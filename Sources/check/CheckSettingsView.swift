@@ -229,6 +229,15 @@ private struct AILimitVisibilitySettingsRows: View {
         .padding(.leading, 16)
         .disabled(!store.aiLimits.visibility.masterEnabled)
         .opacity(store.aiLimits.visibility.masterEnabled ? 1 : 0.4)
+        // 기기 목록을 **여기서** 받아 온다(이 묶음은 절이 보이는 동안 늘 그려진다). 고르개 줄에 붙이면
+        // 맥이 한 대로 보이는 동안 영영 안 불려, 둘째 맥이 생겨도 고르개가 나타나지 않는다.
+        .task { await store.loadAILimitDevicesIfNeeded() }
+        // 맥이 두 대 이상일 때만 선다. 그 줄은 **형제**다(위 스위치들에 딸린 것이 아니라 다른 질문이다) —
+        // 그래서 들여쓰기 밖이고 구분선으로 가른다.
+        if store.aiLimits.showsMainDevicePicker {
+            PanelDivider()
+            AILimitMainDeviceSettingsRow(store: store)
+        }
     }
 
     /// 두 바인딩 모두 **스토어 세터 한 쌍**으로만 간다(`WorkTimerStoreAILimits`). 여기서 `aiLimits` 를
@@ -266,6 +275,92 @@ private struct AILimitProviderToggleRow: View {
                 .foregroundStyle(CheckTheme.primaryText)
         }
         .toggleStyle(CheckSettingsToggleStyle(reduceMotion: reduceMotion))
+    }
+}
+
+/// '폰·위젯에 보여줄 맥' 고르개 (v0.3.47).
+///
+/// ## 왜 이 줄이 필요한가
+/// 서버는 이미 `(user_id, device_id, provider)` 로 기기별로 저장하는데 폰·위젯이 "제공자당 최신 하나"로
+/// 접고 있었다. 그 접기가 "맥 A 에서 껐는데 맥 B 값이 이겨 되살아난다"를 만들었다. 폰 카드는 기기별로
+/// 전부 드러내고, **위젯 미디움은 자리가 좁아 한 대만** 그린다 — 그 한 대를 고르는 자리가 여기다.
+///
+/// ## ★ 맥이 **한 대뿐이면 이 줄을 숨긴다**(근거 넷)
+///  ① 고를 것이 없는 고르개는 권한에 대한 거짓말이다. 칩이 하나면 누를 수 있는 유일한 선택이 이미 눌린
+///     상태이고, 그 줄이 하는 말은 "당신은 아무것도 정할 수 없다"뿐이다.
+///  ② 기본값이 이미 그 한 대다(`AILimitMainDeviceRule` — 안 골랐으면 가장 최근에 일한 맥). 그래서 숨겨도
+///     동작이 한 글자도 다르지 않다. 보이든 안 보이든 폰은 같은 맥을 그린다.
+///  ③ 이 창은 높이 계약으로 서 있고(절이 붙은 본문은 이미 창 884pt 보다 높아 스크롤한다 — `body` 주석의
+///     실측표) 리밋을 쓰는 사람 대부분은 맥 한 대다. 그 다수에게 60pt 를 더 스크롤하게 할 값이 ①·② 때문에 0 이다.
+///  ④ 목록을 아직 못 받은 동안(설정 창을 연 직후 · 조회 실패)도 같은 분기로 덮인다 — 빈 고르개가
+///     "내 맥이 하나도 없다"로 읽히는 순간이 아예 없다.
+/// 두 대가 되는 순간 저절로 나타난다(둘째 맥이 행을 올린 뒤 이 창을 다시 열면).
+///
+/// ## ★ `Picker`/`Menu` 가 아니라 칩 버튼 줄이다
+/// 승인된 스케치는 `[ Mac mini ▾ ]` 드롭다운이었지만, 이 저장소의 렌더 검증(`ImageRenderer`)은 `Menu`·
+/// `Picker`·`TextField` 를 **노란 상자**로 그린다 — 그 자리는 픽셀 커버리지가 0 이라 잘림·겹침·색 결함을
+/// 스냅샷이 영영 못 본다(실측: 그래서 한 색 결함이 8일간 안 잡혔다). 칩은 순수 도형+Text 라 그대로 찍힌다.
+/// 문법은 `CheckCharacterSettingsRow` 와 **같다**(고른 것 = gaugeGradient, 나머지 = trackFill + border).
+///
+/// ## 이름이 겹치면 식별자 꼬리를 붙인다
+/// 맥 미니 두 대는 시스템 설정 이름이 글자 그대로 같다. 맥들은 서로를 모르므로 가르는 일은 **읽는 쪽**이
+/// 한다(`AILimitDeviceRoster.displayNames`) — 겹치지 않는 이름에는 아무것도 붙지 않는다.
+private struct AILimitMainDeviceSettingsRow: View {
+    let store: WorkTimerStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("폰·위젯에 보여줄 맥")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Text("아이폰 위젯은 맥 한 대만 보여줘요. 맥 팝오버는 늘 그 맥 자신의 값이에요.")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    // 좁혀도 말줄임 대신 줄바꿈(이 창의 설명 줄 규약).
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // 목록 순서의 주인은 `AILimitDeviceRoster.fold` 다(최근에 일한 순). 여기서 다시 정렬하면
+            // 그 사실이 두 곳에 적히고, 갈리는 날 기본 선택과 첫 칸이 조용히 어긋난다.
+            let names = AILimitDeviceRoster.displayNames(store.aiLimits.devices)
+            let selected = store.aiLimits.effectiveMainDevice?.deviceID
+            HStack(spacing: 6) {
+                ForEach(store.aiLimits.devices) { device in
+                    chip(device, name: names[device.deviceID] ?? device.baseName, isOn: device.deviceID == selected)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// 칩 하나. **스토어 함수 하나로만** 간다(`WorkTimerStoreAILimits.setAILimitMainDevice`) — 여기서
+    /// `aiLimits` 를 직접 만지면 서버에 쓰는 일이 빠지고, 그 누락은 조용하다(설정 창만 바뀌고 폰은 그대로다).
+    @ViewBuilder
+    private func chip(_ device: AILimitDevice, name: String, isOn: Bool) -> some View {
+        Button {
+            Task { await store.setAILimitMainDevice(device.deviceID) }
+        } label: {
+            Text(name)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isOn ? Color.white : CheckTheme.primaryText)
+                .lineLimit(1)
+                // 이름은 64자까지 올 수 있다(서버 CHECK). 칩 하나가 창을 밀어내지 않게 상한을 둔다 —
+                // 넘치면 말줄임이고, 겹치는 이름은 꼬리로 이미 갈려 있다.
+                .truncationMode(.tail)
+                .frame(maxWidth: 160)
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background {
+                    if isOn {
+                        Capsule().fill(CheckTheme.gaugeGradient)
+                    } else {
+                        Capsule().fill(CheckTheme.trackFill)
+                            .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }
 }
 

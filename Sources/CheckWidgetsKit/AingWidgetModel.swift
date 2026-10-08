@@ -92,6 +92,13 @@ package enum AingWidgetText {
     package static let limitsNoProviders = AILimitSurfaceText.noVisibleProviders
     package static let limitsSignedOutHint = "로그인하면 AI 사용률이 떠요"
     /// 5시간 창 라벨(좁은 칸).
+    /// 머리 줄에서 제목 뒤에 붙는 **메인 맥 이름**(v0.3.47). 가운뎃점으로 이어 제목의 꼬리처럼 읽히게 한다 —
+    /// `AI 리밋 · 예성의 MacBook Pro`. 맥이 한 대면 뷰가 이 글자를 아예 만들지 않는다.
+    ///
+    /// ★ 보이스오버는 가운뎃점을 듣지 않는다(뷰가 그 글자의 라벨을 **이름만으로** 덮는다) — 소리로 "점"을
+    ///   읽으면 이름의 일부처럼 들린다.
+    package static func limitsDeviceName(_ name: String) -> String { "· \(name)" }
+
     package static let limitsFiveHour = "5시간"
     package static let limitsWeekly = "주간"
     package static let limitsTokenTitle = "AI 토큰"
@@ -492,8 +499,20 @@ package enum AingWidgetLimitsState: Equatable, Sendable {
 /// 제공자 줄들 + 기존 토큰 사용량(다른 축 — 한 바에 섞지 않는다).
 package struct AingWidgetLimits: Equatable, Sendable {
     /// 제공자 **고정 순서**(Claude → Codex → 안티그래비티). 연동 유무로 재배열하면 "어제는 Codex 가 위였는데"가 된다.
+    ///
+    /// ★ v0.3.47 부터 이 줄들은 **맥 한 대의 것**이다(메인 맥 — 폰이 골라 싣는다). 위젯은 고르지 않는다:
+    ///   고르는 규칙(`AILimitMainDeviceRule`)과 `ai_limits_prefs` 를 아는 쪽은 앱이고, 위젯이 같은 판단을
+    ///   따로 하면 두 벌이 갈린다 — 위젯 확장은 앱과 **따로** 갱신되므로 그 어긋남이 한동안 살아 있다.
     package let rows: [AingWidgetLimitRow]
+    /// 이 줄들이 어느 맥의 것인가(v0.3.47). **nil = 맥이 한 대뿐이다** → 머리에 이름을 적지 않는다
+    /// (지금과 똑같이 보인다). 옛 스냅샷도 nil 이다.
+    ///
+    /// ★ 위젯이 이름을 **만들지 않는다**: 겹침을 가른 글자(`Mac mini (A1B2)`)가 이미 들어 있다.
+    package let deviceName: String?
     /// 오늘 쓴 AI 토큰. nil = 모른다 → L 의 토큰 줄을 **그리지 않는다**(0 은 "안 썼다"는 거짓이다).
+    ///
+    /// ★ 토큰은 **계정 전체의 합**이다(합산 유지 — 리밋만 메인 맥을 따른다). `deviceName` 이 가리키는 맥의
+    ///   수가 아니다. 그래서 토큰 줄 라벨에는 기기 이름을 쓰지 않는다.
     package let todayTokens: Int?
     package let recentTokens: Int?
 
@@ -542,6 +561,11 @@ package struct AingWidgetLimits: Equatable, Sendable {
                 )
             }
             .sorted { $0.provider.sortOrder < $1.provider.sortOrder }
+        // 공백뿐인 이름은 없는 것으로(디코더가 이미 접지만, 멤버와이즈로 만든 패널도 같은 길을 지나게 한다 —
+        // 그러지 않으면 머리에 빈 `· ` 만 남는다).
+        deviceName = panel.deviceName
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 }
         todayTokens = panel.todayTokens
         recentTokens = panel.recentTokens
     }
@@ -559,6 +583,19 @@ package struct AingWidgetLimits: Equatable, Sendable {
     /// 리밋의 나이처럼 적지 않는다).
     package func observationAgeText(now: Date) -> String? {
         oldestObservedAt.map { AingWidgetFormat.ago(from: $0, now: now) }
+    }
+
+    /// 머리 줄에 적을 맥 이름 — **보이는 글자**와 **읽어 줄 글자**가 다르다(가운뎃점은 소리로 읽으면 이름의
+    /// 일부처럼 들린다). nil = 맥이 한 대뿐이다(= 적지 않는다).
+    ///
+    /// ## 왜 뷰가 아니라 여기서 정하나
+    /// 뷰는 `#if os(iOS)` 라 맥 스위트가 **한 줄도 컴파일하지 않는다** — 뷰 안에서 `deviceName` 을 글자로
+    /// 꾸미면 "한 대면 안 적는다"를 되묻는 그물이 **소스 grep 하나뿐**이 된다(그리고 grep 은 조건에 `false` 를
+    /// 더하는 변형을 못 잡는다). 분기의 **결과를 순수한 값으로** 내놓으면 테스트가 직접 잴 수 있다
+    /// (`AingWidgetLimitInk` 가 색 분기에 같은 일을 하는 것과 같은 이유).
+    package var headerDevice: (text: String, spoken: String)? {
+        guard let deviceName else { return nil }
+        return (AingWidgetText.limitsDeviceName(deviceName), deviceName)
     }
 
     /// 미디움이 그릴 줄들(상한까지).
@@ -718,6 +755,48 @@ package struct AingWidgetLimitsMediumBudget: Equatable, Sendable {
 
     /// 줄 하나가 **마크를 담을 수 있나**(줄 높이가 마크보다 커야 한다 — 아니면 SwiftUI 가 조용히 압축한다).
     package var rowFitsMark: Bool { providerCount == 0 || rowHeight >= markSide }
+
+    // MARK: 머리 줄의 기기 이름 (v0.3.47 — 메인 맥 하나)
+    //
+    // ## 왜 **머리 줄 안**이고 둘째 줄이 아닌가 — 실측으로 골랐다
+    // 맥 두 대 이상이면 위젯은 메인 맥 하나만 그리고 **머리에 그 맥 이름**을 적는다(2026-10-08 사용자 결정).
+    // 둘 수 있는 자리가 둘이었다:
+    //  (a) 제목 줄 안에 `AI 리밋 · 예성의 MacBook Pro ……… 3분 전`
+    //  (b) 제목 아래 둘째 줄
+    // (b) 는 세로를 11pt 글자 한 줄 + 간격만큼(≈13pt) 먹는다. 가장 좁은 기기(375pt → 칸 329×155 → 안쪽 123pt)
+    // 에서 지금 줄 높이는 18.2pt 뿐이고, 13pt 를 빼면 14.2pt 가 되어 마크 하한(14pt)과 **0.2pt 차**다 —
+    // 글자를 조금 키운 사람에게서 바로 깨진다.
+    // (a) 는 세로를 **0pt** 먹는다. 실측(2026-10-08, `(s as NSString).size(withAttributes:)`):
+    //   제목 `AI 리밋` 15pt bold = 44.88 · 가장 넓은 나이 글자 `12시간 전` 11pt monospacedDigit = 45.69 ·
+    //   간격 6 + 6. 좁은 기기 안쪽 297pt 에서 이름에 남는 자리가 **194.4pt** 다.
+    //   그 자리에 드는 이름: `예성의 MacBook Pro` 101.06 · 겹침 꼬리까지 붙은 `예성의 MacBook Pro (A1B2)`
+    //   139.01 · `이름 모를 맥 A1B2` 83.31. **셋 다 넉넉히 든다.**
+    // 그래서 (a) 다. 194pt 를 넘기는 긴 이름은 **자른다**(말줄임) — 사람이 적은 이름이라 앞부분도 그 맥을
+    // 가리키고(코어 `AILimitDeviceLabelContract` 가 64 스칼라로 자르는 것과 같은 근거), 세로를 더 쓰면
+    // 숫자가 읽히지 않는다. 폰 카드는 반대로 세로 자리가 있어 **두 줄로 접는다**.
+
+    /// 제목 글자 크기(`AI 리밋` — 15pt bold).
+    package static let titleFontSize: Double = 15
+    /// 기기 이름 글자 크기(11pt — 나이 글자와 같은 눈금. 제목과 같으면 둘이 한 제목처럼 읽힌다).
+    package static let deviceNameFontSize: Double = 11
+    /// 제목 ↔ 이름 사이(머리 `HStack` 의 spacing 과 같은 값).
+    package static let headerItemGap: Double = 6
+    /// 이름 ↔ 나이 사이의 **최소** 간격(`Spacer(minLength:)`).
+    package static let headerMinGap: Double = 6
+    /// 실측 — `AI 리밋` 15pt bold.
+    package static let measuredTitleWidth: Double = 44.88
+    /// 실측 — 머리에 설 수 있는 **가장 넓은 나이 글자** `12시간 전` 11pt monospacedDigit.
+    /// (`방금` 19.03 · `3시간 전` 38.70 보다 넓다. 이보다 더 낡으면 `N일 전` 으로 짧아진다.)
+    package static let worstAgeWidth: Double = 45.69
+
+    /// 기기 이름이 머리 줄에서 쓸 수 있는 폭 — **나이 글자는 절대 줄지 않는다**는 전제로 잰다
+    /// (그 글자가 줄면 낡음을 알릴 수단이 흐려진다. 뷰에서 `fixedSize()` 로 못 박혀 있다).
+    package var deviceNameWidth: Double {
+        innerWidth - Self.measuredTitleWidth - Self.headerItemGap - Self.headerMinGap - Self.worstAgeWidth
+    }
+
+    /// 그 이름이 머리 줄에 **말줄임 없이** 드는가.
+    package func deviceNameFits(_ measured: Double) -> Bool { measured <= deviceNameWidth }
 }
 
 /// 틴트·투명 모드에서 **열 색이 사라진다**는 사실을 값으로 들고 있는 타입.

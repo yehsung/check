@@ -40,6 +40,31 @@ import SwiftUI
 // 폭 숫자는 전부 `MeAILimitCardBudget`(`MeAILimitsLayout.swift`)이다. 이 뷰는 `#if os(iOS)` 라 맥 스위트가
 // 한 줄도 컴파일하지 않으므로, 숫자를 뷰 안에 적으면 **그물이 하나도 없다**(관례: '폰 뷰는 맥 스위트가 못 본다').
 //
+// ## 기기 묶음 — 맥 두 대 이상이면 이름으로 묶어 **전부** 그린다 (v0.3.47)
+// 서버는 이미 기기별로 저장한다(`ai_limits` PK = user·device·provider). 0.3.46 의 폰은 그걸 "제공자당 최신
+// 하나"로 접었고, 그 접기가 **맥 A 에서 끈 제공자를 맥 B 의 값으로 되살렸다**. 숨기는 대신 드러낸다 —
+// "껐는데 되살아났다"가 "저건 다른 맥 것"이 된다.
+//  · **맥 한 대면 지금 그대로**(이름 줄이 아예 서지 않는다 — 혼자 쓰는 사람에게 군더더기를 보이지 않는다).
+//  · 두 대 이상이면 묶음마다 머리글 한 줄(12pt semibold `label2`) + 그 맥의 제공자 줄들.
+//
+// ### ★ 열 머리는 **카드당 한 번**이다(묶음마다 되풀이하지 않는다) — 고른 근거 넷
+// ① **세로 길이.** 이 카드는 나 탭의 접힌 아래쪽에 있다. 머리 줄은 11pt 글자 + 아래 여백 4 ≈ 15pt 고,
+//    맥 셋이면 그 되풀이만 30pt 다 — 그만큼 아래 토큰 줄이 더 멀어진다. 되풀이로 얻는 것이 없다면 그 값은 손해다.
+// ② **격자가 구조적으로 고정이다.** 왼쪽 이름 칸 108pt → 5시간 칸 → 주간 칸 순서는 `MeAILimitCardBudget` 의
+//    고정 예산이라 **모든 묶음에서 같은 자리**다. 두 번째 머리글은 새 사실을 하나도 말하지 않는다.
+// ③ **짝 단서가 이미 셋이고 그 가운데 둘이 모든 줄에 있다**(색 · 좌우 자리). 머리 글자는 그 색과 글자를
+//    묶어 주는 세 번째 단서이고, 한 번 묶이면 **색이 아래로 그 묶음을 운반한다**.
+// ④ **세 화면이 같은 문법을 쓴다**(승인된 문법 ② — 맥 팝오버·위젯도 머리를 한 번만 적는다). 폰만 되풀이하면
+//    같은 데이터가 화면마다 다른 문법으로 선다 — 이 기능이 몇 번이고 밟은 함정이다.
+// ★ 바꿔 말하면 **맥 한 대인 사람의 카드는 글자 하나 안 바뀐다**: 제목 → 열 머리 → 제공자 줄들. 두 대가 되면
+//   그 사이에 머리글 줄만 끼어든다. 머리를 묶음마다 두면 1대 배치와 2대 배치가 서로 다른 모양이 된다.
+//
+// ### 이름이 겹치는 맥 두 대
+// 맥 미니 두 대는 시스템 설정 이름이 **글자 그대로 같다**. 맥들은 서로를 모르므로 가르는 일은 **읽는 쪽**이
+// 한다 — 같은 이름이 둘 이상이면 뒤에 식별자 꼬리가 붙는다(`Mac mini (A1B2)`). 겹치지 않으면 아무것도 붙지
+// 않고, 이름을 한 번도 올린 적 없는 맥은 `이름 모를 맥 A1B2` 로 선다. 규칙은 코어 한 벌이다
+// (`AILimitDeviceRoster.displayNames` · `AILimitDevice.baseName`) — 이 뷰는 스토어가 정한 글자를 적기만 한다.
+//
 // 숨기기 규칙(2026-10-07 사용자 결정): 미연동 제공자는 줄을 만들지 않고, 하나도 없으면 안내 한 줄만 둔다.
 // 폰에는 이 축의 스위치가 없다 — 사용자가 맥에서 그 도구에 로그인하면 저절로 나타난다.
 //
@@ -59,13 +84,13 @@ struct MeAILimitsCard: View {
     private var limits: AILimitsStore { store.aiLimits }
 
     var body: some View {
-        let rows = limits.displayRows
+        let groups = limits.displayGroups
         VStack(alignment: .leading, spacing: MobileTheme.space3) {
             titleRow(summary: limits.fiveHourSummary)
-            if rows.isEmpty {
+            if groups.isEmpty {
                 emptyLine
             } else {
-                table(rows)
+                table(groups, showsDeviceNames: limits.showsDeviceNames)
                 Text(MeText.aiLimitsCaption)
                     .font(.footnote)
                     .foregroundStyle(MobileTheme.label2)
@@ -93,8 +118,8 @@ struct MeAILimitsCard: View {
             ?? MeText.aiLimitsTitle))
     }
 
-    private func table(_ rows: [AILimitDisplayRow]) -> some View {
-        MeAILimitsTable(rows: rows)
+    private func table(_ groups: [AILimitDeviceDisplayGroup], showsDeviceNames: Bool) -> some View {
+        MeAILimitsTable(groups: groups, showsDeviceNames: showsDeviceNames)
     }
 
     /// 아직 그릴 줄이 없다: 불러오는 중 · 실패 · **그릴 줄 0건**(연동이 없다 · 맥 설정에서 껐다 · 전부 유령이다).
@@ -159,30 +184,69 @@ struct MeAILimitsCard: View {
 
 // MARK: - 표(열 머리 + 제공자 줄들)
 
-/// 열 머리 한 줄 + 제공자 줄들. 간격 0 인 VStack 이다 — 줄 사이는 구분선이 쥐고, 줄 안쪽 여백은 각 줄이 쥔다
+/// 열 머리 한 줄 + **기기 묶음들**. 간격 0 인 VStack 이다 — 줄 사이는 구분선이 쥐고, 줄 안쪽 여백은 각 줄이 쥔다
 /// (간격을 VStack 에 주면 구분선이 줄 가운데가 아니라 한쪽에 붙는다).
 ///
 /// 카드에서 **따로 뗀 까닭**: 검증 하네스가 `ImageRenderer` 로 이 격자를 그대로 구워 사람이 본다
 /// (`MeAILimitsPreviewCatalog` — 카드는 `MeStore` 를 쥐고 있어 하네스가 만들 수 없다). 숫자 칸은
 /// `lineLimit(1)` 이라 넘쳐도 높이가 변하지 않으므로 **눈으로 보는 것 말고는 잡을 길이 없는 결함**이 있다.
+///
+/// ## 평평한 한 격자다 — 묶음이 '카드 안의 카드'가 되지 않게
+/// 묶음마다 `VStack` 을 중첩하지 않고 **머리글 줄과 제공자 줄을 한 줄기로** 세운다. 중첩하면 구분선을 묶음
+/// 안쪽에서 끊을 수밖에 없고(음수 여백이 중첩 컨테이너의 폭을 기준으로 잡힌다), 그러면 승인된 문법 ④
+/// ("구분선은 카드 안쪽 여백 **바깥까지**")가 깨져 묶음이 카드 속 또 다른 카드처럼 보인다.
+///
+/// ★ `ForEach` 의 id: 묶음은 **기기**로 돌고, 줄은 그 묶음 **안에서만** 제공자로 돈다.
+///   맥 두 대가 같은 Claude 를 올리면 제공자 id 가 카드 안에서 두 번 나오므로, 한 `ForEach` 에 펼치면
+///   SwiftUI 가 같은 id 두 개를 보고 줄을 뒤섞는다(`AILimitsStore.displayRows` 주석과 같은 경고).
 struct MeAILimitsTable: View {
-    let rows: [AILimitDisplayRow]
+    let groups: [AILimitDeviceDisplayGroup]
+    /// 기기 이름 줄을 그릴 것인가. **맥이 한 대면 false** — 그때 이 뷰는 0.3.46 과 글자 하나 다르지 않다.
+    var showsDeviceNames: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
             columnHeaderRow
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                if index > 0 { rowSeparator }
-                MeAILimitRow(row: row)
-                    .padding(.vertical, MobileTheme.space1)
+            ForEach(Array(groups.enumerated()), id: \.element.id) { groupIndex, group in
+                // 묶음 경계에는 **이름을 그리든 안 그리든** 선이 있다(죽은 분기를 만들지 않는다 —
+                // 지금은 이름 없이 묶음이 둘일 수 없지만, 그 전제가 느슨해지는 날 두 줄이 맞붙지 않게).
+                if groupIndex > 0 { rowSeparator }
+                if showsDeviceNames { deviceNameRow(group.name, isFirst: groupIndex == 0) }
+                ForEach(Array(group.rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 { rowSeparator }
+                    MeAILimitRow(row: row, deviceName: showsDeviceNames ? group.name : nil)
+                        .padding(.vertical, MobileTheme.space1)
+                }
             }
         }
+    }
+
+    /// 기기 묶음 머리글 한 줄. **구획 표시**라 제공자 이름보다 조용하다(12pt semibold `label2` — 같은 굵기·같은
+    /// 색이면 네 번째 제공자 줄처럼 읽힌다).
+    ///
+    /// ★ 긴 이름은 **두 줄로 접힌다**(말줄임이 아니다 — `lineLimit(2)` + `fixedSize(vertical:)`). 맥 미니 두 대를
+    ///   가르려고 붙인 꼬리 `(A1B2)` 가 바로 말줄임이 먹는 자리에 있어서, 자르면 **가르려던 목적이 사라진다**.
+    /// ★ 보이스오버는 이 줄을 **머리글**로 읽는다(`.isHeader`) — 그리고 줄마다의 라벨에도 기기 이름이 들어간다
+    ///   (`MeAILimitRow.label`): 머리글은 건너뛰며 읽는 사람을 위한 것이고, 줄 라벨은 한 줄만 들었을 때
+    ///   "어느 맥이냐"에 답하기 위한 것이다.
+    private func deviceNameRow(_ name: String, isFirst: Bool) -> some View {
+        Text(name)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(MobileTheme.label2)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, isFirst ? 0 : MeAILimitCardBudget.deviceNameTopGap)
+            .padding(.bottom, MeAILimitCardBudget.deviceNameBottomGap)
+            .accessibilityAddTraits(.isHeader)
     }
 
     /// 열 머리 줄. **데이터 줄과 같은 격자**를 쓴다 — 왼쪽 칸을 비우고, 두 머리 칸이 `maxWidth: .infinity` 로
     /// 남는 폭을 **똑같이** 나눠 가진다. 데이터 줄의 두 칸(바 + 간격 + 숫자)도 같은 몫을 받으므로,
     /// 머리 글자의 오른쪽 끝이 자기 열 숫자 칸의 오른쪽 끝과 **구조적으로** 맞는다(측정 상수가 아니라 항등식이다 —
     /// 맥은 폭이 316pt 고정이라 간격을 상수로 적을 수 있었지만 폰은 기기마다 폭이 다르다).
+    ///
+    /// ★ **카드당 한 번**이다 — 기기 묶음마다 되풀이하지 않는다(근거 넷은 파일 머리말 §기기 묶음).
     private var columnHeaderRow: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
@@ -229,6 +293,12 @@ struct MeAILimitsTable: View {
 /// 전부 그린다(없는 창은 `없음`). 말줄임 대신 배치를 바꾸는 것이 이 저장소 관례다.
 private struct MeAILimitRow: View {
     let row: AILimitDisplayRow
+    /// 이 줄이 어느 맥의 것인가 — **보이스오버 라벨에만** 쓴다(화면에는 묶음 머리글이 이미 그 이름을 적었다).
+    /// nil = 맥이 한 대다(= 말할 것이 없다).
+    ///
+    /// ★ 왜 라벨에 넣는가: 보이스오버는 한 줄씩 읽는다. 머리글을 지나쳐 세 번째 줄에 바로 닿은 사람에게
+    ///   "Claude 5시간 91%" 는 **어느 맥인지 말하지 않는다** — 이 기능이 고치려던 바로 그 거짓이 소리에만 남는다.
+    var deviceName: String?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -240,7 +310,9 @@ private struct MeAILimitRow: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(label))
+        // ★ 한 문장을 만드는 일은 **뷰 밖**이다(`MeText.aiLimitRowAccessibility`) — 이 뷰는 맥 스위트가 한 줄도
+        //   컴파일하지 않아서, 여기서 이어 붙이면 순서·누락을 재는 그물이 소스 grep 하나뿐이 된다.
+        .accessibilityLabel(Text(MeText.aiLimitRowAccessibility(deviceName: deviceName, row: row)))
     }
 
     // MARK: 격자(기본 글자 크기)
@@ -345,16 +417,6 @@ private struct MeAILimitRow: View {
         }
     }
 
-    /// 보이스오버: 창마다 한 문장(값 + 나이), 없는 창도 말한다. 바는 숨기고 이 라벨 하나가 줄 전체를 말한다.
-    private var label: String {
-        let windows = AILimitWindow.allCases.sorted { $0.sortOrder < $1.sortOrder }.map { window -> String in
-            guard let display = row.display(window) else {
-                return MeText.aiLimitAbsentAccessibility(window: window)
-            }
-            return MeText.aiLimitAccessibility(provider: row.provider, display: display)
-        }
-        return ([row.provider.displayName] + windows).joined(separator: ", ")
-    }
 }
 
 // MARK: - 바
@@ -455,52 +517,97 @@ public enum MeAILimitsPreviewCatalog {
     /// 기본 기기(393pt)의 카드 바깥 폭.
     public static let cardWidth: CGFloat = MeAILimitCardBudget.cardOuterWidth(screenWidth: 393)
 
+    /// 미리보기용 맥 둘(**지어낸 이름** — 실사용자 값이 아니다).
+    private static let macA = "mac-a-1111"
+    private static let macB = "mac-b-2222"
+    /// 이름이 **글자 그대로 겹치는** 맥 둘(맥 미니 두 대) — 꼬리가 붙는 모양을 눈으로 본다.
+    private static let twinA = "twin-aaaa-a1b2"
+    private static let twinB = "twin-bbbb-c3d4"
+
     @MainActor
     public static func items(now: Date) -> [(id: String, width: CGFloat, view: AnyView)] {
         [
-            ("card-three", cardWidth, card(rows(now: now, observedAgo: 120))),
+            ("card-three", cardWidth, card(groups(now: now, observedAgo: 120))),
             // 한 시간 전 관측 — 숫자가 하한("27% 이상")이 되어 **가장 넓은 문구**가 칸에 들어가는지 본다.
-            ("card-stale", cardWidth, card(rows(now: now, observedAgo: 3_600))),
+            ("card-stale", cardWidth, card(groups(now: now, observedAgo: 3_600))),
             // 제공자 하나 · 5시간 창이 아예 없는 계정(그 칸이 `없음` 으로 비는 모양).
-            ("card-one", cardWidth, card(Array(rows(now: now, observedAgo: 120).suffix(1)))),
+            ("card-one", cardWidth, card(groups(now: now, observedAgo: 120, suffix: 1))),
             // 좁은 기기(375pt)에서도 바가 남는지.
-            ("card-narrow", MeAILimitCardBudget.cardOuterWidth(screenWidth: 375), card(rows(now: now, observedAgo: 120))),
+            ("card-narrow", MeAILimitCardBudget.cardOuterWidth(screenWidth: 375),
+             card(groups(now: now, observedAgo: 120))),
+            // ★ 맥 **두 대**(v0.3.47) — 묶음 머리글이 제공자 줄과 갈려 보이는지 · 열 머리가 위에 한 번만 있는지 ·
+            //   두 번째 묶음이 '카드 안의 카드' 처럼 보이지 않는지. 둘째 맥은 Claude 하나뿐이다(불균형 모양).
+            ("card-two-devices", cardWidth, card(twoDevices(now: now), showsDeviceNames: true)),
+            // ★ **이름이 겹치는** 맥 두 대 — 꼬리 `(A1B2)` 가 붙은 가장 넓은 머리글이 한 줄에 드는지.
+            ("card-twin-names", cardWidth, card(twinDevices(now: now), showsDeviceNames: true)),
+            // ★ 좁은 기기 + 두 대(머리글이 좁은 폭에서 접히지 않는지).
+            ("card-two-devices-narrow", MeAILimitCardBudget.cardOuterWidth(screenWidth: 375),
+             card(twoDevices(now: now), showsDeviceNames: true)),
         ]
     }
 
-    /// 실제 서버 모양의 행 → **코어 규칙**을 그대로 지난 줄들(값을 지어내지 않는다).
+    /// 실제 서버 모양의 행 → **스토어의 기기 묶기 + 코어 규칙**을 그대로 지난 묶음들(값을 지어내지 않는다).
     @MainActor
-    private static func rows(now: Date, observedAgo: TimeInterval) -> [AILimitDisplayRow] {
+    private static func groups(now: Date, observedAgo: TimeInterval, suffix: Int? = nil) -> [AILimitDeviceDisplayGroup] {
+        var fetched = rows(deviceID: macA, label: "예성의 MacBook Pro", now: now, observedAgo: observedAgo)
+        if let suffix { fetched = Array(fetched.suffix(suffix)) }
+        return fold(fetched, now: now)
+    }
+
+    @MainActor
+    private static func twoDevices(now: Date) -> [AILimitDeviceDisplayGroup] {
+        let first = rows(deviceID: macA, label: "예성의 MacBook Pro", now: now, observedAgo: 120)
+        // 둘째 맥은 **더 오래전** 관측이고 Claude 하나뿐이다 — 묶음 순서(최근 먼저)와 불균형을 같이 본다.
+        let second = Array(rows(deviceID: macB, label: "사무실 iMac", now: now, observedAgo: 1_800,
+                                fiveHour: 91, weekly: 44).prefix(1))
+        return fold(first + second, now: now)
+    }
+
+    @MainActor
+    private static func twinDevices(now: Date) -> [AILimitDeviceDisplayGroup] {
+        // 같은 이름 둘 — 이름을 **한 번도 올린 적 없는 맥**은 `이름 모를 맥 ABCD` 로 선다(그 모양도 같이 본다).
+        let first = Array(rows(deviceID: twinA, label: "Mac mini", now: now, observedAgo: 120).prefix(2))
+        let second = Array(rows(deviceID: twinB, label: "Mac mini", now: now, observedAgo: 600,
+                                fiveHour: 91, weekly: 44).prefix(1))
+        let third = Array(rows(deviceID: "nameless-9f8e", label: nil, now: now, observedAgo: 900,
+                               fiveHour: 12, weekly: 5).prefix(1))
+        return fold(first + second + third, now: now)
+    }
+
+    /// ★ 스토어와 **같은 두 함수**를 지난다(기기 묶기 → 그릴 묶음). 하네스가 이름 가르기·코어 규칙을 자기 손으로
+    /// 다시 적으면 사람이 보는 그림이 화면과 다른 규칙으로 서고, 그 그림으로 승인을 받으면 틀린 것이 굳는다.
+    @MainActor
+    private static func fold(_ fetched: [AILimitFetchedRow], now: Date) -> [AILimitDeviceDisplayGroup] {
+        AILimitsStore.displayGroups(from: AILimitsStore.groups(from: fetched, now: now), now: now)
+    }
+
+    private static func rows(
+        deviceID: String, label: String?, now: Date, observedAgo: TimeInterval,
+        fiveHour: Double = 27, weekly: Double = 60
+    ) -> [AILimitFetchedRow] {
         let observed = now.addingTimeInterval(-observedAgo)
-        let fetched = [
-            AILimitFetchedRow(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: now.addingTimeInterval(9_000),
-                              weeklyPercent: 60, weeklyResetsAt: now.addingTimeInterval(450_000),
+        return [
+            AILimitFetchedRow(deviceID: deviceID, deviceLabel: label, provider: "claude",
+                              fiveHourPercent: fiveHour, fiveHourResetsAt: now.addingTimeInterval(9_000),
+                              weeklyPercent: weekly, weeklyResetsAt: now.addingTimeInterval(450_000),
                               planLabel: "max", observedAt: observed),
-            AILimitFetchedRow(provider: "codex", fiveHourPercent: 0, fiveHourResetsAt: nil,
+            AILimitFetchedRow(deviceID: deviceID, deviceLabel: label, provider: "codex",
+                              fiveHourPercent: 0, fiveHourResetsAt: nil,
                               weeklyPercent: 94, weeklyResetsAt: now.addingTimeInterval(200_000),
                               planLabel: "plus", observedAt: observed),
-            AILimitFetchedRow(provider: "antigravity", fiveHourPercent: nil, fiveHourResetsAt: nil,
+            AILimitFetchedRow(deviceID: deviceID, deviceLabel: label, provider: "antigravity",
+                              fiveHourPercent: nil, fiveHourResetsAt: nil,
                               weeklyPercent: 8, weeklyResetsAt: now.addingTimeInterval(500_000),
                               planLabel: nil, observedAt: observed),
         ]
-        let bundle = AILimitsStore.bundle(from: fetched, now: now)
-        return bundle.visibleProviders.map { snapshot in
-            func display(_ window: AILimitWindow) -> AILimitDisplay? {
-                guard snapshot.window(window) != nil else { return nil }
-                let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: now)
-                return value.isVisible ? value : nil
-            }
-            return AILimitDisplayRow(provider: snapshot.provider, planLabel: snapshot.planLabel,
-                                     fiveHour: display(.fiveHour), weekly: display(.weekly))
-        }
     }
 
     @MainActor
-    private static func card(_ rows: [AILimitDisplayRow]) -> AnyView {
+    private static func card(_ groups: [AILimitDeviceDisplayGroup], showsDeviceNames: Bool = false) -> AnyView {
         AnyView(
             VStack(alignment: .leading, spacing: MobileTheme.space3) {
                 Text(MeText.aiLimitsTitle).font(.headline).foregroundStyle(MobileTheme.label)
-                MeAILimitsTable(rows: rows)
+                MeAILimitsTable(groups: groups, showsDeviceNames: showsDeviceNames)
                 Text(MeText.aiLimitsCaption).font(.footnote).foregroundStyle(MobileTheme.label2)
             }
             .padding(MobileTheme.cardPadding)

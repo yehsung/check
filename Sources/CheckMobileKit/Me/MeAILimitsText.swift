@@ -33,6 +33,29 @@ extension MeText {
         return "\(provider.displayName) \(window) \(display.valueText), \(display.captionText)"
     }
 
+    /// 줄 하나를 **한 문장**으로(보이스오버). 예: "사무실 iMac, Claude, Claude 5시간 91%, 10분 전, 주간 44%, 10분 전".
+    ///
+    /// ## 왜 뷰가 아니라 여기서 만드나
+    /// 카드 뷰는 `#if os(iOS)` 라 맥 스위트가 **한 줄도 컴파일하지 않는다**. 라벨을 뷰 안에서 이어 붙이면
+    /// "기기 이름이 맨 앞에 온다"를 재는 그물이 소스 grep 하나뿐이 되고, grep 은 항목 순서를 바꾸거나 한
+    /// 조각을 빼는 변형을 **못 잡는다**(실증: 기기 이름을 라벨에서 뺀 변형이 안 물렸다).
+    ///
+    /// ## 왜 기기 이름이 **맨 앞**인가
+    /// 보이스오버는 한 줄씩 읽는다. 묶음 머리글을 지나쳐 세 번째 줄에 바로 닿은 사람에게 "Claude 5시간 91%" 는
+    /// **어느 맥인지 말하지 않는다** — 이 기능이 고치려던 바로 그 거짓이 소리에만 남는다. 뒤에 붙이면 숫자를
+    /// 다 들은 뒤에야 주인이 나온다.
+    ///
+    /// `deviceName` nil = 맥이 한 대다(= 말할 것이 없다). 글자는 스토어가 정한 것 그대로(겹침 꼬리까지 붙은 값)다.
+    package static func aiLimitRowAccessibility(deviceName: String?, row: AILimitDisplayRow) -> String {
+        let windows = AILimitWindow.allCases.sorted { $0.sortOrder < $1.sortOrder }.map { window -> String in
+            guard let display = row.display(window) else {
+                return aiLimitAbsentAccessibility(window: window)
+            }
+            return aiLimitAccessibility(provider: row.provider, display: display)
+        }
+        return ([deviceName, row.provider.displayName].compactMap { $0 } + windows).joined(separator: ", ")
+    }
+
     /// 그 창이 **아예 없는** 칸(보이스오버). 예: "5시간 없음".
     ///
     /// ★ 판정 불가(`—`)와 **다른 말이어야 한다**. 화면의 글자를 그대로 읽어 주는 것이고, 글자는 공유 규칙

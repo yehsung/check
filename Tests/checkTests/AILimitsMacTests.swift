@@ -1034,7 +1034,9 @@ struct AILimitsMacUploadTests {
         let decoded = try #require(try JSONSerialization.jsonObject(with: data) as? [[String: Any]])
         #expect(decoded.count == 3)
         let expected = Set(AILimitUpsertRow.CodingKeys.allCases.map(\.rawValue))
-        #expect(expected.count == 9, "컬럼이 \(expected.count) 개다 — 더하거나 뺐으면 이 숫자도 함께 봐라")
+        // v0.3.47 에 `device_label` 이 열째 칸으로 들어왔다(기기 이름 — 맥이 여러 대인 사람의 폰·위젯이
+        // "어느 맥의 숫자인가"를 그 이름으로 말한다).
+        #expect(expected.count == 10, "컬럼이 \(expected.count) 개다 — 더하거나 뺐으면 이 숫자도 함께 봐라")
         for (index, row) in decoded.enumerated() {
             #expect(Set(row.keys) == expected,
                     "\(index)번 행의 키가 \(Set(row.keys).symmetricDifference(expected)) 만큼 다르다 — PGRST102 로 본문 전체가 거절된다")
@@ -1044,6 +1046,9 @@ struct AILimitsMacUploadTests {
         #expect(decoded[1]["weekly_percent"] is NSNull, "nil 이 생략됐다 — 합성 Encodable 로 돌아갔다")
         #expect(decoded[2]["five_hour_percent"] is NSNull)
         #expect(decoded[0]["plan_label"] as? String == "max", "플랜 라벨은 **올린다**(폰 카드가 그린다)")
+        // 기기 이름도 **생략이 아니라 null** 이다. 세 행 다 이름이 없는 픽스처라 셋 다 null 이어야 한다 —
+        // 한 행만 키가 빠지면 PostgREST 가 400 PGRST102 로 본문 전체를 거절하고 그 거절은 조용하다.
+        #expect(decoded.allSatisfy { $0["device_label"] is NSNull }, "기기 이름 칸이 생략됐다")
         #expect(decoded[1]["plan_label"] is NSNull)
         // `updated_at` 은 **서버가 쥔다**(터치 트리거). 보내면 버려지지만 키 집합을 흔들 자리를 만들지 않는다.
         #expect(!expected.contains("updated_at"))
@@ -1198,7 +1203,11 @@ struct AILimitsMacUploadTests {
             .fiveHourResetsAt: ("리셋 시각", "리셋 시각"),
             .weeklyResetsAt: ("리셋 시각", "리셋 시각"),
             .planLabel: ("요금제 이름", "플랜 라벨"),
-            .observedAt: ("읽은 시각", "관측(읽은) 시각")
+            .observedAt: ("읽은 시각", "관측(읽은) 시각"),
+            // v0.3.47. 두 문서가 쓰는 글자는 양쪽 다 **`기기 이름`** 이다(`docs/ai-limits.md` §5 주석이
+            // 그 약속을 적어 두었다). 이 값은 사람이 시스템 설정에 적은 이름이라 **사용자가 붙인 말이
+            // 들어 있다고 보고** 다뤄야 하고, 그래서 공개 열거에 빠지면 "…뿐입니다"가 거짓이 된다.
+            .deviceLabel: ("기기 이름", "기기 이름")
         ]
         // 우리 쪽 **라우팅 키**다(제공자에서 읽은 값이 아니다). `user_id` 는 RLS 의 주인이고 `device_id` 는
         // 어느 맥이 올렸는지다 — 처리방침은 그 둘을 '기기 식별자'·'본인만'으로 따로 적는다.

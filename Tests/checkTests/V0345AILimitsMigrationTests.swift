@@ -91,7 +91,11 @@ func 리밋_마이그레이션은_체인의_마지막이고_토큰_원장_뒤에
         .sorted()
     #expect(names.count > 30, "마이그레이션을 \(names.count)개밖에 못 읽었다 — 이 검사가 헛돈다")
     let index = try #require(names.firstIndex(of: t45Migration), "\(t45Migration) 이 체인에 없다")
-    #expect(index == names.count - 1, "\(t45Migration) 뒤에 다른 파일이 있다 — 타임스탬프를 체인 끝으로 올려라")
+    // ★ 여기 있던 `index == names.count - 1`("내가 체인의 마지막이다")은 **지웠다**(2026-10-08) — V0341 이 같은 이유로
+    //   먼저 지운 대리 지표다. 뒤에 파일이 생기는 것 자체는 결함이 아니다(20261008120000 이 이 표에 device_label 을
+    //   더한다). 지키려던 뜻은 "이 표가 만들어진 뒤에 고친다" 이고 그건 뒤 파일 쪽 §0(to_regclass 전제)과
+    //   V0347 의 순서 단언이 직접 잰다. 반대로 뒤에 아무 파일이 없어도 이 대리는 넓어진 권한을 못 봤다.
+    #expect(index >= 1, "\(t45Migration) 앞에 아무 파일도 없다 — 체인을 잘못 읽었다")
     // 같은 타임스탬프가 둘이면 적용 순서가 파일시스템 순서에 맡겨진다.
     let stamps = names.map { String($0.prefix(14)) }
     #expect(Set(stamps).count == stamps.count, "같은 타임스탬프를 쓰는 마이그레이션이 있다")

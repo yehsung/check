@@ -70,6 +70,10 @@ public enum AingWidgetPreviewCatalog {
             todayTokens: 25_950_000,
             recentTokens: 2_410_000_000
         )
+        // ★ 맥 **두 대 이상**인 사람의 위젯(v0.3.47): 메인 맥 하나만 그리고 머리에 그 맥 이름이 붙는다.
+        //   이름이 겹쳐 꼬리까지 달린 **가장 넓은 현실 문구**를 넣어, 머리 줄에서 나이 글자를 밀어내지 않는지 본다.
+        var mainMac = sample
+        mainMac.aiLimits?.deviceName = "예성의 MacBook Pro (A1B2)"
         let entry = AingWidgetEntry(date: now, snapshot: sample)
         let emptyEntry = AingWidgetEntry(date: now, snapshot: empty)
         let manyEntry = AingWidgetEntry(date: now, snapshot: many)
@@ -92,6 +96,11 @@ public enum AingWidgetPreviewCatalog {
             // 줄 높이가 마크를 깎는 갈래가 그 폭에서만 드러난다.
             item("limits-medium", mediumSize, AingAILimitsContent(entry: entry)),
             item("limits-medium-narrow", CGSize(width: 329, height: 155), AingAILimitsContent(entry: entry)),
+            // 맥 두 대 이상(머리에 맥 이름) — 기준 칸과 **가장 좁은 칸** 둘 다 굽는다: 이름이 들어갈 자리가
+            // 모자라면 좁은 칸에서만 드러난다(실측 194.4pt).
+            item("limits-medium-device", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: mainMac))),
+            item("limits-medium-device-narrow", CGSize(width: 329, height: 155),
+                 AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: mainMac))),
             item("limits-medium-stale", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: staleLimits))),
             item("limits-medium-one", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: oneProvider))),
             item("limits-medium-none", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: noProviders))),

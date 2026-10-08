@@ -25,21 +25,28 @@ import Testing
 struct V0347AILimitClearedRowTests {
     nonisolated static let now = MobileClock.demoInstant   // 2026-09-17 14:05 KST(목)
 
-    /// 실제 서버 모양. Claude 는 **비워진 행**(끈 직후 · 가장 최신)과 **옛 값 행**(다른 맥이 두 시간 전에 올린 것)이
-    /// 같이 있고, 안티그래비티는 **주간만** 온다(5시간 창이 없는 요금제 — 실측).
+    /// 실제 서버 모양 — **맥 한 대**(이 맥에서 Claude 를 껐다). Claude 는 **비워진 행**이고(끈 직후 · 같은 PK 를
+    /// 덮었다), 안티그래비티는 **주간만** 온다(5시간 창이 없는 요금제 — 실측).
+    ///
+    /// ★ 한 기기에 같은 제공자 행이 **둘일 수 없다**(서버 PK = user·device·provider · upsert 가 덮는다).
+    ///   그래서 "비우기 vs 옛 값"은 기기가 **둘일 때만** 생기는 일이고, 그 갈래는
+    ///   `clearingOnOneMacDoesNotEraseTheOtherMac` 가 따로 잰다.
+    nonisolated static let macA = "mac-off-a1"
+    nonisolated static let macB = "mac-on-b2"
     nonisolated static let rows = #"""
     [
-      {"provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
+      {"device_id":"mac-off-a1","device_label":"예성의 MacBook Pro",
+       "provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
        "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:04:30+00:00"},
-      {"provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00.434051+00:00",
-       "weekly_percent":60,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T03:05:00+00:00"},
-      {"provider":"antigravity","five_hour_percent":null,"five_hour_resets_at":null,
+      {"device_id":"mac-off-a1","device_label":"예성의 MacBook Pro",
+       "provider":"antigravity","five_hour_percent":null,"five_hour_resets_at":null,
        "weekly_percent":8,"weekly_resets_at":"2026-09-23T11:05:00+00:00","plan_label":null,"observed_at":"2026-09-17T05:03:00+00:00"}
     ]
     """#
 
     nonisolated static func responder(_ request: MobileStubRequest) -> MobileStubResponse? {
         if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(rows) }
+        if request.path == "/rest/v1/ai_limits_prefs", request.method == "GET" { return .json("[]") }
         return MeStoreTests.rootResponder(request)
     }
 
@@ -68,14 +75,18 @@ struct V0347AILimitClearedRowTests {
         #expect(store.aiLimits.fiveHourSummary == nil, "5시간 창이 없는데 요약 숫자를 지어냈다")
 
         // 단서 자체는 남아 있다(쓰지 않기로 한 단서다 — 근거는 `AILimitSurfaceText` 머리말).
-        let bundle = try #require(store.aiLimits.bundle)
-        #expect(bundle.provider(.claude)?.isLinked == false, "전제: 비워진 행은 창 0개로 남는다")
+        let group = try #require(store.aiLimits.groups?.first)
+        #expect(group.device.deviceID == Self.macA)
+        #expect(group.bundle.provider(.claude)?.isLinked == false, "전제: 비워진 행은 창 0개로 남는다")
+        // 맥이 **한 대**뿐이다 → 이름 줄이 서지 않고 위젯 패널에도 이름이 없다(지금과 똑같이 보인다).
+        #expect(!store.aiLimits.showsDeviceNames, "맥 한 대인데 기기 이름을 그린다 — 군더더기다")
 
         // 위젯 패널: 그 줄이 **실리지 않는다**(위젯은 받지 못한 줄을 그릴 수 없다).
         let panel = try #require(store.aiLimits.widgetPanel())
         #expect(panel.providers.map(\.provider) == ["antigravity"],
                 "비워진 줄이 위젯 패널까지 갔다 — 다음 타임라인에서 `0% · 초기화됨` 으로 굳는다")
         #expect(panel.providers.first?.fiveHourPercent == nil, "없는 5시간 창을 0 으로 지어내 실었다")
+        #expect(panel.deviceName == nil, "맥 한 대인데 위젯 머리에 이름을 적는다")
 
         // 그 패널로 위젯이 그릴 것: 안티그래비티 한 줄(주간만).
         guard case .limits(let limits) = AingWidgetLimitsState(snapshot: Self.snapshot(panel), at: Self.now) else {
@@ -95,16 +106,20 @@ struct V0347AILimitClearedRowTests {
     func everyProviderClearedFallsBackToTheEmptyState() async throws {
         let cleared = #"""
         [
-          {"provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
+          {"device_id":"mac-off-a1","device_label":"예성의 MacBook Pro",
+           "provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
            "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:04:30+00:00"},
-          {"provider":"codex","five_hour_percent":null,"five_hour_resets_at":null,
+          {"device_id":"mac-off-a1","device_label":"예성의 MacBook Pro",
+           "provider":"codex","five_hour_percent":null,"five_hour_resets_at":null,
            "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:04:30+00:00"},
-          {"provider":"antigravity","five_hour_percent":null,"five_hour_resets_at":null,
+          {"device_id":"mac-off-a1","device_label":"예성의 MacBook Pro",
+           "provider":"antigravity","five_hour_percent":null,"five_hour_resets_at":null,
            "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:04:30+00:00"}
         ]
         """#
         let harness = await RankMeHarness(label: "v0347-cleared-all") { request in
             if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(cleared) }
+            if request.path == "/rest/v1/ai_limits_prefs", request.method == "GET" { return .json("[]") }
             return MeStoreTests.rootResponder(request)
         }
         defer { harness.tearDown() }
@@ -113,12 +128,15 @@ struct V0347AILimitClearedRowTests {
         store.appDidBecomeActive()
         #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
         #expect(store.aiLimits.displayRows.isEmpty, "비워진 행으로 줄을 만들었다")
+        #expect(store.aiLimits.displayGroups.isEmpty, "줄이 0개인 맥의 **머리글만** 남겼다 — 그 줄은 '그 맥은 0% 다'로 읽힌다")
         #expect(!store.aiLimits.hasVisibleProviders)
         #expect(store.aiLimits.fiveHourSummary == nil)
+        #expect(store.aiLimits.mainDisplayGroup == nil, "그릴 맥이 없는데 메인 맥을 지어냈다")
 
         // 위젯에는 **빈 목록**이 간다(nil 이 아니다 — "아직 모른다"와 "그릴 줄이 없다"는 다른 안내다).
         let panel = try #require(store.aiLimits.widgetPanel(), "받았는데 패널을 안 넘겼다 — 위젯이 '앱을 열면'으로 굳는다")
         #expect(panel.providers.isEmpty)
+        #expect(panel.deviceName == nil, "그릴 줄이 없는데 맥 이름을 실었다 — 위젯 머리에 이름만 남는다")
         #expect(AingWidgetLimitsState(snapshot: Self.snapshot(panel), at: Self.now) == .noProviders)
         #expect(AingWidgetLimitsState(snapshot: Self.snapshot(nil), at: Self.now) == .noData, "두 빈 상태가 한 뜻이 됐다")
     }
@@ -133,6 +151,7 @@ struct V0347AILimitClearedRowTests {
         let base = Self.now
         func fetched(_ provider: String, fiveHour: Double?, weekly: Double?) -> AILimitFetchedRow {
             AILimitFetchedRow(
+                deviceID: Self.macA, deviceLabel: "예성의 MacBook Pro",
                 provider: provider,
                 fiveHourPercent: fiveHour, fiveHourResetsAt: fiveHour == nil ? nil : base.addingTimeInterval(9_000),
                 weeklyPercent: weekly, weeklyResetsAt: weekly == nil ? nil : base.addingTimeInterval(450_000),
@@ -156,7 +175,7 @@ struct V0347AILimitClearedRowTests {
         ]
         for (label, fiveHour, weekly, shows) in table {
             // 폰
-            let bundle = AILimitsStore.bundle(from: [fetched("claude", fiveHour: fiveHour, weekly: weekly)], now: base)
+            let bundle = meOneDeviceBundle(from: [fetched("claude", fiveHour: fiveHour, weekly: weekly)], now: base)
             #expect(bundle.visibleProviders.isEmpty == !shows, "폰: \(label) — 보임 판정이 뒤집혔다")
             // 위젯(같은 데이터 · 같은 판정이어야 한다)
             let panel = WidgetSnapshot.AILimitPanel(providers: [widgetRow("claude", fiveHour: fiveHour, weekly: weekly)])
@@ -171,7 +190,7 @@ struct V0347AILimitClearedRowTests {
         }
 
         // 섞여 있을 때 **비워진 쪽만** 사라진다(목록이 통째로 비지 않는다 — 이것이 '없음' 처리와 섞이면 생기는 사고다).
-        let mixed = AILimitsStore.bundle(
+        let mixed = meOneDeviceBundle(
             from: [fetched("claude", fiveHour: nil, weekly: nil), fetched("antigravity", fiveHour: nil, weekly: 8)],
             now: base
         )
@@ -188,28 +207,57 @@ struct V0347AILimitClearedRowTests {
         #expect(AILimitColumnText.absentValueText == "없음")
     }
 
-    /// ★ 맥 두 대. 비우기는 **그 맥의 설정**이고 다른 맥은 아직 올린다 — 제공자당 최신 하나를 고르는 규칙이
-    /// 그대로 답을 낸다. 양쪽을 다 잰다(한쪽만 재면 "항상 숨긴다"·"항상 보인다" 둘 다 초록이다).
-    @Test("맥 두 대: 비우기가 최신이면 숨고, 다른 맥이 값을 다시 올리면(최신) 그 줄이 돌아온다")
-    func newestRowWinsEvenWhenItIsTheClearingRow() throws {
+    /// ★ **맥 두 대 — 이 작업의 출발점.** 비우기는 **그 맥의 설정**이고 다른 맥은 아직 올린다.
+    ///
+    /// ## 0.3.46 이 틀렸던 자리(이 테스트가 뒤집은 단언)
+    /// 그때는 "제공자당 `observed_at` 최신 하나"였다. 그래서 **맥 A 에서 끄면 맥 B 의 살아 있는 값까지
+    /// 사라졌고**(비우기 행이 더 최신이면), 반대로 맥 B 가 다음 주기에 값을 올리면 **맥 A 에서 끈 것이
+    /// 아무 효과도 없었다**. 어느 쪽이든 "한 대에서 끄기"가 불가능했고, 화면은 누구 값인지 말하지 않았다.
+    /// 기기가 바깥 축이 되면 두 거짓이 함께 사라진다 — **끈 맥의 줄만 사라지고 다른 맥의 줄은 자기 묶음에 남는다.**
+    ///
+    /// 양쪽 순서를 **다 잰다**(한쪽만 재면 "항상 숨긴다"·"항상 보인다" 둘 다 초록이다).
+    @Test("맥 두 대: 끈 맥의 줄만 사라지고 **다른 맥의 줄은 남는다**(어느 쪽이 더 최신이어도 같다)")
+    func clearingOnOneMacDoesNotEraseTheOtherMac() throws {
         let base = Self.now
-        func row(_ fiveHour: Double?, ago: TimeInterval) -> AILimitFetchedRow {
+        func row(_ device: String, _ label: String, _ fiveHour: Double?, ago: TimeInterval) -> AILimitFetchedRow {
             AILimitFetchedRow(
+                deviceID: device, deviceLabel: label,
                 provider: "claude",
                 fiveHourPercent: fiveHour, fiveHourResetsAt: fiveHour == nil ? nil : base.addingTimeInterval(9_000),
                 weeklyPercent: fiveHour == nil ? nil : 60, weeklyResetsAt: nil,
                 planLabel: fiveHour == nil ? nil : "max", observedAt: base.addingTimeInterval(-ago)
             )
         }
-        // 끈 직후: 비우기(30초 전)가 값 행(2시간 전)을 이긴다 → 숨는다.
-        let justCleared = AILimitsStore.bundle(from: [row(27, ago: 7_200), row(nil, ago: 30)], now: base)
-        #expect(justCleared.visibleProviders.isEmpty,
-                "비워진 최신 행이 옛 값 행에 밀렸다 — 끈 사람의 카드에 옛 숫자가 최대 3일 남는다")
-        // 그 뒤 다른 맥(그 맥은 켜 둔 채다)이 다음 주기에 값을 올린다 → 돌아온다.
-        let otherMacUploaded = AILimitsStore.bundle(from: [row(nil, ago: 600), row(27, ago: 30)], now: base)
-        #expect(otherMacUploaded.visibleProviders.map(\.provider) == [.claude],
-                "아직 보기를 켜 둔 맥이 올린 최신 값이 옛 비우기에 밀렸다 — 그 맥의 설정이 무시된다")
-        #expect(otherMacUploaded.provider(.claude)?.window(.fiveHour)?.usedPercent == 27)
+        let offMac = row(Self.macA, "예성의 MacBook Pro", nil, ago: 30)        // 방금 껐다
+        let liveOld = row(Self.macB, "사무실 iMac", 27, ago: 7_200)            // 두 시간 전 값(아직 켜 둔 맥)
+        let liveNew = row(Self.macB, "사무실 iMac", 27, ago: 10)               // 방금 올린 값
+
+        // ① 비우기가 **더 최신**이어도 다른 맥의 값은 남는다. 0.3.46 은 여기서 목록을 통째로 비웠다
+        //    (= 아직 켜 둔 맥의 살아 있는 숫자가 남의 설정 때문에 사라졌다).
+        let clearedIsNewer = AILimitsStore.groups(from: [liveOld, offMac], now: base)
+        #expect(clearedIsNewer.map(\.device.deviceID) == [Self.macB],
+                "끈 맥의 묶음이 남았거나 켜 둔 맥의 묶음이 사라졌다(\(clearedIsNewer.map(\.device.deviceID)))")
+        #expect(clearedIsNewer.first?.bundle.visibleProviders.map(\.provider) == [.claude])
+        #expect(clearedIsNewer.first?.bundle.provider(.claude)?.window(.fiveHour)?.usedPercent == 27)
+
+        // ② 값이 **더 최신**이어도 끈 맥의 줄은 돌아오지 않는다. 0.3.46 은 여기서 Claude 를 그려
+        //    "맥 A 에서 껐는데 되살아났다"가 됐다.
+        let valueIsNewer = AILimitsStore.groups(from: [offMac, liveNew], now: base)
+        #expect(valueIsNewer.map(\.device.deviceID) == [Self.macB],
+                "끈 맥의 줄이 다른 맥 값으로 되살아났다 — 이 작업이 고치려던 바로 그 결함이다")
+
+        // ③ 두 맥이 **다 켜져 있으면** 둘 다 보인다(기준선 — 이것이 같은 입력이면 ①②는 영원히 초록이다).
+        let bothOn = AILimitsStore.groups(from: [row(Self.macA, "예성의 MacBook Pro", 44, ago: 30), liveOld], now: base)
+        #expect(bothOn.map(\.device.deviceID) == [Self.macA, Self.macB], "두 맥이 다 켜져 있는데 묶음이 하나다")
+        #expect(bothOn.map { $0.bundle.provider(.claude)?.window(.fiveHour)?.usedPercent } == [44, 27],
+                "두 맥의 값이 섞였다 — 각 묶음은 **자기 맥의 숫자**만 말해야 한다")
+
+        // ④ **한 기기 안**에서는 비우기가 값을 덮는다(서버 PK 가 같아 행이 하나지만, 응답이 둘을 줘도 최신이 이긴다).
+        let sameMac = AILimitsStore.groups(
+            from: [row(Self.macA, "예성의 MacBook Pro", 27, ago: 7_200), row(Self.macA, "예성의 MacBook Pro", nil, ago: 30)],
+            now: base
+        )
+        #expect(sameMac.isEmpty, "한 맥 안에서 비우기가 옛 값 행에 밀렸다 — 끈 사람의 카드에 옛 숫자가 최대 3일 남는다")
     }
 
     /// 3일 유령 게이트는 **그대로다**(이 변경은 그것과 별개의 빠른 길이다). 비워진 행이 늙어도 결과는 같다 — 숨김.
@@ -218,15 +266,17 @@ struct V0347AILimitClearedRowTests {
         let base = Self.now
         #expect(AILimitGhostRow.maxObservationAge == 3 * 86_400, "유령 문턱이 바뀌었다 — 이 변경은 그 게이트를 건드리지 않는다")
         #expect(AILimitsStore.ghostRowAge == AILimitGhostRow.maxObservationAge, "폰과 위젯이 다른 문턱을 쓴다")
-        let old = AILimitFetchedRow(provider: "claude", fiveHourPercent: nil, fiveHourResetsAt: nil,
+        let old = AILimitFetchedRow(deviceID: Self.macA, provider: "claude", fiveHourPercent: nil, fiveHourResetsAt: nil,
                                     weeklyPercent: nil, weeklyResetsAt: nil, planLabel: nil,
                                     observedAt: base.addingTimeInterval(-4 * 86_400))
-        #expect(AILimitsStore.bundle(from: [old], now: base).visibleProviders.isEmpty)
+        #expect(meOneDeviceBundle(from: [old], now: base).visibleProviders.isEmpty)
+        // ★ 유령뿐인 맥은 **묶음 자체가 서지 않는다**(이름만 남은 머리글은 "그 맥은 0% 다"로 읽힌다).
+        #expect(AILimitsStore.groups(from: [old], now: base).isEmpty, "3일 넘게 꺼진 맥의 이름만 남았다")
         // 살아 있는 값 행은 여전히 보인다(게이트를 조이지 않았다).
-        let alive = AILimitFetchedRow(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: nil,
+        let alive = AILimitFetchedRow(deviceID: Self.macA, provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: nil,
                                       weeklyPercent: 60, weeklyResetsAt: nil, planLabel: "max",
                                       observedAt: base.addingTimeInterval(-600))
-        #expect(AILimitsStore.bundle(from: [alive], now: base).visibleProviders.map(\.provider) == [.claude])
+        #expect(meOneDeviceBundle(from: [alive], now: base).visibleProviders.map(\.provider) == [.claude])
     }
 
     // MARK: - 빈 상태 문구
@@ -283,6 +333,9 @@ struct V0347AILimitClearedRowTests {
         let store = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsStore.swift")
         #expect(store.contains("row.hasAnyWindow ? row : nil"), "폰이 그릴 칸이 0개인 줄을 끝에서 거르지 않는다")
         #expect(store.contains("bundle.visibleProviders"), "폰이 공유 거르기를 안 쓴다")
+        // ★ 묶음도 같은 자리에서 거른다 — 줄이 0개가 된 맥의 머리글만 남기지 않는다.
+        #expect(store.contains("guard !bundle.visibleProviders.isEmpty else { return nil }"),
+                "폰이 제공자 0명인 기기 묶음을 걸러내지 않는다 — 이름만 남은 머리글이 선다")
         // 위젯 본문도 같은 깃발을 본다(그릴 숫자가 없는 줄을 세우지 않는다).
         let limitsWidget = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
         #expect(limitsWidget.contains(#"filter(\.hasAnyWindow)"#), "위젯 본문이 빈 줄 그물을 버렸다")

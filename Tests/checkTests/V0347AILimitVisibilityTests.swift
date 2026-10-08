@@ -134,6 +134,29 @@ private final class VVReaderProbe: Sendable {
     func fetched(host: String) -> Bool { fetchedHosts.contains(host) }
 }
 
+/// 움직이는 시계. 트레일링 업로드가 **그 시점의 now** 로 도는지 가르려면 두 바퀴의 시각이 달라야 한다 —
+/// 고정 시계(`{ vvNow }`)로는 옛 now 를 재사용해도 같은 값이라 그 결함이 보이지 않는다
+/// (기준선이 같은 입력이면 그 테스트는 영원히 초록이다).
+private final class VVClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+    init(_ value: Date) { self.value = value }
+    var now: Date { lock.lock(); defer { lock.unlock() }; return value }
+    func advance(_ seconds: TimeInterval) {
+        lock.lock()
+        value = value.addingTimeInterval(seconds)
+        lock.unlock()
+    }
+}
+
+/// 관찰 알림이 왔는가. `withObservationTracking` 의 onChange 는 `@Sendable` 이라 지역 변수를 못 잡는다.
+private final class VVObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    func hit() { lock.lock(); value = true; lock.unlock() }
+    var wasHit: Bool { lock.lock(); defer { lock.unlock() }; return value }
+}
+
 // MARK: - ① 설정 모델: 기본 전부 켬 · 영속 · 모르는 키 보존
 
 @Suite("v0.3.47 — 표시 설정 모델")
@@ -222,6 +245,34 @@ struct V0347AILimitVisibilityModelTests {
 
         let third = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
         #expect(third.pendingClear.isEmpty, "비운 사실이 재실행에 되살아났다 — 같은 빈 행을 매번 다시 올린다")
+    }
+
+    /// ★ 비우기 대기열은 **관찰 대상이 아니다**(`@ObservationIgnored`).
+    ///
+    /// 같은 커밋이 더한 다른 업로드 상태들(`uploadInFlight`·`uploadPendingTrailing`·계측값)엔 붙어 있는데
+    /// 이 둘(`pendingClearGenerations`·`clearSequence`)만 빠져 있었다. 관찰 대상이면 30초 틱마다 도는
+    /// 업로드가 대기열을 만질 때 그 값을 읽은 뷰가 전부 무효화돼, 아무 숫자도 안 바뀐 틱에 설정 창·팝오버가
+    /// 다시 그려진다. **모양(글자)이 아니라 관찰이 실제로 트이는지**를 잰다.
+    @Test
+    func theClearQueueIsNotObservable() async {
+        let limits = AILimitStore(defaults: vvDefaults(), clock: { vvNow },
+                                  runner: VVRunnerSpy(available: [.claude]).runner())
+        await limits.refreshIfDue(now: vvNow)
+        #expect(limits.pendingClear.isEmpty, "전제: 대기열이 비어 있다")
+
+        let queueFlag = VVObservationFlag()
+        withObservationTracking { _ = limits.pendingClear } onChange: { queueFlag.hit() }
+        limits.setProviderEnabled(.claude, false)
+        #expect(limits.pendingClear == [.claude], "전제: 대기열이 실제로 바뀌었다")
+        #expect(queueFlag.wasHit == false,
+                "비우기 대기열이 관찰 대상이다 — 틱마다 아무 숫자도 안 바뀐 화면이 다시 그려진다")
+
+        // ★ 대조군: 같은 세터가 바꾼 **표시 설정은 관찰 대상이어야 한다**. 이게 없으면 위 단언은
+        //   `withObservationTracking` 을 잘못 쓴 날에도 초록이다(아무것도 추적하지 않으면 늘 안 온다).
+        let visibilityFlag = VVObservationFlag()
+        withObservationTracking { _ = limits.visibility } onChange: { visibilityFlag.hit() }
+        limits.setProviderEnabled(.claude, true)
+        #expect(visibilityFlag.wasHit, "표시 설정이 관찰 대상이 아니다 — 스위치를 눌러도 설정 창이 안 바뀐다")
     }
 }
 
@@ -899,7 +950,7 @@ struct V0347AILimitClearingUploadTests {
         let posts = URLProtocolStub.requests(forHost: host).count
         #expect(posts == 3, "열 틱(5분)에 POST 가 \(posts)건이다 — 60초→두 배씩이면 0·60·180초에 세 번이다")
         #expect(limits.pendingClear == Set(AILimitProvider.allCases), "실패했는데 대기열을 비웠다")
-        #expect(limits.clearFailureStreak == 3)
+        #expect(limits.uploadFailureStreak == 3)
 
         // ★ 영구 포기는 없다. 하루 뒤에는 다시 노크한다.
         await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(86_400))
@@ -912,7 +963,7 @@ struct V0347AILimitClearingUploadTests {
         defer { healthy.session = nil }
         await healthy.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(90_000))
         #expect(limits.pendingClear.isEmpty, "서버가 돌아왔는데 비우기가 안 올라갔다")
-        #expect(limits.clearFailureStreak == 0, "성공이 백오프를 풀지 않았다")
+        #expect(limits.uploadFailureStreak == 0, "성공이 백오프를 풀지 않았다")
         for tick in 0..<11 {
             await healthy.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(90_030 + Double(tick) * 30))
         }
@@ -924,28 +975,145 @@ struct V0347AILimitClearingUploadTests {
     @Test
     func clearBackoffDoublesAndCapsAndResetsOnSuccess() {
         let limits = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
-        #expect(limits.clearRetryAllowed(now: vvNow), "실패가 하나도 없는데 막았다")
+        #expect(limits.uploadRetryAllowed(now: vvNow), "실패가 하나도 없는데 막았다")
 
-        limits.noteClearFailed(now: vvNow)
-        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(59)) == false, "실패에 간격이 없다")
-        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(60)))
+        limits.noteUploadFailed(now: vvNow)
+        #expect(limits.uploadRetryAllowed(now: vvNow.addingTimeInterval(59)) == false, "실패에 간격이 없다")
+        #expect(limits.uploadRetryAllowed(now: vvNow.addingTimeInterval(60)))
 
-        limits.noteClearFailed(now: vvNow.addingTimeInterval(60))
-        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(179)) == false, "둘째 실패에 간격이 안 벌어졌다")
-        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(180)))
+        limits.noteUploadFailed(now: vvNow.addingTimeInterval(60))
+        #expect(limits.uploadRetryAllowed(now: vvNow.addingTimeInterval(179)) == false, "둘째 실패에 간격이 안 벌어졌다")
+        #expect(limits.uploadRetryAllowed(now: vvNow.addingTimeInterval(180)))
 
         // 상한. 서른 번 더 실패해도 한 시간을 넘지 않는다 — 상한이 없으면 60초 × 2^31 이고, 그건 영구 포기다.
-        for _ in 0..<30 { limits.noteClearFailed(now: vvNow) }
-        #expect(limits.clearFailureStreak == 32)
-        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(3_599)) == false)
-        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(3_600)),
+        for _ in 0..<30 { limits.noteUploadFailed(now: vvNow) }
+        #expect(limits.uploadFailureStreak == 32)
+        #expect(limits.uploadRetryAllowed(now: vvNow.addingTimeInterval(3_599)) == false)
+        #expect(limits.uploadRetryAllowed(now: vvNow.addingTimeInterval(3_600)),
                 "간격이 상한을 넘었다 — 그만큼은 영구 포기와 구별되지 않는다")
 
-        limits.noteClearSucceeded()
-        #expect(limits.clearFailureStreak == 0)
-        #expect(limits.clearRetryAllowed(now: vvNow), "성공이 백오프를 풀지 않았다 — 다음 실패가 한 시간부터 시작한다")
-        #expect(AILimitStore.clearRetryBaseBackoff == 60)
-        #expect(AILimitStore.clearRetryMaxBackoff == 3_600)
+        limits.noteUploadSucceeded()
+        #expect(limits.uploadFailureStreak == 0)
+        #expect(limits.uploadRetryAllowed(now: vvNow), "성공이 백오프를 풀지 않았다 — 다음 실패가 한 시간부터 시작한다")
+        #expect(AILimitStore.uploadRetryBaseBackoff == 60)
+        #expect(AILimitStore.uploadRetryMaxBackoff == 3_600)
+    }
+
+    /// ★★ **값** 업로드도 항구적 실패에서 간격을 벌린다 (2026-10-08 재검 — 같은 결함의 더 넓은 쪽).
+    ///
+    /// 초안의 게이트는 `if !valuesChanged, !uploadRetryAllowed` 라 **값이 바뀐 업로드를 비껴갔다.** 그 비껴감은
+    /// "새 소식은 늘 나간다"는 뜻이었는데, 스키마 없는 서버에서는 장부(`lastUploadedAILimits`)가 **성공에만**
+    /// 갱신되므로 `valuesChanged` 가 **영원히 참**이다. 그래서 마스터를 켜 둔 평범한 사용자 — 비울 것이 하나도
+    /// 없어서 비우기 가드를 한 번도 만나지 않는 사람 — 는 **30초마다 영원히 POST** 했다.
+    /// 실측: 가드가 값 쪽을 안 태우면 10틱에 POST 10건이고 장부는 끝까지 nil 이다.
+    @Test
+    func permanentlyFailingValueUploadAlsoSlowsDown() async {
+        // 접두어로 **내 호스트**를 쓰는 까닭은 요청 수를 세기 때문이다 — 공용 이름을 쓰면 병렬로 도는 다른
+        // 스위트의 POST 가 그 집계에 섞인다.
+        let host = "schema-missing-v0347-value-backoff"
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        #expect(limits.pendingClear.isEmpty, "전제: 비울 것이 하나도 없다 — 이 테스트는 값 쪽만 잰다")
+        #expect(limits.enabledBundle.visibleProviders.count == 1, "전제: 올릴 값이 있다")
+
+        // 30초 틱 열 번(= 5분). 가드가 값 쪽을 안 태우면 열 번 다 POST 한다.
+        for tick in 0..<10 {
+            await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(Double(tick) * 30))
+        }
+        let posts = URLProtocolStub.requests(forHost: host).count
+        #expect(posts == 3, "열 틱(5분)에 POST 가 세 번이 아니다 — 60초→두 배씩이면 0·60·180초다")
+        #expect(store.lastUploadedAILimits == nil,
+                "실패했는데 장부를 갱신했다 — 그게 valuesChanged 를 영원히 참으로 만든 뿌리다")
+        #expect(limits.uploadFailureStreak == 3)
+
+        // ★ 영구 포기는 없다. 하루 뒤에는 다시 노크한다.
+        await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(86_400))
+        #expect(URLProtocolStub.requests(forHost: host).count == posts + 1,
+                "하루가 지나도 다시 시도하지 않았다 — 그 맥의 숫자는 영영 서버에 안 올라간다")
+
+        // 대조군: 멀쩡한 서버에서는 **즉시** 나간다(게이트가 '늘 막는다'로 굳지 않았다).
+        let okHost = "v0347-value-backoff-ok"
+        let okDefaults = vvDefaults()
+        let okLimits = AILimitStore(defaults: okDefaults, clock: { vvNow },
+                                    runner: VVRunnerSpy(available: [.claude]).runner())
+        let okStore = self.store(host: okHost, defaults: okDefaults, aiLimits: okLimits)
+        defer { okStore.session = nil }
+        await okLimits.refreshIfDue(now: vvNow)
+        await okStore.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(URLProtocolStub.requests(forHost: okHost).count == 1, "멀쩡한 서버인데 값이 안 나갔다")
+        #expect(okStore.lastUploadedAILimits != nil, "성공했는데 장부를 갱신하지 않았다")
+    }
+
+    /// ★ 본문을 만드는 함수를 부르는 자리는 **진입점 하나**다.
+    ///
+    /// 주석은 "직렬화를 건너뛰면 P1 이 그대로 돌아온다"고 단정하는데 그 불변식을 재는 계약이 없었다
+    /// (단정만 있고 그물이 없는 자리다). `sendAILimitsUpload` 를 직접 부르는 둘째 집이 생기면 같은 PK 가
+    /// 두 본문에 다른 뜻으로 들어가고 도착 순서는 아무도 보장하지 않는다 — 끈 제공자가 되살아나고,
+    /// 그때 `markCleared` 가 대기열을 비워 **다시는 안 비운다.**
+    @Test
+    func theUploadBodyBuilderHasExactlyOneCaller() throws {
+        let calls = try v0347CountInSources("sendAILimitsUpload(")
+            - (try v0347CountInSources("func sendAILimitsUpload("))
+        #expect(calls == 1, "sendAILimitsUpload 를 부르는 곳이 한 군데가 아니다 — 직렬화를 건너뛰는 집이 생겼다")
+        // 직렬화 가드가 그 진입점에 **실제로** 있다(부르는 곳을 세는 것만으로는 가드가 지워진 것을 못 본다).
+        let source = v0347Stripped(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreAILimits.swift"))
+        #expect(source.contains("guard aiLimits.uploadInFlight == nil else"),
+                "비행 중 가드가 사라졌다 — 토글 둘이 업로드 둘을 동시에 띄운다")
+        #expect(source.contains("aiLimits.uploadPendingTrailing = true"),
+                "합치기가 사라졌다 — 줄 세우지 않으면 요청이 토글 수만큼 난다")
+    }
+
+    /// ★★ 트레일링 업로드는 **그 시점의 `now`** 로 돈다 (2026-10-08 재검).
+    ///
+    /// 초안의 루프는 첫 호출의 `now` 를 둘째 바퀴에도 넘겼다. 그 값은 이미 과거다 — 첫 바퀴가 왕복을 돌고 온
+    /// 뒤니까. 백오프 창이 그 사이에 끝났는데도 트레일링이 옛 시각으로 판정하면 게이트가 닫혀 **소비된 채
+    /// 아무것도 보내지 않는다.** 다음 30초 틱이 구해 주지만 "끈 즉시 폰에서 사라진다"가 그만큼 늦는다.
+    ///
+    /// 재현에 쓰는 호스트가 `delayed-…-expired-token` 인 까닭: 지연(비행 창)은 **접두어**로, 실패(401)는
+    /// **접미어 + 낡은 토큰**으로 붙는다 — 둘을 겹칠 수 있는 유일한 조합이다(URLProtocolStub 주석).
+    /// `schema-missing` 은 접두어라 `delayed-` 와 겹칠 수 없다.
+    @Test
+    func theTrailingUploadRunsWithAFreshNow() async {
+        let host = "delayed-v0347-trailing-expired-token"
+        let defaults = vvDefaults()
+        let clock = VVClock(vvNow)
+        let spy = VVRunnerSpy(available: [.claude])
+        let limits = AILimitStore(defaults: defaults, clock: { clock.now }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        // 이 토큰이어야 스텁이 401 을 준다(만료 재현 규약).
+        store.session = SupabaseSession(accessToken: "old-access-token", refreshToken: nil, userID: "me")
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        // 껐다 → 비우기 대기열에 claude 하나, 올릴 값은 0 건. 그래서 둘째 바퀴는 백오프 게이트를 지난다.
+        limits.setProviderEnabled(.claude, false)
+        #expect(limits.pendingClear == [.claude], "전제: 비울 것이 하나 있다")
+        #expect(limits.enabledBundle.visibleProviders.isEmpty, "전제: 올릴 값은 없다(값은 게이트를 비껴가지 않는다)")
+
+        // ① 첫 바퀴는 실제로 POST 하고(백오프 없음) 401 로 실패해 60초 창을 세운다.
+        let first = Task { @MainActor in await store.uploadAILimitsIfNeeded(now: vvNow) }
+        await vvYieldUntil { limits.uploadRoundTripCount == 1 }
+        #expect(limits.uploadRoundTripCount == 1, "전제: 첫 업로드가 본문을 굳히고 왕복에 들어갔다")
+        #expect(limits.uploadInFlight != nil, "전제: 첫 업로드가 아직 비행 중이다 — 아니면 트레일링이 안 선다")
+
+        // ② 비행 중에 둘째 요청 → 트레일링 한 번으로 합쳐진다.
+        await store.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(limits.uploadPendingTrailing, "전제: 트레일링이 섰다 — 거짓이면 이 테스트는 아무것도 재지 못한다")
+
+        // ③ 그 사이에 시계가 백오프 창(60초)을 지나간다. 트레일링이 **옛 now** 로 돌면 여기서 막힌다.
+        clock.advance(120)
+        await first.value
+
+        #expect(URLProtocolStub.requests(forHost: host).count == 2,
+                "트레일링이 소비된 채 아무것도 안 보냈다 — 끈 제공자가 폰에서 사라지는 일이 30초 늦는다")
+        #expect(limits.pendingClear == [.claude], "실패했으니 대기열은 그대로다(다음 기회에 재시도한다)")
+        #expect(limits.uploadPendingTrailing == false, "트레일링이 소비되지 않았다")
+        #expect(limits.uploadInFlight == nil, "핸들이 남았다 — 다음 업로드가 영원히 자기 가드에 막힌다")
     }
 
     /// 세터가 띄운 업로드가 끝날 때까지 기다린다.
@@ -1010,6 +1178,71 @@ struct V0347AILimitSettingsViewTests {
             let calls = try v0347CountInSources(setter) - (try v0347CountInSources("func \(setter)"))
             #expect(calls == 1, "\(setter) 를 부르는 곳이 \(calls)군데다")
         }
+    }
+
+    /// ★ '폰·위젯에 보여줄 맥' 고르개가 설정 창에 있고, **스토어 함수 하나로만** 간다.
+    ///
+    /// 글자로 재는 까닭은 위 스위치들과 같다: 여기서 `aiLimits` 를 직접 만지면 서버에 쓰는 일이 빠지고
+    /// 그 누락은 조용하다(설정 창만 바뀌고 폰·위젯은 옛 맥을 계속 그린다).
+    @Test
+    func settingsWindowOffersTheMainMacPickerAndRoutesThroughTheStore() throws {
+        let source = v0347Stripped(try CheckCoreSourceLayout.joinedSplitSource("CheckSettingsView.swift"))
+        #expect(source.contains("Text(\"폰·위젯에 보여줄 맥\")"), "고르개 줄의 제목이 없다")
+        #expect(source.contains("if store.aiLimits.showsMainDevicePicker {"),
+                "맥이 한 대인 사람에게도 고르개가 보인다 — 고를 것이 없는 고르개는 권한에 대한 거짓말이다")
+        #expect(source.contains("await store.loadAILimitDevicesIfNeeded()"),
+                "기기 목록을 받아 오는 자리가 없다 — 고르개가 영영 안 나타난다")
+        #expect(source.contains("await store.setAILimitMainDevice(device.deviceID)"),
+                "칩이 스토어 함수로 가지 않는다 — 서버에 안 써서 폰이 안 바뀐다")
+        #expect(source.contains("AILimitDeviceRoster.displayNames(store.aiLimits.devices)"),
+                "이름을 뷰가 직접 만든다 — 겹치는 이름을 가르는 규칙이 두 벌이 된다")
+
+        // 세터를 부르는 곳은 설정 화면 하나뿐이다(위 두 스위치와 같은 규약).
+        let calls = try v0347CountInSources("setAILimitMainDevice(")
+            - (try v0347CountInSources("func setAILimitMainDevice("))
+        #expect(calls == 1, "setAILimitMainDevice 를 부르는 곳이 한 군데가 아니다")
+
+        // ★ 그 줄은 `Menu`·`Picker`·`TextField` 가 아니다. 이 저장소의 렌더 검증(`ImageRenderer`)은 그 셋을
+        //   **노란 상자**로 그려 그 자리의 픽셀 커버리지가 0 이 된다 — 잘림·겹침·색 결함을 스냅샷이 영영 못 본다.
+        let start = try #require(source.range(of: "private struct AILimitMainDeviceSettingsRow"))
+        let row = source[start.lowerBound...].prefix(2_600)
+        for banned in ["Menu {", "Picker(", "TextField("] {
+            #expect(row.contains(banned) == false, "고르개가 렌더 검증에서 노란 상자로 그려지는 조각을 쓴다")
+        }
+        #expect(row.contains("Capsule()"), "칩이 칩이 아니다 — 모양 규약이 캐릭터 행과 갈렸다")
+    }
+
+    /// ★★ 맥이 **두 대일 때만** 그 줄이 실제로 **그려진다**(높이와 잉크가 같이 늘어난다).
+    ///
+    /// 짝이 필요한 까닭: "두 대면 보인다"만 재면 줄을 통째로 지워도 "한 대면 안 보인다"는 영원히 초록이다
+    /// (기준선이 같은 입력이면 그 테스트는 영원히 초록이다). 그리고 높이만 보면 `ScrollView` 안이 비었을 때처럼
+    /// **자리는 생겼는데 아무것도 안 그려진** 상태를 통과시킨다(2026-10-07 실증) — 그래서 잉크도 같이 센다.
+    @Test
+    func theMainMacPickerDrawsOnlyWithTwoMacs() async throws {
+        let suite = CheckTestScratch.defaults("v0347-main-mac-render")
+        let devices = [
+            AILimitDevice(deviceID: "MAC-A", label: "Mac mini", lastObservedAt: vvNow.addingTimeInterval(-600)),
+            AILimitDevice(deviceID: "MAC-B", label: "사무실 iMac", lastObservedAt: vvNow)
+        ]
+
+        let one = AILimitStore(defaults: vvDefaults(), clock: { vvNow },
+                              runner: VVRunnerSpy(available: [.claude]).runner())
+        await one.refreshIfDue(now: vvNow)
+        one.applyDevices([devices[0]], mainDeviceID: nil, now: vvNow)
+        #expect(one.showsMainDevicePicker == false, "전제: 맥 한 대면 고르개가 숨는다")
+        let oneHeight = try v0347SettingsHeight(aiLimits: one, characterDefaults: suite)
+        let oneInk = try v0347SettingsInk(aiLimits: one, characterDefaults: suite)
+
+        let two = AILimitStore(defaults: vvDefaults(), clock: { vvNow },
+                              runner: VVRunnerSpy(available: [.claude]).runner())
+        await two.refreshIfDue(now: vvNow)
+        two.applyDevices(devices, mainDeviceID: "MAC-B", now: vvNow)
+        #expect(two.showsMainDevicePicker, "전제: 맥 두 대면 고르개가 선다")
+        let twoHeight = try v0347SettingsHeight(aiLimits: two, characterDefaults: suite)
+        let twoInk = try v0347SettingsInk(aiLimits: two, characterDefaults: suite)
+
+        #expect(twoHeight > oneHeight, "맥이 두 대인데 고르개 줄이 그려지지 않았다")
+        #expect(twoInk > oneInk, "높이는 늘었는데 잉크가 안 늘었다 — 자리만 생기고 아무것도 안 그려졌다")
     }
 
     /// ★ **연동된 도구가 없는 사람의 설정 창은 한 픽셀도 안 달라진다.**

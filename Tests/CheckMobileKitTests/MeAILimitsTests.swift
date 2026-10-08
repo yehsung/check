@@ -11,25 +11,48 @@ import Testing
 @MainActor
 @Suite("나 탭 AI 리밋(v0.3.45)")
 struct MeAILimitsTests {
-    /// 세 제공자 + 모르는 제공자 + 기기 둘(같은 Claude 계정을 맥 두 대가 읽은 모양).
+    /// 실제 서버 모양 — **맥 두 대**(v0.3.47 기기 축). 맥 A 가 제공자 셋 + 모르는 제공자를, 맥 B 가 Claude 하나를
+    /// 올렸다. 0.3.46 까지 폰은 이 응답을 "제공자당 최신 하나"로 접어 맥 B 의 Claude(9%)를 **지워 버렸다**.
+    nonisolated static let macA = "mac-a-7f21"
+    nonisolated static let macB = "mac-b-3c90"
     nonisolated static let rows = #"""
     [
-      {"provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00.434051+00:00",
+      {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+       "provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00.434051+00:00",
        "weekly_percent":60,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T05:03:00.128+00:00"},
-      {"provider":"claude","five_hour_percent":9,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
-       "weekly_percent":11,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T02:00:00+00:00"},
-      {"provider":"codex","five_hour_percent":0,"five_hour_resets_at":null,
+      {"device_id":"mac-b-3c90","device_label":"사무실 iMac",
+       "provider":"claude","five_hour_percent":9,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
+       "weekly_percent":11,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T04:50:00+00:00"},
+      {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+       "provider":"codex","five_hour_percent":0,"five_hour_resets_at":null,
        "weekly_percent":56,"weekly_resets_at":"2026-09-21T06:51:40+00:00","plan_label":"plus","observed_at":"2026-09-17T05:00:00+00:00"},
-      {"provider":"antigravity","five_hour_percent":null,"five_hour_resets_at":null,
+      {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+       "provider":"antigravity","five_hour_percent":null,"five_hour_resets_at":null,
        "weekly_percent":8,"weekly_resets_at":"2026-09-23T11:05:00+00:00","plan_label":null,"observed_at":"2026-09-17T04:55:00+00:00"},
-      {"provider":"future-provider","five_hour_percent":99,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
+      {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+       "provider":"future-provider","five_hour_percent":99,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
        "weekly_percent":99,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":null,"observed_at":"2026-09-17T05:04:00+00:00"}
     ]
     """#
 
+    /// 고른 메인 맥이 **없다**(행 0개 = 한 번도 안 골랐다 — `profiles` 와 달리 가입 트리거가 이 행을 만들지 않는다).
+    /// 그래서 위젯은 코어 규칙대로 "가장 최근에 일한 맥"으로 접는다.
+    nonisolated static let noPrefs = MobileStubResponse.json("[]")
+
     nonisolated static func responder(_ request: MobileStubRequest) -> MobileStubResponse? {
         if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(rows) }
+        if request.path == "/rest/v1/ai_limits_prefs", request.method == "GET" { return noPrefs }
         return MeStoreTests.rootResponder(request)
+    }
+
+    /// 폰은 **고른 맥을 바꾸지 않는다**(고르개는 맥 설정에만 있다). 쓰기가 한 번이라도 나가면 어느 맥에서
+    /// 바꿔도 같은 한 값이라는 규약이 깨지고, 위젯이 조용히 다른 맥으로 옮겨 간다.
+    static func expectNoPrefsWrites(_ harness: RankMeHarness,
+                                    sourceLocation: SourceLocation = #_sourceLocation) {
+        let writes = harness.requests.filter {
+            $0.path.hasPrefix("/rest/v1/ai_limits_prefs") && $0.method.uppercased() != "GET"
+        }
+        #expect(writes.isEmpty, "폰이 메인 맥 선택을 고쳤다(\(writes.map(\.method)))", sourceLocation: sourceLocation)
     }
 
     // MARK: - 읽기
@@ -51,34 +74,55 @@ struct MeAILimitsTests {
         let get = try #require(gets.first)
         #expect(get.queryValue("user_id") == "eq.\(RankMeFixture.userID)", "본인 행만 거르지 않았다 — RLS 가 막아 주지만 쿼리도 좁혀야 한다")
         #expect(get.query.contains("five_hour_percent") && get.query.contains("weekly_resets_at"))
-        #expect(!get.query.contains("device_id"), "쓰지 않는 칸(기기 식별자)을 받아 온다")
+        // ★ 0.3.46 은 이 두 칸을 **일부러 받지 않았고**(주석: "기기 식별자는 화면에 쓸 일이 없다") 그 문장이
+        //   결함의 뿌리였다 — 기기 칸이 없으니 맥들을 접을 수밖에 없었다. 이제는 받아야 한다.
+        #expect(get.query.contains("device_id") && get.query.contains("device_label"),
+                "기기 칸을 안 받아 온다 — 그러면 맥 두 대가 한 줄로 접히고 끈 제공자가 되살아난다")
         #expect(!get.query.contains("account_fingerprint"), "폰이 계정 지문을 받아 온다(쓰임이 없는 값이다)")
 
         let writes = harness.requests.filter { $0.path == "/rest/v1/ai_limits" && $0.method.uppercased() != "GET" }
         #expect(writes.isEmpty, "폰이 리밋 표에 썼다 — 올리는 쪽은 맥 하나다")
+        Self.expectNoPrefsWrites(harness)
         harness.expectNoForbiddenCalls()
 
-        // 제공자별 최신 하나(맥 두 대의 Claude 행에서 05:03 쪽) · 모르는 제공자는 버린다 · 순서 고정.
+        // ★ **기기로 묶는다**(맥 두 대 → 묶음 둘, 최근에 일한 맥 먼저). 0.3.46 은 Claude 를 한 줄로 접어
+        //   맥 B 의 9% 를 지웠다 — 그 접기가 "맥 A 에서 껐는데 맥 B 값이 이겨 되살아난다"의 정체다.
+        let groups = store.aiLimits.displayGroups
+        #expect(groups.map(\.name) == ["예성의 MacBook Pro", "사무실 iMac"],
+                "기기 묶음이 최근에 일한 맥 먼저로 서지 않는다(\(groups.map(\.name)))")
+        #expect(store.aiLimits.showsDeviceNames, "맥이 둘인데 이름을 그리지 않는다")
+        let first = try #require(groups.first)
+        #expect(first.rows.map(\.provider) == [.claude, .codex, .antigravity], "묶음 안 순서는 제공자 고정 순서다")
+        let second = try #require(groups.last)
+        #expect(second.rows.map(\.provider) == [.claude])
+        #expect(second.rows.first?.fiveHour?.valueText == "9%",
+                "둘째 맥의 값이 사라졌다 — 두 맥을 접었다(이 작업이 고친 그 결함)")
+
         let rows = store.aiLimits.displayRows
-        #expect(rows.map(\.provider) == [.claude, .codex, .antigravity])
+        #expect(rows.map(\.provider) == [.claude, .codex, .antigravity, .claude], "모르는 제공자가 줄을 얻었다")
         let claude = try #require(rows.first)
         #expect(claude.planLabel == "max")
-        #expect(claude.fiveHour?.valueText == "27%", "오래된 기기 행(9%)이 이겼다")
+        #expect(claude.fiveHour?.valueText == "27%")
         // 소수초가 붙은 `observed_at`("…05:03:00.128+00:00")도 읽힌다 — 포매터 한 벌이면 nil 이 되고 그 행은 버려진다
         // (119.9초 전이라 나이는 "1분 전"이다. 파싱이 깨졌다면 행 자체가 사라져 위의 단언들이 먼저 빨갛다).
         #expect(claude.fiveHour?.captionText == "1분 전")
         #expect(claude.weekly?.valueText == "60%")
         // 안티그래비티는 5시간 창이 없다 — 줄을 지어내지 않는다.
-        let antigravity = try #require(rows.last)
+        let antigravity = try #require(first.rows.last)
         #expect(antigravity.fiveHour == nil && antigravity.weekly?.valueText == "8%")
         #expect(antigravity.visibleWindows.count == 1)
         // Codex 0% 는 리셋을 주장하지 않는다(가짜 reset_at 함정) — 맥이 nil 로 올렸고 캡션은 나이다.
-        let codex = try #require(rows.dropFirst().first)
+        let codex = try #require(first.rows.dropFirst().first)
         #expect(codex.fiveHour?.valueText == "0%" && codex.fiveHour?.freshness.isResetClaim == false)
         #expect(codex.fiveHour?.resetsAt == nil)
-        // 요약은 **5시간 창만** 모은다(주간 60% 가 이기면 지금 여유가 안 보인다).
+        // 요약은 **5시간 창만** 모은다(주간 60% 가 이기면 지금 여유가 안 보인다). 맥 둘의 줄을 **다 모은다** —
+        // 27% 가 9% 를 이긴다(다른 맥의 더 높은 값을 놓치면 "지금 막힐 위험"을 틀리게 말한다).
         #expect(store.aiLimits.fiveHourSummary?.valueText == "27%")
         #expect(store.aiLimits.hasVisibleProviders)
+
+        // 맥이 둘이므로 고른 맥을 **한 번** 묻는다(한 대뿐이면 묻지 않는다 — 아래 전용 테스트가 그 갈래를 잰다).
+        #expect(harness.requests(path: "/rest/v1/ai_limits_prefs", method: "GET").count == 1,
+                "메인 맥 조회 횟수가 1이 아니다")
     }
 
     @Test("위젯: 받은 값을 지금 탭이 스냅샷 **최상위 칸**에 쓴다(리밋 스토어는 쓰지 않는다) · 토큰 줄은 기록이 와야 선다")
@@ -90,8 +134,11 @@ struct MeAILimitsTests {
         store.appDidBecomeActive()
         #expect(await baseWaitUntil { harness.model.context.widgetSnapshots.current?.aiLimits != nil })
         let panel = try #require(harness.model.context.widgetSnapshots.current?.aiLimits)
+        // ★ 위젯에 가는 것은 **메인 맥 하나**다(v0.3.47). 고른 맥이 없으므로 가장 최근에 일한 맥(맥 A).
+        //   맥 B 의 Claude 9% 는 **실리지 않는다** — 170pt 칸에 여섯 줄을 밀어 넣지 않는 것이 사용자 결정이다.
         #expect(panel.providers.map(\.provider) == ["claude", "codex", "antigravity"], "모르는 제공자가 위젯까지 갔다")
-        #expect(panel.providers[0].fiveHourPercent == 27)
+        #expect(panel.deviceName == "예성의 MacBook Pro", "맥이 둘인데 위젯이 어느 맥인지 말하지 않는다")
+        #expect(panel.providers[0].fiveHourPercent == 27, "두 맥의 Claude 가 섞였다(맥 B 는 9% 다)")
         #expect(panel.providers[1].fiveHourResetsAt == nil, "0% 행의 가짜 리셋 시각을 위젯에 실었다")
         #expect(panel.todayTokens == nil, "기록을 받기 전인데 토큰 수를 지어냈다")
 
@@ -127,7 +174,8 @@ struct MeAILimitsTests {
         store.appDidBecomeActive()
         #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
         let loaded = store.aiLimits.displayRows.count
-        #expect(loaded == 3)
+        // 맥 둘 × (셋 + 하나) — 0.3.46 이라면 셋이었다(맥 B 의 Claude 를 접어 지웠다).
+        #expect(loaded == 4)
 
         // 신선하면 다시 묻지 않는다(시계를 안 돌렸다).
         let before = harness.requests(path: "/rest/v1/ai_limits", method: "GET").count
@@ -151,31 +199,35 @@ struct MeAILimitsTests {
         let store = harness.me
         store.appDidBecomeActive()
         #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
-        #expect(store.aiLimits.bundle != nil)
+        #expect(store.aiLimits.groups?.count == 2)
 
         store.reset()
-        #expect(store.aiLimits.bundle == nil && !store.aiLimits.state.hasLoaded)
-        #expect(store.aiLimits.displayRows.isEmpty && store.aiLimits.fiveHourSummary == nil)
+        #expect(store.aiLimits.groups == nil && !store.aiLimits.state.hasLoaded)
+        #expect(store.aiLimits.displayGroups.isEmpty && store.aiLimits.displayRows.isEmpty)
+        #expect(store.aiLimits.fiveHourSummary == nil && !store.aiLimits.showsDeviceNames)
+        // ★ 고른 맥도 지운다 — 남기면 다음 사람의 위젯이 앞 사람이 고른 식별자로 선다(증상이 조용하다).
+        #expect(store.aiLimits.mainDeviceID == nil, "계정을 바꿨는데 앞 사람이 고른 맥이 남았다")
+        #expect(store.aiLimits.mainDisplayGroup == nil)
         #expect(store.aiLimits.widgetPanel() == nil, "비운 뒤에도 위젯에 넘길 값이 있다")
     }
 
     // MARK: - 순수 규칙
 
-    @Test("고르기: 제공자별 최신 하나 · 모르는 제공자 버림 · 창 없는 행 버림 · 소스는 server")
+    @Test("고르기: **한 기기 안에서** 제공자별 최신 하나 · 모르는 제공자 버림 · 창 없는 행 버림 · 소스는 server")
     func bundlePicksNewestPerProvider() throws {
         let base = MobileClock.demoInstant
         let rows = [
-            AILimitFetchedRow(provider: "claude", fiveHourPercent: 9, fiveHourResetsAt: nil, weeklyPercent: 11,
+            AILimitFetchedRow(deviceID: mePureMac, provider: "claude", fiveHourPercent: 9, fiveHourResetsAt: nil, weeklyPercent: 11,
                               weeklyResetsAt: nil, planLabel: "max", observedAt: base.addingTimeInterval(-3_600)),
-            AILimitFetchedRow(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: base.addingTimeInterval(9_000),
+            AILimitFetchedRow(deviceID: mePureMac, provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: base.addingTimeInterval(9_000),
                               weeklyPercent: 60, weeklyResetsAt: nil, planLabel: "max", observedAt: base),
-            AILimitFetchedRow(provider: "future-provider", fiveHourPercent: 99, fiveHourResetsAt: nil, weeklyPercent: nil,
+            AILimitFetchedRow(deviceID: mePureMac, provider: "future-provider", fiveHourPercent: 99, fiveHourResetsAt: nil, weeklyPercent: nil,
                               weeklyResetsAt: nil, planLabel: nil, observedAt: base),
             // 퍼센트가 둘 다 없다 — 창이 0개라 숨는다(미연동과 같다).
-            AILimitFetchedRow(provider: "codex", fiveHourPercent: nil, fiveHourResetsAt: nil, weeklyPercent: nil,
+            AILimitFetchedRow(deviceID: mePureMac, provider: "codex", fiveHourPercent: nil, fiveHourResetsAt: nil, weeklyPercent: nil,
                               weeklyResetsAt: nil, planLabel: "plus", observedAt: base),
         ]
-        let bundle = AILimitsStore.bundle(from: rows, now: base)
+        let bundle = meOneDeviceBundle(from: rows, now: base)
         #expect(bundle.schemaVersion == AILimitSnapshotBundle.currentSchemaVersion)
         #expect(bundle.visibleProviders.map(\.provider) == [.claude])
         let claude = try #require(bundle.provider(.claude))
@@ -196,22 +248,22 @@ struct MeAILimitsTests {
         let base = MobileClock.demoInstant
         let cutoff = AILimitsStore.ghostRowAge
         func row(_ provider: String, age: TimeInterval) -> AILimitFetchedRow {
-            AILimitFetchedRow(provider: provider, fiveHourPercent: 27,
+            AILimitFetchedRow(deviceID: mePureMac, provider: provider, fiveHourPercent: 27,
                               fiveHourResetsAt: base.addingTimeInterval(-age + 600),
                               weeklyPercent: 60, weeklyResetsAt: nil, planLabel: nil,
                               observedAt: base.addingTimeInterval(-age))
         }
         // 문턱 **직전**(1초 모자란다)은 남고, 문턱 **정확히**는 숨는다.
-        let justInside = AILimitsStore.bundle(from: [row("claude", age: cutoff - 1)], now: base)
+        let justInside = meOneDeviceBundle(from: [row("claude", age: cutoff - 1)], now: base)
         #expect(justInside.visibleProviders.map(\.provider) == [.claude],
                 "아직 문턱에 닿지 않은 줄을 숨겼다 — 맥을 며칠 끈 사람의 하한까지 사라진다")
-        let exactly = AILimitsStore.bundle(from: [row("claude", age: cutoff)], now: base)
+        let exactly = meOneDeviceBundle(from: [row("claude", age: cutoff)], now: base)
         #expect(exactly.visibleProviders.isEmpty, "문턱에 닿은 유령 행이 남았다 — '0% · 초기화됨' 으로 굳는다")
-        let wayOld = AILimitsStore.bundle(from: [row("codex", age: cutoff * 10)], now: base)
+        let wayOld = meOneDeviceBundle(from: [row("codex", age: cutoff * 10)], now: base)
         #expect(wayOld.visibleProviders.isEmpty)
 
         // 산 제공자와 유령이 섞여 있으면 **산 쪽만** 남는다(목록이 통째로 비지 않는다).
-        let mixed = AILimitsStore.bundle(
+        let mixed = meOneDeviceBundle(
             from: [row("claude", age: 300), row("antigravity", age: cutoff + 60)], now: base
         )
         #expect(mixed.visibleProviders.map(\.provider) == [.claude])
@@ -219,7 +271,7 @@ struct MeAILimitsTests {
         // ★ 문턱은 **맥의 갱신 주기보다 훨씬 커야** 한다 — 켜져 있는 맥의 제공자가 숨는 조합이 없어야 한다.
         #expect(cutoff > 3_600 * 24, "문턱이 하루보다 짧다 — 주말에 맥을 끈 사람의 줄이 사라진다")
         // 미래 관측(기기 시계가 어긋난 맥)은 여기서 **버리지 않는다** — 그 판정은 코어 규칙이 한다.
-        let future = AILimitsStore.bundle(from: [row("claude", age: -7_200)], now: base)
+        let future = meOneDeviceBundle(from: [row("claude", age: -7_200)], now: base)
         #expect(future.visibleProviders.map(\.provider) == [.claude])
     }
 
@@ -236,11 +288,11 @@ struct MeAILimitsTests {
     func everyWindowGetsItsOwnCellOnPhoneAndWidget() throws {
         let base = MobileClock.demoInstant
         func surfaces(fiveHour: Double?) throws -> (phone: AILimitDisplayRow, widget: AingWidgetLimitRow) {
-            let rows = [AILimitFetchedRow(provider: "antigravity", fiveHourPercent: fiveHour,
+            let rows = [AILimitFetchedRow(deviceID: mePureMac, provider: "antigravity", fiveHourPercent: fiveHour,
                                           fiveHourResetsAt: fiveHour == nil ? nil : base.addingTimeInterval(9_000),
                                           weeklyPercent: 42, weeklyResetsAt: base.addingTimeInterval(86_400),
                                           planLabel: nil, observedAt: base)]
-            let snapshot = try #require(AILimitsStore.bundle(from: rows, now: base).provider(.antigravity))
+            let snapshot = try #require(meOneDeviceBundle(from: rows, now: base).provider(.antigravity))
             func display(_ window: AILimitWindow) -> AILimitDisplay? {
                 guard snapshot.window(window) != nil else { return nil }
                 let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: base)
@@ -496,7 +548,7 @@ struct MeAILimitsTests {
     @Test("카드: 값은 코어 규칙에서만 온다 · 한 줄에 두 칸 · 열 머리는 맨 위 한 번 · 이름+요금제 · 출처 문구 없음")
     func cardContract() throws {
         let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
-        #expect(card.contains("limits.displayRows"), "카드가 규칙이 만든 줄을 안 쓴다")
+        #expect(card.contains("limits.displayGroups"), "카드가 규칙이 만든 기기 묶음을 안 쓴다")
         #expect(card.contains("AIProviderTile(provider:"), "로고 타일이 없다")
         #expect(card.contains("row.provider.displayName"), "타일 옆 이름 글자가 없다 — 색으로만 제공자를 가른다")
         #expect(card.contains("row.planLabel"), "요금제를 안 쓴다 — 폰 카드는 이름과 요금제를 **둘 다** 쓴다(승인된 문법)")

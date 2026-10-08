@@ -225,14 +225,29 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// 토큰 수는 리밋과 **다른 축**이다(우리가 센 누적 개수 vs 제공자가 센 창 사용률) — 한 칸에 섞지 않고 나란히 둔다.
     public struct AILimitPanel: Codable, Equatable, Sendable {
         /// 보일 제공자들(미연동은 폰이 이미 걸렀다). 비어 있으면 위젯은 "앱을 열면 채워져요".
+        ///
+        /// ★ v0.3.47 부터 이 목록은 **맥 한 대의 것**이다(메인 맥 — 폰이 골라 싣는다). 그 전에는 "제공자당
+        ///   가장 최신 행"이라 맥 두 대의 값이 한 목록에 섞였고, 그래서 맥 A 에서 끈 제공자가 맥 B 의 더 새로운
+        ///   행에 밀려 **되살아났다**. 섞지 않으면 그 거짓이 사라진다(근거: `AILimitsStore.widgetPanel`).
         public var providers: [AILimitRow]
+        /// 이 목록이 어느 맥의 것인가(v0.3.47). **nil = 맥이 한 대뿐이다** → 위젯은 이름을 적지 않는다
+        /// (혼자 쓰는 사람에게 군더더기를 보이지 않는다 — 2026-10-08 사용자 결정). 옛 스냅샷도 nil 이다.
+        ///
+        /// ★ 이름은 **폰이 정한다**(`AILimitDeviceRoster.displayNames`) — 같은 이름이 둘이면 뒤에 식별자
+        ///   조각이 붙은 값이 이미 들어 있다. 위젯은 받은 글자를 그대로 적는다(가르는 규칙이 두 벌이 되면
+        ///   폰 카드와 위젯이 같은 맥을 다른 이름으로 부른다).
+        public var deviceName: String?
         /// 오늘(KST) 쓴 AI 토큰. nil = 모른다(수집을 껐거나 아직 못 받았다) → 위젯이 그 줄을 **그리지 않는다**(0 은 거짓이다).
+        ///
+        /// ★ 토큰은 **합산 유지**다(2026-10-08 사용자 결정) — 리밋만 메인 맥을 따른다. 그래서 이 칸은
+        ///   `deviceName` 이 가리키는 맥의 것이 아니라 **계정 전체**의 수다(순위표와 같은 장부).
         public var todayTokens: Int?
         /// 최근 12주 합(나 탭 잔디와 같은 창).
         public var recentTokens: Int?
 
-        public init(providers: [AILimitRow], todayTokens: Int? = nil, recentTokens: Int? = nil) {
+        public init(providers: [AILimitRow], deviceName: String? = nil, todayTokens: Int? = nil, recentTokens: Int? = nil) {
             self.providers = providers
+            self.deviceName = deviceName
             self.todayTokens = todayTokens
             self.recentTokens = recentTokens
         }
@@ -241,6 +256,11 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             // 칸 하나가 깨져도 나머지 제공자를 살린다(위젯이 통째로 비는 것보다 낫다 — `working` 과 같은 규약).
             providers = (try? c.decodeIfPresent(LossyArray<AILimitRow>.self, forKey: .providers))?.elements ?? []
+            // ★ 이 줄을 빼먹으면 **컴파일은 통과하고** 파일에 이름이 있어도 영원히 nil 이다(멤버와이즈 왕복
+            //   테스트만으론 초록인 채 위젯 머리에 맥 이름이 안 뜬다 — `aiLimits` 칸이 밟은 그 함정).
+            deviceName = (try? c.decodeIfPresent(String.self, forKey: .deviceName))
+                .flatMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .flatMap { $0.isEmpty ? nil : $0 }
             todayTokens = (try? c.decodeIfPresent(Int.self, forKey: .todayTokens)).flatMap { $0 }.map { max(0, $0) }
             recentTokens = (try? c.decodeIfPresent(Int.self, forKey: .recentTokens)).flatMap { $0 }.map { max(0, $0) }
         }

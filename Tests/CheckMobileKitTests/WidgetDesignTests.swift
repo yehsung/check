@@ -219,7 +219,19 @@ import Testing
         //   말줄임은 이 자리에서 숫자 자릿수 오독이므로 어느 쪽이든 금지다.
         #expect(limits.components(separatedBy: "minimumScaleFactor(").count - 1 >= 3,
                 "이름·숫자·열 머리 가운데 큰 글자에서 잘릴 자리가 있다")
-        #expect(!limits.contains("truncationMode"), "말줄임으로 피한다 — 이 자리에서 말줄임은 자릿수 오독이다")
+        // ★ 말줄임 금지는 **격자**(제공자 이름 칸 · 숫자 칸 · 열 머리)에 걸린다 — 거기서 말줄임은 자릿수 오독이다.
+        //   v0.3.47 이 더한 **머리 줄의 맥 이름** 하나만 예외이고, 근거가 둘이다:
+        //   ① 세로 자리가 없다 — 이름을 둘째 줄로 내리면 가장 좁은 기기(329×155)의 줄 높이가 마크 하한과
+        //      0.2pt 차가 되어 글자를 조금 키운 사람에게서 깨진다(실측은 `AingWidgetLimitsMediumBudget`).
+        //   ② 잘린 앞부분도 **그 맥을 가리킨다** — 사람이 적은 이름이라서다(코어 `AILimitDeviceLabelContract`
+        //      가 64 스칼라로 자르는 것과 **같은 근거**. 숫자를 자르는 것과 다른 종류의 손실이다).
+        //   그래서 "없다"가 아니라 **"머리 줄에 딱 하나"** 로 잰다 — 격자로 번지는 날 여기서 빨개진다.
+        #expect(limits.components(separatedBy: "truncationMode").count - 1 == 1,
+                "말줄임이 머리 줄의 맥 이름 말고 다른 자리에 생겼다 — 격자에서 말줄임은 자릿수 오독이다")
+        let headerStart = try #require(limits.range(of: "private func header("), "대조: 머리 함수를 못 찾았다")
+        let headerStop = try #require(limits.range(of: "private var columnHeaderRow"), "대조: 머리 구간의 끝을 못 찾았다")
+        #expect(limits[headerStart.lowerBound..<headerStop.lowerBound].contains("truncationMode"),
+                "그 하나가 머리 줄 밖에 있다 — 격자 어딘가에서 숫자가 잘린다")
         // 창은 **칸별로** 꺼낸다(`row.display(window)`). 뷰가 `fiveHour ?? weekly` 로 값만 집으면 '어느 창을
         // 세우나' 선택이 되살아나고, 그 선택이 틀리면 주간 8% 가 5시간 27% 옆에서 같은 창으로 읽힌다.
         //

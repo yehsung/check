@@ -320,6 +320,15 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.path == "/rest/v1/profiles", request.httpMethod == "GET" {
             return Data(#"[{"token_usage_public":true}]"#.utf8)
         }
+        // v0.3.47 기기 축: 메인 맥 고르개가 읽는 두 조회. **등록해야 한다** — 미등록이면 `Data()` 가 돌아가
+        // 디코드가 조용히 throw 되고, 그러면 "목록을 못 받았다"와 "내 맥이 하나도 없다"를 가를 수 없다
+        // (고르개가 안 보이는 두 이유가 테스트에서 같은 모양이 된다).
+        if request.url?.path == "/rest/v1/ai_limits", request.httpMethod == "GET" {
+            return aiLimitsRosterData(for: request)
+        }
+        if request.url?.path == "/rest/v1/ai_limits_prefs", request.httpMethod == "GET" {
+            return aiLimitsPrefsData(for: request)
+        }
         if request.url?.path == "/rest/v1/rpc/ultra_wallet_sync" {
             return ultraWalletSyncData(for: request)
         }
@@ -397,6 +406,42 @@ final class URLProtocolStub: URLProtocol {
             }
             """.utf8
         )
+    }
+
+    /// `ai_limits?select=device_id,device_label,observed_at` 픽스처(v0.3.47 · 메인 맥 고르개).
+    /// 호스트 **조각**으로 모양을 가른다(조각이라 `ai-devices-two-ai-prefs-chosen` 처럼 겹쳐 쓸 수 있다).
+    /// 기본은 빈 배열 = "서버에 내 행이 없다"(고르개가 안 보이는 정상 상태).
+    ///
+    /// ★ `ai-devices-two` 의 행 순서와 라벨은 **일부러 심술궂다**: 최근에 일한 맥(MAC-B)이 **뒤에** 오고,
+    ///   MAC-A 의 **가장 새 행은 라벨이 null** 이다(이름을 모르던 옛 빌드가 마지막으로 쓴 행). 접기가
+    ///   정렬을 실제로 하는지, 그리고 그 null 이 이름을 **지우지 않는지**를 이 모양만이 가른다.
+    private static func aiLimitsRosterData(for request: URLRequest) -> Data {
+        let host = request.url?.host ?? ""
+        if host.contains("ai-devices-two") {
+            let rows = #"[{"device_id":"MAC-A","device_label":"Mac mini","observed_at":"2026-10-08T01:00:00Z"},"#
+                + #"{"device_id":"MAC-A","device_label":null,"observed_at":"2026-10-08T02:00:00Z"},"#
+                + #"{"device_id":"MAC-B","device_label":"예성의 MacBook Pro","observed_at":"2026-10-08T03:00:00Z"}]"#
+            return Data(rows.utf8)
+        }
+        if host.contains("ai-devices-one") {
+            return Data(#"[{"device_id":"MAC-A","device_label":"Mac mini","observed_at":"2026-10-08T01:00:00Z"}]"#.utf8)
+        }
+        return Data("[]".utf8)
+    }
+
+    /// `ai_limits_prefs?select=main_device_id` 픽스처. 기본은 **빈 배열** = 아직 안 골랐다
+    /// (가입 트리거가 이 행을 만들지 않으므로 0행이 정상이다).
+    ///   · `ai-prefs-chosen` → MAC-B 를 골랐다
+    ///   · `ai-prefs-gone`   → 목록에 **없는** 식별자를 골랐다(그 맥의 행이 사라진 경우 — 클라가 접어야 한다)
+    private static func aiLimitsPrefsData(for request: URLRequest) -> Data {
+        let host = request.url?.host ?? ""
+        if host.contains("ai-prefs-chosen") {
+            return Data(#"[{"main_device_id":"MAC-B"}]"#.utf8)
+        }
+        if host.contains("ai-prefs-gone") {
+            return Data(#"[{"main_device_id":"MAC-SOLD-LAST-WEEK"}]"#.utf8)
+        }
+        return Data("[]".utf8)
     }
 
     /// 랩 하나의 길이(3시간). 서버 `mission_work_seconds()` 와 같은 값이다.

@@ -213,9 +213,15 @@ package final class AILimitStore {
     /// **다시 켜지고 또 꺼졌으면** 그건 아직 아무도 보낸 적 없는 **새 사건**이다. 집합만 들고 있으면 둘을
     /// 구별할 수 없어서, 돌아온 업로드가 "내가 보낸 것"이라며 그 새 사건을 지운다 — 그러면 그 제공자는
     /// 서버에서 영원히 안 비워진다(대기열이 비어 다음 주기도 재시도할 근거가 없다).
-    private var pendingClearGenerations: [AILimitProvider: Int] = [:]
-    /// 대기열에 들어온 끄기의 순번. 같은 제공자가 다시 꺼지면 **더 큰** 값을 받는다.
-    private var clearSequence = 0
+    ///
+    /// ## ★ `@ObservationIgnored` 인 까닭 (v0.3.47 재검)
+    /// 같은 커밋이 더한 다른 업로드 상태들(`uploadInFlight`·`uploadPendingTrailing`·계측값들)엔 붙어 있는데
+    /// 이 둘만 빠져 있었다. 이 상태는 **화면이 읽는 값이 아니다** — 밖으로 나가는 `pendingClear` 는 업로드
+    /// 경로와 테스트 계측만 읽는다. 관찰 대상으로 두면 30초 틱마다 도는 업로드가 대기열을 만질 때 그 값을
+    /// 읽은 뷰가 전부 무효화돼, 아무 숫자도 안 바뀐 틱에 설정 창·팝오버가 다시 그려진다.
+    @ObservationIgnored private var pendingClearGenerations: [AILimitProvider: Int] = [:]
+    /// 대기열에 들어온 끄기의 순번. 같은 제공자가 다시 꺼지면 **더 큰** 값을 받는다. 관찰 대상 아님(위와 같은 근거).
+    @ObservationIgnored private var clearSequence = 0
     /// 러너가 불린 횟수(테스트 계측 — 간격·백오프·재진입 가드가 실제로 막는지).
     @ObservationIgnored package private(set) var runnerCallCount = 0
     @ObservationIgnored private var inFlight = false
@@ -243,13 +249,24 @@ package final class AILimitStore {
     @ObservationIgnored package private(set) var uploadRoundTripCount = 0
     @ObservationIgnored private var uploadsInFlightNow = 0
 
-    // MARK: 비우기 재시도 백오프 (v0.3.47 P2)
+    // MARK: 업로드 재시도 백오프 (v0.3.47 P2 · 값까지 넓힘)
     //
-    // ## 고치는 자리: 비우기가 **항구적으로** 실패하면 30초마다 영원히 POST 했다
+    // ## 고치는 자리: 업로드가 **항구적으로** 실패하면 30초마다 영원히 POST 했다
     // 비우기는 성공할 때까지 대기열에 남아야 한다(그래야 끈 제공자가 폰·위젯에서 사라진다). 그런데 그 실패가
     // 항구적이면 — 스키마가 없는 서버, 즉 앱이 `db push` 보다 먼저 나간 경우(머리말이 스스로 예상한 경우다) —
     // 30초 틱마다 같은 404 를 영원히 받는다. 그 상태의 사용자는 **마스터를 끈 사람**이고, 그에게 약속한 것은
     // "리밋 축이 통째로 잠든다 … 네트워크 0"이었다.
+    //
+    // ## ★★ 그 게이트는 **값 업로드를 비껴갔다** (2026-10-08 재검 — 같은 결함의 더 넓은 쪽)
+    // 초안의 게이트는 `if !valuesChanged, !clearRetryAllowed` 였다. 값이 바뀐 업로드는 "새 소식은 늘 나간다"는
+    // 뜻으로 일부러 비껴가게 둔 것인데, **스키마 없는 서버에서는 `valuesChanged` 가 영원히 참이다**:
+    // 장부(`lastUploadedAILimits`)는 **성공에만** 갱신되므로 404 를 받는 동안 지문은 늘 장부와 다르다.
+    // 그래서 마스터를 켜 둔 평범한 사용자(= 비울 것이 없는 사람)는 백오프를 한 번도 못 만나고
+    // **30초마다 영원히 POST** 했다. 비우기만 막던 가드는 그 사람에게 아무것도 아니었다.
+    //
+    // 그래서 이 백오프는 이제 **업로드 전체**에 걸린다(이름도 그렇게 바꿨다 — `clear…` 로 두면 다음 사람이
+    // 값 쪽은 안 걸린다고 읽는다). 값이 바뀐 소식이 최대 1시간 늦는 대가를 치르지만, 그 1시간은
+    // **서버가 우리 쓰기를 거절하고 있는 동안**이고 그때 더 자주 두드려서 나아지는 것은 없다.
     //
     // ## 포기는 하지 않는다 — **느려지되 멈추지 않는다**
     // 대기열을 버리면 그 행은 영영 안 지워진다. 그래서 간격만 벌린다: 60초에서 시작해 실패마다 두 배,
@@ -257,21 +274,33 @@ package final class AILimitStore {
     // 영속하지 않는 까닭: 다시 켠 앱이 한 번 더 노크하는 것은 요청 하나이고, 429 처럼 **남의 상한**을
     // 건드리는 일도 아니다(여기는 우리 서버다). 영속해야 하는 쪽은 대기열 자체이고 그건 이미 디스크에 있다.
 
-    /// 비우기 재시도의 첫 간격(초).
-    package nonisolated static let clearRetryBaseBackoff: TimeInterval = 60
-    /// 비우기 재시도 간격의 상한(초). 1시간 — 이 위로 벌려도 네트워크는 더 안 줄고 복구만 늦는다.
-    package nonisolated static let clearRetryMaxBackoff: TimeInterval = 3_600
+    /// 업로드 재시도의 첫 간격(초).
+    package nonisolated static let uploadRetryBaseBackoff: TimeInterval = 60
+    /// 업로드 재시도 간격의 상한(초). 1시간 — 이 위로 벌려도 네트워크는 더 안 줄고 복구만 늦는다.
+    package nonisolated static let uploadRetryMaxBackoff: TimeInterval = 3_600
 
-    @ObservationIgnored private var clearFailureCount = 0
-    @ObservationIgnored private var clearRetryNotBefore: Date?
+    @ObservationIgnored private var uploadFailureCount = 0
+    @ObservationIgnored private var uploadRetryNotBefore: Date?
 
     private let defaults: UserDefaults
     private let clock: () -> Date
     private let runner: Runner
+    /// 이 맥의 컴퓨터 이름을 **그때그때** 읽는 통로(v0.3.47). 저장값이 아니라 클로저인 까닭: 사용자가 시스템
+    /// 설정에서 맥 이름을 바꾸면 **앱을 다시 켜지 않아도** 다음 업로드가 새 이름을 싣는다.
+    /// 주입 지점이 있는 까닭은 `locateAntigravity`·`codexHome` 과 같다 — 기본 해결은 **이 맥의 실제 이름**을
+    /// 읽으므로, 주입이 없으면 "올라간 이름이 그 이름인가"를 재는 단언이 기계마다 초록·회색으로 갈린다
+    /// (관례: 비교 기준선이 같은 입력이면 그 테스트는 영원히 초록).
+    @ObservationIgnored private let deviceLabelProvider: () -> String?
 
-    package init(defaults: UserDefaults, clock: @escaping () -> Date = { Date() }, runner: @escaping Runner) {
+    package init(
+        defaults: UserDefaults,
+        clock: @escaping () -> Date = { Date() },
+        deviceLabelProvider: @escaping () -> String? = { AILimitDeviceName.current() },
+        runner: @escaping Runner
+    ) {
         self.defaults = defaults
         self.clock = clock
+        self.deviceLabelProvider = deviceLabelProvider
         self.runner = runner
         if let data = defaults.data(forKey: Self.snapshotKey),
            let restored = try? JSONDecoder().decode(AILimitSnapshotBundle.self, from: data),
@@ -336,8 +365,76 @@ package final class AILimitStore {
             .appendingPathComponent("check-ai-limits-inert").path
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
-        return AILimitStore(defaults: defaults, runner: { _, _ in AILimitReadOutcome() })
+        // 기기 이름도 **읽지 않는다**(nil). 무해 인스턴스가 이 맥에 대해 아무것도 묻지 않는다는 규약을
+        // 한 칸이라도 깨면 다음 사람이 "여긴 시스템을 조금은 읽는다"로 읽는다.
+        return AILimitStore(
+            defaults: defaults,
+            deviceLabelProvider: { nil },
+            runner: { _, _ in AILimitReadOutcome() }
+        )
     }
+
+    // MARK: 기기 축 (v0.3.47)
+
+    /// 주입 시계의 **지금**. 트레일링 업로드가 첫 호출의 옛 `now` 를 재사용하지 않게 하는 입구다
+    /// (`WorkTimerStore.uploadAILimitsIfNeeded` — 재사용하면 백오프 창 판정이 과거 시각으로 내려간다).
+    package var clockNow: Date { clock() }
+
+    /// 올려도 되는 이 맥의 이름. 빈 값·공백뿐이면 nil(= 싣지 않는다), 64 스칼라를 넘으면 자른다.
+    /// 규칙은 `AILimitDeviceLabelContract` 한 곳에만 있다 — 두 벌이 되면 한쪽이 통과시킨 이름이
+    /// 다른 쪽에서 23514 가 되고 그 거절은 조용하다.
+    package var deviceLabel: String? { AILimitDeviceLabelContract.normalized(deviceLabelProvider()) }
+
+    /// 서버에 행이 있는 **내 맥 전부**(최근에 일한 순). 설정의 고르개가 이 목록을 그린다.
+    ///
+    /// ★ 영속하지 않는다. 이 목록의 주인은 서버고(어느 맥에서 바꿔도 같은 한 값), 쓰는 자리는 설정 창
+    ///   하나다 — 디스크에 두면 지난주에 팔아 버린 맥이 고르개에 계속 서 있고, 그 거짓을 지우는 길이 없다.
+    package private(set) var devices: [AILimitDevice] = []
+    /// 계정이 고른 메인 맥(`ai_limits_prefs.main_device_id`). nil = **아직 안 골랐다**(= 가장 최근에 일한 맥).
+    package private(set) var mainDeviceID: String?
+    /// 기기 목록을 마지막으로 받은 시각. nil = 한 번도 못 받았다.
+    @ObservationIgnored package private(set) var devicesLoadedAt: Date?
+    @ObservationIgnored private var devicesLoading = false
+
+    /// 기기 목록을 다시 받을 간격(초). 5분 — 설정 창을 여닫을 때마다 두 번 왕복하지 않을 만큼 길고,
+    /// 다른 맥이 방금 올린 행을 못 볼 만큼 길지는 않다.
+    package nonisolated static let devicesReloadInterval: TimeInterval = 300
+
+    /// 지금 기기 목록을 받아 올 때인가. **진행 중이면 거짓**이다(설정 창이 두 번 그려져도 왕복은 한 번).
+    package func devicesAreDue(now: Date) -> Bool {
+        if devicesLoading { return false }
+        guard let devicesLoadedAt else { return true }
+        return now.timeIntervalSince(devicesLoadedAt) >= Self.devicesReloadInterval
+    }
+
+    /// 왕복이 시작됐다 / 끝났다. 가드 하나로 두 번 뜨는 요청을 막는다.
+    package func noteDevicesLoading(_ loading: Bool) { devicesLoading = loading }
+
+    /// 받아 온 목록과 고른 맥을 갈아 끼운다. **둘을 한 번에** 넣는 까닭: 따로 넣으면 그 사이에 그려진
+    /// 고르개가 "새 목록 + 옛 선택"을 보고 아무것도 안 고른 것처럼 보인다.
+    package func applyDevices(_ devices: [AILimitDevice], mainDeviceID: String?, now: Date) {
+        self.devices = devices
+        self.mainDeviceID = mainDeviceID
+        devicesLoadedAt = now
+    }
+
+    /// 고른 맥을 **먼저 화면에 반영한다**(서버 왕복 전). 돌려주는 값은 **직전 선택** — 왕복이 실패하면
+    /// 호출부가 그 값으로 되돌린다. 화면만 바뀌었다가 조용히 어긋나 있는 상태를 만들지 않는다.
+    @discardableResult
+    package func setMainDeviceLocally(_ deviceID: String?) -> String? {
+        let previous = mainDeviceID
+        mainDeviceID = deviceID
+        return previous
+    }
+
+    /// 폰·위젯이 보여 줄 맥. 고른 값이 목록에 없으면(안 골랐다 · 그 맥의 행이 사라졌다) 가장 최근에 일한 맥.
+    /// 규칙은 `AILimitMainDeviceRule` 한 곳이다 — 맥의 고르개와 폰의 머리글이 같은 맥을 가리켜야 한다.
+    package var effectiveMainDevice: AILimitDevice? {
+        AILimitMainDeviceRule.resolve(devices: devices, chosen: mainDeviceID)
+    }
+
+    /// 고르개 줄을 **보일지**. 맥이 두 대 이상일 때만 보인다 — 근거는 `CheckSettingsView` 의 그 행 주석에 있다.
+    package var showsMainDevicePicker: Bool { devices.count >= 2 }
 
     // MARK: 표시 재료
 
@@ -562,28 +659,28 @@ package final class AILimitStore {
         uploadsInFlightNow = max(0, uploadsInFlightNow - 1)
     }
 
-    /// 지금 **비우기만** 다시 보내도 되는가. 값이 바뀐 업로드는 이 게이트를 지나지 않는다 — 새 소식은 늘
-    /// 나가고 비우기가 거기 얹혀 간다. 막는 것은 "같은 실패를 30초마다 영원히" 하나다.
-    package func clearRetryAllowed(now: Date) -> Bool {
-        guard let clearRetryNotBefore else { return true }
-        return now >= clearRetryNotBefore
+    /// 지금 업로드를 보내도 되는가. **값이든 비우기든 같은 문을 지난다**(머리말 — 값만 빠져나가던 자리가 결함이었다).
+    /// 막는 것은 "같은 실패를 30초마다 영원히" 하나이고, 성공 한 번이면 즉시 열린다.
+    package func uploadRetryAllowed(now: Date) -> Bool {
+        guard let uploadRetryNotBefore else { return true }
+        return now >= uploadRetryNotBefore
     }
 
-    /// 비우기 업로드가 실패했다 → 다음 시도를 뒤로 미룬다(두 배씩, 상한까지). **대기열은 그대로 둔다.**
-    package func noteClearFailed(now: Date) {
-        clearFailureCount += 1
-        let doubled = Self.clearRetryBaseBackoff * pow(2, Double(clearFailureCount - 1))
-        clearRetryNotBefore = now.addingTimeInterval(min(Self.clearRetryMaxBackoff, doubled))
+    /// 업로드가 실패했다 → 다음 시도를 뒤로 미룬다(두 배씩, 상한까지). **대기열은 그대로 둔다.**
+    package func noteUploadFailed(now: Date) {
+        uploadFailureCount += 1
+        let doubled = Self.uploadRetryBaseBackoff * pow(2, Double(uploadFailureCount - 1))
+        uploadRetryNotBefore = now.addingTimeInterval(min(Self.uploadRetryMaxBackoff, doubled))
     }
 
-    /// 비우기 업로드가 성공했다 → 백오프를 통째로 푼다.
-    package func noteClearSucceeded() {
-        clearFailureCount = 0
-        clearRetryNotBefore = nil
+    /// 업로드가 성공했다 → 백오프를 통째로 푼다.
+    package func noteUploadSucceeded() {
+        uploadFailureCount = 0
+        uploadRetryNotBefore = nil
     }
 
     /// 연속 실패 수(테스트 계측 — 성공이 백오프를 실제로 푸는지).
-    package var clearFailureStreak: Int { clearFailureCount }
+    package var uploadFailureStreak: Int { uploadFailureCount }
 
     private func persistVisibility() {
         defaults.set(visibility.masterEnabled, forKey: Self.visibilityKey)
@@ -715,6 +812,26 @@ extension AILimitStore {
                 return AILimitReadOutcome(results: results)
             }
         }
+    }
+}
+
+/// 이 맥의 이름 — **시스템 설정의 컴퓨터 이름**이다(v0.3.47).
+///
+/// ## 왜 `Host.current().localizedName` 인가
+/// 2026-10-08 이 맥에서 실측했다: `scutil --get ComputerName` 과 `Host.current().localizedName` 이 둘 다
+/// `"Mac mini"` 이고, `Host.current().name` 은 `"mac-mini.local"`(= 네트워크 호스트명)이다. 우리가 원하는 것은
+/// 사람이 시스템 설정에 적어 둔 그 이름이므로 `localizedName` 이다 — 호스트명은 `.local` 이 붙고 공백이
+/// 하이픈으로 바뀌어 사람이 자기 맥으로 못 알아본다.
+///
+/// ★ **프로세스를 띄우지 않는다.** `scutil` 을 부르면 같은 값을 얻으려고 10분마다 자식 프로세스가 뜬다
+///   (리밋 축이 `agy` 하나로도 이미 비싸다 — 그 5초가 팝오버를 연 사람을 기다리게 한다).
+/// ★ 이름은 **식별자가 아니다.** 겹칠 수 있고(맥 미니 두 대), 그때 가르는 일은 읽는 쪽이 한다
+///   (`AILimitDeviceRoster.displayNames`). 맥들은 서로를 모른다.
+package enum AILimitDeviceName {
+    /// 이 맥의 이름, 또는 nil(이름을 못 읽었다 · 빈 값이다). 상한·다듬기는 부르는 쪽이
+    /// `AILimitDeviceLabelContract` 로 한다 — 여기서 또 다듬으면 규칙이 두 벌이 된다.
+    package static func current() -> String? {
+        Host.current().localizedName
     }
 }
 #endif

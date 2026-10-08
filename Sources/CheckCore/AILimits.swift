@@ -361,3 +361,185 @@ package enum AILimitFingerprint {
         return String(digest.map { String(format: "%02x", $0) }.joined().prefix(hexLength))
     }
 }
+
+// MARK: - 기기 축 (v0.3.47 — 기기별 리밋 + 메인 맥)
+//
+// ## 서버는 **이미** 기기별로 저장한다
+// `ai_limits` PK 가 `(user_id, device_id, provider)` 다. 폰이 "제공자당 최신 하나"로 접고 있었을 뿐이고,
+// 그 접기가 두 가지 거짓을 만들었다: ① 맥 A 에서 끈 제공자가 맥 B 의 더 새로운 값에 밀려 **되살아난다**,
+// ② 두 맥이 다른 값을 보고해도 화면이 **누구 값인지 말하지 않는다**. 숨기는 대신 드러내면 둘 다 사라진다.
+//
+// 이 절의 타입들은 **플랫폼이 없다**(맥이 쓰고 폰·위젯이 같은 규칙을 쓴다) — 접는 규칙이 두 벌이 되면
+// 맥의 고르개가 가리키는 맥과 폰이 그리는 맥이 갈리고, 그 어긋남은 조용하다(양쪽 다 그럴듯한 값을 보여 준다).
+
+/// 기기 이름(`ai_limits.device_label`)의 단 하나의 규칙.
+///
+/// ## 왜 자르고(플랜 라벨은 버리는데) 빈 값만 버리는가
+/// `AILimitPlanLabelContract` 는 상한을 넘기면 **버린다** — 그 값은 제공자가 준 어휘라 잘리면 뜻이 반쯤
+/// 남는다("max20" 과 "max2" 는 다른 플랜이다). 기기 이름은 반대로 **사람이 적은 이름**이고, 긴 이름을 자른
+/// 앞부분은 여전히 그 맥을 가리킨다("예성의 MacBook Pro(사무실…)"). 이름이 없어지면 고르개에 "이름 모를 맥"
+/// 둘이 나란히 서므로, 자르는 쪽이 덜 잃는다.
+///
+/// ## ★ 자르는 눈금이 **유니코드 스칼라**인 까닭
+/// 서버 CHECK 는 `char_length(device_label) between 1 and 64` 이고 Postgres 의 그 함수는 **문자(코드 포인트)**
+/// 를 센다. Swift `String.count` 는 자소 묶음(grapheme cluster)을 세므로 둘이 갈린다 — 이모지·조합 문자가 든
+/// 이름은 Swift 로 64자여도 Postgres 로 70자가 될 수 있고, 그러면 그 행이 23514 로 **통째로** 거절된다
+/// (거절은 조용하다 — 그 맥의 리밋이 서버에 영원히 안 올라간다). 그래서 스칼라로 세면서 자소는 쪼개지 않는다:
+/// 한 자소를 더해 64를 넘기면 그 자소를 **넣지 않고 멈춘다**.
+package enum AILimitDeviceLabelContract {
+    /// 서버 CHECK 와 **같은 숫자**여야 한다(`20261008120000_ai_limits_devices.sql` §1). 어긋나면 올릴 수 있는
+    /// 이름을 올리는 순간 23514 다. 마이그레이션 계약 테스트가 두 파일에서 이 숫자를 읽어 비교한다.
+    package static let maxScalars = 64
+
+    /// 올려도 되는 이름, 또는 nil(= 이름을 싣지 않는다). 공백뿐이면 nil 이다 —
+    /// 빈 문자열은 서버 CHECK 가 거절하고(1자 하한), 그 거절은 그 행 전체를 날린다.
+    package static func normalized(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        var out = ""
+        var scalars = 0
+        for character in trimmed {
+            let next = scalars + character.unicodeScalars.count
+            if next > maxScalars { break }
+            out.append(character)
+            scalars = next
+        }
+        // 첫 자소 하나가 이미 상한을 넘는 경우(스칼라 65개짜리 한 글자)는 이름이 없는 것으로 친다 —
+        // 쪼갠 조각은 그 맥을 가리키지 못하고, 서버가 거절할 값을 보내는 것보다 조용히 생략하는 쪽이 낫다.
+        return out.isEmpty ? nil : out
+    }
+}
+
+/// 서버 행에서 읽은 관측 하나(제공자별로 흩어져 있다). 접는 재료다.
+package struct AILimitDeviceObservation: Equatable, Sendable {
+    package let deviceID: String
+    package let label: String?
+    package let observedAt: Date?
+
+    package init(deviceID: String, label: String?, observedAt: Date?) {
+        self.deviceID = deviceID
+        self.label = label
+        self.observedAt = observedAt
+    }
+}
+
+/// 내 맥 한 대. 설정의 고르개가 세우는 줄이고, 폰·위젯의 기기 묶음 머리글이 되는 값이다.
+package struct AILimitDevice: Codable, Equatable, Sendable, Identifiable {
+    package let deviceID: String
+    /// 그 맥이 올린 컴퓨터 이름. nil = 아직 이름을 올린 적 없다(옛 빌드가 올린 행).
+    package let label: String?
+    /// 그 맥의 가장 최근 관측 시각. **기본 선택("가장 최근에 일한 맥")의 유일한 근거다.**
+    package let lastObservedAt: Date?
+
+    package var id: String { deviceID }
+
+    package init(deviceID: String, label: String?, lastObservedAt: Date?) {
+        self.deviceID = deviceID
+        self.label = label
+        self.lastObservedAt = lastObservedAt
+    }
+
+    /// 이름이 없을 때의 대체 이름. **"이름 모를 맥" 하나로 두지 않는다** — 둘이 나란히 서면 고를 수가 없다.
+    package static let unnamedPrefix = "이름 모를 맥"
+
+    /// 기기 식별자의 꼬리(대문자 4자). 사람이 두 줄을 **가르는 데만** 쓴다 — 식별자 전체를 적으면
+    /// 설정 창이 진단 화면이 된다(관례: 사용자 툴팁은 진단이 아니다).
+    package static func shortTail(_ deviceID: String) -> String {
+        String(deviceID.uppercased().suffix(4))
+    }
+
+    /// 이름이 겹치지 않는다고 가정했을 때의 이름.
+    package var baseName: String {
+        if let label, !label.isEmpty { return label }
+        return "\(Self.unnamedPrefix) \(Self.shortTail(deviceID))"
+    }
+}
+
+/// 흩어진 행을 **기기 단위**로 접고, 고르개에 적을 이름을 정한다.
+package enum AILimitDeviceRoster {
+    /// 제공자별 행들을 기기로 접는다. **최근에 일한 순**이고, 관측 시각이 없는 기기는 뒤로 간다.
+    ///
+    /// 이름은 **라벨이 있는 행 중 가장 최근 것**으로 고른다. 그냥 "가장 최근 행의 라벨"로 하면, 이름을 모르는
+    /// 옛 빌드가 마지막으로 쓴 행 하나가 그 맥의 이름을 **지운다**(그 맥은 고르개에서 "이름 모를 맥"이 된다).
+    ///
+    /// 동률(관측 시각이 같거나 둘 다 없음)은 `deviceID` 로 가른다 — 순서가 결정적이어야 테스트가 되묻을 수 있고,
+    /// 무엇보다 기본 선택이 뽑기처럼 바뀌면 "어제는 다른 맥이 보였다"가 된다.
+    package static func fold(_ observations: [AILimitDeviceObservation]) -> [AILimitDevice] {
+        var byDevice: [String: (label: String?, labelAt: Date?, lastAt: Date?)] = [:]
+        for row in observations {
+            let id = row.deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty else { continue }
+            var held = byDevice[id] ?? (label: nil, labelAt: nil, lastAt: nil)
+            if let observedAt = row.observedAt {
+                if let lastAt = held.lastAt { held.lastAt = max(lastAt, observedAt) } else { held.lastAt = observedAt }
+            }
+            if let label = AILimitDeviceLabelContract.normalized(row.label) {
+                let isNewer: Bool = {
+                    guard let heldAt = held.labelAt else { return true }
+                    guard let mine = row.observedAt else { return false }
+                    return mine >= heldAt
+                }()
+                if isNewer {
+                    held.label = label
+                    held.labelAt = row.observedAt ?? held.labelAt
+                }
+            }
+            byDevice[id] = held
+        }
+        return byDevice
+            .map { AILimitDevice(deviceID: $0.key, label: $0.value.label, lastObservedAt: $0.value.lastAt) }
+            .sorted { lhs, rhs in
+                switch (lhs.lastObservedAt, rhs.lastObservedAt) {
+                case let (mine?, theirs?) where mine != theirs: return mine > theirs
+                case (.some, .none): return true
+                case (.none, .some): return false
+                default: return lhs.deviceID < rhs.deviceID
+                }
+            }
+    }
+
+    /// 기기 식별자 → 화면에 적을 이름. **같은 이름이 둘 이상이면** 뒤에 식별자 꼬리를 붙여 가른다
+    /// (맥 미니 두 대는 시스템 설정 이름이 글자 그대로 같다 — 맥들은 서로를 모르므로 가르는 일은 읽는 쪽이 한다).
+    ///
+    /// 겹치지 않는 이름에는 **아무것도 붙이지 않는다**: 한 대뿐인 사람에게 식별자 조각을 보여 줄 이유가 없다.
+    package static func displayNames(_ devices: [AILimitDevice]) -> [String: String] {
+        var counts: [String: Int] = [:]
+        for device in devices { counts[device.baseName, default: 0] += 1 }
+        var out: [String: String] = [:]
+        for device in devices {
+            let base = device.baseName
+            out[device.deviceID] = (counts[base] ?? 0) > 1
+                ? "\(base) (\(AILimitDevice.shortTail(device.deviceID)))"
+                : base
+        }
+        return out
+    }
+}
+
+/// "폰·위젯에 보여 줄 맥"을 정하는 **단 하나의** 규칙.
+///
+/// ## 고른 값이 목록에 없으면 접는다 — 그게 FK 를 안 건 대가이자 이유다
+/// `ai_limits_prefs.main_device_id` 에는 외래키가 **없다**(마이그레이션 머리말). 고른 맥의 행이 사라지는 일은
+/// 정상이기 때문이다: 그 맥에서 설정을 끄면 행이 비워지고, 3일 유령 게이트가 낡은 행을 숨긴다. FK 를 걸면
+/// 그 정상적인 일이 23503 이 된다. 대신 **읽는 쪽이** 모르는 식별자를 "가장 최근에 일한 맥"으로 접는다.
+///
+/// ## 기본값(아직 안 골랐다) = 가장 최근에 일한 맥
+/// 기존 사용자가 업데이트만 하고 아무것도 안 하면 **지금과 같게** 보여야 한다(사용자 요건). 지금의 폰은
+/// "제공자당 최신 하나"를 그리므로, 기기 축으로 바꾼 뒤의 기본값은 "가장 최근에 일한 맥"이 그에 가장 가깝다.
+package enum AILimitMainDeviceRule {
+    /// 고른 맥이 목록에 있으면 그것, 없으면 가장 최근에 일한 맥. 목록이 비면 nil.
+    package static func resolve(devices: [AILimitDevice], chosen: String?) -> AILimitDevice? {
+        if let chosen, let hit = devices.first(where: { $0.deviceID == chosen }) { return hit }
+        // `fold` 가 이미 최근 순으로 정렬해 주지만 여기서 **다시 고른다** — 호출부가 다른 순서의 배열을
+        // 넘기는 날(폰이 자기 순서로 정렬해 넘긴다) 기본 선택이 조용히 다른 맥이 되면 안 된다.
+        return devices.max { lhs, rhs in
+            switch (lhs.lastObservedAt, rhs.lastObservedAt) {
+            case let (mine?, theirs?) where mine != theirs: return mine < theirs
+            case (.none, .some): return true
+            case (.some, .none): return false
+            default: return lhs.deviceID > rhs.deviceID
+            }
+        }
+    }
+}

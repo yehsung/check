@@ -59,6 +59,15 @@ extension WorkTimerStore {
     ///
     /// ★ `defer` 로 핸들을 비우지 **않는다**: 트레일링을 소비하는 동안에도 핸들이 non-nil 이어야 그 사이에
     ///   들어온 요청이 또 쏘지 않는다. 루프로 소비하고 **그 뒤에** 비운다(`requestDrain` 과 같은 관용구).
+    ///
+    /// ## ★★ 트레일링은 **그 시점의 `now`** 로 돈다 (2026-10-08 재검)
+    /// 초안의 루프는 첫 호출의 `now` 를 두 번째 바퀴에도 그대로 넘겼다. 그 값은 **이미 과거**다 — 첫 바퀴가
+    /// 왕복(네트워크)을 돌고 온 뒤니까. 백오프 창이 그 사이에 끝났는데도 트레일링이 옛 시각으로 판정하면
+    /// `uploadRetryAllowed` 가 거짓이 되어, **소비된 채 아무것도 보내지 않는다**:
+    ///   비우기 백오프 창 안에서 값 변화 없이 토글만 들어온 경우가 그 자리다. 다음 30초 틱이 구해 주지만
+    ///   "끈 즉시 폰에서 사라진다"는 약속이 최대 30초 늦는다 — 그 30초는 사용자가 폰을 들여다보는 시간이다.
+    /// 그래서 루프의 둘째 바퀴부터는 **스토어의 시계**를 다시 읽는다(`aiLimits.clockNow` — 테스트 시계가
+    /// 주입되는 그 시계다. `Date()` 를 직접 부르면 고정 시계 테스트가 진짜 벽시계로 샌다).
     func uploadAILimitsIfNeeded(now: Date = Date()) async {
         guard aiLimits.uploadInFlight == nil else {
             aiLimits.uploadPendingTrailing = true
@@ -66,11 +75,15 @@ extension WorkTimerStore {
         }
         let limits = aiLimits
         let task = Task { @MainActor [weak self] in
+            var at = now
             repeat {
                 // 루프 **안에서 먼저** 내린다. 뒤에 내리면 이번 업로드가 도는 동안 도착한 신호를 지운다.
                 limits.uploadPendingTrailing = false
                 guard let self else { break }
-                await sendAILimitsUpload(now: now)
+                await sendAILimitsUpload(now: at)
+                // 다음 바퀴는 **지금**이다(위 주석). 첫 바퀴만 호출자가 준 시각을 쓴다 — 그 시각은
+                // 30초 틱·팝오버 열기가 재 둔 "이 바퀴의 기준"이라 첫 판정의 주인이다.
+                at = limits.clockNow
             } while limits.uploadPendingTrailing
             limits.uploadInFlight = nil
         }
@@ -98,10 +111,12 @@ extension WorkTimerStore {
         let fingerprint = AILimitUploadLedger.fingerprint(bundle)
         let valuesChanged = hasValues && fingerprint != lastUploadedAILimits
         guard valuesChanged || !claim.isEmpty else { return }
-        // ★ **비우기만** 남은 재시도는 백오프를 지난다(v0.3.47 P2). 항구적 실패(스키마 없는 서버)에서
-        //   30초마다 영원히 POST 하던 자리다 — 그 사람은 마스터를 끈 사람이고, 약속은 "네트워크 0"이었다.
-        //   값이 바뀐 소식은 이 게이트를 지나지 않는다(비우기가 거기 얹혀 간다).
-        if !valuesChanged, !aiLimits.clearRetryAllowed(now: now) { return }
+        // ★★ 백오프는 **값 업로드에도** 걸린다(2026-10-08 재검). 초안의 게이트는 `if !valuesChanged, …` 라
+        //   값이 바뀐 업로드를 비껴갔는데, 스키마 없는 서버에서는 장부가 **성공에만** 갱신되므로
+        //   `valuesChanged` 가 영원히 참이다 — 그래서 마스터를 켜 둔 평범한 사용자는 30초마다 영원히 POST 했다
+        //   (비우기만 막던 가드는 그 사람에게 아무것도 아니었다). 영구 포기는 없다: 느려지되 멈추지 않는다
+        //   (60초 → 두 배씩 → 상한 1시간, 성공 한 번이면 즉시 풀린다).
+        guard aiLimits.uploadRetryAllowed(now: now) else { return }
         aiLimits.noteUploadStarted()
         defer { aiLimits.noteUploadFinished() }
         do {
@@ -109,6 +124,9 @@ extension WorkTimerStore {
                 accessToken: session.accessToken,
                 userID: session.userID,
                 deviceID: deviceID,
+                // 기기 이름(v0.3.47). **그때그때 읽는다** — 사용자가 시스템 설정에서 맥 이름을 바꾸면
+                // 앱을 다시 켜지 않아도 다음 업로드가 새 이름을 싣는다. 빈 값이면 nil 로 간다(싣지 않는다).
+                deviceLabel: aiLimits.deviceLabel,
                 bundle: bundle,
                 clearedProviders: claim.providers,
                 clearedAt: now
@@ -117,12 +135,12 @@ extension WorkTimerStore {
             // 성공한 비우기만 대기열에서 뺀다. 실패하면 그대로 남아 다음 주기(30초 틱·팝오버 열기)가 다시 보낸다 —
             // 영구히 안 지워지는 조합이 있으면 그 사람의 폰은 끈 제공자를 계속 보여 준다.
             aiLimits.markCleared(claim)
-            if !claim.isEmpty { aiLimits.noteClearSucceeded() }
+            aiLimits.noteUploadSucceeded()
         } catch {
             // 조용히. 스키마가 없는 서버(앱이 db push 보다 먼저 나간 경우)도 여기로 떨어지고, 사용자를 막을
             // 이유는 없다(리밋은 정보성 표시다). 다만 **간격은 벌린다** — 포기는 하지 않는다(대기열이 사라지면
             // 그 행은 영영 안 지워진다). 느려지되 멈추지 않는다: 60초 → 두 배씩 → 상한 1시간.
-            if !claim.isEmpty { aiLimits.noteClearFailed(now: now) }
+            aiLimits.noteUploadFailed(now: now)
         }
     }
 
@@ -141,6 +159,59 @@ extension WorkTimerStore {
     func setAILimitProviderEnabled(_ provider: AILimitProvider, _ enabled: Bool) {
         aiLimits.setProviderEnabled(provider, enabled)
         noteAILimitsSettingChanged()
+    }
+
+    // MARK: - 메인 맥 고르개 (v0.3.47)
+    //
+    // ## 이 둘은 **설정 창 전용 경로**다
+    // 30초 틱도 팝오버도 부르지 않는다(`refreshAILimitsIfNeeded` 와 나란히 두지 않은 까닭이다). 고르개가
+    // 필요한 것은 "지금 내 맥이 몇 대이고 어느 것을 골랐나"뿐이고, 그 질문은 설정 창을 열 때만 생긴다 —
+    // 틱에 얹으면 아무도 안 보는 동안 계정당 두 번씩 GET 이 더 난다(무료 플랜이다).
+    //
+    // ## on/off 토글과 달리 이것은 **계정 값**이다
+    // 제공자 스위치는 기기 로컬이 옳다(각 맥이 자기 줄을 통제한다). 메인 맥은 반대다 — "폰·위젯에 무엇을
+    // 보여 줄까"는 사람 하나당 하나의 답이고, 어느 맥에서 바꿔도 같은 곳(`ai_limits_prefs.main_device_id`)이
+    // 바뀌어야 한다. 그래서 이 값만 서버에 있다.
+
+    /// 서버의 내 기기 목록과 고른 메인 맥을 받아 온다. 설정 창이 열릴 때 부른다.
+    ///
+    /// ★ **둘 다 성공해야 반영한다.** 목록만 받아 두고 선택을 못 읽으면 고르개가 "아무것도 안 고름"으로
+    ///   그려지는데, 그건 사실이 아니라 **못 읽었다**는 뜻이다 — 그 상태에서 사용자가 보는 기본 선택(가장 최근에
+    ///   일한 맥)은 서버에 저장된 선택과 다를 수 있고, 그 어긋남은 조용하다. 둘은 같은 마이그레이션 한 장이
+    ///   만든 표들이라 실패도 같이 온다(한쪽만 없는 서버는 없다).
+    /// ★ 실패는 **조용하다**: 목록이 비면 고르개 줄 자체가 안 보인다(`showsMainDevicePicker`). 설정 창에
+    ///   "불러오지 못했어요"를 적지 않는다 — 그 사람이 할 수 있는 일이 없다(관례: 사용자 툴팁은 진단이 아니다).
+    func loadAILimitDevicesIfNeeded(now: Date = Date(), force: Bool = false) async {
+        guard let session, hasDeviceIdentity else { return }
+        guard force || aiLimits.devicesAreDue(now: now) else { return }
+        aiLimits.noteDevicesLoading(true)
+        defer { aiLimits.noteDevicesLoading(false) }
+        do {
+            let devices = try await service.fetchAILimitDevices(
+                accessToken: session.accessToken, userID: session.userID)
+            let chosen = try await service.fetchAILimitMainDeviceID(
+                accessToken: session.accessToken, userID: session.userID)
+            aiLimits.applyDevices(devices, mainDeviceID: chosen, now: now)
+        } catch {
+            // 조용히. 다음에 설정 창을 열면 다시 묻는다(스탬프를 안 찍었으므로 `devicesAreDue` 가 참이다).
+        }
+    }
+
+    /// 메인 맥을 고른다. **먼저 화면에 반영하고** 서버에 쓰고, 실패하면 되돌린다.
+    ///
+    /// 되돌리는 까닭: 안 되돌리면 설정 창에는 내가 고른 맥이 떠 있는데 폰·위젯은 옛 맥을 계속 보여 준다 —
+    /// 사용자가 고친 줄 아는 바로 그 결함이 남는다(화면만 바뀌는 거짓말). 칩이 제자리로 튀는 쪽이 정직하다.
+    /// (`CheckCharacterSettingsRow` 가 "저장이 이긴 경우에만 칩을 옮긴다"로 같은 규약을 쓴다 — 여기는 왕복이
+    ///  있어서 순서만 뒤집혔다.)
+    func setAILimitMainDevice(_ deviceID: String) async {
+        guard let session, hasDeviceIdentity else { return }
+        let previous = aiLimits.setMainDeviceLocally(deviceID)
+        do {
+            try await service.upsertAILimitMainDeviceID(
+                accessToken: session.accessToken, userID: session.userID, mainDeviceID: deviceID)
+        } catch {
+            aiLimits.setMainDeviceLocally(previous)
+        }
     }
 
     /// 설정이 바뀐 뒤에 하는 일 둘.

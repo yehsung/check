@@ -38,6 +38,15 @@ import WidgetKit
 //    남은 초를 스냅샷에 실으면 쓰기 창구의 중복 제거가 무력화돼 60초마다 파일을 다시 쓴다.
 // 4. **경고 기호를 쓰지 않는다**(`exclamationmark`). 리밋이 90%인 것은 고장이 아니다 — 숫자 색이 말한다.
 //
+// ## 맥 두 대 이상이면 **메인 맥 하나**만 그린다 (v0.3.47)
+// 서버는 기기별로 저장하고 폰 카드는 맥마다 묶어 전부 그린다. 미디움 칸은 그럴 자리가 없다 —
+// 170pt 에 줄 셋이면 이미 꽉 차는데 맥 두 대 × 제공자 셋이면 여섯 줄이다. 그래서 **앱이 한 대를 골라**
+// (`AILimitMainDeviceRule` — 고른 맥이 없으면 가장 최근에 일한 맥) 그 맥의 줄만 패널에 싣고, 머리에 그 맥
+// 이름을 적는다. 위젯은 고르지 않는다: 고르는 규칙과 `ai_limits_prefs` 를 아는 쪽은 앱이고, 위젯이 같은
+// 판단을 따로 하면 두 벌이 갈린 채 한동안 산다(확장은 앱과 따로 갱신된다).
+// ★ **맥이 한 대면 이름을 적지 않는다**(`deviceName` nil) — 혼자 쓰는 사람의 위젯은 0.3.46 과 똑같다.
+// ★ 토큰 줄은 **계정 전체의 합** 그대로다(합산 유지 — 리밋만 메인 맥을 따른다). 그래서 그 줄에는 맥 이름이 없다.
+//
 // ## 두 빈 상태를 섞지 않는다
 // `noData`("앱을 열면 채워져요")와 `noProviders`(`AILimitSurfaceText.noVisibleProviders` — 맥에서 연동·보기
 // 설정을 가리킨다)는 사용자가 할 일이 다르다. 하나로 합치면 맥을 안 쓰는 사람이 앱만 몇 번이고 열게 된다.
@@ -173,7 +182,7 @@ struct AingAILimitsContent: View {
         }
     }
 
-    /// 머리: 제목 + **리밋 관측 나이**.
+    /// 머리: 제목 + **메인 맥 이름**(맥 두 대 이상) + **리밋 관측 나이**.
     ///
     /// ★ 나이는 `snapshot.generatedAt` 이 아니다(v0.3.45 P2). 그 값은 **폰이 파일을 쓴 시각**이고
     /// `NowStore.touchWidgetSnapshot` 이 리밋이 안 바뀌어도 60초마다 '지금'으로 옮긴다 — 맥이 몇 시간
@@ -183,14 +192,30 @@ struct AingAILimitsContent: View {
     /// 그들이 그리는 것은 '우리 서버가 센 사실'이라 스냅샷을 만든 시각이 맞는 기준이다).
     private func header(_ limits: AingWidgetLimits) -> some View {
         let ink = AingWidgetInk(renderingMode)
-        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+        return HStack(alignment: .firstTextBaseline, spacing: AingWidgetLimitsMediumBudget.headerItemGap) {
             Text(AingWidgetText.limitsTitle)
                 .aingFont(15, .bold, relativeTo: .subheadline)
                 .foregroundStyle(ink.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 6)
+            // ★ 메인 맥 이름(맥이 **두 대 이상일 때만** 들어온다 — 한 대면 nil 이라 지금과 똑같이 보인다).
+            //   자리는 머리 줄 안이고 세로를 하나도 더 쓰지 않는다. 그 선택의 실측 근거는
+            //   `AingWidgetLimitsMediumBudget` §머리 줄의 기기 이름(좁은 기기에서 이름 자리 194.4pt).
+            //   ★ **적을지 말지는 뷰가 정하지 않는다** — `AingWidgetLimits.headerDevice` 가 값으로 답한다
+            //     (뷰는 맥 스위트가 한 줄도 컴파일하지 않아서 그 분기를 재는 그물이 grep 하나뿐이 된다).
+            //   ★ **말줄임이 나는 쪽이 이 글자다**: 나이 글자는 `fixedSize()` 로, 제목은 짧아서 버틴다 —
+            //     이름은 사람이 적은 값이라 앞부분도 그 맥을 가리킨다(숫자를 줄이는 것과 다르다).
+            if let header = limits.headerDevice {
+                Text(header.text)
+                    .aingFont(11, relativeTo: .caption2)
+                    .foregroundStyle(ink.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    // 가운뎃점은 **보이는 글자**일 뿐이다 — 소리로 읽으면 이름의 일부처럼 들린다.
+                    .accessibilityLabel(Text(header.spoken))
+            }
+            Spacer(minLength: AingWidgetLimitsMediumBudget.headerMinGap)
             if let age = limits.observationAgeText(now: entry.date) {
                 Text(age)
                     .monospacedDigit()

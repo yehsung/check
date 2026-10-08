@@ -103,4 +103,31 @@ enum MeAILimitCardBudget {
 
     /// 그 문구가 숫자 칸에 말줄임 없이 들어가는가.
     static func valueFits(_ measured: CGFloat) -> Bool { measured <= valueWidth }
+
+    // MARK: 기기 묶음 머리글 (v0.3.47 — 맥 두 대 이상)
+    //
+    // 맥이 둘 이상이면 카드가 **기기 이름으로 묶어 전부** 그린다(2026-10-08 사용자 결정). 머리글은 묶음마다
+    // 한 줄이고, **열 머리는 카드당 한 번 그대로**다 — 왜 그렇게 골랐는지는 `MeAILimitsCard` 머리말 §기기 묶음.
+    //
+    // 머리글은 데이터가 아니라 **구획 표시**라 제공자 이름(13pt semibold `label`)보다 조용하다(12pt semibold
+    // `label2`). 같은 굵기·같은 색으로 두면 네 번째 제공자 줄처럼 읽힌다.
+
+    /// 묶음 머리글 글자 = `.caption`(12pt) semibold.
+    static let deviceNameFontSize: CGFloat = 12
+    /// 머리글 ↔ 그 묶음의 첫 줄 사이.
+    static let deviceNameBottomGap: CGFloat = 4
+    /// 앞 묶음 ↔ 머리글 사이(구분선 위아래로 숨을 둔다 — 없으면 머리글이 앞 묶음의 꼬리처럼 붙는다).
+    static let deviceNameTopGap: CGFloat = 8
+
+    /// 실측(2026-10-08, `(s as NSString).size(withAttributes:)` 12pt semibold):
+    /// 이름이 겹쳐 꼬리까지 붙은 가장 넓은 현실 문구 `예성의 MacBook Pro (A1B2)` = 154.64pt.
+    /// 테스트가 같은 방법으로 다시 재서 되묻는다.
+    static let worstDeviceNameWidth: CGFloat = 154.65
+
+    /// 그 이름이 **한 줄에** 들어가는가. 넘으면 **두 줄로 접힌다**(말줄임이 아니다) — 폰 카드에는 세로 자리가
+    /// 있고, 머리글이 잘리면 맥 미니 두 대를 가르려고 붙인 꼬리가 바로 그 잘리는 자리에 있다.
+    /// (위젯 머리는 반대다: 세로 자리가 없어 거기서는 자른다 — `AingWidgetLimitsMediumBudget.deviceNameWidth`.)
+    static func deviceNameFitsOneLine(_ measured: CGFloat, screenWidth: CGFloat) -> Bool {
+        measured <= innerWidth(screenWidth: screenWidth)
+    }
 }

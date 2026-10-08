@@ -255,6 +255,73 @@ struct V0347AILimitDeviceRosterTests {
                 "목록에 없는 식별자를 고른 채로 두면 폰·위젯이 아무 맥도 안 그린다")
     }
 
+    /// ★★ 이름은 **조각으로** 나온다(v0.3.47 P2) — 꼬리가 잘릴 자리에 놓이지 않게.
+    ///
+    /// ## 이 단언이 무는 결함
+    /// 합친 글자 하나(`Mac mini (A1B2)`)만 내놓으면, 그리는 쪽은 그 글자를 말줄임으로 자를 수밖에 없고
+    /// 말줄임은 **뒤**를 먹는다 — 거기가 바로 꼬리 자리다. 상한 길이(64 스칼라) 이름 두 대에서 두 머리글이
+    /// **글자 그대로 똑같아진다**(폰 카드 · 맥 고르개 둘 다 실측으로 재현했다). 조각으로 내놓으면 그리는 쪽이
+    /// "이름만 자르고 꼬리는 남긴다"를 할 수 있다.
+    @Test
+    func namesComeApartSoTheTailNeverSitsWhereTruncationBites() {
+        let twins = [
+            pdDevice("DEVICE-AAAA", "Mac mini", 60),
+            pdDevice("DEVICE-BBBB", "Mac mini", 120),
+            pdDevice("DEVICE-CCCC", "사무실 iMac", 180)
+        ]
+        let parts = AILimitDeviceRoster.displayNameParts(twins)
+        #expect(parts["DEVICE-AAAA"]?.base == "Mac mini", "겹친 이름의 base 에 꼬리가 섞였다 — 자르는 글자와 가르는 글자가 한 덩어리다")
+        #expect(parts["DEVICE-AAAA"]?.tail == "AAAA")
+        #expect(parts["DEVICE-BBBB"]?.tail == "BBBB")
+        #expect(parts["DEVICE-AAAA"]?.tail != parts["DEVICE-BBBB"]?.tail, "꼬리가 같다 — 가를 수 없다")
+        #expect(parts["DEVICE-CCCC"]?.tail == nil, "겹치지 않는 이름에 꼬리가 붙었다")
+
+        // ★ 상한 길이로 **글자 그대로 같은** 이름 두 대 — 그 경우에도 가르는 글자가 base 밖에 있다.
+        let longName = String(repeating: "가", count: AILimitDeviceLabelContract.maxScalars)
+        let longTwins = [pdDevice("DEVICE-A1B2", longName, 60), pdDevice("DEVICE-C3D4", longName, 120)]
+        let longParts = AILimitDeviceRoster.displayNameParts(longTwins)
+        #expect(longParts["DEVICE-A1B2"]?.base == longParts["DEVICE-C3D4"]?.base,
+                "전제: 두 맥의 이름 글자가 같다(다르면 이 그물은 아무것도 재지 못한다)")
+        #expect(longParts["DEVICE-A1B2"]?.tail == "A1B2" && longParts["DEVICE-C3D4"]?.tail == "C3D4",
+                "상한 길이 이름에서 꼬리가 사라졌다 — 두 맥을 가를 글자가 하나도 없다")
+
+        // 합친 글자는 **같은 규칙에서** 나온다(두 함수가 각자 세면 한쪽만 꼬리를 붙이는 날이 온다).
+        let combined = AILimitDeviceRoster.displayNames(twins)
+        for device in twins {
+            #expect(combined[device.deviceID] == parts[device.deviceID]?.combined,
+                    "합친 이름과 조각이 갈렸다(\(device.deviceID))")
+        }
+        #expect(combined["DEVICE-AAAA"] == "Mac mini (AAAA)", "합친 글자의 모양이 바뀌었다(기존 화면·소리가 이 글자를 쓴다)")
+        #expect(AILimitDeviceNameParts(base: "Mac mini", tail: nil).combined == "Mac mini")
+    }
+
+    /// ★★ 설정 칩과 폰이 **같은 입력에서 같은 맥**을 고른다 (v0.3.47 P1).
+    ///
+    /// ## 왜 입력이 어긋나면 조용한가
+    /// 맥 설정은 이 규칙을 **기기 명부 전체**로 돌린다(`fetchAILimitDevices` — 값 칸을 안 읽으므로 조용한 맥도
+    /// 명부에 있다). 0.3.47 초안의 폰은 **그릴 수 있는 맥들**로만 돌렸다. 그래서 고른 맥이 조용하면 칩은 그 맥에
+    /// 불이 들어와 있는데 폰은 다른 맥을 그렸고, 묶음이 하나뿐일 때는 **이름조차 적지 않았다**.
+    /// 지금은 폰도 명부 전체로 한 번 더 돌려(`AILimitsStore.settingsMainDevice`) 자기가 그리는 맥과 견준다 —
+    /// 이 단언은 그 두 호출이 **같은 답**을 내는지(= 입력만 맞추면 어긋남이 사라지는지)를 못 박는다.
+    @Test
+    func theSameRosterAlwaysResolvesToTheSameMacForBothSurfaces() {
+        // 명부: 조용한 맥(MAC-B, 더 최근)과 그릴 수 있는 맥(MAC-A).
+        let roster = [pdDevice("MAC-B", "사무실 iMac", 60), pdDevice("MAC-A", "Mac mini", 600)]
+        let drawable = [pdDevice("MAC-A", "Mac mini", 600)]
+
+        for chosen in [nil, "MAC-A", "MAC-B", "MAC-SOLD"] {
+            let settings = AILimitMainDeviceRule.resolve(devices: roster, chosen: chosen)?.deviceID
+            let phone = AILimitMainDeviceRule.resolve(devices: roster, chosen: chosen)?.deviceID
+            #expect(settings == phone, "같은 입력에 두 답이 나왔다(chosen: \(chosen ?? "nil"))")
+        }
+        // ★ 입력이 갈리면 **답도 갈린다** — 그게 이 결함의 정체다(명부로 접으면 조용한 맥, 묶음으로 접으면 다른 맥).
+        #expect(AILimitMainDeviceRule.resolve(devices: roster, chosen: "MAC-B")?.deviceID == "MAC-B")
+        #expect(AILimitMainDeviceRule.resolve(devices: drawable, chosen: "MAC-B")?.deviceID == "MAC-A",
+                "전제: 그릴 수 있는 맥들로만 접으면 고른 맥이 조용히 다른 맥으로 바뀐다(폰이 이 입력을 쓰면 안 되는 까닭)")
+        #expect(AILimitMainDeviceRule.resolve(devices: roster, chosen: nil)?.deviceID == "MAC-B",
+                "안 골랐을 때의 기본값도 **명부** 기준이다 — 설정 칩이 거기에 불을 켠다")
+    }
+
     /// 고를 수 있는 식별자의 상한이 **`ai_limits.device_id` 와 같다**. 어긋나면 고르는 순간 23514 다.
     @Test
     func theChoiceLengthCapMatchesTheDeviceIDCap() {

@@ -333,6 +333,203 @@ struct MeAILimitDeviceTests {
         #expect(panel.todayTokens == AILimitsStore.todayTokens(store.tokenGrid))
     }
 
+    // MARK: - ★ 고른 맥이 조용할 때 (v0.3.47 P1)
+
+    /// 고른 맥이 **값을 비운 맥**(그 맥 설정에서 전부 껐다)일 때 폰이 하는 말.
+    ///
+    /// ## 이 테스트가 무는 결함 (실측으로 재현한 P1)
+    /// 0.3.47 초안은 이름을 적는 조건을 `displayGroups.count > 1` 하나로 뒀다. 고른 맥이 조용하면 폰은 **다른
+    /// 맥**을 그리는데 그릴 묶음이 하나뿐이라 그 조건이 **거짓**이었고, 그래서
+    ///  · 폰 카드 머리글에 맥 이름이 **안 적혔고**,
+    ///  · 위젯 머리에도 이름이 **안 실렸다**(`deviceName` nil).
+    /// 설정 창 칩에는 고른 맥에 불이 들어와 있으므로, 사용자는 **다른 맥의 숫자를 자기가 고른 맥 것으로 읽는다**.
+    ///
+    /// ## 기준선을 다르게 둔다
+    /// 같은 행 묶음에서 **고른 맥만 바꿔** 두 번 잰다. 한쪽만 재면 "늘 이름을 적는다"(혼자 쓰는 사람에게
+    /// 군더더기가 보인다)와 "절대 안 적는다"(고친 것이 없다)가 둘 다 초록이다.
+    @Test("고른 맥이 조용하면: 이름을 적고 · 대체 사실을 말하고 · 위젯에도 그 맥 이름을 싣는다(고른 맥이 멀쩡하면 전부 아니다)")
+    func aSilentChosenMacIsNeverSubstitutedQuietly() async throws {
+        // 맥 둘 — macB 는 **창 값이 전부 null**(그 맥에서 껐다)이고 **더 최근**이다.
+        let rows = #"""
+        [
+          {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+           "provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
+           "weekly_percent":60,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T05:03:00+00:00"},
+          {"device_id":"mac-b-3c90","device_label":"사무실 iMac",
+           "provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
+           "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:04:00+00:00"}
+        ]
+        """#
+        func harness(chosen: String) async -> RankMeHarness {
+            await RankMeHarness(label: "me-dev-silent-\(chosen)") { request in
+                if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(rows) }
+                if request.path == "/rest/v1/ai_limits_prefs", request.method == "GET" {
+                    return .json(#"[{"main_device_id":"\#(chosen)"}]"#)
+                }
+                return MeStoreTests.rootResponder(request)
+            }
+        }
+
+        // ① 고른 맥(macB)이 조용하다 → 그려지는 것은 macA 하나뿐이다.
+        let silent = await harness(chosen: MeAILimitsTests.macB)
+        defer { silent.tearDown() }
+        let quiet = silent.me
+        quiet.appDidBecomeActive()
+        #expect(await baseWaitUntil { quiet.aiLimits.state.hasLoaded })
+
+        #expect(quiet.aiLimits.displayGroups.map(\.device.deviceID) == [MeAILimitsTests.macA],
+                "전제: 값을 비운 맥은 묶음이 서지 않는다")
+        #expect(quiet.aiLimits.roster.map(\.deviceID) == [MeAILimitsTests.macB, MeAILimitsTests.macA],
+                "명부가 숨긴 맥을 잊었다 — 그러면 '고른 맥이 조용하다'를 계산할 재료가 없다")
+        #expect(quiet.aiLimits.settingsMainDevice?.deviceID == MeAILimitsTests.macB,
+                "설정 칩이 가리키는 맥을 폰이 다르게 계산한다 — 두 표면이 같은 입력을 보지 않는다")
+        #expect(quiet.aiLimits.isShowingSubstituteDevice,
+                "고른 맥 대신 다른 맥을 그리면서 그 사실을 말하지 않는다 — 사용자는 고르기가 안 먹혔다고 읽는다")
+        #expect(quiet.aiLimits.showsDeviceNames,
+                "다른 맥을 그리는데 머리글에 그 맥 이름이 안 적힌다 — 남의 숫자를 자기가 고른 맥 것으로 읽는다")
+        let quietPanel = try #require(quiet.aiLimits.widgetPanel())
+        #expect(quietPanel.deviceName == "예성의 MacBook Pro",
+                "위젯 머리에 이름이 안 실렸다 — 위젯이 말할 수 있는 유일한 한마디가 빠졌다")
+        #expect(quietPanel.providers.first?.fiveHourPercent == 27, "전제: 실린 숫자는 macA 것이다")
+        MeAILimitsTests.expectNoPrefsWrites(silent)
+
+        // ② 같은 행 묶음, **고른 맥만 macA** → 그리는 맥이 곧 고른 맥이라 아무 말도 하지 않는다.
+        let matched = await harness(chosen: MeAILimitsTests.macA)
+        defer { matched.tearDown() }
+        let same = matched.me
+        same.appDidBecomeActive()
+        #expect(await baseWaitUntil { same.aiLimits.state.hasLoaded })
+
+        #expect(same.aiLimits.displayGroups.map(\.device.deviceID) == [MeAILimitsTests.macA],
+                "기준선이 다른 그림을 그린다 — 두 갈래의 차이가 '고른 맥' 하나여야 한다")
+        #expect(!same.aiLimits.isShowingSubstituteDevice, "고른 맥을 그리면서 '다른 맥을 보여 준다'고 말한다")
+        #expect(!same.aiLimits.showsDeviceNames,
+                "맥 한 대를 그리는데 이름을 적는다 — 혼자 쓰는 사람에게 군더더기를 보이지 않는 것이 사용자 결정이다")
+        #expect(same.aiLimits.widgetPanel()?.deviceName == nil, "위젯 머리에 쓸데없는 이름이 붙었다")
+    }
+
+    /// 고른 맥이 **3일 넘게 조용한**(유령) 경우도 같은 길이다. 비운 행과 유령은 뜻이 다르지만(설정 off vs 꺼 둔 맥)
+    /// 화면에서 할 말은 같다 — 둘을 가르지 않는 근거는 `AILimitSurfaceText` 머리말이다.
+    @Test("고른 맥이 3일째 조용해도 같다: 이름 + 대체 안내 · 숨긴 맥까지 명부에 남는다")
+    func aGhostChosenMacTakesTheSamePath() async throws {
+        let rows = #"""
+        [
+          {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+           "provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
+           "weekly_percent":60,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T05:03:00+00:00"},
+          {"device_id":"mac-b-3c90","device_label":"사무실 iMac",
+           "provider":"claude","five_hour_percent":91,"five_hour_resets_at":"2026-09-13T07:40:00+00:00",
+           "weekly_percent":44,"weekly_resets_at":"2026-09-18T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-13T05:00:00+00:00"}
+        ]
+        """#
+        let harness = await RankMeHarness(label: "me-dev-ghost-chosen") { request in
+            if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(rows) }
+            if request.path == "/rest/v1/ai_limits_prefs", request.method == "GET" {
+                return .json(#"[{"main_device_id":"\#(MeAILimitsTests.macB)"}]"#)
+            }
+            return MeStoreTests.rootResponder(request)
+        }
+        defer { harness.tearDown() }
+        let store = harness.me
+        store.appDidBecomeActive()
+        #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
+
+        #expect(store.aiLimits.displayGroups.map(\.device.deviceID) == [MeAILimitsTests.macA],
+                "전제: 3일 넘게 조용한 맥은 묶음이 서지 않는다")
+        #expect(store.aiLimits.roster.count == 2, "명부가 유령 행을 걸러 냈다 — 걸러 내면 그 맥은 없었던 것이 된다")
+        #expect(store.aiLimits.isShowingSubstituteDevice && store.aiLimits.showsDeviceNames)
+        #expect(store.aiLimits.widgetPanel()?.deviceName == "예성의 MacBook Pro")
+    }
+
+    /// ★ **안 골랐는데** 가장 최근에 일한 맥이 조용한 경우. 설정 칩은 그 맥에 불이 들어와 있고(같은 규칙이
+    /// 접어 준다) 폰은 다른 맥을 그린다 — 고른 적이 없어도 **두 표면이 갈리는 것은 똑같다**.
+    @Test("안 골랐어도: 설정 칩이 가리키는 맥을 못 그리면 이름을 적고 대체 사실을 말한다")
+    func anUnchosenButSilentDefaultIsAlsoAnnounced() async throws {
+        let rows = #"""
+        [
+          {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+           "provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
+           "weekly_percent":60,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T05:00:00+00:00"},
+          {"device_id":"mac-b-3c90","device_label":"사무실 iMac",
+           "provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
+           "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:04:00+00:00"}
+        ]
+        """#
+        let harness = await RankMeHarness(label: "me-dev-unchosen-silent") { request in
+            if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(rows) }
+            return MeAILimitsTests.responder(request)   // prefs 는 빈 배열(= 한 번도 안 골랐다)
+        }
+        defer { harness.tearDown() }
+        let store = harness.me
+        store.appDidBecomeActive()
+        #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
+
+        #expect(store.aiLimits.mainDeviceID == nil, "전제: 한 번도 고르지 않았다")
+        #expect(store.aiLimits.settingsMainDevice?.deviceID == MeAILimitsTests.macB,
+                "전제: 맥 설정의 칩은 가장 최근에 일한 맥(조용한 쪽)에 불이 들어와 있다")
+        #expect(store.aiLimits.displayGroups.map(\.device.deviceID) == [MeAILimitsTests.macA])
+        #expect(store.aiLimits.isShowingSubstituteDevice,
+                "안 골랐다는 이유로 조용히 다른 맥을 그린다 — 설정 창과 폰이 다른 맥을 가리킨다")
+        #expect(store.aiLimits.showsDeviceNames)
+    }
+
+    /// 맥이 **한 대뿐인 사람**은 이 장치에 걸리지 않는다(그 한 대가 곧 그가 아는 맥이다).
+    /// 그리고 로그아웃하면 명부도 비운다 — 남으면 다음 사람의 카드가 앞 사람의 맥 이야기를 한다.
+    @Test("한 대뿐이면 아무 말도 안 한다 · reset 이 명부를 비운다")
+    func oneMacSaysNothingAndResetForgetsTheRoster() async throws {
+        let single = #"""
+        [
+          {"device_id":"only-mac-1","device_label":"Mac mini",
+           "provider":"claude","five_hour_percent":27,"five_hour_resets_at":null,
+           "weekly_percent":60,"weekly_resets_at":null,"plan_label":"max","observed_at":"2026-09-17T05:03:00+00:00"}
+        ]
+        """#
+        let harness = await RankMeHarness(label: "me-dev-one-silent") { request in
+            if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(single) }
+            return MeStoreTests.rootResponder(request)
+        }
+        defer { harness.tearDown() }
+        let store = harness.me
+        store.appDidBecomeActive()
+        #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
+
+        #expect(store.aiLimits.roster.map(\.deviceID) == ["only-mac-1"])
+        #expect(!store.aiLimits.isShowingSubstituteDevice, "한 대뿐인데 '다른 맥을 보여 준다'고 말한다")
+        #expect(!store.aiLimits.showsDeviceNames)
+
+        store.aiLimits.reset()
+        #expect(store.aiLimits.roster.isEmpty, "로그아웃 뒤에도 앞 사람의 맥 명부가 남는다")
+        #expect(!store.aiLimits.isShowingSubstituteDevice, "묶음이 없는데 대체했다고 말한다")
+    }
+
+    /// 그릴 묶음이 **하나도 없으면** 대체한 것이 없다(빈 상태 안내가 그 자리를 쥔다 — 두 말이 겹치지 않게).
+    @Test("전부 조용하면 대체 안내를 띄우지 않는다(빈 상태 안내와 두 말이 겹치지 않게)")
+    func nothingToDrawMeansNothingWasSubstituted() async throws {
+        let rows = #"""
+        [
+          {"device_id":"mac-a-7f21","device_label":"예성의 MacBook Pro",
+           "provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
+           "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:03:00+00:00"},
+          {"device_id":"mac-b-3c90","device_label":"사무실 iMac",
+           "provider":"claude","five_hour_percent":null,"five_hour_resets_at":null,
+           "weekly_percent":null,"weekly_resets_at":null,"plan_label":null,"observed_at":"2026-09-17T05:04:00+00:00"}
+        ]
+        """#
+        let harness = await RankMeHarness(label: "me-dev-all-silent") { request in
+            if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(rows) }
+            return MeAILimitsTests.responder(request)
+        }
+        defer { harness.tearDown() }
+        let store = harness.me
+        store.appDidBecomeActive()
+        #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
+
+        #expect(store.aiLimits.displayGroups.isEmpty, "전제: 그릴 묶음이 없다")
+        #expect(store.aiLimits.roster.count == 2, "전제: 명부에는 두 대가 있다(걸러진 쪽이 아니다)")
+        #expect(!store.aiLimits.isShowingSubstituteDevice, "그릴 것이 없는데 '다른 맥을 보여 주고 있다'고 말한다")
+        #expect(!store.aiLimits.showsDeviceNames)
+    }
+
     // MARK: - 서버 읽기
 
     /// 귀속 없는 행은 버린다. 화면의 묶음 단위가 기기이므로 둘 곳이 없고, 억지로 한 묶음에 몰면 그게 바로
@@ -453,6 +650,108 @@ struct MeAILimitDeviceTests {
         // ★ 머리글은 제공자 이름보다 **조용하다**(같은 굵기·같은 크기면 네 번째 제공자 줄처럼 읽힌다).
         #expect(MeAILimitCardBudget.deviceNameFontSize < MeAILimitCardBudget.nameFontSize,
                 "묶음 머리글이 제공자 이름만큼 크다 — 구획이 데이터처럼 보인다")
+    }
+
+    /// ★★ **상한 길이 이름 두 대**에서 꼬리가 살아남는가 (v0.3.47 P2).
+    ///
+    /// ## 그물이 없던 까닭
+    /// 기존 폭 테스트는 '가장 넓은 현실적인 이름'을 `예성의 MacBook Pro (A1B2)`(24자)로 잡았고, 그 이름은 한 줄에
+    /// 든다. 그래서 "두 줄로 접힌다"는 설계가 **참인 구간만** 재고 있었다. `device_label` 상한은 **64 스칼라**이고
+    /// 한글 64자는 두 줄에도 들지 않는다 — 그 구간에서 말줄임이 **뒤**를 먹고, 거기가 바로 겹침을 가르는 꼬리
+    /// 자리였다(두 머리글이 글자 그대로 똑같아진다).
+    ///
+    /// ## 여기서 재는 것
+    /// ① 상한 길이 이름은 **정말로** 두 줄을 넘긴다(= 말줄임이 난다 — 전제가 참이어야 이 그물이 뜻을 갖는다).
+    /// ② 그런데 꼬리는 **그 어떤 이름 앞에서도** 자리를 갖는다(`fixedSize` + `layoutPriority` 가 그 뜻이다).
+    /// ③ 그래서 두 묶음의 **꼬리가 서로 다르다** = 사람이 두 머리글을 가를 수 있다.
+    /// (뷰 자체는 `#if os(iOS)` 라 맥 스위트가 한 줄도 컴파일하지 않는다 — 그림으로 보는 그물은 `ImageRenderer`
+    ///  카탈로그의 `card-twin-long-names` 다. 여기서는 그 배치가 성립할 **조건**을 값으로 못 박는다.)
+    @Test("상한 길이 쌍둥이: 이름은 잘려도 꼬리는 남는다 — 두 머리글이 다르게 보인다")
+    func theTailSurvivesEvenWhenTwoMaximumLengthNamesAreIdentical() throws {
+        func width(_ text: String) -> CGFloat {
+            MeAILimitsTests.width(text, size: MeAILimitCardBudget.deviceNameFontSize, weight: .semibold,
+                                  monospacedDigits: false)
+        }
+        // 꼬리 글자의 실측값을 **다시 재서** 되묻는다(글꼴이 바뀌면 여기서 빨개진다). 상수는 **가장 넓은** 꼬리다 —
+        // 꼬리 글자 수는 고정(4자)이고 폭만 글리프에 따라 다르므로, 좁은 쪽을 들면 자리 계산이 과대평가된다.
+        let widestTail = width(AILimitDeviceNameParts.tailText("WWWW"))
+        #expect(abs(widestTail - MeAILimitCardBudget.worstDeviceTailWidth) < 1.5,
+                "가장 넓은 꼬리 실측이 \(widestTail)pt 인데 상수는 \(MeAILimitCardBudget.worstDeviceTailWidth)pt 다")
+        #expect(width(AILimitDeviceNameParts.tailText("A1B2")) <= widestTail + 0.01,
+                "현실적인 꼬리가 '가장 넓은 꼬리'보다 넓다 — 상한을 잘못 잡았다")
+
+        let maxName = String(repeating: "가", count: AILimitDeviceLabelContract.maxScalars)
+        // ★ 초안이 그렸던 **합친 글자**로 전제를 잰다(그게 잘리던 글자다). 꼬리까지 붙으면 두 줄을 확실히 넘는다.
+        let combinedWidth = width(AILimitDeviceNameParts(base: maxName, tail: "A1B2").combined)
+        for screen in [MeAILimitCardBudget.narrowestScreenWidth, MeAILimitCardBudget.referenceScreenWidth] {
+            // ① 전제: 합쳐 적으면 두 줄에도 안 든다 = 말줄임이 **뒤**(꼬리 자리)를 먹는다.
+            #expect(MeAILimitCardBudget.deviceNameOverflowsTwoLines(combinedWidth, screenWidth: screen),
+                    "\(screen)pt 기기에서 상한 길이 쌍둥이 머리글 \(combinedWidth)pt 가 두 줄에 든다 — 이 그물이 재는 구간이 사라졌다")
+            #expect(!MeAILimitCardBudget.deviceNameFitsOneLine(combinedWidth, screenWidth: screen))
+            // ② 그런데 꼬리는 **따로 서므로** 제 자리를 갖는다(이름이 아무리 길어도).
+            #expect(MeAILimitCardBudget.deviceTailAlwaysFits(widestTail, screenWidth: screen),
+                    "\(screen)pt 기기에서 꼬리가 들어갈 자리가 없다 — 긴 이름 앞에서 꼬리가 눌린다")
+        }
+
+        // ③ 두 묶음의 꼬리가 다르다 = 머리글이 가려진다. 스토어가 내놓는 **조각**으로 잰다.
+        let base = Self.now
+        let groups = AILimitsStore.displayGroups(
+            from: AILimitsStore.groups(
+                from: [Self.row("twin-aaaa-a1b2", label: maxName, ago: 60),
+                       Self.row("twin-bbbb-c3d4", label: maxName, ago: 600)],
+                now: base
+            ),
+            now: base
+        )
+        #expect(groups.count == 2, "전제: 같은 이름 두 대가 둘 다 그려진다")
+        let first = try #require(groups.first), second = try #require(groups.last)
+        #expect(first.nameParts.base == second.nameParts.base, "전제: 두 맥의 이름 글자가 같다")
+        #expect(first.nameParts.tail == "A1B2" && second.nameParts.tail == "C3D4",
+                "상한 길이 쌍둥이에서 꼬리가 사라졌다 — 두 머리글을 가를 글자가 없다")
+        #expect(first.nameParts.tail != second.nameParts.tail)
+        // 보이스오버는 합친 글자를 듣는다(소리에는 잘릴 자리가 없다).
+        #expect(first.name != second.name && first.name.hasSuffix("(A1B2)"))
+    }
+
+    /// 카드 소스 계약 — **꼬리가 말줄임에 먹히지 않는 자리에 있고**, 대체 안내가 표 앞에 선다(v0.3.47 P1·P2).
+    ///
+    /// 값으로 재는 위의 단언들과 짝이다: 그쪽은 "스토어가 조각을 내놓는가", 여기는 "뷰가 그 조각을 **따로**
+    /// 그리는가". 뷰는 `#if os(iOS)` 라 맥 스위트가 한 줄도 컴파일하지 않아서, 이 두 자리는 글자로만 잴 수 있다.
+    @Test("카드 소스 계약: 이름만 잘리고 꼬리는 fixedSize · 대체 안내는 표 **앞** · 안내 글자는 공유 상수")
+    func cardKeepsTheTailAndTellsAboutSubstitution() throws {
+        let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
+        // 머리글이 **조각**을 받는다(합친 글자를 받으면 자르는 글자와 가르는 글자가 한 덩어리다).
+        #expect(card.contains("deviceNameRow(group.nameParts, isFirst: groupIndex == 0)"),
+                "머리글이 조각을 안 받는다 — 꼬리가 말줄임이 먹는 자리로 돌아갔다")
+        let header = try #require(card.range(of: "private func deviceNameRow(_ parts: AILimitDeviceNameParts"))
+        let headerBody = String(card[header.upperBound...].prefix(900))
+        #expect(headerBody.contains("Text(parts.base)"), "이름을 조각으로 그리지 않는다")
+        #expect(headerBody.contains("Text(AILimitDeviceNameParts.tailText(tail))"), "꼬리를 따로 그리지 않는다")
+        // ★ 꼬리는 **줄지 않고 먼저** 자리를 받는다. 둘 중 하나만 있으면 긴 이름 앞에서 꼬리가 눌리거나 `…` 가 된다.
+        let tailText = try #require(headerBody.range(of: "Text(AILimitDeviceNameParts.tailText(tail))"))
+        let tailBlock = String(headerBody[tailText.upperBound...].prefix(260))
+        #expect(tailBlock.contains(".fixedSize()"), "꼬리가 줄어들 수 있다")
+        #expect(tailBlock.contains(".layoutPriority(1)"), "꼬리가 이름보다 나중에 자리를 받는다")
+        // 말줄임이 나는 쪽은 **이름뿐**이다(꼬리에 truncationMode 가 붙으면 그 자리가 잘리는 자리가 된다).
+        let nameText = try #require(headerBody.range(of: "Text(parts.base)"))
+        let nameBlock = String(headerBody[nameText.upperBound...].prefix(160))
+        #expect(nameBlock.contains(".lineLimit(2)") && nameBlock.contains(".truncationMode(.tail)"),
+                "이름의 두 줄 접기·말줄임이 사라졌다")
+
+        // 대체 안내: 표 **앞**이고(숫자를 다 본 뒤면 늦다), 글자는 공유 상수에서 온다.
+        #expect(card.contains("if limits.isShowingSubstituteDevice { substituteDeviceLine }"),
+                "대체 사실을 말하는 줄이 없다 — 고르기가 안 먹혔다고 읽는 바로 그 자리다")
+        let line = try #require(card.range(of: "if limits.isShowingSubstituteDevice { substituteDeviceLine }"))
+        let table = try #require(card.range(of: "table(groups, showsDeviceNames: limits.showsDeviceNames)"))
+        #expect(line.lowerBound < table.lowerBound, "대체 안내가 표 뒤에 있다 — 숫자를 다 읽은 뒤에 설명이 온다")
+        #expect(card.contains("Text(MeText.aiLimitsSubstitutedDevice)"), "안내 문장을 뷰가 직접 적는다")
+        #expect(MeText.aiLimitsSubstitutedDevice == AILimitSurfaceText.substitutedMainDevice,
+                "폰 글자와 공유 상수가 갈렸다")
+        #expect(!MeText.aiLimitsSubstitutedDevice.isEmpty)
+        // 뷰는 **기기 이름 규칙을 다시 만들지 않는다**(기존 계약 그대로 — 조각을 쓰는 것도 스토어가 준 값이다).
+        for banned in ["displayNameParts(", "displayNames(", "AILimitMainDeviceRule", "shortTail("] {
+            #expect(!card.contains(banned), "카드가 기기 이름·메인 맥 규칙을 자기 손으로 다시 만든다(\(banned))")
+        }
     }
 }
 

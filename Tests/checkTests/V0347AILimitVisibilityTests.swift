@@ -1193,9 +1193,11 @@ struct V0347AILimitSettingsViewTests {
         #expect(source.contains("await store.loadAILimitDevicesIfNeeded()"),
                 "기기 목록을 받아 오는 자리가 없다 — 고르개가 영영 안 나타난다")
         #expect(source.contains("await store.setAILimitMainDevice(device.deviceID)"),
-                "칩이 스토어 함수로 가지 않는다 — 서버에 안 써서 폰이 안 바뀐다")
-        #expect(source.contains("AILimitDeviceRoster.displayNames(store.aiLimits.devices)"),
-                "이름을 뷰가 직접 만든다 — 겹치는 이름을 가르는 규칙이 두 벌이 된다")
+                "줄이 스토어 함수로 가지 않는다 — 서버에 안 써서 폰이 안 바뀐다")
+        // ★ 이름은 **조각으로** 받는다(v0.3.47 P2). 합친 글자 하나를 받아 그리면 좁은 줄에서 말줄임이
+        //   **꼬리부터** 먹어 같은 이름 두 맥이 글자 그대로 똑같아진다 — 고르개가 가를 수 없는 화면이 된다.
+        #expect(source.contains("AILimitDeviceRoster.displayNameParts(store.aiLimits.devices)"),
+                "이름을 뷰가 직접 만들거나 합친 글자로 받는다 — 겹치는 이름을 가르는 꼬리가 잘릴 자리에 놓인다")
 
         // 세터를 부르는 곳은 설정 화면 하나뿐이다(위 두 스위치와 같은 규약).
         let calls = try v0347CountInSources("setAILimitMainDevice(")
@@ -1204,12 +1206,28 @@ struct V0347AILimitSettingsViewTests {
 
         // ★ 그 줄은 `Menu`·`Picker`·`TextField` 가 아니다. 이 저장소의 렌더 검증(`ImageRenderer`)은 그 셋을
         //   **노란 상자**로 그려 그 자리의 픽셀 커버리지가 0 이 된다 — 잘림·겹침·색 결함을 스냅샷이 영영 못 본다.
-        let start = try #require(source.range(of: "private struct AILimitMainDeviceSettingsRow"))
-        let row = source[start.lowerBound...].prefix(2_600)
+        let start = try #require(source.range(of: "struct AILimitMainDeviceSettingsRow"))
+        let row = source[start.lowerBound...].prefix(3_200)
         for banned in ["Menu {", "Picker(", "TextField("] {
             #expect(row.contains(banned) == false, "고르개가 렌더 검증에서 노란 상자로 그려지는 조각을 쓴다")
         }
-        #expect(row.contains("Capsule()"), "칩이 칩이 아니다 — 모양 규약이 캐릭터 행과 갈렸다")
+        #expect(row.contains("RoundedRectangle(cornerRadius: 8, style: .continuous)"),
+                "줄 배경이 순수 도형이 아니다 — 렌더 검증이 그 자리를 못 본다")
+        #expect(row.contains("CheckTheme.gaugeGradient") && row.contains("CheckTheme.trackFill"),
+                "고른 줄/나머지 줄의 색 문법이 캐릭터 행과 갈렸다")
+
+        // ★★ 칩 한 줄이 아니라 **목록**이다(v0.3.47 P2). 칩을 한 `HStack` 에 밀어 넣으면 기기 수가 늘수록
+        //   칩마다의 폭이 줄어, 4대에서 같은 이름 두 맥이 둘 다 `Mac min…` 으로 떠 **고를 수가 없다**.
+        #expect(row.contains("VStack(alignment: .leading, spacing: AILimitDevicePickerBudget.rowGap)"),
+                "고르개가 세로 목록이 아니다 — 기기 수에 따라 이름 자리가 줄어드는 배치로 돌아갔다")
+        #expect(!row.contains("frame(maxWidth: 160)"),
+                "칩 폭 상한이 남았다 — 한 줄에 여럿을 밀어 넣던 그 배치다")
+        // 꼬리는 **자르지 않는 자리**에 있다(이름만 잘린다).
+        #expect(row.contains("Text(AILimitDeviceNameParts.tailText(tail))"), "꼬리를 따로 세우지 않는다")
+        let tail = try #require(row.range(of: "Text(AILimitDeviceNameParts.tailText(tail))"))
+        let tailBlock = row[tail.upperBound...].prefix(200)
+        #expect(tailBlock.contains(".fixedSize()") && tailBlock.contains(".layoutPriority(1)"),
+                "꼬리가 줄어들거나 나중에 자리를 받는다 — 긴 이름 앞에서 `…` 가 되어 두 줄이 똑같아진다")
     }
 
     /// ★★ 맥이 **두 대일 때만** 그 줄이 실제로 **그려진다**(높이와 잉크가 같이 늘어난다).

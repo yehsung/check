@@ -296,16 +296,29 @@ private struct AILimitProviderToggleRow: View {
 ///     "내 맥이 하나도 없다"로 읽히는 순간이 아예 없다.
 /// 두 대가 되는 순간 저절로 나타난다(둘째 맥이 행을 올린 뒤 이 창을 다시 열면).
 ///
-/// ## ★ `Picker`/`Menu` 가 아니라 칩 버튼 줄이다
+/// ## ★ `Picker`/`Menu` 가 아니라 도형+Text 버튼이다
 /// 승인된 스케치는 `[ Mac mini ▾ ]` 드롭다운이었지만, 이 저장소의 렌더 검증(`ImageRenderer`)은 `Menu`·
 /// `Picker`·`TextField` 를 **노란 상자**로 그린다 — 그 자리는 픽셀 커버리지가 0 이라 잘림·겹침·색 결함을
-/// 스냅샷이 영영 못 본다(실측: 그래서 한 색 결함이 8일간 안 잡혔다). 칩은 순수 도형+Text 라 그대로 찍힌다.
-/// 문법은 `CheckCharacterSettingsRow` 와 **같다**(고른 것 = gaugeGradient, 나머지 = trackFill + border).
+/// 스냅샷이 영영 못 본다(실측: 그래서 한 색 결함이 8일간 안 잡혔다). 도형+Text 는 그대로 찍힌다.
+/// 색 문법은 `CheckCharacterSettingsRow` 와 **같다**(고른 것 = gaugeGradient, 나머지 = trackFill + border).
 ///
-/// ## 이름이 겹치면 식별자 꼬리를 붙인다
+/// ## ★★ 칩 한 줄이 아니라 **목록**이다 (v0.3.47 P2 — 실증으로 잡은 결함)
+/// 초안은 칩을 `HStack` 한 줄에 넣고 `frame(maxWidth: 160)` + 말줄임으로 뒀다(줄바꿈도 가로 스크롤도 없다).
+/// 칩이 남는 폭을 나눠 가지므로 글자 자리가 2대 136pt → **3대 81.3** → 4대 53.5 → 5대 36.8 로 줄고,
+/// 꼬리까지 붙은 머리글(`Mac mini (A1B2)` = 95.3pt)은 **3대에서 이미 꼬리부터 잘렸다** — 같은 이름 두 맥이
+/// 글자 그대로 같아져 **고를 수가 없다**(신고된 4대보다 한 대 이르다. 4대에서는 `사무실 iMac` 같은 평범한
+/// 이름조차 못 쓴다). 고르개는 **그 둘을 가르는 것이 존재 이유인 화면**이고, 이름 없는 옛 맥 둘
+/// (`이름 모를 맥 9F8E`/`2B1C`)도 같은 꼴이었다.
+/// 지금은 한 줄에 한 대씩이고, 이름 자리가 **기기 수와 무관하다**(예산·근거는 `AILimitDevicePickerBudget`).
+/// 세로가 자라는 것은 괜찮다 — 이 창의 본문은 v0.3.47 부터 넘치면 스크롤한다(`CheckSettingsView.body`).
+///
+/// ## 이름이 겹치면 식별자 꼬리를 붙인다 — 그 꼬리는 **잘리지 않는 자리**에 있다
 /// 맥 미니 두 대는 시스템 설정 이름이 글자 그대로 같다. 맥들은 서로를 모르므로 가르는 일은 **읽는 쪽**이
-/// 한다(`AILimitDeviceRoster.displayNames`) — 겹치지 않는 이름에는 아무것도 붙지 않는다.
-private struct AILimitMainDeviceSettingsRow: View {
+/// 한다(`AILimitDeviceRoster.displayNameParts`) — 겹치지 않는 이름에는 아무것도 붙지 않는다.
+/// ★ 이름(최대 64 스칼라)은 한 줄에 못 드는 날이 있고, 그때 말줄임이 먹는 자리가 **뒤**다. 꼬리를 합쳐 적으면
+///   거기가 바로 꼬리 자리라 두 줄이 글자까지 똑같아진다. 그래서 꼬리는 따로 세우고 `fixedSize` 로 못 박는다
+///   (폰 카드 머리글과 **같은 수리** — `MeAILimitsTable.deviceNameRow`).
+struct AILimitMainDeviceSettingsRow: View {
     let store: WorkTimerStore
 
     var body: some View {
@@ -320,46 +333,74 @@ private struct AILimitMainDeviceSettingsRow: View {
                     // 좁혀도 말줄임 대신 줄바꿈(이 창의 설명 줄 규약).
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // 목록 순서의 주인은 `AILimitDeviceRoster.fold` 다(최근에 일한 순). 여기서 다시 정렬하면
-            // 그 사실이 두 곳에 적히고, 갈리는 날 기본 선택과 첫 칸이 조용히 어긋난다.
-            let names = AILimitDeviceRoster.displayNames(store.aiLimits.devices)
-            let selected = store.aiLimits.effectiveMainDevice?.deviceID
-            HStack(spacing: 6) {
-                ForEach(store.aiLimits.devices) { device in
-                    chip(device, name: names[device.deviceID] ?? device.baseName, isOn: device.deviceID == selected)
-                }
-                Spacer(minLength: 0)
+            devicePicker
+        }
+    }
+
+    /// 맥 목록. 순서의 주인은 `AILimitDeviceRoster.fold` 다(최근에 일한 순) — 여기서 다시 정렬하면 그 사실이
+    /// 두 곳에 적히고, 갈리는 날 기본 선택과 첫 줄이 조용히 어긋난다.
+    @ViewBuilder
+    var devicePicker: some View {
+        let names = AILimitDeviceRoster.displayNameParts(store.aiLimits.devices)
+        let selected = store.aiLimits.effectiveMainDevice?.deviceID
+        VStack(alignment: .leading, spacing: AILimitDevicePickerBudget.rowGap) {
+            ForEach(store.aiLimits.devices) { device in
+                deviceRow(
+                    device,
+                    parts: names[device.deviceID] ?? AILimitDeviceNameParts(base: device.baseName, tail: nil),
+                    isOn: device.deviceID == selected
+                )
             }
         }
     }
 
-    /// 칩 하나. **스토어 함수 하나로만** 간다(`WorkTimerStoreAILimits.setAILimitMainDevice`) — 여기서
+    /// 줄 하나. **스토어 함수 하나로만** 간다(`WorkTimerStoreAILimits.setAILimitMainDevice`) — 여기서
     /// `aiLimits` 를 직접 만지면 서버에 쓰는 일이 빠지고, 그 누락은 조용하다(설정 창만 바뀌고 폰은 그대로다).
     @ViewBuilder
-    private func chip(_ device: AILimitDevice, name: String, isOn: Bool) -> some View {
+    func deviceRow(_ device: AILimitDevice, parts: AILimitDeviceNameParts, isOn: Bool) -> some View {
         Button {
             Task { await store.setAILimitMainDevice(device.deviceID) }
         } label: {
-            Text(name)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(isOn ? Color.white : CheckTheme.primaryText)
-                .lineLimit(1)
-                // 이름은 64자까지 올 수 있다(서버 CHECK). 칩 하나가 창을 밀어내지 않게 상한을 둔다 —
-                // 넘치면 말줄임이고, 겹치는 이름은 꼬리로 이미 갈려 있다.
-                .truncationMode(.tail)
-                .frame(maxWidth: 160)
-                .padding(.horizontal, 12)
-                .frame(height: 26)
-                .background {
-                    if isOn {
-                        Capsule().fill(CheckTheme.gaugeGradient)
-                    } else {
-                        Capsule().fill(CheckTheme.trackFill)
-                            .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
-                    }
+            HStack(spacing: AILimitDevicePickerBudget.itemGap) {
+                // 이름은 **이쪽이** 잘린다(겹쳐도 같은 글자다).
+                Text(parts.base)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let tail = parts.tail {
+                    // ★ 꼬리는 자르지 않는다: `fixedSize` 는 "줄이지 마라", `layoutPriority` 는 "먼저 가져가라".
+                    //   하나만 두면 긴 이름 앞에서 꼬리가 눌리거나 `…` 로 바뀐다 — 그 순간 두 줄이 똑같아진다.
+                    Text(AILimitDeviceNameParts.tailText(tail))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
+                Spacer(minLength: AILimitDevicePickerBudget.itemGap)
+                // 고른 줄의 표시. **자리는 늘 비워 둔다** — 줄마다 이름 자리가 달라지면 같은 이름 두 대가
+                // 서로 다른 지점에서 잘려, 선택이 바뀔 때마다 그 차이가 사라진다(가르는 단서가 못 된다).
+                Image(systemName: "checkmark")
+                    .font(.caption.weight(.bold))
+                    .frame(width: AILimitDevicePickerBudget.checkWidth)
+                    .opacity(isOn ? 1 : 0)
+                    .accessibilityHidden(true)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(isOn ? Color.white : CheckTheme.primaryText)
+            .padding(.horizontal, AILimitDevicePickerBudget.rowHorizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: AILimitDevicePickerBudget.rowHeight)
+            .background {
+                if isOn {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(CheckTheme.gaugeGradient)
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(CheckTheme.trackFill)
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(CheckTheme.border, lineWidth: 1))
+                }
+            }
         }
         .buttonStyle(.plain)
+        // 이름과 꼬리는 그리기 사정으로 나뉘었다 — 듣는 사람에게는 한 이름이다.
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }
 }

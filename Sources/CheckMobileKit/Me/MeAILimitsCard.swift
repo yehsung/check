@@ -63,7 +63,15 @@ import SwiftUI
 // 맥 미니 두 대는 시스템 설정 이름이 **글자 그대로 같다**. 맥들은 서로를 모르므로 가르는 일은 **읽는 쪽**이
 // 한다 — 같은 이름이 둘 이상이면 뒤에 식별자 꼬리가 붙는다(`Mac mini (A1B2)`). 겹치지 않으면 아무것도 붙지
 // 않고, 이름을 한 번도 올린 적 없는 맥은 `이름 모를 맥 A1B2` 로 선다. 규칙은 코어 한 벌이다
-// (`AILimitDeviceRoster.displayNames` · `AILimitDevice.baseName`) — 이 뷰는 스토어가 정한 글자를 적기만 한다.
+// (`AILimitDeviceRoster.displayNameParts` · `AILimitDevice.baseName`) — 이 뷰는 스토어가 정한 글자를 적기만 한다.
+// ★ 그 꼬리는 **이름과 따로** 그린다(v0.3.47 P2): 상한 길이(64 스칼라) 이름 두 대는 두 줄에도 안 들어가고,
+//   합쳐 적으면 말줄임이 **꼬리부터** 먹어 두 머리글이 똑같아진다 — 근거는 `deviceNameRow` 주석.
+//
+// ## 고른 맥이 조용하면 그 사실을 적는다 (v0.3.47 P1)
+// 고른 메인 맥이 유령(3일 무보고)이거나 그 맥에서 제공자를 전부 껐으면 폰은 **다른 맥**을 그린다. 그때
+//  · 묶음이 하나뿐이어도 **기기 이름을 적고**(`AILimitsStore.showsDeviceNames`),
+//  · 표 앞에 **한 줄**로 대체 사실을 말한다(`substituteDeviceLine`).
+// 이름만으로는 "고르기가 저장되지 않았다"로 읽히기 때문이다 — 근거는 `AILimitSurfaceText.substitutedMainDevice`.
 //
 // 숨기기 규칙(2026-10-07 사용자 결정): 미연동 제공자는 줄을 만들지 않고, 하나도 없으면 안내 한 줄만 둔다.
 // 폰에는 이 축의 스위치가 없다 — 사용자가 맥에서 그 도구에 로그인하면 저절로 나타난다.
@@ -90,6 +98,9 @@ struct MeAILimitsCard: View {
             if groups.isEmpty {
                 emptyLine
             } else {
+                // ★ 표 **앞**이다. 이 줄은 아래 숫자들을 어떻게 읽어야 하는지를 말하므로, 숫자를 다 본 뒤에
+                //   나오면 늦다(보이스오버는 위에서 아래로 한 번 읽는다).
+                if limits.isShowingSubstituteDevice { substituteDeviceLine }
                 table(groups, showsDeviceNames: limits.showsDeviceNames)
                 Text(MeText.aiLimitsCaption)
                     .font(.footnote)
@@ -120,6 +131,22 @@ struct MeAILimitsCard: View {
 
     private func table(_ groups: [AILimitDeviceDisplayGroup], showsDeviceNames: Bool) -> some View {
         MeAILimitsTable(groups: groups, showsDeviceNames: showsDeviceNames)
+    }
+
+    /// 고른 맥 대신 다른 맥을 그리고 있다는 한 줄(v0.3.47 P1).
+    ///
+    /// ## 왜 머리글의 이름만으로는 부족한가
+    /// 이름을 적으면 "이 숫자는 이 맥 것"은 참이 된다. 그러나 맥 설정에서 **다른 맥**을 고른 사람에게 그 이름은
+    /// "고르기가 저장되지 않았다"로 읽힌다(고쳐질 것이 없는데 다시 고르러 간다). 그래서 대체가 일어났다는
+    /// 사실을 글자로 말한다 — 문장·근거는 공유 상수에 있다(`AILimitSurfaceText.substitutedMainDevice`).
+    ///
+    /// 색은 `pending`(경고가 아니라 **주의**)이다: 고장이 아니고 숫자도 참이지만, 사용자가 고른 것과 다르다는
+    /// 사실은 `label2` 로 적으면 캡션처럼 읽혀 지나친다.
+    private var substituteDeviceLine: some View {
+        Text(MeText.aiLimitsSubstitutedDevice)
+            .font(.footnote)
+            .foregroundStyle(MobileTheme.pending)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// 아직 그릴 줄이 없다: 불러오는 중 · 실패 · **그릴 줄 0건**(연동이 없다 · 맥 설정에서 껐다 · 전부 유령이다).
@@ -211,7 +238,7 @@ struct MeAILimitsTable: View {
                 // 묶음 경계에는 **이름을 그리든 안 그리든** 선이 있다(죽은 분기를 만들지 않는다 —
                 // 지금은 이름 없이 묶음이 둘일 수 없지만, 그 전제가 느슨해지는 날 두 줄이 맞붙지 않게).
                 if groupIndex > 0 { rowSeparator }
-                if showsDeviceNames { deviceNameRow(group.name, isFirst: groupIndex == 0) }
+                if showsDeviceNames { deviceNameRow(group.nameParts, isFirst: groupIndex == 0) }
                 ForEach(Array(group.rows.enumerated()), id: \.element.id) { index, row in
                     if index > 0 { rowSeparator }
                     MeAILimitRow(row: row, deviceName: showsDeviceNames ? group.name : nil)
@@ -224,21 +251,44 @@ struct MeAILimitsTable: View {
     /// 기기 묶음 머리글 한 줄. **구획 표시**라 제공자 이름보다 조용하다(12pt semibold `label2` — 같은 굵기·같은
     /// 색이면 네 번째 제공자 줄처럼 읽힌다).
     ///
-    /// ★ 긴 이름은 **두 줄로 접힌다**(말줄임이 아니다 — `lineLimit(2)` + `fixedSize(vertical:)`). 맥 미니 두 대를
-    ///   가르려고 붙인 꼬리 `(A1B2)` 가 바로 말줄임이 먹는 자리에 있어서, 자르면 **가르려던 목적이 사라진다**.
-    /// ★ 보이스오버는 이 줄을 **머리글**로 읽는다(`.isHeader`) — 그리고 줄마다의 라벨에도 기기 이름이 들어간다
-    ///   (`MeAILimitRow.label`): 머리글은 건너뛰며 읽는 사람을 위한 것이고, 줄 라벨은 한 줄만 들었을 때
+    /// ## ★ 이름과 꼬리를 **따로** 그린다 (v0.3.47 P2 — 실증으로 잡은 결함)
+    /// 0.3.47 초안은 합친 글자 하나를 `lineLimit(2)` + tail 말줄임으로 그렸고, 주석은 "긴 이름은 두 줄로 접힌다
+    /// (말줄임이 아니다)"라고 단정했다. **두 줄에도 안 드는 이름이 있다**: `device_label` 상한이 64 스칼라고
+    /// 한글은 12pt 에서 한 자가 ~12pt 라, 상한 길이 이름은 두 줄(가장 좁은 기기에서 311×2 = 622pt)을 넘는다.
+    /// 그러면 말줄임이 **뒤**를 먹는데 거기가 바로 꼬리 `(A1B2)` 자리다 — 같은 이름의 맥 두 대가 **글자 그대로
+    /// 똑같은 머리글**로 서서, 가르려고 만든 장치가 아무 일도 못 한다.
+    ///
+    /// 그래서 꼬리를 **말줄임이 닿지 않는 자리**로 옮긴다: 이름은 지금처럼 두 줄까지 접히고 넘치면 잘리되,
+    /// 꼬리는 `fixedSize()` + `layoutPriority` 로 **언제나 제 폭을 먼저 가져간다**. 잘리는 쪽은 **겹쳐도 같은**
+    /// 글자(이름)이고, 남는 쪽은 **가르는** 글자(꼬리)다.
+    ///
+    /// ★ 보이스오버는 이 줄을 **머리글 하나로** 읽는다(`children: .combine` + `.isHeader`) — 두 Text 로 나뉜 것은
+    ///   그리기 사정이지 들을 사람의 사정이 아니다. 그리고 줄마다의 라벨에도 기기 이름이 들어간다
+    ///   (`MeAILimitRow`): 머리글은 건너뛰며 읽는 사람을 위한 것이고, 줄 라벨은 한 줄만 들었을 때
     ///   "어느 맥이냐"에 답하기 위한 것이다.
-    private func deviceNameRow(_ name: String, isFirst: Bool) -> some View {
-        Text(name)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(MobileTheme.label2)
-            .lineLimit(2)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, isFirst ? 0 : MeAILimitCardBudget.deviceNameTopGap)
-            .padding(.bottom, MeAILimitCardBudget.deviceNameBottomGap)
-            .accessibilityAddTraits(.isHeader)
+    private func deviceNameRow(_ parts: AILimitDeviceNameParts, isFirst: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: MeAILimitCardBudget.deviceTailGap) {
+            Text(parts.base)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
+            if let tail = parts.tail {
+                Text(AILimitDeviceNameParts.tailText(tail))
+                    .lineLimit(1)
+                    // ★ 이 둘이 꼬리를 지킨다: `fixedSize` 는 "줄이지 마라", `layoutPriority` 는 "먼저 가져가라".
+                    //   하나만 두면 이름이 긴 날 꼬리가 0pt 로 눌리거나 `…` 로 바뀐다.
+                    .fixedSize()
+                    .layoutPriority(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(MobileTheme.label2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, isFirst ? 0 : MeAILimitCardBudget.deviceNameTopGap)
+        .padding(.bottom, MeAILimitCardBudget.deviceNameBottomGap)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     /// 열 머리 줄. **데이터 줄과 같은 격자**를 쓴다 — 왼쪽 칸을 비우고, 두 머리 칸이 `maxWidth: .infinity` 로
@@ -543,7 +593,27 @@ public enum MeAILimitsPreviewCatalog {
             // ★ 좁은 기기 + 두 대(머리글이 좁은 폭에서 접히지 않는지).
             ("card-two-devices-narrow", MeAILimitCardBudget.cardOuterWidth(screenWidth: 375),
              card(twoDevices(now: now), showsDeviceNames: true)),
+            // ★★ **상한 길이(64 스칼라) 이름이 겹친 맥 두 대** — v0.3.47 P2 가 고친 그 모양이다.
+            //   보는 것: 이름은 두 줄에서 잘려도 꼬리 `(A1B2)`/`(C3D4)` 가 **둘 다 남아** 두 머리글이 다르게
+            //   보이는지. 합쳐 적던 초안에서는 두 줄이 글자까지 똑같았다(그래서 사람 눈이 마지막 그물이다 —
+            //   폰 뷰는 맥 스위트가 한 줄도 컴파일하지 않는다).
+            ("card-twin-long-names", cardWidth, card(twinLongNameDevices(now: now), showsDeviceNames: true)),
+            ("card-twin-long-names-narrow", MeAILimitCardBudget.cardOuterWidth(screenWidth: 375),
+             card(twinLongNameDevices(now: now), showsDeviceNames: true)),
         ]
+    }
+
+    /// 상한 길이(64 스칼라)로 **글자 그대로 같은** 이름을 쓰는 맥 두 대. 서버 CHECK 가 받아 주는 가장 긴 이름이고,
+    /// 사람이 실제로 적을 수 있는 값이다(`AILimitDeviceLabelContract.maxScalars`).
+    @MainActor
+    private static func twinLongNameDevices(now: Date) -> [AILimitDeviceDisplayGroup] {
+        // 한글 한 자 = 스칼라 하나다. 앞을 알아볼 수 있는 말로 두고 상한까지 채운다(잘리는 자리가 어디인지 보이게).
+        let head = "거실에 둔 맥 미니 "
+        let maxName = head + String(repeating: "길", count: AILimitDeviceLabelContract.maxScalars - head.unicodeScalars.count)
+        let first = Array(rows(deviceID: twinA, label: maxName, now: now, observedAgo: 120).prefix(2))
+        let second = Array(rows(deviceID: twinB, label: maxName, now: now, observedAgo: 600,
+                                fiveHour: 91, weekly: 44).prefix(1))
+        return fold(first + second, now: now)
     }
 
     /// 실제 서버 모양의 행 → **스토어의 기기 묶기 + 코어 규칙**을 그대로 지난 묶음들(값을 지어내지 않는다).

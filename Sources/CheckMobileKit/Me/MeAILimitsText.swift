@@ -23,6 +23,10 @@ extension MeText {
     /// ★ 여기에 "로그인하면 보여요" 를 다시 적지 마라: 설정에서 끈 사람은 이미 로그인해 있다.
     package static let aiLimitsNoProviders = AILimitSurfaceText.noVisibleProviders
 
+    /// 고른 맥 대신 **다른 맥**을 그리고 있을 때의 한 줄(v0.3.47 P1). 글자와 그 선택의 근거는 공유 상수에 있다
+    /// (`AILimitSurfaceText.substitutedMainDevice` — 이름을 적지 않는 까닭·까닭을 가르지 않는 까닭).
+    package static let aiLimitsSubstitutedDevice = AILimitSurfaceText.substitutedMainDevice
+
     /// 카드 제목의 보이스오버가 덧붙이는 말(화면에는 칩이 없다 — 줄마다의 숫자가 이미 다 보인다).
     /// "가장 높은"이지 "평균"이 아니다 — 요약은 5시간 창의 **최악**을 모은다(`AILimitsStore.fiveHourSummary`).
     package static let aiLimitsFiveHourPeak = "5시간 가장 높은 값"

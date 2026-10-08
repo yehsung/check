@@ -119,16 +119,22 @@ package struct AILimitDeviceGroup: Identifiable, Equatable, Sendable {
 ///   뒤에 식별자 꼬리가 붙는다(`Mac mini (A1B2)`). 겹치지 않으면 아무것도 붙지 않는다.
 /// ★ 이름을 **한 번도 올린 적 없는 맥**(v0.3.46 이하 빌드가 남긴 행)은 `이름 모를 맥 A1B2` 로 선다 —
 ///   "이름 모를 맥" 하나로 두면 둘이 나란히 설 때 어느 쪽인지 알 수가 없다(코어 `AILimitDevice.baseName`).
+/// ★ 이름은 **조각으로** 들고 있다(`base` + 겹침 꼬리). 합친 글자 하나로 두면 좁은 자리에서 말줄임이
+///   **꼬리부터** 먹어 두 쌍둥이의 머리글이 글자 그대로 똑같아진다(v0.3.47 P2 — `AILimitDeviceNameParts` 머리말).
 package struct AILimitDeviceDisplayGroup: Identifiable, Equatable, Sendable {
     package let device: AILimitDevice
-    /// 묶음 머리에 적을 이름. **맥이 한 대면 뷰가 쓰지 않는다**(`AILimitsStore.showsDeviceNames`).
-    package let name: String
+    /// 묶음 머리에 적을 이름의 조각들. 그리는 쪽은 **`base` 만 잘리게** 하고 꼬리는 자르지 않는다.
+    package let nameParts: AILimitDeviceNameParts
     package let rows: [AILimitDisplayRow]
     package var id: String { device.deviceID }
 
-    package init(device: AILimitDevice, name: String, rows: [AILimitDisplayRow]) {
+    /// 꼬리까지 합친 한 글자 — **잘릴 자리가 없는 곳**에서만(보이스오버 · 위젯 패널 · 테스트).
+    /// 저장하지 않고 조각에서 만든다(두 칸을 두면 한쪽만 고쳐지는 날 소리와 글자가 갈린다).
+    package var name: String { nameParts.combined }
+
+    package init(device: AILimitDevice, nameParts: AILimitDeviceNameParts, rows: [AILimitDisplayRow]) {
         self.device = device
-        self.name = name
+        self.nameParts = nameParts
         self.rows = rows
     }
 }
@@ -143,12 +149,35 @@ package final class AILimitsStore {
     package internal(set) var groups: [AILimitDeviceGroup]?
     package internal(set) var state = MeLoadState()
 
+    /// 서버에 행이 있는 **내 맥 전부** — 숨긴 맥까지(3일 유령 · 그 맥에서 전부 껐다).
+    ///
+    /// ## ★ 왜 `groups` 와 따로 들고 있나 (v0.3.47 P1 — 실증으로 잡은 결함)
+    /// 두 표면의 입력이 달랐다: 맥 설정의 고르개는 서버에서 받은 **기기 명부**(`fetchAILimitDevices` — 값 칸을
+    /// 안 읽으므로 조용한 맥도 그 명부에 있다)를 보고, 폰·위젯은 **그릴 묶음**(유령·전부 껐음을 걷어낸 뒤)을
+    /// 봤다. 그래서 고른 맥이 조용하면 설정 칩은 그 맥에 불이 들어와 있는데 폰은 다른 맥을 그렸고, 그릴 묶음이
+    /// 하나뿐일 때는 **이름조차 적지 않았다**.
+    /// 이 칸이 그 어긋남을 없앤다 — 폰은 자기가 받은 행들로 **맥과 같은 함수**(`AILimitDeviceRoster.fold`)를
+    /// 돌려 같은 명부를 만들고, "설정 칩이 가리키는 맥"을 스스로 계산해 자기가 그리는 맥과 견준다.
+    /// (명부를 만드는 재료가 같은 행들이므로 두 표면이 **같은 입력**을 본다. 시각 차이만 남고, 그 차이는
+    ///  이름을 적는 쪽으로만 틀린다 — 숨기는 쪽으로는 틀리지 않는다.)
+    ///
+    /// ★ 남는 한 틈: 이 조회에는 `limit=60` 이 걸려 있고 맥의 기기 조회에는 없다. 맥이 스무 대쯤 되는 사람은
+    ///   가장 오래된 맥의 행이 그 60줄 밖으로 밀려 명부에서 빠질 수 있다. 그때 폰은 **그 맥을 모르는 채**
+    ///   가장 최근 맥으로 접으므로 이름·안내가 0.3.46 처럼 조용해진다(= 틀린 이름을 적지는 않는다).
+    ///   상한을 올리는 것은 무료 플랜의 응답 크기 문제라 여기서 바꾸지 않는다.
+    package internal(set) var roster: [AILimitDevice] = []
+
     /// 계정이 고른 메인 맥(`ai_limits_prefs.main_device_id`). nil = 아직 안 골랐다 **또는 못 읽었다**.
     ///
     /// ★ 두 뜻을 한 칸에 담아도 되는 까닭: 폰에는 고르개가 없다(고르는 곳은 맥 설정이다). 폰이 이 값으로 하는
     ///   일은 "위젯에 어느 맥을 실을까" 하나이고, 모르면 코어 규칙이 **가장 최근에 일한 맥**으로 접는다
     ///   (`AILimitMainDeviceRule.resolve`). 그 접기는 거짓말이 아니다 — 위젯 머리에 **그 맥의 이름이 적히므로**
     ///   화면은 언제나 "이 숫자는 이 맥 것"만 말하고 "이것이 네 메인 맥"이라고는 말하지 않는다.
+    ///   ★★ **그 근거는 이름이 실제로 적힐 때만 성립한다.** 0.3.47 초안은 이름을 적는 조건을
+    ///   `displayGroups.count > 1` 로 뒀고, 접히는 바로 그 경우(고른 맥이 조용해서 다른 맥을 그리는데 그릴 묶음은
+    ///   하나뿐)에 그 조건이 **거짓**이라 이름이 안 적혔다 — 근거가 성립하지 않는 자리에서 접기가 일어났다.
+    ///   지금은 `settingsMainDevice`(명부 전체로 접은 값 = 설정 칩이 가리키는 맥)와 그릴 묶음을 견주고,
+    ///   어긋나면 `showsDeviceNames` · `isShowingSubstituteDevice` 가 둘 다 참이 된다.
     ///   (맥 설정의 고르개는 반대다: 거기서 "안 고름"이 거짓이 되면 체크 표시가 거짓이라, 맥은 두 조회가
     ///   **둘 다** 성공해야 반영한다.)
     package internal(set) var mainDeviceID: String?
@@ -186,6 +215,8 @@ package final class AILimitsStore {
         inflight = nil
         serial &+= 1
         groups = nil
+        // 명부도 비운다 — 남겨 두면 다음 사람의 카드가 앞 사람의 맥 이름으로 "다른 맥을 보여 준다"고 말한다.
+        roster = []
         // ★ 고른 맥도 **지운다**. 계정마다 다른 값이고, 남겨 두면 다음 사람의 위젯이 앞 사람이 고른
         //   식별자로 선다(`AILimitMainDeviceRule` 이 모르는 식별자를 접어 주므로 증상은 조용하다).
         mainDeviceID = nil
@@ -223,10 +254,18 @@ package final class AILimitsStore {
             guard generation == context.generation, serial == self.serial, context.session.userID == userID else { return }
             let groups = Self.groups(from: rows, now: context.clock.now())
             self.groups = groups
+            // 명부는 **걸러내기 전 행들**로 접는다(맥 설정이 보는 것과 같은 입력) — 그릴 수 없는 맥도 명부에 있다.
+            roster = Self.roster(from: rows)
             // ★ 고른 맥은 **맥이 둘 이상일 때만** 묻는다. 한 대뿐이면 고르기가 바꿀 수 있는 것이 없고
             //   (`AILimitMainDeviceRule.resolve` 가 어느 쪽이든 그 한 대를 돌려준다), 혼자 쓰는 사람 —
             //   거의 모든 사용자다 — 의 새로고침마다 GET 하나가 더 나가는 것을 피한다.
-            if groups.count > 1 {
+            //
+            // ★★ 세는 것은 **명부**(`roster`)다 — 그릴 묶음이 아니다(v0.3.47 P1). 초안은 `groups.count > 1` 로
+            //   셌고, 그 조건은 **이 결함이 사는 바로 그 상태에서 거짓**이다: 맥이 둘인데 한 대가 조용하면
+            //   묶음은 하나뿐이라 고른 맥을 **묻지 않았고**, 그러면 `mainDeviceID` 가 영원히 nil 이어서
+            //   "고른 맥을 그리고 있나"를 판정할 수 없다(고른 맥을 멀쩡히 그리는 사람에게도 대체 안내가 뜬다).
+            //   한 대뿐인 사람에게 GET 이 늘지 않는다는 성질은 그대로다 — 명부가 한 줄이면 묻지 않는다.
+            if roster.count > 1 {
                 await loadMainDeviceID(userID: userID)
                 // 두 번째 조회를 기다리는 동안 계정이 바뀌거나 더 가까운 새로고침이 끼어들 수 있다 —
                 // 늦은 응답 가드 셋을 **그 await 뒤에 한 번 더** 지난다(가드가 하나면 이 자리가 구멍이다).
@@ -347,6 +386,17 @@ package final class AILimitsStore {
         }
     }
 
+    /// 서버 행들 → **기기 명부 전부**(숨긴 맥까지). 맥 설정의 고르개가 세우는 목록과 **같은 함수·같은 입력**이다.
+    ///
+    /// `groups(from:now:)` 와 다른 점 하나: **아무것도 걸러내지 않는다**(유령 행도, 창이 0개인 행도 센다).
+    /// 그래서 "고른 맥이 조용하다"를 폰이 알 수 있다 — 걸러낸 뒤의 목록만 보면 그 맥은 **없었던 것처럼** 보이고,
+    /// 조용히 다른 맥으로 바뀐 화면이 그 사실을 말할 재료를 잃는다(P1 의 뿌리).
+    package static func roster(from rows: [AILimitFetchedRow]) -> [AILimitDevice] {
+        AILimitDeviceRoster.fold(rows.map {
+            AILimitDeviceObservation(deviceID: $0.deviceID, label: $0.deviceLabel, observedAt: $0.observedAt)
+        })
+    }
+
     /// 행 하나 → 코어 규칙의 입력 모양. 창은 **퍼센트가 있는 것만** 만든다(없는 창을 0% 로 지어내지 않는다).
     private static func snapshot(provider: AILimitProvider, row: AILimitFetchedRow) -> AILimitProviderSnapshot {
         var windows: [AILimitWindowSnapshot] = []
@@ -392,12 +442,13 @@ package final class AILimitsStore {
             let rows = Self.rows(of: group.bundle, now: now)
             return rows.isEmpty ? nil : (group.device, rows)
         }
-        let names = AILimitDeviceRoster.displayNames(drawn.map(\.device))
+        let names = AILimitDeviceRoster.displayNameParts(drawn.map(\.device))
         return drawn.map {
             AILimitDeviceDisplayGroup(
                 device: $0.device,
                 // 꼬리 계산이 비는 일은 없지만(입력이 같은 배열이다), 비면 코어의 이름 규칙을 그대로 쓴다.
-                name: names[$0.device.deviceID] ?? $0.device.baseName,
+                nameParts: names[$0.device.deviceID]
+                    ?? AILimitDeviceNameParts(base: $0.device.baseName, tail: nil),
                 rows: $0.rows
             )
         }
@@ -421,12 +472,48 @@ package final class AILimitsStore {
         }
     }
 
+    // MARK: - 이 숫자가 누구 것인지 말해야 하는가
+
+    /// 맥 설정의 칩이 **불을 켜는 맥**. 폰이 같은 답을 스스로 계산한다 — 입력(기기 명부 전체 + 고른 식별자)과
+    /// 함수(`AILimitMainDeviceRule`)가 맥과 **같다**.
+    ///
+    /// 왜 `displayGroups` 가 아니라 `roster` 로 접나: 걸러낸 목록으로 접으면 **조용한 맥이 애초에 없었던 것처럼**
+    /// 되어 "고른 맥 대신 다른 맥을 그리고 있다"는 사실 자체가 계산 불가능해진다(P1 의 뿌리).
+    package var settingsMainDevice: AILimitDevice? {
+        AILimitMainDeviceRule.resolve(devices: roster, chosen: mainDeviceID)
+    }
+
+    /// 화면이 **설정 칩이 가리키는 맥 대신 다른 맥**을 그리고 있나.
+    ///
+    /// 판정은 하나다: **설정 칩이 가리키는 맥이 그릴 묶음 안에 없다.** 그 맥이 조용한 두 갈래(3일 무보고 ·
+    /// 그 맥에서 제공자를 전부 껐다)가 전부 이 한 조건으로 덮이고, 고른 적이 **없는** 사람도 덮인다 —
+    /// 그때도 칩에는 어느 한 맥에 불이 들어와 있고(같은 규칙이 접어 준 값이다) 그 맥이 조용할 수 있다.
+    ///
+    /// ★ "고를 때만"으로 좁히지 않는 까닭: 사용자가 보는 것은 **칩의 체크 표시**이지 서버 칸이 아니다.
+    ///   한 번도 안 골랐어도 그 체크는 한 맥에 붙어 있고, 폰이 다른 맥을 그리면 어긋남은 똑같이 보인다.
+    /// ★ 거꾸로 "명부에 숨은 맥이 있으면 참"으로 넓히지도 않는다: 지난주에 판 맥이 명부에 남아 있는 사람은
+    ///   칩도 폰도 **살아 있는 맥**을 가리키므로 할 말이 없다(그 사람에게 안내를 띄우면 영원히 안 사라진다).
+    ///
+    /// 그릴 묶음이 **하나도 없으면 거짓**이다 — 그때 화면은 빈 상태 안내를 그리고, 대체한 것이 없다.
+    package var isShowingSubstituteDevice: Bool {
+        let groups = displayGroups
+        guard !groups.isEmpty else { return false }
+        // 명부가 비었다 = 아직 한 번도 못 받았다(또는 행이 없다). 할 말이 없다.
+        guard let expected = settingsMainDevice else { return false }
+        return !groups.contains { $0.device.deviceID == expected.deviceID }
+    }
+
     /// 기기 이름을 **그릴 것인가**. 맥이 한 대면 그리지 않는다(2026-10-08 사용자 결정 —
     /// *"맥 한 대면 지금 그대로, 기기 이름 없음"*. 혼자 쓰는 사람에게 군더더기를 보이지 않는다).
     ///
-    /// ★ `groups.count` 가 아니라 **`displayGroups.count`** 로 센다: 맥은 둘인데 한 대가 전부 껐거나 3일째
-    ///   꺼져 있으면 화면에는 묶음이 하나뿐이고, 그때 이름을 그리면 **있지도 않은 둘째 맥을 암시한다**.
-    package var showsDeviceNames: Bool { displayGroups.count > 1 }
+    /// ★ 감추는 조건은 **"묶음이 하나"가 아니다** — "**보여 줄 맥이 사용자가 아는 그 맥 하나뿐**"이다(v0.3.47 P1).
+    ///   0.3.47 초안은 `displayGroups.count > 1` 하나였고, 그 조건은 가장 비싼 경우에 **거짓**이었다:
+    ///   고른 맥이 조용해서 폰이 다른 맥을 그릴 때, 그릴 묶음이 하나뿐이면 이름이 안 적혀 사용자는 남의 숫자를
+    ///   자기가 고른 맥 것으로 읽는다. 접기를 정당화한 근거("위젯 머리에 그 맥의 이름이 적히므로 거짓말이 아니다")가
+    ///   **접히는 바로 그 경우에** 성립하지 않았다.
+    /// ★ `groups.count` 로 세지 않는 것은 그대로다: 맥은 둘인데 한 대가 전부 껐거나 3일째 꺼져 있고 **그 조용한
+    ///   맥이 고른 맥도 아니면**, 화면에는 묶음이 하나뿐이고 그때 이름을 그리면 있지도 않은 둘째 맥을 암시한다.
+    package var showsDeviceNames: Bool { displayGroups.count > 1 || isShowingSubstituteDevice }
 
     /// 카드가 그릴 줄 전부(기기 순서대로 펼친 것). 요약·빈 상태 판정이 쓴다.
     ///
@@ -517,6 +604,11 @@ package final class AILimitsStore {
         }
         return WidgetSnapshot.AILimitPanel(
             providers: rows,
+            // ★ 이름을 싣는 조건은 **`showsDeviceNames` 하나**다(폰 카드와 같은 판정) — 고른 맥이 조용해서
+            //   다른 맥을 실을 때 그 조건이 참이므로, 위젯 머리에는 **언제나 그 맥의 이름이 적힌다**.
+            //   위젯에는 폰 카드의 한 줄 안내를 실을 자리가 없다(미디움 머리 줄은 세로 0pt 예산이다) —
+            //   그래서 위젯이 말할 수 있는 것은 "이 숫자는 이 맥 것" 하나이고, 그 한마디가 빠지는 갈래를
+            //   없애는 것이 이 조건의 전부다.
             deviceName: showsDeviceNames ? main?.name : nil,
             todayTokens: tokens.today,
             recentTokens: tokens.recent

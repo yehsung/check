@@ -456,6 +456,38 @@ package struct AILimitDevice: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+/// 화면에 적을 기기 이름의 **두 조각**. 합친 글자(`Mac mini (A1B2)`) 하나로 내놓지 않는 까닭이 전부다.
+///
+/// ## ★ 왜 조각으로 가르나 (v0.3.47 P2 — 실증으로 잡은 결함)
+/// 이름 길이 상한은 **64 스칼라**다(`AILimitDeviceLabelContract`). 같은 이름을 쓰는 맥 두 대가 그 상한에 가까운
+/// 이름을 가지면, 합친 글자는 어느 화면에서도 자리에 못 들어간다 — 그리고 말줄임이 먹는 자리가 **뒤**라서
+/// 가르려고 붙인 꼬리 `(A1B2)` 가 통째로 잘린다. 그러면 두 머리글이 **글자 그대로 똑같아진다**:
+/// 꼬리는 두 쌍둥이를 가르는 **유일한** 글자인데, 가장 잘리기 쉬운 자리에 있었다.
+///
+/// 그래서 이름을 두 조각으로 내놓고, 그리는 쪽은 **이름만 잘리게** 하고 꼬리는 **절대 자르지 않는** 자리에 둔다
+/// (폰 카드 머리글 · 맥 설정 고르개가 둘 다 그 모양이다). `combined` 는 소리(보이스오버)·위젯 패널처럼
+/// **잘릴 자리가 없는** 곳을 위한 편의다.
+package struct AILimitDeviceNameParts: Equatable, Sendable {
+    /// 사람이 적은 이름(또는 `이름 모를 맥 A1B2`). 좁으면 **이쪽이** 잘린다.
+    package let base: String
+    /// 겹침을 가르는 꼬리(`A1B2`) — 겹치지 않으면 nil. **잘리면 가르려던 목적이 사라진다.**
+    package let tail: String?
+
+    package init(base: String, tail: String?) {
+        self.base = base
+        self.tail = tail
+    }
+
+    /// 꼬리를 적는 글자(`(A1B2)`). 괄호를 뷰마다 붙이면 한 화면만 모양이 달라진다.
+    package static func tailText(_ tail: String) -> String { "(\(tail))" }
+
+    /// 꼬리까지 붙인 한 글자. **잘릴 자리가 없는 곳에서만** 쓴다(보이스오버 · 위젯 패널 · 테스트).
+    package var combined: String {
+        guard let tail else { return base }
+        return "\(base) \(Self.tailText(tail))"
+    }
+}
+
 /// 흩어진 행을 **기기 단위**로 접고, 고르개에 적을 이름을 정한다.
 package enum AILimitDeviceRoster {
     /// 제공자별 행들을 기기로 접는다. **최근에 일한 순**이고, 관측 시각이 없는 기기는 뒤로 간다.
@@ -499,21 +531,32 @@ package enum AILimitDeviceRoster {
             }
     }
 
-    /// 기기 식별자 → 화면에 적을 이름. **같은 이름이 둘 이상이면** 뒤에 식별자 꼬리를 붙여 가른다
+    /// 기기 식별자 → 화면에 적을 이름의 **조각들**. **같은 이름이 둘 이상이면** 꼬리를 붙여 가른다
     /// (맥 미니 두 대는 시스템 설정 이름이 글자 그대로 같다 — 맥들은 서로를 모르므로 가르는 일은 읽는 쪽이 한다).
     ///
-    /// 겹치지 않는 이름에는 **아무것도 붙이지 않는다**: 한 대뿐인 사람에게 식별자 조각을 보여 줄 이유가 없다.
-    package static func displayNames(_ devices: [AILimitDevice]) -> [String: String] {
+    /// 겹치지 않는 이름에는 **아무것도 붙이지 않는다**(`tail` nil): 한 대뿐인 사람에게 식별자 조각을 보여 줄
+    /// 이유가 없다.
+    ///
+    /// ★ 조각으로 돌려주는 까닭은 `AILimitDeviceNameParts` 머리말에 있다 — 꼬리가 말줄임에 먹히면 두 쌍둥이가
+    ///   **글자 그대로 똑같아진다**. 합친 글자가 필요한 곳은 `displayNames` 를 쓴다.
+    package static func displayNameParts(_ devices: [AILimitDevice]) -> [String: AILimitDeviceNameParts] {
         var counts: [String: Int] = [:]
         for device in devices { counts[device.baseName, default: 0] += 1 }
-        var out: [String: String] = [:]
+        var out: [String: AILimitDeviceNameParts] = [:]
         for device in devices {
             let base = device.baseName
-            out[device.deviceID] = (counts[base] ?? 0) > 1
-                ? "\(base) (\(AILimitDevice.shortTail(device.deviceID)))"
-                : base
+            out[device.deviceID] = AILimitDeviceNameParts(
+                base: base,
+                tail: (counts[base] ?? 0) > 1 ? AILimitDevice.shortTail(device.deviceID) : nil
+            )
         }
         return out
+    }
+
+    /// 기기 식별자 → 합친 이름 한 글자. **조각 규칙 하나를 그대로 쓴다**(두 함수가 각자 세면 한쪽만 꼬리를
+    /// 붙이는 날이 온다).
+    package static func displayNames(_ devices: [AILimitDevice]) -> [String: String] {
+        displayNameParts(devices).mapValues(\.combined)
     }
 }
 
@@ -527,6 +570,13 @@ package enum AILimitDeviceRoster {
 /// ## 기본값(아직 안 골랐다) = 가장 최근에 일한 맥
 /// 기존 사용자가 업데이트만 하고 아무것도 안 하면 **지금과 같게** 보여야 한다(사용자 요건). 지금의 폰은
 /// "제공자당 최신 하나"를 그리므로, 기기 축으로 바꾼 뒤의 기본값은 "가장 최근에 일한 맥"이 그에 가장 가깝다.
+///
+/// ## ★ 이 규칙을 **두 표면이 같은 입력으로** 돌려야 한다 (v0.3.47 P1 — 실증으로 잡은 결함)
+/// 맥 설정의 칩은 이 함수를 **기기 명부 전체**로 돌리고, 폰·위젯은 0.3.47 초안에서 **그릴 수 있는 맥들**로만
+/// 돌렸다. 그래서 고른 맥이 조용하면(3일 무보고 · 그 맥에서 전부 껐음) 칩은 그 맥에 불이 들어와 있는데 폰은
+/// 다른 맥을 그렸고, 그릴 묶음이 하나뿐일 때는 **이름조차 적지 않아** 사용자가 남의 숫자를 자기가 고른 맥
+/// 것으로 읽었다. 폰은 이제 명부 전체로 이 함수를 한 번 더 돌려(`AILimitsStore.settingsMainDevice`) 자기가
+/// 그리는 맥과 견주고, 다르면 **반드시 이름을 적는다**.
 package enum AILimitMainDeviceRule {
     /// 고른 맥이 목록에 있으면 그것, 없으면 가장 최근에 일한 맥. 목록이 비면 nil.
     package static func resolve(devices: [AILimitDevice], chosen: String?) -> AILimitDevice? {

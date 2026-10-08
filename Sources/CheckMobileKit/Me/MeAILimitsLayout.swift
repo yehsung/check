@@ -130,4 +130,38 @@ enum MeAILimitCardBudget {
     static func deviceNameFitsOneLine(_ measured: CGFloat, screenWidth: CGFloat) -> Bool {
         measured <= innerWidth(screenWidth: screenWidth)
     }
+
+    // MARK: 겹침 꼬리는 **잘리지 않는 자리**에 있다 (v0.3.47 P2)
+    //
+    // ## 두 줄로 접는 것으로는 안 된다 — 두 줄에도 안 드는 이름이 있다
+    // `device_label` 상한은 **64 스칼라**이고(`AILimitDeviceLabelContract`) 한글은 12pt semibold 에서 한 자가
+    // ~12pt 다. 가장 좁은 기기의 카드 안쪽은 311pt 라 두 줄이 622pt 인데, 64자 한글 이름은 그보다 넓다.
+    // 그러면 `lineLimit(2)` + tail 말줄임이 **뒤를 먹고**, 거기가 바로 겹침을 가르는 꼬리 `(A1B2)` 자리다 —
+    // 같은 이름의 맥 두 대가 글자 그대로 똑같은 머리글로 선다(이름을 가르려고 만든 장치가 가를 수 없는 짝을 만든다).
+    //
+    // ## 그래서 꼬리를 따로 세운다
+    // 머리글은 `[이름(두 줄까지 · 넘치면 말줄임)] [꼬리(fixedSize)]` 다. 잘리는 쪽은 **겹쳐도 같은** 글자이고
+    // 남는 쪽은 **가르는** 글자다. 아래 두 함수가 "꼬리는 어떤 이름 앞에서도 제 폭을 가진다"를 값으로 못 박는다.
+
+    /// 이름 ↔ 꼬리 사이.
+    static let deviceTailGap: CGFloat = 4
+
+    /// 실측(2026-10-08, 12pt semibold): **가장 넓은** 꼬리 글자 `(WWWW)` = 57.59pt.
+    /// 꼬리는 식별자 뒤 4자를 대문자로 적은 것이라 글자 수가 고정이고(`AILimitDevice.shortTail`), 폭은 글리프에
+    /// 따라 `(A1B2)` 39.56 ~ `(WWWW)` 57.59 사이다. **가장 넓은 쪽**을 상수로 든다 — 평균을 들면 UUID 가 아닌
+    /// 식별자(사람이 읽을 수 있는 기기 이름 기반)에서 꼬리가 눌릴 수 있고, 눌리는 순간 두 맥을 가를 글자가 없다.
+    static let worstDeviceTailWidth: CGFloat = 57.6
+
+    /// 꼬리가 그 기기에서 **반드시** 들어갈 자리가 있는가. 이름이 아무리 길어도 꼬리는 `fixedSize` 로 제 폭을
+    /// 먼저 가져가므로, 이 부등식이 참이면 꼬리는 **어떤 이름 앞에서도** 그려진다.
+    static func deviceTailAlwaysFits(_ measured: CGFloat, screenWidth: CGFloat) -> Bool {
+        measured + deviceTailGap <= innerWidth(screenWidth: screenWidth)
+    }
+
+    /// 이름이 **두 줄에도 안 드는** 길이인가 = 말줄임이 나는 조건(= 꼬리를 합쳐 적었다면 잘렸을 조건).
+    /// 두 줄 폭은 `innerWidth × 2` 로 **넉넉히** 잡는다 — 실제로는 줄바꿈 때문에 이보다 일찍 잘리므로,
+    /// 이 부등식이 참이면 말줄임은 확실하다(거짓이어도 안 잘린다는 보장은 아니다).
+    static func deviceNameOverflowsTwoLines(_ measured: CGFloat, screenWidth: CGFloat) -> Bool {
+        measured > innerWidth(screenWidth: screenWidth) * 2
+    }
 }

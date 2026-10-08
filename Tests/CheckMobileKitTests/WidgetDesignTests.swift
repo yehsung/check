@@ -189,7 +189,9 @@ import Testing
         // v0.3.45 「AI 리밋」 위젯은 별 파일이다 — **금지 목록(링 게이지 · 경고 기호)은 이 파일에도 걸어야** 한다.
         // 안 걸면 새 위젯이 계약 밖에서 자란다(같은 모드 함정을 다시 만든다).
         let limits = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
-        let both = views + parts + limits
+        // v0.3.47 P2 부터 리밋 위젯의 **머리 줄**은 플랫폼 무관 파일이다(맥 스위트가 그림으로 굽는다) — 금지 목록은 거기에도 건다.
+        let headerLine = try IntegrationContractTests.code("Sources/CheckWidgetsKit/AingWidgetLimitsHeader.swift")
+        let both = views + parts + limits + headerLine
         #expect(both.contains("widgetRenderingMode"), "렌더링 모드 분기가 없다")
         #expect(parts.contains("widgetAccentedRenderingMode("), "초상이 틴트·투명에서 원색으로 남는다")
         #expect(parts.components(separatedBy: ".widgetAccentable()").count >= 4, "막대 채움 · 점 · 체크에 widgetAccentable 이 없다")
@@ -223,15 +225,24 @@ import Testing
         //   v0.3.47 이 더한 **머리 줄의 맥 이름** 하나만 예외이고, 근거가 둘이다:
         //   ① 세로 자리가 없다 — 이름을 둘째 줄로 내리면 가장 좁은 기기(329×155)의 줄 높이가 마크 하한과
         //      0.2pt 차가 되어 글자를 조금 키운 사람에게서 깨진다(실측은 `AingWidgetLimitsMediumBudget`).
-        //   ② 잘린 앞부분도 **그 맥을 가리킨다** — 사람이 적은 이름이라서다(코어 `AILimitDeviceLabelContract`
-        //      가 64 스칼라로 자르는 것과 **같은 근거**. 숫자를 자르는 것과 다른 종류의 손실이다).
-        //   그래서 "없다"가 아니라 **"머리 줄에 딱 하나"** 로 잰다 — 격자로 번지는 날 여기서 빨개진다.
-        #expect(limits.components(separatedBy: "truncationMode").count - 1 == 1,
-                "말줄임이 머리 줄의 맥 이름 말고 다른 자리에 생겼다 — 격자에서 말줄임은 자릿수 오독이다")
+        //   ② 잘리는 것은 **이름뿐**이고 겹침 꼬리 `(A1B2)` 는 `fixedSize` 로 남는다(v0.3.47 P2). 같은 이름의 맥
+        //      두 대에서 앞부분은 두 맥에 글자 그대로 같으므로 "잘린 앞부분도 그 맥을 가리킨다"는 **거짓**이었다 —
+        //      가르는 글자는 꼬리뿐이고, 그 꼬리를 말줄임이 먹지 못하게 한 것이 이 예외의 조건이다.
+        //   그래서 "없다"가 아니라 **"머리 줄의 이름에 딱 하나"** 로 잰다 — 격자나 꼬리로 번지는 날 여기서 빨개진다.
+        //   (머리 줄은 플랫폼 무관 파일 `AingWidgetLimitsHeader.swift` 에 있고, 위젯은 그 뷰를 부르기만 한다.)
+        #expect(!limits.contains("truncationMode"),
+                "말줄임이 위젯 격자에 생겼다 — 격자에서 말줄임은 자릿수 오독이다(머리 줄의 이름은 머리 줄 파일에 있다)")
+        #expect(headerLine.components(separatedBy: "truncationMode").count - 1 == 1,
+                "머리 줄에 말줄임이 이름 말고 또 있다")
+        let nameStart = try #require(headerLine.range(of: "Text(device.name)"), "대조: 머리 줄의 이름 글자를 못 찾았다")
+        let tailStart = try #require(headerLine.range(of: "Text(tail)"), "대조: 머리 줄의 꼬리 글자를 못 찾았다")
+        #expect(nameStart.lowerBound < tailStart.lowerBound
+                && headerLine[nameStart.lowerBound..<tailStart.lowerBound].contains("truncationMode"),
+                "그 하나가 이름에 걸려 있지 않다 — 꼬리나 다른 자리가 잘린다")
         let headerStart = try #require(limits.range(of: "private func header("), "대조: 머리 함수를 못 찾았다")
         let headerStop = try #require(limits.range(of: "private var columnHeaderRow"), "대조: 머리 구간의 끝을 못 찾았다")
-        #expect(limits[headerStart.lowerBound..<headerStop.lowerBound].contains("truncationMode"),
-                "그 하나가 머리 줄 밖에 있다 — 격자 어딘가에서 숫자가 잘린다")
+        #expect(limits[headerStart.lowerBound..<headerStop.lowerBound].contains("AingWidgetLimitsHeaderLine("),
+                "위젯 머리가 맥 스위트가 굽는 그 머리 줄을 쓰지 않는다")
         // 창은 **칸별로** 꺼낸다(`row.display(window)`). 뷰가 `fiveHour ?? weekly` 로 값만 집으면 '어느 창을
         // 세우나' 선택이 되살아나고, 그 선택이 틀리면 주간 8% 가 5시간 27% 옆에서 같은 창으로 읽힌다.
         //

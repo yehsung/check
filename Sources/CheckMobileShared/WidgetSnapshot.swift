@@ -236,7 +236,20 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         /// ★ 이름은 **폰이 정한다**(`AILimitDeviceRoster.displayNames`) — 같은 이름이 둘이면 뒤에 식별자
         ///   조각이 붙은 값이 이미 들어 있다. 위젯은 받은 글자를 그대로 적는다(가르는 규칙이 두 벌이 되면
         ///   폰 카드와 위젯이 같은 맥을 다른 이름으로 부른다).
+        /// ★ 이 칸은 **합친 한 글자**(`Mac mini (A1B2)`)다 — 소리(보이스오버)와 옛 위젯이 읽는 값이라 그대로 둔다.
+        ///   그리는 쪽은 꼬리를 따로 세워야 하므로 꼬리만 `deviceNameTail` 에 한 번 더 싣는다.
         public var deviceName: String?
+        /// `deviceName` 에 붙은 **겹침 꼬리**(`A1B2` — 괄호 없이). nil = 이름이 겹치지 않는다(또는 옛 스냅샷).
+        ///
+        /// ## 왜 따로 싣나 (v0.3.47 P2 — 위젯 머리글)
+        /// 위젯은 맥 **한 대**만 그리므로 "이 숫자가 어느 쌍둥이 것인지"를 말하는 글자가 꼬리 하나뿐이다. 그런데
+        /// 합친 글자를 한 `Text` 에 말줄임으로 그리면 상한 길이(64 스칼라) 쌍둥이에서 **꼬리부터 먹혀** 두 머리글이
+        /// 글자 그대로 같아진다. 그래서 위젯도 폰 카드처럼 이름은 잘리게, 꼬리는 `fixedSize` 로 세운다 — 그러려면
+        /// 어디까지가 꼬리인지 알아야 하고, 그 경계를 아는 쪽은 이름을 정한 폰뿐이다(위젯이 괄호를 찾아 자르면
+        /// 이름 자체에 괄호가 든 맥에서 틀린다).
+        ///
+        /// 옵셔널로 **더하기만** 했다(`version` 그대로). 이 칸이 없는 파일은 지금처럼 합친 글자 하나로 그린다.
+        public var deviceNameTail: String?
         /// 오늘(KST) 쓴 AI 토큰. nil = 모른다(수집을 껐거나 아직 못 받았다) → 위젯이 그 줄을 **그리지 않는다**(0 은 거짓이다).
         ///
         /// ★ 토큰은 **합산 유지**다(2026-10-08 사용자 결정) — 리밋만 메인 맥을 따른다. 그래서 이 칸은
@@ -245,9 +258,16 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         /// 최근 12주 합(나 탭 잔디와 같은 창).
         public var recentTokens: Int?
 
-        public init(providers: [AILimitRow], deviceName: String? = nil, todayTokens: Int? = nil, recentTokens: Int? = nil) {
+        public init(
+            providers: [AILimitRow],
+            deviceName: String? = nil,
+            deviceNameTail: String? = nil,
+            todayTokens: Int? = nil,
+            recentTokens: Int? = nil
+        ) {
             self.providers = providers
             self.deviceName = deviceName
+            self.deviceNameTail = deviceNameTail
             self.todayTokens = todayTokens
             self.recentTokens = recentTokens
         }
@@ -259,6 +279,11 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
             // ★ 이 줄을 빼먹으면 **컴파일은 통과하고** 파일에 이름이 있어도 영원히 nil 이다(멤버와이즈 왕복
             //   테스트만으론 초록인 채 위젯 머리에 맥 이름이 안 뜬다 — `aiLimits` 칸이 밟은 그 함정).
             deviceName = (try? c.decodeIfPresent(String.self, forKey: .deviceName))
+                .flatMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .flatMap { $0.isEmpty ? nil : $0 }
+            // ★ 같은 함정이 이 칸에도 있다 — 줄을 빼먹으면 컴파일은 통과하고 꼬리는 영원히 nil 이라, 위젯 머리는
+            //   소리 없이 합친 글자 한 줄로 돌아가 상한 길이 쌍둥이를 다시 못 가른다(생 JSON 테스트가 지킨다).
+            deviceNameTail = (try? c.decodeIfPresent(String.self, forKey: .deviceNameTail))
                 .flatMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .flatMap { $0.isEmpty ? nil : $0 }
             todayTokens = (try? c.decodeIfPresent(Int.self, forKey: .todayTokens)).flatMap { $0 }.map { max(0, $0) }

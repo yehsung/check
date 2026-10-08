@@ -473,6 +473,26 @@ package struct AingWidgetLimitRow: Equatable, Sendable, Identifiable {
     package var compactName: String { provider.compactName }
 }
 
+/// 머리 줄의 맥 이름 — **보이는 두 조각**과 **읽어 줄 한 글자**(v0.3.47).
+package struct AingWidgetLimitsHeaderDevice: Equatable, Sendable {
+    /// 보이는 이름(`· 예성의 MacBook Pro`). 좁으면 **이쪽만** 잘린다(겹쳐도 같은 글자다).
+    package let name: String
+    /// 보이는 겹침 꼬리(`(A1B2)`) — 이름이 겹칠 때만. **절대 안 잘린다**(두 쌍둥이를 가르는 유일한 글자다).
+    package let tail: String?
+    /// 읽어 줄 글자(가운뎃점 없이 꼬리까지 — `Mac mini (A1B2)`).
+    package let spoken: String
+
+    package init(name: String, tail: String?, spoken: String) {
+        self.name = name
+        self.tail = tail
+        self.spoken = spoken
+    }
+
+    /// 보이는 글자 전부(이름 + 꼬리). 그리는 쪽은 이 값을 **쓰지 않는다**(한 `Text` 로 그리면 꼬리가 말줄임에 먹힌다) —
+    /// 폭 실측과 테스트용이다.
+    package var text: String { tail.map { "\(name) \($0)" } ?? name }
+}
+
 /// 리밋 위젯이 그릴 것.
 package enum AingWidgetLimitsState: Equatable, Sendable {
     /// 스냅샷에 리밋 칸이 아직 없다(옛 스냅샷 · 앱을 한 번도 안 열었다) → "앱을 열면 채워져요".
@@ -508,7 +528,14 @@ package struct AingWidgetLimits: Equatable, Sendable {
     /// (지금과 똑같이 보인다). 옛 스냅샷도 nil 이다.
     ///
     /// ★ 위젯이 이름을 **만들지 않는다**: 겹침을 가른 글자(`Mac mini (A1B2)`)가 이미 들어 있다.
+    ///   이 값은 **합친 한 글자**라 소리(보이스오버)에만 쓴다 — 그릴 때는 `deviceNameParts` 다.
     package let deviceName: String?
+    /// 머리에 **그릴** 이름의 두 조각(이름 + 겹침 꼬리). nil = 맥 한 대.
+    ///
+    /// 폰이 실어 준 꼬리(`AILimitPanel.deviceNameTail`)로 합친 글자를 **되가른다** — 위젯이 괄호를 찾아 자르지
+    /// 않는다(이름 자체에 괄호가 든 맥에서 틀린다). 꼬리가 없거나 합친 글자와 짝이 안 맞으면(옛 파일 · 손으로 쓴
+    /// 파일) 꼬리 없이 합친 글자를 이름으로 쓴다 — 지금까지와 같은 모양이고, 글자를 지어내지 않는다.
+    package let deviceNameParts: AILimitDeviceNameParts?
     /// 오늘 쓴 AI 토큰. nil = 모른다 → L 의 토큰 줄을 **그리지 않는다**(0 은 "안 썼다"는 거짓이다).
     ///
     /// ★ 토큰은 **계정 전체의 합**이다(합산 유지 — 리밋만 메인 맥을 따른다). `deviceName` 이 가리키는 맥의
@@ -563,9 +590,11 @@ package struct AingWidgetLimits: Equatable, Sendable {
             .sorted { $0.provider.sortOrder < $1.provider.sortOrder }
         // 공백뿐인 이름은 없는 것으로(디코더가 이미 접지만, 멤버와이즈로 만든 패널도 같은 길을 지나게 한다 —
         // 그러지 않으면 머리에 빈 `· ` 만 남는다).
-        deviceName = panel.deviceName
+        let name = panel.deviceName
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { $0.isEmpty ? nil : $0 }
+        deviceName = name
+        deviceNameParts = name.map { Self.deviceNameParts(combined: $0, tail: panel.deviceNameTail) }
         todayTokens = panel.todayTokens
         recentTokens = panel.recentTokens
     }
@@ -585,6 +614,21 @@ package struct AingWidgetLimits: Equatable, Sendable {
         oldestObservedAt.map { AingWidgetFormat.ago(from: $0, now: now) }
     }
 
+    /// 합친 글자 + 꼬리 → 두 조각. 짝이 맞을 때만 가른다(`base (tail)` 가 합친 글자와 **글자까지 같을 때**).
+    package static func deviceNameParts(combined: String, tail: String?) -> AILimitDeviceNameParts {
+        let tail = tail?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let tail, !tail.isEmpty else { return AILimitDeviceNameParts(base: combined, tail: nil) }
+        let suffix = " " + AILimitDeviceNameParts.tailText(tail)
+        guard combined.hasSuffix(suffix) else { return AILimitDeviceNameParts(base: combined, tail: nil) }
+        let base = String(combined.dropLast(suffix.count))
+        let parts = AILimitDeviceNameParts(base: base, tail: tail)
+        // 되가른 조각이 합친 글자를 그대로 되만드는지 확인한다(이름이 비거나 경계가 어긋나면 가르지 않는다).
+        guard !base.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, parts.combined == combined else {
+            return AILimitDeviceNameParts(base: combined, tail: nil)
+        }
+        return parts
+    }
+
     /// 머리 줄에 적을 맥 이름 — **보이는 글자**와 **읽어 줄 글자**가 다르다(가운뎃점은 소리로 읽으면 이름의
     /// 일부처럼 들린다). nil = 맥이 한 대뿐이다(= 적지 않는다).
     ///
@@ -593,9 +637,16 @@ package struct AingWidgetLimits: Equatable, Sendable {
     /// 꾸미면 "한 대면 안 적는다"를 되묻는 그물이 **소스 grep 하나뿐**이 된다(그리고 grep 은 조건에 `false` 를
     /// 더하는 변형을 못 잡는다). 분기의 **결과를 순수한 값으로** 내놓으면 테스트가 직접 잴 수 있다
     /// (`AingWidgetLimitInk` 가 색 분기에 같은 일을 하는 것과 같은 이유).
-    package var headerDevice: (text: String, spoken: String)? {
-        guard let deviceName else { return nil }
-        return (AingWidgetText.limitsDeviceName(deviceName), deviceName)
+    ///
+    /// ★ 보이는 글자는 **두 조각**이다(v0.3.47 P2): 이름(`name` — 좁으면 이쪽만 잘린다)과 겹침 꼬리
+    ///   (`tail` — 절대 안 잘린다). 그리는 쪽은 `AingWidgetLimitsHeaderLine`.
+    package var headerDevice: AingWidgetLimitsHeaderDevice? {
+        guard let deviceName, let parts = deviceNameParts else { return nil }
+        return AingWidgetLimitsHeaderDevice(
+            name: AingWidgetText.limitsDeviceName(parts.base),
+            tail: parts.tail.map(AILimitDeviceNameParts.tailText),
+            spoken: deviceName
+        )
     }
 
     /// 미디움이 그릴 줄들(상한까지).
@@ -771,9 +822,18 @@ package struct AingWidgetLimitsMediumBudget: Equatable, Sendable {
     //   간격 6 + 6. 좁은 기기 안쪽 297pt 에서 이름에 남는 자리가 **194.4pt** 다.
     //   그 자리에 드는 이름: `예성의 MacBook Pro` 101.06 · 겹침 꼬리까지 붙은 `예성의 MacBook Pro (A1B2)`
     //   139.01 · `이름 모를 맥 A1B2` 83.31. **셋 다 넉넉히 든다.**
-    // 그래서 (a) 다. 194pt 를 넘기는 긴 이름은 **자른다**(말줄임) — 사람이 적은 이름이라 앞부분도 그 맥을
-    // 가리키고(코어 `AILimitDeviceLabelContract` 가 64 스칼라로 자르는 것과 같은 근거), 세로를 더 쓰면
-    // 숫자가 읽히지 않는다. 폰 카드는 반대로 세로 자리가 있어 **두 줄로 접는다**.
+    // 그래서 (a) 다. 194pt 를 넘기는 긴 이름은 **자른다**(말줄임) — 세로를 더 쓰면 숫자가 읽히지 않는다.
+    // 폰 카드는 반대로 세로 자리가 있어 **두 줄로 접는다**.
+    //
+    // ## ★ 잘리는 것은 **이름뿐**이다 — 겹침 꼬리는 절대 안 잘린다 (v0.3.47 P2)
+    // 초안의 이 주석은 "잘라도 앞부분이 그 맥을 가리킨다"고 했다. **같은 이름의 맥 두 대에서는 거짓이다**:
+    // 앞부분은 두 맥에 글자 그대로 같고, 두 맥을 가르는 글자는 **뒤에 붙은 꼬리** `(A1B2)` 하나뿐이다. 그런데 합친
+    // 글자를 한 `Text` 에 tail 말줄임으로 그리면 상한 길이(64 스칼라 — 11pt 한글 64자 ≈ 615pt) 이름에서 말줄임이
+    // **바로 그 꼬리부터** 먹어, 두 위젯 머리가 글자 그대로 같아졌다. 위젯은 맥 **한 대**만 그리므로 "이 숫자가 어느
+    // 쌍둥이 것인지"를 말할 글자가 꼬리 말고는 없다.
+    // 그래서 폰 카드와 **같은 수리**다: 머리는 `[제목] [· 이름(말줄임)] [(꼬리) fixedSize · layoutPriority(1)]
+    // ……… [나이 fixedSize]` 이고(`AingWidgetLimitsHeaderLine`), 꼬리가 이름 자리에서 **먼저** 제 폭을 가져간다.
+    // 가장 넓은 꼬리 `(WWWW)` 11pt 는 51.37pt 라 좁은 칸의 이름 자리 194.4pt 안에서 이름에 ≥139pt 가 남는다.
 
     /// 제목 글자 크기(`AI 리밋` — 15pt bold).
     package static let titleFontSize: Double = 15
@@ -797,6 +857,18 @@ package struct AingWidgetLimitsMediumBudget: Equatable, Sendable {
 
     /// 그 이름이 머리 줄에 **말줄임 없이** 드는가.
     package func deviceNameFits(_ measured: Double) -> Bool { measured <= deviceNameWidth }
+
+    /// 이름 ↔ 겹침 꼬리 사이(폰 카드 `MeAILimitCardBudget.deviceTailGap` 과 같은 값).
+    package static let deviceTailGap: Double = 4
+    /// 실측(2026-10-08, 11pt regular): **가장 넓은** 꼬리 글자 `(WWWW)` = 51.37pt (`(A1B2)` 34.79 · `(C3D4)` 38.63).
+    /// 꼬리는 식별자 뒤 4자라 글자 수가 고정이다(`AILimitDevice.shortTail`) — 가장 넓은 쪽을 든다.
+    package static let worstDeviceTailWidth: Double = 51.37
+
+    /// 꼬리가 이 칸의 이름 자리에 **반드시** 드는가. 꼬리는 `fixedSize` 로 먼저 자리를 받으므로 이 부등식이 참이면
+    /// **어떤 이름 앞에서도** 그려진다(잘리는 쪽은 이름이다).
+    package func deviceTailAlwaysFits(_ measured: Double) -> Bool {
+        measured + Self.deviceTailGap <= deviceNameWidth
+    }
 }
 
 /// 틴트·투명 모드에서 **열 색이 사라진다**는 사실을 값으로 들고 있는 타입.

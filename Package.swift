@@ -60,15 +60,22 @@ let package = Package(
                 .copy("Characters")
             ]
         ),
+        // 렌더 테스트 두 타깃(맥 `checkTests` · 폰/위젯 `CheckMobileKitTests`)이 **같은 문턱**으로 그림을 견주는 자리
+        // (`CheckRenderDiff`). 테스트 타깃끼리는 파일을 나눌 수 없어 작은 지원 타깃으로 뺐다 — 제품(products)에 없으므로
+        // 맥 앱·폰 앱·위젯 확장 어디에도 링크되지 않는다. CoreGraphics 만 쓴다.
+        .target(
+            name: "CheckRenderTestSupport",
+            path: "Tests/CheckRenderTestSupport"
+        ),
         // D-base: 폰 스토어·세션·라우터·실시간 러너 테스트(macOS `swift test --filter CheckMobileKitTests`). 스텁 서버는
         // CheckMobileKit 의 DEBUG 전용 `MobileStubURLProtocol`(호스트별 응답기 · 요청 기록 · 금지 호출 판정)을 쓴다.
         .testTarget(
             name: "CheckMobileKitTests",
-            dependencies: ["CheckMobileKit", "CheckMobileShared", "CheckWidgetsKit", "CheckCore"]
+            dependencies: ["CheckMobileKit", "CheckMobileShared", "CheckWidgetsKit", "CheckCore", "CheckRenderTestSupport"]
         ),
         .testTarget(
             name: "checkTests",
-            dependencies: ["check", "CheckCore"],
+            dependencies: ["check", "CheckCore", "CheckRenderTestSupport"],
             // 렌주 판정 코퍼스(JSON)는 테스트가 #filePath 로 직접 읽는다 — 리소스로 묶지 않는다.
             exclude: ["Fixtures"]
         )

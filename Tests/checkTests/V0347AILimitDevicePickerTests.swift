@@ -1,5 +1,6 @@
 import AppKit
 import CheckCore
+import CheckRenderTestSupport
 import Foundation
 import SwiftUI
 import Testing
@@ -18,10 +19,17 @@ import Testing
 //  ① **그림으로** 두 줄이 다르게 보인다. 값·폭 계산이 아니라 `ImageRenderer` 가 구운 픽셀을 비교한다 —
 //     말줄임은 높이를 바꾸지 않으므로(한 줄 고정) 이 결함을 잡는 길은 픽셀뿐이다.
 //  ② 기기 수 **4·5·6대**에서 쌍둥이가 갈린다(그 수가 초안이 깨지던 구간이다).
-//  ③ **초안 배치는 같은 조건에서 두 줄이 바이트까지 같다** — 기준선이 같은 입력이면 그 테스트는 영원히
+//  ③ **초안 배치는 같은 조건에서 두 줄이 눈으로 같다** — 기준선이 같은 입력이면 그 테스트는 영원히
 //     초록이므로(저장소 관례), 고친 쪽이 다르고 **고치기 전 쪽은 같다**를 둘 다 잰다.
 //     이 짝이 없으면 렌더가 빈 그림을 굽는 날 ①이 조용히 무의미해진다.
 //  ④ 이름 자리가 **기기 수와 무관**하다(목록으로 바꾼 이유가 그것이다).
+//
+// ## "같다"·"다르다"는 바이트가 아니라 문턱으로 잰다 (2026-10-08 — 플레이크 수리)
+// 처음엔 TIFF 바이트로 견줬다. `CheckRenderSettle` 은 **연속 두 장**만 맞출 뿐 **호출 사이**엔 채널당 Δ1 디더가
+// 남아(같은 줄을 거듭 구우면 호출끼리 최대 Δ1 로 갈린다), `imageA == imageAgain` 이 `--filter V0347AILimit`
+// 14회 중 2~4회 빨갰다. 그리고 반대쪽 단언(`imageA != imageB` · `Set(바이트).count`)은 **그 디더만으로 초록**이
+// 될 수 있었다 — 꼬리가 잘려 두 줄이 글자까지 같아져도 통과한다. 그래서 전부 `CheckRenderDiff` 하나로 잰다:
+// 같다 = 최대 Δ ≤ 2, 다르다 = Δ>8 픽셀이 40개 이상(쌍둥이 꼬리 차이는 실측 최대 Δ218 · Δ>8 픽셀 782).
 
 /// 고정 기준 시각(다른 리밋 스위트와 같은 세계).
 private let dpNow = Date(timeIntervalSince1970: 1_791_300_000)
@@ -59,9 +67,10 @@ private func dpPickerRow(function: String = #function, line: Int = #line) -> AIL
     return AILimitMainDeviceSettingsRow(store: store)
 }
 
-/// 줄 하나를 **굳은 비트맵**으로 굽는다(같은 입력이면 같은 바이트가 참이 되는 자리 — `CheckRenderSettle`).
+/// 줄 하나를 **굳은 그림**으로 굽는다(`CheckRenderSettle` — 첫 두 장의 Δ≤2 잡음을 걷는다).
+/// ★ 굳힌 그림끼리도 **호출 사이에는 Δ1 디더가 남는다** — 그래서 바이트로 견주지 말고 `dpDiff` 로 견준다.
 @MainActor
-private func dpBitmap(_ view: some View) throws -> Data {
+private func dpImage(_ view: some View) throws -> CGImage {
     let settled = try #require(
         CheckRenderSettle.bitmap(
             view.frame(width: AILimitDevicePickerBudget.sectionInnerWidth).background(CheckTheme.background),
@@ -69,7 +78,12 @@ private func dpBitmap(_ view: some View) throws -> Data {
         ),
         "고르개 줄을 굽지 못했다"
     )
-    return try #require(settled.tiffRepresentation, "구운 그림에서 바이트를 못 얻었다")
+    return try #require(settled.cgImage, "구운 그림에서 CGImage 를 못 얻었다")
+}
+
+/// 이 파일의 **유일한** 그림 비교(`CheckRenderDiff` — 같다 = 최대 Δ ≤ 2, 다르다 = Δ>8 픽셀 40개 이상).
+private func dpDiff(_ a: CGImage, _ b: CGImage) throws -> CheckRenderDiff {
+    try #require(CheckRenderDiff(a, b), "두 그림을 견줄 판을 못 만들었다")
 }
 
 /// 글자 폭 실측(`(s as NSString).size(withAttributes:)` — 글자수로 재면 한글·라틴이 배 이상 다르다).
@@ -83,9 +97,9 @@ private func dpWidth(_ text: String, weight: NSFont.Weight = .semibold) -> CGFlo
 struct V0347AILimitDevicePickerTests {
     /// ★★ **그림으로** 잰다: 상한 길이 이름이 겹친 두 맥의 줄이 **다르게 보인다**.
     ///
-    /// 그리고 기준선을 같이 굽는다 — 초안 배치(합친 글자 하나 + 칩 폭 상한 + tail 말줄임)에서는 같은 입력의
-    /// 두 줄이 **바이트까지 같다**. 그 단언이 없으면 렌더가 빈 그림을 굽는 날 위 단언이 조용히 무의미해진다
-    /// (빈 그림끼리는 "다르다"가 거짓이 되어 빨개지므로 방향도 맞다).
+    /// 그리고 기준선을 같이 굽는다 — 초안 배치(합친 글자 하나 + 칩 폭 상한 + tail 말줄임)에서는 **다른 입력**
+    /// (꼬리가 다른 두 맥)의 두 줄이 **눈으로 같다**(최대 Δ ≤ 2). 그 단언이 없으면 렌더가 빈 그림을 굽는 날 위
+    /// 단언이 조용히 무의미해진다(빈 그림끼리는 "다르다"가 거짓이 되어 빨개지므로 방향도 맞다).
     @Test("쌍둥이 두 줄이 그림으로 갈린다 · 같은 줄은 두 번 구워도 같다 · 초안 배치에서는 두 줄이 똑같다")
     func twinRowsLookDifferentWhenActuallyRendered() throws {
         let roster = dpRoster(count: 4)
@@ -96,13 +110,15 @@ struct V0347AILimitDevicePickerTests {
         let partsA = try #require(parts[twinA.deviceID]), partsB = try #require(parts[twinB.deviceID])
         #expect(partsA.base == partsB.base, "전제: 두 맥의 이름 글자가 같다(다르면 이 그물은 아무것도 재지 못한다)")
 
-        let imageA = try dpBitmap(picker.deviceRow(twinA, parts: partsA, isOn: false))
-        let imageB = try dpBitmap(picker.deviceRow(twinB, parts: partsB, isOn: false))
-        let imageAgain = try dpBitmap(picker.deviceRow(twinA, parts: partsA, isOn: false))
+        let imageA = try dpImage(picker.deviceRow(twinA, parts: partsA, isOn: false))
+        let imageB = try dpImage(picker.deviceRow(twinB, parts: partsB, isOn: false))
+        let imageAgain = try dpImage(picker.deviceRow(twinA, parts: partsA, isOn: false))
 
-        #expect(imageA == imageAgain, "같은 줄을 두 번 구웠더니 바이트가 달라졌다 — 이 비교 자체를 믿을 수 없다")
-        #expect(imageA != imageB,
-                "같은 이름 두 맥의 줄이 **픽셀까지 똑같다** — 고르개가 가를 수 없는 화면이다(꼬리가 잘렸다)")
+        let again = try dpDiff(imageA, imageAgain)
+        #expect(again.looksSame, "같은 줄을 두 번 구웠더니 눈에 보이게 달라졌다(\(again)) — 이 비교 자체를 믿을 수 없다")
+        let twins = try dpDiff(imageA, imageB)
+        #expect(twins.looksDifferent,
+                "같은 이름 두 맥의 줄이 **눈으로 똑같다**(\(twins)) — 고르개가 가를 수 없는 화면이다(꼬리가 잘렸다)")
 
         // 기준선: 초안 배치(합친 글자 + 칩 폭 상한 160 + tail 말줄임). 같은 두 맥이 **같은 그림**이 된다.
         func legacyChip(_ parts: AILimitDeviceNameParts) -> some View {
@@ -116,10 +132,10 @@ struct V0347AILimitDevicePickerTests {
                 .frame(height: AILimitDevicePickerBudget.rowHeight)
                 .background(Capsule().fill(CheckTheme.trackFill))
         }
-        let legacyA = try dpBitmap(legacyChip(partsA))
-        let legacyB = try dpBitmap(legacyChip(partsB))
-        #expect(legacyA == legacyB,
-                "초안 배치에서 두 줄이 달라 보인다 — 기준선이 재던 결함이 사라졌다면 이 파일의 전제를 다시 써라")
+        #expect(partsA.tail != partsB.tail, "전제: 기준선의 두 입력은 **꼬리가 다르다**(같은 입력이면 이 기준선은 영원히 초록이다)")
+        let legacy = try dpDiff(try dpImage(legacyChip(partsA)), try dpImage(legacyChip(partsB)))
+        #expect(legacy.looksSame,
+                "초안 배치에서 두 줄이 달라 보인다(\(legacy)) — 기준선이 재던 결함이 사라졌다면 이 파일의 전제를 다시 써라")
     }
 
     /// ★ **4·5·6대**에서 모든 줄이 서로 다르게 보인다(쌍둥이 포함). 초안이 깨지던 구간이 바로 거기다.
@@ -133,15 +149,23 @@ struct V0347AILimitDevicePickerTests {
         let parts = AILimitDeviceRoster.displayNameParts(roster)
         let picker = dpPickerRow(line: 1_000 + count)
 
-        var images: [String: Data] = [:]
+        var images: [(id: String, image: CGImage)] = []
         for device in roster {
             let piece = try #require(parts[device.deviceID])
             // 고른 맥은 **쌍둥이가 아닌** 맥 하나다(배경색 차이가 글자 차이를 가리지 않게).
-            images[device.deviceID] = try dpBitmap(
-                picker.deviceRow(device, parts: piece, isOn: device.deviceID == "anchor-0001"))
+            images.append((device.deviceID, try dpImage(
+                picker.deviceRow(device, parts: piece, isOn: device.deviceID == "anchor-0001"))))
         }
-        #expect(Set(images.values).count == count,
-                "\(count)대 가운데 같은 그림의 줄이 있다 — 그 두 맥은 고를 수가 없다")
+        #expect(images.count == count)
+        // ★ **짝마다** 눈으로 다른지 잰다. `Set(바이트).count` 는 호출 사이 Δ1 디더만으로도 개수가 찰 수 있어,
+        //   두 줄이 글자까지 같아져도 초록이 될 수 있었다.
+        for i in images.indices {
+            for j in images.indices where j > i {
+                let diff = try dpDiff(images[i].image, images[j].image)
+                #expect(diff.looksDifferent,
+                        "\(count)대: `\(images[i].id)` 와 `\(images[j].id)` 의 줄이 눈으로 같다(\(diff)) — 그 두 맥은 고를 수가 없다")
+            }
+        }
     }
 
     /// 예산: 이름 자리가 **기기 수와 무관**하고, 현실적인 이름은 꼬리까지 그 자리에 든다.
@@ -213,9 +237,10 @@ struct V0347AILimitDevicePickerTests {
         let anchor = try #require(roster.first { $0.deviceID == "anchor-0001" })
         let piece = try #require(parts[anchor.deviceID])
 
-        let on = try dpBitmap(picker.deviceRow(anchor, parts: piece, isOn: true))
-        let off = try dpBitmap(picker.deviceRow(anchor, parts: piece, isOn: false))
-        #expect(on != off, "고른 줄과 아닌 줄이 똑같이 보인다 — 무엇을 골랐는지 알 수 없다")
+        let on = try dpImage(picker.deviceRow(anchor, parts: piece, isOn: true))
+        let off = try dpImage(picker.deviceRow(anchor, parts: piece, isOn: false))
+        let chosen = try dpDiff(on, off)
+        #expect(chosen.looksDifferent, "고른 줄과 아닌 줄이 똑같이 보인다(\(chosen)) — 무엇을 골랐는지 알 수 없다")
 
         // 체크 자리를 비워 두지 않으면 이 둘의 **이름 자리**가 달라진다 — 예산이 그 사실을 값으로 말한다.
         #expect(AILimitDevicePickerBudget.nameWidth(hasTail: false)

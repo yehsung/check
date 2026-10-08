@@ -45,6 +45,8 @@ import WidgetKit
 // 이름을 적는다. 위젯은 고르지 않는다: 고르는 규칙과 `ai_limits_prefs` 를 아는 쪽은 앱이고, 위젯이 같은
 // 판단을 따로 하면 두 벌이 갈린 채 한동안 산다(확장은 앱과 따로 갱신된다).
 // ★ **맥이 한 대면 이름을 적지 않는다**(`deviceName` nil) — 혼자 쓰는 사람의 위젯은 0.3.46 과 똑같다.
+// ★ 이름이 겹치는 맥 두 대는 꼬리 `(A1B2)` 로만 갈린다 — 머리 줄은 이름만 자르고 꼬리는 지킨다
+//   (`AingWidgetLimitsHeaderLine` · 폰이 꼬리를 따로 싣는다 `AILimitPanel.deviceNameTail`).
 // ★ 토큰 줄은 **계정 전체의 합** 그대로다(합산 유지 — 리밋만 메인 맥을 따른다). 그래서 그 줄에는 맥 이름이 없다.
 //
 // ## 두 빈 상태를 섞지 않는다
@@ -192,42 +194,18 @@ struct AingAILimitsContent: View {
     /// 그들이 그리는 것은 '우리 서버가 센 사실'이라 스냅샷을 만든 시각이 맞는 기준이다).
     private func header(_ limits: AingWidgetLimits) -> some View {
         let ink = AingWidgetInk(renderingMode)
-        return HStack(alignment: .firstTextBaseline, spacing: AingWidgetLimitsMediumBudget.headerItemGap) {
-            Text(AingWidgetText.limitsTitle)
-                .aingFont(15, .bold, relativeTo: .subheadline)
-                .foregroundStyle(ink.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .accessibilityAddTraits(.isHeader)
-            // ★ 메인 맥 이름(맥이 **두 대 이상일 때만** 들어온다 — 한 대면 nil 이라 지금과 똑같이 보인다).
-            //   자리는 머리 줄 안이고 세로를 하나도 더 쓰지 않는다. 그 선택의 실측 근거는
-            //   `AingWidgetLimitsMediumBudget` §머리 줄의 기기 이름(좁은 기기에서 이름 자리 194.4pt).
-            //   ★ **적을지 말지는 뷰가 정하지 않는다** — `AingWidgetLimits.headerDevice` 가 값으로 답한다
-            //     (뷰는 맥 스위트가 한 줄도 컴파일하지 않아서 그 분기를 재는 그물이 grep 하나뿐이 된다).
-            //   ★ **말줄임이 나는 쪽이 이 글자다**: 나이 글자는 `fixedSize()` 로, 제목은 짧아서 버틴다 —
-            //     이름은 사람이 적은 값이라 앞부분도 그 맥을 가리킨다(숫자를 줄이는 것과 다르다).
-            if let header = limits.headerDevice {
-                Text(header.text)
-                    .aingFont(11, relativeTo: .caption2)
-                    .foregroundStyle(ink.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    // 가운뎃점은 **보이는 글자**일 뿐이다 — 소리로 읽으면 이름의 일부처럼 들린다.
-                    .accessibilityLabel(Text(header.spoken))
-            }
-            Spacer(minLength: AingWidgetLimitsMediumBudget.headerMinGap)
-            if let age = limits.observationAgeText(now: entry.date) {
-                Text(age)
-                    .monospacedDigit()
-                    .aingFont(11, relativeTo: .caption2)
-                    .foregroundStyle(ink.secondary)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-        }
-        // ★ **최소** 높이다. 기본 글자 크기에서는 예산(18pt)과 정확히 같고, 글자를 키운 사람에게는 머리가
-        //   조금 자라고 줄들이 그만큼 줄어든다 — 고정 높이로 못 박으면 그 사람의 머리 글자가 아래 줄을 덮는다.
-        .frame(minHeight: AingWidgetLimitsMediumBudget.headerHeight, alignment: .leading)
+        // ★ 머리 줄은 **플랫폼 무관 뷰**다(`AingWidgetLimitsHeaderLine`) — 맥 스위트가 같은 코드를 굽어 "상한 길이
+        //   쌍둥이의 두 머리가 그림으로 갈린다"를 잰다(이 파일은 `#if os(iOS)` 라 맥에서 한 줄도 컴파일되지 않는다).
+        //   이름을 적을지 말지는 뷰가 정하지 않는다 — `AingWidgetLimits.headerDevice` 가 값으로 답한다.
+        //   ★ 이름은 **두 조각**으로 그린다: 이름만 말줄임에 내주고 겹침 꼬리 `(A1B2)` 는 `fixedSize` 로 지킨다
+        //     (같은 이름의 맥 두 대에서 앞부분은 두 맥에 똑같다 — 가르는 글자는 꼬리뿐이다).
+        return AingWidgetLimitsHeaderLine(
+            title: AingWidgetText.limitsTitle,
+            device: limits.headerDevice,
+            age: limits.observationAgeText(now: entry.date),
+            primary: ink.primary,
+            secondary: ink.secondary
+        )
     }
 
     /// 열 머리 줄. **데이터 줄과 같은 격자**를 쓴다 — 왼쪽 칸을 비우고, 두 머리 칸이 `maxWidth: .infinity` 로

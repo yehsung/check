@@ -301,19 +301,19 @@ struct V0347AILimitDeviceRosterTests {
     /// 맥 설정은 이 규칙을 **기기 명부 전체**로 돌린다(`fetchAILimitDevices` — 값 칸을 안 읽으므로 조용한 맥도
     /// 명부에 있다). 0.3.47 초안의 폰은 **그릴 수 있는 맥들**로만 돌렸다. 그래서 고른 맥이 조용하면 칩은 그 맥에
     /// 불이 들어와 있는데 폰은 다른 맥을 그렸고, 묶음이 하나뿐일 때는 **이름조차 적지 않았다**.
-    /// 지금은 폰도 명부 전체로 한 번 더 돌려(`AILimitsStore.settingsMainDevice`) 자기가 그리는 맥과 견준다 —
-    /// 이 단언은 그 두 호출이 **같은 답**을 내는지(= 입력만 맞추면 어긋남이 사라지는지)를 못 박는다.
+    /// 지금은 폰도 명부 전체로 한 번 더 돌려(`AILimitsStore.settingsMainDevice`) 자기가 그리는 맥과 견준다.
+    /// 이 테스트는 **입력이 갈리면 답이 갈린다**(= 폰이 명부를 써야 하는 까닭)를 값으로 못 박는다. 폰이 실제로
+    /// 명부로 돌려 설정 칩과 같은 맥을 고르는지는 스토어 거동으로 `MeAILimitDeviceTests` 가 잰다
+    /// (`settingsMainDevice` · `isShowingSubstituteDevice`).
+    ///
+    /// ★ 예전엔 여기에 "같은 함수를 같은 인자로 두 번 불러 답이 같다"는 4회 루프가 있었다 — 두 식이 글자까지
+    ///   같아 **영원히 초록**이었고 어떤 결함도 되묻지 못했다. 지웠다.
     @Test
     func theSameRosterAlwaysResolvesToTheSameMacForBothSurfaces() {
         // 명부: 조용한 맥(MAC-B, 더 최근)과 그릴 수 있는 맥(MAC-A).
         let roster = [pdDevice("MAC-B", "사무실 iMac", 60), pdDevice("MAC-A", "Mac mini", 600)]
         let drawable = [pdDevice("MAC-A", "Mac mini", 600)]
 
-        for chosen in [nil, "MAC-A", "MAC-B", "MAC-SOLD"] {
-            let settings = AILimitMainDeviceRule.resolve(devices: roster, chosen: chosen)?.deviceID
-            let phone = AILimitMainDeviceRule.resolve(devices: roster, chosen: chosen)?.deviceID
-            #expect(settings == phone, "같은 입력에 두 답이 나왔다(chosen: \(chosen ?? "nil"))")
-        }
         // ★ 입력이 갈리면 **답도 갈린다** — 그게 이 결함의 정체다(명부로 접으면 조용한 맥, 묶음으로 접으면 다른 맥).
         #expect(AILimitMainDeviceRule.resolve(devices: roster, chosen: "MAC-B")?.deviceID == "MAC-B")
         #expect(AILimitMainDeviceRule.resolve(devices: drawable, chosen: "MAC-B")?.deviceID == "MAC-A",

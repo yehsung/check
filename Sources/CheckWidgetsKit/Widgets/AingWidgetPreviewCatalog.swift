@@ -74,6 +74,12 @@ public enum AingWidgetPreviewCatalog {
         //   이름이 겹쳐 꼬리까지 달린 **가장 넓은 현실 문구**를 넣어, 머리 줄에서 나이 글자를 밀어내지 않는지 본다.
         var mainMac = sample
         mainMac.aiLimits?.deviceName = "예성의 MacBook Pro (A1B2)"
+        mainMac.aiLimits?.deviceNameTail = "A1B2"
+        // ★ 상한 길이(64 스칼라) 이름이 **겹친** 맥(v0.3.47 P2): 이름은 말줄임에 먹히고 꼬리 `(C3D4)` 는 남아야 한다.
+        //   합친 글자 한 줄로 그리면 꼬리부터 먹혀 쌍둥이 두 위젯이 글자 그대로 같아진다 — 사람 눈이 그 모양을 본다.
+        var twinMac = sample
+        twinMac.aiLimits?.deviceName = String(repeating: "가", count: 64) + " (C3D4)"
+        twinMac.aiLimits?.deviceNameTail = "C3D4"
         let entry = AingWidgetEntry(date: now, snapshot: sample)
         let emptyEntry = AingWidgetEntry(date: now, snapshot: empty)
         let manyEntry = AingWidgetEntry(date: now, snapshot: many)
@@ -101,6 +107,8 @@ public enum AingWidgetPreviewCatalog {
             item("limits-medium-device", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: mainMac))),
             item("limits-medium-device-narrow", CGSize(width: 329, height: 155),
                  AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: mainMac))),
+            item("limits-medium-device-twin-long-narrow", CGSize(width: 329, height: 155),
+                 AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: twinMac))),
             item("limits-medium-stale", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: staleLimits))),
             item("limits-medium-one", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: oneProvider))),
             item("limits-medium-none", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: noProviders))),

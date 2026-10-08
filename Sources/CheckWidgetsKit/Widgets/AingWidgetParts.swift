@@ -82,27 +82,9 @@ struct AingWidgetInk {
 }
 
 // MARK: - 글꼴
-
-/// 시안 px 크기를 텍스트 스타일 배율로 키운다(위젯 칸 상한 xxLarge 까지 — `AingWidgetContainer`).
-private struct AingScaledFont: ViewModifier {
-    @ScaledMetric private var size: CGFloat
-    private let weight: Font.Weight
-
-    init(size: CGFloat, weight: Font.Weight, relativeTo style: Font.TextStyle) {
-        _size = ScaledMetric(wrappedValue: size, relativeTo: style)
-        self.weight = weight
-    }
-
-    func body(content: Content) -> some View {
-        content.font(.system(size: size, weight: weight))
-    }
-}
-
-extension View {
-    func aingFont(_ size: CGFloat, _ weight: Font.Weight = .regular, relativeTo style: Font.TextStyle) -> some View {
-        modifier(AingScaledFont(size: size, weight: weight, relativeTo: style))
-    }
-}
+//
+// `aingFont(_:_:relativeTo:)` 는 플랫폼 무관 파일 `AingWidgetLimitsHeader.swift` 로 옮겼다 — 리밋 위젯 머리 줄을
+// 맥 스위트가 같은 글꼴로 굽기 위해서다(이 파일은 `#if os(iOS)` 라 맥에서 컴파일되지 않는다).
 
 // MARK: - 초상
 

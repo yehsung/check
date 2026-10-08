@@ -610,6 +610,9 @@ package final class AILimitsStore {
             //   그래서 위젯이 말할 수 있는 것은 "이 숫자는 이 맥 것" 하나이고, 그 한마디가 빠지는 갈래를
             //   없애는 것이 이 조건의 전부다.
             deviceName: showsDeviceNames ? main?.name : nil,
+            // ★ 꼬리는 **따로 한 번 더** 싣는다(같은 조건 · 같은 조각에서). 위젯은 맥 한 대만 그리므로 쌍둥이를
+            //   가르는 글자가 이 꼬리 하나뿐이고, 합친 글자만 주면 위젯이 그 경계를 몰라 꼬리를 말줄임에 내준다.
+            deviceNameTail: showsDeviceNames ? main?.nameParts.tail : nil,
             todayTokens: tokens.today,
             recentTokens: tokens.recent
         )

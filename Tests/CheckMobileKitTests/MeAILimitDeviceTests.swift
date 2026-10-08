@@ -207,6 +207,7 @@ struct MeAILimitDeviceTests {
         #expect(store.aiLimits.displayRows.map(\.provider) == [.claude, .codex])
         let panel = try #require(store.aiLimits.widgetPanel())
         #expect(panel.deviceName == nil, "맥 한 대인데 위젯 머리에 이름을 적는다")
+        #expect(panel.deviceNameTail == nil, "맥 한 대인데 위젯에 겹침 꼬리를 실었다")
         #expect(panel.providers.map(\.provider) == ["claude", "codex"])
         #expect(harness.requests(path: "/rest/v1/ai_limits_prefs", method: "GET").isEmpty,
                 "맥 한 대인데 고른 맥을 물었다 — 답이 바꿀 수 있는 것이 없는 요청이다")
@@ -233,12 +234,64 @@ struct MeAILimitDeviceTests {
         #expect(store.aiLimits.mainDisplayGroup?.device.deviceID == MeAILimitsTests.macB)
         let panel = try #require(store.aiLimits.widgetPanel())
         #expect(panel.deviceName == "사무실 iMac", "고른 맥의 이름이 위젯에 안 갔다")
+        #expect(panel.deviceNameTail == nil, "이름이 겹치지 않는데 꼬리를 실었다")
         #expect(panel.providers.map(\.provider) == ["claude"], "고른 맥이 아닌 맥의 줄이 실렸다")
         #expect(panel.providers.first?.fiveHourPercent == 9, "고른 맥의 숫자가 아니다(첫째 맥은 27% 다)")
         // 카드는 **여전히 둘 다** 보여 준다 — 고르기는 위젯만의 일이다(사용자 결정).
         #expect(store.aiLimits.displayGroups.count == 2, "고르기가 폰 카드까지 줄였다 — 카드는 전부 보여 준다")
         MeAILimitsTests.expectNoPrefsWrites(harness)
         harness.expectNoForbiddenCalls()
+    }
+
+    /// ★ 이름이 **겹치는** 맥 두 대(상한 길이 64 스칼라)면 위젯 패널이 합친 이름과 **꼬리를 따로** 싣는다(v0.3.47 P2).
+    ///
+    /// 위젯은 맥 한 대만 그리므로 "이 숫자가 어느 쌍둥이 것인지"를 말할 글자가 꼬리뿐이다. 합친 글자만 실으면 위젯은
+    /// 어디까지가 꼬리인지 몰라 한 `Text` 로 그리고, 말줄임이 그 꼬리부터 먹는다. 기준선을 다르게 둔다: 고른 맥이
+    /// **다른** 쌍둥이면 꼬리도 **다른** 글자다(같은 꼬리가 실리면 위젯 두 장이 다시 같아진다).
+    @Test("쌍둥이 맥: 위젯 패널이 합친 이름 + **꼬리를 따로** 싣는다 · 고른 쌍둥이에 따라 꼬리가 바뀐다")
+    func twinMacsSendTheTailSeparatelyToTheWidget() async throws {
+        let maxName = String(repeating: "가", count: AILimitDeviceLabelContract.maxScalars)
+        let twins = #"""
+        [
+          {"device_id":"twin-aaaa-a1b2","device_label":"\#(maxName)",
+           "provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
+           "weekly_percent":60,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T05:03:00+00:00"},
+          {"device_id":"twin-bbbb-c3d4","device_label":"\#(maxName)",
+           "provider":"claude","five_hour_percent":9,"five_hour_resets_at":"2026-09-17T07:40:00+00:00",
+           "weekly_percent":11,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T04:50:00+00:00"}
+        ]
+        """#
+        func panel(chosen: String?) async throws -> WidgetSnapshot.AILimitPanel {
+            let harness = await RankMeHarness(label: "me-dev-twin-\(chosen ?? "none")") { request in
+                if request.path == "/rest/v1/ai_limits", request.method == "GET" { return .json(twins) }
+                if request.path == "/rest/v1/ai_limits_prefs", request.method == "GET" {
+                    return chosen.map { .json(#"[{"main_device_id":"\#($0)"}]"#) } ?? MeAILimitsTests.noPrefs
+                }
+                return MeStoreTests.rootResponder(request)
+            }
+            defer { harness.tearDown() }
+            let store = harness.me
+            store.appDidBecomeActive()
+            #expect(await baseWaitUntil { store.aiLimits.state.hasLoaded })
+            #expect(store.aiLimits.displayGroups.count == 2, "전제: 같은 이름 두 대가 둘 다 그려진다")
+            MeAILimitsTests.expectNoPrefsWrites(harness)
+            harness.expectNoForbiddenCalls()
+            return try #require(store.aiLimits.widgetPanel())
+        }
+
+        // 안 골랐다 → 가장 최근에 일한 맥(A1B2).
+        let recent = try await panel(chosen: nil)
+        #expect(recent.deviceName == "\(maxName) (A1B2)", "합친 이름(소리·옛 위젯이 읽는 값)이 바뀌었다")
+        #expect(recent.deviceNameTail == "A1B2", "쌍둥이인데 꼬리를 따로 싣지 않았다 — 위젯이 그 꼬리를 말줄임에 내준다")
+        #expect(recent.providers.first?.fiveHourPercent == 27)
+        // 다른 쌍둥이를 골랐다 → 꼬리도 다르다.
+        let other = try await panel(chosen: "twin-bbbb-c3d4")
+        #expect(other.deviceNameTail == "C3D4", "고른 쌍둥이의 꼬리가 아니다")
+        #expect(other.providers.first?.fiveHourPercent == 9)
+        #expect(recent.deviceNameTail != other.deviceNameTail, "두 쌍둥이가 같은 꼬리로 실렸다 — 위젯 두 장을 가를 글자가 없다")
+        // 실린 두 칸이 위젯 쪽에서 **같은 조각**으로 되돌아온다(꼬리 경계를 위젯이 다시 짐작하지 않는다).
+        let parts = AingWidgetLimits.deviceNameParts(combined: try #require(recent.deviceName), tail: recent.deviceNameTail)
+        #expect(parts == AILimitDeviceNameParts(base: maxName, tail: "A1B2"))
     }
 
     /// ★ 고른 맥이 **목록에 없으면 접는다**. `main_device_id` 에는 FK 가 없고(마이그레이션 머리말), 고른 맥의 행이
@@ -812,6 +865,42 @@ struct WidgetAILimitDeviceTests {
         }
     }
 
+    /// ★ 겹침 꼬리 칸(`deviceNameTail`)도 **생 JSON** 으로 잰다 — 디코드 줄이 빠지면 컴파일은 통과하고 꼬리는 영원히
+    /// nil 이라, 위젯 머리가 소리 없이 합친 글자 한 줄로 돌아가 상한 길이 쌍둥이를 다시 못 가른다.
+    @Test("스냅샷 칸: 겹침 꼬리가 파일에 실리고 생 JSON 에서 돌아온다 · 옛 파일·빈 값은 nil · 판은 1 그대로")
+    func deviceNameTailSurvivesTheFile() throws {
+        var panel = Self.panel(deviceName: "Mac mini (A1B2)")
+        panel.deviceNameTail = "A1B2"
+        let snapshot = Self.snapshot(panel)
+        let data = try WidgetSnapshotCodec.encode(snapshot)
+        let text = String(decoding: data, as: UTF8.self)
+        #expect(text.contains(#""deviceNameTail":"A1B2""#), "꼬리가 파일에 안 실렸다")
+        #expect(text.contains(#""version":1"#), "판을 올렸다 — 더하기만 한 옵셔널 칸이다")
+        #expect(try #require(WidgetSnapshotCodec.decode(data)) == snapshot)
+        // 꼬리가 없으면 칸 자체가 파일에 안 생긴다(옛 위젯·옛 파일과 같은 모양).
+        let plain = String(decoding: try WidgetSnapshotCodec.encode(Self.snapshot(Self.panel(deviceName: "사무실 iMac"))),
+                           as: UTF8.self)
+        #expect(!plain.contains("deviceNameTail"), "겹치지 않는 이름인데 꼬리 칸을 썼다")
+
+        let json = #"""
+        {"version":1,"generatedAt":1789621500000,
+         "aiLimits":{"providers":[{"provider":"claude","weeklyPercent":60,"observedAt":1789621470000}],
+          "deviceName":"Mac mini (C3D4)","deviceNameTail":"C3D4"}}
+        """#
+        let decoded = try #require(WidgetSnapshotCodec.decode(Data(json.utf8)))
+        #expect(decoded.aiLimits?.deviceNameTail == "C3D4", "디코드 줄이 빠졌다 — 파일에 꼬리가 있어도 영원히 nil 이다")
+        #expect(decoded.aiLimits?.deviceName == "Mac mini (C3D4)")
+
+        for body in [#"{"providers":[],"deviceName":"Mac mini (A1B2)"}"#,
+                     #"{"providers":[],"deviceName":"Mac mini (A1B2)","deviceNameTail":""}"#,
+                     #"{"providers":[],"deviceName":"Mac mini (A1B2)","deviceNameTail":"  "}"#] {
+            let old = #"{"version":1,"generatedAt":1789621500000,"aiLimits":\#(body)}"#
+            let panel = try #require(WidgetSnapshotCodec.decode(Data(old.utf8))?.aiLimits)
+            #expect(panel.deviceNameTail == nil, "빈 꼬리를 꼬리로 받았다(\(body))")
+            #expect(panel.deviceName == "Mac mini (A1B2)", "꼬리 칸이 이름 칸을 흔들었다(\(body))")
+        }
+    }
+
     /// ★ **머리에 이름을 적을지 말지**가 값으로 답해진다. 뷰는 `#if os(iOS)` 라 맥 스위트가 한 줄도 컴파일하지
     /// 않으므로, 그 분기가 뷰 안에 있으면 재는 그물이 소스 grep 하나뿐이고 — grep 은 조건에 `false` 를 더하는
     /// 변형을 **못 잡는다**(실측: 그 변형이 안 물렸다). 그래서 분기의 결과를 `headerDevice` 가 내놓는다.
@@ -829,8 +918,42 @@ struct WidgetAILimitDeviceTests {
         #expect(header.text == "· 예성의 MacBook Pro", "보이는 글자가 제목의 꼬리로 이어지지 않는다")
         #expect(header.spoken == "예성의 MacBook Pro", "보이스오버가 가운뎃점을 이름의 일부로 읽는다")
         #expect(header.text != header.spoken, "보이는 글자와 읽어 줄 글자를 한 글자로 합쳤다")
+        #expect(header.tail == nil, "겹치지 않는 이름에 꼬리 조각이 생겼다")
         // 겹침 꼬리가 붙은 이름도 **그대로** 지난다(위젯이 이름을 다시 만들지 않는다).
         #expect(try limits("Mac mini (A1B2)").headerDevice?.spoken == "Mac mini (A1B2)")
+    }
+
+    /// ★ 머리 이름이 **두 조각**으로 갈린다(v0.3.47 P2) — 이름(잘려도 되는 쪽)과 겹침 꼬리(절대 안 잘리는 쪽).
+    ///
+    /// 경계는 폰이 실어 준 꼬리로만 가른다. 기준선을 다르게 둔다: 꼬리 칸이 없는 옛 파일 · 짝이 안 맞는 꼬리 ·
+    /// 이름 자체에 괄호가 든 맥은 **가르지 않는다**(위젯이 괄호를 찾아 자르면 그 맥에서 이름을 지어낸다).
+    @Test("머리 줄 조각: 꼬리가 실리면 `· 이름` + `(꼬리)` 로 갈리고 · 옛 파일·짝 안 맞는 꼬리·괄호 이름은 안 갈린다")
+    func theHeaderSplitsTheTailOnlyWhenThePhoneSaysWhereItIs() throws {
+        func header(_ name: String?, tail: String?) throws -> AingWidgetLimitsHeaderDevice? {
+            var panel = Self.panel(deviceName: name)
+            panel.deviceNameTail = tail
+            guard case .limits(let value) = AingWidgetLimitsState(snapshot: Self.snapshot(panel), at: Self.now) else {
+                throw WidgetDeviceFailure.notLimits
+            }
+            return value.headerDevice
+        }
+        let twin = try #require(try header("Mac mini (A1B2)", tail: "A1B2"))
+        #expect(twin.name == "· Mac mini", "꼬리가 이름 조각에 남았다 — 말줄임이 그 꼬리를 먹는다")
+        #expect(twin.tail == "(A1B2)", "꼬리 조각이 없다 — 쌍둥이를 가를 글자가 잘리는 자리에 있다")
+        #expect(twin.spoken == "Mac mini (A1B2)", "보이스오버가 꼬리를 못 듣는다")
+        #expect(twin.text == "· Mac mini (A1B2)", "두 조각을 합치면 예전 머리 글자와 같아야 한다")
+
+        // 옛 파일(꼬리 칸 없음): 지금까지처럼 합친 글자 하나.
+        let old = try #require(try header("Mac mini (A1B2)", tail: nil))
+        #expect(old.name == "· Mac mini (A1B2)" && old.tail == nil)
+        // 짝이 안 맞는 꼬리: 가르지 않는다(꼬리를 두 번 적거나 이름을 잘라 먹지 않는다).
+        let mismatch = try #require(try header("Mac mini (A1B2)", tail: "ZZZZ"))
+        #expect(mismatch.name == "· Mac mini (A1B2)" && mismatch.tail == nil, "짝이 안 맞는 꼬리로 이름을 갈랐다")
+        // 이름 자체에 괄호가 든 맥: 꼬리가 없으면 그대로다(위젯이 괄호를 찾아 자르지 않는다).
+        let paren = try #require(try header("Studio (Office)", tail: nil))
+        #expect(paren.name == "· Studio (Office)" && paren.tail == nil, "꼬리가 없는데 괄호를 꼬리로 잘랐다")
+        // 맥 한 대: 꼬리 칸이 있어도 이름이 없으면 아무것도 안 적는다.
+        #expect(try header(nil, tail: "A1B2") == nil, "맥 한 대인데 꼬리만 적었다")
     }
 
     /// 위젯 모델이 그 이름을 **그대로** 들고 온다(위젯은 이름을 만들지 않는다 — 겹침을 가른 글자가 이미 들어 있다).
@@ -904,15 +1027,28 @@ struct WidgetAILimitDeviceTests {
     @Test("위젯 소스 계약: 머리에 맥 이름을 그린다 · 고르기 규칙·prefs 표를 위젯이 모른다 · 토큰 줄엔 맥 이름이 없다")
     func theWidgetDrawsTheNameButNeverChoosesTheMac() throws {
         let view = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        let line = try IntegrationContractTests.code("Sources/CheckWidgetsKit/AingWidgetLimitsHeader.swift")
         // ★ **조건 글자까지** 조인다. "`limits.deviceName` 이 파일에 나온다"로만 재면 조건에 `false` 를 더하는
-        //   변형을 못 잡는다(실측으로 안 물렸다). 뷰는 값이 준 답을 **그대로** 쓰고 자기 조건을 더하지 않는다.
-        #expect(view.contains("if let header = limits.headerDevice {"), "위젯 머리가 값이 준 답을 그대로 쓰지 않는다")
-        #expect(view.contains("Text(header.text)") && view.contains("accessibilityLabel(Text(header.spoken))"),
-                "보이는 글자와 읽어 줄 글자를 가르지 않는다")
-        #expect(!view.contains("AingWidgetText.limitsDeviceName("),
-                "뷰가 이름 글자를 다시 꾸민다 — 그 분기는 맥 스위트가 잴 수 있는 자리에 있어야 한다")
-        for banned in ["AILimitMainDeviceRule", "ai_limits_prefs", "mainDeviceID", "AILimitDeviceRoster"] {
-            #expect(!view.contains(banned), "위젯이 메인 맥을 스스로 고르려 한다(\(banned)) — 앱과 두 벌이 갈린다")
+        //   변형을 못 잡는다(실측으로 안 물렸다). 뷰는 값이 준 답을 **그대로** 넘기고 자기 조건을 더하지 않는다.
+        //   (머리 줄 자체는 플랫폼 무관 뷰라 `WidgetAILimitHeaderRenderTests` 가 **그림으로** 잰다 — `if let device`
+        //    에 `false` 를 더하면 그쪽에서 빨개진다.)
+        #expect(view.contains("device: limits.headerDevice,"), "위젯 머리가 값이 준 답을 그대로 넘기지 않는다")
+        #expect(view.contains("AingWidgetLimitsHeaderLine("), "위젯이 맥 스위트가 굽는 그 머리 줄을 쓰지 않는다")
+        #expect(line.contains("if let device {"), "머리 줄이 값의 답에 자기 조건을 더했다")
+        // 이름과 꼬리를 **따로** 그린다 — 꼬리는 `fixedSize` + `layoutPriority`(폰 카드와 같은 수리).
+        #expect(line.contains("Text(device.name)") && line.contains("Text(tail)"), "이름과 꼬리를 한 글자로 그린다")
+        #expect(!line.contains("Text(device.text)"), "합친 글자를 한 `Text` 로 그린다 — 말줄임이 꼬리부터 먹는다")
+        let tailRange = try #require(line.range(of: "Text(tail)"))
+        let tailCode = String(line[tailRange.lowerBound...].prefix(200))
+        #expect(tailCode.contains(".fixedSize()") && tailCode.contains(".layoutPriority(1)"),
+                "꼬리가 제 폭을 먼저 갖지 않는다 — 긴 이름 앞에서 눌리거나 `…` 가 된다")
+        #expect(line.contains("accessibilityLabel(Text(device.spoken))"), "보이는 글자와 읽어 줄 글자를 가르지 않는다")
+        for code in [view, line] {
+            #expect(!code.contains("AingWidgetText.limitsDeviceName("),
+                    "뷰가 이름 글자를 다시 꾸민다 — 그 분기는 맥 스위트가 잴 수 있는 자리에 있어야 한다")
+            for banned in ["AILimitMainDeviceRule", "ai_limits_prefs", "mainDeviceID", "AILimitDeviceRoster"] {
+                #expect(!code.contains(banned), "위젯이 메인 맥을 스스로 고르려 한다(\(banned)) — 앱과 두 벌이 갈린다")
+            }
         }
         let model = try IntegrationContractTests.code("Sources/CheckWidgetsKit/AingWidgetModel.swift")
         for banned in ["AILimitMainDeviceRule", "ai_limits_prefs", "AILimitDeviceRoster"] {

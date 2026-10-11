@@ -155,7 +155,7 @@ package struct ChessLobbyResponse: Decodable, Equatable, Sendable {
     package let status: ChessRPCStatus
     package var serverNowMs: Double?
     package var stakes: [Int]?
-    /// 한 사람에게 주는 시작 시간(ms, 300000 = 5분). 서버 상수를 앱이 베끼지 않기 위한 칸이다.
+    /// 한 사람에게 주는 시작 시간(ms, 600000 = 10분 — 2026-10-12 전에는 300000). 서버 상수를 앱이 베끼지 않기 위한 칸이다.
     package var initialMs: Int?
     package var incrementMs: Int?
     /// 서버가 차례쪽에 더해 주는 네트워크 유예(ms, 2000). 깃발 판정은 서버가 하고 앱은 **되묻는 시점**에만 쓴다.

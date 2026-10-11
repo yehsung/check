@@ -559,31 +559,34 @@ struct ChessRulesTests {
         #expect(ChessRules.outcome(position: stalemateWithBareKings) == .stalemate)
     }
 
-    // MARK: - 시계 (5분 + 3초)
+    // MARK: - 시계 (10분 + 3초)
 
-    @Test("시계 — 5분에서 시작하고, 수를 둔 뒤 3초가 붙고, 넘겨 쓰면 시간패다")
+    @Test("시계 — 10분에서 시작하고, 수를 둔 뒤 3초가 붙고, 넘겨 쓰면 시간패다")
     func clockAddsIncrementOnlyAfterAMove() {
         let clock = ChessClock()
-        #expect(clock.remaining(.white) == 300)
-        #expect(clock.remaining(.black) == 300)
+        #expect(clock.remaining(.white) == 600)
+        #expect(clock.remaining(.black) == 600)
 
         let afterWhite = clock.afterMove(by: .white, elapsed: 10).clock
-        #expect(afterWhite?.remaining(.white) == 293, "300 − 10 + 3")
-        #expect(afterWhite?.remaining(.black) == 300, "상대 시계는 그대로")
+        #expect(afterWhite?.remaining(.white) == 593, "600 − 10 + 3")
+        #expect(afterWhite?.remaining(.black) == 600, "상대 시계는 그대로")
 
         // 남은 시간을 넘겨 쓰면 가산이 붙지 않는다 — 시간패다(성립하지 않는 입력과 갈린다: ChessContractTests).
-        #expect(clock.afterMove(by: .white, elapsed: 301) == .flagged)
-        #expect(clock.hasFlagged(.white, elapsed: 301) == true)
-        #expect(clock.hasFlagged(.white, elapsed: 299) == false)
+        #expect(clock.afterMove(by: .white, elapsed: 601) == .flagged)
+        #expect(clock.hasFlagged(.white, elapsed: 601) == true)
+        #expect(clock.hasFlagged(.white, elapsed: 599) == false)
+        // ★ 옛 초기값(5분)을 넘긴 301초는 **이제 시간패가 아니다** — 10분으로 늘린 것의 뜻이 이 한 줄이다.
+        #expect(clock.afterMove(by: .white, elapsed: 301).clock?.remaining(.white) == 302, "600 − 301 + 3")
+        #expect(clock.hasFlagged(.white, elapsed: 301) == false)
 
         // 꼭 맞게 쓰면 아직 살아 있고 가산을 받는다(경계).
-        #expect(clock.afterMove(by: .white, elapsed: 300).clock?.remaining(.white) == 3)
-        #expect(clock.hasFlagged(.white, elapsed: 300) == false)
+        #expect(clock.afterMove(by: .white, elapsed: 600).clock?.remaining(.white) == 3)
+        #expect(clock.hasFlagged(.white, elapsed: 600) == false)
 
         // 3초보다 빨리 두면 시간이 늘어난다(가산제의 전부다).
         var running = ChessClock()
         for _ in 0..<10 { running = running.afterMove(by: .black, elapsed: 1).clock! }
-        #expect(running.remaining(.black) == 320, "한 수마다 +2초 × 10")
+        #expect(running.remaining(.black) == 620, "한 수마다 +2초 × 10")
     }
 
     // MARK: - 왕 안전 지름길 대조

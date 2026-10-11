@@ -400,7 +400,7 @@ package nonisolated enum ChessRules {
     /// 밝은 칸들은 그 비숍들로 채울 수도 없다(왕의 직교 이웃 넷은 반대 색이다). 그래서 비숍이 둘·셋이어도,
     /// 양쪽이 나눠 가져도 메이트가 없다. 예전 구현은 `bishops == [1, 1]` 한 짝만 색을 봐서 비숍이 둘 이상이면
     /// 통째로 아니라고 답했고, 그 결과 FIDE 가 무승부라고 하는 판이 50수(100 반수)까지 끌려갔다 —
-    /// 그 사이 5분+3초 시계의 깃발이 먼저 떨어지면 한쪽이 **시간패로 진다**.
+    /// 그 사이 10분+3초 시계의 깃발이 먼저 떨어지면 한쪽이 **시간패로 진다**.
     ///
     /// 나이트 둘(왕+N+N vs 왕)은 들어가지 않는다: 메이트가 나오는 자리가 있어 사국이 아니다.
     package static func hasInsufficientMaterial(_ position: ChessPosition) -> Bool {
@@ -487,7 +487,7 @@ package nonisolated enum ChessRules {
     }
 }
 
-// MARK: - 시계 (5분 + 한 수 3초 가산 — 사용자 확정)
+// MARK: - 시계 (10분 + 한 수 3초 가산 — 사용자 확정)
 
 /// 한 수를 둔 뒤의 시계 — **세 갈래**다. 하나의 nil 로 '시간패'와 '성립하지 않는 입력'을 둘 다 말하면,
 /// 음수 elapsed 한 번이 사람을 시간패로 끝낸다. 음수는 드문 값이 아니다: 서버가 `now − moveStartedAt` 을 셀 때
@@ -511,7 +511,7 @@ package nonisolated enum ChessClockStep: Hashable, Sendable {
 /// 깃발이 떨어졌을 때의 결과 — **FIDE 6.9**. 시간은 시계가 재지만 결과는 기물이 가른다: 상대가 어떤 수순으로도
 /// 메이트할 수 없으면 무승부다. 시계는 기물을 보지 않고 `ChessOutcome` 에는 시간이 없으므로 둘을 묶는 자리가
 /// 없었고, 그래서 자연스러운 호출(깃발 → 패)이 FIDE 가 무승부라고 하는 판을 패배로 만들었다.
-/// 5분+3초 블리츠에서 실제로 닿는 모양이다(한쪽이 기물을 다 잃고 상대에게 비숍·나이트 하나만 남은 끝내기).
+/// 10분+3초 시계에서 실제로 닿는 모양이다(한쪽이 기물을 다 잃고 상대에게 비숍·나이트 하나만 남은 끝내기).
 package nonisolated enum ChessTimeoutRuling: Hashable, Sendable {
     /// 깃발이 떨어진 쪽의 패.
     case loss(flagged: ChessColor)
@@ -539,9 +539,17 @@ extension ChessRules {
 /// 판정 주체가 다르다(판은 배치로, 시계는 흐른 시간으로). 섞으면 "둘 수 없는데 시간이 남았다"가 생긴다.
 /// 깃발이 떨어진 뒤의 결과는 기물까지 봐야 하므로 `ChessRules.timeoutRuling` 이 그 한 자리다.
 package nonisolated struct ChessClock: Hashable, Sendable {
-    /// 기본 설정(사용자 확정 2026-10-05): 5분 + 한 수 3초 가산.
-    package static let initialSeconds: Double = 300
+    /// 기본 설정(사용자 확정): **10분** + 한 수 3초 가산. 2026-10-05 에 5분으로 정했고 2026-10-12 에 10분으로 늘렸다.
+    ///
+    /// ★ 서버 `chess_initial_ms()` 와 **같은 숫자**여야 한다(600 × 1000 = 600000). 한쪽만 고치면 로비를 읽기 전의
+    ///   캡션·로봇 판 시계가 서버와 갈린다 — `V0348ChessClockTenMinuteTests` 가 마이그레이션의 **가장 나중 정의**를
+    ///   읽어 이 값과 대조한다.
+    package static let initialSeconds: Double = 600
     package static let incrementSeconds: Double = 3
+    /// 같은 값의 ms 판(서버와 같은 단위). **로비를 읽기 전의 자리표시와 로봇 판의 기본값이 전부 이 한 줄에서 나온다**
+    /// (`ChessServerClock.initial` · `ChessStore.initialMs` 와 그 `reset()` · `ChessAIGame` 의 기본 인자).
+    /// 예전에는 300_000 이 그 네 자리에 따로 박혀 있었다 — 한 곳만 고치면 로그아웃 뒤의 기본값이 새 스토어와 갈린다.
+    package static var initialMs: Int { Int(initialSeconds * 1000) }
 
     package var whiteSeconds: Double
     package var blackSeconds: Double

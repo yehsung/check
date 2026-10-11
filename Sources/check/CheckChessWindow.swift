@@ -83,7 +83,8 @@ enum ChessWindowLayout {
     static let nameColumnWidth: CGFloat = 140
     /// 카드 좌우 여백. 시계 자리를 테스트가 이 값으로 계산한다.
     static let cardInsetX: CGFloat = 12
-    /// 시계 칸 폭. "5:00"(가산 +3 표시까지) 가 monospacedDigit 로 들어가는 값이다.
+    /// 시계 칸 폭. "10:00"(가산이 붙은 "10:03" 까지 — 다섯 글자) 가 monospacedDigit 로 들어가는 값이다.
+    /// 20pt 굵은 숫자 다섯 글자는 약 57pt 이고 칸 안쪽은 96 − 6×2 = 84pt 라 줄어들지 않고 들어간다(V0348 이 잰다).
     static let clockWidth: CGFloat = 96
     /// 시계 칸 높이(카드 84 안에서 위아래 20 씩 남는다).
     static let clockHeight: CGFloat = 44

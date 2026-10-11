@@ -80,6 +80,14 @@ private let chessStateExtraKeys: [String: Set<String>] = [
     "chess_move__retry_clock_skew": ["reason"]
 ]
 
+/// 이 픽스처 집합을 뜬 서버의 시계 초기값(ms). **5분 시절의 캡처다** — 체인이 `20261005160000_chess_duel.sql` 까지였고
+/// 그 파일의 `chess_initial_ms()` 가 300000 이었다. 0.3.48 의 `20261012120000_chess_clock_10min.sql` 이 서버 값을
+/// 600000 으로 올렸지만 **이 일흔아홉 장은 다시 뜨지 않았다**: 이 파일이 재는 것은 봉투 키·독립 산식·종국 재판정이고
+/// 그건 초기 시간과 무관하다(시계 산수는 "출발값 − 쓴 시간 + 가산" 이라 출발값이 무엇이든 같은 식이다).
+/// 지금 서버의 값은 `V0348ChessClockTenMinuteTests` 가 **가장 나중 마이그레이션 정의**에서 읽고, 10분 서버의 실제 응답은
+/// `Fixtures/chess-rpc-clock10/` 에 따로 있다. 이 집합을 다시 뜨는 날 이 숫자를 그 서버의 값으로 고쳐라.
+private let chessFixtureEraInitialMs = 300_000
+
 /// 각 픽스처가 **내야 하는 status**. 손으로 적은 표다 — 서버가 다른 글자를 내면 여기서 걸린다.
 /// (픽스처를 더하면 이 표가 "그 상황이 무엇을 내야 하는가" 를 한 번 결정하게 만든다 — 집합 단언이 강제한다.)
 private let chessExpectedStatus: [String: String] = [
@@ -486,11 +494,12 @@ struct V0343ChessFixtureContractTests {
                 continue        // since 가 0 이 아니어서 수 사슬이 끊긴 픽스처(§3 이 fen 한 칸을 따로 잰다)
             }
 
-            // 피셔 시계: 초기 5분 · 한 수 3초 가산. 심은 판은 심은 값에서 출발한다.
-            var remaining: [ChessColor: Int] = [.white: 300_000, .black: 300_000]
+            // 피셔 시계: 초기값 · 한 수 3초 가산. 심은 판은 심은 값에서 출발한다.
+            // ★ 초기값은 **이 픽스처를 뜬 서버의 값**이다(`chessFixtureEraInitialMs` — 지금 서버의 값이 아니다).
+            var remaining: [ChessColor: Int] = [.white: chessFixtureEraInitialMs, .black: chessFixtureEraInitialMs]
             if let seed = seeds[matchID] as? [String: Any] {
-                remaining[.white] = chessFxInt(seed["white_ms_left"]) ?? 300_000
-                remaining[.black] = chessFxInt(seed["black_ms_left"]) ?? 300_000
+                remaining[.white] = chessFxInt(seed["white_ms_left"]) ?? chessFixtureEraInitialMs
+                remaining[.black] = chessFxInt(seed["black_ms_left"]) ?? chessFixtureEraInitialMs
             }
 
             for row in moves {
@@ -702,7 +711,7 @@ struct V0343ChessFixtureContractTests {
         for name in try chessFxNames() where name.hasPrefix("chess_lobby__ok") {
             let lobby = try chessFxJSON(name)
             #expect(lobby["stakes"] as? [Int] == [3, 5, 10], "\(name): 판돈 셋(A4)")
-            #expect(chessFxInt(lobby["initial_ms"]) == 300_000, "\(name): 5분(A3)")
+            #expect(chessFxInt(lobby["initial_ms"]) == chessFixtureEraInitialMs, "\(name): 픽스처를 뜬 서버의 초기 시간(5분)")
             #expect(chessFxInt(lobby["increment_ms"]) == 3000, "\(name): 가산 3초(A3)")
             #expect(chessFxInt(lobby["grace_ms"]) == 2000, "\(name): 유예 2초")
             #expect(chessFxInt(lobby["invite_ttl_seconds"]) == 60, "\(name): TTL 60초")

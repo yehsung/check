@@ -87,7 +87,7 @@ enum ChessText {
     static let rulesTitle = "체스 규칙"
     static let close = "닫기"
 
-    /// 머리글 캡션. 시간 수치는 **서버가 말한 값**에서 만든다(상수를 베끼지 않는다 — A3 의 5분+3초가 서버에 있다).
+    /// 머리글 캡션. 시간 수치는 **서버가 말한 값**에서 만든다(상수를 베끼지 않는다 — A3 의 10분+3초가 서버에 있다).
     static func subtitle(initialMs: Int, incrementMs: Int) -> String {
         let minutes = max(1, initialMs / 60_000)
         let increment = max(0, incrementMs / 1_000)

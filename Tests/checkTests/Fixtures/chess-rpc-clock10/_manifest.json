@@ -1,0 +1,81 @@
+{
+  "about": "10분 서버(20261012120000_chess_clock_10min 적용 뒤)의 실제 응답. 5분 시절 캡처는 ../chess-rpc/.",
+  "server": "PostgreSQL 15.18 (Homebrew) on aarch64-apple-darwin25.4.0, compiled by Apple clang version 21.0.0 (clang-2100.0.123.102), 64-bit",
+  "chess_initial_ms": 600000,
+  "chess_increment_ms": 3000,
+  "chess_grace_ms": 2000,
+  "users": {
+    "A": "aa000000-0000-4000-8000-0000000000a1",
+    "B": "bb000000-0000-4000-8000-0000000000b2",
+    "C": "cc000000-0000-4000-8000-0000000000c3",
+    "m1": "9c209afb-73df-4705-9f1d-569bc60f159c",
+    "white": "aa000000-0000-4000-8000-0000000000a1",
+    "black": "bb000000-0000-4000-8000-0000000000b2"
+  },
+  "fixtures": {
+    "chess_lobby__ok_empty": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_lobby(1)",
+      "setup": null,
+      "end": "rollback",
+      "note": "대기 신청·진행 중 판 없음. initial_ms 600000 · increment_ms 3000 · grace_ms 2000"
+    },
+    "chess_respond__accept_ok": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_respond(1, '9c209afb-73df-4705-9f1d-569bc60f159c', true)",
+      "setup": "select setseed(0.4242) \\g /dev/null",
+      "end": "commit",
+      "note": "수락 순간 양쪽 −5 · 흑백 추첨 · 시계 10분·유예 2초"
+    },
+    "chess_state__ok_initial_my_turn": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_state(1, '9c209afb-73df-4705-9f1d-569bc60f159c', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "백 시점 ply 0 — legal_moves 20"
+    },
+    "chess_state__ok_initial_their_turn": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_state(1, '9c209afb-73df-4705-9f1d-569bc60f159c', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "흑 시점 ply 0 — legal_moves null"
+    },
+    "chess_watch__ok_active": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, '9c209afb-73df-4705-9f1d-569bc60f159c', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "관전자 시점 ply 0 — 두 시계 600000"
+    },
+    "chess_move__ok_white_first": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, '9c209afb-73df-4705-9f1d-569bc60f159c', 0, 'e2e4')",
+      "setup": null,
+      "end": "commit",
+      "note": "600000 − 쓴 시간 + 3000"
+    },
+    "chess_resign__ok": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_resign(1, '9c209afb-73df-4705-9f1d-569bc60f159c')",
+      "setup": null,
+      "end": "commit",
+      "note": "흑 기권 — result white_win · end_reason resign"
+    },
+    "chess_state__ok_finished_winner": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_state(1, '9c209afb-73df-4705-9f1d-569bc60f159c', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "이긴 쪽(백)이 끝난 판을 다시 읽는다"
+    }
+  }
+}

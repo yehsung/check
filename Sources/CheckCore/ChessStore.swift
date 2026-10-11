@@ -164,7 +164,7 @@ package nonisolated struct ChessMoveRecord: Identifiable, Equatable, Sendable {
     }
 }
 
-/// 서버가 말한 시계 네 값 + **클라 보간**(5분 + 한 수 3초 가산, A3).
+/// 서버가 말한 시계 네 값 + **클라 보간**(10분 + 한 수 3초 가산, A3).
 ///
 /// ★ **이 값은 표시용이고 권위가 아니다.** 서버 응답이 올 때마다 `applyState` 가 네 칸을 통째로 덮어쓴다 —
 ///   클라가 센 초를 기준선으로 삼아 '서버 값보다 적으면 유지' 같은 보정을 넣으면, 기기가 잠들었다 깨어난 뒤
@@ -189,8 +189,10 @@ package nonisolated struct ChessServerClock: Equatable, Sendable {
         self.running = running
     }
 
+    /// 서버 값을 받기 전의 자리표시(멈춘 시계). 시작 시간은 `ChessClock.initialMs` 한 곳에서 온다.
     package static let initial = ChessServerClock(
-        whiteMsLeft: 300_000, blackMsLeft: 300_000, incrementMs: 3_000, turnStartedAt: nil, running: nil)
+        whiteMsLeft: ChessClock.initialMs, blackMsLeft: ChessClock.initialMs, incrementMs: 3_000,
+        turnStartedAt: nil, running: nil)
 
     package func msLeft(_ color: ChessColor) -> Int { color == .white ? whiteMsLeft : blackMsLeft }
 
@@ -552,14 +554,22 @@ package final class ChessStore {
 
     /// ★ **주기의 하한(= 가장 잦은 주기의 상한)**. 무료 플랜 예산이라 어떤 분기도 이보다 짧게 두지 마라.
     ///
-    /// 근거(2026-10-05 산수): 5분+3초 블리츠 한 판은 길어도 약 12분이다. 1초 주기면 대국자 한 사람당
-    /// 720회·판당 1,440회이고, 거기에 관전자가 붙으면 2초 주기로 사람당 360회가 더해진다. 0.5초 루프에서
-    /// 이보다 짧게 두면 **루프의 매 걸음이 요청**이 되어(= 120회/분) 관전·순위까지 합친 동시 대국 몇 판에
-    /// 무료 플랜이 버티지 못한다. 아래 두 상수는 전부 이 하한을 지나 나온다(`statePollSeconds(subscribed:)`).
+    /// 근거(2026-10-12 다시 계산 — 시계가 5분에서 10분이 됐다): 10분+3초 한 판은 두 시계 20분 + 가산이다.
+    /// 가산은 반수마다 3초라 40수(반수 80)짜리 판이 +4분 = **약 24분**이다(5분 시절 같은 판은 14분이다 — 그때
+    /// 적어 둔 "약 12분" 은 반수 40 으로 셈한 값이다). 1초 주기면 대국자 한 사람당 최대 1,440회·판당 2,880회이고,
+    /// 관전자가 붙으면 2초 주기로 사람당 720회가 더해진다 — **판당 총량은 5분 시절의 약 1.7배**다.
+    /// 다만 하한이 지키는 것은 총량이 아니라 **분당 속도**이고, 그건 시계 길이와 무관하게 그대로다:
+    /// 1초 주기 = 사람당 60회/분. 0.5초 루프에서 이보다 짧게 두면 **루프의 매 걸음이 요청**이 되어(= 120회/분)
+    /// 관전·순위까지 합친 동시 대국 몇 판에 무료 플랜이 버티지 못한다. 그래서 **결론(하한 1.0초 · 구독 중 1.5초)은
+    /// 10분에서도 그대로 선다.** 실제 요청은 위 상한보다 훨씬 적다 — 상태 조회는 **상대 차례에만** 나가므로
+    /// (`pollTick`) 두 사람 합쳐 한 줄기이고, 구독 중 1.5초면 24분 판이 약 960회다(로컬 서버 실측으로 그 응답이
+    /// 한 건 약 2.1KB 라 판당 약 2MB — 5분 시절 14분 판은 560회·약 1.2MB 였다).
+    /// 아래 두 상수는 전부 이 하한을 지나 나온다(`statePollSeconds(subscribed:)`).
     package nonisolated static let statePollFloorSeconds: TimeInterval = 1.0
 
     /// 상대 차례의 상태 조회 주기(초) — 실시간 구독 중. **오목의 3초보다 촘촘하다**(규약 ⑨ 의 사정):
-    /// 한 수가 2~3초로 끝나는 블리츠에서 3초 주기는 "상대가 벌써 뒀고 내 시계가 2.5초 흐른" 상태를 평범하게 만든다.
+    /// 한 수가 2~3초로 끝나는 빠른 수 교환(10분 시계에서도 오프닝과 시간에 쫓길 때는 그렇다)에서 3초 주기는
+    /// "상대가 벌써 뒀고 내 시계가 2.5초 흐른" 상태를 평범하게 만든다.
     package nonisolated static let statePollSecondsWhileSubscribed: TimeInterval = 1.5
     /// 같은 조회 — 미구독(킬스위치·재연결 중). 신호가 없으니 하한까지 당긴다.
     package nonisolated static let statePollSecondsUnsubscribed: TimeInterval = 1.0
@@ -663,7 +673,7 @@ package final class ChessStore {
     /// 한 번도 보지 않으므로, 이 값이 서 있든 nil 이든 `match`·`legalMoves`·`isMyTurn`·시계는 **바이트까지 같다**.
     ///
     /// ★ 여기에 **입력 잠금을 걸지 마라.** 말이 날고 있는 동안에도 `match.position` 과 `legalMoves` 는 이미
-    ///   새 것이다(판은 벌써 다음 수의 판이다). 0.2초를 막으면 5분 블리츠에서 빠르게 두는 사람의 수가 씹힌다.
+    ///   새 것이다(판은 벌써 다음 수의 판이다). 0.2초를 막으면 시간에 쫓겨 빠르게 두는 사람의 수가 씹힌다.
     package private(set) var flight: ChessMoveFlight?
     /// 애니메이션 꼬리표. **늦게 깬 옛 Task 가 새 애니메이션을 지우지 못하게** 하는 유일한 장치다.
     ///
@@ -714,8 +724,9 @@ package final class ChessStore {
     package var isRulesVisible = false
     /// 서버 응답으로만 갱신(host 에도 반영).
     package var rubyBalance: Int?
-    /// 서버가 말한 시작 시간·가산·유예(ms). 화면 캡션("5분 + 3초")이 이 값을 읽는다 — 상수를 베끼지 않는다.
-    package var initialMs = 300_000
+    /// 서버가 말한 시작 시간·가산·유예(ms). 화면 캡션("10분 + 한 수 3초")이 이 값을 읽는다 — 상수를 베끼지 않는다.
+    /// 로비를 읽기 전에는 `ChessClock.initialMs`(10분)이고, **로비 응답이 오면 그 값으로 덮인다**(`applyLobby`).
+    package var initialMs = ChessClock.initialMs
     package var incrementMs = 3_000
     package var graceMs = 2_000
     package var lobbyLoadFailed = false
@@ -1787,7 +1798,7 @@ package final class ChessStore {
     //          (서버는 `chess_invite` 푸시를 '맥에서 근무 중' 이면 suppressed 로 적는다 — push_pipeline.sql),
     //          신청자는 "상대가 응답하지 않았어요" 를 본다 → 1:1 신청이 사실상 성립하지 않는다.
     //     (나) 진행 중 판에서 창을 닫으면 "내 차례예요" 가 한 번도 안 와서, 체스는 오목의 자동 착수 장치를
-    //          전부 버렸으므로(DECISIONS B4 — 시간 소진 = 패배) 5분 시계가 그대로 흘러 판돈을 잃는다.
+    //          전부 버렸으므로(DECISIONS B4 — 시간 소진 = 패배) 10분 시계가 그대로 흘러 판돈을 잃는다.
     //          창 쪽 주석의 "닫기는 기권이 아니다" 는 알림이 없으면 곧 시간패 보장이다.
     //
     //   계기 하나로 모으는 것은 `refreshLobby()` 다 — 그 한 조회가 받은·보낸 신청 id 와 진행 중 판 id 를
@@ -1973,7 +1984,7 @@ package final class ChessStore {
         if rankingUnavailable { rankingUnavailable = false }
         if watchUnavailable { watchUnavailable = false }
         watchRuntime.clear()
-        if initialMs != 300_000 { initialMs = 300_000 }
+        if initialMs != ChessClock.initialMs { initialMs = ChessClock.initialMs }
         if incrementMs != 3_000 { incrementMs = 3_000 }
         if graceMs != 2_000 { graceMs = 2_000 }
         serverClockOffset = 0
@@ -2141,7 +2152,7 @@ package final class ChessStore {
 
     /// 판 진행을 사람에게 알린다(진행 중 판을 옮긴 직후).
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가
-    ///    수락한 순간을 모르면 5분 시계를 흘린다.
+    ///    수락한 순간을 모르면 10분 시계를 흘린다.
     ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, ply) 에는 한 번뿐이다.
     private func noteMatchProgress(previous: ChessMatchState?, next: ChessMatchState, windowWasVisible: Bool) {
         let started = previous == nil || previous?.isFinished == true || previous?.id != next.id

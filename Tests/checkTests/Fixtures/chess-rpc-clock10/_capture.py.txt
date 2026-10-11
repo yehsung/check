@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""체스 10분 시계 픽스처 캡처(0.3.48) — 로컬 전용 재생 하네스에서 **RPC 를 실제로 불러** 나온 jsonb 를 그대로 적는다.
+
+왜 따로 있나: `Fixtures/chess-rpc/` 일흔아홉 장은 5분 서버(20261005160000 까지)에서 뜬 것이다. 그 집합은 봉투 모양의
+계약이라 그대로 두고, **10분 서버(20261012120000_chess_clock_10min 적용 뒤)가 실제로 내는 값**만 여기에 따로 뜬다.
+`V0348ChessClockServerDrivenTests` 가 이 원문을 앱 코드에 먹인다 — 손으로 300000 을 600000 으로 고친 본문이 아니다.
+
+전제: 체인 전체 + 20261012120000 을 올린 하네스 클러스터가 떠 있고(harness_helpers.sql 포함),
+      HARNESS_PORT 가 그 포트다. 출력은 CHESS_CLOCK10_OUT(기본: 이 파일 옆 out/).
+단계마다 psql 세션 하나: migrator → set role postgres → begin → harness.login(호출자) → RPC → commit|rollback.
+"""
+import json
+import os
+import subprocess
+import sys
+from collections import OrderedDict
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.environ.get("CHESS_CLOCK10_OUT", os.path.join(HERE, "out"))
+PSQL = os.environ.get("HARNESS_PSQL", "/opt/homebrew/opt/postgresql@15/bin/psql")
+PORT = os.environ["HARNESS_PORT"]
+
+# 합성 계정 셋(5분 픽스처와 같은 uuid — 앱 쪽 테스트가 같은 사람으로 읽는다)
+A = "aa000000-0000-4000-8000-0000000000a1"  # 체스예은
+B = "bb000000-0000-4000-8000-0000000000b2"  # 체스지유
+C = "cc000000-0000-4000-8000-0000000000c3"  # 체스관전자(한 판도 안 둔다)
+TEAM = "fa11fa11-0000-4000-8000-000000000001"
+LABEL = {A: "A", B: "B", C: "C"}
+
+env = {k: v for k, v in os.environ.items() if not k.startswith("PG")}
+env.update(PGHOST="127.0.0.1", PGPORT=PORT, PGDATABASE="postgres", PGCONNECT_TIMEOUT="5",
+           PGSSLMODE="disable", PGCLIENTENCODING="UTF8", LC_ALL="C", LANG="C")
+fixtures = OrderedDict()
+
+
+def psql(sql, user="migrator"):
+    p = subprocess.run([PSQL, "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", "postgres"],
+                       input=sql, capture_output=True, text=True, env=env)
+    if p.returncode != 0:
+        sys.stderr.write(sql + "\n--- stderr ---\n" + p.stderr)
+        raise SystemExit("psql failed rc=%d" % p.returncode)
+    return p.stdout
+
+
+def admin(sql):
+    psql("set role postgres;\nbegin;\n" + sql + "\ncommit;\n")
+
+
+def scalar(sql):
+    return psql("set role postgres;\nselect '@@' || (" + sql + ")::text;\n").strip()[2:]
+
+
+def call(caller, rpc_sql, setup="", end="rollback", name=None, note=""):
+    sql = "set role postgres;\nbegin;\n" + setup + "\n"
+    sql += "select harness.login('%s', 'authenticated') \\g /dev/null\n" % caller
+    sql += "select '@@' || (%s)::text;\n%s;\n" % (rpc_sql, end)
+    lines = [l for l in psql(sql).splitlines() if l.startswith("@@")]
+    assert len(lines) == 1, lines
+    obj = json.loads(lines[0][2:], object_pairs_hook=OrderedDict)
+    if name:
+        with open(os.path.join(OUT, name + ".json"), "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        fixtures[name] = OrderedDict(caller=caller, caller_label=LABEL[caller], rpc=rpc_sql,
+                                     setup=setup.strip() or None, end=end, note=note or None)
+        m = obj.get("match") or {}
+        print("%-42s status=%-4s white_ms_left=%s black_ms_left=%s initial_ms=%s"
+              % (name, obj.get("status"), m.get("white_ms_left"), m.get("black_ms_left"), obj.get("initial_ms")))
+    return obj
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    for f in os.listdir(OUT):
+        if f.endswith(".json"):
+            os.remove(os.path.join(OUT, f))
+    assert scalar("public.chess_initial_ms()") == "600000", "10분 마이그레이션이 올라가 있지 않다"
+
+    people = [(A, "체스예은", "fox"), (B, "체스지유", "shiba"), (C, "체스관전자", None)]
+    rows_u = ",\n".join("('%s', 'chess-fx-%s@example.invalid', jsonb_build_object('display_name', '%s'))"
+                        % (uid, LABEL[uid].lower(), name) for uid, name, _ in people)
+    rows_p = ",\n".join("('%s', 'chess-fx-%s@example.invalid', '%s', 96, 100, %s, false, false)"
+                        % (uid, LABEL[uid].lower(), name, "null" if ch is None else "'%s'" % ch)
+                        for uid, name, ch in people)
+    admin("""
+delete from public.chess_moves where match_id in (select id from public.chess_matches);
+delete from public.chess_matches;
+delete from public.ruby_ledger where reason like 'prize:chess:%%' or reason like 'spend:chess:%%'
+                                  or reason like 'grant:chess:%%';
+insert into auth.users (id, email, raw_user_meta_data) values
+%s
+on conflict (id) do nothing;
+insert into public.profiles (id, email, display_name, app_build, ruby_balance, character, is_hidden, focus_mode) values
+%s
+on conflict (id) do update set display_name = excluded.display_name, app_build = excluded.app_build,
+  ruby_balance = excluded.ruby_balance, character = excluded.character, focus_mode = excluded.focus_mode;
+insert into public.memberships (user_id, team_id, role)
+  select u.id, '%s', 'member' from (values %s) u(id)
+  on conflict do nothing;
+""" % (rows_u, rows_p, TEAM, ", ".join("('%s'::uuid)" % p[0] for p in people)))
+    assert scalar("public.chess_capable('%s')" % A) == "true"
+    assert scalar("public.poke_blackout_active()") == "false", "블랙아웃이면 신청이 blackout 이다"
+
+    # 1. 로비 — 앱이 캡션과 시계 띠의 분모로 읽는 initial_ms
+    call(A, "public.chess_lobby(1)", name="chess_lobby__ok_empty",
+         note="대기 신청·진행 중 판 없음. initial_ms 600000 · increment_ms 3000 · grace_ms 2000")
+
+    # 2. 신청 → 수락(새 판이 10분으로 열린다). setseed 는 5분 픽스처와 같은 값 — 흑백 추첨이 같은 쪽으로 떨어진다.
+    r = call(A, "public.chess_challenge(1, '%s', 5)" % B, end="commit")
+    assert r["status"] == "ok", r
+    m1 = r["match_id"]
+    call(B, "public.chess_respond(1, '%s', true)" % m1, setup="select setseed(0.4242) \\g /dev/null",
+         end="commit", name="chess_respond__accept_ok",
+         note="수락 순간 양쪽 −5 · 흑백 추첨 · 시계 10분·유예 2초")
+    white = scalar("(select white from public.chess_matches where id = '%s')" % m1)
+    black = scalar("(select black from public.chess_matches where id = '%s')" % m1)
+    assert {white, black} == {A, B}
+
+    # 3. 초기 국면(백 · 흑 시점) · 관전
+    call(white, "public.chess_state(1, '%s', 0)" % m1, name="chess_state__ok_initial_my_turn",
+         note="백 시점 ply 0 — legal_moves 20")
+    call(black, "public.chess_state(1, '%s', 0)" % m1, name="chess_state__ok_initial_their_turn",
+         note="흑 시점 ply 0 — legal_moves null")
+    call(C, "public.chess_watch(1, '%s', 0)" % m1, name="chess_watch__ok_active",
+         note="관전자 시점 ply 0 — 두 시계 600000")
+
+    # 4. 백 e2e4 — 가산이 붙어 남은 시간이 **600000 을 넘는다**(앱이 초기값에서 자르면 여기서 갈린다)
+    call(white, "public.chess_move(1, '%s', 0, 'e2e4')" % m1, end="commit", name="chess_move__ok_white_first",
+         note="600000 − 쓴 시간 + 3000")
+
+    # 5. 흑 기권 → 끝난 판(결과 화면이 읽는 응답 둘: 기권한 쪽의 응답 · 이긴 쪽의 조회)
+    call(black, "public.chess_resign(1, '%s')" % m1, end="commit", name="chess_resign__ok",
+         note="흑 기권 — result white_win · end_reason resign")
+    call(white, "public.chess_state(1, '%s', 0)" % m1, name="chess_state__ok_finished_winner",
+         note="이긴 쪽(백)이 끝난 판을 다시 읽는다")
+
+    manifest = OrderedDict(
+        about="10분 서버(20261012120000_chess_clock_10min 적용 뒤)의 실제 응답. 5분 시절 캡처는 ../chess-rpc/.",
+        server=scalar("version()"),
+        chess_initial_ms=int(scalar("public.chess_initial_ms()")),
+        chess_increment_ms=int(scalar("public.chess_increment_ms()")),
+        chess_grace_ms=int(scalar("public.chess_grace_ms()")),
+        users=OrderedDict([("A", A), ("B", B), ("C", C), ("m1", m1), ("white", white), ("black", black)]),
+        fixtures=fixtures)
+    with open(os.path.join(OUT, "_manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    print("wrote %d fixtures + manifest to %s" % (len(fixtures), OUT))
+
+
+if __name__ == "__main__":
+    main()

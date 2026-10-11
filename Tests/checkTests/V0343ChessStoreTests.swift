@@ -651,7 +651,9 @@ struct V0343ChessStoreTests {
         let openedPosition = try #require(opened.position)
         #expect(opened.legalMoves.map(\.uci).sorted()
                 == ChessRules.legalMoves(in: openedPosition).map(\.uci).sorted())
-        #expect(opened.clock.whiteMsLeft == 300_000)
+        // 로비를 읽지 않은 스토어의 로봇 판은 앱에 박힌 값(10분 — 0.3.48)으로 열린다.
+        #expect(opened.clock.whiteMsLeft == 600_000)
+        #expect(opened.clock.blackMsLeft == 600_000)
 
         // 조회·폴링·착수 전부 서버로 안 나간다.
         await store.refreshMatch(id: opened.id)
@@ -670,8 +672,8 @@ struct V0343ChessStoreTests {
         #expect(played.turn == .white)
         #expect(store.aiRuntime.chooserCalls == 1)
         // 피셔 가산이 붙었다(쓴 시간은 0 에 가깝고 +3초).
-        #expect(played.clock.whiteMsLeft >= 300_000)
-        #expect(played.clock.whiteMsLeft <= 303_000)
+        #expect(played.clock.whiteMsLeft >= 600_000)
+        #expect(played.clock.whiteMsLeft <= 603_000)
 
         // 무승부 합의는 AI 판에 없다(상대가 사람이 아니다) — 요청이 나가면 안 된다.
         await store.offerDraw()
@@ -706,7 +708,11 @@ struct V0343ChessStoreTests {
         #expect(store.hasLoadedLobby)
         #expect(!store.lobbyLoadFailed)
         // 서버 상수 다섯(판돈 셋은 ChessStake 가 든다).
+        // ★ 이 픽스처는 **5분 서버**(20261005160000 시절)에서 뜬 것이라 로비가 300000 을 말한다. 앱에 박힌 값은
+        //   0.3.48 부터 600_000 이므로, 이 단언은 이제 "로비 값이 박힌 값을 **덮는다**" 를 잰다(전에는 둘이 같아
+        //   옮기지 않아도 초록이었다). 10분 서버의 로비는 V0348ChessClockServerDrivenTests 가 먹인다.
         #expect(store.initialMs == 300_000)
+        #expect(store.initialMs != ChessStore().initialMs, "픽스처 값과 박힌 값이 같으면 이 단언은 아무것도 재지 않는다")
         #expect(store.incrementMs == 3_000)
         #expect(store.graceMs == 2_000)
         #expect(ChessStake.allCases.map(\.rawValue) == [3, 5, 10])

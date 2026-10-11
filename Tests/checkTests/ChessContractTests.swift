@@ -20,11 +20,11 @@ struct ChessContractTests {
     func clockSeparatesFlaggedFromInvalidElapsed() {
         let clock = ChessClock()
 
-        // 기준선: 평범한 수와 진짜 시간패에서는 둘이 같은 말을 한다.
-        #expect(clock.afterMove(by: .white, elapsed: 10).clock?.remaining(.white) == 293)
+        // 기준선: 평범한 수와 진짜 시간패에서는 둘이 같은 말을 한다(기본 시계는 10분 + 3초 — 0.3.48).
+        #expect(clock.afterMove(by: .white, elapsed: 10).clock?.remaining(.white) == 593)
         #expect(clock.hasFlagged(.white, elapsed: 10) == false)
-        #expect(clock.afterMove(by: .white, elapsed: 301) == .flagged)
-        #expect(clock.hasFlagged(.white, elapsed: 301) == true)
+        #expect(clock.afterMove(by: .white, elapsed: 601) == .flagged)
+        #expect(clock.hasFlagged(.white, elapsed: 601) == true)
 
         // 음수 elapsed 는 서버가 now − moveStartedAt 을 셀 때 시계 밀림·요청 재시도로 평범하게 나온다.
         // 그걸 시간패로 읽으면 사람이 한 번에 진다 — 그래서 **시간패가 아니라 성립하지 않는 입력**이어야 한다.
@@ -35,8 +35,8 @@ struct ChessContractTests {
         }
 
         // 경계: 꼭 맞게 쓰면 살아 있고 가산을 받는다.
-        #expect(clock.afterMove(by: .white, elapsed: 300).clock?.remaining(.white) == 3)
-        #expect(clock.hasFlagged(.white, elapsed: 300) == false)
+        #expect(clock.afterMove(by: .white, elapsed: 600).clock?.remaining(.white) == 3)
+        #expect(clock.hasFlagged(.white, elapsed: 600) == false)
     }
 
     @Test("시간패 — 상대가 메이트할 기물이 없으면 무승부다(FIDE 6.9)")
@@ -45,7 +45,7 @@ struct ChessContractTests {
         // 자연스러운 호출(깃발 → 패)이 FIDE 가 무승부라고 하는 판을 패배로 만든다. 그 둘을 묶는 자리를 잰다.
         let knightOnly = try #require(ChessPosition(fen: "4k3/8/8/8/8/8/8/2N1K3 b - - 0 1"))
         #expect(ChessRules.hasInsufficientMaterial(knightOnly))
-        #expect(ChessClock().hasFlagged(.black, elapsed: 301) == true, "시계는 깃발만 본다")
+        #expect(ChessClock().hasFlagged(.black, elapsed: 601) == true, "시계는 깃발만 본다")
         #expect(ChessRules.timeoutRuling(position: knightOnly, flagged: .black) == .drawByInsufficientMaterial)
         #expect(ChessRules.timeoutRuling(position: knightOnly, flagged: .black).isDraw)
         #expect(ChessRules.timeoutRuling(position: knightOnly, flagged: .black).winner == nil)

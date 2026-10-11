@@ -73,7 +73,7 @@ package final class ChessAIRuntime {
 /// AI 와 두는 체스 한 판의 **로컬 상태** — 순수 값 타입(시계는 밖에서 `now` 로 넣는다).
 ///
 /// 규칙은 서버 1:1 과 **한 벌**이다: `ChessRules` 하나가 합법 수·체크·종국을 판정하고(두 벌 만들지 않는다),
-/// 3회 반복은 `ChessRepetitionLedger` 가 센다. 시계는 A3 의 5분 + 한 수 3초 가산이고 **다 쓰면 패배**다(B4).
+/// 3회 반복은 `ChessRepetitionLedger` 가 센다. 시계는 A3 의 10분 + 한 수 3초 가산이고 **다 쓰면 패배**다(B4).
 /// 서버와 다른 것: 루비·전적·순위가 없고(사용자 결정) 무승부 합의 왕복이 없다(상대가 사람이 아니다).
 package nonisolated struct ChessAIGame: Equatable, Sendable {
     /// 판 id 머리말. 서버 판 id 는 uuid 라 이 머리말로 시작할 수 없다 — **이 한 줄이 서버 경로 차단의 근거다.**
@@ -112,7 +112,7 @@ package nonisolated struct ChessAIGame: Equatable, Sendable {
         id: String = ChessAIGame.idPrefix + UUID().uuidString.lowercased(),
         humanColor: ChessColor,
         position: ChessPosition = .standard,
-        initialMs: Int = 300_000,
+        initialMs: Int = ChessClock.initialMs,
         incrementMs: Int = 3_000,
         now: Date
     ) {

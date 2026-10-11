@@ -629,6 +629,15 @@ package final class ChessStore {
                 if selection != nil { selection = nil }
                 if promotion != nil { promotion = nil }
             }
+            // 끌던 말은 판·수 번호가 바뀌거나 **내 차례가 아니게 되면** 놓는다(상대 기권·시간패는 수 번호가 그대로다).
+            // 시계·무승부 제안처럼 판의 다른 칸만 바뀐 갱신은 끌기를 건드리지 않는다 — 폴링이 끌기를 끊으면 안 된다.
+            if dragOrigin != nil,
+               oldValue?.id != match?.id || oldValue?.plyCount != match?.plyCount || match?.isMyTurn != true {
+                dragOrigin = nil
+            }
+            // 놓은 말의 꼬리표는 **판이 갈리면** 여기서 지운다. 수 번호만 오른 것은 지우지 않는다 — 곧이어 불리는
+            // `beginFlight` 가 그 꼬리표로 "끌어 놓은 그 수인가" 를 가려야 한다(읽는 쪽은 그사이 이미 없는 것으로 읽는다).
+            if pendingDropRecord != nil, oldValue?.id != match?.id { pendingDropRecord = nil }
             // AI 판은 `match` 가 그 id 를 들고 있는 동안만 산다 — 1:1 판이 열리거나 판이 내려가면 버린다.
             if let game = aiGame, match?.id != game.id { discardAIGame() }
             // 내 판이 섰으면(끝난 판 포함) 관전은 내려간다. 세대를 올려 나가 있던 관전 응답도 함께 버린다.
@@ -665,6 +674,39 @@ package final class ChessStore {
     ///   죽은 가드가 되어, 지워도 전부 초록이 된다.
     @ObservationIgnored private var flightGeneration = 0
     @ObservationIgnored private var flightTask: Task<Void, Never>?
+
+    // MARK: 끌어서 두기 (v0.3.48) — 저장 프로퍼티만 여기, 동작은 "끌어서 두기" 절
+
+    /// 지금 **끌고 있는 말의 출발 칸**(없으면 nil). 끄는 **위치는 여기 없다** — 마우스가 움직일 때마다 스토어를
+    /// 쓰면 창 전체가 다시 그려진다. 이 값은 끌기 한 번에 두 번(시작·끝)만 바뀐다.
+    ///
+    /// 뷰와 스토어가 함께 쥐는 **걸쇠**다: 끄는 중에 판이 바뀌면 스토어가 이 값을 내리고, 뷰는 그것을 보고
+    /// 말을 제자리에 돌려놓으며, 그 뒤에 온 `placeDrop` 은 이 값이 없어 수를 내지 않는다. 창이 가려졌다
+    /// 다시 보이는 것처럼 **되돌아오는 조건**도 한 번 내려간 걸쇠는 다시 걸리지 않는다(놓는 순간의 상태만
+    /// 다시 보는 검사로는 못 막는 자리다).
+    package private(set) var dragOrigin: ChessSquare?
+
+    /// 끌어 놓은 수의 꼬리표 **원본**. ★ **뷰는 이 값을 읽지 않는다** — `pendingDrop` 을 읽는다.
+    /// 따로 드러낸 까닭은 테스트다: "지워서 없는 것" 과 "남아 있는데 없는 것으로 읽히는 것" 을 가를 수 있어야
+    /// 자기 치유를 잴 수 있다.
+    package private(set) var pendingDropRecord: ChessPendingDrop?
+
+    /// 끌어 놓은 말이 **지금** 도착 칸에 머물러야 하는가(뷰가 "출발 칸을 비우고 도착 칸에 그린다").
+    ///
+    /// ★ **읽는 자리에서 자기 치유한다.** 판에 없는 말이 그려진 채 남는 것이 이 기능의 최악의 버그이고,
+    ///   "지우는 자리를 빠짐없이 나열했다" 는 다음 깔때기가 하나 늘어나는 날 깨지는 약속이다. 그래서 원본이
+    ///   남아 있어도 아래 넷 중 하나라도 어긋나면 **없는 것으로 읽힌다**:
+    ///    · 같은 판이다 · 수 번호가 놓을 때 그대로다(판이 나아갔으면 그 말은 이미 판에 그려져 있다)
+    ///    · 아직 내 차례다(끝난 판·상대 차례에는 기다릴 답이 없다)
+    ///    · 출발 칸에 **그 말이 그대로** 서 있다(판이 다시 읽혀 배치가 달라졌으면 옮길 말이 없다)
+    ///   그 위에 실패·거절·승격 취소·판 내림·로그아웃·창 숨김이 원본을 명시적으로도 지운다(`clearPendingDrop`).
+    package var pendingDrop: ChessPendingDrop? {
+        guard let record = pendingDropRecord, let current = match,
+              current.id == record.matchID, current.plyCount == record.ply,
+              current.isMyTurn, current.position?[record.from] == record.piece
+        else { return nil }
+        return record
+    }
 
     package var notice: String?
     package var isBusy = false
@@ -826,6 +868,10 @@ package final class ChessStore {
         isWindowOccluded = false
         // ★ 안 거두면 0.3초 안에 창을 다시 연 사람에게 **끝나던 수의 토막이 다시 미끄러진다**.
         clearFlight()
+        // 끌던 말·놓은 말도 창과 함께 내려간다 — 안 보이는 판에서 뗀 마우스가 수를 내면 안 되고,
+        // 다시 연 창에 답을 못 받은 말이 도착 칸에 서 있으면 안 된다(판은 서버 답이 오는 대로 그려진다).
+        cancelDrag()
+        clearPendingDrop()
         stopPolling()
         pauseAIClock()
         // 끝난 판을 관전한 채 닫았다 = 그 판에서 나간 것이다. **진행 중인 관전은 남긴다**(최소화에서도 오는 통지다).
@@ -838,6 +884,8 @@ package final class ChessStore {
     package func windowDidClose() {
         if spectating != nil { stopWatching() }
         clearFlight()
+        cancelDrag()
+        clearPendingDrop()
     }
 
     /// 창의 가림 상태가 바뀌었다. **폴링·AI 시계만** 멈추고 되살린다 — `isWindowVisible` 은 건드리지 않는다
@@ -853,6 +901,11 @@ package final class ChessStore {
             //   `pauseAIClock()` **앞**이어야 한다(`windowDidHide` 와 같은 순서 — 뒤에 두면 그 안에서
             //   `commitAIGame` 이 돌며 방금 거둔 것을 다시 세운다).
             clearFlight()
+            // 끌던 말을 놓는다 — 가려진 판 위에서 뗀 마우스는 사용자가 **보지 못한 채** 둔 수다.
+            // 뷰는 가림을 볼 길이 없어(`isWindowOccluded` 는 관찰 대상이 아니다) 이 걸쇠가 유일한 신호다.
+            // ★ 놓은 말(`pendingDrop`)은 여기서 지우지 않는다: 가림 통지는 틀릴 수 있고(이 함수 머리말),
+            //   보이는 창에서 답을 기다리던 말이 출발 칸으로 튀었다가 답과 함께 다시 미끄러지면 안 된다.
+            cancelDrag()
             pauseAIClock()
             stopPolling()
         }
@@ -1172,9 +1225,16 @@ package final class ChessStore {
     ///     다시 세우면 1.5초 주기로 같은 수가 영원히 미끄러진다.
     ///  ④ 수나 전·후 국면이 없다(서버 FEN 이 파서를 통과하지 못했다 — 판 자체를 못 그리는 상태다).
     ///  ⑤ 파생이 nil 이다(수와 국면이 안 맞는다 · 제자리 수). 그러면 판은 지금처럼 **바로** 바뀐다(안전한 폴백).
+    ///
+    /// 그리고 **끌어 놓은 수**는 그 말만 뺀다(v0.3.48): 손으로 옮겨 도착 칸에 놓은 말을 출발 칸으로 되돌렸다가
+    /// 다시 미끄러뜨리지 않는다. 캐슬링의 룩·잡힌 말·앙파상으로 잡힌 폰은 그대로 움직인다(`withMoverLanded`).
     func beginFlight(matchID: String, previousMatchID: String?, previousPly: Int?,
                      previousPosition: ChessPosition?, nextPly: Int,
                      nextPosition: ChessPosition?, move: ChessMove?) {
+        // ★ 꼬리표는 **거절 다섯보다 먼저** 거둔다. 창이 가려져 애니메이션을 안 만드는 길에서도 판은 나아갔고,
+        //   그때 꼬리표가 남으면 다음에 같은 칸을 지나는 수가 끌어 놓은 수로 읽힌다.
+        let landed = takePendingDrop(matchID: matchID, previousMatchID: previousMatchID,
+                                     previousPly: previousPly, nextPly: nextPly, move: move)
         guard isWindowVisible, !isWindowOccluded else { return }
         guard let previousMatchID, previousMatchID == matchID else { return }
         guard let previousPly, nextPly == previousPly + 1 else { return }
@@ -1183,10 +1243,19 @@ package final class ChessStore {
         //   Task 를 꼬리표만으로 무력화해(그 Task 는 옛 세대가 된다) 그 애니메이션이 영영 거둬지지 않는다 —
         //   그러면 `TimelineView` 가 60fps 로 계속 돈다.
         let generation = flightGeneration &+ 1
-        guard let made = ChessMoveFlight.make(move: move, before: before, after: after,
+        guard var made = ChessMoveFlight.make(move: move, before: before, after: after,
                                               matchID: matchID, ply: nextPly,
                                               generation: generation, startedAt: clock())
         else { return }
+        if landed {
+            guard let rest = made.withMoverLanded() else {
+                // 움직일 것이 하나도 안 남았다(잡기도 캐슬링도 아닌 수) — 애니메이션은 없다. 다만 **앞 수의 꼬리**가
+                // 아직 돌고 있었다면 거둔다: 판은 이미 다음 수의 판이라, 그 꼬리가 숨기던 칸에 내 말이 놓였을 수 있다.
+                clearFlight()
+                return
+            }
+            made = rest
+        }
         flightGeneration = generation
         flight = made
         flightTask?.cancel()
@@ -1210,10 +1279,30 @@ package final class ChessStore {
     ///  · `reset()` — 로그아웃·계정 전환. 다음 사람 화면에서 앞 사람 판의 말이 날아가면 안 된다.
     ///  · 나머지 — 화면이 이미 다른 것을 보여 주는데(로비 접기 · 판 내림 · 관전 종료) 값이 남아 있으면
     ///    뷰가 그만큼 더 60fps 로 깨어 있다.
+    /// (그 밖에 창 가림과, 끌어 놓은 수에 미끄러질 것이 하나도 안 남았을 때의 `beginFlight` 도 이 문을 지난다.)
     func clearFlight() {
         flightTask?.cancel()
         flightTask = nil
         if flight != nil { flight = nil }
+    }
+
+    /// 방금 나아간 수가 **끌어 놓은 그 수**인가를 가리고, 일을 마친 꼬리표를 거둔다.
+    ///
+    /// 맞다고 보는 조건은 넷 전부다 — 같은 판 · 놓을 때의 수 번호에서 **정확히 한 수** 나아감 · 출발 칸 ·
+    /// 도착 칸. 하나라도 다르면 그 수는 평소대로 미끄러진다: 내가 끌어 놓은 직후에 온 **상대 수**가 안
+    /// 미끄러지면 안 되고, 같은 계정의 다른 기기가 둔 다른 수를 내 손이 옮긴 것처럼 그리면 안 된다.
+    /// (승격으로 고른 말은 보지 않는다 — 놓을 때는 아직 고르기 전이고, 같은 칸으로 간 승격은 무엇을 골랐든 내 수다.)
+    private func takePendingDrop(matchID: String, previousMatchID: String?, previousPly: Int?,
+                                 nextPly: Int, move: ChessMove?) -> Bool {
+        guard let pending = pendingDropRecord else { return false }
+        // 남의 판(관전 깔때기)은 내 꼬리표를 건드리지 않는다. 판이 갈렸다면 `match` 관찰자가 이미 지웠다.
+        guard pending.matchID == matchID else { return false }
+        // 수 번호가 그대로인 응답(폴링 · 시계 · 무승부 제안)은 아직 답이 아니다 — 계속 기다린다.
+        guard nextPly != pending.ply else { return false }
+        // 판이 나아갔다. 맞든 아니든 이 꼬리표의 일은 끝났다.
+        pendingDropRecord = nil
+        return previousMatchID == matchID && previousPly == pending.ply && nextPly == pending.ply + 1
+            && move?.from == pending.from && move?.to == pending.to
     }
 
     // MARK: - 입력 2단 (⑧)
@@ -1242,6 +1331,8 @@ package final class ChessStore {
 
         // 승격을 고르는 중이면 판 탭은 그 단계를 취소한다(다른 수를 고르려는 뜻이다).
         if promotion != nil { promotion = nil }
+        // 끌어 놓고 승격을 고르던 폰이었다면 출발 칸으로 돌아간다(클릭으로 온 승격에는 꼬리표가 없다).
+        clearPendingDrop()
 
         if let selected = selection, selected.from != square {
             if selected.targets.contains(square) {
@@ -1271,11 +1362,16 @@ package final class ChessStore {
         guard let prompt = promotion else { return }
         promotion = nil
         await send(ChessMove(from: prompt.from, to: prompt.to, promotion: kind))
+        // 끌어 놓은 폰이었다면 답이 무엇이든 꼬리표의 일은 끝났다 — 받아들여졌으면 `beginFlight` 가 이미 거뒀고,
+        // 거절·실패면 여기서 지워 폰을 출발 칸으로 돌려보낸다.
+        clearPendingDrop()
     }
 
     /// 승격 창을 닫았다(고르기는 남는다 — 다른 칸을 눌러 보려는 뜻이다).
     package func cancelPromotion() {
         if promotion != nil { promotion = nil }
+        // 끌어 놓은 폰은 출발 칸으로 돌아간다.
+        clearPendingDrop()
     }
 
     /// 고르기를 세운다. 갈 수 있는 칸이 없으면 **세우지 않는다**(움직일 수 없는 말을 고른 채로 두면
@@ -1348,6 +1444,132 @@ package final class ChessStore {
             }
             if needsRefresh { await refreshMatch(id: id) }
         }
+    }
+
+    // MARK: - 끌어서 두기 (v0.3.48)
+    //
+    // 클릭-클릭(`tap` → `commit` → `send`)은 그대로 두고 그 **옆에** 선 두 번째 입구다. 같은 `selection` 을 쓰고
+    // (끌기 시작 = 그 말을 고른 것) 같은 `send` 로 나간다 — 달라지는 것은 둘뿐이다:
+    //   · 놓은 말은 답이 올 때까지 **도착 칸에 머문다**(`pendingDrop`) — 클릭으로 둔 수는 지금처럼 미끄러진다.
+    //   · 그 수의 애니메이션에서는 **놓은 말만** 빠진다(`beginFlight` · `ChessMoveFlight.withMoverLanded`).
+    //
+    // 문은 넷이다: `grab(at:)`(누른 칸에서 끌기가 되는가 — 순수 조회) · `beginDrag(from:)` ·
+    // `placeDrop(from:on:)`(놓기의 **동기 구간**) · `finishDrop(_:)`(왕복). `drop(from:on:)` 은 뒤 둘을 이은 것이다.
+
+    /// 그 칸을 눌렀을 때 **끌기가 될 수 있는가**. 순수 조회다 — 문구도 로그도 상태 변화도 없다.
+    /// 포인터 해석기가 누르는 순간 한 번 묻고(`ChessBoardPointer.Grab`), 실제 판단은 `beginDrag` 가 다시 한다.
+    package func grab(at square: ChessSquare) -> ChessBoardPointer.Grab {
+        guard let current = match, let piece = current.position?[square],
+              piece.color == current.myColor else { return .none }
+        guard !isBusy, current.isMyTurn, !targets(from: square).isEmpty else { return .stuck }
+        return .movable
+    }
+
+    /// 말을 **끌기 시작한다**. 되면 그 말이 `selection` 이 되고(갈 수 있는 칸 점이 뜬다 — 클릭으로 고른 것과
+    /// 같은 그림) true 를 돌려준다.
+    ///
+    /// 거절 사다리는 `tap(_:)` 과 **같은 순서**다 — 같은 상황이 같은 문구를 말해야 한다: 왕복 중 → 판 없음 →
+    /// 끝난 판 → 읽을 수 없는 판 → 내 차례 아님 → 빈 칸 → 상대 말 → 갈 곳 없는 말. `tap` 과 갈리는 곳은 하나다:
+    /// **이미 고른 말**을 끌면 해제하지 않고 그대로 끈다(해제는 문턱 밑에서 뗀 탭의 일이다).
+    @discardableResult
+    package func beginDrag(from square: ChessSquare) -> Bool {
+        guard !isBusy else { refuseTap(.busy, at: square); return false }
+        guard let current = match else { refuseTap(.noMatch, at: square); return false }
+        guard !current.isFinished else { refuseTap(.finished, at: square); return false }
+        guard let position = current.position else { refuseTap(.unreadableBoard, at: square); return false }
+        guard current.isMyTurn else { refuseTap(.notYourTurn, at: square); return false }
+
+        // 승격을 고르는 중이면 접는다(탭과 같다). 끌어 놓고 고르던 폰은 출발 칸으로 돌아간다.
+        if promotion != nil { promotion = nil }
+        clearPendingDrop()
+
+        guard let piece = position[square] else { refuseTap(.emptySquare, at: square); return false }
+        guard piece.color == current.myColor else { refuseTap(.notMyPiece, at: square); return false }
+        // 갈 곳 없는 말은 `select` 가 거절한다(고르기를 비우고 "둘 수 없는 자리" 를 말한다 — 탭과 같은 길).
+        if selection?.from != square { select(square) }
+        guard selection?.from == square else { return false }
+        dragOrigin = square
+        return true
+    }
+
+    /// 끌기를 거둔다(말을 제자리에). **고르기는 남는다** — 끌던 말은 여전히 고른 말이다.
+    /// 뷰가 부르고(끄는 중에 판이 바뀌었다 · 제스처가 죽었다), 창 숨김·가림·닫힘과 `match` 관찰자도 부른다.
+    package func cancelDrag() {
+        if dragOrigin != nil { dragOrigin = nil }
+    }
+
+    /// 끌던 말을 **놓았다** — 놓기의 **동기 구간**. `on` 이 nil 이면 판 밖이다.
+    /// 보낼 수가 정해지면 그 수를 돌려준다(승격이면 nil — 고른 뒤 `choosePromotion` 이 보낸다).
+    ///
+    /// ★ **부른 그 자리에서 끝난다**(await 가 없다). 뷰가 마우스를 뗀 그 틱에 `pendingDrop` 이 서야 한다 —
+    ///   Task 로 미루면 그사이 한 장이 "끄는 말은 사라졌고 놓은 말은 아직 없는" 판으로 그려져, 말이 출발 칸에
+    ///   번쩍 돌아갔다가 도착 칸에 나타난다.
+    ///
+    /// ★ **스스로 다시 검사한다.** 뷰가 취소를 놓쳐도 수가 안 나가야 한다: 탭과 같은 사다리(왕복 중·판 없음·
+    ///   끝난 판·읽을 수 없는 판·내 차례 아님)를 다시 지나고, 끌기의 걸쇠(`dragOrigin`)와 고르기가 **그 칸
+    ///   그대로**인지 본다. 걸쇠가 내려가 있으면(끄는 중에 판이 바뀌었다) 조용히 버린다 — 그때는 화면이 이미 답했다.
+    ///
+    /// 놓은 자리별로:
+    ///  · 갈 수 있는 칸 → `pendingDrop` 을 세우고 그 수를 돌려준다(승격이면 고르기 창을 띄운다).
+    ///  · 출발 칸 → 수 없음. 고르기는 **남는다**(해제는 탭의 일이다).
+    ///  · 갈 수 없는 판 안 칸 → 기존 `.illegalTarget` 거절(문구+로그). 고르기는 남는다.
+    ///  · 판 밖 → 조용히 돌아간다. 고르기는 남는다.
+    package func placeDrop(from: ChessSquare, on target: ChessSquare?) -> ChessMove? {
+        let spot = target ?? from
+        guard !isBusy else { cancelDrag(); refuseTap(.busy, at: spot); return nil }
+        guard let current = match else { cancelDrag(); refuseTap(.noMatch, at: spot); return nil }
+        guard !current.isFinished else { cancelDrag(); refuseTap(.finished, at: spot); return nil }
+        guard let position = current.position else { cancelDrag(); refuseTap(.unreadableBoard, at: spot); return nil }
+        guard current.isMyTurn else { cancelDrag(); refuseTap(.notYourTurn, at: spot); return nil }
+
+        // 걸쇠와 고르기. 둘 중 하나라도 그 칸이 아니면 이 놓기는 **이미 거둔 끌기**의 것이다.
+        guard dragOrigin == from, let selected = selection, selected.from == from,
+              let piece = position[from], piece.color == current.myColor else {
+            cancelDrag()
+            Self.logger.notice("drop ignored reason=drag-revoked square=\(from.notation, privacy: .public)")
+            return nil
+        }
+        // 놓았으니 끌기는 끝났다(어느 갈래로 가든).
+        dragOrigin = nil
+
+        guard let target else { return nil }                    // 판 밖 — 조용히 돌아간다
+        guard target != from else { return nil }                // 출발 칸에 도로 놓았다 — 수 없음
+        let candidates = selected.targets.contains(target) ? legalMoves(from: from, to: target) : []
+        guard !candidates.isEmpty else { refuseTap(.illegalTarget, at: target); return nil }
+
+        pendingDropRecord = ChessPendingDrop(matchID: current.id, ply: current.plyCount,
+                                             from: from, to: target, piece: piece)
+        selection = nil
+        if candidates.count > 1 || candidates.contains(where: { $0.promotion != nil }) {
+            // 승격 — 고르는 동안 폰은 도착 칸에 머문다(취소하면 `cancelPromotion` 이 꼬리표를 지운다).
+            promotion = ChessPromotionPrompt(from: from, to: target)
+            return nil
+        }
+        return candidates[0]
+    }
+
+    /// `placeDrop` 이 돌려준 수를 보낸다. 답이 무엇이든 **남은 꼬리표를 걷는다** — 받아들여졌으면 `beginFlight` 가
+    /// 이미 거뒀고(판이 나아갔다), 거절·실패면 여기서 지워 말이 출발 칸으로 돌아간다(안내 문구는 `send` 가 그대로 낸다).
+    package func finishDrop(_ move: ChessMove) async {
+        // 놓은 뒤 이 줄에 오기 전에 판이 바뀌었으면(읽는 자리가 이미 없는 것으로 읽는다) 보내지 않는다 —
+        // `send` 는 **지금의** 판 id·수 번호로 나가므로 낡은 수가 다른 판에 떨어질 수 있다.
+        guard let pending = pendingDrop, pending.from == move.from, pending.to == move.to else {
+            clearPendingDrop()
+            return
+        }
+        await send(move)
+        if pendingDropRecord == pending { pendingDropRecord = nil }
+    }
+
+    /// 놓기 전체(동기 구간 + 왕복). 뷰는 둘을 **따로** 부른다 — 동기 구간이 마우스를 뗀 그 틱에 끝나야 한다.
+    package func drop(from: ChessSquare, on target: ChessSquare?) async {
+        guard let move = placeDrop(from: from, on: target) else { return }
+        await finishDrop(move)
+    }
+
+    /// 놓은 말의 꼬리표를 지운다(말은 판이 말하는 자리로 돌아간다).
+    private func clearPendingDrop() {
+        if pendingDropRecord != nil { pendingDropRecord = nil }
     }
 
     // MARK: - 동작
@@ -1546,6 +1768,8 @@ package final class ChessStore {
         }
         if phase != .lobby { phase = .lobby }
         clearFlight()
+        cancelDrag()
+        clearPendingDrop()
         setNotice(nil)
         guard host?.session != nil else { return }
         Task { [weak self] in
@@ -1731,6 +1955,8 @@ package final class ChessStore {
         if match != nil { match = nil }
         if selection != nil { selection = nil }
         if promotion != nil { promotion = nil }
+        cancelDrag()
+        clearPendingDrop()
         if notice != nil { notice = nil }
         if isBusy { isBusy = false }
         if isWindowVisible { isWindowVisible = false }
@@ -1908,6 +2134,8 @@ package final class ChessStore {
         if phase != .lobby { phase = .lobby }
         if selection != nil { selection = nil }
         if promotion != nil { promotion = nil }
+        cancelDrag()
+        clearPendingDrop()
         clearFlight()
     }
 

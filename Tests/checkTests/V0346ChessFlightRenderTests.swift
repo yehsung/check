@@ -752,7 +752,10 @@ func theBoardTapStillReachesTheStoreAfterWrappingInATimeline() async throws {
     let panel = cfStripped(try CheckCoreSourceLayout.joinedSplitSource("ChessPanel.swift"))
     #expect(panel.contains("} .contentShape(Rectangle()) .onContinuousHover"),
             "판의 입력 수식어가 TimelineView 안으로 들어갔다 — 탭·호버가 틱마다 다시 달린다")
-    #expect(panel.contains(".gesture( SpatialTapGesture()"), "판의 탭 제스처가 없어졌다")
+    // v0.3.48: 탭과 끌기를 **제스처 하나**(`DragGesture(minimumDistance: 0)`)로 받는다 — 탭은 그 제스처의
+    // "문턱 밑에서 뗌" 이다. 옛 `SpatialTapGesture` 가 남아 있으면 두 제스처가 같은 누름에 함께 답한다.
+    #expect(panel.contains(".gesture( DragGesture(minimumDistance: 0)"), "판의 누름 제스처가 없어졌다")
+    #expect(!panel.contains("SpatialTapGesture"), "옛 탭 제스처가 남았다 — 끌기 제스처와 같은 누름에 둘이 답한다")
     #expect(panel.contains(".onChange(of: match.id) { _, _ in hovered = nil }"), "판 바뀜에 호버를 안 지운다")
     #expect(panel.contains(".onChange(of: match.plyCount) { _, _ in hovered = nil }"), "수가 바뀔 때 호버를 안 지운다")
     #expect(cfCount(".accessibilityLabel(ChessText.boardAccessibility(", in: panel) == 2,

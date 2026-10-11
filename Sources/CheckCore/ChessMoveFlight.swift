@@ -62,6 +62,13 @@ package nonisolated struct ChessMoveFlight: Equatable, Sendable {
     package let slideDuration: TimeInterval
     package let knockoutDelay: TimeInterval
     package let knockoutDuration: TimeInterval
+    /// **끌어 놓아 이미 도착 칸에 서 있는** 말의 칸(v0.3.48). nil 이면 평소의 수다(클릭 · 상대 수 · 관전).
+    ///
+    /// 값이 있으면 그 말은 `sliders` 에 **없다** — 손으로 옮겨 놓은 말을 출발 칸으로 되돌렸다가 다시
+    /// 미끄러뜨리지 않는다. 그런데 그 말은 멈춘 배치에 그려지므로 그대로 두면 **밀려나는 잡힌 말이 그 위에**
+    /// 그려지고(잡은 말이 잡힌 말 밑에 깔린다) 캐슬링의 룩이 왕 위를 지나간다. 뷰가 이 칸의 말을 맨 위에
+    /// 그리도록 프레임에 실어 보낸다(`ChessFlightFrame.landed`).
+    package let landed: ChessSquare?
 
     package init(matchID: String,
                  ply: Int,
@@ -72,7 +79,8 @@ package nonisolated struct ChessMoveFlight: Equatable, Sendable {
                  startedAt: Date,
                  slideDuration: TimeInterval,
                  knockoutDelay: TimeInterval,
-                 knockoutDuration: TimeInterval) {
+                 knockoutDuration: TimeInterval,
+                 landed: ChessSquare? = nil) {
         self.matchID = matchID
         self.ply = ply
         self.generation = generation
@@ -83,6 +91,7 @@ package nonisolated struct ChessMoveFlight: Equatable, Sendable {
         self.slideDuration = slideDuration
         self.knockoutDelay = knockoutDelay
         self.knockoutDuration = knockoutDuration
+        self.landed = landed
     }
 
     // MARK: - 시간 상수
@@ -194,7 +203,35 @@ package nonisolated struct ChessMoveFlight: Equatable, Sendable {
                 opacity: min(1, (1 - Self.clamp01(knockoutProgress(now: now))) / (1 - Self.knockoutFadeStart)))
         }
 
-        return ChessFlightFrame(moving: moving, leaving: leaving, hidden: Set(sliders.map(\.to)))
+        return ChessFlightFrame(moving: moving, leaving: leaving, hidden: Set(sliders.map(\.to)),
+                                landed: landed)
+    }
+
+    // MARK: - 끌어 놓은 수 (v0.3.48)
+
+    /// 움직인 말이 **이미 도착 칸에 서 있을 때**(사람이 끌어 놓았다) 쓰는 사본 — 그 말 **하나만** 미끄러짐에서 뺀다.
+    ///
+    /// 남는 것은 그대로 움직인다: 캐슬링의 룩(`sliders` 의 나머지), 잡힌 말이 밀려나는 그림(`knockout` —
+    /// 앙파상으로 잡힌 폰도 여기다). 남는 것이 하나도 없으면(잡기도 캐슬링도 아닌 수) **nil** 이다 —
+    /// 그릴 것 없는 애니메이션을 세우면 `TimelineView` 가 그 길이만큼 헛되이 깨어 있다.
+    ///
+    /// 시간 둘이 달라진다(움직임의 모양·거리·방향은 그대로다):
+    ///  · `knockoutDelay` 는 0 이다. 그 지연은 "잡는 말이 절반쯤 왔을 때" 를 기다리는 값인데 잡는 말은 이미
+    ///    도착해 있다 — 기다리면 잡힌 말이 잡은 말 밑에 깔린 채로 한 박자 멈춰 있다가 밀려난다.
+    ///  · 미끄러질 말이 없으면 `slideDuration` 도 0 이다(전체 길이가 밀림 0.22초로 떨어진다). 캐슬링은 룩이
+    ///    남으므로 그대로 둔다 — 룩은 클릭으로 둔 캐슬링과 **같은 길이**로 미끄러진다.
+    package func withMoverLanded() -> ChessMoveFlight? {
+        let rest = sliders.filter { !($0.from == move.from && $0.to == move.to) }
+        // 움직인 말이 `sliders` 에 없다(이미 뺀 사본이다) — 두 번 불러도 같은 값이다.
+        guard rest.count < sliders.count else { return self }
+        guard !rest.isEmpty || knockout != nil else { return nil }
+        return ChessMoveFlight(
+            matchID: matchID, ply: ply, generation: generation, move: move,
+            sliders: rest, knockout: knockout, startedAt: startedAt,
+            slideDuration: rest.isEmpty ? 0 : slideDuration,
+            knockoutDelay: 0,
+            knockoutDuration: knockoutDuration,
+            landed: move.to)
     }
 
     // MARK: - 파생
@@ -329,10 +366,15 @@ package nonisolated struct ChessFlightFrame: Equatable, Sendable {
     /// 잡힌 칸은 여기 **안 들어간다**: 잡힌 말은 멈춘 배치에 이미 없어서 넣어도 아무 일이 안 일어나고,
     /// 들어 있다는 것은 파생이 '도착 칸'과 '잡힌 칸'을 헷갈렸다는 뜻이다(앙파상에서 둘은 다른 칸이다).
     package let hidden: Set<ChessSquare>
+    /// 끌어 놓아 **이미 도착해 있는** 말의 칸(없으면 nil). 그 말은 멈춘 배치에 있지만 뷰가 **맨 위에** 그린다 —
+    /// 잡힌 말(`leaving`)과 캐슬링의 룩(`moving`)이 그 말 **밑으로** 지나가야 클릭으로 둔 수와 같은 겹침이 된다.
+    /// `hidden` 에는 넣지 않는다: 숨기는 칸이 아니라 **그리는 순서만 바뀌는** 칸이다.
+    package let landed: ChessSquare?
 
-    package init(moving: [Moving], leaving: Leaving?, hidden: Set<ChessSquare>) {
+    package init(moving: [Moving], leaving: Leaving?, hidden: Set<ChessSquare>, landed: ChessSquare? = nil) {
         self.moving = moving
         self.leaving = leaving
         self.hidden = hidden
+        self.landed = landed
     }
 }

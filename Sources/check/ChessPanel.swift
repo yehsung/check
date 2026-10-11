@@ -469,6 +469,30 @@ enum ChessPieceArt {
     }
 }
 
+// MARK: - 손에 든 말 (v0.3.48)
+
+/// 판 위에서 **제자리를 떠나 있는 말 한 장** — 끄는 중이거나, 놓고 답을 기다리는 중이다.
+///
+/// 둘을 한 값으로 묶은 까닭: 그림의 규칙이 같다(출발 칸에는 그리지 않고, 다른 자리에 **맨 위로** 그린다).
+/// 그리고 둘은 동시에 설 수 없다 — 놓은 말이 답을 기다리는 동안에는 스토어가 새 끌기를 거절한다.
+struct ChessBoardLift: Equatable {
+    enum Place: Equatable {
+        /// 끄는 중 — 말 **중심**이 이 점(판 좌표)에 온다. 판 밖 점은 판 가장자리로 당겨 그린다.
+        case cursor(CGPoint)
+        /// 놓았다 — 그 칸에 그대로 선다(답을 기다리는 중 · 승격을 고르는 중).
+        case square(ChessSquare)
+    }
+
+    let piece: ChessPiece
+    /// 멈춘 배치에서 **그리지 않을** 칸(= 출발 칸). 안 빼면 같은 말이 두 자리에 보인다.
+    let from: ChessSquare
+    let place: Place
+
+    /// 끄는 말은 칸보다 조금 크게 그린다 — 집어 올린 말이 판에 놓인 말과 한눈에 갈린다.
+    /// 그림자는 쓰지 않는다(`ChessBoardView.draw(_:in:cell:into:)` 의 ★ — 렌더 검증이 흔들린다).
+    static let cursorScale: Double = 1.12
+}
+
 // MARK: - 판 그림
 
 /// 8×8 판을 Canvas **한 장**으로 그린다. 입력을 받지 않는 순수 그림이다 — 클릭·호버는 감싸는 쪽이 한다.
@@ -494,6 +518,10 @@ struct ChessBoardView: View {
     /// (초기 배치 32칸 단언이 한 글자도 안 바뀐다). 시각·이징·칸 셈은 전부 `ChessMoveFlight` 가 끝내 놓는다 —
     /// 여기서 하는 일은 받은 숫자를 사각형으로 바꿔 그리는 것뿐이다.
     var flight: ChessFlightFrame? = nil
+    /// 손에 든 말(v0.3.48 — 끄는 중 · 놓고 답을 기다리는 중). 기본 nil = **이 값이 생기기 전과 같은 그림**이다.
+    var lifted: ChessBoardLift? = nil
+    /// 끄는 말 **밑의 갈 수 있는 칸**(한 단 더 진하게 — 놓으면 어디로 가는지 보인다). 기본 nil = 그림 없음.
+    var dropTarget: ChessSquare? = nil
 
     // 칸 — 둘 다 중간 톤(최대 ≤ 204 · 최소 ≥ 71)이다.
     static let lightSquare = Color(red: 0.80, green: 0.72, blue: 0.60)
@@ -513,6 +541,9 @@ struct ChessBoardView: View {
     static let checkTint = CheckTheme.danger
     static let checkOpacity: Double = 0.45
     static let hoverOpacity: Double = 0.14
+    /// 끄는 말 밑 도착 칸의 덮개. 도착 점(0.60)이 그 위에 얹혀도 **중간 톤**에 머무는 값이다 — 밝은 칸에서
+    /// 점의 가장 밝은 채널이 226(< 235, 렌더 실측)이라 빈 칸이 말로 세어지지 않는다(위 ★ 규칙).
+    static let dropTargetOpacity: Double = 0.28
 
     var body: some View {
         Canvas { context, _ in
@@ -547,6 +578,10 @@ struct ChessBoardView: View {
         if let checkSquare {
             context.fill(Path(g.rect(of: checkSquare)),
                          with: .color(Self.checkTint.opacity(Self.checkOpacity)))
+        }
+        if let dropTarget {
+            context.fill(Path(g.rect(of: dropTarget)),
+                         with: .color(Self.targetTint.opacity(Self.dropTargetOpacity)))
         }
 
         // ③ 좌표(가장자리 칸 안쪽 — 테두리를 두지 않는다)
@@ -597,6 +632,10 @@ struct ChessBoardView: View {
             // 날고 있는 말의 **도착** 칸은 뺀다. `position` 은 이미 수를 둔 뒤의 배치라, 안 빼면 같은 말이
             // 도착 칸과 궤적 위에 **둘로** 보인다(캐슬링이면 셋·넷).
             if flight?.hidden.contains(square) == true { continue }
+            // 끌어 놓아 이미 도착해 있는 말은 여기서 건너뛰고 **맨 위**에 그린다(⑤d).
+            if square == flight?.landed { continue }
+            // 손에 든 말의 출발 칸은 비운다(선택 덮개는 남는다 — 어디서 집었는지 보인다).
+            if square == lifted?.from { continue }
             draw(piece, in: g.rect(of: square), cell: g.cell, into: &context)
         }
 
@@ -620,6 +659,28 @@ struct ChessBoardView: View {
             draw(moving.piece, in: g.rect(from: moving.from, to: moving.to, t: moving.t),
                  cell: g.cell, into: &context)
         }
+
+        // ⑤d 끌어 놓아 **이미 도착해 있는** 말 — 잡힌 말(⑤b)과 캐슬링의 룩(⑤c)보다 위.
+        // 이 말은 날지 않는다(손이 옮겨 놓았다). 그런데 ⑤ 자리에 그리면 밀려나는 잡힌 말이 그 **위**에 얹혀
+        // 잡은 말이 깔려 보이고, 캐슬링에서는 룩이 왕 위를 지나간다 — 클릭으로 둔 수와 겹침이 뒤집힌다.
+        if let landed = flight?.landed, landed != lifted?.from, let piece = position[landed] {
+            draw(piece, in: g.rect(of: landed), cell: g.cell, into: &context)
+        }
+
+        // ⑥ 손에 든 말 — **맨 위**. 판 위의 무엇도 손에 든 말을 가리지 않는다.
+        if let lifted {
+            switch lifted.place {
+            case .square(let square):
+                draw(lifted.piece, in: g.rect(of: square), cell: g.cell, into: &context)
+            case .cursor(let point):
+                // 말 중심 = 커서. 판 밖으로 나간 점은 가장자리로 당긴다 — 말이 판에서 사라지면 어디 있는지 잃는다.
+                let center = CGPoint(x: min(g.side, max(0, point.x.isNaN ? 0 : point.x)),
+                                     y: min(g.side, max(0, point.y.isNaN ? 0 : point.y)))
+                let box = CGRect(x: center.x - g.cell / 2, y: center.y - g.cell / 2,
+                                 width: g.cell, height: g.cell)
+                draw(lifted.piece, in: g.scaled(box, by: ChessBoardLift.cursorScale), cell: g.cell, into: &context)
+            }
+        }
     }
 
     /// 사각형 하나에 말 하나.
@@ -641,15 +702,33 @@ struct ChessBoardView: View {
 
 // MARK: - 입력이 있는 판
 
-/// 대국 화면의 판. 탭·호버만 얹고 그림은 `ChessBoardView` 를 그대로 쓴다.
+/// 대국 화면의 판. 탭·끌기·호버만 얹고 그림은 `ChessBoardView` 를 그대로 쓴다.
 ///
-/// **조용히 삼키는 길은 판 밖 하나뿐**이고 나머지 거절은 전부 스토어(`tap(_:)`)가 문구+로그를 남긴다 —
-/// 뭉친 무음 guard 가 오목에서 "눌렀는데 반응 없음" 의 원인이었다.
+/// **조용히 삼키는 길은 판 밖 하나뿐**이고 나머지 거절은 전부 스토어(`tap(_:)`·`beginDrag`·`placeDrop`)가
+/// 문구+로그를 남긴다 — 뭉친 무음 guard 가 오목에서 "눌렀는데 반응 없음" 의 원인이었다.
+///
+/// ── 끌어서 두기(v0.3.48) ──
+/// 이 뷰는 **얇은 어댑터**다. 제스처 값을 `ChessBoardPointer`(순수 해석기)에 먹이고, 나온 행동을 스토어에
+/// 옮길 뿐이다 — 문턱·같은 칸·도착 칸 판정은 해석기에, 둘 수 있는가는 스토어에 있다.
+/// 여기 `@State` 로 둔 것은 **화면에서 태어나 화면에서 죽는** 셋이다: 해석기 · 끄는 위치 · 눌려 있는가.
+/// 끄는 위치를 스토어에 두지 않는 까닭은 값이 마우스가 움직일 때마다 바뀌기 때문이다(창 전체가 다시 그려진다).
 struct ChessPlayBoard: View {
     let store: ChessStore
     let match: ChessMatchState
 
     @State private var hovered: ChessSquare?
+    /// 누름 → 움직임 → 뗌을 행동으로 바꾸는 해석기.
+    @State private var pointer = ChessBoardPointer()
+    /// 끄는 말의 자리(판 좌표).
+    @State private var dragPoint: CGPoint?
+    /// 지금 눌려 있는가. `@GestureState` 라 제스처가 **어떻게 끝나든**(뗌 없이 죽어도) 스스로 false 로 돌아온다 —
+    /// 끄는 말을 이 값이 참일 때만 그리므로, 죽은 제스처가 말을 공중에 남기는 일이 구조적으로 없다.
+    /// (뗌 없이 죽은 누름의 해석기 상태는 **다음 누름**이 치운다 — `ChessBoardPointer.press` 가 끌던 말부터 거둔다.
+    ///  실측 2026-10-12: 뗌 없이 온 두 번째 마우스 다운에 SwiftUI 는 앞 제스처의 `onEnded` 를 부르지 않는다.)
+    @GestureState private var isPressing = false
+    /// 지금 누름이 **시작될 때 본** 끌기의 전제(아래 `dragPremise`). 판이 바뀌었다는 통지가 왔을 때
+    /// "그 변화가 이 누름 **뒤에** 일어났는가" 를 가르는 기준이다.
+    @State private var pressPremise: DragPremise?
 
     private var geometry: ChessBoardGeometry {
         ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: match.myColor)
@@ -663,6 +742,38 @@ struct ChessPlayBoard: View {
 
     private var canTap: Bool { match.isMyTurn && !store.isBusy }
 
+    /// 끌기의 전제. 하나라도 바뀌면 끌던 말을 거둔다 — 상대 기권·시간패(`isMyTurn`)·판 교체(`matchID`)·
+    /// 수가 나아감(`ply`)·왕복 시작(`isBusy`)·창 닫힘/최소화(`isWindowVisible`).
+    /// 스토어도 같은 계기에 자기 걸쇠(`dragOrigin`)를 내리지만 **이쪽은 그것을 안 보고 날 값을 본다** —
+    /// 한쪽이 계기를 하나 놓쳐도 다른 쪽이 잡는다. 창 **가림**만은 스토어 걸쇠로만 온다(관찰할 값이 없다).
+    private struct DragPremise: Equatable {
+        let matchID: String
+        let ply: Int
+        let isMyTurn: Bool
+        let isBusy: Bool
+        let isWindowVisible: Bool
+    }
+
+    /// 스토어의 **지금** 전제(그려진 값이 아니다 — 누르는 순간과 통지가 온 순간에 같은 눈금으로 읽어야 한다).
+    /// 이 판이 스토어가 든 판이 아니게 됐으면 nil 이다(그것도 전제가 바뀐 것이다).
+    private var dragPremise: DragPremise? {
+        guard let current = store.match, current.id == match.id else { return nil }
+        return DragPremise(matchID: current.id, ply: current.plyCount, isMyTurn: current.isMyTurn,
+                           isBusy: store.isBusy, isWindowVisible: store.isWindowVisible)
+    }
+
+    /// 손에 든 말. **놓은 말이 먼저다**(스토어가 판·수 번호를 맞춰 본 값 — 자기 치유는 거기서 한다).
+    /// 끄는 말은 넷이 다 맞을 때만 그린다: 눌려 있다 · 해석기가 끄는 중이다 · 스토어 걸쇠가 같은 칸이다 ·
+    /// 그 칸에 말이 있다. 하나라도 어긋나면 말은 판이 말하는 제자리에 그려진다.
+    private var lifted: ChessBoardLift? {
+        if let pending = store.pendingDrop, pending.matchID == match.id {
+            return ChessBoardLift(piece: pending.piece, from: pending.from, place: .square(pending.to))
+        }
+        guard isPressing, let from = pointer.draggingFrom, store.dragOrigin == from,
+              let point = dragPoint, let piece = match.position?[from] else { return nil }
+        return ChessBoardLift(piece: piece, from: from, place: .cursor(point))
+    }
+
     /// 지금 **이 판에서** 미끄러지는 수. 값이 `matchID` 를 들고 있으므로 다른 판(로봇 판·방금 끝난 판)의
     /// 애니메이션이 이 화면으로 새지 않는다 — 스토어 하나가 세 화면을 먹이기 때문에 이 거르기가 필요하다.
     private var flight: ChessMoveFlight? {
@@ -672,13 +783,20 @@ struct ChessPlayBoard: View {
 
     var body: some View {
         let g = geometry
+        let lifted = lifted
+        // 끄는 말 밑이 갈 수 있는 칸이면 그 칸을 한 단 더 진하게(놓으면 어디로 가는지).
+        let dropTarget: ChessSquare? = {
+            guard case .cursor(let point)? = lifted?.place, let under = g.square(at: point),
+                  store.selection?.targets.contains(under) == true else { return nil }
+            return under
+        }()
         // 프레임 상한은 **화면 주사율에서 온다** — 1/60 을 박아 두면 75Hz·144Hz 처럼 60 으로 나눠떨어지지
         // 않는 화면에서 네 프레임에 한 장이 두 배로 늘어진다(근거·표는 `MiniGameFrameRate`).
         // `paused: flight == nil` 이 **배터리 계약**이다: 미끄러지는 수가 없으면 이 뷰는 한 틱도 안 받는다.
         // 스토어가 그 계약의 다른 쪽 끝을 쥔다 — 창이 안 보이면 값을 아예 안 만들고, 길이가 지나면 거둔다.
         //
-        // 입력(호버·탭·접근성·onChange)은 **TimelineView 밖**에 그대로 둔다. 안으로 넣으면 틱마다 제스처가
-        // 새로 달려 `SpatialTapGesture` 가 눌림을 떨구고, 호버 상태가 들어가 틱마다 판이 통째로 다시 만들어진다.
+        // 입력(호버·탭·끌기·접근성·onChange)은 **TimelineView 밖**에 그대로 둔다. 안으로 넣으면 틱마다 제스처가
+        // 새로 달려 눌림을 떨구고(끌던 말이 틱마다 손에서 떨어진다), 호버 상태가 들어가 틱마다 판이 통째로 다시 만들어진다.
         TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(
             forRefreshRate: MiniGameFrameRateMonitor.shared.refreshHz), paused: flight == nil)) { context in
             ChessBoardView(
@@ -688,8 +806,11 @@ struct ChessPlayBoard: View {
                 selected: store.selection?.from,
                 targets: store.selection?.targets ?? [],
                 checkSquare: checkSquare,
-                hovered: canTap ? hovered : nil,
-                flight: flight?.frame(now: context.date)
+                // 끄는 동안에는 호버를 그리지 않는다 — 마우스를 누른 채로는 호버가 갱신되지 않아 누른 칸에 굳어 있다.
+                hovered: canTap && lifted == nil ? hovered : nil,
+                flight: flight?.frame(now: context.date),
+                lifted: lifted,
+                dropTarget: dropTarget
             )
         }
         .contentShape(Rectangle())
@@ -704,17 +825,87 @@ struct ChessPlayBoard: View {
             }
         }
         .gesture(
-            SpatialTapGesture().onEnded { value in
-                // 판 밖은 조용히 흘린다(그 자리에는 아무 칸도 없다). 그 밖의 거절은 스토어가 말한다.
-                guard let square = g.square(at: value.location) else { return }
-                Task { await store.tap(square) }
-            }
+            // 탭과 끌기를 **제스처 하나**로 받는다. 둘로 나누면(탭 + 끌기) 4pt 를 살짝 넘긴 누름에 둘이 함께
+            // 답해 "고르기가 해제되면서 끌린다" 가 된다 — 어느 쪽인지는 해석기 한 곳이 정한다.
+            // `minimumDistance: 0` 이라 첫 `onChanged` 가 곧 마우스 다운이다(이 저장소의 관용구 — `MiniGamePanel`).
+            DragGesture(minimumDistance: 0)
+                .updating($isPressing) { _, pressing, _ in pressing = true }
+                .onChanged { value in
+                    if !pointer.isTracking(pressAt: value.startLocation) {
+                        // 판 밖 누름은 해석기가 조용히 흘린다(그 자리에는 아무 칸도 없다). 그 밖의 거절은 스토어가 말한다.
+                        let square = g.square(at: value.startLocation)
+                        pressPremise = dragPremise
+                        perform(pointer.press(
+                            at: value.startLocation, square: square,
+                            grab: square.map(store.grab(at:)) ?? .none,
+                            isSelectionTarget: square.map { store.selection?.targets.contains($0) == true } ?? false))
+                    }
+                    perform(pointer.move(to: value.location))
+                }
+                .onEnded { value in
+                    let square = g.square(at: value.location)
+                    perform(pointer.release(at: value.location, square: square))
+                    // 누른 채로는 호버가 안 온다 — 뗀 자리로 맞춰 둔다(안 그러면 누른 칸에 굳은 채 다음 차례를 맞는다).
+                    if hovered != square { hovered = square }
+                }
         )
         .onChange(of: match.id) { _, _ in hovered = nil }
         .onChange(of: match.plyCount) { _, _ in hovered = nil }
+        // 끄는 중에 판이 바뀌었다 — 끌기를 **즉시** 거두고 말을 제자리에. 그 뒤 마우스를 떼도 수가 나가지 않는다
+        // (해석기가 그 누름을 소진시킨다. 스토어 `placeDrop` 도 걸쇠가 내려가 있어 따로 막는다 — 이중 안전).
+        //
+        // ★ **그 누름이 본 판과 지금 판이 다를 때만** 거둔다. 이 통지는 값이 바뀐 **다음 그리기**에 온다 —
+        //   그사이에 시작한 누름은 이미 바뀐 판을 보고 눌렀다. 통지가 왔다고 무조건 거두면 상대 수가 닿은
+        //   바로 그 프레임에 집은 말이 손에서 떨어진다(실창 프로브에서 실제로 났다 — 놓자마자 다시 집은 말이
+        //   앞 끌기가 끝났다는 늦은 통지에 떨어졌다).
+        .onChange(of: dragPremise) { _, _ in
+            guard pressPremise != dragPremise else { return }
+            revokeDrag()
+        }
+        // 스토어가 먼저 걸쇠를 내렸다(창 가림처럼 이 뷰가 볼 수 없는 계기). 해석기가 **그 끌기를 아직 붙들고
+        // 있을 때만** 거둔다 — 같은 이유다: 내 놓기가 걸쇠를 내린 통지가 다음 누름 뒤에 올 수 있다.
+        .onChange(of: store.dragOrigin) { _, _ in
+            guard let from = pointer.draggingFrom, store.dragOrigin != from else { return }
+            revokeDrag()
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ChessText.boardAccessibility(ply: match.plyCount, turn: match.turn,
                                                          inCheck: match.isInCheck))
+    }
+
+    /// 끌기를 거둔다(뷰 쪽 절반). 끌던 중이면 말을 제자리에 돌리고 그 누름을 소진시키며, 아직 끌기 전이면
+    /// "끌 수 있다" 는 누를 때의 판정만 버린다 — 탭은 건드리지 않는다.
+    private func revokeDrag() {
+        perform(pointer.cancel())
+    }
+
+    /// 해석기가 낸 행동을 스토어로 옮긴다. **판단은 여기 없다.**
+    private func perform(_ actions: [ChessBoardPointer.Action]) {
+        for action in actions {
+            switch action {
+            case .tap(let square):
+                Task { await store.tap(square) }
+            case .beginDrag(let square):
+                // 누른 뒤 문턱을 넘기 전에 판이 바뀌었으면 스토어가 거절한다(문구는 스토어가 말했다).
+                // 뒤따르는 행동(끄는 자리 · 놓기)은 버린다.
+                guard store.beginDrag(from: square) else {
+                    pointer.dragRefused()
+                    return
+                }
+            case .dragMoved(let point):
+                if dragPoint != point { dragPoint = point }
+            case .drop(let from, let target):
+                if dragPoint != nil { dragPoint = nil }
+                // ★ 동기 구간을 **이 자리에서** 끝낸다 — 놓은 말이 같은 틱에 도착 칸에 서야 번쩍임이 없다.
+                //   서버 왕복만 뒤로 넘긴다.
+                if let move = store.placeDrop(from: from, on: target) {
+                    Task { await store.finishDrop(move) }
+                }
+            case .cancel:
+                if dragPoint != nil { dragPoint = nil }
+                store.cancelDrag()
+            }
+        }
     }
 }
 

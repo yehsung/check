@@ -1,9 +1,10 @@
 # 배포(release) 운영 가이드 — brew 배포
 
-aing-check 를 팀원에게 배포하는 경로는 두 가지입니다.
+aing-check 를 팀원에게 배포하는 경로는 세 가지입니다. 셋 다 같은 릴리스·같은 공증 앱입니다.
 
 1. **brew 배포 (기본)** — 공증된 앱을 GitHub Releases 에 올리고, tap 저장소의 Homebrew Cask 로 설치/업데이트하는 방식. **이 문서가 다루는 내용이며, v0.1.0 부터 라이브입니다.** 최초 `brew install` 한 번 이후로 팀원은 `brew upgrade` 만으로 최신 버전을 받습니다.
-2. **zip 직접 전달 (비상용)** — `package-notarized.sh` 산출물 `dist/aing-check.zip` 을 직접 보내는 방법(공증본이라 그대로 열림). brew 를 못 쓰는 환경에서만 쓰면 됩니다. (`package-local.sh` 의 ad-hoc 서명본은 개발 확인용 — 배포에 쓰지 말 것.)
+2. **DMG 내려받기 (brew 없이)** — 같은 GitHub 릴리스에 공증·스테이플된 `aing-check.dmg` 가 함께 올라갑니다(v0.3.47 부터). `https://github.com/yehsung/check/releases/latest/download/aing-check.dmg` 가 늘 최신 DMG 를 가리키므로 이 주소만 주면 됩니다 — 열고 앱을 Applications 로 끌어 놓으면 끝. v0.3.49 부터는 DMG 로 설치한 사람도 앱 안 [지금 업데이트] 한 번으로 올라갑니다 — 앱이 **바로 이 주소에서** 새 DMG 를 받아 공증·서명 신원·build 를 확인한 뒤 자기 번들을 바꾸고 다시 켭니다. 그래서 이 자산이 빠진 릴리스(`SKIP_DMG=1`)는 DMG 설치자의 원클릭을 통째로 멈춘다는 뜻입니다. 0.3.48 이하로 설치한 사람만 한 번 수동으로 받으면 됩니다.
+3. **zip 직접 전달 (비상용)** — `package-notarized.sh` 산출물 `dist/aing-check.zip` 을 직접 보내는 방법(공증본이라 그대로 열림). Cask 가 받는 것도 이 zip 입니다. (`package-local.sh` 의 ad-hoc 서명본은 개발 확인용 — 배포에 쓰지 말 것.)
 
 > 이 저장소의 owner 는 `yehsung` 으로 확정되어 있습니다. `release-brew.sh` 는 릴리즈·태그·tap 대상을 `GH_OWNER` 환경변수(또는 `.env.local` 의 `CHECK_GH_OWNER`)로 정하므로, 아래 실행 전에 `GH_OWNER=yehsung` 을 설정하면 됩니다.
 >
@@ -13,9 +14,12 @@ aing-check 를 팀원에게 배포하는 경로는 두 가지입니다.
 
 | 이름 | 역할 |
 | --- | --- |
-| `yehsung/check` | 앱 소스 저장소 + GitHub Releases (공증된 `aing-check.zip` 이 릴리즈 자산으로 올라감) |
+| `yehsung/check` | 앱 소스 저장소 + GitHub Releases (공증된 `aing-check.zip` · `aing-check.dmg` 가 릴리즈 자산으로 올라감 — Cask 는 zip 을 받는다) |
 | `yehsung/homebrew-check` | Homebrew **tap** 저장소. `Casks/aing-check.rb` 하나가 들어 있고, 릴리즈마다 version/sha256 이 갱신됨 |
 | `packaging/homebrew/aing-check.rb` | Cask **템플릿**(`__VERSION__`, `__SHA256__` 자리표시자). 릴리즈 스크립트가 이 템플릿을 치환해 tap 저장소로 복사 |
+| `scripts/package-notarized.sh` | 빌드 → Developer ID 서명 → 공증 → 스테이플 → `dist/aing-check.zip`, 이어서 `package-dmg.sh` 로 `dist/aing-check.dmg` |
+| `scripts/package-dmg.sh` | 스테이플된 앱 → DMG(dmgbuild) → 서명 → 공증 → 스테이플 → 검증. 하나라도 어긋나면 DMG 를 남기지 않는다 — 아래 [DMG](#dmg) |
+| `packaging/dmg/` | DMG 창 설정(`settings.py`)과 배경(`background.html` → `render-background.mjs` → `background.png` · `background@2x.png`) |
 | `scripts/release-brew.sh` | 위 전 과정을 한 번에 처리하는 릴리즈 자동화 스크립트 |
 | Supabase `app_release` · `app_latest_release()` · `app_publish_release()` | **서버 릴리스 알림.** 스크립트가 tap 반영을 원격에서 확인한 뒤 맨 마지막에 게시하고, 실행 중인 앱(build 72 이상)이 5분마다 읽어 새 버전을 곧바로 안다 — 아래 [서버 릴리스 알림](#서버-릴리스-알림) |
 
@@ -107,7 +111,8 @@ CHECK_E2E=1 CHECK_E2E_SR_KEY_FILE=<apikeys.json> swift test --filter LiveE2E   #
 #        -H "apikey: $ANON" -H 'Content-Type: application/json' -d '{"p_month":"2026-08"}'
 #      (s08b_anonRpcExposureIsLocked e2e 가 (B) 를 자동으로 검증한다.)
 
-# 2) Developer ID 서명 + 공증 + 스테이플된 배포 zip 생성 → dist/aing-check.zip
+# 2) Developer ID 서명 + 공증 + 스테이플된 배포 zip 과 DMG 생성 → dist/aing-check.zip, dist/aing-check.dmg
+#    DMG 는 따로 한 번 더 공증한다(2~10분 추가). DMG 만 다시 만들려면: ./scripts/package-dmg.sh dist/aing-check.app
 ./scripts/package-notarized.sh
 
 # 3) 태그·릴리즈·Cask 반영·서버 릴리스 알림을 한 번에 (먼저 dry-run 으로 확인 권장)
@@ -126,13 +131,14 @@ brew update && brew upgrade --cask aing-check
    - gh 로그인, `GH_OWNER`(또는 `.env.local` 의 `CHECK_GH_OWNER`).
    - **`CHANGELOG.md` 의 `## <버전>` 패치노트** — 노트를 안 썼으면 즉시 멈춥니다. 항목 줄(`- `·`* `)이 서버 알림 규칙(8줄 이하 · 한 줄 200자 이하)을 지키는지도 여기서 봅니다.
    - `dist/aing-check.zip` 존재, 공증 스테이플(`stapler validate`), zip 안 앱의 **버전**(`CFBundleShortVersionString` == 릴리스 버전)과 **build**(`CFBundleVersion`, 1..1000000 정수). zip 이 없으면 `package-notarized.sh` 를 먼저 돌리라고 안내합니다.
+   - `dist/aing-check.dmg` 존재, 공증 스테이플, 읽기 전용으로 마운트한 안의 앱 **버전**(== 릴리스 버전)과 **build**(== zip 의 build). `--server-only` 는 자산을 올리지 않아 건너뜁니다. 비상시 `SKIP_DMG=1` 이면 경고만 찍고 DMG 없이 진행합니다 — 그 릴리스엔 DMG 가 없어 `latest/download/aing-check.dmg` 가 404 가 되니, DMG 를 만든 뒤 `gh release upload v<버전> dist/aing-check.dmg --repo yehsung/check` 로 채웁니다.
    - **tap 저장소** — 있는지, upstream 이 걸려 있는지, 원격보다 뒤처지지 않았는지(fetch 로 확인). 예전엔 이 확인이 GitHub 릴리즈가 공개된 **뒤에** 있어, tap 이 없으면 릴리즈만 나간 채 멈췄습니다.
    - **서버의 현재 릴리스 알림** — `app_latest_release()` 를 읽기 전용으로 조회해, 서버 build 가 이번 build 보다 크면(또는 같은 build 에 다른 버전이면) 역행으로 멈춥니다. 버전이 서버 형식(숫자.숫자.숫자, 접미사 없음)이 아니어도 멈춥니다.
-2. **git 태그 + 릴리즈** — `v0.2.0` 태그 생성/푸시 후 `gh release create` 로 릴리즈 생성 + `aing-check.zip` 업로드. 릴리즈 노트 본문은 CHANGELOG 의 해당 섹션 + 설치 안내 한 줄입니다. 이미 있는 태그는 건너뛰고, 이미 있는 릴리즈는 자산만 덮어씁니다.
+2. **git 태그 + 릴리즈** — `v0.2.0` 태그 생성/푸시 후 `gh release create` 로 릴리즈 생성 + `aing-check.zip` · `aing-check.dmg` 업로드. 릴리즈 노트 본문은 CHANGELOG 의 해당 섹션 + 설치 안내 한 줄입니다. 이미 있는 태그는 건너뛰고, 이미 있는 릴리즈는 자산만 덮어씁니다.
 3. **Cask 커밋** — zip 의 sha256 을 계산해 `packaging/homebrew/aing-check.rb` 의 version/sha256 을 치환한 뒤 tap 저장소의 `Casks/aing-check.rb` 로 복사·커밋. 변경이 없으면 커밋을 건너뜁니다.
 4. **tap 푸시 + 원격 게이트** — tap 로컬이 원격보다 앞서 있으면 푸시합니다(푸시할 HEAD 의 Cask 가 이번 version/sha256 일 때만 — 엉뚱한 커밋은 올리지 않습니다). 그다음 `git fetch` 로 **원격**의 `Casks/aing-check.rb` 를 되읽어 version·sha256 이 이번 zip 과 같은지 확인합니다. 다르면 서버에 게시하지 않고 멈춥니다.
 5. **서버 릴리스 알림 게시** — `app_publish_release` 로 버전·build·노트를 올리고, `app_latest_release()` 를 되읽어 build 가 맞는지 확인한 뒤 결과(`published`/`refreshed`/`unchanged`)를 출력합니다.
-6. **안내 출력** — 팀원 최초 설치 명령과 업그레이드 명령을 출력합니다.
+6. **안내 출력** — 팀원 최초 설치 명령과 업그레이드 명령, brew 없이 받을 DMG 주소(`releases/latest/download/aing-check.dmg`)를 출력합니다.
 
 **다시 실행해도 되나** — 같은 버전·같은 zip 으로 다시 돌리는 것은 안전하게 짜여 있습니다. 태그·릴리즈는 건너뛰거나 자산만 덮어쓰고, Cask 에 변경이 없으면 커밋을 건너뛰되 **지난 실행이 커밋만 하고 푸시에 실패했으면 4 에서 그 커밋을 푸시**하고, 서버 게시는 같은 build 면 `unchanged`(노트만 바뀌었으면 `refreshed`)로 끝납니다. 다만 "완전히 멱등"은 아닙니다.
 
@@ -142,7 +148,7 @@ brew update && brew upgrade --cask aing-check
 
 ### dry-run
 
-`--dry-run` 을 붙이면 태그/릴리즈/푸시/서버 게시를 실제로 실행하지 않고 각 단계에서 **무엇을 할지**만 출력합니다(생성될 Cask 내용과 서버에 보낼 SQL 미리보기 포함). 사전점검이 어긋나도 종료하지 않고 경고만 남기므로, 흐름 전체를 미리 확인할 때 유용합니다.
+`--dry-run` 을 붙이면 태그/릴리즈/푸시/서버 게시를 실제로 실행하지 않고 각 단계에서 **무엇을 할지**만 출력합니다(생성될 Cask 내용, 올릴 자산 목록, 서버에 보낼 SQL 미리보기 포함). 사전점검이 어긋나도 종료하지 않고 경고만 남기므로, 흐름 전체를 미리 확인할 때 유용합니다. zip·DMG 게이트(압축 풀기·읽기 전용 마운트)는 dry-run 에서도 실제로 돕니다.
 
 - **supabase 는 부르지 않습니다.** 서버 사전점검(현재 build 조회)은 건너뛴다고 출력만 합니다. 실제 실행 전에 서버 상태를 보려면 아래 [지금 무엇이 게시돼 있나](#지금-무엇이-게시돼-있나-읽기-전용)를 직접 조회하세요.
 - **tap 원격 fetch·읽기는 실제로 합니다**(읽기 전용). 전체 흐름의 dry-run 은 Cask 를 커밋하지 않으니 원격이 옛 버전인 게 정상이라 게이트 불일치를 **경고**로 넘기고, `--server-only --dry-run` 에서는 **실패**로 멈춥니다(그 모드에선 원격이 이미 새 버전이어야 하므로). 로컬이 원격보다 앞서 있으면 `[dry-run] git -C … push` 로 푸시할 것을 알리고, 푸시하면 원격이 가질 로컬 HEAD 기준으로 판정합니다.
@@ -151,6 +157,21 @@ brew update && brew upgrade --cask aing-check
 GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --dry-run
 GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --server-only --dry-run
 ```
+
+## DMG
+
+`package-notarized.sh` 가 zip 을 만든 뒤 같은 스테이플된 앱으로 `package-dmg.sh` 를 부릅니다. 따로 돌릴 수도 있습니다.
+
+```sh
+./scripts/package-dmg.sh dist/aing-check.app            # → dist/aing-check.dmg (stdout 마지막 줄 = 경로)
+./scripts/package-dmg.sh dist/aing-check.app /tmp/x.dmg # 출력 경로 지정
+```
+
+- **만들기** — [dmgbuild](https://github.com/dmgbuild/dmgbuild) 1.6.5 를 `.build/dmgbuild-venv` 에 처음 한 번 설치합니다(`/usr/bin/python3 -m venv`, PyPI 접속 필요). Finder AppleScript 를 쓰지 않고 `.DS_Store` 를 직접 써서 창 배치·배경·볼륨 아이콘을 넣으므로 권한 창이 뜨지 않습니다. 포맷 UDZO, 파일시스템 HFS+, 볼륨 이름 `aing-check`.
+- **서명·공증** — DMG 자체를 Developer ID 로 서명하고 `notarytool submit --wait` 로 **따로 한 번 더** 공증한 뒤 스테이플합니다. 공증은 종료코드와 `status == Accepted` 를 **둘 다** 보고, 실패하면 `notarytool log` 를 찍고 멈춥니다.
+- **검증(전부 실패 시 종료, DMG 를 남기지 않음)** — DMG 의 `stapler validate` · `spctl -a -t open --context context:primary-signature`(출처 `Notarized Developer ID`) · `hdiutil verify`, 읽기 전용 마운트 후 안의 앱 `codesign --verify --deep --strict` · `stapler validate` · `spctl --assess --type execute` · 버전/build/CDHash 가 입력 앱과 같은지 · `Applications` 링크 · `.background.tiff`/`.DS_Store`/`.VolumeIcon.icns`. 시작할 때 옛 `dist/aing-check.dmg` 를 먼저 지우므로, 실패한 뒤 낡은 DMG 가 남아 릴리스에 붙는 일이 없습니다.
+- **창 배치를 바꿀 때** — `packaging/dmg/settings.py` 의 좌표와 `background.html` 의 좌표는 짝입니다. 둘 다 고치고 `node packaging/dmg/render-background.mjs` 로 1x(640x420)·2x(1280x840) PNG 를 다시 굽습니다(Playwright 는 `PLAYWRIGHT_BASE` 또는 `~/Aingo` 의 것을, 글꼴은 `PRETENDARD_DIR` 또는 `~/aing-check-promo/public/fonts` 의 Pretendard 를 씁니다). dmgbuild 가 같은 폴더의 `@2x` 를 찾아 `tiffutil -cathidpicheck` 로 한 장의 HiDPI TIFF 로 묶습니다.
+- **Finder 사실(2026-10-12 macOS 27 실측)** — `.DS_Store` 의 WindowBounds 는 **제목 막대까지 포함한 창 전체**라, 창을 내용 640x400 + 28 로 잡고 배경을 아래로 20 더 길게 굽습니다. 아이콘 이름 글자색은 바꿀 수 없어(라이트 모드 검정 · 다크 모드 흰색) 이름이 놓이는 띠를 중간 밝기로 칠했습니다. `hide_extensions` 는 쓰면 안 됩니다 — `.app` 에 `com.apple.FinderInfo` 가 붙어 `codesign --strict` 가 거절합니다.
 
 ## 서버 릴리스 알림
 
@@ -176,7 +197,7 @@ GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --server-only --dry-run
 
 ### 순서 보장 — brew 가 먼저, 서버 알림이 마지막
 
-앱은 알림을 받는 즉시 "업데이트"를 띄우고, [지금 업데이트]는 `brew upgrade` 를 부릅니다. tap 이 아직 옛 Cask 인데 알림이 먼저 나가면 사용자가 눌러도 아무것도 받지 못합니다. 그래서:
+앱은 알림을 받는 즉시 "업데이트"를 띄우고, **brew 로 설치된 앱**의 [지금 업데이트]는 `brew upgrade` 를 부릅니다(DMG 로 설치된 앱은 릴리스 자산을 직접 받으므로 tap 과 무관합니다). tap 이 아직 옛 Cask 인데 알림이 먼저 나가면 사용자가 눌러도 아무것도 받지 못합니다. 그래서:
 
 1. 게시에 필요한 확인(노트 규칙 · zip build · 서버의 현재 build · tap 상태)은 **태그를 만들기 전에** 끝냅니다.
 2. tap 커밋을 푸시한 뒤 **원격을 fetch 로 되읽어** `Casks/aing-check.rb` 의 version·sha256 이 이번 zip 과 같을 때만 다음으로 갑니다. 로컬 커밋만 보고 넘어가지 않습니다.
@@ -247,6 +268,8 @@ brew install --cask aing-check
 # 이후 업데이트
 brew update && brew upgrade --cask aing-check
 ```
+
+brew 를 쓰지 않는 팀원에게는 DMG 주소를 줍니다: `https://github.com/yehsung/check/releases/latest/download/aing-check.dmg` (열고 앱을 Applications 로 끌어 놓기. 새 버전도 같은 주소에서 다시 받습니다).
 
 앱은 공증(notarized)되어 있으므로 팀원은 격리 해제(`xattr`)나 `설치하기.command` 없이 바로 실행됩니다. 실행하면 메뉴바에 아이콘이 뜨고, 이후 가입/로그인 절차는 [`docs/team-install.md`](team-install.md) 의 2번 이후와 동일합니다.
 
@@ -464,6 +487,8 @@ update public.teams set weekly_goal_hours = 40 where name = '팀이름';
 ## 트러블슈팅
 
 - **`stapler validate` 실패 / 스테이플 없음** — `dist/aing-check.zip` 이 공증 전(예: `package-local.sh` 산출물)일 때 발생합니다. `./scripts/package-notarized.sh` 로 다시 만드세요.
+- **`aing-check.dmg 이 없습니다` / `DMG 내부 앱 버전(…)이 릴리스 버전(…)과 다릅니다` / `DMG 내부 build(…)가 zip 의 build(…)와 다릅니다`** — DMG 가 없거나 낡았습니다. zip 과 같은 앱으로 다시: `./scripts/package-dmg.sh dist/aing-check.app`. zip 까지 낡았으면 `./scripts/package-notarized.sh`. DMG 공증만 계속 실패하고 당장 나가야 하면 `SKIP_DMG=1 ./scripts/release-brew.sh <버전>` 으로 zip 만 내보내고, 나중에 `gh release upload v<버전> dist/aing-check.dmg --repo yehsung/check` 로 채웁니다.
+- **`dmgbuild 설치에 실패했습니다`** — 처음 한 번 PyPI 에서 받습니다. 네트워크를 확인하고 다시 돌리세요. 설치가 꼬였으면 `.build/dmgbuild-venv` 를 지우면 다음 실행이 새로 만듭니다.
 - **`CHANGELOG.md 에 '## <버전>' 섹션이 없거나 비어 있습니다`** — 이번 버전의 변경 내용을 아직 안 적은 것입니다. `CHANGELOG.md` 맨 위에 `## <버전>` 을 만들고 사용자 문장으로 한 줄씩(2~4줄) 적은 뒤 다시 실행하세요. 앱 배너에 그대로 뜨는 문구이므로 내부 구조·파일명 대신 "무엇이 좋아졌는지"를 씁니다.
 - **`gh auth status` 실패** — `gh auth login` 을 다시 실행합니다.
 - **tap 저장소를 찾을 수 없음** — `../homebrew-check` 에 클론했는지, 아니면 `GH_TAP_DIR` 로 경로를 지정했는지 확인합니다. 저장소가 없으면 스크립트가 `gh repo create ...` 안내를 출력합니다. 이 확인은 사전점검이라 태그·릴리즈가 나가기 전에 멈춥니다.

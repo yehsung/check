@@ -49,4 +49,15 @@ mkdir -p "$STAGE/aing-check"
 cp -R "$APP_PATH" "$STAGE/aing-check/"
 ditto -c -k --keepParent "$STAGE/aing-check" "$ROOT/dist/aing-check.zip"
 rm -rf "$STAGE"
+
+# 배포 DMG — 같은 스테이플된 앱으로 만든다. package-dmg.sh 가 DMG 를 따로 서명·공증·스테이플·검증하고,
+# 하나라도 어긋나면 DMG 를 남기지 않고 실패한다. 여기서도 그 실패를 삼키지 않는다(zip 은 이미 만들어져 있다).
+# stdout 계약(마지막 줄 = zip 경로)을 지키려고 DMG 경로는 stderr 로만 알린다.
+if ! DMG_PATH="$("$ROOT/scripts/package-dmg.sh" "$APP_PATH" "$ROOT/dist/aing-check.dmg" | tail -n 1)" || [[ ! -f "$DMG_PATH" ]]; then
+  echo "오류: 배포 DMG 를 만들지 못했습니다(위 로그). zip 은 만들어졌습니다: $ROOT/dist/aing-check.zip" >&2
+  echo "  원인을 고쳐 DMG 만 다시: ./scripts/package-dmg.sh \"$APP_PATH\"" >&2
+  echo "  급하면 DMG 없이 릴리스: SKIP_DMG=1 ./scripts/release-brew.sh <버전>" >&2
+  exit 1
+fi
+echo "배포 DMG: $DMG_PATH" >&2
 echo "$ROOT/dist/aing-check.zip"

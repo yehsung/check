@@ -8,17 +8,23 @@
 #
 # 하는 일:
 #   1) 사전점검 — gh 로그인, CHANGELOG.md 의 이번 버전 패치노트(서버 노트 규칙 포함), GH_OWNER,
-#      공증된 dist/aing-check.zip(스테이플 검증 · 내부 버전 · 내부 build), tap 저장소, 서버의 현재 릴리스(build 역행 차단).
+#      공증된 dist/aing-check.zip(스테이플 검증 · 내부 버전 · 내부 build),
+#      공증된 dist/aing-check.dmg(스테이플 검증 · 읽기 전용으로 마운트해 내부 앱 버전 · build 가 zip 과 같은지),
+#      tap 저장소, 서버의 현재 릴리스(build 역행 차단).
 #      전부 부수효과보다 앞이다 — 하나라도 어긋나면 아무것도 건드리지 않고 멈춘다.
-#   2) git 태그 v<버전> 생성/푸시, GitHub 릴리즈 생성 + zip 자산 업로드
-#   3) sha256 계산 → packaging/homebrew/aing-check.rb 치환본을 tap 저장소에 커밋
+#   2) git 태그 v<버전> 생성/푸시, GitHub 릴리즈 생성 + zip · dmg 자산 업로드
+#   3) sha256 계산 → packaging/homebrew/aing-check.rb 치환본을 tap 저장소에 커밋 (Cask 는 zip 을 받는다 — DMG 와 무관)
 #   4) tap 원격 게이트 — 원격보다 앞서 있으면 푸시하고, fetch 로 원격 Cask 를 되읽어 이번 version/sha256 인지 확인
 #   5) 서버 릴리스 알림 게시(app_publish_release) — 실행 중인 앱이 몇 분 안에 새 버전을 안다.
 #      반드시 4 뒤다: brew 가 아직 옛 cask 인데 앱이 "업데이트" 를 띄우면 [지금 업데이트] 가 아무것도 못 받는다.
-#   6) 팀원 설치/업그레이드 명령 출력
+#   6) 팀원 설치/업그레이드 명령과 DMG 내려받기 주소(releases/latest/download/aing-check.dmg) 출력
 #
 # --server-only 는 1 → 4 → 5 만 한다(2·3 의 태그·릴리즈·Cask 커밋은 건너뜀). 게시가 실패했을 때 게시만 다시 하거나,
-# 이미 brew 로 나간 현재 릴리스를 서버에 처음 심을 때 쓴다.
+# 이미 brew 로 나간 현재 릴리스를 서버에 처음 심을 때 쓴다. 자산을 올리지 않으므로 DMG 게이트도 건너뛴다.
+#
+# 비상 탈출구: SKIP_DMG=1 — DMG 게이트와 DMG 업로드를 건너뛰고 zip 만으로 릴리스한다(경고를 찍는다).
+# 그 릴리스에는 DMG 가 없어 latest/download/aing-check.dmg 주소가 404 가 된다 — DMG 를 만든 뒤
+# 'gh release upload v<버전> dist/aing-check.dmg' 로 채워 넣어라.
 #
 # 최초 1회 세팅과 전체 파이프라인은 docs/release.md 를 참고하세요.
 set -euo pipefail
@@ -54,6 +60,22 @@ run() {
   fi
   "$@"
 }
+
+# DMG 게이트가 읽기 전용으로 마운트한 볼륨을 푼다. 게이트 안에서 바로 부르고, 중간에 끊겨도 EXIT 에서 한 번 더 부른다.
+DMG_MNT=""
+DMG_MOUNTED=0
+detach_dmg() {
+  if [[ "$DMG_MOUNTED" -eq 1 ]]; then
+    hdiutil detach "$DMG_MNT" >/dev/null 2>&1 || hdiutil detach "$DMG_MNT" -force >/dev/null 2>&1 \
+      || warn "DMG 마운트 해제 실패 — 'hdiutil detach \"$DMG_MNT\" -force' 로 직접 푸세요."
+    DMG_MOUNTED=0
+  fi
+  if [[ -n "$DMG_MNT" ]]; then
+    rmdir "$DMG_MNT" 2>/dev/null || true
+    DMG_MNT=""
+  fi
+}
+trap detach_dmg EXIT
 
 # 서버 응답(JSON) 해석과 노트 글자 수 세기에 쓴다. 시스템 python3 을 먼저 고른다 — PATH 앞의 conda 등은 맥마다 다르다.
 PYTHON3="/usr/bin/python3"
@@ -339,6 +361,57 @@ else
 fi
 log "sha256: $SHA256"
 
+# 사전점검: 배포 DMG. Cask 는 zip 을 받으므로 brew 경로와는 무관하지만, 릴리스 자산으로 같이 올라가
+# releases/latest/download/aing-check.dmg 가 늘 최신 DMG 를 가리킨다. 낡은 DMG 가 새 태그에 붙는 것을 zip 과 같은 방식으로
+# 막는다 — 스테이플 검증 + 읽기 전용 마운트로 안의 앱 버전·build 를 읽어 릴리스 버전 · zip 의 build 와 대조.
+DMG="$ROOT/dist/aing-check.dmg"
+DMG_URL="https://github.com/$GH_OWNER/check/releases/latest/download/aing-check.dmg"
+RELEASE_ASSETS=("$ZIP")
+RELEASE_ASSET_NAMES="aing-check.zip"
+UPLOAD_DMG=0
+if [[ "$SERVER_ONLY" -eq 1 ]]; then
+  log "사전점검: 배포 DMG — --server-only 는 자산을 올리지 않으므로 건너뜁니다."
+elif [[ "${SKIP_DMG:-0}" == "1" ]]; then
+  warn "SKIP_DMG=1 — DMG 게이트와 DMG 업로드를 건너뜁니다. 이번 릴리스에는 aing-check.dmg 가 없어 $DMG_URL 이 404 가 됩니다. DMG 를 만든 뒤 'gh release upload $TAG dist/aing-check.dmg --repo $GH_OWNER/check' 로 채우세요."
+else
+  UPLOAD_DMG=1
+  RELEASE_ASSETS+=("$DMG")
+  RELEASE_ASSET_NAMES="aing-check.zip, aing-check.dmg"
+  log "사전점검: 공증된 배포 DMG — $DMG"
+  if [[ ! -f "$DMG" ]]; then
+    missing "$DMG 이 없습니다. './scripts/package-notarized.sh' 가 zip 과 함께 만듭니다(DMG 만 다시: './scripts/package-dmg.sh dist/aing-check.app'). 당장 DMG 없이 나가야 하면 SKIP_DMG=1."
+  else
+    if xcrun stapler validate "$DMG" >/dev/null 2>&1; then
+      log "DMG 공증 스테이플 확인됨"
+    else
+      missing "aing-check.dmg 의 공증 스테이플 검증에 실패했습니다. './scripts/package-dmg.sh dist/aing-check.app' 로 다시 만드세요."
+    fi
+
+    DMG_VERSION=""
+    DMG_BUILD=""
+    DMG_MNT="$(mktemp -d "${TMPDIR:-/tmp}/aing-check-release-dmg.XXXXXX")"
+    if hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$DMG_MNT" "$DMG" >/dev/null 2>&1; then
+      DMG_MOUNTED=1
+      DMG_VERSION="$(plutil -extract CFBundleShortVersionString raw "$DMG_MNT/aing-check.app/Contents/Info.plist" 2>/dev/null || true)"
+      DMG_BUILD="$(plutil -extract CFBundleVersion raw "$DMG_MNT/aing-check.app/Contents/Info.plist" 2>/dev/null || true)"
+    else
+      warn "DMG 를 마운트하지 못했습니다: $DMG"
+    fi
+    detach_dmg
+
+    if [[ "$DMG_VERSION" == "$VERSION" ]]; then
+      log "DMG 내부 앱 버전 확인됨 ($DMG_VERSION)"
+    else
+      missing "DMG 내부 앱 버전(${DMG_VERSION:-읽지 못함})이 릴리스 버전($VERSION)과 다릅니다 — 낡은 DMG 입니다. './scripts/package-dmg.sh dist/aing-check.app' 로 다시 만드세요."
+    fi
+    if [[ "$DMG_BUILD" == "$BUILD" ]]; then
+      log "DMG 내부 build 확인됨 ($DMG_BUILD — zip 과 같음)"
+    else
+      missing "DMG 내부 build(${DMG_BUILD:-읽지 못함})가 zip 의 build($BUILD)와 다릅니다 — 서로 다른 빌드입니다. './scripts/package-notarized.sh' 로 zip 과 DMG 를 함께 다시 만드세요."
+    fi
+  fi
+fi
+
 # 사전점검: tap 저장소. 예전엔 이 확인이 GitHub 릴리즈가 이미 공개된 뒤에 있어, tap 이 없으면 릴리즈만 나간 채 멈췄다.
 CASK_TEMPLATE="$ROOT/packaging/homebrew/aing-check.rb"
 [[ -f "$CASK_TEMPLATE" ]] || die "Cask 템플릿이 없습니다: $CASK_TEMPLATE"
@@ -433,7 +506,7 @@ else
   fi
   run git push origin "$TAG"
 
-  log "GitHub 릴리즈 $TAG (자산: aing-check.zip)"
+  log "GitHub 릴리즈 $TAG (자산: $RELEASE_ASSET_NAMES)"
   REPO="$GH_OWNER/check"
   # 본문 = CHANGELOG 섹션(위 사전점검에서 확보) + 설치 안내 한 줄. 안내 줄은 "- " 로 시작하지 않으므로
   # 앱의 노트 파서가 항목으로 오해하지 않는다(배너에는 패치노트만 뜬다).
@@ -442,9 +515,9 @@ else
 설치: brew tap $GH_OWNER/check && brew install --cask aing-check"
   if [[ "$DRY_RUN" -eq 0 ]] && gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
     warn "릴리즈 $TAG 이(가) 이미 존재합니다. 자산만 덮어씁니다 (멱등)."
-    run gh release upload "$TAG" "$ZIP" --repo "$REPO" --clobber
+    run gh release upload "$TAG" "${RELEASE_ASSETS[@]}" --repo "$REPO" --clobber
   else
-    run gh release create "$TAG" "$ZIP" \
+    run gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
       --repo "$REPO" \
       --title "aing-check $VERSION" \
       --notes "$RELEASE_NOTES"
@@ -622,6 +695,14 @@ fi
     echo ""
     echo "이미 설치한 팀원 업그레이드:"
     echo "  brew update && brew upgrade --cask aing-check"
+    echo ""
+    if [[ "$UPLOAD_DMG" -eq 1 ]]; then
+      echo "brew 없이 설치(DMG 를 받아 열고 Applications 로 끌어 놓기):"
+      echo "  $DMG_URL"
+    else
+      echo "경고: 이번 릴리스엔 DMG 가 없습니다(SKIP_DMG=1) — $DMG_URL 은 404 입니다."
+      echo "  DMG 를 만든 뒤: gh release upload $TAG dist/aing-check.dmg --repo $GH_OWNER/check"
+    fi
   fi
   echo ""
 } >&2

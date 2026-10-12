@@ -15,14 +15,20 @@ brew install yehsung/check/aing-check
 앱은 Apple 공증이 되어 있어 경고 없이 바로 열립니다. 나중에 새 버전이 나오면 `brew upgrade --cask aing-check` 한 줄로 업데이트됩니다.
 (brew 가 없다면 [brew.sh](https://brew.sh) 의 한 줄 설치를 먼저 실행하거나, 아래 방법 B를 쓰세요.)
 
-### 방법 B — zip 직접 받기
+### 방법 B — DMG 받아 끌어 놓기 (brew 없이)
 
-1. [GitHub Releases](https://github.com/yehsung/check/releases)에서 최신 `aing-check.zip`을 받거나 전달받은 zip을 더블클릭해 풉니다.
-2. `aing-check` 폴더 안의 `aing-check.app`을 **응용 프로그램** 폴더로 옮기고 더블클릭하면 열립니다(공증되어 있어 보안 경고 없음).
-3. 혹시 예전에 전달받은 미공증 zip이라 **"손상되었기 때문에 열 수 없습니다"** 가 뜨면: 동봉된 `설치하기.command`를 더블클릭하거나(경고로 안 열리면 우클릭 → 열기), 터미널에서 아래 한 줄을 실행합니다.
-   ```
-   xattr -dr com.apple.quarantine /Applications/aing-check.app
-   ```
+1. **[aing-check.dmg 내려받기](https://github.com/yehsung/check/releases/latest/download/aing-check.dmg)** — 이 주소는 늘 최신 버전을 줍니다. 받은 파일을 더블클릭합니다.
+2. 열린 창에서 왼쪽 **aing-check** 아이콘을 오른쪽 **Applications** 폴더로 끌어다 놓습니다.
+3. **응용 프로그램** 폴더에서 aing-check 를 더블클릭하면 열립니다(Apple 공증이 되어 있어 보안 경고 없음). 다 쓴 창은 닫고, 사이드바·바탕화면의 aing-check 디스크는 꺼내기(⏏) 해도 됩니다.
+
+새 버전이 나오면 앱 배너의 **[지금 업데이트]** 한 번으로 끝납니다 — 앱이 새 DMG 를 받아 확인하고 스스로 바꾼 뒤 다시 켜집니다(v0.3.49 부터).
+
+단 **0.3.48 이하로 설치했다면 딱 한 번만** 손이 필요합니다(그 버전에는 이 기능이 없습니다): 상단바의 **앱 종료** 버튼으로 aing-check 를 끈 뒤, 같은 주소에서 DMG 를 다시 받아 똑같이 끌어 놓고 "대치"를 누르세요. 그 뒤로는 원클릭입니다. 지금 버전은 팝오버 맨 아래에서 확인할 수 있습니다.
+
+zip 이 편하면 [GitHub Releases](https://github.com/yehsung/check/releases)의 `aing-check.zip` 도 같은 앱입니다 — 풀어서 `aing-check` 폴더 안의 `aing-check.app` 을 응용 프로그램 폴더로 옮기면 됩니다. 혹시 예전에 전달받은 미공증 zip 이라 **"손상되었기 때문에 열 수 없습니다"** 가 뜨면: 동봉된 `설치하기.command` 를 더블클릭하거나(경고로 안 열리면 우클릭 → 열기), 터미널에서 아래 한 줄을 실행합니다.
+```
+xattr -dr com.apple.quarantine /Applications/aing-check.app
+```
 
 설치가 끝나면 화면 오른쪽 위 상단바에 aing-check 아이콘이 나타납니다. 아이콘을 클릭하면 작은 창(팝오버)이 열립니다.
 
@@ -69,7 +75,7 @@ brew install yehsung/check/aing-check
 
 이 맥에 Claude Code/Codex 같은 AI CLI 사용 기록이 있으면 창 맨 아래에 **이번 달 AI 토큰 소모량**이 한 줄로 표시됩니다(콤마 전체 숫자, 마우스를 올리면 상세, 매달 1일 0부터 다시 쌓입니다. 기록이 없는 맥에서는 보이지 않습니다). 그 줄의 사람 아이콘을 누르면 **이번 달 토큰 소모량 순위 페이지**가 열립니다 — 팀별 현황처럼 별도 페이지로, aing-check 사용자 전체가 함께 순위에 뜨고(각자 앱이 자기 사용량을 공유) 인원이 많으면 스크롤로 봅니다.
 
-새 버전이 나오면 창 상단에 배너가 뜨고 근무 중이면 캐릭터가 "새 업데이트가 있어요!" 하고 알려 줍니다. 배너의 **[지금 업데이트]**를 누르면 자동으로 업데이트 후 새 버전이 실행되고, 안 되면 **[명령 복사]**로 `brew upgrade aing-check`를 터미널에 붙여넣으면 됩니다.
+새 버전이 나오면 창 상단에 배너가 뜨고 근무 중이면 캐릭터가 "새 업데이트가 있어요!" 하고 알려 줍니다. 배너의 **[지금 업데이트]**를 누르면 자동으로 업데이트 후 새 버전이 실행됩니다. 안 되면 설치 방식에 맞는 폴백이 나옵니다 — brew 로 깔았으면 **[명령 복사]**(`brew update && brew upgrade --cask aing-check` 를 터미널에 붙여넣기), DMG 로 깔았으면 **[직접 받기]**(내려받기 주소가 열립니다).
 
 앱은 로그인할 때 자동으로 실행되도록 처음 한 번 등록됩니다. 원치 않으면 **시스템 설정 > 일반 > 로그인 항목**에서 aing-check를 끄면 되고, 한 번 끄면 다시 켜지 않습니다.
 

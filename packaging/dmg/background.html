@@ -1,0 +1,158 @@
+<!doctype html>
+<!--
+  DMG 창 배경. render-background.mjs 가 이 파일을 640x420(1x)·1280x840(2x) PNG 로 굽는다.
+  ★ 좌표는 settings.py 와 짝이다: 아이콘 128, 앱 중심 (160, 228), Applications 중심 (480, 228).
+    한쪽만 바꾸면 아이콘이 카드 밖으로 빠진다 — 둘 다 고치고 다시 구워라.
+  창 내용 영역은 640x400 이다(settings.py 가 창 틀을 제목 막대 28 만큼 크게 잡는다 — Finder 의 WindowBounds 는
+  제목 막대를 포함한 창 전체다). 그림은 아래로 20 더 길다: 제목 막대가 더 얇은 macOS 에서도 빈 띠가 드러나지 않게.
+  카드 아래 띠(캡션)는 중간 밝기(상대휘도 ~0.18)다. Finder 는 아이콘 이름 글자색을 바꿀 수 없어
+  라이트 모드에선 검정, 다크 모드에선 흰색으로 쓴다 — 짙은 남색 위에 바로 쓰면 라이트 모드 이름이 안 보인다.
+  이 밝기면 검정·흰 글자 둘 다 대비 4.4:1 이상이 나온다.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --w: 640px;
+    --h: 420px;
+    --icon-y: 228px;      /* settings.py ICON_Y */
+    --app-x: 160px;       /* settings.py APP_X */
+    --apps-x: 480px;      /* settings.py APPS_X */
+    --card-w: 176px;
+    --card-top: 144px;    /* 아이콘 위 20px 여백 (128 아이콘의 위 끝 = 164) */
+    --caption-top: 292px; /* 아이콘 아래 끝(228 + 64) — Finder 가 이름을 이 바로 밑에 쓴다 */
+    --card-bottom: 330px;
+    --navy: #1b1e2e;
+  }
+  html, body {
+    margin: 0;
+    width: var(--w);
+    height: var(--h);
+    overflow: hidden;
+    background: var(--navy);
+  }
+  body {
+    position: relative;
+    font-family: "Pretendard", "Apple SD Gothic Neo", -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #e9ebf7;
+  }
+  .sky {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(420px 240px at 50% 56%, rgba(118, 104, 255, 0.16), transparent 72%),
+      radial-gradient(300px 200px at 12% 0%, rgba(80, 130, 255, 0.10), transparent 70%),
+      radial-gradient(300px 200px at 92% 100%, rgba(150, 100, 255, 0.10), transparent 70%),
+      linear-gradient(180deg, #212539 0%, #1b1e2e 58%, #171a28 100%);
+  }
+
+  /* 안내 — 아잉이 말풍선으로 말한다 */
+  .guide {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .guide img {
+    width: 66px;
+    height: 66px;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
+  }
+  .bubble {
+    position: relative;
+    padding: 11px 18px 12px;
+    border-radius: 16px;
+    background: #2a2e45;
+    border: 1px solid #41465f;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+  }
+  .bubble::before { /* 꼬리 */
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    background: #2a2e45;
+    border-left: 1px solid #41465f;
+    border-bottom: 1px solid #41465f;
+    transform: rotate(45deg);
+  }
+  .bubble b {
+    font-weight: 700;
+    color: #b8c4ff;
+  }
+
+  /* 아이콘 자리 카드 */
+  .card {
+    position: absolute;
+    top: var(--card-top);
+    width: var(--card-w);
+    height: calc(var(--card-bottom) - var(--card-top));
+    margin-left: calc(var(--card-w) / -2);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .card.app { left: var(--app-x); }
+  .card.apps {
+    left: var(--apps-x);
+    border: 1.5px dashed rgba(170, 180, 255, 0.45);
+  }
+  .card .caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--caption-top) - var(--card-top));
+    bottom: 0;
+    background: #6f76a0; /* 상대휘도 ≈ 0.19 — 검정 4.8:1, 흰색 4.4:1 */
+  }
+
+  /* 화살표 */
+  svg.arrow {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--w);
+    height: var(--h);
+  }
+</style>
+</head>
+<body>
+  <div class="sky"></div>
+
+  <div class="guide">
+    <img src="../../Sources/check/Resources/aing-neutral.png" alt="">
+    <div class="bubble">아이콘을 <b>Applications</b> 폴더로 끌어다 놓으세요</div>
+  </div>
+
+  <div class="card app"><div class="caption"></div></div>
+  <div class="card apps"><div class="caption"></div></div>
+
+  <svg class="arrow" viewBox="0 0 640 420" aria-hidden="true">
+    <defs>
+      <linearGradient id="g" x1="262" y1="0" x2="378" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#4f86ff"/>
+        <stop offset="1" stop-color="#9b7bff"/>
+      </linearGradient>
+    </defs>
+    <!-- 카드 사이(248..392)에 아이콘 중심 높이로 -->
+    <path d="M266 228 H368" stroke="url(#g)" stroke-width="5" stroke-linecap="round"
+          stroke-dasharray="1 13" fill="none"/>
+    <path d="M356 214 L374 228 L356 242" stroke="#9b7bff" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </svg>
+</body>
+</html>

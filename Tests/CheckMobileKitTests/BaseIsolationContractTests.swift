@@ -23,6 +23,10 @@ import Testing
         "func updateAppVersion(", "func updateFocusMode(", "func startWork(", "func stopWork(", "func heartbeat(",
         "func upsertStatusDevice(", "func reportDeviceInput(", "func reopenSession(", "func upsertTokenUsage(",
         "func sendPoke(", "func sendUltraPoke(",
+        // 2026-10-09 사고 복구 경로. 세션 **쓰기**는 폰에서 컴파일조차 되면 안 된다(근무 시간 위조 R2).
+        // fetchMyOverlappingSessions 는 읽기지만 같은 복구 쌍이라 함께 가둔다 — 폰이 이 조회를 쥐면
+        // 다음 사람이 그 옆에 쓰기를 붙인다.
+        "func insertClosedSession(", "func fetchMyOverlappingSessions(",
     ]
 
     @Test("맥 전용 쓰기는 전부 #if os(macOS) 조각에 있고, 공유 서비스 파일에는 경로·메서드가 한 줄도 없다")

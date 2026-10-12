@@ -16,6 +16,23 @@ package enum MemberPresence: Equatable {
 /// 공유 셀에서 읽히는 값은 언제나 방금 내가 쓴 내 값이다(실측 seen−mine ≈ -0.9초). 그 셀에 기기를 넣어도
 /// "기기 == 나"가 항상 참이라 정보량이 0 이다. 기기마다 자기 행을 가지면 내 upsert 가 남의 행을 건드릴 수
 /// 없어 증거가 지워지지 않는다 — 이것이 소유권을 시각 비교(추측)가 아닌 사실로 판정하는 유일한 축이다.
+/// 서버 `work_sessions` 에 **실재하는** 열린 행 하나의 신원. `TeamMemberStatus.openSession` 참조.
+///
+/// 이 타입이 따로 있는 이유는 **id 와 시작시각을 떼어 놓을 수 없게 하기 위해서**다. 둘을 각각 옵셔널
+/// 필드로 두면 "id 는 셀에서, 시작시각은 행에서" 같은 조합이 다시 가능해지고, 그 조합이 정확히
+/// 2026-10-09 유령 세션 사고의 모양이다. 쌍으로만 존재하면 non-nil 자체가 "그 행을 봤다"의 증거다.
+package struct OpenSessionFact: Equatable, Sendable {
+    /// 열린 행의 id. **항상 소문자**(`WorkTimerStore.canonicalSessionID` 규약과 같은 축).
+    package let id: String
+    /// 그 행의 started_at. `TeamMemberStatus.currentSessionStartedAt` 과 **같은 행**에서 온다.
+    package let startedAt: Date
+
+    package init(id: String, startedAt: Date) {
+        self.id = id
+        self.startedAt = startedAt
+    }
+}
+
 package struct StatusDeviceClaim: Equatable {
     /// 주장한 맥의 식별자(UserDefaults 'check.deviceID'). 내 값과 같으면 이 행은 내가 쓴 것이다.
     package let deviceID: String
@@ -50,6 +67,20 @@ package struct TeamMemberStatus: Equatable, Identifiable {
     /// (그 경우 소유권 판정은 기존 백스톱 7분으로 되돌아간다). 새 필드는 반드시 마지막에 둔다:
     /// 위치 인자로 이 타입을 만드는 테스트/호출부가 그대로 컴파일되게 하기 위함이다.
     package var deviceClaims: [StatusDeviceClaim] = []
+
+    /// 서버 `work_sessions` 에 **실재하는** 이 사람의 열린 행(id + 시작시각). 공유 셀(`activeSessionID`)이 아니다.
+    ///
+    /// **왜 쌍인가.** id 와 시작시각이 **같은 행에서** 와야 "그 id 가 실재한다"가 성립한다. 따로 들면
+    /// 2026-10-09 사고 상태(셀=유령 `943df952`, 열린 행=`af5db2ec`)에서 `activeSessionID != nil &&
+    /// currentSessionStartedAt != nil` 이 **둘 다 참**이라 유령이 사실로 세탁된다 — 두 값의 출처가 다르기
+    /// 때문이다(셀은 `work_statuses`, 시작시각은 `work_sessions` 열린 행들의 min). 세션 **신원**을 묻는
+    /// 자리는 전부 이 값을 쓴다. `activeSessionID` 는 "서버 셀에 뭐라고 적혀 있나"를 묻는 자리에만 남는다.
+    ///
+    /// 부분 유니크(`work_sessions_one_open_per_user`, user_id where ended_at is null)상 한 사람에 최대 한 행이다.
+    /// 이 조회는 팀 범위라 **다른 팀에 열린 내 세션은 nil 이다**(그 경우 판정은 기존 경로로 되돌아간다).
+    /// 요청은 늘지 않는다 — `fetchActiveSessions` 와 work_tick ④ 가 이미 `id` 를 select 해 놓고 버리고 있었다.
+    /// 새 필드는 반드시 마지막에 둔다(위 `deviceClaims` 주석과 같은 이유 — 위치 인자 호환).
+    package var openSession: OpenSessionFact? = nil
 
     /// 생존신호가 끊겼다고 보는 임계(초). 하트비트 주기(30초)의 3배라 한두 번 실패해도 오판하지 않는다.
     /// 상수로 뽑아 둔 이유: 흡수 세션 소유권 되찾기(WorkTimerStore.updateAdoptedPresenceTracking)가 같은

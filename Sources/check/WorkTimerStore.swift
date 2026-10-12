@@ -150,6 +150,33 @@ final class WorkTimerStore {
     /// 소문자 값과의 비교가 전부 어긋나 내 세션이 내 앱에서 '남의 세션'이 된다.
     var currentSessionID: String?
 
+    /// **서버에 그 행이 실재한다고 확인된** 진행 세션 ID. `currentSessionID` 는 "이 맥이 무슨 세션을 살고
+    /// 있다고 믿는가"이고, 이 값은 "서버가 그 믿음을 확인해 줬는가"다. 둘은 다르다 — 2026-10-09 사고에서
+    /// 맥북은 `943df952` 를 살고 있다고 믿었지만 그 행은 서버에 **들어간 적이 없었다**(INSERT 가 23505 로
+    /// 거절됐다). 그런데도 하트비트가 30초마다 그 id 를 공유 행에 써넣었다.
+    ///
+    /// 확인은 **세 규칙뿐**이고, 전부 "그 행을 봤다"에서 나온다:
+    ///  (a) 내 쓰기가 그 행을 돌려받았다 — `startWork` POST / `reopenSession` PATCH 의 representation
+    ///  (b) 서버 읽기의 **열린 행 id** 가 그 값이었다 — `TeamMemberStatus.openSession.id`(공유 셀이 아니다)
+    ///  (c) 폴링의 열린 행 id 가 **다르면 즉시 지운다** — 도장은 "그때 있었다"가 아니라 "지금 있다"여야 한다.
+    ///      이것이 없으면 흡수 맥이 블로커를 종료한 뒤에도 원 소유 맥이 닫힌 id 를 계속 방송한다.
+    ///
+    /// 영속하지 않는다. `startedAt` 이 영속되지 않아 재시작 복귀는 항상 (.working, nil) 로 떨어지고,
+    /// 그 경로의 `adoptRemoteSession` 이 규칙 (b)로 즉시 다시 도장한다.
+    @ObservationIgnored var confirmedServerSessionID: String?
+
+    /// 공유 행(`work_statuses.active_session_id` · `work_status_devices.session_id`)에 실어도 되는 값.
+    ///
+    /// **`currentSessionID` 와 같을 때만 유효하다.** 짝 조건으로 묶은 이유가 이 프로퍼티의 존재 이유 전부다:
+    /// 새 세션이 열리면 도장이 **자동으로 무효**가 되므로 "지우기를 빠뜨려 옛 도장이 새 세션을 세탁한다"는
+    /// 실패 모드가 구조적으로 사라진다. 두 변수를 따로 들고 다니면 지우는 자리를 하나 빠뜨리는 날이 온다.
+    var confirmedSessionID: String? {
+        guard let current = Self.canonicalSessionID(currentSessionID),
+              current == confirmedServerSessionID
+        else { return nil }
+        return current
+    }
+
     /// 지금 진행 중인 세션(startedAt/currentSessionID)을 **이 앱 인스턴스가 열었는가**의 반대말.
     /// true = 서버 스냅샷에서 흡수한 세션 — 다른 맥(또는 이 맥의 이전 실행)이 열었다.
     /// 그래서 이 맥의 **자동** 마감 경로(잠자기·12시간·종료 동기화)와 **하트비트**는 이 세션을 건드리지 않는다.
@@ -3390,6 +3417,11 @@ extension WorkTimerStore {
         resetAdoptedPresenceTracking()
         resetForeignDeviceTracking()
         setOwnedWorkSessionID(nil)
+        // 이 세션은 더 이상 내 것이 아니다 — 서버가 확인해 준 사실도 함께 내려놓는다. 남겨 두면 그 사이
+        // 다른 맥이 세션을 닫아도 이 맥이 닫힌 id 로 공유 행을 계속 덮는다. 세션이 여전히 내 것이라면
+        // 다음 폴링의 도장 규칙 (b)가 곧바로 다시 찍는다 — 잃는 것은 한 주기뿐이다.
+        // (`currentSessionID = nil` 로 내려가는 경로는 짝 조건이 알아서 무효화하므로 여기만 명시하면 된다.)
+        confirmedServerSessionID = nil
     }
 
     /// 소유 세션 ID 와 그 주장의 강도를 영속한다(nil 이면 둘 다 제거). 값이 같으면 쓰지 않는다 — 30초 폴링이

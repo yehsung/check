@@ -245,6 +245,11 @@ private func beginOwnedWork(_ store: WorkTimerStore, at: Date) -> String {
     store.start(now: at)
     store.pendingItems = []
     store.syncTask?.cancel()
+    // 이 헬퍼는 드레인을 **일부러 건너뛴다**(큐를 비우고 태스크를 끊는다) — 그래서 `startWork` 가 행을
+    // 돌려받는 자리가 없고, 세션 확인 도장도 안 찍힌다. 하지만 이 헬퍼의 뜻은 "서버에 올라간 내 세션이
+    // 진행 중이다"이므로, 드레인이 성공했을 때와 **같은 상태**로 맞춰 준다(v0.3.45 공유 행 쓰기 게이트).
+    // 맞추지 않으면 이 스위트가 재는 것이 '근무 중 하트비트'가 아니라 '확인 안 된 세션의 침묵'이 된다.
+    store.confirmedServerSessionID = WorkTimerStore.canonicalSessionID(store.currentSessionID)
     return store.currentSessionID!
 }
 

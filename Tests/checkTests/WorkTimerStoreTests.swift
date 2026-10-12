@@ -1624,8 +1624,8 @@ func heartbeatUpsertsLastSeenWhileWorking() async {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
     }
-    store.startedAt = Date()
-    store.currentSessionID = "hb-session"
+    // 하트비트가 **나가는 것**을 재는 테스트라 확인된 세션으로 세운다(seedConfirmedSession 주석 참조).
+    seedConfirmedSession(store, "hb-session")
 
     await store.sendHeartbeatIfWorking()
 
@@ -1692,7 +1692,9 @@ func reloginRestoresSessionIDSoHeartbeatResumes() async {
             todayDurationSeconds: 0,
             avatarURL: nil,
             lastSeenAt: Date(),
-            activeSessionID: serverSessionID
+            activeSessionID: serverSessionID,
+            // 셀과 열린 행이 **같이** 그 세션을 가리킨다(= "여전히 열려 있다"의 서버 쪽 모양).
+            openSession: OpenSessionFact(id: serverSessionID, startedAt: sessionStart)
         )
     ]
 
@@ -2908,8 +2910,7 @@ func idleRefreshLoopWakesWithinOneSliceWhenWorkStarts() async {
     try? await Task.sleep(for: .milliseconds(10))
 
     // 유휴 중 근무 시작(startedAt 주입) → 다음 슬라이스 경계에서 fast 로 감지되어 즉시 하트비트가 나가야 한다.
-    store.startedAt = Date()
-    store.currentSessionID = "wake-session"
+    seedConfirmedSession(store, "wake-session")
     #expect(store.refreshLoopIsFast)
 
     // 전이 후 ≤1슬라이스 안에 working 하트비트 upsert 가 나타나는지 폴링한다(수정 전엔 최대 300s 지연).
@@ -4395,7 +4396,11 @@ func staleTeamStatusResponseDoesNotUndoJustPressedStop() {
             todayDurationSeconds: 0,
             avatarURL: nil,
             lastSeenAt: Date(),
-            activeSessionID: "30000000-0000-0000-0000-000000000001"
+            activeSessionID: "30000000-0000-0000-0000-000000000001",
+            // 셀과 열린 행이 같이 선다(= 서버가 '근무중'으로 아는 상태의 정상 모양).
+            openSession: OpenSessionFact(
+                id: "30000000-0000-0000-0000-000000000001", startedAt: sessionStart
+            )
         )
     ]
     // refreshTeamStatus 가 fetch 를 발사하기 직전에 캡처했을 세대 값.
@@ -5842,8 +5847,8 @@ func heartbeatCarriesLastInputOnlyOnSupportedServer() async {
 
     let legacyHost = "away-heartbeat-legacy"
     let legacy = makeAwayStore(host: legacyHost, now: now)
-    legacy.startedAt = now.addingTimeInterval(-600)
-    legacy.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    // 하트비트가 나가는 것을 재므로 확인된 세션으로 세운다(v0.3.45 게이트).
+    seedConfirmedSession(legacy, awaySessionID, startedAt: now.addingTimeInterval(-600))
     legacy.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
     legacy.awayServerSupported = false
     await legacy.sendHeartbeatIfWorking()
@@ -5851,8 +5856,7 @@ func heartbeatCarriesLastInputOnlyOnSupportedServer() async {
 
     let newHost = "away-heartbeat-new"
     let modern = makeAwayStore(host: newHost, now: now)
-    modern.startedAt = now.addingTimeInterval(-600)
-    modern.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    seedConfirmedSession(modern, awaySessionID, startedAt: now.addingTimeInterval(-600))
     modern.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
     modern.awayServerSupported = true
     await modern.sendHeartbeatIfWorking()

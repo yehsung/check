@@ -125,7 +125,9 @@ extension WorkTimerStore {
             if adoptedRemoteSession {
                 deviceIDToSend = hasDeviceIdentity ? deviceID : nil
                 lastInputAt = observedInput
-            } else if let current = currentSessionID {
+            } else if let current = confirmedSessionID {
+                // ★ 위 레거시 하트비트와 **같은 게이트**다(`confirmedSessionID` 주석 참조). 한쪽만 걸면
+                //   work_tick 서버가 있는 맥에서만, 또는 없는 맥에서만 유령이 새어 나간다.
                 sessionID = current
                 // 신원 없는 실행은 기기 주장을 **싣지 않는다**(nil). 서버 RPC 는 p_device_id 가 null 이면
                 // 기기 행을 건드리지 않으므로(20260831120000_work_tick_rpc.sql:131·155) 하트비트 ① 은 그대로
@@ -135,7 +137,14 @@ extension WorkTimerStore {
                 deviceIDToSend = hasDeviceIdentity ? deviceID : nil
                 openedSession = ownsCurrentSessionStrongly
                 lastInputAt = observedInput
+            } else if currentSessionID != nil {
+                // 세션은 있다고 믿지만 **아직 확인되지 않았다**(= 큐에 갇힌 start, 또는 서버가 다른 행을 들고 있다).
+                // RPC 의 ②′ **입력만 가지**(20260831120000:155)로 보낸다 — 새 경로를 만들지 않고, 흡수 맥과
+                // 같은 모양이다. 세션 주장(sessionID·openedSession)은 싣지 않으므로 유령이 못 나간다.
+                deviceIDToSend = hasDeviceIdentity ? deviceID : nil
+                lastInputAt = observedInput
             } else {
+                // 세션 자체가 없다(강제 로그아웃 복구 전) — 기존 계약 그대로 조회만 한다.
                 heartbeat = false
             }
         }
@@ -1099,7 +1108,19 @@ extension WorkTimerStore {
             await reportDeviceInputIfPossible(teamID: teamID, lastInputAt: observedInput)
             return
         }
-        guard let sessionID = currentSessionID else { return }
+        // ★ **확인된 세션만 공유 행에 실린다.** `currentSessionID` 가 아니라 `confirmedSessionID` 다 —
+        //   서버가 그 행의 존재를 확인해 준 적이 없는 id 는 여기서 한 건도 못 나간다.
+        //   2026-10-09 사고: INSERT 가 23505 로 거절돼 서버에 없는 세션인데, 이 자리가 `currentSessionID` 를
+        //   보고 30초마다 그 유령 id 를 `work_statuses` 와 `work_status_devices` 에 써넣었다.
+        //
+        //   확인 전에도 **입력 관측은 살린다.** 게이트만 걸고 끝내면 `last_input_at` 보고까지 얼어
+        //   away 판정의 재료가 죽는다(그 사람은 자리 비움 마감에서 조용히 빠진다).
+        //   `reportDeviceInput` 은 session_id/last_seen_at/opened_session 을 담지 않으므로 세션 주장이 아니다 —
+        //   위 흡수 맥 가지와 정확히 같은 처지로 떨어뜨리는 것이다.
+        guard let sessionID = confirmedSessionID else {
+            await reportDeviceInputIfPossible(teamID: teamID, lastInputAt: observedInput)
+            return
+        }
         let generation = sessionGeneration
         do {
             try await withSessionRetry { activeSession in
@@ -1275,7 +1296,10 @@ extension WorkTimerStore {
                     startedAt: sessionStart,
                     endedAt: seen,
                     durationSeconds: duration,
-                    fallbackSessionID: Self.canonicalSessionID(member.activeSessionID)
+                    // **열린 행의 id 다 — 공유 셀이 아니다.** 셀(`activeSessionID`)을 쓰면 그 값이 유령일 때
+                    // 그 유령 id 로 폴백 POST 가 나가 **실재 세션과 겹치는 닫힌 행이 하나 더** 생긴다
+                    // (= 오늘/주간 이중 계상). 2026-10-09 향룡 사고 당시 셀이 정확히 그 상태였다.
+                    fallbackSessionID: member.openSession?.id
                         ?? currentSessionID
                         ?? Self.canonicalSessionID(UUID().uuidString)!
                 )
@@ -1285,7 +1309,9 @@ extension WorkTimerStore {
             // 서버 마감만 유효로 두고 로컬 반영(오프 스냅백 + 재개 대상 등록)은 통째로 건너뛴다.
             // 서버에 열린 새 세션은 그대로 살아 있고, 지금 로컬 상태가 그 세션을 정확히 가리키고 있다.
             guard writeGeneration == workStateWriteGeneration else { return true }
-            lastAutoClosedSessionID = Self.canonicalSessionID(member.activeSessionID)
+            // 위 stopWork 가 보낸 것과 **같은 출처**여야 한다(열린 행의 id). 셀을 쓰면 재개가 방금 마감한
+            // 세션이 아니라 유령을 앵커로 삼는다.
+            lastAutoClosedSessionID = member.openSession?.id
             lastAutoClosedStartedAt = sessionStart
             // ★ 자동 재개 30분 창의 앵커. 이 마감의 ended_at 은 **마지막 신호(seen)** 다 — 위 stopWork 가
             //   endedAt 으로 보낸 바로 그 값이라, 되살아나는 양(지금 − ended_at)이 서버 기록과 정확히 같다.
@@ -1298,7 +1324,7 @@ extension WorkTimerStore {
             // A 인데 B 도 strong 이 된다 → 두 strong 이 만나면 규칙이 다시 사전식 동전 던지기로 떨어진다.
             // 마감 전에 이 맥이 그 세션의 소유자였을 때만 강도를 물려받아, "강한 소유자는 최대 한 명"이라는
             // 이 규칙의 전제를 재개 경로에서도 깨지지 않게 한다.
-            lastAutoClosedClaimStrength = isOwnedByThisMac(member.activeSessionID)
+            lastAutoClosedClaimStrength = isOwnedByThisMac(member.openSession?.id)
                 ? ownedSessionClaimStrength
                 : .weak
             // 재개할 때 누적에서 도로 빼야 할 몫(위에서 누적에 넣은 값과 같은 수). 재개하면 이 세션이 다시
@@ -1736,6 +1762,146 @@ extension WorkTimerStore {
         await refreshTeamStatus()
     }
 
+    /// `.start` 가 23505(`work_sessions_one_open_per_user`)로 거절됐을 때 **큐를 녹인다.**
+    ///
+    /// ── 이 함수가 있는 이유 (2026-10-09 운영 사고) ────────────────────────────────────────────────
+    /// 아이맥이 세션을 열어 둔 채 남았고 맥북의 [근무 시작] INSERT 가 23505 에 걸렸다. `runPendingSync` 는
+    /// 순서 보존 때문에 **실패한 항목 자리에서 멈춘다** — 그래서 그 뒤의 근무 조작 4건이 통째로 갇혔다
+    /// (실측: 1시간 7분 + 12분 + 2초 + 진행 중 세션. 슬롯을 비워 주자 2분 만에 전부 올라왔다).
+    ///
+    /// ── 계약 ─────────────────────────────────────────────────────────────────────────────────────
+    /// **정상 반환 = 이 항목은 끝났다**(호출자가 큐에서 뺀다). **던지기 = 순서 보존 재시도**(오늘과 같은 결말).
+    /// 그 둘 말고는 없다. 그리고 **로컬 상태를 건드리지 않는다** — 흡수·타이머·소유권은 드레인 끝의
+    /// `refreshTeamStatus()`(:1761) → `applyRemoteOwnStatus` 재흡수 경로가 **이미 감사된 세대 가드와 함께**
+    /// 수행한다. 여기서 로컬을 덮으면 왕복 중 사용자가 누른 종료가 조용히 되돌려진다.
+    ///
+    /// ★ **끝 시각을 절대 고르지 않는다.** 끝의 정본은 셋뿐이다 — 큐의 `.stop` · 잠자기 마커 ·
+    ///   "아직 안 끝났다". 셋 중 아무것도 없으면 **아무것도 쓰지 않고** 되던진다. 설계 심사에서 끝을
+    ///   추정하는 안들이 전부 깨졌다(최악 3시간 55분을 지어냈다).
+    private func resolveStartBlockedByOpenSession(_ item: PendingWorkItem, teamID: String) async throws {
+        let authGeneration = sessionGeneration
+        let writeGeneration = workStateWriteGeneration
+        let mineID = Self.canonicalSessionID(item.sessionID)
+        guard let mineStart = item.sessionStartedAt else {
+            // 시작 시각을 모르면 겹침도 정산도 판단할 수 없다. 아무 판단도 하지 않는다.
+            throw SupabaseWorkServiceError.sessionAlreadyOpen
+        }
+
+        // ── (1) 사실을 읽는다. 오류 **문자열**을 근거로 움직이지 않는다.
+        //    SupabaseWorkHTTP.swift:92~99 의 23505 판정은 `rawBody.contains("23505")` 라 다른 표의 유니크
+        //    위반도 같은 값으로 접힌다. 그 넓은 OR 는 **고치지 않는다**(제약명을 안 실어 주는 서버에서
+        //    해소가 통째로 죽는다). 대신 "내 열린 세션이 실제로 있다"를 본 뒤에만 움직여 오분류를 무해하게 만든다.
+        let rows = try await withSessionRetry { activeSession in
+            try await service.fetchMyOverlappingSessions(
+                accessToken: activeSession.accessToken,
+                userID: activeSession.userID,
+                since: mineStart
+            )
+        }
+        guard authGeneration == sessionGeneration else { throw CancellationError() }
+        guard writeGeneration == workStateWriteGeneration else {
+            // 왕복 중 사용자가 시작/종료를 눌렀다 = 방금 읽은 사실이 이미 낡았다. 다음 주기가 다시 본다.
+            throw SupabaseWorkServiceError.sessionAlreadyOpen
+        }
+
+        /// 한 번 더 열어 본다. 성공하면 도장까지 찍고 항목을 끝낸다.
+        func retryStart() async -> Bool {
+            guard let id = try? await withSessionRetry({ activeSession -> String? in
+                try await service.startWork(
+                    accessToken: activeSession.accessToken, teamID: teamID,
+                    userID: activeSession.userID, sessionID: item.sessionID, startedAt: mineStart
+                )
+            }) else { return false }
+            if id == mineID { confirmedServerSessionID = id }
+            return true
+        }
+
+        guard let blocker = rows.first(where: { $0.endedAt == nil }),
+              let blockerID = Self.canonicalSessionID(blocker.id)
+        else {
+            // 열린 행이 안 보인다 = 23505 오분류였거나, 그 사이 닫혔거나, 탈퇴한 팀의 세션이라 RLS 로 안 보인다.
+            // 한 번만 다시 열어 보고 아니면 되던진다 — 보이지 않는 것을 근거로 정산하지 않는다.
+            if await retryStart() { return }
+            throw SupabaseWorkServiceError.sessionAlreadyOpen
+        }
+
+        if blockerID == mineID {
+            // 방어: 막은 행이 **내 것**이다(ack 유실 뒤 재발사). 이미 올라가 있으니 항목은 끝났다.
+            confirmedServerSessionID = blockerID
+            return
+        }
+
+        // ── (2) 슬롯을 **서버 기준으로** 비워 본다. 아무것도 잃지 않는 최선의 결말이다.
+        //    마감 시각은 서버가 last_signal 로 정하므로 우리가 시각을 고르지 않는다.
+        if clock().timeIntervalSince(lastScavengeAt) >= Self.scavengeThrottleSeconds {
+            lastScavengeAt = clock()
+            _ = try? await withSessionRetry { activeSession in
+                try await service.closeAbandonedSessions(accessToken: activeSession.accessToken)
+            }
+            guard authGeneration == sessionGeneration else { throw CancellationError() }
+            guard writeGeneration == workStateWriteGeneration else {
+                throw SupabaseWorkServiceError.sessionAlreadyOpen
+            }
+            if await retryStart() { return }
+        }
+
+        // ── (3) 여전히 막혔다. **끝 시각의 정본이 어디 있는가**로만 가른다.
+
+        // (3-a) 같은 세션의 `.stop` 이 뒤에 줄 서 있다 → 끝은 그 항목이 들고 있다. 여기서 앞 구간을 적으면
+        //       같은 시간이 두 번 기록된다. `stopWork` 의 0행 폴백 POST 가 시작·종료 **정본**을 담은
+        //       닫힌 행을 자립적으로 만든다(닫힌 INSERT 는 부분 유니크에 안 걸린다).
+        if pendingItems.contains(where: { other in
+            guard other.id != item.id,
+                  Self.canonicalSessionID(other.sessionID) == mineID
+            else { return false }
+            if case .stop = other.operation { return true }
+            return false
+        }) {
+            return
+        }
+
+        // (3-b) 이 맥이 **지금 그 세션을 살고 있다** → 끝은 "아직 안 끝났다"이다. 이 앱의 다른 모든 자리
+        //       (로컬 타이머·메뉴바 라벨·언젠가 나갈 stop)가 하는 주장과 **같은 주장**이라 새 사실을
+        //       지어내지 않는다. 그래서 [내 시작, 서버가 덮기 시작하는 지점) 만 닫힌 행으로 정산한다 —
+        //       두 끝 모두 정본이고 어떤 행과도 겹치지 않는다.
+        if startedAt != nil, Self.canonicalSessionID(currentSessionID) == mineID {
+            var coverageStart = Date.distantFuture
+            for row in rows {
+                guard let at = await service.parseDate(row.startedAt) else { continue }
+                coverageStart = min(coverageStart, max(at, mineStart))
+            }
+            if coverageStart == .distantFuture { coverageStart = mineStart }
+            // 1초도 안 되는 구간은 적지 않는다(경계에서 0초·음수 행이 생긴다).
+            if coverageStart.timeIntervalSince(mineStart) >= 1 {
+                try await withSessionRetry { activeSession in
+                    try await service.insertClosedSession(
+                        accessToken: activeSession.accessToken, teamID: teamID,
+                        userID: activeSession.userID, sessionID: item.sessionID,
+                        startedAt: mineStart, endedAt: coverageStart
+                    )
+                }
+            }
+            // 이 id 는 **열린 행으로는** 서버에 없다 — 공유 행 쓰기 금지를 명시한다.
+            // 흡수는 드레인 끝의 refreshTeamStatus 가 한다.
+            confirmedServerSessionID = nil
+            return
+        }
+
+        // (3-c) 이 항목은 **낡은 초안**이다(프로세스가 죽어 로컬 세션이 없는데 그 뒤 다른 세션이 열렸다).
+        //       버린다. 이 설계가 시간을 잃는 **유일한 자리**이고, 그래서 여기 적어 둔다 — 남겨 두면
+        //       슬롯이 비는 순간 끝을 모르는 행이 열려 사용자의 **현재** 근무를 다시 막는다.
+        if startedAt != nil, Self.canonicalSessionID(currentSessionID) != mineID {
+            return
+        }
+
+        // (3-d) 그 밖 전부 → 오늘과 똑같이 되던진다. 순서는 지켜지고 문구는 이제 정확해진다
+        //       ("이미 다른 곳에서 근무 중이에요" — AuthErrorRules.swift:60).
+        //       결함 B 수리로 내 유령 하트비트가 사라지므로 공유 셀이 낡아 **서버의 10분 그물이 되살아난다**:
+        //       cron 또는 다음 폴링의 스캐빈저가 블로커를 마지막 신호로 마감하고, 그 다음 드레인에서
+        //       이 항목이 **사용자가 누른 시각 그대로** 성공한다. 손실 0, 위조 0.
+        throw SupabaseWorkServiceError.sessionAlreadyOpen
+    }
+
     private func performPendingOperation(_ item: PendingWorkItem) async throws {
         guard let teamID = currentTeamID else {
             // 소속 팀이 없으면 근무 시작/종료를 서버에 반영할 수 없다.
@@ -1744,14 +1910,26 @@ extension WorkTimerStore {
         switch item.operation {
         case .start:
             // 항목이 동봉한 세션ID/시작시각을 쓴다 — 오프라인 복구 시 서버 started_at 이 실제 시작시각으로 기록된다.
-            try await withSessionRetry { activeSession in
-                try await service.startWork(
-                    accessToken: activeSession.accessToken,
-                    teamID: teamID,
-                    userID: activeSession.userID,
-                    sessionID: item.sessionID,
-                    startedAt: item.sessionStartedAt ?? Date()
-                )
+            do {
+                let insertedID: String? = try await withSessionRetry { activeSession in
+                    return try await service.startWork(
+                        accessToken: activeSession.accessToken,
+                        teamID: teamID,
+                        userID: activeSession.userID,
+                        sessionID: item.sessionID,
+                        startedAt: item.sessionStartedAt ?? Date()
+                    )
+                }
+                // 도장 규칙 (a): **서버가 그 행을 돌려줬다.** 공유 행 쓰기가 열리는 정상 경로가 여기다.
+                // nil(= 내 id 를 가진 행이 이미 있다 — 큐 재재생)은 찍지 않는다: 그 행이 열려 있는지
+                // 닫혀 있는지 모르기 때문이다. 다음 폴링의 openSession 이 규칙 (b)/(c)로 정확히 판정한다.
+                if let insertedID, insertedID == Self.canonicalSessionID(item.sessionID) {
+                    confirmedServerSessionID = insertedID
+                }
+            } catch SupabaseWorkServiceError.sessionAlreadyOpen {
+                // ★ 23505 는 "중복"이지 "무효"가 아니다. 버리지도 않고(근무가 사라진다) 영원히 재시도하지도
+                //   않는다(큐 전체가 멈춘다 — 2026-10-09 사고의 정체). 해소기로 넘긴다.
+                try await resolveStartBlockedByOpenSession(item, teamID: teamID)
             }
         case .stop(let durationSeconds):
             try await withSessionRetry { activeSession in
@@ -1793,6 +1971,19 @@ extension WorkTimerStore {
               let ownMember = teamMembers.first(where: { $0.id == session.userID })
         else {
             return
+        }
+
+        // ★ 도장 규칙 (c): **열린 행이 내 도장과 다르면 즉시 지운다.** 도장은 "그때 있었다"가 아니라
+        //   "지금 있다"여야 한다 — 흡수 맥이 블로커를 종료하면 원 소유 맥의 세션은 서버에서 닫히는데,
+        //   이 지움이 없으면 그 맥이 **닫힌 id 를 계속 방송한다**(2026-10-09 아이맥이 정확히 그랬다:
+        //   내가 그 세션을 마감한 뒤에도 4시간 동안 그 id 로 하트비트가 나갔다).
+        //
+        //   **'다르면'이지 '없으면'이 아니다.** 찢어진 읽기(work_statuses 만 먼저 도착 — 병렬 GET,
+        //   SupabaseWorkService.swift:88)에서는 openSession 이 nil 로 오는데, 그때 지우면 멀쩡한 세션의
+        //   하트비트가 한 주기 끊긴다. 증거의 부재는 아무것도 증명하지 않는다(이 파일의 일방향 원칙).
+        if let serverOpenID = ownMember.openSession?.id,
+           serverOpenID != confirmedServerSessionID {
+            confirmedServerSessionID = nil
         }
 
         // [v0.2.36 W2 — 잠자기 정정 수용 지점] 서버 스캐빈저가 abandoned(복원 불가)로 먼저 닫아 둔
@@ -1943,8 +2134,12 @@ extension WorkTimerStore {
             // 흡수가 되면 하트비트가 멈추고, 그 창에서 뚜껑을 5분 넘게 닫거나 앱을 끄면 마감이 나가지 못해
             // 스캐빈저가 시작 시각으로 마감한다(= 그 근무가 0초로 기록된다).
             let localSessionID = Self.canonicalSessionID(currentSessionID)
+            // **열린 행의 id 다.** 위 문단의 추론("서버가 다른 id 를 들고 있다 = 내 id 는 이미 닫혔다")은
+            // 부분 유니크에서 나오는데, 그 전제는 비교 대상이 **실재하는 열린 행**일 때만 성립한다.
+            // 공유 셀을 쓰면 유령 id 하나로 그 추론이 통째로 거짓이 된다 — 멀쩡히 살아 있는 내 세션이
+            // '이미 닫혔다'로 오독돼 흡수로 뒤집힌다(2026-10-09 사고에서 셀이 바로 그 상태였다).
             if ownMember.status == .working,
-               let serverSessionID = Self.canonicalSessionID(ownMember.activeSessionID),
+               let serverSessionID = ownMember.openSession?.id,
                serverSessionID != localSessionID {
                 if localSessionID == nil, startedAt != nil {
                     // 강제 로그아웃 → 재로그인 복구. 진행 중 근무는 이 맥의 것 그대로이므로 표식은 건드리지 않는다.
@@ -1952,6 +2147,9 @@ extension WorkTimerStore {
                     // 이 세션이 내 것이었다면 값은 이미 살아 있고, 흡수 세션이었다면 여기서 소유를 주장하는 순간
                     // 살아 있는 다른 맥의 근무를 가로챈다.
                     currentSessionID = serverSessionID
+                    // 도장 규칙 (b): 이 값은 **열린 행에서 직접 온 것**이라 실재가 증명돼 있다.
+                    // 같은 줄에서 찍지 않으면 복구 직후의 하트비트가 게이트에 막혀 영영 안 나간다.
+                    confirmedServerSessionID = serverSessionID
                 } else if ownMember.currentSessionStartedAt != nil {
                     // 열린 세션 행이 실제로 함께 온 경우에만 재흡수한다. work_statuses 와 work_sessions 는
                     // 병렬 GET 이라(SupabaseWorkService.swift:88) 찢어진 읽기에서 상태표만 먼저 도착하면
@@ -1991,11 +2189,19 @@ extension WorkTimerStore {
         let restoredStart = ownMember.currentSessionStartedAt ?? now
         stampDisplayClocks(now)
         if startedAt != restoredStart { startedAt = restoredStart }
-        // activeSessionID 가 비어 온 찢어진 읽기에서는 내가 들고 있던 id 를 유지한다(nil 로 덮으면 하트비트가 끊긴다).
-        // 서버에서 온 값은 여기서 정규화한다 — 아래 1차 판정(isOwnedByThisMac)과 currentSessionID 대입이
-        // 모두 이 값을 쓰므로, 이 한 줄이 '서버 소문자 vs 로컬 대문자' 축을 이 함수 전체에서 없앤다.
-        let resolvedID = Self.canonicalSessionID(ownMember.activeSessionID) ?? currentSessionID
+        // 열린 **행**의 id 다. 비어 온 찢어진 읽기에서는 내가 들고 있던 id 를 유지한다(nil 로 덮으면 하트비트가
+        // 끊긴다). 행의 id 는 이미 소문자라(OpenSessionFact 규약) 여기서 정규화가 한 번 더 필요하지 않다 —
+        // 아래 1차 판정(isOwnedByThisMac)과 currentSessionID 대입이 모두 같은 축을 본다.
+        // 셀(activeSessionID)을 쓰면 흡수가 **존재하지 않는 세션을 흡수**하고, 그 id 로 하트비트가 나간다.
+        let resolvedID = ownMember.openSession?.id ?? currentSessionID
         if currentSessionID != resolvedID { currentSessionID = resolvedID }
+        // 도장 규칙 (b): **서버 읽기의 열린 행 id 가 그 값이었다.** 흡수한 세션은 정의상 서버에 실재하므로
+        // 여기가 가장 흔한 도장 자리다(재시작 복귀도 이 경로로 온다 — startedAt 이 영속되지 않기 때문).
+        // 찢어진 읽기(openSession == nil)에서는 찍지 않는다: 그때 resolvedID 는 내가 들고 있던 값이고,
+        // 그 값이 실재한다는 증거는 아무 데도 없다.
+        if let open = ownMember.openSession, open.id == resolvedID {
+            confirmedServerSessionID = open.id
+        }
         // 12시간 카운터도 서버 시작시각 기준으로 되맞춘다 — 옛 앵커를 남기면 흡수 직후 확인 배너가 즉시 터진다.
         if longSessionAnchor != restoredStart { longSessionAnchor = restoredStart }
         clearLongSessionPrompt()
@@ -2130,7 +2336,8 @@ extension WorkTimerStore {
         guard !adoptedRemoteSession, startedAt != nil, ownMember.status == .working else { return }
         guard let sessionID = Self.canonicalSessionID(currentSessionID) else { return }
         // 서버가 다른 세션을 들고 있는 경우는 이 규칙의 대상이 아니다(재흡수 분기가 이미 처리한다).
-        guard Self.canonicalSessionID(ownMember.activeSessionID) == sessionID else { return }
+        // 비교 대상은 열린 **행**이다 — 셀이 유령이면 이 게이트가 항상 닫혀 반납 규칙 전체가 죽는다.
+        guard ownMember.openSession?.id == sessionID else { return }
         // 세션이 바뀌었으면 장부를 처음부터 — 이전 세션에서 본 남의 신호를 새 세션의 '전진' 근거로 쓰면
         // 방금 내가 연 세션을 첫 폴링에 그대로 반납한다.
         if foreignDeviceTrackingSessionID != sessionID {

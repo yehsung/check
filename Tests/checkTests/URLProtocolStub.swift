@@ -40,10 +40,15 @@ final class URLProtocolStub: URLProtocol {
         let body = Self.bodyText(from: request)
         Self.record(request: request, bodyText: body)
 
-        let responseData = Self.responseData(for: request, body: body)
+        // 상태를 **바꾸는** 호스트(23505 재현)는 요청당 **한 번만** 판정해야 한다. 아래 responseData 와
+        // statusCode 는 서로 다른 호출이라, 둘 다에서 판정하면 같은 INSERT 가 표에 두 번 들어가고
+        // (열린 행이 둘) PATCH 도 두 번 닫힌다 — 상태 없는 분기들에는 없던 함정이다.
+        // 그래서 여기서 한 번 접고, 그 결과를 상태코드와 본문에 **같이** 쓴다.
+        let outcome = Self.statefulOutcome(for: request, body: body)
+        let responseData = outcome?.data ?? Self.responseData(for: request, body: body)
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: Self.statusCode(for: request, body: body),
+            statusCode: outcome?.statusCode ?? Self.statusCode(for: request, body: body),
             httpVersion: nil,
             headerFields: ["Content-Type": "application/json"]
         )!
@@ -358,6 +363,25 @@ final class URLProtocolStub: URLProtocol {
         }
         if request.url?.path == "/rest/v1/work_sessions", request.httpMethod == "GET" {
             return workSessionsData(for: request)
+        }
+        // 세션 열기 POST 는 **들어간 행을 돌려준다** — 실서버 PostgREST 가 `Prefer: return=representation`
+        // 에 하는 그대로다(v0.3.45). 빈 본문을 돌려주면 `startWork` 가 "행을 못 받았다"로 읽어
+        // 세션 확인 도장이 안 찍히고, 그러면 공유 행 게이트가 닫혀 **정상 근무의 하트비트까지 죽는다** —
+        // 스텁이 서버보다 가난해서 제품 코드가 빨개지는 전형적인 자리라 여기서 사실을 맞춘다.
+        // 닫는 PATCH(ended_at 포함)는 기존 분기들이 맡는다.
+        if request.url?.path == "/rest/v1/work_sessions",
+           request.httpMethod == "POST",
+           (request.value(forHTTPHeaderField: "Prefer") ?? "").contains("return=representation"),
+           let object = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any],
+           let id = object["id"] as? String {
+            let echoed: [String: Any] = [
+                "id": id.lowercased(),
+                "user_id": object["user_id"] as? String ?? "",
+                "started_at": object["started_at"] as? String ?? "",
+                "ended_at": object["ended_at"] as Any,
+                "duration_seconds": object["duration_seconds"] as Any,
+            ].compactMapValues { $0 is NSNull ? nil : $0 }
+            return (try? JSONSerialization.data(withJSONObject: [echoed])) ?? Data("[]".utf8)
         }
         if request.url?.path == "/rest/v1/token_usage_monthly", request.httpMethod == "GET" {
             return legacyTokenUsageData(for: request)
@@ -1239,6 +1263,217 @@ final class URLProtocolStub: URLProtocol {
         )
     }
 
+    // MARK: - 상태 있는 스텁: "이 사용자에게 다른 열린 세션이 이미 있다" (부분 유니크 23505)
+    //
+    // 2026-10-09 운영 사고의 모양이다. 아이맥이 세션을 열어 둔 채 남고, 맥북의 [근무 시작] INSERT 가
+    // 부분 유니크 `work_sessions_one_open_per_user`(user_id **where ended_at is null**)에 걸려
+    // 409/23505 로 떨어졌다. 위의 다른 분기들과 달리 이 호스트는 **요청에 따라 답이 바뀐다** —
+    // 블로커를 닫으면 그 다음 열기가 성공해야 하고, 닫힌 행 INSERT 는 처음부터 성공해야 한다.
+    // 그 전이가 없으면 "막힌 상태"만 재현되어 복구 경로(= 사고의 수리 대상)를 한 글자도 못 태운다.
+    //
+    // ★ 상태는 **호스트별 키**다(V0330MessageReadStub 와 같은 규약). 프로세스 전역 단일 변수로 두면
+    //   병렬로 도는 다른 테스트가 서로의 표를 덮어 "열린 행이 있었는가"가 무작위가 된다 —
+    //   위 `patchWorkSessionsShouldFail`·`delayedHosts` 주석이 경고하는 그 레이스이고, 이쪽은 쓰기까지
+    //   섞이므로 더 조용히 깨진다. 테스트는 자기만의 호스트를 쓰고 시작 전에 reset 한다.
+    //
+    // 왜 호스트 **조각** 매칭인가: 기존 관용구(`wallet-laps2` 처럼 조각을 겹쳐 쓰는 호스트)와 같게 두어
+    // `start-conflict-<테스트이름>` 으로 테스트마다 고유 호스트를 만들 수 있게 한다.
+    static let startConflictHostToken = "start-conflict"
+
+    /// 실제 PostgREST 가 이 위반에 돌려주는 본문 **그대로**다. 문구를 줄이면 서비스의 23505 판정
+    /// (`SupabaseWorkHTTP.serviceError` — 제약명·SQLSTATE·"duplicate key"를 본다)이 스텁에서만
+    /// 걸리는 가짜가 된다. 이 문자열이 그 판정에 실제로 걸리는지는
+    /// `startConflictBodyIsClassifiedAsSessionAlreadyOpen` 이 서비스를 불러 못 박는다.
+    static let startConflictDuplicateBody =
+        #"{"code":"23505","message":"duplicate key value violates unique constraint \"work_sessions_one_open_per_user\"","details":null,"hint":null}"#
+
+    /// 이 스텁이 들고 있는 `work_sessions` 한 줄. `endedAt == nil` 이 **열린 행**이고, 부분 유니크는
+    /// 그 행들만 본다(닫힌 행은 몇 줄이든 공존한다).
+    struct StartConflictRow: Equatable {
+        var id: String
+        var startedAt: String
+        var endedAt: String?
+        var durationSeconds: Int?
+        var isOpen: Bool { endedAt == nil }
+    }
+
+    /// 사고 당시의 사용자(스텁 전역에서 쓰는 그 사람).
+    static let startConflictUserID = "00000000-0000-0000-0000-000000000002"
+    /// 아이맥이 열어 둔 채 남긴 **블로커** 세션(= 맥북의 시작을 23505 로 떨어뜨리는 행).
+    static let startConflictBlockerSessionID = "90000000-0000-0000-0000-000000000001"
+    static let startConflictBlockerStartedAt = "2026-10-09T01:00:00Z"
+    /// 어제 정상 마감된 행. **일부러 함께 둔다** — 닫힌 행이 있어도 열기가 막히지 않는다는 것,
+    /// 그리고 닫힌 행 INSERT 가 성공한다는 것을 "행이 없어서 통과"와 가르려면 이 줄이 필요하다.
+    static let startConflictClosedSessionID = "90000000-0000-0000-0000-000000000002"
+
+    static func startConflictDefaultRows() -> [StartConflictRow] {
+        [
+            StartConflictRow(
+                id: startConflictBlockerSessionID,
+                startedAt: startConflictBlockerStartedAt,
+                endedAt: nil,
+                durationSeconds: nil
+            ),
+            StartConflictRow(
+                id: startConflictClosedSessionID,
+                startedAt: "2026-10-08T01:00:00Z",
+                endedAt: "2026-10-08T03:00:00Z",
+                durationSeconds: 7_200
+            )
+        ]
+    }
+
+    private static let startConflictLock = NSLock()
+    private nonisolated(unsafe) static var startConflictRowsByHost: [String: [StartConflictRow]] = [:]
+
+    /// 테스트 시작마다 이 호스트의 표를 처음 상태로 돌린다(rows 를 주면 그 모양으로).
+    /// 같은 호스트를 두 테스트가 쓰더라도 여기서 갈라지므로, 앞 테스트가 닫아 둔 블로커가
+    /// 뒤 테스트의 "막혀 있다" 전제를 조용히 없애지 못한다.
+    static func resetStartConflictFixture(forHost host: String, rows: [StartConflictRow]? = nil) {
+        startConflictLock.lock()
+        defer { startConflictLock.unlock() }
+        startConflictRowsByHost[host] = rows ?? startConflictDefaultRows()
+    }
+
+    /// 지금 이 호스트의 표(단언용). reset 을 안 불렀으면 기본 픽스처로 읽힌다.
+    static func startConflictRows(forHost host: String) -> [StartConflictRow] {
+        startConflictLock.lock()
+        defer { startConflictLock.unlock() }
+        return startConflictRowsByHost[host] ?? startConflictDefaultRows()
+    }
+
+    private static func withStartConflictRows<T>(
+        host: String,
+        _ mutate: (inout [StartConflictRow]) -> T
+    ) -> T {
+        startConflictLock.lock()
+        defer { startConflictLock.unlock() }
+        var rows = startConflictRowsByHost[host] ?? startConflictDefaultRows()
+        let result = mutate(&rows)
+        startConflictRowsByHost[host] = rows
+        return result
+    }
+
+    /// 한 요청의 **최종 응답**(상태코드 + 본문). 상태를 바꾸는 분기는 이 한 쌍을 함께 돌려야 한다 —
+    /// 상태코드와 본문을 따로 계산하면 둘이 어긋난 응답(2xx + 23505 본문)이 나올 수 있다.
+    struct StubOutcome {
+        let statusCode: Int
+        let data: Data
+    }
+
+    static func statefulOutcome(for request: URLRequest, body: String) -> StubOutcome? {
+        guard let host = request.url?.host, host.contains(startConflictHostToken),
+              request.url?.path == "/rest/v1/work_sessions"
+        else { return nil }
+        switch request.httpMethod {
+        case "POST":
+            return startConflictInsert(host: host, body: body)
+        case "PATCH":
+            return startConflictPatch(host: host, request: request, body: body)
+        case "GET":
+            return StubOutcome(statusCode: 200, data: startConflictSelect(host: host, request: request))
+        default:
+            return nil
+        }
+    }
+
+    /// INSERT. 세 갈래가 **전부** 필요하다:
+    ///  · 같은 id 재삽입 → 조용히 무시(2xx). 실서버도 `on_conflict=id` + `resolution=ignore-duplicates`
+    ///    라 중재 인덱스가 id 라 그 충돌은 DO NOTHING 이다(큐 재재생의 멱등성이 이 갈래다).
+    ///  · 새 **열린** 행 + 이미 열린 행이 있다 → 409 + 23505. 중재 인덱스(id)와 **다른** 제약이라
+    ///    ON CONFLICT 가 삼켜 주지 않는다 — 사고가 난 자리가 정확히 여기다.
+    ///  · 새 **닫힌** 행 → 성공. 부분 유니크는 `where ended_at is null` 이라 닫힌 행을 보지 않는다.
+    ///    이 갈래를 막으면 stopWork 의 폴백 INSERT 가 영영 실패해, 재현이 "아무것도 못 쓴다"로 번진다.
+    private static func startConflictInsert(host: String, body: String) -> StubOutcome {
+        let incoming = startConflictInsertRows(in: body)
+        return withStartConflictRows(host: host) { rows in
+            let fresh = incoming.filter { candidate in !rows.contains { $0.id == candidate.id } }
+            if fresh.contains(where: { $0.isOpen }), rows.contains(where: { $0.isOpen }) {
+                // 한 문장이 실패하면 그 INSERT 는 통째로 롤백된다 — 먼저 적재하고 나중에 거절하면
+                // 실패한 요청이 표를 바꿔 놓은, 서버가 절대 못 만드는 상태가 된다.
+                return StubOutcome(statusCode: 409, data: Data(startConflictDuplicateBody.utf8))
+            }
+            rows.append(contentsOf: fresh)
+            return StubOutcome(statusCode: 201, data: Data())
+        }
+    }
+
+    /// PATCH. 본문에 `ended_at` 이 있으면 **열린 행만** 닫는다(쿼리에 `id=eq.…` 가 있으면 그 행만).
+    /// 응답은 `Prefer: return=representation` 의 모양 — 닫은 행들의 배열이다(0행이면 `[]`).
+    private static func startConflictPatch(host: String, request: URLRequest, body: String) -> StubOutcome {
+        let fields = startConflictObject(in: body)
+        let endedAt = fields["ended_at"] as? String
+        let duration = fields["duration_seconds"] as? Int
+        let idFilter = startConflictIDFilter(in: request)
+        let closed = withStartConflictRows(host: host) { rows -> [StartConflictRow] in
+            guard let endedAt else { return [] }
+            var touched: [StartConflictRow] = []
+            for index in rows.indices where rows[index].isOpen {
+                if let idFilter, rows[index].id != idFilter { continue }
+                rows[index].endedAt = endedAt
+                rows[index].durationSeconds = duration ?? rows[index].durationSeconds
+                touched.append(rows[index])
+            }
+            return touched
+        }
+        return StubOutcome(statusCode: 200, data: Data(startConflictRowsJSON(closed).utf8))
+    }
+
+    /// SELECT. 지금 표를 그대로 비춘다 — `ended_at=is.null` 이 붙으면 열린 행만(다른 호스트의
+    /// `openQuery` 관용구와 같다).
+    private static func startConflictSelect(host: String, request: URLRequest) -> Data {
+        let rows = startConflictRows(forHost: host)
+        let openOnly = request.url?.query?.contains("ended_at=is.null") == true
+        return Data(startConflictRowsJSON(openOnly ? rows.filter { $0.isOpen } : rows).utf8)
+    }
+
+    private static func startConflictRowsJSON(_ rows: [StartConflictRow]) -> String {
+        let items = rows.map { row in
+            let ended = row.endedAt.map { "\"\($0)\"" } ?? "null"
+            let duration = row.durationSeconds.map(String.init) ?? "null"
+            return """
+            {"id":"\(row.id)","user_id":"\(startConflictUserID)","started_at":"\(row.startedAt)",\
+            "ended_at":\(ended),"duration_seconds":\(duration)}
+            """
+        }
+        return "[" + items.joined(separator: ",") + "]"
+    }
+
+    private static func startConflictObject(in body: String) -> [String: Any] {
+        (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [String: Any] ?? [:]
+    }
+
+    /// 본문에서 들어오는 행들을 읽는다. PostgREST 는 객체 하나와 배열을 모두 받으므로 둘 다 본다.
+    /// `ended_at` 이 **없거나 null** 이면 열린 행이다 — `StartSessionRequest` 는 그 키를 아예 싣지 않고,
+    /// `CompletedSessionRequest` 는 값을 싣는다. 그 차이가 이 스텁의 유일한 갈림길이다.
+    private static func startConflictInsertRows(in body: String) -> [StartConflictRow] {
+        let decoded = try? JSONSerialization.jsonObject(with: Data(body.utf8))
+        let objects: [[String: Any]]
+        if let one = decoded as? [String: Any] {
+            objects = [one]
+        } else if let many = decoded as? [[String: Any]] {
+            objects = many
+        } else {
+            objects = []
+        }
+        return objects.map { object in
+            StartConflictRow(
+                id: object["id"] as? String ?? "unknown-id",
+                startedAt: object["started_at"] as? String ?? "2026-10-09T00:00:00Z",
+                endedAt: object["ended_at"] as? String,
+                durationSeconds: object["duration_seconds"] as? Int
+            )
+        }
+    }
+
+    private static func startConflictIDFilter(in request: URLRequest) -> String? {
+        guard let url = request.url,
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+              let raw = items.first(where: { $0.name == "id" })?.value
+        else { return nil }
+        return raw.hasPrefix("eq.") ? String(raw.dropFirst(3)) : raw
+    }
+
     private static func hasTeamFixture(for request: URLRequest) -> Bool {
         let host = request.url?.host
         return host == "team-hours-test"
@@ -1256,4 +1491,26 @@ final class URLProtocolStub: URLProtocol {
             || host?.hasPrefix("token-daily-") == true
             || host?.hasPrefix("insights-token-") == true
     }
+}
+
+// MARK: - 확인된 진행 세션 씨뿌리기 (v0.3.45)
+
+/// 테스트가 **"서버가 확인해 준 진행 세션"** 을 손으로 세울 때 쓴다.
+///
+/// 제품에서 이 상태는 한 가지 방법으로만 생긴다 — `startWork` 가 **들어간 행을 돌려받았거나**, 폴링의
+/// 열린 행 id 가 내 id 와 같았을 때(`WorkTimerStore.confirmedServerSessionID` 주석의 규칙 (a)/(b)).
+/// `currentSessionID` 만 세우는 것은 "이 맥이 그렇게 믿는다"일 뿐이고, 그 상태에서는 공유 행 쓰기 게이트가
+/// 닫혀 하트비트가 나가지 않는다 — 그게 2026-10-09 유령 세션 사고를 막는 장치다.
+///
+/// 그래서 **하트비트가 나가는 것을 재는 테스트**는 이 함수로 세워야 한다. 반대로 게이트의 음성(유령은 못
+/// 나간다)을 재는 테스트는 일부러 `currentSessionID` 만 세운다(V0345ConfirmedSessionGateTests).
+@MainActor
+func seedConfirmedSession(
+    _ store: WorkTimerStore,
+    _ sessionID: String,
+    startedAt: Date = Date()
+) {
+    store.startedAt = startedAt
+    store.currentSessionID = sessionID
+    store.confirmedServerSessionID = WorkTimerStore.canonicalSessionID(sessionID)
 }

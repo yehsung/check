@@ -46,14 +46,23 @@ private func makeOwnershipStubStore(
 
 /// 서버 스냅샷의 '내 행'(근무중 + 열린 세션). lastSeenAt 을 명시로 받아 '전진/정지'를 테스트가 직접 조종한다.
 /// deviceClaims 는 기본 빈 배열 = "아무 맥도 주장하지 않음"이 아니라 **판정 불가**(구버전 맥/표 없는 서버).
+/// 근무 중인 팀원 한 명. **공유 셀과 열린 행을 같이 세운다** — 서버에서 근무 중이라는 것은
+/// `work_statuses.active_session_id` 와 `work_sessions` 의 열린 행이 **둘 다** 그 세션을 가리킨다는 뜻이고,
+/// 그게 정상 상태다. 둘을 갈라 놓고 싶은 테스트(2026-10-09 유령 사고 재현)는 `openSessionID` 로 덮어쓴다.
+///
+/// `openSessionID` 에 nil 을 **명시하면** "셀은 있는데 열린 행이 없다"(= 유령)를 만든다.
+/// 기본값(`.some(sessionID)`)과 구별하려고 이중 옵셔널을 쓴다 — 생략과 nil 이 다른 뜻이어야 한다.
 private func workingMember(
     userID: String,
     startedAt: Date,
     sessionID: String,
     lastSeenAt: Date,
-    deviceClaims: [StatusDeviceClaim] = []
+    deviceClaims: [StatusDeviceClaim] = [],
+    openSessionID: String?? = nil,
+    openSessionStartedAt: Date? = nil
 ) -> TeamMemberStatus {
-    TeamMemberStatus(
+    let openID = openSessionID ?? .some(sessionID)
+    return TeamMemberStatus(
         id: userID,
         name: "영식",
         status: .working,
@@ -64,7 +73,10 @@ private func workingMember(
         avatarURL: nil,
         lastSeenAt: lastSeenAt,
         activeSessionID: sessionID,
-        deviceClaims: deviceClaims
+        deviceClaims: deviceClaims,
+        openSession: openID.map {
+            OpenSessionFact(id: $0.lowercased(), startedAt: openSessionStartedAt ?? startedAt)
+        }
     )
 }
 

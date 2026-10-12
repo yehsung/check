@@ -19,10 +19,29 @@ import Foundation
 
 #if os(macOS)
 extension SupabaseWorkService {
-    package func startWork(accessToken: String, teamID: String, userID: String, sessionID: String, startedAt: Date = Date()) async throws {
+    /// 근무 시작. **들어간 행의 id**(소문자, 못 읽으면 nil)를 돌려준다.
+    ///
+    /// 왜 반환값이 필요한가(2026-10-09 운영 사고): 큐가 막힌 사이에도 하트비트는 큐를 지나가지 않아
+    /// **서버에 없는 세션 id** 를 공유 셀에 30초마다 써넣었다. 세션 신원을 공유 셀이 아니라 "서버가 실제로
+    /// 받아 준 행" 에서 얻을 수 있어야 그 거짓말이 성립하지 않는다.
+    ///
+    /// ★ **빈 배열의 뜻을 거꾸로 읽지 마라.** `on_conflict=id` + `resolution=ignore-duplicates` 는
+    ///   `ON CONFLICT (id) DO NOTHING` 이라 **arbiter(= id) 충돌만** 삼킨다. 그래서
+    ///    · 0행 = "내 id 를 가진 행이 **이미 있다**" — 큐 재재생·ack 유실 뒤 재발사의 **정상 경로**다.
+    ///      "내 세션이 아니다"가 **아니다**(설계 심사에서 다른 안이 여기를 거꾸로 읽어, 이미 올라간 내 세션을
+    ///      남의 것으로 보고 근무를 0초로 만들었다).
+    ///    · 부분 유니크 `work_sessions_one_open_per_user`(user_id where ended_at is null) 위반은 arbiter 가
+    ///      달라 **삼켜지지 않는다** — 그대로 23505 로 올라와 공용 매핑이 `.sessionAlreadyOpen` 으로 접어 던진다.
+    ///      즉 "다른 맥의 열린 세션이 있다"는 이 함수의 **오류**이고, nil 반환이 아니다. 두 경우를 반환값으로
+    ///      가르려 들면 영영 섞인다.
+    ///
+    /// 요청 **본문 바이트는 한 글자도 바뀌지 않는다** — Prefer 의 `return=minimal` 이 `return=representation`
+    /// 으로만 바뀐다(쿼리·본문·메서드 동일).
+    @discardableResult
+    package func startWork(accessToken: String, teamID: String, userID: String, sessionID: String, startedAt: Date = Date()) async throws -> String? {
         // 큐 재재생으로 이미 닫힌 동일 id 세션에 다시 POST 돼도 무해하도록 멱등화한다(stopWork fallback 과 동일 패턴).
         // on_conflict=id + resolution=ignore-duplicates 로 중복 id 는 서버가 조용히 무시한다(409 소멸).
-        try await sendNoBody(
+        let inserted = try await send(
             path: "/rest/v1/work_sessions",
             method: "POST",
             queryItems: [URLQueryItem(name: "on_conflict", value: "id")],
@@ -33,13 +52,23 @@ extension SupabaseWorkService {
                 startedAt: dateFormatter.string(from: startedAt)
             ),
             accessToken: accessToken,
-            prefer: "resolution=ignore-duplicates,return=minimal"
+            prefer: "resolution=ignore-duplicates,return=representation"
         )
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
+        // 디코드 실패는 nil 로 접는다(옛 서버·빈 본문) — 여기서 던지면 **이미 성공한 INSERT** 가 큐에서 재생된다.
+        let rows = (try? decoder.decode([WorkSessionRow].self, from: inserted)) ?? []
+        return rows.first?.id?.lowercased()
     }
 
     /// autoClosedReason: 자동 마감이면 사유(away/sleep/long_session). 사용자가 누른 종료는 nil 이고,
     /// 그때의 요청 **본문** 바이트는 v0.2.34 와 같다(쿼리에는 v0.2.36 부터 id 필터가 더해졌다 — 아래 주석).
+    ///
+    /// updateSharedStatus: 꼬리의 `upsertStatus(off_work, nil)` 를 낼지. **기본 true 라 기존 호출부의
+    /// 바이트·동작은 완전히 같다.** false 가 필요한 이유가 2026-10-09 사고의 두 번째 절반이다: 세션 PATCH 가
+    /// 0행을 맞춰도(= 내가 닫으려던 행이 서버에 없거나 이미 닫혔다) 꼬리가 **무조건** 나가 상태만 off_work 가
+    /// 되면 **(열린 세션, off_work)** = "아무도 못 닫는 세션" 이 된다 — 마감 3경로(사용자 종료·away/sleep
+    /// 자동 마감·서버 스캐빈저)가 전부 `status='working'` 을 요구하기 때문이다. 운영에서 실제로 이 상태를
+    /// 확인했다. 세션 한 행만 고치는 복구 경로는 공유 셀을 건드리지 않아야 한다.
     package func stopWork(
         accessToken: String,
         teamID: String,
@@ -48,7 +77,8 @@ extension SupabaseWorkService {
         endedAt: Date,
         durationSeconds: Int,
         fallbackSessionID: String,
-        autoClosedReason: AutoCloseReason? = nil
+        autoClosedReason: AutoCloseReason? = nil,
+        updateSharedStatus: Bool = true
     ) async throws {
         let closedStamp = dateFormatter.string(from: Date())
         func patch(includeReason: Bool) async throws -> Data {
@@ -121,6 +151,7 @@ extension SupabaseWorkService {
                 )
             }
         }
+        guard updateSharedStatus else { return }
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "off_work", activeSessionID: nil)
     }
 
@@ -427,9 +458,16 @@ extension SupabaseWorkService {
     /// 유니크 인덱스(work_sessions_one_open_per_user)상 다른 열린 세션이 없을 때만 안전하다.
     /// auto_closed_at/auto_closed_reason 도 함께 null 로 되돌린다 — 남기면 **열린** 세션이 'abandoned'
     /// 사유를 단 채 살아나, 이후의 마감 사유 판정이 죽은 마감의 잔재를 읽는다.
-    package func reopenSession(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
-        func patch(resetAutoClose: Bool) async throws {
-            try await sendNoBody(
+    ///
+    /// **되돌아온 행의 id 를 돌려준다(없으면 nil).** 전에는 `return=minimal` 이라 **0행을 성공으로 읽었다** —
+    /// 재개가 실제로 아무 행도 안 건드렸는데(그 세션이 이미 사라졌거나 남의 행이거나 필터가 안 맞았다)
+    /// 호출부는 성공으로 보고받고 타이머를 다시 돌렸다. 성패는 "행이 돌아왔는가" 로만 가를 수 있으므로
+    /// 여기서는 그 사실만 돌려주고, 0행을 실패로 다루는 것은 호출부 몫이다(`@discardableResult` 라
+    /// 기존 호출부는 글자 그대로 컴파일된다).
+    @discardableResult
+    package func reopenSession(accessToken: String, teamID: String, userID: String, sessionID: String) async throws -> String? {
+        func patch(resetAutoClose: Bool) async throws -> Data {
+            try await send(
                 path: "/rest/v1/work_sessions",
                 method: "PATCH",
                 queryItems: [
@@ -438,16 +476,93 @@ extension SupabaseWorkService {
                 ],
                 body: ReopenSessionRequest(resetAutoClose: resetAutoClose),
                 accessToken: accessToken,
-                prefer: "return=minimal"
+                prefer: "return=representation"
             )
         }
         // 사유 컬럼이 없는 서버에서 되돌리기 자체가 죽지 않게 한 겹 막는다(stopWork 와 같은 결).
         // 실서버는 20260809140000 부터 컬럼이 있어 정상 경로는 항상 전자다.
+        var reopened = Data()
         try await withoutNewColumns(
-            { try await patch(resetAutoClose: true) },
-            retry: { try await patch(resetAutoClose: false) }
+            { reopened = try await patch(resetAutoClose: true) },
+            retry: { reopened = try await patch(resetAutoClose: false) }
         )
+        // 상태 복구는 **그대로 낸다**(바이트 동일). 0행일 때 이 쓰기를 빼는 판단은 호출부가 한다 —
+        // 여기서 조용히 빼면 기존 경로의 '근무중 복구' 가 사라져 다른 사고가 된다.
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
+        let rows = (try? decoder.decode([WorkSessionRow].self, from: reopened)) ?? []
+        return rows.first?.id?.lowercased()
+    }
+
+    // MARK: - 갇힌 근무 복구 (2026-10-09 운영 사고)
+
+    /// 내가 주장하는 구간(`[since, ∞)`)과 겹칠 수 있는 **내** 세션 전부 — 열린 행(있으면)과 `since` 이후에
+    /// 끝난 닫힌 행들. `started_at` 오름차순, 최대 50행.
+    ///
+    /// ★ **팀 필터를 걸지 않는다.** 부분 유니크 `work_sessions_one_open_per_user` 는
+    ///   `on public.work_sessions(user_id) where ended_at is null` — **user_id 전역**이고 team_id 가 없다
+    ///   (20260701000000:44). 팀으로 좁히면 다른 팀에 열려 있는 내 행이 조회에서 사라지고, 그 행이 바로
+    ///   23505 를 낸 범인이라 "원인을 찾지 못하는 복구" 가 된다. RLS 는 본인 행 select 를 이미 허용한다.
+    ///
+    /// 겹침 판정을 `ended_at` 하나로 세우는 이유: 열린 행은 끝이 없으니 무조건 겹칠 수 있고(`is.null`),
+    /// 닫힌 행은 `ended_at < since` 면 내 구간보다 **완전히 앞서** 절대 겹치지 않는다. 그래서
+    /// `or=(ended_at.is.null,ended_at.gte.<since>)` 가 "겹칠 수 있는 전부" 의 최소 필터다
+    /// (`started_at` 으로 걸면 since 전에 시작해 지금도 안 끝난 행을 놓친다 — fetchWeeklySessions 가 겪은 실버그).
+    package func fetchMyOverlappingSessions(accessToken: String, userID: String, since: Date) async throws -> [WorkSessionRow] {
+        let data = try await send(
+            path: "/rest/v1/work_sessions",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at,duration_seconds"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "or", value: "(ended_at.is.null,ended_at.gte.\(dateFormatter.string(from: since)))"),
+                URLQueryItem(name: "order", value: "started_at.asc"),
+                URLQueryItem(name: "limit", value: "50")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([WorkSessionRow].self, from: data)
+    }
+
+    /// **닫힌** 세션 한 행만 적는다. **공유 상태(work_statuses)를 건드리지 않는 것이 이 함수의 전부다** —
+    /// 갇힌 큐를 풀며 과거 구간을 복구할 때 공유 셀까지 함께 쓰면, 지금 다른 맥이 돌리는 근무의
+    /// status/active_session_id 를 과거의 사실로 덮어 (열린 세션, off_work) 교착을 다시 만든다.
+    /// 그래서 stopWork 를 재사용하지 않는다(그쪽은 PATCH 우선 + 꼬리 쓰기라 결이 다르다).
+    ///
+    /// 부분 유니크에 **걸리지 않는다**: `work_sessions_one_open_per_user` 의 조건이 `where ended_at is null`
+    /// 이라 ended_at 이 들어찬 행은 인덱스에 아예 들어가지 않는다(= 같은 사용자의 닫힌 행은 몇 개든 된다).
+    /// `on_conflict=id` + `resolution=ignore-duplicates` 로 재생은 멱등하다 — 같은 id 가 이미 있으면 0행이고
+    /// 그것이 성공이다(startWork 주석의 arbiter 설명과 같은 규약).
+    ///
+    /// `auto_closed_reason` 은 **nil** 이다. 어휘(away/sleep/long_session/abandoned)에 "큐 복구" 에 맞는 값이
+    /// 없고, away/sleep 이 아니면 `restore_auto_closed_session` 의 복원 대상에서도 빠진다 — 되살리면 열린
+    /// 세션이 다시 생겨 23505 를 또 만든다. 즉 nil 이 사고를 되풀이하지 않는 유일한 값이다.
+    package func insertClosedSession(
+        accessToken: String,
+        teamID: String,
+        userID: String,
+        sessionID: String,
+        startedAt: Date,
+        endedAt: Date
+    ) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/work_sessions",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "id")],
+            body: CompletedSessionRequest(
+                id: sessionID,
+                teamId: teamID,
+                userId: userID,
+                startedAt: dateFormatter.string(from: startedAt),
+                endedAt: dateFormatter.string(from: endedAt),
+                durationSeconds: max(0, Int(endedAt.timeIntervalSince(startedAt))),
+                autoClosedAt: nil,
+                autoClosedReason: nil
+            ),
+            accessToken: accessToken,
+            prefer: "resolution=ignore-duplicates,return=minimal"
+        )
     }
 
     // w16: joinTeam / createTeam 은 SupabaseWorkServiceSignUp.swift 로 갔다(OS 게이트 없음 — 폰 가입 화면이 부른다).

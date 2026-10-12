@@ -132,7 +132,9 @@ func startWorkPostsIdempotentlyWithOnConflictAndIgnoreDuplicates() async throws 
     #expect(queryItems.contains(URLQueryItem(name: "on_conflict", value: "id")))
     let prefer = try #require(sessionPost.value(forHTTPHeaderField: "Prefer"))
     #expect(prefer.contains("resolution=ignore-duplicates"))
-    #expect(prefer.contains("return=minimal"))
+    // 2026-10-09: 들어간 행의 id 를 알아야 세션 신원을 공유 셀에 의존하지 않을 수 있어 representation 으로 바뀌었다
+    // (멱등 규약 자체는 그대로 — on_conflict=id + ignore-duplicates).
+    #expect(prefer.contains("return=representation"))
 }
 
 @Test

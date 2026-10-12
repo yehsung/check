@@ -357,8 +357,10 @@ private func idWorkStore(
     // 신원은 **생성 뒤에** 덮어쓴다. 생성자는 CheckTestScratch 의 성한 defaults 에서 진짜 ID 를 하나
     // 만들어 놓으므로, 여기서 덮지 않으면 "신원 없음" 케이스가 조용히 "신원 있음"이 된다.
     store.deviceID = deviceID
-    store.startedAt = idNow.addingTimeInterval(-3_600)
-    store.currentSessionID = idOwnedSessionID
+    // 이 스위트가 재는 것은 **기기 신원 게이트**이지 세션 확인 게이트가 아니다. 그래서 세션 쪽은
+    // '서버가 확인해 준' 정상 상태로 세운다(v0.3.45) — 안 그러면 여기서 침묵하는 이유가 두 개가 되어
+    // 이 테스트가 무엇을 재는지 말할 수 없게 된다. 세션 게이트의 음성은 V0345ConfirmedSessionGateTests 가 본다.
+    seedConfirmedSession(store, idOwnedSessionID, startedAt: idNow.addingTimeInterval(-3_600))
     store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
     store.adoptedRemoteSession = adopted
     // 서버가 last_input_at 을 아는 버전 + 이미 관측된 입력 하나 — reportDeviceInput 의 두 전제다.

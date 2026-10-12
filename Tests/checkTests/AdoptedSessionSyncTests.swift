@@ -248,6 +248,9 @@ private func statusUpsertCount(host: String) -> Int {
 
 /// 서버 스냅샷의 '내 행'(근무중 + 열린 세션)을 만든다. 신호는 신선하게 둬 stale 판정/자동 마감 경로가
 /// 끼어들지 않게 한다 — 이 스위트가 보려는 것은 흡수와 하트비트뿐이다.
+///
+/// 공유 셀(`activeSessionID`)과 열린 행(`openSession`)을 **같이** 세운다 — 서버에서 근무 중이면 둘 다
+/// 같은 세션을 가리키는 것이 정상이고, 흡수 판정이 보는 쪽은 열린 행이다.
 @MainActor
 private func remoteWorkingMember(userID: String, startedAt: Date, sessionID: String) -> TeamMemberStatus {
     TeamMemberStatus(
@@ -260,7 +263,8 @@ private func remoteWorkingMember(userID: String, startedAt: Date, sessionID: Str
         todayDurationSeconds: 0,
         avatarURL: nil,
         lastSeenAt: Date(),
-        activeSessionID: sessionID
+        activeSessionID: sessionID,
+        openSession: OpenSessionFact(id: sessionID.lowercased(), startedAt: startedAt)
     )
 }
 

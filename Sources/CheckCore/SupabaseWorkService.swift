@@ -203,6 +203,15 @@ package actor SupabaseWorkService {
         let devicesByUser = Dictionary(grouping: devices, by: \.userId)
         return rows.map { row in
             let activeStartedAt = activeByUser[row.userId]?.compactMap { parseDate($0.startedAt) }.min()
+            // 열린 **행**의 신원(id+시작시각 쌍). 위 activeStartedAt 과 같은 규칙(min)으로 같은 행을 고른다.
+            // activeStartedAt 을 이 쌍에서 파생시키지 않는 이유: id 가 없는 행(옛 서버·부분 응답)에서 지금
+            // 동작이 달라지면 안 된다. 쌍은 id 가 있을 때만 서고, 없으면 nil = "판정 불가"다.
+            let openSession = activeByUser[row.userId]?
+                .compactMap { session -> OpenSessionFact? in
+                    guard let id = session.id?.lowercased(), let at = parseDate(session.startedAt) else { return nil }
+                    return OpenSessionFact(id: id, startedAt: at)
+                }
+                .min { $0.startedAt < $1.startedAt }
             let avatarURL = (row.profiles?.avatarUrl).flatMap { URL(string: $0) }
             return TeamMemberStatus(
                 id: row.userId,
@@ -224,7 +233,8 @@ package actor SupabaseWorkService {
                         // 열었다'로 승격시키면 진짜 소유자가 그 앞에서 물러난다.
                         openedSession: device.openedSession ?? false
                     )
-                }
+                },
+                openSession: openSession
             )
         }
     }

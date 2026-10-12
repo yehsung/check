@@ -88,6 +88,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var workShortcut: WorkShortcutCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // ★ 가장 먼저 SIGTERM 을 평소 종료 절차로 잇는다(v0.3.49). DMG 로 설치한 사람의 [지금 업데이트]는
+        //   번들을 갈아치우기 전에 이 앱을 끝내야 하는데, 기본 처분으로 받으면 즉사해서
+        //   `applicationShouldTerminate` → `finishWorkBeforeQuit` 이 돌지 않고 열린 근무 세션이 서버에 남는다
+        //   (왜 신호인지·왜 AppleScript 가 아닌지는 `GracefulTerminationSignal` 주석에 있다).
+        //   로그아웃·시스템 종료의 SIGTERM 도 같은 길로 들어와 근무가 마무리된다.
+        GracefulTerminationSignal.install()
         // 오버레이 컨트롤러를 **먼저** 만든다. 바로 아래 실행 킥이 서버에 열려 있던 세션을 흡수해 곧장 근무중으로
         // 복구할 수 있는데, 그 순간 표시 전환과 리액션/찔림 싱크(store.onReactionTrigger / onPokesReceived)가
         // 이미 배선돼 있어야 캐릭터 등장과 밀린 찔림이 통째로 유실되지 않는다.

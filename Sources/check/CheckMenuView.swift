@@ -1221,9 +1221,13 @@ struct MenuBarDotReasons: Equatable, Sendable {
 
 // MARK: - Update banner (새 버전 안내 + 원클릭/명령 복사)
 
-/// 팝오버 최상단 슬림 배너(accent 톤). 새 버전을 안내하고 [지금 업데이트] 원클릭 + [명령 복사] 폴백을 제공한다.
+/// 팝오버 최상단 슬림 배너(accent 톤). 새 버전을 안내하고 [지금 업데이트] 원클릭 + 폴백 버튼을 제공한다.
 /// 원클릭은 UpdateRunner 로 분리 프로세스를 띄우며, running 중엔 "업데이트 중…"으로 바뀌고 [지금 업데이트]가 비활성된다.
-/// brew 미탐지(unavailable)/스폰 실패(failed) 시 명령 복사 폴백 안내 줄을 노출한다. 복사 문자열은 정확히 `brew upgrade aing-check`.
+///
+/// **폴백은 설치 출처로 갈린다**(v0.3.49). brew 로 깔린 앱은 예전처럼 `brew update && brew upgrade --cask aing-check`
+/// 를 복사하고, DMG·zip 으로 직접 깔린 앱은 **DMG 내려받기 주소를 연다** — 직접 깔린 사람에게 brew 명령을 주는 것은
+/// 쓸 수 없는 조언이고(brew 가 없거나, 있어도 이 앱을 관리하지 않는다) 그게 정확히 예전 모습이었다.
+/// 안내 줄도 같은 기준으로 갈린다(unavailable 의 사유가 출처마다 다르다 — `UpdateRunner.runUpgrade` 주석).
 private struct UpdateBanner: View {
     /// 표시용 버전 문자열("v0.3.0" — 상위에서 "v" 정규화).
     let versionText: String
@@ -1242,11 +1246,50 @@ private struct UpdateBanner: View {
     // 실행 실패/미탐지 시에만 폴백 안내를 띄운다(정상 경로는 군더더기 없이 두 버튼만).
     private var fallbackHint: String? {
         switch runner.status {
-        case .unavailable: return "brew를 찾지 못했어요 — 아래 명령을 복사해 실행하세요"
-        // failed 는 두 경우다: 스폰 자체가 실패했거나, 명령은 떴는데 시한 안에 업데이트가 일어나지 않았거나.
-        // 후자가 훨씬 흔하므로(낡은 탭·권한 등) 원인을 단정하지 않는 문구를 쓴다.
-        case .failed: return "업데이트가 진행되지 않았어요 — 아래 명령을 복사해 실행하세요"
+        case .unavailable:
+            switch runner.installSource {
+            case .brew: return "brew를 찾지 못했어요 — 아래 명령을 복사해 실행하세요"
+            // 직접 깔린 앱이 unavailable 로 오는 길은 셋이고(UpdateRunner.runUpgrade) 할 일이 각각 다르다.
+            // 뭉치면 어느 쪽도 해결하지 못한다 — 특히 "권한이 없어요"를 기본값으로 쓰면 다른 두 사유에 거짓말이 된다.
+            case .standalone:
+                if runner.isRunningFromReadOnlyLocation {
+                    return "앱이 디스크 이미지에서 실행 중이에요 — 먼저 응용 프로그램 폴더로 옮겨 주세요"
+                }
+                if !runner.canReplaceBundle {
+                    return "이 앱을 바꿀 권한이 없어요 — 아래에서 새 버전을 받아 덮어써 주세요"
+                }
+                // 남은 하나: 내 build 를 못 읽었다(개발 빌드). 출시 번들에는 늘 있으므로 사용자는 보지 않는다.
+                return "이 빌드는 스스로 업데이트할 수 없어요 — 아래에서 새 버전을 받아 주세요"
+            }
+        case .failed:
+            // DMG 경로는 스크립트가 **어느 단계에서** 멈췄는지 남긴다. 그 문장이 있으면 그걸 쓴다 —
+            // 사유마다 할 일이 다르고(연결·권한·공간·이미 최신), 뭉뚱그린 한 줄은 어느 쪽도 해결하지 못한다.
+            if let step = runner.progress.failedStep,
+               let message = UpdateProgress.userMessage(forFailedStep: step) {
+                return message
+            }
+            // 표식이 없는 경우(brew 경로이거나, 스크립트가 말없이 사라졌거나). 스폰 자체가 실패했을 수도,
+            // 명령은 떴는데 시한 안에 업데이트가 일어나지 않았을 수도 있다 — 원인을 단정하지 않는다.
+            switch runner.installSource {
+            case .brew: return "업데이트가 진행되지 않았어요 — 아래 명령을 복사해 실행하세요"
+            case .standalone: return "업데이트가 진행되지 않았어요 — 아래에서 새 버전을 받아 덮어써 주세요"
+            }
         case .idle, .running: return nil
+        }
+    }
+
+    /// 폴백 버튼의 글자. brew 는 복사(복사 후 토글), 직접 설치는 내려받기.
+    private var fallbackButtonTitle: String {
+        switch runner.installSource {
+        case .brew: return copied ? "복사됨" : "명령 복사"
+        case .standalone: return "직접 받기"
+        }
+    }
+
+    private var fallbackButtonIcon: String {
+        switch runner.installSource {
+        case .brew: return copied ? "checkmark" : "doc.on.doc"
+        case .standalone: return "arrow.down.circle"
         }
     }
 
@@ -1256,7 +1299,12 @@ private struct UpdateBanner: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(CheckTheme.accent)
-                Text(runner.status == .running ? "업데이트 중…" : "새 버전 \(versionText)가 나왔어요")
+                // running 중엔 **어느 단계인지** 보여 준다. 30MB 를 받는 동안은 몇 분이 걸릴 수 있고,
+                // 한 문구로 굳어 있으면 사용자가 멈춘 것으로 보고 앱을 강제 종료한다(그러면 스크립트만 살아
+                // 나중에 혼자 교체해 더 혼란스럽다). 표식이 아직 없으면 예전 문구 그대로다.
+                Text(runner.status == .running
+                     ? (runner.progress.stage?.userText ?? "업데이트 중…")
+                     : "새 버전 \(versionText)가 나왔어요")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
@@ -1300,12 +1348,18 @@ private struct UpdateBanner: View {
                 .buttonStyle(.plain)
                 .disabled(runner.status == .running)
 
-                // [명령 복사] — 폴백. 복사 후 "복사됨"으로 토글(CheckPasteboard 재사용).
+                // 폴백 — brew 는 명령 복사(복사 후 "복사됨"으로 토글), 직접 설치는 DMG 주소를 브라우저로 연다.
+                // 직접 설치한 사람에게 brew 명령을 복사해 주면 붙여넣어도 똑같이 실패한다(그게 예전 모습이다).
                 Button {
-                    CheckPasteboard.copy(UpdateRunner.copyCommand)
-                    copied = true
+                    switch runner.installSource {
+                    case .brew:
+                        CheckPasteboard.copy(UpdateRunner.copyCommand)
+                        copied = true
+                    case .standalone:
+                        if let url = URL(string: UpdateRunner.dmgURL) { NSWorkspace.shared.open(url) }
+                    }
                 } label: {
-                    Label(copied ? "복사됨" : "명령 복사", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    Label(fallbackButtonTitle, systemImage: fallbackButtonIcon)
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(CheckTheme.accent)
                         .frame(maxWidth: .infinity)

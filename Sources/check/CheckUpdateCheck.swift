@@ -445,86 +445,520 @@ final class UpdateCheckStore {
     }
 }
 
+// MARK: - 교체를 위한 정상 종료 신호 (SIGTERM)
+
+/// DMG 자가 업데이트 스크립트가 보내는 SIGTERM 을 받아 **평소의 종료 절차**로 잇는다.
+///
+/// **왜 필요한가**: 교체 스크립트는 번들을 갈아치우기 전에 이 앱을 끝내야 한다. 그런데 기본 처분으로 SIGTERM 이
+/// 오면 프로세스가 **즉시** 죽어 `applicationShouldTerminate` 가 돌지 않는다 — 근무 중이었다면 열린 세션이
+/// 서버에 그대로 남고 하트비트만 끊긴다. 그 상태는 이 저장소가 이미 크게 겪은 사고다(두 맥을 오가다 세션이
+/// 갇혀 근무가 통째로 큐에 묶인 일). brew 경로는 cask 의 `uninstall quit:` 스탠자가 **정상** 종료를 보내므로
+/// 그 쪽엔 이 문제가 없었다 — DMG 경로만 거친 종료를 쓰면 두 설치 방식의 동작이 어긋난다.
+///
+/// AppleScript(`tell application id "kingcheck" to quit`)로 보내는 길도 있지만 두 가지가 걸린다: 보내는 쪽이
+/// 자동화 권한(TCC) 프롬프트에 걸려 원클릭이 사용자 응답을 기다리며 멈출 수 있고, Apple Event 는 **응답으로**
+/// 돌아오므로 프로세스가 실제로 사라졌는지 알려 주지 않는다 — `applicationShouldTerminate` 가 근무중일 때
+/// `.terminateLater` 를 돌려주고 최대 3초 서버 왕복을 하는 이 앱에서는, 그 틈에 번들을 바꾸면 종료 절차와 경합한다.
+/// 신호 + PID 소멸 확인은 두 문제를 한 번에 없앤다.
+///
+/// 구현은 기본 처분을 끄고(`SIG_IGN`) 메인 큐의 `DispatchSource` 로 받는 표준 방식이다 —
+/// 신호 처리기 안에서 할 수 없는 일(Objective-C 런타임 호출)을 큐로 옮기는 것이 요점이다.
+/// 실측: 신호를 보낸 뒤 비동기 마무리까지 끝내고 종료하는 데 600ms, 스크립트의 20초 대기 안에 넉넉히 든다.
+///
+/// 부수 효과로 **로그아웃·시스템 종료**에서 오는 SIGTERM 에서도 근무 마무리가 돌아간다(그 전엔 즉사했다).
+enum GracefulTerminationSignal {
+    /// 설치된 신호 소스. 프로세스에 하나뿐이고 메인에서만 건드린다.
+    @MainActor private static var source: DispatchSourceSignal?
+
+    /// 멱등 — 실행당 1회 `AppDelegate` 가 부른다. 두 번 불러도 소스는 하나다(두 벌을 달면 종료가 두 번 불린다).
+    ///
+    /// - Parameter onTerminate: 신호를 받았을 때 할 일. 기본값은 평소 종료(`NSApp.terminate`)이고,
+    ///   테스트는 표식을 세우는 클로저를 넘겨 **실제로 신호를 받는지** 확인한다.
+    @MainActor
+    static func install(
+        onTerminate: @escaping @Sendable () -> Void = {
+            // 소스를 `.main` 큐에 달았으므로 이 블록은 메인에서 돈다 — 그 사실을 적어 준다
+            // (기본 인자 자리는 nonisolated 문맥이라 NSApp 을 그냥 부르면 경고가 난다).
+            MainActor.assumeIsolated { NSApp.terminate(nil) }
+        }
+    ) {
+        guard source == nil else { return }
+        // 기본 처분을 끄지 않으면 소스를 달기 전에 프로세스가 죽는다.
+        signal(SIGTERM, SIG_IGN)
+        let s = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        s.setEventHandler(handler: onTerminate)
+        s.resume()
+        source = s
+    }
+
+    /// 테스트 전용 되돌리기 — 소스를 떼고 기본 처분을 복구한다. 스위트가 프로세스 전역 상태를 남기지 않게 한다.
+    @MainActor
+    static func uninstallForTesting() {
+        source?.cancel()
+        source = nil
+        signal(SIGTERM, SIG_DFL)
+    }
+}
+
+// MARK: - 설치 출처 (brew cask / 직접 설치)
+
+/// 이 앱이 **어떻게 깔렸는가**. 업데이트 방법이 여기서 갈린다.
+///
+/// `.brew` 는 `brew upgrade --cask` 가 맡고, `.standalone`(DMG 나 zip 으로 직접 설치)은 우리가 새 DMG 를
+/// 받아 번들을 갈아치운다. 예전엔 이 구분이 아예 없어서 **brew 가 깔려 있기만 하면** brew 경로를 탔다 —
+/// DMG 로 설치하는 사람은 대개 개발자이고 그 맥에는 brew 가 거의 다 있으므로, [지금 업데이트]가
+/// `brew upgrade --cask aing-check` 를 불러 "설치되지 않았다"로 끝나고 배너는 600초 뒤 실패로 떨어졌다.
+/// brew 가 **없는** DMG 사용자는 그보다 더 나빴다 — "brew 명령을 복사해 실행하세요"라는 쓸 수 없는 안내를 받았다.
+enum InstallSource: Equatable { case brew, standalone }
+
+// MARK: - 업데이트 진행 단계 (스크립트 → 앱)
+
+/// DMG 자가 업데이트 스크립트가 상태 파일에 남기는 단계. **배너가 "업데이트 중…" 한 줄로 굳지 않게 하는 유일한 통로다.**
+///
+/// 왜 필요한가: brew 경로는 실패 사유가 사실상 하나("업그레이드가 안 일어났다")라 뭉뚱그린 한 문장으로 버텼다.
+/// DMG 경로는 사유가 많고(오프라인 · 자산 없음 · 검증 실패 · 권한 · 용량 · 교체 실패) 각각 **다른 조치**를 요구한다.
+/// 게다가 30MB 를 받는 동안은 몇 분이 걸릴 수 있어, 표식이 없으면 사용자는 멈춘 것과 구별할 수 없다 —
+/// 이 앱은 이미 "배너가 업데이트 중으로 굳었다"는 실사용 신고를 받은 적이 있다.
+/// 오프라인은 1초에 판정되는데 표식이 없으면 600초를 기다려야 한다.
+enum UpdateStage: String, Equatable, Sendable {
+    /// 시작했다(아직 네트워크를 치기 전).
+    case start
+    /// 내려받는 중.
+    case download
+    /// 받은 것을 검증하는 중(공증 · 신원 · 버전).
+    case verify
+    /// 설치할 자리 옆에 사본을 만드는 중.
+    case staging
+    /// 앱 종료를 기다리는 중.
+    case quit
+    /// 번들을 바꾸는 중.
+    case swap
+    /// 끝났다(곧 새 앱이 뜬다).
+    case done
+
+    /// 배너 제목에 그대로 쓰는 사용자용 문구. 진행률(%)은 쓰지 않는다 —
+    /// 총량을 알려면 요청을 한 번 더 쳐야 하고, "무엇을 하는 중인지"만으로도 멈춤과 진행이 갈린다.
+    var userText: String {
+        switch self {
+        case .start, .download: return "새 버전을 받는 중…"
+        case .verify: return "받은 파일을 확인하는 중…"
+        case .staging: return "설치를 준비하는 중…"
+        case .quit, .swap, .done: return "앱을 바꾸는 중…"
+        }
+    }
+}
+
+/// 상태 파일에서 읽어 낸 현재 상황. 단계와 실패 단계는 **함께** 올 수 없다(실패하면 스크립트가 끝난다).
+struct UpdateProgress: Equatable, Sendable {
+    let stage: UpdateStage?
+    /// 실패한 단계 이름(`error=<단계>` 로 적힌다). 있으면 즉시 실패로 본다 — 600초를 기다리지 않는다.
+    let failedStep: String?
+
+    static let unknown = UpdateProgress(stage: nil, failedStep: nil)
+
+    /// 상태 파일 내용에서 **마지막** 뜻있는 줄을 읽는다(순수 함수 — 테스트가 동기로 검증한다).
+    ///
+    /// 스크립트는 줄을 **덧붙이기만** 한다(`>>`). 그래야 중간에 죽어도 어디까지 갔는지 남고, 쓰기가 한 줄이라
+    /// 반쯤 쓰인 줄을 읽을 틈이 거의 없다. 모르는 줄은 조용히 버린다 — 스크립트가 나중에 줄을 더 적어도
+    /// 옛 앱이 깨지지 않게(열거값 확장 함정과 같은 이유).
+    static func parse(_ raw: String?) -> UpdateProgress {
+        guard let raw else { return .unknown }
+        var stage: UpdateStage?
+        var failed: String?
+        for line in raw.split(whereSeparator: \.isNewline) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if let v = t.droppingPrefix("stage=") {
+                // 모르는 단계 이름은 무시하고 직전 단계를 지키다 — 앞으로 단계가 늘어도 옛 앱이 "모름"으로 되돌지 않게.
+                if let s = UpdateStage(rawValue: v) { stage = s }
+            } else if let v = t.droppingPrefix("error=") {
+                // `error=<단계> code=<n>` 모양이라 첫 토막만 쓴다.
+                failed = v.split(separator: " ").first.map(String.init)
+            }
+        }
+        // 실패가 적혀 있으면 그게 결론이다(단계는 실패 직전 것이라 안내에 쓰지 않는다).
+        return UpdateProgress(stage: failed == nil ? stage : nil, failedStep: failed)
+    }
+
+    /// 실패 단계 → 사용자에게 보여 줄 한 문장. 모르는 단계면 nil(배너가 뭉뚱그린 기본 문구를 쓴다).
+    ///
+    /// 왜 단계마다 다른 문장인가: 사유마다 **할 일이 다르다**. 오프라인은 연결을 고치면 되고, 권한은 관리자
+    /// 계정이 필요하고, "이미 최신"은 아무것도 할 필요가 없다. 예전 한 문장("업데이트가 진행되지 않았어요 —
+    /// 아래 명령을 복사해 실행하세요")은 brew 경로에선 통했지만 DMG 경로의 아홉 가지 사유를 전부 뭉갰고,
+    /// 게다가 쓸 수 없는 brew 명령을 권했다.
+    ///
+    /// nil 을 돌려주는 길을 남기는 이유는 **옛 앱 보호**다 — 스크립트가 나중에 단계를 더 적어도, 그 이름을
+    /// 모르는 설치본이 빈 안내를 내지 않고 기본 문구로 떨어진다. 대신 `dmgUpdateScript` 가 쓰는 단계는
+    /// 하나도 빠짐없이 여기 있어야 하고, 그 사실을 소스 계약 테스트가 스크립트에서 이름을 긁어 되묻는다.
+    static func userMessage(forFailedStep step: String) -> String? {
+        switch step {
+        case "download":
+            return "새 버전을 받지 못했어요 — 인터넷 연결을 확인해 주세요"
+        // 검증 계열은 사용자가 할 수 있는 일이 없다. 중요한 것은 **설치하지 않았다**는 사실을 알리는 것이다.
+        case "image", "dmg-notary", "notary", "identity", "content", "build-unreadable", "staged-verify":
+            return "받은 파일을 믿을 수 없어서 설치하지 않았어요 — 잠시 뒤 다시 시도해 주세요"
+        case "swapped-verify":
+            return "설치 직후 확인이 어긋나 원래 버전으로 되돌렸어요 — 잠시 뒤 다시 시도해 주세요"
+        case "not-newer":
+            return "이미 최신 버전이에요"
+        case "permission":
+            return "응용 프로그램 폴더에 쓸 권한이 없어요 — 아래에서 받아 직접 덮어써 주세요"
+        case "copy":
+            return "저장 공간이 부족할 수 있어요 — 공간을 확보한 뒤 다시 시도해 주세요"
+        case "busy", "lock":
+            return "이미 업데이트가 진행 중이에요 — 잠시 기다려 주세요"
+        case "mount":
+            return "받은 파일을 열지 못했어요 — 잠시 뒤 다시 시도해 주세요"
+        case "swap", "swap-aside":
+            return "앱을 바꾸지 못했어요 — 아래에서 받아 직접 덮어써 주세요"
+        default:
+            return nil
+        }
+    }
+}
+
+private extension String {
+    /// 접두가 맞으면 그 뒤를, 아니면 nil. `hasPrefix` + `dropFirst` 두 줄을 한 자리로 모은다.
+    func droppingPrefix(_ p: String) -> String? {
+        hasPrefix(p) ? String(dropFirst(p.count)) : nil
+    }
+}
+
 // MARK: - 원클릭 업그레이드 실행 (분리 프로세스 · 폴백)
 
-/// `brew upgrade aing-check` 를 원클릭으로 실행한다. brew 경로를 탐지하고, 앱 종료에도 살아남는 분리 프로세스로
-/// 업그레이드+재실행을 던진다. brew 미탐지/스폰 실패 시 상태로 알려 배너가 "명령 복사" 폴백을 안내하게 한다.
+/// 원클릭 업데이트를 실행한다. 설치 출처를 먼저 가려(`installSource`) brew 가 **이 번들을** 관리하면
+/// `brew upgrade --cask` 를, 직접 깔린 번들이면 **새 DMG 를 받아 번들을 교체**하는 분리 프로세스를 던진다.
+/// 어느 쪽도 쓸 수 없으면 상태로 알려 배너가 출처에 맞는 폴백을 안내하게 한다.
 ///
-/// 파일 존재 판정/스폰은 주입 가능해(테스트가 파일시스템·프로세스를 건드리지 않게) 상태 전이를 결정적으로 검증한다.
+/// 파일/폴더 판정 · 심링크 해소 · 쓰기 권한 · 번들 경로 · PID · 내 build · 상태 파일 읽기 · 스폰 · 대기가
+/// 모두 주입 가능해(테스트가 파일시스템·프로세스·네트워크를 건드리지 않게) 상태 전이와 **실제로 던지는
+/// 스크립트 문자열**을 결정적으로 검증한다.
 @Observable
 @MainActor
 final class UpdateRunner {
-    /// 실행 상태. running 동안 배너가 "업데이트 중…"을 보여 주고, unavailable/failed 면 명령 복사 폴백을 안내한다.
+    /// 실행 상태. running 동안 배너가 진행 문구를 보여 주고, unavailable/failed 면 폴백을 안내한다.
     enum Status: Equatable { case idle, running, failed, unavailable }
     private(set) var status: Status = .idle
 
-    /// brew 후보 경로(Apple Silicon → Intel 순). nonisolated — nonisolated 스폰 헬퍼에서도 참조한다.
-    nonisolated static let brewCandidates = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+    /// DMG 경로가 상태 파일에서 읽어 낸 현재 진행(brew 경로는 늘 `.unknown`). 관찰 대상 — 배너가 다시 그려진다.
+    private(set) var progress: UpdateProgress = .unknown
+
+    /// brew 접두사 후보(Apple Silicon → Intel 순). **`bin/brew` 와 `Caskroom` 은 같은 접두사에서 짝으로 봐야 한다** —
+    /// Caskroom 위치는 `HOMEBREW_PREFIX` 에 묶여 있어 사용자가 옮길 수 없다(실측: `brew --caskroom` → `/opt/homebrew/Caskroom`,
+    /// `HOMEBREW_CASK_OPTS` 의 `--appdir` 은 앱 자리만 바꾸고 Caskroom 은 못 바꾼다). 두 값을 따로 고르면
+    /// ARM 맥에 Rosetta Intel brew 가 함께 깔린 경우처럼 "brew 는 /opt/homebrew, 설치 기록은 /usr/local" 짝이 나와
+    /// 엉뚱한 brew 에게 엉뚱한 설치를 올리라고 시킨다.
+    ///
+    /// **알려진 한계**: brew 를 비표준 접두사(예: `~/homebrew`)에 깐 사람은 두 후보에 걸리지 않아 `.standalone` 이 된다.
+    /// 그러면 brew 가 관리하는 번들을 DMG 로 덮어쓰게 되는데, 앱 자체는 **올바르게** 갱신되고 brew 기록만 낡는다
+    /// (다음 `brew upgrade --cask` 가 스스로 맞춘다). 로그인 셸을 띄워 `brew --prefix` 를 묻는 길도 있지만,
+    /// GUI 앱의 PATH 에는 사용자 셸 설정이 없어 `zsh -lc` 로 프로파일을 읽어야 하고 그건 느리고 깨지기 쉽다.
+    /// brew 자신이 비표준 접두사를 cask 에 대해 지원하지 않으므로 이 한계를 받아들인다.
+    nonisolated static let brewPrefixCandidates = ["/opt/homebrew", "/usr/local"]
+    /// brew 실행파일 후보. **접두사 후보에서 파생한다** — 두 목록을 따로 적으면 언젠가 어긋나고 짝 판정이 무너진다.
+    /// nonisolated — nonisolated 스폰 헬퍼에서도 참조한다.
+    nonisolated static let brewCandidates = brewPrefixCandidates.map { "\($0)/bin/brew" }
     nonisolated static let caskName = "aing-check"
     nonisolated static let appPath = "/Applications/aing-check.app"
     /// 폴백 복사 문자열. **원클릭이 실제로 실행하는 명령과 같아야 한다** — 예전엔 `brew upgrade aing-check` 였는데,
     /// 그 명령은 탭이 낡았을 때 조용히 "이미 최신"으로 끝나 사용자가 손으로 실행해도 똑같이 실패했다.
     nonisolated static let copyCommand = "brew update && brew upgrade --cask aing-check"
 
+    /// 늘 **최신** DMG 를 가리키는 주소. 릴리스 스크립트가 태그마다 같은 이름으로 자산을 올린다
+    /// (`scripts/release-brew.sh`). 문서·랜딩 페이지도 같은 주소를 쓴다.
+    ///
+    /// 태그를 박은 주소(`releases/download/<태그>/…`)로 바꾸는 길도 검토했으나 채택하지 않았다:
+    /// `SKIP_DMG=1` 로 낸 릴리스에는 자산이 아예 없어 **태그를 박아도 404 다**(모양만 바뀐다). 그 창에서
+    /// 잘못된 것을 설치하는 위험은 아래 build 결박이 막고, 404 는 상태 파일이 "자산이 아직 없다"로 즉시 알린다.
+    nonisolated static let dmgURL = "https://github.com/yehsung/check/releases/latest/download/aing-check.dmg"
+
+    /// 내려받은 앱이 **우리 앱인지** 못박는 코드 서명 지정 요구사항.
+    ///
+    /// **왜 `spctl` 만으로는 안 되는가(실측)**: `spctl --assess --type execute` 는 "애플이 공증했고 신뢰할 수 있다"만
+    /// 본다 — Xcode·Google Chrome·Mail 이 전부 `accepted`(종료코드 0)로 통과한다. 즉 공격자가 **자기 Developer ID 로
+    /// 공증한** 앱을 내려주면 그것도 통과한다. 팀 ID(MQ2KQK37WD)와 번들 id(kingcheck)를 못박는 이 요구사항만이
+    /// 신원 관문이고, 같은 실측에서 위 세 앱은 모두 거절됐다(그리고 번들 안 파일 하나를 고친 우리 앱도 거절됐다).
+    ///
+    /// **거꾸로 이 요구사항만으로도 안 된다(실측)**: Developer ID 로 서명했지만 **공증하지 않은** 번들은
+    /// `codesign --verify -R` 을 통과한다. 공증을 강제하는 것은 `spctl` 쪽이므로 **둘 다** 봐야 한다.
+    nonisolated static let codeRequirement =
+        "anchor apple generic and identifier \"kingcheck\" and certificate leaf[subject.OU] = MQ2KQK37WD"
+
     /// running 감시 시한(초). 이 시간이 지나도 여전히 running 이면 실패로 본다.
     ///
-    /// 왜 필요한가: 업그레이드가 **실제로 일어나면** cask 의 `uninstall quit: "kingcheck"` 가 이 앱을 종료시키므로
-    /// (packaging/homebrew/aing-check.rb) 이 감시는 발화할 기회가 없다. 즉 감시가 발화했다는 것은
-    /// "명령은 떴는데 업그레이드가 일어나지 않았다"는 뜻이다. 예전엔 running 을 벗어나는 경로가 **하나도 없어서**
+    /// 왜 필요한가: 업데이트가 **실제로 일어나면** 앱이 종료되므로(brew 경로는 cask 의 `uninstall quit:`,
+    /// DMG 경로는 우리 스크립트의 SIGTERM) 이 감시는 발화할 기회가 없다. 즉 감시가 발화했다는 것은
+    /// "명령은 떴는데 업데이트가 일어나지 않았다"는 뜻이다. 예전엔 running 을 벗어나는 경로가 **하나도 없어서**
     /// 그 경우 배너가 "업데이트 중…"으로 영원히 굳고 버튼도 비활성이라 재시도조차 못 했다(실사용 신고).
     ///
     /// **왜 150초가 아니라 600초인가**: 이 수리가 앞세운 `brew update` 는 탭이 몇 주 낡았거나 회선이 느리면
     /// 단독으로도 150초를 넘긴다(git fetch + 수천 formula 재인덱싱). 150초이던 시절엔 **정상 진행 중인** 업그레이드를
     /// 실패로 판정해 배너가 재시도를 열었고, 사용자가 다시 누르면 두 번째 brew 가 같은 락을 다퉈 둘 다 깨졌다.
-    /// 성공 경로는 앱이 종료돼 이 감시가 아예 발화하지 않으므로, 시한을 넉넉히 늘려도 '진짜 실패'의 안내만 늦어질 뿐이다.
+    ///
+    /// DMG 경로는 이 시한에 **의존하지 않는다** — 상태 파일이 단계와 실패를 알려 주므로 오프라인은 1초에,
+    /// 자산 없음은 즉시 판정된다. 여기서 이 시한은 "스크립트가 말없이 사라진" 경우의 마지막 그물일 뿐이다.
     nonisolated static let watchdogSeconds: Double = 600
+
+    /// DMG 내려받기 제한 시간(초). **`--retry` 를 쓰지 않는다** — `man curl` 에 따르면 `--max-time` 은 전송마다
+    /// 리셋되므로 `--retry 3 --max-time 420` 의 최악은 4배가 되어 감시 시한을 넘긴다. 실패하면 사용자가 다시 누른다.
+    /// 28.5MB 를 420초에 받으려면 약 70KB/s 면 되고, 그보다 느리면 어차피 끝까지 못 간다.
+    nonisolated static let dmgDownloadTimeoutSeconds = 420
+
+    /// 상태 파일을 다시 읽는 간격(초). DMG 경로에서만 돈다(brew 경로는 예전처럼 한 번 자고 판정한다).
+    nonisolated static let progressPollSeconds: Double = 1
+
+    /// 스크립트가 단계를 적는 상태 파일. 로그와 **따로** 둔다 — 로그는 사람이 읽는 덧붙임 파일이고
+    /// 이 파일은 앱이 파싱하는 짧은 표식이라, 섞으면 로그 한 줄이 늘 때마다 파싱이 흔들린다.
+    ///
+    /// 자리는 `~/Library/Caches/kingcheck/` 안이다 — cask 의 `zap trash:` 목록에 그 폴더가 있어
+    /// `brew uninstall --zap` 이 함께 지운다(바깥에 두면 지워지지 않는 잔재가 된다).
+    nonisolated static let statePath =
+        NSString(string: "~/Library/Caches/kingcheck/update.state").expandingTildeInPath
 
     /// brew 실행파일 존재 판정(주입 가능).
     private let fileExists: (String) -> Bool
-    /// 분리 프로세스 스폰(주입 가능). 인자는 탐지된 brew 절대경로. 성공하면 true.
+    /// 폴더 안 항목 이름들(주입 가능). Caskroom 의 버전 폴더를 훑는 데만 쓴다. 읽을 수 없으면 빈 배열.
+    private let directoryContents: (String) -> [String]
+    /// 경로의 심링크를 걷어 실제 자리로 정규화(주입 가능). "brew 가 관리하는 번들이 곧 내 번들인가"를
+    /// 비교하는 **유일한 수단**이라 주입 지점을 남긴다 — 안 그러면 테스트가 실제 심링크를 만들어야 한다.
+    private let resolvePath: (String) -> String
+    /// 이 자리에 쓸 수 있는가(주입 가능). **번들의 부모 폴더**를 묻는다 — 교체는 그 폴더 안에서
+    /// 이름을 바꾸는 일이므로 번들 자체의 권한이 아니라 부모의 권한이 관문이다.
+    private let isWritable: (String) -> Bool
+    /// 지금 돌고 있는 이 앱의 번들 경로(주입 가능). **하드코딩된 `appPath` 를 쓰지 않는다** —
+    /// DMG 사용자는 앱을 `~/Applications` 나 다른 자리에 끌어다 놓을 수 있고, 그러면 교체가 엉뚱한 곳을 노린다.
+    private let bundlePath: String
+    /// 이 앱의 PID(주입 가능). 스크립트가 교체 직전에 이 PID 에 SIGTERM 을 보내고 사라질 때까지 기다린다.
+    private let processID: Int32
+    /// 이 앱의 build 번호(주입 가능). 받은 DMG 의 build 가 이보다 **커야만** 설치한다(다운그레이드 차단).
+    /// 모르면(개발 빌드) 0 으로 넘겨 어떤 build 든 통과시킨다 — 폴백 숫자를 지어내지 않는다는 규칙과 같다.
+    private let currentBuild: Int?
+    /// 상태 파일 읽기(주입 가능). 없으면 nil.
+    private let readState: (String) -> String?
+    /// 상태 파일 지우기(주입 가능). 스폰 **직전에** 부른다 — 지난 시도의 실패 표식을 읽고
+    /// 누르자마자 거짓 실패를 띄우는 창을 없앤다.
+    private let clearState: (String) -> Void
+    /// brew 분리 프로세스 스폰(주입 가능). 인자는 탐지된 brew 절대경로. 성공하면 true.
     private let spawn: (String) -> Bool
-    /// 감시 대기(주입 가능). 테스트가 150초를 실제로 자지 않게 한다.
+    /// DMG 분리 프로세스 스폰(주입 가능). 성공하면 true.
+    private let spawnDMG: (DMGUpdatePlan) -> Bool
+    /// 감시 대기(주입 가능). 테스트가 600초를 실제로 자지 않게 한다.
     private let watchdogSleep: @Sendable (Double) async -> Void
     @ObservationIgnored private var watchdogTask: Task<Void, Never>?
 
     init(
         fileExists: @escaping (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) },
+        directoryContents: @escaping (String) -> [String] = { UpdateRunner.contentsOfDirectory($0) },
+        resolvePath: @escaping (String) -> String = { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path },
+        isWritable: @escaping (String) -> Bool = { FileManager.default.isWritableFile(atPath: $0) },
+        bundlePath: String = Bundle.main.bundlePath,
+        processID: Int32 = ProcessInfo.processInfo.processIdentifier,
+        currentBuild: Int? = UpdateCheckStore.bundleBuild(),
+        readState: @escaping (String) -> String? = { try? String(contentsOfFile: $0, encoding: .utf8) },
+        clearState: @escaping (String) -> Void = { try? FileManager.default.removeItem(atPath: $0) },
         spawn: @escaping (String) -> Bool = UpdateRunner.detachedSpawn,
+        spawnDMG: @escaping (DMGUpdatePlan) -> Bool = UpdateRunner.detachedSpawnDMG,
         watchdogSleep: @escaping @Sendable (Double) async -> Void = { try? await Task.sleep(for: .seconds($0)) }
     ) {
         self.fileExists = fileExists
+        self.directoryContents = directoryContents
+        self.resolvePath = resolvePath
+        self.isWritable = isWritable
+        self.bundlePath = bundlePath
+        self.processID = processID
+        self.currentBuild = currentBuild
+        self.readState = readState
+        self.clearState = clearState
         self.spawn = spawn
+        self.spawnDMG = spawnDMG
         self.watchdogSleep = watchdogSleep
     }
 
-    /// 탐지된 brew 경로(없으면 nil).
-    var brewPath: String? { Self.brewCandidates.first(where: fileExists) }
+    /// 폴더 안 항목 이름들(기본 `directoryContents`). 읽을 수 없으면 빈 배열 — 없는 Caskroom 과 같게 취급한다.
+    nonisolated static func contentsOfDirectory(_ path: String) -> [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: path)) ?? []
+    }
 
-    /// 원클릭 업그레이드. brew 미탐지 → unavailable, 스폰 실패 → failed, 성공 → running(+감시 시작).
+    /// **이 번들을** 관리하는 brew 설치의 접두사(없으면 nil).
+    ///
+    /// Caskroom 폴더가 있는지만 보면 **안 된다**. 실측: brew 는 앱을 `appdir` 로 옮기고 Caskroom 에는 심링크만 남긴다 —
+    /// `/opt/homebrew/Caskroom/aing-check/0.3.48/aing-check/aing-check.app → /Applications/aing-check.app`.
+    /// 즉 Caskroom 의 존재는 "brew 가 이 기기의 **어떤** 사본을 관리한다"까지만 말한다.
+    ///
+    /// 그 차이가 조용한 영구 실패를 만든다: brew 로 `/Applications` 에 깔아 쓰던 사람이 DMG 를 받아 `~/Applications`
+    /// 에 두고 그쪽을 실행하면, 폴더 존재만 보는 판정은 `.brew` 라 답하고 `brew upgrade --cask` 는 **돌고 있지 않은
+    /// 사본**을 올린다. 돌고 있는 앱은 영원히 안 바뀌는데 배너는 같은 새 버전을 계속 권한다.
+    ///
+    /// 그래서 심링크를 걷어 **지금 돌고 있는 번들과 같은 자리를 가리킬 때만** `.brew` 로 본다. 확신이 없으면
+    /// `.standalone` 으로 떨어뜨린다 — 두 오판의 피해가 대칭이 아니다. 거짓 `.standalone` 은 DMG 로 **올바르게**
+    /// 갱신되고 brew 기록만 낡는다(다음 `brew upgrade` 가 스스로 맞춘다). 거짓 `.brew` 는 아무것도 안 바뀐다.
+    var managingBrewPrefix: String? {
+        let destination = destinationPath
+        return Self.brewPrefixCandidates.first { prefix in
+            guard fileExists("\(prefix)/bin/brew") else { return false }
+            return stagedBundlePaths(caskroom: "\(prefix)/Caskroom/\(Self.caskName)")
+                .contains { resolvePath($0) == destination }
+        }
+    }
+
+    /// Caskroom 안에서 "설치된 앱"을 가리키는 자리들(버전 폴더마다). 숨김 항목(`.metadata`)은 건너뛴다.
+    ///
+    /// 두 모양을 다 본다 — 지금 cask 는 `app "aing-check/aing-check.app"`(배포 zip 안에 폴더가 한 겹 있다)라
+    /// 중간에 폴더가 끼지만, 스탠자가 `app "aing-check.app"` 로 단순해지면 버전 폴더 바로 아래가 된다.
+    /// 한 모양만 보면 그때 판정이 **조용히** `.standalone` 으로 기울어 brew 사용자가 DMG 경로를 타게 된다.
+    private func stagedBundlePaths(caskroom: String) -> [String] {
+        directoryContents(caskroom)
+            .filter { !$0.hasPrefix(".") }
+            .flatMap { version in
+                [
+                    "\(caskroom)/\(version)/\(Self.caskName)/\(Self.caskName).app",
+                    "\(caskroom)/\(version)/\(Self.caskName).app",
+                ]
+            }
+    }
+
+    /// 이 번들을 관리하는 brew 실행파일 경로(없으면 nil). 접두사와 **짝으로** 나온다.
+    var brewPath: String? { managingBrewPrefix.map { "\($0)/bin/brew" } }
+
+    /// 설치 출처. brew 가 **이 번들을** 관리할 때만 `.brew` 다(`managingBrewPrefix` 주석).
+    var installSource: InstallSource { managingBrewPrefix == nil ? .standalone : .brew }
+
+    /// 교체할 번들의 경로. 심링크를 걷어 실제 자리로 정규화한다 — 심링크를 그대로 교체하면 링크를 번들로
+    /// 덮어써 원본이 남고, `open` 은 새 앱을 띄우지만 다음 업데이트는 다시 옛 자리를 본다.
+    var destinationPath: String { resolvePath(bundlePath) }
+
+    /// 내 build 번호를 아는가. 모르면(개발 빌드 — `CFBundleVersion` 이 없다) 자가 업데이트를 하지 않는다.
+    /// 배너가 "권한이 없어요" 같은 엉뚱한 사유를 말하지 않도록 바깥에서도 볼 수 있게 열어 둔다.
+    var hasKnownBuild: Bool { currentBuild != nil }
+
+    /// 이 번들을 교체할 수 있는가. 부모 폴더에 쓸 수 있어야 한다.
+    ///
+    /// 왜 스크립트가 아니라 여기서 보는가: 권한이 없으면 스크립트는 28.5MB 를 **다 받은 뒤** 복사 단계에서야
+    /// 실패한다(실측). 미리 보면 버튼을 누른 즉시 "권한이 없다"고 말할 수 있다. 스크립트에도 같은 판정이
+    /// 남아 있다 — 받는 동안 권한이 바뀌는 경우까지 막는 2차 방어다.
+    var canReplaceBundle: Bool {
+        isWritable(URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path)
+    }
+
+    /// 앱 번들이 **DMG 안이나 App Translocation 자리에서** 돌고 있는가. 그러면 교체할 '설치본'이 없다.
+    ///
+    /// DMG 를 열고 응용 프로그램 폴더로 끌어다 놓지 않은 채 바로 실행하면 macOS 가 번들을 읽기 전용 임시 자리로
+    /// 옮겨 띄운다(App Translocation). 그 경로를 교체 대상으로 쓰면 임시 사본을 갈아치우고 끝나므로,
+    /// 다음 실행이면 사라진다 — 사용자는 업데이트가 됐다고 믿지만 아무것도 바뀌지 않는다.
+    /// DMG 배포에서 가장 흔한 사용 오류가 '끌어놓지 않고 바로 두 번 클릭' 이므로 이 판정이 실제로 자주 걸린다.
+    var isRunningFromReadOnlyLocation: Bool {
+        let p = destinationPath
+        return p.hasPrefix("/Volumes/")
+            || p.contains("/AppTranslocation/")
+            || p.hasPrefix("/private/var/folders/")
+    }
+
+    /// 원클릭 업데이트. 출처에 따라 갈린다.
+    ///
+    /// `.brew`  — 스폰 실패 → failed, 성공 → running(+600초 감시). 예전과 **동작이 같다**.
+    /// `.standalone` — 읽기 전용 자리에서 돌거나 번들을 교체할 권한이 없으면 **스폰하지 않고** unavailable
+    ///                (배너가 옮기라고/직접 받으라고 안내한다). 그 밖엔 DMG 스크립트를 던지고 상태 파일을 지켜본다.
     /// running 중 재호출은 무시한다(중복 스폰 금지).
     @discardableResult
     func runUpgrade() -> Task<Void, Never>? {
         guard status != .running else { return nil }
-        guard let brew = brewPath else {
-            status = .unavailable
-            return nil
+        let source = installSource
+        switch source {
+        case .brew:
+            guard let brew = brewPath else {
+                status = .unavailable
+                return nil
+            }
+            guard spawn(brew) else {
+                status = .failed
+                return nil
+            }
+        case .standalone:
+            // 교체할 설치본이 없거나 쓸 수 없으면 받아 봐야 버린다 — 28.5MB 를 받기 전에 멈춘다.
+            // 내 build 를 모르면(개발 빌드) 계획이 nil 이라 여기서 멈춘다 — `dmgUpdatePlan()` 주석.
+            guard !isRunningFromReadOnlyLocation, canReplaceBundle, let plan = dmgUpdatePlan() else {
+                status = .unavailable
+                return nil
+            }
+            // ── 수리: 스폰 **직전에** 지난 시도의 상태 파일을 지운다.
+            // 스크립트도 첫 줄에서 비우지만 그건 zsh 가 뜬 **뒤**다. 러너는 1초 뒤 첫 폴링을 하므로
+            // 그 틈에 지난주의 `error=download` 를 읽으면 누르자마자 거짓 실패 문구가 뜬다.
+            clearState(Self.statePath)
+            guard spawnDMG(plan) else {
+                status = .failed
+                return nil
+            }
         }
-        guard spawn(brew) else {
-            status = .failed
-            return nil
-        }
+        progress = .unknown
         status = .running
         watchdogTask?.cancel()
         let task = Task { @MainActor [weak self] in
-            guard let sleep = self?.watchdogSleep else { return }
-            await sleep(Self.watchdogSeconds)
-            guard !Task.isCancelled, let self, self.status == .running else { return }
-            // 여기 도달 = 앱이 살아 있는데 시한이 지났다 = 업그레이드가 일어나지 않았다.
-            // failed 로 내려 배너가 폴백 안내와 함께 재시도를 허용하게 한다.
-            self.status = .failed
+            guard let self else { return }
+            await self.watch(source)
         }
         watchdogTask = task
         return task
+    }
+
+    /// running 을 지켜본다. brew 는 예전 그대로 한 번 자고 판정하고, DMG 는 상태 파일을 짧은 간격으로 읽는다.
+    ///
+    /// 왜 갈라 두는가: brew 경로는 표식을 남기지 않으므로 폴링이 아무것도 못 읽고 600번 헛깨어난다.
+    /// 그리고 그 경로의 동작은 실전에서 잘 돌고 있어 바꿀 이유가 없다.
+    private func watch(_ source: InstallSource) async {
+        switch source {
+        case .brew:
+            await watchdogSleep(Self.watchdogSeconds)
+            guard !Task.isCancelled, status == .running else { return }
+            // 여기 도달 = 앱이 살아 있는데 시한이 지났다 = 업데이트가 일어나지 않았다.
+            // failed 로 내려 배너가 폴백 안내와 함께 재시도를 허용하게 한다.
+            status = .failed
+        case .standalone:
+            var elapsed = 0.0
+            while elapsed < Self.watchdogSeconds {
+                await watchdogSleep(Self.progressPollSeconds)
+                elapsed += Self.progressPollSeconds
+                guard !Task.isCancelled, status == .running else { return }
+                let p = UpdateProgress.parse(readState(Self.statePath))
+                progress = p
+                // 실패가 적혀 있으면 **즉시** 내려간다 — 오프라인은 1초에 판정되는데 600초를 기다릴 이유가 없다.
+                if p.failedStep != nil {
+                    status = .failed
+                    return
+                }
+                // 교체가 끝났으면 곧 이 앱이 죽고 새 앱이 뜬다. 더 볼 것이 없다.
+                if p.stage == .done { return }
+            }
+            guard !Task.isCancelled, status == .running else { return }
+            status = .failed
+        }
+    }
+
+    /// 이번 실행이 던질 DMG 업데이트 한 벌. 테스트가 이 값을 그대로 본다.
+    ///
+    /// 인자 순서는 스크립트의 `$1`…`$6` 과 **한 자리씩 대응**한다. 순서를 바꾸면 경로에 URL 이 들어가는 식으로
+    /// 조용히 어긋나므로, 테스트가 각 자리의 뜻을 글자로 못박는다.
+    /// **내 build 를 모르면 nil 이다.** 그때는 자가 업데이트를 하지 않는다.
+    ///
+    /// 왜 `?? 0` 으로 때우지 않는가: 0 을 넘기면 스크립트의 `GOT_BUILD > MIN_BUILD` 비교가 **아무 build 든**
+    /// 통과시켜 다운그레이드 차단이 통째로 꺼진다. 그리고 이건 이론이 아니다 — 실측으로 테스트 호스트 번들
+    /// (`checkPackageTests.xctest`)에는 `CFBundleVersion` 이 **없어서** `currentBuild` 가 늘 nil 이다.
+    /// `?? 0` 을 두면 `spawnDMG` 를 안 박은 테스트가 실제 스크립트를 띄워 아무 build 나 받아 테스트 번들을
+    /// 갈아치울 수 있었다. 폴백 숫자를 두지 않는 규칙은 `bundleBuild()` 주석과 같다.
+    func dmgUpdatePlan() -> DMGUpdatePlan? {
+        guard let currentBuild else { return nil }
+        return DMGUpdatePlan(
+            script: Self.dmgUpdateScript,
+            arguments: [
+                "aing-check-update",
+                Self.dmgUpdateScript,
+                destinationPath,
+                Self.dmgURL,
+                String(processID),
+                Self.codeRequirement,
+                String(currentBuild),
+                Self.statePath,
+                Self.logPath,
+            ]
+        )
     }
 
     /// 기본 스폰: 앱 종료에도 살아남는 분리 프로세스로 `brew update && brew upgrade --cask … && open -a …` 를 띄운다.
@@ -558,6 +992,202 @@ final class UpdateRunner {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
         proc.arguments = ["-c", script]
+        do {
+            try proc.run()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: DMG 자가 업데이트 (직접 설치한 사람의 원클릭)
+
+    /// DMG 자가 업데이트 한 벌 — 스크립트 본문과 그 스크립트에 넘길 인자들.
+    struct DMGUpdatePlan: Equatable {
+        /// 분리 프로세스가 실행할 zsh 스크립트(상수 — 어떤 값도 끼워 넣지 않는다).
+        let script: String
+        /// `zsh -c <래퍼>` 에 이어 붙일 인자들.
+        /// `[argv0, 스크립트, 번들경로, DMG주소, PID, 요구사항, 내build, 상태파일, 로그파일]`.
+        let arguments: [String]
+    }
+
+    /// 분리 스폰 래퍼. **순수 상수다 — 어떤 값도 문자열에 끼워 넣지 않는다.**
+    ///
+    /// 왜 이렇게까지 하는가: 교체 대상은 `Bundle.main.bundlePath` 이고 그건 **사용자가 정하는 값**이다
+    /// (앱을 어느 폴더에 끌어다 놓았는지). 기존 brew 경로처럼 `zsh -c '…경로…'` 로 끼워 넣으면 폴더 이름에
+    /// 작은 인용(`'`)이 하나 있는 것만으로 스크립트가 끊기고 그 뒤가 명령으로 해석된다 — 실측으로 임의 명령이
+    /// 실행됐고, 평범한 `Yesung's Apps` 같은 폴더만으로도 `unmatched "` 로 통째로 죽었다. 이 스크립트에는
+    /// `rm -rf` 가 들어 있으므로 인용이 깨지는 것 자체가 위험하다.
+    ///
+    /// 그래서 **스크립트 본문까지** 위치 인자로 넘긴다. 그러면 바깥 셸이 전개하는 것은 `$1`…`$8` 뿐이고
+    /// 전개 결과는 다시 파싱되지 않으므로, 어떤 글자가 와도 데이터로만 남는다(공백·한글·`'`·`;`·`$` 실측 확인).
+    nonisolated static let dmgSpawnWrapper =
+        #"nohup zsh -c "$1" aing-check-update "$2" "$3" "$4" "$5" "$6" "$7" >>"$8" 2>&1 &"#
+
+    /// DMG 자가 업데이트 스크립트. **상수**이고 값은 전부 위치 인자로 받는다:
+    /// `$1` 번들 경로 · `$2` DMG 주소 · `$3` 앱 PID · `$4` 코드 서명 지정 요구사항 · `$5` 내 build · `$6` 상태 파일.
+    ///
+    /// **순서가 안전의 핵심이다** — 검증을 다 통과하고 사본까지 만든 뒤에야 기존 번들을 건드린다.
+    /// 그래서 네트워크·공증·신원·버전·권한 중 무엇이 실패해도 설치본은 그 자리에 그대로 남는다(실측: 404 는
+    /// 내려받기에서, 권한 없음은 스테이징에서 멈추고 번들은 손대지 않았다).
+    ///
+    /// **`set -e` 를 쓰지 않는다**: zsh 의 errexit 은 `&&`/`||` 목록의 마지막이 아닌 명령에 적용되지 않아
+    /// (실측: `set -e; false && echo nope; echo AFTER` → AFTER 가 찍히고 종료코드 0) 실패를 조용히 흘린다.
+    /// 그래서 파괴적인 단계마다 `|| { fail …; }` 로 **명시 분기**한다.
+    ///
+    /// **`xcrun stapler` 를 쓰지 않는다**: Xcode 명령행 도구가 없는 맥에서는 그 자체로 실패하고,
+    /// DMG 로 설치하는 사람이야말로 개발자 도구가 없을 확률이 높다. `spctl` 이 이미 공증을 본다
+    /// (실측: 마운트한 앱에 `source=Notarized Developer ID`).
+    nonisolated static let dmgUpdateScript = """
+        set -u
+        DEST="$1"; URL="$2"; APP_PID="$3"; REQ="$4"; MIN_BUILD="$5"; STATE="$6"
+        M="[aing-check-update]"
+        # 상태 파일은 이번 시도에서 새로 시작한다(지난 시도의 실패가 남아 배너를 속이지 않게).
+        # 부모 폴더를 먼저 만든다 — 없으면 `: >` 가 조용히 실패해 표식이 하나도 안 남고,
+        # 배너는 다시 600초 "업데이트 중…"으로 굳는다(고치려던 바로 그 증상).
+        mkdir -p "$(dirname "$STATE")" 2>/dev/null
+        : > "$STATE" 2>/dev/null
+        note() { echo "stage=$1" >>"$STATE" 2>/dev/null; echo "$M $1"; }
+        fail() { echo "error=$1 code=${2:-1}" >>"$STATE" 2>/dev/null; echo "$M 실패: $1 ($3)"; exit 1; }
+        echo "$M ---- 시작 $(date +%Y-%m-%dT%H:%M:%S) → $DEST"
+        note start
+
+        # 자물쇠. 두 벌이 같은 번들을 동시에 갈아치우면 한쪽이 치워 둔 옛 번들을 다른 쪽이 지운다.
+        # SIGKILL 로 죽은 시도가 남긴 자물쇠는 한 시간 뒤 가져온다(영구히 막히지 않게).
+        LOCK="${TMPDIR:-/tmp}/aing-check-update.lock"
+        if ! mkdir "$LOCK" 2>/dev/null; then
+          if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
+            rm -rf "$LOCK"
+            mkdir "$LOCK" 2>/dev/null || fail lock 1 "자물쇠를 잡지 못했습니다"
+          else
+            fail busy 1 "이미 업데이트가 진행 중입니다"
+          fi
+        fi
+
+        TMP="$(mktemp -d "${TMPDIR:-/tmp}/aing-check-update.XXXXXX")" || { rm -rf "$LOCK"; exit 1; }
+        MNT="$TMP/mnt"
+        MOUNTED=""
+        PARENT="$(dirname "$DEST")"
+        STAGE_DIR="$PARENT/.aing-check-update.$$"
+        OLD="$DEST.aing-check-old"
+        cleanup() {
+          # errexit 을 안 쓰므로 트랩이 중간에 끊기지 않는다. 붙지 않은 마운트에 detach 를 부르면 실패하므로
+          # 실제로 붙었을 때만 부른다.
+          [ -n "$MOUNTED" ] && hdiutil detach "$MNT" -force >/dev/null 2>&1
+          rm -rf "$TMP" "$STAGE_DIR" "$LOCK"
+        }
+        trap cleanup EXIT
+
+        # 지난 시도가 SIGKILL 로 죽어 남긴 잔재를 치운다. 남겨 두면 다음 ditto 가 **병합**해
+        # 새 버전에서 지워진 파일이 섞인 번들이 되고 코드 서명이 무효가 된다(실측: ditto 는 대상이 이미 있으면 합친다).
+        rm -rf "$OLD"
+        find "$PARENT" -maxdepth 1 -name '.aing-check-update.*' -exec rm -rf {} + 2>/dev/null
+
+        # 1) 받는다. `'=https'` 의 작은 인용은 **지워선 안 된다**: zsh 는 단어 앞의 `=https` 를 `=명령어` 확장으로
+        #    읽어 "https not found" 로 죽는다(실측). 스크립트를 위치 인자로 넘기므로 작은 인용을 마음껏 쓸 수 있다.
+        note download
+        curl -fL --proto '=https' --tlsv1.2 --connect-timeout 20 --max-time 420 -o "$TMP/a.dmg" "$URL" \\
+          || fail download $? "내려받지 못했습니다(연결 또는 주소)"
+        echo "$M 받음: $(stat -f %z "$TMP/a.dmg") bytes"
+
+        # 2) 붙이기 **전에** DMG 자체를 본다 — 공격자 바이트를 커널 파일시스템 파서에 먼저 들이지 않는다.
+        #    종료코드만 보지 않고 출처 문자열까지 확인한다: Gatekeeper 가 꺼진 맥에서는 spctl 이 무엇이든 통과시킨다.
+        note verify
+        hdiutil verify "$TMP/a.dmg" >/dev/null 2>&1 || fail image $? "받은 파일이 손상됐습니다"
+        LC_ALL=C spctl -a -t open --context context:primary-signature -v "$TMP/a.dmg" 2>&1 \\
+          | grep -q "source=Notarized Developer ID" || fail dmg-notary 1 "DMG 가 공증되지 않았습니다"
+
+        # 3) 읽기 전용으로 붙인다.
+        mkdir -p "$MNT"
+        hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$MNT" "$TMP/a.dmg" >/dev/null \\
+          || fail mount $? "DMG 를 열지 못했습니다"
+        MOUNTED=1
+        SRC="$MNT/aing-check.app"
+        # 심링크면 거절한다 — 링크를 따라가면 검증·복사 대상이 **디스크의 다른 앱**으로 돌아간다.
+        [ -d "$SRC" ] && [ ! -L "$SRC" ] || fail content 1 "DMG 안에 앱이 없습니다"
+
+        # 4) ★ 두 관문을 **둘 다** 지난다.
+        #    공증: spctl 이 본다. 우리 신원: 지정 요구사항이 본다. 하나만으로는 각각 뚫린다(실측) —
+        #    spctl 만 보면 Xcode·Chrome 같은 '남이 공증한 앱'이 통과하고, 요구사항만 보면
+        #    우리 인증서로 서명했지만 **공증하지 않은** 번들이 통과한다.
+        LC_ALL=C spctl --assess --type execute -v "$SRC" 2>&1 \\
+          | grep -q "source=Notarized Developer ID" || fail notary 1 "앱이 공증되지 않았습니다"
+        codesign --verify --deep --strict -R "=$REQ" "$SRC" \\
+          || fail identity $? "우리 앱이 아닙니다(서명 신원 불일치)"
+
+        # 5) 버전 결박 — 받은 것이 **더 새 것**이어야 한다.
+        #    실측: 옛 정식 릴리스(0.3.47)는 위 검증을 전부 통과한다. 결박이 없으면 `latest` 가 한 번 흔들리거나
+        #    자산이 잘못 올라간 순간 다운그레이드가 설치되고, 그 뒤엔 배너가 또 업데이트를 권해 고리가 된다.
+        GOT_BUILD="$(plutil -extract CFBundleVersion raw "$SRC/Contents/Info.plist" 2>/dev/null)"
+        case "$GOT_BUILD" in
+          ''|*[!0-9]*) fail build-unreadable 1 "받은 앱의 build 를 읽지 못했습니다" ;;
+        esac
+        if [ "$GOT_BUILD" -le "$MIN_BUILD" ]; then
+          fail not-newer 1 "받은 앱이 더 새 버전이 아닙니다(build $GOT_BUILD ≤ $MIN_BUILD)"
+        fi
+        echo "$M 검증 통과: $(plutil -extract CFBundleShortVersionString raw "$SRC/Contents/Info.plist" 2>/dev/null) build $GOT_BUILD"
+
+        # 6) 사본을 DEST 와 **같은 볼륨**에 만든다 — 그래야 마지막 교체가 복사가 아니라 이름 바꾸기다.
+        note staging
+        mkdir -p "$STAGE_DIR" || fail permission $? "이 자리에 쓸 권한이 없습니다 — $PARENT"
+        STAGE="$STAGE_DIR/$(basename "$DEST")"
+        ditto "$SRC" "$STAGE" || fail copy $? "복사하지 못했습니다(용량 부족일 수 있습니다)"
+        xattr -dr com.apple.quarantine "$STAGE" 2>/dev/null
+        # 복사본을 **다시** 검증한다 — 용량 부족으로 반쪽 복사가 되면 서명이 깨진 번들이 자리에 들어간다.
+        codesign --verify --deep --strict -R "=$REQ" "$STAGE" \\
+          || fail staged-verify $? "복사본 검증에 실패했습니다"
+
+        # 7) 앱을 **정상** 종료시킨다. SIGTERM 을 앱이 받아 근무 세션을 닫고(finishWorkBeforeQuit) 스스로 끝낸다.
+        #    Apple Event 로 quit 을 보내면 자동화 권한 프롬프트가 끼어들 수 있고, 무엇보다 **응답으로** 돌아와
+        #    프로세스 소멸을 보장하지 않는다 — 종료 절차가 도는 중에 번들을 바꾸면 경합한다. 그래서 PID 소멸을 본다.
+        note quit
+        if [ -n "$APP_PID" ] && kill -0 "$APP_PID" 2>/dev/null; then
+          echo "$M 앱 종료 요청: pid $APP_PID"
+          kill -TERM "$APP_PID" 2>/dev/null
+          i=0
+          while [ "$i" -lt 100 ] && kill -0 "$APP_PID" 2>/dev/null; do sleep 0.2; i=$((i+1)); done
+          if kill -0 "$APP_PID" 2>/dev/null; then
+            echo "$M 20초 안에 끝나지 않아 강제 종료"
+            kill -KILL "$APP_PID" 2>/dev/null
+            sleep 1
+          fi
+        fi
+
+        # 8) 교체 — 같은 볼륨이라 이름 바꾸기 두 번. 어느 쪽이 실패해도 옛 번들을 되돌리고,
+        #    **교체된 자리를 다시 검증**한 뒤에만 옛 번들을 지운다(검증한 것과 실행될 것이 같다는 보장).
+        note swap
+        if [ -d "$DEST" ] && ! mv "$DEST" "$OLD"; then
+          fail swap-aside $? "옛 번들을 치우지 못했습니다"
+        fi
+        # 되돌리기까지 실패하면(부모 폴더가 그 사이 못 쓰게 됐다든지) 앱은 `$OLD` 에 남는다. 그때는 앱이
+        # 제자리에 없어서 **다시 눌러 볼 수조차 없으므로**, 사람이 손으로 고칠 수 있게 어디 있는지 로그에 적는다.
+        rescue_note() {
+          [ -d "$DEST" ] || echo "$M ★ 복구 안내: 앱이 \"$OLD\" 에 있습니다 — 그 폴더 이름을 \"$(basename "$DEST")\" 로 바꿔 주세요"
+        }
+        if ! mv "$STAGE" "$DEST"; then
+          [ -d "$OLD" ] && mv "$OLD" "$DEST"
+          rescue_note
+          fail swap $? "번들을 바꾸지 못했습니다(되돌렸습니다)"
+        fi
+        if ! codesign --verify --deep --strict -R "=$REQ" "$DEST"; then
+          rm -rf "$DEST"
+          [ -d "$OLD" ] && mv "$OLD" "$DEST"
+          rescue_note
+          fail swapped-verify 1 "바꾼 뒤 검증에 실패해 되돌렸습니다"
+        fi
+        rm -rf "$OLD"
+
+        # 9) 다시 연다. 성공·실패 어느 쪽이든 앱은 떠 있어야 한다 — 사용자가 앱을 잃으면 알릴 표면조차 없다.
+        note done
+        open -a "$DEST" || open "$DEST" || echo "$M 경고: 다시 열지 못했습니다 — 직접 실행해 주세요"
+        echo "$M ---- 완료"
+        """
+
+    /// 기본 DMG 스폰. 래퍼만 셸 텍스트로 주고 나머지는 전부 인자로 넘긴다(`dmgSpawnWrapper` 주석).
+    nonisolated static func detachedSpawnDMG(_ plan: DMGUpdatePlan) -> Bool {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        proc.arguments = ["-c", dmgSpawnWrapper] + plan.arguments
         do {
             try proc.run()
             return true

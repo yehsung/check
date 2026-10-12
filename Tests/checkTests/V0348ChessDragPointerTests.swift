@@ -12,6 +12,7 @@ import Testing
 //   · 문턱 — 3.9pt(탭) · 4.0pt(끌기) · 4.1pt(끌기), 가로·세로·대각선 → ①
 //   · 누름의 종류 — 끌 수 있는 말 · 못 끄는 내 말 · 빈 칸/상대 말 · 도착 칸 넷이 **같은 움직임**에 다른 답 → ②③④
 //   · 뗀 자리 — 같은 칸 · 다른 칸 · 판 밖 → ③⑤
+//   · 칸 경계를 넘은 손떨림 — 0.8pt · 3.9pt(누른 칸의 탭) · 4.0pt · 4.1pt(아무 일도 없다) → ③b
 //   · 취소 — 끌던 중 · 끌기 전 · 아무것도 안 누름 → ⑥
 
 private func dpSquare(_ notation: String) throws -> ChessSquare {
@@ -139,7 +140,7 @@ struct V0348ChessDragPointerTests {
         #expect(pointer.release(at: CGPoint(x: -40, y: 300), square: nil) == [.drop(from: e2, on: nil)])
     }
 
-    // MARK: - ③ 끌기가 안 되는 누름 — 같은 칸에서 뗐을 때만 탭
+    // MARK: - ③ 끌기가 안 되는 누름 — 같은 칸에서 뗐거나(③) 문턱 밑에서 뗐을 때만(③b) 탭
 
     @Test("빈 칸·상대 말 — 4pt 를 넘겨 떨려도 같은 칸이면 탭, 다른 칸·판 밖이면 아무 일도 없다")
     func plainPressTapsOnlyOnTheSameSquare() throws {
@@ -181,6 +182,76 @@ struct V0348ChessDragPointerTests {
         var plain = ChessBoardPointer()
         _ = plain.press(at: origin, square: d5, grab: .movable, isSelectionTarget: false)
         #expect(plain.move(to: slid) == [.beginDrag(d5), .dragMoved(slid)], "전제: 같은 누름이 도착 칸이 아니면 끌기다")
+    }
+
+    // MARK: - ③b 칸 경계를 넘은 손떨림 — 문턱 밑이면 누른 칸의 탭이다
+
+    @Test("끌기가 안 되는 누름 — 문턱 밑 손떨림은 칸 경계를 넘어 떼도 누른 칸의 탭이고, 4pt 부터는 아무 일도 없다")
+    func aWiggleAcrossACellBorderStillTapsThePressedSquare() throws {
+        // 없으면: 도착 칸의 경계 0.4pt 안쪽을 누른 손이 0.4pt 바깥(옆 칸)에서 떼면 **수도 문구도 없이** 삼켜진다
+        //        (옛 탭 제스처는 같은 입력에 적어도 거절 문구를 냈다). 반대로 문턱을 없애 "어디서 떼든 누른 칸의 탭"
+        //        으로 풀어도 초록이면 안 된다 — 누른 채 옆 칸으로 옮겨 가 버린 손은 클릭이 아니다.
+        let e4 = try dpSquare("e4"), f4 = try dpSquare("f4"), e5 = try dpSquare("e5"), h4 = try dpSquare("h4")
+        // e4 와 f4 가 만나는 세로 경계(x = 380) · e4 와 e5 가 만나는 가로 경계(y = 304) · 판의 오른쪽 변(x = 608).
+        let borderX = dpCenter(e4).x + 38, borderY = dpCenter(e4).y - 38, edgeX = dpCenter(h4).x + 38
+        let rowY = dpCenter(e4).y
+
+        struct Wiggle {
+            let label: String
+            let press: CGPoint
+            let pressed: ChessSquare
+            let release: CGPoint
+            let released: ChessSquare?
+            let taps: Bool
+        }
+        // 정확히 4.0pt 인 경우는 2진수로 딱 떨어지는 좌표(….5)로만 만든다 — 경계가 뺄셈의 반올림에 안 흔들린다.
+        let cases: [Wiggle] = [
+            Wiggle(label: "0.8pt(경계 0.4pt 안 → 0.4pt 밖)",
+                   press: CGPoint(x: borderX - 0.4, y: rowY), pressed: e4,
+                   release: CGPoint(x: borderX + 0.4, y: rowY), released: f4, taps: true),
+            Wiggle(label: "3.9pt",
+                   press: CGPoint(x: borderX - 0.5, y: rowY), pressed: e4,
+                   release: CGPoint(x: borderX + 3.4, y: rowY), released: f4, taps: true),
+            Wiggle(label: "4.0pt",
+                   press: CGPoint(x: borderX - 0.5, y: rowY), pressed: e4,
+                   release: CGPoint(x: borderX + 3.5, y: rowY), released: f4, taps: false),
+            Wiggle(label: "4.1pt",
+                   press: CGPoint(x: borderX - 0.5, y: rowY), pressed: e4,
+                   release: CGPoint(x: borderX + 3.6, y: rowY), released: f4, taps: false),
+            Wiggle(label: "세로 3.0pt(위 칸으로)",
+                   press: CGPoint(x: dpCenter(e4).x, y: borderY + 1.5), pressed: e4,
+                   release: CGPoint(x: dpCenter(e4).x, y: borderY - 1.5), released: e5, taps: true),
+            Wiggle(label: "세로 4.0pt(위 칸으로)",
+                   press: CGPoint(x: dpCenter(e4).x, y: borderY + 0.5), pressed: e4,
+                   release: CGPoint(x: dpCenter(e4).x, y: borderY - 3.5), released: e5, taps: false),
+            Wiggle(label: "판 밖으로 0.8pt",
+                   press: CGPoint(x: edgeX - 0.4, y: rowY), pressed: h4,
+                   release: CGPoint(x: edgeX + 0.4, y: rowY), released: nil, taps: true),
+            Wiggle(label: "판 밖으로 4.0pt",
+                   press: CGPoint(x: edgeX - 0.5, y: rowY), pressed: h4,
+                   release: CGPoint(x: edgeX + 3.5, y: rowY), released: nil, taps: false),
+        ]
+        // 끌기가 안 되는 누름 둘: 빈 칸·상대 말(`none`) · 도착 칸(끌 수 있는 말이 서 있어도 `none` 으로 덮인다).
+        let presses: [(name: String, grab: ChessBoardPointer.Grab, isTarget: Bool)] = [
+            ("빈 칸·상대 말", .none, false), ("도착 칸", .none, true), ("도착 칸(내 말이 선)", .movable, true),
+        ]
+        for item in cases {
+            for kind in presses {
+                var pointer = ChessBoardPointer()
+                #expect(pointer.press(at: item.press, square: item.pressed, grab: kind.grab,
+                                      isSelectionTarget: kind.isTarget) == [])
+                #expect(pointer.move(to: item.release) == [], "\(kind.name) · \(item.label): 움직임에 행동이 나왔다")
+                let released = pointer.release(at: item.release, square: item.released)
+                let wanted: [Action] = item.taps ? [.tap(item.pressed)] : []
+                #expect(released == wanted,
+                        "\(kind.name) · \(item.label): \(item.released?.notation ?? "판 밖") 에서 뗐더니 \(released)")
+                #expect(pointer.isIdle)
+            }
+        }
+        // ★ 기준선: 같은 칸 안이면 문턱을 넘겨도 탭이다(③) — 4pt 가 "탭의 한계" 가 된 것이 아니다.
+        var same = ChessBoardPointer()
+        _ = same.press(at: CGPoint(x: borderX - 30, y: rowY), square: e4, grab: .none, isSelectionTarget: true)
+        #expect(same.release(at: CGPoint(x: borderX - 0.5, y: rowY), square: e4) == [.tap(e4)])
     }
 
     // MARK: - ④ 못 끄는 내 말 — 끌기는 없고, 뗄 때 거절 한 번

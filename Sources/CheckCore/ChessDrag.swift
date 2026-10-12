@@ -44,8 +44,11 @@ package nonisolated struct ChessPendingDrop: Equatable, Sendable {
 ///
 /// 여기 있는 판정 셋:
 ///  ① **문턱**: 누른 자리에서 `dragThreshold`(4pt) 이상 움직여야 끌기다. 그 밑에서 떼면 지금의 탭 그대로다.
-///  ② **같은 칸**: 끌기가 안 되는 누름(빈 칸·상대 말·도착 칸)은 뗀 칸이 누른 칸과 같을 때만 탭이다 —
-///     손이 4pt 넘게 떨려도 같은 칸이면 탭이라 지금보다 덜 씹히고, 다른 칸에서 떼면 아무 일도 없다.
+///  ② **같은 칸 · 손떨림**: 끌기가 안 되는 누름(빈 칸·상대 말·도착 칸)은 뗀 칸이 누른 칸과 같으면 탭이다 —
+///     손이 4pt 넘게 떨려도 같은 칸이면 탭이라 지금보다 덜 씹힌다. 뗀 칸이 **달라도** 뗀 점이 누른 점에서
+///     문턱 밑이면 누른 칸의 탭이다: 칸 경계 바로 안쪽을 누른 손이 1pt 떨려 옆 칸에서 떼는 것은 클릭이지
+///     끌기가 아니다(안 그러면 도착 칸 클릭이 문구도 없이 삼켜진다). 문턱 이상 움직여 다른 칸·판 밖에서
+///     뗀 것만 아무 일도 없다 — 그 손은 클릭을 그만두고 떠난 것이다.
 ///  ③ **도착 칸을 눌렀으면 끌기가 아니다**: 이미 고른 말의 도착 칸을 누른 것은 클릭-도착이다.
 ///
 /// 여기 **없는** 것: 그 말을 지금 끌 수 있는가(스토어 `grab(at:)` 이 누를 때 한 번 말해 준다) · 점이 어느 칸인가
@@ -158,7 +161,10 @@ package nonisolated struct ChessBoardPointer: Equatable, Sendable {
         case .pressed(let pressed, .stuck):
             return [.tap(pressed)]                              // 끌려다 만 내 말 — 어디서 떼든 거절 한 번
         case .pressed(let pressed, .none):
-            return square == pressed ? [.tap(pressed)] : []     // ② 같은 칸에서 뗐을 때만 탭
+            // ② 같은 칸에서 뗐거나, 칸은 달라도 문턱 밑(손떨림)이면 **누른 칸**의 탭.
+            //    문턱 이상 움직여 다른 칸·판 밖에서 뗀 것만 조용히 버린다.
+            if square == pressed || !hasCrossedThreshold(point) { return [.tap(pressed)] }
+            return []
         case .dragging(let from):
             return [.drop(from: from, on: square)]
         case .idle, .spent:

@@ -474,10 +474,12 @@ enum ChessPieceArt {
 /// 판 위에서 **제자리를 떠나 있는 말 한 장** — 끄는 중이거나, 놓고 답을 기다리는 중이다.
 ///
 /// 둘을 한 값으로 묶은 까닭: 그림의 규칙이 같다(출발 칸에는 그리지 않고, 다른 자리에 **맨 위로** 그린다).
-/// 그리고 둘은 동시에 설 수 없다 — 놓은 말이 답을 기다리는 동안에는 스토어가 새 끌기를 거절한다.
+/// 그리고 판에는 **한 번에 한 장**만 든다 — 놓은 말이 답을 기다리는 동안에는 스토어가 새 끌기를 거절하고,
+/// 놓은 직후 왕복이 시작되기 전의 틈에 시작된 끌기는 놓은 말이 먼저라 그려지지 않는다(`ChessPlayBoard.lifted`).
 struct ChessBoardLift: Equatable {
     enum Place: Equatable {
-        /// 끄는 중 — 말 **중심**이 이 점(판 좌표)에 온다. 판 밖 점은 판 가장자리로 당겨 그린다.
+        /// 끄는 중 — 말 **중심**이 이 점(판 좌표)에 온다. 판 가장자리에서는 말이 **통째로 보이는 데까지만**
+        /// 따라간다(`ChessBoardView.cursorCenter`) — 판 밖 점도 그 안쪽으로 당겨 그린다.
         case cursor(CGPoint)
         /// 놓았다 — 그 칸에 그대로 선다(답을 기다리는 중 · 승격을 고르는 중).
         case square(ChessSquare)
@@ -673,14 +675,29 @@ struct ChessBoardView: View {
             case .square(let square):
                 draw(lifted.piece, in: g.rect(of: square), cell: g.cell, into: &context)
             case .cursor(let point):
-                // 말 중심 = 커서. 판 밖으로 나간 점은 가장자리로 당긴다 — 말이 판에서 사라지면 어디 있는지 잃는다.
-                let center = CGPoint(x: min(g.side, max(0, point.x.isNaN ? 0 : point.x)),
-                                     y: min(g.side, max(0, point.y.isNaN ? 0 : point.y)))
+                // 말 중심 = 커서. 판 변에서는 말이 통째로 보이는 데까지만 따라간다(`cursorCenter`).
+                let center = Self.cursorCenter(for: point, in: g)
                 let box = CGRect(x: center.x - g.cell / 2, y: center.y - g.cell / 2,
                                  width: g.cell, height: g.cell)
                 draw(lifted.piece, in: g.scaled(box, by: ChessBoardLift.cursorScale), cell: g.cell, into: &context)
             }
         }
+    }
+
+    /// 끄는 말의 **중심** — 커서 그대로이되 판 변에서 **그려지는 말의 반폭**만큼 안쪽으로 묶는다.
+    ///
+    /// 판은 Canvas 한 장이라 그 밖은 잘린다. 중심을 판 사각형 `[0, side]` 에만 묶으면 판 밖으로 끈 말이 변에
+    /// 걸려 **반쪽만** 보이고, 판 안에서도 커서가 변에서 반폭 안쪽이면 그만큼 잘린다(가장자리 줄의 룩·폰을
+    /// 집을 때 바로 보인다). 그래서 `[반폭, side − 반폭]` 으로 묶는다 — 반폭은 **실제로 그리는 상자**
+    /// (칸 × `cursorScale` × `ChessPieceArt.fillFraction`)의 절반이고, 여섯 말의 잉크는 테두리까지 그 상자 안이다.
+    /// 커서가 그 안쪽에 있으면 중심은 커서와 **같다**(묶기 전과 한 픽셀도 안 다르다).
+    /// 숫자가 아닌 좌표는 0 으로 읽는다(그 뒤 같은 묶기를 지난다) — 판을 깨지 않는다.
+    static func cursorCenter(for point: CGPoint, in g: ChessBoardGeometry) -> CGPoint {
+        let half = g.cell * ChessPieceArt.fillFraction * CGFloat(ChessBoardLift.cursorScale) / 2
+        // 말보다 작은 판은 없지만(608pt), 있다면 위아래 한계가 뒤집히지 않게 한가운데로 모은다.
+        let low = min(half, g.side / 2), high = max(g.side - half, g.side / 2)
+        func bound(_ value: CGFloat) -> CGFloat { min(high, max(low, value.isNaN ? 0 : value)) }
+        return CGPoint(x: bound(point.x), y: bound(point.y))
     }
 
     /// 사각형 하나에 말 하나.
@@ -704,8 +721,13 @@ struct ChessBoardView: View {
 
 /// 대국 화면의 판. 탭·끌기·호버만 얹고 그림은 `ChessBoardView` 를 그대로 쓴다.
 ///
-/// **조용히 삼키는 길은 판 밖 하나뿐**이고 나머지 거절은 전부 스토어(`tap(_:)`·`beginDrag`·`placeDrop`)가
+/// **조용히 삼키는 길은 둘뿐**이고 나머지 거절은 전부 스토어(`tap(_:)`·`beginDrag`·`placeDrop`)가
 /// 문구+로그를 남긴다 — 뭉친 무음 guard 가 오목에서 "눌렀는데 반응 없음" 의 원인이었다.
+///  ① **판 밖** — 판 밖을 누른 누름, 판 밖에 놓은 끌기(말은 제자리로, 고르기는 남는다).
+///  ② **끌기가 안 되는 누름(빈 칸·상대 말·도착 칸)을 문턱(4pt) 이상 움직여 다른 칸·판 밖에서 뗀 것** —
+///     그 손은 클릭을 그만두고 떠났다. 문턱 **밑**에서 뗀 누름은 칸 경계를 넘었어도 누른 칸의 탭이다
+///     (`ChessBoardPointer` ② — 도착 칸 가장자리를 누른 손이 1pt 떨려도 수는 나간다).
+/// (끌던 말을 출발 칸에 도로 놓는 것도 문구가 없지만 그건 거절이 아니라 "안 두기로 했다" 다.)
 ///
 /// ── 끌어서 두기(v0.3.48) ──
 /// 이 뷰는 **얇은 어댑터**다. 제스처 값을 `ChessBoardPointer`(순수 해석기)에 먹이고, 나온 행동을 스토어에
@@ -765,6 +787,10 @@ struct ChessPlayBoard: View {
     /// 손에 든 말. **놓은 말이 먼저다**(스토어가 판·수 번호를 맞춰 본 값 — 자기 치유는 거기서 한다).
     /// 끄는 말은 넷이 다 맞을 때만 그린다: 눌려 있다 · 해석기가 끄는 중이다 · 스토어 걸쇠가 같은 칸이다 ·
     /// 그 칸에 말이 있다. 하나라도 어긋나면 말은 판이 말하는 제자리에 그려진다.
+    ///
+    /// 놓은 직후 — 왕복(`finishDrop`)이 시작되기 전의 틈 — 에 다른 말을 집으면 둘이 함께 선다(스토어는 그 틈에
+    /// 놓은 수의 꼬리표를 지우지 않는다: 지우면 그 수가 사라진다). 그때 그리는 것은 **놓은 말**이고 새로 집은 말은
+    /// 제자리에 그려진다. 곧 왕복이 시작되면(`isBusy`) 아래 `dragPremise` 통지가 그 끌기를 거둔다.
     private var lifted: ChessBoardLift? {
         if let pending = store.pendingDrop, pending.matchID == match.id {
             return ChessBoardLift(piece: pending.piece, from: pending.from, place: .square(pending.to))

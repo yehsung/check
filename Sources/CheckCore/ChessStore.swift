@@ -1341,9 +1341,15 @@ package final class ChessStore {
         guard current.isMyTurn else { refuseTap(.notYourTurn, at: square); return }
 
         // 승격을 고르는 중이면 판 탭은 그 단계를 취소한다(다른 수를 고르려는 뜻이다).
-        if promotion != nil { promotion = nil }
         // 끌어 놓고 승격을 고르던 폰이었다면 출발 칸으로 돌아간다(클릭으로 온 승격에는 꼬리표가 없다).
-        clearPendingDrop()
+        //
+        // ★ 꼬리표는 **승격을 실제로 접을 때만** 지운다. 승격이 아닌 꼬리표는 "놓았고 곧 보낼 수" 다 — 뷰는
+        //   `placeDrop` 을 그 자리에서 부르고 왕복(`finishDrop`)은 Task 로 넘기므로, 그 Task 가 돌기 전의 틈에
+        //   온 탭이 여기서 꼬리표를 지우면 `finishDrop` 이 보낼 것이 없어 **놓은 수가 문구도 로그도 없이 사라진다**.
+        if promotion != nil {
+            promotion = nil
+            clearPendingDrop()
+        }
 
         if let selected = selection, selected.from != square {
             if selected.targets.contains(square) {
@@ -1453,6 +1459,11 @@ package final class ChessStore {
             } else if response.status == .ok {
                 needsRefresh = true             // 상태를 안 실어 준 성공(서버 계약상 없지만 모르는 모양은 되묻는다)
             }
+            // 서버가 거절한 수가 **끌어 놓은 수**였다면 놓은 말은 여기서 출발 칸으로 돌아간다 — 재조회를 기다리지
+            // 않는다. 거절 문구는 이미 떴는데 재조회가 느리면(요청 타임아웃 15초) 그동안 말이 도착 칸에 남는다:
+            // 같은 판·같은 수 번호·내 차례·출발 칸에 그 말이라 읽는 자리의 자기 치유가 못 걸러 낸다.
+            // 클릭으로 둔 수에는 꼬리표가 없어 아무 일도 없다(승격 고르기도 이 문을 지난다).
+            if response.status != .ok { clearPendingDrop() }
             if needsRefresh { await refreshMatch(id: id) }
         }
     }
@@ -1491,8 +1502,12 @@ package final class ChessStore {
         guard current.isMyTurn else { refuseTap(.notYourTurn, at: square); return false }
 
         // 승격을 고르는 중이면 접는다(탭과 같다). 끌어 놓고 고르던 폰은 출발 칸으로 돌아간다.
-        if promotion != nil { promotion = nil }
-        clearPendingDrop()
+        // ★ 꼬리표는 **승격을 접을 때만** 지운다(`tap` 의 ★ 와 같은 까닭). 놓은 직후 — 왕복이 시작되기 전의
+        //   틈에 — 다른 말을 집는 끌기가 앞 수의 꼬리표를 지우면 그 수는 서버로 나가지 못한다.
+        if promotion != nil {
+            promotion = nil
+            clearPendingDrop()
+        }
 
         guard let piece = position[square] else { refuseTap(.emptySquare, at: square); return false }
         guard piece.color == current.myColor else { refuseTap(.notMyPiece, at: square); return false }

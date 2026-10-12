@@ -30,6 +30,7 @@ import Testing
 //   있다는 사실만 못 박는다(꺼져 있으면 내용 영역 끌기는 창을 옮기지 않는다 — AppKit 계약).
 //
 // 서버 응답은 **실서버 픽스처 원문**이다(`Fixtures/chess-rpc`): 초기 국면(내 차례) → 1.e4 의 답.
+// 뒤집힌 판(흑 시점)은 1.e4 뒤 흑 차례 → 1…e5 의 답이다(`dwBlackToMoveState` — 같은 판, 같은 픽스처 묶음).
 //
 // 창 수명 스위트(`ChessWindowLifecycleTests`, 직렬)에 붙인다 — AppKit 창을 동시에 만들면 죽는다(그 파일 머리말).
 
@@ -54,13 +55,15 @@ private enum DWRetention {
 }
 
 /// 초기 국면(내 차례)을 든 1:1 스토어. `chess_move` 는 1.e4 의 실서버 답을 돌려준다.
+/// `stateBody` 를 주면 픽스처 이름 대신 **그 원문**이 판 응답이 되고, `move` 는 착수 답의 픽스처 이름이다.
 @MainActor
 private func dwStore(_ label: String, me: String = dwWhiteID,
-                     state: String = "chess_state__ok_initial_my_turn") async throws -> (ChessStore, String) {
+                     state: String = "chess_state__ok_initial_my_turn", stateBody: String? = nil,
+                     move: String = "chess_move__ok_white_first") async throws -> (ChessStore, String) {
     let host = "v0348-cw-\(label)-\(UUID().uuidString.prefix(8))".lowercased()
     let bodies = [
-        "chess_state": try dwText(state),
-        "chess_move": try dwText("chess_move__ok_white_first"),
+        "chess_state": try stateBody ?? dwText(state),
+        "chess_move": try dwText(move),
         "chess_lobby": try dwText("chess_lobby__ok_empty"),
     ]
     GomokuStubProtocol.register(host: host) { rpc, _, _ in
@@ -81,6 +84,15 @@ private func dwStore(_ label: String, me: String = dwWhiteID,
     store.pollStepSeconds = 3_600
     await store.refreshMatch(id: dwMatchID)
     return (store, host)
+}
+
+/// 1.e4 뒤 **흑 차례**를 흑이 본 판(같은 판 id). 실서버 픽스처 `chess_move__stale` 의 몸통(흑 · 내 차례 ·
+/// 합법 수 20)을 판 응답으로 쓴다 — status 만 ok 로 바꾼다. 그 판의 답은 `chess_move__ok_black_reply`(1…e5).
+private func dwBlackToMoveState() throws -> String {
+    let data = try #require(try dwText("chess_move__stale").data(using: .utf8))
+    var object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    object["status"] = "ok"
+    return try #require(String(data: try JSONSerialization.data(withJSONObject: object), encoding: .utf8))
 }
 
 /// 창이 그림·배치·제스처를 따라잡을 틈을 준다. **중첩 런루프를 돌리지 않는다**(오목 창 시험이 그렇게 데었다) —
@@ -134,16 +146,22 @@ private func dwClose(_ window: NSWindow, _ store: ChessStore) {
     window.close()
 }
 
-/// 판 위 칸의 가운데 — **창 콘텐츠 좌표**(왼쪽 위가 원점). 판은 레이아웃 상수가 정한 자리에 있다.
+/// 판 좌표(판 왼쪽 위가 원점) → **창 콘텐츠 좌표**(왼쪽 위가 원점). 판은 레이아웃 상수가 정한 자리에 있다.
+@MainActor
+private func dwContent(_ board: CGPoint) -> CGPoint {
+    CGPoint(
+        x: ChessWindowLayout.contentPadding + board.x,
+        y: ChessWindowLayout.contentPadding + ChessWindowLayout.headerHeight
+            + ChessWindowLayout.headerSpacing + board.y)
+}
+
+/// 판 위 칸의 가운데 — 창 콘텐츠 좌표. `orientation` 은 아래쪽에 오는 색이다(흑이면 판이 뒤집혀 있다).
 @MainActor
 private func dwPoint(_ notation: String, orientation: ChessColor = .white,
                      dx: CGFloat = 0, dy: CGFloat = 0) throws -> CGPoint {
     let square = try #require(ChessSquare(notation))
     let center = ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: orientation).center(of: square)
-    return CGPoint(
-        x: ChessWindowLayout.contentPadding + center.x + dx,
-        y: ChessWindowLayout.contentPadding + ChessWindowLayout.headerHeight
-            + ChessWindowLayout.headerSpacing + center.y + dy)
+    return dwContent(CGPoint(x: center.x + dx, y: center.y + dy))
 }
 
 /// 합성 마우스 이벤트 한 건을 **이 창에만** 넣는다.
@@ -208,6 +226,45 @@ private func dwWhiteInk(_ rep: NSBitmapImageRep, _ notation: String) throws -> I
         }
     }
     return hits
+}
+
+/// 창 콘텐츠 좌표 사각형 안의 **흑 말 채움**(세 채널 전부 ≤ 55) 픽셀 수와 그것을 감싸는 상자(pt).
+/// 흑 말의 테두리는 밝아서(0.90) 여기 안 세어진다 — 상자는 채움의 상자다.
+@MainActor
+private func dwDarkInk(_ rep: NSBitmapImageRep, in rect: CGRect) -> (count: Int, bounds: CGRect?) {
+    let scale = CGFloat(rep.pixelsWide) / ChessWindowLayout.contentSize.width
+    guard let data = rep.bitmapData, rep.samplesPerPixel >= 3 else { return (0, nil) }
+    let x0 = max(0, Int(rect.minX * scale)), x1 = min(rep.pixelsWide - 1, Int(rect.maxX * scale))
+    let y0 = max(0, Int(rect.minY * scale)), y1 = min(rep.pixelsHigh - 1, Int(rect.maxY * scale))
+    guard x0 <= x1, y0 <= y1 else { return (0, nil) }
+    var hits = 0, minX = Int.max, maxX = Int.min, minY = Int.max, maxY = Int.min
+    for y in y0...y1 {
+        for x in x0...x1 {
+            let o = y * rep.bytesPerRow + x * rep.samplesPerPixel
+            guard max(data[o], max(data[o + 1], data[o + 2])) <= 55 else { continue }
+            hits += 1
+            minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+        }
+    }
+    guard hits > 0 else { return (0, nil) }
+    return (hits, CGRect(x: CGFloat(minX) / scale, y: CGFloat(minY) / scale,
+                         width: CGFloat(maxX - minX + 1) / scale, height: CGFloat(maxY - minY + 1) / scale))
+}
+
+/// 창 콘텐츠 좌표 한 점의 색(RGB).
+@MainActor
+private func dwPixel(_ rep: NSBitmapImageRep, at point: CGPoint) -> (Int, Int, Int) {
+    let scale = CGFloat(rep.pixelsWide) / ChessWindowLayout.contentSize.width
+    guard let data = rep.bitmapData, rep.samplesPerPixel >= 3 else { return (0, 0, 0) }
+    let x = min(rep.pixelsWide - 1, max(0, Int(point.x * scale)))
+    let y = min(rep.pixelsHigh - 1, max(0, Int(point.y * scale)))
+    let o = y * rep.bytesPerRow + x * rep.samplesPerPixel
+    return (Int(data[o]), Int(data[o + 1]), Int(data[o + 2]))
+}
+
+/// 두 색의 가장 큰 채널 차.
+private func dwDelta(_ a: (Int, Int, Int), _ b: (Int, Int, Int)) -> Int {
+    max(abs(a.0 - b.0), max(abs(a.1 - b.1), abs(a.2 - b.2)))
 }
 
 @MainActor
@@ -533,5 +590,281 @@ extension ChessWindowLifecycleTests {
         #expect(store.notice == ChessNoticeText.notYourTurn, "상대 차례에 끌려 했는데 '\(store.notice ?? "무음")'")
         #expect(store.selection == nil)
         #expect(dwMoves(host).isEmpty)
+    }
+
+    // MARK: - ⑥ 놓자마자 다른 말을 집는다 — 놓은 수는 그대로 나간다
+
+    @Test(.gomokuDefaultsCleanup)
+    func aLegalDropFollowedAtOnceByAnotherGrabStillSendsTheMove() async throws {
+        // 없으면: 뷰는 놓기의 동기 구간을 그 자리에서 끝내고 왕복만 Task 로 넘긴다. 그 Task 가 돌기 **전에** 다음
+        //        누름+끌기가 처리되면(이벤트가 밀려 한 턴에 몰릴 때) 스토어는 아직 '보내는 중' 이 아니다 — 그 끌기가
+        //        앞 수의 꼬리표를 지워 **놓은 수가 문구도 로그도 없이 사라졌다**(chess_move 0건 · 폰은 출발 칸으로).
+        // 세 갈래: 틈에서 집어 틈에서 도로 놓는다 · 틈에서 집어 답이 온 뒤에 갈 수 있는 칸에 놓는다 ·
+        //         (대조군) 한 박자 양보한 뒤에 집는다 — 그때는 왕복이 이미 시작돼 집히지도 않는다.
+        struct Variant {
+            let label: String
+            /// 놓은 뒤 다음 누름 전에 메인 액터를 양보하는가(양보하면 틈이 닫힌다).
+            let yields: Bool
+            /// 집은 말을 답이 올 때까지 쥐고 있다가 갈 수 있는 칸(d4)에 놓는가.
+            let holds: Bool
+        }
+        let variants = [
+            Variant(label: "틈에서 집고 틈에서 놓음", yields: false, holds: false),
+            Variant(label: "틈에서 집고 답 뒤에 놓음", yields: false, holds: true),
+            Variant(label: "양보 뒤에 집음", yields: true, holds: false),
+        ]
+        let e2 = try #require(ChessSquare("e2")), e4 = try #require(ChessSquare("e4"))
+        let d2 = try #require(ChessSquare("d2"))
+        for (index, variant) in variants.enumerated() {
+            let (store, host) = try await dwStore("drop-then-grab-\(index)")
+            let window = try await dwOpen(store)
+            try await dwPressAndDrag(window, from: try dwPoint("e2"), to: try dwPoint("e4"), number: 1)
+            #expect(store.dragOrigin == e2, "전제(\(variant.label)): 끌기가 시작됐다")
+            try dwSend(window, .leftMouseUp, at: try dwPoint("e4"), number: 1)
+            #expect(store.pendingDrop?.to == e4, "전제(\(variant.label)): 놓은 말이 도착 칸에 서 있다")
+            #expect(dwMoves(host).isEmpty, "전제(\(variant.label)): 뗀 틱에는 수가 아직 안 나갔다")
+            if variant.yields { await dwSettle(turns: 1) }
+
+            // ★ 여기까지 await 가 없다(양보 갈래만 빼고) — 곧바로 d2 를 집어 d3 한가운데까지 끈다.
+            try dwSend(window, .leftMouseDown, at: try dwPoint("d2"), number: 2)
+            try dwSend(window, .leftMouseDragged, at: try dwPoint("d2", dy: -10), number: 2)
+            try dwSend(window, .leftMouseDragged, at: try dwPoint("d3"), number: 2)
+            if !variant.yields {
+                // 틈은 실제로 열려 있었다: 그 끌기가 시작됐고, 앞 수는 아직 안 나갔다.
+                #expect(store.dragOrigin == d2 && !store.isBusy && dwMoves(host).isEmpty,
+                        "전제(\(variant.label)): 왕복이 시작되기 전에 다른 말을 집었다")
+                #expect(store.pendingDrop?.to == e4, "\(variant.label): 다른 말을 집었더니 놓은 말의 꼬리표가 지워졌다")
+                // 그 순간의 그림: 놓은 폰은 도착 칸에 **그대로** 서 있다(출발 칸으로 번쩍 돌아가지 않는다).
+                let gap = try dwCapture(window)
+                let ink = (e2: try dwWhiteInk(gap, "e2"), e4: try dwWhiteInk(gap, "e4"),
+                           d2: try dwWhiteInk(gap, "d2"), d3: try dwWhiteInk(gap, "d3"))
+                print("[실창 틈] \(variant.label) — 흰 잉크 e2/e4 \(ink.e2)/\(ink.e4) · d2/d3 \(ink.d2)/\(ink.d3)")
+                #expect(ink.e2 == 0 && ink.e4 > 200,
+                        "\(variant.label): 다른 말을 집자 놓은 폰이 출발 칸으로 돌아갔다(e2 \(ink.e2)px · e4 \(ink.e4)px)")
+            }
+            if variant.holds {
+                // 쥔 채로 답을 기다린 뒤 갈 수 있는 칸에 놓는다 — **두 번째 수는 없다**(판이 나아가며 그 끌기는 거둬졌다).
+                await dwSettle(turns: 300) { store.match?.plyCount == 1 }
+                await dwSettle(turns: 5)
+                print("[실창 틈] \(variant.label) — 답 뒤: 걸쇠 \(store.dragOrigin?.notation ?? "없음") · 보내는 중 \(store.isBusy)")
+                try dwSend(window, .leftMouseDragged, at: try dwPoint("d4"), number: 2)
+                try dwSend(window, .leftMouseUp, at: try dwPoint("d4"), number: 2)
+            } else {
+                try dwSend(window, .leftMouseUp, at: try dwPoint("d2"), number: 2)    // 제자리에 도로 놓는다(수 없음)
+            }
+            await dwSettle(turns: 300) { store.match?.plyCount == 1 }
+            await dwSettle(turns: 20)
+            print("[실창 틈] \(variant.label) — chess_move=\(dwMoves(host)) ply=\(store.match?.plyCount ?? -1) notice=\(store.notice ?? "무음")")
+            #expect(dwMoves(host) == ["e2e4"],
+                    "\(variant.label): 갈 수 있는 칸에 놓은 수가 \(dwMoves(host)) 로 나갔다 — 곧바로 다른 말을 집었더니 달라졌다")
+            #expect(store.match?.plyCount == 1)
+            #expect(store.pendingDropRecord == nil && store.dragOrigin == nil)
+            dwClose(window, store)
+        }
+    }
+
+    // MARK: - ⑦ 도착 칸 클릭이 칸 경계를 살짝 넘는다 — 손떨림은 누른 칸의 클릭이다
+
+    @Test(.gomokuDefaultsCleanup)
+    func aDestinationClickThatWigglesAcrossACellBorderStillMoves() async throws {
+        // 없으면: e2 를 고른 뒤 도착 칸 e4 의 오른쪽 경계 0.4pt 안쪽을 누르고 0.4pt 바깥(f4)에서 떼면 **수도 문구도
+        //        로그도 없다**(옛 탭 제스처는 같은 입력에 '둘 수 없는 자리예요' 라도 말했다). 지금은 누른 칸 e4 로 수가 나간다.
+        //        문턱(4pt)을 넘겨 옆 칸에서 뗀 것은 클릭이 아니다 — 그건 여전히 아무 일도 없어야 한다(대조군).
+        let e2 = try #require(ChessSquare("e2"))
+        let border = ChessWindowLayout.cellSide / 2                 // 칸 가운데에서 오른쪽 경계까지
+        // (경계 안쪽에서 누른 거리, 경계 바깥에서 뗀 거리, 수가 나가는가)
+        let cases: [(inside: CGFloat, outside: CGFloat, moves: Bool)] = [
+            (0.4, 0.4, true),       // 손떨림 0.8pt
+            (1.5, 1.5, true),       // 손떨림 3.0pt
+            (0.5, 4.5, false),      // 5.0pt — 문턱을 넘겨 옆 칸에서 뗐다
+        ]
+        for (index, item) in cases.enumerated() {
+            let label = "손떨림 \(item.inside + item.outside)pt"
+            let (store, host) = try await dwStore("wiggle-\(index)")
+            let window = try await dwOpen(store)
+            // ① 말을 고른다(가운데 클릭).
+            try await dwClick(window, at: try dwPoint("e2"), number: 1)
+            await dwSettle(turns: 30) { store.selection != nil }
+            #expect(store.selection?.from == e2, "전제(\(label)): e2 를 골랐다")
+            // ② 도착 칸의 오른쪽 경계 바로 안쪽을 누르고, 경계 바깥(f4)에서 뗀다.
+            let down = try dwPoint("e4", dx: border - item.inside), up = try dwPoint("e4", dx: border + item.outside)
+            store.notice = nil
+            try dwSend(window, .leftMouseDown, at: down, number: 2)
+            await dwSettle(turns: 2)
+            try dwSend(window, .leftMouseDragged, at: up, number: 2)
+            try dwSend(window, .leftMouseUp, at: up, number: 2)
+            await dwSettle(turns: 60) { !dwMoves(host).isEmpty || store.notice != nil }
+            await dwSettle(turns: 10)
+            print("[실창 경계 클릭] \(label) — chess_move=\(dwMoves(host)) notice=\(store.notice ?? "무음") 고른 칸=\(store.selection?.from.notation ?? "없음")")
+            if item.moves {
+                #expect(dwMoves(host) == ["e2e4"], "\(label): 도착 칸 클릭이 \(dwMoves(host)) — 경계를 살짝 넘었다고 삼켜졌다")
+                await dwSettle(turns: 300) { store.match?.plyCount == 1 }
+                #expect(store.match?.plyCount == 1)
+                #expect(store.pendingDropRecord == nil && store.dragOrigin == nil, "\(label): 클릭이 끌기로 읽혔다")
+            } else {
+                #expect(dwMoves(host).isEmpty, "\(label): 문턱을 넘겨 옆 칸에서 뗐는데 수가 나갔다: \(dwMoves(host))")
+                #expect(store.notice == nil, "\(label): 문턱을 넘겨 옆 칸에서 뗐는데 '\(store.notice ?? "")' 라 말했다")
+                #expect(store.selection?.from == e2, "\(label): 고르기가 풀렸다")
+                #expect(store.match?.plyCount == 0)
+            }
+            dwClose(window, store)
+        }
+    }
+
+    // MARK: - ⑧ 뒤집힌 판(흑 시점) — 누른 점 · 끄는 말 · 도착 칸 덮개 · 놓는 칸이 전부 뒤집힌 좌표로 맞는다
+
+    @Test(.gomokuDefaultsCleanup)
+    func draggingAsBlackOnTheFlippedBoardSendsTheMirroredMove() async throws {
+        // 없으면: 위 끌기 시험은 전부 백 시점이다 — 흑으로 두는 사람의 판에서만 좌표 뒤집기가 깨져도(다른 말이 집힌다 ·
+        //        끄는 말이 커서 반대쪽에 그려진다 · 도착 칸 덮개가 거울 칸에 뜬다 · 수가 거울 칸으로 나간다) 초록이다.
+        let (store, host) = try await dwStore("black-drag", me: dwBlackID, stateBody: try dwBlackToMoveState(),
+                                              move: "chess_move__ok_black_reply")
+        let window = try await dwOpen(store)
+        defer { dwClose(window, store) }
+        #expect(store.phase == .playing)
+        #expect(store.match?.myColor == .black && store.match?.isMyTurn == true && store.match?.plyCount == 1,
+                "전제: 흑으로 두는 내 차례(1.e4 뒤)")
+        let g = ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: .black)
+        let white = ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: .white)
+        let e7 = try #require(ChessSquare("e7")), e5 = try #require(ChessSquare("e5"))
+        let e6 = try #require(ChessSquare("e6")), c5 = try #require(ChessSquare("c5"))
+        // 뒤집히지 않은 판이라면 같은 화면 점은 d2(백 폰)다 — 뒤집기가 빠지면 집히는 말이 달라진다.
+        #expect(white.square(at: g.center(of: e7))?.notation == "d2", "전제: 흑 시점의 e7 자리는 백 시점의 d2 다")
+
+        let press = g.center(of: e7)
+        // 놓는 점은 e5 칸 안에서 **가운데를 벗어난** 자리 — 말 중심이 커서를 따라오는지를 잰다.
+        let drop = CGPoint(x: g.center(of: e5).x + 11, y: g.center(of: e5).y - 7)
+        #expect(g.square(at: drop) == e5)
+        let cell = ChessWindowLayout.cellSide
+        /// 그 칸 가운데 50% 상자(창 콘텐츠 좌표, 흑 시점).
+        func cellBox(_ square: ChessSquare) -> CGRect {
+            let c = dwContent(g.center(of: square))
+            return CGRect(x: c.x - cell * 0.25, y: c.y - cell * 0.25, width: cell * 0.5, height: cell * 0.5)
+        }
+        let resting = try dwCapture(window)
+        let restingE7 = dwDarkInk(resting, in: cellBox(e7)).count
+        #expect(restingE7 > 200, "전제: 멈춘 판의 e7(흑 시점 자리)에 흑 폰이 있다(\(restingE7)px)")
+        #expect(dwDarkInk(resting, in: cellBox(e5)).count == 0, "전제: e5 는 비었다")
+
+        try await dwPressAndDrag(window, from: dwContent(press), to: dwContent(drop), number: 1)
+        await dwSettle(turns: 30) { store.dragOrigin != nil }
+        #expect(store.dragOrigin == e7, "흑 시점에서 e7 을 눌러 끌었는데 집힌 칸이 \(store.dragOrigin?.notation ?? "없음")")
+        #expect(store.selection == ChessSelection(from: e7, targets: [e6, e5]))
+        #expect(dwMoves(host).isEmpty)
+
+        // 끄는 중의 그림: 출발 칸은 비었고, 말은 **커서 자리**에 1.12배로 있다.
+        let dragging = try dwCapture(window)
+        let sourceInk = dwDarkInk(dragging, in: cellBox(e7)).count
+        #expect(sourceInk == 0, "끄는 중인데 출발 칸(e7)에 말이 그려진다(\(sourceInk)px)")
+        let cursor = dwContent(drop)
+        // 커서 둘레(위쪽은 e4 백 폰의 테두리를 피한다).
+        let around = dwDarkInk(dragging, in: CGRect(x: cursor.x - 46, y: cursor.y - 30, width: 92, height: 76))
+        let bounds = try #require(around.bounds, "끄는 중인데 커서 둘레에 말이 없다")
+        // 폰 실루엣: 좌우 대칭(가운데 x = 커서 x), 세로는 머리 꼭대기 0.215 ~ 받침 0.91 → 가운데가 커서보다 조금 아래다.
+        let pieceSide = cell * ChessPieceArt.fillFraction * CGFloat(ChessBoardLift.cursorScale)
+        let expectedMidY = cursor.y - pieceSide / 2 + pieceSide * (0.215 + 0.91) / 2
+        #expect(abs(bounds.midX - cursor.x) <= 1.5, "끄는 말의 가운데 x 가 커서에서 \(bounds.midX - cursor.x)pt 어긋났다")
+        #expect(abs(bounds.midY - expectedMidY) <= 2.5, "끄는 말의 가운데 y 가 기대에서 \(bounds.midY - expectedMidY)pt 어긋났다")
+        // 1.12배: 멈춘 폰(d7)의 폭과 견준다.
+        let d7 = dwContent(g.center(of: try #require(ChessSquare("d7"))))
+        let restingPawn = try #require(dwDarkInk(dragging, in: CGRect(x: d7.x - 38, y: d7.y - 38, width: 76, height: 76)).bounds)
+        let ratio = bounds.width / restingPawn.width
+        #expect(ratio > 1.06 && ratio < 1.18, "끄는 말의 크기가 ×\(ratio) 다 — 1.12배여야 한다")
+        // 도착 칸 덮개: e5 모서리(말·점이 안 닿는 6pt 안쪽)가 같은 색 칸 c5 모서리와 달라야 한다.
+        func corner(_ square: ChessSquare) -> CGPoint {
+            let box = g.rect(of: square)
+            return dwContent(CGPoint(x: box.minX + 6, y: box.maxY - 6))
+        }
+        let tinted = dwPixel(dragging, at: corner(e5)), plain = dwPixel(dragging, at: corner(c5))
+        print("[실창 흑] 끄는 말 상자 \(bounds) · 커서 \(cursor) · 폭 ×\(ratio) · 덮개 e5 \(tinted) / c5 \(plain)")
+        #expect(dwDelta(dwPixel(resting, at: corner(e5)), plain) <= 2, "전제: 멈춘 판에서는 e5 와 c5 모서리가 같은 색이다")
+        #expect(dwDelta(tinted, plain) > 8, "커서 밑 도착 칸(e5)에 덮개가 없다")
+        // 뒤집히지 않은 좌표로 덮개를 그렸다면 색이 변했을 칸(같은 화면 자리의 거울 = d4)은 그대로다.
+        let d4 = try #require(ChessSquare("d4"))
+        #expect(dwDelta(dwPixel(dragging, at: corner(d4)), dwPixel(resting, at: corner(d4))) <= 2,
+                "도착 칸 덮개가 거울 칸에 그려졌다")
+
+        try dwSend(window, .leftMouseUp, at: dwContent(drop), number: 1)
+        #expect(store.match?.plyCount == 1, "전제: 뗀 틱에는 답이 아직 없다")
+        let dropped = try dwCapture(window)
+        let droppedInk = (e7: dwDarkInk(dropped, in: cellBox(e7)).count, e5: dwDarkInk(dropped, in: cellBox(e5)).count)
+        print("[실창 흑] 어두운 잉크 e7/e5 — 멈춤 \(restingE7)/0 · 끄는 중 \(sourceInk)/— · 뗀 틱 \(droppedInk.e7)/\(droppedInk.e5)")
+        #expect(droppedInk.e7 == 0, "뗀 틱에 말이 출발 칸으로 되돌아갔다")
+        #expect(droppedInk.e5 > 200, "뗀 틱에 도착 칸(e5)에 말이 없다")
+
+        await dwSettle(turns: 300) { store.match?.plyCount == 2 }
+        #expect(dwMoves(host) == ["e7e5"], "흑 시점에서 끌어 놓은 수가 \(dwMoves(host)) 로 나갔다")
+        #expect(store.match?.plyCount == 2)
+        #expect(store.match?.position?[e5] == ChessPiece(.black, .pawn))
+        #expect(store.pendingDrop == nil && store.pendingDropRecord == nil && store.dragOrigin == nil)
+        #expect(store.flight == nil, "끌어 놓은 말이 다시 미끄러졌다")
+        let settled = try dwCapture(window)
+        #expect(dwDarkInk(settled, in: cellBox(e5)).count > 200)
+        #expect(dwDarkInk(settled, in: cellBox(e7)).count == 0)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func clickClickAsBlackStillSendsTheMirroredMove() async throws {
+        // 없으면: 흑 시점의 클릭-클릭이 거울 칸을 골라도 초록이다(위 클릭 시험도 백 시점뿐이다).
+        let (store, host) = try await dwStore("black-click", me: dwBlackID, stateBody: try dwBlackToMoveState(),
+                                              move: "chess_move__ok_black_reply")
+        let window = try await dwOpen(store)
+        defer { dwClose(window, store) }
+        let e7 = try #require(ChessSquare("e7"))
+        try await dwClick(window, at: try dwPoint("e7", orientation: .black), number: 1)
+        await dwSettle(turns: 30) { store.selection != nil }
+        #expect(store.selection?.from == e7, "흑 시점에서 e7 을 눌렀는데 고른 칸이 \(store.selection?.from.notation ?? "없음")")
+        #expect(store.dragOrigin == nil)
+        try await dwClick(window, at: try dwPoint("e5", orientation: .black), number: 2)
+        await dwSettle(turns: 300) { store.match?.plyCount == 2 }
+        #expect(dwMoves(host) == ["e7e5"], "흑 시점의 클릭-클릭이 \(dwMoves(host)) 로 나갔다")
+        #expect(store.pendingDropRecord == nil, "클릭 길이 놓은 말의 꼬리표를 세웠다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func onTheFlippedBoardDroppingOutsideKeepsTheSelectionAndTheNextDragMoves() async throws {
+        // 없으면: 뒤집힌 판의 **가장자리 줄**(흑 시점에서 a 줄은 오른쪽 끝, h 줄은 왼쪽 끝)에서 좌표가 한 칸 밀려도,
+        //        판 밖으로 끈 말이 변에 걸려 반쪽만 보여도 초록이다.
+        let (store, host) = try await dwStore("black-edge", me: dwBlackID, stateBody: try dwBlackToMoveState(),
+                                              move: "chess_move__ok_black_reply")
+        let window = try await dwOpen(store)
+        defer { dwClose(window, store) }
+        let side = ChessWindowLayout.boardSide
+        let g = ChessBoardGeometry(side: side, orientation: .black)
+        let a7 = try #require(ChessSquare("a7")), h7 = try #require(ChessSquare("h7"))
+        #expect(g.rect(of: a7).maxX == side && g.rect(of: h7).minX == 0, "전제: 흑 시점에서 a 줄이 오른쪽 끝이다")
+
+        // a7 을 집어 판 오른쪽 밖(오른쪽 열 위)으로 끈다. 그 줄 위쪽(6·5랭크)은 비어 있다.
+        let outside = CGPoint(x: side + 40, y: g.center(of: a7).y - 90)
+        try await dwPressAndDrag(window, from: dwContent(g.center(of: a7)), to: dwContent(outside), number: 1)
+        #expect(store.dragOrigin == a7, "흑 시점 오른쪽 끝 칸에서 집힌 말이 \(store.dragOrigin?.notation ?? "없음")")
+        // 판 밖으로 나간 말은 판 변 안쪽에 **통째로** 그려진다 — 사라지지도, 변에 걸려 잘리지도 않는다.
+        let clamped = try dwCapture(window)
+        // 판 오른쪽 변 안쪽 100pt 띠에서 잰다. 변의 마지막 1pt 는 뺀다 — 그 바깥은 창 바탕(어둡다)이라 잉크로 세어진다.
+        let edgeX = dwContent(CGPoint(x: side, y: 0)).x
+        let nearEdge = dwContent(CGPoint(x: side - 100, y: outside.y - 50))
+        let pawn = try #require(dwDarkInk(clamped, in: CGRect(x: nearEdge.x, y: nearEdge.y, width: 99, height: 100)).bounds,
+                                "판 밖으로 끌었더니 말이 사라졌다")
+        // 온전한 말의 기준: 같은 그림에 멈춰 있는 폰(b7)의 폭 × 1.12.
+        let b7 = dwContent(g.center(of: try #require(ChessSquare("b7"))))
+        let restingPawn = try #require(dwDarkInk(clamped, in: CGRect(x: b7.x - 38, y: b7.y - 38, width: 76, height: 76)).bounds)
+        let ratio = pawn.width / restingPawn.width
+        print("[실창 흑 가장자리] 판 밖으로 끈 폰 상자 \(pawn) · 멈춘 폰 폭 \(restingPawn.width)pt · ×\(ratio) · 판 오른쪽 변 x=\(edgeX)")
+        // 창 캡처는 1pt 눈금이라 폭이 ±1pt 흔들린다(34pt 폰의 1.12배 = 38pt 안팎). 변에 걸려 잘리면 0.6배 밑이다.
+        #expect(ratio > 1.0 && ratio < 1.2, "판 변에서 끄는 말이 잘렸다 — 폭이 멈춘 폰의 ×\(ratio)(1.12배여야 한다)")
+        #expect(pawn.maxX < edgeX - 1, "끄는 말이 판 오른쪽 변에 닿았다(오른쪽 끝 x=\(pawn.maxX)) — 변에서 잘렸다")
+
+        try dwSend(window, .leftMouseUp, at: dwContent(outside), number: 1)
+        await dwSettle(turns: 20)
+        #expect(dwMoves(host).isEmpty && store.notice == nil, "판 밖에 놓았는데 수·안내가 났다")
+        #expect(store.selection?.from == a7, "판 밖에 놓았더니 고르기가 풀렸다")
+
+        // 왼쪽 끝 줄(h)을 두 칸 민다.
+        try await dwPressAndDrag(window, from: try dwPoint("h7", orientation: .black),
+                                 to: try dwPoint("h5", orientation: .black), number: 2)
+        #expect(store.dragOrigin == h7)
+        try dwSend(window, .leftMouseUp, at: try dwPoint("h5", orientation: .black), number: 2)
+        await dwSettle(turns: 60) { !dwMoves(host).isEmpty }
+        #expect(dwMoves(host) == ["h7h5"], "흑 시점 왼쪽 끝 줄을 끌어 둔 수가 \(dwMoves(host))")
     }
 }

@@ -221,23 +221,45 @@ func theDraggedPieceIsDrawnAtTheCursorNotSnappedToASquare() throws {
     #expect(abs(bounds.midX - corner.x) < 1.5, "말의 중심이 모서리에서 \(bounds.midX - corner.x)pt 벗어났다")
 }
 
-/// 없으면: 커서가 판 밖으로 나가면 말이 통째로 사라져 "어디 갔는지 모른다" 가 되어도 초록이다.
+/// 없으면: 커서가 판 밖으로 나가면 말이 통째로 사라져 "어디 갔는지 모른다" 가 되거나, 판 변에 걸려 **반쪽만**
+/// 보여도(말 중심만 판 안에 묶으면 그렇게 된다 — 가장자리 줄의 말을 집으면 바로 보인다) 초록이다.
 @MainActor
 @Test
 func theDraggedPieceIsClampedToTheBoardWhenTheCursorLeavesIt() throws {
     let g = drGeometry()
     let e2 = try drSquare("e2")
     let rowY = g.center(of: try drSquare("a4")).y
-    // 왼쪽으로 100pt 나갔다 — 말 중심이 x = 0 으로 당겨져 **오른쪽 절반**이 판에 남는다.
-    let outside = try drBitmap(
-        ChessBoardView(position: .standard, geometry: g,
-                       lifted: ChessBoardLift(piece: drWhitePawn, from: e2,
-                                              place: .cursor(CGPoint(x: -100, y: rowY)))),
-        name: "drag-clamped-left")
-    let edge = CGRect(x: 0, y: rowY - g.cell / 2, width: g.cell / 2, height: g.cell)
-    let edgeInk = drPieceInk(outside, rect: edge)
-    print("[끄는 중] 판 왼쪽 밖 100pt — 가장자리 잉크 \(edgeInk)px")
-    #expect(edgeInk > 0, "커서가 판을 나가자 말이 사라졌다")
+    func dragged(to point: CGPoint, name: String) throws -> NSBitmapImageRep {
+        try drBitmap(
+            ChessBoardView(position: .standard, geometry: g,
+                           lifted: ChessBoardLift(piece: drWhitePawn, from: e2, place: .cursor(point))),
+            name: name)
+    }
+    /// 그 줄(4랭크 — 초기 배치에서 비어 있다)에서 `x` 부터 두 칸 폭의 띠. 끄는 말 하나만 든다.
+    func band(fromX x: CGFloat) -> CGRect {
+        CGRect(x: x, y: rowY - g.cell * 0.7, width: g.cell * 2, height: g.cell * 1.4)
+    }
+
+    // ★ 기준: 같은 줄 **한가운데**에서 끄는 폰 — 잘릴 데가 없는 온전한 말이다.
+    let middle = CGPoint(x: g.side / 2, y: rowY)
+    let whole = try dragged(to: middle, name: "drag-whole-middle")
+    let wholeBounds = try #require(drInkBounds(whole, rect: band(fromX: middle.x - g.cell)))
+    let wholeInk = drPieceInk(whole, rect: band(fromX: middle.x - g.cell))
+
+    // 왼쪽으로 100pt 나갔다 — 말은 판 안쪽으로 당겨져 **통째로** 보인다(가장자리 줄과 그 옆 칸까지의 띠에서 잰다).
+    let outside = try dragged(to: CGPoint(x: -100, y: rowY), name: "drag-clamped-left")
+    let edgeBounds = try #require(drInkBounds(outside, rect: band(fromX: 0)), "커서가 판을 나가자 말이 사라졌다")
+    let edgeInk = drPieceInk(outside, rect: band(fromX: 0))
+    print("[끄는 중] 판 왼쪽 밖 100pt — 잉크 상자 \(edgeBounds.width)×\(edgeBounds.height)pt · \(edgeInk)px"
+        + " / 온전한 말 \(wholeBounds.width)×\(wholeBounds.height)pt · \(wholeInk)px · 가운데 x \(edgeBounds.midX)")
+    #expect(abs(edgeBounds.width - wholeBounds.width) <= 1,
+            "판 변에서 말의 폭이 잘렸다: \(edgeBounds.width)pt(온전한 말 \(wholeBounds.width)pt)")
+    #expect(abs(edgeBounds.height - wholeBounds.height) <= 1)
+    // 잉크 양도 온전한 말과 같다(칸 색이 달라 테두리의 반쯤 덮인 픽셀 몇이 갈린다 — 실측 차 20px, 5% 까지 봐준다).
+    #expect(abs(edgeInk - wholeInk) * 20 <= wholeInk, "판 변에서 말 잉크가 줄었다: \(edgeInk)px(온전한 말 \(wholeInk)px)")
+    // 당겨진 자리: 말 중심이 판 변에서 **그려지는 말의 반폭**만큼 안쪽이다(폰은 좌우 대칭이라 잉크 가운데가 곧 중심).
+    let half = g.cell * ChessPieceArt.fillFraction * CGFloat(ChessBoardLift.cursorScale) / 2
+    #expect(abs(edgeBounds.midX - half) <= 1, "말 중심이 x = \(edgeBounds.midX) 로 당겨졌다 — \(half) 여야 한다")
     #expect(drPieceInk(outside, rect: drProbe(e2, g)) == 0, "판 밖으로 끄는 중인데 출발 칸에 말이 있다")
 
     // 아래·오른쪽 모서리 밖과 숫자가 아닌 좌표도 판을 깨지 않는다.
@@ -252,6 +274,81 @@ func theDraggedPieceIsClampedToTheBoardWhenTheCursorLeavesIt() throws {
         var others = Set(ChessPosition.standard.pieces.map(\.square.notation))
         others.remove("e2")
         #expect(others.isSubset(of: inked), "빠진 칸: \(others.subtracting(inked).sorted())")
+    }
+}
+
+/// 없으면: 어느 한 변에서만, 또는 어느 한 말에서만 잘려도 초록이다 — x 만 묶고 y 를 안 묶거나, 묶는 폭이 폰에는
+/// 맞고 왕(가장 넓고 십자가가 가장 높다)·나이트(좌우가 다르다)에는 모자라도. 그리고 반대쪽 사고 —
+/// 묶는 폭이 **지나쳐서** 판 안쪽의 커서에서도 말이 커서를 안 따라오는 것 — 도 여기서 잰다.
+@MainActor
+@Test
+func noDraggedPieceIsCutByAnyEdgeOfTheBoard() throws {
+    let g = drGeometry()
+    // 왕 둘만 판 한가운데 줄에 둔 판 — 네 귀퉁이와 기준 자리가 전부 비어 있다. 흰 왕 자리(d3)에서 말을 집는다.
+    let sparse = try drPosition("8/8/3k4/8/8/3K4/8/8 w - - 0 1")
+    let from = try drSquare("d3")
+    let half = g.cell * ChessPieceArt.fillFraction * CGFloat(ChessBoardLift.cursorScale) / 2
+    let reach = g.cell * 2                                   // 재는 상자 한 변 — 당겨진 말이 통째로 든다
+
+    func dragged(_ piece: ChessPiece, to point: CGPoint, name: String) throws -> NSBitmapImageRep {
+        try drBitmap(ChessBoardView(position: sparse, geometry: g,
+                                    lifted: ChessBoardLift(piece: piece, from: from, place: .cursor(point))),
+                     name: name)
+    }
+    /// 그 상자 안 말 잉크의 (상자, 픽셀 수).
+    func ink(_ bitmap: NSBitmapImageRep, _ rect: CGRect, _ label: String) throws -> (bounds: CGRect, count: Int) {
+        (try #require(drInkBounds(bitmap, rect: rect), "\(label): 말이 안 보인다"), drPieceInk(bitmap, rect: rect))
+    }
+
+    // 여섯 말 전부(흰색) + 색이 뒤집힌 왕 하나(채움이 어둡고 테두리가 밝다 — 감지기의 다른 쪽 끝).
+    let pieces = [ChessPieceKind.pawn, .rook, .knight, .bishop, .queen, .king].map { ChessPiece(.white, $0) }
+        + [ChessPiece(.black, .king)]
+    for piece in pieces {
+        let tag = "\(piece.color.rawValue)-\(piece.kind)"
+        // ★ 기준: 판 안쪽 빈 자리(g4 한가운데)에서 끄는 온전한 말.
+        let home = g.center(of: try drSquare("g4"))
+        let whole = try ink(try dragged(piece, to: home, name: "edge-\(tag)-whole"),
+                            CGRect(x: home.x - reach / 2, y: home.y - reach / 2, width: reach, height: reach), tag)
+        // 잉크 가운데가 커서에서 벗어난 만큼(나이트는 좌우가, 모든 말은 위아래가 비대칭이다).
+        let offset = CGSize(width: whole.bounds.midX - home.x, height: whole.bounds.midY - home.y)
+
+        // 네 변을 두 귀퉁이로 잰다: 왼쪽·위(판 밖 100pt · 판 안이지만 변에서 10pt) / 오른쪽·아래(터무니없이 먼 점).
+        // 판 **안**의 10pt 도 같은 자리에 묶여야 한다 — 안 묶으면 판 안에서도 그만큼 잘린다.
+        let topLeft = CGRect(x: 0, y: 0, width: reach, height: reach)
+        let bottomRight = CGRect(x: g.side - reach, y: g.side - reach, width: reach, height: reach)
+        let corners: [(name: String, cursor: CGPoint, center: CGPoint, box: CGRect)] = [
+            ("top-left-out", CGPoint(x: -100, y: -100), CGPoint(x: half, y: half), topLeft),
+            ("top-left-in", CGPoint(x: 10, y: 10), CGPoint(x: half, y: half), topLeft),
+            ("bottom-right-out", CGPoint(x: 9_999, y: 9_999), CGPoint(x: g.side - half, y: g.side - half), bottomRight),
+        ]
+        var measured: [String] = []
+        for corner in corners {
+            let label = "\(tag) \(corner.name)"
+            let clamped = try ink(try dragged(piece, to: corner.cursor, name: "edge-\(tag)-\(corner.name)"),
+                                  corner.box, label)
+            measured.append("\(corner.name) \(clamped.bounds.width)×\(clamped.bounds.height)pt \(clamped.count)px")
+            #expect(abs(clamped.bounds.width - whole.bounds.width) <= 1
+                    && abs(clamped.bounds.height - whole.bounds.height) <= 1,
+                    "\(label): 판 변에서 말이 잘렸다 — \(clamped.bounds.size)(온전한 말 \(whole.bounds.size))")
+            // 잉크 양도 온전한 말과 같다(실측 차 ≤ 2.4% — 칸 색이 달라 테두리의 반쯤 덮인 픽셀 몇이 갈린다).
+            #expect(abs(clamped.count - whole.count) * 20 <= whole.count,
+                    "\(label): 말 잉크가 줄었다 — \(clamped.count)px(온전한 말 \(whole.count)px)")
+            // 묶인 자리는 판 변에서 **정확히 반폭** 안쪽이다(더 들어가면 말이 커서에서 괜히 멀어진다).
+            #expect(abs(clamped.bounds.midX - corner.center.x - offset.width) <= 1
+                    && abs(clamped.bounds.midY - corner.center.y - offset.height) <= 1,
+                    "\(label): 말이 (\(clamped.bounds.midX), \(clamped.bounds.midY)) 에 그려졌다")
+        }
+
+        print("[끄는 중·변] \(tag) 온전한 말 \(whole.bounds.width)×\(whole.bounds.height)pt \(whole.count)px · "
+            + measured.joined(separator: " · "))
+
+        // ★ 묶이지 않는 가장 바깥 자리(변에서 반폭 + 2pt): 말 중심은 **커서 그대로**다 — 묶기 전과 같은 자리.
+        let free = CGPoint(x: half + 2, y: g.side - half - 2)
+        let followed = try ink(try dragged(piece, to: free, name: "edge-\(tag)-free"),
+                               CGRect(x: 0, y: g.side - reach, width: reach, height: reach), "\(tag) 반폭+2pt")
+        #expect(abs(followed.bounds.midX - free.x - offset.width) <= 1
+                && abs(followed.bounds.midY - free.y - offset.height) <= 1,
+                "\(tag): 묶일 자리가 아닌데 말이 커서에서 벗어났다 — (\(followed.bounds.midX), \(followed.bounds.midY)) · 커서 \(free)")
     }
 }
 

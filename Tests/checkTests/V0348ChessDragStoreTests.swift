@@ -19,6 +19,10 @@ import Testing
 //   · 입구 — **끌어 둔** 수(그 말이 애니메이션에 없다) · **클릭으로 둔 같은 수**(있다) → ⑥⑦⑧⑫
 //   · 꼬리표 — 지워서 없다(`pendingDropRecord == nil`) · 남아 있는데 없는 것으로 읽힌다(자기 치유) → ⑤
 //   · 걸쇠 — 계기 없음(1건) · 계기 열한 가지 각각(0건) → ⑩
+//   · 놓은 직후의 틈 — 놓기 → (다른 말 집기 · 탭) → 왕복: 놓은 수가 1건 / 승격을 고르던 중이면 꼬리표가 지워진다 → ⑬④
+//   · 서버 거절 — 재조회가 즉답(⑤) · 재조회가 늦다(⑭) · 승격의 거절과 전송 실패(⑮)
+//   · 앞 수의 꼬리 — 끌어 둔 조용한 수(애니메이션 없음) · 클릭으로 둔 같은 수(새 애니메이션) → ⑯
+//   · 낡은 놓기 — 판이 그대로(1건) · 출발 칸의 말이 달라짐 · 내 차례가 꺼짐(0건) → ⑰
 
 // MARK: - 하네스
 
@@ -1088,5 +1092,313 @@ struct V0348ChessDragStoreTests {
 
         // 세워 둔 로봇들을 푼다 — 기다리는 작업을 남기고 끝내지 않는다.
         await parked.open()
+    }
+
+    // MARK: - ⑬ 놓은 직후의 틈 — 왕복이 시작되기 전의 다음 끌기·탭이 놓은 수를 지우지 않는다
+    //
+    // 뷰는 `placeDrop` 을 마우스를 뗀 그 자리에서 부르고 왕복(`finishDrop`)은 Task 로 넘긴다. 그 Task 가 돌기 전에
+    // 처리된 다음 입력(이벤트가 밀려 한 턴에 몰릴 때)은 `isBusy == false` 인 스토어를 본다 — 여기서는 그 순서를
+    // 그대로 부른다: 놓기(동기) → 다음 입력 → 왕복.
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aGrabBetweenTheDropAndItsRoundTripDoesNotLoseTheMove() async throws {
+        // 없으면: 틈에 시작한 끌기가 앞 수의 꼬리표를 지워 `finishDrop` 이 보낼 것이 없다 — 놓은 수가 **문구도
+        //        로그도 없이 사라지고** 말은 출발 칸으로 돌아간다(사용자는 두었다고 믿은 채 시계가 흐른다).
+        let line = try dsLine(["e2e4"])
+        let e2 = try dsSquare("e2"), e4 = try dsSquare("e4"), d2 = try dsSquare("d2"), d4 = try dsSquare("d4")
+        let waiting = ChessPendingDrop(matchID: dsMatch, ply: 0, from: e2, to: e4, piece: ChessPiece(.white, .pawn))
+
+        // (가) 다른 말을 쥔 채로 답이 온다.
+        let (store, host) = try dsPlayable("gap-grab", line)
+        #expect(store.beginDrag(from: e2))
+        let move = try #require(store.placeDrop(from: e2, on: e4))
+        #expect(store.pendingDrop == waiting, "전제: 놓은 말이 도착 칸에 서 있다")
+        // ↓ 틈 — `finishDrop` 은 아직 안 돌았다.
+        #expect(!store.isBusy && store.grab(at: d2) == .movable, "전제: 틈에서는 다른 말이 집힌다")
+        #expect(store.beginDrag(from: d2), "전제: 틈에서 다른 말을 집었다")
+        #expect(store.pendingDrop == waiting, "틈에 시작한 끌기가 놓은 말을 출발 칸으로 돌려보냈다")
+        #expect(store.dragOrigin == d2 && store.selection?.from == d2)
+
+        await store.finishDrop(move)
+        let calls = GomokuStubProtocol.calls(host: host, rpc: "chess_move")
+        #expect(calls.count == 1, "놓은 수가 \(calls.count)건 나갔다 — 틈에 다른 말을 집었더니 사라졌다")
+        #expect(calls.first?.json["p_uci"] as? String == "e2e4")
+        #expect(calls.first?.json["p_expected_ply"] as? Int == 0)
+        #expect(store.match?.plyCount == 1)
+        #expect(store.match?.position?[e4] == ChessPiece(.white, .pawn))
+        #expect(store.pendingDropRecord == nil)
+        #expect(store.flight == nil, "틈에 다른 말을 집었더니 놓은 말이 다시 미끄러졌다")
+        // 답이 판을 한 수 옮기면서 쥐고 있던 끌기는 걸쇠째 내려갔다 — 그 뒤 놓아도 **두 번째 수는 없다**.
+        #expect(store.dragOrigin == nil && store.selection == nil, "판이 나아갔는데 쥐고 있던 끌기가 살아 있다")
+        #expect(store.placeDrop(from: d2, on: d4) == nil)
+        #expect(dsMoveCalls(host) == ["e2e4"], "답이 온 뒤 놓은 끌기가 수를 냈다: \(dsMoveCalls(host))")
+        #expect(store.pendingDropRecord == nil)
+
+        // (나) 다른 말을 쥔 채 **왕복 중에** 놓는다 — '보내는 중' 거절 한 번이고, 가고 있는 수는 그대로 간다.
+        let reply = dsBody(dsStateJSON(ply: 1, line))
+        let (slow, slowHost) = dsStore("gap-grab-busy", handler: { rpc, _, _ in
+            rpc == "chess_move" ? GomokuStubProtocol.Reply(body: reply, delay: 0.5)
+                                : GomokuStubProtocol.Reply(status: 404, body: #"{"code":"PGRST202"}"#)
+        })
+        slow.applyState(try dsDecode(dsStateJSON(ply: 0, line)))
+        #expect(slow.beginDrag(from: e2))
+        let slowMove = try #require(slow.placeDrop(from: e2, on: e4))
+        #expect(slow.beginDrag(from: d2))
+        let sending = Task { @MainActor in await slow.finishDrop(slowMove) }
+        await dsWait { GomokuStubProtocol.count(host: slowHost, rpc: "chess_move") == 1 }
+        #expect(slow.isBusy, "전제: 놓은 수가 가고 있다")
+        #expect(slow.pendingDrop == waiting, "가고 있는 수의 말이 도착 칸에 안 머문다")
+        #expect(slow.placeDrop(from: d2, on: d4) == nil)
+        #expect(slow.notice == ChessNoticeText.sending, "왕복 중의 놓기가 '\(slow.notice ?? "무음")' 이라 말했다")
+        #expect(slow.dragOrigin == nil)
+        #expect(slow.pendingDrop == waiting, "거절된 놓기가 가고 있는 수의 말을 출발 칸으로 돌려보냈다")
+        await sending.value
+        #expect(dsMoveCalls(slowHost) == ["e2e4"], "왕복 중에 놓은 끌기가 수를 냈다: \(dsMoveCalls(slowHost))")
+        #expect(slow.match?.plyCount == 1)
+        #expect(slow.pendingDropRecord == nil && !slow.isBusy)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aTapBetweenTheDropAndItsRoundTripDoesNotLoseTheMove() async throws {
+        // 없으면: 틈에 온 **탭** 하나가 꼬리표를 지워 놓은 수가 조용히 사라진다(같은 결함의 다른 문).
+        let line = try dsLine(["e2e4"])
+        let e2 = try dsSquare("e2"), e4 = try dsSquare("e4"), d2 = try dsSquare("d2")
+        let (store, host) = try dsPlayable("gap-tap", line)
+        #expect(store.beginDrag(from: e2))
+        let move = try #require(store.placeDrop(from: e2, on: e4))
+        await store.tap(d2)
+        #expect(store.selection?.from == d2, "전제: 틈에 온 탭은 평소대로 그 말을 골랐다")
+        #expect(store.pendingDrop?.to == e4, "틈에 온 탭이 놓은 말을 출발 칸으로 돌려보냈다")
+
+        await store.finishDrop(move)
+        let calls = GomokuStubProtocol.calls(host: host, rpc: "chess_move")
+        #expect(calls.count == 1, "놓은 수가 \(calls.count)건 나갔다 — 탭 하나에 사라졌다")
+        #expect(calls.first?.json["p_uci"] as? String == "e2e4")
+        #expect(store.match?.plyCount == 1)
+        #expect(store.pendingDropRecord == nil)
+        #expect(store.selection == nil, "판이 나아갔는데 앞 판에서 고른 말이 남았다")
+        // ★ 대조: **승격을 고르던 중**의 탭·끌기는 여전히 꼬리표를 지운다(④ 의 promo-tap · promo-regrab).
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aGrabInTheGapOnTheRobotBoardDoesNotLoseTheMove() async throws {
+        // 없으면: 로봇 판에서도 같은 틈이다 — 놓은 수가 판에 안 올라간다(서버가 없어 되물을 곳도 없다).
+        let e2 = try dsSquare("e2"), e4 = try dsSquare("e4"), d2 = try dsSquare("d2"), d4 = try dsSquare("d4")
+        let gate = DSRobotGate()
+        let (store, host) = try dsRobotStore("robot-gap", gate: gate)
+        #expect(store.beginDrag(from: e2))
+        let move = try #require(store.placeDrop(from: e2, on: e4))
+        #expect(store.beginDrag(from: d2), "전제: 틈에서 다른 말을 집었다")
+
+        await store.finishDrop(move)
+        #expect(store.match?.plyCount == 1, "로봇 판에서 놓은 수가 판에 안 올라갔다")
+        #expect(store.match?.lastMove?.uci == "e2e4")
+        #expect(store.flight == nil, "틈에 다른 말을 집었더니 놓은 말이 다시 미끄러졌다")
+        #expect(store.pendingDropRecord == nil && store.dragOrigin == nil)
+        // 쥐고 있던 끌기를 놓아도 로봇 차례라 두 번째 수는 없다.
+        #expect(store.placeDrop(from: d2, on: d4) == nil)
+        #expect(store.match?.plyCount == 1, "로봇 차례에 놓은 끌기가 판을 옮겼다")
+        #expect(GomokuStubProtocol.calls(host: host).isEmpty, "로봇 판이 서버에 요청을 냈다")
+        await gate.open()
+        store.clearMatch()
+    }
+
+    // MARK: - ⑭ 서버가 거절한 끌기 — 놓은 말은 재조회를 기다리지 않고 돌아간다
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aRefusedDropGoesBackBeforeTheSlowRereadReturns() async throws {
+        // 없으면: 거절 문구("지금은 둘 수 없는 수예요")는 이미 떴는데 뒤따르는 재조회가 끝날 때까지 말이 도착 칸에
+        //        그려진다 — 같은 판·같은 수 번호·내 차례·출발 칸에 그 말이라 자기 치유 넷이 전부 통과한다.
+        //        재조회가 느리면 그만큼 남는다(요청 타임아웃 15초). ⑤ 의 거절 시험은 재조회가 즉답이라 이 구간을 못 본다.
+        let e2 = try dsSquare("e2"), e4 = try dsSquare("e4")
+        let a7 = try dsSquare("a7"), a8 = try dsSquare("a8")
+        let line = try dsLine(["e2e4"])
+        let promoting = try dsLine(["a7a8q"], from: dsPromotionFEN)
+
+        /// 착수는 곧바로 거절하고(illegal) 재조회는 **늦게** 답하는 스토어.
+        func refusing(_ label: String, _ line: DSLine) throws -> (ChessStore, String) {
+            let refused = dsBody(dsStateJSON(ply: 0, line, status: "illegal"))
+            let reread = dsBody(dsStateJSON(ply: 0, line))
+            let (store, host) = dsStore(label, handler: { rpc, _, _ in
+                switch rpc {
+                case "chess_move": return GomokuStubProtocol.Reply(body: refused)
+                case "chess_state": return GomokuStubProtocol.Reply(body: reread, delay: 0.6)
+                default: return GomokuStubProtocol.Reply(status: 404, body: #"{"code":"PGRST202"}"#)
+                }
+            })
+            store.applyState(try dsDecode(dsStateJSON(ply: 0, line)))
+            return (store, host)
+        }
+        /// 거절 응답은 이미 반영됐고(문구가 떴다) 재조회가 **나가 있는** 순간의 단언.
+        func expectGoneWhileRereading(_ store: ChessStore, _ host: String, _ label: String) async {
+            await dsWait { GomokuStubProtocol.count(host: host, rpc: "chess_state") == 1 }
+            #expect(GomokuStubProtocol.count(host: host, rpc: "chess_state") == 1, "전제(\(label)): 거절 뒤 재조회가 나갔다")
+            #expect(store.notice == ChessNoticeText.illegalMove, "전제(\(label)): 거절 문구가 이미 떴다")
+            #expect(store.isBusy, "전제(\(label)): 재조회가 아직 안 끝났다")
+            #expect(store.match?.plyCount == 0)
+            #expect(store.pendingDrop == nil, "\(label): 서버가 거절한 뒤에도 재조회가 끝날 때까지 놓은 말이 도착 칸에 그려진다")
+            #expect(store.pendingDropRecord == nil, "\(label): 거절이 꼬리표를 재조회 뒤로 미뤘다")
+        }
+
+        // 끌어 놓은 수.
+        let (store, host) = try refusing("refused-slow", line)
+        #expect(store.beginDrag(from: e2))
+        let move = try #require(store.placeDrop(from: e2, on: e4))
+        #expect(store.pendingDrop != nil, "전제: 놓은 말이 도착 칸에 서 있다")
+        let sending = Task { @MainActor in await store.finishDrop(move) }
+        await expectGoneWhileRereading(store, host, "끌기")
+        await sending.value
+        #expect(dsMoveCalls(host) == ["e2e4"])
+        #expect(!store.isBusy && store.pendingDropRecord == nil)
+        #expect(store.match?.position?[e2] == ChessPiece(.white, .pawn))
+
+        // 끌어 놓은 **승격**도 같은 `send` 를 지난다 — 폰이 재조회 내내 끝줄에 서 있으면 안 된다.
+        let (promo, promoHost) = try refusing("refused-slow-promo", promoting)
+        #expect(promo.beginDrag(from: a7))
+        #expect(promo.placeDrop(from: a7, on: a8) == nil)
+        #expect(promo.pendingDrop?.to == a8, "전제: 고르는 동안 폰이 도착 칸에 서 있다")
+        let choosing = Task { @MainActor in await promo.choosePromotion(.queen) }
+        await expectGoneWhileRereading(promo, promoHost, "승격")
+        await choosing.value
+        #expect(dsMoveCalls(promoHost) == ["a7a8q"])
+        #expect(!promo.isBusy && promo.pendingDropRecord == nil)
+    }
+
+    // MARK: - ⑮ 거절·실패한 끌기-승격 — 폰이 끝줄에 유령으로 남지 않는다
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aRefusedOrFailedPromotionByDragLeavesNoGhostPawn() async throws {
+        // 없으면: 끌어 놓고 고른 승격을 서버가 거절했거나 보내지 못했는데 폰이 마지막 랭크에 **유령으로 남는다**
+        //        (다음 탭까지) — 판에 없는 말이 그려지는, 이 기능의 최악의 부류다. ④ 는 성공·취소만 잰다.
+        let line = try dsLine(["a7a8q"], from: dsPromotionFEN)
+        let a7 = try dsSquare("a7"), a8 = try dsSquare("a8")
+        let pawn = ChessPendingDrop(matchID: dsMatch, ply: 0, from: a7, to: a8, piece: ChessPiece(.white, .pawn))
+
+        // 서버 거절(illegal) — 건드리지 않은 판이 되돌아온다.
+        let (denied, deniedHost) = dsStore("promo-refused", handler: dsHandler([
+            "chess_move": [dsBody(dsStateJSON(ply: 0, line, status: "illegal"))],
+            "chess_state": [dsBody(dsStateJSON(ply: 0, line))],
+        ]))
+        denied.applyState(try dsDecode(dsStateJSON(ply: 0, line)))
+        #expect(denied.beginDrag(from: a7))
+        #expect(denied.placeDrop(from: a7, on: a8) == nil)
+        #expect(denied.pendingDrop == pawn, "전제: 고르는 동안 폰이 도착 칸에 서 있다")
+        await denied.choosePromotion(.queen)
+        #expect(dsMoveCalls(deniedHost) == ["a7a8q"], "전제: 수는 한 건 나갔다")
+        #expect(denied.notice == ChessNoticeText.illegalMove)
+        #expect(denied.match?.plyCount == 0)
+        #expect(denied.pendingDrop == nil, "거절된 승격의 폰이 끝줄에 남았다")
+        #expect(denied.pendingDropRecord == nil, "거절된 승격이 꼬리표를 안 지웠다")
+        #expect(denied.match?.position?[a7] == ChessPiece(.white, .pawn))
+
+        // 네트워크 실패(5xx) — 판을 다시 읽지도 않는다. 꼬리표를 걷는 것은 `choosePromotion` 자신뿐이다.
+        let (failed, failedHost) = dsStore("promo-failed", handler: { rpc, _, _ in
+            rpc == "chess_move" ? GomokuStubProtocol.Reply(status: 500, body: #"{"message":"boom"}"#)
+                                : GomokuStubProtocol.Reply(status: 404, body: #"{"code":"PGRST202"}"#)
+        })
+        failed.applyState(try dsDecode(dsStateJSON(ply: 0, line)))
+        #expect(failed.beginDrag(from: a7))
+        #expect(failed.placeDrop(from: a7, on: a8) == nil)
+        #expect(failed.pendingDrop == pawn)
+        await failed.choosePromotion(.rook)
+        #expect(dsMoveCalls(failedHost) == ["a7a8r"])
+        #expect(failed.notice == ChessNoticeText.checkConnection)
+        #expect(failed.match?.plyCount == 0)
+        #expect(failed.pendingDrop == nil, "보내지 못한 승격의 폰이 끝줄에 남았다")
+        #expect(failed.pendingDropRecord == nil, "보내지 못한 승격이 꼬리표를 안 지웠다")
+    }
+
+    // MARK: - ⑯ 앞 수의 꼬리 — 조용한 수를 끌어 놓으면 돌고 있던 애니메이션이 거둬진다
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aQuietDropEndsTheOpponentsSlideThatWasStillRunning() async throws {
+        // 없으면: 끌어 놓은 조용한 수는 애니메이션을 세우지 않는다(움직일 것이 안 남는다). 그런데 그때 **상대 수의
+        //        꼬리**가 아직 돌고 있었으면 그 값이 남아, 판은 이미 다음 수의 판인데 옛 수의 프레임이 그 위에 그려진다
+        //        (그 꼬리가 숨기는 칸에 내 말이 놓였을 수도 있다). 클릭으로 둔 수는 새 애니메이션이 옛것을 갈아 치워
+        //        이 자리가 안 드러난다 — 끌어 놓은 조용한 수에만 있는 길이다.
+        // 수순: 1.e4 d5 2.exd5 Qxd5(상대가 잡는다 — 꼬리가 가장 길다, 0.32초) 3.a3(조용한 수를 끌어 둔다).
+        let line = try dsLine(["e2e4", "d7d5", "e4d5", "d8d5", "a2a3"])
+        let a2 = try dsSquare("a2"), a3 = try dsSquare("a3")
+        func arriving(_ label: String) throws -> (ChessStore, String) {
+            let (store, host) = dsStore(label, handler: dsHandler([
+                "chess_move": [dsBody(dsStateJSON(ply: 5, line))], "chess_state": [dsBody(dsStateJSON(ply: 5, line))],
+            ]))
+            store.applyState(try dsDecode(dsStateJSON(ply: 3, line)))
+            store.applyState(try dsDecode(dsStateJSON(ply: 4, line)))        // 상대의 Qxd5 가 미끄러지기 시작한다
+            #expect(store.flight?.ply == 4 && store.flight?.knockout != nil, "전제(\(label)): 상대의 잡는 수가 미끄러지는 중이다")
+            return (store, host)
+        }
+
+        let (dragged, dragHost) = try arriving("tail-drag")
+        #expect(dragged.beginDrag(from: a2))
+        await dragged.drop(from: a2, on: a3)
+        #expect(dsMoveCalls(dragHost) == ["a2a3"])
+        #expect(dragged.match?.plyCount == 5)
+        #expect(dragged.flight == nil,
+                "끌어 놓은 조용한 수 뒤에 앞 수의 꼬리가 남았다(ply \(dragged.flight?.ply ?? -1)) — 옛 수의 프레임이 새 판 위에 그려진다")
+
+        // ★ 대조군: 같은 수를 **클릭으로** 두면 그 수의 애니메이션이 옛것을 갈아 치운다(nil 이 아니라 새 값이다).
+        let (clicked, clickHost) = try arriving("tail-click")
+        await clicked.tap(a2)
+        await clicked.tap(a3)
+        #expect(dsMoveCalls(clickHost) == ["a2a3"])
+        #expect(clicked.flight?.ply == 5 && clicked.flight?.sliders.map(\.from) == [a2],
+                "클릭으로 둔 수가 앞 수의 꼬리를 갈아 치우지 않았다")
+    }
+
+    // MARK: - ⑰ 낡은 놓기 — 놓은 뒤 판이 다시 읽혔으면 보내지 않는다
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aDropWhoseBoardWasRereadUnderItIsNeverSent() async throws {
+        // 없으면: `finishDrop` 이 자기 치유값(`pendingDrop`)이 아니라 원본을 읽어도 초록이다. 그러면 놓고 보내기 전에
+        //        **같은 판·같은 수 번호에서** 판이 다시 읽힌 경우(출발 칸의 말이 달라졌다 · 내 차례가 꺼졌다) 낡은 수가
+        //        나간다 — `send` 는 '지금의' 판 id·수 번호를 실어 보내므로 서버는 그것을 지금 판의 수로 받는다.
+        //        (판 id 나 수 번호가 달라진 경우는 ⑤(마)·⑨ 가 잰다. 여기는 그 둘이 **그대로인** 경우다.)
+        let line = try dsLine(["e2e4"])
+        let e2 = try dsSquare("e2"), e4 = try dsSquare("e4")
+        /// 놓고 아직 안 보낸 스토어와 그 수.
+        func placed(_ label: String) throws -> (ChessStore, String, ChessMove) {
+            let (store, host) = try dsPlayable(label, line)
+            #expect(store.beginDrag(from: e2))
+            let move = try #require(store.placeDrop(from: e2, on: e4))
+            return (store, host, move)
+        }
+
+        // (가) 출발 칸의 말이 달라졌다(e2 폰이 이미 e3 에 가 있는 판으로 다시 읽혔다).
+        let (reread, rereadHost, rereadMove) = try placed("stale-piece")
+        let elsewhere = try #require(ChessPosition(fen: "rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 0 1"))
+        var changed = try #require(reread.match)
+        changed.position = elsewhere
+        reread.match = changed                      // 깔때기를 안 거친다 — 원본을 지우는 자리가 하나도 안 불린다
+        #expect(reread.pendingDropRecord != nil, "전제: 원본은 아무도 안 지웠다 — 막는 것은 읽는 자리다")
+        await reread.finishDrop(rereadMove)
+        #expect(dsMoveCalls(rereadHost).isEmpty, "출발 칸에 그 말이 없는데 놓은 수가 나갔다: \(dsMoveCalls(rereadHost))")
+        #expect(reread.pendingDropRecord == nil, "안 보낸 놓기의 꼬리표가 남았다")
+        #expect(!reread.isBusy)
+
+        // (나) 같은 수 번호인데 내 차례가 아니게 됐다.
+        let (turned, turnedHost, turnedMove) = try placed("stale-turn")
+        var flipped = try #require(turned.match)
+        flipped.turn = .black
+        turned.match = flipped
+        #expect(turned.pendingDropRecord != nil, "전제: 원본은 아무도 안 지웠다")
+        await turned.finishDrop(turnedMove)
+        #expect(dsMoveCalls(turnedHost).isEmpty, "내 차례가 아닌 판에 놓은 수가 나갔다: \(dsMoveCalls(turnedHost))")
+        #expect(turned.pendingDropRecord == nil)
+
+        // ★ 기준선: 판이 그대로면 같은 놓기가 한 건 나간다(판의 다른 칸만 바뀐 갱신은 막지 않는다).
+        let (steady, steadyHost, steadyMove) = try placed("stale-none")
+        var offered = try #require(steady.match)
+        offered.drawOfferBy = dsBlackID
+        steady.match = offered
+        await steady.finishDrop(steadyMove)
+        #expect(dsMoveCalls(steadyHost) == ["e2e4"])
     }
 }

@@ -1161,6 +1161,44 @@ struct V0348ChessDragStoreTests {
 
     @Test(.gomokuDefaultsCleanup)
     @MainActor
+    func aSecondDropInTheGapIsRefusedAndTheFirstMoveStillGoesOut() async throws {
+        // 없으면: 틈 안에서 두 번째 끌기를 **놓기까지** 끝내면 그 놓기가 앞 수의 꼬리표를 덮는다 — 뒤이어 도는
+        //        `finishDrop` 둘이 다 "내 수가 아니다" 로 물러나 chess_move 0건, 두 말이 문구 없이 출발 칸으로 돌아간다.
+        let line = try dsLine(["e2e4"])
+        let e2 = try dsSquare("e2"), e3 = try dsSquare("e3"), e4 = try dsSquare("e4")
+        let d2 = try dsSquare("d2"), d4 = try dsSquare("d4")
+        let waiting = ChessPendingDrop(matchID: dsMatch, ply: 0, from: e2, to: e4, piece: ChessPiece(.white, .pawn))
+
+        // (가) 다른 말을 갈 수 있는 칸에 놓는다.
+        let (store, host) = try dsPlayable("gap-second-drop", line)
+        #expect(store.beginDrag(from: e2))
+        let move = try #require(store.placeDrop(from: e2, on: e4))
+        #expect(store.beginDrag(from: d2), "전제: 틈에서 다른 말을 집었다")
+        #expect(store.placeDrop(from: d2, on: d4) == nil, "틈의 두 번째 놓기가 수를 돌려줬다")
+        #expect(store.notice == ChessNoticeText.sending, "틈의 두 번째 놓기가 '\(store.notice ?? "무음")' 이라 말했다")
+        #expect(store.dragOrigin == nil)
+        #expect(store.pendingDrop == waiting, "두 번째 놓기가 보내기를 기다리는 수의 꼬리표를 덮었다")
+        await store.finishDrop(move)
+        #expect(dsMoveCalls(host) == ["e2e4"], "틈에서 두 번 놓았더니 나간 수가 \(dsMoveCalls(host)) 다")
+        #expect(store.match?.plyCount == 1)
+        #expect(store.pendingDropRecord == nil && !store.isBusy)
+
+        // (나) 같은 말을 다시 집어 다른 칸에 놓는다 — 먼저 놓은 칸으로 나간다.
+        let (same, sameHost) = try dsPlayable("gap-second-drop-same", line)
+        #expect(same.beginDrag(from: e2))
+        let first = try #require(same.placeDrop(from: e2, on: e4))
+        #expect(same.beginDrag(from: e2), "전제: 틈에서 같은 말을 다시 집었다")
+        #expect(same.placeDrop(from: e2, on: e3) == nil)
+        #expect(same.notice == ChessNoticeText.sending)
+        #expect(same.pendingDrop == waiting)
+        await same.finishDrop(first)
+        #expect(dsMoveCalls(sameHost) == ["e2e4"], "같은 말을 두 번 놓았더니 나간 수가 \(dsMoveCalls(sameHost)) 다")
+        #expect(same.match?.plyCount == 1)
+        #expect(same.pendingDropRecord == nil)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
     func aTapBetweenTheDropAndItsRoundTripDoesNotLoseTheMove() async throws {
         // 없으면: 틈에 온 **탭** 하나가 꼬리표를 지워 놓은 수가 조용히 사라진다(같은 결함의 다른 문).
         let line = try dsLine(["e2e4"])

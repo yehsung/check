@@ -1543,6 +1543,11 @@ package final class ChessStore {
     package func placeDrop(from: ChessSquare, on target: ChessSquare?) -> ChessMove? {
         let spot = target ?? from
         guard !isBusy else { cancelDrag(); refuseTap(.busy, at: spot); return nil }
+        // 앞서 놓은 수가 아직 보내기를 기다린다 — 뷰는 왕복을 Task 로 넘기므로 뗀 틱과 `send` 사이에 한 홉이 있다.
+        // 그 틈에 두 번째 놓기가 꼬리표를 덮으면 `finishDrop` 둘이 다 "내 수가 아니다" 로 물러나 **두 수가 함께
+        // 사라진다**. 왕복 중과 똑같이 거절한다(이 끌기를 시작할 때 `beginDrag` 가 승격 고르기와 그 꼬리표를 이미
+        // 접었으므로, 여기 남은 꼬리표는 보내기를 기다리는 수뿐이다).
+        guard pendingDrop == nil else { cancelDrag(); refuseTap(.busy, at: spot); return nil }
         guard let current = match else { cancelDrag(); refuseTap(.noMatch, at: spot); return nil }
         guard !current.isFinished else { cancelDrag(); refuseTap(.finished, at: spot); return nil }
         guard let position = current.position else { cancelDrag(); refuseTap(.unreadableBoard, at: spot); return nil }

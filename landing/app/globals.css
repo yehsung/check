@@ -1,0 +1,310 @@
+@import "tailwindcss";
+
+/* ── 반응형 변형: lib/hooks.ts 의 MQ_* 와 같은 문자열 ─────────────────────────── */
+@custom-variant desk (@media (min-width: 1024px) and (min-height: 640px));
+@custom-variant tab (@media (min-width: 768px) and ((max-width: 1023.98px) or (max-height: 639.98px)));
+@custom-variant phone (@media (max-width: 767.98px));
+/* 무대 모드 = desk + 감속 아님(트립틱 고정 무대·빛 한 줄·패럴랙스). JS 조건은 .js 로 따로 건다 */
+@custom-variant stage (@media (min-width: 1024px) and (min-height: 640px) and (prefers-reduced-motion: no-preference));
+
+:root {
+  /* 바탕 — 보랏빛 밤 */
+  --bg-0:#0C0A14; --bg-1:#16132B; --surface:#181428; --surface-2:#221C38;
+  --dome-in:#06040C; --bg-outro:#08060F;
+  --line:rgba(255,255,255,.08); --grid-line:rgba(255,255,255,.06); --line-strong:rgba(255,255,255,.16);
+  /* 글자 */
+  --ink-1:#F4F1FF; --ink-2:#B8B1D4; --ink-3:#958DB4;
+  /* 손 */
+  --aing:#C9B8FF; --aing-hover:#D8CCFF; --on-aing:#14102A;
+  /* 빛 — 앱 아이콘 링 가족 */
+  --violet:#7E5EFA; --violet-deep:#3B1E8F; --violet-bright:#DA84FF; --violet-core:#FFC8FF; --lilac:#C584F9;
+  --wire-draw:#B9A6FF; --wire-rest:#6E5B9A;
+  /* 물체 */
+  --shadow-window:0 0 0 1px rgba(255,255,255,.07),0 28px 56px -18px rgba(0,0,0,.72),0 8px 18px -8px rgba(0,0,0,.5);
+  --ring-lit:0 0 0 1px rgba(187,159,255,.28),0 0 40px -6px rgba(126,94,250,.45);
+  --r-window:12px; --r-tile:12px; --r-node:7px; --r-pill:999px; --r-code:10px; --r-nav:8px; --r-tip:8px; --r-seg-in:8px;
+  /* 움직임 */
+  --t-quick:120ms; --t-resize:200ms; --t-draw:200ms; --t-exit:267ms; --t-enter:333ms; --t-pop:400ms;
+  --t-dots:330ms; --t-dim:400ms; --t-fade:600ms; --t-glow:800ms; --t-light:900ms; --t-comet:1000ms; --t-first-light:1300ms;
+  --ease-out:cubic-bezier(.2,.8,.2,1); --ease-in:cubic-bezier(.4,0,1,1); --ease-pop:cubic-bezier(.34,1.56,.64,1);
+  /* 배치 */
+  --shell:min(100vw,1600px);
+  --nav-h:56px; --edge:16px; --gutter:20px;
+  --dome-top:clamp(64px, 9svh, 96px); --dome-d:230vw;
+  --aing-w:clamp(180px, 26svh, 240px);
+  --z-nav:50; --z-ultra:90;
+}
+@media (min-width:768px){ :root{ --nav-h:64px; --gutter:32px; --dome-top:clamp(72px, 13svh, 132px); --dome-d:120vw; --aing-w:clamp(184px, 24svh, 240px); } }
+@media (min-width:1024px) and (min-height:640px){ :root{
+  --gutter:calc((100vw - var(--shell)) / 2 + var(--shell) * .10 + 32px);   /* 1440 → 176 */
+  --dome-top:18svh; --dome-d:min(87.5vw, 1300px, 140svh);                  /* 1440×900 → 162 · 1260 */
+  --aing-w:clamp(184px, calc(28svh - 16px), 268px);                        /* 900 → 236 · 789 → 205 · 720 → 186 */
+} }
+
+@theme inline {
+  --color-bg-0:var(--bg-0); --color-bg-1:var(--bg-1); --color-bg-outro:var(--bg-outro);
+  --color-surface:var(--surface); --color-surface-2:var(--surface-2);
+  --color-line:var(--line); --color-line-strong:var(--line-strong);
+  --color-ink-1:var(--ink-1); --color-ink-2:var(--ink-2); --color-ink-3:var(--ink-3);
+  --color-aing:var(--aing); --color-aing-hover:var(--aing-hover); --color-on-aing:var(--on-aing);
+  --color-violet:var(--violet); --color-violet-bright:var(--violet-bright); --color-violet-deep:var(--violet-deep);
+  --font-display:var(--font-ptd-500), -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-heading:var(--font-ptd-600), -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-figure:var(--font-ptd-300n), var(--font-ptd-500), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans:-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --font-code:var(--font-jbm), ui-monospace, "SF Mono", Menlo, monospace;
+  --radius-window:var(--r-window); --radius-pill:var(--r-pill);
+}
+
+html { background:var(--bg-0); color:var(--ink-1); color-scheme:dark; font-family:var(--font-sans);
+       word-break:keep-all; overflow-wrap:anywhere; -webkit-font-smoothing:antialiased;
+       scroll-padding-top:calc(var(--nav-h) + 24px); }
+body { overflow-x:clip; }            /* hidden·auto 금지 — sticky 조상 규칙(§5.4) */
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior:smooth; } }
+:focus-visible { outline:2px solid var(--aing); outline-offset:2px; }
+.btn-primary:focus-visible { outline-offset:3px; }
+::selection { background:rgba(126,94,250,.35); color:var(--ink-1); }
+
+@layer components {
+  /* ── 타입 ─────────────────────────────────────────────────────────────── */
+  .t-display,.t-closing,.t-facts-title { font-family:var(--font-display); font-weight:500; text-wrap:balance; }
+  .t-h2,.t-h2-solo,.t-h3,.t-h4,.t-caption,.t-faq-q,.t-wordmark { font-family:var(--font-heading); font-weight:600; text-wrap:balance; }
+  .t-number,.t-facts { font-family:var(--font-figure); font-weight:300; font-variant-numeric:tabular-nums; }
+  .t-lead,.t-body,.t-small,.t-micro,.t-nav,.t-button,.t-button-s,.t-kicker,.t-eyebrow,.t-counter,.t-unit { font-family:var(--font-sans); }
+
+  .t-display     { font-size:min(clamp(40px, 22.17px + 4.571vw, 88px), 10svh); line-height:1.1; letter-spacing:-.03em; }
+  .t-number      { font-size:clamp(64px, 49.14px + 3.810vw, 104px); line-height:1;    letter-spacing:-.04em; }
+  .t-h2,.t-h2-solo { font-size:clamp(32px, 21.6px + 2.667vw, 60px); line-height:1.16; letter-spacing:-.03em; }
+  .t-closing     { font-size:clamp(36px, 25.6px + 2.667vw, 64px);   line-height:1.12; letter-spacing:-.03em; }
+  .t-h3          { font-size:clamp(26px, 19.31px + 1.714vw, 44px);  line-height:1.22; letter-spacing:-.025em; }
+  .t-facts       { font-size:clamp(36px, 30.06px + 1.524vw, 52px);  line-height:1;    letter-spacing:-.03em; }
+  .t-facts-title { font-size:clamp(28px, 23.54px + 1.143vw, 40px);  line-height:1.25; letter-spacing:-.02em; }
+  .t-caption     { font-size:clamp(20px, 18.51px + .381vw, 24px);   line-height:1.35; letter-spacing:-.015em; }
+  .t-h4          { font-size:clamp(18px, 16.51px + .381vw, 22px);   line-height:1.35; letter-spacing:-.01em; }
+  .t-faq-q       { font-size:clamp(17px, 15.89px + .286vw, 20px);   line-height:1.4;  letter-spacing:-.01em; }
+  .t-lead        { font-size:clamp(16px, 14.51px + .381vw, 20px);   line-height:1.6;  font-weight:400; max-width:34em; text-wrap:pretty; }
+  .t-body        { font-size:17px; line-height:1.7;  font-weight:400; max-width:34em; text-wrap:pretty; }
+  .t-unit        { font-size:20px; line-height:1;    font-weight:500; color:var(--ink-2); }
+  .t-kicker      { font-size:14px; line-height:1;    font-weight:500; color:var(--ink-2); }
+  .t-eyebrow     { font-size:13px; line-height:1;    font-weight:500; color:var(--ink-1); }
+  .t-counter     { font-size:13px; line-height:1;    font-weight:500; letter-spacing:.06em; font-variant-numeric:tabular-nums; color:var(--ink-3); }
+  .t-small       { font-size:14px; line-height:1.55; font-weight:400; }
+  .t-micro       { font-size:13px; line-height:1.5;  font-weight:400; }
+  .t-nav         { font-size:14px; line-height:1;    font-weight:500; }
+  .t-wordmark    { font-size:16px; line-height:1; }
+  .t-button      { font-size:16px; line-height:1;    font-weight:600; letter-spacing:-.005em; }
+  .t-button-s    { font-size:14px; line-height:1;    font-weight:600; }
+  .t-code        { font-family:var(--font-code); font-size:15px; line-height:1.5; font-weight:400; }
+  @media (max-width:767.98px) { .t-body{ font-size:16px; } .t-code{ font-size:13.5px; } .t-unit{ font-size:16px; } }
+
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border-width:0; }
+  summary.disclosure { list-style:none; cursor:pointer; }
+  summary.disclosure::-webkit-details-marker { display:none; }
+  .disclosure::after { content:""; display:inline-block; flex:none; width:10px; height:10px; background:var(--ink-3);
+    clip-path:polygon(20% 8%, 88% 50%, 20% 92%); transform:rotate(0deg); }
+  details[open] > .disclosure::after { transform:rotate(90deg); }
+
+  /* ── 구조: 세로 격자 10/50/90 ─────────────────────────────────────────── */
+  .gridlines { position:absolute; inset:0; pointer-events:none; background:
+    linear-gradient(var(--grid-line), var(--grid-line)) calc(50% - var(--shell) * .40) 0 / 1px 100% no-repeat,
+    linear-gradient(var(--grid-line), var(--grid-line)) 50% 0 / 1px 100% no-repeat,
+    linear-gradient(var(--grid-line), var(--grid-line)) calc(50% + var(--shell) * .40) 0 / 1px 100% no-repeat; }
+  .gridlines--left { background:linear-gradient(var(--grid-line), var(--grid-line)) calc(50% - var(--shell) * .40) 0 / 1px 100% no-repeat; }
+
+  /* ── 돔: 림 단면(RA §3.1)을 아이콘 링 가족으로. 그라디언트 한 장, 블렌드·의사 요소 없음 ── */
+  .dome { position:absolute; left:50%; top:var(--dome-top); width:var(--dome-d); aspect-ratio:1;
+    margin-left:calc(var(--dome-d) / -2); border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle closest-side,
+      var(--dome-in) 0, var(--dome-in) calc(100% - 58px),
+      #17123A calc(100% - 46px), #221A58 calc(100% - 36px), #31247F calc(100% - 26px),
+      #4733B6 calc(100% - 15px), #6447E2 calc(100% - 11px), #8C6CFF calc(100% - 8px),   /* 2차 띠 */
+      #6B4BF0 calc(100% - 7px), var(--violet) calc(100% - 5px), #A27CFF calc(100% - 4px),
+      var(--violet-bright) calc(100% - 3px), var(--violet-core) calc(100% - 1.5px),       /* 밝은 띠 → 핵 */
+      #1F0A2E calc(100% - .5px), transparent 100%);                                       /* 1px 어두운 선 */
+    box-shadow:0 0 120px 8px rgba(126,94,250,.10); }                                     /* 바깥 헤일로는 거의 없다 */
+  .dome--small { --dome-d:min(60vw, 92svh, 860px); top:14svh; }
+  @media (max-width:767.98px) { .dome--small { --dome-d:200vw; top:10svh; } }
+  .dome-pool { position:absolute; left:50%; translate:-50% 0; width:calc(var(--aing-w) * 1.6); height:calc(var(--aing-w) * .24);
+    border-radius:50%; pointer-events:none; background:radial-gradient(closest-side, rgba(126,94,250,.34), rgba(126,94,250,0)); }   /* v2.1 §5: .24 → .34 */
+
+  /* ── v2.1 장면 빛(brief-v21 §4·§5) — 늘 켜짐, 전이 없음, data-glow 없음 ──────────────────────
+     .scene-wash = 장면 <section> 자체의 배경(넓은 보라 워시 한 장). 위치·쌓임을 바꾸지 않는다(배경만).
+     .scene-glow = 렌더 영역(position:relative 인 상자) 가운데에 absolute 로 두는 무대 빛 — 트립틱 무대 빛(v2 .obj-glow — v2.1 에서 삭제) 레시피를
+       반지름 --glow-r(1440 기준 760)·중심 α .34 → 55% .12 → 투명으로. z-index:-1 이라 렌더·글자 뒤에 깔린다(렌더 영역·장면에
+       불투명 배경을 깔면 가려진다 — 깔지 않는다). 인접 장면의 빛과 한 화면에 둘까지 겹쳐도 된다(§4). 렌더를 가리는 마스크 없음 */
+  .scene-wash { background:radial-gradient(1400px 900px at 62% 50%, rgba(126,94,250,.10), transparent 70%); }
+  .scene-glow { --glow-r:380px; position:absolute; left:50%; top:50%; z-index:-1;
+    width:calc(var(--glow-r) * 2); height:calc(var(--glow-r) * 2); translate:-50% -50%; border-radius:50%; pointer-events:none;
+    background:radial-gradient(closest-side, rgba(126,94,250,.34), rgba(126,94,250,.12) 55%, transparent); }
+  @media (min-width:768px) { .scene-glow { --glow-r:560px; } }
+  @media (min-width:1024px) and (min-height:640px) { .scene-glow { --glow-r:760px; } }
+  /* 장면별 반지름 손잡이(D19 의 --floor-alpha 와 같은 방식 — 그 장면만, desk 만). 렌더가 빛의 심을 덜 가리는 장면(가로로 넓고 낮은 창 ·
+     작은 창)은 워시와 겹친 고리가 넓게 보여 상한 15% 를 넘는다 — purple 실측(1440×900, 760): 메시지 15.3 · 리듬 14.8 · 미니게임 18.0%.
+     주입 측정(.scratch/purple21/glowtune*.mjs)으로 고른 값: 메시지 700 · 리듬 720 · 미니게임 640(다른 장면 760 그대로 — 타이머 6.4 · 토큰 9.5 · 아이폰 11.6%) */
+  @media (min-width:1024px) and (min-height:640px) {
+    #f-message .scene-glow { --glow-r:700px; }
+    #f-rhythm .scene-glow { --glow-r:720px; }
+    #f-games .scene-glow { --glow-r:640px; }
+  }
+
+  /* ── v2.1 스파인(brief-v21 §5): 장면 1 위에서 아웃트로 돔까지 끊김 없는 보라 선 — 늘 켜짐, 전이 없음 ──────────
+     선 .55 + 좁은 빛은 box-shadow(선 상자를 따른다). filter:drop-shadow 금지(verify-final R1 — WebKit 이 화면 밖 필터 층을
+     문서 (0,0) 에 28×28 사각으로 그린다). 시작·끝 토막은 선 자체가 그라디언트라 box-shadow 대신 ::before 타원 빛(가로·세로로
+     함께 흐려진다 — 마스크 없이) */
+  .rail-seg, .spine-ext { background:rgba(126,94,250,.55); box-shadow:0 0 2px rgba(126,94,250,.75), 0 0 8px rgba(126,94,250,.35); }
+  .spine-ext { position:absolute; top:0; bottom:0; left:calc(50% - var(--shell) * .40); width:1px; pointer-events:none; }
+  .spine-ext--start, .spine-ext--end { box-shadow:none; }
+  .spine-ext--start { background:linear-gradient(transparent, rgba(126,94,250,.55) 15%); }
+  .spine-ext--end { bottom:auto; height:160px; background:linear-gradient(rgba(126,94,250,.55), transparent); }
+  .spine-ext--start::before, .spine-ext--end::before { content:""; position:absolute; top:0; bottom:0; left:-4px; width:9px; pointer-events:none; }
+  .spine-ext--start::before { background:radial-gradient(farthest-side at 50% 100%, rgba(126,94,250,.40), transparent); }
+  .spine-ext--end::before   { background:radial-gradient(farthest-side at 50% 0,    rgba(126,94,250,.40), transparent); }
+
+  /* ── 행 바닥 빛(렌더 아래 타원) — v2.1: 엔진의 row 갈래(쓰는 장면 0)만 참조. FloorLight import 가 끊기면 이 블록과 아래 GlowGate 를 지운다 ── */
+  /* DECISIONS D19-1 · D20-2: 폭 = 캔버스 안 렌더들의 합집합 폭(--w) × 1.3 · 높이 160 · 중심 α .55 → 55% 지점 .20.
+     행별 손잡이 --floor-alpha(기본 .55)는 하한 0.8% 를 못 넘는 행에만(다른 곳에 보라를 더하지 않는다) */
+  .floor-light { position:absolute; left:50%; translate:-50% 0; width:calc(var(--w, 420px) * 1.3); height:160px; border-radius:50%;
+    pointer-events:none; background:radial-gradient(ellipse closest-side, rgb(126 94 250 / var(--floor-alpha, .55)), rgba(126,94,250,.20) 55%, transparent); }
+
+  /* GlowGate: data-glow="on" 일 때만. 불투명 페이드는 감속 모션에서도 남긴다(이동이 아니다) */
+  [data-glow] { opacity:0; transition:opacity var(--t-glow) linear; }
+  [data-glow="on"] { opacity:1; }
+
+  /* ── 선 · 타일 · 노드 · 점 격자 ──────────────────────────────────────── */
+  .wire { fill:none; stroke:var(--wire-rest); stroke-width:1.5; stroke-linecap:round; stroke-dasharray:100; stroke-dashoffset:0; }
+  .tile { width:48px; height:48px; border-radius:var(--r-tile); display:grid; place-items:center;
+    background:linear-gradient(150deg, var(--lilac) 0%, var(--violet) 55%, var(--violet-deep) 100%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28), inset 0 0 0 1px rgba(255,255,255,.10),
+               0 0 0 1px rgba(126,94,250,.35), 0 10px 28px -8px rgba(126,94,250,.6); }
+  .node { position:relative; width:24px; height:24px; border-radius:var(--r-node); display:grid; place-items:center;
+    background:linear-gradient(150deg, rgba(126,94,250,.35), rgba(59,30,143,.35)); border:1px solid rgba(187,159,255,.55);
+    box-shadow:0 0 0 4px rgba(126,94,250,.10), 0 0 16px rgba(126,94,250,.35); }
+  .node::after { content:""; width:8px; height:8px; border-radius:2px; background:var(--violet-bright); box-shadow:0 0 8px rgba(218,132,255,.8); }
+  .dots { position:absolute; inset:-40px; pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg fill='%23fff' fill-opacity='.10'%3E%3Ccircle cx='8' cy='8' r='.9'/%3E%3Ccircle cx='40' cy='8' r='.9'/%3E%3Ccircle cx='24' cy='24' r='.9'/%3E%3Ccircle cx='56' cy='24' r='.9'/%3E%3Ccircle cx='8' cy='40' r='.9'/%3E%3Ccircle cx='40' cy='40' r='.9'/%3E%3Ccircle cx='56' cy='56' r='.9'/%3E%3C/g%3E%3Cg fill='%237E5EFA' fill-opacity='.5'%3E%3Ccircle cx='24' cy='56' r='.9'/%3E%3Ccircle cx='56' cy='8' r='.9'/%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-image:radial-gradient(ellipse 58% 52% at 55% 50%, #000 35%, transparent 100%);
+            mask-image:radial-gradient(ellipse 58% 52% at 55% 50%, #000 35%, transparent 100%); }
+
+  /* ── 조용한 절의 보라 하나씩 ─────────────────────────────────────────── */
+  .horizon { position:absolute; top:0; left:10%; right:10%; height:1px; pointer-events:none;
+    background:linear-gradient(90deg, transparent, var(--violet) 30%, var(--violet-bright) 50%, var(--violet) 70%, transparent);
+    box-shadow:0 0 18px 1px rgba(126,94,250,.45); }
+  /* DECISIONS D27-2(a): 열린 행 선에 .horizon 과 같은 헤일로(18px .45) — 조용한 절도 '빛나는 선'으로(숫자 격자의 이음매 .seam · 칸 틱 .tick 은
+     v2.1 에서 격자와 함께 삭제).
+     헤일로만으로는 선 둘레가 V ≥ .30 을 못 넘으므로 선의 '좁은 빛'(심)을 더한다. v2 는 filter:drop-shadow 였으나 WebKit 이 화면 밖 필터
+     층을 문서 (0,0) 에 28×28 사각으로 그려(verify-final R1) v2.1 에서 의사 요소로 바꿨다: 선 위아래 4px 의 타원 빛(closest-side —
+     가로로는 선의 그라디언트처럼 가운데가 진하고 양끝이 투명, 세로로는 선에서 멀어질수록 흐려진다). filter 를 다시 쓰지 말 것 */
+  .horizon::before, .faq-open-line::before { content:""; position:absolute; left:0; right:0; top:-4px; height:9px;
+    pointer-events:none; background:radial-gradient(closest-side, rgba(126,94,250,.75), rgba(126,94,250,.28) 55%, transparent); }
+  .faq-open-line { position:absolute; left:0; right:0; top:-1px; height:1px; pointer-events:none;
+    background:linear-gradient(90deg, transparent, var(--violet) 12%, var(--violet-bright) 35%, var(--violet) 70%, transparent);
+    box-shadow:0 0 18px 1px rgba(126,94,250,.45); }
+  details[name="faq"][open] > .disclosure::after { background:var(--violet-bright); }   /* D27-2(b) */
+
+  /* ── v2.1 설치·FAQ 오로라(brief-v21 §5) — 절 뒤에 깔린 가로 빛 띠, 늘 켜짐, 전이 없음 ──────────────────────────
+     .aurora-band = 설치 절 가운데 높이 420 의 띠(위아래로 흐려지는 linear α .14). z-index:-1 — 글·버튼 뒤(절에 배경을 깔지 않는다).
+     .aurora-tail = FAQ 위쪽에 같은 오로라의 꼬리(α .08). 위끝은 투명에서 시작해 설치 띠와 이음매가 생기지 않는다.
+     (Turbopack 이 globals 저장을 가끔 놓친다 — 고친 뒤에는 서빙된 CSS 에서 클래스를 확인하고, 놓쳤으면 cat > 로 다시 쓴다) */
+  /* 띠만으로는 V ≥ .30(엄격 보라)에 못 닿는다(α .14 → V .20). 설치 ≥ 1.5% · FAQ ≥ 1%(§5 목표)를 위해 띠 안에 타원 빛 한 점을 겹친다 —
+     설치는 iPhone 열·QR 뒤(빈 오른쪽), FAQ 는 목록 오른쪽 빈 곳. 둘 다 '빛'(그라디언트)이지 평평한 면이 아니다 */
+  .aurora-band { position:absolute; left:0; right:0; top:50%; height:420px; translate:0 -50%; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(ellipse 36% 50% at 62% 52%, rgba(126,94,250,.24), transparent),
+      linear-gradient(180deg, transparent, rgba(126,94,250,.14) 50%, transparent); }
+  .aurora-tail { position:absolute; left:0; right:0; top:0; height:min(100%, 520px); z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(ellipse 30% 42% at 80% 40%, rgba(126,94,250,.26), transparent),
+      linear-gradient(180deg, transparent, rgba(126,94,250,.08) 35%, transparent); }
+  /* D27-2(c): 10% 스파인 선을 조용한 절(설치·FAQ)에도 이어 그린다 — desk 만(tab·phone 은 스파인이 글 열과 겹친다 — D19-5).
+     아웃트로에서는 위 160px 동안 사라진다(.spine-ext--end). 모양은 위 'v2.1 스파인' 한 곳에서 정한다 */
+
+  /* ── 히어로 빛 한 줄 ────────────────────────────────────────────────── */
+  .comet { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+  .comet-trail { fill:none; stroke:url(#comet-grad); stroke-width:1.5; stroke-linecap:round; stroke-dasharray:100; stroke-dashoffset:100; }
+  /* 머리 = 흰 구슬 5px + 이중 글로우(DECISIONS D27-1 · D28-3) — 림의 핵(--violet-core)과 같은 색이면 림 위에서 보이지 않는다 */
+  .comet-head  { fill:none; stroke:#fff; stroke-width:5; stroke-linecap:round; stroke-dasharray:2 100; stroke-dashoffset:2;
+    filter:drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px var(--violet-bright)); }
+}
+
+/* ── JS 가 있을 때만 거는 '시작 전' 상태(없으면 전부 최종 상태로 보인다) ───────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* 히어로: data-arrived = 근무 라벨 켬, data-bubble = 말풍선 보임(도착 때 붙고 5s 뒤 떨어진다).
+     감속 모션에서는 이 블록이 없으므로 라벨·말풍선이 늘 보인다(= 도착 뒤 정지 상태) */
+  .js [data-aing]:not([data-arrived]) .aing-timer { opacity:0; }
+  /* 퇴장 = 불투명 160ms 선형만 — 축소(.96)는 다 사라진 뒤에(review-motion P2-5: 불투명 1 인 채 '툭' 줄던 것) */
+  .js [data-aing]:not([data-bubble]) .aing-bubble { opacity:0; scale:.96; transform-origin:0 100%; transition:opacity 160ms linear, scale 0s linear 160ms; }
+  .js [data-aing][data-bubble] .aing-bubble { transform-origin:0 100%; transition:opacity var(--t-quick) linear, scale 200ms var(--ease-out); }
+  /* 빛 한 줄의 진행(stroke-dashoffset)은 HeroStage 가 Web Animations 두 구간으로 건다(림 등속 → 착지 ease-out — DECISIONS D28-3) */
+  .comet[data-done] { opacity:0; transition:opacity 1200ms linear; }
+
+  /* 기능 행 조립 전(§S4 4.1 타임라인 — 각 요소의 --at 지연) */
+  .js [data-row]:not([data-on]) .wire     { stroke-dashoffset:100; stroke:var(--wire-draw); }
+  .js [data-row]:not([data-on]) .row-item { opacity:0; translate:0 8px; }
+  .js [data-row]:not([data-on]) .row-item[data-kind="main"] { opacity:0; translate:none; scale:.96; }
+  .js [data-row]:not([data-on]) .row-item[data-kind="main"] > img { opacity:0; }
+  .js [data-row]:not([data-on]) .tile     { opacity:0; scale:.6; }
+  .js [data-row]:not([data-on]) .dots     { opacity:0; }
+  .js [data-row]:not([data-on]) .node     { background:var(--bg-0); border-color:rgba(255,255,255,.14); box-shadow:none; }
+  .js [data-row]:not([data-on]) .node::after { width:6px; height:6px; background:rgba(255,255,255,.22); box-shadow:none; }
+  .js [data-row]:not([data-on]) .swap-to  { opacity:0; }
+  /* 선 탁해짐 = 900–1300(SPEC §S4 4.1 — 가지(600)도 900 에 시작, review-motion P2-7) */
+  .js [data-row][data-on]:not([data-instant]) .wire { transition:stroke-dashoffset var(--t-draw) var(--ease-out) var(--at,0ms), stroke var(--t-dim) linear max(900ms, calc(var(--at,0ms) + 200ms)); }
+  .js [data-row][data-on]:not([data-instant]) .row-item { transition:opacity 240ms linear var(--at,0ms), translate 240ms var(--ease-out) var(--at,0ms), scale 320ms var(--ease-out) var(--at,0ms); }
+  /* 주 렌더 빈 창 = 불투명 320 선형 + scale .96→1 320(SPEC §S4 4.1 '120–440') */
+  .js [data-row][data-on]:not([data-instant]) .row-item[data-kind="main"] { transition:opacity 320ms linear var(--at,0ms), scale 320ms var(--ease-out) var(--at,0ms); }
+  .js [data-row][data-on]:not([data-instant]) .row-item[data-kind="main"] > img { transition:opacity 340ms linear 440ms; }
+  .js [data-row][data-on]:not([data-instant]) .tile { transition:opacity 120ms linear 360ms, scale 270ms var(--ease-pop) 360ms; }
+  .js [data-row][data-on]:not([data-instant]) .dots { transition:opacity var(--t-dots) linear 900ms; }
+  .js [data-row][data-on]:not([data-instant]) .node { transition:background-color 400ms linear, border-color 400ms linear, box-shadow 400ms linear; }
+  .js [data-row][data-on]:not([data-instant]) .swap-to { transition:opacity 180ms linear var(--swap-at,1500ms); }
+  /* v2.1: 스파인 토막(.rail-seg)은 조립 규칙에서 뺐다 — 늘 켜짐(brief-v21 §4·§5). 노드만 조립 때 점등 */
+  /* 행 말풍선 = 앱 문법(SPEC §S4 4.1: 120 선형 + .96→1 200) · 접합점은 점이라 올라오지 않는다(DECISIONS D19-7 · requests/primitives.md §1-1) */
+  .js [data-row]:not([data-on]) .row-item[data-kind="bubble"]   { translate:none; scale:.96; transform-origin:0 100%; }
+  .js [data-row]:not([data-on]) .row-item[data-kind="junction"] { translate:none; }
+  .js [data-row][data-on]:not([data-instant]) .row-item[data-kind="bubble"] { transform-origin:0 100%;
+    transition:opacity var(--t-quick) linear var(--at,0ms), scale 200ms var(--ease-out) var(--at,0ms); }
+  /* R5 폰 화면도 '빈 창 → 내용' 두 박자(440ms 내용 페이드 — requests/primitives.md §1-2) */
+  .js [data-row]:not([data-on]) .row-item[data-item="phone"] [data-phone-shell] img { opacity:0; }
+  .js [data-row][data-on]:not([data-instant]) .row-item[data-item="phone"] [data-phone-shell] img { transition:opacity 340ms linear 440ms; }
+
+  /* 돔 패럴랙스(스크럽 1곳) — CSS scroll-driven, 미지원은 정적 */
+  @keyframes dome-set { from { translate:0 0; opacity:1; } to { translate:0 14svh; opacity:.35; } }
+  @media (min-width:1024px) and (min-height:640px) {
+    @supports (animation-timeline: view()) {
+      #top { view-timeline:--hero block; }
+      #top .dome { animation:dome-set linear both; animation-timeline:--hero; animation-range:exit 0% exit 100%; }
+    }
+  }
+  .disclosure::after { transition:transform 180ms var(--ease-out); }
+
+  /* FAQ 높이 전이(SPEC §S7 — ::details-content + interpolate-size 지원 브라우저만, requests/faq-outro.md §1 · DECISIONS D20-5) */
+  @supports (interpolate-size: allow-keywords) {
+    details[name="faq"] { interpolate-size:allow-keywords; }
+    details[name="faq"]::details-content { height:0; overflow:clip;
+      transition:height var(--t-resize) var(--ease-out), content-visibility var(--t-resize) allow-discrete; }
+    details[name="faq"][open]::details-content { height:auto; }
+  }
+
+  /* 아웃트로: 절 45% 진입(data-shown) 전 내용 숨김 — OutroStage 가 1회 붙인다. 안에 포커스가 오면 보인다(SPEC §S8 · requests/faq-outro.md §2) */
+  .js [data-outro-stage]:not([data-shown]):not(:focus-within) { opacity:0; }
+  [data-outro-stage] { transition:opacity var(--t-fade) linear; }
+}
+
+/* 감속 모션: 히어로 말풍선·근무 라벨을 하이드레이션 전 첫 페인트부터(SPEC §2.7 '처음부터 최종 상태' — review-motion P2-6).
+   AingClip 이 상자에 --art(같은 그림 주소)를 SSR 로 달고, 여기서만 배경으로 그린다(미디어쿼리가 맞을 때만 요청 — 기본 컨텍스트 바이트 0).
+   안쪽 img(하이드레이션 뒤 붙음)는 감춰 두 번 그리지 않는다 */
+@media (prefers-reduced-motion: reduce) {
+  .aing-timer, .aing-bubble { background:var(--art, none) center / 100% 100% no-repeat; }
+  .aing-timer > *, .aing-bubble > * { visibility:hidden; }
+}
+
+/* 플랫폼별 CTA: 세 벌을 SSR 하고 <html data-platform> 으로 하나만 보인다(층 밖이라 유틸리티 display 를 이긴다) */
+html:not([data-platform="ios"]) .cta-ios { display:none; }
+html:not([data-platform="other"]) .cta-other { display:none; }
+html[data-platform="ios"] .cta-mac, html[data-platform="other"] .cta-mac { display:none; }
+html[data-platform="ios"] .order-ios-first { order:-1; }
+
+/* FeatureRow 캔버스 배율(DECISIONS D20-1): 웹킷은 vw 가 든 tan(atan2()) 를 도/라디안 혼동으로 잘못 낸다(1440 → scale(-3.28)).
+   길이로 등록한 --kw 에 vw 를 담으면 계산값이 px 로 굳은 뒤 atan2 에 들어가 두 엔진이 같아진다.
+   initial-value 는 576px — desk 밖에서 --kw 가 비어도 배율이 1 이 되게(D20-1 의 0px 보다 안전한 쪽) */
+@property --kw { syntax:"<length>"; inherits:true; initial-value:576px; }

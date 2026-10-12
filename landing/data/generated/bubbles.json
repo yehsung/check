@@ -1,0 +1,129 @@
+{
+  "anchorCanvas": [
+    323,
+    981
+  ],
+  "canvasPerPx3x": 3.5,
+  "bubbles": {
+    "commute-start": {
+      "asset": "ui/bubble-commute-start",
+      "px3x": [
+        242,
+        89
+      ],
+      "pt": [
+        80.67,
+        29.67
+      ],
+      "canvasPx": [
+        847,
+        311.5
+      ]
+    },
+    "autostart": {
+      "asset": "ui/bubble-autostart",
+      "px3x": [
+        332,
+        125
+      ],
+      "pt": [
+        110.67,
+        41.67
+      ],
+      "canvasPx": [
+        1162,
+        437.5
+      ]
+    },
+    "poked-mint": {
+      "asset": "ui/bubble-poked-mint",
+      "px3x": [
+        239,
+        125
+      ],
+      "pt": [
+        79.67,
+        41.67
+      ],
+      "canvasPx": [
+        836.5,
+        437.5
+      ]
+    },
+    "message-gureum": {
+      "asset": "ui/bubble-message-gureum",
+      "px3x": [
+        308,
+        125
+      ],
+      "pt": [
+        102.67,
+        41.67
+      ],
+      "canvasPx": [
+        1078,
+        437.5
+      ]
+    },
+    "commute-end": {
+      "asset": "ui/bubble-commute-end",
+      "px3x": [
+        182,
+        89
+      ],
+      "pt": [
+        60.67,
+        29.67
+      ],
+      "canvasPx": [
+        637,
+        311.5
+      ]
+    },
+    "ruby": {
+      "asset": "ui/bubble-ruby",
+      "px3x": [
+        179,
+        88
+      ],
+      "pt": [
+        59.67,
+        29.33
+      ],
+      "canvasPx": [
+        626.5,
+        308
+      ]
+    },
+    "ultra-mint": {
+      "asset": "ui/bubble-ultra-mint",
+      "px3x": [
+        717,
+        189
+      ],
+      "pt": [
+        239,
+        63
+      ],
+      "canvasPx": [
+        2509.5,
+        661.5
+      ]
+    },
+    "update": {
+      "asset": "ui/bubble-update",
+      "px3x": [
+        327,
+        89
+      ],
+      "pt": [
+        109,
+        29.67
+      ],
+      "canvasPx": [
+        1144.5,
+        311.5
+      ]
+    }
+  }
+}

@@ -1,0 +1,416 @@
+{
+  "brand/appstore-badge-ko-black": {
+    "src": "/assets/brand/appstore-badge-ko-black.svg?v=d26b37dd",
+    "w": 130,
+    "h": 40,
+    "bytes": 9260
+  },
+  "brand/icon-256": {
+    "src": "/assets/brand/icon-256.webp?v=6b86bede",
+    "w": 256,
+    "h": 256,
+    "bytes": 6538
+  },
+  "brand/icon-64": {
+    "src": "/assets/brand/icon-64.webp?v=b3518b2f",
+    "w": 64,
+    "h": 64,
+    "bytes": 1434
+  },
+  "brand/qr-appstore": {
+    "src": "/assets/brand/qr-appstore.svg?v=a9b2d4b9",
+    "w": 148,
+    "h": 148,
+    "bytes": 3257
+  },
+  "char/aing-idle-poster": {
+    "src": "/assets/char/aing-idle-poster.webp?v=a23bcf6e",
+    "w": 654,
+    "h": 790,
+    "bytes": 17748
+  },
+  "char/aing-rest-poster": {
+    "src": "/assets/char/aing-rest-poster.webp?v=c279d5f4",
+    "w": 654,
+    "h": 790,
+    "bytes": 17426
+  },
+  "char/aing-ultra-poster": {
+    "src": "/assets/char/aing-ultra-poster.webp?v=8ec7d0b3",
+    "w": 1260,
+    "h": 1108,
+    "bytes": 34592
+  },
+  "ios/games": {
+    "src": "/assets/ios/games.webp?v=a484159c",
+    "w": 600,
+    "h": 1304,
+    "bytes": 28462
+  },
+  "ios/me-records": {
+    "src": "/assets/ios/me-records.webp?v=442692b5",
+    "w": 600,
+    "h": 1304,
+    "bytes": 40606
+  },
+  "ios/messages": {
+    "src": "/assets/ios/messages.webp?v=52194120",
+    "w": 600,
+    "h": 1304,
+    "bytes": 36590
+  },
+  "ios/now": {
+    "src": "/assets/ios/now.webp?v=561b054f",
+    "w": 600,
+    "h": 1304,
+    "bytes": 30102
+  },
+  "ios/rankings-league": {
+    "src": "/assets/ios/rankings-league.webp?v=8441e92c",
+    "w": 600,
+    "h": 1304,
+    "bytes": 34654
+  },
+  "ios/widget-today-small": {
+    "src": "/assets/ios/widget-today-small.webp?v=bd46ca11",
+    "w": 340,
+    "h": 340,
+    "bytes": 9222
+  },
+  "ios/widget-todos-large-checked": {
+    "src": "/assets/ios/widget-todos-large-checked.webp?v=4fb968a3",
+    "w": 728,
+    "h": 764,
+    "bytes": 19598
+  },
+  "ios/widget-todos-large": {
+    "src": "/assets/ios/widget-todos-large.webp?v=d6842cb4",
+    "w": 728,
+    "h": 764,
+    "bytes": 19920
+  },
+  "ui/bubble-autostart": {
+    "src": "/assets/ui/bubble-autostart.webp?v=16b66983",
+    "w": 443,
+    "h": 167,
+    "bytes": 13416
+  },
+  "ui/bubble-commute-end": {
+    "src": "/assets/ui/bubble-commute-end.webp?v=41590055",
+    "w": 243,
+    "h": 118,
+    "bytes": 6970
+  },
+  "ui/bubble-commute-start": {
+    "src": "/assets/ui/bubble-commute-start.webp?v=140edd2e",
+    "w": 323,
+    "h": 118,
+    "bytes": 7946
+  },
+  "ui/bubble-message-gureum": {
+    "src": "/assets/ui/bubble-message-gureum.webp?v=190777b8",
+    "w": 411,
+    "h": 167,
+    "bytes": 11898
+  },
+  "ui/bubble-poked-mint": {
+    "src": "/assets/ui/bubble-poked-mint.webp?v=af1f4fc5",
+    "w": 319,
+    "h": 167,
+    "bytes": 10648
+  },
+  "ui/bubble-ruby": {
+    "src": "/assets/ui/bubble-ruby.webp?v=cdfb92ff",
+    "w": 238,
+    "h": 118,
+    "bytes": 6074
+  },
+  "ui/bubble-ultra-mint": {
+    "src": "/assets/ui/bubble-ultra-mint.webp?v=2cff0842",
+    "w": 956,
+    "h": 252,
+    "bytes": 19498
+  },
+  "ui/bubble-update": {
+    "src": "/assets/ui/bubble-update.webp?v=3a5b9df6",
+    "w": 437,
+    "h": 118,
+    "bytes": 9986
+  },
+  "ui/character-panel": {
+    "src": "/assets/ui/character-panel.webp?v=c505987e",
+    "w": 954,
+    "h": 900,
+    "bytes": 30666
+  },
+  "ui/character-pick": {
+    "src": "/assets/ui/character-pick.webp?v=b13f133e",
+    "w": 828,
+    "h": 990,
+    "bytes": 35798
+  },
+  "ui/gomoku-board-sm": {
+    "src": "/assets/ui/gomoku-board-sm.webp?v=ce5dfd81",
+    "w": 700,
+    "h": 778,
+    "bytes": 15578
+  },
+  "ui/gomoku-board": {
+    "src": "/assets/ui/gomoku-board.webp?v=b1a43552",
+    "w": 1260,
+    "h": 1400,
+    "bytes": 28946
+  },
+  "ui/grass-token-empty": {
+    "src": "/assets/ui/grass-token-empty.webp?v=5a078d3d",
+    "w": 912,
+    "h": 519,
+    "bytes": 9332
+  },
+  "ui/grass-token-final": {
+    "src": "/assets/ui/grass-token-final.webp?v=4cb904de",
+    "w": 912,
+    "h": 519,
+    "bytes": 18580
+  },
+  "ui/grass-work-empty": {
+    "src": "/assets/ui/grass-work-empty.webp?v=68f61a26",
+    "w": 912,
+    "h": 515,
+    "bytes": 8838
+  },
+  "ui/grass-work-final": {
+    "src": "/assets/ui/grass-work-final.webp?v=c2aa536b",
+    "w": 912,
+    "h": 515,
+    "bytes": 21058
+  },
+  "ui/header-off-1702": {
+    "src": "/assets/ui/header-off-1702.webp?v=dce1ca18",
+    "w": 632,
+    "h": 214,
+    "bytes": 8172
+  },
+  "ui/header-on-lg": {
+    "src": "/assets/ui/header-on-lg.webp?v=d9a59d04",
+    "w": 1264,
+    "h": 428,
+    "bytes": 17878
+  },
+  "ui/insights-popover": {
+    "src": "/assets/ui/insights-popover.webp?v=ae551410",
+    "w": 828,
+    "h": 1390,
+    "bytes": 46496
+  },
+  "ui/league-slice": {
+    "src": "/assets/ui/league-slice.webp?v=a7311e4c",
+    "w": 496,
+    "h": 427,
+    "bytes": 17140
+  },
+  "ui/league": {
+    "src": "/assets/ui/league.webp?v=84258e4d",
+    "w": 828,
+    "h": 1200,
+    "bytes": 50524
+  },
+  "ui/menubar-0000-lg": {
+    "src": "/assets/ui/menubar-0000-lg.webp?v=565a634d",
+    "w": 463,
+    "h": 132,
+    "bytes": 7148
+  },
+  "ui/menubar-0000": {
+    "src": "/assets/ui/menubar-0000.webp?v=80e77246",
+    "w": 232,
+    "h": 66,
+    "bytes": 3708
+  },
+  "ui/menubar-0100": {
+    "src": "/assets/ui/menubar-0100.webp?v=6ec74ce0",
+    "w": 232,
+    "h": 66,
+    "bytes": 3408
+  },
+  "ui/menubar-0345-newmsg": {
+    "src": "/assets/ui/menubar-0345-newmsg.webp?v=e65d734b",
+    "w": 232,
+    "h": 66,
+    "bytes": 4140
+  },
+  "ui/menubar-0345": {
+    "src": "/assets/ui/menubar-0345.webp?v=f0463002",
+    "w": 232,
+    "h": 66,
+    "bytes": 3940
+  },
+  "ui/menubar-0642-lg": {
+    "src": "/assets/ui/menubar-0642-lg.webp?v=0c908bf2",
+    "w": 463,
+    "h": 132,
+    "bytes": 8458
+  },
+  "ui/menubar-0642": {
+    "src": "/assets/ui/menubar-0642.webp?v=4fed73ac",
+    "w": 232,
+    "h": 66,
+    "bytes": 3960
+  },
+  "ui/menubar-icon-dot": {
+    "src": "/assets/ui/menubar-icon-dot.webp?v=5a19a10f",
+    "w": 66,
+    "h": 66,
+    "bytes": 1832
+  },
+  "ui/menubar-icon": {
+    "src": "/assets/ui/menubar-icon.webp?v=ea2eecc5",
+    "w": 66,
+    "h": 66,
+    "bytes": 1596
+  },
+  "ui/menubar-off-lg": {
+    "src": "/assets/ui/menubar-off-lg.webp?v=54e27444",
+    "w": 369,
+    "h": 132,
+    "bytes": 6000
+  },
+  "ui/menubar-off": {
+    "src": "/assets/ui/menubar-off.webp?v=ae52708b",
+    "w": 185,
+    "h": 66,
+    "bytes": 2886
+  },
+  "ui/message-composing": {
+    "src": "/assets/ui/message-composing.webp?v=b5f8b432",
+    "w": 828,
+    "h": 1144,
+    "bytes": 34976
+  },
+  "ui/message-read-panel": {
+    "src": "/assets/ui/message-read-panel.webp?v=8ff4e2b6",
+    "w": 954,
+    "h": 900,
+    "bytes": 28486
+  },
+  "ui/message-read": {
+    "src": "/assets/ui/message-read.webp?v=23acbb67",
+    "w": 828,
+    "h": 1206,
+    "bytes": 37126
+  },
+  "ui/message-unread-panel": {
+    "src": "/assets/ui/message-unread-panel.webp?v=4aef0f92",
+    "w": 954,
+    "h": 900,
+    "bytes": 28576
+  },
+  "ui/message-unread": {
+    "src": "/assets/ui/message-unread.webp?v=83431fe4",
+    "w": 828,
+    "h": 1206,
+    "bytes": 37198
+  },
+  "ui/minigame": {
+    "src": "/assets/ui/minigame.webp?v=96957e25",
+    "w": 1400,
+    "h": 779,
+    "bytes": 35538
+  },
+  "ui/poke-cooldown": {
+    "src": "/assets/ui/poke-cooldown.webp?v=c9da2e6f",
+    "w": 828,
+    "h": 1308,
+    "bytes": 43786
+  },
+  "ui/poke-focus-1": {
+    "src": "/assets/ui/poke-focus-1.webp?v=4bae97dc",
+    "w": 828,
+    "h": 1358,
+    "bytes": 47508
+  },
+  "ui/poke-focus-2": {
+    "src": "/assets/ui/poke-focus-2.webp?v=4398974b",
+    "w": 828,
+    "h": 1358,
+    "bytes": 47894
+  },
+  "ui/poke-list": {
+    "src": "/assets/ui/poke-list.webp?v=e2eaf861",
+    "w": 828,
+    "h": 1308,
+    "bytes": 44382
+  },
+  "ui/poke-slice": {
+    "src": "/assets/ui/poke-slice.webp?v=2a9100e6",
+    "w": 762,
+    "h": 852,
+    "bytes": 18942
+  },
+  "ui/popover-newmsg": {
+    "src": "/assets/ui/popover-newmsg.webp?v=f7adf705",
+    "w": 828,
+    "h": 1306,
+    "bytes": 41570
+  },
+  "ui/popover-off-1702": {
+    "src": "/assets/ui/popover-off-1702.webp?v=ec6a31d6",
+    "w": 828,
+    "h": 1306,
+    "bytes": 39214
+  },
+  "ui/popover-off": {
+    "src": "/assets/ui/popover-off.webp?v=c9702a6d",
+    "w": 828,
+    "h": 1306,
+    "bytes": 39866
+  },
+  "ui/popover-on": {
+    "src": "/assets/ui/popover-on.webp?v=4336649f",
+    "w": 828,
+    "h": 1306,
+    "bytes": 41054
+  },
+  "ui/popover-tick-strip": {
+    "src": "/assets/ui/popover-tick-strip.webp?v=ecde05cd",
+    "w": 2160,
+    "h": 1010,
+    "bytes": 91398
+  },
+  "ui/popover-working": {
+    "src": "/assets/ui/popover-working.webp?v=ec08003f",
+    "w": 828,
+    "h": 1306,
+    "bytes": 41442
+  },
+  "ui/timer-00-00": {
+    "src": "/assets/ui/timer-00-00.webp?v=ecf3ef48",
+    "w": 264,
+    "h": 120,
+    "bytes": 10826
+  },
+  "ui/todo-board": {
+    "src": "/assets/ui/todo-board.webp?v=231eecd0",
+    "w": 600,
+    "h": 800,
+    "bytes": 22794
+  },
+  "ui/token-last": {
+    "src": "/assets/ui/token-last.webp?v=c289fb23",
+    "w": 828,
+    "h": 1364,
+    "bytes": 43688
+  },
+  "ui/token-month": {
+    "src": "/assets/ui/token-month.webp?v=dff72885",
+    "w": 828,
+    "h": 1364,
+    "bytes": 49270
+  },
+  "ui/token-slice": {
+    "src": "/assets/ui/token-slice.webp?v=5c49e8bc",
+    "w": 472,
+    "h": 670,
+    "bytes": 17718
+  }
+}

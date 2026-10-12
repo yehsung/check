@@ -1,0 +1,276 @@
+{
+  "version": 1,
+  "canvas": {
+    "main": [
+      2100,
+      2625
+    ],
+    "ultra": [
+      2160,
+      2160
+    ]
+  },
+  "heroBox": [
+    424,
+    544,
+    1308,
+    1580
+  ],
+  "sequences": {
+    "aing-idle": {
+      "kind": "video",
+      "fps": 30,
+      "frames": 432,
+      "loop": true,
+      "canvas": "main",
+      "box": [
+        424,
+        544,
+        1308,
+        1580
+      ],
+      "scale": 0.5,
+      "size": [
+        654,
+        790
+      ],
+      "offsetOut": [
+        0,
+        0
+      ],
+      "gop": 30,
+      "src": {
+        "webm": "/assets/char/aing-idle.webm?v=1c60082e",
+        "mov": "/assets/char/aing-idle.mov?v=00570f94"
+      },
+      "low": {
+        "fps": 15,
+        "frames": 216,
+        "gop": 15,
+        "src": {
+          "webm": "/assets/char/aing-idle-15.webm?v=bb52a89d",
+          "mov": "/assets/char/aing-idle-15.mov?v=5ac4b557"
+        },
+        "bytes": {
+          "webm": 536078,
+          "mov": 523861
+        }
+      },
+      "poster": "/assets/char/aing-idle-poster.webp?v=a23bcf6e",
+      "posterFrame": 0,
+      "bytes": {
+        "webm": 808263,
+        "mov": 817960
+      }
+    },
+    "aing-commute-start": {
+      "kind": "video",
+      "fps": 30,
+      "frames": 45,
+      "loop": false,
+      "canvas": "main",
+      "box": [
+        424,
+        544,
+        1308,
+        1580
+      ],
+      "scale": 0.5,
+      "size": [
+        654,
+        790
+      ],
+      "offsetOut": [
+        0,
+        0
+      ],
+      "gop": 30,
+      "src": {
+        "webm": "/assets/char/aing-commute-start.webm?v=6c825c46",
+        "mov": "/assets/char/aing-commute-start.mov?v=59619260"
+      },
+      "poster": null,
+      "bytes": {
+        "webm": 151047,
+        "mov": 125839
+      }
+    },
+    "aing-commute-end": {
+      "kind": "video",
+      "fps": 30,
+      "frames": 36,
+      "loop": false,
+      "canvas": "main",
+      "box": [
+        424,
+        544,
+        1308,
+        1580
+      ],
+      "scale": 0.5,
+      "size": [
+        654,
+        790
+      ],
+      "offsetOut": [
+        0,
+        0
+      ],
+      "gop": 30,
+      "src": {
+        "webm": "/assets/char/aing-commute-end.webm?v=2b03caaf",
+        "mov": "/assets/char/aing-commute-end.mov?v=2cbf02e0"
+      },
+      "poster": null,
+      "bytes": {
+        "webm": 101842,
+        "mov": 83484
+      }
+    },
+    "aing-poked": {
+      "kind": "video",
+      "fps": 30,
+      "frames": 90,
+      "loop": false,
+      "canvas": "main",
+      "box": [
+        424,
+        544,
+        1308,
+        1580
+      ],
+      "scale": 0.5,
+      "size": [
+        654,
+        790
+      ],
+      "offsetOut": [
+        0,
+        0
+      ],
+      "gop": 30,
+      "src": {
+        "webm": "/assets/char/aing-poked.webm?v=d562b6ca",
+        "mov": "/assets/char/aing-poked.mov?v=7a52a7ad"
+      },
+      "poster": null,
+      "bytes": {
+        "webm": 328060,
+        "mov": 260505
+      }
+    },
+    "aing-milestone": {
+      "kind": "video",
+      "fps": 30,
+      "frames": 72,
+      "loop": false,
+      "canvas": "main",
+      "box": [
+        308,
+        544,
+        1544,
+        1580
+      ],
+      "scale": 0.5,
+      "size": [
+        772,
+        790
+      ],
+      "offsetOut": [
+        -58,
+        0
+      ],
+      "gop": 30,
+      "src": {
+        "webm": "/assets/char/aing-milestone.webm?v=86bb24dc",
+        "mov": "/assets/char/aing-milestone.mov?v=e2f7ec25"
+      },
+      "poster": null,
+      "bytes": {
+        "webm": 331045,
+        "mov": 410046
+      }
+    },
+    "aing-ultra-charged": {
+      "kind": "video",
+      "fps": 30,
+      "frames": 102,
+      "loop": false,
+      "canvas": "main",
+      "box": [
+        452,
+        1032,
+        1228,
+        1160
+      ],
+      "scale": 0.5,
+      "size": [
+        614,
+        580
+      ],
+      "offsetOut": [
+        14,
+        244
+      ],
+      "gop": 30,
+      "src": {
+        "webm": "/assets/char/aing-ultra-charged.webm?v=0e478771",
+        "mov": "/assets/char/aing-ultra-charged.mov?v=f60f8fca"
+      },
+      "poster": null,
+      "bytes": {
+        "webm": 286720,
+        "mov": 260786
+      }
+    },
+    "aing-ultra": {
+      "kind": "video",
+      "fps": 30,
+      "frames": 72,
+      "loop": false,
+      "canvas": "ultra",
+      "box": [
+        260,
+        48,
+        1680,
+        1476
+      ],
+      "scale": 0.75,
+      "size": [
+        1260,
+        1108
+      ],
+      "offsetOut": null,
+      "gop": 30,
+      "src": {
+        "webm": "/assets/char/aing-ultra.webm?v=a5648794",
+        "mov": "/assets/char/aing-ultra.mov?v=46c5bdfd"
+      },
+      "poster": "/assets/char/aing-ultra-poster.webp?v=8ec7d0b3",
+      "posterFrame": 40,
+      "bytes": {
+        "webm": 667105,
+        "mov": 604147
+      }
+    },
+    "tick": {
+      "kind": "sheet",
+      "fps": 1,
+      "frames": 12,
+      "loop": false,
+      "hold": "last",
+      "src": "/assets/ui/popover-tick-strip.webp?v=ecde05cd",
+      "frameSize": [
+        180,
+        1010
+      ],
+      "cols": 12,
+      "rows": 1,
+      "displayPt": [
+        90,
+        505
+      ],
+      "bytes": 91398
+    }
+  }
+}

@@ -1441,6 +1441,11 @@ struct CheckSettingsView: View {
                 // 설정 → 차단한 사람(v0.3.34). 설정 본문과 **자리를 바꾼다** — 사람 수만큼 자라는 목록을 본문에 펼치면
                 // 이 창의 높이 계약(맨 아래 항목이 안 잘린다)이 사람 수에 묶인다.
                 CheckBlockedPeopleSettingsPage(store: store)
+            } else if store.showsAccountDeletionInSettings {
+                // 설정 → 계정 삭제(v0.3.51 — 심사 지침 5.1.1(v)). [차단한 사람]과 같은 자리 바꿈이다: 지워지는 것의 목록 ·
+                // 비밀번호 · 2단 확인을 본문에 펼치면 본문 높이 계약(창 여유 5pt)이 그만큼 흔들린다. 들어가는 문은 '내 정보'
+                // 머리 줄의 [계정 삭제] 하나이고 그 문은 높이를 한 점도 먹지 않는다(`section(_:content:trailing:)`).
+                CheckAccountDeletionSettingsPage(store: store)
             } else {
                 // ★ 본문은 **들어가면 그대로, 넘치면 스크롤**한다(v0.3.47).
                 //
@@ -1509,6 +1514,8 @@ struct CheckSettingsView: View {
     /// 설정 본문 두 묶음(일반 · 내 정보). `body` 가 [차단한 사람] 쪽과 자리를 바꾼다(v0.3.34).
     private var settingsSections: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // 머리 줄 오른쪽(절 끝의 `trailing:`): 개인정보 처리방침 · 이용약관(v0.3.51 — 심사 지침 5.1.1(i) "앱 안에서 쉽게
+            // 찾을 수 있게"). 창을 열면 **맨 위**에 보이는 자리이고, 절 제목과 같은 글자 크기의 한 줄이라 본문 높이가 한 점도 늘지 않는다.
             section("일반") {
                 CheckSettingsToggleRow(
                     title: "로그인 시 자동 실행",
@@ -1544,7 +1551,13 @@ struct CheckSettingsView: View {
                 // (사용자 결정: "이후엔 설정에서 계속 설치 링크 QR코드로 찍을 수 있게"). 주소는 공지의 linkURL 이 아니라
                 // `CheckAppLinks.iosAppStore` 다 — 공지는 사라질 수 있고 이 행은 남아야 한다.
                 IOSAppInstallSettingsRow()
+            } trailing: {
+                SettingsLegalLinks()
             }
+            // 머리 줄 오른쪽(절 끝의 `trailing:`): [계정 삭제](v0.3.51 — 심사 지침 5.1.1(v)). 로그인했을 때만 선다.
+            // ★ 머리 줄 링크는 **절 끝의 꼬리 클로저**로 단다(`section("…") { 본문 } trailing: { 링크 }`). 여는 줄은 다른 절과 같은
+            //   `section("내 정보") {` 그대로라 이 줄을 붙잡는 다른 계약(V0351 상태메시지의 '별명 바로 아래')과 부딪히지 않는다 —
+            //   이 링크를 떼어 내는 것으로 그 계약을 맞추지 마라(V0351 맥 앱스토어 판이 링크 자리를 되묻는다).
             section("내 정보") {
                 DisplayNameSettingsRow(store: store)
                 PanelDivider()
@@ -1555,6 +1568,16 @@ struct CheckSettingsView: View {
                 // 사람에게만 있다 — 지우기는 무소속 사용자에게도 있어야 해서 설정에 둔다(행 주석 참고).
                 AvatarRemovalSettingsRow(store: store)
                 PanelDivider()
+                // 맥 앱스토어 판만(v0.3.51): AI 도구 기록 읽기 동의 — 첫 실행 안내에서 고른 값을 여기서 바꾼다. 끄면 **읽지도
+                // 올리지도** 않는다(`aiToolDataAllowed`). Developer ID 판에는 이 행이 없다(그 판의 집계는 늘 켜짐이고, 본문 높이도 그대로다).
+                if store.macEdition.asksBeforeReadingAITools {
+                    CheckSettingsToggleRow(
+                        title: AIToolConsentSettingsText.title,
+                        detail: AIToolConsentSettingsText.detail,
+                        isOn: aiToolDataConsentBinding
+                    )
+                    PanelDivider()
+                }
                 CheckSettingsToggleRow(
                     title: "AI 토큰 사용량 공개",
                     detail: "끄면 AI 토큰 순위판에서 내 사용량이 다른 사람에게 보이지 않아요.",
@@ -1588,6 +1611,14 @@ struct CheckSettingsView: View {
                         onChosen: { _ in store.pushSelectedCharacter(announcesFailure: true) }
                     )
                 }
+            } trailing: {
+                // 지울 계정이 없으면(로그인 전) 문도 없다.
+                if store.session != nil {
+                    SettingsHeaderLinkButton(
+                        title: AccountDeletionText.entry, tint: CheckTheme.danger,
+                        action: { store.openAccountDeletionSettings() }
+                    )
+                }
             }
             // AI 리밋 표시 설정(v0.3.47 — 사용자 요청: "원하는것만 표시하고, 아예 표시 안할 수도 있게").
             //
@@ -1618,11 +1649,25 @@ struct CheckSettingsView: View {
 
     @ViewBuilder
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        section(title, content: content, trailing: { EmptyView() })
+    }
+
+    /// 절 하나. 머리 줄 오른쪽(`trailing`)에 **절 제목과 같은 글자 크기**의 링크를 둘 수 있다(v0.3.51) — 같은 크기라 머리 줄
+    /// 높이가 그대로이고, 그래서 본문 높이 계약이 흔들리지 않는다(`V0351MacAppStoreEditionTests` 가 높이를 재 되묻는다).
+    /// 부르는 모양은 `section("제목") { 본문 } trailing: { 링크 }` 다(본문이 먼저 · 링크는 꼬리) — 여는 줄이 링크 없는 절과 같다.
+    @ViewBuilder
+    private func section(
+        _ title: String, @ViewBuilder content: () -> some View, @ViewBuilder trailing: () -> some View
+    ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(CheckTheme.secondaryText)
-                .padding(.leading, 2)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .padding(.leading, 2)
+                Spacer(minLength: 8)
+                trailing()
+            }
             VStack(alignment: .leading, spacing: 12) {
                 content()
             }
@@ -1677,5 +1722,65 @@ struct CheckSettingsView: View {
             get: { store.miniGamePublic },
             set: { store.setMiniGamePublic($0) }
         )
+    }
+
+    /// 맥 앱스토어 판의 AI 기록 읽기 동의(v0.3.51). 쓰는 길은 `setAIToolDataConsent` 하나다(첫 실행 안내와 같은 문).
+    private var aiToolDataConsentBinding: Binding<Bool> {
+        Binding(
+            get: { store.aiToolDataConsent },
+            set: { store.setAIToolDataConsent($0) }
+        )
+    }
+}
+
+// MARK: - 설정 머리 줄 링크 (v0.3.51)
+
+/// 맥 앱스토어 판 설정의 AI 기록 읽기 동의 행 문구.
+enum AIToolConsentSettingsText {
+    static let title = "AI 사용 기록 읽기"
+    static let detail = "이 맥의 AI 코딩 도구 기록에서 토큰 숫자만 세어 순위에 올려요. 끄면 읽지도 올리지도 않아요."
+}
+
+/// 설정 머리 줄 링크의 문구.
+enum SettingsLegalText {
+    static let privacy = "개인정보 처리방침"
+    static let terms = "이용약관"
+}
+
+/// 절 머리 줄 오른쪽에 서는 작은 링크 하나. **절 제목과 같은 글자**(caption2)라 머리 줄이 자라지 않는다.
+struct SettingsHeaderLinkButton: View {
+    let title: String
+    var tint: Color = CheckTheme.accent
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(tint)
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .accessibilityLabel(title)
+    }
+}
+
+/// '일반' 머리 줄의 [개인정보 처리방침 · 이용약관]. 누르면 기본 브라우저가 GitHub Pages 문서를 연다(폰과 같은 주소).
+struct SettingsLegalLinks: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        HStack(spacing: 6) {
+            SettingsHeaderLinkButton(title: SettingsLegalText.privacy) {
+                openURL(CheckAppLinks.privacyPolicy)
+            }
+            Text("·")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(CheckTheme.secondaryText)
+                .accessibilityHidden(true)
+            SettingsHeaderLinkButton(title: SettingsLegalText.terms) {
+                openURL(CheckAppLinks.termsOfService)
+            }
+        }
     }
 }

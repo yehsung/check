@@ -189,9 +189,17 @@ package enum CodexAccountUsageProbe {
     }
 
     /// 프로덕션 셸 조회(`/bin/zsh` 실행). 주입이 없을 때의 기본값.
+    ///
+    /// ★ 맥 앱스토어 판(v0.3.51)에는 셸 조회가 **없다**(nil — "셸이 없다"와 같은 결과). 샌드박스의 자식 셸은 홈이 컨테이너라
+    ///   `~/.zshrc` 를 못 읽고, 사용자의 셸을 띄우는 코드 자체가 심사 지침 2.5.2 에 걸린다. 그래서 그 판의 `CODEX_HOME` 캐시는
+    ///   늘 비어 있고, 스캐너·리밋은 `~/.codex` + Orca 폴더를 본다.
+    #if CHECK_MAS
+    private static let liveShellLookup: ShellLookup = { _ in nil }
+    #else
     private static let liveShellLookup: ShellLookup = { interactive in
         await shellLookup(interactive: interactive, timeout: shellLookupTimeout)
     }
+    #endif
 
     /// 로그인 셸 조회(캐시). `-lc`(.zprofile) 로 먼저 묻고 **codex 가 안 보이거나 CODEX_HOME 이 비어 있으면** `-ic`(.zshrc —
     /// nvm 초기화도, `export CODEX_HOME=…` 도 대개 여기 있다) 로 한 번 더 묻는다. 둘 다 `shellLookupTimeout` 으로 막고 stdin 은
@@ -334,6 +342,9 @@ package enum CodexAccountUsageProbe {
         return out
     }
 
+    // ★ 아래 둘(스크립트 · 파서)과 그 뒤의 셸 실행은 맥 앱스토어 판(v0.3.51)에서 컴파일되지 않는다 — 그 판에는 셸 조회가 없다
+    //   (`liveShellLookup` 이 nil). 실행되지 않는 스크립트 문자열이라도 바이너리에 남기지 않는다.
+    #if !CHECK_MAS
     /// 로그인 셸 조회 스크립트. 표지 뒤에 PATH·CODEX_HOME·codex 경로를 NUL 구분으로 찍는다.
     package static var shellLookupScript: String {
         "printf '\\n\(shellLookupMarker)\\0%s\\0%s\\0%s\\0' \"$PATH\" \"${CODEX_HOME-}\" \"$(command -v codex 2>/dev/null)\""
@@ -368,6 +379,7 @@ package enum CodexAccountUsageProbe {
             return nil
         }
     }
+    #endif
 
     // MARK: 요청/응답 (순수)
 
@@ -441,9 +453,18 @@ package enum CodexAccountUsageProbe {
         homeDirectory: URL, appVersion: String, now: Date = Date(),
         cache: LocateCache = .shared, lookup: ShellLookup? = nil, run: SessionRunner? = nil
     ) async -> Result<CodexAccountUsage, Failure> {
+        // ★ 맥 앱스토어 판(v0.3.51)의 기본 러너는 **아무것도 띄우지 않고** '기동 실패'를 돌려준다 — 그 판에는 `codex app-server`
+        //   를 실행하는 코드가 컴파일되지 않는다. 앱도 이 경로를 부르지 않는다(`CodexAccountUsageStore.live()` 가 그 판에서
+        //   무해 인스턴스이고, 업로드 경로가 `MacEdition.probesCodexAccount` 로 프로브를 거른다). 여기는 마지막 울타리다.
+        #if CHECK_MAS
+        let run: SessionRunner = run ?? { _ in
+            (.failure(Failure(status: .codexNotInstalled, reason: "앱스토어 판에는 프로브가 없다")), .launchFailed)
+        }
+        #else
         let run: SessionRunner = run ?? { toolchain in
             await runSession(toolchain: toolchain, homeDirectory: homeDirectory, appVersion: appVersion, now: now)
         }
+        #endif
         var excluded: URL?
         if let cached = cache.state.withLock({ $0.toolchain }) {
             let (result, kind) = await run(cached)
@@ -489,6 +510,12 @@ package enum CodexAccountUsageProbe {
         return .failure(Failure(status: .failed, reason: "후보 전부 실패"))
     }
 
+    /// 프로세스가 어떻게 끝났는지. fetch 의 후보 확정이 이것을 본다(파싱 결과만으로는 '기동 실패'와 '메서드 모름'이 안 갈린다).
+    package enum SessionKind: Sendable { case responded, exited, timeout, launchFailed }
+
+    // ★ 여기서부터 `ProcessSession` 끝까지는 **자식 프로세스를 띄우는 코드**다(`codex app-server` · 로그인 셸).
+    //   맥 앱스토어 판(v0.3.51)에서는 통째로 컴파일되지 않는다 — 심사 지침 2.5.2 "다른 앱의 코드를 실행하지 않는다".
+    #if !CHECK_MAS
     /// `codex app-server` 를 띄워 요청 3줄을 쓰고, stdout 을 **비동기로 계속 읽으며**(파이프 버퍼 교착 방지) id 2 응답 줄이
     /// 오면 끝낸다. 총 `fetchDeadline` 뒤 terminate() → `killGrace` 뒤 SIGKILL. stderr 는 /dev/null.
     package static func run(
@@ -498,9 +525,6 @@ package enum CodexAccountUsageProbe {
         await runSession(toolchain: toolchain, homeDirectory: homeDirectory, appVersion: appVersion,
                          deadline: deadline, killGrace: killGrace, now: now).result
     }
-
-    /// 프로세스가 어떻게 끝났는지. fetch 의 후보 확정이 이것을 본다(파싱 결과만으로는 '기동 실패'와 '메서드 모름'이 안 갈린다).
-    package enum SessionKind: Sendable { case responded, exited, timeout, launchFailed }
 
     private static func runSession(
         toolchain: Toolchain, homeDirectory: URL, appVersion: String,
@@ -695,6 +719,7 @@ package enum CodexAccountUsageProbe {
             completion?(outcome)
         }
     }
+    #endif
 
     /// 파이프에서 **지금 있는 만큼만** 읽는다(O_NONBLOCK). 0 = EOF, -1 = EAGAIN/오류 — 어느 쪽이든 더 기다리지 않는다.
     /// 종료 경로의 잔여 드레인이 쓴다(리뷰 P2: 쓰는 쪽 fd 를 물려받은 고아 자식이 남아 있으면 차단 읽기는 영원히 안 돌아온다).

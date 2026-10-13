@@ -55,11 +55,21 @@ enum SemverCompare {
 ///
 /// 실패는 두 경로 모두 조용히 무시한다(사용자 방해 금지). 현재버전·빌드/페처/시계/영속/주기는 모두 주입 가능하고,
 /// `serverFetcher` 가 nil(기본값)이면 서버 메서드는 전부 no-op 이라 테스트·프리뷰는 네트워크를 건드리지 않는다.
+///
+/// ## 맥 앱스토어 판(v0.3.51) — 새 버전 안내가 **없다**
+/// 앱스토어 앱은 앱스토어로만 업데이트한다(심사 지침 2.4.5(vii)). 그래서 그 판에서 이 스토어는 **서버 공지만** 나른다:
+///  · `isUpdateAvailable` 은 언제나 거짓 → 배너·캐릭터 말풍선·메뉴바 점이 전부 꺼진다(셋 다 이 값 하나를 본다).
+///  · GitHub 폴링(`latestReleaseURL`·`performCheck`)은 **컴파일되지 않는다**, 서버 `app_latest_release` 응답은 버린다
+///    (`applyServerRelease` — 배선도 CheckApp 에서 빠진다).
+///  · 공지 조회(`noticeFetcher`)와 그 주기(실행 5초 뒤·5분마다·깨어날 때·팝오버)는 그대로다.
+/// 판정은 `edition`(기본값 `MacEdition.current`)이 한다 — 기본 빌드의 테스트가 `.appStore` 를 주입해 이 갈래를 그대로 돌린다.
 @Observable
 @MainActor
 final class UpdateCheckStore {
+    #if !CHECK_MAS
     /// GitHub 최신 릴리스 엔드포인트(정식 릴리스만 반환 — 프리릴리스/드래프트 제외).
     static let latestReleaseURL = URL(string: "https://api.github.com/repos/yehsung/check/releases/latest")!
+    #endif
     /// 감지 스로틀(초). 하루 1회.
     static let checkInterval: TimeInterval = 24 * 60 * 60
     /// 팝오버 열림 경로의 서버 조회 최소 간격(초). 열었다 닫았다를 반복해도 1분에 1회만 친다.
@@ -93,6 +103,8 @@ final class UpdateCheckStore {
     private let currentVersion: String
     /// 이 앱의 빌드 번호. 못 읽으면 nil 이고, nil 이면 서버 경로는 **침묵**한다(폴백 숫자 금지 — bundleBuild 주석).
     private let currentBuild: Int?
+    /// 이 앱의 판(v0.3.51). 앱스토어 판이면 새 버전 안내를 하지 않는다(머리말 '맥 앱스토어 판').
+    let edition: MacEdition
     private let fetcher: (URL) async throws -> Data
     private let clock: () -> Date
     private let defaults: UserDefaults
@@ -131,7 +143,9 @@ final class UpdateCheckStore {
     /// 최신이 현재보다 높으면 true. latestVersion 미확인이면 false(오탐 방지).
     /// 빌드를 **양쪽 다** 알면 빌드로만 비교한다 — 버전 문자열 축은 "0.3.01" 과 "0.3.1" 을 같은 값으로 읽는다.
     /// 한쪽이라도 모르면(GitHub 경로 기록 · 옛 기록 · 개발 빌드) 예전 semver 규칙 그대로다.
+    /// 앱스토어 판은 **언제나 거짓**이다(v0.3.51) — 배너·말풍선·메뉴바 점이 전부 이 값을 보므로 여기 한 줄이 셋을 함께 끈다.
     var isUpdateAvailable: Bool {
+        guard edition.updatesItself else { return false }
         guard let latestVersion else { return false }
         if let latestBuild, let currentBuild { return latestBuild > currentBuild }
         return SemverCompare.isNewer(latestVersion, than: currentVersion)
@@ -146,10 +160,12 @@ final class UpdateCheckStore {
         serverWatchInterval: TimeInterval = 300,
         serverWatchInitialDelay: TimeInterval = 5,
         wakeSettleDelay: TimeInterval = UpdateCheckStore.defaultWakeSettleDelay,
-        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter
+        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
+        edition: MacEdition = .current
     ) {
         self.currentVersion = currentVersion
         self.currentBuild = currentBuild
+        self.edition = edition
         self.fetcher = fetcher
         self.clock = clock
         self.defaults = defaults
@@ -180,11 +196,16 @@ final class UpdateCheckStore {
     }
 
     /// 기본 페처: URLSession. 테스트는 스텁을 주입해 네트워크를 건드리지 않는다.
+    /// 맥 앱스토어 판(v0.3.51)에는 GitHub 폴링이 없다 — 이 페처를 부르는 길(`performCheck`)이 컴파일되지 않으므로 늘 던진다.
     static func urlSessionFetch(_ url: URL) async throws -> Data {
+        #if CHECK_MAS
+        throw URLError(.unsupportedURL)
+        #else
         var req = URLRequest(url: url)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         let (data, _) = try await URLSession.shared.data(for: req)
         return data
+        #endif
     }
 
     /// 마지막 확인 시각(영속). 0(미기록)이면 nil.
@@ -198,8 +219,13 @@ final class UpdateCheckStore {
     /// 그다음은 예전 그대로다: 24h 스로틀 + 재진입 가드. 신선하면(24h 이내 확인됨) 즉시 반환한다. 아니면 fetch 해 tag_name 을
     /// latestVersion 에 반영. 실패(네트워크/형식)는 조용히 무시한다(latestVersion 미변경). 스로틀 스탬프는 시도 시점에 찍어
     /// (성공/실패 무관) 팝오버를 하루에 수십 번 열어도 네트워크는 1회만 치게 한다(rate-limit 보호).
+    ///
+    /// 맥 앱스토어 판(v0.3.51)은 **서버 쪽(공지)만** 본다 — GitHub 폴링은 그 판에 컴파일되지 않고, 판정표가 거짓이면
+    /// 기본 빌드에서도(테스트가 `.appStore` 를 주입한 경우) GitHub 을 치지 않는다.
     func checkIfStale() async {
         await checkServerNow(minimumInterval: Self.serverOpenThrottle)
+        guard edition.updatesItself else { return }
+        #if !CHECK_MAS
         if let checkTask { await checkTask.value; return }
         if let last = lastCheckedAt, clock().timeIntervalSince(last) < Self.checkInterval { return }
         let task = Task { @MainActor [weak self] in
@@ -209,8 +235,10 @@ final class UpdateCheckStore {
         checkTask = task
         await task.value
         checkTask = nil
+        #endif
     }
 
+    #if !CHECK_MAS
     private func performCheck() async {
         // 시도 시점에 스로틀 스탬프(성공/실패 무관) — 도배 오픈에도 하루 1회로 제한.
         defaults.set(clock().timeIntervalSince1970, forKey: Self.lastCheckedKey)
@@ -221,6 +249,7 @@ final class UpdateCheckStore {
         let build = Self.isSameTag(tag, latestVersion) ? latestBuild : nil
         record(version: tag, notes: Self.parseNotes(Self.parseBody(data)), build: build)
     }
+    #endif
 
     /// 최신 릴리스 기록의 **유일한 쓰기 지점**(두 경로 공통). 버전·노트·빌드를 한 번에 바꾸고 한 번에 영속한 뒤
     /// (재실행 후에도 같은 배너를 그대로 그린다), 버전이 새 값으로 바뀌었고 그게 업데이트면 onNewVersionAvailable 을 1회 부른다.
@@ -263,7 +292,11 @@ final class UpdateCheckStore {
     ///  · 내 빌드를 모른다(개발 빌드) — 모르면 침묵한다.
     /// 통과했고 서버 빌드가 내 빌드보다 **클 때만** 기록한다. 같거나 낮으면 그대로 둔다 — 서버 경로는 절대 지우지 않는다
     /// (지우면 GitHub 경로가 적은 기록까지 날아가고, 업데이트한 뒤엔 어차피 빌드 비교가 false 로 수렴한다).
+    ///
+    /// 맥 앱스토어 판(v0.3.51)은 **아무것도 기록하지 않는다** — 서버 릴리스 행은 brew·DMG 판이 나간 시각에 게시되므로
+    /// 그 판에 알리면 갈 곳 없는 "새 버전"이 된다(앱스토어 심사는 하루 이틀 늦는다).
     func applyServerRelease(_ r: AppLatestRelease) {
+        guard edition.updatesItself else { return }
         guard r.v == nil || r.v == 1 else { return }
         guard let build = r.build, build > 0 else { return }
         guard let version = r.version?.trimmingCharacters(in: .whitespaces),
@@ -499,6 +532,15 @@ enum GracefulTerminationSignal {
         signal(SIGTERM, SIG_DFL)
     }
 }
+
+// MARK: - 자가 업데이트 (brew upgrade · DMG 교체) — 맥 앱스토어 판에는 없다
+//
+// ★ 여기서부터 파일 끝까지(설치 출처 · 진행 단계 · 원클릭 실행기 · DMG 교체 스크립트)는 맥 앱스토어 판(v0.3.51)에서
+//   **통째로 컴파일되지 않는다.** 앱스토어 앱은 앱스토어로만 업데이트하고(심사 지침 2.4.5(vii)), 앱이 끝나도 살아남는
+//   분리 프로세스(2.4.5(iii))와 코드 내려받기·설치(2.4.5(iv))는 금지다 — 샌드박스는 어차피 `/Applications` 교체와 brew 실행을
+//   막는다. 판정표(`MacEdition.updatesItself`)가 거짓이어도 코드가 남아 있으면 심사관이 바이너리에서 `brew upgrade` 를 본다.
+//   `GracefulTerminationSignal`(위)은 남긴다 — 로그아웃·시스템 종료의 SIGTERM 에서도 근무를 마무리한다.
+#if !CHECK_MAS
 
 // MARK: - 설치 출처 (brew cask / 직접 설치)
 
@@ -1196,3 +1238,4 @@ final class UpdateRunner {
         }
     }
 }
+#endif

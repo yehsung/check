@@ -407,9 +407,9 @@ package enum AntigravityConversationReader {
         duringImmutableRead: (() -> Void)? = nil
     ) -> ReadResult {
         let direct = attempt(path: path, afterIdx: afterIdx, limit: limit, immutable: false)
-        // 성공했거나, CANTOPEN 이 아닌 다른 이유(표 없음·잠금·손상)로 실패했으면 2단은 답이 아니다.
+        // 성공했거나, 사이드카와 무관한 이유(표 없음·잠금·손상)로 실패했으면 2단은 답이 아니다.
         // 특히 `.queryFailed`(= 표가 없는 남의 db)에서 immutable 로 다시 여는 것은 같은 실패를 두 번 하는 낭비다.
-        guard direct.code & 0xFF == SQLITE_CANTOPEN else { return direct.result }
+        guard fallsBackToImmutable(primaryCode: direct.code) else { return direct.result }
 
         // 울타리를 치고 2단. 울타리를 못 세우면(그 사이 파일이 사라졌다) 열기 실패로 돌린다.
         guard let before = fence(path) else {
@@ -431,8 +431,25 @@ package enum AntigravityConversationReader {
         return fallback.result
     }
 
+    /// 1단(`SQLITE_OPEN_READONLY`)의 실패 원인 코드가 **사이드카를 다룰 권한이 없어서** 생긴 것인가 — 그렇다면 2단(immutable)이 답이다.
+    ///
+    ///  · `SQLITE_CANTOPEN`(14) — 위 표의 (i)·(ii): 사이드카가 없거나 디렉터리에 `-shm` 을 만들 수 없다. 원래의 유일한 갈래.
+    ///  · `SQLITE_READONLY`(8) 계열 · `SQLITE_PERM`(3) — **맥 앱스토어 판(v0.3.51)의 샌드박스**에서 새로 생기는 갈래다.
+    ///    그 판은 `~/.gemini/` 를 **읽기 전용 임시 예외**로만 연다. `agy` 가 대화를 열어 두어 `-shm` 이 이미 있으면 sqlite 는
+    ///    그것을 쓰기로 못 열고 읽기 전용 공유 메모리로 버티려 하는데, 인덱스를 새로 세워야 하는 순간이면
+    ///    `SQLITE_READONLY_RECOVERY`·`SQLITE_READONLY_CANTINIT` 로 멈춘다. 그때도 체크포인트된 내용은 immutable 로 온전히 읽힌다
+    ///    (놓치는 것은 아직 `-wal` 에만 있는 최신 턴뿐이고, `lastIdx` 가 단조라 다음 스캔이 그 턴을 줍는다 — 두 번 세지 않는다).
+    ///    Developer ID 판에서는 이 두 코드가 1단에서 나올 일이 사실상 없다 — 나와도 immutable 로 읽는 쪽이 '통째로 0'보다 낫다.
+    ///  · 그 밖(표 없음 1 · 손상 11 · NOTADB 26 · 잠금 5)은 사이드카와 무관하다 — 2단도 같은 실패를 한다.
+    package static func fallsBackToImmutable(primaryCode: Int32) -> Bool {
+        switch primaryCode & 0xFF {
+        case SQLITE_CANTOPEN, SQLITE_READONLY, SQLITE_PERM: return true
+        default: return false
+        }
+    }
+
     /// 한 번의 열기+질의 시도. `code` 는 sqlite 가 돌려준 원인 코드(성공이면 SQLITE_OK)로, 호출자가
-    /// CANTOPEN 만 골라 2단으로 넘기는 데 쓴다.
+    /// 사이드카 계열 실패(`fallsBackToImmutable`)만 골라 2단으로 넘기는 데 쓴다.
     private static func attempt(
         path: String, afterIdx: Int, limit: Int, immutable: Bool
     ) -> (result: ReadResult, code: Int32) {

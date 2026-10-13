@@ -665,7 +665,9 @@ extension WorkTimerStore {
     /// 로그인 직후 공개 토글 한 번이 '설정 도착'으로 읽혀 거부자의 맥에서 프로세스가 떴다.
     func uploadTokenUsageIfNeeded(now: Date = Date()) async {
         let usage = tokenUsage.currentMonthUsage
-        if session != nil, tokenUsageCollect, tokenUsageCollectLoaded {
+        // 맥 앱스토어 판(v0.3.51)은 프로브가 **없다**(`MacEdition.probesCodexAccount` — 로그인 셸·`codex app-server` 를 띄울 수 없다).
+        // 부르지 않으므로 계정 상태도 nil 로 남아 서버에는 '모름'으로 간다('미로그인'으로 오보하지 않는다).
+        if session != nil, tokenUsageCollect, tokenUsageCollectLoaded, macEdition.probesCodexAccount, aiToolDataAllowed {
             let rolledOver = usage?.month != TokenUsageIncrementalScanner.kstMonthString(now)
             await codexAccount.refreshIfDue(now: now, force: rolledOver)
         }
@@ -699,7 +701,9 @@ extension WorkTimerStore {
         // 수집 끔이면 아예 보내지 않는다. 서버 트리거가 어차피 조용히 버리므로 결과는 같지만,
         // 그 사람 맥이 30초마다 헛왕복을 도는 것을 없앤다(설정이 서버에서 도착하기 전 기본값은 수집이라,
         // 로그인 직후 한두 번은 나갈 수 있다 — 그건 서버가 막는다).
-        guard tokenUsageCollect else { return }
+        // 맥 앱스토어 판(v0.3.51)은 **AI 기록 읽기 동의**가 없으면 아무것도 올리지 않는다(`aiToolDataAllowed` — Developer ID 판은 늘 참).
+        // 동의를 거둔 뒤에도 디스크에 남은 지난 스냅샷이 있을 수 있어, 스캔을 막는 것만으로는 부족하다 — 여기서도 막는다.
+        guard tokenUsageCollect, aiToolDataAllowed else { return }
         guard let usage else { return }
         let accountMonth = account?.monthTotal(usage.month) ?? 0
         // v0.3.12: 안티그래비티만 쓰는 사람도 올린다. `usage.total` 에는 안티그래비티가 들어가지 않으므로(업로드값의 뜻을
@@ -834,7 +838,7 @@ extension WorkTimerStore {
     func uploadTokenUsageDailyIfNeeded(
         usage: TokenUsageMonthly, account: CodexAccountUsage?, generation: Int, now: Date
     ) async {
-        guard session != nil, tokenUsageCollect else { return }
+        guard session != nil, tokenUsageCollect, aiToolDataAllowed else { return }
         // 재기준: 날짜가 바뀌었으면 장부를 비운다. 여기서(전송 전) 날짜를 찍어 두는 것이 요건이다 — 실패해도 날짜가 남아야
         // 위 게이트의 dailyDue 가 내려가고, 남은 재시도는 tokenDailyRetryPending 이 맡는다(둘 다 열려 있으면 무한히 열린다).
         let today = TokenDailyGrid.dayString(now)
@@ -902,7 +906,8 @@ extension WorkTimerStore {
         guard session != nil else { return }
         // 수집 거부자에게선 스캔조차 돌리지 않는다 — 업로드가 서버에서 버려지는 것과 별개로,
         // 애초에 그 사람 맥에서 파일을 읽을 이유가 없다(uploadTokenUsageIfNeeded 와 같은 규약).
-        guard tokenUsageCollect else { return }
+        // 앱스토어 판의 동의 거절자도 같다(v0.3.51 — 스캐너 입구도 같은 키를 따로 본다).
+        guard tokenUsageCollect, aiToolDataAllowed else { return }
         guard startedAt != nil else { return }
         // 롤오버 판정: 지금 들고 있는 값이 이번 달 것이 아니면(달이 막 바뀌었거나 이번 실행에서 한 번도 안 스캔했다)
         // 서버에 이 달 행이 아예 없다는 뜻이다. 그 창을 10분씩 열어 둘 이유가 없어 주기를 1분으로 줄인다.
@@ -942,7 +947,7 @@ extension WorkTimerStore {
         guard session != nil else { return }
         // 수집 거부자의 스캔 사실도 서버에 남기지 않는다(위 배경 스캔이 이미 막지만, 이 함수만 따로 불려도
         // 프라이버시 규약이 깨지지 않게 여기서도 건다 — 게이트는 짝으로 있어야 한다).
-        guard tokenUsageCollect else { return }
+        guard tokenUsageCollect, aiToolDataAllowed else { return }
         // 기기 신원 없는 실행은 여기서도 침묵한다. 이 하트비트는 사용량 행과 **같은 기기 키**로 들어가므로
         // (아래 주석) 유령 ID 로 보내면 "스캔은 도는데 값이 없는 기기"가 그 사람 화면에 하나씩 쌓인다.
         guard hasDeviceIdentity else { return }
@@ -1075,7 +1080,8 @@ extension WorkTimerStore {
         guard defaults.string(forKey: Self.codexDiagnosticsReportedStampKey)
                 != Self.codexDiagnosticsStamp(build: build, now: now) else { return nil }
         // 홈은 메인 액터에서 미리 읽어 값으로 넘긴다(detached 클로저가 캡처하는 것은 Sendable 한 URL 뿐).
-        let home = FileManager.default.homeDirectoryForCurrentUser
+        // 스캐너와 **같은 홈**이어야 항등식이 선다 — 앱스토어 판은 샌드박스 컨테이너가 아니라 진짜 홈(v0.3.51 `AIToolHome`).
+        let home = AIToolHome.current(edition: macEdition)
         // 프로덕션 스캐너와 같은 Codex 홈(로그인 셸 CODEX_HOME 캐시)을 본다 — 루트가 다르면 항등식이 깨진다.
         let codexHome = CodexAccountUsageProbe.cachedCodexHome()
         return await Task.detached(priority: .utility) {

@@ -214,6 +214,15 @@ package enum AILimitProcess {
     /// terminate 뒤 SIGKILL 까지의 유예(초).
     package static let killGrace: TimeInterval = 2
 
+    /// 아무것도 실행하지 않는 실행기. 주입을 잊은 테스트가 실제 프로세스를 띄우지 않게 하는 기본값이다.
+    package static func inert() -> AILimitCommandRunner {
+        { _ in .notRun }
+    }
+
+    // ★ 맥 앱스토어 판(v0.3.51)에서는 **자식 프로세스 실행기 자체가 없다.** 이 실행기를 쓰는 리더 둘(Claude 키체인을
+    //   `/usr/bin/security` 로 · 안티그래비티를 `agy` 로)이 그 판에서 컴파일되지 않고, 샌드박스의 자식은 부모의 샌드박스를
+    //   물려받아 어차피 실패한다 — 남의 실행 파일을 띄우는 코드가 바이너리에 남는 것 자체가 심사 지침 2.5.2 다.
+    #if !CHECK_MAS
     package static func live() -> AILimitCommandRunner {
         { command in
             await withCheckedContinuation { continuation in
@@ -221,11 +230,6 @@ package enum AILimitProcess {
                 session.start { output in continuation.resume(returning: output) }
             }
         }
-    }
-
-    /// 아무것도 실행하지 않는 실행기. 주입을 잊은 테스트가 실제 프로세스를 띄우지 않게 하는 기본값이다.
-    package static func inert() -> AILimitCommandRunner {
-        { _ in .notRun }
     }
 
     /// 한 번 돌고 끝나는 세션. `CodexAccountUsageProbe.ProcessSession` 의 축소판이고 **그 파일의 결론을 그대로 따른다**:
@@ -351,6 +355,7 @@ package enum AILimitProcess {
             completion?(output)
         }
     }
+    #endif
 }
 
 // MARK: - 시각 파싱
@@ -411,6 +416,9 @@ package enum AILimitResetTrust {
 
 // MARK: - Claude Code
 
+// ★ 맥 앱스토어 판(v0.3.51)에서 컴파일되지 않는다 — 남의 키체인 항목을 `/usr/bin/security` 자식 프로세스로 읽는 리더라
+//   샌드박스(자식 상속)와 심사 지침(2.5.2 · 5.1.1)이 둘 다 막는다. 그 판의 러너(`AILimitStore.liveRunner`)는 이 타입을 모른다.
+#if !CHECK_MAS
 /// Claude Code 의 5시간 · 주간 창을 읽는다.
 ///
 /// ## 자격증명은 `/usr/bin/security` **자식 프로세스**로만 읽는다
@@ -584,6 +592,7 @@ package struct AILimitClaudeReader: Sendable {
         return Self.parseUsage(response.body, observedAt: now, planLabel: credentials.planLabel)
     }
 }
+#endif
 
 // MARK: - OpenAI Codex
 
@@ -749,6 +758,9 @@ package struct AILimitCodexReader: Sendable {
 
 // MARK: - Google Antigravity
 
+// ★ 맥 앱스토어 판(v0.3.51)에서 컴파일되지 않는다 — 사용자가 설치한 `agy` 를 자식 프로세스로 띄우는 리더다(2.5.2).
+//   그 판의 토큰 **집계**(`~/.gemini/…/conversations/*.db` 읽기 — CheckAntigravityUsage.swift)는 그대로 남는다.
+#if !CHECK_MAS
 /// 안티그래비티의 5시간 · 주간 창을 `agy` CLI 로 읽는다.
 ///
 /// ## 부호가 반대다 — 이 파일에서 가장 쉬운 사고
@@ -921,6 +933,7 @@ package struct AILimitAntigravityReader: Sendable {
         return Self.parseCLI(output.stdout, observedAt: now)
     }
 }
+#endif
 
 // MARK: - 보조
 

@@ -2113,6 +2113,9 @@ package final class TokenUsageStore {
     private let cacheURL: URL
     private let clock: () -> Date
     private let notificationCenter: NotificationCenter
+    /// 이 스토어가 도는 판(v0.3.51). 앱스토어 판이면 **AI 도구 기록 읽기 동의**(`AIToolDataConsent` — 이 스토어의 defaults)가
+    /// 있어야 스캔이 시작된다. Developer ID 판은 동의를 묻지 않는다(판정이 언제나 참 — 지금 동작 그대로).
+    private let edition: MacEdition
     /// Codex 홈 재정의(로그인 셸의 `CODEX_HOME`). 스캔마다 부른다 — 기본 구현은 CodexAccountUsageProbe 가 **이미 캐시한**
     /// 셸 환경만 읽으므로 셸을 새로 띄우지 않는다(첫 계정 프로브 전엔 nil → `~/.codex`). 테스트는 nil/고정값을 주입한다.
     private let codexHomeResolver: @Sendable () -> URL?
@@ -2145,13 +2148,19 @@ package final class TokenUsageStore {
     ///
     /// notificationCenter: 앱 종료(NSApplication.willTerminateNotification)를 듣는 곳. 테스트는 사설 센터를 주입해 종료를
     /// 모사한다(실 센터에 가짜 종료 알림을 흘리면 다른 구독자가 반응한다).
+    ///
+    /// homeDirectory 기본값은 `AIToolHome.current()` 다(v0.3.51): Developer ID 판은 예전과 같은
+    /// `homeDirectoryForCurrentUser`, 앱스토어 판은 샌드박스 컨테이너가 아니라 **사용자의 진짜 홈**(`getpwuid_r`).
+    /// 앱스토어 판의 `codexHomeResolver` 기본값은 늘 nil 이다 — 그 캐시를 채우는 로그인 셸 조회가 그 판에서 컴파일되지 않는다
+    /// (`CODEX_HOME` 대신 `~/.codex` + Orca 폴더를 본다).
     package init(
         defaults: UserDefaults = .standard,
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        homeDirectory: URL = AIToolHome.current(),
         cacheURL: URL = TokenUsageCacheStore.defaultURL(),
         clock: @escaping () -> Date = { Date() },
         notificationCenter: NotificationCenter = .default,
-        codexHomeResolver: @escaping @Sendable () -> URL? = { CodexAccountUsageProbe.cachedCodexHome() }
+        codexHomeResolver: @escaping @Sendable () -> URL? = { CodexAccountUsageProbe.cachedCodexHome() },
+        edition: MacEdition = .current
     ) {
         self.defaults = defaults
         self.homeDirectory = homeDirectory
@@ -2159,6 +2168,7 @@ package final class TokenUsageStore {
         self.clock = clock
         self.notificationCenter = notificationCenter
         self.codexHomeResolver = codexHomeResolver
+        self.edition = edition
         self.lastSaveAt = clock()
         // 재시작 후 즉시 표시: 영속 스냅샷을 먼저 읽는다. 단, 귀속 월(month)이 현재 KST 월과 다르면(달이 바뀜)
         // 표시하지 않고(리셋) 재스캔에 맡긴다 — 지난달 숫자가 새 달 첫 프레임에 잘못 보이지 않게.
@@ -2222,8 +2232,18 @@ package final class TokenUsageStore {
         }
     }
 
+    /// 지금 AI 도구 기록을 읽어도 되는가(v0.3.51 — 앱스토어 판의 동의 게이트). Developer ID 판은 언제나 참이다.
+    /// 거짓이면 스캔이 **시작되지 않는다**: 파일 하나 stat 하지 않고, 캐시도 디스크에서 읽지 않고, `scanCount` 도 그대로다.
+    package var isScanPermitted: Bool {
+        AIToolDataConsent.isAllowed(edition: edition, defaults: defaults)
+    }
+
     private func startScan() {
         guard scanTask == nil else { return }
+        // ★ 동의 게이트는 **스캔의 유일한 입구**에 건다(v0.3.51). 팝오버 루프(`runRefreshLoop`)·배경 스캔
+        //   (`refreshTokenUsageInBackgroundIfDue`)·롤오버 강제 스캔(`refreshNow`) 셋이 전부 이 함수를 지난다 — 호출자마다
+        //   걸면 언젠가 하나가 빠진다. 스탬프(lastRefreshAt)도 안 찍는다: 동의하는 순간 다음 루프가 3초 스로틀 없이 바로 돈다.
+        guard isScanPermitted else { return }
         isScanning = true
         scanCount += 1
         let now = clock()

@@ -54,7 +54,14 @@ extension CharacterCatalog {
 
 extension CodexAccountUsageStore {
     /// 프로덕션 조립: 실홈 + 로그인 셸의 CODEX_HOME + 실제 프로브. **CheckApp 한 곳에서만** 만든다(소스 계약 테스트가 되묻는다).
+    ///
+    /// ★ 맥 앱스토어 판(v0.3.51)은 **무해 인스턴스**다 — 그 판에는 로그인 셸 조회도 `codex app-server` 실행도 컴파일되지 않는다
+    ///   (`MacEdition.probesCodexAccount`). 호출 지점(CheckApp 의 한 줄)은 두 판이 같다: 갈래를 조립 지점 안에 두어야
+    ///   "라이브 조립은 CheckApp 한 곳" 계약이 판마다 둘로 갈리지 않는다.
     static func live(defaults: UserDefaults = .standard) -> CodexAccountUsageStore {
+        #if CHECK_MAS
+        return .inert()
+        #else
         let version = UpdateCheckStore.bundleShortVersion()
         return CodexAccountUsageStore(
             defaults: defaults,
@@ -64,5 +71,6 @@ extension CodexAccountUsageStore {
                 await CodexAccountUsageProbe.fetch(homeDirectory: home, appVersion: version, now: now)
             }
         )
+        #endif
     }
 }

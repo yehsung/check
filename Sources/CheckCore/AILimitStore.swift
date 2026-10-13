@@ -751,15 +751,46 @@ extension AILimitStore {
     /// 라이브 스토어. **저장소에서 이 함수를 부르는 프로덕션 지점은 `CheckApp.swift` 한 줄뿐이다**
     /// (`CodexAccountUsageStore.live()` 와 같은 규약 — 기본값은 무해 인스턴스라 테스트가 실제 자격증명을
     /// 건드리지 않는다).
+    ///
+    /// `home` 기본값은 `AIToolHome.current()` 다(v0.3.51) — 앱스토어 판에서는 샌드박스 컨테이너가 아니라 사용자의 진짜 홈이라
+    /// `~/.codex/auth.json` 이 읽기 전용 임시 예외(`/.codex/`) 아래의 실제 파일을 가리킨다.
     package static func live(
         defaults: UserDefaults = .standard,
-        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        home: URL = AIToolHome.current(),
         appVersion: String,
         session: URLSession = .shared
     ) -> AILimitStore {
         let runner = liveRunner(home: home, appVersion: appVersion, session: session)
         return AILimitStore(defaults: defaults, runner: runner)
     }
+
+    #if CHECK_MAS
+    /// **맥 앱스토어 판의 러너**(v0.3.51). 자식 프로세스를 띄우는 두 리더(Claude 키체인 · `agy`)는 이 판에서 컴파일되지
+    /// 않으므로 이 러너에는 **Codex 리더 하나**뿐이다. 그것도 판정표가 허락할 때만(`MacEdition.readsCodexLimits`) 부른다.
+    /// 요청 집합에 Claude·안티그래비티가 들어 있어도 결과를 만들지 않는다 — 결과가 없는 제공자는 스토어가 "그대로 둔다"로
+    /// 읽고(`apply`), 한 번도 읽힌 적이 없으니 설정에도 카드에도 줄이 서지 않는다(빈 카드·"0" 이 없다).
+    /// Codex 홈은 `~/.codex` 고정이다 — 로그인 셸의 `CODEX_HOME` 을 묻는 조회가 이 판에 없다.
+    package nonisolated static func liveRunner(
+        home: URL,
+        appVersion: String,
+        session: URLSession,
+        fetcher: AILimitHTTPFetcher? = nil,
+        codexHome: URL? = nil
+    ) -> Runner {
+        let fetch = fetcher ?? AILimitHTTP.fetcher(session: session)
+        let codex = AILimitCodexReader(
+            fetch: fetch,
+            codexHome: codexHome ?? home.appendingPathComponent(".codex", isDirectory: true),
+            appVersion: appVersion
+        )
+        let readsCodex = MacEdition.appStore.readsCodexLimits
+        return { now, providers in
+            var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [:]
+            if readsCodex, providers.contains(.codex) { results[.codex] = await codex.read(now: now) }
+            return AILimitReadOutcome(results: results)
+        }
+    }
+    #else
 
     /// 리더 셋을 **동시에** 돌리는 러너. 셋이 서로를 기다리지 않아야 한다 — `agy` 는 5초짜리라
     /// 직렬로 묶으면 팝오버를 연 사람이 그만큼 더 기다린다.
@@ -813,6 +844,7 @@ extension AILimitStore {
             }
         }
     }
+    #endif
 }
 
 /// 이 맥의 이름 — **시스템 설정의 컴퓨터 이름**이다(v0.3.47).

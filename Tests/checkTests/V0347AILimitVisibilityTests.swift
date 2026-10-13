@@ -1174,10 +1174,18 @@ struct V0347AILimitSettingsViewTests {
         #expect(source.contains(".opacity(store.aiLimits.visibility.masterEnabled ? 1 : 0.4)"))
 
         // 세터를 부르는 곳은 설정 화면 하나뿐이다. 두 번째 집이 생기면 두 스위치가 서로 다른 값을 그린다.
-        for setter in ["setAILimitsVisible(", "setAILimitProviderEnabled("] {
+        // v0.3.51: 마스터 세터만 **한 자리 더** 있다 — 맥 앱스토어 판의 AI 기록 읽기 동의(`setAIToolDataConsent`)가 동의를 거둘 때
+        // 리밋 축을 재우고(그 순간 서버 행을 비운다) 다시 줄 때 되살린다. 그 자리도 **같은 세터**를 지나므로 비우기가 빠지지 않는다.
+        // 그 밖의 집은 여전히 없다(제공자 세터는 설정 화면 하나).
+        let expectedCalls = ["setAILimitsVisible(": 2, "setAILimitProviderEnabled(": 1]
+        for (setter, expected) in expectedCalls {
             let calls = try v0347CountInSources(setter) - (try v0347CountInSources("func \(setter)"))
-            #expect(calls == 1, "\(setter) 를 부르는 곳이 \(calls)군데다")
+            #expect(calls == expected, "\(setter) 를 부르는 곳이 \(calls)군데다")
         }
+        let consent = v0347Stripped(try String(contentsOf: CheckCoreSourceLayout.macDirectory
+            .appendingPathComponent("WorkTimerStoreMacEdition.swift"), encoding: .utf8))
+        #expect(consent.components(separatedBy: "setAILimitsVisible(").count - 1 == 1,
+                "동의 스위치가 마스터 세터를 한 자리에서만 불러야 한다")
     }
 
     /// ★ '폰·위젯에 보여줄 맥' 고르개가 설정 창에 있고, **스토어 함수 하나로만** 간다.

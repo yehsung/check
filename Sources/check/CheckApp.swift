@@ -86,6 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 근무 시작·종료 전역 단축키(v0.3.23). 조정자가 등록기를 붙들고, 등록기는 Carbon 처리기에 자기 주소를 소유권 없이
     // 넘긴다 — 그래서 이 참조가 **앱 수명 동안** 살아 있어야 한다(CarbonWorkShortcutRegistrar 주석).
     private var workShortcut: WorkShortcutCoordinator?
+    // 맥 앱스토어 판의 첫 실행 안내·다른 판 경고(v0.3.51). 창 델리게이트라 앱 수명 동안 붙든다.
+    private var masOnboarding: MacAppStoreOnboardingController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // ★ 가장 먼저 SIGTERM 을 평소 종료 절차로 잇는다(v0.3.49). DMG 로 설치한 사람의 [지금 업데이트]는
@@ -151,9 +153,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //   ② **새 버전을 안 그 순간 캐릭터 말풍선을 시도한다.** 없으면 말풍선은 40~80분 졸기 tick 에만 편승해 뜬다.
         //      캐릭터가 안 보이는 때(근무 전)는 컨트롤러가 false 로 돌려보내고, 근무를 시작하면 졸기 tick 이 버전당 1회를 챙긴다.
         //   ③ **컨트롤러를 만든 뒤에** 켠다 — 첫 조회가 새 버전을 들고 와도 받아 줄 말풍선 자리가 있어야 한다.
+        //   ④ **맥 앱스토어 판(v0.3.51)에는 ①②가 없다** — 업데이트는 앱스토어가 한다(심사 지침 2.4.5(vii)). 그 판은 새 버전을
+        //      묻지도 알리지도 않고(스토어도 `isUpdateAvailable` 을 늘 거짓으로 둔다), 아래 공지 조회만 같은 주기로 돈다.
         let releaseService = store.service
+        #if !CHECK_MAS
         updateCheck.serverFetcher = { try await releaseService.fetchLatestRelease() }
         updateCheck.onNewVersionAvailable = { [weak self] _ in _ = self?.overlayController?.showUpdateBubbleIfNeeded() }
+        #endif
         // 서버 공지(v0.3.40). 릴리스 조회와 **같은 주기·같은 Task** 에 얹는다 — 새 타이머가 아니다(무료 플랜 · 사용자 46명).
         // 조회기는 ①과 같은 서비스, 결과는 스토어가 받아 닫음 표식(기기별)을 판정한다. 이 두 줄이 없으면 공지 경로는 no-op 이라
         // 컴파일도 테스트도 조용히 초록이다 — 그래서 소스 계약 테스트(V0340)가 이 배선을 되묻는다.
@@ -164,6 +170,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // .app 번들이 교체되면 실제로 사라진다) 되살린다. 사용자가 끈 것은 두 갈래 모두 존중한다 —
         // 앱 토글로 끈 것은 userTurnedOffKey 로, 시스템 설정에서 끈 것은 .requiresApproval 상태로 걸러진다.
         // 실패를 삼키지 않는다: 로그 + 진단 키에 남기고, 플래그가 없으니 다음 실행에서 자동으로 재시도된다.
+        // ★ 맥 앱스토어 판(v0.3.51)은 반대로 **기본 꺼짐**이다(심사 지침 2.4.5(iii)) — 사용자가 첫 실행 안내나 설정에서 켠 적이
+        //   있을 때만(`userOptedInKey`) 되살린다. 판정은 `registerIfNeeded` 의 `edition`(이 바이너리의 판)이 한다.
         LoginItemRegistrar.registerIfNeeded(
             defaults: .standard,
             status: { SMAppService.mainApp.status },
@@ -187,6 +195,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 로 로그인 자동 실행은 이미 켜져 있으니, 부팅 후 아이콘을 안 누르는 사용자에게는 "앱은 떠 있는데 근무가
         // 하나도 기록되지 않는" 상태가 하루 종일 지속된다.
         store.activateStoredSessionOnLaunch()
+        // 맥 앱스토어 판(v0.3.51): 첫 실행 안내(로그인 시 자동 실행 · AI 기록 읽기 동의를 한 화면에서 — 한 번만)와
+        // 다른 판(brew·DMG) 동시 실행 경고(한 번만). Developer ID 판에서는 `start()` 가 아무 창도 만들지 않는다.
+        masOnboarding = MacAppStoreOnboardingController(store: store)
+        masOnboarding?.start()
     }
 
     /// 할 일 보드를 만들고 오버레이 훅에 잇는다. **판단은 전부 배선(TodoBoardWiring)이** 하고 오버레이는
@@ -577,6 +589,11 @@ enum LoginItemRegistrar {
     /// `defaults read kingcheck check.launchAtLogin.lastAutoRegister` 한 줄로 무슨 일이 있었는지 보인다.
     static let lastAutoRegisterKey = "check.launchAtLogin.lastAutoRegister"
 
+    /// 사용자가 **직접 켰다**(맥 앱스토어 판 v0.3.51 — 첫 실행 안내의 체크 또는 설정 스위치). 그 판은 이 값이 참일 때만 자동
+    /// 복구(재등록)를 한다: 심사 지침 2.4.5(iii) "동의 없이 로그인 때 자동 실행하지 않는다". Developer ID 판은 이 키를 쓰지도
+    /// 읽지도 않는다(그 판의 기본값은 지금처럼 켜짐이다).
+    static let userOptedInKey = "check.launchAtLogin.userOptedIn"
+
     /// 자동 등록 판단의 결말.
     enum Outcome: String, Sendable {
         /// 사용자가 앱 토글로 껐다 — 되살리지 않는다.
@@ -587,6 +604,8 @@ enum LoginItemRegistrar {
         case registered
         /// `.notRegistered` 였는데 등록이 실패했다. 플래그가 없으므로 **다음 실행에서 다시 시도된다.**
         case registerFailed
+        /// 맥 앱스토어 판: 사용자가 아직 켜지 않았다(기본 꺼짐) — 묻지 않고는 등록하지 않는다(v0.3.51).
+        case skippedAwaitingConsent
     }
 
     /// 현재 로그인 자동 실행 상태(주입 가능 — 테스트/프리뷰가 실제 SMAppService 를 건드리지 않게).
@@ -616,21 +635,41 @@ enum LoginItemRegistrar {
         return status == .notRegistered
     }
 
+    /// 판(v0.3.51)까지 보는 판단부. Developer ID 판은 위 두 인자 판단과 **똑같다**. 맥 앱스토어 판은 그 위에
+    /// "사용자가 직접 켰다"(`userOptedIn`)가 하나 더 붙는다 — 켠 적이 없으면 `.notRegistered` 여도 등록하지 않는다.
+    static func shouldRegister(
+        edition: MacEdition, userTurnedOff: Bool, userOptedIn: Bool, status: SMAppService.Status
+    ) -> Bool {
+        if edition.asksBeforeLaunchAtLogin, !userOptedIn { return false }
+        return shouldRegister(userTurnedOff: userTurnedOff, status: status)
+    }
+
     /// 매 실행 1회 호출. 판단해서 필요하면 등록하고, 결과를 진단 키에 남긴다(성공/실패 모두).
     /// 옛 1회성 플래그는 여기서 정리한다 — 읽지 않는 키가 남아 다음 사람을 헷갈리게 하지 않도록.
+    ///
+    /// 맥 앱스토어 판(v0.3.51)은 **기본 꺼짐**이다: 사용자가 첫 실행 안내나 설정에서 켠 적이 있을 때만(`userOptedInKey`)
+    /// 사라진 등록을 되살린다. `edition` 기본값은 이 바이너리의 판이다(테스트는 두 판을 다 넣어 돌린다).
     @discardableResult
     static func registerIfNeeded(
         defaults: UserDefaults,
         status: () -> SMAppService.Status,
-        register: () -> Bool
+        register: () -> Bool,
+        edition: MacEdition = .current
     ) -> Outcome {
         defaults.removeObject(forKey: legacyRegisteredKey)
 
         let current = status()
         let userTurnedOff = defaults.bool(forKey: userTurnedOffKey)
+        let userOptedIn = edition.asksBeforeLaunchAtLogin && defaults.bool(forKey: userOptedInKey)
         let outcome: Outcome
-        if !shouldRegister(userTurnedOff: userTurnedOff, status: current) {
-            outcome = userTurnedOff ? .skippedUserTurnedOff : .skippedByStatus
+        if !shouldRegister(edition: edition, userTurnedOff: userTurnedOff, userOptedIn: userOptedIn, status: current) {
+            if userTurnedOff {
+                outcome = .skippedUserTurnedOff
+            } else if edition.asksBeforeLaunchAtLogin, !userOptedIn {
+                outcome = .skippedAwaitingConsent
+            } else {
+                outcome = .skippedByStatus
+            }
         } else {
             outcome = register() ? .registered : .registerFailed
         }
@@ -640,10 +679,12 @@ enum LoginItemRegistrar {
 
     /// 사용자가 앱 토글을 움직였다. 의도를 **먼저** 남기고(쓰기가 실패해도 "껐다"는 사실은 남아야 한다)
     /// 실제 상태를 적용한 뒤, 토글이 표시할 **실상태**를 돌려준다.
+    /// 맥 앱스토어 판은 "직접 켰다/껐다"도 함께 남긴다(`userOptedInKey` — 다음 실행의 자동 복구가 이 값만 본다).
     @MainActor
     @discardableResult
-    static func applyUserToggle(_ enabled: Bool, defaults: UserDefaults = .standard) -> Bool {
+    static func applyUserToggle(_ enabled: Bool, defaults: UserDefaults = .standard, edition: MacEdition = .current) -> Bool {
         defaults.set(!enabled, forKey: userTurnedOffKey)
+        if edition.asksBeforeLaunchAtLogin { defaults.set(enabled, forKey: userOptedInKey) }
         guard setLaunchAtLoginEnabled(enabled) else { return isLaunchAtLoginEnabled() }
         return enabled
     }

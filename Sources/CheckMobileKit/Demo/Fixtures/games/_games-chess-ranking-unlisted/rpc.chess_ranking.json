@@ -1,0 +1,79 @@
+{
+  "__note" : [
+    "순위(내가 목록 **밖**인데 내 순위는 보인다). 닿는 길: -AingCheckDemoRoute games/chess/ranking/unlisted → 장면 games-chess-ranking-unlisted.",
+    "rows 는 전체 순위의 **앞토막**(1~5위)이고 나는 11위라 그 안에 없다. 화면은 그래도 '내 순위' 한 줄을 띄워야 한다 — 안 띄우면 목록 밖 사용자에게 자기 숫자가 통째로 사라진다.",
+    "앞토막이라도 rank 산식은 그대로 성립한다(나보다 나은 사람은 전부 앞토막 안에 있다). me 의 전적은 기본 순위·로비와 같은 5승 3패 2무 · 승점 2 이고, 5위의 승점(4)보다 낮아 11위와 모순이 없다."
+  ],
+  "me" : {
+    "draws" : 2,
+    "losses" : 3,
+    "points" : 2,
+    "rank" : 11,
+    "wins" : 5
+  },
+  "record_since_ms" : 1788188400000,
+  "rows" : [
+    {
+      "avatar_url" : null,
+      "center" : "seoul",
+      "character" : "fox",
+      "display_name" : "달토끼",
+      "draws" : 1,
+      "losses" : 3,
+      "points" : 19,
+      "rank" : 1,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b6",
+      "wins" : 22
+    },
+    {
+      "avatar_url" : null,
+      "center" : "seoul",
+      "character" : null,
+      "display_name" : "민트별",
+      "draws" : 2,
+      "losses" : 4,
+      "points" : 14,
+      "rank" : 2,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b3",
+      "wins" : 18
+    },
+    {
+      "avatar_url" : null,
+      "center" : "seoul",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "draws" : 0,
+      "losses" : 4,
+      "points" : 11,
+      "rank" : 3,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b1",
+      "wins" : 15
+    },
+    {
+      "avatar_url" : null,
+      "center" : null,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "draws" : 3,
+      "losses" : 5,
+      "points" : 7,
+      "rank" : 4,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b4",
+      "wins" : 12
+    },
+    {
+      "avatar_url" : null,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "draws" : 1,
+      "losses" : 5,
+      "points" : 4,
+      "rank" : 5,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b7",
+      "wins" : 9
+    }
+  ],
+  "server_now_ms" : 1789621500000,
+  "status" : "ok"
+}

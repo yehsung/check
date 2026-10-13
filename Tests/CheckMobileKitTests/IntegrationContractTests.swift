@@ -107,6 +107,11 @@ import Testing
         "now/teamless",
         "messages", "rankings/league", "rankings/tokens", "rankings/minigame", "games", "games/timing", "games/flappy",
         "games/gomoku/lobby", "games/gomoku/match", "me", "me/shop", "me/feedback", "me/settings", "login", "update",
+        // 체스(0.3.50 — 화면보다 **데모 데이터를 먼저** 둔 순서다): 로비·순위는 장면 없는 바깥 층이 답하고, 변형 셋만
+        // 장면이다. 대국·관전 변형은 장면이 아니라 **바늘**(본문의 `p_match_id`)로 갈린다 —
+        // `games/chess/match/demo-chess-flagdraw` 처럼 라우트 꼬리가 그대로 match id 다(`GamesChessFixtureContractTests`).
+        "games/chess/lobby", "games/chess/lobby/invites", "games/chess/match",
+        "games/chess/ranking", "games/chess/ranking/unlisted",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
         "me/",
         // 로그인 **아래** 화면(w16): 탭 라우트가 아니라 `MobileAuthRoute` 다. 가입 인증코드 장면(`_signup-confirm`)만
@@ -128,10 +133,19 @@ import Testing
             #expect(route != nil, "장면 폴더 _\(scene) 에 맞는 데모 라우트가 없다")
             // 탭 라우트만 `AingRoute` 로 열린다. 로그인 화면·업데이트 화면·로그인 아래 화면(가입·재설정)은 저쪽 길이고,
             // `now/teamless` 는 **서버 상태 장면**이라(소속이 빈 배열) 열 라우트가 없다 — 기본 탭(지금)에 그대로 선다.
-            if let route, !["login", "update", "now/teamless"].contains(route), MobileAuthRoute.demo(route) == nil {
+            // 체스는 **아직 화면이 없어서**(데모 데이터를 먼저 두는 순서였다) `AingRoute` 에 케이스가 없다 —
+            // 그 예외는 아래 ★ 단언이 **스스로 만료시킨다**.
+            let chessHasNoRouteYet = route?.hasPrefix("games/chess/") == true
+            if let route, !["login", "update", "now/teamless"].contains(route), !chessHasNoRouteYet,
+               MobileAuthRoute.demo(route) == nil {
                 #expect(AingRoute(path: route) != nil, "장면 _\(scene) 의 라우트 \(route) 를 앱이 열지 못한다")
             }
         }
+        // ★ 자기 만료 예외. 체스 화면 작업자가 `AingRoute` 에 chess 케이스를 더하는 날 이 줄이 빨개진다 —
+        // 그때 위 `chessHasNoRouteYet` 갈래를 **지우고** 체스 장면도 다른 탭처럼 열리는지 재라.
+        // (예외를 조용히 남겨 두면 "장면 폴더가 실제 라우트다" 가 체스에서만 빈말이 된다.)
+        #expect(AingRoute(path: "games/chess/lobby") == nil,
+                "체스 라우트가 생겼다 — 위 games/chess 예외 갈래를 지워라")
         // 라우트마다 그 탭의 첫 화면 픽스처가 적어도 하나는 닿는다(장면 또는 바깥 층).
         let firstScreenKeys: [String: [String]] = [
             "now": ["rest.work_statuses.get", "rpc.todo_sync"],
@@ -144,6 +158,9 @@ import Testing
             "games/flappy": ["rpc.minigame_board", "rpc.minigame_start_round"],
             "games/gomoku/lobby": ["rpc.gomoku_lobby", "rpc.gomoku_inbox"],
             "games/gomoku/match": ["rpc.gomoku_state", "rpc.gomoku_lobby"],
+            "games/chess/lobby": ["rpc.chess_lobby"],
+            "games/chess/match": ["rpc.chess_state", "rpc.chess_lobby"],
+            "games/chess/ranking": ["rpc.chess_ranking"],
             "me": ["rpc.shop_state", "rest.work_sessions.get"],
             "me/shop": ["rpc.shop_state"],
             "me/feedback": ["rpc.feedback_list"],

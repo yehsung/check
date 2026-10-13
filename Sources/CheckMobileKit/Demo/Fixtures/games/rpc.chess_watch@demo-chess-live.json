@@ -1,0 +1,206 @@
+{
+  "__note" : [
+    "관전(진행 중). 닿는 길: -AingCheckDemoRoute games/chess/lobby → '지금 대결 중' 카드 → [관전], 또는 games/chess/watch/demo-chess-live.",
+    "match.id·stake·started_ms·두 사람이 rpc.chess_lobby.json 의 matches[0] 과 **같다** — 어긋나면 [관전] 이 이 파일에 닿지 못한다(오목 0.3.41 의 기준선이 그 꼴이었다).",
+    "관전엔 채팅도 관전자 수도 없다. my_color·legal_moves·ruby_balance·opponent·state 중복 봉투도 **없는 것이 계약**이다(ChessWire.ChessWatchResponse).",
+    "흑·백은 black_user/white_user 로만 확정한다 — 로비 카드의 a/b 는 uuid 오름차순이라 색을 말하지 않는다."
+  ],
+  "black_user" : {
+    "avatar_url" : null,
+    "center" : "seoul",
+    "character" : "fox",
+    "display_name" : "달토끼",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b6"
+  },
+  "in_check" : false,
+  "match" : {
+    "black" : "d0000000-0000-4000-8000-0000000000b6",
+    "black_grace_ms" : 2000,
+    "black_ms_left" : 576488,
+    "challenger" : "d0000000-0000-4000-8000-0000000000b6",
+    "deadline_ms" : 1789622062327,
+    "draw_offer_by" : null,
+    "end_reason" : null,
+    "fen" : "r2q1rk1/ppp1bppp/2p2n2/4p3/4P1b1/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8",
+    "finished_ms" : null,
+    "id" : "demo-chess-live",
+    "increment_ms" : 3000,
+    "opponent" : "d0000000-0000-4000-8000-0000000000b3",
+    "ply_count" : 14,
+    "result" : null,
+    "stake" : 10,
+    "started_ms" : 1789621396815,
+    "status" : "active",
+    "turn" : "white",
+    "turn_started_ms" : 1789621488000,
+    "white" : "d0000000-0000-4000-8000-0000000000b3",
+    "white_grace_ms" : 2000,
+    "white_ms_left" : 574327,
+    "winner" : null
+  },
+  "moves" : [
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "from" : 12,
+      "ms_left" : 599623,
+      "ms_spent" : 3377,
+      "promo" : null,
+      "san" : "e4",
+      "seq" : 1,
+      "to" : 28
+    },
+    {
+      "color" : "black",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+      "from" : 52,
+      "ms_left" : 598646,
+      "ms_spent" : 4354,
+      "promo" : null,
+      "san" : "e5",
+      "seq" : 2,
+      "to" : 36
+    },
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+      "from" : 6,
+      "ms_left" : 597292,
+      "ms_spent" : 5331,
+      "promo" : null,
+      "san" : "Nf3",
+      "seq" : 3,
+      "to" : 21
+    },
+    {
+      "color" : "black",
+      "fen" : "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+      "from" : 57,
+      "ms_left" : 595338,
+      "ms_spent" : 6308,
+      "promo" : null,
+      "san" : "Nc6",
+      "seq" : 4,
+      "to" : 42
+    },
+    {
+      "color" : "white",
+      "fen" : "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+      "from" : 5,
+      "ms_left" : 593007,
+      "ms_spent" : 7285,
+      "promo" : null,
+      "san" : "Bb5",
+      "seq" : 5,
+      "to" : 33
+    },
+    {
+      "color" : "black",
+      "fen" : "r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+      "from" : 62,
+      "ms_left" : 590076,
+      "ms_spent" : 8262,
+      "promo" : null,
+      "san" : "Nf6",
+      "seq" : 6,
+      "to" : 45
+    },
+    {
+      "color" : "white",
+      "fen" : "r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/3P1N2/PPP2PPP/RNBQK2R b KQkq - 0 4",
+      "from" : 11,
+      "ms_left" : 586768,
+      "ms_spent" : 9239,
+      "promo" : null,
+      "san" : "d3",
+      "seq" : 7,
+      "to" : 19
+    },
+    {
+      "color" : "black",
+      "fen" : "r1bqk2r/ppppbppp/2n2n2/1B2p3/4P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5",
+      "from" : 61,
+      "ms_left" : 582860,
+      "ms_spent" : 10216,
+      "promo" : null,
+      "san" : "Be7",
+      "seq" : 8,
+      "to" : 52
+    },
+    {
+      "color" : "white",
+      "fen" : "r1bqk2r/ppppbppp/2B2n2/4p3/4P3/3P1N2/PPP2PPP/RNBQK2R b KQkq - 0 5",
+      "from" : 33,
+      "ms_left" : 578575,
+      "ms_spent" : 11193,
+      "promo" : null,
+      "san" : "Bxc6",
+      "seq" : 9,
+      "to" : 42
+    },
+    {
+      "color" : "black",
+      "fen" : "r1bqk2r/ppp1bppp/2p2n2/4p3/4P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 6",
+      "from" : 51,
+      "ms_left" : 582690,
+      "ms_spent" : 3170,
+      "promo" : null,
+      "san" : "dxc6",
+      "seq" : 10,
+      "to" : 42
+    },
+    {
+      "color" : "white",
+      "fen" : "r1bqk2r/ppp1bppp/2p2n2/4p3/4P3/3P1N2/PPP2PPP/RNBQ1RK1 b kq - 1 6",
+      "from" : 4,
+      "ms_left" : 577428,
+      "ms_spent" : 4147,
+      "promo" : null,
+      "san" : "O-O",
+      "seq" : 11,
+      "to" : 6
+    },
+    {
+      "color" : "black",
+      "fen" : "r1bq1rk1/ppp1bppp/2p2n2/4p3/4P3/3P1N2/PPP2PPP/RNBQ1RK1 w - - 2 7",
+      "from" : 60,
+      "ms_left" : 580566,
+      "ms_spent" : 5124,
+      "promo" : null,
+      "san" : "O-O",
+      "seq" : 12,
+      "to" : 62
+    },
+    {
+      "color" : "white",
+      "fen" : "r1bq1rk1/ppp1bppp/2p2n2/4p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 b - - 3 7",
+      "from" : 1,
+      "ms_left" : 574327,
+      "ms_spent" : 6101,
+      "promo" : null,
+      "san" : "Nc3",
+      "seq" : 13,
+      "to" : 18
+    },
+    {
+      "color" : "black",
+      "fen" : "r2q1rk1/ppp1bppp/2p2n2/4p3/4P1b1/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8",
+      "from" : 58,
+      "ms_left" : 576488,
+      "ms_spent" : 7078,
+      "promo" : null,
+      "san" : "Bg4",
+      "seq" : 14,
+      "to" : 30
+    }
+  ],
+  "server_now_ms" : 1789621500000,
+  "status" : "ok",
+  "white_user" : {
+    "avatar_url" : null,
+    "center" : "seoul",
+    "character" : null,
+    "display_name" : "민트별",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b3"
+  }
+}

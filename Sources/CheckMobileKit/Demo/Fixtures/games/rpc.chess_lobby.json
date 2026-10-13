@@ -1,0 +1,123 @@
+{
+  "__note" : [
+    "로비(기본 · 장면 없음이라 모든 데모 장면에 걸린다). 닿는 길: -AingCheckDemoRoute games/chess/lobby.",
+    "상대 목록이 네 상태를 다 덮는다: ① 근무 중(구름빵) ② 근무 안 함(초코칩) ③ 대국 중(민트별·달토끼 — 관전 카드의 두 사람) ④ 옛 버전 capable=false(보리차). 덧붙여 '근무 중인데 옛 버전'(솜사탕)도 있다 — capable 과 is_working 이 다른 축임을 보이려고 둔다.",
+    "users[] 에 **내가 없다** — 서버가 호출자를 뺀다(맥 캡처 chess_lobby__ok_watch_entry 로 확인).",
+    "matches[0].match_id 는 rpc.chess_watch@demo-chess-live.json 의 match.id 와 같다. a/b 는 uuid 오름차순이고 **색이 아니다**. fen·ply_count 가 없는 것이 계약이다.",
+    "me 가 내 전적(5승 3패 2무)과 루비(42)를 싣는다. 신청이 와 있는 변형은 장면 _games-chess-lobby-invites, 내 판이 진행 중인 변형은 _games-chess-match 다."
+  ],
+  "grace_ms" : 2000,
+  "increment_ms" : 3000,
+  "initial_ms" : 600000,
+  "invite_ttl_seconds" : 60,
+  "matches" : [
+    {
+      "a" : {
+        "avatar_url" : null,
+        "center" : "seoul",
+        "character" : null,
+        "display_name" : "민트별",
+        "user_id" : "d0000000-0000-4000-8000-0000000000b3"
+      },
+      "b" : {
+        "avatar_url" : null,
+        "center" : "seoul",
+        "character" : "fox",
+        "display_name" : "달토끼",
+        "user_id" : "d0000000-0000-4000-8000-0000000000b6"
+      },
+      "match_id" : "demo-chess-live",
+      "stake" : 10,
+      "started_ms" : 1789621396815
+    }
+  ],
+  "me" : {
+    "active_match_id" : null,
+    "draws" : 2,
+    "incoming_match_id" : null,
+    "losses" : 3,
+    "outgoing_match_id" : null,
+    "ruby_balance" : 42,
+    "wins" : 5
+  },
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "stakes" : [
+    3,
+    5,
+    10
+  ],
+  "status" : "ok",
+  "users" : [
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "초코칩",
+      "in_match" : false,
+      "is_working" : false,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b2"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : null,
+      "display_name" : "민트별",
+      "in_match" : true,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b3"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : null,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b4"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "center" : "busan",
+      "character" : "squirrel",
+      "display_name" : "보리차",
+      "in_match" : false,
+      "is_working" : false,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b5"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : "fox",
+      "display_name" : "달토끼",
+      "in_match" : true,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b6"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b7"
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "__note" : [
+    "**내가 보낸** 신청(pending). games/chess/lobby/invites 장면의 로비가 me.outgoing_match_id 로 가리킨다.",
+    "취소 버튼의 자리다(chess_cancel). 만료는 52초 뒤."
+  ],
+  "in_check" : null,
+  "legal_moves" : null,
+  "match" : {
+    "black" : "d0000000-0000-4000-8000-0000000000b4",
+    "black_grace_ms" : 2000,
+    "black_ms_left" : 600000,
+    "challenger" : "d0000000-0000-4000-8000-000000000001",
+    "deadline_ms" : null,
+    "draw_offer_by" : null,
+    "end_reason" : null,
+    "fen" : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "finished_ms" : null,
+    "id" : "demo-chess-invite-out",
+    "increment_ms" : 3000,
+    "invite_expires_ms" : 1789621552000,
+    "opponent" : "d0000000-0000-4000-8000-0000000000b4",
+    "ply_count" : 0,
+    "result" : null,
+    "stake" : 10,
+    "started_ms" : null,
+    "status" : "pending",
+    "turn" : "white",
+    "turn_started_ms" : null,
+    "white" : "d0000000-0000-4000-8000-000000000001",
+    "white_grace_ms" : 2000,
+    "white_ms_left" : 600000,
+    "winner" : null
+  },
+  "moves" : [
+
+  ],
+  "my_color" : "white",
+  "opponent" : {
+    "avatar_url" : null,
+    "center" : null,
+    "character" : "shiba",
+    "display_name" : "호두과자",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b4"
+  },
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "state" : {
+    "in_check" : null,
+    "legal_moves" : null,
+    "match" : {
+      "black" : "d0000000-0000-4000-8000-0000000000b4",
+      "black_grace_ms" : 2000,
+      "black_ms_left" : 600000,
+      "challenger" : "d0000000-0000-4000-8000-000000000001",
+      "deadline_ms" : null,
+      "draw_offer_by" : null,
+      "end_reason" : null,
+      "fen" : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "finished_ms" : null,
+      "id" : "demo-chess-invite-out",
+      "increment_ms" : 3000,
+      "invite_expires_ms" : 1789621552000,
+      "opponent" : "d0000000-0000-4000-8000-0000000000b4",
+      "ply_count" : 0,
+      "result" : null,
+      "stake" : 10,
+      "started_ms" : null,
+      "status" : "pending",
+      "turn" : "white",
+      "turn_started_ms" : null,
+      "white" : "d0000000-0000-4000-8000-000000000001",
+      "white_grace_ms" : 2000,
+      "white_ms_left" : 600000,
+      "winner" : null
+    },
+    "moves" : [
+
+    ],
+    "my_color" : "white",
+    "opponent" : {
+      "avatar_url" : null,
+      "center" : null,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "user_id" : "d0000000-0000-4000-8000-0000000000b4"
+    },
+    "ruby_balance" : 42,
+    "server_now_ms" : 1789621500000
+  },
+  "status" : "ok"
+}

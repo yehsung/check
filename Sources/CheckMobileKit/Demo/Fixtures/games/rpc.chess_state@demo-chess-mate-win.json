@@ -1,0 +1,178 @@
+{
+  "__note" : [
+    "대국(외통으로 **이겼다** · 나는 흑). 닿는 길: games/chess/match/demo-chess-mate-win.",
+    "result=black_win 인 유일한 상태 픽스처다 — 승패를 result 글자로만 가르는 화면이 white_win 만 보고 만들어졌는지 여기서 드러난다.",
+    "끝난 판은 in_check·legal_moves 가 null 이고 deadline_ms 도 null 이다. turn 은 실려 오지만 뜻이 없다."
+  ],
+  "in_check" : null,
+  "legal_moves" : null,
+  "match" : {
+    "black" : "d0000000-0000-4000-8000-000000000001",
+    "black_grace_ms" : 2000,
+    "black_ms_left" : 594538,
+    "challenger" : "d0000000-0000-4000-8000-000000000001",
+    "deadline_ms" : null,
+    "draw_offer_by" : null,
+    "end_reason" : "checkmate",
+    "fen" : "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3",
+    "finished_ms" : 1789621475150,
+    "id" : "demo-chess-mate-win",
+    "increment_ms" : 3000,
+    "invite_expires_ms" : 1789621513950,
+    "opponent" : "d0000000-0000-4000-8000-0000000000b7",
+    "ply_count" : 4,
+    "result" : "black_win",
+    "stake" : 5,
+    "started_ms" : 1789621454030,
+    "status" : "finished",
+    "turn" : "white",
+    "turn_started_ms" : 1789621475000,
+    "white" : "d0000000-0000-4000-8000-0000000000b7",
+    "white_grace_ms" : 2000,
+    "white_ms_left" : 596492,
+    "winner" : "d0000000-0000-4000-8000-000000000001"
+  },
+  "moves" : [
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppppppp/8/8/8/5P2/PPPPP1PP/RNBQKBNR b KQkq - 0 1",
+      "from" : 13,
+      "ms_left" : 599223,
+      "ms_spent" : 3777,
+      "promo" : null,
+      "san" : "f3",
+      "seq" : 1,
+      "to" : 21
+    },
+    {
+      "color" : "black",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq e6 0 2",
+      "from" : 52,
+      "ms_left" : 598246,
+      "ms_spent" : 4754,
+      "promo" : null,
+      "san" : "e5",
+      "seq" : 2,
+      "to" : 36
+    },
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq g3 0 2",
+      "from" : 14,
+      "ms_left" : 596492,
+      "ms_spent" : 5731,
+      "promo" : null,
+      "san" : "g4",
+      "seq" : 3,
+      "to" : 30
+    },
+    {
+      "color" : "black",
+      "fen" : "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3",
+      "from" : 59,
+      "ms_left" : 594538,
+      "ms_spent" : 6708,
+      "promo" : null,
+      "san" : "Qh4#",
+      "seq" : 4,
+      "to" : 31
+    }
+  ],
+  "my_color" : "black",
+  "opponent" : {
+    "avatar_url" : null,
+    "center" : "busan",
+    "character" : "ghost",
+    "display_name" : "솜사탕",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b7"
+  },
+  "ruby_balance" : 47,
+  "server_now_ms" : 1789621500000,
+  "state" : {
+    "in_check" : null,
+    "legal_moves" : null,
+    "match" : {
+      "black" : "d0000000-0000-4000-8000-000000000001",
+      "black_grace_ms" : 2000,
+      "black_ms_left" : 594538,
+      "challenger" : "d0000000-0000-4000-8000-000000000001",
+      "deadline_ms" : null,
+      "draw_offer_by" : null,
+      "end_reason" : "checkmate",
+      "fen" : "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3",
+      "finished_ms" : 1789621475150,
+      "id" : "demo-chess-mate-win",
+      "increment_ms" : 3000,
+      "invite_expires_ms" : 1789621513950,
+      "opponent" : "d0000000-0000-4000-8000-0000000000b7",
+      "ply_count" : 4,
+      "result" : "black_win",
+      "stake" : 5,
+      "started_ms" : 1789621454030,
+      "status" : "finished",
+      "turn" : "white",
+      "turn_started_ms" : 1789621475000,
+      "white" : "d0000000-0000-4000-8000-0000000000b7",
+      "white_grace_ms" : 2000,
+      "white_ms_left" : 596492,
+      "winner" : "d0000000-0000-4000-8000-000000000001"
+    },
+    "moves" : [
+      {
+        "color" : "white",
+        "fen" : "rnbqkbnr/pppppppp/8/8/8/5P2/PPPPP1PP/RNBQKBNR b KQkq - 0 1",
+        "from" : 13,
+        "ms_left" : 599223,
+        "ms_spent" : 3777,
+        "promo" : null,
+        "san" : "f3",
+        "seq" : 1,
+        "to" : 21
+      },
+      {
+        "color" : "black",
+        "fen" : "rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq e6 0 2",
+        "from" : 52,
+        "ms_left" : 598246,
+        "ms_spent" : 4754,
+        "promo" : null,
+        "san" : "e5",
+        "seq" : 2,
+        "to" : 36
+      },
+      {
+        "color" : "white",
+        "fen" : "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq g3 0 2",
+        "from" : 14,
+        "ms_left" : 596492,
+        "ms_spent" : 5731,
+        "promo" : null,
+        "san" : "g4",
+        "seq" : 3,
+        "to" : 30
+      },
+      {
+        "color" : "black",
+        "fen" : "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3",
+        "from" : 59,
+        "ms_left" : 594538,
+        "ms_spent" : 6708,
+        "promo" : null,
+        "san" : "Qh4#",
+        "seq" : 4,
+        "to" : 31
+      }
+    ],
+    "my_color" : "black",
+    "opponent" : {
+      "avatar_url" : null,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "user_id" : "d0000000-0000-4000-8000-0000000000b7"
+    },
+    "ruby_balance" : 47,
+    "server_now_ms" : 1789621500000
+  },
+  "status" : "ok"
+}

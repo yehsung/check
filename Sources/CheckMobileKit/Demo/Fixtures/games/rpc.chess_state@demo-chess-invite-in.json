@@ -1,0 +1,93 @@
+{
+  "__note" : [
+    "**들어온** 신청(pending). 닿는 길: games/chess/lobby/invites 장면의 로비가 me.incoming_match_id 로 가리킨다.",
+    "체스에는 받은함 RPC 가 없다 — 신청의 상대·판돈·만료는 이 chess_state 한 번으로 안다(ChessWire 머리말).",
+    "pending 이라 started_ms·turn_started_ms·deadline_ms 가 null 이고 moves 는 비었다. 색은 만들 때 정해져 있다(invite_expires_ms 가 active 행까지 남는 것이 근거다) — **서버 캡처가 아니라 추정**이다.",
+    "만료는 지금(데모 시계)으로부터 41초 뒤다 — 카운트다운이 도는 것을 볼 수 있다(TTL 60)."
+  ],
+  "in_check" : null,
+  "legal_moves" : null,
+  "match" : {
+    "black" : "d0000000-0000-4000-8000-000000000001",
+    "black_grace_ms" : 2000,
+    "black_ms_left" : 600000,
+    "challenger" : "d0000000-0000-4000-8000-0000000000b1",
+    "deadline_ms" : null,
+    "draw_offer_by" : null,
+    "end_reason" : null,
+    "fen" : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "finished_ms" : null,
+    "id" : "demo-chess-invite-in",
+    "increment_ms" : 3000,
+    "invite_expires_ms" : 1789621541000,
+    "opponent" : "d0000000-0000-4000-8000-000000000001",
+    "ply_count" : 0,
+    "result" : null,
+    "stake" : 5,
+    "started_ms" : null,
+    "status" : "pending",
+    "turn" : "white",
+    "turn_started_ms" : null,
+    "white" : "d0000000-0000-4000-8000-0000000000b1",
+    "white_grace_ms" : 2000,
+    "white_ms_left" : 600000,
+    "winner" : null
+  },
+  "moves" : [
+
+  ],
+  "my_color" : "black",
+  "opponent" : {
+    "avatar_url" : null,
+    "center" : "seoul",
+    "character" : "jellyfish",
+    "display_name" : "구름빵",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+  },
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "state" : {
+    "in_check" : null,
+    "legal_moves" : null,
+    "match" : {
+      "black" : "d0000000-0000-4000-8000-000000000001",
+      "black_grace_ms" : 2000,
+      "black_ms_left" : 600000,
+      "challenger" : "d0000000-0000-4000-8000-0000000000b1",
+      "deadline_ms" : null,
+      "draw_offer_by" : null,
+      "end_reason" : null,
+      "fen" : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "finished_ms" : null,
+      "id" : "demo-chess-invite-in",
+      "increment_ms" : 3000,
+      "invite_expires_ms" : 1789621541000,
+      "opponent" : "d0000000-0000-4000-8000-000000000001",
+      "ply_count" : 0,
+      "result" : null,
+      "stake" : 5,
+      "started_ms" : null,
+      "status" : "pending",
+      "turn" : "white",
+      "turn_started_ms" : null,
+      "white" : "d0000000-0000-4000-8000-0000000000b1",
+      "white_grace_ms" : 2000,
+      "white_ms_left" : 600000,
+      "winner" : null
+    },
+    "moves" : [
+
+    ],
+    "my_color" : "black",
+    "opponent" : {
+      "avatar_url" : null,
+      "center" : "seoul",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+    },
+    "ruby_balance" : 42,
+    "server_now_ms" : 1789621500000
+  },
+  "status" : "ok"
+}

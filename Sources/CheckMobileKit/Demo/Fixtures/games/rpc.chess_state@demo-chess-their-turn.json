@@ -1,0 +1,156 @@
+{
+  "__note" : [
+    "대국(상대 차례 · 나는 백). 닿는 길: games/chess/match/demo-chess-their-turn.",
+    "legal_moves 가 null 인 것이 계약이다 — 상대 차례·끝난 판·관전이 전부 null 이다. 화면은 이때 아무 칸도 집을 수 없어야 한다.",
+    "deadline_ms 는 **차례인 쪽**(흑)의 남은 시간으로 잰다 — 내 쪽으로 재면 상대 시계가 거짓으로 돈다."
+  ],
+  "in_check" : false,
+  "legal_moves" : null,
+  "match" : {
+    "black" : "d0000000-0000-4000-8000-0000000000b1",
+    "black_grace_ms" : 2000,
+    "black_ms_left" : 599146,
+    "challenger" : "d0000000-0000-4000-8000-0000000000b1",
+    "deadline_ms" : 1789622095146,
+    "draw_offer_by" : null,
+    "end_reason" : null,
+    "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+    "finished_ms" : null,
+    "id" : "demo-chess-their-turn",
+    "increment_ms" : 3000,
+    "invite_expires_ms" : 1789621544358,
+    "opponent" : "d0000000-0000-4000-8000-000000000001",
+    "ply_count" : 3,
+    "result" : null,
+    "stake" : 3,
+    "started_ms" : 1789621484438,
+    "status" : "active",
+    "turn" : "black",
+    "turn_started_ms" : 1789621496000,
+    "white" : "d0000000-0000-4000-8000-000000000001",
+    "white_grace_ms" : 2000,
+    "white_ms_left" : 598292,
+    "winner" : null
+  },
+  "moves" : [
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "from" : 12,
+      "ms_left" : 600123,
+      "ms_spent" : 2877,
+      "promo" : null,
+      "san" : "e4",
+      "seq" : 1,
+      "to" : 28
+    },
+    {
+      "color" : "black",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+      "from" : 52,
+      "ms_left" : 599146,
+      "ms_spent" : 3854,
+      "promo" : null,
+      "san" : "e5",
+      "seq" : 2,
+      "to" : 36
+    },
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+      "from" : 6,
+      "ms_left" : 598292,
+      "ms_spent" : 4831,
+      "promo" : null,
+      "san" : "Nf3",
+      "seq" : 3,
+      "to" : 21
+    }
+  ],
+  "my_color" : "white",
+  "opponent" : {
+    "avatar_url" : null,
+    "center" : "seoul",
+    "character" : "jellyfish",
+    "display_name" : "구름빵",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+  },
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "state" : {
+    "in_check" : false,
+    "legal_moves" : null,
+    "match" : {
+      "black" : "d0000000-0000-4000-8000-0000000000b1",
+      "black_grace_ms" : 2000,
+      "black_ms_left" : 599146,
+      "challenger" : "d0000000-0000-4000-8000-0000000000b1",
+      "deadline_ms" : 1789622095146,
+      "draw_offer_by" : null,
+      "end_reason" : null,
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+      "finished_ms" : null,
+      "id" : "demo-chess-their-turn",
+      "increment_ms" : 3000,
+      "invite_expires_ms" : 1789621544358,
+      "opponent" : "d0000000-0000-4000-8000-000000000001",
+      "ply_count" : 3,
+      "result" : null,
+      "stake" : 3,
+      "started_ms" : 1789621484438,
+      "status" : "active",
+      "turn" : "black",
+      "turn_started_ms" : 1789621496000,
+      "white" : "d0000000-0000-4000-8000-000000000001",
+      "white_grace_ms" : 2000,
+      "white_ms_left" : 598292,
+      "winner" : null
+    },
+    "moves" : [
+      {
+        "color" : "white",
+        "fen" : "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+        "from" : 12,
+        "ms_left" : 600123,
+        "ms_spent" : 2877,
+        "promo" : null,
+        "san" : "e4",
+        "seq" : 1,
+        "to" : 28
+      },
+      {
+        "color" : "black",
+        "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        "from" : 52,
+        "ms_left" : 599146,
+        "ms_spent" : 3854,
+        "promo" : null,
+        "san" : "e5",
+        "seq" : 2,
+        "to" : 36
+      },
+      {
+        "color" : "white",
+        "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+        "from" : 6,
+        "ms_left" : 598292,
+        "ms_spent" : 4831,
+        "promo" : null,
+        "san" : "Nf3",
+        "seq" : 3,
+        "to" : 21
+      }
+    ],
+    "my_color" : "white",
+    "opponent" : {
+      "avatar_url" : null,
+      "center" : "seoul",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+    },
+    "ruby_balance" : 42,
+    "server_now_ms" : 1789621500000
+  },
+  "status" : "ok"
+}

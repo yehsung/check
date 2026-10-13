@@ -1,0 +1,128 @@
+{
+  "__note" : [
+    "관전(끝난 판 — chess_watch_tail_seconds()=180 꼬리 안: 95초 전에 끝났다). 닿는 길: games/chess/watch/demo-chess-over.",
+    "로비 matches[] 에는 **없다** — 그쪽은 진행 중인 판만 싣는다. 꼬리가 지나면 서버는 not_found 다.",
+    "in_check 는 외통인데도 null 이다: 서버가 '진행 중이 아니면 안 싣는다'(ChessStatePayload.inCheck 주석)."
+  ],
+  "black_user" : {
+    "avatar_url" : null,
+    "center" : null,
+    "character" : "shiba",
+    "display_name" : "호두과자",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b4"
+  },
+  "in_check" : null,
+  "match" : {
+    "black" : "d0000000-0000-4000-8000-0000000000b4",
+    "black_grace_ms" : 2000,
+    "black_ms_left" : 587976,
+    "challenger" : "d0000000-0000-4000-8000-0000000000b1",
+    "deadline_ms" : null,
+    "draw_offer_by" : null,
+    "end_reason" : "checkmate",
+    "fen" : "r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4",
+    "finished_ms" : 1789621405000,
+    "id" : "demo-chess-over",
+    "increment_ms" : 3000,
+    "opponent" : "d0000000-0000-4000-8000-0000000000b4",
+    "ply_count" : 7,
+    "result" : "white_win",
+    "stake" : 5,
+    "started_ms" : 1789621353944,
+    "status" : "finished",
+    "turn" : "black",
+    "turn_started_ms" : 1789621403000,
+    "white" : "d0000000-0000-4000-8000-0000000000b1",
+    "white_grace_ms" : 2000,
+    "white_ms_left" : 583968,
+    "winner" : "d0000000-0000-4000-8000-0000000000b1"
+  },
+  "moves" : [
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "from" : 12,
+      "ms_left" : 598923,
+      "ms_spent" : 4077,
+      "promo" : null,
+      "san" : "e4",
+      "seq" : 1,
+      "to" : 28
+    },
+    {
+      "color" : "black",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+      "from" : 52,
+      "ms_left" : 597946,
+      "ms_spent" : 5054,
+      "promo" : null,
+      "san" : "e5",
+      "seq" : 2,
+      "to" : 36
+    },
+    {
+      "color" : "white",
+      "fen" : "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2",
+      "from" : 5,
+      "ms_left" : 595892,
+      "ms_spent" : 6031,
+      "promo" : null,
+      "san" : "Bc4",
+      "seq" : 3,
+      "to" : 26
+    },
+    {
+      "color" : "black",
+      "fen" : "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3",
+      "from" : 57,
+      "ms_left" : 593938,
+      "ms_spent" : 7008,
+      "promo" : null,
+      "san" : "Nc6",
+      "seq" : 4,
+      "to" : 42
+    },
+    {
+      "color" : "white",
+      "fen" : "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+      "from" : 3,
+      "ms_left" : 590907,
+      "ms_spent" : 7985,
+      "promo" : null,
+      "san" : "Qh5",
+      "seq" : 5,
+      "to" : 39
+    },
+    {
+      "color" : "black",
+      "fen" : "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4",
+      "from" : 62,
+      "ms_left" : 587976,
+      "ms_spent" : 8962,
+      "promo" : null,
+      "san" : "Nf6",
+      "seq" : 6,
+      "to" : 45
+    },
+    {
+      "color" : "white",
+      "fen" : "r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4",
+      "from" : 39,
+      "ms_left" : 583968,
+      "ms_spent" : 9939,
+      "promo" : null,
+      "san" : "Qxf7#",
+      "seq" : 7,
+      "to" : 53
+    }
+  ],
+  "server_now_ms" : 1789621500000,
+  "status" : "ok",
+  "white_user" : {
+    "avatar_url" : null,
+    "center" : "seoul",
+    "character" : "jellyfish",
+    "display_name" : "구름빵",
+    "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+  }
+}

@@ -24,4 +24,12 @@ extension WorkTimerStore {
         shopNotice = nil
         megaphone.open()
     }
+
+    /// 상점을 여는 순간(`toggleShopPanel`) 확성기 값을 **미리** 읽는다 — 카드가 처음부터 "📢 확성기 · 💎50" 으로 서게
+    /// (작성기를 한 번 열어야만 가격이 보이면 비용을 확인 질문에서야 처음 알게 된다). 가격은 여전히 서버 값뿐이다.
+    /// 잔량 미러는 건드리지 않는다 — 같이 나간 `shop_state` 가 말하고, 늦게 도착한 이 응답이 그 사이의 구매 결과를 옛 잔량으로
+    /// 덮으면 안 된다(`MegaphoneStore.loadInfo(mirrorsRubyBalance:)`).
+    func prefetchMegaphoneInfo() {
+        megaphone.loadInfo(mirrorsRubyBalance: false)
+    }
 }

@@ -498,8 +498,12 @@ package final class MegaphoneStore {
         }
     }
 
-    /// `megaphone_info` 를 읽는다(작성 화면이 열릴 때 · 보낸 뒤). 겹치지 않는다.
-    package func loadInfo() {
+    /// `megaphone_info` 를 읽는다(작성 화면이 열릴 때 · 보낸 뒤 · 맥은 상점을 여는 순간 미리). 겹치지 않는다.
+    ///
+    /// `mirrorsRubyBalance: false` 는 **가격만 미리 읽는** 호출이다(맥 상점 열기 — 카드가 처음부터 "📢 확성기 · 💎50" 이게).
+    /// 그 순간 잔량은 같이 나간 `shop_state` 가 말하고, 이 응답이 늦게 도착하면 그 사이 산 캐릭터 값을 **옛 잔량으로 덮는다**
+    /// (구매 응답 → 늦은 정보 응답 순서). 그래서 미리 읽기는 미러를 건드리지 않는다.
+    package func loadInfo(mirrorsRubyBalance: Bool = true) {
         guard let host, host.session != nil, !infoLoading else { return }
         infoLoading = true
         let sessionGeneration = host.sessionGeneration
@@ -513,7 +517,7 @@ package final class MegaphoneStore {
                 }
                 guard host.sessionGeneration == sessionGeneration, generation == self.resetGeneration else { return }
                 self.infoLoading = false
-                self.applyInfo(response)
+                self.applyInfo(response, mirrorsRubyBalance: mirrorsRubyBalance)
             } catch {
                 guard host.sessionGeneration == sessionGeneration, generation == self.resetGeneration else { return }
                 self.infoLoading = false
@@ -528,7 +532,8 @@ package final class MegaphoneStore {
     }
 
     /// 정보 응답을 화면 값으로. ok 가 아니면 실패로 센다(숫자를 지어내지 않는다).
-    package func applyInfo(_ response: MegaphoneInfoResponse) {
+    /// `mirrorsRubyBalance: false` 면 잔량 미러는 그대로 둔다(`loadInfo` 의 미리 읽기 — 위 주석).
+    package func applyInfo(_ response: MegaphoneInfoResponse, mirrorsRubyBalance: Bool = true) {
         guard response.status == "ok", let price = response.price, let recipients = response.recipients else {
             infoFailed = true
             return
@@ -545,7 +550,7 @@ package final class MegaphoneStore {
         )
         infoFailed = false
         serverUnavailable = false
-        if let ruby = response.rubyBalance { host?.rubyBalance = ruby }
+        if mirrorsRubyBalance, let ruby = response.rubyBalance { host?.rubyBalance = ruby }
     }
 
     /// 로그아웃·계정 전환. 계정에 묶인 값(글·id·정보)을 전부 비우고, 나가 있던 응답은 세대로 버린다.

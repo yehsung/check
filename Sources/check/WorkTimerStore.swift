@@ -2653,6 +2653,8 @@ final class WorkTimerStore {
         closeUltraPanel()
         isInsightsPanelVisible = false
         loadShopState()
+        // 확성기 카드의 가격(💎50)도 서버가 말한다 — 작성기를 열기 전부터 보이게 같이 읽는다(v0.3.51).
+        prefetchMegaphoneInfo()
     }
 
     /// 헤더 마스코트 버튼 액션. 캐릭터 선택 패널을 토글하고, 여는 순간 다른 패널을 전부 내린다.

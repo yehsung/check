@@ -436,6 +436,85 @@ private let missingFunction = #"{"code":"PGRST202","message":"Could not find the
         #expect(!store.megaphone.isComposerOpen)
     }
 
+    /// 리뷰 지적(2026-10-14): 카드의 가격 칩이 `megaphone_info` 를 읽은 **뒤에만** 섰고, 그 읽기는 작성기를 열 때뿐이었다 —
+    /// 그래서 비용(💎50)을 카드가 아니라 확인 질문에서야 처음 봤다. 상점을 여는 순간 미리 읽는다.
+    /// 기준선: 열기 전 `price == nil`(카드에 칩 없음) · 미리 읽기는 작성기를 안 열고 · 잔량 미러는 `shop_state` 몫이다(늦은 정보 응답이
+    /// 그 사이 구매 결과를 옛 잔량으로 덮지 않게 — 정보 응답은 일부러 **다른** 잔량 999 를 말한다).
+    @Test("상점을 열면 확성기 값을 미리 읽어 카드가 처음부터 가격을 말한다 · 작성기는 안 열고 · 잔량은 shop_state 몫")
+    func openingTheShopPrefetchesThePrice() async throws {
+        let host = "mega-mac-prefetch"
+        let store = Self.store(host: host) { request in
+            switch request.rpc {
+            case "shop_state":
+                return .json(200, #"{"status":"ok","ruby_balance":80,"ultra_balance":1,"ultra_price":3,"characters":[]}"#)
+            case "megaphone_info": return .json(200, infoJSON(recipients: 12, ruby: 999))
+            default: return .json(404, missingFunction)
+            }
+        }
+        #expect(store.megaphone.price == nil, "기준선이 틀렸다 — 열기 전부터 가격을 알면 이 테스트는 공허하다")
+        store.toggleShopPanel()
+        await Self.waitUntil { store.shopLoaded && store.megaphone.price != nil && !store.megaphone.infoLoading }
+        #expect(store.isShopPanelVisible)
+        #expect(store.megaphone.price == 50, "상점을 열었는데 확성기 가격을 모른다 — 카드가 💎 없이 선다")
+        #expect(store.megaphone.isComposerOpen == false, "미리 읽기가 작성기를 열었다")
+        let rpcs = MegaphoneStubProtocol.records(host: host).map(\.rpc)
+        #expect(rpcs.filter { $0 == "megaphone_info" }.count == 1, "정보 요청이 \(rpcs) — 한 번이어야 한다")
+        #expect(!rpcs.contains("send_megaphone"), "상점을 열기만 했는데 전송이 나갔다")
+        #expect(store.rubyBalance == 80, "미리 읽기가 잔량 미러를 덮었다(\(String(describing: store.rubyBalance))) — shop_state 몫이다")
+        // 지키려는 경합을 순서 그대로 만든다: 구매 응답이 미러를 고친 **뒤에** 미리 읽기 응답이 도착한다(두 응답이 동시에 나가는
+        // 첫 열기만으로는 도착 순서가 갈려 미러 회귀가 초록으로 숨을 수 있다 — 뮤테이션으로 확인했다).
+        store.rubyBalance = 30
+        store.prefetchMegaphoneInfo()
+        await Self.waitUntil { Self.infoCalls(host) == 2 && !store.megaphone.infoLoading }
+        #expect(Self.infoCalls(host) == 2)
+        #expect(store.rubyBalance == 30, "늦게 도착한 미리 읽기가 구매 뒤 잔량(30)을 옛 값 \(String(describing: store.rubyBalance))로 덮었다")
+        // 작성기를 열면 그때는 잔량도 정보 응답이 말한다(작성 화면의 판정 재료 — 기존 규약 그대로).
+        store.toggleMegaphoneComposer()
+        await Self.waitUntil { !store.megaphone.infoLoading && store.rubyBalance == 999 }
+        #expect(store.rubyBalance == 999, "작성기의 정보 읽기는 잔량을 고쳐야 한다")
+        // 닫았다 다시 열면 또 읽는다(가격·받는 사람 수는 그 사이 바뀐다).
+        store.closeShopPanel()
+        store.toggleShopPanel()
+        await Self.waitUntil { Self.infoCalls(host) == 4 && !store.megaphone.infoLoading }
+        #expect(Self.infoCalls(host) == 4)
+    }
+
+    static func infoCalls(_ host: String) -> Int {
+        MegaphoneStubProtocol.records(host: host).filter { $0.rpc == "megaphone_info" }.count
+    }
+
+    /// 가격 칩(RubyBalanceChip — 아이콘 13pt + 위아래 2pt)은 글자 한 줄보다 높다. 칩이 카드 줄을 키우면 크롬이 늘어 격자 상한
+    /// (`chromeOutsideGrid`)이 거짓이 된다 — 미리 읽기 뒤로는 **칩이 서 있는 것이 평소 모습**이므로 그 모습으로 잰다.
+    /// 기준선: 같은 패널을 칩 없이(정보 모름) 재서 **둘 다** 상수와 맞아야 한다(칩 유무로 높이가 갈리면 안 된다).
+    @Test("가격 칩이 서도 상점 크롬은 상수 그대로다 — 칩 유무로 카드 높이가 안 갈린다")
+    func priceChipKeepsTheChromeConstant() throws {
+        func chrome(cards: Int, withPrice: Bool) throws -> CGFloat {
+            let store = V0317ShopTests.plainStore()
+            store.applyShopState(ShopStateResponse(rubyBalance: 10, ultraBalance: 1, ultraPrice: 3,
+                                                   characters: V0317ShopTests.rows(ownedIDs: [], limit: cards)))
+            store.shopLoaded = true
+            if withPrice {
+                store.megaphone.applyInfo(MegaphoneInfoResponse(price: 50, cooldownSeconds: 600, cooldownRemainingSeconds: 0,
+                                                               recipients: 46, maxLength: 198))
+            }
+            #expect((store.megaphone.price != nil) == withPrice, "준비 실패 — 칩 유무 기준선이 안 갈렸다")
+            let panel = CheckShopPanel(store: store, onBack: {})
+            // ImageRenderer 는 첫 두 장을 다르게 굽는다 — 높이만 쓰지만 세 번째 장으로 잰다.
+            _ = V0317ShopTests.height(panel, width: CheckMenuView.contentColumnWidth)
+            _ = V0317ShopTests.height(panel, width: CheckMenuView.contentColumnWidth)
+            let height = try #require(V0317ShopTests.height(panel, width: CheckMenuView.contentColumnWidth))
+            return height - ShopPanelGridBudget.naturalHeight(rowCount: ShopPanelGridBudget.rowCount(cardCount: cards))
+        }
+        for cards in [3, 6] {
+            let bare = try chrome(cards: cards, withPrice: false)
+            let priced = try chrome(cards: cards, withPrice: true)
+            print("[v0351] 상점 크롬 카드 \(cards): 칩 없음 \(bare)pt · 칩 있음 \(priced)pt · 상수 \(ShopPanelGridBudget.chromeOutsideGrid)pt")
+            #expect(abs(priced - ShopPanelGridBudget.chromeOutsideGrid) < 1.0,
+                    "카드 \(cards): 가격 칩이 선 크롬 \(priced)pt ≠ 상수 \(ShopPanelGridBudget.chromeOutsideGrid)pt — 격자 상한이 거짓이 된다")
+            #expect(abs(priced - bare) < 1.0, "카드 \(cards): 칩 유무로 크롬이 갈린다(\(bare) → \(priced))")
+        }
+    }
+
     // MARK: 렌더 — 예산
 
     @Test("작성기를 연 상점 패널은 격자를 연 패널보다 높지 않다 · 최악 조합도 700pt 안")

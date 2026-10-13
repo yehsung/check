@@ -176,9 +176,11 @@ enum ShopPanelGridBudget {
     /// + 캐릭터 소제목 + 하단 구매 바(38pt)** 의 값이다.
     /// 이력: 바깥 간격 12pt·안내 줄 별도일 때 210pt → 간격 7pt 로 174pt → 2단 구매의 하단 바를 더해 199pt.
     /// (안내 줄을 따로 두지 않고 **구매 바 둘째 줄로 합쳐** 25pt 만 늘었다 — 따로 뒀으면 39pt 였다.)
-    /// → v0.3.51 확성기 카드(한 줄 23pt + 간격 4pt)를 소모품 구획에 더해 **226pt**(같은 절차로 3장·6장 둘 다 226.0 실측).
-    ///   격자 상한은 700 − 216 − 226 − 5 = 253pt 로, 캐릭터 6장(2행 232pt)은 평소 화면에서 여전히 스크롤 없이 다 보인다.
-    static let chromeOutsideGrid: CGFloat = 226
+    /// → v0.3.51 확성기 카드(한 줄 27pt + 간격 4pt)를 소모품 구획에 더해 **230pt**(같은 절차로 3장·6장 둘 다 230.0 실측).
+    ///   처음엔 226 이었다 — 가격 칩이 없을 때(정보를 모를 때)만 잰 값이었고, 칩(아이콘 13 + 위아래 2)이 서면 카드가 23 → 27pt 로
+    ///   자라 230 이 됐다. 이제 칩 자리를 늘 비워 둬서 칩 유무와 무관하게 230 이다(`V0351MegaphoneMacTests.priceChipKeepsTheChromeConstant`).
+    ///   격자 상한은 700 − 216 − 230 − 5 = 249pt 로, 캐릭터 6장(2행 232pt)은 평소 화면에서 여전히 스크롤 없이 다 보인다.
+    static let chromeOutsideGrid: CGFloat = 230
     /// 팝오버에서 패널이 아닌 부분(헤더 카드 + 푸터 + 바깥 여백).
     ///
     /// ★ **캐릭터 패널의 194pt 를 그대로 쓰면 안 된다**(처음에 그렇게 했다가 최악 조합이 717pt 로
@@ -402,6 +404,7 @@ struct CheckShopPanel: View {
     @ViewBuilder
     private var megaphoneCard: some View {
         let open = store.megaphone.isComposerOpen
+        let price = store.megaphone.price
         Button {
             store.toggleMegaphoneComposer()
         } label: {
@@ -415,9 +418,13 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
                 Spacer(minLength: 6)
-                // 값은 서버가 말한다(`megaphone_info` — 작성기를 한 번 열면 안다). 모르면 숫자를 지어내지 않는다.
-                if let price = store.megaphone.price {
+                // 값은 서버가 말한다(`megaphone_info` — 상점을 여는 순간 미리 읽는다: `prefetchMegaphoneInfo`).
+                // 모르면 숫자를 지어내지 않되 **칩 자리는 비워 둔다**(.hidden) — 칩(아이콘 13 + 위아래 2)이 글자 줄보다 4pt 높아서,
+                // 값이 도착하는 순간 카드가 자라면 크롬이 갈리고(226 → 230 실측) 격자 상한(`chromeOutsideGrid`)이 거짓이 된다.
+                if let price {
                     RubyBalanceChip(balance: price)
+                } else {
+                    RubyBalanceChip(balance: nil).hidden()
                 }
                 Image(systemName: open ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9, weight: .bold))
@@ -438,7 +445,7 @@ struct CheckShopPanel: View {
         .buttonStyle(.plain)
         .focusEffectDisabled()
         .disabled(store.purchasingID != nil)
-        .accessibilityLabel(open ? "확성기 작성 닫기" : "확성기 보내기")
+        .accessibilityLabel(open ? "확성기 작성 닫기" : (price.map { "확성기 보내기, 루비 \($0)개" } ?? "확성기 보내기"))
         .accessibilityAddTraits(open ? [.isButton, .isSelected] : .isButton)
     }
 

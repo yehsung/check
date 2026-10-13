@@ -288,6 +288,14 @@ func 찌르기_차단_게이트는_블랙아웃보다_앞이다() throws {
 /// 가 바이트로 되묻는다. 여기서는 허용하되 **게이트가 살아 있는지**를 같은 도우미로 한 번 더 본다(허용만 하면 다음 덮어쓰기를 아무도 못 본다).
 private let laterRedefinitionsAllowed: [String: [String]] = [
     "20260930120000_gomoku_ranking_watch.sql:gomoku_lobby": ["blocked_between", "public.same_visibility(", "public.gomoku__record(uid)"],
+    // 2026-10-14 확성기(v0.3.51)가 message_history 를 다시 만든다 — 보낸 사람 자신의 fan-out 행(`megaphone_id` 가 있는 내 행)을
+    // 이력에서 뺀다(안 빼면 대화 목록에 받는 사람 수만큼 스레드가 생기고 200행 창을 먹는다). 그 파일의 §9 가 "차이는 확성기 줄
+    // 하나뿐"을 바이트로 되묻고, V0351MegaphoneMigrationTests 가 정본 대조를 줄 단위로 한 번 더 한다.
+    // 등록 토큰: 덮어쓴 **이유**(확성기 줄) + 이 파일이 지키는 차단 게이트 + 유일한 벽.
+    // (사전이라 순서는 뜻이 없다 — 같은 날 다른 갈래(상태메시지)가 맨 끝에 줄을 더하므로 병합이 겹치지 않게 여기 둔다.)
+    "20261014122000_megaphone.sql:message_history": [
+        "blocked_between", "(m.from_user = v_uid or m.to_user = v_uid)", "and not (m.from_user = v_uid and m.megaphone_id is not null)",
+    ],
     // 2026-10-05 체스가 둘을 다시 만든다 — B8("한 사람은 한 판만")의 **반대 방향**이다. 오목의 busy·target_busy 네 `exists` 가
     // `gomoku_matches` 만 봐서, 체스 대국 중인 사람이 오목을 수락할 수 있었다(실측: chess_duel.sql:2400-2403). 체스는 누적
     // 피셔 시계에 자동 착수가 없으므로 오목을 두는 몇 분 동안 체스 시계가 흘러 **시간패로 판돈을 잃는다.**
@@ -296,13 +304,6 @@ private let laterRedefinitionsAllowed: [String: [String]] = [
     // 나머지 둘은 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 조용히 사라지지 않았는지를 본다.
     "20261005160000_chess_duel.sql:gomoku_challenge": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
     "20261005160000_chess_duel.sql:gomoku_respond": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
-    // 2026-10-14 확성기(v0.3.51)가 message_history 를 다시 만든다 — 보낸 사람 자신의 fan-out 행(`megaphone_id` 가 있는 내 행)을
-    // 이력에서 뺀다(안 빼면 대화 목록에 받는 사람 수만큼 스레드가 생기고 200행 창을 먹는다). 그 파일의 §9 가 "차이는 확성기 줄
-    // 하나뿐"을 바이트로 되묻고, V0351MegaphoneMigrationTests 가 정본 대조를 줄 단위로 한 번 더 한다.
-    // 등록 토큰: 덮어쓴 **이유**(확성기 줄) + 이 파일이 지키는 차단 게이트 + 유일한 벽.
-    "20261014122000_megaphone.sql:message_history": [
-        "blocked_between", "(m.from_user = v_uid or m.to_user = v_uid)", "and not (m.from_user = v_uid and m.megaphone_id is not null)",
-    ],
 ]
 
 @Test

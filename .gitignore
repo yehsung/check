@@ -1,4 +1,6 @@
 .build/
+# 맥 앱스토어 판 빌드 캐시(scripts/package-mas.sh — -DCHECK_MAS 산출물이 Developer ID 빌드의 .build/ 를 덮지 않게 따로 둔다)
+.build-mas/
 .swiftpm/
 dist/
 Config/Supabase.local.xcconfig

@@ -6,6 +6,8 @@ aing-check 를 팀원에게 배포하는 경로는 세 가지입니다. 셋 다 
 2. **DMG 내려받기 (brew 없이)** — 같은 GitHub 릴리스에 공증·스테이플된 `aing-check.dmg` 가 함께 올라갑니다(v0.3.47 부터). `https://github.com/yehsung/check/releases/latest/download/aing-check.dmg` 가 늘 최신 DMG 를 가리키므로 이 주소만 주면 됩니다 — 열고 앱을 Applications 로 끌어 놓으면 끝. v0.3.49 부터는 DMG 로 설치한 사람도 앱 안 [지금 업데이트] 한 번으로 올라갑니다 — 앱이 **바로 이 주소에서** 새 DMG 를 받아 공증·서명 신원·build 를 확인한 뒤 자기 번들을 바꾸고 다시 켭니다. 그래서 이 자산이 빠진 릴리스(`SKIP_DMG=1`)는 DMG 설치자의 원클릭을 통째로 멈춘다는 뜻입니다. 0.3.48 이하로 설치한 사람만 한 번 수동으로 받으면 됩니다.
 3. **zip 직접 전달 (비상용)** — `package-notarized.sh` 산출물 `dist/aing-check.zip` 을 직접 보내는 방법(공증본이라 그대로 열림). Cask 가 받는 것도 이 zip 입니다. (`package-local.sh` 의 ad-hoc 서명본은 개발 확인용 — 배포에 쓰지 말 것.)
 
+> 이 셋과 **별개 앱**으로 맥 앱스토어 판(`com.yehsung.aingcheck` · `scripts/package-mas.sh`)이 있습니다 — 맨 아래 [맥 앱스토어(MAS) 판](#맥-앱스토어mas-판).
+
 > 이 저장소의 owner 는 `yehsung` 으로 확정되어 있습니다. `release-brew.sh` 는 릴리즈·태그·tap 대상을 `GH_OWNER` 환경변수(또는 `.env.local` 의 `CHECK_GH_OWNER`)로 정하므로, 아래 실행 전에 `GH_OWNER=yehsung` 을 설정하면 됩니다.
 >
 > Cask 템플릿 `packaging/homebrew/aing-check.rb` 의 `url`/`homepage` 는 `__GH_OWNER__` 자리표시자를 쓰고, `release-brew.sh` 가 `__VERSION__`·`__SHA256__` 과 함께 치환합니다. 공증·brew 배포는 활성 상태입니다 — Developer ID 서명 + 공증 프로파일은 키체인 `check-notary`, 산출 앱은 유니버설(arm64+x86_64)입니다.
@@ -500,3 +502,117 @@ update public.teams set weekly_goal_hours = 40 where name = '팀이름';
 - **`HEAD 의 Cask 가 이번 릴리스가 아닙니다 — 푸시하지 않습니다`** — tap 로컬에 이번 릴리스와 무관한 커밋이 푸시되지 않은 채 남아 있습니다. `git -C ../homebrew-check log --oneline @{u}..HEAD` 로 무엇인지 보고, 필요 없는 커밋이 확실할 때만 `git -C ../homebrew-check reset --hard @{u}` 로 정리한 뒤 다시 실행합니다.
 - **`항목이 서버 알림 규칙(8줄 이하 · 한 줄 200자 이하)에 어긋납니다`** — CHANGELOG 섹션의 `- ` 항목을 8줄 이하로 줄이거나 긴 줄을 나눕니다(배너에는 어차피 앞의 몇 줄만 보입니다).
 - **팀원이 옛 버전을 받음** — `brew update` 로 tap 을 먼저 갱신한 뒤 `brew upgrade --cask aing-check` 를 실행하도록 안내합니다.
+
+## 맥 앱스토어(MAS) 판
+
+같은 소스를 `-DCHECK_MAS` 로 빌드한 **별개 앱**입니다. 아이폰과 같은 App Store 레코드 **아잉체크(6812768622)** 에 macOS 를 붙인 유니버설 구매이고,
+번들 ID 도 아이폰과 같은 `com.yehsung.aingcheck` 입니다. Developer ID 판(`kingcheck` — brew·DMG)은 **그대로 유지**합니다. 둘은 번들 ID 가 달라
+따로 설치되고(파일도 `AingCheck.app` 과 `aing-check.app` 으로 갈린다), 키체인·설정·기기 ID 를 나누지 않으므로 MAS 로 옮기는 사람은 한 번 다시 로그인합니다.
+
+| | Developer ID 판 | MAS 판 |
+| --- | --- | --- |
+| 스크립트 | `build-local.sh` → `package-notarized.sh` → `release-brew.sh` | `package-mas.sh` (업로드는 손으로 — 아래) |
+| 번들 · 파일 · 표시 이름 | `kingcheck` · `aing-check.app` · aing-check | `com.yehsung.aingcheck` · `AingCheck.app` · 아잉체크 (`CFBundleName` 은 ASCII `AingCheck`) |
+| 서명 | Developer ID Application + 하드닝 런타임 + 공증·스테이플 | Apple Distribution + 하드닝 런타임 + 샌드박스 엔타이틀먼트 + `embedded.provisionprofile`, pkg 는 Mac Installer Distribution. 공증 없음(애플이 다시 서명) |
+| 업데이트 | 앱 안 [지금 업데이트](brew · DMG 자가 교체) | App Store 만. 앱 안 업데이트 코드는 `#if CHECK_MAS` 로 **컴파일에서 빠진다** |
+| 산출물 · 빌드 캐시 | `dist/aing-check.{app,zip,dmg}` · `.build/` | `dist/mas/AingCheck.{app,pkg}` · `.build-mas/` (서로 덮지 않는다) |
+
+### 서명 자산 (저장소 밖 — 2026-10-14 ASC API 로 만듦)
+
+| 무엇 | 어디 | 만료 |
+| --- | --- | --- |
+| 앱 서명 `Apple Distribution: yesung kim (MQ2KQK37WD)` | 로그인 키체인(아이폰 배포와 공용) | 2027-09-17 |
+| pkg 서명 `3rd Party Mac Developer Installer: yesung kim (MQ2KQK37WD)` | **전용 키체인** `~/Library/Keychains/aing-mas.keychain-db` — 검색 목록에 넣지 않았다. 스크립트가 `productbuild --keychain` 으로 지정하고, 암호 `~/.aing-check-secrets/mas/keychain-password`(600)를 stdin 으로 넘겨 잠금을 푼다(암호 창 없음) | 2027-10-13 |
+| 프로파일 `aing check Mac AppStore`(MAC_APP_STORE) | `~/.aing-check-secrets/mas/aingcheck-mac-appstore.provisionprofile` → 앱의 `Contents/embedded.provisionprofile` | 2027-09-17 |
+| ASC API 키 | `~/.appstoreconnect/private_keys/AuthKey_JT2GT9FY5N.p8`, 발급자 ID 는 `.env.local` 의 `ASC_API_ISSUER`(공개 저장소라 여기 적지 않는다) | — |
+
+프로파일은 **그 Apple Distribution 인증서에 묶여** 있습니다. 인증서를 새로 만들면 프로파일도 같은 이름으로 다시 만들어야 하고, 스크립트는 서명에 쓴
+인증서가 프로파일 안에 없으면 멈춥니다.
+
+### 엔타이틀먼트 — `packaging/mas.entitlements`
+
+| 키 | 왜 |
+| --- | --- |
+| `com.apple.security.app-sandbox` | MAS 필수 |
+| `com.apple.security.network.client` | Supabase REST · Realtime 웹소켓 · 사용량 API |
+| `com.apple.security.files.user-selected.read-only` | 아바타 사진 고르기(NSOpenPanel) |
+| `com.apple.security.temporary-exception.files.home-relative-path.read-only` = `/.claude/` `/.codex/` `/.gemini/` `/Library/Application Support/orca/` | AI 토큰 집계가 사용자 홈의 AI 도구 사용 기록을 **읽기만** 한다(2026-10-14 소유자 결정: 폴더 고르기 대신 예외 권한 신청, 반려 위험 감수). ASC 의 *App Sandbox Entitlement Usage Information* 에 사유를 적어야 한다 |
+| `com.apple.application-identifier` · `com.apple.developer.team-identifier` | 프로파일과 짝(`MQ2KQK37WD.com.yehsung.aingcheck` · `MQ2KQK37WD`) |
+
+그 밖의 키는 없습니다 — Developer ID 전용(하드닝 런타임 예외 등)도, `get-task-allow` 도 없고, 스크립트가 서명 뒤 **서명된 엔타이틀먼트가 이 파일과
+정확히 같은지** 다시 잽니다. 키를 더하면 프로파일이 허락하는지(`security cms -D -i <프로파일>` 의 `Entitlements`)부터 보세요.
+
+**샌드박스 실측(2026-10-14, 같은 엔타이틀먼트만 단 프로브 앱):**
+`homeDirectoryForCurrentUser` · `NSHomeDirectory()` · `$HOME` 은 전부 컨테이너(`~/Library/Containers/<번들>/Data`)이고 **실제 홈은 `getpwuid` 만** 준다.
+예외 네 경로는 목록·열기·읽기가 되고(경로에 공백이 있는 Orca 도), 쓰기는 EPERM, 예외 안의 심볼릭 링크가 **밖**을 가리키면 EPERM, 예외 밖
+(`~/Documents` · `~/Desktop` · `~/.ssh` · `~/Library/Application Support` · 홈 자체)은 전부 EPERM 이었다. sqlite 는 `-wal` 만 있고 `-shm` 이 없으면
+READONLY 열기가 `SQLITE_CANTOPEN(14)` — `immutable=1` 은 열리지만 WAL 의 최신 행을 놓치고, `.db`+`-wal` 을 컨테이너 임시 폴더로 복사해 열면 전부 읽힌다.
+`-shm` 이 있으면(쓰는 프로세스가 열어 둔 상태 포함) READONLY 가 WAL 까지 읽는다. 자식 프로세스 `/usr/bin/security find-generic-password … -w` 와
+CGEventSource 유휴 시간은 샌드박스 안에서도 됐다(앱스토어 판이 Claude 리밋을 빼는 건 기술이 아니라 심사 지침 때문이다).
+
+### 한 번에: 빌드 → 서명 → pkg → 검증
+
+```sh
+# .env.local 에 CHECK_SUPABASE_ANON_KEY 와 ASC_API_ISSUER (워크트리에서 내면 메인의 .env.local 을 복사해 둔다)
+./scripts/package-mas.sh 0.3.52 105 --validate     # <버전> <build> — 같은 커밋의 Developer ID 릴리스와 같은 값
+# → dist/mas/AingCheck.pkg (stdout 마지막 줄), dist/mas/validate.log, dist/mas/AingCheck.app.dSYM(크래시 기호화용)
+```
+
+스크립트가 멈추는 곳(하나라도 어긋나면 pkg 를 남기지 않는다):
+- **anon 키** 가 없거나 anon 이 아니면(service_role 이면) 멈춘다 — 키 없는 번들은 서명·검증·업로드를 다 통과하고 심사관만 로그인을 못 한다.
+- **방금 만든 바이너리인가**: 빌드 전에 산출물을 지우고, 빌드 뒤 '빌드 시작보다 새것' · '어떤 소스보다 새것' 을 잰다(Xcode 27 산출물 경로 함정).
+- **CHECK_MAS 갈래가 컴파일됐나**: 자가 업데이트(`brew upgrade --cask` · `releases/latest/download` · `api.github.com/repos` · `aing-check-update`),
+  타사 자격증명(`Claude Code-credentials`), 외부 실행(`account/usage/read` · `/opt/homebrew/bin/agy`) 문자열이 바이너리에 0건이어야 한다.
+  16바이트 이상만 쓴다 — 15바이트 이하 Swift 문자열은 코드에 인라인돼 바이트 검색으로 원리상 못 찾는다.
+- **SDK 스탬프**를 빌드 SDK 로 고치고(LD 도구 항목은 보존) 두 아키텍처 · minos = `LSMinimumSystemVersion` 을 잰다.
+- **프로파일**: 앱 ID · 팀 · 플랫폼 OSX · 만료 전 · 기기 목록 없음 · 서명 인증서 포함. 엔타이틀먼트가 프로파일 밖이면 멈춘다.
+- **서명**: 서명자 = Apple Distribution, Identifier = 번들 ID, 엔타이틀먼트 = 파일, `--verify --deep --strict`. quarantine 속성 0.
+- **pkg**: 서명자 = Mac Installer Distribution, 펼친 pkg 안의 앱 CDHash = 방금 서명한 앱, 그 안의 build · anon 키.
+- **검증**(`--validate`): `altool --validate-app` 의 rc 0 **과** 성공 문구(`VERIFY SUCCEEDED`) 둘 다.
+
+Info.plist 는 스크립트가 키마다 씁니다: `LSApplicationCategoryType=public.app-category.productivity`, `ITSAppUsesNonExemptEncryption=false`,
+`DT*`·`BuildMachineOSBuild` 는 지금 툴체인에서 읽은 값(`xcodebuild -version` · `xcrun --show-sdk-*` · `sw_vers`), `CFBundleDevelopmentRegion` 은
+Developer ID 판처럼 넣지 않습니다(넣으면 시스템 패널 언어와 `Locale.current` 가 판마다 달라진다). 리소스 번들(`check_check` · `check_CheckCore`)의
+`CFBundleIdentifier` 는 SwiftBuild 가 빌드한 폴더 이름으로 적기 때문에(`v0351-maspipe.check.resources` 식) `com.yehsung.aingcheck.resources.<타깃>` 으로
+고정합니다. 개인정보 매니페스트는 `Sources/check/Resources/PrivacyInfo.xcprivacy`(앱 코드 쪽이 관리)를 `Contents/Resources/` 에 넣습니다.
+
+**리허설**: 맥 앱스토어 판 앱 코드(`#if CHECK_MAS` 갈래)가 아직 없는 소스에서는 금지 문자열 게이트를 증명할 수 없어 멈춥니다. 파이프라인만 미리
+돌려 보려면 `MAS_REHEARSAL=1` — 그 게이트를 경고로 낮추고 pkg 이름을 `AingCheck-rehearsal.pkg` 로 바꿉니다(이건 올리지 않는다). 갈래가 있는
+소스에서는 `MAS_REHEARSAL` 을 거부하므로 제출본에서 게이트를 끄는 손잡이는 없습니다.
+
+### 업로드 (사람이 따로 — 스크립트는 올리지 않는다)
+
+```sh
+xcrun altool --upload-package dist/mas/AingCheck.pkg --apple-id 6812768622 \
+  --api-key JT2GT9FY5N --api-issuer "$ASC_API_ISSUER" --wait
+```
+
+- 검증과 업로드는 **호출을 나눕니다**(파이프로 묶은 테스트가 빨간 채로 푸시된 전례). 검증이 초록인 `validate.log` 를 본 뒤에 올립니다.
+- `--apple-id` 는 레코드를 직접 집습니다. 번들 ID 로 찾게 두면 레코드에 macOS 플랫폼이 붙기 전에는
+  `Unable to find Apple ID for Bundle ID 'com.yehsung.aingcheck' on platform 'macOS App'` 로 죽습니다(2026-10-14 검증에서 실측 — `--apple-id` 를 주면
+  macOS 플랫폼이 없어도 `VERIFY SUCCEEDED`). **업로드 명령은 이 저장소에서 아직 한 번도 실행하지 않았습니다** — 첫 업로드 전 ASC 에서
+  아잉체크에 macOS 플랫폼을 추가해 두세요(유니버설 구매는 한 번 붙이면 뗄 수 없습니다 — 소유자 결정).
+- 그 뒤: 맥 TestFlight 내부 테스트로 실제 샌드박스 실행(로그인 화면이 키체인 창 없이 뜨는지 · 근무 시작/종료 · 단축키 · 유휴 감지 · 아바타 · Realtime ·
+  토큰 집계) → 심사 제출. 제출 자료(설명 · 스크린샷 · 예외 권한 사유 · 리뷰 노트)는 따로 준비합니다.
+
+### build 번호 — 카운터는 하나
+
+서버는 채널(번들 ID)을 모르고 **`CFBundleVersion` 정수만** 봅니다(`profiles.app_build` → 메시지 `target_outdated` · 오목/체스/채팅 게이트 등).
+그래서 MAS 판은 Developer ID 판과 **같은 build 줄**을 씁니다: 같은 커밋이면 같은 버전·build, MAS 만 다시 올려야 하면 번호를 하나 소모하고 다음
+DMG 릴리스는 그 위에서 이어 갑니다. 스크립트는 `scripts/build-local.sh` 의 build 보다 낮으면 멈추고, 다르면 경고합니다. App Store 의 build 문자열은
+플랫폼마다 따로라 아이폰(1.0.x · 16 …)과 겹치지 않습니다.
+
+MAS 판은 심사를 거치는 만큼 늦게 도착합니다. **서버의 build 게이트(`chess_min_build()` 같은 것)를 올리는 변경은 MAS 빌드가 판매 중이 된 뒤에**
+적용하세요 — 그 전에 올리면 심사를 기다리는 MAS 사용자가 구버전으로 판정돼 메시지·대결 상대에서 빠집니다.
+
+### MAS 트러블슈팅
+
+- **`Sources 에 '#if … CHECK_MAS' 갈래가 없다`** — 맥 앱스토어 판 앱 코드가 병합되지 않은 소스입니다. 병합하거나, 파이프라인 리허설이면 `MAS_REHEARSAL=1`.
+- **`CHECK_MAS 판 바이너리에 빠졌어야 할 코드가 있다: …`** — 찍힌 문자열의 코드 경로가 `#if !CHECK_MAS` 로 감싸이지 않았습니다(또는 `-DCHECK_MAS` 가
+  안 들어간 빌드). 금지 목록에서 지우는 것으로 해결하지 마세요 — 그 기능을 앱스토어 판에 **남기기로** 정했고 심사상 안전할 때만 목록을 고칩니다.
+- **`서명 인증서(SHA-1 …)가 프로파일에 없다`** — 프로파일이 다른 Apple Distribution 인증서로 만들어졌습니다. 프로파일을 지금 인증서로 다시 만듭니다.
+- **`'Apple Distribution: …' 가 여럿이다`** — 갱신 직후 유효한 인증서가 둘입니다. 프로파일에 든 쪽의 SHA-1 을 `MAS_APP_IDENTITY_HASH` 로 줍니다.
+- **`설치 패키지 키체인을 열지 못했다`** — `~/.aing-check-secrets/mas/keychain-password` 가 키체인 암호와 다릅니다.
+- **`altool 이 rc 0 인데 성공 문구가 없다`** — `dist/mas/validate.log` 를 직접 읽고 판정합니다(문구가 바뀌었을 수 있다).
+- **`write: Permission denied` 네 줄(pkgbuild/productbuild)** — 에이전트의 샌드박스 셸에서 빈 폴더 하나짜리 `pkgbuild --root` 도 똑같이 찍었습니다.
+  내용물과 무관하고 pkg 는 정상이었습니다(서명 확인 · 펼침 · CDHash · `VERIFY SUCCEEDED`).

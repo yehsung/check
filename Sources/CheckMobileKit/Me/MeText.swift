@@ -523,6 +523,8 @@ package enum MeText {
         case .message: return "누가 메시지를 보내면 알려 줘요."
         case .gomokuInvite: return "1:1 오목 대결 신청이 오면 알려 줘요."
         case .feedbackReply: return "보낸 제보에 답장이 오면 알려 줘요."
+        // 토글 목록(`PushKind.configurable`)에는 없다 — 끌 수 없는 알림이다. 빠짐없는 switch 라 문장만 둔다.
+        case .workCheck: return "폰으로 연 근무를 2시간 30분 넘게 확인하지 않으면 한 번 물어봐요."
         }
     }
     package static let pushPrefsUnknown = "알림 종류 설정을 아직 못 읽었어요 — 잠시 뒤 다시 열어 주세요"

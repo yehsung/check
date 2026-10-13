@@ -150,6 +150,15 @@ extension SupabaseWorkService {
                     closedStamp: closedStamp
                 )
             }
+            // ★ 0.3.51(폰도 근무를 연다): 0행 = 내가 닫으려던 세션은 이미 닫혔다. 그 사이 **다른 열린 근무**(폰이 방금 연 근무 ·
+            //   다른 맥의 근무)가 있으면 꼬리의 off_work 가 그 근무를 덮어 (열린 세션, off_work) = '아무도 못 닫는 세션'을 만든다
+            //   (지도 phonework-mac P1 — 늦게 도착한 맥 종료). 열린 행을 **봤을 때만** 꼬리를 건너뛴다 — 못 물어봤으면(오류)
+            //   기존 동작 그대로 쓴다(서버 cron 이 열린 폰 근무의 상태 행을 다음 분에 바로잡는다 — 20261014130000 결정 ⑤).
+            if updateSharedStatus,
+               let openIDs = try? await openSessionIDs(accessToken: accessToken, userID: userID),
+               !openIDs.isEmpty {
+                return
+            }
         }
         guard updateSharedStatus else { return }
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "off_work", activeSessionID: nil)
@@ -491,6 +500,24 @@ extension SupabaseWorkService {
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
         let rows = (try? decoder.decode([WorkSessionRow].self, from: reopened)) ?? []
         return rows.first?.id?.lowercased()
+    }
+
+    /// 내 **열린** 세션 id(사람당 최대 하나 — 부분 유니크). stopWork 의 0행 갈래가 꼬리를 낼지 정할 때만 묻는다.
+    func openSessionIDs(accessToken: String, userID: String) async throws -> [String] {
+        let data = try await send(
+            path: "/rest/v1/work_sessions",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "ended_at", value: "is.null"),
+                URLQueryItem(name: "limit", value: "1")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([WorkSessionRow].self, from: data).compactMap { $0.id?.lowercased() }
     }
 
     // MARK: - 갇힌 근무 복구 (2026-10-09 운영 사고)

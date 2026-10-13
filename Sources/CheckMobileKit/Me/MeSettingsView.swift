@@ -207,8 +207,9 @@ struct MeSettingsView: View {
                             }
                         }
                     }
-                    ForEach(Array(PushKind.allCases.enumerated()), id: \.element) { index, kind in
-                        let isLast = index == PushKind.allCases.count - 1 && !(!push.knowsPrefs && authorization.allowsDelivery) && push.prefsNotice == nil
+                    // 끌 수 있는 종류만(근무 확인은 끌 수 없다 — 서버가 키를 받지 않는다).
+                    ForEach(Array(PushKind.configurable.enumerated()), id: \.element) { index, kind in
+                        let isLast = index == PushKind.configurable.count - 1 && !(!push.knowsPrefs && authorization.allowsDelivery) && push.prefsNotice == nil
                         GroupRow(divider: isLast ? .none : .inset(MobileTheme.cardPadding), minHeight: MobileTheme.rowHeightTwoLine) {
                             toggleRow(
                                 title: kind.settingTitle,

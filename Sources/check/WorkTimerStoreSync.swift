@@ -1953,6 +1953,8 @@ extension WorkTimerStore {
     /// 내 소유 세션이 서버에서 abandoned 로 닫혀 강하할 때의 사용자 통보 한 줄(v0.2.36 W3).
     /// 노출 수명은 refreshTeamStatus 의 정규화 가드가 준다(세운 그 주기는 살고, 다음 정상 폴링이 덮는다).
     static let remoteAbandonedCloseNotice = "연결이 끊겨 근무가 자동 종료됐어요"
+    /// 신호가 신선한 채 서버에서 내려간 근무(0.3.51) — 폰의 [근무 종료] · 다른 맥의 종료가 대표다. 사고가 아니라 사용자의 손이다.
+    static let remoteEndedElsewhereNotice = "다른 기기에서 근무를 끝냈어요"
 
     /// 서버 스냅샷의 '내 행'을 로컬 상태로 흡수한다(앱 재시작 복구/타 기기 조작 반영).
     /// writeGeneration 은 이 응답을 발사하기 직전의 workStateWriteGeneration 이다. 값이 그 사이 올랐다면
@@ -2096,6 +2098,17 @@ extension WorkTimerStore {
                 // working 으로 세우므로, 누가 닫았든(클라 stopWork/서버 스캐빈저) 닫힌 행의 모양이 같아
                 // 동일하게 동작한다. 문구는 refreshTeamStatus 의 정규화 가드가 이 주기 동안 지켜 준다.
                 syncMessage = Self.remoteAbandonedCloseNotice
+            } else if let seen = ownMember.lastSeenAt ?? ownMember.updatedAt,
+                      clock().timeIntervalSince(seen) <= Self.abandonedSessionThresholdSeconds {
+                // [0.3.51 — 폰도 근무를 끝낸다] 신호가 신선한 강하 = **다른 기기에서 사람이 끝냈다**(폰 [근무 종료]는 서버가
+                // last_seen_at 을 지금으로 찍는다 — 20261014130000 결정 ④). 흡수 세션이든 이 맥이 연 세션이든 같다.
+                //   · 짧게 알린다(예전엔 침묵 — 폰에서 끝낸 근무가 맥에서 말없이 사라졌다).
+                //   · **재개 대상으로 등록하지 않는다**(위 abandoned 갈래와 다르다) — 사용자가 끈 근무를 30분 창이 되살리면 안 된다.
+                //   · 자동 시작을 억제한다(수동 [근무 종료]와 같은 장치) — 맥 앞에서 계속 타이핑하는 사람에게 5분 뒤 새 근무를
+                //     열어 버리면 방금 폰에서 누른 종료가 무의미해진다. 억제는 1시간 부재로 풀린다(스케줄러 onAbsenceGap) —
+                //     폰 근무가 자리비움으로 끝난 경우(맥 입력도 2시간 30분 넘게 없었다)는 돌아오는 순간 공백이 이미 1시간을 넘는다.
+                syncMessage = Self.remoteEndedElsewhereNotice
+                suppressAutoStart(now: clock())
             }
             startedAt = nil
             // 흡수 세션이든 이 맥이 연 세션이든 서버에서 이미 닫혔다 — 표식과 잔존 세션ID를 **함께** 끊는다.

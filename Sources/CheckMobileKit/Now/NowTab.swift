@@ -151,18 +151,40 @@ struct NowSectionHeader: View {
 struct NowStatusSection: View {
     let store: NowStore
     let onEditGoal: () -> Void
+    @State private var isConfirmingStop = false
 
     var body: some View {
         if store.hasNoTeam {
+            // 무소속: 맨 위 버튼은 꺼진 채 이유를 말한다(0.3.51) — 아래 합류 카드가 그 이유를 푸는 자리다.
+            if store.showsDisabledWorkControlForNoTeam {
+                Section {
+                    NowWorkControlRow(store: store, onStop: {})
+                        .cardSegmentRow(.single, padding: EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                }
+            }
             // 무소속: 안내만 하고 끝내면 맥 없는 사람은 앱을 못 쓴다 — 여기가 팀에 들어가는 자리다(w16 검증 high).
             NowTeamJoinSection(store: store.teamJoin)
         } else {
+            let showsControl = store.showsWorkControl
             Section {
                 // 오늘 누적은 1초마다 폰이 센다(서버 세션 시작 시각 기준). 시각은 스토어 시계에서만 읽는다(데모는 멈춘 시계).
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     content(now: store.context.clock.now())
                 }
-                .cardSegmentRow(.single, padding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                .cardSegmentRow(showsControl ? .first : .single, padding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                // 근무 시작·종료(0.3.51). 1초 TimelineView **밖**의 별도 행이다 — 버튼이 1초마다 다시 만들어지지 않게.
+                if showsControl {
+                    NowWorkControlRow(store: store, onStop: { isConfirmingStop = true })
+                        .cardSegmentRow(.last, padding: EdgeInsets(top: 12, leading: 16, bottom: 14, trailing: 16))
+                }
+            }
+            .confirmationDialog(NowText.workStopConfirmTitle, isPresented: $isConfirmingStop, titleVisibility: .visible) {
+                Button(NowText.workStop, role: .destructive) {
+                    Task { await store.clockOut() }
+                }
+                Button(NowText.close, role: .cancel) {}
+            } message: {
+                Text(NowText.workStopConfirmMessage(origin: store.myWorkOrigin))
             }
         }
     }
@@ -176,6 +198,58 @@ struct NowStatusSection: View {
             NowUnavailableRow(title: NowText.statusUnavailableTitle, isRetrying: store.isRefreshing) { store.refresh() }
         } else {
             LoadingRow()
+        }
+    }
+}
+
+/// 근무 시작·종료 줄(0.3.51 — 지금 탭 맨 위 카드의 아래 칸). 근무 중이 아니면 [근무 시작](채움), 근무 중이면 [근무 종료](회색 —
+/// 누르면 확인을 받는다). 아래 한 줄: 폰이 연 근무의 생존 규칙 · 맥이 연 근무 안내 · 결과 안내 · 알림이 꺼졌을 때 경고.
+/// 무소속이면 꺼진 [근무 시작]과 이유("팀에 들어가면…").
+struct NowWorkControlRow: View {
+    let store: NowStore
+    let onStop: () -> Void
+
+    var body: some View {
+        let working = store.isMyWorkOpen
+        let origin = store.myWorkOrigin
+        VStack(alignment: .leading, spacing: 8) {
+            if working {
+                AingButton(
+                    NowText.workStop, systemImage: "stop.fill", kind: .gray, size: .md, fillsWidth: true,
+                    isBusy: store.isWorkBusy, action: onStop
+                )
+                .disabled(store.isWorkBusy)
+            } else {
+                AingButton(
+                    NowText.workStart, systemImage: "play.fill", kind: .filled, size: .md, fillsWidth: true,
+                    isBusy: store.isWorkBusy
+                ) {
+                    Task { await store.clockIn() }
+                }
+                .disabled(store.isWorkBusy || store.hasNoTeam)
+            }
+            ForEach(lines(working: working, origin: origin), id: \.self) { line in
+                Text(line)
+                    .font(.footnote)
+                    .foregroundStyle(MobileTheme.label2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let notice = store.workNotice {
+                InlineNotice(text: notice, kind: .info)
+            }
+            if working, origin == .phone, store.context.links.push?.authorization == .denied {
+                InlineNotice(text: NowText.pushOffWarning, kind: .warning)
+            }
+        }
+    }
+
+    private func lines(working: Bool, origin: NowWorkOrigin) -> [String] {
+        if store.hasNoTeam { return [NowText.workNeedsTeam] }
+        guard working else { return [] }
+        switch origin {
+        case .phone: return [NowText.phoneWorkCaption(checkAfterSeconds: store.phoneSession?.checkAfterSeconds)]
+        case .mac: return [NowText.macWorkCaption]
+        case .unknown: return []
         }
     }
 }
@@ -250,7 +324,7 @@ struct NowStatusCard: View {
 
     private var stateText: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(card.isWorking ? NowText.workingOnMac : NowText.notWorking)
+            Text(card.stateText)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(stateColor)
                 .fixedSize(horizontal: false, vertical: true)
@@ -362,7 +436,7 @@ struct NowWorkingSection: View {
             } header: {
                 header
             } footer: {
-                NowWorkingFooter()
+                NowWorkingFooter(phoneWorkAvailable: store.phoneWorkAvailable)
             }
         } else if !teammates.isEmpty, !others.isEmpty {
             // 우리 팀 · 다른 팀은 그룹 두 장(시안 02 — 사이 12pt).
@@ -375,7 +449,7 @@ struct NowWorkingSection: View {
             Section {
                 NowWorkingGroup(store: store, label: NowText.otherTeams, people: others, anchorID: nil)
             } footer: {
-                NowWorkingFooter()
+                NowWorkingFooter(phoneWorkAvailable: store.phoneWorkAvailable)
             }
         } else {
             Section {
@@ -383,16 +457,18 @@ struct NowWorkingSection: View {
             } header: {
                 header
             } footer: {
-                NowWorkingFooter()
+                NowWorkingFooter(phoneWorkAvailable: store.phoneWorkAvailable)
             }
         }
     }
 }
 
-/// 절 아래 한 줄 "근무 시작과 종료는 맥 앱에서 해요"(시안 `.b-foot`).
+/// 절 아래 한 줄(시안 `.b-foot`). 0.3.51 부터 폰도 근무를 시작·종료한다 — 서버에 그 함수가 없을 때만 옛 문장.
 struct NowWorkingFooter: View {
+    let phoneWorkAvailable: Bool
+
     var body: some View {
-        Text(NowText.workingFooter)
+        Text(phoneWorkAvailable ? NowText.workingFooter : NowText.workingFooterMacOnly)
             .font(.footnote)
             .foregroundStyle(MobileTheme.label2)
             .fixedSize(horizontal: false, vertical: true)

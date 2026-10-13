@@ -607,6 +607,8 @@ import Testing
             ("message", AingTab.messages, AingRoute.message(peerID: PushDemo.peerID)),
             ("gomoku_invite", .games, .gomokuInvite(matchID: PushDemo.matchID)),
             ("feedback_reply", .me, .feedback(reportID: PushDemo.reportID)),
+            // 0.3.51 근무 확인 — 누르면 지금 탭(여는 것 자체가 '아직 근무 중'이라는 답이다).
+            ("work_check", .now, .now),
         ] {
             MobileStubURLProtocol.clearRequests(host: MobileDemo.host)
             let arguments = ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", "now", "-AingCheckDemoPushOpen", raw]

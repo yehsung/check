@@ -270,6 +270,22 @@ create or replace function public.away_daily_restore_limit()     returns int lan
 사유 필터가 아니라 산술이다: away 의 갭 = 임계이고 재개 창은 30분이다. 임계가 30분 밑으로 내려가면
 away 마감이 조용히 자동 재개된다. 서버 함수 코멘트에도 같은 경고가 있다.
 
+## 8-1. 폰이 연 근무 (0.3.51 — 정본은 `docs/phone-work.md`)
+
+폰도 근무를 연다(`work_phone_start`). 폰은 잠기면 아무 신호도 못 보내므로 **이 문서의 판정자들이 그 근무를 보지 않게** 설계했다:
+
+- **판정자는 따로다.** 폰 근무의 확인 알림 · 마감은 service_role 전용 cron `phone-work`(매분, `phone_work_tick()`)만 한다.
+  클라가 부르는 `close_abandoned_work_sessions()` 에는 아무것도 섞지 않았다(이 문서 6절과 같은 이유 — 팀원 팝오버가 남의 마감을 앞당긴다).
+- **같은 임계·같은 소급**: 신호 없이 `away_close_threshold_seconds()`(2시간 30분 — `[30분, 12시간]` 으로 조여 씀)가 지나면 푸시 1회 →
+  10분 유예 → 마지막 신호 시각으로 마감, 사유 **`away`**(CHECK 무변경). 신호 = 마지막 폰 앱 활동 + **`away_last_input_at`(맥 입력 — 같은 max 규칙)**.
+- **이 문서의 클라 판정·백스톱은 폰 근무에 발화하지 않는다**: 맥은 폰 근무를 흡수(미러링)하므로 클라 away 마감에서 빠지고,
+  `close_away_work_sessions()` 는 그 세션을 소유한 기기 행(`session_id = 그 세션`)을 요구하는데 폰 근무에는 없다(`away_input_observable` 거짓).
+- **6-1 자동 재개가 되살리지 않는다**: 사유가 `away` 이고 갭은 언제나 임계(2시간 30분) 이상이라 30분 창 밖이다.
+- **리그 라이브 클램프(7절)**: 폰의 touch · 시작이 `work_statuses.last_input_at` 을 now 로 쓴다 — 진행 중 폰 근무의 리그 기여가
+  '마지막 앱 열림 + 30분'까지 산다(안 쓰면 맥의 어제 입력이 li 로 남아 0 으로 보였다). 대가는 `push__at_mac` 2분 억제(phone-work.md 4절).
+- cron 이 살아 있는 동안 `work_statuses.last_seen_at` 을 대리로 민다 — 10분 스캐빈저·맥 7분 폴백이 폰 근무를 '버려진 근무'로 보지 않는다.
+  cron 이 죽으면 10분 뒤 스캐빈저가 'abandoned' 로 닫는다(실패하면 닫히는 쪽).
+
 ## 9. 알려진 잔여 위험 (숨기지 않는다)
 
 1. **세션이 열린 도중 그 맥을 구버전으로 다운그레이드**하면 기기 행의 `last_input_at` 이 얼어붙은 채

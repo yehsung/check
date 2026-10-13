@@ -70,14 +70,16 @@ import UserNotifications
         #expect(PushAction(actionIdentifier: "") == .open)
     }
 
-    @Test("카테고리 3종(서버 aps.category 글자 그대로): MESSAGE 액션 없음 · GOMOKU_INVITE 수락(앱 열기 · 잠금 해제)만 · FEEDBACK_REPLY 액션 없음 — 앱을 열지 않는 액션 0")
+    @Test("카테고리 4종(서버 aps.category 글자 그대로): MESSAGE 액션 없음 · GOMOKU_INVITE 수락(앱 열기 · 잠금 해제)만 · FEEDBACK_REPLY · WORK_CHECK 액션 없음 — 앱을 열지 않는 액션 0")
     func categories() throws {
         let byID = Dictionary(uniqueKeysWithValues: PushCategories.all.map { ($0.identifier, $0) })
-        #expect(Set(byID.keys) == ["MESSAGE", "GOMOKU_INVITE", "FEEDBACK_REPLY"])
+        #expect(Set(byID.keys) == ["MESSAGE", "GOMOKU_INVITE", "FEEDBACK_REPLY", "WORK_CHECK"])
         #expect(Set(PushKind.allCases.map(\.categoryIdentifier)) == Set(byID.keys))
 
         #expect(try #require(byID["MESSAGE"]).actions.isEmpty)
         #expect(try #require(byID["FEEDBACK_REPLY"]).actions.isEmpty)
+        // 근무 확인(0.3.51): 앱을 여는 것 자체가 답이다 — 액션 버튼을 두지 않는다(앱을 열지 않는 '계속' 버튼은 계약상 금지).
+        #expect(try #require(byID["WORK_CHECK"]).actions.isEmpty)
 
         let gomoku = try #require(byID["GOMOKU_INVITE"])
         #expect(gomoku.actions == [PushActionSpec(identifier: "GOMOKU_ACCEPT", title: "수락", opensApp: true, requiresUnlock: true)])
@@ -131,6 +133,7 @@ extension PushHarness {
         case .message: return "MESSAGE"
         case .gomokuInvite: return "GOMOKU_INVITE"
         case .feedbackReply: return "FEEDBACK_REPLY"
+        case .workCheck: return "WORK_CHECK"
         }
     }
 }

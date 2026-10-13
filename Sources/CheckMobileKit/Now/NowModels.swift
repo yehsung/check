@@ -12,6 +12,10 @@ package enum NowText {
 
     // 내 상태
     package static let workingOnMac = "맥에서 근무 중"
+    /// 폰이 연 세션(0.3.51 — `work_phone_start`).
+    package static let workingOnPhone = "폰에서 근무 중"
+    /// 어디서 열었는지 아직 모른다(생존 신호 응답 전).
+    package static let working = "근무 중"
     package static let notWorking = "근무 안 함"
     /// 상태 카드 부제(근무 중): "이번 세션 10:20부터"(KST 시각).
     package static func sessionSince(_ time: String) -> String { "이번 세션 \(time)부터" }
@@ -80,8 +84,10 @@ package enum NowText {
     package static let workingEmpty = "지금 근무 중인 사람이 없어요"
     /// 머리·묶음 오른쪽 사람 수("6명").
     package static func peopleCount(_ count: Int) -> String { "\(count)명" }
-    /// 지금 근무 중 절 아래 한 줄(폰은 근무를 시작·종료하지 않는다).
-    package static let workingFooter = "근무 시작과 종료는 맥 앱에서 해요"
+    /// 지금 근무 중 절 아래 한 줄. 0.3.51 부터 폰도 근무를 시작·종료한다(맨 위 상태 카드의 버튼).
+    package static let workingFooter = "근무는 맥이나 이 탭 맨 위 버튼으로 시작하고 끝내요"
+    /// 서버에 폰 근무 함수가 아직 없을 때(404 PGRST202 — 앱이 db push 보다 먼저 나간 창)만 쓰는 옛 문장.
+    package static let workingFooterMacOnly = "근무 시작과 종료는 맥 앱에서 해요"
     /// 끊긴 팀원 부제: "연결 끊김 · 마지막 확인 13분 전".
     package static func staleLastSeen(_ relative: String?) -> String {
         guard let relative else { return connectionLost }
@@ -98,6 +104,71 @@ package enum NowText {
     }
     /// 스크롤해 접힌 제목 아래: "5:10:00 · 이번 주 62%".
     package static func collapsedSubtitle(clock: String, percent: Int) -> String { "\(clock) · 이번 주 \(percent)%" }
+
+    // 근무 시작 · 종료(0.3.51 — 폰도 근무를 연다)
+    package static let workStart = "근무 시작"
+    package static let workStop = "근무 종료"
+    package static let workStopConfirmTitle = "근무를 끝낼까요?"
+    /// 종료 확인 본문. 맥이 연 근무도 여기서 끝난다(사람당 열린 근무는 하나 — 서버 `work_phone_stop`).
+    package static func workStopConfirmMessage(origin: NowWorkOrigin) -> String {
+        switch origin {
+        case .mac: return "맥에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
+        case .phone, .unknown: return "지금까지의 시간은 그대로 기록돼요."
+        }
+    }
+    package static let workStarted = "근무를 시작했어요"
+    package static let workStopped = "근무를 끝냈어요"
+    package static let alreadyWorking = "이미 근무 중이에요"
+    package static let alreadyWorkingOnMac = "이미 맥에서 근무 중이에요"
+    package static let alreadyStopped = "이미 근무가 끝나 있어요"
+    package static let workChanged = "근무 상태가 바뀌었어요. 다시 확인해 주세요"
+    package static let startFailed = "근무를 시작하지 못했어요. 잠시 후 다시 시도해 주세요"
+    package static let stopFailed = "근무를 끝내지 못했어요. 잠시 후 다시 시도해 주세요"
+    /// 서버에 폰 근무 함수가 없다(404 PGRST202).
+    package static let workUnavailable = "지금은 폰에서 근무를 시작할 수 없어요"
+    /// 소속이 없을 때 버튼 아래(버튼은 꺼진다).
+    package static let workNeedsTeam = "팀에 들어가면 근무를 시작할 수 있어요"
+    /// 폰이 연 근무의 버튼 아래 안내. 확인 임계는 서버가 준 값(없으면 2시간 30분 — 서버 기본값과 같다).
+    package static func phoneWorkCaption(checkAfterSeconds: Int?) -> String {
+        "폰을 잠가도 근무는 이어져요 · \(NowFormat.hoursMinutesText(checkAfterSeconds ?? 9_000)) 동안 앱을 안 열면 확인 알림을 보내요"
+    }
+    package static let macWorkCaption = "맥에서 연 근무예요 · 여기서 끝낼 수도 있어요"
+    /// 알림이 꺼진 사람이 폰으로 근무 중일 때 — 확인 알림 없이 같은 시각표로 끝난다(서버 결정).
+    package static let pushOffWarning = "알림이 꺼져 있어 확인 알림 없이 근무가 끝날 수 있어요"
+    /// 서버가 확인 알림 뒤 유예가 지나 소급 마감했다(`work_phone_touch` 의 last.reason = idle). "13:20"(KST).
+    package static func idleClosed(at time: String?) -> String {
+        guard let time else { return "앱을 오래 열지 않아 근무를 끝냈어요" }
+        return "앱을 오래 열지 않아 \(time)에 근무를 끝냈어요"
+    }
+}
+
+// MARK: - 폰 근무(0.3.51)
+
+/// 내 열린 근무를 어디서 열었는가(서버 `work_phone_*` 응답의 origin). 팀 상태 GET 에는 이 칸이 없다 — 공유 select 에 칸을
+/// 더하면 칸이 없는 서버에서 맥·폰 공용 폴링이 400 이 된다(지도 phonework-ios-client). 그래서 폰 RPC 응답으로만 안다.
+package enum NowWorkOrigin: String, Equatable, Sendable {
+    case phone
+    case mac
+    /// 아직 모른다(생존 신호 응답 전) — "근무 중"으로만 말한다.
+    case unknown
+}
+
+/// 폰 RPC 가 알려 준 내 열린 세션(시작 · touch 응답).
+package struct NowPhoneSession: Equatable, Sendable {
+    /// 열린 행 id(소문자 — `OpenSessionFact.id` 와 같은 축).
+    package var id: String
+    package var origin: NowWorkOrigin
+    /// 다음 확인 알림 예정 시각(touch 응답 `check_at` — 맥 입력이 있으면 서버가 더 미룬다).
+    package var checkAt: Date?
+    /// 확인 임계(초 — 시작 응답 `check_after_seconds`).
+    package var checkAfterSeconds: Int?
+
+    package init(id: String, origin: NowWorkOrigin, checkAt: Date? = nil, checkAfterSeconds: Int? = nil) {
+        self.id = id
+        self.origin = origin
+        self.checkAt = checkAt
+        self.checkAfterSeconds = checkAfterSeconds
+    }
 }
 
 // MARK: - 팀 소속
@@ -121,7 +192,7 @@ package struct NowMembership: Equatable, Sendable {
 
 /// 내 상태 카드 한 장의 값(시각 `now` 기준 — 뷰가 1초마다 다시 만든다).
 package struct NowMyCard: Equatable, Sendable {
-    /// 맥에서 근무 중인가(서버 `work_statuses.status`).
+    /// 근무 중인가(서버 `work_statuses.status` — 맥이 열었든 폰이 열었든).
     package var isWorking: Bool
     /// 근무 중인데 생존신호가 끊겼다(맥 팀 카드의 "연결 끊김"). 시간은 마지막 신호에서 멈춘다.
     package var isStale: Bool
@@ -130,8 +201,20 @@ package struct NowMyCard: Equatable, Sendable {
     package var todaySeconds: Int
     package var weekSeconds: Int
     package var goalHours: Int
+    /// 열린 근무를 어디서 열었는가(근무 중일 때만 뜻이 있다). 새 칸은 마지막 — 기본값이 있어 기존 호출부가 그대로 컴파일된다.
+    package var origin: NowWorkOrigin = .unknown
 
     package var goalSeconds: Int { max(1, goalHours) * 3600 }
+
+    /// 상태 글자: 근무 안 함 · 폰에서 근무 중 · 맥에서 근무 중 · (모르면) 근무 중.
+    package var stateText: String {
+        guard isWorking else { return NowText.notWorking }
+        switch origin {
+        case .phone: return NowText.workingOnPhone
+        case .mac: return NowText.workingOnMac
+        case .unknown: return NowText.working
+        }
+    }
     package var progress: Double { TeamWeeklyGoal(workedSeconds: weekSeconds, goalSeconds: goalSeconds).progress }
     package var isGoalComplete: Bool { weekSeconds >= goalSeconds }
     package var percent: Int { NowFormat.percent(workedSeconds: weekSeconds, goalSeconds: goalSeconds) }

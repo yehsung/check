@@ -591,6 +591,11 @@ package final class PushCoordinator {
            let visible = context.router.visibleConversationPeerID, visible.lowercased() == peer {
             return .hidden
         }
+        // 근무 확인(0.3.51): 앱이 이미 앞에 있다 = 그 자체가 답이다. 위 refreshStores 가 생존 신호를 바로 보냈다 —
+        // "10분 안에 앱을 열면…" 배너를 앱 안에서 띄우면 이미 연 사람에게 열라고 말하게 된다.
+        if case .workCheck = payload.content, isAppActive {
+            return .hidden
+        }
         return .banner
     }
 
@@ -603,6 +608,8 @@ package final class PushCoordinator {
             context.gomoku.handleSignal()
         case .feedbackReply(let report):
             if let me = context.links.me { notifyFeedback(me, reportID: report) }
+        case .workCheck:
+            if let now = context.links.now { notifyWorkCheck(now) }
         }
     }
 
@@ -618,6 +625,11 @@ package final class PushCoordinator {
 
     private func notifyFeedback<Store: PushFeedbackRefreshing>(_ store: Store, reportID: String?) {
         store.didReceiveFeedbackReplyPush(reportID: reportID)
+    }
+
+    /// 근무 확인 알림 → 지금 탭이 생존 신호를 바로 보내고 카드를 다시 읽는다(요구 서명 — 기본 구현 없음).
+    private func notifyWorkCheck<Store: PushWorkCheckRefreshing>(_ store: Store) {
+        store.didReceiveWorkCheckPush()
     }
 
     // MARK: - 응답(탭 · 액션)

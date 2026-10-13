@@ -148,7 +148,9 @@ import Testing
                 "체스 라우트가 생겼다 — 위 games/chess 예외 갈래를 지워라")
         // 라우트마다 그 탭의 첫 화면 픽스처가 적어도 하나는 닿는다(장면 또는 바깥 층).
         let firstScreenKeys: [String: [String]] = [
-            "now": ["rest.work_statuses.get", "rpc.todo_sync"],
+            // rpc.work_phone_touch(0.3.51): 지금 탭이 active 마다 보내는 생존 신호 — 없으면 404 로 접혀 데모에서 근무 버튼이 숨는다.
+            "now": ["rest.work_statuses.get", "rpc.todo_sync", "rpc.work_phone_touch"],
+            "now/teamless": ["rpc.work_phone_touch"],
             "messages": ["rpc.message_history_with_reads", "rpc.message_unread_summary"],
             "rankings/league": ["rpc.team_weekly_leaderboard"],
             "rankings/tokens": ["rpc.token_usage_board"],

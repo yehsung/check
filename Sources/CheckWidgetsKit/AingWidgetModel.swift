@@ -49,7 +49,7 @@ package enum AingWidgetText {
     package static func teammates(_ count: Int) -> String { "우리 팀 \(count)" }
     package static func otherTeams(_ count: Int) -> String { "다른 팀 \(count)" }
     package static let workingEmptyTitle = "아직 아무도 없어요"
-    package static let workingEmptyHint = "맥에서 근무를 시작하면 여기에 떠요"
+    package static let workingEmptyHint = "누가 근무를 시작하면 여기에 떠요"
     /// 로그아웃 칸의 둘째 줄 — 어떤 위젯인지 말한다(비평: 5종이 같은 경고 아이콘 한 줄이라 종류를 알 수 없었다).
     package static let signedOutWorkingHint = "로그인하면 지금 근무 중인 사람이 떠요"
     package static let signedOutTodoHint = "로그인하면 여기서 바로 체크해요"

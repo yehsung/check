@@ -11,7 +11,9 @@ import Testing
 //     최소화(`windowDidHide`)는 남긴다. 진행 중인 판은 어느 쪽도 건드리지 않는다(닫기는 기권이 아니다).
 //  ② "게임이 종료되면 채팅을 보내도 전달이 안 된다" — 서버는 끝난 뒤 120초 동안 말을 받고 상대를 두드리는데,
 //     받는 쪽이 끝난 판에서는 초인종에 받은함만 읽었다. 결과 화면에 서 있는 동안은 그 판도 읽는다(초인종 · 따라잡기 ·
-//     끝난 뒤 130초 동안의 안전망 폴링).
+//     안전망 폴링) — **끝난 뒤 130초 동안만**, 내가 상대 말을 끄지 않았을 때만.
+//  독립 검토가 찾은 넷도 여기서 지킨다: 끝난 판의 늦은 응답이 방금 수락한 새 판을 덮지 않는다 · 시간 밖의 초인종은
+//  그 판을 읽지 않는다 · 받은함이 방금 세운 판을 곧바로 또 읽지 않는다 · 보내자마자 떠난 판은 읽지 않는다.
 //
 // 관례는 V0328GomokuChatStoreTests 그대로다(호스트별 스텁 · 재개 횟수 대기 · WorkTimerStore 보관 · `.gomokuDefaultsCleanup`).
 // 스텁이 못 재는 것(실제 초인종 배달 · 서버의 120초 판정)은 두 계정 e2e 몫이다.
@@ -39,7 +41,7 @@ private func geChat(_ seq: Int, _ body: String, mine: Bool = false) -> [String: 
 /// gomoku_state 의 ok 묶음. 수는 한 건도 없는 판이다(끝난 사유는 기권) — 여기서 재는 것은 판이 아니라 나가기와 대화다.
 private func geState(
     id: String = geMatchID, finished: Bool, chat: [[String: Any]]? = nil, chatSeq: Int? = nil,
-    finishedMs: Double? = nil, serverNowMs: Double? = nil
+    finishedMs: Double? = nil, serverNowMs: Double? = nil, myMuted: Bool? = nil
 ) -> [String: Any] {
     var payload: [String: Any] = [
         "status": "ok",
@@ -68,6 +70,7 @@ private func geState(
     ]
     if let chat { payload["chat"] = chat }
     if let chatSeq { payload["chat_seq"] = chatSeq }
+    if let myMuted { payload["my_muted"] = myMuted }
     return payload
 }
 
@@ -232,22 +235,22 @@ struct V0350GomokuExitChatTests {
         clock.now = t0
         gomoku.isWindowVisible = true
 
-        // 미구독: 3초.
-        await tick(2.0)
+        // 미구독: 5초.
+        await tick(4.9)
         #expect(states() == 0)
-        await tick(3.1)
+        await tick(5.1)
         #expect(states() == 1)
         #expect(gomoku.chat.map(\.body) == ["수고하셨어요"], "안전망이 읽어 온 끝인사가 화면에 안 붙었다")
-        await tick(5.0)
+        await tick(9.0)
         #expect(states() == 1)
-        await tick(6.2)
+        await tick(10.2)
         #expect(states() == 2)
 
         // 구독 중: 10초(주 경로는 초인종이다).
         store.realtimeState = .subscribed(since: t0, lastHeardAt: t0)
-        await tick(15.0)
+        await tick(19.0)
         #expect(states() == 2)
-        await tick(16.3)
+        await tick(20.3)
         #expect(states() == 3)
 
         // 같은 끝난 판을 다시 읽어도 끝이 뒤로 밀리지 않는다 — 밀리면 영영 안 닫힌다.
@@ -301,6 +304,136 @@ struct V0350GomokuExitChatTests {
         clock.now = t0.addingTimeInterval(60)
         await fresh.pollTick(at: clock.now)
         #expect(geCount(freshHost, "gomoku_state") == 1, "나간 판을 안전망이 계속 읽는다")
+    }
+
+    // MARK: - ② 끝인사: 읽지 않는 자리 (독립 검토 2026-10-13)
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func doorbellsOutsideTheGraceWindowOrWhileMutedDoNotReadTheFinishedMatch() async {
+        // 없으면: 끝난 판을 들고 있는 동안(결과 화면을 켜 둔 채 방치 · 최소화) 초인종마다, 다시 붙을 때마다 그 판을 읽는다 —
+        //        서버는 120초 뒤로 말을 안 받으니 전부 헛요청이다. 내가 상대 말을 껐을 때도 올 것이 없다.
+        let clock = GEClock()
+        let t0 = clock.now
+
+        let (_, late, lateHost) = geStore("bell-late", handler: geFarewellHandler)
+        late.clock = { clock.now }
+        late.applyState(geDecode(geState(finished: true, chat: [], chatSeq: 0)))
+        clock.now = t0.addingTimeInterval(GomokuStore.finishedChatWindowSeconds + 1)
+        late.handleSignal()
+        await geWait { geCount(lateHost, "gomoku_inbox") == 1 && late.syncTask == nil }
+        await late.catchUp()
+        #expect(geCount(lateHost, "gomoku_inbox") == 2, "시간이 지나도 받은함은 읽는다(새 신청)")
+        #expect(geCount(lateHost, "gomoku_state") == 0, "서버가 말을 안 받는 시간에 끝난 판을 읽는다")
+
+        clock.now = t0
+        let (_, muted, mutedHost) = geStore("bell-muted", handler: geFarewellHandler)
+        muted.clock = { clock.now }
+        muted.applyState(geDecode(geState(finished: true, chat: [], chatSeq: 0, myMuted: true)))
+        #expect(muted.isMuted)
+        muted.handleSignal()
+        await geWait { geCount(mutedHost, "gomoku_inbox") == 1 && muted.syncTask == nil }
+        muted.isWindowVisible = true
+        muted.lastStateRequestAt = t0
+        clock.now = t0.addingTimeInterval(30)
+        await muted.pollTick(at: clock.now)
+        #expect(geCount(mutedHost, "gomoku_state") == 0, "상대 말을 껐는데 끝인사를 읽으러 간다")
+
+        // 기준선: 같은 순간, 끄지 않은 판은 읽는다.
+        clock.now = t0
+        let (_, open, openHost) = geStore("bell-open", handler: geFarewellHandler)
+        open.clock = { clock.now }
+        open.applyState(geDecode(geState(finished: true, chat: [], chatSeq: 0, myMuted: false)))
+        open.handleSignal()
+        await geWait { geCount(openHost, "gomoku_state") == 1 && open.syncTask == nil }
+        #expect(geCount(openHost, "gomoku_state") == 1)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func aLateReplyForTheFinishedMatchDoesNotOverwriteANewlyAcceptedOne() {
+        // 없으면: 결과 화면에서 끝난 판 A 를 읽는 조회가 나간 직후 배너로 새 신청 B 를 수락하면, 늦게 온 A 의 응답이
+        //        방금 선 B 를 A 의 결과 화면으로 되돌려 놓는다 — 그동안 B 의 첫 수 시간이 흐른다.
+        let (_, gomoku, _) = geStore("late-over-new")
+        gomoku.applyState(geDecode(geState(finished: true)))
+        #expect(gomoku.phase == .result)
+        // 수락: 앞 판을 접지 않은 채 새 판이 선다(`respond` 의 길).
+        gomoku.applyState(geDecode(geState(id: geOtherMatchID, finished: false)))
+        #expect(gomoku.phase == .playing && gomoku.match?.id == geOtherMatchID)
+
+        #expect(gomoku.applyState(geDecode(geState(finished: true, chat: [geChat(1, "수고하셨어요")], chatSeq: 1)))
+                == .ignored)
+        #expect(gomoku.match?.id == geOtherMatchID && gomoku.match?.isFinished == false,
+                "끝난 판의 늦은 응답이 새 판을 덮었다")
+        #expect(gomoku.phase == .playing && gomoku.activeMatchID == geOtherMatchID)
+        #expect(gomoku.chat.isEmpty, "앞 판의 대화가 새 판에 섞였다")
+
+        // 기준선: 판이 없을 때 온 끝난 판은 여전히 결과 화면을 세운다(가드가 전부 삼키는 것이 아니다).
+        let (_, empty, _) = geStore("late-over-empty")
+        #expect(empty.applyState(geDecode(geState(finished: true))) == .applied)
+        #expect(empty.phase == .result)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func theInboxRaisingAFinishedMatchDoesNotReadItTwice() async {
+        // 없으면: 앱을 켤 때 받은함이 '방금 끝난 판'을 읽어 결과 화면을 세운 직후, 따라잡기가 같은 판을 한 번 더 읽는다.
+        let handler: GomokuStubProtocol.Handler = { rpc, _, _ in
+            switch rpc {
+            case "gomoku_inbox":
+                return geReply(["status": "ok", "incoming": [], "outgoing": NSNull(),
+                                "last_finished": ["match_id": geMatchID, "result": "white_win", "end_reason": "resign",
+                                                  "winner": NSNull(), "stake": 5, "finished_ms": NSNull()]])
+            case "gomoku_state": return geReply(geState(finished: true, chat: [], chatSeq: 0))
+            case "gomoku_lobby": return geReply(geLobby())
+            default: return nil
+            }
+        }
+        let (_, viaCatchUp, catchHost) = geStore("inbox-raise-catchup", handler: handler)
+        await viaCatchUp.catchUp()
+        #expect(viaCatchUp.phase == .result && viaCatchUp.match?.id == geMatchID, "받은함이 끝난 판의 결과를 안 세웠다")
+        #expect(geCount(catchHost, "gomoku_state") == 1, "받은함이 방금 읽은 판을 따라잡기가 또 읽었다")
+
+        let (_, viaBell, bellHost) = geStore("inbox-raise-bell", handler: handler)
+        viaBell.handleSignal()
+        await geWait { viaBell.phase == .result && viaBell.syncTask == nil }
+        #expect(geCount(bellHost, "gomoku_state") == 1, "받은함이 방금 읽은 판을 초인종이 또 읽었다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    @MainActor
+    func sendingAFarewellAndClosingRightAwayDoesNotReadTheFoldedMatch() async {
+        // 없으면: 결과 화면에서 한마디 보내자마자 창을 닫으면, 전송 응답 뒤의 재조회가 이미 접은 판을 읽는다(응답은 버려진다).
+        let handler: GomokuStubProtocol.Handler = { rpc, _, _ in
+            switch rpc {
+            case "gomoku_chat_send":
+                return GomokuStubProtocol.Reply(
+                    body: geText(["status": "ok", "chat_seq": 1, "opponent_muted": false, "chat_capable": true]),
+                    delay: 0.2)
+            case "gomoku_state":
+                return geReply(geState(finished: true, chat: [geChat(1, "수고하셨어요", mine: true)], chatSeq: 1))
+            case "gomoku_leave": return geReply(["status": "ok", "both_left": false, "chat_deleted": 0])
+            default: return nil
+            }
+        }
+        let (_, gomoku, host) = geStore("send-then-close", handler: handler)
+        gomoku.applyState(geDecode(geState(finished: true, chat: [], chatSeq: 0)))
+        gomoku.chatDraft = "수고하셨어요"
+        gomoku.sendChatDraft()
+        gomoku.windowDidClose()
+        await geWait { geCount(host, "gomoku_chat_send") == 1 && !gomoku.isSendingChat }
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(geCount(host, "gomoku_state") == 0, "접은 판을 전송 뒤에 다시 읽었다")
+        #expect(gomoku.phase == .lobby && gomoku.match == nil)
+
+        // 기준선: 창을 그대로 두면 내 줄을 읽어 와 화면에 붙인다.
+        let (_, stays, staysHost) = geStore("send-then-stay", handler: handler)
+        stays.applyState(geDecode(geState(finished: true, chat: [], chatSeq: 0)))
+        stays.chatDraft = "수고하셨어요"
+        stays.sendChatDraft()
+        await geWait { stays.chat.count == 1 }
+        #expect(geCount(staysHost, "gomoku_state") == 1)
+        #expect(stays.chat.first?.isMine == true && stays.chatDraft == "")
     }
 
     // MARK: - ① 끝난 판에서 나가기

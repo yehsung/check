@@ -543,8 +543,8 @@ package final class GomokuStore {
     package nonisolated static let outgoingInboxPollSeconds: TimeInterval = 5
     /// 결과 화면에 서 있는 끝난 판의 **끝인사** 안전망 조회 주기(초) — 실시간 구독 중. 주 경로는 초인종(`syncOnce`)이다.
     package nonisolated static let finishedChatPollSecondsWhileSubscribed: TimeInterval = 10
-    /// 같은 조회 — 미구독. 초인종이 없으니 더 촘촘하다.
-    package nonisolated static let finishedChatPollSecondsUnsubscribed: TimeInterval = 3
+    /// 같은 조회 — 미구독. 초인종이 없으니 더 촘촘하다(그래도 끝난 판이라 대국 중의 1.5초보다는 느슨하다).
+    package nonisolated static let finishedChatPollSecondsUnsubscribed: TimeInterval = 5
     /// 그 안전망을 돌리는 길이(초) — 판이 끝난 서버 시각부터(모르면 결과 화면이 선 순간부터) 센다.
     /// 서버 `gomoku_chat_grace_seconds()`(120) 에 마지막 줄이 건너올 여유를 얹었다. 이 뒤로는 서버가 어차피 새 말을 안 받는다(`not_active`).
     package nonisolated static let finishedChatWindowSeconds: TimeInterval = 130
@@ -1213,6 +1213,10 @@ package final class GomokuStore {
         }
         let isFinished = status == "finished"
         if isFinished, dismissedMatchIDs.contains(id), match?.id != id { return .ignored }
+        // 진행 중인 **다른** 1:1 판을 들고 있으면 끝난 판의 늦은 응답은 버린다. 0.3.50 부터 결과 화면이 끝난 판을 다시 읽으므로
+        // (끝인사), 그 조회가 나간 직후 배너로 새 신청을 수락하면 늦게 온 응답이 방금 선 새 판을 끝난 판의 결과로 되돌려 놓는다 —
+        // 그동안 새 판의 첫 수 시간이 흐른다. 수락은 앞 판을 `dismissedMatchIDs` 에 넣지 않아 윗줄이 못 막는다.
+        if isFinished, !isAIMatch, let current = match, current.id != id, !current.isFinished { return .ignored }
 
         let myID = host?.session?.userID.lowercased()
         var myColor = GomokuColor(rawValue: payload.myColor ?? "")
@@ -1683,29 +1687,35 @@ package final class GomokuStore {
         if let current = match, !current.isFinished, !isAIMatch {
             await refreshMatch(id: current.id)
         } else {
-            await loadInbox()
             // 결과 화면에 아직 서 있는 끝난 판이면 이 초인종은 **상대의 끝인사**일 수 있다 — 서버는 끝난 뒤 120초 동안
             // 말을 받고 상대를 두드린다(`gomoku_chat_send`). 여기서 그 판을 안 읽으면 받는 쪽은 그 말을 영영 못 본다:
             // 폴링은 끝난 판을 건너뛰고, 보낸 사람만 제 줄을 본다("보내도 전달이 안 된다" — 2026-10-13 신고).
-            await refreshFinishedMatchChat()
+            // 읽을 판은 **받은함보다 먼저** 정한다 — 받은함이 방금 세운(= 방금 읽은) 끝난 판을 곧바로 한 번 더 읽지 않게.
+            let farewellID = farewellMatchID(at: clock())
+            await loadInbox()
+            if let farewellID, match?.id == farewellID { await refreshMatch(id: farewellID) }
         }
     }
 
-    /// 결과 화면에 서 있는 끝난 1:1 판을 한 번 다시 읽는다 — 받은 번호부터 묻으므로 오는 것은 새 대화 줄뿐이다.
-    /// 판이 없거나 진행 중이거나 AI 판이면 아무것도 안 한다([로비로]·창 닫기 뒤에는 판이 없어 요청이 안 나간다).
-    private func refreshFinishedMatchChat() async {
-        guard let current = match, current.isFinished, !isAIMatch else { return }
-        await refreshMatch(id: current.id)
+    /// 끝인사를 읽어 올 판 — 결과 화면에 서 있는 끝난 1:1 판이고, 서버가 아직 말을 받는 시간 안이며(`finishedChatWatch`),
+    /// 내가 상대 말을 끄지 않았다(껐으면 서버가 상대 줄을 빼고 주므로 올 것이 없다). 아니면 nil 이고, 그때는
+    /// 초인종·따라잡기·안전망 폴링 어느 것도 그 판을 읽지 않는다([로비로]·창 닫기 뒤에는 판이 없어 역시 nil 이다).
+    /// 읽는 조회는 받은 번호부터 묻으므로 오는 것은 새 대화 줄뿐이다.
+    private func farewellMatchID(at now: Date) -> String? {
+        guard let current = match, current.isFinished, !isAIMatch, !isMuted,
+              let watch = finishedChatWatch, watch.id == current.id, now < watch.until else { return nil }
+        return current.id
     }
 
     /// 조인 직후·깨어남의 따라잡기: 인박스 한 번 + 진행 중 판이면 그 판의 놓친 수.
     package func catchUp() async {
+        // 소켓이 끊겨 있던 동안의 끝인사도 놓친 초인종이다(`syncOnce` 와 같은 이유 · 같은 순서).
+        let farewellID = farewellMatchID(at: clock())
         await loadInbox()
         if let current = match, !current.isFinished {
             await refreshMatch(id: current.id)
-        } else {
-            // 소켓이 끊겨 있던 동안의 끝인사도 놓친 초인종이다(`syncOnce` 와 같은 이유).
-            await refreshFinishedMatchChat()
+        } else if let farewellID, match?.id == farewellID {
+            await refreshMatch(id: farewellID)
         }
     }
 
@@ -1768,7 +1778,7 @@ package final class GomokuStore {
 
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
     ///  · 진행 중 판이 상대 차례면(또는 표시 마감 + 유예가 지났으면) 구독 중 3초 / 미구독 1.5초마다 상태.
-    ///  · 결과 화면의 끝난 판이면 끝난 뒤 130초 동안 구독 중 10초 / 미구독 3초마다 상태(상대의 끝인사).
+    ///  · 결과 화면의 끝난 판이면 끝난 뒤 130초 동안 구독 중 10초 / 미구독 5초마다 상태(상대의 끝인사 — 내가 껐으면 안 돈다).
     ///  · 내 대기 신청이 있으면 5초마다 인박스(수락·거절·만료를 본다).
     ///  · 로비를 보고 있으면 30초마다 목록.
     package func pollTick(at now: Date) async {
@@ -1783,15 +1793,14 @@ package final class GomokuStore {
                     await refreshMatch(id: current.id)
                 }
             }
-        } else if let current = match, current.isFinished, !isAIMatch,
-                  let watch = finishedChatWatch, watch.id == current.id, now < watch.until {
+        } else if let farewellID = farewellMatchID(at: now) {
             // 끝인사 안전망: 초인종을 놓쳐도(미구독·재연결 중) 결과 화면의 대화가 멈춰 서지 않게 한다. 그 시간이 지나면
-            // 서버가 더는 말을 안 받으므로 거기서 그친다 — 결과 화면을 한 시간 켜 둬도 요청은 구독 중 열몇 번, 미구독이어도 마흔 번 남짓이다.
+            // 서버가 더는 말을 안 받으므로 거기서 그친다 — 결과 화면을 한 시간 켜 둬도 요청은 구독 중 13건, 미구독이어도 26건이 상한이다.
             let subscribed = host?.realtimeState.isSubscribed ?? false
             let interval = subscribed
                 ? Self.finishedChatPollSecondsWhileSubscribed : Self.finishedChatPollSecondsUnsubscribed
             if now.timeIntervalSince(lastStateRequestAt) >= interval {
-                await refreshMatch(id: current.id)
+                await refreshMatch(id: farewellID)
             }
         }
         guard isWindowVisible else { return }
@@ -1996,6 +2005,8 @@ package final class GomokuStore {
                 if clearsDraft, self.match?.id == id { self.chatDraft = "" }
                 // 낙관 삽입을 하지 않는다: 서버가 본문을 정규화하고 번호·시각을 정한다. 내가 지어낸 줄과
                 // 다음 응답의 진짜 줄이 다르면 같은 말이 두 줄로 보이거나 순서가 튄다(메시지와 같은 판단).
+                // 왕복 사이에 그 판을 떠났으면(결과 화면에서 보내자마자 창을 닫았다) 읽지 않는다 — 그릴 화면이 없다.
+                guard self.match?.id == id else { return }
                 await self.refreshMatch(id: id)
             }
         }

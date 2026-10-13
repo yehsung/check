@@ -7,6 +7,7 @@ import Foundation
 ///     -AingCheckDemoMessages new        메시지 목록 위에 사람 찾기 시트를 띄운다(라우트 messages 와 함께).
 ///     -AingCheckDemoMessages composer   그 대화 입력칸에 185자를 넣고 한 번 보낸다 — 장면 픽스처가 target_focused 로 답해
 ///                                       카운터 · 되돌아온 글 · 실패 문구가 한 화면에 선다(라우트 messages/<peer> 와 함께).
+///     -AingCheckDemoMessages megaphone  메시지 목록 위에 확성기(📢) 작성 시트를 띄운다(라우트 messages 와 함께 — 1.0.7).
 ///     -AingCheckDemoMessages newbutton  대화 화면에 "새 메시지 ↓" 버튼을 늘 세운다 — 위로 올려 읽는 중에 새 말이 온 순간은 손으로만
 ///                                       만들 수 있어서(라우트 messages/<peer> 와 함께). 터치 영역·말풍선과의 구분을 스크린샷으로 잰다.
 ///
@@ -21,6 +22,10 @@ package enum MessagesDemoLaunch {
 
     static func opensNewConversation(isDemo: Bool, arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
         isDemo && value(arguments: arguments) == "new"
+    }
+
+    static func opensMegaphone(isDemo: Bool, arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        isDemo && value(arguments: arguments) == "megaphone"
     }
 
     static func forcesNewMessageButton(isDemo: Bool, arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {

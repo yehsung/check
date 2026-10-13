@@ -176,7 +176,9 @@ enum ShopPanelGridBudget {
     /// + 캐릭터 소제목 + 하단 구매 바(38pt)** 의 값이다.
     /// 이력: 바깥 간격 12pt·안내 줄 별도일 때 210pt → 간격 7pt 로 174pt → 2단 구매의 하단 바를 더해 199pt.
     /// (안내 줄을 따로 두지 않고 **구매 바 둘째 줄로 합쳐** 25pt 만 늘었다 — 따로 뒀으면 39pt 였다.)
-    static let chromeOutsideGrid: CGFloat = 199
+    /// → v0.3.51 확성기 카드(한 줄 23pt + 간격 4pt)를 소모품 구획에 더해 **226pt**(같은 절차로 3장·6장 둘 다 226.0 실측).
+    ///   격자 상한은 700 − 216 − 226 − 5 = 253pt 로, 캐릭터 6장(2행 232pt)은 평소 화면에서 여전히 스크롤 없이 다 보인다.
+    static let chromeOutsideGrid: CGFloat = 226
     /// 팝오버에서 패널이 아닌 부분(헤더 카드 + 푸터 + 바깥 여백).
     ///
     /// ★ **캐릭터 패널의 194pt 를 그대로 쓰면 안 된다**(처음에 그렇게 했다가 최악 조합이 717pt 로
@@ -240,12 +242,19 @@ struct CheckShopPanel: View {
             VStack(alignment: .leading, spacing: 4) {
                 sectionHeader("소모품")
                 ultraCard
+                megaphoneCard
             }
-            VStack(alignment: .leading, spacing: 4) {
-                sectionHeader("캐릭터")
-                grid
+            // 확성기 작성기(v0.3.51)는 캐릭터 구획과 구매 바 **자리를 빌려** 선다 — 높이가 그 자리의 최소보다 작아서
+            // 팝오버 예산(`ShopPanelGridBudget`)에 새 항목을 만들지 않는다(`MegaphoneComposer.height` 주석).
+            if store.megaphone.isComposerOpen {
+                MegaphoneComposer(store: store)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    sectionHeader("캐릭터")
+                    grid
+                }
+                purchaseBar
             }
-            purchaseBar
         }
         .padding(12)
         .panelStyle()
@@ -383,6 +392,54 @@ struct CheckShopPanel: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: 소모품 — 확성기 카드 (v0.3.51)
+
+    /// 📢 확성기 · 루비 N. **한 줄짜리**다(울트라 카드보다 낮다) — 이 줄만큼 크롬이 늘고(`chromeOutsideGrid` 실측) 격자 상한이
+    /// 그만큼 줄어드는데, 두 줄 카드면 캐릭터 6장(2행)이 평소 화면에서도 스크롤로 밀린다.
+    /// 누르면 작성기를 열고 닫는다(사지 않는다 — 실제 전송은 작성기의 2단 확인 하나뿐이다).
+    @ViewBuilder
+    private var megaphoneCard: some View {
+        let open = store.megaphone.isComposerOpen
+        Button {
+            store.toggleMegaphoneComposer()
+        } label: {
+            HStack(spacing: 6) {
+                Text(MegaphoneText.badgeTitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Text("모두에게 한마디")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                // 값은 서버가 말한다(`megaphone_info` — 작성기를 한 번 열면 안다). 모르면 숫자를 지어내지 않는다.
+                if let price = store.megaphone.price {
+                    RubyBalanceChip(balance: price)
+                }
+                Image(systemName: open ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(CheckTheme.accent.opacity(open ? 0.22 : 0.10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(CheckTheme.accent.opacity(open ? 1.0 : 0.35), lineWidth: open ? 2 : 1)
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(store.purchasingID != nil)
+        .accessibilityLabel(open ? "확성기 작성 닫기" : "확성기 보내기")
+        .accessibilityAddTraits(open ? [.isButton, .isSelected] : .isButton)
     }
 
     // MARK: 격자

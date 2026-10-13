@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "enabled": true,
+  "price": 50,
+  "cooldown_seconds": 600,
+  "cooldown_remaining_seconds": 0,
+  "recipients": 12,
+  "max_length": 198
+}

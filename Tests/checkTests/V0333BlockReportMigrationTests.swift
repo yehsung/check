@@ -296,6 +296,13 @@ private let laterRedefinitionsAllowed: [String: [String]] = [
     // 나머지 둘은 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 조용히 사라지지 않았는지를 본다.
     "20261005160000_chess_duel.sql:gomoku_challenge": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
     "20261005160000_chess_duel.sql:gomoku_respond": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
+    // 2026-10-14 확성기(v0.3.51)가 message_history 를 다시 만든다 — 보낸 사람 자신의 fan-out 행(`megaphone_id` 가 있는 내 행)을
+    // 이력에서 뺀다(안 빼면 대화 목록에 받는 사람 수만큼 스레드가 생기고 200행 창을 먹는다). 그 파일의 §9 가 "차이는 확성기 줄
+    // 하나뿐"을 바이트로 되묻고, V0351MegaphoneMigrationTests 가 정본 대조를 줄 단위로 한 번 더 한다.
+    // 등록 토큰: 덮어쓴 **이유**(확성기 줄) + 이 파일이 지키는 차단 게이트 + 유일한 벽.
+    "20261014122000_megaphone.sql:message_history": [
+        "blocked_between", "(m.from_user = v_uid or m.to_user = v_uid)", "and not (m.from_user = v_uid and m.megaphone_id is not null)",
+    ],
 ]
 
 @Test

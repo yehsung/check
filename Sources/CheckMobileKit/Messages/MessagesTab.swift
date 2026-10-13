@@ -3,7 +3,8 @@ import CheckCore
 import CheckMobileShared
 import SwiftUI
 
-/// 메시지 탭 화면(SPEC-ios §3.3 · 시안 B 03). 목록 → 대화(경로 push) · 오른쪽 위 유리 원 "새 대화" → 사람 찾기 시트.
+/// 메시지 탭 화면(SPEC-ios §3.3 · 시안 B 03). 목록 → 대화(경로 push) · 오른쪽 위 유리 원 "새 대화" → 사람 찾기 시트 ·
+/// 그 옆 📢 → 확성기 작성 시트(1.0.7 — 루비로 모두에게 한마디, `MessagesMegaphoneSheet`).
 ///
 /// - 경로는 `router.pathBinding(for: .messages)` 이고 원소는 `MessagesDestination` 이다.
 /// - 딥링크(`aingcheck://message/<peer>` · 푸시 탭)는 `routeSerial` 이 바뀔 때마다 `consumePendingRoute(for: .messages)` 로 꺼내
@@ -11,6 +12,7 @@ import SwiftUI
 struct MessagesTab: View {
     let store: MessagesStore
     @State private var showsNewConversation = false
+    @State private var showsMegaphone = false
 
     var body: some View {
         let router = store.context.router
@@ -23,6 +25,9 @@ struct MessagesTab: View {
             .navigationTitle(AingTab.messages.title)
             .modifier(MessagesListSubtitle(text: MessagesListRules.subtitle(unreadCount: store.badgeCount)))
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    MessagesMegaphoneToolbarButton { showsMegaphone = true }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     MessagesComposeToolbarButton { showsNewConversation = true }
                 }
@@ -41,10 +46,14 @@ struct MessagesTab: View {
                 router.push(MessagesDestination.conversation(peerID: peer), on: .messages)
             }
         }
+        .sheet(isPresented: $showsMegaphone) {
+            MessagesMegaphoneSheet(store: store)
+        }
         .onAppear {
             consumeRoute()
             #if DEBUG
             if MessagesDemoLaunch.opensNewConversation(isDemo: store.context.isDemo) { showsNewConversation = true }
+            if MessagesDemoLaunch.opensMegaphone(isDemo: store.context.isDemo) { showsMegaphone = true }
             #endif
         }
         .onChange(of: router.routeSerial) { consumeRoute() }
@@ -56,6 +65,7 @@ struct MessagesTab: View {
               let destinations = MessagesListRules.destinations(for: route)
         else { return }
         showsNewConversation = false
+        showsMegaphone = false
         for destination in destinations {
             router.push(destination, on: .messages)
         }
@@ -95,8 +105,29 @@ private struct MessagesComposeToolbarButton: View {
     }
 }
 
+/// 오른쪽 위 "확성기"(📢). 새 대화 버튼과 같은 문법(iOS 26 막대 유리 · iOS 18 공용 유리 원). 기호는 시스템 `megaphone` —
+/// 이모지는 막대 글자색을 안 따라 다크 모드에서 혼자 튄다.
+private struct MessagesMegaphoneToolbarButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            Button(action: action) {
+                Image(systemName: "megaphone")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(MobileTheme.label)
+            }
+            .tint(MobileTheme.label)
+            .accessibilityLabel(Text(MessagesListText.megaphone))
+        } else {
+            GlassCircleButton(systemImage: "megaphone", accessibilityLabel: MessagesListText.megaphone, action: action)
+        }
+    }
+}
+
 enum MessagesListText {
     static let newConversation = "새 대화"
+    static let megaphone = "확성기"
     static let workingTitle = "지금 근무 중"
     static let workingTrailing = "바로 말 걸기"
     static let nobodyWorking = "지금 근무 중인 사람이 없어요"

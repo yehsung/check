@@ -1068,6 +1068,10 @@ final class WorkTimerStore {
     /// 같은 소유자가 두 게임의 호스트이므로 멤버를 베껴 적은 두 번째 프로토콜을 두면 한쪽이 언젠가 빠진다.
     let chess: ChessStore
 
+    /// 확성기(📢 v0.3.51) 작성 스토어 — **폰과 같은 코어 스토어**다(`MegaphoneStore`). 이 스토어는 호스트(세션·루비 미러)만
+    /// 빌려 주고, 화면은 상점 패널(`CheckShopPanel`)이 그린다. 오목·체스와 같은 소유 규약(약참조 호스트 · 로그아웃에 reset).
+    let megaphone: MegaphoneStore
+
     /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
     /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로
     /// 그 게이트를 우회해 peek 으로라도 알려야 한다(배선은 agent-overlay/W2 몫이다).
@@ -1653,6 +1657,8 @@ final class WorkTimerStore {
         self.gomoku = GomokuStore()
         // 체스도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.chess = ChessStore()
+        // 확성기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.megaphone = MegaphoneStore()
         self.service = service
         self.defaults = defaults
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
@@ -1708,6 +1714,7 @@ final class WorkTimerStore {
         refreshMenuBarTitle()
         gomoku.attach(host: self)
         chess.attach(host: self)
+        megaphone.attach(host: self)
     }
 
     /// 잠자기/깨어남 노티를 구독한다. 클로저는 [weak self]로 스토어 수명을 넘겨 자동 무력화되므로
@@ -2622,6 +2629,8 @@ final class WorkTimerStore {
         guard isShopPanelVisible else { return }
         isShopPanelVisible = false
         shopNotice = nil
+        // 확성기 작성기는 상점 패널 안에 산다 — 패널을 닫으면 같이 접는다(쓰던 글은 남는다).
+        megaphone.close()
     }
 
     /// 헤더 루비 칩 액션. 상점을 토글하고, 여는 순간 다른 패널을 전부 내린다(캐릭터 패널과 같은 규약).
@@ -3712,6 +3721,8 @@ extension WorkTimerStore {
         gomoku.reset()
         // 체스도 같은 이유로 내린다(v0.3.44). 빠뜨리면 다음 사람이 앞 계정의 체스 판을 본다.
         chess.reset()
+        // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
+        megaphone.reset()
         // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
         isEditingDisplayName = false
         displayNameDraft = ""
@@ -3840,6 +3851,7 @@ extension WorkTimerStore {
         // 오목·체스 상태도 앞 계정의 것이다. 로그아웃 경로가 이미 비웠더라도 한 번 더 — 멱등이다.
         gomoku.reset()
         chess.reset()
+        megaphone.reset()
         startedAt = nil
         accumulatedSeconds = 0
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())

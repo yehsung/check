@@ -24,8 +24,9 @@ import CheckCore
 //     ★ 채팅 입력칸만은 **`CheckTextEditor`** 다(메시지 작성기가 정본). AppKit 을 감싼 뷰라 스냅샷에서는
 //     `rendersPlainText` 대체 경로로 글자만 그린다 — 그 갈래가 없으면 입력칸 자리가 노란 상자가 된다.
 //     전송 세 갈래(버튼·↩·⌘↩)는 전부 `CheckEditorSend.commitThenSend` 를 지난다(IME 마지막 음절 유실 방지).
-//   · **초 단위 값(남은 시간·신청 만료)은 잎 뷰 TimelineView 안에서만 읽는다**(`GomokuTurnClock` · `GomokuCountdownText`).
-//     창 루트가 시계를 읽으면 5Hz 로 창 전체가 다시 그려진다. 잎은 창이 안 보이면 멈춘다(`isWindowVisible`).
+//   · **초 단위 값(남은 시간·신청 만료)은 잎 뷰 TimelineView 안에서만 읽는다**(`GomokuTurnClock` · `GomokuCountdownText` ·
+//     0.3.51 판 테두리 경고 `GomokuBoardTimeWarning`). 창 루트가 시계를 읽으면 5Hz 로 창 전체가 다시 그려진다.
+//     잎은 창이 안 보이면 멈춘다(`isWindowVisible`).
 //   · 툴팁은 `.checkTooltip`, 창 루트에 `.checkTooltipLayer()` 하나. 정보는 툴팁에만 두지 않는다 —
 //     금수 이유는 오른쪽 상태줄에도 글자로 뜬다(툴팁은 픽셀을 안 만들어 렌더 검증이 못 본다).
 //   · 문구는 사용자 어휘만(`GomokuText`).
@@ -1344,6 +1345,9 @@ private struct GomokuPlayBoard: View {
         let g = geometry
         GomokuBoardView(board: match.board, geometry: g, lastMove: match.lastMove, forbidden: forbidden,
                         autoPoints: match.autoPoints, preview: preview)
+            // 내 차례 마지막 3초 — 판 안쪽 가장자리가 빨갛게 빛난다(0.3.51). 시계는 이 잎만 읽는다(판 그림·이 판 뷰는 5Hz 로 안 다시 그려진다).
+            // 툴팁 자리들보다 **먼저**(아래 겹에) 깐다. 입력을 안 받고(allowsHitTesting false) 보이스오버에도 없다 — 호버·탭·툴팁은 그대로다.
+            .overlay { GomokuBoardTimeWarning(store: store) }
             .overlay(alignment: .topLeading) {
                 // 금수 X 마다 투명한 호버 자리 + 이유 툴팁. 이유는 오른쪽 상태줄에도 글자로 뜬다.
                 ForEach(forbidden.keys.sorted(by: { ($0.y, $0.x) < ($1.y, $1.x) }), id: \.self) { point in
@@ -1391,6 +1395,31 @@ private struct GomokuPlayBoard: View {
             // 보이스오버: 판 전체를 한 요소로 읽는다(교차점별 요소·착수 동작은 아직 없다 — 둘 곳은 마우스로 고른다).
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(GomokuText.boardAccessibility(match, forbiddenCount: forbidden.count))
+    }
+}
+
+/// 내 차례 마지막 3초의 판 테두리 빛(0.3.51) — **잎 뷰**. 판정·세기·그림은 코어 `GomokuTurnWarning` 한 곳이고(폰과 한 벌),
+/// 여기는 시계를 읽어 넘기기만 한다. 남은 초는 차례 링과 같은 `remainingSeconds(now:)` 다(서버 마감 · 기기 시계 보정).
+///
+/// 상대 차례·AI 차례·멈춘 AI 시계·끝난 판에서는 꺼진다(`watchesMyClock` — 마감이 없거나 내 것이 아니다). 그때와 창이 안 보일 때는
+/// TimelineView 도 멈춘다. **멈춘 TimelineView 는 마지막 그림을 들고 있으므로** 켜짐 판정을 본문에서 한 번 더 한다 — 내 차례 0초에
+/// 빛나던 판이 상대 차례로 넘어가 시계가 멈춰도 빛이 남지 않는다.
+private struct GomokuBoardTimeWarning: View {
+    let store: GomokuStore
+
+    var body: some View {
+        let watches = GomokuTurnWarning.watchesMyClock(store.match)
+        TimelineView(.animation(minimumInterval: 0.2, paused: !store.isWindowVisible || !watches)) { context in
+            let remaining = GomokuTurnWarning.watchesMyClock(store.match) ? store.remainingSeconds(now: context.date) : nil
+            if GomokuTurnWarning.isActive(remaining: remaining) {
+                let intensity = GomokuTurnWarning.intensity(remaining: remaining)
+                Canvas { canvas, size in
+                    GomokuTurnWarning.drawEdgeGlow(into: &canvas, side: min(size.width, size.height), intensity: intensity)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

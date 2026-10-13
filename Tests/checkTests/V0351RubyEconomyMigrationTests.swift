@@ -218,6 +218,32 @@ struct V0351RubyEconomyMigrationTests {
         #expect(CheckMiniGameWindowView.prizeQuorum == 5)
     }
 
+    @Test("상금 칩(`ChampionRow(… awarded:)`)에 숫자를 직접 적은 자리가 소스 어디에도 없다 — DEBUG 견본까지 상수에서 읽는다")
+    func championRowAwardIsNeverALiteral() throws {
+        // 2026-10-14 리뷰: 짝 상수 셋을 10·5·3 으로 옮긴 뒤에도 DEBUG 견본(MobileComponentsGallery)이 `awarded: 20` 을
+        // 박고 있었다 — 맥 스위트는 `#if DEBUG && os(iOS)` 파일을 컴파일하지 않으니 **원문**을 훑는다(주석 걷음).
+        let sources = reRepoRoot.appendingPathComponent("Sources", isDirectory: true)
+        let enumerator = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        let literalAward = #"\bawarded:\s*-?[0-9]"#
+        // 기준선: 이 정규식이 옛 견본 줄은 잡고 상수에서 읽는 줄은 놓아준다(둘이 같게 나오면 이 검사는 영원히 초록이다).
+        #expect(try reMatches(literalAward, in: #"ChampionRow(caption: "어제 1등", score: "972점", awarded: 20)"#).count == 1)
+        #expect(try reMatches(literalAward, in: #"ChampionRow(caption: "어제 1등", awarded: RankingsText.rubyPrizes[0])"#).isEmpty)
+        var scanned = 0
+        var offenders: [String] = []
+        for case let file as URL in enumerator where file.pathExtension == "swift" {
+            scanned += 1
+            let code = reStripSwift(try String(contentsOf: file, encoding: .utf8))
+            for match in try reMatches(literalAward, in: code) {
+                offenders.append("\(file.path.replacingOccurrences(of: reRepoRoot.path + "/", with: "")): \(match[0])")
+            }
+        }
+        #expect(scanned > 100, "Swift 소스를 \(scanned)개밖에 못 읽었다 — 이 검사가 헛돈다")
+        #expect(offenders.isEmpty, "상금 칩에 숫자를 직접 적은 자리: \(offenders) — `rubyPrizes[0]` 에서 읽어라")
+        let gallery = reStripSwift(try reSource("Sources/CheckMobileKit/Components/MobileComponentsGallery.swift"))
+        #expect(try reMatches(#"ChampionRow\([^)]*awarded:\s*RankingsText\.rubyPrizes\[0\]"#, in: gallery).count == 1,
+                "견본의 ChampionRow 가 RankingsText.rubyPrizes[0] 을 안 읽는다")
+    }
+
     // MARK: ③ 가격표 — price 칸만, 여섯 캐릭터 전부, 2배
 
     @Test("가격표 갱신은 price 칸 한 칸만 쓴다 — min_protocol 을 덮는 upsert 가 없다(로봇 누출 함정)")

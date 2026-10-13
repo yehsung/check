@@ -55,6 +55,8 @@ struct GamesTab: View {
                     GamesGomokuScreen(store: store)
                 case .chess:
                     GamesChessScreen(store: store)
+                        // 데모 전용: 라우트 꼬리가 순위·관전이면 로비 스크롤을 **맨 아래 절**에서 시작한다.
+                        .gamesDemoChessSectionAnchor(store.demoChessRoute?.section)
                 }
             }
         }
@@ -338,6 +340,10 @@ struct GamesTab: View {
     /// 데모 스크린샷 전용: 시작 라우트가 체스 장면(`games/chess/…`)이면 체스를 쌓는다.
     /// 깃발은 앱 모델이 세운다(`MobileAppModel.openDemoRouteIfNeeded` — `AingRoute` 에 체스 가지가 없는 까닭이 거기 있다).
     /// `consume…` 이라 두 계기에서 불려도 한 번만 쌓는다.
+    ///
+    /// ★ **꼬리는 여기서 쓰지 않는다** — 쌓는 화면은 라우트 일곱이 다 같은 `.chess` 하나다(순위·관전은 로비 안
+    ///   절이고 대국은 같은 화면이 단계로 갈아 끼운다). 꼬리는 `store.demoChessRoute` 에 남아 두 자리가 읽는다:
+    ///   판·관전은 `GamesStore.chessScreenDidAppear`, 절은 위 `gamesDemoChessSectionAnchor` 닻.
     private func applyDemoChessRoute() {
         guard store.consumePendingDemoChessScreen() else { return }
         store.context.router.push(GamesDestination.chess, on: .games)
@@ -579,4 +585,27 @@ private struct GamesChessTabThumbnail: View {
 private func gamesHex(_ value: UInt32) -> Color {
     Color(red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
 }
+
+extension View {
+    /// 데모 스크린샷 전용: 체스 **로비 안 절**에서 스크롤을 시작한다(`-AingCheckDemoRoute games/chess/ranking…` ·
+    /// `…/watch/<id>`). nil·`.top` 이면 아무것도 안 한다.
+    ///
+    /// ★ **화면을 밀어 올리지 않는다.** 순위·관전은 자식 라우트가 아니라 로비 스크롤 안의 절이고
+    ///   (`GamesChessScreen` 머리말 — push 하면 `onDisappear` → `windowDidHide()` 로 폴링이 죽는다),
+    ///   그 둘은 로비의 **마지막 두 절**이라 옮길 것이 닻 하나(`defaultScrollAnchor(.bottom)`)다.
+    ///   오목·미니게임이 `-AingCheckGamesDemo bottom` 으로 쓰는 수단과 **같은 수단**이다
+    ///   (`gamesDemoScrollAnchor` — 그쪽은 실행 인자가, 이쪽은 라우트 꼬리가 고른다).
+    ///
+    /// `#if DEBUG` 가 없는 까닭: 값을 세우는 자리가 데모 라우트뿐이라(`MobileAppModel.openDemoRouteIfNeeded`)
+    /// Release 에서는 `demoChessRoute` 가 영원히 nil 이다.
+    @ViewBuilder
+    func gamesDemoChessSectionAnchor(_ section: MobileDemoChessRoute.Section?) -> some View {
+        if section == .bottom {
+            defaultScrollAnchor(.bottom)
+        } else {
+            self
+        }
+    }
+}
+
 #endif

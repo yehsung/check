@@ -279,11 +279,17 @@ public final class MobileAppModel {
         // 체스 데모 장면(`games/chess/…` — 로비·신청·대국·순위·관전)은 **`AingRoute` 에 가지가 없다.**
         // 가지를 더하지 않은 것이 일부러다: 그 열거는 `CheckMobileShared` 에 있고, 체스 라우트가 생기는 날
         // `IntegrationContractTests` 의 '장면 폴더 예외'가 자기 만료 단언으로 빨개진다(픽스처 레인이 설계한 신호).
-        // 지금 필요한 것은 **화면을 띄우는 것**뿐이고, 장면 고르기는 라우트와 무관하다 —
-        // 스텁은 `-AingCheckDemoRoute` 글자를 그대로 폴더 이름으로 바꿔 쓴다(`MobileDemo`: `/` → `-`).
         // 그래서 게임 탭만 열고, 탭이 체스를 쌓는다(`GamesTab.applyDemoChessRoute`).
-        if Self.isDemoChessRoute(raw) {
+        //
+        // ★ **꼬리를 버리면 안 된다.** 스텁은 라우트 글자를 폴더 이름으로 바꿔 장면을 고르지만(`MobileDemo`: `/` → `-`),
+        //   장면 폴더가 **없는** 꼬리(`match/<id>` · `watch/<id>`)는 바깥 층 로비(진행 판 없음)로 떨어지고
+        //   `ranking…` 은 로비 **맨 아래 절**이라 머리에서 시작한 스크롤에 안 보인다. 꼬리를 깃발 하나(Bool)로
+        //   접었을 때 라우트 일곱 중 넷이 **같은 로비**를 그렸고(스크린샷 md5 동일) 아무도 순위·관전·대국을
+        //   눈으로 못 봤다. 그래서 꼬리를 **값으로 풀어**(`MobileDemoChessRoute`) 스토어에 넘긴다 —
+        //   판 열기는 코어 문(`openWindow(focusMatchID:)`), 관전은 `startWatching`, 절은 스크롤 닻이 받는다.
+        if let chess = Self.demoChessRoute(raw) {
             games.pendingDemoChessScreen = true
+            games.demoChessRoute = chess
             router.open(.games)
             return
         }
@@ -293,9 +299,20 @@ public final class MobileAppModel {
 
     /// 이 데모 라우트가 체스 화면을 띄우라는 뜻인가(`games/chess` · `games/chess/<장면…>`).
     /// 오목(`games/gomoku…`)·미니게임(`games/<게임>`)은 `AingRoute` 가 이미 안다 — 여기 걸리면 안 된다.
+    ///
+    /// **꼬리까지 푸는 자리는 `demoChessRoute(_:)` 다** — 이 되묻기는 그 값이 섰는가만 본다(두 판정이 갈리지 않게).
     package static func isDemoChessRoute(_ raw: String) -> Bool {
+        demoChessRoute(raw) != nil
+    }
+
+    /// 데모 라우트 글자 → **꼬리까지 푼 값**. 체스 라우트가 아니면 nil.
+    ///
+    /// 꼬리가 정하는 것 셋(`MobileDemoChessRoute`): 열 판 · 걸 관전 · 로비 스크롤이 시작할 절.
+    package static func demoChessRoute(_ raw: String) -> MobileDemoChessRoute? {
         let path = raw.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return path == "games/chess" || path.hasPrefix("games/chess/")
+        guard path == "games/chess" || path.hasPrefix("games/chess/") else { return nil }
+        let tail = path.dropFirst("games/chess".count).split(separator: "/").map(String.init)
+        return MobileDemoChessRoute(tail: tail)
     }
 
     /// `AingRoute` 가 모르는 **데모 전용 표기**가 열 화면(DEBUG 전용). AI 대국 장면(`games/gomoku/ai…`)은 오목 로비로 열고,
@@ -306,5 +323,66 @@ public final class MobileAppModel {
         #else
         return nil
         #endif
+    }
+}
+
+/// 데모 스크린샷 라우트 `games/chess/…` 한 건을 **값으로 푼 것**.
+///
+/// 이 파일·이 타입에는 **플랫폼·구성 분기가 없다**(`GamesStore` 와 같은 규약) — 체스 화면은 전부
+/// `#if os(iOS)` 안이라 맥 스위트가 한 줄도 못 보므로(저장소 메모 '폰 뷰는 맥 스위트가 못 본다'),
+/// 라우트 → 화면 판정을 여기 값으로 둬야 `swift test` 가 **라우트마다 다른 결과**를 잴 수 있다.
+///
+/// ## 꼬리가 정하는 것 셋
+/// | 라우트                          | focusMatchID      | watchMatchID    | section |
+/// | ------------------------------- | ----------------- | --------------- | ------- |
+/// | `games/chess`                   | nil               | nil             | top     |
+/// | `games/chess/lobby`             | nil               | nil             | top     |
+/// | `games/chess/lobby/invites`     | nil               | nil             | top     |
+/// | `games/chess/match`             | nil (장면이 세운다) | nil             | top     |
+/// | `games/chess/match/<id>`        | `<id>`            | nil             | top     |
+/// | `games/chess/ranking[/unlisted]`| nil               | nil             | bottom  |
+/// | `games/chess/watch/<id>`        | nil               | `<id>`          | bottom  |
+///
+/// `games/chess/match` 의 `focusMatchID` 가 **nil 인 것이 맞다**: 그 라우트는 장면 폴더
+/// `_games-chess-match` 가 있고 그 로비 픽스처의 `me.active_match_id` 가 판을 가리킨다(코어가 그 값으로 판을 연다).
+/// 꼬리가 붙은 `match/<id>` 는 장면 폴더가 없어 **바깥 층 로비**(진행 판 없음)로 떨어지므로 — 그 하나가
+/// 이 값이 필요한 까닭이다 — 꼬리의 id 를 코어 문에 직접 흘려 넣는다.
+package struct MobileDemoChessRoute: Hashable, Sendable {
+    /// 로비 스크롤이 시작할 자리. 순위·관전은 **별도 화면이 아니라 로비 안 절**이라(화면 머리말 —
+    /// 자식 화면을 push 하면 `onDisappear` 로 폴링이 죽는다) 옮기는 것은 화면이 아니라 **닻**이다.
+    package enum Section: String, Hashable, Sendable {
+        /// 머리부터(전적·루비 → 신청 → 상대 목록).
+        case top
+        /// 맨 아래 절(지금 대결 중·관전 판 → 순위).
+        case bottom
+    }
+
+    /// 열 **내 판**(`games/chess/match/<id>`). 코어 문 `ChessStore.openWindow(focusMatchID:)` 로 간다.
+    package var focusMatchID: String?
+    /// 걸 **관전**(`games/chess/watch/<id>`). `ChessStore.startWatching(matchID:)` 로 간다 —
+    /// 데모에는 합성 탭이 없어 [관전] 칩을 누를 길이 없다(작업 규칙 §0-1).
+    package var watchMatchID: String?
+    /// 로비 스크롤 시작 자리.
+    package var section: Section
+
+    package init(focusMatchID: String? = nil, watchMatchID: String? = nil, section: Section = .top) {
+        self.focusMatchID = focusMatchID
+        self.watchMatchID = watchMatchID
+        self.section = section
+    }
+
+    /// `games/chess` 뒤의 토막들로 세운다. 모르는 꼬리는 **로비 머리**로 접는다(라우트를 조용히 버리지 않는다).
+    package init(tail: [String]) {
+        switch (tail.first, tail.count) {
+        case ("match", 2):
+            self.init(focusMatchID: tail[1].lowercased())
+        case ("watch", 2):
+            // 관전 절은 로비 **아래**에 있다 — 관전을 걸어 놓고 머리에서 시작하면 화면에 안 보인다.
+            self.init(watchMatchID: tail[1].lowercased(), section: .bottom)
+        case ("watch", 1), ("ranking", _):
+            self.init(section: .bottom)
+        default:
+            self.init()
+        }
     }
 }

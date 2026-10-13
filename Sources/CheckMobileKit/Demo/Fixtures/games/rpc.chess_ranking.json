@@ -1,7 +1,7 @@
 {
   "__note" : [
     "순위(기본 · 내가 목록 안). 닿는 길: -AingCheckDemoRoute games/chess/ranking.",
-    "행마다 rank·avatar(avatar_url=null + character)·display_name·points·wins·losses·draws 가 다 차 있다 — 사용자 지시로 **승점만** 띄우면 안 된다. 민트별만 character=null 이라 머리글자 대체 그림도 한 줄 볼 수 있다.",
+    "행마다 rank·avatar(avatar_url=null + character)·display_name·points·wins·losses·draws 가 다 차 있다 — 사용자 지시로 **승점만** 띄우면 안 된다. 민트별만 character=null 인데 화면에는 **아잉 기본 캐릭터 초상**이 나온다(머리글자 대체가 아니다 — 앱이 맞다): base/rpc.app_user_characters.json 이 그 사람(…b3)을 character=null 로 싣고, 코어가 **표의 null 은 '안 골랐다' 라서 aing 으로 접는다**(AppUserCharacters.swift:148 characterID(for:) 머리말 — 행의 null 은 접지 않지만 표의 null 은 접힌다). 머리글자를 보려면 그 사람이 표에 **없어야** 한다.",
     "정렬은 (승점 desc, 승 desc, 무 desc, user_id asc) 이고 rank 는 '나보다 엄격히 나은 행 수 + 1' 이다 — 새벽과 구름빵이 (승점 2 · 5승 · 2무)로 **동률**이라 같은 순위 숫자를 쓴다(동률이 없으면 rank 산식이 공짜로 통과한다).",
     "0판인 보리차는 **없다**. 로비 users[] 에는 있으므로 '0판 제외' 가 '그 사람이 없다' 와 다르다는 것이 선다.",
     "record_since_ms 는 전적 컷(2026-09-01 KST)이다. 이 컷 뒤 전적만 세므로 로비 me 와 숫자가 같다."

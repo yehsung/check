@@ -4,7 +4,8 @@
     "상대 목록이 네 상태를 다 덮는다: ① 근무 중(구름빵) ② 근무 안 함(초코칩) ③ 대국 중(민트별·달토끼 — 관전 카드의 두 사람) ④ 옛 버전 capable=false(보리차). 덧붙여 '근무 중인데 옛 버전'(솜사탕)도 있다 — capable 과 is_working 이 다른 축임을 보이려고 둔다.",
     "users[] 에 **내가 없다** — 서버가 호출자를 뺀다(맥 캡처 chess_lobby__ok_watch_entry 로 확인).",
     "matches[0].match_id 는 rpc.chess_watch@demo-chess-live.json 의 match.id 와 같다. a/b 는 uuid 오름차순이고 **색이 아니다**. fen·ply_count 가 없는 것이 계약이다.",
-    "me 가 내 전적(5승 3패 2무)과 루비(42)를 싣는다. 신청이 와 있는 변형은 장면 _games-chess-lobby-invites, 내 판이 진행 중인 변형은 _games-chess-match 다."
+    "me 가 내 전적(5승 3패 2무)과 루비(42)를 싣는다. 신청이 와 있는 변형은 장면 _games-chess-lobby-invites, 내 판이 진행 중인 변형은 _games-chess-match 다.",
+    "★ 꼬리가 붙은 라우트(games/chess/match/<id> · games/chess/watch/<id>)는 장면 폴더가 없어 **이 바깥 층**이 답한다 — me.active_match_id 가 null 이라 이 파일만으로는 로비가 그대로 선다. 그 판·관전을 여는 것은 픽스처가 아니라 **라우트 꼬리**다(MobileDemoChessRoute → ChessStore.openWindow(focusMatchID:) · startWatching). 꼬리를 버리면 네 라우트가 전부 이 로비를 그린다(결함 D6 — 스크린샷 md5 동일)."
   ],
   "grace_ms" : 2000,
   "increment_ms" : 3000,

@@ -589,7 +589,11 @@ import Testing
         let code = try Self.strippedSource("Sources/CheckMobileKit/Games/GamesStore.swift")
         // 나타나는 길: `windowDidShow()` 가 창 깃발을 켜는 **유일한 문**이다(그 깃발이 애니메이션·폴링·관전을 쥔다).
         let appear = try #require(Self.slice(code, from: "func chessScreenDidAppear", length: 400))
-        #expect(appear.contains("chess.openWindow(focusMatchID: nil)"), "나타나는 길이 로비·판을 안 읽는다")
+        // ★ 인자는 **데모 라우트의 꼬리**다(`games/chess/match/<id>` — `MobileDemoChessRoute`). 사람이 쓰는 길에서는
+        //   그 값이 nil 이라 예전 `focusMatchID: nil` 과 같은 동작이고, 값으로 재는 쪽은 `GamesChessDemoRouteTests` 다.
+        //   여기서는 **그 문을 부르는 것**만 못 박는다(안 부르면 로비·판을 아예 안 읽는다).
+        #expect(appear.contains("chess.openWindow(focusMatchID: demoChessRoute?.focusMatchID)"),
+                "나타나는 길이 로비·판을 안 읽는다")
         #expect(appear.contains("if isAppActive { chess.windowDidShow() }"),
                 "나타나는 길이 windowDidShow() 를 안 부른다 — 창 깃발이 꺼진 채라 말이 순간이동한다")
         let body = try #require(Self.slice(code, from: "func chessScreenDidDisappear", length: 420))

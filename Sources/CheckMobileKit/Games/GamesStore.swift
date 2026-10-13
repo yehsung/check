@@ -79,6 +79,14 @@ package final class GamesStore {
     /// (Bool 한 칸이고, 세우는 자리가 데모뿐이라 Release 에서는 영원히 false 다).
     package var pendingDemoChessScreen = false
 
+    /// 데모 전용: 시작 라우트의 **꼬리를 푼 값**(열 판 · 걸 관전 · 로비 시작 절 — `MobileDemoChessRoute`).
+    ///
+    /// 위 깃발과 달리 **꺼내 비우지 않는다.** 스크롤 닻은 그릴 때마다 읽히는 값이고(한 번 꺼내면 두 번째
+    /// 그리기에서 머리로 튄다), 판·관전을 거는 두 자리는 다시 불러도 무해하다 —
+    /// `openWindow(focusMatchID:)` 는 들고 있는 판이면 다시 안 받고 `startWatching` 은 같은 관전이면 돌아선다.
+    /// 로그아웃 `reset()` 이 비운다(다음 사람의 로비에 남의 장면이 남지 않게).
+    package var demoChessRoute: MobileDemoChessRoute?
+
     /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
     @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
 
@@ -169,6 +177,7 @@ package final class GamesStore {
         isChessScreenVisible = false
         pendingGomokuFocusID = nil
         pendingDemoChessScreen = false
+        demoChessRoute = nil
         syncAIThinker()
     }
 
@@ -347,11 +356,37 @@ package final class GamesStore {
     ///   **빨개지는 테스트가 없다**. 그래서 못을 따로 박아 두었다 — `GamesChessWiringTests` 의
     ///   `theScreenHookMakesTheMoveAnimation`(깃발이 아니라 **그 결과로 애니메이션이 서는지**를 재고,
     ///   화면 훅을 안 부른 기준선과 나란히 본다).
+    /// ★ `focusMatchID` 는 **데모 라우트의 꼬리**다(`games/chess/match/<id>`). 사람이 쓰는 길에서는 nil 이다 —
+    ///   코어가 로비 `me.active_match_id` 로 내 판을 스스로 연다. 꼬리가 붙은 데모 라우트는 장면 폴더가 없어
+    ///   바깥 층 로비(진행 판 없음)로 떨어지므로, 그 꼬리를 **코어가 이미 가진 문**으로 흘려 넣는다
+    ///   (오목이 `pendingGomokuFocusID` 를 `gomoku.openWindow(focusMatchID:)` 에 넣는 것과 같은 선례).
     package func chessScreenDidAppear() {
         let chess = context.chess
         isChessScreenVisible = true
-        chess.openWindow(focusMatchID: nil)
+        chess.openWindow(focusMatchID: demoChessRoute?.focusMatchID)
         if isAppActive { chess.windowDidShow() }
+        startDemoChessWatchIfNeeded()
+    }
+
+    /// 데모 전용: 라우트 꼬리가 관전(`games/chess/watch/<id>`)이면 **[관전] 칩을 누른 것과 같은 자리**를 직접 건다.
+    ///
+    /// 왜 데모 전용 길이 필요한가: 스크린샷은 `simctl` 헤드리스라 **합성 탭이 없다**(작업 규칙 §0-1) — 칩을 누를
+    /// 사람이 없으면 관전 화면에 닿는 길이 아예 없다. 부르는 자리는 칩과 **똑같이** `startWatching(matchID:)` 이다
+    /// (코어 게이트 — 주 스위치·세션·`phase == .lobby`·잠금 — 를 하나도 우회하지 않는다).
+    ///
+    /// 로비 응답을 **먼저 기다린다**: `liveMatches` 가 두 얼굴을 싣고 `startWatching` 이 그것을 씨앗으로 쓴다
+    /// (못 기다리면 얼굴 없는 로딩 상태로 들어가고 응답이 뒤늦게 채운다 — 스크린샷에는 그 틈이 그대로 찍힌다).
+    private func startDemoChessWatchIfNeeded() {
+        guard let id = demoChessRoute?.watchMatchID else { return }
+        Task { [weak self] in
+            for _ in 0..<60 {
+                guard let self, self.isChessScreenVisible else { return }
+                if self.context.chess.liveMatches.contains(where: { $0.id == id }) { break }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            guard let self, self.isChessScreenVisible else { return }
+            self.context.chess.startWatching(matchID: id)
+        }
     }
 
     /// 체스 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃).

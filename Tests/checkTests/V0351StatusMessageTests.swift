@@ -178,6 +178,15 @@ private func smDrain() async {
     }
 }
 
+/// 내 상태메시지 GET(`profiles?select=status_message`)인가.
+private func smIsStatusGET(_ call: MessageReadStubProtocol.Call) -> Bool {
+    call.path == "/rest/v1/profiles" && call.method == "GET" && call.url.query?.contains("status_message") == true
+}
+
+private func smStatusGETs(_ host: String) -> [MessageReadStubProtocol.Call] {
+    MessageReadStubProtocol.calls(host: host).filter(smIsStatusGET)
+}
+
 @MainActor
 @Suite(.serialized) struct V0351StatusMessageStoreTests {
     @Test(.gomokuDefaultsCleanup)
@@ -262,10 +271,125 @@ private func smDrain() async {
         await store.loadMyStatusMessageIfNeeded()
         #expect(store.myStatusMessageLoaded)
         #expect(store.myStatusMessage == "휴가 중 🌴")
-        // 받은 뒤에는 다시 묻지 않는다(설정 창을 여닫아도 왕복이 안 는다).
+        // 받은 뒤에는 '모를 때만' 문이 다시 묻지 않는다(로그인 설정 체인이 다시 돌아도 왕복이 안 는다).
+        // 설정 창을 열 때의 다시 받기는 이 문이 아니다 — 아래 `설정_창을_열_때마다_…` 가 잰다.
         await store.loadMyStatusMessageIfNeeded()
-        let gets = MessageReadStubProtocol.calls(host: host).filter { $0.path == "/rest/v1/profiles" && $0.url.query?.contains("status_message") == true }
-        #expect(gets.count == 2)
+        #expect(smStatusGETs(host).count == 2)
+    }
+
+    // ── 폰에서 바꾼 값(검토 지적, v0.3.51) ──
+    // 같은 계정이 폰 나 > 프로필에서도 상태를 고친다. 맥이 세션당 한 번만 받으면 폰에서 바꾼 값이 맥 설정 행에 영영 안 보이고,
+    // 낡은 미러 때문에 [저장]이 '같은 값'으로 잠긴다. 설정 행의 onAppear 는 창 수명에 한 번뿐이라 그 자리가 못 된다 —
+    // 그래서 **진짜 설정 창 컨트롤러의 show()** 를 지나 잰다(스토어 함수만 부르면 배선을 지운 회귀가 초록으로 남는다).
+
+    @Test(.gomokuDefaultsCleanup)
+    func 설정_창을_열_때마다_내_값을_다시_받는다_폰에서_바꾼_값이_보인다() async {
+        let (store, host) = makeMessageReadStore("sm-reopen") { call, index in
+            guard smIsStatusGET(call) else { return nil }
+            // 로그인 체인의 GET 은 '회의 중'(맥에서 쓴 값), 그 뒤 GET 은 '퇴근'(폰에서 바꾼 값).
+            return MessageReadStubProtocol.Reply(body: index == 0 ? #"[{"status_message":"회의 중"}]"# : #"[{"status_message":"퇴근"}]"#)
+        }
+        await store.loadMyStatusMessageIfNeeded()
+        #expect(store.myStatusMessage == "회의 중")
+        store.statusMessageNotice = StatusMessageText.saved
+
+        let controller = CheckSettingsWindowController(stuckWindowCheckSeconds: 60)
+        controller.configure(store: store, content: { _ in AnyView(EmptyView()) })
+        // 여는 문이 GET 을 띄운 뒤에는 창이 필요 없다 — 알파 0 창을 화면에 오래 두지 않는다.
+        controller.show()
+        controller.close()
+        #expect(store.statusMessageNotice == nil, "지난번 결과 한 줄('저장했어요')이 다시 연 창에 남았다 — 값이 폰에서 바뀐 뒤라 거짓말이다")
+        await messageReadWait { store.myStatusMessage == "퇴근" }
+        #expect(store.myStatusMessage == "퇴근", "폰에서 바꾼 상태가 맥 설정 창에 안 보인다 — 세션당 한 번만 받았다")
+        #expect(store.myStatusMessageLoaded)
+        #expect(smStatusGETs(host).count == 2)
+
+        // 같은 미러로 [저장] 판정이 서므로, 다시 연 창에서는 폰이 쓴 값('퇴근')이 '같은 값'이고 맥에서 쓴 옛 값('회의 중')은 다시 올릴 수 있다.
+        MessageReadStubProtocol.register(host: host) { call, _ in
+            call.rpc == "set_status_message"
+                ? MessageReadStubProtocol.Reply(body: #"{"status":"ok","status_message":"회의 중"}"#) : nil
+        }
+        #expect(await store.updateStatusMessage("회의 중"))
+        #expect(MessageReadStubProtocol.count(host: host, rpc: "set_status_message") == 1,
+                "폰이 바꾼 뒤 맥에서 옛 값을 다시 올렸는데 '같은 값'으로 보고 아무것도 안 보냈다")
+        #expect(store.myStatusMessage == "회의 중")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 로그인과_첫_열기에서_GET_이_실패해도_다음_열기가_되살린다() async {
+        let (store, host) = makeMessageReadStore("sm-reopen-fail") { call, index in
+            guard smIsStatusGET(call) else { return nil }
+            return index < 2
+                ? MessageReadStubProtocol.Reply(status: 500, body: #"{"message":"boom"}"#)
+                : MessageReadStubProtocol.Reply(body: #"[{"status_message":"휴가 중 🌴"}]"#)
+        }
+        let controller = CheckSettingsWindowController(stuckWindowCheckSeconds: 60)
+        controller.configure(store: store, content: { _ in AnyView(EmptyView()) })
+
+        await store.loadMyStatusMessageIfNeeded()          // 로그인 체인 — 실패
+        controller.show(); controller.close()               // 첫 열기 — 실패
+        await messageReadWait { smStatusGETs(host).count == 2 }
+        await smDrain()
+        #expect(store.myStatusMessageLoaded == false)
+        #expect(store.myStatusMessage == nil)
+
+        controller.show(); controller.close()               // 두 번째 열기 — 되살아난다
+        await messageReadWait { store.myStatusMessageLoaded }
+        #expect(store.myStatusMessageLoaded, "두 번 실패한 뒤에는 세션 내내 상태를 모른다 — [지우기]가 안 서고 칸이 빈 채다")
+        #expect(store.myStatusMessage == "휴가 중 🌴")
+        #expect(smStatusGETs(host).count == 3)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 떠_있던_GET_은_그사이_나간_저장의_값을_되돌리지_않는다() async {
+        let getGate = MessageReadStubGate()
+        let (store, host) = makeMessageReadStore("sm-get-vs-save") { call, _ in
+            if smIsStatusGET(call) { return MessageReadStubProtocol.Reply(body: #"[{"status_message":"옛 값"}]"#, gate: getGate) }
+            return call.rpc == "set_status_message"
+                ? MessageReadStubProtocol.Reply(body: #"{"status":"ok","status_message":"새 값"}"#) : nil
+        }
+        async let pendingFetch: Void = store.fetchMyStatusMessageFromServer()
+        await messageReadWait { smStatusGETs(host).count == 1 }
+        #expect(await store.updateStatusMessage("새 값"))
+        #expect(store.myStatusMessage == "새 값")
+        getGate.open()
+        await pendingFetch
+        #expect(store.myStatusMessage == "새 값", "저장 전에 떠난 GET 이 늦게 와 방금 쓴 상태를 옛 값으로 되돌렸다")
+
+        // 저장 왕복 중에 열면 GET 을 띄우지 않는다(돌아올 저장 결과가 더 새 값이다).
+        let saveGate = MessageReadStubGate()
+        MessageReadStubProtocol.register(host: host) { call, _ in
+            call.rpc == "set_status_message"
+                ? MessageReadStubProtocol.Reply(body: #"{"status":"ok","status_message":"더 새 값"}"#, gate: saveGate) : nil
+        }
+        async let pendingSave = store.updateStatusMessage("더 새 값")
+        await messageReadWait { store.isUpdatingStatusMessage }
+        store.statusMessageNotice = StatusMessageText.network
+        store.refreshMyStatusMessageForSettings()
+        #expect(store.statusMessageNotice == StatusMessageText.network, "저장 왕복 중에 결과 자리를 접었다 — 곧 올 결과와 섞인다")
+        await smDrain()
+        #expect(smStatusGETs(host).isEmpty, "저장 왕복 중에 GET 을 띄웠다")
+        saveGate.open()
+        #expect(await pendingSave)
+        #expect(store.myStatusMessage == "더 새 값")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 늦게_온_앞_GET_은_뒤_GET_의_값을_덮지_않는다() async {
+        let firstGate = MessageReadStubGate()
+        let (store, host) = makeMessageReadStore("sm-get-order") { call, index in
+            guard smIsStatusGET(call) else { return nil }
+            return index == 0
+                ? MessageReadStubProtocol.Reply(body: #"[{"status_message":"앞 GET"}]"#, gate: firstGate)
+                : MessageReadStubProtocol.Reply(body: #"[{"status_message":"뒤 GET"}]"#)
+        }
+        async let first: Void = store.fetchMyStatusMessageFromServer()
+        await messageReadWait { smStatusGETs(host).count == 1 }
+        await store.fetchMyStatusMessageFromServer()
+        #expect(store.myStatusMessage == "뒤 GET")
+        firstGate.open()
+        await first
+        #expect(store.myStatusMessage == "뒤 GET", "늦게 도착한 앞 GET 이 뒤 GET 의 값을 덮었다")
     }
 
     @Test(.gomokuDefaultsCleanup)

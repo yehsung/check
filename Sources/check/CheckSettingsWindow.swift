@@ -259,6 +259,9 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         // 사진 되돌리기의 2단 확인·결과 한 줄도 **열 때 접는다**(v0.3.36). 닫을 때만 접으면 닫기를 거치지 않은
         // 경로(창 재생성 · 앱이 창을 잃었다 되찾는 복구)에서 빨간 [되돌리기]가 무장된 채로 사용자를 맞는다.
         wiring?.store.resetAvatarRemovalRow()
+        // 내 상태메시지도 **열 때마다** 서버에서 다시 받는다(v0.3.51). 폰에서 바꾼 값이 여기 보여야 하고, 낡은 미러로는 [저장]이
+        // '같은 값'으로 잠긴다. 행의 onAppear 로는 안 된다 — 위 단축키와 같은 이유(창 수명에 한 번).
+        wiring?.store.refreshMyStatusMessageForSettings()
         if !CheckPanelVisibility.isRunningTests {
             NSApp.activate()
         }

@@ -194,3 +194,93 @@ import Testing
         #expect(!h.requests.contains { $0.query.contains("status_message") }, "상태를 따로 묻거나 기존 select 에 끼웠다")
     }
 }
+
+// MARK: - ④ 화면(소스 계약)
+//
+// 폰 뷰는 `#if os(iOS)` 라 맥 `swift test` 가 컴파일조차 안 하고, build-sim 은 줄을 지워도 성공한다 — 위 스토어·판 테스트가 값을
+// 실어 날라도 그 값을 **그리는 줄**이 사라지면 아무것도 안 빨개진다(검토 지적, v0.3.51). 그래서 그리는 자리를 글자로 되묻는다.
+// 사양이 정한 자리: 새 대화 시트 사람 줄 · 대화 이름표 · 지금 탭 사람 줄(두 크기 갈래 모두) · 나 > 프로필 편집 카드. 대화 목록 줄에는 안 넣는다.
+// 주석은 걷어낸 코드만 본다(`IntegrationContractTests.code`) — 설명에 남은 이름으로 초록이 되지 않게.
+
+@MainActor
+@Suite struct V0351StatusMessageViewContractTests {
+    /// `marker` 가 처음 나오는 자리부터 그 뒤 첫 `{` 의 짝 `}` 까지. 못 찾으면 nil.
+    static func block(_ code: String, after marker: String) -> String? {
+        guard let start = code.range(of: marker),
+              let open = code[start.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var index = open
+        while index < code.endIndex {
+            switch code[index] {
+            case "{": depth += 1
+            case "}":
+                depth -= 1
+                if depth == 0 { return String(code[start.lowerBound...index]) }
+            default: break
+            }
+            index = code.index(after: index)
+        }
+        return nil
+    }
+
+    @Test("지금 탭 사람 줄: 접근성 크기 갈래와 보통 갈래 둘 다 상태 줄을 그린다")
+    func nowWorkingRowDrawsStatusInBothBranches() throws {
+        let code = try IntegrationContractTests.code("Sources/CheckMobileKit/Now/NowTab.swift")
+        let row = try #require(Self.block(code, after: "struct NowWorkingRow: View"))
+        let body = try #require(Self.block(row, after: "var body: some View"))
+        let accessibility = try #require(Self.block(body, after: "if typeSize.isAccessibilitySize"))
+        let accessibilityEnd = try #require(body.range(of: accessibility)).upperBound
+        let regular = try #require(Self.block(String(body[accessibilityEnd...]), after: "else"))
+        #expect(regular.contains("PersonName(") && accessibility.contains("PersonName("), "갈래를 잘못 잘랐다 — 이 단언 자체가 낡았다")
+        for (name, branch) in [("접근성 크기", accessibility), ("보통 크기", regular)] {
+            #expect(branch.contains("person.statusMessage") && branch.contains("statusText(status"),
+                    "\(name) 갈래에서 상태 줄이 사라졌다 — 그 글자 크기의 사용자에게만 상태가 안 보인다")
+        }
+        let statusText = try #require(Self.block(row, after: "func statusText("))
+        #expect(statusText.contains("Text(status)") && statusText.contains(".lineLimit(lineLimit)"))
+    }
+
+    @Test("새 대화 시트 사람 줄 · 대화 이름표가 상태를 그리고, 대화 화면이 판의 상태를 이름표에 넘긴다")
+    func messagesSurfacesDrawStatus() throws {
+        let sheet = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesNewConversationSheet.swift")
+        let personRow = try #require(Self.block(sheet, after: "struct MessagesPersonRow: View"))
+        let personBody = try #require(Self.block(personRow, after: "var body: some View"))
+        #expect(personBody.contains("if let status = person.statusMessage") && personBody.contains("Text(status)"),
+                "새 대화 시트 사람 줄에서 상태 줄이 사라졌다")
+
+        let conversation = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesConversationView.swift")
+        let nameplate = try #require(Self.block(conversation, after: "struct MessagesConversationNameplate: View"))
+        let nameplateBody = try #require(Self.block(nameplate, after: "var body: some View"))
+        #expect(nameplateBody.contains("if let statusMessage") && nameplateBody.contains("Text(statusMessage)"),
+                "대화 이름표에서 상태 줄이 사라졌다")
+        let view = try #require(Self.block(conversation, after: "struct MessagesConversationView: View"))
+        #expect(view.contains(".statuses[peerID]"), "대화 화면이 판에서 상대의 상태를 꺼내지 않는다 — 이름표는 늘 nil 을 받는다")
+        #expect(view.contains("MessagesConversationNameplate(header: header, presence: presence, statusMessage: statusMessage)"),
+                "이름표에 상태를 안 넘긴다 — 기본값 nil 로 조용히 빈 줄이 된다")
+    }
+
+    @Test("대화 목록 줄에는 상태를 넣지 않는다(사양 — 두 줄 미리보기가 이미 그 자리를 쓴다)")
+    func threadRowStaysWithoutStatus() throws {
+        let tab = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesTab.swift")
+        let threadRow = try #require(Self.block(tab, after: "struct MessagesThreadRow: View"))
+        #expect(threadRow.contains("previewLines"), "대화 목록 줄을 잘못 잘랐다 — 이 단언 자체가 낡았다")
+        #expect(!threadRow.contains("statusMessage") && !threadRow.contains("statuses["), "대화 목록 줄에 상태가 들어갔다")
+    }
+
+    @Test("나 > 프로필: 상태메시지 편집 카드가 본문에 서고 입력 · 카운터 · 저장 · 지우기가 스토어에 닿는다")
+    func meProfileHasStatusEditor() throws {
+        let code = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeProfileView.swift")
+        let view = try #require(Self.block(code, after: "struct MeProfileView: View"))
+        let body = try #require(Self.block(view, after: "var body: some View"))
+        #expect(body.contains("statusMessageCard"), "프로필 본문에서 상태메시지 카드가 빠졌다 — 폰에서 상태를 쓸 길이 없다")
+        #expect(body.contains("store.profileDidAppear()"), "프로필이 열릴 때 내 상태를 다시 받지 않는다")
+        let card = try #require(Self.block(view, after: "var statusMessageCard: some View"))
+        for token in ["$store.statusMessageDraft", "store.statusMessageDraftLength", "MeStore.statusMessageMaxLength",
+                      "store.statusMessageNotice", "StatusMessageText.save", "StatusMessageText.clear",
+                      "action: saveStatus", "action: clearStatus", "store.canSaveStatusMessage"] {
+            #expect(card.contains(token), "상태메시지 카드에서 '\(token)' 가 사라졌다")
+        }
+        #expect(try #require(Self.block(view, after: "func saveStatus()")).contains("store.saveStatusMessage()"))
+        #expect(try #require(Self.block(view, after: "func clearStatus()")).contains("store.clearStatusMessage()"))
+    }
+}

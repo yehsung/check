@@ -696,6 +696,11 @@ final class WorkTimerStore {
     var myStatusMessageLoaded = false
     /// 저장 왕복 중. **관찰 대상**이다 — 저장·지우기 버튼을 그동안 잠가 연타로 두 요청이 나가지 않게 한다.
     var isUpdatingStatusMessage = false
+    /// 내 값 GET 순번 — GET 이 나갈 때마다 오른다. 늦게 도착한 앞 GET 이 뒤 GET 의 결과를 덮지 않게 한다(뒤가 이긴다).
+    @ObservationIgnored var statusMessageFetchSerial = 0
+    /// 저장 왕복이 **나갈 때마다** 오른다(성공 여부와 무관). GET 이 떠 있는 사이 이 값이 바뀌었으면 그 GET 은 저장 전의 값이라 버린다 —
+    /// 시간 초과로 실패한 저장도 서버에는 닿았을 수 있어 실패에서도 올린다.
+    @ObservationIgnored var statusMessageWriteSerial = 0
     /// 설정 행 안 1줄 결과(바꿨어요 · 지웠어요 · 40자 · 쓸 수 없는 글자 …). nil 이면 기본 안내.
     var statusMessageNotice: String?
     /// 위 한 줄이 실패인지(true = danger). 성공·지움은 오류가 아니다(별명 행과 같은 규약).
@@ -3693,6 +3698,8 @@ extension WorkTimerStore {
         myStatusMessage = nil
         myStatusMessageLoaded = false
         isUpdatingStatusMessage = false
+        // 떠 있던 GET 이 다음 계정에 닿지 않는 것은 세대 가드가 맡는다. 순번은 올려 두기만 한다(어느 쪽이든 앞 계정의 응답은 버려진다).
+        statusMessageFetchSerial &+= 1
         statusMessageNotice = nil
         isStatusMessageNoticeError = false
         // 수집 설정 수신 플래그도 계정에 묶인다 — 남기면 다음 계정은 서버 설정을 받기 전에 프로브(외부 프로세스)가 뜬다.

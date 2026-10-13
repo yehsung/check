@@ -618,12 +618,13 @@ struct StatusMessageSettingsRow: View {
             }
         }
         .onAppear {
+            // 서버에서 다시 받는 것은 여기가 아니라 창을 열 때마다 도는 `CheckSettingsWindowController.show()` 다
+            // (`refreshMyStatusMessageForSettings`) — 이 onAppear 는 창 수명에 한 번뿐이라, 여기서 받으면 폰에서 바꾼 값을 영영 못 본다.
             draft = store.myStatusMessage ?? ""
-            // 로그인 직후 설정 로드가 네트워크 blip 으로 실패했으면 여기가 유일한 복구 경로다(소속 센터 행과 같다).
-            Task { @MainActor in await store.loadMyStatusMessageIfNeeded() }
         }
         .onChange(of: store.myStatusMessage) { old, new in
-            // 서버가 정규화해 돌려준 값(또는 늦게 도착한 내 값)으로 되맞춘다. 사용자가 이미 고쳐 쓰고 있으면 건드리지 않는다.
+            // 서버가 정규화해 돌려준 값 · 늦게 도착한 내 값 · 창을 열 때 다시 받은 값(폰에서 바꾼 것)으로 되맞춘다.
+            // 사용자가 이미 고쳐 쓰고 있으면 건드리지 않는다.
             if StatusMessage.sanitized(draft) == (old ?? "") { draft = new ?? "" }
         }
     }

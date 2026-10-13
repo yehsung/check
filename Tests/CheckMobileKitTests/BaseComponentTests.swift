@@ -194,7 +194,10 @@ import Testing
         #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue })
                 == ["conversation", "gomokuMatch", "chessMatch", "shop", "miniGamePlay", "grassDetail"])
         let chrome = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/SheetChrome.swift")
-        #expect(chrome.contains("func hidesTabBar(for screen: TabBarPolicy.Screen)") && chrome.contains("toolbar(.hidden, for: .tabBar)"))
+        // d7701ab 부터 숨김은 정책 표(`TabBarPolicy.hidesTabBar(on:)`)를 거쳐 `.hidden`/`.automatic` 중 하나를 고른다 — 리터럴
+        // `toolbar(.hidden, for: .tabBar)` 는 주석에만 남아 이 대조가 주석을 걷어낸 소스에서 늘 빨갰다(1.0.6 이후).
+        #expect(chrome.contains("func hidesTabBar(for screen: TabBarPolicy.Screen)")
+                && chrome.contains("toolbar(TabBarPolicy.hidesTabBar(on: screen) ? .hidden : .automatic, for: .tabBar)"))
     }
 
     @Test("부품 견본은 DEBUG 에서만 컴파일되고 루트는 DEBUG 갈래로만 연다")

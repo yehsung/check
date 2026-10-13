@@ -1,0 +1,383 @@
+@testable import CheckCore
+import CheckMobileShared
+import Foundation
+import Testing
+@testable import CheckMobileKit
+
+// 폰 "로봇과 두기"(체스 AI) — 가장 작은 레인이지만 **비로그인 사용자의 유일한 체스 길**이다(인수인계 §6 ⑫ · §7).
+// 규칙·판·시계·AI 는 전부 코어이고 맥 스위트(V034x)가 지킨다 — 여기서 재는 것은 **폰이 더한 것**뿐이다:
+//  ① 세션이 nil 인데도 입구가 열리고 판이 시작되고 수가 들어간다(서버 요청 0건)
+//  ② 흑을 고르면 판이 뒤집힌다(`whiteAtBottom == false`) — 그 값은 한 자리에서만 나온다
+//  ③ 승격은 도착 칸이 같은 합법 수가 **넷일 때만** 시트를 띄운다(하나면 안 띄우고 그대로 나간다)
+//  ④ 판돈 0 · 루비 이동 0 · 체스 RPC 0건(요청이 나가면 빨강) — 세는 눈이 멀지 않았음을 **대조군**으로 함께 보인다
+//  ⑤ 로봇 수에 애니메이션(`ChessStore.flight`)이 붙는다 — 화면이 창 가시성을 켜야 붙는다(기준선이 갈린다)
+//  ⑥ 로봇 판 중 PvP — **판정만** 적는다(고치지 않는다, 다른 레인·통합 단계와 겹친다)
+//  ⑦ 소스 계약: 뷰 구역에 로그인 게이트·뒤집기 산술·`ChessRules`·판돈이 **없다**
+//
+// 폰 뷰(`#if os(iOS)`)는 맥 스위트가 못 본다 — 그래서 판정은 전부 플랫폼 무관 표(`GamesChessAIChrome`)에 있고
+// 뷰는 그 표만 읽는다. 뷰 자체의 그물은 `ios/scripts/build-sim.sh` 다.
+
+// MARK: - 도우미
+
+private func sq(_ notation: String) -> ChessSquare { ChessSquare(notation)! }
+
+/// 체스 RPC 열한 개(이 중 **하나라도** 나가면 로봇 판이 서버를 탄 것이다).
+private let chessRPCs: Set<String> = [
+    "chess_lobby", "chess_challenge", "chess_cancel", "chess_respond", "chess_move", "chess_resign",
+    "chess_offer_draw", "chess_respond_draw", "chess_state", "chess_ranking", "chess_watch"
+]
+
+/// 요청이 **나갈 수 있는** 체스 스토어 하나(host 가 붙어 있다 · 조작 시계 · 결정적 로봇).
+/// host 를 nil 로 두면 "요청 0건" 은 아무것도 증명하지 않는다(기준선이 같은 입력이면 그 시험은 영원히 초록).
+@MainActor
+private func makeChessStore(_ harness: GamesHarness) -> ChessStore {
+    let chess = ChessStore(host: harness.model.gomokuHost)
+    let clock = harness.clock
+    chess.clock = { clock.now }
+    chess.aiRuntime.minimumThinkSeconds = 0
+    // 결정적 로봇: 합법 수 목록의 첫 수(`ChessRules.legalMoves` 의 순서는 결정적이다 — 코어 대체 수와 같은 규칙).
+    chess.aiMoveChooser = { position, _ in ChessRules.legalMoves(in: position).first }
+    return chess
+}
+
+/// 로봇 판 하나를 띄울 수 있는 스토어 + 스텁 서버.
+@MainActor
+private func chessHarness(_ label: String, signedIn: Bool) async -> (GamesHarness, ChessStore) {
+    let harness = GamesHarness(label: label)
+    if signedIn { await harness.signIn() }
+    return (harness, makeChessStore(harness))
+}
+
+@MainActor
+private func tearDown(_ harness: GamesHarness, _ chess: ChessStore) async {
+    chess.reset()
+    await harness.tearDown()
+}
+
+/// 화면이 나타난 그 순간(`GamesChessAIScreen.onAppear`)과 같은 두 줄. 로봇 판의 로컬 시계·애니메이션이 이 뒤에 산다.
+@MainActor
+private func screenDidAppear(_ chess: ChessStore) {
+    chess.isWindowVisible = true
+    chess.windowOcclusionDidChange(visible: true)
+}
+
+/// 사람이 판을 두 번 누른다(화면이 누르는 문 그대로 — `GamesChessBoard.onTapSquare` → `store.tap`).
+@MainActor
+private func play(_ chess: ChessStore, _ from: String, _ to: String) async {
+    await chess.tap(sq(from))
+    await chess.tap(sq(to))
+}
+
+private func chessRequestNames(_ harness: GamesHarness) -> [String] {
+    harness.server.requests.compactMap { $0.rpcName }.filter { chessRPCs.contains($0) }
+}
+
+// MARK: - ① 로그인을 보지 않는다
+
+@MainActor
+@Suite(.serialized)
+struct GamesChessAISignedOutTests {
+    @Test("비로그인에서 입구가 열리고 로봇 판이 돌아간다 — 서버는 한 번도 안 탄다")
+    func robotGameRunsWithoutSession() async {
+        // 없으면: 입구나 화면을 로그인 뒤로 숨겨도 **전부 초록**이다(로봇 판은 서버를 안 타므로 요청 시험이
+        // 막힌 길도 통과시킨다). 비로그인 사용자의 유일한 체스 길이 조용히 막힌다 — §6 ⑫.
+        let (harness, chess) = await chessHarness("chess-ai-anon", signedIn: false)
+        #expect(harness.model.session.isSignedIn == false, "세션이 없어야 이 시험이 뜻을 갖는다")
+        #expect(GamesChessAIChrome.requiresSignIn == false, "기본값도 값으로 — 이 한 줄이 레인의 계약이다")
+
+        screenDidAppear(chess)
+        var chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.canStart, "비로그인인데 입구가 닫혔다")
+        #expect(chrome.stage == .colorPick)
+
+        chess.startAIMatch(humanColor: .white)
+        chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.stage == .playing, "색을 고르면 **바로** 판이 선다(확인 단계 없음)")
+        #expect(chrome.board != nil)
+        #expect(chess.match?.plyCount == 0)
+
+        await play(chess, "e2", "e4")
+        #expect(chess.match?.plyCount == 1, "비로그인 사용자의 수가 판에 들어가야 한다")
+        #expect(await baseWaitUntil { chess.match?.plyCount == 2 }, "로봇이 답하지 않았다")
+        #expect(chess.match?.turn == .white, "로봇이 둔 뒤 다시 사람 차례다")
+
+        #expect(chessRequestNames(harness).isEmpty, "로봇 판이 서버를 탔다: \(chessRequestNames(harness))")
+        await tearDown(harness, chess)
+    }
+
+    @Test("비로그인 로봇 판은 기권·다시 두기·로비로까지 요청 0건")
+    func robotGameLifecycleSendsNothing() async {
+        let (harness, chess) = await chessHarness("chess-ai-anon-life", signedIn: false)
+        screenDidAppear(chess)
+        chess.startAIMatch(humanColor: .white)
+        await play(chess, "e2", "e4")
+        _ = await baseWaitUntil { chess.match?.plyCount == 2 }
+
+        await chess.resign()                                   // [기권]
+        #expect(GamesChessAIChrome(store: chess).stage == .result)
+        #expect(chess.match?.outcome == .lost)
+        chess.restartAIMatch()                                 // [다시 두기]
+        #expect(GamesChessAIChrome(store: chess).stage == .playing)
+        #expect(chess.match?.plyCount == 0)
+        await chess.resign()
+        chess.backToLobby()                                    // [그만두기]
+        #expect(GamesChessAIChrome(store: chess).stage == .colorPick)
+        #expect(GamesChessAIChrome(store: chess).canStart, "끝난 판을 치웠으면 입구가 다시 열린다")
+
+        #expect(chessRequestNames(harness).isEmpty, "요청이 나갔다: \(chessRequestNames(harness))")
+        await tearDown(harness, chess)
+    }
+}
+
+// MARK: - ②③④⑤ 판·승격·판돈·애니메이션
+
+@MainActor
+@Suite(.serialized)
+struct GamesChessAIBoardTests {
+    @Test("흑을 고르면 판이 뒤집히고 로봇이 먼저 둔다")
+    func choosingBlackFlipsTheBoard() async {
+        // 기준선을 갈라 둔다 — 백·흑 둘 다 재지 않으면 `whiteAtBottom` 을 상수 true 로 박아도 초록이다.
+        let (harness, white) = await chessHarness("chess-ai-black", signedIn: false)
+        screenDidAppear(white)
+        white.startAIMatch(humanColor: .white)
+        #expect(GamesChessAIChrome(store: white).board?.whiteAtBottom == true)
+        #expect(white.match?.turn == .white, "사람이 백이면 사람이 먼저다")
+
+        let chess = makeChessStore(harness)                     // 판 둘을 섞지 않게 스토어를 따로 세운다
+        screenDidAppear(chess)
+        chess.startAIMatch(humanColor: .black)
+        let chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.board?.whiteAtBottom == false, "흑으로 두는 사람의 판이 뒤집히지 않았다")
+        #expect(chrome.humanColor == .black)
+        #expect(await baseWaitUntil { chess.match?.plyCount == 1 }, "로봇(백)이 먼저 두지 않았다")
+        #expect(chess.match?.turn == .black)
+        #expect(chessRequestNames(harness).isEmpty)
+        white.reset()
+        await tearDown(harness, chess)
+    }
+
+    @Test("판 인자는 스토어가 쥔 한 칸만 읽는다 — 고른 칸·갈 수 있는 칸")
+    func boardInputReadsTheStoreSelection() async {
+        // §6 ② — 로봇 판은 로컬 규칙이, 1:1 은 서버가 `legalMoves` 를 채운다. 화면은 어느 쪽인지 모른 채
+        // `selection.targets` 한 칸만 읽는다. 뷰가 스스로 합법 수를 만들면 1:1 에서 서버와 갈린다.
+        let (harness, chess) = await chessHarness("chess-ai-select", signedIn: false)
+        screenDidAppear(chess)
+        chess.startAIMatch(humanColor: .white)
+
+        await chess.tap(sq("e2"))                               // 말을 고른다(한 단째)
+        let chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.board?.selection == sq("e2"))
+        #expect(chrome.board?.legalTargets == chess.selection?.targets)
+        #expect(chrome.board?.legalTargets == Set([sq("e3"), sq("e4")]))
+        #expect(chrome.board?.isMyTurn == true)
+        await tearDown(harness, chess)
+    }
+
+    @Test("승격은 합법 수가 넷일 때만 시트를 띄운다 — 하나면 그대로 나간다")
+    func promotionAsksOnlyWhenFourMovesShareTheTarget() async {
+        // §6 ⑩. 기준선을 갈라 둔다: **같은 판에서** 폰 승격(넷)과 왕 이동(하나)을 둘 다 눌러 본다 —
+        // 승격만 재면 "언제나 묻는다"도, 평수만 재면 "한 번도 안 묻는다"도 초록이다.
+        let (harness, chess) = await chessHarness("chess-ai-promo", signedIn: false)
+        screenDidAppear(chess)
+        let position = ChessPosition(fen: "4k3/1P6/8/8/8/8/8/4K3 w - - 0 1")!
+        let game = ChessAIGame(humanColor: .white, position: position, now: harness.clock.now)
+        chess.aiGame = game
+        chess.match = game.matchState()
+        chess.phase = .playing
+        #expect(GamesChessAIChrome(store: chess).stage == .playing)
+
+        // (가) 평수 — 왕 e1→e2: 합법 수가 하나다 → 묻지 않고 그대로 나간다.
+        await play(chess, "e1", "e2")
+        #expect(GamesChessAIChrome(store: chess).promotion == nil, "평수에 승격 시트가 떴다")
+        #expect(await baseWaitUntil { chess.match?.plyCount == 2 }, "로봇이 답하지 않았다")
+
+        // (나) 승격 — 폰 b7→b8: 같은 칸으로 가는 합법 수가 넷이다 → 그때만 네 말을 묻는다.
+        await play(chess, "b7", "b8")
+        let prompt = GamesChessAIChrome(store: chess).promotion
+        #expect(prompt != nil, "승격인데 묻지 않았다")
+        #expect(prompt?.from == sq("b7"))
+        #expect(prompt?.to == sq("b8"))
+        #expect(prompt?.choices == [.queen, .rook, .bishop, .knight])
+        let plyBefore = chess.match?.plyCount ?? -1
+        #expect(plyBefore == 2, "고르기 전에는 수가 **나가지 않는다**")
+
+        await chess.choosePromotion(.knight)                    // 시트에서 나이트를 골랐다
+        #expect(chess.match?.plyCount == plyBefore + 1)
+        #expect(chess.match?.position?[sq("b8")]?.kind == .knight, "고른 말이 아니라 다른 말이 섰다")
+        #expect(GamesChessAIChrome(store: chess).promotion == nil)
+        #expect(chessRequestNames(harness).isEmpty)
+        await tearDown(harness, chess)
+    }
+
+    @Test("판돈 0 · 루비 이동 0 · 체스 RPC 0건 — 그리고 세는 눈은 멀지 않았다")
+    func robotGameTouchesNoRubyAndNoRanking() async {
+        // ★ 대조군이 이 시험의 절반이다: 같은 스텁·같은 세는 눈으로 **요청 한 건을 실제로 잡아** 보인 뒤에만
+        //   "0건" 이 뜻을 갖는다(host 를 안 붙이거나 RPC 이름이 틀렸으면 0 은 언제나 0 이다).
+        let (harness, chess) = await chessHarness("chess-ai-ruby", signedIn: true)
+        screenDidAppear(chess)
+        chess.rubyBalance = 500
+        harness.model.gomokuHost.rubyBalance = 500
+        #expect(chess.spectatorFeaturesEnabled == false, "순위·관전 주 스위치는 꺼짐이 기본값이다")
+
+        chess.startAIMatch(humanColor: .white)
+        await play(chess, "e2", "e4")
+        _ = await baseWaitUntil { chess.match?.plyCount == 2 }
+        await play(chess, "d2", "d4")
+        _ = await baseWaitUntil { chess.match?.plyCount == 4 }
+
+        let chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.matchStake == 0, "로봇 판에 판돈이 붙었다")
+        #expect(GamesChessAIChrome.stake == 0)
+        #expect(GamesChessAIChrome.entersRanking == false)
+        #expect(chess.rubyBalance == 500, "루비가 움직였다")
+        #expect(harness.model.gomokuHost.rubyBalance == 500, "호스트 루비 미러가 움직였다")
+        #expect(chess.match?.rubyDelta == nil, "진행 중 판에 루비 변화가 적혔다")
+        #expect(chessRequestNames(harness).isEmpty, "요청이 나갔다: \(chessRequestNames(harness))")
+
+        // 대조군 — 같은 세는 눈이 체스 요청을 **잡는다**(로비 조회는 로비 레인의 문이다).
+        await chess.refreshLobby()
+        #expect(harness.server.requests("chess_lobby").count == 1, "세는 눈이 멀었다 — 0건은 아무것도 증명하지 않는다")
+        #expect(harness.server.requests("chess_ranking").isEmpty, "주 스위치가 꺼졌는데 순위를 당겼다")
+        await tearDown(harness, chess)
+    }
+
+    @Test("로봇 수에 애니메이션이 붙는다 — 화면이 보이지 않으면 안 붙는다")
+    func robotMoveSlidesOnlyWhileTheScreenIsVisible() async {
+        // §5 — `ChessStore.flight` 는 `commitAIGame` 깔때기에 이미 붙어 있고 **스토어를 건드리지 않는다**.
+        // 다만 `beginFlight` 의 거절 ①이 "창이 안 보인다" 라서, 화면이 가시성을 켜지 않으면 폰에서는
+        // 애니메이션이 **한 번도** 안 뜬다(그리고 그래도 테스트는 초록이다 — 그래서 기준선을 갈라 둔다).
+        let (harness, hidden) = await chessHarness("chess-ai-flight", signedIn: false)
+
+        // (가) 기준선 — 가시성을 켜지 않은 판: 날 것이 없다.
+        hidden.startAIMatch(humanColor: .white)
+        await play(hidden, "e2", "e4")
+        #expect(await baseWaitUntil { hidden.match?.plyCount == 2 })
+        #expect(hidden.flight == nil, "안 보이는 화면을 60fps 로 깨웠다")
+        hidden.reset()
+
+        // (나) 화면이 나타난 뒤의 같은 수: 로봇 수가 미끄러진다.
+        let chess = makeChessStore(harness)
+        screenDidAppear(chess)
+        chess.startAIMatch(humanColor: .white)
+        await play(chess, "e2", "e4")
+        #expect(await baseWaitUntil { chess.match?.plyCount == 2 })
+        let flight = chess.flight
+        #expect(flight != nil, "로봇 수가 순간이동했다")
+        #expect(flight?.matchID == chess.match?.id)
+        #expect(flight?.ply == 2)
+        #expect(chessRequestNames(harness).isEmpty)
+        await tearDown(harness, chess)
+    }
+}
+
+// MARK: - ⑥ 로봇 판 중 PvP (판정만 — 고치지 않는다)
+
+@MainActor
+@Suite(.serialized)
+struct GamesChessAIVersusPvPTests {
+    private static func peer() -> ChessUser {
+        ChessUser(id: "7f3c1e2a-0000-4000-8000-0000000000aa", displayName: "상대", avatarURL: nil,
+                  characterID: "fox", isWorking: true, isCapable: true, inMatch: false)
+    }
+
+    private static func pvpMatch(now: Date) -> ChessMatchState {
+        ChessMatchState(
+            id: "7f3c1e2a-0000-4000-8000-000000000001", stake: 3, myColor: .white, opponent: peer(),
+            fen: ChessPosition.standard.fen, position: .standard, plyCount: 0, turn: .white, lastMove: nil,
+            moves: [], clock: ChessServerClock(whiteMsLeft: ChessClock.initialMs, blackMsLeft: ChessClock.initialMs,
+                                               incrementMs: 3_000, turnStartedAt: now, running: .white),
+            isInCheck: false, legalMoves: [], isFinished: false, outcome: nil, endReason: nil,
+            rubyDelta: nil, drawOfferBy: nil, drawOfferedByMe: false)
+    }
+
+    @Test("한 사람 한 판은 **한 방향만** 걸린다 — 1:1 판이 서면 로봇 판은 말없이 사라진다")
+    func pvpSilentlyWinsOverTheRobotGame() async {
+        // ⑥ 판정(고치지 않는다 — 다른 레인·통합 단계와 겹친다). 서버 `chess__busy` 는 `chess_matches` ·
+        // `gomoku_matches` 만 본다(duel.sql:1088) — **로봇 판은 서버에 없어 보이지 않는다.** 그래서:
+        //   · 로봇 판 중에도 남이 나를 신청할 수 있고, 내가 수락하면 1:1 판이 선다.
+        //   · 그 순간 코어 `match` 관찰자가 로봇 판을 **조용히** 버린다(ChessStore.swift:655 `discardAIGame`).
+        //     문구도 확인도 없다 — 두던 판이 그냥 없어진다(걸린 루비가 0 이라 돈은 잃지 않는다).
+        //   · 반대 방향은 막혀 있다: 1:1 판·보낸 신청이 있으면 `canStartAIMatch` 가 false 다.
+        let (harness, chess) = await chessHarness("chess-ai-pvp", signedIn: true)
+        screenDidAppear(chess)
+        chess.startAIMatch(humanColor: .white)
+        await play(chess, "e2", "e4")
+        _ = await baseWaitUntil { chess.match?.plyCount == 2 }
+        #expect(chess.aiGame != nil)
+
+        // 신청을 수락하면 서버가 이 판을 내려 준다(`applyState` 가 하는 일을 한 줄로 세운다).
+        chess.match = Self.pvpMatch(now: harness.clock.now)
+        #expect(chess.aiGame == nil, "1:1 판이 섰는데 로봇 판이 남았다")
+        #expect(chess.notice == nil, "판정: 로봇 판이 사라진 것을 **알리는 문구가 없다**")
+        let chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.stage == .colorPick, "로봇 화면은 색 고르기로 되돌아간다")
+        #expect(chrome.canStart == false, "1:1 판 중에는 로봇 판을 새로 열 수 없다(반대 방향은 막혀 있다)")
+        await tearDown(harness, chess)
+    }
+
+    @Test("로봇 판 중에 보내는 PvP 신청은 클라가 막지 않는다 — 요청이 그대로 나간다")
+    func challengeDuringRobotGameIsNotBlockedByTheClient() async {
+        // ⑥ 판정의 나머지 반쪽. `ChessStore.challenge` 에는 `isAIMatch` 가드가 없고 서버도 로봇 판을 모른다 —
+        // 신청은 나가고 수락되면 위 시험의 길로 로봇 판이 사라진다. **고치지 않는다**(판정만): 막을 자리는
+        // 로비 입구(다른 레인)이거나 "로봇 판을 먼저 끝내시겠어요?" 를 묻는 통합 단계다.
+        let (harness, chess) = await chessHarness("chess-ai-challenge", signedIn: true)
+        screenDidAppear(chess)
+        chess.startAIMatch(humanColor: .white)
+        #expect(chess.isAIMatch)
+
+        await chess.challenge(userID: Self.peer().id)
+        #expect(harness.server.requests("chess_challenge").count == 1,
+                "판정: 로봇 판 중에도 1:1 신청이 서버로 나간다(막는 자리가 없다)")
+        await tearDown(harness, chess)
+    }
+}
+
+// MARK: - ⑦ 소스 계약 (뷰 구역)
+
+@MainActor
+@Suite(.serialized)
+struct GamesChessAISourceContractTests {
+    /// `GamesChessAIViews.swift` 의 **뷰 구역**(입구부터 끝까지) — 주석을 걷어낸다(안 걷으면 설명을 지워야
+    /// 초록이 된다). 자리표시 블록은 입구보다 **앞**에 있어 이 구역에 들어오지 않는다(병합 때 지워질 코드다).
+    static func viewRegion() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/CheckMobileKit/Games/GamesChessAIViews.swift")
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let stripped = raw.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                guard let hit = line.range(of: "//") else { return String(line) }
+                return String(line[line.startIndex..<hit.lowerBound])
+            }
+            .joined(separator: "\n")
+        guard let hit = stripped.range(of: "struct GamesChessAISection") else { return "" }
+        return String(stripped[hit.lowerBound...])
+    }
+
+    @Test("뷰 구역에 로그인 게이트가 없다")
+    func viewsHaveNoSignInGate() throws {
+        let code = try Self.viewRegion()
+        #expect(!code.isEmpty, "뷰 구역을 못 찾았다 — 이름이 바뀌었으면 이 시험을 먼저 고쳐라")
+        #expect(!code.contains("session"), "로봇 판이 세션을 본다 — 비로그인 사용자의 체스 길이 막힌다(§6 ⑫)")
+        #expect(!code.contains("isSignedIn"))
+    }
+
+    @Test("뒤집기는 한 자리만 지난다 — 뷰가 좌표를 다시 계산하지 않는다")
+    func viewsDeriveOrientationOnlyOnce() throws {
+        let code = try Self.viewRegion()
+        let passes = code.components(separatedBy: "whiteAtBottom:").count - 1
+        #expect(passes == 1, "판에 뒤집기를 넘기는 자리가 \(passes) 군데다 — 한 군데여야 한다(§6 ①·④)")
+        #expect(!code.contains("myColor"), "뷰가 내 색에서 방향을 다시 만든다 — 흑으로 두는 사람만 틀어진다")
+        #expect(!code.contains("7 -"), "뷰에 칸 뒤집기 산술이 있다")
+        #expect(!code.contains("file:"), "뷰가 칸 좌표를 만든다")
+    }
+
+    @Test("뷰 구역이 합법 수를 만들지 않고 판돈을 그리지 않는다")
+    func viewsNeitherComputeLegalMovesNorDrawStake() throws {
+        let code = try Self.viewRegion()
+        #expect(!code.contains("ChessRules"), "화면이 합법 수를 만든다 — 1:1 에서는 서버가 권위다(§6 ②)")
+        #expect(!code.contains("stake"), "로봇 판에 판돈 줄이 있다(§7 — 판돈 없음)")
+        #expect(!code.contains("ranking"), "로봇 판이 순위를 그린다(§7 — 순위에 안 들어감)")
+        #expect(!code.contains("rubyDelta"), "로봇 판 결과에 루비 변화가 있다")
+    }
+}

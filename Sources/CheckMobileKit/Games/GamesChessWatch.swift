@@ -17,8 +17,8 @@ import SwiftUI
 // 그래서 이 절은 **제 스크롤도, 떠 있는 아래 막대도 만들지 않는다**(둘 다 로비 스크롤과 싸운다).
 // [관전]을 누른 자리에서 그 자리가 판으로 바뀌므로 화면이 튀지 않는다.
 //
-// ★ 스토어 자리는 **`ChessStore`** 다(로봇 입구 `GamesChessAISection` 과 같은 규약). 로비 레인의 자리표시는
-//   `GamesStore` 로 가정해 두었으니, 그 블록을 지울 때 호출부를 `store.context.chess` 로 바꿔야 한다.
+// ★ 스토어 자리는 **`ChessStore`** 다(로봇 입구 `GamesChessAISection` 과 같은 규약). 로비는 `store.chess`
+//   (= `store.context.chess`)를 넘긴다 — 로비 레인의 자리표시가 `GamesStore` 로 가정했던 자리를 통합이 고쳤다.
 //
 // ── 이 파일이 두 겹인 까닭 ──
 // 아래 **판정**(`GamesChessWatchPlan` · `GamesChessWatchStatus` · `GamesChessWatchBudget`)은 `#if os(iOS)`
@@ -106,12 +106,12 @@ enum GamesChessWatchStatus {
     static func headline(for watch: ChessSpectateState) -> String {
         switch kind(for: watch) {
         case .ended:
-            guard let winner = watch.winner else { return GamesChessWatchSectionText.endedDraw }
-            return GamesChessWatchSectionText.endedWin(winner)
+            guard let winner = watch.winner else { return GamesChessText.endedDraw }
+            return GamesChessText.endedWin(winner)
         case .loading:
             return GamesChessText.watchLoading
         case .turn(let turn):
-            return GamesChessWatchSectionText.watchingTurn(turn)
+            return GamesChessText.watchingTurn(turn)
         }
     }
 
@@ -177,62 +177,6 @@ enum GamesChessWatchBudget {
     }
 }
 
-/// 관전 절이 **아직 문구 레인에 없는** 줄만 든다(나머지는 전부 `GamesChessText` = `ChessPhoneText`).
-/// ★ 보고서의 '문구로 옮길 목록'이 이 enum 그대로다 — 그 표에 줄이 생기면 여기서 지우고 그쪽을 부른다.
-///
-/// `#if os(iOS)` 로 감싸지 않는다 — 글자뿐이라 맥 스위트가 값으로 잴 수 있다.
-///
-/// ★ **관전자에게 판돈을 "이기면 +N" 으로 말하지 않는다** — 관전자는 이 판에서 한 푼도 얻지 못한다.
-/// 그 접미사를 붙이는 자리(`GamesChessText.stakeLine`·`stakeGainSuffix`)는 내비 부제·신청 카드·대국 화면이고
-/// **전부 내 판**이다. 오목 관전 화면에 그 문구가 들어가 수리했고(0.3.41), 맥 판돈 칩도 관전만 `showsReward: false` 다.
-enum GamesChessWatchSectionText {
-    /// [관전] 칩의 보이스오버 힌트(맥 툴팁 자리 — 폰에는 호버가 없다).
-    static let watchChipHint = "이 판을 지켜봐요"
-    /// 서버에 관전이 아직 없으면 칩 대신 서는 캡션. **짧게** 둔 것이 핵심이다 — 칩 자리는 얼굴 둘·이름·판돈
-    /// 다음의 좁은 끝이라 긴 문장을 넣으면 이름 줄이 낱글자로 꺾인다. 보이스오버는 온전한 문장을 읽는다
-    /// (`ChessNoticeText.unavailable`).
-    static let watchSoonCaption = "곧 열려요"
-    /// 끝난 판인데 서버가 두 사람 행을 못 채웠다. 끝난 판은 폴링이 이미 멈춰 있어 더 올 것이 없으므로
-    /// 진행형(`watchLoading`)으로 말하면 거짓말이 된다(오목에서 "불러오는 중"과 "이미 끝났다"가 한 화면에 떴다).
-    static let playersUnknown = "대국자를 불러오지 못했어요"
-    /// 끝난 판 머리글 — 이긴 색이 있으면 "흑 승리", 없으면 무승부다.
-    static func endedWin(_ winner: ChessColor) -> String { "\(GamesChessText.stoneName(winner)) 승리" }
-    static let endedDraw = "무승부로 끝났어요"
-    /// 진행 중 머리글 — "관전 중 · 백 차례".
-    static func watchingTurn(_ turn: ChessColor) -> String {
-        "\(GamesChessText.watchTitle) · \(GamesChessText.stoneName(turn)) 차례"
-    }
-    /// 이름을 모르는 자리. 코어 경계가 이름을 모를 때 nil 이 아니라 **빈 문자열**을 넣으므로 `??` 로는 못 접는다.
-    static let unknownName = "—"
-    /// 판돈을 아직 모른다(씨앗 없이 들어온 판의 첫 응답 전) — 맥 판돈 칩의 "—"와 같은 자리.
-    /// ★ 액수 자리만 비운다(접미사를 붙이지 않는다).
-    static let stakeUnknown = "\(GamesChessText.stakeTitle) —"
-    /// [나가기] 보이스오버 힌트.
-    static let leaveWatchHint = "로비로 돌아가요"
-
-    /// 보이스오버: 관전 판 전체를 한 요소로(말 수 · 마지막 수 · 수 번호 · 상태). 칸마다 요소를 두는 것은
-    /// 두는 사람의 판뿐이다 — 관전은 입력이 없다.
-    static func boardAccessibility(_ watch: ChessSpectateState) -> String {
-        var parts = ["체스판"]
-        if let position = watch.position {
-            var white = 0
-            var black = 0
-            for index in 0..<64 {
-                guard let square = ChessSquare(index: index), let piece = position[square] else { continue }
-                if piece.color == .white { white += 1 } else { black += 1 }
-            }
-            parts.append("백 \(white)개")
-            parts.append("흑 \(black)개")
-        }
-        if let move = watch.lastMove {
-            parts.append("마지막 수 \(move.from.notation)\(move.to.notation)")
-        }
-        parts.append(GamesChessText.watchPly(watch.plyCount))
-        parts.append(GamesChessWatchStatus.headline(for: watch))
-        return parts.joined(separator: ", ")
-    }
-}
-
 #if os(iOS)
 
 /// 체스 관전 절. `store.spectating` 이 모양을 고른다(파일 머리 '자리 계약').
@@ -259,7 +203,7 @@ private struct GamesChessLiveSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionHeader(GamesChessText.liveTitle,
-                          trailing: store.liveMatches.isEmpty ? .none : .text("\(store.liveMatches.count)판"),
+                          trailing: store.liveMatches.isEmpty ? .none : .text(GamesChessText.liveCount(store.liveMatches.count)),
                           padded: true)
             InsetGroup {
                 if store.liveMatches.isEmpty {
@@ -380,13 +324,13 @@ private struct GamesChessLiveRow: View {
         case .soon:
             // 서버에 **관전이** 아직 없다(PGRST202 — 앱이 db push 보다 먼저 나간 창). 또렷한 칩을 흐려만 두면
             // 눈으로 보는 사용자는 이유를 알 길이 없다(폰엔 호버 툴팁이 없다) — 그래서 칩을 빼고 이유를 글자로.
-            caption(GamesChessWatchSectionText.watchSoonCaption, voiceOver: ChessNoticeText.unavailable)
+            caption(GamesChessText.watchSoonCaption, voiceOver: ChessNoticeText.unavailable)
         case .chip:
             AingButton(GamesChessText.watch, kind: .tinted, size: .sm) {
                 store.startWatching(matchID: live.id)
             }
             .fixedSize()
-            .accessibilityHint(GamesChessWatchSectionText.watchChipHint)
+            .accessibilityHint(GamesChessText.watchChipHint)
         }
     }
 
@@ -441,7 +385,7 @@ private struct GamesChessWatchPanel: View {
         SectionHeader(GamesChessText.watchTitle,
                       trailing: .action(GamesChessText.leaveWatch) { store.leaveWatch() },
                       padded: true)
-            .accessibilityHint(GamesChessWatchSectionText.leaveWatchHint)
+            .accessibilityHint(GamesChessText.leaveWatchHint)
     }
 
     // MARK: 두 사람 · 판
@@ -460,7 +404,7 @@ private struct GamesChessWatchPanel: View {
                 GroupRow(divider: .none) {
                     // **끝난 판에는 로딩을 말하지 않는다** — 폴링이 이미 멈춰(isFinished) 더 올 것이 없다.
                     if watch.isFinished {
-                        Text(GamesChessWatchSectionText.playersUnknown)
+                        Text(GamesChessText.playersUnknown)
                             .font(.subheadline)
                             .foregroundStyle(MobileTheme.label2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -529,7 +473,7 @@ private struct GamesChessWatchPanel: View {
         .frame(maxWidth: .infinity)
         // 보이스오버: 판 전체가 한 요소다. 칸마다 요소를 두는 것은 두는 사람의 판뿐이다.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(GamesChessWatchSectionText.boardAccessibility(watch))
+        .accessibilityLabel(GamesChessText.boardAccessibility(watch))
     }
 
     /// 판에 **세로 상한만** 건다(폭은 판 부품이 제 `aspectRatio(1, .fit)` 로 본다). 상한을 모르는 첫 한 틱은
@@ -617,7 +561,7 @@ private struct GamesChessWatchPanel: View {
                 .font(MobileTheme.rowSubtitle)
                 .foregroundStyle(MobileTheme.label2)
         } else {
-            Text(GamesChessWatchSectionText.stakeUnknown)
+            Text(GamesChessText.stakeUnknown)
                 .font(MobileTheme.rowSubtitle)
                 .foregroundStyle(MobileTheme.label2)
         }
@@ -684,7 +628,7 @@ private struct GamesChessWatchPlayerRow: View {
     /// 넣으므로 `??` 로는 못 접는다(오목에서 이름 줄이 통째로 비던 함정).
     private var displayName: String {
         let name = user?.displayName ?? ""
-        return name.isEmpty ? GamesChessWatchSectionText.unknownName : name
+        return name.isEmpty ? GamesChessText.unknownName : name
     }
 
     var body: some View {

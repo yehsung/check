@@ -211,7 +211,7 @@ struct GamesChessTextTests {
         let robotLines = [
             ChessPhoneText.robotButton, ChessPhoneText.robotButtonHelp, ChessPhoneText.robotPromptTitle,
             ChessPhoneText.robotPromptCaption, ChessPhoneText.robotPlayWhite, ChessPhoneText.robotPlayBlack,
-            ChessPhoneText.robotNoRecord, ChessPhoneText.robotStakeChip, ChessPhoneText.robotClockPauses
+            ChessPhoneText.robotNoRecord, ChessPhoneText.robotClockPauses
         ]
         for line in robotLines {
             #expect(!line.contains("로그인"), "로봇 입구 문구가 로그인을 말한다: \(line)")
@@ -278,31 +278,23 @@ struct GamesChessTextTests {
         #expect(ChessPhoneText.promotionCancel == "다른 수 두기")
     }
 
-    // MARK: - 7. 무승부 제안 · 응답
+    // MARK: - 7. 무승부 제안 · 응답 (★ 시트 없음 — 동작 줄이 쥔다)
 
-    @Test("무승부 시트는 제안과 응답을 가른다(거절은 응답이고 그만두기는 아니다)")
-    func drawSheetSplitsOfferFromRespond() {
-        #expect(ChessPhoneText.DrawSheetMode.allCases.count == 2)
-        for mode in ChessPhoneText.DrawSheetMode.allCases {
-            #expect(!ChessPhoneText.drawSheetTitle(mode).isEmpty)
-            #expect(!ChessPhoneText.drawSheetMessage(mode).isEmpty)
-            #expect(!ChessPhoneText.drawSheetPrimary(mode).isEmpty)
-            #expect(!ChessPhoneText.drawSheetSecondary(mode).isEmpty)
-            // 본문은 **루비가 어떻게 되는지**를 말한다(무승부는 돌려받는다 — 승패가 아니다).
-            #expect(ChessPhoneText.drawSheetMessage(mode).contains("무승부"))
-            #expect(ChessPhoneText.drawSheetMessage(mode).contains(ChessPhoneText.stakeRefundOnDraw))
-        }
-        // 네 갈래가 서로 다른 글자다 — 한 벌로 두면 제안 화면에 [거절] 이 뜨거나 응답 화면이 그만두기만 준다.
-        #expect(ChessPhoneText.drawSheetTitle(.offer) != ChessPhoneText.drawSheetTitle(.respond))
-        #expect(ChessPhoneText.drawSheetPrimary(.offer) != ChessPhoneText.drawSheetPrimary(.respond))
-        #expect(ChessPhoneText.drawSheetSecondary(.offer) == ChessPhoneText.keepPlaying)
-        #expect(ChessPhoneText.drawSheetSecondary(.respond) == ChessPhoneText.declineDraw)
-        #expect(ChessPhoneText.drawSheetSecondary(.offer) != ChessPhoneText.drawSheetSecondary(.respond))
-        // 받은 제안은 **누가** 했는지 말한다. 별명을 모르면 지어내지 않고 "상대가" 로 부른다.
-        #expect(ChessPhoneText.drawSheetTitle(.respond, name: "민트별") == "민트별님이 무승부를 제안했어요")
-        #expect(ChessPhoneText.drawSheetTitle(.respond, name: nil) == "상대가 무승부를 제안했어요")
-        #expect(ChessPhoneText.drawSheetTitle(.respond, name: "") == "상대가 무승부를 제안했어요", "빈 별명도 폴백")
-        #expect(ChessPhoneText.drawOfferVanishesOnMove.contains("한 수"))
+    @Test("무승부는 동작 줄에서 끝난다 — 제안·수락·거절 세 글자와 제안 중 두 상태가 서로 다르다")
+    func drawLivesInTheActionRow() {
+        // 통합 결정: 받은 제안은 맥과 같게 **동작 줄에 바로** 서고 보내기에도 확인 시트가 없다.
+        // 그래서 시트가 없고, 이 다섯 줄이 무승부가 쓰는 문구 전부다 — 하나라도 같은 글자면 사용자가 못 가른다.
+        let lines = [ChessPhoneText.offerDraw, ChessPhoneText.acceptDraw, ChessPhoneText.declineDraw,
+                     ChessPhoneText.drawOfferedByMe, ChessPhoneText.drawOfferedByOpponent]
+        for line in lines { #expect(!line.isEmpty) }
+        #expect(Set(lines).count == lines.count, "무승부 문구 다섯 줄 가운데 같은 글자가 있다: \(lines)")
+        // 제안한 쪽·받은 쪽이 **다른 말**을 한다(한 벌이면 내가 제안한 판에 "상대가 제안했어요" 가 뜬다).
+        #expect(ChessPhoneText.drawOfferedByMe != ChessPhoneText.drawOfferedByOpponent)
+        // 무승부는 **돌려받는다**(승패가 아니다) — 액수 있는 줄과 없는 줄이 둘 다 그 말을 한다.
+        #expect(ChessPhoneText.stakeRefundOnDraw.contains("돌려받"))
+        #expect(ChessPhoneText.drawRefund(stake: 5) == "판돈 5 루비를 돌려받았어요")
+        #expect(ChessPhoneText.rubyResultCaption(.draw) == ChessPhoneText.stakeRefundOnDraw)
+        #expect(ChessPhoneText.rubyResultCaption(.won) == nil)
     }
 
     // MARK: - 8. 순위 행은 승점만 띄우지 않는다
@@ -451,31 +443,37 @@ struct GamesChessTextTests {
                 "★ 쓸어내려 닫기가 열려 있다 — 그 길은 스토어를 접지 않는다")
     }
 
-    @Test("무승부 시트의 [거절] 은 서버로 간다 — 그냥 닫으면 상대가 기다린 채 시계만 흐른다")
-    func drawSheetSendsTheDecline() throws {
-        let code = try Self.code(Self.sheetsPath)
-        let sheet = try #require(Self.block(after: "struct GamesChessDrawSheet: View", in: code)?.body,
-                                 "무승부 시트 타입을 못 찾았다")
-        let primary = try #require(Self.block(after: "private func primaryAction()", in: sheet), "`primaryAction()` 이 없다")
-        #expect(primary.body.contains("store.offerDraw()"), "제안 갈래가 제안을 안 보낸다")
-        #expect(primary.body.contains("store.respondDraw(accept: true)"), "응답 갈래가 수락을 안 보낸다")
-        let secondary = try #require(Self.block(after: "private func secondaryAction()", in: sheet), "`secondaryAction()` 이 없다")
-        #expect(secondary.body.contains("store.respondDraw(accept: false)"),
-                "★ [거절] 이 서버로 가지 않는다 — 상대는 응답을 기다린 채 시계를 쓴다")
-        // 제안 갈래의 보조는 **아무것도 안 보낸다**(제안한 적이 없다) — 그 가름이 살아 있어야 한다.
-        #expect(secondary.body.contains("guard mode == .respond"), "제안 갈래의 [계속 두기] 가 서버를 탄다")
-    }
-
-    @Test("시트 파일은 한국어 문구를 직접 적지 않는다 — 전부 문구 표에서 온다")
-    func sheetsCarryNoKoreanLiterals() throws {
-        // 왜: 폰 뷰는 맥 스위트가 못 본다. 뷰가 제 문구를 적으면 **어느 테스트도 그 글자를 볼 수 없고**,
-        // 같은 사실이 화면마다 다른 말을 하는 길이 열린다(체스는 그 자리가 곧 돈이다).
-        let literals = Self.stringLiterals(in: try Self.code(Self.sheetsPath))
-        #expect(!literals.isEmpty, "전제: 문자열 리터럴을 못 읽었다(스캐너가 헛돈다)")
+    @Test("체스 폰 파일은 한국어 문구를 직접 적지 않는다 — 전부 문구 표에서 온다", arguments: Self.chessOwnedFiles)
+    func chessFilesCarryNoKoreanLiterals(relative: String) throws {
+        // 왜: 폰 뷰는 맥 스위트가 못 본다(`CheckMobileKit` 의 절반이 `#if os(iOS)`). 뷰가 제 문구를 적으면
+        // **어느 테스트도 그 글자를 볼 수 없고**, 같은 사실이 화면마다 다른 말을 하는 길이 열린다
+        // (체스는 그 자리가 곧 돈이다 — 무승부 환불을 "±0" 으로 말한 화면이 그 사고다).
+        //
+        // ★ 시트뿐 아니라 **합친 화면 전부**에 넓혔다(통합). 문구가 표 밖으로 새면 거기만 수정에서 빠지고,
+        //   그 사실을 알려 주는 것은 이 단언뿐이다. 보이스오버 글도 문구다 — 접근성만 옛말을 하는 길을 막는다.
+        //   `GamesTab.swift` 는 오목·미니게임과 함께 쓰는 파일이라 이 목록에 없다(체스 전용 파일만 센다).
+        // 전제는 **문구 표**에서 잰다 — 체스 파일 가운데 리터럴이 0건인 것이 실제로 있다
+        // (`GamesChessBoardLayout.swift` 는 순수 산수다). 거기에 전제를 걸면 스캐너가 멀쩡한데도 빨개진다.
+        #expect(!Self.stringLiterals(in: try Self.code(Self.textPath)).isEmpty,
+                "전제: 문자열 리터럴을 못 읽었다(스캐너가 헛돈다)")
+        let literals = Self.stringLiterals(in: try Self.code(relative))
         for literal in literals where literal.unicodeScalars.contains(where: { (0xAC00...0xD7A3).contains($0.value) }) {
-            Issue.record("시트가 한국어 문구를 직접 적었다: \"\(literal)\" — `ChessPhoneText` 로 옮겨라")
+            Issue.record("\(relative) 가 한국어 문구를 직접 적었다: \"\(literal)\" — `ChessPhoneText` 로 옮겨라")
         }
     }
+
+    /// 문구 표(`GamesChessText.swift`)를 뺀 **체스 전용** 폰 파일 전부. 파일이 늘면 여기 더한다 —
+    /// 안 더하면 새 화면만 제 문구를 적을 수 있고, 그게 이 단언이 막으려는 길이다.
+    static let chessOwnedFiles = [
+        "Sources/CheckMobileKit/Games/GamesChessSheets.swift",
+        "Sources/CheckMobileKit/Games/GamesChessScreen.swift",
+        "Sources/CheckMobileKit/Games/GamesChessMatch.swift",
+        "Sources/CheckMobileKit/Games/GamesChessRanking.swift",
+        "Sources/CheckMobileKit/Games/GamesChessWatch.swift",
+        "Sources/CheckMobileKit/Games/GamesChessAIViews.swift",
+        "Sources/CheckMobileKit/Games/GamesChessBoardCanvas.swift",
+        "Sources/CheckMobileKit/Games/GamesChessBoardLayout.swift"
+    ]
 
     // MARK: - 도우미
 

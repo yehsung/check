@@ -162,13 +162,13 @@ import Testing
         // ① 값: 이 절이 말할 수 있는 모든 문장에 '이기면'·'받아요'가 없다.
         let watch = Self.finishedWatch()
         var spoken: [String] = [
-            GamesChessWatchSectionText.stakeUnknown, GamesChessText.watchCaption,
+            GamesChessText.stakeUnknown, GamesChessText.watchCaption,
             GamesChessText.watchTailCaption, GamesChessText.watchTitle,
-            GamesChessText.watchLoading, GamesChessWatchSectionText.playersUnknown,
-            GamesChessText.watch, GamesChessWatchSectionText.watchChipHint,
-            GamesChessText.myMatch, GamesChessWatchSectionText.watchSoonCaption,
+            GamesChessText.watchLoading, GamesChessText.playersUnknown,
+            GamesChessText.watch, GamesChessText.watchChipHint,
+            GamesChessText.myMatch, GamesChessText.watchSoonCaption,
             GamesChessText.liveTitle, GamesChessText.noLiveMatches,
-            GamesChessWatchSectionText.boardAccessibility(watch), GamesChessText.watchPly(24),
+            GamesChessText.boardAccessibility(watch), GamesChessText.watchPly(24),
             GamesChessWatchStatus.headline(for: watch)
         ]
         spoken.append(GamesChessWatchStatus.detail(for: watch) ?? "")
@@ -243,7 +243,7 @@ import Testing
         // 끝난 판의 두 사람 자리는 `LoadingRow` 가 아니다.
         let players = try Self.body(of: "private var players", in: code, length: 1_400)
         #expect(players.contains("if watch.isFinished"), "끝난 판 갈래가 없다")
-        #expect(players.contains("GamesChessWatchSectionText.playersUnknown"))
+        #expect(players.contains("GamesChessText.playersUnknown"))
     }
 
     // MARK: - 4. 세로 예산

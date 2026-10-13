@@ -163,12 +163,14 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
     func rubyDeltaPrefersServerValue() throws {
         let won = try #require(cmChrome(cmMatch(isFinished: true, outcome: .won, endReason: .checkmate)).result)
         #expect(won.rubyDelta == 5 && won.rubyDeltaText == "+5")
-        #expect(won.reason == "체크메이트")
+        #expect(won.reason == ChessPhoneText.endReason(.checkmate, outcome: .won))
+        #expect(won.reason == "체크메이트로 이겼어요")
         // 서버가 다른 값을 말하면(환불·보정) 그 값이 이긴다 — 앱이 다시 세지 않는다.
         let patched = try #require(cmChrome(cmMatch(isFinished: true, outcome: .won, endReason: .timeout,
                                                     rubyDelta: 3)).result)
         #expect(patched.rubyDelta == 3 && patched.rubyDeltaText == "+3")
         #expect(patched.reason == "상대 시간이 다 됐어요")
+        #expect(patched.reason == ChessPhoneText.endReason(.timeout, outcome: .won))
     }
 
     @Test("로봇 판 결과는 루비를 안 그리고 기록이 안 남는다고 말한다")
@@ -176,7 +178,8 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
         let result = try #require(cmChrome(cmMatch(isFinished: true, outcome: .won, endReason: .checkmate),
                                            isRobotMatch: true).result)
         #expect(!result.showsRubyDelta, "±0·+5 를 그리면 걸었다가 돌려받은 것처럼 읽힌다")
-        #expect(result.rubyNote == "로봇과 둔 판은 순위·루비에 들어가지 않아요")
+        #expect(result.rubyNote == ChessPhoneText.robotNoRecord)
+        #expect(result.rubyNote == "루비·전적·순위에 들어가지 않아요")
     }
 
     @Test("★ 로봇 판 사유는 다른 표를 쓴다 — '상대'·루비 어휘가 없고 사람 판과 문장이 갈린다")
@@ -194,7 +197,12 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
             }
         }
         // 두 표가 **실제로 갈린다**(한쪽을 다른 쪽으로 돌려 놓으면 이 수가 0 이 되어 빨개진다).
-        #expect(differed >= 4, "로봇 표가 사람 표와 한 줄도 다르지 않다 — 같은 표를 두 번 쓰고 있다")
+        #expect(differed == 3, """
+            로봇 표와 사람 표가 갈리는 칸 수가 바뀌었다(기대 3 · 실제 \(differed)).
+            갈리는 자리는 **주어가 사람인 셋**이다: 기권·시간패·판 닫힘의 '이김' 칸("상대가…" → "로봇이…").
+            0 이면 같은 표를 두 번 쓰는 것이고, 늘었다면 무승부 사유 가운데 하나가 로봇 판에서 다른 말을
+            하게 된 것이다 — 어느 쪽이든 읽고 결정할 일이다.
+            """)
         // 사람 판은 그 자리에서 '상대' 를 말한다(대조군 — 금지 검사가 공허하지 않다).
         let human = try #require(cmChrome(cmMatch(isFinished: true, outcome: .won, endReason: .resign)).result)
         #expect(human.reason == "상대가 기권했어요")
@@ -203,20 +211,20 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
     @Test("★ 시간 규칙 줄은 서버가 준 값에서 조립된다(10분이 박혀 있지 않다)")
     func clockLineComesFromTheServerValues() {
         let tenMinutes = cmChrome(cmMatch(clock: .initial), initialMs: 600_000)
-        #expect(tenMinutes.clockLine == "10분 + 한 수 3초 · 앱을 닫아도 시계는 계속 흘러요")
+        #expect(tenMinutes.clockLine == "10분 + 한 수 3초 · 앱을 나가도 차례 시간은 흘러요")
         // 서버가 5분·2초로 되돌아가면 화면도 **따라간다** — 상수를 베꼈으면 10분이 그대로 나온다.
         let fiveMinutes = cmChrome(
             cmMatch(clock: ChessServerClock(whiteMsLeft: 300_000, blackMsLeft: 300_000, incrementMs: 2_000,
                                             turnStartedAt: nil, running: nil)),
             initialMs: 300_000)
-        #expect(fiveMinutes.clockLine == "5분 + 한 수 2초 · 앱을 닫아도 시계는 계속 흘러요")
+        #expect(fiveMinutes.clockLine == "5분 + 한 수 2초 · 앱을 나가도 차례 시간은 흘러요")
         #expect(tenMinutes.clockLine != fiveMinutes.clockLine)
         // 가산은 **이 판의 행**에서 온다(로비 값이 아니다 — 판이 시작된 뒤 로비 상수가 바뀌어도 판은 그대로다).
         let mixed = cmChrome(
             cmMatch(clock: ChessServerClock(whiteMsLeft: 600_000, blackMsLeft: 600_000, incrementMs: 5_000,
                                             turnStartedAt: nil, running: nil)),
             initialMs: 600_000)
-        #expect(mixed.clockLine == "10분 + 한 수 5초 · 앱을 닫아도 시계는 계속 흘러요")
+        #expect(mixed.clockLine == "10분 + 한 수 5초 · 앱을 나가도 차례 시간은 흘러요")
         // 코어 기본값과도 맞는다(로비를 아직 못 읽었을 때 — 서버가 10분이다).
         #expect(ChessClock.initialMs == 600_000)
         #expect(cmChrome(cmMatch()).clockLine == tenMinutes.clockLine)
@@ -225,8 +233,10 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
     @Test("사유를 모르면 빈칸이 아니라 한 줄이 선다")
     func unknownEndReasonIsNeverBlank() throws {
         let result = try #require(cmChrome(cmMatch(isFinished: true, outcome: nil, endReason: nil)).result)
-        #expect(result.reason == "대국이 끝났어요")
+        #expect(result.reason == ChessPhoneText.unknownEndReason(nil))
+        #expect(result.reason == "판이 끝났어요", "사유 자리가 빈칸이다 — 왜 끝났는지 못 묻는다")
         #expect(result.title == "대국이 끝났어요")
+        #expect(result.reason != result.title, "제목과 사유가 같은 말이면 한 줄이 공허하다")
     }
 
     // MARK: ② 유예는 판·사람당 1회 예산
@@ -418,11 +428,11 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
     func drawOfferActionRow() {
         let incoming = cmChrome(cmMatch(drawOfferBy: cmPeer.id))
         #expect(incoming.actionRow == .answerDrawOffer, "받은 제안에 답할 길이 없으면 무승부를 놓친다")
-        #expect(incoming.statusLine?.text == ChessNoticeText.drawOfferPending)
+        #expect(incoming.statusLine?.text == ChessPhoneText.drawOfferedByOpponent)
 
         let mine = cmChrome(cmMatch(drawOfferBy: "me", drawOfferedByMe: true))
         #expect(mine.actionRow == .playing(canOfferDraw: false, canResign: true))
-        #expect(mine.statusLine?.text == ChessNoticeText.drawOffered)
+        #expect(mine.statusLine?.text == ChessPhoneText.drawOfferedByMe)
 
         let busy = cmChrome(cmMatch(), isBusy: true)
         #expect(busy.actionRow == .playing(canOfferDraw: false, canResign: false), "왕복 중에는 둘 다 잠긴다")
@@ -543,7 +553,7 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
         #expect(!code.contains("store.send("), "화면이 수를 직접 보낸다 — 입구는 탭과 승격 고르기뿐이다")
         #expect(!code.contains("expected_ply"))
         // ⑧ 낙관적 표시가 없다 — 판은 서버가 확인한 국면만 그린다.
-        #expect(code.contains("position: match.position"), "판이 서버 국면 말고 다른 것을 그린다")
+        #expect(code.contains("position: match.position ?? .empty"), "판이 서버 국면 말고 다른 것을 그린다")
         // ② 깃발 판정은 코어 함수 하나뿐이다(손 비교 금지).
         #expect(code.contains("isFlagOverdue(now:"), "깃발 판정이 코어 함수를 지나지 않는다")
         #expect(!code.contains("rawRemainingSeconds"), "화면이 깃발을 손으로 비교한다")
@@ -560,19 +570,31 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
                                             encoding: .utf8))
         #expect(code.contains("struct GamesChessMatchView: View"))
         #expect(code.contains("let store: ChessStore"))
-        // 다른 레인이 내놓을 이름은 **약속된 서명 그대로** 자리표시로 두고, 들어오면 그 절만 지운다.
-        // `private` 이어도 같은 모듈에 같은 이름이 둘이면 Swift 가 invalid redeclaration 으로 막으므로
-        // (이 저장소에서 프로브로 실측했다) 안 지우고 머지하면 **조용히 지나가지 않는다**.
-        for seam in ["private struct GamesChessBoard: View", "private enum GamesChessBoardMetrics",
-                     "private struct GamesChessPromotionSheet: View", "private enum GamesChessText"] {
-            #expect(code.contains(seam), "자리표시 \(seam) 가 private 이 아니다(레인 파일과 조용히 섞인다)")
+        // ★ 통합이 자리표시 넷(판·한 변·승격 시트·문구 표)을 **지웠다** — 이제 그 이름들은 이웃 레인의 것이고
+        //   이 파일에는 **제 벌이 하나도 없어야** 한다. 남으면 같은 모듈에 같은 이름이 둘이 되어 컴파일이 막히고
+        //   (프로브로 실측했다 — `private` 이어도 invalid redeclaration 이다), 그 요란한 실패가 이 단언의 짝이다.
+        for leftover in ["private struct GamesChessBoard", "private enum GamesChessBoardMetrics",
+                         "private struct GamesChessPromotionSheet", "private enum GamesChessText",
+                         "enum GamesChessText {"] {
+            #expect(!code.contains(leftover), "자리표시 \(leftover) 가 남아 있다 — 이웃 레인의 진짜 부품과 겹친다")
         }
-        #expect(code.contains("GamesChessBoard(position: match.position, flight: store.flight,"))
+        #expect(code.contains("GamesChessBoard(position: match.position ?? .empty, flight: store.flight,"))
+        #expect(code.contains("lastMove: match.lastMove.map { (from: $0.from, to: $0.to) }"),
+                "마지막 수를 판 부품의 꼴(칸 둘)로 넘기지 않는다")
         #expect(code.contains("GamesChessBoardMetrics.side(fitting:"))
         #expect(code.contains("GamesChessPromotionSheet(store: store, prompt: prompt, myColor: match.myColor)"))
-        // 승격 시트의 계약 둘: 쓸어 내려 닫을 수 없고, 닫는 길은 `cancelPromotion()` 하나뿐이다.
-        #expect(code.contains("interactiveDismissDisabled()"))
-        #expect(code.components(separatedBy: "store.cancelPromotion()").count == 2,
+        // 승격 시트의 계약 둘(쓸어 내려 닫을 수 없다 · 닫는 길은 `cancelPromotion()` 하나뿐)은 **시트 파일**이
+        // 쥔다 — 통합 뒤 이 화면은 시트를 띄우기만 한다. 그래서 그 둘을 거기서 잰다.
+        //
+        // ★ 이 화면의 `isPresented` setter 는 **아무 일도 하지 않아야** 한다: 승격을 고르지 않고 빠져나가는
+        //   두 번째 길을 만들면 그 길로 나간 폰은 고르기만 사라진 채 수가 영원히 안 나간다.
+        #expect(code.contains("set: { _ in }"), "승격 시트에 두 번째 닫는 길이 생겼다")
+        #expect(!code.contains("store.cancelPromotion()"), "닫는 길이 화면에도 있다 — 시트 하나로 모아 둔다")
+        let sheets = stripComments(try String(
+            contentsOf: Self.root.appendingPathComponent("Sources/CheckMobileKit/Games/GamesChessSheets.swift"),
+            encoding: .utf8))
+        #expect(sheets.contains("interactiveDismissDisabled()"))
+        #expect(sheets.components(separatedBy: "store.cancelPromotion()").count == 2,
                 "승격을 고르지 않고 빠져나가는 길이 둘 이상이다")
     }
 }

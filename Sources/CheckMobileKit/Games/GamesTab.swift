@@ -149,12 +149,12 @@ struct GamesTab: View {
             inboxFailed: gomoku.inboxLoadFailed && gomoku.incoming.isEmpty
         )
         let chip: String? = blockedBy != nil
-            ? GamesCrossGameText.busyChip(blockedBy)
+            ? ChessPhoneText.entryBlock(playing: blockedBy?.text)
             : (active ? GamesText.activeMatchChip : (incoming > 0 ? GamesText.incomingChip(incoming) : nil))
         let record = gomoku.record.map { GomokuPhoneText.recordTitle + " " + GomokuPhoneText.record($0) }
         // 칩이 없을 때: 보낸 신청 대기·받은함 실패는 그 한 줄이 먼저, 아니면 전적(모르면 안내 한 줄).
         let detail: String? = blockedBy != nil
-            ? GamesCrossGameText.busyDetail(blockedBy)
+            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text)
             : (chip != nil ? record : ((gomoku.outgoing != nil || gomoku.inboxLoadFailed) ? line : (record ?? line)))
         return Button {
             store.context.router.push(GamesDestination.gomoku, on: .games)
@@ -191,7 +191,9 @@ struct GamesTab: View {
         }
         .buttonStyle(.plain)
         .disabled(blockedBy != nil)
-        .accessibilityHint(blockedBy == nil ? "오목 대결 화면을 열어요" : GamesCrossGameText.busyDetail(blockedBy))
+        .accessibilityHint(blockedBy == nil
+                           ? "오목 대결 화면을 열어요"
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text) ?? ""))
     }
 
     // MARK: 체스 카드
@@ -209,13 +211,13 @@ struct GamesTab: View {
         let active = GamesText.hubShowsActiveMatch(
             active: store.hasActiveChessMatch, isAIMatch: chess.isAIMatch, incoming: incoming == nil ? 0 : 1)
         let chip: String? = blockedBy != nil
-            ? GamesCrossGameText.busyChip(blockedBy)
-            : (active ? GamesText.activeMatchChip : (incoming != nil ? GamesCrossGameText.chessIncomingChip : nil))
-        let record = chess.record.map { GamesCrossGameText.chessRecordTitle + " " + GamesCrossGameText.chessRecord($0) }
+            ? ChessPhoneText.entryBlock(playing: blockedBy?.text)
+            : (active ? GamesText.activeMatchChip : (incoming != nil ? ChessPhoneText.incomingChip : nil))
+        let record = chess.record.map { ChessPhoneText.recordTitle + " " + ChessPhoneText.record($0) }
         let detail: String? = blockedBy != nil
-            ? GamesCrossGameText.busyDetail(blockedBy)
-            : (chip != nil ? record : (chess.outgoing != nil ? GamesCrossGameText.chessOutgoingLine
-                                                            : (record ?? GamesCrossGameText.chessIdleLine)))
+            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text)
+            : (chip != nil ? record : (chess.outgoing != nil ? ChessPhoneText.outgoingLine
+                                                            : (record ?? ChessPhoneText.idleLine)))
         return Button {
             store.context.router.push(GamesDestination.chess, on: .games)
         } label: {
@@ -223,10 +225,10 @@ struct GamesTab: View {
                 HStack(spacing: 14) {
                     GamesChessTabThumbnail()
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(GamesCrossGameText.chessTitle)
+                        Text(ChessPhoneText.title)
                             .font(MobileTheme.rowTitle)
                             .foregroundStyle(MobileTheme.label)
-                        Text(GamesCrossGameText.chessSubtitle)
+                        Text(ChessPhoneText.cardSubtitle)
                             .font(MobileTheme.rowSubtitle)
                             .foregroundStyle(MobileTheme.label2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -251,7 +253,9 @@ struct GamesTab: View {
         }
         .buttonStyle(.plain)
         .disabled(blockedBy != nil)
-        .accessibilityHint(blockedBy == nil ? "체스 대결 화면을 열어요" : GamesCrossGameText.busyDetail(blockedBy))
+        .accessibilityHint(blockedBy == nil
+                           ? ChessPhoneText.cardOpenHint
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text) ?? ""))
     }
 
     @ViewBuilder
@@ -569,50 +573,6 @@ private struct GamesChessTabThumbnail: View {
     private static let pieces: [(Int, Int, Color)] = [
         (3, 6, Color.white), (4, 4, Color.white), (4, 1, Color(white: 0.12)), (2, 3, Color(white: 0.12))
     ]
-}
-
-/// 두 게임 카드가 **같이** 쓰는 문구(한 사람 한 판 안내)와 체스 카드 문구.
-///
-/// **임시 자리다** — 옮길 자리가 이미 정해져 있다(문구 레인의 `ChessPhoneText`, 별칭 `GamesChessText`):
-///  · `busyChip(_:)`   → `ChessPhoneText.busyTitle(.chess)` / `.gomoku`
-///  · `busyDetail(_:)` → `ChessPhoneText.busyHint(.chess)` / `.gomoku`
-///  · 나머지 체스 줄   → `ChessPhoneText` 의 해당 항목
-/// 그 파일이 이 레인의 워크트리에는 **아직 없어서**(세션 시작 HEAD 포크) 부르면 컴파일되지 않는다.
-/// 그래서 임시로 두고 **오목 쪽 공용 파일(`GamesText.swift`)은 한 줄도 건드리지 않았다.**
-///
-/// ★ 시간 수치는 카드에 싣지 않는다 — 그 값은 서버가 말하고(로비 `initial_ms`·`increment_ms`) 카드는 로비를
-///   안 읽었을 수도 있다. 10-12 에 5분 → 10분으로 늘어난 값이라 박아 두면 그 자리가 곧 거짓이 된다.
-private enum GamesCrossGameText {
-    static let chessTitle = "1:1 체스"
-    /// 시간 수치는 카드에 싣지 않는다 — 그 값은 서버가 말하고(로비 응답) 카드는 로비를 안 읽을 수도 있다.
-    static let chessSubtitle = "FIDE 규칙 · 백 선공 · 로봇과도 둬요"
-    static let chessRecordTitle = "내 전적"
-    static let chessIncomingChip = "받은 신청 1건"
-    static let chessOutgoingLine = "보낸 신청을 기다리고 있어요"
-    static let chessIdleLine = "상대를 골라 대결을 신청해요"
-
-    static func chessRecord(_ record: ChessRecord) -> String {
-        "\(record.wins)승 \(record.losses)패 \(record.draws)무"
-    }
-
-    /// 다른 게임 판이 흐르는 동안의 칩. **한 사람은 한 판만** 둘 수 있다(B8).
-    static func busyChip(_ busy: GamesBusyGame?) -> String {
-        switch busy {
-        case .chess: return "체스 대국 중"
-        case .gomoku: return "오목 대국 중"
-        case nil: return ""
-        }
-    }
-
-    /// 그 까닭 한 줄 — 비활성 카드의 보조 줄이자 보이스오버 힌트. "지금은 못 눌러요"가 아니라
-    /// **언제 열리는지**를 말한다(사용자가 할 수 있는 일을 말하는 규약).
-    static func busyDetail(_ busy: GamesBusyGame?) -> String {
-        switch busy {
-        case .chess: return "체스 대국이 끝나면 열려요 · 한 번에 한 판만 둘 수 있어요"
-        case .gomoku: return "오목 대국이 끝나면 열려요 · 한 번에 한 판만 둘 수 있어요"
-        case nil: return ""
-        }
-    }
 }
 
 /// 시안 px 색(무대 그림 전용 — 뜻 색이 아니다).

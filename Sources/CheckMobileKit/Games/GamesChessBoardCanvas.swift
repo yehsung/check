@@ -292,8 +292,6 @@ package struct GamesChessBoard: View {
     /// 판 전체를 읽는 **한 줄**(64칸을 하나씩 읽히면 못 쓴다 — 맥 `ChessText.boardAccessibility` 와 같은 규약).
     /// 화면이 더 많이 아는 글(기보 수·체크)을 말하려면 바깥에서 `.accessibilityLabel` 을 덮어쓰면 된다.
     static func boardAccessibility(position: ChessPosition, whiteAtBottom: Bool) -> String {
-        let bottom = whiteAtBottom ? "백" : "흑"
-        let turn = position.sideToMove == .white ? "백" : "흑"
-        return "체스판, \(bottom)이 아래, \(turn) 차례"
+        ChessPhoneText.boardAccessibility(position: position, whiteAtBottom: whiteAtBottom)
     }
 }

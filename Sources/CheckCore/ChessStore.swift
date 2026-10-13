@@ -808,7 +808,12 @@ package final class ChessStore {
     /// 팝오버 열기 계기의 마지막 조회 시각(스로틀).
     @ObservationIgnored package var lastMenuLobbyAt: Date = .distantPast
     @ObservationIgnored package var lastOutgoingRequestAt: Date = .distantPast
-    @ObservationIgnored private var inviteTTLSeconds: TimeInterval = 60
+    /// 서버가 말한 신청 만료(초) — 로비 응답의 `invite_ttl_seconds` 가 오면 그 값이고, 없으면 60이다.
+    ///
+    /// ★ **읽기를 연 까닭**: 화면이 "1분 안에 응답하세요"·규칙 시트의 TTL 줄을 그린다. 상수를 박아 두면
+    ///   서버가 `chess_invite_ttl_seconds()` 를 바꾼 날 화면만 옛 숫자를 말한다(시계가 5분 → 10분이 된 날
+    ///   같은 자리다). 쓰기는 코어만 한다(`applyLobby` · `reset`).
+    @ObservationIgnored package private(set) var inviteTTLSeconds: TimeInterval = 60
     /// 이 기기에서 보낸 신청을 새로 세울 때마다 오른다. 그보다 **먼저** 나간 조회 응답이 방금 보낸 신청을 지우지 않게 한다.
     @ObservationIgnored private var outgoingRevision = 0
     @ObservationIgnored private var lobbyRequestOutgoingRevision = 0

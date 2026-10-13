@@ -19,6 +19,11 @@ package enum GamesDestination: Hashable, Sendable {
 package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
     case gomoku
     case chess
+
+    /// 문구 표가 쓰는 짝(`ChessPhoneText.BusyGame`). 두 열거가 따로 있는 까닭: 이쪽은 **스토어 판정**이고
+    /// 그쪽은 **문구 표**다(문구 표는 뷰·스토어를 모르는 자리라야 맥 스위트가 값으로 잰다). 옮기는 자리를
+    /// 여기 하나로 둬서 두 꼴을 손으로 가르는 switch 가 화면마다 생기지 않게 한다.
+    package var text: ChessPhoneText.BusyGame { self == .chess ? .chess : .gomoku }
 }
 
 /// 딥링크 한 건을 게임 탭 경로에 옮기는 동작(`GamesStore.routeStep(for:)`). 뷰는 돌려받은 대로 경로만 바꾼다.

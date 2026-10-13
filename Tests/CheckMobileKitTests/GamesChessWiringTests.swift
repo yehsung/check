@@ -421,10 +421,16 @@ import Testing
         #expect(accept.contains("onNeedsRobotConfirm(invite); return"),
                 "확인으로 넘기고 **돌아서지** 않는다 — 확인과 요청이 함께 나간다")
         // 확인 시트는 두던 판이 사라진다는 **사실**을 말해야 한다(루비가 안 걸린다는 안심도 함께).
-        #expect(code.contains("두던 로봇 판은 저장되지 않아요"), "확인 문구가 '사라진다'를 말하지 않는다")
-        #expect(code.contains("잃는 루비는 없어요"), "확인 문구가 '손실 없음'을 말하지 않는다")
+        // ★ 글자는 문구 표(`ChessPhoneText`)에 있다 — 화면에는 한 줄도 없다(통합이 전부 옮겼고
+        //   `GamesChessTextTests.chessFilesCarryNoKoreanLiterals` 가 되돌아오는 길을 막는다).
+        #expect(ChessPhoneText.acceptEndsRobotMessage.contains("저장되지 않아요"),
+                "확인 문구가 '사라진다'를 말하지 않는다")
+        #expect(ChessPhoneText.acceptEndsRobotMessage.contains("잃는 루비는 없어요"),
+                "확인 문구가 '손실 없음'을 말하지 않는다")
+        #expect(code.contains("ChessPhoneText.acceptEndsRobotMessage"), "화면이 그 확인 문구를 안 쓴다")
         // 그리고 [도전] 쪽은 **막는 것이 맞다** — 그 까닭을 화면이 말한다.
-        #expect(code.contains("로봇 판을 끝내면 1:1 대결을 신청할 수 있어요"),
+        #expect(ChessPhoneText.blockedByRobot == "로봇 판을 끝내면 1:1 대결을 신청할 수 있어요")
+        #expect(code.contains("ChessPhoneText.blockedByRobot"),
                 "로봇 판 중 [도전]이 막힌 까닭을 말하지 않는다 — 비활성 알약만 남는다")
     }
 
@@ -605,23 +611,35 @@ import Testing
         // 없으면: "신청하면 빠져요"로 적힌 한 줄이 사용자에게 **없는 손해**를 믿게 한다(신청은 60초 뒤
         // 만료되고 그때도 루비 이동이 없다). 서버 계약은 수락 트랜잭션에서 양쪽을 차감한다.
         let code = try Self.strippedSource("Sources/CheckMobileKit/Games/GamesChessScreen.swift")
-        #expect(code.contains("수락하는 순간 두 사람 모두 걸고"),
+        #expect(ChessPhoneText.stakeCaption.contains("수락하는 순간 두 사람 모두 걸고"),
                 "판돈 캡션이 '언제 빠지는지'를 말하지 않는다")
-        #expect(code.contains("신청만 한 상태에서는 루비가 빠지지 않아요"),
+        #expect(ChessPhoneText.stakeNotHeldYet(ttlSeconds: 60)
+                    == "신청만 해서는 루비가 빠지지 않아요 · 60초 안에 응답이 없으면 신청이 사라져요",
                 "보낸 신청 줄이 '아직 안 빠졌다'를 말하지 않는다")
+        #expect(code.contains("ChessPhoneText.stakeNotHeldYet(ttlSeconds: Int(chess.inviteTTLSeconds))"),
+                "보낸 신청 줄이 **서버가 말한 TTL** 을 쓰지 않는다 — 상수를 박으면 서버가 바뀐 날 화면만 거짓이다")
         for lie in ["신청하면 빠", "신청하면 루비", "신청하는 순간"] {
             #expect(!code.contains(lie), "판돈 문구가 '\(lie)…' 로 거짓을 말한다")
+            for line in [ChessPhoneText.stakeCaption, ChessPhoneText.stakeNotHeldYet(),
+                         ChessPhoneText.stakePromptCaption] {
+                #expect(!line.contains(lie), "판돈 문구가 '\(lie)…' 로 거짓을 말한다: \(line)")
+            }
         }
         // 순위·관전은 **로비 안 제자리 절**이다 — 새 라우트로 밀면 폴링이 죽는다.
-        #expect(code.contains("GamesChessRankingSection(store: store)"), "순위 절이 로비에 없다")
-        #expect(code.contains("GamesChessWatchSection(store: store)"), "관전 절이 로비에 없다")
-        #expect(code.contains("GamesChessAISection(store: store)"), "로봇과 두기 입구가 로비에 없다")
+        #expect(code.contains("GamesChessRankingSection(store: chess)"), "순위 절이 로비에 없다")
+        #expect(code.contains("GamesChessWatchSection(store: chess)"), "관전 절이 로비에 없다")
+        #expect(code.contains("GamesChessAISection(store: chess)"), "로봇과 두기 입구가 로비에 없다")
         // ★ 순위·관전은 **로비 몸통 안**에 서야 한다(자식 라우트로 밀면 onDisappear → windowDidHide 로 폴링이 죽는다).
         //   로봇 화면(`GamesChessAIScreen`)은 밀어도 된다 — 그쪽은 서버 폴링이 없다. 그래서 `navigationDestination`
         //   자체를 금지하지 않고 **두 절이 로비 몸통에 있는지**를 잰다.
         let lobbyBody = try #require(Self.slice(code, from: "private var lobby: some View", length: 1400))
-        #expect(lobbyBody.contains("GamesChessRankingSection(store: store)"), "순위 절이 로비 몸통 밖에 있다")
-        #expect(lobbyBody.contains("GamesChessWatchSection(store: store)"), "관전 절이 로비 몸통 밖에 있다")
+        #expect(lobbyBody.contains("GamesChessRankingSection(store: chess)"), "순위 절이 로비 몸통 밖에 있다")
+        #expect(lobbyBody.contains("GamesChessWatchSection(store: chess)"), "관전 절이 로비 몸통 밖에 있다")
+        // ★ 로비가 **코어 안내줄을 그린다**(통합이 확인한 자리). 관전하던 판이 3분 꼬리를 지나면 코어가
+        //   `setNotice(ChessNoticeText.watchGone)` 만 남기고 관전을 내린다(`ChessStoreWatch`) — 그 말을 그리는
+        //   화면이 없으면 판이 **이유 없이 사라진다**(맥은 그 자리에 그린다). 뷰는 `#if os(iOS)` 안이라 글자로 잰다.
+        #expect(code.contains("chess.notice"), "로비가 코어 안내줄을 안 그린다 — 관전 404 가 말없이 사라진다")
+        #expect(ChessNoticeText.watchGone == "지금은 볼 수 없는 판이에요")
         // 로봇 판은 로그인을 보지 않는다 — 화면 자체를 로그인으로 가리면 비로그인 사용자의 그 길이 막힌다.
         #expect(!code.contains("session.isSignedIn"), "체스 화면이 로그인을 게이트로 쓴다 — 로봇 판 입구가 막힌다")
     }

@@ -88,35 +88,30 @@ struct GamesChessPromotionSheet: View {
     }
 }
 
-/// 승격 시트의 말 한 칸 그림.
+/// 승격 시트의 말 한 칸 그림 — **판과 같은 한 벌**(`ChessPieceArt`)로 그린다.
 ///
-/// ★ **그림은 A2 가 올린 뒤 이어붙일 자리다.** 맥은 `ChessPieceArt.path(for:in:)`(벡터 실루엣)을 쓰는데 그 타입이
-///   아직 `Sources/check/ChessPanel.swift` 안에 있어 폰 모듈이 못 본다 — A2 가 `Sources/CheckCore/ChessPieceArt.swift`
-///   로 올리면 이 뷰의 `Canvas` 한 줄을 그 경로로 바꾸면 된다(`context.fill(ChessPieceArt.path(for: kind, in: box), …)`).
-///   그때까지는 유니코드 기물 글리프를 자리표시로 쓴다 — 백은 속 빈 글리프, 흑은 채운 글리프라 판과 같은 관례로 읽힌다.
+/// ★ 자리표시(유니코드 ♔♕♖♗♘♙)를 걷어낸 자리다. 판은 벡터 실루엣인데 시트만 글리프면 **같은 말이 두 모양**이고,
+///   고른 말이 판에 어떻게 설지 눈으로 맞춰지지 않는다(그것이 이 칸의 유일한 일이다). 색·테두리 굵기도 판 부품의
+///   상수를 그대로 쓴다 — 여기서 색을 새로 고르면 시트와 판의 흑백 대비가 갈린다.
 struct GamesChessPieceTile: View {
     let kind: ChessPieceKind
     let color: ChessColor
     let side: CGFloat
 
-    /// 자리표시 글리프(백 ♔♕♖♗♘♙ · 흑 ♚♛♜♝♞♟). A2 의 벡터가 들어오면 이 표는 지운다.
-    static func placeholderGlyph(_ kind: ChessPieceKind, color: ChessColor) -> String {
-        let white: [ChessPieceKind: String] = [
-            .king: "♔", .queen: "♕", .rook: "♖", .bishop: "♗", .knight: "♘", .pawn: "♙"
-        ]
-        let black: [ChessPieceKind: String] = [
-            .king: "♚", .queen: "♛", .rook: "♜", .bishop: "♝", .knight: "♞", .pawn: "♟"
-        ]
-        return (color == .white ? white[kind] : black[kind]) ?? "?"
-    }
-
     var body: some View {
-        Text(Self.placeholderGlyph(kind, color: color))
-            .font(.system(size: side * 0.68))
-            .foregroundStyle(MobileTheme.label)
-            .frame(width: side, height: side)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MobileTheme.fill))
-            .accessibilityHidden(true)
+        Canvas { context, size in
+            // `path(for:in:)` 가 안에서 `box(in:)` 로 여백을 잡는다 — 칸 사각형을 그대로 넘긴다.
+            let path = ChessPieceArt.path(for: kind, in: CGRect(origin: .zero, size: size))
+            context.fill(path, with: .color(color == .white ? GamesChessBoardCanvas.whitePiece
+                                                            : GamesChessBoardCanvas.blackPiece))
+            context.stroke(path,
+                           with: .color(color == .white ? GamesChessBoardCanvas.whitePieceEdge
+                                                        : GamesChessBoardCanvas.blackPieceEdge),
+                           lineWidth: max(0.8, min(size.width, size.height) * 0.035))
+        }
+        .frame(width: side, height: side)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MobileTheme.fill))
+        .accessibilityHidden(true)
     }
 }
 
@@ -177,88 +172,6 @@ struct GamesChessRulesSheet: View {
             }
         }
         .background(MobileTheme.background.ignoresSafeArea())
-    }
-}
-
-// MARK: - 무승부 제안 · 응답
-
-/// 무승부 시트. 갈래가 둘이고 **묻는 사람이 다르다**(`ChessPhoneText.DrawSheetMode`):
-///  · `.offer` — 내가 제안한다. [무승부 제안하기] / [계속 두기]. 보조는 **그만두기**라 서버를 타지 않는다.
-///  · `.respond` — 상대가 제안했다. [무승부 수락] / [거절]. 보조도 **서버를 탄다**(거절도 응답이다) —
-///    그냥 닫으면 상대는 응답을 기다린 채로 남고, 그 사이 시계는 계속 흐른다.
-///
-/// 수락·거절의 결과 문구는 코어 `ChessNoticeText.respondDraw` 가 스토어 안내줄에 적는다(이 시트는 말하지 않는다).
-struct GamesChessDrawSheet: View {
-    let store: ChessStore
-    let mode: ChessPhoneText.DrawSheetMode
-    /// 제안한 사람의 별명(`.respond` 에서만 쓴다). 모르면 nil — 그때는 "상대가" 로 부른다.
-    var opponentName: String?
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            SheetHeader(ChessPhoneText.offerDraw, onClose: { dismiss() })
-            ScrollView {
-                VStack(alignment: .leading, spacing: MobileTheme.space3) {
-                    InsetGroup {
-                        GroupRow(divider: .none, minHeight: 64) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(ChessPhoneText.drawSheetTitle(mode, name: opponentName))
-                                    .font(.headline)
-                                    .foregroundStyle(MobileTheme.label)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Text(ChessPhoneText.drawSheetMessage(mode))
-                                    .font(MobileTheme.rowSubtitle)
-                                    .foregroundStyle(MobileTheme.label2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .accessibilityElement(children: .combine)
-                            Spacer(minLength: 0)
-                        }
-                    }
-                    Text(ChessPhoneText.drawOfferVanishesOnMove)
-                        .font(.footnote)
-                        .foregroundStyle(MobileTheme.label2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-                }
-                .padding(.horizontal, MobileTheme.sideMargin)
-                .padding(.top, MobileTheme.space2)
-                .padding(.bottom, MobileTheme.space4)
-            }
-            VStack(spacing: MobileTheme.space2) {
-                AingButton(ChessPhoneText.drawSheetPrimary(mode), kind: .filled, size: .lg,
-                           fillsWidth: true, isBusy: store.isBusy) {
-                    dismiss()
-                    Task { await primaryAction() }
-                }
-                AingButton(ChessPhoneText.drawSheetSecondary(mode), kind: .gray, size: .lg, fillsWidth: true) {
-                    dismiss()
-                    Task { await secondaryAction() }
-                }
-                .disabled(store.isBusy)
-            }
-            .padding(.horizontal, MobileTheme.sideMargin)
-            .padding(.bottom, MobileTheme.space3)
-        }
-        .background(MobileTheme.background.ignoresSafeArea())
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
-    }
-
-    private func primaryAction() async {
-        switch mode {
-        case .offer: await store.offerDraw()
-        case .respond: await store.respondDraw(accept: true)
-        }
-    }
-
-    /// `.offer` 의 [계속 두기] 는 **아무것도 보내지 않는다**(제안한 적이 없다).
-    /// `.respond` 의 [거절] 은 **보낸다** — 거절도 응답이고, 안 보내면 상대가 계속 기다린다.
-    private func secondaryAction() async {
-        guard mode == .respond else { return }
-        await store.respondDraw(accept: false)
     }
 }
 #endif

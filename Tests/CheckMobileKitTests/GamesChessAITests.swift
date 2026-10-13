@@ -219,6 +219,15 @@ struct GamesChessAIBoardTests {
         //   "0건" 이 뜻을 갖는다(host 를 안 붙이거나 RPC 이름이 틀렸으면 0 은 언제나 0 이다).
         let (harness, chess) = await chessHarness("chess-ai-ruby", signedIn: true)
         wiringMadeScreenVisible(chess)
+        // ★ 기준선을 **로그인 뒤**에 뜬다(통합): 배선 레인이 로그인·활성 때 `chess_lobby` 를 한 번 당기므로
+        //   (`GamesStore.appDidBecomeActive`·`hubDidAppear` — 한 사람 한 판이 그 조회에 달려 있다)
+        //   스텁 서버의 누적 건수는 0 이 아니다. 이 시험이 재는 것은 **로봇 판이 내는 요청**이고,
+        //   그것은 이 스토어의 몫이라 '여기서부터의 증가분' 으로 세야 뜻이 맞는다.
+        //   그 한 건이 **비동기**로 날아가므로 먼저 가라앉힌다(안 가라앉으면 기준선 뒤에 떨어져 이 시험이
+        //   로봇 판 탓으로 읽는다). 30초 스로틀이라 뒤따르는 건은 없고, 혹시 안 와도 기준선이 0 인 채로 맞다.
+        _ = await baseWaitUntil { harness.server.requests("chess_lobby").count >= 1 }
+        let rpcBaseline = chessRequestNames(harness)
+        let lobbyBaseline = harness.server.requests("chess_lobby").count
         chess.rubyBalance = 500
         harness.model.gomokuHost.rubyBalance = 500
         #expect(chess.spectatorFeaturesEnabled == false, "순위·관전 주 스위치는 꺼짐이 기본값이다")
@@ -236,11 +245,13 @@ struct GamesChessAIBoardTests {
         #expect(chess.rubyBalance == 500, "루비가 움직였다")
         #expect(harness.model.gomokuHost.rubyBalance == 500, "호스트 루비 미러가 움직였다")
         #expect(chess.match?.rubyDelta == nil, "진행 중 판에 루비 변화가 적혔다")
-        #expect(chessRequestNames(harness).isEmpty, "요청이 나갔다: \(chessRequestNames(harness))")
+        #expect(chessRequestNames(harness) == rpcBaseline,
+                "로봇 판이 요청을 냈다: \(chessRequestNames(harness).dropFirst(rpcBaseline.count))")
 
         // 대조군 — 같은 세는 눈이 체스 요청을 **잡는다**(로비 조회는 로비 레인의 문이다).
         await chess.refreshLobby()
-        #expect(harness.server.requests("chess_lobby").count == 1, "세는 눈이 멀었다 — 0건은 아무것도 증명하지 않는다")
+        #expect(harness.server.requests("chess_lobby").count == lobbyBaseline + 1,
+                "세는 눈이 멀었다 — 증가 0 은 아무것도 증명하지 않는다")
         #expect(harness.server.requests("chess_ranking").isEmpty, "주 스위치가 꺼졌는데 순위를 당겼다")
         await tearDown(harness, chess)
     }

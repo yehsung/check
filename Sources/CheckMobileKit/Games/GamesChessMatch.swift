@@ -37,150 +37,6 @@ import SwiftUI
 //
 // 채팅은 없다(오목에만 있다). 관전·로비·순위는 다른 화면이다.
 
-// MARK: - 문구 (★ 자리표시 — 문구 레인의 `GamesChessText`(= `ChessPhoneText` 별칭)가 들어오면 **이 표를 지운다**)
-//
-// 이름을 약속된 `GamesChessText` 그대로 둔 까닭: 같은 모듈에 같은 이름이 둘이면 Swift 는 `private` 이라도
-// **invalid redeclaration 으로 막는다**(이 저장소에서 프로브로 실측했다). 그래서 머지 때 이 표를 안 지우면
-// 컴파일이 멈춘다 — 조용히 옛 문구가 쓰이는 길이 없다. 호출부는 한 줄도 안 바뀐다.
-
-/// 이 화면이 쓰는 사용자 어휘. 안내 한 줄(거절·실패)은 **코어 `ChessNoticeText`** 를 그대로 쓴다 —
-/// 같은 사실이 화면마다 다른 말을 하면 그게 다음 조사거리다.
-/// 맥 정본은 `Sources/check/ChessPanel.swift` 의 `ChessText` 이고, 아래는 같은 뜻이면 **같은 문장**이다.
-private enum GamesChessText {
-    static let title = "1:1 체스"
-    static let stakeTitle = "판돈"
-    static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(stake)" }
-    /// 로봇 판의 판돈 자리(맥 "AI 대국 · 기록 없음" 과 같은 뜻).
-    static let robotStakeChip = "로봇과 두기 · 기록 없음"
-    static let robotNoRecord = "로봇과 둔 판은 순위·루비에 들어가지 않아요"
-
-    static let myTurn = "내 차례예요"
-    static let opponentTurn = "상대 차례예요"
-    static let inCheck = "체크! 왕을 피하세요"
-    static let opponentInCheck = "상대가 체크예요"
-    static let robotThinking = "로봇이 생각 중이에요"
-    /// 깃발이 떨어지고 **유예 예산까지** 지났다 — 서버가 정산하는 중이다(폰이 판정한 것이 아니다).
-    static let flagSettling = "시간이 다 됐어요 · 결과를 확인하고 있어요"
-    /// 서버 FEN 을 읽지 못해 판을 그릴 수 없다(서버 쪽 문제 — 결과·루비는 그대로 보여 준다).
-    static let unreadableBoard = "판을 그릴 수 없어요 · 결과는 그대로 보여요"
-    /// 폰에서 처음 쓰는 문장: 맥과 달리 앱을 내려도 판은 서버에서 계속 흐른다.
-    static let clockKeepsRunning = "앱을 닫아도 시계는 계속 흘러요"
-    /// 시간 규칙 한 마디. ★ **숫자를 박지 않는다** — 서버가 준 값에서 조립한다(10-12 에 5분 → 10분이 됐다).
-    static func clockPhrase(initialMs: Int, incrementMs: Int) -> String {
-        let minutes = max(1, initialMs / 60_000)
-        let increment = max(0, incrementMs / 1_000)
-        return "\(minutes)분 + 한 수 \(increment)초"
-    }
-
-    static func plyLine(_ ply: Int) -> String { "\(ply)수 진행" }
-
-    static let resign = "기권"
-    static let resignNow = "기권하기"
-    static let keepPlaying = "계속 두기"
-    static let resignConfirmTitle = "기권할까요?"
-    static func resignConfirmMessage(stake: Int) -> String { "판돈 \(stake) 루비를 상대가 가져가요" }
-    static let robotResignConfirmMessage = "로봇 판이라 루비는 걸리지 않아요"
-    static let offerDraw = "무승부 제안"
-    static let drawOfferedByMe = ChessNoticeText.drawOffered
-    static let drawOfferedByOpponent = ChessNoticeText.drawOfferPending
-    static let acceptDraw = "무승부 수락"
-    static let declineDraw = "거절"
-    static let backToLobby = "로비로"
-    static let playAgain = "다시 두기"
-
-    static let movesTitle = "기보"
-    static let noMoves = "아직 둔 수가 없어요"
-    static let promotionTitle = "승격할 말을 고르세요"
-
-    static func stoneName(_ color: ChessColor) -> String { color == .white ? "백" : "흑" }
-    static let me = "나"
-
-    // 결과.
-    static func outcomeTitle(_ outcome: ChessMatchOutcome?) -> String {
-        switch outcome {
-        case .won?: return "이겼어요"
-        case .lost?: return "졌어요"
-        case .draw?: return "무승부예요"
-        case nil: return "대국이 끝났어요"
-        }
-    }
-
-    /// 사유를 모를 때(서버가 새 값을 보냈다 · 응답에 없다). **빈칸으로 두지 않는다** — 결과 카드에 이유 줄이
-    /// 사라지면 사용자는 왜 끝났는지 못 묻는다.
-    static let unknownEndReason = "대국이 끝났어요"
-
-    /// 끝난 이유(**내 기준** — 주어가 '상대'다). `ChessEndReason` 열 갈래를 **빠짐없이** 말한다:
-    /// `default:` 를 두지 않는 것이 계약이다 — 접으면 `abandoned`(상대 계정 삭제)가 "대국이 끝났어요" 가 되어
-    /// 남는 사람이 왜 이겼는지 모르고, `timeout_insufficient` 가 패배 문장을 입는다. 사유가 늘면 컴파일이 막는다.
-    static func endReason(_ reason: ChessEndReason?, outcome: ChessMatchOutcome?) -> String {
-        guard let reason else { return unknownEndReason }
-        switch reason {
-        case .checkmate: return outcome == .won ? "체크메이트" : "체크메이트를 당했어요"
-        case .resign: return outcome == .won ? "상대가 기권했어요" : "기권했어요"
-        case .timeout: return outcome == .won ? "상대 시간이 다 됐어요" : "시간이 다 됐어요"
-        // ★ FIDE 6.9 — 깃발은 떨어졌지만 남은 쪽에 메이트 재료가 없어 **무승부**다. 위 `timeout`(패) 과
-        //   **다른 문장이어야 한다**: 섞이면 환불받은 사람이 졌다고 읽는다.
-        case .timeoutInsufficient: return "시간이 다 됐지만 메이트할 기물이 없어요 · 무승부예요"
-        case .stalemate: return "스테일메이트"
-        case .fiftyMove: return "50수 규칙"
-        case .threefold: return "같은 국면 3회 반복"
-        case .insufficientMaterial: return "메이트할 기물이 없어요"
-        case .agreement: return "무승부에 합의했어요"
-        case .abandoned: return "상대가 더 둘 수 없게 됐어요"
-        }
-    }
-
-    /// 로봇 판의 끝난 이유 — **루비 어휘도, '상대' 도 쓰지 않는다**(걸린 루비가 없고, 상대는 사람이 아니다).
-    /// 사람 판 표를 그대로 쓰면 "상대가 기권했어요" 가 되어 로봇이 사람처럼 읽힌다.
-    static func robotEndReason(_ reason: ChessEndReason?, outcome: ChessMatchOutcome?) -> String {
-        guard let reason else { return unknownEndReason }
-        switch reason {
-        case .checkmate: return outcome == .won ? "체크메이트" : "체크메이트를 당했어요"
-        case .resign: return outcome == .won ? "로봇이 기권했어요" : "기권했어요"
-        case .timeout: return outcome == .won ? "로봇의 시간이 다 됐어요" : "시간이 다 됐어요"
-        case .timeoutInsufficient: return "시간이 다 됐지만 메이트할 기물이 없어요 · 무승부예요"
-        case .stalemate: return "스테일메이트"
-        case .fiftyMove: return "50수 규칙"
-        case .threefold: return "같은 국면 3회 반복"
-        case .insufficientMaterial: return "메이트할 기물이 없어요"
-        case .agreement: return "무승부로 끝났어요"
-        case .abandoned: return "판이 닫혔어요"
-        }
-    }
-
-    static func rubyDelta(_ delta: Int) -> String {
-        if delta > 0 { return "+\(delta)" }
-        if delta < 0 { return "−\(-delta)" }
-        return "±0"
-    }
-
-    /// 무승부는 **양쪽이 판돈을 돌려받는다**(서버 `grant:chess:refund:`). ±0 만 그리면 "걸었다가 그대로"
-    /// 인지 "잃었는지" 를 사용자가 못 가른다 — 돈이 갈리는 자리라 한 줄로 말한다.
-    static func drawRefund(stake: Int) -> String { "판돈 \(stake) 루비를 돌려받았어요" }
-
-    /// 시계 글자 — `m:ss`, 10초 아래는 소수 한 자리(마지막 10초는 1초 단위로 안 읽힌다). 맥과 같은 산식이다.
-    static func clock(_ seconds: Double) -> String {
-        let clamped = max(0, seconds)
-        if clamped < 10 { return String(format: "%.1f", clamped) }
-        let whole = Int(clamped.rounded(.down))
-        return String(format: "%d:%02d", whole / 60, whole % 60)
-    }
-
-    static func clockAccessibility(_ seconds: Double, color: ChessColor) -> String {
-        let whole = Int(max(0, seconds).rounded())
-        let side = stoneName(color)
-        if whole >= 60 { return "\(side) 남은 시간 \(whole / 60)분 \(whole % 60)초" }
-        return "\(side) 남은 시간 \(whole)초"
-    }
-
-    static func boardAccessibility(ply: Int, turn: ChessColor?, inCheck: Bool) -> String {
-        var text = "체스판, \(ply)수 진행"
-        if let turn { text += ", \(stoneName(turn)) 차례" }
-        if inCheck { text += ", 체크" }
-        return text
-    }
-}
-
 // MARK: - 색의 뜻
 
 /// 화면 표가 말하는 색. `MobileTheme` 은 iOS 전용이라 이 표에 `Color` 를 둘 수 없다(둬도 맥 스위트가 못 본다) —
@@ -282,7 +138,7 @@ package struct GamesChessMatchChrome: Equatable, Sendable {
         whiteAtBottom = match.myColor == .white
         plyLine = GamesChessText.plyLine(match.plyCount)
         clockLine = GamesChessText.clockPhrase(initialMs: initialMs, incrementMs: match.clock.incrementMs)
-            + " · " + GamesChessText.clockKeepsRunning
+            + " · " + GamesChessText.clockRunsInBackground
 
         if match.isFinished {
             actionRow = .finished(showsPlayAgain: isRobotMatch)
@@ -481,7 +337,7 @@ struct GamesChessMatchView: View {
                         GamesStakeLine(stake: chrome.stake, prefix: GamesChessText.stakeTitle,
                                        suffix: chrome.stakeSuffix, gemSize: 13)
                     } else {
-                        Label(GamesChessText.robotStakeChip, systemImage: "cpu")
+                        Label(GamesChessText.robotButton, systemImage: "cpu")
                     }
                 }
             }
@@ -506,9 +362,10 @@ struct GamesChessMatchView: View {
         // [계속 두기]가 안 보였고, 알림창은 재질이 색을 빨아들여 대비가 1.9:1 이었다).
         .sheet(isPresented: $confirmsResign) {
             AingConfirmSheet(
-                title: GamesChessText.resignConfirmTitle,
-                message: chrome.isRobotMatch ? GamesChessText.robotResignConfirmMessage
-                                             : GamesChessText.resignConfirmMessage(stake: chrome.stake),
+                title: chrome.isRobotMatch ? GamesChessText.robotResignConfirmTitle
+                                           : GamesChessText.resignConfirmTitle,
+                message: chrome.isRobotMatch ? GamesChessText.robotNoRecord
+                                             : GamesChessText.resignConfirmMessage,
                 confirmTitle: GamesChessText.resignNow,
                 cancelTitle: GamesChessText.keepPlaying,
                 onConfirm: {
@@ -538,9 +395,13 @@ struct GamesChessMatchView: View {
             let side = GamesChessMatchChrome.boardSide(
                 laneDefault: GamesChessBoardMetrics.side(fitting: visible), visible: visible,
                 isLargeText: typeSize >= .xLarge, isAccessibilitySize: typeSize.isAccessibilitySize)
-            GamesChessBoard(position: match.position, flight: store.flight,
+            // ★ `?? .empty` 는 **닿지 않는 갈래**다(`chrome.drawsBoard == (match.position != nil)`).
+            //   판 레인의 판은 `ChessPosition` 을 **옵셔널이 아니게** 받고(관전 절도 같은 꼴로 넘긴다),
+            //   마지막 수도 `ChessMove` 가 아니라 칸 두 개짜리 짝이다 — 자리표시가 가정한 서명과 갈렸다.
+            GamesChessBoard(position: match.position ?? .empty, flight: store.flight,
                             whiteAtBottom: chrome.whiteAtBottom, selection: store.selection?.from,
-                            legalTargets: store.selection?.targets ?? [], lastMove: match.lastMove,
+                            legalTargets: store.selection?.targets ?? [],
+                            lastMove: match.lastMove.map { (from: $0.from, to: $0.to) },
                             onTapSquare: { square in Task { await store.tap(square) } })
                 .frame(width: side, height: side)
                 .shadow(color: colorScheme == .dark ? .black.opacity(0.35)
@@ -863,74 +724,7 @@ struct GamesChessResultCard: View {
         }
         .fixedSize()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("루비 \(result.rubyDeltaText)")
-    }
-}
-
-// MARK: - ★ 자리표시 — 다른 레인이 내놓으면 **이 절을 통째로 지운다**
-//
-// 약속된 이름·서명 그대로 비워 뒀다(`private` 이라 레인 파일이 들어와도 내 파일 밖으로 새지 않는다).
-// 지울 때 호출부는 한 줄도 안 바뀐다.
-//  · `GamesChessBoard(position:flight:whiteAtBottom:selection:legalTargets:lastMove:onTapSquare:)` — 판 레인
-//    (세 겹 Canvas + `TimelineView(.animation(…, paused: flight == nil))` · 인수인계 §5)
-//  · `GamesChessBoardMetrics.side(fitting:)` — 판 한 변
-//  · `GamesChessPromotionSheet(store:prompt:myColor:)` — 승격 고르기 시트(문구·시트 레인 확정 서명).
-//    말 그림은 공용 `ChessPieceArt` 가 올라오는 중이라 여기서는 FEN 글자로 세워 뒀다.
-
-private struct GamesChessBoard: View {
-    let position: ChessPosition?
-    let flight: ChessMoveFlight?
-    let whiteAtBottom: Bool
-    let selection: ChessSquare?
-    let legalTargets: Set<ChessSquare>
-    let lastMove: ChessMove?
-    let onTapSquare: (ChessSquare) -> Void
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(MobileTheme.fill)
-    }
-}
-
-private enum GamesChessBoardMetrics {
-    static func side(fitting size: CGSize) -> CGFloat {
-        max(240, min(size.width - 24, size.height * 0.52).rounded())
-    }
-}
-
-/// ★ 자리표시. 진짜 시트는 **닫는 길 둘이 모두** `store.cancelPromotion()` 을 지나고
-/// `interactiveDismissDisabled` 라 손가락으로 쓸어 내릴 수 없다 — 그 둘이 이 시트의 계약이다.
-private struct GamesChessPromotionSheet: View {
-    let store: ChessStore
-    let prompt: ChessPromotionPrompt
-    let myColor: ChessColor
-
-    var body: some View {
-        VStack(spacing: MobileTheme.space3) {
-            Text(GamesChessText.promotionTitle)
-                .font(.headline)
-                .foregroundStyle(MobileTheme.label)
-            HStack(spacing: MobileTheme.space3) {
-                ForEach(prompt.choices, id: \.rawValue) { kind in
-                    Button {
-                        Task { await store.choosePromotion(kind) }
-                    } label: {
-                        Text(String(ChessPiece(myColor, kind).fenCharacter))
-                            .font(.title)
-                            .frame(width: 56, height: 56)
-                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(MobileTheme.fill))
-                    }
-                    .accessibilityLabel(kind.rawValue)
-                }
-            }
-            AingButton(GamesChessText.keepPlaying, kind: .gray, fillsWidth: true) {
-                store.cancelPromotion()
-            }
-        }
-        .padding(MobileTheme.cardPadding)
-        .presentationDetents([.height(220)])
-        .interactiveDismissDisabled()
+        .accessibilityLabel(GamesChessText.rubyDeltaAccessibility(result.rubyDeltaText))
     }
 }
 

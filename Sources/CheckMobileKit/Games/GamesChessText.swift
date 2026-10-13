@@ -75,6 +75,16 @@ package enum ChessPhoneText {
     package static func peopleCount(_ count: Int) -> String { "\(count)명" }
     package static func liveCount(_ count: Int) -> String { "\(count)판" }
 
+    /// 게임 탭 **카드** 부제. ★ 시간 수치를 싣지 않는다 — 카드는 로비를 아직 안 읽었을 수 있고(`subtitle` 과
+    /// 다른 점이 그것이다) 10-12 에 5분 → 10분으로 늘어난 값이라 박아 두면 그 자리가 곧 거짓이 된다.
+    package static let cardSubtitle = "FIDE 규칙 · 백 선공 · 로봇과도 둬요"
+    /// 카드 칩 — 받은 신청. 체스 서버는 받은 신청을 **한 번에 하나만** 말해 준다(`chess_lobby.me`)라 수를 세지 않는다.
+    package static let incomingChip = "받은 신청 1건"
+    /// 카드 한 줄 — 보낸 신청을 기다리는 중.
+    package static let outgoingLine = "보낸 신청을 기다리고 있어요"
+    /// 카드 한 줄 — 아무것도 없을 때. **할 수 있는 일**을 말한다.
+    package static let idleLine = "상대를 골라 대결을 신청해요"
+
     /// 상대 행 상태 칩. 우선순위: 대국 중 > 업데이트 필요 > 근무 중/근무 안 함(오목과 같은 서열).
     ///
     /// ★ `inMatch` 는 **어느 게임인지 말하지 않는다**(서버가 오목 판까지 보고 하나로 접어 준다 — `ChessUser.inMatch`).
@@ -132,6 +142,32 @@ package enum ChessPhoneText {
         playing.map(busyTitle)
     }
 
+    /// 막힌 입구의 **둘째 줄**(언제 풀리는지). `entryBlock(playing:)` 과 **짝으로** 쓴다 — 머리만 그리면
+    /// "지금은 못 눌러요" 로 끝나고 사용자가 기다릴 끝을 모른다(폰엔 호버 툴팁이 없다).
+    package static func entryBlockHint(playing: BusyGame?) -> String? {
+        playing.map(busyHint)
+    }
+
+    /// 게임 탭 체스 카드의 보이스오버 힌트(막히지 않았을 때).
+    package static let cardOpenHint = "체스 대결 화면을 열어요"
+
+    /// 로봇 판을 두는 중이라 **신청**이 막혔다(받은 신청은 막지 않고 묻는다 — 아래 `acceptEndsRobot…`).
+    ///
+    /// ★ 서버는 이 판을 볼 수 없다(`chess__busy` 는 `chess_matches` 만 본다 — 로봇 판은 서버에 행이 없다).
+    ///   그래서 이 줄은 **클라만 할 수 있는 말**이고, 없으면 비활성 알약만 남아 "왜 안 눌리지"가 된다
+    ///   (폰엔 호버 툴팁이 없다).
+    package static let blockedByRobot = "로봇 판을 끝내면 1:1 대결을 신청할 수 있어요"
+
+    /// 로봇 판을 두는 중에 받은 신청을 **수락**할 때 묻는 네 줄.
+    ///
+    /// ★ 막지 않고 묻는 까닭: 막으면 60초 TTL 안에 **루비가 걸린 진짜 대결**을 놓친다. 묻는 까닭: 안 물으면
+    ///   1:1 판이 서는 순간 코어가 로봇 판을 버려(`discardAIGame`) **두던 판이 문구도 확인도 없이 사라진다**.
+    ///   그래서 첫 줄이 "사라진다"를, 둘째 줄이 "잃는 루비는 없다"를 말한다(둘 다 사실이다).
+    package static let acceptEndsRobotTitle = "로봇 판을 끝내고 수락할까요?"
+    package static let acceptEndsRobotMessage = "두던 로봇 판은 저장되지 않아요. 순위·루비와 상관없는 판이라 잃는 루비는 없어요."
+    package static let acceptEndsRobotConfirm = "끝내고 수락"
+    package static let acceptEndsRobotCancel = "그냥 두기"
+
     /// 로봇과 두기 입구를 막는 사유 한 줄.
     ///
     /// ★ **로그인은 사유가 아니다**(인수인계 §6-12). `ChessStoreAI` 는 서버를 한 번도 안 타므로 비로그인
@@ -151,6 +187,8 @@ package enum ChessPhoneText {
     package static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(stake)" }
     /// " · 이기면 +5"(판돈 줄 꼬리).
     package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(stake)" }
+    /// "이기면 +5" — 판돈 칸(타일) 아래 줄. 꼬리(`stakeGainSuffix`)와 달리 **앞 가운뎃점이 없다**.
+    package static func stakeGain(_ stake: Int) -> String { "이기면 +\(stake)" }
     package static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     package static let stakePromptCaption = "판돈을 고르세요"
     package static func stakePromptChosen(_ stake: Int) -> String { "판돈 \(stakeLine(stake))" }
@@ -181,6 +219,12 @@ package enum ChessPhoneText {
     package static func incomingTitle(name: String) -> String { "\(name)님의 신청" }
     package static func outgoingTitle(name: String) -> String { "\(name)님에게 신청했어요" }
     /// 남은 초("42초").
+    /// 받은 신청 절 머리의 오른쪽 한 줄. ★ **초를 박지 않는다** — 서버가 `invite_ttl_seconds` 로 말하고
+    /// 로비가 그 값을 넘긴다(상수를 베끼면 서버가 TTL 을 바꾼 날 화면만 옛 숫자다).
+    package static func inviteTtlHint(ttlSeconds: Int = inviteTtlSecondsFallback) -> String {
+        "\(ttlSeconds)초 안에 응답하세요"
+    }
+
     package static func remaining(_ seconds: Double) -> String { "\(Int(max(0, seconds).rounded(.up)))초" }
     /// "42초 남음"(받은 신청 머리 · 보낸 신청 부제).
     package static func remainingPhrase(_ seconds: Double) -> String { "\(remaining(seconds)) 남음" }
@@ -237,6 +281,29 @@ package enum ChessPhoneText {
         return "남은 시간 \(whole)초"
     }
 
+    /// 시계가 **둘** 있는 화면(1:1 대국)의 보이스오버. 색을 안 붙이면 두 카드가 같은 말을 읽어
+    /// 어느 쪽 시계인지 알 수 없다 — 로봇 화면은 한 벌만 읽으므로 위 짝을 쓴다.
+    package static func clockAccessibility(_ seconds: Double, color: ChessColor) -> String {
+        let whole = Int(max(0, seconds).rounded())
+        let side = stoneName(color)
+        if whole >= 60 { return "\(side) 남은 시간 \(whole / 60)분 \(whole % 60)초" }
+        return "\(side) 남은 시간 \(whole)초"
+    }
+
+    /// 수 번호 줄("24수 진행").
+    package static func plyLine(_ ply: Int) -> String { "\(ply)수 진행" }
+
+    /// 깃발이 떨어지고 **유예 예산까지** 지났다 — 서버가 정산하는 중이다(폰이 판정한 것이 아니다).
+    /// 이 자리에 결과를 지어내면 서버 판정(FIDE 6.9 의 무승부일 수도 있다)과 갈려 돈이 틀리게 읽힌다.
+    package static let flagSettling = "시간이 다 됐어요 · 결과를 확인하고 있어요"
+    /// 서버 FEN 을 읽지 못해 판을 그릴 수 없다(서버 쪽 문제 — 결과·루비는 그대로 보여 준다).
+    package static let unreadableBoard = "판을 그릴 수 없어요 · 결과는 그대로 보여요"
+
+    /// 무승부로 끝난 판에서 **돌려받은 액수**를 말한다(서버 `grant:chess:refund:`).
+    /// ±0 만 그리면 "걸었다가 그대로"인지 "잃었는지"를 사용자가 못 가른다 — 돈이 갈리는 자리라 한 줄로 말한다.
+    /// 액수가 없는 자리(제안 시트·결과 캡션)는 `stakeRefundOnDraw` 가 쓴다.
+    package static func drawRefund(stake: Int) -> String { "판돈 \(stake) 루비를 돌려받았어요" }
+
     /// 판 전체를 읽는 보이스오버 한 줄(64칸을 하나씩 읽히면 못 쓴다 — 맥과 같은 결정).
     package static func boardAccessibility(ply: Int, turn: ChessColor?, inCheck: Bool) -> String {
         var text = "체스판, \(ply)수 진행"
@@ -273,9 +340,6 @@ package enum ChessPhoneText {
 
     // MARK: 무승부 제안·응답
 
-    /// 무승부 시트의 두 갈래. 제안하기와 받은 제안에 답하기가 **다른 화면**이다(묻는 사람이 다르다).
-    package enum DrawSheetMode: String, CaseIterable, Sendable { case offer, respond }
-
     package static let offerDraw = "무승부 제안"
     /// 내가 제안했고 상대의 응답을 기다린다(코어 `ChessNoticeText.drawOffered` 와 같은 뜻의 카드 줄).
     package static let drawOfferedByMe = "무승부를 제안했어요 · 상대의 응답을 기다려요"
@@ -283,35 +347,6 @@ package enum ChessPhoneText {
     package static let acceptDraw = "무승부 수락"
     package static let declineDraw = "거절"
 
-    package static func drawSheetTitle(_ mode: DrawSheetMode, name: String? = nil) -> String {
-        switch mode {
-        case .offer: return "무승부를 제안할까요?"
-        case .respond:
-            guard let name, !name.isEmpty else { return drawOfferedByOpponent }
-            return "\(name)님이 무승부를 제안했어요"
-        }
-    }
-
-    /// 시트 본문 — **루비가 어떻게 되는지**를 말한다. 무승부는 건 판돈을 그대로 돌려받는다(승패가 아니다).
-    package static func drawSheetMessage(_ mode: DrawSheetMode) -> String {
-        switch mode {
-        case .offer: return "상대가 수락하면 무승부로 끝나요 · \(stakeRefundOnDraw)"
-        case .respond: return "수락하면 무승부로 끝나요 · \(stakeRefundOnDraw)"
-        }
-    }
-
-    /// 시트의 채운 버튼.
-    package static func drawSheetPrimary(_ mode: DrawSheetMode) -> String {
-        mode == .offer ? "무승부 제안하기" : acceptDraw
-    }
-
-    /// 시트의 보조 버튼. 제안은 그만두는 것이고, 응답은 **거절**이다(뜻이 다르니 글자도 다르다).
-    package static func drawSheetSecondary(_ mode: DrawSheetMode) -> String {
-        mode == .offer ? keepPlaying : declineDraw
-    }
-
-    /// 제안이 어느 쪽 차례에도 매여 있지 않다는 사실 한 줄(어느 쪽이 한 수 두면 제안이 지워진다).
-    package static let drawOfferVanishesOnMove = "누구든 한 수를 두면 제안은 사라져요"
 
     // MARK: 결과 (★ 사유 열 갈래를 빠짐없이)
 
@@ -402,7 +437,6 @@ package enum ChessPhoneText {
     /// ★ 로봇 판은 서버를 한 번도 안 탄다 — 비로그인 사용자도 둔다. 입구에 이 줄을 두면 로그인을 요구하는
     ///   화면이 돌아올 때 **글자부터** 어긋나 눈에 띈다.
     package static let robotNoSignIn = "로그인하지 않아도 둘 수 있어요"
-    package static let robotStakeChip = "로봇 대국 · 기록 없음"
     package static let robotOpponentLine = "상대 · 로봇"
     package static let robotName = "로봇"
     package static let robotThinking = "로봇이 생각 중이에요"
@@ -451,6 +485,58 @@ package enum ChessPhoneText {
     /// 꼬리가 지나 판이 사라졌다. 코어 문구를 그대로 쓴다(같은 사실이 화면마다 다른 말을 하지 않게).
     package static let watchGone = ChessNoticeText.watchGone
     package static func watchPly(_ ply: Int) -> String { "\(ply)수" }
+
+    /// [관전] 칩의 보이스오버 힌트(맥 툴팁 자리 — 폰에는 호버가 없다).
+    package static let watchChipHint = "이 판을 지켜봐요"
+    /// 서버에 관전이 아직 없으면 칩 대신 서는 캡션. **짧게** 둔 것이 핵심이다 — 칩 자리는 얼굴 둘·이름·판돈
+    /// 다음의 좁은 끝이라 긴 문장을 넣으면 이름 줄이 낱글자로 꺾인다. 보이스오버는 온전한 문장을 읽는다
+    /// (`ChessNoticeText.unavailable`).
+    package static let watchSoonCaption = "곧 열려요"
+    /// 끝난 판인데 서버가 두 사람 행을 못 채웠다. 끝난 판은 폴링이 이미 멈춰 있어 더 올 것이 없으므로
+    /// 진행형(`watchLoading`)으로 말하면 거짓말이 된다(오목에서 "불러오는 중"과 "이미 끝났다"가 한 화면에 떴다).
+    package static let playersUnknown = "대국자를 불러오지 못했어요"
+    /// 끝난 관전 판 머리글 — 이긴 색이 있으면 "흑 승리", 없으면 아래 `endedDraw`.
+    package static func endedWin(_ winner: ChessColor) -> String { "\(stoneName(winner)) 승리" }
+    package static let endedDraw = "무승부로 끝났어요"
+    /// 진행 중 관전 머리글 — "관전 중 · 백 차례".
+    package static func watchingTurn(_ turn: ChessColor) -> String {
+        "\(watchTitle) · \(stoneName(turn)) 차례"
+    }
+    /// 이름을 모르는 자리. 코어 경계가 이름을 모를 때 nil 이 아니라 **빈 문자열**을 넣으므로 `??` 로는 못 접는다.
+    package static let unknownName = "—"
+    /// 판돈을 아직 모른다(씨앗 없이 들어온 판의 첫 응답 전) — 맥 판돈 칩의 "—"와 같은 자리.
+    /// ★ **액수 자리만** 비운다(관전자에게 "이기면 +N" 접미사를 붙이지 않는다 — 관전자는 한 푼도 받지 않는다).
+    package static let stakeUnknown = "\(stakeTitle) —"
+    /// [나가기] 보이스오버 힌트.
+    package static let leaveWatchHint = "로비로 돌아가요"
+
+    /// 판 부품이 **스스로** 내는 한 줄(감싸는 화면이 더 아는 것 — 기보 수·체크 — 을 말하려면 바깥에서 덮어쓴다).
+    /// 64칸을 하나씩 읽히면 못 쓴다(맥 `ChessText.boardAccessibility` 와 같은 규약).
+    package static func boardAccessibility(position: ChessPosition, whiteAtBottom: Bool) -> String {
+        "체스판, \(stoneName(whiteAtBottom ? .white : .black))이 아래, \(stoneName(position.sideToMove)) 차례"
+    }
+
+    /// 관전 판 전체를 한 요소로 읽는다(말 수 · 마지막 수 · 수 번호 · 상태). 칸마다 요소를 두는 것은
+    /// **두는 사람의 판뿐**이다 — 관전은 입력이 없다.
+    package static func boardAccessibility(_ watch: ChessSpectateState) -> String {
+        var parts = ["체스판"]
+        if let position = watch.position {
+            var white = 0
+            var black = 0
+            for index in 0..<64 {
+                guard let square = ChessSquare(index: index), let piece = position[square] else { continue }
+                if piece.color == .white { white += 1 } else { black += 1 }
+            }
+            parts.append("백 \(white)개")
+            parts.append("흑 \(black)개")
+        }
+        if let move = watch.lastMove {
+            parts.append("마지막 수 \(move.from.notation)\(move.to.notation)")
+        }
+        parts.append(watchPly(watch.plyCount))
+        parts.append(GamesChessWatchStatus.headline(for: watch))
+        return parts.joined(separator: ", ")
+    }
     /// "민트별 · 달토끼".
     package static func livePair(_ live: ChessLiveMatch) -> String {
         live.a.displayName + " · " + live.b.displayName
@@ -537,6 +623,27 @@ package enum ChessPhoneText {
         parts.append(record(wins: entry.wins, losses: entry.losses, draws: entry.draws))
         return parts.joined(separator: ", ")
     }
+
+    // MARK: 보이스오버·토막 (★ 화면이 제 글자를 적지 않게 — 폰 뷰는 맥 스위트가 못 본다)
+
+    /// 값을 아직 모르는 숫자 칸(루비 잔액 미러가 비었다). `unknownName`(관전자 이름, em dash)과 **다른 글리프**다.
+    package static let unknownNumber = "–"
+    /// 한 줄 안에서 토막을 잇는 머리("· 루비가 모자라요").
+    package static let bulletPrefix = "· "
+    /// 고른 칸의 접근성 값.
+    package static let selected = "선택됨"
+    /// 머리 두 칸 왼쪽(내 전적)의 보이스오버 — 제목과 값이 한 요소로 합쳐지므로 무슨 전적인지 말한다.
+    package static func myRecordAccessibility(_ record: ChessRecord?) -> String {
+        "내 체스 전적 \(Self.record(record))"
+    }
+    /// [도전] 버튼의 보이스오버 힌트 — 누르면 **바로 신청이 나가지 않는다**(판돈 시트가 먼저다).
+    package static func challengeHint(name: String) -> String { "\(name)님에게 판돈을 골라 신청해요" }
+    /// 남은 초의 보이스오버("남은 시간 42초") — 화면 글자("42초 남음")와 어순이 다르다.
+    package static func remainingAccessibility(_ seconds: Double) -> String { "남은 시간 \(remaining(seconds))" }
+    /// 판돈 칸의 보이스오버.
+    package static func stakeOptionAccessibility(_ stake: Int) -> String { "판돈 루비 \(stake)" }
+    /// 결과 카드의 루비 줄 보이스오버("루비 +5"). 글자는 부호뿐이라(`rubyDelta`) 무엇의 부호인지 말한다.
+    package static func rubyDeltaAccessibility(_ text: String) -> String { "루비 \(text)" }
 
     // MARK: 조사
 

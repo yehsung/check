@@ -107,7 +107,15 @@ import Testing
 
     @Test("데모·스텁 서버는 #if DEBUG 안에만 있다(Release 에서 컴파일되지 않는다)")
     func demoIsDebugOnly() throws {
-        for file in ["Sources/CheckMobileKit/Demo/MobileDemo.swift", "Sources/CheckMobileKit/Demo/MobileStubURLProtocol.swift"] {
+        // Demo/ 의 **모든** .swift 를 훑는다(Package.swift 가 적어 둔 불변식 — "읽는 코드(Demo/*.swift)는 #if DEBUG").
+        // 손으로 적은 두 줄 목록이던 자리다: 1.0.6 build 16 에서 데모 값 하나가 이 폴더 **밖**(App/MobileAppModel.swift)에
+        // 구성 분기 없이 선언돼 Release 바이너리에 이름이 남았고(출시 게이트 ios/scripts/check-release-app.sh 의
+        // 금지 문자열 `MobileDemo`), 목록은 그 파일을 보지 않았다. 폴더를 훑으면 다음 데모 파일은 자동으로 걸린다.
+        let demoDir = Self.root.appendingPathComponent("Sources/CheckMobileKit/Demo")
+        let demoFiles = try FileManager.default.contentsOfDirectory(atPath: demoDir.path)
+            .filter { $0.hasSuffix(".swift") }.sorted()
+        #expect(demoFiles.count >= 4, "Demo/ 에서 훑은 파일이 \(demoFiles.count)개뿐이다 — 경로가 틀렸다(공허한 초록 방지)")
+        for file in demoFiles.map({ "Sources/CheckMobileKit/Demo/\($0)" }) {
             let code = stripComments(try source(file)).split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             #expect(code.first == "#if DEBUG", "\(file) 이 #if DEBUG 로 시작하지 않는다")
             #expect(code.last == "#endif")

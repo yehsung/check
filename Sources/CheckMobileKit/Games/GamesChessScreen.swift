@@ -137,7 +137,11 @@ struct GamesChessScreen: View {
         // `navigationDestination` 클로저에서 읽으면 관전이 서는 순간 목적지가 다시 세워져 체스 화면이
         // 헐리고(`chessScreenDidDisappear` → `stopWatching()`) 관전이 영영 안 섰다(실측).
         // ① 라우트 꼬리가 순위·관전이면 맨 아래 절에서 시작하되, **관전이 선 뒤에는 그 닻을 놓는다**.
+        // ★ `#if DEBUG` 는 **인자가 DEBUG 전용 값**이라 있다(출시 게이트 — `Demo/MobileDemoChessRoute.swift` 머리).
+        //   Release 에서 잃는 것은 없다: 그 구성에서 `demoChessRoute` 는 영원히 nil 이고 nil 이면 닻이 없다.
+        #if DEBUG
         .gamesDemoChessSectionAnchor(store.demoChessRoute?.section, isWatching: chess.spectating != nil)
+        #endif
         // ② 그리고 관전 절을 화면 위로 올린다 — 닻 하나로는 둘 다 못 한다(바닥 닻이 순위 절을 붙잡는 동안
         //    판은 접힘 위로 밀려 올라갔다 · 실측 A).
         .gamesDemoChessWatchAnchor(isDemo: store.context.isDemo, watchID: chess.spectating?.id,

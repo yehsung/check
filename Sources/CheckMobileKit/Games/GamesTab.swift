@@ -590,6 +590,7 @@ private func gamesHex(_ value: UInt32) -> Color {
 }
 
 extension View {
+    #if DEBUG
     /// 데모 스크린샷 전용: 체스 **로비 안 절**에서 스크롤을 시작한다(`-AingCheckDemoRoute games/chess/ranking…` ·
     /// `…/watch/<id>`). nil·`.top` 이면 아무것도 안 한다.
     ///
@@ -599,8 +600,11 @@ extension View {
     ///   오목·미니게임이 `-AingCheckGamesDemo bottom` 으로 쓰는 수단과 **같은 수단**이다
     ///   (`gamesDemoScrollAnchor` — 그쪽은 실행 인자가, 이쪽은 라우트 꼬리가 고른다).
     ///
-    /// `#if DEBUG` 가 없는 까닭: 값을 세우는 자리가 데모 라우트뿐이라(`MobileAppModel.openDemoRouteIfNeeded`)
-    /// Release 에서는 `demoChessRoute` 가 영원히 nil 이다.
+    /// **`#if DEBUG` 안이다**: 인자 타입이 DEBUG 전용 `MobileDemoChessRoute.Section` 이다(출시 게이트
+    /// `ios/scripts/check-release-app.sh` — 까닭은 `Demo/MobileDemoChessRoute.swift` 머리). 부르는 자리
+    /// (`GamesChessScreen.lobbyScroll`)도 같은 게이트 안이다. Release 에서 잃는 것은 없다: 값을 세우는 자리가
+    /// 데모 라우트뿐이라(`MobileAppModel.openDemoRouteIfNeeded`) 그 구성에서는 `demoChessRoute` 가 영원히
+    /// nil 이고, nil·`.top` 이면 이 닻은 원래부터 아무것도 하지 않았다.
     ///
     /// ★ **관전이 선 뒤에는 닻을 놓는다**(`isWatching`). 이 닻은 `[관전]` 카드를 보이게 하려던 것인데, 관전이
     ///   시작되면 그 자리의 내용이 **판으로 바뀐다**(`GamesChessWatchSection` — 절 머리 + 카드 + 판 + 상태 상자).
@@ -619,6 +623,7 @@ extension View {
     func gamesDemoChessSectionAnchor(_ section: MobileDemoChessRoute.Section?, isWatching: Bool) -> some View {
         defaultScrollAnchor(section == .bottom && !isWatching ? .bottom : nil)
     }
+    #endif
 
     /// 데모 스크린샷 전용: **관전 절을 화면 위로** 올린다(`-AingCheckDemoRoute games/chess/watch/<id>`).
     ///

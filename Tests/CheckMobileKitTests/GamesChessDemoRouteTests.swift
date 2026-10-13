@@ -239,6 +239,71 @@ import Testing
         #expect(model.contains("games.demoChessRoute = chess"), "앱 모델이 꼬리를 스토어에 안 넘긴다")
     }
 
+    // MARK: - 4. Release 에서 **사라졌는가** (출시 게이트 `ios/scripts/check-release-app.sh` 의 짝)
+
+    /// 꼬리 값(`MobileDemoChessRoute`)과 그 배선 전부가 **`#if DEBUG` 안**이다 — Release 바이너리에 이름이 남지 않는다.
+    ///
+    /// ── 이 테스트가 생긴 까닭(1.0.6 build 16) ──
+    /// 타입이 구성 분기 없이 선언돼 있어 Swift 가 타입 이름(nominal type descriptor)을 Release 바이너리에 넣었고,
+    /// 출시 게이트가 금지 문자열 `MobileDemo` 로 물어 아카이브가 막혔다("0 이 아니면 올리지 않는다" — SPEC-ios §0-2).
+    /// **`swift test` 는 Debug 라 그 결함을 한 건도 보지 못했다** — 그물이 아카이브 때 도는 게이트 하나뿐이었다.
+    /// 그래서 소스 글자로 못을 박는다: 한 자리만 게이트 밖으로 나가도 이름이 다시 남는다(전부냐 아니냐의 문제다).
+    ///
+    /// 동작은 재지 않는다 — 위 §1·§2 가 Debug 에서 라우트 → 화면을 그대로 잰다(여기서 빨개지면 흔적만 어긋난 것이다).
+    /// `pendingDemoChessScreen`(Bool)·`applyDemoChessRoute()` 는 **일부러 게이트 밖**이라 여기 걸리지 않는다:
+    /// 게이트가 보는 것은 데모 **타입 이름**이고 Bool 한 칸은 그 이름을 바이너리에 들이지 않는다.
+    @Test("데모 꼬리 값과 그 배선은 #if DEBUG 안에만 있다 — Release 바이너리에 이름이 남지 않는다(출시 게이트)")
+    func theDemoTailIsDebugOnly() throws {
+        // 타입은 `Demo/` 안, **파일 통째**가 DEBUG 다(`MobileDemoGomokuAI`·`MobileStubURLProtocol` 과 같은 관례).
+        let typeFile = try Self.strippedSource("Sources/CheckMobileKit/Demo/MobileDemoChessRoute.swift")
+        let lines = typeFile.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        #expect(lines.first == "#if DEBUG", "꼬리 값 파일이 #if DEBUG 로 시작하지 않는다")
+        #expect(lines.last == "#endif", "꼬리 값 파일이 #endif 로 끝나지 않는다")
+        #expect(typeFile.contains("package struct MobileDemoChessRoute"), "꼬리 값 타입이 그 파일에 없다 — 경로가 틀렸다")
+        // 플랫폼 분기는 **여전히 금지**다: 체스 화면은 전부 `#if os(iOS)` 안이라 그 분기를 더하면 맥 스위트가
+        // 라우트 → 화면을 한 줄도 못 보게 되고 §1·§2 가 통째로 공허해진다(결함 D6 이 그렇게 숨었다).
+        #expect(!typeFile.contains("#if os("), "꼬리 값에 플랫폼 분기가 들어왔다 — 맥 스위트가 라우트 판정을 못 본다")
+
+        // 그리고 **쓰는 자리 전부**가 DEBUG 안이다(실측 11곳 — 앱 모델 5 · 스토어 4 · 탭 1 · 화면 1).
+        var checked = 0
+        for path in ["Sources/CheckMobileKit/App/MobileAppModel.swift",
+                     "Sources/CheckMobileKit/Games/GamesStore.swift",
+                     "Sources/CheckMobileKit/Games/GamesTab.swift",
+                     "Sources/CheckMobileKit/Games/GamesChessScreen.swift"] {
+            for row in Self.debugScopedLines(try Self.strippedSource(path)) {
+                guard row.line.contains("MobileDemoChessRoute") || row.line.contains("demoChessRoute") else { continue }
+                checked += 1
+                #expect(row.isDebugOnly, """
+                    \(path): 이 줄이 #if DEBUG 밖이다 — Release 바이너리에 `MobileDemoChessRoute` 가 남아 \
+                    출시 게이트(ios/scripts/check-release-app.sh)가 막는다: \(row.line.trimmingCharacters(in: .whitespaces))
+                    """)
+            }
+        }
+        #expect(checked >= 9, "훑은 자리가 \(checked)곳뿐이다 — 경로·이름이 틀렸다(공허한 초록 방지)")
+    }
+
+    /// 주석을 걷어낸 소스를 줄마다 **`#if DEBUG` 안인가**와 함께 돌려준다(지시문 줄 자체는 돌려주지 않는다).
+    /// `#else`·다른 `#if` 갈래는 DEBUG 바깥으로 센다 — Release 가 컴파일하는 쪽이 그쪽이다.
+    static func debugScopedLines(_ stripped: String) -> [(line: String, isDebugOnly: Bool)] {
+        var stack: [Bool] = []
+        var out: [(line: String, isDebugOnly: Bool)] = []
+        for raw in stripped.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#if ") {
+                stack.append(line == "#if DEBUG")
+            } else if line.hasPrefix("#elseif ") {
+                if !stack.isEmpty { stack[stack.count - 1] = line == "#elseif DEBUG" }
+            } else if line == "#else" {
+                if !stack.isEmpty { stack[stack.count - 1] = false }
+            } else if line == "#endif" {
+                if !stack.isEmpty { stack.removeLast() }
+            } else {
+                out.append((String(raw), stack.contains(true)))
+            }
+        }
+        return out
+    }
+
     /// 저장소 파일 한 벌을 **주석을 걷어내고** 돌려준다. 안 걷으면 설명을 지워야만 초록이 되는 테스트가 된다
     /// (저장소 메모 '소스 계약 테스트는 주석을 걷어내야 한다').
     static func strippedSource(_ relativePath: String) throws -> String {

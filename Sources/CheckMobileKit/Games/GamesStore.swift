@@ -75,8 +75,9 @@ package final class GamesStore {
 
     /// 데모 전용: 시작 라우트가 체스 장면(`games/chess/…`)이라 게임 탭이 체스를 쌓아야 한다.
     /// 앱 모델이 세우고(`MobileAppModel.openDemoRouteIfNeeded`) 게임 탭이 **한 번** 꺼내 쓴다.
-    /// `#if DEBUG` 로 감싸지 않은 까닭: 이 파일은 플랫폼·구성 분기가 없어야 맥 스위트가 값으로 잴 수 있다
-    /// (Bool 한 칸이고, 세우는 자리가 데모뿐이라 Release 에서는 영원히 false 다).
+    /// `#if DEBUG` 로 감싸지 않은 까닭: **Bool 한 칸**이라 Release 바이너리에 데모 타입 이름을 들이지 않고
+    /// (아래 꼬리 값과 갈리는 지점이다 — 출시 게이트는 `MobileDemo` 라는 **이름**을 본다),
+    /// 세우는 자리가 데모뿐이라 Release 에서는 영원히 false 다. 구성 분기가 없어야 맥 스위트가 값으로 잰다.
     package var pendingDemoChessScreen = false
 
     /// 데모 전용: 시작 라우트의 **꼬리를 푼 값**(열 판 · 걸 관전 · 로비 시작 절 — `MobileDemoChessRoute`).
@@ -85,7 +86,14 @@ package final class GamesStore {
     /// 그리기에서 머리로 튄다), 판·관전을 거는 두 자리는 다시 불러도 무해하다 —
     /// `openWindow(focusMatchID:)` 는 들고 있는 판이면 다시 안 받고 `startWatching` 은 같은 관전이면 돌아선다.
     /// 로그아웃 `reset()` 이 비운다(다음 사람의 로비에 남의 장면이 남지 않게).
+    ///
+    /// ★ **`#if DEBUG` 안이다**(저장 프로퍼티라 확장으로 못 옮긴다 — 맥 전용 `workTickGate` 와 같은 수법).
+    ///   타입이 DEBUG 전용이고 Release 바이너리에 그 **이름이 남으면 출시 게이트가 막는다**
+    ///   (`ios/scripts/check-release-app.sh` · 까닭은 `Demo/MobileDemoChessRoute.swift` 머리).
+    ///   Release 에서 잃는 것은 없다 — 세우는 자리가 데모 라우트뿐이라 그 구성에서는 원래부터 영원히 nil 이었다.
+    #if DEBUG
     package var demoChessRoute: MobileDemoChessRoute?
+    #endif
 
     /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
     @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
@@ -177,7 +185,9 @@ package final class GamesStore {
         isChessScreenVisible = false
         pendingGomokuFocusID = nil
         pendingDemoChessScreen = false
+        #if DEBUG
         demoChessRoute = nil
+        #endif
         syncAIThinker()
     }
 
@@ -380,7 +390,14 @@ package final class GamesStore {
     package func chessScreenDidAppear() {
         let chess = context.chess
         isChessScreenVisible = true
+        // 두 갈래는 **같은 동작**이다: `demoChessRoute` 는 DEBUG 전용 값이고(출시 게이트 — 머리말 참조)
+        // Release 에서는 원래부터 영원히 nil 이었다. 사람이 쓰는 길에서 꼬리는 한 번도 서지 않는다 —
+        // 코어가 로비 `me.active_match_id` 로 내 판을 스스로 연다.
+        #if DEBUG
         chess.openWindow(focusMatchID: demoChessRoute?.focusMatchID)
+        #else
+        chess.openWindow(focusMatchID: nil)
+        #endif
         if isAppActive { chess.windowDidShow() }
         startDemoChessWatchIfNeeded()
     }
@@ -393,7 +410,11 @@ package final class GamesStore {
     ///
     /// 로비 응답을 **먼저 기다린다**: `liveMatches` 가 두 얼굴을 싣고 `startWatching` 이 그것을 씨앗으로 쓴다
     /// (못 기다리면 얼굴 없는 로딩 상태로 들어가고 응답이 뒤늦게 채운다 — 스크린샷에는 그 틈이 그대로 찍힌다).
+    ///
+    /// Release 에는 **본문이 없다**(`demoChessRoute` 가 DEBUG 전용 — 출시 게이트). 그 구성에서도 값이 늘 nil 이라
+    /// 첫 guard 에서 돌아섰으므로 동작은 같다. `GamesTab.applyDemoSeed` · `MobileAppModel.demoOnlyRoute` 와 같은 모양이다.
     private func startDemoChessWatchIfNeeded() {
+        #if DEBUG
         guard let id = demoChessRoute?.watchMatchID else { return }
         Task { [weak self] in
             for _ in 0..<60 {
@@ -404,6 +425,7 @@ package final class GamesStore {
             guard let self, self.isChessScreenVisible else { return }
             self.context.chess.startWatching(matchID: id)
         }
+        #endif
     }
 
     /// 체스 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃).

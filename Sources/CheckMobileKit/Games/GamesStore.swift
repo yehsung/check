@@ -7,6 +7,18 @@ import Observation
 package enum GamesDestination: Hashable, Sendable {
     case miniGame(MiniGameKind)
     case gomoku
+    case chess
+}
+
+/// 지금 **사람과의** 판을 들고 있는 게임 — 한 사람 한 판(B8)의 까닭을 화면이 말할 수 있게 하는 값.
+///
+/// 서버는 체스 쪽에서만 두 게임을 함께 본다(`chess__busy`): 체스를 신청·수락할 때는 오목 판까지 보고 막지만,
+/// **오목 쪽 게이트는 체스를 모른다**(인수인계 §6-7 의 '알려진 비대칭'). 그래서 체스 중인 사람이 오목을
+/// 신청·수락하는 길은 **클라만** 막을 수 있고, 안 막으면 오목이 열리는 동안 체스는 판돈이 걸린 채 시간패한다.
+/// 폰은 두 게임 입구를 한 화면에 같이 띄우므로 **양방향**을 그려야 한다.
+package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
+    case gomoku
+    case chess
 }
 
 /// 딥링크 한 건을 게임 탭 경로에 옮기는 동작(`GamesStore.routeStep(for:)`). 뷰는 돌려받은 대로 경로만 바꾼다.
@@ -30,8 +42,16 @@ package enum GamesRouteStep: Equatable, Sendable {
 ///    "오목 화면이 보이고 앱이 active 인가"를 그 선택기의 허락으로 옮긴다 — 떠나면 AI 탐색을 취소하고 돌아오면 다시 생각한다
 ///    (`GamesGomokuAI.swift` 머리 주석). 사람 시계 멈춤은 위 창 수명(숨김·가림)이 코어에서 이미 한다.
 ///
-/// 탭 배지 = 받은 오목 신청 수(만료 안 된 것). 받은 신청은 인박스가 채운다 — 계기는 앱 active(60초 스로틀) · 실시간
-/// 'gomoku' 신호(기반 배선) · 오목 화면.
+/// 4. **1:1 체스**(0.3.44 서버·맥 · 폰은 이번 세션) — 코어 `ChessStore`(context.chess, host = 오목과 **같은** 폰 세션 호스트).
+///    오목과 **같은 세 걸음**을 옮긴다: 화면이 나타남 → `openWindow` + active 면 `windowDidShow` /
+///    사라짐 → `stopWatching()` **먼저** 그리고 `windowDidHide()` / 앱이 background → **가림**(판·관전을 남긴다).
+///    판이 막 열림(`presentWindow`) → 체스 화면을 연다(체스는 자동 착수가 없어 모르면 10분 시계를 그대로 흘린다).
+///
+/// 탭 배지 = 받은 오목 신청 수(만료 안 된 것 — 체스는 아직 안 센다, `badgeCount` 주석). 받은 신청은 인박스가 채운다 —
+/// 계기는 앱 active(60초 스로틀) · 실시간 'gomoku' 신호(기반 배선) · 오목 화면.
+///
+/// **한 사람 한 판(B8)은 양방향**이다 — 두 게임 입구가 한 화면에 있으므로 `chessEntryBlock`·`gomokuEntryBlock` 둘을
+/// 그려야 한다(까닭은 `GamesBusyGame`).
 @MainActor
 @Observable
 package final class GamesStore {
@@ -40,6 +60,8 @@ package final class GamesStore {
 
     /// 오목 화면이 지금 떠 있다(내비게이션에 올라와 보인다).
     package private(set) var isGomokuScreenVisible = false
+    /// 체스 화면이 지금 떠 있다(오목과 같은 뜻 — 코어의 '창 표시'를 폰 화면 수명으로 옮긴 값).
+    package private(set) var isChessScreenVisible = false
     /// 앱이 active 다(로그인 상태에서 appDidBecomeActive ~ appDidEnterBackground).
     package private(set) var isAppActive = false
     /// 오목 화면을 열 때 보여 줄 신청·판 id(딥링크 `gomoku/invite/<id>` · `gomoku/match/<id>`). 화면이 한 번 꺼내 쓴다.
@@ -60,6 +82,10 @@ package final class GamesStore {
         // 판이 막 시작됐다(내 신청이 수락됨 · 내가 수락함 · 앱을 다시 켜니 진행 중인 판) — 오목 화면을 연다.
         // 네트워크가 아니라 문을 다는 것이라 init 에서 해도 된다.
         context.gomoku.presentWindow = { [weak self] in self?.presentGomokuScreen() }
+        // 체스도 같은 문이 필요하다. 맥에서 이 문을 안 물려 **판돈이 걸린 판을 조용히 시간패**했다
+        // (CheckApp.wireChess 의 ⑤ — 체스는 오목의 자동 착수 장치를 전부 버렸다). 코어가 부르는 자리 셋:
+        // `openWindow` · 수락 응답(`respond`) · 진행 중 판으로 처음 넘어갈 때(`noteMatchProgress`).
+        context.chess.presentWindow = { [weak self] in self?.presentChessScreen() }
         // AI 대국: 코어 기본 선택기(창을 몰라 떠나도 계속 생각한다 — 맥 동작) 대신 화면 수명을 아는 폰 선택기. 문을 다는 것뿐이다.
         context.gomoku.aiMoveChooser = aiThinker.chooser
         aiThinker.isStillNeeded = { [weak gomoku = context.gomoku] board, color in
@@ -82,15 +108,27 @@ package final class GamesStore {
         let gomoku = context.gomoku
         // 받은 신청(탭 배지·첫 화면 카드)의 신선도. 60초 스로틀은 코어가 한다.
         gomoku.refreshInboxIfStale()
-        guard isGomokuScreenVisible else { return }
-        if gomoku.isWindowVisible {
-            // background 에서 '가림'으로 멈춰 둔 폴링을 되살린다(창은 닫힌 적이 없다).
-            gomoku.windowOcclusionDidChange(visible: true)
-        } else {
-            gomoku.windowDidShow()
+        if isGomokuScreenVisible {
+            if gomoku.isWindowVisible {
+                // background 에서 '가림'으로 멈춰 둔 폴링을 되살린다(창은 닫힌 적이 없다).
+                gomoku.windowOcclusionDidChange(visible: true)
+            } else {
+                gomoku.windowDidShow()
+            }
+            // background 동안 놓친 것(신청·수락·상대 수). 서버 시계는 그동안에도 흘렀다.
+            Task { await gomoku.catchUp() }
         }
-        // background 동안 놓친 것(신청·수락·상대 수). 서버 시계는 그동안에도 흘렀다.
-        Task { await gomoku.catchUp() }
+        // 체스: 같은 세 걸음. 체스는 시계가 **서버에서만** 흐르고 자동 착수가 없어(DECISIONS B4) background 에서
+        // 돌아온 순간의 따라잡기가 오목보다 더 중요하다 — 안 하면 다음 폴링 한 걸음(1.0~1.5초)까지 옛 시계를 그린다.
+        let chess = context.chess
+        chess.refreshLobbyIfStale()
+        guard isChessScreenVisible else { return }
+        if chess.isWindowVisible {
+            chess.windowOcclusionDidChange(visible: true)
+        } else {
+            chess.windowDidShow()
+        }
+        Task { await chess.catchUp() }
     }
 
     package func appDidEnterBackground() {
@@ -106,16 +144,31 @@ package final class GamesStore {
         if isGomokuScreenVisible, context.gomoku.isWindowVisible {
             context.gomoku.windowOcclusionDidChange(visible: false)
         }
+        // 체스도 **가림**이다. `windowDidHide` 를 부르면 두 가지가 깨진다: ① 결과 화면인 채로 알림 하나 읽고 온 것이
+        // "그 판에서 나갔다"가 되고(`windowDidHide` 가 끝난 관전을 내린다), ② 진행 중인 남의 판 관전이 화면을
+        // 떠난 적도 없는데 끊긴다. 끊는 자리는 화면을 떠나는 길(`chessScreenDidDisappear`) 하나뿐이다.
+        if isChessScreenVisible, context.chess.isWindowVisible {
+            context.chess.windowOcclusionDidChange(visible: false)
+        }
     }
 
     package func reset() {
         miniGames.reset()
         isGomokuScreenVisible = false
+        isChessScreenVisible = false
         pendingGomokuFocusID = nil
         syncAIThinker()
     }
 
+    /// 코어 체스 스토어 줄임(= `context.chess`). 화면·다른 레인이 읽는 자리는 **두 이름이 같은 인스턴스**다.
+    package var chess: ChessStore { context.chess }
+
     /// 탭 배지: 만료 안 된 받은 오목 신청 수.
+    ///
+    /// ⚠️ **체스 신청은 아직 안 센다.** 체스는 받은함 RPC 가 없어 받은 신청을 `chess_lobby` 로만 알고(머리말 ⑪),
+    /// 그 조회는 허브·체스 화면에서만 나간다 — 배지에 넣으면 "60초 TTL 짜리 숫자가 30초 스로틀로 갱신되는"
+    /// 꼴이 되어 없는 신청을 가리키거나 있는 신청을 놓친다. 체스 신청을 배지에 싣는 날은 그 신선도를
+    /// 어디서 받을지(푸시 · 실시간 `chessSignal`)를 먼저 정해야 한다.
     package var badgeCount: Int { context.gomoku.pendingIncomingInvites.count }
 
     /// 게임 탭이 보여 주는 루비 잔액 — **공유 미러**(`context.gomokuHost.rubyBalance`)를 먼저 읽는다(통합 w4/int).
@@ -136,6 +189,47 @@ package final class GamesStore {
         return context.gomoku.users.filter { !hidden.contains($0.id) }
     }
 
+    /// 체스 로비의 **상대 고르기 목록** — 같은 근거·같은 방식(위 오목 주석). 코어 `visibleUsers` 는 스토어가 쥔
+    /// `hiddenPeerIDs`(폰은 안 채운다)까지 거른 값이고, 거기에 메시지 탭의 차단 목록을 한 번 더 겹친다.
+    /// **정렬은 하지 않는다** — 코어 `applyLobby` 가 서버와 같은 규칙(근무 중·가능 → 대국 중 → …)으로
+    /// 이미 맞춰 뒀고(`ChessStore.sortedForLobby`), 화면이 다시 정렬하면 두 규칙이 갈린다.
+    package var chessLobbyUsers: [ChessUser] {
+        let hidden = context.links.messages?.hiddenBlockedPeerIDs ?? []
+        let users = context.chess.visibleUsers
+        guard !hidden.isEmpty else { return users }
+        return users.filter { !hidden.contains($0.id) }
+    }
+
+    // MARK: 한 사람 한 판 (B8 — 양방향)
+
+    /// 사람과의 **오목** 판이 지금 흐르고 있는가.
+    ///
+    /// 둘을 뺀다: **AI 판**(루비·순위가 없고 화면을 떠나면 시계가 멈춘다 — 그 판이 다른 게임을 막으면 두던 채
+    /// 며칠 남은 판 하나가 입구를 통째로 잠근다)과 **끝난 판**(결과 화면은 판이 아니다). 서버가 말한 진행 판
+    /// id(`activeMatchID`)는 들고 있는 판이 없어도 참이다 — 앱을 막 켠 사람의 판이 그 갈래다.
+    package var hasLiveGomokuMatch: Bool {
+        let gomoku = context.gomoku
+        if gomoku.activeMatchID != nil { return true }
+        guard let match = gomoku.match, !match.isFinished else { return false }
+        return !gomoku.isAIMatch
+    }
+
+    /// 사람과의 **체스** 판이 지금 흐르고 있는가(위와 같은 규칙 — 로봇 판·끝난 판은 아니다).
+    package var hasLiveChessMatch: Bool {
+        let chess = context.chess
+        if chess.activeMatchID != nil { return true }
+        guard let match = chess.match, !match.isFinished else { return false }
+        return !chess.isAIMatch
+    }
+
+    /// 체스 입구를 막는 까닭(없으면 nil). 오목 판이 흐르면 체스를 신청·수락할 수 없다 —
+    /// 서버도 같은 판정을 한다(`chess__busy`), 그래서 이 쪽은 **클라가 사실을 먼저 그리는 것**이다.
+    package var chessEntryBlock: GamesBusyGame? { hasLiveGomokuMatch ? .gomoku : nil }
+
+    /// 오목 입구를 막는 까닭(없으면 nil). ★ **이 방향은 클라밖에 막는 데가 없다** — 서버의 오목 게이트는
+    /// 체스를 모른다(`GamesBusyGame` 머리말). 안 막으면 체스 중인 사람이 오목을 수락해 체스를 시간패한다.
+    package var gomokuEntryBlock: GamesBusyGame? { hasLiveChessMatch ? .chess : nil }
+
     // MARK: 첫 화면
 
     /// 게임 탭 첫 화면이 보였다: 카드의 오늘 최고·순위 · 받은 신청.
@@ -143,6 +237,11 @@ package final class GamesStore {
         guard context.session.isSignedIn else { return }
         miniGames.refreshSummariesIfStale()
         context.gomoku.refreshInboxIfStale()
+        // 체스는 **받은함 RPC 가 없다**(ChessStore 머리말 ⑪) — 받은 신청·진행 중 판·내 전적이 전부 `chess_lobby`
+        // 의 `me` 로 온다. 그래서 허브에서 한 번 당긴다(30초 스로틀 — `menuLobbyThrottleSeconds`).
+        // ★ 조회를 더하는 값은 **한 사람 한 판**이다: 이 조회가 없으면 앱을 막 켠 사람의 `activeMatchID` 가 nil 이라
+        //   체스 판이 흐르는 중에도 오목 카드가 열려 있고, 그 길로 오목을 수락하면 체스가 시간패한다.
+        context.chess.refreshLobbyIfStale()
     }
 
     /// 오목 카드의 한 줄 재료: 진행 중인 판이 있는가(서버가 말한 진행 판 id 또는 들고 있는 끝나지 않은 판).
@@ -150,6 +249,14 @@ package final class GamesStore {
         let gomoku = context.gomoku
         if let match = gomoku.match, !match.isFinished { return true }
         return gomoku.activeMatchID != nil
+    }
+
+    /// 체스 카드의 한 줄 재료(위와 같은 뜻 — **로봇 판도 포함**이다. 카드가 '대국 중'을 앞세울지는
+    /// `GamesTab` 이 `isAIMatch` 와 받은 신청을 함께 보아 정한다 — 오목 카드와 같은 관례).
+    package var hasActiveChessMatch: Bool {
+        let chess = context.chess
+        if let match = chess.match, !match.isFinished { return true }
+        return chess.activeMatchID != nil
     }
 
     // MARK: 오목 화면 수명
@@ -189,6 +296,38 @@ package final class GamesStore {
         syncAIThinker()
     }
 
+    // MARK: 체스 화면 수명 (오목에서 수리한 모양 그대로)
+
+    /// 체스 화면이 나타났다: 로비·진행 판을 읽고(`openWindow`) 앱이 active 면 폴링을 시작한다.
+    ///
+    /// `isChessScreenVisible` 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이
+    /// "이미 보인다"를 봐야 화면을 또 열지 않는다(오목에서 같은 순서로 데였다).
+    package func chessScreenDidAppear() {
+        let chess = context.chess
+        isChessScreenVisible = true
+        chess.openWindow(focusMatchID: nil)
+        if isAppActive { chess.windowDidShow() }
+    }
+
+    /// 체스 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃).
+    ///
+    /// **`stopWatching()` 이 먼저, `windowDidHide()` 가 나중이다.** 코어 `windowDidHide` 는 **끝난** 관전만 내리고
+    /// **진행 중인** 관전은 일부러 남긴다 — 맥에서 그 통지는 '창 최소화'라 지우면 최소화만 해도 남의 판 관전이
+    /// 로비로 떨어지기 때문이다. 폰에서 같은 통지는 "사용자가 화면을 떠났다"다. 순서를 뒤집거나 `stopWatching()`
+    /// 을 빼면 게임 탭에서 체스를 다시 누를 때 로비가 아니라 **남의 대국이 다시 열린다**(오목 0.3.41 수리와 같은 자리).
+    ///
+    /// `leaveWatch()` 가 **아니다**: 그쪽은 로비·순위를 다시 읽는 **네트워크 호출**이라 화면을 떠나는 길에서
+    /// 조회 둘이 나간다. `stopWatching()` 은 세대만 올리고 장부를 비운다(요청 0건).
+    ///
+    /// **내 판은 손대지 않는다.** 체스에는 `chess_leave` 가 없고(코어 `windowDidClose` 주석) 진행 중인 판은
+    /// 서버에서 계속 흐른다 — 결과 화면인 채로 떠난 것도 "그 판에서 나갔다"가 아니다.
+    package func chessScreenDidDisappear() {
+        guard isChessScreenVisible else { return }
+        isChessScreenVisible = false
+        context.chess.stopWatching()
+        context.chess.windowDidHide()
+    }
+
     /// AI 선택기의 허락 = 오목 화면이 보이고 앱이 active. 거두면 도는 탐색이 곧바로 취소된다.
     private func syncAIThinker() {
         aiThinker.setAllowed(isGomokuScreenVisible && isAppActive)
@@ -211,6 +350,16 @@ package final class GamesStore {
         // 유일한 상한이었고, 여기에 타이밍 바를 넣으면 그 상한이 사라진다. 플래피(새가 떨어져 끝난다)와 테트리스
         // (쌓여서 탑아웃한다)는 방치해도 엔진이 판을 끝내므로 안전하다. 새 게임을 더할 때 이 성질을 확인할 것.
         if let controller = miniGames.controller, controller.isPlaying, controller.kind != .timingBar { return true }
+        // 체스: 오목과 **같은 규칙**이다. 1:1 판은 서버 시계가 흐르므로 어느 화면에 있든 켜고(10분 시계에
+        // 자동잠금이 닿으면 한 수도 못 두고 시간패한다), 로봇 판은 체스 화면이 보일 때만 켠다
+        // (화면을 떠나면 코어가 시계를 멈춘다 — `pauseAIClock`).
+        if let match = context.chess.match, !match.isFinished {
+            if context.chess.isAIMatch {
+                if isChessScreenVisible { return true }
+            } else {
+                return true
+            }
+        }
         guard let match = context.gomoku.match else { return false }
         if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished
@@ -269,14 +418,26 @@ package final class GamesStore {
             }
             return .push(.miniGame(kind))
         case .gomokuLobby, .gomokuMatch(matchID: nil):
+            guard gomokuEntryBlock == nil else { return blockedGomokuRoute() }
             openGomoku(focusID: nil)
             return .push(.gomoku)
         case .gomokuInvite(let id), .gomokuMatch(matchID: .some(let id)):
+            guard gomokuEntryBlock == nil else { return blockedGomokuRoute() }
             openGomoku(focusID: id)
             return .push(.gomoku)
         default:
             return nil
         }
+    }
+
+    /// 체스 판이 흐르는 동안 들어온 오목 링크(푸시·위젯)를 **열지 않는다** — 게임 탭 첫 화면에 세운다.
+    ///
+    /// 카드만 막으면 이 길이 남는다: 오목 로비의 [수락]은 `GomokuPhoneChallengeGate`(보낸 신청용)를 지나지 않아
+    /// 아무 게이트도 없고, 서버의 오목 쪽 게이트는 체스를 모른다(`GamesBusyGame` 머리말). 그래서 **화면까지
+    /// 가지 않는 것**이 지금 폰이 그 수락을 막는 유일한 방법이다. 첫 화면에서는 오목 카드가 그 까닭을 말한다.
+    private func blockedGomokuRoute() -> GamesRouteStep {
+        pendingGomokuFocusID = nil
+        return .popToRoot
     }
 
     private func openGomoku(focusID: String?) {
@@ -292,5 +453,53 @@ package final class GamesStore {
     private func presentGomokuScreen() {
         guard isAppActive, context.session.isSignedIn, !isGomokuScreenVisible else { return }
         context.router.open(.gomokuMatch(matchID: nil))
+    }
+
+    /// 체스 판이 막 열렸다(내 신청이 수락됨 · 내가 수락함 · 앱을 다시 켜니 진행 중인 판) — 체스 화면을 연다.
+    ///
+    /// `AingRoute` 에 체스 링크가 **아직 없다**(CheckMobileShared — 이 작업의 소유 파일 밖이다). 그래서 라우터의
+    /// 조각 셋으로 같은 일을 한다: 게임 탭을 고르고 · 쌓인 화면을 비우고 · 체스를 쌓는다(`router.open` 이 하는 일과 같다).
+    /// 푸시·위젯이 체스를 열려면 그때 `AingRoute` 에 가지를 더하고 이 함수를 `routeStep` 쪽으로 옮겨야 한다.
+    private func presentChessScreen() {
+        guard isAppActive, context.session.isSignedIn, !isChessScreenVisible else { return }
+        let router = context.router
+        router.selectedTab = .games
+        router.popToRoot(.games)
+        router.push(GamesDestination.chess, on: .games)
+    }
+}
+
+/// 체스 로비 [도전] 활성 조건 — 맥 `ChessOpponentRow.canChallenge`(`user.isCapable && !user.inMatch && !isBusy`)에
+/// **폰에서 셋을 더한** 것이다: 보낸 신청 · 내 판 · **다른 게임의 판**(한 사람 한 판, 양방향).
+///
+/// ★ 왜 뷰 파일이 아니라 여기 있나: 체스 화면은 통째로 `#if os(iOS)` 안이라 **맥 스위트가 한 줄도 못 본다**
+///   (저장소 메모 '폰 뷰는 맥 스위트가 못 본다'). 게이트를 뷰에 적으면 되돌려도 빨개지는 테스트가 없다.
+///   이 파일은 플랫폼 분기가 없어 `GamesChessWiringTests` 가 값으로 잰다.
+///
+/// ★ `user.isCapable` 은 `capable` 이 **nil 이면 false** 다(`ChessStore.user(from:)` — `ChessWire.swift:118` 의 계약).
+///   모르는 상대에게 신청해 `target_outdated` 를 받는 것보다, 모르면 막는 것이 낫다.
+package enum GamesChessChallengeGate {
+    @MainActor
+    package static func isEnabled(user: ChessUser, store: ChessStore, blockedBy other: GamesBusyGame?) -> Bool {
+        other == nil
+            && user.isCapable
+            && !user.inMatch
+            && store.outgoing == nil
+            && store.match == nil
+            && !store.isBusy
+    }
+}
+
+/// 판돈 고르기(맥 `ChessStakePrompt` 와 같은 규약 — 고른 판돈을 다시 누르면 해제 · 잔액을 **모르면 막지 않는다**).
+/// 오목의 `GomokuPhoneStakeSelection` 과 같은 자리·같은 뜻이고, 체스 판돈 표(3·5·10)는 서버 CHECK 가 쥔다.
+package enum GamesChessStakeSelection {
+    package static func toggled(current: ChessStake?, tapped: ChessStake) -> ChessStake? {
+        current == tapped ? nil : tapped
+    }
+
+    /// 이 판돈을 걸 수 있는가. **잔액을 모르면(nil) 막지 않는다**(맥 0.3.29 규칙 — 서버가 거절하면 그때 안내한다).
+    package static func affordable(_ stake: ChessStake, balance: Int?) -> Bool {
+        guard let balance else { return true }
+        return balance >= stake.rawValue
     }
 }

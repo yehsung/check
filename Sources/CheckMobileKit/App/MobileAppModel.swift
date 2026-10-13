@@ -20,6 +20,7 @@ public final class MobileAppModel {
     @ObservationIgnored package let widgetSnapshots: WidgetSnapshotWriter
     package let gomokuHost: MobileGomokuHost
     package let gomoku: GomokuStore
+    package let chess: ChessStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -88,6 +89,21 @@ public final class MobileAppModel {
         // 지금은 폰도 자기 배선에서 켠다(같은 스토어를 쓰는 두 앱의 유일한 차이라 배선에만 있다).
         gomoku.spectatorFeaturesEnabled = true
         realtime.gomoku = gomoku
+        // 1:1 체스(0.3.44 서버·맥 · 폰은 이 세션부터). 호스트는 **오목과 같은 하나**다 —
+        // `ChessStoreHost` 는 `GomokuStoreHost` 의 별명이고(ChessStore.swift:43), 루비 미러를 한 칸으로 두면
+        // 체스 정산이 오목·상점과 같은 잔액을 적는다(두 벌이면 탭마다 다른 잔액이 보인다).
+        let chess = ChessStore(host: host)
+        chess.clock = { clock.now() }
+        // 순위·관전(체스)의 **주 스위치**. 기본이 꺼짐(`ChessStore.spectatorFeaturesEnabled`, ChessStore.swift:745)이라
+        // 이 한 줄이 없으면 `chess_ranking`·`chess_watch` 가 **한 번도 안 나간다** — `loadRanking`·`startWatching`·
+        // `refreshWatch` 와 `pollTick`·`windowDidShow` 의 두 분기가 전부 `canPollSpectatorFeatures` 를 먼저 본다.
+        // 빠지면 순위 절은 영영 로딩 문구이고 [관전]은 눌러도 관전 상태조차 서지 않는다. **화면이 죽는데 빨간
+        // 테스트가 없다**(뷰 파일은 `#if os(iOS)` 안이라 맥 스위트가 못 본다) — 그래서 못을 따로 박아 두었다:
+        // `Tests/CheckMobileKitTests/GamesChessWiringTests.swift`(켠 효과를 **요청 건수**로 재고, 스위치만
+        // 되돌린 기준선과 나란히 본다).
+        // **"기본값이니 지워도 되겠지"로 지우지 마라.** 꺼짐은 맥 작업이 남긴 의도된 보호다(그리지도 않는 폰이
+        // 순위를 1분마다 당기지 않게) — 폰이 그 화면을 갖는 지금은 폰도 자기 배선에서 켠다. 바로 위 오목 한 줄과 짝이다.
+        chess.spectatorFeaturesEnabled = true
         let links = MobileStoreLinks()
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let characters = AppUserCharacterStore(session: session, clock: env.clock)
@@ -99,6 +115,7 @@ public final class MobileAppModel {
             realtime: realtime,
             widgetSnapshots: writer,
             gomoku: gomoku,
+            chess: chess,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -114,6 +131,7 @@ public final class MobileAppModel {
         self.widgetSnapshots = writer
         self.gomokuHost = host
         self.gomoku = gomoku
+        self.chess = chess
         self.links = links
         self.appearance = appearance
         self.characters = characters
@@ -231,6 +249,9 @@ public final class MobileAppModel {
     private func sessionDidSignOut() {
         realtime.sessionDidSignOut()
         gomoku.reset()
+        // 체스도 같은 사슬에 넣는다 — 안 넣으면 다음 사람의 로비에 앞 사람의 판·신청·순위가 남는다.
+        // `reset()` 은 배선 값(`spectatorFeaturesEnabled`·`clock`·`presentWindow`)을 건드리지 않는다(위 주 스위치 주석).
+        chess.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()

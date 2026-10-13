@@ -26,6 +26,8 @@ struct GamesTab: View {
                         .padding(.top, 14)
                     gomokuCard
                         .padding(.top, 12)
+                    chessCard
+                        .padding(.top, 12)
                     todayRanks
                     liveMatches
                 }
@@ -42,6 +44,8 @@ struct GamesTab: View {
             .refreshable {
                 for kind in MiniGameKind.phoneCases { await store.miniGames.loadBoard(kind, withWinner: false) }
                 await store.context.gomoku.loadInbox()
+                // 체스는 받은함 RPC 가 없다 — 받은 신청·진행 판·전적이 전부 로비 응답에 실려 온다(`GamesStore.hubDidAppear`).
+                await store.chess.refreshLobby()
             }
             .navigationDestination(for: GamesDestination.self) { destination in
                 switch destination {
@@ -49,6 +53,8 @@ struct GamesTab: View {
                     GamesMiniGameScreen(store: store, kind: kind)
                 case .gomoku:
                     GamesGomokuScreen(store: store)
+                case .chess:
+                    GamesChessScreen(store: store)
                 }
             }
         }
@@ -124,6 +130,12 @@ struct GamesTab: View {
     private var gomokuCard: some View {
         let incoming = store.badgeCount
         let gomoku = store.context.gomoku
+        // ★ 한 사람 한 판(B8) — **이 방향은 클라밖에 막는 데가 없다.** 서버의 오목 게이트는 체스를 모르므로
+        //   (`GamesBusyGame` 머리말) 체스 판이 흐르는 동안 이 카드를 열어 두면 오목 로비의 [수락]으로
+        //   오목이 시작되고, 판돈이 걸린 체스가 조용히 시간패한다(맥 적대 검증이 P0 으로 잡은 자리).
+        //   화면을 **아예 열지 않는 것**이 지금 그 수락을 막는 유일한 길이다(로비의 [수락]에는 게이트가 없다).
+        //   딥링크로 들어오는 같은 길은 `GamesStore.routeStep` 이 막는다 — 두 입구가 짝이다.
+        let blockedBy = store.gomokuEntryBlock
         // AI 판은 받은 신청을 가리지 않는다 — 규칙과 까닭은 `GamesText.hubShowsActiveMatch`.
         let active = GamesText.hubShowsActiveMatch(
             active: store.hasActiveGomokuMatch, isAIMatch: gomoku.isAIMatch, incoming: incoming)
@@ -131,10 +143,14 @@ struct GamesTab: View {
             incoming: incoming, hasActiveMatch: active, hasOutgoing: gomoku.outgoing != nil,
             inboxFailed: gomoku.inboxLoadFailed && gomoku.incoming.isEmpty
         )
-        let chip: String? = active ? GamesText.activeMatchChip : (incoming > 0 ? GamesText.incomingChip(incoming) : nil)
+        let chip: String? = blockedBy != nil
+            ? GamesCrossGameText.busyChip(blockedBy)
+            : (active ? GamesText.activeMatchChip : (incoming > 0 ? GamesText.incomingChip(incoming) : nil))
         let record = gomoku.record.map { GomokuPhoneText.recordTitle + " " + GomokuPhoneText.record($0) }
         // 칩이 없을 때: 보낸 신청 대기·받은함 실패는 그 한 줄이 먼저, 아니면 전적(모르면 안내 한 줄).
-        let detail: String? = chip != nil ? record : ((gomoku.outgoing != nil || gomoku.inboxLoadFailed) ? line : (record ?? line))
+        let detail: String? = blockedBy != nil
+            ? GamesCrossGameText.busyDetail(blockedBy)
+            : (chip != nil ? record : ((gomoku.outgoing != nil || gomoku.inboxLoadFailed) ? line : (record ?? line)))
         return Button {
             store.context.router.push(GamesDestination.gomoku, on: .games)
         } label: {
@@ -164,11 +180,73 @@ struct GamesTab: View {
                 .padding(.horizontal, MobileTheme.cardPadding)
                 .padding(.vertical, 14)
             }
+            .opacity(blockedBy == nil ? 1 : 0.55)
             .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
             .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("오목 대결 화면을 열어요")
+        .disabled(blockedBy != nil)
+        .accessibilityHint(blockedBy == nil ? "오목 대결 화면을 열어요" : GamesCrossGameText.busyDetail(blockedBy))
+    }
+
+    // MARK: 체스 카드
+
+    /// 1:1 체스 카드 — 오목 카드와 **같은 모양**(썸네일 60 · 제목 · 부제 · 칩 + 보조 한 줄 · 꺾쇠).
+    /// 입구 하나로 로비·대국·결과·순위·관전·로봇을 다 연다(체스 화면이 단계를 갈아 끼운다).
+    ///
+    /// ★ 막는 방향은 **양쪽이다**: 오목 판이 흐르면 이 카드가 막히고(아래 `blockedBy`), 체스 판이 흐르면
+    ///   위 오목 카드가 막힌다. 한 방향만 막으면 막히지 않은 쪽으로 들어가 다른 판을 시간패한다.
+    private var chessCard: some View {
+        let chess = store.chess
+        let blockedBy = store.chessEntryBlock
+        let incoming = chess.visibleIncoming
+        // 로봇 판은 사람의 신청을 가리지 않는다 — 오목 카드와 같은 규칙(`GamesText.hubShowsActiveMatch`).
+        let active = GamesText.hubShowsActiveMatch(
+            active: store.hasActiveChessMatch, isAIMatch: chess.isAIMatch, incoming: incoming == nil ? 0 : 1)
+        let chip: String? = blockedBy != nil
+            ? GamesCrossGameText.busyChip(blockedBy)
+            : (active ? GamesText.activeMatchChip : (incoming != nil ? GamesCrossGameText.chessIncomingChip : nil))
+        let record = chess.record.map { GamesCrossGameText.chessRecordTitle + " " + GamesCrossGameText.chessRecord($0) }
+        let detail: String? = blockedBy != nil
+            ? GamesCrossGameText.busyDetail(blockedBy)
+            : (chip != nil ? record : (chess.outgoing != nil ? GamesCrossGameText.chessOutgoingLine
+                                                            : (record ?? GamesCrossGameText.chessIdleLine)))
+        return Button {
+            store.context.router.push(GamesDestination.chess, on: .games)
+        } label: {
+            InsetGroup {
+                HStack(spacing: 14) {
+                    GamesChessTabThumbnail()
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(GamesCrossGameText.chessTitle)
+                            .font(MobileTheme.rowTitle)
+                            .foregroundStyle(MobileTheme.label)
+                        Text(GamesCrossGameText.chessSubtitle)
+                            .font(MobileTheme.rowSubtitle)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) { gomokuChip(chip); gomokuDetail(detail) }
+                            VStack(alignment: .leading, spacing: 4) { gomokuChip(chip); gomokuDetail(detail) }
+                        }
+                        .padding(.top, 3)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label3)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MobileTheme.cardPadding)
+                .padding(.vertical, 14)
+            }
+            .opacity(blockedBy == nil ? 1 : 0.55)
+            .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+        .disabled(blockedBy != nil)
+        .accessibilityHint(blockedBy == nil ? "체스 대결 화면을 열어요" : GamesCrossGameText.busyDetail(blockedBy))
     }
 
     @ViewBuilder
@@ -437,6 +515,89 @@ private struct GamesGameIconSquare: View {
         case .timingBar: return [gamesHex(0x4B3274), gamesHex(0x8A4F74)]
         case .flappy: return [gamesHex(0x1F4A63), gamesHex(0x3C8A6C)]
         case .tetris: return [gamesHex(0x24204E), gamesHex(0x3A2A5E)]
+        }
+    }
+}
+
+// MARK: - 체스 카드 조각
+
+/// 체스판 썸네일 60pt — 오목 나무판 썸네일(`GamesWoodThumbnail`)과 **같은 변·같은 둥글기**라 두 카드가 한 열로 선다.
+/// 판 캔버스(`GamesChessBoard` — 다른 레인)와는 별개다: 이쪽은 정지 그림 한 장이고 좌표·방향·애니메이션이 없다.
+private struct GamesChessTabThumbnail: View {
+    var side: CGFloat = 60
+
+    var body: some View {
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size)
+            let clip = Path(roundedRect: rect, cornerRadius: side * 0.2, style: .continuous)
+            context.fill(clip, with: .color(Self.light))
+            context.clip(to: clip)
+            let cell = size.width / 8
+            for rank in 0..<8 {
+                for file in 0..<8 where (rank + file) % 2 == 1 {
+                    let square = CGRect(x: CGFloat(file) * cell, y: CGFloat(rank) * cell, width: cell, height: cell)
+                    context.fill(Path(square), with: .color(Self.dark))
+                }
+            }
+            // 흑·백 한 점씩 — 정지 그림 한 장으로 "두 사람이 두는 판"이라고 말하는 자리(오목 썸네일의 돌과 같은 역할).
+            for (file, rank, color) in Self.pieces {
+                let center = CGPoint(x: (CGFloat(file) + 0.5) * cell, y: (CGFloat(rank) + 0.5) * cell)
+                let dot = CGRect(x: center.x - cell * 0.3, y: center.y - cell * 0.3, width: cell * 0.6, height: cell * 0.6)
+                context.fill(Path(ellipseIn: dot), with: .color(color))
+                context.stroke(Path(ellipseIn: dot), with: .color(Color.black.opacity(0.25)), lineWidth: 0.5)
+            }
+        }
+        .frame(width: side, height: side)
+        .accessibilityHidden(true)
+    }
+
+    private static let light = Color(red: 0.93, green: 0.88, blue: 0.78)
+    private static let dark = Color(red: 0.54, green: 0.38, blue: 0.27)
+    private static let pieces: [(Int, Int, Color)] = [
+        (3, 6, Color.white), (4, 4, Color.white), (4, 1, Color(white: 0.12)), (2, 3, Color(white: 0.12))
+    ]
+}
+
+/// 두 게임 카드가 **같이** 쓰는 문구(한 사람 한 판 안내)와 체스 카드 문구.
+///
+/// **임시 자리다** — 옮길 자리가 이미 정해져 있다(문구 레인의 `ChessPhoneText`, 별칭 `GamesChessText`):
+///  · `busyChip(_:)`   → `ChessPhoneText.busyTitle(.chess)` / `.gomoku`
+///  · `busyDetail(_:)` → `ChessPhoneText.busyHint(.chess)` / `.gomoku`
+///  · 나머지 체스 줄   → `ChessPhoneText` 의 해당 항목
+/// 그 파일이 이 레인의 워크트리에는 **아직 없어서**(세션 시작 HEAD 포크) 부르면 컴파일되지 않는다.
+/// 그래서 임시로 두고 **오목 쪽 공용 파일(`GamesText.swift`)은 한 줄도 건드리지 않았다.**
+///
+/// ★ 시간 수치는 카드에 싣지 않는다 — 그 값은 서버가 말하고(로비 `initial_ms`·`increment_ms`) 카드는 로비를
+///   안 읽었을 수도 있다. 10-12 에 5분 → 10분으로 늘어난 값이라 박아 두면 그 자리가 곧 거짓이 된다.
+private enum GamesCrossGameText {
+    static let chessTitle = "1:1 체스"
+    /// 시간 수치는 카드에 싣지 않는다 — 그 값은 서버가 말하고(로비 응답) 카드는 로비를 안 읽을 수도 있다.
+    static let chessSubtitle = "FIDE 규칙 · 백 선공 · 로봇과도 둬요"
+    static let chessRecordTitle = "내 전적"
+    static let chessIncomingChip = "받은 신청 1건"
+    static let chessOutgoingLine = "보낸 신청을 기다리고 있어요"
+    static let chessIdleLine = "상대를 골라 대결을 신청해요"
+
+    static func chessRecord(_ record: ChessRecord) -> String {
+        "\(record.wins)승 \(record.losses)패 \(record.draws)무"
+    }
+
+    /// 다른 게임 판이 흐르는 동안의 칩. **한 사람은 한 판만** 둘 수 있다(B8).
+    static func busyChip(_ busy: GamesBusyGame?) -> String {
+        switch busy {
+        case .chess: return "체스 대국 중"
+        case .gomoku: return "오목 대국 중"
+        case nil: return ""
+        }
+    }
+
+    /// 그 까닭 한 줄 — 비활성 카드의 보조 줄이자 보이스오버 힌트. "지금은 못 눌러요"가 아니라
+    /// **언제 열리는지**를 말한다(사용자가 할 수 있는 일을 말하는 규약).
+    static func busyDetail(_ busy: GamesBusyGame?) -> String {
+        switch busy {
+        case .chess: return "체스 대국이 끝나면 열려요 · 한 번에 한 판만 둘 수 있어요"
+        case .gomoku: return "오목 대국이 끝나면 열려요 · 한 번에 한 판만 둘 수 있어요"
+        case nil: return ""
         }
     }
 }

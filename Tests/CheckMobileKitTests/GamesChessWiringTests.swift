@@ -369,6 +369,65 @@ import Testing
         await harness.tearDown()
     }
 
+    @Test("로봇 판을 두는 중에는 1:1 신청이 **나갈 길이 없다** — 코어는 안 막으므로(기준선 1건) 로비가 막는다")
+    func aRobotGameClosesEveryPathThatWouldDiscardIt() async {
+        // 증상: 1:1 판이 서는 순간 코어 `match` 관찰자가 로봇 판을 버린다(`discardAIGame`) — **문구도 확인도 없이**
+        // 두던 판이 사라진다. 걸린 루비가 0이라 손실은 없고, 잃는 것은 두던 판뿐이다.
+        // 원인: 서버 `chess__busy` 는 `chess_matches`·`gomoku_matches` 만 봐서 **로봇 판이 안 보인다**(행이 없다).
+        // ★ "버튼이 비활성"만 재면 안 된다 — 다른 경로로 들어오는 신청을 못 잡는다. **요청 0건**을 잰다.
+        let harness = GamesHarness(label: "chess-robot-guard")
+        serve(harness)
+        await harness.signIn()
+        let chess = harness.model.chess
+        chess.aiMoveChooser = { _, _ in nil }
+        harness.games.chessScreenDidAppear()
+        chess.startAIMatch(humanColor: .white)
+        #expect(harness.games.hasLiveChessRobotGame, "로봇 판이 안 섰다 — 이 테스트의 전제가 깨졌다")
+        let rival = ChessUser(id: Self.rival, displayName: "체스라이벌", avatarURL: nil, characterID: nil,
+                              isWorking: true, isCapable: true, inMatch: false)
+
+        // ① [도전] 버튼 게이트.
+        #expect(!GamesChessChallengeGate.isEnabled(user: rival, store: chess, blockedBy: harness.games.chessEntryBlock),
+                "로봇 판 중인데 [도전]이 열려 있다 — 누르면 두던 판이 말없이 사라진다")
+        // ② 판돈 시트의 **마지막 문**(게이트가 열린 뒤 로봇 판을 시작한 틈도 여기서 막힌다).
+        for stake in ChessStake.allCases {
+            #expect(GamesChessStakeSend.sendable(stake, store: chess, balance: 100,
+                                                 blockedBy: harness.games.chessEntryBlock) == nil,
+                    "로봇 판 중인데 판돈 \(stake.rawValue) 신청이 나갈 수 있다")
+        }
+        #expect(harness.server.requests("chess_challenge").isEmpty, "여기까지 신청 요청이 한 건도 없어야 한다")
+
+        // ③ 기준선 — **코어는 막지 않는다.** 이 대비가 없으면 위 초록이 게이트 덕인지 코어 덕인지 알 수 없다
+        //    (`ChessStore.challenge` 에 `isAIMatch` 가드가 없다). 코어가 언젠가 막게 되면 이 줄이 빨개지고,
+        //    그때는 "클라 게이트는 그대로 두고 이 기준선만 갱신"이 맞는 처리다(게이트는 문구까지 쥔다).
+        await chess.challenge(userID: Self.rival)
+        #expect(harness.server.requests("chess_challenge").count == 1,
+                "기준선이 안 갈린다 — 코어가 이미 막는다면 로비 게이트는 아무것도 증명하지 않는다")
+        await harness.tearDown()
+    }
+
+    @Test("로봇 판 중 받은 신청은 **막지 않고 묻는다** — 수락 버튼이 요청 대신 확인을 띄운다")
+    func acceptingWhileARobotGameRunsGoesThroughAConfirm() async throws {
+        // 막아 버리면 60초 TTL 안에 **진짜 대결**을 놓친다(루비가 걸린 쪽은 그쪽이다). 그래서 수락은 살려 두고
+        // "로봇 판을 끝내고 수락할까요?" 를 먼저 묻는다 — 조용히 사라지는 길만 없으면 된다는 판단.
+        // 뷰는 `#if os(iOS)` 안이라 글자로 잰다: [수락] 본문이 **요청 전에** 로봇 판을 보고 돌아서는지.
+        let code = try Self.strippedSource("Sources/CheckMobileKit/Games/GamesChessScreen.swift")
+        let accept = try #require(Self.slice(code, from: "private var acceptButton", length: 420))
+        let guardRange = try #require(accept.range(of: "store.hasLiveChessRobotGame"),
+                                      "[수락]이 로봇 판을 보지 않는다 — 두던 판이 말없이 사라진다")
+        let sendRange = try #require(accept.range(of: "respond(inviteID:"), "[수락]이 응답을 안 보낸다")
+        #expect(guardRange.lowerBound < sendRange.lowerBound,
+                "로봇 판 검사가 요청 **뒤**에 있다 — 그러면 묻기 전에 이미 판이 사라진다")
+        #expect(accept.contains("onNeedsRobotConfirm(invite); return"),
+                "확인으로 넘기고 **돌아서지** 않는다 — 확인과 요청이 함께 나간다")
+        // 확인 시트는 두던 판이 사라진다는 **사실**을 말해야 한다(루비가 안 걸린다는 안심도 함께).
+        #expect(code.contains("두던 로봇 판은 저장되지 않아요"), "확인 문구가 '사라진다'를 말하지 않는다")
+        #expect(code.contains("잃는 루비는 없어요"), "확인 문구가 '손실 없음'을 말하지 않는다")
+        // 그리고 [도전] 쪽은 **막는 것이 맞다** — 그 까닭을 화면이 말한다.
+        #expect(code.contains("로봇 판을 끝내면 1:1 대결을 신청할 수 있어요"),
+                "로봇 판 중 [도전]이 막힌 까닭을 말하지 않는다 — 비활성 알약만 남는다")
+    }
+
     @Test("체스 로비 [도전] 게이트: 다른 게임 판 · 상대 대국 중 · 보낸 신청 · 내 판 · **capable 모름**을 모두 막는다")
     func theChessChallengeGateRefusesEveryBlockedCase() async {
         // 없으면: 게이트가 뷰에만 있으면 되돌려도 빨개지는 테스트가 없다(화면은 `#if os(iOS)`).
@@ -467,7 +526,41 @@ import Testing
         await harness.tearDown()
     }
 
-    // MARK: - 6. 소스 계약 (뷰가 그 자리를 실제로 부르는가 — 맥 스위트가 뷰를 못 보므로 글자로 잰다)
+    // MARK: - 6. 데모 장면 라우트 (스크린샷이 이 화면에 닿는 길)
+
+    @Test("데모 라우트 `games/chess/…` 일곱 가지가 체스 화면으로 가고, 오목·미니게임 라우트는 안 걸린다")
+    func theDemoChessRoutesReachTheScreen() async {
+        // 없으면: `AingRoute` 에 체스 가지가 없어 `-AingCheckDemoRoute games/chess/lobby` 가 **조용히 버려지고**
+        // 데모는 게임 탭 첫 화면에 머문다(스크린샷·검수가 로비에 닿을 길이 없다). 장면 고르기는 라우트와
+        // 무관하므로(`MobileDemo` 가 라우트 글자를 폴더 이름으로 쓴다) 화면만 띄우면 픽스처가 따라온다.
+        for raw in ["games/chess", "games/chess/lobby", "games/chess/lobby/invites", "games/chess/match",
+                    "games/chess/ranking", "games/chess/ranking/unlisted",
+                    "games/chess/watch/demo-chess-live", "games/chess/watch/demo-chess-over"] {
+            #expect(MobileAppModel.isDemoChessRoute(raw), "체스 데모 라우트를 못 알아본다: \(raw)")
+        }
+        // 앞뒤 공백·슬래시는 흘려 보낸다(인자 따옴표 실수).
+        #expect(MobileAppModel.isDemoChessRoute(" /games/chess/lobby "))
+        // 남의 라우트는 걸리지 않는다 — 걸리면 그 장면이 체스 화면으로 오배달된다.
+        for raw in ["games", "games/tetris", "games/gomoku/ai", "gomoku/lobby", "games/chessboard", "me/shop"] {
+            #expect(!MobileAppModel.isDemoChessRoute(raw), "남의 데모 라우트를 체스로 읽었다: \(raw)")
+        }
+
+        // 깃발은 **한 번만** 꺼내진다 — 두 계기(onAppear · routeSerial)에서 불려도 화면을 두 번 쌓지 않는다.
+        let harness = GamesHarness(label: "chess-demo-flag")
+        serve(harness)
+        await harness.signIn()
+        #expect(!harness.games.consumePendingDemoChessScreen(), "안 세웠는데 깃발이 섰다")
+        harness.games.pendingDemoChessScreen = true
+        #expect(harness.games.consumePendingDemoChessScreen())
+        #expect(!harness.games.consumePendingDemoChessScreen(), "깃발이 남았다 — 나중의 무관한 진입에 쓰인다")
+        // 로그아웃 reset 이 깃발을 거둔다(다음 사람의 첫 화면에 남의 장면이 쌓이지 않게).
+        harness.games.pendingDemoChessScreen = true
+        harness.games.reset()
+        #expect(!harness.games.pendingDemoChessScreen)
+        await harness.tearDown()
+    }
+
+    // MARK: - 7. 소스 계약 (뷰가 그 자리를 실제로 부르는가 — 맥 스위트가 뷰를 못 보므로 글자로 잰다)
 
     @Test("게임 탭의 두 카드가 **양방향** 차단을 각각 본다 — 한 줄만 있으면 한 방향이 열린 채다")
     func bothCardsConsultTheCrossGameBlock() throws {
@@ -478,6 +571,9 @@ import Testing
                 "체스 카드가 '오목 중' 차단을 안 본다")
         #expect(code.contains("GamesDestination.chess"), "체스 입구가 게임 탭에 없다 — 화면에 닿을 길이 없다")
         #expect(code.contains("GamesChessScreen(store: store)"), "체스 목적지가 화면으로 이어지지 않는다")
+        // 데모 장면 라우트는 **두 계기**에서 꺼내야 한다 — 탭이 먼저 마운트되면 onAppear 는 깃발 전에 끝난다.
+        #expect(code.components(separatedBy: "applyDemoChessRoute()").count - 1 >= 3,
+                "데모 체스 라우트를 한 계기에서만 꺼낸다 — 탭 마운트 순서에 따라 화면이 안 열린다")
     }
 
     @Test("체스 화면 수명: 떠날 때 stopWatching() 이 windowDidHide() **앞**이고, leaveWatch() 는 부르지 않는다")
@@ -520,7 +616,12 @@ import Testing
         #expect(code.contains("GamesChessRankingSection(store: store)"), "순위 절이 로비에 없다")
         #expect(code.contains("GamesChessWatchSection(store: store)"), "관전 절이 로비에 없다")
         #expect(code.contains("GamesChessAISection(store: store)"), "로봇과 두기 입구가 로비에 없다")
-        #expect(!code.contains("navigationDestination"), "체스 화면이 자식 라우트를 쌓는다 — 절이 밀려나면 폴링이 죽는다")
+        // ★ 순위·관전은 **로비 몸통 안**에 서야 한다(자식 라우트로 밀면 onDisappear → windowDidHide 로 폴링이 죽는다).
+        //   로봇 화면(`GamesChessAIScreen`)은 밀어도 된다 — 그쪽은 서버 폴링이 없다. 그래서 `navigationDestination`
+        //   자체를 금지하지 않고 **두 절이 로비 몸통에 있는지**를 잰다.
+        let lobbyBody = try #require(Self.slice(code, from: "private var lobby: some View", length: 1400))
+        #expect(lobbyBody.contains("GamesChessRankingSection(store: store)"), "순위 절이 로비 몸통 밖에 있다")
+        #expect(lobbyBody.contains("GamesChessWatchSection(store: store)"), "관전 절이 로비 몸통 밖에 있다")
         // 로봇 판은 로그인을 보지 않는다 — 화면 자체를 로그인으로 가리면 비로그인 사용자의 그 길이 막힌다.
         #expect(!code.contains("session.isSignedIn"), "체스 화면이 로그인을 게이트로 쓴다 — 로봇 판 입구가 막힌다")
     }

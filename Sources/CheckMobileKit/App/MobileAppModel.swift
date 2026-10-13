@@ -275,8 +275,27 @@ public final class MobileAppModel {
     }
 
     private func openDemoRouteIfNeeded() {
-        guard let raw = environment.demoRoute, session.isSignedIn, let route = AingRoute(path: raw) ?? Self.demoOnlyRoute(raw) else { return }
+        guard let raw = environment.demoRoute, session.isSignedIn else { return }
+        // 체스 데모 장면(`games/chess/…` — 로비·신청·대국·순위·관전)은 **`AingRoute` 에 가지가 없다.**
+        // 가지를 더하지 않은 것이 일부러다: 그 열거는 `CheckMobileShared` 에 있고, 체스 라우트가 생기는 날
+        // `IntegrationContractTests` 의 '장면 폴더 예외'가 자기 만료 단언으로 빨개진다(픽스처 레인이 설계한 신호).
+        // 지금 필요한 것은 **화면을 띄우는 것**뿐이고, 장면 고르기는 라우트와 무관하다 —
+        // 스텁은 `-AingCheckDemoRoute` 글자를 그대로 폴더 이름으로 바꿔 쓴다(`MobileDemo`: `/` → `-`).
+        // 그래서 게임 탭만 열고, 탭이 체스를 쌓는다(`GamesTab.applyDemoChessRoute`).
+        if Self.isDemoChessRoute(raw) {
+            games.pendingDemoChessScreen = true
+            router.open(.games)
+            return
+        }
+        guard let route = AingRoute(path: raw) ?? Self.demoOnlyRoute(raw) else { return }
         router.open(route)
+    }
+
+    /// 이 데모 라우트가 체스 화면을 띄우라는 뜻인가(`games/chess` · `games/chess/<장면…>`).
+    /// 오목(`games/gomoku…`)·미니게임(`games/<게임>`)은 `AingRoute` 가 이미 안다 — 여기 걸리면 안 된다.
+    package static func isDemoChessRoute(_ raw: String) -> Bool {
+        let path = raw.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return path == "games/chess" || path.hasPrefix("games/chess/")
     }
 
     /// `AingRoute` 가 모르는 **데모 전용 표기**가 열 화면(DEBUG 전용). AI 대국 장면(`games/gomoku/ai…`)은 오목 로비로 열고,

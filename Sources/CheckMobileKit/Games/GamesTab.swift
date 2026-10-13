@@ -62,9 +62,14 @@ struct GamesTab: View {
         .onAppear {
             store.hubDidAppear()
             consumeRoute()
+            applyDemoChessRoute()
             applyDemoSeed()
         }
-        .onChange(of: router.routeSerial) { consumeRoute() }
+        // 라우트 계기에서도 꺼낸다 — 탭 막대가 이 탭을 **먼저** 마운트했으면 깃발이 서기 전에 onAppear 가 끝난다.
+        .onChange(of: router.routeSerial) {
+            consumeRoute()
+            applyDemoChessRoute()
+        }
     }
 
     // MARK: 미니게임 타일
@@ -324,6 +329,14 @@ struct GamesTab: View {
                 }
             }
         }
+    }
+
+    /// 데모 스크린샷 전용: 시작 라우트가 체스 장면(`games/chess/…`)이면 체스를 쌓는다.
+    /// 깃발은 앱 모델이 세운다(`MobileAppModel.openDemoRouteIfNeeded` — `AingRoute` 에 체스 가지가 없는 까닭이 거기 있다).
+    /// `consume…` 이라 두 계기에서 불려도 한 번만 쌓는다.
+    private func applyDemoChessRoute() {
+        guard store.consumePendingDemoChessScreen() else { return }
+        store.context.router.push(GamesDestination.chess, on: .games)
     }
 
     /// 데모 스크린샷 전용: 로비를 다녀온 상태(`visited`) — 허브 자체는 로비를 부르지 않는다(새 조회 없음).

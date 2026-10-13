@@ -68,6 +68,12 @@ package final class GamesStore {
     /// 화면이 **이미 보이면** 여기 남기지 않는다(`routeStep(for:)` 이 코어에 바로 넘긴다).
     package var pendingGomokuFocusID: String?
 
+    /// 데모 전용: 시작 라우트가 체스 장면(`games/chess/…`)이라 게임 탭이 체스를 쌓아야 한다.
+    /// 앱 모델이 세우고(`MobileAppModel.openDemoRouteIfNeeded`) 게임 탭이 **한 번** 꺼내 쓴다.
+    /// `#if DEBUG` 로 감싸지 않은 까닭: 이 파일은 플랫폼·구성 분기가 없어야 맥 스위트가 값으로 잴 수 있다
+    /// (Bool 한 칸이고, 세우는 자리가 데모뿐이라 Release 에서는 영원히 false 다).
+    package var pendingDemoChessScreen = false
+
     /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
     @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
 
@@ -157,7 +163,16 @@ package final class GamesStore {
         isGomokuScreenVisible = false
         isChessScreenVisible = false
         pendingGomokuFocusID = nil
+        pendingDemoChessScreen = false
         syncAIThinker()
+    }
+
+    /// 데모 체스 장면 깃발을 **한 번** 꺼낸다(꺼내면 비운다 — 뒤의 무관한 진입에 쓰이지 않게).
+    /// 오목 `pendingGomokuFocusID` 가 같은 자리에서 데인 것과 같은 규약이다.
+    package func consumePendingDemoChessScreen() -> Bool {
+        guard pendingDemoChessScreen else { return false }
+        pendingDemoChessScreen = false
+        return true
     }
 
     /// 코어 체스 스토어 줄임(= `context.chess`). 화면·다른 레인이 읽는 자리는 **두 이름이 같은 인스턴스**다.
@@ -229,6 +244,22 @@ package final class GamesStore {
     /// 오목 입구를 막는 까닭(없으면 nil). ★ **이 방향은 클라밖에 막는 데가 없다** — 서버의 오목 게이트는
     /// 체스를 모른다(`GamesBusyGame` 머리말). 안 막으면 체스 중인 사람이 오목을 수락해 체스를 시간패한다.
     package var gomokuEntryBlock: GamesBusyGame? { hasLiveChessMatch ? .chess : nil }
+
+    /// **로봇 체스 판**이 지금 진행 중인가(끝난 판은 아니다).
+    ///
+    /// ★ 서버는 이 판을 **볼 수 없다.** `chess__busy`(duel.sql:1088)는 `chess_matches`·`gomoku_matches` 만 보고
+    ///   로봇 판은 서버에 행이 없다. 그래서 한 사람 한 판이 이 축에서도 **한 방향만** 걸린다:
+    ///   1:1 중 → 로봇 입구는 코어가 막지만(`canStartAIMatch`), **로봇 판 중 → 1:1 신청·수락은 그대로 나간다**
+    ///   (`ChessStore.challenge` 에 `isAIMatch` 가드가 없다 — 로봇 레인이 요청 1건을 실측했다).
+    ///   그러면 1:1 판이 서는 순간 `match` 관찰자가 로봇 판을 버려(`discardAIGame`) **문구도 확인도 없이
+    ///   두던 판이 사라진다.** 걸린 루비가 0이라 손실은 없지만 **조용히 사라지는 것**이 결함이다.
+    ///   그래서 이 레인이 두 길을 다 막는다: 신청은 게이트가(`GamesChessChallengeGate`·`GamesChessStakeSend`),
+    ///   수락은 확인 시트가(화면 — "로봇 판을 끝내고 수락할까요?").
+    package var hasLiveChessRobotGame: Bool {
+        let chess = context.chess
+        guard chess.isAIMatch, let match = chess.match, !match.isFinished else { return false }
+        return true
+    }
 
     // MARK: 첫 화면
 
@@ -494,8 +525,34 @@ package enum GamesChessChallengeGate {
             && user.isCapable
             && !user.inMatch
             && store.outgoing == nil
+            // ★ `match == nil` 이 **로봇 판까지** 막는 자리다(`GamesStore.hasLiveChessRobotGame` 머리말) —
+            //   코어 `challenge` 에는 `isAIMatch` 가드가 없어 여기를 열면 요청이 그대로 나가고,
+            //   1:1 판이 서는 순간 두던 로봇 판이 말없이 사라진다. `isAIMatch` 를 예외로 빼지 마라.
             && store.match == nil
             && !store.isBusy
+    }
+}
+
+/// 판돈 시트의 [도전하기] 가 **실제로 요청을 낼 수 있는가**(낼 수 있으면 그 판돈, 못 내면 nil).
+///
+/// ★ 왜 뷰가 아니라 여기 있나: 신청이 나가는 **마지막 문**이라 "버튼이 비활성"이 아니라 **요청 0건**을 재야 하고
+///   (들어오는 다른 경로가 생기면 버튼 단언은 못 잡는다), 뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다.
+///   `GamesChessWiringTests` 가 세 판돈 전부에서 nil 인 것을 값으로 잰다.
+package enum GamesChessStakeSend {
+    @MainActor
+    package static func sendable(
+        _ selected: ChessStake?, store: ChessStore, balance: Int?, blockedBy other: GamesBusyGame?
+    ) -> ChessStake? {
+        guard let selected,
+              GamesChessStakeSelection.affordable(selected, balance: balance),
+              !store.isBusy,
+              other == nil,
+              // 내 판(1:1·**로봇** 둘 다) · 보낸 신청이 있으면 낼 수 없다. 버튼 게이트와 같은 조건을 두 번
+              // 적는 것이 아니라, 게이트가 열린 뒤 상태가 바뀐 틈(시트가 떠 있는 동안 로봇 판을 시작했다)을 막는다.
+              store.match == nil,
+              store.outgoing == nil
+        else { return nil }
+        return selected
     }
 }
 

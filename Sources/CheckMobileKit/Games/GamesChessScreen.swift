@@ -20,10 +20,13 @@ struct GamesChessScreen: View {
 
     /// [도전] → 판돈 시트의 대상.
     @State private var stakeTarget: ChessUser?
+    /// 로봇 판을 두는 중에 누른 [수락] — 확인을 거쳐야 보낸다(아래 `robotConfirm` 주석).
+    @State private var acceptNeedsRobotConfirm: ChessInvite?
 
     private var chess: ChessStore { store.chess }
 
     var body: some View {
+        @Bindable var chess = chess
         content
             .background(MobileTheme.background.ignoresSafeArea())
             .navigationTitle(GamesChessLobbyText.title)
@@ -31,11 +34,42 @@ struct GamesChessScreen: View {
             .sheet(item: $stakeTarget) { target in
                 GamesChessStakeSheet(store: store, target: target)
             }
+            // 규칙 시트의 주인은 화면 루트다(판돈 시트와 같은 관례 — 시트는 루트만 띄운다). 코어 깃발을 쓰는 까닭은
+            // 맥과 같다: 메뉴·대국 화면도 같은 깃발로 이 시트를 연다.
+            .sheet(isPresented: $chess.isRulesVisible) {
+                GamesChessRulesSheet(initialMs: chess.initialMs, incrementMs: chess.incrementMs,
+                                     inviteTtlSeconds: GamesChessLobbyText.inviteTtlSecondsFallback)
+            }
+            .sheet(item: $acceptNeedsRobotConfirm) { invite in
+                robotConfirm(for: invite)
+            }
             .onAppear { store.chessScreenDidAppear() }
             .onDisappear { store.chessScreenDidDisappear() }
             .onChange(of: chess.match?.id) { _, _ in
                 stakeTarget = nil
+                acceptNeedsRobotConfirm = nil
             }
+    }
+
+    /// 로봇 판을 두는 중에 1:1 신청을 수락하려 한다 — **먼저 묻는다.**
+    ///
+    /// ★ 안 물으면 두던 로봇 판이 **문구도 확인도 없이 사라진다**: 서버 `chess__busy` 는 로봇 판을 볼 수 없고
+    ///   (서버에 행이 없다) 코어 `respond` 에도 가드가 없어 1:1 판이 그대로 서며, 그 순간 `match` 관찰자가
+    ///   로봇 판을 버린다(`discardAIGame`). 걸린 루비가 0이라 **손실은 없고**, 잃는 것은 두던 판뿐이다 —
+    ///   그래서 막지 않고 **묻는다**(막으면 60초 TTL 안에 진짜 대결을 놓친다).
+    ///   확인 뒤에는 코어가 알아서 로봇 판을 버린다 — 이 화면이 따로 정리하지 않는다.
+    private func robotConfirm(for invite: ChessInvite) -> some View {
+        AingConfirmSheet(
+            title: GamesChessLobbyText.acceptEndsRobotTitle,
+            message: GamesChessLobbyText.acceptEndsRobotMessage,
+            confirmTitle: GamesChessLobbyText.acceptEndsRobotConfirm,
+            cancelTitle: GamesChessLobbyText.acceptEndsRobotCancel,
+            onConfirm: {
+                acceptNeedsRobotConfirm = nil
+                Task { await chess.respond(inviteID: invite.id, accept: true) }
+            },
+            onCancel: { acceptNeedsRobotConfirm = nil }
+        )
     }
 
     @ViewBuilder
@@ -80,6 +114,13 @@ struct GamesChessScreen: View {
         }
         .refreshable {
             await chess.refreshLobby()
+        }
+        // 규칙 책 버튼(오목 로비와 같은 자리). 로비가 **로비 응답 값**으로 시트를 띄우므로 시간 수치가 서버와 같다.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { chess.isRulesVisible = true } label: { Image(systemName: "book") }
+                    .accessibilityLabel(GamesChessLobbyText.rulesTitle)
+            }
         }
     }
 
@@ -150,6 +191,12 @@ struct GamesChessScreen: View {
         if store.chessEntryBlock == .gomoku {
             InlineNotice(text: GamesChessLobbyText.blockedByGomoku, kind: .warning)
                 .padding(.top, MobileTheme.rowSpacing)
+        } else if store.hasLiveChessRobotGame {
+            // 로봇 판 중에는 [도전]이 막힌다(게이트의 `store.match == nil`). **왜**인지 말하지 않으면
+            // 비활성 알약만 보고 "왜 안 눌리지"가 된다 — 폰엔 호버 툴팁이 없다.
+            // 받은 신청은 막지 않는다(묻고 수락한다 — `robotConfirm`).
+            InlineNotice(text: GamesChessLobbyText.blockedByRobot, kind: .info)
+                .padding(.top, MobileTheme.rowSpacing)
         }
     }
 
@@ -161,7 +208,8 @@ struct GamesChessScreen: View {
             SectionHeader(GamesChessLobbyText.incomingTitle,
                           trailing: .text(GamesChessLobbyText.inviteTTLHint), padded: true)
             InsetGroup {
-                GamesChessInviteCard(store: store, invite: invite)
+                GamesChessInviteCard(store: store, invite: invite,
+                                     onNeedsRobotConfirm: { acceptNeedsRobotConfirm = $0 })
             }
         }
     }
@@ -310,12 +358,15 @@ private struct GamesChessOpponentRow: View {
 private struct GamesChessInviteCard: View {
     let store: GamesStore
     let invite: ChessInvite
+    /// 로봇 판을 두는 중이면 수락을 **바로 보내지 않고** 화면 루트에 확인을 넘긴다(두던 판이 말없이 사라지지 않게).
+    let onNeedsRobotConfirm: (ChessInvite) -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var chess: ChessStore { store.chess }
 
     /// 오목 판이 흐르는 동안은 체스 수락도 막는다(한 사람 한 판 — 양방향).
+    /// **로봇 판은 여기서 막지 않는다** — 막으면 60초 TTL 안에 진짜 대결을 놓친다. 대신 확인을 거친다.
     private var canRespond: Bool { !chess.isBusy && store.chessEntryBlock == nil }
 
     var body: some View {
@@ -359,6 +410,8 @@ private struct GamesChessInviteCard: View {
 
     private var acceptButton: some View {
         AingButton(GamesChessLobbyText.accept, kind: .filled, size: .md, fillsWidth: true) {
+            // ★ 로봇 판을 두는 중이면 **여기서 요청을 내지 않는다** — 확인을 거친다(`GamesChessScreen.robotConfirm`).
+            guard !store.hasLiveChessRobotGame else { onNeedsRobotConfirm(invite); return }
             Task { await chess.respond(inviteID: invite.id, accept: true) }
         }
         .disabled(!canRespond)
@@ -466,11 +519,10 @@ private struct GamesChessStakeSheet: View {
     /// 공유 미러 먼저 — `GamesStore.rubyBalance` 와 같은 순서.
     private var balance: Int? { store.rubyBalance }
 
+    /// 지금 신청을 **낼 수 있는 판돈**(못 내면 nil). 판정은 `GamesChessStakeSend` 한 곳이다 —
+    /// 요청이 나가는 마지막 문이라 맥 스위트가 값으로 재야 한다(그쪽 머리말).
     private var sendable: ChessStake? {
-        guard let selected, GamesChessStakeSelection.affordable(selected, balance: balance), !chess.isBusy,
-              store.chessEntryBlock == nil
-        else { return nil }
-        return selected
+        GamesChessStakeSend.sendable(selected, store: chess, balance: balance, blockedBy: store.chessEntryBlock)
     }
 
     var body: some View {
@@ -665,9 +717,23 @@ private enum GamesChessLobbyText {
     static let decline = "거절"
     static let cancel = "취소"
 
+    static let rulesTitle = "체스 규칙"
+    /// 신청 TTL(초). ★ **코어가 그 값을 안 드러낸다** — `ChessStore.inviteTTLSeconds` 가 `private` 이라
+    /// 로비 응답의 `invite_ttl_seconds` 를 읽을 길이 없다(서버·코어 기본값이 둘 다 60이다).
+    /// 코어가 그 칸을 `package` 로 드러내는 날 이 상수를 지우고 그 값을 넘겨라(보고의 후속 목록).
+    static let inviteTtlSecondsFallback = 60
+
     /// 한 사람 한 판 — 오목 판이 흐르는 동안의 안내(양방향 가운데 이쪽).
     /// 옮길 자리: `ChessPhoneText.entryBlock(playing: .gomoku)`.
     static let blockedByGomoku = "오목 대국이 끝나면 체스를 신청할 수 있어요"
+    /// 로봇 판 중 — 신청만 막힌다(받은 신청은 묻고 수락한다).
+    static let blockedByRobot = "로봇 판을 끝내면 1:1 대결을 신청할 수 있어요"
+
+    /// 로봇 판을 두는 중에 받은 신청을 수락할 때 묻는 네 줄. **두던 판이 사라진다는 사실을 먼저 말한다.**
+    static let acceptEndsRobotTitle = "로봇 판을 끝내고 수락할까요?"
+    static let acceptEndsRobotMessage = "두던 로봇 판은 저장되지 않아요. 순위·루비와 상관없는 판이라 잃는 루비는 없어요."
+    static let acceptEndsRobotConfirm = "끝내고 수락"
+    static let acceptEndsRobotCancel = "그냥 두기"
 
     static func remaining(_ seconds: Double) -> String { "\(Int(max(0, seconds).rounded(.up)))초" }
     static func remainingPhrase(_ seconds: Double) -> String { remaining(seconds) + " 남음" }
@@ -711,6 +777,16 @@ struct GamesChessWatchSection: View {
 struct GamesChessAISection: View {
     let store: GamesStore
     var body: some View { GamesChessPlaceholder(label: "로봇과 두기") }
+}
+
+/// 자리표시: 규칙 시트. 서명이 셋인 까닭은 **시간 수치를 받아 쓰기** 위해서다 — 로비가 로비 응답 값을 넘긴다
+/// (상수를 베끼면 10-12 에 5분 → 10분으로 늘어난 것 같은 변화마다 거짓이 된다).
+struct GamesChessRulesSheet: View {
+    let initialMs: Int
+    let incrementMs: Int
+    let inviteTtlSeconds: Int
+
+    var body: some View { GamesChessPlaceholder(label: "체스 규칙") }
 }
 
 /// 자리표시 한 칸의 모양 — 비어 있지만 **자리는 보인다**(절이 통째로 사라지면 "로비가 반쪽"으로 읽힌다).

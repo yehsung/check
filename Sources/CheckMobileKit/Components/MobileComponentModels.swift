@@ -445,11 +445,15 @@ package enum ProgressBarRule {
 // MARK: - 탭 막대
 
 /// 탭 막대를 숨기는 화면(시안 B: **목록 화면에만** 탭 막대 — 자체 하단 막대·몰입 화면은 숨긴다).
-/// 대화 · 오목 대국 · 상점 · 미니게임 플레이가 `.hidesTabBar(for:)`(iOS 층 `SheetChrome.swift`)를 쓴다. 규칙이 한 곳이어야 화면마다 갈리지 않는다.
+/// 대화 · 오목 대국 · 체스 대국 · 상점 · 미니게임 플레이가 `.hidesTabBar(for:)`(iOS 층 `SheetChrome.swift`)를 쓴다.
+/// 규칙이 한 곳이어야 화면마다 갈리지 않는다 — 화면이 `toolbar(.hidden, for: .tabBar)` 를 직접 쓰면 안 된다(게임 폴더 계약).
 package enum TabBarPolicy {
     package enum Screen: String, CaseIterable, Sendable {
         case conversation
         case gomokuMatch
+        /// 체스 대국·결과 — 오목 대국과 같은 까닭(몰입 화면 + 자체 동작 줄). 체스는 **시계가 서버에서 흐르고
+        /// 자동 착수가 없어**(DECISIONS B4) 탭을 잘못 눌러 빠져나가는 것이 곧 시간패 쪽으로 가는 길이다.
+        case chessMatch
         case shop
         case miniGamePlay
         /// 잔디 상세 — 자체 하단 값 막대를 가진다(막대 둘이 쌓이면 엄지 사정권이 좁아진다).

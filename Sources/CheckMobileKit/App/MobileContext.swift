@@ -25,7 +25,11 @@ package struct MobileContext {
     package let widgetSnapshots: WidgetSnapshotWriter
     /// 코어 오목 스토어(host = `MobileGomokuHost`). 게임 탭이 화면을, 기반이 실시간 신호를 맡는다.
     package let gomoku: GomokuStore
-    /// 오목 스토어의 호스트(루비 미러 `rubyBalance` 를 나 탭·게임 탭이 함께 읽는다).
+    /// 코어 체스 스토어(host = **같은** `MobileGomokuHost` — `ChessStoreHost` 는 `GomokuStoreHost` 의 별명이다,
+    /// `ChessStore.swift:43`). 오목과 **같은 자리**에 둔 것이 계약이다: 체스 화면 넷(로비·대국·순위·관전)이
+    /// 전부 `store.context.chess` 로 닿고, 루비 미러도 두 게임이 한 칸을 함께 읽는다.
+    package let chess: ChessStore
+    /// 오목·체스 스토어의 호스트(루비 미러 `rubyBalance` 를 나 탭·게임 탭이 함께 읽는다).
     package let gomokuHost: MobileGomokuHost
     /// App Group 저장소(할 일 파일 `storage.todoFileURL(userID:)` · 공용 suite).
     package let storage: AingSharedStorage
@@ -47,6 +51,7 @@ package struct MobileContext {
         realtime: MobileRealtimeRunner,
         widgetSnapshots: WidgetSnapshotWriter,
         gomoku: GomokuStore,
+        chess: ChessStore,
         gomokuHost: MobileGomokuHost,
         storage: AingSharedStorage,
         appInfo: MobileAppInfo,
@@ -62,6 +67,7 @@ package struct MobileContext {
         self.realtime = realtime
         self.widgetSnapshots = widgetSnapshots
         self.gomoku = gomoku
+        self.chess = chess
         self.gomokuHost = gomokuHost
         self.storage = storage
         self.appInfo = appInfo

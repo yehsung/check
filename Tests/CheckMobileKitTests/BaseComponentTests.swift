@@ -186,10 +186,13 @@ import Testing
         #expect(gems.contains("Sources/CheckMobileKit/Components/RubyComponents.swift"), "대조: 보석 부품을 못 찾았다")
     }
 
-    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 다섯")
+    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 여섯")
     func tabBarPolicy() throws {
         // grassDetail 은 0.3.31 에 늘었다 — 잔디 상세는 **자체 하단 값 막대**를 가져 탭 막대와 둘이 쌓이면 엄지 사정권이 좁아진다.
-        #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue }) == ["conversation", "gomokuMatch", "shop", "miniGamePlay", "grassDetail"])
+        // chessMatch 는 폰 체스(1.0.5)에 늘었다 — 오목 대국과 같은 몰입 화면이고, 그 갈래가 없으면 체스 대국 화면이
+        // 탭 막대를 **숨길 수단이 없다**(직접 `toolbar(.hidden, for: .tabBar)` 를 쓰는 길은 게임 폴더 계약이 막는다).
+        #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue })
+                == ["conversation", "gomokuMatch", "chessMatch", "shop", "miniGamePlay", "grassDetail"])
         let chrome = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/SheetChrome.swift")
         #expect(chrome.contains("func hidesTabBar(for screen: TabBarPolicy.Screen)") && chrome.contains("toolbar(.hidden, for: .tabBar)"))
     }

@@ -369,7 +369,12 @@ import Testing
         #expect(relaunchedServer.count == 1, "지난 실행의 스로틀 도장이 새 실행의 첫 조회를 막았다 — 도장이 영속됐다")
 
         // 서버 경로가 defaults 에 남길 수 있는 키는 기록 셋(+ GitHub 스로틀)뿐이다. 새 키가 생기면 무언가 영속된 것이다.
-        let added = Set(defaults.dictionaryRepresentation().keys).subtracting(keysBefore)
+        // ★ 등록 도메인(NSRegistrationDomain)의 키는 뺀다 — 프로세스 전체가 나눠 쓰는 휘발 도메인이라, 같은 프로세스에서 **동시에**
+        //   도는 그림 테스트가 AppKit 글자 체계를 처음 깨우면 AppKit 이 `NSVisualBidiSelectionEnabled` 를 거기 등록하고, 그 키가
+        //   이 스위트의 `dictionaryRepresentation()` 에도 비친다(2026-10-14 실측: V0351 그림 테스트와 함께 돌리면 3/3 빨강).
+        //   등록 도메인은 디스크에 쓰이지 않으므로 '영속'을 묻는 이 단언의 대상이 아니다.
+        let registered = Set(UserDefaults.standard.volatileDomain(forName: UserDefaults.registrationDomain).keys)
+        let added = Set(defaults.dictionaryRepresentation().keys).subtracting(keysBefore).subtracting(registered)
         let allowed: Set<String> = [
             UpdateCheckStore.latestVersionKey, UpdateCheckStore.latestNotesKey,
             "check.update.latestBuild", UpdateCheckStore.lastCheckedKey,

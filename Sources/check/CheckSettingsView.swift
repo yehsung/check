@@ -1275,7 +1275,7 @@ struct CheckSettingsView: View {
             } else if store.showsAccountDeletionInSettings {
                 // 설정 → 계정 삭제(v0.3.51 — 심사 지침 5.1.1(v)). [차단한 사람]과 같은 자리 바꿈이다: 지워지는 것의 목록 ·
                 // 비밀번호 · 2단 확인을 본문에 펼치면 본문 높이 계약(창 여유 5pt)이 그만큼 흔들린다. 들어가는 문은 '내 정보'
-                // 머리 줄의 [계정 삭제] 하나이고 그 문은 높이를 한 점도 먹지 않는다(`section(_:trailing:content:)`).
+                // 머리 줄의 [계정 삭제] 하나이고 그 문은 높이를 한 점도 먹지 않는다(`section(_:content:trailing:)`).
                 CheckAccountDeletionSettingsPage(store: store)
             } else {
                 // ★ 본문은 **들어가면 그대로, 넘치면 스크롤**한다(v0.3.47).
@@ -1345,9 +1345,9 @@ struct CheckSettingsView: View {
     /// 설정 본문 두 묶음(일반 · 내 정보). `body` 가 [차단한 사람] 쪽과 자리를 바꾼다(v0.3.34).
     private var settingsSections: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // 머리 줄 오른쪽: 개인정보 처리방침 · 이용약관(v0.3.51 — 심사 지침 5.1.1(i) "앱 안에서 쉽게 찾을 수 있게").
-            // 창을 열면 **맨 위**에 보이는 자리이고, 절 제목과 같은 글자 크기의 한 줄이라 본문 높이가 한 점도 늘지 않는다.
-            section("일반", trailing: { SettingsLegalLinks() }) {
+            // 머리 줄 오른쪽(절 끝의 `trailing:`): 개인정보 처리방침 · 이용약관(v0.3.51 — 심사 지침 5.1.1(i) "앱 안에서 쉽게
+            // 찾을 수 있게"). 창을 열면 **맨 위**에 보이는 자리이고, 절 제목과 같은 글자 크기의 한 줄이라 본문 높이가 한 점도 늘지 않는다.
+            section("일반") {
                 CheckSettingsToggleRow(
                     title: "로그인 시 자동 실행",
                     detail: "맥에 로그인하면 메뉴바에 자동으로 올라와요.",
@@ -1382,16 +1382,14 @@ struct CheckSettingsView: View {
                 // (사용자 결정: "이후엔 설정에서 계속 설치 링크 QR코드로 찍을 수 있게"). 주소는 공지의 linkURL 이 아니라
                 // `CheckAppLinks.iosAppStore` 다 — 공지는 사라질 수 있고 이 행은 남아야 한다.
                 IOSAppInstallSettingsRow()
+            } trailing: {
+                SettingsLegalLinks()
             }
-            // 머리 줄 오른쪽: [계정 삭제](v0.3.51 — 심사 지침 5.1.1(v)). 로그인했을 때만 선다 — 지울 계정이 없으면 문도 없다.
-            section("내 정보", trailing: {
-                if store.session != nil {
-                    SettingsHeaderLinkButton(
-                        title: AccountDeletionText.entry, tint: CheckTheme.danger,
-                        action: { store.openAccountDeletionSettings() }
-                    )
-                }
-            }) {
+            // 머리 줄 오른쪽(절 끝의 `trailing:`): [계정 삭제](v0.3.51 — 심사 지침 5.1.1(v)). 로그인했을 때만 선다.
+            // ★ 머리 줄 링크는 **절 끝의 꼬리 클로저**로 단다(`section("…") { 본문 } trailing: { 링크 }`). 여는 줄은 다른 절과 같은
+            //   `section("내 정보") {` 그대로라 이 줄을 붙잡는 다른 계약(V0351 상태메시지의 '별명 바로 아래')과 부딪히지 않는다 —
+            //   이 링크를 떼어 내는 것으로 그 계약을 맞추지 마라(V0351 맥 앱스토어 판이 링크 자리를 되묻는다).
+            section("내 정보") {
                 DisplayNameSettingsRow(store: store)
                 PanelDivider()
                 // 사진을 **지우는** 자리(v0.3.36). 올리는 자리는 팝오버 팀 목록의 내 행이지만 그 행은 팀에 속한
@@ -1441,6 +1439,14 @@ struct CheckSettingsView: View {
                         onChosen: { _ in store.pushSelectedCharacter(announcesFailure: true) }
                     )
                 }
+            } trailing: {
+                // 지울 계정이 없으면(로그인 전) 문도 없다.
+                if store.session != nil {
+                    SettingsHeaderLinkButton(
+                        title: AccountDeletionText.entry, tint: CheckTheme.danger,
+                        action: { store.openAccountDeletionSettings() }
+                    )
+                }
             }
             // AI 리밋 표시 설정(v0.3.47 — 사용자 요청: "원하는것만 표시하고, 아예 표시 안할 수도 있게").
             //
@@ -1471,14 +1477,15 @@ struct CheckSettingsView: View {
 
     @ViewBuilder
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        section(title, trailing: { EmptyView() }, content: content)
+        section(title, content: content, trailing: { EmptyView() })
     }
 
     /// 절 하나. 머리 줄 오른쪽(`trailing`)에 **절 제목과 같은 글자 크기**의 링크를 둘 수 있다(v0.3.51) — 같은 크기라 머리 줄
     /// 높이가 그대로이고, 그래서 본문 높이 계약이 흔들리지 않는다(`V0351MacAppStoreEditionTests` 가 높이를 재 되묻는다).
+    /// 부르는 모양은 `section("제목") { 본문 } trailing: { 링크 }` 다(본문이 먼저 · 링크는 꼬리) — 여는 줄이 링크 없는 절과 같다.
     @ViewBuilder
     private func section(
-        _ title: String, @ViewBuilder trailing: () -> some View, @ViewBuilder content: () -> some View
+        _ title: String, @ViewBuilder content: () -> some View, @ViewBuilder trailing: () -> some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {

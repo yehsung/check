@@ -244,15 +244,85 @@ struct V0351MacAppStoreEditionTests {
         let usage = TokenUsageMonthly(month: TokenUsageMonthKey.current(), claudeInput: 100, codexInput: 5_000)
         await store.uploadTokenUsageIfNeeded(usage: usage, now: Date())
         #expect(URLProtocolStub.requests(forHost: host).isEmpty, "동의 없이 토큰 숫자가 나갔다")
-        await store.refreshTokenUsageInBackgroundIfDue(now: Date())
-        await store.sendTokenScanHeartbeatIfNeeded(now: Date())
-        #expect(URLProtocolStub.requests(forHost: host).isEmpty)
+        // 배경 스캔 · 스캔 하트비트는 각자 다른 가드(근무 중 · 스캔 사실)가 먼저 막아 여기서는 못 잰다 — 아래 두 테스트가
+        // 그 가드를 다 통과시킨 채 **동의 하나만** 바꿔 잰다.
 
         // 대조군: 동의하면 같은 호출이 실제로 나간다(게이트가 전원을 죽이지 않는다).
         store.setAIToolDataConsent(true)
         #expect(store.aiToolDataAllowed)
         await store.uploadTokenUsageIfNeeded(usage: usage, now: Date())
         #expect(URLProtocolStub.requests(forHost: host).contains { $0.url?.path == "/rest/v1/token_usage_device_monthly" })
+    }
+
+    /// 배경 스캔(팝오버 없이 근무 중에 도는 스캔 → 업로드 → 하트비트)의 동의 게이트.
+    /// 스캐너는 **일부러 Developer ID 판**(키 없이도 읽는다)으로 만든다 — 스캐너 입구의 게이트(위 `…파일을_하나도_안_읽는다`)를
+    /// 빼고 **스토어 쪽 게이트 하나만** 잰다. 게이트는 짝으로 있다: 둘 중 하나가 빠져도 다른 하나가 빨개져야 한다.
+    @Test func 앱스토어_판은_동의가_없으면_배경_스캔을_돌리지_않는다() async throws {
+        let host = "v0351-background-gate"
+        let home = try v0351TempHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try v0351WriteClaudeLog(into: home, input: 4_321)
+        let tokens = TokenUsageStore(defaults: CheckTestScratch.defaults("tokens"), homeDirectory: home,
+                                     cacheURL: home.appendingPathComponent("cache/bg.json"),
+                                     notificationCenter: NotificationCenter(), codexHomeResolver: { nil },
+                                     edition: .developerID)
+        let store = v0351Store(host: host, tokenUsage: tokens)
+        store.session = SupabaseSession(accessToken: "access", refreshToken: nil, userID: v0351UserID)
+        store.macEdition = .appStore
+        // 다른 가드는 전부 연다: 근무 중 · 수집 허용 · 기기 신원 · 이번 달 값 없음(= 1분 주기 롤오버, 바로 돈다).
+        store.startedAt = Date().addingTimeInterval(-600)
+        #expect(store.tokenUsageCollect)
+        try #require(store.hasDeviceIdentity)
+        #expect(!store.aiToolDataAllowed)
+
+        let now = Date()
+        await store.refreshTokenUsageInBackgroundIfDue(now: now)
+        #expect(tokens.scanCount == 0, "동의 없이 배경 스캔이 AI 도구 기록을 읽었다")
+        #expect(store.lastBackgroundTokenScanAt == .distantPast, "동의 없이 배경 스캔 주기 도장이 찍혔다")
+        #expect(URLProtocolStub.requests(forHost: host).isEmpty, "동의 없이 배경 스캔 경로가 서버를 쳤다")
+
+        // 대조군: 같은 스토어 · 같은 시각에 동의 **하나만** 바꾸면 읽고 올린다(위 침묵이 다른 가드 덕이 아니다).
+        store.setAIToolDataConsent(true)
+        await store.refreshTokenUsageInBackgroundIfDue(now: now)
+        #expect(tokens.scanCount == 1)
+        #expect(tokens.currentMonthUsage?.claudeInput == 4_321)
+        #expect(URLProtocolStub.requests(forHost: host).contains {
+            $0.httpMethod == "POST" && $0.url?.path == "/rest/v1/token_usage_device_monthly"
+        }, "동의한 뒤에도 배경 스캔이 올리지 않았다 — 이 테스트의 앞 절반이 헛돈다")
+    }
+
+    /// 스캔 하트비트("스캐너가 돌았다"는 사실)의 동의 게이트. 스캔 사실(`lastScanAt`)을 미리 만들어 두고 동의만 바꾼다.
+    @Test func 앱스토어_판은_동의가_없으면_스캔_하트비트를_보내지_않는다() async throws {
+        let host = "v0351-heartbeat-gate"
+        let home = try v0351TempHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try v0351WriteClaudeLog(into: home, input: 10)
+        let tokens = TokenUsageStore(defaults: CheckTestScratch.defaults("tokens"), homeDirectory: home,
+                                     cacheURL: home.appendingPathComponent("cache/hb.json"),
+                                     notificationCenter: NotificationCenter(), codexHomeResolver: { nil },
+                                     edition: .developerID)
+        await tokens.refreshNow()
+        try #require(tokens.lastScanAt != nil, "준비 실패: 스캔 사실이 없으면 하트비트는 동의와 무관하게 침묵한다")
+        let store = v0351Store(host: host, tokenUsage: tokens)
+        store.session = SupabaseSession(accessToken: "access", refreshToken: nil, userID: v0351UserID)
+        store.macEdition = .appStore
+        #expect(store.tokenUsageCollect)
+        try #require(store.hasDeviceIdentity)
+        #expect(!store.aiToolDataAllowed)
+
+        await store.sendTokenScanHeartbeatIfNeeded(now: Date())
+        #expect(URLProtocolStub.requests(forHost: host).isEmpty, "동의 없이 스캔 하트비트가 나갔다")
+        #expect(store.lastTokenScanHeartbeatAt == nil)
+
+        // 대조군: 동의 하나만 바꾸면 같은 스캔 사실이 하트비트로 나간다(본문은 하트비트 전용 두 칸).
+        store.setAIToolDataConsent(true)
+        await store.sendTokenScanHeartbeatIfNeeded(now: Date())
+        let requests = URLProtocolStub.requests(forHost: host)
+        let bodies = URLProtocolStub.bodies(forHost: host)
+        #expect(requests.count == 1, "\(requests.map { $0.url?.path ?? "" })")
+        #expect(requests.first?.url?.path == "/rest/v1/token_usage_device_monthly")
+        #expect(bodies.first?.contains("\"last_scan_at\"") == true, "하트비트 본문이 아니다: \(bodies)")
+        #expect(store.lastTokenScanHeartbeatAt == tokens.lastScanAt)
     }
 
     @Test func 동의를_거두면_리밋_마스터를_재우고_다시_주면_그것만_되살린다() async {
@@ -570,6 +640,107 @@ struct V0351MacAppStoreEditionTests {
         #expect(CheckAppLinks.termsOfService.absoluteString == "https://yehsung.github.io/check/terms")
     }
 
+    // MARK: 들어가는 문 — 심사 지침 5.1.1 · 첫 실행 동의에 닿는 자리 넷
+    //
+    // 위 테스트들은 삭제 흐름 · 링크 값 · `MacAppStoreOnboarding.complete` 를 **직접** 부른다. 화면이 그것들을 부르는지는 따로
+    // 재야 한다 — 문 넷(설정 머리 줄 링크 둘 · 가입 한 줄 · 첫 실행 배선)은 지워도 높이가 그대로라(머리 줄 링크) 또는 화면을 못 띄워서
+    // (가입 폼 · 앱 시작) 다른 테스트가 전부 초록인 채로 사라진다. 그래서 하나는 그림으로(기준선이 다른 두 장), 나머지는 소스로 잰다.
+
+    @Test func 로그인하면_내_정보_머리_줄에_빨간_계정_삭제가_그려진다() throws {
+        // 기준선이 **다른** 두 장: 로그인 전(문 없음)과 뒤(문 있음). 차이는 그 문 하나여야 하고, 그 문은 위험색(빨강) 글자다.
+        let signedOut = try v0351SettingsRedPixels { _ in }
+        let signedIn = try v0351SettingsRedPixels { store in
+            store.session = SupabaseSession(accessToken: "a", refreshToken: nil, userID: v0351UserID)
+        }
+        // 실측(2026-10-14 · 폭 380 · 2배): 로그인 전 14,252 → 뒤 14,834(+582 = 그 두 낱말). 문을 지우거나(`if false`) 누구에게나
+        // 세우거나(`if true`) helper 가 꼬리를 안 그리면 두 값이 같아진다. 문턱 200 은 '낱말 하나 크기의 빨강'이다.
+        #expect(signedIn > signedOut + 200,
+                "로그인했는데 '내 정보' 머리 줄에 [계정 삭제]가 안 그려졌다(빨강 \(signedOut) → \(signedIn)px)")
+    }
+
+    @Test func 설정_머리_줄의_약관_링크와_계정_삭제_문은_두_판_모두에_있다() throws {
+        let raw = try v0351Source("CheckSettingsView.swift")
+        let source = v0351Collapsed(raw)
+        // ① 절 helper 가 꼬리(trailing)를 머리 줄에 **실제로 그린다**(인자만 받고 버리면 아래 배선이 전부 헛돈다).
+        let helper = try #require(v0351Closure(
+            after: "private func section( _ title: String, @ViewBuilder content: () -> some View, @ViewBuilder trailing: () -> some View ) -> some View",
+            in: source), "머리 줄 꼬리를 받는 절 helper 가 없다")
+        #expect(helper.body.contains("Text(title)") && helper.body.contains("trailing()") && helper.body.contains("content()"))
+        let titleAt = try #require(helper.body.range(of: "Text(title)"))
+        let trailingAt = try #require(helper.body.range(of: "trailing()"))
+        let contentAt = try #require(helper.body.range(of: "content()"))
+        #expect(titleAt.upperBound <= trailingAt.lowerBound && trailingAt.upperBound <= contentAt.lowerBound,
+                "꼬리가 머리 줄(제목 옆)이 아닌 자리에 그려진다")
+
+        // ② '일반' 머리 줄 = 개인정보 처리방침 · 이용약관(5.1.1(i)). 여는 줄은 링크 없는 절과 같고, 링크는 절 끝 꼬리 클로저다.
+        #expect(source.components(separatedBy: "section(\"일반\") {").count == 2, "'일반' 절이 정확히 하나가 아니다")
+        let general = try #require(v0351Closure(after: "section(\"일반\")", in: source))
+        let generalTrailing = try #require(v0351TrailingClosure(labeled: "trailing", after: general, in: source),
+                                           "'일반' 절에 머리 줄 꼬리가 없다 — 개인정보 처리방침 · 이용약관 링크가 사라졌다")
+        #expect(generalTrailing.body.contains("SettingsLegalLinks()"))
+        let legal = try #require(v0351Closure(after: "struct SettingsLegalLinks: View", in: source))
+        #expect(legal.body.contains("openURL(CheckAppLinks.privacyPolicy)"))
+        #expect(legal.body.contains("openURL(CheckAppLinks.termsOfService)"))
+
+        // ③ '내 정보' 머리 줄 = [계정 삭제](5.1.1(v)) — 로그인했을 때만, 누르면 삭제 화면을 연다.
+        //    본문의 첫 행이 별명이라는 것까지 같이 본다(상태메시지 계약이 같은 여는 줄을 붙잡는다 — 그 줄을 바꾸지 않았다는 증거).
+        #expect(source.components(separatedBy: "section(\"내 정보\") {").count == 2, "'내 정보' 절이 정확히 하나가 아니다")
+        let mine = try #require(v0351Closure(after: "section(\"내 정보\")", in: source))
+        #expect(mine.body.hasPrefix("{ DisplayNameSettingsRow(store: store)"), "'내 정보' 본문 첫 행이 별명이 아니다")
+        let mineTrailing = try #require(v0351TrailingClosure(labeled: "trailing", after: mine, in: source),
+                                        "'내 정보' 절에 머리 줄 꼬리가 없다 — [계정 삭제] 문이 사라졌다")
+        let gate = try #require(v0351Closure(after: "if store.session != nil", in: mineTrailing.body),
+                                "[계정 삭제] 문이 로그인 여부로 갈리지 않는다")
+        #expect(gate.body.contains("SettingsHeaderLinkButton( title: AccountDeletionText.entry"))
+        #expect(gate.body.contains("action: { store.openAccountDeletionSettings() }"))
+
+        // ④ 두 판 모두에서 컴파일된다(앱스토어 심사가 보는 판이 바로 CHECK_MAS 판이다).
+        try v0351ExpectIncluded("CheckSettingsView.swift", ["SettingsLegalLinks()", "title: AccountDeletionText.entry",
+                                                            "CheckAccountDeletionSettingsPage(store: store)"])
+    }
+
+    @Test func 가입_폼에만_약관_동의_한_줄이_선다() throws {
+        let source = v0351Collapsed(try v0351Source("CheckMenuView.swift"))
+        let panel = try #require(v0351Closure(after: "private struct LoginPanel: View", in: source)).body
+        // 가입 모드 분기(`if mode == .signUp { … }`)들 중 **하나**가 동의 한 줄을 세운다(분기가 여럿이라 전부 훑는다).
+        var signUpBlocks: [String] = []
+        var searchFrom = panel.startIndex
+        while let hit = panel.range(of: "if mode == .signUp", range: searchFrom..<panel.endIndex) {
+            if let block = v0351BraceBlock(from: hit.upperBound, in: panel) { signUpBlocks.append(block.body) }
+            searchFrom = hit.upperBound
+        }
+        #expect(!signUpBlocks.isEmpty, "로그인 패널에 가입 모드 분기가 없다 — 이 계약이 헛돈다")
+        #expect(signUpBlocks.contains { $0.contains("SignUpTermsNotice()") },
+                "가입 폼(`if mode == .signUp`)에 약관 동의 한 줄(SignUpTermsNotice)이 없다 — 심사 지침 5.1.1(i)")
+        #expect(source.components(separatedBy: "SignUpTermsNotice()").count == 2, "약관 동의 한 줄이 가입 폼 밖에도 섰다")
+        let notice = try #require(v0351Closure(after: "struct SignUpTermsNotice: View", in: source))
+        #expect(notice.body.contains("Text(SignUpTermsText.attributed)"), "동의 한 줄이 링크를 심은 문장을 그리지 않는다")
+        try v0351ExpectIncluded("CheckMenuView.swift", ["SignUpTermsNotice()"])
+    }
+
+    @Test func 첫_실행_안내는_앱이_뜨는_자리에서_두_판_모두_불린다() throws {
+        let raw = try v0351Source("CheckApp.swift")
+        let source = v0351Collapsed(raw)
+        let launch = try #require(v0351Closure(after: "func applicationDidFinishLaunching(_ notification: Notification)", in: source))
+        let make = try #require(launch.body.range(of: "masOnboarding = MacAppStoreOnboardingController(store: store)"),
+                                "앱 시작이 첫 실행 안내 컨트롤러를 만들지 않는다 — 앱스토어 판 사용자는 동의를 영영 못 고른다")
+        let start = try #require(launch.body.range(of: "masOnboarding?.start()", range: make.upperBound..<launch.body.endIndex),
+                                 "만든 컨트롤러를 시작하지 않는다")
+        #expect(make.upperBound <= start.lowerBound)
+        // 판 울타리 밖이다: 판정은 `start()` 안의 판 값이 한다(Developer ID 판에서는 창을 만들지 않는다).
+        try v0351ExpectIncluded("CheckApp.swift", ["masOnboarding = MacAppStoreOnboardingController(store: store)",
+                                                   "masOnboarding?.start()"])
+        // 그리고 `start()` 는 정말로 첫 실행 안내를 띄운다(판 · 완료 키 판정 뒤).
+        let controller = v0351Collapsed(try v0351Source("CheckMacAppStoreOnboarding.swift"))
+        let startBody = try #require(v0351Closure(after: "func start()", in: controller))
+        let decide = try #require(startBody.body.range(of: "MacAppStoreOnboarding.shouldShowFirstRun(edition: store.macEdition, defaults: defaults)"))
+        let show = try #require(startBody.body.range(of: "showFirstRun()"), "start() 가 첫 실행 안내를 띄우지 않는다")
+        #expect(decide.upperBound <= show.lowerBound)
+        // 만드는 자리는 하나다(두 번 만들면 안내가 두 번 뜬다).
+        let sites = try v0351AllSources().map { $0.1.components(separatedBy: "MacAppStoreOnboardingController(store:").count - 1 }
+        #expect(sites.reduce(0, +) == 1)
+    }
+
     // MARK: ③ 소스 계약 — 앱스토어 판에서 사라져야 하는 경로는 `#if !CHECK_MAS` 안에 있다
 
     @Test func 자가_업데이트_경로는_앱스토어_판에서_컴파일되지_않는다() throws {
@@ -712,7 +883,8 @@ private final class V0351Counter: @unchecked Sendable {
 }
 
 @MainActor
-private func v0351Store(host: String = "v0351-default", function: String = #function) -> WorkTimerStore {
+private func v0351Store(host: String = "v0351-default", tokenUsage: TokenUsageStore = .shared,
+                        function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key",
         session: URLSession(configuration: .stubbed)
@@ -721,7 +893,8 @@ private func v0351Store(host: String = "v0351-default", function: String = #func
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
         defaults: CheckTestScratch.defaults(host, function: function),
-        workspaceNotifications: nil
+        workspaceNotifications: nil,
+        tokenUsage: tokenUsage
     )
     store.currentTeamID = URLProtocolStub.stubTeamID
     // 빌드를 모르게 둔다 — 알면 업로드가 Codex 진단(홈 디렉터리 전량 순회)을 하루 1회 계산하는데, 이 스위트가 재는 것은
@@ -873,6 +1046,88 @@ private func v0351SettingsHeight(function: String = #function, line: Int = #line
         width: CheckSettingsView.preferredWidth
     ) else { throw V0351Error.renderFailed }
     return height
+}
+
+/// 설정 창 본문을 그려 **위험색(CheckTheme.danger ≈ 1.0/0.45/0.46) 계열 픽셀**을 센다. 시드는 높이 헬퍼와 같되 단축키 충돌
+/// 안내는 세우지 않는다(그 줄도 빨강이라 기준선을 흐린다). 글자 가장자리의 섞인 색까지 잡도록 '빨강이 초록·파랑보다 확연히 큰' 픽셀로 센다.
+@MainActor
+private func v0351SettingsRedPixels(function: String = #function, line: Int = #line,
+                                   _ configure: (WorkTimerStore) -> Void) throws -> Int {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
+        defaults: CheckTestScratch.defaults("red-L\(line)", function: function),
+        workspaceNotifications: nil
+    )
+    store.myCenterLoaded = true
+    store.myCenter = CenterLabel.seoul
+    configure(store)
+    let characters = CheckTestScratch.defaults("red-chars-L\(line)", function: function)
+    let view = CheckSettingsView(store: store, launchAtLoginSeed: false, characterDefaults: characters)
+        .frame(width: CheckSettingsView.preferredWidth).fixedSize()
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+    guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff), let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3
+    else { throw V0351Error.renderFailed }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    var count = 0
+    for y in 0..<bitmap.pixelsHigh {
+        for x in 0..<bitmap.pixelsWide {
+            let o = y * bpr + x * spp
+            let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
+            if r >= 120 && r - g >= 50 && r - b >= 50 { count += 1 }
+        }
+    }
+    return count
+}
+
+/// 공백(줄바꿈·들여쓰기)을 한 칸으로 접는다 — 소스 조각을 줄 모양과 무관하게 찾는다.
+private func v0351Collapsed(_ source: String) -> String {
+    source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+}
+
+/// `anchor` 뒤 첫 `{` 부터 짝이 맞는 `}` 까지(양 끝 괄호 포함)와, 그 `}` 바로 뒤 위치. 문자열 리터럴 안의 괄호는 건너뛴다.
+private func v0351Closure(after anchor: String, in source: String) -> (body: String, end: String.Index)? {
+    guard let hit = source.range(of: anchor) else { return nil }
+    return v0351BraceBlock(from: hit.upperBound, in: source)
+}
+
+/// 앞 클로저(`previous`) 바로 뒤에 붙은 **이름표 달린 꼬리 클로저**(`label: { … }`). 다른 것이 끼어 있으면 nil.
+private func v0351TrailingClosure(labeled label: String, after previous: (body: String, end: String.Index),
+                                  in source: String) -> (body: String, end: String.Index)? {
+    let rest = source[previous.end...].drop { $0.isWhitespace }
+    guard rest.hasPrefix("\(label): {") else { return nil }
+    return v0351BraceBlock(from: rest.startIndex, in: source)
+}
+
+private func v0351BraceBlock(from start: String.Index, in source: String) -> (body: String, end: String.Index)? {
+    guard let open = source[start...].firstIndex(of: "{") else { return nil }
+    var depth = 0
+    var inString = false
+    var index = open
+    while index < source.endIndex {
+        let c = source[index]
+        if inString {
+            if c == "\\" {
+                index = source.index(after: index)
+                if index == source.endIndex { break }
+            } else if c == "\"" {
+                inString = false
+            }
+        } else if c == "\"" {
+            inString = true
+        } else if c == "{" {
+            depth += 1
+        } else if c == "}" {
+            depth -= 1
+            if depth == 0 {
+                let end = source.index(after: index)
+                return (String(source[open..<end]), end)
+            }
+        }
+        index = source.index(after: index)
+    }
+    return nil
 }
 
 // MARK: 소스 읽기 · `#if` 해석

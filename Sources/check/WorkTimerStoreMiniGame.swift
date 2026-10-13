@@ -204,6 +204,24 @@ extension WorkTimerStore {
         CheckMiniGameWindowController.shared.close()
     }
 
+    /// 미니게임 창 머리글의 **1:1 오목** 입구. 오목 창을 띄우고 **이 창은 내린다**(0.3.50 · 2026-10-13 사용자 요청 —
+    /// 로비 창이 뜬 뒤에도 미니게임 창이 남아 창 둘이 떠 있는 것이 지저분했다).
+    ///
+    /// 순서는 **여는 것이 먼저**다 — 대결 창이 키를 가져간 뒤에 이 창을 내린다(`openMiniGameWindow` 가 창 먼저 ·
+    /// 팝오버 나중으로 정한 것과 같은 순서다).
+    /// 이 문은 판이 도는 중에는 화면에 없다(같은 자리를 [일시정지] 가 쓴다) — 정지해 둔 판이 있었다면 여기서 끝나는데,
+    /// 그것은 예전에도 같았다(대결 창이 키를 가져가는 순간 `windowDidResignKey` 가 판을 끝냈다).
+    func openGomokuFromMiniGame() {
+        gomoku.openWindow(focusMatchID: nil)
+        closeMiniGamePanel()
+    }
+
+    /// 미니게임 창 머리글의 **1:1 체스** 입구. 위와 같은 규약이다.
+    func openChessFromMiniGame() {
+        chess.openWindow(focusMatchID: nil)
+        closeMiniGamePanel()
+    }
+
     /// 진행 중인 판을 **사용자 의사로** 접는다(정지 카드의 [그만두기] — v0.2.48).
     ///
     /// 하는 일은 `miniGameInterruptToken += 1` 하나뿐이다. 그런데도 새 메서드를 낸 이유: 지금까지 이 토큰을

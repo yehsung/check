@@ -563,8 +563,8 @@ struct CheckMiniGameWindowView: View {
             isFrozen: pauseState.isFrozen,
             onSelect: { store.selectMiniGame($0) },
             onPause: { togglePause() },
-            onGomoku: { store.gomoku.openWindow(focusMatchID: nil) },
-            onChess: { store.chess.openWindow(focusMatchID: nil) }
+            onGomoku: { store.openGomokuFromMiniGame() },
+            onChess: { store.openChessFromMiniGame() }
         )
     }
 
@@ -1102,6 +1102,7 @@ struct MiniGameGameHeader: View {
                 // 1:1 대결 창 입구 **둘**(오목 v0.3.27 · 체스 v0.3.44). 둘 다 이 창과 **별도의 넓은 창**이다
                 // (사용자 결정) — 여기는 문만 둔다. [일시정지] 와 **같은 자리를 번갈아 쓴다**: 판이 도는 중에는
                 // 어차피 누를 수 없는 문이다(누르는 순간 이 창이 키를 잃어 판이 끝난다).
+                // **누르면 이 창은 내려간다**(0.3.50 — `WorkTimerStore.openGomokuFromMiniGame`): 대결 창과 둘이 떠 있지 않게.
                 // 팝오버를 닫지 않는다 — 이 창에서 오는 길이면 팝오버는 이미 닫혀 있다(토글이라 부르면 오히려 열린다).
                 //
                 // ★ **입구 둘 다 이름을 단다 — 실측으로 들어간다.** 입구가 둘이 되며 344pt 예산을 다시 쟀고,

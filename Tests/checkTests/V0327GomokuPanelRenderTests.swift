@@ -1379,7 +1379,15 @@ func gomokuPanelKeepsClocksInLeavesAndUsesNoYellowBoxControls() throws {
     // v0.3.44: 입구가 **둘**이 됐지만 둘 다 이름을 그대로 단다(실측 330.5pt / 344pt — V0338 의 헤더 실측).
     #expect(miniGame.contains("MiniGameGomokuEntryButton { onGomoku() }"),
             "미니게임 머리글에 오목 입구 버튼이 없다")
-    #expect(miniGame.contains("onGomoku: { store.gomoku.openWindow(focusMatchID: nil) }"),
+    // v0.3.50: 입구가 스토어의 한 문(`openGomokuFromMiniGame`)을 지난다 — 오목 창을 띄우고 **미니게임 창은 내린다**.
+    // 그래서 배선이 **세 조각**이 됐다(버튼 → 패널 클로저 → 스토어 문). 가운데까지만 보면 문은 있는데 그 문이
+    // 오목 창을 안 여는 상태가 조용히 통과한다 — 문 안쪽까지 본다(동작은 V0350MiniGameDuelEntryTests 가 잰다).
+    #expect(miniGame.contains("onGomoku: { store.openGomokuFromMiniGame() }"),
+            "미니게임 헤더 입구가 오목 문에 안 이어진다")
+    let miniGameStore = gpStripped(try gpSource("WorkTimerStoreMiniGame.swift"))
+    let gomokuDoor = try #require(gpRegion(miniGameStore, from: "func openGomokuFromMiniGame() {", to: "}"),
+                                  "스토어에 오목 입구 문이 없다")
+    #expect(gomokuDoor.contains("gomoku.openWindow(focusMatchID: nil)"),
             "미니게임 헤더 입구가 오목 창을 안 연다")
 }
 

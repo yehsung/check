@@ -541,6 +541,13 @@ package final class GomokuStore {
     package nonisolated static let statePollSecondsUnsubscribed: TimeInterval = 1.5
     /// 내 대기 신청이 있을 때 받은 쪽의 응답을 보는 주기(초).
     package nonisolated static let outgoingInboxPollSeconds: TimeInterval = 5
+    /// 결과 화면에 서 있는 끝난 판의 **끝인사** 안전망 조회 주기(초) — 실시간 구독 중. 주 경로는 초인종(`syncOnce`)이다.
+    package nonisolated static let finishedChatPollSecondsWhileSubscribed: TimeInterval = 10
+    /// 같은 조회 — 미구독. 초인종이 없으니 더 촘촘하다.
+    package nonisolated static let finishedChatPollSecondsUnsubscribed: TimeInterval = 3
+    /// 그 안전망을 돌리는 길이(초) — 판이 끝난 서버 시각부터(모르면 결과 화면이 선 순간부터) 센다.
+    /// 서버 `gomoku_chat_grace_seconds()`(120) 에 마지막 줄이 건너올 여유를 얹었다. 이 뒤로는 서버가 어차피 새 말을 안 받는다(`not_active`).
+    package nonisolated static let finishedChatWindowSeconds: TimeInterval = 130
     /// 로비 목록 재조회 주기(초). 창을 열 때 한 번 + 로비를 보고 있는 동안 이 주기.
     package nonisolated static let lobbyPollSeconds: TimeInterval = 30
     /// 팝오버를 열 때 받은 신청을 보는 스로틀(초). 팀 메타 재조회와 같은 눈금이다.
@@ -844,6 +851,8 @@ package final class GomokuStore {
     /// (`serverSeq >= 0`) 늦은 응답이 방금 누른 값을 되감고, 줄은 한 줄도 안 담긴 채 번호만 서버 값으로 되올라
     /// 다음 회차가 그 뒤만 물어 가려졌던 줄이 그 판 내내 안 돌아온다.
     @ObservationIgnored package private(set) var chatGeneration = 0
+    /// 끝인사 안전망(`pollTick`)이 보는 창: 결과 화면이 선 판과 그 조회를 그만둘 시각. 판이 내려가면 id 가 안 맞아 저절로 꺼진다.
+    @ObservationIgnored package private(set) var finishedChatWatch: (id: String, until: Date)?
     @ObservationIgnored private var lastOpponent: GomokuUser?
     @ObservationIgnored private var lastStake: Int?
 
@@ -918,8 +927,14 @@ package final class GomokuStore {
     /// 관전만 내린다. 요청은 쏘지 않는다(`stopWatching` 은 조용한 쪽이다).
     /// ※ 내 판의 `leaveMatch`(결과 화면인 채로 닫기)는 예전부터 `windowDidHide` 에 있다 — 최소화에서도 도는
     ///   같은 비대칭이지만 이번 범위가 아니라 옮기지 않았다.
+    ///
+    /// **끝난 내 판도 여기서 내린다**(0.3.50 · 2026-10-13 신고). 결과 화면인 채로 닫으면 서버에는 나갔다고 말하면서
+    /// (`windowDidHide` 의 `leaveMatch`) 화면은 끝난 판을 그대로 들고 있어, 다음에 창을 열면 로비가 아니라 그 결과가 다시 서고
+    /// [로비로] 를 눌러야만 빠져나왔다. **진행 중인 판은 건드리지 않는다** — 닫기는 기권이 아니다. 최소화는 이 문을 안 지나므로
+    /// 결과 화면이 그대로 남는다. 로비·받은함은 다시 읽지 않는다(다음에 창을 여는 `openWindow` 가 읽는다).
     package func windowDidClose() {
         if spectating != nil { stopWatching() }
+        if match?.isFinished == true { foldFinishedMatch() }
     }
 
     /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). **폴링만** 멈추고 되살린다.
@@ -1338,6 +1353,12 @@ package final class GomokuStore {
             if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
         } else {
             shownResultIDs.insert(id)
+            // 끝인사 안전망의 끝을 **판마다 한 번만** 적는다(같은 끝난 판을 다시 읽을 때마다 늘리면 영영 안 닫힌다).
+            // 서버가 끝난 시각을 말해 주면 거기서 세고(오래전에 끝난 판을 뒤늦게 세워도 헛돌지 않는다), 없으면 지금부터 센다.
+            if finishedChatWatch?.id != id {
+                let finishedAt = deviceDate(serverMs: row.finishedMs) ?? clock()
+                finishedChatWatch = (id, finishedAt.addingTimeInterval(Self.finishedChatWindowSeconds))
+            }
         }
         lastOpponent = opponent
         lastStake = stake
@@ -1579,10 +1600,22 @@ package final class GomokuStore {
 
     /// 결과 화면에서 로비로. **진행 중인 판에서는 아무것도 하지 않는다**(빠져나가는 길은 기권뿐이다).
     package func backToLobby() {
+        guard foldFinishedMatch(), host?.session != nil else { return }
+        Task { [weak self] in
+            await self?.refreshLobby()
+            await self?.loadInbox()
+        }
+    }
+
+    /// 끝난 판을 내리고 화면을 로비로 돌린다 — [로비로] 와 '결과 화면인 채로 창 닫기'(`windowDidClose`)가 같이 쓴다.
+    /// 나가는 요청은 `leaveMatch` 하나뿐이고(판마다 한 번) 로비 재조회는 부르는 쪽 몫이다.
+    /// 진행 중인 판이면 false — 아무것도 안 바꾼다.
+    @discardableResult
+    private func foldFinishedMatch() -> Bool {
         // 끝난 AI 판이면 판만 내리고 나머지는 아래 1:1 길을 그대로 탄다(진행 중이면 아래 가드가 막는다).
         if isAIMatch { backToLobbyFromAIMatch() }
         if let current = match {
-            guard current.isFinished else { return }
+            guard current.isFinished else { return false }
             dismissedMatchIDs.insert(current.id)
             // 결과 화면을 떠났다 = 그 판에서 나간 것이다. 둘 다 나가면 서버가 그 판 채팅을 즉시 지운다.
             leaveMatch(current.id)
@@ -1594,11 +1627,7 @@ package final class GomokuStore {
         // 로비로 나가면 그 판의 대화는 끝이다(서버도 하루 뒤 지운다). 초안까지 함께 내린다.
         clearMatchScopedState()
         setNotice(nil)
-        guard host?.session != nil else { return }
-        Task { [weak self] in
-            await self?.refreshLobby()
-            await self?.loadInbox()
-        }
+        return true
     }
 
     /// 같은 상대·같은 판돈으로 다시 신청.
@@ -1655,7 +1684,18 @@ package final class GomokuStore {
             await refreshMatch(id: current.id)
         } else {
             await loadInbox()
+            // 결과 화면에 아직 서 있는 끝난 판이면 이 초인종은 **상대의 끝인사**일 수 있다 — 서버는 끝난 뒤 120초 동안
+            // 말을 받고 상대를 두드린다(`gomoku_chat_send`). 여기서 그 판을 안 읽으면 받는 쪽은 그 말을 영영 못 본다:
+            // 폴링은 끝난 판을 건너뛰고, 보낸 사람만 제 줄을 본다("보내도 전달이 안 된다" — 2026-10-13 신고).
+            await refreshFinishedMatchChat()
         }
+    }
+
+    /// 결과 화면에 서 있는 끝난 1:1 판을 한 번 다시 읽는다 — 받은 번호부터 묻으므로 오는 것은 새 대화 줄뿐이다.
+    /// 판이 없거나 진행 중이거나 AI 판이면 아무것도 안 한다([로비로]·창 닫기 뒤에는 판이 없어 요청이 안 나간다).
+    private func refreshFinishedMatchChat() async {
+        guard let current = match, current.isFinished, !isAIMatch else { return }
+        await refreshMatch(id: current.id)
     }
 
     /// 조인 직후·깨어남의 따라잡기: 인박스 한 번 + 진행 중 판이면 그 판의 놓친 수.
@@ -1663,6 +1703,9 @@ package final class GomokuStore {
         await loadInbox()
         if let current = match, !current.isFinished {
             await refreshMatch(id: current.id)
+        } else {
+            // 소켓이 끊겨 있던 동안의 끝인사도 놓친 초인종이다(`syncOnce` 와 같은 이유).
+            await refreshFinishedMatchChat()
         }
     }
 
@@ -1725,6 +1768,7 @@ package final class GomokuStore {
 
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
     ///  · 진행 중 판이 상대 차례면(또는 표시 마감 + 유예가 지났으면) 구독 중 3초 / 미구독 1.5초마다 상태.
+    ///  · 결과 화면의 끝난 판이면 끝난 뒤 130초 동안 구독 중 10초 / 미구독 3초마다 상태(상대의 끝인사).
     ///  · 내 대기 신청이 있으면 5초마다 인박스(수락·거절·만료를 본다).
     ///  · 로비를 보고 있으면 30초마다 목록.
     package func pollTick(at now: Date) async {
@@ -1738,6 +1782,16 @@ package final class GomokuStore {
                 if now.timeIntervalSince(lastStateRequestAt) >= interval {
                     await refreshMatch(id: current.id)
                 }
+            }
+        } else if let current = match, current.isFinished, !isAIMatch,
+                  let watch = finishedChatWatch, watch.id == current.id, now < watch.until {
+            // 끝인사 안전망: 초인종을 놓쳐도(미구독·재연결 중) 결과 화면의 대화가 멈춰 서지 않게 한다. 그 시간이 지나면
+            // 서버가 더는 말을 안 받으므로 거기서 그친다 — 결과 화면을 한 시간 켜 둬도 요청은 구독 중 열몇 번, 미구독이어도 마흔 번 남짓이다.
+            let subscribed = host?.realtimeState.isSubscribed ?? false
+            let interval = subscribed
+                ? Self.finishedChatPollSecondsWhileSubscribed : Self.finishedChatPollSecondsUnsubscribed
+            if now.timeIntervalSince(lastStateRequestAt) >= interval {
+                await refreshMatch(id: current.id)
             }
         }
         guard isWindowVisible else { return }
@@ -1829,6 +1883,7 @@ package final class GomokuStore {
         seenInviteIDs = []
         dismissedMatchIDs = []
         leftMatchIDs = []
+        finishedChatWatch = nil
         lastStateRequestAt = .distantPast
         lastInboxRequestAt = .distantPast
         lastLobbyRequestAt = .distantPast

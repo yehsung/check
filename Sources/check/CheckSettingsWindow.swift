@@ -290,6 +290,8 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         endWorkShortcutRecording()
         // [차단한 사람] 쪽을 보던 채 닫아도 다시 열면 설정 본문부터 보인다(v0.3.34).
         wiring?.store.closeBlockedPeopleSettings()
+        // [계정 삭제] 쪽도 같다(v0.3.51) — 비밀번호 칸과 2단 확인까지 비운다(삭제 왕복 중이면 스토어가 그대로 둔다).
+        wiring?.store.closeAccountDeletionSettings()
         // 사진 되돌리기 확인을 연 채 닫아도 다음에 열면 평소 상태다(v0.3.36) — 이 창은 닫아도 뷰가 살아 있다.
         wiring?.store.resetAvatarRemovalRow()
         stuckWindowWatchdog?.cancel()
@@ -304,6 +306,7 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         endWorkShortcutRecording()
         wiring?.store.closeBlockedPeopleSettings()
+        wiring?.store.closeAccountDeletionSettings()
         wiring?.store.resetAvatarRemovalRow()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
@@ -463,6 +466,11 @@ enum CheckSettingsWindowProbe {
     /// 명령: `show` / `close` / `redbutton`(타이틀바 빨간 점과 같은 길) / `rebuild`(고착 복구) / `state` / `quit`.
     @discardableResult
     static func startIfRequested(arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        // 맥 앱스토어 판(v0.3.51)에는 이 문이 **없다** — 실행 인자로 여는 진단 명령 루프는 심사에서 숨은 기능(2.3.1)으로
+        // 읽힐 수 있고, 그 판의 창 실측은 Developer ID 빌드로 한다.
+        #if CHECK_MAS
+        return false
+        #else
         guard arguments.contains(argument) else { return false }
         let thread = Thread {
             while let line = readLine(strippingNewline: true) {
@@ -474,6 +482,7 @@ enum CheckSettingsWindowProbe {
         thread.stackSize = 1 << 19
         thread.start()
         return true
+        #endif
     }
 
     @MainActor

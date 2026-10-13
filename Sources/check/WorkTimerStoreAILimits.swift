@@ -36,8 +36,14 @@ extension WorkTimerStore {
     ///
     /// `force` 는 "사용자가 방금 팝오버·창을 열었다"일 때 참이다(스토어의 5분 하한은 유지 — Claude 가
     /// 5분에 5회로 막기 때문에 여닫기만으로 429 를 맞을 수 있다).
+    ///
+    /// 맥 앱스토어 판(v0.3.51)은 **AI 기록 읽기 동의**(`aiToolDataAllowed`)가 없으면 리더를 부르지 않는다 — `~/.codex/auth.json`
+    /// 에 손도 대지 않는다. 업로드 진입은 그대로 지난다: 동의를 거둘 때 생긴 **비우기**(`setAIToolDataConsent` → 마스터 끄기)는
+    /// 거둔 뒤에야 나가야 하기 때문이다(값 행은 `sendAILimitsUpload` 가 같은 판정으로 막는다).
     func refreshAILimitsIfNeeded(now: Date = Date(), force: Bool = false) async {
-        await aiLimits.refreshIfDue(now: now, force: force)
+        if aiToolDataAllowed {
+            await aiLimits.refreshIfDue(now: now, force: force)
+        }
         await uploadAILimitsIfNeeded(now: now)
     }
 
@@ -106,7 +112,8 @@ extension WorkTimerStore {
         // (`AILimitClearClaim` 머리말).
         let claim = aiLimits.claimPendingClear()
         // 설정이 **켠** 제공자만 담긴 묶음. 끈 제공자는 여기 없고, 대신 위 대기열에 있다.
-        let bundle = aiLimits.enabledBundle
+        // 앱스토어 판에서 AI 기록 읽기 동의가 없으면 **값 행은 하나도** 싣지 않는다(v0.3.51) — 비우기만 나간다.
+        let bundle = aiToolDataAllowed ? aiLimits.enabledBundle : AILimitSnapshotBundle(providers: [])
         let hasValues = !bundle.visibleProviders.isEmpty
         let fingerprint = AILimitUploadLedger.fingerprint(bundle)
         let valuesChanged = hasValues && fingerprint != lastUploadedAILimits
@@ -150,7 +157,10 @@ extension WorkTimerStore {
     // 집이 둘이 되지 않게 설정 화면은 반드시 이 두 함수만 부른다(소스 계약 테스트가 호출 지점 수를 되묻는다).
 
     /// 마스터 스위치. 끄면 읽기·타이머가 멈추고 **연동된 모든 제공자**의 행이 그 순간 비워진다.
+    /// 맥 앱스토어 판(v0.3.51): 사용자가 마스터를 **직접** 만지면 "동의를 거둘 때 우리가 재웠다"는 표식을 지운다 — 다시 동의할 때
+    /// 사용자의 이 선택을 덮지 않게(`setAIToolDataConsent`). 표식이 없는 brew 판에서는 빈 삭제다.
     func setAILimitsVisible(_ enabled: Bool) {
+        defaults.removeObject(forKey: Self.aiLimitsPausedByConsentKey)
         aiLimits.setMasterEnabled(enabled)
         noteAILimitsSettingChanged()
     }

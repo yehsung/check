@@ -886,10 +886,13 @@ final class WorkTimerStore {
     /// 서버 조회 결과를 반영한다(UpdateCheckStore.onNoticeFetched 가 부른다). nil 은 "지금 보여 줄 공지가 없다"(서버가 내렸다·기간이
     /// 끝났다·옛 서버)라 카드를 내린다. 닫은 id 는 여기서 걸러진다 — 같은 공지가 5분마다 다시 와도 카드는 돌아오지 않고,
     /// **새 id 가 오면 다시 뜬다.** 값이 같으면 대입하지 않는다(@Observable 은 같은 값 대입에도 화면을 다시 그린다).
+    ///
+    /// 맥 앱스토어 판(v0.3.51)은 **링크를 거른다**: 앱스토어 주소가 아닌 링크(brew·DMG·GitHub 등)는 QR·버튼 문구째 떼고
+    /// 제목·본문만 보여 준다(`AppNotice.filtered(for:)` · `MacEdition.allowsNoticeLink`). 화면은 이미 걸러진 값만 받는다.
     func applyAppNotice(_ notice: AppNotice?) {
         let visible: AppNotice? = {
             guard let notice, !defaults.bool(forKey: Self.noticeDismissedKey(notice.id)) else { return nil }
-            return notice
+            return notice.filtered(for: macEdition)
         }()
         if appNotice != visible { appNotice = visible }
     }
@@ -901,6 +904,27 @@ final class WorkTimerStore {
         defaults.set(true, forKey: Self.noticeDismissedKey(appNotice.id))
         self.appNotice = nil
     }
+
+    // MARK: - 맥 앱스토어 판 · 계정 삭제 (v0.3.51)
+
+    /// 이 앱의 판(`MacEdition.current` — 컴파일 플래그로 정해진다). **판정은 전부 이 값을 거친다** — 테스트가 `.appStore` 를
+    /// 넣어 기본 빌드에서 앱스토어 판의 갈래(공지 링크 거름 · AI 기록 동의 게이트 · Codex 계정 프로브 끔)를 그대로 돌린다.
+    @ObservationIgnored var macEdition: MacEdition = .current
+
+    /// 앱스토어 판의 **AI 도구 기록 읽기 동의**(설정 스위치가 그리는 값 — `AIToolDataConsent.key` 의 화면 사본).
+    /// 쓰는 길은 `setAIToolDataConsent` 하나다. Developer ID 판에서는 화면에 나오지 않고 판정에도 쓰이지 않는다.
+    var aiToolDataConsent = false
+
+    /// 설정 창 본문 자리에 **계정 삭제** 화면이 서 있는가([차단한 사람]과 같은 자리 바꿈 — 본문 높이 계약을 건드리지 않는다).
+    var showsAccountDeletionInSettings = false
+    /// 계정 삭제 화면의 비밀번호 칸(본인 확인용 재로그인). 화면을 떠나면 비운다.
+    var accountDeletionPassword = ""
+    /// [계정 삭제]를 한 번 눌러 **확인 단계**에 들어섰는가(2단 확인 — 두 번째 누름만 삭제를 부른다).
+    var isConfirmingAccountDeletion = false
+    /// 삭제 왕복(재로그인 → 사진 → RPC)이 도는 중. 화면은 이 동안 버튼·뒤로가기를 잠근다.
+    var isDeletingAccount = false
+    /// 계정 삭제 화면의 결과 한 줄(실패 사유). 성공하면 로그인 화면으로 가므로 여기 남지 않는다.
+    var accountDeletionNotice: String?
     /// 목록 조회 순번. **늦게 도착한 옛 응답이 새 응답을 덮지 않게** 한다(패널을 연 조회와 처리 성공 뒤 재조회가 겹치는 경우).
     /// 화면이 읽지 않으므로 관찰 대상이 아니다.
     @ObservationIgnored var reportAdminLoadSerial = 0
@@ -1670,6 +1694,8 @@ final class WorkTimerStore {
         workShortcutEnabled = defaults.object(forKey: Self.workShortcutEnabledKey) as? Bool ?? true
         workShortcut = Self.restoredWorkShortcut(from: defaults)
         miniGameKind = MiniGameKind(rawValue: defaults.string(forKey: Self.miniGameKindKey) ?? "") ?? .timingBar
+        // 앱스토어 판의 AI 기록 읽기 동의(v0.3.51). 키가 없으면 거절이다 — 첫 실행 안내나 설정 스위치만 켠다.
+        aiToolDataConsent = defaults.bool(forKey: AIToolDataConsent.key)
         // 수동 [근무 종료]의 자동 시작 억제를 복구한다. 단, 앱이 1시간 넘게 죽어 있었다면(밤새 꺼짐·재부팅)
         // 그 공백 자체가 '부재'이므로 여기서 푼다 — 살아 있는 동안의 공백 관측(onAbsenceGap)은 스케줄러가
         // 하지만, 앱이 꺼져 있던 시간은 마지막 생존 스탬프와의 차이로만 잴 수 있다.

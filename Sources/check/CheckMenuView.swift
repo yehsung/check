@@ -406,9 +406,12 @@ struct CheckMenuView: View {
         VStack(spacing: 10) {
             // 팝오버 최상단: 새 버전 안내 배너([지금 업데이트] 원클릭 + [명령 복사] 폴백). HeaderCard 위에 얹는다.
             // 더 급한 배너가 있으면 이번 팝오버에서는 양보한다(topBanner — 배너는 한 번에 하나만).
+            // 맥 앱스토어 판(v0.3.51)에는 배너 자체가 없다 — 업데이트는 앱스토어가 한다(`UpdateBanner` 정의 주석).
+            #if !CHECK_MAS
             if topBanner == .update {
                 UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes)
             }
+            #endif
             // 같은 슬롯의 서버 공지 카드(v0.3.40). 업데이트 배너와 **같은 자리, 같은 "한 번에 하나" 예산**이라 둘이 함께 서는 일은
             // 구조적으로 없다(topBanner 가 하나만 고른다). 닫기는 스토어 한 줄 — 닫히면 이 if 가 거짓이 되어 자리가 즉시 접힌다.
             if topBanner == .appNotice, let notice = store.appNotice {
@@ -1221,6 +1224,10 @@ struct MenuBarDotReasons: Equatable, Sendable {
 
 // MARK: - Update banner (새 버전 안내 + 원클릭/명령 복사)
 
+// ★ 맥 앱스토어 판(v0.3.51)에서 컴파일되지 않는다 — 원클릭(`UpdateRunner` = brew upgrade · DMG 교체)과 폴백(brew 명령 복사 ·
+//   DMG 내려받기 주소 열기)이 전부 앱스토어 밖 업데이트 경로다(심사 지침 2.4.5(vii)). 그 판에서는 `isUpdateAvailable` 이 언제나
+//   거짓이라 `topBanner` 가 `.update` 를 고를 일도 없다.
+#if !CHECK_MAS
 /// 팝오버 최상단 슬림 배너(accent 톤). 새 버전을 안내하고 [지금 업데이트] 원클릭 + 폴백 버튼을 제공한다.
 /// 원클릭은 UpdateRunner 로 분리 프로세스를 띄우며, running 중엔 "업데이트 중…"으로 바뀌고 [지금 업데이트]가 비활성된다.
 ///
@@ -1393,6 +1400,7 @@ private struct UpdateBanner: View {
         )
     }
 }
+#endif
 
 // MARK: - Header card
 
@@ -4934,6 +4942,9 @@ enum AuthMessageKind {
         // 스토어 상수를 그대로 참조해 문구가 바뀌어도 분류가 어긋나지 않게 못 박는다.
         case WorkTimerStore.passwordResetChangedSignInMessage:
             self = .success
+        // 계정 삭제(v0.3.51)를 마치면 설정 화면이 사라지고 로그인 화면이 선다 — 그 결과도 상태줄로 넘어온다(같은 이유).
+        case WorkTimerStore.accountDeletedMessage:
+            self = .success
         default:
             self = .error
         }
@@ -5039,6 +5050,11 @@ private struct LoginPanel: View {
                     // 가입 모드에서는 **소속 센터를 고르기 전까지** 막는다(store.canSubmitSignUp).
                     // 로그인 모드는 종전 그대로 키 유무(canSync)만 본다.
                     .disabled(!canSubmitPrimary)
+                // 약관 동의 한 줄(v0.3.51 — 심사 지침 1.2 · 5.1.1(i)). **계정이 실제로 만들어지는 가입 폼에만** 선다(폰과 같은 자리 —
+                // 가입 버튼 바로 아래). 두 낱말이 곧 링크다(`SignUpTermsNotice`).
+                if mode == .signUp {
+                    SignUpTermsNotice()
+                }
                 // 상태 배너 슬롯은 항상 확보하고 메시지 유무는 opacity로만 토글한다 — 오류 배너 등장 시 창 튐 제거.
                 AuthStatusLine(message: store.syncMessage)
                     .opacity(store.syncMessage == "로그인 필요" ? 0 : 1)
@@ -5273,6 +5289,43 @@ private struct LoginPanel: View {
         if newMode == .signUp {
             store.isCreateTeamMode = false
         }
+    }
+}
+
+// MARK: - 가입 약관 동의 한 줄 (v0.3.51)
+
+/// "가입하면 이용약관과 개인정보 처리방침에 동의하게 돼요" — **두 낱말이 곧 링크다**(누르면 기본 브라우저가 GitHub Pages 문서를 연다).
+/// 체크박스가 아니라 버튼 아래 한 줄인 이유는 폰과 같다(`MobileSignUpText.termsAgreement` — 가입 버튼을 누르는 것이 곧 동의라고
+/// 적는 방식). 약관에는 괴롭힘·혐오·음란물 무관용과 계정 정지가 적혀 있다(심사 지침 1.2 의 사용자 생성 콘텐츠 요건).
+enum SignUpTermsText {
+    static let agreement = "가입하면 이용약관과 개인정보 처리방침에 동의하게 돼요"
+    static let termsLink = "이용약관"
+    static let privacyLink = "개인정보 처리방침"
+
+    /// 위 한 줄에 두 링크를 심은 것(화면이 그대로 그린다 — 순수 값이라 테스트가 링크 둘을 값으로 잰다).
+    static var attributed: AttributedString {
+        var text = AttributedString(agreement)
+        if let range = text.range(of: termsLink) {
+            text[range].link = CheckAppLinks.termsOfService
+            text[range].underlineStyle = .single
+        }
+        if let range = text.range(of: privacyLink) {
+            text[range].link = CheckAppLinks.privacyPolicy
+            text[range].underlineStyle = .single
+        }
+        return text
+    }
+}
+
+struct SignUpTermsNotice: View {
+    var body: some View {
+        Text(SignUpTermsText.attributed)
+            .font(.caption2)
+            .foregroundStyle(CheckTheme.secondaryText)
+            .tint(CheckTheme.accent)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
     }
 }
 

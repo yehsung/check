@@ -35,7 +35,10 @@ package final class KeychainTokenVault: TokenVault {
     /// iOS 는 늘 data protection 키체인이라 그룹이 곧 엔타이틀먼트 `keychain-access-groups` 의 값이다.
     private let accessGroup: String?
 
-    package init(service: String = "kingcheck", accessGroup: String? = nil) {
+    /// `service` 기본값은 **판마다 다르다**(`MacEdition.keychainService` — brew 판 `kingcheck`, 앱스토어 판 `kingcheck.mas`).
+    /// 같은 맥의 다른 판이 만든 항목을 찾으면 그 항목의 ACL 이 남의 서명을 믿어 접근 창이 뜨거나 호출이 멈춘다. 폰·위젯은
+    /// service 를 늘 명시하므로(`AingKeychain`) 이 기본값을 타지 않는다.
+    package init(service: String = MacEdition.current.keychainService, accessGroup: String? = nil) {
         self.service = service
         self.accessGroup = accessGroup
     }

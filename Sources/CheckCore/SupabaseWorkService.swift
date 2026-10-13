@@ -484,8 +484,9 @@ package actor SupabaseWorkService {
     /// 앱이 db push 보다 먼저 나가는 창이 실제로 있다.
     ///
     /// ★ 맥 게이트가 **없다**(MacOnly 파일이 아니다): 이 호출은 본인 계정에만 작용하고 남의 세션·찌르기·근무 시간을 건드리지 않는다.
-    ///   맥 앱은 이번 범위가 아니라(brew 배포 — 애플 요구 대상이 아니다) 부르는 곳이 폰뿐이지만, 코어에 두는 이유는 서버 계약이
-    ///   하나이기 때문이다(재인증·로컬 정리는 플랫폼마다 다르고 RPC 는 같다).
+    ///   부르는 곳은 둘이다 — 폰(`MobileSessionStore.deleteAccount`)과 v0.3.51 부터 맥(설정 → 계정 삭제 · `WorkTimerStore.deleteMyAccount`,
+    ///   맥 앱스토어 판이 생기며 맥도 5.1.1(v) 대상이 됐다). 코어에 두는 이유는 서버 계약이 하나이기 때문이다(재인증·로컬 정리는
+    ///   플랫폼마다 다르고 RPC 는 같다).
     package func deleteMyAccount(accessToken: String) async throws {
         _ = try await send(
             path: "/rest/v1/rpc/delete_my_account",

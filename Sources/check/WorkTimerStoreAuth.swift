@@ -930,10 +930,12 @@ extension WorkTimerStore {
         }
     }
 
-    func signOut() {
+    /// - Parameter notifyServer: 서버에 로그아웃을 알린다(기본). **계정 삭제** 뒤에만 false 다(v0.3.51) — 계정이 cascade 로
+    ///   사라져 알릴 세션이 없고, 지운 계정의 토큰으로 한 번 더 왕복할 이유가 없다(`deleteMyAccount`).
+    func signOut(notifyServer: Bool = true) {
         sessionGeneration += 1
 
-        if let accessToken = session?.accessToken {
+        if notifyServer, let accessToken = session?.accessToken {
             Task {
                 await service.signOut(accessToken: accessToken)
             }

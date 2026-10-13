@@ -19,4 +19,11 @@ package enum CheckAppLinks {
     /// 구형 아이폰이 QR 을 찍으면 "이 기기와 호환되지 않음"을 만나므로 화면이 이 문구를 주소 옆에 둔다.
     /// **스토어에서 최소 버전을 올리면 여기도 고쳐라** — 실제 값과 갈리면 이 문구는 거짓말이 된다.
     package static let iosMinimumVersionText = "iOS 18 이상"
+
+    /// 개인정보 처리방침(v0.3.51 — 맥). 심사 지침 5.1.1(i) 은 스토어 메타데이터와 **앱 안** 둘 다에 링크를 요구한다.
+    /// 저장소 `docs/privacy.md` 를 GitHub Pages 로 켠 주소이고, 폰의 나 → 설정·가입 화면(`MeText.privacyPolicyURL` ·
+    /// `MobileSignUpText.privacyURL`)과 **같은 주소**다.
+    package static let privacyPolicy = URL(string: "https://yehsung.github.io/check/privacy")!
+    /// 이용약관(v0.3.51 — 맥). 가입 화면의 동의 한 줄과 설정 머리 줄이 쓴다(폰 `MobileSignUpText.termsURL` 과 같은 주소).
+    package static let termsOfService = URL(string: "https://yehsung.github.io/check/terms")!
 }

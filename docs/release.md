@@ -387,7 +387,7 @@ Dashboard 의 SQL Editor 에서 직접 실행하려면 `supabase/migrations/` �
 > **"잔량 0"** 입니다(어휘를 넓히지 않으려고 이름을 유지했습니다 — `20260901120000_admin_ultra_ledger.sql`).
 >
 > **지금 울트라 수급을 바꾸려면**: 자정 밑바닥은 `ultra_daily_floor(app_build)`, 구매 가격은
-> `ultra_ruby_price()`(루비 3), 한 번에 사는 상한은 `ultra_buy_max()`(20). **보유 상한은 2026-09-13 에
+> `ultra_ruby_price()`(루비 5 — 2026-10-14 에 3 에서 올렸다, `20261014120000_ruby_economy_v2.sql`), 한 번에 사는 상한은 `ultra_buy_max()`(20). **보유 상한은 2026-09-13 에
 > 폐지**됐습니다(`ultra_balance_cap()` 이 int4 최대값). 자세한 계약은 [재화 경제 문서](ultra-economy.md).
 
 > **롤백 시 주의**: `drop function ultra_poke_user` 한 줄이면 울트라만 죽습니다. 다만 위 두 `grant execute`

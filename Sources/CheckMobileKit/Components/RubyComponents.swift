@@ -191,7 +191,7 @@ package struct RubyPrice: View {
     }
 }
 
-/// 획득: 초록 [보석]+N(`.inline`) 또는 틴트 칩(`.chip` — "+20 받음" 같은 꼬리 문구).
+/// 획득: 초록 [보석]+N(`.inline`) 또는 틴트 칩(`.chip` — "+10 받음" 같은 꼬리 문구).
 package struct RubyGain: View {
     package enum Style: Sendable { case inline, chip }
 

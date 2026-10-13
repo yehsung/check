@@ -92,7 +92,17 @@ struct GamesChessScreen: View {
 
     // MARK: - 로비
 
+    /// 데모 스크린샷 전용 닻 id — 관전 절을 화면 위로 올릴 자리(`gamesDemoChessWatchAnchor`).
+    /// 값이 **절에 붙은 `.id` 와 같은 한 곳에서** 와야 한다(글자를 두 번 적으면 한쪽만 고쳐져 조용히 안 움직인다).
+    static let watchSectionAnchorID = "chess-watch-section"
+
     private var lobby: some View {
+        ScrollViewReader { proxy in
+            lobbyScroll(proxy: proxy)
+        }
+    }
+
+    private func lobbyScroll(proxy: ScrollViewProxy) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 summary
@@ -107,7 +117,9 @@ struct GamesChessScreen: View {
                     .padding(.top, MobileTheme.rowSpacing)
                 opponents
                 // 관전("지금 대결 중" 목록 + 관전 판)과 순위는 **제자리 절**이다(화면 머리말).
+                // `.id` 는 데모 닻이 올릴 자리다(운영에서는 아무도 그 id 를 부르지 않는다).
                 GamesChessWatchSection(store: chess)
+                    .id(Self.watchSectionAnchorID)
                 GamesChessRankingSection(store: chess)
             }
             .padding(.horizontal, MobileTheme.sideMargin)
@@ -121,6 +133,15 @@ struct GamesChessScreen: View {
         // 같은 모양. ★ 체스 로비만 이 줄이 없어서 **순위·관전 절을 아무도 눈으로 못 봤다**(실측 D5):
         // 그 두 절은 로비 맨 아래라 기본 닻으로는 화면에 한 번도 들어오지 않는다.
         .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
+        // 데모 전용 닻 둘. ★ **게임 탭이 아니라 여기**다: 둘 다 "관전 중인가"를 보는데, 그 값을
+        // `navigationDestination` 클로저에서 읽으면 관전이 서는 순간 목적지가 다시 세워져 체스 화면이
+        // 헐리고(`chessScreenDidDisappear` → `stopWatching()`) 관전이 영영 안 섰다(실측).
+        // ① 라우트 꼬리가 순위·관전이면 맨 아래 절에서 시작하되, **관전이 선 뒤에는 그 닻을 놓는다**.
+        .gamesDemoChessSectionAnchor(store.demoChessRoute?.section, isWatching: chess.spectating != nil)
+        // ② 그리고 관전 절을 화면 위로 올린다 — 닻 하나로는 둘 다 못 한다(바닥 닻이 순위 절을 붙잡는 동안
+        //    판은 접힘 위로 밀려 올라갔다 · 실측 A).
+        .gamesDemoChessWatchAnchor(isDemo: store.context.isDemo, watchID: chess.spectating?.id,
+                                   proxy: proxy, id: Self.watchSectionAnchorID)
         // 규칙 책 버튼(오목 로비와 같은 자리). 로비가 **로비 응답 값**으로 시트를 띄우므로 시간 수치가 서버와 같다.
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

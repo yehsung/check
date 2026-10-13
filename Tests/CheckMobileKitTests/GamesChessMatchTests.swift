@@ -706,8 +706,94 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
                 "판 레인에 **화면 폭**을 그대로 넘긴다(D1 의 정체다)")
         #expect(flat.contains("columnWidth: budget.width)"), "판이 열 폭에 가둬지지 않는다")
         // 열 여백은 한 값에서 온다 — 뷰가 16 을 베껴 적으면 여백이 바뀐 날 판만 옛 값으로 남는다.
-        #expect(code.components(separatedBy: "MobileTheme.sideMargin").count == 3,
-                "열 여백을 말하는 자리가 둘(열 패딩 · 판 예산)이 아니다")
+        // 자리는 **셋**이다: 열 패딩 · 판 예산 · 스크롤 밖 동작 막대의 좌우 여백(아래 ⑨ — 막대가 열과 같은
+        // 선에 서야 버튼이 판·카드와 어긋나 보이지 않는다).
+        #expect(code.components(separatedBy: "MobileTheme.sideMargin").count == 4,
+                "열 여백을 말하는 자리가 셋(열 패딩 · 판 예산 · 동작 막대)이 아니다")
+        #expect(!code.contains("padding(.horizontal, 16)"), "뷰가 열 여백 16 을 베껴 적었다")
+    }
+
+    // MARK: ⑨ 동작 줄은 스크롤 밖이다 (실측 B — 큰 글자에서 첫 화면이 잘렸다)
+
+    @Test("★ 대국 동작 줄([기권]·[무승부 수락])이 **스크롤 밖**에 선다 — 시계가 도는 판에서 '스크롤하면 닿는다'는 충분하지 않다")
+    func theActionRowStandsOutsideTheScroll() throws {
+        // 결함의 정체(헤드리스 실측 · 402pt · `content_size` XXXL): 동작 줄이 `matchBody` 의 `ScrollView` 안
+        // 마지막 자식이어서 `games/chess/match` 의 [기권]·[무승부 제안]이 화면 **마지막 픽셀 줄**까지 칠해진 채
+        // 잘렸고, 무승부 제안을 받은 판(`drawoffer`)은 "상대가 무승부를 제안했어요" 한 줄이 더 밀어내
+        // [무승부 수락]의 파란 띠 **한 조각만** 남았다. 탭 막대 가림(D2)과 **같은 버튼들**이다.
+        let code = stripComments(try String(contentsOf: Self.root.appendingPathComponent(Self.viewPath),
+                                            encoding: .utf8))
+        let flat = code.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        // ① 막대가 스크롤 **밖**에 달렸다.
+        #expect(flat.contains(".safeAreaInset(edge: .bottom, spacing: 0) { actionBar(match: match, chrome: chrome) }"),
+                "동작 줄이 스크롤 밖 막대로 나와 있지 않다")
+        // ② 스크롤 열 안에는 **없다**. 열의 범위는 `ScrollView {` 부터 `.scrollBounceBehavior` 까지다 —
+        //    되돌려 열 자식으로 넣으면(= 결함 상태) 여기가 빨개진다.
+        let column = try #require(Self.between(code, from: "ScrollView {", to: ".scrollBounceBehavior"))
+        #expect(!column.contains("actionRow("), "동작 줄이 다시 스크롤 열 안에 있다 — 큰 글자에서 첫 화면이 잘린다")
+        #expect(!column.contains("actionBar("), "동작 막대가 스크롤 열 안에 있다")
+        // 전제: 그 열이 실제로 대국 열이다(스캐너가 헛돌면 ② 가 공짜로 초록이 된다).
+        #expect(column.contains("GamesChessMoveList(moves: match.moves)"), "전제: 대국 열을 못 읽었다")
+        // ③ 막대는 **불투명**하고 위에 선이 있다(오목 관전 [나가기] 막대와 같은 꼴 — 스크롤 내용이 비치면
+        //    버튼 글자와 겹쳐 읽힌다).
+        let bar = try #require(Self.between(code, from: "private func actionBar(", to: "@ViewBuilder"))
+        #expect(bar.contains("MobileTheme.surface"), "동작 막대가 투명해 스크롤 내용이 버튼 뒤로 비친다")
+        #expect(bar.contains("MobileTheme.hairline"), "동작 막대에 경계선이 없다")
+        // ④ 막대를 `GeometryReader` **바깥**에 달았다(스크롤 꼬리 `.scrollBounceBehavior` 다음의 닫는 괄호
+        //    **뒤**에 온다) — 안쪽에 달면 `screen.size.height` 가 막대를 모르고 큰 글자 판 예산
+        //    (`boardSide` 의 세로 비율)이 막대 높이만큼 낙관적이 된다.
+        #expect(flat.contains(".scrollBounceBehavior(.basedOnSize) } .safeAreaInset(edge: .bottom"),
+                "막대가 `GeometryReader` 안에 달렸다 — 큰 글자 판 예산이 막대 높이를 모른다")
+    }
+
+    // MARK: ⑩ 잎 뷰의 시간 축 (실측 C — 데모가 늘 '시간이 다 됐어요' 였다)
+
+    @Test("★ 시계·차례 잎 뷰가 **스토어 시계**로 잰다 — 벽시계를 쓰면 보정된 `turnStartedAt` 과 축이 섞인다")
+    func theTimeLeavesReadTheStoreClock() throws {
+        // 결함의 정체: `turnStartedAt` 은 서버 epoch 을 **스토어 시계 축으로** 옮긴 값이다
+        // (`deviceDate(serverMs:)` 가 `server_now_ms − clock()` 어긋남으로 보정한다). 잎 뷰가 `TimelineView` 의
+        // `context.date`(기기 벽시계)를 넘기면 그 어긋남이 통째로 "흐른 시간"이 된다 — 고정 시계 데모에서
+        // 진행 중 대국이 **전부** "시간이 다 됐어요" + 시계 "0.0" 으로 떴다(26일치 어긋남).
+        //
+        // ★ 운영에는 분기가 **없다**: 운영 시계가 벽시계라(`MobileClock.system`) 같은 한 줄이 같은 값을 준다.
+        let code = stripComments(try String(contentsOf: Self.root.appendingPathComponent(Self.viewPath),
+                                            encoding: .utf8))
+        #expect(code.contains("store.remainingSeconds(color, now: store.clock())"), "시계 잎이 스토어 시계를 안 쓴다")
+        #expect(code.contains("match: match, now: store.clock(), graceSecondsFallback: store.graceSeconds"),
+                "차례 잎이 스토어 시계를 안 쓴다")
+        #expect(!code.contains("now: context.date"), "잎 뷰가 아직 벽시계로 잰다 — 두 축이 섞인다")
+        // 관전 시계도 같은 축이다(관전 판은 같은 보정을 지난 `turn_started_ms` 를 쓴다).
+        let watch = stripComments(try String(
+            contentsOf: Self.root.appendingPathComponent("Sources/CheckMobileKit/Games/GamesChessWatch.swift"),
+            encoding: .utf8))
+        #expect(watch.contains("remainingSeconds(color, now: store.clock())"), "관전 시계가 스토어 시계를 안 쓴다")
+        #expect(!watch.contains("now: context.date"), "관전 시계가 아직 벽시계로 잰다")
+        // 운영 시계 == 벽시계(이 수리가 운영에서 무엇도 바꾸지 않는다는 못). 두 번 읽은 값이 1초 안이다.
+        let system = MobileClock.system.now()
+        #expect(abs(system.timeIntervalSince(Date())) < 1, "운영 시계가 벽시계가 아니다 — 이 수리의 전제가 깨졌다")
+        // 그리고 **분기가 없다**: 두 잎에 데모 깃발도 `#if DEBUG` 도 없다(있으면 운영과 데모가 갈린다).
+        let leaves = try #require(Self.between(code, from: "struct GamesChessClockLeaf: View",
+                                               to: "struct GamesChessMoveList: View"))
+        #expect(!leaves.contains("isDemo") && !leaves.contains("#if DEBUG"),
+                "잎 뷰가 데모에서만 다르게 잰다 — 시계가 서버 권위라는 계약이 깨진다")
+        // ★ 기준선이 달라야 한다: **같은 판**을 두 축으로 재면 답이 갈린다(안 갈리면 이 시험은 식이 식과 같다는 말뿐).
+        let started = cmNow.addingTimeInterval(-7)
+        let live = cmMatch(turn: .white, clock: ChessServerClock(whiteMsLeft: 593_907, blackMsLeft: 590_976,
+                                                                incrementMs: 3_000, turnStartedAt: started,
+                                                                running: .white))
+        #expect(GamesChessMatchChrome.turnLine(match: live, now: cmNow, graceSecondsFallback: 2).text == "내 차례예요",
+                "스토어 축에서 '내 차례'가 아니다")
+        let wallDrift = cmNow.addingTimeInterval(26 * 24 * 3600)
+        #expect(GamesChessMatchChrome.turnLine(match: live, now: wallDrift, graceSecondsFallback: 2).text
+                    == GamesChessText.flagSettling,
+                "기준선(어긋난 축)이 깃발을 안 본다 — 기준선을 다시 골라야 한다")
+    }
+
+    /// `from` 뒤부터 `to` 앞까지. 둘 중 하나가 없으면 nil(전제가 깨진 것을 조용히 통과시키지 않는다).
+    static func between(_ code: String, from: String, to: String) -> String? {
+        guard let start = code.range(of: from) else { return nil }
+        guard let end = code.range(of: to, range: start.upperBound..<code.endIndex) else { return nil }
+        return String(code[start.upperBound..<end.lowerBound])
     }
 
     // MARK: ⑦ 탭 막대 (D2 — 선언만 있고 호출이 없었다)

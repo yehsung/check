@@ -201,13 +201,39 @@ import Testing
         #expect(store.contains("demoChessRoute = nil"), "로그아웃 reset 이 데모 꼬리를 안 거둔다")
 
         let tab = try Self.strippedSource("Sources/CheckMobileKit/Games/GamesTab.swift")
+        let screen = try Self.strippedSource("Sources/CheckMobileKit/Games/GamesChessScreen.swift")
         // ③ 절: 화면을 밀어 올리지 않고 **닻**만 옮긴다(순위·관전은 로비 안 절이다).
-        #expect(tab.contains("gamesDemoChessSectionAnchor(store.demoChessRoute?.section)"),
-                "체스 목적지에 데모 절 닻이 없다 — `ranking` 이 로비 머리에서 시작해 순위가 화면 밖이다")
-        #expect(tab.contains("defaultScrollAnchor(.bottom)"), "절 닻이 스크롤을 안 옮긴다")
+        #expect(screen.contains("gamesDemoChessSectionAnchor(store.demoChessRoute?.section,"),
+                "체스 로비에 데모 절 닻이 없다 — `ranking` 이 로비 머리에서 시작해 순위가 화면 밖이다")
+        #expect(tab.contains("defaultScrollAnchor(section == .bottom && !isWatching ? .bottom : nil)"),
+                "절 닻이 스크롤을 안 옮긴다")
+        // ★ 그 닻은 **관전이 선 뒤에는 놓는다**. 안 놓으면 바닥(순위 절)을 계속 붙잡아 관전 판이 접힘 위로
+        //   밀려 올라간다(실측: `watch/demo-chess-live` 에 파일 글자 한 줄만 남았다 · 402·390 둘 다).
+        #expect(screen.contains("isWatching: chess.spectating != nil"),
+                "절 닻이 관전을 보지 않는다 — 관전 판이 접힘 위로 밀려 화면에 안 보인다")
+        // ★★ 그리고 그 값을 **`navigationDestination` 자리에서 읽지 않는다**: 거기서 읽으면 관전이 서는 순간
+        //    목적지가 다시 세워져 화면이 헐리고 `chessScreenDidDisappear()` → `stopWatching()` 이 관전을
+        //    내린다(되풀이 — 실측에서 관전 화면이 **영영 안 떴다**).
+        #expect(!tab.contains("store.chess.spectating"),
+                "게임 탭의 목적지 클로저가 관전 상태를 읽는다 — 관전이 설 때마다 체스 화면이 헐린다")
+        // 갈래로 적지 않는다(갈래가 뒤집히면 그 아래 나무가 헐린다 — 위와 같은 함정의 작은 판).
+        #expect(!tab.contains("if section == .bottom, !isWatching {"),
+                "닻을 `if/else` 로 갈랐다 — 값이 뒤집히는 순간 로비 스크롤이 헐리고 다시 선다")
         // 순위·관전을 **자식 화면으로 밀지 않았다**(밀면 onDisappear → windowDidHide 로 폴링이 죽는다).
         #expect(!tab.contains("GamesChessRankingScreen") && !tab.contains("GamesChessWatchScreen"),
                 "순위·관전을 별도 화면으로 밀었다 — 스토어가 phase == .lobby 를 요구한다")
+
+        // ④ 관전 절을 **화면 위로 올리는 쪽**(닻을 놓는 것만으로는 로비 머리에서 시작해 판이 한참 아래다).
+        //   되풀이가 계약이다 — 로비·관전 응답이 차례로 오며 위쪽 절이 자라 한 번 올린 것은 다시 밀려난다.
+        #expect(tab.contains("proxy.scrollTo(id, anchor: .top)"), "데모 닻이 관전 절을 올리지 않는다")
+        #expect(tab.contains("for _ in 0..<12 {"), "한 번만 올린다 — 위쪽 절이 자라면 다시 밀려난다")
+        #expect(screen.contains(".id(Self.watchSectionAnchorID)"),
+                "관전 절에 닻 id 가 없다 — `scrollTo` 가 올릴 자리를 못 찾아 조용히 아무 일도 안 한다")
+        #expect(screen.contains("gamesDemoChessWatchAnchor(isDemo: store.context.isDemo, watchID: chess.spectating?.id,"),
+                "로비가 데모 관전 닻을 안 단다")
+        // 올리는 자리와 id 를 **한 곳**에서 읽는다(글자를 두 벌 적으면 한쪽만 고쳐져 조용히 멈춘다).
+        #expect(screen.components(separatedBy: "Self.watchSectionAnchorID").count == 3,
+                "닻 id 를 말하는 자리가 둘(절의 `.id` · 닻 호출)이 아니다")
 
         let model = try Self.strippedSource("Sources/CheckMobileKit/App/MobileAppModel.swift")
         #expect(model.contains("games.demoChessRoute = chess"), "앱 모델이 꼬리를 스토어에 안 넘긴다")

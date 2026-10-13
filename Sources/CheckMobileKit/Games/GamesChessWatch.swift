@@ -689,9 +689,12 @@ private struct GamesChessWatchClock: View {
     let color: ChessColor
     let isTurn: Bool
 
+    /// ★ `now` 는 **스토어 시계**다(`GamesChessTurnLeaf` 머리말 — `turnStartedAt` 이 그 축으로 보정돼 있다).
+    /// `TimelineView` 는 다시 그리게 깨우는 펌프로만 쓴다. 벽시계를 쓰면 시계를 꽂은 배선에서 두 축이 섞여
+    /// 관전 시계가 늘 0.0 으로 떴다(고정 시계 데모 실측).
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.2, paused: !isRunning)) { context in
-            let remaining = store.spectating?.clock.remainingSeconds(color, now: context.date) ?? 0
+        TimelineView(.animation(minimumInterval: 0.2, paused: !isRunning)) { _ in
+            let remaining = store.spectating?.clock.remainingSeconds(color, now: store.clock()) ?? 0
             face(remaining: remaining)
         }
     }

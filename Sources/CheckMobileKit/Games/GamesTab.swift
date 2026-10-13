@@ -54,9 +54,12 @@ struct GamesTab: View {
                 case .gomoku:
                     GamesGomokuScreen(store: store)
                 case .chess:
+                    // ★ 데모 절 닻은 **이 자리가 아니라 체스 화면 안**에 있다(`GamesChessScreen.lobbyScroll`).
+                    //   여기서 달면 닻이 보는 값(관전 중인가)이 `navigationDestination` 클로저의 의존성이 되고,
+                    //   그 값이 바뀌는 순간 목적지가 다시 세워져 **화면이 한 번 사라졌다 선다**:
+                    //   `onDisappear` → `chessScreenDidDisappear()` → `stopWatching()` 이 관전을 내리고,
+                    //   그러면 값이 또 바뀌어 같은 일이 되풀이된다. 실측에서 관전 화면이 **영영 안 떴다**.
                     GamesChessScreen(store: store)
-                        // 데모 전용: 라우트 꼬리가 순위·관전이면 로비 스크롤을 **맨 아래 절**에서 시작한다.
-                        .gamesDemoChessSectionAnchor(store.demoChessRoute?.section)
                 }
             }
         }
@@ -598,13 +601,47 @@ extension View {
     ///
     /// `#if DEBUG` 가 없는 까닭: 값을 세우는 자리가 데모 라우트뿐이라(`MobileAppModel.openDemoRouteIfNeeded`)
     /// Release 에서는 `demoChessRoute` 가 영원히 nil 이다.
-    @ViewBuilder
-    func gamesDemoChessSectionAnchor(_ section: MobileDemoChessRoute.Section?) -> some View {
-        if section == .bottom {
-            defaultScrollAnchor(.bottom)
-        } else {
-            self
+    ///
+    /// ★ **관전이 선 뒤에는 닻을 놓는다**(`isWatching`). 이 닻은 `[관전]` 카드를 보이게 하려던 것인데, 관전이
+    ///   시작되면 그 자리의 내용이 **판으로 바뀐다**(`GamesChessWatchSection` — 절 머리 + 카드 + 판 + 상태 상자).
+    ///   바닥 닻은 그때도 계속 바닥(순위 절)을 붙잡아 **판을 통째로 접힘 위로 밀어 올렸다**: 실측에서
+    ///   `watch/demo-chess-live`·`watch/demo-chess-over`(402·390 둘 다)는 파일 글자(a~h) 한 줄만 네비 바 밑에
+    ///   걸쳤고, 앞선 두 레인은 이 화면을 아예 못 봤거나 픽스처를 손대 우회했다. 닻을 놓으면 스크롤이 머리에서
+    ///   서고, 관전 절을 화면 위로 올리는 것은 바로 아래 닻이 한다(`GamesChessScreen.watchSectionAnchorID` —
+    ///   위쪽 절들이 응답마다 자라므로 한 번 올리는 것으로는 다시 밀려난다).
+    ///
+    /// ★★ **`if/else` 로 가르지 않는다**(`defaultScrollAnchor` 는 `UnitPoint?` 를 받는다 — nil 이 '닻 없음'이다).
+    ///   `@ViewBuilder` 의 두 갈래는 **서로 다른 신원**이라, 값이 뒤집히는 순간 SwiftUI 가 그 아래 나무를
+    ///   **헐고 다시 세운다**. 이 닻이 보는 값은 관전 중인가이고 관전은 화면이 서 있는 동안 뒤집히므로,
+    ///   갈래로 적으면 로비 스크롤이 통째로 다시 서서 스크롤 자리와 관전 판의 뷰포트 측정이 날아간다
+    ///   (이 닻을 `navigationDestination` 자리에 달았을 때는 **체스 화면 자체**가 헐려
+    ///   `chessScreenDidDisappear()` → `stopWatching()` 이 돌아 관전이 영영 안 섰다 — 실측).
+    func gamesDemoChessSectionAnchor(_ section: MobileDemoChessRoute.Section?, isWatching: Bool) -> some View {
+        defaultScrollAnchor(section == .bottom && !isWatching ? .bottom : nil)
+    }
+
+    /// 데모 스크린샷 전용: **관전 절을 화면 위로** 올린다(`-AingCheckDemoRoute games/chess/watch/<id>`).
+    ///
+    /// 한 번만 올리면 안 된다 — 로비 응답·관전 응답이 차례로 도착하며 **관전 절 위쪽이 자라** 그만큼 다시 밀려난다
+    /// (사람 목록 · 받은 신청 · 안내줄). 그래서 처음 몇 초만 짧게 되풀이한다. 애니메이션을 쓰지 않는 것도 일부러다
+    /// (스크린샷이 흐르는 중간을 찍으면 안 된다).
+    ///
+    /// Release 에서는 **한 줄도 돌지 않는다**: `#if DEBUG` 안이고, 그 안에서도 데모 실행(`isDemo`)이어야 한다.
+    ///
+    /// ★ 위 닻과 같은 까닭으로 **`if/else` 로 가르지 않는다** — `watchID` 가 nil → 값으로 뒤집히는 순간
+    ///   갈래가 바뀌면 로비 스크롤이 헐리고 다시 선다. 갈래 대신 `task(id:)` 를 늘 달고 **안에서** 돌아선다.
+    func gamesDemoChessWatchAnchor(isDemo: Bool, watchID: String?, proxy: ScrollViewProxy, id: String) -> some View {
+        #if DEBUG
+        return task(id: watchID) {
+            guard isDemo, watchID != nil else { return }
+            for _ in 0..<12 {
+                proxy.scrollTo(id, anchor: .top)
+                try? await Task.sleep(for: .milliseconds(250))
+            }
         }
+        #else
+        return self
+        #endif
     }
 }
 

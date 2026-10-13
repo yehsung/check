@@ -353,8 +353,6 @@ struct GamesChessMatchView: View {
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
-                    actionRow(match: match, chrome: chrome)
-                        .padding(.top, MobileTheme.space1)
                 }
                 .padding(.horizontal, MobileTheme.sideMargin)
                 .padding(.top, MobileTheme.space1)
@@ -362,6 +360,11 @@ struct GamesChessMatchView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        // ★ 동작 줄은 **스크롤 밖**에 있다(아래 `actionBar` 머리말 — 큰 글자에서 첫 화면이 잘렸다).
+        //   `GeometryReader` **바깥**에 다는 것이 일부러다: 안쪽에 달면 막대가 본문만 깎고
+        //   `screen.size.height` 는 그대로라 판 예산(`boardSide` 의 세로 비율)이 막대 높이만큼 낙관적이 된다.
+        //   바깥에 달면 `GeometryReader` 가 받는 높이에서 막대가 이미 빠져 있어 그 예산이 저절로 맞는다.
+        .safeAreaInset(edge: .bottom, spacing: 0) { actionBar(match: match, chrome: chrome) }
         // ★ 탭 막대를 숨긴다(`TabBarPolicy.Screen.chessMatch` — 오목 대국과 같은 까닭: 몰입 화면 + 자체 동작 줄).
         //   이 한 줄이 **없었다**: 갈래는 주석까지 달려 선언돼 있었는데 호출자가 Sources 전체에 0건이어서,
         //   무승부 제안 화면의 [무승부 수락]·[거절]이, 다른 상태에서는 [기권]·[무승부 제안]이 탭 막대 뒤에
@@ -461,6 +464,29 @@ struct GamesChessMatchView: View {
     }
 
     // MARK: 동작 줄
+
+    /// 동작 줄이 서는 **아래 막대**(스크롤 밖 · `safeAreaInset`). 오목 관전의 [나가기] 막대와 같은 꼴
+    /// (머리카락 선 + 불투명 바닥) — 스크롤 내용이 버튼 뒤로 비치면 글자가 겹쳐 읽힌다.
+    ///
+    /// ★ **왜 스크롤 밖인가**: 전에는 이 줄이 열 맨 아래 자식이었다. 헤드리스 실측(402pt · `content_size` XXXL)에서
+    ///   `games/chess/match` 의 [기권]·[무승부 제안]이 화면 **마지막 픽셀 줄**(y=2621)까지 칠해진 채 잘렸고,
+    ///   무승부 제안을 받은 판은 한 줄이 더 밀어내 [무승부 수락]의 파란 띠 **한 조각만** 남았다.
+    ///   "스크롤하면 닿는다"는 **제한 시간이 도는 판**에서 충분하지 않다 — 방금 같은 까닭으로 탭 막대 가림(D2)을
+    ///   출시 막는 결함으로 고쳤고, 그 둘은 같은 버튼들이다.
+    ///
+    /// 큰 글자에서 버튼이 두 줄로 접히면(`ViewThatFits` · 접근성 크기) 막대가 그만큼 높아지고 `safeAreaInset` 이
+    /// 본문을 밀어 준다 — 상한을 두지 않는 까닭은 **이 줄이 잘리면 안 되는 것**이 결함의 정체였기 때문이다.
+    private func actionBar(match: ChessMatchState, chrome: GamesChessMatchChrome) -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(MobileTheme.separator)
+                .frame(height: MobileTheme.hairline)
+            actionRow(match: match, chrome: chrome)
+                .padding(.horizontal, MobileTheme.sideMargin)
+                .padding(.vertical, 10)
+        }
+        .background(MobileTheme.surface)
+    }
 
     @ViewBuilder
     private func actionRow(match: ChessMatchState, chrome: GamesChessMatchChrome) -> some View {
@@ -607,8 +633,10 @@ struct GamesChessClockLeaf: View {
     let isTurn: Bool
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.2, paused: !store.isWindowVisible || !isTurn)) { context in
-            let remaining = store.remainingSeconds(color, now: context.date) ?? 0
+        // ★ `now` 는 **스토어 시계**다(`TimelineView` 는 다시 그리게 깨우는 펌프일 뿐 — `context.date` 를 쓰지 않는다).
+        //   까닭은 아래 `GamesChessTurnLeaf` 머리말과 같다: `turnStartedAt` 이 그 시계 축으로 보정돼 있다.
+        TimelineView(.animation(minimumInterval: 0.2, paused: !store.isWindowVisible || !isTurn)) { _ in
+            let remaining = store.remainingSeconds(color, now: store.clock()) ?? 0
             let face = GamesChessMatchChrome.clockFace(seconds: remaining, isTurn: isTurn)
             Text(face.text)
                 .font(MobileTheme.number(.title3, weight: .bold))
@@ -627,14 +655,27 @@ struct GamesChessClockLeaf: View {
 }
 
 /// 차례 한 줄(내 차례 · 체크 · 결과 확인 중). 깃발+유예 판정이 시간에 달려 있어 잎 뷰다.
+///
+/// ★ **`now` 는 `store.clock()` 이다 — `context.date` 가 아니다.** 깃발 판정이 비교하는 `clock.turnStartedAt` 은
+///   서버 epoch 을 **그 시계 축으로** 옮긴 값이고(`ChessStore.deviceDate(serverMs:)` 가 `server_now_ms − clock()`
+///   어긋남으로 보정한다), `TimelineView` 가 주는 `context.date` 는 그 축을 모르는 **기기 벽시계**다. 두 축을 섞으면
+///   어긋남만큼이 그대로 "흐른 시간"으로 계산된다. 운영에서는 둘이 같은 벽시계라(`MobileClock.system` = `{ Date() }`)
+///   한 글자도 달라지지 않지만, 시계를 꽂은 배선에서는 갈린다: 고정 시계 데모(`MobileClock.demoInstant`)에서
+///   진행 중 대국 화면이 **전부** "시간이 다 됐어요 · 결과를 확인하고 있어요" + 차례 쪽 시계 "0.0" 으로 떴다
+///   (실측 — 26일치 어긋남이 흐른 시간으로 계산됐다). 그래서 "내 차례"·"체크!"·살아 있는 시계를 한 번도 못 찍었다.
+///   폰 게임 폴더의 다른 잎 뷰 전부가 이미 스토어 시계를 쓴다(`GamesGomokuTurnRing` · `GamesChessLiveRow`) —
+///   체스 잎 둘만 갈려 있었다. `TimelineView` 는 **다시 그리게 깨우는 펌프**로만 쓴다.
+///
+/// ★ 시각을 **주입하는 것이 아니다**: 운영 경로도 같은 한 줄을 지나고 그 시계가 벽시계다(분기가 없다 —
+///   `#if DEBUG` 도 데모 깃발도 없다). 시계의 권위는 그대로 서버에 있다.
 struct GamesChessTurnLeaf: View {
     let store: ChessStore
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.2, paused: !store.isWindowVisible)) { context in
+        TimelineView(.animation(minimumInterval: 0.2, paused: !store.isWindowVisible)) { _ in
             if let match = store.match {
                 let line = GamesChessMatchChrome.turnLine(
-                    match: match, now: context.date, graceSecondsFallback: store.graceSeconds,
+                    match: match, now: store.clock(), graceSecondsFallback: store.graceSeconds,
                     isRobotThinking: store.isAIThinking)
                 Text(line.text)
                     .font(MobileTheme.rowTitle)

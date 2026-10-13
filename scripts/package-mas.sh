@@ -86,7 +86,6 @@ FORBIDDEN_STRINGS=(
   "releases/latest/download"         # DMG 자가 교체 · 직접 받기 링크
   "api.github.com/repos"             # GitHub 릴리스 감시
   "aing-check-update"                # 분리 프로세스 업데이터 스크립트·로그
-  "Claude Code-credentials"          # 남의 키체인 항목(Claude 리밋) — 2.5.2 / 5.1.1
   "account/usage/read"               # codex app-server 프로브
   "/opt/homebrew/bin/agy"            # 안티그래비티 CLI 실행
 )

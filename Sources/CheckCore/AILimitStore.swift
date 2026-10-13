@@ -765,15 +765,17 @@ extension AILimitStore {
     }
 
     #if CHECK_MAS
-    /// **맥 앱스토어 판의 러너**(v0.3.51). 자식 프로세스를 띄우는 두 리더(Claude 키체인 · `agy`)는 이 판에서 컴파일되지
-    /// 않으므로 이 러너에는 **Codex 리더 하나**뿐이다. 그것도 판정표가 허락할 때만(`MacEdition.readsCodexLimits`) 부른다.
-    /// 요청 집합에 Claude·안티그래비티가 들어 있어도 결과를 만들지 않는다 — 결과가 없는 제공자는 스토어가 "그대로 둔다"로
+    /// **맥 앱스토어 판의 러너**(0.3.52). 사용자 설치 실행 파일을 띄우는 `agy` 리더는 이 판에서 컴파일되지 않으므로
+    /// 이 러너에는 **Claude(시스템 `security`) · Codex(`auth.json`) 리더 둘**뿐이다. 각각 판정표가 허락할 때만
+    /// (`MacEdition.readsClaudeLimits` · `readsCodexLimits`) 부른다.
+    /// 요청 집합에 안티그래비티가 들어 있어도 결과를 만들지 않는다 — 결과가 없는 제공자는 스토어가 "그대로 둔다"로
     /// 읽고(`apply`), 한 번도 읽힌 적이 없으니 설정에도 카드에도 줄이 서지 않는다(빈 카드·"0" 이 없다).
     /// Codex 홈은 `~/.codex` 고정이다 — 로그인 셸의 `CODEX_HOME` 을 묻는 조회가 이 판에 없다.
     package nonisolated static func liveRunner(
         home: URL,
         appVersion: String,
         session: URLSession,
+        processRunner: AILimitCommandRunner? = nil,
         fetcher: AILimitHTTPFetcher? = nil,
         codexHome: URL? = nil
     ) -> Runner {
@@ -783,11 +785,18 @@ extension AILimitStore {
             codexHome: codexHome ?? home.appendingPathComponent(".codex", isDirectory: true),
             appVersion: appVersion
         )
+        let claude = AILimitClaudeReader(runner: processRunner ?? AILimitProcess.live(), fetch: fetch, appVersion: appVersion)
         let readsCodex = MacEdition.appStore.readsCodexLimits
+        let readsClaude = MacEdition.appStore.readsClaudeLimits
         return { now, providers in
-            var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [:]
-            if readsCodex, providers.contains(.codex) { results[.codex] = await codex.read(now: now) }
-            return AILimitReadOutcome(results: results)
+            typealias Reading = (AILimitProvider, Result<AILimitProviderSnapshot, AILimitReadError>)
+            return await withTaskGroup(of: Reading.self) { group in
+                if readsClaude, providers.contains(.claude) { group.addTask { (.claude, await claude.read(now: now)) } }
+                if readsCodex, providers.contains(.codex) { group.addTask { (.codex, await codex.read(now: now)) } }
+                var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [:]
+                for await (provider, result) in group { results[provider] = result }
+                return AILimitReadOutcome(results: results)
+            }
         }
     }
     #else

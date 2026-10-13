@@ -275,7 +275,7 @@ private func functionBody(_ sql: String, _ name: String) throws -> String {
         #expect(window == 600)
         #expect(WorkTimerStore.adoptedPokeConsumerInputWindowSeconds > TimeInterval(window),
                 "맥 소비 창(\(WorkTimerStore.adoptedPokeConsumerInputWindowSeconds)초)이 서버 창(\(window)초)보다 좁다 — 서버가 받은 찌르기를 아무도 안 받는다")
-        #expect(minBuild > 103, "0.3.50(103)은 흡수 세션에서 찌르기를 안 받는다 — 그 맥을 '받아 줄 맥'으로 치면 찌르기가 사라진다")
+        #expect(minBuild > 104, "0.3.50(103)·0.3.51(104)은 흡수 세션에서 찌르기를 안 받는다(0.3.51 은 이 기능 없이 먼저 나갔다) — 그 맥을 '받아 줄 맥'으로 치면 찌르기가 사라진다")
         let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let script = try String(contentsOf: repoRoot.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
         let squashedScript = script.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")

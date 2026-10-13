@@ -261,14 +261,15 @@ struct V0351MASPackagingTests {
     // ③ 금지 문자열 게이트가 뜻을 가진다
     @Test func masForbiddenStringsAreLongAndPresentInDeveloperIDSources() throws {
         let forbidden = try masForbiddenStrings()
-        #expect(forbidden.count >= 7, "금지 문자열 목록을 읽지 못했다(\(forbidden.count)개)")
+        #expect(forbidden.count >= 6, "금지 문자열 목록을 읽지 못했다(\(forbidden.count)개)")
         let corpus = try masMacCodeCorpus()
         for s in forbidden {
             #expect(s.utf8.count >= 16, "[\(s)] 는 \(s.utf8.count)바이트 — 15바이트 이하는 코드에 인라인돼 바이트 검색으로 못 찾는다")
             #expect(corpus.contains(s), "[\(s)] 가 맥 소스 코드에 없다 — 게이트가 헛돈다(기준선이 같으면 영원히 초록). 목록을 지금 코드에 맞춘다")
         }
-        // 다섯 갈래(brew · DMG · GitHub 감시 · 타사 자격증명 · 외부 실행)가 다 덮여야 한다.
-        for needle in ["brew upgrade", "releases/latest/download", "api.github.com", "Claude Code-credentials", "account/usage/read", "agy"] {
+        // 네 갈래(brew · DMG · GitHub 감시 · 사용자 설치 실행 파일)가 다 덮여야 한다. Claude 리밋(시스템 `security` 로 키체인
+        // 항목 읽기)은 2026-10-14 결정으로 앱스토어 판에 남으므로 이 목록에 없다 — `MacEdition.readsClaudeLimits` 참고.
+        for needle in ["brew upgrade", "releases/latest/download", "api.github.com", "account/usage/read", "agy"] {
             #expect(forbidden.contains { $0.contains(needle) }, "금지 목록에서 [\(needle)] 갈래가 빠졌다")
         }
     }
@@ -277,7 +278,7 @@ struct V0351MASPackagingTests {
     //   글자 단언("die 가 있다")은 die → warn 변형을 못 잡는다 — 블록을 원문 그대로 잘라 가짜 바이너리에 건다.
     @Test func masForbiddenStringGateDiesInStrictModeAndOnlyWarnsInRehearsal() throws {
         let forbidden = try masForbiddenStrings()
-        #expect(forbidden.count >= 7, "금지 문자열 목록을 읽지 못했다(\(forbidden.count)개)")
+        #expect(forbidden.count >= 6, "금지 문자열 목록을 읽지 못했다(\(forbidden.count)개)")
         let dir = try masTempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let harness = dir.appendingPathComponent("gate2.sh")

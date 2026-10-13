@@ -14,7 +14,7 @@
 
 **업데이트(심사 지침 2.4.5(vii))** — 새 버전 안내가 없다. `UpdateCheckStore.isUpdateAvailable` 이 늘 거짓이라 배너·캐릭터 말풍선·메뉴바 점이 함께 꺼진다. 서버 `app_latest_release` 배선과 GitHub 폴링, brew upgrade·DMG 교체(`UpdateRunner` 와 그 스크립트), `UpdateBanner` 는 **컴파일되지 않는다.** 서버 공지 카드는 남지만 링크는 `https://apps.apple.com` 만 보여 주고, 그 밖의 링크는 QR·버튼 문구째 뗀다.
 
-**외부 프로세스(2.5.2)** — 로그인 셸 조회(`/bin/zsh -lc/-ic`), `codex app-server` 계정 프로브, Claude 리밋(`/usr/bin/security` 로 남의 키체인 항목), 안티그래비티 리밋(`agy`)이 컴파일되지 않는다. 계정 프로브는 무해 인스턴스이고 업로드 경로가 부르지도 않는다(계정 상태는 서버에 '모름'으로 간다). Codex 리밋(`~/.codex/auth.json` 읽기)은 **남긴다**(2026-10-14 결정 — `MacEdition.readsCodexLimits` 한 줄로 끌 수 있다).
+**외부 프로세스(2.5.2)** — 로그인 셸 조회(`/bin/zsh -lc/-ic`), `codex app-server` 계정 프로브, 안티그래비티 리밋(`agy`)이 컴파일되지 않는다. **Claude 리밋(시스템 `/usr/bin/security` 로 키체인 항목 읽기)은 남긴다**(2026-10-14 사용자 결정 "AI 리밋은 예외 권한으로 기능 그대로" + 샌드박스 실측: 상속 샌드박스에서 프롬프트 없이 exit 0 — `MacEdition.readsClaudeLimits` 한 줄로 끈다). 계정 프로브는 무해 인스턴스이고 업로드 경로가 부르지도 않는다(계정 상태는 서버에 '모름'으로 간다). Codex 리밋(`~/.codex/auth.json` 읽기)은 **남긴다**(2026-10-14 결정 — `MacEdition.readsCodexLimits` 한 줄로 끌 수 있다).
 
 **진짜 홈** — 샌드박스에서는 `homeDirectoryForCurrentUser` 가 컨테이너다. 토큰 스캐너·Codex 진단·Codex 리밋은 `AIToolHome.current()`(앱스토어 판은 `getpwuid_r`)로 사용자의 진짜 홈을 읽는다. 읽는 자리는 다음 넷이고, 패키징의 읽기 전용 임시 예외(`com.apple.security.temporary-exception.files.home-relative-path.read-only`)와 짝이다.
 
@@ -55,9 +55,9 @@
 
 앱스토어 판 실행 파일에 다음이 **없어야** 한다(`strings -a` · `nm`). 2026-10-14 디버그·릴리스 빌드(arm64) 실측 0건.
 
-- 문자열: `brew upgrade` · `brew update` · `releases/latest` · `aing-check-update` · `api.github.com` · `nohup` · `hdiutil` · `spctl` · `app-server` · `Claude Code-credentials` · `/usr/bin/security` · `find-generic-password` · `/bin/zsh` · `--output-format` · `command -v codex`
-- 심볼: `UpdateRunner` · `dmgUpdateScript` · `upgradeScript` · `AILimitClaudeReader` · `AILimitAntigravityReader` · `ProcessSession` · `shellLookupScript`
-- `nm -u` 에 `NSTask` 참조가 0 이다(자식 프로세스를 띄우는 코드가 아예 없다).
+- 문자열: `brew upgrade` · `brew update` · `releases/latest` · `aing-check-update` · `api.github.com` · `nohup` · `hdiutil` · `spctl` · `app-server` · `/bin/zsh` · `--output-format` · `command -v codex`
+- 심볼: `UpdateRunner` · `dmgUpdateScript` · `upgradeScript` · `AILimitAntigravityReader` · `ProcessSession` · `shellLookupScript`
+- 자식 프로세스는 **Claude 리밋의 시스템 도구 `/usr/bin/security` 하나**만 띄운다(0.3.52 결정). 그래서 `nm -u` 의 `NSTask` 참조는 0 이 아니다 — 사용자 설치 실행 파일(`agy`·`codex`·로그인 셸)을 띄우는 문자열이 위 목록대로 0건인 것으로 가른다.
 - 주의: `kingcheck.mas` 같은 15바이트 이하 문자열은 릴리스 빌드에서 명령어 안에 박혀 `strings` 로 안 보인다 — "있어야 한다" 쪽 검사는 문자열로 하지 마라(디버그 빌드에서는 보인다).
 
 ## 운영 수칙(이 판이 생기며 새로 생긴 것)

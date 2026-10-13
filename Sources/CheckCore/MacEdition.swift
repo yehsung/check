@@ -69,8 +69,12 @@ package enum MacEdition: String, CaseIterable, Equatable, Sendable {
     /// 없을 뿐, 같은 사람의 brew 판 맥이 있으면 그쪽 계정값이 그대로 쓰인다).
     package var probesCodexAccount: Bool { self == .developerID }
 
-    /// Claude 리밋(남의 키체인 항목 `Claude Code-credentials` 를 `/usr/bin/security` 로 읽는다). 앱스토어 판에서 뺀다.
-    package var readsClaudeLimits: Bool { self == .developerID }
+    /// Claude 리밋(남의 키체인 항목 `Claude Code-credentials` 를 시스템 도구 `/usr/bin/security` 로 읽는다).
+    ///
+    /// ★ 2026-10-14 결정: 앱스토어 판에도 **남긴다** — 사용자가 "AI 리밋은 예외 권한으로 기능 그대로 신청"을 골랐고, 샌드박스
+    ///   실측에서 상속 샌드박스 안의 `security` 가 프롬프트 없이 읽었다. Codex 리밋처럼 **AI 기록 읽기 동의 뒤에만** 돈다.
+    ///   심사에서 문제가 되면 이 한 줄을 `self == .developerID` 로 바꾼다(러너가 이 값을 본다).
+    package var readsClaudeLimits: Bool { true }
 
     /// 안티그래비티 리밋(`agy` CLI 를 띄운다). 앱스토어 판에서 뺀다.
     package var readsAntigravityLimits: Bool { self == .developerID }

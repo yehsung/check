@@ -219,10 +219,10 @@ package enum AILimitProcess {
         { _ in .notRun }
     }
 
-    // ★ 맥 앱스토어 판(v0.3.51)에서는 **자식 프로세스 실행기 자체가 없다.** 이 실행기를 쓰는 리더 둘(Claude 키체인을
-    //   `/usr/bin/security` 로 · 안티그래비티를 `agy` 로)이 그 판에서 컴파일되지 않고, 샌드박스의 자식은 부모의 샌드박스를
-    //   물려받아 어차피 실패한다 — 남의 실행 파일을 띄우는 코드가 바이너리에 남는 것 자체가 심사 지침 2.5.2 다.
-    #if !CHECK_MAS
+    // ★ 맥 앱스토어 판(0.3.52)에도 이 실행기는 **남는다** — 그 판에서 쓰는 것은 Claude 리더 하나(시스템 도구
+    //   `/usr/bin/security`)뿐이다. 2026-10-14 샌드박스 실측: 상속 샌드박스 안에서도 그 도구가 프롬프트 없이 exit 0 으로
+    //   항목을 읽었다(work-maspipe/probe). 사용자가 "AI 리밋은 예외 권한으로 기능 그대로 신청"을 골랐다. `agy` 는 사용자
+    //   설치 실행 파일이라 그 판에서 컴파일되지 않는다(아래 안티그래비티 리더).
     package static func live() -> AILimitCommandRunner {
         { command in
             await withCheckedContinuation { continuation in
@@ -355,7 +355,6 @@ package enum AILimitProcess {
             completion?(output)
         }
     }
-    #endif
 }
 
 // MARK: - 시각 파싱
@@ -416,9 +415,9 @@ package enum AILimitResetTrust {
 
 // MARK: - Claude Code
 
-// ★ 맥 앱스토어 판(v0.3.51)에서 컴파일되지 않는다 — 남의 키체인 항목을 `/usr/bin/security` 자식 프로세스로 읽는 리더라
-//   샌드박스(자식 상속)와 심사 지침(2.5.2 · 5.1.1)이 둘 다 막는다. 그 판의 러너(`AILimitStore.liveRunner`)는 이 타입을 모른다.
-#if !CHECK_MAS
+// ★ 맥 앱스토어 판(0.3.52)에서도 컴파일된다 — 2026-10-14 사용자 결정("AI 리밋은 예외 권한으로, 기능 그대로 신청")과
+//   샌드박스 실측(상속 샌드박스에서 `/usr/bin/security` 가 이 항목을 프롬프트 없이 읽었다)에 따라. 심사에서 문제가 되면
+//   `MacEdition.readsClaudeLimits` 한 줄로 그 판에서 끈다(러너가 그 값을 본다).
 /// Claude Code 의 5시간 · 주간 창을 읽는다.
 ///
 /// ## 자격증명은 `/usr/bin/security` **자식 프로세스**로만 읽는다
@@ -592,7 +591,6 @@ package struct AILimitClaudeReader: Sendable {
         return Self.parseUsage(response.body, observedAt: now, planLabel: credentials.planLabel)
     }
 }
-#endif
 
 // MARK: - OpenAI Codex
 

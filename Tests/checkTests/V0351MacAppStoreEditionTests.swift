@@ -49,7 +49,8 @@ struct V0351MacAppStoreEditionTests {
         let e = MacEdition.appStore
         #expect(!e.updatesItself)
         #expect(!e.probesCodexAccount)
-        #expect(!e.readsClaudeLimits)
+        // 2026-10-14 결정: Claude 리밋도 남긴다(시스템 `security`, 동의 뒤에만) — 바꾸면 이 줄과 MacEdition 주석을 같이 고쳐라.
+        #expect(e.readsClaudeLimits)
         #expect(!e.readsAntigravityLimits)
         // 2026-10-14 결정: Codex 리밋은 남긴다(동의 뒤에만 돈다) — 바꾸면 이 줄과 MacEdition 주석을 같이 고쳐라.
         #expect(e.readsCodexLimits)
@@ -759,34 +760,44 @@ struct V0351MacAppStoreEditionTests {
     }
 
     @Test func 외부_프로세스를_띄우는_리더는_앱스토어_판에서_컴파일되지_않는다() throws {
-        try v0351ExpectExcluded("AILimitReaders.swift", [
-            "struct AILimitClaudeReader", "struct AILimitAntigravityReader",
-            "static func live() -> AILimitCommandRunner", "private final class Session",
+        // 사용자 설치 실행 파일(`agy`)을 띄우는 리더만 빠진다. Claude 리더와 실행기는 시스템 `security` 하나를 위해 남는다
+        // (2026-10-14 결정 · 샌드박스 실측).
+        try v0351ExpectExcluded("AILimitReaders.swift", ["struct AILimitAntigravityReader"])
+        try v0351ExpectIncluded("AILimitReaders.swift", [
+            "struct AILimitClaudeReader", "static func live() -> AILimitCommandRunner", "private final class Session",
         ])
         try v0351ExpectExcluded("CheckCodexAccountUsage.swift", [
             "private static func shellLookup(", "private static func runSession(", "private final class ProcessSession",
             "static var shellLookupScript", "package static func run(",
         ])
-        // 앱스토어 판 러너는 Codex 리더 하나뿐이고, 브루 판 러너(세 리더)는 그 판에서 빠진다.
-        try v0351ExpectExcluded("AILimitStore.swift", ["AILimitClaudeReader(", "AILimitAntigravityReader("])
-        try v0351ExpectIncluded("AILimitStore.swift", ["AILimitCodexReader("])
+        // 앱스토어 판 러너는 Claude·Codex 리더 둘이고, 브루 판 러너(세 리더)의 안티그래비티는 그 판에서 빠진다.
+        try v0351ExpectExcluded("AILimitStore.swift", ["AILimitAntigravityReader("])
+        try v0351ExpectIncluded("AILimitStore.swift", ["AILimitCodexReader(", "AILimitClaudeReader("])
         // Codex 계정 프로브의 라이브 조립은 그 판에서 무해 인스턴스다(호출 지점 CheckApp 의 한 줄은 두 판이 같다).
         try v0351ExpectExcluded("CheckCoreBridge.swift", ["CodexAccountUsageProbe.fetch(", "CodexAccountUsageProbe.resolveCodexHome()"])
         // 실행 인자로 여는 진단 명령 루프도 그 판에는 없다.
         try v0351ExpectExcluded("CheckSettingsWindow.swift", ["readLine(strippingNewline: true)"])
     }
 
+    /// 앱스토어 판에서 컴파일되는 자식 프로세스는 **리밋 실행기(`AILimitProcess.live()` 의 `Session`) 하나**뿐이다 —
+    /// Claude 리밋이 시스템 도구 `/usr/bin/security` 를 띄우는 자리(2026-10-14 사용자 결정 · 샌드박스 실측). 그 실행기로
+    /// 사용자 설치 실행 파일을 띄우던 안티그래비티 리더는 울타리 안에 있다(위 테스트). 그 밖의 `Process()` 가 울타리 밖에
+    /// 새로 생기면 빨개진다.
     @Test func 불변식_Process_는_전부_앱스토어_판_울타리_안에_있다() throws {
         var hits = 0
+        var allowedUnfenced = 0
         for (name, source) in try v0351AllSources() {
             let excluded = V0351IfConfig.linesExcludedUnderMAS(source)
             for (index, line) in source.components(separatedBy: "\n").enumerated()
             where line.contains("Process()") || line.contains(".executableURL =") {
                 hits += 1
-                #expect(excluded.contains(index), "앱스토어 판에서 컴파일되는 자식 프로세스: \(name):\(index + 1) \(line)")
+                if excluded.contains(index) { continue }
+                if name == "AILimitReaders.swift" { allowedUnfenced += 1; continue }
+                Issue.record("앱스토어 판에서 컴파일되는 자식 프로세스: \(name):\(index + 1) \(line)")
             }
         }
         #expect(hits >= 4, "검사가 헛돈다 — Process() 를 하나도 못 찾았다")
+        #expect(allowedUnfenced >= 1, "리밋 실행기가 울타리 안으로 들어갔다 — Claude 리밋을 앱스토어 판에서 뺐다면 MacEdition.readsClaudeLimits·이 테스트를 같이 고쳐라")
     }
 
     @Test func 불변식_컨테이너_홈을_쓰는_자리는_앱스토어_판에서_사라진다() throws {

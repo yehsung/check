@@ -383,6 +383,9 @@ package enum CodexAccountUsageProbe {
 
     // MARK: 요청/응답 (순수)
 
+    // ★ 맥 앱스토어 판에서는 컴파일되지 않는다 — 이 요청을 보낼 `codex app-server` 실행 경로가 그 판에 없고, 남은 리터럴이
+    //   패키징 게이트(`scripts/package-mas.sh` 금지 문자열 `account/usage/read`)에 걸린다(0.3.52 병합 때 실측: 디버그 바이너리 1건).
+    #if !CHECK_MAS
     /// stdio JSONL 요청 3줄(한 줄 = 한 메시지). initialize(id 1) → initialized 알림 → account/usage/read(id 2).
     package static func requestLines(appVersion: String) -> [String] {
         let version = appVersion.replacingOccurrences(of: "\"", with: "")
@@ -392,6 +395,7 @@ package enum CodexAccountUsageProbe {
             "{\"method\":\"account/usage/read\",\"id\":\(usageRequestID)}"
         ]
     }
+    #endif
 
     /// 응답 줄들을 파싱한다. **`id == requestID` 인 줄만** 쓴다 — 초기화 응답(id 1)·알림(`remoteControl/status/changed` 등)·
     /// 잘린 JSON 이 섞여 와도 무시한다. 그 줄에 `error` 가 있으면 실패(인증 문구면 `.notLoggedIn`), `result` 가 있으면

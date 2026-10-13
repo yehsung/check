@@ -33,7 +33,7 @@
 
 | 탭 | 화면에 있는 것 | 서버에 **쓰는** 것 | 근거 |
 | --- | --- | --- | --- |
-| 지금 | 내 상태 카드(착용 캐릭터·오늘 타이머·이번 주 막대), 오늘 할 일, 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기), 주간 목표 편집 시트 | 할 일(`todo_sync`), 팀 주간 목표(`set_team_weekly_goal`). **근무 시작/종료는 없다**(읽기만) | `Now/NowTab.swift:7-9`, `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22` |
+| 지금 | 내 상태 카드(착용 캐릭터·오늘 타이머·이번 주 막대), 오늘 할 일, 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기), 주간 목표 편집 시트 | 할 일(`todo_sync`), 팀 주간 목표(`set_team_weekly_goal`). **근무 시작/종료**(1.0.7 — `work_phone_start/stop/touch`, 서버 시계) | `Now/NowTab.swift:7-9`, `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22` |
 | 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift` |
 | 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘) 세 판 | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
 | 게임 | 미니게임 둘(타이밍 바·플래피 아잉), 1:1 오목(로비·신청·대국·채팅), 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출, 오목 신청·수락·착수·기권·채팅·음소거 | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290` |
@@ -41,7 +41,7 @@
 | (홈 위젯) | 지금 근무 중 · 내 오늘 · 할 일 — 세 종류. 앱이 쓴 스냅샷 파일만 그린다 | 할 일 체크 인텐트의 `todo_sync` 한 번뿐 | `Sources/CheckWidgetsKit/AingWidgetModel.swift:11-16`, `Sources/CheckMobileShared/WidgetSnapshot.swift:6`, `Sources/CheckWidgetsKit/WidgetTodoToggle.swift:11` |
 | (푸시) | 새 메시지 · 오목 신청(수락 버튼) · 제보 답장 세 종류, 앱 배지 = 안 읽은 메시지 + 받은 오목 신청 | 기기 등록(`register_device`), 알림 종류별 설정(`set_push_prefs`) | `Push/PushPayload.swift:6-10`, `Push/PushCoordinator.swift:14-27`, `Session/MobileDeviceService.swift:116-164` |
 
-폰이 **코드로 못 하는 것**(맥 전용): 근무 시작/종료·근무 시각 쓰기, 자리 비움 신호, AI 토큰 집계 업로드, 콕/울트라 찌르기, 울트라 구매, 집중 모드, 팀 합류/생성.
+폰이 **코드로 못 하는 것**(맥 전용): 근무 시각을 클라 시계로 쓰기(1.0.7 부터 폰의 근무 시작/종료는 서버 RPC 로만), 자리 비움 신호, AI 토큰 집계 업로드, 콕/울트라 찌르기, 울트라 구매, 집중 모드, 팀 합류/생성.
 근거: `Sources/CheckCore/SupabaseWorkServiceMacOnly.swift:1-10`(`#if os(macOS)` 파일 — iOS 에서는 컴파일되지 않는다),
 `Sources/CheckMobileKit/Demo/MobileStubURLProtocol.swift:175-187`(금지 RPC 목록 `take_pokes · work_tick · … · join_team · create_team`, 읽기 전용 표 `work_sessions · work_statuses · … · token_usage_*`, 금지 profiles 칸 `app_build · app_version · focus_mode`).
 **작업 B 뒤** `join_team · create_team` 은 폰에서도 부른다(SPEC 작업 B-1) — 이 목록과 `docs/privacy.md:102` 를 같이 고쳐야 한다(§7 위험 5).
@@ -81,7 +81,7 @@
 아래 문안은 약 1,300자. 모든 문장은 코드·`docs/privacy.md`·`README.md` 의 사실만 담았다(과장 금지 — 4.2/2.3 대비).
 
 > **아잉체크(aing-check)는 작은 팀을 위한 근무 타이머의 아이폰 동반 앱입니다.**
-> 맥 메뉴바 앱(aing-check for Mac)에서 누른 근무 시작·종료가 팀 전체에 실시간으로 공유되고, 아이폰에서는 그 현황을 언제 어디서나 확인하고 팀원과 이야기할 수 있습니다.
+> 맥 메뉴바 앱(aing-check for Mac)이나 아이폰에서 누른 근무 시작·종료가 팀 전체에 실시간으로 공유되고, 아이폰에서는 그 현황을 언제 어디서나 확인하고 팀원과 이야기할 수 있습니다.
 >
 > **지금** — 내 오늘 근무 시간과 이번 주 목표 달성률, 우리 팀에서 지금 누가 일하고 있는지, 오늘 할 일을 한 화면에서 봅니다. 할 일은 계정에 저장되어 맥과 아이폰, 홈 화면 위젯에서 같은 목록을 씁니다.
 >
@@ -96,7 +96,7 @@
 > **위젯** — 지금 근무 중인 사람, 내 오늘 근무, 오늘 할 일 위젯을 홈 화면에 둘 수 있습니다. 할 일은 위젯에서 바로 체크됩니다.
 >
 > **알아 두세요**
-> - 근무 시작·종료는 맥 앱에서 합니다. 아이폰 앱은 기록을 보고, 메시지·게임·할 일을 씁니다.
+> - 지금 탭에서 근무를 켜고 끌 수 있습니다. 폰을 잠가도 근무는 이어지고, 오래 확인하지 않으면 알림으로 물어봅니다.
 > - 팀에 들어가려면 팀원에게 받은 팀 코드가 필요하고, 코드가 없으면 새 팀을 만들어 혼자 시작할 수 있습니다.
 > - 광고·분석·추적 도구를 쓰지 않고, 앱 안 결제가 없습니다. 카메라·마이크·위치·연락처 권한을 요청하지 않습니다.
 > - 계정과 기록은 앱 안(나 → 설정)에서 언제든 삭제할 수 있습니다.
@@ -160,7 +160,7 @@
 
 | 데이터 | 폰 동작 | 근거 |
 | --- | --- | --- |
-| 근무 시작/종료 시각·근무 시간·현재 근무 상태 | GET 만. 폰은 쓰지 않는다 | `SupabaseWorkServiceMacOnly.swift:1-10`(`#if os(macOS)`), `MobileStubURLProtocol.swift:182-185`(읽기 전용 표), `Now/NowStore.swift:15`, `Me/MeStoreRecords.swift:6`, `privacy.md:99` |
+| 근무 시작/종료 시각·근무 시간·현재 근무 상태 | 1.0.7 부터 **수집**: 지금 탭의 근무 시작/종료(서버 시계) + 폰 앱을 마지막으로 연 시각(근무 확인용) — 라벨 '사용 데이터·기타'에 반영 | `SupabaseWorkServiceMacOnly.swift:1-10`(`#if os(macOS)`), `MobileStubURLProtocol.swift:182-185`(읽기 전용 표), `Now/NowStore.swift:15`, `Me/MeStoreRecords.swift:6`, `privacy.md:99` |
 | 마지막으로 컴퓨터를 만진 시각 | 폰은 올리지 않는다(맥만) | `privacy.md:13, 99`, 금지 RPC `away_sync·work_tick` `MobileStubURLProtocol.swift:178-179` |
 | AI 도구 토큰 사용량 숫자 | 순위판·내 잔디로 읽기만 | `Rankings/RankingsStore.swift:20`, `Me/MeStoreRecords.swift:6`, `MobileStubURLProtocol.swift:183-184`, `privacy.md:100` |
 | 콕/울트라 찌르기 | 폰에 없음 | `MobileStubURLProtocol.swift:178-179`(`poke_user·ultra_poke_user·take_pokes`), `privacy.md:101` |
@@ -285,7 +285,7 @@
 - 데모 계정 둘(A·B, 숨김 팀 "앱 심사 팀") · 비밀번호 무기한.
 - 팀 코드 없이 "팀 만들기" 로 혼자 시작 가능(작업 B 뒤) · 비밀번호 재설정 6자리 코드 앱 안 완결(작업 B 뒤) · 계정 삭제는 나 → 설정 → 계정 삭제, 비밀번호 재입력(작업 C 뒤).
 - 푸시 세 종류·설명 시트 먼저(`Push/PushCoordinator.swift:14-20`) · 맥에서 근무 중이면 폰 알림 생략(`Push/PushPayload.swift:263` `primerMacNote`, `privacy.md:108`) — 데모엔 해당 없음.
-- 근무 시작/종료는 맥 전용이라는 점을 **먼저** 말한다(4.2 오해 방지).
+- 1.0.7 부터 근무 시작/종료는 폰 지금 탭에서도 된다 — 심사 메모에 [근무 시작] 위치와 2시간 30분 확인 알림을 적는다.
 
 ---
 

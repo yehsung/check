@@ -1716,7 +1716,7 @@ package struct TakePokesRequest: Encodable {
 }
 
 /// poke_user / ultra_poke_user RPC 응답:
-/// { status: "ok"|"cooldown"|"not_working"|"target_not_working"|"ultra_used_today"|"invalid",
+/// { status: "ok"|"cooldown"|"not_working"|"target_not_working"|"target_focused"|"target_on_phone"|"ultra_used_today"|"invalid",
 ///   retry_after_seconds?, reset_after_seconds?, ultra_remaining? }
 package struct PokeSendResponse: Decodable, Equatable {
     package let status: String
@@ -1812,6 +1812,10 @@ package enum PokeSendOutcome: Equatable {
     case ultraUsedToday(resetAfterSeconds: Int)
     /// 대상이 집중 모드다(20260812090000). 몫도 쿨타임도 소모되지 않는다 — 서버가 행을 안 남긴다.
     case targetFocused
+    /// 대상이 **폰으로만** 근무 중이다(0.3.51 · 20261014130000 결정 ⑦). 찌르기를 받는 것은 맥의 take_pokes 뿐이라
+    /// 받아 줄 맥(0.3.51+ · 최근 입력)이 없으면 서버가 거절한다. 몫도 쿨타임도 소모되지 않는다 — 서버가 행을 안 남긴다.
+    /// 0.3.50 이하는 이 값을 모르므로 `.invalid`("지금은 찌를 수 없어요")로 접힌다 — 아래 default 가 그 계약이다.
+    case targetOnPhone
     case invalid
 
     package init(response: PokeSendResponse) {
@@ -1822,6 +1826,7 @@ package enum PokeSendOutcome: Equatable {
         case "target_not_working": self = .targetNotWorking
         case "ultra_used_today": self = .ultraUsedToday(resetAfterSeconds: max(1, response.resetAfterSeconds ?? 3600))
         case "target_focused": self = .targetFocused
+        case "target_on_phone": self = .targetOnPhone
         default: self = .invalid
         }
     }

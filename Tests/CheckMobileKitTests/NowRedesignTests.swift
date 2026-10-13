@@ -44,7 +44,9 @@ import Testing
         #expect(NowText.staleLastSeen(nil) == "연결 끊김")
         #expect(NowText.peopleCount(6) == "6명")
         #expect(NowText.talkTo("모래") == "모래에게 말 걸기")
-        #expect(NowText.workingFooter == "근무 시작과 종료는 맥 앱에서 해요")
+        // 0.3.51: 폰도 근무를 시작·종료한다(지금 탭 맨 위 버튼). 옛 문장은 서버에 폰 근무 함수가 없을 때만 남는다.
+        #expect(NowText.workingFooter == "근무는 맥이나 이 탭 맨 위 버튼으로 시작하고 끝내요")
+        #expect(NowText.workingFooterMacOnly == "근무 시작과 종료는 맥 앱에서 해요")
         #expect(NowText.sessionSince("10:20") == "이번 세션 10:20부터")
         #expect(NowText.goalSuffix(hours: 40) == "/ 40시간")
     }

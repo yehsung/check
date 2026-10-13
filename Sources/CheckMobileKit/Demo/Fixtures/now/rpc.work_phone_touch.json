@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "session": {
+    "id": "d0000000-0000-4000-8000-00000000a001",
+    "started_at": "2026-09-17T01:20:00.000Z",
+    "ended_at": null,
+    "origin": "phone"
+  },
+  "server_now": "2026-09-17T05:05:00.000Z",
+  "check_at": "2026-09-17T07:35:00.000Z",
+  "grace_seconds": 600,
+  "wallet": null
+}

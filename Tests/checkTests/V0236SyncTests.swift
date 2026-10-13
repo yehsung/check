@@ -233,9 +233,12 @@ private func offWorkMember(
         #expect(store.accumulatedSeconds == 6_300)
     }
 
-    @Test func freshSeenDropStaysSilent() {
-        // 대조군: 신선한 신호의 강하(다른 맥에서 방금 누른 정상 종료가 대표)는 기존대로 조용히 내린다 —
-        // 여기에 통보를 붙이면 정당한 종료마다 "연결이 끊겨…" 헛경보가 뜬다.
+    @Test func freshSeenDropSaysEndedElsewhereWithoutResume() {
+        // 대조군: 신선한 신호의 강하(다른 맥 · **폰**에서 방금 누른 정상 종료가 대표)는 "연결이 끊겨…" 헛경보도, 30분 재개도
+        // 없어야 한다 — 사용자가 끈 근무를 되살리면 안 된다.
+        // 0.3.51 에서 바뀐 것(폰도 근무를 끝낸다 — 사장님 결정): 예전엔 **침묵**이었는데 이제 "다른 기기에서 근무를 끝냈어요"
+        // 한 줄을 띄우고 자동 시작을 억제한다(맥 앞에서 타이핑하는 사람에게 5분 뒤 새 근무를 열지 않게). 헛경보 금지 계약은 그대로다:
+        // 띄우는 문장은 abandoned 문구가 아니다.
         let (_, defaults) = isolatedSuite()
         let store = makeStore(host: "v0236-sync-f4-fresh", defaults: defaults)
         defer { cancelTasks(store) }
@@ -243,13 +246,15 @@ private func offWorkMember(
         store.clock = { now }
         store.start(now: t0)
         store.pendingItems = []
-        let messageBefore = store.syncMessage
+        #expect(!store.autoStartSuppressed)
 
         store.teamMembers = [offWorkMember(todaySeconds: 7_170, lastSeenAt: now.addingTimeInterval(-30))]
         store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
 
         #expect(store.startedAt == nil)
-        #expect(store.syncMessage == messageBefore)
+        #expect(store.syncMessage == WorkTimerStore.remoteEndedElsewhereNotice)
+        #expect(store.syncMessage != WorkTimerStore.remoteAbandonedCloseNotice)
+        #expect(store.autoStartSuppressed)
         #expect(store.lastAutoClosedSessionID == nil)
         #expect(!store.canResumeRecentlyClosedSession(now: now))
         #expect(store.pendingItems.isEmpty)

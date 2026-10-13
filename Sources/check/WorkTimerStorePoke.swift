@@ -43,6 +43,15 @@ extension WorkTimerStore {
     /// 대상이 집중 모드일 때의 안내. 몫도 쿨타임도 소모되지 않았다는 사실까지 말해 준다 —
     /// 안 그러면 사용자는 "한 번 날린 건가?" 하고 남은 횟수를 잘못 센다.
     nonisolated static let targetFocusedNotice = "지금 집중 중이에요. 나중에 찔러 주세요"
+    /// 대상이 폰으로만 근무 중이라 받아 줄 맥이 없을 때의 안내(0.3.51 — 서버 `target_on_phone`). 찌르기는 맥에서만 뜬다.
+    /// 집중 모드 안내와 같은 모양으로 '언제 다시 하면 되는지'까지 말한다 — 몫도 쿨타임도 안 탔으니 그때 그대로 찌르면 된다.
+    nonisolated static let targetOnPhoneNotice = "폰으로 근무 중이에요. 맥으로 돌아오면 찔러 주세요"
+    /// 흡수(미러링) 중인 맥이 찔림을 받아 갈 때 요구하는 **이 맥의** 최근 입력 창(초) — 0.3.51, 폰이 연 근무.
+    /// 서버 게이트(`phone_work_poke_mac_input_seconds()` = 600 — 20261014130000 §6-B)보다 **넓어야 한다**: 서버는 이 맥이
+    /// 보고한 입력(폴링 주기만큼 늦게 도착한다)을 보고 찌르기를 받아 주는데, 그 찌르기를 정작 이 맥이 '입력이 낡았다'며 안 받으면
+    /// 아무도 안 받는다. 반대로 넓기만 하면 같은 계정의 다른 맥(사람이 떠난 집 맥)이 회사 맥의 찌르기를 훔친다 — 15분이 그 사이다.
+    /// V0351PhoneWorkMigrationTests 가 서버 값을 읽어 이 부등식을 잰다.
+    nonisolated static let adoptedPokeConsumerInputWindowSeconds: TimeInterval = 900
 
     /// 울트라 발사 직후 안내. 잔량을 아는 경우에만 뒤에 덧붙인다.
     /// **모르면 숫자를 지어내지 않는다** — 서버가 잔량 키를 안 보내는 창(구버전 서버)이 실제로 있고,
@@ -123,6 +132,10 @@ extension WorkTimerStore {
                     loadPokeDirectory()
                 case .targetFocused:
                     pokeNotice = Self.targetFocusedNotice
+                case .targetOnPhone:
+                    // 폰으로만 근무 중 — 받는 쪽이 맥뿐이라 서버가 거절했다(쿨타임 기록 없음). 디렉토리는 낡지 않았다:
+                    // 그 사람은 정말 근무 중이다. 그래서 재조회하지 않는다.
+                    pokeNotice = Self.targetOnPhoneNotice
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }
@@ -202,6 +215,9 @@ extension WorkTimerStore {
                     // 집중 모드도 재화를 태우지 않는다 — 서버가 재화 차감보다 **앞에서** 거절하므로
                     // 여기서 잔량을 건드리면 안 된다(멀쩡한 재화를 화면에서만 깎게 된다).
                     pokeNotice = Self.targetFocusedNotice
+                case .targetOnPhone:
+                    // 폰으로만 근무 중 — 서버가 관리자 분기·재화(ultra_wallet_touch)보다 **앞에서** 거절한다. 잔량을 건드리지 않는다.
+                    pokeNotice = Self.targetOnPhoneNotice
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }
@@ -493,13 +509,46 @@ extension WorkTimerStore {
     ///
     /// `adoptedRemoteSession` 도 함께 막는다: 흡수 세션의 주인은 다른 맥이다. 로컬 startedAt 이
     /// 서 있어도 그 근무는 이 맥의 것이 아니므로, 여기서 소비하면 진짜 주인이 못 본다.
+    /// **단 하나의 예외**(0.3.51): 주인 맥이 없는 흡수 세션 = 폰이 연 근무 — `adoptedSessionMayConsumePokes` 주석.
     ///
     /// ★ v0.3.30: 서버가 send_message 의 근무 조건을 풀어 **비근무 구간에도 메시지 행은 쌓인다**(찌르기는 여전히 안 쌓인다).
     ///   그래도 이 게이트는 그대로다 — 비근무 맥이 소비하면 말풍선을 볼 캐릭터가 없고 회사 맥의 말풍선을 훔친다.
     ///   근무 밖 메시지는 소켓 신호가 **요약 조회**로 알리고(메뉴바 점), 근무를 시작하는 순간 start() 의 drain 이 가져온다.
     func takePokesIfWorking() async {
-        guard startedAt != nil, !adoptedRemoteSession else { return }
+        guard startedAt != nil, !adoptedRemoteSession || adoptedSessionMayConsumePokes else { return }
         await drainReceivedPokes()
+    }
+
+    /// 흡수 세션인데도 **이 맥이** 찔림을 받아 가도 되는가(0.3.51 — 폰이 연 근무).
+    ///
+    /// 왜 필요한가: 폰이 연 근무는 서버 cron 이 몇 시간이고 '근무 중'으로 살려 두고(대리 하트비트), 찌르기를 받는 것은
+    /// take_pokes 뿐인데 폰은 그걸 부르지 않는다(맥의 리액션·말풍선을 훔친다). 그 근무를 미러링하는 맥까지 흡수 세션이라고
+    /// 안 받으면 **아무도** 안 받는다 — 찌르기와 돈 낸 울트라가 아무 화면에도 안 뜬 채 사라진다(0.3.51 리뷰가 잡았다).
+    /// 서버의 짝(20261014130000 §6-B `phone_work__poke_unreachable`)은 받아 줄 맥이 없으면 애초에 `target_on_phone` 으로
+    /// 거절하고, 받아 줄 맥 = 0.3.51+ 이면서 기기 행에 최근 10분 입력을 보고한 맥이다. 이 함수가 그 '받아 주는' 쪽이다.
+    ///
+    /// 셋이 모두 서야 한다(하나라도 모르면 받지 않는다 — 남의 것을 훔치는 쪽보다 서버가 막아 주는 쪽이 낫다):
+    ///  1. 내 행의 기기 주장(work_status_devices)을 **읽었다** — 빈 배열은 '다른 맥 없음'이 아니라 '판정 불가'다
+    ///     (`TeamMemberStatus.deviceClaims` 주석의 일방향 원칙). 서버가 열린 행으로 든 세션이 지금 흡수한 그 세션이어야 한다.
+    ///  2. **남의 맥**이 이 세션을 주장하지 않는다 — 주장하면 그 맥이 주인이고 받는 것도 그 맥이다(blocker 리얼타임 #5).
+    ///     폰이 연 근무는 어떤 기기 행도 session_id 로 주장하지 않는다(폰은 기기 행을 안 쓰고, 흡수 맥은 입력만 쓴다).
+    ///  3. 이 맥에 최근 입력이 있다(`adoptedPokeConsumerInputWindowSeconds`) — 같은 계정의 맥 두 대가 다 미러링 중이면
+    ///     사람이 앞에 있는 맥이 받는다. 창이 서버 창보다 넓어 서버가 받아 준 찌르기를 놓치지 않는다.
+    var adoptedSessionMayConsumePokes: Bool {
+        guard adoptedRemoteSession, startedAt != nil,
+              let sessionID = Self.canonicalSessionID(currentSessionID),
+              let userID = session?.userID,
+              let own = teamMembers.first(where: { $0.id == userID }),
+              own.openSession?.id == sessionID,
+              !own.deviceClaims.isEmpty
+        else { return false }
+        let anotherMacClaimsIt = own.deviceClaims.contains { claim in
+            !claim.deviceID.isEmpty
+                && claim.deviceID != deviceID
+                && Self.canonicalSessionID(claim.sessionID) == sessionID
+        }
+        guard !anotherMacClaimsIt, let input = lastMeaningfulInputAt else { return false }
+        return clock().timeIntervalSince(input) <= Self.adoptedPokeConsumerInputWindowSeconds
     }
 
     /// take_pokes 1회 원자 수신+소비 후 1시간 이내 신선분만 onPokesReceived 로 흘린다.

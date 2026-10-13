@@ -7,14 +7,23 @@ import Foundation
 //   message        {"aps":{…,"category":"MESSAGE","thread-id":"message-<보낸 사람>"},"type":"message","peer_id":uuid,"message_id":uuid}
 //   gomoku_invite  {"aps":{…,"category":"GOMOKU_INVITE","thread-id":"gomoku"},"type":"gomoku_invite","match_id":uuid}
 //   feedback_reply {"aps":{…,"category":"FEEDBACK_REPLY"},"type":"feedback_reply","report_id":uuid}
+//   work_check     {"aps":{…,"category":"WORK_CHECK","thread-id":"work-check"},"type":"work_check","session_id":uuid}
+//                  (0.3.51 — 폰이 연 근무에 2시간 30분 동안 신호가 없을 때 서버 cron 이 한 번 보낸다. 눌러 열면 근무가 이어진다.)
 // 오목 차례·결과·읽음은 푸시하지 않는다(서버가 만들지 않는다). 모르는 type·id 가 빠진 페이로드는 nil — 조용히 "지금" 탭으로 접지 않는다.
 // `message_id` 는 서버가 계속 싣지만 앱은 읽지 않는다 — 그것을 쓰던 알림 액션(답장 · 읽음)을 걷어냈다(w10). 있든 없든 · 모양이 틀리든 알림은 산다.
 
-/// 푸시 종류 세 개(서버 `push_outbox.kind` · `client_devices.push_prefs` 의 키와 같은 이름).
+/// 푸시 종류(서버 `push_outbox.kind` · `client_devices.push_prefs` 의 키와 같은 이름).
+///
+/// `workCheck`(0.3.51)는 **끌 수 없다** — 서버 `set_push_prefs` 허용 목록에 없고(끄면 확인 없이 조용히 끝난다),
+/// 그래서 나 탭 토글 목록(`configurable`)에서 빠진다. 권한 설명 시트에는 보인다(알림을 켤 이유다).
 package enum PushKind: String, CaseIterable, Sendable, Hashable {
     case message
     case gomokuInvite = "gomoku_invite"
     case feedbackReply = "feedback_reply"
+    case workCheck = "work_check"
+
+    /// 나 탭에서 켜고 끌 수 있는 종류(서버 `set_push_prefs` 허용 목록과 같은 셋 — 체스 신청은 폰에 아직 없다).
+    package static let configurable: [PushKind] = [.message, .gomokuInvite, .feedbackReply]
 
     /// APNs `aps.category`(카테고리 등록 식별자와 같다).
     package var categoryIdentifier: String {
@@ -22,6 +31,7 @@ package enum PushKind: String, CaseIterable, Sendable, Hashable {
         case .message: return PushIdentifiers.messageCategory
         case .gomokuInvite: return PushIdentifiers.gomokuInviteCategory
         case .feedbackReply: return PushIdentifiers.feedbackReplyCategory
+        case .workCheck: return PushIdentifiers.workCheckCategory
         }
     }
 
@@ -31,6 +41,7 @@ package enum PushKind: String, CaseIterable, Sendable, Hashable {
         case .message: return "메시지"
         case .gomokuInvite: return "오목 신청"
         case .feedbackReply: return "제보 답장"
+        case .workCheck: return "근무 확인"
         }
     }
 
@@ -40,6 +51,7 @@ package enum PushKind: String, CaseIterable, Sendable, Hashable {
         case .message: return "누가 나에게 메시지를 보내면"
         case .gomokuInvite: return "누가 오목 대결을 신청하면"
         case .feedbackReply: return "보낸 제보에 답장이 오면"
+        case .workCheck: return "폰으로 연 근무를 오래 확인하지 않으면"
         }
     }
 
@@ -49,6 +61,7 @@ package enum PushKind: String, CaseIterable, Sendable, Hashable {
         case .message: return "bubble.left.fill"
         case .gomokuInvite: return "circle.grid.3x3.fill"
         case .feedbackReply: return "envelope.open.fill"
+        case .workCheck: return "clock.fill"
         }
     }
 
@@ -57,6 +70,8 @@ package enum PushKind: String, CaseIterable, Sendable, Hashable {
         case .message: return prefs.message
         case .gomokuInvite: return prefs.gomokuInvite
         case .feedbackReply: return prefs.feedbackReply
+        // 끌 수 없다(서버가 키를 받지 않는다) — 늘 켜짐.
+        case .workCheck: return true
         }
     }
 
@@ -66,6 +81,7 @@ package enum PushKind: String, CaseIterable, Sendable, Hashable {
         case .message: next.message = enabled
         case .gomokuInvite: next.gomokuInvite = enabled
         case .feedbackReply: next.feedbackReply = enabled
+        case .workCheck: break
         }
         return next
     }
@@ -78,6 +94,8 @@ package struct PushPayload: Equatable, Sendable {
         case gomokuInvite(matchID: String)
         /// `report_id` 가 없으면 제보 목록으로 연다.
         case feedbackReply(reportID: String?)
+        /// 근무 확인(0.3.51). `session_id` 는 참고값이다(없어도 산다) — 여는 곳은 언제나 지금 탭이다.
+        case workCheck(sessionID: String?)
     }
 
     package let content: Content
@@ -91,6 +109,7 @@ package struct PushPayload: Equatable, Sendable {
         case .message: return .message
         case .gomokuInvite: return .gomokuInvite
         case .feedbackReply: return .feedbackReply
+        case .workCheck: return .workCheck
         }
     }
 
@@ -100,6 +119,7 @@ package struct PushPayload: Equatable, Sendable {
         case .message(let peer): return .message(peerID: peer)
         case .gomokuInvite(let match): return .gomokuInvite(matchID: match)
         case .feedbackReply(let report): return .feedback(reportID: report)
+        case .workCheck: return .now
         }
     }
 
@@ -131,6 +151,8 @@ package struct PushPayload: Equatable, Sendable {
             content = .gomokuInvite(matchID: match)
         case .feedbackReply:
             content = .feedbackReply(reportID: text("report_id").flatMap(Self.safeID))
+        case .workCheck:
+            content = .workCheck(sessionID: text("session_id").flatMap(Self.safeID))
         }
     }
 
@@ -179,6 +201,7 @@ package enum PushIdentifiers {
     package static let messageCategory = "MESSAGE"
     package static let gomokuInviteCategory = "GOMOKU_INVITE"
     package static let feedbackReplyCategory = "FEEDBACK_REPLY"
+    package static let workCheckCategory = "WORK_CHECK"
 
     package static let acceptAction = "GOMOKU_ACCEPT"
 
@@ -202,7 +225,8 @@ package struct PushCategorySpec: Equatable, Sendable {
 }
 
 package enum PushCategories {
-    /// MESSAGE(액션 없음 — 누르면 대화) · GOMOKU_INVITE(수락 — 앱 열기) · FEEDBACK_REPLY(액션 없음).
+    /// MESSAGE(액션 없음 — 누르면 대화) · GOMOKU_INVITE(수락 — 앱 열기) · FEEDBACK_REPLY(액션 없음) · WORK_CHECK(액션 없음 — 누르면
+    /// 지금 탭. 앱을 여는 것 자체가 '아직 근무 중'이라는 답이다. 앱을 열지 않는 액션은 두지 않는다 — 계약상 금지).
     /// 액션이 없는 카테고리도 등록한다: 서버가 싣는 `aps.category` 이름을 앱이 안다는 표시이고, 옛 빌드가 등록한 버튼을 새 등록이 덮는다.
     package static let all: [PushCategorySpec] = [
         PushCategorySpec(identifier: PushIdentifiers.messageCategory, actions: []),
@@ -215,6 +239,7 @@ package enum PushCategories {
             ),
         ]),
         PushCategorySpec(identifier: PushIdentifiers.feedbackReplyCategory, actions: []),
+        PushCategorySpec(identifier: PushIdentifiers.workCheckCategory, actions: []),
     ]
 }
 

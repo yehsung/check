@@ -53,5 +53,14 @@ protocol PushFeedbackRefreshing: AnyObject {
     func didReceiveFeedbackReplyPush(reportID: String?)
 }
 
+/// 지금 탭 스토어가 근무 확인 알림(0.3.51 `work_check`)을 받는 진입점. 같은 이유로 기본 구현이 없다.
+/// 알림을 눌러 앱을 열었든 앱이 앞에 있을 때 왔든, 스토어는 스로틀 없이 생존 신호(`work_phone_touch`)를 보낸다 —
+/// 그것이 '아직 근무 중'이라는 답이다.
+@MainActor
+protocol PushWorkCheckRefreshing: AnyObject {
+    func didReceiveWorkCheckPush()
+}
+
 extension MessagesStore: PushMessageRefreshing {}
 extension MeStore: PushFeedbackRefreshing {}
+extension NowStore: PushWorkCheckRefreshing {}

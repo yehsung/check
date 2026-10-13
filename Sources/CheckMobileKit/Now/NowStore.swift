@@ -12,9 +12,11 @@ import Observation
 /// - `reset()` — 로그아웃·치명 만료로 세대가 바뀐 직후(계정에 묶인 값을 전부 비운다).
 /// - `badgeCount` — 탭 배지 없음(0).
 ///
-/// 데이터(읽기만 — 폰 금지 호출 없음)
+/// 데이터(읽기 + 폰 근무 RPC 셋 — 폰 금지 호출 없음)
 /// - 내 상태·우리 팀: `fetchOwnMembership` + `fetchTeamStatuses`(GET 넷) 를 받아 **값으로만** 계산한다. 맥 스토어의 팀 상태 반영
 ///   (세션 흡수 · 소유권 · 버려진 세션 마감)은 가져오지 않는다 — 그 경로가 근무 쓰기로 샌다(ios-inventory R2).
+/// - 근무 시작·종료·생존 신호(0.3.51): 서버 RPC `work_phone_start` · `work_phone_stop` · `work_phone_touch` 만 부른다
+///   (`NowStorePhoneWork.swift`). 시각은 서버 now() — 맥의 세션 POST/PATCH · 상태 upsert · 하트비트는 폰에 없다.
 /// - 다른 팀: `app_user_directory` 의 근무 여부·센터만(경과 시간은 서버가 주지 않는다).
 /// - 주간 목표 쓰기: `set_team_weekly_goal`(팀 전체 1인당 목표 — 맥과 같은 권한 규칙, 팀원 누구나).
 /// - 할 일: 코어 `TodoListStore` · `TodoSync` 를 App Group 파일로(위젯 인텐트와 같은 파일 · 같은 조정 규칙).
@@ -46,6 +48,24 @@ package final class NowStore {
     /// 한 줄 안내(불러오기 실패). 받아 둔 값은 지우지 않는다.
     package private(set) var notice: String?
     package private(set) var lastRefreshedAt: Date?
+
+    // MARK: 폰 근무(0.3.51 — NowStorePhoneWork.swift)
+
+    /// 서버에 폰 근무 함수가 있다(404 PGRST202 를 받으면 이 세대 동안 false — 버튼을 숨긴다).
+    package internal(set) var phoneWorkAvailable = true
+    /// 시작·종료 왕복 중(버튼 스피너 · 두 번 누름 막기).
+    package internal(set) var isWorkBusy = false
+    /// 버튼 아래 한 줄(시작했어요 · 끝냈어요 · 실패 · 서버가 자리비움으로 끝냈어요).
+    package internal(set) var workNotice: String?
+    /// 폰 RPC 가 알려 준 내 열린 세션(어디서 열었는지 · 다음 확인 시각). 근무 중이 아니면 nil.
+    package internal(set) var phoneSession: NowPhoneSession?
+    /// 마지막 생존 신호를 보낸 시각(스로틀).
+    @ObservationIgnored var lastPhoneTouchAt: Date?
+    @ObservationIgnored package internal(set) var phoneTouchTask: Task<Void, Never>?
+    /// 신호가 도는 중에 '반드시 한 번 더'(근무 확인 알림)가 왔다 — 끝나면 바로 다시 보낸다.
+    @ObservationIgnored var phoneTouchRerun = false
+    /// 생존 신호 횟수(테스트).
+    @ObservationIgnored package internal(set) var phoneTouchCount = 0
 
     // MARK: 주간 목표
 
@@ -154,6 +174,9 @@ package final class NowStore {
         refresh()
         prepareTodos(for: userID)
         armRefreshTimer()
+        // 앱이 앞으로 왔다 = 폰 근무의 생존 신호(서버가 확인 알림 대기를 풀고 근무를 잇는다). 근무 중이 아니어도 보낸다 —
+        // 응답이 "자리비움으로 끝났어요" 안내와 지금 근무의 출처(폰 · 맥)를 알려 준다.
+        touchPhoneWorkIfNeeded(minimumInterval: Self.phoneTouchOnActiveSeconds)
     }
 
     package func appDidEnterBackground() {
@@ -190,6 +213,7 @@ package final class NowStore {
         lastRefreshedAt = nil
         isSavingGoal = false
         goalNotice = nil
+        resetPhoneWork()
         editingTodoID = nil
         closeUndoWindow()
         todoScheduler.resume()
@@ -245,6 +269,10 @@ package final class NowStore {
         refreshTimer = timers.schedule(after: Self.refreshIntervalSeconds) { [weak self] in
             guard let self, self.isActive else { return }
             self.refresh()
+            // 앱을 켜 둔 채(화면 꺼짐 없음) 오래 두어도 확인 알림이 오지 않게 — 폰이 연 근무일 때만, 5분에 한 번.
+            if self.phoneSession?.origin == .phone {
+                self.touchPhoneWorkIfNeeded(minimumInterval: Self.phoneTouchWhileActiveSeconds)
+            }
             self.armRefreshTimer()
         }
     }
@@ -438,7 +466,8 @@ package final class NowStore {
             sessionStartedAt: working ? me.currentSessionStartedAt : nil,
             todaySeconds: NowTimeMath.todaySeconds(me, fetchedAt: fetchedAt, now: now, presenceAt: judgedAt),
             weekSeconds: NowTimeMath.weekSeconds(me, fetchedAt: fetchedAt, now: now, presenceAt: judgedAt),
-            goalHours: goalHours
+            goalHours: goalHours,
+            origin: working ? workOrigin(of: me) : .unknown
         )
     }
 

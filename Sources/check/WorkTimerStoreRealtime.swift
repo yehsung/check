@@ -203,9 +203,10 @@ extension WorkTimerStore {
     ///   회사 맥이 근무중이면 집 맥은 확정적으로 비근무다. 집 맥이 take_pokes 를 쏘면 단일
     ///   UPDATE…RETURNING 이 한쪽만 이기게 하므로 **회사 맥에는 아무것도 안 오고**, 집 맥은
     ///   CheckOverlayWindow 의 peek 경로가 shouldBeVisible 게이트를 안 보므로 8초짜리 팝업을 띄운다.
-    ///   흡수 세션도 같은 이유로 막는다 — 그 세션의 주인은 다른 맥이다.
+    ///   흡수 세션도 같은 이유로 막는다 — 그 세션의 주인은 다른 맥이다. **예외는 주인 맥이 없는 흡수 세션 하나**
+    ///   (0.3.51 — 폰이 연 근무. `adoptedSessionMayConsumePokes` 주석). 폴링 게이트(takePokesIfWorking)와 같은 식이다.
     var realtimeMayConsumePokes: Bool {
-        startedAt != nil && !adoptedRemoteSession
+        startedAt != nil && (!adoptedRemoteSession || adoptedSessionMayConsumePokes)
     }
 
     // MARK: - effect 실행

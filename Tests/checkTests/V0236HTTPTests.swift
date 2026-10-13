@@ -119,6 +119,28 @@ final class V0236HTTPURLProtocol: URLProtocol {
         if path == "/rest/v1/work_sessions", method == "POST" {
             return (201, "")
         }
+        if path == "/rest/v1/work_sessions", method == "GET" {
+            // 0.3.51: stopWork 의 0행 갈래는 꼬리(off_work)를 내기 전에 **내 열린 세션**을 묻는다(openSessionIDs).
+            // "다른 맥의 새 세션만 열려 있다" 시나리오의 서버는 그 행을 돌려줘야 한다 — 빈 배열을 주면 꼬리 건너뛰기가
+            // 아무것도 재지 않는다(기준선이 같은 입력이면 그 테스트는 영원히 초록이다).
+            // 순서 주의: "-read-fails" 도 "stop-other-open" 을 품는다 — 실패 갈래를 먼저 고른다.
+            if host.contains("stop-other-open-read-fails") {
+                return (500, #"{"code":"XX000","message":"boom"}"#)
+            }
+            if host.contains("stop-other-open") {
+                return (200, """
+                [
+                  {
+                    "id": "\(otherSessionID)",
+                    "user_id": "\(userID)",
+                    "started_at": "2026-08-24T20:30:00Z",
+                    "ended_at": null
+                  }
+                ]
+                """)
+            }
+            return (200, "[]")
+        }
         return (200, "[]")
     }
 
@@ -341,6 +363,11 @@ private func v0236QueryItems(_ request: URLRequest) throws -> [URLQueryItem] {
 
     /// (2) 서버엔 다른 맥의 새 세션만 열려 있다: PATCH 는 0행 → 폴백 POST 가 **내** 닫힌 세션을 만들고,
     /// 발신 요청 전수 검사로 남의 세션(otherSessionID)은 어떤 요청도 건드리지 않았음을 확인한다.
+    ///
+    /// 0.3.51 부터 0행 갈래는 꼬리 전에 **내 열린 세션을 읽는다**(GET — 쓰기가 아니다). 그 읽기가 남의 열린 행을 보면
+    /// 꼬리의 off_work 를 **내지 않는다** — 내면 그 세션이 (열린 세션, off_work) = '아무도 못 닫는 세션'이 된다
+    /// (폰이 방금 연 근무가 대표다). 그래서 이 시나리오는 이제 "남의 세션을 덮지 않는다"를 **쓰기 두 축** 모두로 잰다:
+    /// work_sessions 쓰기는 내 id 만 명시하고, work_statuses 쓰기(꼬리)는 아예 없다.
     @Test func stopWorkAgainstOnlyAnotherMacsOpenSessionFallsBackWithoutTouchingIt() async throws {
         let host = "v0236-stop-other-open"
         let service = v0236Service(host: host)
@@ -359,17 +386,23 @@ private func v0236QueryItems(_ request: URLRequest) throws -> [URLQueryItem] {
         )
 
         let exchanges = V0236HTTPURLProtocol.exchanges(forHost: host)
-        let sessionWrites = exchanges.filter { $0.request.url?.path == "/rest/v1/work_sessions" }
-        #expect(!sessionWrites.isEmpty)
-        // 전수 검사: work_sessions 로 나간 모든 요청은 반드시 **내 세션 id 를 명시**한다
+        let sessionRequests = exchanges.filter { $0.request.url?.path == "/rest/v1/work_sessions" }
+        #expect(!sessionRequests.isEmpty)
+        // 전수 검사: work_sessions 로 나간 모든 **쓰기**는 반드시 **내 세션 id 를 명시**한다
         // (PATCH 는 쿼리의 id=eq, POST 는 본문의 "id"). 어느 하나라도 익명이면 남의 세션이 과녁이 된다.
-        for (request, body) in sessionWrites {
+        // 읽기(GET)는 id 를 모른 채 "내 열린 세션"을 묻는 것이 목적이다 — 대신 **내 것만**(user_id) · **열린 것만** 묻는다.
+        for (request, body) in sessionRequests {
             switch request.httpMethod {
             case "PATCH":
                 let query = try v0236QueryItems(request)
                 #expect(query.contains(URLQueryItem(name: "id", value: "eq.\(V0236HTTPURLProtocol.mySessionID)")))
             case "POST":
                 #expect(body.contains(#""id":"\#(V0236HTTPURLProtocol.mySessionID)""#))
+            case "GET":
+                let query = try v0236QueryItems(request)
+                #expect(query.contains(URLQueryItem(name: "user_id", value: "eq.\(V0236HTTPURLProtocol.userID)")))
+                #expect(query.contains(URLQueryItem(name: "ended_at", value: "is.null")))
+                #expect(body.isEmpty, "읽기에 본문이 실렸다")
             default:
                 Issue.record("예상 밖의 메서드: \(request.httpMethod ?? "?")")
             }
@@ -378,12 +411,47 @@ private func v0236QueryItems(_ request: URLRequest) throws -> [URLQueryItem] {
             #expect(!body.contains(V0236HTTPURLProtocol.otherSessionID))
         }
         // 0행 → 폴백 POST(on_conflict=id + ignore-duplicates)로 내 닫힌 세션이 만들어진다(기존 흐름 불변).
-        let fallback = try #require(sessionWrites.first { $0.request.httpMethod == "POST" })
+        let fallback = try #require(sessionRequests.first { $0.request.httpMethod == "POST" })
         let fallbackQuery = try v0236QueryItems(fallback.request)
         #expect(fallbackQuery.contains(URLQueryItem(name: "on_conflict", value: "id")))
         let prefer = try #require(fallback.request.value(forHTTPHeaderField: "Prefer"))
         #expect(prefer.contains("resolution=ignore-duplicates"))
         #expect(fallback.body.contains(#""ended_at":"2026-08-24T21:00:00Z""#))
+        // 열린 세션 읽기는 **정확히 한 번**, 폴백 POST **뒤**다(내 마감을 먼저 남기고 꼬리만 판정한다).
+        let reads = sessionRequests.indices.filter { sessionRequests[$0].request.httpMethod == "GET" }
+        let postIndex = try #require(sessionRequests.firstIndex { $0.request.httpMethod == "POST" })
+        #expect(reads.count == 1)
+        #expect(reads.allSatisfy { $0 > postIndex })
+        // 핵심: 남의 열린 세션을 봤으므로 꼬리(off_work upsert)가 **나가지 않았다** — 상태 행에 쓰기 0건.
+        #expect(!exchanges.contains { $0.request.url?.path == "/rest/v1/work_statuses" },
+                "남의 열린 세션이 있는데 off_work 꼬리를 썼다 — 그 세션이 '아무도 못 닫는 세션'이 된다")
+    }
+
+    /// (2-대조) 같은 0행 갈래인데 **열린 세션 읽기가 실패했다**(5xx): 모르는 채 꼬리를 건너뛰지 않는다 — 기존 동작대로
+    /// off_work 를 쓴다(그 경우의 열린 폰 세션은 서버 cron 이 다음 분에 상태를 바로잡는다 — 20261014130000 결정 ⑤).
+    /// 위 테스트와 **입력이 다르고 결과도 다르다**: 같은 호스트 계열에서 읽기 응답만 바꿨는데 꼬리 유무가 갈린다 —
+    /// 위 테스트의 '꼬리 없음'이 스텁의 우연이 아니라 읽은 행 때문이라는 증거다.
+    @Test func stopWorkZeroRowStillWritesOffWorkWhenTheOpenSessionReadFails() async throws {
+        let host = "v0236-stop-other-open-read-fails"
+        let service = v0236Service(host: host)
+        let formatter = ISO8601DateFormatter()
+
+        try await service.stopWork(
+            accessToken: "access-token",
+            teamID: V0236HTTPURLProtocol.teamID,
+            userID: V0236HTTPURLProtocol.userID,
+            startedAt: formatter.date(from: "2026-08-24T20:00:00Z")!,
+            endedAt: formatter.date(from: "2026-08-24T21:00:00Z")!,
+            durationSeconds: 3600,
+            fallbackSessionID: V0236HTTPURLProtocol.mySessionID
+        )
+
+        let exchanges = V0236HTTPURLProtocol.exchanges(forHost: host)
+        #expect(exchanges.filter { $0.request.url?.path == "/rest/v1/work_sessions" && $0.request.httpMethod == "GET" }.count == 1,
+                "읽기를 시도하지 않았다 — 이 대조군이 아무것도 재지 않는다")
+        let tail = exchanges.filter { $0.request.url?.path == "/rest/v1/work_statuses" && $0.request.httpMethod == "POST" }
+        #expect(tail.count == 1, "읽기가 실패했는데 꼬리를 건너뛰었다 — 모를 때는 기존 동작이어야 한다")
+        #expect(tail.first?.body.contains(#""off_work""#) == true)
     }
 
     /// (4) 잠자기 소급 마감(사유 있음) 경로: correctAutoClose 의 "ended_at 은 **더 이르게만**"(gt 필터) 규약과

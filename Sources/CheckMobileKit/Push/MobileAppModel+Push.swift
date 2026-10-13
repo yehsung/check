@@ -51,6 +51,8 @@ package enum PushDemo {
     package static let messageID = "d0000000-0000-4000-8000-00000000e00a"
     package static let matchID = "d0000000-0000-4000-8000-00000000a0a1"
     package static let reportID = "d0000000-0000-4000-8000-00000000fb02"
+    /// 지금 탭 데모의 열린 세션(`Demo/Fixtures/now/_now` 의 work_sessions 픽스처와 같은 id).
+    package static let workSessionID = "d0000000-0000-4000-8000-00000000a001"
 
     package static func payloadJSON(_ kind: PushKind) -> Data {
         let text: String
@@ -61,6 +63,8 @@ package enum PushDemo {
             text = #"{"aps":{"alert":{"title":"오목 신청","body":"솜사탕님이 오목 대결을 신청했어요 · 루비 5"},"sound":"default","category":"GOMOKU_INVITE","thread-id":"gomoku"},"type":"gomoku_invite","match_id":"\#(matchID)"}"#
         case .feedbackReply:
             text = #"{"aps":{"alert":{"title":"제보에 답장이 왔어요","body":"알려 주셔서 고마워요! 원인을 찾았고 다음 버전에서 고칠게요."},"sound":"default","category":"FEEDBACK_REPLY"},"type":"feedback_reply","report_id":"\#(reportID)"}"#
+        case .workCheck:
+            text = #"{"aps":{"alert":{"title":"아직 근무 중이에요?","body":"10분 안에 앱을 열면 근무가 이어져요"},"sound":"default","category":"WORK_CHECK","thread-id":"work-check"},"type":"work_check","session_id":"\#(workSessionID)"}"#
         }
         return Data(text.utf8)
     }

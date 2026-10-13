@@ -308,6 +308,12 @@ private let laterRedefinitionsAllowed: [String: [String]] = [
     // create or replace 가 안 된다 — 42P13). 본문은 이 파일의 정본을 그대로 옮기고 select 끝에 한 줄만 더했다(그 파일의 §4 가 교체 전후
     // 전 사용자의 눈으로 기존 칸 multiset 불변을 증명한다). 측정: 덮어쓴 **이유**(status_message)와 차단·숨김 게이트가 살아 있는지.
     "20261014121000_status_message.sql:app_user_directory": ["blocked_between", "public.same_visibility(", "p.status_message"],
+    // 2026-10-14(0.3.51) 폰 근무가 찌르기 둘을 다시 만든다 — 이 파일의 본문을 **그대로** 복사하고 폰 게이트 한 덩어리만 얹었다
+    // (폰으로만 근무 중이고 받아 줄 맥이 없는 사람에게 간 찌르기·울트라가 조용히 사라지던 구멍 — 결정 ⑦). 줄 단위 동일성은
+    // V0351PhoneWorkMigrationTests 가 이 파일과 맞대어 잰다. 여기서는 덮어쓴 **이유**(`phone_work__poke_unreachable(p_to)`)와
+    // 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 사라지지 않았는지를 본다.
+    "20261014130000_phone_work.sql:poke_user": ["blocked_between", "public.same_visibility(", "public.phone_work__poke_unreachable(p_to)"],
+    "20261014130000_phone_work.sql:ultra_poke_user": ["blocked_between", "public.same_visibility(", "public.phone_work__poke_unreachable(p_to)"],
 ]
 
 @Test

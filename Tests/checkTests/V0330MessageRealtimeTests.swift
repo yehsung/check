@@ -771,8 +771,10 @@ func 소켓_출발에는_근무_게이트가_없고_소비_분기는_그대로�
     #expect(start.contains("guard realtime.link.state == .idle(.signedOut) else { return }"))
     // 읽음 신호 가지는 take_pokes 문을 지나지 않고, 합치기 창을 거친다(m-fix2 · 부록 B-2).
     #expect(realtime.contains("case .messageReadSignal: requestMessageActivityRefreshCoalesced()"))
-    // take_pokes 로 가는 문은 여전히 하나다.
-    #expect(realtime.contains("var realtimeMayConsumePokes: Bool { startedAt != nil && !adoptedRemoteSession }"))
+    // take_pokes 로 가는 문은 여전히 하나다. 0.3.51 에 흡수 세션 예외 하나(주인 맥이 없는 폰 근무)가 같은 식 안에 붙었다 —
+    // 근무 게이트(startedAt)는 그대로이고, 흡수 세션은 그 예외 판정을 지나야만 열린다(V0351PhoneWorkMacTests 가 행동으로 잰다).
+    #expect(realtime.contains(
+        "var realtimeMayConsumePokes: Bool { startedAt != nil && (!adoptedRemoteSession || adoptedSessionMayConsumePokes) }"))
 
     let store = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("WorkTimerStore.swift")))
     let stop = try #require(gomokuBody(of: "func stop(now: Date = Date())", in: store))

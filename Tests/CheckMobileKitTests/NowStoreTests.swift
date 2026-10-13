@@ -52,7 +52,11 @@ import Testing
 
         #expect(h.store.notice == nil)
         #expect(h.requests("work_statuses").allSatisfy { $0.method == "GET" })
-        #expect(h.requests.filter { $0.path.contains("work_") }.allSatisfy { $0.method == "GET" }, "근무 표는 읽기만")
+        // 근무 **표**는 읽기만 한다. 폰의 근무 쓰기는 서버 RPC 셋(`work_phone_*` — 시각은 서버 now())뿐이다(0.3.51).
+        #expect(h.requests.filter { $0.path.contains("work_") && !$0.path.hasPrefix("/rest/v1/rpc/work_phone_") }
+            .allSatisfy { $0.method == "GET" }, "근무 표는 읽기만")
+        #expect(h.requests.filter { $0.path.hasPrefix("/rest/v1/rpc/work_phone_") }.allSatisfy { $0.bodyText == "{}" },
+                "생존 신호 본문에 클라 시각이 실리지 않는다")
         #expect(!h.requests.contains { $0.path.contains("take_pokes") || $0.path.contains("work_tick") })
         #expect(h.violations.isEmpty, "\(h.violations)")
     }

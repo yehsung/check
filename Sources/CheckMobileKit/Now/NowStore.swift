@@ -462,7 +462,9 @@ package final class NowStore {
                     startedAt: member.currentSessionStartedAt,
                     elapsedSeconds: NowTimeMath.elapsedSeconds(member, now: now, presenceAt: judgedAt),
                     isStale: NowTimeMath.isStale(member, now: judgedAt),
-                    lastSeenAt: member.lastSeenAt ?? member.updatedAt
+                    lastSeenAt: member.lastSeenAt ?? member.updatedAt,
+                    // 팀원의 상태메시지도 사람 목록에서 찾는다(팀 상태 조회는 이 칸을 싣지 않는다 — 옛 서버 42703 회피).
+                    statusMessage: StatusMessage.display(entry?.statusMessage)
                 )
             }
             .sorted(by: Self.teammateOrder)
@@ -473,7 +475,8 @@ package final class NowStore {
             let avatar: URL? = row.avatarUrl.flatMap { URL(string: $0) }
             others.append(NowWorkingPerson(
                 id: row.userId, name: row.displayName, avatarURL: avatar,
-                center: row.center, isTeammate: false, startedAt: nil, elapsedSeconds: nil, isStale: false
+                center: row.center, isTeammate: false, startedAt: nil, elapsedSeconds: nil, isStale: false,
+                statusMessage: StatusMessage.display(row.statusMessage)
             ))
         }
         others.sort { lhs, rhs in lhs.name == rhs.name ? lhs.id < rhs.id : lhs.name < rhs.name }

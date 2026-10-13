@@ -13,8 +13,11 @@ extension MeStore {
         isProfileVisible = true
         if displayNameDraft.isEmpty, let displayName { displayNameDraft = displayName }
         refreshDisplayNameLockNotice()
+        // 상태메시지 입력은 받아 둔 값으로 채운다(아직 모르면 GET 이 도착할 때 채운다 — loadStatusMessage).
+        if statusMessageDraft.isEmpty, let statusMessage { statusMessageDraft = statusMessage }
         guard context.session.isSignedIn else { return }
         launch { [weak self] in await self?.loadDisplayNameCooldown() }
+        launch { [weak self] in await self?.loadStatusMessage() }
     }
 
     package func profileDidDisappear() {
@@ -25,6 +28,11 @@ extension MeStore {
             isDisplayNameNoticeError = false
         }
         if !isUploadingAvatar { avatarNotice = nil }
+        statusMessageDraft = ""
+        if !isUpdatingStatusMessage {
+            statusMessageNotice = nil
+            isStatusMessageNoticeError = false
+        }
     }
 
     package func loadDisplayNameCooldown() async {

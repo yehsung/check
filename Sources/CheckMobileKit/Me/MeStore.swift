@@ -118,6 +118,15 @@ package final class MeStore {
     package internal(set) var avatarNotice: String?
     package internal(set) var isAvatarNoticeError = false
 
+    // MARK: 상태메시지 (v0.3.51 — MeStoreStatusMessage.swift)
+    /// 서버값 미러(`profiles.status_message`). nil = 없음이거나 아직 모름 — `statusMessageLoaded` 가 가른다.
+    package internal(set) var statusMessage: String?
+    package internal(set) var statusMessageLoaded = false
+    package var statusMessageDraft = ""
+    package internal(set) var isUpdatingStatusMessage = false
+    package internal(set) var statusMessageNotice: String?
+    package internal(set) var isStatusMessageNoticeError = false
+
     // MARK: 제보
     package var feedbackKind: FeedbackKind = .bug
     package var feedbackDraft = ""
@@ -227,6 +236,13 @@ package final class MeStore {
         isUploadingAvatar = false
         avatarNotice = nil
         isAvatarNoticeError = false
+        // 상태메시지도 계정에 묶인다 — 남기면 다음 계정의 편집 화면에 앞 사람의 문장이 '내 값'으로 서고 [저장]이 그걸 올린다.
+        statusMessage = nil
+        statusMessageLoaded = false
+        statusMessageDraft = ""
+        isUpdatingStatusMessage = false
+        statusMessageNotice = nil
+        isStatusMessageNoticeError = false
         feedbackKind = .bug
         feedbackDraft = ""
         isSendingFeedback = false
@@ -388,6 +404,7 @@ package final class MeStore {
     }
 
     nonisolated static let displayNameWriteKey = "write.displayName"
+    nonisolated static let statusMessageWriteKey = "write.statusMessage"
     nonisolated static let avatarWriteKey = "write.avatar"
 
     /// 사용자가 이 칸을 서버에 **써서 성공한** 횟수. 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 응답의 이 칸은 옛 값이다.

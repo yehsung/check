@@ -37,7 +37,7 @@
 | 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift` |
 | 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘) 세 판 | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
 | 게임 | 미니게임 둘(타이밍 바·플래피 아잉), 1:1 오목(로비·신청·대국·채팅), 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출, 오목 신청·수락·착수·기권·채팅·음소거 | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290` |
-| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점 · 캐릭터 고르기 | 사진 업로드, 별명, 착용 캐릭터, 캐릭터 구매, 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6` |
+| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점 · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6` |
 | (홈 위젯) | 지금 근무 중 · 내 오늘 · 할 일 — 세 종류. 앱이 쓴 스냅샷 파일만 그린다 | 할 일 체크 인텐트의 `todo_sync` 한 번뿐 | `Sources/CheckWidgetsKit/AingWidgetModel.swift:11-16`, `Sources/CheckMobileShared/WidgetSnapshot.swift:6`, `Sources/CheckWidgetsKit/WidgetTodoToggle.swift:11` |
 | (푸시) | 새 메시지 · 오목 신청(수락 버튼) · 제보 답장 세 종류, 앱 배지 = 안 읽은 메시지 + 받은 오목 신청 | 기기 등록(`register_device`), 알림 종류별 설정(`set_push_prefs`) | `Push/PushPayload.swift:6-10`, `Push/PushCoordinator.swift:14-27`, `Session/MobileDeviceService.swift:116-164` |
 
@@ -204,7 +204,7 @@
 | 자녀 보호 기능(Parental Controls) | 없음 | 해당 코드 없음 |
 | 연령 확인(Age Assurance) | 없음 | 가입은 이메일·비밀번호·별명·센터·팀 코드만(SPEC 작업 B-2) |
 | 무제한 웹 접근 | 아니오 | WebKit·SafariServices 0건(§2.4) |
-| **사용자 생성 콘텐츠** | **예** | 1:1 메시지, 오목 채팅, 별명, 프로필 사진, 제보 — §2.1 |
+| **사용자 생성 콘텐츠** | **예** | 1:1 메시지, 오목 채팅, 별명, 프로필 사진, 상태메시지(40자 한 줄 — 사람 찾기·지금 근무 중·대화 머리에 보인다, 차단하면 서로 안 보인다), 제보 — §2.1 |
 | 소셜 미디어 | 아니오(**확인 필요**) | 피드·재게시·팔로우가 없다. 다만 순위판(별명·아바타)이 앱 사용자 전체에게 보인다(`privacy.md:68-72`) — 심사원이 "발견 수단" 으로 볼 여지가 있으면 13+ |
 | **메시지 및 채팅** | **예** | `send_message`, 오목 채팅 |
 | 광고 | 아니오 | §2.4 |

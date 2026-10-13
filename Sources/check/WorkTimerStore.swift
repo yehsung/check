@@ -688,6 +688,24 @@ final class WorkTimerStore {
     ///   순간을 다시 그려야 하는데, 그때 myCenter 는 nil → nil 로 안 바뀔 수도 있다(미지정 계정).
     var myCenterLoaded = false
 
+    // ── 상태메시지 (v0.3.51) ── 쓰기·읽기는 WorkTimerStoreStatusMessage.swift 가 한다.
+    /// 내 상태메시지 **서버값** 미러(nil = 없음이거나 아직 모름 — 둘은 `myStatusMessageLoaded` 가 가른다).
+    var myStatusMessage: String?
+    /// 서버에서 실제로 받았거나 저장에 성공했는가. myCenterLoaded 와 같은 이유로 **관찰 대상**이다 — 설정 행이
+    /// '불러오는 중'에서 값으로 바뀌는 순간을 다시 그려야 하는데 값은 nil → nil 일 수 있다(상태 없는 사람).
+    var myStatusMessageLoaded = false
+    /// 저장 왕복 중. **관찰 대상**이다 — 저장·지우기 버튼을 그동안 잠가 연타로 두 요청이 나가지 않게 한다.
+    var isUpdatingStatusMessage = false
+    /// 내 값 GET 순번 — GET 이 나갈 때마다 오른다. 늦게 도착한 앞 GET 이 뒤 GET 의 결과를 덮지 않게 한다(뒤가 이긴다).
+    @ObservationIgnored var statusMessageFetchSerial = 0
+    /// 저장 왕복이 **나갈 때마다** 오른다(성공 여부와 무관). GET 이 떠 있는 사이 이 값이 바뀌었으면 그 GET 은 저장 전의 값이라 버린다 —
+    /// 시간 초과로 실패한 저장도 서버에는 닿았을 수 있어 실패에서도 올린다.
+    @ObservationIgnored var statusMessageWriteSerial = 0
+    /// 설정 행 안 1줄 결과(바꿨어요 · 지웠어요 · 40자 · 쓸 수 없는 글자 …). nil 이면 기본 안내.
+    var statusMessageNotice: String?
+    /// 위 한 줄이 실패인지(true = danger). 성공·지움은 오류가 아니다(별명 행과 같은 규약).
+    var isStatusMessageNoticeError = false
+
     // ── 제보 창 (v0.2.48) ── 미니게임과 같은 **별도 NSWindow** 라 팝오버 패널들과 상호 배타가 아니다.
     //
     // 로직은 전부 `WorkTimerStoreFeedback.swift` 확장에 있다. 저장 프로퍼티만 여기 있는 이유는 언어 제약이다
@@ -3686,6 +3704,15 @@ extension WorkTimerStore {
         // 이미 골라진 채로 뜨고, 로딩 플래그까지 남으면 그 값이 '서버가 확인해 준 값'으로 읽힌다.
         myCenter = nil
         myCenterLoaded = false
+        // 상태메시지 미러도 계정에 묶인다(v0.3.51). 남기면 새 계정의 설정 창에 **앞 사람의 상태**가 이미 쓰인 채로 뜨고,
+        // 로딩 플래그까지 남으면 그 값이 '서버가 확인해 준 내 값'으로 읽혀 [저장]이 남의 문장을 내 프로필에 올린다.
+        myStatusMessage = nil
+        myStatusMessageLoaded = false
+        isUpdatingStatusMessage = false
+        // 떠 있던 GET 이 다음 계정에 닿지 않는 것은 세대 가드가 맡는다. 순번은 올려 두기만 한다(어느 쪽이든 앞 계정의 응답은 버려진다).
+        statusMessageFetchSerial &+= 1
+        statusMessageNotice = nil
+        isStatusMessageNoticeError = false
         // 수집 설정 수신 플래그도 계정에 묶인다 — 남기면 다음 계정은 서버 설정을 받기 전에 프로브(외부 프로세스)가 뜬다.
         tokenUsageCollectLoaded = false
         // 집중 모드 미러와 서버 맞추기 장부도 계정에 묶인다(v0.2.51). 남기면 다음 계정 화면에 앞 사람의 켜짐이 설정 GET 전까지

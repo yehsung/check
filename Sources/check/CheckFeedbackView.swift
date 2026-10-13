@@ -975,6 +975,8 @@ enum FeedbackReplySend {
         case feedbackReply
         /// 설정 창의 별명 칸(`DisplayNameSettingsRow`).
         case settingsDisplayName
+        /// 설정 창의 상태메시지 칸(`StatusMessageSettingsRow`, v0.3.51 — 한글 한 줄이라 별명과 같은 결함을 같은 문으로 막는다).
+        case settingsStatusMessage
         /// 팝오버의 가입·무소속·재설정 화면 칸(`CredentialField` — 별명·팀 이름이 한글이다).
         case authForm
         /// 상점 패널의 확성기 작성 칸(v0.3.51 — `MegaphoneComposer`). 한글 방송의 마지막 음절이 빠지면 **루비 50개짜리**

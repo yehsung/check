@@ -159,10 +159,13 @@ package struct NowWorkingPerson: Identifiable, Equatable, Sendable {
     package var isStale: Bool
     /// 우리 팀만: 마지막 생존신호 시각(끊긴 줄 부제 "마지막 확인 N분 전").
     package var lastSeenAt: Date?
+    /// 상태메시지(v0.3.51) — 사람 목록(`app_user_directory`)에서 온다. 우리 팀원도 같은 목록에서 찾는다(팀 상태 조회는 싣지 않는다).
+    /// 이미 `StatusMessage.display` 를 지난 값이다(nil = 줄을 그리지 않는다).
+    package var statusMessage: String?
 
     package init(
         id: String, name: String, avatarURL: URL?, center: String?, isTeammate: Bool,
-        startedAt: Date?, elapsedSeconds: Int?, isStale: Bool, lastSeenAt: Date? = nil
+        startedAt: Date?, elapsedSeconds: Int?, isStale: Bool, lastSeenAt: Date? = nil, statusMessage: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -173,6 +176,7 @@ package struct NowWorkingPerson: Identifiable, Equatable, Sendable {
         self.elapsedSeconds = elapsedSeconds
         self.isStale = isStale
         self.lastSeenAt = lastSeenAt
+        self.statusMessage = statusMessage
     }
 }
 

@@ -10,6 +10,7 @@ struct MeProfileView: View {
     let store: MeStore
     @State private var pickerItem: PhotosPickerItem?
     @FocusState private var nameFocused: Bool
+    @FocusState private var statusFocused: Bool
     /// 기본 글자 크기의 지름 — 큰 글자에서는 `AvatarView` 공용 규칙이 키운다.
     private let avatarSize: CGFloat = 96
 
@@ -80,6 +81,8 @@ struct MeProfileView: View {
                         .disabled(!store.canSaveDisplayName)
                 }
 
+                statusMessageCard
+
                 characterRoleCard
             }
             .padding(.horizontal, MobileTheme.sideMargin)
@@ -100,6 +103,52 @@ struct MeProfileView: View {
                     return
                 }
                 await store.uploadAvatar(imageData: data)
+            }
+        }
+    }
+
+    /// 상태메시지 카드(v0.3.51) — 40자 한 줄 · 비우고 저장하면 지워진다 · 쿨타임 없음. 별명 카드와 같은 모양(제목 · 도움말 · 칸 안 카운터 ·
+    /// 안내 · [저장])이고, 저장된 상태가 있으면 [지우기]가 하나 더 선다.
+    private var statusMessageCard: some View {
+        @Bindable var store = store
+        return AingCard {
+            Text(StatusMessageText.title)
+                .font(.headline)
+                .foregroundStyle(MobileTheme.label)
+            Text(StatusMessageText.hint)
+                .font(.footnote)
+                .foregroundStyle(MobileTheme.label2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: MobileTheme.space2) {
+                TextField(StatusMessageText.placeholder, text: $store.statusMessageDraft)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .focused($statusFocused)
+                    .onSubmit(saveStatus)
+                    .disabled(store.isUpdatingStatusMessage)
+                    .accessibilityLabel(Text(StatusMessageText.title))
+                // 글자 수는 입력칸 **안** 오른쪽(별명 칸과 같은 자리 — 서버와 같은 눈금).
+                Text("\(store.statusMessageDraftLength)/\(MeStore.statusMessageMaxLength)")
+                    .font(.footnote)
+                    .monospacedDigit()
+                    .foregroundStyle(store.statusMessageDraftLength > MeStore.statusMessageMaxLength ? MobileTheme.danger : MobileTheme.label3Text)
+                    .fixedSize()
+                    .accessibilityLabel(Text("\(store.statusMessageDraftLength)자, 최대 \(MeStore.statusMessageMaxLength)자"))
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
+            .background(RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous).fill(MobileTheme.fill))
+            if let notice = store.statusMessageNotice {
+                InlineNotice(text: notice, kind: store.isStatusMessageNoticeError ? .error : .info)
+            }
+            // 채운 버튼은 화면당 하나(별명 [저장])다 — 상태의 [저장]은 틴트, [지우기]는 회색(디자인 계약 w15).
+            HStack(spacing: MobileTheme.space2) {
+                if store.statusMessage != nil {
+                    AingButton(StatusMessageText.clear, kind: .gray, size: .lg, fillsWidth: true, action: clearStatus)
+                        .disabled(!store.canClearStatusMessage)
+                }
+                AingButton(StatusMessageText.save, kind: .tinted, size: .lg, fillsWidth: true, isBusy: store.isUpdatingStatusMessage, action: saveStatus)
+                    .disabled(!store.canSaveStatusMessage)
             }
         }
     }
@@ -145,6 +194,17 @@ struct MeProfileView: View {
         guard store.canSaveDisplayName else { return }
         nameFocused = false
         Task { await store.saveDisplayName() }
+    }
+
+    private func saveStatus() {
+        guard store.canSaveStatusMessage else { return }
+        statusFocused = false
+        Task { await store.saveStatusMessage() }
+    }
+
+    private func clearStatus() {
+        statusFocused = false
+        Task { await store.clearStatusMessage() }
     }
 }
 #endif

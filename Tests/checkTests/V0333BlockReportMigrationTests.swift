@@ -304,6 +304,10 @@ private let laterRedefinitionsAllowed: [String: [String]] = [
     // 나머지 둘은 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 조용히 사라지지 않았는지를 본다.
     "20261005160000_chess_duel.sql:gomoku_challenge": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
     "20261005160000_chess_duel.sql:gomoku_respond": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
+    // 2026-10-14 상태메시지(v0.3.51)가 사람 찾기 명부에 맨 끝 칸 `status_message` 를 더하느라 drop+create 한다(returns table 이 바뀌면
+    // create or replace 가 안 된다 — 42P13). 본문은 이 파일의 정본을 그대로 옮기고 select 끝에 한 줄만 더했다(그 파일의 §4 가 교체 전후
+    // 전 사용자의 눈으로 기존 칸 multiset 불변을 증명한다). 측정: 덮어쓴 **이유**(status_message)와 차단·숨김 게이트가 살아 있는지.
+    "20261014121000_status_message.sql:app_user_directory": ["blocked_between", "public.same_visibility(", "p.status_message"],
 ]
 
 @Test

@@ -29,7 +29,10 @@ struct MessagesConversationView: View {
         let items = store.conversationItems(for: peerID)
         let header = store.conversationHeader(for: peerID)
         let avatarURL = store.peerAvatarURL(for: peerID)
-        let presence = header.avatarName == nil ? nil : store.presenceBoard(now: store.context.clock.now()).peers[peerID]
+        let board = header.avatarName == nil ? nil : store.presenceBoard(now: store.context.clock.now())
+        let presence = board?.peers[peerID]
+        // 상대의 상태메시지(v0.3.51) — 이름을 모르면(머리가 아직 이름을 못 찾았으면) 세우지 않는다.
+        let statusMessage = board?.statuses[peerID]
         ScrollViewReader { proxy in
             ScrollView {
                 // Lazy 가 아니다: 화면 밖 줄의 높이를 어림하면 큰 글자에서 `scrollTo` 가 바닥에 못 닿았다(AX3 실측). 이력은 24시간 · 200건 상한이다.
@@ -116,7 +119,7 @@ struct MessagesConversationView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                MessagesConversationNameplate(header: header, presence: presence)
+                MessagesConversationNameplate(header: header, presence: presence, statusMessage: statusMessage)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 MessagesComposerView(store: store, peerID: peerID)
@@ -278,6 +281,8 @@ private struct MessagesConversationNameplate: View {
 
     let header: MessagesConversationHeader
     let presence: MessagesPeerPresence?
+    /// 상대의 상태메시지(v0.3.51). 있으면 근무 줄 아래 한 줄(꼬리 줄임표) — 이름표가 한 줄 자랄 뿐 머리 모양은 그대로다.
+    var statusMessage: String? = nil
 
     var body: some View {
         let line = MessagesPresenceRules.headerLine(presence)
@@ -297,6 +302,14 @@ private struct MessagesConversationNameplate: View {
                         .lineLimit(1)
                 }
             }
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.caption2)
+                    .foregroundStyle(MobileTheme.label2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 260)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 4)
@@ -310,7 +323,8 @@ private struct MessagesConversationNameplate: View {
         // 이름표는 작은 머리다 — 가장 큰 글자에서 화면 위를 통째로 먹지 않게 상한을 둔다(보이스오버는 글자 그대로 읽는다).
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text([header.accessibilityLabel, line].compactMap { $0 }.joined(separator: ", ")))
+        .accessibilityLabel(Text([header.accessibilityLabel, line, statusMessage.map { "상태메시지 \($0)" }]
+            .compactMap { $0 }.joined(separator: ", ")))
         .accessibilityAddTraits(.isHeader)
         .frame(maxWidth: .infinity)
         // 얼굴 바로 아래에 붙인다(시안 B 04 틈 4pt). iOS 26 내비 막대는 유리 버튼 때문에 키가 커 얼굴 아래가 14pt 떴다(스크린샷 실측).

@@ -811,6 +811,9 @@ extension WorkTimerStore {
             // 소속 센터도 **따로** GET 한다(v0.3.13). 위 두 GET 과 같은 이유다.
             await loadMyCenterIfNeeded()
             guard generation == sessionGeneration else { return }
+            // 상태메시지도 **따로** GET 한다(v0.3.51) — 칸이 없는 서버에서 이 GET 만 죽고 위 설정은 산다.
+            await loadMyStatusMessageIfNeeded()
+            guard generation == sessionGeneration else { return }
             tokenUsagePublicLoaded = true
         } catch {
             // 조용히 무시한다 — loaded 는 성공 시에만 서므로 다음 폴링 tick 에 재시도된다.

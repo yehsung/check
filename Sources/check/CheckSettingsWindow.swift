@@ -93,7 +93,16 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 없다. 가장 높은 상태는 여전히 되돌리기 확인까지 연 866 + 13 = **879**, 같은 5pt 여유로 **884**. V0340 이 이 여유
     /// (정확히 5)를 되묻는다 — 상수를 넉넉히 올려 두면 계약 숫자가 흐려진다.
     /// 화면 맞춤 참고: 13" MacBook Air(956pt, 메뉴바 빼면 931)에 타이틀바 28 을 더해 912 — 아직 든다. 다음 행부터는 안 든다.
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 884)
+    ///
+    /// v0.3.51: '내 정보'의 별명 바로 아래에 [상태메시지] 행(제목 + 입력 줄 28 + 안내/카운터 한 줄)이 붙어 전체 렌더가
+    /// **962pt**(+96 — 구분선 1 + 간격 12×2 + 행 71, 실측 2026-10-14 폭 380)가 됐다. 행은 상태에 따라 자라지 않는다(안내 문구가 전부
+    /// 한 줄 · `lineLimit(1)` — V0351 이 가장 긴 문구를 띄운 행과 평소 행이 같은 높이인지 그려서 되묻는다). 가장 높은 상태는 여전히
+    /// 되돌리기 확인을 연 962 + 13 = 975, 같은 5pt 여유로 **980**.
+    /// ★ 예고대로 **이제 노트북 화면에 안 든다**(13" Air 의 콘텐츠 상한 ~903 · 14" 도 넘는다). 그래서 이번에 창 쪽이 바뀌었다:
+    ///   여는 순간 화면보다 크면 화면 높이에서 멈추고(`growForContentIfNeeded` · `keepOnScreen`), 그때 본문은 v0.3.47 의
+    ///   `ViewThatFits` 가 스크롤로 받는다(잘리지 않는다 — AI 리밋을 연동한 맥은 이미 그 상태로 쓰고 있다). 큰 화면에서는 예전처럼
+    ///   스크롤 없이 다 보인다. 이 상수는 여전히 "스크롤 없이 다 보이는 높이"의 계약이고 V0340·V0347 이 5pt 여유를 되묻는다.
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 980)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: Self.preferredWidth`)을 그대로 따른다 — 여기에 뷰가
     /// 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈리고, 갈리는 쪽이 위 높이 계약을 깬다(바로 위 실측표).
     static let minContentSize = NSSize(width: CheckSettingsView.preferredWidth, height: 260)
@@ -250,6 +259,9 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         // 사진 되돌리기의 2단 확인·결과 한 줄도 **열 때 접는다**(v0.3.36). 닫을 때만 접으면 닫기를 거치지 않은
         // 경로(창 재생성 · 앱이 창을 잃었다 되찾는 복구)에서 빨간 [되돌리기]가 무장된 채로 사용자를 맞는다.
         wiring?.store.resetAvatarRemovalRow()
+        // 내 상태메시지도 **열 때마다** 서버에서 다시 받는다(v0.3.51). 폰에서 바꾼 값이 여기 보여야 하고, 낡은 미러로는 [저장]이
+        // '같은 값'으로 잠긴다. 행의 onAppear 로는 안 된다 — 위 단축키와 같은 이유(창 수명에 한 번).
+        wiring?.store.refreshMyStatusMessageForSettings()
         if !CheckPanelVisibility.isRunningTests {
             NSApp.activate()
         }
@@ -258,8 +270,9 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         armStuckWindowWatchdog()
     }
 
-    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **968pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
-    /// v0.3.40 — 단축키 안내 한 줄 + 사진 되돌리기 확인이 함께 열린 가장 높은 상태, 설치 QR 행 포함). 기본 창은 884pt 라 그대로 열면 맨 아래 행이 잘린다.
+    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **1064pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
+    /// v0.3.51 — 단축키 안내 한 줄 + 사진 되돌리기 확인이 함께 열린 가장 높은 상태, 설치 QR · 상태메시지 행 포함). 기본 창은 980pt 라 그대로 열면 맨 아래 행이 잘린다.
+    /// 단 **화면보다 크게는 안 키운다**(v0.3.51) — 그때는 본문이 스크롤한다.
     ///
     /// **왜 창을 만들 때가 아니라 열 때인가**: `ultraUnlimited` 는 서버가 정하고 세션 동기화로 **늦게 도착한다**.
     /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 기본 높이로 굳는다.
@@ -271,16 +284,40 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// **왜 키우기만 하는가**: 사용자가 직접 줄여 둔 창을 우리가 매번 되돌리면 그 조작이 무의미해진다.
     /// 저장된 자리(`setFrameAutosaveName`)보다 우리가 세게 굴면 안 된다 — 모자랄 때만 채운다.
     private func growForContentIfNeeded(_ window: NSWindow) {
-        let needed = wiring?.store.ultraUnlimited == true
+        var needed = wiring?.store.ultraUnlimited == true
             ? CheckSettingsView.adminContentHeight
             : Self.defaultContentSize.height
-        guard window.contentLayoutRect.height < needed else { return }
+        // ★ v0.3.51: **화면보다 크게 키우지 않는다.** 상태메시지 행이 붙어 기본 높이(980)가 13"·14" 노트북의 화면을 넘었다
+        //   (`defaultContentSize` 머리말). 화면을 넘는 창은 아래 행이 Dock·화면 밖으로 나가 **스크롤로도 못 닿는다** —
+        //   본문이 창 안에서는 다 들어간 것으로 보이기 때문이다(ViewThatFits 가 맨몸 본문을 고른다). 화면 높이에서 멈추면
+        //   본문이 창보다 높아져 ViewThatFits 가 스크롤 쪽으로 떨어진다 — 잘림 대신 스크롤(v0.3.47 이 만든 바로 그 길).
+        let chrome = window.frame.height - window.contentLayoutRect.height
+        let visible = (window.screen ?? NSScreen.main)?.visibleFrame
+        if let visible { needed = min(needed, visible.height - chrome) }
+        guard window.contentLayoutRect.height < needed else {
+            keepOnScreen(window, visible: visible)
+            return
+        }
         var size = window.frame.size
         size.height += needed - window.contentLayoutRect.height
         var frame = window.frame
         // 타이틀바가 위에 있으므로 **위쪽을 고정하고 아래로** 늘린다 — 그래야 창이 화면 위로 튀지 않는다.
         frame.origin.y -= size.height - frame.size.height
         frame.size = size
+        window.setFrame(frame, display: false)
+        keepOnScreen(window, visible: visible)
+    }
+
+    /// 창이 화면(메뉴바·Dock 을 뺀 영역)보다 크거나 아래로 삐져나가 있으면 **안으로 들인다**(v0.3.51).
+    /// 키우는 쪽이 아니라 맞추는 쪽이라 사용자가 고른 크기를 늘리지 않는다 — 화면을 넘는 부분만 깎고, 바닥이 화면 밖이면 위로 올린다.
+    /// 처음 만든 창(980pt)이 작은 화면에서 `center()` 로 놓이거나, 큰 외장 모니터에서 저장된 자리가 노트북 화면으로 옮겨 온 경우가 이 길이다.
+    private func keepOnScreen(_ window: NSWindow, visible: NSRect?) {
+        guard let visible else { return }
+        var frame = window.frame
+        if frame.height > visible.height { frame.size.height = visible.height }
+        if frame.maxY > visible.maxY { frame.origin.y = visible.maxY - frame.height }
+        if frame.minY < visible.minY { frame.origin.y = visible.minY }
+        guard frame != window.frame else { return }
         window.setFrame(frame, display: false)
     }
 

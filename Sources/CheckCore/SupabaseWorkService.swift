@@ -886,6 +886,48 @@ package actor SupabaseWorkService {
         return try decoder.decode([ProfileCenterRow].self, from: data).first?.center
     }
 
+    // MARK: - 상태메시지 (v0.3.51)
+
+    /// 내 상태메시지(profiles.status_message). **반드시 별도 GET 이다** — 기존 설정 GET·내 카드 GET·팀 임베드의 select 에
+    /// 끼우면 칸이 없는 서버(db push 전 창)에서 42703 → 그 요청이 통째로 400 이 되어 토큰 설정·집중 모드·팀 폴링까지 같이 죽는다
+    /// (fetchMyCenter 와 같은 규약). 칸이 없는 서버면 이 GET 만 throw 하고 호출부가 삼킨다. 행이 없거나 null 이면 nil.
+    /// 반환은 `StatusMessage.display` 를 지난 값이다(빈 값·보이는 글자 없는 값은 nil).
+    package func fetchMyStatusMessage(accessToken: String, userID: String) async throws -> String? {
+        let data = try await send(
+            path: "/rest/v1/profiles",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(userID)"),
+                URLQueryItem(name: "select", value: "status_message")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return StatusMessage.display(try decoder.decode([ProfileStatusMessageRow].self, from: data).first?.statusMessage)
+    }
+
+    /// 내 상태메시지를 쓴다/지운다. `set_status_message(p_text)` RPC — **쓰기 경로가 이것뿐이다**(update grant 없음 — PATCH 는 403).
+    /// `text` 가 nil 이면 지운다. 본문은 언제나 `{"p_text": …}` 다(SetStatusMessageRequest 주석).
+    ///
+    /// 서버에 함수가 아직 없으면(PGRST202 · 404) throw 하지 않고 `.serverNotReady` 로 돌려준다 — 그 경우 서버에서 실행된 것이
+    /// 하나도 없으므로(함수를 못 찾았다) 화면은 "준비가 끝나면" 한 줄로 끝낸다. 그 밖의 전송·권한 오류는 그대로 throw 한다.
+    package func setStatusMessage(accessToken: String, text: String?) async throws -> StatusMessageSaveOutcome {
+        let data: Data
+        do {
+            data = try await send(
+                path: "/rest/v1/rpc/set_status_message",
+                method: "POST",
+                body: SetStatusMessageRequest(pText: text),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        } catch let error as SupabaseWorkServiceError where BlockReportRules.isMissingFunction(error) {
+            return .serverNotReady
+        }
+        return StatusMessageSaveOutcome(response: try decoder.decode(SetStatusMessageResponse.self, from: data))
+    }
+
     // ★ center 를 **쓰는** 길(PATCH)은 일부러 없다(사장님 지시 2026-09-12). 서버가 `profiles.center` 에
     //   `grant update` 를 주지 않으므로 이 토큰으로 보내는 PATCH 는 어차피 거절된다 — 함수만 남겨 두면
     //   호출부가 '조용히 실패하는 변경'을 만든다. 센터 정정은 운영자 SQL 이 유일한 경로다.

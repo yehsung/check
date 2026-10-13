@@ -3300,10 +3300,15 @@ private struct PokePanel: View {
     //   (펼침 덩어리가 없으니 `composerBlockHeight` 도 없다).
 
     // 행 고정 높이·간격. 아바타(26pt) + 이름/상태 칩 한 줄이라 팀원 행보다 낮게 둔다.
-    private static let rowHeight: CGFloat = 48
+    // ★ v0.3.51: 상태메시지가 **있는** 사람의 행만 아래로 한 줄 자란다(`PokeDirectoryRowView.statusRowHeight` = 62).
+    //   없는 사람은 지금과 한 픽셀도 다르지 않은 48pt 다. 높이 규칙은 행 쪽 한 곳(`rowHeight(for:)`)에만 있다.
+    private static let rowHeight: CGFloat = PokeDirectoryRowView.plainRowHeight
     private static let rowSpacing: CGFloat = 8
     // 스크롤 없이 그대로 보여 주는 최대 인원. 행이 낮아(48pt) 7행까지 창 높이 상한(≤700pt) 안에 든다
     // (리스트 높이 7*48 + 6*8 = 384pt).
+    // ★ v0.3.51 부터 이 수는 **행 수가 아니라 점(pt) 예산의 단위**다: 목록 상한은 여전히 `7행짜리 48pt 목록`의 높이(384 −
+    //   위에 얹힌 것)이고, 상태가 있는 행이 섞이면 그 높이 안에 **더 적은 사람**이 들어가고 나머지는 스크롤로 밀린다.
+    //   행 수로 세면 상태 행 7개가 7×62 + 6×8 = 482pt 로 예산을 98pt 넘겨 팝오버가 700pt 를 뚫고 푸터가 잘린다.
     static let maxVisibleRows = 7
 
     // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
@@ -3399,17 +3404,13 @@ private struct PokePanel: View {
         return entries.sortedForPokeDisplay()
     }
 
-    private static func rowCount(of sorted: [PokeDirectoryEntry]) -> Int {
-        sorted.isEmpty ? 1 : sorted.count
-    }
-
-    // 리스트 높이 = 인원 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
-    // **펼친 작성기도 이 안에서 자란다** — 리스트 총 높이 상한(capHeight)은 펼침 여부와 무관하므로,
-    // 어떤 조합에서도 창 높이는 '접힌 7행'을 넘지 않는다(펼치면 보이는 행수가 줄고 나머지는 스크롤로 밀린다).
+    // 리스트 높이 = 행 높이의 합. 상한(capHeight, **점 예산**)까지는 그대로 자라고(스크롤 없음), 넘으면 그 높이로 고정 후 스크롤.
+    // 상한은 행 수가 아니라 높이다 — `visibleRows` 개의 48pt 행이 차지하던 높이 그대로라, 상태메시지 행(62pt)이 섞여도
+    // 어떤 조합에서도 창 높이는 v0.3.50 의 '접힌 7행'을 넘지 않는다(상태 행이 많을수록 보이는 사람이 줄고 나머지는 스크롤로 밀린다).
     @ViewBuilder
     private func entryList(_ sorted: [PokeDirectoryEntry]) -> some View {
-        let capHeight = Self.listContentHeight(rowCount: visibleRows)
-        let contentHeight = Self.listContentHeight(rowCount: Self.rowCount(of: sorted))
+        let capHeight = Self.listCapHeight(visibleRows: visibleRows)
+        let contentHeight = Self.listContentHeight(entries: sorted)
         if contentHeight <= capHeight {
             rows(sorted).frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
@@ -3453,15 +3454,30 @@ private struct PokePanel: View {
                         onOpenMessages: { onOpenMessages(entry.userID) },
                         hasUnreadMessages: unreadMessagePeerIDs.contains(entry.userID)
                     )
-                    .frame(height: Self.rowHeight)
+                    // 행마다 높이가 다르다(상태메시지가 있으면 62, 없으면 48) — 규칙은 행 쪽 한 곳이다.
+                    .frame(height: PokeDirectoryRowView.rowHeight(for: entry))
                 }
             }
         }
     }
 
+    /// 균일한 48pt 행 `rowCount` 개의 높이. 상한(`listCapHeight`)의 단위이고, 상태가 하나도 없는 목록의 높이와 같다.
     static func listContentHeight(rowCount: Int) -> CGFloat {
         guard rowCount > 0 else { return 0 }
         return CGFloat(rowCount) * rowHeight + CGFloat(rowCount - 1) * rowSpacing
+    }
+
+    /// 실제 목록 높이 = 행 높이의 합 + 간격. 빈 목록은 안내 한 줄(48pt 한 행)이다.
+    static func listContentHeight(entries: [PokeDirectoryEntry]) -> CGFloat {
+        guard !entries.isEmpty else { return listContentHeight(rowCount: 1) }
+        let rows = entries.reduce(CGFloat(0)) { $0 + PokeDirectoryRowView.rowHeight(for: $1) }
+        return rows + CGFloat(entries.count - 1) * rowSpacing
+    }
+
+    /// 스크롤 없이 그리는 목록의 **점 상한**. v0.3.50 의 `visibleRows` 개 48pt 행 높이 그대로다 — 팝오버 700pt 상한과 푸터가
+    /// 이 값 위에 서 있으므로, 상태메시지 행이 아무리 섞여도 목록이 이보다 커지지 않는다.
+    static func listCapHeight(visibleRows: Int) -> CGFloat {
+        listContentHeight(rowCount: visibleRows)
     }
 }
 
@@ -3573,6 +3589,24 @@ struct PokeDirectoryRowView: View {
     /// 이 사람에게서 온 것 중 아직 안 읽은 것이 있는가. 말풍선 위 점 하나로 그린다.
     var hasUnreadMessages: Bool = false
 
+    // ── 높이(v0.3.51 상태메시지) ──
+    /// 상태메시지가 없는 행. v0.3.50 까지의 유일한 높이이고 지금도 상태가 없는 사람은 이 높이 그대로다.
+    static let plainRowHeight: CGFloat = 48
+    /// 위 띠(아바타·이름·칩·버튼 한 줄)의 높이 = 48 − 위아래 패딩 6×2. 상태가 있어도 **이 띠는 그대로**라
+    /// 이름·센터 배지·버튼의 자리(x·띠 안의 y)가 상태 유무와 무관하게 같다.
+    static let topBandHeight: CGFloat = plainRowHeight - 12
+    /// 상태메시지 한 줄(caption2)의 높이.
+    static let statusLineHeight: CGFloat = 14
+    /// 상태메시지가 **있는** 행 = 위 띠 + 상태 한 줄 + 패딩 = 62. 카드가 아래로만 자란다.
+    static let statusRowHeight: CGFloat = plainRowHeight + statusLineHeight
+    /// 상태 줄이 시작하는 x 를 이름과 맞추는 들여쓰기(아바타 26 + 간격 10). 세로 바 다음 열 기준이다.
+    static let statusLeadingInset: CGFloat = 26 + 10
+
+    /// 이 사람의 행 높이. **목록 높이 계산(PokePanel)과 행의 실제 프레임이 같은 함수를 본다** — 둘이 갈리면 스크롤 판정이 틀린다.
+    static func rowHeight(for entry: PokeDirectoryEntry) -> CGFloat {
+        entry.statusMessage == nil ? plainRowHeight : statusRowHeight
+    }
+
     // 좌측 세로 바 색 — 아바타 이니셜과 동일한 이름 해시색(유저별 컬러 포인트).
     private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
 
@@ -3586,23 +3620,42 @@ struct PokeDirectoryRowView: View {
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 3)
-            CheckAvatarView(name: entry.name, userID: entry.userID, avatarURL: entry.avatarURL, size: 26, center: center)
-            Text(entry.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(CheckTheme.primaryText)
-                .lineLimit(1)
-            statusChip
-            Spacer(minLength: 6)
-            // 메시지는 찌르기 **바로 왼쪽**, 같은 30pt 원형이다(같은 자리·같은 무게).
-            // 다만 채움은 한 급 낮춘다 — 둘 다 accent 원형이면 어느 쪽이 이 화면의 주 동작인지 사라지고,
-            // 손가락 아이콘의 '콕' 은 이 패널의 이름 그 자체다.
-            messageButton
-            pokeButton
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 10) {
+                    CheckAvatarView(name: entry.name, userID: entry.userID, avatarURL: entry.avatarURL, size: 26, center: center)
+                    Text(entry.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                    statusChip
+                    Spacer(minLength: 6)
+                    // 메시지는 찌르기 **바로 왼쪽**, 같은 30pt 원형이다(같은 자리·같은 무게).
+                    // 다만 채움은 한 급 낮춘다 — 둘 다 accent 원형이면 어느 쪽이 이 화면의 주 동작인지 사라지고,
+                    // 손가락 아이콘의 '콕' 은 이 패널의 이름 그 자체다.
+                    messageButton
+                    pokeButton
+                }
+                .frame(height: Self.topBandHeight)
+                // 상태메시지(v0.3.51) — **있는 사람만** 이 줄이 생기고 카드가 아래로 14pt 자란다. 이름 열(x≈57)에 맞춰
+                // 시작해 버튼 밑까지 쓰고, 넘치면 꼬리를 줄임표로 자른다(한 줄). 전문은 툴팁으로 본다.
+                if let status = entry.statusMessage {
+                    Text(status)
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: Self.statusLineHeight, alignment: .top)
+                        .padding(.leading, Self.statusLeadingInset)
+                        .checkTooltip(status)
+                        .accessibilityLabel("\(entry.name)님의 상태메시지: \(status)")
+                }
+            }
         }
         .padding(.leading, 8)
         .padding(.trailing, 12)
         .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(CheckTheme.fieldFill)

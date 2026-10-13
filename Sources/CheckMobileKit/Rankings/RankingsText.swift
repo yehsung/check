@@ -242,8 +242,9 @@ package enum RankingsText {
     package static let miniGameEmpty = "아직 기록이 없어요 — 첫 기록의 주인공이 되세요"
     package static let miniGameFailed = "순위를 불러오지 못했어요"
     package static let yesterdayChampion = "어제 1등"
-    /// 자정 상품(루비). 맥 `CheckMiniGameWindowView.rubyPrizes` · 서버 `ruby_prize_amounts()` 와 **짝인 상수**.
-    package static let rubyPrizes = [20, 10, 5]
+    /// 자정 상품(루비). 맥 `CheckMiniGameWindowView.rubyPrizes` · 서버 `ruby_prize_amounts()` · 게임 탭 `GamesMiniGameText.rubyPrizes`
+    /// 와 **짝인 상수**. 2026-10-14(1.0.7 · 서버 20261014120000) 20·10·5 → 10·5·3.
+    package static let rubyPrizes = [10, 5, 3]
     /// 자정 상품 정족수. 맥 `prizeQuorum` · 서버 `minigame_prize_quorum()` 과 짝.
     package static let prizeQuorum = 5
     package static var prizeCaption: String {

@@ -212,7 +212,7 @@
 | 의료·웰니스 | 없음 | — |
 | 도박(실제) | 아니오 | 애플 정의 "Betting or wagering using real money or in-game currency that **may be exchanged for real money**" → 18+. 결제 없음, 루비는 현금 구매·환금 불가(`privacy.md:103`, `README.md` "현금으로는 못 삽니다") — 환금 불가라는 사실이 피하게 해 주는 것은 **이 항목**이지 아래 모의 도박이 아니다 |
 | **모의 도박(Simulated Gambling)** | **예 · 드묾(Infrequent) → 13+** | 애플 정의(원문): "Betting or wagering **without** using real money or in-game currency that can be exchanged for real money" — 환금 불가 재화로 거는 것이 정의 그 자체다. 오목은 수락 순간 두 사람이 루비 판돈 3/5/10 을 내고 이긴 쪽이 두 사람 몫을 받는다(무승부·판 가득이면 각자 돌려받음): 로비 응답 `Demo/Fixtures/games/rpc.gomoku_lobby.json:4-8`(stakes), 서버 `supabase/migrations/20260916120000_gomoku_duel.sql:133`(`stake check (3,5,10)`)·`:1057`(수락 시 차감)·`:640`(승자 `+2*stake`)·`:654`(환불), `GamesText.swift:248` "건 루비는 돌려받아요". 등급: 드묾 13+ · 잦음 18+. 오목은 게임 탭 안 카드 하나이고 앱의 주된 활동(근무 현황)이 아니므로 **드묾**으로 답한다. 심사 노트(§5.2)에 "가상 포인트, 실물 가치 없음, 한 판 3~10 루비" 명시 |
-| **경연(Contests)** | **예 · 잦음(Frequent) → 13+** | 애플 정의(원문): "Events that allow users to compete with one another for rankings, rewards, or the achievement of personal goals. May include: skill-based competitions, trivia quizzes, or sport or fitness contests" — 실물 상품·상금 조건이 **없다**. 미니게임은 매일 자정(KST) 그날 1·2·3등에게 루비 20·10·5 를 준다(`GamesText.swift:80-83`, 참여 5명부터 지급 `:81-82, 125-128`, `privacy.md:20`). 매일 여는 순위·보상 행사라 **잦음**. 등급: 드묾 4+ · 잦음 13+ |
+| **경연(Contests)** | **예 · 잦음(Frequent) → 13+** | 애플 정의(원문): "Events that allow users to compete with one another for rankings, rewards, or the achievement of personal goals. May include: skill-based competitions, trivia quizzes, or sport or fitness contests" — 실물 상품·상금 조건이 **없다**. 미니게임은 매일 자정(KST) 그날 1·2·3등에게 루비 10·5·3 을 준다(2026-10-14 부터 · 그 전 20·10·5 — `GamesText.swift:89, 92`, 참여 5명부터 지급 `:91, 160-163`, `privacy.md:26`). 매일 여는 순위·보상 행사라 **잦음**. 등급: 드묾 4+ · 잦음 13+ |
 | 루트 상자 | 아니오 | 확률 뽑기 없음. 캐릭터는 정가 구매(`Me/MeText.swift:215`) |
 
 예상 결과 등급: **13+** — 모의 도박(드묾)과 경연(잦음) 어느 한쪽만으로도 13+ 가 된다. 두 항목을 '아니오' 로 답해 4+ 로 내면 심사에서 등급 정정·거절 사유가 되므로 그렇게 내지 않는다. 4+ 가 꼭 필요하다면 오목 판돈과 자정 상품을 없애는 결정이 먼저인데(둘 다 사용자 결정 사항 — 2026-09-16 오목 루비 3/5/10, 미니게임 상품), 앱이 성인 연수생 대상이고 별명·사진이 전원에게 보이는 점까지 감안하면 13+ 가 앱 성격과도 맞는다. "최소 연령을 더 높게 설정" 옵션은 따로 필요 없다.
@@ -314,6 +314,8 @@
 | 4 | 게임 — 허브(미니게임 타일·오목 카드·오늘 내 순위) | `games` | "매일 자정 1·2·3등에게 루비" | `Games/GamesTab.swift:5-8`, `Demo/Fixtures/games/_games/` |
 | 5 | 순위 — 팀 리그 | `rankings/league` | "이번 주 팀 리그, 1인당 평균으로" | `Rankings/RankingsText.swift:21-27, 39`, `Demo/Fixtures/rankings/rpc.team_weekly_leaderboard.json` |
 | 6 | 나 — 캐릭터 무대·기록 잔디 | `me` | "일한 만큼 모은 루비로 캐릭터를" | `Me/MeTab.swift:6-7`, `Demo/Fixtures/me/_me/` |
+
+⚠ **2026-10-14(1.0.7) 상금이 20·10·5 → 10·5·3 으로 바뀌었다.** 4번(허브)은 상단 캡션이 `GamesMiniGameText.prizeCaption` 그대로라 1.0.6 까지 찍은 장에는 "루비 20·10·5" 가 박혀 있다 — 1.0.7 제출 때 4번을 다시 찍는다(데모 라우트 `games`). 상점 데모 픽스처(`Demo/Fixtures/me/_me*/rpc.shop_state.json`)도 같은 날 새 가격표(여우·다람쥐 60 · 강아지·유령 100 · 해파리 140 · 울트라 5)로 맞췄다.
 
 예비(7~10장 채울 때): `rankings/minigame`(오늘 순위·어제 1등), `me/shop`(상점), `games/flappy`(플래피 아잉), 알림 설명 시트(`now` + `-AingCheckDemoPushPrimer YES`, `Push/PushCoordinator.swift:108-110`), **작업 B 뒤** 가입 화면(라우트 이름은 작업 B 가 정한다 — `login` 은 로그아웃 장면일 뿐 라우트가 아니다, `Tests/CheckMobileKitTests/BaseRouterTests.swift:35-51`).
 피할 것: 설정 화면 아래쪽(이메일 칸) — e2e 도 남기지 않는 화면이다(`ios/UITests/AingCheckE2ETests.swift:16`).

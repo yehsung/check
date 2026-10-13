@@ -304,17 +304,19 @@ struct V0317ShopTests {
     @Test("잔량이 모자라면 구매하기가 비활성이고 얼마가 모자란지 말한다")
     func shortfallDisablesTheConfirmButton() {
         let store = Self.shopStore(ruby: 12)
-        store.selectShopItem(.character("ghost"))   // 50루비
-        #expect(store.shopSelectionPrice == 50)
+        store.selectShopItem(.character("ghost"))   // 100루비
+        #expect(store.shopSelectionPrice == 100)
         #expect(store.canConfirmShopPurchase == false, "못 사는데 구매하기가 켜져 있다")
         #expect(ShopText.barDetail(notice: nil, selection: store.shopSelection,
                                    price: store.shopSelectionPrice,
-                                   balance: store.rubyBalance) == "루비 38개 더 필요해요")
+                                   balance: store.rubyBalance) == "루비 88개 더 필요해요")
         // 눌러도 서버로 안 나간다.
         store.confirmShopPurchase()
         #expect(store.purchasingID == nil, "못 사는데 서버 왕복이 생겼다")
 
-        // ★ 기준선이 실제로 다르다: 살 수 있으면 켜진다.
+        // ★ 기준선이 실제로 다르다: 살 수 있으면 켜진다(정확히 가격과 같은 잔량 = 경계).
+        store.rubyBalance = 99
+        #expect(store.canConfirmShopPurchase == false, "1개 모자란데 구매하기가 켜져 있다")
         store.rubyBalance = 100
         #expect(store.canConfirmShopPurchase, "살 수 있는데 구매하기가 꺼져 있다")
     }
@@ -400,7 +402,7 @@ struct V0317ShopTests {
             let store = Self.plainStore()
             let rows = Self.rows(ownedIDs: ownedIDs)
             store.applyShopState(ShopStateResponse(rubyBalance: ruby, ultraBalance: 7,
-                                                   ultraPrice: 3, ultraBuyMax: 20, characters: rows))
+                                                   ultraPrice: Self.realUltraPrice, ultraBuyMax: 20, characters: rows))
             store.shopLoaded = true
             if let selection { store.selectShopItem(selection) }
             let panel = CheckShopPanel(store: store, onBack: {})
@@ -537,9 +539,11 @@ struct V0317ShopTests {
         CheckCharacter3DScene.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID }
     }
 
-    /// **실제 서버 가격**(2026-09-13 프로덕션). 그림이 거짓말하지 않게 픽스처도 같은 값을 쓴다.
-    static let realPrices: [String: Int] = ["fox": 30, "squirrel": 30, "shiba": 50,
-                                            "ghost": 50, "jellyfish": 70]
+    /// **실제 서버 가격**(2026-10-14 `20261014120000_ruby_economy_v2.sql` — 그 전 30·30·50·50·70·100).
+    /// 그림이 거짓말하지 않게 픽스처도 같은 값을 쓴다. 울트라 1개 = 루비 `realUltraPrice`.
+    static let realPrices: [String: Int] = ["fox": 60, "squirrel": 60, "shiba": 100,
+                                            "ghost": 100, "jellyfish": 140, "robot": 200]
+    static let realUltraPrice = 5
 
     @MainActor
     static func rows(ownedIDs: Set<String>, limit: Int? = nil) -> [ShopCharacterRow] {
@@ -560,7 +564,7 @@ struct V0317ShopTests {
     static func shopStore(ruby: Int?, ownedIDs: Set<String> = [],
                           function: String = #function, line: Int = #line) -> WorkTimerStore {
         let store = plainStore(function: function, line: line)
-        store.applyShopState(ShopStateResponse(rubyBalance: ruby, ultraBalance: 7, ultraPrice: 3,
+        store.applyShopState(ShopStateResponse(rubyBalance: ruby, ultraBalance: 7, ultraPrice: realUltraPrice,
                                                ultraBuyMax: 20, characters: rows(ownedIDs: ownedIDs)))
         store.rubyBalance = ruby
         store.shopLoaded = true

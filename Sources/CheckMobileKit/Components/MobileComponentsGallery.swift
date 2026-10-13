@@ -247,7 +247,7 @@ private struct GalleryPageRows: View {
         SectionHeaderBar("순위", topPadding: 18) {
             AingChip(text: "타이밍 바", tint: MobileTheme.label2, background: MobileTheme.fill)
         }
-        ChampionRow(caption: "어제 1등", name: "라떼", center: "seoul", score: "972점", awarded: 20)
+        ChampionRow(caption: "어제 1등", name: "라떼", center: "seoul", score: "972점", awarded: RankingsText.rubyPrizes[0])
         RankRow(isMine: false, isLast: false, dividerInset: 84, minHeight: 48, verticalPadding: (7, 7)) {
             RankRowBody(rank: 2) {
                 RankRowFace(name: "구름", colorSeed: "구름", url: nil, userID: nil, base: 30, me: nil)

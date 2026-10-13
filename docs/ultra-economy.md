@@ -1,4 +1,4 @@
-# 재화 경제(울트라·루비) · 미션 · 상점 · 초인종 — 서버 계약 (v0.3.18 / build 70)
+# 재화 경제(울트라·루비) · 미션 · 상점 · 초인종 — 서버 계약 (v0.3.18 / build 70 · 값 갱신 v0.3.51)
 
 이 문서는 **클라이언트가 의존해도 되는 응답 스키마**를 정의한다. 여기 적힌 것만 계약이다 —
 적히지 않은 키는 언제든 사라질 수 있고, 적힌 키는 예고 없이 사라지지 않는다.
@@ -7,6 +7,10 @@
 > **보유 상한이 폐지**됐으며, 3시간 미션과 미니게임 상금이 **루비로** 간다. 울트라는 이제
 > "매일 자정 밑바닥 1개 + 루비로 구매" 로만 얻는다. 아래 표의 값이 그 결과다 — 이 문서에서
 > `capped`·`prize:expire`·"가득 참" 을 보면 **사문화된 개념**이라는 표시가 함께 있는지 확인하라.
+>
+> ⚠️ **2026-10-14(v0.3.51 · `20261014120000_ruby_economy_v2.sql`)에 값이 바뀌었다** — 상금 20·10·5 → **10·5·3**,
+> 캐릭터 가격 **2배**(여우·다람쥐 60 · 강아지·유령 100 · 해파리 140 · 로봇 200), 울트라 3 → **5**, 가입 지급
+> 30 → **60**(제일 싼 캐릭터를 바로 살 수 있게). 3시간 랩 3 · 오목/체스 판돈 3/5/10 은 그대로다. 아래 표가 지금 값이다.
 
 관련 마이그레이션 (적용 순서가 곧 이 순서다):
 
@@ -27,6 +31,7 @@
 | `20260901130000_ultra_lap_economy.sql` | 없음(표·컬럼 0개) | **있음** — 상한 5→3 · `ultra_wallet_sync` 가 3시간 **마다** 지급하고 가득 참은 영구 소멸 |
 | `20260901140000_ultra_capped_persistent.sql` | 없음 | **있음** — `capped` 를 순간 신호에서 **상태**(잔량 ≥ 상한)로 |
 | `20260903190000_ultra_pending_lap.sql` | `profiles` 퀘스트 상태 3컬럼(grant 없음) | **있음** — 가득 찼을 때의 달성이 **소멸에서 대기**로. `missions[].pending` 키 추가 |
+| `20261014120000_ruby_economy_v2.sql` | 없음(상수 3개 값 · 가격표 6행 price 칸만) | 없음 — 본문·서명·실행권 그대로. 상금 {10,5,3} · 울트라 5 · 가입 60 · 가격 2배(로봇 `min_protocol` 1 유지) |
 
 ---
 
@@ -40,9 +45,10 @@
 | 미션 1호 목표 | 그날 누적 근무 **3시간마다**(3·6·9…) | `mission_work_seconds()` = 10800 |
 | 미션 보상 | 랩당 **루비 +3**(울트라 아님. 2026-09-13 교체) | `ruby_mission_grant()` = 3 · `ruby_ledger` 의 `unique (user_id, kst_day, reason) where delta > 0` |
 | 가득 찼을 때 달성 | **사문화** — 상한이 없어 "가득 참"이 성립하지 않는다 | `profiles.ultra_quest_pending` 은 내려가기만 한다 |
-| 울트라 구매 | 루비 **3개 = 울트라 1개**, 한 번에 최대 20개 | `ultra_ruby_price()` = 3 · `ultra_buy_max()` = 20 |
-| 미니게임 상금 | 게임별 **1·2·3등에게 루비 20·10·5** (1등 울트라 10개에서 교체) | `ruby_prize_amounts()` = `{20,10,5}` · 정족수 `minigame_prize_quorum()` = 5 |
-| 가입 지급 | 루비 **30**(제일 싼 캐릭터 가격과 같아야 한다 — 마이그레이션이 단언한다) | `ruby_welcome_grant()` = 30 |
+| 울트라 구매 | 루비 **5개 = 울트라 1개**, 한 번에 최대 20개 (2026-10-14 에 3 → 5) | `ultra_ruby_price()` = 5 · `ultra_buy_max()` = 20 |
+| 미니게임 상금 | 게임별 **1·2·3등에게 루비 10·5·3** (1등 울트라 10개 → 2026-09-13 루비 20·10·5 → 2026-10-14 10·5·3). 클라에 **짝 상수**가 셋 있다(맥 `CheckMiniGameWindowView.rubyPrizes` · 폰 `GamesMiniGameText`/`RankingsText.rubyPrizes`) — 서버는 금액을 내려 주지 않는다 | `ruby_prize_amounts()` = `{10,5,3}` · 정족수 `minigame_prize_quorum()` = 5 |
+| 가입 지급 | 루비 **60**(제일 싼 캐릭터 가격 **이상**이어야 한다 — 가격이나 이 값을 바꾸는 마이그레이션이 그때 단언한다. 2026-10-14 에 30 → 60) | `ruby_welcome_grant()` = 60 |
+| 확성기(📢) | 루비 **50** — 메시지 한 통을 앱 사용자 **전원**(나와 같은 공개 범위, 차단 관계·집중 모드인 사람 제외)에게 1:1 메시지로 보낸다. 한 사람당 10분에 한 번 · 관리자도 낸다 | `megaphone_ruby_price()` = 50 · `megaphone_cooldown_seconds()` = 600 · 장부 `spend:megaphone` (`20261014122000_megaphone.sql`) |
 | 연속 출근 스트릭 | **표시만. 보상 없음** | `ultra_wallet_sync` 는 스트릭으로 어떤 적립도 하지 않는다 |
 | 울트라 발사 비용 | 1 | `ultra_poke_user` |
 | 같은 대상 쿨타임 | 60초 (거절은 몫을 안 태운다) | 세 RPC 공통 |
@@ -323,7 +329,7 @@ invalid → not_working → target_not_working → target_focused → 관리자 
 
 | 것 | 내용 |
 |---|---|
-| `character_prices(character_id, price)` | fox 30 · squirrel 30 · shiba 50 · ghost 50 · jellyfish 70. **아잉은 없다**(무료 = `free_character_id()`) |
+| `character_prices(character_id, price, min_protocol)` | fox 60 · squirrel 60 · shiba 100 · ghost 100 · jellyfish 140 · robot 200(`min_protocol` 1). 2026-10-14 에 전부 2배(그 전 30·30·50·50·70·100). **아잉은 없다**(무료 = `free_character_id()`) |
 | `character_ownership(user_id, character_id, acquired_at, acquired_via)` | PK `(user_id, character_id)` 가 **구매 멱등을 보장하는 유일한 장치**다 — `ruby_ledger_grant_once` 는 `delta > 0` 조건이라 구매(음수)를 못 막는다 |
 | `buy_character(p_id text)` | `ok`(+`character`·`price`·`ruby_balance`) · `already_owned` · `unknown_character` · `insufficient`(+`need`·`have`) · `unauthorized` · `no_profile` |
 | `buy_ultra(p_count int default 1)` | `ok`(+`count`·`unit`·`spent`·`ultra_balance`·`ruby_balance`) · `insufficient`(+`need`·`have`·`ruby_balance`·`unit`·`count`) · `invalid`(+`count`·`max`) · `unauthorized` · `no_profile` |

@@ -276,6 +276,51 @@ import Testing
         await harness.tearDown()
     }
 
+    @Test("화면이 뜨면 말 이동 애니메이션이 **만들어진다** — 화면을 안 띄운 기준선은 nil 이다(= 순간이동)")
+    func theScreenHookMakesTheMoveAnimation() async {
+        // ★ **주 스위치가 둘째**다. `ChessStore.isWindowVisible` 도 기본이 false 이고,
+        //   `beginFlight` 가 맨 앞에서 `guard isWindowVisible, !isWindowOccluded` 로 막는다(ChessStore.swift:1250).
+        //   배선이 `windowDidShow()` 로 그 깃발을 안 켜면 애니메이션이 **한 번도 안 만들어지고**, 판은 멈춘 국면을
+        //   정확히 그리므로 **순간이동으로 조용히 되돌아간다** — 사용자가 0.3.43 에서 말한 그 증상이다.
+        //   그리고 거절이 의도된 동작이라 **빨개지는 테스트가 없다**(`spectatorFeaturesEnabled` 와 같은 종류의 함정).
+        //
+        // 없으면: `chessScreenDidAppear()` 에서 `if isAppActive { chess.windowDidShow() }` 한 줄을 지워도
+        //   아무 시험도 안 물린다(폴링은 스토어가 다른 길로도 되살리고, 깃발 자체를 재는 단언은 "켜졌다"만 말한다).
+        //
+        // 로봇 판으로 잰다: 서버를 한 번도 안 타므로 수 하나가 **동기로** 판을 나아가게 하고, 그 깔때기
+        // (`commitAIGame` → `beginFlight`)는 1:1·관전과 **같은 문**이다. 로봇은 생각하지 않게 막아 내 수만 남긴다.
+        let harness = GamesHarness(label: "chess-flight-on")
+        serve(harness)
+        await harness.signIn()
+        let chess = harness.model.chess
+        chess.aiMoveChooser = { _, _ in nil }
+        harness.games.chessScreenDidAppear()
+        #expect(chess.isWindowVisible, "화면 훅이 코어 창 깃발을 안 켰다 — windowDidShow() 가 빠졌다")
+        chess.startAIMatch(humanColor: .white)
+        #expect(chess.isAIMatch, "로봇 판이 안 섰다 — 이 테스트의 전제가 깨졌다")
+        await chess.send(ChessMove(from: ChessSquare("e2")!, to: ChessSquare("e4")!))
+        #expect(chess.match?.plyCount == 1, "수가 판에 안 들어갔다 — 아래 nil 은 애니메이션 때문이 아니다")
+        #expect(chess.flight != nil,
+                "수가 들어갔는데 애니메이션이 안 만들어졌다 — 말이 순간이동한다(isWindowVisible 이 꺼져 있다)")
+        #expect(chess.flight?.ply == 1)
+        await harness.tearDown()
+
+        // 기준선: **같은 손짓**에서 화면 훅만 안 부르면 애니메이션이 0건이다. 기준선이 안 갈리면 위 초록은
+        // 아무것도 증명하지 않는다(저장소 메모 '비교 기준선이 달라야 한다').
+        let bare = GamesHarness(label: "chess-flight-off")
+        serve(bare)
+        await bare.signIn()
+        let bareChess = bare.model.chess
+        bareChess.aiMoveChooser = { _, _ in nil }
+        // chessScreenDidAppear() 를 **부르지 않는다** = 배선 한 줄을 지운 것.
+        bareChess.startAIMatch(humanColor: .white)
+        await bareChess.send(ChessMove(from: ChessSquare("e2")!, to: ChessSquare("e4")!))
+        #expect(bareChess.match?.plyCount == 1, "기준선에서도 수는 들어가야 한다 — 판은 서버가 아니라 로컬이다")
+        #expect(bareChess.flight == nil,
+                "기준선이 안 갈린다 — 창 깃발과 무관하게 애니메이션이 만들어지면 위 단언은 배선을 재지 않는다")
+        await bare.tearDown()
+    }
+
     // MARK: - 4. 한 사람 한 판 — 양방향
 
     @Test("한 사람 한 판은 **양방향**이다: 체스 중이면 오목 입구가, 오목 중이면 체스 입구가 막힌다")
@@ -440,6 +485,11 @@ import Testing
         // 값으로 재는 쪽은 위 `leavingTheChessScreenDropsALiveSpectate` 다. 이 테스트는 그 값이 **우연히**
         // 맞는 경우(코어가 언젠가 진행 중 관전까지 내리게 바뀌는 날)에도 순서 계약이 남아 있게 못을 박는다.
         let code = try Self.strippedSource("Sources/CheckMobileKit/Games/GamesStore.swift")
+        // 나타나는 길: `windowDidShow()` 가 창 깃발을 켜는 **유일한 문**이다(그 깃발이 애니메이션·폴링·관전을 쥔다).
+        let appear = try #require(Self.slice(code, from: "func chessScreenDidAppear", length: 400))
+        #expect(appear.contains("chess.openWindow(focusMatchID: nil)"), "나타나는 길이 로비·판을 안 읽는다")
+        #expect(appear.contains("if isAppActive { chess.windowDidShow() }"),
+                "나타나는 길이 windowDidShow() 를 안 부른다 — 창 깃발이 꺼진 채라 말이 순간이동한다")
         let body = try #require(Self.slice(code, from: "func chessScreenDidDisappear", length: 420))
         let stop = try #require(body.range(of: "stopWatching()"), "떠나는 길에 stopWatching() 이 없다")
         let hide = try #require(body.range(of: "windowDidHide()"), "떠나는 길에 windowDidHide() 가 없다")

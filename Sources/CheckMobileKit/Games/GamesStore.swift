@@ -298,10 +298,19 @@ package final class GamesStore {
 
     // MARK: 체스 화면 수명 (오목에서 수리한 모양 그대로)
 
-    /// 체스 화면이 나타났다: 로비·진행 판을 읽고(`openWindow`) 앱이 active 면 폴링을 시작한다.
+    /// 체스 화면이 나타났다: 로비·진행 판을 읽고(`openWindow`) 앱이 active 면 창을 세운다(`windowDidShow`).
     ///
     /// `isChessScreenVisible` 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이
     /// "이미 보인다"를 봐야 화면을 또 열지 않는다(오목에서 같은 순서로 데였다).
+    ///
+    /// ★★ **`windowDidShow()` 가 이 레인의 두 번째 주 스위치다.** 코어 `isWindowVisible` 도 기본이 false 이고
+    ///   (`ChessStore.swift:723`), 그 깃발을 켜는 문은 이것뿐이다. 깃발이 꺼져 있으면 셋이 함께 죽는다:
+    ///   폴링(`startPolling` 의 가드) · 순위·관전(`canPollSpectatorFeatures`) · **말 이동 애니메이션**
+    ///   (`beginFlight` 가 맨 앞에서 `guard isWindowVisible, !isWindowOccluded`). 애니메이션이 안 만들어지면
+    ///   판은 멈춘 국면을 **정확히** 그리므로 사용자에게는 말이 순간이동하고, 거절이 의도된 동작이라
+    ///   **빨개지는 테스트가 없다**. 그래서 못을 따로 박아 두었다 — `GamesChessWiringTests` 의
+    ///   `theScreenHookMakesTheMoveAnimation`(깃발이 아니라 **그 결과로 애니메이션이 서는지**를 재고,
+    ///   화면 훅을 안 부른 기준선과 나란히 본다).
     package func chessScreenDidAppear() {
         let chess = context.chess
         isChessScreenVisible = true

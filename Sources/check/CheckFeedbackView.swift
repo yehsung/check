@@ -977,6 +977,9 @@ enum FeedbackReplySend {
         case settingsDisplayName
         /// 팝오버의 가입·무소속·재설정 화면 칸(`CredentialField` — 별명·팀 이름이 한글이다).
         case authForm
+        /// 상점 패널의 확성기 작성 칸(v0.3.51 — `MegaphoneComposer`). 한글 방송의 마지막 음절이 빠지면 **루비 50개짜리**
+        /// 문장이 잘린 채 모두에게 간다 — [보내기]·확인 단계 둘 다 이 자리의 조합을 먼저 확정한다.
+        case megaphone
     }
 
     private final class WeakWindow {

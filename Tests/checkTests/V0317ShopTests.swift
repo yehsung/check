@@ -460,11 +460,16 @@ struct V0317ShopTests {
     @MainActor
     @Test("최악 조합에서도 창이 700pt 상한 안이다")
     func popoverStaysUnderTheCapInTheWorstCase() throws {
-        let store = Self.teamStore(members: 8)
+        // 세션이 있는 스토어라 `toggleShopPanel` 의 로드(shop_state · 확성기 미리 읽기 v0.3.51)가 나간다 — 스텁으로 막는다.
+        let store = Self.teamStore(members: 8, service: Self.offlineService("worst"))
         store.toggleShopPanel()
         store.applyShopState(ShopStateResponse(rubyBalance: 42, ultraBalance: 7, ultraPrice: 3,
                                                characters: Self.rows(ownedIDs: [])))
         store.shopLoaded = true
+        // 확성기 카드의 가격 칩까지 선 모습이 평소 모습이다(상점을 열면 미리 읽는다) — 그 모습으로 잰다.
+        store.megaphone.applyInfo(MegaphoneInfoResponse(price: 50, cooldownSeconds: 600, cooldownRemainingSeconds: 0,
+                                                       recipients: 46, maxLength: 198))
+        #expect(store.megaphone.price == 50, "준비 실패 — 가격 칩 없는 모습을 재고 있다")
         store.isEditingWeeklyGoal = true
         let view = CheckMenuView(store: store,
                                  previewClipsOverflowList: true,
@@ -574,9 +579,20 @@ struct V0317ShopTests {
     @MainActor
     /// `function`·`line` 은 **호출 지점**에서 평가되는 기본 인자라 호출자를 안 고치고 자기 신원을 준다.
     /// 받아서 이어 넘겨야 한다 — 여기서 다시 쓰면 이름이 `plainStore` 로 굳어 모든 테스트가 한 스위트다.
-    static func plainStore(function: String = #function, line: Int = #line) -> WorkTimerStore {
-        WorkTimerStore(environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+    static func plainStore(service: SupabaseWorkService? = nil,
+                           function: String = #function, line: Int = #line) -> WorkTimerStore {
+        WorkTimerStore(service: service ?? SupabaseWorkService(),
+                       environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
                        defaults: isolatedDefaults("plain-L\(line)", function: function))
+    }
+
+    /// 아무 데도 안 나가는 서비스(호스트별 스텁 — 응답은 `[]`). 세션이 있는 스토어에서 **진짜 경로**(`toggleShopPanel` 의
+    /// `shop_state` · 확성기 미리 읽기)를 지나야 하는 렌더 테스트용: 기본 서비스면 가짜 토큰으로 실서버에 나간다.
+    @MainActor
+    static func offlineService(_ label: String) -> SupabaseWorkService {
+        SupabaseWorkService(projectURL: URL(string: "http://v0317-offline-\(label)")!,
+                            anonKey: "anon-test-key",
+                            session: TokenBoardURLProtocol.session())
     }
 
     @MainActor
@@ -596,8 +612,9 @@ struct V0317ShopTests {
     }
 
     @MainActor
-    static func teamStore(members: Int, function: String = #function, line: Int = #line) -> WorkTimerStore {
-        let store = plainStore(function: function, line: line)
+    static func teamStore(members: Int, service: SupabaseWorkService? = nil,
+                          function: String = #function, line: Int = #line) -> WorkTimerStore {
+        let store = plainStore(service: service, function: function, line: line)
         store.isMenuPresented = true
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil,
                                         userID: "00000000-0000-0000-0000-000000000002")

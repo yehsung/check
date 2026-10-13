@@ -579,6 +579,9 @@ extension WorkTimerStore {
     /// 고장으로 보인다).
     func selectShopItem(_ selection: ShopSelection) {
         guard purchasingID == nil else { return }
+        // 확성기 작성기가 열려 있으면 접는다 — 작성기는 캐릭터 격자·구매 바 자리를 빌려 쓰므로, 상품을 고르는 순간
+        // 그 자리를 돌려줘야 하단 바가 고른 것을 말한다(쓰던 글은 남는다).
+        if megaphone.isComposerOpen { megaphone.close() }
         if case .character(let id) = selection, ownedCharacterIDs.contains(id) {
             shopSelection = nil
             shopNotice = Self.alreadyOwnedNotice

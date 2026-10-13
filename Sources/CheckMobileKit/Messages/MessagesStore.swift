@@ -27,6 +27,9 @@ import Observation
 @Observable
 package final class MessagesStore {
     @ObservationIgnored package let context: MobileContext
+    /// 확성기(📢 1.0.7) 작성 스토어 — **맥과 같은 코어 스토어**(`MegaphoneStore`)다. 호스트는 오목·체스·상점과 같은 하나
+    /// (`context.gomokuHost` — 루비 미러를 한 칸으로 나눠 쓴다). 화면은 메시지 탭 위 📢 버튼의 시트(`MessagesMegaphoneSheet`).
+    @ObservationIgnored package let megaphone: MegaphoneStore
 
     // MARK: 이력 · 읽음
 
@@ -113,6 +116,10 @@ package final class MessagesStore {
 
     package init(context: MobileContext) {
         self.context = context
+        let megaphone = MegaphoneStore(host: context.gomokuHost)
+        let clock = context.clock
+        megaphone.clock = { clock.now() }
+        self.megaphone = megaphone
         // 등록은 네트워크가 아니다. 핸들러가 스스로 로그인·active·세대를 확인한다(등록은 reset 뒤에도 살아 있다).
         registrations.append(context.onMessageActivity { [weak self] in self?.realtimeMessageActivity() })
         registrations.append(context.onMessageRead { [weak self] in self?.realtimeMessageRead() })
@@ -171,6 +178,8 @@ package final class MessagesStore {
         pendingOutgoing = []
         sendNotices = [:]
         isSending = false
+        // 확성기 글·요청 id·정보도 계정에 묶인다 — 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
+        megaphone.reset()
         context.router.visibleConversationPeerID = nil
     }
 

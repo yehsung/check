@@ -89,9 +89,17 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
 
     @Test("★ 깃발 패배와 FIDE 6.9 무승부가 다른 결과를 그린다 — 뒤는 무승부이고 판돈을 돌려받는다")
     func timeoutVersusTimeoutInsufficient() throws {
-        // 두 판은 **사유와 서버가 말한 결과만** 다르다(판돈·색·수까지 같다).
-        let lost = cmMatch(isFinished: true, outcome: .lost, endReason: .timeout, rubyDelta: -5)
-        let drawn = cmMatch(isFinished: true, outcome: .draw, endReason: .timeoutInsufficient, rubyDelta: 0)
+        // ★ 기준선을 한 축만 갈라 둔다(데모 픽스처 `demo-chess-flagloss` ↔ `demo-chess-flagdraw` 와 같은 짝):
+        //   같은 쪽 · 같은 남은 시간(1,000ms) · 같은 경과 · 같은 판돈 · 같은 수 번호이고 **사유와 결과만** 다르다.
+        //   입력이 같은 기준선이면 그 시험은 아무것도 증명하지 않는다.
+        let frozen = ChessServerClock(whiteMsLeft: 1_000, blackMsLeft: 240_000, incrementMs: 3_000,
+                                      turnStartedAt: cmNow.addingTimeInterval(-9), running: nil)
+        let lost = cmMatch(plyCount: 40, clock: frozen, isFinished: true, outcome: .lost,
+                           endReason: .timeout, rubyDelta: -5)
+        let drawn = cmMatch(plyCount: 40, clock: frozen, isFinished: true, outcome: .draw,
+                            endReason: .timeoutInsufficient, rubyDelta: 0)
+        #expect(lost.clock == drawn.clock && lost.plyCount == drawn.plyCount && lost.stake == drawn.stake,
+                "전제: 두 판은 사유·결과 말고 전부 같다")
         let loss = try #require(cmChrome(lost).result)
         let draw = try #require(cmChrome(drawn).result)
 

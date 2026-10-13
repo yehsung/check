@@ -87,7 +87,6 @@ private enum GamesChessText {
     static let declineDraw = "거절"
     static let backToLobby = "로비로"
     static let playAgain = "다시 두기"
-    static let moreMenu = "더보기"
 
     static let movesTitle = "기보"
     static let noMoves = "아직 둔 수가 없어요"

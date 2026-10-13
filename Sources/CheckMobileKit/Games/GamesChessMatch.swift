@@ -111,6 +111,10 @@ package struct GamesChessMatchChrome: Equatable, Sendable {
     package let drawsBoard: Bool
     /// 내 색이 아래인가. 체스는 **내 색이 아래**여야 읽힌다(관전은 백이 아래 — 다른 화면이다).
     package let whiteAtBottom: Bool
+    /// 체크 덮개가 설 칸(없으면 nil). ★ 문구(`turnLine` 의 `inCheck`)와 **같은 값**에서 나온다 —
+    /// 체스에서 체크는 글자로만 말하면 안 되는 정보다(왕이 어디서 맞고 있는지 판에서 보여야 한다).
+    /// 규칙을 돌리지 않는다: 깃발은 서버가 준 `match.isInCheck` 이고 칸은 배치에서 읽는다(`GamesChessCheckMark`).
+    package let checkSquare: ChessSquare?
     package let plyLine: String
     /// 시간 규칙 + 폰에서 처음 쓰는 사실("앱을 닫아도 시계는 계속 흘러요"). ★ 숫자는 **서버가 준 값**에서
     /// 조립한다(총시간은 로비 `initialMs`, 가산은 행의 `increment_ms`) — 10-12 에 5분이 10분으로 늘었다.
@@ -136,6 +140,8 @@ package struct GamesChessMatchChrome: Equatable, Sendable {
         showsPromotionSheet = promotion != nil
         drawsBoard = match.position != nil
         whiteAtBottom = match.myColor == .white
+        checkSquare = GamesChessCheckMark.square(isInCheck: match.isInCheck, isFinished: match.isFinished,
+                                                 turn: match.turn, position: match.position)
         plyLine = GamesChessText.plyLine(match.plyCount)
         clockLine = GamesChessText.clockPhrase(initialMs: initialMs, incrementMs: match.clock.incrementMs)
             + " · " + GamesChessText.clockRunsInBackground
@@ -402,6 +408,7 @@ struct GamesChessMatchView: View {
                             whiteAtBottom: chrome.whiteAtBottom, selection: store.selection?.from,
                             legalTargets: store.selection?.targets ?? [],
                             lastMove: match.lastMove.map { (from: $0.from, to: $0.to) },
+                            checkSquare: chrome.checkSquare,
                             onTapSquare: { square in Task { await store.tap(square) } })
                 .frame(width: side, height: side)
                 .shadow(color: colorScheme == .dark ? .black.opacity(0.35)

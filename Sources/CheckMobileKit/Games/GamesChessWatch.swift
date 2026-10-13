@@ -81,6 +81,16 @@ enum GamesChessWatchPlan {
     static let boardLegalTargets: Set<ChessSquare> = []
     /// ★ **백이 아래**다. 관전자에게는 내 색이 없고, 체스 관례가 백 아래다(맥 `ChessPanel.swift:1041`).
     static let boardWhiteAtBottom = true
+
+    /// 체크 덮개가 설 칸. ★ **관전에도 그린다** — 선택·도착 점은 "내 차례·내 색" 에 매여 있어 버리지만
+    /// 체크는 판의 사실이고, 체스에서 그건 글자로만 말해서는 안 되는 정보다(맥 관전도 같은 덮개를 그린다).
+    ///
+    /// ★ 깃발은 **응답이 준 값**이다(`chess_watch` 의 `in_check` → `ChessSpectateState.isInCheck`) — 관전
+    ///   화면은 합법 수를 만들지 않는다(§6 ④). 끝난 판은 nil 이다(`GamesChessCheckMark` 의 가드).
+    static func boardCheckSquare(for watch: ChessSpectateState) -> ChessSquare? {
+        GamesChessCheckMark.square(isInCheck: watch.isInCheck, isFinished: watch.isFinished,
+                                   turn: watch.turn, position: watch.position)
+    }
 }
 
 /// 관전 상태 한 줄의 판정(순수 — 맥 `ChessWatchStatusText` 와 같은 표).
@@ -463,6 +473,7 @@ private struct GamesChessWatchPanel: View {
                 selection: GamesChessWatchPlan.boardSelection,
                 legalTargets: GamesChessWatchPlan.boardLegalTargets,
                 lastMove: watch.lastMove.map { (from: $0.from, to: $0.to) },
+                checkSquare: GamesChessWatchPlan.boardCheckSquare(for: watch),
                 onTapSquare: GamesChessWatchPlan.boardTapHandler
             ),
             to: GamesChessWatchBudget.boardCap(viewportHeight: viewportHeight)

@@ -134,6 +134,35 @@ import Testing
         #expect(GamesChessWatchPlan.boardWhiteAtBottom, "관전 판이 백을 아래에 두지 않는다")
     }
 
+    /// 선택·도착 점과 달리 **체크는 관전에도 그린다** — "내 차례·내 색" 에 매이지 않은 판의 사실이고,
+    /// 체스에서 그건 글자로만 말해서는 안 되는 정보다(맥 관전도 같은 덮개를 그린다).
+    ///
+    /// ★ 깃발은 **응답이 준 값**이다(`chess_watch` 의 `in_check`) — 관전 화면은 합법 수를 만들지 않는다(§6 ④).
+    ///   이 시험이 재는 것은 그 깃발 + 배치에서 읽은 왕 칸이고, 끝난 판에서는 nil 이다.
+    @Test("관전 판도 체크 칸을 그린다 — 응답의 in_check + 배치에서 읽은 왕 칸, 끝난 판은 nil")
+    func theSpectatorBoardStillMarksTheCheckedKing() throws {
+        // 없으면: 관전자는 "흑 차례" 만 읽고 흑 왕이 지금 맞고 있다는 것을 판에서 못 본다.
+        var watch = ChessSpectateState(id: "m-1")
+        watch.position = ChessPosition(fen: "r1bqk1nr/pppp1ppp/2n5/4N3/2B1P3/8/PPPP1bPP/RNBQK2R w KQkq - 0 5")
+        watch.turn = .white
+        watch.isInCheck = true
+        #expect(GamesChessWatchPlan.boardCheckSquare(for: watch)?.notation == "e1",
+                "체크인 관전 판이 왕 칸을 못 집었다(\(GamesChessWatchPlan.boardCheckSquare(for: watch)?.notation ?? "없음"))")
+        // 체크가 아니면 없다(기준선이 갈린다 — 같으면 위 한 줄은 아무것도 안 잰다).
+        var quiet = watch
+        quiet.isInCheck = false
+        #expect(GamesChessWatchPlan.boardCheckSquare(for: quiet) == nil, "체크가 아닌데 덮개 칸이 선다")
+        // 끝난 판에는 없다 — 결과를 보는 화면에 빨간 칸이 남으면 아직 두는 중처럼 읽힌다.
+        var ended = watch
+        ended.isFinished = true
+        #expect(GamesChessWatchPlan.boardCheckSquare(for: ended) == nil, "끝난 관전 판에 체크 덮개가 남는다")
+        // 첫 응답 전(배치를 모른다)에도 조용하다.
+        var cold = ChessSpectateState(id: "m-2")
+        cold.isInCheck = true
+        cold.turn = .white
+        #expect(GamesChessWatchPlan.boardCheckSquare(for: cold) == nil, "판을 모르는데 덮개 칸이 선다")
+    }
+
     @Test("소스 계약: 판 호출이 그 값들을 그대로 넘기고, 관전 절에 제스처가 한 줄도 없다")
     func theSpectatorBoardCallSiteUsesThePlanValues() throws {
         // 없으면: 판정은 nil 인데 호출부가 자기 손으로 처리기를 끼워 넣는 길이 남는다.
@@ -142,6 +171,9 @@ import Testing
         #expect(code.contains("selection: GamesChessWatchPlan.boardSelection"))
         #expect(code.contains("legalTargets: GamesChessWatchPlan.boardLegalTargets"))
         #expect(code.contains("whiteAtBottom: GamesChessWatchPlan.boardWhiteAtBottom"))
+        // 체크 덮개는 **판정에서 받는다**(nil 을 박아 두면 관전자는 왕이 어디서 맞고 있는지 못 본다).
+        #expect(code.contains("checkSquare: GamesChessWatchPlan.boardCheckSquare(for: watch)"),
+                "관전 판이 체크 칸을 판정에서 받지 않는다")
         // 못 읽은 FEN·첫 응답 전에는 **빈 판**이다(판 부품의 `position` 은 옵셔널이 아니다) — `.standard` 를
         // 넘기면 아무도 안 둔 초기 배치를 "지금 판"으로 그려 거짓말이 된다.
         #expect(code.contains("position: watch.position ?? .empty"), "못 읽은 판을 다른 배치로 메운다")

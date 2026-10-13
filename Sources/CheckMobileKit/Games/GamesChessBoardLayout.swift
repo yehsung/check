@@ -120,6 +120,27 @@ package enum GamesChessBoardMetrics {
     }
 }
 
+/// 체크 덮개가 설 칸을 고르는 **한 자리**(순수 — 맥 `ChessPanel.checkSquare` 와 같은 식).
+///
+/// ★ **규칙을 돌리지 않는다.** 체크인지는 1:1 은 서버가, 로봇 판은 코어가 판정한 값(`isInCheck`)으로 들어온다 —
+///   화면이 합법 수를 만들어 왕을 찾는 것은 금지다(§6 ④ · B5: 서버가 권위). 이 함수가 하는 일은 그 깃발이
+///   참일 때 **배치에서 왕 칸을 읽는 것**뿐이고(`ChessPosition.kingSquare(of:)` — 탐색이 아니라 조회다),
+///   그건 "판에 무엇이 서 있나" 라서 규칙 계산이 아니다.
+///
+/// ★ **끝난 판은 nil 이다.** 결과 화면에 빨간 칸이 남으면 아직 두는 중처럼 읽힌다(맥도 같은 가드다).
+///   `turn` 도 끝난 판에서 nil 로 오지만 두 끝을 다 보는 까닭은, 둘 중 하나만 믿으면 응답 한 쪽이 옛 값을
+///   들고 올 때 빨간 칸이 결과 화면까지 따라오기 때문이다.
+///
+/// ★ 세 화면(대국·로봇·관전)이 **이 함수 하나**를 쓴다. 두 줄짜리 식을 세 번 적으면 한 화면만 조건을
+///   놓치고, 폰 뷰는 맥 스위트가 못 보므로 그 한 화면은 아무도 재지 않는다.
+package enum GamesChessCheckMark {
+    package static func square(isInCheck: Bool, isFinished: Bool, turn: ChessColor?,
+                               position: ChessPosition?) -> ChessSquare? {
+        guard isInCheck, !isFinished, let turn, let position else { return nil }
+        return position.kingSquare(of: turn)
+    }
+}
+
 /// 프레임 루프의 **배터리 계약**.
 package enum GamesChessFlightLoop {
     /// `TimelineView(.animation(… paused:))` 에 넣는 값. 애니메이션이 없으면 **한 틱도 돌지 않아야 한다** —

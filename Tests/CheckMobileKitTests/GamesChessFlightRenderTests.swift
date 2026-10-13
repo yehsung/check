@@ -739,7 +739,7 @@ struct GamesChessFlightRenderTests {
         func render(interactive: Bool) throws -> NSBitmapImageRep {
             try Self.bake(GamesChessBoard(
                 position: position, flight: nil, whiteAtBottom: true,
-                selection: selection, legalTargets: targets, lastMove: nil,
+                selection: selection, legalTargets: targets, lastMove: nil, checkSquare: nil,
                 onTapSquare: interactive ? { _ in } : nil
             ).frame(width: Self.side, height: Self.side))
         }
@@ -748,7 +748,7 @@ struct GamesChessFlightRenderTests {
         let player = try render(interactive: true)
         let plain = try Self.bake(GamesChessBoard(
             position: position, flight: nil, whiteAtBottom: true,
-            selection: nil, legalTargets: [], lastMove: nil, onTapSquare: nil
+            selection: nil, legalTargets: [], lastMove: nil, checkSquare: nil, onTapSquare: nil
         ).frame(width: Self.side, height: Self.side))
 
         let spectatorVsPlain = try #require(CheckRenderDiff(try Self.cgImage(spectator), try Self.cgImage(plain)))
@@ -799,5 +799,119 @@ struct GamesChessFlightRenderTests {
                         CGPoint(x: g.side, y: 10), CGPoint(x: 10, y: g.side)] {
             #expect(g.square(at: outside) == nil, "판 밖 \(outside) 가 칸으로 읽혔다")
         }
+    }
+
+    // MARK: - ⑭ 체크 받은 왕이 **판에** 보인다
+
+    /// 두 비트맵이 **다른 픽셀의 수**(사각형 안). 0 이면 한 픽셀도 안 달라졌다.
+    /// `maxChannelDifference` 는 "달라졌나" 만 말하고 **얼마나 넓게** 달라졌는지는 안 말한다 — 덮개가 칸을
+    /// 채우는지, 한 줄만 긋고 끝났는지를 가르려면 수가 필요하다.
+    static func changedPixels(_ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, rect: CGRect) -> Int {
+        guard let a = lhs.bitmapData, let b = rhs.bitmapData,
+              lhs.pixelsWide == rhs.pixelsWide, lhs.pixelsHigh == rhs.pixelsHigh else { return 0 }
+        let spp = lhs.samplesPerPixel, bpr = lhs.bytesPerRow
+        let x0 = max(0, Int(rect.minX * 2)), x1 = min(lhs.pixelsWide - 1, Int(rect.maxX * 2))
+        let y0 = max(0, Int(rect.minY * 2)), y1 = min(lhs.pixelsHigh - 1, Int(rect.maxY * 2))
+        guard x0 <= x1, y0 <= y1 else { return 0 }
+        var hits = 0
+        for y in y0...y1 {
+            for x in x0...x1 {
+                let offset = y * bpr + x * spp
+                for channel in 0..<min(3, spp) where a[offset + channel] != b[offset + channel] {
+                    hits += 1
+                    break
+                }
+            }
+        }
+        return hits
+    }
+
+    /// 데모 픽스처 `demo-chess-incheck` 의 국면(`-AingCheckDemoRoute games/chess/match/demo-chess-incheck` 로
+    /// 폰에서 눈으로 보는 그 화면). FEN 을 **베끼지 않고 그 파일에서 읽는다** — 베끼면 픽스처가 바뀐 날
+    /// 이 시험만 옛 국면을 재고, 사용자가 보는 화면과 조용히 갈린다.
+    static func inCheckFixture() throws -> (fen: String, turn: ChessColor) {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let url = root.appendingPathComponent(
+            "Sources/CheckMobileKit/Demo/Fixtures/games/rpc.chess_state@demo-chess-incheck.json")
+        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url))
+        let state = try #require((json as? [String: Any])?["state"] as? [String: Any], "픽스처 state 가 없다")
+        let match = try #require(state["match"] as? [String: Any], "픽스처 match 가 없다")
+        // 전제: 그 픽스처가 **체크 국면**이다. 아니면 아래 시험은 아무것도 재지 않는다.
+        #expect(state["in_check"] as? Bool == true, "전제: demo-chess-incheck 가 체크 국면이 아니다")
+        let fen = try #require(match["fen"] as? String, "픽스처 fen 이 없다")
+        let turn = try #require(ChessColor(rawValue: (match["turn"] as? String) ?? ""), "픽스처 turn 을 못 읽었다")
+        return (fen, turn)
+    }
+
+    static func checkChrome(fen: String, turn: ChessColor, isInCheck: Bool,
+                            isFinished: Bool = false) -> GamesChessMatchChrome {
+        let peer = ChessUser(id: "00000000-0000-0000-0000-0000000000cc", displayName: "민수", avatarURL: nil,
+                             characterID: "fox", isWorking: true, isCapable: true, inMatch: true, center: "seoul")
+        let match = ChessMatchState(
+            id: "match-incheck", stake: 5, myColor: .white, opponent: peer, fen: fen,
+            position: ChessPosition(fen: fen), plyCount: 9, turn: isFinished ? nil : turn, lastMove: nil,
+            moves: [], clock: .initial, isInCheck: isInCheck, legalMoves: [], isFinished: isFinished,
+            outcome: isFinished ? .lost : nil, endReason: isFinished ? .checkmate : nil, rubyDelta: nil,
+            drawOfferBy: nil, drawOfferedByMe: false)
+        return GamesChessMatchChrome(match: match, promotion: nil, notice: nil, isBusy: false,
+                                     isRobotMatch: false, initialMs: ChessClock.initialMs)
+    }
+
+    /// 없으면: 문구는 "체크! 왕을 피하세요" 라고 말하는데 **판에는 아무 표시가 없다**. 통합 직후 실제로 그랬다 —
+    /// 캔버스에 `checkSquare` 인자가 있는데 감싸는 `GamesChessBoard` 가 그걸 **안 받아서** 넷 중 어느 화면도
+    /// 체크를 못 그렸다. 체스에서 체크는 판에서 보여야 하는 정보다(왕이 어디서 맞고 있는지).
+    ///
+    /// ★ 재는 것은 "인자를 넘겼다" 가 아니라 **구운 픽셀**이다: 같은 배치를 체크 값 있이·없이 굽고
+    ///   **왕 칸만** 달라졌는지 본다. 판 전체에서 달라진 픽셀 수가 왕 칸 안에서 달라진 수와 **같아야** 하므로
+    ///   덮개가 엉뚱한 칸에 서거나 판 전체가 흔들리는 것도 같이 빨개진다.
+    /// ★ 값은 **화면이 이미 아는 것**에서 온다(`GamesChessMatchChrome.checkSquare` — 서버가 준 `isInCheck` +
+    ///   배치에서 읽은 왕 칸). 이 시험은 합법 수를 한 번도 만들지 않는다(§6 ④).
+    @Test("체크인 국면은 **왕 칸의 픽셀**이 달라진다 — 판의 다른 어느 곳도 안 달라진다")
+    func theCheckedKingSquareIsPaintedOnTheBoard() throws {
+        let fixture = try Self.inCheckFixture()
+        let position = try Self.position(fixture.fen)
+        let king = try #require(position.kingSquare(of: fixture.turn), "그 국면에 차례쪽 왕이 없다")
+
+        let checked = Self.checkChrome(fen: fixture.fen, turn: fixture.turn, isInCheck: true)
+        let quiet = Self.checkChrome(fen: fixture.fen, turn: fixture.turn, isInCheck: false)
+        #expect(checked.checkSquare == king,
+                "표가 왕 칸을 못 집었다(\(checked.checkSquare?.notation ?? "없음") — 기대 \(king.notation))")
+        // ★ 기준선이 **갈려야** 한다. 두 기준선이 같은 값이면 아래 그림 비교는 영원히 초록이다.
+        #expect(quiet.checkSquare == nil, "체크가 아닌 국면에도 덮개 칸이 선다 — 기준선이 안 갈렸다")
+
+        let g = Self.geometry()
+        func render(_ square: ChessSquare?) throws -> NSBitmapImageRep {
+            try Self.bake(GamesChessBoard(
+                position: position, flight: nil, whiteAtBottom: true, selection: nil,
+                legalTargets: [], lastMove: nil, checkSquare: square, onTapSquare: { _ in }
+            ).frame(width: Self.side, height: Self.side))
+        }
+        let withMark = try render(checked.checkSquare)
+        let without = try render(quiet.checkSquare)
+
+        let inKing = Self.changedPixels(withMark, without, rect: g.rect(of: king))
+        let whole = Self.changedPixels(withMark, without, rect: Self.whole)
+        let area = Int((g.cell * 2) * (g.cell * 2))
+        print("[체크 덮개] 왕 칸(\(king.notation)) 달라진 픽셀 \(inKing) / 칸 면적 \(area) · 판 전체 \(whole)")
+        #expect(inKing > 0, "★ 체크인데 왕 칸이 평소와 똑같이 그려졌다 — 판에 체크 표시가 없다")
+        // 덮개는 **칸을 채운다**(한 줄 긋기·점 하나가 아니다). 말 실루엣이 덮개를 가리는 몫이 있으니
+        // 면적의 4분의 1만 바닥으로 둔다 — 그래도 "선 하나"는 못 넘는다.
+        #expect(inKing > area / 4, "왕 칸이 달라진 폭이 너무 좁다(\(inKing)/\(area)) — 덮개가 칸을 안 채운다")
+        #expect(whole == inKing, "★ 왕 칸 밖이 달라졌다(전체 \(whole) · 왕 칸 \(inKing)) — 덮개가 엉뚱한 자리에 섰다")
+        // 어느 칸이 달라졌나를 칸 단위로도 되묻는다(가운데 50% 상자 — 칸 경계 픽셀을 안 센다).
+        var changedSquares: Set<String> = []
+        for index in 0..<64 {
+            let square = try #require(ChessSquare(index: index))
+            if Self.maxChannelDifference(withMark, without, rect: Self.squareProbe(square, g)) > 0 {
+                changedSquares.insert(square.notation)
+            }
+        }
+        #expect(changedSquares == [king.notation], "달라진 칸이 \(changedSquares.sorted()) 다 — 왕 칸 하나여야 한다")
+
+        // 끝난 판에는 덮개가 없다(결과 화면에 빨간 칸이 남으면 아직 두는 중처럼 읽힌다).
+        #expect(Self.checkChrome(fen: fixture.fen, turn: fixture.turn, isInCheck: true,
+                                 isFinished: true).checkSquare == nil,
+                "끝난 판에 체크 덮개가 남는다")
     }
 }

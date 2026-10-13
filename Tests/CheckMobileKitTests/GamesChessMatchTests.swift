@@ -564,6 +564,36 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
         #expect(!code.contains("ChatDrawer"))
     }
 
+    /// 체크는 **판에서 보여야 하는 정보**다. 문구(`turnLine` 의 `inCheck`)로만 말하면 왕이 어디서 맞고 있는지
+    /// 모른다. 그림까지 가는 길은 `GamesChessFlightRenderTests` 가 픽셀로 재고, 여기서는 **표의 값**을 잰다.
+    ///
+    /// ★ 규칙을 돌리지 않는다: 깃발은 서버가 준 `match.isInCheck` 이고 칸은 배치에서 읽는다(§6 ④ · B5).
+    @Test("표가 체크 받은 왕의 칸을 집는다 — 체크가 아니면·끝난 판이면·판을 못 읽으면 nil")
+    func theChromePicksTheCheckedKingSquare() throws {
+        // 데모 픽스처 `demo-chess-incheck` 와 같은 국면(백 왕 e1 · 흑 비숍 f2 가 체크).
+        let fen = "r1bqk1nr/pppp1ppp/2n5/4N3/2B1P3/8/PPPP1bPP/RNBQK2R w KQkq - 0 5"
+        let checked = cmChrome(cmMatch(turn: .white, fen: fen, isInCheck: true))
+        #expect(checked.checkSquare == cmSquare("e1"),
+                "체크인데 왕 칸이 안 선다(\(checked.checkSquare?.notation ?? "없음"))")
+        // 기준선이 갈린다 — 같으면 위 한 줄은 "아무 칸도 안 세운다" 로도 초록이다.
+        #expect(cmChrome(cmMatch(turn: .white, fen: fen, isInCheck: false)).checkSquare == nil,
+                "체크가 아닌데 덮개 칸이 선다")
+        // 흑이 체크를 받는 국면이면 **흑 왕**이다(차례쪽 왕을 집는다 — 내 색이 아니다).
+        // e 열이 열려 있고 백 룩이 e5 에서 e8 을 본다(e6·e7 이 비었다).
+        let blackChecked = cmChrome(cmMatch(myColor: .white, turn: .black,
+                                            fen: "rnbqkbnr/pppp1ppp/8/4R3/8/8/PPPPPPPP/RNBQKBN1 b Qkq - 0 1",
+                                            isInCheck: true))
+        #expect(blackChecked.checkSquare == cmSquare("e8"),
+                "차례쪽(흑) 왕이 아니라 다른 칸을 집었다(\(blackChecked.checkSquare?.notation ?? "없음"))")
+        // 끝난 판에는 없다 — 결과 화면에 빨간 칸이 남으면 아직 두는 중처럼 읽힌다.
+        #expect(cmChrome(cmMatch(turn: .white, fen: fen, isInCheck: true, isFinished: true,
+                                 outcome: .lost, endReason: .checkmate)).checkSquare == nil,
+                "끝난 판에 체크 덮개가 남는다")
+        // 판을 못 읽으면 없다(그때는 판 자체를 그리지 않는다 — `drawsBoard`).
+        #expect(cmChrome(cmMatch(turn: .white, fen: fen, readableBoard: false, isInCheck: true)).checkSquare == nil,
+                "읽을 수 없는 판에 덮개 칸이 선다")
+    }
+
     @Test("공개 이름 하나: GamesChessMatchView(store:) · 자리표시는 private 이라 밖으로 안 샌다")
     func publicSurface() throws {
         let code = stripComments(try String(contentsOf: Self.root.appendingPathComponent(Self.viewPath),
@@ -579,6 +609,9 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
             #expect(!code.contains(leftover), "자리표시 \(leftover) 가 남아 있다 — 이웃 레인의 진짜 부품과 겹친다")
         }
         #expect(code.contains("GamesChessBoard(position: match.position ?? .empty, flight: store.flight,"))
+        // 체크 덮개는 **표에서 받는다**. nil 을 박아 두면 문구만 "체크예요" 라고 말하고 판은 가만히 있다
+        // (통합 직후 실제로 그랬다 — 캔버스에는 인자가 있는데 감싸개가 안 받았다).
+        #expect(code.contains("checkSquare: chrome.checkSquare"), "판에 체크 칸을 넘기지 않는다")
         #expect(code.contains("lastMove: match.lastMove.map { (from: $0.from, to: $0.to) }"),
                 "마지막 수를 판 부품의 꼴(칸 둘)로 넘기지 않는다")
         #expect(code.contains("GamesChessBoardMetrics.side(fitting:"))

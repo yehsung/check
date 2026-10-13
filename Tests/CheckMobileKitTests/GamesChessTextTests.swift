@@ -192,6 +192,35 @@ struct GamesChessTextTests {
         #expect(ChessPhoneText.busyHint(.gomoku) != ChessPhoneText.busyHint(.chess))
     }
 
+    /// 막힌 입구는 **왜**와 **언제 풀리는지**를 같이 말한다. 통합이 안내를 `entryBlock`(제목) 한 줄로 모으면서
+    /// "오목 판이 끝나면 체스를 신청할 수 있어요" 가 사라져 "오목을 두는 중이에요" 만 남았다 — 사용자가 왜
+    /// 막혔는지만 알고 언제 풀리는지 모르면 불친절하다(폰엔 호버 툴팁이 없다).
+    ///
+    /// ★ 그리는 자리가 둘이다: 게임 탭 카드는 **칩 + 보조 줄**(`entryBlock` + `entryBlockHint`), 체스 로비
+    ///   안내는 **한 칸 두 줄**(`entryBlockNotice`). 두 자리 **모두** 제목과 힌트를 함께 내야 한다.
+    @Test("막힌 입구 안내는 제목 + 언제 풀리는지 **두 줄**이다 — 양방향 모두 같은 꼴")
+    func theBlockedEntryNoticeSaysWhenItClears() throws {
+        for game in ChessPhoneText.BusyGame.allCases {
+            let notice = try #require(ChessPhoneText.entryBlockNotice(playing: game))
+            let lines = notice.components(separatedBy: "\n")
+            #expect(lines.count == 2, "안내가 두 줄이 아니다: \(lines)")
+            #expect(lines.first == ChessPhoneText.busyTitle(game), "첫 줄이 막힌 사유가 아니다: \(lines)")
+            #expect(lines.last == ChessPhoneText.busyHint(game),
+                    "★ 둘째 줄(언제 풀리는지)이 빠졌다 — 사용자는 기다릴 끝을 모른다: \(lines)")
+        }
+        #expect(ChessPhoneText.entryBlockNotice(playing: nil) == nil, "두는 판이 없는데 안내가 선다")
+        // 체스 로비 안내가 **그 두 줄 짜리 함수**를 쓴다(제목만 쓰는 함수로 되돌리면 빨개진다).
+        let screen = try Self.code("Sources/CheckMobileKit/Games/GamesChessScreen.swift")
+        #expect(screen.contains("ChessPhoneText.entryBlockNotice(playing: .gomoku)"),
+                "체스 로비 안내가 제목 한 줄만 그린다 — `entryBlockNotice` 를 써라")
+        // 게임 탭 두 카드도 **양방향 모두** 힌트를 그린다(한 방향만 두 줄이면 다른 입구가 더 불친절하다).
+        let tab = try Self.code("Sources/CheckMobileKit/Games/GamesTab.swift")
+        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlock(playing:").count - 1 == 2,
+                "게임 탭의 막힌 칩이 두 자리가 아니다(오목 카드·체스 카드)")
+        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlockHint(playing:").count - 1 >= 2,
+                "게임 탭 카드가 양방향 모두 힌트를 그리지 않는다")
+    }
+
     // MARK: - 4. ★ 로봇 판은 로그인을 안 본다
 
     @Test("로봇과 두기 입구는 로그인으로 막히지 않는다(두는 판만 막는다)")

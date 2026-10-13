@@ -148,6 +148,20 @@ package enum ChessPhoneText {
         playing.map(busyHint)
     }
 
+    /// 막힌 입구에 세우는 안내 **한 칸 두 줄**(제목 + 언제 풀리는지). 칩·보조 줄처럼 자리가 둘로 나뉘지 않는
+    /// 자리(`InlineNotice`)가 쓴다.
+    ///
+    /// ★ 왜 표가 줄바꿈까지 쥐나: 뷰에서 `busyTitle + "\n" + busyHint` 를 조립하면 그 조립이 **맥 스위트가
+    ///   못 보는 자리**(폰 뷰)에 남아, 한 화면만 둘째 줄을 빠뜨려도 아무도 모른다. 통합에서 실제로 그렇게
+    ///   줄었다 — 안내가 `entryBlock`(제목) 한 줄로 모여 "오목 판이 끝나면 체스를 신청할 수 있어요" 가 사라졌고,
+    ///   사용자는 **왜** 막혔는지만 알고 **언제** 풀리는지 모르게 됐다(폰엔 호버 툴팁이 없다).
+    /// ★ **양방향이 같은 꼴이다** — `.gomoku`·`.chess` 가 같은 두 줄을 낸다(한쪽만 두 줄이면 다른 입구가 더
+    ///   불친절하다).
+    package static func entryBlockNotice(playing: BusyGame?) -> String? {
+        guard let playing else { return nil }
+        return busyTitle(playing) + "\n" + busyHint(playing)
+    }
+
     /// 게임 탭 체스 카드의 보이스오버 힌트(막히지 않았을 때).
     package static let cardOpenHint = "체스 대결 화면을 열어요"
 

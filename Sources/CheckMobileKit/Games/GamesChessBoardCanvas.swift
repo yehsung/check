@@ -222,6 +222,10 @@ package struct GamesChessBoard: View {
     private let selection: ChessSquare?
     private let legalTargets: Set<ChessSquare>
     private let lastMove: (from: ChessSquare, to: ChessSquare)?
+    /// 체크를 받은 쪽 왕의 칸(빨간 덮개). **기본값이 없다** — 부르는 자리가 조용히 빠뜨리면 문구는 "체크예요"
+    /// 라고 말하는데 판에는 아무 표시가 없다(통합 직후 실제로 그랬다: 캔버스에는 인자가 있고 이 감싸개가
+    /// 안 받아서 넷 중 어느 화면도 체크를 못 그렸다). 값은 `GamesChessCheckMark.square(...)` 에서 온다.
+    private let checkSquare: ChessSquare?
     private let onTapSquare: ((ChessSquare) -> Void)?
 
     /// 이 판이 선 화면의 주사율(Hz). 기본값(60)으로 시작해 나타날 때 실제 값을 읽는다 — ProMotion 120 ·
@@ -234,6 +238,7 @@ package struct GamesChessBoard: View {
                  selection: ChessSquare?,
                  legalTargets: Set<ChessSquare>,
                  lastMove: (from: ChessSquare, to: ChessSquare)?,
+                 checkSquare: ChessSquare?,
                  onTapSquare: ((ChessSquare) -> Void)?) {
         self.position = position
         self.flight = flight
@@ -241,6 +246,7 @@ package struct GamesChessBoard: View {
         self.selection = selection
         self.legalTargets = legalTargets
         self.lastMove = lastMove
+        self.checkSquare = checkSquare
         self.onTapSquare = onTapSquare
     }
 
@@ -276,6 +282,10 @@ package struct GamesChessBoard: View {
             // 관전 판은 선택·도착 점을 **그리지 않는다**(§6 ⑨).
             selected: isInteractive ? selection : nil,
             targets: isInteractive ? legalTargets : [],
+            // ★ 체크는 **관전 판에서도 그린다**(선택·도착 점과 달리 "내 차례·내 색" 에 매이지 않은 판의
+            //   사실이다 — 맥 관전도 같은 덮개를 그린다). 여기에 `isInteractive` 를 끼우면 관전자는 왕이
+            //   어디서 맞고 있는지 못 본다.
+            checkSquare: checkSquare,
             flight: frame
         )
         .contentShape(Rectangle())

@@ -177,6 +177,33 @@ struct GamesChessAIBoardTests {
         await tearDown(harness, chess)
     }
 
+    /// 체크는 **판에서 보여야 하는 정보**다. 로봇 판의 체크 깃발은 **코어**(`ChessAIGame`)가 주고, 화면은
+    /// 그 깃발이 참일 때 배치에서 왕 칸을 읽는다 — 합법 수를 만들어 왕을 찾지 않는다(§6 ②).
+    @Test("판 인자가 체크 받은 왕의 칸을 싣는다 — 체크가 아니면 nil(실제 체크를 둬서 가른다)")
+    func boardInputCarriesTheCheckedKingSquare() async {
+        // 없으면: 로봇 판에서 문구만 "체크예요" 라고 말하고 판에는 표시가 없다.
+        let (harness, chess) = await chessHarness("chess-ai-check", signedIn: false)
+        wiringMadeScreenVisible(chess)
+        // 백 룩 e5 · 흑 왕 e8 · e 열이 열려 있다. 아직은 **체크가 아니다**(룩이 d5 에 있다).
+        let position = ChessPosition(fen: "4k3/8/8/3R4/8/8/8/4K3 w - - 0 1")!
+        let game = ChessAIGame(humanColor: .white, position: position, now: harness.clock.now)
+        chess.aiGame = game
+        chess.match = game.matchState()
+        chess.phase = .playing
+        #expect(GamesChessAIChrome(store: chess).board?.checkSquare == nil,
+                "체크가 아닌데 덮개 칸이 선다 — 기준선이 안 갈린다")
+
+        // 룩을 d5 → e5 로 옮기면 **흑이 체크**다. 코어가 깃발을 세우고 화면 표가 왕 칸을 싣는다.
+        await play(chess, "d5", "e5")
+        #expect(await baseWaitUntil { chess.match?.isInCheck == true }, "코어가 체크 깃발을 안 세웠다")
+        let chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.isInCheck, "표의 체크 깃발이 꺼져 있다")
+        #expect(chrome.board?.checkSquare == sq("e8"),
+                "체크인데 흑 왕 칸이 안 선다(\(chrome.board?.checkSquare?.notation ?? "없음"))")
+        #expect(chessRequestNames(harness).isEmpty, "로봇 판이 서버를 탔다: \(chessRequestNames(harness))")
+        await tearDown(harness, chess)
+    }
+
     @Test("승격은 합법 수가 넷일 때만 시트를 띄운다 — 하나면 그대로 나간다")
     func promotionAsksOnlyWhenFourMovesShareTheTarget() async {
         // §6 ⑩. 기준선을 갈라 둔다: **같은 판에서** 폰 승격(넷)과 왕 이동(하나)을 둘 다 눌러 본다 —
@@ -454,6 +481,8 @@ struct GamesChessAISourceContractTests {
         let code = try Self.viewRegion()
         let passes = code.components(separatedBy: "whiteAtBottom:").count - 1
         #expect(passes == 1, "판에 뒤집기를 넘기는 자리가 \(passes) 군데다 — 한 군데여야 한다(§6 ①·④)")
+        // 체크 칸도 **표에서 받는다**(뷰가 nil 을 박으면 로봇 판만 체크가 안 보인다).
+        #expect(code.contains("checkSquare: board.checkSquare"), "판에 체크 칸을 넘기지 않는다")
         // `myColor:` 를 **넘기는 것**(승격 시트의 인자)은 괜찮다 — 금지하는 것은 그 값에서 방향을 **다시 만드는** 것이다.
         #expect(!code.contains(".myColor"), "뷰가 판에서 내 색을 다시 읽는다 — 흑으로 두는 사람만 틀어진다")
         #expect(!code.contains("myColor =="), "뷰가 내 색으로 방향을 가른다")

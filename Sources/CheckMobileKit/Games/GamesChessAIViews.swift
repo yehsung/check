@@ -57,6 +57,9 @@ package struct GamesChessAIBoardInput: Equatable, Sendable {
     package let lastMove: ChessMove?
     /// 지금 사람이 둘 차례인가(탭을 받을 수 있는가).
     package let isMyTurn: Bool
+    /// 체크 덮개가 설 칸(없으면 nil). 로봇 판의 체크 깃발은 **코어**가 준다(`match.isInCheck`) — 화면이
+    /// 합법 수를 만들어 왕을 찾지 않는다. 칸은 배치에서 읽는다(`GamesChessCheckMark`).
+    package let checkSquare: ChessSquare?
 
     /// 판을 읽을 수 없으면(서버·FEN 결함) nil — 그때는 판을 그리지 않는다.
     package init?(match: ChessMatchState, selection: ChessSelection?) {
@@ -67,6 +70,9 @@ package struct GamesChessAIBoardInput: Equatable, Sendable {
         self.legalTargets = selection?.targets ?? []
         self.lastMove = match.lastMove
         self.isMyTurn = match.isMyTurn
+        self.checkSquare = GamesChessCheckMark.square(
+            isInCheck: match.isInCheck, isFinished: match.isFinished,
+            turn: match.turn, position: position)
     }
 }
 
@@ -394,6 +400,7 @@ struct GamesChessAIScreen: View {
                 selection: board.selection,
                 legalTargets: board.legalTargets,
                 lastMove: board.lastMove.map { (from: $0.from, to: $0.to) },
+                checkSquare: board.checkSquare,
                 onTapSquare: { square in Task { await store.tap(square) } }
             )
             .accessibilityElement(children: .ignore)

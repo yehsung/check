@@ -82,6 +82,70 @@ private func workSessionPatches(host: String) -> [URLRequest] {
     URLProtocolStub.requests(forHost: host).filter { $0.httpMethod == "PATCH" && $0.url?.path == "/rest/v1/work_sessions" }
 }
 
+// MARK: - 찌르기 도우미 (0.3.51 리뷰 — 폰 근무에 간 찌르기를 미러링하는 맥이 받는다)
+
+private let thisMacDeviceID = "AAAAAAAA-0000-4000-8000-00000000000A"
+private let otherMacDeviceID = "BBBBBBBB-0000-4000-8000-00000000000B"
+
+private func takePokesCount(host: String) -> Int {
+    URLProtocolStub.requests(forHost: host).filter { $0.url?.path == "/rest/v1/rpc/take_pokes" }.count
+}
+
+/// 폰이 연 근무를 흡수한 맥 — 서버가 대리 하트비트로 살려 두는 모양에 기기 주장 행을 얹는다.
+/// `claims` 의 기본값은 '이 맥이 입력만 보고한 행 하나'(세션 주장 없음) = 폰 근무의 실제 모양이다.
+@MainActor
+private func mirroringPhoneStore(
+    host: String,
+    now: Date,
+    claims: [StatusDeviceClaim] = [StatusDeviceClaim(deviceID: thisMacDeviceID, sessionID: nil, lastSeenAt: nil)],
+    lastInputAgo: TimeInterval? = 60
+) -> WorkTimerStore {
+    let store = makePhoneStore(host: host)
+    store.clock = { now }
+    store.deviceID = thisMacDeviceID
+    var member = phoneWorkingMember(startedAt: t0, seen: now.addingTimeInterval(-30))
+    member.deviceClaims = claims
+    store.teamMembers = [member]
+    store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
+    store.lastMeaningfulInputAt = lastInputAgo.map { now.addingTimeInterval(-$0) }
+    return store
+}
+
+/// 찌르기 · 울트라 RPC 가 늘 `target_on_phone` 을 돌려주는 스텁(공유 스텁은 poke_user 를 모른다).
+final class V0351PhonePokeURLProtocol: URLProtocol {
+    private nonisolated(unsafe) static var recorded: [URLRequest] = []
+    private static let lock = NSLock()
+
+    static func paths(forHost host: String) -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        return recorded.filter { $0.url?.host == host }.compactMap { $0.url?.path }
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        Self.lock.lock(); Self.recorded.append(request); Self.lock.unlock()
+        let path = request.url?.path ?? ""
+        let body = (path == "/rest/v1/rpc/poke_user" || path == "/rest/v1/rpc/ultra_poke_user")
+            ? #"{"status":"target_on_phone"}"# : "[]"
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                       headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+@MainActor
+private func waitUntilTrue(_ condition: () -> Bool) async -> Bool {
+    for _ in 0..<300 {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
+}
+
 @MainActor
 @Suite struct V0351PhoneWorkMacTests {
     // MARK: - 폰에서 끝낸 근무
@@ -227,5 +291,113 @@ private func workSessionPatches(host: String) -> [URLRequest] {
         let statusWrites = URLProtocolStub.requests(forHost: host).filter { $0.url?.path == "/rest/v1/work_statuses" }
         #expect(statusWrites.count == 1, "열린 근무가 없는데 off_work 꼬리를 빠뜨렸다")
         #expect(URLProtocolStub.bodyText(forHost: host).contains("\"off_work\""))
+    }
+
+    // MARK: - 찌르기: 폰 근무를 미러링하는 맥이 받는다 (서버 짝 — 20261014130000 §6-B)
+    //
+    // 0.3.51 리뷰가 잡은 구멍: 폰이 연 근무는 서버가 몇 시간이고 '근무 중'으로 살려 둬 찌르기 · 울트라가 통과하는데,
+    // 받는 것(take_pokes)은 맥뿐이고 그 근무를 미러링하는 맥은 '흡수 세션'이라 안 받았다 → 아무도 안 받는다.
+    // 이제: 남의 맥이 그 세션을 주장하지 않고(= 주인 맥이 없다 — 폰 근무의 모양) 이 맥에 최근 입력이 있으면 받는다.
+    // 아래 대조군들은 **같은 흡수 상태에서 한 축만** 바꾼다(기준선이 달라야 한다).
+
+    @Test func mirroringMacConsumesPokesForAPhoneSessionWhenItHasTheInput() async {
+        let host = "v0351-phone-poke-consume"
+        let now = t0.addingTimeInterval(3_600)
+        let store = mirroringPhoneStore(host: host, now: now)
+        defer { cancelTasks(store) }
+        #expect(store.adoptedRemoteSession, "폰 근무를 흡수하지 않았다 — 이 테스트가 흡수 세션을 재지 않는다")
+        #expect(store.adoptedSessionMayConsumePokes)
+        #expect(store.realtimeMayConsumePokes, "리얼타임 초인종 경로가 폰 근무의 찌르기를 안 받는다")
+
+        await store.takePokesIfWorking()
+        #expect(takePokesCount(host: host) == 1, "폴링 경로가 폰 근무의 찌르기를 안 받는다 — 서버가 받아 준 찌르기가 사라진다")
+    }
+
+    @Test func mirroringMacStillLeavesPokesToTheOwnerMacThatClaimsTheSession() async {
+        // 대조군 ①: 다른 맥이 그 세션을 주장한다(= 그 맥이 연 근무, 주인이 살아 있다) — 주인이 받는다(blocker 리얼타임 #5).
+        let host = "v0351-phone-poke-owner-claims"
+        let now = t0.addingTimeInterval(3_600)
+        let store = mirroringPhoneStore(host: host, now: now, claims: [
+            StatusDeviceClaim(deviceID: thisMacDeviceID, sessionID: nil, lastSeenAt: nil),
+            StatusDeviceClaim(deviceID: otherMacDeviceID, sessionID: phoneSessionID, lastSeenAt: now.addingTimeInterval(-20),
+                              openedSession: true),
+        ])
+        defer { cancelTasks(store) }
+        #expect(store.adoptedRemoteSession)
+        #expect(!store.adoptedSessionMayConsumePokes && !store.realtimeMayConsumePokes)
+        await store.takePokesIfWorking()
+        #expect(takePokesCount(host: host) == 0, "주인 맥이 살아 있는 흡수 세션에서 남의 찌르기를 훔쳤다")
+    }
+
+    @Test func mirroringMacDoesNotConsumeWhenItCannotSeeTheDeviceClaims() async {
+        // 대조군 ②: 기기 주장 표를 못 읽었다(빈 배열 = '다른 맥 없음'이 아니라 '판정 불가') — 받지 않는다.
+        let host = "v0351-phone-poke-claims-unknown"
+        let store = mirroringPhoneStore(host: host, now: t0.addingTimeInterval(3_600), claims: [])
+        defer { cancelTasks(store) }
+        #expect(store.adoptedRemoteSession)
+        #expect(!store.adoptedSessionMayConsumePokes && !store.realtimeMayConsumePokes)
+        await store.takePokesIfWorking()
+        #expect(takePokesCount(host: host) == 0)
+    }
+
+    @Test func mirroringMacWithoutRecentInputLeavesPokesToTheMacThePersonIsAt() async {
+        // 대조군 ③: 같은 계정의 다른 맥에서 일하는 중이라 이 맥은 16분째 입력이 없다 — 이 맥은 받지 않는다(사람이 앞에 있는 맥이 받는다).
+        let host = "v0351-phone-poke-stale-input"
+        let now = t0.addingTimeInterval(3_600)
+        let store = mirroringPhoneStore(host: host, now: now,
+                                        lastInputAgo: WorkTimerStore.adoptedPokeConsumerInputWindowSeconds + 60)
+        defer { cancelTasks(store) }
+        #expect(store.adoptedRemoteSession)
+        #expect(!store.adoptedSessionMayConsumePokes && !store.realtimeMayConsumePokes)
+        await store.takePokesIfWorking()
+        #expect(takePokesCount(host: host) == 0)
+
+        // 그 맥으로 돌아와 입력하면 바로 받는다(창 경계 포함 — 서버 창 10분보다 넓은 15분).
+        store.lastMeaningfulInputAt = now.addingTimeInterval(-WorkTimerStore.adoptedPokeConsumerInputWindowSeconds)
+        #expect(store.adoptedSessionMayConsumePokes)
+        await store.takePokesIfWorking()
+        #expect(takePokesCount(host: host) == 1)
+    }
+
+    @Test func pokeOutcomeDecodesTargetOnPhoneAndOldStatusesStayPut() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let response = try decoder.decode(PokeSendResponse.self, from: Data(#"{"status":"target_on_phone"}"#.utf8))
+        #expect(PokeSendOutcome(response: response) == .targetOnPhone)
+        // 기존 어휘와 미지값 접기는 그대로다.
+        #expect(PokeSendOutcome(response: PokeSendResponse(status: "target_focused")) == .targetFocused)
+        #expect(PokeSendOutcome(response: PokeSendResponse(status: "target_not_working")) == .targetNotWorking)
+        #expect(PokeSendOutcome(response: PokeSendResponse(status: "target_on_phone_v2")) == .invalid)
+    }
+
+    @Test func pokeAndUltraToAPhoneOnlyWorkerSayWhyAndBurnNothing() async {
+        let host = "v0351-phone-poke-send-target-on-phone"
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [V0351PhonePokeURLProtocol.self]
+        let service = SupabaseWorkService(projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key",
+                                          session: URLSession(configuration: configuration))
+        let suiteName = CheckTestScratch.uniqueSuitePath()
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let store = WorkTimerStore(service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"], defaults: defaults)
+        store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: phoneUserID)
+        defer { cancelTasks(store) }
+        store.startedAt = t0                 // 보내는 사람은 근무 중(클라 선게이트 통과)
+        store.applyUltraBalance(3)
+        let target = "00000000-0000-0000-0000-0000000000c3"
+
+        store.sendPoke(to: target)
+        #expect(await waitUntilTrue { store.pokeNotice == WorkTimerStore.targetOnPhoneNotice },
+                "폰으로만 근무 중인 사람을 찔렀는데 이유를 말하지 않는다: \(store.pokeNotice ?? "nil")")
+        #expect(store.pokeCooldownUntil[target] == nil, "거절됐는데 쿨타임을 세웠다 — 서버는 쿨타임을 안 태운다")
+
+        store.pokeNotice = nil
+        store.sendUltraPoke(to: target)
+        #expect(await waitUntilTrue { store.pokeNotice == WorkTimerStore.targetOnPhoneNotice })
+        #expect(store.ultraBalance == 3, "거절됐는데 화면의 울트라를 깎았다")
+        #expect(store.pokeCooldownUntil[target] == nil)
+        // 디렉토리를 다시 읽지 않는다(그 사람은 정말 근무 중이다 — 배지가 낡은 게 아니다).
+        #expect(!V0351PhonePokeURLProtocol.paths(forHost: host).contains("/rest/v1/rpc/app_user_directory"))
+        #expect(WorkTimerStore.targetOnPhoneNotice != "지금은 찌를 수 없어요", "옛 앱의 접힌 문구와 같으면 새 상태를 만든 이유가 없다")
     }
 }

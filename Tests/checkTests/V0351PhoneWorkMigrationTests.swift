@@ -181,8 +181,9 @@ private func functionBody(_ sql: String, _ name: String) throws -> String {
 
     @Test func existingClosersAndLeaderboardAreNotRedefined() throws {
         let flat = squash(try phoneWorkSQL())
+        // poke_user · ultra_poke_user 는 0.3.51 리뷰 뒤 **의도적으로** 다시 정의한다(결정 ⑦ — 아래 찌르기 게이트 테스트들이 잰다).
         for name in ["close_abandoned_work_sessions", "close_away_work_sessions", "team_weekly_leaderboard",
-                     "ultra_wallet_sync", "enforce_open_session_for_working", "poke_user", "ultra_poke_user", "work_tick"] {
+                     "ultra_wallet_sync", "enforce_open_session_for_working", "work_tick", "take_pokes", "poke_ring"] {
             #expect(!flat.contains("create or replace function public.\(name)("), "\(name) 를 재정의했다 — 이 파일의 범위가 아니다")
             #expect(!flat.contains("drop function if exists public.\(name)("))
         }
@@ -194,4 +195,148 @@ private func functionBody(_ sql: String, _ name: String) throws -> String {
         let statements = try phoneWorkSQL().split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         #expect(statements.last == "notify pgrst, 'reload schema';")
     }
+
+    // MARK: - 찌르기 게이트(결정 ⑦ · §6-B) — 폰으로만 근무 중이고 받아 줄 맥이 없으면 target_on_phone
+
+    /// 두 함수는 정본(20260918180000)의 본문을 **바이트 그대로** 복사하고 게이트 한 덩어리만 얹었다. 그 덩어리를 걷어내면
+    /// 정본과 같아야 한다 — 본문을 손으로 다시 쓰면 그 사이에 들어온 변경(차단 · 숨김 · 블랙아웃 · 관리자 장부 …)이 조용히 사라진다.
+    @Test func pokeFunctionsAreTheCanonicalBodiesPlusOnlyThePhoneGate() throws {
+        let directory = try phoneWorkMigrationsDirectory()
+        let canonicalRaw = try String(contentsOf: directory.appendingPathComponent(canonicalPokeMigrationName), encoding: .utf8)
+        let phoneRaw = try String(contentsOf: directory.appendingPathComponent(phoneWorkMigrationName), encoding: .utf8)
+        for (name, statusLiteral) in [("poke_user", "'status', 'target_on_phone'"), ("ultra_poke_user", "'status','target_on_phone'")] {
+            let canonical = try #require(rawFunctionBody(of: name, in: canonicalRaw), "\(name) 정본 본문을 못 찾았다")
+            let redefined = try #require(rawFunctionBody(of: name, in: phoneRaw), "\(name) 을 이 파일이 다시 정의하지 않는다")
+            let (rest, gate) = try #require(splitPhoneGate(redefined), "\(name) 에 폰 게이트 덩어리(▼/▲ 표식)가 없다")
+            #expect(rest == canonical, "\(name): 게이트를 걷어낸 본문이 정본과 다르다 — 본문을 손으로 다시 썼다")
+            let code = gate.split(separator: "\n").map { line -> String in
+                let text = line.range(of: "--").map { String(line[line.startIndex..<$0.lowerBound]) } ?? String(line)
+                return text.trimmingCharacters(in: .whitespaces)
+            }.filter { !$0.isEmpty }
+            #expect(code == ["if public.phone_work__poke_unreachable(p_to) then",
+                             "return jsonb_build_object(\(statusLiteral));",
+                             "end if;"],
+                    "\(name): 게이트 덩어리에 딴 코드가 끼었다: \(code)")
+        }
+    }
+
+    /// 자리가 계약이다: 대상 근무 · 집중 모드 **뒤**, 쿨타임 판정 · 발사(pokes 삽입) **앞**, 울트라는 관리자 분기 · 재화 **앞**.
+    /// 뒤로 가면 거절이 보낸이의 60초 · 울트라 · 장부를 태우고, 집중 모드 앞으로 오면 집중 중인 사람이 '폰으로 근무 중'으로 보인다.
+    @Test func phoneGateSitsAfterFocusAndBeforeAnythingThatBurns() throws {
+        let raw = try String(contentsOf: try phoneWorkMigrationsDirectory().appendingPathComponent(phoneWorkMigrationName), encoding: .utf8)
+        for name in ["poke_user", "ultra_poke_user"] {
+            let body = squash(stripComments(try #require(rawFunctionBody(of: name, in: raw))))
+            let gate = try #require(body.range(of: "public.phone_work__poke_unreachable(p_to)"), "\(name) 에 게이트가 없다")
+            for earlier in ["public.blocked_between(uid, p_to)", "public.poke_blackout_active()", "'target_not_working'", "'target_focused'"] {
+                let at = try #require(body.range(of: earlier), "\(name) 에서 \(earlier) 를 못 찾았다")
+                #expect(at.lowerBound < gate.lowerBound, "\(name): 폰 게이트가 \(earlier) 보다 앞이다")
+            }
+            var later = ["from public.pokes", "insert into public.pokes", "public.poke_ring(p_to)"]
+            if name == "ultra_poke_user" { later += ["role = 'admin'", "public.ultra_wallet_touch(uid)", "insert into public.ultra_ledger"] }
+            for burn in later {
+                let at = try #require(body.range(of: burn), "\(name) 에서 \(burn) 를 못 찾았다")
+                #expect(gate.upperBound < at.lowerBound, "\(name): 폰 게이트가 \(burn) 뒤다 — 거절이 무언가를 태운다")
+            }
+        }
+        let flat = squash(stripComments(raw))
+        for name in ["poke_user", "ultra_poke_user"] {
+            #expect(flat.contains("revoke execute on function public.\(name)(uuid) from public, anon;"))
+            #expect(flat.contains("grant execute on function public.\(name)(uuid) to authenticated;"))
+        }
+    }
+
+    /// 판정 재료: 폰이 연 근무(폰 장부의 그 세션 행) + 맥 빌드 + **기기 행의** 맥 입력. 상태 행(work_statuses)의 입력은 폰 touch 도
+    /// 쓰므로(결정 ①) 읽으면 '폰 앱을 방금 열었다'가 '맥 앞에 있다'로 둔갑한다. 도우미 · 상수는 클라가 못 부른다.
+    @Test func gateHelperReadsPhoneOriginMacBuildAndDeviceInputOnly() throws {
+        let sql = try phoneWorkSQL()
+        let helper = squash(try functionBody(sql, "phone_work__poke_unreachable"))
+        #expect(helper.contains("security definer"))
+        #expect(helper.contains("join public.phone_work_sessions pw on pw.session_id = s.id"))
+        #expect(helper.contains("s.user_id = p_user and s.ended_at is null"))
+        // 비교의 양쪽 끝까지 본다(상수 뒤에 `- 100` 같은 꼬리가 붙으면 옛 맥이 '받아 줄 맥'이 된다 — 뮤턴트로 확인한 구멍).
+        #expect(helper.contains("coalesce((select p.app_build from public.profiles p where p.id = p_user), 0) >= public.phone_work_poke_mac_min_build() and exists ("))
+        #expect(helper.contains("from public.work_status_devices d where d.user_id = p_user and d.last_input_at > now() - make_interval(secs => public.phone_work_poke_mac_input_seconds())))"))
+        #expect(!helper.contains("work_statuses"), "게이트가 상태 행 입력을 읽는다 — 폰 touch 가 맥 입력으로 둔갑한다")
+        let flat = squash(sql)
+        #expect(flat.contains("revoke all on function public.phone_work__poke_unreachable(uuid) from public, anon, authenticated, service_role;"))
+        #expect(flat.contains("revoke execute on function public.phone_work_poke_mac_input_seconds() from public, anon, authenticated;"))
+        #expect(flat.contains("revoke execute on function public.phone_work_poke_mac_min_build() from public, anon, authenticated;"))
+        #expect(!flat.contains("grant execute on function public.phone_work__poke_unreachable"))
+    }
+
+    /// 서버와 맥 클라는 **짝**이다(한쪽만 고치면 다른 쪽이 막아서 초록인 채로 아무것도 안 바뀐다):
+    ///  · 맥의 소비 창(15분)은 서버의 수락 창보다 넓어야 한다 — 서버가 받아 준 찌르기를 그 입력을 보고한 맥이 놓치지 않게.
+    ///  · 서버가 '받아 줄 맥'으로 치는 첫 빌드는 흡수 세션에서도 소비하는 첫 빌드(이 코드가 나가는 빌드)여야 한다 — 0.3.50(103)은
+    ///    안 받으므로 그보다 커야 하고, 이 코드가 실릴 다음 빌드(build-local.sh + 1)보다 크면 새 맥도 영영 못 받는다.
+    @Test func serverWindowAndMinBuildPairWithTheMacConsumer() throws {
+        let flat = squash(try phoneWorkSQL())
+        let window = try #require(constantValue(flat, "phone_work_poke_mac_input_seconds"), "서버 입력 창 상수를 못 읽었다")
+        let minBuild = try #require(constantValue(flat, "phone_work_poke_mac_min_build"), "서버 최소 빌드 상수를 못 읽었다")
+        #expect(window == 600)
+        #expect(WorkTimerStore.adoptedPokeConsumerInputWindowSeconds > TimeInterval(window),
+                "맥 소비 창(\(WorkTimerStore.adoptedPokeConsumerInputWindowSeconds)초)이 서버 창(\(window)초)보다 좁다 — 서버가 받은 찌르기를 아무도 안 받는다")
+        #expect(minBuild > 103, "0.3.50(103)은 흡수 세션에서 찌르기를 안 받는다 — 그 맥을 '받아 줄 맥'으로 치면 찌르기가 사라진다")
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let script = try String(contentsOf: repoRoot.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
+        let squashedScript = script.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        let marker = "<key>CFBundleVersion</key> <string>"
+        let start = try #require(squashedScript.range(of: marker), "build-local.sh 에서 CFBundleVersion 을 못 찾았다")
+        let digits = squashedScript[start.upperBound...].prefix { $0.isNumber }
+        let scriptBuild = try #require(Int(digits), "CFBundleVersion 이 정수가 아니다")
+        #expect(minBuild <= scriptBuild + 1,
+                "서버 최소 빌드(\(minBuild))가 이 코드가 실릴 빌드(\(scriptBuild) 또는 그다음)보다 크다 — 새 맥도 '받아 줄 맥'이 못 된다")
+    }
+}
+
+// MARK: - 찌르기 게이트 테스트 도우미
+
+/// poke_user · ultra_poke_user 의 정본(이 파일이 복사해 덮는 본문).
+private let canonicalPokeMigrationName = "20260918180000_blocks_and_reports.sql"
+
+/// 원문(주석 포함)에서 `create … function public.<name>(` **마지막** 정의의 달러 인용 본문. 태그는 파일마다 다르다($function$ · $fn$ …).
+private func rawFunctionBody(of name: String, in raw: String) -> String? {
+    var searchStart = raw.startIndex
+    var lastHeader: Range<String.Index>?
+    while let found = raw.range(of: "function public.\(name)(", options: .caseInsensitive, range: searchStart..<raw.endIndex) {
+        let lineStart = raw[raw.startIndex..<found.lowerBound].lastIndex(of: "\n").map { raw.index(after: $0) } ?? raw.startIndex
+        if raw[lineStart..<found.lowerBound].lowercased().contains("create") { lastHeader = found }
+        searchStart = found.upperBound
+    }
+    guard let header = lastHeader else { return nil }
+    let after = raw[header.upperBound...]
+    guard let asRange = after.range(of: "as $", options: .caseInsensitive) else { return nil }
+    let tagStart = after.index(asRange.upperBound, offsetBy: -1)
+    guard let tagEnd = after[after.index(after: tagStart)...].firstIndex(of: "$") else { return nil }
+    let tag = String(after[tagStart...tagEnd])
+    let bodyStart = after.index(after: tagEnd)
+    guard let close = after.range(of: tag, range: bodyStart..<after.endIndex) else { return nil }
+    return String(after[bodyStart..<close.lowerBound])
+}
+
+/// 본문에서 폰 게이트 덩어리(앞의 빈 줄 + `--▼ phone-gate …` 줄부터 `--▲ phone-gate …` 줄까지)를 떼어 (나머지, 덩어리)로 돌려준다.
+private func splitPhoneGate(_ body: String) -> (rest: String, gate: String)? {
+    guard let open = body.range(of: "  --▼ phone-gate 20261014130000"),
+          let close = body.range(of: "  --▲ phone-gate 20261014130000", range: open.upperBound..<body.endIndex),
+          let closeEOL = body[close.upperBound...].firstIndex(of: "\n"),
+          open.lowerBound > body.startIndex
+    else { return nil }
+    let blankLine = body.index(before: open.lowerBound)          // 덩어리 앞에 얹은 빈 줄의 줄바꿈
+    guard body[blankLine] == "\n" else { return nil }
+    let end = body.index(after: closeEOL)
+    return (String(body[..<blankLine] + body[end...]), String(body[open.lowerBound..<end]))
+}
+
+/// `--` 줄 주석을 걷어낸다(하우스 규칙).
+private func stripComments(_ sql: String) -> String {
+    sql.split(separator: "\n", omittingEmptySubsequences: false).map { line -> Substring in
+        if let range = line.range(of: "--") { return line[line.startIndex..<range.lowerBound] }
+        return line
+    }.joined(separator: "\n")
+}
+
+/// squash 된 SQL 에서 `create or replace function public.<name>() returns int language sql immutable as $$ select N $$` 의 N.
+private func constantValue(_ flat: String, _ name: String) -> Int? {
+    let head = "create or replace function public.\(name)() returns int language sql immutable as $$ select "
+    guard let range = flat.range(of: head) else { return nil }
+    return Int(flat[range.upperBound...].prefix { $0.isNumber })
 }

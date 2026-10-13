@@ -243,12 +243,19 @@ insert 를 없애고 **오늘·어제 KST 의 그 행만** 일회성으로 지�
 게이트 순서는 **불변**이다(이 순서가 계약이다):
 
 ```
-invalid → not_working → target_not_working → target_focused → 관리자 → [재화] → cooldown → 발사
+invalid → not_working → target_not_working → target_focused → target_on_phone → 관리자 → [재화] → cooldown → 발사
 ```
 
-### 상태 어휘 — **정확히 이 7개. 넓히지 않는다.**
+> `target_on_phone`(2026-10-14 · v0.3.51 · `20261014130000_phone_work.sql` §6-B): 대상의 열린 근무가 **폰이 연 것**이고 받아 줄 맥
+> (`app_build ≥ 104` + 기기 행 최근 10분 입력)이 없으면 거절한다 — 받는 것은 맥의 `take_pokes` 뿐이라 그냥 두면 울트라가 사라진다.
+> 관리자 · 재화보다 **앞**이라 몫도 장부도 안 탄다. 맥이 연 근무에는 투명하다. 자세한 것은 `docs/phone-work.md` 4-1.
+
+### 상태 어휘 — **정확히 이 7개. 넓히지 않는다.** (그 뒤 둘이 더해졌다 — 아래 인용)
 
 `ok` · `invalid` · `not_working` · `target_not_working` · `target_focused` · `ultra_used_today` · `cooldown`
+
+> 그 뒤 더해진 것: `blackout`(20260820060000 — 발표 주간) · `target_on_phone`(20261014130000 — 폰으로만 근무 중). 둘 다 구버전이
+> `.invalid`("지금은 찌를 수 없어요")로 접는 값이고, 접혀도 아무것도 안 탄다(거절이 재화 · 장부보다 앞) — 오배달이 없어서 넓혔다.
 
 (마이그레이션의 사후 단언이 이 집합을 정규식으로 뽑아 비교한다. 하나라도 늘어나면 배포가 멈춘다 —
 구버전이 모르는 값을 받으면 조용히 접어 오배달을 만들기 때문이다.)
@@ -259,7 +266,7 @@ invalid → not_working → target_not_working → target_focused → 관리자 
 | `ok` (관리자) | `ultra_remaining` int, `ultra_balance` int, `unlimited` **true**, `ring` string |
 | `ultra_used_today` | `ultra_remaining` 0, `ultra_balance` 0, `reset_after_seconds` int |
 | `cooldown` | `retry_after_seconds` int, `ultra_balance` int |
-| `invalid` / `not_working` / `target_not_working` / `target_focused` | 없음 |
+| `invalid` / `not_working` / `target_not_working` / `target_focused` / `target_on_phone` | 없음 |
 
 **`ultra_remaining` 의 의미가 바뀌었다.** 예전엔 "오늘 남은 횟수", 이제는 **잔량**이다.
 값의 해석이 바뀌었을 뿐 구버전 표시는 여전히 참이다(잔량 2면 실제로 2발 쏠 수 있다).
@@ -296,7 +303,7 @@ invalid → not_working → target_not_working → target_focused → 관리자 
 ```
 
 `ring` 은 `ok` 일 때만 온다. `poke_user` 의 상태 어휘(`ok`/`invalid`/`not_working`/
-`target_not_working`/`target_focused`/`cooldown`)와 `send_message` 의 어휘
+`target_not_working`/`target_focused`/`cooldown` — 2026-10-14 `target_on_phone` 추가, §3 인용)와 `send_message` 의 어휘
 (+ `not_text`/`too_long`, 둘 다 `max_length` 동반)는 **불변**이다.
 
 ---

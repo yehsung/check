@@ -39,10 +39,10 @@ enum GamesChessRankingPlan {
         case loading
     }
 
-    /// 접힌 상태에서 보여 줄 행 수(오목 절과 같다 — 로비에 절이 여럿이라 100행을 그대로 펼치면 아래가 묻힌다).
-    static let collapsedRows = 5
-    /// 펼쳤을 때의 상한. 서버도 100행까지만 주지만 화면이 서버 값을 믿지 않고 스스로 자른다.
-    static let rowLimit = 100
+    /// 접힌 줄 수 · 펼쳤을 때의 상한. **숫자를 다시 적지 않는다** — 문구 레인의 표가 한 출처다
+    /// (`GamesChessText.rankCollapsedRows` · `rankRowLimit`).
+    static var collapsedRows: Int { GamesChessText.rankCollapsedRows }
+    static var rowLimit: Int { GamesChessText.rankRowLimit }
 
     /// ★ **0판인 사람은 안 낀다.** 서버 `chess_ranking` 이 이미 걸러 주지만(전적 표에 행이 없다) 그 약속을
     /// 화면이 다시 지킨다 — 0승 0패 0무 줄은 순위표에 아무 정보도 주지 않고, 전적 컷 직후에는 그런 줄이
@@ -104,73 +104,7 @@ enum GamesChessRankingPlan {
     /// 머리 오른쪽 캡션. **한 번도 못 받았으면 아무것도 말하지 않는다** — 컷을 모르는데 "전체 기간"은 거짓이다.
     static func sinceCaption(_ store: ChessStore) -> String? {
         guard let ranking = store.ranking else { return nil }
-        return ranking.recordSince.map(GamesChessRankText.since) ?? GamesChessRankText.wholePeriod
-    }
-}
-
-/// 순위 절 문구. ★ **임시 자리**다 — 다른 레인의 `GamesChessText` 가 서면 이 enum 의 줄을 그쪽으로 옮기고
-/// 여기서 지운다(보고서의 '문구로 옮길 목록'). 맥과 같은 뜻이면 같은 문장이다(출처는 맥 `ChessText` 의 순위 절 ·
-/// `Sources/check/ChessPanel.swift:142-152`). 폰에서 처음 쓴 줄만 `// 폰`.
-///
-/// `#if os(iOS)` 로 감싸지 않는다 — 글자뿐이라 맥 스위트가 값으로 잴 수 있다.
-enum GamesChessRankText {
-    static let title = "체스 순위"
-    /// 절 **아래** 캡션 — 승점의 뜻(맥 `rankHelp`).
-    static let caption = "승점 = 승 − 패"
-    static let unavailable = "순위는 곧 열려요"
-    /// 맥 `rankEmpty` 는 "아직 순위가 없어요"지만 폰은 오목 절과 한 벌로 맞춘다(같은 화면에 두 절이 선다). 폰
-    static let empty = "아직 전적이 없어요"
-    static let emptyHint = "첫 판이 끝나면 순위가 올라와요"
-    /// 폰: 절마다 "무엇을 못 불러왔나" + 공용 [다시 시도](`MobileLoadText` 규칙).
-    static let loadFailed = "순위를 불러오지 못했어요"
-    /// 실패 줄 **아래** 한 줄. 깃발 하나에 원인이 둘 들어온다(연결·5xx 와 `unsupported_client`) —
-    /// 스토어가 status 를 넘겨 주지 않아 뷰는 둘을 가릴 수 없으므로 단정하지 않는다. 폰
-    static let loadFailedHint = "계속 안 되면 앱을 업데이트해 주세요"
-
-    static let myRankTitle = "내 순위"
-    /// 0판이면 순위가 없다(서버가 `me.rank` 를 null 로 준다).
-    static let outOfRank = "순위 밖"
-    static let collapse = "접기"
-    static func seeAll(total: Int) -> String { "전체 보기 · \(total)명" }
-
-    /// 전적 기준시각(컷) — "10월 1일부터". 시간대는 **KST 로 못 박는다**: 컷은 서버가 정한 KST 자정이라
-    /// 기기 시간대로 조립하면 비KST 기기에서 하루 밀린다(오목 절에서 실측해 고친 자리).
-    static func since(_ date: Date) -> String {
-        let parts = TeamWeeklyGoal.kstCalendar.dateComponents([.month, .day], from: date)
-        return "\(parts.month ?? 0)월 \(parts.day ?? 0)일부터"
-    }
-    /// 컷이 없다(`record_since_ms` null = `-infinity`). 폰
-    static let wholePeriod = "전체 기간"
-
-    /// 승점의 부호 있는 짧은 꼴. 음수 기호는 루비 변화와 같은 '−'(U+2212).
-    static func signedPoints(_ points: Int) -> String {
-        if points > 0 { return "+\(points)" }
-        if points < 0 { return "−\(-points)" }
-        return "0"
-    }
-    static func points(_ points: Int) -> String { "승점 \(signedPoints(points))" }
-    /// "6승 2패 1무" — ★ **승점만 띄우지 않는다**(사용자 지시). 순위 행과 내 순위 줄이 같은 이 표를 쓴다.
-    static func record(wins: Int, losses: Int, draws: Int) -> String { "\(wins)승 \(losses)패 \(draws)무" }
-
-    /// 목록 밖 내 순위 한 줄 — "12위 · 승점 +4 · 6승 2패 1무"(0판이면 "순위 밖 · 0승 0패 0무"). 폰
-    static func myRankLine(_ mine: ChessMyRank) -> String {
-        let record = record(wins: mine.wins, losses: mine.losses, draws: mine.draws)
-        guard let rank = mine.rank else { return "\(outOfRank) · \(record)" }
-        return "\(rank)위 · \(points(mine.points)) · \(record)"
-    }
-
-    /// 보이스오버: 순위 한 행 — "3위, 나, 솜사탕, 서울센터, 승점 +4, 6승 2패 1무".
-    ///
-    /// 행을 `children: .combine` 으로 묶지 **않는** 이유: 순위 원(`RankBadge`)이 `accessibilityHidden(true)` 라
-    /// 묶으면 순위가 안 읽힌다. ★ **일곱 칸을 전부 읽는다** — 승점만 읽으면 눈으로 보는 화면과 어긋난다.
-    static func rowAccessibility(_ entry: ChessRankEntry, isMe: Bool) -> String {
-        var parts = ["\(entry.rank)위"]
-        if isMe { parts.append("나") }
-        parts.append(entry.user.displayName)
-        if let center = entry.user.center, !center.isEmpty { parts.append("\(center)센터") }
-        parts.append(points(entry.points))
-        parts.append(record(wins: entry.wins, losses: entry.losses, draws: entry.draws))
-        return parts.joined(separator: ", ")
+        return ranking.recordSince.map(GamesChessText.rankSince) ?? GamesChessText.rankWholePeriod
     }
 }
 
@@ -201,20 +135,20 @@ struct GamesChessRankingSection: View {
             rows
         case .soon:
             header
-            InsetGroup { messageRow(GamesChessRankText.unavailable, hint: nil) }
+            InsetGroup { messageRow(GamesChessText.rankingUnavailable, hint: nil) }
         case .empty:
             header
-            InsetGroup { messageRow(GamesChessRankText.empty, hint: GamesChessRankText.emptyHint) }
+            InsetGroup { messageRow(GamesChessText.noRanking, hint: GamesChessText.noRankingHint) }
         case .failed:
             header
             InsetGroup {
                 GroupRow(divider: .none) {
                     // 세로 한 칸: 실패 한 줄 + [다시 시도] 아래, **왜 다시 시도가 안 먹을 수도 있는지** 한 줄.
                     VStack(alignment: .leading, spacing: MobileTheme.space2) {
-                        LoadFailureRow(GamesChessRankText.loadFailed) {
+                        LoadFailureRow(GamesChessText.rankingLoadFailed) {
                             Task { await store.loadRanking() }
                         }
-                        Text(GamesChessRankText.loadFailedHint)
+                        Text(GamesChessText.rankingLoadFailedHint)
                             .font(MobileTheme.rowSubtitle)
                             .foregroundStyle(MobileTheme.label2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -230,7 +164,7 @@ struct GamesChessRankingSection: View {
     // MARK: 머리 · 캡션
 
     private var header: some View {
-        SectionHeader(GamesChessRankText.title, trailing: headerTrailing, padded: true)
+        SectionHeader(GamesChessText.rankTitle, trailing: headerTrailing, padded: true)
     }
 
     private var headerTrailing: SectionHeader.Trailing {
@@ -238,13 +172,20 @@ struct GamesChessRankingSection: View {
         return .text(caption)
     }
 
+    /// 절 아래 작은 두 줄: 승점의 뜻 + **0판인 사람은 안 낀다**는 사실(`playable` 이 실제로 거르는 그것 —
+    /// 빈 순위·짧은 목록을 사고로 읽지 않게 하는 줄이다).
     private var caption: some View {
-        Text(GamesChessRankText.caption)
-            .font(MobileTheme.rowSubtitle)
-            .foregroundStyle(MobileTheme.label2)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-            .padding(.top, MobileTheme.space2)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(GamesChessText.rankCaption)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(GamesChessText.rankZeroGamesNote)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(MobileTheme.rowSubtitle)
+        .foregroundStyle(MobileTheme.label2)
+        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+        .padding(.top, MobileTheme.space2)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: 목록
@@ -278,10 +219,10 @@ struct GamesChessRankingSection: View {
             InsetGroup {
                 GroupRow(divider: .none, isHighlighted: true) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(GamesChessRankText.myRankTitle)
+                        Text(GamesChessText.myRankTitle)
                             .font(MobileTheme.rowSubtitle)
                             .foregroundStyle(MobileTheme.label2)
-                        Text(GamesChessRankText.myRankLine(mine))
+                        Text(GamesChessText.myRankLine(mine))
                             .font(MobileTheme.rowTitle)
                             .monospacedDigit()
                             .foregroundStyle(MobileTheme.label)
@@ -303,7 +244,7 @@ struct GamesChessRankingSection: View {
             padding: EdgeInsets(top: 2, leading: MobileTheme.cardPadding - 13, bottom: 2, trailing: MobileTheme.cardPadding)
         ) {
             AingButton(
-                isExpanded ? GamesChessRankText.collapse : GamesChessRankText.seeAll(total: total),
+                isExpanded ? GamesChessText.rankCollapse : GamesChessText.rankSeeAll(total: total),
                 systemImage: isExpanded ? "chevron.up" : "chevron.down",
                 kind: .plain,
                 size: .sm
@@ -370,7 +311,7 @@ private struct GamesChessRankRow: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(GamesChessRankText.rowAccessibility(entry, isMe: isMe)))
+        .accessibilityLabel(Text(GamesChessText.rankRowAccessibility(entry, isMe: isMe)))
     }
 
     /// 한 줄 꼴: 이름 · 오른쪽에 승점과 전적.
@@ -426,14 +367,14 @@ private struct GamesChessRankRow: View {
     ///
     /// ★ 가로 고정은 이 조각이 들지 않는다 — **쓰는 자리에서** 건다(큰 글자 가지가 접을 수 있어야 한다).
     private var pointsText: some View {
-        Text(GamesChessRankText.signedPoints(entry.points))
+        Text(GamesChessText.points(entry.points))
             .font(MobileTheme.number(.callout, weight: .bold))
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label)
     }
 
     private var recordText: some View {
-        Text(GamesChessRankText.record(wins: entry.wins, losses: entry.losses, draws: entry.draws))
+        Text(GamesChessText.record(wins: entry.wins, losses: entry.losses, draws: entry.draws))
             .font(MobileTheme.rowSubtitle)
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label2)

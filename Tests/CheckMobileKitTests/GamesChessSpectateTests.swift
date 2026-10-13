@@ -142,6 +142,9 @@ import Testing
         #expect(code.contains("selection: GamesChessWatchPlan.boardSelection"))
         #expect(code.contains("legalTargets: GamesChessWatchPlan.boardLegalTargets"))
         #expect(code.contains("whiteAtBottom: GamesChessWatchPlan.boardWhiteAtBottom"))
+        // 못 읽은 FEN·첫 응답 전에는 **빈 판**이다(판 부품의 `position` 은 옵셔널이 아니다) — `.standard` 를
+        // 넘기면 아무도 안 둔 초기 배치를 "지금 판"으로 그려 거짓말이 된다.
+        #expect(code.contains("position: watch.position ?? .empty"), "못 읽은 판을 다른 배치로 메운다")
         // 절 전체에 입력 문법이 없다. [관전]·[나가기] 버튼은 `AingButton` 이라 이 목록에 걸리지 않는다.
         let whole = Self.stripComments(try Self.watchSource())
         for forbidden in ["onTapGesture", "onLongPressGesture", "DragGesture", "onHover", "simultaneousGesture"] {
@@ -159,19 +162,19 @@ import Testing
         // ① 값: 이 절이 말할 수 있는 모든 문장에 '이기면'·'받아요'가 없다.
         let watch = Self.finishedWatch()
         var spoken: [String] = [
-            GamesChessWatchText.stakeUnknown, GamesChessWatchText.readOnlyCaption,
-            GamesChessWatchText.endedTailCaption, GamesChessWatchText.watching,
-            GamesChessWatchText.loading, GamesChessWatchText.playersUnknown,
-            GamesChessWatchText.watchChip, GamesChessWatchText.watchChipHint,
-            GamesChessWatchText.myMatchCaption, GamesChessWatchText.watchSoonCaption,
-            GamesChessWatchText.liveTitle, GamesChessWatchText.noLive,
-            GamesChessWatchText.boardAccessibility(watch), GamesChessWatchText.moves(24),
+            GamesChessWatchSectionText.stakeUnknown, GamesChessText.watchCaption,
+            GamesChessText.watchTailCaption, GamesChessText.watchTitle,
+            GamesChessText.watchLoading, GamesChessWatchSectionText.playersUnknown,
+            GamesChessText.watch, GamesChessWatchSectionText.watchChipHint,
+            GamesChessText.myMatch, GamesChessWatchSectionText.watchSoonCaption,
+            GamesChessText.liveTitle, GamesChessText.noLiveMatches,
+            GamesChessWatchSectionText.boardAccessibility(watch), GamesChessText.watchPly(24),
             GamesChessWatchStatus.headline(for: watch)
         ]
         spoken.append(GamesChessWatchStatus.detail(for: watch) ?? "")
         for reason in ChessEndReason.allCases {
-            spoken.append(GamesChessWatchText.watchEndReason(reason, winner: .black))
-            spoken.append(GamesChessWatchText.watchEndReason(reason, winner: nil))
+            spoken.append(GamesChessText.watchEndReason(reason, winner: .black))
+            spoken.append(GamesChessText.watchEndReason(reason, winner: nil))
         }
         for line in spoken {
             #expect(!line.contains("이기면"), "관전 문구가 이김을 약속한다: \(line)")
@@ -197,15 +200,15 @@ import Testing
         #expect(GamesChessWatchStatus.headline(for: watch) == "흑 승리")
         let detail = GamesChessWatchStatus.detail(for: watch)
         #expect(detail == "백이 기권했어요", "진 쪽을 주어로 말하지 않는다: \(detail ?? "nil")")
-        #expect(GamesChessWatchText.watchEndReason(.timeout, winner: .white) == "흑의 시간이 다 됐어요")
+        #expect(GamesChessText.watchEndReason(.timeout, winner: .white) == "흑의 시간이 다 됐어요")
         // ★ FIDE 6.9 — 깃발이 떨어졌는데 메이트 재료가 없으면 무승부다. **문구가** 그 경우를 말해야 한다.
-        #expect(GamesChessWatchText.watchEndReason(.timeoutInsufficient, winner: nil)
-                == "시간이 다 됐지만 메이트할 기물이 없어요")
+        #expect(GamesChessText.watchEndReason(.timeoutInsufficient, winner: nil)
+                == "시간이 다 됐지만 무승부예요 · 메이트할 기물이 없어요")
         // 승자를 모르면 승패를 가르는 주어를 쓰지 않는다(지어내면 거짓말이다).
-        #expect(GamesChessWatchText.watchEndReason(.checkmate, winner: nil) == "체크메이트")
+        #expect(GamesChessText.watchEndReason(.checkmate, winner: nil) == "체크메이트")
         // 열 갈래를 빠짐없이 말한다 — `default:` 로 접으면 `abandoned` 가 왜 끝났는지 못 말한다.
         for reason in ChessEndReason.allCases {
-            #expect(!GamesChessWatchText.watchEndReason(reason, winner: .black).isEmpty, "\(reason) 가 빈 문장이다")
+            #expect(!GamesChessText.watchEndReason(reason, winner: .black).isEmpty, "\(reason) 가 빈 문장이다")
         }
     }
 
@@ -225,22 +228,22 @@ import Testing
         // 첫 응답 전에는 색조차 모른다 — 돌 배지·차례를 말하지 않는다(로비 카드의 a/b 는 uuid 순서다).
         let cold = ChessSpectateState(id: "m-2")
         #expect(GamesChessWatchStatus.kind(for: cold) == .loading)
-        #expect(GamesChessWatchStatus.headline(for: cold) == GamesChessWatchText.loading)
+        #expect(GamesChessWatchStatus.headline(for: cold) == GamesChessText.watchLoading)
     }
 
     @Test("끝난 판에는 3분 꼬리를 말하고, 로딩을 말하지 않는다")
     func theFinishedWatchTellsTheThreeMinuteTail() throws {
         // 없으면: 3분이 지나 서버가 `not_found` 를 주는 순간 화면이 사라지는데 이유를 아무도 모른다.
         // 그리고 끝난 판에 진행형을 쓰면 한 화면이 "아직 안 불러왔다"와 "이미 끝났다"를 동시에 주장한다.
-        #expect(GamesChessWatchText.endedTailCaption.contains("3분"), "3분 꼬리를 말하지 않는다")
+        #expect(GamesChessText.watchTailCaption.contains("3분"), "3분 꼬리를 말하지 않는다")
         let code = Self.stripComments(try Self.watchSource())
         let caption = try Self.body(of: "private var caption", in: code, length: 500)
         #expect(caption.contains("watch.isFinished"), "꼬리 문구가 끝난 판에만 서지 않는다")
-        #expect(caption.contains("GamesChessWatchText.endedTailCaption"))
+        #expect(caption.contains("GamesChessText.watchTailCaption"))
         // 끝난 판의 두 사람 자리는 `LoadingRow` 가 아니다.
-        let players = try Self.body(of: "private func players", in: code, length: 1_400)
+        let players = try Self.body(of: "private var players", in: code, length: 1_400)
         #expect(players.contains("if watch.isFinished"), "끝난 판 갈래가 없다")
-        #expect(players.contains("GamesChessWatchText.playersUnknown"))
+        #expect(players.contains("GamesChessWatchSectionText.playersUnknown"))
     }
 
     // MARK: - 4. 세로 예산
@@ -250,24 +253,46 @@ import Testing
         // 없으면: iPhone SE 에서 기본 글자로도 백 카드가 잘리고 상태 상자가 통째로 화면 밖이다(오목 실측).
         // 상수의 산수를 여기서 검산한다 — 폰 화면은 맥이 그림을 그릴 수 없다.
         let blocks = GamesChessWatchBudget.blocksAroundBoard()
-        #expect(blocks == 8 + (60 + 60 + 60) + 8 * 3, "블록 합이 바뀌었다: \(blocks)")
-        // iPhone SE 375×667 → 보이는 높이 554.
-        let se = GamesChessWatchBudget.available(visible: CGSize(width: 375, height: 554))
-        #expect(se.width == 351)
-        #expect(se.height == 554 - 64.5 - blocks)
-        #expect(se.height < se.width, "SE 에서 높이가 폭보다 크다 — 예산이 아무것도 줄이지 않는다")
-        // iPhone 15 393×739 → 폭이 이긴다(판을 억지로 줄이지 않는다).
-        let fifteen = GamesChessWatchBudget.available(visible: CGSize(width: 393, height: 739))
-        #expect(fifteen.width == 369)
-        #expect(fifteen.height > fifteen.width)
-        // 아주 좁은 자리에서도 음수를 내지 않는다(음수 한 변은 그리기 자체를 깨뜨린다).
-        let tiny = GamesChessWatchBudget.available(visible: CGSize(width: 10, height: 10))
-        #expect(tiny.width >= 0 && tiny.height >= 0)
-        // 그리고 **그 자리를 판 부품에 넘긴다** — 뷰가 자기 손으로 한 변을 고르지 않는다.
+        let expected: CGFloat = (54 + 60 + 60 + 60) + 8 * 4
+        #expect(blocks == expected, "블록 합이 바뀌었다: \(blocks)")
+
+        // iPhone SE 375×667 → 뷰포트 554. 예산 288 이 폭 상한(343)보다 작아 **높이가 이긴다**.
+        let se = try #require(GamesChessWatchBudget.boardCap(viewportHeight: 554))
+        #expect(se == 554 - blocks)
+        #expect(se < 343, "SE 에서 높이 상한이 폭보다 크다 — 예산이 아무것도 줄이지 않는다")
+        // iPhone 15 393×852 → 뷰포트 739. 상한 472 는 폭 361 보다 크다 → **폭이 이긴다**(판을 괜히 줄이지 않는다).
+        let fifteen = try #require(GamesChessWatchBudget.boardCap(viewportHeight: 739))
+        #expect(fifteen == 472, "8의 배수로 안 내렸다: \(fifteen)")
+        #expect(fifteen > 361)
+        // 뷰포트를 아직 모르는 한 틱은 상한이 **없다**(그 한 틱에 판을 세로로 늘이지 않는다).
+        #expect(GamesChessWatchBudget.boardCap(viewportHeight: 0) == nil)
+        #expect(GamesChessWatchBudget.boardCap(viewportHeight: .infinity) == nil)
+        // 터무니없이 좁은 자리에서도 음수·0 을 내지 않는다(칸이 0 이면 판이 빈 그림이 된다).
+        let tiny = try #require(GamesChessWatchBudget.boardCap(viewportHeight: 100))
+        #expect(tiny == GamesChessBoardMetrics.minimumSide)
+
+        // 그리고 **그 상한을 판에 건다** — 뷰가 자기 손으로 한 변을 고르지 않는다.
         let code = Self.stripComments(try Self.watchSource())
-        let side = try Self.body(of: "private func boardSide", in: code, length: 600)
-        #expect(side.contains("GamesChessWatchBudget.available(visible: visible)"))
-        #expect(side.contains("GamesChessBoardMetrics.side(fitting: available)"))
+        #expect(code.contains("GamesChessWatchBudget.boardCap(viewportHeight: viewportHeight)"),
+                "판이 높이 예산을 안 쓴다")
+        // 뷰포트는 **스크롤의 보이는 높이**다. `GeometryReader` 로 읽으면 제안 높이를 그대로 받아 뜻을 잃는다.
+        #expect(code.contains("proxy.bounds(of: .scrollView)?.height"), "뷰포트를 스크롤에서 읽지 않는다")
+        // `GeometryReader` 는 시계 띠(잎 뷰)에만 있고 **판 패널에는 없다** — 패널 블록만 좁혀 본다
+        //  (파일 전체로 재면 시계 띠 때문에 영원히 빨갛다).
+        let panel = try Self.body(of: "private struct GamesChessWatchPanel", in: code, length: 1_200)
+        #expect(!panel.contains("GeometryReader"), "절이 스크롤 안에서 GeometryReader 로 높이를 읽는다")
+    }
+
+    @Test("관전 절은 로비 스크롤 **안의 절**이다 — 제 스크롤도, 떠 있는 아래 막대도 두지 않는다")
+    func theWatchPanelIsASectionNotAScreen() throws {
+        // 없으면: 로비 화면이 이 절을 자기 `ScrollView` 안에 그대로 넣으므로(다른 레인의 호출부가 그렇다)
+        // 스크롤이 겹쳐 안쪽이 안 움직이고, `safeAreaInset` 막대가 로비 바닥에 눌러앉는다.
+        let code = Self.stripComments(try Self.watchSource())
+        #expect(!code.contains("ScrollView"), "절이 제 스크롤을 만든다")
+        #expect(!code.contains("safeAreaInset"), "절이 떠 있는 막대를 만든다")
+        // [나가기]는 **하나**이고 절 머리에 있다(스크롤 끝의 버튼은 거둘 길이 못 된다는 오목의 교훈을 머리로 지킨다).
+        #expect(code.contains(".action(GamesChessText.leaveWatch) { store.leaveWatch() }"))
+        #expect(code.components(separatedBy: "store.leaveWatch()").count - 1 == 1, "[나가기] 문이 두 벌이다")
     }
 
     // MARK: - 5. 순위 행 — 일곱 칸 · 0판 제외 · 목록 밖 내 순위
@@ -277,27 +302,27 @@ import Testing
         // 없으면: 승점만 남고 전적이 사라진다. 오목에서 사용자가 직접 금지한 모양이고, 큰 글자에서는
         // 가로 고정 둘이 한 HStack 에 있다가 카드가 전적을 **잘라** 그 화면이 되살아났다.
         let row = Self.entry("u-x", "솜사탕", rank: 3, wins: 6, losses: 2, draws: 1)
-        let label = GamesChessRankText.rowAccessibility(row, isMe: false)
+        let label = GamesChessText.rankRowAccessibility(row, isMe: false)
         for cell in ["3위", "솜사탕", "승점 +4", "6승 2패 1무"] {
             #expect(label.contains(cell), "행이 \(cell) 를 말하지 않는다: \(label)")
         }
-        #expect(GamesChessRankText.record(wins: 6, losses: 2, draws: 1) == "6승 2패 1무")
+        #expect(GamesChessText.record(wins: 6, losses: 2, draws: 1) == "6승 2패 1무")
         // 승점은 부호를 보인다(색으로 말하지 않는다 — 폰 토큰 규약에서 초록·앰버는 근무의 뜻이다).
-        #expect(GamesChessRankText.signedPoints(4) == "+4")
-        #expect(GamesChessRankText.signedPoints(-2) == "−2")
-        #expect(GamesChessRankText.signedPoints(0) == "0")
+        #expect(GamesChessText.signedPoints(4) == "+4")
+        #expect(GamesChessText.signedPoints(-2) == "−2")
+        #expect(GamesChessText.signedPoints(0) == "0")
         // 내 행은 '나'를 먼저 읽는다(순위 원은 `accessibilityHidden` 이라 묶으면 순위가 안 읽힌다).
-        #expect(GamesChessRankText.rowAccessibility(row, isMe: true).contains("나"))
+        #expect(GamesChessText.rankRowAccessibility(row, isMe: true).contains("나"))
 
         // 눈으로 보는 화면도 둘을 **같이** 그린다 — 세 갈래(큰 글자·한 줄·접힌 줄) 전부에서.
         let code = Self.stripComments(try Self.rankingSource())
         for name in ["private var inline", "private var stacked"] {
-            let body = try Self.body(of: name, in: code, length: 600)
+            let body = try Self.block(of: name, in: code)
             #expect(body.contains("pointsText"), "\(name) 에 승점이 없다")
             #expect(body.contains("recordText"), "\(name) 에 전적이 없다 — '승점만' 화면이다")
         }
         // 큰 글자 갈래는 쌓는다(`HStack` + 조각마다 `.fixedSize()` 는 카드가 오른쪽을 자른다).
-        let stacked = try Self.body(of: "private var stacked", in: code, length: 600)
+        let stacked = try Self.block(of: "private var stacked", in: code)
         #expect(stacked.contains("VStack(alignment: .leading, spacing: 4)"))
         #expect(stacked.contains("fixedSize(horizontal: false, vertical: true)"))
         // 320pt 좁은 기기는 `ViewThatFits` 로 덮는다.
@@ -329,6 +354,15 @@ import Testing
                 "픽스처가 이미 서버 순서대로다 — 재정렬을 잡을 수 없다")
         #expect(GamesChessRankingPlan.held(unsorted).map(\.rank) == [3, 1], "화면이 행을 재정렬했다")
 
+        // 동률 한 쌍(3위·3위 → 다음은 5위)도 **서버 숫자 그대로**다 — 화면이 순위를 다시 세면 4위가 생긴다.
+        let ties = Self.store(entries: [
+            Self.entry("u-1", "일위", rank: 1, wins: 9, losses: 1, draws: 0),
+            Self.entry("u-2", "셋째A", rank: 3, wins: 4, losses: 2, draws: 0),
+            Self.entry("u-3", "셋째B", rank: 3, wins: 4, losses: 2, draws: 0),
+            Self.entry("u-4", "다섯째", rank: 5, wins: 1, losses: 2, draws: 0)
+        ])
+        #expect(GamesChessRankingPlan.held(ties).map(\.rank) == [1, 3, 3, 5], "동률 숫자를 다시 셌다")
+
         // 전원 0판이면 `.rows` 가 아니다(빈 카드를 그리지 않고 "아직 전적이 없어요"를 말한다).
         let allZero = Self.store(entries: [Self.entry("u-z", "0판", rank: 1, wins: 0, losses: 0, draws: 0)])
         #expect(GamesChessRankingPlan.content(allZero) == .empty, "0판만 있는 목록을 행으로 그린다")
@@ -344,14 +378,14 @@ import Testing
         #expect(!visible.contains { $0.id == Self.mine }, "픽스처에 내 행이 들어 있다 — '목록 밖'을 못 잰다")
         let mine = try #require(GamesChessRankingPlan.myRank(store), "목록 밖 내 순위가 사라졌다")
         #expect(mine.rank == 12)
-        #expect(GamesChessRankText.myRankLine(mine) == "12위 · 승점 +1 · 3승 2패 1무")
+        #expect(GamesChessText.myRankLine(mine) == "12위 · 승점 +1 · 3승 2패 1무")
         // 0판이면 순위가 없다(서버가 `me.rank` 를 null 로 준다) — 0 으로 꾸미지 않는다.
         let zero = ChessMyRank(rank: nil, wins: 0, losses: 0, draws: 0, points: 0)
-        #expect(GamesChessRankText.myRankLine(zero) == "순위 밖 · 0승 0패 0무")
+        #expect(GamesChessText.myRankLine(zero) == "순위 밖 · 0승 0패 0무")
         // 펼치면 전부 보이고 [전체 보기] 줄이 선다.
         #expect(GamesChessRankingPlan.visible(store, isExpanded: true).count == 7)
         #expect(GamesChessRankingPlan.showsToggle(store))
-        #expect(GamesChessRankText.seeAll(total: 7) == "전체 보기 · 7명")
+        #expect(GamesChessText.rankSeeAll(total: 7) == "전체 보기 · 7명")
 
         // 전적이 어긋나면(한쪽이 늦었다) 그 줄을 그리지 않는다 — "8승 3패 · 승점 +4" 같은 자기모순을 막는다.
         store.record = ChessRecord(wins: 9, losses: 9, draws: 9)
@@ -394,7 +428,7 @@ import Testing
         // 없으면: 컷을 모르는데 "전체 기간"이라고 단정한다(거짓이다).
         #expect(GamesChessRankingPlan.sinceCaption(ChessStore()) == nil)
         let whole = Self.store(entries: [], recordSince: nil)
-        #expect(GamesChessRankingPlan.sinceCaption(whole) == GamesChessRankText.wholePeriod)
+        #expect(GamesChessRankingPlan.sinceCaption(whole) == GamesChessText.rankWholePeriod)
         // 컷은 **KST 달력 값**이다 — 기기 시간대로 조립하면 비KST 기기에서 하루 밀린다(오목에서 고친 자리).
         // 2026-10-01 00:00 KST = 2026-09-30 15:00 UTC.
         let cut = Self.store(entries: [], recordSince: Date(timeIntervalSince1970: 1_790_780_400))
@@ -444,6 +478,28 @@ import Testing
                 return String(line[line.startIndex..<hit.lowerBound])
             }
             .joined(separator: "\n")
+    }
+
+    /// 선언 머리부터 **중괄호가 닫히는 곳까지**. 글자 수로 자르는 `body(of:in:length:)` 와 달리 다음 블록으로
+    /// 새지 않는다 — 그 새는 창 때문에 "행에서 전적 지우기" 뮤테이션이 한 번 살아남았다(바로 아래 블록에
+    /// 같은 이름이 있어 창이 그걸 읽었다). 블록 안을 재는 단언은 **이것만** 쓴다.
+    static func block(of marker: String, in source: String) throws -> String {
+        let stripped = source.contains("//") ? stripComments(source) : source
+        let hit = try #require(stripped.range(of: marker), "대조: '\(marker)' 를 못 찾았다(이름이 바뀌었나)")
+        var depth = 0
+        var started = false
+        var out = ""
+        for character in stripped[hit.upperBound...] {
+            if character == "{" {
+                depth += 1
+                started = true
+            } else if character == "}" {
+                depth -= 1
+            }
+            out.append(character)
+            if started, depth == 0 { return out }
+        }
+        return out
     }
 
     /// 선언 머리부터 앞쪽 `length` 글자(주석은 이미 걷힌 소스를 넘겨도 되고, 안 걷힌 것을 넘기면 여기서 걷는다).

@@ -281,12 +281,18 @@ private final class GamesMainFlag {
         harness.model.sceneDidBecomeActive()
         harness.games.gomokuScreenDidDisappear()
         harness.games.gomokuScreenDidAppear()
-        #expect(gomoku.isAIMatch, "수명 사건이 AI 판을 버렸다")
+        #expect(gomoku.isAIMatch, "수명 사건이 **진행 중인** AI 판을 버렸다")
         await gomoku.resign()
+        // ★ 0.3.50 로 바뀐 계약: 폰에서 화면을 떠나는 것은 맥의 '최소화'가 아니라 **'창을 정말 닫았다'**다 —
+        //   `gomokuScreenDidDisappear` 가 `windowDidClose()` 를 부르고 그 문이 **끝난 판을 접는다**
+        //   (결과 화면이 다시 서던 결함의 수리 · 값으로 재는 쪽은 `GamesStoreCloseTests`).
+        //   AI 판도 같은 가드를 지난다(`backToLobbyFromAIMatch` 가 `game.isFinished` 를 먼저 본다) — 그래서
+        //   바로 위 '진행 중' 왕복은 판이 살아남고 이 '끝난' 왕복은 로비로 돌아온다. 그 대조가 이 두 단언이다.
         harness.games.gomokuScreenDidDisappear()
         harness.games.gomokuScreenDidAppear()
-        #expect(gomoku.phase == .result && gomoku.isAIMatch)
-        gomoku.backToLobby()
+        #expect(gomoku.phase == .lobby && !gomoku.isAIMatch && gomoku.match == nil && gomoku.aiGame == nil,
+                "끝난 AI 판을 들고 화면을 떠났는데 결과 화면이 그대로다 — 다시 열면 로비가 아니라 그 결과가 선다")
+        gomoku.backToLobby()   // 이미 로비다(접을 것이 없어 멱등)
         #expect(gomoku.phase == .lobby && gomoku.aiGame == nil && gomoku.match == nil)
         await harness.barrier()
         await baseYield(turns: 8)

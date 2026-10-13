@@ -332,12 +332,29 @@ package final class GamesStore {
     ///
     /// 머리 문장의 함정과 어긋나지 않는다: **내 판**은 여기서 손대지 않는다 — 결과 화면인 채로 떠나면 코어가 그 판에서
     /// 나가고(`gomoku_leave`), **진행 중인 내 판은 남는다**(끊으면 떠나 있는 사이 대국이 죽는다). 관전만 결과·진행 구분 없이 끝난다.
+    ///
+    /// ★★ **`windowDidClose()` 가 마지막이다**(0.3.50 수리의 폰 몫 · 2026-10-13 신고). 폰에서 화면을 떠나는 것은
+    ///   맥의 '최소화'가 아니라 **'창을 정말 닫았다'**다 — 탭을 옮기면 화면이 통째로 내려가고 다음 진입은 처음부터다.
+    ///   그런데 `windowDidHide()` 만 부르면 코어는 서버에 "그 판에서 나갔다"고 말하면서(`gomoku_leave`) **화면은 끝난 판을
+    ///   그대로 들고 있어**, 오목을 다시 누를 때 로비가 아니라 **그 결과 화면이 다시 섰다**([로비로] 를 눌러야만 빠져나왔다).
+    ///   `windowDidClose()` 가 그 끝난 판을 접는다(`foldFinishedMatch`).
+    /// ★ **진행 중인 내 판은 그대로 남는다** — 가드는 코어 안에 있다(`GomokuStore.windowDidClose` 의
+    ///   `if match?.isFinished == true`, 그 안의 `foldFinishedMatch` 도 `isFinished` 를 다시 본다. AI 판도 같다 —
+    ///   `backToLobbyFromAIMatch` 가 `game.isFinished` 를 먼저 본다). 그래서 폰에서 따로 가를 것이 없다.
+    /// ★ **순서는 맥과 같다**: 맥 창 배선도 `notifyVisibility(false)` → `notifyClosed()`,
+    ///   즉 `windowDidHide()` 뒤에 `windowDidClose()` 다(`CheckGomokuWindow.windowWillClose`). 뒤집으면 접힌 뒤의
+    ///   `windowDidHide` 가 빈 판을 보게 되는데, 그러면 "끝난 판에서 나간다"(`gomoku_leave`)를 부르는 자리가
+    ///   `foldFinishedMatch` 안쪽 하나로 줄어 조용히 갈래가 바뀐다.
+    /// ★ **요청은 늘지 않는다.** `windowDidClose()` 는 조회를 쏘지 않고(로비·받은함은 다음 `openWindow` 가 읽는다),
+    ///   겹치는 `stopWatching()`·`leaveMatch` 는 멱등이다(`leftMatchIDs` 가 판마다 한 번으로 묶는다).
     package func gomokuScreenDidDisappear() {
         guard isGomokuScreenVisible else { return }
         isGomokuScreenVisible = false
         // 관전을 먼저 내린다(요청 없음). 뒤의 `windowDidHide` 는 **끝난** 관전만 내리므로 진행 중인 남의 판이 그대로 남았다.
         context.gomoku.stopWatching()
         context.gomoku.windowDidHide()
+        // 폰에서 '떠남'은 맥의 '닫기'다 — 끝난 판을 접는 자리는 이 문뿐이다(진행 중인 판은 코어가 가른다).
+        context.gomoku.windowDidClose()
         syncAIThinker()
     }
 
@@ -399,13 +416,28 @@ package final class GamesStore {
     /// `leaveWatch()` 가 **아니다**: 그쪽은 로비·순위를 다시 읽는 **네트워크 호출**이라 화면을 떠나는 길에서
     /// 조회 둘이 나간다. `stopWatching()` 은 세대만 올리고 장부를 비운다(요청 0건).
     ///
-    /// **내 판은 손대지 않는다.** 체스에는 `chess_leave` 가 없고(코어 `windowDidClose` 주석) 진행 중인 판은
-    /// 서버에서 계속 흐른다 — 결과 화면인 채로 떠난 것도 "그 판에서 나갔다"가 아니다.
+    /// **진행 중인 내 판은 손대지 않는다.** 체스에는 `chess_leave` 가 없고(코어 `windowDidClose` 주석) 진행 중인 판은
+    /// 서버에서 계속 흐른다 — 떠나는 것은 기권이 아니다.
+    ///
+    /// ★★ **`windowDidClose()` 가 마지막이다**(0.3.50 수리의 폰 몫 · 2026-10-13 신고 — 오목과 같은 결함이었다).
+    ///   폰에서 화면을 떠나는 것은 맥의 '최소화'가 아니라 **'창을 정말 닫았다'**다. `windowDidHide()` 만으로는
+    ///   **끝난 내 판이 그대로 남아**, 게임 탭에서 체스를 다시 누를 때 로비가 아니라 **그 결과 화면이 다시 섰다**
+    ///   ([로비로] 를 눌러야만 빠져나왔다). `windowDidClose()` 가 그 판을 접는다(`foldFinishedMatch`).
+    /// ★ **진행 중인 판을 가르는 가드는 코어 안에 있다** — 체스 `foldFinishedMatch()` 의 첫 줄이
+    ///   `guard let current = match, current.isFinished else { return false }` 다(직접 확인했다 ·
+    ///   `ChessStore.swift:1817`). 그래서 폰 배선에서 따로 가를 것이 없다. AI 판도 같은 가드를 지난다.
+    /// ★ **순서는 맥과 같다**: 맥 창 배선도 `notifyVisibility(false)` → `notifyClosed()`,
+    ///   즉 `windowDidHide()` 뒤에 `windowDidClose()` 다(`CheckChessWindow.windowWillClose`).
+    /// ★ **겹치는 일은 해롭지 않다.** `windowDidClose()` 도 `clearFlight`·`cancelDrag`·`clearPendingDrop` 을
+    ///   부르는데 셋 다 nil 가드가 달린 멱등 함수다(`ChessStore.swift:1305·1534·1613`) — 두 번 불러도
+    ///   거둘 것이 없으면 아무 일도 안 한다. 요청도 늘지 않는다(체스에는 `chess_leave` 가 없고 이 문은 조회를 안 쏜다).
     package func chessScreenDidDisappear() {
         guard isChessScreenVisible else { return }
         isChessScreenVisible = false
         context.chess.stopWatching()
         context.chess.windowDidHide()
+        // 폰에서 '떠남'은 맥의 '닫기'다 — 끝난 판을 접는 자리는 이 문뿐이다(진행 중인 판은 코어가 가른다).
+        context.chess.windowDidClose()
     }
 
     /// AI 선택기의 허락 = 오목 화면이 보이고 앱이 active. 거두면 도는 탐색이 곧바로 취소된다.

@@ -261,7 +261,9 @@ package final class MessagesStore {
         return MessagesPresenceBoard(
             isKnown: board.isKnown,
             peers: board.peers.filter { !hiddenBlockedPeerIDs.contains($0.key) },
-            working: board.working.filter { !hiddenBlockedPeerIDs.contains($0.id) }
+            working: board.working.filter { !hiddenBlockedPeerIDs.contains($0.id) },
+            // 차단한 사람의 상태메시지도 같이 걷는다 — 대화 머리에 그 사람이 쓴 문장이 남지 않게.
+            statuses: board.statuses.filter { !hiddenBlockedPeerIDs.contains($0.key) }
         )
     }
 

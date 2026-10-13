@@ -5,7 +5,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": "오늘은 회의 많은 날 🙏"
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b2",
@@ -13,7 +14,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "busan"
+    "center": "busan",
+    "status_message": "부산에서 커피 한 잔 ☕️"
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b5",
@@ -21,7 +23,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": null
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b4",
@@ -29,7 +32,8 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": "busan"
+    "center": "busan",
+    "status_message": "4시 이후에 답장할게요"
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b3",
@@ -37,7 +41,8 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": null
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b6",
@@ -45,7 +50,8 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": null
+    "center": null,
+    "status_message": null
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b9",
@@ -53,7 +59,8 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": "busan"
+    "center": "busan",
+    "status_message": "점심 먹고 올게요"
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b7",
@@ -61,6 +68,7 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": null
   }
 ]

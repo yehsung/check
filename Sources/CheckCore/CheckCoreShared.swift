@@ -7,6 +7,10 @@ package enum CheckCoreShared {
     /// 별명 최대 길이. 서버 set_display_name 의 max_len 과 같은 값이다(근거는 WorkTimerStore.displayNameMaxLength 주석).
     package static let displayNameMaxLength = 12
 
+    /// 상태메시지 최대 길이(코드포인트, v0.3.51). 서버 `status_message_max_length()` · 표 CHECK(profiles_status_message_valid)의
+    /// 40 과 같은 값이다. 맥 설정 카운터 · 폰 나 > 프로필 카운터 · 저장 게이트가 전부 `StatusMessage.maxLength` 로 이 값을 읽는다.
+    package static let statusMessageMaxLength = 40
+
     /// 실시간 진단 줄의 시각 형식(HH:mm:ss). 설정 창 진단 두 줄(스토어·서비스)이 같은 인스턴스를 쓴다.
     package static let realtimeDiagnosticsTime: DateFormatter = {
         let f = DateFormatter()

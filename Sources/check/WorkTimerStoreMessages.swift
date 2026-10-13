@@ -166,6 +166,15 @@ extension WorkTimerStore {
         return receivedMessages.first { $0.fromUserID == id }?.fromName
     }
 
+    /// 대화 머리에 쓸 상대의 상태메시지(v0.3.51). **콕찌르기 목록 한 곳**에서만 온다 — 이력 행(message_history)은 상태를
+    /// 싣지 않는다(서버 함수를 안 건드렸다). 목록은 팝오버가 열려 있는 동안 30초마다 다시 받으므로 상대가 바꾼 상태가 그 주기로 따라온다.
+    /// 차단·숨김으로 목록에서 빠진 사람은 nil 이다(서버가 그 사람을 명부에서 뺀다 — 상태도 같이 사라진다).
+    /// 새 저장 프로퍼티를 만들지 않는 이유는 이름과 같다: 따로 들면 서버 값과 언젠가 갈린다.
+    var selectedMessagePeerStatusMessage: String? {
+        guard let id = selectedMessagePeerID else { return nil }
+        return pokeDirectory.first { $0.userID == id }?.statusMessage
+    }
+
     /// 같은 세 곳에서 오는 아바타(없으면 nil — 그때는 이니셜 원이 그려진다).
     var selectedMessagePeerAvatarURL: URL? {
         guard let id = selectedMessagePeerID else { return nil }

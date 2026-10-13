@@ -1441,6 +1441,10 @@ package struct PokeDirectoryRow: Decodable, Equatable {
     /// 이 컬럼을 안 내려주는 서버(마이그레이션 전 창)에서 비옵셔널이면 디렉토리 디코드가 통째로 throw 되어
     /// 콕찌르기 목록이 전원 사라진다. 화면 글자로의 변환은 CenterLabel 한 곳에서만 한다.
     package let center: String?
+    /// 상태메시지 **서버 원문**(v0.3.51 · `status_message`, 맨 뒤 칸). center 와 같은 이유로 Optional 이고 decodeIfPresent 다 —
+    /// 이 칸을 안 내려주는 옛 서버(db push 전 창)에서도 디렉터리 디코드가 깨지지 않는다(nil = 없음).
+    /// 화면에 올리기 전 관문은 toPokeDirectoryEntries 의 `StatusMessage.display` 한 곳이다.
+    package let statusMessage: String?
 
     /// 키는 `.convertFromSnakeCase` 가 이미 카멜로 바꾼 뒤에 매칭되므로 **카멜로 적는다**
     /// (`message_capable` → `messageCapable`). 스네이크로 적으면 어떤 키도 안 잡혀 전부 nil 이 된다.
@@ -1448,6 +1452,7 @@ package struct PokeDirectoryRow: Decodable, Equatable {
         case userId, displayName, avatarUrl, isWorking
         case messageCapable, canReceiveMessage
         case center
+        case statusMessage
     }
 
     package init(from decoder: Decoder) throws {
@@ -1459,6 +1464,7 @@ package struct PokeDirectoryRow: Decodable, Equatable {
         canReceiveMessage = try container.decodeIfPresent(Bool.self, forKey: .messageCapable)
             ?? container.decodeIfPresent(Bool.self, forKey: .canReceiveMessage)
         center = try container.decodeIfPresent(String.self, forKey: .center)
+        statusMessage = try container.decodeIfPresent(String.self, forKey: .statusMessage)
     }
 
     /// 테스트/변환 픽스처용 직접 생성자. 커스텀 init(from:) 을 만든 순간 멤버와이즈 init 이 사라지므로
@@ -1469,7 +1475,8 @@ package struct PokeDirectoryRow: Decodable, Equatable {
         avatarUrl: String?,
         isWorking: Bool,
         canReceiveMessage: Bool? = nil,
-        center: String? = nil
+        center: String? = nil,
+        statusMessage: String? = nil
     ) {
         self.userId = userId
         self.displayName = displayName
@@ -1477,6 +1484,7 @@ package struct PokeDirectoryRow: Decodable, Equatable {
         self.isWorking = isWorking
         self.canReceiveMessage = canReceiveMessage
         self.center = center
+        self.statusMessage = statusMessage
     }
 }
 
@@ -1500,6 +1508,9 @@ package struct PokeDirectoryEntry: Identifiable, Equatable {
     ///   CenterLabel.display 를 한 번 통과시키므로, 모르는 값은 이 필드에 **도달할 수 없다** — 네 화면이
     ///   각자 변환하면 그중 한 곳이 모르는 값을 서울로 접는 날이 오기 때문에 관문을 하나로 둔다.
     package var center: String? = nil
+    /// 상태메시지(v0.3.51). 이미 `StatusMessage.display` 를 지난 값이다 — nil 이면 두 번째 줄을 그리지 않는다.
+    /// **맨 끝에 둔다**: 멤버와이즈 init 을 쓰는 기존 호출부·테스트가 그대로 컴파일되게(기본값 nil).
+    package var statusMessage: String? = nil
 
     package var id: String { userID }
 }
@@ -1516,7 +1527,9 @@ extension [PokeDirectoryRow] {
                 // '모름(nil)'은 허용으로 읽는다 — 근거는 위 프로퍼티 주석에 있다.
                 canReceiveMessage: row.canReceiveMessage ?? true,
                 // 서버값 → 화면 글자. **모르는 값이 화면에 닿는 유일한 관문이 여기다**(모르면 nil = 배지 없음).
-                center: CenterLabel.display(row.center)
+                center: CenterLabel.display(row.center),
+                // 상태메시지 관문: 빈 값·보이는 글자 없는 값은 nil(두 번째 줄을 안 그린다).
+                statusMessage: StatusMessage.display(row.statusMessage)
             )
         }
     }

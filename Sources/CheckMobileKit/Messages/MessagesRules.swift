@@ -527,11 +527,18 @@ package struct MessagesPresenceBoard: Equatable, Sendable {
     package let peers: [String: MessagesPeerPresence]
     /// 근무 중(나 제외) — 우리 팀(오래 일한 순) 먼저, 그다음 이름순.
     package let working: [MessagesWorkingPerson]
+    /// 사람별 상태메시지(v0.3.51 · 이미 `StatusMessage.display` 를 지난 값, 없는 사람은 키가 없다).
+    ///
+    /// **`peers` 와 따로 둔 이유**: `board()` 는 근무 판정을 네 자리에서 다시 만든다(목록 → 지금 탭 목록 → 우리 팀 → 지금 근무 중).
+    /// 상태를 `MessagesPeerPresence` 에 넣으면 그 네 자리를 하나라도 빠뜨리는 순간 그 경로의 사람만 상태가 조용히 사라진다.
+    /// 상태의 출처는 사람 목록 둘(`app_user_directory`)뿐이라 여기서 한 번만 겹친다.
+    package let statuses: [String: String]
 
-    package init(isKnown: Bool, peers: [String: MessagesPeerPresence], working: [MessagesWorkingPerson]) {
+    package init(isKnown: Bool, peers: [String: MessagesPeerPresence], working: [MessagesWorkingPerson], statuses: [String: String] = [:]) {
         self.isKnown = isKnown
         self.peers = peers
         self.working = working
+        self.statuses = statuses
     }
 }
 
@@ -606,7 +613,26 @@ package enum MessagesPresenceRules {
                 let order = lhs.name.localizedStandardCompare(rhs.name)
                 return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
             }
-        return MessagesPresenceBoard(isKnown: true, peers: peers, working: working + others)
+        return MessagesPresenceBoard(isKnown: true, peers: peers, working: working + others,
+                                     statuses: statuses(nowDirectory: nowDirectory, messagesDirectory: messagesDirectory, me: me))
+    }
+
+    /// 상태메시지 겹치기 — 판과 같은 순서(뒤가 앞을 덮는다): 새 대화 시트 목록 → 지금 탭 목록(1분마다 받는 더 새 값).
+    /// **목록에 있는 사람은 그 목록의 값이 답이다**: 뒤 목록에 그 사람이 있고 상태가 없으면 앞 목록의 옛 상태를 지운다(방금 지운 상태가
+    /// 남아 보이지 않게). 나(`me`)는 넣지 않는다.
+    package static func statuses(
+        nowDirectory: [PokeDirectoryRow]?,
+        messagesDirectory: [PokeDirectoryEntry]?,
+        me: String?
+    ) -> [String: String] {
+        var result: [String: String] = [:]
+        for entry in messagesDirectory ?? [] where entry.userID != me {
+            result[entry.userID] = entry.statusMessage
+        }
+        for row in nowDirectory ?? [] where row.userId != me {
+            result[row.userId] = StatusMessage.display(row.statusMessage)
+        }
+        return result
     }
 
     /// 대화 머리 이름 아래 한 줄("근무 중 · 서울" · "연결 끊김" · "근무 안 함 · 부산"). 근무 여부를 모르면 nil(센터만 있어도 세우지 않는다 — 머리는 이름만).

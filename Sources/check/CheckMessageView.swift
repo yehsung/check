@@ -270,11 +270,25 @@ struct CheckMessageView: View {
             if hasPeer {
                 CheckAvatarView(name: peerName, userID: store.selectedMessagePeerID, avatarURL: store.selectedMessagePeerAvatarURL, size: 22)
             }
-            Text(hasPeer ? peerName : "메시지")
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(CheckTheme.primaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            // 이름 아래 상대의 상태메시지 한 줄(v0.3.51). **머리 높이를 늘리지 않는다**: 맥의 subheadline(11pt) 한 줄 +
+            // caption2(10pt) 한 줄이 [뒤로] 버튼(27pt) 높이 안에 든다 — 이 패널의 최악 크롬 여유는 12pt 뿐이라(위 부등식 ②)
+            // 머리가 자라면 그만큼 푸터가 잘린다. V0351 이 상태 유무로 패널 높이가 같은지를 그려서 되묻는다.
+            VStack(alignment: .leading, spacing: 0) {
+                Text(hasPeer ? peerName : "메시지")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if hasPeer, let status = store.selectedMessagePeerStatusMessage {
+                    Text(status)
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .checkTooltip(status)
+                        .accessibilityLabel("상태메시지: \(status)")
+                }
+            }
             Spacer(minLength: 6)
             // 아직 못 받았을 때만 뜬다. **본문 자리가 아니라 머리 오른쪽**이다 — 본문 자리에 동기화 문구를
             // 쓰지 않는다는 규약이고, 이미 대화가 보이는 상태에서 갱신이 돌 때도 화면이 안 흔들린다.

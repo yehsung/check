@@ -5,7 +5,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": "3시까지 집중할게요 🎧"
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000103",
@@ -13,7 +14,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": null
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000104",
@@ -21,7 +23,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "busan"
+    "center": "busan",
+    "status_message": "점심 먹고 올게요"
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000201",
@@ -29,7 +32,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "busan"
+    "center": "busan",
+    "status_message": "오늘은 재택 중이에요"
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000203",
@@ -37,7 +41,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": null
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000202",
@@ -45,7 +50,8 @@
     "avatar_url": null,
     "is_working": true,
     "message_capable": true,
-    "center": null
+    "center": null,
+    "status_message": null
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000105",
@@ -53,7 +59,8 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": null
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000204",
@@ -61,7 +68,8 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": "seoul"
+    "center": "seoul",
+    "status_message": "휴가 중 🌴"
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000205",
@@ -69,6 +77,7 @@
     "avatar_url": null,
     "is_working": false,
     "message_capable": true,
-    "center": "busan"
+    "center": "busan",
+    "status_message": null
   }
 ]

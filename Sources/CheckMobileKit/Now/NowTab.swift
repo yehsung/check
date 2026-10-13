@@ -457,6 +457,8 @@ struct NowWorkingRow: View {
                             trailing
                         }
                     }
+                    // 상태메시지(v0.3.51)는 접근성 크기에서 아랫줄로 — 여러 줄로 접혀도 이름을 꺾지 않는다.
+                    if let status = person.statusMessage { statusText(status, lineLimit: 3) }
                     if person.isStale { staleText }
                     if person.isTeammate { trailing }
                 }
@@ -465,6 +467,8 @@ struct NowWorkingRow: View {
                     avatar
                     VStack(alignment: .leading, spacing: 1) {
                         PersonName(person.name, center: person.center)
+                        // 상태메시지(v0.3.51) — 있는 사람만 이름 아래 한 줄(꼬리 줄임표).
+                        if let status = person.statusMessage { statusText(status, lineLimit: 1) }
                         if person.isStale { staleText }
                     }
                     Spacer(minLength: 8)
@@ -473,6 +477,15 @@ struct NowWorkingRow: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+    }
+
+    private func statusText(_ status: String, lineLimit: Int) -> some View {
+        Text(status)
+            .font(MobileTheme.rowSubtitle)
+            .foregroundStyle(MobileTheme.label2)
+            .lineLimit(lineLimit)
+            .truncationMode(.tail)
+            .accessibilityLabel(Text("상태메시지 \(status)"))
     }
 
     private var avatar: some View {

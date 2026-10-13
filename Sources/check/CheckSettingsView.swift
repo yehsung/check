@@ -558,6 +558,170 @@ private struct DisplayNameSettingsRow: View {
     }
 }
 
+// MARK: - 상태메시지 행 (v0.3.51)
+
+/// 상태메시지 행 — 40자 한 줄 · 비우고 저장하면 지운다 · 쿨타임 없음. 별명 행과 같은 관용구다:
+/// **로컬 초안**을 쓰고(스토어 편집 상태를 공유하지 않는다), 스토어에는 규칙(저장)만 묻고, 저장 전에 **한글 조합을 먼저 확정**한다.
+///
+/// 높이는 **한 가지**다: 제목 한 줄 · 입력 줄(28) · 안내/카운터 한 줄. 안내 문구는 전부 한 줄에 들도록 짧게 썼다
+/// (`StatusMessageText` — 카드 안쪽 폭 328 에서 caption2 한 줄). 결과 문구가 바뀌어도 행이 안 자라므로 설정 창 높이 계약이
+/// 상태에 흔들리지 않는다 — V0351 이 가장 긴 문구를 띄운 행과 평소 행의 높이가 같은지를 그려서 되묻는다.
+struct StatusMessageSettingsRow: View {
+    let store: WorkTimerStore
+
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(StatusMessageText.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+            HStack(spacing: 8) {
+                TextField(StatusMessageText.placeholder, text: $draft)
+                    .textFieldStyle(.plain)
+                    .font(.subheadline)
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .tint(CheckTheme.accent)
+                    .lineLimit(1)
+                    .disabled(store.isUpdatingStatusMessage)
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(CheckTheme.fieldFill)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(CheckTheme.border, lineWidth: 1)
+                    )
+                    // 이 칸이 선 창을 조합 확정 문에 알려 준다(`save()` 첫 줄이 이 창의 조합을 확정한다).
+                    .background(FeedbackReplyWindowAnchor(slot: .settingsStatusMessage).frame(width: 0, height: 0))
+                    .onSubmit(save)
+                    .accessibilityLabel(StatusMessageText.title)
+                if hasStoredStatus {
+                    clearButton
+                }
+                saveButton
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(notice)
+                    .font(.caption2)
+                    .foregroundStyle(isNoticeError ? CheckTheme.danger : CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 6)
+                // 서버는 코드포인트로 센다(char_length) — 카운터도 서버와 같은 정규화를 거친 길이다.
+                Text(StatusMessage.counterText(draft))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(isOverLength ? CheckTheme.danger : CheckTheme.secondaryText)
+                    .fixedSize()
+            }
+        }
+        .onAppear {
+            draft = store.myStatusMessage ?? ""
+            // 로그인 직후 설정 로드가 네트워크 blip 으로 실패했으면 여기가 유일한 복구 경로다(소속 센터 행과 같다).
+            Task { @MainActor in await store.loadMyStatusMessageIfNeeded() }
+        }
+        .onChange(of: store.myStatusMessage) { old, new in
+            // 서버가 정규화해 돌려준 값(또는 늦게 도착한 내 값)으로 되맞춘다. 사용자가 이미 고쳐 쓰고 있으면 건드리지 않는다.
+            if StatusMessage.sanitized(draft) == (old ?? "") { draft = new ?? "" }
+        }
+    }
+
+    private var hasStoredStatus: Bool { store.myStatusMessage != nil }
+
+    private var isOverLength: Bool { StatusMessage.length(draft) > StatusMessage.maxLength }
+
+    /// 저장할 것이 있는가 — 왕복 중이 아니고 · 길이 안이고 · 지금 값과 다르다(비운 입력은 '지우기'로 다르다).
+    private var canSave: Bool {
+        guard !store.isUpdatingStatusMessage, !isOverLength else { return false }
+        let next: String? = {
+            if case .ok(let normalized) = StatusMessage.validate(draft) { return normalized }
+            return nil
+        }()
+        return next != store.myStatusMessage
+    }
+
+    /// 안내 한 줄: 스토어가 세운 결과 > 길이 초과 > 기본 도움말.
+    private var notice: String {
+        if let stored = store.statusMessageNotice { return stored }
+        if isOverLength { return StatusMessageText.tooLong(StatusMessage.maxLength) }
+        return StatusMessageText.hint
+    }
+
+    private var isNoticeError: Bool {
+        if store.statusMessageNotice != nil { return store.isStatusMessageNoticeError }
+        return isOverLength
+    }
+
+    @ViewBuilder
+    private var saveButton: some View {
+        Button(action: save) {
+            Text(StatusMessageText.save)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 28)
+                .background {
+                    if canSave {
+                        Capsule().fill(CheckTheme.gaugeGradient)
+                    } else {
+                        Capsule().fill(CheckTheme.trackFill)
+                            .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(!canSave)
+        .opacity(canSave ? 1 : 0.55)
+        .checkTooltip("상태메시지 저장")
+    }
+
+    /// [지우기] — 저장된 상태가 있을 때만 선다. 누르면 입력칸을 비우고 곧바로 지운다(되묻지 않는다: 다시 쓰면 그만이다).
+    @ViewBuilder
+    private var clearButton: some View {
+        Button(action: clear) {
+            Text(StatusMessageText.clear)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CheckTheme.secondaryText)
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(
+                    Capsule().fill(CheckTheme.trackFill)
+                        .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
+                )
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(store.isUpdatingStatusMessage)
+        .checkTooltip("상태메시지 지우기")
+    }
+
+    private func save() {
+        // ★ **조합을 먼저 확정한다**(별명 행과 같은 문). 마지막 한글 음절이 조합 중인 채로 [저장]·Enter 가 오면 그 음절이
+        //   `draft` 에 아직 없다. 확정은 동기라 바로 아래 `canSave`·`draft` 가 화면에 보이던 글 전체를 읽는다. 순서를 바꾸지 마라.
+        FeedbackReplySend.commitActiveComposition(slot: .settingsStatusMessage)
+        guard canSave else { return }
+        let text = draft
+        Task { @MainActor in
+            if await store.updateStatusMessage(text) {
+                // 서버가 실제로 저장한 값(정규화 결과)으로 입력칸을 되맞춘다.
+                draft = store.myStatusMessage ?? ""
+            }
+        }
+    }
+
+    private func clear() {
+        // 조합 중인 글자가 남아 지운 뒤에 다시 튀어나오지 않게 먼저 확정하고 비운다.
+        FeedbackReplySend.commitActiveComposition(slot: .settingsStatusMessage)
+        draft = ""
+        Task { @MainActor in
+            if await store.updateStatusMessage("") { draft = store.myStatusMessage ?? "" }
+        }
+    }
+}
+
 // MARK: - 프로필 사진 삭제 행 (v0.3.36)
 
 /// 사진 삭제 자리의 문구 한 벌. **순수 값이라 테스트가 글자 그대로 되묻는다** — 스토어가 세우는 네 문구
@@ -1264,7 +1428,11 @@ struct CheckSettingsView: View {
     /// v0.3.40: '일반'에 [아이폰 앱] 설치 QR 행(`IOSAppInstallSettingsRow`)이 붙어 전체 렌더가 일반 866 / 관리자 955
     /// (둘 다 **+113** = 구분선 1 + 간격 12×2 + QR 판 88, 실측 2026-09-28 폭 380). 이 행은 누르면 자라는 상태가 없다 —
     /// 최악값은 여전히 되돌리기 확인의 +13 이라 955 + 13 = **968**. 창 계약은 884 다. V0340 이 같은 등식을 되묻는다.
-    static let adminContentHeight: CGFloat = 968
+    ///
+    /// v0.3.51: '내 정보'의 별명 아래 [상태메시지] 행(`StatusMessageSettingsRow`)이 붙어 전체 렌더가 일반 962 / 관리자 1051
+    /// (둘 다 **+96** = 구분선 1 + 간격 12×2 + 행 71, 실측 2026-10-14 폭 380). 행은 누르거나 결과가 떠도 자라지 않는다(안내 한 줄 고정) —
+    /// 최악값은 되돌리기 확인의 +13 그대로라 1051 + 13 = **1064**. 창 계약은 980 이고, 화면이 그보다 작으면 창이 화면에서 멈추고 본문이 스크롤된다.
+    static let adminContentHeight: CGFloat = 1064
 
     var body: some View {
         Group {
@@ -1378,6 +1546,9 @@ struct CheckSettingsView: View {
             }
             section("내 정보") {
                 DisplayNameSettingsRow(store: store)
+                PanelDivider()
+                // 상태메시지(v0.3.51 — 사장님: "설정의 별명 옆에서"). 별명 바로 아래다: 둘 다 남에게 보이는 '나'라서.
+                StatusMessageSettingsRow(store: store)
                 PanelDivider()
                 // 사진을 **지우는** 자리(v0.3.36). 올리는 자리는 팝오버 팀 목록의 내 행이지만 그 행은 팀에 속한
                 // 사람에게만 있다 — 지우기는 무소속 사용자에게도 있어야 해서 설정에 둔다(행 주석 참고).

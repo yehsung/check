@@ -100,7 +100,7 @@ struct MessagesNewConversationSheet: View {
     }
 }
 
-/// 사람 한 줄: 아바타(근무 중이면 초록 점) · 이름 · 센터 배지.
+/// 사람 한 줄: 아바타(근무 중이면 초록 점) · 이름 · 센터 배지 · (있으면) 상태메시지 한 줄.
 struct MessagesPersonRow: View {
     static let avatarSize: CGFloat = 40
     /// 구분선 시작(카드 왼쪽에서) = 안쪽 여백 16 + 아바타 40 + 사이 12.
@@ -118,13 +118,24 @@ struct MessagesPersonRow: View {
                 userID: person.userID,
                 size: Self.avatarSize
             )
-            PersonName(person.name, center: CenterLabel.serverValue(forDisplay: person.center))
+            VStack(alignment: .leading, spacing: 2) {
+                PersonName(person.name, center: CenterLabel.serverValue(forDisplay: person.center))
+                // 상태메시지(v0.3.51) — 있는 사람만 이름 아래 한 줄(꼬리 줄임표). 없는 사람의 줄은 지금과 같다.
+                if let status = person.statusMessage {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
             Spacer(minLength: 8)
         }
         .frame(minHeight: MobileTheme.rowHeight)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text([person.name, person.center.map { "\($0)센터" }, person.isWorking ? "근무 중" : "근무 안 함"]
+        .accessibilityLabel(Text([person.name, person.center.map { "\($0)센터" }, person.isWorking ? "근무 중" : "근무 안 함",
+                                  person.statusMessage.map { "상태메시지 \($0)" }]
             .compactMap { $0 }.joined(separator: ", ")))
         .accessibilityHint(Text("대화 열기"))
         .accessibilityAddTraits(.isButton)

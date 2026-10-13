@@ -23,7 +23,7 @@ enum FirstRunText {
     static let menuBarHint = "아잉체크는 화면 맨 위 메뉴 막대에 있어요. 아잉 아이콘을 누르면 열려요."
     static let aiTitle = "AI 사용량을 팀 순위에 올릴까요?"
     static let aiBody = "AI 코딩 도구가 이 맥에 남긴 사용 기록(~/.claude · ~/.codex · ~/.gemini · Orca 폴더)을 읽기만 해서 토큰 숫자를 세요. 대화 내용·프롬프트·파일 경로는 보내지 않고 숫자만 올라가요."
-    static let aiLimitsNote = "Codex 를 쓰면 사용 한도(%)를 보여 주려고 그 로그인 파일도 읽어요. 폴더에 아무것도 쓰지 않아요."
+    static let aiLimitsNote = "사용 한도(%)를 보여 주려고 Codex 로그인 파일과 키체인의 Claude Code 로그인 항목도 읽어요. 아무것도 쓰거나 바꾸지 않아요."
     static let loginTitle = "맥에 로그인하면 자동으로 켜기"
     static let loginDetail = "켜 두면 근무 시작을 놓치지 않아요."
     static let activityNote = "근무 중에는 자리 비움을 알아채려고 마지막으로 키보드·마우스를 쓴 시각만 기록해요. 무엇을 입력했는지는 기록하지 않아요."

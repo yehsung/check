@@ -143,6 +143,9 @@ struct GamesGomokuMatch: View {
             .frame(width: side, height: side)
             .shadow(color: colorScheme == .dark ? .black.opacity(0.35) : Color(red: 80 / 255, green: 50 / 255, blue: 10 / 255).opacity(0.18),
                     radius: 9, y: 6)
+            // 내 차례 마지막 3초 — 판 안쪽 가장자리가 빨갛게 빛난다(0.3.51 · 맥과 같은 문턱·그림). 그림자 **뒤**에 얹는다: 앞에 두면
+            // 5Hz 틱마다 그림자를 다시 굽는다. 판 뷰(`GamesGomokuPlayBoard`)는 시계를 모르므로 이 자리에서 시계를 넘긴다.
+            .overlay { GamesGomokuBoardTimeWarning(store: store) }
             .frame(maxWidth: .infinity)
     }
 
@@ -312,6 +315,32 @@ struct GamesGomokuTurnRing: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(GomokuPhoneText.clockAccessibility(remaining))
         }
+    }
+}
+
+/// 내 차례 마지막 3초의 판 테두리 빛(0.3.51) — **잎 뷰**. 판정·세기·그림은 코어 `GomokuTurnWarning`(맥 `GomokuBoardTimeWarning` 과 한 벌)이고,
+/// 여기는 초 링과 같은 시계(`store.context.clock` — 데모는 고정 시계, 테스트는 조작 시계)로 남은 초를 읽어 넘기기만 한다.
+///
+/// 상대 차례·AI 차례·멈춘 AI 시계·끝난 판에서는 꺼지고 TimelineView 도 멈춘다. 멈춘 TimelineView 는 마지막 그림을 들고 있으므로
+/// 켜짐 판정을 본문에서 한 번 더 한다. 탭(미리보기·착수)과 보이스오버 칸 요소를 가리지 않는다.
+struct GamesGomokuBoardTimeWarning: View {
+    let store: GamesStore
+
+    var body: some View {
+        let gomoku = store.context.gomoku
+        let watches = GomokuTurnWarning.watchesMyClock(gomoku.match)
+        TimelineView(.animation(minimumInterval: 0.2, paused: !gomoku.isWindowVisible || !watches)) { _ in
+            let remaining = GomokuTurnWarning.watchesMyClock(gomoku.match)
+                ? gomoku.remainingSeconds(now: store.context.clock.now()) : nil
+            if GomokuTurnWarning.isActive(remaining: remaining) {
+                let intensity = GomokuTurnWarning.intensity(remaining: remaining)
+                Canvas { context, size in
+                    GomokuTurnWarning.drawEdgeGlow(into: &context, side: min(size.width, size.height), intensity: intensity)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

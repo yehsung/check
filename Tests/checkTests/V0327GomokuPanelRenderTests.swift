@@ -1344,9 +1344,23 @@ func gomokuPanelKeepsClocksInLeavesAndUsesNoYellowBoxControls() throws {
     for clock in ["TimelineView", "remainingSeconds", "Date()", "expiresAt"] {
         #expect(!root.contains(clock), "창 루트가 '\(clock)' 를 읽는다 — 창 전체가 매 틱 다시 그려진다")
     }
-    #expect(panel.components(separatedBy: "remainingSeconds(").count - 1 == 1, "남은 시간을 잎 뷰 밖에서도 읽는다")
-    let clock = try #require(gpRegion(panel, from: "struct GomokuTurnClock: View {", to: "// MARK:"))
-    #expect(clock.contains("remainingSeconds(now: context.date)"))
+    // 남은 시간을 읽는 잎은 **둘**이다(0.3.51 — 차례 링 + 판 테두리 경고). 개수만 1 → 2 로 올리지 않는다: 파일 전체의
+    // `remainingSeconds(` 가 **전부 두 잎 안에** 있고, 각 잎에서는 TimelineView 가 연 뒤 그 틱의 시각(context.date)으로 읽는지 센다 —
+    // 다른 자리(판 뷰 본문·창 루트)에 하나가 더 생기면 합이 어긋나 빨개진다.
+    let clockLeaves = [("struct GomokuTurnClock: View {", "struct GomokuClockRing: View {"),
+                       ("private struct GomokuBoardTimeWarning: View {", "enum GomokuResignGuard {")]
+    var readsInLeaves = 0
+    for (start, end) in clockLeaves {
+        let leaf = try #require(gpRegion(panel, from: start, to: end), "잎 뷰 '\(start)' 가 없다")
+        let timeline = try #require(leaf.range(of: "TimelineView("), "잎 '\(start)' 에 TimelineView 가 없다")
+        let read = try #require(leaf.range(of: "remainingSeconds(now: context.date)"), "잎 '\(start)' 가 틱 시각으로 안 읽는다")
+        #expect(timeline.lowerBound < read.lowerBound, "잎 '\(start)' 가 TimelineView 밖에서 남은 시간을 읽는다")
+        #expect(leaf.contains("paused: !store.isWindowVisible"), "잎 '\(start)' 가 창이 안 보여도 돈다")
+        readsInLeaves += leaf.components(separatedBy: "remainingSeconds(").count - 1
+    }
+    let readsInPanel = panel.components(separatedBy: "remainingSeconds(").count - 1
+    #expect(readsInPanel == 2 && readsInLeaves == readsInPanel,
+            "남은 시간을 잎 뷰 밖에서도 읽는다(파일 \(readsInPanel)곳 · 잎 안 \(readsInLeaves)곳)")
 
     // 보이스오버: 판은 한 요소로(돌 수·마지막 수·차례), 차례 링은 남은 초, 상태줄(금수 이유)은 한 문장으로 읽힌다.
     let board = try #require(gpRegion(panel, from: "private struct GomokuPlayBoard: View {", to: "private struct GomokuMatchSide: View {"))

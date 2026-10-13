@@ -6,12 +6,18 @@ import Testing
 // 이 스위트가 지키는 것은 넷이다.
 //  ① **엔타이틀먼트는 정해진 집합 그대로다.** 키 하나를 더하면 심사 설명·프로파일 허락이 같이 바뀌어야 하고, 하나를 빼면
 //     샌드박스 안에서 그 기능이 소리 없이 0 이 된다(2026-10-14 프로브 실측: 예외 밖 경로는 EPERM). 그래서 집합을 통째로 잰다.
-//  ② **예외 경로가 스캐너가 읽는 경로를 덮는다.** 스캐너가 새 홈 경로를 읽기 시작하면 이 테스트가 빨개져 엔타이틀먼트를 다시 보게 한다.
+//  ② **예외 경로가 스캐너가 읽는 경로를 덮는다.** 맥 소스 코드에서 홈 아래 경로처럼 생긴 리터럴(`.x…` · `Library/…` 로 시작하는
+//     `appendingPathComponent("…")` · `appending(path:/component:)` 인자와 `let … = "…"` 상수)을 **전부 뽑아** 예외가 덮는지 잰다.
+//     그래서 스캐너가 그 꼴로 새 홈 경로(예: `.config/…`)를 읽기 시작하면 빨개진다. 다른 꼴(문자열 이어 붙이기 · `"~/…"` 펼치기)로
+//     만든 경로는 못 잡는다 — 그 꼴은 샌드박스에서 컨테이너 홈을 가리키므로 예외가 필요 없기도 하다.
 //  ③ **금지 문자열 게이트가 헛돌지 않는다.** 스크립트는 '자가 업데이트·타사 자격증명 코드가 바이너리에 0건'으로 CHECK_MAS 갈래가
 //     컴파일됐음을 증명한다. 그 문자열이 Developer ID 소스에 **있어야** 게이트가 뜻을 가진다(기준선이 같으면 영원히 초록이다).
 //     그리고 16바이트 이상이어야 한다 — Swift 는 15바이트 이하 문자열을 코드에 인라인해 바이트 검색으로 원리상 못 찾는다.
+//     게이트 블록 자체도 bash 로 **실제로 돌려** 제출본(엄격)에서는 문자열 하나만 있어도 멈추고(경고로 낮아지지 않는다),
+//     리허설에서만 경고로 지나가는지 잰다.
 //  ④ **스크립트는 올리지 않고, --deep 으로 서명하지 않고, 암호를 argv 에 싣지 않으며, Developer ID 판을 건드리지 않는다.**
 //     글자 단언에 더해 bash 3.2(맥 기본 /bin/bash)가 실제로 파싱·실행하는지까지 본다 — 문자열 단언은 깨진 스크립트도 통과시킨다.
+//     엄격/리허설을 가르는 `#if … CHECK_MAS` 탐지 블록도 실제로 돌려, `#if !CHECK_MAS` 줄은 잡고 주석 속 언급은 안 잡는지 잰다.
 //
 // ⚠️ 소스 계약은 전부 **주석을 걷어낸 뒤** 잰다(안 그러면 설명을 지워야만 초록이 된다).
 
@@ -98,9 +104,17 @@ private struct MASScriptRun {
 
 /// 스크립트를 맥 기본 bash(3.2)로 돌린다. 인자 검사에서 멈추는 경로만 부른다 — 빌드·서명·네트워크에 닿기 전이다.
 private func masRunScript(_ arguments: [String]) throws -> MASScriptRun {
+    try masRunBash(masRoot.appendingPathComponent("scripts/package-mas.sh"), arguments)
+}
+
+/// 아무 bash 파일을 맥 기본 bash(3.2)로 돌린다. `environment` 의 nil 값은 그 이름을 환경에서 **지운다**.
+private func masRunBash(_ script: URL, _ arguments: [String], environment: [String: String?] = [:]) throws -> MASScriptRun {
     let proc = Process()
     proc.executableURL = URL(fileURLWithPath: "/bin/bash")
-    proc.arguments = [masRoot.appendingPathComponent("scripts/package-mas.sh").path] + arguments
+    proc.arguments = [script.path] + arguments
+    var env = ProcessInfo.processInfo.environment
+    for (key, value) in environment { env[key] = value }
+    proc.environment = env
     proc.standardInput = FileHandle.nullDevice
     let out = Pipe()
     let err = Pipe()
@@ -111,6 +125,59 @@ private func masRunScript(_ arguments: [String]) throws -> MASScriptRun {
     let stderr = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     proc.waitUntilExit()
     return MASScriptRun(status: proc.terminationStatus, stdout: stdout, stderr: stderr)
+}
+
+/// 스크립트 원문의 줄(주석 포함 — 블록을 잘라 그대로 bash 에 먹인다).
+private func masScriptRawLines() throws -> [String] {
+    try masText("scripts/package-mas.sh").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+}
+
+/// 맨 앞이 `prefix` 인 첫 줄부터 그 뒤 **맨 앞에 홀로 선** `terminator` 줄까지(들여쓴 안쪽 `fi` 는 블록 끝이 아니다).
+private func masScriptBlock(from prefix: String, through terminator: String) throws -> String {
+    let lines = try masScriptRawLines()
+    let start = try #require(lines.firstIndex { $0.hasPrefix(prefix) }, "스크립트에서 [\(prefix)] 로 시작하는 줄을 찾지 못했다")
+    let end = try #require(lines[start...].firstIndex { $0 == terminator }, "[\(prefix)] 블록의 끝 [\(terminator)] 을 찾지 못했다")
+    return lines[start...end].joined(separator: "\n")
+}
+
+/// 게이트 블록을 따로 돌리는 데 필요한 스크립트의 앞부분: `set -euo pipefail` · log/warn/die · 금지 문자열 배열 — 전부 원문 그대로.
+private func masGatePrelude() throws -> String {
+    let lines = try masScriptRawLines()
+    var out = [try #require(lines.first { $0.hasPrefix("set -euo pipefail") }, "set -euo pipefail 줄이 없다")]
+    for name in ["log", "warn", "die"] {
+        out.append(try #require(lines.first { $0.hasPrefix("\(name)() {") }, "\(name)() 정의가 없다"))
+    }
+    out.append(try masScriptBlock(from: "FORBIDDEN_STRINGS=(", through: ")"))
+    return out.joined(separator: "\n")
+}
+
+/// 테스트마다 따로 쓰는 임시 폴더(끝나면 지운다 — 저장소·공유 폴더에 흘리지 않는다).
+private func masTempDirectory() throws -> URL {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("v0351-mas-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+}
+
+/// 코드(주석을 걷은 것)에서 홈 아래 경로처럼 생긴 리터럴 — 점 디렉터리(`.x…`) 또는 `Library/…` 로 시작하는 것 — 을 뽑는다.
+/// 잡는 꼴: `appendingPathComponent("…")` · `appending(path: "…")` · `appending(component: "…")` 인자, `let 이름 = "…"` 상수.
+/// 확장자 리터럴(`".zst"`)처럼 경로가 아닌 점 문자열은 이 꼴에 안 걸린다(`path + ".zst"` 로 쓰인다).
+private func masHomeRelativeLiterals(in code: String) throws -> Set<String> {
+    let literal = #""((?:\.[A-Za-z]|Library/)[^"\\]*)""#
+    let patterns = [
+        #"appendingPathComponent\(\s*"# + literal,
+        #"appending\(\s*(?:path|component):\s*"# + literal,
+        #"\blet\s+\w+\s*(?::\s*String\s*)?=\s*"# + literal,
+    ]
+    var found: Set<String> = []
+    let range = NSRange(code.startIndex..., in: code)
+    for pattern in patterns {
+        let regex = try NSRegularExpression(pattern: pattern)
+        for match in regex.matches(in: code, range: range) {
+            guard let r = Range(match.range(at: 1), in: code) else { continue }
+            found.insert(String(code[r]))
+        }
+    }
+    return found
 }
 
 @Suite("맥 앱스토어 판 패키징 — 엔타이틀먼트 · 금지 문자열 게이트 · 스크립트 계약")
@@ -148,23 +215,47 @@ struct V0351MASPackagingTests {
         let data = try Data(contentsOf: masRoot.appendingPathComponent("packaging/mas.entitlements"))
         let plist = try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
         let exceptions = try #require(plist["com.apple.security.temporary-exception.files.home-relative-path.read-only"] as? [String])
-        let corpus = try masMacCodeCorpus()
-        // 스캐너가 홈 아래에서 읽는 경로(코드 리터럴 그대로). 리터럴이 바뀌면 이 표와 엔타이틀먼트를 같이 고친다.
-        let scannerPaths = [
+        func covered(_ path: String) -> Bool {
+            exceptions.contains { ex in
+                let prefix = String(ex.dropFirst())     // "/.claude/" → ".claude/"
+                return (path + "/").hasPrefix(prefix)
+            }
+        }
+        // 목록은 손으로 적지 않고 **코드에서 뽑는다** — 스캐너가 `.config/…` 같은 새 홈 경로를 읽기 시작하면 여기서 빨개진다.
+        let derived = try masHomeRelativeLiterals(in: try masMacCodeCorpus())
+        // 실행 파일 탐색 경로(`…/bin/…` · nvm 노드 설치 폴더 — codex app-server · agy 를 찾는 곳)는 읽기 대상이 아니다.
+        // 샌드박스 앱은 남의 바이너리를 실행하지 못하고, 그 코드는 맥 앱스토어 판에서 컴파일되지 않는다
+        // (게이트 ② 의 "account/usage/read" · "/opt/homebrew/bin/agy" 가 바이너리에 0건이어야 pkg 가 나온다).
+        func isExecutableLookup(_ path: String) -> Bool {
+            path.split(separator: "/").contains("bin") || path.hasPrefix(".nvm/")
+        }
+        let read = derived.filter { !isExecutableLookup($0) }
+        for path in read.sorted() {
+            #expect(covered(path), "코드가 ~/\(path) 를 읽는데 덮는 읽기 전용 예외가 없다 — 샌드박스에서 소리 없이 0 이 된다. packaging/mas.entitlements 와 심사 설명을 같이 고친다")
+        }
+        // 뽑기가 헛돌지 않는다: 지금 스캐너가 읽는 다섯 경로가 뽑힌 집합에 있어야 한다(코드 모양이 바뀌어 뽑기가 0 이 되면 위 루프는
+        // 아무것도 안 재고 초록이 된다). 이 표가 틀리면 뽑기 정규식을 새 코드 모양에 맞춘다.
+        for path in [
             ".claude/projects",                        // Claude Code 로그
             ".claude/transcripts",
             ".codex",                                  // Codex rollout · auth.json(리밋)
             ".gemini/antigravity-cli/conversations",   // 안티그래비티 sqlite
             "Library/Application Support/orca",        // Orca 런타임 미러·계정별 Codex 홈
-        ]
-        for path in scannerPaths {
-            #expect(corpus.contains("\"\(path)\""), "스캐너 코드에서 \"\(path)\" 리터럴이 사라졌다 — 이 표와 엔타이틀먼트를 다시 맞춘다")
-            let covered = exceptions.contains { ex in
-                let prefix = String(ex.dropFirst())     // "/.claude/" → ".claude/"
-                return (path + "/").hasPrefix(prefix)
-            }
-            #expect(covered, "~/\(path) 를 덮는 읽기 전용 예외가 없다 — 샌드박스에서 소리 없이 0 이 된다")
+        ] {
+            #expect(read.contains(path), "\"\(path)\" 를 코드에서 뽑지 못했다(뽑은 것: \(read.sorted())) — 뽑기 정규식이 지금 코드 모양을 못 따라간다")
         }
+        // 뽑기 자체가 새 루트를 잡는지(이 테스트가 홀로 지키는 약속) — 합성 코드로 잰다.
+        let synthetic = """
+            let a = homeDirectory.appendingPathComponent(".config/newtool", isDirectory: true)
+            let b = home.appending(path: "Library/Application Support/NewTool")
+            static let logsSubpath = ".newtool/logs"
+            let ext = path + ".zst"
+            let c = home.appendingPathComponent(".local/bin/newtool")
+            """
+        let syntheticFound = try masHomeRelativeLiterals(in: synthetic)
+        #expect(syntheticFound == [".config/newtool", "Library/Application Support/NewTool", ".newtool/logs", ".local/bin/newtool"])
+        #expect(Set(syntheticFound.filter { !isExecutableLookup($0) && !covered($0) }) == [".config/newtool", "Library/Application Support/NewTool", ".newtool/logs"],
+                "덮이지 않은 새 루트를 '덮였다'로 본다")
     }
 
     // ③ 금지 문자열 게이트가 뜻을 가진다
@@ -179,6 +270,48 @@ struct V0351MASPackagingTests {
         // 다섯 갈래(brew · DMG · GitHub 감시 · 타사 자격증명 · 외부 실행)가 다 덮여야 한다.
         for needle in ["brew upgrade", "releases/latest/download", "api.github.com", "Claude Code-credentials", "account/usage/read", "agy"] {
             #expect(forbidden.contains { $0.contains(needle) }, "금지 목록에서 [\(needle)] 갈래가 빠졌다")
+        }
+    }
+
+    // ③ 게이트 ② 블록을 실제로 돌린다: 제출본(엄격)에서는 금지 문자열 **하나**만 있어도 멈추고, 리허설에서만 경고로 지나간다.
+    //   글자 단언("die 가 있다")은 die → warn 변형을 못 잡는다 — 블록을 원문 그대로 잘라 가짜 바이너리에 건다.
+    @Test func masForbiddenStringGateDiesInStrictModeAndOnlyWarnsInRehearsal() throws {
+        let forbidden = try masForbiddenStrings()
+        #expect(forbidden.count >= 7, "금지 문자열 목록을 읽지 못했다(\(forbidden.count)개)")
+        let dir = try masTempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let harness = dir.appendingPathComponent("gate2.sh")
+        let gate = try masScriptBlock(from: "FOUND=()", through: "fi")
+        #expect(gate.contains("\"${FORBIDDEN_STRINGS[@]}\"") && gate.contains("\"$BIN\""), "게이트 ② 블록을 엉뚱한 곳에서 잘랐다:\n\(gate)")
+        try ([try masGatePrelude(), "BIN=\"$1\"", "REHEARSAL=\"$2\"", gate, "echo GATE2_PASSED"].joined(separator: "\n"))
+            .write(to: harness, atomically: true, encoding: .utf8)
+
+        // 바이너리 흉내: Mach-O 머리 바이트·NUL·0xFF 사이에 문자열 — grep 이 텍스트가 아니라 바이너리로 보는 파일이다.
+        func fakeBinary(_ name: String, containing middle: String) throws -> URL {
+            var bytes = Data([0xCF, 0xFA, 0xED, 0xFE, 0x00, 0x00, 0x01, 0x07, 0x00])
+            bytes.append(Data(middle.utf8))
+            bytes.append(Data([0x00, 0xFF, 0x00, 0x42]))
+            let url = dir.appendingPathComponent(name)
+            try bytes.write(to: url)
+            return url
+        }
+
+        // 깨끗한 바이너리(비슷하지만 다른 글자만): 엄격에서도 통과 — 빈 FOUND 배열이 bash 3.2 + set -u 에서 죽지 않는지도 여기서 잰다.
+        let clean = try fakeBinary("clean", containing: "brew upgrade --cas\u{0}releases/latest\u{0}Claude Code-credential")
+        let cleanRun = try masRunBash(harness, [clean.path, "0"])
+        #expect(cleanRun.status == 0 && cleanRun.stdout.contains("GATE2_PASSED"), "깨끗한 바이너리를 막았다: \(cleanRun.stderr)")
+        #expect(cleanRun.stderr.contains("0건"), "깨끗한 바이너리에서 '0건' 로그가 없다: \(cleanRun.stderr)")
+
+        for (index, s) in forbidden.enumerated() {
+            let bin = try fakeBinary("dirty-\(index)", containing: s)
+            let strict = try masRunBash(harness, [bin.path, "0"])
+            #expect(strict.status == 1, "엄격 모드가 [\(s)] 를 품은 바이너리를 통과시켰다(status \(strict.status)) — 제출본에서 게이트 ② 가 경고로 낮아졌다")
+            #expect(!strict.stdout.contains("GATE2_PASSED"), "엄격 모드가 [\(s)] 뒤에도 다음 단계로 넘어갔다")
+            #expect(strict.stderr.contains("오류:") && strict.stderr.contains(s), "엄격 모드 멈춤 문구에 [\(s)] 가 없다: \(strict.stderr)")
+
+            let rehearsal = try masRunBash(harness, [bin.path, "1"])
+            #expect(rehearsal.status == 0 && rehearsal.stdout.contains("GATE2_PASSED"), "리허설이 [\(s)] 에서 멈췄다: \(rehearsal.stderr)")
+            #expect(rehearsal.stderr.contains("경고:") && rehearsal.stderr.contains(s), "리허설 경고에 [\(s)] 가 없다: \(rehearsal.stderr)")
         }
     }
 
@@ -214,6 +347,62 @@ struct V0351MASPackagingTests {
         #expect(code.contains("[[ \"$KEY_ROLE\" == \"anon\" ]] || die"), "service_role 키를 막지 않는다")
         // 리허설 손잡이는 MAS 갈래가 있는 소스에서 거부돼야 한다.
         #expect(code.contains("[[ -z \"${MAS_REHEARSAL:-}\" ]] || die"))
+    }
+
+    // 엄격/리허설 가르기를 실제로 돌린다. 탐지 정규식이 `#if !CHECK_MAS` 를 놓치면 MAS 갈래가 병합된 소스에서도 '갈래 없음'으로 보여
+    // 제출본이 리허설 손잡이로만 나오고(게이트 ② 경고), 주석 속 언급까지 잡으면 갈래가 없는 소스를 엄격으로 오판한다.
+    @Test func masBranchDetectionSplitsStrictFromRehearsal() throws {
+        let dir = try masTempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let harness = dir.appendingPathComponent("detect.sh")
+        let detect = try masScriptBlock(from: "if grep -rqE ", through: "fi")
+        #expect(detect.contains("\"$ROOT/Sources\""), "탐지 블록이 Sources 를 보지 않는다:\n\(detect)")
+        try ([try masGatePrelude(), "ROOT=\"$1\"", "OUT_DIR=\"$ROOT/dist/mas\"", "APP_NAME=AingCheck", detect,
+              "echo \"REHEARSAL=$REHEARSAL\"", "echo \"PKG=$PKG\""].joined(separator: "\n"))
+            .write(to: harness, atomically: true, encoding: .utf8)
+
+        func run(sourceLine: String, rehearsal: Bool) throws -> MASScriptRun {
+            let root = dir.appendingPathComponent("root-\(UUID().uuidString)", isDirectory: true)
+            let nested = root.appendingPathComponent("Sources/check/Nested", isDirectory: true)   // grep -r 이 하위 폴더까지 보는지
+            try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+            try "import Foundation\n\(sourceLine)\nlet x = 1\n#endif\n"
+                .write(to: nested.appendingPathComponent("File.swift"), atomically: true, encoding: .utf8)
+            return try masRunBash(harness, [root.path], environment: ["MAS_REHEARSAL": rehearsal ? "1" : nil])
+        }
+
+        let branches = [
+            "    #if !CHECK_MAS",
+            "#if CHECK_MAS",
+            "\t#if !CHECK_MAS",
+            "#elseif CHECK_MAS",
+            "#if os(macOS) && !CHECK_MAS",
+        ]
+        for line in branches {
+            let strict = try run(sourceLine: line, rehearsal: false)
+            #expect(strict.status == 0 && strict.stdout.contains("REHEARSAL=0") && strict.stdout.contains("/AingCheck.pkg"),
+                    "[\(line)] 를 MAS 갈래로 못 알아봤다(status \(strict.status)): \(strict.stdout) \(strict.stderr)")
+            let refused = try run(sourceLine: line, rehearsal: true)
+            #expect(refused.status == 1 && refused.stderr.contains("MAS_REHEARSAL"),
+                    "[\(line)] 갈래가 있는데 MAS_REHEARSAL=1 을 받아들였다 — 제출본에서 게이트 ② 를 끄는 손잡이가 생긴다")
+            #expect(!refused.stdout.contains("PKG="))
+        }
+
+        let mentionsOnly = [
+            "// #if CHECK_MAS",
+            "/// `#if !CHECK_MAS` 로 가른다",
+            "    /* #if !CHECK_MAS */",
+            "let marker = \"#if CHECK_MAS\"",
+            "#if DEBUG // CHECK_MAS 갈래는 나중에",
+            "#if DEBUG",
+        ]
+        for line in mentionsOnly {
+            let strict = try run(sourceLine: line, rehearsal: false)
+            #expect(strict.status == 1 && strict.stderr.contains("CHECK_MAS"),
+                    "[\(line)] 만 있는 소스를 MAS 갈래가 있다고 봤다(status \(strict.status)): \(strict.stdout)")
+            let rehearsal = try run(sourceLine: line, rehearsal: true)
+            #expect(rehearsal.status == 0 && rehearsal.stdout.contains("REHEARSAL=1") && rehearsal.stdout.contains("/AingCheck-rehearsal.pkg"),
+                    "[\(line)] 소스의 리허설이 리허설 이름으로 나오지 않는다(status \(rehearsal.status)): \(rehearsal.stdout) \(rehearsal.stderr)")
+        }
     }
 
     @Test func masDeveloperIDScriptsStayUnaware() throws {

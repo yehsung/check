@@ -1,0 +1,120 @@
+{
+  "__note" : [
+    "로비(신청 변형). 닿는 길: -AingCheckDemoRoute games/chess/lobby/invites → 장면 이름 games-chess-lobby-invites.",
+    "들어온 신청 1건(구름빵, 판돈 5) + 내가 보낸 신청 1건(호두과자, 판돈 10). 두 id 로 chess_state 를 한 번 더 불러 상대·판돈·만료를 안다 — 그 두 픽스처가 rpc.chess_state@demo-chess-invite-in/out.json 이다."
+  ],
+  "grace_ms" : 2000,
+  "increment_ms" : 3000,
+  "initial_ms" : 600000,
+  "invite_ttl_seconds" : 60,
+  "matches" : [
+    {
+      "a" : {
+        "avatar_url" : null,
+        "center" : "seoul",
+        "character" : null,
+        "display_name" : "민트별",
+        "user_id" : "d0000000-0000-4000-8000-0000000000b3"
+      },
+      "b" : {
+        "avatar_url" : null,
+        "center" : "seoul",
+        "character" : "fox",
+        "display_name" : "달토끼",
+        "user_id" : "d0000000-0000-4000-8000-0000000000b6"
+      },
+      "match_id" : "demo-chess-live",
+      "stake" : 10,
+      "started_ms" : 1789621396815
+    }
+  ],
+  "me" : {
+    "active_match_id" : null,
+    "draws" : 2,
+    "incoming_match_id" : "demo-chess-invite-in",
+    "losses" : 3,
+    "outgoing_match_id" : "demo-chess-invite-out",
+    "ruby_balance" : 42,
+    "wins" : 5
+  },
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "stakes" : [
+    3,
+    5,
+    10
+  ],
+  "status" : "ok",
+  "users" : [
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "초코칩",
+      "in_match" : false,
+      "is_working" : false,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b2"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : null,
+      "display_name" : "민트별",
+      "in_match" : true,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b3"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : null,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b4"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "center" : "busan",
+      "character" : "squirrel",
+      "display_name" : "보리차",
+      "in_match" : false,
+      "is_working" : false,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b5"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : "fox",
+      "display_name" : "달토끼",
+      "in_match" : true,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b6"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b7"
+    }
+  ]
+}

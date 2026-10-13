@@ -1,0 +1,122 @@
+{
+  "__note" : [
+    "로비(내 판이 진행 중). 닿는 길: -AingCheckDemoRoute games/chess/match → 장면 games-chess-match.",
+    "me.active_match_id 가 demo-chess-my-turn 을 가리키고, 그 상태는 바깥의 rpc.chess_state@demo-chess-my-turn.json 이 답한다(바늘이 본문의 p_match_id 에 걸린다 — 장면 안에 다시 둘 필요가 없다).",
+    "내 상대(호두과자)는 여기서 in_match=true 다 — 기본 로비와 갈리는 유일한 칸이다.",
+    "matches[] 에 내 판을 싣지 않았다: 맥 캡처(chess_lobby__ok_in_match)는 싣지만, 폰 데모에서 '관전 카드' 와 '내 판' 이 같은 줄로 보이면 두 입구가 섞인다. 이 갈래는 서버 캡처가 아니라 선택이다."
+  ],
+  "grace_ms" : 2000,
+  "increment_ms" : 3000,
+  "initial_ms" : 600000,
+  "invite_ttl_seconds" : 60,
+  "matches" : [
+    {
+      "a" : {
+        "avatar_url" : null,
+        "center" : "seoul",
+        "character" : null,
+        "display_name" : "민트별",
+        "user_id" : "d0000000-0000-4000-8000-0000000000b3"
+      },
+      "b" : {
+        "avatar_url" : null,
+        "center" : "seoul",
+        "character" : "fox",
+        "display_name" : "달토끼",
+        "user_id" : "d0000000-0000-4000-8000-0000000000b6"
+      },
+      "match_id" : "demo-chess-live",
+      "stake" : 10,
+      "started_ms" : 1789621396815
+    }
+  ],
+  "me" : {
+    "active_match_id" : "demo-chess-my-turn",
+    "draws" : 2,
+    "incoming_match_id" : null,
+    "losses" : 3,
+    "outgoing_match_id" : null,
+    "ruby_balance" : 42,
+    "wins" : 5
+  },
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "stakes" : [
+    3,
+    5,
+    10
+  ],
+  "status" : "ok",
+  "users" : [
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b1"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "초코칩",
+      "in_match" : false,
+      "is_working" : false,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b2"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : null,
+      "display_name" : "민트별",
+      "in_match" : true,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b3"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : null,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "in_match" : true,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b4"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "center" : "busan",
+      "character" : "squirrel",
+      "display_name" : "보리차",
+      "in_match" : false,
+      "is_working" : false,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b5"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "center" : "seoul",
+      "character" : "fox",
+      "display_name" : "달토끼",
+      "in_match" : true,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b6"
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "center" : "busan",
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "in_match" : false,
+      "is_working" : true,
+      "user_id" : "d0000000-0000-4000-8000-0000000000b7"
+    }
+  ]
+}

@@ -430,7 +430,14 @@ func theAppWiresTheChessWindowAndItsMasterSwitch() throws {
     let miniGame = cwStripped(try cwSource("MiniGamePanel.swift"))
     #expect(miniGame.contains("MiniGameChessEntryButton { onChess() }"),
             "미니게임 머리글에 체스 입구 버튼이 없다")
-    #expect(miniGame.contains("onChess: { store.chess.openWindow(focusMatchID: nil) }"),
+    // v0.3.50: 입구가 스토어의 한 문(`openChessFromMiniGame`)을 지난다 — 체스 창을 띄우고 **미니게임 창은 내린다**.
+    // 배선이 세 조각이 됐으므로 문 안쪽까지 본다(가운데까지만 보면 문은 있는데 체스 창을 안 여는 상태가 통과한다).
+    #expect(miniGame.contains("onChess: { store.openChessFromMiniGame() }"),
+            "미니게임 헤더 입구가 체스 문에 안 이어진다")
+    let miniGameStore = cwStripped(try cwSource("WorkTimerStoreMiniGame.swift"))
+    let chessDoor = try #require(cwFunctionBody(miniGameStore, name: "openChessFromMiniGame"),
+                                 "스토어에 체스 입구 문이 없다")
+    #expect(chessDoor.contains("chess.openWindow(focusMatchID: nil)"),
             "미니게임 헤더 입구가 체스 창을 안 연다")
     #expect(miniGame.contains("CheckChessWindowController.frameAutosaveName"),
             "전역 스페이스 모니터의 독립 창 목록에 체스 창이 없다(B2)")

@@ -123,7 +123,11 @@ func 끝나는_판을_읽는_중에_온_신호는_판이_끝난_뒤_받은함을
     await ggWait(5) { GomokuStubProtocol.count(host: host, rpc: "gomoku_inbox") >= 1 }
     try? await Task.sleep(for: .milliseconds(500))
     #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_inbox") == 1, "판이 끝난 뒤 온 신호가 인박스를 안 봤다(새 신청을 놓친다)")
-    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 1, "끝난 판을 한 번 더 읽었다")
+    // v0.3.50: 결과 화면에 서 있는 끝난 판은 초인종에 **한 번** 다시 읽는다 — 그 초인종이 상대의 끝인사일 수 있다
+    // (서버는 끝난 뒤 120초 동안 말을 받고 두드린다 · V0350GomokuExitChatTests). 그 전에는 여기가 1 이었고, 그래서
+    // 끝난 뒤 보낸 말이 받는 쪽에 영영 안 떴다. 직렬화 계약은 그대로다: 뒤따르는 신호는 **한 번**으로 합쳐진다(3 이면 고리다).
+    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 2,
+            "끝난 판의 초인종이 그 판을 안 읽었거나(1) 되풀이해 읽었다(3 이상)")
 }
 
 // X1 — 내 차례라도 표시 마감 + 유예(2초)가 지나면 보이는 창은 한 번 묻는다(결과 화면이 신호에만 기대지 않게).

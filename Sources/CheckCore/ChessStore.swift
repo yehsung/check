@@ -896,12 +896,18 @@ package final class ChessStore {
     }
 
     /// 창을 **정말 닫았다**(빨간 점 · 로그아웃의 프로그램 닫기). 최소화·가려짐은 이 문을 지나지 않는다.
-    /// 관전만 내린다(요청은 쏘지 않는다). 체스에는 `chess_leave` 가 없어 내 판에 대고 부를 것이 없다.
+    /// 관전을 내린다(요청은 쏘지 않는다). 체스에는 `chess_leave` 가 없어 내 판에 대고 부를 것이 없다.
+    ///
+    /// **끝난 내 판도 여기서 내린다**(0.3.50 · 2026-10-13 신고). 결과 화면인 채로 닫으면 끝난 판이 그대로 남아, 다음에 창을
+    /// 열면 로비가 아니라 그 결과가 다시 서고 [로비로] 를 눌러야만 빠져나왔다. **진행 중인 판은 건드리지 않는다** — 닫기는
+    /// 기권이 아니다(시계는 서버에서 흐른다). 최소화는 이 문을 안 지나므로 결과 화면이 그대로 남는다.
+    /// 로비·순위는 다시 읽지 않는다(다음에 창을 여는 `openWindow` 가 읽는다).
     package func windowDidClose() {
         if spectating != nil { stopWatching() }
         clearFlight()
         cancelDrag()
         clearPendingDrop()
+        foldFinishedMatch()
     }
 
     /// 창의 가림 상태가 바뀌었다. **폴링·AI 시계만** 멈추고 되살린다 — `isWindowVisible` 은 건드리지 않는다
@@ -1795,7 +1801,19 @@ package final class ChessStore {
 
     /// 결과 화면 [로비로]. **진행 중인 판에서는 아무것도 안 한다** — 빠져나가는 길은 기권뿐이다.
     package func backToLobby() {
-        guard let current = match, current.isFinished else { return }
+        guard foldFinishedMatch(), host?.session != nil else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            await self.refreshLobby()
+            await self.loadRanking()
+        }
+    }
+
+    /// 끝난 판을 내리고 화면을 로비로 돌린다 — [로비로] 와 '결과 화면인 채로 창 닫기'(`windowDidClose`)가 같이 쓴다.
+    /// 요청은 쏘지 않는다(로비 재조회는 부르는 쪽 몫이다). 끝난 판을 들고 있지 않으면 false — 아무것도 안 바꾼다.
+    @discardableResult
+    private func foldFinishedMatch() -> Bool {
+        guard let current = match, current.isFinished else { return false }
         dismissedMatchIDs.insert(current.id)
         if isAIMatch {
             match = nil                         // 관찰자가 AI 판을 버린다
@@ -1807,12 +1825,7 @@ package final class ChessStore {
         cancelDrag()
         clearPendingDrop()
         setNotice(nil)
-        guard host?.session != nil else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            await self.refreshLobby()
-            await self.loadRanking()
-        }
+        return true
     }
 
     // MARK: - 신호 · 계기 (창 밖에서 아는 유일한 길)

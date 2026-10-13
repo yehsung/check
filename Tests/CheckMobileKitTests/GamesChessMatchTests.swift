@@ -630,4 +630,137 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
         #expect(sheets.components(separatedBy: "store.cancelPromotion()").count == 2,
                 "승격을 고르지 않고 빠져나가는 길이 둘 이상이다")
     }
+
+    // MARK: ⑥ 판이 열을 벌리지 않는다 (D1 — 기본 글자 전용 잘림)
+
+    /// 판 한 변을 **화면이 정하는 대로** 잰다: 여백을 뺀 예산 → 8의 배수 → 큰 글자 축소 → 열 가둠.
+    /// 뷰가 하는 셈을 그대로 한 자리에 모은 것이고, 소스 단언이 뷰가 **이 셈을 지난다**는 것을 못 박는다.
+    private static func cmBoardSide(screenWidth: CGFloat, screenHeight: CGFloat = 874,
+                                    sideMargin: CGFloat = 16,
+                                    isLargeText: Bool = false,
+                                    isAccessibilitySize: Bool = false) -> CGFloat {
+        let visible = CGSize(width: screenWidth, height: screenHeight)
+        let budget = GamesChessMatchChrome.boardBudget(visible: visible, sideMargin: sideMargin)
+        let lane = GamesChessBoardMetrics.side(fitting: budget)
+        return GamesChessMatchChrome.cagedSide(
+            GamesChessMatchChrome.boardSide(laneDefault: lane, visible: visible,
+                                            isLargeText: isLargeText,
+                                            isAccessibilitySize: isAccessibilitySize),
+            columnWidth: budget.width)
+    }
+
+    @Test("★ 판 + 좌우 여백이 화면 폭 안에 들어온다 — **기본 글자**에서 모든 아이폰 폭(기준선: 화면 폭을 넘기면 전부 넘친다)")
+    func theBoardFitsInsideTheColumnAtDefaultTextSize() {
+        // 헤드리스 실측으로 잡은 결함이다: 판에 **화면 폭**을 주면 한 변이 그 폭에서 정해지고, 판은
+        // `.padding(.horizontal, 16)` **안**에 있으므로 열이 벌어져 결과 카드·사람 카드·시계 칩·기보가
+        // 함께 오른쪽으로 잘렸다(402pt 에서 판 오른쪽 모서리가 x=416pt — 화면 밖 14pt).
+        //
+        // ★ 기준선이 달라야 한다: 아래 `legacy` 는 **여백을 안 뺀** 옛 셈이고 모든 폭에서 넘친다.
+        //   그 기준선이 없으면 이 시험은 "식이 식과 같다" 만 말한다.
+        let widths: [CGFloat] = [320, 360, 375, 390, 393, 402, 414, 428, 430, 440, 1024]
+        for width in widths {
+            let side = Self.cmBoardSide(screenWidth: width)
+            #expect(side + 32 <= width,
+                    "\(width)pt 에서 판(\(side)) + 여백 32 가 화면을 넘는다 — 열의 자식 전부가 잘린다")
+            #expect(side.truncatingRemainder(dividingBy: 8) == 0, "\(width)pt 에서 한 변이 8의 배수가 아니다")
+            // 기준선(옛 셈) — 여백을 안 빼면 **모든 폭에서** 넘친다는 사실을 같이 못 박는다.
+            let legacy = GamesChessBoardMetrics.side(fitting: CGSize(width: width, height: 874))
+            if width <= 440 {
+                #expect(legacy + 32 > width,
+                        "기준선이 안 넘친다 — 이 폭에서는 옛 셈도 멀쩡했다는 뜻이라 기준선을 다시 골라야 한다")
+                #expect(side < legacy, "고친 셈이 옛 셈과 같다 — 여백을 빼지 않았다")
+            }
+        }
+    }
+
+    @Test("큰 글자·접근성 글자에서도 열 안이고, 좁은 창은 **열 폭에서 잘린다**(판 레인 바닥값이 열을 벌리지 못한다)")
+    func theBoardFitsAtLargeTextAndInNarrowColumns() {
+        for width in [CGFloat(320), 390, 402, 440] {
+            for (large, a11y) in [(true, false), (true, true)] {
+                let side = Self.cmBoardSide(screenWidth: width, isLargeText: large, isAccessibilitySize: a11y)
+                #expect(side + 32 <= width, "\(width)pt large=\(large) a11y=\(a11y) 에서 판이 열을 넘는다")
+            }
+        }
+        // 가둠: 열이 판 레인 바닥값(160)보다 좁아도 판은 열을 넘지 않는다.
+        #expect(GamesChessMatchChrome.cagedSide(160, columnWidth: 100) == 100)
+        #expect(GamesChessMatchChrome.cagedSide(368, columnWidth: 370) == 368, "열보다 좁은 판을 괜히 깎는다")
+        // 첫 배치 한 틱(0)에는 자르지 않는다 — 0 으로 자르면 판이 사라진다.
+        #expect(GamesChessMatchChrome.cagedSide(368, columnWidth: 0) == 368)
+        // 예산 자체도 음수로 내려가지 않는다(0 으로 접힌다).
+        #expect(GamesChessMatchChrome.boardBudget(visible: CGSize(width: 10, height: 100), sideMargin: 16).width == 0)
+        #expect(GamesChessMatchChrome.boardBudget(visible: CGSize(width: 402, height: 874), sideMargin: 16)
+                == CGSize(width: 370, height: 874), "예산이 좌우 여백 둘을 빼지 않는다")
+    }
+
+    @Test("화면 소스: 판 레인에 넘기는 값이 **여백을 뺀 예산**이고, 판은 열 폭에 가둬진다")
+    func theViewPassesTheMarginSubtractedBudgetToTheBoardLane() throws {
+        let code = stripComments(try String(contentsOf: Self.root.appendingPathComponent(Self.viewPath),
+                                            encoding: .utf8))
+        let flat = code.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        // ★ 뮤테이션 과녁: 여백을 다시 안 빼면(= `side(fitting: visible)`) 여기가 빨개진다.
+        #expect(flat.contains("boardBudget(visible: visible, sideMargin: MobileTheme.sideMargin)"),
+                "판 예산이 화면 크기에서 열 여백을 빼지 않는다 — 열의 자식 전부가 오른쪽으로 잘린다")
+        #expect(flat.contains("GamesChessBoardMetrics.side(fitting: budget)"),
+                "판 레인에 예산이 아니라 다른 값을 넘긴다")
+        #expect(!flat.contains("GamesChessBoardMetrics.side(fitting: visible)"),
+                "판 레인에 **화면 폭**을 그대로 넘긴다(D1 의 정체다)")
+        #expect(flat.contains("columnWidth: budget.width)"), "판이 열 폭에 가둬지지 않는다")
+        // 열 여백은 한 값에서 온다 — 뷰가 16 을 베껴 적으면 여백이 바뀐 날 판만 옛 값으로 남는다.
+        #expect(code.components(separatedBy: "MobileTheme.sideMargin").count == 3,
+                "열 여백을 말하는 자리가 둘(열 패딩 · 판 예산)이 아니다")
+    }
+
+    // MARK: ⑦ 탭 막대 (D2 — 선언만 있고 호출이 없었다)
+
+    @Test("★ 체스 대국·결과에서 탭 막대가 숨는다 — 그리고 `TabBarPolicy.Screen` 의 **모든 갈래에 호출자가 있다**")
+    func everyTabBarPolicyScreenHasACaller() throws {
+        // 결함의 정체: `Screen.chessMatch` 가 **주석까지 달려** 선언돼 있었는데 `.hidesTabBar(for: .chessMatch)`
+        // 호출이 Sources 전체에 **0건**이었다. 그래서 무승부 제안 화면의 [무승부 수락]·[거절]이, 다른
+        // 상태에서는 [기권]·[무승부 제안]이 탭 막대 뒤에 통째로 가렸다(헤드리스 실측 — 제한 시간이 도는
+        // 판에서 가장 급한 버튼들이다). 선언을 세는 시험은 그 결함을 못 본다.
+        //
+        // ① 정책이 **값으로** 답한다(`.hidesTabBar(for:)` 가 이 답을 지나서 숨긴다 — `SheetChrome.swift`).
+        #expect(TabBarPolicy.hidesTabBar(on: .chessMatch), "체스 대국 화면이 탭 막대를 숨기지 않는다")
+        for screen in TabBarPolicy.Screen.allCases {
+            #expect(TabBarPolicy.hidesTabBar(on: screen), "\(screen.rawValue) 가 숨기지 않는다고 답한다")
+        }
+
+        // ② 전수: 갈래마다 **뷰 안에 호출자**가 있다(주석을 걷어낸 소스에서 센다 — 본보기 주석이 호출로
+        //    세어지면 이 결함이 그대로 초록이 된다).
+        let sources = Self.root.appendingPathComponent("Sources")
+        var code = ""
+        let walker = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            code += stripComments(try String(contentsOf: url, encoding: .utf8))
+        }
+        #expect(code.contains("package func hidesTabBar(for screen: TabBarPolicy.Screen)"),
+                "전제: 공용 수단을 못 읽었다(스캐너가 헛돈다)")
+        for screen in TabBarPolicy.Screen.allCases {
+            #expect(code.contains(".hidesTabBar(for: .\(screen.rawValue))"),
+                    "\(screen.rawValue) 는 선언만 있고 **부르는 화면이 없다** — 그 화면은 탭 막대가 버튼을 가린다")
+        }
+        // ③ 게임 폴더 계약: 화면이 `toolbar(.hidden, for: .tabBar)` 를 직접 쓰지 않는다(규칙이 한 곳이다).
+        let match = stripComments(try String(contentsOf: Self.root.appendingPathComponent(Self.viewPath),
+                                             encoding: .utf8))
+        #expect(!match.contains("for: .tabBar"), "화면이 탭 막대를 직접 숨긴다 — 공용 수단만 쓴다")
+        #expect(match.contains(".hidesTabBar(for: .chessMatch)"), "대국 화면에 숨김 호출이 없다")
+    }
+
+    // MARK: ⑧ 데모 스크롤 닻 (D5 — 체스 로비만 없었다)
+
+    @Test("체스 로비에 데모 스크롤 닻이 있다 — 없으면 `bottom` 으로도 순위·관전 절을 띄워 볼 수 없다")
+    func theChessLobbyCarriesTheDemoScrollAnchor() throws {
+        // 실측 결함: 오목 화면 넷·미니게임은 닻을 달고 있는데 체스 로비만 없었다. 그래서 그 두 절(순위·관전)이
+        // **이 작업에서 아무도 눈으로 못 본** 절이 됐다 — 로비 맨 아래라 기본 닻으로는 화면에 들어오지 않는다.
+        let anchor = ".gamesDemoScrollAnchor(isDemo: store.context.isDemo)"
+        let chess = stripComments(try String(
+            contentsOf: Self.root.appendingPathComponent("Sources/CheckMobileKit/Games/GamesChessScreen.swift"),
+            encoding: .utf8))
+        #expect(chess.contains(anchor), "체스 로비에 데모 스크롤 닻이 없다")
+        // 본보기와 **같은 모양**인지(다른 꼴로 적으면 데모 씨앗을 안 지나 아무 일도 안 한다).
+        let gomoku = stripComments(try String(
+            contentsOf: Self.root.appendingPathComponent("Sources/CheckMobileKit/Games/GamesGomokuScreen.swift"),
+            encoding: .utf8))
+        #expect(gomoku.contains(anchor), "전제: 본보기(오목 화면)가 바뀌었다 — 모양을 다시 맞춰야 한다")
+    }
 }

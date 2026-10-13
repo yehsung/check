@@ -265,6 +265,32 @@ package struct GamesChessMatchChrome: Equatable, Sendable {
         let fraction: CGFloat = isAccessibilitySize ? 0.40 : 0.52
         return max(240, min(laneDefault, (visible.height * fraction).rounded()))
     }
+
+    /// 판 레인(`GamesChessBoardMetrics.side(fitting:)`)에 넘기는 **예산** — `GeometryReader` 가 준 화면
+    /// 크기에서 **열 좌우 여백을 뺀 폭**이다.
+    ///
+    /// ★ 여기서 빼지 않으면 판 한 변이 "화면 폭"으로 정해진다. 판은 `.padding(.horizontal, sideMargin)`
+    ///   **안**에 있으므로 그 판이 ScrollView 안 열의 폭을 벌리고, **같은 열의 자식 전부**(결과 카드 ·
+    ///   사람 카드 · 시계 칩 · 기보 칩)가 함께 오른쪽으로 넘친다. 헤드리스 실측: 402pt 기기에서 판
+    ///   오른쪽 모서리가 x=416pt(화면 밖 14pt)에 서고 결과 카드 모서리가 사라졌다.
+    /// ★ 식으로도 **늘** 넘친다: 넘치는 양은 `floor(W/8)*8 − W + 2·sideMargin` 이고 8의 배수로 내리는
+    ///   규칙 때문에 모든 아이폰 폭에서 10~16pt 다. 그래서 "큰 화면이면 괜찮다"가 없다.
+    /// ★ 큰 글자에서만 판이 줄어 잘림이 사라졌다(`boardSide` 의 높이 예산). 그래서 **기본 글자 전용**
+    ///   결함이었고, 코드 검토와 125건이 전부 놓쳤다 — 재는 자리가 여기다.
+    ///
+    /// 높이는 그대로 넘긴다(판 아래 카드·기보가 밀려나지 않게 보는 예산은 화면 높이다).
+    package static func boardBudget(visible: CGSize, sideMargin: CGFloat) -> CGSize {
+        CGSize(width: max(0, visible.width - sideMargin * 2), height: visible.height)
+    }
+
+    /// 판이 **열보다 넓어질 수 없다**는 가둠. 예산이 판 레인의 바닥값(`minimumSide` 160)보다 좁은 창
+    /// (분할 화면·첫 배치 한 틱)에서도 열이 벌어지지 않게 한 변을 열 폭에서 자른다.
+    /// 열 폭이 0 이면 자르지 않는다 — 첫 배치에서 `GeometryReader` 가 0 을 주는 한 틱이다(그때 0 으로
+    /// 자르면 판이 사라진다).
+    package static func cagedSide(_ side: CGFloat, columnWidth: CGFloat) -> CGFloat {
+        guard columnWidth > 0 else { return side }
+        return min(side, columnWidth)
+    }
 }
 
 #if os(iOS)
@@ -336,6 +362,13 @@ struct GamesChessMatchView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        // ★ 탭 막대를 숨긴다(`TabBarPolicy.Screen.chessMatch` — 오목 대국과 같은 까닭: 몰입 화면 + 자체 동작 줄).
+        //   이 한 줄이 **없었다**: 갈래는 주석까지 달려 선언돼 있었는데 호출자가 Sources 전체에 0건이어서,
+        //   무승부 제안 화면의 [무승부 수락]·[거절]이, 다른 상태에서는 [기권]·[무승부 제안]이 탭 막대 뒤에
+        //   통째로 가렸다(헤드리스 실측 D2). 제한 시간이 도는 판에서 가장 급한 버튼들이다.
+        //   대국·결과가 **한 뷰**라 여기 한 줄이 둘을 다 덮는다(결과 카드는 같은 열에 선다).
+        //   `toolbar(.hidden, for: .tabBar)` 를 직접 쓰는 것은 게임 폴더 계약으로 금지다 — 공용 수단만 쓴다.
+        .hidesTabBar(for: .chessMatch)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 GamesNavTitle(title: GamesChessText.title) {
@@ -398,9 +431,15 @@ struct GamesChessMatchView: View {
     @ViewBuilder
     private func board(match: ChessMatchState, chrome: GamesChessMatchChrome, visible: CGSize) -> some View {
         if chrome.drawsBoard {
-            let side = GamesChessMatchChrome.boardSide(
-                laneDefault: GamesChessBoardMetrics.side(fitting: visible), visible: visible,
-                isLargeText: typeSize >= .xLarge, isAccessibilitySize: typeSize.isAccessibilitySize)
+            // ★ 판 레인에 넘기는 것은 **화면 폭이 아니라 열 폭**이다(여백을 뺀 예산 — `boardBudget`).
+            //   화면 폭을 넘기면 판이 열을 벌려 같은 열의 자식 전부가 오른쪽으로 잘린다(실측 D1).
+            let budget = GamesChessMatchChrome.boardBudget(visible: visible,
+                                                           sideMargin: MobileTheme.sideMargin)
+            let side = GamesChessMatchChrome.cagedSide(
+                GamesChessMatchChrome.boardSide(
+                    laneDefault: GamesChessBoardMetrics.side(fitting: budget), visible: visible,
+                    isLargeText: typeSize >= .xLarge, isAccessibilitySize: typeSize.isAccessibilitySize),
+                columnWidth: budget.width)
             // ★ `?? .empty` 는 **닿지 않는 갈래**다(`chrome.drawsBoard == (match.position != nil)`).
             //   판 레인의 판은 `ChessPosition` 을 **옵셔널이 아니게** 받고(관전 절도 같은 꼴로 넘긴다),
             //   마지막 수도 `ChessMove` 가 아니라 칸 두 개짜리 짝이다 — 자리표시가 가정한 서명과 갈렸다.

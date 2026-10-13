@@ -190,7 +190,9 @@ extension View {
     /// 한 곳에서 말하기 위해서다. 시뮬레이터 실측(w15 기반 부품 견본 `components/tabbar`): push 하면 숨고, 그 화면에서 시트를 띄웠다
     /// 닫아도 숨은 채이고, 뒤로 가면 다시 보인다.
     package func hidesTabBar(for screen: TabBarPolicy.Screen) -> some View {
-        toolbar(.hidden, for: .tabBar)
+        // 숨길지는 **정책이 답한다**(`TabBarPolicy.hidesTabBar(on:)`) — 그래서 그 답이 맥 스위트에서
+        // 값으로 재는 자리가 되고, 폰 뷰를 못 보는 테스트도 "이 화면이 숨는가" 를 되물을 수 있다.
+        toolbar(TabBarPolicy.hidesTabBar(on: screen) ? .hidden : .automatic, for: .tabBar)
     }
 }
 #endif

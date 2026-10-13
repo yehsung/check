@@ -404,6 +404,103 @@ struct GamesChessTextTests {
         #expect(ChessPhoneText.withParticle("민트별") == "과")
     }
 
+    // MARK: - 10-b. 상대 행은 **한 문장을 두 번 말하지 않는다** (D4)
+
+    @Test("상대 한 줄: 부제와 버튼이 같은 문장을 말하지 않고, **근무 축과 옛 버전 축이 둘 다** 읽힌다")
+    func theOpponentRowNeverRepeatsItselfAndKeepsBothAxes() {
+        func user(working: Bool, capable: Bool, inMatch: Bool) -> ChessUser {
+            ChessUser(id: "u-\(working)-\(capable)-\(inMatch)", displayName: "솜사탕", avatarURL: nil,
+                      characterID: nil, isWorking: working, isCapable: capable, inMatch: inMatch)
+        }
+        // 헤드리스 실측 결함: 솜사탕(`is_working=true` · `capable=false`) 줄이 부제에서 "앱 업데이트가
+        // 필요해요"(두 줄로 꺾임)를 말하고 **오른쪽 버튼도 같은 문장**이었다. 게다가 옛 서열이 근무 축을
+        // 덮어, 아바타에 초록 점이 켜진 사람의 "근무 중" 이 화면에서 사라졌다.
+        let 솜사탕 = ChessPhoneText.opponentRow(for: user(working: true, capable: false, inMatch: false))
+        #expect(솜사탕.subtitle == ChessPhoneText.working, "근무 축이 덮였다 — 초록 점이 켜진 사람의 상태가 사라진다")
+        #expect(솜사탕.buttonTitle == ChessPhoneText.needsUpdateButton)
+        #expect(솜사탕.subtitle != 솜사탕.buttonTitle)
+
+        for working in [true, false] {
+            for capable in [true, false] {
+                for inMatch in [true, false] {
+                    let row = ChessPhoneText.opponentRow(for: user(working: working, capable: capable, inMatch: inMatch))
+                    let where_ = "working=\(working) capable=\(capable) inMatch=\(inMatch)"
+                    // ① 같은 말을 두 번 하지 않는다(한쪽이 다른 쪽을 품는 것도 되풀이다).
+                    #expect(row.subtitle != row.buttonTitle, "\(where_): 한 줄에 같은 문장이 두 번이다")
+                    #expect(!row.subtitle.contains(row.buttonTitle), "\(where_): 부제가 버튼 글자를 품는다")
+                    #expect(!row.buttonTitle.contains(row.subtitle), "\(where_): 버튼이 부제를 품는다")
+                    // ② 근무 축은 **늘** 부제에 있다(초록 점의 글자 짝 — 다른 축이 덮지 않는다).
+                    let work = working ? ChessPhoneText.working : ChessPhoneText.notWorking
+                    #expect(row.subtitle.hasPrefix(work), "\(where_): 부제가 근무 축으로 시작하지 않는다")
+                    #expect(!row.subtitle.contains(working ? ChessPhoneText.notWorking : ChessPhoneText.working),
+                            "\(where_): 부제가 근무 축을 거꾸로 말한다")
+                    // ③ 옛 버전 축은 **두 자리 가운데 정확히 한 곳**에서 말한다(사라지지도, 두 번도 아니다).
+                    let says = [row.subtitle, row.buttonTitle].filter { $0.contains("업데이트") }
+                    #expect(says.count == (capable ? 0 : 1), "\(where_): 옛 버전 축이 \(says.count) 곳에서 말한다")
+                    // ④ 대국 중 축도 사라지지 않는다(버튼이 옛 버전을 말하는 갈래에서는 부제가 쥔다).
+                    if inMatch {
+                        #expect(row.subtitle.contains(ChessPhoneText.inMatchButton)
+                                    || row.buttonTitle == ChessPhoneText.inMatchButton,
+                                "\(where_): 대국 중 축이 두 자리 어디에도 없다")
+                    }
+                    // ⑤ 누를 수 있는 갈래에서만 버튼이 [도전]이다.
+                    #expect((row.buttonTitle == ChessPhoneText.challenge) == (capable && !inMatch), "\(where_)")
+                }
+            }
+        }
+        // 버튼 글자는 **짧다** — 알약 안에서 꺾이면 줄 높이가 늘어난다(실측: 긴 문장이 두 줄로 꺾였다).
+        #expect(ChessPhoneText.needsUpdateButton.count < ChessPhoneText.needsUpdate.count)
+    }
+
+    @Test("상대 행 소스: 두 자리를 **문구 표 한 함수**가 고른다 — 화면이 제 서열을 또 적지 않는다")
+    func theOpponentRowPicksBothSlotsInOnePlace() throws {
+        let screen = try Self.code("Sources/CheckMobileKit/Games/GamesChessScreen.swift")
+        #expect(screen.contains("ChessPhoneText.opponentRow(for: user)"),
+                "화면이 두 자리를 한 함수에서 받지 않는다")
+        #expect(screen.contains("Text(lines.subtitle)") && screen.contains("AingButton(lines.buttonTitle"),
+                "부제·버튼이 그 함수의 결과를 쓰지 않는다")
+        // ★ 뮤테이션 과녁: 화면이 제 서열을 다시 적으면(= 옛 `disabledTitle`) 여기가 빨개진다.
+        for revived in ["ChessPhoneText.status(for: user)", "private var disabledTitle",
+                        "ChessPhoneText.needsUpdate", "if user.inMatch { return"] {
+            #expect(!screen.contains(revived), "화면이 상태 서열을 또 적었다: \(revived)")
+        }
+    }
+
+    // MARK: - 10-c. 로봇 입구는 **까닭으로** 말이 갈린다 (D3)
+
+    @Test("★ 로봇 입구가 막힌 세 까닭이 **서로 다른 말**이고, 신청 대기는 '두는 중' 이라고 말하지 않는다")
+    func theRobotEntryBlockSplitsByReason() {
+        // 실측 결함: 게이트(`canStartAIMatch`)의 다섯 조건을 깃발 하나로 접고 문구를 하나로 박아 둬서,
+        // **신청만 보낸 사람**이 "체스를 두는 중이에요" 를 들었다 — 두고 있지 않은 판을 두고 있다고 듣고
+        // 할 일(신청 취소)을 못 찾았다.
+        let reasons = ChessPhoneText.RobotBlock.allCases
+        #expect(reasons.count == 3)
+        let titles = reasons.map(ChessPhoneText.robotEntryBlock)
+        let hints = reasons.map(ChessPhoneText.robotEntryBlockHint)
+        #expect(Set(titles).count == 3, "까닭이 같은 머리를 말한다 — 가른 뜻이 없다")
+        #expect(Set(hints).count == 3, "까닭이 같은 둘째 줄을 말한다")
+        #expect(titles.allSatisfy { !$0.isEmpty } && hints.allSatisfy { !$0.isEmpty })
+
+        // 신청 대기: '두는 중' 이라고 **말하지 않고**, 취소하면 풀린다는 것을 말한다.
+        let waiting = ChessPhoneText.robotEntryBlockNotice(.outgoingInvite)
+        #expect(!waiting.contains("두는 중"), "신청만 보낸 사람에게 판을 두고 있다고 말한다(D3 의 정체다)")
+        #expect(waiting.contains("신청"), "무엇을 기다리는지 말하지 않는다")
+        #expect(waiting.contains("취소"), "어떻게 풀리는지 말하지 않는다 — 폰엔 호버 툴팁이 없다")
+        // 대국 중: 양방향 표와 **같은 말**이고(한 사실을 두 말로 하지 않는다) 언제 풀리는지 말한다.
+        let playing = ChessPhoneText.robotEntryBlockNotice(.playing)
+        #expect(playing.hasPrefix(ChessPhoneText.busyTitle(.chess)))
+        #expect(playing.contains("끝나면"))
+        // 둘 줄: 머리 + 둘째 줄이고 그 둘이 다르다.
+        for reason in reasons {
+            let notice = ChessPhoneText.robotEntryBlockNotice(reason)
+            let lines = notice.components(separatedBy: "\n")
+            #expect(lines.count == 2, "\(reason.rawValue) 안내가 두 줄이 아니다")
+            #expect(lines[0] == ChessPhoneText.robotEntryBlock(reason))
+            #expect(lines[1] == ChessPhoneText.robotEntryBlockHint(reason))
+            #expect(lines[0] != lines[1])
+        }
+    }
+
     // MARK: - 11. 규칙 시트 — 돈이 갈리는 셋을 다 말한다
 
     @Test("규칙 줄은 FIDE 6.9 예외 · 수락 시점 · 한 사람 한 판을 다 말한다")

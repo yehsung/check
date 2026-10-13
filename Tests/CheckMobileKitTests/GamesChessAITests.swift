@@ -414,8 +414,10 @@ struct GamesChessAIVersusPvPTests {
         let chrome = GamesChessAIChrome(store: chess)
         #expect(chrome.stage == .colorPick, "로봇 화면은 색 고르기로 되돌아간다")
         #expect(chrome.canStart == false, "1:1 판 중에는 로봇 판을 새로 열 수 없다(반대 방향은 막혀 있다)")
-        #expect(chrome.blockReason == ChessPhoneText.busyTitle(.chess),
-                "막힌 입구가 사유를 말해야 한다(문구 표의 양방향 표현)")
+        #expect(chrome.blocked == .playing, "판이 떠 있는데 다른 까닭을 고른다")
+        #expect(chrome.blockReason == ChessPhoneText.robotEntryBlockNotice(.playing),
+                "막힌 입구가 사유를 말해야 한다(문구 표의 양방향 표현 + 언제 풀리는지)")
+        #expect(chrome.blockReason?.contains(ChessPhoneText.busyTitle(.chess)) == true)
         await tearDown(harness, chess)
     }
 
@@ -432,6 +434,37 @@ struct GamesChessAIVersusPvPTests {
         await chess.challenge(userID: Self.peer().id)
         #expect(harness.server.requests("chess_challenge").count == 1,
                 "판정: 로봇 판 중에도 1:1 신청이 서버로 나간다(막는 자리가 없다)")
+        await tearDown(harness, chess)
+    }
+
+    @Test("★ 신청만 보낸 사람은 '두는 중' 이라고 듣지 않는다 — 게이트는 그대로, **문구만** 갈린다")
+    func anOutgoingInviteDoesNotClaimAGameIsBeingPlayed() async {
+        // 헤드리스 실측 결함(D3): `canStartAIMatch` 의 다섯 조건을 깃발 하나로 접고 문구를 하나로 박아 둬서,
+        // **보낸 신청만 있는 사람**이 "체스를 두는 중이에요" 를 들었다 — 두고 있지 않은 판을 두고 있다고
+        // 듣고, 할 일(신청 취소)을 못 찾았다. 게이트는 고치지 않는다(신청이 수락되는 순간 1:1 이 로봇 판을
+        // 이기므로 막는 것이 맞다) — 가르는 것은 문구뿐이다.
+        let (harness, chess) = await chessHarness("chess-ai-outgoing", signedIn: true)
+        wiringMadeScreenVisible(chess)
+
+        // 보낸 신청만 있다 — 판은 없다(이것이 결함이 살던 자리다).
+        chess.outgoing = ChessInvite(id: "7f3c1e2a-0000-4000-8000-0000000000b1", peer: Self.peer(),
+                                     stake: 3, expiresAt: harness.clock.now.addingTimeInterval(60))
+        #expect(chess.match == nil, "전제: 두는 판이 없어야 이 시험이 뜻을 갖는다")
+        var chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.canStart == false, "게이트는 그대로다 — 보낸 신청이 있으면 로봇 판을 열지 않는다")
+        #expect(chrome.blocked == .outgoingInvite, "보낸 신청을 '두는 중' 으로 접었다")
+        let waiting = try! #require(chrome.blockReason)
+        #expect(!waiting.contains(ChessPhoneText.busyTitle(.chess)),
+                "두고 있지 않은 판을 두고 있다고 말한다: \(waiting)")
+        #expect(waiting.contains("취소"), "취소하면 풀린다는 것을 말하지 않는다")
+        // 같은 화면, **판이 서면** 말이 바뀐다(기준선이 달라야 한다 — 한 입력만 바꿔 비교한다).
+        chess.outgoing = nil
+        chess.match = Self.pvpMatch(now: harness.clock.now)
+        chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.blocked == .playing)
+        #expect(chrome.blockReason?.contains(ChessPhoneText.busyTitle(.chess)) == true,
+                "판이 떠 있는데 '두는 중' 이라고 말하지 않는다")
+        #expect(chrome.blockReason != waiting, "두 까닭이 같은 말을 한다 — 가른 뜻이 없다")
         await tearDown(harness, chess)
     }
 }

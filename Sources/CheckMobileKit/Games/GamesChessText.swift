@@ -95,6 +95,37 @@ package enum ChessPhoneText {
         return user.isWorking ? working : notWorking
     }
 
+    /// 비활성 [도전] 버튼의 글자 — **짧게** 말한다(알약 안에서 꺾이면 줄 높이가 늘어난다).
+    /// 부제가 한 문장을 다시 말하지 않게, 옛 버전 축은 **이 자리**가 쥔다.
+    package static let needsUpdateButton = "업데이트 필요"
+
+    /// 상대 한 줄이 쓰는 **두 자리** — 이름 아래 회색 부제와 오른쪽 버튼 글자.
+    package struct OpponentRow: Equatable, Sendable {
+        package let subtitle: String
+        package let buttonTitle: String
+    }
+
+    /// 상대 한 줄의 두 자리를 **한 함수**가 고른다.
+    ///
+    /// ★ 왜 둘을 같이 내나: 자리마다 따로 고르면 **같은 문장이 한 줄에 두 번** 나온다. 헤드리스 실측 —
+    ///   솜사탕·보리차 줄의 부제가 "앱 업데이트가 필요해요"(두 줄로 꺾임)인데 오른쪽 버튼도 같은 문장이었다.
+    /// ★ 게다가 옛 서열(`inMatch > capable > 근무`)이 **근무 축을 덮었다**: 솜사탕은 `is_working=true` 라
+    ///   아바타에 초록 점이 켜지는데 "근무 중" 이 화면에서 사라져, 픽스처가 일부러 둔 '근무 중인데 옛 버전'
+    ///   축이 안 읽혔다. 그래서 축을 **자리로 가른다** — 부제는 늘 근무 축, 버튼은 막힌 까닭.
+    /// ★ 둘이 겹치는 갈래(대국 중 + 옛 버전)에서는 버튼이 못 말한 축을 부제 꼬리로 보낸다. 버튼은 하나라
+    ///   말할 수 있는 까닭도 하나다 — 그때 축 하나가 사라지지 않게 하는 자리가 여기다.
+    package static func opponentRow(for user: ChessUser) -> OpponentRow {
+        let work = user.isWorking ? working : notWorking
+        // 옛 버전이 먼저다: 상대가 앱을 올릴 때까지 신청이 서버에서 거절되는, 가장 오래 가는 막힘이다
+        // (`capable` 이 nil 로 와도 false 다 — 모르는 상대는 불가로 그린다).
+        if !user.isCapable {
+            return OpponentRow(subtitle: user.inMatch ? "\(work) · \(inMatchButton)" : work,
+                               buttonTitle: needsUpdateButton)
+        }
+        if user.inMatch { return OpponentRow(subtitle: work, buttonTitle: inMatchButton) }
+        return OpponentRow(subtitle: work, buttonTitle: challenge)
+    }
+
     /// 상대 행 부제(칩 대신 회색 글 — 오목 `opponentStatus` 와 같은 꼴). 대국 중이면 누구와 두는지(로비의 대결 중 목록에서 찾는다).
     package static func opponentStatus(for user: ChessUser, liveMatches: [ChessLiveMatch]) -> String {
         if user.inMatch {
@@ -191,6 +222,46 @@ package enum ChessPhoneText {
     package static func robotEntryBlock(signedIn: Bool, playing: BusyGame?) -> String? {
         _ = signedIn
         return playing.map(busyTitle)
+    }
+
+    /// 로봇 입구가 막힌 **까닭**. 코어 게이트(`canStartAIMatch`)의 다섯 조건을 사용자가 **할 수 있는 일**로 묶는다.
+    ///
+    /// ★ 왜 가르나: 게이트 깃발 하나로 문구를 고르면 **보낸 신청만 있는 사람**에게 "체스를 두는 중이에요"
+    ///   라고 말한다 — 두고 있지 않은 판을 두고 있다고 듣고, 할 일(신청 취소)을 못 찾는다(헤드리스 실측 D3).
+    ///   게이트는 **그대로 둔다**(신청이 수락되는 순간 1:1 이 로봇 판을 이기므로 막는 것이 맞다) —
+    ///   가르는 것은 **문구뿐**이다.
+    package enum RobotBlock: String, CaseIterable, Sendable {
+        /// 판이 떠 있다(1:1 이든 로봇이든). 끝나야 풀린다.
+        case playing
+        /// 보낸 신청이 답을 기다린다 — **판은 없다**. 취소하면 바로 풀린다.
+        case outgoingInvite
+        /// 요청이 오가는 중(한 틱). 곧 풀린다.
+        case busy
+    }
+
+    /// 막힌 사유 한 줄(머리).
+    package static func robotEntryBlock(_ reason: RobotBlock) -> String {
+        switch reason {
+        case .playing: return busyTitle(.chess)
+        case .outgoingInvite: return "신청에 답을 기다리는 중이에요"
+        case .busy: return "요청을 보내는 중이에요"
+        }
+    }
+
+    /// 그 **둘째 줄** — 언제·어떻게 풀리는지. 머리만 그리면 "지금은 못 눌러요" 로 끝나고 사용자가 할 일을
+    /// 모른다(폰엔 호버 툴팁이 없다 — `entryBlockHint` 와 같은 까닭의 짝이다).
+    package static func robotEntryBlockHint(_ reason: RobotBlock) -> String {
+        switch reason {
+        case .playing: return "두던 판이 끝나면 로봇과 둘 수 있어요"
+        case .outgoingInvite: return "보낸 신청을 취소하면 로봇과 둘 수 있어요"
+        case .busy: return "잠시 뒤에 다시 눌러 보세요"
+        }
+    }
+
+    /// 입구에 세우는 **한 칸 두 줄**(머리 + 언제 풀리는지). 자리가 하나뿐인 보조문구 칸이 쓴다 —
+    /// 줄바꿈까지 표가 쥐는 까닭은 `entryBlockNotice` 와 같다(뷰에서 조립하면 맥 스위트가 못 본다).
+    package static func robotEntryBlockNotice(_ reason: RobotBlock) -> String {
+        robotEntryBlock(reason) + "\n" + robotEntryBlockHint(reason)
     }
 
     // MARK: 판돈 (★ 빠지는 순간은 수락이다)

@@ -117,6 +117,10 @@ struct GamesChessScreen: View {
         .refreshable {
             await chess.refreshLobby()
         }
+        // 데모 스크린샷(`-AingCheckGamesDemo bottom`)에서 맨 아래부터 보여 준다 — 오목 화면 넷·미니게임과
+        // 같은 모양. ★ 체스 로비만 이 줄이 없어서 **순위·관전 절을 아무도 눈으로 못 봤다**(실측 D5):
+        // 그 두 절은 로비 맨 아래라 기본 닻으로는 화면에 한 번도 들어오지 않는다.
+        .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
         // 규칙 책 버튼(오목 로비와 같은 자리). 로비가 **로비 응답 값**으로 시트를 띄우므로 시간 수치가 서버와 같다.
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -285,9 +289,11 @@ struct GamesChessScreen: View {
 /// 상대 한 줄(폰 오목 `GamesGomokuOpponentRow` 와 같은 모양): 아바타(근무 중 점) · 이름 + 센터 · 상태 부제 ·
 /// 오른쪽 [도전] 틴트(또는 회색 비활성).
 ///
-/// ★ 상태 부제가 **옛 버전 배지**를 쥔다: `isCapable == false` 는 "앱 업데이트 필요"다. 서버 `capable` 이
-///   nil 로 와도 그 값이 false 이므로(`ChessStore.user(from:)`) **모르는 상대는 불가로 그린다** —
-///   신청해서 `target_outdated` 를 받는 것보다 낫다(`ChessWire.swift:118` 의 계약).
+/// ★ **옛 버전 배지는 버튼이 쥔다**("업데이트 필요"), 부제는 **근무 축**을 쥔다. 두 자리가 각자 고르던
+///   때는 한 줄이 "앱 업데이트가 필요해요" 를 두 번 말하고 초록 점이 켜진 사람의 "근무 중" 이 사라졌다
+///   (헤드리스 실측 D4). 그래서 고르는 자리를 `ChessPhoneText.opponentRow(for:)` 하나로 모았다.
+///   서버 `capable` 이 nil 로 와도 그 값이 false 이므로(`ChessStore.user(from:)`) **모르는 상대는 불가로
+///   그린다** — 신청해서 `target_outdated` 를 받는 것보다 낫다(`ChessWire.swift:118` 의 계약).
 private struct GamesChessOpponentRow: View {
     let store: GamesStore
     let user: ChessUser
@@ -324,10 +330,14 @@ private struct GamesChessOpponentRow: View {
                      characterHint: user.characterID)
     }
 
+    /// 부제와 버튼 글자를 **문구 표가 한 번에** 고른다 — 자리마다 따로 고르면 한 줄에 같은 문장이 두 번
+    /// 나오고(실측 D4) 근무 축이 덮인다.
+    private var lines: ChessPhoneText.OpponentRow { ChessPhoneText.opponentRow(for: user) }
+
     private var info: some View {
         VStack(alignment: .leading, spacing: 1) {
             PersonName(user.displayName, center: CenterLabel.serverValue(forDisplay: user.center))
-            Text(ChessPhoneText.status(for: user))
+            Text(lines.subtitle)
                 .font(MobileTheme.rowSubtitle)
                 .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -342,18 +352,12 @@ private struct GamesChessOpponentRow: View {
                 .fixedSize()
                 .accessibilityHint(ChessPhoneText.challengeHint(name: user.displayName))
         } else {
-            AingButton(disabledTitle, kind: .gray, size: .sm) {}
+            // 막힌 까닭은 **버튼**이 말하고(짧게), 근무 축은 부제가 말한다 — 둘을 한 자리에서 고른 것이
+            // `ChessPhoneText.opponentRow(for:)` 다. 여기서 다시 고르면 같은 문장이 두 번 나온다.
+            AingButton(lines.buttonTitle, kind: .gray, size: .sm) {}
                 .disabled(true)
                 .fixedSize()
         }
-    }
-
-    /// 비활성 버튼의 글자 — **막힌 까닭을 말한다**(상대가 대국 중 · 상대가 옛 버전 · 그 밖). 하나로 뭉치면
-    /// "왜 못 누르나"가 사라진다.
-    private var disabledTitle: String {
-        if user.inMatch { return ChessPhoneText.inMatchButton }
-        if !user.isCapable { return ChessPhoneText.needsUpdate }
-        return ChessPhoneText.challenge
     }
 }
 

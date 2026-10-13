@@ -459,4 +459,15 @@ package enum TabBarPolicy {
         /// 잔디 상세 — 자체 하단 값 막대를 가진다(막대 둘이 쌓이면 엄지 사정권이 좁아진다).
         case grassDetail
     }
+
+    /// 이 화면에서 탭 막대를 숨기는가. `Screen` 은 **'숨기는 화면 목록' 그 자체**라 전부 참이다.
+    ///
+    /// ★ 값으로 되묻는 자리를 두는 까닭: 갈래만 더해 놓고 `.hidesTabBar(for:)` 를 **부르는 것을 잊으면**
+    ///   목록만 늘고 화면은 그대로다. 실제로 그렇게 났다 — `chessMatch` 가 주석까지 달린 채 선언돼 있었고
+    ///   호출자는 Sources 전체에 0건이어서 체스 대국의 [기권]·[무승부 수락]이 탭 막대 뒤에 가렸다.
+    ///   `.hidesTabBar(for:)`(iOS 층 `SheetChrome.swift`)가 **이 답을 지나서** 숨기므로, 여기가 거짓을
+    ///   말하면 화면이 실제로 안 숨는다(모양이 아니라 결과를 재는 자리다).
+    package static func hidesTabBar(on screen: Screen) -> Bool {
+        Screen.allCases.contains(screen)
+    }
 }

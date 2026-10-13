@@ -97,9 +97,14 @@ package struct GamesChessAIChrome: Equatable, Sendable {
     package let stage: Stage
     /// 입구를 누를 수 있는가(코어 `canStartAIMatch` — 1:1 판·보낸 신청이 떠 있으면 닫힌다).
     package let canStart: Bool
-    /// 입구가 막힌 사유 한 줄(열려 있으면 nil). ★ 로그인은 사유가 **아니다** — 문구 표에 **최악의 값**
-    /// (`signedIn: false`)을 넣어도 nil 이어야 한다(그 함수가 세션으로 가르면 여기서 빨개진다).
+    /// 입구가 막힌 사유 **두 줄**(열려 있으면 nil) — 머리 + 언제 풀리는지.
+    /// ★ 로그인은 사유가 **아니다**(최악의 값으로 되물어도 nil 이어야 한다 — `GamesChessAITests`).
+    /// ★ **까닭으로 갈린다**(`blocked`): 보낸 신청만 있는 사람에게 "체스를 두는 중이에요" 라고 말하면
+    ///   두고 있지 않은 판을 두고 있다고 듣는다(실측 D3).
     package let blockReason: String?
+
+    /// 막힌 까닭(열려 있으면 nil). 문구를 고른 근거를 **값으로** 둬서 시험이 갈림을 되물을 수 있게 한다.
+    package let blocked: ChessPhoneText.RobotBlock?
     package let board: GamesChessAIBoardInput?
     package let humanColor: ChessColor?
     /// 로봇 쪽 사람 값(이름 "로봇" · 캐릭터 `robot` — 코어 `ChessUser.chessAI`).
@@ -127,8 +132,10 @@ package struct GamesChessAIChrome: Equatable, Sendable {
         let match = store.isAIMatch ? store.match : nil
         let canStart = store.canStartAIMatch
         self.canStart = canStart
-        // 막히는 길은 하나뿐이다 — 이 스토어가 이미 쥔 체스 판·신청(`canStartAIMatch` 의 다섯 조건 전부).
-        blockReason = canStart ? nil : ChessPhoneText.robotEntryBlock(signedIn: false, playing: .chess)
+        // 막히는 조건은 다섯이지만 **사용자가 할 일은 세 가지**다 — 그 셋으로 문구를 가른다(아래 `blockReason(store:)`).
+        let blocked = GamesChessAIChrome.blockReason(store: store)
+        self.blocked = blocked
+        blockReason = blocked.map(ChessPhoneText.robotEntryBlockNotice)
         notice = store.notice
         if let match {
             stage = match.isFinished ? .result : .playing
@@ -163,6 +170,22 @@ package struct GamesChessAIChrome: Equatable, Sendable {
             canRestart = false
             matchStake = nil
         }
+    }
+
+    /// 입구가 막힌 **까닭 하나**를 고른다(열려 있으면 nil).
+    ///
+    /// ★ 게이트를 **다시 세지 않는다**: 열렸는지는 코어 `canStartAIMatch` 하나가 답하고(여기서 베끼면
+    ///   클라 게이트가 짝으로 갈려 스토어는 막았는데 화면만 열린다), 이 함수는 **닫혔을 때 무엇을 말할지**
+    ///   만 고른다.
+    /// ★ 서열: 판 > 보낸 신청 > 오가는 요청. 판이 떠 있으면 그것이 가장 긴 막힘이고, 보낸 신청은
+    ///   **취소로 당장 풀 수 있는** 막힘이라 다른 말을 들어야 한다(실측 D3 — 신청만 보낸 사람이
+    ///   "체스를 두는 중이에요" 를 들었다).
+    @MainActor
+    package static func blockReason(store: ChessStore) -> ChessPhoneText.RobotBlock? {
+        guard !store.canStartAIMatch else { return nil }
+        if store.match != nil || store.activeMatchID != nil || store.phase != .lobby { return .playing }
+        if store.outgoing != nil { return .outgoingInvite }
+        return .busy
     }
 
     /// 판 아래 한 줄. 로봇 차례면 "로봇이 생각 중이에요", 아니면 문구 표의 상태 한 줄(체크 포함).

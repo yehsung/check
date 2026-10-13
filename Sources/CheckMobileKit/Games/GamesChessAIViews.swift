@@ -103,6 +103,9 @@ package struct GamesChessAIChrome: Equatable, Sendable {
     package let isRobotThinking: Bool
     package let isInCheck: Bool
     package let plyCount: Int
+    /// 둘 차례인 쪽(끝난 판은 nil). ★ **시계의 `running` 이 아니다** — 로봇 판의 로컬 시계는 화면이 안
+    /// 보이면 멈추므로(`turnStartedAt = nil`) `running` 으로 차례를 그리면 그때 테두리·안내가 사라진다.
+    package let turn: ChessColor?
     package let clock: ChessServerClock?
     package let outcome: ChessMatchOutcome?
     package let endReason: ChessEndReason?
@@ -130,6 +133,7 @@ package struct GamesChessAIChrome: Equatable, Sendable {
             isRobotThinking = store.isAIThinking
             isInCheck = match.isInCheck
             plyCount = match.plyCount
+            turn = match.turn
             clock = match.clock
             outcome = match.outcome
             endReason = match.endReason
@@ -145,6 +149,7 @@ package struct GamesChessAIChrome: Equatable, Sendable {
             isRobotThinking = false
             isInCheck = false
             plyCount = 0
+            turn = nil
             clock = nil
             outcome = nil
             endReason = nil
@@ -167,75 +172,6 @@ package struct GamesChessAIChrome: Equatable, Sendable {
 }
 
 #if os(iOS)
-
-// MARK: - ★ 자리표시 — 판 레인이 내놓으면 이 블록을 **통째로 지운다**
-//
-// 이름·서명은 지시받은 그대로 두었다(`GamesChessBoard` · `GamesChessBoardMetrics.side(fitting:)`).
-// 병합 때 이 블록만 지우면 호출부는 그대로 선다. 판 자리표시는 **애니메이션을 그리지 않는다**
-// (`flight` 를 받기만 한다) — 세 겹 그리기·TimelineView·말 그림은 판 레인의 것이다.
-// (문구·시트는 자리표시가 아니다 — `ChessPhoneText` · `GamesChessPromotionSheet` 가 이미 들어와 있다.)
-
-/// 판 한 변(화면에 맞춘 길이).
-enum GamesChessBoardMetrics {
-    static func side(fitting size: CGSize) -> CGFloat {
-        max(0, min(size.width, size.height))
-    }
-}
-
-/// 판. 자리표시는 칸·말 글리프·탭만 있다.
-struct GamesChessBoard: View {
-    let position: ChessPosition
-    let flight: ChessMoveFlight?
-    let whiteAtBottom: Bool
-    let selection: ChessSquare?
-    let legalTargets: Set<ChessSquare>
-    let lastMove: ChessMove?
-    let onTapSquare: (ChessSquare) -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ForEach(0..<8, id: \.self) { row in
-                HStack(spacing: 0) {
-                    ForEach(0..<8, id: \.self) { column in
-                        cell(row: row, column: column)
-                    }
-                }
-            }
-        }
-        .background(MobileTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous))
-    }
-
-    @ViewBuilder
-    private func cell(row: Int, column: Int) -> some View {
-        // 자리표시의 화면 좌표 계산 — 판 레인이 들어오면 이 산술은 사라진다.
-        let file = whiteAtBottom ? column : 7 - column
-        let rank = whiteAtBottom ? 7 - row : row
-        if let square = ChessSquare(file: file, rank: rank) {
-            let piece = position[square]
-            Button {
-                onTapSquare(square)
-            } label: {
-                Text(piece.map { GamesChessPieceTile.placeholderGlyph($0.kind, color: $0.color) } ?? " ")
-                    .font(.system(size: 19))
-                    .foregroundStyle(MobileTheme.label)
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(1, contentMode: .fit)
-                    .background(background(square))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(square.notation)
-        }
-    }
-
-    private func background(_ square: ChessSquare) -> Color {
-        if selection == square { return MobileTheme.accentTint }
-        if legalTargets.contains(square) { return MobileTheme.workingTint }
-        if lastMove?.from == square || lastMove?.to == square { return MobileTheme.pendingTint }
-        return square.isLightSquare ? MobileTheme.surface2 : MobileTheme.fill
-    }
-}
 
 // MARK: - 입구 (로비 안)
 
@@ -282,10 +218,7 @@ struct GamesChessAISection: View {
             .accessibilityHint(ChessPhoneText.robotNoRecord)
         }
         // 판을 통째로 덮어 띄운다 — 탭 막대·로비 위에 서므로 라우팅 표를 건드리지 않는다(다른 레인의 파일이다).
-        .fullScreenCover(isPresented: $isScreenPresented, onDismiss: {
-            // 내가 끈 것을 되돌린다: 덮는 동안 멈춰 둔 폴링을 로비에 돌려준다.
-            store.windowOcclusionDidChange(visible: true)
-        }) {
+        .fullScreenCover(isPresented: $isScreenPresented) {
             NavigationStack {
                 GamesChessAIScreen(store: store)
                     .toolbar {
@@ -320,15 +253,11 @@ struct GamesChessAIScreen: View {
                     GamesChessPromotionSheet(store: store, prompt: prompt, myColor: chrome.humanColor ?? .white)
                 }
             }
-            .onAppear {
-                // 로컬 시계는 **보이는 동안만** 돈다(기다리는 상대가 없다 — 코어 `ChessStoreAI` 머리말).
-                // ★ `windowDidShow()` 를 부르지 않는다 — 그 문은 로비·판 재조회를 쏜다(로봇 판의 일이 아니다).
-                store.isWindowVisible = true
-                store.windowOcclusionDidChange(visible: true)
-            }
-            .onDisappear {
-                store.windowOcclusionDidChange(visible: false)
-            }
+        // ★ 창 가시성(`ChessStore.isWindowVisible`)을 **여기서 켜지 않는다** — 배선 레인(로비·입구)의 것이다.
+        //   그 깃발은 기본값이 꺼짐이고 `beginFlight` 가 맨 앞에서 그것을 보므로, 배선이 켜 주지 않으면
+        //   로봇 수가 **미끄러지지 않는다**(거절이 의도된 동작이라 테스트는 초록이다 — 그래서 시험에서
+        //   기준선을 갈라 두 갈래로 쟀다: `GamesChessAIBoardTests` 의 애니메이션 시험).
+        //   로컬 시계도 같은 깃발을 본다(보이지 않으면 멈춘다 — 코어 `ChessStoreAI` 머리말).
     }
 
     /// 승격 시트는 **코어가 단계를 세웠을 때만** 뜬다(도착 칸이 같은 합법 수가 넷 — §6 ⑩).
@@ -452,36 +381,32 @@ struct GamesChessAIScreen: View {
         }
     }
 
+    /// 판. **크기를 스스로 정한다**(`GeometryReader` + `aspectRatio(1, .fit)` 가 판 안에 있다) — 공간만 준다.
+    /// 뒤집기·궤적·밀림 방향은 `whiteAtBottom` 한 값으로 판 안에서 끝난다(§6 ①·④).
+    /// 보이스오버 한 줄만 덮어쓴다 — 판이 모르는 것(기보 수·체크)을 화면은 안다.
     @ViewBuilder
     private func board(_ chrome: GamesChessAIChrome) -> some View {
         if let board = chrome.board {
-            Color.clear
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    GeometryReader { geo in
-                        let side = GamesChessBoardMetrics.side(fitting: geo.size)
-                        GamesChessBoard(
-                            position: board.position,
-                            flight: store.flight,
-                            whiteAtBottom: board.whiteAtBottom,
-                            selection: board.selection,
-                            legalTargets: board.legalTargets,
-                            lastMove: board.lastMove,
-                            onTapSquare: { square in Task { await store.tap(square) } }
-                        )
-                        .frame(width: side, height: side)
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(ChessPhoneText.boardAccessibility(
-                    ply: chrome.plyCount, turn: chrome.clock?.running, inCheck: chrome.isInCheck))
+            GamesChessBoard(
+                position: board.position,
+                flight: store.flight,
+                whiteAtBottom: board.whiteAtBottom,
+                selection: board.selection,
+                legalTargets: board.legalTargets,
+                lastMove: board.lastMove.map { (from: $0.from, to: $0.to) },
+                onTapSquare: { square in Task { await store.tap(square) } }
+            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ChessPhoneText.boardAccessibility(
+                ply: chrome.plyCount, turn: chrome.turn, inCheck: chrome.isInCheck))
         }
     }
 
     private func playerCard(_ chrome: GamesChessAIChrome, isMe: Bool) -> some View {
         let human = chrome.humanColor ?? .white
         let color = isMe ? human : human.opponent
-        let isTurn = chrome.clock?.running == color
+        // ★ 차례는 `turn` 으로 읽는다 — 시계의 `running` 은 화면이 안 보이면 nil 이 되어 테두리가 사라진다.
+        let isTurn = chrome.turn == color
         let shape = RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
         return HStack(spacing: MobileTheme.space3) {
             if isMe {

@@ -12,11 +12,13 @@ import SwiftUI
 //  ② `GamesChessAIScreen(store:)` — 색 고르기 → 판 → 결과.
 // 규칙·판·시계·AI·애니메이션은 **전부 코어**다(`ChessStoreAI` · `ChessAIEngine` · `ChessStore.flight`).
 // 이 파일은 코어를 한 줄도 고치지 않고, 코어가 이미 세워 둔 값을 화면에 옮기기만 한다.
+// 문구는 **전부 `ChessPhoneText`**(별칭 `GamesChessText`)에서 온다 — 이 파일에 문장이 없다.
 //
 // ── ★ 로그인을 보지 않는다 ──
 // `ChessStoreAI` 는 서버를 **한 번도 안 탄다**(판 id 머리말 "ai-" 가 서버 경로를 막고, `send` 의 AI 분기는
 // `host?.session` 검사 **앞**에 선다). 그래서 입구·화면 어디에도 세션 조건이 없다. 숨기면 그 길이 막힌다 —
-// `GamesChessAITests` 가 세션 nil 로 입구·판·수를 전부 되묻는다.
+// `GamesChessAITests` 가 세션 nil 로 입구·판·수를 전부 되묻는다. 막는 사유 한 줄도 문구 표의
+// `robotEntryBlock(signedIn:playing:)` 을 지나는데, 그 함수에 **최악의 값(false)** 을 넣어도 nil 이어야 한다.
 //
 // ── ★ 판 방향은 한 값만 지난다 ──
 // 뒤집기는 `GamesChessAIBoardInput.whiteAtBottom` **한 줄**에서 나와 `GamesChessBoard` 로 넘어간다.
@@ -29,7 +31,12 @@ import SwiftUI
 //
 // ── ★ 승격은 2단 ──
 // 도착 칸이 같은 합법 수가 넷이면 승격이고 그때만 네 말을 묻는다. 그 판정은 코어 `commit(from:to:)` 에
-// 이미 있다(`candidates.count > 1`) — 화면은 `store.promotion` 이 섰을 때만 시트를 띄운다. 여기서 다시 세지 않는다.
+// 이미 있다(`candidates.count > 1`) — 화면은 `store.promotion` 이 섰을 때만 시트를 띄우고, 닫는 길은
+// 시트가 쥔 `store.cancelPromotion()` **하나뿐**이다(따로 빠져나가는 길을 만들지 않는다).
+//
+// ── ★ 결과 문구는 로봇 판 표를 쓴다 ──
+// `ChessPhoneText.robotEndReason` 이다(1인칭 `endReason` 이 아니다) — 그 표는 루비·"상대" 를 말하므로
+// 판돈이 없는 로봇 판에 쓰면 **없는 루비 변화**를 말하게 된다. 사유 열 갈래는 문구 표가 다 쥔다.
 //
 // ── ★ 애니메이션은 스토어에 이미 붙어 있다 ──
 // 로봇 수는 서버를 안 타므로 즉시 미끄러진다. `ChessStore.flight` 가 `commitAIGame` 깔때기에 붙어 있어
@@ -84,6 +91,9 @@ package struct GamesChessAIChrome: Equatable, Sendable {
     package let stage: Stage
     /// 입구를 누를 수 있는가(코어 `canStartAIMatch` — 1:1 판·보낸 신청이 떠 있으면 닫힌다).
     package let canStart: Bool
+    /// 입구가 막힌 사유 한 줄(열려 있으면 nil). ★ 로그인은 사유가 **아니다** — 문구 표에 **최악의 값**
+    /// (`signedIn: false`)을 넣어도 nil 이어야 한다(그 함수가 세션으로 가르면 여기서 빨개진다).
+    package let blockReason: String?
     package let board: GamesChessAIBoardInput?
     package let humanColor: ChessColor?
     /// 로봇 쪽 사람 값(이름 "로봇" · 캐릭터 `robot` — 코어 `ChessUser.chessAI`).
@@ -106,7 +116,10 @@ package struct GamesChessAIChrome: Equatable, Sendable {
     package init(store: ChessStore) {
         // 로봇 판만 본다. 1:1 판이 열려 있으면 그 판은 이 화면의 것이 아니다(코어가 로봇 판을 이미 버렸다).
         let match = store.isAIMatch ? store.match : nil
-        canStart = store.canStartAIMatch
+        let canStart = store.canStartAIMatch
+        self.canStart = canStart
+        // 막히는 길은 하나뿐이다 — 이 스토어가 이미 쥔 체스 판·신청(`canStartAIMatch` 의 다섯 조건 전부).
+        blockReason = canStart ? nil : ChessPhoneText.robotEntryBlock(signedIn: false, playing: .chess)
         notice = store.notice
         if let match {
             stage = match.isFinished ? .result : .playing
@@ -140,90 +153,27 @@ package struct GamesChessAIChrome: Equatable, Sendable {
             matchStake = nil
         }
     }
-}
 
-/// 이 레인의 문구. ★ **전부 `GamesChessText` 로 옮길 목록**이다(그 표가 아직 없어 여기 둔다 —
-/// 인수인계 §7 의 짝 맞추기에서 `GamesChessText` 가 서면 이 enum 을 지우고 이름을 그 표의 것으로 바꾼다).
-/// 사용자 어휘만 쓴다 — 진단·규격 번호를 싣지 않는다. 겹치는 것은 코어 `ChessNoticeText` 를 그대로 쓴다.
-enum GamesChessAIText {
-    static let title = "로봇과 두기"
-    static let entryHelp = "기기와 한 판 둬요 (루비가 걸리지 않아요)"
-    static let colorTitle = "어느 색으로 둘까요"
-    static let playWhite = "백(선공)"
-    static let playBlack = "흑(후공)"
-    static let noRecord = "로봇과 둔 판은 순위·루비에 들어가지 않아요"
-    static let thinking = "생각 중"
-    static let thinkingShort = "생각 중"
-    static let myTurn = "내 차례예요"
-    static let inCheck = "체크! 왕을 피하세요"
-    static let resign = "기권"
-    static let resignConfirm = "기권할까요?"
-    static let keepPlaying = "계속 두기"
-    static let playAgain = "다시 두기"
-    static let quit = "그만두기"
-    static let me = "나"
-    static let promotionTitle = "승격할 말을 고르세요"
-    /// 로봇 판 시계는 **로컬**이다 — 화면을 떠나면 멈춘다(1:1 은 서버에서 흐른다).
-    static let clockPauses = "화면을 떠나면 시계가 멈춰요"
-
-    static func color(_ color: ChessColor) -> String { color == .white ? "백" : "흑" }
-
-    static func moveCount(_ ply: Int) -> String { "\(ply)수" }
-
-    static func outcome(_ outcome: ChessMatchOutcome?) -> String {
-        switch outcome {
-        case .won?: return "이겼어요"
-        case .lost?: return "졌어요"
-        case .draw?: return "무승부예요"
-        case nil: return "대국이 끝났어요"
-        }
+    /// 판 아래 한 줄. 로봇 차례면 "로봇이 생각 중이에요", 아니면 문구 표의 상태 한 줄(체크 포함).
+    package var statusLine: String {
+        if isRobotThinking { return ChessPhoneText.robotThinking }
+        return ChessPhoneText.statusLine(isMyTurn: board?.isMyTurn == true, isInCheck: isInCheck)
     }
 
-    /// 끝난 이유. ★ `timeout_insufficient` 는 **FIDE 6.9** 다 — "시간이 다 됐지만 무승부" 를 말해야 한다(§6 ③).
-    static func endReason(_ reason: ChessEndReason?) -> String {
-        switch reason {
-        case .checkmate?: return "외통수"
-        case .resign?: return "기권"
-        case .timeout?: return "시간이 다 됐어요"
-        case .timeoutInsufficient?: return "시간이 다 됐지만 무승부예요"
-        case .stalemate?: return "둘 곳이 없어요"
-        case .fiftyMove?: return "50수 동안 잡기·폰 이동이 없었어요"
-        case .threefold?: return "같은 국면이 세 번 나왔어요"
-        case .insufficientMaterial?: return "메이트할 기물이 없어요"
-        case .agreement?: return "무승부에 합의했어요"
-        case .abandoned?: return "대국이 중단됐어요"
-        case nil: return ""
-        }
-    }
-
-    static func piece(_ kind: ChessPieceKind) -> String {
-        switch kind {
-        case .queen: return "퀸"
-        case .rook: return "룩"
-        case .bishop: return "비숍"
-        case .knight: return "나이트"
-        case .pawn: return "폰"
-        case .king: return "킹"
-        }
-    }
-
-    /// 시계 글자 — `mm:ss`, 10초 아래는 `s.d`(맥 `ChessText.clock` 과 같은 눈금).
-    static func clock(_ seconds: Double) -> String {
-        let safe = max(0, seconds)
-        if safe < 10 { return String(format: "%.1f", safe) }
-        let whole = Int(safe.rounded(.down))
-        return String(format: "%d:%02d", whole / 60, whole % 60)
+    /// 결과 이유 — **로봇 판 표**다(1인칭 표는 루비·"상대" 를 말한다).
+    package var endReasonLine: String {
+        ChessPhoneText.robotEndReason(endReason, outcome: outcome)
     }
 }
 
 #if os(iOS)
 
-// MARK: - ★ 자리표시 — 다른 레인이 내놓으면 이 블록을 **통째로 지운다**
+// MARK: - ★ 자리표시 — 판 레인이 내놓으면 이 블록을 **통째로 지운다**
 //
-// 이름·서명은 지시받은 그대로 두었다(`GamesChessBoard` · `GamesChessBoardMetrics.side(fitting:)` ·
-// `GamesChessSheets` 의 승격 고르기). 병합 때 이 블록만 지우면 호출부는 그대로 선다.
-//  · 판 자리표시는 **애니메이션을 그리지 않는다**(`flight` 를 받기만 한다) — 세 겹 그리기·TimelineView 는 판 레인의 것이다.
-//  · 승격 시트의 **정확한 이름은 추측**이다(`GamesChessSheets.Promotion(store:prompt:)`) — 그 레인의 것으로 바꿔라.
+// 이름·서명은 지시받은 그대로 두었다(`GamesChessBoard` · `GamesChessBoardMetrics.side(fitting:)`).
+// 병합 때 이 블록만 지우면 호출부는 그대로 선다. 판 자리표시는 **애니메이션을 그리지 않는다**
+// (`flight` 를 받기만 한다) — 세 겹 그리기·TimelineView·말 그림은 판 레인의 것이다.
+// (문구·시트는 자리표시가 아니다 — `ChessPhoneText` · `GamesChessPromotionSheet` 가 이미 들어와 있다.)
 
 /// 판 한 변(화면에 맞춘 길이).
 enum GamesChessBoardMetrics {
@@ -232,7 +182,7 @@ enum GamesChessBoardMetrics {
     }
 }
 
-/// 판. 자리표시는 칸·말 글자·탭만 있다.
+/// 판. 자리표시는 칸·말 글리프·탭만 있다.
 struct GamesChessBoard: View {
     let position: ChessPosition
     let flight: ChessMoveFlight?
@@ -266,9 +216,9 @@ struct GamesChessBoard: View {
             Button {
                 onTapSquare(square)
             } label: {
-                Text(piece.map { String($0.kind.fenLetter) } ?? " ")
-                    .font(.system(size: 17, weight: .bold, design: .serif))
-                    .foregroundStyle(piece?.color == .black ? MobileTheme.label : MobileTheme.label3Text)
+                Text(piece.map { GamesChessPieceTile.placeholderGlyph($0.kind, color: $0.color) } ?? " ")
+                    .font(.system(size: 19))
+                    .foregroundStyle(MobileTheme.label)
                     .frame(maxWidth: .infinity)
                     .aspectRatio(1, contentMode: .fit)
                     .background(background(square))
@@ -284,46 +234,6 @@ struct GamesChessBoard: View {
         if legalTargets.contains(square) { return MobileTheme.workingTint }
         if lastMove?.from == square || lastMove?.to == square { return MobileTheme.pendingTint }
         return square.isLightSquare ? MobileTheme.surface2 : MobileTheme.fill
-    }
-}
-
-/// 체스 시트 모음.
-enum GamesChessSheets {
-    /// 승격 고르기 — 네 말(Q R B N, `ChessPieceKind.promotionChoices` 순서 그대로).
-    struct Promotion: View {
-        let store: ChessStore
-        let prompt: ChessPromotionPrompt
-
-        @Environment(\.dismiss) private var dismiss
-
-        var body: some View {
-            VStack(spacing: 0) {
-                SheetHeader(GamesChessAIText.promotionTitle, onClose: { dismiss() })
-                HStack(spacing: 10) {
-                    ForEach(prompt.choices, id: \.rawValue) { kind in
-                        Button {
-                            Task { await store.choosePromotion(kind) }
-                        } label: {
-                            VStack(spacing: 6) {
-                                Text(String(kind.fenLetter))
-                                    .font(.system(size: 24, weight: .bold, design: .serif))
-                                Text(GamesChessAIText.piece(kind))
-                                    .font(.caption.weight(.semibold))
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 84)
-                            .background(RoundedRectangle(cornerRadius: MobileTheme.tileRadius, style: .continuous)
-                                .fill(MobileTheme.surface))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, MobileTheme.sideMargin)
-                Spacer(minLength: 0)
-            }
-            .background(MobileTheme.background.ignoresSafeArea())
-            .presentationDetents([.height(220)])
-        }
     }
 }
 
@@ -348,10 +258,10 @@ struct GamesChessAISection: View {
                     CharacterPortrait(id: ChessUser.chessAI.characterID, mood: .plain, size: 36)
                         .opacity(chrome.canStart ? 1 : 0.5)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(GamesChessAIText.title)
+                        Text(ChessPhoneText.robotButton)
                             .font(MobileTheme.rowTitle)
                             .foregroundStyle(chrome.canStart ? MobileTheme.label : MobileTheme.label2)
-                        Text(GamesChessAIText.entryHelp)
+                        Text(chrome.blockReason ?? ChessPhoneText.robotButtonHelp)
                             .font(MobileTheme.rowSubtitle)
                             .foregroundStyle(MobileTheme.label2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -369,7 +279,7 @@ struct GamesChessAISection: View {
             }
             .buttonStyle(.plain)
             .disabled(!chrome.canStart)
-            .accessibilityHint(GamesChessAIText.noRecord)
+            .accessibilityHint(ChessPhoneText.robotNoRecord)
         }
         // 판을 통째로 덮어 띄운다 — 탭 막대·로비 위에 서므로 라우팅 표를 건드리지 않는다(다른 레인의 파일이다).
         .fullScreenCover(isPresented: $isScreenPresented, onDismiss: {
@@ -380,7 +290,7 @@ struct GamesChessAISection: View {
                 GamesChessAIScreen(store: store)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
-                            GlassCircleButton(systemImage: "xmark", accessibilityLabel: SheetChromeText.close) {
+                            GlassCircleButton(systemImage: "xmark", accessibilityLabel: ChessPhoneText.close) {
                                 isScreenPresented = false
                             }
                         }
@@ -403,11 +313,11 @@ struct GamesChessAIScreen: View {
         let chrome = GamesChessAIChrome(store: store)
         content(chrome)
             .background(MobileTheme.background.ignoresSafeArea())
-            .navigationTitle(GamesChessAIText.title)
+            .navigationTitle(ChessPhoneText.robotButton)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: promotionBinding(chrome)) {
                 if let prompt = chrome.promotion {
-                    GamesChessSheets.Promotion(store: store, prompt: prompt)
+                    GamesChessPromotionSheet(store: store, prompt: prompt, myColor: chrome.humanColor ?? .white)
                 }
             }
             .onAppear {
@@ -422,10 +332,11 @@ struct GamesChessAIScreen: View {
     }
 
     /// 승격 시트는 **코어가 단계를 세웠을 때만** 뜬다(도착 칸이 같은 합법 수가 넷 — §6 ⑩).
-    /// 손으로 닫으면 그 단계를 접는다(고르기는 남는다 — 다른 칸을 눌러 보려는 뜻이다).
+    /// ★ 닫는 길은 시트가 쥔 `cancelPromotion()` 하나다 — 이 묶음은 그 문을 **다시 지나기만** 한다
+    ///   (단계가 이미 접혔으면 아무것도 하지 않는다. 따로 빠져나가는 길을 만들지 않는다).
     private func promotionBinding(_ chrome: GamesChessAIChrome) -> Binding<Bool> {
         Binding(get: { chrome.promotion != nil }, set: { shown in
-            if !shown { store.cancelPromotion() }
+            if !shown, store.promotion != nil { store.cancelPromotion() }
         })
     }
 
@@ -448,10 +359,10 @@ struct GamesChessAIScreen: View {
                     GroupRow(divider: .none, minHeight: MobileTheme.rowHeightTwoLine) {
                         CharacterPortrait(id: ChessUser.chessAI.characterID, mood: .plain, size: 44)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(GamesChessAIText.colorTitle)
+                            Text(ChessPhoneText.robotPromptTitle)
                                 .font(MobileTheme.rowTitle)
                                 .foregroundStyle(MobileTheme.label)
-                            Text(GamesChessAIText.noRecord)
+                            Text(ChessPhoneText.robotPromptCaption)
                                 .font(MobileTheme.rowSubtitle)
                                 .foregroundStyle(MobileTheme.label2)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -463,12 +374,16 @@ struct GamesChessAIScreen: View {
                     colorOption(.white, enabled: chrome.canStart)
                     colorOption(.black, enabled: chrome.canStart)
                 }
-                if !chrome.canStart {
-                    InlineNotice(text: ChessNoticeText.busy, kind: .warning)
+                if let blocked = chrome.blockReason {
+                    InlineNotice(text: blocked, kind: .warning)
                 }
                 if let notice = chrome.notice {
                     InlineNotice(text: notice, kind: .warning)
                 }
+                // ★ 로그인 없이 둘 수 있다는 사실을 글자로 둔다 — 누가 이 화면을 로그인 뒤로 옮기면
+                //   **문구부터** 어긋나 눈에 띈다(문구 레인이 그 까닭으로 둔 줄이다).
+                footNote(ChessPhoneText.robotNoSignIn, symbol: "person.crop.circle.badge.checkmark")
+                footNote(ChessPhoneText.robotNoRecord, symbol: "cpu")
             }
             .padding(.horizontal, MobileTheme.sideMargin)
             .padding(.top, MobileTheme.space2)
@@ -484,7 +399,7 @@ struct GamesChessAIScreen: View {
         } label: {
             VStack(spacing: 8) {
                 GamesChessAIColorDot(color: color, size: 30)
-                Text(color == .white ? GamesChessAIText.playWhite : GamesChessAIText.playBlack)
+                Text(color == .white ? ChessPhoneText.robotPlayWhite : ChessPhoneText.robotPlayBlack)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(enabled ? MobileTheme.label : MobileTheme.label2)
                     .multilineTextAlignment(.center)
@@ -498,7 +413,7 @@ struct GamesChessAIScreen: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .accessibilityHint(GamesChessAIText.noRecord)
+        .accessibilityHint(ChessPhoneText.robotNoRecord)
     }
 
     // MARK: 판 · 결과
@@ -524,10 +439,10 @@ struct GamesChessAIScreen: View {
         // 1.9:1 까지 떨어졌다(w15 검증 medium 1 · 오목이 같은 자리에서 데였다).
         .sheet(isPresented: $showsResignConfirm) {
             AingConfirmSheet(
-                title: GamesChessAIText.resignConfirm,
-                message: GamesChessAIText.noRecord,
-                confirmTitle: GamesChessAIText.resign,
-                cancelTitle: GamesChessAIText.keepPlaying,
+                title: ChessPhoneText.robotResignConfirmTitle,
+                message: ChessPhoneText.robotNoRecord,
+                confirmTitle: ChessPhoneText.resignNow,
+                cancelTitle: ChessPhoneText.keepPlaying,
                 onConfirm: {
                     showsResignConfirm = false
                     Task { await store.resign() }
@@ -557,6 +472,9 @@ struct GamesChessAIScreen: View {
                         .frame(width: side, height: side)
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(ChessPhoneText.boardAccessibility(
+                    ply: chrome.plyCount, turn: chrome.clock?.running, inCheck: chrome.isInCheck))
         }
     }
 
@@ -573,10 +491,10 @@ struct GamesChessAIScreen: View {
                 CharacterPortrait(id: chrome.opponent?.characterID, mood: .plain, size: 44)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(isMe ? GamesChessAIText.me : (chrome.opponent?.displayName ?? GamesChessAIText.title))
+                Text(isMe ? ChessPhoneText.me : (chrome.opponent?.displayName ?? ChessPhoneText.robotName))
                     .font(MobileTheme.rowTitle)
                     .foregroundStyle(MobileTheme.label)
-                Text(GamesChessAIText.color(color))
+                Text(ChessPhoneText.stoneName(color))
                     .font(MobileTheme.rowSubtitle)
                     .foregroundStyle(MobileTheme.label2)
             }
@@ -595,15 +513,16 @@ struct GamesChessAIScreen: View {
         .overlay(shape.strokeBorder(isTurn ? MobileTheme.workingDot : Color.clear, lineWidth: 2))
     }
 
-    /// 남은 시간. 코어가 쥔 시계(`ChessServerClock`)를 읽기만 한다 — 폰이 세지 않는다.
-    /// 1초마다만 다시 그린다(판 애니메이션의 60fps 는 `GamesChessBoard` 의 것이다).
+    /// 남은 시간. 코어가 쥔 시계(`ChessServerClock`)를 읽기만 한다 — 폰이 세지 않는다(10분 + 한 수 3초는
+    /// 서버·코어 상수의 것이고 이 화면에 숫자가 없다). 1초마다만 다시 그린다(판의 60fps 는 판 레인의 것이다).
     private func clockLabel(_ clock: ChessServerClock, color: ChessColor, isTurn: Bool) -> some View {
         TimelineView(.animation(minimumInterval: 1, paused: clock.running == nil)) { _ in
             let remaining = clock.remainingSeconds(color, now: store.clock())
-            Text(GamesChessAIText.clock(remaining))
+            Text(ChessPhoneText.clock(remaining))
                 .font(MobileTheme.roundedNumber(.callout))
                 .monospacedDigit()
                 .foregroundStyle(remaining <= 10 && isTurn ? MobileTheme.danger : MobileTheme.label)
+                .accessibilityLabel(ChessPhoneText.clockAccessibility(remaining))
         }
     }
 
@@ -611,32 +530,24 @@ struct GamesChessAIScreen: View {
         HStack(spacing: 4) {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
-            Text(GamesChessAIText.thinkingShort)
+            Text(ChessPhoneText.robotThinkingShort)
                 .font(.system(size: 11, weight: .bold))
         }
         .foregroundStyle(MobileTheme.accent)
-        .accessibilityLabel(GamesChessAIText.thinking)
+        .accessibilityLabel(ChessPhoneText.robotThinking)
     }
 
     @ViewBuilder
     private func footLines(_ chrome: GamesChessAIChrome) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if chrome.stage == .playing {
-                Text(turnLine(chrome))
+                Text(chrome.statusLine)
                     .font(.footnote.weight(chrome.isInCheck ? .semibold : .regular))
                     .foregroundStyle(chrome.isInCheck ? MobileTheme.danger : MobileTheme.label2)
             }
-            Label {
-                Text(GamesChessAIText.noRecord)
-            } icon: {
-                Image(systemName: "cpu").foregroundStyle(MobileTheme.accent)
-            }
-            .font(.footnote)
-            .foregroundStyle(MobileTheme.label2)
-            .fixedSize(horizontal: false, vertical: true)
-            Text(GamesChessAIText.clockPauses + " · " + GamesChessAIText.moveCount(chrome.plyCount))
-                .font(.caption)
-                .foregroundStyle(MobileTheme.label2)
+            footNote(ChessPhoneText.robotNoRecord, symbol: "cpu")
+            // 1:1 의 "앱을 나가도 차례 시간은 흘러요" 와 **정반대 사실**이다 — 로봇 판 시계는 떠나면 멈춘다.
+            footNote(ChessPhoneText.robotClockPauses, symbol: "pause.circle")
             if let notice = chrome.notice {
                 InlineNotice(text: notice, kind: .warning)
             }
@@ -644,24 +555,32 @@ struct GamesChessAIScreen: View {
         .padding(.top, MobileTheme.space1)
     }
 
-    private func turnLine(_ chrome: GamesChessAIChrome) -> String {
-        if chrome.isInCheck, chrome.board?.isMyTurn == true { return GamesChessAIText.inCheck }
-        if chrome.isRobotThinking { return GamesChessAIText.thinking }
-        return chrome.board?.isMyTurn == true ? GamesChessAIText.myTurn : ChessNoticeText.notYourTurn
+    private func footNote(_ text: String, symbol: String) -> some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(MobileTheme.accent)
+        }
+        .font(.footnote)
+        .foregroundStyle(MobileTheme.label2)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// 결과 — 승/패/무 + 끝난 이유. **루비 변화는 싣지 않는다**(0 원도 움직이지 않았다).
+    /// 결과 — 승/패/무 + 끝난 이유(**로봇 판 표**). 루비 줄은 없다(0 원도 움직이지 않았다).
     private func resultCard(_ chrome: GamesChessAIChrome) -> some View {
         InsetGroup {
             GroupRow(divider: .none, minHeight: MobileTheme.rowHeightTwoLine) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(GamesChessAIText.outcome(chrome.outcome))
+                    Text(ChessPhoneText.outcomeTitle(chrome.outcome))
                         .font(MobileTheme.title(.title3))
                         .foregroundStyle(MobileTheme.label)
-                    Text(GamesChessAIText.endReason(chrome.endReason))
+                    Text(chrome.endReasonLine)
                         .font(MobileTheme.rowSubtitle)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
+                    Text(ChessPhoneText.robotOpponentLine)
+                        .font(.caption)
+                        .foregroundStyle(MobileTheme.label2)
                 }
                 Spacer(minLength: 0)
             }
@@ -672,17 +591,17 @@ struct GamesChessAIScreen: View {
     @ViewBuilder
     private func actions(_ chrome: GamesChessAIChrome) -> some View {
         if chrome.canResign {
-            AingButton(GamesChessAIText.resign, kind: .destructive, fillsWidth: true) {
+            AingButton(ChessPhoneText.resign, kind: .destructive, fillsWidth: true) {
                 showsResignConfirm = true
             }
             .padding(.top, MobileTheme.space2)
         }
         if chrome.canRestart {
             VStack(spacing: 10) {
-                AingButton(GamesChessAIText.playAgain, kind: .filled, fillsWidth: true) {
+                AingButton(ChessPhoneText.robotRematch, kind: .filled, fillsWidth: true) {
                     store.restartAIMatch()
                 }
-                AingButton(GamesChessAIText.quit, kind: .gray, fillsWidth: true) {
+                AingButton(ChessPhoneText.backToLobby, kind: .gray, fillsWidth: true) {
                     store.backToLobby()
                 }
             }

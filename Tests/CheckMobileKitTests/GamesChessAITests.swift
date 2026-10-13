@@ -89,6 +89,9 @@ struct GamesChessAISignedOutTests {
         var chrome = GamesChessAIChrome(store: chess)
         #expect(chrome.canStart, "비로그인인데 입구가 닫혔다")
         #expect(chrome.stage == .colorPick)
+        // 막는 사유 한 줄도 **문구 표를 지난다**(`robotEntryBlock`). 로그인은 사유가 아니므로 최악의 값을
+        // 넣어도 nil 이어야 한다 — 그 함수가 세션으로 가르기 시작하면 여기서 빨개진다.
+        #expect(chrome.blockReason == nil, "비로그인이 입구를 막는 사유로 쓰였다")
 
         chess.startAIMatch(humanColor: .white)
         chrome = GamesChessAIChrome(store: chess)
@@ -270,6 +273,66 @@ struct GamesChessAIBoardTests {
     }
 }
 
+// MARK: - 결과 문구 (로봇 판 표 · FIDE 6.9)
+
+@MainActor
+@Suite(.serialized)
+struct GamesChessAIResultTextTests {
+    /// 끝난 로봇 판 하나를 시계로 세운다(사람이 백 · 로봇이 흑). `flagged` 쪽의 깃발이 떨어진다.
+    @MainActor
+    private static func finishedByFlag(_ harness: GamesHarness, fen: String) -> ChessStore {
+        let chess = makeChessStore(harness)
+        let position = ChessPosition(fen: fen)!
+        let game = ChessAIGame(humanColor: .white, position: position, initialMs: 1_000,
+                               incrementMs: 0, now: harness.clock.now)
+        chess.aiGame = game
+        chess.match = game.matchState()
+        chess.phase = .playing
+        chess.handleAIClock(now: harness.clock.now.addingTimeInterval(2))
+        return chess
+    }
+
+    @Test("결과 이유는 로봇 판 표를 쓴다 — 1인칭 표의 '상대' 문장이 아니다")
+    func resultUsesTheRobotEndReasonTable() async {
+        // 표가 셋이다(`endReason` 1인칭 · `robotEndReason` 로봇 · `watchEndReason` 관전). 1인칭 표는 루비와
+        // "상대" 를 말하므로 로봇 판에 쓰면 **없는 루비 변화**와 없는 사람을 말한다. 두 표가 **갈리는 경우**로
+        // 재야 한다 — 로봇이 시간을 다 쓴 판(내가 이김)에서 두 문장이 다르다.
+        let harness = GamesHarness(label: "chess-ai-robot-text")
+        // 흑(로봇) 차례인데 깃발이 떨어진다. 백은 K+Q 라 메이트할 기물이 있다 → 백(사람) 승.
+        let chess = Self.finishedByFlag(harness, fen: "4k3/8/8/8/8/8/3Q4/4K3 b - - 0 1")
+        let chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.stage == .result)
+        #expect(chrome.outcome == .won)
+        #expect(chrome.endReason == .timeout)
+        #expect(chrome.endReasonLine == ChessPhoneText.robotEndReason(.timeout, outcome: .won))
+        #expect(chrome.endReasonLine != ChessPhoneText.endReason(.timeout, outcome: .won),
+                "1인칭 표를 쓰고 있다 — 로봇 판에 '상대' 가 나온다")
+        #expect(!chrome.endReasonLine.contains("상대"), "로봇 판에 '상대' 어휘가 나왔다")
+        #expect(!chrome.endReasonLine.contains("루비"), "판돈이 없는 판이 루비를 말했다")
+        chess.reset()
+        await harness.tearDown()
+    }
+
+    @Test("FIDE 6.9 — 시간이 다 됐는데도 무승부라고 말한다")
+    func fideSixNineSaysDraw() async {
+        // §6 ③ — 깃발이 떨어진 쪽이 져야 할 것 같지만, 남은 쪽에 메이트할 기물이 없으면 **무승부**다.
+        // 코어가 판정하고(사유 `timeout_insufficient`) 화면은 **문구만** 그 경우를 말한다. 기준선이 갈린다:
+        // 같은 '시간 초과' 인데 위 시험은 패·승을, 이 시험은 무승부를 말해야 한다.
+        let harness = GamesHarness(label: "chess-ai-fide69")
+        // 백(사람) 차례인데 깃발이 떨어진다. 흑은 왕뿐이라 메이트할 수 없다 → 무승부.
+        let chess = Self.finishedByFlag(harness, fen: "4k3/8/8/8/8/8/3Q4/4K3 w - - 0 1")
+        let chrome = GamesChessAIChrome(store: chess)
+        #expect(chrome.endReason == .timeoutInsufficient, "코어가 FIDE 6.9 로 판정해야 한다")
+        #expect(chrome.outcome == .draw, "2배 승리가 아니라 무승부다")
+        #expect(chrome.endReasonLine.contains("무승부"), "시간이 다 됐는데 무승부라고 말하지 않았다")
+        #expect(chrome.endReasonLine != ChessPhoneText.robotEndReason(.timeout, outcome: .draw),
+                "timeout 과 같은 문장으로 접혔다 — 돌려받은 루비를 잃은 것으로 읽힌다")
+        #expect(ChessPhoneText.outcomeTitle(chrome.outcome) == "무승부예요")
+        chess.reset()
+        await harness.tearDown()
+    }
+}
+
 // MARK: - ⑥ 로봇 판 중 PvP (판정만 — 고치지 않는다)
 
 @MainActor
@@ -312,6 +375,8 @@ struct GamesChessAIVersusPvPTests {
         let chrome = GamesChessAIChrome(store: chess)
         #expect(chrome.stage == .colorPick, "로봇 화면은 색 고르기로 되돌아간다")
         #expect(chrome.canStart == false, "1:1 판 중에는 로봇 판을 새로 열 수 없다(반대 방향은 막혀 있다)")
+        #expect(chrome.blockReason == ChessPhoneText.busyTitle(.chess),
+                "막힌 입구가 사유를 말해야 한다(문구 표의 양방향 표현)")
         await tearDown(harness, chess)
     }
 
@@ -367,9 +432,30 @@ struct GamesChessAISourceContractTests {
         let code = try Self.viewRegion()
         let passes = code.components(separatedBy: "whiteAtBottom:").count - 1
         #expect(passes == 1, "판에 뒤집기를 넘기는 자리가 \(passes) 군데다 — 한 군데여야 한다(§6 ①·④)")
-        #expect(!code.contains("myColor"), "뷰가 내 색에서 방향을 다시 만든다 — 흑으로 두는 사람만 틀어진다")
+        // `myColor:` 를 **넘기는 것**(승격 시트의 인자)은 괜찮다 — 금지하는 것은 그 값에서 방향을 **다시 만드는** 것이다.
+        #expect(!code.contains(".myColor"), "뷰가 판에서 내 색을 다시 읽는다 — 흑으로 두는 사람만 틀어진다")
+        #expect(!code.contains("myColor =="), "뷰가 내 색으로 방향을 가른다")
         #expect(!code.contains("7 -"), "뷰에 칸 뒤집기 산술이 있다")
         #expect(!code.contains("file:"), "뷰가 칸 좌표를 만든다")
+    }
+
+    @Test("결과 문구는 1인칭 표를 부르지 않는다 — 파일 어디에도 없다")
+    func fileNeverCallsTheFirstPersonEndReasonTable() throws {
+        // 표가 셋이라 **부르는 이름 하나**로 갈린다(`robotEndReason`). 1인칭 표를 부르면 로봇 판이 루비·"상대"
+        // 를 말한다 — 값 시험(`GamesChessAIResultTextTests`)과 짝으로 둬서 이름이 바뀌어도 한쪽이 잡는다.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/CheckMobileKit/Games/GamesChessAIViews.swift")
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let stripped = raw.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                guard let hit = line.range(of: "//") else { return String(line) }
+                return String(line[line.startIndex..<hit.lowerBound])
+            }
+            .joined(separator: "\n")
+        #expect(!stripped.contains("Text.endReason("), "1인칭 끝난 이유 표를 부른다")
+        #expect(!stripped.contains("watchEndReason"), "관전 표를 부른다(로봇 판은 3인칭이 아니다)")
+        #expect(stripped.contains("robotEndReason("), "로봇 판 표를 부르지 않는다")
     }
 
     @Test("뷰 구역이 합법 수를 만들지 않고 판돈을 그리지 않는다")

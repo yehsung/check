@@ -261,6 +261,15 @@ func 서버_캐릭터_명단의_neutral_초상이_맥_번들에_전부_있다() 
     // 그래서 build-local.sh 는 지금처럼 check_check.bundle 하나만 복사하면 된다. 그 전제가 이 테스트다.
     let roster = try serverCharacterRoster()
     #expect(roster.contains("aing") && roster.count >= 6, "서버 명단이 이상하다: \(roster)")
+    // v0.3.54(20261015121000): 서버 명단에 aing_gold(황금 아잉이)가 든다. 황금은 3D 아잉의 변형이라 캐릭터 폴더가 아니라
+    // 아잉처럼 Resources 의 초상을 쓴다 — 그 원본(작업 A 가 만든다)이 저장소에 있어야 아래 번들 검사가 성립한다.
+    if roster.contains("aing_gold") {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = repoRoot.appendingPathComponent("Sources/check/Resources/aing_gold-neutral.png")
+        #expect(FileManager.default.fileExists(atPath: source.path),
+                "서버가 aing_gold 를 허용하는데 황금 아잉이 neutral 초상 원본이 없다: \(source.path)")
+    }
     let directory = AppUserCharacterDirectory(catalog: CheckMascotAssets.catalog)
     for id in roster {
         #expect(directory.knownIDs.contains(id), "서버가 허용하는 '\(id)' 를 맥 카탈로그가 모른다 — 그 사람은 맥에서 이니셜로 남는다")

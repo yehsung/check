@@ -155,6 +155,48 @@ private func reDoBlocks(_ raw: String) throws -> [(tag: String, body: String)] {
     }
 }
 
+/// `insert into public.character_prices (칸…) values (…), (…);` 문장들(주석 걷은 소문자 SQL)을 행 단위로 읽는다.
+/// 반환: (칸 이름들, 행마다 값 문자열들). 칸 목록이 없는 insert 는 모양을 모르므로 던진다 — 조용히 건너뛰면 검사가 헛돈다.
+private func rePriceInserts(_ sql: String) throws -> [(columns: [String], rows: [[String]])] {
+    let statements = try reMatches(#"insert\s+into\s+public\.character_prices\s*\(([^)]*)\)\s*values\s*([^;]*?)\s*(?:on\s+conflict[^;]*)?;"#, in: sql)
+    let mentions = sql.components(separatedBy: "insert into public.character_prices").count - 1
+    guard statements.count == mentions else {
+        throw REError("가격표 insert 가 \(mentions)번 나오는데 \(statements.count)개만 읽었다 — 칸 목록 없는 모양이다(이 파서를 고쳐라)")
+    }
+    return try statements.map { statement in
+        let columns = statement[1].split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let rows = try reMatches(#"\(([^()]*)\)"#, in: statement[2]).map { row in
+            row[1].split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
+        return (columns, rows)
+    }
+}
+
+/// 가격표 insert 가 전부 **뽑기 전용 행**(`gacha_only` 칸 = true)인가. 파는 캐릭터를 더하는 insert 면 false.
+private func reInsertsAreGachaOnly(_ inserts: [(columns: [String], rows: [[String]])]) -> Bool {
+    inserts.allSatisfy { insert in
+        guard let at = insert.columns.firstIndex(of: "gacha_only"), !insert.rows.isEmpty else { return false }
+        return insert.rows.allSatisfy { $0.count == insert.columns.count && $0[at] == "true" }
+    }
+}
+
+/// 체인 전체에서 `gacha_only = true` 로 가격표에 들어간 id(뽑기 전용 — 상점에서 안 판다, 20261015121000 aing_gold).
+private func reGachaOnlyIDs() throws -> Set<String> {
+    var ids = Set<String>()
+    for file in try reMigrationNames() {
+        let sql = reStripSQL(try reRaw(file)).lowercased()
+        guard sql.contains("insert into public.character_prices") else { continue }
+        for insert in try rePriceInserts(sql) {
+            guard let at = insert.columns.firstIndex(of: "gacha_only"),
+                  let idAt = insert.columns.firstIndex(of: "character_id") else { continue }
+            for row in insert.rows where row.count == insert.columns.count && row[at] == "true" {
+                ids.insert(row[idAt].trimmingCharacters(in: CharacterSet(charactersIn: "'")))
+            }
+        }
+    }
+    return ids
+}
+
 private func reSource(_ relative: String) throws -> String {
     try String(contentsOf: reRepoRoot.appendingPathComponent(relative), encoding: .utf8)
 }
@@ -275,8 +317,11 @@ struct V0351RubyEconomyMigrationTests {
         }
 
         // 이 앱 번들이 세우는 유료 캐릭터 전부가 새 가격을 받는다(빠진 캐릭터는 옛 값 그대로 남아 "2배" 가 거짓이 된다).
-        // v0.3.54: 황금 아잉이는 카탈로그에 늘 있지만 **팔지 않는다**(뽑기 전용) — 유료 캐릭터가 아니다.
-        let paid = Set(CheckMascotAssets.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGoldAing($0) })
+        // ★ 뽑기 전용 캐릭터(가격표에 gacha_only = true 로 들어간 id — 20261015121000 aing_gold)는 **팔지 않으므로** 유료가 아니다.
+        //   그 명단도 손으로 적지 않고 마이그레이션에서 읽는다(기준선: 지금 정확히 aing_gold 하나다).
+        let gachaOnly = try reGachaOnlyIDs()
+        #expect(gachaOnly == ["aing_gold"], "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold]")
+        let paid = Set(CheckMascotAssets.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID }).subtracting(gachaOnly)
         #expect(Set(newPrices.keys) == paid, "가격을 고친 캐릭터 \(newPrices.keys.sorted()) ≠ 번들의 유료 캐릭터 \(paid.sorted())")
     }
 
@@ -288,10 +333,26 @@ struct V0351RubyEconomyMigrationTests {
 
         let names = try reMigrationNames()
         let mine = try #require(names.firstIndex(of: reNewMigration), "\(reNewMigration) 이 체인에 없다")
+        // 기준선: 판별식이 파는 캐릭터의 insert 는 거절하고 뽑기 전용 insert 는 통과시킨다(둘이 같게 나오면 아래 검사는 영원히 초록이다).
+        #expect(!reInsertsAreGachaOnly(try rePriceInserts(
+            "insert into public.character_prices (character_id, price, min_protocol, gacha_only) values ('cat', 80, 2, false);")))
+        #expect(!reInsertsAreGachaOnly(try rePriceInserts(
+            "insert into public.character_prices(character_id, price, min_protocol) values ('cat', 80, 2) on conflict (character_id) do nothing;")))
+        #expect(reInsertsAreGachaOnly(try rePriceInserts(
+            "insert into public.character_prices (character_id, price, min_protocol, gacha_only) values ('aing_gold', 1000, 2, true) on conflict (character_id) do nothing;")))
         for later in names[(mine + 1)...] {
             let sql = reStripSQL(try reRaw(later)).lowercased()
-            #expect(!sql.contains("update public.character_prices") && !sql.contains("insert into public.character_prices"),
-                    "\(later) 가 이 파일 뒤에서 가격표를 다시 쓴다 — 이 계약(가입 ≥ 최저가 · 2배)을 그 파일로 옮겨라")
+            #expect(!sql.contains("update public.character_prices"),
+                    "\(later) 가 이 파일 뒤에서 가격표 값을 다시 쓴다 — 이 계약(가입 ≥ 최저가 · 2배)을 그 파일로 옮겨라")
+            guard sql.contains("insert into public.character_prices") else { continue }
+            // 뒤 파일의 insert 는 **뽑기 전용 행**(상점에서 안 판다 — 최저가·2배 계약 밖)만 된다(20261015121000 aing_gold).
+            #expect(reInsertsAreGachaOnly(try rePriceInserts(sql)),
+                    "\(later) 가 파는 캐릭터를 가격표에 더한다 — 이 계약(가입 ≥ 최저가 · 2배)을 그 파일로 옮겨라")
+            // 그리고 그 파일이 적용 시점에 부등식을 **살 수 있는 행으로** 다시 잰다(옛 파일의 단언은 다시 안 돈다).
+            let laterPost = try #require(try reDoBlocks(try reRaw(later)).first { $0.tag == "$post$" }, "\(later) 에 사후 단언 블록이 없다")
+            #expect(laterPost.body.contains("public.ruby_welcome_grant() < v_min")
+                        && laterPost.body.contains("where not c.gacha_only"),
+                    "\(later) 의 사후 단언이 가입 지급 ≥ (뽑기 전용을 뺀) 최저가를 안 잰다")
         }
         // 이 파일 자신이 그 부등식을 적용 시점에 되묻는다(옛 파일의 단언은 다시 안 돈다).
         let post = try #require(try reDoBlocks(try reRaw(reNewMigration)).first { $0.tag == "$post$" }, "사후 단언 블록이 없다")

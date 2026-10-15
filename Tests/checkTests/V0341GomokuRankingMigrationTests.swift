@@ -276,6 +276,17 @@ private let t41IntendedGomokuRewrites: [String: (why: String, required: [String]
         ["public.chess__busy(", "public.blocked_between(", "public.same_visibility("],
         ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
     ),
+    // 2026-10-15 판돈 수수료 10%(20261015120000 · 사용자 확정): 승리 갈래만 `2 × 판돈 − duel_fee(판돈)` 로 바꿨다.
+    // 정산은 전적을 **보고하지 않는다**(판 행을 닫을 뿐 — 컷 술어·인라인 집계 0회, 정본에서도 실측) → 컷을 못 지운다.
+    // required 는 덮어쓴 이유(수수료 한 줄과 지급식)와 정본이 지키던 것(멱등 가드 · 지갑 키 순서 · 무승부 환불 = 판돈 그대로)이다.
+    "20261015120000_duel_fee.sql:gomoku__settle": (
+        "판돈 수수료 10% — 승자 2×판돈 − duel_fee(판돈), 무승부 환불은 그대로(20261015120000)",
+        ["v_fee := public.duel_fee(v_stake);", "set ruby_balance = ruby_balance + 2 * v_stake - v_fee",
+         "where g.id = p_match_id and g.status = 'active'",
+         "pg_advisory_xact_lock(hashtext('ultra_wallet:' || least(v_black, v_white)::text))",
+         "'grant:gomoku:refund:' || p_match_id::text, v_stake, v_bal"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
+    ),
 ]
 
 @Test

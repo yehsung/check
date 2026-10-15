@@ -5,15 +5,16 @@ import Testing
 
 /// v0.3.54 뽑기 — 맥·폰이 같이 쓰는 판정과 문구(`GachaRules` · `GachaPullOutcome` · `GachaText` · `GachaRequestIDs`).
 ///
-/// 기대값은 **설계서 표를 손으로 옮긴 값**이다(확률 · 상점가 · 교환가). 서버 응답 모양을 지나 화면 줄(글자)까지 잰다 —
-/// "확률 보기" 표가 사용자에게 무엇을 말하는지가 이 기능의 공개 의무다.
+/// 기대값은 **설계서 표를 손으로 옮긴 값**이다(확률 · 상점가 · 교환가 — 교환가는 AMENDMENT 1: 여우·다람쥐 2 · 강아지·유령 4 ·
+/// 해파리 5 · 로봇 8 · 황금 20). 서버 응답 모양을 지나 화면 줄(글자)까지 잰다 — "확률 보기" 표가 사용자에게 무엇을 말하는지가
+/// 이 기능의 공개 의무다.
 @Suite("v0.3.54 뽑기 판정·문구")
 struct V0354GachaRulesTests {
 
     // MARK: - 확률표 → 화면 줄
 
     /// 맥의 실제 번들 카탈로그 이름으로 그린다(폰은 카드 표 이름 — 둘 다 "강아지" 다. 설계서 표의 "시바"는 id 의 별명이다).
-    @Test("확률표 7줄: 서버 순서 · 이름 · % · 상점가(황금은 '뽑기 전용') · 교환가 — 설계서 표 그대로")
+    @Test("확률표 7줄: 서버 순서 · 이름 · % · 상점가(황금은 '뽑기 또는 조각 20개') · 교환가 — 설계서 표(AMENDMENT 1) 그대로")
     func oddsTableMatchesTheOwnerTable() async throws {
         let state = try Self.shopState()
         let info = try #require(state.gacha)
@@ -23,18 +24,20 @@ struct V0354GachaRulesTests {
 
         let table = rows.map { [$0.characterID, $0.name, $0.percentText, $0.priceText, $0.shardCost.map(String.init) ?? "-"] }
         #expect(table == [
-            ["aing_gold", "황금 아잉이", "5%", "뽑기 전용", "-"],
-            ["fox", "여우", "24%", "60", "3"],
-            ["squirrel", "다람쥐", "24%", "60", "3"],
-            ["shiba", "강아지", "14%", "100", "5"],
-            ["ghost", "유령", "14%", "100", "5"],
-            ["jellyfish", "해파리", "11%", "140", "7"],
-            ["robot", "로봇", "8%", "200", "10"],
+            ["aing_gold", "황금 아잉이", "5%", "뽑기 또는 조각 20개", "20"],
+            ["fox", "여우", "24%", "60", "2"],
+            ["squirrel", "다람쥐", "24%", "60", "2"],
+            ["shiba", "강아지", "14%", "100", "4"],
+            ["ghost", "유령", "14%", "100", "4"],
+            ["jellyfish", "해파리", "11%", "140", "5"],
+            ["robot", "로봇", "8%", "200", "8"],
         ], Comment(rawValue: "\(table)"))
         #expect(rows.reduce(0) { $0 + $1.percent } == 100)
         #expect(rows.first?.isGold == true && rows.first?.isGachaOnly == true && rows.first?.shopPrice == nil)
-        // 명목가(1000)가 화면에 새지 않는다 — 뽑기 전용은 값이 아니라 말로 쓴다.
+        // 명목가(1000)가 화면에 새지 않는다 — 뽑기 전용은 값이 아니라 얻는 길(뽑기 또는 조각)로 쓴다.
         #expect(!rows.map(\.priceText).contains("1000"))
+        // AMENDMENT 1: 황금도 조각으로 바뀌므로 "뽑기 전용"이라고 말하면 거짓이다(교환값을 아는 한).
+        #expect(!rows.map(\.priceText).contains(GachaText.gachaOnly), Comment(rawValue: "\(rows.map(\.priceText))"))
     }
 
     @Test("이름은 호출부 → 내장 이름 → id 순서로 — 빈칸을 만들지 않는다")
@@ -46,7 +49,7 @@ struct V0354GachaRulesTests {
         #expect(GachaRules.name(for: "dragon", displayName: { _ in nil }) == "dragon")
     }
 
-    @Test("상점가 칸: 황금은 언제나 '뽑기 전용' · 서버 표식이 참이면 뽑기 전용 · 값이 없으면 '—'")
+    @Test("상점가 칸: 황금은 언제나 루비 값 없음 · 교환값을 알면 '뽑기 또는 조각 N개' · 모르면 '뽑기 전용' · 값이 없으면 '—'")
     func priceTextRules() {
         let info = GachaInfo(price: 50, odds: [GachaOddsEntry(characterID: "aing_gold", percent: 40),
                                                GachaOddsEntry(characterID: "fox", percent: 30),
@@ -62,6 +65,28 @@ struct V0354GachaRulesTests {
         ], displayName: { _ in nil })
         #expect(rows.map(\.priceText) == ["뽑기 전용", "뽑기 전용", "100"])
         #expect(rows.map(\.shopPrice) == [nil, nil, 100])
+
+        // 교환값을 알면(서버 shard_costs) 루비 값 대신 얻는 길을 숫자까지 말한다 — 숫자는 서버 값이다(기준선: 위의 값 없는 판).
+        var priced = info
+        priced.shardCosts = ["aing_gold": 20, "fox": 2, "ghost": 4]
+        let withCosts = GachaRules.oddsRows(info: priced, shopRows: [
+            ShopCharacterRow(id: "aing_gold", price: 1000, owned: false, gachaOnly: true),
+            ShopCharacterRow(id: "fox", price: 60, owned: false, gachaOnly: true),
+            ShopCharacterRow(id: "ghost", price: 100, owned: false),
+        ], displayName: { _ in nil })
+        #expect(withCosts.map(\.priceText) == ["뽑기 또는 조각 20개", "뽑기 또는 조각 2개", "100"])
+        #expect(withCosts.map(\.shardCost) == [20, 2, 4])
+        priced.shardCosts = ["aing_gold": 25]
+        #expect(GachaRules.oddsRows(info: priced, shopRows: [], displayName: { _ in nil }).first?.priceText == "뽑기 또는 조각 25개",
+                "교환값을 화면이 다시 적었다 — 서버 값을 따라가야 한다")
+        #expect(GachaText.gachaOnlyPrice(shardCost: 20) == "뽑기 또는 조각 20개")
+        #expect(GachaText.gachaOnlyPrice(shardCost: nil) == "뽑기 전용")
+        #expect(GachaText.gachaOnlyPrice(shardCost: 0) == "뽑기 전용", "0 조각은 값이 아니다")
+        // 아잉(무료 기본)은 서버가 교환값을 실어도 교환값 칸이 비어 있다.
+        let aing = GachaRules.oddsRows(info: GachaInfo(price: 50, odds: [GachaOddsEntry(characterID: "aing", percent: 100)],
+                                                      shardCosts: ["aing": 1]),
+                                       shopRows: [], displayName: { _ in nil })
+        #expect(aing.first?.shardCost == nil)
         // 상점 행 자체의 "살 수 있나"도 같은 규칙이다.
         #expect(ShopCharacterRow(id: "aing_gold", price: 1000, owned: false, gachaOnly: false).isPurchasable == false)
         #expect(ShopCharacterRow(id: "aing_gold", price: 1000).isPurchasable == false)
@@ -150,19 +175,27 @@ struct V0354GachaRulesTests {
 
     // MARK: - 교환
 
-    @Test("교환 판정: 보유 · 충분 · 모자람 · 조각 모름 · 교환 불가(아잉 · 황금 · 모르는 id)")
+    @Test("교환 판정: 보유 · 충분 · 모자람 · 조각 모름 · 황금 20(19 모자람 · 20 교환) · 교환 불가(아잉 · 모르는 id)")
     func exchangeAvailability() {
-        let costs = ["fox": 3, "robot": 10, "aing_gold": 9, "aing": 1]
+        let costs = ["fox": 2, "robot": 8, "aing_gold": 20, "aing": 1]
         #expect(GachaRules.exchangeAvailability(characterID: "fox", isOwned: true, shards: 0, shardCosts: costs) == .owned)
-        #expect(GachaRules.exchangeAvailability(characterID: "fox", isOwned: false, shards: 3, shardCosts: costs)
-                == .available(cost: 3))
         #expect(GachaRules.exchangeAvailability(characterID: "fox", isOwned: false, shards: 2, shardCosts: costs)
-                == .short(cost: 3, missing: 1))
+                == .available(cost: 2))
+        #expect(GachaRules.exchangeAvailability(characterID: "fox", isOwned: false, shards: 1, shardCosts: costs)
+                == .short(cost: 2, missing: 1))
         #expect(GachaRules.exchangeAvailability(characterID: "robot", isOwned: false, shards: nil, shardCosts: costs)
-                == .unknownShards(cost: 10))
-        // 서버가 실수로 실어도 아잉·황금은 교환 불가(사장님 규칙) · 표에 없는 id 도.
-        #expect(GachaRules.exchangeAvailability(characterID: "aing_gold", isOwned: false, shards: 99, shardCosts: costs)
+                == .unknownShards(cost: 8))
+        // AMENDMENT 1: 황금 아잉이도 조각 20개로 바꾼다 — 경계 양쪽(19 · 20)과 보유.
+        #expect(GachaRules.exchangeAvailability(characterID: "aing_gold", isOwned: false, shards: 19, shardCosts: costs)
+                == .short(cost: 20, missing: 1))
+        #expect(GachaRules.exchangeAvailability(characterID: "aing_gold", isOwned: false, shards: 20, shardCosts: costs)
+                == .available(cost: 20))
+        #expect(GachaRules.exchangeAvailability(characterID: "aing_gold", isOwned: true, shards: 99, shardCosts: costs) == .owned)
+        // 값은 서버 교환표의 것만 — 표에 황금이 없으면 클라가 지어내지 않는다(기준선: 위와 같은 사람·같은 조각).
+        #expect(GachaRules.exchangeAvailability(characterID: "aing_gold", isOwned: false, shards: 99, shardCosts: ["fox": 2])
                 == .notExchangeable)
+        // 서버가 실수로 실어도 아잉(무료 기본)은 교환 불가(사장님 규칙) · 표에 없는 id 도.
+        #expect(GachaRules.isNeverExchangeable("aing") && !GachaRules.isNeverExchangeable("aing_gold"))
         #expect(GachaRules.exchangeAvailability(characterID: "aing", isOwned: false, shards: 99, shardCosts: costs)
                 == .notExchangeable)
         #expect(GachaRules.exchangeAvailability(characterID: "ghost", isOwned: false, shards: 99, shardCosts: costs)
@@ -173,29 +206,44 @@ struct V0354GachaRulesTests {
         #expect(GachaExchangeAvailability.owned.canExchange == false)
     }
 
-    @Test("교환 목록: 확률표 순서 · 6종 · 황금 없음 · 보유/조각에 따라 갈린다")
+    @Test("교환 목록: 7줄 · 황금 먼저 · 그다음 확률표 순서 · 보유/조각에 따라 갈린다(AMENDMENT 1)")
     func exchangeRows() throws {
         let state = try Self.shopState()
         let info = try #require(state.gacha)   // 조각 3개
         let owned: Set<String> = ["aing", "squirrel"]
         let rows = GachaRules.exchangeRows(info: info, ownedIDs: owned,
                                            displayName: { CheckMascotAssets.catalog.manifest(id: $0)?.displayName })
-        #expect(rows.map(\.characterID) == ["fox", "squirrel", "shiba", "ghost", "jellyfish", "robot"])
+        #expect(rows.map(\.characterID) == ["aing_gold", "fox", "squirrel", "shiba", "ghost", "jellyfish", "robot"])
         #expect(rows.map(\.availability) == [
-            .available(cost: 3), .owned, .short(cost: 5, missing: 2), .short(cost: 5, missing: 2),
-            .short(cost: 7, missing: 4), .short(cost: 10, missing: 7),
+            .short(cost: 20, missing: 17), .available(cost: 2), .owned, .short(cost: 4, missing: 1), .short(cost: 4, missing: 1),
+            .short(cost: 5, missing: 2), .short(cost: 8, missing: 5),
         ])
-        #expect(rows.map(\.name) == ["여우", "다람쥐", "강아지", "유령", "해파리", "로봇"])
+        #expect(rows.map(\.name) == ["황금 아잉이", "여우", "다람쥐", "강아지", "유령", "해파리", "로봇"])
+        #expect(rows.filter { $0.availability.canExchange }.map(\.characterID) == ["fox"], "조각 3개로 바꿀 수 있는 건 여우(2)뿐이다")
+
+        // 금 먼저는 서버 순서와 무관하다: 확률표에서 황금이 맨 뒤여도 교환 목록에선 맨 위 · 나머지 상대 순서는 그대로.
+        let reversed = GachaInfo(price: 50, shards: 20, odds: Array((info.odds ?? []).reversed()), shardCosts: info.shardCosts)
+        let flipped = GachaRules.exchangeRows(info: reversed, ownedIDs: [], displayName: { _ in nil })
+        #expect(flipped.map(\.characterID) == ["aing_gold", "robot", "jellyfish", "ghost", "shiba", "squirrel", "fox"])
+        #expect(flipped.first?.availability == .available(cost: 20), "조각 20개면 황금을 바꿀 수 있다")
+        // 기준선: 교환표에 황금이 없으면 황금 줄 자체가 없다(값을 지어내지 않는다) — 순서는 확률표 그대로.
+        var noGold = info
+        noGold.shardCosts = info.shardCosts?.filter { $0.key != "aing_gold" }
+        #expect(GachaRules.exchangeRows(info: noGold, ownedIDs: [], displayName: { _ in nil }).map(\.characterID)
+                == ["fox", "squirrel", "shiba", "ghost", "jellyfish", "robot"])
     }
 
     @Test("교환 결과 문구")
     func exchangeNotices() {
-        #expect(GachaText.notice(for: .exchanged(characterID: "fox", shards: 0, cost: 3, replayed: false), name: "여우")
+        #expect(GachaText.notice(for: .exchanged(characterID: "fox", shards: 0, cost: 2, replayed: false), name: "여우")
                 == "교환했어요: 여우")
-        #expect(GachaText.notice(for: .insufficientShards(need: 7, have: 2), name: "해파리") == "조각 5개 더 필요해요")
+        #expect(GachaText.notice(for: .exchanged(characterID: "aing_gold", shards: 0, cost: 20, replayed: false), name: "황금 아잉이")
+                == "교환했어요: 황금 아잉이")
+        #expect(GachaText.notice(for: .insufficientShards(need: 5, have: 2), name: "해파리") == "조각 3개 더 필요해요")
+        #expect(GachaText.notice(for: .insufficientShards(need: 20, have: 19), name: "황금 아잉이") == "조각 1개 더 필요해요")
         #expect(GachaText.notice(for: .insufficientShards(need: nil, have: nil), name: "해파리") == "조각이 모자라요")
         #expect(GachaText.notice(for: .alreadyOwned, name: "여우") == "이미 갖고 있어요")
-        #expect(GachaText.notice(for: .notExchangeable, name: "황금 아잉이") == "교환할 수 없는 캐릭터예요")
+        #expect(GachaText.notice(for: .notExchangeable, name: "아잉") == "교환할 수 없는 캐릭터예요")
         #expect(GachaExchangeOutcome(response: GachaExchangeResponse(status: .ok), requestedID: "ghost")
                 == .exchanged(characterID: "ghost", shards: nil, cost: nil, replayed: false))
     }
@@ -248,7 +296,11 @@ struct V0354GachaRulesTests {
         let everything = sentences + [
             GachaText.title, GachaText.pullButton, GachaText.oddsButton, GachaText.oddsTitle, GachaText.gachaOnly,
             GachaText.owned, GachaText.exchangeButton, GachaText.exchangeTitle, GachaText.goldHeadline,
+            GachaText.gachaOnlyPrice(shardCost: 20),
         ]
+        // AMENDMENT 1: 황금은 조각으로도 바뀐다 — "뽑기로만"은 거짓 문장이다.
+        #expect(!GachaText.gachaOnlyHint.contains("뽑기로만") && GachaText.gachaOnlyHint.contains("조각"),
+                Comment(rawValue: GachaText.gachaOnlyHint))
         for text in everything {
             #expect(!text.contains("도박") && !text.contains("베팅") && !text.contains("확률형"), Comment(rawValue: text))
         }

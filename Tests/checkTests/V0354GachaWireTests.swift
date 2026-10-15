@@ -26,7 +26,8 @@ struct V0354GachaWireTests {
         #expect(gacha.odds?.map(\.characterID) == ["aing_gold", "fox", "squirrel", "shiba", "ghost", "jellyfish", "robot"],
                 "서버 순서가 아니다 — 정렬하거나 키 이름(character_id)을 못 읽었다")
         #expect(gacha.odds?.map(\.percent) == [5, 24, 24, 14, 14, 11, 8])
-        #expect(gacha.shardCosts == ["fox": 3, "squirrel": 3, "shiba": 5, "ghost": 5, "jellyfish": 7, "robot": 10])
+        // AMENDMENT 1: 일곱 값(황금 20 포함). `[String: T]` 는 키 변환을 안 타서 `aing_gold` 키가 그대로 남는다.
+        #expect(gacha.shardCosts == ["aing_gold": 20, "fox": 2, "squirrel": 2, "shiba": 4, "ghost": 4, "jellyfish": 5, "robot": 8])
         #expect(gacha.totalPercent == 100 && gacha.hasCompleteOdds && gacha.isUsable)
 
         let rows = try #require(state.characters)
@@ -78,9 +79,9 @@ struct V0354GachaWireTests {
 
         // ⑤ 교환값 하나가 숫자가 아니다 → 그 값만 버린다. 키는 id 그대로다(snake→camel 변환을 타지 않는다).
         let costs = try #require(try decode(#"""
-        {"price":50,"odds":[{"character_id":"fox","percent":100}],"shard_costs":{"fox":3,"ghost":"5","aing_gold":9,"jelly_fish":7}}
+        {"price":50,"odds":[{"character_id":"fox","percent":100}],"shard_costs":{"fox":2,"ghost":"4","aing_gold":20,"jelly_fish":5}}
         """#).gacha?.shardCosts)
-        #expect(costs == ["fox": 3, "aing_gold": 9, "jelly_fish": 7], Comment(rawValue: "\(costs)"))
+        #expect(costs == ["fox": 2, "aing_gold": 20, "jelly_fish": 5], Comment(rawValue: "\(costs)"))
 
         // ⑥ 값이 없다 → 뽑기 닫힘(값을 지어내지 않는다).
         let noPrice = try #require(try decode(#"{"odds":[{"character_id":"fox","percent":100}]}"#).gacha)
@@ -128,14 +129,14 @@ struct V0354GachaWireTests {
         func decode(_ text: String) throws -> GachaExchangeResponse {
             try decoder.decode(GachaExchangeResponse.self, from: Data(text.utf8))
         }
-        let ok = try decode(#"{"status":"ok","character_id":"robot","shards":2,"cost":10,"request_id":"x","replayed":true}"#)
-        #expect(ok.status == .ok && ok.characterID == "robot" && ok.shards == 2 && ok.cost == 10 && ok.replayed == true)
+        let ok = try decode(#"{"status":"ok","character_id":"robot","shards":2,"cost":8,"request_id":"x","replayed":true}"#)
+        #expect(ok.status == .ok && ok.characterID == "robot" && ok.shards == 2 && ok.cost == 8 && ok.replayed == true)
         #expect(try decode(#"{"status":"not_signed_in"}"#).status == .notSignedIn)
         #expect(try decode(#"{"status":"needs_update"}"#).status == .needsUpdate)
         #expect(try decode(#"{"status":"not_exchangeable"}"#).status == .notExchangeable)
         #expect(try decode(#"{"status":"already_owned"}"#).status == .alreadyOwned)
-        let short = try decode(#"{"status":"insufficient_shards","need":7,"have":2}"#)
-        #expect(short.status == .insufficientShards && short.need == 7 && short.have == 2)
+        let short = try decode(#"{"status":"insufficient_shards","character_id":"aing_gold","need":20,"have":19}"#)
+        #expect(short.status == .insufficientShards && short.need == 20 && short.have == 19 && short.characterID == "aing_gold")
         #expect(try decode(#"{"status":"nope"}"#).status == .unknown("nope"))
         for raw in ["ok", "not_signed_in", "needs_update", "not_exchangeable", "already_owned", "insufficient_shards", "nope"] {
             #expect(GachaExchangeStatus(raw: raw).raw == raw)
@@ -199,7 +200,17 @@ struct V0354GachaWireTests {
         #expect(call.json["p_protocol"] as? Int == 2)
         #expect(call.json["p_request_id"] as? String == id.uuidString.lowercased())
         #expect(GachaExchangeOutcome(response: response, requestedID: "jellyfish")
-                == .exchanged(characterID: "jellyfish", shards: 0, cost: 7, replayed: false))
+                == .exchanged(characterID: "jellyfish", shards: 0, cost: 5, replayed: false))
+
+        // AMENDMENT 1: 황금도 같은 RPC · 같은 세 키로 교환된다(클라가 막지 않는다) — 서버 값(20)이 결과에 실린다.
+        let goldID = UUID()
+        let gold = try await service.gachaExchange(accessToken: "t", characterID: CharacterCatalog.goldAingID,
+                                                   protocolVersion: 2, requestID: goldID)
+        let goldCall = try #require(GomokuStubProtocol.calls(host: host, rpc: "gacha_exchange").last)
+        #expect(Set(goldCall.json.keys) == ["p_character_id", "p_protocol", "p_request_id"], Comment(rawValue: goldCall.body))
+        #expect(goldCall.json["p_character_id"] as? String == "aing_gold")
+        #expect(GachaExchangeOutcome(response: gold, requestedID: "aing_gold")
+                == .exchanged(characterID: "aing_gold", shards: 0, cost: 20, replayed: false))
     }
 
     /// throw 로 온 실패의 갈래: 함수 없음(PGRST202) = 아무것도 안 돌았다 → `.unavailable`(id 를 버려도 된다).
@@ -256,8 +267,10 @@ struct V0354GachaWireTests {
                                                 + #""shards":3,"ruby_balance":\#(balance),"price":50,"request_id":"\#(requestID)","#
                                                 + #""replayed":\#(replayed)}"#)
             case "gacha_exchange":
+                // 교환값은 서버 확률표(AMENDMENT 1) 그대로 — 보낸 id 의 값을 cost 로 싣는다.
                 let id = json["p_character_id"] as? String ?? ""
-                return GomokuStubProtocol.Reply(body: #"{"status":"ok","character_id":"\#(id)","shards":0,"cost":7,"#
+                let cost = ["aing_gold": 20, "fox": 2, "squirrel": 2, "shiba": 4, "ghost": 4, "jellyfish": 5, "robot": 8][id] ?? 0
+                return GomokuStubProtocol.Reply(body: #"{"status":"ok","character_id":"\#(id)","shards":0,"cost":\#(cost),"#
                                                 + #""request_id":"\#(requestID)","replayed":false}"#)
             default:
                 return nil

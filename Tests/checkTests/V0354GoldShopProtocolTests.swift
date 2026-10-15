@@ -192,14 +192,15 @@ enum V0354CoreArtBaseline {
 /// 상점·뽑기 스텁 응답(설계서 Wire contract 모양 그대로). `GomokuStubProtocol` 에 호스트별로 건다 —
 /// 그 URLProtocol 은 rpc 이름을 가리지 않고 호스트로만 가른다(체스·오목 스위트도 같은 하네스를 쓴다).
 enum V0354CoreStub {
-    /// 설계서 표 그대로의 `gacha` 객체(서버 순서 · 합 100).
+    /// 설계서 표 그대로의 `gacha` 객체(서버 순서 · 합 100). 교환값은 AMENDMENT 1(2026-10-15) — 일곱(황금 20 포함).
+    /// 키 순서는 서버 jsonb 가 내는 순서(길이 → 바이트)를 흉내 냈다 — 클라는 순서에 기대지 않는다.
     static let gachaJSON = #"""
     {"price":50,"shards":3,
      "odds":[{"character_id":"aing_gold","percent":5},{"character_id":"fox","percent":24},
              {"character_id":"squirrel","percent":24},{"character_id":"shiba","percent":14},
              {"character_id":"ghost","percent":14},{"character_id":"jellyfish","percent":11},
              {"character_id":"robot","percent":8}],
-     "shard_costs":{"fox":3,"squirrel":3,"shiba":5,"ghost":5,"jellyfish":7,"robot":10}}
+     "shard_costs":{"fox":2,"ghost":4,"robot":8,"shiba":4,"squirrel":2,"aing_gold":20,"jellyfish":5}}
     """#
 
     /// 상점 행(설계서 상점가). 2 이상이면 aing_gold(뽑기 전용 · 명목가 1000)가 붙는다.

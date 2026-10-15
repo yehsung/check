@@ -5,7 +5,9 @@ import Foundation
 // 서버 정본은 `supabase/migrations/20261015121000_gacha.sql` 이다. 요점만(설계서 Wire contract):
 //   · 1회 50루비(`gacha_price()`). 결과는 서버 `gacha_pool` 표(합 100%)에서 뽑는다 — 클라는 확률을 **보여 주기만** 한다.
 //   · 처음 나온 캐릭터 → 소유(acquired_via='gacha'). 이미 가진 캐릭터(황금 포함) → 조각 1개.
-//   · 조각으로 기존 6종을 교환한다(`shard_costs`). 아잉·황금 아잉이는 교환 불가.
+//   · 조각으로 일곱 캐릭터를 교환한다(`shard_costs` — 황금 아잉이 20 포함, 사장님 정정 2026-10-15 AMENDMENT 1).
+//     아잉(무료 기본)만 교환 불가. 황금 아잉이는 **루비로는 안 판다**(뽑기 · 조각 교환으로만).
+//     교환값은 서버가 준 것만 쓴다 — 클라에 숫자를 적지 않는다(값이 바뀌어도 앱을 다시 낼 필요가 없게).
 //   · `shop_state(p_protocol >= 2)` 만 `gacha` 키를 싣는다. 없으면 클라는 뽑기 화면을 통째로 숨긴다.
 //   · `gacha_pull`·`gacha_exchange` 는 `p_protocol >= 2` 가 아니면 `needs_update`(루비·조각 안 움직임).
 //   · 같은 `(사용자, request_id)` 를 다시 보내면 **처음 결과를 `replayed: true` 로** 돌려준다 — 두 번 깎지 않는다.
@@ -33,7 +35,7 @@ package struct GachaInfo: Decodable, Equatable, Sendable {
     package var shards: Int?
     /// 결과 확률표 — **서버 순서 그대로**(정렬하지 않는다).
     package var odds: [GachaOddsEntry]?
-    /// 조각 교환값(id → 조각 수). 여기 없는 id 는 교환할 수 없다(아잉 · 황금 아잉이 · 모르는 id).
+    /// 조각 교환값(id → 조각 수). 여기 없는 id 는 교환할 수 없다(아잉 · 모르는 id). 황금 아잉이도 여기 있다(20).
     package var shardCosts: [String: Int]?
 
     package init(price: Int? = nil, shards: Int? = nil, odds: [GachaOddsEntry]? = nil, shardCosts: [String: Int]? = nil) {
@@ -561,7 +563,7 @@ package enum GachaExchangeAvailability: Equatable, Sendable {
     case short(cost: Int, missing: Int)
     /// 조각 수를 모른다(비활성).
     case unknownShards(cost: Int)
-    /// 교환표에 없다(아잉 · 황금 아잉이 · 모르는 id).
+    /// 교환표에 없다(아잉 · 모르는 id). 황금 아잉이는 교환표에 값이 있으면 다른 캐릭터와 똑같이 교환된다.
     case notExchangeable
 
     package var canExchange: Bool {
@@ -586,9 +588,9 @@ package struct GachaOddsRow: Equatable, Sendable, Identifiable {
     package let percent: Double
     /// "5%" · "2.5%".
     package let percentText: String
-    /// 상점가(루비). 뽑기 전용이거나 서버가 값을 안 줬으면 nil.
+    /// 상점가(루비). 뽑기 전용(루비로 안 판다)이거나 서버가 값을 안 줬으면 nil.
     package let shopPrice: Int?
-    /// 상점가 칸의 글: 숫자("60") · "뽑기 전용" · 모르면 "—".
+    /// 상점가 칸의 글: 숫자("60") · 뽑기 전용이면 "뽑기 또는 조각 20개"(교환값을 모르면 "뽑기 전용") · 모르면 "—".
     package let priceText: String
     package let isGachaOnly: Bool
     /// 조각 교환값(교환 불가면 nil).
@@ -620,8 +622,9 @@ package nonisolated enum GachaRules {
         shards: Int?,
         shardCosts: [String: Int]?
     ) -> GachaExchangeAvailability {
-        // 아잉·황금 아잉이는 서버가 교환표에 안 싣지만, 서버가 실수로 실어도 여기서 막는다(교환 불가는 사장님 규칙).
-        guard !CharacterCatalog.builtIns.contains(where: { $0.id == characterID }),
+        // 아잉(무료 기본)은 서버가 교환표에 안 싣지만, 서버가 실수로 실어도 여기서 막는다(교환 불가는 사장님 규칙).
+        // 황금 아잉이는 교환할 수 있다(AMENDMENT 1 — 값은 서버 교환표의 것만 · 없으면 교환 불가로 둔다).
+        guard !isNeverExchangeable(characterID),
               let cost = shardCosts?[characterID], cost > 0 else { return .notExchangeable }
         if isOwned { return .owned }
         guard let shards else { return .unknownShards(cost: cost) }
@@ -641,18 +644,20 @@ package nonisolated enum GachaRules {
         return (info.odds ?? []).map { entry in
             let id = entry.characterID
             let row = rowsByID[id]
-            // 서버 표식이 참이면 뽑기 전용 · 황금 아잉이는 표식과 무관하게 언제나 뽑기 전용(사장님 규칙 — 팔지 않는다).
+            // 서버 표식이 참이면 뽑기 전용 · 황금 아잉이는 표식과 무관하게 언제나 뽑기 전용(사장님 규칙 — 루비로 안 판다).
             let gachaOnly = row?.gachaOnly == true || CharacterCatalog.isGoldAing(id)
             let price = gachaOnly ? nil : row?.price
+            // 교환값(아잉은 서버가 실어도 버린다 · 0 이하는 값이 아니다).
+            let cost = isNeverExchangeable(id) ? nil : info.shardCosts?[id].flatMap { $0 > 0 ? $0 : nil }
             let priceText: String
             if gachaOnly {
-                priceText = GachaText.gachaOnly
+                // 루비 값 대신 얻는 길을 말한다: "뽑기 또는 조각 20개"(교환값을 모르면 "뽑기 전용").
+                priceText = GachaText.gachaOnlyPrice(shardCost: cost)
             } else if let price {
                 priceText = "\(price)"
             } else {
                 priceText = GachaText.unknownValue
             }
-            let cost = info.shardCosts?[id]
             return GachaOddsRow(
                 characterID: id,
                 name: name(for: id, displayName: displayName),
@@ -661,12 +666,13 @@ package nonisolated enum GachaRules {
                 shopPrice: price,
                 priceText: priceText,
                 isGachaOnly: gachaOnly,
-                shardCost: CharacterCatalog.builtIns.contains(where: { $0.id == id }) ? nil : cost
+                shardCost: cost
             )
         }
     }
 
-    /// 교환 목록. 순서는 확률표 순서(서버 순서)이고, 확률표에 없는 교환값은 뒤에 id 순으로 붙는다.
+    /// 교환 목록. **황금 아잉이가 맨 위**(사장님 정정 — "교환 목록은 금 먼저"), 그다음 확률표 순서(서버 순서),
+    /// 확률표에 없는 교환값은 뒤에 id 순으로 붙는다. 교환표(`shard_costs`)에 없는 캐릭터는 줄을 만들지 않는다.
     package static func exchangeRows(
         info: GachaInfo,
         ownedIDs: Set<String>,
@@ -678,6 +684,10 @@ package nonisolated enum GachaRules {
             ordered.append(entry.characterID)
         }
         ordered += costs.keys.filter { !ordered.contains($0) }.sorted()
+        // 금 먼저 — 서버가 확률표를 어떤 순서로 주든(나머지의 상대 순서는 그대로).
+        if let gold = ordered.firstIndex(where: { CharacterCatalog.isGoldAing($0) }), gold > 0 {
+            ordered.insert(ordered.remove(at: gold), at: 0)
+        }
         return ordered.compactMap { id in
             let availability = exchangeAvailability(characterID: id, isOwned: ownedIDs.contains(id),
                                                     shards: info.shards, shardCosts: costs)
@@ -685,6 +695,12 @@ package nonisolated enum GachaRules {
             return GachaExchangeRow(characterID: id, name: name(for: id, displayName: displayName),
                                     availability: availability)
         }
+    }
+
+    /// 조각으로 **절대** 바꿀 수 없는 캐릭터인가 — 무료 기본(아잉) 하나. 서버 교환표에 실려 와도 막는다.
+    /// (황금 아잉이는 여기 없다 — AMENDMENT 1 로 교환표의 값만큼 조각을 내면 교환된다.)
+    package static func isNeverExchangeable(_ id: String) -> Bool {
+        id == CharacterCatalog.builtInAingID
     }
 
     /// 이름 해석(호출부 → 내장 → id).
@@ -707,11 +723,18 @@ package nonisolated enum GachaText {
     package static let oddsTitle = "뽑기 확률"
     /// 확률표 아래 한 줄 — 규칙 전부를 짧게.
     package static let oddsFootnote = "이미 있는 캐릭터가 나오면 조각 1개를 받아요 · 조각으로 캐릭터를 바꿀 수 있어요"
-    /// 상점가 칸의 "팔지 않음"(황금 아잉이).
+    /// 상점가 칸의 "루비로 안 팖"(황금 아잉이) — 교환값을 모를 때만 쓰는 짧은 말. 교환값을 알면 `gachaOnlyPrice(shardCost:)`.
     package static let gachaOnly = "뽑기 전용"
-    /// 뽑기 전용 캐릭터를 눌렀을 때 · 고르기에서 안 가진 황금 아잉이를 눌렀을 때의 한 줄. "상점에서 살 수 있어요"는 이 캐릭터에 거짓이다.
-    /// 서버 `buy_character` 의 `not_for_sale` 도 이 문장으로 말한다(루비는 안 깎였다).
-    package static let gachaOnlyHint = "뽑기로만 얻을 수 있어요"
+    /// 루비 값 대신 얻는 길(황금 아잉이 카드·확률표 상점가 칸): "뽑기 또는 조각 20개". 교환값을 모르면(nil · 0 이하) "뽑기 전용".
+    /// 숫자는 서버 `shard_costs` 의 값을 넘긴다 — 20 을 화면에 적지 않는다.
+    package static func gachaOnlyPrice(shardCost: Int?) -> String {
+        guard let shardCost, shardCost > 0 else { return gachaOnly }
+        return "뽑기 또는 \(Self.shardCost(shardCost))"
+    }
+    /// 뽑기 전용 캐릭터를 눌렀을 때 · 고르기에서 안 가진 황금 아잉이를 눌렀을 때의 한 줄. "상점에서 살 수 있어요"는 이 캐릭터에 거짓이고,
+    /// AMENDMENT 1 뒤로는 "뽑기로만"도 거짓이다(조각으로도 바꾼다). 서버 `buy_character` 의 `not_for_sale` 도 이 문장으로 말한다
+    /// (루비는 안 깎였다).
+    package static let gachaOnlyHint = "뽑기나 조각 교환으로 얻을 수 있어요"
     /// 값을 모를 때(상점 카드의 "—" 와 같은 표기).
     package static let unknownValue = "—"
     package static let owned = "보유"

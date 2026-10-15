@@ -4,11 +4,13 @@ import Testing
 
 // v0.3.54 — 캐릭터 뽑기 · 황금 아잉이 · 조각 교환(`20261015121000_gacha.sql`)의 **소스 계약**.
 //
-// 행동은 마이그레이션 자신의 §9 프로브(실호출 24건 — 옛/새 상점 · needs_update · 부족 · 뽑기 · 재시도 멱등 · 중복 → 조각 ·
-// 교환 갈래 전부 · 황금 not_for_sale · 착용 게이트 · 추첨 경계 · 2만 번 분포 · RPC 200번 셈 · 계정 삭제 cascade)와 재생 하네스
-// (3회 연속 적용 + 사용자 흉내 테스트 · 뮤턴트 11개 전부 빨강)가 증명했다. 여기서 재는 것은 db push 전에 알 수 있는 것이다:
-//   ① 확률표가 사용자 확정표이고 합 100 이며, **누적 추첨을 0…99 전부에 돌리면** 칸마다 정확히 그 확률만큼 떨어진다
-//      (프로브의 경계표 ⑳ · 사후 단언 §8(5) · 프로브 ② 의 확률 JSON 이 같은 표를 말한다).
+// 행동은 마이그레이션 자신의 §9 프로브(실호출 27건 — 옛/새 상점 · needs_update · 부족 · 뽑기 · 재시도 멱등 · 중복 → 조각 ·
+// 교환 갈래 전부 · 황금 not_for_sale · 착용 게이트 · 추첨 경계 · 2만 번 분포 · RPC 200번 셈 · 계정 삭제 cascade ·
+// 황금 조각 교환 19/20/보유)와 재생 하네스(3회 연속 적용 + 사용자 흉내 테스트 · 뮤턴트 20개 전부 빨강)가 증명했다.
+// 여기서 재는 것은 db push 전에 알 수 있는 것이다:
+//   ① 확률표가 사용자 확정표(교환가는 AMENDMENT 1 — 2/2/4/4/5/8 · 황금 20)이고 합 100 이며, **누적 추첨을 0…99 전부에
+//      돌리면** 칸마다 정확히 그 확률만큼 떨어진다(프로브의 경계표 ⑳ · 사후 단언 §8(5) · 프로브 ② 의 확률·교환가 JSON ·
+//      프로브 ㉕ 의 황금 경계가 같은 표를 말한다).
 //   ② 황금의 가격표 행(min_protocol 2 · gacha_only)이 CHECK 교체보다 **먼저** 들어간다 — 거꾸로면 그 사이 옛 클라 전원에게
 //      price 0 카드가 뜨고 누구나 공짜로 입는다(20261005120000 머리말의 함정).
 //   ③ shop_state · buy_character 의 새 본문 = 직전 마지막 정의(정본) + 치환표(바이트) · §1 의 정본 md5 가 정말 그 본문의 md5.
@@ -20,10 +22,11 @@ private let gcRobot = "20261005120000_character_roster_v3_robot.sql"
 private let gcShop = "20260913170100_shop.sql"
 private let gcRubyV2 = "20261014120000_ruby_economy_v2.sql"
 
-/// 사용자 확정표(2026-10-15): (id, 확률, 조각 교환가 — nil = 교환 불가).
+/// 사용자 확정표(2026-10-15 · 교환가는 같은 날 정정 AMENDMENT 1): (id, 확률, 조각 교환가). 일곱 모두 교환 가능 — 황금 20.
+/// 아잉(무료 기본)은 이 표에 없다(교환 불가).
 private let gcOwnerTable: [(id: String, percent: Int, shardCost: Int?)] = [
-    ("aing_gold", 5, nil), ("fox", 24, 3), ("squirrel", 24, 3), ("shiba", 14, 5),
-    ("ghost", 14, 5), ("jellyfish", 11, 7), ("robot", 8, 10),
+    ("aing_gold", 5, 20), ("fox", 24, 2), ("squirrel", 24, 2), ("shiba", 14, 4),
+    ("ghost", 14, 4), ("jellyfish", 11, 5), ("robot", 8, 8),
 ]
 
 private struct GCError: Error, CustomStringConvertible {
@@ -173,7 +176,7 @@ struct V0354GachaMigrationTests {
 
     // MARK: ① 확률표
 
-    @Test("확률표 = 사용자 확정표(합 100) · 누적 추첨을 0…99 에 돌리면 칸마다 정확히 그 확률 · 교환 대상 = 상점에서 파는 여섯")
+    @Test("확률표 = 사용자 확정표(합 100 · 교환가 AMENDMENT 1) · 누적 추첨을 0…99 에 돌리면 칸마다 정확히 그 확률 · 교환 대상 = 파는 여섯 + 황금")
     func oddsTableIsTheOwnerTableAndTheWalkMatches() throws {
         let rows = try gcPoolRows()
         #expect(rows.map(\.id) == gcOwnerTable.map(\.id), "확률표 순서·명단이 \(rows.map(\.id)) 다")
@@ -208,12 +211,29 @@ struct V0354GachaMigrationTests {
         let odds = gcSquash(probe)
         #expect(odds.contains(gcSquash(gcOwnerTable.map { #"{"character_id": "\#($0.id)", "percent": \#($0.percent)}"# }.joined(separator: ", "))),
                 "프로브 ② 의 확률 JSON 이 확정표와 다르다")
+        // 프로브 ② 의 교환가 JSON(shop_state.gacha.shard_costs 기대값)도 같은 표다 — 키 일곱(황금 포함).
+        let costLiteral = try #require(try gcMatches(#"'(\{"aing_gold": [0-9]+[^']*\})'::jsonb"#, in: probe).first?[1], "프로브 ② 의 교환가 JSON 이 없다")
+        let costJSON = try #require(try JSONSerialization.jsonObject(with: Data(costLiteral.utf8)) as? [String: Int])
+        #expect(costJSON == Dictionary(uniqueKeysWithValues: gcOwnerTable.compactMap { row in row.shardCost.map { (row.id, $0) } }),
+                "프로브 ② 의 교환가 JSON 이 확정표와 다르다: \(costLiteral)")
+        // 프로브 ㉕ 의 황금 경계(조각 교환가 − 1 은 부족)가 확정표의 황금 값이다.
+        let goldCost = try #require(gcOwnerTable.first { $0.id == "aing_gold" }?.shardCost)
+        #expect(odds.contains("update public.character_shards set shards = \(goldCost - 1) where user_id = u[4];")
+                && odds.contains("(v_res ->> 'need')::int is distinct from \(goldCost) or (v_res ->> 'have')::int is distinct from \(goldCost - 1)")
+                && odds.contains("update public.character_shards set shards = \(goldCost) where user_id = u[4];"),
+                "프로브 ㉕·㉖ 이 황금 교환가 \(goldCost) 의 경계(\(goldCost - 1) 부족 · \(goldCost) 교환)를 재지 않는다")
 
-        // 교환 대상(교환가 있는 칸) = 상점에서 파는 여섯(루비 v2 의 가격표 갱신 대상) — 파는 캐릭터만 조각으로 바꿀 수 있다.
+        // 교환 대상(교환가 있는 칸) = 확률표 일곱 전부 = 상점에서 파는 여섯(루비 v2 의 가격표 갱신 대상) + 황금(AMENDMENT 1).
+        // 교환가 칸은 not null — 빈 교환가로 "교환 불가"를 표시하던 옛 판으로 되돌아가면 빨강.
         let priceUpdate = gcStrip(try gcRaw(gcRubyV2))
         let sold = Set(try gcMatches(#"\(\s*'([a-z_]+)'\s*,\s*[0-9]+\s*\)"#,
                                      in: try #require(try gcMatches(#"^\s*update\s+public\.character_prices\b[^;]*;"#, in: priceUpdate).first?[0])).map { $0[1] })
-        #expect(Set(rows.filter { $0.shardCost != nil }.map(\.id)) == sold, "교환 대상 \(rows.filter { $0.shardCost != nil }.map(\.id)) ≠ 파는 캐릭터 \(sold.sorted())")
+        #expect(sold.count == 6 && !sold.contains("aing_gold"), "기준선: 파는 캐릭터를 \(sold.sorted()) 로 읽었다")
+        #expect(Set(rows.filter { $0.shardCost != nil }.map(\.id)) == sold.union(["aing_gold"]),
+                "교환 대상 \(rows.filter { $0.shardCost != nil }.map(\.id)) ≠ 파는 캐릭터 + 황금")
+        #expect(rows.allSatisfy { ($0.shardCost ?? 0) > 0 }, "교환가가 빈 칸이 있다: \(rows.map(\.shardCost))")
+        let flat = gcSquash(gcStrip(try gcRaw(gcMigration)))
+        #expect(flat.contains("shard_cost int not null check (shard_cost > 0),"), "gacha_pool.shard_cost 가 not null 이 아니다")
     }
 
     @Test("추첨은 코어 CSPRNG(gen_random_uuid 앞 32비트 mod 100)이고 random()·setseed 를 안 쓴다")
@@ -398,7 +418,7 @@ struct V0354GachaMigrationTests {
 
     // MARK: ⑥ 위생 · 불변식 · 프로브
 
-    @Test("순서 · do 블록 · 달러 태그 · RESET ROLE · notify · 가입 지급 ≥ 살 수 있는 최저가를 다시 잰다 · 프로브 24건과 분포 ±1.2%p")
+    @Test("순서 · do 블록 · 달러 태그 · RESET ROLE · notify · 가입 지급 ≥ 살 수 있는 최저가를 다시 잰다 · 프로브 27건과 분포 ±1.2%p")
     func hygieneInvariantAndProbe() throws {
         let names = try gcNames()
         let mine = try #require(names.firstIndex(of: gcMigration))
@@ -426,7 +446,7 @@ struct V0354GachaMigrationTests {
         #expect(post.contains("select min(c.price) into v_min from public.character_prices c where not c.gacha_only;")
                 && post.contains("public.ruby_welcome_grant() < v_min"), "사후 단언이 가입 지급 ≥ (뽑기 전용을 뺀) 최저가를 안 잰다")
         let probe = gcSquash(gcStrip(try gcBlock(raw, tag: "$probe$")))
-        for token in ["v_expected constant int := 24", "v_draws constant int := 20000", "abs(v_share - r.percent) > 1.2",
+        for token in ["v_expected constant int := 27", "v_draws constant int := 20000", "abs(v_share - r.percent) > 1.2",
                       "v_res := public.gacha_pull(2, v_r1);", "v_res := public.buy_character('aing_gold', 2);",
                       "v_res := public.set_character('aing_gold');", "perform public.delete_my_account();",
                       "raise exception 'gacha_probe_rollback';", "if sqlerrm <> 'gacha_probe_rollback' then raise; end if;",

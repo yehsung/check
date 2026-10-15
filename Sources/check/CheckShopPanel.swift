@@ -114,6 +114,14 @@ enum ShopText {
         return "\(max(0, price))"
     }
 
+    /// 황금 아잉이(v0.3.54) 카드 아래 줄. 루비로 안 팔므로 **가격 대신 얻는 길**을 말한다: "뽑기 또는 조각 20개".
+    /// 숫자는 서버 `shard_costs` 의 값 — 모르면 "뽑기 전용"(값을 지어내지 않는다). 가진 것은 다른 카드처럼 "보유".
+    static func goldCardPrice(owned: Bool, shardCost: Int?) -> String {
+        if owned { return "보유" }
+        guard let shardCost, shardCost > 0 else { return GachaText.gachaOnly }
+        return "뽑기 또는 \(GachaText.shardCost(shardCost))"
+    }
+
     /// 울트라 줄 제목. 가격을 모르면 "1개"를 말하지 않는다 — 몇 개를 얼마에 파는지 모르는 채로
     /// 수량만 단정하면 그 줄이 거짓말을 한다.
     static func ultraRowTitle(price: Int?) -> String {
@@ -189,6 +197,13 @@ enum ShopPanelGridBudget {
     ///   그래서 **추정하지 않고 잰 값을 쓴다**(`V0317ShopTests.popoverStaysUnderTheCapInTheWorstCase`
     ///   가 최악 조합을 렌더로 확인한다).
     static let popoverChromeOutsidePanel: CGFloat = 216
+    /// [캐릭터 뽑기] 카드(v0.3.54 — 한 줄 27pt + 소모품 구획 간격 4pt)가 크롬에 더하는 높이(pt). **실측값이다**
+    /// (`V0354GachaMacTests.gachaCardChromeMatchesMeasurement` — 카드가 선 패널과 안 선 패널의 크롬 차).
+    ///
+    /// `chromeOutsideGrid`(230)에 섞지 않은 이유: 카드는 서버가 `gacha` 를 줄 때만 선다(옛 서버 · 능력 번호 2 미만이면 숨는다).
+    /// 상수에 섞으면 숨은 때 격자가 31pt 손해를 보고, 기존 실측 계약(230)이 카드 유무에 따라 거짓이 된다. 그래서 격자는
+    /// 카드가 섰을 때만 이만큼을 **추가 크롬**으로 받아 상한을 깎는다(`CheckShopPanel.grid`) — 팝오버 합은 어느 쪽이든 같다.
+    static let gachaCardChrome: CGFloat = 31
     static let safetySlack = CharacterPanelGridBudget.safetySlack
 
     static let maxGridHeight: CGFloat = 700 - popoverChromeOutsidePanel - chromeOutsideGrid - safetySlack
@@ -245,11 +260,19 @@ struct CheckShopPanel: View {
                 sectionHeader("소모품")
                 ultraCard
                 megaphoneCard
+                // 캐릭터 뽑기(v0.3.54). 서버가 `gacha` 를 안 주면(옛 서버 · 능력 번호 2 미만) 카드째 숨는다 —
+                // 섰을 때 더해지는 높이(`ShopPanelGridBudget.gachaCardChrome`)만큼 격자 상한이 깎인다(`grid`).
+                if store.isGachaAvailable {
+                    gachaCard
+                }
             }
             // 확성기 작성기(v0.3.51)는 캐릭터 구획과 구매 바 **자리를 빌려** 선다 — 높이가 그 자리의 최소보다 작아서
             // 팝오버 예산(`ShopPanelGridBudget`)에 새 항목을 만들지 않는다(`MegaphoneComposer.height` 주석).
+            // 뽑기 패널(v0.3.54)도 같은 자리를 같은 규약으로 빌린다(`CheckGachaPanel.height`). 둘은 서로 배타다.
             if store.megaphone.isComposerOpen {
                 MegaphoneComposer(store: store)
+            } else if store.isGachaPanelOpen && store.isGachaAvailable {
+                CheckGachaPanel(store: store, catalog: catalog)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     sectionHeader("캐릭터")
@@ -449,6 +472,58 @@ struct CheckShopPanel: View {
         .accessibilityAddTraits(open ? [.isButton, .isSelected] : .isButton)
     }
 
+    // MARK: 소모품 — 캐릭터 뽑기 카드 (v0.3.54)
+
+    /// 🎁 캐릭터 뽑기 · 루비 50. 확성기 카드와 **같은 한 줄 문법**이다(칩 자리를 늘 비워 둬서 값 도착 전후 높이가 같다).
+    /// 누르면 뽑기 패널을 열고 닫는다(뽑지 않는다 — 실제 뽑기는 패널의 [뽑기 · 50] 하나뿐이다).
+    @ViewBuilder
+    private var gachaCard: some View {
+        let open = store.isGachaPanelOpen
+        let price = store.gachaInfo?.price
+        Button {
+            store.toggleGachaPanel()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "gift.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(CheckTheme.accent)
+                Text(GachaText.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Text(GachaPanelText.cardSubtitle(shards: store.gachaShards))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                if let price {
+                    RubyBalanceChip(balance: price)
+                } else {
+                    RubyBalanceChip(balance: nil).hidden()
+                }
+                Image(systemName: open ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(CheckTheme.accent.opacity(open ? 0.22 : 0.10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(CheckTheme.accent.opacity(open ? 1.0 : 0.35), lineWidth: open ? 2 : 1)
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(store.purchasingID != nil)
+        .accessibilityLabel(open ? "캐릭터 뽑기 닫기" : (price.map { "캐릭터 뽑기, 루비 \($0)개" } ?? "캐릭터 뽑기"))
+        .accessibilityAddTraits(open ? [.isButton, .isSelected] : .isButton)
+    }
+
     // MARK: 격자
 
     private var rows: [[ShopCharacterRow?]] {
@@ -471,7 +546,9 @@ struct CheckShopPanel: View {
     @ViewBuilder
     private var grid: some View {
         let natural = ShopPanelGridBudget.naturalHeight(rowCount: rows.count)
-        let cap = ShopPanelGridBudget.capHeight(extraChromeHeight: extraChromeHeight)
+        // 뽑기 카드가 서 있으면 그 줄만큼 격자 상한을 깎는다(`gachaCardChrome` 주석) — 팝오버 700pt 합이 그대로다.
+        let cap = ShopPanelGridBudget.capHeight(
+            extraChromeHeight: extraChromeHeight + (store.isGachaAvailable ? ShopPanelGridBudget.gachaCardChrome : 0))
         FeedbackListBox(contentHeight: natural, capHeight: cap,
                         clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll) {
             VStack(spacing: ShopPanelGridBudget.cardSpacing) {
@@ -496,7 +573,10 @@ struct CheckShopPanel: View {
     private func card(_ entry: ShopCharacterRow) -> some View {
         let owned = entry.owned == true || store.ownedCharacterIDs.contains(entry.id)
         let busy = store.purchasingID == entry.id
-        let affordable = (store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false
+        // 루비로 안 파는 캐릭터(황금 아잉이 — v0.3.54): 가격 대신 "뽑기 또는 조각 20개", 흐리게 하지 않는다(살 수 없는 게 아니라
+        // 다른 길로 얻는다). 누르면 뽑기 패널이 열린다(`selectShopItem` 이 가른다).
+        let gachaOnly = WorkTimerStore.isGachaOnly(entry.id, rows: store.shopCharacters)
+        let affordable = gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false)
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         let picked = store.shopSelection == .character(entry.id)
         Button {
@@ -513,13 +593,24 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                HStack(spacing: 3) {
-                    if !owned { RubyIcon(size: 10) }
-                    Text(busy ? "…" : ShopText.cardPrice(owned: owned, price: entry.price))
+                if gachaOnly {
+                    // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
+                    Text(ShopText.goldCardPrice(owned: owned, shardCost: store.gachaShardCost(of: entry.id)))
                         .font(.caption2.weight(.bold))
                         .monospacedDigit()
-                        .foregroundStyle(owned ? CheckTheme.secondaryText : CheckTheme.primaryText)
-                        .lineLimit(1)
+                        .foregroundStyle(owned ? CheckTheme.secondaryText : GachaPalette.gold)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                } else {
+                    HStack(spacing: 3) {
+                        if !owned { RubyIcon(size: 10) }
+                        Text(busy ? "…" : ShopText.cardPrice(owned: owned, price: entry.price))
+                            .font(.caption2.weight(.bold))
+                            .monospacedDigit()
+                            .foregroundStyle(owned ? CheckTheme.secondaryText : CheckTheme.primaryText)
+                            .lineLimit(1)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
@@ -546,8 +637,8 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .checkTooltip(owned ? "\(name) — 보유 중" : "\(name) 사기")
-        .accessibilityLabel(owned ? "\(name) 보유 중" : "\(name) 사기")
+        .checkTooltip(owned ? "\(name) — 보유 중" : (gachaOnly ? "\(name) — \(GachaText.gachaOnlyHint)" : "\(name) 사기"))
+        .accessibilityLabel(owned ? "\(name) 보유 중" : (gachaOnly ? "\(name), \(GachaText.gachaOnlyHint)" : "\(name) 사기"))
     }
 }
 

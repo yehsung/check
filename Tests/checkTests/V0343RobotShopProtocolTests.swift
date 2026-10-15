@@ -352,7 +352,12 @@ struct V0343RobotShopProtocolTests {
         let fullCatalog = CharacterCatalog.load(charactersDirectory: root.appendingPathComponent("full", isDirectory: true))
         let fullDrawable = CheckMascotAssets.drawableCharacterIDs(catalog: fullCatalog)
         #expect(fullDrawable.contains("robot"), Comment(rawValue: "그림이 다 있는데 못 그린다고 했다: \(fullDrawable)"))
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: fullDrawable) == ShopWire.robotProtocol)
+        // v0.3.54: 황금 아잉이는 카탈로그 내장이고 그림은 **앱 번들 Resources** 에 있다(캐릭터 폴더와 무관) — 이 빌드처럼 금 그림이
+        // 실렸으면 robot 이 그려지는 순간 번호는 누적으로 2 다(`ShopWire.protocolVersion` 의 누적 규칙). robot 이 빠지면 0(③).
+        let goldDrawable = fullDrawable.contains(CharacterCatalog.goldAingID)
+        #expect(goldDrawable == V0354CoreArtBaseline.macGoldArtInSourceTree, "금 그림 판정이 소스 트리와 갈렸다")
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: fullDrawable)
+                == (goldDrawable ? ShopWire.goldProtocol : ShopWire.robotProtocol))
 
         // ③ 한 장만 빼도 0 이다(초상 한쪽·아틀라스 각각). 세 파일이 전부 요구되는지 낱개로 잰다.
         for missing in ["atlas.png", "portrait-neutral.png", "portrait-negative.png"] {

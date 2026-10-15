@@ -570,6 +570,10 @@ extension WorkTimerStore {
         if let ultra = state.ultraBalance { ultraBalance = ultra }
         if let price = state.ultraPrice { ultraPrice = price }
         if let buyMax = state.ultraBuyMax { ultraBuyMax = buyMax }
+        // 뽑기(v0.3.54)는 **없음이 곧 사실**이다 — 서버가 `gacha` 를 안 실었으면(옛 서버 · 능력 번호 2 미만) 뽑기 화면을 숨긴다.
+        // 그래서 다른 칸과 달리 nil 도 그대로 옮긴다. 숨기는 순간 열려 있던 패널도 접는다(빈 패널이 자리를 쥐고 있지 않게).
+        gachaInfo = state.gacha
+        if !isGachaAvailable, isGachaPanelOpen { isGachaPanelOpen = false }
         guard let rows = state.characters else { return }
         shopCharacters = rows
         // 아잉은 무료라 서버 목록에 없어도 언제나 보유다.
@@ -590,14 +594,33 @@ extension WorkTimerStore {
         // 확성기 작성기가 열려 있으면 접는다 — 작성기는 캐릭터 격자·구매 바 자리를 빌려 쓰므로, 상품을 고르는 순간
         // 그 자리를 돌려줘야 하단 바가 고른 것을 말한다(쓰던 글은 남는다).
         if megaphone.isComposerOpen { megaphone.close() }
+        // 뽑기 패널(v0.3.54)도 같은 자리를 빌린다 — 상품을 고르는 순간 하단 바에 자리를 돌려준다.
+        if isGachaPanelOpen { closeGachaPanel() }
         if case .character(let id) = selection, ownedCharacterIDs.contains(id) {
             shopSelection = nil
             shopNotice = Self.alreadyOwnedNotice
             return
         }
+        // 루비로 살 수 없는 캐릭터(황금 아잉이)는 **고르지 않는다** — 하단 바에 [구매하기]를 세우면 거짓이다. 뽑기 패널을 연다.
+        if case .character(let id) = selection, Self.isGachaOnly(id, rows: shopCharacters) {
+            shopSelection = nil
+            if isGachaAvailable {
+                openGachaPanel()
+            } else {
+                shopNotice = GachaText.gachaOnlyHint
+            }
+            return
+        }
         // 같은 것을 다시 누르면 선택을 푼다(실수로 고른 것을 되돌리는 길).
         shopSelection = (shopSelection == selection) ? nil : selection
         shopNotice = nil
+    }
+
+    /// 루비로 살 수 없는(뽑기·조각으로만 얻는) 캐릭터인가. 서버 표식이 빠지거나 false 로 와도 황금 아잉이는 언제나 그렇다
+    /// (`ShopCharacterRow.isPurchasable` 과 같은 규칙 — 목록에 아직 없는 id 도 금이면 참).
+    nonisolated static func isGachaOnly(_ id: String, rows: [ShopCharacterRow]) -> Bool {
+        if CharacterCatalog.isGoldAing(id) { return true }
+        return rows.first { $0.id == id }?.gachaOnly == true
     }
 
     /// 이미 가진 것을 눌렀을 때의 문구(순수 — 값으로 검증한다).
@@ -631,6 +654,13 @@ extension WorkTimerStore {
     ///   카드 탭에서 이 경로로 새는 길이 생기면 사용자가 또 실수로 산다.
     func confirmShopPurchase() {
         guard let selection = shopSelection, purchasingID == nil else { return }
+        // 두 번째 문(v0.3.54): 루비로 안 파는 캐릭터는 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
+        // 값 확인보다 **먼저** 본다 — 그 캐릭터는 값이 없어(`shopPrice` nil) 아래 갈래가 상점을 다시 읽고 조용히 끝난다.
+        if case .character(let id) = selection, Self.isGachaOnly(id, rows: shopCharacters) {
+            shopSelection = nil
+            shopNotice = GachaText.gachaOnlyHint
+            return
+        }
         guard let have = rubyBalance else {
             loadShopState()
             return
@@ -678,6 +708,9 @@ extension WorkTimerStore {
                     self.loadShopState()
                 case "insufficient":
                     self.shopNotice = Self.shortfallNotice(need: response.need, have: response.have)
+                case "not_for_sale":
+                    // 황금 아잉이(v0.3.54)는 루비로 안 판다 — 루비는 안 깎였다. "구매 실패"로 뭉개면 다시 눌러 보게 된다.
+                    self.shopNotice = GachaText.gachaOnlyHint
                 case "needs_update":
                     // 서버는 "이 앱은 그 캐릭터를 아직 못 산다"고 거절했고 **루비는 안 깎였다**.
                     // `default:` 의 "구매 실패" 로 떨어지면 사용자는 돈이 빠졌는지, 다시 눌러야 하는지 알 수 없다.

@@ -807,9 +807,36 @@ final class WorkTimerStore {
     }
 
     /// 상점 목록에서 이 캐릭터의 가격(모르면 nil).
+    ///
+    /// ★ **루비로 살 수 없는 캐릭터는 nil 이다**(v0.3.54 황금 아잉이). 서버는 그 행에도 명목가(1000)를 싣는데, 그 숫자를 그대로 주면
+    ///   캐릭터 고르기의 자물쇠 배지가 "1000" 을 말하고 하단 바가 "루비 N개 더 필요해요" 라고 한다 — 둘 다 거짓이다(뽑기·조각으로만 얻는다).
     func shopPrice(of id: String) -> Int? {
-        shopCharacters.first { $0.id == id }?.price
+        guard let row = shopCharacters.first(where: { $0.id == id }), row.isPurchasable else { return nil }
+        return row.price
     }
+
+    // MARK: 캐릭터 뽑기 (v0.3.54) — 상태. 동작은 WorkTimerStoreGacha.swift
+
+    /// `shop_state.gacha`(값 · 내 조각 · 확률표 · 교환값). **nil = 이 서버/능력 번호에는 뽑기가 없다** — 화면이 뽑기를 통째로 숨긴다.
+    var gachaInfo: GachaInfo?
+    /// 상점 안 뽑기 패널이 열려 있는가(캐릭터 구획·구매 바 자리를 빌린다 — 확성기 작성기와 같은 자리, 둘은 서로 배타).
+    var isGachaPanelOpen = false
+    /// 뽑기 패널의 보기.
+    var gachaPanelMode: GachaPanelMode = .pull
+    /// 뽑기 왕복 중(버튼 잠금 — 연타가 두 번 깎지 않게. 서버 멱등키가 마지막 방어선이다).
+    var gachaPulling = false
+    /// 교환 왕복 중인 캐릭터 id.
+    var gachaExchangingID: String?
+    /// 마지막 뽑기 결과(결과 연출이 읽는다). 패널을 닫았다 열어도 남는다 — 방금 뭐가 나왔는지 다시 볼 수 있게.
+    var gachaLastResult: GachaPullResult?
+    /// 결과 연출 순번 — 같은 캐릭터가 두 번 연달아 나와도 연출이 다시 돈다.
+    var gachaRevealSerial = 0
+    /// 뽑기 패널의 한 줄(거절·실패·교환 결과). nil 이면 비운다.
+    var gachaNotice: String?
+    /// 위 한 줄이 실패·거절인가(색).
+    var gachaNoticeIsError = false
+    /// 동작 한 번 = 요청 id 하나(결과를 모르는 실패 뒤 다시 누르면 같은 id — 두 번 깎지 않는다). 화면이 읽지 않는다.
+    @ObservationIgnored var gachaRequestIDs = GachaRequestIDs()
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
@@ -2697,6 +2724,8 @@ final class WorkTimerStore {
         shopNotice = nil
         // 확성기 작성기는 상점 패널 안에 산다 — 패널을 닫으면 같이 접는다(쓰던 글은 남는다).
         megaphone.close()
+        // 뽑기 패널(v0.3.54)도 상점 안에 산다. 결과는 남긴다(다시 열면 방금 무엇이 나왔는지 보인다).
+        closeGachaPanel()
     }
 
     /// 헤더 루비 칩 액션. 상점을 토글하고, 여는 순간 다른 패널을 전부 내린다(캐릭터 패널과 같은 규약).
@@ -3800,6 +3829,8 @@ extension WorkTimerStore {
         chess.reset()
         // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
+        // 뽑기 정보·결과·요청 id 도 계정에 묶인다(v0.3.54).
+        resetGachaState()
         // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
         isEditingDisplayName = false
         displayNameDraft = ""
@@ -3929,6 +3960,7 @@ extension WorkTimerStore {
         gomoku.reset()
         chess.reset()
         megaphone.reset()
+        resetGachaState()
         startedAt = nil
         accumulatedSeconds = 0
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())

@@ -322,6 +322,11 @@ for TARGET in check CheckCore; do
   cp -R "$SRC_BUNDLE" "$RES_DIR/"
   plutil -replace CFBundleIdentifier -string "$BUNDLE_ID.resources.$TARGET" "$RES_DIR/check_$TARGET.bundle/Contents/Info.plist"
 done
+# 뽑기 기계 그림 다섯 장이 앱 안에 실렸는가(v0.3.54). 빠지면 기계가 조용히 벡터로 그리고 서명·심사 검사는 다 통과한다.
+GACHA_ART_DIR="$RES_DIR/check_CheckCore.bundle/Contents/Resources/GachaMachine"
+for GACHA_PNG in gacha_body gacha_knob gacha_capsule gacha_capsule_gold gacha_cap; do
+  [[ -s "$GACHA_ART_DIR/$GACHA_PNG.png" ]] || die "뽑기 기계 그림이 앱에 없다: $GACHA_ART_DIR/$GACHA_PNG.png"
+done
 
 CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
 plutil -create xml1 "$CONFIG_PLIST"

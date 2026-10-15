@@ -396,8 +396,8 @@ import Testing
         #expect(hits(outside, mask: true).isEmpty, "카테고리 비트만으로는 후광 판을 못 거른다")
         probe.removeFromParentNode()
         // 앱 경로가 이 마스크를 실제로 쓴다(소스 계약 — 주석을 걷어내고 본다).
-        let source = try String(contentsOf: V0354CoreArtBaseline.repoRoot
-            .appendingPathComponent("Sources/check/CheckOverlayReactions.swift"), encoding: .utf8)
+        // 쪼갠 파일이라 두 조각을 이어 읽는다(반쪽만 읽으면 '없다' 단언이 나머지 반을 못 본다 — CheckCoreSourceLayout).
+        let source = try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayReactions.swift")
         let code = source.split(separator: "\n").map { line -> Substring in
             guard let range = line.range(of: "//") else { return line }
             return line[..<range.lowerBound]

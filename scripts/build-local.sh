@@ -77,6 +77,14 @@ for BUNDLE_NAME in check_check.bundle check_CheckCore.bundle; do
     exit 1
   fi
 done
+# 뽑기 기계 그림 다섯 장이 앱 안에 실렸는가(v0.3.54). 빠지면 기계가 조용히 벡터로 그리고 공증·버전·스탬프 검사는 다 통과한다.
+GACHA_ART_DIR="$RES_DIR/check_CheckCore.bundle/Contents/Resources/GachaMachine"
+for GACHA_PNG in gacha_body gacha_knob gacha_capsule gacha_capsule_gold gacha_cap; do
+  if [[ ! -s "$GACHA_ART_DIR/$GACHA_PNG.png" ]]; then
+    echo "error: 뽑기 기계 그림이 앱에 없다: $GACHA_ART_DIR/$GACHA_PNG.png" >&2
+    exit 1
+  fi
+done
 
 if [[ -n "${CHECK_SUPABASE_ANON_KEY:-}" ]]; then
   CONFIG_PLIST="$RES_DIR/CheckConfig.plist"

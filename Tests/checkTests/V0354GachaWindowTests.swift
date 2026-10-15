@@ -9,7 +9,8 @@ import UniformTypeIdentifiers
 // v0.3.54 — 맥 캐릭터 뽑기 창(캡슐 기계). 상점 뽑기 패널의 [뽑기 · 50] · 캐릭터 고르기의 잠긴 황금 아잉이가 이 창을 연다.
 //
 // 재는 것:
-//  · 창 수명 — 한 번 만들고 다시 쓴다 · 닫아도 파괴 안 함 · 닫혔다 다시 열면 새 기계(뽑기 왕복 중이면 그대로) · 안 보이면 기계 멈춤.
+//  · 창 수명 — 한 번 만들고 다시 쓴다 · 닫아도 파괴 안 함 · 닫혔다 다시 열면 새 기계(왕복 중 · 결과를 못 본 판이면 그대로) ·
+//    안 보이면 기계 멈춤(커밋 전 자동 회전 · [한 번 더] 도 거둔다 — 닫은 창에서 루비가 안 나간다).
 //  · 사용자 화면 — 테스트가 띄운 창은 모든 화면 밖 · 클릭 통과 · 키를 안 가져간다(사용자 지시 2026-10-16).
 //  · 문 — 패널 버튼은 뽑지 않고 창을 연다 · 잠긴 이유 · 뽑기 없는 서버면 창도 없다 · 로그아웃이면 창이 내려간다.
 //  · 돈 길 — 기계의 `pull` 이 스토어 뽑기 하나로 간다: 한 판에 RPC 한 번 · 결과 모름 실패 뒤 같은 요청 id · 실패면 공개 없음.
@@ -155,8 +156,12 @@ struct V0354GachaWindowLifecycleTests {
         NotificationCenter.default.post(name: NSWindow.didDeminiaturizeNotification, object: window)
         #expect(controller.state.isActive, "되살렸는데 기계가 멈춰 있다")
 
-        controller.applyOcclusion(visible: false)
-        #expect(!controller.state.isActive, "완전히 가려졌는데 기계가 돈다")
+        // 가림도 AppKit 알림 그대로 — 화면 밖 테스트 창의 가림 상태는 '안 보임'이라 위임 메서드가 그 값을 읽어 옮긴다.
+        #expect(!window.occlusionState.contains(.visible),
+                "전제: 화면 밖 테스트 창의 가림 상태는 '안 보임'이다 — 아니면 아래 알림이 아무것도 안 잰다")
+        NotificationCenter.default.post(name: NSWindow.didChangeOcclusionStateNotification, object: window)
+        #expect(!controller.state.isActive, "완전히 가려졌는데 기계가 돈다 — windowDidChangeOcclusionState 배선이 빠졌다")
+        // '보임' 쪽은 화면 밖 창으로 만들 수 없어 판정 값을 넣는다.
         controller.applyOcclusion(visible: true)
         #expect(controller.state.isActive)
 
@@ -191,6 +196,70 @@ struct V0354GachaWindowLifecycleTests {
         controller.show()
         #expect(controller.state.contentID == firstID + 1, "왕복 중인데 기계를 새로 세웠다 — 그 판의 공개가 사라진다")
         store.gachaPulling = false
+    }
+
+    @Test("뽑은 판이 공개되기 전에 창을 닫았다 다시 열면 그 기계를 그대로 둔다(산 캡슐을 끝까지 본다) — 공개가 자리 잡았으면 새 기계")
+    func reopeningKeepsAnUnrevealedPaidTurn() async throws {
+        let host = gwHost("reopen")
+        V0354GachaStub.register(host: host, pull: { _ in .init(body: V0354GachaWindowPullTests.okFox, delay: 0.2) })
+        let store = await V0354GachaStub.loadedStore(host: host, label: "gwin-reopen")
+        let controller = gwController(store)
+        defer { controller.discardWindowForTesting() }
+        let clock = GWClock()
+        let d = GachaMachineDirector(clock: { [clock] in clock.now })
+        d.autoSchedule = false
+        d.update(env: gwEnv(store))
+        controller.state.machineLink.attach(d)            // 실제 창 콘텐츠는 기계가 그릴 때 스스로 물린다(아래 실제 창 시험)
+        controller.show()
+        let id0 = controller.state.contentID
+        gwTurn(d, clock)                                  // 손잡이 한 바퀴 → 스토어 뽑기(RPC)
+        #expect(await V0354CoreStub.waitUntil { store.gachaPulling }, "전제: 기계의 pull 이 스토어 뽑기로 갔다")
+        controller.close()                                // 흔들리는 중에 닫았다
+        await d.pullTask?.value                           // 닫힌 동안 RPC 가 돌아왔다(루비는 나갔다)
+        #expect(!store.gachaPulling && d.result?.characterID == "fox" && !d.revealSettled(clock.now),
+                "전제: 왕복은 끝났고 공개는 아직이다")
+        controller.show()                                 // 상점 [뽑기 · 50] 으로 다시 연다
+        #expect(controller.state.contentID == id0,
+                "공개 전인 판이 있는데 기계를 새로 세웠다 — 루비 50 을 낸 캡슐을 창에서 못 본다")
+        // 기준선(달라야 한다): 공개가 자리 잡은 뒤 닫았다 열면 새 기계.
+        gwSettle(d, clock)
+        #expect(d.revealSettled(clock.now))
+        controller.close()
+        controller.show()
+        #expect(controller.state.contentID == id0 + 1, "공개가 끝난 판인데 지난 기계가 그대로다 — [닫기] 가 방금 연 창을 또 닫는다")
+    }
+
+    @Test("실제 창 · 실제 기계(화면 밖): 손잡이가 저절로 도는 중에 창을 닫으면 서버에 뽑기를 안 묻는다 — 열어 둔 기준선은 묻는다")
+    func closingDuringTheAutoTurnSpendsNothing() async throws {
+        for closeIt in [false, true] {
+            let host = gwHost("e2e-\(closeIt)")
+            V0354GachaStub.register(host: host, pull: { _ in .init(body: V0354GachaWindowPullTests.okFox) })
+            let store = await V0354GachaStub.loadedStore(host: host, label: "gwin-e2e-\(closeIt)")
+            let controller = CheckGachaWindowController()
+            controller.configure(store: store)            // 앱과 같은 콘텐츠(기계 + 확률 보기)
+            defer { controller.discardWindowForTesting() }
+            controller.show()
+            let window = try #require(controller.currentWindow)
+            for screen in NSScreen.screens {
+                #expect(!screen.frame.intersects(window.frame), "테스트 창 \(window.frame) 이 화면 \(screen.frame) 에 걸쳤다")
+            }
+            #expect(await V0354CoreStub.waitUntil { controller.state.machineLink.director?.env?.canPull == true },
+                    "창 안 기계가 안 섰거나 뽑을 수 없다")
+            let d = try #require(controller.state.machineLink.director)
+            d.autoTurn()                                   // 손잡이 클릭(보이스오버 동작과 같은 문)
+            #expect(d.autoTurnStart != nil, "전제: 손잡이가 저절로 돌기 시작했다")
+            try await Task.sleep(for: .milliseconds(150))
+            if closeIt { controller.close() }              // 도는 중에 ⌘W
+            try await Task.sleep(for: .milliseconds(1_500))
+            let pulls = GomokuStubProtocol.count(host: host, rpc: "gacha_pull")
+            if closeIt {
+                #expect(pulls == 0 && d.pullCount == 0, "닫은 창의 기계가 마저 돌아 뽑았다(RPC \(pulls)) — 창 없이 루비 50 이 나간다")
+                #expect(d.env?.isActive == false, "닫은 창의 기계가 '안 보임'을 못 받았다 — 닫힌 창의 뷰가 다시 안 그려졌다")
+            } else {
+                #expect(pulls == 1, "기준선: 열어 둔 창의 기계가 다 돌았는데 서버에 안 물었다 — 위 '안 물음'이 아무것도 안 잰다")
+            }
+            await d.pullTask?.value
+        }
     }
 
     @Test("로그아웃은 뽑기 창을 내린다(다음 사람이 앞 사람의 잔량·조각이 박힌 기계를 안 본다)")

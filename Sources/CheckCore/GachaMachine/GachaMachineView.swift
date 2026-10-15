@@ -10,13 +10,15 @@ import SwiftUI
 /// - `portrait`: 캐릭터 id → 초상.
 /// - `art`: 기계 그림(배포본은 `.bundled` — 다섯 장 다 있어야 한다, 빠진 칸은 벡터).
 /// - `isActive`: 보이는가. 창이 가려졌다 · 내려갔다 · 닫혔다(맥) / 앱이 뒤로 갔다 · 덮개가 내려갔다(폰) → `false`.
-///   `false` 면 매 프레임 그리기를 멈춘다. 잔잔한 움직임도 손대지 않으면 몇 초 뒤 멎는다(그 뒤로 CPU 0).
+///   `false` 면 매 프레임 그리기를 멈추고, **커밋 전 예약(손잡이 자동 회전 · [한 번 더])을 거둔다** — 안 보이는 기계는
+///   루비를 쓰지 않는다. 잔잔한 움직임도 손대지 않으면 몇 초 뒤 멎는다(그 뒤로 CPU 0).
 /// - `blockedReason`: 호스트가 막은 이유(업데이트 필요 · 서버에 뽑기 없음 …). 있으면 손잡이가 안 돌고 이 줄이 뜬다.
 /// - `againEnabled`: [한 번 더] 를 받을까.
 /// - `pull`: 한 바퀴를 다 돌린 순간 **한 번** 부른다(돌고 있는 동안엔 다시 부르지 않는다). 던지면 한 줄
 ///   (`GachaRevealFailure.message`, 아니면 `GachaText.pullFailed`)을 2.4초 띄우고 처음으로 돌아간다 — 공개는 없다.
 /// - `onAgain`: [한 번 더] 를 누른 순간(곧 손잡이가 저절로 돌아 `pull` 을 다시 부른다).
 /// - `onClose`: [닫기].
+/// - `link`: 호스트가 쥐는 연결(맥 창) — 루비를 낸 판의 결과를 사용자가 아직 못 봤는지 묻는다(`GachaMachineLink`).
 package struct GachaMachineView: View {
     private let input: Input
     @State private var director: GachaMachineDirector
@@ -39,6 +41,7 @@ package struct GachaMachineView: View {
         var pull: @MainActor () async throws -> GachaRevealOutcome
         var onAgain: () -> Void
         var onClose: () -> Void
+        var link: GachaMachineLink?
     }
 
     package init(
@@ -55,11 +58,12 @@ package struct GachaMachineView: View {
         againEnabled: Bool = true,
         pull: @escaping @MainActor () async throws -> GachaRevealOutcome,
         onAgain: @escaping () -> Void = {},
-        onClose: @escaping () -> Void
+        onClose: @escaping () -> Void,
+        link: GachaMachineLink? = nil
     ) {
         input = Input(balance: balance, cost: cost, shards: shards, ruby: rubyIcon, portrait: portrait, art: art,
                       teaseChance: goldTeaseChance, haptics: haptics, isActive: isActive, blockedReason: blockedReason,
-                      againEnabled: againEnabled, pull: pull, onAgain: onAgain, onClose: onClose)
+                      againEnabled: againEnabled, pull: pull, onAgain: onAgain, onClose: onClose, link: link)
         _director = State(initialValue: GachaMachineDirector())
     }
 
@@ -89,6 +93,7 @@ package struct GachaMachineView: View {
         let env = makeEnv()
         let d = director
         let _ = d.update(env: env)
+        let _ = input.link?.attach(d)
         let theme = GachaMachineTheme.of(colorScheme)
         // 캡슐 그림은 처음 한 번 굽는다(같은 그림 묶음이면 창을 다시 열어도 다시 굽지 않는다).
         let sprites = GachaCapsuleSprites.shared(for: input.art)
@@ -107,11 +112,33 @@ package struct GachaMachineView: View {
         }
         .onDisappear { d.stop() }
         .onChange(of: input.isActive) { _, active in
-            if active { d.touched(d.clock()) }
+            // 안 보이게 됐다 → 커밋 전 예약을 거둔다(감독의 깨우기도 같은 일을 한다 — 어느 쪽이 먼저 와도 루비가 안 나간다).
+            if active { d.touched(d.clock()) } else { d.cancelPendingTurn(d.clock()) }
         }
         .onChange(of: systemReduceMotion) { _, _ in d.touched(d.clock()) }
         .onChange(of: input.balance) { _, _ in d.touched(d.clock()) }
         .onChange(of: input.blockedReason) { _, _ in d.touched(d.clock()) }
+    }
+}
+
+/// 호스트가 쥐는 기계 연결(맥 뽑기 창). 지금 기계에 **루비를 낸 판의 결과를 사용자가 아직 못 봤는가**를 묻는다 —
+/// 창을 닫았다 다시 열 때 그런 판이 있으면 기계를 새로 세우지 않는다(새로 세우면 산 캡슐이 창에서 사라진다).
+/// 왕복이 끝났어도(스토어의 뽑기 중 표시가 꺼져도) 공개 전이면 판은 아직 안 끝났다.
+@MainActor
+package final class GachaMachineLink {
+    /// 지금 물린 기계의 감독(뷰가 그릴 때마다 물린다 — 기계가 새로 서면 새 감독으로 바뀐다).
+    private(set) weak var director: GachaMachineDirector?
+
+    package init() {}
+
+    func attach(_ director: GachaMachineDirector) {
+        if self.director !== director { self.director = director }
+    }
+
+    /// 루비가 나간(나가는 중인) 판의 결과를 아직 못 봤다(`GachaMachineDirector.hasUnrevealedTurn`).
+    package var hasUnrevealedTurn: Bool {
+        guard let director else { return false }
+        return director.hasUnrevealedTurn(director.clock())
     }
 }
 
@@ -176,6 +203,10 @@ struct GachaMachineStage: View {
     let theme: GachaMachineTheme
     var sprites: GachaCapsuleSprites?
     let now: Date
+    /// 무대 누름 · 손잡이 끌기가 잡혀 있는가. 끝날 때 **그리고 취소될 때**(전화 · 시스템 알림 · 창이 내려감) 되돌아간다 —
+    /// SwiftUI 는 취소에 `onEnded` 를 안 부르므로, 이게 없으면 `pressing`/`dragging` 이 참으로 굳어 기계가 영영 매 프레임 그린다.
+    @GestureState private var stageHeld = false
+    @GestureState private var knobHeld = false
 
     static let space = "gachaMachineStage"
     /// 무대 밖으로 번지는 폭(설계 좌표). 세로 폰(393×852)이면 위아래로 ≈ 180 이 필요하다 — 넉넉히.
@@ -215,11 +246,24 @@ struct GachaMachineStage: View {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
+                .updating($stageHeld) { _, held, _ in held = true }
                 .onChanged { _ in
                     if !d.pressing { d.pressing = true; d.press() }
                 }
                 .onEnded { _ in d.pressEnded() }
         )
+        // 누름이 끝났거나 취소됐다. 이미 풀렸으면(onEnded) 아무것도 안 한다.
+        .onChange(of: stageHeld) { _, held in
+            if !held, d.pressing { d.pressEnded() }
+        }
+        // 손잡이를 놓았으면 onEnded(dragEnded — 클릭이면 저절로 한 바퀴)가 이미 dragging 을 풀었다. 한 차례 뒤에도 잡혀 있으면
+        // 취소된 것이다 — 클릭으로 치지 않고 풀기만 한다(루비가 안 나간다).
+        .onChange(of: knobHeld) { _, held in
+            guard !held else { return }
+            Task { @MainActor in
+                if d.dragging { d.dragCancelled() }
+            }
+        }
         .onChange(of: d.beats(now)) { old, new in d.emitBeats(old: old, new: new, now: now) }
     }
 
@@ -336,6 +380,7 @@ struct GachaMachineStage: View {
                 .position(GLayout.knobCenter)
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
+                        .updating($knobHeld) { _, held, _ in held = true }
                         .onChanged { v in d.dragChanged(location: v.location, translation: v.translation) }
                         .onEnded { _ in d.dragEnded() }
                 )
@@ -956,13 +1001,15 @@ struct GachaMachineStage: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
 
-        // 건너뛰기(보이스오버는 이걸로 캡슐을 연다)
+        // 건너뛰기(보이스오버는 이걸로 캡슐을 연다). 밝은 바탕에선 무대 조명이 이 모서리를 보라로 가라앉혀, 옅은 보라 알약 위
+        // 보라 글자는 1.8:1 이었다 — [닫기] 와 같은 흰 알약 + 진한 라벤더 글자로(≥ 4.5:1). 어두운 쪽은 그대로(≈ 5:1).
         Button { d.skipTaps() } label: {
             Text(GachaMachineText.skip)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(ink.opacity(0.75))
+                .foregroundStyle(dark ? ink.opacity(0.75) : theme.closeText)
                 .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(Capsule().fill((dark ? Color.white : GPalette.lavDeep).opacity(0.12)))
+                .background(Capsule().fill(dark ? Color.white.opacity(0.12) : theme.closeFill))
+                .overlay(Capsule().stroke(dark ? Color.clear : theme.closeStroke, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(GachaMachineText.openCapsule)

@@ -16,9 +16,13 @@ import CheckCore
 // 이 창만의 규칙:
 //   · **안 보이면 기계를 멈춘다**(`GachaWindowState.isActive`). 닫힘 · 최소화 · 완전히 가려짐(다른 창 · 다른 Space · 화면 잠금)이면
 //     기계의 TimelineView 가 멎는다 — `orderOut` 된 창도 SwiftUI 는 계속 그린다(S1 실측: 닫은 창이 60fps 로 돌았다).
+//     같은 입력으로 기계는 **커밋 전 예약(손잡이 자동 회전 · [한 번 더])을 거둔다** — 손잡이를 누르고 바로 닫아도 루비가 안 나간다
+//     (닫아도 뷰가 안 사라져 `onDisappear` 가 안 오므로 이 입력이 유일한 문이다).
 //   · **다시 열면 새 기계다**(`contentID`). 닫힌 창을 다시 열 때 기계를 새로 세운다 — 지난 공개 화면(한 번 더 · 닫기)이 남아 있으면
-//     [닫기] 가 방금 연 창을 또 닫는다. 단 **뽑기 왕복이 떠 있으면 그대로 둔다** — 그 판의 공개를 이어서 보여 주고, 새 기계가
-//     같은 순간에 손잡이를 받지 않게(스토어도 한 번 더 막는다). 폰 전체 화면도 덮개를 내렸다 올리면 새 기계다 — 같은 수명이다.
+//     [닫기] 가 방금 연 창을 또 닫는다. 단 **루비를 낸 판의 결과를 아직 못 봤으면 그대로 둔다**(`GachaMachineLink` — 왕복 중 ·
+//     공개 전 · 안 보이는 동안 공개가 끝남) — 산 캡슐을 창에서 끝까지 보여 주고, 새 기계가 같은 순간에 손잡이를 받지 않게
+//     (스토어도 한 번 더 막는다). 왕복은 0.3초면 끝나고 공개는 2.4~3.8초라 '왕복 중' 만으로는 판을 지키지 못한다.
+//     폰 전체 화면도 덮개를 내렸다 올리면 새 기계다 — 같은 수명이다.
 //   · **외관은 시스템을 따른다**(다른 창들은 `.darkAqua` 고정). 기계는 밝은·어두운 테마를 둘 다 가졌고(S1), 사용자가 써 본 시안
 //     앱도 시스템 외관을 따랐다. 앱 테마(`CheckTheme` — 어두운 판 전용)를 쓰는 조각이 이 창엔 없다(확률 보기 판은 제 색을 고른다).
 //   · **테스트 실행에서는 사용자 화면에 아무것도 안 뜬다**: 알파 0(`CheckPanelVisibility`) + 모든 화면 밖(x = -30000) + 클릭 통과 +
@@ -63,6 +67,8 @@ final class GachaWindowState {
     var contentID = 0
     /// "확률 보기" 판이 떠 있다.
     var showsOdds = false
+    /// 창 안 기계와의 연결 — 루비를 낸 판의 결과를 아직 못 봤는가(다시 열 때 기계를 지킬지).
+    @ObservationIgnored let machineLink = GachaMachineLink()
 
     /// 기계가 움직여도 되는가 = 보인다.
     var isActive: Bool { isOpen && !isMiniaturized && !isOccluded }
@@ -106,7 +112,8 @@ struct CheckGachaWindowView: View {
             // 교환·캐릭터 구매가 떠 있는 동안은 [한 번 더] 를 받지 않는다(스토어도 막는다 — 받으면 실패 한 줄만 뜬다).
             againEnabled: store.gachaExchangingID == nil && store.purchasingID == nil,
             pull: Self.pullAction(store),
-            onClose: onClose
+            onClose: onClose,
+            link: state.machineLink
         )
     }
 
@@ -404,12 +411,13 @@ final class CheckGachaWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - 열기 / 닫기
 
-    /// 뽑기 창을 연다(멱등 — 최소화돼 있으면 되살린다). 닫혀 있던 창이면 기계를 새로 세운다(뽑기 왕복이 떠 있으면 그대로).
+    /// 뽑기 창을 연다(멱등 — 최소화돼 있으면 되살린다). 닫혀 있던 창이면 기계를 새로 세운다 — 단 왕복 중이거나
+    /// 루비를 낸 판의 결과를 아직 못 봤으면 그 기계 그대로(머리 주석).
     func show() {
         guard let wiring else { return }
         let existed = windowStorage != nil
         guard let window else { return }
-        if existed, !state.isOpen, !wiring.store.gachaPulling {
+        if existed, !state.isOpen, !wiring.store.gachaPulling, !state.machineLink.hasUnrevealedTurn {
             state.contentID &+= 1
             state.showsOdds = false
         }

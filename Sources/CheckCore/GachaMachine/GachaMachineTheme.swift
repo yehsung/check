@@ -12,7 +12,7 @@ struct GachaMachineTheme {
     var ink: Color
     /// 결과 이름.
     var title: Color
-    /// 조각 "+1" 처럼 강조한 작은 글자.
+    /// 조각 "+1" 처럼 강조한 글자(결과 글줄 · 24pt). 밝은 쪽은 진한 라벤더 — 옅은 라벤더(#9979E6)는 공개 바탕과 2.1:1 이었다(큰 글자 기준 3:1 미달).
     var accent: Color
     /// 칩 아래 "+1 조각" 처럼 작은 알약 속 글자(바탕 대비가 커야 한다).
     var accentStrong: Color
@@ -51,7 +51,7 @@ struct GachaMachineTheme {
     static let light = GachaMachineTheme(
         dark: false,
         bgTop: GPalette.hex(0xF8F5FF), bgBottom: GPalette.hex(0xECE4FF), bgGlow: Color.white.opacity(0.9),
-        ink: GPalette.lavInk, title: GPalette.plum, accent: GPalette.lavDeep, accentStrong: GPalette.lavInk,
+        ink: GPalette.lavInk, title: GPalette.plum, accent: GPalette.lavInk, accentStrong: GPalette.lavInk,
         chipFill: Color.white.opacity(0.92), chipStroke: GPalette.hex(0xD9CBFF), chipText: GPalette.plum,
         pillFill: Color.white.opacity(0.9), warn: GPalette.hex(0xB0477A),
         badgeFill: Color.white.opacity(0.92), badgeText: GPalette.lavInk,

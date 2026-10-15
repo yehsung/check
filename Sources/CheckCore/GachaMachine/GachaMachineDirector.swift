@@ -277,9 +277,12 @@ final class GachaMachineDirector {
     /// 결과가 도착한 때(공개에 처음 나올 그림을 이때 미리 한 번 그려 둔다).
     var arrivedAt: Date?
     var pressing = false
-    /// 다시 보이기 시작한 첫 그리기 — 멈춘 동안 지나간 박자로 햅틱을 몰아 내지 않는다.
-    @ObservationIgnored var beatsResync = false
+    /// 다시 보이기 시작한 순간의 박자. 다음 박자 변화는 (멈추기 전 박자가 아니라) 이것과 견준다 — 멈춘 동안 지나간 박자로
+    /// 햅틱을 몰아 내지 않되, 멈춘 동안 아무것도 안 바뀌었으면 다음 실제 박자(공개 · 결과 알림)는 그대로 낸다.
+    @ObservationIgnored var resyncBase: GBeats?
     @ObservationIgnored private var wasActive = true
+    /// 안 보이기 시작한 때(보이면 nil). 공개가 이 뒤에 자리 잡았으면 사용자는 아직 결과를 못 본 것이다.
+    @ObservationIgnored private(set) var hiddenSince: Date?
     /// 이번 판이 동작 줄이기로 도는가(커밋 순간의 설정을 쥔다 — 도중에 바꿔도 판이 안 꼬인다).
     var reduced = false
     /// 마지막으로 무슨 일이 있었던 때(잔잔한 움직임이 이 뒤로 `ambientGrace` 만큼 이어진다).
@@ -327,6 +330,18 @@ final class GachaMachineDirector {
     func revealSettled(_ now: Date) -> Bool {
         guard case .reveal(let t) = phase(now), let r = result else { return false }
         return t >= buttonsAt(r.kind)
+    }
+
+    /// 루비가 나간(나가는 중인) 판의 결과를 사용자가 아직 못 봤다 — 왕복 중 · 공개 전 · 안 보이는 동안 공개가 자리 잡음.
+    /// 호스트(맥 창)는 이 판이 있으면 다시 열 때 기계를 새로 세우지 않는다(새로 세우면 산 캡슐이 창에서 사라진다).
+    func hasUnrevealedTurn(_ now: Date) -> Bool {
+        if pullInFlight { return true }
+        guard commitTime != nil, failTime == nil, let r = result else { return false }
+        guard let b = burstTime else { return true }
+        let settledAt = b.addingTimeInterval(goldBuild + buttonsAt(r.kind))
+        if now < settledAt { return true }
+        if let hs = hiddenSince { return settledAt > hs }
+        return false
     }
 
     /// 덜컹 시각들(커밋 0 + 기다리는 동안 kickEvery 마다).
@@ -449,6 +464,9 @@ final class GachaMachineDirector {
 
     /// 시계가 `now` 에 왔을 때 할 일을 한다(자동 회전 끝 → 커밋, 실패 → 처음으로, [한 번 더] → 자동 회전, 멎기).
     func advance(_ now: Date) {
+        // 안 보이는 기계는 저절로 돌지 않는다 — 호스트가 isActive 를 내렸으면 커밋 전 예약을 거둔다(뷰의 onChange 보다
+        // 이 깨우기가 먼저 올 수 있다). 맥 창은 닫아도 뷰가 안 사라져 `stop()` 이 안 불린다.
+        if env?.isActive == false { cancelPendingTurn(now) }
         if let s = autoTurnStart, now >= s.addingTimeInterval(autoTurnDuration) {
             autoTurnStart = nil
             angle = 360
@@ -506,6 +524,22 @@ final class GachaMachineDirector {
         wakeTask = nil
     }
 
+    /// 안 보이게 됐다(맥 창 닫힘 · 최소화 · 완전히 가려짐 / 폰 덮개 · 앱이 뒤로 · 확률 시트). **커밋 전** 예약 — 손잡이의
+    /// 자동 회전과 [한 번 더] — 을 거둔다: 안 보이는 동안 손잡이가 저절로 마저 돌아 루비를 쓰지 않게. 손잡이는 처음 자리로
+    /// 미끄러진다. 이미 떠난 `pull` 은 그대로 둔다(서버 일은 호스트 몫 — 공개는 다시 보일 때 이어진다).
+    func cancelPendingTurn(_ now: Date) {
+        guard autoTurnStart != nil || againAt != nil else { return }
+        if autoTurnStart != nil {
+            let shown = knobAngle(now)
+            autoTurnStart = nil
+            if shown > 0.5 { releaseAngle = shown; releaseTime = now }
+            angle = 0
+            lastNotch = 0
+        }
+        againAt = nil
+        touched(now)
+    }
+
     // MARK: 리셋
 
     func resetPull(_ now: Date? = nil) {
@@ -523,14 +557,19 @@ final class GachaMachineDirector {
 
     /// 뷰가 그릴 때마다 넘기는 호스트 값. 관찰되지 않는 칸만 바꾼다(그리는 도중에 관찰 값을 바꾸지 않는다).
     func update(env newEnv: GachaMachineEnv) {
-        if newEnv.isActive && !wasActive { beatsResync = true }
+        let resumed = newEnv.isActive && !wasActive
+        if !newEnv.isActive && wasActive { hiddenSince = clock() }
+        if newEnv.isActive { hiddenSince = nil }
         wasActive = newEnv.isActive
         env = newEnv
+        if resumed { resyncBase = beats(clock()) }
     }
 
     /// 박자가 바뀐 순간의 햅틱(덜컹 · 툭 · 짠 · 조각 · 자동 회전 톱니)과 결과 알림.
     func emitBeats(old: GBeats, new: GBeats, now: Date) {
-        if beatsResync { beatsResync = false; return }
+        var old = old
+        // 다시 보인 뒤 첫 변화: 멈추기 전 박자 대신 다시 보인 순간의 박자와 견준다(멈춘 동안 지나간 것은 안 낸다).
+        if let base = resyncBase { resyncBase = nil; old = base }
         guard let env, env.isActive else { return }
         let h = env.haptics
         if new.kicks > old.kicks && new.kicks > 1 && !reduced { h.play(.rumble) }
@@ -595,6 +634,20 @@ extension GachaMachineDirector {
         guard let env, env.canPull, commitTime == nil else { touched(now); return }
         if !dragMoved { autoTurn(now); return }
         if angle > 0.5 {
+            releaseAngle = angle; releaseTime = now
+            angle = 0; lastNotch = 0
+        }
+        touched(now)
+    }
+
+    /// 손잡이 끌기가 **취소됐다**(전화 · 시스템 알림 · 창이 내려감 — SwiftUI 는 취소에 `onEnded` 를 안 부른다).
+    /// 놓은 것과 달리 클릭으로 치지 않는다(저절로 돌지 않는다 — 루비가 안 나간다). 손잡이는 처음 자리로 미끄러진다.
+    func dragCancelled() {
+        let now = clock()
+        guard dragging else { return }
+        dragging = false
+        pointerAngle = nil
+        if commitTime == nil, angle > 0.5 {
             releaseAngle = angle; releaseTime = now
             angle = 0; lastNotch = 0
         }

@@ -5,7 +5,8 @@ import Foundation
 //
 // 판정(뽑을 수 있나 · 교환할 수 있나 · 결과 분류)·문구·요청 id 수명은 전부 코어 `Gacha.swift`(폰과 한 벌)에 있다. 맥이 더하는 것은
 // 세 가지뿐이다:
-//  ① 문 — 상점 '소모품' 구획의 [캐릭터 뽑기] 카드 · 캐릭터 격자의 황금 아잉이 카드 · 캐릭터 고르기의 잠긴 금 카드가 뽑기 패널을 연다.
+//  ① 문 — 상점 '소모품' 구획의 [캐릭터 뽑기] 카드 · 캐릭터 격자의 황금 아잉이 카드가 뽑기 패널(확률 · 조각 교환)을 열고,
+//     그 패널의 [뽑기 · 50] 과 캐릭터 고르기의 잠긴 금 카드가 **뽑기 창**(캡슐 기계 — `CheckGachaWindow.swift`)을 연다(0.3.54).
 //  ② 왕복 — `gacha_pull` · `gacha_exchange` 를 상점 구매(`buyCharacter`)와 같은 모양으로 부른다(세대 가드 · 세션 재시도 · 취소 무시).
 //  ③ 거울 — **서버가 말한 값으로만** 잔량·조각·보유를 고친다(클라가 50 을 빼거나 조각을 더하지 않는다).
 //
@@ -21,6 +22,23 @@ enum GachaPanelMode: Equatable, Sendable, CaseIterable {
     case odds
     /// [조각 교환] — 내 조각 + 교환 목록.
     case exchange
+}
+
+/// 뽑기 한 번의 표(동기 반쪽이 끊고 왕복 반쪽이 쓴다). 떠날 때의 세대 · 능력 번호를 쥔다 — 왕복 중 로그아웃하면 결과를 버린다.
+struct GachaPullTicket: Equatable, Sendable {
+    let requestID: UUID
+    let generation: Int
+    let protocolVersion: Int
+}
+
+/// 뽑기 왕복이 어떻게 끝났는가. 창의 기계는 `.answered(.pulled)` 일 때만 공개하고 나머지는 한 줄로 말한다.
+enum GachaPullAttempt: Equatable, Sendable {
+    /// 서버가 답했다(또는 함수가 없다는 것이 확실하다) — 요청 id 는 버렸다.
+    case answered(GachaPullOutcome)
+    /// 결과를 모른다(오프라인 · 5xx · 응답 해석 실패) — 요청 id 를 쥔 채 남겼다.
+    case connection
+    /// 취소됐거나 그 사이 로그아웃·계정 전환이 있었다 — 결과를 화면에 옮기지 않았다.
+    case dropped
 }
 
 @MainActor
@@ -88,16 +106,58 @@ extension WorkTimerStore {
         gachaNoticeIsError = false
     }
 
-    /// 캐릭터 고르기에서 **잠긴** 카드를 눌렀을 때: 상점을 연다. 루비로 살 수 없는 캐릭터(황금 아잉이)면 뽑기 패널까지 연다 —
-    /// 상점 격자에서 그 카드를 찾아 다시 누르게 하지 않는다.
+    /// 캐릭터 고르기에서 **잠긴** 카드를 눌렀을 때: 상점을 연다. 루비로 살 수 없는 캐릭터(황금 아잉이)는 뽑기가 열려 있으면
+    /// **뽑기 창**을 바로 연다(0.3.54 — 예전엔 상점 안 뽑기 패널) — 상점 격자에서 그 카드를 찾아 다시 누르게 하지 않는다.
+    /// 뽑기가 없으면(옛 서버) 상점을 열고 얻는 길만 말한다.
     func openShopForLockedCharacter(_ id: String) {
+        if CharacterCatalog.isGoldAing(id), isGachaAvailable {
+            openGachaWindow()
+            return
+        }
         if !isShopPanelVisible { toggleShopPanel() }
         guard isShopPanelVisible, CharacterCatalog.isGoldAing(id) else { return }
-        if isGachaAvailable {
-            openGachaPanel()
-        } else {
-            shopNotice = GachaText.gachaOnlyHint
+        shopNotice = GachaText.gachaOnlyHint
+    }
+
+    // MARK: 뽑기 창(캡슐 기계 · 0.3.54)
+
+    /// [뽑기 · 50] — 뽑기 창을 띄운다(이미 떠 있으면 앞으로 · 최소화돼 있으면 되살린다). **여기서는 뽑지 않는다** —
+    /// 실제 뽑기는 창 안 기계의 손잡이가 한 바퀴를 다 돈 순간 `pullGachaForReveal()` 한 번이다.
+    ///
+    /// 뽑기가 없으면(옛 서버 · 정보를 아직 모름) 창을 띄우지 않는다 — 공개하지 못한 확률로 루비를 받지 않는다(`isGachaAvailable`).
+    /// 열 때 상점을 한 번 다시 읽는다(다른 기기에서 바뀐 잔량·조각) — 그 사이 뽑기가 끝나도 `loadShopState` 의 변이 순번이 되돌림을 막는다.
+    /// 팝오버 안의 버튼이 부르므로 **창 먼저, 팝오버 나중**에 닫는다(미니게임 창과 같은 순서 — `openMiniGameWindow` 주석).
+    func openGachaWindow() {
+        guard isGachaAvailable else {
+            gachaNotice = GachaText.unavailable
+            gachaNoticeIsError = true
+            return
         }
+        loadShopState()
+        gachaWindowHooks.show()
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 뽑기 창 기계가 손잡이를 막는 이유(nil = 막지 않는다). 루비 모자람은 기계가 스스로 말한다(잔액·값으로) — 여기선 그 밖의 것만.
+    var gachaWindowBlockedReason: String? {
+        Self.gachaWindowBlockedReason(signedIn: isSignedIn, availability: gachaPullAvailability)
+    }
+
+    /// 위 판정의 순수 본체.
+    nonisolated static func gachaWindowBlockedReason(signedIn: Bool, availability: GachaPullAvailability) -> String? {
+        guard signedIn else { return GachaText.notSignedIn }
+        switch availability {
+        case .ready, .short: return nil
+        case .unknownBalance: return ShopText.entryHelp(nil)
+        case .unavailable: return GachaText.unavailable
+        }
+    }
+
+    /// 확률표 줄(서버 순서 그대로). 상점 패널 [확률 보기] 와 뽑기 창 "확률 보기" 가 **같은 줄**을 그린다.
+    func gachaOddsLines(catalog: CharacterCatalog = CheckCharacter3DScene.catalog) -> [GachaOddsLine] {
+        guard let info = gachaInfo else { return [] }
+        return GachaRules.oddsRows(info: info, shopRows: shopCharacters) { catalog.manifest(id: $0)?.displayName }
+            .map(GachaOddsLine.init)
     }
 
     // MARK: 황금 아잉이를 세우는 자리 — 캐릭터 고르기 · 상점 자리표시 격자
@@ -136,49 +196,105 @@ extension WorkTimerStore {
 
     // MARK: 뽑기
 
-    /// [뽑기 · 50]. **실제 뽑기는 여기 하나뿐이다.** 서버가 잔량 확인·차감·장부·소유/조각을 한 트랜잭션에서 끝낸다.
+    /// 뽑기 한 번 — 결과를 **기다리지 않는** 문. 앱 화면은 더 부르지 않는다(0.3.54 부터 뽑기는 창 기계의 `pullGachaForReveal()`);
+    /// 스토어 시험이 이 문으로 왕복 규칙(연타 · 결과 모름 id · 서버 값 거울)을 잰다. 둘은 같은 두 조각(`startGachaPull` →
+    /// `finishGachaPull`)을 지난다 — 판정 · 요청 id · 세대 가드 · 서버 값 거울이 한 벌이라 시험이 재는 것이 곧 창이 타는 길이다.
     func pullGacha() {
-        guard !isGachaBusy, purchasingID == nil else { return }
+        guard let ticket = startGachaPull() else { return }
+        Task { [weak self] in
+            _ = await self?.finishGachaPull(ticket)
+        }
+    }
+
+    /// 창 기계의 `pull`. 손잡이가 한 바퀴를 다 돈 순간 **한 번** 불린다(기계가 한 판에 한 번만 부르고, 스토어가 한 번 더 막는다).
+    ///
+    /// 서버가 ok 를 말했을 때만 결과를 돌려준다 — 그 밖(모자람 · 업데이트 필요 · 연결 실패 · 스토어가 막음)은 전부 `GachaRevealFailure`
+    /// 로 던진다(기계는 공개 없이 한 줄을 2.4초 띄우고 처음으로). 결과를 모르는 실패는 요청 id 를 쥔 채 던진다 — 다음 판이 같은 id 로 묻는다.
+    /// 잔량·조각·보유는 이미 서버 값으로 옮겨졌다(`applyGachaPull`) — 기계는 넘겨받은 값만 보여 준다.
+    func pullGachaForReveal() async throws -> GachaRevealOutcome {
+        // 연출의 조각 칩은 "뽑기 전 → 뒤" 로 올라간다. 서버가 뒤 조각 수를 안 줬을 때만 이 값에 더한다.
+        let shardsBefore = gachaShards ?? 0
+        // 막힌 이유는 **묻기 전에** 정한다 — `gachaNotice` 에는 앞 동작(교환 결과 등)의 한 줄이 남아 있을 수 있다.
+        let refusal = gachaPullRefusal
+        guard let ticket = startGachaPull() else {
+            throw GachaRevealFailure(message: refusal ?? GachaText.pullFailed)
+        }
+        let attempt = await finishGachaPull(ticket)
+        return try Self.revealOutcome(for: attempt, shardsBefore: shardsBefore) { self.gachaDisplayName($0) }
+    }
+
+    /// 왕복 결과 → 기계 연출 값(또는 던질 실패). 순수 — 값으로 검증한다.
+    nonisolated static func revealOutcome(for attempt: GachaPullAttempt, shardsBefore: Int,
+                                          name: (String) -> String) throws -> GachaRevealOutcome {
+        switch attempt {
+        case .answered(.pulled(let result)):
+            return GachaRevealOutcome(result: result, name: name(result.characterID), shardsBefore: shardsBefore)
+        case .answered(let other):
+            throw GachaRevealFailure(message: GachaText.notice(for: other) ?? GachaText.pullFailed)
+        case .connection:
+            throw GachaRevealFailure(message: GachaText.connection)
+        case .dropped:
+            throw GachaRevealFailure(message: GachaText.pullFailed)
+        }
+    }
+
+    /// 서버에 묻기 전에 막는 이유(막지 않으면 nil). 다른 왕복(뽑기 · 교환 · 구매)이 떠 있으면 일반 실패 한 줄 — 서버에 안 갔으니 깎이지 않았다.
+    var gachaPullRefusal: String? {
+        if isGachaBusy || purchasingID != nil { return GachaText.pullFailed }
+        let availability = gachaPullAvailability
+        guard !availability.canPull else { return nil }
+        return GachaText.blockedReason(availability) ?? ShopText.entryHelp(rubyBalance)
+    }
+
+    /// 뽑기의 동기 반쪽: 판정 → 요청 id → 왕복 표시. 막히면 nil(이유는 `gachaNotice` 에 — 왕복 중이면 말없이).
+    ///
+    /// **결과를 모르는 실패 뒤라면 같은 id 가 나온다**(두 번 깎이지 않는다 — `GachaRequestIDs`). `gachaPulling` 은 여기서
+    /// 동기로 선다 — 같은 틱의 두 번째 누름이 바로 막힌다(뷰의 비활성화는 장식일 수 있다 — 클라 게이트는 짝으로).
+    func startGachaPull() -> GachaPullTicket? {
+        guard !isGachaBusy, purchasingID == nil else { return nil }
         let availability = gachaPullAvailability
         guard availability.canPull else {
             gachaNotice = GachaText.blockedReason(availability) ?? ShopText.entryHelp(rubyBalance)
             gachaNoticeIsError = true
             if case .unknownBalance = availability { loadShopState() }
-            return
+            return nil
         }
-        // 결과를 모르는 실패 뒤라면 **같은 id** 가 나온다(두 번 깎이지 않는다). 아니면 새 id.
-        let requestID = gachaRequestIDs.pullID()
+        let ticket = GachaPullTicket(requestID: gachaRequestIDs.pullID(), generation: sessionGeneration,
+                                     protocolVersion: shopProtocolVersion)
         gachaPulling = true
         gachaNotice = nil
         gachaNoticeIsError = false
-        let generation = sessionGeneration
-        let protocolVersion = shopProtocolVersion
-        Task { [weak self] in
-            guard let self else { return }
-            defer { self.gachaPulling = false }
-            do {
-                let response = try await withSessionRetry { activeSession in
-                    try await self.service.gachaPull(accessToken: activeSession.accessToken,
-                                                     protocolVersion: protocolVersion,
-                                                     requestID: requestID)
-                }
-                guard generation == self.sessionGeneration else { return }
-                // 서버가 답을 줬다 — 어떤 status 든 그 id 의 결과는 안다.
-                self.gachaRequestIDs.settlePull(requestID)
-                self.applyGachaPull(GachaPullOutcome(response: response))
-            } catch {
-                guard generation == self.sessionGeneration else { return }
-                if let known = GachaPullOutcome(error: error) {
-                    // 함수가 없다(서버가 아무것도 안 했다) — id 를 버려도 된다.
-                    self.gachaRequestIDs.settlePull(requestID)
-                    self.applyGachaPull(known)
-                    return
-                }
-                // 취소·오프라인·5xx: 서버가 처리했는지 모른다 → id 를 쥔 채 둔다(다시 누르면 같은 id 로 묻는다).
-                if case .cancelled = self.classifyAuthError(error) { return }
-                self.gachaNotice = GachaText.connection
-                self.gachaNoticeIsError = true
+        return ticket
+    }
+
+    /// 뽑기의 왕복 반쪽. **실제 뽑기 RPC 는 여기 하나뿐이다.** 서버가 잔량 확인·차감·장부·소유/조각을 한 트랜잭션에서 끝낸다.
+    func finishGachaPull(_ ticket: GachaPullTicket) async -> GachaPullAttempt {
+        defer { gachaPulling = false }
+        do {
+            let response = try await withSessionRetry { activeSession in
+                try await self.service.gachaPull(accessToken: activeSession.accessToken,
+                                                 protocolVersion: ticket.protocolVersion,
+                                                 requestID: ticket.requestID)
             }
+            guard ticket.generation == sessionGeneration else { return .dropped }
+            // 서버가 답을 줬다 — 어떤 status 든 그 id 의 결과는 안다.
+            gachaRequestIDs.settlePull(ticket.requestID)
+            let outcome = GachaPullOutcome(response: response)
+            applyGachaPull(outcome)
+            return .answered(outcome)
+        } catch {
+            guard ticket.generation == sessionGeneration else { return .dropped }
+            if let known = GachaPullOutcome(error: error) {
+                // 함수가 없다(서버가 아무것도 안 했다) — id 를 버려도 된다.
+                gachaRequestIDs.settlePull(ticket.requestID)
+                applyGachaPull(known)
+                return .answered(known)
+            }
+            // 취소·오프라인·5xx: 서버가 처리했는지 모른다 → id 를 쥔 채 둔다(다시 누르면 같은 id 로 묻는다).
+            if case .cancelled = classifyAuthError(error) { return .dropped }
+            gachaNotice = GachaText.connection
+            gachaNoticeIsError = true
+            return .connection
         }
     }
 
@@ -194,7 +310,6 @@ extension WorkTimerStore {
             if let shards = result.shards { gachaInfo?.shards = shards }
             if let newID = result.newlyOwnedID { ownedCharacterIDs.insert(newID) }
             gachaLastResult = result
-            gachaRevealSerial += 1
             gachaPanelMode = .pull
             gachaNotice = nil
             gachaNoticeIsError = false
@@ -309,8 +424,10 @@ extension WorkTimerStore {
         GachaRules.name(for: id) { CheckCharacter3DScene.catalog.manifest(id: $0)?.displayName }
     }
 
-    /// 로그아웃·계정 전환 — 앞 계정의 뽑기 정보·결과·요청 id 를 다음 사람이 보지도 쓰지도 않게.
+    /// 로그아웃·계정 전환 — 앞 계정의 뽑기 정보·결과·요청 id 를 다음 사람이 보지도 쓰지도 않게. 뽑기 창도 내린다 — 남기면 다음 사람이
+    /// 앞 사람의 잔량·조각이 박힌 기계를 본다(체스 창의 `ChessAccountWatcher` 와 같은 이유 — 여긴 스토어가 직접 닫는다).
     func resetGachaState() {
+        gachaWindowHooks.close()
         gachaInfo = nil
         isGachaPanelOpen = false
         gachaPanelMode = .pull

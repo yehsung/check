@@ -504,9 +504,7 @@ struct GachaMachineStage: View {
                                 radius: effects ? (gold ? 18 : 10) : 0, y: effects && !gold ? 6 : 0)
                         .position(GLayout.stageCenter)
                     if effects {
-                        GLightBurst(t: 0.25, gold: gold, center: GLayout.stageCenter, dark: gold || theme.raysOnDark, spin: 0)
-                            .frame(width: GLayout.size.width, height: GLayout.size.height)
-                            .blendMode(gold ? .plusLighter : .normal)
+                        burst(t: 0.25, gold: gold, spin: 0)
                         revealTexts(r, 3.0)
                         if r.shardsGained > 0 {
                             GShardGem(size: 40, glow: 1, outline: theme.shardOutline).position(GLayout.stageCenter)
@@ -692,6 +690,22 @@ struct GachaMachineStage: View {
 
     // MARK: 공개(터짐 · 캐릭터 · 조각)
 
+    /// 터짐 빛(빛줄기 반지름 ≤ 330 · 금 고리 ≤ 420)이 무대 위아래로 넘쳐 그려질 폭(설계 좌표).
+    /// `Canvas` 는 기기에서 **제 테두리로 잘린다**(ImageRenderer 는 안 자른다 — 그래서 시험 그림에선 안 보였다). 무대 크기로 두면
+    /// 폰 세로 화면(무대 위아래가 비는 화면)에서 빛이 무대 테두리에서 가로줄로 뚝 끊겼다(1.0.8 시뮬레이터 실측). 옆은 폰에서
+    /// 화면 끝이 곧 무대 끝이라 넓히지 않는다(칠할 넓이를 두 배 안쪽으로 묶는다). 금 고리(420 − 무대 중심 196 ≈ 224) + 흐림.
+    static let burstBleedY: CGFloat = 240
+
+    /// 터짐 빛 한 판. 배치 크기는 무대 그대로(형제 배치가 안 움직인다), 그림판만 위아래로 `burstBleedY` 씩 넘친다.
+    private func burst(t: Double, gold: Bool, spin: Double) -> some View {
+        let bleed = Self.burstBleedY
+        return GLightBurst(t: t, gold: gold, center: CGPoint(x: GLayout.stageCenter.x, y: GLayout.stageCenter.y + bleed),
+                           dark: gold || theme.raysOnDark, spin: spin)
+            .frame(width: GLayout.size.width, height: GLayout.size.height + 2 * bleed)
+            .frame(width: GLayout.size.width, height: GLayout.size.height)
+            .blendMode(gold ? .plusLighter : .normal)
+    }
+
     @ViewBuilder private func revealLayer(_ ph: GPhase) -> some View {
         if let rt = revealT(ph), let r = d.result {
             let gold = r.kind == .gold
@@ -699,10 +713,7 @@ struct GachaMachineStage: View {
                 if d.reduced {
                     reducedReveal(r, rt)
                 } else {
-                    GLightBurst(t: rt, gold: gold, center: GLayout.stageCenter, dark: gold || theme.raysOnDark,
-                                spin: burstSpin(r, rt))
-                        .frame(width: GLayout.size.width, height: GLayout.size.height)
-                        .blendMode(gold ? .plusLighter : .normal)
+                    burst(t: rt, gold: gold, spin: burstSpin(r, rt))
                     capsuleHalves(r, rt)
                     character(r, rt)
                     if r.kind == .duplicate { shardFlight(rt) }

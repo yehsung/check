@@ -382,6 +382,12 @@ package enum MeText {
         "루비 \(max(0, price))개로 캐릭터 하나를 뽑아요"
     }
 
+    /// 앞 뽑기가 아직 떠 있을 때 기계 손잡이를 잠근 이유(덮개를 닫았다 다시 연 새 기계 · 두 번 깎지 않는다).
+    package static let gachaPullBusy = "앞 뽑기 결과를 받는 중이에요"
+
+    /// 상점 카드의 마지막 결과 줄(보이스오버 앞말) — 기계를 닫은 뒤에도(공개 전에 닫았어도) 무엇을 뽑았는지 남긴다.
+    package static let gachaLastResult = "방금 뽑은 결과"
+
     /// 뽑기 전용 캐릭터를 얻는 길. 교환값을 알면(서버 `shard_costs`) "뽑기 또는 조각 N개", 모르면 코어의 "뽑기로만" 문장.
     /// 값은 서버가 준 것만 쓴다 — 교환값을 박아 두면 서버가 값을 바꾸는 날 화면이 거짓말을 한다.
     package static func gachaAcquirePhrase(shardCost: Int?) -> String {

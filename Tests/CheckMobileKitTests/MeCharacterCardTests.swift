@@ -81,6 +81,14 @@ struct MeCharacterCardTests {
         let aingBox = try #require(alphaBounds(aing))
         let aingCrop = try #require(aing.cropping(to: aingBox))
         var result = [Source(id: "aing", displayName: "아잉", pixelArt: false, crop: aingCrop)]
+        // 황금 아잉이(v0.3.54)는 아잉과 같은 내장 3D 캐릭터다 — 매니페스트·아틀라스가 없고(밑줄 id 는 매니페스트 문법 밖),
+        // 원천은 맥 초상 PNG 다(아잉과 같은 갈래). 이름은 코어 내장 항목의 이름을 그대로 쓴다(맥 카탈로그와 같은 글자).
+        let gold = try loadImage(repoRoot.appendingPathComponent(
+            "Sources/check/Resources/\(GoldAingArt.neutralPortraitResourceName).\(GoldAingArt.resourceExtension)"))
+        let goldBox = try #require(alphaBounds(gold))
+        let goldCrop = try #require(gold.cropping(to: goldBox))
+        result.append(Source(id: CharacterCatalog.goldAingID, displayName: CharacterCatalog.builtInGoldAing.displayName,
+                             pixelArt: false, crop: goldCrop))
         let charactersDir = repoRoot.appendingPathComponent("Sources/check/Characters")
         let names = try FileManager.default.contentsOfDirectory(atPath: charactersDir.path).sorted()
         for name in names {
@@ -146,6 +154,10 @@ struct MeCharacterCardTests {
         #expect(MeCharacterCards.equippedID(fromServer: " fox ") == "fox")
         #expect(MeCharacterCards.displayName(for: "ghost") == "유령")
         #expect(MeCharacterCards.displayName(for: "dragon") == "dragon")
+        // 황금 아잉이(v0.3.54): 이 빌드가 아는 캐릭터라 접히지 않고, 이름은 맥 카탈로그와 같은 글자다.
+        #expect(MeCharacterCards.equippedID(fromServer: "aing_gold") == "aing_gold")
+        #expect(MeCharacterCards.displayName(for: "aing_gold") == CharacterCatalog.builtInGoldAing.displayName)
+        #expect(MeCharacterCards.displayName(for: "aing_gold") == "황금 아잉이")
     }
 
     // MARK: 다시 굽기

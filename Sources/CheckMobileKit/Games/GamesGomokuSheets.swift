@@ -110,7 +110,7 @@ struct GamesGomokuStakeSheet: View {
         } label: {
             VStack(spacing: 2) {
                 RubyPrice(stake.rawValue, isShort: !affordable, gemSize: 20, style: .title3)
-                Text("이기면 +\(stake.rawValue)")
+                Text(GomokuPhoneText.stakeGain(stake.rawValue))
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(affordable ? MobileTheme.label2 : MobileTheme.label3Text)

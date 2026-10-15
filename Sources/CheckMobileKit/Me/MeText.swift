@@ -375,6 +375,90 @@ package enum MeText {
         "루비 \(price)개를 써요 · 남는 루비 \(max(0, balance - price))개"
     }
 
+    // MARK: 캐릭터 뽑기 (v0.3.54 — 뽑기 문구 본체는 코어 `GachaText`(맥과 한 벌), 여기는 폰 화면이 더 쓰는 줄만)
+
+    /// 뽑기 카드 설명 한 줄. 값은 서버 `gacha.price` 다(50 을 다시 적지 않는다).
+    package static func gachaLede(price: Int) -> String {
+        "루비 \(max(0, price))개로 캐릭터 하나를 뽑아요"
+    }
+
+    /// 뽑기 전용 캐릭터를 얻는 길. 교환값을 알면(서버 `shard_costs`) "뽑기 또는 조각 N개", 모르면 코어의 "뽑기로만" 문장.
+    /// 값은 서버가 준 것만 쓴다 — 교환값을 박아 두면 서버가 값을 바꾸는 날 화면이 거짓말을 한다.
+    package static func gachaAcquirePhrase(shardCost: Int?) -> String {
+        guard let shardCost, shardCost > 0 else { return GachaText.gachaOnlyHint }
+        return "뽑기 또는 \(GachaText.shardCost(shardCost))로 얻을 수 있어요"
+    }
+
+    /// 상점에서 뽑기 전용 타일을 눌렀을 때: "황금 아잉이는 뽑기 또는 조각 20개로 얻을 수 있어요".
+    package static func gachaOnlyNotice(_ name: String, shardCost: Int?) -> String {
+        "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) \(gachaAcquirePhrase(shardCost: shardCost))"
+    }
+
+    /// 고르기에서 안 가진 뽑기 전용 캐릭터를 눌렀을 때(`lockedCharacter` 의 "상점에서 살 수 있어요"는 이 캐릭터에 거짓이다).
+    package static func lockedGachaCharacter(_ name: String, shardCost: Int?) -> String {
+        "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) 아직 없어요 — \(gachaAcquirePhrase(shardCost: shardCost))"
+    }
+
+    /// 서버가 뽑기 전용 캐릭터를 `not_owned` 로 거절했을 때(`characterNotOwned` 의 짝).
+    package static let gachaCharacterNotOwned = "아직 없는 캐릭터예요 — 뽑기나 조각 교환으로 얻을 수 있어요"
+
+    /// 타일 상태 줄(좁다): 교환값을 알면 "뽑기 · 조각 20", 모르면 "뽑기 전용". 긴 문장은 안내 줄·보이스오버가 말한다.
+    package static func gachaTileStatus(shardCost: Int?) -> String {
+        guard let shardCost, shardCost > 0 else { return GachaText.gachaOnly }
+        return "\(GachaText.pullButton) · 조각 \(shardCost)"
+    }
+
+    /// 타일 보이스오버: "황금 아잉이, 뽑기 또는 조각 20개로 얻을 수 있어요".
+    package static func gachaTileAccessibility(name: String, shardCost: Int?) -> String {
+        "\(name), \(gachaAcquirePhrase(shardCost: shardCost))"
+    }
+
+    /// 확률표 머리(캐릭터 · 상점가 · 확률).
+    package static let gachaOddsColumnName = "캐릭터"
+    package static let gachaOddsColumnPrice = "상점가"
+    package static let gachaOddsColumnPercent = "확률"
+
+    /// 조각 교환 진입 버튼("조각 3개 · 교환"). 조각 수를 모르면 "조각 교환".
+    package static func gachaExchangeEntry(shards: Int?) -> String {
+        guard let shards else { return GachaText.exchangeTitle }
+        return "\(GachaText.shards(max(0, shards))) · \(GachaText.exchangeButton)"
+    }
+
+    /// 교환 확인 제목: "여우를 조각 2개로 교환할까요?".
+    package static func exchangeConfirmTitle(name: String, cost: Int) -> String {
+        "\(name)\(particle(name, withFinal: "을", withoutFinal: "를")) \(GachaText.shardCost(cost))로 교환할까요?"
+    }
+
+    /// 교환 확인 본문: "남는 조각 1개".
+    package static func exchangeConfirmMessage(cost: Int, shards: Int) -> String {
+        "남는 조각 \(max(0, shards - cost))개"
+    }
+
+    package static let exchangeAction = "교환하기"
+
+    /// 교환 줄을 눌렀지만 못 바꿀 때의 한 줄(버튼이 잠겨 있어 보통은 안 닿는다 — 늦게 온 상태 변화의 방어선).
+    /// 바꿀 수 있으면 nil.
+    package static func exchangeBlocked(_ availability: GachaExchangeAvailability) -> String? {
+        switch availability {
+        case .owned: return GachaText.alreadyOwned
+        case .short(_, let missing): return GachaText.shardShortfall(missing: missing)
+        case .unknownShards: return "조각 수를 아직 몰라요 — 상점을 다시 열어 주세요"
+        case .notExchangeable: return GachaText.notExchangeable
+        case .available: return nil
+        }
+    }
+
+    /// 교환 줄 보이스오버: "여우, 조각 2개, 교환할 수 있어요" · "…, 조각 1개 더 필요해요" · "…, 보유".
+    package static func exchangeRowAccessibility(name: String, availability: GachaExchangeAvailability) -> String {
+        switch availability {
+        case .owned: return "\(name), \(GachaText.owned)"
+        case .available(let cost): return "\(name), \(GachaText.shardCost(cost)), 교환할 수 있어요"
+        case .short(let cost, let missing): return "\(name), \(GachaText.shardCost(cost)), \(GachaText.shardShortfall(missing: missing))"
+        case .unknownShards(let cost): return "\(name), \(GachaText.shardCost(cost))"
+        case .notExchangeable: return "\(name), \(GachaText.notExchangeable)"
+        }
+    }
+
     // MARK: 프로필 (맥 WorkTimerStore.updateDisplayName · CheckSettingsView 별명)
 
     package static let profileTitle = "프로필"

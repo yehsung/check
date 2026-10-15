@@ -1,3 +1,4 @@
+import CheckCore
 import Foundation
 import Testing
 @testable import CheckMobileKit
@@ -69,6 +70,34 @@ struct AppStoreDocContractTests {
         let verdict = try #require(survey.split(separator: "\n").first { $0.hasPrefix("예상 결과 등급") }, "예상 등급 줄이 없다")
         #expect(verdict.contains("**13+**") && !verdict.contains("**4+**"),
                 "모의 도박·경연 어느 한쪽만으로도 13+ 인데 4+ 를 예상한다: \(verdict)")
+    }
+
+    // MARK: 1.0.8 — 루트 상자(캐릭터 뽑기)
+
+    @Test("뽑기가 앱에 있는 한 §3 루트 상자는 '예' · 현금 결제 없음 · 확률을 보여 주는 자리(앱 문구 그대로)를 근거 칸이 말한다")
+    func lootBoxFollowsGachaFacts() throws {
+        // 대조 — 코드 사실: 데모 상점(심사·스크린샷이 보는 화면)이 뽑기를 싣고, 그 확률표가 합 100% 다(= 폰이 뽑기 카드를 세운다).
+        let url = Self.root.appendingPathComponent("Sources/CheckMobileKit/Demo/Fixtures/me/_me-shop/rpc.shop_state.json")
+        let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        let gacha = try #require(object?["gacha"] as? [String: Any], "데모 상점에 뽑기가 없다 — 이 계약의 전제가 사라졌다")
+        let odds = try #require(gacha["odds"] as? [[String: Any]])
+        #expect(odds.compactMap { $0["percent"] as? Int }.reduce(0, +) == 100, "데모 확률표 합이 100 이 아니다")
+        let price = try #require(gacha["price"] as? Int)
+
+        let doc = try Self.document("docs/appstore.md")
+        let survey = try Self.section(of: doc, heading: "## 3. 연령 등급 설문 예상 답")
+        let lootBox = try Self.row(in: survey, containing: "루트 상자")
+        #expect(lootBox[1].contains("예") && !lootBox[1].contains("아니오"),
+                "확률로 캐릭터가 나오는 뽑기가 있는데 루트 상자를 '아니오'로 답한다: \(lootBox[1])")
+        #expect(lootBox[1].contains("현금 결제 없음") && lootBox[1].contains("확률 앱 안 공개"), "답 칸: \(lootBox[1])")
+        #expect(lootBox[2].contains(GachaText.oddsButton), "근거 칸이 확률을 보여 주는 자리(앱 버튼 '\(GachaText.oddsButton)')를 말하지 않는다")
+        #expect(lootBox[2].contains(GachaText.title), "근거 칸이 앱의 뽑기 이름('\(GachaText.title)')을 쓰지 않는다")
+        #expect(lootBox[2].contains("\(price) 루비"), "근거 칸의 1회 값이 데모 상점(\(price))과 다르다")
+        // 모의 도박 근거 칸도 1.0.8 수수료를 말한다(이긴 쪽이 '두 사람 몫' 전부를 받는다고 쓰면 거짓이다).
+        let gambling = try Self.row(in: survey, containing: "모의 도박(Simulated Gambling)")
+        let payouts = [3, 5, 10].map { 2 * $0 - DuelFee.fee(stake: $0) }
+        #expect(payouts == [5, 9, 18], "전제: 손으로 적은 승자 수령표")
+        #expect(gambling[2].contains("수수료 10%") && gambling[2].contains("5/9/18"), "모의 도박 근거가 수수료 뒤 상금을 말하지 않는다")
     }
 
     // MARK: medium 2 — 처리방침의 오목 구멍

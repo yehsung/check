@@ -410,6 +410,16 @@ enum MeDemoHooks {
         #endif
     }
 
+    /// 상점 뽑기 장면(`-AingCheckDemoMeGacha odds|exchange|pull`) — 확률표·교환 시트를 열거나 한 번 뽑는다(결과 연출 스크린샷용).
+    /// 뽑기 응답은 데모 픽스처(`Demo/Fixtures/me/rpc.gacha_pull.json`)다 — 실제 서버에 닿지 않는다.
+    static func gachaAction() -> String? {
+        #if DEBUG
+        return argument("-AingCheckDemoMeGacha")
+        #else
+        return nil
+        #endif
+    }
+
     /// 루트 대신 열 하위 화면(`-AingCheckDemoMeScreen characters|profile|grass|grass-token`) — 라우트가 없는 화면을 찍을 때.
     static func initialDestination() -> MeDestination? {
         #if DEBUG

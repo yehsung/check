@@ -8,41 +8,64 @@ import SwiftUI
 /// 상점(캐릭터만 · 시안 B 11). 카드를 누르면 **고르기만** 하고, 아래 막대의 [보석 30 사기] → 확인 대화상자 → `confirmPurchase()` 로만 산다.
 /// 잔량은 오른쪽 위 알약 하나 · 가격은 맨 보석 + 숫자(모자라면 흐림 — 자물쇠·진홍 없음) · 고른 캐릭터의 두 표정 미리 보기 · 탭 막대 숨김.
 /// 보유 · 착용 표시는 고르기 화면과 같은 타일 부품(`MeCharacterTile`)이 그린다.
+///
+/// v0.3.54(폰 1.0.8): 캐릭터 머리 **위**에 뽑기 카드(`MeGachaCard`)가 선다 — 서버가 `shop_state.gacha` 를 줄 때만. 확률표·조각 교환
+/// 시트는 이 화면(루트)이 띄운다. 뽑기 전용 타일(황금 아잉이)을 누르면 사지 않고 얻는 길을 말하며 뽑기 카드로 올라간다.
 struct MeShopView: View {
     let store: MeStore
     @State private var confirming = false
+    @State private var showsGachaOdds = false
+    @State private var showsGachaExchange = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// 뽑기 카드의 스크롤 앵커(뽑기 전용 타일을 누르면 여기로 올라간다).
+    private static let gachaAnchor = "gacha"
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                Text(MeText.shopLede)
-                    .font(.footnote)
-                    .foregroundStyle(MobileTheme.label2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-                if store.shopState.hasFailed, !store.shopState.hasLoaded {
-                    AingCard {
-                        LoadFailureRow(MeText.shopFailed, isRetrying: store.shopState.isLoading) {
-                            Task { await store.loadShop() }
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+                    Text(MeText.shopLede)
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                    if store.shopState.hasFailed, !store.shopState.hasLoaded {
+                        AingCard {
+                            LoadFailureRow(MeText.shopFailed, isRetrying: store.shopState.isLoading) {
+                                Task { await store.loadShop() }
+                            }
                         }
                     }
-                }
-                let ids = tileIDs
-                SectionHeader(MeText.charactersTitle, trailing: .text(MeText.ownedCount(owned: ids.filter(store.isOwned).count, total: ids.count)))
-                    .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-                    .padding(.top, MobileTheme.space1)
-                LazyVGrid(columns: MeCharacterTile.columns(dynamicTypeSize), spacing: 10) {
-                    ForEach(ids, id: \.self) { id in
-                        shopTile(id)
+                    if store.showsGacha {
+                        MeGachaCard(store: store, onOdds: { showsGachaOdds = true }, onExchange: { showsGachaExchange = true })
+                            .id(Self.gachaAnchor)
+                    }
+                    let ids = tileIDs
+                    SectionHeader(MeText.charactersTitle, trailing: .text(MeText.ownedCount(owned: ids.filter(store.isOwned).count, total: ids.count)))
+                        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                        .padding(.top, MobileTheme.space1)
+                    LazyVGrid(columns: MeCharacterTile.columns(dynamicTypeSize), spacing: 10) {
+                        ForEach(ids, id: \.self) { id in
+                            shopTile(id) {
+                                guard store.showsGacha, !store.isOwned(id), store.isGachaOnly(id) else { return }
+                                withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(Self.gachaAnchor, anchor: .top) }
+                            }
+                        }
+                    }
+                    if let previewID {
+                        MeCharacterPreviewCard(id: previewID)
                     }
                 }
-                if let previewID {
-                    MeCharacterPreviewCard(id: previewID)
+                .padding(.horizontal, MobileTheme.sideMargin)
+                .padding(.vertical, MobileTheme.rowSpacing)
+            }
+            .onAppear {
+                // 데모(DEBUG) 스크린샷: `-AingCheckDemoMeScroll <캐릭터 id>` — 그 타일까지 내린다(설정·제보 화면과 같은 관용).
+                if let target = MeDemoHooks.scrollTarget() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo(target, anchor: .center) }
                 }
             }
-            .padding(.horizontal, MobileTheme.sideMargin)
-            .padding(.vertical, MobileTheme.rowSpacing)
         }
         .refreshable { await store.loadShop() }
         .background(MobileTheme.background.ignoresSafeArea())
@@ -56,8 +79,14 @@ struct MeShopView: View {
         .onAppear {
             store.charactersDidAppear()
             if let id = MeDemoHooks.shopSelection(), store.shopSelection == nil { store.selectShopItem(id) }
+            if store.showsGacha { openDemoGachaSheetIfAsked() }
         }
         .onDisappear { store.shopDidDisappear() }
+        .onChange(of: store.showsGacha) { _, shows in
+            if shows { openDemoGachaSheetIfAsked() }
+        }
+        .sheet(isPresented: $showsGachaOdds) { MeGachaOddsSheet(store: store) }
+        .sheet(isPresented: $showsGachaExchange) { MeGachaExchangeSheet(store: store) }
         .confirmationDialog(confirmTitle, isPresented: $confirming, titleVisibility: .visible) {
             Button(MeText.buyAction) { store.confirmPurchase() }
             Button("취소", role: .cancel) {}
@@ -90,7 +119,17 @@ struct MeShopView: View {
         MeText.purchaseConfirmTitle(name: store.shopSelection.map(MeCharacterCards.displayName(for:)) ?? "")
     }
 
-    private func shopTile(_ id: String) -> some View {
+    /// 데모(DEBUG) 스크린샷: `-AingCheckDemoMeGacha odds|exchange|pull` — 서버 뽑기 정보가 선 뒤 그 시트를 열거나 한 번 뽑는다.
+    private func openDemoGachaSheetIfAsked() {
+        switch MeDemoHooks.gachaAction() {
+        case "odds": showsGachaOdds = true
+        case "exchange": showsGachaExchange = true
+        case "pull": store.pullGacha()
+        default: break
+        }
+    }
+
+    private func shopTile(_ id: String, onGachaOnly: @escaping () -> Void) -> some View {
         let owned = store.isOwned(id)
         let picked = store.shopSelection == id
         let equipped = store.equippedLoaded && store.equippedCharacterID == id
@@ -102,6 +141,9 @@ struct MeShopView: View {
             status = .equipped
         } else if owned {
             status = .owned
+        } else if store.isGachaOnly(id) {
+            // 뽑기 전용(황금 아잉이) — 서버가 싣는 명목 가격(1000)을 보이지 않는다. 사는 줄이 아니다.
+            status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
         } else if let price = store.price(of: id) {
             status = .price(price, balance: store.rubyBalance)
         } else {
@@ -109,6 +151,7 @@ struct MeShopView: View {
         }
         return Button {
             store.selectShopItem(id)
+            onGachaOnly()
         } label: {
             // 상점의 표시는 '고름'(틴트 바탕)이고, 체크 + 테두리는 착용 중에만 — 두 뜻이 같은 모양이면 안 된다.
             MeCharacterTile(id: id, name: name, status: status, mark: equipped ? .equipped : (picked ? .picked : .none))
@@ -131,10 +174,12 @@ struct MeShopView: View {
                     Spacer(minLength: MobileTheme.space2)
                     buyButton(selection: selection)
                 }
+                // 긴 안내(예: 황금 아잉이를 얻는 길)로 두 줄 모양이 되면 왼쪽에 붙인다 — 폭을 안 채우면 가운데로 떠 보인다(시뮬레이터 실측).
                 VStack(alignment: .leading, spacing: 10) {
                     barLead(selection: selection)
                     buyButton(selection: selection)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, MobileTheme.sideMargin)
             .padding(.vertical, 10)
@@ -354,11 +399,16 @@ struct MeCharacterPickerView: View {
             status = .equipped
         } else if store.isOwned(id) {
             status = .owned
+        } else if store.isGachaOnly(id) {
+            status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
         } else if let price = store.price(of: id) {
             status = .price(price, balance: store.rubyBalance)
         } else {
             status = unlocked ? .none : .unknownPrice
         }
+        let lockedLabel = store.isGachaOnly(id)
+            ? "\(name), 잠김 — \(MeText.gachaAcquirePhrase(shardCost: store.gachaShardCost(of: id)))"
+            : "\(name), 잠김 — 상점에서 사기"
         return Button {
             store.chooseCharacter(id)
         } label: {
@@ -366,7 +416,7 @@ struct MeCharacterPickerView: View {
         }
         .buttonStyle(.plain)
         .disabled(store.savingCharacterID != nil)
-        .accessibilityLabel(Text(unlocked ? MeCharacterTile.accessibilityText(name: name, status: status) : "\(name), 잠김 — 상점에서 사기"))
+        .accessibilityLabel(Text(unlocked ? MeCharacterTile.accessibilityText(name: name, status: status) : lockedLabel))
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 }
@@ -387,6 +437,8 @@ struct MeCharacterTile: View {
         case equipped
         case owned
         case price(Int, balance: Int?)
+        /// 뽑기·조각 교환으로만 얻는다(황금 아잉이) — 가격 대신 얻는 길("뽑기 · 조각 20"). 교환값은 서버 값(모르면 nil).
+        case gachaOnly(shardCost: Int?)
         case unknownPrice
         case busy
         case none
@@ -421,6 +473,7 @@ struct MeCharacterTile: View {
         case .equipped: return "\(name), \(MeText.equipped)"
         case .owned: return "\(name), \(MeText.owned)"
         case .price(let price, let balance): return "\(name), \(RubyPriceRule.accessibilityText(price: price, isShort: RubyPriceRule.isShort(price: price, balance: balance)))"
+        case .gachaOnly(let shardCost): return MeText.gachaTileAccessibility(name: name, shardCost: shardCost)
         case .unknownPrice: return "\(name), 가격 모름"
         case .busy: return "\(name), \(MeText.loading)"
         case .none: return name
@@ -483,6 +536,18 @@ struct MeCharacterTile: View {
                 .foregroundStyle(MobileTheme.label2)
         case .price(let price, let balance):
             RubyPrice(price, balance: balance, gemSize: 17, style: .subheadline)
+        case .gachaOnly(let shardCost):
+            HStack(spacing: 3) {
+                Image(systemName: "sparkles")
+                    .font(.caption2)
+                    .foregroundStyle(MobileTheme.gold)
+                    .accessibilityHidden(true)
+                Text(MeText.gachaTileStatus(shardCost: shardCost))
+                    .font(.footnote)
+                    .foregroundStyle(MobileTheme.label2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
         case .unknownPrice:
             Text("—")
                 .font(.footnote)

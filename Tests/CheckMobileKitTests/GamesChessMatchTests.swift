@@ -159,10 +159,11 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
         #expect(ChessEndReason.allCases.filter(\.isDraw).count == 6)
     }
 
-    @Test("승리는 판돈만큼 는다 · 서버가 말한 루비 변화가 있으면 그것을 쓴다")
+    @Test("승리는 판돈에서 수수료를 뺀 만큼 는다(5 → +4) · 서버가 말한 루비 변화가 있으면 그것을 쓴다")
     func rubyDeltaPrefersServerValue() throws {
+        // v0.3.54: 승자 상금 2×판돈에서 반올림 10% 를 뗀다 — 판돈 5 의 순이익은 +4(수수료 1). 서버 값이 없을 때의 폴백도 같은 식이다.
         let won = try #require(cmChrome(cmMatch(isFinished: true, outcome: .won, endReason: .checkmate)).result)
-        #expect(won.rubyDelta == 5 && won.rubyDeltaText == "+5")
+        #expect(won.rubyDelta == 4 && won.rubyDeltaText == "+4", "판돈 5 승리의 폴백이 수수료를 안 뗐다: \(won.rubyDeltaText)")
         #expect(won.reason == ChessPhoneText.endReason(.checkmate, outcome: .won))
         #expect(won.reason == "체크메이트로 이겼어요")
         // 서버가 다른 값을 말하면(환불·보정) 그 값이 이긴다 — 앱이 다시 세지 않는다.
@@ -443,7 +444,8 @@ private func cmStore(match: ChessMatchState) -> ChessStore {
 
         let plain = cmChrome(cmMatch())
         #expect(plain.actionRow == .playing(canOfferDraw: true, canResign: true))
-        #expect(plain.showsStake && plain.stake == 5 && plain.stakeSuffix == " · 이기면 +5")
+        // v0.3.54: 꼬리 숫자는 순이익(판돈 5 − 수수료 1).
+        #expect(plain.showsStake && plain.stake == 5 && plain.stakeSuffix == " · 이기면 +4")
     }
 
     @Test("끝난 판에는 기권·무승부 제안이 없고 로봇 판만 [다시 두기]가 있다")

@@ -13,14 +13,17 @@ import Testing
 
     // MARK: 에셋
 
-    @Test("초상 14장: 7 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
+    @Test("초상 16장: 8 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
     func portraitsAreBundledCopiesOfMacArt() throws {
         // 0.3.43(2026-10-05)에 로봇이 들어와 6 → **7 캐릭터 · 14장**이 됐다(맥 `AppUserAvatarArt.knownIDs` 도 7).
         // 개수를 **두 자리**에서 잰다: 명단 길이(7)와 **맥 원본과 실제로 대조한 장수**(14). 명단만 재면 번들 사본이
         // 안 들어온 날에도 초록이고, 장수만 재면 명단이 줄어도 초록이다 — 폰 자산이 맥과 갈리면 같은 캐릭터가 두 앱에서
         // 다르게 보인다(위젯까지 이 번들을 읽는다).
-        #expect(AingCharacterArt.knownIDs.count == 7, "폰 초상 명단이 7 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
+        // 0.3.54(폰 1.0.8, 2026-10-15)에 황금 아잉이가 들어와 **8 캐릭터 · 16장**이 됐다. 원본은 아잉처럼 맥 `Resources/` 의
+        // `aing_gold-<표정>.png` 다(내장 3D 캐릭터라 `Characters/<id>/` 폴더가 없다).
+        #expect(AingCharacterArt.knownIDs.count == 8, "폰 초상 명단이 8 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
         #expect(AingCharacterArt.knownIDs.contains("robot"), "로봇(0.3.43)이 폰 초상 명단에 없다 — 맥에만 있는 캐릭터는 폰에서 이니셜로 선다")
+        #expect(AingCharacterArt.knownIDs.contains("aing_gold"), "황금 아잉이(0.3.54)가 폰 초상 명단에 없다 — 폰이 뽑기를 못 보고 금 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.Expression.allCases.count == 2, "표정이 둘(neutral·negative)이 아니다")
         var comparedWithMac = 0
         for id in AingCharacterArt.knownIDs {
@@ -29,8 +32,10 @@ import Testing
                 let image = try #require(AingCharacterArt.portraitImage(id: id, expression: expression), "\(id)-\(expression) 디코드 실패")
                 #expect(image.width == AingCharacterArt.portraitPixelSize && image.height == AingCharacterArt.portraitPixelSize)
                 #expect(image.alphaInfo != .none && image.alphaInfo != .noneSkipLast && image.alphaInfo != .noneSkipFirst, "\(id) 알파 없음")
-                let mac = id == "aing"
-                    ? Self.root.appendingPathComponent("Sources/check/Resources/aing-\(expression.rawValue).png")
+                // 내장 캐릭터(아잉 · 황금 아잉이)는 맥 `Resources/<id>-<표정>.png`, 스프라이트는 `Characters/<id>/portrait-<표정>.png`.
+                let builtIn = CharacterCatalog.builtIns.contains { $0.id == id }
+                let mac = builtIn
+                    ? Self.root.appendingPathComponent("Sources/check/Resources/\(id)-\(expression.rawValue).png")
                     : Self.root.appendingPathComponent("Sources/check/Characters/\(id)/portrait-\(expression.rawValue).png")
                 // 무손실 재압축(PNG optimize)이라 파일 바이트가 아니라 **픽셀**을 대조한다 — 실측(2026-10-06): 로봇 2장만
                 // 바이트까지 같고 나머지 12장은 사본이 재압축돼 바이트가 다르다. 그래서 기준은 픽셀이다(이름도 그렇게 말한다).
@@ -38,13 +43,13 @@ import Testing
                 comparedWithMac += 1
             }
         }
-        #expect(comparedWithMac == 14, "맥 원본과 대조한 초상이 14장이 아니다: \(comparedWithMac)장")
+        #expect(comparedWithMac == 16, "맥 원본과 대조한 초상이 16장이 아니다: \(comparedWithMac)장")
     }
 
     @Test("초상 id 목록은 앱 캐릭터 카드(MeCharacterCards)와 같고, 착용값 접기도 같다")
     func portraitIDsMatchAppCatalog() {
         #expect(AingCharacterArt.knownIDs == MeCharacterCards.knownIDs)
-        for raw in [nil, "", "  ", "fox", " fox ", "ghost", "unknown-new", "aing", "FOX"] as [String?] {
+        for raw in [nil, "", "  ", "fox", " fox ", "ghost", "unknown-new", "aing", "FOX", "aing_gold", "AING_GOLD"] as [String?] {
             #expect(AingCharacterArt.resolvedID(raw) == MeCharacterCards.equippedID(fromServer: raw), "\(String(describing: raw))")
         }
     }
@@ -102,6 +107,8 @@ import Testing
         #expect(CharacterArtChoice.choose(id: "fox", expression: .neutral, pointSize: 68, displayScale: 3) == .stage)
         #expect(CharacterArtChoice.choose(id: "fox", expression: .negative, pointSize: 140, displayScale: 3) == .portrait, "시무룩은 원본뿐")
         #expect(CharacterArtChoice.choose(id: "aing", expression: .neutral, pointSize: 140, displayScale: 3) == .portrait, "아잉은 192px 뿐")
+        #expect(CharacterArtChoice.choose(id: "aing_gold", expression: .neutral, pointSize: 140, displayScale: 3) == .portrait,
+                "황금 아잉이도 192px 뿐(무대 고해상 그림이 없다 — 없는 파일을 고르면 그림이 빈다)")
         #expect(CharacterArtChoice.choose(id: "mystery", expression: .neutral, pointSize: 140, displayScale: 3) == .portrait, "모르는 id 는 아잉")
     }
 

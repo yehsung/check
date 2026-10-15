@@ -224,7 +224,8 @@ package enum GomokuPhoneText {
     package static let reloadUsers = MobileLoadText.retry
     package static let challenge = "도전"
     package static let stakeTitle = "판돈"
-    package static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요"
+    /// v0.3.54: 승자 상금 2×판돈에서 수수료 10%(반올림)를 뗀다 — 문장이 그 사실을 한 번 말한다(비율은 `DuelFee.percent`).
+    package static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요(수수료 \(DuelFee.percent)% 빼고)"
     package static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     package static let stakePromptCaption = "판돈을 고르세요"
     package static func stakePromptChosen(_ stake: Int) -> String { "판돈 \(stakeLine(stake))" }
@@ -288,7 +289,8 @@ package enum GomokuPhoneText {
         reason == .budget ? "판정할 수 없는 자리예요" : "\(reasonLabel(reason))라 둘 수 없어요"
     }
 
-    package static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(stake)" }
+    /// "5 · 이기면 +4" — 꼬리 숫자는 **순이익**(판돈 − 수수료, `DuelFee.winnerNet`)이다. 결과 카드의 +N 과 같은 눈금.
+    package static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
 
     package static func stoneName(_ color: GomokuColor) -> String { color == .black ? "흑 · 먼저 둬요" : "백" }
 
@@ -347,8 +349,10 @@ package enum GomokuPhoneText {
     package static func liveCount(_ count: Int) -> String { "\(count)판" }
     package static let inMatchButton = "대국 중"
     package static let needsUpdate = "앱 업데이트가 필요해요"
-    /// " · 이기면 +5"(판돈 줄 꼬리).
-    package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(stake)" }
+    /// " · 이기면 +4"(판돈 5 의 줄 꼬리 — 순이익, `DuelFee.winnerNet`).
+    package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
+    /// "이기면 +4" — 판돈 시트의 칸 아래 줄(앞 가운뎃점 없음 · 순이익). 체스 `ChessPhoneText.stakeGain` 과 같은 말.
+    package static func stakeGain(_ stake: Int) -> String { "이기면 +\(DuelFee.winnerNet(stake: stake))" }
     /// "42초 남음"(받은 신청 머리 · 보낸 신청 부제).
     package static func remainingPhrase(_ seconds: Double) -> String { "\(remaining(seconds)) 남음" }
     /// "민트별 · 달토끼".

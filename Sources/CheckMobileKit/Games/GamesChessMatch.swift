@@ -175,7 +175,8 @@ package struct GamesChessMatchChrome: Equatable, Sendable {
         let delta: Int = {
             if let given = match.rubyDelta { return given }
             switch match.outcome {
-            case .won?: return match.stake
+            // v0.3.54: 승자 순이익 = 판돈 − 수수료(`DuelFee.winnerNet`). 서버가 값을 주면 위에서 그 값이 이긴다.
+            case .won?: return DuelFee.winnerNet(stake: match.stake)
             case .lost?: return -match.stake
             default: return 0
             }

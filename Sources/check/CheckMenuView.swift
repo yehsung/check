@@ -733,7 +733,9 @@ struct CheckMenuView: View {
                             // `WorkTimerStore.pushCharacter` 다 — **둘 다 있어야** 한다.
                             isUnlocked: { store.isCharacterUnlocked($0) },
                             onLocked: { store.openShopForLockedCharacter($0) },
-                            priceOf: { store.shopPrice(of: $0) }
+                            priceOf: { store.shopPrice(of: $0) },
+                            // 얻을 길이 안 보이는 황금 아잉이(뽑기 없는 서버)는 카드째 뺀다 — 폰 고르기와 같은 규칙(v0.3.54).
+                            isListed: { store.isCharacterListed($0) }
                         )
                     } else {
                         // store 를 통째로 내려보내 초단위(displayNow) 의존을 잎 뷰로 격리한다 — TeamPanel 본체는

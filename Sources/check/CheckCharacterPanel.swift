@@ -43,6 +43,9 @@ struct CheckCharacterPanel: View {
     var onLocked: (String) -> Void = { _ in }
     /// 잠긴 카드에 얹을 가격(모르면 nil — 숫자를 지어내지 않는다).
     var priceOf: (String) -> Int? = { _ in nil }
+    /// 이 캐릭터의 카드를 **세우는가**(v0.3.54). 기본값은 전부 — 앱은 `WorkTimerStore.isCharacterListed` 를 넣어, 얻을 길이 안 보이는
+    /// 황금 아잉이(뽑기 없는 서버 · 안 가짐 · 서버 목록에 없음)를 뺀다(잠긴 카드가 뽑기 없는 상점으로 보내는 막다른 길이 된다).
+    var isListed: (String) -> Bool = { _ in true }
 
     /// 저장이 **이긴 뒤** 한 번 불린다. 서버(`profiles.character`)에 밀어 넣는 자리다 —
     /// 로컬 저장만으로는 내 화면만 바뀌고 남에게는 영원히 아잉으로 보인다(울트라 찌르기가 서버 컬럼을 읽는다).
@@ -63,7 +66,8 @@ struct CheckCharacterPanel: View {
         onChosen: @escaping (String) -> Void = { _ in },
         isUnlocked: @escaping (String) -> Bool = { _ in true },
         onLocked: @escaping (String) -> Void = { _ in },
-        priceOf: @escaping (String) -> Int? = { _ in nil }
+        priceOf: @escaping (String) -> Int? = { _ in nil },
+        isListed: @escaping (String) -> Bool = { _ in true }
     ) {
         self.catalog = catalog
         self.selection = selection
@@ -75,6 +79,7 @@ struct CheckCharacterPanel: View {
         self.isUnlocked = isUnlocked
         self.onLocked = onLocked
         self.priceOf = priceOf
+        self.isListed = isListed
         _selectedID = State(initialValue: selection.selectedID)
     }
 
@@ -112,7 +117,7 @@ struct CheckCharacterPanel: View {
     /// 카드를 행 단위로 끊는다. 마지막 행이 모자라면 **빈 칸을 채워** 카드 폭을 모든 행에서 같게 한다
     /// (안 채우면 두 장짜리 마지막 행에서 카드가 혼자 넓어져 격자가 아니라 목록처럼 보인다).
     private var rows: [[String?]] {
-        let ids = catalog.allIDs
+        let ids = catalog.allIDs.filter { isListed($0) }
         var out: [[String?]] = []
         var index = 0
         while index < ids.count {

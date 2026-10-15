@@ -368,6 +368,10 @@ extension WorkTimerStore {
                 //   사람(로컬 선택은 있는데 소유권 행이 없다 — 0.3.30 부터는 옮겨 가기 1회 밀기에서)
                 //   (나) 기기 두 대 중 한쪽에서만 산 사람.
                 revertCharacterToDefault()
+            case "unknown_character" where CharacterCatalog.isGoldAing(id):
+                // 황금 아잉이(v0.3.54)만은 not_owned 와 같다: 뽑기 마이그레이션 전 서버는 CHECK 에서 금을 모르므로 **그 서버에선 아무도
+                // 금을 가질 수 없다.** 그대로 두면 상점을 읽기 전(아무것도 안 막는 창)에 고른 금이 내 화면엔 서고 남에게는 아잉이다.
+                revertCharacterToDefault()
             default:
                 // unknown_character = 서버 CHECK 에 없는 id. 앱 번들과 서버 명단이 갈린 것이라
                 // 사용자가 할 수 있는 일이 없다 — 그래도 조용히 성공한 척하지는 않는다.
@@ -391,14 +395,22 @@ extension WorkTimerStore {
         let catalog = CheckCharacter3DScene.catalog
         let selection = CharacterSelection(defaults: characterDefaults, catalog: catalog)
         guard selection.selectedID != CharacterCatalog.builtInAingID else { return }
+        let reverted = selection.selectedID
         CheckCharacterPicker.choose(CharacterCatalog.builtInAingID,
                                     selection: selection, broadcast: characterSync.broadcast)
         noteMyEquippedCharacter()
-        syncMessage = Self.notOwnedRevertNotice
+        syncMessage = Self.revertNotice(for: reverted, rows: shopCharacters)
     }
 
     /// 되돌렸을 때의 문구(순수 — 값으로 검증한다). 상점으로 가는 길을 함께 말한다.
     nonisolated static let notOwnedRevertNotice = "안 산 캐릭터라 기본으로 돌아갔어요 — 상점에서 살 수 있어요"
+    /// 루비로 안 파는 캐릭터(황금 아잉이 — v0.3.54)를 되돌렸을 때. "상점에서 살 수 있어요"는 그 캐릭터에 거짓이라 얻는 길(뽑기 · 조각)을 말한다.
+    nonisolated static let gachaOnlyRevertNotice = "아직 없는 캐릭터라 기본으로 돌아갔어요 — " + GachaText.gachaOnlyHint
+
+    /// 되돌린 캐릭터에 맞는 안내(순수).
+    nonisolated static func revertNotice(for id: String, rows: [ShopCharacterRow]) -> String {
+        isGachaOnly(id, rows: rows) ? gachaOnlyRevertNotice : notOwnedRevertNotice
+    }
 
     // MARK: - 착용 캐릭터 서버 기준 동기화 (v0.3.30)
 
@@ -536,21 +548,36 @@ extension WorkTimerStore {
     ///
     /// **로컬 캐시를 믿지 않는 이유**: 가격도 보유도 다른 기기에서 바뀐다(다른 맥에서 사고 왔을 수 있다).
     /// 캐시만 믿으면 "산 게 안 산 걸로 보이는" 화면이 된다.
+    ///
+    /// ★ **변이 전에 나간 조회는 변이 뒤의 값을 덮지 않는다**(v0.3.54 — 뽑기 [한 번 더]). 뽑기 → 다시 읽기(L) → 곧바로 둘째 뽑기가
+    ///   끝나면, 둘째 뽑기가 부른 다시 읽기는 위 `shopLoading` 가드에 막히고, 첫 뽑기 직후를 읽은 L 이 나중에 도착해 잔량·보유·조각을
+    ///   **한 판 전으로** 되돌렸다(방금 뽑은 캐릭터가 잠긴 카드로 · 잔량 +50). 그래서 떠날 때 `shopMutationSerial` 을 찍어 두고,
+    ///   도착했을 때 그 사이 변이 응답이 옮겨졌으면 이 응답은 통째로 버리고 **한 번 더 읽는다**(막혔던 그 다시 읽기를 여기서 갚는다).
+    ///   변이 응답이 준 값(서버가 말한 잔량·조각·보유)이 다음 조회까지 화면에 남는다.
     func loadShopState() {
         guard !shopLoading else { return }
         shopLoading = true
         let generation = sessionGeneration
+        let mutationSerial = shopMutationSerial
         // 번들 카탈로그 조회는 메인 액터에 있다 — Task 안에서 다시 묻지 않고 여기서 한 번 집는다.
         let protocolVersion = shopProtocolVersion
         Task { [weak self] in
             guard let self else { return }
-            defer { self.shopLoading = false }
+            var rereads = false
+            defer {
+                self.shopLoading = false
+                if rereads { self.loadShopState() }
+            }
             do {
                 let state = try await withSessionRetry { activeSession in
                     try await self.service.fetchShopState(accessToken: activeSession.accessToken,
                                                          protocolVersion: protocolVersion)
                 }
                 guard generation == self.sessionGeneration else { return }
+                guard mutationSerial == self.shopMutationSerial else {
+                    rereads = true
+                    return
+                }
                 self.applyShopState(state)
                 self.shopLoaded = true
                 self.shopFailed = false
@@ -561,6 +588,12 @@ extension WorkTimerStore {
                 self.shopFailed = true
             }
         }
+    }
+
+    /// 상점 변이(뽑기 · 교환 · 캐릭터/울트라 구매)의 서버 응답을 옮기기 **직전에** 부른다 — 그 전에 떠난 상점 조회가 도착해도
+    /// 이 응답이 준 잔량·보유·조각을 덮지 않게 한다(`loadShopState` 의 ★).
+    func noteShopMutation() {
+        shopMutationSerial &+= 1
     }
 
     /// 서버가 말한 상점 상태를 화면 상태로 옮긴다. **nil 은 건너뛴다** — "모른다"를 0 으로 적으면
@@ -696,6 +729,7 @@ extension WorkTimerStore {
                                                        protocolVersion: protocolVersion)
                 }
                 guard generation == self.sessionGeneration else { return }
+                self.noteShopMutation()
                 if let ruby = response.rubyBalance { self.rubyBalance = ruby }
                 switch response.status {
                 case "ok", "already_owned":
@@ -740,6 +774,7 @@ extension WorkTimerStore {
                     try await self.service.buyUltra(accessToken: activeSession.accessToken, count: count)
                 }
                 guard generation == self.sessionGeneration else { return }
+                self.noteShopMutation()
                 if let ruby = response.rubyBalance { self.rubyBalance = ruby }
                 if let ultra = response.ultraBalance { self.ultraBalance = ultra }
                 switch response.status {

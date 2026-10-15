@@ -100,6 +100,40 @@ extension WorkTimerStore {
         }
     }
 
+    // MARK: 황금 아잉이를 세우는 자리 — 캐릭터 고르기 · 상점 자리표시 격자
+
+    /// 이 캐릭터를 캐릭터 고르기·상점 자리표시 격자에 **세우는가**. 루비로 안 파는 캐릭터(황금 아잉이)는 얻을 길이 보일 때만 선다 —
+    /// 뽑기가 열려 있거나 · 이미 가졌거나 · 서버 상점이 그 캐릭터를 말했다. 상점을 아직 못 읽었으면 막지 않는다(로드 전 관용 —
+    /// `isCharacterUnlocked`; 그 창에서 고른 금은 서버가 거절하면 `pushCharacter` 가 아잉으로 되돌린다).
+    ///
+    /// 이 문이 없으면 뽑기 없는 서버(뽑기 마이그레이션 전 · 옛 서버)에서 잠긴 금 카드가 서고, 누르면 뽑기 카드도 금 칸도 없는 상점이
+    /// "뽑기나 조각 교환으로 얻을 수 있어요"라고 말한다 — 막다른 길이다. 폰 `MeStoreCharacters.pickerIDs` 와 같은 규칙이다.
+    func isCharacterListed(_ id: String) -> Bool {
+        Self.isCharacterListed(id, shopLoaded: shopLoaded, gachaAvailable: isGachaAvailable,
+                               owned: ownedCharacterIDs, rows: shopCharacters)
+    }
+
+    /// 위 판정의 순수 본체(값으로 검증한다).
+    nonisolated static func isCharacterListed(_ id: String, shopLoaded: Bool, gachaAvailable: Bool,
+                                              owned: Set<String>, rows: [ShopCharacterRow]) -> Bool {
+        guard isGachaOnly(id, rows: rows) else { return true }
+        return !shopLoaded || gachaAvailable || owned.contains(id) || rows.contains { $0.id == id }
+    }
+
+    /// 캐릭터 고르기에 서는 id(번들 순서 · 아잉 먼저). `CheckCharacterPanel` 이 같은 판정(`isListed:`)으로 거른다.
+    var characterPickerIDs: [String] {
+        CheckCharacter3DScene.catalog.allIDs.filter { isCharacterListed($0) }
+    }
+
+    /// 상점 격자의 줄. 서버 목록이 유일한 출처다 — 아직 못 읽었거나 비었으면 **번들 목록으로 자리만**(가격 없음) 그리되,
+    /// 금은 고르기와 같은 규칙으로 거른다(`isCharacterListed`).
+    func shopGridRows(catalog: CharacterCatalog) -> [ShopCharacterRow] {
+        guard shopCharacters.isEmpty else { return shopCharacters }
+        return catalog.allIDs
+            .filter { $0 != CharacterCatalog.builtInAingID && isCharacterListed($0) }
+            .map { ShopCharacterRow(id: $0, price: nil, owned: false) }
+    }
+
     // MARK: 뽑기
 
     /// [뽑기 · 50]. **실제 뽑기는 여기 하나뿐이다.** 서버가 잔량 확인·차감·장부·소유/조각을 한 트랜잭션에서 끝낸다.
@@ -149,9 +183,13 @@ extension WorkTimerStore {
     }
 
     /// 뽑기 결과를 화면 상태로 옮긴다. **서버 값으로만** 고친다(잔량 · 조각 · 새 보유).
+    ///
+    /// 서버 값을 옮기는 갈래는 먼저 `noteShopMutation()` 을 부른다 — 이 뽑기 **전에** 떠난 상점 조회(직전 뽑기 뒤의 다시 읽기)가
+    /// 나중에 도착해도 이 값을 한 판 전으로 되돌리지 않는다([한 번 더] 연타 — `loadShopState` 의 ★).
     func applyGachaPull(_ outcome: GachaPullOutcome) {
         switch outcome {
         case .pulled(let result):
+            noteShopMutation()
             if let ruby = result.rubyBalance { rubyBalance = ruby }
             if let shards = result.shards { gachaInfo?.shards = shards }
             if let newID = result.newlyOwnedID { ownedCharacterIDs.insert(newID) }
@@ -164,7 +202,10 @@ extension WorkTimerStore {
             loadShopState()
         case .insufficient(_, let have):
             // 서버가 말한 잔량이 화면보다 정확하다(다른 기기에서 썼을 수 있다).
-            if let have { rubyBalance = have }
+            if let have {
+                noteShopMutation()
+                rubyBalance = have
+            }
             gachaNotice = GachaText.notice(for: outcome)
             gachaNoticeIsError = true
         default:
@@ -221,11 +262,12 @@ extension WorkTimerStore {
         }
     }
 
-    /// 교환 결과를 화면 상태로 옮긴다.
+    /// 교환 결과를 화면 상태로 옮긴다. 서버 값을 옮기는 갈래는 뽑기와 같이 `noteShopMutation()` 을 먼저 부른다.
     func applyGachaExchange(_ outcome: GachaExchangeOutcome, requestedID: String) {
         let name = gachaDisplayName(requestedID)
         switch outcome {
         case .exchanged(let characterID, let shards, _, _):
+            noteShopMutation()
             ownedCharacterIDs.insert(characterID)
             if let shards { gachaInfo?.shards = shards }
             gachaNotice = GachaText.notice(for: outcome, name: gachaDisplayName(characterID))
@@ -233,12 +275,16 @@ extension WorkTimerStore {
             loadShopState()
         case .alreadyOwned:
             // 다른 기기에서 이미 얻었다 — 사용자가 할 일이 없다. 목록을 다시 읽으면 화면이 사실과 맞는다.
+            noteShopMutation()
             ownedCharacterIDs.insert(requestedID)
             gachaNotice = GachaText.notice(for: outcome, name: name)
             gachaNoticeIsError = false
             loadShopState()
         case .insufficientShards(_, let have):
-            if let have { gachaInfo?.shards = have }
+            if let have {
+                noteShopMutation()
+                gachaInfo?.shards = have
+            }
             gachaNotice = GachaText.notice(for: outcome, name: name)
             gachaNoticeIsError = true
         default:
@@ -276,3 +322,4 @@ extension WorkTimerStore {
         gachaRequestIDs.reset()
     }
 }
+

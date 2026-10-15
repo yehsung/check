@@ -505,4 +505,47 @@ struct MeGachaStoreTests {
         await store.loadShop()
         #expect(store.pickerIDs.contains("aing_gold"), "가진 금이 고르기에서 사라졌다")
     }
+
+    // MARK: - 연달아 뽑기 — 늦은 상점 조회(맥 리뷰 결함의 폰 짝 점검)
+
+    /// 맥은 뽑기 뒤 상점 다시 읽기가 떠 있는 동안 [한 번 더]가 풀려, 늦게 온 그 조회가 둘째 뽑기 값을 되돌렸다(v0.3.54 리뷰 P1).
+    /// 폰은 같은 결함이 없다 — 이 테스트가 그 이유 둘을 못 박는다:
+    ///  · 뽑기 응답을 옮긴 뒤 **다시 읽기가 끝나야** `isPulling` 이 풀린다(그 사이 [뽑기]는 요청을 안 낸다).
+    ///  · 상점 조회는 순번(`nextSerial("shop")`)으로 **마지막에 떠난 것만** 옮긴다 — 뽑기 전에 떠난 조회가 늦게 와도 버린다.
+    @Test("연달아 뽑기(폰): 뽑기 뒤 다시 읽기가 끝나야 [뽑기]가 풀리고, 뽑기 전에 떠난 늦은 상점 조회는 뽑기 값을 되돌리지 않는다")
+    func lateShopFetchNeverRollsBackAPull() async throws {
+        let harness = await RankMeHarness(label: "me-gacha-race") { _ in nil }
+        defer { harness.tearDown() }
+        let store = harness.me
+        harness.enqueue("shop_state", .json(Self.shopV2(ruby: 200, shards: 0, owned: ["fox"])))
+        await store.loadShop()
+        #expect(store.rubyBalance == 200 && store.canPullGacha)
+
+        // ① 뽑기 **전에** 떠난 상점 조회(화면 다시 열기)를 붙잡는다.
+        let staleHold = BaseHold.rpc("shop_state", host: harness.host)
+        let stale = Task { await store.loadShop() }
+        #expect(await staleHold.waitHeld())
+        // ② 뽑기 뒤의 다시 읽기도 붙잡는다(붙잡기는 설치 순서로 고른다 — ①은 이미 찼다).
+        let refetchHold = BaseHold.rpc("shop_state", host: harness.host)
+        harness.enqueue("gacha_pull", Self.pullOK("ghost", duplicate: false, shards: 0, ruby: 150))
+        store.pullGacha()
+        #expect(await refetchHold.waitHeld(), "뽑은 뒤 상점을 다시 읽지 않는다")
+        #expect(store.rubyBalance == 150 && store.isOwned("ghost"), "뽑기 응답을 안 옮겼다")
+        // 다시 읽기가 떠 있는 동안은 [뽑기]가 잠겨 있다 — 둘째 뽑기가 끼어들 틈이 없다.
+        #expect(store.isPulling && !store.canPullGacha, "다시 읽기가 끝나기 전에 [뽑기]가 풀렸다")
+        store.pullGacha()
+        #expect(harness.requests(rpc: "gacha_pull").count == 1, "다시 읽기가 떠 있는데 둘째 뽑기가 나갔다")
+
+        // ②(뽑기 뒤 사실)를 먼저 놓고, ①(뽑기 전 값 — 200 · 유령 없음)이 **나중에** 도착하게 한다.
+        harness.enqueue("shop_state", .json(Self.shopV2(ruby: 150, shards: 0, owned: ["fox", "ghost"])))
+        #expect(await refetchHold.releaseAndWaitDelivered())
+        #expect(await baseWaitUntil { !store.isPulling }, "다시 읽기가 끝났는데 [뽑기]가 안 풀린다")
+        harness.enqueue("shop_state", .json(Self.shopV2(ruby: 200, shards: 0, owned: ["fox"])))
+        #expect(await staleHold.releaseAndWaitDelivered())
+        await stale.value
+        await harness.quiesceMe()
+        #expect(store.rubyBalance == 150, "잔량 \(String(describing: store.rubyBalance)) — 뽑기 전에 떠난 조회(200)가 덮었다")
+        #expect(store.isOwned("ghost"), "방금 뽑은 유령이 다시 잠겼다")
+        #expect(harness.requests(rpc: "shop_state").count == 3)
+    }
 }

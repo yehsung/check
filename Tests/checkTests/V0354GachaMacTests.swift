@@ -130,7 +130,8 @@ enum V0354GachaStub {
         #expect(await V0354CoreStub.waitUntil { !store.gachaPulling && store.gachaLastResult != nil })
         #expect(store.gachaLastResult?.kind == .gold && store.ownedCharacterIDs.contains(CharacterCatalog.goldAingID))
         let firstSerial = store.gachaRevealSerial
-        _ = await V0354CoreStub.waitUntil { !store.shopLoading }
+        // 첫 뽑기 뒤의 상점 다시 읽기(0.4초 늦다)를 **기다리지 않고** 곧바로 다시 누른다 — [한 번 더] 연타 그대로다
+        // (늦게 오는 그 조회가 둘째 뽑기 값을 덮지 않는 것은 `V0354GachaRaceTests` 가 잰다).
         store.pullGacha()
         #expect(await V0354CoreStub.waitUntil { !store.gachaPulling && store.gachaLastResult?.characterID == "squirrel" })
         #expect(store.gachaLastResult?.kind == .duplicate && store.gachaShards == 4 && store.rubyBalance == 20)
@@ -247,13 +248,13 @@ enum V0354GachaStub {
         let host = Self.host("goldcopy")
         V0354GachaStub.register(host: host)
         let store = await V0354GachaStub.loadedStore(host: host, label: "goldcopy")
-        #expect(ShopText.goldCardPrice(owned: false, shardCost: store.gachaShardCost(of: gold)) == "뽑기 또는 조각 20개")
+        #expect(GachaText.gachaOnlyPrice(shardCost: store.gachaShardCost(of: gold)) == "뽑기 또는 조각 20개")
         let host25 = Self.host("goldcopy25")
         V0354GachaStub.register(host: host25, shopStates: [V0354GachaStub.shopStateJSON(goldCost: 25)])
         let store25 = await V0354GachaStub.loadedStore(host: host25, label: "goldcopy25")
-        #expect(ShopText.goldCardPrice(owned: false, shardCost: store25.gachaShardCost(of: gold)) == "뽑기 또는 조각 25개")
-        #expect(ShopText.goldCardPrice(owned: false, shardCost: nil) == GachaText.gachaOnly)
-        #expect(ShopText.goldCardPrice(owned: true, shardCost: 20) == "보유")
+        #expect(GachaText.gachaOnlyPrice(shardCost: store25.gachaShardCost(of: gold)) == "뽑기 또는 조각 25개")
+        #expect(GachaText.gachaOnlyPrice(shardCost: nil) == GachaText.gachaOnly)
+        #expect(GachaText.owned == "보유")
     }
 
     @Test("캐릭터 고르기의 잠긴 금 카드 → 상점 + 뽑기 패널 · 다른 잠긴 카드 → 상점만")
@@ -469,11 +470,11 @@ enum V0354GachaStub {
         #expect(CheckGachaPanel.costText(.short(cost: 20, missing: 17)) == "조각 3/20")
     }
 
-    @Test("[캐릭터 뽑기] 카드가 더하는 크롬이 실측(gachaCardChrome)과 맞다 · 카드 없을 때는 종전 230 그대로")
+    @Test("[캐릭터 뽑기] 카드가 더하는 크롬이 실측(gachaCardChrome)과 맞다 · 카드 없을 때는 종전 230 그대로 · 확성기와 한 줄을 나눠 쓰면 0")
     func gachaCardChromeMatchesMeasurement() throws {
         // 한 행(카드 1장·3장)으로 잰다 — 두 행(232pt)은 카드가 서면 격자 상한(249 − 31 = 218)에 걸려 '자연 높이'가 아니다.
         for cards in [1, 3] {
-            func chrome(withGacha: Bool) throws -> CGFloat {
+            func chrome(withGacha: Bool, extra: CGFloat = 0) throws -> CGFloat {
                 let store = V0317ShopTests.plainStore()
                 store.applyShopState(ShopStateResponse(rubyBalance: 10, ultraBalance: 1, ultraPrice: 3,
                                                        characters: V0317ShopTests.rows(ownedIDs: [], limit: cards)))
@@ -482,7 +483,7 @@ enum V0354GachaStub {
                                                                recipients: 46, maxLength: 198))
                 if withGacha { store.gachaInfo = Self.info() }
                 #expect(store.isGachaAvailable == withGacha, "준비 실패 — 카드 유무 기준선이 안 갈렸다")
-                let panel = CheckShopPanel(store: store, onBack: {})
+                let panel = CheckShopPanel(store: store, extraChromeHeight: extra, onBack: {})
                 let height = try #require(Self.settledBitmap(panel, width: Self.width)).pixelsHigh
                 return CGFloat(height) / 2 - ShopPanelGridBudget.naturalHeight(rowCount: ShopPanelGridBudget.rowCount(cardCount: cards))
             }
@@ -491,6 +492,14 @@ enum V0354GachaStub {
             #expect(abs(bare - ShopPanelGridBudget.chromeOutsideGrid) < 1.0)
             #expect(abs((carded - bare) - ShopPanelGridBudget.gachaCardChrome) < 1.0,
                     "뽑기 카드 크롬 \(carded - bare)pt ≠ 상수 \(ShopPanelGridBudget.gachaCardChrome)pt")
+            // 큰 배너(새 버전 노트 4줄 149pt)가 얹혀 격자가 카드 높이를 못 받으면 확성기와 한 줄을 나눠 쓴다 — 크롬이 안 는다.
+            // 한 행 격자는 이 크롬에서 상한(바닥 112)과 자연 높이가 같아 위와 같은 뺄셈으로 잰다.
+            let banner: CGFloat = 149
+            #expect(ShopPanelGridBudget.sharesConsumableRow(extraChromeHeight: banner))
+            #expect(!ShopPanelGridBudget.sharesConsumableRow(extraChromeHeight: 0) && !ShopPanelGridBudget.sharesConsumableRow(extraChromeHeight: 92))
+            let bareBanner = try chrome(withGacha: false, extra: banner), sharedBanner = try chrome(withGacha: true, extra: banner)
+            print("[v0354-gacha] 상점 크롬 카드 \(cards) · 배너 \(banner): 뽑기 없음 \(bareBanner)pt · 한 줄 나눔 \(sharedBanner)pt")
+            #expect(abs(sharedBanner - bareBanner) < 0.5, "확성기와 나눠 쓴 뽑기 카드가 크롬을 \(sharedBanner - bareBanner)pt 키웠다")
         }
     }
 
@@ -518,23 +527,98 @@ enum V0354GachaStub {
         #expect(CheckGachaPanel.height <= 14 + 4 + ShopPanelGridBudget.minGridHeight + 7 + CheckShopPanel.purchaseBarHeight)
     }
 
-    @Test("최악 조합(목표 편집 + 뽑기 카드 + 금 포함 일곱 장)에서도 팝오버가 700pt 안이다")
-    func worstCasePopoverWithGacha() throws {
-        let store = V0317ShopTests.teamStore(members: 8, service: V0317ShopTests.offlineService("v0354-worst"))
+    /// 상점 위에 얹힐 수 있는 큰 배너들(배너는 한 번에 하나 — `CheckMenuView.TopBanner`).
+    enum WorstBanner: String, CaseIterable {
+        case none
+        /// 새 버전 배너 + 노트 4줄(`UpdateCheckStore.maxNotes`) = 149pt — 팝오버가 얹는 가장 큰 배너.
+        case update4
+        /// 앱 공지 QR 카드 144pt — 닫기 전까지 로그인한 사람 모두에게 선다.
+        case appNoticeQR
+        /// 12시간 확인 92pt.
+        case longSession
+    }
+
+    /// 상점이 그리는 세 모습: 격자 · 뽑기 패널 · 확성기 작성기(뒤 둘은 격자 구획 + 구매 바 자리를 빌린다).
+    enum WorstMode: String, CaseIterable { case grid, gachaPanel, megaphone }
+
+    static let worstNotes = ["캐릭터 뽑기가 생겼어요", "황금 아잉이를 만나 보세요", "판돈 수수료가 10%예요", "자잘한 문제를 고쳤어요"]
+
+    /// 실제 팝오버(8인 팀 · 상점 · 확성기 가격 칩 · 금 포함 일곱 장)를 그려 높이를 잰다.
+    static func worstPopoverHeight(banner: WorstBanner, goal: Bool, gacha: Bool, mode: WorstMode,
+                                   save name: String? = nil) throws -> CGFloat {
+        let label = "\(banner.rawValue)-\(goal)-\(gacha)-\(mode.rawValue)"
+        let store = V0317ShopTests.teamStore(members: 8, service: V0317ShopTests.offlineService("v0354-worst-\(label)"),
+                                             function: "worst-" + label)
         store.toggleShopPanel()
         store.applyShopState(ShopStateResponse(rubyBalance: 42, ultraBalance: 7, ultraPrice: 3, characters: Self.shopRows()))
-        store.gachaInfo = Self.info()
+        store.gachaInfo = gacha ? Self.info() : nil
         store.shopLoaded = true
         store.megaphone.applyInfo(MegaphoneInfoResponse(price: 50, cooldownSeconds: 600, cooldownRemainingSeconds: 0,
                                                        recipients: 46, maxLength: 198))
-        #expect(store.isGachaAvailable && store.shopCharacters.count == 7)
-        store.isEditingWeeklyGoal = true
-        let view = CheckMenuView(store: store, previewClipsOverflowList: true, previewGoalEditing: true,
-                                 characterDefaults: V0317ShopTests.isolatedDefaults())
-        let height = try #require(V0317ShopTests.popoverHeight(view))
-        print("[v0354-gacha] 최악 조합 팝오버(뽑기 카드 + 일곱 장) \(height)pt")
-        #expect(height <= 700, "팝오버가 \(height)pt — 700pt 상한을 넘어 푸터가 잘린다")
-        if let rep = V0317ShopTests.bitmap(view, width: CheckMenuView.mainWindowWidth) { Self.save(rep, "gacha-popover-worst.png") }
+        #expect(store.isGachaAvailable == gacha && store.shopCharacters.count == 7, "\(label): 준비 실패")
+        if banner == .appNoticeQR {
+            // 앱이 공지를 심는 문 그대로(`applyAppNotice`) — QR 이 그려지는 주소를 준다.
+            store.applyAppNotice(AppNotice(id: "ios-launch-2026-09", title: "아이폰 앱도 있어요",
+                                           body: "앱스토어에서 아잉체크를 검색하거나 QR 을 찍어 주세요",
+                                           linkURL: CheckAppLinks.iosAppStore.absoluteString, linkLabel: nil))
+            #expect(store.appNotice != nil && store.isSignedIn, "\(label): 공지가 안 섰다")
+        }
+        if goal { store.isEditingWeeklyGoal = true }
+        switch mode {
+        case .grid: break
+        case .gachaPanel:
+            store.openGachaPanel(mode: .exchange)
+            #expect(store.isGachaPanelOpen, "\(label): 뽑기 패널이 안 열렸다")
+        case .megaphone:
+            store.toggleMegaphoneComposer()
+            #expect(store.megaphone.isComposerOpen, "\(label): 확성기 작성기가 안 열렸다")
+        }
+        let view = CheckMenuView(store: store,
+                                 previewLongSessionBanner: banner == .longSession,
+                                 previewClipsOverflowList: true,
+                                 previewGoalEditing: goal,
+                                 previewUpdateBanner: banner == .update4,
+                                 previewUpdateNotes: banner == .update4 ? Self.worstNotes : [],
+                                 characterDefaults: V0317ShopTests.isolatedDefaults(label))
+        if let name, let rep = V0317ShopTests.bitmap(view, width: CheckMenuView.mainWindowWidth) { Self.save(rep, name) }
+        return try #require(V0317ShopTests.popoverHeight(view))
+    }
+
+    /// ★ "최악 조합"은 **배너를 포함해** 잰다. 예전 이 테스트는 목표 편집(92pt)만 얹었고, 격자 상한이 그걸 다 흡수해 카드가 있든 없든
+    ///   673pt 였다 — 정작 새 버전 배너 노트 4줄(714pt) · 앱 공지 QR(711pt)에서 뽑기 카드가 700pt 를 넘기는 걸 못 봤다(리뷰 실측).
+    ///
+    /// 단언 셋:
+    ///  · 뽑기 카드는 팝오버를 **키우지 않는다** — 어느 조합 · 어느 모습(격자 · 뽑기 패널 · 확성기 작성기)이든 카드 없는 격자 화면 이하.
+    ///  · 배너 하나 · 목표 편집 하나짜리 화면은 700pt 안이다.
+    ///  · 배너가 정말 그려졌다 — 목표 편집과 겹치면 격자가 바닥(한 줄)에 닿아 배너만큼 팝오버가 커진다(재서 확인한다, 가정하지 않는다).
+    /// 배너 + 목표 편집이 **겹친** 화면은 0.3.54 이전부터 700pt 를 넘는다(카드 없이 720~775pt — 상점 격자 바닥 112pt 가 그 크롬을 못 받는다).
+    /// 그건 뽑기 카드가 만든 것이 아니라 여기서는 "카드가 더하지 않는다"만 못 박는다(보고서에 남긴다).
+    @Test("최악 조합(큰 배너 · 목표 편집 · 뽑기 카드 · 확성기 · 금 포함 일곱 장): 뽑기 카드는 팝오버를 키우지 않고, 배너 하나짜리 화면은 700pt 안이다")
+    func worstCasePopoverWithGacha() throws {
+        var table: [String] = []
+        var goalOnly: CGFloat = 0
+        for banner in WorstBanner.allCases {
+            for goal in [false, true] {
+                let baseline = try Self.worstPopoverHeight(banner: banner, goal: goal, gacha: false, mode: .grid)
+                var line = "\(banner.rawValue)\(goal ? "+목표" : ""): 카드 없음 \(baseline)"
+                if banner == .none && goal { goalOnly = baseline }
+                if banner != .none && goal {
+                    #expect(baseline > goalOnly + 1, "\(banner): 배너가 안 그려졌다(목표 편집만 \(goalOnly)pt · 배너 더해 \(baseline)pt)")
+                }
+                for mode in WorstMode.allCases {
+                    let save = (banner == .update4 && !goal) ? "gacha-popover-worst-\(mode.rawValue).png" : nil
+                    let height = try Self.worstPopoverHeight(banner: banner, goal: goal, gacha: true, mode: mode, save: save)
+                    line += " · \(mode.rawValue) \(height)"
+                    #expect(height <= baseline + 0.5,
+                            "\(banner)\(goal ? " + 목표 편집" : "") · \(mode): 뽑기 카드가 팝오버를 \(height - baseline)pt 키웠다(\(baseline) → \(height))")
+                    if banner == .none || !goal {
+                        #expect(height <= 700, "\(banner)\(goal ? " + 목표 편집" : "") · \(mode): 팝오버 \(height)pt — 700pt 상한을 넘어 푸터가 잘린다")
+                    }
+                }
+                table.append(line)
+            }
+        }
+        print("[v0354-gacha] 최악 조합 팝오버(pt)\n  " + table.joined(separator: "\n  "))
     }
 
     @Test("상점 격자의 금 카드: 안 가졌으면 '뽑기 또는 조각 20개'(금빛) · 가지면 '보유' — 렌더에서 금빛 글자가 갈린다")
@@ -551,7 +635,7 @@ enum V0354GachaStub {
         let goldA = Self.goldInk(a), goldB = Self.goldInk(b)
         print("[v0354-gacha] 금 카드 금빛 픽셀 안 가짐 \(goldA) · 가짐 \(goldB)")
         #expect(goldA > goldB + 40, "안 가진 금 카드에 금빛 '뽑기 또는 조각' 글자가 안 보인다(\(goldA) vs \(goldB))")
-        #expect(ShopText.goldCardPrice(owned: false, shardCost: unowned.gachaShardCost(of: CharacterCatalog.goldAingID))
+        #expect(GachaText.gachaOnlyPrice(shardCost: unowned.gachaShardCost(of: CharacterCatalog.goldAingID))
                 == "뽑기 또는 조각 20개")
     }
 }

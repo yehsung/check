@@ -349,6 +349,27 @@ final class ReactionEngine {
     /// 감은눈 캐시를 캡처한 **캐릭터 노드**. sceneRoot 와 짝으로 열쇠가 된다 — 이유는 `locateSleepEyeTargets` 주석.
     @ObservationIgnored private weak var eyeCacheCharacterNode: SCNNode?
 
+    /// 울트라가 **떼어 둔** 3D 캐릭터 노드의 감은눈 자원(v0.3.54 — 아잉 ↔ 황금 아잉이 교체·원복 왕복).
+    ///
+    /// ★ 3D 에서 3D 로 갈아입었다가 원래 노드를 도로 붙이면(`restoreCharacterNode`) 그 노드의 얼굴 재질은 이미 **MTLTexture** 를
+    ///   들고 있다(`prepareFaceTextures` 가 얹었다). `locateSleepEyeTargets` 의 재탐색은 CGImage 만 얼굴로 알아보므로 아무것도 못
+    ///   찾고 캐시를 비운 채 끝났다 — 그 뒤로 **깜빡이지 않고**(sleepDiffuse nil), 졸 때마다 **뜬 눈 위에 감은 눈 선**이 그려졌다
+    ///   (앱을 다시 켜기 전까지). 0.3.54 전에는 아잉 ↔ 아잉 교체가 없었고 스프라이트 교체는 이 경로를 안 타서 안 보였다.
+    ///   그래서 떼어 낼 때 자원을 노드와 함께 맡겨 두고, 그 노드가 돌아오면 다시 찾지 않고 그대로 꺼내 쓴다(굽기·업로드도 다시 안 한다).
+    private struct ParkedEyeCache {
+        weak var node: SCNNode?
+        let material: SCNMaterial
+        let awake: CGImage
+        let sleep: CGImage?
+        let awakeTexture: (any MTLTexture)?
+        let sleepTexture: (any MTLTexture)?
+        let device: (any MTLDevice)?
+    }
+    /// 맡겨 둔 자원들. 격발 한 번이면 많아야 둘이다(떼어 둔 내 캐릭터 · 원복으로 떨어진 남의 캐릭터) — 노드가 사라진 것은 버린다.
+    @ObservationIgnored private var parkedEyeCaches: [ParkedEyeCache] = []
+    /// 맡겨 둘 수 있는 최대 개수(노드가 오래 살아 있어도 텍스처를 무한히 쥐지 않게).
+    private static let parkedEyeCacheLimit = 4
+
     /// A3: 넛지 자동 근무 시작 시 다음 commuteStart 말풍선을 1회 덮어쓰는 오버라이드. perform(.commuteStart)이
     /// 소비하며 nil 로 비워, 뒤이은 수동 시작은 평소 "오늘도 화이팅!"으로 돌아간다. 관찰 대상 아님(설정→소비만).
     /// setAt 스탬프로 수명을 묶는다: 넛지 직후 곧바로 근무종료하면(SwiftUI onChange 가 false→true→false 를
@@ -470,6 +491,8 @@ final class ReactionEngine {
         //   (`swapCharacter`). sceneRoot 만 보면 "같은 씬이니 캐시 재사용"으로 빠져나가 **떼어낸 옛 캐릭터의
         //   재질**에 감은눈을 칠하게 되고, 화면의 캐릭터는 영영 눈을 못 감는다.
         if faceMaterial != nil, eyeCacheSceneRoot === sceneRoot, eyeCacheCharacterNode === character { return }
+        // 나가는 3D 캐릭터의 자원을 맡겨 둔다(`ParkedEyeCache` 주석 — 울트라 원복이 이 노드를 도로 붙인다).
+        parkOutgoingEyeCache(incoming: character)
         eyeCacheSceneRoot = sceneRoot
         eyeCacheCharacterNode = character
         faceMaterial = nil
@@ -478,6 +501,7 @@ final class ReactionEngine {
         awakeFaceTexture = nil
         sleepFaceTexture = nil
         faceTextureDevice = nil
+        if restoreParkedEyeCache(for: character) { return }
         var found: (material: SCNMaterial, image: CGImage, geometry: SCNGeometry?)?
         sceneRoot.enumerateHierarchy { node, stop in
             for material in node.geometry?.materials ?? [] {
@@ -500,6 +524,60 @@ final class ReactionEngine {
         awakeDiffuse = cg
         // 메시 기반 눈 커버(색 분류가 놓치는 눈두덩/안구 하이라이트까지 덮어 유령 눈두덩 제거). 1회 생성·캐시.
         sleepDiffuse = CheckCharacter3DScene.makeClosedEyesImage(faceImage: cg, geometry: geometry)
+    }
+
+    /// 지금 쥔 감은눈 자원을 그 캐릭터 노드와 함께 맡겨 둔다(`ParkedEyeCache` 주석). 새로 붙는 노드가 같은 노드면 맡길 게 없다.
+    ///
+    /// 맡기면서 나가는 노드를 **뜬 눈 모습**으로 돌려 둔다(얼굴 = 뜬 눈 CGImage · 감은 눈 선 숨김) — 화면에서 이미 떨어진 노드라
+    /// 보이는 것은 없다. 얼굴을 CGImage 로 두는 이유: 맡긴 자원을 어떤 이유로 못 찾더라도(노드가 늦게 돌아와 밀려났다 등) 재탐색이
+    /// 그 얼굴을 다시 알아본다(굽기 한 번이 더 들 뿐 눈은 산다). 선을 숨기는 이유: 자다가 격발을 맞으면 그 노드는 감은 선을 켠 채
+    /// 떨어지고, 깨기(`endSleep`)는 **새로 선 노드**의 선만 끈다 — 돌아온 뒤 뜬 눈 위에 감은 선이 남는다.
+    private func parkOutgoingEyeCache(incoming: SCNNode?) {
+        parkedEyeCaches.removeAll { $0.node == nil }
+        guard let outgoing = eyeCacheCharacterNode, outgoing !== incoming,
+              let material = faceMaterial, let awake = awakeDiffuse else { return }
+        material.diffuse.contents = awake
+        for name in [CheckCharacter3DScene.closedEyeLeftName, CheckCharacter3DScene.closedEyeRightName] {
+            outgoing.childNode(withName: name, recursively: true)?.isHidden = true
+        }
+        parkedEyeCaches.removeAll { $0.node === outgoing }
+        parkedEyeCaches.append(ParkedEyeCache(node: outgoing, material: material,
+                                              awake: awake, sleep: sleepDiffuse,
+                                              awakeTexture: awakeFaceTexture, sleepTexture: sleepFaceTexture,
+                                              device: faceTextureDevice))
+        if parkedEyeCaches.count > Self.parkedEyeCacheLimit {
+            parkedEyeCaches.removeFirst(parkedEyeCaches.count - Self.parkedEyeCacheLimit)
+        }
+    }
+
+    /// 맡겨 둔 자원이 이 노드의 것이면 되찾는다. 재질이 여전히 그 노드에 달려 있는지까지 확인한다(아니면 재탐색).
+    /// 씬은 묻지 않는다 — 격발이 화면을 덮는 순간 뷰가 처음 서면(캐릭터를 꺼 둔 사용자) 떼어 둔 노드가 **새 씬**으로 돌아오는데,
+    /// 재질·그림은 노드에 딸린 것이라 그대로 쓸 수 있다(텍스처 디바이스가 다르면 뒤따르는 `prepareFaceTextures` 가 다시 만든다).
+    /// 되찾은 얼굴은 맡길 때 뜬 눈 CGImage 로 돌려 둔 상태다 — 지금 뷰의 디바이스로 만든 텍스처면 바로 뜬 눈 텍스처를 얹고
+    /// (자는 중이면 attach 의 sleeping 갈래가 감는다), 아니면 CGImage 를 둔 채 `prepareFaceTextures` 에 맡긴다(다른 디바이스의
+    /// 텍스처를 재질에 남기지 않는다).
+    private func restoreParkedEyeCache(for character: SCNNode?) -> Bool {
+        guard let character, let index = parkedEyeCaches.firstIndex(where: { $0.node === character }) else { return false }
+        let parked = parkedEyeCaches.remove(at: index)
+        var attached = false
+        character.enumerateHierarchy { node, stop in
+            if node.geometry?.materials.contains(where: { $0 === parked.material }) == true {
+                attached = true
+                stop.pointee = true
+            }
+        }
+        guard attached else { return false }
+        faceMaterial = parked.material
+        awakeDiffuse = parked.awake
+        sleepDiffuse = parked.sleep
+        awakeFaceTexture = parked.awakeTexture
+        sleepFaceTexture = parked.sleepTexture
+        faceTextureDevice = parked.device
+        if !isSleeping, hasFaceTextures, let device = attachedView?.device, let parkedDevice = parked.device,
+           device === parkedDevice {
+            setFaceDiffuse(closed: false)
+        }
+        return true
     }
 
     // MARK: - 스프라이트 판정 · 캐릭터 교체

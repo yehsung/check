@@ -114,14 +114,6 @@ enum ShopText {
         return "\(max(0, price))"
     }
 
-    /// 황금 아잉이(v0.3.54) 카드 아래 줄. 루비로 안 팔므로 **가격 대신 얻는 길**을 말한다: "뽑기 또는 조각 20개".
-    /// 숫자는 서버 `shard_costs` 의 값 — 모르면 "뽑기 전용"(값을 지어내지 않는다). 가진 것은 다른 카드처럼 "보유".
-    static func goldCardPrice(owned: Bool, shardCost: Int?) -> String {
-        if owned { return "보유" }
-        guard let shardCost, shardCost > 0 else { return GachaText.gachaOnly }
-        return "뽑기 또는 \(GachaText.shardCost(shardCost))"
-    }
-
     /// 울트라 줄 제목. 가격을 모르면 "1개"를 말하지 않는다 — 몇 개를 얼마에 파는지 모르는 채로
     /// 수량만 단정하면 그 줄이 거짓말을 한다.
     static func ultraRowTitle(price: Int?) -> String {
@@ -203,7 +195,24 @@ enum ShopPanelGridBudget {
     /// `chromeOutsideGrid`(230)에 섞지 않은 이유: 카드는 서버가 `gacha` 를 줄 때만 선다(옛 서버 · 능력 번호 2 미만이면 숨는다).
     /// 상수에 섞으면 숨은 때 격자가 31pt 손해를 보고, 기존 실측 계약(230)이 카드 유무에 따라 거짓이 된다. 그래서 격자는
     /// 카드가 섰을 때만 이만큼을 **추가 크롬**으로 받아 상한을 깎는다(`CheckShopPanel.grid`) — 팝오버 합은 어느 쪽이든 같다.
+    ///
+    /// ★ **단, 격자가 받을 수 있을 때만이다.** 상한은 바닥(`minGridHeight` — 카드 한 줄)에서 멈추므로, 큰 배너(새 버전 노트 4줄 149pt ·
+    ///   앱 공지 QR 144pt)가 얹힌 화면에선 31pt 가 그대로 팝오버에 더해져 700pt 를 넘었다(리뷰 실측 714 · 711pt — 0.3.23 사고와 같은 꼴).
+    ///   격자 바닥을 더 낮추면 같은 자리를 빌리는 뽑기 패널(173)·확성기 작성기(166)가 그 자리보다 커져 또 넘는다. 그래서 그 경우엔
+    ///   카드가 **확성기 카드와 한 줄을 나눠 쓴다**(`sharesConsumableRow`) — 줄이 늘지 않으니 크롬도 안 는다(`gachaChrome`).
     static let gachaCardChrome: CGFloat = 31
+
+    /// 뽑기 카드가 확성기 카드와 **한 줄을 나눠 쓰는가** — 격자가 카드의 높이를 받지 못할 때(상한이 바닥에 닿을 때)다.
+    /// 경계에서는 따로 선다: `extra + 31 == max − min` 이면 상한이 정확히 바닥이라 카드 높이를 격자가 다 받는다.
+    static func sharesConsumableRow(extraChromeHeight: CGFloat) -> Bool {
+        extraChromeHeight + gachaCardChrome > maxGridHeight - minGridHeight
+    }
+
+    /// 뽑기 카드가 격자 상한에서 가져가는 높이: 따로 한 줄이면 `gachaCardChrome`, 확성기와 나눠 쓰거나 카드가 없으면 0.
+    static func gachaChrome(gachaShown: Bool, extraChromeHeight: CGFloat) -> CGFloat {
+        guard gachaShown, !sharesConsumableRow(extraChromeHeight: extraChromeHeight) else { return 0 }
+        return gachaCardChrome
+    }
     static let safetySlack = CharacterPanelGridBudget.safetySlack
 
     static let maxGridHeight: CGFloat = 700 - popoverChromeOutsidePanel - chromeOutsideGrid - safetySlack
@@ -259,11 +268,19 @@ struct CheckShopPanel: View {
             VStack(alignment: .leading, spacing: 4) {
                 sectionHeader("소모품")
                 ultraCard
-                megaphoneCard
                 // 캐릭터 뽑기(v0.3.54). 서버가 `gacha` 를 안 주면(옛 서버 · 능력 번호 2 미만) 카드째 숨는다 —
                 // 섰을 때 더해지는 높이(`ShopPanelGridBudget.gachaCardChrome`)만큼 격자 상한이 깎인다(`grid`).
-                if store.isGachaAvailable {
-                    gachaCard
+                // 큰 배너가 얹혀 격자가 그 높이를 못 받으면 확성기 카드와 한 줄을 나눠 쓴다(`sharesConsumableRow` — 팝오버 700pt).
+                if store.isGachaAvailable && ShopPanelGridBudget.sharesConsumableRow(extraChromeHeight: extraChromeHeight) {
+                    HStack(spacing: 4) {
+                        megaphoneCard(compact: true)
+                        gachaCard(compact: true)
+                    }
+                } else {
+                    megaphoneCard(compact: false)
+                    if store.isGachaAvailable {
+                        gachaCard(compact: false)
+                    }
                 }
             }
             // 확성기 작성기(v0.3.51)는 캐릭터 구획과 구매 바 **자리를 빌려** 선다 — 높이가 그 자리의 최소보다 작아서
@@ -424,31 +441,38 @@ struct CheckShopPanel: View {
     /// 📢 확성기 · 루비 N. **한 줄짜리**다(울트라 카드보다 낮다) — 이 줄만큼 크롬이 늘고(`chromeOutsideGrid` 실측) 격자 상한이
     /// 그만큼 줄어드는데, 두 줄 카드면 캐릭터 6장(2행)이 평소 화면에서도 스크롤로 밀린다.
     /// 누르면 작성기를 열고 닫는다(사지 않는다 — 실제 전송은 작성기의 2단 확인 하나뿐이다).
+    /// `compact` 면 뽑기 카드와 한 줄을 나눠 쓰는 반쪽이다 — 부제("모두에게 한마디")를 빼고 높이는 그대로다.
     @ViewBuilder
-    private var megaphoneCard: some View {
+    private func megaphoneCard(compact: Bool) -> some View {
         let open = store.megaphone.isComposerOpen
         let price = store.megaphone.price
         Button {
             store.toggleMegaphoneComposer()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: compact ? 4 : 6) {
                 Text(MegaphoneText.badgeTitle)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
-                Text("모두에게 한마디")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
+                if !compact {
+                    Text("모두에게 한마디")
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: compact ? 2 : 6)
                 // 값은 서버가 말한다(`megaphone_info` — 상점을 여는 순간 미리 읽는다: `prefetchMegaphoneInfo`).
                 // 모르면 숫자를 지어내지 않되 **칩 자리는 비워 둔다**(.hidden) — 칩(아이콘 13 + 위아래 2)이 글자 줄보다 4pt 높아서,
                 // 값이 도착하는 순간 카드가 자라면 크롬이 갈리고(226 → 230 실측) 격자 상한(`chromeOutsideGrid`)이 거짓이 된다.
-                if let price {
-                    RubyBalanceChip(balance: price)
-                } else {
-                    RubyBalanceChip(balance: nil).hidden()
+                // 반쪽 카드에선 칩이 접혀 두 줄이 되면 줄이 자란다(실측 +13pt) — 칩은 제 크기를 지킨다.
+                Group {
+                    if let price {
+                        RubyBalanceChip(balance: price)
+                    } else {
+                        RubyBalanceChip(balance: nil).hidden()
+                    }
                 }
+                .fixedSize()
                 Image(systemName: open ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(CheckTheme.secondaryText)
@@ -476,31 +500,41 @@ struct CheckShopPanel: View {
 
     /// 🎁 캐릭터 뽑기 · 루비 50. 확성기 카드와 **같은 한 줄 문법**이다(칩 자리를 늘 비워 둬서 값 도착 전후 높이가 같다).
     /// 누르면 뽑기 패널을 열고 닫는다(뽑지 않는다 — 실제 뽑기는 패널의 [뽑기 · 50] 하나뿐이다).
+    /// `compact` 면 확성기 카드와 한 줄을 나눠 쓰는 반쪽이다 — 부제(확률 공개 · 조각 N개)를 빼고 높이는 그대로다(조각 수는 패널이 말한다).
     @ViewBuilder
-    private var gachaCard: some View {
+    private func gachaCard(compact: Bool) -> some View {
         let open = store.isGachaPanelOpen
         let price = store.gachaInfo?.price
         Button {
             store.toggleGachaPanel()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(CheckTheme.accent)
+            HStack(spacing: compact ? 4 : 6) {
+                // 반쪽 카드는 폭이 모자라 선물 아이콘을 뺀다(제목 · 값 칩 · 펼침 표시가 다 들어가게).
+                if !compact {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(CheckTheme.accent)
+                }
                 Text(GachaText.title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
-                Text(GachaPanelText.cardSubtitle(shards: store.gachaShards))
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                if let price {
-                    RubyBalanceChip(balance: price)
-                } else {
-                    RubyBalanceChip(balance: nil).hidden()
+                    .minimumScaleFactor(compact ? 0.85 : 1)
+                if !compact {
+                    Text(GachaPanelText.cardSubtitle(shards: store.gachaShards))
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
                 }
+                Spacer(minLength: compact ? 2 : 6)
+                Group {
+                    if let price {
+                        RubyBalanceChip(balance: price)
+                    } else {
+                        RubyBalanceChip(balance: nil).hidden()
+                    }
+                }
+                .fixedSize()
                 Image(systemName: open ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(CheckTheme.secondaryText)
@@ -528,11 +562,8 @@ struct CheckShopPanel: View {
 
     private var rows: [[ShopCharacterRow?]] {
         // 서버 목록이 유일한 출처다. 아직 못 읽었으면 **번들 목록으로 자리만** 그린다(가격 없음) —
-        // 빈 화면보다 낫고, 가격을 지어내지도 않는다.
-        let source: [ShopCharacterRow] = store.shopCharacters.isEmpty
-            ? catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID }
-                .map { ShopCharacterRow(id: $0, price: nil, owned: false) }
-            : store.shopCharacters
+        // 빈 화면보다 낫고, 가격을 지어내지도 않는다. 황금 아잉이는 고르기와 같은 규칙으로 거른다(`shopGridRows`).
+        let source = store.shopGridRows(catalog: catalog)
         var out: [[ShopCharacterRow?]] = []
         var index = 0
         while index < source.count {
@@ -546,9 +577,11 @@ struct CheckShopPanel: View {
     @ViewBuilder
     private var grid: some View {
         let natural = ShopPanelGridBudget.naturalHeight(rowCount: rows.count)
-        // 뽑기 카드가 서 있으면 그 줄만큼 격자 상한을 깎는다(`gachaCardChrome` 주석) — 팝오버 700pt 합이 그대로다.
+        // 뽑기 카드가 따로 한 줄로 서 있으면 그 줄만큼 격자 상한을 깎는다(`gachaCardChrome` 주석) — 팝오버 700pt 합이 그대로다.
+        // 확성기와 한 줄을 나눠 쓰면 줄이 안 늘었으니 깎을 것도 없다(`gachaChrome`).
         let cap = ShopPanelGridBudget.capHeight(
-            extraChromeHeight: extraChromeHeight + (store.isGachaAvailable ? ShopPanelGridBudget.gachaCardChrome : 0))
+            extraChromeHeight: extraChromeHeight + ShopPanelGridBudget.gachaChrome(gachaShown: store.isGachaAvailable,
+                                                                                  extraChromeHeight: extraChromeHeight))
         FeedbackListBox(contentHeight: natural, capHeight: cap,
                         clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll) {
             VStack(spacing: ShopPanelGridBudget.cardSpacing) {
@@ -595,7 +628,9 @@ struct CheckShopPanel: View {
                     .minimumScaleFactor(0.8)
                 if gachaOnly {
                     // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
-                    Text(ShopText.goldCardPrice(owned: owned, shardCost: store.gachaShardCost(of: entry.id)))
+                    // 문구는 코어 한 벌(`GachaText.gachaOnlyPrice` — 확률표 금 줄 · 폰과 같은 글자): "뽑기 또는 조각 20개", 교환값을 모르면
+                    // "뽑기 전용". 숫자는 서버 `shard_costs` 다. 가진 것은 다른 카드처럼 "보유".
+                    Text(owned ? GachaText.owned : GachaText.gachaOnlyPrice(shardCost: store.gachaShardCost(of: entry.id)))
                         .font(.caption2.weight(.bold))
                         .monospacedDigit()
                         .foregroundStyle(owned ? CheckTheme.secondaryText : GachaPalette.gold)

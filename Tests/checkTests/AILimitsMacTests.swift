@@ -1825,8 +1825,11 @@ struct AILimitsMacCardContentTests {
         #expect(haunted.isEmpty, "사라진 창 컨트롤러를 아직 부르는 파일: \(haunted)")
         #expect(sources["CheckAILimitsRow.swift"]?.contains("자세히 ›") == false,
                 "누를 데가 없는 '자세히 ›' 가 남았다")
-        // 독립 창 목록에서도 빠졌다(없는 창의 식별자가 남으면 "등록이 빠졌다"로 읽힌다).
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 3)
+        // 독립 창 목록에서도 빠졌다(없는 창의 식별자가 남으면 "등록이 빠졌다"로 읽힌다). 넷 = 오목 · 체스 · 설정 · 캐릭터 뽑기(v0.3.54).
+        #expect(MiniGameSpaceKey.standaloneWindowIDs == [CheckGomokuWindowController.frameAutosaveName,
+                                                         CheckChessWindowController.frameAutosaveName,
+                                                         CheckSettingsWindowController.frameAutosaveName,
+                                                         CheckGachaWindowController.frameAutosaveName])
         #expect(!MiniGameSpaceKey.standaloneWindowIDs.contains("check.aiLimitsWindow"))
         // 팝오버가 갱신을 당기는 길은 **남아 있다**(창의 `onOpen` 이 하던 일 — 그게 사라지면 팝오버를 열어도
         // 숫자가 안 갱신된다). 스토어의 5분 하한이 난사를 막는 것도 그대로다.

@@ -129,13 +129,11 @@ enum V0354GachaStub {
         store.pullGacha()
         #expect(await V0354CoreStub.waitUntil { !store.gachaPulling && store.gachaLastResult != nil })
         #expect(store.gachaLastResult?.kind == .gold && store.ownedCharacterIDs.contains(CharacterCatalog.goldAingID))
-        let firstSerial = store.gachaRevealSerial
         // 첫 뽑기 뒤의 상점 다시 읽기(0.4초 늦다)를 **기다리지 않고** 곧바로 다시 누른다 — [한 번 더] 연타 그대로다
         // (늦게 오는 그 조회가 둘째 뽑기 값을 덮지 않는 것은 `V0354GachaRaceTests` 가 잰다).
         store.pullGacha()
         #expect(await V0354CoreStub.waitUntil { !store.gachaPulling && store.gachaLastResult?.characterID == "squirrel" })
         #expect(store.gachaLastResult?.kind == .duplicate && store.gachaShards == 4 && store.rubyBalance == 20)
-        #expect(store.gachaRevealSerial == firstSerial + 1, "결과 연출 순번이 안 올랐다")
         let name = store.gachaDisplayName("squirrel")
         #expect(GachaText.headline(for: try #require(store.gachaLastResult), name: name) == "이미 있는 다람쥐 → 조각 +1")
     }
@@ -257,16 +255,20 @@ enum V0354GachaStub {
         #expect(GachaText.owned == "보유")
     }
 
-    @Test("캐릭터 고르기의 잠긴 금 카드 → 상점 + 뽑기 패널 · 다른 잠긴 카드 → 상점만")
+    /// 0.3.54 캡슐 기계: 잠긴 금 카드는 상점 안 뽑기 패널이 아니라 **뽑기 창**을 연다(`V0354GachaWindowDoorTests.lockedGoldOpensTheWindow`
+    /// 가 자세히 잰다). 여기선 창 문이 열리고 상점 패널은 안 열리는 것만 — 다른 잠긴 카드(기준선)는 그대로 상점이다.
+    @Test("캐릭터 고르기의 잠긴 금 카드 → 뽑기 창(상점 패널 아님) · 다른 잠긴 카드 → 상점만")
     func lockedGoldInThePickerOpensTheGacha() async throws {
         let host = Self.host("locked")
         V0354GachaStub.register(host: host)
         let store = await V0354GachaStub.loadedStore(host: host, label: "locked")
+        var shows = 0
+        store.gachaWindowHooks = GachaWindowHooks(show: { shows += 1 }, close: {})
         store.openShopForLockedCharacter("fox")
-        #expect(store.isShopPanelVisible && !store.isGachaPanelOpen)
+        #expect(store.isShopPanelVisible && !store.isGachaPanelOpen && shows == 0)
         store.closeShopPanel()
         store.openShopForLockedCharacter(CharacterCatalog.goldAingID)
-        #expect(store.isShopPanelVisible && store.isGachaPanelOpen)
+        #expect(shows == 1 && !store.isShopPanelVisible && !store.isGachaPanelOpen)
     }
 
     @Test("확성기 작성기와 뽑기 패널은 같은 자리 — 하나를 열면 다른 하나가 접힌다 · 상점을 닫으면 둘 다 접힌다")
@@ -404,8 +406,10 @@ enum V0354GachaStub {
             Self.save(shop, "gacha-shop-\(state.rawValue).png")
         }
         print("[v0354-gacha] 금빛 픽셀 \(gold.sorted { $0.key.rawValue < $1.key.rawValue }) · 경고색 \(danger.sorted { $0.key.rawValue < $1.key.rawValue })")
-        // 결과: 금 결과는 금빛 글자 + 후광 초상 — 새 캐릭터 결과(기준선)보다 금빛 픽셀이 훨씬 많다.
-        #expect((gold[.resultGold] ?? 0) > (gold[.resultNew] ?? 0) * 3 + 200, "금 결과가 금빛이 아니다")
+        // 결과(0.3.54 캡슐 기계 뒤): 패널은 연출하지 않고 마지막 결과를 **한 줄**로만 말한다 — 황금이면 그 줄이 금빛이다.
+        // 확률 띠의 금 초상은 모든 보기에 있으므로 기준선(새 캐릭터 한 줄 = 흰 글자)과의 차가 곧 금빛 한 줄이다(실측 +184).
+        #expect((gold[.resultGold] ?? 0) > (gold[.resultNew] ?? 0) + 100, "금 결과 한 줄이 금빛이 아니다")
+        #expect(gold[.resultNew] == gold[.idle], "새 캐릭터 한 줄이 금빛으로 칠해졌다(기준선이 갈리지 않는다)")
         // 결과: 잔량이 모자라면 이유가 경고색으로 선다 — 뽑을 수 있을 때(기준선)는 없다.
         #expect((danger[.insufficient] ?? 0) > (danger[.idle] ?? 0) + 30, "모자람 이유가 안 보인다")
     }

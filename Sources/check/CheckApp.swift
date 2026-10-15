@@ -306,6 +306,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
         }, safety: store)
+        // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
+        // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
+        CheckGachaWindowController.shared.configure(store: store)
         // ★ **AI 리밋 창은 v0.3.46 에 사라졌다.** 카드가 팝오버 안으로 들어왔다(사용자 지시: "메인 화면
         //   자체에 다 뜨게끔") — 그리는 것은 `CheckAILimitsCard` 이고 배선할 창 수명이 없다. 여기에
         //   `CheckAILimitsWindowController` 를 다시 더하지 마라.
@@ -315,7 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ★ **제보·메시지 창은 v0.2.50 에 사라졌다.** 둘 다 팝오버 하위 패널로 내려왔고(사용자 지시:
         //   "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 그 사람과의 1대1 메시지 화면으로만"),
         //   패널은 배선할 창 수명이 없다 — 그리는 것은 `CheckMenuView` 이고 상태는 스토어 깃발 하나다.
-        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임·1:1 오목·1:1 체스 넷이다.
+        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임·1:1 오목·1:1 체스·캐릭터 뽑기 다섯이다.
         // 실행 중인 앱에서 창이 **실제로** 떴는지 밖에서 재기 위한 문(인자가 없으면 아무 일도 안 한다).
         // 이 저장소에서 창 검증은 CGWindowList 실측 없이는 성립하지 않는다 — 근거는 그 타입 주석 참고.
         CheckSettingsWindowProbe.startIfRequested()

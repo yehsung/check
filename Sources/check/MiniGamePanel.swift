@@ -316,10 +316,13 @@ enum MiniGameSpaceKey {
     /// v0.3.46: **AI 리밋 창이 빠져 셋이다.** 그 창은 사라졌다(카드가 팝오버 안으로 들어왔다 —
     /// `CheckAILimitsRow.swift` 머리말). 없는 창의 식별자를 목록에 남겨 두면, 다음 사람이 그 이름으로
     /// 컨트롤러를 찾다 못 찾고 "등록이 빠졌다"로 읽는다.
+    /// v0.3.54: 캐릭터 뽑기 창이 더해져 **넷**이다. 그 창은 글을 받지 않지만 [한 번 더]·[닫기]·"확률 보기" 가 키보드로도 눌린다
+    /// (전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 그 단추를 스페이스로 누를 때 게임이 삼킨다.
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
-         CheckSettingsWindowController.frameAutosaveName]
+         CheckSettingsWindowController.frameAutosaveName,
+         CheckGachaWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —

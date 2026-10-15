@@ -8,7 +8,9 @@ import CheckCore
 // 자리를 빌려** 선다 — 확성기 작성기와 같은 자리이고 둘은 서로 배타다. 높이를 상수로 못 박아(`height`) 그 자리의 최소보다 커지지
 // 않으므로 팝오버 700pt 예산(`ShopPanelGridBudget`)에 새 항목이 생기지 않는다(`V0354GachaMacTests` 가 렌더로 잰다).
 //
-// 보기 셋(높이 고정이라 한 번에 하나): [뽑기] 큰 버튼 + 결과 연출 · [확률 보기] 일곱 줄 · [조각 교환] 내 조각 + 교환 목록.
+// 보기 셋(높이 고정이라 한 번에 하나): [뽑기] 확률 한눈에 + 큰 [뽑기 · 50] · [확률 보기] 일곱 줄 · [조각 교환] 내 조각 + 교환 목록.
+// **[뽑기 · 50] 은 뽑지 않는다 — 뽑기 창(캡슐 기계 · `CheckGachaWindow.swift`)을 연다.** 뽑기·연출은 그 창의 몫이고(0.3.54 — 예전의
+// 0.8초 결과 카드는 걷어냈다), 이 패널은 마지막 결과를 **한 줄**로만 말한다.
 // 판정·문구·확률표·교환 목록은 전부 코어(`GachaRules` · `GachaText`)가 만든다 — 이 파일은 그리기만 한다. **숫자를 적지 않는다**
 // (값 50 · 확률 · 교환값은 서버 `shop_state.gacha` 에서 온다).
 //
@@ -77,6 +79,14 @@ enum GachaPanelText {
     }
 
     static let pulling = "뽑는 중…"
+    /// 마지막 결과 한 줄(패널은 연출하지 않는다 — 연출은 뽑기 창): "방금 · 새 캐릭터: 여우" · "방금 · 이미 있는 다람쥐 → 조각 +1" ·
+    /// "방금 · 황금 아잉이!"(이미 있던 금이면 조각 줄).
+    static func lastResult(_ result: GachaPullResult, name: String) -> String {
+        let line = result.kind == .gold && result.isDuplicate
+            ? GachaText.duplicate(name: name, shardsGained: result.shardsGained)
+            : GachaText.headline(for: result, name: name)
+        return "방금 · \(line)"
+    }
     /// 하단 바 첫 줄.
     static let barTitle = "캐릭터 뽑기 1회"
     static let oddsHeaderName = "캐릭터"
@@ -98,8 +108,6 @@ struct CheckGachaPanel: View {
     var previewExchangeLines: [GachaExchangeLine]?
     /// 테스트 전용: 고정 높이를 풀고 **내용의 자연 높이**로 그린다 — 내용이 `height` 를 넘는지(넘치면 아래가 잘린다) 재는 문. 앱은 false.
     var measuresNaturalHeight = false
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 패널 전체 높이(pt). **캐릭터 구획 최소 자리**(소제목 + 간격 4 + 카드 한 줄 112) + 간격 7 + 구매 바 38 보다 작아야 한다 —
     /// 그래야 어떤 예산 조합에서도 이 패널을 연 상점이 격자를 연 상점보다 높아지지 않는다(확성기 작성기 166 과 같은 규약).
@@ -189,89 +197,20 @@ struct CheckGachaPanel: View {
                         .fill(CheckTheme.trackFill)
                         .overlay {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(store.gachaLastResult?.kind == .gold && !store.gachaPulling
-                                              ? GachaPalette.gold.opacity(0.85) : CheckTheme.border,
-                                              lineWidth: store.gachaLastResult?.kind == .gold && !store.gachaPulling ? 2 : 1)
+                                .strokeBorder(CheckTheme.border, lineWidth: 1)
                         }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                // 결과 연출(0.8초 안): 순번이 바뀌는 순간 무대 안의 결과 카드가 새로 끼어들며 커진다. 애니메이션은 **무대(부모)**에 건다 —
-                // 끼어드는 뷰 자신에 걸면 자기 삽입은 애니메이션되지 않는다. 동작 줄이기면 즉시.
-                .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.62), value: store.gachaRevealSerial)
             pullBar
         }
     }
 
-    @ViewBuilder
+    /// 무대: 첫 줄(마지막 결과 한 줄 · 없으면 "루비 50개로 하나를 뽑아요") + 일곱 캐릭터와 확률(서버 순서 그대로) + 조각 규칙.
+    /// 무엇이 얼마의 확률로 나오는지 첫 화면에서 보인다. 결과 연출은 없다 — 뽑기 창의 기계가 한다.
     private var stage: some View {
-        if store.gachaPulling {
-            VStack(spacing: 6) {
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(CheckTheme.accent)
-                Text(GachaPanelText.pulling)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(CheckTheme.secondaryText)
-            }
-        } else if let result = store.gachaLastResult {
-            resultCard(result)
-                // 같은 결과가 연달아 나와도 연출이 다시 돈다(순번이 바뀌면 새 뷰).
-                .id(store.gachaRevealSerial)
-                // 들어올 때만 튀어 커지고(스프링 크기만 — 불투명도는 이징에 안 맡긴다), 앞 결과는 즉시 비킨다(겹쳐 번지지 않게).
-                .transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.55), removal: .identity))
-        } else {
-            idleStage
-        }
-    }
-
-    /// 결과 한 장 — 초상 + 큰 한 줄(+ 금이면 둘째 줄). 연출은 0.8초 안(스프링 0.42초).
-    private func resultCard(_ result: GachaPullResult) -> some View {
-        let name = store.gachaDisplayName(result.characterID)
-        let headline = GachaText.headline(for: result, name: name)
-        let detail = GachaText.detail(for: result, name: name)
-        let gold = result.kind == .gold
-        return HStack(spacing: 12) {
-            // 황금 아잉이의 초상은 후광이 구워진 그림이다(`aing_gold-neutral.png`) — 그대로 크게 세운다.
-            CharacterPortrait(characterID: result.characterID,
-                              isPixelArt: catalog.manifest(id: result.characterID)?.pixelArt == true)
-                .frame(width: gold ? 92 : 78, height: gold ? 86 : 72)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(headline)
-                    .font(gold ? .system(size: 17, weight: .heavy) : .subheadline.weight(.bold))
-                    .foregroundStyle(gold ? GachaPalette.gold : CheckTheme.primaryText)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.primaryText)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                if result.kind == .newCharacter {
-                    Text("캐릭터 고르기에서 바로 입을 수 있어요")
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(detail.map { "\(headline), \($0)" } ?? headline)
-    }
-
-    /// 결과가 아직 없을 때: 일곱 캐릭터와 확률(서버 순서 그대로) — 무엇이 얼마의 확률로 나오는지 첫 화면에서 보인다.
-    private var idleStage: some View {
         let lines = oddsLines
         return VStack(spacing: 6) {
-            Text(GachaPanelText.idleLine(price: store.gachaInfo?.price))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(CheckTheme.primaryText)
-                .lineLimit(1)
+            topLine
             HStack(spacing: 2) {
                 ForEach(lines) { line in
                     VStack(spacing: 2) {
@@ -296,11 +235,31 @@ struct CheckGachaPanel: View {
         .padding(.horizontal, 8)
     }
 
+    /// 무대 첫 줄. 결과가 있으면 그 한 줄(황금이면 금빛), 없으면 값 안내.
+    @ViewBuilder
+    private var topLine: some View {
+        if let result = store.gachaLastResult {
+            let line = GachaPanelText.lastResult(result, name: store.gachaDisplayName(result.characterID))
+            Text(line)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(result.kind == .gold ? GachaPalette.gold : CheckTheme.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .accessibilityLabel(line)
+        } else {
+            Text(GachaPanelText.idleLine(price: store.gachaInfo?.price))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+        }
+    }
+
     /// 하단 바 — 상점 구매 바와 **같은 높이·모양**(`CheckShopPanel.purchaseBarHeight`).
     private var pullBar: some View {
         let availability = store.gachaPullAvailability
-        let busy = store.isGachaBusy
+        let button = Self.pullButtonState(store)
         let reason: String? = store.gachaNotice ?? Self.reason(for: availability, balance: store.rubyBalance)
+            ?? (store.gachaPulling ? GachaPanelText.pulling : nil)
         let isError = store.gachaNotice != nil ? store.gachaNoticeIsError : !availability.canPull
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
@@ -316,10 +275,9 @@ struct CheckGachaPanel: View {
                     .minimumScaleFactor(0.85)
             }
             Spacer(minLength: 6)
-            GachaPullButton(price: store.gachaInfo?.price,
-                            busy: store.gachaPulling,
-                            enabled: availability.canPull && !busy && store.purchasingID == nil) {
-                store.pullGacha()
+            // 뽑지 않는다 — 뽑기 창을 연다(창 기계의 손잡이가 실제 뽑기다). 팝오버는 창이 뜬 뒤 닫힌다.
+            GachaPullButton(price: store.gachaInfo?.price, busy: store.gachaPulling, enabled: button.enabled) {
+                store.openGachaWindow()
             }
         }
         .frame(maxWidth: .infinity)
@@ -336,6 +294,14 @@ struct CheckGachaPanel: View {
         }
     }
 
+    /// [뽑기 · 50] 의 상태: 뽑을 수 있을 때만 눌린다(모자람 · 잔량 모름 · 뽑기 없음 · 왕복 중 · 구매 중이면 잠긴다), 잠겼으면 이유 한 줄.
+    /// 잠긴 버튼은 창도 안 연다 — 창의 기계도 같은 이유로 손잡이가 안 도는데, 그걸 보러 창을 여는 것은 한 번 더 누르게 할 뿐이다.
+    static func pullButtonState(_ store: WorkTimerStore) -> (enabled: Bool, reason: String?) {
+        let availability = store.gachaPullAvailability
+        let enabled = availability.canPull && !store.isGachaBusy && store.purchasingID == nil
+        return (enabled, reason(for: availability, balance: store.rubyBalance))
+    }
+
     /// 버튼을 잠근 이유(뽑을 수 있으면 nil). 잔량을 모르면 "루비 잔량을 아직 못 읽었어요"(코어는 nil 을 준다 — 침묵하면 고장으로 보인다).
     static func reason(for availability: GachaPullAvailability, balance: Int?) -> String? {
         if case .unknownBalance = availability { return ShopText.entryHelp(balance) }
@@ -347,9 +313,7 @@ struct CheckGachaPanel: View {
     /// 확률표 줄(서버 순서 그대로). 이름은 맥 카탈로그(강아지 등), 상점가는 `shop_state.characters`.
     var oddsLines: [GachaOddsLine] {
         if let previewOddsLines { return previewOddsLines }
-        guard let info = store.gachaInfo else { return [] }
-        return GachaRules.oddsRows(info: info, shopRows: store.shopCharacters) { catalog.manifest(id: $0)?.displayName }
-            .map(GachaOddsLine.init)
+        return store.gachaOddsLines(catalog: catalog)
     }
 
     private var oddsView: some View {
@@ -511,7 +475,7 @@ struct CheckGachaPanel: View {
     }
 }
 
-/// 큰 [뽑기 · 50] 버튼. 상점 [구매하기](`BuyButton`)보다 크다 — 이 패널에서 누를 것은 이것 하나다.
+/// 큰 [뽑기 · 50] 버튼. 상점 [구매하기](`BuyButton`)보다 크다 — 이 패널에서 누를 것은 이것 하나다. 누르면 뽑기 창이 열린다.
 /// 값을 모르면 숫자를 지어내지 않는다("뽑기" 만).
 struct GachaPullButton: View {
     let price: Int?
@@ -550,5 +514,6 @@ struct GachaPullButton: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.55)
         .accessibilityLabel(price.map { "뽑기, 루비 \($0)개" } ?? "뽑기")
+        .accessibilityHint("뽑기 창을 열어요")
     }
 }

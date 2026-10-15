@@ -606,7 +606,11 @@ extension WorkTimerStore {
         // 뽑기(v0.3.54)는 **없음이 곧 사실**이다 — 서버가 `gacha` 를 안 실었으면(옛 서버 · 능력 번호 2 미만) 뽑기 화면을 숨긴다.
         // 그래서 다른 칸과 달리 nil 도 그대로 옮긴다. 숨기는 순간 열려 있던 패널도 접는다(빈 패널이 자리를 쥐고 있지 않게).
         gachaInfo = state.gacha
-        if !isGachaAvailable, isGachaPanelOpen { isGachaPanelOpen = false }
+        if !isGachaAvailable {
+            if isGachaPanelOpen { isGachaPanelOpen = false }
+            // 뽑기 창(0.3.54)도 같이 내린다 — 남기면 기계가 값·조각을 모르는 채(0 으로) 서 있다. 창의 문(`openGachaWindow`)도 같은 판정으로 닫혀 있다.
+            gachaWindowHooks.close()
+        }
         guard let rows = state.characters else { return }
         shopCharacters = rows
         // 아잉은 무료라 서버 목록에 없어도 언제나 보유다.

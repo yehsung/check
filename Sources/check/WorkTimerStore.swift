@@ -830,16 +830,16 @@ final class WorkTimerStore {
     var gachaPulling = false
     /// 교환 왕복 중인 캐릭터 id.
     var gachaExchangingID: String?
-    /// 마지막 뽑기 결과(결과 연출이 읽는다). 패널을 닫았다 열어도 남는다 — 방금 뭐가 나왔는지 다시 볼 수 있게.
+    /// 마지막 뽑기 결과. 상점 뽑기 패널이 한 줄로 말한다(연출은 뽑기 창의 기계 몫 — 0.3.54). 패널을 닫았다 열어도 남는다.
     var gachaLastResult: GachaPullResult?
-    /// 결과 연출 순번 — 같은 캐릭터가 두 번 연달아 나와도 연출이 다시 돈다.
-    var gachaRevealSerial = 0
     /// 뽑기 패널의 한 줄(거절·실패·교환 결과). nil 이면 비운다.
     var gachaNotice: String?
     /// 위 한 줄이 실패·거절인가(색).
     var gachaNoticeIsError = false
     /// 동작 한 번 = 요청 id 하나(결과를 모르는 실패 뒤 다시 누르면 같은 id — 두 번 깎지 않는다). 화면이 읽지 않는다.
     @ObservationIgnored var gachaRequestIDs = GachaRequestIDs()
+    /// 뽑기 창을 띄우고 내리는 문(테스트 이음새 — 앱은 언제나 `.live`, 곧 `CheckGachaWindowController.shared`). 화면이 읽지 않는다.
+    @ObservationIgnored var gachaWindowHooks = GachaWindowHooks.live
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.

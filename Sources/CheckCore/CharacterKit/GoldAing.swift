@@ -1,0 +1,68 @@
+import Foundation
+
+// MARK: - 황금 아잉이 (v0.3.54) — 식별과 "그릴 수 있다"의 정의
+//
+// 황금 아잉이는 아잉과 **같은 메시**(aing.scn)에 금빛 마감(굽힌 피부 텍스처 + 후광)을 입힌 변형이다. 상점에서 살 수 없고
+// 뽑기로만 얻는다. 이 파일은 두 가지를 한 곳에 둔다:
+//  ① 렌더러가 금 변형을 알아보는 길(`CharacterManifest.finish`) — kind 는 아잉과 같은 `.scene3D` 라 kind 로 가를 수 없다.
+//  ② "이 빌드가 황금 아잉이를 그릴 수 있다"의 정의(`GoldAingArt`) — 상점 능력 번호 2(`ShopWire.goldProtocol`)의 재료다.
+//     그림 없는 빌드가 2 를 보내면 서버가 금 카드·뽑기를 내려 주고, 사용자는 **아잉 그림**의 "황금 아잉이"를 뽑는다.
+
+extension CharacterManifest {
+    /// 3D 캐릭터의 표면 마감. 스프라이트는 언제나 `.standard` 다.
+    package enum Finish: Sendable, Equatable {
+        /// 메시·텍스처 그대로(아잉 · 스프라이트).
+        case standard
+        /// 황금 아잉이 — 아잉 메시 + 금빛 피부(`GoldAingArt.skinResourceName`) + 후광(`GoldAingArt.haloResourceName`).
+        case gold
+    }
+
+    /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금은 코드에 박힌 내장 항목뿐이다).
+    package var finish: Finish {
+        CharacterCatalog.isGoldAing(id) ? .gold : .standard
+    }
+}
+
+/// 황금 아잉이 그림 파일의 이름과 "그릴 수 있다"의 판정. **파일 이름을 적는 곳은 여기 하나다** — 맥 번들 조회·폰 초상·
+/// 아트 스크립트(`scripts/make-gold-aing.swift`)·테스트가 이 이름을 같이 쓴다.
+///
+/// 파일 자리(확장자는 모두 `png`):
+/// - 맥: `Sources/check/Resources/` — `.process` 리소스라 번들 루트에 평탄화된다(아잉 `aing-neutral.png` 와 같은 자리).
+/// - 폰·위젯: `Sources/CheckMobileShared/Resources/Portraits/` — 초상 두 장만(3D 가 없다). 맥 원본과 픽셀이 같아야 한다.
+package nonisolated enum GoldAingArt {
+    package static let characterID = CharacterCatalog.goldAingID
+    package static let resourceExtension = "png"
+
+    /// 초상(192×192). 메뉴바·헤더·카드·남의 아바타가 쓴다. 이름 규칙은 폰 `AingCharacterArt.portraitName` 의 `<id>-<표정>` 과 같다.
+    package static let neutralPortraitResourceName = "\(characterID)-neutral"
+    package static let negativePortraitResourceName = "\(characterID)-negative"
+    package static var portraitResourceNames: [String] { [neutralPortraitResourceName, negativePortraitResourceName] }
+
+    /// 맥 3D 마감 — UV 공간에 구운 금빛 피부(512²)와, 몸 뒤에 세우는 후광 판.
+    package static let skinResourceName = "\(characterID)-skin"
+    package static let haloResourceName = "\(characterID)-halo"
+    package static var finishResourceNames: [String] { [skinResourceName, haloResourceName] }
+
+    /// 플랫폼별 요구 파일. 폰은 3D 를 그리지 않으므로 초상이 전부다.
+    package enum Platform: Sendable, Equatable {
+        case mac
+        case phone
+    }
+
+    package static func requiredResourceNames(for platform: Platform) -> [String] {
+        switch platform {
+        case .mac: return portraitResourceNames + finishResourceNames
+        case .phone: return portraitResourceNames
+        }
+    }
+
+    /// 이 빌드가 황금 아잉이를 **그릴 수 있는가** — 요구 파일이 전부 실재할 때만 참이다.
+    ///
+    /// `resourceExists` 는 주입한다(파일 이름 → 실재 여부). 맥은 번들 조회
+    /// (`{ CheckResources.bundle.url(forResource: $0, withExtension: GoldAingArt.resourceExtension) != nil }`),
+    /// 테스트는 임시 폴더나 가짜 집합을 넣는다. 한 장이라도 없으면 거짓이다 — 초상만 있고 마감이 없는 맥은 금 착용자의
+    /// 오버레이에 보라 아잉을 세우고, 마감만 있고 초상이 없으면 메뉴바·카드가 아잉으로 접힌다.
+    package static func isDrawable(on platform: Platform, resourceExists: (String) -> Bool) -> Bool {
+        requiredResourceNames(for: platform).allSatisfy(resourceExists)
+    }
+}

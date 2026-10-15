@@ -337,7 +337,8 @@ private func v0316TempRoot(_ label: String = "", function: String = #function) -
 
     @Test func 카탈로그_캐릭터_폴더가_아예_없어도_아잉이_있다() {
         let catalog = CharacterCatalog.load(charactersDirectory: nil)
-        #expect(catalog.allIDs == ["aing"])
+        // v0.3.54: 내장 항목이 둘이다(아잉 · 황금 아잉이 — 둘 다 같은 3D 메시라 번들 폴더가 없어도 선다).
+        #expect(catalog.allIDs == ["aing", "aing_gold"])
         #expect(catalog.manifest(id: "aing")?.kind == .scene3D)
         #expect(catalog.manifest(id: "aing")?.displayName == "아잉")
         #expect(catalog.manifest(id: "aing")?.atlas == nil)
@@ -361,7 +362,7 @@ private func v0316TempRoot(_ label: String = "", function: String = #function) -
         try Data("noise".utf8).write(to: root.appendingPathComponent("README.txt"))      // 폴더가 아닌 파일
 
         let catalog = CharacterCatalog.load(charactersDirectory: root)
-        #expect(catalog.allIDs == ["aing", "fox"])
+        #expect(catalog.allIDs == ["aing", "aing_gold", "fox"])
         #expect(catalog.manifest(id: "bot") == nil)
         #expect(catalog.manifest(id: "cat") == nil)
         #expect(catalog.manifest(id: "wolf") == nil)
@@ -383,7 +384,8 @@ private func v0316TempRoot(_ label: String = "", function: String = #function) -
         let catalog = CharacterCatalog(manifests: [
             v0316SpriteManifest(id: "zebra"), v0316SpriteManifest(id: "bot"), v0316SpriteManifest(id: "fox")
         ])
-        #expect(catalog.allIDs == ["aing", "bot", "fox", "zebra"])
+        // v0.3.54: 내장 둘(아잉 · 황금 아잉이)이 앞, 나머지는 id 정렬.
+        #expect(catalog.allIDs == ["aing", "aing_gold", "bot", "fox", "zebra"])
     }
 
     @Test func 카탈로그_에셋_URL_은_캐릭터_폴더_안을_가리킨다() throws {

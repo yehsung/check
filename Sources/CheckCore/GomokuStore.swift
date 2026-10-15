@@ -77,7 +77,7 @@ package nonisolated struct GomokuMatchState: Identifiable, Equatable, Sendable {
     package var isFinished: Bool
     package var outcome: GomokuOutcome?
     package var endReason: GomokuEndReason?
-    package var rubyDelta: Int?            // 이 판으로 내 루비가 변한 양(승 +stake, 패 -stake, 무 0)
+    package var rubyDelta: Int?            // 이 판으로 내 루비가 변한 양(승 +(stake−수수료) · `DuelFee.winnerNet`, 패 -stake, 무 0)
     package var blackPassed: Bool          // 직전에 흑 자동 패스가 있었다
     /// 0.3.28 — 시간이 지나 **서버가 대신 놓은** 자리들(뷰가 작은 회색 점으로 구분해 그린다).
     /// **기본값이 있는 채로 맨 끝에 둔다** — 멤버와이즈 초기화를 쓰는 렌더·창 테스트가 그대로 컴파일돼야 한다.
@@ -1320,7 +1320,9 @@ package final class GomokuStore {
         let stake = row.stake ?? base?.stake ?? 0
         let rubyDelta = outcome.map { result -> Int in
             switch result {
-            case .won: return stake
+            // v0.3.54: 승자 상금 2×판돈에서 수수료 10%(반올림)를 뗀 순이익 — 서버 `duel_fee` 와 같은 식(`DuelFee`).
+            // 서버는 상금 금액을 응답에 안 싣는다 — 이 숫자는 클라 계산이고 잔량 칩(서버 값)과 같은 말을 해야 한다.
+            case .won: return DuelFee.winnerNet(stake: stake)
             case .lost: return -stake
             case .draw: return 0
             }

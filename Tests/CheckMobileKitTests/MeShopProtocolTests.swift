@@ -33,8 +33,9 @@ import Testing
         let known = AingCharacterArt.knownIDs
         let derived = ShopWire.protocolVersion(drawableCharacterIDs: known)
 
-        // 필요충분: 초상 파일이 있다 ⟺ 1 을 보낸다. (둘 중 하나만 고치면 빨개진다 — 그게 이 단언의 일이다.)
-        #expect((derived == ShopWire.robotProtocol) == Self.robotPortraitExists,
+        // 필요충분: 초상 파일이 있다 ⟺ 1 **이상**을 보낸다. (둘 중 하나만 고치면 빨개진다 — 그게 이 단언의 일이다.)
+        // v0.3.54: 번호는 누적이다 — 황금 아잉이 초상까지 있으면 2(⊇ robot). 2 의 기준선은 MeGoldShopProtocolTests 가 잰다.
+        #expect((derived >= ShopWire.robotProtocol) == Self.robotPortraitExists,
                 Comment(rawValue: "초상 \(Self.robotPortraitExists) · 목록 \(known) → \(derived)"))
         #expect(known.contains(ShopWire.robotCharacterID) == Self.robotPortraitExists,
                 "번들 초상과 knownIDs 가 갈렸다 — 목록에만 있으면 아잉이 그려지고, 파일만 있으면 아무도 못 본다")
@@ -47,7 +48,7 @@ import Testing
         guard !Self.robotPortraitExists else {
             // 그림이 들어왔다 = 모바일 세션이 배선할 차례다. 조용히 통과시키지 않고 사실을 적는다.
             #expect(ShopWire.protocolVersion(drawableCharacterIDs: AingCharacterArt.knownIDs)
-                    == ShopWire.robotProtocol,
+                    >= ShopWire.robotProtocol,
                     "robot 초상이 번들에 들어왔는데 폰이 아직 0 을 보낸다 — knownIDs 에 robot 을 더해라")
             return
         }
@@ -123,7 +124,7 @@ import Testing
         await harness.me.loadShop()
         let list = try #require(harness.requests(rpc: "shop_state").last?.jsonBody)
         #expect(list.isEmpty == !Self.robotPortraitExists, Comment(rawValue: "본문 \(list)"))
-        #expect((list["p_protocol"] as? Int == ShopWire.robotProtocol) == Self.robotPortraitExists,
+        #expect(((list["p_protocol"] as? Int ?? ShopWire.legacyProtocol) >= ShopWire.robotProtocol) == Self.robotPortraitExists,
                 Comment(rawValue: "본문 \(list) · 초상 \(Self.robotPortraitExists)"))
     }
 }

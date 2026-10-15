@@ -241,7 +241,7 @@ package nonisolated struct ChessMatchState: Identifiable, Equatable, Sendable {
     package var isFinished: Bool
     package var outcome: ChessMatchOutcome?
     package var endReason: ChessEndReason?
-    /// 이 판으로 내 루비가 변한 양(승 +stake, 패 −stake, 무 0).
+    /// 이 판으로 내 루비가 변한 양(승 +(stake−수수료) · `DuelFee.winnerNet`, 패 −stake, 무 0).
     package var rubyDelta: Int?
     /// 무승부를 제안한 사람의 uuid(없으면 nil).
     package var drawOfferBy: String?
@@ -1173,7 +1173,8 @@ package final class ChessStore {
         let stake = row.stake ?? base?.stake ?? 0
         let rubyDelta = outcome.map { result -> Int in
             switch result {
-            case .won: return stake
+            // v0.3.54: 승자 순이익 = 판돈 − 수수료(반올림 10%) — 서버 `duel_fee` 와 같은 식(`DuelFee`). 무승부 환불엔 수수료가 없다.
+            case .won: return DuelFee.winnerNet(stake: stake)
             case .lost: return -stake
             case .draw: return 0
             }

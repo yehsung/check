@@ -21,6 +21,31 @@ package struct CharacterCatalog: Sendable {
         kind: .scene3D
     )
 
+    /// 황금 아잉이(v0.3.54)의 고정 id. 서버 CHECK·가격표·`gacha_pool` 의 id 와 같다.
+    ///
+    /// ★ **매니페스트 파일로는 못 싣는다**: 파일 매니페스트의 id 문법은 `[a-z0-9-]{1,32}`(밑줄 금지,
+    ///   `CharacterManifest.isValidID`)이고 서버 `shop_state` 는 CHECK 를 `[a-z_]+` 로 읽는다 — 두 문법이 다르다.
+    ///   그리고 scene3D 매니페스트는 초상을 가질 수 없다. 그래서 아잉처럼 **코드에 박는다**(검증을 안 탄다).
+    package static let goldAingID = "aing_gold"
+
+    /// 코드에 박힌 황금 아잉이 — 아잉과 **같은 3D 메시**(aing.scn)에 금빛 마감을 입힌 변형이다.
+    /// 렌더러가 "이건 금 아잉이다"를 아는 길은 `CharacterManifest.finish`(또는 `isGoldAing(_:)`) 하나다 —
+    /// `kind` 는 아잉과 같은 `.scene3D` 라 kind 로 가르면 금 착용자 화면에 보라 아잉이 선다.
+    /// 상점에서는 살 수 없고 뽑기로만 얻는다(서버 `character_prices.gacha_only = true`).
+    package static let builtInGoldAing = CharacterManifest(
+        id: goldAingID,
+        displayName: "황금 아잉이",
+        kind: .scene3D
+    )
+
+    /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이). 번들이 비어도 이 둘은 늘 있다.
+    package static let builtIns: [CharacterManifest] = [builtInAing, builtInGoldAing]
+
+    /// 이 id 가 황금 아잉이인가. 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 `aing_gold` 다).
+    package static func isGoldAing(_ id: String?) -> Bool {
+        id == goldAingID
+    }
+
     /// 카탈로그 한 칸 — 매니페스트와 그 에셋이 있는 폴더. 내장 아잉은 폴더가 없다(씬 파일은 종전 경로).
     package struct Entry: Sendable, Equatable {
         package let manifest: CharacterManifest
@@ -32,12 +57,16 @@ package struct CharacterCatalog: Sendable {
     /// 주어진 항목들로 카탈로그를 만든다. **아잉은 항상 들어가고 항상 이긴다** —
     /// 번들이 `aing` 매니페스트를 실어 보내도 3D 아잉을 덮어쓰지 못하게 한다(폴백 대상이 스프라이트가 되면
     /// "모르는 값 → 아잉" 안전망 자체가 스프라이트 파이프라인에 의존하게 된다).
+    /// 황금 아잉이도 같은 규칙이다(v0.3.54) — 내장 항목이 늘 이긴다.
     package init(entries: [Entry]) {
         var map: [String: Entry] = [:]
-        for entry in entries where entry.manifest.id != Self.builtInAingID {
+        let builtInIDs = Set(Self.builtIns.map(\.id))
+        for entry in entries where !builtInIDs.contains(entry.manifest.id) {
             map[entry.manifest.id] = entry
         }
-        map[Self.builtInAingID] = Entry(manifest: Self.builtInAing, directory: nil)
+        for builtIn in Self.builtIns {
+            map[builtIn.id] = Entry(manifest: builtIn, directory: nil)
+        }
         self.entries = map
     }
 
@@ -54,9 +83,11 @@ package struct CharacterCatalog: Sendable {
         entries[id]
     }
 
-    /// 표시 순서: **아잉 먼저, 나머지는 id 정렬**. 목록이 실행마다 흔들리지 않게 정렬을 여기 한 곳에 둔다.
+    /// 표시 순서: **아잉 먼저, 황금 아잉이 둘째, 나머지는 id 정렬**. 목록이 실행마다 흔들리지 않게 정렬을 여기 한 곳에 둔다.
+    /// (`aing_gold` 는 정렬로도 둘째지만 — `_` 는 소문자보다 앞이다 — 그 우연에 기대지 않고 내장 순서로 박는다.)
     package var allIDs: [String] {
-        [Self.builtInAingID] + entries.keys.filter { $0 != Self.builtInAingID }.sorted()
+        let builtInIDs = Self.builtIns.map(\.id)
+        return builtInIDs + entries.keys.filter { !builtInIDs.contains($0) }.sorted()
     }
 
     /// 아틀라스 PNG 의 절대 URL. 내장 아잉·3D 캐릭터는 nil.

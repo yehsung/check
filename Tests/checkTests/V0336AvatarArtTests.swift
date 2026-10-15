@@ -190,8 +190,11 @@ struct V0336AvatarArtSourceTests {
         for id in AppUserAvatarArt.knownIDs {
             #expect(AppUserAvatarArt.portrait(characterID: id) != nil, "\(id) 를 안다고 해 놓고 못 그린다")
         }
-        // 아는 캐릭터 목록은 번들 카탈로그 그대로다(빈 원이 서지 않게 — V0335 와 같은 계약).
-        #expect(Set(AppUserAvatarArt.knownIDs) == Set(CheckMascotAssets.catalog.allIDs))
+        // 아는 캐릭터 목록은 번들 카탈로그 그대로다(빈 원이 서지 않게 — V0335 와 같은 계약). 황금 아잉이(내장)는 소스 트리에
+        // 금 초상이 있을 때만 세는 것도 V0335 와 같다(v0.3.54).
+        let goldPortraits = V0354CoreArtBaseline.macGoldPortraitsInSourceTree
+        #expect(Set(AppUserAvatarArt.knownIDs)
+                == Set(CheckMascotAssets.catalog.allIDs.filter { !CharacterCatalog.isGoldAing($0) || goldPortraits }))
     }
 }
 

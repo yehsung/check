@@ -35,7 +35,9 @@ struct V0343RobotShopProtocolTests {
         // (가) 그릴 수 있다 → 1, 못 그린다 → 0. 숫자 둘을 다 못 박는다(0 쪽을 빼면 "늘 1" 도 통과한다).
         let host = "shop-new-\(UUID().uuidString.lowercased())"
         let store = Self.store(host: host)
-        #expect(store.shopProtocolVersion == (canDrawRobot ? ShopWire.robotProtocol : ShopWire.legacyProtocol),
+        // v0.3.54: 번호는 누적이다 — 황금 아잉이까지 그리면 2(⊇ robot). 이 스위트가 재는 것은 "robot ⟺ 1 이상" 이고,
+        // 2 의 기준선(금 그림 파일)은 V0354GoldShopProtocolTests 가 잰다.
+        #expect((store.shopProtocolVersion >= ShopWire.robotProtocol) == canDrawRobot,
                 Comment(rawValue: "그림 \(canDrawRobot) · 명단 \(store.drawableCharacterIDs) → \(store.shopProtocolVersion)"))
 
         // (나) 그 값이 **전선에 실제로 나가는지**. 스토어의 진짜 경로(loadShopState)로 보낸다.
@@ -46,8 +48,8 @@ struct V0343RobotShopProtocolTests {
         // 필요충분 ①: p_protocol 키가 실렸다 ⟺ robot 을 그릴 수 있다.
         #expect(body.keys.contains("p_protocol") == canDrawRobot,
                 Comment(rawValue: "본문 \(body) · 그릴 수 있나 \(canDrawRobot)"))
-        // 필요충분 ②: 그 값이 1 이다 ⟺ robot 을 그릴 수 있다.
-        #expect((body["p_protocol"] as? Int == ShopWire.robotProtocol) == canDrawRobot)
+        // 필요충분 ②: 그 값이 1 이상이다 ⟺ robot 을 그릴 수 있다(2 = 황금 아잉이까지 — 누적).
+        #expect(((body["p_protocol"] as? Int ?? ShopWire.legacyProtocol) >= ShopWire.robotProtocol) == canDrawRobot)
         // 필요충분 ③: 본문이 옛 모양 `{}` 다 ⟺ robot 을 못 그린다. (키를 다른 이름으로 실어도 여기서 잡힌다.)
         #expect(body.isEmpty == !canDrawRobot, Comment(rawValue: "본문 \(body)"))
     }

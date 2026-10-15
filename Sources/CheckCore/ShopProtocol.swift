@@ -26,12 +26,35 @@ package nonisolated enum ShopWire {
     /// 이 번호를 요구하는 캐릭터. 서버 `character_prices.min_protocol = 1` 인 행과 같은 id 다.
     package static let robotCharacterID = "robot"
 
+    /// 황금 아잉이(v0.3.54)가 든 명단 + 뽑기(`shop_state.gacha` · `gacha_pull` · `gacha_exchange`)를 받을 수 있는 번호.
+    /// 서버 `character_prices.min_protocol = 2` 인 행이 aing_gold 이고, 뽑기 RPC 는 `p_protocol >= 2` 가 아니면
+    /// `needs_update` 로 거절한다(루비는 안 깎인다). `shop_state` 는 2 미만이면 `gacha` 키를 아예 안 싣는다 —
+    /// 그래서 이 번호가 2 가 아닌 빌드는 **뽑기 화면이 통째로 안 보인다**(클라는 `gacha` 가 없으면 숨긴다).
+    package static let goldProtocol = 2
+
+    /// 이 번호를 요구하는 캐릭터. `CharacterCatalog.goldAingID` 와 같은 값이다(서버 CHECK·가격표의 id).
+    package static let goldCharacterID = CharacterCatalog.goldAingID
+
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
-    /// 맥은 번들 카탈로그(`CharacterCatalog.allIDs` — `Characters/<id>/manifest.json` 이 실재하는 id)가,
-    /// 폰은 `AingCharacterArt.knownIDs`(번들 초상이 있는 id)가 답을 안다. 둘 다 "그림이 있다"의 정본이라
-    /// 그림이 번들에 들어오는 순간 이 값이 저절로 1 이 되고, 그 전에는 저절로 0 이다.
+    /// 맥은 `CheckMascotAssets.drawableCharacterIDs`(초상·아틀라스 **파일 실재**)가, 폰은 `AingCharacterArt.knownIDs`
+    /// (번들 초상이 있는 id)가 답을 안다. 둘 다 "그림이 있다"의 정본이라 그림이 번들에 들어오는 순간 이 값이 저절로
+    /// 오르고, 그 전에는 저절로 낮다. 황금 아잉이가 "그릴 수 있다"의 정의는 `GoldAingArt` 가 한 곳에서 말한다
+    /// (폰 = 초상 두 장, 맥 = 초상 두 장 + 3D 마감 두 장).
+    ///
+    /// ★ **번호는 누적이다.** 서버 게이트는 `min_protocol <= p_protocol` 이라 2 를 보내면 1 짜리(robot)도 받는다.
+    ///   그래서 2 는 "aing_gold **와** robot 을 둘 다 그릴 수 있다"일 때만 보낸다 — 금 그림만 있고 robot 이 없는 번들이
+    ///   2 를 보내면 robot 카드가 아잉 그림으로 팔린다(v0.3.43 이 막은 바로 그 사고). 그 번들은 0 이다
+    ///   (robot 이 없으면 1 도 못 보내고, 2 를 건너뛰어 말할 수도 없다 — 보수적인 쪽으로 틀린다).
     package static func protocolVersion(drawableCharacterIDs: some Sequence<String>) -> Int {
-        drawableCharacterIDs.contains(where: { $0 == robotCharacterID }) ? robotProtocol : legacyProtocol
+        let drawable = Set(drawableCharacterIDs)
+        guard drawable.contains(robotCharacterID) else { return legacyProtocol }
+        return drawable.contains(goldCharacterID) ? goldProtocol : robotProtocol
+    }
+
+    /// 이 번호로 뽑기를 쓸 수 있는가(서버 `gacha_pull`·`gacha_exchange` 의 `p_protocol >= 2` 와 같은 문턱).
+    /// 화면을 여는 판정은 이것이 아니라 **`shop_state.gacha` 의 유무**다 — 서버가 꺼 두면 번호가 2 여도 없다.
+    package static func supportsGacha(protocolVersion: Int) -> Bool {
+        protocolVersion >= goldProtocol
     }
 }

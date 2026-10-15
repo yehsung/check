@@ -97,9 +97,14 @@ private func avFetches(_ host: String) -> Int {
         // 대문자로 넘긴 id 도 같은 사람이다.
         #expect(directory.characterID(for: avFox.uppercased()) == "fox")
         // 맥이 '안다'고 하는 캐릭터 = 번들에 neutral 초상이 **실제로 있는** id — 빈 원이 서지 않는다.
-        #expect(Set(AppUserAvatarArt.knownIDs) == Set(CheckMascotAssets.catalog.allIDs), "번들 카탈로그에 초상 없는 캐릭터가 섞였다")
+        // v0.3.54: 황금 아잉이는 카탈로그 **내장** 항목이라 초상 파일보다 먼저 목록에 든다. 기준선은 소스 트리의 금 초상
+        // 파일이다 — 파일이 있으면 맥도 그 초상을 찾아야 하고(못 찾으면 빨강 = 초상 조회 배선이 빠졌다), 없으면 금만 빠진다.
+        let goldPortraits = V0354CoreArtBaseline.macGoldPortraitsInSourceTree
+        let drawableCatalog = CheckMascotAssets.catalog.allIDs.filter { !CharacterCatalog.isGoldAing($0) || goldPortraits }
+        #expect(Set(AppUserAvatarArt.knownIDs) == Set(drawableCatalog), "번들 카탈로그에 초상 없는 캐릭터가 섞였다")
         #expect(directory.knownIDs == Set(AppUserAvatarArt.knownIDs))
-        #expect(AppUserAvatarArt.knownIDs.count == 7 && AppUserAvatarArt.knownIDs.contains("aing"))
+        #expect(AppUserAvatarArt.knownIDs.count == (goldPortraits ? 8 : 7) && AppUserAvatarArt.knownIDs.contains("aing"),
+                Comment(rawValue: "아는 캐릭터 \(AppUserAvatarArt.knownIDs) · 금 초상 \(goldPortraits)"))
         // 로봇(2026-10-05)은 **폴더만 넣어** 들어온 일곱 번째다 — 카탈로그가 번들 폴더를 실제로 훑는다는 증거다.
         #expect(AppUserAvatarArt.knownIDs.contains("robot"), "로봇이 아는 캐릭터에 없다 — Characters/robot 이 번들에 안 실렸다")
         for id in AppUserAvatarArt.knownIDs {

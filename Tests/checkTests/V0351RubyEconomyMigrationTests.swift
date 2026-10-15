@@ -275,7 +275,8 @@ struct V0351RubyEconomyMigrationTests {
         }
 
         // 이 앱 번들이 세우는 유료 캐릭터 전부가 새 가격을 받는다(빠진 캐릭터는 옛 값 그대로 남아 "2배" 가 거짓이 된다).
-        let paid = Set(CheckMascotAssets.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID })
+        // v0.3.54: 황금 아잉이는 카탈로그에 늘 있지만 **팔지 않는다**(뽑기 전용) — 유료 캐릭터가 아니다.
+        let paid = Set(CheckMascotAssets.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGoldAing($0) })
         #expect(Set(newPrices.keys) == paid, "가격을 고친 캐릭터 \(newPrices.keys.sorted()) ≠ 번들의 유료 캐릭터 \(paid.sorted())")
     }
 

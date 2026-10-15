@@ -1616,6 +1616,9 @@ package struct ShopStateResponse: Decodable, Equatable {
     /// 붙이는 날 이 키를 안 읽으면 상한을 모른 채 요청했다가 `invalid` 를 받는 경로가 생긴다.
     package var ultraBuyMax: Int?
     package var characters: [ShopCharacterRow]?
+    /// 캐릭터 뽑기(v0.3.54) — 서버는 `p_protocol >= 2` 일 때만 이 키를 싣는다. **없으면 뽑기 화면을 통째로 숨긴다**
+    /// (옛 서버 · db push 전 창 · 2 를 못 보내는 빌드). 모양이 깨져 와도 상점 전체가 죽지 않게 `GachaInfo` 가 스스로 삼킨다.
+    package var gacha: GachaInfo?
 }
 
 /// 상점 목록의 한 줄. 가격·보유는 **서버가 말한다**(클라에 가격표를 두지 않는다).
@@ -1623,12 +1626,22 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     package let id: String
     package var price: Int?
     package var owned: Bool?
+    /// 뽑기로만 얻는 캐릭터인가(v0.3.54 — 지금은 황금 아잉이 하나). 참이면 `price` 는 명목값이라 **팔지 않는다**
+    /// (서버 `buy_character` 가 `not_for_sale` 로 거절한다). 이 키를 모르는 옛 서버는 nil — "아니다"로 읽는다.
+    package var gachaOnly: Bool?
 
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
-    package init(id: String, price: Int? = nil, owned: Bool? = nil) {
+    package init(id: String, price: Int? = nil, owned: Bool? = nil, gachaOnly: Bool? = nil) {
         self.id = id
         self.price = price
         self.owned = owned
+        self.gachaOnly = gachaOnly
+    }
+
+    /// 상점에서 살 수 있는 줄인가 — 뽑기 전용이 아니고 값이 있을 때만. (보유 여부는 묻지 않는다 — 그건 화면의 다른 판정이다.)
+    /// 황금 아잉이는 서버 표식과 무관하게 **언제나** 못 산다(사장님 결정 — 뽑기로만). 표식이 빠진 응답이 와도 팔리는 카드가 서지 않게.
+    package var isPurchasable: Bool {
+        gachaOnly != true && !CharacterCatalog.isGoldAing(id) && price != nil
     }
 }
 

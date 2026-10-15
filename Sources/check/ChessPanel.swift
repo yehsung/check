@@ -107,7 +107,8 @@ enum ChessText {
 
     static let stakeTitle = "판돈"
     static let stakeUnknown = "—"
-    static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(stake)" }
+    /// 판돈 줄. 이기면 **순이익**(판돈 − 수수료 10%, `DuelFee.winnerNet` — v0.3.54) — 결과 카드의 루비 변화와 같은 숫자다.
+    static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
     static func watchStakeLine(_ stake: Int) -> String { "\(stake)" }
     static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     static let stakePromptCaption = "판돈을 고르세요"
@@ -1930,7 +1931,8 @@ private struct ChessResultCard: View {
     private var delta: Int {
         if let rubyDelta = match.rubyDelta { return rubyDelta }
         switch match.outcome {
-        case .won?: return match.stake
+        // 서버 값이 없을 때의 대체값도 순이익이다(v0.3.54 수수료 — 스토어의 rubyDelta 와 같은 `DuelFee.winnerNet`).
+        case .won?: return DuelFee.winnerNet(stake: match.stake)
         case .lost?: return -match.stake
         default: return 0
         }
@@ -2344,19 +2346,26 @@ private struct ChessAIPrompt: View {
     }
 }
 
-/// 규칙 보기. FIDE 표준(A2)을 **사용자 어휘**로 줄여 적는다 — 진단·규격 번호는 싣지 않는다.
-private struct ChessRulesOverlay: View {
-    let store: ChessStore
-    let onClose: () -> Void
-
-    static let lines: [(title: String, detail: String)] = [
+/// 규칙 보기의 줄들(v0.3.54 — 테스트가 판돈 줄의 수수료 문구를 값으로 되묻게 오버레이 밖으로 뺐다).
+enum ChessRulesOverlayLines {
+    static let all: [(title: String, detail: String)] = [
         ("기본", "백이 먼저 둡니다. 왕을 잡히지 않게 두면서 상대 왕을 피할 수 없게 만들면(체크메이트) 이깁니다."),
         ("캐슬링", "왕과 룩이 한 번도 움직이지 않았고 사이가 비어 있으면 왕을 두 칸 옮겨 룩과 자리를 바꿉니다."),
         ("앙파상", "상대 폰이 두 칸 전진해 내 폰 옆에 섰다면, 바로 다음 수에 한 칸 지나간 자리로 잡을 수 있습니다."),
         ("승격", "폰이 맨 끝 줄에 닿으면 퀸·룩·비숍·나이트 중 하나로 바꿉니다."),
         ("무승부", "둘 곳이 없는데 체크가 아니면(스테일메이트), 50수 동안 잡기·폰 이동이 없으면, 같은 국면이 세 번 나오면, 메이트할 기물이 없으면, 또는 두 사람이 합의하면 무승부입니다."),
-        ("시간", "시간을 다 쓰면 집니다. 다만 상대에게 메이트할 기물이 없으면 무승부입니다.")
+        ("시간", "시간을 다 쓰면 집니다. 다만 상대에게 메이트할 기물이 없으면 무승부입니다."),
+        // v0.3.54 — 판돈 수수료를 이 창에서 말하는 곳은 이 한 줄이다(숫자는 판돈 줄 "이기면 +N" 이 순이익으로 말한다).
+        ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고(수수료 \(DuelFee.percent)% 빼고), 무승부면 건 판돈을 돌려받아요.")
     ]
+}
+
+/// 규칙 보기. FIDE 표준(A2)을 **사용자 어휘**로 줄여 적는다 — 진단·규격 번호는 싣지 않는다.
+private struct ChessRulesOverlay: View {
+    let store: ChessStore
+    let onClose: () -> Void
+
+    static var lines: [(title: String, detail: String)] { ChessRulesOverlayLines.all }
 
     var body: some View {
         ChessOverlayScrim {

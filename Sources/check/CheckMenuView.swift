@@ -732,7 +732,7 @@ struct CheckMenuView: View {
                             // 소유 게이트(예방). 치료 쪽 짝은 서버의 not_owned 를 받아 로컬을 되돌리는
                             // `WorkTimerStore.pushCharacter` 다 — **둘 다 있어야** 한다.
                             isUnlocked: { store.isCharacterUnlocked($0) },
-                            onLocked: { _ in store.toggleShopPanel() },
+                            onLocked: { store.openShopForLockedCharacter($0) },
                             priceOf: { store.shopPrice(of: $0) }
                         )
                     } else {

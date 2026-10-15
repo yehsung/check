@@ -58,6 +58,9 @@ struct V0336PortraitBoxTests {
         ("shiba", CGSize(width: 151, height: 192)),
         ("squirrel", CGSize(width: 140, height: 192)),
         ("aing", CGSize(width: 164, height: 154)),
+        // v0.3.54 황금 아잉이: 초상에 후광이 구워져 있어(몸 0.88배 + 둘레 빛 — 아트 결정) 알파 상자로 조이면 180×179(빛까지 몸)였다.
+        // 아바타는 **몸 상자 + 둘레 8%** 로 자른다(`CharacterCardArt.bodyFramed`) — 얼굴이 다른 캐릭터와 같은 눈금(19.7pt)에 선다.
+        ("aing_gold", CGSize(width: 164, height: 155)),
     ]
 
     @Test func 높이를_지름에_맞추고_폭은_원본_비대로_따라간다() {
@@ -96,11 +99,12 @@ struct V0336PortraitBoxTests {
         #expect(abs(flat.height - diameter * 1.02 / 4) < 1e-9)
     }
 
+    /// v0.3.54: 황금 아잉이(후광 초상 180×179 — 가로가 세로보다 1px 넓다)도 아잉처럼 상한에 걸린다.
     @Test func 여섯_캐릭터_중_상한에_걸리는_것은_아잉뿐이다() {
         for (id, size) in Self.artSizes {
             let box = AppUserAvatarArt.portraitBox(diameter: 26, artSize: size)
             let capped = abs(box.height - 26 * AppUserAvatarArt.artHeightFraction) > 1e-9
-            #expect(capped == (id == "aing"), "\(id) 가 상한에 \(capped ? "걸렸다" : "안 걸렸다")")
+            #expect(capped == (id == "aing" || id == "aing_gold"), "\(id) 가 상한에 \(capped ? "걸렸다" : "안 걸렸다")")
             // 어느 캐릭터든 원보다 크게 넘치지 않는다(레퍼런스는 1.018/0.80 이었다).
             #expect(box.height <= 26 * 1.03 + 1e-9 && box.width <= 26 * 1.02 + 1e-9)
         }
@@ -144,9 +148,16 @@ struct V0336AvatarArtSourceTests {
             let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
             let raw = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
             #expect(raw.width == 192 && raw.height == 192, "\(id) 초상 캔버스가 192² 가 아니다(\(raw.width)×\(raw.height))")
-            let tight = CharacterCardArt.tightened(raw)
+            // 황금 아잉이(v0.3.54)는 후광이 구워진 초상이라 **몸 상자 + 둘레 8%** 로 자른다(`bodyFramed`) — 알파 상자(빛까지)보다 작다.
+            let gold = CharacterCatalog.isGoldAing(id)
+            let tight = gold ? CharacterCardArt.bodyFramed(raw) : CharacterCardArt.tightened(raw)
             #expect(art.width == tight.width && art.height == tight.height,
                     "\(id) 프로필이 \(art.width)×\(art.height) 인데 조인 초상은 \(tight.width)×\(tight.height) 다")
+            if gold {
+                let alphaBox = CharacterCardArt.tightened(raw)
+                #expect(art.width < alphaBox.width && art.height < alphaBox.height,
+                        "기준선: 금 프로필 \(art.width)×\(art.height) 이 빛까지 조인 \(alphaBox.width)×\(alphaBox.height) 보다 작지 않다")
+            }
             // 캐릭터당 한 번만 디코드·조인한다 — 두 번째 조회는 같은 인스턴스다(행은 hover·갱신마다 다시 그려진다).
             #expect(AppUserAvatarArt.portrait(characterID: id) === art, "\(id) 가 매번 다시 디코드된다")
         }
@@ -204,7 +215,7 @@ struct V0336AvatarArtSourceTests {
 @Suite("v0.3.36 캐릭터별 얼굴 크기")
 struct V0336FaceScaleTests {
     /// 조인 그림의 **행별 가로 폭**(알파 > 8). `CharacterCardArt.alphaBounds` 와 같은 규약(좌상단 원점)으로 한 번 그려 읽는다.
-    static func rowExtents(_ image: CGImage) -> [Int] {
+    static func rowExtents(_ image: CGImage, alphaAbove threshold: UInt8 = 8) -> [Int] {
         let w = image.width, h = image.height
         guard w > 0, h > 0 else { return [] }
         var pixels = [UInt8](repeating: 0, count: w * h * 4)
@@ -217,7 +228,7 @@ struct V0336FaceScaleTests {
         return (0..<h).map { y in
             let row = y * w * 4
             var lo = -1, hi = -1
-            for x in 0..<w where pixels[row + x * 4 + 3] > 8 {
+            for x in 0..<w where pixels[row + x * 4 + 3] > threshold {
                 if lo < 0 { lo = x }
                 hi = x
             }
@@ -229,7 +240,10 @@ struct V0336FaceScaleTests {
     static func earWidthPt(_ id: String, diameter: CGFloat = 26) -> Double? {
         guard let art = AppUserAvatarArt.portrait(characterID: id), art.width > 0 else { return nil }
         let box = AppUserAvatarArt.portraitBox(diameter: diameter, artSize: CGSize(width: art.width, height: art.height))
-        let ext = rowExtents(art)
+        // 황금 아잉이(v0.3.54)의 초상엔 후광(반투명 빛)이 둘러 있다 — 빛은 얼굴이 아니므로 **몸**(불투명, 알파 > 250)으로 잰다.
+        // 알파 > 8 로 재면 남은 빛 고리까지 얼굴로 친다. 실측(몸 상자 + 8% 자르기 뒤): 19.7pt — 띠(19.4~23.3) 안.
+        // (자르기 전 — 알파 상자 180×179 — 엔 18.0pt 로 하한 18.2 밑이었다: 이 계약이 잡았다.)
+        let ext = rowExtents(art, alphaAbove: CharacterCatalog.isGoldAing(id) ? 250 : 8)
         guard let top = ext.prefix(max(1, ext.count / 2)).max() else { return nil }
         return Double(top) * Double(box.width) / Double(art.width)
     }
@@ -251,7 +265,7 @@ struct V0336FaceScaleTests {
         for id in AppUserAvatarArt.knownIDs.sorted() {
             widths.append((id, try #require(Self.earWidthPt(id), "\(id) 를 못 쟀다")))
         }
-        #expect(widths.count == 7, "\(widths.count) 종만 쟀다")
+        #expect(widths.count == 8, "\(widths.count) 종만 쟀다")
         let values = widths.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())
         #expect(hi / lo < 1.30, "얼굴 폭이 \(hi / lo) 배 갈렸다 — \(widths)")

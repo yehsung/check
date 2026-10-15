@@ -121,11 +121,13 @@ enum CheckCharacter3DScene {
             }
             logger.error("sprite scene build failed id=\(character.id, privacy: .public) — 아잉으로 접는다")
         }
-        return makeAingScene(animated: animated)
+        return makeAingScene(animated: animated, finish: character.finish)
     }
 
     /// 내장 아잉(3D) 씬. **v0.3.15 이전의 `makeScene` 본문 그대로다** — 여기에 스프라이트 조건을 섞지 마라.
-    private static func makeAingScene(animated: Bool) -> SCNScene? {
+    /// 황금 아잉이(v0.3.54)는 같은 메시에 금 마감(`GoldAingFinish.apply`)만 더한다 — 카메라를 세운 **뒤**에 입힌다
+    /// (후광 판은 몸 크기 계산에 안 끼게 만들었지만, 프레이밍이 몸만 보고 끝나는 순서를 지키는 편이 확실하다).
+    private static func makeAingScene(animated: Bool, finish: CharacterManifest.Finish = .standard) -> SCNScene? {
         guard let scene = loadModelScene() else { return nil }
         // 씬 배경을 비워 패널 뒤(바탕화면/다른 앱)가 그대로 비치게 한다.
         scene.background.contents = nil
@@ -147,6 +149,9 @@ enum CheckCharacter3DScene {
         scene.rootNode.addChildNode(wrapper)
 
         addFramingCamera(to: scene)
+        if finish == .gold {
+            GoldAingFinish.apply(to: character)
+        }
         addClosedEyeNodes(to: character)
         if animated {
             addIdleAnimations(to: character)
@@ -277,10 +282,14 @@ enum CheckCharacter3DScene {
             // 아잉은 모델을 다시 읽는다(씬 하나에 캐릭터는 한 마리라 예비를 들고 있을 자리가 없다).
             // unlit 정규화 → 감은눈 노드까지 `makeScene` 과 **같은 순서**로 세운다. 순서가 갈리면
             // 감은눈 선이 unlit 정규화를 못 받아 조명에 허옇게 뜬다.
+            // 황금 아잉이(v0.3.54)는 unlit 정규화 **뒤**·감은눈 노드 **앞**에 금 마감을 입힌다(`makeAingScene` 과 같은 순서).
             guard let scene = loadModelScene() else { return nil }
             applyUnlitMaterials(to: scene.rootNode)
             guard let character = scene.rootNode.childNodes.first else { return nil }
             character.removeFromParentNode()
+            if manifest.finish == .gold {
+                GoldAingFinish.apply(to: character)
+            }
             addClosedEyeNodes(to: character)
             return character
         }
@@ -314,7 +323,20 @@ enum CheckCharacter3DScene {
     /// 얼굴 디퓨즈의 눈을 피부로 덮은 "감은 눈" 텍스처를 만든다. 메시 지오메트리로 눈 표면 UV 마스크를 산출해
     /// `SleepEyeTexture` 에 넘긴다(색 분류가 놓치는 눈두덩/안구 하이라이트까지 덮어 유령 눈두덩 제거). 지오메트리가
     /// 없거나 마스크 산출 실패면 nil 마스크로 넘어가 색 기반 폴백으로 동작한다. 엔진·테스트가 공통으로 쓴다.
+    ///
+    /// 황금 아잉이(v0.3.54)의 얼굴이면 **라벤더 원본에서 감은 눈을 굽고** 같은 금 합성을 한다(`GoldAingFinish.closedEyesImage`) —
+    /// 금 디퓨즈에서 바로 구우면 감은 눈의 색 분류가 금 피부를 피부로 못 알아봐 눈꺼풀이 라벤더 얼룩이 된다.
     static func makeClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?) -> CGImage? {
+        if let original = GoldAingFinish.lavenderOriginal(ofGoldFace: faceImage) {
+            return GoldAingFinish.closedEyesImage(goldFace: faceImage, original: original) { lavender in
+                lavenderClosedEyesImage(faceImage: lavender, geometry: geometry)
+            }
+        }
+        return lavenderClosedEyesImage(faceImage: faceImage, geometry: geometry)
+    }
+
+    /// 라벤더(원래 아잉) 얼굴의 감은 눈 굽기 — 종전 `makeClosedEyesImage` 본문 그대로.
+    static func lavenderClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?) -> CGImage? {
         let mask = geometry.flatMap {
             SleepEyeTexture.eyeUVCoverMask(
                 geometry: $0, anchors: closedEyeAnchors.map { $0.position },

@@ -244,7 +244,10 @@ struct CheckCharacterPanel: View {
         // 팝오버가 열릴 때 첫 포커스 링이 카드 위에 사각으로 겹치는 것을 막는다(이 앱의 기존 규약).
         .focusEffectDisabled()
         .accessibilityLabel(isUnlocked(id) ? (manifest?.displayName ?? id)
-                                           : "\(manifest?.displayName ?? id) 잠김 — 상점에서 사기")
+                                           : (CharacterCatalog.isGoldAing(id)
+                                              // 황금 아잉이(v0.3.54)는 상점에서 못 산다 — "상점에서 사기"는 거짓이다.
+                                              ? "\(manifest?.displayName ?? id) 잠김 — \(GachaText.gachaOnlyHint)"
+                                              : "\(manifest?.displayName ?? id) 잠김 — 상점에서 사기"))
         .accessibilityAddTraits(isOn && isUnlocked(id) ? [.isButton, .isSelected] : .isButton)
     }
 }
@@ -338,6 +341,17 @@ enum CharacterCardArt {
         }
         guard maxX >= minX, maxY >= minY else { return nil }
         return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    /// 몸(불투명, 알파 > `bodyThreshold`) 상자에 둘레 `margin`(긴 변 비율)을 더해 자른다 — 후광처럼 몸 밖으로 넓게 번지는 반투명이
+    /// 그림 크기 계산을 차지하지 않게. 자른 가장자리에서 빛이 딱 끊기므로 **원으로 잘리는 자리(사람 아바타)에만** 쓴다 —
+    /// 아바타 상자는 지름보다 크고(높이 1.03 · 폭 1.02) 원이 그 모서리를 가린다. 몸을 못 찾으면 `tightened` 와 같다.
+    static func bodyFramed(_ image: CGImage, bodyThreshold: UInt8 = 250, margin: CGFloat = 0.08) -> CGImage {
+        guard let body = alphaBounds(image, threshold: bodyThreshold) else { return tightened(image) }
+        let pad = (max(body.width, body.height) * margin).rounded()
+        let frame = body.insetBy(dx: -pad, dy: -pad)
+            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return image.cropping(to: frame) ?? tightened(image)
     }
 
     /// 테스트 전용: 캐시를 비운다(에셋을 갈아 끼운 뒤 다시 재려면 필요하다).

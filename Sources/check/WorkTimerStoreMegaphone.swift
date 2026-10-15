@@ -22,6 +22,8 @@ extension WorkTimerStore {
         guard purchasingID == nil else { return }
         shopSelection = nil
         shopNotice = nil
+        // 뽑기 패널(v0.3.54)과 같은 자리를 빌린다 — 둘은 서로 배타다.
+        if isGachaPanelOpen { closeGachaPanel() }
         megaphone.open()
     }
 

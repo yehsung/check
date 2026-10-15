@@ -32,7 +32,12 @@ extension CheckPanelVisibility {
 
 extension CharacterCatalog {
     /// 메뉴바·팝오버용 초상 PNG 의 절대 URL. 내장 아잉·3D 캐릭터는 nil(호출부는 종전 `aing-*.png` 경로를 쓴다).
+    /// 황금 아잉이(v0.3.54 내장)는 폴더가 없고 매니페스트에 초상도 없다 — 번들 루트의 `aing_gold-*.png` 를 준다
+    /// (이 분기가 없으면 메뉴바·헤더·카드는 아잉으로 접히고, 남의 아바타는 이니셜이 된다).
     func portraitURL(for id: String, mood: CheckMascotAssets.Mood) -> URL? {
+        if CharacterCatalog.isGoldAing(id) {
+            return entry(id: id) == nil ? nil : GoldAingFinish.portraitURL(for: mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

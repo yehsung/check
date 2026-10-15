@@ -1216,8 +1216,11 @@ func gomokuTextIsPlainUserLanguage() throws {
     #expect(GomokuText.rubyDelta(10) == "+10")
     #expect(GomokuText.rubyDelta(-5) == "−5")
     #expect(GomokuText.rubyDelta(0) == "±0")
-    // 판돈 줄은 순수익 기준 — 결과 카드의 루비 변화(+10)와 같은 숫자를 말한다.
-    #expect(GomokuText.stakeLine(10) == "10 · 이기면 +10")
+    // 판돈 줄은 순수익 기준 — v0.3.54 부터 승자 상금 20 에서 수수료 2(10%)를 뗀 +8 이다(결과 카드의 루비 변화와 같은 숫자).
+    #expect(GomokuText.stakeLine(10) == "10 · 이기면 +8")
+    #expect(GomokuText.stakeLine(3) == "3 · 이기면 +2" && GomokuText.stakeLine(5) == "5 · 이기면 +4")
+    #expect(GomokuText.stakeCaption.contains("수수료 10%"), "판돈 창이 수수료를 말하지 않는다")
+    #expect(GomokuRuleExample.ruleLines[6].contains("수수료 10%"), "규칙 보기가 수수료를 말하지 않는다")
     #expect(GomokuText.rubyDelta(10) == "+10")
     #expect(GomokuRuleExample.ruleLines[6].contains("판돈만큼 더"), "규칙 보기의 판돈 설명이 결과 카드와 다른 숫자를 말한다")
     #expect(!GomokuRuleExample.ruleLines[6].contains("두 배") && !GomokuText.stakeCaption.contains("두 배"))

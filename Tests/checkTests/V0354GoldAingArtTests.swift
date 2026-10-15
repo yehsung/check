@@ -142,26 +142,15 @@ import Testing
 
     // MARK: - 결과: 감은 눈 커버 합성
 
-    /// 금 합성 마스크 — 시안을 만든 피부 분류(scripts/make-gold-aing.swift `isGoldSkin`, ref render3d.swift isSkin).
-    /// 맥 3D 경로가 이 판정을 앱 코드로 옮기면 그 함수로 바꿔 부른다.
+    /// 금 합성 마스크 — **앱 함수**(`GoldAingFinish.isGoldSkin`, 아트 스크립트 `isGoldSkin` 과 같은 식)를 부른다.
+    /// 예전엔 여기 사본이 있었다 — 사본은 앱이 식을 바꿔도 초록이라 그림과 앱이 갈린 것을 못 잡는다(아키텍트 결정 2026-10-15).
     static func isGoldSkin(_ r: Int, _ g: Int, _ b: Int) -> Bool {
-        let rr = Double(r), gg = Double(g), bb = Double(b)
-        let mx = max(rr, gg, bb), mn = min(rr, gg, bb), sat = mx == 0 ? 0 : (mx - mn) / mx
-        var hue = 0.0
-        if mx != mn {
-            if mx == rr { hue = 60 * ((gg - bb) / (mx - mn)) } else if mx == gg { hue = 60 * ((bb - rr) / (mx - mn) + 2) } else { hue = 60 * ((rr - gg) / (mx - mn) + 4) }
-            if hue < 0 { hue += 360 }
-        }
-        let lum = (0.299 * rr + 0.587 * gg + 0.114 * bb) / 255
-        return hue >= 215 && hue <= 300 && sat > 0.05 && sat < 0.75 && lum > 0.10
+        GoldAingFinish.isGoldSkin(r, g, b)
     }
 
+    /// 앱의 합성(`GoldAingFinish.composite`) 그대로.
     static func composite(_ face: [UInt8], skin: [UInt8]) -> [UInt8] {
-        var out = face
-        for o in stride(from: 0, to: face.count, by: 4) where isGoldSkin(Int(face[o]), Int(face[o + 1]), Int(face[o + 2])) {
-            out[o] = skin[o]; out[o + 1] = skin[o + 1]; out[o + 2] = skin[o + 2]
-        }
-        return out
+        GoldAingFinish.composite(face: face, skin: skin)
     }
 
     @MainActor

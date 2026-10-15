@@ -10,15 +10,17 @@ import SwiftUI
 /// 보유 · 착용 표시는 고르기 화면과 같은 타일 부품(`MeCharacterTile`)이 그린다.
 ///
 /// v0.3.54(폰 1.0.8): 캐릭터 머리 **위**에 뽑기 카드(`MeGachaCard`)가 선다 — 서버가 `shop_state.gacha` 를 줄 때만. 확률표·조각 교환
-/// 시트는 이 화면(루트)이 띄운다. 뽑기 전용 타일(황금 아잉이)을 누르면 사지 않고 얻는 길을 말하며 뽑기 카드로 올라간다.
+/// 시트와 캡슐 뽑기 기계 덮개는 이 화면(루트)이 띄운다. [뽑기] 와 뽑기 전용 타일(황금 아잉이)이 기계를 연다(타일은 사지 않고
+/// 얻는 길도 아래 막대에 말한다).
 struct MeShopView: View {
     let store: MeStore
     @State private var confirming = false
     @State private var showsGachaOdds = false
     @State private var showsGachaExchange = false
+    @State private var showsGachaMachine = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// 뽑기 카드의 스크롤 앵커(뽑기 전용 타일을 누르면 여기로 올라간다).
+    /// 뽑기 카드의 스크롤 앵커(데모 `-AingCheckDemoMeScroll gacha` 가 내려갈 자리).
     private static let gachaAnchor = "gacha"
 
     var body: some View {
@@ -38,7 +40,8 @@ struct MeShopView: View {
                         }
                     }
                     if store.showsGacha {
-                        MeGachaCard(store: store, onOdds: { showsGachaOdds = true }, onExchange: { showsGachaExchange = true })
+                        MeGachaCard(store: store, onPull: { showsGachaMachine = true },
+                                    onOdds: { showsGachaOdds = true }, onExchange: { showsGachaExchange = true })
                             .id(Self.gachaAnchor)
                     }
                     let ids = tileIDs
@@ -48,8 +51,9 @@ struct MeShopView: View {
                     LazyVGrid(columns: MeCharacterTile.columns(dynamicTypeSize), spacing: 10) {
                         ForEach(ids, id: \.self) { id in
                             shopTile(id) {
+                                // 뽑기 전용(황금 아잉이) "뽑기 · 조각 20" → 기계를 연다(뽑기가 열린 서버일 때만 — 아니면 얻을 길이 없다).
                                 guard store.showsGacha, !store.isOwned(id), store.isGachaOnly(id) else { return }
-                                withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(Self.gachaAnchor, anchor: .top) }
+                                showsGachaMachine = true
                             }
                         }
                     }
@@ -87,6 +91,7 @@ struct MeShopView: View {
         }
         .sheet(isPresented: $showsGachaOdds) { MeGachaOddsSheet(store: store) }
         .sheet(isPresented: $showsGachaExchange) { MeGachaExchangeSheet(store: store) }
+        .gachaMachineCover(store: store, isPresented: $showsGachaMachine)
         .confirmationDialog(confirmTitle, isPresented: $confirming, titleVisibility: .visible) {
             Button(MeText.buyAction) { store.confirmPurchase() }
             Button("취소", role: .cancel) {}
@@ -119,12 +124,14 @@ struct MeShopView: View {
         MeText.purchaseConfirmTitle(name: store.shopSelection.map(MeCharacterCards.displayName(for:)) ?? "")
     }
 
-    /// 데모(DEBUG) 스크린샷: `-AingCheckDemoMeGacha odds|exchange|pull` — 서버 뽑기 정보가 선 뒤 그 시트를 열거나 한 번 뽑는다.
+    /// 데모(DEBUG) 스크린샷: `-AingCheckDemoMeGacha odds|exchange|pull|machine` — 서버 뽑기 정보가 선 뒤 그 시트를 열거나 · 한 번
+    /// 뽑거나 · 기계 덮개를 연다. **한 번만**(덮개가 닫혀 상점이 다시 뜰 때마다 또 열리지 않게).
     private func openDemoGachaSheetIfAsked() {
-        switch MeDemoHooks.gachaAction() {
+        switch MeDemoHooks.takeGachaAction() {
         case "odds": showsGachaOdds = true
         case "exchange": showsGachaExchange = true
         case "pull": store.pullGacha()
+        case "machine": showsGachaMachine = true
         default: break
         }
     }
@@ -306,6 +313,7 @@ struct MeCharacterPreviewCard: View {
 /// 캐릭터 고르기: 위에 지금 입은 캐릭터를 크게(무엇이 바뀌는지) · 아래 상점과 같은 타일(착용 = 파랑 테두리 + 체크 · 보유 · 가격).
 struct MeCharacterPickerView: View {
     let store: MeStore
+    @State private var showsGachaMachine = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -336,6 +344,7 @@ struct MeCharacterPickerView: View {
         .navigationTitle(MeText.pickerTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { store.charactersDidAppear() }
+        .gachaMachineCover(store: store, isPresented: $showsGachaMachine)
     }
 
     /// 지금 입은 캐릭터 크게 + 이 캐릭터가 어디에 나오는지.
@@ -410,7 +419,12 @@ struct MeCharacterPickerView: View {
             ? "\(name), 잠김 — \(MeText.gachaAcquirePhrase(shardCost: store.gachaShardCost(of: id)))"
             : "\(name), 잠김 — 상점에서 사기"
         return Button {
-            store.chooseCharacter(id)
+            // 안 가진 뽑기 전용(황금 아잉이) "뽑기 · 조각 20" → 기계를 연다(뽑기가 열린 서버일 때만 — 아니면 얻는 길을 말한다).
+            if store.showsGacha, !store.isOwned(id), store.isGachaOnly(id) {
+                showsGachaMachine = true
+            } else {
+                store.chooseCharacter(id)
+            }
         } label: {
             MeCharacterTile(id: id, name: name, status: status, mark: isOn ? .equipped : .none)
         }

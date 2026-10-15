@@ -410,14 +410,24 @@ enum MeDemoHooks {
         #endif
     }
 
-    /// 상점 뽑기 장면(`-AingCheckDemoMeGacha odds|exchange|pull`) — 확률표·교환 시트를 열거나 한 번 뽑는다(결과 연출 스크린샷용).
-    /// 뽑기 응답은 데모 픽스처(`Demo/Fixtures/me/rpc.gacha_pull.json`)다 — 실제 서버에 닿지 않는다.
+    /// 상점 뽑기 장면(`-AingCheckDemoMeGacha odds|exchange|pull|machine`) — 확률표·교환 시트를 열거나 · 한 번 뽑거나 · 캡슐 뽑기
+    /// 기계 덮개를 연다(스크린샷용). 뽑기 응답은 데모 픽스처(`Demo/Fixtures/me/rpc.gacha_pull.json`)다 — 실제 서버에 닿지 않는다.
     static func gachaAction() -> String? {
         #if DEBUG
         return argument("-AingCheckDemoMeGacha")
         #else
         return nil
         #endif
+    }
+
+    private static var gachaActionTaken = false
+
+    /// `gachaAction()` 을 **한 번만** 내준다 — 기계 덮개가 닫혀 상점이 다시 뜰 때마다 덮개가 또 열리지 않게.
+    static func takeGachaAction() -> String? {
+        guard !gachaActionTaken else { return nil }
+        guard let action = gachaAction() else { return nil }
+        gachaActionTaken = true
+        return action
     }
 
     /// 루트 대신 열 하위 화면(`-AingCheckDemoMeScreen characters|profile|grass|grass-token`) — 라우트가 없는 화면을 찍을 때.

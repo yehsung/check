@@ -79,7 +79,18 @@ extension MeStore {
 
     // MARK: 뽑기
 
-    /// [뽑기 · 50] 한 번. 떠 있는 요청이 있으면 아무것도 안 한다(연타 = 요청 하나).
+    /// 뽑기 한 번이 어떻게 끝났나(카드 · 기계 공용 몸통의 답).
+    enum GachaPullStep: Equatable {
+        /// 서버가 답했다(어떤 status 든 — 화면에 옮긴 뒤 · 뽑혔으면 상점 다시 읽기까지 끝난 뒤).
+        case answered(GachaPullOutcome)
+        /// 결과를 모른다(오프라인 · 5xx · 해석 실패) — request_id 를 **쥔 채** 둔다.
+        case unknown
+        /// 로그아웃 · 취소로 버렸다(아무것도 안 옮겼다).
+        case dropped
+    }
+
+    /// [뽑기 · 50] 한 번(데모 장면용 — 사용자의 뽑기는 기계 덮개의 손잡이가 `pullGachaForMachine()` 으로 한다).
+    /// 떠 있는 요청이 있으면 아무것도 안 한다(연타 = 요청 하나).
     package func pullGacha() {
         guard !isPulling, context.session.isSignedIn else { return }
         let availability = gachaPullAvailability
@@ -94,6 +105,71 @@ extension MeStore {
             }
             return
         }
+        startGachaPull { _ in }
+    }
+
+    // MARK: 캡슐 기계(폰 전체 화면 덮개)
+
+    /// 기계가 손잡이 한 바퀴를 다 돌렸을 때 **한 번** 부른다(`GachaMachineView.pull`). 카드 [뽑기] 와 **같은 몸통**
+    /// (`startGachaPull` — 사용자 동작 하나 = request_id 하나 · 결과를 모르면 id 를 쥔다 · 세대 가드 · 루비 미러 · 뽑은 뒤 상점 다시 읽기)을
+    /// 지나고, 서버가 뽑아 줬을 때만 결과를 돌려준다. 그 밖은 전부 던진다 — 기계는 공개 없이 한 줄을 띄우고 처음으로 돌아간다.
+    ///
+    /// - 떠 있는 뽑기가 있으면 요청 없이 던진다(덮개를 닫았다 다시 연 새 기계가 앞 판을 모르고 또 돌린 경우 — 두 번 깎지 않는다).
+    /// - 요청은 **스토어의 일**로 뜬다(`launch`): 덮개가 닫혀 이 함수를 기다리던 쪽이 사라져도 끊기지 않고, 응답은 화면이 없어도
+    ///   옮겨진다(루비 · 보유 · 상점 카드의 마지막 결과 줄). 로그아웃만 그 일을 끊는다(`reset()`).
+    package func pullGachaForMachine() async throws -> GachaRevealOutcome {
+        guard !isPulling else { throw GachaRevealFailure(message: MeText.gachaPullBusy) }
+        guard context.session.isSignedIn else { throw GachaRevealFailure(message: GachaText.notSignedIn) }
+        let availability = gachaPullAvailability
+        guard availability.canPull else {
+            if case .unknownBalance = availability {
+                // 잔량을 모르면 깎지 않는다(카드와 같은 관용) — 다시 읽어 잔량을 안 뒤에 다시 돌리게 한다.
+                launch { [weak self] in await self?.loadShop() }
+            }
+            throw GachaRevealFailure(message: GachaText.blockedReason(availability) ?? MeText.loading)
+        }
+        // 서버가 뒤 조각 수를 안 실었을 때만 쓰는 '앞' 값(칩이 앞 → 뒤로 올라간다).
+        let shardsBefore = gachaShards ?? 0
+        let step = await withCheckedContinuation { (continuation: CheckedContinuation<GachaPullStep, Never>) in
+            startGachaPull { continuation.resume(returning: $0) }
+        }
+        switch step {
+        case .answered(.pulled(let result)):
+            return GachaRevealOutcome(result: result, name: gachaName(result.characterID), shardsBefore: shardsBefore)
+        case .answered(let other):
+            throw GachaRevealFailure(message: GachaText.notice(for: other) ?? GachaText.pullFailed)
+        case .unknown:
+            throw GachaRevealFailure(message: GachaText.connection)
+        case .dropped:
+            throw CancellationError()
+        }
+    }
+
+    /// 기계 손잡이를 잠글 이유(없으면 nil). 루비 모자람은 기계가 잔액·값으로 스스로 말하므로 여기 없다.
+    /// - Parameter machineOwnsPull: 이 기계가 띄운 뽑기가 떠 있는가 — 그 판은 기계가 스스로 연출하므로 막지 않는다.
+    ///   덮개를 닫았다 다시 열었는데 앞 뽑기가 아직 떠 있으면(새 기계는 그 판을 모른다) 손잡이를 잠근다.
+    package func gachaMachineBlockedReason(machineOwnsPull: Bool) -> String? {
+        guard context.session.isSignedIn else { return GachaText.notSignedIn }
+        if isPulling && !machineOwnsPull { return MeText.gachaPullBusy }
+        switch gachaPullAvailability {
+        case .ready, .short: return nil
+        // 잔량을 모른다 — 0 으로 그려 "모자라요"라고 거짓말하지 않는다(덮개가 뜰 때 다시 읽는다).
+        case .unknownBalance: return MeText.loading
+        case .unavailable: return GachaText.unavailable
+        }
+    }
+
+    /// 덮개가 떴을 때: 잔량을 모르면 다시 읽는다(모르는 채로는 손잡이가 잠겨 있다).
+    package func gachaMachineDidAppear() {
+        guard context.session.isSignedIn, rubyBalance == nil, !shopState.isLoading else { return }
+        launch { [weak self] in await self?.loadShop() }
+    }
+
+    // MARK: 뽑기 몸통
+
+    /// 요청 하나를 스토어의 일로 띄우고, 끝나면 `completion` 을 **꼭 한 번** 부른다(카드 · 기계 공용).
+    /// 부르기 전에 호출부가 `!isPulling` · 로그인 · 판정 ready 를 봤다.
+    private func startGachaPull(completion: @escaping @MainActor (GachaPullStep) -> Void) {
         let requestID = gachaRequestIDs.pullID()
         isPulling = true
         gachaNotice = nil
@@ -102,14 +178,22 @@ extension MeStore {
         let service = context.service
         let protocolVersion = shopProtocolVersion
         launch { [weak self] in
-            guard let self else { return }
-            defer { if generation == self.context.generation { self.isPulling = false } }
+            guard let self else { completion(.dropped); return }
+            var step = GachaPullStep.dropped
+            defer {
+                if generation == self.context.generation { self.isPulling = false }
+                completion(step)
+            }
             do {
                 let response = try await self.context.withMobileSessionRetry { session in
                     try await service.gachaPull(accessToken: session.accessToken, protocolVersion: protocolVersion,
                                                 requestID: requestID)
                 }
-                await self.applyGachaPullResponse(response, requestID: requestID, generation: generation)
+                // 옮긴 뒤(뽑혔으면 다시 읽기까지) 세대가 그대로일 때만 답이다 — 그 사이 로그아웃했으면 기계에 결과를 넘기지 않는다.
+                if let outcome = await self.applyGachaPullResponse(response, requestID: requestID, generation: generation),
+                   generation == self.context.generation {
+                    step = .answered(outcome)
+                }
             } catch {
                 guard generation == self.context.generation else { return }
                 if AuthErrorRules.classify(error) == .cancelled { return }
@@ -117,9 +201,11 @@ extension MeStore {
                     // 함수가 없다(서버에서 아무것도 안 돌았다) — id 를 버려도 된다.
                     self.gachaRequestIDs.settlePull(requestID)
                     self.gachaNotice = GachaText.notice(for: known)
+                    step = .answered(known)
                 } else {
                     // 결과를 모른다 — id 를 **쥔 채** 둔다(다시 누르면 같은 id 로 묻는다).
                     self.gachaNotice = GachaText.connection
+                    step = .unknown
                 }
                 self.isGachaNoticeError = true
             }
@@ -127,8 +213,10 @@ extension MeStore {
     }
 
     /// 뽑기 응답을 화면에 옮긴다. **보낼 때의 세대가 아니면 아무것도 안 한다**(로그아웃 경합 — `applyPurchaseResponse` 주석).
-    func applyGachaPullResponse(_ response: GachaPullResponse, requestID: UUID, generation: Int) async {
-        guard generation == context.generation else { return }
+    /// 돌려주는 값: 옮긴 결과(세대가 바뀌어 버렸으면 nil).
+    @discardableResult
+    func applyGachaPullResponse(_ response: GachaPullResponse, requestID: UUID, generation: Int) async -> GachaPullOutcome? {
+        guard generation == context.generation else { return nil }
         // 서버가 답을 줬다(어떤 status 든) — 이 id 의 일은 끝났다. 다음 누름은 새 동작이다.
         gachaRequestIDs.settlePull(requestID)
         // 잔량·조각은 실린 것만(서버 값) — 모르는 칸을 0 으로 적지 않는다.
@@ -158,6 +246,7 @@ extension MeStore {
             gachaNotice = GachaText.notice(for: outcome)
             isGachaNoticeError = true
         }
+        return outcome
     }
 
     // MARK: 조각 교환

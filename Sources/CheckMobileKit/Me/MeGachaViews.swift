@@ -5,15 +5,19 @@ import SwiftUI
 
 // MARK: - 캐릭터 뽑기 카드 (v0.3.54 · 폰 1.0.8)
 
-/// 상점 맨 위 뽑기 카드: 제목 + 1회 값 · 결과 연출(마지막 결과) · [뽑기 · 50] · 막힌 이유 · [확률 보기] [조각 N개 · 교환].
+/// 상점 맨 위 뽑기 카드: 제목 + 1회 값 · 마지막 결과 한 줄 · [뽑기 · 50] · 막힌 이유 · [확률 보기] [조각 N개 · 교환].
 ///
-/// 판정·문구는 코어(`GachaRules` · `GachaText`)가 맥과 한 벌로 들고 있다 — 이 뷰는 그리기만 한다. 시트(확률표 · 교환)는 화면 루트
-/// (`MeShopView`)가 띄운다(시트는 루트만 띄운다는 관례).
+/// 판정·문구는 코어(`GachaRules` · `GachaText`)가 맥과 한 벌로 들고 있다 — 이 뷰는 그리기만 한다. 시트(확률표 · 교환)와
+/// 기계 덮개는 화면 루트(`MeShopView`)가 띄운다(시트는 루트만 띄운다는 관례).
+///
+/// v0.3.54 공개판: [뽑기] 는 **캡슐 뽑기 기계**(전체 화면 덮개 · `MeGachaMachineScreen`)를 연다 — 뽑기는 기계의 손잡이가 한다.
+/// 예전의 짧은 결과 연출은 걷었고, 카드에는 마지막 결과 한 줄만 남는다(덮개를 공개 전에 닫았어도 무엇을 뽑았는지 보인다).
 ///
 /// [뽑기] 는 **틴트**다: 이 화면의 채운 버튼은 아래 구매 막대 하나다(화면당 채운 버튼 하나 — `MeDesignContractTests`).
-/// 뽑기에는 확인 대화상자를 두지 않는다(맥 뽑기 패널과 같다) — 버튼 글자가 값을 말하고, 요청이 떠 있는 동안 잠겨 연타가 요청 하나다.
+/// 뽑을 수 없으면(루비 모자람 · 잔량 모름 · 앞 뽑기가 떠 있음) 잠기고 이유가 아래 줄에 선다.
 struct MeGachaCard: View {
     let store: MeStore
+    let onPull: () -> Void
     let onOdds: () -> Void
     let onExchange: () -> Void
 
@@ -34,8 +38,7 @@ struct MeGachaCard: View {
                     .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let result = store.lastGachaResult {
-                    MeGachaResultView(result: result, name: store.gachaName(result.characterID))
-                        .id(store.gachaRevealSerial)
+                    MeGachaLastResultRow(result: result, name: store.gachaName(result.characterID))
                 }
                 pullButton(price: price)
                 if let detail = store.gachaDetail {
@@ -54,7 +57,7 @@ struct MeGachaCard: View {
 
     private func pullButton(price: Int) -> some View {
         Button {
-            store.pullGacha()
+            onPull()
         } label: {
             HStack(spacing: 6) {
                 if store.isPulling {
@@ -78,49 +81,27 @@ struct MeGachaCard: View {
     }
 }
 
-/// 뽑기 결과 한 칸 — 짧게(0.8초 안) 튀어나온다. 황금 아잉이는 금빛 후광 + "황금 아잉이!" · 새 캐릭터 "새 캐릭터: 여우" ·
+/// 마지막 뽑기 결과 한 줄(움직임 없음 — 연출은 기계 몫이다). 황금 아잉이는 금빛 바탕 + "황금 아잉이!" · 새 캐릭터 "새 캐릭터: 여우" ·
 /// 중복 "이미 있는 여우 → 조각 +1"(문구는 코어 `GachaText` — 맥과 같은 글자).
-///
-/// 움직임과 나타남을 **다른 곡선·다른 상태**로 준다: 크기는 스프링(0.45초 · 살짝 튕김), 불투명은 0.12초 직선 — 같은 easeOut 으로
-/// 둘 다 깎으면 커지기 전에 흐려 보인다(메모리 '이징으로 불투명도를 깎지 마라'). 동작 줄이기를 켜면 크기 변화 없이 나타나기만 한다.
-/// 새 결과마다 카드가 `.id(gachaRevealSerial)` 로 새로 서므로 같은 캐릭터가 연달아 나와도 다시 튀어나온다.
-struct MeGachaResultView: View {
+struct MeGachaLastResultRow: View {
     let result: GachaPullResult
     let name: String
-    @State private var visible = false
-    @State private var grown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let isGold = result.kind == .gold
         let shape = RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous)
+        let headline = GachaText.headline(for: result, name: name)
+        let detail = GachaText.detail(for: result, name: name)
         HStack(spacing: MobileTheme.space3) {
-            ZStack {
-                if isGold {
-                    Circle()
-                        .fill(RadialGradient(colors: [MobileTheme.gold.opacity(0.55), MobileTheme.gold.opacity(0)],
-                                             center: .center, startRadius: 4, endRadius: 46))
-                        .frame(width: 92, height: 92)
-                        .scaleEffect(grown ? 1 : 0.4)
-                }
-                MeCharacterArt(id: result.characterID, size: 64)
-                    .scaleEffect(grown ? 1 : 0.55)
-            }
-            .frame(width: 76, height: 76)
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    if isGold {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(MobileTheme.gold)
-                            .accessibilityHidden(true)
-                    }
-                    Text(GachaText.headline(for: result, name: name))
-                        .font(.headline)
-                        .foregroundStyle(MobileTheme.label)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let detail = GachaText.detail(for: result, name: name) {
+            MeCharacterArt(id: result.characterID, size: 40)
+                .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headline)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.label)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail {
                     Text(detail)
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.label2)
@@ -132,16 +113,106 @@ struct MeGachaResultView: View {
         .padding(MobileTheme.space2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(shape.fill(isGold ? MobileTheme.gold.opacity(0.14) : MobileTheme.surface2))
-        .opacity(visible ? 1 : 0)
-        .accessibilityElement(children: .combine)
-        .onAppear {
-            withAnimation(.linear(duration: 0.12)) { visible = true }
-            if reduceMotion {
-                grown = true
-            } else {
-                withAnimation(.spring(duration: 0.45, bounce: 0.25)) { grown = true }
-            }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text([MeText.gachaLastResult, headline, detail].compactMap { $0 }.joined(separator: ", ")))
+    }
+}
+
+// MARK: - 캡슐 뽑기 기계(전체 화면 덮개)
+
+extension View {
+    /// 캡슐 뽑기 기계 덮개(상점 [뽑기] · 뽑기 전용 타일이 연다). 덮개는 아래로 끌어 닫히지 않는다 — 왼쪽 위 ✕ 와 기계의 [닫기] 가 닫는다.
+    func gachaMachineCover(store: MeStore, isPresented: Binding<Bool>) -> some View {
+        fullScreenCover(isPresented: isPresented) {
+            MeGachaMachineScreen(store: store, onClose: { isPresented.wrappedValue = false })
         }
+    }
+}
+
+/// 캡슐 뽑기 기계를 폰 전체 화면에 띄운다(코어 `GachaMachineView` — 맥 뽑기 창과 같은 뷰 · 같은 그림 `.bundled`).
+///
+/// - 뽑기: 손잡이 한 바퀴 = `store.pullGachaForMachine()` 한 번(요청 id · 세대 가드 · 루비 미러 · 다시 읽기는 카드와 같은 몸통).
+///   기계는 잔액 · 조각을 스스로 안 바꾼다 — 넘기는 값은 전부 스토어의 서버 값이다.
+/// - `isActive`: 앱이 앞(`scenePhase == .active`)이고 · 덮개가 떠 있고 · 확률 시트가 기계를 가리지 않을 때만. 아니면 매 프레임 그리기를 멈춘다.
+/// - 손잡이 잠금: 로그인 · 뽑기 닫힘 · 잔량 모름 · **이 기계가 모르는 앞 뽑기**(닫았다 다시 연 덮개)만 막는다(`gachaMachineBlockedReason`).
+/// - 덮개를 공개 전에 닫아도 요청은 끊기지 않는다(스토어의 일) — 결과는 상점 카드의 마지막 결과 줄에 선다.
+struct MeGachaMachineScreen: View {
+    let store: MeStore
+    let onClose: () -> Void
+
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.displayScale) private var displayScale
+    @State private var haptics = MeGachaHaptics()
+    /// 덮개가 떠 있는가(onAppear ~ onDisappear).
+    @State private var isShown = false
+    /// 이 기계가 띄운 뽑기가 떠 있는가(그 판은 막지 않는다 — `gachaMachineBlockedReason(machineOwnsPull:)`).
+    @State private var ownsPull = false
+    @State private var showsOdds = false
+
+    var body: some View {
+        GachaMachineView(
+            balance: store.rubyBalance ?? 0,
+            cost: store.gachaInfo?.price ?? 0,
+            shards: store.gachaShards ?? 0,
+            rubyIcon: rubyIcon,
+            portrait: portrait,
+            art: .bundled,
+            haptics: haptics,
+            isActive: isShown && scenePhase == .active && !showsOdds,
+            blockedReason: store.gachaMachineBlockedReason(machineOwnsPull: ownsPull),
+            againEnabled: !store.isPulling,
+            pull: { try await pull() },
+            onClose: onClose
+        )
+        .ignoresSafeArea()
+        .overlay(alignment: .top) { chrome }
+        .onAppear {
+            isShown = true
+            store.gachaMachineDidAppear()
+        }
+        .onDisappear { isShown = false }
+        .sheet(isPresented: $showsOdds) { MeGachaOddsSheet(store: store) }
+    }
+
+    /// 왼쪽 위 ✕(시트 머리 관례) · 오른쪽 위 [확률 보기](사기 전에 확률을 볼 수 있는 자리 — 카드와 같은 시트).
+    private var chrome: some View {
+        HStack {
+            GlassCircleButton(systemImage: "xmark", accessibilityLabel: SheetChromeText.close, action: onClose)
+            Spacer(minLength: MobileTheme.space2)
+            Button { showsOdds = true } label: {
+                GlassPill {
+                    Image(systemName: "percent")
+                        .font(.footnote.weight(.semibold))
+                        .accessibilityHidden(true)
+                    Text(GachaText.oddsButton)
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(MobileTheme.label)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, MobileTheme.sideMargin)
+        .padding(.top, MobileTheme.space2)
+    }
+
+    private func pull() async throws -> GachaRevealOutcome {
+        ownsPull = true
+        defer { ownsPull = false }
+        return try await store.pullGachaForMachine()
+    }
+
+    private var rubyIcon: Image {
+        // 기계 칩은 15~18pt × 무대 배율(≈1.03) — 24pt 로 고르면 3배 화면에서 ruby-96 이 온다(뭉개지지 않는다).
+        // 그림이 없으면 빈 자리(루비를 SF 기호로 대신하지 않는다 — `RubyIcon` 과 같은 규칙).
+        Image(uiImage: MobileArt.ruby(pointSize: 24, displayScale: displayScale) ?? UIImage())
+    }
+
+    private func portrait(_ id: String) -> Image {
+        // 기계는 초상을 150~172pt × 무대 배율로 그린다 — 그 크기면 여섯 캐릭터는 무대용 420px, 아잉 · 황금 아잉이는 192px 초상이 온다.
+        guard let image = MobileArt.character(id: id, expression: .neutral, pointSize: 180, displayScale: displayScale) else {
+            return Image(systemName: "questionmark.circle")
+        }
+        return Image(uiImage: image)
     }
 }
 

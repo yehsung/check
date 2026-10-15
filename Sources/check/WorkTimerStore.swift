@@ -777,6 +777,9 @@ final class WorkTimerStore {
     var shopLoaded = false
     var shopLoading = false
     var shopFailed = false
+    /// 상점 변이(뽑기 · 교환 · 구매) 응답을 옮길 때마다 오르는 순번(v0.3.54). `loadShopState` 가 떠날 때 찍어 두고, 도착했을 때
+    /// 달라졌으면 그 응답은 **변이 전에 나간 조회**라 잔량·보유·조각을 덮지 않는다(`loadShopState` 주석). 화면이 읽지 않는다.
+    @ObservationIgnored var shopMutationSerial = 0
     /// 상점 화면에 띄우는 한 줄(구매 결과·실패). nil 이면 안 띄운다.
     var shopNotice: String?
     /// 상점에서 **고른 것**(아직 산 것이 아니다). nil = 아무것도 안 골랐다.

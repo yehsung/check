@@ -364,7 +364,8 @@ struct GamesGomokuResult: View {
     private var delta: Int {
         if let rubyDelta = match.rubyDelta { return rubyDelta }
         switch match.outcome {
-        case .won?: return match.stake
+        // v0.3.54: 승자 순이익 = 판돈 − 수수료(`DuelFee.winnerNet` — 서버 `duel_fee` 와 같은 식). 패배·무승부엔 수수료가 없다.
+        case .won?: return DuelFee.winnerNet(stake: match.stake)
         case .lost?: return -match.stake
         default: return 0
         }

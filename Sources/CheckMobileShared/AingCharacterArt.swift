@@ -4,10 +4,10 @@ import CoreGraphics
 import ImageIO
 #endif
 
-/// 캐릭터 초상 그림(7 캐릭터 × 표정 2 = 14장) — **앱과 위젯 확장이 함께 읽는 번들 리소스**(App Group 이 아니다).
+/// 캐릭터 초상 그림(8 캐릭터 × 표정 2 = 16장) — **앱과 위젯 확장이 함께 읽는 번들 리소스**(App Group 이 아니다).
 ///
-/// 원본은 맥 에셋 그대로다: 스프라이트는 `Sources/check/Characters/<id>/portrait-{neutral,negative}.png`, 아잉은
-/// `Sources/check/Resources/aing-{neutral,negative}.png`(모두 192px — 맥 원본 해상도). 이 패키지 리소스(`Resources/Portraits`)는
+/// 원본은 맥 에셋 그대로다: 스프라이트는 `Sources/check/Characters/<id>/portrait-{neutral,negative}.png`, 아잉·황금 아잉이는
+/// `Sources/check/Resources/<id>-{neutral,negative}.png`(모두 192px — 맥 원본 해상도). 이 패키지 리소스(`Resources/Portraits`)는
 /// 그 사본이고, `BaseComponentTests` 가 **픽셀 단위로** 원본과 같은지 잰다(맥 그림이 바뀌면 빨강 — 사본은 재압축돼 바이트가 다르다).
 ///
 /// 표정은 근무 상태다(맥 헤더 문법): 근무 중·연결 끊김 = neutral(웃음), 근무 안 함 = negative(시무룩).
@@ -16,7 +16,12 @@ public enum AingCharacterArt {
     public static let defaultID = "aing"
 
     /// 이 번들에 초상이 있는 캐릭터(아잉 먼저, 나머지 이름순 — 코어 `CharacterCatalog` 순서 규칙과 같다).
-    public static let knownIDs: [String] = ["aing", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"]
+    ///
+    /// v0.3.54(폰 1.0.8): 황금 아잉이(`aing_gold` — 뽑기·조각 교환으로만 얻는다)의 초상 두 장이 들어와 8 캐릭터가 됐다.
+    /// ★ 이 목록이 상점 능력 번호의 재료다(`MeStore.drawableCharacterIDs` → `ShopWire.protocolVersion`): 여기 `aing_gold` 가
+    ///   있어야 폰이 2 를 보내고, 서버가 그제야 금 행과 뽑기(`shop_state.gacha`)를 내려 준다. 초상 파일 없이 이름만 더하면
+    ///   아잉 그림의 "황금 아잉이"를 뽑게 된다 — `MeGoldShopProtocolTests` 가 파일 ⟺ 목록을 양방향으로 잰다.
+    public static let knownIDs: [String] = ["aing", "aing_gold", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"]
 
     public enum Expression: String, CaseIterable, Sendable {
         /// 웃는 얼굴(근무 중 · 연결 끊김 · 상태 없음).
@@ -38,7 +43,7 @@ public enum AingCharacterArt {
         "\(resolvedID(id))-\(expression.rawValue)"
     }
 
-    /// 초상 파일 위치(번들 안). 없으면 nil — 이 빌드의 리소스가 빠졌다는 뜻이다(테스트가 14장 모두 있는지 잰다).
+    /// 초상 파일 위치(번들 안). 없으면 nil — 이 빌드의 리소스가 빠졌다는 뜻이다(테스트가 16장 모두 있는지 잰다).
     public static func portraitURL(id: String, expression: Expression, bundle: Bundle? = nil) -> URL? {
         (bundle ?? .module).url(forResource: portraitName(id: id, expression: expression), withExtension: "png", subdirectory: "Portraits")
     }

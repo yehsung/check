@@ -83,6 +83,9 @@ package final class MeStore {
     package internal(set) var shopState = MeLoadState()
     package internal(set) var shopSelection: String?
     package internal(set) var shopNotice: String?
+    /// 상점에서 마지막으로 누른 뽑기 전용 타일(황금 아잉이). 안내 줄(`shopBarDetail`)이 **읽을 때** 문장을 만든다 —
+    /// 누를 때 만들어 두면 상점이 아직 안 읽힌 순간의 "뽑기로만"이 교환값(조각 20)을 안 뒤에도 남는다(시뮬레이터 실측).
+    package internal(set) var shopGachaHintID: String?
     package internal(set) var purchasingID: String?
     /// 상점 RPC(`shop_state`·`buy_character`)에 싣는 능력 번호의 **재료**: 이 번들에 초상이 있는 캐릭터 id.
     ///
@@ -104,6 +107,27 @@ package final class MeStore {
     package internal(set) var savingCharacterID: String?
     package internal(set) var characterNotice: String?
     package internal(set) var isCharacterNoticeError = false
+
+    // MARK: 캐릭터 뽑기 (v0.3.54 · 폰 1.0.8 — MeStoreGacha.swift)
+    /// 서버 `shop_state.gacha`(1회 값 · 내 조각 · 확률표 · 교환값). **nil = 서버가 안 줬다**(옛 서버 · db push 전 · 2 를 못 보내는
+    /// 빌드) — 뽑기 화면을 통째로 숨긴다. 값은 서버 응답으로만 바꾼다(클라가 조각을 스스로 더하거나 빼지 않는다).
+    package internal(set) var gachaInfo: GachaInfo?
+    /// 뽑기 요청이 떠 있다 — 버튼이 잠기고, 두 번 눌러도 요청은 하나다.
+    package internal(set) var isPulling = false
+    /// 마지막 뽑기 결과(결과 연출 · 상점 화면을 떠나면 비운다).
+    package internal(set) var lastGachaResult: GachaPullResult?
+    /// 결과가 새로 설 때마다 오른다 — 같은 캐릭터가 연달아 나와도 화면이 연출을 다시 튼다.
+    package internal(set) var gachaRevealSerial = 0
+    /// 뽑기 카드의 한 줄(실패·거절). 결과는 연출이 말하므로 여기 쓰지 않는다.
+    package internal(set) var gachaNotice: String?
+    package internal(set) var isGachaNoticeError = false
+    /// 조각 교환이 떠 있는 캐릭터(그 줄만 스피너 · 나머지 줄은 잠긴다).
+    package internal(set) var exchangingID: String?
+    /// 교환 시트의 한 줄(교환 완료 · 거절 · 실패).
+    package internal(set) var exchangeNotice: String?
+    package internal(set) var isExchangeNoticeError = false
+    /// 사용자 동작 한 번 = request_id 하나(결과를 모르는 실패 뒤 다시 누르면 같은 id — 서버가 처음 결과를 `replayed` 로 돌려준다).
+    @ObservationIgnored package internal(set) var gachaRequestIDs = GachaRequestIDs()
 
     // MARK: 프로필 편집
     package var displayNameDraft = ""
@@ -219,6 +243,7 @@ package final class MeStore {
         shopState = MeLoadState()
         shopSelection = nil
         shopNotice = nil
+        shopGachaHintID = nil
         purchasingID = nil
         equippedServerID = nil
         equippedLoaded = false
@@ -226,6 +251,18 @@ package final class MeStore {
         savingCharacterID = nil
         characterNotice = nil
         isCharacterNoticeError = false
+        // 뽑기도 계정에 묶인다 — 안 비우면 앞 사람의 조각 수·결과 연출이 다음 계정 화면에 서고, 앞 사람의 request_id 로
+        // 다음 사람이 뽑는다(서버는 (사용자, id) 로 묶으니 깎이진 않지만, 결과를 모르는 채 쥔 id 가 남는다).
+        gachaInfo = nil
+        isPulling = false
+        lastGachaResult = nil
+        gachaRevealSerial = 0
+        gachaNotice = nil
+        isGachaNoticeError = false
+        exchangingID = nil
+        exchangeNotice = nil
+        isExchangeNoticeError = false
+        gachaRequestIDs.reset()
         displayNameDraft = ""
         isProfileVisible = false
         displayNameNotice = nil

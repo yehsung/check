@@ -47,8 +47,12 @@ extension MeStore {
 
     /// 서버가 말한 상점 상태를 옮긴다. **nil 은 건너뛴다** — 모르는 것을 0 으로 적지 않는다(맥 applyShopState).
     /// 울트라 잔량·가격 칸은 읽지 않는다(폰에 울트라 가지가 없다).
+    ///
+    /// 뽑기(v0.3.54)는 예외로 **없음도 사실이다**: 서버는 `p_protocol >= 2` 일 때만 `gacha` 를 싣고, 없으면 뽑기를 닫았다는 뜻이다
+    /// (옛 서버 · db push 전 · 404 로 옛 모양에 되물은 응답). 그래서 받은 그대로 옮긴다 — 지난 값을 남기면 서버가 닫은 뽑기가 열려 있다.
     func applyShopState(_ state: ShopStateResponse) {
         if let ruby = state.rubyBalance { context.gomokuHost.rubyBalance = ruby }
+        gachaInfo = state.gacha
         guard let rows = state.characters else { return }
         shopCharacters = rows
         var owned: Set<String> = [MeCharacterCards.aingID]
@@ -96,8 +100,13 @@ extension MeStore {
     }
 
     /// 고르기 목록: 아잉 + 이 빌드가 아는 캐릭터 + 서버가 준 모르는 캐릭터(이름은 id).
+    ///
+    /// 뽑기 전용(황금 아잉이)은 **서버 상점이 그 캐릭터를 말했거나 내가 가졌을 때만** 선다 — 뽑기가 아직 없는 서버(db push 전 ·
+    /// 옛 서버)에서 얻을 길이 없는 "뽑기 전용" 타일이 서지 않게. 상점을 아직 못 읽었으면 막지 않는다(다른 캐릭터와 같은 관용).
     package var pickerIDs: [String] {
-        var ids = MeCharacterCards.knownIDs
+        var ids = MeCharacterCards.knownIDs.filter { id in
+            !shopState.hasLoaded || !isGachaOnly(id) || isOwned(id) || shopCharacters.contains { $0.id == id }
+        }
         for row in shopCharacters where !ids.contains(row.id) { ids.append(row.id) }
         return ids
     }
@@ -111,8 +120,16 @@ extension MeStore {
         !shopState.hasLoaded || isOwned(id)
     }
 
+    /// 상점가. **살 수 있는 줄만** 값이 있다 — 뽑기 전용(황금 아잉이)의 `price` 는 서버가 싣는 명목값(1000)이라 화면·구매에 쓰면
+    /// [1000 사기] 가 켜지고 서버가 `not_for_sale` 로 거절한다(`ShopCharacterRow.isPurchasable`).
     package func price(of id: String) -> Int? {
-        shopCharacters.first { $0.id == id }?.price
+        guard let row = shopCharacters.first(where: { $0.id == id }), row.isPurchasable else { return nil }
+        return row.price
+    }
+
+    /// 뽑기·조각 교환으로만 얻는 캐릭터인가(서버 표식 · 황금 아잉이는 표식과 무관하게 언제나).
+    package func isGachaOnly(_ id: String) -> Bool {
+        CharacterCatalog.isGoldAing(id) || shopCharacters.first { $0.id == id }?.gachaOnly == true
     }
 
     // MARK: 상점
@@ -120,9 +137,17 @@ extension MeStore {
     /// 카드를 눌렀을 때. **고르기만 한다.** 이미 가진 것은 고르지 않고 그 사실을 말한다. 같은 것을 다시 누르면 선택을 푼다.
     package func selectShopItem(_ id: String) {
         guard purchasingID == nil else { return }
+        shopGachaHintID = nil
         if isOwned(id) {
             shopSelection = nil
             shopNotice = MeText.alreadyOwned
+            return
+        }
+        // 뽑기 전용은 사는 줄이 아니다 — 고르지 않고 얻는 길(뽑기 · 조각 교환)을 말한다. 화면은 이 안내와 함께 뽑기 카드로 올라간다.
+        if isGachaOnly(id) {
+            shopSelection = nil
+            shopNotice = nil
+            shopGachaHintID = id
             return
         }
         shopSelection = (shopSelection == id) ? nil : id
@@ -143,6 +168,9 @@ extension MeStore {
     /// 하단 바 두 번째 줄(맥 `ShopText.barDetail`): 안내가 있으면 안내, 모자라면 모자란 만큼.
     package var shopBarDetail: String? {
         if let shopNotice { return shopNotice }
+        if let id = shopGachaHintID {
+            return MeText.gachaOnlyNotice(MeCharacterCards.displayName(for: id), shardCost: gachaShardCost(of: id))
+        }
         guard shopSelection != nil, let price = shopSelectionPrice, let have = rubyBalance, have < price else { return nil }
         return CheckCoreShared.shortfallNotice(need: price, have: have)
     }
@@ -205,7 +233,11 @@ extension MeStore {
     package func chooseCharacter(_ id: String) {
         guard savingCharacterID == nil, context.session.isSignedIn else { return }
         guard isUnlocked(id) else {
-            characterNotice = MeText.lockedCharacter(MeCharacterCards.displayName(for: id))
+            // 뽑기 전용(황금 아잉이)에게 "상점에서 살 수 있어요"는 거짓이다 — 얻는 길을 그대로 말한다.
+            let name = MeCharacterCards.displayName(for: id)
+            characterNotice = isGachaOnly(id)
+                ? MeText.lockedGachaCharacter(name, shardCost: gachaShardCost(of: id))
+                : MeText.lockedCharacter(name)
             isCharacterNoticeError = false
             return
         }
@@ -239,7 +271,7 @@ extension MeStore {
                 case "not_owned":
                     // 다른 기기에서 환불·운영자 정리 등으로 소유가 사라졌다 — 상점 상태를 다시 읽어 화면을 사실에 맞춘다.
                     self.ownedCharacterIDs.remove(id)
-                    self.characterNotice = MeText.characterNotOwned
+                    self.characterNotice = self.isGachaOnly(id) ? MeText.gachaCharacterNotOwned : MeText.characterNotOwned
                     self.isCharacterNoticeError = true
                     needsReread = !self.equippedLoaded
                     await self.loadShop()
@@ -271,6 +303,8 @@ extension MeStore {
 
     package func shopDidDisappear() {
         shopNotice = nil
+        shopGachaHintID = nil
         if purchasingID == nil { shopSelection = nil }
+        gachaDidDisappear()
     }
 }

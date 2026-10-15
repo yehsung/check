@@ -88,6 +88,7 @@ FORBIDDEN_STRINGS=(
   "aing-check-update"                # 분리 프로세스 업데이터 스크립트·로그
   "account/usage/read"               # codex app-server 프로브
   "/opt/homebrew/bin/agy"            # 안티그래비티 CLI 실행
+  "uninstall --cask"                 # brew 판 물러남의 `brew uninstall --cask`(0.3.53 — `brew uninstall` 은 14바이트라 명령 꼬리로 잰다)
 )
 
 SECRETS_DIR="${MAS_SECRETS_DIR:-$HOME/.aing-check-secrets/mas}"

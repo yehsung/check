@@ -13,6 +13,10 @@ extension WorkTimerStore {
     /// 조건 미달이면 아무것도 하지 않고 nil — 비로그인/키 없음 실행에서 요청이 0건이어야 하는 계약이다.
     @discardableResult
     func activateStoredSessionOnLaunch() -> Task<Void, Never>? {
+        #if !CHECK_MAS
+        // 물러난 실행(v0.3.53)은 저장 세션을 살리지 않는다(토큰 회전·팀 확정·폴링·하트비트 0건 — `retiredForAppStoreEdition`).
+        guard !retiredForAppStoreEdition else { return nil }
+        #endif
         guard shouldActivateOnLaunch else { return nil }
         let task = Task { @MainActor [weak self] in
             await self?.performActivateStoredSession()
@@ -34,6 +38,10 @@ extension WorkTimerStore {
         guard session != nil else {
             return
         }
+        #if !CHECK_MAS
+        // 물러난 실행(v0.3.53) — 팝오버의 `.task` 가 어떻게든 돌아도 여기서 멈춘다(메뉴바 아이콘 게이트의 2차 방어).
+        guard !retiredForAppStoreEdition else { return }
+        #endif
         // 실행당 1회만 전체 활성화(토큰 회전 + 멤버십 확정)한다. 이후 팝오버 여닫이에선 refresh 만 돌려
         // refresh token 회전(+reuse-detection 리스크)을 없앤다. access token 만료는 401 재시도 경로가 담당한다.
         if hasActivatedStoredSession {

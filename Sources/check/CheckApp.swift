@@ -12,39 +12,67 @@ struct CheckApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
+        #if CHECK_MAS
         MenuBarExtra {
-            CheckMenuView(store: appDelegate.store, updateCheck: appDelegate.updateCheck)
-                // ★ 폭을 여기서 씌우지 않는다(v0.2.48). 팝오버는 화면에 따라 자기 폭을 스스로 정한다 —
-                // 메인(레일 있음) 414 / 로그인·무소속 340. 예전처럼 `.frame(width: 340)` 으로 감싸면
-                // MenuBarExtra 창이 340 에 갇히고 414 짜리 내용이 가운데 정렬로 넘쳐 오른쪽 레일이
-                // 창 밖으로 잘린다(테스트는 자연 폭으로 그려서 못 잡는다 — 실앱에서만 보이는 결함).
-                // 폭의 근거는 CheckMenuView.mainWindowWidth 주석에 있다.
-                // 팝오버 창의 위쪽 모서리를 고정 — 콘텐츠 높이 변화 시 위로 튀어 상단이 잘리는 것을 막는다
-                // (동적 높이는 유지, 창은 아래로만 성장/수축). 그림은 그리지 않는 배경 뷰.
-                // 창 키 획득/상실도 setMenuPresented 로 흘려 티커/폴링 게이팅의 이중 안전망을 만든다.
-                .background(WindowAnchorAccessor(onVisibilityChange: { appDelegate.store.setMenuPresented($0) }))
+            menuContent
         } label: {
-            // 아이콘 판정만 스냅샷을 읽고, 글자는 스토어의 파생 저장값(menuBarTitle)을 그대로 그린다.
-            // 업데이트 점: 근무를 안 하면 캐릭터 말풍선이 뜰 자리가 없고, 팝오버를 안 열면 배너도 못 본다 — 그런 사람에게
-            // 새 버전을 알릴 곳은 늘 떠 있는 이 아이콘뿐이다. 업데이트 스토어가 @Observable 이라 여기서 읽는 것만으로
-            // 새 릴리스가 잡힌 순간 라벨이 다시 그려진다.
-            // v0.3.30: 같은 점이 **안 읽은 메시지**와 **받은 오목 신청**에도 켜진다 — 둘 다 근무 밖에서 오게 됐고(서버가 근무
-            // 조건을 지웠다), 캐릭터가 없는 사람에게 알릴 곳이 여기뿐인 사정이 업데이트와 같다. 두 스토어 모두 @Observable 이라
-            // 읽는 것만으로 값이 바뀐 순간 라벨이 다시 그려진다(신청 만료는 오목 스토어의 타이머가 `incoming` 을 비워서 내린다).
-            MenuBarStatusLabel(
-                snapshot: appDelegate.store.snapshot,
-                title: appDelegate.store.menuBarTitle,
-                updateAvailable: appDelegate.updateCheck.isUpdateAvailable,
-                hasUnreadMessages: appDelegate.store.hasUnreadMessages,
-                hasGomokuInvite: !appDelegate.store.gomoku.pendingIncomingInvites.isEmpty,
-                // v0.3.34: 운영자에게 미해결 신고가 있으면 같은 점. 건수는 서버가 운영자에게만 준다(판정은 여기서 하지 않는다).
-                hasOpenReports: appDelegate.store.reportOpenCount > 0,
-                // v0.3.44: 받은 **체스** 신청도 같은 점. 체스 창을 여는 길은 미니게임 머리글 하나뿐이고 체스 폴링은
-                // 창이 보일 때만 돌아서, 창을 안 연 사람에게 이 점은 신청을 아는 세 표면(점·팝오버 배너·말풍선) 중 하나다.
-                hasChessInvite: appDelegate.store.chess.visibleIncoming != nil
-            )
+            menuLabel
         }
         .menuBarExtraStyle(.window)
+        #else
+        // ★ 물러남(v0.3.53): 같은 맥에 **설치된 앱스토어 판**이 있으면 아이콘을 **넣지 않는다**(첫 렌더부터). 팝오버를 열면
+        //   `CheckMenuView` 의 `.task { await store.activateStoredSession() }` 이 세션을 살린다 — 아이콘이 있으면 그 길이 열린다.
+        //   값은 델리게이트가 만들어지는 순간 정해진다(`AppStoreRetirementState.live()`). 실행 중 물러남이 값을 내리면 아이콘도
+        //   곧바로 내려간다(2026-10-15 실측 — 읽기 클로저 안의 관찰 값도 추적된다). 앱스토어 판은 위 갈래다(이 판정이 없다).
+        //   쓰기는 **사용자가 ⌘-끌기로 아이콘을 뺀 것**뿐이다. 이 갈래의 상태 항목은 빼낼 수 있는데 빼도 앱이 안 끝나서(위 갈래는
+        //   빼면 끝난다 — 실측), 그대로 두면 아이콘 없는 앱이 남는다. 그래서 위 갈래와 같은 결과(종료)를 낸다.
+        MenuBarExtra(isInserted: Binding(get: { appDelegate.retirement.menuBarInserted }, set: { inserted in
+            guard appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        })) {
+            menuContent
+        } label: {
+            menuLabel
+        }
+        .menuBarExtraStyle(.window)
+        #endif
+    }
+
+    /// 팝오버 본문. 두 판의 `MenuBarExtra` 가 같은 본문을 쓴다(판마다 한 벌씩 적으면 언젠가 갈린다).
+    private var menuContent: some View {
+        CheckMenuView(store: appDelegate.store, updateCheck: appDelegate.updateCheck)
+            // ★ 폭을 여기서 씌우지 않는다(v0.2.48). 팝오버는 화면에 따라 자기 폭을 스스로 정한다 —
+            // 메인(레일 있음) 414 / 로그인·무소속 340. 예전처럼 `.frame(width: 340)` 으로 감싸면
+            // MenuBarExtra 창이 340 에 갇히고 414 짜리 내용이 가운데 정렬로 넘쳐 오른쪽 레일이
+            // 창 밖으로 잘린다(테스트는 자연 폭으로 그려서 못 잡는다 — 실앱에서만 보이는 결함).
+            // 폭의 근거는 CheckMenuView.mainWindowWidth 주석에 있다.
+            // 팝오버 창의 위쪽 모서리를 고정 — 콘텐츠 높이 변화 시 위로 튀어 상단이 잘리는 것을 막는다
+            // (동적 높이는 유지, 창은 아래로만 성장/수축). 그림은 그리지 않는 배경 뷰.
+            // 창 키 획득/상실도 setMenuPresented 로 흘려 티커/폴링 게이팅의 이중 안전망을 만든다.
+            .background(WindowAnchorAccessor(onVisibilityChange: { appDelegate.store.setMenuPresented($0) }))
+    }
+
+    /// 메뉴바 라벨(아이콘 + 글자). 두 판의 `MenuBarExtra` 가 같은 라벨을 쓴다.
+    private var menuLabel: some View {
+        // 아이콘 판정만 스냅샷을 읽고, 글자는 스토어의 파생 저장값(menuBarTitle)을 그대로 그린다.
+        // 업데이트 점: 근무를 안 하면 캐릭터 말풍선이 뜰 자리가 없고, 팝오버를 안 열면 배너도 못 본다 — 그런 사람에게
+        // 새 버전을 알릴 곳은 늘 떠 있는 이 아이콘뿐이다. 업데이트 스토어가 @Observable 이라 여기서 읽는 것만으로
+        // 새 릴리스가 잡힌 순간 라벨이 다시 그려진다.
+        // v0.3.30: 같은 점이 **안 읽은 메시지**와 **받은 오목 신청**에도 켜진다 — 둘 다 근무 밖에서 오게 됐고(서버가 근무
+        // 조건을 지웠다), 캐릭터가 없는 사람에게 알릴 곳이 여기뿐인 사정이 업데이트와 같다. 두 스토어 모두 @Observable 이라
+        // 읽는 것만으로 값이 바뀐 순간 라벨이 다시 그려진다(신청 만료는 오목 스토어의 타이머가 `incoming` 을 비워서 내린다).
+        MenuBarStatusLabel(
+            snapshot: appDelegate.store.snapshot,
+            title: appDelegate.store.menuBarTitle,
+            updateAvailable: appDelegate.updateCheck.isUpdateAvailable,
+            hasUnreadMessages: appDelegate.store.hasUnreadMessages,
+            hasGomokuInvite: !appDelegate.store.gomoku.pendingIncomingInvites.isEmpty,
+            // v0.3.34: 운영자에게 미해결 신고가 있으면 같은 점. 건수는 서버가 운영자에게만 준다(판정은 여기서 하지 않는다).
+            hasOpenReports: appDelegate.store.reportOpenCount > 0,
+            // v0.3.44: 받은 **체스** 신청도 같은 점. 체스 창을 여는 길은 미니게임 머리글 하나뿐이고 체스 폴링은
+            // 창이 보일 때만 돌아서, 창을 안 연 사람에게 이 점은 신청을 아는 세 표면(점·팝오버 배너·말풍선) 중 하나다.
+            hasChessInvite: appDelegate.store.chess.visibleIncoming != nil
+        )
     }
 }
 
@@ -88,6 +116,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var workShortcut: WorkShortcutCoordinator?
     // 맥 앱스토어 판의 첫 실행 안내·다른 판 경고(v0.3.51). 창 델리게이트라 앱 수명 동안 붙든다.
     private var masOnboarding: MacAppStoreOnboardingController?
+    #if !CHECK_MAS
+    /// 앱스토어 판이 설치된 맥에서 이 판이 물러나는가(v0.3.53). **델리게이트가 만들어지는 순간** 정한다 — 메뉴바 아이콘
+    /// (`CheckApp.body` 의 `isInserted`)이 첫 렌더부터 이 값을 읽어야 해서 `applicationDidFinishLaunching` 까지 기다릴 수 없다.
+    let retirement = AppStoreRetirementState.live()
+    /// 물러남 창(물러남 모드에서만). 창 델리게이트라 앱 수명 동안 붙든다.
+    private var retireWindow: AppStoreRetireWindowController?
+    /// 실행 중에 앱스토어 판이 켜지는지 보는 감시자(물러나지 않은 실행에서만). 앱 수명 동안 붙든다.
+    private var appStoreLaunchWatcher: AppStoreEditionLaunchWatcher?
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // ★ 가장 먼저 SIGTERM 을 평소 종료 절차로 잇는다(v0.3.49). DMG 로 설치한 사람의 [지금 업데이트]는
@@ -96,6 +133,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //   (왜 신호인지·왜 AppleScript 가 아닌지는 `GracefulTerminationSignal` 주석에 있다).
         //   로그아웃·시스템 종료의 SIGTERM 도 같은 길로 들어와 근무가 마무리된다.
         GracefulTerminationSignal.install()
+        #if !CHECK_MAS
+        // ★ 물러남(v0.3.53) — 같은 맥에 **설치된 앱스토어 판**이 있으면 여기서 멈춘다. 아래 배선(오버레이 · 할 일 · 오목/체스 ·
+        //   단축키 · 업데이트/공지 감시 · 로그인 항목 · 세션 활성화 · 첫 실행 안내)을 **하나도** 하지 않고 물러남 창 하나만 띄운다.
+        //   그래서 이 갈래는 그 어느 배선보다 앞이어야 한다(뒤에 두면 세션이 살아난 뒤에 멈춘다 — V0353 이 순서를 되묻는다).
+        if let appStoreEdition = retirement.launchAppStoreEdition {
+            enterRetiredMode(appStoreEdition: appStoreEdition)
+            return
+        }
+        // 물러나지 않은 실행은 실행 중에 앱스토어 판이 켜지는지 본다(켜지면 근무를 마무리하고 물러남 모드로 다시 뜬다).
+        startWatchingForAppStoreEdition()
+        #endif
         // 오버레이 컨트롤러를 **먼저** 만든다. 바로 아래 실행 킥이 서버에 열려 있던 세션을 흡수해 곧장 근무중으로
         // 복구할 수 있는데, 그 순간 표시 전환과 리액션/찔림 싱크(store.onReactionTrigger / onPokesReceived)가
         // 이미 배선돼 있어야 캐릭터 등장과 밀린 찔림이 통째로 유실되지 않는다.
@@ -355,10 +403,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 한 번 더 보낸다(v0.3.39) — 폰이 "앱이 다시 active 가 될 때 `retryPendingSubmitIfAny()`" 하는 자리와 같다.
     /// 인편이 없으면 no-op 이라 활성화마다 비용이 없고, 같은 토큰이라 두 번 올라가지도 않는다(서버가 `token_used`).
     func applicationDidBecomeActive(_ notification: Notification) {
+        #if !CHECK_MAS
+        // 물러난 실행(v0.3.53)은 물러남 창을 띄우며 앱이 활성화된다 — 그때 인편을 밀면 서버에 점수가 간다.
+        guard !store.retiredForAppStoreEdition else { return }
+        #endif
         store.retryMiniGamePendingSubmitIfAny()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        #if !CHECK_MAS
+        // 물러난 실행(v0.3.53)은 퇴근 동기화를 하지 않는다 — 실행 시점 물러남은 세션을 살린 적이 없고, 실행 중 물러남은
+        // 근무를 이미 마무리한 뒤에 이 표식을 세운다(`retireMidRun`).
+        if store.retiredForAppStoreEdition { return .terminateNow }
+        #endif
         // 로그인 안 됨/키 없음/근무중 아님 → 지연할 이유가 없으므로 즉시 종료.
         // 흡수 세션(다른 맥이 연 세션)도 즉시 종료다: finishWorkBeforeQuit 이 같은 표식을 보고 즉시 반환하므로
         // 여기서 걸러 내지 않으면 .terminateLater 를 돌려놓고 아무것도 안 하는 헛왕복이 되어 종료만 한 틱 늦는다.
@@ -373,6 +430,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateLater
     }
+
+    #if !CHECK_MAS
+    // MARK: 물러남 (v0.3.53 — 같은 맥에 설치된 앱스토어 판이 있다)
+
+    /// 실행 시점 물러남(B). 스토어 게이트를 세우고(저장 세션 활성화 · 근무 시작 · AI 기록 읽기·업로드 · 깨어남이 전부 no-op)
+    /// 물러남 창 하나만 띄운다. 메뉴바 아이콘은 이미 없다(`retirement.menuBarInserted` 가 첫 렌더부터 거짓).
+    private func enterRetiredMode(appStoreEdition: URL) {
+        store.retiredForAppStoreEdition = true
+        let window = AppStoreRetireWindowController(
+            appStoreEdition: appStoreEdition,
+            finishedWork: retirement.finishedWorkBeforeRelaunch,
+            previousRemovalFailed: AppStoreRetireRemoval.previousBrewUninstallFailed()
+        )
+        retireWindow = window
+        window.present()
+    }
+
+    /// 실행 중 감지(C)를 건다 — 판정은 `AppStoreEditionRetirement.midRunDecision`(설치된 앱스토어 판일 때만 · 탈출구 키).
+    /// ★ `workspace:` 가 **주 경로**다(실행 중 앱 목록 KVO). 앱스토어 판은 LSUIElement 라 켜짐 통지가 오지 않는다(2026-10-15 실측).
+    private func startWatchingForAppStoreEdition() {
+        appStoreLaunchWatcher = AppStoreEditionLaunchWatcher(
+            center: NSWorkspace.shared.notificationCenter,
+            workspace: NSWorkspace.shared,
+            decide: { bundleIdentifier, bundleURL in
+                AppStoreEditionRetirement.midRunDecision(
+                    launchedBundleIdentifier: bundleIdentifier,
+                    launchedBundleURL: bundleURL,
+                    edition: .current,
+                    defaults: .standard
+                )
+            },
+            onAppStoreEditionLaunched: { [weak self] appStoreEdition in
+                Task { @MainActor in await self?.retireMidRun(appStoreEdition: appStoreEdition) }
+            }
+        )
+    }
+
+    /// 실행 중 물러남(C): 내가 연 근무면 평소 종료처럼 마무리하고(`applicationShouldTerminate` 와 같은 조건 · 같은 함수),
+    /// 스토어 게이트를 세운 뒤, 자기를 **새 인스턴스로** 다시 띄워 물러남 모드로 들어가게 하고 이 인스턴스는 끝난다.
+    /// 같은 프로세스에서 루프를 하나씩 멈추는 길은 스토어가 커서 누락 위험이 크다. 재실행이 실패해도 종료는 한다.
+    private func retireMidRun(appStoreEdition: URL) async {
+        guard retirement.beginMidRunRetirement() else { return }
+        // 근무 시작부터 막는다 — 아래 마무리 동기화(최대 3초)를 기다리는 동안 단축키·넛지가 새 근무를 열면 그 세션은 곧 버려진다.
+        store.retiringForAppStoreEdition = true
+        let finishedWork = AppStoreEditionRetirement.shouldFinishWorkBeforeRetiring(
+            isSignedIn: store.isSignedIn,
+            startedAt: store.startedAt,
+            adoptedRemoteSession: store.adoptedRemoteSession
+        )
+        if finishedWork { await store.finishWorkBeforeQuit() }
+        store.retiredForAppStoreEdition = true
+        appStoreLaunchWatcher?.stop()
+        await AppStoreRetireEffects.relaunchSelf(
+            arguments: AppStoreEditionRetirement.relaunchArguments(finishedWork: finishedWork, appStoreEdition: appStoreEdition)
+        )
+        NSApp.terminate(nil)
+    }
+    #endif
 }
 
 // MARK: - 캐릭터 ↔ 할 일 보드 배선

@@ -35,9 +35,47 @@
 
 **키체인** — 세션 토큰의 service 가 `kingcheck.mas` 다. 같은 맥의 brew 판 항목(`kingcheck`)을 건드리지 않는다(남의 ACL 에서 `SecItem` 이 멈추거나 brew 판이 로그아웃되는 사고를 막는다). 앱스토어 판으로 옮기는 사람은 한 번 다시 로그인한다.
 
-**다른 판 동시 실행** — brew 판(`kingcheck`)이 함께 돌고 있으면(실행 중에 켜져도) 한 번 알린다. 막지는 않는다.
+**다른 판 동시 실행** — brew 판(`kingcheck`)이 함께 돌고 있으면(실행 중에 켜져도) 한 번 알린다. 막지는 않는다(0.3.52 이하 brew 판을 쓰는 사람용 — 0.3.53 부터는 brew 판 쪽이 물러난다, 아래 절).
 
 **진단 명령 루프**(`--check-settings-probe`)는 앱스토어 판에 없다.
+
+## 두 판을 함께 설치했을 때 (v0.3.53 — brew·DMG 판이 물러난다)
+
+같은 맥에 **설치된 앱스토어 판**이 있으면 Developer ID 판(brew·DMG)이 물러난다. 두 판이 함께 돌면 같은 맥이 서버에 기기 두 대로 잡혀 토큰이 두 번 집계되고, 전역 단축키 하나에 두 앱이 함께 근무를 토글한다. 설치 자체는 못 막으니 **실행을 막는다.**
+
+앱스토어 판의 **동작**은 바뀌지 않았다 — 이 기능 전체(`Sources/check/AppStoreEditionRetirement.swift` · `CheckApp.swift` 의 배선 · 스토어 게이트)가 `#if !CHECK_MAS` 안이고, 판정표에는 `MacEdition.retiresWhenAppStoreEditionInstalled`(Developer ID 판만 참) 한 줄이 있다. 다만 **소스는 한 군데 바뀌었다**: 두 판의 메뉴바 갈래가 갈리면서(`MenuBarExtra { }` ↔ `MenuBarExtra(isInserted:)`) 팝오버 본문·라벨을 두 판이 함께 쓰는 속성(`menuContent` · `menuLabel`)으로 뺐다(라벨을 만드는 자리는 한 곳이어야 한다는 기존 계약 때문). 그리는 것은 같지만 0.3.52 심사본과 바이너리 바이트는 다르다 — 앱스토어 판을 다시 낼 때는 이 차이를 검토 범위에 넣는다. 그 속성에 물러남 코드·판 갈래가 들어오지 않는지 V0353 이 되묻는다. 패키징 게이트가 앱스토어 판 바이너리에서 `uninstall --cask` 를 금지어로 잰다.
+
+**판정**(`AppStoreEditionRetirement.isInstalledAppStoreEdition`) — 후보는 LaunchServices 가 아는 `com.yehsung.aingcheck` 사본들 ∪ 지금 돌고 있는 사본 ∪ `/Applications/AingCheck.app` ∪ (재실행 인자의 힌트). 다섯 다 참이어야 '설치된 앱스토어 판'이다:
+
+1. 경로에 `/.Trash/`(`/.Trashes/`)가 없다 — LaunchServices 는 휴지통의 앱도 기억한다.
+2. 실제 자리가 **시동 볼륨** 위다(`volumeIsRootFileSystem` — `/Applications` · 홈 · 임시 폴더는 참, `/Volumes/<디스크 이미지·외장·백업>` 은 거짓, 2026-10-15 실측). LaunchServices 는 마운트된 볼륨의 앱도 기억하고, 복제 백업에는 영수증까지 복사돼 있다.
+3. `Contents/Info.plist` 의 `CFBundleIdentifier` 가 정확히 `com.yehsung.aingcheck`.
+4. `Contents/_MASReceipt/receipt` 가 비어 있지 않은 파일로 있다 — **앱스토어가 설치한 사본에만 있다.** 개발 맥의 `scripts/package-mas.sh` 산출물·스크래치 빌드는 같은 번들 ID 여도 영수증이 없어 걸리지 않는다.
+5. `Contents/MacOS` 가 있다(그리고 `Wrapper`·`WrappedBundle` 이 없다) — 같은 번들 ID 의 아이폰 앱 래퍼는 제외.
+
+판정은 못 찾음 쪽으로 기운다(읽기 오류·모호하면 '없음'). 오탐은 근무를 멈추지만 미탐은 지금 상태(앱스토어 판의 경고 한 번)로 돌아갈 뿐이다.
+
+**실행 시점** — 델리게이트가 만들어지는 순간 판정한다(`AppStoreRetirementState.live()`). 참이면 메뉴바 아이콘을 넣지 않고(`MenuBarExtra(isInserted:)` — 첫 렌더부터), `applicationDidFinishLaunching` 은 SIGTERM 마무리 설치 바로 뒤에서 물러남 창 하나만 띄우고 돌아간다: 세션 활성화 · 전역 단축키 · 로그인 항목 자동 등록 · 업데이트/공지 감시 · 오버레이 · 할 일 동기화 · 오목/체스 배선 · 첫 실행 안내를 하나도 하지 않는다. 스토어에도 2차 게이트(`WorkTimerStore.retiredForAppStoreEdition`)가 있어 저장 세션 활성화 · 근무 시작 · AI 기록 읽기/토큰 업로드 · 깨어남 처리가 아무것도 하지 않는다. 앱 활성화(미니게임 인편)·종료(퇴근 동기화)도 서버를 치지 않는다.
+
+**메뉴바 아이콘 빼기** — `MenuBarExtra(isInserted:)` 의 상태 항목은 ⌘-끌기로 뺄 수 있는데 빼도 앱이 끝나지 않는다(2026-10-15 실측: behavior = `removalAllowed`. 0.3.52 의 `MenuBarExtra { }` 는 `removalAllowed | terminationOnRemoval` 이라 빼면 끝났다). 그대로 두면 아이콘 없는 앱이 남으므로, 사용자가 뺀 쓰기가 오면 예전처럼 앱을 끝낸다(`shouldQuitAfterMenuBarWrite` — 근무 중이면 평소 종료처럼 마무리). 물러남이 내린 경우에는 끝내지 않는다.
+
+**실행 중** — 앱스토어 판이 켜지는 것을 본다. **주 경로는 `NSWorkspace.runningApplications` KVO 다** — 앱스토어 판은 LSUIElement 라 `NSWorkspace.didLaunchApplicationNotification` 이 오지 않는다(2026-10-15 실측: LSUIElement 더미 앱을 띄우자 통지 0건 · KVO 삽입 1건). 통지 관찰은 보조 길로 남아 있다. 켜진 번들이 위 조건을 만족하면: 먼저 근무 시작을 막고(`retiringForAppStoreEdition` — 마무리를 기다리는 동안 단축키·넛지가 새 근무를 열면 곧 버려진다), 근무 중이고 내가 연 세션이면(종료 훅과 같은 조건) 평소 종료와 같은 퇴근 동기화(`finishWorkBeforeQuit`)를 끝내고, 자기를 새 인스턴스로 다시 띄워(`--check-retire-finished-work` · `--check-retire-app-store-edition <경로>`) 물러남 모드로 들어가게 한 뒤 이 인스턴스는 끝난다. 재실행이 실패해도 끝난다. 근무를 넘기지 않고 끝내는 이유: 끄기만 하면 앱스토어 판이 그 세션을 흡수해도 이 맥의 기기 주장 행 때문에 되찾지 않고, 스캐빈저가 10분 뒤 마지막 신호 시각으로 닫는다.
+
+**물러남 창** — "이 맥에 앱스토어 판 아잉체크가 있어요"(근무를 마무리하고 다시 떴으면 그 사실 한 줄 · 지난번 brew 가 못 지웠으면 그 사실 한 줄 더). 본문은 계정에 남는 것(기록·루비·팀·할 일)과 넘어가지 않는 것(단축키 같은 이 맥의 설정 — 앱스토어 판은 다른 저장 자리에서 빈 상태로 시작한다)을 함께 말한다. [나중에]·창 닫기는 그냥 종료한다(로그인 항목은 그대로 — 다음 로그인에 다시 묻는다). [이 판 지우고 앱스토어 판 열기](기본 버튼 — Return)는:
+
+0. **누른 순간 앱스토어 판을 다시 판정한다**(`AppStoreRetireRemoval.live`). 창이 떠 있는 동안 앱스토어 판을 지웠으면 아무것도 지우지 않고 끝낸다(처음 찾은 자리가 사라졌어도 다른 설치 사본이 있으면 그것을 연다).
+1. 로그인 항목 해제(`SMAppService.mainApp.unregister()`) — 먼저.
+2. 설치 출처는 업데이트와 같은 판정(`UpdateRunner.installSource` · `brewPath` — brew 가 **이 번들을** 관리할 때만 brew).
+   - brew: 떼어 낸 셸(`nohup zsh -c`)로 이 앱이 끝나기를 잠깐 기다린 뒤 `brew uninstall --cask aing-check`, 끝나면 `open <앱스토어 판>`. 값은 전부 argv 로 넘긴다(스크립트·래퍼는 상수). 로그는 `~/Library/Logs/aing-check-retire.log`, 결과는 상태 파일 `~/Library/Caches/kingcheck/retire.state`(`ok` · `brew-failed`). brew 가 못 지웠으면(다른 관리자 소유 접두사 · 잠금) 다음 물러남 창이 그 사실을 알리고, 다음 [지우기]는 남은 자리를 Finder 로 먼저 보여 준다. 셸을 못 띄우면 지우지 않고 Finder 로 보여 준다(brew 가 관리하는 사본을 우리가 지우면 brew 기록이 낡는다).
+   - 그 밖(DMG·수동): 자기 번들을 휴지통으로 — 실패하면(읽기 전용 볼륨 · 권한) Finder 에서 보여 준다. **App Translocation** 으로 돌고 있으면(끌어다 놓지 않고 바로 연 사본) 휴지통은 임시 사본에서 실패하므로 시도하지 않고, `SecTranslocateCreateOriginalPathForURL`(이름으로 찾는다)로 얻은 **원래 자리**를 Finder 로 보여 주기만 한다. 자기 번들이 우리 `.app`(번들 ID `kingcheck`)이 아니면(`swift run` 같은 개발 실행) 아무것도 지우지 않는다.
+   - **자기 번들 말고는 아무것도 지우지 않는다.**
+3. 앱스토어 판 열기 → 종료. 열기는 **이 앱이 끝난 뒤에** 한다(떼어 낸 셸이 PID 가 사라지기를 기다렸다가 `open`) — 이 앱이 살아 있을 때 열면 앱스토어 판의 첫 실행이 이 앱을 보고 한 번뿐인 "다른 판 동시 실행" 경고를 써 버린다. 셸을 못 띄우면 직접 연다.
+
+실패는 삼키지 않고 `os.Logger`(subsystem `kingcheck`, category `retire`)에 남긴다.
+
+**알려진 한계 — 디스크에 남은 동기화 큐** — 물러난 실행은 세션을 살리지 않으므로 지난 실행이 남긴 근무 동기화 큐(`pendingItems` — 오프라인에서 연·닫은 근무)를 보내지 않는다. 앱스토어 판은 저장 자리가 달라 그 큐를 못 본다. 그래서 오프라인에서 근무를 하고 앱을 끈 뒤 앱스토어 판을 깔고 이 판을 켜면 그 근무 기록은 서버에 가지 않는다(물러남은 '서버에 아무것도 보내지 않는다'가 먼저다 — 큐를 보내려면 세션을 살려야 한다). 실행 중 물러남도 마무리 동기화가 3초 안에 끝나지 않으면 퇴근 기록이 큐에 남는다 — 그 세션은 서버의 스캐빈저가 마지막 신호 시각으로 닫는다.
+
+**개발자 탈출구** — `defaults write kingcheck check.allowAlongsideAppStoreEdition -bool true` 면 물러나지 않는다(실행 시점·실행 중 둘 다). UI 는 없다. 앱스토어에서 받은 사본과 brew 판을 한 맥에서 함께 시험할 때 쓴다.
 
 ## 두 판 모두 (심사 지침 5.1.1(i)(v) · 1.2)
 
@@ -55,7 +93,7 @@
 
 앱스토어 판 실행 파일에 다음이 **없어야** 한다(`strings -a` · `nm`). 2026-10-14 디버그·릴리스 빌드(arm64) 실측 0건.
 
-- 문자열: `brew upgrade` · `brew update` · `releases/latest` · `aing-check-update` · `api.github.com` · `nohup` · `hdiutil` · `spctl` · `app-server` · `/bin/zsh` · `--output-format` · `command -v codex`
+- 문자열: `brew upgrade` · `brew update` · `releases/latest` · `aing-check-update` · `api.github.com` · `nohup` · `hdiutil` · `spctl` · `app-server` · `/bin/zsh` · `--output-format` · `command -v codex` · `uninstall --cask`(0.3.53 물러남 — 2026-10-15 디버그 빌드 실측 0건)
 - 심볼: `UpdateRunner` · `dmgUpdateScript` · `upgradeScript` · `AILimitAntigravityReader` · `ProcessSession` · `shellLookupScript`
 - 자식 프로세스는 **Claude 리밋의 시스템 도구 `/usr/bin/security` 하나**만 띄운다(0.3.52 결정). 그래서 `nm -u` 의 `NSTask` 참조는 0 이 아니다 — 사용자 설치 실행 파일(`agy`·`codex`·로그인 셸)을 띄우는 문자열이 위 목록대로 0건인 것으로 가른다.
 - 주의: `kingcheck.mas` 같은 15바이트 이하 문자열은 릴리스 빌드에서 명령어 안에 박혀 `strings` 로 안 보인다 — "있어야 한다" 쪽 검사는 문자열로 하지 마라(디버그 빌드에서는 보인다).

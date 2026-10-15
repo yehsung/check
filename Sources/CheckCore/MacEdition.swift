@@ -54,6 +54,15 @@ package enum MacEdition: String, CaseIterable, Equatable, Sendable {
         }
     }
 
+    /// 같은 맥에 **설치된 앱스토어 판**(앱스토어가 설치한 사본 — 영수증이 있다)이 있으면 이 판이 **물러나는가**(v0.3.53).
+    ///
+    /// 물러남 = 근무·단축키·감시를 하나도 켜지 않고 안내 창 하나만 띄운다(실행 중에 앱스토어 판이 켜지면 근무를 마무리하고
+    /// 그 모드로 다시 뜬다). 두 판이 함께 돌면 같은 맥이 서버에 기기 두 대로 잡혀 토큰이 두 번 집계되고, 전역 단축키 하나에
+    /// 두 앱이 함께 근무를 토글한다 — 설치는 못 막으니(앱스토어 설치기 · DMG 드래그) 실행을 막는다.
+    /// Developer ID 판만 물러난다. 앱스토어 판의 동작은 0.3.52 심사본 그대로다(다른 판이 돌면 한 번 알리는 경고만 있다) — 판정·창·
+    /// 지우기 코드는 그 판에서 **컴파일되지 않는다**(`#if !CHECK_MAS` — `AppStoreEditionRetirement`).
+    package var retiresWhenAppStoreEditionInstalled: Bool { self == .developerID }
+
     // MARK: 업데이트 (심사 지침 2.4.5(vii) — 앱스토어 앱은 앱스토어로만 업데이트한다)
 
     /// 이 판이 **스스로 새 버전을 알리고 설치하는가**: brew upgrade · DMG 자가 교체 · GitHub 릴리스 폴링 ·

@@ -53,8 +53,14 @@ extension WorkTimerStore {
 
     /// 지금 AI 도구 기록을 읽고 그 숫자를 올려도 되는가. **Developer ID 판은 언제나 참**(지금 동작 그대로)이고,
     /// 앱스토어 판은 사용자가 첫 실행 안내나 설정에서 켰을 때만 참이다.
+    ///
+    /// 물러난 실행(v0.3.53 — 같은 맥에 설치된 앱스토어 판이 있다)은 판과 무관하게 **거짓**이다. 이 값 하나가 토큰 스캔·업로드·
+    /// 일별 업로드·스캔 하트비트·Codex 계정 프로브·리밋 읽기를 함께 막는다(그 판에는 이 갈래가 없다).
     var aiToolDataAllowed: Bool {
-        !macEdition.asksBeforeReadingAITools || aiToolDataConsent
+        #if !CHECK_MAS
+        if retiredForAppStoreEdition { return false }
+        #endif
+        return !macEdition.asksBeforeReadingAITools || aiToolDataConsent
     }
 
     /// 앱스토어 판의 동의 스위치. 첫 실행 안내의 [허용]/[나중에]와 설정 스위치가 **이 함수만** 부른다.

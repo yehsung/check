@@ -929,6 +929,19 @@ final class WorkTimerStore {
     /// 넣어 기본 빌드에서 앱스토어 판의 갈래(공지 링크 거름 · AI 기록 동의 게이트 · Codex 계정 프로브 끔)를 그대로 돌린다.
     @ObservationIgnored var macEdition: MacEdition = .current
 
+    #if !CHECK_MAS
+    /// 이 실행이 **물러났다**(v0.3.53 — 같은 맥에 설치된 앱스토어 판이 있다 · `AppStoreEditionRetirement`). 참이면 저장 세션 활성화 ·
+    /// 근무 시작 · AI 기록 읽기와 토큰 업로드(`aiToolDataAllowed`) · 깨어남 처리가 **아무것도 하지 않는다**.
+    /// 1차 게이트는 앱 쪽이다(메뉴바 아이콘을 안 넣고 배선을 통째로 건너뛴다). 이 값은 그 게이트가 뚫려도(팝오버의 `.task` 가 어떻게든
+    /// 돌아도) 서버에 아무것도 안 가게 하는 2차 방어다. 앱스토어 판에는 이 칸도 판정도 없다.
+    @ObservationIgnored var retiredForAppStoreEdition = false
+    /// 실행 중 물러남이 **시작됐다**(v0.3.53). 참이면 근무 시작만 막는다 — 마무리 동기화(`finishWorkBeforeQuit`, 최대 3초)를
+    /// 기다리는 동안 단축키·자동 시작 넛지가 새 근무를 열면 그 세션은 곧 `.terminateNow` 로 마무리 없이 버려진다.
+    /// `retiredForAppStoreEdition` 을 앞당기지 않는 이유: 그 값은 AI 기록 읽기·업로드(`aiToolDataAllowed`)까지 꺼서
+    /// 마무리 경로의 마지막 업로드를 막는다.
+    @ObservationIgnored var retiringForAppStoreEdition = false
+    #endif
+
     /// 앱스토어 판의 **AI 도구 기록 읽기 동의**(설정 스위치가 그리는 값 — `AIToolDataConsent.key` 의 화면 사본).
     /// 쓰는 길은 `setAIToolDataConsent` 하나다. Developer ID 판에서는 화면에 나오지 않고 판정에도 쓰이지 않는다.
     var aiToolDataConsent = false
@@ -1832,6 +1845,11 @@ final class WorkTimerStore {
 
     func start(now: Date = Date()) {
         guard startedAt == nil else { return }
+        #if !CHECK_MAS
+        // 물러난 실행(v0.3.53)은 근무를 열지 않는다 — 같은 맥의 앱스토어 판이 근무를 맡는다(단축키·넛지·팝오버 어느 길이든).
+        // 물러나는 중(마무리 동기화를 기다리는 동안)에도 열지 않는다 — 열면 곧 버려진다.
+        guard !retiredForAppStoreEdition, !retiringForAppStoreEdition else { return }
+        #endif
         // 어떤 경로로든 근무가 시작되면 억제는 끝이다 — 수동 시작은 명시적 의사이고, 넛지 시작은
         // 억제 중엔 자격 미달이라 여기 오지 못하므로 이 한 줄이 억제를 세탁하는 일은 없다.
         clearAutoStartSuppression()
@@ -2030,6 +2048,10 @@ final class WorkTimerStore {
 
     /// didWake. 잠든 시간이 5분 이하면 근무 연속으로 인정, 초과하면 덮은 시각으로 자동 마감한다.
     func handleWake(at date: Date = Date()) {
+        #if !CHECK_MAS
+        // 물러난 실행(v0.3.53)은 깨어나도 아무것도 하지 않는다 — 재연결·미니게임 인편·집중 모드 만료 PATCH 가 전부 서버를 친다.
+        guard !retiredForAppStoreEdition else { return }
+        #endif
         // ⚠️ **맨 앞이다.** 아래로는 조기 리턴 가지가 셋(sleepBeganAt nil / 유예 이내 / 흡수 세션)이라
         //    뒤에 붙이면 실제 경로 대부분에서 재연결이 안 돈다 = 뚜껑을 열어도 찌르기가 영영 안 온다.
         // v0.2.38 M7 — 네트워크 관측자가 있으면(프로덕션) 재연결을 **결합 게이트 뒤**로 미룬다. 깨움 직후에는 모든

@@ -48,7 +48,7 @@
 | 울트라 구매 | 루비 **5개 = 울트라 1개**, 한 번에 최대 20개 (2026-10-14 에 3 → 5) | `ultra_ruby_price()` = 5 · `ultra_buy_max()` = 20 |
 | 미니게임 상금 | 게임별 **1·2·3등에게 루비 10·5·3** (1등 울트라 10개 → 2026-09-13 루비 20·10·5 → 2026-10-14 10·5·3). 클라에 **짝 상수**가 셋 있다(맥 `CheckMiniGameWindowView.rubyPrizes` · 폰 `GamesMiniGameText`/`RankingsText.rubyPrizes`) — 서버는 금액을 내려 주지 않는다 | `ruby_prize_amounts()` = `{10,5,3}` · 정족수 `minigame_prize_quorum()` = 5 |
 | 가입 지급 | 루비 **60**(제일 싼 캐릭터 가격 **이상**이어야 한다 — 가격이나 이 값을 바꾸는 마이그레이션이 그때 단언한다. 2026-10-14 에 30 → 60) | `ruby_welcome_grant()` = 60 |
-| 확성기(📢) | 루비 **50** — 메시지 한 통을 앱 사용자 **전원**(나와 같은 공개 범위, 차단 관계·집중 모드인 사람 제외)에게 1:1 메시지로 보낸다. 한 사람당 10분에 한 번 · 관리자도 낸다 | `megaphone_ruby_price()` = 50 · `megaphone_cooldown_seconds()` = 600 · 장부 `spend:megaphone` (`20261014122000_megaphone.sql`) |
+| 확성기(📢) | 루비 **30**(2026-10-14 50 → 2026-10-16 30) — 메시지 한 통을 앱 사용자 **전원**(나와 같은 공개 범위, 차단 관계·집중 모드인 사람 제외)에게 1:1 메시지로 보낸다. 한 사람당 10분에 한 번 · 관리자도 낸다 | `megaphone_ruby_price()` = 30 (`20261015110000_megaphone_price_30.sql`) · `megaphone_cooldown_seconds()` = 600 · 장부 `spend:megaphone` (`20261014122000_megaphone.sql`) |
 | 연속 출근 스트릭 | **표시만. 보상 없음** | `ultra_wallet_sync` 는 스트릭으로 어떤 적립도 하지 않는다 |
 | 울트라 발사 비용 | 1 | `ultra_poke_user` |
 | 같은 대상 쿨타임 | 60초 (거절은 몫을 안 태운다) | 세 RPC 공통 |

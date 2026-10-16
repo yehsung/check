@@ -40,6 +40,10 @@ enum ReactionKind: Equatable {
     /// 연관값(잔량)을 두지 않는다: "루비 +3 (12개)" 는 말풍선 한 줄 예산을 넘고, 잔량은 상점이 말한다.
     /// 2026-09-13 부터 이 보상은 **울트라가 아니라 루비**다(리액션 이름만 옛 이름으로 남았다).
     case ultraCharged
+    /// 금액이 랩(+3)과 **다른** 루비 보상(v0.3.55 주간 누적 근무 — +20 · +50 · +200). 모션·순위·길이·양보 규칙은
+    /// `.ultraCharged` 와 **한 벌**이고 말풍선 숫자만 다르다("루비 +N!"). `.ultraCharged` 에 연관값을 달지 않은 이유:
+    /// 그 이름을 값으로 쓰는 자리(스토어 · 테스트)가 수십 곳이라, 연관값 하나가 랩 보상 경로 전체를 흔든다.
+    case rubyReward(amount: Int)
 
     /// 우선순위(높을수록 우선). 울트라 > hit/출퇴근/화들짝/찌름 > 마일스톤 > 인사 > 졸기.
     /// (wake/drowsy 는 sleeping 상태 분기에서 직접 처리되어 우선순위 비교를 거의 타지 않는다.)
@@ -55,7 +59,7 @@ enum ReactionKind: Equatable {
         // 보상 통지가 조용히 거부되는데, 재화는 서버가 이미 올렸고 되돌릴 수 없다.
         // 4로 올리지 않는 이유: 4는 전체화면 점거(ultraPoked)의 자리다.
         // 동순위 충돌은 request() 의 activeIsReward 예외로 **보상이 양보**하는 쪽으로 푼다(그쪽 주석 참조).
-        case .goalAchieved, .ultraCharged:
+        case .goalAchieved, .ultraCharged, .rubyReward:
             return 3
         case .milestone:
             return 2
@@ -95,7 +99,7 @@ enum ReactionKind: Equatable {
             // ReactionActions.goalAchieved 총 2.02s(웅크림 0.16 + 도약 0.42 + **공중 정지 0.35** + 하강 0.34
             // + 정착 0.75)에 여유 0.18. 마일스톤(1.6)과 **다른 숫자여야 한다** — 같으면 길이로도 안 갈린다.
             return 2.2
-        case .ultraCharged:
+        case .ultraCharged, .rubyReward:
             // ReactionActions.ultraCharged 총 1.72s(흡수 0.70 + 번쩍 0.14 + 정착 0.88)에 여유 0.28.
             // 말풍선은 자체 타이머(3.2s)라 모션이 끝난 뒤에도 "루비 +3!" 이 잠깐 남는다.
             return 2.0
@@ -204,6 +208,8 @@ final class ReactionEngine {
     /// 이 저장소가 `MiniGamePanel.rubyPrizes`·`prizeQuorum` 에 쓰는 것과 같은 규약이다.
     /// (지속 안내 `missionNotice` 는 서버가 준 값을 그대로 쓴다 — 그쪽이 권위다.)
     static let missionRewardBubble = "루비 +3!"
+    /// 금액이 응답에서 오는 루비 보상(`.rubyReward` — 주간 누적 근무)의 말풍선. 랩 말풍선과 **같은 모양**이고 숫자만 다르다.
+    static func rubyRewardBubble(amount: Int) -> String { "루비 +\(max(0, amount))!" }
 
     /// 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김. 각 리액션이 자기 텍스트/지속시간으로 교체한다.
     /// (팀원 인사·시작 화이팅·때리기 아얏·종료 수고·깨우기 등 모두 이 한 채널을 자체 타이머로 공유.)
@@ -837,7 +843,7 @@ final class ReactionEngine {
         case .goalAchieved:
             let hop = modelExtent * 0.34
             return flat ? ReactionActions.flatGoalAchieved(hop: hop) : ReactionActions.goalAchieved(hop: hop)
-        case .ultraCharged:
+        case .ultraCharged, .rubyReward:
             return ReactionActions.ultraCharged()                     // 균일 스케일뿐
         case .drowsy:
             return nil
@@ -916,7 +922,7 @@ final class ReactionEngine {
                 // 자는 중 클릭 → 화들짝 + "깜빡 졸았다!" 로 깨운다(hit 쿨다운과 무관하게 즉시).
                 beginWake(now: now)
                 return true
-            case .commuteStart, .commuteEnd, .milestone, .poked, .ultraPoked, .goalAchieved, .ultraCharged:
+            case .commuteStart, .commuteEnd, .milestone, .poked, .ultraPoked, .goalAchieved, .ultraCharged, .rubyReward:
                 // 잠을 인터럽트하고 정상 재생으로 넘어간다(아래 일반 경로). .poked 는 잠을 깨운 뒤 이어서
                 // 움찔+말풍선이 보이도록 endSleep 후 통상 경로로 흘린다(runReaction 이 resetPose 로 숙인
                 // 포즈를 identity 로 스냅해 잔상 없이 움찔로 이어진다 — beginWake 의 화들짝과 구분).
@@ -965,6 +971,7 @@ final class ReactionEngine {
             var activeIsReward = false
             if case .goalAchieved = active { activeIsReward = sameRank }
             if case .ultraCharged = active { activeIsReward = sameRank }
+            if case .rubyReward = active { activeIsReward = sameRank }
             guard commuteRestart || activeIsPoked || ultraRestart || activeIsReward else {
                 return false
             }
@@ -1069,6 +1076,11 @@ final class ReactionEngine {
             runReaction(ReactionActions.ultraCharged())
             emitUltraCharge()
             showBubble(Self.missionRewardBubble, seconds: Self.ultraChargedBubbleSeconds)
+        case .rubyReward(let amount):
+            // `.ultraCharged` 와 같은 모션·같은 반짝임·같은 지속 — 숫자만 응답이 준 금액이다.
+            runReaction(ReactionActions.ultraCharged())
+            emitUltraCharge()
+            showBubble(Self.rubyRewardBubble(amount: amount), seconds: Self.ultraChargedBubbleSeconds)
         case .drowsy, .wake:
             // drowsy/wake 는 request 에서 beginSleep/beginWake 로 직접 처리되어 이 경로로 오지 않는다.
             break

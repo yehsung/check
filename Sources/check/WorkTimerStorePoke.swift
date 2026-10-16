@@ -259,6 +259,8 @@ extension WorkTimerStore {
     /// Task 발사 래퍼. 호출부는 결과를 기다리지 않는다(화면은 @Observable 로 따라온다).
     func syncUltraWallet(reason: UltraSyncReason) {
         Task { @MainActor in await performSyncUltraWallet(reason: reason) }
+        // 주간 누적 근무 보상(v0.3.55)도 **같은 박자**에 묻는다 — 다만 1분에 한 번을 넘지 않는다(그쪽 게이트가 막는다).
+        refreshWeeklyWork(reason: .walletCadence)
     }
 
     /// 폴링 tick 전용 — 근무중이고 스로틀이 열렸을 때만 발사한다. **요청 0건이 기본값이다.**
@@ -404,6 +406,9 @@ extension WorkTimerStore {
         //   그날 sync 가 0회가 된다 — 그러면 서버가 미션을 평가할 기회 자체가 없어 코인이 영구 소실된다.
         //   (다음 날 p_days_back=1 이 어제 몫을 소급하지만, 이틀 연속으로 놓치면 그건 사라진다.)
         syncUltraWalletIfDue(now: clock())
+        // 근무 종료 직후의 주간 조회가 1분 창에 막혀 빚으로 남았으면 여기서 갚는다(요청 0~1건 — 빚이 없으면 0건).
+        // 근무중 게이트가 **없는** 것이 핵심이다: 빚은 정의상 근무가 끝난 뒤에 생긴다.
+        refreshWeeklyWorkIfOwed()
         // 운영자에게만: 미해결 신고 건수를 5분에 1회 묻는다(v0.3.34 · 요청 0~1건 — 비운영자는 첫 가드에서 빠진다).
         // 근무 여부와 **무관**하다(근무 게이트가 없다). 신고는 폰에서 아무 때나 오고, 팝오버를 안 여는 운영자에게 그 사실을
         // 알릴 곳은 메뉴바 점뿐이다 — 여는 순간에만 물으면 점은 "이미 본 신고의 상기"밖에 못 한다(24시간 약속).

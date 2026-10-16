@@ -18,8 +18,8 @@ import simd
 //   360°/720° 스핀) 빌보드라 정면 날개 윤곽이 그대로 남아, 달걀 모양 옆모습 뒤에 날개 모양 빛이 떴다(사용자 신고 2026-10-16).
 //   그래서 몸 요 10° 마다 그 자세의 실루엣으로 구운 칸 36장(`GoldAingArt.haloCellResourceNames`)을 판 36개로 세우고, 렌더 프레임마다
 //   제약(`haloCellTransform`)이 몸의 presentation 변환에서 카메라 기준 요·롤을 구해 **칸 하나만**(`haloCell` — 가장 가까운 칸, 단 쉬는
-//   자세 0° · ±40° 둘레 ±9° 는 그 자세의 칸이라 idle 살랑 ±8° 동안 칸이 안 바뀐다) 몸 자리에 두고 나머지는
-//   카메라 뒤로 치운다(절두체 컬링으로 그리지도 않는다 — 판 36개 실측 +0.015ms/프레임). 롤(찔림의 z 흔들림)은 그 판을 화면 안에서 같이
+//   자세 0° · ±40° 둘레 ±9° 는 그 자세의 칸이라 idle 살랑 ±8° 동안 칸이 안 바뀐다) 제 크기로 세우고 나머지는 같은 자리에서
+//   크기 1e-5 로 접는다(멀리 치우면 몸의 presentation 바운딩박스가 부푼다 — `haloHiddenScale`). 롤(찔림의 z 흔들림)은 그 판을 화면 안에서 같이
 //   기울인다. 재질·텍스처는 만들 때 한 번 정하고 다시는 안 건드린다 — 제약은 SceneKit 렌더 스레드에서 돌기 때문에 거기서 하는 일은
 //   **받은 변환과 부모의 presentation 을 읽어 변환 하나를 돌려주는 것뿐**이다(공유 상태 · 할당 · 텍스처 재업로드 없음 — 할당은
 //   `V0355GoldHaloYawTests` 가 렌더 프레임마다 세어 후광 없는 씬과 맞댄다. SCNMatrix4 → simd 는 `simdMatrix` 로 손수 옮긴다: SceneKit
@@ -51,9 +51,13 @@ enum GoldAingFinish {
     static let haloRenderingOrder = -1
     /// 각도 칸 판 노드 이름의 앞부분(`check.goldHalo.cell.040` — 칸의 몸 요). 칸 판은 전부 `haloNodeName` 노드의 자식이다.
     static let haloCellNodePrefix = "check.goldHalo.cell."
-    /// 고르지 않은 칸을 치우는 거리(몸 중심에서 카메라 쪽으로, 모델 단위). 앱 카메라는 몸에서 6 남짓이라 이만큼 가면 카메라 뒤 —
-    /// 절두체 밖이라 컬링되고(그리기 호출 없음), 클릭 hitTest 에도 안 걸린다.
-    static let haloHiddenDistance: Float = 10_000
+    /// 고르지 않은 칸의 크기 배율 — 몸 중심 그 자리에서 이만큼 접는다(판 한 변 3.39 × 1e-5 ≈ 3e-5 단위: 울트라 크기에서도 한 픽셀의
+    /// 백분의 일이라 샘플을 하나도 못 덮고, 덮더라도 그 자리는 불투명한 몸 한가운데 뒤다). 0 이 아닌 까닭: 축을 정규화할 수 있어야 한다.
+    /// ★ 멀리 치우지 않는다: 0.3.55 첫 판은 카메라 뒤 1만 단위로 치웠는데, 그러면 캐릭터 · wrapper 의 **presentation** 바운딩박스가
+    ///   9,556 단위로 부풀었다(검토 지적 — 모델 트리는 그대로라 지금 앱은 안 다쳤지만, presentation 경계를 읽는 코드 · SceneKit 기능
+    ///   — 자동 z 범위 · 그림자 투영 · 카메라 컨트롤러 — 가 붙는 순간 덫이다). 대가: 접힌 판도 절두체 안이라 그리기 호출이 남는다
+    ///   (판 35개 -O 실측 +0.016ms/프레임) · 칸 텍스처 36장이 첫 프레임에 다 올라간다(6.2MB/뷰 — 스핀 한 번이면 어차피 다 올라간다).
+    static let haloHiddenScale: Float = 1e-5
 
     private static let logger = Logger(subsystem: "kingcheck", category: "character")
 
@@ -459,7 +463,7 @@ enum GoldAingFinish {
         material.readsFromDepthBuffer = false
         plane.materials = [material]
         // 바운딩박스를 몸 중심의 점으로 덮어 쓴다 — 판이 몸 크기 계산(프레이밍·modelExtent·클릭 rect)에 끼지 않게.
-        // 고른 칸은 몸 중심에 서고 몸 중심은 언제나 화면 안이라 절두체 컬링이 그 판을 지우지 않는다(치운 칸은 일부러 컬링된다).
+        // 칸은 언제나 몸 중심에 서고 몸 중심은 언제나 화면 안이라 절두체 컬링이 그 판을 지우지 않는다(고르지 않은 칸은 크기로 접는다).
         let tiny: CGFloat = 0.001
         plane.boundingBox = (min: SCNVector3(-tiny, -tiny, -tiny), max: SCNVector3(tiny, tiny, tiny))
         node.geometry = plane
@@ -467,8 +471,12 @@ enum GoldAingFinish {
         node.categoryBitMask = haloCategoryBit
         // ★ 렌더 스레드에서 돈다. 받은 변환(빌보드 결과 = 카메라 방향)과 부모(표식 노드)의 presentation 만 읽는다 — 리액션 SCNAction ·
         //   CAAnimation · 살랑 회전이 이 프레임에 몸을 어디로 돌렸는지는 presentation 에만 확실히 있다. 들어오는 변환의 위치·크기는
-        //   믿지 않는다: SceneKit 은 제약 결과를 presentation 에 남겨 다음 프레임의 입력으로 쓰므로, 지난 프레임에 치운 칸은 카메라 뒤에서
-        //   출발한다. 위치·크기는 언제나 표식 노드(= 몸)에서 다시 잰다.
+        //   믿지 않는다 — 위치·크기는 언제나 표식 노드(= 몸)에서 다시 잰다.
+        // ⚠ 알려진 한계(검토 지적 · 실측): 빌보드 뒤에 오는 월드 공간 제약 안에서는 SceneKit 이 부모 사슬을 **이징 SCNAction 의 조금 다른
+        //   값**으로 본다 — 목표 달성 720° 이징 스핀 중 최대 2.9°(선형 스핀은 0°). 그래서 그 스핀 30fps 63프레임 중 4프레임이 이웃 칸을
+        //   고르고 판이 카메라를 최대 7.7° 비껴 본다(스냅숏 · render(atTime:) 둘 다 같다). 부모를 어떻게 읽어도(presentation · 모델 ·
+        //   손으로 곱한 사슬 · 로컬 공간 제약) 이 사슬 안에서는 같은 값이라 제약 안에서는 못 고친다 — 고치려면 뷰마다 렌더러 델리게이트에서
+        //   골라야 한다. 초당 500° 넘게 도는 동안 한두 프레임이라 그대로 둔다.
         // 블록은 칸 번호(Int)만 잡는다 — 노드를 잡으면 노드 → 제약 → 블록 → 노드 고리가 생긴다.
         let select = SCNTransformConstraint(inWorldSpace: true) { evaluated, transform in
             guard let anchor = evaluated.parent?.presentation.simdWorldTransform else { return transform }
@@ -536,17 +544,17 @@ enum GoldAingFinish {
         return k < 0 ? k + count : k
     }
 
-    /// 칸 `cell` 판의 이 프레임 월드 변환. 몸 자세가 이 칸이면 몸 중심에 화면 정렬 + 몸의 롤만큼 기울여 세우고, 아니면 카메라 뒤로 치운다.
-    /// 빌보드 결과에서는 **방향만** 쓴다(SceneKit 이 매 프레임 카메라에서 새로 정한다). 위치·크기(스쿼시·스트레치)는 몸(`anchor`)에서
-    /// 잰다 — 들어온 위치·크기는 지난 프레임 이 함수의 결과가 남은 것이라, 그것을 다시 쓰면 오차가 쌓이거나 치운 자리에 머문다.
+    /// 칸 `cell` 판의 이 프레임 월드 변환. 언제나 몸 중심에 화면 정렬 + 몸의 롤만큼 기울여 세우고, 몸 자세가 이 칸이 아니면 그 자리에서
+    /// 크기를 `haloHiddenScale` 로 접는다. 빌보드 결과에서는 **방향만** 쓴다(SceneKit 이 매 프레임 카메라에서 새로 정한다).
+    /// 위치·크기(스쿼시·스트레치)는 몸(`anchor`)에서 잰다 — 들어온 위치·크기를 다시 쓰면 접힌 크기에서 출발하거나 오차가 쌓일 수 있다.
     static func haloCellTransform(billboard: simd_float4x4, anchor: simd_float4x4, cell: Int) -> simd_float4x4 {
         let pose = haloPose(camera: billboard, body: anchor)
         let right = axis(billboard.columns.0), up = axis(billboard.columns.1), toward = axis(billboard.columns.2)
-        let scale = SIMD3(length(anchor.columns.0), length(anchor.columns.1), length(anchor.columns.2))
+        var scale = SIMD3(length(anchor.columns.0), length(anchor.columns.1), length(anchor.columns.2))
+        if haloCell(yaw: Double(pose.yaw)) != cell { scale *= haloHiddenScale }
         let c = cos(pose.roll), s = sin(pose.roll)
         let rolledRight = right * c + up * s, rolledUp = up * c - right * s
-        var position = SIMD3(anchor.columns.3.x, anchor.columns.3.y, anchor.columns.3.z)
-        if haloCell(yaw: Double(pose.yaw)) != cell { position += toward * haloHiddenDistance }
+        let position = SIMD3(anchor.columns.3.x, anchor.columns.3.y, anchor.columns.3.z)
         return simd_float4x4(SIMD4(rolledRight * scale.x, 0), SIMD4(rolledUp * scale.y, 0), SIMD4(toward * scale.z, 0), SIMD4(position, 1))
     }
 

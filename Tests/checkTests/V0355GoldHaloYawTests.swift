@@ -40,11 +40,13 @@ import Testing
         try #require(scene.rootNode.childNode(withName: GoldAingFinish.haloNodeName, recursively: true))
     }
 
-    /// 지금 몸 자리에 선(= 고른) 칸 번호들. 고르지 않은 칸은 카메라 쪽으로 1만 단위 치워져 있다.
+    /// 지금 몸 자리에 제 크기로 선(= 고른) 칸 번호들. 고르지 않은 칸은 몸 중심에서 크기 `haloHiddenScale` 로 접혀 있다.
     static func visibleCells(_ scene: SCNScene) throws -> [Int] {
         let anchor = try halo(scene).presentation.simdWorldPosition
         return try halo(scene).childNodes.enumerated().compactMap { index, node in
-            simd_distance(node.presentation.simdWorldPosition, anchor) < 0.5 ? index : nil
+            let world = node.presentation.simdWorldTransform
+            let size = simd_length(SIMD3(world.columns.0.x, world.columns.0.y, world.columns.0.z))
+            return simd_distance(node.presentation.simdWorldPosition, anchor) < 0.5 && size > 0.01 ? index : nil
         }
     }
 
@@ -196,7 +198,7 @@ import Testing
                 "내려다보는 카메라: 요 \(looked.yaw * 180 / .pi) · 롤 \(looked.roll * 180 / .pi) · 기울기 \(looked.tilt * 180 / .pi)")
     }
 
-    @Test("칸 판 변환: 고른 칸은 몸 중심에 화면 정렬 + 롤, 크기는 몸에서 · 나머지는 카메라 뒤로 1만")
+    @Test("칸 판 변환: 고른 칸은 몸 중심에 화면 정렬 + 롤, 크기는 몸에서 · 나머지는 몸 중심에서 크기 1e-5 로 접힌다")
     func cellTransformPlacesOnlyTheChosenCell() {
         let camera = matrix_identity_float4x4
         var body = simd_float4x4(simd_quatf(angle: Float(Self.degrees(40)), axis: SIMD3(0, 1, 0)))
@@ -213,7 +215,53 @@ import Testing
         #expect(abs(chosen.columns.2.z - 1) < 1e-5, "판이 카메라를 안 본다")
         for other in [0, 3, 5, 31] {
             let hidden = GoldAingFinish.haloCellTransform(billboard: billboard, anchor: body, cell: other)
-            #expect(hidden.columns.3.z > 9_000, "칸 \(other) 가 안 치워졌다")
+            #expect(simd_distance(SIMD3(hidden.columns.3.x, hidden.columns.3.y, hidden.columns.3.z), SIMD3(0.3, -0.2, 0.1)) < 1e-5,
+                    "칸 \(other) 가 몸 중심을 떠났다 — 몸의 presentation 바운딩박스가 부푼다")
+            let size = simd_length(SIMD3(hidden.columns.0.x, hidden.columns.0.y, hidden.columns.0.z))
+            #expect(size > 0 && size <= GoldAingFinish.haloHiddenScale * 1.001, "칸 \(other) 가 안 접혔다(크기 \(size))")
+            #expect(abs(hidden.columns.2.z / simd_length(SIMD3(hidden.columns.2.x, hidden.columns.2.y, hidden.columns.2.z)) - 1) < 1e-5,
+                    "접힌 칸도 축은 화면 정렬이다(다음 프레임 빌보드가 크기만 다른 같은 축을 받는다)")
+        }
+    }
+
+    @Test("치운 칸이 몸의 presentation 바운딩박스를 바꾸지 않는다 — 정지 90° · 스핀 중간 둘 다 후광을 뗀 같은 씬과 같다")
+    func parkedCellsKeepThePresentationBounds() throws {
+        typealias Box = (min: SCNVector3, max: SCNVector3)
+        func extent(_ box: Box) -> Double { Double(max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z)) }
+        // (이름, 자세 걸기 → 몇 초 뒤 재나). 기준선은 후광 표식을 떼어 낸 같은 씬 — SceneKit 의 presentation 바운딩박스는 회전 중이면
+        // 그 자체로 부푼다(근무 시작 스핀 0.2초 = 120° 에서 1.92 → 3.19, 아잉과 같다) — 그래서 모델 값이 아니라 그 씬과 맞댄다.
+        let poses: [(String, (SCNScene) throws -> TimeInterval)] = [
+            ("정지 90°", { scene in try Self.facing(scene).eulerAngles = SCNVector3(0, Self.degrees(90), 0); return 0 }),
+            ("근무 시작 스핀 0.2초", { scene in
+                let box = try Self.wrapper(scene).boundingBox
+                try Self.wrapper(scene).runAction(ReactionActions.commuteStart(hop: CGFloat(max(box.max.x - box.min.x, box.max.y - box.min.y)) * 0.32))
+                return 0.2
+            })
+        ]
+        for (name, pose) in poses {
+            var boxes: [[Box]] = []
+            for halo in [true, false] {
+                let scene = try Self.scene()
+                let wrapper = try Self.wrapper(scene), facing = try Self.facing(scene)
+                let character = try #require(facing.childNodes.first)
+                if !halo { try Self.halo(scene).removeFromParentNode() }
+                let shooter = try Shooter(scene, pointOfView: V0354GoldAing3DTests.cameraNode(scene))
+                _ = try shooter.shot(at: 0)
+                let offset = try pose(scene)
+                _ = try shooter.shot(at: 1)
+                _ = try shooter.shot(at: 1 + offset)
+                if halo {
+                    let cells = try Self.visibleCells(scene)
+                    #expect(cells.count == 1, "\(name): 선 칸 \(cells)")
+                    #expect(try Self.halo(scene).childNodes.count == 36)
+                }
+                boxes.append([wrapper, facing, character].map { $0.presentation.boundingBox })
+            }
+            for (index, label) in ["wrapper", "facing", "캐릭터"].enumerated() {
+                let gold = extent(boxes[0][index]), bare = extent(boxes[1][index])
+                #expect(abs(gold - bare) < 0.01,
+                        "\(name): \(label) presentation 바운딩박스 \(gold) — 후광 없는 같은 씬은 \(bare). 치운 칸이 몸 밖 멀리 있다")
+            }
         }
     }
 

@@ -4,7 +4,7 @@ import CheckMobileShared
 import SwiftUI
 
 /// 나 탭 화면(SPEC-ios §3.6 · w15 재디자인). 루트: **무대**(착용 캐릭터 · 이름 · 팀 · 센터 · 큰 루비 칩 · 근무 상태 · [캐릭터 바꾸기][상점])
-/// → **기록**(회고 한 줄 + 12주 근무 · AI 토큰 잔디가 스크롤 없이 한눈에 + 지난주 근무 리듬) → 프로필 · 제보 · 설정 그룹.
+/// → **이번 주 근무 보상**(v0.3.55) → **기록**(회고 한 줄 + 12주 근무 · AI 토큰 잔디가 스크롤 없이 한눈에 + 지난주 근무 리듬) → 프로필 · 제보 · 설정 그룹.
 /// 하위 화면은 `MeDestination` 을 `router.pathBinding(for: .me)` 에 쌓는다. 딥링크 `me` · `me/shop` · `me/settings` · `feedback[/<id>]`.
 struct MeTab: View {
     let store: MeStore
@@ -57,6 +57,9 @@ struct MeHomeView: View {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
                     MeStageCard(store: store)
                         .id(MeAnchor.header)
+                    // v0.3.55 「이번 주 근무」 보상 카드 — 루비 칩 바로 아래(루비가 어디서 오는지 옆에서 보인다). 범위는 '이번 주'라
+                    // 「지난주」 카드 **앞**이 맞다(지금 → 지난주 → 12주 순으로 넓어진다). 서버에 함수가 없으면 통째로 빠진다.
+                    MeWeeklyWorkCard(store: store)
                     // 카드 경계 = 시간 범위 하나. 무대 → 「지난주」(회고 + 근무 리듬) → 「최근 12주」(잔디 두 벌) → 메뉴 순으로
                     // 범위가 단조롭게 넓어진다. 예전에는 [회고 + 잔디] 뒤에 [리듬]이 따로 서서 지난주 → 12주 → 지난주로 튀었다
                     // (사용자 지적 0.3.31). 기록이 먼저, 메뉴 그룹이 마지막인 것은 그대로다(w15 검증 낮음 2).

@@ -129,6 +129,19 @@ package final class MeStore {
     /// 사용자 동작 한 번 = request_id 하나(결과를 모르는 실패 뒤 다시 누르면 같은 id — 서버가 처음 결과를 `replayed` 로 돌려준다).
     @ObservationIgnored package internal(set) var gachaRequestIDs = GachaRequestIDs()
 
+    // MARK: 이번 주 근무 보상 (v0.3.55 · 폰 1.0.8(19) — MeStoreWeeklyWork.swift)
+    /// 서버 `weekly_work_status()` 의 마지막 응답. nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
+    package internal(set) var weeklyWork: WeeklyWorkStatusDTO?
+    package internal(set) var weeklyWorkState = MeLoadState()
+    /// 서버에 함수가 있다. 없으면(404 · PGRST202 — db push 전) 카드를 접는다. 다음 조회가 다시 묻는다(스로틀 60초).
+    package internal(set) var weeklyWorkAvailable = true
+    /// '받았어요 +N' 한 줄. 나 탭을 본 뒤 떠나면 걷힌다(`tabDidDisappear`).
+    package internal(set) var weeklyGrantNotice: WeeklyWorkGrantNotice?
+    /// 새 지급을 알릴 때마다 오른다 — 카드가 이 값으로 성공 햅틱을 낸다.
+    package internal(set) var weeklyGrantSerial = 0
+    /// 지금 알림을 사용자가 나 탭에서 봤다(떠날 때 걷는다). 안 본 알림은 남겨 두어 다음에 열 때 보이게 한다.
+    @ObservationIgnored var weeklyGrantNoticeSeen = false
+
     // MARK: 프로필 편집
     package var displayNameDraft = ""
     /// 편집 화면이 떠 있는가(머리가 늦게 오면 그때 입력을 채운다).
@@ -212,6 +225,8 @@ package final class MeStore {
         // 사용자의 리밋 위젯이 영원히 비는 것을 막는다(GET 하나다). 로그인 직후에도 여기로 들어온다
         // (`MobileAppModel.sessionDidSignIn` → scene 이 active 면 `activateStores()`).
         aiLimits.refreshIfStale()
+        // 주간 보상도 탭이 안 보여도 받는다(앞에 올 때마다 · 60초 스로틀) — 정산 결과의 루비가 게임 탭·상점 알약에도 바로 선다.
+        refreshWeeklyWorkIfStale()
         guard isTabVisible else { return }
         refreshRootIfStale()
     }
@@ -263,6 +278,14 @@ package final class MeStore {
         exchangeNotice = nil
         isExchangeNoticeError = false
         gachaRequestIDs.reset()
+        // 주간 보상도 계정에 묶인다 — 안 비우면 다음 계정 카드에 앞 사람의 근무 시간·받은 칸·'받았어요'가 선다.
+        // 계정별 '본 칸' 저장값(defaults)은 키가 계정별이라 그대로 둔다.
+        weeklyWork = nil
+        weeklyWorkState = MeLoadState()
+        weeklyWorkAvailable = true
+        weeklyGrantNotice = nil
+        weeklyGrantSerial = 0
+        weeklyGrantNoticeSeen = false
         displayNameDraft = ""
         isProfileVisible = false
         displayNameNotice = nil
@@ -315,11 +338,13 @@ package final class MeStore {
 
     package func tabDidAppear() {
         isTabVisible = true
+        if weeklyGrantNotice != nil { weeklyGrantNoticeSeen = true }
         refreshRootIfStale()
     }
 
     package func tabDidDisappear() {
         isTabVisible = false
+        weeklyTabDidDisappear()
     }
 
     /// 딥링크(`aingcheck://me` · `me/shop` · `me/settings` · `feedback[/<id>]`). 라우터가 이미 경로를 비웠다 — 하위 화면을 한 칸 쌓는다.
@@ -349,6 +374,7 @@ package final class MeStore {
         if !equippedLoaded || isStale(shopState) { launch { [weak self] in await self?.loadEquippedCharacter() } }
         if isStale(recordsState) { launch { [weak self] in await self?.loadRecords() } }
         launch { [weak self] in await self?.loadFeedbackReplyLatest() }
+        refreshWeeklyWorkIfStale()
         aiLimits.refreshIfStale()
     }
 
@@ -370,7 +396,8 @@ package final class MeStore {
         async let records: Void = loadRecords()
         async let reply: Void = loadFeedbackReplyLatest()
         async let limits: Void = aiLimits.load()
-        _ = await (header, shop, equipped, records, reply, limits)
+        async let weekly: Void = loadWeeklyWork()
+        _ = await (header, shop, equipped, records, reply, limits, weekly)
     }
 
     // MARK: - 머리

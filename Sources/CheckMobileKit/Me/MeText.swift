@@ -298,6 +298,58 @@ package enum MeText {
         return ContributionLevels.level(value: min(seconds, 3_600), denominator: 3_600)
     }
 
+    // MARK: 이번 주 근무 보상 (v0.3.55 — 칸 값은 서버가 말한다, 여기는 말투만)
+
+    package static let weeklyTitle = "이번 주 근무"
+    /// 규칙 한 줄(칸별 값은 바로 위 칩이 말한다).
+    package static let weeklyRule = "월요일 0시에 새로 세요"
+    /// 세 칸 다 받은 뒤(뒤에 보석 + "+270").
+    package static let weeklyAllDone = "이번 주 보상 다 받았어요"
+    /// '받았어요' 칩 꼬리("💎+20 받음" — 순위 상품 칩과 같은 말).
+    package static let weeklyGrantSuffix = "받음"
+    package static let weeklyLoadFailed = "이번 주 근무를 불러오지 못했어요"
+
+    /// 큰 숫자 "23시간 12분" — 바로 아래 「지난주 회고」 큰 숫자와 같은 잣대(내림 · 분 두 자리). 올려서 칸을 넘긴 것처럼 보이지 않는다.
+    package static func weeklyHours(_ seconds: Int) -> String {
+        MenuBarStatusFormatter.hoursMinutes(seconds)
+    }
+
+    /// 다음 칸 줄 앞말 "40시간 되면"(뒤에 보석 + "+50").
+    package static func weeklyNextLead(hours: Int) -> String {
+        "\(hours)시간 되면"
+    }
+
+    /// 시간은 넘었는데 아직 장부에 없다(서버 정산이 1분 안에 돈다).
+    package static func weeklyPending(hours: Int) -> String {
+        "\(hours)시간 채웠어요 · 곧 들어와요"
+    }
+
+    /// 칩 앞말 "20h"(SPEC-weekly 칩 표기). "20시간"이면 세 칸을 다 받아 체크가 붙었을 때 402pt 폭에서 한 줄에 안 들어가 세로로
+    /// 쌓였다(시뮬레이터 실측). 읽어 주는 말은 `weeklyTierAccessibility` 가 "20시간"으로 따로 쥔다.
+    package static func weeklyTierHours(_ hours: Int) -> String {
+        "\(hours)h"
+    }
+
+    /// 보석 뒤 숫자 "+50".
+    package static func weeklyRubyGain(_ ruby: Int) -> String {
+        "+\(ruby)"
+    }
+
+    /// 보이스오버 칩: "20시간 루비 20개, 받음" · "40시간 루비 50개".
+    package static func weeklyTierAccessibility(hours: Int, ruby: Int, claimed: Bool) -> String {
+        "\(hours)시간 루비 \(ruby)개" + (claimed ? ", 받음" : "")
+    }
+
+    /// 보이스오버 다음 칸 줄: "40시간 되면 루비 50개".
+    package static func weeklyNextAccessibility(hours: Int, ruby: Int) -> String {
+        "\(weeklyNextLead(hours: hours)) 루비 \(ruby)개"
+    }
+
+    /// 보이스오버 다 받은 줄: "이번 주 보상 다 받았어요, 루비 270개".
+    package static func weeklyAllDoneAccessibility(totalRuby: Int) -> String {
+        "\(weeklyAllDone), 루비 \(totalRuby)개"
+    }
+
     // MARK: 메뉴 그룹
 
     package static let profileMenuDetail = "사진 · 별명"

@@ -1,0 +1,13 @@
+{
+  "week_start": "2026-09-14",
+  "next_week_start": "2026-09-21",
+  "worked_seconds": 0,
+  "tiers": [
+    {"hours": 20, "ruby": 20, "claimed": false},
+    {"hours": 40, "ruby": 50, "claimed": false},
+    {"hours": 60, "ruby": 200, "claimed": false}
+  ],
+  "granted_now": [],
+  "ruby_balance": 12,
+  "server_now_ms": 1789621500000
+}

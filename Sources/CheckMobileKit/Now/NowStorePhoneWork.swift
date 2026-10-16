@@ -127,9 +127,12 @@ extension NowStore {
         case .stopped:
             phoneSession = nil
             workNotice = NowText.workStopped
+            // 근무가 막 닫혔다 — 이번 주 누적이 확정됐으니 주간 보상을 스로틀 없이 다시 읽는다(나 탭 카드 · 루비 미러).
+            context.links.me?.weeklyWorkDidChange()
         case .notWorking:
             phoneSession = nil
             workNotice = NowText.alreadyStopped
+            context.links.me?.weeklyWorkDidChange()
         case .mismatch:
             workNotice = NowText.workChanged
         default:

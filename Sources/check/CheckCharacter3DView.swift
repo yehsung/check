@@ -96,6 +96,10 @@ enum CheckCharacter3DScene {
     /// 캐릭터(안쪽, 부유/살랑) 사이에 끼워, facing 회전이 리액션 resetPose·commuteStart y스핀과 충돌하지 않게 한다.
     static let facingWrapperName = "check.facingWrapper"
 
+    /// idle 살랑 회전의 한쪽 폭(라디안, ±0.14 ≈ ±8.02°). 황금 아잉이 후광이 쉬는 자세 둘레 띠(`GoldAingFinish.haloRestBandDegrees`)를
+    /// 이 값에서 잰다 — 살랑을 키우면 띠도 같이 넓어져, 가만히 선 몸 뒤에서 후광 칸이 살랑마다 바뀌지 않는다.
+    static let idleSwayRadians: CGFloat = 0.14
+
     /// 오버레이용으로 완성된 씬(재질 unlit·투명 배경·카메라·애니메이션 포함). 로드 실패 시 nil.
     ///
     /// **기본값은 내장 아잉이라 기존 호출부는 한 글자도 바뀌지 않는다.** `character` 가 스프라이트면 `aing.scn`
@@ -548,11 +552,11 @@ enum CheckCharacter3DScene {
         down.timingMode = .easeInEaseOut
         node.runAction(.repeatForever(.sequence([up, down])))
 
-        let swayRight = SCNAction.rotateBy(x: 0, y: 0.14, z: 0, duration: 3.6)
+        let swayRight = SCNAction.rotateBy(x: 0, y: idleSwayRadians, z: 0, duration: 3.6)
         swayRight.timingMode = .easeInEaseOut
-        let swayLeft = SCNAction.rotateBy(x: 0, y: -0.28, z: 0, duration: 7.2)
+        let swayLeft = SCNAction.rotateBy(x: 0, y: -2 * idleSwayRadians, z: 0, duration: 7.2)
         swayLeft.timingMode = .easeInEaseOut
-        let swayBack = SCNAction.rotateBy(x: 0, y: 0.14, z: 0, duration: 3.6)
+        let swayBack = SCNAction.rotateBy(x: 0, y: idleSwayRadians, z: 0, duration: 3.6)
         swayBack.timingMode = .easeInEaseOut
         node.runAction(.repeatForever(.sequence([swayRight, swayLeft, swayBack])))
     }

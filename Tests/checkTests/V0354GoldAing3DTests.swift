@@ -132,21 +132,26 @@ import Testing
         #expect(wider == 605, "isGoldSkin 이 isSkin 보다 넓은 몫 \(wider) — 아트 스크립트(605)와 식이 갈렸다")
     }
 
+    // v0.3.55: 후광은 표식 노드(바운딩박스 중심) 아래 각도 칸 판 36개다 — 판 하나하나가 이 규약을 지키고, 0° 칸이 0.3.54 의 그 판이다.
+    // 칸 고르기(빌보드 뒤 변환 제약)와 칸 36개 전부의 계약은 `V0355GoldHaloYawTests` 가 잰다.
     @Test("후광 판: 아트 규약(2.0×H 정사각 · 바운딩박스 중심 · 빌보드 · 순서 −1 · 깊이 끔 · 알파)대로 캐릭터 노드 아래에 선다 — 아잉엔 없다")
     func haloPlaneFollowsTheArtContract() throws {
         let goldScene = try Self.scene(Self.gold)
         #expect(Self.halo(try Self.scene(Self.aing)) == nil, "보라 아잉에 후광이 섰다")
-        let halo = try #require(Self.halo(goldScene), "황금 아잉이에 후광이 없다")
-        #expect(halo.parent === (try Self.character(goldScene)),
+        let marker = try #require(Self.halo(goldScene), "황금 아잉이에 후광이 없다")
+        #expect(marker.parent === (try Self.character(goldScene)),
                 "후광이 캐릭터 노드 아래가 아니다 — 부유(bob)를 따라 움직이지 않는다")
+        #expect(marker.childNodes.count == 36, "후광 각도 칸이 \(marker.childNodes.count) 개")
+        let halo = try #require(marker.childNodes.first, "0° 칸 판이 없다")
+        #expect(halo.position.x == 0 && halo.position.y == 0 && halo.position.z == 0, "칸 판이 표식 노드(몸 중심)에서 벗어났다")
         let plane = try #require(halo.geometry as? SCNPlane)
         // 아트 스크립트 머리말: H = 1.695736 → 3.391472, 중심 (−0.001055, 0.001083, −0.000753).
         #expect(abs(plane.width - 3.391472) < 0.001 && abs(plane.height - 3.391472) < 0.001,
                 "후광 판 \(plane.width)×\(plane.height) — 2.0×H(3.391472)가 아니다")
-        #expect(abs(halo.position.x + 0.001055) < 0.0002 && abs(halo.position.y - 0.001083) < 0.0002
-                && abs(halo.position.z + 0.000753) < 0.0002, "후광 판 중심 \(halo.position)")
+        #expect(abs(marker.position.x + 0.001055) < 0.0002 && abs(marker.position.y - 0.001083) < 0.0002
+                && abs(marker.position.z + 0.000753) < 0.0002, "후광 판 중심 \(marker.position)")
         #expect(halo.renderingOrder == -1)
-        #expect(halo.constraints?.contains { $0 is SCNBillboardConstraint } == true, "빌보드가 아니다")
+        #expect(halo.constraints?.first is SCNBillboardConstraint, "빌보드가 아니다")
         #expect(halo.categoryBitMask == GoldAingFinish.haloCategoryBit)
         let material = try #require(plane.firstMaterial)
         #expect(material.lightingModel == .constant && material.blendMode == .alpha && material.isDoubleSided)
@@ -198,7 +203,8 @@ import Testing
         let rawHalo = try #require(CGImageSourceCreateWithURL(haloURL as CFURL, nil)
             .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
         let transparent = try Self.render(goldScene, pointOfView: Self.frontCamera(for: goldScene), size: size)
-        let haloMaterial = try #require(halo.geometry?.firstMaterial)
+        // 시안 카메라 = 정면이라 0° 칸이 선다(v0.3.55 — 그 칸이 0.3.54 의 정면 판이다).
+        let haloMaterial = try #require(halo.childNodes.first?.geometry?.firstMaterial)
         let compensated = haloMaterial.diffuse.contents
         haloMaterial.diffuse.contents = rawHalo
         let uncompensated = try Self.render(goldScene, pointOfView: Self.frontCamera(for: goldScene), size: size)
@@ -383,7 +389,7 @@ import Testing
         // 기준선: 같은 크기·자리의 **장치 없는** 판(바운딩박스 그대로 · 기본 카테고리)을 같은 부모에 세우면 같은 점에서 맞는다
         // — 점 고르기가 판 위라는 증거다. 그 판에 후광 카테고리 비트를 주면 앱 마스크가 걸러 낸다(바운딩박스 덮기와 별개로 막는다).
         let halo = try #require(Self.halo(scene))
-        let side = try #require(halo.geometry as? SCNPlane).width
+        let side = try #require(halo.childNodes.first?.geometry as? SCNPlane).width
         let probe = SCNNode(geometry: SCNPlane(width: side, height: side))
         probe.name = "probe.plainHalo"
         probe.position = halo.position

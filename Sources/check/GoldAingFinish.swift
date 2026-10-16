@@ -2,6 +2,7 @@ import AppKit
 import CheckCore
 import os
 import SceneKit
+import simd
 
 // MARK: - 황금 아잉이 3D 마감 (v0.3.54)
 //
@@ -12,6 +13,17 @@ import SceneKit
 //     울트라 교체·원복이 몇 번이 와도 다시 굽지 않는다).
 //  ② 후광 판 — 몸 뒤에 세우는 빌보드 평면(`aing_gold-halo.png`). 크기·자리는 아트 스크립트 머리말의 규약 그대로:
 //     가로 = 세로 = 2.0 × 바운딩박스 높이, 중심 = 바운딩박스 중심, renderingOrder −1, 깊이 읽기·쓰기 끔, 알파 블렌드.
+//
+// ★ 후광은 몸의 **지금 각도**를 따른다(v0.3.55). 정면 한 장만 세우면 몸이 옆으로 돌아도(드래그 ±40° · 살랑 ±8° · 찔림 스핀 ·
+//   360°/720° 스핀) 빌보드라 정면 날개 윤곽이 그대로 남아, 달걀 모양 옆모습 뒤에 날개 모양 빛이 떴다(사용자 신고 2026-10-16).
+//   그래서 몸 요 10° 마다 그 자세의 실루엣으로 구운 칸 36장(`GoldAingArt.haloCellResourceNames`)을 판 36개로 세우고, 렌더 프레임마다
+//   제약(`haloCellTransform`)이 몸의 presentation 변환에서 카메라 기준 요·롤을 구해 **칸 하나만**(`haloCell` — 가장 가까운 칸, 단 쉬는
+//   자세 0° · ±40° 둘레 ±9° 는 그 자세의 칸이라 idle 살랑 ±8° 동안 칸이 안 바뀐다) 제 크기로 세우고 나머지는 같은 자리에서
+//   크기 1e-5 로 접는다(멀리 치우면 몸의 presentation 바운딩박스가 부푼다 — `haloHiddenScale`). 롤(찔림의 z 흔들림)은 그 판을 화면 안에서 같이
+//   기울인다. 재질·텍스처는 만들 때 한 번 정하고 다시는 안 건드린다 — 제약은 SceneKit 렌더 스레드에서 돌기 때문에 거기서 하는 일은
+//   **받은 변환과 부모의 presentation 을 읽어 변환 하나를 돌려주는 것뿐**이다(공유 상태 · 할당 · 텍스처 재업로드 없음 — 할당은
+//   `V0355GoldHaloYawTests` 가 렌더 프레임마다 세어 후광 없는 씬과 맞댄다. SCNMatrix4 → simd 는 `simdMatrix` 로 손수 옮긴다: SceneKit
+//   오버레이 이니셜라이저는 부를 때마다 할당해 판 36개면 프레임당 +36 이었다).
 //
 // ★ 마스크는 `isGoldSkin`(아트 스크립트 · 시안의 피부 분류)이다 — `SleepEyeTexture.isSkin` 이 **아니다**(아키텍트 결정 2026-10-15).
 //   isSkin 은 루마 > 120 · b > g+18 이라 이보다 좁아서, 그 마스크로 합성하면 날개 이음매·정수리 하이라이트 605 텍셀이 라벤더로 남는다
@@ -37,6 +49,15 @@ enum GoldAingFinish {
     static let haloSideOverBodyHeight: CGFloat = 2.0
     /// 후광 판의 렌더 순서(몸보다 먼저 그려 몸이 덮는다).
     static let haloRenderingOrder = -1
+    /// 각도 칸 판 노드 이름의 앞부분(`check.goldHalo.cell.040` — 칸의 몸 요). 칸 판은 전부 `haloNodeName` 노드의 자식이다.
+    static let haloCellNodePrefix = "check.goldHalo.cell."
+    /// 고르지 않은 칸의 크기 배율 — 몸 중심 그 자리에서 이만큼 접는다(판 한 변 3.39 × 1e-5 ≈ 3e-5 단위: 울트라 크기에서도 한 픽셀의
+    /// 백분의 일이라 샘플을 하나도 못 덮고, 덮더라도 그 자리는 불투명한 몸 한가운데 뒤다). 0 이 아닌 까닭: 축을 정규화할 수 있어야 한다.
+    /// ★ 멀리 치우지 않는다: 0.3.55 첫 판은 카메라 뒤 1만 단위로 치웠는데, 그러면 캐릭터 · wrapper 의 **presentation** 바운딩박스가
+    ///   9,556 단위로 부풀었다(검토 지적 — 모델 트리는 그대로라 지금 앱은 안 다쳤지만, presentation 경계를 읽는 코드 · SceneKit 기능
+    ///   — 자동 z 범위 · 그림자 투영 · 카메라 컨트롤러 — 가 붙는 순간 덫이다). 대가: 접힌 판도 절두체 안이라 그리기 호출이 남는다
+    ///   (판 35개 -O 실측 +0.016ms/프레임) · 칸 텍스처 36장이 첫 프레임에 다 올라간다(6.2MB/뷰 — 스핀 한 번이면 어차피 다 올라간다).
+    static let haloHiddenScale: Float = 1e-5
 
     private static let logger = Logger(subsystem: "kingcheck", category: "character")
 
@@ -138,7 +159,8 @@ enum GoldAingFinish {
 
     private struct Cache {
         var skin: CGImage??
-        var halo: CGImage??
+        /// 후광 각도 칸 36장(창 합성 보정 끝). 빠진 칸은 0 칸(정면)으로 채운다. 정면이 없으면 nil.
+        var haloCells: [CGImage]??
         /// 마지막으로 합성한 (라벤더 원본, 금 디퓨즈). 같은 메시·같은 텍스처라 한 벌이면 된다.
         var gold: (original: CGImage, gold: CGImage)?
         /// 위 금 디퓨즈의 감은 눈 판.
@@ -171,11 +193,35 @@ enum GoldAingFinish {
         return made
     }
 
-    /// 후광 판 텍스처 — 번들 PNG 를 **창 합성 보정**(`windowCompensated`)해서 쓴다(캐시).
+    /// 정면 후광(0 칸) 텍스처 — 번들 PNG 를 **창 합성 보정**(`windowCompensated`)해서 쓴다(캐시).
     static func haloImage() -> CGImage? {
-        if let hit = cache.withLock({ $0.halo }) { return hit }
-        let made = decode(GoldAingArt.haloResourceName).flatMap { windowCompensated($0) }
-        cache.withLock { $0.halo = .some(made) }
+        haloCellImages()?.first
+    }
+
+    /// 후광 각도 칸 36장(0 칸 = 정면 512², 나머지 160²) — 전부 창 합성 보정을 거친다(캐시, 프로세스당 한 번).
+    /// 칸 하나가 번들에 없으면 그 자리는 정면으로 접는다(옛 동작 — 패키징 대본이 그런 빌드를 막는다). 정면이 없으면 nil.
+    static func haloCellImages() -> [CGImage]? {
+        if let hit = cache.withLock({ $0.haloCells }) { return hit }
+        var memo = CompensationMemo()
+        var made: [CGImage]?
+        if let front = decode(GoldAingArt.haloResourceName).flatMap({ windowCompensated($0, memo: &memo) }) {
+            var cells = [front]
+            var missing: [String] = []
+            for cell in 1..<GoldAingArt.haloCellCount {
+                let name = GoldAingArt.haloResourceName(cell: cell)
+                if let image = decode(name).flatMap({ windowCompensated($0, memo: &memo) }) {
+                    cells.append(image)
+                } else {
+                    missing.append(name)
+                    cells.append(front)
+                }
+            }
+            if !missing.isEmpty {
+                logger.error("gold halo: 각도 칸 \(missing.count, privacy: .public)장이 번들에 없다 — 정면 후광으로 접는다 \(missing.joined(separator: ","), privacy: .public)")
+            }
+            made = cells
+        }
+        cache.withLock { $0.haloCells = .some(made) }
         return made
     }
 
@@ -228,23 +274,32 @@ enum GoldAingFinish {
         return UInt8(highError < lowError ? high : low)
     }
 
+    /// (알파, 색) 쌍 → 보정한 프리멀티 바이트. 쌍은 256×256 가지뿐이라 픽셀마다 pow 를 여섯 번 부르지 않게 쌍마다 한 번만 계산한다
+    /// (첫 금 로드가 메인 스레드다). 후광 칸 36장이 같은 금빛 층이라 한 메모를 나눠 쓰면 대부분 이미 채워져 있다.
+    struct CompensationMemo {
+        var table = [Int16](repeating: -1, count: 256 * 256)
+    }
+
     /// 후광 그림 전체를 보정한다(`premultipliedByte`). 결과는 8비트 sRGB 프리멀티 RGBA — SceneKit 이 그대로 올리는 꼴이다.
     static func windowCompensated(_ image: CGImage) -> CGImage? {
+        var memo = CompensationMemo()
+        return windowCompensated(image, memo: &memo)
+    }
+
+    static func windowCompensated(_ image: CGImage, memo: inout CompensationMemo) -> CGImage? {
         let w = image.width, h = image.height
         guard let straight = straightRGBA(image) else { return nil }
         var out = [UInt8](repeating: 0, count: w * h * 4)
-        // (알파, 색) 쌍은 256×256 가지뿐이다 — 픽셀마다 pow 를 여섯 번 부르지 않게 쌍마다 한 번만 계산한다(첫 금 로드가 메인 스레드다).
-        var memo = [Int16](repeating: -1, count: 256 * 256)
         var o = 0
         while o < straight.count {
             let k = Int(straight[o + 3])
             if k > 0 {
                 for c in 0..<3 {
                     let key = k << 8 | Int(straight[o + c])
-                    if memo[key] < 0 {
-                        memo[key] = Int16(premultipliedByte(color: Double(straight[o + c]) / 255, alpha: k))
+                    if memo.table[key] < 0 {
+                        memo.table[key] = Int16(premultipliedByte(color: Double(straight[o + c]) / 255, alpha: k))
                     }
-                    out[o + c] = UInt8(memo[key])
+                    out[o + c] = UInt8(memo.table[key])
                 }
                 out[o + 3] = straight[o + 3]
             }
@@ -377,33 +432,151 @@ enum GoldAingFinish {
         return true
     }
 
-    /// 후광 판 노드. 그림이 없으면 지오메트리 없는 표식 노드만 남긴다(금 판정은 그대로 산다).
+    /// 후광 노드: 몸 바운딩박스 중심의 표식 노드(`haloNodeName`, 지오메트리 없음) 아래에 각도 칸 판 36개.
+    /// 그림이 없으면 표식 노드만 남긴다(금 판정은 그대로 산다).
     static func makeHaloNode(bodyMin: SCNVector3, bodyMax: SCNVector3) -> SCNNode {
         let node = SCNNode()
         node.name = haloNodeName
+        node.categoryBitMask = haloCategoryBit
         let center = SCNVector3((bodyMin.x + bodyMax.x) / 2, (bodyMin.y + bodyMax.y) / 2, (bodyMin.z + bodyMax.z) / 2)
         node.position = center
-        guard let halo = haloImage() else { return node }
+        guard let cells = haloCellImages() else { return node }
         let side = CGFloat(bodyMax.y - bodyMin.y) * haloSideOverBodyHeight
+        for (cell, image) in cells.enumerated() {
+            node.addChildNode(makeHaloCellNode(cell: cell, image: image, side: side))
+        }
+        return node
+    }
+
+    /// 각도 칸 판 하나. 판·재질은 0.3.54 정면 판과 같고, 제약이 [빌보드 → 칸 고르기(`haloCellTransform`)] 다.
+    static func makeHaloCellNode(cell: Int, image: CGImage, side: CGFloat) -> SCNNode {
+        let node = SCNNode()
+        node.name = haloCellNodePrefix + String(format: "%03d", cell * GoldAingArt.haloYawStepDegrees)
         let plane = SCNPlane(width: side, height: side)
         let material = SCNMaterial()
         material.name = haloMaterialName
         material.lightingModel = .constant
-        material.diffuse.contents = halo
+        material.diffuse.contents = image
         material.blendMode = .alpha
         material.isDoubleSided = true
         material.writesToDepthBuffer = false
         material.readsFromDepthBuffer = false
         plane.materials = [material]
         // 바운딩박스를 몸 중심의 점으로 덮어 쓴다 — 판이 몸 크기 계산(프레이밍·modelExtent·클릭 rect)에 끼지 않게.
-        // 몸 중심은 언제나 화면 안이라 절두체 컬링이 판을 지우지 않는다.
+        // 칸은 언제나 몸 중심에 서고 몸 중심은 언제나 화면 안이라 절두체 컬링이 그 판을 지우지 않는다(고르지 않은 칸은 크기로 접는다).
         let tiny: CGFloat = 0.001
         plane.boundingBox = (min: SCNVector3(-tiny, -tiny, -tiny), max: SCNVector3(tiny, tiny, tiny))
         node.geometry = plane
         node.renderingOrder = haloRenderingOrder
         node.categoryBitMask = haloCategoryBit
-        node.constraints = [SCNBillboardConstraint()]
+        // ★ 렌더 스레드에서 돈다. 받은 변환(빌보드 결과 = 카메라 방향)과 부모(표식 노드)의 presentation 만 읽는다 — 리액션 SCNAction ·
+        //   CAAnimation · 살랑 회전이 이 프레임에 몸을 어디로 돌렸는지는 presentation 에만 확실히 있다. 들어오는 변환의 위치·크기는
+        //   믿지 않는다 — 위치·크기는 언제나 표식 노드(= 몸)에서 다시 잰다.
+        // ⚠ 알려진 한계(검토 지적 · 실측): 빌보드 뒤에 오는 월드 공간 제약 안에서는 SceneKit 이 부모 사슬을 **이징 SCNAction 의 조금 다른
+        //   값**으로 본다 — 목표 달성 720° 이징 스핀 중 최대 2.9°(선형 스핀은 0°). 그래서 그 스핀 30fps 63프레임 중 5프레임이 이웃 칸을
+        //   고르고, 판이 카메라를 최대 7.7° 비껴 보고 롤이 최대 5.7°(찔림) 어긋난다(스냅숏 · render(atTime:) 둘 다 같다). 월드 공간에서는
+        //   부모를 어떻게 읽어도(presentation · 모델 · 손으로 곱한 사슬) 같은 옛 값이고, 로컬 공간 제약으로 바꾸면 부모는 맞게 읽히지만
+        //   빌보드가 넘긴 변환이 옛 사슬로 환산돼 있어 결과가 같다 — 제약 안에서는 못 고친다(고치려면 뷰마다 렌더러 델리게이트에서 골라야
+        //   한다). 초당 500° 넘게 도는 동안 한두 프레임이라 그대로 둔다.
+        // 블록은 칸 번호(Int)만 잡는다 — 노드를 잡으면 노드 → 제약 → 블록 → 노드 고리가 생긴다.
+        let select = SCNTransformConstraint(inWorldSpace: true) { evaluated, transform in
+            guard let anchor = evaluated.parent?.presentation.simdWorldTransform else { return transform }
+            return SCNMatrix4(haloCellTransform(billboard: simdMatrix(transform), anchor: anchor, cell: cell))
+        }
+        node.constraints = [SCNBillboardConstraint(), select]
         return node
+    }
+
+    // MARK: 칸 고르기(순수 — 렌더 스레드의 제약이 부른다)
+
+    /// 몸의 자세를 카메라 기준으로 나눈 것(라디안). 카메라 기준 회전 = Rz(roll) · Rx(tilt) · Ry(yaw).
+    /// · yaw — 몸이 카메라 앞에서 제 위 축으로 돈 각(+ = 위에서 볼 때 반시계, 얼굴이 화면 오른쪽으로). 후광 칸을 고른다.
+    /// · roll — 몸의 위 축이 화면 안에서 기운 각(+ = 반시계). 판을 화면 안에서 같이 기울인다.
+    /// · tilt — 몸의 위 축이 카메라 쪽으로 넘어온 각. 앱 카메라는 위에서 내려다봐 서 있는 몸도 약 17° 다. 칸은 수평 시안 카메라로
+    ///   구웠고(확정 정면도 그렇다) 끄덕임(인사 20°)용 칸은 없다 — yaw 를 구할 때 걷어 내기만 한다.
+    struct HaloPose: Equatable {
+        var yaw: Float
+        var roll: Float
+        var tilt: Float
+    }
+
+    /// `camera`: 빌보드 결과(축 = 화면 오른쪽 · 위 · 카메라 쪽, 크기가 섞여 있어도 된다). `body`: 몸(표식 노드)의 월드 변환.
+    static func haloPose(camera: simd_float4x4, body: simd_float4x4) -> HaloPose {
+        let right = axis(camera.columns.0), up = axis(camera.columns.1), toward = axis(camera.columns.2)
+        let bodyUp = axis(body.columns.1), bodyForward = axis(body.columns.2)
+        // 몸 축을 카메라 좌표로.
+        let u = SIMD3(simd_dot(bodyUp, right), simd_dot(bodyUp, up), simd_dot(bodyUp, toward))
+        let f = SIMD3(simd_dot(bodyForward, right), simd_dot(bodyForward, up), simd_dot(bodyForward, toward))
+        // 위 축 = Rz(roll)·Rx(tilt)·(0,1,0) = (−sin roll · cos tilt, cos roll · cos tilt, sin tilt).
+        let roll = atan2(-u.x, u.y)
+        let tilt = asin(min(1, max(-1, u.z)))
+        // 앞 축에서 roll · tilt 를 걷어 내면 Ry(yaw)·(0,0,1) = (sin yaw, 0, cos yaw) 가 남는다.
+        let cr = cos(roll), sr = sin(roll)
+        let unrolled = SIMD3(f.x * cr + f.y * sr, -f.x * sr + f.y * cr, f.z)
+        let ct = cos(tilt), st = sin(tilt)
+        let level = SIMD3(unrolled.x, unrolled.y * ct + unrolled.z * st, -unrolled.y * st + unrolled.z * ct)
+        return HaloPose(yaw: atan2(level.x, level.z), roll: roll, tilt: tilt)
+    }
+
+    /// 몸 요(라디안, 아무 값 — 여러 바퀴 · 음수) → 칸(0…35). 360° 로 감고, 기본은 가장 가까운 칸(경계 ±5° 반올림)이다.
+    /// 단 **쉬는 자세**(정면 0° · 드래그/보드 바라보기 ±40°) 둘레 ±`haloRestBandDegrees` 안은 그 자세의 칸이다 — 살랑(±8.02°)이
+    /// 칸 경계(±5° · 35° · 45°)를 넘나들어, 가만히 선 몸 뒤에서 확정 정면 후광이 3.6초마다 10° 칸과 뒤바뀌며 윤곽이 튀었다(검토 지적).
+    /// 띠 끝(9.02°)의 윤곽 오차는 정면 칸 기준 L1 0.0041 — 가장 가까운 칸 규칙의 최악(145° 0.0044)보다 작다(아트 파이프라인 실측).
+    static func haloCell(yaw: Double) -> Int {
+        guard yaw.isFinite else { return 0 }
+        let degrees = remainder(yaw * 180 / .pi, 360)   // (−180, 180]
+        let band = haloRestBandDegrees, side = haloSideRestDegrees
+        if abs(degrees) <= band { return 0 }
+        if abs(degrees - side) <= band { return nearestHaloCell(degrees: side) }
+        if abs(degrees + side) <= band { return nearestHaloCell(degrees: -side) }
+        return nearestHaloCell(degrees: degrees)
+    }
+
+    /// 쉬는 자세 띠의 반폭(도) = idle 살랑 한쪽 폭(`CheckCharacter3DScene.idleSwayRadians`, 8.02°) + 1°.
+    static let haloRestBandDegrees: Double = Double(CheckCharacter3DScene.idleSwayRadians) * 180 / .pi + 1
+    /// 옆으로 쉬는 자세(도) — 드래그 방향·보드 쪽 바라보기 스냅 각(`ReactionEngine.dragFacingAngle`, 테스트가 같은 값으로 묶는다).
+    /// 칸 중심(10° 배수)이어야 그 자세에서 오차 0 이다.
+    static let haloSideRestDegrees: Double = 40
+
+    /// 도(아무 값) → 가장 가까운 칸. 반올림 · 360° 감기.
+    private static func nearestHaloCell(degrees: Double) -> Int {
+        let count = GoldAingArt.haloCellCount
+        let k = Int((degrees / Double(GoldAingArt.haloYawStepDegrees)).rounded()) % count
+        return k < 0 ? k + count : k
+    }
+
+    /// 칸 `cell` 판의 이 프레임 월드 변환. 언제나 몸 중심에 화면 정렬 + 몸의 롤만큼 기울여 세우고, 몸 자세가 이 칸이 아니면 그 자리에서
+    /// 크기를 `haloHiddenScale` 로 접는다. 빌보드 결과에서는 **방향만** 쓴다(SceneKit 이 매 프레임 카메라에서 새로 정한다).
+    /// 위치·크기(스쿼시·스트레치)는 몸(`anchor`)에서 잰다 — 들어온 위치·크기를 다시 쓰면 접힌 크기에서 출발하거나 오차가 쌓일 수 있다.
+    static func haloCellTransform(billboard: simd_float4x4, anchor: simd_float4x4, cell: Int) -> simd_float4x4 {
+        let pose = haloPose(camera: billboard, body: anchor)
+        let right = axis(billboard.columns.0), up = axis(billboard.columns.1), toward = axis(billboard.columns.2)
+        var scale = SIMD3(length(anchor.columns.0), length(anchor.columns.1), length(anchor.columns.2))
+        if haloCell(yaw: Double(pose.yaw)) != cell { scale *= haloHiddenScale }
+        let c = cos(pose.roll), s = sin(pose.roll)
+        let rolledRight = right * c + up * s, rolledUp = up * c - right * s
+        let position = SIMD3(anchor.columns.3.x, anchor.columns.3.y, anchor.columns.3.z)
+        return simd_float4x4(SIMD4(rolledRight * scale.x, 0), SIMD4(rolledUp * scale.y, 0), SIMD4(toward * scale.z, 0), SIMD4(position, 1))
+    }
+
+    /// SCNMatrix4 → simd_float4x4 를 칸마다 손으로 옮긴다(행 i = 열 i — SceneKit 의 m41…m43 이 위치다). SceneKit 오버레이의
+    /// `simd_float4x4(_: SCNMatrix4)` 는 부를 때마다 힙 할당을 하나 한다(실측: 칸 판 36개 → 프레임당 +36, 디버그 · -O 같다) —
+    /// 렌더 스레드에서 프레임마다 판마다 도는 제약이라 그 이니셜라이저를 쓰지 않는다. 반대 방향 `SCNMatrix4(_: simd_float4x4)` 는 할당이 없다.
+    static func simdMatrix(_ m: SCNMatrix4) -> simd_float4x4 {
+        simd_float4x4(SIMD4(Float(m.m11), Float(m.m12), Float(m.m13), Float(m.m14)),
+                      SIMD4(Float(m.m21), Float(m.m22), Float(m.m23), Float(m.m24)),
+                      SIMD4(Float(m.m31), Float(m.m32), Float(m.m33), Float(m.m34)),
+                      SIMD4(Float(m.m41), Float(m.m42), Float(m.m43), Float(m.m44)))
+    }
+
+    private static func axis(_ column: SIMD4<Float>) -> SIMD3<Float> {
+        let v = SIMD3(column.x, column.y, column.z)
+        let l = simd_length(v)
+        return l > 0 ? v / l : v
+    }
+
+    private static func length(_ column: SIMD4<Float>) -> Float {
+        simd_length(SIMD3(column.x, column.y, column.z))
     }
 
     /// 이 캐릭터 노드가 황금 아잉이인가(후광 표식이 붙어 있다).

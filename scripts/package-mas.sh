@@ -327,6 +327,13 @@ GACHA_ART_DIR="$RES_DIR/check_CheckCore.bundle/Contents/Resources/GachaMachine"
 for GACHA_PNG in gacha_body gacha_knob gacha_capsule gacha_capsule_gold gacha_cap; do
   [[ -s "$GACHA_ART_DIR/$GACHA_PNG.png" ]] || die "뽑기 기계 그림이 앱에 없다: $GACHA_ART_DIR/$GACHA_PNG.png"
 done
+# 황금 아잉이 후광 각도 칸 36장이 앱 안에 실렸는가(v0.3.55). 빠진 칸은 앱이 정면 후광으로 접어 서명·심사 검사는 다 통과한다.
+# 이름은 GoldAingArt.haloResourceName(cell:) 와 같다(0° aing_gold-halo, 그다음 -010 … -350).
+GOLD_ART_DIR="$RES_DIR/check_check.bundle/Contents/Resources"
+for HALO_DEG in $(seq 0 10 350); do
+  if [[ "$HALO_DEG" == 0 ]]; then HALO_PNG="aing_gold-halo"; else HALO_PNG="$(printf 'aing_gold-halo-%03d' "$HALO_DEG")"; fi
+  [[ -s "$GOLD_ART_DIR/$HALO_PNG.png" ]] || die "황금 아잉이 후광 칸이 앱에 없다: $GOLD_ART_DIR/$HALO_PNG.png"
+done
 
 CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
 plutil -create xml1 "$CONFIG_PLIST"

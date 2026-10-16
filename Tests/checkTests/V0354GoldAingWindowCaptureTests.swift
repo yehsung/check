@@ -81,7 +81,8 @@ import Testing
         let view = SCNView(frame: NSRect(origin: .zero, size: size))
         let scene = try #require(CheckCharacter3DScene.makeScene(animated: false, character: CharacterCatalog.builtInGoldAing))
         if let rawHalo {
-            scene.rootNode.childNode(withName: GoldAingFinish.haloNodeName, recursively: true)?.geometry?.firstMaterial?
+            // 0° 칸 판(v0.3.55 — 후광은 표식 노드 아래 각도 칸 판들이고, 정면에서는 0° 칸이 선다).
+            scene.rootNode.childNode(withName: GoldAingFinish.haloNodeName, recursively: true)?.childNodes.first?.geometry?.firstMaterial?
                 .diffuse.contents = rawHalo
         }
         view.scene = scene

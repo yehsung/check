@@ -43,6 +43,23 @@ package nonisolated enum GoldAingArt {
     package static let haloResourceName = "\(characterID)-halo"
     package static var finishResourceNames: [String] { [skinResourceName, haloResourceName] }
 
+    /// 후광 각도 칸(v0.3.55) — 몸이 카메라에 대해 돈 각(요)마다 그 자세의 실루엣으로 구운 후광. 칸 k 는 몸 요 k × 10°
+    /// (위에서 볼 때 반시계 = `rotateBy(y: +)` 방향, +90° 면 얼굴이 화면 오른쪽). 0 칸은 정면 후광(`haloResourceName`, 512²) 그대로이고,
+    /// 나머지 35칸은 `<id>-halo-010` … `<id>-halo-350`(160²)이다. 아트 스크립트가 같은 이름으로 쓴다.
+    ///
+    /// "그릴 수 있다"(`requiredResourceNames`)에는 넣지 않는다 — 칸이 빠진 빌드도 황금 아잉이는 서고(빠진 칸은 정면 후광으로 접는다),
+    /// 상점 능력 번호 2 의 뜻은 "금 아잉을 그린다"이다. 대신 맥 패키징 대본 둘이 조립한 앱 안에서 칸 수를 세어 빠지면 멈춘다.
+    package static let haloYawStepDegrees = 10
+    package static var haloCellCount: Int { 360 / haloYawStepDegrees }
+
+    /// 칸 k(0…35)의 그림 이름.
+    package static func haloResourceName(cell: Int) -> String {
+        cell == 0 ? haloResourceName : "\(haloResourceName)-\(String(format: "%03d", cell * haloYawStepDegrees))"
+    }
+
+    /// 후광 그림 전부(0 칸 = 정면부터 순서대로 36장).
+    package static var haloCellResourceNames: [String] { (0..<haloCellCount).map(haloResourceName(cell:)) }
+
     /// 플랫폼별 요구 파일. 폰은 3D 를 그리지 않으므로 초상이 전부다.
     package enum Platform: Sendable, Equatable {
         case mac

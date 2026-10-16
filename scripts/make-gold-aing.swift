@@ -1,11 +1,14 @@
 #!/usr/bin/env swift
-// 황금 아잉이(aing_gold) 그림 생성기 (v0.3.54) — 앱이 쓰는 금 피부 맵 · 후광 · 초상 4장(맥 2 + 폰 사본 2)을 다시 굽는다.
+// 황금 아잉이(aing_gold) 그림 생성기 (v0.3.54 · 후광 각도 칸 v0.3.55) — 앱이 쓰는 금 피부 맵 · 후광(정면 1 + 각도 칸 35) ·
+// 초상 4장(맥 2 + 폰 사본 2)을 다시 굽는다.
 //
 // 사용법(저장소 루트에서):
-//   swift -O scripts/make-gold-aing.swift                    산출물 6개를 저장소에 쓴다(아래 '출력'). 같은 입력이면 같은 픽셀.
+//   swift -O scripts/make-gold-aing.swift                    산출물 41개를 저장소에 쓴다(아래 '출력'). 같은 입력이면 같은 픽셀.
 //   swift -O scripts/make-gold-aing.swift --verify <폴더> <목표-후광.png> <목표-몸.png>
 //                                                            산출물로 SceneKit 렌더(앱과 같은 unlit 합성 + 후광 판)를 그려
 //                                                            목표와 나란히 놓은 PNG 와 수치(measure)를 <폴더>에 쓴다. 저장소는 안 건드린다.
+//                                                            몸을 여러 각도(0·16·40·90·140·180·220·270·320°)로 돌려 그 각도의
+//                                                            후광 칸과 옛 정면 한 장을 나란히 그리고 '후광이 몸을 감싸는 폭'을 잰다.
 //   swift -O scripts/make-gold-aing.swift --fit <목표-몸.png>  목표 그림에서 아래 상수(조명 계수·초상 램프·밝기 분위수·상자 비율)를
 //                                                            다시 맞춰 Swift 리터럴로 찍는다. 상수를 바꾸려면 이 출력을 붙여 넣는다.
 //   (실측: -O 로 약 10초. 두 번 돌려도 산출물 바이트가 같다. -O 없이도 돌지만 느리다.)
@@ -22,6 +25,14 @@
 //                                                   두었다(감은 눈 커버가 그 자리를 피부로 덮어도 금이 나온다).
 //   Sources/check/Resources/aing_gold-halo.png      512×512 알파. 후광만(몸 없음). 정면 실루엣에서 ref halo.swift 층(k = 0.8,
 //                                                   몸 높이 256px 기준 σ 32 / 14.4 / 4.8px)으로 만든다 — 몸 밖 픽셀은 시안 후광과 같다(실측).
+//                                                   = 각도 칸 0°. 사용자가 고른 그림이라 v0.3.55 에서도 바이트 그대로다(재생성해도 같다).
+//   Sources/check/Resources/aing_gold-halo-010.png … aing_gold-halo-350.png
+//                                                   160×160 알파 35장 — 몸이 카메라에 대해 +10°, +20°, …, +350° 돈 자세(요, 위에서 볼 때
+//                                                   반시계 = SCNAction rotateBy(y: +) 방향 — +90° 면 얼굴이 화면 오른쪽)의 실루엣으로 **같은
+//                                                   파이프라인**(시안 카메라를 몸 중심 둘레로 −ψ 만큼 돌린 512 렌더 → 같은 층 · 같은 σ → 테두리 검사)
+//                                                   으로 구운 뒤 160² 로 줄인다. 왜 칸인가: 정면 한 장은 정면 날개 윤곽이 박혀 있어, 몸이 옆으로 돌면
+//                                                   달걀 모양 옆모습 뒤에 날개 모양 빛이 남았다(사용자 신고 2026-10-16 · 90° 에서 윤곽 차 44px@512).
+//                                                   왜 10° · 360° 전부 · 160²: 아래 '후광 각도 칸' 머리말.
 //   Sources/check/Resources/aing_gold-neutral.png   192×192 RGBA 초상(아잉 초상의 피부만 금으로 + 몸 0.88배 + 후광).
 //                                                   눈·볼·입·눈썹은 원래 색 그대로.
 //   Sources/check/Resources/aing_gold-negative.png  〃 (시무룩)
@@ -47,6 +58,22 @@
 //    writesToDepthBuffer = false · readsFromDepthBuffer = false · 노드 renderingOrder = −1 (몸보다 먼저 그려 몸이 덮는다).
 //    근거: 시안 카메라(FOV 30, 거리 = H/2/tan15° × 2.0)에서 512px 프레임은 몸 중심 깊이에서 정확히 2.0H 를 덮고, 후광 PNG 의 중심은
 //    바운딩박스 중심의 투영이다. --verify 가 이 판을 실제로 그려 시안과 맞댄다.
+//    v0.3.55: 각도 칸마다 같은 판을 하나씩(36장) 세우고, 렌더 프레임마다 몸의 **지금 자세**(presentation)에서 카메라 기준 요를 구해
+//    가장 가까운 칸 하나만 보이게 한다(GoldAingFinish). 각도 칸의 판 크기·자리·재질은 0° 와 같다 — 텍스처 해상도만 다르다.
+//
+// ── 후광 각도 칸(v0.3.55) ──────────────────────────────────────────────────────────────────────────────────────────
+// 칸 ψ 의 실루엣 = 시안 카메라를 몸 중심 둘레로 −ψ 돌린 512 렌더(`View.bodyYaw`). 0° 는 `.front` 와 바이트까지 같은 렌더다(실측) —
+//   그래서 0° 칸 = 지금 확정 후광 그대로다. 모델을 +ψ 돌리고 정면에서 찍은 것과 실루엣 IoU 0.9995(40°) · 0.9992(90°)(부호 확인).
+// 간격 10°: 1° 마다 구운 실루엣을 '가장 가까운 칸'과 맞대 윤곽 하우스도르프 거리를 쟀다(512 렌더 · 앱 구도 280×340 에서 판 한 변
+//   ≈ 348px 라 512px 의 1px = 앱 0.68px). 5° 칸 최악 4.0px(앱 2.7) · **10° 칸 9.2px(앱 6.3, ψ=55° 날개가 돌아 나오는 자리)** ·
+//   15° 13.0px(앱 8.8) · 20° 18.0px(앱 12.2). 옛 정면 한 장은 40° 에서 40.8px(앱 27.7) · 90° 에서 44.0px(앱 29.9). 10° 는 옛 오차의
+//   1/5 이고 칸 수(36)와 메모리가 감당할 만하다. 이웃 칸이 바뀌는 순간의 튐은 0°↔10° 6.0px(앱 4.1 — 평소 살랑 ±8° 가 넘는 경계).
+// 360° 전부: 좌우 대칭이 아니다 — +θ 와 거울(−θ)의 실루엣 IoU 는 0.987 이상이지만 날개 끝이 한쪽이 더 처져(정면에서 약 6px) 윤곽
+//   하우스도르프가 최악 8.9px(앱 6.1, θ=130°) — 10° 양자화 오차와 같은 크기다. 거울로 반을 아끼면 그 오차가 한쪽에만 더해진다.
+// 160²: 같은 후광을 512 와 각 해상도로 판에 붙여 앱 구도에서 맞대면(밝은·어두운 바탕) 256² 최대 7 · 평균 0.45, 192² 8 · 0.56,
+//   **160² 9 · 0.69**, 128² 12 · 0.87(/255, 어두운 바탕이 최악). 울트라(945²)에서도 160² 최대 9 · 평균 0.57 — 흐린 빛이라 해상도가
+//   거의 안 보인다. GPU 텍스처(밉맵 포함 ×4/3): 0° 512² 1.40MB + 35 × 160² 4.78MB = 6.2MB(한 뷰에서 칸을 전부 거쳤을 때).
+//   0° 칸만 512 로 둔다 — 그 칸을 줄이면 확정 후광의 앱 렌더가 최대 7 바뀐다.
 //
 // ── 어떻게 굽나 ───────────────────────────────────────────────────────────────────────────────────────────────────
 // 피부 맵: 메시 삼각형을 UV 공간(512²)에 래스터해 텍셀마다 '부드러운 법선'(ref render3d.swift smoothed() 와 같은 이웃 확산 40회,
@@ -59,6 +86,7 @@
 //   어느 텍셀의 원본 밝기를 믿나: 얼굴 장식(눈·볼·입) 둘레 8텍셀 안에서는 밝은 피부만(감은 눈 커버가 그 자리를 밝은 라벤더로 덮는다),
 //   그 밖은 (금) 피부 전부. 못 믿는 텍셀의 밝기는 **메시 표면**을 따라 번진 정점 밝기로 채우고, UV 틈은 색을 팽창해 채운다.
 // 후광: 시안 카메라로 그린 정면 실루엣 알파에 halo.swift 층을 그대로(색 · 두 번 겹침 포함) 적용하고 몸은 합성하지 않는다.
+//   각도 칸은 같은 카메라를 몸 중심 둘레로 돌린 실루엣에 같은 층을 적용하고, 테두리 검사 뒤 160² 로 줄여 다시 검사한다.
 // 초상: 라벤더 피부를 금으로 바꾼다. 피부색 S(눈·볼 아래는 둘레에서 번져 채움)의 밝기를 '시안 몸 밝기 분위수'로 옮기고 — 원천 분포는
 //   시안 측정 상자가 시안 몸에서 덮는 것과 **같은 몸 비율** 자리에서 잰다(targetBoxInBody) — 그 밝기의 '시안 평균색' 램프로 칠한다.
 //   픽셀마다 피부 비율 β 를 구해 out = P + β·(금 − S) — 볼터치처럼 피부와 섞인 픽셀은 섞인 비율만큼만 바뀐다(볼 테두리에 단단한
@@ -85,6 +113,19 @@ let modelPath = "\(resourceDir)/aing.scn"
 let skinOutput = "\(resourceDir)/aing_gold-skin.png"
 let haloOutput = "\(resourceDir)/aing_gold-halo.png"
 let expressions = ["neutral", "negative"]
+// 후광 각도 칸(v0.3.55). 이름 규칙은 앱 `GoldAingArt.haloResourceName(cell:)` 와 같다 — 앱 쪽이 바뀌면 여기도 같이 바꾼다.
+let haloYawStep = 10
+let haloCellCount = 360 / haloYawStep
+let haloCellSize = 160
+/// 칸 k(0…35)의 파일. 0 은 정면 512²(`haloOutput`), 나머지는 몸 요 k×10° 의 160².
+func haloCellOutput(_ cell: Int) -> String {
+    cell == 0 ? haloOutput : "\(resourceDir)/aing_gold-halo-\(String(format: "%03d", cell * haloYawStep)).png"
+}
+/// 몸 요(도) → 가장 가까운 칸(앱 `GoldAingFinish.haloCell(yaw:)` 와 같은 규칙: 반올림 · 360° 감기).
+func haloCell(yawDegrees: Double) -> Int {
+    let k = Int((yawDegrees / Double(haloYawStep)).rounded()) % haloCellCount
+    return k < 0 ? k + haloCellCount : k
+}
 
 let skinSize = 512
 let haloSize = 512
@@ -294,12 +335,15 @@ func smoothedNormals(pos: [SIMD3<Float>], idx: [Int]) -> ([SIMD3<Float>], [Int],
 struct FrontCamera {
     let position: SIMD3<Float>, center: SIMD3<Float>, right: SIMD3<Float>, up: SIMD3<Float>, forward: SIMD3<Float>
     let tanHalf: Float
-    init(_ mesh: Mesh) {
+    /// `bodyYawDegrees`: 몸이 카메라에 대해 돈 각(후광 각도 칸). 몸을 +ψ 돌리는 대신 카메라를 몸 중심 둘레로 −ψ 돌린다(같은 그림 ·
+    /// 후광 PNG 의 중심이 언제나 바운딩박스 중심의 투영으로 남는다). 0 이면 sin(−0)·dist = −0 · cos 0 = 1 이라 **정면과 비트까지 같다**.
+    init(_ mesh: Mesh, bodyYawDegrees: Float = 0) {
         let h = mesh.height
         tanHalf = tan(frontFOV / 2 * .pi / 180)
         let dist = h / 2 / tanHalf * frontZoom
         center = mesh.center
-        position = SIMD3(center.x, center.y + h * frontRaise, center.z + dist)
+        let a = -bodyYawDegrees * .pi / 180
+        position = SIMD3(center.x + dist * sin(a), center.y + h * frontRaise, center.z + dist * cos(a))
         forward = simd_normalize(center - position)
         right = simd_normalize(simd_cross(forward, SIMD3<Float>(0, 1, 0)))
         up = simd_cross(right, forward)
@@ -555,7 +599,8 @@ func over(_ top: CGImage, _ bottom: CGImage) -> CGImage {
 /// aing.scn 을 unlit + 주어진 디퓨즈로 그린다. halo 가 있으면 헤더에 적은 판을 단다. view: 시안 정면 · 앱 구도 · 궤도.
 /// background nil = 투명. 반투명 픽셀은 SceneKit 이 **선형 공간에서 프리멀티플라이**한 값을 sRGB 로 적어 돌려주므로(실측:
 /// 후광 α 27/255 자리가 (92,80,43,27) — 보통 sRGB 프리멀티 해석이면 R>α 라 깨진다) 후광을 볼 때는 배경을 씬 안에 깐다.
-enum View { case front, app, orbit(yaw: Float, pitch: Float) }
+/// `bodyYaw(도)` = 시안 카메라를 몸 중심 둘레로 돌린 구도(후광 각도 칸 · `FrontCamera(mesh, bodyYawDegrees:)`). 0 은 `.front` 와 같다.
+enum View { case front, app, orbit(yaw: Float, pitch: Float), bodyYaw(Float) }
 
 func renderModel(diffuse: CGImage, halo: CGImage?, mesh: Mesh, size: CGSize, view: View, background: NSColor? = nil) -> CGImage {
     guard let scene = try? SCNScene(url: URL(fileURLWithPath: modelPath), options: nil) else { fail("모델을 못 읽었다") }
@@ -582,6 +627,8 @@ func renderModel(diffuse: CGImage, halo: CGImage?, mesh: Mesh, size: CGSize, vie
     var cameraNode = FrontCamera(mesh).node()
     switch view {
     case .front: break
+    case let .bodyYaw(degrees):
+        cameraNode = FrontCamera(mesh, bodyYawDegrees: degrees).node()
     case .app:
         // 앱 CheckCharacter3DScene.addFramingCamera 와 같은 구도(FOV 40, 위에서 내려다봄).
         let extent = max(mesh.maxB.x - mesh.minB.x, mesh.maxB.y - mesh.minB.y)
@@ -761,13 +808,28 @@ func borderAlpha(_ image: CGImage) -> Double {
 
 // MARK: - 후광(3D 판용)
 
-func makeHalo(_ mesh: Mesh) -> CGImage {
-    let silhouette = renderModel(diffuse: mesh.diffuse, halo: nil, mesh: mesh, size: CGSize(width: haloSize, height: haloSize), view: .front)
+/// 후광 한 칸(512²): 몸 요 `cell × 10°` 의 실루엣 → 같은 층 · 같은 σ. 0 칸은 `.front` 그대로(확정 후광).
+func makeHalo(_ mesh: Mesh, cell: Int = 0) -> CGImage {
+    let view: View = cell == 0 ? .front : .bodyYaw(Float(cell * haloYawStep))
+    let silhouette = renderModel(diffuse: mesh.diffuse, halo: nil, mesh: mesh, size: CGSize(width: haloSize, height: haloSize), view: view)
     let halo = haloImage(silhouette: silhouette, sigmaK: haloK * (Double(haloSize) / 2) / haloBodyPixels)
     let border = borderAlpha(halo)
-    print("[halo] 테두리 2px 최대 알파 \(String(format: "%.4f", border))")
-    guard border <= portraitBorderAlphaLimit else { fail("후광 테두리 알파 \(border)") }
+    if cell == 0 { print("[halo] 테두리 2px 최대 알파 \(String(format: "%.4f", border))") }
+    guard border <= portraitBorderAlphaLimit else { fail("후광 \(cell * haloYawStep)° 테두리 알파 \(border)") }
     return halo
+}
+
+/// 각도 칸(1…35)의 저장본: 512² 후광을 `haloCellSize`(160²)로 줄인다(sRGB 프리멀티 문맥 · 고품질 보간). 줄인 뒤 테두리도 다시 잰다.
+func makeHaloCell(_ mesh: Mesh, cell: Int) -> CGImage {
+    let full = makeHalo(mesh, cell: cell)
+    let ctx = CGContext(data: nil, width: haloCellSize, height: haloCellSize, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.interpolationQuality = .high
+    ctx.draw(full, in: CGRect(x: 0, y: 0, width: haloCellSize, height: haloCellSize))
+    let small = ctx.makeImage()!
+    let border = borderAlpha(small)
+    guard border <= portraitBorderAlphaLimit else { fail("후광 \(cell * haloYawStep)° (\(haloCellSize)²) 테두리 알파 \(border)") }
+    return small
 }
 
 // MARK: - --fit
@@ -989,7 +1051,71 @@ func verify(outDir: String, targetHaloPath: String, targetBodyPath: String, mesh
         ctx.draw(bottom, in: CGRect(x: (w - bottom.width) / 2, y: 0, width: bottom.width, height: bottom.height))
         writePNG(ctx.makeImage()!, "\(outDir)/gold-aing-\(name).png")
     }
+    verifyYaws(outDir: outDir, diffuse: diffuse, mesh: mesh)
     print("[verify] \(outDir) 에 썼다")
+}
+
+/// 알파 ≥ `threshold` 영역의 경계 픽셀(4-이웃 중 하나가 문턱 아래).
+func boundary(_ px: [UInt8], width w: Int, height h: Int, threshold: UInt8) -> [SIMD2<Float>] {
+    var out = [SIMD2<Float>]()
+    for y in 1..<(h - 1) { for x in 1..<(w - 1) where px[(y * w + x) * 4 + 3] >= threshold {
+        if px[(y * w + x - 1) * 4 + 3] < threshold || px[(y * w + x + 1) * 4 + 3] < threshold
+            || px[((y - 1) * w + x) * 4 + 3] < threshold || px[((y + 1) * w + x) * 4 + 3] < threshold {
+            out.append(SIMD2(Float(x), Float(y)))
+        }
+    } }
+    return out
+}
+
+/// 후광이 몸을 감싸는 폭: 후광(α ≥ 0.3) 경계 픽셀마다 몸(α ≥ 250) 경계까지 가장 가까운 거리 — 평균 · 최대(px).
+/// 맞는 후광은 어느 각도에서나 0° 와 비슷한 폭으로 몸을 두르고, 정면 날개가 박힌 후광은 옆모습에서 최대가 크게 튄다.
+func hugWidth(composite: CGImage, body: CGImage) -> (mean: Double, max: Double) {
+    let w = composite.width, h = composite.height
+    let halo = boundary(bytes(composite), width: w, height: h, threshold: 77)
+    let edge = boundary(bytes(body), width: w, height: h, threshold: 250)
+    guard !halo.isEmpty, !edge.isEmpty else { return (.infinity, .infinity) }
+    var sum = 0.0, peak = 0.0
+    for p in halo {
+        var best = Float.infinity
+        for q in edge { best = min(best, simd_distance_squared(p, q)) }
+        let d = Double(best.squareRoot()); sum += d; peak = max(peak, d)
+    }
+    return (sum / Double(halo.count), peak)
+}
+
+/// 각도 칸 검증: 몸을 여러 요로 돌린 시안 구도에서 '앱 규칙으로 고른 칸'과 '옛 정면 한 장'을 그려 나란히 놓고 감싸는 폭을 잰다.
+func verifyYaws(outDir: String, diffuse: CGImage, mesh: Mesh) {
+    let yaws: [Float] = [0, 16, 40, 90, 140, 180, 220, 270, 320]
+    let size = CGSize(width: 256, height: 256)
+    let front = loadImage(haloOutput)
+    var rows: [String: (old: [NSImage], new: [NSImage])] = [:]
+    for yaw in yaws {
+        let cell = haloCell(yawDegrees: Double(yaw))
+        let cellImage = loadImage(haloCellOutput(cell))
+        let body = renderModel(diffuse: diffuse, halo: nil, mesh: mesh, size: size, view: .bodyYaw(yaw))
+        let withCell = hugWidth(composite: renderModel(diffuse: diffuse, halo: cellImage, mesh: mesh, size: size, view: .bodyYaw(yaw)), body: body)
+        let withFront = hugWidth(composite: renderModel(diffuse: diffuse, halo: front, mesh: mesh, size: size, view: .bodyYaw(yaw)), body: body)
+        print(String(format: "[yaw] 몸 %3.0f° → 칸 %3d°: 감싸는 폭 평균 %.1f · 최대 %.1f px(256) | 옛 정면 한 장: 평균 %.1f · 최대 %.1f",
+                     yaw, cell * haloYawStep, withCell.mean, withCell.max, withFront.mean, withFront.max))
+        for (name, gray) in [("light", 0.95), ("dark", 0.11)] {
+            let bg = NSColor(srgbRed: gray, green: gray, blue: gray, alpha: 1), cbg = (CGFloat(gray), CGFloat(gray), CGFloat(gray))
+            let old = renderModel(diffuse: diffuse, halo: front, mesh: mesh, size: size, view: .bodyYaw(yaw), background: bg)
+            let new = renderModel(diffuse: diffuse, halo: cellImage, mesh: mesh, size: size, view: .bodyYaw(yaw), background: bg)
+            var r = rows[name] ?? ([], [])
+            r.old.append(label(old, "\(Int(yaw))° 정면 한 장", background: cbg))
+            r.new.append(label(new, "\(Int(yaw))° → 칸 \(cell * haloYawStep)°", background: cbg))
+            rows[name] = r
+        }
+    }
+    for (name, r) in rows {
+        let gray = name == "light" ? 0.95 : 0.11, cbg = (CGFloat(gray), CGFloat(gray), CGFloat(gray))
+        let top = row(r.old, background: cbg), bottom = row(r.new, background: cbg)
+        let ctx = CGContext(data: nil, width: max(top.width, bottom.width), height: top.height + bottom.height, bitsPerComponent: 8,
+                            bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.draw(top, in: CGRect(x: 0, y: bottom.height, width: top.width, height: top.height))
+        ctx.draw(bottom, in: CGRect(x: 0, y: 0, width: bottom.width, height: bottom.height))
+        writePNG(ctx.makeImage()!, "\(outDir)/gold-halo-yaw-\(name).png")
+    }
 }
 
 // MARK: - 실행
@@ -1012,6 +1138,15 @@ case nil:
     let camera = FrontCamera(mesh)
     writePNG(bakeSkin(mesh, camera), skinOutput)
     writePNG(makeHalo(mesh), haloOutput)
+    // 각도 칸 — 간격을 바꿨다면 옛 칸 파일이 남지 않게 지금 규칙에 없는 aing_gold-halo-NNN.png 를 먼저 지운다.
+    let cellFiles = Set((1..<haloCellCount).map { URL(fileURLWithPath: haloCellOutput($0)).lastPathComponent })
+    for name in (try? FileManager.default.contentsOfDirectory(atPath: resourceDir)) ?? []
+    where name.hasPrefix("aing_gold-halo-") && name.hasSuffix(".png") && !cellFiles.contains(name) {
+        try? FileManager.default.removeItem(atPath: "\(resourceDir)/\(name)")
+        print("[halo] 옛 칸 지움: \(name)")
+    }
+    for cell in 1..<haloCellCount { writePNG(makeHaloCell(mesh, cell: cell), haloCellOutput(cell)) }
+    print("[halo] 각도 칸 \(haloCellCount - 1)장(\(haloYawStep)° 간격 · \(haloCellSize)²) + 정면 512²")
     for e in expressions {
         let portrait = makePortrait(loadImage("\(resourceDir)/aing-\(e).png"), label: e)
         let mac = "\(resourceDir)/aing_gold-\(e).png"
@@ -1021,7 +1156,7 @@ case nil:
         do { try FileManager.default.copyItem(atPath: mac, toPath: phone) } catch { fail("폰 사본 실패: \(error)") }
         print("[portrait] \(e): 측정 \(measure(portrait))")
     }
-    print("[done] \(skinOutput) · \(haloOutput) · 초상 \(expressions.count * 2)장")
+    print("[done] \(skinOutput) · \(haloOutput) + 각도 칸 \(haloCellCount - 1)장 · 초상 \(expressions.count * 2)장")
 default:
     fail("모르는 인자: \(args)")
 }

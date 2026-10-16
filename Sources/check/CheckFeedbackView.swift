@@ -215,7 +215,7 @@ struct CheckFeedbackView: View {
             }
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     // MARK: 머리(뒤로 + 제목 + 탭)

@@ -761,18 +761,18 @@ struct CheckMenuView: View {
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     }
-                    // 푸터는 **본문 열 바닥에 붙는다**(v0.3.56). 레일이 [미션] 칸으로 여덟 칸이 되면서 레일만으로 432pt 라
-                    // (`CheckMenuSideRail` '높이 계약'), 본문이 그보다 짧은 화면(1인 팀 · 울트라 · 빈 순위판 …)에서는 레일이 창
-                    // 높이를 정한다. 그때 남는 자리가 푸터 **아래**에 깔리면 푸터가 허공에 뜨고 레일의 [설정](바닥 앵커)과 줄이
-                    // 안 맞는다. 유연한 틀로 그 자리를 푸터 **위**로 돌린다 — 본문이 레일보다 길면 틀은 푸터 크기 그대로라
-                    // (제안 높이 = 자연 높이) 어떤 화면도 1pt 도 안 바뀐다. 레일이 같은 수식어로 이미 늘어나고 있다.
+                    // 푸터는 **본문 열 바닥에 선다**(v0.3.56). 레일이 [미션] 칸으로 여덟 칸이 되면서 레일만으로 432pt 라
+                    // (`CheckMenuSideRail` '높이 계약'), 본문이 그보다 짧은 화면(1인 팀 · 울트라 · 미션 · 빈 순위판 …)에서는 레일이 창
+                    // 높이를 정한다. 그때 남는 자리는 **위 본문 카드가 받는다**(`pagePanelStyle` — 바탕이 푸터 바로 위까지 닿는다).
+                    // 그래서 푸터는 저절로 바닥에 서고 레일의 [설정](바닥 앵커)과 줄이 맞는다.
+                    // 처음엔 푸터에 `maxHeight: .infinity` 를 걸어 바닥에 붙였는데, 그러면 남는 자리가 카드와 푸터 **사이**에 빈 띠로
+                    // 남았다(검토 실측: 울트라 99pt · 미션 불러오는 중 115pt · 1인 홈 60pt). 여기 그 틀을 **다시 걸지 마라** — 본문 카드와
+                    // 푸터가 남는 자리를 나눠 가져 빈 띠가 되살아난다(V0356HeightTests.shortScreensPinTheFooter 가 틈을 잰다).
                     // ⚠️ 레일이 높이를 정하는 화면에서는 이 VStack 이 자연 높이보다 큰 높이를 **나눠 준다** — 그때 세로로 줄 수 있는
-                    //   뷰(`minimumScaleFactor` 글자)는 자기 자연 높이보다 작은 몫을 받아 글자가 줄어든다(헤더 연속 근무 칩이 실제로
+                    //   뷰(`minimumScaleFactor` 글자)는 자기 자연 높이보다 작은 몫을 받아 글자가 줄어들 수 있다(헤더 연속 근무 칩이 실제로
                     //   72 → 59pt 로 줄었다). 이 열에 그런 글자를 새로 넣으면 `.fixedSize(horizontal: false, vertical: true)` 로 세로를
-                    //   고정하라. 이 틀이 있고 없고의 두 빌드를 0~1인 홈 · 빈 순위판 · 울트라 · 미션 등 9개 화면에서 그려 본문 카드
-                    //   영역이 픽셀까지 같음을 확인했다(v0.3.56).
+                    //   고정하라.
                     FooterBar(store: store)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
                 }
             }
         } else {
@@ -807,8 +807,8 @@ struct CheckMenuView: View {
 ///   · 빈 순위판 · 빈 토큰판 · 빈 콕찌르기 · 내 기록(불러오는 중) 본문은 329~344pt 라 **이미** 레일이 높이를 정하고 있었다.
 /// 여덟 칸이면 레일만 432pt 이고, 0~1인 팀 홈(381) · 울트라 화면 · 1줄 미션 화면은 432pt 로 자란다(+51pt — 2인 팀
 /// 449pt 부터는 예전 그대로 본문이 정한다). 칸 높이는 **줄이지 않는다**(45pt 는 아이콘 17 + 라벨 9 를 담는 높이다).
-/// 늘어난 자리는 푸터 **위**로 간다 — 본문 열의 푸터가 바닥에 붙는다(`CheckMenuView.content` 의 푸터 주석). 그래서 레일
-/// 바닥의 [설정]과 푸터가 같은 줄에 서고, 푸터 아래가 비지 않는다.
+/// 늘어난 자리는 **본문 카드**가 받는다(`pagePanelStyle` — 바탕이 푸터 바로 위까지 닿는다). 그래서 푸터가 본문 열 바닥에 서고
+/// 레일 바닥의 [설정]과 같은 줄이 되며, 카드와 푸터 사이에도 · 푸터 아래에도 빈 띠가 없다(`CheckMenuView.content` 의 푸터 주석).
 /// 칸을 더하면 또 +51pt 다. 항목·높이를 건드리기 전에 반드시 다시 재라
 /// (CheckMenuRenderTests.sideRailSetsTheFloorOfTheWindowHeightAndTheFooterFollowsIt · V0356MissionPanelTests 가 그 실측을 못 박는다).
 /// (테스트가 아래 상수를 읽으므로 internal 이다 — 리터럴을 다시 적으면 칸을 더해도 가드가 안 따라온다.)
@@ -892,7 +892,7 @@ struct CheckMenuSideRail: View {
             // 페이지로 빼내자. 메인페이지 오른쪽에 주요 버튼들 있는곳으로 빼고 미션 클릭하면 볼 수 있게끔." — 0.3.55 의 이번 주
             // 근무 줄이 콕찌르기 → 잔량 배지 → 울트라 화면 안에만 있어서 사장님조차 못 찾았다. 자리가 [상점] 바로 아래인
             // 이유: 미션으로 버는 것이 **루비**이고 그 루비를 쓰는 곳이 [상점]이다(벌고 · 쓰는 문이 나란히 선다).
-            // `checklist` 는 macOS 11+ (배포 타깃 14 ✓).
+            // `checklist` 는 macOS 12+ (배포 타깃 14 ✓ — CoreGlyphs name_availability: 2021 = macOS 12.0).
             CheckMenuRailButton(
                 icon: "checklist",
                 label: "미션",
@@ -1644,7 +1644,7 @@ private struct HeaderGoalSection: View {
 /// 연속 근무 칩의 문구(순수 — 값으로 검증한다). 숫자는 서버 `ultra_wallet_sync` 의 `streak_days` 그대로다
 /// (예전 울트라 화면 "연속 출근" 줄이 "N일 연속"으로 보여 주던 바로 그 값 — 판정은 서버가 한다).
 enum HeaderStreakCopy {
-    static let icon = "flame.fill"   // macOS 11+ (배포 타깃 14 ✓)
+    static let icon = "flame.fill"   // macOS 10.15+ (배포 타깃 14 ✓ — CoreGlyphs name_availability: 2019)
     /// 화면 글자. 사장님 예시(2026-10-16) "연속 0일 근무!" 그대로 — **0일도 그린다**(사장님 예시가 0일이다).
     static func text(_ days: Int) -> String { "연속 \(max(0, days))일 근무!" }
     /// 보이스오버 문구. 느낌표를 읽지 않게 뺀다.
@@ -1660,9 +1660,15 @@ enum HeaderStreakCopy {
 ///   "동기화 대기"(51) + 칩 999일(86) = 143pt 로 **평소 경우부터** 넘친다 — 그 줄에 두면 알약이 밀리거나 상태 글자가 두 줄이 된다.
 ///   타이머 아래에 새 줄로 두면 글자 열(상태 14 + 3 + 타이머 20.5 = 37.5)이 마스코트(46)보다 높아져 헤더가 +7.5pt 자란다 —
 ///   창 700pt 예산을 실측 상수로 쥔 패널들(캐릭터·상점 격자 — 안전 여유 5pt)이 그 순간 넘친다.
-///   캡션 줄은 최악(주간 글자 "이번 주 168시간 00분 / 168시간" 137 + 칩 999일 86 + "100%" 29.5 + 연필 18 + 간격 16 + Spacer 4
-///   = 290.5 ≤ 292)에서도 제 크기로 들어가고 높이를 1pt 도 안 더한다. 그래도 넘치는 날(글꼴 차이)에는 **칩이 먼저 양보한다**
-///   (주간 글자 · 퍼센트 1 > 칩 0.5 > Spacer 0 — 칩은 0.8배까지 줄어든다) — 주간 글자 · 퍼센트 · 연필은 그대로다.
+///   캡션 줄은 높이를 1pt 도 안 더한다(칩 캡슐 17pt < 연필 18pt). 폭(칩은 바탕 캡슐 여백 12pt 포함 — 3일 84 · 99일 91 · 999일 98pt):
+///   평소(주간 글자 "이번 주 99시간 59분 / 60시간" + 99일)까지는 제 크기로 들어간다. 그보다 넘치는 극단(168시간 주 + 999일 —
+///   주간 글자 137 + 칩 98 + "100%" 29.5 + 연필 18 + 간격 16 + Spacer 4 = 302.5 > 292)에서는 **칩이 먼저 양보한다**
+///   (주간 글자 · 퍼센트 1 > 칩 0.5 > Spacer 0 — 칩 글자만 0.8배까지 줄어든다. 렌더 실측 98 → 87.5pt) — 주간 글자 · 퍼센트 · 연필은
+///   그대로다(V0356HeaderStreakTests.widthTouchesNothingElse).
+///
+/// ★ **바탕 캡슐**(v0.3.56 검토 수리): 맨 글자로 두었을 때 주간 문장 끝("60시간")에서 낱말 간격 하나 뒤에 서서 한 문장으로
+///   읽혔다 — 앱의 칩 관용구(틴트 캡슐)로 갈라 놓는다(`HeaderStreakChipLabel`). 자리(상태 글자 옆 → 캡션 줄)는 위 실측으로
+///   설계서와 달라진 것이라 사장님 확인이 남아 있다.
 ///
 /// ★ **지갑이 한 번이라도 답한 뒤에만** 그린다(`missionsLoaded` — 로그아웃에서 내려간다). 아직 안 물어본 사람에게
 ///   "연속 0일"이라고 말하면 그건 만들어 낸 사실이다(잔량을 모를 때 0 이 아니라 "—"를 그리는 것과 같은 규약).
@@ -1701,8 +1707,16 @@ struct HeaderStreakChipLabel: View {
                 //   세로를 고정하면 칩은 헤더를 줄일 수 있는 자리가 아니게 되고, 폭이 모자랄 때만 줄어든다.
                 .fixedSize(horizontal: false, vertical: true)
         }
-        // 우선순위가 **주간 글자 · 퍼센트(1)와 Spacer(0) 사이**인 이유: 남는 폭을 Spacer 보다 먼저 받는다. 그래도 모자라면(글꼴
-        // 차이) 칩만 0.8배까지 줄어든다 — 주간 글자 · 퍼센트는 그대로다.
+        // 바탕 캡슐(v0.3.56 검토 수리). 맨 글자로 두었더니 앞 문장("…/ 60시간")에서 낱말 간격 하나(4pt) 뒤에 테두리 없이 서서
+        // "이번 주 42시간 54분 / 60시간 🔥 연속 3일 근무!" 한 문장으로 읽혔다. 이 앱의 칩 관용구(미션 줄의 "가득" · "대기" 칩 —
+        // 가로 6 · 세로 2 · 틴트 0.16)를 그대로 쓰고, 틴트는 불꽃과 같은 주황→빨강이다. 높이는 13 + 4 = 17pt 로 캡션 줄(연필 18pt)
+        // 안이라 헤더가 자라지 않는다.
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(CheckTheme.stopGradient).opacity(0.16))
+        // 우선순위가 **주간 글자 · 퍼센트(1)와 Spacer(0) 사이**인 이유: 남는 폭을 Spacer 보다 먼저 받는다. 그래도 모자라면
+        // 칩 글자만 0.8배까지 줄어든다 — 주간 글자 · 퍼센트는 그대로다(캡슐 여백 12pt 를 더한 뒤로는 168시간 주 같은 극단에서
+        // 실제로 줄어든다 — `HeaderStreakChip` 주석의 폭 실측).
         .layoutPriority(0.5)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(HeaderStreakCopy.accessibilityLabel(days))
@@ -1935,8 +1949,9 @@ private struct TeamPanel: View {
             memberList
         }
         .padding(12)
-        // 팀 카드 높이는 콘텐츠(멤버 리스트 포함)에 맞춘다 — 남는 공간 채우기(maxHeight:.infinity) 없음.
-        .panelStyle()
+        // 팀 카드 높이는 콘텐츠(멤버 리스트 포함)에 맞춘다 — 팝오버를 키우는 채우기는 없다. 다만 레일이 창 높이를 정하는
+        // 짧은 화면(0~1인 팀)에서는 남는 자리를 **바탕만** 받아 푸터 바로 위까지 닿는다(v0.3.56 — `pagePanelStyle` 주석).
+        .pagePanelStyle()
     }
 
     // 행 사이 간격. 리스트 총 높이(팀원 수 비례) 계산에도 쓴다.
@@ -2322,7 +2337,7 @@ private struct LeaderboardPanel: View {
             entryList(now: now, isPastWeek: isPastWeek, visibleRows: visibleRows(weekNote: weekNote))
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     private var sortedEntries: [TeamLeaderboardEntry] {
@@ -2539,7 +2554,7 @@ private struct TokenBoardPanel: View {
             entryList
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     // 서버 정렬을 신뢰하지 않고 뷰에서도 total 내림차순(동률 이름)으로 다시 정렬한다.
@@ -2976,9 +2991,12 @@ enum UltraBalanceText {
     /// 무제한일 때는 **기호의 뜻을 말로 푼다** — 배지가 그리는 것은 글리프 하나뿐이라,
     /// 그 자리에 잔량이 있던 것을 기억하는 사람은 ∞ 를 "못 읽었다"로 오해할 수 있다.
     /// "충전 방법"을 말하지 않는 것도 의도다: 충전할 것이 없는 사람에게 충전을 권하지 않는다.
+    /// v0.3.56 부터는 **세 갈래 모두** "눌러서 보기"다 — 울트라 화면이 보유 수량만 그리게 되면서(사장님 지시 2026-10-16)
+    /// 잔량이 있는 사람이 배지를 눌러 닿는 화면에는 충전 방법이 없다(캡션은 "N초 꾹 누르면 한 개 써요"). 옛 문구
+    /// "눌러서 충전 방법 보기"는 그 화면이 미션 줄(매일 첫 근무 · 3시간마다)을 함께 그리던 때의 약속이었다.
     static func badgeHelp(balance: Int?, unlimited: Bool = false) -> String {
         if unlimited { return "울트라 무제한 — 눌러서 보기" }
-        return balance.map { "울트라 \($0)개 — 눌러서 충전 방법 보기" } ?? "잔량을 아직 못 읽었어요 — 눌러서 보기"
+        return balance.map { "울트라 \($0)개 — 눌러서 보기" } ?? "잔량을 아직 못 읽었어요 — 눌러서 보기"
     }
 }
 
@@ -3532,7 +3550,7 @@ private struct PokePanel: View {
             entryList(sorted)
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     // 서버 정렬을 신뢰하지 않고 뷰에서도 근무중 먼저·이름순으로 다시 정렬한다. body 맨 위에서 **한 번만** 부른다.
@@ -4263,7 +4281,7 @@ struct InsightsPanel: View {
             }
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     /// 「지난주」 묶음(회고 카드 + 히트맵) + 「최근 12주」 묶음(잔디 둘) 본문. 자연 높이만으로 창 상한을 넘기므로 크롬이 없어도 예산이 정한 높이로
@@ -4781,7 +4799,7 @@ private struct UltraPanel: View {
             heroCard
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     @ViewBuilder
@@ -4915,7 +4933,7 @@ private struct MissionPanel: View {
             }
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     @ViewBuilder

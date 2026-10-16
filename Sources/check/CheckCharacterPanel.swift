@@ -103,7 +103,7 @@ struct CheckCharacterPanel: View {
             grid
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     // MARK: - 격자

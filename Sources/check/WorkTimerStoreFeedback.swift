@@ -121,8 +121,9 @@ extension WorkTimerStore {
     ///   있었다 — 팝오버 위에 창을 띄우는 동작이었으니까. 지금은 팝오버 **안에서 화면이 바뀌는 것**이라,
     ///   닫으면 방금 연 화면이 그 자리에서 사라진다. 미니게임·설정은 여전히 별도 창이므로 그쪽 호출은 그대로다.
     ///
-    /// 다른 하위 패널과 **상호 배타**다. 순서가 뜻이다: `closeUltraPanel()`/`closeMessagePanel()` 은 origin 이
-    /// .poke 면 콕찌르기 목록을 되살리므로, 그 목록을 내리는 `closePokePanel()` 이 뒤에 온다.
+    /// 다른 하위 패널과 **상호 배타**다. 순서가 뜻이다: `closeMessagePanel()` 은 origin 이 .poke 면 콕찌르기 목록을
+    /// 되살리므로, 그 목록을 내리는 `closePokePanel()` 이 뒤에 온다. 울트라는 되살림 없이 닫는다(v0.3.56 —
+    /// `closeUltraPanelForAnotherScreen`; 예전엔 `closeUltraPanel()` 도 되살려서 이 순서가 그쪽까지 막고 있었다).
     ///
     /// **목록을 받는 자리가 곧 이 문이다.** [새로고침] 버튼은 v0.2.50 에 없앴다(사용자 지시:
     /// "제보창에서 새로고침 버튼 없어도 될 듯"). 최신을 보는 길은 그래서 셋이다 —
@@ -134,7 +135,7 @@ extension WorkTimerStore {
         isFeedbackPanelVisible = true
         isLeaderboardVisible = false
         closeTokenBoard()
-        closeUltraPanel()
+        closeUltraPanelForAnotherScreen()
         closeMessagePanel()
         closePokePanel()
         closeCharacterPanel()

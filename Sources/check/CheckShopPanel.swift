@@ -300,7 +300,7 @@ struct CheckShopPanel: View {
             }
         }
         .padding(12)
-        .panelStyle()
+        .pagePanelStyle()
     }
 
     // MARK: 하단 구매 바 — **실제 구매로 가는 유일한 문**

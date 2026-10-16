@@ -243,7 +243,7 @@ struct CheckMessageView: View {
                 )
             )
             .padding(12)
-            .panelStyle()
+            .pagePanelStyle()
         } else {
             VStack(spacing: MessagePanelLayout.blockSpacing) {
                 header
@@ -252,7 +252,7 @@ struct CheckMessageView: View {
                 composer
             }
             .padding(12)
-            .panelStyle()
+            .pagePanelStyle()
             // ★ 도착한 메시지를 **재진입 없이** 그리는 판정의 한 축이다(v0.3.31 M4). 팝오버 표시 칸(`isMenuPresented`)만 보던 0.3.29 는
             //   떠 있는 팝오버에서 그 칸이 false 로 남으면 [뒤로] 뒤 다시 들어가야 새 말이 떴다. 이 두 줄을 지우면 판정이 그 한 칸으로 돌아간다.
             .onAppear { store.messageConversationViewDidAppear(viewToken) }

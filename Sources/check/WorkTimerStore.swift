@@ -302,6 +302,11 @@ final class WorkTimerStore {
             if isTokenBoardVisible { loadTokenBoard() }
             if isPokePanelVisible { loadPokeDirectory() }
             if isMiniGamePanelVisible { loadMiniGameBoard() }
+            // 지갑 화면(미션 · 울트라)도 같은 규약이다(v0.3.56 검토 수리). 미션 화면은 레일 칸이 되면서 팝오버를 닫았다 열어도
+            // 그대로 떠 있는 화면이 됐는데, 주기 sync 는 **근무 중에만** 돈다(`syncUltraWalletIfDue` 의 startedAt 게이트) —
+            // 근무 밖에서 패널을 열어 둔 사람은 다시 열어도 낡은 3시간 줄 · 주간 줄 · 잔량을 봤다. 이번 주 근무 줄은 이 sync 에
+            // 얹힌 주간 조회가 채운다(1분 창이 막는다 — `syncUltraWallet`). 홈 화면 재오픈은 묻지 않는다(왕복을 늘리지 않는다).
+            if isMissionPanelVisible || isUltraPanelVisible { syncUltraWallet(reason: .panelOpen) }
             // 개인 기록: 패널이 열려 있으면 재조회하고, 닫혀 있어도 아직 한 번도 못 받았으면 조용히 받아 온다
             // — 월요일 첫 팝오버의 지난주 회고 배너는 retro 가 계산돼 있어야 뜨기 때문이다(실행당 1회 수준).
             // 주가 바뀌었으면(insightsWeekKey 불일치) 반드시 다시 계산한다 — needsInsightsReload 참고.
@@ -1136,7 +1141,8 @@ final class WorkTimerStore {
 
     // ── 울트라 패널(잔량) ──
     /// 울트라 패널이 떠 있는가. **리그·토큰보드·콕찌르기·개인기록과 상호 배타이고, 그 배타는 양방향이다** —
-    /// 한쪽만 걸면 다른 패널을 열어도 이 화면이 위에 남아 굳는다(closeUltraPanel 호출부를 세어 확인할 것).
+    /// 한쪽만 걸면 다른 패널을 열어도 이 화면이 위에 남아 굳는다(다른 문이 부르는 `closeUltraPanelForAnotherScreen` 호출부를
+    /// 세어 확인할 것 — v0.3.56 부터 `closeUltraPanel` 을 직접 부르는 자리는 [뒤로] 하나다).
     /// v0.3.56 부터 이 화면은 **보유 수량만** 말한다 — 미션 줄 · 이번 주 근무 줄 · 안내줄은 미션 화면으로 갔다.
     var isUltraPanelVisible = false
     /// 어디서 이 패널로 들어왔는가. [뒤로]가 돌아갈 곳을 정하는 유일한 근거다.
@@ -2514,7 +2520,7 @@ final class WorkTimerStore {
             closeShopPanel()
             closeTokenBoard()
             closePokePanel()
-            closeUltraPanel()
+            closeUltraPanelForAnotherScreen()
             closeMissionPanel()
             isInsightsPanelVisible = false
             // 앱을 켜 둔 채 주가 바뀐 경우(지난주를 보고 닫은 뒤 월요일 0시) 낡은 주가 그대로 그려지고 재조회마저
@@ -2634,7 +2640,7 @@ final class WorkTimerStore {
         closeCharacterPanel()
         closeShopPanel()
         closePokePanel()
-        closeUltraPanel()
+        closeUltraPanelForAnotherScreen()
         closeMissionPanel()
         isInsightsPanelVisible = false
         // 앱을 켜 둔 채 달이 바뀐 경우(6월에 보고 닫은 뒤 7월 1일) 지난달 캐시가 그대로 그려지고
@@ -2676,7 +2682,7 @@ final class WorkTimerStore {
             isPokePanelVisible = true
             isLeaderboardVisible = false
             closeTokenBoard()
-            closeUltraPanel()
+            closeUltraPanelForAnotherScreen()
             closeMissionPanel()
             isInsightsPanelVisible = false
             loadPokeDirectory()
@@ -2728,12 +2734,27 @@ final class WorkTimerStore {
         ultraPanelOrigin = .home
     }
 
+    /// **다른 화면으로 건너가는 길**에서 울트라 화면을 닫는다(v0.3.56 검토 수리). 다른 패널을 여는 문은 전부 이것을 부르고,
+    /// `closeUltraPanel()` 을 직접 부르는 자리는 울트라 화면의 [뒤로] 하나만 남는다.
+    ///
+    /// 왜 따로 있나: `closeUltraPanel()` 은 [뒤로]의 규약대로 진입 맥락이 `.poke`(콕찌르기 제목의 잔량 배지)면 콕찌르기를
+    /// **되살린다**. 그런데 리그 · 토큰판 · 내 기록 · 상점 · 캐릭터 문은 콕찌르기를 먼저 내린 **뒤에** 울트라를 닫아서, 되살아난
+    /// 콕찌르기가 새 화면과 함께 섰다(깃발 둘 — 리뷰 실측: [콕찌르기, 상점] · [리그, 콕찌르기] …). 디스패치에서 콕찌르기가
+    /// 내 기록 · 상점 · 캐릭터보다 앞이라 **누른 화면이 안 보였다**(0.3.55 부터 있던 결함). 울트라 화면이 잔량만 말하게 되면서
+    /// (캡션 "상점에서 루비로 사요") 다음 손이 [상점]이라 더 자주 밟힌다. 그래서 건너갈 때는 진입 맥락을 홈으로 접고 닫는다 —
+    /// 되살림도, 곧 버려질 콕찌르기 목록 조회도 안 일어난다. 줄 순서에 기대던 문(제보 · 1:1 대화 — 울트라를 닫은 **뒤에**
+    /// 콕찌르기를 내려 결과는 깃발 하나였다)도 같은 문을 쓴다: 순서가 뜻이던 자리를 순서와 무관하게 만든다.
+    func closeUltraPanelForAnotherScreen() {
+        if isUltraPanelVisible { ultraPanelOrigin = .home }
+        closeUltraPanel()
+    }
+
     /// 레일 [미션] 칸 액션(v0.3.56). 미션 화면을 토글하고, **여는 순간 지갑을 한 번 맞춘다** — 3시간 줄의 랩 진행은
     /// 지갑 sync 가, 이번 주 근무 줄은 그 박자에 얹힌 주간 조회가 채운다(`syncUltraWallet` 한 번이 둘 다 부른다 —
     /// 주간 쪽은 1분 창이 막는다). 울트라 화면을 열 때와 같은 이유다: 낡은 숫자를 그리지 않는다.
     ///
     /// 다른 패널 **전부와 양방향 배타**다. 순서가 뜻이다: `closeMessagePanel()` 이 맨 앞이고(origin 이 .poke 면 목록을
-    /// 되살린다), 울트라는 콕찌르기를 내린 **뒤에** 닫되 되살림 없이 닫는다(아래 주석).
+    /// 되살린다), 울트라는 되살림 없이 닫는다(`closeUltraPanelForAnotherScreen`).
     func toggleMissionPanel() {
         if isMissionPanelVisible {
             closeMissionPanel()
@@ -2747,10 +2768,9 @@ final class WorkTimerStore {
         closeTokenBoard()
         closePokePanel()
         // 콕찌르기 배지로 울트라 화면에 들어와 있던 사람이 [미션]을 누르면, `closeUltraPanel()` 은 [뒤로]의 규약대로
-        // 콕찌르기를 **되살린다** — 미션과 콕찌르기가 함께 서고 화면은 콕찌르기가 이긴다(디스패치 순서). 그래서 미션으로
-        // 가는 길에서는 진입 맥락을 홈으로 접고 닫는다(되살림 · 목록 조회 둘 다 안 일어난다).
-        if isUltraPanelVisible { ultraPanelOrigin = .home }
-        closeUltraPanel()
+        // 콕찌르기를 **되살린다** — 미션과 콕찌르기가 함께 서고 화면은 콕찌르기가 이긴다(디스패치 순서). 건너가는 문은
+        // 진입 맥락을 홈으로 접고 닫는다(되살림 · 목록 조회 둘 다 안 일어난다 — 다른 문들도 같은 함수를 쓴다).
+        closeUltraPanelForAnotherScreen()
         isInsightsPanelVisible = false
         isMissionPanelVisible = true
         syncUltraWallet(reason: .panelOpen)
@@ -2778,7 +2798,7 @@ final class WorkTimerStore {
             isLeaderboardVisible = false
             closeTokenBoard()
             closePokePanel()
-            closeUltraPanel()
+            closeUltraPanelForAnotherScreen()
             closeMissionPanel()
             // 배너 소비 판정은 evaluateRetroBanner 한 곳에만 둔다 — 예전엔 여기서 markRetroBannerSeen() 을
             // 무조건 불러, 아직 회고를 못 받은 상태(첫 조회 실패·오프라인)에서 패널을 열기만 해도 이번 주 키가
@@ -2827,7 +2847,7 @@ final class WorkTimerStore {
         isLeaderboardVisible = false
         closeTokenBoard()
         closePokePanel()
-        closeUltraPanel()
+        closeUltraPanelForAnotherScreen()
         closeMissionPanel()
         isInsightsPanelVisible = false
         loadShopState()
@@ -2856,7 +2876,7 @@ final class WorkTimerStore {
         isLeaderboardVisible = false
         closeTokenBoard()
         closePokePanel()
-        closeUltraPanel()
+        closeUltraPanelForAnotherScreen()
         closeMissionPanel()
         isInsightsPanelVisible = false
         loadShopState()

@@ -19,7 +19,10 @@ import Testing
 //     울트라 화면은 그 어느 것도 안 그리고 잔량 카드만 그린다.
 //  ④ 헤더 — "연속 N일 근무!" 칩(0일 · 3일) · 지갑이 답하기 전에는 안 그린다 · 최악 폭(동기화 대기 · 999일 · 긴 주간 캡션)에서
 //     윗줄(상태 · 타이머 · 알약)과 캡션의 주간 글자 · 퍼센트 · 연필을 1px 도 안 건드린다 · 높이 0pt.
-//  ⑤ 높이 — 레일 바닥(432pt)이 창의 최소 높이이고 그때 푸터가 바닥에 붙는다 · 최악 조합 ≤ 700pt.
+//  ⑤ 높이 — 레일 바닥(432pt)이 창의 최소 높이이고 그때 푸터가 바닥에 붙는다 · 본문 카드가 푸터 바로 위까지 닿는다(빈 띠 없음) ·
+//     최악 조합 ≤ 700pt.
+//  ⑦ 검토 수리 — 팝오버가 넘긴 [뒤로] · [다시 시도] 클로저를 실제로 불러 본다 · 배지 울트라에서 어느 문을 눌러도 깃발 하나 ·
+//     지갑 화면을 연 채 팝오버를 다시 열면 지갑 sync · 칩 바탕 캡슐 · 배지 툴팁이 '충전 방법'을 약속하지 않는다.
 // 실네트워크 없음(호스트별 스텁) · 창 없음(ImageRenderer 만 — 화면에 아무것도 안 뜬다).
 
 // MARK: - 공용 도우미
@@ -114,6 +117,26 @@ private func v0356BodyInkBottom(_ bitmap: NSBitmapImageRep) -> CGFloat {
         }
     }
     return 0
+}
+
+/// 본문 열 왼쪽 안쪽 세로 한 줄(x = 20pt — 카드의 안쪽 padding 자리라 카드 위에서는 **언제나 카드 바탕**이다)을 위→아래로 훑어
+/// 카드 구간 [top, bottom)(pt)을 낸다. 배경 판정은 `v0356BodyInkBottom` 과 같은 자(같은 줄의 창 왼쪽 가장자리 색 · 차이 > 8).
+/// 카드와 카드 사이 빈 띠(본문 열 VStack 간격 10pt + 둥근 모서리 몫 ~1pt)가 구간 사이 틈으로 잡힌다.
+private func v0356CardRuns(_ bitmap: NSBitmapImageRep) -> [(top: CGFloat, bottom: CGFloat)] {
+    guard let data = bitmap.bitmapData else { return [] }
+    let spp = bitmap.samplesPerPixel
+    let o = 40 * spp
+    var runs: [(top: CGFloat, bottom: CGFloat)] = []
+    var start: Int?
+    for y in 0..<bitmap.pixelsHigh {
+        let row = data + y * bitmap.bytesPerRow
+        let bg = (Int(row[2 * spp]), Int(row[2 * spp + 1]), Int(row[2 * spp + 2]))
+        let ink = abs(Int(row[o]) - bg.0) > 8 || abs(Int(row[o + 1]) - bg.1) > 8 || abs(Int(row[o + 2]) - bg.2) > 8
+        if ink, start == nil { start = y }
+        if !ink, let s = start { runs.append((CGFloat(s) / 2, CGFloat(y) / 2)); start = nil }
+    }
+    if let s = start { runs.append((CGFloat(s) / 2, CGFloat(bitmap.pixelsHigh) / 2)) }
+    return runs
 }
 
 /// 렌더용 메인 화면 스토어. **네트워크가 이 맥 밖으로 한 건도 안 나간다** — 두 겹이다:
@@ -562,11 +585,13 @@ enum MissionPanelHiddenKinds {
     }
 
     /// 폭 시험: 상태 "동기화 대기"(가장 긴 상태)와 함께, 칩이 있을 때와 없을 때 그림이 갈리는 곳은 **캡션 줄의 주간 글자와 퍼센트
-    /// 사이뿐**이어야 한다(윗줄 · 주간 글자 · 퍼센트 · 연필 · 높이 불변). 그리고 칩은 **제 크기**다 — 최악(999일 · 168시간 캡션)에서도
-    /// 290.5 ≤ 292pt 라 줄 이유가 없다. 이 화면들은 팀원이 나 하나라 레일이 창 높이를 정한다 — 칩이 세로 몫에 맞춰 줄던 결함
-    /// (`HeaderStreakChipLabel` 의 세로 고정 주석 — 실측 72 → 59pt)을 여기서 함께 잰다.
-    @Test("폭(동기화 대기 + 평소 · 최악 캡션)에서 칩은 높이 0pt · 윗줄과 캡션 양끝을 1px 도 안 건드린다 · 칩은 제 크기",
-          arguments: [(168, 168, 999, true), (168, 16, 999, true), (99, 60, 99, true), (34, 60, 3, true)])
+    /// 사이뿐**이어야 한다(윗줄 · 주간 글자 · 퍼센트 · 연필 · 높이 불변). 평소 폭(≤ 99시간 · ≤ 99일)에서 칩은 **제 크기**다.
+    /// 칩에 바탕 캡슐(가로 여백 12pt)이 붙은 뒤로(v0.3.56 검토 수리) 168시간 주 + 999일 같은 극단에서는 칩 글자가 줄어든다 —
+    /// 그래도 0.8배 아래로는 안 줄고, 주간 글자 · 퍼센트 · 연필은 1px 도 안 밀린다(우선순위 사다리). 이 화면들은 팀원이 나 하나라
+    /// 레일이 창 높이를 정한다 — 칩이 세로 몫에 맞춰 줄던 결함(`HeaderStreakChipLabel` 의 세로 고정 주석 — 실측 72 → 59pt)을
+    /// 여기서 함께 잰다.
+    @Test("폭(동기화 대기 + 평소 · 최악 캡션)에서 칩은 높이 0pt · 윗줄과 캡션 양끝을 1px 도 안 건드린다 · 평소엔 제 크기 · 극단에도 0.8배 이상",
+          arguments: [(168, 168, 999, false), (168, 16, 999, false), (99, 60, 99, true), (34, 60, 3, true)])
     func widthTouchesNothingElse(caseValues: (worked: Int, goal: Int, days: Int, fullSize: Bool)) throws {
         func store(loaded: Bool, line: Int = #line) -> WorkTimerStore {
             let s = v0356RenderStore(members: 0, pendingSync: true, loaded: loaded, streak: caseValues.days,
@@ -584,14 +609,17 @@ enum MissionPanelHiddenKinds {
         let box = try #require(v0356DiffBox(without, with), "\(tag): 칩이 안 그려졌다")
         // 윗줄(마스코트 · 상태 · 타이머 · 알약)은 헤더 카드 위 12 + 안쪽 12 + 46 = 70pt 안이다 — 차이는 그 아래에서만.
         #expect(box.minY >= 70, "\(tag): 칩이 윗줄(상태 · 타이머 · 알약)을 건드렸다(차이 시작 \(box.minY)pt)")
-        // 한 줄(캡션) 높이 안이다.
-        #expect(box.height <= 14, "\(tag): 차이가 \(box.height)pt 높이다 — 칩이 줄을 바꾸거나 다른 줄을 밀었다")
+        // 한 줄(캡션 — 연필 18pt) 높이 안이다. 칩 캡슐은 13 + 4 = 17pt.
+        #expect(box.height <= 18, "\(tag): 차이가 \(box.height)pt 높이다 — 칩이 줄을 바꾸거나 다른 줄을 밀었다")
         // 캡션 양끝: 왼쪽 주간 글자(카드 안쪽 24pt 부터 ≥ 126pt)와 오른쪽 퍼센트 · 연필은 그대로다.
         #expect(box.minX > 24 + 100, "\(tag): 칩이 주간 글자를 밀거나 잘랐다(차이 시작 x \(box.minX)pt)")
         #expect(box.maxX < 12 + 316 - 12 - 18 - 4 - 20, "\(tag): 칩이 퍼센트 · 연필을 밀었다(차이 끝 x \(box.maxX)pt)")
         let natural = CGFloat(try v0356Bitmap(HeaderStreakChipLabel(days: caseValues.days)).pixelsWide) / 2
         if caseValues.fullSize {
             #expect(box.width >= natural - 2, "\(tag): 평소 폭인데 칩이 \(box.width)pt 로 줄었다(제 크기 \(natural)pt)")
+        } else {
+            // 극단에서도 0.8배(minimumScaleFactor) 아래로는 안 준다 — 그 아래면 글자가 말줄임으로 잘린 것이다.
+            #expect(box.width >= natural * 0.8 - 2, "\(tag): 칩이 \(box.width)pt — 0.8배(\(natural * 0.8)pt)보다 줄었다(잘렸다)")
         }
         print("[v0356] 폭 \(tag) — 칩 차이 x \(box.minX)…\(box.maxX)pt(\(box.width)pt · 제 크기 \(natural)pt) · y \(box.minY)…\(box.maxY)pt")
     }
@@ -601,7 +629,9 @@ enum MissionPanelHiddenKinds {
         for days in [0, 3, 99, 999] {
             let bitmap = try v0356Bitmap(HeaderStreakChipLabel(days: days))
             print("[v0356] 칩 \(days)일 = \(Double(bitmap.pixelsWide) / 2)pt × \(Double(bitmap.pixelsHigh) / 2)pt")
-            #expect(Double(bitmap.pixelsWide) / 2 <= 90, "칩 \(days)일이 \(Double(bitmap.pixelsWide) / 2)pt — 캡션 줄 예산(≤ 90)을 넘는다")
+            // 캡슐 여백(12pt) 포함 예산. 평소 캡션("이번 주 99시간 59분 / 60시간" + "166%")과 함께 292pt 줄에 제 크기로 든다
+            // (폭 시험의 99시간 · 99일 경우가 화면에서 잰다).
+            #expect(Double(bitmap.pixelsWide) / 2 <= 100, "칩 \(days)일이 \(Double(bitmap.pixelsWide) / 2)pt — 캡션 줄 예산(≤ 100)을 넘는다")
         }
     }
 }
@@ -628,7 +658,9 @@ enum MissionPanelHiddenKinds {
         #expect(measured == Self.railFloor, "레일 실측 \(measured)pt ≠ 상수 \(Self.railFloor)pt — contentHeight 산식이 레일을 잘못 안다")
     }
 
-    @Test("레일이 높이를 정하는 화면(홈 0~1인 · 울트라 · 미션 1줄)은 정확히 레일 높이 · 푸터가 바닥에 붙는다(푸터 아래가 비지 않는다)")
+    /// ★ 검토 지적(P1, v0.3.56 리뷰): 푸터만 바닥에 붙이면 남는 자리가 **카드와 푸터 사이**에 빈 띠로 남았다 — 울트라 99pt ·
+    ///   미션(불러오는 중 · 1줄) 115pt · 1인 홈 60pt. 본문 카드가 그 자리를 받아 푸터 바로 위(간격 10pt)까지 닿아야 한다.
+    @Test("레일이 높이를 정하는 화면(홈 0~1인 · 울트라 · 미션 · 빈 순위판 · 빈 토큰판)은 정확히 레일 높이 · 푸터가 바닥에 붙고 본문 카드가 푸터 바로 위까지 닿는다(빈 띠 없음)")
     func shortScreensPinTheFooter() throws {
         let home0 = v0356RenderStore(members: 0)
         let home1 = v0356RenderStore(members: 1)
@@ -636,14 +668,31 @@ enum MissionPanelHiddenKinds {
         ultra.isUltraPanelVisible = true
         let mission = v0356RenderStore()
         mission.isMissionPanelVisible = true
-        for (label, store) in [("홈 0인", home0), ("홈 1인", home1), ("울트라", ultra), ("미션 1줄", mission)] {
+        let missionLoading = v0356RenderStore(loaded: false, missions: [])
+        missionLoading.isMissionPanelVisible = true
+        let missionTwo = v0356RenderStore(weekly: V0356Fixture.weekly23h)
+        missionTwo.isMissionPanelVisible = true
+        let league = v0356RenderStore()
+        league.isLeaderboardVisible = true
+        let tokens = v0356RenderStore()
+        tokens.isTokenBoardVisible = true
+        let screens = [("홈 0인", home0), ("홈 1인", home1), ("울트라", ultra), ("미션 1줄", mission),
+                       ("미션 불러오는 중", missionLoading), ("미션 2줄(3시간 + 주간)", missionTwo),
+                       ("빈 순위판", league), ("빈 토큰판", tokens)]
+        for (label, store) in screens {
             let bitmap = try v0356Bitmap(CheckMenuView(store: store))
             let height = CGFloat(bitmap.pixelsHigh) / 2
             let ink = v0356BodyInkBottom(bitmap)
-            print("[v0356] \(label): 창 \(height)pt · 본문 잉크 바닥 \(ink)pt")
+            let runs = v0356CardRuns(bitmap)
+            let gap = runs.count >= 2 ? runs[runs.count - 1].top - runs[runs.count - 2].bottom : -1
+            print("[v0356] \(label): 창 \(height)pt · 본문 잉크 바닥 \(ink)pt · 카드 \(runs.map { "\($0.top)…\($0.bottom)" }) · 푸터 위 틈 \(gap)pt")
             #expect(height == Self.railFloor, "\(label): 창 \(height)pt — 레일 바닥(\(Self.railFloor))보다 크다/작다")
             // 푸터(본문 열 마지막 카드)의 바닥 = 창 바닥 − 바깥 여백 12. 1pt 안쪽이면 붙은 것이다.
             #expect(abs(ink - (height - 12)) <= 1, "\(label): 푸터 바닥이 \(ink)pt — 창 바닥(\(height - 12))에서 떠 있다")
+            // 카드가 셋 이상(헤더 · 본문 · 푸터)이어야 틈을 잰 것이다 — 아니면 자가 무언가를 못 본다.
+            #expect(runs.count >= 3, "\(label): 카드 구간 \(runs.count)개 — 자가 카드를 못 가른다")
+            // 본문 카드 ↔ 푸터 틈 = VStack 간격 10 + 둥근 모서리 몫. 12 를 넘으면 빈 띠가 다시 생긴 것이다.
+            #expect(gap >= 9 && gap <= 12, "\(label): 본문 카드와 푸터 사이 \(gap)pt — 남는 자리가 빈 띠로 남았다(카드가 받아야 한다)")
         }
         // 레일보다 긴 화면은 예전 그대로 본문이 정한다(팀원 수 비례 성장이 산다).
         let two = try Self.height(CheckMenuView(store: v0356RenderStore(members: 2)))
@@ -690,6 +739,170 @@ enum MissionPanelHiddenKinds {
 
 /// 미션 줄 하나의 값(56 + 간격 8).
 enum MissionPanelUnit { static let value: CGFloat = 64 }
+
+// MARK: - ⑦ 검토 수리(v0.3.56 리뷰) — 배선 · 배지 울트라에서 건너가기 · 재오픈 sync · 칩 테두리 · 배지 툴팁
+
+@MainActor
+@Suite(.serialized) struct V0356ReviewFixTests {
+    /// 실제 `CheckMenuView` 가 패널에 넘긴 값 트리에서 이름이 정확히 `name` 인 노드(패널이 private 라 이름으로 잡는다).
+    static func panelNode(_ name: String, in store: WorkTimerStore) throws -> Any {
+        var found: [(name: String, value: Any)] = []
+        var budget = 400_000
+        v0356Collect([name], in: CheckMenuView(store: store).body, into: &found, budget: &budget)
+        return try #require(found.first?.value, "\(name) 을(를) 팝오버 뷰 트리에서 못 찾았다 — 디스패치 갈래가 빠졌다")
+    }
+
+    /// 패널이 받은 인자 없는 클로저(옵셔널이어도 풀어서). **인자 없는** 것만 부른다 — 인자 있는 클로저를 미러로 꺼내 부르면
+    /// 재추상화 썽크가 쓰레기를 넘긴다(UltraPokeTests `spentPanelKeepsSpentDisplay…` 주석).
+    static func action(_ label: String, of node: Any) throws -> () -> Void {
+        let value = try #require(v0356Child(label, of: node), "패널에 \(label) 이(가) 없다")
+        return try #require(value as? () -> Void, "\(label) 이(가) 인자 없는 클로저가 아니거나 nil 이다")
+    }
+
+    /// 지갑 sync 에 답하는 스텁 호스트 위의 스토어(V0355 스토어 — 세션 · 팀 · 고정 시계).
+    static func walletStore(_ label: String, function: String = #function) -> (WorkTimerStore, String) {
+        let host = V0355WeeklyStoreTests.host("v0356-\(label)")
+        GomokuStubProtocol.register(host: host) { rpc, _, _ in
+            rpc == "ultra_wallet_sync" ? .init(body: V0356Fixture.walletJSON(streak: 2)) : nil
+        }
+        let store = V0355WeeklyStoreTests.store(host: host, label: "v0356-\(label)",
+                                                clock: V0355Clock(V0355WeeklyStoreTests.t0), function: function)
+        return (store, host)
+    }
+
+    static func walletCalls(_ host: String) -> Int { GomokuStubProtocol.count(host: host, rpc: "ultra_wallet_sync") }
+
+    // ── P2 ① 미션 화면 [뒤로] · [다시 시도] 배선 ─────────────────────────────────────────────
+    // 리뷰 실측: 호출부를 `onBack: { store.closeUltraPanel() }` · `onRetry: { }` 로 바꾼 뮤턴트가 276건 전부 초록이었다 —
+    // [뒤로]가 죽은 미션 화면이 초록으로 나갈 수 있었다. 그래서 **실제 팝오버가 넘긴 클로저**를 꺼내 불러 본다.
+
+    @Test("미션 화면 — 팝오버가 넘긴 [다시 시도]는 지갑을 한 번 더 묻고, [뒤로]는 미션을 닫아 홈으로 간다")
+    func missionPanelBackAndRetryAreWired() async throws {
+        let (store, host) = Self.walletStore("wire-mission")
+        store.toggleMissionPanel()
+        let opened = await V0354CoreStub.waitUntil { Self.walletCalls(host) == 1 && store.missionsLoaded }
+        #expect(opened, "준비 실패 — 여는 sync 가 안 왔다")
+        let panel = try Self.panelNode("MissionPanel", in: store)
+        try Self.action("onRetry", of: panel)()
+        let retried = await V0354CoreStub.waitUntil { Self.walletCalls(host) == 2 }
+        #expect(retried, "미션 화면 [다시 시도]가 지갑을 다시 묻지 않는다(\(Self.walletCalls(host))회) — 실패한 사람이 다시 밀 길이 없다")
+        try Self.action("onBack", of: panel)()
+        #expect(store.isMissionPanelVisible == false, "미션 화면 [뒤로]가 미션을 닫지 않는다 — 레일을 다시 누를 때까지 갇힌다")
+        #expect(V0356MissionStoreTests.openFlags(store).isEmpty, "[뒤로] 뒤에 다른 패널이 섰다: \(V0356MissionStoreTests.openFlags(store))")
+    }
+
+    @Test("울트라 화면 — 팝오버가 넘긴 [다시 시도]는 지갑을 한 번 더 묻고, [뒤로]는 울트라를 닫는다(홈 진입)")
+    func ultraPanelBackAndRetryAreWired() async throws {
+        let (store, host) = Self.walletStore("wire-ultra")
+        store.openUltraPanel(from: .home)
+        let opened = await V0354CoreStub.waitUntil { Self.walletCalls(host) == 1 }
+        #expect(opened, "준비 실패 — 여는 sync 가 안 왔다")
+        let panel = try Self.panelNode("UltraPanel", in: store)
+        try Self.action("onRetry", of: panel)()
+        let retried = await V0354CoreStub.waitUntil { Self.walletCalls(host) == 2 }
+        #expect(retried, "울트라 화면 [다시 시도]가 지갑을 다시 묻지 않는다")
+        try Self.action("onBack", of: panel)()
+        #expect(store.isUltraPanelVisible == false, "울트라 화면 [뒤로]가 울트라를 닫지 않는다")
+        #expect(V0356MissionStoreTests.openFlags(store).isEmpty)
+    }
+
+    // ── P2 ② 콕찌르기 배지로 들어온 울트라에서 다른 문 ─────────────────────────────────────────
+    // 리뷰 실측(0.3.55 부터 있던 결함): 팀 현황 → [리그, 콕찌르기] · 토큰 → [토큰판, 콕찌르기] · 내 기록 / 캐릭터 / 상점 →
+    // [콕찌르기, X] — 그 셋은 콕찌르기가 디스패치에서 이겨 **누른 화면이 안 보였다**. 울트라 화면이 잔량만 말하게 되면서
+    // (캡션 "상점에서 루비로 사요") 다음 손이 [상점]이라 더 자주 밟힌다.
+
+    @Test("콕찌르기 배지로 들어온 울트라에서 어느 문을 눌러도 그 화면 하나만 선다 · 울트라 [뒤로]는 여전히 콕찌르기로 돌아간다")
+    func everyDoorFromTheBadgeUltraShowsOnlyThatScreen() {
+        let mission: (String, @MainActor (WorkTimerStore) -> Void, KeyPath<WorkTimerStore, Bool>) =
+            ("미션", { $0.toggleMissionPanel() }, \.isMissionPanelVisible)
+        let doors = V0356MissionStoreTests.openers + [mission]
+        for (index, door) in doors.enumerated() {
+            let (store, _) = V0356MissionStoreTests.store("u\(index)")
+            store.togglePokePanel()
+            store.openUltraPanel(from: .poke)
+            #expect(V0356MissionStoreTests.openFlags(store) == ["울트라"], "\(door.0): 준비 실패 — \(V0356MissionStoreTests.openFlags(store))")
+            door.1(store)
+            let expected = V0356MissionStoreTests.allFlags.first { $0.1 == door.2 }?.0 ?? "?"
+            #expect(V0356MissionStoreTests.openFlags(store) == [expected],
+                    "배지 울트라 → \(door.0): 동시에 선 패널 \(V0356MissionStoreTests.openFlags(store)) — 콕찌르기가 되살아났다")
+        }
+        // 대조군: [뒤로]의 규약은 그대로다 — 배지로 들어왔으면 콕찌르기로 돌아간다.
+        let (back, _) = V0356MissionStoreTests.store("u-back")
+        back.togglePokePanel()
+        back.openUltraPanel(from: .poke)
+        back.closeUltraPanel()
+        #expect(V0356MissionStoreTests.openFlags(back) == ["콕찌르기"], "울트라 [뒤로]가 콕찌르기로 안 돌아간다(수리가 [뒤로]까지 바꿨다)")
+    }
+
+    // ── P2 ③ 팝오버를 다시 열면 지갑 화면이 다시 묻는다 ────────────────────────────────────────
+    // 리뷰 실측: 미션 화면을 연 채 팝오버를 닫았다 열면 sync 가 1회 그대로 — 리그 · 토큰판 · 콕찌르기 · 미니게임은 다시 받는다.
+    // 주기 sync 는 근무 중에만 돌아(`syncUltraWalletIfDue` 의 startedAt 게이트) 근무 밖 사람은 낡은 줄을 계속 봤다.
+
+    @Test("미션 · 울트라 화면을 연 채 팝오버를 닫았다 열면 지갑을 한 번 더 묻는다(근무 밖이어도) · 지갑 화면이 아니면 안 묻는다")
+    func reopeningThePopoverResyncsWalletScreens() async {
+        let screens: [(String, @MainActor (WorkTimerStore) -> Void)] = [
+            ("미션", { $0.toggleMissionPanel() }),
+            ("울트라", { $0.openUltraPanel(from: .home) }),
+        ]
+        for (index, screen) in screens.enumerated() {
+            let (store, host) = Self.walletStore("reopen-\(index)")
+            #expect(store.startedAt == nil, "전제: 근무 밖(주기 sync 가 안 도는 사람)")
+            store.isMenuPresented = true
+            screen.1(store)
+            let opened = await V0354CoreStub.waitUntil { Self.walletCalls(host) == 1 }
+            #expect(opened, "\(screen.0): 준비 실패 — 여는 sync 가 안 왔다")
+            store.setMenuPresented(false)
+            store.setMenuPresented(true)
+            let resynced = await V0354CoreStub.waitUntil { Self.walletCalls(host) == 2 }
+            #expect(resynced, "\(screen.0) 화면을 연 채 팝오버를 다시 열었는데 지갑을 안 물었다(\(Self.walletCalls(host))회) — 낡은 줄을 그린다")
+        }
+        // 대조군: 홈(지갑 화면이 아님)에서 다시 열면 지갑을 묻지 않는다 — 팝오버를 열 때마다 왕복을 늘리지 않는다.
+        let (home, host) = Self.walletStore("reopen-home")
+        home.isMenuPresented = true
+        home.setMenuPresented(false)
+        home.setMenuPresented(true)
+        await V0355WeeklyStoreTests.settle()
+        #expect(Self.walletCalls(host) == 0, "홈 화면 재오픈이 지갑을 물었다(\(Self.walletCalls(host))회)")
+    }
+
+    // ── P2 ⑤ 연속 근무 칩은 주간 문장과 갈라 보이는 **칩**이다 ──────────────────────────────────
+    // 리뷰 실측: 칩이 "60시간"에서 5pt(낱말 간격 하나) 뒤에 테두리 없이 서서 "…/ 60시간 🔥 연속 3일 근무!" 한 문장으로 읽혔다.
+
+    @Test("칩에는 바탕(캡슐)이 있다 — 가운데 줄이 낱말 사이까지 채워진다(맨 글자는 낱말 사이가 비어 있다)")
+    func streakChipHasAContainer() throws {
+        let bitmap = try v0356Bitmap(HeaderStreakChipLabel(days: 3))
+        let data = try #require(bitmap.bitmapData)
+        let spp = bitmap.samplesPerPixel
+        #expect(bitmap.hasAlpha && spp == 4, "자가 알파를 못 읽는다(spp \(spp))")
+        let y = bitmap.pixelsHigh / 2
+        let row = data + y * bitmap.bytesPerRow
+        // 둥근 끝(캡슐 반지름)은 빼고 잰다 — 가운데 줄은 반지름 안쪽부터 끝까지 바탕이 깔려야 한다.
+        let inset = bitmap.pixelsHigh / 2
+        let span = inset..<(bitmap.pixelsWide - inset)
+        let filled = span.filter { row[$0 * spp + 3] > 8 }.count
+        let ratio = Double(filled) / Double(span.count)
+        print("[v0356] 칩 가운데 줄 채움 \(filled)/\(span.count) = \(ratio) · 칩 \(Double(bitmap.pixelsWide) / 2)×\(Double(bitmap.pixelsHigh) / 2)pt")
+        #expect(ratio >= 0.98, "칩 가운데 줄이 \(Int(ratio * 100))% 만 채워졌다 — 바탕이 없어 주간 문장에 붙어 읽힌다")
+        // 높이는 캡션 줄(연필 18pt) 안이다 — 칩이 헤더를 키우지 않는다(폭 시험의 '높이 0pt' 가 화면 쪽 대조).
+        #expect(Double(bitmap.pixelsHigh) / 2 <= 18, "칩 높이 \(Double(bitmap.pixelsHigh) / 2)pt — 캡션 줄(18pt)을 넘는다")
+    }
+
+    // ── P2 ⑥ 콕찌르기 제목의 잔량 배지 툴팁 ────────────────────────────────────────────────
+    // 울트라 화면이 잔량만 그리게 되면서 "눌러서 충전 방법 보기"는 거짓이 됐다(잔량 > 0 이면 캡션은 "3초 꾹 누르면 한 개 써요").
+
+    @Test("잔량 배지 툴팁 — 숫자를 말하고 '충전 방법'을 약속하지 않는다(무제한 · 모름과 같은 '눌러서 보기')")
+    func badgeTooltipNoLongerPromisesChargeSteps() {
+        #expect(UltraBalanceText.badgeHelp(balance: 3) == "울트라 3개 — 눌러서 보기")
+        #expect(UltraBalanceText.badgeHelp(balance: 0) == "울트라 0개 — 눌러서 보기")
+        for balance in [nil, 0, 1, 3] as [Int?] {
+            for unlimited in [false, true] {
+                let text = UltraBalanceText.badgeHelp(balance: balance, unlimited: unlimited)
+                #expect(!text.contains("충전"), "\"\(text)\" 가 울트라 화면에 없는 충전 방법을 약속한다")
+                #expect(text.hasSuffix("눌러서 보기"), "\"\(text)\" — 세 갈래가 같은 동사로 끝나야 한다")
+            }
+        }
+    }
+}
 
 // MARK: - ⑥ 미리보기(환경변수가 있을 때만 — 창은 띄우지 않는다)
 

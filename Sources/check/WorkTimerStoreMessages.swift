@@ -219,7 +219,8 @@ extension WorkTimerStore {
     ///   그대로 남아 있다(이 파일에서 지운 것이 그쪽까지 지운 것으로 읽히면 안 된다).
     ///
     /// 다른 하위 패널과 **상호 배타**다(리그·토큰 보드·콕찌르기·내 기록·울트라·제보·캐릭터·상점·미션). 순서가 뜻이다:
-    /// `closeUltraPanel()` 은 origin 이 .poke 면 콕찌르기 목록을 되살리므로, 목록을 내리는 줄이 그 뒤에 온다.
+    /// 울트라는 되살림 없이 닫고(`closeUltraPanelForAnotherScreen` — v0.3.56; 예전 `closeUltraPanel()` 은 origin 이 .poke 면
+    /// 콕찌르기 목록을 되살렸다), 목록을 내리는 줄은 그래도 그 뒤에 온다(순서가 바뀌어도 깃발이 하나로 끝나게).
     func openMessagePanel(peer: String, from origin: MessagePanelOrigin = .poke) {
         // 빈 id 는 **아무 상태도 세우기 전에** 돌려보낸다. 이 가드를 아래로 내리지 마라 — origin 이나 패널 깃발을
         // 먼저 세우고 나가면 그 상태가 곧 "상대 없는 대화 화면"이다.
@@ -228,7 +229,7 @@ extension WorkTimerStore {
         isMessagePanelVisible = true
         isLeaderboardVisible = false
         closeTokenBoard()
-        closeUltraPanel()
+        closeUltraPanelForAnotherScreen()
         closeFeedbackPanel()
         closeCharacterPanel()
         closeShopPanel()

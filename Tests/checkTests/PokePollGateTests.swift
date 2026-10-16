@@ -686,7 +686,11 @@ func closeUltraPanelReturnsToOriginWithoutSideEffects() {
     #expect(store.isUltraPanelVisible == false)
     #expect(store.isPokePanelVisible)               // 콕찌르기로 돌아왔다
     #expect(store.lastShownMessage != nil)          // 여전히 안 지웠다
-    #expect(store.missionNotice == nil)             // 패널을 떠나면 안내는 접는다
+    // v0.3.56: 안내줄은 **미션 화면의 것**이 됐다 — 울트라를 떠나도 남고(미션 화면에서 기다린다), 미션 화면을 떠날 때 접는다.
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +3")
+    store.isMissionPanelVisible = true              // (지갑 조회 없이) 미션 화면이 떠 있는 상태
+    store.closeMissionPanel()
+    #expect(store.missionNotice == nil)             // 미션 화면을 떠나면 안내는 접는다
 
     // 홈에서 들어왔으면 홈으로 돌아간다(콕찌르기를 멋대로 열지 않는다).
     store.openUltraPanel(from: .home)

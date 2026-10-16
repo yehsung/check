@@ -201,7 +201,7 @@ final class ReactionEngine {
     /// 마일스톤에 말풍선이 없다는 것이 "구분이 안 된다"의 절반이었다.
     static let goalBubbleSeconds: Double = 4
     /// 보상 통지 말풍선 지속(초). 모션(1.72s)보다 길다 — 이 문장이 재화가 늘었다는 유일한 즉시 증거다
-    /// (지속 증거인 배지·미션 행·missionNotice 는 패널을 열어야 보인다).
+    /// (지속 증거인 배지·미션 행·missionNotice 는 패널 — 콕찌르기 · 미션 화면 — 을 열어야 보인다).
     static let ultraChargedBubbleSeconds: Double = 3.2
     /// 3시간 랩 보상 말풍선. 숫자는 서버 `ruby_mission_grant()` 와 **짝인 상수**다(둘 다 3).
     /// 서버 상수를 바꾸면 여기도 같이 바꿔야 말풍선이 거짓말을 하지 않는다 —

@@ -489,27 +489,31 @@ struct V0317ShopTests {
         }
     }
 
-    /// 레일이 창 높이를 결정하지 않는지 **픽셀로** 잰다(계약 테스트의 초록만으로는 여유가 몇 pt 인지 모른다).
+    /// 레일과 가장 짧은 메인 화면의 관계를 **픽셀로** 잰다(계약 테스트의 초록만으로는 몇 pt 인지 모른다).
+    ///
+    /// v0.3.56 에 단언이 바뀌었다: [미션] 칸(8칸 · 432pt)부터 0~1인 팀 홈은 **레일이 창 높이를 정한다**(사장님 지시 2026-10-16 —
+    /// 칸 높이는 줄이지 않는다). 그래서 "최단 화면 > 레일"이 아니라 "최단 화면 == 레일"(상수가 실제 레일과 같다 · 잘림 없음)을
+    /// 잰다. v0.3.55 까지의 "여유 6pt"는 상수가 Spacer 간격 6pt 를 빼고 센 값이었다(실측 레일 381 = 최단 화면 381 — 여유 0).
     @MainActor
-    @Test("레일 여유를 픽셀로 잰다")
+    @Test("레일과 최단 화면을 픽셀로 잰다(8칸부터 레일이 바닥이다)")
     func railSlackMeasuredInPixels() throws {
         let railOnly = CheckMenuSideRail.contentHeight + 12 * 2
         let shortest = try #require(Self.popoverHeight(
             CheckMenuView(store: Self.teamStore(members: 0))))
         print("[v0317] 레일 \(CheckMenuSideRail.itemCount)칸 × \(CheckMenuSideRail.buttonHeight)pt "
-              + "→ 레일만 \(railOnly)pt · 최단 메인 화면 \(shortest)pt · 여유 \(shortest - railOnly)pt")
-        #expect(shortest > railOnly,
-                Comment(rawValue: "최단 화면 \(shortest)pt 가 레일 \(railOnly)pt 보다 낮다 — 레일이 창 높이를 결정한다"))
+              + "→ 레일만 \(railOnly)pt · 최단 메인 화면 \(shortest)pt · 차 \(shortest - railOnly)pt")
+        #expect(shortest == railOnly,
+                Comment(rawValue: "최단 화면 \(shortest)pt ≠ 레일 \(railOnly)pt — 레일 상수가 실제 레일과 갈렸다(작으면 잘리고 크면 상수가 레일을 작게 안다)"))
         // 눈으로도 확인할 수 있게 굽는다(1인팀 = 레일이 제일 이기기 쉬운 화면).
         if let bitmap = Self.bitmap(CheckMenuView(store: Self.teamStore(members: 1)),
                                     width: CheckMenuView.mainWindowWidth) {
-            Self.save(bitmap, name: "v0317-rail-7items-1member.png")
+            Self.save(bitmap, name: "v0317-rail-8items-1member.png")
         }
     }
 
     // MARK: - ⑦ 배선 계약 (여기가 끊기면 화면은 멀쩡한데 문이 없다)
 
-    @Test("헤더 루비 칩이 상점을 열고, 레일 칸 수는 그대로다")
+    @Test("레일 [상점] 칸이 상점을 열고, 레일 칸 수 · 높이는 계약 상수 그대로다")
     func headerChipOpensTheShopAndTheRailIsUntouched() throws {
         let menu = Self.stripped(try Self.source("CheckMenuView.swift"))
         #expect(menu.contains("store.toggleShopPanel()"),
@@ -519,13 +523,13 @@ struct V0317ShopTests {
         #expect(!menu.contains("RubyEntryButton"), "헤더 루비 칩이 아직 남아 있다")
         #expect(menu.contains("store.isShopPanelVisible"), "상점 깃발이 isSubPanelOpen 에 없다")
         #expect(menu.contains("CheckShopPanel("), "상점 패널이 라우팅에 없다")
-        // ★ 레일은 **1pt 도 건드리지 않는다**(378pt vs 최단 화면 381pt — 한 칸이면 레일이 창 높이를 결정한다).
-        // 칸은 일곱이 됐고, 그 대신 칸 높이를 54 → 45pt 로 내려 레일 총 높이는 **줄었다**.
-        #expect(CheckMenuSideRail.itemCount == 7)
+        // v0.3.17: 칸은 일곱이 됐고, 그 대신 칸 높이를 54 → 45pt 로 내려 레일 총 높이는 **줄었다**.
+        // v0.3.56: [미션] 칸으로 여덟(사장님 지시 2026-10-16). 칸 높이는 45 그대로 두고(아이콘 + 라벨 높이) 레일이 432pt 가 됐다 —
+        // 0~1인 팀 홈은 레일이 창 높이를 정하고 푸터가 바닥에 붙는다(`CheckMenuSideRail` '높이 계약').
+        #expect(CheckMenuSideRail.itemCount == 8)
         #expect(CheckMenuSideRail.buttonHeight == 45)
-        #expect(CheckMenuSideRail.contentHeight + 24 < 378,
-                Comment(rawValue: "레일이 \(CheckMenuSideRail.contentHeight + 24)pt — 예전 378pt 보다 크면 "
-                        + "1인팀 창이 자란다"))
+        #expect(CheckMenuSideRail.contentHeight + 24 == 432,
+                Comment(rawValue: "레일이 \(CheckMenuSideRail.contentHeight + 24)pt — 8칸 × 45 + 간격 8 × 6 + 바깥 24 = 432 가 아니다"))
     }
 
     @Test("소유 게이트가 예방·치료 양쪽에 다 있다")

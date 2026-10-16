@@ -338,7 +338,10 @@ private func v0340InertTokenStore(_ label: String, function: String) -> TokenUsa
 
 /// 로그인 + 팀 확정(메인 화면) 스토어. `#line` 을 섞는 이유: 한 테스트가 스토어를 여럿 세워 서로 견준다.
 @MainActor
-private func v0340TeamStore(members: Int = 1, notice: AppNotice? = nil,
+/// 기본 팀원 수가 3 인 이유(v0.3.56): 레일이 [미션] 칸으로 432pt 가 되며 1인 팀 홈(381pt)은 **레일이 창 높이를 정한다** —
+/// 그 화면에 카드를 얹으면 본문이 레일을 넘는 만큼만 자라 "카드 높이 == 예산" 등식을 잴 수 없다(실측 93 vs 144pt).
+/// 3인(517pt)이면 공지 없는 그림부터 본문이 높이를 정한다. 이 스위트가 재는 뜻(카드 예산 · 접힘 · 양보)은 그대로다.
+private func v0340TeamStore(members: Int = 3, notice: AppNotice? = nil,
                             function: String = #function, line: Int = #line) -> WorkTimerStore {
     let now = Date()
     let store = WorkTimerStore(

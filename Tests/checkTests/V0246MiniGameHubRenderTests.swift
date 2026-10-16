@@ -302,7 +302,7 @@ func thePauseScrimMakesTheCanvasIndependentOfWhateverWasUnderneath() throws {
 /// 한 벌). 그래서 이 테스트가 재는 사실이 둘로 늘었다.
 ///  · 높이 517pt: 예전 계약 그대로다. 레일은 본문 **오른쪽에 나란히** 서므로 세로 예산을 1pt 도 안 먹는다 —
 ///    그게 이 배치를 고른 이유이고, 여기가 빨개지면 레일이 창 높이를 결정하기 시작했다는 뜻이다
-///    (짝: CheckMenuRenderTests.settingsEntryMovedToTheSideRailAndIsStillNotAMenu · sideRailNeverDecidesTheWindowHeight).
+///    (짝: CheckMenuRenderTests.settingsEntryMovedToTheSideRailAndIsStillNotAMenu · sideRailSetsTheFloorOfTheWindowHeightAndTheFooterFollowsIt).
 ///  · 폭 414pt: 본문 316 + 간격 10 + 레일 64 + 바깥 padding 24. 미니게임 입구가 레일에 **실제로 실렸다**는
 ///    증거다(레일이 안 붙으면 340 으로 떨어진다).
 ///

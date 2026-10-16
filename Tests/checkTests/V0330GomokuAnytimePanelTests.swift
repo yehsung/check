@@ -238,7 +238,18 @@ struct V0330GomokuAnytimePanelTests {
     @Test(.gomokuDefaultsCleanup)
     func 비근무_팝오버에_헤더_아래_배너가_서고_만료되면_사라진다() throws {
         let store = m2gMainScreenStore("m2-gomoku-banner").store
+        // v0.3.56: 레일이 [미션] 칸으로 432pt 가 되며 1인 팀 홈(381pt)은 **레일이 창 높이를 정한다** — 그 화면에 배너(92pt)를 얹으면
+        // 본문이 473pt 로 레일을 41pt 넘을 뿐이라 "배너만큼 자랐다"를 잴 수 없다(실측 41pt). 팀원 둘을 더해 본문이 레일보다 길게
+        // 시작하게 한다(3인 517pt) — 배너 예산을 재는 이 테스트의 뜻은 그대로다.
+        store.teamMembers += [
+            TeamMemberStatus(id: "00000000-0000-0000-0000-0000000000b1", name: "민수", status: .offWork, updatedAt: nil,
+                             currentSessionStartedAt: nil, weeklyDurationSeconds: 3_600),
+            TeamMemberStatus(id: "00000000-0000-0000-0000-0000000000b2", name: "지현", status: .offWork, updatedAt: nil,
+                             currentSessionStartedAt: nil, weeklyDurationSeconds: 3_600),
+        ]
         let plain = try m2gMenu(store)
+        #expect(Double(plain.pixelsHigh) / 2 > Double(CheckMenuSideRail.contentHeight + 24),
+                "준비 실패 — 배너 전 화면이 레일 바닥(\(CheckMenuSideRail.contentHeight + 24)pt)에 걸려 있어 자람을 잴 수 없다")
 
         let invite = GomokuInvite(id: "in-1", peer: m2gUser("민수", 31, working: true), stake: 5,
                                   expiresAt: Date().addingTimeInterval(45))

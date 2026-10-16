@@ -463,6 +463,12 @@ private func crMenuStore() -> WorkTimerStore {
     store.currentTeamID = "11111111-1111-1111-1111-111111111111"
     store.teamName = "아잉팀"
     store.isMenuPresented = true
+    // v0.3.56: 레일이 [미션] 칸으로 432pt 가 되며 팀원 0명 홈(381pt)은 레일이 창 높이를 정한다 — 그 화면에선 배너(92pt)가
+    // 레일을 넘는 만큼(41pt)만 창을 키워 "배너 예산 ≈ 실제"를 잴 수 없다. 팀원 셋으로 본문이 레일보다 길게 시작하게 한다.
+    store.teamMembers = (0..<3).map { index in
+        TeamMemberStatus(id: "00000000-0000-0000-0000-0000000000c\(index)", name: "멤버\(index)", status: .offWork,
+                         updatedAt: nil, currentSessionStartedAt: nil, weeklyDurationSeconds: 3_600)
+    }
     return store
 }
 

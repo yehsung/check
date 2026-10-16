@@ -3245,9 +3245,10 @@ func settingsEntryMovedToTheSideRailAndIsStillNotAMenu() throws {
     #expect(!caption.contains("\"gamecontroller.fill\""), "미니게임이 캡션 행으로 되돌아왔다")
     #expect(!caption.contains("\"chart.xyaxis.line\""), "내 기록이 캡션 행으로 되돌아왔다")
 
-    // 레일에는 여섯이 **위에서 아래 순서대로** 선다. 순서는 손버릇이 되는 값이라 소스로 고정한다.
+    // 레일에는 여덟이 **위에서 아래 순서대로** 선다. 순서는 손버릇이 되는 값이라 소스로 고정한다.
+    // v0.3.17 [상점](bag.fill)과 v0.3.56 [미션](checklist — [상점] 바로 아래, 사장님 지시 2026-10-16)이 들어왔다.
     let rail = try #require(swiftStructBody(source, name: "CheckMenuSideRail"))
-    let order = ["\"gamecontroller.fill\"", "PokeEntryIconButton", "\"chart.bar.xaxis\"", "\"chart.xyaxis.line\"", "\"exclamationmark.bubble.fill\"", "\"gearshape.fill\""]
+    let order = ["\"gamecontroller.fill\"", "PokeEntryIconButton", "\"bag.fill\"", "\"checklist\"", "\"chart.bar.xaxis\"", "\"chart.xyaxis.line\"", "\"exclamationmark.bubble.fill\"", "\"gearshape.fill\""]
     var cursor = rail.startIndex
     for token in order {
         let found = try #require(rail.range(of: token, range: cursor..<rail.endIndex), "레일에 \(token) 이 순서대로 없다")
@@ -4966,11 +4967,17 @@ func theMessageButtonNoLongerCarriesTheRetiredVersionGate() throws {
     #expect(body.contains("onOpenMessages"))
 }
 
-// MARK: - 울트라 화면(잔량 + 충전 경로) — v0.2.34
+// MARK: - 울트라 화면(잔량) · 미션 화면(3시간 줄) — v0.2.34 · v0.3.56 에 둘로 갈렸다
 
-/// 울트라 화면이 열린 스토어. 미션 목록은 **서버 응답에서 순수 변환**해 만든다(뷰가 판정하지 않는다).
+/// 지갑 화면 둘 중 어느 쪽을 여는가. v0.3.56 부터 미션 줄(3시간 · 칩 상태)은 **미션 화면**에, 잔량은 **울트라 화면**에 산다
+/// (사장님 지시 2026-10-16: "울트라 게이지에서는 울트라 보유수량만 표현하고. 나머지는 전부 미션 페이지로").
+/// 그래서 칩 상태를 재던 테스트들은 미션 화면을, 잔량을 재던 테스트들은 울트라 화면을 연다 — 단언은 그대로다.
+private enum WalletPanel { case ultra, mission }
+
+/// 울트라 화면 또는 미션 화면이 열린 스토어. 미션 목록은 **서버 응답에서 순수 변환**해 만든다(뷰가 판정하지 않는다).
 @MainActor
 private func makeUltraPanelStore(
+    panel: WalletPanel = .ultra,
     balance: Int? = 3,
     missionCount: Int = 3,
     claimed: Bool = false,
@@ -5009,24 +5016,32 @@ private func makeUltraPanelStore(
     ]
     store.missions = Array(all.prefix(missionCount))
     store.missionsLoaded = true
-    store.isUltraPanelVisible = true
+    switch panel {
+    case .ultra: store.isUltraPanelVisible = true
+    case .mission: store.isMissionPanelVisible = true
+    }
     return store
 }
 
 @MainActor
 @Test
 func ultraPanelWindowHeightWithinCap() throws {
-    // 최악 조합: 표시 상한(maxVisibleRows=4)을 넘긴 미션 + 안내줄 + 새 버전 배너.
-    // 미션이 늘어나는 것은 예정된 일이라(지금 3개) 상한을 지금 못 박아 둔다.
+    // 최악 조합: 표시 상한(미션 화면 maxVisibleRows=5)을 넘긴 미션 + 안내줄 + 새 버전 배너.
+    // 미션이 늘어나는 것은 예정된 일이라 상한을 지금 못 박아 둔다. v0.3.56 부터 목록은 **미션 화면**에 있다
+    // ("매일 첫 근무" · "연속 출근" 줄은 화면에서 빠지므로 미래 미션은 3시간 줄과 같은 종류로 흉내 낸다).
     // 안내줄은 **가장 긴 분기**를 쓴다(랩 여러 개를 받은 날). lineLimit(1) + 고정 높이라 문장이 길어져도
     // 창이 자라면 안 되는데, 짧은 쪽으로 재면 그 계약이 재어지지 않는다.
-    let store = makeUltraPanelStore(balance: 3, missionCount: 3, notice: "3시간 채웠어요 — 울트라 +1 (오늘 3개)")
+    let store = makeUltraPanelStore(panel: .mission, balance: 3, missionCount: 3, notice: "3시간 채웠어요 — 울트라 +1 (오늘 3개)")
     // 서버가 미션을 늘린 미래를 흉내 낸다(같은 순수 타입이라 화면은 그대로 그린다).
-    store.missions += (0..<3).map {
+    store.missions += (0..<5).map {
         MissionProgress(kind: .todayThreeHours, progress: Double($0) / 3, claimedToday: false, cappedToday: false, detail: "미래 미션 \($0)")
     }
     let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: store, previewUpdateBanner: true)))
     #expect(Double(pixelHeight) / 2.0 <= 700.0)
+    // 울트라 화면은 목록이 없어 높이가 고정이다 — 같은 배너를 얹어도 상한 안이다(미션 · 안내를 줘도 안 그린다).
+    let ultra = makeUltraPanelStore(panel: .ultra, balance: 3, missionCount: 3, notice: "3시간 채웠어요 — 울트라 +1 (오늘 3개)")
+    let ultraHeight = try #require(renderedPixelHeight(CheckMenuView(store: ultra, previewUpdateBanner: true)))
+    #expect(Double(ultraHeight) / 2.0 <= 700.0)
 }
 
 @MainActor
@@ -5035,10 +5050,11 @@ func ultraPanelDrawsEachChipStateDifferently() throws {
     // 칩 세 상태(보상 대기 / 받음 / 가득 참)가 **픽셀로** 갈린다. 순수 함수 테스트는 어느 칩을 골랐는지
     // 알지만 그것이 그려졌는지는 모르고, 렌더는 그려진 것만 알지 왜 그렸는지는 모른다 — 둘 다 필요하다.
     let now = Date(timeIntervalSince1970: 1_700_000_000)
-    let pending = makeUltraPanelStore(missionCount: 1, now: now)
-    let pendingTwin = makeUltraPanelStore(missionCount: 1, now: now)
-    let claimed = makeUltraPanelStore(missionCount: 1, claimed: true, now: now)
-    let capped = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, now: now)
+    // v0.3.56: 칩이 사는 3시간 줄은 **미션 화면**에 있다(울트라 화면은 잔량만).
+    let pending = makeUltraPanelStore(panel: .mission, missionCount: 1, now: now)
+    let pendingTwin = makeUltraPanelStore(panel: .mission, missionCount: 1, now: now)
+    let claimed = makeUltraPanelStore(panel: .mission, missionCount: 1, claimed: true, now: now)
+    let capped = makeUltraPanelStore(panel: .mission, balance: 3, missionCount: 1, capped: true, now: now)
 
     let base = try renderPNG(CheckMenuView(store: pending))
     // 대조군: 같은 입력이면 바이트까지 같다(없으면 아래 부등식이 렌더 잡음과 구별되지 않는다).
@@ -5052,14 +5068,14 @@ func ultraPanelDrawsEachChipStateDifferently() throws {
     // ★ v0.2.39: 3시간 줄의 `claimed` 는 서버가 **언제나 false** 로 보낸다. 그래서 "오늘 받았다"를
     //   화면에 나타내는 것은 랩 수뿐이고, 그걸 안 읽으면 세 개를 받은 사람의 줄이 하나도 못 받은 줄과
     //   픽셀까지 같아진다 — 화면이 "아직 아무것도 안 줬다"고 거짓말하는 것이다.
-    let withLaps = makeUltraPanelStore(missionCount: 1, lapsGrantedToday: 3, now: now)
+    let withLaps = makeUltraPanelStore(panel: .mission, missionCount: 1, lapsGrantedToday: 3, now: now)
     #expect(
         base != (try renderPNG(CheckMenuView(store: withLaps))),
         "오늘 랩을 3개 받은 화면이 0개 받은 화면과 같다 — 받은 사실이 그려지지 않았다."
     )
 
-    savePokeUISnapshot(base, "ultra-panel-pending")
-    savePokeUISnapshot(try renderPNG(CheckMenuView(store: capped)), "ultra-panel-capped")
+    savePokeUISnapshot(base, "mission-panel-pending")
+    savePokeUISnapshot(try renderPNG(CheckMenuView(store: capped)), "mission-panel-capped")
 }
 
 /// v0.2.41 — **"가득 참"과 "대기 중"이 픽셀로 갈린다.**
@@ -5074,10 +5090,11 @@ func ultraPanelDrawsEachChipStateDifferently() throws {
 func ultraPanelDrawsPendingApartFromMerelyBeingFull() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     // 가득 참(대기 아님): 아직 아무것도 못 채웠는데 잔량만 3인 아침.
-    let full = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, now: now)
-    let fullTwin = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, now: now)
+    // v0.3.56: 3시간 줄은 **미션 화면**에 있다.
+    let full = makeUltraPanelStore(panel: .mission, balance: 3, missionCount: 1, capped: true, now: now)
+    let fullTwin = makeUltraPanelStore(panel: .mission, balance: 3, missionCount: 1, capped: true, now: now)
     // 대기: 3시간을 채워 뒀고 잔량도 가득하다(서버는 이 조합만 보낸다).
-    let waiting = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, pending: true, now: now)
+    let waiting = makeUltraPanelStore(panel: .mission, balance: 3, missionCount: 1, capped: true, pending: true, now: now)
 
     let fullPNG = try renderPNG(CheckMenuView(store: full))
     // 대조군: 같은 입력이면 바이트까지 같다(없으면 아래 부등식이 렌더 잡음과 구별되지 않는다).
@@ -5087,9 +5104,9 @@ func ultraPanelDrawsPendingApartFromMerelyBeingFull() throws {
         "대기 중인 화면이 그냥 가득 찬 화면과 같다 — 채워 둔 하나가 있다는 사실이 화면에서 사라졌다."
     )
     // 보상 대기(평상시)와도 달라야 한다. 셋이 같은 그림이면 칩이 아예 안 그려지고 있는 것이다.
-    let plain = try renderPNG(CheckMenuView(store: makeUltraPanelStore(missionCount: 1, now: now)))
+    let plain = try renderPNG(CheckMenuView(store: makeUltraPanelStore(panel: .mission, missionCount: 1, now: now)))
     #expect(plain != (try renderPNG(CheckMenuView(store: waiting))))
-    savePokeUISnapshot(try renderPNG(CheckMenuView(store: waiting)), "ultra-panel-pending-lap")
+    savePokeUISnapshot(try renderPNG(CheckMenuView(store: waiting)), "mission-panel-pending-lap")
 }
 
 @MainActor
@@ -5109,9 +5126,13 @@ func ultraPanelDistinguishesUnknownBalanceFromZero() throws {
 @MainActor
 @Test
 func ultraPanelSnapshot() throws {
+    // v0.3.56: 울트라 화면은 잔량만 — 미션 세 줄과 안내줄은 미션 화면이 그린다(그 화면은 3시간 줄 + 안내줄).
     let png = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: 3, notice: "3시간 채웠어요 — 루비 +3")))
     #expect(png.count > 0)
-    savePokeUISnapshot(png, "ultra-panel-3missions")
+    savePokeUISnapshot(png, "ultra-panel-balance-only")
+    let mission = try renderPNG(CheckMenuView(store: makeUltraPanelStore(panel: .mission, balance: 3, notice: "3시간 채웠어요 — 루비 +3")))
+    #expect(mission.count > 0)
+    savePokeUISnapshot(mission, "mission-panel-lap-and-notice")
 }
 
 @MainActor
@@ -5784,7 +5805,8 @@ private let railOuterPadding: CGFloat = 12
 /// ★ **4 → 5 (v0.3.17).** [상점] 칸이 2번([콕찌르기] 바로 아래)으로 들어오면서 한 칸씩 밀렸다.
 ///   픽셀 프로브는 이 자리를 기하로 계산하므로, 리터럴을 여러 곳에 적어 두면 칸을 끼울 때마다
 ///   조용히 엉뚱한 칸을 찍는다(실제로 이 테스트가 그렇게 빨개졌다).
-private let railFeedbackIndex = 5
+/// ★ **5 → 6 (v0.3.56).** [미션] 칸이 3번([상점] 바로 아래)으로 들어왔다.
+private let railFeedbackIndex = 6
 
 private func railButtonRect(_ index: Int, windowHeightPoints: CGFloat) -> (left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) {
     let left = railOuterPadding + CheckMenuView.contentColumnWidth + 10
@@ -5881,7 +5903,16 @@ func sideRailPaintsTheOpenPanelWithAccent() throws {
 
     // 닫혔을 때는 CheckTheme.panel(≈43,46,61). 열리면 accent 0.18 이 얹혀 파랑 쪽으로 확 민다.
     #expect(after.b - before.b >= 20, "열린 패널의 레일 칸이 안 파래졌다(파랑 \(before.b)→\(after.b))")
-    #expect(after.g - before.g >= 12, "accent 채움이 아니라 다른 색이 칠해졌다(초록 \(before.g)→\(after.g))")
+    // accent 0.18 은 **반투명**이라 그 아래 창 배경(대각선 그라디언트)이 비친다 — 열린 칸의 초록은 창 높이에 따라 움직인다.
+    // 예전엔 "초록 +12 이상"이라는 고정 문턱을 썼는데, 그건 열린 화면이 381pt 일 때의 운이었다: v0.3.56 에 레일이 [미션] 칸으로
+    // 432pt 가 되며 같은 화면이 432pt 로 자라자 초록이 46→57(+11)이 되어 문턱 아래로 내려갔다. 그래서 **바로 옆 창 배경**
+    // (본문 열과 레일 사이 10pt 틈 — 같은 높이)을 읽어 accent 0.18 합성값을 계산하고 그 값과 견준다. 문턱보다 엄격하다 —
+    // 다른 색(근무 초록 · 대기 주황 · 시스템 파랑)을 같은 불투명도로 칠하면 초록 · 파랑 중 하나가 10 넘게 어긋난다.
+    let gap = try #require(railPixel(open, xPoints: rect.left - 5, yPoints: sampleY))
+    let expectedG = Double(gap.g) * 0.82 + 0.67 * 255 * 0.18
+    let expectedB = Double(gap.b) * 0.82 + 1.0 * 255 * 0.18
+    #expect(abs(Double(after.g) - expectedG) <= 4 && abs(Double(after.b) - expectedB) <= 4,
+            "accent 채움이 아니라 다른 색이 칠해졌다(초록 \(after.g) vs 기대 \(expectedG) · 파랑 \(after.b) vs 기대 \(expectedB) · 배경 \(gap))")
     // 색만으로 정보를 주지 않는다: 테두리도 accent 로 바뀌므로 카드 경계 픽셀도 함께 움직여야 한다.
     let borderBefore = try #require(railPixel(closed, xPoints: rect.left + 32, yPoints: rect.top + 0.5))
     let borderAfter = try #require(railPixel(open, xPoints: rect.left + 32, yPoints: rect.top + 0.5))
@@ -5896,30 +5927,32 @@ func sideRailPaintsTheOpenPanelWithAccent() throws {
 
 @MainActor
 @Test
-func sideRailNeverDecidesTheWindowHeight() throws {
-    // 레일 총 높이 = 7×45 + 6×6 = 351pt. 여기에 바깥 padding 12*2 를 더한 375pt 가 "레일만으로 정해지는
-    // 창 높이"다. 어떤 메인 화면이든 본문이 그보다 높아야 레일이 창 높이를 밀지 않는다 —
-    // 밀기 시작하면 팀원 수 비례 성장(windowHeightAdaptsToContentWithinCap (b))이 조용히 죽는다.
-    //
-    // ⚠️ **여유가 6pt 다**(v0.3.17 실측: 가장 짧은 메인 화면 381pt vs 레일 375pt).
-    //   v0.3.16 까지는 6칸 × 54pt = 378pt 라 여유가 3pt 였다. [상점] 칸을 더하면서 buttonHeight 를
-    //   54 → 45 로 내렸고, 그래서 **칸이 늘었는데 여유는 오히려 커졌다.**
-    //   칸을 하나 더 더하면 +51pt(45+6)라 그 순간 레일이 창 높이를 결정한다.
-    //   그때 이 단언이 가장 먼저, 가장 알아보기 쉽게 빨개진다.
+func sideRailSetsTheFloorOfTheWindowHeightAndTheFooterFollowsIt() throws {
+    // v0.3.55 까지의 이름은 `sideRailNeverDecidesTheWindowHeight` 였다 — "어떤 메인 화면이든 본문이 레일보다 높다".
+    // **v0.3.56 에 그 계약을 바꿨다**([미션] 칸 — 사장님 지시 2026-10-16 "메인페이지 오른쪽에 주요 버튼들 있는곳으로").
+    // 여덟 칸이면 레일만 8×45 + 8×6 = 408pt(바깥 padding 포함 432pt)이고, 0~1인 팀 홈(381pt) · 울트라 화면 · 1줄 미션 화면은
+    // 레일이 창 높이를 정한다. 칸 높이는 줄이지 않았다(아이콘 + 라벨 높이). 대신 둘을 못 박는다:
+    //  (가) 레일이 정하는 창 높이는 **정확히** 레일 높이다 — 상수(`contentHeight`)가 실제 레일과 같다(Spacer 간격 포함).
+    //      v0.3.55 까지는 상수가 Spacer 간격 6pt 를 빼고 세어(375 vs 실측 381) "여유 6pt"가 실은 0pt 였다.
+    //  (나) 그때 푸터는 본문 열 바닥에 붙는다 — 남는 자리가 푸터 **아래**에 깔리지 않는다(V0356HeightTests 가 픽셀로 잰다).
+    //  (다) 레일 **위**에서는 팀원 수 비례 성장이 그대로 산다(2인 < 5인).
+    //  (라) 어떤 조합도 700pt 를 안 넘는다.
     let now = Date(timeIntervalSince1970: 1_784_000_000)
     // 리터럴이 아니라 **소스의 계약 상수**에서 읽는다 — 칸을 더하면 이 값이 저절로 커져야 경고가 산다.
     let railOnlyHeight = CheckMenuSideRail.contentHeight + railOuterPadding * 2
 
-    // 가장 짧은 메인 화면: 팀원 0명(안내 1행짜리 목록).
+    // (가) 가장 짧은 메인 화면(팀원 0명)은 정확히 레일 높이다 — 더 크면 상수가 레일을 작게 알고 있고, 더 작을 수는 없다.
     let shortest = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: [], now: now))))
-    #expect(Double(shortest) / 2.0 > railOnlyHeight, "가장 짧은 메인 화면(\(Double(shortest) / 2.0)pt)이 레일 높이(\(railOnlyHeight)pt)보다 낮다 — 레일이 창 높이를 결정하고 있다")
+    // CGFloat 끼리 견준다 — Double 과 CGFloat 를 #expect 의 == 에 섞으면 값이 같아도 거짓으로 나온다(실측: 432.0 ≠ 432.0).
+    #expect(CGFloat(shortest) / 2 == railOnlyHeight, "가장 짧은 메인 화면 \(CGFloat(shortest) / 2)pt ≠ 레일 \(railOnlyHeight)pt — 레일 상수가 실제 레일과 갈렸다")
 
-    // 그래서 팀원 수 비례 성장이 살아 있다(레일이 바닥을 깔아 두면 2명과 5명이 같은 높이가 된다).
+    // (다) 레일 위에서는 팀원 수 비례 성장이 살아 있다(2인 449pt 부터 본문이 정한다).
     let two = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: steadyMembers(count: 2), now: now))))
     let five = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: steadyMembers(count: 5), now: now))))
+    #expect(CGFloat(two) / 2 > railOnlyHeight, "2인 팀(\(CGFloat(two) / 2)pt)까지 레일이 정한다 — 레일이 또 자랐다")
     #expect(two < five)
 
-    // 그리고 어떤 조합에서도 상한(700pt)을 안 넘는다 — 레일은 세로 예산을 1pt 도 안 먹으므로
+    // (라) 어떤 조합에서도 상한(700pt)을 안 넘는다 — 레일은 세로 예산을 1pt 도 안 먹으므로
     // 이 값들은 레일 이전과 같아야 한다(배너 + 목표 편집 + 팀원 6명이 겹친 가장 키 큰 조합 포함).
     let tallest = makeTeamStore(members: steadyMembers(count: 6), now: now)
     let tallestHeight = try #require(

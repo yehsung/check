@@ -572,8 +572,10 @@ private func smDiffRows(_ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, rows: 
     }
 
     @Test func 넘치지_않는_목록은_상태_행_수만큼만_자란다() throws {
-        let plain3 = try smBitmap(CheckMenuView(store: smPopoverStore(smEntries(3, statusEvery: nil))))
-        let mixed3 = try smBitmap(CheckMenuView(store: smPopoverStore(smEntries(3, statusEvery: 2))))   // u0 · u2 에 상태
+        // v0.3.56: 3명(430pt)은 레일 바닥(432pt — [미션] 칸으로 8칸)에 걸려 자람이 2pt 깎인다. 4명으로 본문이 레일보다 길게 시작한다
+        // (상태는 여전히 u0 · u2 두 줄이다 — 재는 뜻은 그대로).
+        let plain3 = try smBitmap(CheckMenuView(store: smPopoverStore(smEntries(4, statusEvery: nil))))
+        let mixed3 = try smBitmap(CheckMenuView(store: smPopoverStore(smEntries(4, statusEvery: 2))))   // u0 · u2 에 상태
         #expect(mixed3.pixelsHigh - plain3.pixelsHigh == 2 * 14 * 2, "상태 행 둘이 14pt 씩 자라지 않았다: \(mixed3.pixelsHigh - plain3.pixelsHigh)px")
         // 7명 전원이 상태를 달면 점 예산을 넘어 스크롤로 간다 — 팝오버는 '상태 없는 7명'과 같은 높이다.
         let plain7 = try smBitmap(CheckMenuView(store: smPopoverStore(smEntries(7, statusEvery: nil)), previewClipsOverflowList: true))

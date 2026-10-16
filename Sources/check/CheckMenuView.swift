@@ -251,7 +251,7 @@ struct CheckMenuView: View {
         }
     }
 
-    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라/**1:1 대화**/**제보**/**캐릭터**)이 열려 있는지.
+    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라/**1:1 대화**/**제보**/**캐릭터**/**상점**/**미션**)이 열려 있는지.
     /// 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
     ///
     /// 미니게임은 **여기 없다** — v0.2.46 에 별도 창(`CheckMiniGameWindowController`)으로 나갔다. 팝오버 자리를
@@ -267,6 +267,7 @@ struct CheckMenuView: View {
             || store.isInsightsPanelVisible || store.isUltraPanelVisible
             || store.isMessagePanelVisible || store.isFeedbackPanelVisible
             || store.isCharacterPanelVisible || store.isShopPanelVisible
+            || store.isMissionPanelVisible
     }
 
     /// 위 목록이 세는 **패널 깃발의 이름들**(테스트가 읽는 유일한 권위).
@@ -283,7 +284,9 @@ struct CheckMenuView: View {
         // 들어오는 문이 어디냐가 아니라 팀 카드 자리를 대신 쓰느냐가 이 목록의 기준이다.
         "isCharacterPanelVisible",
         // 상점(v0.3.17). 진입점은 헤더의 루비 잔량 칩이지만, 팝오버 자리를 먹는 것은 같다.
-        "isShopPanelVisible"
+        "isShopPanelVisible",
+        // 미션(v0.3.56 — 레일 [미션]). 3시간 줄 · 이번 주 근무 줄 · 방금 받은 안내가 울트라 화면에서 이리로 왔다.
+        "isMissionPanelVisible"
     ]
 
     /// 토큰 소모량 행은 홈(팀 목록) 화면의 구성요소다 — 하위 패널이 열리면 감춘다. 패널이 쓸 세로 공간을
@@ -669,10 +672,20 @@ struct CheckMenuView: View {
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     } else if store.isUltraPanelVisible {
-                        // 울트라 화면(잔량 + 충전 경로). 리그/토큰/찌르기/내 기록과 **같은 뼈대**다.
+                        // 울트라 화면 — **보유 수량만**(v0.3.56). 리그/토큰/찌르기/내 기록과 **같은 뼈대**다.
+                        // 미션 줄 · 이번 주 근무 줄 · 안내줄은 미션 화면(아래 가지)으로 옮겼다(사장님 지시 2026-10-16).
+                        // 목록이 없어 높이가 고정이라 창 높이 예산(extraChromeHeight)·스크롤/클립 인자가 필요 없다.
                         UltraPanel(
                             balance: store.ultraBalance,
                             isUnlimited: store.ultraUnlimited,
+                            hasFailed: store.ultraBalanceFailed,
+                            onRetry: { store.syncUltraWallet(reason: .panelOpen) },
+                            onBack: { store.closeUltraPanel() }
+                        )
+                    } else if store.isMissionPanelVisible {
+                        // 미션 화면(v0.3.56 — 레일 [미션]). 근무 3시간마다 · 이번 주 근무 · 방금 받은 안내.
+                        // 목록 패널이라 다른 목록과 **같은 창 높이 예산**을 받는다(배너 · 목표 편집이 얹히면 줄이 스크롤로 밀린다).
+                        MissionPanel(
                             missions: store.missions,
                             weeklyWork: store.weeklyWork,
                             hasLoaded: store.missionsLoaded,
@@ -681,7 +694,7 @@ struct CheckMenuView: View {
                             onRetry: { store.syncUltraWallet(reason: .panelOpen) },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
-                            onBack: { store.closeUltraPanel() }
+                            onBack: { store.closeMissionPanel() }
                         )
                     } else if store.isInsightsPanelVisible {
                         // 개인 기록 페이지(지난주 회고 + 근무 리듬 히트맵). 내 데이터만 쓰고, 계산은 전부
@@ -748,7 +761,18 @@ struct CheckMenuView: View {
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     }
+                    // 푸터는 **본문 열 바닥에 붙는다**(v0.3.56). 레일이 [미션] 칸으로 여덟 칸이 되면서 레일만으로 432pt 라
+                    // (`CheckMenuSideRail` '높이 계약'), 본문이 그보다 짧은 화면(1인 팀 · 울트라 · 빈 순위판 …)에서는 레일이 창
+                    // 높이를 정한다. 그때 남는 자리가 푸터 **아래**에 깔리면 푸터가 허공에 뜨고 레일의 [설정](바닥 앵커)과 줄이
+                    // 안 맞는다. 유연한 틀로 그 자리를 푸터 **위**로 돌린다 — 본문이 레일보다 길면 틀은 푸터 크기 그대로라
+                    // (제안 높이 = 자연 높이) 어떤 화면도 1pt 도 안 바뀐다. 레일이 같은 수식어로 이미 늘어나고 있다.
+                    // ⚠️ 레일이 높이를 정하는 화면에서는 이 VStack 이 자연 높이보다 큰 높이를 **나눠 준다** — 그때 세로로 줄 수 있는
+                    //   뷰(`minimumScaleFactor` 글자)는 자기 자연 높이보다 작은 몫을 받아 글자가 줄어든다(헤더 연속 근무 칩이 실제로
+                    //   72 → 59pt 로 줄었다). 이 열에 그런 글자를 새로 넣으면 `.fixedSize(horizontal: false, vertical: true)` 로 세로를
+                    //   고정하라. 이 틀이 있고 없고의 두 빌드를 0~1인 홈 · 빈 순위판 · 울트라 · 미션 등 9개 화면에서 그려 본문 카드
+                    //   영역이 픽셀까지 같음을 확인했다(v0.3.56).
                     FooterBar(store: store)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
                 }
             }
         } else {
@@ -758,7 +782,7 @@ struct CheckMenuView: View {
     }
 }
 
-// MARK: - 오른쪽 세로 레일 (화면 이동 버튼 6개)
+// MARK: - 오른쪽 세로 레일 (화면 이동 버튼 8개 — v0.3.56)
 
 /// 팝오버 오른쪽에 세로로 서는 화면 이동 레일.
 ///
@@ -772,15 +796,21 @@ struct CheckMenuView: View {
 /// **왜 오른쪽인가.** 본문 폭(316)을 1pt 도 줄이지 않고 버튼을 키우는 유일한 길이다. 창은 위·오른쪽
 /// 모서리가 고정이라(WindowTopAnchor) 폭이 늘면 왼쪽으로 자란다 — 레일을 달아도 팝오버 위치가 튀지 않는다.
 ///
-/// **높이 계약.** 레일 총 높이 = 7×45 + 6×6 = 351pt(바깥 padding 포함 375pt). 메인 화면 본문이 이보다
-/// 짧으면 **레일이 창 높이를 결정한다**(HStack 은 큰 쪽을 따른다). 그 순간 "팀원 수에 비례해 창이 자란다"는
-/// 오래된 성질이 작은 팀에서 조용히 죽는다.
+/// **높이 계약.** 레일 총 높이 = 8×45 + 8×6 = 408pt(바깥 padding 포함 **432pt**). 간격이 칸 수와 같은 8개인 이유는
+/// [설정] 앞의 `Spacer` 도 VStack 의 자식이라 간격 하나를 더 먹기 때문이다(`contentHeight` 주석). 메인 화면 본문이 이보다
+/// 짧으면 **레일이 창 높이를 결정한다**(HStack 은 큰 쪽을 따른다).
 ///
-/// ⚠️ **여유가 9pt 다**(v0.3.17 렌더 실측: 가장 짧은 메인 화면 384pt vs 레일 375pt).
-/// 그 전(6칸 × 54pt)은 378pt 라 여유가 6pt 였다 — [상점] 칸을 더하면서 `buttonHeight` 를 54 → 45 로
-/// 내렸고, 그 결과 칸이 늘었는데 여유는 오히려 커졌다.
-/// 칸을 더하면 +51pt(45+6)다. 항목·높이를 건드리기 전에 반드시 다시 재라
-/// (CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight 가 그 실측을 못 박는다).
+/// ⚠️ **v0.3.56 부터 레일이 창 높이를 정하는 화면이 있다** — [미션] 칸(사장님 지시 2026-10-16: "메인페이지 오른쪽에
+/// 주요 버튼들 있는곳으로 빼고")을 더하며 +51pt(45+6) 가 됐다. 렌더 실측(이 칸을 더하기 전):
+///   · 레일만 381pt(7칸 — 그때도 Spacer 간격 6pt 가 상수 351+24=375 에 빠져 있었다)
+///   · 가장 짧은 메인 화면(0~1인 팀) 381pt — 사실 여유는 0pt 였다(옛 주석의 "여유 9pt"는 Spacer 간격을 빼고 센 값)
+///   · 빈 순위판 · 빈 토큰판 · 빈 콕찌르기 · 내 기록(불러오는 중) 본문은 329~344pt 라 **이미** 레일이 높이를 정하고 있었다.
+/// 여덟 칸이면 레일만 432pt 이고, 0~1인 팀 홈(381) · 울트라 화면 · 1줄 미션 화면은 432pt 로 자란다(+51pt — 2인 팀
+/// 449pt 부터는 예전 그대로 본문이 정한다). 칸 높이는 **줄이지 않는다**(45pt 는 아이콘 17 + 라벨 9 를 담는 높이다).
+/// 늘어난 자리는 푸터 **위**로 간다 — 본문 열의 푸터가 바닥에 붙는다(`CheckMenuView.content` 의 푸터 주석). 그래서 레일
+/// 바닥의 [설정]과 푸터가 같은 줄에 서고, 푸터 아래가 비지 않는다.
+/// 칸을 더하면 또 +51pt 다. 항목·높이를 건드리기 전에 반드시 다시 재라
+/// (CheckMenuRenderTests.sideRailSetsTheFloorOfTheWindowHeightAndTheFooterFollowsIt · V0356MissionPanelTests 가 그 실측을 못 박는다).
 /// (테스트가 아래 상수를 읽으므로 internal 이다 — 리터럴을 다시 적으면 칸을 더해도 가드가 안 따라온다.)
 struct CheckMenuSideRail: View {
     let store: WorkTimerStore
@@ -797,11 +827,16 @@ struct CheckMenuSideRail: View {
     static let buttonSpacing: CGFloat = 6
     static let cornerRadius: CGFloat = 12
     /// 항목 수. 늘리기 전에 contentHeight 가 본문 최소 높이를 넘지 않는지 렌더로 재라(위 '높이 계약').
-    /// **테스트가 이 두 값을 읽는다**(CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight) —
+    /// **테스트가 이 두 값을 읽는다**(CheckMenuRenderTests.sideRailSetsTheFloorOfTheWindowHeightAndTheFooterFollowsIt) —
     /// 리터럴을 다시 적어 두면 칸을 더해도 그 가드가 따라오지 않아 '여유 3pt' 경고가 거짓말이 된다.
-    static let itemCount = 7
+    /// v0.3.56: 7 → 8([미션] 칸 — [상점] 바로 아래).
+    static let itemCount = 8
+    /// 레일 VStack 의 **실제** 높이(바깥 padding 제외). 간격이 `itemCount - 1` 이 아니라 `itemCount` 개다 —
+    /// 위쪽 칸들과 [설정] 사이의 `Spacer(minLength: 0)` 도 VStack 의 자식이라 양옆에 간격이 하나 더 붙는다.
+    /// v0.3.55 까지는 `itemCount - 1` 로 세어 레일을 6pt 작게 알고 있었다(렌더 실측 381pt vs 상수 375pt) —
+    /// 그래서 "여유 6pt"라던 단언이 실은 여유 0pt 의 화면을 통과시키고 있었다.
     static var contentHeight: CGFloat {
-        CGFloat(itemCount) * buttonHeight + CGFloat(itemCount - 1) * buttonSpacing
+        CGFloat(itemCount) * buttonHeight + CGFloat(itemCount) * buttonSpacing
     }
 
     /// 제보 배지 글자(운영자가 아직 처리하지 않은 건수). 0 이면 **배지를 아예 안 그린다** — "0" 은
@@ -853,6 +888,19 @@ struct CheckMenuSideRail: View {
             ) {
                 store.toggleShopPanel()
             }
+            // 미션(v0.3.56). 사장님 지시 2026-10-16: "울트라 게이지에서는 울트라 보유수량만 표현하고. 나머지는 전부 미션
+            // 페이지로 빼내자. 메인페이지 오른쪽에 주요 버튼들 있는곳으로 빼고 미션 클릭하면 볼 수 있게끔." — 0.3.55 의 이번 주
+            // 근무 줄이 콕찌르기 → 잔량 배지 → 울트라 화면 안에만 있어서 사장님조차 못 찾았다. 자리가 [상점] 바로 아래인
+            // 이유: 미션으로 버는 것이 **루비**이고 그 루비를 쓰는 곳이 [상점]이다(벌고 · 쓰는 문이 나란히 선다).
+            // `checklist` 는 macOS 11+ (배포 타깃 14 ✓).
+            CheckMenuRailButton(
+                icon: "checklist",
+                label: "미션",
+                help: "미션 — 근무 3시간마다 · 이번 주 근무 보상",
+                isActive: store.isMissionPanelVisible
+            ) {
+                store.toggleMissionPanel()
+            }
             CheckMenuRailButton(
                 icon: "chart.bar.xaxis",
                 label: "팀 현황",
@@ -874,7 +922,8 @@ struct CheckMenuSideRail: View {
             // **여기 있던 [울트라] 칸은 뺐다.** 사용자 판단 2026-09-10: "울트라 버튼은 따로 빼 둘 만큼
             // 비중 있는 기능이 아니야. 기존처럼 콕 찌르기 페이지의 상단 버튼 정도로만 남겨놓자."
             // 울트라 화면으로 가는 길은 그래서 **콕찌르기 제목 행의 잔량 배지**(UltraBalanceBadge →
-            // openUltraPanel(from: .poke)) 하나만 남는다. 그 말은 UltraPanelOrigin 의 두 값 중
+            // openUltraPanel(from: .poke)) 하나만 남는다 — v0.3.56 에도 그대로다. 그 화면은 이제 **보유 수량만** 말하고,
+            // 미션(3시간 줄 · 이번 주 근무)은 위 [미션] 칸이 따로 연다(울트라 칸이 되돌아온 것이 아니다). 그 말은 UltraPanelOrigin 의 두 값 중
             // **지금 버튼으로 도달할 수 있는 진입은 .poke 뿐**이라는 뜻이다 — .home 은 여전히
             // ultraPanelOrigin 의 초기값이자 closeUltraPanel 이 되돌려 놓는 값이라 살아 있는 값이고,
             // 열거값을 줄이면 구버전 계약이 흔들리므로 지우지 않는다(그 파일은 이 트랙의 소유도 아니다).
@@ -904,9 +953,10 @@ struct CheckMenuSideRail: View {
             // 그대로 떠 있다(측정표는 `WindowTopAnchor.dismissMenuPopover` 주석). 그래서 팝오버를 닫는
             // 일은 **명시적으로** 한다 — 창을 여는 스토어의 `openMiniGameWindow()`, 그리고 스토어를
             // 안 거치는 [설정]은 바로 아래 호출부가 직접 한다(제보는 이제 창이 아니라 닫을 일이 없다).
-            // 본문이 레일보다 길면 남는 자리가 여기로 간다. 위 다섯(게임·찌르기·현황·기록·제보)은 위에,
+            // 본문이 레일보다 길면 남는 자리가 여기로 간다. 위 일곱(게임·찌르기·상점·미션·현황·기록·제보)은 위에,
             // [설정]은 아래에 앵커된다 — 상단 정렬만 하면 본문이 길 때 레일 아래가 최대 310pt(창 높이의 46%)
             // 통째로 비어 "여섯 칸이 떠 있는" 인상이 된다(2026-09-10 실측).
+            // ⚠️ 이 Spacer 도 VStack 의 자식이라 간격(6pt)을 하나 더 먹는다 — `contentHeight` 가 그 간격까지 센다.
             Spacer(minLength: 0)
             CheckMenuRailButton(
                 icon: "gearshape.fill",
@@ -929,7 +979,7 @@ struct CheckMenuSideRail: View {
             }
         }
         .frame(width: Self.width, alignment: .top)
-        // 레일은 본문 높이를 **따라간다**(늘리기만 한다 — 위 '높이 계약'의 최소 높이 354 는 VStack 이 그대로 쥔다).
+        // 레일은 본문 높이를 **따라간다**(늘리기만 한다 — 위 '높이 계약'의 최소 높이 408 은 VStack 이 그대로 쥔다).
         .frame(maxHeight: .infinity, alignment: .top)
     }
 }
@@ -1517,11 +1567,19 @@ private struct HeaderGoalSection: View {
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .lineLimit(1)
+                        // 칩(v0.3.56)이 이 줄에 서면서 붙였다 — 줄이 모자라는 날 **이 글자가 먼저 자리를 갖고** 칩이 양보한다
+                        // (칩 0.5 · Spacer 0 — 우선순위 사다리는 `HeaderStreakChipLabel` 주석).
+                        .layoutPriority(1)
+                    // 연속 근무 칩(v0.3.56) — 자리가 상태 글자 옆이 아니라 **이 줄**인 이유는 `HeaderStreakChip` 주석(폭 실측).
+                    // 잎 뷰라 이 섹션이 매초 다시 돌아도 칩은 자기 값(지갑 응답 여부 · 연속 일수)이 바뀔 때만 다시 그린다.
+                    HeaderStreakChip(store: store)
                     Spacer(minLength: 4)
                     Text("\(GoalPercentFormatter.percent(workedSeconds: worked, goalSeconds: goalSeconds))%")
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
+                        // 주간 글자와 같은 이유(v0.3.56) — 칩이 이 숫자를 밀지 않는다.
+                        .layoutPriority(1)
                     // 2026-09-10 — 이 줄에 있던 [설정]·[미니게임]·[내 기록] 세 버튼은 오른쪽 세로 레일
                     // (CheckMenuSideRail)로 옮겼다. 셋 다 **화면 이동**이고, 이 줄은 원래 그 셋이 갈 곳이
                     // 없어서 쓰던 넘침 자리였다("남는 곳이 이 캡션 행이고" — 옛 주석). 사용자 지적이 정확히
@@ -1578,6 +1636,76 @@ private struct HeaderGoalSection: View {
     // 초 단위 목표를 스테퍼 범위(1~168시간)로 클램프한 시간값.
     private static func hours(from goalSeconds: Int) -> Int {
         max(1, min(168, goalSeconds / 3600))
+    }
+}
+
+// MARK: - Header streak chip (v0.3.56)
+
+/// 연속 근무 칩의 문구(순수 — 값으로 검증한다). 숫자는 서버 `ultra_wallet_sync` 의 `streak_days` 그대로다
+/// (예전 울트라 화면 "연속 출근" 줄이 "N일 연속"으로 보여 주던 바로 그 값 — 판정은 서버가 한다).
+enum HeaderStreakCopy {
+    static let icon = "flame.fill"   // macOS 11+ (배포 타깃 14 ✓)
+    /// 화면 글자. 사장님 예시(2026-10-16) "연속 0일 근무!" 그대로 — **0일도 그린다**(사장님 예시가 0일이다).
+    static func text(_ days: Int) -> String { "연속 \(max(0, days))일 근무!" }
+    /// 보이스오버 문구. 느낌표를 읽지 않게 뺀다.
+    static func accessibilityLabel(_ days: Int) -> String { "연속 \(max(0, days))일 근무" }
+}
+
+/// 헤더 카드의 연속 근무 칩(v0.3.56). 사장님 지시(2026-10-16): "연속 근무일수는 [헤더 카드] 여기에 뜨게끔 밖으로 빼줘.
+/// 연속 0일 근무! 이런식으로." — 예전엔 울트라 화면의 "연속 출근" 줄(콕찌르기 → 잔량 배지 → 울트라)에서만 보였다.
+///
+/// ★ **자리: 상태 글자("근무중") 옆이 아니라 주간 목표 캡션 줄**이다. 렌더 실측(헤더 카드 안쪽 폭 292pt):
+///   윗줄은 마스코트 46 + 간격 12 + [글자 열] + 간격 12 + Spacer 8 + 간격 12 + [근무 종료] 알약 96 이라 글자 열에 남는 폭이
+///   **106pt** 다. 상태 글자 + 간격 6 + 칩이 필요한 폭은 "근무중"(29) + 칩 3일(72) = 107 · "근무종료"(38.5) + 72 = 116.5 ·
+///   "동기화 대기"(51) + 칩 999일(86) = 143pt 로 **평소 경우부터** 넘친다 — 그 줄에 두면 알약이 밀리거나 상태 글자가 두 줄이 된다.
+///   타이머 아래에 새 줄로 두면 글자 열(상태 14 + 3 + 타이머 20.5 = 37.5)이 마스코트(46)보다 높아져 헤더가 +7.5pt 자란다 —
+///   창 700pt 예산을 실측 상수로 쥔 패널들(캐릭터·상점 격자 — 안전 여유 5pt)이 그 순간 넘친다.
+///   캡션 줄은 최악(주간 글자 "이번 주 168시간 00분 / 168시간" 137 + 칩 999일 86 + "100%" 29.5 + 연필 18 + 간격 16 + Spacer 4
+///   = 290.5 ≤ 292)에서도 제 크기로 들어가고 높이를 1pt 도 안 더한다. 그래도 넘치는 날(글꼴 차이)에는 **칩이 먼저 양보한다**
+///   (주간 글자 · 퍼센트 1 > 칩 0.5 > Spacer 0 — 칩은 0.8배까지 줄어든다) — 주간 글자 · 퍼센트 · 연필은 그대로다.
+///
+/// ★ **지갑이 한 번이라도 답한 뒤에만** 그린다(`missionsLoaded` — 로그아웃에서 내려간다). 아직 안 물어본 사람에게
+///   "연속 0일"이라고 말하면 그건 만들어 낸 사실이다(잔량을 모를 때 0 이 아니라 "—"를 그리는 것과 같은 규약).
+///
+/// 잎 뷰다 — 이 칩은 시계를 읽지 않는다(연속 일수는 지갑 응답 때만 바뀐다). 매초 도는 `HeaderGoalSection` 안에 서도
+/// 자기 값이 안 바뀌면 다시 그려지지 않는다.
+struct HeaderStreakChip: View {
+    let store: WorkTimerStore
+
+    var body: some View {
+        if store.missionsLoaded {
+            HeaderStreakChipLabel(days: store.streakDays)
+        }
+    }
+}
+
+/// 칩의 그림(값만 받는다 — 렌더 테스트가 폭을 재는 단위). 불꽃은 [근무 종료] 알약과 같은 주황→빨강 그라디언트다
+/// (`CheckTheme.stopGradient`). `CheckTheme.pending`(주황)을 쓰지 않는 이유: 그 색은 '대기'라는 뜻이 박혀 있고, 바로 윗줄의
+/// 상태 글자가 동기화 대기일 때 그 색이 된다 — 같은 색이면 두 사실이 하나로 읽힌다.
+struct HeaderStreakChipLabel: View {
+    let days: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: HeaderStreakCopy.icon)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(CheckTheme.stopGradient)
+            Text(HeaderStreakCopy.text(days))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                // ★ **세로로는 줄지 않는다.** `minimumScaleFactor` 는 폭만이 아니라 **높이** 제안에도 반응한다 — 레일이 창 높이를
+                //   정하는 화면(1인 팀 · 미션 화면 …)에서는 본문 열이 자연 높이보다 큰 높이를 받아 VStack 이 나눠 주는데, 그때
+                //   헤더 카드가 자연 높이보다 조금 작은 몫을 받으면 이 글자가 그 몫에 맞춰 0.82배로 줄었다(렌더 실측 72 → 59pt).
+                //   세로를 고정하면 칩은 헤더를 줄일 수 있는 자리가 아니게 되고, 폭이 모자랄 때만 줄어든다.
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        // 우선순위가 **주간 글자 · 퍼센트(1)와 Spacer(0) 사이**인 이유: 남는 폭을 Spacer 보다 먼저 받는다. 그래도 모자라면(글꼴
+        // 차이) 칩만 0.8배까지 줄어든다 — 주간 글자 · 퍼센트는 그대로다.
+        .layoutPriority(0.5)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(HeaderStreakCopy.accessibilityLabel(days))
     }
 }
 
@@ -2949,7 +3077,7 @@ enum PokeTitleRowWidthBudget {
     }
 }
 
-/// 제목 행 오른쪽 울트라 잔량 배지. **탭하면 울트라 화면**(잔량 + 충전 경로)이 열린다 —
+/// 제목 행 오른쪽 울트라 잔량 배지. **탭하면 울트라 화면**(보유 수량 — v0.3.56 부터 미션 줄은 레일 [미션])이 열린다 —
 /// "0개인데 어떻게 채우죠?"라는 질문이 실제로 생기는 자리가 여기뿐이라 답도 여기에 붙인다.
 ///
 /// **Menu 를 쓰지 않는다.** ImageRenderer 가 Menu 를 노란 상자로 그려 그 자리 픽셀 커버리지가 0이 되고,
@@ -3265,7 +3393,7 @@ private struct PokePanel: View {
     // 클라가 role 로 추측하지 않는다 — 그 판정은 서버 한 곳이다(WorkTimerStore.ultraUnlimited 주석).
     // 기본값 false 라 관리자가 아닌 사람의 화면은 지금과 **글자 하나까지 같다**.
     var ultraUnlimited: Bool = false
-    // 잔량 배지 탭 → 울트라 화면(잔량 + 충전 경로). "0개인데 어떻게 채우죠?"의 답이 있는 유일한 자리다.
+    // 잔량 배지 탭 → 울트라 화면(보유 수량 + 얻는 법 한 줄 — "상점에서 루비로 사요"). "0개인데 어떻게 채우죠?"의 답이 있는 자리다.
     var onOpenUltraPanel: () -> Void = {}
     // 찌르기 **수신** 연결이 끊겼는가(PokeConnectionNotice.shouldWarn 결과) 읽기. 안내줄 최우선 가지가 된다.
     // 판정이 시계를 읽으므로(재연결 유예 경과) 값이 아니라 클로저다 — 안내줄 잎(PokePanelNoticeLine)이 부른다.
@@ -4411,13 +4539,16 @@ struct InsightsPanel: View {
 
 // MARK: - Footer utility bar
 
-// MARK: - 울트라 화면 (잔량 + 충전 경로)
+// MARK: - 울트라 화면 (보유 수량) · 미션 화면 (v0.3.56 에 둘로 갈랐다)
 
 /// 미션 줄의 문구·아이콘 규약(순수 — 값으로 검증한다).
 ///
-/// **이름이 "미션 목록"이 아니라 "울트라"인 이유**: v0.2.34 시점 실제 미션은 1개(오늘 3시간)뿐이다.
-/// 1행짜리 목록은 목록으로 안 읽히고 미완성으로 읽힌다. 이 화면이 답하는 질문은 "미션이 뭐가 있나"가
-/// 아니라 **"울트라가 몇 개고 어떻게 채우나"**이고, 그 답(잔량 + 충전 경로 3줄)은 지금도 한 화면을 채운다.
+/// **v0.2.34 에 이 줄들이 "미션 목록"이 아니라 "울트라" 화면에 산 이유**: 그때 실제 미션은 1개(오늘 3시간)뿐이었고,
+/// 1행짜리 목록은 목록으로 안 읽히고 미완성으로 읽혔다. 화면이 답하는 질문은 **"울트라가 몇 개고 어떻게 채우나"**였다.
+/// **v0.3.56 에 그 전제가 뒤집혔다**: 3시간 랩도 이번 주 근무도 이제 **루비**를 주고(울트라를 채우지 않는다), 주간 줄이
+/// 울트라 화면 안에 묻혀 사장님조차 못 찾았다. 그래서 울트라 화면은 보유 수량만, 줄들은 레일 [미션] 화면으로 갔다
+/// (사장님 지시 2026-10-16). "매일 첫 근무" · "연속 출근" 줄은 그 화면에서도 안 그린다(`MissionPanel.hiddenKinds`) —
+/// 아래 문구들은 코어가 그 줄을 계속 만들고 기존 계약 테스트가 읽으므로 남겨 둔다.
 enum MissionCopy {
     /// 미션 줄의 제목. **3시간 줄이 "마다"인 이유**: 그건 하루 한 번 끝나는 퀘스트가 아니라
     /// 그날 누적 3시간마다 다시 열리는 랩이다. "오늘 3시간"으로 적으면 한 번 채운 사람은 그날
@@ -4579,7 +4710,7 @@ enum UltraPanelCopy {
     static let unknownBalance = "—"
     static let loadingCaption = "불러오는 중…"
     static let failedCaption = "최신 잔량을 못 읽었어요"
-    static let emptyMissions = "충전 경로가 아직 없어요"
+    // 미션 목록 문구(빈 목록 · 실패)는 v0.3.56 에 `MissionPanelCopy` 로 옮겼다 — 이 화면에는 이제 목록이 없다.
 
     /// 무제한(관리자)일 때 큰 글자 자리에 들어가는 말. **여기서는 기호를 쓰지 않는다** —
     /// 이 화면은 폭이 넉넉하고(히어로 카드 한 줄을 통째로 쓴다), 뜻을 곧이곧대로 말할 수 있는
@@ -4594,8 +4725,8 @@ enum UltraPanelCopy {
     static func heroCaption(balance: Int?, hasFailed: Bool, unlimited: Bool = false) -> String {
         // ★ 무제한이 실패보다 **앞이다**. failedCaption 은 "최신 **잔량**을 못 읽었어요"인데,
         //   잔량이 뜻을 갖지 않는 사람에게 그 문장은 아무 정보도 아니고 불안만 만든다.
-        //   sync 실패 사실 자체는 사라지지 않는다 — 미션 목록의 실패 문구와 [다시 시도] 버튼이
-        //   hasFailed 로 따로 그려진다(그쪽은 관리자에게도 그대로 뜻이 있다).
+        //   sync 실패 사실 자체는 사라지지 않는다 — 히어로 카드의 [다시 시도] 버튼이 hasFailed 로 따로 그려지고,
+        //   미션 화면(v0.3.56)의 실패 문구와 [다시 시도]도 같은 깃발을 읽는다(그쪽은 관리자에게도 그대로 뜻이 있다).
         if unlimited { return unlimitedCaption }
         // 실패가 먼저다: 잔량은 남아 있어도(스토어가 알던 값을 버리지 않는다) 최신이라는 보장이 없다.
         if hasFailed { return failedCaption }
@@ -4616,50 +4747,25 @@ enum UltraPanelCopy {
 
 /// 울트라 화면. 리그/토큰/찌르기/내 기록과 **같은 뼈대**다(뒤로 + 제목 + PanelDivider + 본문,
 /// store 값을 값 + 클로저로만 받아 렌더 테스트 친화적으로 유지).
+///
+/// **v0.3.56 — 보유 수량만 말한다.** 사장님 지시(2026-10-16): "울트라 게이지에서는 울트라 보유수량만 표현하고. 나머지는
+/// 전부 미션 페이지로 빼내자." 그래서 본문은 히어로 카드(잔량 · 보조 문장 · 실패 시 [다시 시도]) 하나뿐이다.
+/// 미션 줄 · 이번 주 근무 줄 · 방금 받은 안내는 `MissionPanel`(레일 [미션])이 그린다. 목록이 없어 높이가 고정이므로
+/// 창 높이 예산(`extraChromeHeight`)도 스크롤/클립 분기도 없다 — 배너·목표 편집이 얹혀도 이 카드는 줄일 것이 없다.
 private struct UltraPanel: View {
     let balance: Int?
     /// 서버가 말해 준 무제한(관리자). 기본값 false — 안 넘기면 지금과 완전히 같다.
     var isUnlimited: Bool = false
-    let missions: [MissionProgress]
-    /// 이번 주 누적 근무 보상(v0.3.55). nil 이거나 줄을 그릴 만큼 모르면(`gauge == nil`) 줄을 **안 그린다** — 함수가 없는
-    /// 옛 서버 · 첫 조회 전. 3시간 줄 **바로 아래**에 선다(둘 다 근무로 받는 루비다).
-    var weeklyWork: WeeklyWorkStatus? = nil
-    /// 미션을 한 번이라도 성공적으로 받았는가(빈 목록과 로드 전을 가른다 — 토큰 보드와 같은 규약).
-    let hasLoaded: Bool
     var hasFailed: Bool = false
-    /// 방금 미션을 달성했다는 지속 안내(연출은 2초면 사라진다).
-    var notice: String? = nil
     var onRetry: (() -> Void)? = nil
-    var extraChromeHeight: CGFloat = 0
-    var clipsOverflowInsteadOfScroll: Bool = false
     let onBack: () -> Void
 
-    static let rowHeight: CGFloat = 56
-    static let rowSpacing: CGFloat = 8
-    /// 히어로 카드(72pt)를 **이미 반영한** 상한이다 — 히어로를 extraChromeHeight 에 다시 더해 넣지 마라
-    /// (이중 차감으로 visibleRows 가 최소값까지 주저앉는다).
-    static let maxVisibleRows = 4
     static let heroHeight: CGFloat = 72
-    /// 안내줄 한 줄이 먹는 높이(바깥 VStack spacing 12 포함).
-    static let noticeStripHeight: CGFloat = 14 + 12
-
-    private var noticeHeight: CGFloat {
-        (notice?.isEmpty == false) ? Self.noticeStripHeight : 0
-    }
 
     /// 히어로 아이콘을 accent 로 그릴 조건. **무제한은 잔량이 0 이어도 켜진 상태다** —
     /// 관리자는 재화를 안 쓰므로 잔량이 0 에 머무는 것이 정상이고, 그 화면이 회색으로 죽으면
     /// "울트라를 못 쏜다"는 거짓말이 된다(서버는 그래도 발사한다).
     private var isCharged: Bool { isUnlimited || (balance ?? 0) > 0 }
-
-    private var visibleRows: Int {
-        ListRowBudget.visibleRows(
-            maxVisibleRows: Self.maxVisibleRows,
-            rowHeight: Self.rowHeight,
-            rowSpacing: Self.rowSpacing,
-            extraChromeHeight: extraChromeHeight + noticeHeight
-        )
-    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -4673,14 +4779,6 @@ private struct UltraPanel: View {
             }
             PanelDivider()
             heroCard
-            if let notice, !notice.isEmpty {
-                Text(notice)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(CheckTheme.accent)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            missionList
         }
         .padding(12)
         .panelStyle()
@@ -4727,22 +4825,110 @@ private struct UltraPanel: View {
                 .stroke(CheckTheme.accent.opacity(0.28), lineWidth: 1)
         )
     }
+}
+
+/// 미션 화면 문구(v0.3.56). 빈 목록 · 불러오는 중 · 실패 문장은 예전 울트라 화면의 미션 목록 문구를 그대로 옮겼다
+/// (빈 목록만 "충전 경로"에서 바꿨다 — 2026-09-13 부터 미션 보상은 울트라가 아니라 루비라 "충전"이 맞지 않는다).
+enum MissionPanelCopy {
+    static let title = "미션"
+    static let loadingCaption = UltraPanelCopy.loadingCaption
+    static let failedCaption = "미션을 불러오지 못했어요"
+    static let emptyCaption = "받을 수 있는 미션이 아직 없어요"
+}
+
+/// 미션 화면(v0.3.56 — 레일 [미션]). 울트라 화면과 **같은 뼈대**(뒤로 + 제목 + PanelDivider + 본문)이고, 본문은
+/// **근무 3시간마다**(`MissionRowView`) → **이번 주 근무**(`WeeklyWorkRowView`, 게이지를 만들 만큼 알 때만) → 방금 받은 안내 줄.
+///
+/// ★ **"매일 첫 근무"(밑바닥 보정) · "연속 출근" 줄은 안 그린다**(사장님 지시 2026-10-16: "매일 첫 근무 설명은 빼버리고,
+///   연속 근무일수는 [헤더 카드] 여기에 뜨게끔 밖으로 빼줘"). **화면에서만 뺐다** — 서버의 밑바닥 보정 규칙(잔량 0이면 1개로)은
+///   그대로 돌고, 연속 일수는 헤더 카드의 칩(`HeaderStreakChip`)이 말한다. 코어 `MissionProgress.rows(from:)` 는 그 두 줄을
+///   계속 만든다(폰 · 기존 테스트가 순서와 내용에 기댄다) — 거르는 자리는 이 뷰 하나다(`hiddenKinds`).
+private struct MissionPanel: View {
+    let missions: [MissionProgress]
+    /// 이번 주 누적 근무 보상(v0.3.55). nil 이거나 줄을 그릴 만큼 모르면(`gauge == nil`) 줄을 **안 그린다** — 함수가 없는
+    /// 옛 서버 · 첫 조회 전. 3시간 줄 **바로 아래**에 선다(둘 다 근무로 받는 루비다).
+    var weeklyWork: WeeklyWorkStatus? = nil
+    /// 미션을 한 번이라도 성공적으로 받았는가(빈 목록과 로드 전을 가른다 — 토큰 보드와 같은 규약).
+    let hasLoaded: Bool
+    var hasFailed: Bool = false
+    /// 방금 미션을 달성했다는 지속 안내(연출은 2초면 사라진다). 줄들 **아래**에 선다.
+    var notice: String? = nil
+    var onRetry: (() -> Void)? = nil
+    var extraChromeHeight: CGFloat = 0
+    var clipsOverflowInsteadOfScroll: Bool = false
+    let onBack: () -> Void
+
+    /// 화면에서 빼는 줄(위 ★). 코어가 줄을 더 만들게 돼도(새 미션) 여기 없는 것은 그대로 선다.
+    static let hiddenKinds: Set<MissionProgress.Kind> = [.dailyFloor, .arrivalStreak]
+    static let rowHeight: CGFloat = 56
+    static let rowSpacing: CGFloat = 8
+    /// 예전 울트라 화면의 상한(4줄)은 히어로 카드(72pt + 간격 12)를 이미 뺀 값이었다. 이 화면엔 히어로가 없으니
+    /// 그 84pt 를 한 줄(56 + 8)로 돌려받아 5줄이다 — 창 높이는 예전 울트라 화면의 최악값을 넘지 않는다.
+    static let maxVisibleRows = 5
+    /// 안내줄 한 줄이 먹는 높이(바깥 VStack spacing 12 포함).
+    static let noticeStripHeight: CGFloat = 14 + 12
+
+    private var noticeHeight: CGFloat {
+        (notice?.isEmpty == false) ? Self.noticeStripHeight : 0
+    }
+
+    /// 그릴 미션 줄(빼는 줄을 거른 뒤 — 줄 수 셈과 그리기가 같은 값을 쓴다).
+    private var shownMissions: [MissionProgress] {
+        missions.filter { !Self.hiddenKinds.contains($0.kind) }
+    }
 
     /// 그릴 주간 줄(게이지를 만들 만큼 알 때만 — 줄 수 셈과 그리기가 같은 판정을 쓴다).
     private var weeklyRow: WeeklyWorkStatus? {
         weeklyWork.flatMap { $0.gauge == nil ? nil : $0 }
     }
 
+    private var visibleRows: Int {
+        ListRowBudget.visibleRows(
+            maxVisibleRows: Self.maxVisibleRows,
+            rowHeight: Self.rowHeight,
+            rowSpacing: Self.rowSpacing,
+            extraChromeHeight: extraChromeHeight + noticeHeight
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
+                Text(MissionPanelCopy.title)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                // 실패했을 때만 재시도를 준다(리그/토큰/내 기록과 같은 3분기 규약). 제목 행에 두는 이유: 줄을 이미 받아 둔
+                // 사람의 sync 가 실패해도(줄은 알던 값 그대로) 다시 밀 자리가 있어야 한다 — 예전엔 울트라 히어로 카드가 그 자리였다.
+                if hasFailed, let onRetry { PanelRetryButton(action: onRetry) }
+            }
+            PanelDivider()
+            missionList
+            if let notice, !notice.isEmpty {
+                Text(notice)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.accent)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(12)
+        .panelStyle()
+    }
+
     @ViewBuilder
     private var missionList: some View {
+        let missions = shownMissions
         let capHeight = Self.listContentHeight(rowCount: visibleRows)
         // 주간 줄도 한 줄이다 — 빼고 세면 스크롤로 넘어가야 할 높이를 그대로 펼쳐 창이 자란다.
         let rowCount = (missions.isEmpty ? 1 : missions.count) + (weeklyRow == nil ? 0 : 1)
         let contentHeight = Self.listContentHeight(rowCount: rowCount)
         let rows = VStack(spacing: Self.rowSpacing) {
             if missions.isEmpty {
-                Text(hasLoaded ? UltraPanelCopy.emptyMissions
-                               : (hasFailed ? "미션을 불러오지 못했어요" : UltraPanelCopy.loadingCaption))
+                Text(hasLoaded ? MissionPanelCopy.emptyCaption
+                               : (hasFailed ? MissionPanelCopy.failedCaption : MissionPanelCopy.loadingCaption))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
@@ -4756,7 +4942,7 @@ private struct UltraPanel: View {
         if contentHeight <= capHeight {
             rows.frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
-            // 스냅샷 전용: ImageRenderer 는 ScrollView 안쪽을 못 그린다(4개 패널이 모두 같은 우회를 쓴다).
+            // 스냅샷 전용: ImageRenderer 는 ScrollView 안쪽을 못 그린다(목록 패널이 모두 같은 우회를 쓴다).
             rows.frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
@@ -4813,7 +4999,7 @@ private struct MissionRowView: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: UltraPanel.rowHeight)
+        .frame(height: MissionPanel.rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.fieldFill))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
@@ -4915,7 +5101,7 @@ struct WeeklyWorkRowView: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: UltraPanel.rowHeight)
+        .frame(height: MissionPanel.rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.fieldFill))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))

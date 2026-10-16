@@ -907,6 +907,7 @@ func openingTheFeedbackPanelClosesEveryOtherPanelAndNeverTouchesThePopover() thr
     store.isPokePanelVisible = true
     store.isInsightsPanelVisible = true
     store.isMessagePanelVisible = true
+    store.isMissionPanelVisible = true   // v0.3.56 미션 화면도 같은 배타 안에 든다
 
     store.openFeedbackPanel()
 
@@ -914,6 +915,7 @@ func openingTheFeedbackPanelClosesEveryOtherPanelAndNeverTouchesThePopover() thr
     #expect(!store.isLeaderboardVisible && !store.isTokenBoardVisible)
     #expect(!store.isPokePanelVisible && !store.isInsightsPanelVisible)
     #expect(!store.isUltraPanelVisible && !store.isMessagePanelVisible, "다른 패널이 제보 뒤에 살아 남았다")
+    #expect(!store.isMissionPanelVisible, "미션 화면이 제보 뒤에 살아 남았다")
 
     // ★ **팝오버를 닫지 않는다.** 창이던 시절에는 진입점이 `dismissMenuPopover()` 를 불렀는데(팝오버 위에
     //   창을 띄우는 동작이었으니까), 지금 그러면 방금 연 화면이 그 자리에서 사라진다.

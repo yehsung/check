@@ -11,7 +11,8 @@ import CheckCore
 // **진입점은 헤더 카드의 루비 잔량 칩**이다(사용자 확정: "상점 진입 걍 재화 버튼 눌러서 진입으로 하자").
 // 오른쪽 레일에 일곱 번째 칸을 더하지 않는 이유는 캐릭터 패널과 같다 — 레일 6칸이 378pt 인데 제일 짧은
 // 메인 화면이 381pt 라 여유가 3pt 뿐이고, 한 칸(+60pt)이면 곧바로 **레일이 창 높이를 결정한다**
-// (`CheckMenuSideRail` 주석 · `CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight`).
+// (`CheckMenuSideRail` 주석 · `CheckMenuRenderTests.sideRailSetsTheFloorOfTheWindowHeightAndTheFooterFollowsIt` — v0.3.56 에
+// 이름이 바뀌었다: [미션] 칸으로 레일이 432pt 가 되며 짧은 화면은 이제 레일이 높이를 정한다).
 
 /// 상점에서 고른 것. **고른 것이지 산 것이 아니다** — 실제 구매는 `WorkTimerStore.confirmShopPurchase()`
 /// 하나뿐이고, 이 값은 하단 구매 바가 무엇을 말할지 정한다.

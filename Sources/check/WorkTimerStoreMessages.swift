@@ -218,7 +218,7 @@ extension WorkTimerStore {
     ///   닫으면 사용자가 방금 연 화면이 그 자리에서 사라진다. 미니게임·설정은 여전히 별도 창이므로 그쪽 호출은
     ///   그대로 남아 있다(이 파일에서 지운 것이 그쪽까지 지운 것으로 읽히면 안 된다).
     ///
-    /// 다른 하위 패널과 **상호 배타**다(리그·토큰 보드·콕찌르기·내 기록·울트라·제보). 순서가 뜻이다:
+    /// 다른 하위 패널과 **상호 배타**다(리그·토큰 보드·콕찌르기·내 기록·울트라·제보·캐릭터·상점·미션). 순서가 뜻이다:
     /// `closeUltraPanel()` 은 origin 이 .poke 면 콕찌르기 목록을 되살리므로, 목록을 내리는 줄이 그 뒤에 온다.
     func openMessagePanel(peer: String, from origin: MessagePanelOrigin = .poke) {
         // 빈 id 는 **아무 상태도 세우기 전에** 돌려보낸다. 이 가드를 아래로 내리지 마라 — origin 이나 패널 깃발을
@@ -232,6 +232,7 @@ extension WorkTimerStore {
         closeFeedbackPanel()
         closeCharacterPanel()
         closeShopPanel()
+        closeMissionPanel()
         isInsightsPanelVisible = false
         // ★ `closePokePanel()` 이 아니라 깃발 한 줄이다(울트라 배지 탭이 세운 규약 — blocker UI-2).
         //   그 함수는 `lastShownMessage` 를 죽이는데, 말풍선 버튼을 누른 것은 '그 알림을 봤다'가 아니다.

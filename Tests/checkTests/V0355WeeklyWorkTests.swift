@@ -599,11 +599,14 @@ final class V0355Clock {
     }
 }
 
-// MARK: - ④ 화면(울트라 화면의 주간 줄)
+// MARK: - ④ 화면(미션 화면의 주간 줄 — v0.3.55 엔 울트라 화면, v0.3.56 에 미션 화면으로 옮겼다)
 
 @MainActor
 @Suite(.serialized) struct V0355WeeklyRenderTests {
-    static func store(weekly: WeeklyWorkStatus?, missionCount: Int = 3, notice: String? = nil,
+    /// `missionCount` = 미션 화면에 **보이는** 미션 줄 수(3시간 줄 + 나머지는 같은 종류의 미래 미션). v0.3.56 부터 "매일 첫 근무" ·
+    /// "연속 출근" 줄은 화면에서 빠지므로(`MissionPanel.hiddenKinds` — 사장님 지시 2026-10-16) 그 둘로는 줄 수를 늘릴 수 없다.
+    /// 숨는 두 줄은 서버가 지금 보내는 그대로 **함께 넣는다** — 줄 수 셈에 끼지 않는다는 것까지 아래 높이 단언이 잰다.
+    static func store(weekly: WeeklyWorkStatus?, missionCount: Int = 1, notice: String? = nil,
                       function: String = #function, line: Int = #line) -> WorkTimerStore {
         let tag = "v0355-render-L\(line)"
         let home = CheckTestScratch.directory("token-\(tag)", function: function)
@@ -623,15 +626,18 @@ final class V0355Clock {
         store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
         store.ultraBalance = 3
         store.missionNotice = notice
-        let all = [
+        let server = [
             MissionProgress(kind: .todayThreeHours, progress: 0.5, claimedToday: false, cappedToday: false, detail: "다음 하나까지 1시간 30분"),
             MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "잔량 0이면 1개로"),
             MissionProgress(kind: .arrivalStreak, progress: nil, claimedToday: true, cappedToday: false, detail: "5일 연속"),
         ]
-        store.missions = Array(all.prefix(missionCount))
+        let future = (1..<max(1, missionCount)).map {
+            MissionProgress(kind: .todayThreeHours, progress: Double($0 % 3) / 3, claimedToday: false, cappedToday: false, detail: "미래 미션 \($0)")
+        }
+        store.missions = missionCount == 0 ? [] : server + future
         store.missionsLoaded = true
         store.weeklyWork = weekly
-        store.isUltraPanelVisible = true
+        store.isMissionPanelVisible = true
         return store
     }
 
@@ -681,26 +687,30 @@ final class V0355Clock {
         let notice = "이번 주 60시간 채웠어요 — 루비 +270"
         // 스토어마다 다른 스크래치(태그 = 줄 번호)를 준다 — 같은 태그를 다시 쓰면 앞 스토어의 기본값이 섞인다.
         var tag = 9_100
-        func height(_ status: WeeklyWorkStatus?, missions: Int = 3, notice: String?, banner: Bool) throws -> Double {
+        // v0.3.56: 미션 화면의 목록 상한은 5줄이다(히어로 카드 자리를 돌려받았다). 그래서 보이는 미션을 **넷**으로 둔다 —
+        // 크롬이 없으면 넷 + 주간 = 다섯이 꼭 맞고, 안내줄(한 줄) · 배너(두 줄)가 얹히면 넷이 이미 채워 주간 줄은 스크롤로 간다.
+        // (v0.3.55 의 울트라 화면은 상한 4줄 · 미션 셋이었다 — 같은 산수를 한 줄씩 옮긴 것이다.)
+        func height(_ status: WeeklyWorkStatus?, missions: Int = 4, notice: String?, banner: Bool) throws -> Double {
             tag += 1
             return Double(try Self.bitmap(Self.store(weekly: status, missionCount: missions, notice: notice, line: tag),
                                           banner: banner).pixelsHigh) / 2
         }
-        // 한 줄의 값(줄 높이 + 사이)은 그림에서 잰다: 미션 하나 → 둘(목록 상한은 최소 두 줄이라 언제나 펼쳐진다).
-        let rowUnit = try height(nil, missions: 2, notice: nil, banner: false) - height(nil, missions: 1, notice: nil, banner: false)
+        // 한 줄의 값(줄 높이 + 사이)은 그림에서 잰다: 미션 셋 → 넷. 둘 다 레일 바닥(432pt — 짧은 화면은 레일이 창 높이를
+        // 정한다)보다 커야 줄 값이 그림에 나타난다 — 하나 → 둘로 재면 둘 다 432 라 0 이 나온다(v0.3.56 실측).
+        let rowUnit = try height(nil, missions: 4, notice: nil, banner: false) - height(nil, missions: 3, notice: nil, banner: false)
         #expect(rowUnit > 40, "한 줄 값이 \(rowUnit)pt — 잴 수 없다")
         for (withNotice, banner) in [(false, false), (false, true), (true, false), (true, true)] {
             let label = "안내줄 \(withNotice ? "있음" : "없음") · 배너 \(banner ? "있음" : "없음")"
             let with = try height(weekly, notice: withNotice ? notice : nil, banner: banner)
             let without = try height(nil, notice: withNotice ? notice : nil, banner: banner)
             #expect(with <= 700, "\(label): 팝오버 높이 \(with)pt")
-            // 주간 줄은 넷째 줄이다 — 목록에 자리가 있으면 한 줄만큼 자라고, 없으면(스크롤) 한 픽셀도 안 자란다. 그 사이 값은 없다.
+            // 주간 줄은 다섯째 줄이다 — 목록에 자리가 있으면 한 줄만큼 자라고, 없으면(스크롤) 한 픽셀도 안 자란다. 그 사이 값은 없다.
             #expect(with == without || with == without + rowUnit, "\(label): 주간 줄이 \(with - without)pt 를 더했다(0 또는 \(rowUnit))")
             if !withNotice && !banner {
-                // 덧붙는 크롬이 없으면 목록은 네 줄까지 펼친다(가장 큰 창 — 이 조합이 ≤ 700 의 진짜 최악이다).
-                #expect(with == without + rowUnit, "\(label): 넷째 줄(주간)이 펼쳐지지 않았다")
+                // 덧붙는 크롬이 없으면 목록은 다섯 줄까지 펼친다(가장 큰 창 — 이 조합이 ≤ 700 의 진짜 최악이다).
+                #expect(with == without + rowUnit, "\(label): 다섯째 줄(주간)이 펼쳐지지 않았다")
             } else {
-                // 안내줄 · 배너가 한 줄 자리를 먹으면 목록은 세 줄 — 미션 셋이 이미 채웠으니 주간 줄은 스크롤로 간다.
+                // 안내줄 · 배너가 줄 자리를 먹으면 목록은 넷 이하 — 미션 넷이 이미 채웠으니 주간 줄은 스크롤로 간다.
                 // 주간 줄을 줄 수에서 빼고 세면(`rowCount` 에서 weeklyRow 누락) 여기서 창이 한 줄만큼 자란다.
                 #expect(with == without, "\(label): 목록 상한을 넘어 창이 \(with - without)pt 자랐다 — 주간 줄을 줄 수에 안 셌다")
             }
@@ -725,21 +735,26 @@ final class V0355Clock {
         ]
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         for (name, status, notice) in cases {
-            try Self.png(Self.store(weekly: status, notice: notice), clips: true)
+            try Self.png(Self.store(weekly: status, missionCount: 1, notice: notice), clips: true)
                 .write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
         }
     }
 
-    @Test("주간 줄은 3시간 줄 바로 아래에 선다(소스 순서 — 주석 제외)")
+    @Test("주간 줄은 3시간 줄 바로 아래에 선다 — 미션 화면 선언 안에서(소스 순서 — 주석 제외)")
     func rowSitsUnderTheLapRow() throws {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/check/CheckMenuView.swift")
-        let code = v0355StripComments(try String(contentsOf: url, encoding: .utf8))
+        let whole = v0355StripComments(try String(contentsOf: url, encoding: .utf8))
+        // v0.3.56: 줄들은 **미션 화면** 선언 안에 있어야 한다(울트라 화면은 보유 수량만 — 사장님 지시 2026-10-16).
+        let head = try #require(whole.range(of: "private struct MissionPanel: View {"), "미션 화면 선언이 없다")
+        let tail = try #require(whole.range(of: "\nprivate struct MissionRowView: View {", range: head.upperBound..<whole.endIndex))
+        let code = String(whole[head.lowerBound..<tail.lowerBound])
+        #expect(!code.contains("private struct UltraPanel"), "미션 화면 추출 범위가 울트라 화면까지 삼켰다")
         let lap = try #require(code.range(of: "ForEach(missions.prefix(1)) { MissionRowView(mission: $0) }"))
         let weekly = try #require(code.range(of: "if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }", range: lap.upperBound..<code.endIndex))
         let rest = try #require(code.range(of: "ForEach(missions.dropFirst()) { MissionRowView(mission: $0) }", range: weekly.upperBound..<code.endIndex))
         #expect(lap.upperBound <= weekly.lowerBound && weekly.upperBound <= rest.lowerBound)
-        #expect(code.contains(".checkTooltip(WeeklyWorkCopy.rule(status))"), "규칙 툴팁이 줄에 없다")
+        #expect(whole.contains(".checkTooltip(WeeklyWorkCopy.rule(status))"), "규칙 툴팁이 줄에 없다")
     }
 }
 

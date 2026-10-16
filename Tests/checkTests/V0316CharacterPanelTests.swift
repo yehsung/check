@@ -508,7 +508,9 @@ private func cpOtherPanelOpeners() -> [(String, @MainActor (WorkTimerStore) -> V
         ("내 기록", { $0.toggleInsightsPanel() }),
         ("울트라", { $0.openUltraPanel(from: .home) }),
         ("제보", { $0.openFeedbackPanel() }),
-        ("1:1 대화", { $0.openMessagePanel(peer: "00000000-0000-0000-0000-000000000003") })
+        ("1:1 대화", { $0.openMessagePanel(peer: "00000000-0000-0000-0000-000000000003") }),
+        // v0.3.56 레일 [미션]. (가) 방향(캐릭터를 열면 미션이 닫힌다)은 V0356MissionStoreTests 의 표가 함께 잰다.
+        ("미션", { $0.toggleMissionPanel() })
     ]
 }
 

@@ -4,7 +4,8 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-/// 이번 주 누적 근무 보상(v0.3.55 · 폰 1.0.8(19)) — 응답 디코드 · 화면이 읽는 규칙 · `MeStore` 의 **진짜 경로**(스텁 서버 →
+/// 이번 주 누적 근무 보상(v0.3.55 · 폰 1.0.8(19)) — 응답 디코드(CheckCore 모델 — 맥과 한 벌) · 화면이 읽는 규칙(게이지는 코어
+/// `WeeklyWorkGauge`) · `MeStore` 의 **진짜 경로**(스텁 서버 →
 /// `weekly_work_status` → 스토어 상태 → 카드가 읽는 값 · 루비 미러) · 폰 [근무 종료] 뒤 다시 읽기 · iOS 카드 소스 계약.
 ///
 /// 기대값은 손으로 적은 글자다(규칙 함수로 기대값을 다시 만들면 규칙이 틀려도 초록이다).
@@ -21,22 +22,22 @@ struct MeWeeklyWorkTests {
         return #"{"week_start":"\#(week)","next_week_start":"\#(next)","worked_seconds":\#(worked),"tiers":[\#(tiers)],"granted_now":\#(granted)\#(rubyPart),"server_now_ms":1789621500000}"#
     }
 
-    nonisolated static func decode(_ json: String) throws -> WeeklyWorkStatusDTO {
+    nonisolated static func decode(_ json: String) throws -> WeeklyWorkStatus {
         // 서비스와 같은 설정(SupabaseWorkService.init — 뱀 표기 → 낙타 표기).
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(WeeklyWorkStatusDTO.self, from: Data(json.utf8))
+        return try decoder.decode(WeeklyWorkStatus.self, from: Data(json.utf8))
     }
 
-    nonisolated static func tier(_ hours: Int, _ ruby: Int, _ claimed: Bool) -> WeeklyWorkStatusDTO.Tier {
+    nonisolated static func tier(_ hours: Int, _ ruby: Int, _ claimed: Bool) -> WeeklyWorkStatus.Tier {
         .init(hours: hours, ruby: ruby, claimed: claimed)
     }
 
-    nonisolated static func dto(worked: Int, claimed: Set<Int>, granted: [WeeklyWorkStatusDTO.Grant] = [],
-                                week: String = "2026-09-14") -> WeeklyWorkStatusDTO {
-        WeeklyWorkStatusDTO(weekStart: week, nextWeekStart: "2026-09-21", workedSeconds: worked,
-                            tiers: [tier(20, 20, claimed.contains(20)), tier(40, 50, claimed.contains(40)), tier(60, 200, claimed.contains(60))],
-                            grantedNow: granted, rubyBalance: 120)
+    nonisolated static func dto(worked: Int, claimed: Set<Int>, granted: [WeeklyWorkStatus.Grant] = [],
+                                week: String? = "2026-09-14") -> WeeklyWorkStatus {
+        WeeklyWorkStatus(weekStart: week, nextWeekStart: "2026-09-21", workedSeconds: worked,
+                         tiers: [tier(20, 20, claimed.contains(20)), tier(40, 50, claimed.contains(40)), tier(60, 200, claimed.contains(60))],
+                         grantedNow: granted, rubyBalance: 120)
     }
 
     // MARK: - 디코드
@@ -62,14 +63,16 @@ struct MeWeeklyWorkTests {
         #expect(status.serverNowMs == 1_781_234_567_890)
     }
 
-    @Test("디코드: 칸이 다 빠져도 · null 이어도 응답 전체를 버리지 않는다(0초 · 칸 없음 · 잔량 모름)")
+    @Test("디코드: 칸이 다 빠져도 · null 이어도 응답 전체를 버리지 않는다(누적초 모름 · 칸 없음 · 잔량 모름 → 카드는 그리지 않는다)")
     func decodesMissingKeys() throws {
         let empty = try Self.decode("{}")
         #expect(empty.weekStart == nil && empty.nextWeekStart == nil)
-        #expect(empty.workedSeconds == 0 && empty.tiers.isEmpty && empty.grantedNow.isEmpty)
+        #expect(empty.workedSeconds == nil && empty.tiers.isEmpty && empty.grantedNow.isEmpty)
         #expect(empty.rubyBalance == nil && empty.serverNowMs == nil)
+        #expect(!empty.isUsable && empty.gauge == nil, "아무것도 모르는 응답으로 '이번 주 0시간'을 그린다")
         let nulls = try Self.decode(#"{"week_start":null,"worked_seconds":null,"tiers":null,"granted_now":null,"ruby_balance":null}"#)
-        #expect(nulls.workedSeconds == 0 && nulls.tiers.isEmpty && nulls.grantedNow.isEmpty && nulls.rubyBalance == nil)
+        #expect(nulls.workedSeconds == nil && nulls.tiers.isEmpty && nulls.grantedNow.isEmpty && nulls.rubyBalance == nil)
+        #expect(nulls.gauge == nil)
     }
 
     @Test("디코드: 모르는 칸은 무시 · 깨진 칸 원소 하나만 빠진다 · 소수 초는 내림 · claimed 가 없으면 받지 않은 것 · 모양 틀린 값은 nil")
@@ -93,49 +96,59 @@ struct MeWeeklyWorkTests {
 
     // MARK: - 규칙(카드가 읽는 값)
 
-    @Test("다음 칸 · 막대 · 곧 들어와요: 0 · 19:59:59 · 20:00(받음) · 20:00(아직 장부 없음) · 59:59 · 60+ 다 받음")
-    func progressAndNextTier() {
-        let zero = Self.dto(worked: 0, claimed: [])
-        #expect(WeeklyWorkRules.nextTier(zero) == Self.tier(20, 20, false))
-        #expect(WeeklyWorkRules.progress(zero) == 0)
-        #expect(!WeeklyWorkRules.isNextTierPending(zero) && !WeeklyWorkRules.allClaimed(zero))
-        #expect(MeText.weeklyHours(0) == "0시간 00분")
+    @Test("게이지(지금 퀘스트 하나): 0 · 19:59:59 · 20:00(받음 · 장부 아직) · 30h · 40:00 · 59:59 · 60:00 완료 · 완료인데 장부 늦음")
+    func questGaugeCopy() throws {
+        func g(_ worked: Int, _ claimed: Set<Int>) throws -> WeeklyWorkGauge { try #require(Self.dto(worked: worked, claimed: claimed).gauge) }
 
-        let almost = Self.dto(worked: 71_999, claimed: [])
-        #expect(WeeklyWorkRules.nextTier(almost)?.hours == 20)
-        #expect(WeeklyWorkRules.progress(almost) < 1 && WeeklyWorkRules.progress(almost) > 0.999)
-        #expect(!WeeklyWorkRules.isNextTierPending(almost), "19:59:59 를 20시간 넘은 것으로 봤다")
-        #expect(MeText.weeklyHours(71_999) == "19시간 59분", "19:59:59 를 20시간으로 올려 적었다")
+        let zero = try g(0, [])
+        #expect(zero.questHours == 20 && zero.fill == 0 && !zero.isComplete)
+        #expect(MeText.weeklyHeadline(zero) == "이번 주 근무 · 20시간 달성하기")
+        #expect(MeText.weeklyGaugeValue(worked: 0, gauge: zero) == "0시간 00분 / 20시간")
+        #expect(MeText.weeklyGaugeGem(zero) == "+20")
 
-        let twenty = Self.dto(worked: 72_000, claimed: [20])
-        #expect(WeeklyWorkRules.nextTier(twenty) == Self.tier(40, 50, false))
-        #expect(WeeklyWorkRules.progress(twenty) == 0.5, "막대 원점이 0 이 아니다(20→40 칸 사이로 재면 0)")
-        #expect(MeText.weeklyNextLead(hours: 40) == "40시간 되면" && MeText.weeklyRubyGain(50) == "+50")
+        let almost = try g(71_999, [])
+        #expect(almost.questHours == 20 && almost.fill == 71_999.0 / 72_000.0, "19:59:59 를 20시간 넘은 것으로 봤다")
+        #expect(MeText.weeklyGaugeValue(worked: 71_999, gauge: almost) == "19시간 59분 / 20시간", "19:59:59 를 20시간으로 올려 적었다")
 
-        let pending = Self.dto(worked: 72_000, claimed: [])
-        #expect(WeeklyWorkRules.nextTier(pending)?.hours == 20)
-        #expect(WeeklyWorkRules.isNextTierPending(pending) && WeeklyWorkRules.progress(pending) == 1)
-        #expect(MeText.weeklyPending(hours: 20) == "20시간 채웠어요 · 곧 들어와요")
+        // 20:00 — 다음 퀘스트(40)로 넘어가고 게이지는 이미 절반(구간이 아니라 이번 주 누적). 장부가 아직이어도 같다(누적초로 고른다).
+        let twenty = try g(72_000, [20])
+        #expect(twenty.questHours == 40 && twenty.fill == 0.5, "게이지를 20→40 구간으로 쟀다(그러면 0)")
+        #expect(MeText.weeklyHeadline(twenty) == "이번 주 근무 · 40시간 달성하기" && MeText.weeklyGaugeGem(twenty) == "+50")
+        let pending = try g(72_000, [])
+        #expect(pending.questHours == 40 && pending.fill == 0.5, "장부가 1분 늦는다고 '20시간 달성하기'에 머문다")
 
-        let fiftyNine = Self.dto(worked: 59 * 3600 + 59 * 60, claimed: [20, 40])
-        #expect(WeeklyWorkRules.nextTier(fiftyNine) == Self.tier(60, 200, false))
-        #expect(MeText.weeklyHours(fiftyNine.workedSeconds) == "59시간 59분")
+        let thirty = try g(30 * 3600, [20])
+        #expect(thirty.fill == 0.75)
+        #expect(MeText.weeklyGaugeValue(worked: 30 * 3600, gauge: thirty) == "30시간 00분 / 40시간")
 
-        let done = Self.dto(worked: 61 * 3600, claimed: [20, 40, 60])
-        #expect(WeeklyWorkRules.nextTier(done) == nil && WeeklyWorkRules.allClaimed(done))
-        #expect(WeeklyWorkRules.progress(done) == 1 && WeeklyWorkRules.totalRuby(done) == 270)
-        #expect(MeText.weeklyAllDone == "이번 주 보상 다 받았어요")
-        #expect(MeText.weeklyAllDoneAccessibility(totalRuby: 270) == "이번 주 보상 다 받았어요, 루비 270개")
+        let forty = try g(40 * 3600, [20, 40])
+        #expect(forty.questHours == 60 && abs(forty.fill - 2.0 / 3.0) < 1e-12 && MeText.weeklyGaugeGem(forty) == "+200")
 
-        // 서버가 칸 순서를 섞어 보내도(또는 같은 칸을 두 번) 화면은 시간 오름차순 · 한 번씩.
-        var shuffled = Self.dto(worked: 30 * 3600, claimed: [20])
-        shuffled.tiers = [Self.tier(60, 200, false), Self.tier(20, 20, true), Self.tier(40, 50, false), Self.tier(40, 99, false)]
-        #expect(WeeklyWorkRules.sortedTiers(shuffled).map(\.hours) == [20, 40, 60])
-        #expect(WeeklyWorkRules.nextTier(shuffled) == Self.tier(40, 50, false))
-        // 칸을 하나도 모르면 다 받은 것도 아니고 막대도 0.
-        var noTiers = Self.dto(worked: 30 * 3600, claimed: [])
-        noTiers.tiers = []
-        #expect(!WeeklyWorkRules.allClaimed(noTiers) && WeeklyWorkRules.progress(noTiers) == 0 && WeeklyWorkRules.nextTier(noTiers) == nil)
+        let fiftyNine = try g(60 * 3600 - 1, [20, 40])
+        #expect(fiftyNine.questHours == 60 && !fiftyNine.isComplete)
+        #expect(MeText.weeklyGaugeValue(worked: 60 * 3600 - 1, gauge: fiftyNine) == "59시간 59분 / 60시간")
+
+        let done = try g(60 * 3600, [20, 40, 60])
+        #expect(done.isComplete && done.fill == 1 && done.claimedTotal == 270)
+        #expect(MeText.weeklyHeadline(done) == "이번 주 근무 완료")
+        #expect(MeText.weeklyGaugeValue(worked: 61 * 3600, gauge: done) == "61시간 00분", "완료인데 다음 목표를 말한다")
+        #expect(MeText.weeklyGaugeGem(done) == "+270 받았어요")
+        #expect(MeText.weeklyGaugeAccessibility(worked: 61 * 3600, gauge: done) == "61시간 00분, 루비 270개 받았어요")
+        #expect(MeText.weeklyGaugeAccessibility(worked: 30 * 3600, gauge: thirty) == "30시간 00분 / 40시간, 달성하면 루비 50개")
+
+        // 완료인데 cron 이 아직 — 받은 만큼만(70). 하나도 없으면 보석을 안 그린다.
+        let lagging = try g(61 * 3600, [20, 40])
+        #expect(lagging.isComplete && MeText.weeklyGaugeGem(lagging) == "+70 받았어요")
+        #expect(MeText.weeklyGaugeGem(try g(61 * 3600, [])) == nil)
+
+        // 서버가 칸 순서를 섞어 보내도(또는 같은 칸을 두 번) 코어 모델이 시간 오름차순 · 한 번씩으로 정리한다.
+        let shuffled = WeeklyWorkStatus(weekStart: "2026-09-14", workedSeconds: 30 * 3600,
+                                        tiers: [Self.tier(60, 200, false), Self.tier(20, 20, true), Self.tier(40, 50, false), Self.tier(40, 99, false)])
+        #expect(shuffled.tiers.map(\.hours) == [20, 40, 60] && shuffled.tiers[1] == Self.tier(40, 50, false))
+        #expect(shuffled.gauge?.questHours == 40)
+        // 칸을 하나도 모르면 게이지가 없다(카드는 그리지 않는다).
+        #expect(WeeklyWorkStatus(weekStart: "2026-09-14", workedSeconds: 30 * 3600).gauge == nil)
+        #expect(MeText.weeklyHeadline(nil) == "이번 주 근무")
     }
 
     @Test("'받았어요' 알림: granted_now 는 늘 · 본 기록과 비교해 새로 받은 칸도(cron 이 먼저 지급한 경우) · 첫 조회는 기준만 · 같은 칸은 한 번")
@@ -179,9 +192,7 @@ struct MeWeeklyWorkTests {
         #expect(WeeklyWorkSeen(encoded: seen.encoded) == seen)
         #expect(WeeklyWorkSeen(encoded: "2026-10-12|") == WeeklyWorkSeen(weekStart: "2026-10-12", claimedHours: []))
         #expect(WeeklyWorkSeen(encoded: nil) == nil && WeeklyWorkSeen(encoded: "") == nil && WeeklyWorkSeen(encoded: "|20") == nil)
-        var unknownWeek = Self.dto(worked: 0, claimed: [])
-        unknownWeek.weekStart = nil
-        #expect(WeeklyWorkRules.seen(after: unknownWeek) == nil)
+        #expect(WeeklyWorkRules.seen(after: Self.dto(worked: 0, claimed: [], week: nil)) == nil)
     }
 
     @Test("주 넘김: 다음 주 월요일 0시(KST) 직전은 이번 주 · 0시부터는 지난 값")
@@ -220,9 +231,9 @@ struct MeWeeklyWorkTests {
         #expect(calls.count == 1)
         #expect(calls.first?.method == "POST" && calls.first?.bodyText == "{}", "본문에 무언가 실렸다: \(calls.first?.bodyText ?? "")")
         let status = try #require(store.weeklyWork)
-        #expect(status.workedSeconds == 83_520 && MeText.weeklyHours(status.workedSeconds) == "23시간 12분")
+        #expect(status.workedSeconds == 83_520 && MeText.weeklyHours(status.displayWorkedSeconds) == "23시간 12분")
         #expect(store.showsWeeklyWork && store.weeklyWorkState.hasLoaded)
-        #expect(WeeklyWorkRules.nextTier(status)?.hours == 40)
+        #expect(status.gauge?.questHours == 40)
         #expect(store.rubyBalance == 133 && harness.model.gomokuHost.rubyBalance == 133, "정산 잔량이 미러에 안 실렸다")
         #expect(store.weeklyGrantNotice == nil && store.weeklyGrantSerial == 0, "첫 조회인데 지난 지급을 '받았어요'로 알렸다")
 
@@ -292,8 +303,8 @@ struct MeWeeklyWorkTests {
         await harness.quiesceMe()
         #expect(store.weeklyGrantNotice == WeeklyWorkGrantNotice(ruby: 270, hours: [20, 40, 60]))
         #expect(store.weeklyGrantSerial == 1, "세 칸을 세 번 따로 울렸다")
-        let status = try #require(store.weeklyWork)
-        #expect(WeeklyWorkRules.allClaimed(status) && WeeklyWorkRules.totalRuby(status) == 270)
+        let gauge = try #require(store.weeklyWork?.gauge)
+        #expect(gauge.isComplete && gauge.claimedTotal == 270)
         #expect(store.rubyBalance == 330)
     }
 
@@ -374,6 +385,36 @@ struct MeWeeklyWorkTests {
         await harness.quiesceMe()
         #expect(harness.requests(rpc: "weekly_work_status").count == 3, "실패 뒤 다음 활성화가 다시 묻지 않았다")
         #expect(store.weeklyWork?.workedSeconds == 50 * 3600)
+    }
+
+    @Test("그릴 만큼 모르는 응답(누적초 · 칸 표 빠짐)은 알던 카드와 본 기록을 덮지 않는다 — 잔량은 옮긴다(맥 줄과 같은 규약)")
+    func unusableResponseKeepsCard() async throws {
+        let harness = await RankMeHarness(label: "me-weekly-unusable") { _ in nil }
+        defer { harness.tearDown() }
+        let store = harness.me
+        harness.enqueue("weekly_work_status", .json(Self.status(worked: 30 * 3600, claimed: [20], ruby: 70)))
+        await store.loadWeeklyWork()
+        let key = "aing.me.weeklyWorkSeen.\(RankMeFixture.userID)"
+        #expect(store.weeklyWork?.gauge?.questHours == 40 && harness.storage.defaults.string(forKey: key) == "2026-09-14|20")
+
+        // 칸 표 없는 응답 — 카드는 30시간 그대로, 본 기록도 그대로(비우면 다음 조회가 받은 20 을 '방금'으로 또 알린다).
+        harness.enqueue("weekly_work_status", .json(#"{"week_start":"2026-09-14","worked_seconds":31000,"ruby_balance":71}"#))
+        await store.loadWeeklyWork()
+        #expect(store.weeklyWork?.workedSeconds == 30 * 3600, "칸 표 없는 응답이 카드를 덮었다")
+        #expect(harness.storage.defaults.string(forKey: key) == "2026-09-14|20", "칸 표 없는 응답이 본 기록을 비웠다")
+        #expect(store.rubyBalance == 71 && store.weeklyWorkState.hasLoaded && !store.weeklyWorkState.hasFailed)
+        #expect(store.showsWeeklyWork)
+
+        harness.enqueue("weekly_work_status", .json(Self.status(worked: 31 * 3600, claimed: [20], ruby: 71)))
+        await store.loadWeeklyWork()
+        #expect(store.weeklyGrantNotice == nil, "본 기록이 지워져 이미 받은 20 을 다시 알렸다")
+
+        // 첫 조회부터 그릴 수 없으면 카드는 서지 않는다(0 시간으로 지어내지 않는다).
+        let fresh = await RankMeHarness(label: "me-weekly-unusable-first") { _ in nil }
+        defer { fresh.tearDown() }
+        fresh.enqueue("weekly_work_status", .json(#"{"week_start":"2026-09-14","ruby_balance":5}"#))
+        await fresh.me.loadWeeklyWork()
+        #expect(fresh.me.weeklyWork == nil && !fresh.me.showsWeeklyWork)
     }
 
     @Test("주가 바뀌었으면(월요일 0시) 스로틀 안이어도 다시 읽는다")
@@ -468,8 +509,12 @@ struct MeWeeklyWorkTests {
         #expect(card.contains(".sensoryFeedback(.success, trigger: store.weeklyGrantSerial)"), "지급 햅틱이 없다")
         #expect(card.contains("RubyGain(notice.ruby, suffix: MeText.weeklyGrantSuffix, style: .chip)"),
                 "'받았어요'를 기존 루비 획득 칩이 아닌 새 모양으로 그린다")
-        #expect(card.contains("MeText.weeklyRule") && card.contains("MeText.weeklyTitle"))
-        #expect(card.contains("WeeklyWorkRules.progress(") && card.contains("WeeklyWorkRules.sortedTiers("))
+        // 제목은 게이지가 정한다(모르면 "이번 주 근무" · 진행 중 지금 퀘스트 · 완료) — `weeklyHeadline` 한 곳.
+        #expect(card.contains("MeText.weeklyRule") && card.contains("MeText.weeklyHeadline(gauge)"))
+        // 게이지는 코어 한 벌(지금 퀘스트 · 누적 채움 · 완료) — 카드가 따로 셈하지 않는다.
+        #expect(card.contains("status?.gauge") && card.contains("ProgressBar(gauge.fill, style: gauge.isComplete ? .done : .accent)"),
+                "카드 게이지가 코어 WeeklyWorkGauge 를 그리지 않는다")
+        #expect(card.contains("MeText.weeklyHeadline(gauge)") && card.contains("MeText.weeklyGaugeValue(") && card.contains("MeText.weeklyGaugeGem("))
         #expect(card.contains("RubyIcon("), "루비를 실제 보석이 아닌 기호로 그린다")
         #expect(!card.contains("💎") && !card.contains("diamond"), "진홍 마름모·이모지 루비(폰 규약 위반)")
         // 칸 값(20·40·60 · 20·50·200 · 270)은 서버가 말한다 — 카드가 숫자를 박으면 서버 표를 바꿔도 화면이 그대로다.
@@ -480,7 +525,7 @@ struct MeWeeklyWorkTests {
         #expect(MeText.weeklyTitle == "이번 주 근무" && MeText.weeklyRule == "월요일 0시에 새로 세요")
         #expect(MeText.weeklyTierHours(60) == "60h", "칩이 길어져 세 칸 다 받은 줄이 세로로 쌓인다(402pt 실측)")
         #expect(MeText.weeklyTierAccessibility(hours: 20, ruby: 20, claimed: true) == "20시간 루비 20개, 받음")
-        #expect(MeText.weeklyNextAccessibility(hours: 40, ruby: 50) == "40시간 되면 루비 50개")
+        #expect(MeText.weeklyQuestTitle(hours: 40) == "이번 주 근무 · 40시간 달성하기" && MeText.weeklyDoneTitle == "이번 주 근무 완료")
     }
 
     @Test("주간 보상 RPC 는 폰 금지 목록에 없다 · 데모 장면(me · me/)에 픽스처가 있다")
@@ -491,9 +536,11 @@ struct MeWeeklyWorkTests {
                                         query: "", headers: [:], bodyText: "{}")
         let me = try #require(fixtures.entry(for: request, scenario: "me"), "나 탭 데모 장면에 주간 보상 픽스처가 없다")
         let status = try Self.decode(String(decoding: me.data, as: UTF8.self))
-        #expect(status.weekStart == "2026-09-14" && MeText.weeklyHours(status.workedSeconds) == "23시간 12분")
+        #expect(status.weekStart == "2026-09-14" && MeText.weeklyHours(status.displayWorkedSeconds) == "23시간 12분")
+        #expect(status.gauge?.questHours == 40)
         let empty = try #require(fixtures.entry(for: request, scenario: "me-"))
-        #expect(try Self.decode(String(decoding: empty.data, as: UTF8.self)).workedSeconds == 0)
+        let emptyStatus = try Self.decode(String(decoding: empty.data, as: UTF8.self))
+        #expect(emptyStatus.workedSeconds == 0 && emptyStatus.gauge?.questHours == 20)
         // 다른 장면(게임 탭 등)에는 없다 — 거기서 잔량을 덮어 스크린샷 알약 값이 바뀌지 않게.
         #expect(fixtures.entry(for: request, scenario: "games") == nil)
     }

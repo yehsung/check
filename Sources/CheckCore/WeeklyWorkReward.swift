@@ -102,7 +102,7 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
         )
     }
 
-    private static func normalized(_ tiers: [Tier]) -> [Tier] {
+    fileprivate static func normalized(_ tiers: [Tier]) -> [Tier] {
         var seen = Set<Int>()
         return tiers.sorted { $0.hours < $1.hours }.filter { seen.insert($0.hours).inserted }
     }
@@ -116,27 +116,14 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
     /// 화면이 쓰는 누적초(음수 방어). `isUsable` 이 거짓이면 0 이지만, 그때는 줄 자체를 그리지 않는다.
     package var displayWorkedSeconds: Int { max(0, workedSeconds ?? 0) }
 
-    /// 아직 안 받은 첫 단계(시간 오름차순). nil = 다 받았다(또는 표가 없다).
-    package var nextUnclaimedTier: Tier? { tiers.first { !$0.claimed } }
-
-    /// 세 단계를 **다** 받았는가. 빈 표는 다 받은 것이 아니다(모르는 것이다).
-    package var isComplete: Bool { !tiers.isEmpty && nextUnclaimedTier == nil }
-
-    /// 다음 단계의 문턱을 이미 넘었는데 아직 장부에 없다 — 다음 정산(cron 1분)에 들어온다. 화면은 "곧"이라고 말한다.
-    package var isNextTierReached: Bool {
-        guard let next = nextUnclaimedTier else { return false }
-        return displayWorkedSeconds >= next.thresholdSeconds
-    }
-
-    /// 진행 바(0…1) — **다음 안 받은 단계까지**의 누적 비율. 다 받았으면 1.
-    package var progressToNextTier: Double {
-        guard let next = nextUnclaimedTier else { return tiers.isEmpty ? 0 : 1 }
-        guard next.thresholdSeconds > 0 else { return 1 }
-        return min(1, Double(displayWorkedSeconds) / Double(next.thresholdSeconds))
-    }
-
     /// 단계 표의 루비 합(다 받으면 이만큼 — 지금 표로는 270).
     package var totalRuby: Int { tiers.reduce(0) { $0 + max(0, $1.ruby) } }
+
+    /// 화면의 게이지(맥 줄 · 폰 카드가 같은 값을 그린다). 줄을 그릴 만큼 모르면 nil.
+    package var gauge: WeeklyWorkGauge? {
+        guard isUsable else { return nil }
+        return WeeklyWorkGauge.make(workedSeconds: displayWorkedSeconds, tiers: tiers)
+    }
 
     /// `previous`(같은 사람의 지난 조회) 다음에 **새로 들어온** 지급. 두 갈래의 합집합이다:
     ///  ① `granted_now` — 이 호출이 넣은 행(지난주 소급분 포함).
@@ -164,6 +151,60 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
             }
         }
         return result
+    }
+}
+
+// MARK: - 게이지(지금 퀘스트 하나) — 사장님 늦은 변경(2026-10-16 12:4x)
+//
+// "맨처음엔 20시간 달성 기준이고 20시간 달성하고 40시간 달성하러가는사람이면 그거 기준으로 게이지 뜨고, 40시간 달성하고 60시간
+//  달성하러가는사람은 60시간 기준으로 뜨게끔. 그리고 60시간 넘으면 완료로 화면 처리하고."
+//
+//  · 지금 퀘스트 = 누적초가 **아직 못 넘은** 첫 단계(시간 오름차순). `claimed` 로 고르지 않는다 — 지급은 cron 을 최대 1분 늦게
+//    따라오므로, claimed 로 고르면 20시간을 막 넘긴 사람에게 1분 동안 "20시간 달성하기"가 남는다.
+//  · 채움 = 누적초 ÷ (퀘스트 시간 × 3600) — **이번 주 누적**이다(구간이 아니다): 20시간이면 40시간 게이지가 이미 절반,
+//    45시간이면 60시간 게이지가 75%. 0…1 로 자른다.
+//  · 마지막 단계를 넘으면 완료 — 게이지는 가득, 다음 목표는 없다. 받은 합은 **장부(`claimed`)가 말하는 만큼만**이다
+//    (cron 이 아직이면 270 이 아니라 70 — 안 준 루비를 받았다고 말하지 않는다).
+
+/// 맥 줄 · 폰 카드가 그리는 게이지 하나. 만드는 곳은 `make(workedSeconds:tiers:)` 하나다.
+package struct WeeklyWorkGauge: Equatable, Sendable {
+    /// 지금 퀘스트의 시간(20 · 40 · 60). 완료면 마지막 단계의 시간.
+    package let questHours: Int
+    /// 0…1 — 이번 주 누적 ÷ 퀘스트 시간. 완료면 1.
+    package let fill: Double
+    /// 마지막 단계의 시간을 넘었다(누적초로 판정).
+    package let isComplete: Bool
+    /// 지금 퀘스트를 채우면 받는 루비. 완료면 마지막 단계의 루비(화면은 완료일 때 이 값을 쓰지 않는다).
+    package let reward: Int
+    /// 장부에 들어간(= `claimed`) 단계의 루비 합. 완료 화면의 "💎 +N 받았어요"는 이 값만 말한다.
+    package let claimedTotal: Int
+
+    package init(questHours: Int, fill: Double, isComplete: Bool, reward: Int, claimedTotal: Int) {
+        self.questHours = questHours
+        self.fill = fill
+        self.isComplete = isComplete
+        self.reward = reward
+        self.claimedTotal = claimedTotal
+    }
+
+    /// 표가 비면 nil(모르는 것을 0 으로 그리지 않는다). 표 순서 · 중복은 여기서 다시 정리한다(직접 만든 표도 같은 답).
+    package static func make(workedSeconds: Int, tiers: [WeeklyWorkStatus.Tier]) -> WeeklyWorkGauge? {
+        let table = WeeklyWorkStatus.normalized(tiers.filter { $0.hours > 0 })
+        guard let last = table.last else { return nil }
+        let worked = max(0, workedSeconds)
+        let claimedTotal = table.reduce(0) { $0 + ($1.claimed ? max(0, $1.ruby) : 0) }
+        guard let quest = table.first(where: { worked < $0.thresholdSeconds }) else {
+            return WeeklyWorkGauge(questHours: last.hours, fill: 1, isComplete: true,
+                                   reward: max(0, last.ruby), claimedTotal: claimedTotal)
+        }
+        let fill = min(1, max(0, Double(worked) / Double(quest.thresholdSeconds)))
+        return WeeklyWorkGauge(questHours: quest.hours, fill: fill, isComplete: false,
+                               reward: max(0, quest.ruby), claimedTotal: claimedTotal)
+    }
+
+    /// 이미 넘긴 단계인가(게이지 옆의 작은 표시 — 받았으면 체크, 장부가 아직이면 흐리게). 완료면 전부.
+    package func hasPassed(_ tier: WeeklyWorkStatus.Tier) -> Bool {
+        isComplete || tier.hours < questHours
     }
 }
 

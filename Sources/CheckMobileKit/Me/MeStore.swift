@@ -130,8 +130,8 @@ package final class MeStore {
     @ObservationIgnored package internal(set) var gachaRequestIDs = GachaRequestIDs()
 
     // MARK: 이번 주 근무 보상 (v0.3.55 · 폰 1.0.8(19) — MeStoreWeeklyWork.swift)
-    /// 서버 `weekly_work_status()` 의 마지막 응답. nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
-    package internal(set) var weeklyWork: WeeklyWorkStatusDTO?
+    /// 서버 `weekly_work_status()` 의 마지막 **그릴 만한** 응답(CheckCore 모델 — 맥과 한 벌). nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
+    package internal(set) var weeklyWork: WeeklyWorkStatus?
     package internal(set) var weeklyWorkState = MeLoadState()
     /// 서버에 함수가 있다. 없으면(404 · PGRST202 — db push 전) 카드를 접는다. 다음 조회가 다시 묻는다(스로틀 60초).
     package internal(set) var weeklyWorkAvailable = true

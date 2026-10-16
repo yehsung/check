@@ -4529,21 +4529,27 @@ enum MissionChip: Equatable {
 /// 주간 누적 근무 보상 줄(v0.3.55)의 문구 규약(순수 — 값으로 검증한다).
 ///
 /// **숫자는 전부 응답의 단계 표에서 온다**(20/40/60 · 20/50/200 을 여기 적지 않는다) — 서버 상수를 바꾸는 날 이 줄만
-/// 옛 숫자를 약속하면 안 된다. 문장의 주어는 3시간 줄과 같다: 완료가 아니라 **다음 하나까지**.
+/// 옛 숫자를 약속하면 안 된다. 줄은 **지금 퀘스트 하나**를 말한다(코어 `WeeklyWorkGauge` — 사장님 늦은 변경 2026-10-16).
 enum WeeklyWorkCopy {
     static let title = "이번 주 근무"
     static let icon = "calendar.badge.clock"   // macOS 13+ (배포 타깃 14 ✓)
 
-    /// 줄 아래 보조 문장.
-    ///  · 다 받았으면 — "이번 주 보상 다 받았어요 💎 +270"(합은 표에서).
-    ///  · 다음 단계 문턱을 넘었는데 장부엔 아직 없으면 — "40시간 채웠어요 · 곧 💎 +50". cron 이 1분 안에 넣는다.
-    ///    여기서 "40시간 되면"이라고 말하면 이미 넘긴 사람에게 아직 멀었다고 말하는 것이 된다.
-    ///  · 그 밖 — "23시간 12분 · 40시간 되면 💎 +50".
-    static func detail(_ status: WeeklyWorkStatus) -> String {
-        if status.isComplete { return "이번 주 보상 다 받았어요 💎 +\(status.totalRuby)" }
-        guard let next = status.nextUnclaimedTier else { return MissionProgress.hoursText(status.displayWorkedSeconds) }
-        if status.isNextTierReached { return "\(next.hours)시간 채웠어요 · 곧 💎 +\(next.ruby)" }
-        return "\(MissionProgress.hoursText(status.displayWorkedSeconds)) · \(next.hours)시간 되면 💎 +\(next.ruby)"
+    /// 줄 제목 — 진행 중 "이번 주 근무 · 40시간 달성하기", 마지막 단계를 넘으면 "이번 주 근무 완료".
+    static func title(_ gauge: WeeklyWorkGauge) -> String {
+        gauge.isComplete ? "\(title) 완료" : "\(title) · \(gauge.questHours)시간 달성하기"
+    }
+
+    /// 오른쪽 칩 — 진행 중 "💎 +50"(지금 퀘스트의 보상), 완료 "💎 +270 받았어요".
+    /// 완료 칩의 숫자는 **장부에 들어간 합**(`claimedTotal`)만이다 — cron 이 아직이면 70 이고, 하나도 안 들어왔으면 칩이 없다.
+    static func chip(_ gauge: WeeklyWorkGauge) -> String? {
+        if gauge.isComplete { return gauge.claimedTotal > 0 ? "💎 +\(gauge.claimedTotal) 받았어요" : nil }
+        return "💎 +\(gauge.reward)"
+    }
+
+    /// 게이지 아래 보조 문장 — 진행 중 "23시간 12분 / 40시간", 완료면 누적만("61시간 3분" — 다음 목표는 없다).
+    static func detail(_ status: WeeklyWorkStatus, gauge: WeeklyWorkGauge) -> String {
+        let worked = MissionProgress.hoursText(status.displayWorkedSeconds)
+        return gauge.isComplete ? worked : "\(worked) / \(gauge.questHours)시간"
     }
 
     /// 줄의 말풍선 툴팁 — 규칙 한 줄. "월요일 0시에 새로 세요 · 20시간 20 · 40시간 50 · 60시간 200".
@@ -4615,7 +4621,7 @@ private struct UltraPanel: View {
     /// 서버가 말해 준 무제한(관리자). 기본값 false — 안 넘기면 지금과 완전히 같다.
     var isUnlimited: Bool = false
     let missions: [MissionProgress]
-    /// 이번 주 누적 근무 보상(v0.3.55). nil 이거나 줄을 그릴 만큼 모르면(`isUsable`) 줄을 **안 그린다** — 함수가 없는
+    /// 이번 주 누적 근무 보상(v0.3.55). nil 이거나 줄을 그릴 만큼 모르면(`gauge == nil`) 줄을 **안 그린다** — 함수가 없는
     /// 옛 서버 · 첫 조회 전. 3시간 줄 **바로 아래**에 선다(둘 다 근무로 받는 루비다).
     var weeklyWork: WeeklyWorkStatus? = nil
     /// 미션을 한 번이라도 성공적으로 받았는가(빈 목록과 로드 전을 가른다 — 토큰 보드와 같은 규약).
@@ -4722,9 +4728,9 @@ private struct UltraPanel: View {
         )
     }
 
-    /// 그릴 주간 줄(그릴 만큼 알 때만).
+    /// 그릴 주간 줄(게이지를 만들 만큼 알 때만 — 줄 수 셈과 그리기가 같은 판정을 쓴다).
     private var weeklyRow: WeeklyWorkStatus? {
-        weeklyWork.flatMap { $0.isUsable ? $0 : nil }
+        weeklyWork.flatMap { $0.gauge == nil ? nil : $0 }
     }
 
     @ViewBuilder
@@ -4853,47 +4859,57 @@ private struct MissionRowView: View {
 }
 
 /// 주간 누적 근무 보상 줄(v0.3.55). 3시간 줄(`MissionRowView`)과 **같은 뼈대**(아이콘 · 제목 + 오른쪽 칩 · 진행 바 · 보조 문장 ·
-/// 같은 높이)이고, 오른쪽 칩 자리에 보상 칩 하나 대신 **단계 표시 셋**(20 · 40 · 60)이 선다 — 받은 단계는 근무색 + 체크,
-/// 다음 단계는 강조색, 그 뒤는 흐리게. 진행 바는 **다음 안 받은 단계까지**의 누적이다(`progressToNextTier`).
-/// 규칙 한 줄은 말풍선 툴팁으로 둔다(줄 높이를 늘리지 않는다 — 팝오버 높이 예산).
+/// 같은 높이)다. 게이지는 **지금 퀘스트 하나**(코어 `WeeklyWorkGauge` — 사장님 늦은 변경): 제목 "이번 주 근무 · 40시간 달성하기",
+/// 칩 "💎 +50", 바는 이번 주 누적 ÷ 퀘스트 시간, 아래 "23시간 12분 / 40시간". 마지막 단계를 넘으면 "이번 주 근무 완료" ·
+/// 근무색 가득 찬 바 · "💎 +N 받았어요"(장부 합)로 바뀌고 다음 목표는 없다. 이미 넘긴 단계는 보조 문장 오른쪽에 작은 표시로만
+/// 남는다(받았으면 체크 + 근무색, 장부가 아직이면 흐리게). 규칙 한 줄은 말풍선 툴팁(줄 높이를 늘리지 않는다 — 팝오버 높이 예산).
 private struct WeeklyWorkRowView: View {
     let status: WeeklyWorkStatus
 
     var body: some View {
-        let progress = status.progressToNextTier
-        let next = status.nextUnclaimedTier
-        HStack(spacing: 10) {
+        if let gauge = status.gauge {
+            row(gauge)
+        }
+    }
+
+    private func row(_ gauge: WeeklyWorkGauge) -> some View {
+        // 완료는 근무색 — 진행 중(강조색)과 색으로 갈린다.
+        let barTint = gauge.isComplete ? CheckTheme.working : CheckTheme.accent
+        let passed = status.tiers.filter { gauge.hasPassed($0) }
+        return HStack(spacing: 10) {
             Image(systemName: WeeklyWorkCopy.icon)
                 .font(.system(size: 13, weight: .semibold))
-                // 한 단계라도 받았으면 근무색 — 3시간 줄이 랩 수로 아이콘을 물들이는 것과 같은 규약.
-                .foregroundStyle(status.tiers.contains(where: \.claimed) ? CheckTheme.working : CheckTheme.accent)
+                // 완료했거나 한 단계라도 받았으면 근무색 — 3시간 줄이 랩 수로 아이콘을 물들이는 것과 같은 규약.
+                .foregroundStyle(gauge.isComplete || status.tiers.contains(where: \.claimed) ? CheckTheme.working : CheckTheme.accent)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(WeeklyWorkCopy.title)
+                    Text(WeeklyWorkCopy.title(gauge))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(CheckTheme.primaryText)
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    HStack(spacing: 3) {
-                        ForEach(status.tiers, id: \.hours) { tier in
-                            tierMark(tier, isNext: tier.hours == next?.hours)
-                        }
-                    }
+                    chip(gauge)
                 }
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(CheckTheme.trackFill)
                         Capsule()
-                            .fill(progress >= 1 ? CheckTheme.working : CheckTheme.accent)
-                            .frame(width: max(0, proxy.size.width * min(1, max(0, progress))))
+                            .fill(barTint)
+                            .frame(width: max(0, proxy.size.width * min(1, max(0, gauge.fill))))
                     }
                 }
                 .frame(height: 4)      // MissionRowView 와 같은 관용구
-                Text(WeeklyWorkCopy.detail(status))
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(WeeklyWorkCopy.detail(status, gauge: gauge))
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    HStack(spacing: 3) {
+                        ForEach(passed, id: \.hours) { tierMark($0) }
+                    }
+                }
             }
         }
         .padding(.horizontal, 10)
@@ -4904,8 +4920,26 @@ private struct WeeklyWorkRowView: View {
         .checkTooltip(WeeklyWorkCopy.rule(status))
     }
 
-    private func tierMark(_ tier: WeeklyWorkStatus.Tier, isNext: Bool) -> some View {
-        let tint: Color = tier.claimed ? CheckTheme.working : (isNext ? CheckTheme.accent : CheckTheme.secondaryText)
+    @ViewBuilder
+    private func chip(_ gauge: WeeklyWorkGauge) -> some View {
+        if let text = WeeklyWorkCopy.chip(gauge) {
+            let tint = gauge.isComplete ? CheckTheme.working : CheckTheme.accent
+            HStack(spacing: 3) {
+                if gauge.isComplete {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+                }
+                Text(text).font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(tint.opacity(0.16)))
+        }
+    }
+
+    /// 넘긴 단계의 작은 표시("✓20"). 받았으면 근무색 + 체크, 장부가 아직이면(cron ≤ 1분) 흐리게 — 받았다고 그리지 않는다.
+    private func tierMark(_ tier: WeeklyWorkStatus.Tier) -> some View {
+        let tint: Color = tier.claimed ? CheckTheme.working : CheckTheme.secondaryText
         return HStack(spacing: 2) {
             if tier.claimed {
                 Image(systemName: "checkmark").font(.system(size: 7, weight: .bold))
@@ -4916,8 +4950,7 @@ private struct WeeklyWorkRowView: View {
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 5)
-        .padding(.vertical, 1)
-        .background(Capsule().fill(tier.claimed || isNext ? tint.opacity(0.16) : CheckTheme.trackFill))
+        .background(Capsule().fill(tier.claimed ? tint.opacity(0.16) : CheckTheme.trackFill))
     }
 }
 

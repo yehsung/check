@@ -135,80 +135,157 @@ final class V0355Clock {
     }
 }
 
-// MARK: - ② 문구 · 진행 산식
+// MARK: - ② 게이지(코어 · 맥·폰 한 벌) · 문구
+//
+// 사장님 늦은 변경(2026-10-16 12:4x): 게이지는 **지금 퀘스트 하나** — 누적초가 못 넘은 첫 단계가 기준이고(20 → 40 → 60),
+// 채움은 이번 주 누적 ÷ 퀘스트 시간(구간이 아니다), 60시간을 넘으면 완료. 기대값은 손으로 적은 숫자다.
+
+@Suite struct V0355WeeklyGaugeTests {
+    let h = V0355WeeklyStub.hour
+    /// 표 그대로(시간 오름차순) — `claimed` 는 20·40·60 순서.
+    func gauge(_ worked: Int, _ claimed: [Bool] = [false, false, false]) throws -> WeeklyWorkGauge {
+        try #require(V0355WeeklyStub.status(worked: worked, claimed: claimed).gauge)
+    }
+
+    @Test("0시간 — 20시간 퀘스트 · 채움 0 · 보상 20")
+    func zero() throws {
+        let g = try gauge(0)
+        #expect(g == WeeklyWorkGauge(questHours: 20, fill: 0, isComplete: false, reward: 20, claimedTotal: 0))
+    }
+
+    @Test("19:59:59 — 아직 20시간 퀘스트(문턱 1초 전) · 채움 71999/72000")
+    func oneSecondBeforeTwenty() throws {
+        let g = try gauge(20 * h - 1)
+        #expect(g.questHours == 20 && !g.isComplete && g.reward == 20)
+        #expect(g.fill == 71_999.0 / 72_000.0)
+    }
+
+    @Test("20:00:00 — 40시간 퀘스트로 넘어가고 게이지는 이미 절반(구간이 아니라 누적) · 장부가 아직이어도 같다")
+    func exactlyTwenty() throws {
+        let paid = try gauge(20 * h, [true, false, false])
+        #expect(paid == WeeklyWorkGauge(questHours: 40, fill: 0.5, isComplete: false, reward: 50, claimedTotal: 20))
+        // cron 이 아직(claimed 거짓) — 퀘스트는 누적초로 고른다. claimed 로 고르면 1분 동안 "20시간 달성하기"가 남는다.
+        let pending = try gauge(20 * h)
+        #expect(pending.questHours == 40 && pending.fill == 0.5 && pending.claimedTotal == 0)
+    }
+
+    @Test("30시간 — 40시간 퀘스트 · 채움 0.75")
+    func thirty() throws {
+        let g = try gauge(30 * h, [true, false, false])
+        #expect(g.questHours == 40 && g.fill == 0.75 && g.reward == 50)
+    }
+
+    @Test("40:00:00 — 60시간 퀘스트 · 채움 2/3 · 보상 200")
+    func exactlyForty() throws {
+        let g = try gauge(40 * h, [true, true, false])
+        #expect(g.questHours == 60 && !g.isComplete && g.reward == 200 && g.claimedTotal == 70)
+        #expect(abs(g.fill - 2.0 / 3.0) < 1e-12)
+    }
+
+    @Test("45시간 — 60시간 게이지 75%(사장님 예시)")
+    func fortyFive() throws {
+        #expect(try gauge(45 * h, [true, true, false]).fill == 0.75)
+    }
+
+    @Test("59:59:59 — 아직 60시간 퀘스트 · 완료 아님")
+    func oneSecondBeforeSixty() throws {
+        let g = try gauge(60 * h - 1, [true, true, false])
+        #expect(g.questHours == 60 && !g.isComplete)
+        #expect(g.fill == 215_999.0 / 216_000.0)
+    }
+
+    @Test("60:00:00 — 완료 · 가득 · 받은 합 270")
+    func exactlySixty() throws {
+        let g = try gauge(60 * h, [true, true, true])
+        #expect(g.isComplete && g.fill == 1 && g.claimedTotal == 270)
+    }
+
+    @Test("80시간 — 완료 · 채움 1 에서 멈춘다")
+    func eighty() throws {
+        let g = try gauge(80 * h, [true, true, true])
+        #expect(g.isComplete && g.fill == 1 && g.claimedTotal == 270)
+    }
+
+    @Test("완료인데 장부가 늦다 — 완료로 그리되 받은 합은 장부만큼(70) · 아무것도 안 들어왔으면 0")
+    func completeButClaimsLagging() throws {
+        let lagging = try gauge(61 * h, [true, true, false])
+        #expect(lagging.isComplete && lagging.fill == 1 && lagging.claimedTotal == 70)
+        #expect(try gauge(61 * h).claimedTotal == 0)
+    }
+
+    @Test("표 순서를 섞어 보내도 · 같은 단계가 두 번 와도 같은 답 · 빈 표는 게이지 없음 · 모르는 누적초도 없음")
+    func normalizationAndUnknowns() throws {
+        let shuffled = WeeklyWorkGauge.make(workedSeconds: 30 * h, tiers: [
+            .init(hours: 60, ruby: 200, claimed: false), .init(hours: 20, ruby: 20, claimed: true),
+            .init(hours: 40, ruby: 50, claimed: false), .init(hours: 20, ruby: 999, claimed: true),
+        ])
+        #expect(shuffled == WeeklyWorkGauge(questHours: 40, fill: 0.75, isComplete: false, reward: 50, claimedTotal: 20))
+        #expect(WeeklyWorkGauge.make(workedSeconds: 30 * h, tiers: []) == nil)
+        #expect(WeeklyWorkStatus(workedSeconds: 30 * h).gauge == nil, "표 없는 응답으로 게이지를 만들었다")
+        #expect(V0355WeeklyStub.status(worked: nil).gauge == nil, "모르는 누적초를 0 으로 그렸다")
+        // 넘긴 단계 표시: 진행 중이면 퀘스트 아래 단계만, 완료면 전부.
+        let g = try gauge(45 * h, [true, false, false])
+        #expect(V0355WeeklyStub.status(worked: 45 * h).tiers.filter { g.hasPassed($0) }.map(\.hours) == [20, 40])
+        let done = try gauge(60 * h, [true, true, true])
+        #expect(V0355WeeklyStub.status(worked: 60 * h).tiers.filter { done.hasPassed($0) }.map(\.hours) == [20, 40, 60])
+    }
+}
 
 @Suite struct V0355WeeklyCopyTests {
     let h = V0355WeeklyStub.hour
-
-    @Test("0시간 — 다음은 20시간 · 바 0 · 'N 되면 💎 +20'")
-    func zeroHours() {
-        let status = V0355WeeklyStub.status(worked: 0)
-        #expect(status.nextUnclaimedTier?.hours == 20)
-        #expect(status.progressToNextTier == 0)
-        #expect(!status.isNextTierReached && !status.isComplete)
-        #expect(WeeklyWorkCopy.detail(status) == "0분 · 20시간 되면 💎 +20")
+    func copy(_ worked: Int, _ claimed: [Bool] = [false, false, false]) throws -> (title: String, chip: String?, detail: String) {
+        let status = V0355WeeklyStub.status(worked: worked, claimed: claimed)
+        let gauge = try #require(status.gauge)
+        return (WeeklyWorkCopy.title(gauge), WeeklyWorkCopy.chip(gauge), WeeklyWorkCopy.detail(status, gauge: gauge))
     }
 
-    @Test("19:59:59 — 아직 20시간이 아니다(문턱 1초 전)")
-    func oneSecondBeforeTheFirstTier() {
-        let status = V0355WeeklyStub.status(worked: 20 * h - 1)
-        #expect(!status.isNextTierReached)
-        #expect(status.progressToNextTier < 1 && status.progressToNextTier > 0.99)
-        #expect(WeeklyWorkCopy.detail(status) == "19시간 59분 · 20시간 되면 💎 +20")
+    @Test("0시간 — '이번 주 근무 · 20시간 달성하기' · '💎 +20' · '0분 / 20시간'")
+    func zeroHours() throws {
+        let c = try copy(0)
+        #expect(c.title == "이번 주 근무 · 20시간 달성하기" && c.chip == "💎 +20" && c.detail == "0분 / 20시간")
     }
 
-    @Test("20시간 — 받았으면 다음은 40시간(바 절반), 장부에 아직 없으면 '곧'(바 가득)")
-    func exactlyTwentyHours() {
-        let paid = V0355WeeklyStub.status(worked: 20 * h, claimed: [true, false, false])
-        #expect(paid.nextUnclaimedTier?.hours == 40)
-        #expect(paid.progressToNextTier == 0.5)
-        #expect(WeeklyWorkCopy.detail(paid) == "20시간 · 40시간 되면 💎 +50")
-
-        // cron 이 아직 안 돈 1분 — 넘겼는데 장부에 없다. "20시간 되면"이라고 말하면 이미 넘긴 사람에게 아직 멀었다고 말한다.
-        let pending = V0355WeeklyStub.status(worked: 20 * h, claimed: [false, false, false])
-        #expect(pending.nextUnclaimedTier?.hours == 20 && pending.isNextTierReached)
-        #expect(pending.progressToNextTier == 1)
-        #expect(WeeklyWorkCopy.detail(pending) == "20시간 채웠어요 · 곧 💎 +20")
+    @Test("19:59:59 — 아직 20시간 퀘스트(분은 내림)")
+    func oneSecondBeforeTheFirstTier() throws {
+        let c = try copy(20 * h - 1)
+        #expect(c.title == "이번 주 근무 · 20시간 달성하기" && c.detail == "19시간 59분 / 20시간")
     }
 
-    @Test("23시간 12분 — 설계서 예시 문장 그대로")
-    func specExampleLine() {
-        let status = V0355WeeklyStub.status(worked: 23 * h + 12 * 60 + 5, claimed: [true, false, false])
-        #expect(WeeklyWorkCopy.detail(status) == "23시간 12분 · 40시간 되면 💎 +50")
+    @Test("23시간 12분 — 설계서 예시 그대로('이번 주 근무 · 40시간 달성하기' · '23시간 12분 / 40시간' · '💎 +50')")
+    func specExampleLine() throws {
+        let c = try copy(23 * h + 12 * 60 + 5, [true, false, false])
+        #expect(c.title == "이번 주 근무 · 40시간 달성하기")
+        #expect(c.detail == "23시간 12분 / 40시간")
+        #expect(c.chip == "💎 +50")
     }
 
-    @Test("59시간 — 20·40 을 받았고 다음은 60시간")
-    func fiftyNineHours() {
-        let status = V0355WeeklyStub.status(worked: 59 * h, claimed: [true, true, false])
-        #expect(status.nextUnclaimedTier?.hours == 60)
-        #expect(abs(status.progressToNextTier - 59.0 / 60.0) < 1e-9)
-        #expect(WeeklyWorkCopy.detail(status) == "59시간 · 60시간 되면 💎 +200")
+    @Test("40시간 · 59시간 — 60시간 퀘스트 · '💎 +200'")
+    func sixtyQuest() throws {
+        #expect(try copy(40 * h, [true, true, false]).title == "이번 주 근무 · 60시간 달성하기")
+        let c = try copy(59 * h, [true, true, false])
+        #expect(c.detail == "59시간 / 60시간" && c.chip == "💎 +200")
     }
 
-    @Test("60시간+ — 셋 다 받았으면 '다 받았어요 💎 +270'(합은 표에서) · 바 가득")
-    func allThreeClaimed() {
-        let status = V0355WeeklyStub.status(worked: 71 * h, claimed: [true, true, true])
-        #expect(status.isComplete && status.nextUnclaimedTier == nil)
-        #expect(status.progressToNextTier == 1)
-        #expect(status.totalRuby == 270)
-        #expect(WeeklyWorkCopy.detail(status) == "이번 주 보상 다 받았어요 💎 +270")
+    @Test("60시간+ — '이번 주 근무 완료' · '💎 +270 받았어요'(장부 합) · 다음 목표 없음")
+    func complete() throws {
+        let c = try copy(71 * h, [true, true, true])
+        #expect(c.title == "이번 주 근무 완료" && c.chip == "💎 +270 받았어요" && c.detail == "71시간")
+        #expect(!c.detail.contains("/"), "완료인데 다음 목표를 말한다")
     }
 
-    @Test("다음 단계 고르기 — 시간 오름차순의 첫 '안 받은' 단계(서버가 순서를 섞어 보내도)")
-    func nextTierSelection() throws {
-        let shuffled = try V0355WeeklyStub.decode(#"{"worked_seconds":90000,"tiers":["#
-            + #"{"hours":60,"ruby":200,"claimed":false},{"hours":20,"ruby":20,"claimed":true},{"hours":40,"ruby":50,"claimed":false}]}"#)
-        #expect(shuffled.tiers.map(\.hours) == [20, 40, 60])
-        #expect(shuffled.nextUnclaimedTier?.hours == 40)
-        // 앞 단계가 비어 있으면 그게 다음이다(높은 단계만 받은 이상한 장부도 아래부터 채운다).
-        let gap = V0355WeeklyStub.status(worked: 45 * h, claimed: [false, true, false])
-        #expect(gap.nextUnclaimedTier?.hours == 20 && gap.isNextTierReached)
+    @Test("완료인데 장부가 늦다 — 받은 만큼만(+70) · 하나도 없으면 칩 없음(안 준 루비를 받았다고 말하지 않는다)")
+    func completeButLagging() throws {
+        #expect(try copy(61 * h, [true, true, false]).chip == "💎 +70 받았어요")
+        let none = try copy(61 * h)
+        #expect(none.title == "이번 주 근무 완료" && none.chip == nil)
     }
 
     @Test("숫자는 응답 표에서 온다 — 표가 바뀌면 문구도 바뀐다(기준선이 다른 대조군)")
     func copyFollowsTheServerTable() throws {
         let other = try V0355WeeklyStub.decode(#"{"worked_seconds":3600,"tiers":[{"hours":10,"ruby":7,"claimed":false},{"hours":30,"ruby":11,"claimed":false}]}"#)
-        #expect(WeeklyWorkCopy.detail(other) == "1시간 · 10시간 되면 💎 +7")
+        let gauge = try #require(other.gauge)
+        #expect(WeeklyWorkCopy.title(gauge) == "이번 주 근무 · 10시간 달성하기")
+        #expect(WeeklyWorkCopy.chip(gauge) == "💎 +7" && WeeklyWorkCopy.detail(other, gauge: gauge) == "1시간 / 10시간")
         #expect(WeeklyWorkCopy.rule(other) == "월요일 0시에 새로 세요 · 10시간 7 · 30시간 11")
         #expect(other.totalRuby == 18)
     }
@@ -332,7 +409,7 @@ final class V0355Clock {
         #expect(call.body == "{}")
         #expect(SupabaseWorkService.weeklyWorkStatusPath == "/rest/v1/rpc/weekly_work_status")
         #expect(store.weeklyWork?.workedSeconds == 83_456)
-        #expect(store.weeklyWork?.nextUnclaimedTier?.hours == 40)
+        #expect(store.weeklyWork?.gauge?.questHours == 40)
         #expect(store.rubyBalance == 1057)
     }
 
@@ -578,13 +655,23 @@ final class V0355Clock {
         #expect(row != none, "주간 줄이 안 그려졌다")
         #expect(try Self.png(Self.store(weekly: WeeklyWorkStatus(workedSeconds: 10 * h))) == none,
                 "표 없는 응답으로 줄을 그렸다 — 모르는 것을 0 으로 그리는 거짓말")
-        // 60 단계만 받음 vs 아무것도 안 받음 — 다음 단계(20) · 진행 바 · 보조 문장은 **같고** 단계 표시(와 아이콘 색)만 다르다.
-        let unclaimed = try Self.png(Self.store(weekly: V0355WeeklyStub.status(worked: 10 * h)))
-        #expect(unclaimed == row)
-        let marked = try Self.png(Self.store(weekly: V0355WeeklyStub.status(worked: 10 * h, claimed: [false, false, true])))
-        #expect(WeeklyWorkCopy.detail(V0355WeeklyStub.status(worked: 10 * h, claimed: [false, false, true]))
-                == WeeklyWorkCopy.detail(V0355WeeklyStub.status(worked: 10 * h)))
-        #expect(marked != unclaimed, "받은 단계가 그림에 안 나타난다")
+        // 23시간 — 20 을 받음 vs 장부가 아직(cron ≤ 1분). 퀘스트(40) · 게이지 · 문구는 **같고**(누적초로 고른다) 넘긴 단계 표시
+        // (체크 + 근무색 vs 흐림)와 아이콘 색만 다르다.
+        let worked = 23 * h + 12 * 60
+        let pending = V0355WeeklyStub.status(worked: worked)
+        let paid = V0355WeeklyStub.status(worked: worked, claimed: [true, false, false])
+        let pendingGauge = try #require(pending.gauge)
+        let paidGauge = try #require(paid.gauge)
+        #expect(WeeklyWorkCopy.title(pendingGauge) == WeeklyWorkCopy.title(paidGauge))
+        #expect(WeeklyWorkCopy.detail(pending, gauge: pendingGauge) == WeeklyWorkCopy.detail(paid, gauge: paidGauge))
+        #expect(pendingGauge.fill == paidGauge.fill)
+        let pendingPNG = try Self.png(Self.store(weekly: pending))
+        #expect(pendingPNG == (try Self.png(Self.store(weekly: pending))), "같은 입력인데 그림이 다르다(대조군)")
+        #expect(try Self.png(Self.store(weekly: paid)) != pendingPNG, "받은 단계가 그림에 안 나타난다")
+        // 완료(60시간+)는 진행 중(59:59:59)과 다른 그림이다(제목 · 칩 · 근무색 게이지).
+        let almost = try Self.png(Self.store(weekly: V0355WeeklyStub.status(worked: 60 * h - 1, claimed: [true, true, false])))
+        let done = try Self.png(Self.store(weekly: V0355WeeklyStub.status(worked: 60 * h, claimed: [true, true, true])))
+        #expect(done != almost)
     }
 
     @Test("팝오버 높이 상한 — 미션 셋 + 주간 줄 + 안내줄 + 새 버전 배너에서도 ≤ 700pt · 줄이 없는 창보다 작지 않다")
@@ -602,7 +689,7 @@ final class V0355Clock {
     }
 
     /// 미리보기 PNG — 환경변수 `CHECK_V0355_MAC_PREVIEW_DIR` 가 있을 때만 떨군다(없으면 아무것도 안 한다). 창은 띄우지 않는다.
-    @Test("미리보기(환경변수가 있을 때만) — 0시간 · 23시간 12분 · 문턱 넘김(곧) · 다 받음")
+    @Test("미리보기(환경변수가 있을 때만) — 0시간 · 23시간 12분 · 40시간(60 퀘스트) · 완료 · 완료인데 장부가 늦음")
     func previewStills() throws {
         guard let dir = ProcessInfo.processInfo.environment["CHECK_V0355_MAC_PREVIEW_DIR"] else { return }
         let h = V0355WeeklyStub.hour
@@ -612,6 +699,7 @@ final class V0355Clock {
              "이번 주 20시간 채웠어요 — 루비 +20"),
             ("mac-weekly-reached", V0355WeeklyStub.status(worked: 40 * h + 30, claimed: [true, false, false]), nil),
             ("mac-weekly-all", V0355WeeklyStub.status(worked: 61 * h, claimed: [true, true, true]), nil),
+            ("mac-weekly-lagging", V0355WeeklyStub.status(worked: 60 * h + 20, claimed: [true, true, false]), nil),
         ]
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         for (name, status, notice) in cases {

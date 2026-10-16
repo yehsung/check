@@ -45,7 +45,7 @@ extension MeStore {
         let service = context.service
         do {
             let status = try await context.withMobileSessionRetry { session in
-                try await service.fetchWeeklyWorkStatus(accessToken: session.accessToken)
+                try await service.weeklyWorkStatus(accessToken: session.accessToken)
             }
             guard generation == context.generation, isCurrent("weekly", serial) else { return }
             applyWeeklyWorkStatus(status, rubyAtDeparture: rubyAtDeparture)
@@ -66,16 +66,19 @@ extension MeStore {
     }
 
     /// 응답을 화면에 옮긴다: 상태 · 루비(더 새 값을 되돌리지 않게) · '받았어요' 알림(+ 햅틱 순번) · 이 기기가 본 칸 저장.
-    func applyWeeklyWorkStatus(_ status: WeeklyWorkStatusDTO, rubyAtDeparture: Int?) {
+    func applyWeeklyWorkStatus(_ status: WeeklyWorkStatus, rubyAtDeparture: Int?) {
         weeklyWorkAvailable = true
-        weeklyWork = status
+        // 카드를 그릴 만큼 모르는 응답(누적초 · 칸 표가 빠진 서버 어긋남)은 **알던 값을 덮지 않는다** — 맥 줄과 같은 규약
+        // (`WeeklyWorkStatus.isUsable`). 모르는 누적초를 0 으로 그리면 "이번 주 0시간"이라는 거짓말이 된다.
+        if status.isUsable { weeklyWork = status }
         weeklyWorkState.hasLoaded = true
         weeklyWorkState.hasFailed = false
         weeklyWorkState.loadedAt = context.clock.now()
 
         let previous = loadWeeklyWorkSeen()
         let grants = WeeklyWorkRules.newGrants(previous: previous, status: status)
-        if let seen = WeeklyWorkRules.seen(after: status) { storeWeeklyWorkSeen(seen) }
+        // 본 기록도 칸 표를 알 때만 옮긴다 — 표가 빠진 응답으로 '본 칸 없음'을 적으면 다음 조회가 받은 칸을 다 새로 알린다.
+        if !status.tiers.isEmpty, let seen = WeeklyWorkRules.seen(after: status) { storeWeeklyWorkSeen(seen) }
 
         let current = context.gomokuHost.rubyBalance
         if WeeklyWorkRules.shouldApplyRuby(server: status.rubyBalance, atDeparture: rubyAtDeparture, current: current),

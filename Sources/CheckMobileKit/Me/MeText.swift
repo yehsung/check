@@ -298,13 +298,13 @@ package enum MeText {
         return ContributionLevels.level(value: min(seconds, 3_600), denominator: 3_600)
     }
 
-    // MARK: 이번 주 근무 보상 (v0.3.55 — 칸 값은 서버가 말한다, 여기는 말투만)
+    // MARK: 이번 주 근무 보상 (v0.3.55 — 칸 값은 서버가 말한다, 여기는 말투만 · 게이지 판정은 CheckCore `WeeklyWorkGauge`)
 
     package static let weeklyTitle = "이번 주 근무"
+    /// 마지막 칸을 넘었다(사장님: "60시간 넘으면 완료로 화면 처리").
+    package static let weeklyDoneTitle = "이번 주 근무 완료"
     /// 규칙 한 줄(칸별 값은 바로 위 칩이 말한다).
     package static let weeklyRule = "월요일 0시에 새로 세요"
-    /// 세 칸 다 받은 뒤(뒤에 보석 + "+270").
-    package static let weeklyAllDone = "이번 주 보상 다 받았어요"
     /// '받았어요' 칩 꼬리("💎+20 받음" — 순위 상품 칩과 같은 말).
     package static let weeklyGrantSuffix = "받음"
     package static let weeklyLoadFailed = "이번 주 근무를 불러오지 못했어요"
@@ -314,14 +314,27 @@ package enum MeText {
         MenuBarStatusFormatter.hoursMinutes(seconds)
     }
 
-    /// 다음 칸 줄 앞말 "40시간 되면"(뒤에 보석 + "+50").
-    package static func weeklyNextLead(hours: Int) -> String {
-        "\(hours)시간 되면"
+    /// 지금 퀘스트 제목 "이번 주 근무 · 40시간 달성하기".
+    package static func weeklyQuestTitle(hours: Int) -> String {
+        "\(weeklyTitle) · \(hours)시간 달성하기"
     }
 
-    /// 시간은 넘었는데 아직 장부에 없다(서버 정산이 1분 안에 돈다).
-    package static func weeklyPending(hours: Int) -> String {
-        "\(hours)시간 채웠어요 · 곧 들어와요"
+    /// 카드 제목: 아직 모르면 "이번 주 근무", 진행 중이면 지금 퀘스트, 완료면 "이번 주 근무 완료".
+    package static func weeklyHeadline(_ gauge: WeeklyWorkGauge?) -> String {
+        guard let gauge else { return weeklyTitle }
+        return gauge.isComplete ? weeklyDoneTitle : weeklyQuestTitle(hours: gauge.questHours)
+    }
+
+    /// 값 줄: 진행 중 "23시간 12분 / 40시간", 완료면 누적만("61시간 03분" — 다음 목표는 없다).
+    package static func weeklyGaugeValue(worked: Int, gauge: WeeklyWorkGauge) -> String {
+        gauge.isComplete ? weeklyHours(worked) : "\(weeklyHours(worked)) / \(gauge.questHours)시간"
+    }
+
+    /// 값 줄 보석 뒤 글자: 진행 중 "+50"(지금 퀘스트 보상), 완료 "+270 받았어요" — **장부에 들어간 합**만(cron 이 아직이면 70).
+    /// 완료인데 아직 하나도 안 들어왔으면 nil(보석을 그리지 않는다 — 안 준 루비를 받았다고 말하지 않는다).
+    package static func weeklyGaugeGem(_ gauge: WeeklyWorkGauge) -> String? {
+        if gauge.isComplete { return gauge.claimedTotal > 0 ? "+\(gauge.claimedTotal) 받았어요" : nil }
+        return weeklyRubyGain(gauge.reward)
     }
 
     /// 칩 앞말 "20h"(SPEC-weekly 칩 표기). "20시간"이면 세 칸을 다 받아 체크가 붙었을 때 402pt 폭에서 한 줄에 안 들어가 세로로
@@ -340,14 +353,13 @@ package enum MeText {
         "\(hours)시간 루비 \(ruby)개" + (claimed ? ", 받음" : "")
     }
 
-    /// 보이스오버 다음 칸 줄: "40시간 되면 루비 50개".
-    package static func weeklyNextAccessibility(hours: Int, ruby: Int) -> String {
-        "\(weeklyNextLead(hours: hours)) 루비 \(ruby)개"
-    }
-
-    /// 보이스오버 다 받은 줄: "이번 주 보상 다 받았어요, 루비 270개".
-    package static func weeklyAllDoneAccessibility(totalRuby: Int) -> String {
-        "\(weeklyAllDone), 루비 \(totalRuby)개"
+    /// 보이스오버 값 줄: "23시간 12분 / 40시간, 달성하면 루비 50개" · "61시간 03분, 루비 270개 받았어요".
+    package static func weeklyGaugeAccessibility(worked: Int, gauge: WeeklyWorkGauge) -> String {
+        let value = weeklyGaugeValue(worked: worked, gauge: gauge)
+        if gauge.isComplete {
+            return gauge.claimedTotal > 0 ? "\(value), 루비 \(gauge.claimedTotal)개 받았어요" : value
+        }
+        return "\(value), 달성하면 루비 \(gauge.reward)개"
     }
 
     // MARK: 메뉴 그룹

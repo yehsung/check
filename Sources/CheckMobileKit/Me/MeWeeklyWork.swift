@@ -96,37 +96,25 @@ package enum WeeklyWorkRules {
         return WeeklyWorkGrantNotice(ruby: ruby, hours: grants.map(\.hours).sorted())
     }
 
-    /// "2026-10-19" → 그 날 0시(KST). 못 읽으면 nil.
+    /// "2026-10-19" → 그 날 0시(KST). 못 읽으면 nil. 맥과 같은 달력(CheckCore `WeeklyWorkCalendar`).
     package static func kstMidnight(_ day: String?) -> Date? {
-        guard let day else { return nil }
-        let parts = day.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3 else { return nil }
-        var components = DateComponents()
-        components.year = parts[0]
-        components.month = parts[1]
-        components.day = parts[2]
-        return kst.date(from: components)
+        WeeklyWorkCalendar.kstMidnight(day)
     }
 
     /// 이 응답의 주가 끝났는가(지금이 다음 주 월요일 0시 이후). 끝났으면 화면 값은 지난주 것이다 — 스로틀 없이 다시 읽는다.
     package static func weekHasRolled(_ status: WeeklyWorkStatus?, now: Date) -> Bool {
-        guard let next = kstMidnight(status?.nextWeekStart) else { return false }
-        return now >= next
+        status?.hasEnded(at: now) ?? false
     }
 
     /// 루비 미러에 서버 잔량을 쓸 것인가 — **더 새 값을 되돌리지 않는다**.
     ///
     /// 미러(`context.gomokuHost.rubyBalance`)는 상점 · 뽑기 · 오목 · 체스가 다 쓰는 한 칸이다. 이 조회가 떠 있는 사이 다른 응답이
-    /// 미러를 바꿨으면(예: 뽑기 −50) 그 값이 이 응답보다 늦게 읽힌 값일 수 있다 — 그때 이 응답의 잔량을 쓰면 깎인 루비가
-    /// 화면에서 되살아난다. 그래서 **떠날 때와 같을 때만** 쓴다. 쓰지 못했는데 이번에 받은 게 있으면 스토어가 상점을 다시 읽어 맞춘다.
-    package static func shouldApplyRuby(server: Int?, atDeparture: Int?, current: Int?) -> Bool {
+    /// 미러에 썼으면(예: 뽑기 −50) 그 값이 이 응답보다 늦게 읽힌 값일 수 있다 — 그때 이 응답의 잔량을 쓰면 깎인 루비가
+    /// 화면에서 되살아난다. 그래서 **떠난 뒤 미러에 쓴 횟수가 0 일 때만** 쓴다(`MobileGomokuHost.rubyWriteSerial`). 값으로 비교하면
+    /// 사이의 쓰기가 마침 떠날 때와 같은 값이었을 때(ABA — 40시간 보상 50 = 뽑기 값 50 이라 흔하다) 옛 잔량이 이긴다.
+    /// 쓰지 못했는데 이번에 받은 게 있으면 스토어가 상점을 다시 읽어 맞춘다.
+    package static func shouldApplyRuby(server: Int?, writeSerialAtDeparture: Int, currentWriteSerial: Int) -> Bool {
         guard server != nil else { return false }
-        return current == atDeparture
+        return writeSerialAtDeparture == currentWriteSerial
     }
-
-    static let kst: Calendar = {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
-        return calendar
-    }()
 }

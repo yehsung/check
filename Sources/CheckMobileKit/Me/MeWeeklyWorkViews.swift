@@ -29,7 +29,10 @@ struct MeWeeklyWorkCard: View {
             header(gauge)
             if let status, let gauge {
                 valueLine(status, gauge)
+                // 보이스오버는 막대를 건너뛴다 — 공용 막대는 백분율을 반올림해 읽어서 퀘스트의 마지막 0.5%(19시간 54분 …)를
+                // 아직 못 받았는데도 "100%"라고 말했다. 같은 사실은 바로 위 값 줄이 정확히 읽는다("23시간 12분 / 40시간…").
                 ProgressBar(gauge.fill, style: gauge.isComplete ? .done : .accent)
+                    .accessibilityHidden(true)
                     .padding(.vertical, 2)
                 tierChips(status)
             } else {

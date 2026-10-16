@@ -20,10 +20,15 @@ extension MeStore {
     // MARK: 읽기
 
     /// 낡았으면 읽는다(60초 스로틀 · 주가 바뀌었으면 바로). 떠 있으면 겹쳐 띄우지 않는다.
+    ///
+    /// '떠 있다'는 **띄우는 이 자리에서 바로** 적는다. `loadWeeklyWork` 안에서 적으면 Task 가 돌기 전의 같은 턴에 온 두 번째
+    /// 호출이 아직 거짓을 보고 또 띄운다 — 앞에 올 때(`appDidBecomeActive` 가 직접 한 번 + `refreshRootIfStale` 이 한 번)마다
+    /// 두 번, 콜드 스타트(탭 표시 + 활성화)엔 세 번 나갔다(검토 지적 2026-10-16). 하나하나가 서버에서 지갑 자물쇠를 잡는 정산이다.
     package func refreshWeeklyWorkIfStale() {
         guard context.session.isSignedIn, !weeklyWorkState.isLoading else { return }
         let rolled = WeeklyWorkRules.weekHasRolled(weeklyWork, now: context.clock.now())
         guard rolled || isStale(weeklyWorkState) else { return }
+        weeklyWorkState.isLoading = true
         launch { [weak self] in await self?.loadWeeklyWork() }
     }
 
@@ -35,11 +40,15 @@ extension MeStore {
 
     /// `weekly_work_status()` 한 번. 세대(로그아웃) · 순번(겹친 조회) 가드.
     package func loadWeeklyWork() async {
-        guard context.session.isSignedIn else { return }
+        guard context.session.isSignedIn else {
+            // 띄우는 자리(`refreshWeeklyWorkIfStale`)가 미리 적어 둔 '떠 있음'을 거둔다 — 안 거두면 다음 조회가 영영 안 뜬다.
+            weeklyWorkState.isLoading = false
+            return
+        }
         let serial = nextSerial("weekly")
         let generation = context.generation
-        // 루비 미러를 떠날 때 찍는다 — 도착했을 때 다른 응답이 바꿔 놓았으면 그쪽이 더 새 값일 수 있다(`shouldApplyRuby`).
-        let rubyAtDeparture = context.gomokuHost.rubyBalance
+        // 루비 미러에 쓴 횟수를 떠날 때 찍는다 — 도착했을 때 그 사이 누가 썼으면 그쪽이 더 새 값일 수 있다(`shouldApplyRuby`).
+        let rubyWriteAtDeparture = context.gomokuHost.rubyWriteSerial
         weeklyWorkState.isLoading = true
         defer { if isCurrent("weekly", serial) { weeklyWorkState.isLoading = false } }
         let service = context.service
@@ -48,7 +57,7 @@ extension MeStore {
                 try await service.weeklyWorkStatus(accessToken: session.accessToken)
             }
             guard generation == context.generation, isCurrent("weekly", serial) else { return }
-            applyWeeklyWorkStatus(status, rubyAtDeparture: rubyAtDeparture)
+            applyWeeklyWorkStatus(status, rubyWriteSerialAtDeparture: rubyWriteAtDeparture)
         } catch {
             guard generation == context.generation, isCurrent("weekly", serial) else { return }
             if AuthErrorRules.classify(error) == .cancelled { return }
@@ -66,7 +75,7 @@ extension MeStore {
     }
 
     /// 응답을 화면에 옮긴다: 상태 · 루비(더 새 값을 되돌리지 않게) · '받았어요' 알림(+ 햅틱 순번) · 이 기기가 본 칸 저장.
-    func applyWeeklyWorkStatus(_ status: WeeklyWorkStatus, rubyAtDeparture: Int?) {
+    func applyWeeklyWorkStatus(_ status: WeeklyWorkStatus, rubyWriteSerialAtDeparture: Int) {
         weeklyWorkAvailable = true
         // 카드를 그릴 만큼 모르는 응답(누적초 · 칸 표가 빠진 서버 어긋남)은 **알던 값을 덮지 않는다** — 맥 줄과 같은 규약
         // (`WeeklyWorkStatus.isUsable`). 모르는 누적초를 0 으로 그리면 "이번 주 0시간"이라는 거짓말이 된다.
@@ -80,8 +89,8 @@ extension MeStore {
         // 본 기록도 칸 표를 알 때만 옮긴다 — 표가 빠진 응답으로 '본 칸 없음'을 적으면 다음 조회가 받은 칸을 다 새로 알린다.
         if !status.tiers.isEmpty, let seen = WeeklyWorkRules.seen(after: status) { storeWeeklyWorkSeen(seen) }
 
-        let current = context.gomokuHost.rubyBalance
-        if WeeklyWorkRules.shouldApplyRuby(server: status.rubyBalance, atDeparture: rubyAtDeparture, current: current),
+        if WeeklyWorkRules.shouldApplyRuby(server: status.rubyBalance, writeSerialAtDeparture: rubyWriteSerialAtDeparture,
+                                           currentWriteSerial: context.gomokuHost.rubyWriteSerial),
            let ruby = status.rubyBalance {
             context.gomokuHost.rubyBalance = ruby
         } else if !grants.isEmpty || !status.grantedNow.isEmpty {

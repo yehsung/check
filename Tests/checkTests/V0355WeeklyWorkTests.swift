@@ -674,15 +674,37 @@ final class V0355Clock {
         #expect(done != almost)
     }
 
-    @Test("팝오버 높이 상한 — 미션 셋 + 주간 줄 + 안내줄 + 새 버전 배너에서도 ≤ 700pt · 줄이 없는 창보다 작지 않다")
+    @Test("팝오버 높이 상한 — 안내줄 × 배너 네 조합 전부 ≤ 700pt · 주간 줄은 미션 줄과 똑같이 한 줄로 세여 목록 상한을 넘기지 않는다")
     func heightBudget() throws {
         let h = V0355WeeklyStub.hour
-        let worst = Self.store(weekly: V0355WeeklyStub.status(worked: 71 * h, claimed: [true, true, true]),
-                               notice: "이번 주 60시간 채웠어요 — 루비 +270")
-        let height = Double(try Self.bitmap(worst, banner: true).pixelsHigh) / 2
-        #expect(height <= 700, "팝오버 높이 \(height)pt")
-        let without = Double(try Self.bitmap(Self.store(weekly: nil, notice: "이번 주 60시간 채웠어요 — 루비 +270"), banner: true).pixelsHigh) / 2
-        #expect(height >= without)
+        let weekly = V0355WeeklyStub.status(worked: 71 * h, claimed: [true, true, true])
+        let notice = "이번 주 60시간 채웠어요 — 루비 +270"
+        // 스토어마다 다른 스크래치(태그 = 줄 번호)를 준다 — 같은 태그를 다시 쓰면 앞 스토어의 기본값이 섞인다.
+        var tag = 9_100
+        func height(_ status: WeeklyWorkStatus?, missions: Int = 3, notice: String?, banner: Bool) throws -> Double {
+            tag += 1
+            return Double(try Self.bitmap(Self.store(weekly: status, missionCount: missions, notice: notice, line: tag),
+                                          banner: banner).pixelsHigh) / 2
+        }
+        // 한 줄의 값(줄 높이 + 사이)은 그림에서 잰다: 미션 하나 → 둘(목록 상한은 최소 두 줄이라 언제나 펼쳐진다).
+        let rowUnit = try height(nil, missions: 2, notice: nil, banner: false) - height(nil, missions: 1, notice: nil, banner: false)
+        #expect(rowUnit > 40, "한 줄 값이 \(rowUnit)pt — 잴 수 없다")
+        for (withNotice, banner) in [(false, false), (false, true), (true, false), (true, true)] {
+            let label = "안내줄 \(withNotice ? "있음" : "없음") · 배너 \(banner ? "있음" : "없음")"
+            let with = try height(weekly, notice: withNotice ? notice : nil, banner: banner)
+            let without = try height(nil, notice: withNotice ? notice : nil, banner: banner)
+            #expect(with <= 700, "\(label): 팝오버 높이 \(with)pt")
+            // 주간 줄은 넷째 줄이다 — 목록에 자리가 있으면 한 줄만큼 자라고, 없으면(스크롤) 한 픽셀도 안 자란다. 그 사이 값은 없다.
+            #expect(with == without || with == without + rowUnit, "\(label): 주간 줄이 \(with - without)pt 를 더했다(0 또는 \(rowUnit))")
+            if !withNotice && !banner {
+                // 덧붙는 크롬이 없으면 목록은 네 줄까지 펼친다(가장 큰 창 — 이 조합이 ≤ 700 의 진짜 최악이다).
+                #expect(with == without + rowUnit, "\(label): 넷째 줄(주간)이 펼쳐지지 않았다")
+            } else {
+                // 안내줄 · 배너가 한 줄 자리를 먹으면 목록은 세 줄 — 미션 셋이 이미 채웠으니 주간 줄은 스크롤로 간다.
+                // 주간 줄을 줄 수에서 빼고 세면(`rowCount` 에서 weeklyRow 누락) 여기서 창이 한 줄만큼 자란다.
+                #expect(with == without, "\(label): 목록 상한을 넘어 창이 \(with - without)pt 자랐다 — 주간 줄을 줄 수에 안 셌다")
+            }
+        }
         // 미션이 아직 없는 화면(불러오는 중)에서도 주간 줄이 서고 상한 안이다.
         let loading = Self.store(weekly: V0355WeeklyStub.status(worked: h), missionCount: 0)
         #expect(Double(try Self.bitmap(loading, banner: true).pixelsHigh) / 2 <= 700)

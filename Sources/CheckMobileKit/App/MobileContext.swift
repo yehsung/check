@@ -124,7 +124,13 @@ package final class MobileGomokuHost: GomokuStoreHost {
     @ObservationIgnored private let sessionStore: MobileSessionStore
     @ObservationIgnored private weak var realtimeRunner: MobileRealtimeRunner?
     /// 루비 잔액 미러. 오목 응답이 쓰고(정산), 나 탭 상점이 `shop_state` 로 채운다. nil = 모른다(막지 않는다 — 맥 0.3.29 규칙).
-    package var rubyBalance: Int?
+    /// 대입마다 `rubyWriteSerial` 이 오른다(맥 `rubyBalanceWriteSerial` 과 같은 규약 — 같은 값을 써도 센다).
+    package var rubyBalance: Int? {
+        didSet { rubyWriteSerial &+= 1 }
+    }
+    /// 미러에 쓴 횟수. 늦게 도착한 응답이 "떠난 뒤 다른 쓰기가 있었나"를 **값이 아니라 횟수로** 묻는다 — 값으로 물으면
+    /// 사이에 같은 값이 한 번 더 써진 경우(ABA: 주간 조회가 150 을 읽은 뒤 뽑기 −50 이 떠날 때의 100 으로 되돌림)를 못 가른다.
+    @ObservationIgnored package private(set) var rubyWriteSerial = 0
 
     package init(sessionStore: MobileSessionStore, realtime: MobileRealtimeRunner) {
         self.sessionStore = sessionStore

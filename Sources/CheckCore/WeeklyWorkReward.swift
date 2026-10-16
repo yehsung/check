@@ -119,6 +119,22 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
     /// 단계 표의 루비 합(다 받으면 이만큼 — 지금 표로는 270).
     package var totalRuby: Int { tiers.reduce(0) { $0 + max(0, $1.ruby) } }
 
+    /// 다음 주 월요일 0시(KST) — 이 응답의 주가 끝나는 순간. 못 읽으면 nil.
+    package var nextWeekStartDate: Date? { WeeklyWorkCalendar.kstMidnight(nextWeekStart) }
+
+    /// 이 응답의 주가 `now` 에 끝났는가(다음 주 월요일 0시 이후). 끝났으면 화면 값은 지난주 것이다.
+    package func hasEnded(at now: Date) -> Bool {
+        guard let end = nextWeekStartDate else { return false }
+        return now >= end
+    }
+
+    /// 주 경계(다음 주 월요일 0시)가 `last`(이 값을 물은 때) 뒤 · `now` 이전에 있었는가 — 맥 1분 창을 건너뛰는 조건.
+    /// 경계 **뒤에** 물었으면(그 조회가 실패해 이 값이 아직 지난주여도) 거짓이다 — 실패한 서버를 매 박자 두드리지 않는다.
+    package func weekEnded(after last: Date, by now: Date) -> Bool {
+        guard let end = nextWeekStartDate else { return false }
+        return last < end && end <= now
+    }
+
     /// 화면의 게이지(맥 줄 · 폰 카드가 같은 값을 그린다). 줄을 그릴 만큼 모르면 nil.
     package var gauge: WeeklyWorkGauge? {
         guard isUsable else { return nil }
@@ -152,6 +168,28 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
         }
         return result
     }
+}
+
+// MARK: - 주 달력(KST) — 맥 · 폰이 같은 "월요일 0시"를 쓴다
+
+package enum WeeklyWorkCalendar {
+    /// "2026-10-19" → 그 날 0시(KST). 못 읽으면 nil.
+    package static func kstMidnight(_ day: String?) -> Date? {
+        guard let day else { return nil }
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var components = DateComponents()
+        components.year = parts[0]
+        components.month = parts[1]
+        components.day = parts[2]
+        return kst.date(from: components)
+    }
+
+    package static let kst: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        return calendar
+    }()
 }
 
 // MARK: - 게이지(지금 퀘스트 하나) — 사장님 늦은 변경(2026-10-16 12:4x)

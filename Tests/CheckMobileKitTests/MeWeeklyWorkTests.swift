@@ -206,13 +206,23 @@ struct MeWeeklyWorkTests {
         #expect(WeeklyWorkRules.kstMidnight("2026-9") == nil && WeeklyWorkRules.kstMidnight(nil) == nil)
     }
 
-    @Test("루비 미러: 떠날 때와 같을 때만 서버 잔량을 쓴다(그 사이 바뀐 더 새 값을 되돌리지 않는다)")
+    @Test("루비 미러: 떠난 뒤 미러에 쓴 횟수가 0 일 때만 서버 잔량을 쓴다(값이 아니라 횟수 — 같은 값으로 되돌린 쓰기도 쓰기다)")
     func rubyApplyRule() {
-        #expect(WeeklyWorkRules.shouldApplyRuby(server: 140, atDeparture: 120, current: 120))
-        #expect(WeeklyWorkRules.shouldApplyRuby(server: 140, atDeparture: nil, current: nil))
-        #expect(!WeeklyWorkRules.shouldApplyRuby(server: 140, atDeparture: 120, current: 70), "뽑기로 깎인 잔량을 되살렸다")
-        #expect(!WeeklyWorkRules.shouldApplyRuby(server: 140, atDeparture: nil, current: 70))
-        #expect(!WeeklyWorkRules.shouldApplyRuby(server: nil, atDeparture: 120, current: 120))
+        #expect(WeeklyWorkRules.shouldApplyRuby(server: 140, writeSerialAtDeparture: 7, currentWriteSerial: 7))
+        #expect(!WeeklyWorkRules.shouldApplyRuby(server: 140, writeSerialAtDeparture: 7, currentWriteSerial: 8), "그 사이 쓴 잔량을 되돌렸다")
+        #expect(!WeeklyWorkRules.shouldApplyRuby(server: nil, writeSerialAtDeparture: 7, currentWriteSerial: 7))
+    }
+
+    @Test("루비 미러 쓰기 횟수: 대입마다 오른다 — 같은 값을 다시 써도(ABA) 오른다")
+    func rubyWriteSerialCountsEveryWrite() async {
+        let harness = await RankMeHarness(label: "me-weekly-ruby-serial") { _ in nil }
+        defer { harness.tearDown() }
+        let host = harness.model.gomokuHost
+        let start = host.rubyWriteSerial
+        host.rubyBalance = 100
+        host.rubyBalance = 100
+        host.rubyBalance = nil
+        #expect(host.rubyWriteSerial == start + 3)
     }
 
     // MARK: - 스토어(진짜 경로)
@@ -343,6 +353,74 @@ struct MeWeeklyWorkTests {
         await load2.value
         await harness.quiesceMe()
         #expect(store.rubyBalance == 90 && harness.requests(rpc: "shop_state").count == 1)
+    }
+
+    /// 서버 순서: cron 이 40시간 칸 +50 (100 → 150) → 주간 조회가 150 을 읽음 → 뽑기 −50 (150 → 100).
+    /// 뽑기 응답이 먼저 도착해 미러에 `gacha` 를 쓴다. 떠날 때 미러는 100 이었다.
+    func rubyRace(gachaWrites gacha: Int, label: String) async throws -> (mirror: Int?, shopReads: Int) {
+        let harness = await RankMeHarness(label: label) { _ in nil }
+        defer { harness.tearDown() }
+        let store = harness.me
+        harness.enqueue("weekly_work_status", .json(Self.status(worked: 30 * 3600, claimed: [20], ruby: 100)))
+        await store.loadWeeklyWork()
+        #expect(store.rubyBalance == 100)
+
+        let hold = BaseHold.rpc("weekly_work_status", host: harness.host)
+        harness.enqueue("weekly_work_status", .json(Self.status(worked: 41 * 3600, claimed: [20, 40], ruby: 150)))
+        harness.enqueue("shop_state", .json(#"{"ruby_balance":100,"characters":[]}"#))
+        let load = Task { await store.loadWeeklyWork() }
+        #expect(await hold.waitHeld())
+        harness.model.gomokuHost.rubyBalance = gacha
+        #expect(await hold.releaseAndWaitDelivered())
+        await load.value
+        await harness.quiesceMe()
+        return (harness.model.gomokuHost.rubyBalance, harness.requests(rpc: "shop_state").count)
+    }
+
+    @Test("루비 ABA: 뽑기가 떠날 때와 **같은 값**(100)을 썼어도 늦게 온 주간 150 이 덮지 않는다 · 다른 값(80)이면 상점을 다시 읽는다(대조군)")
+    func rubyNotRegressedWhenTheInterveningWriteHasTheSameValue() async throws {
+        let control = try await rubyRace(gachaWrites: 80, label: "me-weekly-aba-control")
+        #expect(control.shopReads == 1 && control.mirror == 100, "대조군: \(control)")
+        let aba = try await rubyRace(gachaWrites: 100, label: "me-weekly-aba")
+        #expect(aba.mirror == 100, "주간 응답(뽑기 전 서버 150)이 뽑기 뒤 잔량(100)을 덮었다 — 미러 \(String(describing: aba.mirror))")
+        #expect(aba.shopReads == 1, "버린 응답이 지급을 실었는데 상점을 다시 읽지 않았다")
+    }
+
+    @Test("나 탭이 보이는 채로 앱이 앞에 오면 weekly_work_status 는 한 번만 나간다(직접 + 루트 새로고침 두 자리)")
+    func foregroundWithVisibleTabFiresOnce() async throws {
+        let harness = await RankMeHarness(label: "me-weekly-fg-once") { _ in nil }
+        defer { harness.tearDown() }
+        let store = harness.me
+        harness.enqueue("weekly_work_status", .json(Self.status(worked: 30 * 3600, claimed: [20], ruby: 100)))
+        store.tabDidAppear()
+        await harness.quiesceMe()
+        #expect(harness.requests(rpc: "weekly_work_status").count == 1)
+
+        harness.clock.advance(61)
+        for _ in 0..<3 {
+            harness.enqueue("weekly_work_status", .json(Self.status(worked: 30 * 3600 + 61, claimed: [20], ruby: 100)))
+        }
+        store.appDidBecomeActive()
+        await harness.quiesceMe()
+        let fired = harness.requests(rpc: "weekly_work_status").count - 1
+        #expect(fired == 1, "앞에 한 번 왔는데 weekly_work_status 가 \(fired)번 나갔다")
+        #expect(!store.weeklyWorkState.isLoading && store.weeklyWork?.workedSeconds == 30 * 3600 + 61)
+    }
+
+    @Test("콜드 스타트(탭 표시 + 활성화가 같은 턴)도 weekly_work_status 는 한 번")
+    func coldStartFiresOnce() async throws {
+        let harness = await RankMeHarness(label: "me-weekly-cold-once") { _ in nil }
+        defer { harness.tearDown() }
+        let store = harness.me
+        for _ in 0..<4 {
+            harness.enqueue("weekly_work_status", .json(Self.status(worked: 30 * 3600, claimed: [20], ruby: 100)))
+        }
+        store.tabDidAppear()
+        store.appDidBecomeActive()
+        await harness.quiesceMe()
+        let fired = harness.requests(rpc: "weekly_work_status").count
+        #expect(fired == 1, "콜드 스타트 한 번에 weekly_work_status 가 \(fired)번 나갔다")
+        #expect(!store.weeklyWorkState.isLoading)
     }
 
     @Test("함수가 없는 서버(404): 카드를 접고 60초 안엔 다시 안 묻는다 · 그 뒤 서버에 생기면 카드가 선다")
@@ -514,6 +592,12 @@ struct MeWeeklyWorkTests {
         // 게이지는 코어 한 벌(지금 퀘스트 · 누적 채움 · 완료) — 카드가 따로 셈하지 않는다.
         #expect(card.contains("status?.gauge") && card.contains("ProgressBar(gauge.fill, style: gauge.isComplete ? .done : .accent)"),
                 "카드 게이지가 코어 WeeklyWorkGauge 를 그리지 않는다")
+        // 보이스오버: 공용 막대는 백분율을 반올림해 읽어 19시간 54분 / 20시간에서 "100%"라고 말한다(아직 못 받았다).
+        // 이 카드의 막대는 접근성에서 빼고, 값 줄이 정확한 값을 읽는다(검토 지적 2026-10-16).
+        #expect(card.range(of: #"ProgressBar\(gauge\.fill, style: gauge\.isComplete \? \.done : \.accent\)\s*\.accessibilityHidden\(true\)"#,
+                           options: .regularExpression) != nil,
+                "주간 게이지 막대가 보이스오버에 반올림 백분율(99.5% → \"100%\")을 읽힌다")
+        #expect(card.contains(".accessibilityLabel(Text(MeText.weeklyGaugeAccessibility("), "막대를 숨겼는데 값 줄이 정확한 값을 안 읽는다")
         #expect(card.contains("MeText.weeklyHeadline(gauge)") && card.contains("MeText.weeklyGaugeValue(") && card.contains("MeText.weeklyGaugeGem("))
         #expect(card.contains("RubyIcon("), "루비를 실제 보석이 아닌 기호로 그린다")
         #expect(!card.contains("💎") && !card.contains("diamond"), "진홍 마름모·이모지 루비(폰 규약 위반)")

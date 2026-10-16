@@ -4863,7 +4863,9 @@ private struct MissionRowView: View {
 /// 칩 "💎 +50", 바는 이번 주 누적 ÷ 퀘스트 시간, 아래 "23시간 12분 / 40시간". 마지막 단계를 넘으면 "이번 주 근무 완료" ·
 /// 근무색 가득 찬 바 · "💎 +N 받았어요"(장부 합)로 바뀌고 다음 목표는 없다. 이미 넘긴 단계는 보조 문장 오른쪽에 작은 표시로만
 /// 남는다(받았으면 체크 + 근무색, 장부가 아직이면 흐리게). 규칙 한 줄은 말풍선 툴팁(줄 높이를 늘리지 않는다 — 팝오버 높이 예산).
-private struct WeeklyWorkRowView: View {
+/// private 가 아닌 이유: 렌더 테스트가 이 줄 하나만 그려 색(완료 막대 · 넘긴 단계 표시 · 아이콘)을 픽셀로 잰다 — 팝오버 전체
+/// 그림에서는 다른 줄의 같은 색에 섞여 하나를 걷어내도 초록이었다(검토 지적 2026-10-16).
+struct WeeklyWorkRowView: View {
     let status: WeeklyWorkStatus
 
     var body: some View {

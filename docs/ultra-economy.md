@@ -388,6 +388,21 @@ invalid → not_working → target_not_working → target_focused → target_on_
 "어디까지 맞았는지" 알려 주는 신탁이 된다. `need_seconds`·`elapsed_seconds` 는 **진단 전용**이고
 화면·로그에 쓰지 않는다(얼마나 더 기다리면 통과하는지는 위조 보조 도구다).
 
+## 4-D. 주간 누적 근무 보상 (2026-10-16, 20261016120000 · 맥 0.3.55 · 폰 1.0.8)
+사장님 확정: 한 주(월 00:00 → 다음 월 00:00 KST) 누적 근무 20시간 → 루비 20 · 40시간 → 50 · 60시간 → 200, 단계마다 따로(최대 270).
+2026-10-12 주부터 센다(그 이전 주는 정산하지 않는다 — weekly_work_first_week()). 3시간 랩(+3)은 그대로다.
+| 항목 | 값 |
+|---|---|
+| 측정 | work_seconds_on__exact(uid, day) — 세션 자르기는 ultra_wallet_sync 랩 그대로(자정 분할 · 열린 세션은 now 또는 10분 무신호 컷), 자른 구간은 합집합(겹친 세션은 한 번 — 순위표와 같다). 주 = 월..오늘 하루 몫(소수) 합을 한 번 내림 |
+| 랩과 다른 점 | 겹친 세션(정상 데이터엔 없다) · 반올림(랩은 날마다 반올림, 주간은 끝에 내림) 둘뿐 |
+| 단계표 | weekly_work_tiers() (20,20)(40,50)(60,200) — 유일한 출처 |
+| 장부 | reason mission:week:<주 월요일>:<h>h · kst_day = 지급한 날 · detail {week_start, hours, worked_seconds} |
+| 한 번만 | unique (user_id, reason) where reason like 'mission:week:%' (ruby_ledger_week_once) + 지갑 자물쇠 ultra_wallet:<uid> |
+| 지급 시점 | cron weekly-work-reward 매분(weekly_work_settle_all) + 클라 weekly_work_status 호출 시. 지난주 몫은 이번 주 내내 따라잡는다 |
+| 클라 RPC | weekly_work_status() → {week_start, next_week_start, worked_seconds, tiers[{hours,ruby,claimed}], granted_now[{hours,ruby[,week_start]}], ruby_balance, server_now_ms} |
+granted_now 는 "이 호출이 넣은 행"이라 cron 이 먼저 주면 비어 있다 — "+N" 표시는 claimed 의 false→true 로도 잡는다(같은 주 안에서만 — 지난주 몫을 cron 이 월요일에 주면 알림 없이 들어간다).
+남은 위험: 단일 세션 위조(P0)는 주당 270 까지 — 세션 무결성(닫힌 세션 ended_at 고정 · 길이 상한)과 함께 고친다.
+
 ## 5. 초인종 (Realtime Broadcast)
 
 ### 채널

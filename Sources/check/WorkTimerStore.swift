@@ -764,7 +764,14 @@ final class WorkTimerStore {
     ///
     /// **서버가 유일한 출처다** — 구매 성공 응답이 실어 준 값으로만 갱신하고, 클라가 스스로 빼지 않는다.
     /// 두 곳에서 빼면 실패한 구매가 화면에서만 차감되는 조합이 생긴다.
-    var rubyBalance: Int?
+    ///
+    /// 대입마다 `rubyBalanceWriteSerial` 이 오른다(v0.3.55). 쓰는 자리가 여럿이라(상점 · 뽑기 · 확성기 · 오목 · 체스 · 주간 보상)
+    /// 늦게 도착한 응답이 그 사이 들어온 새 값을 덮지 않게 하는 눈금이다(`applyWeeklyWork` 가 읽는다).
+    var rubyBalance: Int? {
+        didSet { rubyBalanceWriteSerial &+= 1 }
+    }
+    /// `rubyBalance` 에 대입된 횟수. 화면이 읽지 않는다.
+    @ObservationIgnored var rubyBalanceWriteSerial = 0
     /// 한 번에 살 수 있는 울트라 최대 개수(서버 상수). 지금 화면은 1개 고정이라 판정에 안 쓴다.
     var ultraBuyMax: Int?
     /// 울트라 1개의 루비 값. 서버가 말해 주기 전에는 nil — 화면은 **모르는 값을 숫자로 단정하지 않는다**
@@ -1228,6 +1235,13 @@ final class WorkTimerStore {
     @ObservationIgnored var ultraMissionTargetSeconds: Int?
     /// 마지막 지갑 sync 시각. `.periodic` 스로틀(5분)의 유일한 근거다.
     @ObservationIgnored var lastUltraWalletSyncAt: Date?
+    /// 이번 주 누적 근무 보상(v0.3.55 · `weekly_work_status`). **nil = 아직 모름**(한 번도 못 받았거나 함수가 없는 옛 서버) —
+    /// 그때 울트라 화면은 주간 줄을 **안 그린다**(0분으로 그리면 거짓말이다). 실패는 알던 값을 지우지 않는다(잔량과 같은 규약).
+    var weeklyWork: WeeklyWorkStatus?
+    /// 마지막 주간 조회를 **발사한** 시각. "1분에 한 번 넘게 묻지 않는다"의 유일한 근거다(WorkTimerStoreWeeklyWork.swift).
+    @ObservationIgnored var lastWeeklyWorkFetchAt: Date?
+    /// 근무가 끝난 직후의 조회가 1분 창에 막혀 **빚으로 남았다**. 폴링 tick 이 1분이 지나면 갚는다.
+    @ObservationIgnored var weeklyWorkFetchOwed = false
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     /// 공개 여부가 **확정**됐는가 — 서버 응답이 왔거나 **사용자가 직접 골랐거나**(setTokenUsagePublic 이 GET 전에 세운다:
@@ -1986,6 +2000,9 @@ final class WorkTimerStore {
         // 볼 사람도 없어 이득이 0이다.
         if !isTerminating {
             flushPokesOnWorkEnd()
+            // 주간 누적 근무 보상(v0.3.55)을 근무가 끝난 직후 한 번 묻는다 — 종료 기록이 서버에 닿은 뒤다(그쪽 주석).
+            // 종료 시퀀스에서는 부르지 않는다: 볼 사람이 없다.
+            refreshWeeklyWorkAfterWorkEnded()
         }
         // ★ 링은 **내리지 않는다**(v0.3.30). 근무가 끝나도 메시지·읽음·오목 신청 신호는 계속 온다(서버가 근무 조건을 풀었다).
         //   끝난 뒤 도착한 초인종은 소비 게이트(realtimeMayConsumePokes)가 take_pokes 대신 서버 표 읽기로 돌린다.
@@ -2374,6 +2391,11 @@ final class WorkTimerStore {
             autoCloseReason: reason
         )
         syncMessage = message
+        // 자동 마감도 근무가 끝난 순간이다 — 주간 보상을 한 번 묻는다(v0.3.55). 과거 시각으로 닫는 마감(자리 비움)이라
+        // **종료 기록이 서버에 닿은 뒤**여야 한다(먼저 물으면 서버가 열린 세션을 지금까지로 잰다) — 그쪽 함수가 큐를 기다린다.
+        if !isTerminating {
+            refreshWeeklyWorkAfterWorkEnded()
+        }
         // 자동 마감(잠자기·12시간 미확인·자리비움)도 근무 종료지만 **링은 그대로 둔다**(v0.3.30 — stop() 과 같은 이유:
         // 근무 밖에서도 메시지·읽음·오목 신청 신호가 온다).
     }
@@ -3818,6 +3840,11 @@ extension WorkTimerStore {
         streakDays = 0
         streakIncludesToday = false
         lastUltraWalletSyncAt = nil
+        // 주간 보상도 계정에 묶인다 — 남기면 새 계정 화면이 남의 이번 주 시간을 그리고, 다음 조회의 "새로 받은 단계" 판정이
+        // 남의 장부와 비교돼 받지도 않은 루비를 받았다고 말한다(`WeeklyWorkStatus.newlyGranted`).
+        weeklyWork = nil
+        lastWeeklyWorkFetchAt = nil
+        weeklyWorkFetchOwed = false
         // 갱신 조정자도 계정에 묶인다. 진행 중이던 갱신 결과가 새 세션에 적용되면 남의 토큰으로 근무를 기록한다.
         sessionRefreshCoordinator.invalidate()
         // 리얼타임 링도 함께 내린다. realtimeApply 가 소켓을 끊고 예약 타이머를 취소하며 realtimeState 를

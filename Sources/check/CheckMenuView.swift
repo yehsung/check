@@ -674,6 +674,7 @@ struct CheckMenuView: View {
                             balance: store.ultraBalance,
                             isUnlimited: store.ultraUnlimited,
                             missions: store.missions,
+                            weeklyWork: store.weeklyWork,
                             hasLoaded: store.missionsLoaded,
                             hasFailed: store.ultraBalanceFailed,
                             notice: store.missionNotice,
@@ -4525,6 +4526,47 @@ enum MissionChip: Equatable {
     case pending
 }
 
+/// 주간 누적 근무 보상 줄(v0.3.55)의 문구 규약(순수 — 값으로 검증한다).
+///
+/// **숫자는 전부 응답의 단계 표에서 온다**(20/40/60 · 20/50/200 을 여기 적지 않는다) — 서버 상수를 바꾸는 날 이 줄만
+/// 옛 숫자를 약속하면 안 된다. 문장의 주어는 3시간 줄과 같다: 완료가 아니라 **다음 하나까지**.
+enum WeeklyWorkCopy {
+    static let title = "이번 주 근무"
+    static let icon = "calendar.badge.clock"   // macOS 13+ (배포 타깃 14 ✓)
+
+    /// 줄 아래 보조 문장.
+    ///  · 다 받았으면 — "이번 주 보상 다 받았어요 💎 +270"(합은 표에서).
+    ///  · 다음 단계 문턱을 넘었는데 장부엔 아직 없으면 — "40시간 채웠어요 · 곧 💎 +50". cron 이 1분 안에 넣는다.
+    ///    여기서 "40시간 되면"이라고 말하면 이미 넘긴 사람에게 아직 멀었다고 말하는 것이 된다.
+    ///  · 그 밖 — "23시간 12분 · 40시간 되면 💎 +50".
+    static func detail(_ status: WeeklyWorkStatus) -> String {
+        if status.isComplete { return "이번 주 보상 다 받았어요 💎 +\(status.totalRuby)" }
+        guard let next = status.nextUnclaimedTier else { return MissionProgress.hoursText(status.displayWorkedSeconds) }
+        if status.isNextTierReached { return "\(next.hours)시간 채웠어요 · 곧 💎 +\(next.ruby)" }
+        return "\(MissionProgress.hoursText(status.displayWorkedSeconds)) · \(next.hours)시간 되면 💎 +\(next.ruby)"
+    }
+
+    /// 줄의 말풍선 툴팁 — 규칙 한 줄. "월요일 0시에 새로 세요 · 20시간 20 · 40시간 50 · 60시간 200".
+    static func rule(_ status: WeeklyWorkStatus) -> String {
+        (["월요일 0시에 새로 세요"] + status.tiers.map { "\($0.hours)시간 \($0.ruby)" }).joined(separator: " · ")
+    }
+
+    /// 단계 표시(작은 칩) 글자 — 시간만("20").
+    static func tierMark(_ tier: WeeklyWorkStatus.Tier) -> String { "\(tier.hours)" }
+
+    /// 새로 받은 단계의 안내줄(`missionNotice`). 3시간 줄의 "3시간 채웠어요 — 루비 +3" 과 같은 모양이다.
+    /// 여러 단계가 한꺼번에 들어오면(앱을 오래 꺼 뒀다 켠 날) **가장 높은 단계 + 합계**로 한 줄에 말한다.
+    /// 이번 주 몫이 하나라도 있으면 "이번 주", 지난주 소급분뿐이면 "지난주". 빈 목록이면 nil(줄을 안 띄운다).
+    static func grantNotice(_ grants: [WeeklyWorkStatus.Grant]) -> String? {
+        guard !grants.isEmpty else { return nil }
+        let total = grants.reduce(0) { $0 + $1.ruby }
+        let thisWeek = grants.filter { $0.weekStart == nil }
+        let shown = thisWeek.isEmpty ? grants : thisWeek
+        let hours = shown.map(\.hours).max() ?? 0
+        return "\(thisWeek.isEmpty ? "지난주" : "이번 주") \(hours)시간 채웠어요 — 루비 +\(total)"
+    }
+}
+
 enum UltraPanelCopy {
     static let title = "울트라"
     /// 잔량을 모를 때 그리는 글자. **0 으로 접지 않는다** — 0 이라고 말하면 그건 만들어 낸 사실이다.
@@ -4573,6 +4615,9 @@ private struct UltraPanel: View {
     /// 서버가 말해 준 무제한(관리자). 기본값 false — 안 넘기면 지금과 완전히 같다.
     var isUnlimited: Bool = false
     let missions: [MissionProgress]
+    /// 이번 주 누적 근무 보상(v0.3.55). nil 이거나 줄을 그릴 만큼 모르면(`isUsable`) 줄을 **안 그린다** — 함수가 없는
+    /// 옛 서버 · 첫 조회 전. 3시간 줄 **바로 아래**에 선다(둘 다 근무로 받는 루비다).
+    var weeklyWork: WeeklyWorkStatus? = nil
     /// 미션을 한 번이라도 성공적으로 받았는가(빈 목록과 로드 전을 가른다 — 토큰 보드와 같은 규약).
     let hasLoaded: Bool
     var hasFailed: Bool = false
@@ -4677,10 +4722,17 @@ private struct UltraPanel: View {
         )
     }
 
+    /// 그릴 주간 줄(그릴 만큼 알 때만).
+    private var weeklyRow: WeeklyWorkStatus? {
+        weeklyWork.flatMap { $0.isUsable ? $0 : nil }
+    }
+
     @ViewBuilder
     private var missionList: some View {
         let capHeight = Self.listContentHeight(rowCount: visibleRows)
-        let contentHeight = Self.listContentHeight(rowCount: max(1, missions.count))
+        // 주간 줄도 한 줄이다 — 빼고 세면 스크롤로 넘어가야 할 높이를 그대로 펼쳐 창이 자란다.
+        let rowCount = (missions.isEmpty ? 1 : missions.count) + (weeklyRow == nil ? 0 : 1)
+        let contentHeight = Self.listContentHeight(rowCount: rowCount)
         let rows = VStack(spacing: Self.rowSpacing) {
             if missions.isEmpty {
                 Text(hasLoaded ? UltraPanelCopy.emptyMissions
@@ -4688,8 +4740,11 @@ private struct UltraPanel: View {
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+                if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }
             } else {
-                ForEach(missions) { MissionRowView(mission: $0) }
+                ForEach(missions.prefix(1)) { MissionRowView(mission: $0) }
+                if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }
+                ForEach(missions.dropFirst()) { MissionRowView(mission: $0) }
             }
         }
         if contentHeight <= capHeight {
@@ -4794,6 +4849,75 @@ private struct MissionRowView: View {
                 .padding(.vertical, 2)
                 .background(Capsule().fill(CheckTheme.accent.opacity(0.16)))
         }
+    }
+}
+
+/// 주간 누적 근무 보상 줄(v0.3.55). 3시간 줄(`MissionRowView`)과 **같은 뼈대**(아이콘 · 제목 + 오른쪽 칩 · 진행 바 · 보조 문장 ·
+/// 같은 높이)이고, 오른쪽 칩 자리에 보상 칩 하나 대신 **단계 표시 셋**(20 · 40 · 60)이 선다 — 받은 단계는 근무색 + 체크,
+/// 다음 단계는 강조색, 그 뒤는 흐리게. 진행 바는 **다음 안 받은 단계까지**의 누적이다(`progressToNextTier`).
+/// 규칙 한 줄은 말풍선 툴팁으로 둔다(줄 높이를 늘리지 않는다 — 팝오버 높이 예산).
+private struct WeeklyWorkRowView: View {
+    let status: WeeklyWorkStatus
+
+    var body: some View {
+        let progress = status.progressToNextTier
+        let next = status.nextUnclaimedTier
+        HStack(spacing: 10) {
+            Image(systemName: WeeklyWorkCopy.icon)
+                .font(.system(size: 13, weight: .semibold))
+                // 한 단계라도 받았으면 근무색 — 3시간 줄이 랩 수로 아이콘을 물들이는 것과 같은 규약.
+                .foregroundStyle(status.tiers.contains(where: \.claimed) ? CheckTheme.working : CheckTheme.accent)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(WeeklyWorkCopy.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    HStack(spacing: 3) {
+                        ForEach(status.tiers, id: \.hours) { tier in
+                            tierMark(tier, isNext: tier.hours == next?.hours)
+                        }
+                    }
+                }
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(CheckTheme.trackFill)
+                        Capsule()
+                            .fill(progress >= 1 ? CheckTheme.working : CheckTheme.accent)
+                            .frame(width: max(0, proxy.size.width * min(1, max(0, progress))))
+                    }
+                }
+                .frame(height: 4)      // MissionRowView 와 같은 관용구
+                Text(WeeklyWorkCopy.detail(status))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: UltraPanel.rowHeight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.fieldFill))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+        .checkTooltip(WeeklyWorkCopy.rule(status))
+    }
+
+    private func tierMark(_ tier: WeeklyWorkStatus.Tier, isNext: Bool) -> some View {
+        let tint: Color = tier.claimed ? CheckTheme.working : (isNext ? CheckTheme.accent : CheckTheme.secondaryText)
+        return HStack(spacing: 2) {
+            if tier.claimed {
+                Image(systemName: "checkmark").font(.system(size: 7, weight: .bold))
+            }
+            Text(WeeklyWorkCopy.tierMark(tier))
+                .font(.caption2.weight(.bold))
+                .monospacedDigit()
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1)
+        .background(Capsule().fill(tier.claimed || isNext ? tint.opacity(0.16) : CheckTheme.trackFill))
     }
 }
 

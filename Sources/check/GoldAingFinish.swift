@@ -21,7 +21,9 @@ import simd
 //   자세 0° · ±40° 둘레 ±9° 는 그 자세의 칸이라 idle 살랑 ±8° 동안 칸이 안 바뀐다) 몸 자리에 두고 나머지는
 //   카메라 뒤로 치운다(절두체 컬링으로 그리지도 않는다 — 판 36개 실측 +0.015ms/프레임). 롤(찔림의 z 흔들림)은 그 판을 화면 안에서 같이
 //   기울인다. 재질·텍스처는 만들 때 한 번 정하고 다시는 안 건드린다 — 제약은 SceneKit 렌더 스레드에서 돌기 때문에 거기서 하는 일은
-//   **받은 변환과 부모의 presentation 을 읽어 변환 하나를 돌려주는 것뿐**이다(공유 상태 · 할당 · 텍스처 재업로드 없음).
+//   **받은 변환과 부모의 presentation 을 읽어 변환 하나를 돌려주는 것뿐**이다(공유 상태 · 할당 · 텍스처 재업로드 없음 — 할당은
+//   `V0355GoldHaloYawTests` 가 렌더 프레임마다 세어 후광 없는 씬과 맞댄다. SCNMatrix4 → simd 는 `simdMatrix` 로 손수 옮긴다: SceneKit
+//   오버레이 이니셜라이저는 부를 때마다 할당해 판 36개면 프레임당 +36 이었다).
 //
 // ★ 마스크는 `isGoldSkin`(아트 스크립트 · 시안의 피부 분류)이다 — `SleepEyeTexture.isSkin` 이 **아니다**(아키텍트 결정 2026-10-15).
 //   isSkin 은 루마 > 120 · b > g+18 이라 이보다 좁아서, 그 마스크로 합성하면 날개 이음매·정수리 하이라이트 605 텍셀이 라벤더로 남는다
@@ -470,7 +472,7 @@ enum GoldAingFinish {
         // 블록은 칸 번호(Int)만 잡는다 — 노드를 잡으면 노드 → 제약 → 블록 → 노드 고리가 생긴다.
         let select = SCNTransformConstraint(inWorldSpace: true) { evaluated, transform in
             guard let anchor = evaluated.parent?.presentation.simdWorldTransform else { return transform }
-            return SCNMatrix4(haloCellTransform(billboard: simd_float4x4(transform), anchor: anchor, cell: cell))
+            return SCNMatrix4(haloCellTransform(billboard: simdMatrix(transform), anchor: anchor, cell: cell))
         }
         node.constraints = [SCNBillboardConstraint(), select]
         return node
@@ -546,6 +548,16 @@ enum GoldAingFinish {
         var position = SIMD3(anchor.columns.3.x, anchor.columns.3.y, anchor.columns.3.z)
         if haloCell(yaw: Double(pose.yaw)) != cell { position += toward * haloHiddenDistance }
         return simd_float4x4(SIMD4(rolledRight * scale.x, 0), SIMD4(rolledUp * scale.y, 0), SIMD4(toward * scale.z, 0), SIMD4(position, 1))
+    }
+
+    /// SCNMatrix4 → simd_float4x4 를 칸마다 손으로 옮긴다(행 i = 열 i — SceneKit 의 m41…m43 이 위치다). SceneKit 오버레이의
+    /// `simd_float4x4(_: SCNMatrix4)` 는 부를 때마다 힙 할당을 하나 한다(실측: 칸 판 36개 → 프레임당 +36, 디버그 · -O 같다) —
+    /// 렌더 스레드에서 프레임마다 판마다 도는 제약이라 그 이니셜라이저를 쓰지 않는다. 반대 방향 `SCNMatrix4(_: simd_float4x4)` 는 할당이 없다.
+    static func simdMatrix(_ m: SCNMatrix4) -> simd_float4x4 {
+        simd_float4x4(SIMD4(Float(m.m11), Float(m.m12), Float(m.m13), Float(m.m14)),
+                      SIMD4(Float(m.m21), Float(m.m22), Float(m.m23), Float(m.m24)),
+                      SIMD4(Float(m.m31), Float(m.m32), Float(m.m33), Float(m.m34)),
+                      SIMD4(Float(m.m41), Float(m.m42), Float(m.m43), Float(m.m44)))
     }
 
     private static func axis(_ column: SIMD4<Float>) -> SIMD3<Float> {

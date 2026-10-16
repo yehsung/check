@@ -282,6 +282,83 @@ import Testing
         }
     }
 
+    /// 메인 스레드 힙 할당 세기(`malloc_logger` — libmalloc 이 할당마다 부르는 전역 갈고리). 테스트는 메인 액터에서 동기로 렌더하므로
+    /// 그동안 메인 스레드에서 일어난 할당은 전부 그 렌더(SceneKit · 제약 블록)의 것이다. 다른 스레드의 할당은 세지 않는다.
+    enum MainThreadMallocs {
+        typealias Logger = @convention(c) (UInt32, UInt, UInt, UInt, UInt, UInt32) -> Void
+        nonisolated(unsafe) static let count = UnsafeMutablePointer<Int>.allocate(capacity: 1)
+        static func measure(_ body: () throws -> Void) throws -> Int {
+            let symbol = try #require(dlsym(UnsafeMutableRawPointer(bitPattern: -2), "malloc_logger"), "malloc_logger 가 없다")
+            let slot = symbol.assumingMemoryBound(to: Optional<Logger>.self)
+            count.pointee = 0
+            // type 비트 2 = 할당(MALLOC_LOG_TYPE_ALLOCATE). 메인 스레드에서만 센다(그 스레드에서만 쓰므로 원자 연산이 필요 없다).
+            slot.pointee = { type, _, _, _, _, _ in if type & 2 != 0, pthread_main_np() != 0 { MainThreadMallocs.count.pointee += 1 } }
+            defer { slot.pointee = nil }
+            try body()
+            return count.pointee
+        }
+    }
+
+    @Test("렌더 프레임마다 후광 고르기가 힙 할당을 더하지 않는다 — 금 씬과 후광을 뗀 같은 씬의 프레임당 할당이 같다")
+    func selectionDoesNotAllocatePerFrame() throws {
+        // 손으로 옮긴 SCNMatrix4 → simd 가 SceneKit 이니셜라이저와 같은 값이다(위치 · 회전 · 비균일 크기 · 원근 칸까지).
+        let node = SCNNode()
+        node.simdPosition = SIMD3(0.3, -1.2, 4)
+        node.simdOrientation = simd_quatf(angle: 0.7, axis: simd_normalize(SIMD3(0.2, 1, -0.4)))
+        node.simdScale = SIMD3(1.16, 0.8, 1.02)
+        var odd = node.transform
+        odd.m14 = 0.25; odd.m34 = -0.5
+        for m in [node.transform, odd] { #expect(GoldAingFinish.simdMatrix(m) == simd_float4x4(m)) }
+        // 앱의 SCNView 와 같은 경로(render(atTime:viewport:commandBuffer:passDescriptor:)) · 280×340 · 메인 스레드에서 동기.
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let queue = try #require(device.makeCommandQueue())
+        func target(_ format: MTLPixelFormat) throws -> MTLTexture {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format, width: 280, height: 340, mipmapped: false)
+            descriptor.usage = [.renderTarget]
+            descriptor.storageMode = .private
+            return try #require(device.makeTexture(descriptor: descriptor))
+        }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = try target(.bgra8Unorm)
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .store
+        pass.depthAttachment.texture = try target(.depth32Float)
+        pass.depthAttachment.loadAction = .clear
+        pass.depthAttachment.storeAction = .dontCare
+        let frames = 200
+        func allocationsPerFrame(halo: Bool) throws -> Double {
+            let scene = try Self.scene()
+            try Self.facing(scene).eulerAngles = SCNVector3(0, Self.degrees(40), 0)   // 칸 하나 고르고 35개 치우는 자세
+            if !halo { try Self.halo(scene).removeFromParentNode() }
+            let renderer = SCNRenderer(device: device, options: nil)
+            renderer.scene = scene
+            renderer.autoenablesDefaultLighting = false
+            renderer.pointOfView = V0354GoldAing3DTests.cameraNode(scene)
+            SCNTransaction.flush()
+            var time = 0.0
+            func frame() {
+                autoreleasepool {
+                    guard let buffer = queue.makeCommandBuffer() else { return }
+                    renderer.render(atTime: time, viewport: CGRect(x: 0, y: 0, width: 280, height: 340), commandBuffer: buffer, passDescriptor: pass)
+                    buffer.commit()
+                    buffer.waitUntilCompleted()
+                }
+                time += 1.0 / 30
+            }
+            for _ in 0..<30 { frame() }   // 텍스처 올리기 · 파이프라인 준비가 끝나게
+            var best = Int.max
+            for _ in 0..<3 {   // 세 번 재서 가장 적은 것(드문 잡음 — 캐시 늘리기 같은 것 — 을 걷는다)
+                best = min(best, try MainThreadMallocs.measure { for _ in 0..<frames { frame() } })
+            }
+            if halo { #expect(try Self.visibleCells(scene) == [4], "전제: 40° 에서 40° 칸 하나만 서야 한다") }
+            return Double(best) / Double(frames)
+        }
+        let gold = try allocationsPerFrame(halo: true)
+        let bare = try allocationsPerFrame(halo: false)
+        print(String(format: "[v0355-alloc] 프레임당 메인 스레드 할당: 금(후광 칸 36) %.2f · 후광 뗀 같은 씬 %.2f · 차 %.2f", gold, bare, gold - bare))
+        #expect(gold - bare < 1, "후광 고르기가 프레임마다 \(gold - bare) 번 할당한다(금 \(gold) · 후광 없음 \(bare))")
+    }
+
     // MARK: ③ 결과 — 후광이 몸을 감싼다
 
     @Test("결과: 앱 카메라 방향에서 40° · 90° · 찔림 중간(롤)에도 후광이 몸을 0° 와 같은 폭으로 감싼다 — 옛 정면 한 장은 빨갛다(기준선)")

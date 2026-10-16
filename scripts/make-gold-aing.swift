@@ -59,7 +59,8 @@
 //    근거: 시안 카메라(FOV 30, 거리 = H/2/tan15° × 2.0)에서 512px 프레임은 몸 중심 깊이에서 정확히 2.0H 를 덮고, 후광 PNG 의 중심은
 //    바운딩박스 중심의 투영이다. --verify 가 이 판을 실제로 그려 시안과 맞댄다.
 //    v0.3.55: 각도 칸마다 같은 판을 하나씩(36장) 세우고, 렌더 프레임마다 몸의 **지금 자세**(presentation)에서 카메라 기준 요를 구해
-//    가장 가까운 칸 하나만 보이게 한다(GoldAingFinish). 각도 칸의 판 크기·자리·재질은 0° 와 같다 — 텍스처 해상도만 다르다.
+//    칸 하나만 보이게 한다(GoldAingFinish — 가장 가까운 칸, 단 쉬는 자세 0° · ±40° 둘레 ±9.02° 는 그 자세의 칸: 아래 `haloCell`).
+//    각도 칸의 판 크기·자리·재질은 0° 와 같다 — 텍스처 해상도만 다르다.
 //
 // ── 후광 각도 칸(v0.3.55) ──────────────────────────────────────────────────────────────────────────────────────────
 // 칸 ψ 의 실루엣 = 시안 카메라를 몸 중심 둘레로 −ψ 돌린 512 렌더(`View.bodyYaw`). 0° 는 `.front` 와 바이트까지 같은 렌더다(실측) —
@@ -67,7 +68,12 @@
 // 간격 10°: 1° 마다 구운 실루엣을 '가장 가까운 칸'과 맞대 윤곽 하우스도르프 거리를 쟀다(512 렌더 · 앱 구도 280×340 에서 판 한 변
 //   ≈ 348px 라 512px 의 1px = 앱 0.68px). 5° 칸 최악 4.0px(앱 2.7) · **10° 칸 9.2px(앱 6.3, ψ=55° 날개가 돌아 나오는 자리)** ·
 //   15° 13.0px(앱 8.8) · 20° 18.0px(앱 12.2). 옛 정면 한 장은 40° 에서 40.8px(앱 27.7) · 90° 에서 44.0px(앱 29.9). 10° 는 옛 오차의
-//   1/5 이고 칸 수(36)와 메모리가 감당할 만하다. 이웃 칸이 바뀌는 순간의 튐은 0°↔10° 6.0px(앱 4.1 — 평소 살랑 ±8° 가 넘는 경계).
+//   1/5 이고 칸 수(36)와 메모리가 감당할 만하다. 이웃 칸이 바뀌는 순간의 튐은 0°↔10° 6.0px(앱 4.1) — 평소 살랑 ±8° 가 ±5° 경계를
+//   넘나들어 확정 정면 후광이 3.6초마다 10° 칸과 뒤바뀌었다(검토 지적). 그래서 쉬는 자세(0° · 드래그/보드 ±40°) 둘레 ±9.02° 는 그
+//   자세의 칸으로 묶는다. 경계를 어디 두나: 1/2° 마다 그 각도의 512 후광을 구워 160² 로 줄이고 이웃 두 칸과 알파 L1 을 재면 36개 경계
+//   전부가 ±2.8° 안에서 중간점과 갈린다(140→150° 는 144.96°) — 반올림이 곧 '모양이 가장 가까운 칸'이다. 띠 끝 9.02° 에서 정면 칸의
+//   L1 은 0.0041 로 반올림 규칙의 최악(145° 0.0044)보다 작다. ±40° 는 살랑 끝(32° · 48° / 312° · 328°)에서 0.0063 · 0.0045 /
+//   0.0042 · 0.0064 — 날개가 돌아 나오는 쪽이라 더 크지만, 칸이 3.6초마다 30°↔40°↔50° 로 튀는 것보다 낫다고 봤다.
 // 360° 전부: 좌우 대칭이 아니다 — +θ 와 거울(−θ)의 실루엣 IoU 는 0.987 이상이지만 날개 끝이 한쪽이 더 처져(정면에서 약 6px) 윤곽
 //   하우스도르프가 최악 8.9px(앱 6.1, θ=130°) — 10° 양자화 오차와 같은 크기다. 거울로 반을 아끼면 그 오차가 한쪽에만 더해진다.
 // 160²: 같은 후광을 512 와 각 해상도로 판에 붙여 앱 구도에서 맞대면(밝은·어두운 바탕) 256² 최대 7 · 평균 0.45, 192² 8 · 0.56,
@@ -121,10 +127,20 @@ let haloCellSize = 160
 func haloCellOutput(_ cell: Int) -> String {
     cell == 0 ? haloOutput : "\(resourceDir)/aing_gold-halo-\(String(format: "%03d", cell * haloYawStep)).png"
 }
-/// 몸 요(도) → 가장 가까운 칸(앱 `GoldAingFinish.haloCell(yaw:)` 와 같은 규칙: 반올림 · 360° 감기).
+/// 몸 요(도) → 칸(앱 `GoldAingFinish.haloCell(yaw:)` 와 같은 규칙: 360° 감기 · 가장 가까운 칸 반올림, 단 쉬는 자세 0° · ±40° 둘레
+/// ±9.02°(idle 살랑 8.02° + 1°)는 그 자세의 칸). 상수는 앱 `GoldAingFinish.haloRestBandDegrees` · `haloSideRestDegrees` 를 옮겨 적은 것.
+let haloRestBandDegrees = 0.14 * 180 / Double.pi + 1
+let haloSideRestDegrees = 40.0
 func haloCell(yawDegrees: Double) -> Int {
-    let k = Int((yawDegrees / Double(haloYawStep)).rounded()) % haloCellCount
-    return k < 0 ? k + haloCellCount : k
+    func nearest(_ degrees: Double) -> Int {
+        let k = Int((degrees / Double(haloYawStep)).rounded()) % haloCellCount
+        return k < 0 ? k + haloCellCount : k
+    }
+    let d = remainder(yawDegrees, 360)
+    if abs(d) <= haloRestBandDegrees { return 0 }
+    if abs(d - haloSideRestDegrees) <= haloRestBandDegrees { return nearest(haloSideRestDegrees) }
+    if abs(d + haloSideRestDegrees) <= haloRestBandDegrees { return nearest(-haloSideRestDegrees) }
+    return nearest(d)
 }
 
 let skinSize = 512

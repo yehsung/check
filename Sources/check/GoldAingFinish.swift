@@ -17,7 +17,8 @@ import simd
 // ★ 후광은 몸의 **지금 각도**를 따른다(v0.3.55). 정면 한 장만 세우면 몸이 옆으로 돌아도(드래그 ±40° · 살랑 ±8° · 찔림 스핀 ·
 //   360°/720° 스핀) 빌보드라 정면 날개 윤곽이 그대로 남아, 달걀 모양 옆모습 뒤에 날개 모양 빛이 떴다(사용자 신고 2026-10-16).
 //   그래서 몸 요 10° 마다 그 자세의 실루엣으로 구운 칸 36장(`GoldAingArt.haloCellResourceNames`)을 판 36개로 세우고, 렌더 프레임마다
-//   제약(`haloCellTransform`)이 몸의 presentation 변환에서 카메라 기준 요·롤을 구해 **가장 가까운 칸 하나만** 몸 자리에 두고 나머지는
+//   제약(`haloCellTransform`)이 몸의 presentation 변환에서 카메라 기준 요·롤을 구해 **칸 하나만**(`haloCell` — 가장 가까운 칸, 단 쉬는
+//   자세 0° · ±40° 둘레 ±9° 는 그 자세의 칸이라 idle 살랑 ±8° 동안 칸이 안 바뀐다) 몸 자리에 두고 나머지는
 //   카메라 뒤로 치운다(절두체 컬링으로 그리지도 않는다 — 판 36개 실측 +0.015ms/프레임). 롤(찔림의 z 흔들림)은 그 판을 화면 안에서 같이
 //   기울인다. 재질·텍스처는 만들 때 한 번 정하고 다시는 안 건드린다 — 제약은 SceneKit 렌더 스레드에서 돌기 때문에 거기서 하는 일은
 //   **받은 변환과 부모의 presentation 을 읽어 변환 하나를 돌려주는 것뿐**이다(공유 상태 · 할당 · 텍스처 재업로드 없음).
@@ -506,12 +507,30 @@ enum GoldAingFinish {
         return HaloPose(yaw: atan2(level.x, level.z), roll: roll, tilt: tilt)
     }
 
-    /// 몸 요(라디안, 아무 값 — 여러 바퀴 · 음수) → 가장 가까운 칸(0…35). 칸 경계(±5°)는 반올림, 360° 로 감는다.
+    /// 몸 요(라디안, 아무 값 — 여러 바퀴 · 음수) → 칸(0…35). 360° 로 감고, 기본은 가장 가까운 칸(경계 ±5° 반올림)이다.
+    /// 단 **쉬는 자세**(정면 0° · 드래그/보드 바라보기 ±40°) 둘레 ±`haloRestBandDegrees` 안은 그 자세의 칸이다 — 살랑(±8.02°)이
+    /// 칸 경계(±5° · 35° · 45°)를 넘나들어, 가만히 선 몸 뒤에서 확정 정면 후광이 3.6초마다 10° 칸과 뒤바뀌며 윤곽이 튀었다(검토 지적).
+    /// 띠 끝(9.02°)의 윤곽 오차는 정면 칸 기준 L1 0.0041 — 가장 가까운 칸 규칙의 최악(145° 0.0044)보다 작다(아트 파이프라인 실측).
     static func haloCell(yaw: Double) -> Int {
-        let count = GoldAingArt.haloCellCount
-        let step = Double(GoldAingArt.haloYawStepDegrees) * .pi / 180
         guard yaw.isFinite else { return 0 }
-        let k = Int((yaw / step).rounded()) % count
+        let degrees = remainder(yaw * 180 / .pi, 360)   // (−180, 180]
+        let band = haloRestBandDegrees, side = haloSideRestDegrees
+        if abs(degrees) <= band { return 0 }
+        if abs(degrees - side) <= band { return nearestHaloCell(degrees: side) }
+        if abs(degrees + side) <= band { return nearestHaloCell(degrees: -side) }
+        return nearestHaloCell(degrees: degrees)
+    }
+
+    /// 쉬는 자세 띠의 반폭(도) = idle 살랑 한쪽 폭(`CheckCharacter3DScene.idleSwayRadians`, 8.02°) + 1°.
+    static let haloRestBandDegrees: Double = Double(CheckCharacter3DScene.idleSwayRadians) * 180 / .pi + 1
+    /// 옆으로 쉬는 자세(도) — 드래그 방향·보드 쪽 바라보기 스냅 각(`ReactionEngine.dragFacingAngle`, 테스트가 같은 값으로 묶는다).
+    /// 칸 중심(10° 배수)이어야 그 자세에서 오차 0 이다.
+    static let haloSideRestDegrees: Double = 40
+
+    /// 도(아무 값) → 가장 가까운 칸. 반올림 · 360° 감기.
+    private static func nearestHaloCell(degrees: Double) -> Int {
+        let count = GoldAingArt.haloCellCount
+        let k = Int((degrees / Double(GoldAingArt.haloYawStepDegrees)).rounded()) % count
         return k < 0 ? k + count : k
     }
 

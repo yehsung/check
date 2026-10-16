@@ -133,11 +133,18 @@ import Testing
 
     // MARK: ① 칸 고르기(순수)
 
-    @Test("요 → 칸: 0 · ±40° · ±90° · ±180° · 370° · 720°+40° · 경계 ±5° · 음수는 거울이 아니라 반대쪽 칸 · 이름 36장")
+    @Test("요 → 칸: 0 · ±40° · ±90° · ±180° · 370° · 720°+40° · 경계 ±5° 반올림 · 쉬는 자세(0° · ±40°) 둘레 ±9.02° 띠 · 음수는 반대쪽 칸 · 이름 36장")
     func yawMapsToNearestCell() {
         let cases: [(Double, Int)] = [
             (0, 0), (40, 4), (-40, 32), (90, 9), (-90, 27), (180, 18), (-180, 18),
-            (370, 1), (720 + 40, 4), (-720 - 40, 32), (4.99, 0), (5.01, 1), (-4.99, 0), (-5.01, 35), (355.01, 0), (354.99, 35)
+            (370, 1), (720 + 40, 4), (-720 - 40, 32),
+            // 쉬는 자세 띠: 정면 ±9.02° 는 0 칸(옛 반올림이면 5.01° 부터 10° 칸), 그 밖은 반올림.
+            (5.01, 0), (8.5, 0), (-8.5, 0), (9.0, 0), (9.1, 1), (-9.1, 35), (14.99, 1), (15.01, 2), (355.01, 0), (351.0, 0), (350.8, 35),
+            // ±40° 띠: 30.98…49.02° 는 40° 칸(−40° 도 같다).
+            (30.9, 3), (31.1, 4), (34.9, 4), (45.1, 4), (48.9, 4), (49.1, 5), (54.99, 5), (55.01, 6),
+            (-30.9, 33), (-31.1, 32), (-48.9, 32), (-49.1, 31),
+            // 쉬는 자세와 먼 곳은 그대로 반올림.
+            (64.99, 6), (65.01, 7), (144.99, 14), (145.01, 15), (-145.01, 21), (184.99, 18), (185.01, 19)
         ]
         for (deg, cell) in cases {
             #expect(GoldAingFinish.haloCell(yaw: Self.degrees(deg)) == cell, "\(deg)° → \(GoldAingFinish.haloCell(yaw: Self.degrees(deg))) (기대 \(cell))")
@@ -243,6 +250,36 @@ import Testing
         }
         #expect(try Self.facing(animScene).eulerAngles.y == 0, "전제: CAAnimation 은 모델 값을 안 바꾼다")
         #expect(animSeen == [0, 9, 16], "CAAnimation 스핀 중 칸 \(animSeen) — presentation 을 안 읽는다")
+    }
+
+    @Test("쉬는 자세: 실제 idle 애니메이션(살랑 ±8.02°) 한 주기 내내 칸이 안 바뀐다 — 정면은 0° 칸, 드래그/보드 바라보기 ±40° 는 그 칸")
+    func idleSwayKeepsTheRestCell() throws {
+        // 띠가 살랑을 덮고, 옆 쉬는 자세가 앱의 드래그 바라보기 각과 같고, 그 각이 칸 중심이다.
+        let swayDegrees = Double(CheckCharacter3DScene.idleSwayRadians) * 180 / .pi
+        #expect(GoldAingFinish.haloRestBandDegrees > swayDegrees + 0.5 && GoldAingFinish.haloRestBandDegrees <= 10,
+                "띠 \(GoldAingFinish.haloRestBandDegrees)° 가 살랑 \(swayDegrees)° 를 넉넉히 덮지 못하거나 너무 넓다")
+        #expect(abs(Double(ReactionEngine.dragFacingAngle) - Self.degrees(GoldAingFinish.haloSideRestDegrees)) < 1e-9,
+                "옆 쉬는 자세 \(GoldAingFinish.haloSideRestDegrees)° 가 드래그 바라보기 각과 다르다")
+        #expect(GoldAingFinish.haloSideRestDegrees.truncatingRemainder(dividingBy: Double(GoldAingArt.haloYawStepDegrees)) == 0)
+        // 실제 씬(animated: true — 살랑 3.6 + 7.2 + 3.6 초 · 부유)을 앱 카메라로 0.1초마다 한 주기(14.4초) 그린다.
+        for (facingDegrees, expected) in [(0.0, 0), (40.0, 4), (-40.0, 32)] {
+            let scene = try #require(CheckCharacter3DScene.makeScene(animated: true, character: Self.gold))
+            try Self.facing(scene).eulerAngles = SCNVector3(0, Self.degrees(facingDegrees), 0)   // applyDragFacingToNode 와 같은 노드 · 같은 값
+            let camera = try #require(V0354GoldAing3DTests.cameraNode(scene))
+            let shooter = try Shooter(scene, pointOfView: camera)
+            var seen = Set<Int>()
+            var widest = 0.0
+            for frame in 0...144 {
+                _ = try shooter.shot(at: Double(frame) * 0.1, size: CGSize(width: 16, height: 16))
+                seen.formUnion(try Self.visibleCells(scene))
+                let pose = GoldAingFinish.haloPose(camera: camera.presentation.simdWorldTransform,
+                                                   body: try Self.halo(scene).presentation.simdWorldTransform)
+                widest = max(widest, abs(Double(pose.yaw) * 180 / .pi - facingDegrees))
+            }
+            #expect(widest > 7.5 && widest < GoldAingFinish.haloRestBandDegrees,
+                    "전제: 살랑이 ±5° 칸 경계를 넘고 띠 안에 있어야 한다(쉬는 자세 \(facingDegrees)° 에서 최대 \(widest)°)")
+            #expect(seen == [expected], "쉬는 자세 \(facingDegrees)° 의 idle 한 주기에 칸 \(seen.sorted()) — \(expected) 하나여야 한다")
+        }
     }
 
     // MARK: ③ 결과 — 후광이 몸을 감싼다

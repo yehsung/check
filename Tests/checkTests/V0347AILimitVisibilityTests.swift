@@ -116,7 +116,11 @@ private final class VVReaderProbe: Sendable {
     var processRunner: AILimitCommandRunner {
         { [self] command in
             let name = command.executable.lastPathComponent
-            state.withLock { $0.commands.append(name) }
+            // 0.3.57: agy 는 `sandbox-exec -p <프로필> <agy> …` 로만 뜬다 — 감싼 프로그램 이름도 함께 적어야
+            // "agy 를 띄웠나"가 감싸기와 무관하게 같은 뜻을 갖는다(안 적으면 아래 ③의 전제가 빨개지고 ②가 공허해진다).
+            let wrapped = name == "sandbox-exec" && command.arguments.count >= 3 && command.arguments[0] == "-p"
+                ? [URL(fileURLWithPath: command.arguments[2]).lastPathComponent] : []
+            state.withLock { $0.commands.append(contentsOf: [name] + wrapped) }
             // 빈 stdout = 실패. 파싱까지 가지 않는다(이 스위트가 재는 것은 "불렸나" 하나다).
             return AILimitCommandOutput(status: 1, stdout: Data())
         }

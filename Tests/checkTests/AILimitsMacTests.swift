@@ -130,7 +130,7 @@ private func amAntigravityCLIJSON(
 
 /// 명령별 canned 결과 + **호출 기록**을 남기는 가짜 프로세스 실행기.
 private final class AMFakeProcess: @unchecked Sendable {
-    /// 실행 파일 경로 접미사 → 결과.
+    /// **실제로 돌 프로그램**의 경로 접미사 → 결과(`program(of:)` — `sandbox-exec` 로 감싼 명령은 감싼 쪽).
     var outcomes: [String: AILimitCommandOutput] = [:]
     private let recorded = OSAllocatedUnfairLock(initialState: [AILimitCommand]())
 
@@ -141,12 +141,24 @@ private final class AMFakeProcess: @unchecked Sendable {
     var runner: AILimitCommandRunner {
         { [self] command in
             recorded.withLock { $0.append(command) }
-            return outcomes.first { command.executable.path.hasSuffix($0.key) }?.value ?? .notRun
+            let program = Self.program(of: command)
+            return outcomes.first { program.hasSuffix($0.key) }?.value ?? .notRun
         }
     }
 
+    /// 이 명령이 결국 돌리는 프로그램. `sandbox-exec -p <프로필> <프로그램> …` 이면 **감싼 프로그램**이다 —
+    /// 0.3.57 부터 agy 는 언제나 그렇게 뜨므로, 접미사 `"agy"` 로 결과를 고르는 테스트가 감싸기와 무관하게 같은 뜻을 갖는다.
+    /// (감싸였는가 자체는 `AILimitsMacAgySandboxTests` 가 실행 파일·인자로 따로 잰다.)
+    static func program(of command: AILimitCommand) -> String {
+        let arguments = command.arguments
+        if command.executable.path == "/usr/bin/sandbox-exec", arguments.count >= 3, arguments[0] == "-p" {
+            return arguments[2]
+        }
+        return command.executable.path
+    }
+
     func count(suffix: String) -> Int {
-        commands.filter { $0.executable.path.hasSuffix(suffix) }.count
+        commands.filter { Self.program(of: $0).hasSuffix(suffix) }.count
     }
 }
 
@@ -586,9 +598,12 @@ struct AILimitsMacReaderTests {
         )
         _ = await reader.read(now: amNow)
         let command = try #require(process.commands.first)
-        #expect(command.arguments.prefix(4) == ["-p", "/usage", "--output-format", "json"])
-        #expect(command.arguments.contains("--log-file"), "로그를 돌리지 않으면 사용자 홈에 쌓인다")
-        #expect(command.arguments.last?.hasPrefix(scratch.path) == true, "로그가 임시 폴더 밖으로 나간다")
+        // 0.3.57: agy 는 `sandbox-exec -p <프로필> <agy>` 뒤에 붙는다(감싸기 자체는 `AILimitsMacAgySandboxTests`).
+        // 여기서 재는 것은 그 뒤의 **agy 인자**다.
+        let agyArguments = Array(command.arguments.dropFirst(3))
+        #expect(agyArguments.prefix(4) == ["-p", "/usage", "--output-format", "json"])
+        #expect(agyArguments.contains("--log-file"), "로그를 돌리지 않으면 사용자 홈에 쌓인다")
+        #expect(agyArguments.last?.hasPrefix(scratch.path) == true, "로그가 임시 폴더 밖으로 나간다")
         #expect(command.timeout == AILimitAntigravityReader.timeout)
         #expect(command.timeout == 90)
         #expect(command.outputLimit == AILimitProcess.defaultOutputLimit)
@@ -732,6 +747,274 @@ struct AILimitsMacProcessTests {
             executable: URL(fileURLWithPath: "/bin/echo"), arguments: ["x"], timeout: 1
         ))
         #expect(output.launchFailed)
+    }
+}
+
+// MARK: - 안티그래비티: 샌드박스 안에서만 · 로그인 필요 분류 (0.3.57)
+//
+// 2026-10-18 02:06 KST 우리 `agy` 실행이 사용자 크롬에 구글 로그인 창을 몰래 띄웠다(사용자: "해킹당한거 아니야?").
+// agy 1.4.0 은 조용한 재인증이 실패하면 **절대 경로** `/usr/bin/open` 을 exec 한다 — 그래서 리더는 agy 를 언제나
+// `/usr/bin/sandbox-exec -p <프로필> <agy> …` 로만 띄운다(`AILimitAntigravityReader` 머리말 ★★).
+// 이 스위트가 재는 것: ① 러너가 받는 명령의 모양 ② sandbox-exec 가 없으면 아예 안 띄운다 ③ 실측 출력 세 벌의 분류
+// ④ 로그인 필요가 기존 '만료' 문구·정책으로 화면까지 간다 ⑤ **실제** sandbox-exec 가 그 프로필로 `/usr/bin/open` 을 막는다.
+//
+// ★ 이 파일은 `agy` 를 **한 번도** 띄우지 않는다(띄우면 사용자 화면에 로그인 창이 뜰 수 있다). 출력은 실측 바이트다.
+
+/// 리더가 거는 프로필을 **테스트가 따로 적은 글자**. 리더의 상수를 그대로 가져다 비교하면 상수를 고쳐도 초록이다.
+private let amPinnedAgyProfile = [
+    "(version 1)",
+    "(allow default)",
+    #"(deny process-exec (literal "/usr/bin/open") (literal "/usr/bin/osascript"))"#,
+    #"(deny mach-lookup (global-name "com.apple.coreservices.launchservicesd") (global-name-prefix "com.apple.lsd."))"#,
+    "(deny appleevent-send)"
+].joined(separator: "\n")
+
+/// 2026-10-18 실측 stdout(①) — 샌드박스 안의 **평소 성공**(`exp3/stdout.txt` 그대로 · 계정 식별자 없음을 확인했다).
+private let amAgySuccessStdout = #"""
+{"conversation_id":"","status":"SUCCESS","response":"Gemini Models\tWeekly Limit Remaining\t100%\t2026-10-24T17:22:10Z\nGemini Models\tFive Hour Limit Remaining\t100%\t2026-10-17T22:22:10Z\nClaude and GPT models\tWeekly Limit Remaining\t100%\t2026-10-24T17:22:10Z\nClaude and GPT models\tFive Hour Limit Remaining\t100%\t2026-10-17T22:22:10Z\nGemini 4 Argon\tGemini 4 Argon Weekly Limit\t100%\t2026-10-24T17:22:10Z\n","duration_seconds":0,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":0},"command":{"name":"usage","data":{"description":"Within each group, models share a weekly limit and a 5-hour limit. Quota is consumed proportionally to the cost of the tokens. Thus, limits will last longer with shorter tasks or using more cost-effective models. The 5-hour limit smooths out aggregate demand to fairly distribute global capacity across all users, while your weekly limit is tied directly to your individual tier.","groups":[{"name":"Gemini Models","description":"Models within this group: Gemini Flash, Gemini Pro","buckets":[{"id":"gemini-weekly","name":"Weekly Limit Remaining","window":"weekly","remaining_fraction":1,"reset_time":"2026-10-24T17:22:10Z"},{"id":"gemini-5h","name":"Five Hour Limit Remaining","window":"5h","remaining_fraction":1,"reset_time":"2026-10-17T22:22:10Z"}]},{"name":"Claude and GPT models","description":"Models within this group: Claude Opus, Claude Sonnet, GPT-OSS","buckets":[{"id":"3p-weekly","name":"Weekly Limit Remaining","window":"weekly","remaining_fraction":1,"reset_time":"2026-10-24T17:22:10Z"},{"id":"3p-5h","name":"Five Hour Limit Remaining","window":"5h","remaining_fraction":1,"reset_time":"2026-10-17T22:22:10Z"}]},{"name":"Gemini 4 Argon","description":"For paid Pro plans, Argon quota is separate. Higher Argon quota (included as part of the larger Gemini quota bucket) is available on Ultra plans.","buckets":[{"id":"gemini-argon-wtu-weekly","name":"Gemini 4 Argon Weekly Limit","window":"weekly","remaining_fraction":1,"reset_time":"2026-10-24T17:22:10Z"}]}]}}}
+"""#
+
+/// 2026-10-18 실측 stdout(②) — 조용한 재인증 실패 → 브라우저 exec 가 샌드박스에 막힌 뒤 60초 기다리고 나온 것(`exp1`, exit 1).
+private let amAgyAuthFailureStdout = #"""
+{"conversation_id":"","status":"ERROR","response":"","error":"authentication failed or timed out","duration_seconds":0,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":0}}
+"""#
+
+/// 2026-10-18 실측 stdout(③) — 네트워크를 끊은 샌드박스(`exp4`). 7초 만에 나왔고 로그인 시도는 없었다.
+/// ★ 이 문장에도 `operation not permitted` 가 있다 — 인증 분류가 그 말에 기대면 이 픽스처가 잡는다.
+private let amAgyNetworkFailureStdout = #"""
+{"conversation_id":"","status":"ERROR","response":"","error":"/usage failed: retrieving quota summary: failed to retrieve user quota summary: failed to get load code assist response: Post \"https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist\": dial tcp 172.217.117.4:443: connect: operation not permitted","duration_seconds":0,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":0}}
+"""#
+
+/// ERROR 봉투에 **합성** 오류 문장을 넣는다(문구 견고성 확인용 — 실측이 아니다). 인용은 JSONSerialization 이 한다.
+private func amAgyErrorJSON(_ message: String) -> Data {
+    (try? JSONSerialization.data(withJSONObject: ["conversation_id": "", "status": "ERROR", "response": "", "error": message]))
+        ?? Data()
+}
+
+private let amAgyPath = "/opt/homebrew/bin/agy"
+
+/// 이 테스트 프로세스가 이미 샌드박스 안에 있어 sandbox-exec 를 **겹쳐 걸 수 없는가**.
+///
+/// 실측(2026-10-18): 바깥 `sandbox-exec` 안에서 다시 부르면 stderr `sandbox-exec: sandbox_apply: Operation not permitted` · exit 71.
+/// 설계자의 게이트가 바로 그 꼴(네트워크 차단 sandbox-exec 아래 `swift test`)이라, 그때 실제 샌드박스 시험은 잴 수 없다.
+/// **그 정확한 실패만** 참이다 — 다른 실패(실행 파일 없음 · 다른 종료 코드)는 거짓이라 시험이 그대로 돌고 빨개진다.
+private func amSandboxNestingDenied() -> Bool {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
+    process.arguments = ["-p", "(version 1)(allow default)", "/usr/bin/true"]
+    let stderr = Pipe()
+    process.standardInput = FileHandle.nullDevice
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = stderr
+    do { try process.run() } catch { return false }
+    process.waitUntilExit()
+    let text = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    return process.terminationStatus == 71 && text.contains("sandbox_apply: Operation not permitted")
+}
+
+@Suite("AILimitsMac — 안티그래비티: 샌드박스 안에서만 · 로그인 필요 (0.3.57)")
+struct AILimitsMacAgySandboxTests {
+    /// ① 러너가 받는 명령: 실행 파일은 **sandbox-exec**, agy 는 그 인자다. 그 뒤의 agy 인자·데드라인·작업 디렉터리는 전과 같다.
+    ///
+    /// 없으면: agy 를 직접 띄우는 옛 모양으로 되돌려도(= 사고 그대로) 기존 계약 테스트는 초록이다 — 그 테스트는 인자 꼬리만 본다.
+    @Test
+    func agyIsLaunchedOnlyThroughSandboxExec() async throws {
+        let process = AMFakeProcess()
+        process.outcomes["agy"] = AILimitCommandOutput(status: 0, stdout: Data(amAgySuccessStdout.utf8))
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("check-ai-limits-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let reader = AILimitAntigravityReader(
+            runner: process.runner,
+            locate: { URL(fileURLWithPath: amAgyPath) },
+            scratchDirectory: { scratch },
+            sandboxAvailable: { true }
+        )
+        let result = await reader.read(now: amNow)
+
+        #expect(process.commands.count == 1, "agy 한 번에 프로세스 \(process.commands.count)개")
+        let command = try #require(process.commands.first)
+        #expect(command.executable.path == "/usr/bin/sandbox-exec",
+                "agy 를 \(command.executable.path) 로 띄웠다 — 샌드박스 밖이면 로그인 창이 다시 뜬다")
+        #expect(command.executable.path != amAgyPath)
+        #expect(Array(command.arguments.prefix(3)) == ["-p", amPinnedAgyProfile, amAgyPath],
+                "sandbox-exec 앞 세 칸이 [-p, 프로필, agy] 가 아니다: \(command.arguments.prefix(3))")
+        #expect(Array(command.arguments.dropFirst(3)) == [
+            "-p", "/usage", "--output-format", "json", "--log-file", scratch.appendingPathComponent("agy.log").path
+        ])
+        #expect(command.timeout == 90)
+        #expect(command.currentDirectory == scratch)
+        // 프로필 상수 자체를 글자로 못 박는다 — 특히 `/usr/bin/open` exec 금지(사고의 바로 그 경로).
+        #expect(AILimitAntigravityReader.sandboxProfile == amPinnedAgyProfile)
+        #expect(AILimitAntigravityReader.sandboxProfile.contains(#"(deny process-exec (literal "/usr/bin/open")"#))
+        #expect(AILimitAntigravityReader.sandboxExecutable.path == "/usr/bin/sandbox-exec")
+        // 감싸도 결과는 그대로 읽힌다(가짜는 감싼 프로그램 = agy 로 결과를 고른다).
+        #expect((try? result.get())?.provider == .antigravity)
+        #expect(!FileManager.default.fileExists(atPath: scratch.path), "임시 폴더가 남았다")
+    }
+
+    /// ② sandbox-exec 를 쓸 수 없으면 agy 를 **아예 띄우지 않는다**(맨몸 폴백 없음) → `.notInstalled`(숨김 · 문구 없음).
+    ///
+    /// 없으면: "없으면 그냥 agy 를 띄운다"는 폴백이 초록으로 들어온다 — 그 맥에서 로그인 창 사고가 그대로 돌아온다.
+    @Test
+    func withoutSandboxExecAgyIsNeverLaunched() async {
+        let process = AMFakeProcess()
+        process.outcomes["agy"] = AILimitCommandOutput(status: 0, stdout: Data(amAgySuccessStdout.utf8))
+        let scratchCalls = OSAllocatedUnfairLock(initialState: 0)
+        let reader = AILimitAntigravityReader(
+            runner: process.runner,
+            locate: { URL(fileURLWithPath: amAgyPath) },
+            scratchDirectory: { scratchCalls.withLock { $0 += 1 }; return nil },
+            sandboxAvailable: { false }
+        )
+        let result = await reader.read(now: amNow)
+        #expect(process.commands.isEmpty, "sandbox-exec 가 없는데 프로세스를 띄웠다: \(process.commands.map(\.executable.path))")
+        if case .failure(let error) = result {
+            #expect(error.failure == .notInstalled)
+        } else {
+            Issue.record("sandbox-exec 없이 성공을 돌려줬다 — 어딘가에서 agy 를 띄웠다")
+        }
+        #expect(scratchCalls.withLock { $0 } == 0, "띄우지 않을 실행을 위해 임시 폴더를 만들었다")
+        #expect(AILimitReadFailure.notInstalled.hidesProvider, "볼 수 없는 맥에서 낡은 숫자를 계속 들고 있다")
+        #expect(AILimitReadFailure.notInstalled.noticeText(for: .antigravity) == nil)
+
+        // 대조군: 같은 리더 조립에서 **쓸 수 있으면** 한 번 띄운다(위 0회가 "애초에 못 띄우는 세계"가 아니다).
+        let control = AMFakeProcess()
+        control.outcomes["agy"] = AILimitCommandOutput(status: 0, stdout: Data(amAgySuccessStdout.utf8))
+        _ = await AILimitAntigravityReader(
+            runner: control.runner, locate: { URL(fileURLWithPath: amAgyPath) },
+            scratchDirectory: { nil }, sandboxAvailable: { true }
+        ).read(now: amNow)
+        #expect(control.count(suffix: "agy") == 1)
+    }
+
+    /// ③ 실측 출력 세 벌의 분류: 성공은 그대로 · 인증 실패는 `.unauthorized`(로그인 필요) · 네트워크 실패는 `.network`.
+    ///
+    /// 그리고 문구가 조금 바뀌어도 잡고(어간 `authenticat`), 네트워크 실패가 인증 문구를 품어도 로그인 필요라고 하지 않는다.
+    @Test
+    func classifiesTheThreeMeasuredOutputs() throws {
+        // ① 성공 — 세 그룹(아르곤은 주간만) · 남은 1.0 = 0% 씀 · 0% 창의 reset_time 은 투영이라 접힌다(전과 같다).
+        let snapshot = try AILimitAntigravityReader.parseCLI(Data(amAgySuccessStdout.utf8), observedAt: amNow).get()
+        #expect(snapshot.provider == .antigravity)
+        #expect(snapshot.windows.count == 2)
+        #expect(snapshot.window(.fiveHour)?.usedPercent == 0)
+        #expect(snapshot.window(.weekly)?.usedPercent == 0)
+
+        // ② 인증 실패 → 로그인 필요. 기존 '만료' 분류·문구를 그대로 쓴다(새 문구를 만들지 않았다).
+        let auth = AILimitAntigravityReader.parseCLI(Data(amAgyAuthFailureStdout.utf8), observedAt: amNow)
+        if case .failure(let error) = auth {
+            #expect(error.failure == .unauthorized, "인증 실패를 \(error.failure) 로 읽었다 — 로그인 안내가 안 뜬다")
+            #expect(error.failure.noticeText(for: .antigravity) == "안티그래비티를 한 번 실행해 주세요")
+            #expect(error.failure.hidesProvider == false, "로그인 필요는 숨기지 않는다 — 사용자가 할 일이 있다")
+        } else {
+            Issue.record("인증 실패 봉투를 성공으로 읽었다")
+        }
+
+        // ③ 네트워크 실패 → 그대로 `.network`(문구 없음). 일시적인 실패가 "로그인 필요"를 말하면 안 된다.
+        let network = AILimitAntigravityReader.parseCLI(Data(amAgyNetworkFailureStdout.utf8), observedAt: amNow)
+        if case .failure(let error) = network {
+            #expect(error.failure == .network, "네트워크 실패를 \(error.failure) 로 읽었다")
+        } else {
+            Issue.record("네트워크 실패 봉투를 성공으로 읽었다")
+        }
+
+        // 합성 문구(실측 아님): 꼬리가 바뀌어도 인증 실패로 잡는다.
+        for message in ["Authentication failed", "authentication required", "not authenticated",
+                        "rpc error: code = Unauthenticated desc = invalid credentials"] {
+            let result = AILimitAntigravityReader.parseCLI(amAgyErrorJSON(message), observedAt: amNow)
+            #expect((try? result.get()) == nil)
+            if case .failure(let error) = result { #expect(error.failure == .unauthorized, "[\(message)] → \(error.failure)") }
+        }
+        // 합성 문구(실측 아님): 네트워크로 토큰 갱신이 실패한 꼴 — `oauth2` 의 `auth` 나, 인증 문구 옆의 전송 실패 지문은
+        // 로그인 필요가 아니다.
+        for message in [
+            #"oauth2: cannot fetch token: Post "https://oauth2.googleapis.com/token": dial tcp: lookup oauth2.googleapis.com: no such host"#,
+            // 전송 지문 없이 `auth` 만 품은 일시적 서버 오류 — 어간을 `auth` 로 줄이면 이것이 "로그인 필요"가 된다.
+            "oauth2: cannot fetch token: 503 Service Unavailable",
+            #"authentication failed: Post "https://oauth2.googleapis.com/token": dial tcp 142.250.0.1:443: i/o timeout"#
+        ] {
+            let result = AILimitAntigravityReader.parseCLI(amAgyErrorJSON(message), observedAt: amNow)
+            if case .failure(let error) = result { #expect(error.failure == .network, "[\(message)] → \(error.failure)") }
+            else { Issue.record("[\(message)] 를 성공으로 읽었다") }
+        }
+    }
+
+    /// ④ 로그인 필요 한 바퀴가 **기존 만료 처리 그대로** 화면까지 간다: 숫자는 그대로 · 숨기지 않음 · 툴팁 끝줄에 문구 ·
+    /// 금지창 없음(= 다음 시도는 평소 주기). agy 는 exit 1 로 끝나지만(실측) stdout 의 봉투로 가른다.
+    ///
+    /// ★ 주기 숫자는 **스토어의 기존 정책**을 그대로 적은 것이다(새 정책을 만들지 않았다): 타이머 600초 · 팝오버 강제 300초.
+    @MainActor
+    @Test
+    func loginRequiredRunShowsTheExistingNoticeAndKeepsTheNumbers() async throws {
+        let process = AMFakeProcess()
+        process.outcomes["agy"] = AILimitCommandOutput(status: 0, stdout: Data(amAgySuccessStdout.utf8))
+        let reader = AILimitAntigravityReader(
+            runner: process.runner, locate: { URL(fileURLWithPath: amAgyPath) },
+            scratchDirectory: { nil }, sandboxAvailable: { true }
+        )
+        let store = AILimitStore(defaults: amDefaults(), clock: { amNow }, runner: { now, _ in
+            AILimitReadOutcome(results: [.antigravity: await reader.read(now: now)])
+        })
+        await store.refreshIfDue(now: amNow)
+        #expect(store.failures[.antigravity] == nil, "전제: 첫 바퀴는 성공이다")
+        #expect(store.bundle?.provider(.antigravity) != nil)
+
+        // 다음 바퀴: 재인증 실패(실측 봉투 · exit 1).
+        process.outcomes["agy"] = AILimitCommandOutput(status: 1, stdout: Data(amAgyAuthFailureStdout.utf8))
+        let later = amNow.addingTimeInterval(AILimitStore.refreshInterval)
+        await store.refreshIfDue(now: later)
+        #expect(process.count(suffix: "agy") == 2)
+        #expect(store.failures[.antigravity] == .unauthorized, "로그인 필요가 \(String(describing: store.failures[.antigravity])) 로 남았다")
+        #expect(store.noticeText(provider: .antigravity) == "안티그래비티를 한 번 실행해 주세요")
+        #expect(store.bundle?.provider(.antigravity) != nil, "로그인 필요에서 들고 있던 숫자를 지웠다(만료와 다르게 굴었다)")
+        #expect(store.listedProviders.contains(.antigravity), "로그인 필요인 제공자의 줄이 사라졌다")
+        #expect(store.silentUntil == nil, "로그인 필요에 금지창을 걸었다 — 기존 만료 정책과 다르다")
+
+        // 화면: 숫자 칸은 그대로 서고, 툴팁 끝줄이 할 일을 말한다(만료 카드와 같은 길).
+        let card = AILimitCardModel.make(store: store, provider: .antigravity, now: later)
+        #expect(card.notice == "안티그래비티를 한 번 실행해 주세요")
+        #expect(card.tooltipText.hasSuffix("\n안티그래비티를 한 번 실행해 주세요"), "툴팁: \(card.tooltipText)")
+        #expect(!card.windows.isEmpty)
+
+        // 주기(기존 정책 그대로): 강제(팝오버)는 300초, 평소는 600초 뒤에야 다시 agy 를 띄운다.
+        #expect(store.isDue(now: later.addingTimeInterval(299), force: true) == false)
+        #expect(store.isDue(now: later.addingTimeInterval(300), force: true))
+        #expect(store.isDue(now: later.addingTimeInterval(599)) == false)
+        #expect(store.isDue(now: later.addingTimeInterval(600)))
+    }
+
+    /// ⑤ **실제** sandbox-exec + 리더의 프로필 상수: `/usr/bin/open` exec 는 거부되고(126), 다른 것은 돈다.
+    ///
+    /// `open -h` 는 사용법만 찍는 호출이라 프로필이 틀렸어도 아무것도 열 수 없다(설계자 확인). 실행기도 **프로덕션 것**
+    /// (`AILimitProcess.live()`)을 쓴다 — 프로필이 argv 한 칸으로 sandbox-exec 에 닿는 그 길 그대로다.
+    /// ★ 이 테스트 프로세스가 이미 sandbox-exec 안이면(설계자 게이트) 중첩이 거부돼 잴 수 없다 → **보이는 사유로 건너뛴다**
+    ///   (조용히 초록이 되지 않는다). 그 판정은 정확한 실패 모양 하나뿐이다(`amSandboxNestingDenied`).
+    @Test(.disabled(
+        if: amSandboxNestingDenied(),
+        "이 테스트 프로세스가 이미 sandbox-exec 안에 있다(중첩 sandbox_apply 거부 · exit 71) — 바깥 샌드박스 없이 따로 돌려야 실제 거부를 잰다"
+    ))
+    func profileReallyDeniesOpenUnderSandboxExec() async {
+        func run(_ script: String) async -> AILimitCommandOutput? {
+            await amRun(AILimitProcess.live(), AILimitCommand(
+                executable: AILimitAntigravityReader.sandboxExecutable,
+                arguments: ["-p", AILimitAntigravityReader.sandboxProfile, "/bin/sh", "-c", script],
+                timeout: 10
+            ), within: 10)
+        }
+        guard let denied = await run("/usr/bin/open -h >/dev/null 2>&1; echo $?") else {
+            Issue.record("sandbox-exec 실행이 10초 안에 돌아오지 않았다")
+            return
+        }
+        #expect(String(decoding: denied.stdout, as: UTF8.self) == "126\n",
+                "프로필 아래 `/usr/bin/open` exec 가 거부되지 않았다(126 이어야 한다): [\(String(decoding: denied.stdout, as: UTF8.self))] status \(denied.status)")
+        #expect(denied.status == 0)
+
+        // 대조군(설계자 지정): 같은 프로필에서 셸은 돈다 — 위 126 이 "프로필이 모든 걸 막는다"가 아니다.
+        let control = await run("echo ok")
+        #expect(control.map { String(decoding: $0.stdout, as: UTF8.self) } == "ok\n", "같은 프로필에서 셸조차 안 돈다")
+        // 대조군 2: `open` 이 아닌 **실행 파일**의 exec 는 허용된다(`echo` 는 셸 내장이라 exec 를 재지 못한다).
+        let otherExec = await run("/usr/bin/true; echo $?")
+        #expect(otherExec.map { String(decoding: $0.stdout, as: UTF8.self) } == "0\n", "open 아닌 실행 파일까지 막혔다")
     }
 }
 

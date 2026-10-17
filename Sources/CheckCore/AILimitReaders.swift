@@ -46,6 +46,7 @@ package enum AILimitReadFailure: String, Codable, Equatable, Sendable {
     /// 토큰이 만료됐다(`expiresAt`·JWT `exp` 가 과거). 네트워크를 쓰지 않고 안다.
     case expired
     /// 제공자가 401 로 거절했다. 우리가 갱신하지 않으므로 만료와 **같은 문구**로 접는다.
+    /// 안티그래비티는 agy 가 `authentication failed …` 로 끝난 경우가 이것이다(0.3.57 — 브라우저 로그인 대신 이 문구).
     case unauthorized
     /// 429. `retryAfter` 까지 **완전히 침묵한다**(30초마다 다시 노크하면 금지창이 안 끝난다).
     case rateLimited
@@ -783,24 +784,80 @@ package struct AILimitCodexReader: Sendable {
 /// 경로 B(`cloudcode-pa.googleapis.com`)도 실증됐지만, 저장된 access_token 이 만료되면 우리가 갱신할
 /// 방법이 없다 — 갱신하려면 agy 바이너리에서 뽑은 **구글 설치앱 client_id/secret 을 공개 앱에 심어야**
 /// 하고 그건 타사 OAuth 클라이언트 자격증명 유출이다. agy 는 스스로 갱신하므로 CLI 경로가 곧 폴백을 포함한다.
+///
+/// ## ★★ `agy` 는 **언제나 `sandbox-exec` 안에서만** 띄운다 — 브라우저 로그인 창 사고 (0.3.57)
+/// 2026-10-18 02:06 KST, 사용자가 팝오버를 연 직후(02:05 — 그때 네트워크가 불안정해 찌르기 하나가 "연결이 불안정"으로
+/// 실패했다) 우리 `agy` 실행이 크롬에 구글 로그인 창(`accounts.google.com/o/oauth2/auth?…redirect_uri=https://antigravity.google/
+/// oauth-callback&prompt=consent` — "애플리케이션에 이 코드를 붙여넣어 인증을 완료하세요")을 **사용자 몰래** 띄웠다. 크롬 기록은
+/// AUTO_TOPLEVEL · from_visit 0 = 바깥 프로그램이 연 탭이다. 사용자 원문: "갑자기 이게 왜 떠? 해킹당한거 아니야?" → 설명을 듣고
+/// "ㅇㅇ 그렇게 해줘"(agy 가 브라우저를 열 수 없게 하고, 로그인이 필요하면 브라우저로 재시도하지 말고 멈춰서 알려 달라).
+///
+/// agy 1.4.0(Go) 의 길: print 모드는 실행마다 `not authenticated, trying silent auth` 로 시작해 보통 `silent auth succeeded` 로
+/// 끝난다. 조용한 재인증이 실패하면 `triggering interactive OAuth` → `browser.go` 가 **절대 경로** `/usr/bin/open` 을
+/// fork/exec 한다 → stderr 에 로그인 주소를 찍고 60초 기다린 뒤 stdout 에
+/// `{"status":"ERROR","error":"authentication failed or timed out",…}` · exit 1 로 끝난다.
+///
+/// 다른 길로는 못 막는다:
+///  · PATH 를 바꿔도 소용없다 — 절대 경로 exec 다.
+///  · 환경 변수도 없다 — `AGY_CLI_NONINTERACTIVE_HEADLESS=true` 를 줘도 브라우저가 떴다(실측). `--no-browser` 같은 깃발도 없다.
+///  · 보고 죽이기(경합)도 안 된다 — "Starting OAuth" 로그와 exec 사이가 1.4ms 다.
+/// 그래서 커널이 막게 한다: `/usr/bin/sandbox-exec -p <sandboxProfile> <agy> <인자…>`. 같은 맥에서 잰 세 가지(2026-10-18):
+///  ① 평소: `status SUCCESS` · 6초 · 사용량 모양 그대로(키체인을 읽는 `/usr/bin/security` 도 그대로 돈다).
+///  ② 재인증을 일부러 실패시키면: agy 로그 `Failed to open browser: fork/exec /usr/bin/open: operation not permitted`,
+///     창 0, 60초 뒤 위 ERROR JSON → 우리는 `.unauthorized` 로 읽는다(`parseCLI` — "안티그래비티를 한 번 실행해 주세요").
+///  ③ 네트워크를 끊으면: 7초 만에 `"/usage failed: retrieving quota summary: …"` ERROR(로그인 시도 없음) → 그대로 `.network`.
+/// sandbox-exec 는 프로필을 건 뒤 **그 자리에서 exec** 한다(pid 가 그대로 agy 다 — 실측) — 데드라인·SIGKILL·stdin `/dev/null`
+/// 이 전과 똑같이 agy 에 닿는다. 프로필을 못 걸면(중첩 샌드박스 등) sandbox-exec 는 agy 를 exec 하지 않고 71 로 끝난다(실측).
+///
+/// ★★ **샌드박스 없이 띄우는 길은 없다.** `/usr/bin/sandbox-exec` 가 실행 가능하지 않으면 agy 를 **아예 띄우지 않는다**
+///   (`.notInstalled` — `read(now:)` 주석). "없으면 그냥 실행"으로 접는 폴백을 넣는 순간 이 사고가 그 맥에서 그대로 돌아온다.
 package struct AILimitAntigravityReader: Sendable {
     /// `agy` 호출 데드라인(초). 실측 소요 ~5.1초의 넉넉한 배수 — 구글이 느린 날에도 끊기지 않게.
+    /// 로그인이 필요한 실행은 agy 가 스스로 60초를 기다린 뒤 끝나므로(머리말 ②) 이 안에 들어온다.
     package static let timeout: TimeInterval = 90
     /// CLI 성공 표지. 대소문자를 구별한다(실측 `"status": "SUCCESS"`).
     package static let successStatus = "SUCCESS"
 
+    /// agy 를 감싸는 실행 파일(0.3.57). **이것 말고 agy 를 띄우는 길은 없다**(머리말).
+    package static let sandboxExecutable = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
+
+    /// agy 에 거는 샌드박스 프로필(0.3.57). 2026-10-18 실측본(`exp3/app.sb`)의 규칙 다섯 줄과 **한 글자도 다르지 않다** —
+    /// 고치면 위 세 측정을 다시 하라(테스트가 글자로 못 박고, 실제 sandbox-exec 로 `/usr/bin/open` 거부도 잰다).
+    ///  · `/usr/bin/open` · `/usr/bin/osascript` exec 금지 — 사고의 바로 그 경로(agy 가 절대 경로로 exec 한다).
+    ///  · LaunchServices(`launchservicesd` · `com.apple.lsd.*`) 조회 금지 — `open` 을 거치지 않고 URL 을 여는 API 길도 막아 둔다.
+    ///  · Apple Event 금지 — 다른 앱(브라우저)에게 "이 주소를 열어라"를 시키는 길도 막아 둔다.
+    /// 나머지는 전부 허용(`allow default`)이라 네트워크·키체인(`/usr/bin/security`)·로그 파일 쓰기는 그대로다(실측 ①).
+    /// ★ argv 한 칸으로 넘긴다 — 파일도 셸 문자열도 아니다(인용·보간으로 깨질 자리가 없다).
+    package static let sandboxProfile = """
+        (version 1)
+        (allow default)
+        (deny process-exec (literal "/usr/bin/open") (literal "/usr/bin/osascript"))
+        (deny mach-lookup (global-name "com.apple.coreservices.launchservicesd") (global-name-prefix "com.apple.lsd."))
+        (deny appleevent-send)
+        """
+
     private let runner: AILimitCommandRunner
     private let locate: @Sendable () -> URL?
     private let scratchDirectory: @Sendable () -> URL?
+    private let sandboxAvailable: @Sendable () -> Bool
 
+    /// - Parameter sandboxAvailable: `/usr/bin/sandbox-exec` 를 쓸 수 있는가(주입 지점 — 테스트가 '없는 맥'을 만든다).
+    ///   거짓이면 agy 를 띄우지 않는다(머리말 ★★).
     package init(
         runner: @escaping AILimitCommandRunner,
         locate: @escaping @Sendable () -> URL?,
-        scratchDirectory: @escaping @Sendable () -> URL? = { AILimitAntigravityReader.makeScratchDirectory() }
+        scratchDirectory: @escaping @Sendable () -> URL? = { AILimitAntigravityReader.makeScratchDirectory() },
+        sandboxAvailable: @escaping @Sendable () -> Bool = { AILimitAntigravityReader.liveSandboxAvailable() }
     ) {
         self.runner = runner
         self.locate = locate
         self.scratchDirectory = scratchDirectory
+        self.sandboxAvailable = sandboxAvailable
+    }
+
+    /// 이 맥에서 `/usr/bin/sandbox-exec` 를 실행할 수 있는가.
+    package static func liveSandboxAvailable() -> Bool {
+        FileManager.default.isExecutableFile(atPath: sandboxExecutable.path)
     }
 
     /// `agy` 를 찾는다. PATH 와 흔한 설치 경로를 본다.
@@ -842,8 +899,13 @@ package struct AILimitAntigravityReader: Sendable {
 
     /// CLI 출력 파싱(순수). 봉투는 `{status, command: {name, data: {groups: [...]}}}` 다.
     ///
-    /// `status != "SUCCESS"` 면 `.network` 다 — 실패 시 agy 는 `{"status":"ERROR",…}` 로 떨어지고
-    /// (네트워크를 끊어 검증했다) 100% 를 지어내지 않는다.
+    /// `status != "SUCCESS"` 면 실패다 — 실패 시 agy 는 `{"status":"ERROR",…}` 로 떨어지고 100% 를 지어내지 않는다.
+    /// 갈래는 둘이다(0.3.57):
+    ///  · `error` 가 **인증 실패**를 말한다(`isAuthenticationFailure`) → `.unauthorized`. Claude·Codex 의 401 과 같은 분류·
+    ///    같은 문구("안티그래비티를 한 번 실행해 주세요")·같은 정책(숫자는 그대로, 숨기지 않는다, 금지창 없이 평소 주기 —
+    ///    10분 · 팝오버를 열면 5분 하한)을 그대로 쓴다. 샌드박스 안이라 그 한 번은 창 없이 agy 의 60초 대기로 끝난다.
+    ///    로그인은 사용자가 터미널에서 agy 를 직접 켜서 한다 — 우리는 브라우저로 재시도하지 않는다(머리말 ★★).
+    ///  · 그 밖(네트워크를 끊어 검증한 `/usage failed: …` 등) → `.network`. 일시적인 실패가 "로그인 필요"를 말하면 안 된다.
     package static func parseCLI(
         _ data: Data,
         observedAt: Date
@@ -852,6 +914,10 @@ package struct AILimitAntigravityReader: Sendable {
             return .failure(AILimitReadError(.malformed))
         }
         guard (root["status"] as? String) == successStatus else {
+            // ★ 오류 문장은 **분류에만** 쓰고 어디에도 담지 않는다(파일 머리말 — 에러 타입에 메시지 칸이 없다).
+            if let message = root["error"] as? String, isAuthenticationFailure(message) {
+                return .failure(AILimitReadError(.unauthorized))
+            }
             return .failure(AILimitReadError(.network))
         }
         guard let command = root["command"] as? [String: Any],
@@ -910,16 +976,48 @@ package struct AILimitAntigravityReader: Sendable {
         ))
     }
 
+    /// ERROR 봉투의 `error` 가 **인증 실패**를 말하는가(0.3.57).
+    ///
+    /// 실측 문장은 `authentication failed or timed out` 이지만 **문장 전체로 맞추지 않는다** — 다음 판에서 꼬리가 바뀌면
+    /// ("authentication required" · "not authenticated" · gRPC 의 `Unauthenticated`) 다시 `.network` 로 떨어져 로그인 안내가
+    /// 사라진다. 그래서 어간 `authenticat` 하나로 잰다(대소문자 무시). `auth` 로 줄이지 않는 까닭: 토큰 갱신이 네트워크로
+    /// 실패한 문장에는 `oauth2.googleapis.com` 이 들어 있어 일시적인 실패가 "로그인 필요"로 둔갑한다.
+    /// 같은 이유로 **전송 실패의 지문**(Go `net` 오류 문구)이 함께 있으면 인증 실패로 치지 않는다 — 그건 끊긴 네트워크다.
+    package static func isAuthenticationFailure(_ message: String) -> Bool {
+        let text = message.lowercased()
+        guard text.contains("authenticat") else { return false }
+        return !transportFailureMarkers.contains { text.contains($0) }
+    }
+
+    /// 전송 실패의 지문(Go `net`·`crypto/tls` 오류 문구, 소문자). 이것이 보이면 인증 문구가 섞여 있어도 `.network` 다.
+    package static let transportFailureMarkers = [
+        "dial tcp", "no such host", "connection refused", "network is unreachable", "i/o timeout", "tls handshake"
+    ]
+
+    /// agy 를 **샌드박스 안에서** 한 번 돌린다.
+    ///
+    /// 순서가 계약이다: agy 를 못 찾으면 `.notInstalled`(전과 같다) → **sandbox-exec 를 못 쓰면 `.notInstalled`** 이고 러너를
+    /// 부르지 않는다 → 그때만 `sandbox-exec -p <프로필> <agy> <인자…>` 를 러너에 넘긴다.
+    ///
+    /// ★ 샌드박스가 없을 때 `.notInstalled` 를 고른 까닭(`.network` 가 아니다):
+    ///  · `.network` 는 "잠깐 끊겼다"의 분류라 직전 숫자를 **영원히** 들고 나이 캡션만 낡힌다 — 이 맥에서는 다시 읽힐 날이
+    ///    오지 않으므로 그 숫자는 점점 거짓이 된다.
+    ///  · `.notInstalled` 는 "이 맥에서는 볼 수 없다"(숨김 · 들고 있던 값도 지움)다. 사용자가 할 수 있는 일이 없으니 문구도 없다.
+    ///  · 그리고 sandbox-exec 를 **띄우려다** 실패한 경우(`launchFailed` — 아래)도 이미 `.notInstalled` 다. 미리 본 결과와
+    ///    띄워 본 결과가 같은 분류여야 확인과 실행 사이에 파일이 사라지는 틈에서도 화면이 같은 말을 한다.
+    /// 확인을 임시 디렉터리 **앞에** 두는 까닭: 띄우지 않을 실행을 위해 디렉터리를 만들고 지우는 일을 하지 않는다.
     package func read(now: Date) async -> Result<AILimitProviderSnapshot, AILimitReadError> {
         guard let executable = locate() else { return .failure(AILimitReadError(.notInstalled)) }
+        guard sandboxAvailable() else { return .failure(AILimitReadError(.notInstalled)) }
         let scratch = scratchDirectory()
         var arguments = ["-p", "/usage", "--output-format", "json"]
         if let scratch {
             arguments += ["--log-file", scratch.appendingPathComponent("agy.log").path]
         }
+        // ★ agy 를 직접 띄우지 않는다. 실행 파일은 sandbox-exec, agy 는 그 인자다(타입 주석 ★★).
         let output = await runner(AILimitCommand(
-            executable: executable,
-            arguments: arguments,
+            executable: Self.sandboxExecutable,
+            arguments: ["-p", Self.sandboxProfile, executable.path] + arguments,
             timeout: Self.timeout,
             currentDirectory: scratch
         ))

@@ -902,8 +902,9 @@ package struct AILimitAntigravityReader: Sendable {
     /// `status != "SUCCESS"` 면 실패다 — 실패 시 agy 는 `{"status":"ERROR",…}` 로 떨어지고 100% 를 지어내지 않는다.
     /// 갈래는 둘이다(0.3.57):
     ///  · `error` 가 **인증 실패**를 말한다(`isAuthenticationFailure`) → `.unauthorized`. Claude·Codex 의 401 과 같은 분류·
-    ///    같은 문구("안티그래비티를 한 번 실행해 주세요")·같은 정책(숫자는 그대로, 숨기지 않는다, 금지창 없이 평소 주기 —
-    ///    10분 · 팝오버를 열면 5분 하한)을 그대로 쓴다. 샌드박스 안이라 그 한 번은 창 없이 agy 의 60초 대기로 끝난다.
+    ///    같은 문구("안티그래비티를 한 번 실행해 주세요")·같은 표시(숫자는 그대로, 숨기지 않는다)를 그대로 쓴다.
+    ///    샌드박스 안이라 그 한 번은 창 없이 agy 의 60초 대기로 끝나고, 다시 띄우는 간격은 스토어가 늦춘다
+    ///    (`AILimitStore.antigravityIsDue` — 10분 뒤 한 번, 그다음은 1시간마다, 팝오버 열기로는 앞당기지 않는다).
     ///    로그인은 사용자가 터미널에서 agy 를 직접 켜서 한다 — 우리는 브라우저로 재시도하지 않는다(머리말 ★★).
     ///  · 그 밖(네트워크를 끊어 검증한 `/usage failed: …` 등) → `.network`. 일시적인 실패가 "로그인 필요"를 말하면 안 된다.
     package static func parseCLI(

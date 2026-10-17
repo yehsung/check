@@ -942,7 +942,8 @@ struct AILimitsMacAgySandboxTests {
     /// ④ 로그인 필요 한 바퀴가 **기존 만료 처리 그대로** 화면까지 간다: 숫자는 그대로 · 숨기지 않음 · 툴팁 끝줄에 문구 ·
     /// 금지창 없음(= 다음 시도는 평소 주기). agy 는 exit 1 로 끝나지만(실측) stdout 의 봉투로 가른다.
     ///
-    /// ★ 주기 숫자는 **스토어의 기존 정책**을 그대로 적은 것이다(새 정책을 만들지 않았다): 타이머 600초 · 팝오버 강제 300초.
+    /// ★ 아래 주기 숫자는 **스토어 전체 바퀴**의 기존 정책이다(타이머 600초 · 팝오버 강제 300초). 그 바퀴에 로그인이 필요한
+    ///   안티그래비티를 **넣을지**는 따로 잰다(`AILimitsMacAgyLoginBackoffTests` — 10분 한 번 뒤 1시간마다).
     @MainActor
     @Test
     func loginRequiredRunShowsTheExistingNoticeAndKeepsTheNumbers() async throws {
@@ -976,7 +977,7 @@ struct AILimitsMacAgySandboxTests {
         #expect(card.tooltipText.hasSuffix("\n안티그래비티를 한 번 실행해 주세요"), "툴팁: \(card.tooltipText)")
         #expect(!card.windows.isEmpty)
 
-        // 주기(기존 정책 그대로): 강제(팝오버)는 300초, 평소는 600초 뒤에야 다시 agy 를 띄운다.
+        // 스토어 전체 바퀴의 주기(기존 정책 그대로): 강제(팝오버)는 300초, 평소는 600초 뒤에야 다음 바퀴가 돈다.
         #expect(store.isDue(now: later.addingTimeInterval(299), force: true) == false)
         #expect(store.isDue(now: later.addingTimeInterval(300), force: true))
         #expect(store.isDue(now: later.addingTimeInterval(599)) == false)
@@ -1015,6 +1016,235 @@ struct AILimitsMacAgySandboxTests {
         // 대조군 2: `open` 이 아닌 **실행 파일**의 exec 는 허용된다(`echo` 는 셸 내장이라 exec 를 재지 못한다).
         let otherExec = await run("/usr/bin/true; echo $?")
         #expect(otherExec.map { String(decoding: $0.stdout, as: UTF8.self) } == "0\n", "open 아닌 실행 파일까지 막혔다")
+    }
+}
+
+// MARK: - 안티그래비티: 로그인이 필요하면 반복 실행을 멈춘다 (0.3.57)
+//
+// 사용자 결정(2026-10-18): "로그인이 필요하면 반복 실행을 멈추고 로그인 필요만 표시". 샌드박스 안의 로그인 필요 실행은 창이
+// 없지만 60초짜리고, 그 동안 Claude·Codex 반영도 늦는다. 스토어가 바퀴마다 안티그래비티를 넣을지 가른다
+// (`AILimitStore.antigravityIsDue` — 연속 1회째는 10분 뒤 한 번, 2회째부터 1시간마다, 팝오버 강제 바퀴로는 앞당기지 않는다).
+// 이 스위트는 **러너가 받은 제공자 집합**을 바퀴마다 적어 그 판정을 잰다.
+
+/// 고정 시각에서 `seconds` 뒤.
+private func amAt(_ seconds: TimeInterval) -> Date { amNow.addingTimeInterval(seconds) }
+
+/// 주간 창 하나짜리 스냅샷(관측 시각 = 그 바퀴).
+private func amWeeklySnapshot(_ provider: AILimitProvider, used: Double, at: Date) -> AILimitProviderSnapshot {
+    AILimitProviderSnapshot(provider: provider, windows: [
+        AILimitWindowSnapshot(window: .weekly, usedPercent: used, resetsAt: at.addingTimeInterval(86_400),
+                              observedAt: at, source: .local)
+    ])
+}
+
+/// 바퀴마다 러너가 받은 제공자 집합을 적고, 안티그래비티 결과를 **대본대로** 돌려주는 가짜 러너.
+/// Claude 는 늘 성공한다(바퀴가 실제로 돌았는지의 대조군 — 안티그래비티만 빠졌는지, 바퀴째 멈췄는지를 가른다).
+private final class AMRoundSpy: @unchecked Sendable {
+    private struct State {
+        var rounds: [Set<AILimitProvider>] = []
+        /// 안티그래비티가 돌려줄 실패. nil = 성공.
+        var antigravity: AILimitReadFailure? = .unauthorized
+    }
+    private let state = OSAllocatedUnfairLock(initialState: State())
+
+    var rounds: [Set<AILimitProvider>] { state.withLock { $0.rounds } }
+    /// agy 를 띄운(= 안티그래비티를 넣은) 바퀴 수.
+    var agyRuns: Int { rounds.filter { $0.contains(.antigravity) }.count }
+    var lastIncludedAntigravity: Bool? { rounds.last.map { $0.contains(.antigravity) } }
+
+    func setAntigravity(_ failure: AILimitReadFailure?) { state.withLock { $0.antigravity = failure } }
+
+    var runner: AILimitStore.Runner {
+        { [self] now, providers in
+            let scripted = state.withLock { s -> AILimitReadFailure? in
+                s.rounds.append(providers)
+                return s.antigravity
+            }
+            var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [:]
+            if providers.contains(.claude) { results[.claude] = .success(amWeeklySnapshot(.claude, used: 27, at: now)) }
+            if providers.contains(.antigravity) {
+                results[.antigravity] = scripted.map { .failure(AILimitReadError($0)) }
+                    ?? .success(amWeeklySnapshot(.antigravity, used: 40, at: now))
+            }
+            return AILimitReadOutcome(results: results)
+        }
+    }
+}
+
+@Suite("AILimitsMac — 안티그래비티: 로그인 필요면 반복 실행 멈춤 (0.3.57)")
+@MainActor
+struct AILimitsMacAgyLoginBackoffTests {
+    private func makeStore(_ spy: AMRoundSpy, defaults: UserDefaults? = nil, clock: Date = amNow) -> AILimitStore {
+        AILimitStore(defaults: defaults ?? amDefaults(), clock: { clock }, runner: spy.runner)
+    }
+
+    /// 팝오버 강제 바퀴(5분 하한)는 로그인이 필요한 안티그래비티를 **빼고** 돈다 — 열기만으로 agy 가 다시 뜨지 않는다.
+    /// 로그인 필요가 아니면(네트워크 실패) 같은 강제 바퀴에 넣는다(기준선이 갈린다).
+    @Test
+    func forcedRoundSkipsAntigravityWhileLoginIsRequired() async {
+        let spy = AMRoundSpy()
+        let store = makeStore(spy)
+        await store.refreshIfDue(now: amNow)
+        #expect(spy.lastIncludedAntigravity == true, "전제: 첫 바퀴는 안티그래비티를 넣는다")
+        #expect(store.failures[.antigravity] == .unauthorized)
+
+        await store.refreshIfDue(now: amAt(300), force: true)
+        #expect(spy.rounds.count == 2, "강제 바퀴 자체가 안 돌았다 — Claude 까지 멈췄다")
+        #expect(spy.lastIncludedAntigravity == false, "로그인 필요인데 팝오버를 열자 agy 를 다시 띄웠다: \(spy.rounds)")
+        #expect(spy.rounds.last?.contains(.claude) == true)
+
+        // 대조군: 네트워크 실패는 로그인 필요가 아니다 → 같은 강제 바퀴에 넣는다.
+        let network = AMRoundSpy()
+        network.setAntigravity(.network)
+        let other = makeStore(network)
+        await other.refreshIfDue(now: amNow)
+        await other.refreshIfDue(now: amAt(300), force: true)
+        #expect(network.lastIncludedAntigravity == true, "네트워크 실패인데 안티그래비티를 뺐다")
+    }
+
+    /// 평소 바퀴: 연속 1회째 → 다음 10분 바퀴에 한 번 더(네트워크가 흔들린 한 번은 여기서 풀린다) →
+    /// 2회째부터 → 마지막 시도에서 1시간이 지날 때까지 뺀다 → 1시간이 차면 넣는다.
+    @Test
+    func periodicRetriesOnceAfterTenMinutesThenHourly() async {
+        let spy = AMRoundSpy()
+        let store = makeStore(spy)
+        await store.refreshIfDue(now: amNow)                 // 1회째
+        await store.refreshIfDue(now: amAt(600))             // 10분 뒤 → 넣는다 → 2회째
+        #expect(spy.rounds.count == 2)
+        #expect(spy.rounds[1].contains(.antigravity), "연속 1회째 다음 10분 바퀴에 안티그래비티를 안 넣었다")
+        for seconds in stride(from: 1_200.0, through: 3_600.0, by: 600) {
+            await store.refreshIfDue(now: amAt(seconds))
+            #expect(spy.lastIncludedAntigravity == false, "+\(Int(seconds))초: 2회째 뒤 1시간 안에 agy 를 다시 띄웠다")
+            #expect(spy.rounds.last?.contains(.claude) == true, "+\(Int(seconds))초: 바퀴째 멈췄다")
+        }
+        await store.refreshIfDue(now: amAt(600 + AILimitStore.antigravityLoginRetryInterval))
+        #expect(spy.lastIncludedAntigravity == true, "마지막 시도에서 1시간이 지났는데 안 넣었다 — 영영 안 풀린다")
+        #expect(AILimitStore.antigravityLoginRetryInterval == 3_600)
+    }
+
+    /// ★ 보고 숫자: 로그인이 필요한 1시간 동안 팝오버를 5분마다 연다(강제 바퀴만 12번).
+    ///   0e138f2 는 12번 모두 agy 를 띄웠다(시간당 12 × 60초). 지금은 처음 + 10분 뒤 = **2번**이고, 다음은 1시간 뒤다.
+    ///   그리고 평소 바퀴가 한 번도 안 와도(강제 바퀴가 공용 스탬프를 계속 찍는다) 자기 시계로 꼭 다시 돈다.
+    @Test
+    func popoverEveryFiveMinutesForAnHourRunsAgyTwice() async {
+        let spy = AMRoundSpy()
+        let store = makeStore(spy)
+        for k in 0..<12 { await store.refreshIfDue(now: amAt(Double(k) * 300), force: true) }
+        #expect(spy.rounds.count == 12, "전제: 강제 바퀴가 5분마다 돌았다(\(spy.rounds.count)번)")
+        #expect(spy.agyRuns == 2, "로그인이 필요한 1시간에 agy 를 \(spy.agyRuns)번 띄웠다 — 처음 + 10분 뒤 두 번이어야 한다")
+        #expect(spy.rounds.indices.filter { spy.rounds[$0].contains(.antigravity) } == [0, 2])
+        // 마지막 시도(+600) + 1시간 = +4200 — 강제 바퀴만 와도 그때 돈다.
+        for k in 12...14 { await store.refreshIfDue(now: amAt(Double(k) * 300), force: true) }
+        #expect(spy.agyRuns == 3, "강제 바퀴뿐인 사람에게 1시간 뒤 재시도가 오지 않았다")
+        #expect(spy.lastIncludedAntigravity == true)
+    }
+
+    /// 연속 횟수가 풀리는 길: 안티그래비티의 다른 결과(네트워크 · 성공), 그리고 사용자가 스위치를 껐다 켜기(제공자 · 마스터).
+    /// 풀린 뒤의 새 `.unauthorized` 는 다시 1회째라 **10분 뒤 한 번** 더 돈다(안 풀렸으면 3회째라 1시간을 기다린다).
+    @Test
+    func otherResultsAndSwitchesResetTheStreak() async {
+        for reset in [AILimitReadFailure?.some(.network), nil] {
+            let spy = AMRoundSpy()
+            let store = makeStore(spy)
+            await store.refreshIfDue(now: amNow)
+            await store.refreshIfDue(now: amAt(600))                 // 2회째
+            await store.refreshIfDue(now: amAt(1_200))
+            #expect(spy.lastIncludedAntigravity == false, "전제: 2회째 뒤에는 1시간 간격이다")
+            spy.setAntigravity(reset)
+            await store.refreshIfDue(now: amAt(4_200))               // 1시간 → 넣는다 → 다른 결과
+            #expect(spy.lastIncludedAntigravity == true)
+            spy.setAntigravity(.unauthorized)
+            await store.refreshIfDue(now: amAt(4_800))               // 다시 로그인 필요 → 1회째여야 한다
+            await store.refreshIfDue(now: amAt(5_400))               // 1회째면 10분 뒤 넣는다
+            #expect(spy.lastIncludedAntigravity == true,
+                    "\(String(describing: reset)) 결과가 연속 횟수를 안 풀었다 — 새 로그인 필요가 곧장 1시간 간격이 됐다")
+        }
+
+        // 스위치: 1시간 간격 한가운데에서 안티그래비티를 껐다 켜면(= "다시 해 봐라") 다음 강제 바퀴에 바로 돈다.
+        for viaMaster in [false, true] {
+            let spy = AMRoundSpy()
+            let store = makeStore(spy)
+            await store.refreshIfDue(now: amNow)
+            await store.refreshIfDue(now: amAt(600))
+            await store.refreshIfDue(now: amAt(1_200))
+            #expect(spy.lastIncludedAntigravity == false, "전제: 1시간 간격 안이다")
+            if viaMaster {
+                store.setMasterEnabled(false)
+                store.setMasterEnabled(true)
+            } else {
+                store.setProviderEnabled(.antigravity, false)
+                store.setProviderEnabled(.antigravity, true)
+            }
+            await store.refreshIfDue(now: amAt(1_500), force: true)
+            #expect(spy.lastIncludedAntigravity == true,
+                    "\(viaMaster ? "마스터" : "안티그래비티 스위치")를 껐다 켰는데 다음 바퀴에 안 돌았다")
+        }
+    }
+
+    /// 뺀 바퀴는 안티그래비티를 **건드리지 않는다**: 들고 있던 숫자 · 실패 · 문구 · 줄 · 업로드 묶음 · 비우기 대기열 그대로.
+    /// "이번에 안 읽었다"를 "사라졌다"로 접으면 폰·위젯에서 그 줄이 지워진다.
+    @Test
+    func skippedRoundsKeepHeldNumbersNoticeAndUploadState() async {
+        let spy = AMRoundSpy()
+        spy.setAntigravity(nil)
+        let store = makeStore(spy)
+        await store.refreshIfDue(now: amNow)                         // 성공 → 숫자를 든다
+        spy.setAntigravity(.unauthorized)
+        await store.refreshIfDue(now: amAt(600))
+        await store.refreshIfDue(now: amAt(1_200))                   // 2회째
+        let held = store.bundle?.provider(.antigravity)
+        #expect(held != nil, "전제: 성공한 숫자를 들고 있다")
+        for seconds in [1_800.0, 2_400, 3_000] {
+            await store.refreshIfDue(now: amAt(seconds))
+            #expect(spy.lastIncludedAntigravity == false, "+\(Int(seconds))초: 전제 — 이 바퀴는 안티그래비티를 뺐다")
+            #expect(store.bundle?.provider(.antigravity) == held, "+\(Int(seconds))초: 뺀 바퀴가 들고 있던 숫자를 바꿨다")
+            #expect(store.failures[.antigravity] == .unauthorized, "+\(Int(seconds))초: 뺀 바퀴가 실패를 지웠다")
+            #expect(store.noticeText(provider: .antigravity) == "안티그래비티를 한 번 실행해 주세요")
+            #expect(store.listedProviders.contains(.antigravity))
+            #expect(store.enabledBundle.provider(.antigravity) == held, "+\(Int(seconds))초: 업로드 묶음에서 빠졌다")
+            #expect(store.pendingClear.isEmpty, "+\(Int(seconds))초: 뺀 바퀴가 서버 행 비우기를 걸었다")
+        }
+    }
+
+    /// 빼고 나니 아무도 안 남은 바퀴(Claude·Codex 를 끄고 안티그래비티만 켠 사람)는 러너를 부르지 않고 **시도 스탬프도 안 찍는다**.
+    /// 스탬프를 찍으면 10분 뒤 재시도가 다음 10분 간격 뒤로 밀린다.
+    @Test
+    func roundWithNothingLeftDoesNotCallTheRunner() async {
+        let spy = AMRoundSpy()
+        let store = makeStore(spy)
+        store.setProviderEnabled(.claude, false)
+        store.setProviderEnabled(.codex, false)
+        await store.refreshIfDue(now: amNow)
+        #expect(spy.rounds == [[.antigravity]], "전제: 안티그래비티만 켠 바퀴다")
+        #expect(store.runnerCallCount == 1)
+
+        await store.refreshIfDue(now: amAt(300), force: true)
+        #expect(spy.rounds.count == 1, "빈 바퀴에 러너를 불렀다: \(spy.rounds)")
+        #expect(store.runnerCallCount == 1)
+        #expect(store.lastAttemptAt == amNow, "빈 바퀴가 시도 스탬프를 찍었다")
+
+        // 10분이 차면 그 바퀴에 돈다(빈 바퀴가 스탬프를 찍었으면 여기서 아직 간격이 안 찼다).
+        await store.refreshIfDue(now: amAt(600))
+        #expect(spy.rounds.count == 2, "10분 뒤 재시도가 오지 않았다")
+        #expect(spy.lastIncludedAntigravity == true)
+    }
+
+    /// 재실행: 연속 횟수는 영속하지 않지만 디스크의 `.unauthorized` 에서 1회로 되살린다 → 첫 바퀴에 **한 번** 돌고,
+    /// 또 실패하면 곧장 1시간 간격이다(0 에서 시작하면 10분 뒤 한 번 더 돈다).
+    @Test
+    func restartRunsAgyOnceThenWaitsAnHour() async {
+        let defaults = amDefaults()
+        let before = AMRoundSpy()
+        await makeStore(before, defaults: defaults).refreshIfDue(now: amNow)
+
+        let spy = AMRoundSpy()
+        let store = makeStore(spy, defaults: defaults, clock: amAt(900))
+        #expect(store.failures[.antigravity] == .unauthorized, "전제: 실패가 디스크에서 돌아왔다")
+        await store.refreshIfDue(now: amAt(900), force: true)
+        #expect(spy.lastIncludedAntigravity == true, "재실행 뒤 첫 바퀴에 한 번은 돈다")
+        await store.refreshIfDue(now: amAt(1_500))
+        #expect(spy.rounds.count == 2)
+        #expect(spy.lastIncludedAntigravity == false, "재실행 뒤 또 실패했는데 10분 만에 다시 띄웠다")
     }
 }
 

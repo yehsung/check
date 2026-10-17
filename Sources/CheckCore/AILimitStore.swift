@@ -315,6 +315,9 @@ package final class AILimitStore {
                 out[provider] = pair.value
             }
         }
+        // 로그인 필요는 디스크의 실패에서 **연속 1회**로 되살린다 — 재실행 뒤 한 번만 돌고 또 실패하면 바로 1시간 간격이다
+        // (0.3.57 '안티그래비티 로그인 필요' — 횟수 자체는 영속하지 않는다).
+        if failures[.antigravity] == .unauthorized { antigravityLoginStreak = 1 }
         // 간격·금지창은 프로세스 수명보다 오래 산다(머리말). 미래 스탬프는 지금으로 접어 영구고착을 막고,
         // 금지창은 한 번의 기본 백오프보다 길게 믿지 않는다(디스크 값 하나가 리밋 축을 영원히 끌 수 있다).
         let now = self.clock()
@@ -523,7 +526,7 @@ package final class AILimitStore {
     ///   `enabledProviders` 는 '꺼진 쪽을 저장한다' 규약 때문에 **연동 안 된 제공자까지 켜진 것으로 센다.**
     ///   그 제공자는 설정 화면에 줄이 **없어서**(섹션은 연동된 것만 세운다 — `configurableProviders`)
     ///   사용자가 끌 수도 없다. 그걸로 바퀴를 살려 두면 Claude 하나만 연동한 사람이 그 하나를 끈 뒤에도
-    ///   10분마다 `~/.codex/auth.json` 을 읽고 `agy`(5초짜리)를 띄운다 — 화면에 남은 스위치가 마스터뿐이라
+    ///   10분마다 `~/.codex/auth.json` 을 읽고 `agy`(평소 5~6초 · 로그인이 필요하면 60초)를 띄운다 — 화면에 남은 스위치가 마스터뿐이라
     ///   "끄면 읽지도 않는다"가 그 사람에게는 거짓이 된다.
     ///   그래서 줄이 선 제공자 중 켜진 것이 하나도 없으면 **바퀴를 돌리지 않는다.**
     ///
@@ -556,16 +559,70 @@ package final class AILimitStore {
         guard isDue(now: now, force: force) else { return }
         // 켜진 제공자만 러너에게 넘긴다. 집합을 **여기서** 굳히는 까닭: 바퀴 도중에 사용자가 스위치를
         // 만져도 이번 바퀴의 요청 집합은 변하지 않아야 한다(요청한 적 없는 제공자의 결과가 섞이지 않는다).
-        let providers = visibility.enabledProviders
+        var providers = visibility.enabledProviders
+        // 로그인이 필요한 안티그래비티는 자기 시계가 찰 때만 넣는다(아래 '안티그래비티 로그인 필요' 절).
+        // 빠진 제공자는 결과가 없으므로 `apply` 가 들고 있던 숫자·실패·문구를 그대로 둔다.
+        if providers.contains(.antigravity), !antigravityIsDue(now: now) {
+            providers.remove(.antigravity)
+        }
+        // ★ 빼고 나서 아무도 안 남으면 러너를 부르지 않고 **스탬프도 찍지 않는다**: 이건 시도가 아니다.
+        //   찍으면 안티그래비티의 1시간이 찬 순간이 다음 10분 간격 뒤로 밀린다. 안 찍으면 `isDue` 가 참으로 남아
+        //   30초 틱마다 이 판정만 다시 한다(러너도 디스크도 안 건드린다 — 값싸다).
+        guard !providers.isEmpty else { return }
         // 스탬프를 러너 **전에** 찍는다 — 실패도 간격을 지켜야 난사가 안 된다(CodexAccountUsageStore 와 같은 관용구).
         // 디스크에도 **지금** 내려간다: 바퀴 도중에 앱이 죽어도 이 시도가 장부에 남아야 다음 실행이 간격을 지킨다.
         lastAttemptAt = now
+        if providers.contains(.antigravity) { antigravityLastAttemptAt = now }
         persistSchedule()
         inFlight = true
         defer { inFlight = false }
         runnerCallCount += 1
         let outcome = await runner(now, providers)
         apply(outcome, now: now)
+    }
+
+    // MARK: 안티그래비티 로그인 필요 — 반복 실행 멈춤 (0.3.57)
+    //
+    // agy 는 로그인이 필요하면 샌드박스 안에서 브라우저를 못 열고 **60초를 기다린 뒤** `authentication failed …` 로 끝난다
+    // (`AILimitAntigravityReader` 머리말). 창은 안 뜨지만 그 60초 동안 바퀴가 `inFlight` 로 묶이고, 러너는 셋을 **다 받은
+    // 뒤에** 반영하므로 Claude·Codex 숫자도 60초 늦는다. 그대로 두면 팝오버를 5분마다 여는 사람에게 시간당 12번이다.
+    // 사용자 결정(2026-10-18): "로그인이 필요하면 반복 실행을 멈추고 로그인 필요만 표시".
+    //
+    // 판정(`antigravityIsDue`) — 안티그래비티 **자기 시계**(`antigravityLastAttemptAt`)로 잰다:
+    //  · 연속 `.unauthorized` 0회(또는 지금 실패가 `.unauthorized` 가 아니다) → 평소처럼 모든 바퀴에 넣는다.
+    //  · 1회째 → 그 시도에서 **10분**(`refreshInterval`)이 지난 바퀴에 한 번 더 넣는다. 네트워크가 흔들려 한 번
+    //    실패한 경우(2026-10-18 사고가 바로 그때였다)가 다음 바퀴에 풀리게.
+    //  · 2회째부터 → **1시간**(`antigravityLoginRetryInterval`)이 지난 바퀴에만.
+    //  · 팝오버를 연 강제 바퀴(5분 하한)는 그 시계가 차기 **전에는 넣지 않는다** — 열기만으로 agy 가 더 돌지 않는다.
+    //    ★ "강제 바퀴는 무조건 뺀다"로 짜지 않은 까닭: 강제 바퀴도 공용 `lastAttemptAt` 을 찍으므로 팝오버를 10분 안에
+    //      한 번씩 여는 사람에게는 평소 바퀴(600초)가 **영영 오지 않는다** — 그러면 네트워크 탓의 한 번 실패도 영원히
+    //      "로그인 필요"로 굳는다. 자기 시계로 재면 바퀴 종류와 무관하게 10분 · 1시간 뒤에 꼭 한 번 돈다.
+    //  · 연속 횟수가 0 으로 돌아가는 때: 안티그래비티 결과가 `.unauthorized` 가 아닐 때(성공·네트워크·미설치 …),
+    //    그리고 안티그래비티가 **꺼지거나 켜질 때**(제공자 스위치 · 마스터 — `apply(visibility:)`). 그래서 사용자가 다시
+    //    켜면 다음 바퀴(강제든 평소든)에 바로 돈다. 로그아웃·계정 전환은 이 스토어가 따로 비우지 않는다(agy 로그인은
+    //    우리 계정과 무관한 구글 계정이다).
+    //
+    // ## 메모리에만 둔다 — 다시 켜면 한 번 돌 수 있다
+    // 영속하면 재실행마다 도는 그 한 번(창 없는 60초)을 아끼지만 키가 둘 는다. 429 처럼 **남의 상한**을 건드리는 일이
+    // 아니라 우리만 치르는 값이라, `lastAttemptAt` 처럼 디스크에 둘 근거가 약하다. 대신 복원할 때 디스크의 실패가
+    // `.unauthorized` 면 연속 1회로 시작한다 — 그래서 재실행 뒤 첫 바퀴에 **한 번** 돌고, 또 실패하면 바로 1시간 간격이다
+    // (0 에서 시작하면 첫 바퀴 + 10분 뒤 한 번 = 두 번 돈다).
+
+    /// 로그인이 필요한 동안(연속 2회째부터) 안티그래비티를 다시 넣는 간격(초). 1시간.
+    package nonisolated static let antigravityLoginRetryInterval: TimeInterval = 3_600
+
+    /// 안티그래비티의 연속 `.unauthorized` 횟수(메모리 — 위 절). 다른 결과·스위치 변화에 0 이 된다.
+    @ObservationIgnored package private(set) var antigravityLoginStreak = 0
+    /// 안티그래비티를 **넣은** 마지막 바퀴의 시각(메모리). 뺀 바퀴는 찍지 않는다.
+    @ObservationIgnored package private(set) var antigravityLastAttemptAt: Date?
+
+    /// 이번 바퀴에 안티그래비티를 넣어도 되는가(켜져 있는지는 부르는 쪽이 이미 걸렀다). 판정표는 위 절.
+    package func antigravityIsDue(now: Date) -> Bool {
+        guard antigravityLoginStreak > 0, failures[.antigravity] == .unauthorized else { return true }
+        // 재실행 직후(연속 횟수만 복원됐다) — 이 프로세스에서 아직 안 돌렸으니 한 번은 돈다.
+        guard let last = antigravityLastAttemptAt else { return true }
+        let wait = antigravityLoginStreak >= 2 ? Self.antigravityLoginRetryInterval : Self.refreshInterval
+        return now.timeIntervalSince(last) >= wait
     }
 
     // MARK: 표시 설정 (v0.3.47)
@@ -599,6 +656,9 @@ package final class AILimitStore {
     /// 같은 PK 의 값 행과 비우는 행이 한 본문에 섞이면 upsert 가 21000 으로 **본문 전체**를 거절한다.
     private func apply(visibility next: AILimitVisibility) {
         let before = uploadableProviders(visibility)
+        // 안티그래비티가 꺼지거나 켜지면(제공자 스위치 · 마스터 어느 쪽이든) 로그인 필요 연속 횟수를 푼다 —
+        // 사용자가 다시 켠 것은 "다시 해 봐라"다. 다음 바퀴(강제든 평소든)에 바로 돈다(0.3.57 '안티그래비티 로그인 필요').
+        if visibility.isEnabled(.antigravity) != next.isEnabled(.antigravity) { antigravityLoginStreak = 0 }
         visibility = next
         let after = uploadableProviders(next)
         // 새로 끈 제공자는 **새 세대**로 들어온다(정렬 — 세대 번호가 결정적이어야 테스트가 되묻을 수 있다).
@@ -706,9 +766,16 @@ package final class AILimitStore {
         let next = AILimitSnapshotBundle(providers: merged.values.sorted { $0.provider.sortOrder < $1.provider.sortOrder })
         bundle = next
         var nextFailures = failures
+        // ★ 이번 바퀴에 **결과가 있는** 제공자만 갈아 끼운다 — 바퀴에서 뺀 제공자(꺼짐 · 로그인 필요로 쉬는 안티그래비티)는
+        //   실패·문구가 그대로 남는다. "이번에 안 읽었다"는 "사라졌다"가 아니다.
         for provider in outcome.results.keys { nextFailures.removeValue(forKey: provider) }
         for (provider, failure) in outcome.failures { nextFailures[provider] = failure }
         failures = nextFailures
+        // 로그인 필요 연속 횟수(0.3.57). 안티그래비티 결과가 있을 때만 움직인다 — `.unauthorized` 면 하나 늘고, 그 밖의 결과
+        // (성공 · 네트워크 · 미설치 …)는 0 으로 푼다. 결과가 없는 바퀴(뺐다)는 세지 않는다.
+        if outcome.results[.antigravity] != nil {
+            antigravityLoginStreak = outcome.failures[.antigravity] == .unauthorized ? antigravityLoginStreak + 1 : 0
+        }
         silentUntil = outcome.failures.values.contains(.rateLimited)
             ? now.addingTimeInterval(outcome.retryAfter ?? Self.defaultBackoff)
             : nil
@@ -801,8 +868,10 @@ extension AILimitStore {
     }
     #else
 
-    /// 리더 셋을 **동시에** 돌리는 러너. 셋이 서로를 기다리지 않아야 한다 — `agy` 는 5초짜리라
-    /// 직렬로 묶으면 팝오버를 연 사람이 그만큼 더 기다린다.
+    /// 리더 셋을 **동시에** 돌리는 러너. 셋이 서로를 기다리지 않아야 한다 — `agy` 는 평소 5~6초, 로그인이 필요하면
+    /// 60초(0.3.57 실측 — 샌드박스가 브라우저를 막은 뒤 agy 가 스스로 기다린다)라 직렬로 묶으면 팝오버를 연 사람이 그만큼 더 기다린다.
+    /// ★ 다만 결과는 셋이 **다 끝나야** 한꺼번에 반영된다 — 그 60초 동안은 Claude·Codex 숫자도 늦는다. 그래서 로그인이
+    ///   필요한 안티그래비티는 스토어가 바퀴에서 뺀다(`AILimitStore.antigravityIsDue`).
     /// `nonisolated` 인 이유: 클로저 셋을 **조립만** 하므로 메인 액터일 필요가 없고, 그래야 실증 하네스나
     /// 배경 작업이 메인을 잡지 않고 한 바퀴를 돌려 볼 수 있다(`live()` 는 스토어를 만들어야 해서 메인이다).
     package nonisolated static func liveRunner(
@@ -842,8 +911,8 @@ extension AILimitStore {
             //   빈 집합이면 자식 작업이 하나도 안 떠서 묻는 데 드는 비용도 0 이다.
             typealias Reading = (AILimitProvider, Result<AILimitProviderSnapshot, AILimitReadError>)
             return await withTaskGroup(of: Reading.self) { group in
-                // 셋이 서로를 기다리지 않아야 한다 — `agy` 는 5초짜리라 직렬로 묶으면 팝오버를 연 사람이
-                // 그만큼 더 기다린다(그래서 `async let` 셋을 작업 그룹으로 바꿔도 동시성은 그대로다).
+                // 셋이 서로를 기다리지 않아야 한다 — `agy` 는 평소 5~6초(로그인이 필요하면 60초)라 직렬로 묶으면
+                // 팝오버를 연 사람이 그만큼 더 기다린다(그래서 `async let` 셋을 작업 그룹으로 바꿔도 동시성은 그대로다).
                 if providers.contains(.claude) { group.addTask { (.claude, await claude.read(now: now)) } }
                 if providers.contains(.codex) { group.addTask { (.codex, await codex.read(now: now)) } }
                 if providers.contains(.antigravity) { group.addTask { (.antigravity, await antigravity.read(now: now)) } }
@@ -865,7 +934,7 @@ extension AILimitStore {
 /// 하이픈으로 바뀌어 사람이 자기 맥으로 못 알아본다.
 ///
 /// ★ **프로세스를 띄우지 않는다.** `scutil` 을 부르면 같은 값을 얻으려고 10분마다 자식 프로세스가 뜬다
-///   (리밋 축이 `agy` 하나로도 이미 비싸다 — 그 5초가 팝오버를 연 사람을 기다리게 한다).
+///   (리밋 축이 `agy` 하나로도 이미 비싸다 — 평소 5~6초, 로그인이 필요하면 60초가 팝오버를 연 사람을 기다리게 한다).
 /// ★ 이름은 **식별자가 아니다.** 겹칠 수 있고(맥 미니 두 대), 그때 가르는 일은 읽는 쪽이 한다
 ///   (`AILimitDeviceRoster.displayNames`). 맥들은 서로를 모른다.
 package enum AILimitDeviceName {

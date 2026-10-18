@@ -21,6 +21,8 @@ import SwiftUI
 //    자리를 잡고, 제목 행의 루비 숫자가 올라간다(`MissionRubyBalance` — 숫자 넘김 전환). 캐릭터 말풍선 "루비 +N!"은 스토어가 기존
 //    자리로 낸다.
 //  · 동작 줄이기: 위치 · 크기 변화 없이 제자리에 섰다가 흐려지기만 하고, 줄 · 숫자는 애니메이션 없이 바로 바뀐다.
+//  · 실패: 그 줄의 보조 문장 자리가 "받지 못했어요 · 다시 눌러 주세요"(주황)로 바뀌고 [받기]는 그대로 선다. 안내줄로 띄우지 않는다
+//    (검토 지적 2026-10-19 — 안내줄은 절 위에 끼어 줄을 26pt 밀고, 아래 줄을 누른 사람에겐 스크롤 밖이라 안 보였다).
 
 /// 도전 미션 절의 문구 · 아이콘 규약(순수 — 값으로 검증한다).
 enum AchievementCopy {
@@ -32,6 +34,8 @@ enum AchievementCopy {
     /// 한 번도 못 받았는데 실패 — 미션 화면의 실패 문장 그대로.
     static let failedCaption = MissionPanelCopy.failedCaption
     static let loadingCaption = MissionPanelCopy.loadingCaption
+    /// 받기가 실패한 줄의 보조 문장(그 줄 안 — [받기]는 그대로 서 있다). 주간 줄도 같은 문장이다.
+    static let claimFailedCaption = AchievementNoticeText.claimFailedRow
 
     /// 보상 칩 — 3시간 줄("💎 +3") · 주간 줄("💎 +50")과 같은 루비 글리프. 0 이면 칩이 없다(nil).
     static func reward(_ mission: AchievementStatus.Mission) -> String? {
@@ -108,6 +112,17 @@ enum AchievementSectionState: Equatable {
         return failed ? .failed : .loading
     }
 
+    /// 줄을 아직 모르는 동안(불러오는 중 · 한 번도 못 받은 실패) 미션 화면이 **스크롤 창 높이를 미리 잡아 두는가**.
+    /// 검토 지적(2026-10-19): 문구 한 줄로 세면 첫 열기마다 팝오버가 482pt 로 섰다가 답이 오면 582pt 로 100pt 자랐다(9줄은 언제나
+    /// 스크롤 상한을 넘는다). 그래서 이 두 상태는 받은 뒤와 같은 높이를 차지한다 — 실패 ↔ 다시 묻는 중도 같은 높이라 [다시 시도]가
+    /// 팝오버를 흔들지 않는다. 서버에 기능이 없다고 **안 뒤**(`.hidden`)에만 접힌다(db push 전 창의 한 번뿐이다).
+    var reservesViewport: Bool {
+        switch self {
+        case .loading, .failed: return true
+        case .hidden, .loaded: return false
+        }
+    }
+
     /// 절이 그리는 줄 수(소제목 제외). 문구 한 줄도 한 줄 높이다(미션 화면의 빈 목록 문구와 같은 규약).
     var rowCount: Int {
         switch self {
@@ -133,13 +148,22 @@ struct MissionClaimContext {
     var weeklyInFlight = false
     /// 줄 자리 → 받기 연출(`MissionClaimBurst.achievementTarget(series:)` · `weeklyTarget`).
     var bursts: [String: MissionClaimBurst] = [:]
+    /// 마지막 받기가 실패한 키 · 주간 받기 실패(검토 지적 2026-10-19 — 실패는 **그 줄 안**에서 말한다, 안내줄로 절을 밀지 않는다).
+    var failedKeys: Set<String> = []
+    var weeklyFailed = false
     /// 동작 줄이기 강제값. nil 이면 시스템 설정을 따른다(`accessibilityReduceMotion` 은 읽기 전용이라 렌더 테스트가 여기로 강제한다 —
     /// `CheckFocusModeButton.reduceMotion` 과 같은 규약).
     var reduceMotion: Bool? = nil
+    /// 받기 연출을 이 장면(0…1)에 멈춰 그린다 — **렌더 테스트 · 스틸 전용**, 앱은 언제나 nil(0 → 1 로 한 번 재생한다).
+    /// 왜 필요한가(2026-10-19 실측): `ImageRenderer` 는 `onAppear` 의 `withAnimation` 을 끝값으로 건너뛰어 굽는다 — 연출이 언제나
+    /// 불투명도 0 으로 찍혀, 줄이 동작 줄이기 값을 연출에 넘기는지 그림으로 잴 수 없었다(검토 지적: 넘기지 않게 바꿔도 초록).
+    var frozenBurstProgress: Double? = nil
 
     func isInFlight(_ key: String) -> Bool {
         inFlightKeys.contains(key) || inFlightKeys.contains(WorkTimerStore.achievementClaimAllSlot)
     }
+
+    func hasFailed(_ key: String) -> Bool { failedKeys.contains(key) }
 }
 
 private struct MissionClaimContextKey: EnvironmentKey {
@@ -300,17 +324,21 @@ struct MissionClaimBurstFace: View, Animatable {
 }
 
 /// 받기 연출(한 번 재생하고 끝 — 끝난 뒤엔 불투명도 0 으로 남아 아무것도 가리지 않는다). 다시 재생하려면 `.id(serial)` 로 새로 만든다.
+/// 동작 줄이기 값은 **줄이 넘긴다**(줄마다 같은 값으로 자리잡기 애니메이션도 고르므로 — 두 곳이 갈리지 않게). 멈춘 장면
+/// (`MissionClaimContext.frozenBurstProgress`)만 환경값에서 직접 읽는다 — 렌더 테스트가 줄의 배선을 그대로 거쳐 재게.
 struct MissionClaimBurstView: View {
     let amount: Int
     let reduceMotion: Bool
 
+    @Environment(\.missionClaim) private var claim
     @State private var progress: Double = 0
 
     var body: some View {
-        MissionClaimBurstFace(amount: amount, progress: progress, reduceMotion: reduceMotion)
+        MissionClaimBurstFace(amount: amount, progress: claim.frozenBurstProgress ?? progress, reduceMotion: reduceMotion)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .onAppear {
+                guard claim.frozenBurstProgress == nil else { return }
                 withAnimation(.linear(duration: MissionClaimBurstCurve.duration)) { progress = 1 }
             }
     }
@@ -367,6 +395,9 @@ struct AchievementRowView: View {
         let tint = state == .claimed ? CheckTheme.working : CheckTheme.accent
         // 버튼이 서면 왼쪽 글자 열이 그만큼 좁아진다 — 가장 긴 제목("미니게임 3종 한 판씩 해보기")이 말줄임 대신 살짝 줄어들게.
         let squeeze: CGFloat = state == .claimable ? 0.8 : 1
+        // 받기가 실패했으면 보조 문장 자리에 실패 문장(검토 지적 2026-10-19) — 줄 높이 · 위치는 그대로라 아무것도 밀리지 않고,
+        // 누른 그 줄에서 보인다. [받기]가 서 있을 때만이다(그 사이 다른 기기에서 받았으면 실패는 더 뜻이 없다).
+        let failed = state == .claimable && claim.hasFailed(mission.key)
         HStack(spacing: 10) {
             Image(systemName: AchievementCopy.icon(mission.key))
                 .font(.system(size: 13, weight: .semibold))
@@ -399,9 +430,9 @@ struct AchievementRowView: View {
                 }
                 .frame(height: 4)      // MissionRowView 와 같은 관용구
                 HStack(spacing: 6) {
-                    Text(mission.detail)
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
+                    Text(failed ? AchievementCopy.claimFailedCaption : mission.detail)
+                        .font(failed ? .caption2.weight(.semibold) : .caption2)
+                        .foregroundStyle(failed ? CheckTheme.pending : CheckTheme.secondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(squeeze)
                     Spacer(minLength: 4)

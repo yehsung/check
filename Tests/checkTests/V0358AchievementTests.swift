@@ -188,6 +188,14 @@ enum V0358Fixture {
         weeklyJSON(tiers: [(20, 20, true, true), (40, 50, true, true), (60, 200, false, false)], pending: [],
                    claimedNow: [("2026-10-12", 20, 20), ("2026-10-12", 40, 50)], ruby: ruby)
     }
+
+    /// 3시간 랩 안내줄(받기와 무관한 안내 — 높이 예산 셈에 쓴다). 받기 실패는 v0.3.58 검토 뒤 안내줄이 아니다.
+    static let lapNotice = "3시간 채웠어요 — 루비 +3"
+
+    /// 상점 조회 응답(`shop_state` — V0355 잔량 경합 스텁과 같은 모양).
+    static func shopJSON(ruby: Int) -> String {
+        #"{"ruby_balance":"# + "\(ruby)" + #","ultra_balance":0,"ultra_price":3,"ultra_buy_max":20,"characters":[]}"#
+    }
 }
 
 // MARK: - 공용 도우미
@@ -222,6 +230,11 @@ private func v0358GreenPixels(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat
 /// 받기 버튼의 흰 글자 픽셀 수(세 채널 모두 밝다) — 줄의 다른 글자는 회색(0.68)·흰(0.94)이라 **바탕이 그라데이션인 자리**에서만 센다.
 private func v0358WhitePixels(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>) -> Int {
     v0358Count(bitmap, x: x, y: y) { r, g, b in r > 225 && g > 225 && b > 225 }
+}
+
+/// 주황(`CheckTheme.pending` ≈ 255,184,84 — 받기 실패 문장) 픽셀 수. 근무색 · 강조색 · 흰 · 회색 글자와 갈린다.
+private func v0358AmberPixels(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>) -> Int {
+    v0358Count(bitmap, x: x, y: y) { r, g, b in r > 170 && r - b > 70 && g > 100 && r - g > 25 }
 }
 
 /// 그라데이션 캡슐(`gaugeGradient` — 근무색 → 강조색)의 **가운데 섞인 색** 픽셀 수. 양 끝 색 자체는 줄의 다른 것(근무색 바 · ✓ 받음 ·
@@ -319,6 +332,7 @@ private func v0358RenderStore(achievements: AchievementStatus? = nil,
                               notice: String? = nil,
                               ruby: Int? = 1234,
                               mission: Bool = true,
+                              claimsFail: Bool = false,
                               function: String = #function, line: Int = #line) -> WorkTimerStore {
     let tag = "v0358-render-L\(line)"
     let home = CheckTestScratch.directory("token-\(tag)", function: function)
@@ -328,7 +342,13 @@ private func v0358RenderStore(achievements: AchievementStatus? = nil,
         cacheURL: home.appendingPathComponent("cache.json", isDirectory: false)
     )
     let host = "v0358-silent-\(UUID().uuidString.prefix(8))".lowercased()
-    GomokuStubProtocol.register(host: host) { _, _, _ in .init(body: "[]", delay: 600) }
+    // `claimsFail` — 받기 둘(도전 미션 · 주간)만 곧바로 500 으로 답한다(실패한 받기를 **스토어 길 그대로** 그리려고). 나머지는 답하지 않는다.
+    GomokuStubProtocol.register(host: host) { rpc, _, _ in
+        if claimsFail, rpc == "achievement_claim" || rpc == "weekly_work_claim" {
+            return .init(status: 500, body: #"{"message":"boom"}"#)
+        }
+        return .init(body: "[]", delay: 600)
+    }
     let service = SupabaseWorkService(projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key",
                                       session: GomokuStubProtocol.session())
     let store = WorkTimerStore(service: service,
@@ -371,6 +391,7 @@ private func v0358Store(_ label: String,
                         weeklyClaim: @escaping @Sendable (Int) -> GomokuStubProtocol.Reply = { _ in
                             .init(body: V0358Fixture.weeklyClaimedJSON())
                         },
+                        shop: (@Sendable (Int) -> GomokuStubProtocol.Reply)? = nil,
                         function: String = #function) -> (WorkTimerStore, String) {
     let host = V0355WeeklyStoreTests.host("v0358-\(label)")
     GomokuStubProtocol.register(host: host) { rpc, body, index in
@@ -380,6 +401,7 @@ private func v0358Store(_ label: String,
         case "weekly_work_status": return weekly(index)
         case "weekly_work_claim": return weeklyClaim(index)
         case "ultra_wallet_sync": return .init(body: V0356Fixture.walletJSON(streak: 2))
+        case "shop_state": return shop?(index)
         default: return nil
         }
     }
@@ -666,25 +688,49 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(store.achievements?.missions.first?.state == .claimed, "서버가 말한 받음을 옮기지 않았다(버튼이 남는다)")
     }
 
-    @Test("실패 — 안내줄 '받지 못했어요…' · 버튼은 그대로(안 받음) · 떠 있음 해제 · 다시 누르면 나간다")
+    @Test("실패 — 그 줄에 실패 표시(안내줄은 안 쓴다) · 버튼은 그대로(안 받음) · 떠 있음 해제 · 다시 누르면 나가고 받으면 표시가 내려간다")
     func failureLeavesTheButton() async {
         let (store, host) = v0358Store("claim-fail", claim: { body, index in
-            index == 0 ? .init(status: 500, body: #"{"message":"boom"}"#)
-                : .init(body: V0358Fixture.claimJSON(key: "phone_login", ruby: 1284))
+            let key = (try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])?["p_key"] as? String
+            return index == 0 || index == 2 ? .init(status: 500, body: #"{"message":"boom"}"#)
+                : .init(body: V0358Fixture.claimJSON(key: key ?? "phone_login", ruby: 1284))
         })
         store.applyAchievements(V0358Fixture.status())
         await store.claimAchievement(key: "phone_login")?.value
-        #expect(store.missionNotice == AchievementNoticeText.claimFailed)
-        #expect(AchievementNoticeText.claimFailed == "받지 못했어요. 잠시 후 다시 시도해 주세요")
+        // ★ 검토 지적(2026-10-19): 안내줄은 절 위에 끼어 줄을 26pt 밀고, 넷째 줄부터는 누른 사람의 스크롤 밖이었다.
+        #expect(store.missionNotice == nil, "받기 실패를 안내줄로 띄웠다 — 절이 밀리고 아래 줄을 누른 사람에겐 안 보인다")
+        #expect(store.achievementClaimFailedKeys == ["phone_login"], "실패한 줄에 실패 표시가 없다")
+        #expect(AchievementNoticeText.claimFailedRow == "받지 못했어요 · 다시 눌러 주세요")
         #expect(store.achievements?.missions.first?.state == .claimable && store.achievementClaimsInFlight.isEmpty)
         #expect(store.missionClaimBursts.isEmpty)
         await store.claimAchievement(key: "phone_login")?.value
         #expect(v0358Calls(host, "achievement_claim") == 2 && store.achievements?.missions.first?.state == .claimed)
-        #expect(store.missionNotice == nil, "다시 눌러 받았는데 '받지 못했어요'가 남았다")
-        // 다른 안내(3시간 랩)는 받기가 지우지 않는다.
-        store.missionNotice = "3시간 채웠어요 — 루비 +3"
+        #expect(store.achievementClaimFailedKeys.isEmpty, "다시 눌러 받았는데 실패 표시가 남았다")
+        // 다른 줄의 실패는 그 줄에만 선다 · 다른 안내(3시간 랩)는 받기가 건드리지 않는다.
+        store.missionNotice = V0358Fixture.lapNotice
         await store.claimAchievement(key: "team3")?.value
-        #expect(store.missionNotice == "3시간 채웠어요 — 루비 +3")
+        #expect(store.achievementClaimFailedKeys == ["team3"] && store.missionNotice == V0358Fixture.lapNotice)
+        // 미션 화면을 닫으면 실패 표시도 내린다(다시 열면 화면이 새로 묻는다).
+        store.isMenuPresented = true
+        store.toggleMissionPanel()
+        store.closeMissionPanel()
+        #expect(store.achievementClaimFailedKeys.isEmpty, "미션 화면을 닫아도 실패 표시가 남았다")
+    }
+
+    @Test("전부 받기가 실패하면 받을 수 있던 줄 전부에 표시 · 낱개 성공은 그 줄만 · 전부 받기 성공은 모두 내린다")
+    func claimAllFailureMarksEveryClaimableRow() async {
+        let (store, _) = v0358Store("claim-all-fail", claim: { body, index in
+            let key = (try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])?["p_key"] as? String
+            return index == 0 ? .init(status: 500, body: #"{"message":"boom"}"#)
+                : .init(body: V0358Fixture.claimJSON(key: key ?? "phone_login", ruby: 1284))
+        })
+        store.applyAchievements(V0358Fixture.status())
+        await store.claimAchievement(key: nil)?.value
+        #expect(store.achievementClaimFailedKeys == ["phone_login", "team3"])
+        await store.claimAchievement(key: "phone_login")?.value
+        #expect(store.achievementClaimFailedKeys == ["team3"])
+        await store.claimAchievement(key: nil)?.value
+        #expect(store.achievementClaimFailedKeys.isEmpty)
     }
 
     @Test("받기 함수가 없는 서버(404) → 절을 감춘다(실패 문구 없음) · 감춘 동안은 받기가 안 나간다")
@@ -736,6 +782,44 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(store.rubyBalance == 2000)
     }
 
+    @Test("받기가 옮긴 잔량을 그 전에 떠난 상점 조회가 되돌리지 않는다 — 늦은 상점 조회(받기 전 1234)는 버려지고 한 번 다시 읽어 1284")
+    func claimBalanceSurvivesALateShopRead() async throws {
+        // 검토 지적(2026-10-19): `applyAchievements` 의 상점 변이 표시(noteShopMutation)를 지워도 모든 시험이 초록이었다.
+        // 그러면 받기 전에 떠난 상점 조회가 받기 뒤에 도착해 잔량을 받기 전으로 되돌린다(2026-10-16 주간 보상 때와 같은 결함).
+        let (store, host) = v0358Store("claim-shop-race", shop: { index in
+            .init(body: V0358Fixture.shopJSON(ruby: index == 0 ? 1234 : 1284), delay: index == 0 ? 0.5 : 0)
+        })
+        store.applyAchievements(V0358Fixture.status(ruby: 1234))
+        store.loadShopState()
+        #expect(await V0354CoreStub.waitUntil { GomokuStubProtocol.count(host: host, rpc: "shop_state") == 1 }, "전제: 상점 조회가 떠났다")
+        await store.claimAchievement(key: "phone_login")?.value
+        #expect(store.rubyBalance == 1284, "받기 응답이 잔량을 안 옮겼다")
+        // 늦은 상점 조회(0.5초)가 도착하고, 버려졌으면 다시 읽기까지 끝날 때를 기다린다.
+        try? await Task.sleep(for: .milliseconds(700))
+        _ = await V0354CoreStub.waitUntil { !store.shopLoading }
+        #expect(store.rubyBalance == 1284, "받기 전에 떠난 상점 조회가 받은 잔량(1284)을 1234 로 되돌렸다")
+        #expect(GomokuStubProtocol.count(host: host, rpc: "shop_state") == 2, "버려진 상점 조회를 한 번 다시 읽지 않았다")
+    }
+
+    @Test("주간 받기가 떠 있는 사이 다른 쓰기가 잔량을 바꿨으면 받기 응답의 잔량은 버리고, 루비가 늘었으니 사실을 다시 읽는다")
+    func weeklyClaimRereadsWhenTheBalanceMovedMeanwhile() async throws {
+        // 검토 지적(2026-10-19): `applyWeeklyWork` 의 다시 읽기 조건에서 `claimedNowRuby > 0` 을 지워도 초록이었다 — 받기 서버의
+        // 주간 응답엔 granted_now 가 없어, 그 조건이 없으면 받은 +70 을 다시 읽지 않고 받기 전 숫자가 남는다.
+        let (store, host) = v0358Store("weekly-claim-reread",
+                                       weeklyClaim: { _ in .init(body: V0358Fixture.weeklyClaimedJSON(ruby: 1127), delay: 0.3) },
+                                       shop: { _ in .init(body: V0358Fixture.shopJSON(ruby: 1500)) })
+        store.applyWeeklyWork(V0358Fixture.weekly())
+        #expect(store.rubyBalance == 1057)
+        let task = try #require(store.claimWeeklyWork())
+        #expect(await V0354CoreStub.waitUntil { v0358Calls(host, "weekly_work_claim") == 1 }, "전제: 주간 받기가 떠났다")
+        store.rubyBalance = 1430   // 그 사이 뽑기 · 대국 정산이 새 잔량을 썼다
+        await task.value
+        #expect(store.rubyBalance != 1127, "떠난 뒤 들어온 잔량(1430)을 받기 응답(1127)이 덮었다")
+        #expect(await V0354CoreStub.waitUntil { GomokuStubProtocol.count(host: host, rpc: "shop_state") == 1 && !store.shopLoading },
+                "버린 받기 잔량을 다시 읽지 않았다 — 제목 행 숫자가 받기 전 값에 머문다")
+        #expect(store.rubyBalance == 1500)
+    }
+
     @Test("겹친 받기 둘의 답이 뒤바뀌어 와도 받은 줄은 받은 채(스토어 병합)")
     func reversedClaimResponsesKeepBothClaimed() {
         let (store, _) = v0358Store("claim-reorder")
@@ -781,7 +865,7 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(v0358Calls(host, "weekly_work_claim") == 0)
     }
 
-    @Test("주간 — 받기 전에 떠난 주간 조회가 받기 뒤에 도착하면 버린다 · 실패는 안내줄 + 버튼 남음")
+    @Test("주간 — 받기 전에 떠난 주간 조회가 받기 뒤에 도착하면 버린다 · 실패는 주간 줄의 표시 + 버튼 남음(안내줄 없음)")
     func weeklyStaleFetchAndFailure() async {
         let (store, host) = v0358Store("weekly-stale", weekly: { _ in .init(body: V0358Fixture.weeklyJSON(), delay: 0.4) },
                                        weeklyClaim: { index in
@@ -794,13 +878,19 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         await store.claimWeeklyWork()?.value
         await fetch?.value
         #expect(store.weeklyWork?.hasClaimable == false, "받기 전에 떠난 주간 조회가 [받기]를 되살렸다")
-        // 실패 — 버튼은 남고 안내줄 · 다시 눌러 받으면 안내줄이 내려간다.
+        // 실패 — 버튼은 남고 주간 줄에 실패 표시(안내줄은 절을 민다 — 검토 지적 2026-10-19) · 다시 눌러 받으면 표시가 내려간다.
         store.applyWeeklyWork(V0358Fixture.weekly())
         await store.claimWeeklyWork()?.value
-        #expect(store.missionNotice == AchievementNoticeText.claimFailed && store.weeklyWork?.hasClaimable == true)
+        #expect(store.weeklyClaimFailed && store.weeklyWork?.hasClaimable == true)
+        #expect(store.missionNotice == nil, "주간 받기 실패를 안내줄로 띄웠다 — 아래 도전 미션 절이 26pt 밀린다")
         #expect(!store.weeklyClaimInFlight)
         await store.claimWeeklyWork()?.value
-        #expect(store.missionNotice == nil && store.weeklyWork?.hasClaimable == false, "다시 눌러 받았는데 실패 안내가 남았다")
+        #expect(!store.weeklyClaimFailed && store.weeklyWork?.hasClaimable == false, "다시 눌러 받았는데 실패 표시가 남았다")
+        // 팝오버를 닫으면 실패 표시도 내린다.
+        store.weeklyClaimFailed = true
+        store.isMenuPresented = true
+        store.setMenuPresented(false)
+        #expect(!store.weeklyClaimFailed, "팝오버를 닫아도 주간 실패 표시가 남았다")
     }
 
     @Test("연출은 그 순간의 것 — 미션 화면을 닫거나 팝오버를 닫으면 비운다 · 로그아웃은 받기 상태를 모두 내린다")
@@ -902,7 +992,7 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(v0358Calls(host) == 3, "미션 화면을 닫는데 물었다")
     }
 
-    @Test("미션 화면이 아닌 지갑 박자는 묻지 않는다 — 콕찌르기 · 울트라 열기 · 울트라 연 채 재오픈 · 홈 재오픈 · 로그인 · 랩 임계")
+    @Test("미션 화면이 아닌 지갑 박자는 묻지 않는다 — 콕찌르기 · 울트라 열기 · 울트라 연 채 재오픈 · 홈 재오픈 · 랩 임계")
     func otherWalletCadencesDoNotAsk() async {
         let (store, host) = v0358Store("others")
         store.isMenuPresented = true
@@ -914,11 +1004,27 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         store.closePokePanel()
         store.setMenuPresented(false)
         store.setMenuPresented(true)
-        store.syncUltraWallet(reason: .signIn)
         store.syncUltraWallet(reason: .missionCandidate)
         await V0355WeeklyStoreTests.settle()
         #expect(GomokuStubProtocol.count(host: host, rpc: "ultra_wallet_sync") >= 3, "전제: 지갑 sync 는 나갔다")
         #expect(v0358Calls(host) == 0, "미션 화면이 아닌데 도전 미션을 \(v0358Calls(host))번 물었다")
+    }
+
+    @Test("로그인 지갑 sync 에 한 번 얹힌다 — 패널을 안 열고 근무도 안 해도 레일 배지가 소급 달성을 말한다 · 받기는 안 나간다")
+    func signInPiggyback() async {
+        // 검토 지적(2026-10-19): 이 박자가 없으면 근무 안 하는 사람의 배지는 소급 달성을 영영 말하지 않았다(배지가 [받기]를 찾는 길).
+        let (store, host) = v0358Store("sign-in")
+        #expect(store.startedAt == nil && !store.isMissionPanelVisible, "전제: 근무 밖 · 미션 화면 닫힘")
+        store.syncUltraWallet(reason: .signIn)
+        #expect(await V0354CoreStub.waitUntil { v0358Calls(host) == 1 && store.achievementsFetchTask == nil },
+                "로그인 sync 에 도전 미션이 안 얹혔다(\(v0358Calls(host))회)")
+        #expect(store.missionClaimableCount >= 2, "로그인 박자로 받은 소급 달성이 레일 배지를 켜지 않았다")
+        #expect(store.achievementsReason(forWallet: .signIn) == .signIn)
+        #expect(store.achievementsReason(forWallet: .missionCandidate) == nil)
+        await V0355WeeklyStoreTests.settle()
+        #expect(v0358Calls(host) == 1, "로그인 한 번에 두 번 물었다")
+        #expect(v0358Calls(host, "achievement_claim") == 0 && v0358Calls(host, "weekly_work_claim") == 0,
+                "사람이 안 눌렀는데 받기가 나갔다(자동 지급이 되살아났다)")
     }
 
     @Test("5분 주기 지갑 sync 에 얹힌다 — 근무 중 · 스로틀이 열렸을 때만(5분 안 0건) · 근무 밖이면 0건 · 받기는 박자가 없다")
@@ -1219,13 +1325,13 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(withSection > without, "절이 안 그려졌거나 스크롤 창이 줄었다")
         #expect(noRuby == without, "제목 행 루비 칩이 제목 행 높이를 바꿨다")
         let withNotice = try Self.windowHeight(CheckMenuView(store: v0358RenderStore(achievements: achievements,
-                                                                                  notice: AchievementNoticeText.claimFailed)))
+                                                                                  notice: V0358Fixture.lapNotice)))
         let cappedNotice = try Self.windowHeight(CheckMenuView(store: v0358RenderStore(missions: fiveRows + [V0356Fixture.future(5)],
-                                                                                    notice: AchievementNoticeText.claimFailed)))
+                                                                                    notice: V0358Fixture.lapNotice)))
         print("[v0358] 안내줄 — 절 \(withNotice) · v0.3.56 상한 \(cappedNotice)pt")
         #expect(withNotice == cappedNotice)
         for (banner, editing) in [(false, false), (true, false), (true, true), (false, true)] {
-            let store = v0358RenderStore(achievements: achievements, weekly: V0358Fixture.weekly(), notice: AchievementNoticeText.claimFailed)
+            let store = v0358RenderStore(achievements: achievements, weekly: V0358Fixture.weekly(), notice: V0358Fixture.lapNotice)
             let h = try Self.windowHeight(CheckMenuView(store: store, previewClipsOverflowList: true, previewGoalEditing: editing,
                                                         previewUpdateBanner: banner, previewUpdateNotes: banner ? ["a", "b", "c", "d"] : []))
             let hs = try Self.windowHeight(CheckMenuView(store: store, previewGoalEditing: editing,
@@ -1241,7 +1347,7 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         for (label, store) in [("절", v0358RenderStore(achievements: V0358Fixture.status())),
                                ("절 불러오는 중", v0358RenderStore()),
                                ("절 + 주간 받기 + 안내", v0358RenderStore(achievements: V0358Fixture.status(), weekly: V0358Fixture.weekly(),
-                                                                    notice: AchievementNoticeText.claimFailed))] {
+                                                                    notice: V0358Fixture.lapNotice))] {
             let bitmap = try v0358Bitmap(CheckMenuView(store: store, previewClipsOverflowList: true))
             let runs = v0358CardRuns(bitmap)
             let gap = runs.count >= 2 ? runs[runs.count - 1].top - runs[runs.count - 2].bottom : -1
@@ -1296,6 +1402,159 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(GomokuStubProtocol.calls(host: host, rpc: "achievement_claim").first?.body == #"{"p_key":"phone_login"}"#)
         context.claimWeekly()
         #expect(await V0354CoreStub.waitUntil { v0358Calls(host, "weekly_work_claim") == 1 }, "주간 [받기]가 주간 받기를 안 부른다")
+        // 실패 표시도 그대로 내려간다(그 줄이 실패를 그리는 유일한 길이다).
+        store.achievementClaimFailedKeys = ["team3"]
+        store.weeklyClaimFailed = true
+        let failed = try #require(v0358Child("claim", of: try V0356ReviewFixTests.panelNode("MissionPanel", in: store)) as? MissionClaimContext)
+        #expect(failed.hasFailed("team3") && !failed.hasFailed("phone_login") && failed.weeklyFailed)
+    }
+
+    // ── 받기 실패는 그 줄 안에서(검토 지적 2026-10-19) ──
+
+    @Test("줄 — 받기가 실패하면 보조 문장 자리가 주황 실패 문장으로 바뀌고 [받기]는 그대로 · 받은 줄엔 실패 표시가 서지 않는다")
+    func failedClaimShowsInTheRow() throws {
+        func row(_ mission: AchievementStatus.Mission, failed: Set<String>) throws -> NSBitmapImageRep {
+            try v0358Bitmap(AchievementRowView(mission: mission).frame(width: 292).background(Color.black)
+                .environment(\.missionClaim, MissionClaimContext(failedKeys: failed))
+                .environment(\.colorScheme, .dark))
+        }
+        let phone = try Self.mission("phone_login")
+        let idle = try row(phone, failed: [])
+        let failed = try row(phone, failed: ["phone_login"])
+        let caption = (x: CGFloat(40)...CGFloat(200), y: CGFloat(36)...CGFloat(54))
+        let button = (x: CGFloat(196)...CGFloat(284), y: CGFloat(14)...CGFloat(42))
+        print("[v0358] 실패 줄 — 주황 \(v0358AmberPixels(idle, x: caption.x, y: caption.y)) → \(v0358AmberPixels(failed, x: caption.x, y: caption.y)) · 버튼 \(v0358GradientPixels(failed, x: button.x, y: button.y))")
+        #expect(v0358AmberPixels(idle, x: caption.x, y: caption.y) == 0)
+        #expect(v0358AmberPixels(failed, x: caption.x, y: caption.y) > 60, "받기가 실패한 줄에 실패 문장이 없다")
+        #expect(v0358GradientPixels(failed, x: button.x, y: button.y) > 1_000, "실패한 줄에서 [받기]가 사라졌다(다시 누를 수 없다)")
+        // 바뀌는 것은 셋째 줄(보조 문장)뿐이다 — 줄 높이 · 제목 · 바 · 버튼은 그대로.
+        let box = try #require(v0358DiffBox(idle, failed), "실패 표시가 안 그려졌다")
+        #expect(failed.pixelsHigh == idle.pixelsHigh && box.minY >= 34 && box.maxX < 200, "실패 표시가 보조 문장 자리 밖을 바꿨다: \(box)")
+        // 받은 줄(또는 진행 중)에 남은 실패 표시는 그리지 않는다(그 사이 다른 기기에서 받았을 수 있다).
+        let todo = try Self.mission("todo3")
+        #expect(try v0358Diff(try row(todo, failed: []), try row(todo, failed: ["todo3"])).looksSame)
+    }
+
+    @Test("주간 줄 — 받기가 실패하면 보조 문장 자리가 주황 실패 문장으로 바뀌고 [받기 +70]은 그대로")
+    func failedWeeklyClaimShowsInTheRow() throws {
+        func row(failed: Bool) throws -> NSBitmapImageRep {
+            try v0358Bitmap(WeeklyWorkRowView(status: V0358Fixture.weekly()).frame(width: 292).background(Color.black)
+                .environment(\.missionClaim, MissionClaimContext(weeklyFailed: failed))
+                .environment(\.colorScheme, .dark))
+        }
+        let idle = try row(failed: false)
+        let failed = try row(failed: true)
+        let caption = (x: CGFloat(40)...CGFloat(200), y: CGFloat(36)...CGFloat(54))
+        let button = (x: CGFloat(196)...CGFloat(284), y: CGFloat(14)...CGFloat(42))
+        print("[v0358] 주간 실패 줄 — 주황 \(v0358AmberPixels(failed, x: caption.x, y: caption.y)) · 버튼 \(v0358GradientPixels(failed, x: button.x, y: button.y))")
+        #expect(v0358AmberPixels(idle, x: caption.x, y: caption.y) == 0)
+        #expect(v0358AmberPixels(failed, x: caption.x, y: caption.y) > 60, "주간 받기가 실패한 줄에 실패 문장이 없다")
+        #expect(v0358GradientPixels(failed, x: button.x, y: button.y) > 1_000, "실패한 주간 줄에서 [받기]가 사라졌다")
+        let box = try #require(v0358DiffBox(idle, failed))
+        #expect(failed.pixelsHigh == idle.pixelsHigh && box.minY >= 34, "실패 표시가 보조 문장 자리 밖을 바꿨다: \(box)")
+    }
+
+    @Test("미션 화면 — 받기가 실패해도(스토어 길 그대로) 창 높이 · 절의 줄 자리가 그대로고, 바뀌는 것은 실패한 그 줄의 보조 문장뿐이다")
+    func failedClaimDoesNotShiftTheSection() async throws {
+        // 검토 지적(2026-10-19) 재현: 예전엔 실패가 안내줄(26pt)로 절 위에 끼어 절의 줄이 모두 26pt 밀리고 창이 38pt 줄었다.
+        func bitmap(_ store: WorkTimerStore) throws -> NSBitmapImageRep {
+            try v0358Bitmap(CheckMenuView(store: store, previewClipsOverflowList: true))
+        }
+        let status = V0358Fixture.status()
+        let weekly = V0358Fixture.weekly()
+        let plain = try bitmap(v0358RenderStore(achievements: status, weekly: weekly))
+        let phoneFails = v0358RenderStore(achievements: status, weekly: weekly, claimsFail: true)
+        await phoneFails.claimAchievement(key: "phone_login")?.value
+        let weeklyFails = v0358RenderStore(achievements: status, weekly: weekly, claimsFail: true)
+        await weeklyFails.claimWeeklyWork()?.value
+        #expect(phoneFails.missionNotice == nil && weeklyFails.missionNotice == nil, "받기 실패가 안내줄을 띄웠다")
+        for (label, store) in [("도전 미션", phoneFails), ("주간", weeklyFails)] {
+            let failed = try bitmap(store)
+            let box = try #require(v0358DiffBox(plain, failed, maxX: 330), "\(label): 실패가 화면에 안 나타났다")
+            let amber = v0358AmberPixels(failed, x: box.minX...box.maxX, y: box.minY...box.maxY)
+            print("[v0358] \(label) 받기 실패 — 창 \(CGFloat(plain.pixelsHigh) / 2) → \(CGFloat(failed.pixelsHigh) / 2)pt · 차이 \(box) · 주황 \(amber)")
+            #expect(failed.pixelsHigh == plain.pixelsHigh, "\(label): 받기 실패가 창 높이를 바꿨다")
+            #expect(box.height <= 18, "\(label): 받기 실패가 한 줄의 보조 문장보다 넓게 바꿨다(줄이 밀렸다): \(box)")
+            #expect(amber > 60, "\(label): 바뀐 자리에 실패 문장이 없다")
+        }
+    }
+
+    // ── 동작 줄이기가 줄까지 내려간다(검토 지적 2026-10-19 — 곡선만 시험하고 배선은 안 쟀다) ──
+
+    @Test("동작 줄이기 배선 — 줄이 그린 연출이 동작 줄이기면 제 크기 · 제자리, 아니면 작게(0.7) 시작해 위로 떠오른다 · 도전 미션 줄 · 주간 줄 둘 다")
+    func reduceMotionReachesTheRows() throws {
+        // ImageRenderer 는 onAppear 의 애니메이션을 끝값(불투명도 0)으로 굽는다 — 장면을 멈춰(`frozenBurstProgress`) 줄의 배선을 그대로 거친다.
+        let claimedAchievement = try Self.mission("todo3")
+        let achievementTarget = MissionClaimBurst.achievementTarget(series: claimedAchievement.series)
+        let claimedWeekly = V0358Fixture.weekly(V0358Fixture.weeklyClaimedJSON())
+        func render(_ row: some View, target: String?, reduce: Bool, at t: Double) throws -> NSBitmapImageRep {
+            let bursts = target.map { [$0: MissionClaimBurst(serial: 1, target: $0, amount: 50)] } ?? [:]
+            return try v0358Bitmap(row.frame(width: 292).background(Color.black)
+                .environment(\.missionClaim, MissionClaimContext(bursts: bursts, reduceMotion: reduce, frozenBurstProgress: t))
+                .environment(\.colorScheme, .dark))
+        }
+        for (label, target) in [("도전 미션", achievementTarget), ("주간", MissionClaimBurst.weeklyTarget)] {
+            func row(_ burst: Bool, reduce: Bool, at t: Double = 0) throws -> NSBitmapImageRep {
+                if label == "주간" {
+                    return try render(WeeklyWorkRowView(status: claimedWeekly), target: burst ? target : nil, reduce: reduce, at: t)
+                }
+                return try render(AchievementRowView(mission: claimedAchievement), target: burst ? target : nil, reduce: reduce, at: t)
+            }
+            let plain = try row(false, reduce: false)
+            // 첫 장면(진행 0): 보통은 0.7 배에서 톡 커지고, 동작 줄이기는 제 크기로 선다 — 폭이 약 30% 갈린다.
+            let moving = try #require(v0358DiffBox(plain, try row(true, reduce: false)), "\(label): 연출 첫 장면이 안 그려졌다")
+            let still = try #require(v0358DiffBox(plain, try row(true, reduce: true)), "\(label): 동작 줄이기 연출 첫 장면이 안 그려졌다")
+            // 중간 장면(0.45): 보통은 위로 18pt 남짓 떠 있고, 동작 줄이기는 제자리다.
+            let risen = try #require(v0358DiffBox(plain, try row(true, reduce: false, at: 0.45)), "\(label): 연출 중간 장면이 안 그려졌다")
+            let stays = try #require(v0358DiffBox(plain, try row(true, reduce: true, at: 0.45)), "\(label): 동작 줄이기 중간 장면이 안 그려졌다")
+            print("[v0358] \(label) 연출 — 첫 장면 폭 보통 \(moving.width) · 동작 줄이기 \(still.width)pt · 중간 장면 위 끝 보통 \(risen.minY) · 동작 줄이기 \(stays.minY)pt")
+            #expect(moving.width < still.width * 0.85, "\(label): 줄이 동작 줄이기를 연출에 안 넘긴다(첫 장면 크기가 같다)")
+            #expect(abs(moving.width - still.width * MissionClaimBurstCurve.popFrom) < 6,
+                    "\(label): 보통 첫 장면이 0.7 배가 아니다(\(moving.width) vs \(still.width))")
+            #expect(risen.minY < stays.minY - 12, "\(label): 줄이 동작 줄이기를 연출에 안 넘긴다(중간 장면 자리가 같다)")
+        }
+    }
+
+    @Test("소스 계약 — 두 줄 모두 줄 자리잡기 · 연출에 동작 줄이기 값을 넘긴다(글자 그대로의 참/거짓이 없다 · 주석 제외)")
+    func rowsPassReduceMotionThrough() throws {
+        func body(_ file: String, _ start: String) throws -> String {
+            let code = try v0358Code(file)
+            let head = try #require(code.range(of: start), "\(file): \(start) 를 못 찾았다")
+            // 걷어낸 소스는 공백이 한 칸으로 접힌다 — 다음 형 선언(struct · enum · extension)까지가 이 줄의 본문이다.
+            let rest = code[head.upperBound...]
+            let end = [" struct ", " enum ", " extension "].compactMap { rest.range(of: $0)?.lowerBound }.min() ?? rest.endIndex
+            return String(rest[..<end])
+        }
+        for (file, start) in [("CheckAchievementRows.swift", "struct AchievementRowView: View {"),
+                              ("CheckMenuView.swift", "struct WeeklyWorkRowView: View {")] {
+            let row = try body(file, start)
+            #expect(row.contains("let reduces = claim.reduceMotion ?? systemReduceMotion"), "\(start): 동작 줄이기를 고르는 자리가 없다")
+            #expect(row.contains("MissionClaimMotion.rowSettle(reduceMotion: reduces)"), "\(start): 자리잡기가 동작 줄이기를 안 따른다")
+            #expect(row.contains("MissionClaimBurstView(amount: burst.amount, reduceMotion: reduces)"), "\(start): 연출이 동작 줄이기를 안 따른다")
+            for literal in ["reduceMotion: false", "reduceMotion: true"] {
+                #expect(!row.contains(literal), "\(start): 동작 줄이기 자리에 글자 그대로의 \(literal)")
+            }
+        }
+    }
+
+    // ── 첫 열기 높이(검토 지적 2026-10-19) ──
+
+    @Test("첫 열기 — 도전 미션이 오기 전(불러오는 중) · 한 번도 못 받은 실패 · 받은 뒤의 창 높이가 같다 · 서버에 없음만 접힌다")
+    func loadingReservesTheLoadedHeight() throws {
+        for weekly in [nil, V0358Fixture.weekly()] as [WeeklyWorkStatus?] {
+            let label = weekly == nil ? "주간 없음" : "주간 있음"
+            let loading = try Self.windowHeight(CheckMenuView(store: v0358RenderStore(weekly: weekly)))
+            let failed = try Self.windowHeight(CheckMenuView(store: v0358RenderStore(failed: true, weekly: weekly)))
+            let loaded = try Self.windowHeight(CheckMenuView(store: v0358RenderStore(achievements: V0358Fixture.status(), weekly: weekly)))
+            let hidden = try Self.windowHeight(CheckMenuView(store: v0358RenderStore(unavailable: true, weekly: weekly)))
+            print("[v0358] \(label) 창 높이 — 불러오는 중 \(loading) · 실패 \(failed) · 받음 \(loaded) · 서버에 없음 \(hidden)pt")
+            #expect(loading == loaded, "\(label): 첫 열기 \(loading)pt 가 답이 오면 \(loaded)pt 로 바뀐다(팝오버가 자란다)")
+            #expect(failed == loaded, "\(label): 실패 \(failed)pt ↔ 다시 묻는 중 · 받음 \(loaded)pt 사이에 팝오버가 흔들린다")
+            #expect(hidden < loaded, "\(label): 서버에 없음(\(hidden))이 절 자리를 비우지 않았다")
+        }
+        #expect(AchievementSectionState.loading.reservesViewport && AchievementSectionState.failed.reservesViewport)
+        #expect(!AchievementSectionState.hidden.reservesViewport
+                && !AchievementSectionState.loaded(rows: [], claimableCount: 0).reservesViewport)
     }
 }
 
@@ -1340,6 +1599,13 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
             }.frame(width: 292).padding(12).background(CheckTheme.panel), scheme: scheme)
             let home = v0358RenderStore(achievements: status, weekly: weekly, mission: false, line: 920 + offset)
             try save("5-home-rail-badge", CheckMenuView(store: home, previewClipsOverflowList: true), scheme: scheme)
+            // 받기 실패 — 그 줄의 보조 문장 자리(검토 지적 2026-10-19 뒤 · 안내줄 없음).
+            try save("6-claim-failed-rows", VStack(spacing: 8) {
+                WeeklyWorkRowView(status: weekly)
+                AchievementRowView(mission: before)
+            }
+            .environment(\.missionClaim, MissionClaimContext(failedKeys: [before.key], weeklyFailed: true))
+            .frame(width: 292).padding(12).background(CheckTheme.panel), scheme: scheme)
         }
     }
 }

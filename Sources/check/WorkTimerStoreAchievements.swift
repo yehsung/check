@@ -13,12 +13,16 @@ import Foundation
 //       · `.panelOpen` 이면서 **미션 화면이 떠 있을 때만** — 레일 [미션]으로 여는 순간 · 그 화면의 [다시 시도] · 미션 화면을 연 채
 //         팝오버를 다시 연 순간(`setMenuPresented(true)`) 셋이 전부 이 모양으로 지갑을 부른다. 콕찌르기 · 울트라 화면을 여는 `.panelOpen`
 //         은 묻지 않는다(그 화면엔 도전 미션이 없다).
-//       · `.periodic` — 근무 중 5분 스로틀(`syncUltraWalletIfDue`)이 이미 막아 둔 박자라 5분에 많아야 하나 더다. 레일 배지가 패널을 안
-//         여는 사람에게도 켜지는 길이 이것이다.
+//       · `.periodic` — 근무 중 5분 스로틀(`syncUltraWalletIfDue`)이 이미 막아 둔 박자라 5분에 많아야 하나 더다.
+//       · `.signIn` — 로그인 · 저장 세션 활성화 직후 한 번(실행마다 1건). 검토 지적(2026-10-19)으로 더했다: 레일 배지는 [받기]를
+//         찾는 길인데, 이것이 없으면 근무를 안 하는 사람의 배지는 소급 달성(설계 추정 52명 중 41명 · 약 9,920 루비)을 영영 말하지 않고
+//         근무하는 사람도 첫 5분 sync 까지 몰랐다. 첫 [미션] 열기의 "불러오는 중…"도 대부분 사라진다. 여전히 타이머는 없다.
 //     겹친 박자는 떠 있는 조회 하나를 같이 기다린다(`achievementsFetchTask`). 받기는 사람이 누를 때만 나간다.
 //  ② 받기 — 같은 키는 한 번에 하나(`achievementClaimsInFlight` — 두 번 눌러도 요청 1건) · 주간은 전부 받기 하나(`weeklyClaimInFlight`).
 //     성공하면 응답의 상태 · 잔량을 옮기고 **이 호출이 넣은 지급(`claimed_now`)만큼** 연출한다(`missionClaimBursts` + 캐릭터 말풍선).
-//     실패하면 안내줄에 `AchievementNoticeText.claimFailed` — 버튼은 그대로 남아 다시 누르는 것이 재시도다.
+//     실패하면 **그 줄**이 보조 문장 자리에 실패 문장을 그린다(`achievementClaimFailedKeys` · `weeklyClaimFailed`) — 버튼은 그대로 남아
+//     다시 누르는 것이 재시도다. 안내줄(`missionNotice`)은 쓰지 않는다(검토 지적 2026-10-19: 안내줄은 절 위에 끼어 줄을 26pt 밀고,
+//     넷째 줄부터는 누른 사람의 스크롤 밖이라 안 보였고, 다시 받아 내리면 연출 중에 줄이 위로 뛰었다).
 //  ③ 순서 — 잔량은 **그 사이 다른 쓰기가 없었을 때만** 옮긴다(`rubyBalanceWriteSerial` — 주간 보상과 같은 규약). 받기 전에 떠난 조회가
 //     받기 뒤에 도착하면 그 조회는 버린다(`achievementsApplySerial` · `weeklyClaimSerial`). 겹친 받기 둘의 답이 뒤바뀌어 와도 받음은
 //     되돌아가지 않는다(`AchievementStatus.merged(over:)`).
@@ -48,17 +52,20 @@ extension WorkTimerStore {
         case missionPanel
         /// 근무 중 5분 지갑 sync 에 얹힌 박자.
         case periodic
+        /// 로그인 · 저장 세션 활성화 직후 지갑 sync 에 얹힌 한 번(레일 배지가 패널을 안 열어도 켜진다 — 머리 주석 ①).
+        case signIn
     }
 
     /// 전부 받기(`achievement_claim(null)`)가 떠 있음을 적는 자리. 키가 아니다(서버 키에 `*` 는 없다).
     nonisolated static let achievementClaimAllSlot = "*"
 
-    /// 지갑 sync 박자 → 도전 미션 박자. 미션 화면이 아닌 `.panelOpen`(콕찌르기 · 울트라)과 로그인 · 랩 임계는 묻지 않는다.
+    /// 지갑 sync 박자 → 도전 미션 박자. 미션 화면이 아닌 `.panelOpen`(콕찌르기 · 울트라)과 랩 임계는 묻지 않는다.
     func achievementsReason(forWallet reason: UltraSyncReason) -> AchievementsFetchReason? {
         switch reason {
         case .panelOpen: return isMissionPanelVisible ? .missionPanel : nil
         case .periodic: return .periodic
-        case .signIn, .missionCandidate: return nil
+        case .signIn: return .signIn
+        case .missionCandidate: return nil
         }
     }
 
@@ -162,7 +169,7 @@ extension WorkTimerStore {
                 }
                 guard generation == self.sessionGeneration else { return }
                 self.applyAchievements(status, rubyWriteSerialAtDeparture: rubySerial)
-                self.clearClaimFailureNotice()
+                self.markAchievementClaim(key, failed: false)
                 self.celebrateAchievementClaims(status)
             } catch {
                 if case .cancelled = self.classifyAuthError(error) { return }
@@ -172,9 +179,25 @@ extension WorkTimerStore {
                     self.markAchievementsUnavailable()
                     return
                 }
-                self.missionNotice = AchievementNoticeText.claimFailed
+                // 실패는 그 줄이 말한다(머리 주석 ② — 안내줄로 절을 밀지 않는다).
+                self.markAchievementClaim(key, failed: true)
             }
         }
+    }
+
+    /// 받기 실패 표시를 세우거나 내린다. `key` 가 nil(전부 받기)이면 지금 받을 수 있는 줄 전부다. 바뀔 때만 대입한다(관찰 무효화를
+    /// 만들지 않게).
+    private func markAchievementClaim(_ key: String?, failed: Bool) {
+        let keys = key.map { Set([$0]) } ?? Set(achievements?.claimable.map(\.key) ?? [])
+        var next = achievementClaimFailedKeys
+        if failed {
+            next.formUnion(keys)
+        } else if key == nil {
+            next.removeAll()
+        } else {
+            next.subtract(keys)
+        }
+        if next != achievementClaimFailedKeys { achievementClaimFailedKeys = next }
     }
 
     /// 이 호출이 넣은 지급만큼 연출한다 — 줄(계열)마다 하나 · 캐릭터 말풍선은 합계로 한 번. 넣은 것이 없으면(이미 받음 · 미달성)
@@ -216,7 +239,7 @@ extension WorkTimerStore {
                 // 받기 전에 떠난 주간 조회가 이 뒤에 도착하면 버린다(`performWeeklyWorkFetch`).
                 self.weeklyClaimSerial &+= 1
                 self.applyWeeklyWork(status, rubyWriteSerialAtDeparture: rubySerial)
-                self.clearClaimFailureNotice()
+                if self.weeklyClaimFailed { self.weeklyClaimFailed = false }
                 let amount = status.claimedNowRuby
                 guard amount > 0 else { return }
                 self.startClaimBurst(target: MissionClaimBurst.weeklyTarget, amount: amount)
@@ -224,17 +247,18 @@ extension WorkTimerStore {
             } catch {
                 if case .cancelled = self.classifyAuthError(error) { return }
                 guard generation == self.sessionGeneration else { return }
-                self.missionNotice = AchievementNoticeText.claimFailed
+                // 실패는 주간 줄이 말한다(도전 미션과 같은 규약 — 안내줄로 절을 밀지 않는다).
+                if !self.weeklyClaimFailed { self.weeklyClaimFailed = true }
             }
         }
     }
 
     // MARK: 연출 · 배지
 
-    /// 받기가 한 번 실패해 띄운 "받지 못했어요…"는 다음 받기가 답을 받으면 내린다 — 다시 눌러 받았는데 실패 문장이 남으면 거짓말이다.
-    /// 다른 안내(3시간 랩 · 옛 서버 주간 지급)는 건드리지 않는다.
-    private func clearClaimFailureNotice() {
-        if missionNotice == AchievementNoticeText.claimFailed { missionNotice = nil }
+    /// 받기 실패 문장을 비운다(미션 화면 · 팝오버를 닫을 때 — 다시 열면 화면이 새로 묻는다). 비어 있으면 대입하지 않는다.
+    func clearMissionClaimFailures() {
+        if !achievementClaimFailedKeys.isEmpty { achievementClaimFailedKeys = [] }
+        if weeklyClaimFailed { weeklyClaimFailed = false }
     }
 
     private func startClaimBurst(target: String, amount: Int) {

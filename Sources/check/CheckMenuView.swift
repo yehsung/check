@@ -703,7 +703,10 @@ struct CheckMenuView: View {
                                 claimWeekly: { store.claimWeeklyWork() },
                                 inFlightKeys: store.achievementClaimsInFlight,
                                 weeklyInFlight: store.weeklyClaimInFlight,
-                                bursts: store.missionClaimBursts
+                                bursts: store.missionClaimBursts,
+                                // 실패는 그 줄 안에서 말한다(안내줄로 절을 밀지 않는다 — 검토 지적 2026-10-19).
+                                failedKeys: store.achievementClaimFailedKeys,
+                                weeklyFailed: store.weeklyClaimFailed
                             ),
                             // 미션 화면이 떠 있으니 이 sync 가 도전 미션도 다시 묻는다(`achievementsReason(forWallet:)`).
                             onRetry: { store.syncUltraWallet(reason: .panelOpen) },
@@ -4884,6 +4887,9 @@ enum MissionPanelCopy {
 /// 같은 판에 **받기**가 붙었다(사장님 2026-10-19): 채운 줄 · 이번 주 근무 줄에 [받기 💎+N] — 동작은 환경값(`missionClaim`)으로
 /// 줄에 내려간다(주간 줄 호출부 글자를 바꾸지 않으려고 — `MissionClaimContext` 주석). 제목 행 오른쪽엔 루비 잔량(`MissionRubyBalance`)
 /// 이 서서 받는 순간 숫자가 올라간다 — 뒤로 버튼(27pt)보다 낮아 제목 행 높이는 그대로다.
+/// 받기 **실패는 안내줄로 띄우지 않는다**(검토 지적 2026-10-19): 안내줄은 절 위에 끼어 절의 줄을 26pt 밀고 창을 38pt 줄였고, 넷째
+/// 줄부터는 누른 사람의 스크롤 밖이었다. 실패는 그 줄의 보조 문장 자리가 말한다(`MissionClaimContext.failedKeys` · `weeklyFailed`).
+/// 절이 줄을 아직 모르는 동안(불러오는 중 · 실패)은 받은 뒤의 높이를 미리 잡는다(`reservesViewport` — 첫 열기의 100pt 자람).
 ///
 /// ★ **"매일 첫 근무"(밑바닥 보정) · "연속 출근" 줄은 안 그린다**(사장님 지시 2026-10-16: "매일 첫 근무 설명은 빼버리고,
 ///   연속 근무일수는 [헤더 카드] 여기에 뜨게끔 밖으로 빼줘"). **화면에서만 뺐다** — 서버의 밑바닥 보정 규칙(잔량 0이면 1개로)은
@@ -5006,7 +5012,10 @@ private struct MissionPanel: View {
             }
         }
         if contentHeight <= capHeight {
+            // 도전 미션 절이 줄을 아직 모르면(불러오는 중 · 실패) 받은 뒤의 높이(스크롤 상한)를 미리 잡는다 — 문구 한 줄로 세면
+            // 첫 열기마다 팝오버가 답이 올 때 100pt 자랐다(검토 지적 2026-10-19 · `AchievementSectionState.reservesViewport`).
             rows.frame(maxWidth: .infinity, alignment: .top)
+                .frame(height: achievementSection.reservesViewport ? capHeight : nil, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
             // 스냅샷 전용: ImageRenderer 는 ScrollView 안쪽을 못 그린다(목록 패널이 모두 같은 우회를 쓴다).
             rows.frame(maxWidth: .infinity, alignment: .top)
@@ -5139,6 +5148,9 @@ struct WeeklyWorkRowView: View {
         let barTint = gauge.isComplete ? CheckTheme.working : CheckTheme.accent
         let passed = status.tiers.filter { gauge.hasPassed($0) }
         let claimable = status.hasClaimable
+        // 받기가 실패했으면 보조 문장 자리에 실패 문장(도전 미션 줄과 같은 규약 — 검토 지적 2026-10-19). 넘긴 단계 표시는 그동안
+        // 비킨다(버튼 옆 글자 열이 140pt 남짓이라 둘이 같이 서면 문장이 잘린다).
+        let failed = claimable && claim.weeklyFailed
         let reduces = claim.reduceMotion ?? systemReduceMotion
         // 버튼이 서면 글자 열이 좁아진다 — 제목("이번 주 근무 · 40시간 달성하기")이 말줄임 대신 살짝 줄어들게(없을 땐 1 = 예전 그대로).
         let squeeze: CGFloat = claimable ? 0.8 : 1
@@ -5168,14 +5180,16 @@ struct WeeklyWorkRowView: View {
                 }
                 .frame(height: 4)      // MissionRowView 와 같은 관용구
                 HStack(spacing: 6) {
-                    Text(WeeklyWorkCopy.detail(status, gauge: gauge))
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
+                    Text(failed ? AchievementCopy.claimFailedCaption : WeeklyWorkCopy.detail(status, gauge: gauge))
+                        .font(failed ? .caption2.weight(.semibold) : .caption2)
+                        .foregroundStyle(failed ? CheckTheme.pending : CheckTheme.secondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(squeeze)
                     Spacer(minLength: 4)
-                    HStack(spacing: 3) {
-                        ForEach(passed, id: \.hours) { tierMark($0) }
+                    if !failed {
+                        HStack(spacing: 3) {
+                            ForEach(passed, id: \.hours) { tierMark($0) }
+                        }
                     }
                 }
             }

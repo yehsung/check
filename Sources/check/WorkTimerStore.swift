@@ -379,7 +379,9 @@ final class WorkTimerStore {
             // 경우)는 키가 소비되지 않아 다음 오픈에서 다시 올라온다.
             if showsRetroBanner { showsRetroBanner = false }
             // 받기 연출(v0.3.58)은 **그 순간**의 것이다 — 남겨 두면 다시 열 때 새로 그려진 줄이 지난 "+50"을 또 띄운다.
+            // 받기 실패 문장도 그 순간의 것이다(다시 열면 화면이 새로 묻는다).
             clearMissionClaimBursts()
+            clearMissionClaimFailures()
             // 미니게임은 v0.2.46 에 별도 창으로 나갔다 — 팝오버가 닫혀도 창의 판은 계속돼야 하므로 여기서
             // 끝내지 않는다. 창의 정지 신호는 `CheckMiniGameWindowController` 의 닫힘·포커스 상실이다.
             stopTimerIfIdle()
@@ -1283,6 +1285,12 @@ final class WorkTimerStore {
     var weeklyClaimInFlight = false
     /// 주간 받기 응답을 옮긴 횟수(주간 조회가 떠날 때 찍고, 그 사이 받기가 옮겨졌으면 그 조회는 버린다 — 위와 같은 이유). 화면이 읽지 않는다.
     @ObservationIgnored var weeklyClaimSerial = 0
+    /// 마지막 받기가 실패한 도전 미션 키. 그 줄이 [받기] 옆 보조 문장 자리에 실패 문장을 그린다 — 안내줄(`missionNotice`)로 띄우면
+    /// 절 **위**에 끼어 줄을 밀고, 아래 줄을 누른 사람에겐 스크롤 밖이라 안 보였다(검토 지적 2026-10-19). 그 키의 받기가 답을 받으면
+    /// 내려가고, 미션 화면 · 팝오버를 닫으면 비운다.
+    var achievementClaimFailedKeys: Set<String> = []
+    /// 마지막 주간 받기가 실패했다(같은 이유로 주간 줄 안에서 말한다).
+    var weeklyClaimFailed = false
     /// 받기 연출(줄 자리 → 그 순간). 키는 `MissionClaimBurst.achievementTarget(series:)` · `weeklyTarget`. 미션 화면 · 팝오버를 닫으면 비운다
     /// (다시 열었을 때 지난 연출이 또 재생되지 않게).
     var missionClaimBursts: [String: MissionClaimBurst] = [:]
@@ -2814,8 +2822,9 @@ final class WorkTimerStore {
         guard isMissionPanelVisible else { return }
         isMissionPanelVisible = false
         missionNotice = nil
-        // 받기 연출(v0.3.58)도 이 화면의 것이다 — 다시 열 때 지난 "+50"이 또 뜨지 않게.
+        // 받기 연출(v0.3.58)도 이 화면의 것이다 — 다시 열 때 지난 "+50"이 또 뜨지 않게. 실패 문장도 같다.
         clearMissionClaimBursts()
+        clearMissionClaimFailures()
     }
 
     /// 개인 기록 버튼 액션. 내 근무 리듬/지난주 회고 페이지를 토글하고, 여는 순간 세션을 로드한다. 다른 패널과 상호 배타.
@@ -3967,6 +3976,8 @@ extension WorkTimerStore {
         achievementClaimsInFlight = []
         weeklyClaimInFlight = false
         missionClaimBursts = [:]
+        achievementClaimFailedKeys = []
+        weeklyClaimFailed = false
         // 갱신 조정자도 계정에 묶인다. 진행 중이던 갱신 결과가 새 세션에 적용되면 남의 토큰으로 근무를 기록한다.
         sessionRefreshCoordinator.invalidate()
         // 리얼타임 링도 함께 내린다. realtimeApply 가 소켓을 끊고 예약 타이머를 취소하며 realtimeState 를

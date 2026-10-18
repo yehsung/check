@@ -192,6 +192,9 @@ private func v0356RenderStore(members: Int = 0,
     store.streakDays = streak
     store.weeklyWork = weekly
     store.missionNotice = notice
+    // v0.3.58: 이 스위트는 **도전 미션 절이 없는** 미션 화면(v0.3.56 의 줄 예산 · 짧은 화면)을 잰다 — 서버에 도전 미션이 없는 창과
+    // 같은 그림이다. 절이 붙은 화면(불러오는 중 · 9줄 · 받기)의 높이 · 빈 띠는 V0358AchievementTests 가 따로 잰다.
+    store.achievementsUnavailable = true
     return store
 }
 

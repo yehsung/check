@@ -15,6 +15,10 @@ import Foundation
 //     (`onRewardTrigger` — "루비 +N!"). 새 토스트 장치를 만들지 않는다.
 //
 // 지급 자체는 서버(cron 1분 + 이 조회의 선정산)가 한다. 이 파일은 **아무것도 판정하지 않는다** — 시간을 재서 "넘었다"고 말하지 않는다.
+//
+// v0.3.58(사장님 2026-10-19 "기존의 주간 목표시간 달성하는것도 받는 버튼으로 받게 바꿔주고"): 받기 서버에서는 정산이 **달성 기록만** 하고
+// 루비는 [받기](`claimWeeklyWork()` — WorkTimerStoreAchievements.swift)가 움직인다. 이 파일의 박자 · 거울은 그대로이고, 더한 것은 둘:
+// 받기 전에 떠난 조회는 받기 뒤에 도착하면 버리고(`weeklyClaimSerial`), 받기 응답의 잔량을 버렸으면 다시 읽는다(`claimedNow`).
 
 extension WorkTimerStore {
     /// 주간 조회 사이의 최소 간격(초). 어떤 이유든 이보다 자주 묻지 않는다(무료 플랜 · 서버가 어차피 1분마다 정산한다).
@@ -86,11 +90,14 @@ extension WorkTimerStore {
         guard session != nil else { return }
         let generation = sessionGeneration
         let rubySerial = rubyBalanceWriteSerial
+        let claimSerial = weeklyClaimSerial
         do {
             let status = try await withSessionRetry { activeSession in
                 try await service.weeklyWorkStatus(accessToken: activeSession.accessToken)
             }
             guard generation == sessionGeneration else { return }
+            // 떠난 뒤 받기 응답이 옮겨졌다(v0.3.58) — 이 답은 받기 **전**의 서버일 수 있다(방금 받은 단계에 [받기]가 다시 선다). 버린다.
+            guard claimSerial == weeklyClaimSerial else { return }
             applyWeeklyWork(status, rubyWriteSerialAtDeparture: rubySerial)
         } catch {
             // 조용히 삼킨다. 줄은 마지막으로 알던 값을 그대로 그린다(한 번도 못 받았으면 안 그린다).
@@ -113,8 +120,9 @@ extension WorkTimerStore {
                 // cron 지급 전에 100 을 읽은 상점 조회가 이 150 뒤에 도착해 100 으로 되돌렸다(검토 지적 2026-10-16).
                 // 적힌 상점 조회는 버려지고 한 번 다시 읽는다(`loadShopState`) — 최악이 요청 하나 더다.
                 noteShopMutation()
-            } else if !grants.isEmpty {
-                // 그 사이 다른 쓰기가 있어 이 값은 버렸다 — 그런데 루비가 늘었으니 사실을 다시 읽는다(옛 잔량이 화면에 남지 않게).
+            } else if !grants.isEmpty || status.claimedNowRuby > 0 {
+                // 그 사이 다른 쓰기가 있어 이 값은 버렸다 — 그런데 루비가 늘었으니(자동 지급 · v0.3.58 받기) 사실을 다시 읽는다
+                // (옛 잔량이 화면에 남지 않게).
                 loadShopState()
             }
         }

@@ -691,6 +691,21 @@ struct CheckMenuView: View {
                             hasLoaded: store.missionsLoaded,
                             hasFailed: store.ultraBalanceFailed,
                             notice: store.missionNotice,
+                            // 도전 미션 절(v0.3.58). 고르는 자리는 `AchievementSectionState.make` 하나다 — 서버에 기능이 없으면 `.hidden`.
+                            achievementSection: AchievementSectionState.make(status: store.achievements,
+                                                                             unavailable: store.achievementsUnavailable,
+                                                                             failed: store.achievementsFailed),
+                            // 제목 행의 루비 잔량 — [받기]를 누르면 여기 숫자가 올라간다(v0.3.58).
+                            rubyBalance: store.rubyBalance,
+                            // 받기 동작 · 떠 있음 · 연출(v0.3.58 — 사장님 2026-10-19 "달성하면 받는 버튼이 생기고 그거 누르면 받아지게끔").
+                            claim: MissionClaimContext(
+                                claimAchievement: { store.claimAchievement(key: $0) },
+                                claimWeekly: { store.claimWeeklyWork() },
+                                inFlightKeys: store.achievementClaimsInFlight,
+                                weeklyInFlight: store.weeklyClaimInFlight,
+                                bursts: store.missionClaimBursts
+                            ),
+                            // 미션 화면이 떠 있으니 이 sync 가 도전 미션도 다시 묻는다(`achievementsReason(forWallet:)`).
                             onRetry: { store.syncUltraWallet(reason: .panelOpen) },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
@@ -893,11 +908,16 @@ struct CheckMenuSideRail: View {
             // 근무 줄이 콕찌르기 → 잔량 배지 → 울트라 화면 안에만 있어서 사장님조차 못 찾았다. 자리가 [상점] 바로 아래인
             // 이유: 미션으로 버는 것이 **루비**이고 그 루비를 쓰는 곳이 [상점]이다(벌고 · 쓰는 문이 나란히 선다).
             // `checklist` 는 macOS 12+ (배포 타깃 14 ✓ — CoreGlyphs name_availability: 2021 = macOS 12.0).
+            // v0.3.58: 받을 보상이 있으면 숫자 배지(받을 도전 미션 수 + 받을 주간 단계 수 — `missionClaimableCount`). [제보] 칸의
+            // 배지와 같은 모양이고, 받으면 내려간다(본 적 있는지는 적지 않는다). 매초 값이 아니다(조회 · 받기 응답에만 바뀐다) —
+            // 잎으로 가둘 이유가 없다.
+            let missionClaimable = store.missionClaimableCount
             CheckMenuRailButton(
                 icon: "checklist",
                 label: "미션",
-                help: "미션 — 근무 3시간마다 · 이번 주 근무 보상",
-                isActive: store.isMissionPanelVisible
+                help: MissionRailBadge.help(count: missionClaimable),
+                isActive: store.isMissionPanelVisible,
+                badge: MissionRailBadge.text(count: missionClaimable)
             ) {
                 store.toggleMissionPanel()
             }
@@ -4855,7 +4875,15 @@ enum MissionPanelCopy {
 }
 
 /// 미션 화면(v0.3.56 — 레일 [미션]). 울트라 화면과 **같은 뼈대**(뒤로 + 제목 + PanelDivider + 본문)이고, 본문은
-/// **근무 3시간마다**(`MissionRowView`) → **이번 주 근무**(`WeeklyWorkRowView`, 게이지를 만들 만큼 알 때만) → 방금 받은 안내 줄.
+/// **근무 3시간마다**(`MissionRowView`) → **이번 주 근무**(`WeeklyWorkRowView`, 게이지를 만들 만큼 알 때만) → 방금 받은 안내 줄
+/// → **도전 미션**(v0.3.58 — `AchievementSectionView`, 계열마다 한 줄 · 사장님 확정 2026-10-19).
+///
+/// v0.3.58: 도전 미션 9줄이 붙으며 본문이 늘 상한을 넘는다 — **본문 전체(안내줄 포함)가 한 스크롤 안**이다. 안내줄은 예전처럼
+/// 줄들 바로 아래(위 여백 12pt 그대로)에 서서 화면을 열면 처음부터 보인다. 스크롤 창의 높이 = 예전 줄 상한(`visibleRows` — 배너 ·
+/// 목표 편집 · 안내줄이 먹은 만큼 줄어든다) + 안내줄 몫이라, **창 높이는 v0.3.56 의 최악값을 넘지 않는다**(700pt 예산이 그대로다).
+/// 같은 판에 **받기**가 붙었다(사장님 2026-10-19): 채운 줄 · 이번 주 근무 줄에 [받기 💎+N] — 동작은 환경값(`missionClaim`)으로
+/// 줄에 내려간다(주간 줄 호출부 글자를 바꾸지 않으려고 — `MissionClaimContext` 주석). 제목 행 오른쪽엔 루비 잔량(`MissionRubyBalance`)
+/// 이 서서 받는 순간 숫자가 올라간다 — 뒤로 버튼(27pt)보다 낮아 제목 행 높이는 그대로다.
 ///
 /// ★ **"매일 첫 근무"(밑바닥 보정) · "연속 출근" 줄은 안 그린다**(사장님 지시 2026-10-16: "매일 첫 근무 설명은 빼버리고,
 ///   연속 근무일수는 [헤더 카드] 여기에 뜨게끔 밖으로 빼줘"). **화면에서만 뺐다** — 서버의 밑바닥 보정 규칙(잔량 0이면 1개로)은
@@ -4871,6 +4899,12 @@ private struct MissionPanel: View {
     var hasFailed: Bool = false
     /// 방금 미션을 달성했다는 지속 안내(연출은 2초면 사라진다). 줄들 **아래**에 선다.
     var notice: String? = nil
+    /// 도전 미션 절(v0.3.58). 기본값 `.hidden` — 안 넘기면 v0.3.56 과 같은 화면이다(서버에 기능이 없을 때도 이 값이다).
+    var achievementSection: AchievementSectionState = .hidden
+    /// 제목 행의 루비 잔량(v0.3.58). nil = 모름("—").
+    var rubyBalance: Int? = nil
+    /// 받기 맥락(v0.3.58) — 줄들에 환경값으로 내려간다. 기본값은 "아무것도 안 함".
+    var claim = MissionClaimContext()
     var onRetry: (() -> Void)? = nil
     var extraChromeHeight: CGFloat = 0
     var clipsOverflowInsteadOfScroll: Bool = false
@@ -4920,17 +4954,13 @@ private struct MissionPanel: View {
                 Spacer(minLength: 6)
                 // 실패했을 때만 재시도를 준다(리그/토큰/내 기록과 같은 3분기 규약). 제목 행에 두는 이유: 줄을 이미 받아 둔
                 // 사람의 sync 가 실패해도(줄은 알던 값 그대로) 다시 밀 자리가 있어야 한다 — 예전엔 울트라 히어로 카드가 그 자리였다.
-                if hasFailed, let onRetry { PanelRetryButton(action: onRetry) }
+                // 도전 미션을 한 번도 못 받았는데 실패해도 같은 버튼이다(v0.3.58) — 같은 [다시 시도]가 지갑과 도전 미션을 함께 다시 묻는다.
+                if hasFailed || achievementSection == .failed, let onRetry { PanelRetryButton(action: onRetry) }
+                MissionRubyBalance(balance: rubyBalance, reduceMotion: claim.reduceMotion)
             }
             PanelDivider()
             missionList
-            if let notice, !notice.isEmpty {
-                Text(notice)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(CheckTheme.accent)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+                .environment(\.missionClaim, claim)
         }
         .padding(12)
         .pagePanelStyle()
@@ -4939,10 +4969,13 @@ private struct MissionPanel: View {
     @ViewBuilder
     private var missionList: some View {
         let missions = shownMissions
-        let capHeight = Self.listContentHeight(rowCount: visibleRows)
+        // 스크롤 창 = 예전 줄 상한 + 안내줄 몫(안내줄이 스크롤 안으로 들어왔다 — 창 높이 합은 v0.3.56 과 같다).
+        let capHeight = Self.listContentHeight(rowCount: visibleRows) + noticeHeight
         // 주간 줄도 한 줄이다 — 빼고 세면 스크롤로 넘어가야 할 높이를 그대로 펼쳐 창이 자란다.
         let rowCount = (missions.isEmpty ? 1 : missions.count) + (weeklyRow == nil ? 0 : 1)
-        let contentHeight = Self.listContentHeight(rowCount: rowCount)
+        // 도전 미션 절(소제목 + 줄)도 같은 셈에 든다 — 빼면 절이 붙은 화면이 스크롤 대신 창을 키운다.
+        let contentHeight = Self.listContentHeight(rowCount: rowCount) + noticeHeight
+            + AchievementSectionLayout.height(achievementSection)
         let rows = VStack(spacing: Self.rowSpacing) {
             if missions.isEmpty {
                 Text(hasLoaded ? MissionPanelCopy.emptyCaption
@@ -4955,6 +4988,21 @@ private struct MissionPanel: View {
                 ForEach(missions.prefix(1)) { MissionRowView(mission: $0) }
                 if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }
                 ForEach(missions.dropFirst()) { MissionRowView(mission: $0) }
+            }
+            // 안내줄 — 줄들 바로 아래, 위 여백은 예전과 같은 12pt(간격 8 + 4). 높이를 박아 두는 이유: 스크롤 판정이 이 몫을
+            // `noticeStripHeight` 로 센다(글자 크기가 달라져도 셈과 그림이 안 갈린다).
+            if let notice, !notice.isEmpty {
+                Text(notice)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.accent)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: Self.noticeStripHeight - 12,
+                           maxHeight: Self.noticeStripHeight - 12, alignment: .leading)
+                    .padding(.top, 12 - Self.rowSpacing)
+            }
+            // 도전 미션(v0.3.58) — 기존 줄 · 안내줄 **아래**. 절이 없으면(`.hidden`) 아무것도 안 그린다(간격도 없다).
+            if achievementSection != .hidden {
+                AchievementSectionView(state: achievementSection)
             }
         }
         if contentHeight <= capHeight {
@@ -5069,8 +5117,16 @@ private struct MissionRowView: View {
 /// 남는다(받았으면 체크 + 근무색, 장부가 아직이면 흐리게). 규칙 한 줄은 말풍선 툴팁(줄 높이를 늘리지 않는다 — 팝오버 높이 예산).
 /// private 가 아닌 이유: 렌더 테스트가 이 줄 하나만 그려 색(완료 막대 · 넘긴 단계 표시 · 아이콘)을 픽셀로 잰다 — 팝오버 전체
 /// 그림에서는 다른 줄의 같은 색에 섞여 하나를 걷어내도 초록이었다(검토 지적 2026-10-16).
+///
+/// v0.3.58 받기(사장님 2026-10-19 "기존의 주간 목표시간 달성하는것도 받는 버튼으로 받게 바꿔주고"): 받기 서버가 받을 것이 있다고
+/// 말하면(`hasClaimable` — 어느 주든) 오른쪽 세로 가운데에 [받기 💎+N] — **한 번에 전부** 받는다. 그동안 오른쪽 위 칩(지금 퀘스트의
+/// 보상)은 감춘다 — 칩 "💎 +50" 옆 버튼 "💎+20" 은 어느 것이 지금 받는 루비인지 헷갈린다. 옛 서버(새 칸 없음)는 예전 그대로다.
+/// 동작은 환경값(`missionClaim`)으로 받는다 — 호출부 글자 `WeeklyWorkRowView(status: weeklyRow)` 는 소스 계약 테스트가 읽는다.
 struct WeeklyWorkRowView: View {
     let status: WeeklyWorkStatus
+
+    @Environment(\.missionClaim) private var claim
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     var body: some View {
         if let gauge = status.gauge {
@@ -5082,6 +5138,10 @@ struct WeeklyWorkRowView: View {
         // 완료는 근무색 — 진행 중(강조색)과 색으로 갈린다.
         let barTint = gauge.isComplete ? CheckTheme.working : CheckTheme.accent
         let passed = status.tiers.filter { gauge.hasPassed($0) }
+        let claimable = status.hasClaimable
+        let reduces = claim.reduceMotion ?? systemReduceMotion
+        // 버튼이 서면 글자 열이 좁아진다 — 제목("이번 주 근무 · 40시간 달성하기")이 말줄임 대신 살짝 줄어들게(없을 땐 1 = 예전 그대로).
+        let squeeze: CGFloat = claimable ? 0.8 : 1
         return HStack(spacing: 10) {
             Image(systemName: WeeklyWorkCopy.icon)
                 .font(.system(size: 13, weight: .semibold))
@@ -5094,8 +5154,9 @@ struct WeeklyWorkRowView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(CheckTheme.primaryText)
                         .lineLimit(1)
+                        .minimumScaleFactor(squeeze)
                     Spacer(minLength: 4)
-                    chip(gauge)
+                    if !claimable { chip(gauge) }
                 }
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
@@ -5111,10 +5172,16 @@ struct WeeklyWorkRowView: View {
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .lineLimit(1)
+                        .minimumScaleFactor(squeeze)
                     Spacer(minLength: 4)
                     HStack(spacing: 3) {
                         ForEach(passed, id: \.hours) { tierMark($0) }
                     }
+                }
+            }
+            if claimable {
+                MissionClaimButton(amount: status.pendingRuby, inFlight: claim.weeklyInFlight) {
+                    claim.claimWeekly()
                 }
             }
         }
@@ -5122,7 +5189,17 @@ struct WeeklyWorkRowView: View {
         .frame(height: MissionPanel.rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.fieldFill))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .stroke(claimable ? CheckTheme.accent.opacity(0.55) : CheckTheme.border, lineWidth: 1))
+        // 받기 연출(v0.3.58) — 도전 미션 줄과 같은 "+N" 알약이 버튼 자리에서 떠오른다.
+        .overlay(alignment: .trailing) {
+            if let burst = claim.bursts[MissionClaimBurst.weeklyTarget] {
+                MissionClaimBurstView(amount: burst.amount, reduceMotion: reduces)
+                    .id(burst.serial)
+                    .padding(.trailing, 12)
+            }
+        }
+        .animation(MissionClaimMotion.rowSettle(reduceMotion: reduces), value: claimable)
         .checkTooltip(WeeklyWorkCopy.rule(status))
     }
 

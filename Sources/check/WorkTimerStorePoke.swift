@@ -264,6 +264,11 @@ extension WorkTimerStore {
         Task { @MainActor in await performSyncUltraWallet(reason: reason) }
         // 주간 누적 근무 보상(v0.3.55)도 **같은 박자**에 묻는다 — 다만 1분에 한 번을 넘지 않는다(그쪽 게이트가 막는다).
         refreshWeeklyWork(reason: .walletCadence)
+        // 도전 미션(v0.3.58)은 이 박자 중 **미션 화면의 `.panelOpen` 과 5분 `.periodic`** 에만 얹힌다(새 타이머 없음 —
+        // WorkTimerStoreAchievements.swift 머리 주석 ①). 콕찌르기 · 울트라 화면을 여는 `.panelOpen` 은 묻지 않는다.
+        if let achievementsReason = achievementsReason(forWallet: reason) {
+            refreshAchievements(reason: achievementsReason)
+        }
     }
 
     /// 폴링 tick 전용 — 근무중이고 스로틀이 열렸을 때만 발사한다. **요청 0건이 기본값이다.**

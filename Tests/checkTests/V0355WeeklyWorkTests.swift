@@ -638,6 +638,9 @@ final class V0355Clock {
         store.missionsLoaded = true
         store.weeklyWork = weekly
         store.isMissionPanelVisible = true
+        // v0.3.58: 주간 줄의 줄 셈 · 높이 상한은 **도전 미션 절이 없는** 미션 화면에서 잰다(서버에 도전 미션이 없는 창과 같은 그림) —
+        // 절이 붙으면 목록은 언제나 스크롤 상한이라 "주간 줄을 한 줄로 세는가"가 그림에 안 나타난다. 절이 붙은 화면은 V0358 이 잰다.
+        store.achievementsUnavailable = true
         return store
     }
 

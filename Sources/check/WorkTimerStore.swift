@@ -306,6 +306,7 @@ final class WorkTimerStore {
             // 그대로 떠 있는 화면이 됐는데, 주기 sync 는 **근무 중에만** 돈다(`syncUltraWalletIfDue` 의 startedAt 게이트) —
             // 근무 밖에서 패널을 열어 둔 사람은 다시 열어도 낡은 3시간 줄 · 주간 줄 · 잔량을 봤다. 이번 주 근무 줄은 이 sync 에
             // 얹힌 주간 조회가 채운다(1분 창이 막는다 — `syncUltraWallet`). 홈 화면 재오픈은 묻지 않는다(왕복을 늘리지 않는다).
+            // 미션 화면을 연 채 다시 열었으면 이 sync 가 도전 미션(v0.3.58)도 함께 묻는다(미션 화면의 `.panelOpen`).
             if isMissionPanelVisible || isUltraPanelVisible { syncUltraWallet(reason: .panelOpen) }
             // 개인 기록: 패널이 열려 있으면 재조회하고, 닫혀 있어도 아직 한 번도 못 받았으면 조용히 받아 온다
             // — 월요일 첫 팝오버의 지난주 회고 배너는 retro 가 계산돼 있어야 뜨기 때문이다(실행당 1회 수준).
@@ -377,6 +378,8 @@ final class WorkTimerStore {
             // 그 자리를 새 버전 안내 같은 다음 순위 배너가 쓴다. 아직 그려지지 못한 배너(더 급한 배너에 밀린
             // 경우)는 키가 소비되지 않아 다음 오픈에서 다시 올라온다.
             if showsRetroBanner { showsRetroBanner = false }
+            // 받기 연출(v0.3.58)은 **그 순간**의 것이다 — 남겨 두면 다시 열 때 새로 그려진 줄이 지난 "+50"을 또 띄운다.
+            clearMissionClaimBursts()
             // 미니게임은 v0.2.46 에 별도 창으로 나갔다 — 팝오버가 닫혀도 창의 판은 계속돼야 하므로 여기서
             // 끝내지 않는다. 창의 정지 신호는 `CheckMiniGameWindowController` 의 닫힘·포커스 상실이다.
             stopTimerIfIdle()
@@ -1260,6 +1263,31 @@ final class WorkTimerStore {
     @ObservationIgnored var lastWeeklyWorkFetchAt: Date?
     /// 근무가 끝난 직후의 조회가 1분 창에 막혀 **빚으로 남았다**. 폴링 tick 이 1분이 지나면 갚는다.
     @ObservationIgnored var weeklyWorkFetchOwed = false
+    // ── 도전 미션 · 받기(v0.3.58 · `achievements_status` · `achievement_claim` · `weekly_work_claim`) ── 박자 · 반영 · 받기 ·
+    //    배지는 WorkTimerStoreAchievements.swift.
+    /// 마지막으로 받은 도전 미션. **nil = 아직 모름**(한 번도 못 받았다). 실패는 알던 값을 지우지 않는다(주간 줄과 같은 규약).
+    var achievements: AchievementStatus?
+    /// 이 서버엔 도전 미션이 없다(404 · PGRST202 — db push 전 창). 참이면 미션 화면이 절을 **조용히 감춘다**(실패 문구도 없다).
+    /// 다음 박자에 다시 묻고, 답이 오면 내려간다(앱이 켜진 채 서버가 올라와도 절이 선다).
+    var achievementsUnavailable = false
+    /// 마지막 조회가 실패했다(네트워크 · 5xx · 해석 실패). 한 번도 못 받았으면 절이 "미션을 불러오지 못했어요" + [다시 시도]를 그린다.
+    var achievementsFailed = false
+    /// 떠 있는 조회(한 번에 하나 — 겹친 박자는 떠 있는 답을 같이 기다린다).
+    @ObservationIgnored var achievementsFetchTask: Task<Void, Never>?
+    /// 도전 미션 응답을 옮긴 횟수. 조회가 떠날 때 찍고, 도착했을 때 그 사이 **받기 응답**이 옮겨졌으면 그 조회는 버린다
+    /// (받기 전에 떠난 조회가 늦게 와서 방금 받은 줄에 [받기]를 다시 세우지 않게). 화면이 읽지 않는다.
+    @ObservationIgnored var achievementsApplySerial = 0
+    /// 떠 있는 받기(키 — 전부 받기는 `achievementClaimAllSlot`). 같은 키는 한 번에 하나(두 번 눌러도 요청 1건) · 버튼이 흐려진다.
+    var achievementClaimsInFlight: Set<String> = []
+    /// 주간 받기가 떠 있다(전부 받기 하나뿐이다).
+    var weeklyClaimInFlight = false
+    /// 주간 받기 응답을 옮긴 횟수(주간 조회가 떠날 때 찍고, 그 사이 받기가 옮겨졌으면 그 조회는 버린다 — 위와 같은 이유). 화면이 읽지 않는다.
+    @ObservationIgnored var weeklyClaimSerial = 0
+    /// 받기 연출(줄 자리 → 그 순간). 키는 `MissionClaimBurst.achievementTarget(series:)` · `weeklyTarget`. 미션 화면 · 팝오버를 닫으면 비운다
+    /// (다시 열었을 때 지난 연출이 또 재생되지 않게).
+    var missionClaimBursts: [String: MissionClaimBurst] = [:]
+    /// 연출 순번(같은 줄을 또 받으면 새 순번 → 뷰가 처음부터 다시 그린다). 화면이 읽지 않는다.
+    @ObservationIgnored var missionClaimBurstSerial = 0
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     /// 공개 여부가 **확정**됐는가 — 서버 응답이 왔거나 **사용자가 직접 골랐거나**(setTokenUsagePublic 이 GET 전에 세운다:
@@ -2773,6 +2801,7 @@ final class WorkTimerStore {
         closeUltraPanelForAnotherScreen()
         isInsightsPanelVisible = false
         isMissionPanelVisible = true
+        // 이 sync 가 도전 미션(v0.3.58)도 함께 묻는다 — 미션 화면이 떠 있는 `.panelOpen` 이라서다(`achievementsReason(forWallet:)`).
         syncUltraWallet(reason: .panelOpen)
     }
 
@@ -2785,6 +2814,8 @@ final class WorkTimerStore {
         guard isMissionPanelVisible else { return }
         isMissionPanelVisible = false
         missionNotice = nil
+        // 받기 연출(v0.3.58)도 이 화면의 것이다 — 다시 열 때 지난 "+50"이 또 뜨지 않게.
+        clearMissionClaimBursts()
     }
 
     /// 개인 기록 버튼 액션. 내 근무 리듬/지난주 회고 페이지를 토글하고, 여는 순간 세션을 로드한다. 다른 패널과 상호 배타.
@@ -3926,6 +3957,16 @@ extension WorkTimerStore {
         weeklyWork = nil
         lastWeeklyWorkFetchAt = nil
         weeklyWorkFetchOwed = false
+        // 도전 미션 · 받기도 계정에 묶인다(v0.3.58) — 남기면 새 계정 화면이 남의 진행 · 남의 [받기]를 그리고(누르면 내 계정으로
+        // 나간다), 받음을 되돌리지 않는 병합(`merged(over:)`)이 남의 받음을 내 줄에 덮는다. 레일 배지도 앞 사람의 것이다.
+        // 떠 있던 조회 · 받기의 답은 세대 가드가 버린다(떠 있음 표시도 여기서 내린다 — 답이 버려지면 아무도 안 내린다).
+        achievements = nil
+        achievementsUnavailable = false
+        achievementsFailed = false
+        achievementsFetchTask = nil
+        achievementClaimsInFlight = []
+        weeklyClaimInFlight = false
+        missionClaimBursts = [:]
         // 갱신 조정자도 계정에 묶인다. 진행 중이던 갱신 결과가 새 세션에 적용되면 남의 토큰으로 근무를 기록한다.
         sessionRefreshCoordinator.invalidate()
         // 리얼타임 링도 함께 내린다. realtimeApply 가 소켓을 끊고 예약 타이머를 취소하며 realtimeState 를

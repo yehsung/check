@@ -18,6 +18,11 @@ import Foundation
 //    `isUsable` 로 "줄을 그릴 만큼 아는가"를 묻는다.
 // ② **"방금 받았다"는 서버가 넣은 행으로만 말한다.** `granted_now`(이 호출이 넣은 행) 또는 같은 주에서 `claimed` 가
 //    거짓 → 참으로 바뀐 단계(cron 이 먼저 넣은 행)뿐이다 — 클라가 시간을 재서 "넘었다"고 판단하지 않는다.
+// ③ **v0.3.58 — 받기 버튼으로 받는다**(사장님 2026-10-19: "기존의 주간 목표시간 달성하는것도 받는 버튼으로 받게 바꿔주고").
+//    서버 `20261019121000_weekly_claim.sql` 부터 정산은 **달성 기록만** 하고 루비는 `weekly_work_claim()` 이 줄 때 움직인다.
+//    응답엔 단계마다 `achieved` · `claimable`, 위에 `pending`(어느 주든 받을 것 전부) · `claimable_ruby` 가 더해지고
+//    `granted_now` 는 언제나 `[]` 다. 옛 칸(`tiers[].claimed` · `granted_now`)의 뜻은 그대로라 0.3.55~0.3.57 이 계속 읽는다.
+//    새 칸이 **없는** 응답(옛 서버)은 예전 그대로다 — 버튼이 없고 ②로 알린다(`supportsClaim`).
 
 /// `weekly_work_status()` 응답.
 ///
@@ -27,6 +32,13 @@ import Foundation
 ///   "granted_now": [ {"hours": 20, "ruby": 20} ], "ruby_balance": 1057, "server_now_ms": 1781234567890 }
 /// ```
 ///
+/// v0.3.58 받기 서버는 더 싣는다(없으면 nil — 옛 서버):
+/// ```json
+/// { …, "tiers": [ {"hours": 20, "ruby": 20, "claimed": false, "achieved": true, "claimable": true}, … ],
+///   "granted_now": [], "pending": [ {"week_start": "2026-10-12", "hours": 20, "ruby": 20} ], "claimable_ruby": 20,
+///   "claimed_now": [ {"week_start": "2026-10-12", "hours": 20, "ruby": 20} ] }   // claimed_now 는 weekly_work_claim 응답만
+/// ```
+///
 /// ★ **이 타입의 디코드는 칸 하나 때문에 throw 하지 않는다**(최상위가 객체가 아닐 때만 throw 한다 — 그건 응답이 아니다).
 package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
     /// 한 단계. `claimed` = 이 주 · 이 단계의 장부 행이 있다(= 이미 받았다).
@@ -34,11 +46,17 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
         package let hours: Int
         package let ruby: Int
         package let claimed: Bool
+        /// v0.3.58 받기 서버: 이 주 · 이 단계를 채웠다(달성 행이 있다). nil = 옛 서버(모른다).
+        package let achieved: Bool?
+        /// v0.3.58 받기 서버: 채웠고 아직 안 받았다. nil = 옛 서버.
+        package let claimable: Bool?
 
-        package init(hours: Int, ruby: Int, claimed: Bool) {
+        package init(hours: Int, ruby: Int, claimed: Bool, achieved: Bool? = nil, claimable: Bool? = nil) {
             self.hours = hours
             self.ruby = ruby
             self.claimed = claimed
+            self.achieved = achieved
+            self.claimable = claimable
         }
 
         /// 이 단계의 문턱(초).
@@ -59,6 +77,20 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
         }
     }
 
+    /// v0.3.58 — 채웠고 아직 안 받은 단계 하나(**어느 주든** — 지난주에 채우고 안 받은 것도 남는다. 달성은 사라지지 않는다).
+    package struct Pending: Equatable, Sendable {
+        /// `YYYY-MM-DD`(그 주 월요일). 비어 있을 수 있다(서버가 안 실었다 — 받기는 어차피 전부 받기다).
+        package let weekStart: String
+        package let hours: Int
+        package let ruby: Int
+
+        package init(weekStart: String, hours: Int, ruby: Int) {
+            self.weekStart = weekStart
+            self.hours = hours
+            self.ruby = max(0, ruby)
+        }
+    }
+
     /// `YYYY-MM-DD`(KST 월요일). 서버가 판정한 이번 주.
     package var weekStart: String?
     package var nextWeekStart: String?
@@ -72,9 +104,16 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
     package var rubyBalance: Int?
     /// 서버 시각(epoch 밀리초). 진단용.
     package var serverNowMs: Int?
+    /// v0.3.58 — 받을 것 전부(어느 주든). **nil = 옛 서버**(이 칸이 없다 → 버튼 없음 · 예전 알림). 빈 배열 = 받을 것이 없다.
+    package var pending: [Pending]?
+    /// v0.3.58 — 받을 루비 합(`pending` 의 합). nil = 옛 서버.
+    package var claimableRuby: Int?
+    /// v0.3.58 — `weekly_work_claim` 이 이 호출에 **실제로 넣은** 지급. 상태 조회는 언제나 비어 있다.
+    package var claimedNow: [Grant]
 
     package init(weekStart: String? = nil, nextWeekStart: String? = nil, workedSeconds: Int? = nil,
-                 tiers: [Tier] = [], grantedNow: [Grant] = [], rubyBalance: Int? = nil, serverNowMs: Int? = nil) {
+                 tiers: [Tier] = [], grantedNow: [Grant] = [], rubyBalance: Int? = nil, serverNowMs: Int? = nil,
+                 pending: [Pending]? = nil, claimableRuby: Int? = nil, claimedNow: [Grant] = []) {
         self.weekStart = weekStart
         self.nextWeekStart = nextWeekStart
         self.workedSeconds = workedSeconds
@@ -82,11 +121,15 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
         self.grantedNow = grantedNow
         self.rubyBalance = rubyBalance
         self.serverNowMs = serverNowMs
+        self.pending = pending
+        self.claimableRuby = claimableRuby.map { max(0, $0) }
+        self.claimedNow = claimedNow
     }
 
     /// 키는 서비스 디코더의 `.convertFromSnakeCase` 를 거친 **카멜**이다(`worked_seconds` → `workedSeconds`).
     package enum CodingKeys: String, CodingKey {
         case weekStart, nextWeekStart, workedSeconds, tiers, grantedNow, rubyBalance, serverNowMs
+        case pending, claimableRuby, claimedNow
     }
 
     package init(from decoder: Decoder) throws {
@@ -98,7 +141,11 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
             tiers: (c.weeklyLossyList(WeeklyLossyTier.self, forKey: .tiers) ?? []).compactMap(\.tier),
             grantedNow: (c.weeklyLossyList(WeeklyLossyGrant.self, forKey: .grantedNow) ?? []).compactMap(\.grant),
             rubyBalance: c.weeklyLossyInt(forKey: .rubyBalance),
-            serverNowMs: c.weeklyLossyInt(forKey: .serverNowMs)
+            serverNowMs: c.weeklyLossyInt(forKey: .serverNowMs),
+            // 칸이 **있을 때만** 배열이다(없으면 nil = 옛 서버). 모양이 틀린 배열 원소는 그 원소만 버린다.
+            pending: c.weeklyLossyList(WeeklyLossyPending.self, forKey: .pending)?.compactMap(\.pending),
+            claimableRuby: c.weeklyLossyInt(forKey: .claimableRuby),
+            claimedNow: (c.weeklyLossyList(WeeklyLossyGrant.self, forKey: .claimedNow) ?? []).compactMap(\.grant)
         )
     }
 
@@ -118,6 +165,29 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
 
     /// 단계 표의 루비 합(다 받으면 이만큼 — 지금 표로는 270).
     package var totalRuby: Int { tiers.reduce(0) { $0 + max(0, $1.ruby) } }
+
+    // MARK: v0.3.58 받기(순수)
+
+    /// 이 응답이 받기 서버의 것인가 — `pending` 이나 `claimable_ruby` 가 실려 왔다. 거짓(옛 서버)이면 버튼도 받을 것도 없다.
+    package var supportsClaim: Bool { pending != nil || claimableRuby != nil }
+
+    /// 받을 루비(어느 주든). 서버 합(`claimable_ruby`)이 있으면 그 값, 없으면 `pending` 의 합. 옛 서버는 0.
+    package var pendingRuby: Int {
+        guard supportsClaim else { return 0 }
+        return max(0, claimableRuby ?? (pending ?? []).reduce(0) { $0 + $1.ruby })
+    }
+
+    /// 받을 단계 수(레일 배지에 더해진다). `pending` 이 없는데 합만 양수면 1(한 번 누르면 받을 것이 있다는 사실은 말한다).
+    package var pendingCount: Int {
+        guard pendingRuby > 0 else { return 0 }
+        return max(1, pending?.count ?? 1)
+    }
+
+    /// [받기 +N] 버튼을 세우는가.
+    package var hasClaimable: Bool { pendingRuby > 0 }
+
+    /// 이 호출(받기)이 넣은 지급의 루비 합.
+    package var claimedNowRuby: Int { claimedNow.reduce(0) { $0 + max(0, $1.ruby) } }
 
     /// 다음 주 월요일 0시(KST) — 이 응답의 주가 끝나는 순간. 못 읽으면 nil.
     package var nextWeekStartDate: Date? { WeeklyWorkCalendar.kstMidnight(nextWeekStart) }
@@ -160,7 +230,9 @@ package struct WeeklyWorkStatus: Decodable, Equatable, Sendable {
             let isThisWeek = grant.weekStart == nil || grant.weekStart == weekStart
             add(Grant(hours: grant.hours, ruby: grant.ruby, weekStart: isThisWeek ? nil : grant.weekStart))
         }
-        if let previous, previous.weekStart != nil, previous.weekStart == weekStart {
+        // v0.3.58 받기 서버에서는 ② 를 보지 않는다 — `claimed` 가 거짓 → 참이 되는 길은 이제 **사람이 [받기]를 누른 것**뿐이고
+        // (이 맥이면 받기 연출이 말하고, 폰이면 폰에서 이미 봤다), 그걸 "N시간 채웠어요"로 또 말하면 같은 일을 두 번 알린다.
+        if !supportsClaim, let previous, previous.weekStart != nil, previous.weekStart == weekStart {
             let wasClaimed = Dictionary(previous.tiers.map { ($0.hours, $0.claimed) }, uniquingKeysWith: { first, _ in first })
             for tier in tiers where tier.claimed && wasClaimed[tier.hours] == false {
                 add(Grant(hours: tier.hours, ruby: tier.ruby))
@@ -269,6 +341,42 @@ extension SupabaseWorkService {
         )
         return try decoder.decode(WeeklyWorkStatus.self, from: data)
     }
+
+    package nonisolated static let weeklyWorkClaimPath = "/rest/v1/rpc/weekly_work_claim"
+
+    /// v0.3.58 받기. `weekly_work_claim(p_week_start, p_hours)` — 둘 다 nil 이면 **받을 것 전부(어느 주든)**. 서버가 먼저 정산하므로
+    /// 방금 넘긴 단계도 한 번에 받는다. 응답은 `weekly_work_status()` 와 같은 모양 + `claimed_now`. 장부 사유는 0.3.55 와 **같은 꼴**
+    /// (`mission:week:<주>:<h>h`)이라 기존 유니크 인덱스가 옛 자동 지급 · 새 받기 사이의 두 번 지급을 막는다.
+    package func weeklyWorkClaim(accessToken: String, weekStart: String? = nil, hours: Int? = nil) async throws -> WeeklyWorkStatus {
+        let data = try await send(
+            path: Self.weeklyWorkClaimPath,
+            method: "POST",
+            body: WeeklyWorkClaimRequest(weekStart: weekStart, hours: hours),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(WeeklyWorkStatus.self, from: data)
+    }
+}
+
+/// `weekly_work_claim(p_week_start, p_hours)` 본문. **키 둘을 언제나 싣는다**(nil 은 JSON null) — 키 집합이 흔들리면 PostgREST 가 다른
+/// 함수를 찾는다(`GachaPullRequest` 와 같은 규약). 인코더가 `.convertToSnakeCase` 라 `pWeekStart` → `p_week_start`.
+package struct WeeklyWorkClaimRequest: Encodable, Equatable, Sendable {
+    package let pWeekStart: String?
+    package let pHours: Int?
+
+    package init(weekStart: String?, hours: Int?) {
+        pWeekStart = weekStart
+        pHours = hours
+    }
+
+    private enum CodingKeys: String, CodingKey { case pWeekStart, pHours }
+
+    package func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if let pWeekStart { try c.encode(pWeekStart, forKey: .pWeekStart) } else { try c.encodeNil(forKey: .pWeekStart) }
+        if let pHours { try c.encode(pHours, forKey: .pHours) } else { try c.encodeNil(forKey: .pHours) }
+    }
 }
 
 // MARK: - 관대한 디코드 부품(이 파일 전용)
@@ -277,7 +385,7 @@ extension SupabaseWorkService {
 private struct WeeklyLossyTier: Decodable {
     let tier: WeeklyWorkStatus.Tier?
 
-    enum CodingKeys: String, CodingKey { case hours, ruby, claimed }
+    enum CodingKeys: String, CodingKey { case hours, ruby, claimed, achieved, claimable }
 
     init(from decoder: Decoder) throws {
         guard let c = try? decoder.container(keyedBy: CodingKeys.self),
@@ -288,7 +396,27 @@ private struct WeeklyLossyTier: Decodable {
             return
         }
         // claimed 가 없거나 모양이 틀리면 **안 받은 것**으로 둔다 — 받았다고 그리면 아직 안 준 루비를 준 것처럼 말한다.
-        tier = WeeklyWorkStatus.Tier(hours: hours, ruby: ruby, claimed: c.weeklyLossy(Bool.self, forKey: .claimed) ?? false)
+        tier = WeeklyWorkStatus.Tier(hours: hours, ruby: ruby, claimed: c.weeklyLossy(Bool.self, forKey: .claimed) ?? false,
+                                     achieved: c.weeklyLossy(Bool.self, forKey: .achieved),
+                                     claimable: c.weeklyLossy(Bool.self, forKey: .claimable))
+    }
+}
+
+/// 받을 단계 한 행(v0.3.58). 시간 · 루비가 없으면 그 행만 버린다.
+private struct WeeklyLossyPending: Decodable {
+    let pending: WeeklyWorkStatus.Pending?
+
+    enum CodingKeys: String, CodingKey { case weekStart, hours, ruby }
+
+    init(from decoder: Decoder) throws {
+        guard let c = try? decoder.container(keyedBy: CodingKeys.self),
+              let hours = c.weeklyLossyInt(forKey: .hours), hours > 0,
+              let ruby = c.weeklyLossyInt(forKey: .ruby)
+        else {
+            pending = nil
+            return
+        }
+        pending = WeeklyWorkStatus.Pending(weekStart: c.weeklyLossy(String.self, forKey: .weekStart) ?? "", hours: hours, ruby: ruby)
     }
 }
 

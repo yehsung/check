@@ -86,7 +86,7 @@ enum MissionRailBadge {
     static let plainHelp = "미션 — 근무 3시간마다 · 이번 주 근무 · 도전 미션"
 
     /// 숫자는 색 · 모양으로만 말하지 않는다 — 툴팁(= 보이스오버)도 같은 수를 말한다.
-    static func help(count: Int) -> String {
+    static func tooltipText(count: Int) -> String {
         count > 0 ? "미션 — 받을 보상 \(count)개" : plainHelp
     }
 }

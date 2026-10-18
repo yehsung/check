@@ -930,7 +930,7 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         store.achievementsUnavailable = true
         #expect(store.missionClaimableCount == 2)
         #expect(MissionRailBadge.text(count: 0) == nil && MissionRailBadge.text(count: 3) == "3" && MissionRailBadge.text(count: 12) == "9+")
-        #expect(MissionRailBadge.help(count: 3) == "미션 — 받을 보상 3개" && MissionRailBadge.help(count: 0) == MissionRailBadge.plainHelp)
+        #expect(MissionRailBadge.tooltipText(count: 3) == "미션 — 받을 보상 3개" && MissionRailBadge.tooltipText(count: 0) == MissionRailBadge.plainHelp)
     }
 
     @Test("레일 — [미션] 칸의 배지가 스토어 수를 따른다(값 트리) · 배지가 칸 오른쪽 위에 그려진다")
@@ -962,7 +962,7 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
     func railSourceContract() throws {
         let code = try v0358Code("CheckMenuView.swift")
         #expect(code.contains("let missionClaimable = store.missionClaimableCount"))
-        #expect(code.contains("help: MissionRailBadge.help(count: missionClaimable)"))
+        #expect(code.contains("help: MissionRailBadge.tooltipText(count: missionClaimable)"))
         #expect(code.contains("badge: MissionRailBadge.text(count: missionClaimable)"))
     }
 }

@@ -918,7 +918,7 @@ struct CheckMenuSideRail: View {
             CheckMenuRailButton(
                 icon: "checklist",
                 label: "미션",
-                help: MissionRailBadge.help(count: missionClaimable),
+                help: MissionRailBadge.tooltipText(count: missionClaimable),
                 isActive: store.isMissionPanelVisible,
                 badge: MissionRailBadge.text(count: missionClaimable)
             ) {

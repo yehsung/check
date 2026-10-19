@@ -12,6 +12,10 @@
 #     읽기 경로(work_status_devices GET · focus_mode 조회 칸)와 실시간 소켓 keepalive(heartbeat · heartbeatAck — 근무 하트비트가 아니다)는
 #     폰도 쓰므로 여기서 보지 않는다. 근무 하트비트(맥 heartbeat(…) 메서드)는 아래 심볼 검사와 소스 계약 테스트가 본다.
 #  3. nm 심볼에 데모·스텁·맥 전용 메서드 이름이 0건이다.
+#     ★ 2026-10-19: 이 검사 하나만 믿지 마라. Swift 는 **낱말 치환**으로 망글링해서 `MobileDemoMissionsRoute` 가
+#       `0B17DemoMissionsRoute` 로 적힌다 — `MobileDemo` 라는 글자가 심볼에 아예 없다. 그래서 2번(strings · 리플렉션
+#       메타데이터)이 데모 격리의 **주된 증거**이고, 3번은 보조다. 치환된 꼴(`<길이>Demo…` · `<길이>Stub…`)도
+#       같이 센다 — 길이 숫자가 앞에 붙는 모양이라 평범한 영어 심볼과는 겹치지 않는다.
 #
 # ★ 2026-09-18: `join_team` · `create_team` · `/auth/v1/signup` 을 금지 목록에서 **뺐다**. 폰이 가입을 받게 됐기 때문이다
 #   (앱스토어 정식 출시 준비 — 폰에서 가입을 못 하면 스토어에서 받은 사람은 로그인 벽만 본다). 이 셋은 본인 계정에만 작용하고
@@ -33,7 +37,7 @@ demo_json="$(find "$APP" -type f \( -name 'rpc.*.json' -o -name 'rest.*.json' -o
 [[ -z "$demo_json" ]] || report "픽스처 모양의 JSON 이 번들에 있다: $demo_json"
 
 STRINGS_PATTERN='take_pokes|work_tick|close_abandoned|ultra_wallet_sync|buy_ultra|poke_user|ultra_poke|away_sync|token_usage_device_monthly|token_usage_monthly|app_build|app_version|AingCheckDemo|demo\.aingcheck|forbidden on phone|MobileStub|MobileDemo|MESSAGE_REPLY|MESSAGE_READ|GOMOKU_DECLINE|aingcheck\.local\.|aingcheck_local'
-SYMBOL_PATTERN='MobileDemo|MobileStubURLProtocol|MobileForbiddenCalls|MobileKeychainProbe|takePokes|workTick|WorkTickGate|syncUltraWallet|updateAppVersion|closeAbandonedSessions|upsertStatusDevice|reportDeviceInput|sendUltraPoke|UNTextInputNotificationAction|postLocalNotice'
+SYMBOL_PATTERN='MobileDemo|[0-9]Demo[A-Z0-9]|[0-9]Stub[A-Z0-9]|MobileStubURLProtocol|MobileForbiddenCalls|MobileKeychainProbe|takePokes|workTick|WorkTickGate|syncUltraWallet|updateAppVersion|closeAbandonedSessions|upsertStatusDevice|reportDeviceInput|sendUltraPoke|UNTextInputNotificationAction|postLocalNotice'
 
 binaries=("$APP/AingCheck")
 for appex in "$APP"/PlugIns/*.appex; do

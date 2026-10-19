@@ -1,0 +1,36 @@
+{
+  "__note": [
+    "weekly_work_status() — **옛 서버(0.3.55~0.3.57)** 응답. 닿는 길: -AingCheckDemoRoute me/weekly/legacy (장면 _me + 바늘 demo-week-legacy).",
+    "pending · claimable_ruby · tiers[].achieved · tiers[].claimable 이 **아예 없다** → supportsClaim = false: [받기] 버튼을 세우면 안 되고,",
+    "지급은 cron 이 이미 했으므로 granted_now(이 호출이 넣은 행)로 '루비 50개를 받았어요'를 알린다 — 받기 서버에서는 이 길이 막힌다.",
+    "이번 주 42시간 · 20·40 단계를 받았고 60 단계는 아직이다. 잔량 190 = 120 + 20 + 50."
+  ],
+  "week_start": "2026-09-14",
+  "next_week_start": "2026-09-21",
+  "worked_seconds": 151200,
+  "tiers": [
+    {
+      "hours": 20,
+      "ruby": 20,
+      "claimed": true
+    },
+    {
+      "hours": 40,
+      "ruby": 50,
+      "claimed": true
+    },
+    {
+      "hours": 60,
+      "ruby": 200,
+      "claimed": false
+    }
+  ],
+  "granted_now": [
+    {
+      "hours": 40,
+      "ruby": 50
+    }
+  ],
+  "ruby_balance": 190,
+  "server_now_ms": 1789621500000
+}

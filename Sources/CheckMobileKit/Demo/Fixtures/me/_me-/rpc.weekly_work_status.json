@@ -1,13 +1,38 @@
 {
+  "__note": [
+    "weekly_work_status() — 받기 서버 · **받을 것 없음**(장면 _me- · 라우트 `me/`). 이번 주 0초.",
+    "pending 이 **빈 배열**이다(nil 이 아니다) — 빈 배열은 '받을 것이 없다', 칸이 아예 없으면 '옛 서버'(supportsClaim 이 갈린다).",
+    "잔량 12 는 같은 장면의 rpc.shop_state.json 과 같은 값이다."
+  ],
   "week_start": "2026-09-14",
   "next_week_start": "2026-09-21",
   "worked_seconds": 0,
   "tiers": [
-    {"hours": 20, "ruby": 20, "claimed": false},
-    {"hours": 40, "ruby": 50, "claimed": false},
-    {"hours": 60, "ruby": 200, "claimed": false}
+    {
+      "hours": 20,
+      "ruby": 20,
+      "claimed": false,
+      "achieved": false,
+      "claimable": false
+    },
+    {
+      "hours": 40,
+      "ruby": 50,
+      "claimed": false,
+      "achieved": false,
+      "claimable": false
+    },
+    {
+      "hours": 60,
+      "ruby": 200,
+      "claimed": false,
+      "achieved": false,
+      "claimable": false
+    }
   ],
   "granted_now": [],
   "ruby_balance": 12,
-  "server_now_ms": 1789621500000
+  "server_now_ms": 1789621500000,
+  "pending": [],
+  "claimable_ruby": 0
 }

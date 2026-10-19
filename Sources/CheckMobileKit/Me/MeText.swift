@@ -362,6 +362,89 @@ package enum MeText {
         return "\(value), 달성하면 루비 \(gauge.reward)개"
     }
 
+    // MARK: 도전 미션 · 받기 (v0.3.58 서버 — 맥 `AchievementCopy` · `MissionCopy` · `MissionPanelCopy` 와 같은 낱말)
+    //
+    // ★ **제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다**(응답의 `title` · `detail` · `reward` · `target` · `sort`).
+    //   그래서 이 절에는 미션 제목이 한 줄도 없고 50 · 20 · 10 같은 숫자도 없다 — 서버가 미션을 더하거나 값을 바꿔도 앱을 다시
+    //   낼 필요가 없고(모르는 키도 그대로 그린다), 화면이 서버와 다른 숫자를 약속하지 않는다. 지금 계열은 아홉이다
+    //   (폰 로그인 · 할 일 3개 · 오목 · 체스 · 미니게임 3종 · 콕 10/50/100 · 울트라 5회 · 팀 2/3명 · 연속 근무 14/30일 →
+    //   `AchievementStatus.seriesRows` 가 계열마다 한 줄로 접는다). 여기 있는 것은 **말투**뿐이다.
+
+    /// 절 소제목(맥 `AchievementCopy.sectionTitle`).
+    package static let missionsTitle = "도전 미션"
+    /// 한 번도 못 읽었을 때의 실패 문장(맥 `MissionPanelCopy.failedCaption`). 불러오는 중은 `MeText.loading`.
+    package static let missionsLoadFailed = "미션을 불러오지 못했어요"
+    /// 받기 버튼의 낱말 — 도전 미션 줄과 이번 주 근무 카드가 **같은 버튼**이다(맥 `AchievementCopy.claimButton`).
+    package static let claimButton = "받기"
+    /// 받은 줄의 표시(진행 숫자 자리). 체크 기호는 화면이 그린다(주간 칸 칩과 같은 관용구) — 글자는 "받음" 하나다
+    /// (맥 `MissionCopy.claimedChip` · 주간 칩 꼬리 `weeklyGrantSuffix` 와 같은 낱말).
+    package static let claimedMark = weeklyGrantSuffix
+    /// 받기가 실패한 **그 줄** 안의 문장(코어 `AchievementNoticeText.claimFailedRow` — 맥과 한 글자도 다르지 않다).
+    /// 절 위 안내줄에 띄우지 않는다: 맥이 검토(2026-10-19)에서 버린 방식이다 — 안내줄은 줄을 밀고, 아래쪽 줄을 누른 사람에겐
+    /// 스크롤 밖이라 안 보였다. [받기]는 그대로 남아 있으니 **다시 누르는 것이 재시도**다.
+    package static let claimFailed = AchievementNoticeText.claimFailedRow
+
+    /// 진행 숫자 "23/50". 받은 줄은 이 자리에 `claimedMark` 를 그린다(연속 근무는 받은 뒤 지금 연속이 다시 낮아질 수 있어
+    /// 숫자가 거짓이 된다 — 달성은 끈적하다).
+    package static func missionProgress(_ mission: AchievementStatus.Mission) -> String {
+        "\(mission.progress)/\(mission.target)"
+    }
+
+    /// 보상 숫자 "+50"(루비 보석은 화면이 `RubyIcon` 으로 그린다 — 폰은 💎 이모지를 쓰지 않는다). 0 이면 nil(칩 없음).
+    package static func missionReward(_ ruby: Int) -> String? {
+        ruby > 0 ? weeklyRubyGain(ruby) : nil
+    }
+
+    /// 받기 버튼의 숫자 "+50"(0 이어도 글자는 만든다 — 버튼을 세우는 판단은 스토어가 한다).
+    package static func claimAmount(_ ruby: Int) -> String {
+        weeklyRubyGain(max(0, ruby))
+    }
+
+    /// 절 머리 오른쪽 "받을 보상 2개"(줄이 스크롤 아래에 있어도 여기서 보인다 — 맥 `AchievementCopy.pendingHint`). 없으면 nil.
+    package static func claimPendingHint(_ count: Int) -> String? {
+        count > 0 ? "받을 보상 \(count)개" : nil
+    }
+
+    /// 받기 버튼의 보이스오버 "받기, 루비 50개"(맥 `AchievementCopy.claimAccessibility`). 주간 버튼도 같은 문구다.
+    package static func claimAccessibility(_ amount: Int) -> String {
+        "\(claimButton), 루비 \(max(0, amount))개"
+    }
+
+    /// 줄 전체의 보이스오버. 주간 게이지(`weeklyGaugeAccessibility`)와 같은 말투다 — 진행이면 "달성하면 루비 N개",
+    /// 받았으면 "루비 N개 받았어요". 받을 수 있는 줄의 금액은 **버튼이** 읽으므로(`claimAccessibility`) 여기서 또 읽지 않는다.
+    package static func missionAccessibility(_ mission: AchievementStatus.Mission) -> String {
+        switch mission.state {
+        case .inProgress:
+            let progress = "\(mission.title), \(missionProgress(mission))"
+            return mission.reward > 0 ? "\(progress), 달성하면 루비 \(mission.reward)개" : progress
+        case .claimable:
+            return "\(mission.title), 달성했어요"
+        case .claimed:
+            return mission.reward > 0 ? "\(mission.title), 루비 \(mission.reward)개 받았어요" : "\(mission.title), \(claimedMark)"
+        }
+    }
+
+    /// 줄 아이콘(SF Symbol). **키 앞부분으로 고른다** — 계열 이름은 서버가 정하고 키는 계약 표에 있다. 모르는 키는 별이다
+    /// (서버가 미션을 더하는 날 줄은 그려지고 아이콘만 기본값이 된다). 맥 `AchievementCopy.icon` 과 같은 기호를 쓴다:
+    /// 다른 화면에서 이미 그 기능을 뜻하던 그림(콕 = 손가락 · 미니게임 = 게임기 · 오목 = 3×3 격자 · 체스 = 체커보드 ·
+    /// 연속 근무 = 불꽃 · 울트라 = 번개 · 팀 = 세 사람 · 할 일 = 체크 목록 · 폰 = 아이폰). 전부 iOS 17 이하(배포 타깃 18 ✓).
+    package static func missionIcon(_ key: String) -> String {
+        let table: [(prefix: String, symbol: String)] = [
+            ("phone", "iphone"),
+            ("todo", "checklist"),
+            ("gomoku", "circle.grid.3x3.fill"),
+            ("chess", "checkerboard.rectangle"),
+            ("minigame", "gamecontroller.fill"),
+            ("team", "person.3.fill"),
+            ("poke", "hand.point.right.fill"),
+            ("ultra", "bolt.fill"),
+            ("streak", "flame.fill"),
+        ]
+        return table.first { key.hasPrefix($0.prefix) }?.symbol ?? missionFallbackIcon
+    }
+
+    package static let missionFallbackIcon = "star.fill"
+
     // MARK: 메뉴 그룹
 
     package static let profileMenuDetail = "사진 · 별명"

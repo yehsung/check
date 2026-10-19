@@ -142,6 +142,28 @@ package final class MeStore {
     /// 지금 알림을 사용자가 나 탭에서 봤다(떠날 때 걷는다). 안 본 알림은 남겨 두어 다음에 열 때 보이게 한다.
     @ObservationIgnored var weeklyGrantNoticeSeen = false
 
+    // MARK: 도전 미션 · 받기 (v0.3.58 서버 · 맥 0.3.58 — MeStoreAchievements.swift)
+    /// 서버 `achievements_status()` · `achievement_claim()` 의 마지막 응답(CheckCore 모델 — 맥과 한 벌).
+    /// nil = 아직 모른다(못 읽었으면 **지난 값을 그대로 둔다**). 여기에 넣는 자리는 `applyAchievementStatus` 하나이고,
+    /// 거기서 `merged(over:)` 를 거친다 — **받음은 되돌아가지 않는다**.
+    package internal(set) var achievements: AchievementStatus?
+    package internal(set) var achievementsState = MeLoadState()
+    /// 서버에 함수가 있다. 없으면(404 · PGRST202 — db push 전) 절을 접는다. 스로틀 간격 뒤 조회가 다시 묻는다(60초).
+    package internal(set) var achievementsAvailable = true
+    /// 떠 있는 받기(미션 키 · 전부 받기는 `MeStore.achievementClaimAllSlot`) — **같은 줄을 두 번 받지 않게** 하는 자리다.
+    package internal(set) var achievementClaimsInFlight: Set<String> = []
+    /// 마지막 받기가 실패한 키. 실패는 **그 줄 안**에서 말한다(`MeText.claimFailed`) — 절 위 안내줄에 띄우지 않는다
+    /// (맥이 검토에서 버린 방식: 안내줄은 줄을 밀고, 아래쪽 줄을 누른 사람에겐 스크롤 밖이라 안 보였다).
+    package internal(set) var achievementClaimFailedKeys: Set<String> = []
+    /// 이번 주 근무 받기가 떠 있다(두 번 눌러도 요청 하나) · 마지막 주간 받기가 실패했다(주간 줄 안에서 말한다).
+    package internal(set) var weeklyClaimInFlight = false
+    package internal(set) var weeklyClaimFailed = false
+    /// 줄 자리(`MeClaimBurst.achievementTarget(series:)` · `MeClaimBurst.weeklyTarget`) → 받기 연출.
+    /// 화면이 아니라 스토어가 "방금 받았다"를 쥔다 — 줄은 계열이 다음 단계로 바뀌며 새로 그려지기 때문이다(맥과 같은 이유).
+    package internal(set) var missionClaimBursts: [String: MeClaimBurst] = [:]
+    /// 받기 연출이 설 때마다 오른다 — 화면이 이 값으로 성공 햅틱을 내고, 같은 줄을 또 받아도 연출을 처음부터 다시 튼다.
+    package internal(set) var missionClaimBurstSerial = 0
+
     // MARK: 프로필 편집
     package var displayNameDraft = ""
     /// 편집 화면이 떠 있는가(머리가 늦게 오면 그때 입력을 채운다).
@@ -286,6 +308,17 @@ package final class MeStore {
         weeklyGrantNotice = nil
         weeklyGrantSerial = 0
         weeklyGrantNoticeSeen = false
+        // 도전 미션 · 받기도 계정에 묶인다 — 안 비우면 다음 계정 줄에 앞 사람의 달성과 [받기]가 서고(누르면 서버는 아무것도 안 준다),
+        // 떠 있던 받기 자리가 남아 새 계정의 첫 받기가 "이미 떠 있음"으로 막힌다.
+        achievements = nil
+        achievementsState = MeLoadState()
+        achievementsAvailable = true
+        achievementClaimsInFlight.removeAll()
+        achievementClaimFailedKeys.removeAll()
+        weeklyClaimInFlight = false
+        weeklyClaimFailed = false
+        missionClaimBursts = [:]
+        missionClaimBurstSerial = 0
         displayNameDraft = ""
         isProfileVisible = false
         displayNameNotice = nil
@@ -345,6 +378,7 @@ package final class MeStore {
     package func tabDidDisappear() {
         isTabVisible = false
         weeklyTabDidDisappear()
+        missionsTabDidDisappear()
     }
 
     /// 딥링크(`aingcheck://me` · `me/shop` · `me/settings` · `feedback[/<id>]`). 라우터가 이미 경로를 비웠다 — 하위 화면을 한 칸 쌓는다.
@@ -375,6 +409,10 @@ package final class MeStore {
         if isStale(recordsState) { launch { [weak self] in await self?.loadRecords() } }
         launch { [weak self] in await self?.loadFeedbackReplyLatest() }
         refreshWeeklyWorkIfStale()
+        // 도전 미션은 **나 탭이 보일 때만** 읽는다(여기 · 당겨서 새로고침 · 탭이 보이는 채로 앱이 앞에 올 때 — 셋 다 이 함수를
+        // 지난다). 주간 보상과 달리 탭이 안 보일 때는 묻지 않는다: 받기 전에는 루비가 한 푼도 움직이지 않아(서버는 달성만 적는다)
+        // 화면 밖에서 알아 둘 값이 없다. **새 타이머는 없다** — 스로틀도 다른 덩어리와 같은 60초다.
+        refreshAchievementsIfStale()
         aiLimits.refreshIfStale()
     }
 
@@ -397,7 +435,8 @@ package final class MeStore {
         async let reply: Void = loadFeedbackReplyLatest()
         async let limits: Void = aiLimits.load()
         async let weekly: Void = loadWeeklyWork()
-        _ = await (header, shop, equipped, records, reply, limits, weekly)
+        async let missions: Void = loadAchievements()
+        _ = await (header, shop, equipped, records, reply, limits, weekly, missions)
     }
 
     // MARK: - 머리
@@ -470,6 +509,11 @@ package final class MeStore {
     nonisolated static let displayNameWriteKey = "write.displayName"
     nonisolated static let statusMessageWriteKey = "write.statusMessage"
     nonisolated static let avatarWriteKey = "write.avatar"
+    /// 받기 응답을 **옮긴** 횟수(v0.3.58). 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 조회는 받기 **전**의 서버를 말한다 —
+    /// 그대로 덮으면 방금 받은 줄에 [받기]가 다시 선다(누르면 서버는 아무것도 안 주는 거짓 버튼이다). 그때는 응답을 버린다:
+    /// 받기 응답이 이미 더 새 상태를 줬으니 다시 묻지 않아도 된다.
+    nonisolated static let achievementClaimWriteKey = "write.achievementClaim"
+    nonisolated static let weeklyClaimWriteKey = "write.weeklyClaim"
 
     /// 사용자가 이 칸을 서버에 **써서 성공한** 횟수. 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 응답의 이 칸은 옛 값이다.
     func writeStamp(_ key: String) -> Int {

@@ -1626,7 +1626,7 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     package let id: String
     package var price: Int?
     package var owned: Bool?
-    /// 뽑기로만 얻는 캐릭터인가(v0.3.54 — 지금은 황금 아잉이 하나). 참이면 `price` 는 명목값이라 **팔지 않는다**
+    /// 뽑기로만 얻는 캐릭터인가(v0.3.54 황금 아잉이 · v0.3.59 무지개 아잉이). 참이면 `price` 는 명목값이라 **팔지 않는다**
     /// (서버 `buy_character` 가 `not_for_sale` 로 거절한다). 이 키를 모르는 옛 서버는 nil — "아니다"로 읽는다.
     package var gachaOnly: Bool?
 
@@ -1639,9 +1639,9 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     }
 
     /// 상점에서 살 수 있는 줄인가 — 뽑기 전용이 아니고 값이 있을 때만. (보유 여부는 묻지 않는다 — 그건 화면의 다른 판정이다.)
-    /// 황금 아잉이는 서버 표식과 무관하게 **언제나** 못 산다(사장님 결정 — 뽑기로만). 표식이 빠진 응답이 와도 팔리는 카드가 서지 않게.
+    /// 황금·무지개 아잉이는 서버 표식과 무관하게 **언제나** 못 산다(사장님 결정 — 뽑기로만). 표식이 빠진 응답이 와도 팔리는 카드가 서지 않게.
     package var isPurchasable: Bool {
-        gachaOnly != true && !CharacterCatalog.isGoldAing(id) && price != nil
+        gachaOnly != true && !CharacterCatalog.isGachaOnlyBuiltIn(id) && price != nil
     }
 }
 

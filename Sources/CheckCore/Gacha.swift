@@ -7,6 +7,9 @@ import Foundation
 //   · 처음 나온 캐릭터 → 소유(acquired_via='gacha'). 이미 가진 캐릭터(황금 포함) → 조각 1개.
 //   · 조각으로 일곱 캐릭터를 교환한다(`shard_costs` — 황금 아잉이 20 포함, 사장님 정정 2026-10-15 AMENDMENT 1).
 //     아잉(무료 기본)만 교환 불가. 황금 아잉이는 **루비로는 안 판다**(뽑기 · 조각 교환으로만).
+//   · v0.3.59 무지개 아잉이(2% · 조각 20 · 황금 5 → 3%): 황금과 **같은 급**이다(뽑기 전용 · 희귀 연출 · 교환 목록 맨 위 둘째).
+//     서버는 능력 번호 3 미만 클라에게 그 행을 아예 안 보이고(확률표 · 교환표 · 추첨), 2 인 클라의 확률은 합 98 을 100 으로 다시 나눈
+//     소수다 — 클라는 서버 표를 그대로 보인다(`GachaText.percent` 가 소수 한 자리).
 //     교환값은 서버가 준 것만 쓴다 — 클라에 숫자를 적지 않는다(값이 바뀌어도 앱을 다시 낼 필요가 없게).
 //   · `shop_state(p_protocol >= 2)` 만 `gacha` 키를 싣는다. 없으면 클라는 뽑기 화면을 통째로 숨긴다.
 //   · `gacha_pull`·`gacha_exchange` 는 `p_protocol >= 2` 가 아니면 `needs_update`(루비·조각 안 움직임).
@@ -375,6 +378,8 @@ package struct GachaPullResult: Equatable, Sendable {
     package enum Kind: Equatable, Sendable {
         /// 황금 아잉이(처음이든 중복이든 — 중복이면 `isDuplicate` 가 참이고 조각을 받았다). 후광 초상 + "황금 아잉이!".
         case gold
+        /// 무지개 아잉이(v0.3.59 — 황금과 같은 급). 처음이든 중복이든 무지개 후광 초상 + "무지개 아잉이!".
+        case rainbow
         /// 처음 나온 캐릭터 — 이제 가졌다.
         case newCharacter
         /// 이미 가진 캐릭터 — 조각을 받았다.
@@ -402,9 +407,11 @@ package struct GachaPullResult: Equatable, Sendable {
     }
 
     package var isGold: Bool { CharacterCatalog.isGoldAing(characterID) }
+    package var isRainbow: Bool { CharacterCatalog.isRainbowAing(characterID) }
 
     package var kind: Kind {
         if isGold { return .gold }
+        if isRainbow { return .rainbow }
         return isDuplicate ? .duplicate : .newCharacter
     }
 
@@ -583,7 +590,7 @@ package enum GachaExchangeAvailability: Equatable, Sendable {
 package struct GachaOddsRow: Equatable, Sendable, Identifiable {
     package var id: String { characterID }
     package let characterID: String
-    /// 사람이 읽는 이름("여우" · "황금 아잉이").
+    /// 사람이 읽는 이름("여우" · "황금 아잉이" · "무지개 아잉이").
     package let name: String
     package let percent: Double
     /// "5%" · "2.5%".
@@ -596,6 +603,10 @@ package struct GachaOddsRow: Equatable, Sendable, Identifiable {
     /// 조각 교환값(교환 불가면 nil).
     package let shardCost: Int?
     package var isGold: Bool { CharacterCatalog.isGoldAing(characterID) }
+    /// 무지개 아잉이 줄(v0.3.59) — 화면이 황금과 같은 급으로 강조한다(색만 무지개).
+    package var isRainbow: Bool { CharacterCatalog.isRainbowAing(characterID) }
+    /// 이 줄의 희귀 강조(.gold · .rainbow · .standard) — 3D 마감과 같은 판정 한 곳(`CharacterManifest.Finish(characterID:)`).
+    package var finish: CharacterManifest.Finish { CharacterManifest.Finish(characterID: characterID) }
 }
 
 /// 교환 목록 한 줄(화면용).
@@ -644,8 +655,8 @@ package nonisolated enum GachaRules {
         return (info.odds ?? []).map { entry in
             let id = entry.characterID
             let row = rowsByID[id]
-            // 서버 표식이 참이면 뽑기 전용 · 황금 아잉이는 표식과 무관하게 언제나 뽑기 전용(사장님 규칙 — 루비로 안 판다).
-            let gachaOnly = row?.gachaOnly == true || CharacterCatalog.isGoldAing(id)
+            // 서버 표식이 참이면 뽑기 전용 · 황금·무지개 아잉이는 표식과 무관하게 언제나 뽑기 전용(사장님 규칙 — 루비로 안 판다).
+            let gachaOnly = row?.gachaOnly == true || CharacterCatalog.isGachaOnlyBuiltIn(id)
             let price = gachaOnly ? nil : row?.price
             // 교환값(아잉은 서버가 실어도 버린다 · 0 이하는 값이 아니다).
             let cost = isNeverExchangeable(id) ? nil : info.shardCosts?[id].flatMap { $0 > 0 ? $0 : nil }
@@ -671,7 +682,7 @@ package nonisolated enum GachaRules {
         }
     }
 
-    /// 교환 목록. **황금 아잉이가 맨 위**(사장님 정정 — "교환 목록은 금 먼저"), 그다음 확률표 순서(서버 순서),
+    /// 교환 목록. **황금 아잉이가 맨 위**(사장님 정정 — "교환 목록은 금 먼저"), 무지개 아잉이(v0.3.59)가 그 다음, 그다음 확률표 순서(서버 순서),
     /// 확률표에 없는 교환값은 뒤에 id 순으로 붙는다. 교환표(`shard_costs`)에 없는 캐릭터는 줄을 만들지 않는다.
     package static func exchangeRows(
         info: GachaInfo,
@@ -684,10 +695,9 @@ package nonisolated enum GachaRules {
             ordered.append(entry.characterID)
         }
         ordered += costs.keys.filter { !ordered.contains($0) }.sorted()
-        // 금 먼저 — 서버가 확률표를 어떤 순서로 주든(나머지의 상대 순서는 그대로).
-        if let gold = ordered.firstIndex(where: { CharacterCatalog.isGoldAing($0) }), gold > 0 {
-            ordered.insert(ordered.remove(at: gold), at: 0)
-        }
+        // 금 먼저, 무지개 다음 — 서버가 확률표를 어떤 순서로 주든(나머지의 상대 순서는 그대로).
+        let rare = CharacterCatalog.gachaOnlyBuiltInIDs.filter { ordered.contains($0) }
+        ordered = rare + ordered.filter { !rare.contains($0) }
         return ordered.compactMap { id in
             let availability = exchangeAvailability(characterID: id, isOwned: ownedIDs.contains(id),
                                                     shards: info.shards, shardCosts: costs)
@@ -703,7 +713,7 @@ package nonisolated enum GachaRules {
         id == CharacterCatalog.builtInAingID
     }
 
-    /// 이름 해석(호출부 → 내장 → id).
+    /// 이름 해석(호출부 → 내장(아잉 · 황금 · 무지개) → id).
     package static func name(for id: String, displayName: (String) -> String?) -> String {
         if let given = displayName(id)?.trimmingCharacters(in: .whitespacesAndNewlines), !given.isEmpty { return given }
         if let builtIn = CharacterCatalog.builtIns.first(where: { $0.id == id }) { return builtIn.displayName }
@@ -723,7 +733,7 @@ package nonisolated enum GachaText {
     package static let oddsTitle = "뽑기 확률"
     /// 확률표 아래 한 줄 — 규칙 전부를 짧게.
     package static let oddsFootnote = "이미 있는 캐릭터가 나오면 조각 1개를 받아요 · 조각으로 캐릭터를 바꿀 수 있어요"
-    /// 상점가 칸의 "루비로 안 팖"(황금 아잉이) — 교환값을 모를 때만 쓰는 짧은 말. 교환값을 알면 `gachaOnlyPrice(shardCost:)`.
+    /// 상점가 칸의 "루비로 안 팖"(황금·무지개 아잉이) — 교환값을 모를 때만 쓰는 짧은 말. 교환값을 알면 `gachaOnlyPrice(shardCost:)`.
     package static let gachaOnly = "뽑기 전용"
     /// 루비 값 대신 얻는 길(황금 아잉이 카드·확률표 상점가 칸): "뽑기 또는 조각 20개". 교환값을 모르면(nil · 0 이하) "뽑기 전용".
     /// 숫자는 서버 `shard_costs` 의 값을 넘긴다 — 20 을 화면에 적지 않는다.
@@ -755,21 +765,33 @@ package nonisolated enum GachaText {
 
     // 결과 연출
     package static let goldHeadline = "황금 아잉이!"
+    /// 무지개 아잉이(v0.3.59)의 결과 머리말 — 황금의 "황금 아잉이!" 에 대응한다.
+    package static let rainbowHeadline = "무지개 아잉이!"
     package static func newCharacter(name: String) -> String { "새 캐릭터: \(name)" }
     package static func duplicate(name: String, shardsGained: Int) -> String { "이미 있는 \(name) → 조각 +\(shardsGained)" }
 
-    /// 결과 한 줄(큰 글씨). 황금은 언제나 "황금 아잉이!".
+    /// 희귀 결과의 머리말(황금 · 무지개). 희귀가 아니면 nil.
+    package static func rareHeadline(_ kind: GachaPullResult.Kind) -> String? {
+        switch kind {
+        case .gold: return goldHeadline
+        case .rainbow: return rainbowHeadline
+        case .newCharacter, .duplicate: return nil
+        }
+    }
+
+    /// 결과 한 줄(큰 글씨). 황금은 언제나 "황금 아잉이!", 무지개는 언제나 "무지개 아잉이!".
     package static func headline(for result: GachaPullResult, name: String) -> String {
         switch result.kind {
         case .gold: return goldHeadline
+        case .rainbow: return rainbowHeadline
         case .newCharacter: return newCharacter(name: name)
         case .duplicate: return duplicate(name: name, shardsGained: result.shardsGained)
         }
     }
 
-    /// 결과 둘째 줄(작은 글씨). 황금일 때만 있다 — 처음이면 "새 캐릭터: 황금 아잉이", 중복이면 조각 줄.
+    /// 결과 둘째 줄(작은 글씨). 희귀(황금 · 무지개)일 때만 있다 — 처음이면 "새 캐릭터: 황금 아잉이", 중복이면 조각 줄.
     package static func detail(for result: GachaPullResult, name: String) -> String? {
-        guard result.kind == .gold else { return nil }
+        guard rareHeadline(result.kind) != nil else { return nil }
         return result.isDuplicate ? duplicate(name: name, shardsGained: result.shardsGained) : newCharacter(name: name)
     }
 

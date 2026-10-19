@@ -17,6 +17,11 @@ package enum GachaRevealKind: String, Sendable, Equatable {
     case duplicate
     /// 황금 아잉이(처음이든 중복이든 — 중복이면 `shardsGained` 가 0 보다 크다).
     case gold
+    /// 무지개 아잉이(v0.3.59 — 황금과 같은 희귀 연출, 빛깔만 무지개. 처음이든 중복이든).
+    case rainbow
+
+    /// 희귀 공개(어두운 무대 · 모으기 · 반짝 제목 — 황금 · 무지개)인가.
+    package var isRare: Bool { self == .gold || self == .rainbow }
 }
 
 /// 기계가 보여 줄 결과 하나. 값은 전부 호스트가 서버 응답에서 옮겨 준다 — 기계는 숫자를 지어내지 않는다.
@@ -43,6 +48,7 @@ package struct GachaRevealOutcome: Sendable, Equatable {
         let kind: GachaRevealKind
         switch result.kind {
         case .gold: kind = .gold
+        case .rainbow: kind = .rainbow
         case .newCharacter: kind = .new
         case .duplicate: kind = .duplicate
         }
@@ -55,6 +61,8 @@ package struct GachaRevealOutcome: Sendable, Equatable {
     package var shardCountBefore: Int { max(0, shardCount - shardsGained) }
     /// 황금인데 이미 있던 것(조각만 받았다).
     package var isGoldDuplicate: Bool { kind == .gold && shardsGained > 0 }
+    /// 희귀(황금 · 무지개)인데 이미 있던 것(조각만 받았다).
+    package var isRareDuplicate: Bool { kind.isRare && shardsGained > 0 }
 }
 
 /// `pull` 이 던지는 실패. `message` 가 기계 아래 한 줄로 2.4초 뜬다(짧게).
@@ -79,11 +87,11 @@ package enum GachaMachineHapticEvent: Equatable, Sendable {
     case land
     /// 캡슐 톡톡 1...3.
     case tap(Int)
-    /// 평범한 캡슐이 황금으로 바뀜(반전 연출).
+    /// 평범한 캡슐이 황금(무지개)으로 바뀜(반전 연출). 무지개도 같은 박자다 — 폰 햅틱 switch 가 이 어휘를 다 안다.
     case goldFlip
     /// 캡슐 터짐.
     case reveal
-    /// 황금 터짐.
+    /// 황금(무지개) 터짐.
     case goldReveal
     /// 조각이 칩에 들어감.
     case shard
@@ -196,17 +204,26 @@ package nonisolated enum GachaMachineText {
         switch outcome.kind {
         case .new: return "새 캐릭터!"
         case .duplicate: return "이미 있는 친구예요"
-        case .gold: return nil
+        case .gold, .rainbow: return nil
+        }
+    }
+    /// 희귀 결과의 머리말("황금 아잉이!" · "무지개 아잉이!"). 희귀가 아니면 nil.
+    static func rareHeadline(_ kind: GachaRevealKind) -> String? {
+        switch kind {
+        case .gold: return GachaText.goldHeadline
+        case .rainbow: return GachaText.rainbowHeadline
+        case .new, .duplicate: return nil
         }
     }
     static func title(_ outcome: GachaRevealOutcome) -> String {
-        outcome.kind == .gold ? GachaText.goldHeadline : outcome.name
+        rareHeadline(outcome.kind) ?? outcome.name
     }
     /// 중복의 둘째 이름("다람쥐 조각 +1").
     static func shardLine(_ outcome: GachaRevealOutcome) -> String { "\(outcome.name) 조각" }
     static func shardGain(_ outcome: GachaRevealOutcome) -> String { "+\(max(1, outcome.shardsGained))" }
+    /// 희귀(황금 · 무지개) 결과의 부제 — 둘이 같은 말이다.
     static func goldSubtitle(_ outcome: GachaRevealOutcome) -> String {
-        outcome.isGoldDuplicate ? "이미 있는 친구예요 · 조각 +\(outcome.shardsGained)" : "아주 드문 친구를 만났어요"
+        outcome.isRareDuplicate ? "이미 있는 친구예요 · 조각 +\(outcome.shardsGained)" : "아주 드문 친구를 만났어요"
     }
     static func chipGain(_ outcome: GachaRevealOutcome) -> String { "+\(max(1, outcome.shardsGained)) 조각" }
 
@@ -215,7 +232,7 @@ package nonisolated enum GachaMachineText {
         switch outcome.kind {
         case .new: return "새 캐릭터! \(outcome.name)"
         case .duplicate: return "이미 있는 친구예요. \(outcome.name) 조각 \(shardGain(outcome))"
-        case .gold: return "\(GachaText.goldHeadline) \(goldSubtitle(outcome))"
+        case .gold, .rainbow: return "\(title(outcome)) \(goldSubtitle(outcome))"
         }
     }
 

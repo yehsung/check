@@ -368,9 +368,9 @@ extension WorkTimerStore {
                 //   사람(로컬 선택은 있는데 소유권 행이 없다 — 0.3.30 부터는 옮겨 가기 1회 밀기에서)
                 //   (나) 기기 두 대 중 한쪽에서만 산 사람.
                 revertCharacterToDefault()
-            case "unknown_character" where CharacterCatalog.isGoldAing(id):
-                // 황금 아잉이(v0.3.54)만은 not_owned 와 같다: 뽑기 마이그레이션 전 서버는 CHECK 에서 금을 모르므로 **그 서버에선 아무도
-                // 금을 가질 수 없다.** 그대로 두면 상점을 읽기 전(아무것도 안 막는 창)에 고른 금이 내 화면엔 서고 남에게는 아잉이다.
+            case "unknown_character" where CharacterCatalog.isGachaOnlyBuiltIn(id):
+                // 황금·무지개 아잉이(v0.3.54 · v0.3.59)만은 not_owned 와 같다: 그 마이그레이션 전 서버는 CHECK 에서 그 id 를 모르므로
+                // **그 서버에선 아무도 가질 수 없다.** 그대로 두면 상점을 읽기 전(아무것도 안 막는 창)에 고른 것이 내 화면엔 서고 남에게는 아잉이다.
                 revertCharacterToDefault()
             default:
                 // unknown_character = 서버 CHECK 에 없는 id. 앱 번들과 서버 명단이 갈린 것이라
@@ -404,7 +404,8 @@ extension WorkTimerStore {
 
     /// 되돌렸을 때의 문구(순수 — 값으로 검증한다). 상점으로 가는 길을 함께 말한다.
     nonisolated static let notOwnedRevertNotice = "안 산 캐릭터라 기본으로 돌아갔어요 — 상점에서 살 수 있어요"
-    /// 루비로 안 파는 캐릭터(황금 아잉이 — v0.3.54)를 되돌렸을 때. "상점에서 살 수 있어요"는 그 캐릭터에 거짓이라 얻는 길(뽑기 · 조각)을 말한다.
+    /// 루비로 안 파는 캐릭터(황금 · 무지개 아잉이 — v0.3.54 · v0.3.59)를 되돌렸을 때. "상점에서 살 수 있어요"는 그 캐릭터에 거짓이라
+    /// 얻는 길(뽑기 · 조각)을 말한다.
     nonisolated static let gachaOnlyRevertNotice = "아직 없는 캐릭터라 기본으로 돌아갔어요 — " + GachaText.gachaOnlyHint
 
     /// 되돌린 캐릭터에 맞는 안내(순수).
@@ -638,7 +639,7 @@ extension WorkTimerStore {
             shopNotice = Self.alreadyOwnedNotice
             return
         }
-        // 루비로 살 수 없는 캐릭터(황금 아잉이)는 **고르지 않는다** — 하단 바에 [구매하기]를 세우면 거짓이다. 뽑기 패널을 연다.
+        // 루비로 살 수 없는 캐릭터(황금 · 무지개 아잉이)는 **고르지 않는다** — 하단 바에 [구매하기]를 세우면 거짓이다. 뽑기 패널을 연다.
         if case .character(let id) = selection, Self.isGachaOnly(id, rows: shopCharacters) {
             shopSelection = nil
             if isGachaAvailable {
@@ -653,10 +654,10 @@ extension WorkTimerStore {
         shopNotice = nil
     }
 
-    /// 루비로 살 수 없는(뽑기·조각으로만 얻는) 캐릭터인가. 서버 표식이 빠지거나 false 로 와도 황금 아잉이는 언제나 그렇다
-    /// (`ShopCharacterRow.isPurchasable` 과 같은 규칙 — 목록에 아직 없는 id 도 금이면 참).
+    /// 루비로 살 수 없는(뽑기·조각으로만 얻는) 캐릭터인가. 서버 표식이 빠지거나 false 로 와도 황금·무지개 아잉이는 언제나 그렇다
+    /// (`ShopCharacterRow.isPurchasable` 과 같은 규칙 — 목록에 아직 없는 id 도 금 · 무지개면 참).
     nonisolated static func isGachaOnly(_ id: String, rows: [ShopCharacterRow]) -> Bool {
-        if CharacterCatalog.isGoldAing(id) { return true }
+        if CharacterCatalog.isGachaOnlyBuiltIn(id) { return true }
         return rows.first { $0.id == id }?.gachaOnly == true
     }
 
@@ -747,7 +748,7 @@ extension WorkTimerStore {
                 case "insufficient":
                     self.shopNotice = Self.shortfallNotice(need: response.need, have: response.have)
                 case "not_for_sale":
-                    // 황금 아잉이(v0.3.54)는 루비로 안 판다 — 루비는 안 깎였다. "구매 실패"로 뭉개면 다시 눌러 보게 된다.
+                    // 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 루비로 안 판다 — 루비는 안 깎였다. "구매 실패"로 뭉개면 다시 눌러 보게 된다.
                     self.shopNotice = GachaText.gachaOnlyHint
                 case "needs_update":
                     // 서버는 "이 앱은 그 캐릭터를 아직 못 산다"고 거절했고 **루비는 안 깎였다**.

@@ -334,6 +334,12 @@ for HALO_DEG in $(seq 0 10 350); do
   if [[ "$HALO_DEG" == 0 ]]; then HALO_PNG="aing_gold-halo"; else HALO_PNG="$(printf 'aing_gold-halo-%03d' "$HALO_DEG")"; fi
   [[ -s "$GOLD_ART_DIR/$HALO_PNG.png" ]] || die "황금 아잉이 후광 칸이 앱에 없다: $GOLD_ART_DIR/$HALO_PNG.png"
 done
+# 무지개 아잉이 후광 각도 칸 36장도 같은 규약이다(v0.3.59). 이름은 RainbowAingArt.haloResourceName(cell:) 와 같다.
+RAINBOW_ART_DIR="$RES_DIR/check_check.bundle/Contents/Resources"
+for HALO_DEG in $(seq 0 10 350); do
+  if [[ "$HALO_DEG" == 0 ]]; then HALO_PNG="aing_rainbow-halo"; else HALO_PNG="$(printf 'aing_rainbow-halo-%03d' "$HALO_DEG")"; fi
+  [[ -s "$RAINBOW_ART_DIR/$HALO_PNG.png" ]] || die "무지개 아잉이 후광 칸이 앱에 없다: $RAINBOW_ART_DIR/$HALO_PNG.png"
+done
 
 CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
 plutil -create xml1 "$CONFIG_PLIST"

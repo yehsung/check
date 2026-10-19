@@ -5,8 +5,8 @@ import Foundation
 //
 // 판정(뽑을 수 있나 · 교환할 수 있나 · 결과 분류)·문구·요청 id 수명은 전부 코어 `Gacha.swift`(폰과 한 벌)에 있다. 맥이 더하는 것은
 // 세 가지뿐이다:
-//  ① 문 — 상점 '소모품' 구획의 [캐릭터 뽑기] 카드 · 캐릭터 격자의 황금 아잉이 카드가 뽑기 패널(확률 · 조각 교환)을 열고,
-//     그 패널의 [뽑기 · 50] 과 캐릭터 고르기의 잠긴 금 카드가 **뽑기 창**(캡슐 기계 — `CheckGachaWindow.swift`)을 연다(0.3.54).
+//  ① 문 — 상점 '소모품' 구획의 [캐릭터 뽑기] 카드 · 캐릭터 격자의 황금(무지개) 아잉이 카드가 뽑기 패널(확률 · 조각 교환)을 열고,
+//     그 패널의 [뽑기 · 50] 과 캐릭터 고르기의 잠긴 금 · 무지개 카드가 **뽑기 창**(캡슐 기계 — `CheckGachaWindow.swift`)을 연다(0.3.54).
 //  ② 왕복 — `gacha_pull` · `gacha_exchange` 를 상점 구매(`buyCharacter`)와 같은 모양으로 부른다(세대 가드 · 세션 재시도 · 취소 무시).
 //  ③ 거울 — **서버가 말한 값으로만** 잔량·조각·보유를 고친다(클라가 50 을 빼거나 조각을 더하지 않는다).
 //
@@ -106,17 +106,30 @@ extension WorkTimerStore {
         gachaNoticeIsError = false
     }
 
-    /// 캐릭터 고르기에서 **잠긴** 카드를 눌렀을 때: 상점을 연다. 루비로 살 수 없는 캐릭터(황금 아잉이)는 뽑기가 열려 있으면
-    /// **뽑기 창**을 바로 연다(0.3.54 — 예전엔 상점 안 뽑기 패널) — 상점 격자에서 그 카드를 찾아 다시 누르게 하지 않는다.
-    /// 뽑기가 없으면(옛 서버) 상점을 열고 얻는 길만 말한다.
+    /// 캐릭터 고르기에서 **잠긴** 카드를 눌렀을 때: 상점을 연다. 루비로 살 수 없는 캐릭터(황금 · 무지개 아잉이)는 뽑기가 그 캐릭터를
+    /// 내고 있으면 **뽑기 창**을 바로 연다(0.3.54 — 예전엔 상점 안 뽑기 패널) — 상점 격자에서 그 카드를 찾아 다시 누르게 하지 않는다.
+    /// 뽑기가 없거나 그 캐릭터를 안 내면(옛 서버 · 무지개 db push 전) 상점을 열고 얻는 길만 말한다.
     func openShopForLockedCharacter(_ id: String) {
-        if CharacterCatalog.isGoldAing(id), isGachaAvailable {
+        if CharacterCatalog.isGachaOnlyBuiltIn(id), gachaOffers(id) {
             openGachaWindow()
             return
         }
         if !isShopPanelVisible { toggleShopPanel() }
-        guard isShopPanelVisible, CharacterCatalog.isGoldAing(id) else { return }
+        guard isShopPanelVisible, CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
         shopNotice = GachaText.gachaOnlyHint
+    }
+
+    /// 뽑기가 지금 이 캐릭터를 **내는가** — 뽑기가 열려 있고(값 · 완전한 확률표) 그 id 가 확률표나 교환표에 있다.
+    /// 희귀 둘의 "얻을 길이 보인다"는 뽑기가 열린 것만으로는 모자라다: 무지개(v0.3.59)는 서버가 능력 번호 3 미만이거나 db push 전이면
+    /// 확률표 · 교환표에서 빠진다 — 그때 잠긴 무지개 카드를 세우면 누른 사람은 무지개가 없는 뽑기 창을 본다.
+    func gachaOffers(_ id: String) -> Bool {
+        Self.gachaOffers(id, info: gachaInfo)
+    }
+
+    /// 위 판정의 순수 본체.
+    nonisolated static func gachaOffers(_ id: String, info: GachaInfo?) -> Bool {
+        guard let info, info.isUsable else { return false }
+        return info.odds?.contains { $0.characterID == id } == true || info.shardCosts?[id] != nil
     }
 
     // MARK: 뽑기 창(캡슐 기계 · 0.3.54)
@@ -160,20 +173,22 @@ extension WorkTimerStore {
             .map(GachaOddsLine.init)
     }
 
-    // MARK: 황금 아잉이를 세우는 자리 — 캐릭터 고르기 · 상점 자리표시 격자
+    // MARK: 황금 · 무지개 아잉이를 세우는 자리 — 캐릭터 고르기 · 상점 자리표시 격자
 
-    /// 이 캐릭터를 캐릭터 고르기·상점 자리표시 격자에 **세우는가**. 루비로 안 파는 캐릭터(황금 아잉이)는 얻을 길이 보일 때만 선다 —
-    /// 뽑기가 열려 있거나 · 이미 가졌거나 · 서버 상점이 그 캐릭터를 말했다. 상점을 아직 못 읽었으면 막지 않는다(로드 전 관용 —
-    /// `isCharacterUnlocked`; 그 창에서 고른 금은 서버가 거절하면 `pushCharacter` 가 아잉으로 되돌린다).
+    /// 이 캐릭터를 캐릭터 고르기·상점 자리표시 격자에 **세우는가**. 루비로 안 파는 캐릭터(황금 · 무지개 아잉이)는 얻을 길이 보일 때만 선다 —
+    /// 뽑기가 그 캐릭터를 내거나(`gachaOffers`) · 이미 가졌거나 · 서버 상점이 그 캐릭터를 말했다. 상점을 아직 못 읽었으면 막지 않는다
+    /// (로드 전 관용 — `isCharacterUnlocked`; 그 창에서 고른 것은 서버가 거절하면 `pushCharacter` 가 아잉으로 되돌린다).
     ///
     /// 이 문이 없으면 뽑기 없는 서버(뽑기 마이그레이션 전 · 옛 서버)에서 잠긴 금 카드가 서고, 누르면 뽑기 카드도 금 칸도 없는 상점이
-    /// "뽑기나 조각 교환으로 얻을 수 있어요"라고 말한다 — 막다른 길이다. 폰 `MeStoreCharacters.pickerIDs` 와 같은 규칙이다.
+    /// "뽑기나 조각 교환으로 얻을 수 있어요"라고 말한다 — 막다른 길이다. 무지개(v0.3.59)는 뽑기가 열려 있어도 무지개를 안 내는 서버
+    /// (db push 전)가 같은 막다른 길이라 "뽑기가 열렸다"가 아니라 "뽑기가 **그 캐릭터를** 낸다"를 묻는다. 폰 `MeStoreCharacters.pickerIDs` 와
+    /// 같은 결의 규칙이다.
     func isCharacterListed(_ id: String) -> Bool {
-        Self.isCharacterListed(id, shopLoaded: shopLoaded, gachaAvailable: isGachaAvailable,
+        Self.isCharacterListed(id, shopLoaded: shopLoaded, gachaAvailable: gachaOffers(id),
                                owned: ownedCharacterIDs, rows: shopCharacters)
     }
 
-    /// 위 판정의 순수 본체(값으로 검증한다).
+    /// 위 판정의 순수 본체(값으로 검증한다). `gachaAvailable` = 뽑기가 **이 캐릭터를** 낸다(앱은 `gachaOffers(id)` 를 넣는다).
     nonisolated static func isCharacterListed(_ id: String, shopLoaded: Bool, gachaAvailable: Bool,
                                               owned: Set<String>, rows: [ShopCharacterRow]) -> Bool {
         guard isGachaOnly(id, rows: rows) else { return true }
@@ -186,7 +201,7 @@ extension WorkTimerStore {
     }
 
     /// 상점 격자의 줄. 서버 목록이 유일한 출처다 — 아직 못 읽었거나 비었으면 **번들 목록으로 자리만**(가격 없음) 그리되,
-    /// 금은 고르기와 같은 규칙으로 거른다(`isCharacterListed`).
+    /// 금 · 무지개는 고르기와 같은 규칙으로 거른다(`isCharacterListed`).
     func shopGridRows(catalog: CharacterCatalog) -> [ShopCharacterRow] {
         guard shopCharacters.isEmpty else { return shopCharacters }
         return catalog.allIDs

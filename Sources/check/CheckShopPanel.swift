@@ -607,8 +607,9 @@ struct CheckShopPanel: View {
     private func card(_ entry: ShopCharacterRow) -> some View {
         let owned = entry.owned == true || store.ownedCharacterIDs.contains(entry.id)
         let busy = store.purchasingID == entry.id
-        // 루비로 안 파는 캐릭터(황금 아잉이 — v0.3.54): 가격 대신 "뽑기 또는 조각 20개", 흐리게 하지 않는다(살 수 없는 게 아니라
-        // 다른 길로 얻는다). 누르면 뽑기 패널이 열린다(`selectShopItem` 이 가른다).
+        // 루비로 안 파는 캐릭터(황금 아잉이 — v0.3.54 · 무지개 아잉이 — v0.3.59): 가격 대신 "뽑기 또는 조각 20개", 흐리게 하지 않는다
+        // (살 수 없는 게 아니라 다른 길로 얻는다). 누르면 뽑기 패널이 열린다(`selectShopItem` 이 가른다). 문구는 금빛 · 무지개빛(희귀 강조) —
+        // 서버 표식으로만 뽑기 전용인 캐릭터(희귀 아님)는 금빛 그대로다(v0.3.54 와 같다).
         let gachaOnly = WorkTimerStore.isGachaOnly(entry.id, rows: store.shopCharacters)
         let affordable = gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false)
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
@@ -634,7 +635,9 @@ struct CheckShopPanel: View {
                     Text(owned ? GachaText.owned : GachaText.gachaOnlyPrice(shardCost: store.gachaShardCost(of: entry.id)))
                         .font(.caption2.weight(.bold))
                         .monospacedDigit()
-                        .foregroundStyle(owned ? CheckTheme.secondaryText : GachaPalette.gold)
+                        .foregroundStyle(owned ? AnyShapeStyle(CheckTheme.secondaryText)
+                                               : (GachaPalette.rare(CharacterManifest.Finish(characterID: entry.id))
+                                                  ?? AnyShapeStyle(GachaPalette.gold)))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)

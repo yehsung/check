@@ -167,7 +167,7 @@ struct CheckGachaWindowView: View {
         .accessibilityHint("확률표를 열어요")
     }
 
-    /// 확률 보기 판(서버 순서 그대로 일곱 줄 — 상점 패널 [확률 보기] 와 같은 줄). 바깥을 누르거나 [닫기] · esc 로 닫힌다.
+    /// 확률 보기 판(서버 순서 그대로 여덟 줄 — 상점 패널 [확률 보기] 와 같은 줄). 바깥을 누르거나 [닫기] · esc 로 닫힌다.
     private var oddsSheet: some View {
         let lines = store.gachaOddsLines(catalog: catalog)
         return ZStack {
@@ -196,7 +196,7 @@ struct CheckGachaWindowView: View {
                     .focusEffectDisabled()
                     .keyboardShortcut(.cancelAction)
                 }
-                oddsRow(name: "캐릭터", price: "상점가", percent: "확률", header: true, gold: false, id: nil)
+                oddsRow(name: "캐릭터", price: "상점가", percent: "확률", header: true, finish: .standard, id: nil)
                 Rectangle().fill(palette.ink.opacity(0.25)).frame(height: 1)
                 if lines.isEmpty {
                     Text(GachaText.unavailable)
@@ -205,7 +205,7 @@ struct CheckGachaWindowView: View {
                 }
                 ForEach(lines) { line in
                     oddsRow(name: line.name, price: line.priceText, percent: line.percentText, header: false,
-                            gold: line.isGold, id: line.id)
+                            finish: line.finish, id: line.id)
                 }
                 Text(GachaText.oddsFootnote)
                     .font(.system(size: 10.5, weight: .medium, design: .rounded))
@@ -227,8 +227,11 @@ struct CheckGachaWindowView: View {
         }
     }
 
-    private func oddsRow(name: String, price: String, percent: String, header: Bool, gold: Bool, id: String?) -> some View {
-        HStack(spacing: 8) {
+    /// 확률 보기 한 줄. 희귀(황금 · 무지개)는 이름과 확률을 그 빛깔로 칠한다(밝은 바탕은 진한 쪽 — `GachaWindowPalette`).
+    private func oddsRow(name: String, price: String, percent: String, header: Bool, finish: CharacterManifest.Finish,
+                         id: String?) -> some View {
+        let ink = header ? AnyShapeStyle(palette.ink) : palette.rare(finish) ?? AnyShapeStyle(palette.title)
+        return HStack(spacing: 8) {
             if let id {
                 Self.portrait(id)
                     .resizable()
@@ -240,7 +243,7 @@ struct CheckGachaWindowView: View {
             }
             Text(name)
                 .font(.system(size: 12, weight: header ? .semibold : .bold, design: .rounded))
-                .foregroundStyle(header ? palette.ink : (gold ? palette.gold : palette.title))
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .frame(width: 84, alignment: .leading)
             Text(price)
@@ -253,7 +256,7 @@ struct CheckGachaWindowView: View {
             Text(percent)
                 .font(.system(size: 12, weight: header ? .semibold : .heavy, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(header ? palette.ink : (gold ? palette.gold : palette.title))
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .frame(width: 40, alignment: .trailing)
         }
@@ -272,15 +275,31 @@ struct GachaWindowPalette {
     let title: Color
     let card: Color
     let gold: Color
+    /// 무지개 아잉이 줄의 일곱 빛(v0.3.59). 흰 판 위에선 진한 쪽(글자 대비), 보라 판 위에선 상점 패널과 같은 밝은 파스텔.
+    let rainbow: [Color]
 
     static let light = GachaWindowPalette(dark: false, ink: Color(red: 0x6A / 255, green: 0x4F / 255, blue: 0xC8 / 255),
                                           title: Color(red: 0x2D / 255, green: 0x21 / 255, blue: 0x50 / 255),
                                           card: Color.white.opacity(0.97),
-                                          gold: Color(red: 0xB0 / 255, green: 0x7A / 255, blue: 0x10 / 255))
+                                          gold: Color(red: 0xB0 / 255, green: 0x7A / 255, blue: 0x10 / 255),
+                                          rainbow: [Color(red: 0.85, green: 0.22, blue: 0.33), Color(red: 0.86, green: 0.45, blue: 0.08),
+                                                    Color(red: 0.70, green: 0.58, blue: 0.00), Color(red: 0.16, green: 0.60, blue: 0.27),
+                                                    Color(red: 0.13, green: 0.47, blue: 0.85), Color(red: 0.36, green: 0.29, blue: 0.86),
+                                                    Color(red: 0.66, green: 0.24, blue: 0.82)])
     static let night = GachaWindowPalette(dark: true, ink: Color(red: 0xCD / 255, green: 0xBD / 255, blue: 0xFF / 255),
                                           title: Color(red: 0xF4 / 255, green: 0xEF / 255, blue: 0xFF / 255),
                                           card: Color(red: 0x2B / 255, green: 0x21 / 255, blue: 0x48 / 255),
-                                          gold: Color(red: 0xFF / 255, green: 0xD2 / 255, blue: 0x4A / 255))
+                                          gold: Color(red: 0xFF / 255, green: 0xD2 / 255, blue: 0x4A / 255),
+                                          rainbow: GachaPalette.rainbowColors)
+
+    /// 희귀 강조 칠(평범하면 nil).
+    func rare(_ finish: CharacterManifest.Finish) -> AnyShapeStyle? {
+        switch finish {
+        case .gold: return AnyShapeStyle(gold)
+        case .rainbow: return AnyShapeStyle(LinearGradient(colors: rainbow, startPoint: .leading, endPoint: .trailing))
+        case .standard: return nil
+        }
+    }
 
     static func of(_ scheme: ColorScheme) -> GachaWindowPalette { scheme == .dark ? night : light }
 }

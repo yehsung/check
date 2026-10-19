@@ -63,6 +63,16 @@ package struct CharacterCatalog: Sendable {
         id == rainbowAingID
     }
 
+    /// 루비로 **절대** 안 파는 내장 캐릭터(황금 · 무지개)인가 — 서버 `gacha_only` 표식이 빠지거나 false 로 와도 뽑기 · 조각으로만 얻는다
+    /// (사용자 결정: 황금 2026-10-15 · 무지개 2026-10-20 "황금처럼 뽑기 전용"). 상점 구매 가능 · 확률표 상점가 칸 · 고르기 잠긴 카드의
+    /// 안내가 전부 이 한 곳을 묻는다 — 새 희귀 캐릭터는 여기 하나만 더하면 된다.
+    package static func isGachaOnlyBuiltIn(_ id: String?) -> Bool {
+        isGoldAing(id) || isRainbowAing(id)
+    }
+
+    /// 희귀 내장 캐릭터의 표시 순서(교환 목록 맨 위 · 확률표가 순서를 안 줄 때) — 황금 먼저, 무지개 다음.
+    package static let gachaOnlyBuiltInIDs: [String] = [goldAingID, rainbowAingID]
+
     /// 카탈로그 한 칸 — 매니페스트와 그 에셋이 있는 폴더. 내장 아잉은 폴더가 없다(씬 파일은 종전 경로).
     package struct Entry: Sendable, Equatable {
         package let manifest: CharacterManifest

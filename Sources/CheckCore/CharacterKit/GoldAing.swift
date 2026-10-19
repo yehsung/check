@@ -21,11 +21,24 @@ extension CharacterManifest {
     }
 
     /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개는 코드에 박힌 내장 항목뿐이다).
-    package var finish: Finish {
-        if CharacterCatalog.isGoldAing(id) { return .gold }
-        if CharacterCatalog.isRainbowAing(id) { return .rainbow }
-        return .standard
+    package var finish: Finish { Finish(characterID: id) }
+}
+
+extension CharacterManifest.Finish {
+    /// id → 마감. 매니페스트가 없는 자리(뽑기 결과 · 확률표 줄 · 교환 칸 · 남의 착용 id)도 같은 판정을 쓴다 — 화면의 희귀 강조
+    /// (금빛 · 무지개빛)가 3D 마감과 **한 곳**에서 갈린다(v0.3.59).
+    package init(characterID: String?) {
+        if CharacterCatalog.isGoldAing(characterID) {
+            self = .gold
+        } else if CharacterCatalog.isRainbowAing(characterID) {
+            self = .rainbow
+        } else {
+            self = .standard
+        }
     }
+
+    /// 희귀(뽑기 전용 내장 — 황금 · 무지개)인가. 확률표 강조 · 결과 연출 · 교환 목록 맨 위가 이 값으로 갈린다.
+    package var isRare: Bool { self != .standard }
 }
 
 /// 황금 아잉이 그림 파일의 이름과 "그릴 수 있다"의 판정. **파일 이름을 적는 곳은 여기 하나다** — 맥 번들 조회·폰 초상·

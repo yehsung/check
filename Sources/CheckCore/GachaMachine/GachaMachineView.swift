@@ -174,13 +174,16 @@ enum GachaMachineWarmup {
         done = true
         let t0 = Date()
         let content = ZStack {
-            GLightBurst(t: 0.3, gold: false, center: CGPoint(x: 60, y: 60), dark: false, spin: 0)
-            GLightBurst(t: 0.3, gold: true, center: CGPoint(x: 60, y: 60), dark: true, spin: 0)
+            GLightBurst(t: 0.3, rare: nil, center: CGPoint(x: 60, y: 60), dark: false, spin: 0)
+            GLightBurst(t: 0.3, rare: .gold, center: CGPoint(x: 60, y: 60), dark: true, spin: 0)
+                .blendMode(.plusLighter)
+            GLightBurst(t: 0.3, rare: .rainbow, center: CGPoint(x: 60, y: 60), dark: true, spin: 0)
                 .blendMode(.plusLighter)
             VStack(spacing: 2) {
                 Text("새 캐릭터! 이미 있는 친구예요 건너뛰기 닫기").font(.system(size: 14, weight: .bold, design: .rounded))
                 Text("여우 다람쥐 강아지 유령 해파리 로봇 조각 +1").font(.system(size: 24, weight: .heavy, design: .rounded))
                 GShimmerTitle(text: GachaText.goldHeadline, size: 30, t: 0.5)
+                GShimmerTitle(text: GachaText.rainbowHeadline, size: 30, t: 0.5, rare: .rainbow)
                 Text("아주 드문 친구를 만났어요 두근두근 손잡이를 돌려서 뽑기").font(.system(size: 14, weight: .semibold, design: .rounded))
                 Text("한 번 더 · 루비가 모자라요 0123456789").font(.system(size: 15, weight: .bold, design: .rounded))
                 Text("톡톡 눌러서 열기 조금 더! 마지막 한 번! -50 +1").font(.system(size: 13, weight: .heavy, design: .rounded))
@@ -286,9 +289,15 @@ struct GachaMachineStage: View {
         }
     }
 
-    private var goldShown: Bool {
-        guard d.isGold else { return false }
+    /// 희귀 캡슐(황금 · 무지개)이 지금 보이는가 — 반전(tease)이면 둘째 톡부터.
+    private var rareShown: Bool {
+        guard d.isRare else { return false }
         return !d.tease || d.tapTimes.count >= 2 || d.burstTime != nil
+    }
+
+    /// 지금 무대의 희귀 빛깔(결과 → 막 끝난 결과 순). 어둠 · 섬광의 색이 이 값을 따른다.
+    private var stageRare: GRare? {
+        d.rare ?? d.outgoing.flatMap { GRare($0.kind) }
     }
 
     private func revealT(_ ph: GPhase) -> Double? {
@@ -453,19 +462,22 @@ struct GachaMachineStage: View {
         return -0.16 * GMath.ring(tau - 0.12, freq: 4, decay: 9)
     }
 
-    /// 황금: 캡슐이 나오기 전부터 배출구가 금빛으로 샌다.
+    /// 희귀(황금 · 무지개): 캡슐이 나오기 전부터 배출구가 그 빛깔로 샌다.
     @ViewBuilder private func chuteGlow(_ ph: GPhase) -> some View {
-        if case .dropping(let td) = ph, d.isGold, !d.tease, td < d.drop.emerge1 + 0.3 {
+        if case .dropping(let td) = ph, let rare = d.rare, !d.tease, td < d.drop.emerge1 + 0.3 {
             let a = GMath.smooth(0, 0.3, td) * (1 - GMath.smooth(d.drop.emerge1 - 0.05, d.drop.emerge1 + 0.3, td))
             let flicker = still ? 1 : 0.78 + 0.22 * sin(2 * .pi * 6 * td)
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(GPalette.gold.opacity(0.55 * a * flicker))
+                    .fill(rare == .rainbow
+                          ? AnyShapeStyle(LinearGradient(colors: GRare.spectrum.map { $0.opacity(0.55 * a * flicker) },
+                                                         startPoint: .leading, endPoint: .trailing))
+                          : AnyShapeStyle(rare.primary.opacity(0.55 * a * flicker)))
                     .frame(width: GLayout.chuteRect.width - 6, height: GLayout.chuteRect.height - 6)
                     .blur(radius: 6)
                     .blendMode(.plusLighter)
                 Circle()
-                    .fill(RadialGradient(colors: [GPalette.goldLight.opacity(0.9 * a * flicker), GPalette.gold.opacity(0)],
+                    .fill(RadialGradient(colors: [rare.light.opacity(0.9 * a * flicker), rare.primary.opacity(0)],
                                          center: .center, startRadius: 0, endRadius: 70))
                     .frame(width: 150, height: 150)
                     .blendMode(.plusLighter)
@@ -489,7 +501,7 @@ struct GachaMachineStage: View {
     }
 
     private func dimAmount(_ ph: GPhase) -> Double {
-        if d.isGold {
+        if d.isRare {
             switch ph {
             case .dropping(let td): return d.tease ? 0 : 0.42 * GMath.smooth(0, 0.5, td)
             case .tapping:
@@ -503,7 +515,7 @@ struct GachaMachineStage: View {
             default: break
             }
         }
-        if ph == .idle, d.outgoing?.kind == .gold, let rt = d.returnTime {
+        if ph == .idle, d.outgoing?.kind.isRare == true, let rt = d.returnTime {
             return 0.84 * (1 - GMath.smooth(0, 0.45, now.timeIntervalSince(rt)))
         }
         return 0
@@ -520,7 +532,7 @@ struct GachaMachineStage: View {
             fullBleed(ZStack {
                 RadialGradient(colors: [GPalette.hex(0x2A1460, min(1, a * 0.72)), GPalette.hex(0x140A2E, min(1, a * 1.12))],
                                center: focus, startRadius: 20, endRadius: 360)
-                RadialGradient(colors: [GPalette.hex(0x7A5212, 0.5 * a), .clear], center: focus,
+                RadialGradient(colors: [(stageRare ?? .gold).dimGlow.opacity(0.5 * a), .clear], center: focus,
                                startRadius: 10, endRadius: 260)
             })
         }
@@ -538,18 +550,19 @@ struct GachaMachineStage: View {
         switch ph {
         case .shaking, .dropping, .tapping, .building:
             if Self.prewarmEnabled, let r = d.result {
-                let gold = r.kind == .gold
+                let rare = GRare(r.kind)
+                let gold = rare != nil
                 let size: CGFloat = gold ? 172 : 150
                 let effects = d.arrivedAt.map { now.timeIntervalSince($0) < 0.25 } ?? false
                 ZStack(alignment: .topLeading) {
                     env.portrait(r.characterID)
                         .resizable().interpolation(.high)
                         .frame(width: size, height: size)
-                        .shadow(color: effects ? (gold ? GPalette.gold.opacity(0.5) : GPalette.hex(0x5B3FB8, 0.25)) : .clear,
+                        .shadow(color: effects ? (rare.map { $0.primary.opacity(0.5) } ?? GPalette.hex(0x5B3FB8, 0.25)) : .clear,
                                 radius: effects ? (gold ? 18 : 10) : 0, y: effects && !gold ? 6 : 0)
                         .position(GLayout.stageCenter)
                     if effects {
-                        burst(t: 0.25, gold: gold, spin: 0)
+                        burst(t: 0.25, rare: rare, spin: 0)
                         revealTexts(r, 3.0)
                         if r.shardsGained > 0 {
                             GShardGem(size: 40, glow: 1, outline: theme.shardOutline).position(GLayout.stageCenter)
@@ -654,7 +667,8 @@ struct GachaMachineStage: View {
         if let p = capsulePose(ph) {
             let pair = d.dropPair
             let cracks = GCracks.make(seed: d.seed)
-            let gold = goldShown
+            let rare: GRare? = rareShown ? d.rare : nil
+            let gold = rare != nil
             let taps = d.tapTimes.count
             let lastTau = d.tapTimes.last.map { now.timeIntervalSince($0) } ?? 9
             let tapFlash = exp(-6 * lastTau)
@@ -683,7 +697,7 @@ struct GachaMachineStage: View {
 
                 if halo > 0.001 || beams > 0.001 {
                     GLeakLight(cracks: cracks, tapTimes: d.tapTimes, now: now, intensity: beams, halo: halo,
-                               gold: gold, capsuleD: p.d)
+                               rare: rare, capsuleD: p.d)
                         .frame(width: p.d * 3.4, height: p.d * 3.4)
                         .rotationEffect(.degrees(p.rot))
                         .position(p.c)
@@ -691,20 +705,20 @@ struct GachaMachineStage: View {
                 }
 
                 ZStack {
-                    GHeroBall(d: p.d, pair: pair, gold: false, art: env.art, sprites: sprites)
+                    GHeroBall(d: p.d, pair: pair, rare: nil, art: env.art, sprites: sprites)
                         .opacity(1 - goldMix)
-                    if goldMix > 0 {
-                        GHeroBall(d: p.d, pair: pair, gold: true, art: env.art, sprites: sprites)
+                    if goldMix > 0, let rare {
+                        GHeroBall(d: p.d, pair: pair, rare: rare, art: env.art, sprites: sprites)
                             .opacity(goldMix)
                     }
-                    if gold {
-                        Circle().fill(RadialGradient(colors: [GPalette.goldLight.opacity(0.35 * goldPulse), .clear],
+                    if let rare {
+                        Circle().fill(RadialGradient(colors: [rare.light.opacity(0.35 * goldPulse), .clear],
                                                      center: UnitPoint(x: 0.4, y: 0.35), startRadius: 0, endRadius: p.d * 0.5))
                             .blendMode(.plusLighter)
                             .frame(width: p.d, height: p.d)
                     }
                     if taps > 0 {
-                        GCrackOverlay(cracks: cracks, tapTimes: d.tapTimes, now: now, glow: crackGlow, gold: gold)
+                        GCrackOverlay(cracks: cracks, tapTimes: d.tapTimes, now: now, glow: crackGlow, rare: rare)
                             .frame(width: p.d, height: p.d)
                         // 톡 칠 때마다 안쪽이 환해진다
                         Circle().fill(RadialGradient(colors: [Color.white.opacity(0.55 * tapFlash + 0.3 * buildK), .clear],
@@ -719,10 +733,10 @@ struct GachaMachineStage: View {
                 .position(p.c)
                 .opacity(p.alpha)
 
-                // 반전: 황금으로 바뀌는 순간 빛 고리
+                // 반전: 황금(무지개)으로 바뀌는 순간 빛 고리
                 if let ft = flipT, ft < 0.7 {
                     Circle()
-                        .stroke(GPalette.goldLight.opacity(0.9 * (1 - ft / 0.7)), lineWidth: 10 * (1 - ft / 0.7) + 1)
+                        .stroke((rare ?? .gold).light.opacity(0.9 * (1 - ft / 0.7)), lineWidth: 10 * (1 - ft / 0.7) + 1)
                         .frame(width: p.d * (1 + 1.6 * GMath.easeOutCubic(ft / 0.7)), height: p.d * (1 + 1.6 * GMath.easeOutCubic(ft / 0.7)))
                         .blur(radius: 3)
                         .blendMode(.plusLighter)
@@ -742,9 +756,10 @@ struct GachaMachineStage: View {
     static let burstBleedY: CGFloat = 240
 
     /// 터짐 빛 한 판. 배치 크기는 무대 그대로(형제 배치가 안 움직인다), 그림판만 위아래로 `burstBleedY` 씩 넘친다.
-    private func burst(t: Double, gold: Bool, spin: Double) -> some View {
+    private func burst(t: Double, rare: GRare?, spin: Double) -> some View {
         let bleed = Self.burstBleedY
-        return GLightBurst(t: t, gold: gold, center: CGPoint(x: GLayout.stageCenter.x, y: GLayout.stageCenter.y + bleed),
+        let gold = rare != nil
+        return GLightBurst(t: t, rare: rare, center: CGPoint(x: GLayout.stageCenter.x, y: GLayout.stageCenter.y + bleed),
                            dark: gold || theme.raysOnDark, spin: spin)
             .frame(width: GLayout.size.width, height: GLayout.size.height + 2 * bleed)
             .frame(width: GLayout.size.width, height: GLayout.size.height)
@@ -753,12 +768,11 @@ struct GachaMachineStage: View {
 
     @ViewBuilder private func revealLayer(_ ph: GPhase) -> some View {
         if let rt = revealT(ph), let r = d.result {
-            let gold = r.kind == .gold
             ZStack {
                 if d.reduced {
                     reducedReveal(r, rt)
                 } else {
-                    burst(t: rt, gold: gold, spin: burstSpin(r, rt))
+                    burst(t: rt, rare: GRare(r.kind), spin: burstSpin(r, rt))
                     capsuleHalves(r, rt)
                     character(r, rt)
                     if r.kind == .duplicate { shardFlight(rt) }
@@ -770,26 +784,27 @@ struct GachaMachineStage: View {
 
     /// 빛줄기 회전 각: 처음엔 돌다가 잔잔한 움직임이 잦아드는 동안 같이 멈춘다(각속도 × 봉투의 적분 — 튀지 않는다).
     private func burstSpin(_ r: GachaRevealOutcome, _ rt: Double) -> Double {
-        let speed = r.kind == .gold ? 0.10 : 0.16
+        let speed = r.kind.isRare ? 0.10 : 0.16
         let end = GTiming.revealOneShotEnd(r.kind) + GTiming.revealAmbientGrace
         return speed * GMath.fadeIntegral(end, end + GTiming.ambientFade, rt)
     }
 
     @ViewBuilder private func capsuleHalves(_ r: GachaRevealOutcome, _ rt: Double) -> some View {
         if rt < 0.8 {
-            let gold = r.kind == .gold
+            let rare = GRare(r.kind)
+            let gold = rare != nil
             let center = GLayout.stageCenter
             let pair = d.dropPair
             let capD = GLayout.capsuleBig * (gold ? 1.12 : 1)
             let g = 900.0
             let k = gold ? 1.15 : 1.0
             let fade = 1 - GMath.smooth(0.18, gold ? 0.7 : 0.55, rt)
-            GHeroHalf(upper: true, d: capD, pair: pair, gold: gold, art: env.art, sprites: sprites)
+            GHeroHalf(upper: true, d: capD, pair: pair, rare: rare, art: env.art, sprites: sprites)
                 .rotationEffect(.degrees(-230 * rt * k))
                 .scaleEffect(1 + 0.15 * rt)
                 .position(x: center.x - 150 * rt * k, y: center.y - 320 * rt * k + 0.5 * g * rt * rt)
                 .opacity(fade)
-            GHeroHalf(upper: false, d: capD, pair: pair, gold: gold, art: env.art, sprites: sprites)
+            GHeroHalf(upper: false, d: capD, pair: pair, rare: rare, art: env.art, sprites: sprites)
                 .rotationEffect(.degrees(170 * rt * k))
                 .scaleEffect(1 + 0.15 * rt)
                 .position(x: center.x + 125 * rt * k, y: center.y + 30 * rt * k + 0.5 * g * rt * rt)
@@ -799,13 +814,14 @@ struct GachaMachineStage: View {
 
     /// 동작 줄이기의 공개: 쟁반의 캡슐이 사라지며 캐릭터가 겹쳐 나타난다(튀기 · 빛줄기 · 고리 · 조각 비행 없음).
     @ViewBuilder private func reducedReveal(_ r: GachaRevealOutcome, _ rt: Double) -> some View {
-        let gold = r.kind == .gold
+        let rare = GRare(r.kind)
+        let gold = rare != nil
         let fade = GTiming.Reduced.fade
-        GLightBurst(t: rt, gold: gold, center: GLayout.stageCenter, dark: gold || theme.raysOnDark, spin: 0, reduced: true)
+        GLightBurst(t: rt, rare: rare, center: GLayout.stageCenter, dark: gold || theme.raysOnDark, spin: 0, reduced: true)
             .frame(width: GLayout.size.width, height: GLayout.size.height)
             .blendMode(gold ? .plusLighter : .normal)
         if rt < fade {
-            GHeroBall(d: GLayout.capsuleSmall, pair: d.dropPair, gold: gold, art: env.art, sprites: sprites)
+            GHeroBall(d: GLayout.capsuleSmall, pair: d.dropPair, rare: rare, art: env.art, sprites: sprites)
                 .opacity(1 - GMath.ramp(0, fade, rt))
                 .position(GLayout.tray)
         }
@@ -816,12 +832,13 @@ struct GachaMachineStage: View {
             .frame(width: size, height: size)
             .saturation(1 - cond)
             .opacity(GMath.ramp(0, fade, rt) * GMath.lerp(1, 0.25, cond))
-            .shadow(color: gold ? GPalette.gold.opacity(0.5) : GPalette.hex(0x5B3FB8, 0.25), radius: gold ? 18 : 10, y: gold ? 0 : 6)
+            .shadow(color: rare.map { $0.primary.opacity(0.5) } ?? GPalette.hex(0x5B3FB8, 0.25), radius: gold ? 18 : 10, y: gold ? 0 : 6)
             .position(GLayout.stageCenter)
     }
 
     @ViewBuilder private func character(_ r: GachaRevealOutcome, _ rt: Double) -> some View {
-        let gold = r.kind == .gold
+        let rare = GRare(r.kind)
+        let gold = rare != nil
         let delay = gold ? 0.08 : 0.02
         let s0 = gold ? 0.3 : 0.25
         let sp = GMath.spring(rt - delay, zeta: gold ? 0.42 : 0.40, freq: gold ? 1.6 : 2.3)
@@ -838,7 +855,7 @@ struct GachaMachineStage: View {
             .brightness(0.5 * sin(.pi * min(1, cond * 1.15)))
             .opacity(GMath.ramp(delay, delay + 0.08, rt) * GMath.lerp(1, 0.2, cond))
             .scaleEffect(scale * (1 - 0.12 * cond))
-            .shadow(color: gold ? GPalette.gold.opacity(0.5) : GPalette.hex(0x5B3FB8, 0.25), radius: gold ? 18 : 10, y: gold ? 0 : 6)
+            .shadow(color: rare.map { $0.primary.opacity(0.5) } ?? GPalette.hex(0x5B3FB8, 0.25), radius: gold ? 18 : 10, y: gold ? 0 : 6)
             .position(x: GLayout.stageCenter.x, y: GLayout.stageCenter.y + 26 * (1 - rise) + bob)
     }
 
@@ -885,7 +902,7 @@ struct GachaMachineStage: View {
         if let o = d.outgoing, let ot = d.outgoingTime {
             let tt = now.timeIntervalSince(ot)
             if tt < 0.35 {
-                let size: CGFloat = o.kind == .gold ? 172 : 150
+                let size: CGFloat = o.kind.isRare ? 172 : 150
                 env.portrait(o.characterID)
                     .resizable().interpolation(.high)
                     .frame(width: size, height: size)
@@ -983,8 +1000,8 @@ struct GachaMachineStage: View {
     @ViewBuilder private func tapHint(_ n: Int, _ ph: GPhase) -> some View {
         let arrive = d.dropStart.map { now.timeIntervalSince($0) - d.drop.jump1 } ?? 0
         let a = GMath.smooth(0.1, 0.4, arrive)
-        let dark = goldShown || dimAmount(ph) > 0.3 || theme.dark
-        let ink = (goldShown || dimAmount(ph) > 0.3) ? Color.white : theme.ink
+        let dark = rareShown || dimAmount(ph) > 0.3 || theme.dark
+        let ink = (rareShown || dimAmount(ph) > 0.3) ? Color.white : theme.ink
         VStack(spacing: 7) {
             Text(n == 0 ? GachaMachineText.tapFirst : (n == 1 ? GachaMachineText.tapSecond : GachaMachineText.tapLast))
                 .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -1061,17 +1078,19 @@ struct GachaMachineStage: View {
             .foregroundStyle(theme.title)
             .opacity(nameA).offset(y: nameY)
             .position(x: GLayout.midX, y: 300)
-        case .gold:
+        case .gold, .rainbow:
+            let rare = GRare(r.kind) ?? .gold
             let titleAt = reduced ? GTiming.Reduced.nameAt : GTiming.goldTitleAt
             let subAt = reduced ? GTiming.Reduced.nameAt + 0.3 : GTiming.goldSubAt
             let tt = rt - titleAt
-            GShimmerTitle(text: GachaMachineText.title(r), size: 30, t: max(0, rt - titleAt - 0.3), passes: reduced ? 0 : 2)
+            GShimmerTitle(text: GachaMachineText.title(r), size: 30, t: max(0, rt - titleAt - 0.3), passes: reduced ? 0 : 2,
+                          rare: rare)
                 .scaleEffect(reduced ? 1 : 0.6 + 0.4 * GMath.spring(tt, zeta: 0.45, freq: 2.0))
                 .opacity(GMath.ramp(0, reduced ? 0.3 : 0.15, tt))
                 .position(x: GLayout.midX, y: 306)
             Text(GachaMachineText.goldSubtitle(r))
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(GPalette.goldLight.opacity(0.9))
+                .foregroundStyle(rare.light.opacity(0.9))
                 .opacity(GMath.ramp(subAt, subAt + 0.3, rt))
                 .position(x: GLayout.midX, y: 340)
         }
@@ -1157,7 +1176,7 @@ struct GachaMachineStage: View {
             let b = d.buttonsAt(r.kind)
             let a = GMath.ramp(b, b + (d.reduced ? 0.3 : 0.22), rt)
             if a > 0 {
-                let dark = r.kind == .gold
+                let dark = r.kind.isRare
                 let canAgain = env.canPull && env.againEnabled && !d.pullInFlight
                 HStack(spacing: 10) {
                     Button { d.again() } label: {
@@ -1210,8 +1229,9 @@ struct GachaMachineStage: View {
 
     @ViewBuilder private func flash(_ ph: GPhase) -> some View {
         // 일반: 흰 섬광(밝은 바탕) · 옅은 라벤더(어두운 바탕). 황금: 더하기 합성의 따뜻한 빛 — 어두운 무대를 회색으로 씻지 않는다.
-        // 동작 줄이기: 섬광 없음.
-        let gold = d.isGold
+        // 무지개(v0.3.59): 같은 모양의 분홍빛 흰 섬광. 동작 줄이기: 섬광 없음.
+        let rare = d.rare
+        let gold = rare != nil
         let a: Double = {
             if d.reduced { return 0 }
             switch ph {
@@ -1226,8 +1246,8 @@ struct GachaMachineStage: View {
             }
         }()
         if a > 0.005 {
-            if gold {
-                fullBleed(RadialGradient(colors: [GPalette.hex(0xFFE7A6), GPalette.hex(0xFFC94A, 0.85), GPalette.hex(0xB07A10, 0.5)],
+            if let rare {
+                fullBleed(RadialGradient(colors: rare.flash,
                                          center: Self.bleedUnit(GLayout.stageCenter), startRadius: 0, endRadius: 380))
                     .opacity(a)
                     .blendMode(.plusLighter)

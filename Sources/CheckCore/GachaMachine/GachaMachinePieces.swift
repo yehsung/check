@@ -74,18 +74,34 @@ struct GShardGem: View {
 enum GCapsuleArt { static let split: CGFloat = 0.50 }
 
 /// 캡슐 반쪽. 그림이 있으면 흰 캡슐을 물들이고, 없으면 벡터로.
+/// 황금은 금 캡슐 그림 그대로, 무지개(v0.3.59)는 흰 캡슐에 **위 → 아래 일곱 빛**을 곱한다(위 반쪽 = 빨·주·노, 아래 = 초·파·남·보).
 struct GCapsuleHalf: View {
     var upper: Bool
     var d: CGFloat
     var tint: Color
-    var gold: Bool
+    var rare: GRare?
     var art: GachaMachineArt
 
     var body: some View {
         Group {
-            if gold, let g = art.goldCapsule {
+            if rare == .gold, let g = art.goldCapsule {
                 g.resizable().interpolation(.high).frame(width: d, height: d)
-            } else if !gold, let img = art.capsule {
+            } else if rare == .rainbow, let img = art.capsule {
+                ZStack {
+                    img.resizable().interpolation(.high)
+                    // 흰 캡슐 × 일곱 빛(그림 알파 안에서만) — 곱하기라 그림의 음영 · 이음매가 그대로 산다.
+                    LinearGradient(colors: GRare.spectrum, startPoint: .top, endPoint: .bottom)
+                        .mask(img.resizable().interpolation(.high))
+                        .blendMode(.multiply)
+                    // 흰 하이라이트를 되살린다(물들인 캡슐과 같은 처리)
+                    img.resizable().interpolation(.high)
+                        .brightness(-0.42).contrast(5.5)
+                        .blendMode(.screen)
+                        .opacity(upper ? 0.9 : 0.75)
+                }
+                .compositingGroup()
+                .frame(width: d, height: d)
+            } else if rare == nil, let img = art.capsule {
                 ZStack {
                     img.resizable().interpolation(.high)
                         .colorMultiply(tint)
@@ -99,7 +115,8 @@ struct GCapsuleHalf: View {
                 .compositingGroup()
                 .frame(width: d, height: d)
             } else {
-                GVectorCapsuleHalf(upper: upper, tint: gold ? GPalette.gold : tint, gold: gold)
+                GVectorCapsuleHalf(upper: upper, tint: rare == .gold ? GPalette.gold : tint,
+                                   spectrum: rare == .rainbow ? GRare.spectrum : nil)
                     .frame(width: d, height: d)
             }
         }
@@ -116,14 +133,21 @@ struct GCapsuleHalf: View {
 struct GVectorCapsuleHalf: View {
     var upper: Bool
     var tint: Color
-    var gold: Bool
+    /// 무지개 캡슐(v0.3.59): 한 색 대신 위 → 아래 일곱 빛(반원 둘이 한 띠를 나눠 갖는다 — 그라데이션이 반쪽 틀이 아니라 공 전체에 걸린다).
+    var spectrum: [Color]? = nil
     var body: some View {
         GeometryReader { g in
             let d = g.size.width
             ZStack {
-                GHalfDisc(upper: upper)
-                    .fill(LinearGradient(colors: upper ? [tint.opacity(0.55), tint.opacity(0.85)] : [tint, tint.opacity(0.75)],
-                                         startPoint: .top, endPoint: .bottom))
+                if let spectrum {
+                    GHalfDisc(upper: upper)
+                        .fill(LinearGradient(colors: spectrum, startPoint: .top, endPoint: .bottom))
+                        .opacity(upper ? 0.85 : 1)
+                } else {
+                    GHalfDisc(upper: upper)
+                        .fill(LinearGradient(colors: upper ? [tint.opacity(0.55), tint.opacity(0.85)] : [tint, tint.opacity(0.75)],
+                                             startPoint: .top, endPoint: .bottom))
+                }
                 GHalfDisc(upper: upper)
                     .fill(RadialGradient(colors: [Color.white.opacity(upper ? 0.65 : 0.35), .clear],
                                          center: UnitPoint(x: 0.36, y: upper ? 0.30 : 0.55), startRadius: 0, endRadius: d * 0.45))
@@ -148,12 +172,12 @@ struct GCapsuleBall: View {
     var d: CGFloat
     var top: Color
     var bottom: Color
-    var gold: Bool
+    var rare: GRare?
     var art: GachaMachineArt
     var body: some View {
         ZStack {
-            GCapsuleHalf(upper: true, d: d, tint: top, gold: gold, art: art)
-            GCapsuleHalf(upper: false, d: d, tint: bottom, gold: gold, art: art)
+            GCapsuleHalf(upper: true, d: d, tint: top, rare: rare, art: art)
+            GCapsuleHalf(upper: false, d: d, tint: bottom, rare: rare, art: art)
         }
         .frame(width: d, height: d)
     }
@@ -174,6 +198,9 @@ final class GachaCapsuleSprites {
     let heroBottom: [Image]
     let goldTop: Image
     let goldBottom: Image
+    /// 무지개 캡슐 두 반쪽(v0.3.59).
+    let rainbowTop: Image
+    let rainbowBottom: Image
 
     private static var cache: [String: GachaCapsuleSprites] = [:]
     /// 마지막으로 굽는 데 걸린 시간(초) — 측정용.
@@ -197,11 +224,13 @@ final class GachaCapsuleSprites {
         }
         let pairs = GPalette.capsulePairs
         let hs = Self.heroSize, ds = Self.domeSize
-        domeBalls = pairs.map { bake(GCapsuleBall(d: ds, top: $0.0, bottom: $0.1, gold: false, art: art), ds) }
-        heroTop = pairs.map { bake(GCapsuleHalf(upper: true, d: hs, tint: $0.0, gold: false, art: art), hs) }
-        heroBottom = pairs.map { bake(GCapsuleHalf(upper: false, d: hs, tint: $0.1, gold: false, art: art), hs) }
-        goldTop = bake(GCapsuleHalf(upper: true, d: hs, tint: GPalette.gold, gold: true, art: art), hs)
-        goldBottom = bake(GCapsuleHalf(upper: false, d: hs, tint: GPalette.gold, gold: true, art: art), hs)
+        domeBalls = pairs.map { bake(GCapsuleBall(d: ds, top: $0.0, bottom: $0.1, rare: nil, art: art), ds) }
+        heroTop = pairs.map { bake(GCapsuleHalf(upper: true, d: hs, tint: $0.0, rare: nil, art: art), hs) }
+        heroBottom = pairs.map { bake(GCapsuleHalf(upper: false, d: hs, tint: $0.1, rare: nil, art: art), hs) }
+        goldTop = bake(GCapsuleHalf(upper: true, d: hs, tint: GPalette.gold, rare: .gold, art: art), hs)
+        goldBottom = bake(GCapsuleHalf(upper: false, d: hs, tint: GPalette.gold, rare: .gold, art: art), hs)
+        rainbowTop = bake(GCapsuleHalf(upper: true, d: hs, tint: .white, rare: .rainbow, art: art), hs)
+        rainbowBottom = bake(GCapsuleHalf(upper: false, d: hs, tint: .white, rare: .rainbow, art: art), hs)
     }
 }
 
@@ -210,16 +239,22 @@ struct GHeroHalf: View {
     var upper: Bool
     var d: CGFloat
     var pair: Int
-    var gold: Bool
+    var rare: GRare?
     var art: GachaMachineArt
     var sprites: GachaCapsuleSprites?
     var body: some View {
         if let sp = sprites {
-            let img = gold ? (upper ? sp.goldTop : sp.goldBottom) : (upper ? sp.heroTop[pair] : sp.heroBottom[pair])
+            let img: Image = {
+                switch rare {
+                case .gold: return upper ? sp.goldTop : sp.goldBottom
+                case .rainbow: return upper ? sp.rainbowTop : sp.rainbowBottom
+                case nil: return upper ? sp.heroTop[pair] : sp.heroBottom[pair]
+                }
+            }()
             img.resizable().interpolation(.high).frame(width: d, height: d)
         } else {
             let c = GPalette.capsulePairs[pair]
-            GCapsuleHalf(upper: upper, d: d, tint: upper ? c.0 : c.1, gold: gold, art: art)
+            GCapsuleHalf(upper: upper, d: d, tint: upper ? c.0 : c.1, rare: rare, art: art)
         }
     }
 }
@@ -227,13 +262,13 @@ struct GHeroHalf: View {
 struct GHeroBall: View {
     var d: CGFloat
     var pair: Int
-    var gold: Bool
+    var rare: GRare?
     var art: GachaMachineArt
     var sprites: GachaCapsuleSprites?
     var body: some View {
         ZStack {
-            GHeroHalf(upper: true, d: d, pair: pair, gold: gold, art: art, sprites: sprites)
-            GHeroHalf(upper: false, d: d, pair: pair, gold: gold, art: art, sprites: sprites)
+            GHeroHalf(upper: true, d: d, pair: pair, rare: rare, art: art, sprites: sprites)
+            GHeroHalf(upper: false, d: d, pair: pair, rare: rare, art: art, sprites: sprites)
         }
         .frame(width: d, height: d)
     }
@@ -318,7 +353,7 @@ struct GDomeView: View {
                         if let sp = sprites {
                             sp.domeBalls[c.pair].resizable().interpolation(.high).frame(width: c.d, height: c.d)
                         } else {
-                            GCapsuleBall(d: c.d, top: c.top, bottom: c.bottom, gold: false, art: art)
+                            GCapsuleBall(d: c.d, top: c.top, bottom: c.bottom, rare: nil, art: art)
                         }
                     }
                     .rotationEffect(.degrees(c.rot + m.rot))

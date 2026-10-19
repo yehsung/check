@@ -15,11 +15,16 @@ extension CharacterManifest {
         case standard
         /// 황금 아잉이 — 아잉 메시 + 금빛 피부(`GoldAingArt.skinResourceName`) + 후광(`GoldAingArt.haloResourceName`).
         case gold
+        /// 무지개 아잉이(v0.3.59) — 아잉 메시 + 다듬은 라벤더 밝기 맵(`RainbowAingArt.shadeResourceName`) + 몸 셰이더(높이로 무지개 색상) +
+        /// 무지개 후광(`RainbowAingArt.haloResourceName`). 렌더러는 kind 가 아니라 이 값으로 가른다(금과 같은 이유).
+        case rainbow
     }
 
-    /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금은 코드에 박힌 내장 항목뿐이다).
+    /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개는 코드에 박힌 내장 항목뿐이다).
     package var finish: Finish {
-        CharacterCatalog.isGoldAing(id) ? .gold : .standard
+        if CharacterCatalog.isGoldAing(id) { return .gold }
+        if CharacterCatalog.isRainbowAing(id) { return .rainbow }
+        return .standard
     }
 }
 

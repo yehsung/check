@@ -128,6 +128,16 @@ enum CheckCharacter3DScene {
         return makeAingScene(animated: animated, finish: character.finish)
     }
 
+    /// 아잉 메시 위의 마감(금 · 무지개) — `makeAingScene` 과 `makeCharacterNode`(울트라 교체)가 **같은 자리**에서 부른다.
+    /// 스프라이트는 언제나 `.standard` 라 여기 오지 않는다.
+    private static func applyFinish(_ finish: CharacterManifest.Finish, to character: SCNNode) {
+        switch finish {
+        case .standard: break
+        case .gold: GoldAingFinish.apply(to: character)
+        case .rainbow: RainbowAingFinish.apply(to: character)
+        }
+    }
+
     /// 내장 아잉(3D) 씬. **v0.3.15 이전의 `makeScene` 본문 그대로다** — 여기에 스프라이트 조건을 섞지 마라.
     /// 황금 아잉이(v0.3.54)는 같은 메시에 금 마감(`GoldAingFinish.apply`)만 더한다 — 카메라를 세운 **뒤**에 입힌다
     /// (후광 판은 몸 크기 계산에 안 끼게 만들었지만, 프레이밍이 몸만 보고 끝나는 순서를 지키는 편이 확실하다).
@@ -153,9 +163,7 @@ enum CheckCharacter3DScene {
         scene.rootNode.addChildNode(wrapper)
 
         addFramingCamera(to: scene)
-        if finish == .gold {
-            GoldAingFinish.apply(to: character)
-        }
+        applyFinish(finish, to: character)
         addClosedEyeNodes(to: character)
         if animated {
             addIdleAnimations(to: character)
@@ -286,14 +294,12 @@ enum CheckCharacter3DScene {
             // 아잉은 모델을 다시 읽는다(씬 하나에 캐릭터는 한 마리라 예비를 들고 있을 자리가 없다).
             // unlit 정규화 → 감은눈 노드까지 `makeScene` 과 **같은 순서**로 세운다. 순서가 갈리면
             // 감은눈 선이 unlit 정규화를 못 받아 조명에 허옇게 뜬다.
-            // 황금 아잉이(v0.3.54)는 unlit 정규화 **뒤**·감은눈 노드 **앞**에 금 마감을 입힌다(`makeAingScene` 과 같은 순서).
+            // 황금 아잉이(v0.3.54)·무지개 아잉이(v0.3.59)는 unlit 정규화 **뒤**·감은눈 노드 **앞**에 마감을 입힌다(`makeAingScene` 과 같은 순서).
             guard let scene = loadModelScene() else { return nil }
             applyUnlitMaterials(to: scene.rootNode)
             guard let character = scene.rootNode.childNodes.first else { return nil }
             character.removeFromParentNode()
-            if manifest.finish == .gold {
-                GoldAingFinish.apply(to: character)
-            }
+            applyFinish(manifest.finish, to: character)
             addClosedEyeNodes(to: character)
             return character
         }
@@ -333,6 +339,12 @@ enum CheckCharacter3DScene {
     static func makeClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?) -> CGImage? {
         if let original = GoldAingFinish.lavenderOriginal(ofGoldFace: faceImage) {
             return GoldAingFinish.closedEyesImage(goldFace: faceImage, original: original) { lavender in
+                lavenderClosedEyesImage(faceImage: lavender, geometry: geometry)
+            }
+        }
+        // 무지개 아잉이(v0.3.59)도 같은 순서 — 라벤더 원본에서 감은 눈을 굽고 밝기 맵을 합성한다(덮인 눈 자리가 둘레와 이어진 밝기를 받는다).
+        if let original = RainbowAingFinish.lavenderOriginal(ofRainbowFace: faceImage) {
+            return RainbowAingFinish.closedEyesImage(rainbowFace: faceImage, original: original) { lavender in
                 lavenderClosedEyesImage(faceImage: lavender, geometry: geometry)
             }
         }

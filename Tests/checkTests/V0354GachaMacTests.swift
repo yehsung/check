@@ -73,8 +73,10 @@ enum V0354GachaStub {
         let store = await V0354GachaStub.loadedStore(host: host, label: "show")
         #expect(store.shopLoaded)
         #expect(store.isGachaAvailable && store.gachaShards == 3)
-        #expect((GomokuStubProtocol.calls(host: host, rpc: "shop_state").last?.json["p_protocol"] as? Int) == ShopWire.goldProtocol,
-                "맥이 능력 번호 2 를 안 보낸다 — 서버가 뽑기를 안 준다")
+        // v0.3.59: 번들이 무지개까지 그리면 3 이다(누적) — 뽑기 문턱(2) 이상이면 서버가 뽑기를 준다. 값은 번들에서 파생한 그 번호.
+        let sent = GomokuStubProtocol.calls(host: host, rpc: "shop_state").last?.json["p_protocol"] as? Int
+        #expect(sent == store.shopProtocolVersion && ShopWire.supportsGacha(protocolVersion: sent ?? 0),
+                "맥이 능력 번호 \(sent.map(String.init) ?? "없음") 를 보낸다 — 2 이상이 아니면 서버가 뽑기를 안 준다")
         store.openGachaPanel()
         #expect(store.isGachaPanelOpen)
         // 기준선: gacha 없는 응답(옛 서버) — 뽑기가 숨고 패널이 접힌다.
@@ -105,7 +107,7 @@ enum V0354GachaStub {
         let calls = GomokuStubProtocol.calls(host: host, rpc: "gacha_pull")
         #expect(calls.count == 1)
         let body = try #require(calls.first).json
-        #expect(body["p_protocol"] as? Int == 2)
+        #expect(body["p_protocol"] as? Int == store.shopProtocolVersion && store.shopProtocolVersion >= ShopWire.goldProtocol)
         let id = try #require(body["p_request_id"] as? String)
         #expect(UUID(uuidString: id) != nil && id == id.lowercased())
         // 보유·조각을 사실과 맞추려 상점을 다시 읽는다(서버의 새 상태가 같은 값을 말한다).
@@ -211,7 +213,8 @@ enum V0354GachaStub {
         #expect(store.ownedCharacterIDs.contains("fox") && store.gachaShards == 1)
         #expect(store.gachaNotice == GachaText.exchanged(name: "여우") && !store.gachaNoticeIsError)
         let body = try #require(GomokuStubProtocol.calls(host: host, rpc: "gacha_exchange").first).json
-        #expect(body["p_character_id"] as? String == "fox" && body["p_protocol"] as? Int == 2)
+        #expect(body["p_character_id"] as? String == "fox" && body["p_protocol"] as? Int == store.shopProtocolVersion
+                && store.shopProtocolVersion >= ShopWire.goldProtocol)
         // 해파리(5) > 조각 1 — 서버에 안 묻는다.
         store.exchangeGacha("jellyfish")
         #expect(GomokuStubProtocol.count(host: host, rpc: "gacha_exchange") == 1)
@@ -316,7 +319,8 @@ enum V0354GachaStub {
     /// 서버처럼 여섯 장 + 황금 아잉이(뽑기 전용 · 명목가 1000). `V0317ShopTests.rows` 는 카탈로그를 따라 금을 가격 30 으로 끼워
     /// 넣으므로(그 스위트의 픽스처) 여기서는 금을 빼고 서버 모양으로 다시 붙인다.
     static func shopRows(goldOwned: Bool = false) -> [ShopCharacterRow] {
-        V0317ShopTests.rows(ownedIDs: ["squirrel"]).filter { !CharacterCatalog.isGoldAing($0.id) }
+        // v0.3.59: 무지개 아잉이(내장 · 뽑기 전용)는 이 '금 포함 일곱 장' 픽스처에 없다 — 루비 값 30 의 파는 줄로 섞이지 않게 뺀다.
+        V0317ShopTests.rows(ownedIDs: ["squirrel"]).filter { !CharacterCatalog.isGoldAing($0.id) && !CharacterCatalog.isRainbowAing($0.id) }
             + [ShopCharacterRow(id: CharacterCatalog.goldAingID, price: 1000, owned: goldOwned, gachaOnly: true)]
     }
 

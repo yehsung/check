@@ -147,6 +147,9 @@ enum CheckMascotAssets {
             // 황금 아잉이(v0.3.54): 초상 두 장 + 3D 금 마감 두 장(피부 맵 · 후광). 마감이 없으면 입어도 오버레이에 보라 아잉이 선다 —
             // 정의는 `GoldAingArt.isDrawable(on: .mac)` 한 곳이다.
             if CharacterCatalog.isGoldAing(id) { return GoldAingFinish.isDrawable(fileManager: fileManager) }
+            // 무지개 아잉이(v0.3.59): 초상 두 장 + 3D 무지개 마감 두 장(밝기 맵 · 후광) — 정의는 `RainbowAingArt.isDrawable(on: .mac)` 한 곳.
+            // 이 셋(robot · 금 · 무지개)이 다 서야 상점 능력 번호 3 이 나간다(`ShopWire.protocolVersion`).
+            if CharacterCatalog.isRainbowAing(id) { return RainbowAingFinish.isDrawable(fileManager: fileManager) }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]

@@ -356,8 +356,11 @@ struct V0343RobotShopProtocolTests {
         // 실렸으면 robot 이 그려지는 순간 번호는 누적으로 2 다(`ShopWire.protocolVersion` 의 누적 규칙). robot 이 빠지면 0(③).
         let goldDrawable = fullDrawable.contains(CharacterCatalog.goldAingID)
         #expect(goldDrawable == V0354CoreArtBaseline.macGoldArtInSourceTree, "금 그림 판정이 소스 트리와 갈렸다")
+        // v0.3.59: 무지개 아잉이도 같은 내장 · 앱 번들 그림이라, 금과 무지개가 둘 다 실린 빌드는 누적으로 3 이다.
+        let rainbowDrawable = fullDrawable.contains(CharacterCatalog.rainbowAingID)
+        #expect(rainbowDrawable == V0359RainbowShopProtocolTests.macRainbowArtInSourceTree, "무지개 그림 판정이 소스 트리와 갈렸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: fullDrawable)
-                == (goldDrawable ? ShopWire.goldProtocol : ShopWire.robotProtocol))
+                == (goldDrawable ? (rainbowDrawable ? ShopWire.rainbowProtocol : ShopWire.goldProtocol) : ShopWire.robotProtocol))
 
         // ③ 한 장만 빼도 0 이다(초상 한쪽·아틀라스 각각). 세 파일이 전부 요구되는지 낱개로 잰다.
         for missing in ["atlas.png", "portrait-neutral.png", "portrait-negative.png"] {

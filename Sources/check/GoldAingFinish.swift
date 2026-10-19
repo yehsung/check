@@ -202,27 +202,31 @@ enum GoldAingFinish {
     /// 칸 하나가 번들에 없으면 그 자리는 정면으로 접는다(옛 동작 — 패키징 대본이 그런 빌드를 막는다). 정면이 없으면 nil.
     static func haloCellImages() -> [CGImage]? {
         if let hit = cache.withLock({ $0.haloCells }) { return hit }
-        var memo = CompensationMemo()
-        var made: [CGImage]?
-        if let front = decode(GoldAingArt.haloResourceName).flatMap({ windowCompensated($0, memo: &memo) }) {
-            var cells = [front]
-            var missing: [String] = []
-            for cell in 1..<GoldAingArt.haloCellCount {
-                let name = GoldAingArt.haloResourceName(cell: cell)
-                if let image = decode(name).flatMap({ windowCompensated($0, memo: &memo) }) {
-                    cells.append(image)
-                } else {
-                    missing.append(name)
-                    cells.append(front)
-                }
-            }
-            if !missing.isEmpty {
-                logger.error("gold halo: 각도 칸 \(missing.count, privacy: .public)장이 번들에 없다 — 정면 후광으로 접는다 \(missing.joined(separator: ","), privacy: .public)")
-            }
-            made = cells
-        }
+        let made = compensatedHaloCells(names: GoldAingArt.haloCellResourceNames, label: "gold", decode: decode)
         cache.withLock { $0.haloCells = .some(made) }
         return made
+    }
+
+    /// 후광 각도 칸 이름(0 칸 = 정면부터) → 창 합성 보정을 거친 그림들. 빠진 칸은 정면으로 접고, 정면이 없으면 nil.
+    /// 금과 무지개(`RainbowAingFinish`)가 같이 쓴다 — 그림 이름만 다르다(칸 규약 · 보정 · 접기 규칙은 하나).
+    static func compensatedHaloCells(names: [String], label: String, decode: (String) -> CGImage?) -> [CGImage]? {
+        var memo = CompensationMemo()
+        guard let frontName = names.first,
+              let front = decode(frontName).flatMap({ windowCompensated($0, memo: &memo) }) else { return nil }
+        var cells = [front]
+        var missing: [String] = []
+        for name in names.dropFirst() {
+            if let image = decode(name).flatMap({ windowCompensated($0, memo: &memo) }) {
+                cells.append(image)
+            } else {
+                missing.append(name)
+                cells.append(front)
+            }
+        }
+        if !missing.isEmpty {
+            logger.error("\(label, privacy: .public) halo: 각도 칸 \(missing.count, privacy: .public)장이 번들에 없다 — 정면 후광으로 접는다 \(missing.joined(separator: ","), privacy: .public)")
+        }
+        return cells
     }
 
     // MARK: 창 합성 보정(후광)
@@ -435,12 +439,18 @@ enum GoldAingFinish {
     /// 후광 노드: 몸 바운딩박스 중심의 표식 노드(`haloNodeName`, 지오메트리 없음) 아래에 각도 칸 판 36개.
     /// 그림이 없으면 표식 노드만 남긴다(금 판정은 그대로 산다).
     static func makeHaloNode(bodyMin: SCNVector3, bodyMax: SCNVector3) -> SCNNode {
+        makeHaloNode(name: haloNodeName, cells: haloCellImages(), bodyMin: bodyMin, bodyMax: bodyMax)
+    }
+
+    /// 후광 노드의 몸통 — 금과 무지개(`RainbowAingFinish`)가 같이 쓴다. 표식 노드 이름(= 어떤 마감인가)과 칸 그림만 다르고,
+    /// 판 규약 · 재질 이름(`haloMaterialName` — 엔진의 얼굴 탐색이 건너뛴다) · 카테고리 비트(몸 클릭 hitTest 가 뺀다) · 칸 고르기는 하나다.
+    static func makeHaloNode(name: String, cells: [CGImage]?, bodyMin: SCNVector3, bodyMax: SCNVector3) -> SCNNode {
         let node = SCNNode()
-        node.name = haloNodeName
+        node.name = name
         node.categoryBitMask = haloCategoryBit
         let center = SCNVector3((bodyMin.x + bodyMax.x) / 2, (bodyMin.y + bodyMax.y) / 2, (bodyMin.z + bodyMax.z) / 2)
         node.position = center
-        guard let cells = haloCellImages() else { return node }
+        guard let cells else { return node }
         let side = CGFloat(bodyMax.y - bodyMin.y) * haloSideOverBodyHeight
         for (cell, image) in cells.enumerated() {
             node.addChildNode(makeHaloCellNode(cell: cell, image: image, side: side))

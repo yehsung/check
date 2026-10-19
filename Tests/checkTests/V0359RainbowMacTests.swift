@@ -271,17 +271,18 @@ struct V0359RainbowGachaRulesTests {
     var isWaiting: Bool { pending != nil }
 }
 
-/// 감독을 시계로 몰아 공개 직전(세 번째 톡)까지 데려간다. 초상은 맥 창이 쓰는 그 문(`CheckGachaWindowView.portrait`).
+/// 감독을 시계로 몰아 공개 직전(세 번째 톡)까지 데려간다(`taps` 로 톡 수를 줄일 수 있다 — 0 이면 캡슐이 막 앉은 때). 초상은 맥 창이 쓰는
+/// 그 문(`CheckGachaWindowView.portrait`).
 @MainActor
-private func rbRevealDirector(_ outcome: GachaRevealOutcome, art: GachaMachineArt = .vector,
-                              teaseChance: Double = 0) async -> (GachaMachineDirector, RBClock, RBHaptics) {
+private func rbRevealDirector(_ outcome: GachaRevealOutcome, art: GachaMachineArt = .vector, teaseChance: Double = 0,
+                              taps: Int = 3, reduceMotion: Bool = false) async -> (GachaMachineDirector, RBClock, RBHaptics) {
     let clock = RBClock(), haptics = RBHaptics(), gate = RBGate()
     let d = GachaMachineDirector(clock: { [clock] in clock.now })
     d.autoSchedule = false
     d.update(env: GachaMachineEnv(balance: 500, cost: 50, shards: 3, ruby: Image(systemName: "diamond.fill"),
                                   portrait: { CheckGachaWindowView.portrait($0) }, art: art, teaseChance: teaseChance,
                                   haptics: haptics, pull: { try await gate.pull() }, onAgain: {}, onClose: {},
-                                  blockedReason: nil, againEnabled: true, isActive: true, reduceMotion: false, onFrame: nil))
+                                  blockedReason: nil, againEnabled: true, isActive: true, reduceMotion: reduceMotion, onFrame: nil))
     d.autoTurn()
     clock.advance(d.autoTurnDuration)
     d.advance(clock.now)
@@ -292,7 +293,7 @@ private func rbRevealDirector(_ outcome: GachaRevealOutcome, art: GachaMachineAr
         clock.now = max(clock.now, ds.addingTimeInterval(d.drop.total + 0.01))
         d.advance(clock.now)
     }
-    for _ in 0..<3 {
+    for _ in 0..<taps {
         d.press(clock.now)
         clock.advance(0.2)
     }
@@ -322,6 +323,73 @@ struct V0359RainbowMachineTests {
         #expect(gd.isRare && gd.isGold && gd.rare == .gold && gd.drop == GDropTimes.gold)
         let (fd, _, _) = await rbRevealDirector(Self.fox)
         #expect(!fd.isRare && fd.rare == nil && fd.drop == GDropTimes.normal && fd.goldBuild == 0)
+    }
+
+    /// 두 무대 그림에서 어느 채널이든 24 넘게 다른 화소의 몫(불투명 화소 기준). 크기가 다르면 1.
+    static func differingShare(_ a: CGImage, _ b: CGImage) -> Double {
+        guard a.width == b.width, a.height == b.height else { return 1 }
+        let pa = V0354GoldAingArtTests.rgba(a), pb = V0354GoldAingArtTests.rgba(b)
+        var differ = 0, total = 0
+        for o in stride(from: 0, to: pa.count, by: 4) where pa[o + 3] > 0 || pb[o + 3] > 0 {
+            total += 1
+            if (0..<4).contains(where: { abs(Int(pa[o + $0]) - Int(pb[o + $0])) > 24 }) { differ += 1 }
+        }
+        return Double(differ) / Double(max(total, 1))
+    }
+
+    /// 톡톡 단계 캡슐 자리(무대 가운데 190,196 · 2배 그림).
+    static let capsuleRect = CGRect(x: 380 - 130, y: 392 - 130, width: 260, height: 260)
+
+    @Test("무지개 반전(평범한 캡슐 → 둘째 톡에 무지개): 확률 1 이면 평범한 낙하로 숨고 첫 톡까지 여우 판과 같은 그림 · 둘째 톡에 반전 햅틱과 무지개 캡슐 — 반전 없는 무지개(기준선)는 첫 톡부터 다르다 · 동작 줄이기엔 반전이 없다")
+    func rainbowTeaseFlipsOnSecondTap() async throws {
+        let (d, clock, haptics) = await rbRevealDirector(Self.rainbow, art: .bundled, teaseChance: 1, taps: 0)
+        let (fox, foxClock, _) = await rbRevealDirector(Self.fox, art: .bundled, teaseChance: 1, taps: 0)
+        #expect(d.tease && d.isRare && d.rare == .rainbow, "무지개 판에 반전이 안 걸렸다(tease \(d.tease))")
+        #expect(d.drop == GDropTimes.normal, "반전 판은 평범한 낙하 시간표로 숨어야 한다(\(d.drop))")
+        #expect(!fox.tease && !fox.isRare, "기준선: 여우 판에 반전이 걸렸다")
+        #expect(clock.now == foxClock.now, "두 판의 시계가 갈렸다 — 그림을 맞댈 수 없다")
+        guard case .tapping = d.phase(clock.now) else { Issue.record("톡톡 단계가 아니다: \(d.phase(clock.now))"); return }
+        fox.seed = d.seed   // 같은 캡슐 쌍 · 같은 금
+
+        // 첫 톡: 아직 평범한 캡슐 — 여우 판과 같은 그림 · 반전 햅틱 없음.
+        d.press(clock.now); fox.press(foxClock.now)
+        clock.advance(0.15); foxClock.advance(0.15)
+        #expect(d.tapTimes.count == 1 && !haptics.events.contains(.goldFlip), "첫 톡에 반전 햅틱이 났다: \(haptics.events)")
+        let firstRainbow = try #require(Self.stage(d, scheme: .dark, now: clock.now, art: .bundled))
+        let firstFox = try #require(Self.stage(fox, scheme: .dark, now: foxClock.now, art: .bundled))
+        let firstShare = Self.differingShare(firstRainbow, firstFox)
+
+        // 둘째 톡: 반전 햅틱 · 0.3초 뒤(바뀜 0.22초가 끝난 뒤) 무지개 캡슐.
+        d.press(clock.now); fox.press(foxClock.now)
+        #expect(d.tapTimes.count == 2 && haptics.events.filter { $0 == .goldFlip }.count == 1, "둘째 톡에 반전 햅틱이 한 번 나야 한다: \(haptics.events)")
+        clock.advance(0.3); foxClock.advance(0.3)
+        let secondRainbow = try #require(Self.stage(d, scheme: .dark, now: clock.now, art: .bundled))
+        let secondFox = try #require(Self.stage(fox, scheme: .dark, now: foxClock.now, art: .bundled))
+        let secondShare = Self.differingShare(secondRainbow, secondFox)
+        let rainbowHues = V0359UI.hueCounts(secondRainbow, rect: Self.capsuleRect), foxHues = V0359UI.hueCounts(secondFox, rect: Self.capsuleRect)
+
+        // 기준선: 반전 없는 무지개는 첫 톡부터 무지개 캡슐이다 — 같은 잣대(여우 판과 다른 화소 몫)가 첫 톡에서 이미 갈린다.
+        let (plain, plainClock, plainHaptics) = await rbRevealDirector(Self.rainbow, art: .bundled, teaseChance: 0, taps: 1)
+        #expect(!plain.tease && plain.drop == GDropTimes.gold)
+        plainClock.advance(-0.05)
+        let plainFirst = try #require(Self.stage(plain, scheme: .dark, now: plainClock.now, art: .bundled))
+        let plainHues = V0359UI.hueCounts(plainFirst, rect: Self.capsuleRect)
+        print(String(format: "[v0359-machine] 반전: 첫 톡 여우와 다른 화소 %.4f · 둘째 톡 %.4f · 캡슐 색상 칸 무지개 %@ 여우 %@ · 반전 없는 무지개 첫 톡 %@",
+                     firstShare, secondShare, rainbowHues.description, foxHues.description, plainHues.description))
+        V0359UI.save(firstRainbow, "machine-rainbow-tease-tap1.png")
+        V0359UI.save(secondRainbow, "machine-rainbow-tease-tap2.png")
+        V0359UI.save(plainFirst, "machine-rainbow-plain-tap1.png")
+        #expect(firstShare < 0.002, "첫 톡에 반전 무지개가 여우 판과 다르다(\(firstShare)) — 무지개가 둘째 톡 전에 드러났다")
+        #expect(secondShare > 0.05, "둘째 톡 뒤에도 반전 무지개가 여우 판과 같다(\(secondShare)) — 캡슐이 안 바뀌었다")
+        #expect(V0359UI.dominantHues(rainbowHues) >= 4 && V0359UI.dominantHues(rainbowHues) > V0359UI.dominantHues(foxHues),
+                "둘째 톡 뒤 캡슐이 무지개빛이 아니다: 무지개 \(rainbowHues) · 여우 \(foxHues)")
+        #expect(V0359UI.dominantHues(plainHues) >= 4, "기준선: 반전 없는 무지개 첫 톡 캡슐이 무지개빛이 아니다 \(plainHues)")
+        #expect(!plainHaptics.events.contains(.goldFlip), "기준선: 반전 없는 판에 반전 햅틱")
+
+        // 동작 줄이기: 확률 1 이어도 반전 없음 · 줄인 낙하 · 반전 햅틱 없음.
+        let (reduced, _, reducedHaptics) = await rbRevealDirector(Self.rainbow, teaseChance: 1, reduceMotion: true)
+        #expect(reduced.reduced && !reduced.tease && reduced.isRare && reduced.drop == GDropTimes.reduced, "동작 줄이기 무지개에 반전이 걸렸다")
+        #expect(!reducedHaptics.events.contains(.goldFlip))
     }
 
     @Test("공개 그림: 무지개 제목은 일곱 빛(주된 색상 칸 ≥ 5) · 황금 제목은 금빛 한 계열(≤ 2) — 밝은 · 어두운 외관 둘 다")

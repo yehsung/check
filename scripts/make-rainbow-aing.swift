@@ -14,8 +14,10 @@
 //   Sources/check/Resources/aing_rainbow-shade.png   512×512 불투명 **라벤더** 밝기 맵. aing.scn 디퓨즈와 같은 UV 배치. 텍셀마다 '그 자리
 //                                                    피부의 다듬은 밝기'(OKLab L)를 라벤더 색으로 담는다 — 눈·볼·입 둘레 8텍셀 안은 밝은 피부만
 //                                                    믿고(나머지는 메시 표면으로 번진 밝기), 1–2텍셀 밝은 티끌은 5×5 중앙값으로 걷었다(시안 E 의
-//                                                    rbData 와 같은 밝기 장). 눈·볼·입·UV 틈 텍셀까지 채워 두었다(감은 눈 커버가 그 자리를 피부로
-//                                                    덮어도 매끈한 밝기가 나온다). 색상은 라벤더라 **띠 색이 구워져 있지 않다** — 아래 ★.
+//                                                    rbData 와 같은 밝기 장). 눈·볼·입·UV 틈 텍셀까지 채워 두었다. 두 눈 둘레(앵커에서 x·y 0.16
+//                                                    안)는 칠한 눈두덩 테를 버리고 둘레 밖 밝기로 정면 격자에서 다시 채웠다(`refillEyeSockets` —
+//                                                    감은 눈 커버가 그 자리를 피부로 덮어도 테 · 원반 없이 매끈하다). 색상은 라벤더라 **띠 색이
+//                                                    구워져 있지 않다** — 아래 ★.
 //   Sources/check/Resources/aing_rainbow-halo.png    512×512 알파. 후광만(몸 없음) = 각도 칸 0°. 금 후광(make-gold-aing.swift)과 같은 카메라 ·
 //                                                    같은 층(넓게 σ40·α0.68 / 가운데 σ18·α0.8 ×2 / 안쪽 σ6·α0.8 ×2, σ × 0.8 × 몸높이/256) · 같은 판
 //                                                    (2.0 × H 빌보드). 색만: 실루엣 중심에서 잰 둘레 각 θ(12시 0, 시계 방향) → 순환 8정지점의 색상,
@@ -74,6 +76,10 @@ let portraitBodyScale = 0.88
 let portraitFadePixels = 10.0
 let borderAlphaLimit = 0.04
 let featureRadius = 8             // 눈·볼·입 둘레(텍셀): 금과 같은 '밝은 피부만 믿기' 폭
+// 감은 눈 둘레 다시 채우기(아래 `refillEyeSockets`). 두 눈 앵커 = 앱 `CheckCharacter3DScene.closedEyeAnchors` 의 x·y(물체 좌표) — 시험이 글자를 맞댄다.
+let eyeAnchors: [SIMD2<Double>] = [SIMD2(-0.277, 0.418), SIMD2(0.250, 0.434)]
+let eyeSocketRadius = 0.16        // 앵커에서 x·y 거리: 눈(반지름 ≈ 0.125) + 칠해진 눈두덩 테
+let eyeSocketGrid = 0.005         // 정면 격자 간격(물체 좌표 — 얼굴 앞면 텍셀 간격 ≈ 0.006 과 비슷하게)
 
 // 셰이더가 쓰는 몸 좌표 상수(앱 `RainbowAingArt` 와 같은 값). 메시가 바뀌면 여기서 멈춘다.
 let bodyTop = 0.848950
@@ -384,9 +390,10 @@ func loadMesh() -> Mesh {
 // MARK: - 밝기 장(시안 E 의 rbData 와 같은 정의)
 
 struct ShadeField {
-    var lightness: [Double]   // 텍셀의 다듬은 OKLab L(믿는 텍셀은 원본 — 티끌만 걷음, 나머지는 메시 표면으로 번진 값, UV 틈은 팽창)
+    var lightness: [Double]   // 텍셀의 다듬은 OKLab L(믿는 텍셀은 원본 — 티끌만 걷음, 나머지는 메시 표면으로 번진 값, 눈 둘레는 정면 격자로 다시 채운 값, UV 틈은 팽창)
     var reference: Double     // 믿는 텍셀 L 의 중앙값(셰이더 `lReference`)
     var despeckled: Int
+    var socketRefilled: Int
 }
 
 func bakeShadeField(_ mesh: Mesh) -> ShadeField {
@@ -459,8 +466,9 @@ func bakeShadeField(_ mesh: Mesh) -> ShadeField {
         }
         vL = next
     }
-    // UV 래스터: 텍셀 중심의 표면 밝기.
+    // UV 래스터: 텍셀 중심의 표면 밝기 · 물체 좌표.
     var surfL = [Double](repeating: 0, count: S * S), weight = [Double](repeating: 0, count: S * S)
+    var surfPos = [SIMD3<Double>](repeating: .zero, count: S * S)
     for t in stride(from: 0, to: mesh.idx.count, by: 3) {
         let i0 = mesh.idx[t], i1 = mesh.idx[t + 1], i2 = mesh.idx[t + 2]
         let a = mesh.uv[i0] * Float(S), b = mesh.uv[i1] * Float(S), c = mesh.uv[i2] * Float(S)
@@ -477,6 +485,8 @@ func bakeShadeField(_ mesh: Mesh) -> ShadeField {
             if w0 < -1e-4 || w1 < -1e-4 || w2 < -1e-4 { continue }
             let o = y * S + x
             surfL[o] += vL[mesh.key[i0]] * Double(w0) + vL[mesh.key[i1]] * Double(w1) + vL[mesh.key[i2]] * Double(w2)
+            let p = mesh.pos[i0] * w0 + mesh.pos[i1] * w1 + mesh.pos[i2] * w2
+            surfPos[o] += SIMD3<Double>(Double(p.x), Double(p.y), Double(p.z))
             weight[o] += 1
         } }
     }
@@ -486,6 +496,8 @@ func bakeShadeField(_ mesh: Mesh) -> ShadeField {
         lightness[i] = knownLum[i] ? texL[i] : surfL[i] / weight[i]
         filled[i] = true
     }
+    let refilled = refillEyeSockets(&lightness, positions: (0..<(S * S)).map { weight[$0] > 0 ? surfPos[$0] / weight[$0] : .zero },
+                                    covered: filled, trusted: knownLum)
     var pending = true
     while pending {
         pending = false
@@ -502,7 +514,79 @@ func bakeShadeField(_ mesh: Mesh) -> ShadeField {
         } }
         lightness = nL; filled = nFilled
     }
-    return ShadeField(lightness: lightness, reference: reference, despeckled: replaced)
+    return ShadeField(lightness: lightness, reference: reference, despeckled: replaced, socketRefilled: refilled)
+}
+
+/// 감은 눈 둘레 다시 채우기. 감은 눈은 눈 자리를 이 밝기 맵으로 덮는다(앱 `RainbowAingFinish.closedEyesImage` — 덮인 자리도 둘레도 이 맵).
+/// 그런데 눈 안쪽(못 믿는 텍셀)은 성긴 메시 정점에서 번진 값이라 둘레보다 어둡고(≈ 0.86), 눈 바깥엔 '믿는 텍셀'이 될 만큼만 어두운 칠해진
+/// 눈두덩 테가 남아(≈ 0.875 → 0.89) 눈 가장자리에 밝기 계단이 섰다 — 셰이더의 채도 규칙(k = 1 − 3·dL)이 그 계단을 주황 테로 키워 감은 눈이
+/// '고글'처럼 보였다(검토 프로브: 560×680 감은 눈, 2px 바퀴 사이 최대 계단 1.40 — 황금 0.87 · 아잉 0.33). 눈 장식 팽창(8 → 12·14텍셀)은 그 테를
+/// 못 걷는다(밝기 컷을 넘는 텍셀이라 그대로 믿는다 — 실측 계단 그대로 1.39).
+/// 고침: 두 눈 앵커에서 x·y 거리 `eyeSocketRadius` 안의 앞면 텍셀을 칠한 값 대신, 그 밖 믿는 텍셀의 밝기를 경계로 **정면 격자**에서 라플라스
+/// 방정식을 풀어(경계값은 그대로 · 안은 매끈) 그 자리 값으로 채운다. 메시 정점 · 텍셀 이웃 그래프로 풀면 UV 섬 사이 연결이 약한 곳에서 계단이
+/// 그대로 남아(실측) 얼굴 앞면을 높이 장(x·y → 값)으로 본다 — 눈 둘레는 앞면(z > 0.2)이라 한 x·y 에 면이 하나다.
+/// 볼 분홍 · 입 빨강 텍셀도 같이 채워지지만 보이지 않는다(합성이 피부 판정 밖 텍셀은 원본을 쓴다). 믿는 텍셀 집합(`lReference`)은 그대로다.
+func refillEyeSockets(_ lightness: inout [Double], positions: [SIMD3<Double>], covered: [Bool], trusted: [Bool]) -> Int {
+    let h = eyeSocketGrid, margin = 0.05
+    func socketDistance(_ x: Double, _ y: Double) -> Double {
+        eyeAnchors.map { ((x - $0.x) * (x - $0.x) + (y - $0.y) * (y - $0.y)).squareRoot() }.min()!
+    }
+    var refill = [Int]()
+    var inSocket = [Bool](repeating: false, count: lightness.count)
+    for i in lightness.indices where covered[i] && positions[i].z > 0.2 && socketDistance(positions[i].x, positions[i].y) < eyeSocketRadius {
+        refill.append(i); inSocket[i] = true
+    }
+    // 정면 격자(두 눈 둘레 + 여유): 둘레 밖 칸 = 그 칸에 든 믿는 앞면 텍셀 밝기 평균(고정) · 둘레 안 칸 · 여유 띠의 빈 칸 = 풀 칸.
+    let x0 = eyeAnchors.map(\.x).min()! - eyeSocketRadius - margin - h, y0 = eyeAnchors.map(\.y).min()! - eyeSocketRadius - margin - h
+    let gw = Int(((eyeAnchors.map(\.x).max()! + eyeSocketRadius + margin + h - x0) / h).rounded(.up))
+    let gh = Int(((eyeAnchors.map(\.y).max()! + eyeSocketRadius + margin + h - y0) / h).rounded(.up))
+    var sum = [Double](repeating: 0, count: gw * gh), count = [Double](repeating: 0, count: gw * gh)
+    for i in lightness.indices where covered[i] && trusted[i] && !inSocket[i] && positions[i].z > 0.2 {
+        let cx = Int(floor((positions[i].x - x0) / h)), cy = Int(floor((positions[i].y - y0) / h))
+        guard cx >= 0, cy >= 0, cx < gw, cy < gh else { continue }
+        sum[cy * gw + cx] += lightness[i]; count[cy * gw + cx] += 1
+    }
+    var value = [Double](repeating: 0, count: gw * gh)
+    var fixed = [Bool](repeating: false, count: gw * gh), solve = [Bool](repeating: false, count: gw * gh)
+    var rimSum = 0.0, rimCount = 0.0
+    for c in 0..<(gw * gh) {
+        let d = socketDistance(x0 + (Double(c % gw) + 0.5) * h, y0 + (Double(c / gw) + 0.5) * h)
+        if d >= eyeSocketRadius && count[c] > 0 {
+            fixed[c] = true; value[c] = sum[c] / count[c]
+            if d < eyeSocketRadius + margin { rimSum += value[c]; rimCount += 1 }
+        } else if d < eyeSocketRadius + margin {
+            solve[c] = true
+        }
+    }
+    guard rimCount > 0 else { fail("눈 둘레 밖에 믿는 텍셀이 없다 — 앵커가 메시와 갈렸다") }
+    for c in 0..<(gw * gh) where solve[c] { value[c] = rimSum / rimCount }
+    // 과완화(SOR) — 풀 칸 수천 개라 4000번이면 수렴한다(순서 고정 → 결정적). 격자 밖 · 고정도 풀 칸도 아닌 이웃은 빼고 평균(닫힌 경계).
+    for _ in 0..<4000 {
+        for c in 0..<(gw * gh) where solve[c] {
+            let x = c % gw, y = c / gw
+            var s = 0.0, n = 0.0
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let xx = x + dx, yy = y + dy
+                guard xx >= 0, yy >= 0, xx < gw, yy < gh else { continue }
+                let q = yy * gw + xx
+                if fixed[q] || solve[q] { s += value[q]; n += 1 }
+            }
+            if n > 0 { value[c] += 1.9 * (s / n - value[c]) }
+        }
+    }
+    for i in refill {
+        let fx = (positions[i].x - x0) / h - 0.5, fy = (positions[i].y - y0) / h - 0.5
+        let ix = Int(floor(fx)), iy = Int(floor(fy)), ax = fx - Double(ix), ay = fy - Double(iy)
+        var acc = 0.0, wsum = 0.0
+        for (dx, dy, w) in [(0, 0, (1 - ax) * (1 - ay)), (1, 0, ax * (1 - ay)), (0, 1, (1 - ax) * ay), (1, 1, ax * ay)] {
+            let xx = ix + dx, yy = iy + dy
+            guard xx >= 0, yy >= 0, xx < gw, yy < gh, fixed[yy * gw + xx] || solve[yy * gw + xx] else { continue }
+            acc += value[yy * gw + xx] * w; wsum += w
+        }
+        guard wsum > 0 else { fail("눈 둘레 텍셀 \(i) 가 격자 밖이다") }
+        lightness[i] = acc / wsum
+    }
+    return refill.count
 }
 
 /// 밝기 맵: 피부 텍셀은 원본 색 방향(OKLab a·b) 그대로에 다듬은 밝기, 나머지(눈·볼·입·UV 틈)는 피부 a·b 중앙값에 그 자리 밝기 —
@@ -863,7 +947,8 @@ guard abs(Double(mesh.maxB.y) - bodyTop) < 1e-5, abs(Double(mesh.height) - bodyH
 }
 
 let field = bakeShadeField(mesh)
-print(String(format: "[shade] 티끌 걷기 %d텍셀 · 믿는 텍셀 L 중앙값 %.4f(셰이더 상수 %.4f)", field.despeckled, field.reference, lReference))
+print(String(format: "[shade] 티끌 걷기 %d텍셀 · 눈 둘레 다시 채움 %d텍셀 · 믿는 텍셀 L 중앙값 %.4f(셰이더 상수 %.4f)",
+             field.despeckled, field.socketRefilled, field.reference, lReference))
 guard abs(field.reference - lReference) < 5e-5 else { fail("밝기 기준이 셰이더 상수와 다르다 — 앱 RainbowAingArt.lightnessReference 를 고쳐라") }
 writePNG(shadeMap(field, original: bytes(mesh.diffuse)), "\(resourceDir)/\(characterID)-shade.png")
 

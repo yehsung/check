@@ -137,11 +137,26 @@ import Testing
 
     // MARK: - 팔레트 상수 — 스크립트와 앱이 같은 글자
 
-    @Test("팔레트·몸 좌표·그늘 상수: 아트 스크립트의 글자와 앱 RainbowAingArt 의 값이 같다 · 셰이더 글도 같은 값으로 만든다")
+    /// 스크립트 글에 이 줄이 **살아 있는 선언**으로 있는가. 주석(`//` · `/* */`)을 걷어낸 뒤 줄 단위(앞뒤 공백 무시)로 통째로 같은 줄이 있어야 하고,
+    /// `let 이름` 줄이면 그 이름의 `let` 선언이 그 하나뿐이어야 한다 — 옛 줄을 주석으로 남기고 아래에 다른 값을 선언하거나, 줄 일부만 같은
+    /// 경우는 통과하지 못한다(검토: 주석 처리한 원래 줄이 계약을 채운 채 실제 상수가 갈렸다).
+    static func scriptDeclares(_ script: String, _ line: String) -> Bool {
+        let lines = V0351IfConfig.strippingComments(script).split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard lines.contains(line) else { return false }
+        guard line.hasPrefix("let "),
+              let name = line.dropFirst(4).split(whereSeparator: { $0 == " " || $0 == ":" || $0 == "=" }).first else { return true }
+        return lines.filter { $0.hasPrefix("let \(name) ") || $0.hasPrefix("let \(name):") || $0.hasPrefix("let \(name)=") }.count == 1
+    }
+
+    @Test("팔레트·몸 좌표·그늘·눈 앵커 상수: 아트 스크립트의 살아 있는 선언(주석 걷음)과 앱 값이 같다 · 셰이더 글도 같은 값 · 주석 속 옛 줄은 계약을 못 채운다")
     func paletteMatchesTheScript() throws {
         let script = try String(contentsOf: CheckCoreSourceLayout.repoRoot.appendingPathComponent("scripts/make-rainbow-aing.swift"), encoding: .utf8)
         func lit(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : "\(v)" }
         let art = RainbowAingArt.self
+        let anchors = CheckCharacter3DScene.closedEyeAnchors.map {
+            "SIMD2(" + String(format: "%.3f", Double($0.position.x)) + ", " + String(format: "%.3f", Double($0.position.y)) + ")"
+        }
         let expected = [
             "let stopLightness: [Double] = [" + art.stopLightness.map { String(format: "%.3f", $0) }.joined(separator: ", ") + "]",
             "let stopChroma: [Double] = [" + art.stopChroma.map { String(format: "%.3f", $0) }.joined(separator: ", ") + "]",
@@ -155,10 +170,26 @@ import Testing
             "let shadowWindows: [(centre: Double, inner: Double, outer: Double, lift: Double)] = ["
                 + art.shadowWindows.map { "(\(lit($0.centre)), \(lit($0.inner)), \(lit($0.outer)), \(lit($0.lift)))" }.joined(separator: ", ") + "]",
             "return hue >= 215 && hue <= 300 && sat > 0.05 && sat < 0.75 && l > 0.10",
+            // 감은 눈 둘레 다시 채우기의 두 눈 앵커 = 앱 감은 눈 앵커(x·y).
+            "let eyeAnchors: [SIMD2<Double>] = [" + anchors.joined(separator: ", ") + "]",
         ]
         for line in expected {
-            #expect(script.contains(line), "스크립트에 이 줄이 없다(앱 상수와 갈렸다): \(line)")
+            #expect(Self.scriptDeclares(script, line), "스크립트에 이 줄이 살아 있는 선언으로 없다(앱 상수와 갈렸다): \(line)")
+            // 기준선: 주석 속에만 있는 줄은 계약을 못 채운다(줄 주석 · 블록 주석).
+            #expect(!Self.scriptDeclares("// " + line + "\n", line) && !Self.scriptDeclares("/* " + line + " */\n", line),
+                    "기준선: 주석 속 줄이 계약을 채운다 — \(line)")
         }
+        // 기준선(검토가 실제로 해 본 표류): 원래 줄을 주석으로 남기고 다른 값을 선언하면 걸린다.
+        let slope = "let chromaSlope = \(art.chromaSlope), chromaFloor = \(art.chromaFloor), chromaCeil = \(art.chromaCeil)"
+        let hue = "let stopHue: [Double] = [" + art.stopHue.map(lit).joined(separator: ", ") + "]"
+        #expect(script.contains(slope) && script.contains(hue))
+        let drifted = script
+            .replacingOccurrences(of: slope, with: "// " + slope + "\nlet chromaSlope = 3.6, chromaFloor = \(art.chromaFloor), chromaCeil = \(art.chromaCeil)")
+            .replacingOccurrences(of: hue, with: "/* " + hue + " */\nlet stopHue: [Double] = [10, 58, 100, 145, 240, 272, 330]")
+        #expect(!Self.scriptDeclares(drifted, slope), "기준선: 주석으로 남긴 chromaSlope 옛 줄이 계약을 채운다")
+        #expect(!Self.scriptDeclares(drifted, hue), "기준선: 블록 주석으로 남긴 stopHue 옛 줄이 계약을 채운다")
+        // 기준선: 같은 이름을 살아 있는 줄로 한 번 더 선언하면(옛 줄은 그대로) 걸린다.
+        #expect(!Self.scriptDeclares(script + "\nlet chromaSlope = 3.6\n", slope), "기준선: 같은 이름의 두 번째 선언을 못 본다")
         // 셰이더 글이 같은 상수에서 나온다.
         let shader = RainbowAingFinish.fragmentShader
         #expect(shader.contains("{ " + art.stopLightness.map { String(format: "%.6f", $0) }.joined(separator: ", ") + " }"))

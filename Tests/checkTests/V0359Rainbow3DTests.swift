@@ -467,6 +467,74 @@ import Testing
         engine.request(.wake)
     }
 
+    /// 감은 눈 둘레 바퀴 프로필(검토 프로브 D 와 같은 잣대). 엔진을 졸게 해 560×680(MSAA 2× — 오버레이 실제 픽셀 크기)으로 그리고(후광은
+    /// 숨김), 두 눈마다 앵커 투영보다 10px 위를 중심으로 위쪽 반원(감은 선 · 볼 제외 — OKLab L > 0.55)을 2px 바퀴 20개로 나눠 바퀴마다 평균
+    /// L · C 를 낸다. 값 = 이웃 바퀴 사이 (ΔL, ΔC)×100 길이의 최댓값. `ring`(px)을 주면 재기 전에 그 반지름의 2px 띠를 3% 어둡힌다(기준선).
+    static func closedEyeRingStep(_ manifest: CharacterManifest, ring: Double? = nil) throws -> (step: Double, profile: [String]) {
+        let size = CGSize(width: 560, height: 680)
+        let scene = try Self.scene(manifest)
+        scene.rootNode.childNode(withName: GoldAingFinish.haloNodeName, recursively: true)?.isHidden = true
+        scene.rootNode.childNode(withName: RainbowAingFinish.haloNodeName, recursively: true)?.isHidden = true
+        let engine = ReactionEngine()
+        engine.attach(node: try V0354GoldAing3DTests.wrapper(scene), sceneRoot: scene.rootNode, view: nil)
+        engine.request(.drowsy)
+        #expect(engine.state == .sleeping, "\(manifest.id): 졸지 않았다 — 감은 눈을 안 재고 있다")
+        let image = try Self.render(scene, size: size, antialiasing: .multisampling2X)
+        if let stills = Self.stillsDirectory {
+            try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: stills).appendingPathComponent("closed-eyes-560-\(manifest.id)\(ring == nil ? "" : "-ringed").png"))
+        }
+        var px = V0354GoldAingArtTests.rgba(image)
+        let w = Int(size.width)
+        let character = try V0354GoldAing3DTests.character(scene)
+        let renderer = SCNRenderer(device: try #require(MTLCreateSystemDefaultDevice()), options: nil)
+        renderer.scene = scene
+        renderer.pointOfView = V0354GoldAing3DTests.cameraNode(scene)
+        _ = renderer.snapshot(atTime: 0, with: size, antialiasingMode: .none)
+        var worst = 0.0
+        var profile: [String] = []
+        for anchor in CheckCharacter3DScene.closedEyeAnchors {
+            let p = renderer.projectPoint(character.convertPosition(anchor.position, to: nil))
+            let cx = Double(p.x), cy = Double(size.height - p.y) - 10
+            var sums = [SIMD2<Double>](repeating: .zero, count: 20), counts = [Int](repeating: 0, count: 20)
+            for y in Int(cy - 42)...Int(cy) { for x in Int(cx - 42)...Int(cx + 42) {
+                let r = ((Double(x) - cx) * (Double(x) - cx) + (Double(y) - cy) * (Double(y) - cy)).squareRoot()
+                let bin = Int(r / 2)
+                guard bin < 20 else { continue }
+                let i = (y * w + x) * 4
+                guard px[i + 3] == 255 else { continue }
+                if let ring, r >= ring, r < ring + 2 {
+                    for c in 0..<3 { px[i + c] = UInt8((Double(px[i + c]) * 0.97).rounded()) }
+                }
+                let c = V0359RainbowArtTests.oklch(px[i], px[i + 1], px[i + 2])
+                guard c.L > 0.55 else { continue }
+                sums[bin] += SIMD2(c.L, c.C); counts[bin] += 1
+            } }
+            let means = (0..<20).map { counts[$0] > 0 ? sums[$0] / Double(counts[$0]) : SIMD2<Double>(.nan, .nan) }
+            for k in 1..<20 where counts[k] > 0 && counts[k - 1] > 0 {
+                let d = (means[k] - means[k - 1]) * 100
+                worst = max(worst, (d.x * d.x + d.y * d.y).squareRoot())
+            }
+            profile.append(means.map { String(format: "%.0f/%.1f", $0.x * 100, $0.y * 100) }.joined(separator: " "))
+        }
+        return (worst, profile)
+    }
+
+    @Test("감은 눈 둘레에 테 · 원반이 없다(검토 지적 '고글'): 560×680 졸기 렌더의 2px 바퀴 사이 최대 계단 — 무지개 ≤ 황금이고 0.6 아래 · 2px 띠를 3% 어둡힌 무지개(기준선)는 걸린다")
+    func closedEyeSocketsHaveNoRing() throws {
+        let rainbow = try Self.closedEyeRingStep(Self.rainbow)
+        let gold = try Self.closedEyeRingStep(Self.gold)
+        let aing = try Self.closedEyeRingStep(Self.aing)
+        let ringed = try Self.closedEyeRingStep(Self.rainbow, ring: 30)
+        print(String(format: "[v0359-3d] 감은 눈 바퀴 최대 계단(L·C ×100): 무지개 %.2f · 황금 %.2f · 아잉 %.2f · 3%% 띠를 넣은 무지개 %.2f",
+                     rainbow.step, gold.step, aing.step, ringed.step))
+        for line in rainbow.profile { print("[v0359-3d]   무지개 " + line) }
+        #expect(rainbow.step <= gold.step, "무지개 감은 눈 테(\(rainbow.step))가 황금(\(gold.step))보다 도드라진다")
+        #expect(rainbow.step < 0.6, "무지개 감은 눈 둘레에 계단 \(rainbow.step) — 밝기 맵 눈 둘레에 테 · 원반이 남았다")
+        // 기준선: 같은 잣대가 2px 띠 하나(3% 어둡게)를 본다 — 잣대가 무뎌서 초록인 게 아니다.
+        #expect(ringed.step > 0.87, "기준선: 3% 어두운 2px 띠를 못 본다(\(ringed.step)) — 잣대가 무디다")
+    }
+
     // MARK: ⑥ 울트라
 
     @Test("엔진은 아잉 · 황금 · 무지개를 가른다 — 교체 · 원복 왕복에서도 무지개 표식 · 셰이더가 따라온다")

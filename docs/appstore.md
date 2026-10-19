@@ -284,7 +284,7 @@
 > - The only automatic grant left is 3 rubies for every 3 hours worked.
 >
 > **How to see it right after signing in**
-> Sign in with the demo account on the iPhone, open the "나" (Me) tab and scroll to 「도전 미션」. The first row — "폰 앱에서 로그인하기 · +50" (Sign in on the phone app) — is already achieved, because signing in is its condition, so its **[받기]** button is visible immediately. Tapping it increases the ruby count at the top of the screen by 50 and the row changes to "✓ 받음" (Claimed). For a second one, add three items to the to-do list on the "지금" (Now) tab and come back to "나". The weekly-goal [받기] button needs 20 hours of work in the current week, so it will usually not appear during review — the two missions above show the same behaviour.
+> Sign in with the demo account on the iPhone, open the "나" (Me) tab and scroll to 「도전 미션」. The first row — "폰 앱에서 로그인하기 · +50" (Sign in on the phone app) — is already achieved on the demo account, so its **[받기]** button is visible immediately. Tapping it increases the ruby count at the top of the screen by 50 and the row changes to "✓ 받음" (Claimed) — that one tap is the whole change in this version. The weekly-goal [받기] button needs 20 hours of work in the current week, so it will usually not appear during review.
 > Rubies still cannot be bought or cashed out, and there are no in-app purchases.
 >
 > **Screens that will look empty for a solo account**
@@ -296,7 +296,10 @@
 - 팀 코드 없이 "팀 만들기" 로 혼자 시작 가능(작업 B 뒤) · 비밀번호 재설정 6자리 코드 앱 안 완결(작업 B 뒤) · 계정 삭제는 나 → 설정 → 계정 삭제, 비밀번호 재입력(작업 C 뒤).
 - 푸시 세 종류·설명 시트 먼저(`Push/PushCoordinator.swift:14-20`) · 맥에서 근무 중이면 폰 알림 생략(`Push/PushPayload.swift:263` `primerMacNote`, `privacy.md:108`) — 데모엔 해당 없음.
 - 1.0.9 부터 보상은 [받기] 버튼으로 받는다 — 나 탭 「도전 미션」 절 · 주간 근무 단계도 같은 방식(3시간 랩 3루비만 자동).
-  심사원은 로그인만 하면 'phone_login(+50)' 이 소급 달성돼 첫 줄에 [받기] 가 바로 보인다(서버 `20261019120000_achievements.sql:23,381`).
+  ★ **데모 계정은 숨김(`profiles.is_hidden`)이라 서버가 미션을 판정하지 않는다** — `achievements_settle` 이 숨김 사용자를
+  `status: hidden` 으로 바로 돌려보낸다(`20261019120000_achievements.sql:515-521`). 소급(phone_login)도 할 일 3개도 저절로는
+  달성되지 않는다. 그래서 **제출 직전에 운영에 데모 두 계정의 `phone_login` 달성 행(미수령, +50)을 직접 넣는다**(2026-10-19 결정).
+  심사원이 누르면 '받음'으로 남으므로 **재심사·다음 버전 때는 다시 넣어야 한다.**
 - 1.0.7 부터 근무 시작/종료는 폰 지금 탭에서도 된다 — 심사 메모에 [근무 시작] 위치와 2시간 30분 확인 알림을 적는다.
 
 ---

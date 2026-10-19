@@ -284,7 +284,7 @@
 > - The only automatic grant left is 3 rubies for every 3 hours worked.
 >
 > **How to see it right after signing in**
-> Sign in with the demo account on the iPhone, open the "나" (Me) tab and scroll to 「도전 미션」. The first row — "폰 앱에서 로그인하기 · +50" (Sign in on the phone app) — is already achieved on the demo account, so its **[받기]** button is visible immediately. Tapping it increases the ruby count at the top of the screen by 50 and the row changes to "✓ 받음" (Claimed) — that one tap is the whole change in this version. The weekly-goal [받기] button needs 20 hours of work in the current week, so it will usually not appear during review.
+> Sign in with the demo account on the iPhone, open the "나" (Me) tab and scroll to 「도전 미션」. The first row — "폰 앱에서 로그인하기 · +50" (Sign in on the phone app) — is already achieved on the demo account, so its **[받기]** button is visible immediately. Tapping it increases the ruby count at the top of the screen by 50 and the row changes to "✓ 받음" (Claimed). The weekly-goal [받기] button needs 20 hours of work in the current week, so it will usually not appear during review.
 > Rubies still cannot be bought or cashed out, and there are no in-app purchases.
 >
 > **Screens that will look empty for a solo account**

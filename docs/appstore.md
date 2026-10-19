@@ -37,7 +37,7 @@
 | 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift` |
 | 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘) 세 판 | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
 | 게임 | 미니게임 둘(타이밍 바·플래피 아잉), 1:1 오목(로비·신청·대국·채팅), 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출, 오목 신청·수락·착수·기권·채팅·음소거 | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290` |
-| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
+| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 이번 주 근무(1.0.8 — 20/40/60시간 단계) → 도전 미션(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
 | (홈 위젯) | 지금 근무 중 · 내 오늘 · 할 일 — 세 종류. 앱이 쓴 스냅샷 파일만 그린다 | 할 일 체크 인텐트의 `todo_sync` 한 번뿐 | `Sources/CheckWidgetsKit/AingWidgetModel.swift:11-16`, `Sources/CheckMobileShared/WidgetSnapshot.swift:6`, `Sources/CheckWidgetsKit/WidgetTodoToggle.swift:11` |
 | (푸시) | 새 메시지 · 오목 신청(수락 버튼) · 제보 답장 세 종류, 앱 배지 = 안 읽은 메시지 + 받은 오목 신청 | 기기 등록(`register_device`), 알림 종류별 설정(`set_push_prefs`) | `Push/PushPayload.swift:6-10`, `Push/PushCoordinator.swift:14-27`, `Session/MobileDeviceService.swift:116-164` |
 
@@ -277,6 +277,16 @@
 > **Reporting and blocking (Guideline 1.2)**
 > Every screen where users exchange their own content has both: a 1:1 conversation (Messages tab → a conversation → **···** in the top right → "신고하기" Report / "차단하기" Block; long-press a received bubble to report that single message) and the Gomoku match chat drawer (**···** in the drawer header → the same two items). Reporting asks for a reason (spam / harassment / inappropriate / other), an optional 200-character note, and has "report and block" on by default. Blocked people are listed under "나" (Me) → 설정 (Settings) → 차단한 사람 (Blocked people), where a block can be lifted. Reports are reviewed within 24 hours; the same promise is on the support page and in the terms (<https://yehsung.github.io/check/terms>).
 >
+> **New in 1.0.9 — rewards are now collected with a [받기] (Claim) button**
+> Until now, in-app points (rubies) earned from work milestones were granted automatically. In 1.0.9 the user taps a button to collect them.
+> - "나" (Me) tab → a new **「도전 미션」 (Challenges)** section lists missions whose progress comes from the user's own work records. When a mission is achieved, a **[받기] (Claim)** button appears on that row, and the rubies are granted only when it is tapped. There is no expiry.
+> - The existing weekly work goal (20 / 40 / 60 hours) is collected the same way.
+> - The only automatic grant left is 3 rubies for every 3 hours worked.
+>
+> **How to see it right after signing in**
+> Sign in with the demo account on the iPhone, open the "나" (Me) tab and scroll to 「도전 미션」. The first row — "폰 앱에서 로그인하기 · +50" (Sign in on the phone app) — is already achieved, because signing in is its condition, so its **[받기]** button is visible immediately. Tapping it increases the ruby count at the top of the screen by 50 and the row changes to "✓ 받음" (Claimed). For a second one, add three items to the to-do list on the "지금" (Now) tab and come back to "나". The weekly-goal [받기] button needs 20 hours of work in the current week, so it will usually not appear during review — the two missions above show the same behaviour.
+> Rubies still cannot be bought or cashed out, and there are no in-app purchases.
+>
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.
 
@@ -285,6 +295,8 @@
 - 데모 계정 둘(A·B, 숨김 팀 "앱 심사 팀") · 비밀번호 무기한.
 - 팀 코드 없이 "팀 만들기" 로 혼자 시작 가능(작업 B 뒤) · 비밀번호 재설정 6자리 코드 앱 안 완결(작업 B 뒤) · 계정 삭제는 나 → 설정 → 계정 삭제, 비밀번호 재입력(작업 C 뒤).
 - 푸시 세 종류·설명 시트 먼저(`Push/PushCoordinator.swift:14-20`) · 맥에서 근무 중이면 폰 알림 생략(`Push/PushPayload.swift:263` `primerMacNote`, `privacy.md:108`) — 데모엔 해당 없음.
+- 1.0.9 부터 보상은 [받기] 버튼으로 받는다 — 나 탭 「도전 미션」 절 · 주간 근무 단계도 같은 방식(3시간 랩 3루비만 자동).
+  심사원은 로그인만 하면 'phone_login(+50)' 이 소급 달성돼 첫 줄에 [받기] 가 바로 보인다(서버 `20261019120000_achievements.sql:23,381`).
 - 1.0.7 부터 근무 시작/종료는 폰 지금 탭에서도 된다 — 심사 메모에 [근무 시작] 위치와 2시간 30분 확인 알림을 적는다.
 
 ---

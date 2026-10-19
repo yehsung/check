@@ -348,10 +348,18 @@ package enum MeText {
         "+\(ruby)"
     }
 
-    /// 보이스오버 칩: "20시간 루비 20개, 받음" · "40시간 루비 50개".
-    package static func weeklyTierAccessibility(hours: Int, ruby: Int, claimed: Bool) -> String {
-        "\(hours)시간 루비 \(ruby)개" + (claimed ? ", 받음" : "")
+    /// 보이스오버 칩: "20시간 루비 20개, 받음" · "20시간 루비 20개, 받을 수 있어요"(v0.3.58 받기 서버) · "40시간 루비 50개".
+    ///
+    /// `claimable` 은 **기본값이 있다** — 세 칸 호출부(`weeklyTierAccessibility(hours:ruby:claimed:)`)를 글자로 읽는
+    /// 소스 계약이 있어 서명을 깨지 않으려는 것이다(저장소 메모 '함수 서명을 바꾸기 전에 Tests 에서 서명 문자열을 grep 하라').
+    /// 받음이 이긴다: 받은 칸은 더 받을 것이 없다.
+    package static func weeklyTierAccessibility(hours: Int, ruby: Int, claimed: Bool, claimable: Bool = false) -> String {
+        let tail = claimed ? ", 받음" : (claimable ? ", \(claimableMark)" : "")
+        return "\(hours)시간 루비 \(ruby)개" + tail
     }
+
+    /// 아직 안 받았지만 **받을 수 있는** 칸 · 줄의 말. 글자로는 칩에 안 쓰고(색과 버튼이 말한다) 보이스오버만 쓴다.
+    package static let claimableMark = "받을 수 있어요"
 
     /// 보이스오버 값 줄: "23시간 12분 / 40시간, 달성하면 루비 50개" · "61시간 03분, 루비 270개 받았어요".
     package static func weeklyGaugeAccessibility(worked: Int, gauge: WeeklyWorkGauge) -> String {
@@ -376,6 +384,9 @@ package enum MeText {
     package static let missionsLoadFailed = "미션을 불러오지 못했어요"
     /// 받기 버튼의 낱말 — 도전 미션 줄과 이번 주 근무 카드가 **같은 버튼**이다(맥 `AchievementCopy.claimButton`).
     package static let claimButton = "받기"
+    /// 절 머리의 [전부 받기] — 받을 줄이 **둘 이상**일 때만 선다(하나뿐이면 그 줄의 [받기]와 같은 일을 하는 버튼이 둘이 된다).
+    /// 맥 미션 화면에는 이 버튼이 없다(줄이 다섯 줄 창에 다 보인다) — 폰은 절이 스크롤 안이라 머리에서 한 번에 받게 한다.
+    package static let claimAllButton = "전부 받기"
     /// 받은 줄의 표시(진행 숫자 자리). 체크 기호는 화면이 그린다(주간 칸 칩과 같은 관용구) — 글자는 "받음" 하나다
     /// (맥 `MissionCopy.claimedChip` · 주간 칩 꼬리 `weeklyGrantSuffix` 와 같은 낱말).
     package static let claimedMark = weeklyGrantSuffix
@@ -408,6 +419,11 @@ package enum MeText {
     /// 받기 버튼의 보이스오버 "받기, 루비 50개"(맥 `AchievementCopy.claimAccessibility`). 주간 버튼도 같은 문구다.
     package static func claimAccessibility(_ amount: Int) -> String {
         "\(claimButton), 루비 \(max(0, amount))개"
+    }
+
+    /// 절 머리 [전부 받기] 의 보이스오버 "전부 받기, 루비 75개"(= `achievementClaimableRuby`).
+    package static func claimAllAccessibility(_ amount: Int) -> String {
+        "\(claimAllButton), 루비 \(max(0, amount))개"
     }
 
     /// 줄 전체의 보이스오버. 주간 게이지(`weeklyGaugeAccessibility`)와 같은 말투다 — 진행이면 "달성하면 루비 N개",

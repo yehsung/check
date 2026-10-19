@@ -249,6 +249,7 @@ package final class MeStore {
         aiLimits.refreshIfStale()
         // 주간 보상도 탭이 안 보여도 받는다(앞에 올 때마다 · 60초 스로틀) — 정산 결과의 루비가 게임 탭·상점 알약에도 바로 선다.
         refreshWeeklyWorkIfStale()
+        if achievements != nil { refreshAchievementsIfStale() }
         guard isTabVisible else { return }
         refreshRootIfStale()
     }

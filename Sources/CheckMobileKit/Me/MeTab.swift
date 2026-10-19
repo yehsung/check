@@ -60,6 +60,11 @@ struct MeHomeView: View {
                     // v0.3.55 「이번 주 근무」 보상 카드 — 루비 칩 바로 아래(루비가 어디서 오는지 옆에서 보인다). 범위는 '이번 주'라
                     // 「지난주」 카드 **앞**이 맞다(지금 → 지난주 → 12주 순으로 넓어진다). 서버에 함수가 없으면 통째로 빠진다.
                     MeWeeklyWorkCard(store: store)
+                    // v0.3.58 「도전 미션」 — 주간 카드 **바로 아래**(맥 [미션] 화면도 주간 게이지 → 도전 미션 순서다).
+                    // 둘 다 "루비를 받는 곳"이라 한 덩어리로 붙는다. 서버에 함수가 없으면 절이 통째로 빠진다
+                    // (`store.achievementSection == .hidden`).
+                    MeAchievementsSection(store: store)
+                        .id(MeAnchor.missions)
                     // 카드 경계 = 시간 범위 하나. 무대 → 「지난주」(회고 + 근무 리듬) → 「최근 12주」(잔디 두 벌) → 메뉴 순으로
                     // 범위가 단조롭게 넓어진다. 예전에는 [회고 + 잔디] 뒤에 [리듬]이 따로 서서 지난주 → 12주 → 지난주로 튀었다
                     // (사용자 지적 0.3.31). 기록이 먼저, 메뉴 그룹이 마지막인 것은 그대로다(w15 검증 낮음 2).
@@ -80,6 +85,9 @@ struct MeHomeView: View {
                 .padding(.bottom, MobileTheme.space6)
             }
             .refreshable { await store.refreshRoot() }
+            // 받기 성공 햅틱 — **이 한 곳**이다(v0.3.58). 도전 미션 절과 주간 카드가 각자 달면 한 번 받고 두 번 운다.
+            // 루트에 다는 또 하나의 이유: 도전 미션이 없는 서버(`.hidden`)에서도 주간 [받기]는 울어야 한다.
+            .sensoryFeedback(.success, trigger: store.missionClaimBurstSerial)
             .background(MobileTheme.background.ignoresSafeArea())
             .navigationTitle(AingTab.me.title)
             .toolbar {
@@ -101,7 +109,7 @@ struct MeHomeView: View {
 
 /// 루트 스크롤 앵커(데모 스크린샷이 아래 절을 찍을 때 쓴다).
 enum MeAnchor: String {
-    case header, records, tokenGrass, characters, menu, rhythm
+    case header, records, tokenGrass, characters, menu, rhythm, missions
     /// v0.3.45 「AI 리밋」 카드. 이름은 데모 스크린샷 명령(`-AingCheckDemoMeAnchor aiLimits`)의 인자다 — 바꾸면
     /// 저장소 밖 스크린샷 스크립트가 깨진다(`MeDesignContractTests` 가 이름 목록을 되묻는다).
     case aiLimits

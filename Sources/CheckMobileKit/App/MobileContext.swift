@@ -111,9 +111,10 @@ package final class MobileStoreLinks {
 
     package init() {}
 
-    /// 탭 배지 합성(메시지 · 게임). 푸시 코디네이터의 앱 아이콘 배지도 이 값의 합이다.
+    /// 탭 배지 합성(메시지 · 게임 · 나 = 받을 보상). 푸시 코디네이터의 앱 아이콘 배지는 메시지 + 게임만이다(`appBadgeTotal`).
     package var badges: MobileBadges {
-        MobileBadges(messages: messages?.badgeCount ?? 0, games: games?.badgeCount ?? 0)
+        MobileBadges(messages: messages?.badgeCount ?? 0, games: games?.badgeCount ?? 0,
+                     missions: me?.missionClaimableCount ?? 0)
     }
 }
 

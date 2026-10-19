@@ -24,6 +24,10 @@ extension MeStore {
         guard context.session.isSignedIn else { return }
         let serial = nextSerial("shop")
         let generation = context.generation
+        // 루비 미러에 쓴 횟수를 **떠날 때** 찍는다 — 도착했을 때 그 사이 누가 썼으면(받기 · 뽑기 · 구매 · 오목 정산 · 지갑)
+        // 이 조회는 그 쓰기보다 **옛 서버**를 말한다(`applyShopRubyBalance`). 순번 가드(`isCurrent`)는 상점 조회끼리만 세므로
+        // 다른 갈래의 쓰기는 못 본다.
+        let rubyWriteAtDeparture = context.gomokuHost.rubyWriteSerial
         shopState.isLoading = true
         shopState.hasFailed = false
         defer { if isCurrent("shop", serial) { shopState.isLoading = false } }
@@ -35,6 +39,7 @@ extension MeStore {
                                                  protocolVersion: protocolVersion)
             }
             guard generation == context.generation, isCurrent("shop", serial) else { return }
+            applyShopRubyBalance(state.rubyBalance, writeSerialAtDeparture: rubyWriteAtDeparture)
             applyShopState(state)
             shopState.hasLoaded = true
             shopState.loadedAt = context.clock.now()
@@ -45,13 +50,33 @@ extension MeStore {
         }
     }
 
+    /// 상점 조회가 실어 온 잔량을 루비 미러에 옮긴다 — **떠난 뒤 미러에 쓴 적이 없을 때만**(폰 1.0.9).
+    ///
+    /// ★ 미러(`context.gomokuHost.rubyBalance`)는 상점 · 뽑기 · 받기 · 오목 · 체스가 다 쓰는 한 칸이다. 나 탭이 뜨면 상점과
+    ///   주간 · 도전 미션 조회가 **함께** 떠나므로, 받기를 누른 뒤에 **받기 전에 떠난** `shop_state` 가 도착하는 창이 흔하다.
+    ///   도장 없이 덮던 시절엔 그때 잔량이 받기 전으로 되돌아갔다(1055 → 1000 — 받은 루비가 눈앞에서 사라진다).
+    ///   그래서 주간 보상과 **같은 규약**으로 묻는다: 떠난 뒤 미러에 쓴 횟수가 0 일 때만 쓴다(`WeeklyWorkRules.shouldApplyRuby` —
+    ///   값이 아니라 횟수로 묻는 이유는 그 주석의 ABA 를 보라). 못 쓴 잔량은 다음 조회가 맞추고, 받기 갈래는 그 자리에서
+    ///   상점을 다시 읽어 맞춘다(`applyWeeklyWorkStatus` · `applyAchievementStatus` 의 else 가지 — 이 함수가 그 재조회의 끝이다).
+    ///
+    /// 구매·뽑기·교환 **응답**의 잔량은 이 문을 지나지 않는다(`applyPurchaseResponse` · `applyGachaPullResponse`) — 그건 누른
+    /// 사람 자신의 결과이고 가장 새 값이라 언제나 쓴다.
+    func applyShopRubyBalance(_ server: Int?, writeSerialAtDeparture: Int) {
+        guard WeeklyWorkRules.shouldApplyRuby(server: server, writeSerialAtDeparture: writeSerialAtDeparture,
+                                              currentWriteSerial: context.gomokuHost.rubyWriteSerial),
+              let ruby = server else { return }
+        context.gomokuHost.rubyBalance = ruby
+    }
+
     /// 서버가 말한 상점 상태를 옮긴다. **nil 은 건너뛴다** — 모르는 것을 0 으로 적지 않는다(맥 applyShopState).
     /// 울트라 잔량·가격 칸은 읽지 않는다(폰에 울트라 가지가 없다).
+    ///
+    /// **잔량은 여기서 쓰지 않는다** — 늦게 도착한 조회가 받은 루비를 되돌리지 않게 부르는 자리가 도장과 함께
+    /// `applyShopRubyBalance` 로 옮긴다(위 ★). 새로 이 함수를 부르는 자리를 만들거든 잔량도 그 짝으로 같이 옮겨라.
     ///
     /// 뽑기(v0.3.54)는 예외로 **없음도 사실이다**: 서버는 `p_protocol >= 2` 일 때만 `gacha` 를 싣고, 없으면 뽑기를 닫았다는 뜻이다
     /// (옛 서버 · db push 전 · 404 로 옛 모양에 되물은 응답). 그래서 받은 그대로 옮긴다 — 지난 값을 남기면 서버가 닫은 뽑기가 열려 있다.
     func applyShopState(_ state: ShopStateResponse) {
-        if let ruby = state.rubyBalance { context.gomokuHost.rubyBalance = ruby }
         gachaInfo = state.gacha
         guard let rows = state.characters else { return }
         shopCharacters = rows
@@ -211,6 +236,9 @@ extension MeStore {
     /// 구매 응답을 화면에 옮긴다. **보낼 때의 세대가 아니면 아무것도 안 한다** — 응답이 도착한 뒤 메인 액터 차례를 기다리는 사이
     /// 로그아웃(reset)이 먼저 돌면, 취소가 이미 끝난 요청에는 닿지 않아 앞 계정의 루비·보유·안내가 다음 계정 화면에 선다.
     /// (그 창은 실제 요청으로는 결정적으로 못 만든다 — 이 함수로 떼어 직접 시험한다.)
+    ///
+    /// 잔량은 **도장 없이 언제나 쓴다**(조회와 다르다 — `applyShopRubyBalance`): 이건 누른 사람 자신이 방금 만든 결과라
+    /// 서버가 아는 가장 새 값이다. 여기에 "떠난 뒤 쓰기가 없었나"를 끼우면 구매와 겹친 다른 응답 하나가 산 값을 지운다.
     func applyPurchaseResponse(_ response: BuyCharacterResponse, id: String, generation: Int) async {
         guard generation == context.generation else { return }
         if let ruby = response.rubyBalance { context.gomokuHost.rubyBalance = ruby }

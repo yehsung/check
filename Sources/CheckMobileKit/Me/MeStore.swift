@@ -22,9 +22,10 @@ package typealias MeLoadState = RankingsLoadState
 
 /// 나 탭 스토어(SPEC-ios §3.6) — 프로필 머리 · 루비 · 기록(회고·잔디·리듬) · 캐릭터(상점·고르기) · 프로필(사진·별명) · 제보 · 설정.
 ///
-/// 수명(기반 자리 API): `init(context:)` 네트워크 없음 · `appDidBecomeActive()` 탭이 보이면 낡은 것만 다시 읽는다 ·
-/// `appDidEnterBackground()` · `reset()` 계정에 묶인 값 전부 비움 · `badgeCount` = 안 본 제보 답장이 있으면 1(탭 막대는 기반이 아직
-/// 나 탭 배지를 그리지 않는다 — 나 탭 안의 제보 줄에 점으로 보인다).
+/// 수명(기반 자리 API): `init(context:)` 네트워크 없음 · `appDidBecomeActive()` 탭이 보이면 낡은 것만 다시 읽고, 탭이 안 보여도
+/// AI 리밋 · 주간 보상 · 도전 미션 셋은 읽는다(위젯 · 탭 막대 배지의 재료다) · `appDidEnterBackground()` ·
+/// `reset()` 계정에 묶인 값 전부 비움 · `badgeCount` = 안 본 제보 답장이 있으면 1(나 탭 **안**의 제보 줄에 점으로 보인다 —
+/// 탭 막대의 나 탭 배지는 이 값이 아니라 `missionClaimableCount`(받을 보상 수)다).
 ///
 /// 폰이 **하지 않는 것**(코드로 막혀 있다): 울트라 구매(상점은 캐릭터 가지만 — `buy_ultra` 경로 없음) · 지갑 동기화(`ultra_wallet_sync`) ·
 /// 집중 모드 PATCH(공개 설정 GET 에 딸려 오는 focus_mode 는 읽고 버린다) · 앱 빌드 PATCH · 팀 상태 반영(`applyFetchedTeamStatuses` 계열 —
@@ -249,7 +250,12 @@ package final class MeStore {
         aiLimits.refreshIfStale()
         // 주간 보상도 탭이 안 보여도 받는다(앞에 올 때마다 · 60초 스로틀) — 정산 결과의 루비가 게임 탭·상점 알약에도 바로 선다.
         refreshWeeklyWorkIfStale()
-        if achievements != nil { refreshAchievementsIfStale() }
+        // 도전 미션도 주간 보상과 **똑같이** 탭이 안 보여도 받는다(앞에 올 때마다 · 같은 60초 스로틀) — 이제 이 값이
+        // **탭 막대 배지**(받을 보상 수 = `missionClaimableCount`)라서다. "이미 아는 것만 다시 읽는다"로 걸어 두면
+        // `achievements` 는 메모리 값이라 **콜드 스타트엔 언제나 nil** 이고, 배지가 꼭 필요한 사람(나 탭에 아직 안 가 본
+        // 사람)에게만 영영 안 선다. 받기 전에 루비가 안 움직이는 것은 여전히 사실이지만, 이제 화면 밖에서 알아 둘 값이
+        // **배지 숫자**로 생겼다.
+        refreshAchievementsIfStale()
         guard isTabVisible else { return }
         refreshRootIfStale()
     }
@@ -410,9 +416,9 @@ package final class MeStore {
         if isStale(recordsState) { launch { [weak self] in await self?.loadRecords() } }
         launch { [weak self] in await self?.loadFeedbackReplyLatest() }
         refreshWeeklyWorkIfStale()
-        // 도전 미션은 **나 탭이 보일 때만** 읽는다(여기 · 당겨서 새로고침 · 탭이 보이는 채로 앱이 앞에 올 때 — 셋 다 이 함수를
-        // 지난다). 주간 보상과 달리 탭이 안 보일 때는 묻지 않는다: 받기 전에는 루비가 한 푼도 움직이지 않아(서버는 달성만 적는다)
-        // 화면 밖에서 알아 둘 값이 없다. **새 타이머는 없다** — 스로틀도 다른 덩어리와 같은 60초다.
+        // 도전 미션 조회는 나 탭 루트 새로고침에 얹는다(여기 · 당겨서 새로고침 · 탭이 보이는 채로 앱이 앞에 올 때 — 셋 다 이
+        // 함수를 지난다). 탭이 **안** 보일 때도 주간 보상처럼 `appDidBecomeActive()` 가 따로 한 번 부른다(그 주석) —
+        // 탭 막대 배지가 이 값이다. **새 타이머는 없다** — 스로틀도 다른 덩어리와 같은 60초다.
         refreshAchievementsIfStale()
         aiLimits.refreshIfStale()
     }

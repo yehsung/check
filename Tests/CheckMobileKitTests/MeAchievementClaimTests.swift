@@ -151,26 +151,84 @@ struct MeAchievementClaimTests {
         harness.expectNoForbiddenCalls()
     }
 
-    @Test("같은 턴에 두 번(탭 표시 + 앱 활성화) 불러도 조회는 한 번 · 탭이 안 보이면 묻지 않는다")
+    @Test("같은 턴에 두 번(탭 표시 + 앱 활성화) 불러도 조회는 한 번 — 순서가 어느 쪽이어도 · 탭이 안 보여도 한 번은 묻는다")
     func sameTurnFiresOnce() async throws {
+        // 계약이 바뀐 자리다(1.0.9 배지). 옛 계약은 "탭이 안 보이면 묻지 않는다"였고 근거는 "받기 전에는 루비가 안 움직인다"였다 —
+        // **그 근거가 배지와 함께 사라졌다**: 이제 탭이 안 보여도 알아야 할 값(탭 막대에 그릴 받을 보상 수)이 있다. 주간 보상이
+        // 이미 같은 이유로 탭과 무관하게 읽는다. 변하지 않은 것은 **'한 번'** 이다 — 콜드 스타트는 탭 표시와 활성화가 같은 턴에
+        // 오고, 그때 서버 호출이 둘로 늘면 정산과 같은 표를 두 번 읽는다.
         let harness = await RankMeHarness(label: "me-ach-once") { Self.quietResponder($0) }
         defer { harness.tearDown() }
         let store = harness.me
         for _ in 0..<4 { harness.enqueue("achievements_status", .json(Self.status(achieved: ["team2"]))) }
 
-        // 탭이 안 보이는 채로 앞에 왔다 — 주간 보상은 읽지만 미션은 묻지 않는다(받기 전에는 루비가 안 움직인다).
+        // ① 탭이 안 보이는 채로 앞에 왔다 — 주간 보상과 **똑같이** 한 번 묻는다(배지가 설 수 있게).
         store.appDidBecomeActive()
         await harness.quiesceMe()
-        #expect(harness.requests(rpc: "achievements_status").isEmpty, "탭이 안 보이는데 도전 미션을 물었다")
+        #expect(harness.requests(rpc: "achievements_status").count == 1,
+                "탭이 안 보이면 안 물었다 — 나 탭에 안 가 본 사람에게 배지가 영영 안 선다: \(harness.requests(rpc: "achievements_status").count)건")
         #expect(!harness.requests(rpc: "weekly_work_status").isEmpty, "대조: 주간 보상은 탭이 안 보여도 읽는다")
+        #expect(store.achievementClaimableCount == 1, "탭 없이 읽은 값이 안 들어왔다")
 
-        // 콜드 스타트(탭 표시 + 활성화가 같은 턴).
+        // ② 이어서 같은 턴에 탭이 떴다 — 또 나가지 않는다(떠 있음 · 60초 스로틀).
         store.tabDidAppear()
+        await harness.quiesceMe()
+        #expect(harness.requests(rpc: "achievements_status").count == 1,
+                "활성화 직후 같은 턴의 탭 표시가 또 물었다: \(harness.requests(rpc: "achievements_status").count)번")
+
+        // ③ 반대 순서의 콜드 스타트(탭 표시 + 활성화가 같은 턴) — 새 스토어에서 한 번.
+        let cold = await RankMeHarness(label: "me-ach-once-cold") { Self.quietResponder($0) }
+        defer { cold.tearDown() }
+        for _ in 0..<4 { cold.enqueue("achievements_status", .json(Self.status(achieved: ["team2"]))) }
+        cold.me.tabDidAppear()
+        cold.me.appDidBecomeActive()
+        await cold.quiesceMe()
+        let fired = cold.requests(rpc: "achievements_status").count
+        #expect(fired == 1, "같은 턴에 achievements_status 가 \(fired)번 나갔다")
+        #expect(!cold.me.achievementsState.isLoading)
+        harness.expectNoForbiddenCalls()
+        cold.expectNoForbiddenCalls()
+    }
+
+    @Test("나 탭을 한 번도 열지 않고 앱이 앞에 오면 **탭 배지 수**가 선다(도전 미션 셋 + 이번 주 근무 하나 = 4)")
+    func coldStartBadgeStandsWithoutOpeningTab() async throws {
+        // 1.0.9 결함의 결과를 재는 자리다 — "함수를 불렀는가"가 아니라 **화면이 읽는 숫자**(`MobileRootView` 가 그리는
+        // `model.badges.badge(for: .me)`)를 못 박는다. 앱을 새로 켜면 `achievements` 는 nil 이라, 조회 조건이 되살아나면
+        // 이 수는 0(배지 없음)이 된다.
+        let harness = await RankMeHarness(label: "me-ach-coldbadge") { request in
+            switch request.rpcName {
+            case "achievements_status":
+                return .json(Self.status(achieved: ["todo3", "poke10", "team2"], claimed: ["gomoku1"], ruby: 120))
+            case "weekly_work_status":
+                return .json(Self.weekly(worked: 83_520, achieved: [20]))
+            case "shop_state":
+                return .json(#"{"ruby_balance":120,"characters":[]}"#)
+            default:
+                return nil
+            }
+        }
+        defer { harness.tearDown() }
+        let store = harness.me
+        #expect(!store.isTabVisible, "전제: 나 탭을 한 번도 안 열었다")
+        #expect(harness.model.badges.badge(for: .me) == nil, "아직 아무것도 못 읽었는데 배지가 선다")
+
+        // 앱이 앞에 왔다 — 탭은 그대로 안 보인다(지금 탭에 있는 사람이다).
         store.appDidBecomeActive()
         await harness.quiesceMe()
-        let fired = harness.requests(rpc: "achievements_status").count
-        #expect(fired == 1, "같은 턴에 achievements_status 가 \(fired)번 나갔다")
-        #expect(!store.achievementsState.isLoading)
+
+        #expect(!store.isTabVisible, "전제가 깨졌다 — 활성화가 나 탭을 띄웠다")
+        #expect(store.achievementClaimableCount == 3 && store.weeklyWork?.pendingCount == 1,
+                "재료: 미션 \(store.achievementClaimableCount) · 주간 \(String(describing: store.weeklyWork?.pendingCount))")
+        #expect(store.missionClaimableCount == 4, "스토어가 센 받을 보상 수: \(store.missionClaimableCount)")
+        let badge = harness.model.badges.badge(for: .me)
+        #expect(badge != nil, "나 탭을 한 번도 열지 않은 사람에게 배지가 안 섰다 — 배지가 필요한 바로 그 사람이다")
+        #expect(badge == 4, "탭 배지가 스토어와 다른 수를 말한다: \(String(describing: badge))")
+        // 홈 화면 아이콘에는 안 더한다(v0.3.58 규칙) — 배지를 켠 것이 아이콘으로 새지 않았다.
+        #expect(harness.model.badges.appBadgeTotal == 0, "미션이 앱 아이콘 배지로 샜다")
+        // 그 수가 실제로 탭 막대에 붙는가 — 안 붙으면 위 값이 아무 데도 안 간다.
+        let root = try IntegrationContractTests.code("Sources/CheckMobileKit/App/MobileRootView.swift")
+        #expect(root.contains(".badge(badges.badge(for: .me) ?? 0)"), "나 탭 막대에 배지를 안 붙였다")
+        harness.expectNoForbiddenCalls()
     }
 
     @Test("함수 없는 서버(404): 절이 감춰지고 60초 안엔 다시 안 묻는다 · 그 뒤 서버에 생기면 줄이 선다")

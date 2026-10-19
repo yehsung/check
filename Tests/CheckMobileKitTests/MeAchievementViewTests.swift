@@ -254,23 +254,26 @@ struct MeAchievementViewTests {
 
     // MARK: - ⑨ 앞에 올 때(배지가 거짓말하지 않게)
 
-    @Test("앞에 올 때: 이미 아는 미션은 탭이 안 보여도 다시 읽는다(배지) · 한 번도 안 읽었으면 묻지 않는다")
-    func foregroundRefreshesKnownMissionsOnly() async throws {
+    @Test("앞에 올 때: 탭이 안 보여도 미션을 읽는다 — **한 번도 안 열어 본 사람도**(배지) · 스로틀은 그대로 60초")
+    func foregroundRefreshesMissionsForBadge() async throws {
         let harness = await RankMeHarness(label: "me-ach-fg") { MeAchievementClaimTests.quietResponder($0) }
         defer { harness.tearDown() }
         let store = harness.me
 
-        // ① 한 번도 안 읽었다 — 탭이 안 보이면 묻지 않는다(받기 전에는 루비가 안 움직이니 모르는 채로 둔다).
+        // ① 한 번도 안 읽었다 — 그래도 묻는다. 옛 계약("안 묻는다")의 근거는 "받기 전에는 루비가 안 움직인다"였고,
+        //    **그 근거가 배지와 함께 사라졌다**: 이제 탭이 안 보여도 알아야 할 값(탭 막대에 그릴 받을 보상 수)이 있다.
+        //    이 값은 메모리라 앱을 새로 켜면 늘 비어 있어서, "아는 것만 다시 읽기"로 걸면 **나 탭에 아직 안 가 본 사람**
+        //    — 배지가 꼭 필요한 바로 그 사람 — 에게만 영영 안 섰다(1.0.9 결함).
+        harness.enqueue("achievements_status", .json(MeAchievementClaimTests.status(achieved: ["team2"], ruby: 10)))
         store.appDidBecomeActive()
         await harness.quiesceMe()
-        #expect(harness.requests(rpc: "achievements_status").isEmpty, "한 번도 안 연 사람에게 미션을 물었다")
+        #expect(harness.requests(rpc: "achievements_status").count == 1, "한 번도 안 연 사람에게 안 물었다 — 배지가 영영 안 선다")
+        #expect(store.missionClaimableCount == 1 && harness.model.badges.badge(for: .me) == 1)
 
-        // ② 나 탭을 한 번 열었다.
-        harness.enqueue("achievements_status", .json(MeAchievementClaimTests.status(achieved: ["team2"], ruby: 10)))
+        // ② 그 뒤 나 탭을 열었다 — 스로틀 안이라 또 묻지 않는다(탭을 여는 것이 호출을 하나 더 만들지 않는다).
         store.tabDidAppear()
         await harness.quiesceMe()
-        #expect(harness.requests(rpc: "achievements_status").count == 1)
-        #expect(store.missionClaimableCount == 1 && harness.model.badges.badge(for: .me) == 1)
+        #expect(harness.requests(rpc: "achievements_status").count == 1, "활성화 직후의 탭 표시가 또 물었다")
 
         // ③ 탭을 떠나 61초 뒤 앱이 앞에 왔다 — **배지 때문에** 다시 읽는다(그 사이 cron 이 달성을 적는다).
         store.tabDidDisappear()

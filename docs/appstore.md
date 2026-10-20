@@ -290,10 +290,9 @@
 > **New in 1.0.10 — one more character in the draw: 무지개 아잉이 (Rainbow Aing)**
 > The character draw itself, its price, and the way odds are disclosed are unchanged from 1.0.8, which completed review. One character is added and the published odds change.
 > - Odds now — eight entries, total 100%: **무지개 아잉이 (Rainbow Aing) 2%** (new) · 황금 아잉이 (Golden Aing) **3%** (was 5%) · 여우 Fox 24% · 다람쥐 Squirrel 24% · 강아지 Shiba 14% · 유령 Ghost 14% · 해파리 Jellyfish 11% · 로봇 Robot 8%. The app shows this table under **"확률 보기"** (Show odds), both on the draw card and on the capsule-machine screen.
-> - Displayed percentages are rounded to one decimal place, so adding up the numbers on screen can give 100.1%. The odds themselves total exactly 100%.
 > - Like 황금 아잉이, the new character **cannot be bought with rubies** — it comes from the draw, or from exchanging 20 duplicate shards. A duplicate of any character still gives one shard.
 > - A draw still costs 50 in-app rubies. Rubies are earned only by working and by playing mini games; they cannot be bought with money or cashed out, and there are no in-app purchases. A draw only gives a cosmetic character.
-> - Older builds are not offered the new character at all — the server hides that row from clients that cannot draw it — so a device still on 1.0.9 keeps seeing the seven-entry table.
+> - Older builds are not offered the new character at all — the server hides that row from clients that cannot draw it — so a device still on 1.0.9 keeps seeing a seven-entry table. There the percentages are shown rounded to one decimal place, so adding up the numbers on screen can give 100.1%; the odds themselves total exactly 100% there too. **On this build (1.0.10) all eight values are whole numbers and add up to exactly 100%.**
 >
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.
@@ -306,7 +305,7 @@
 - 1.0.9 부터 보상은 [받기] 버튼으로 받는다 — 나 탭 「도전 미션」 절 · 주간 근무 단계도 같은 방식(3시간 랩 3루비만 자동).
 - 1.0.10 은 뽑기에 **무지개 아잉이(2% 신규)**를 더하고 **황금 아잉이를 5% → 3%** 로 내린다(서버 `20261020120000_gacha_rainbow`, 2026-10-20 07:27 운영 반영 — 클라보다 먼저 가 있다).
   확률표는 여덟 줄 합 100%(앱 [확률 보기]) · 루비로 못 사고 조각 20개로 교환 · 1회 50루비 그대로.
-  ★ **화면은 한 자리로 반올림**해서 보여 주므로 표시값을 더하면 100.1 이 된다(전선값 합은 정확히 100.0000). 심사 메모에 '합 100%'를 적을 때 이 두 층을 섞지 마라.
+  ★ **반올림 주의는 1.0.10 의 성질이 아니다**: 능력 번호 3 은 여덟 줄이 **정수**라 화면 숫자의 합도 정확히 100 이다. 표시값을 더해 100.1 이 되는 것은 **번호 2(1.0.9)의 일곱 줄 소수 표**뿐이다(전선값 합은 그때도 정확히 100.0000 — `round(…,4)`). 심사 메모에 '합 100%'를 적을 때 이 두 층과 두 버전을 섞지 마라.
   ★ 서버는 능력 번호 3 미만 클라에게 무지개 행을 **아예 안 보낸다**(`ShopWire.rainbowProtocol`) — 1.0.9 는 무지개를 뺀 일곱 줄 소수 표(합 100.0000)를 본다. 폰이 3 을 보내는 방아쇠는 `AingCharacterArt.knownIDs` 에 `aing_rainbow` 가 있는 것 하나다.
   ★ **데모 계정은 숨김(`profiles.is_hidden`)이라 서버가 미션을 판정하지 않는다** — `achievements_settle` 이 숨김 사용자를
   `status: hidden` 으로 바로 돌려보낸다(`20261019120000_achievements.sql:515-521`). 소급(phone_login)도 할 일 3개도 저절로는

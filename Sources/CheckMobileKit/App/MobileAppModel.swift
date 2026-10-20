@@ -113,6 +113,11 @@ public final class MobileAppModel {
         // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisDuelWiringTests.swift`
         // (`GamesTetrisWiringTests` 는 **솔로** 테트리스 것이다 — 섞지 마라).
         tetris.rankingEnabled = true
+        // 실시간 'tetris' 초인종을 받을 자리(오목 `realtime.gomoku` 바로 옆 · 같은 꼴). 이 한 줄이 없으면
+        // 러너의 `.tetrisSignal` 가지가 **nil 에 말을 걸어** 아무 일도 안 한다 — 초인종이 와도 폰은 자기 보고
+        // 왕복(1초)까지 방해 줄을 모르고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.
+        // 러너는 **약한 참조**로 들고 있고(수명은 앱 모델이 쥔다) 핸들러가 스스로 세션 가드를 한다.
+        realtime.tetris = tetris
         let links = MobileStoreLinks()
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let characters = AppUserCharacterStore(session: session, clock: env.clock)
@@ -263,6 +268,11 @@ public final class MobileAppModel {
         // 체스도 같은 사슬에 넣는다 — 안 넣으면 다음 사람의 로비에 앞 사람의 판·신청·순위가 남는다.
         // `reset()` 은 배선 값(`spectatorFeaturesEnabled`·`clock`·`presentWindow`)을 건드리지 않는다(위 주 스위치 주석).
         chess.reset()
+        // 테트리스도 같은 사슬이다. 안 넣으면 다음 사람의 로비에 **앞 사람의 판·신청·순위·루비**가 남는다 —
+        // 테트리스는 거기에 하나가 더 붙는다: 판 구동기(`duel`)와 1초 보고 Task 가 살아 있어서, 로그아웃한
+        // 사람의 판에 **새 계정의 토큰으로** 보고가 계속 나간다. `reset()` 이 그 둘(`discardDuel`·세대)을 끊는다.
+        // `reset()` 은 배선 값(`rankingEnabled`·`clock`·`presentWindow`)을 건드리지 않는다(위 주 스위치 주석).
+        tetris.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()

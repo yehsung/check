@@ -233,6 +233,65 @@ import Testing
         #expect(MobileThemePalette.gold.light.contrast(against: MobileThemePalette.surface.light) < 4.5)
     }
 
+    // MARK: - ④-2 반짝임 기호(장식)의 색 규칙 — 글자와 갈린다(폰 1.0.10 색 고르기, 2026-10-20)
+    //
+    // 사장님이 시안을 보고 고른 것: 기호의 **금은 옛 메달 금으로 되돌리고**(기호는 글자가 아니라 장식이라 1.8:1 도 괜찮다),
+    // **무지개는 라이트에서 단색 보라**다(작은 기호에 일곱 빛을 깔면 짙은 청록 한 색으로 읽힌다 — 실측). **다크는 그대로.**
+    //
+    // 값으로 잰다 — 폰 뷰·테마는 `#if os(iOS)` 라 맥 스위트가 `MobileTheme` 을 한 줄도 못 본다(저장소 메모 '폰 뷰는 맥
+    // 스위트가 못 본다'). 그래서 그 색의 뼈대인 `MobileThemePalette` 숫자를 재고, 뷰·테마가 **그 토큰을 쓰는지**는 ⑤ 가 본다.
+
+    @Test("라이트 반짝임: 금은 메달 금 #F5B700(글자색 goldText 가 아니다) · 무지개는 일곱 중 여섯 번째 보라 단색")
+    func sparkleLightFollowsDecorationRule() {
+        let white = MobileThemePalette.surface.light
+
+        // ① 금 — 기호는 글자 기준(4.5:1)을 벗어나 메달 금으로 돌아갔다. 두 값이 **다르다**는 것이 이 변경의 전부다.
+        #expect(MobileThemePalette.gold.light == MobileThemePalette.RGB(hex: 0xF5B700),
+                "라이트 기호 금이 메달 금이 아니다: \(MobileThemePalette.gold.light)")
+        #expect(MobileThemePalette.gold.light != MobileThemePalette.goldText.light,
+                "기호 금과 글자 금이 같아졌다 — 두 갈래가 다시 하나로 합쳐졌다")
+        let goldOnCard = MobileThemePalette.gold.light.contrast(against: white)
+        #expect(goldOnCard > 1.7 && goldOnCard < 1.9,
+                "라이트 기호 금의 흰 카드 대비가 \(String(format: "%.2f", goldOnCard)):1 — 1.80 에서 움직였다")
+        // 장식이니 괜찮다는 판단이지, **글자**에 쓰면 여전히 안 된다 — 확률·교환 시트의 이름 글자는 그대로 `goldText`.
+        #expect(MobileThemePalette.goldText.light.contrast(against: white) >= 4.5,
+                "글자용 금빛이 기호 값으로 뒤따라갔다(황금 아잉이 이름이 안 보인다)")
+
+        // ② 무지개 — 라이트 단색은 **새 색이 아니라 그 일곱 중 여섯 번째**(보라)다(신원이 흔들리지 않는다).
+        let solid = MobileThemePalette.rainbowStops[5].light
+        #expect(solid == MobileThemePalette.RGB(0.43, 0.40, 0.66), "단색 보라가 바뀌었다: \(solid)")
+        #expect(solid.b == MobileThemePalette.rainbowStops.map(\.light.b).max(),
+                "여섯 번째가 가장 파란(보라) 빛이 아니다 — 일곱 빛 차례가 어긋났다")
+        // 같은 토큰이 확률 **숫자**(글자)에도 서니 글자 기준 4.5:1 은 지킨다.
+        for (name, face) in [("카드", MobileThemePalette.surface.light), ("바탕", MobileThemePalette.background.light),
+                             ("2차 상자", MobileThemePalette.surface2.light)] {
+            #expect(solid.contrast(against: face) >= 4.5,
+                    "단색 보라가 \(name) 위 \(String(format: "%.2f", solid.contrast(against: face))):1 — 확률 숫자가 안 보인다")
+        }
+        // 대조군: 다크 보라를 그대로 라이트에 썼다면 이 검사가 갈랐다 — 즉 검사가 실제로 가른다.
+        #expect(MobileThemePalette.rainbowStops[5].dark.contrast(against: white) < 4.5,
+                "다크 보라가 흰 카드에서 통과한다 — 대비 계산이 안 가른다")
+    }
+
+    @Test("다크는 한 픽셀도 안 바뀐다 — 기호 금 #FFD24A(= goldText.dark) · 다크 무지개는 일곱 빛 그대로")
+    func sparkleDarkIsUntouched() {
+        // 기호를 `gold` 로 되돌려도 다크가 안 바뀌는 **이유**: 두 토큰의 다크 값이 같은 숫자다(직접 확인한 사실).
+        #expect(MobileThemePalette.gold.dark == MobileThemePalette.RGB(hex: 0xFFD24A),
+                "다크 메달 금: \(MobileThemePalette.gold.dark)")
+        #expect(MobileThemePalette.goldText.dark == MobileThemePalette.RGB(hex: 0xFFD24A),
+                "다크 금빛 글자: \(MobileThemePalette.goldText.dark)")
+        #expect(MobileThemePalette.gold.dark == MobileThemePalette.goldText.dark,
+                "다크 기호 금과 글자 금이 갈렸다 — 기호를 `gold` 로 되돌리면 다크까지 바뀐다")
+
+        // 다크 무지개: 기호·확률 숫자 둘 다 일곱 빛 그대로다(단색 가름은 `colorScheme == .light` 하나뿐 — ⑤ 가 본다).
+        let dark = MobileThemePalette.rainbowStops.map(\.dark)
+        #expect(dark.count == 7)
+        #expect(dark == MobileThemePalette.rainbowSpectrum, "다크 일곱 빛이 정본(맥과 같은 숫자)과 갈렸다")
+        #expect(dark[5] == MobileThemePalette.RGB(0.65, 0.61, 1.00), "다크 여섯 번째 빛이 바뀌었다: \(dark[5])")
+        // 다크에서는 일곱이 **서로 다른** 색이어야 한다 — 라이트 단색이 다크로 새면 일곱이 한 색으로 주저앉는다.
+        #expect(Set(dark.map(\.hex)).count == 7, "다크 일곱 빛에 같은 색이 섞였다: \(dark.map(\.hex))")
+    }
+
     // MARK: - ⑤ 뷰가 그 값을 실제로 쓴다(소스 글자 — 주석 걷고)
 
     @Test("뷰 배선: 결과 줄·확률 줄·교환 줄·타일이 희귀 둘을 가르는 값을 쓴다(금만 가리키는 옛 가름은 남아 있지 않다)")
@@ -250,7 +309,13 @@ import Testing
             ("확률 줄 글자색", "MobileTheme.ink(row.finish, otherwise: MobileTheme.label)", gacha),
             ("교환 줄 글자색", "MobileTheme.ink(finish, otherwise: MobileTheme.label)", gacha),
             ("타일 상태 내용", "switch status.content", characters),
-            ("타일 반짝임 빛깔", "MobileTheme.ink(CharacterManifest.Finish(characterID: id)", characters),
+            // 기호는 **글자 갈래가 아니라 기호 갈래**를 쓴다(1.0.10 색 고르기 — 아래 forbidden 이 옛 갈래를 막는다).
+            ("타일 반짝임 갈래", "MobileTheme.sparkle(CharacterManifest.Finish(characterID: id), in: colorScheme)", characters),
+            ("확률 숫자 라이트 단색 가름", "row.finish == .rainbow && colorScheme == .light", gacha),
+            ("확률 숫자가 그 가름을 쓴다", "foregroundStyle(percentInk)", gacha),
+            ("기호 갈래 — 라이트 무지개는 단색", "case .rainbow: return colorScheme == .light ? AnyShapeStyle(rainbowSolid) : AnyShapeStyle(rainbow)", theme),
+            ("기호 갈래 — 금·평범은 메달 금", "case .gold, .standard: return AnyShapeStyle(gold)", theme),
+            ("단색 보라는 일곱 중 여섯 번째", "color(MobileThemePalette.rainbowStops[5])", theme),
             ("무지개 칠", "case .rainbow: return AnyShapeStyle(rainbow)", theme),
             ("금빛 글자 칠", "case .gold: return AnyShapeStyle(goldText)", theme),
             ("평범은 호출부 기본색", "case .standard: return nil", theme),
@@ -267,12 +332,15 @@ import Testing
             ("결과 받침을 금으로 못 박았다", "MobileTheme.gold.opacity", gacha),
             ("타일 반짝임을 금으로 못 박았다", "foregroundStyle(MobileTheme.gold)", characters),
             ("결과 머리말을 금으로 못 박았다", "GachaText.goldHeadline", gacha),
+            // 되돌리기 막기: 기호가 다시 글자 갈래(= 라이트에서 흙빛 `goldText`)로 가면 빨개진다.
+            ("타일 반짝임이 글자 갈래로 되돌아갔다", "MobileTheme.ink(CharacterManifest.Finish", characters),
+            ("타일에 글자용 금빛이 남았다", "MobileTheme.goldText", characters),
         ]
         for (what, needle, source) in forbidden {
             #expect(!source.contains(needle), "\(what): `\(needle)` 가 남아 있다")
             checked += 1
         }
-        #expect(checked == 17, "훑은 자리가 \(checked)곳뿐이다(공허한 초록 방지)")
+        #expect(checked == 24, "훑은 자리가 \(checked)곳뿐이다(공허한 초록 방지)")
     }
 
     // MARK: - 도우미

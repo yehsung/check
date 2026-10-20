@@ -63,6 +63,10 @@ package enum MobileTheme {
     /// 무지개 일곱 빛을 글자·테두리에 거는 칠(왼쪽 → 오른쪽 — 맥 `GachaPalette.rainbow` 와 같은 방향).
     package static let rainbow = LinearGradient(colors: MobileThemePalette.rainbowStops.map(color),
                                                 startPoint: .leading, endPoint: .trailing)
+    /// B안(폰 1.0.10 색 고르기): 라이트에서 **짧은 글자**(확률 숫자 "2%")에 거는 단색. 일곱 빛을 두세 글자에 깔면 두어 색만
+    /// 지나가 애매한 한 색으로 읽힌다 — 그 자리만 일곱 중 **보라**(여섯 번째, 라이트 값)로 둔다. 새 색이 아니라 그 일곱 중
+    /// 하나이고(신원이 흔들리지 않는다), 흰 카드 위 5.09:1 이다. 이름(긴 글자)과 다크는 그대로 일곱 빛이다.
+    package static let rainbowSolid = color(MobileThemePalette.rainbowStops[5])
     /// 무지개 받침(결과 줄 바탕) — 같은 일곱 빛을 금 받침과 같은 세기로 깐다.
     package static let rainbowTint = LinearGradient(
         colors: MobileThemePalette.rainbowStops.map { color($0, opacity: MobileThemePalette.rareTintOpacity) },
@@ -81,6 +85,25 @@ package enum MobileTheme {
     /// 희귀면 그 칠, 아니면 `otherwise`(맥 `GachaPalette.ink(_:otherwise:)` 와 같은 모양).
     package static func ink(_ finish: CharacterManifest.Finish, otherwise: Color) -> AnyShapeStyle {
         rare(finish) ?? AnyShapeStyle(otherwise)
+    }
+
+    /// 반짝임 **기호**(뽑기 전용 타일의 `sparkles`) 전용 빛깔. **글자(`ink`)와 규칙이 갈린다** — 폰 1.0.10 색 고르기(2026-10-20).
+    ///
+    /// 왜 하나로 안 가나(1.0.9 까지는 둘 다 `ink(_:otherwise: goldText)` 하나였다):
+    /// 1. **짧은 자리에는 그라데이션이 안 읽힌다.** 일곱 빛은 왼쪽 → 오른쪽으로 깔리니 caption2 기호 한 글자폭에는 일곱 중
+    ///    한두 색만 걸려 '무지개'가 아니라 짙은 청록 한 색으로 읽힌다(실측). 그래서 라이트 무지개는 `rainbowSolid` 한 색이다.
+    /// 2. **장식은 글자 대비 기준을 안 쓴다.** `goldText` 는 "모든 글자 4.5:1" 때문에 라이트에서 밝기를 내린 색이라 기호가
+    ///    흙빛으로 보였다. 이 기호는 글자가 아니라 장식이고(뜻은 옆 글자가 말한다 — `accessibilityHidden`) 메달 금
+    ///    `gold`(흰 카드 위 1.80:1)로 되돌린다. **기호는 1.8:1 이어도 된다**는 것이 사장님 판단이다.
+    ///
+    /// **다크는 한 픽셀도 안 바뀐다**(직접 확인): `MobileThemePalette.gold.dark` 와 `goldText.dark` 가 같은 `#FFD24A` 라
+    /// 금을 `gold` 로 되돌려도 다크 기호 색은 그대로이고, 다크 무지개는 일곱 빛 그대로다.
+    /// 평범(`.standard`)이 금빛인 것은 서버가 `gacha_only` 표식만 준 id 의 기호다 — 얻는 길이 같으니 1.0.9 까지와 같은 그림이다.
+    package static func sparkle(_ finish: CharacterManifest.Finish, in colorScheme: ColorScheme) -> AnyShapeStyle {
+        switch finish {
+        case .rainbow: return colorScheme == .light ? AnyShapeStyle(rainbowSolid) : AnyShapeStyle(rainbow)
+        case .gold, .standard: return AnyShapeStyle(gold)
+        }
     }
 
     /// 희귀 받침(금빛 14% · 무지개 일곱 빛 14%). 평범은 nil.

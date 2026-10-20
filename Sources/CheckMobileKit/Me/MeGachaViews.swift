@@ -231,6 +231,8 @@ struct MeGachaMachineScreen: View {
 struct MeGachaOddsSheet: View {
     let store: MeStore
     @Environment(\.dismiss) private var dismiss
+    /// B안(폰 1.0.10 색 고르기): 라이트에서만 확률 숫자를 단색으로 — 모드를 봐야 하므로 뷰가 읽는다.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let rows = store.gachaOddsRows
@@ -255,6 +257,10 @@ struct MeGachaOddsSheet: View {
                             // `MeText.gachaOddsEmphasized`(= `finish.isRare`)뿐이다(`isGold` 로 가르면 무지개가 평범해진다).
                             let emphasized = MeText.gachaOddsEmphasized(row)
                             let ink = MobileTheme.ink(row.finish, otherwise: MobileTheme.label)
+                            // B안: **라이트에서만** 확률 숫자(두세 글자)를 일곱 빛 대신 단색으로 — 짧은 글자에 일곱 빛을 깔면
+                            // 두어 색만 지나가 애매한 한 색으로 읽힌다. 이름은 길어서 그대로 일곱 빛, 다크도 그대로다.
+                            let percentInk = (row.finish == .rainbow && colorScheme == .light)
+                                ? AnyShapeStyle(MobileTheme.rainbowSolid) : ink
                             GroupRow(divider: index == rows.count - 1 ? .none : .inset(MobileTheme.cardPadding + 40 + MobileTheme.space3)) {
                                 MeCharacterArt(id: row.characterID, size: 40)
                                     .frame(width: 40, height: 40)
@@ -270,7 +276,7 @@ struct MeGachaOddsSheet: View {
                                 Text(row.percentText)
                                     .font(.subheadline.weight(emphasized ? .bold : .semibold))
                                     .monospacedDigit()
-                                    .foregroundStyle(ink)
+                                    .foregroundStyle(percentInk)
                                     .frame(minWidth: 48, alignment: .trailing)
                             }
                             .accessibilityElement(children: .ignore)

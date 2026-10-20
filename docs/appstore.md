@@ -37,7 +37,7 @@
 | 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift` |
 | 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘) 세 판 | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
 | 게임 | 미니게임 둘(타이밍 바·플래피 아잉), 1:1 오목(로비·신청·대국·채팅), 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출, 오목 신청·수락·착수·기권·채팅·음소거 | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290` |
-| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 이번 주 근무(1.0.8 — 20/40/60시간 단계) → 도전 미션(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
+| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 이번 주 근무(1.0.8 — 20/40/60시간 단계) → 도전 미션(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환 / 1.0.10 — 무지개 아잉이 2% 추가 · 황금 아잉이 5 → 3%, 둘 다 루비로 못 사고 조각 20개로 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
 | (홈 위젯) | 지금 근무 중 · 내 오늘 · 할 일 — 세 종류. 앱이 쓴 스냅샷 파일만 그린다 | 할 일 체크 인텐트의 `todo_sync` 한 번뿐 | `Sources/CheckWidgetsKit/AingWidgetModel.swift:11-16`, `Sources/CheckMobileShared/WidgetSnapshot.swift:6`, `Sources/CheckWidgetsKit/WidgetTodoToggle.swift:11` |
 | (푸시) | 새 메시지 · 오목 신청(수락 버튼) · 제보 답장 세 종류, 앱 배지 = 안 읽은 메시지 + 받은 오목 신청 | 기기 등록(`register_device`), 알림 종류별 설정(`set_push_prefs`) | `Push/PushPayload.swift:6-10`, `Push/PushCoordinator.swift:14-27`, `Session/MobileDeviceService.swift:116-164` |
 
@@ -287,6 +287,14 @@
 > Sign in with the demo account on the iPhone, open the "나" (Me) tab and scroll to 「도전 미션」. The first row — "폰 앱에서 로그인하기 · +50" (Sign in on the phone app) — is already achieved on the demo account, so its **[받기]** button is visible immediately. Tapping it increases the ruby count at the top of the screen by 50 and the row changes to "✓ 받음" (Claimed). The weekly-goal [받기] button needs 20 hours of work in the current week, so it will usually not appear during review.
 > Rubies still cannot be bought or cashed out, and there are no in-app purchases.
 >
+> **New in 1.0.10 — one more character in the draw: 무지개 아잉이 (Rainbow Aing)**
+> The character draw itself, its price, and the way odds are disclosed are unchanged from 1.0.8, which completed review. One character is added and the published odds change.
+> - Odds now — eight entries, total 100%: **무지개 아잉이 (Rainbow Aing) 2%** (new) · 황금 아잉이 (Golden Aing) **3%** (was 5%) · 여우 Fox 24% · 다람쥐 Squirrel 24% · 강아지 Shiba 14% · 유령 Ghost 14% · 해파리 Jellyfish 11% · 로봇 Robot 8%. The app shows this table under **"확률 보기"** (Show odds), both on the draw card and on the capsule-machine screen.
+> - Displayed percentages are rounded to one decimal place, so adding up the numbers on screen can give 100.1%. The odds themselves total exactly 100%.
+> - Like 황금 아잉이, the new character **cannot be bought with rubies** — it comes from the draw, or from exchanging 20 duplicate shards. A duplicate of any character still gives one shard.
+> - A draw still costs 50 in-app rubies. Rubies are earned only by working and by playing mini games; they cannot be bought with money or cashed out, and there are no in-app purchases. A draw only gives a cosmetic character.
+> - Older builds are not offered the new character at all — the server hides that row from clients that cannot draw it — so a device still on 1.0.9 keeps seeing the seven-entry table.
+>
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.
 
@@ -296,6 +304,10 @@
 - 팀 코드 없이 "팀 만들기" 로 혼자 시작 가능(작업 B 뒤) · 비밀번호 재설정 6자리 코드 앱 안 완결(작업 B 뒤) · 계정 삭제는 나 → 설정 → 계정 삭제, 비밀번호 재입력(작업 C 뒤).
 - 푸시 세 종류·설명 시트 먼저(`Push/PushCoordinator.swift:14-20`) · 맥에서 근무 중이면 폰 알림 생략(`Push/PushPayload.swift:263` `primerMacNote`, `privacy.md:108`) — 데모엔 해당 없음.
 - 1.0.9 부터 보상은 [받기] 버튼으로 받는다 — 나 탭 「도전 미션」 절 · 주간 근무 단계도 같은 방식(3시간 랩 3루비만 자동).
+- 1.0.10 은 뽑기에 **무지개 아잉이(2% 신규)**를 더하고 **황금 아잉이를 5% → 3%** 로 내린다(서버 `20261020120000_gacha_rainbow`, 2026-10-20 07:27 운영 반영 — 클라보다 먼저 가 있다).
+  확률표는 여덟 줄 합 100%(앱 [확률 보기]) · 루비로 못 사고 조각 20개로 교환 · 1회 50루비 그대로.
+  ★ **화면은 한 자리로 반올림**해서 보여 주므로 표시값을 더하면 100.1 이 된다(전선값 합은 정확히 100.0000). 심사 메모에 '합 100%'를 적을 때 이 두 층을 섞지 마라.
+  ★ 서버는 능력 번호 3 미만 클라에게 무지개 행을 **아예 안 보낸다**(`ShopWire.rainbowProtocol`) — 1.0.9 는 무지개를 뺀 일곱 줄 소수 표(합 100.0000)를 본다. 폰이 3 을 보내는 방아쇠는 `AingCharacterArt.knownIDs` 에 `aing_rainbow` 가 있는 것 하나다.
   ★ **데모 계정은 숨김(`profiles.is_hidden`)이라 서버가 미션을 판정하지 않는다** — `achievements_settle` 이 숨김 사용자를
   `status: hidden` 으로 바로 돌려보낸다(`20261019120000_achievements.sql:515-521`). 소급(phone_login)도 할 일 3개도 저절로는
   달성되지 않는다. 그래서 **제출 직전에 운영에 데모 두 계정의 `phone_login` 달성 행(미수령, +50)을 직접 넣는다**(2026-10-19 결정).

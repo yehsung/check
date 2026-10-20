@@ -167,4 +167,31 @@ package enum TetrisPhoneText {
 
     /// 루비 증감 글자(+N / −N / 0).
     package static func rubyDelta(_ value: Int) -> String { value > 0 ? "+\(value)" : "\(value)" }
+
+    // ── 대결 절 (레인 C 가 더한 자리 — 판 화면·캔버스가 읽는다) ──────────────────────────────
+
+    /// 판 위 글자 겹. 솔로 캔버스와 **같은 말**이고(두 판이 같은 그림이어야 한다) 자리는 코어 배치 표가 정한다.
+    package static let holdLabel = "홀드"
+    package static let nextLabel = "다음"
+    /// 값 자리는 자기설명형이다 — 폰은 8pt 캡션을 못 쓴다(iOS 캡션 하한 10pt · 캔버스 머리말 ②).
+    package static func levelValue(_ level: Int) -> String { "Lv " + String(level) }
+    package static func linesValue(_ lines: Int) -> String { String(lines) + "줄" }
+    /// 판 밑 밴드·상대 줄의 들어올 줄(미터와 같은 빨강으로 쓴다).
+    package static func incomingLines(_ lines: Int) -> String { incomingLinesTitle + " " + String(lines) }
+
+    package static let myBoardLabel = "내 판"
+    package static let opponentBoardLabel = "상대 판"
+
+    /// 조작 버튼 세 개의 **글자**. `controls` 표의 꺾쇠 안 말과 **같아야 한다**(규칙 시트와 버튼이 갈리면
+    /// 같은 버튼을 두 이름으로 부르게 된다 — 테스트가 그 둘을 묶어 둔다).
+    /// ⚠️ 솔로 폰은 같은 버튼을 "반시계"·"즉시 내리기" 로 부른다(`GamesMiniGameText`). 1.0.11 은 대결 표의
+    /// 말을 쓴다 — 통합 때 메인 세션이 한쪽으로 모으면 여기와 `controls` 두 줄만 고치면 된다.
+    package static let holdButton = "홀드"
+    package static let rotateCounterButton = "반대로"
+    package static let hardDropButton = "바로 내리기"
+    /// 홀드를 이미 쓴 조각(버튼의 보이스오버 값).
+    package static let holdSpent = "이미 썼어요"
+
+    /// 기권 확인 시트 제목(본문은 `resignWarning` · 버튼은 `confirmResign`/`keepPlaying`).
+    package static let resignConfirmTitle = "기권할까요?"
 }

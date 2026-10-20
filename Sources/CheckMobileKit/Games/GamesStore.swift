@@ -127,6 +127,24 @@ package final class GamesStore {
     package var demoChessRoute: MobileDemoChessRoute?
     #endif
 
+    /// 데모 전용: 시작 라우트가 1:1 테트리스 장면(`games/tetris/…`)이라 게임 탭이 테트리스를 쌓아야 한다.
+    /// 위 체스 깃발과 **같은 규약**이다(Bool 한 칸이라 `#if DEBUG` 밖 · 세우는 자리가 데모뿐이라 Release 에서는
+    /// 영원히 false · 구성 분기가 없어야 맥 스위트가 값으로 잰다).
+    package var pendingDemoTetrisScreen = false
+
+    /// 데모 전용: 시작 라우트의 **꼬리를 푼 값**(열 판 · 로비 탭 — `MobileDemoTetrisRoute`).
+    ///
+    /// 위 깃발과 달리 **꺼내 비우지 않는다.** 로비 탭은 화면이 설 때마다 읽는 값이고, 판을 거는 자리는 다시
+    /// 불러도 무해하다(`openWindow(focusMatchID:)` 는 들고 있는 판이면 다시 안 받는다).
+    /// 로그아웃 `reset()` 이 비운다(다음 사람의 로비에 남의 장면이 남지 않게).
+    ///
+    /// ★ **`#if DEBUG` 안이다**(저장 프로퍼티라 확장으로 못 옮긴다 — 체스 꼬리와 같은 수법). 타입이 DEBUG
+    ///   전용이고 Release 바이너리에 그 **이름이 남으면 출시 게이트가 막는다**
+    ///   (`ios/scripts/check-release-app.sh` · 까닭은 `Demo/MobileDemoTetrisRoute.swift` 머리).
+    #if DEBUG
+    package var demoTetrisRoute: MobileDemoTetrisRoute?
+    #endif
+
     /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
     @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
 
@@ -259,8 +277,10 @@ package final class GamesStore {
         isTetrisScreenVisible = false
         pendingGomokuFocusID = nil
         pendingDemoChessScreen = false
+        pendingDemoTetrisScreen = false
         #if DEBUG
         demoChessRoute = nil
+        demoTetrisRoute = nil
         #endif
         syncAIThinker()
     }
@@ -270,6 +290,14 @@ package final class GamesStore {
     package func consumePendingDemoChessScreen() -> Bool {
         guard pendingDemoChessScreen else { return false }
         pendingDemoChessScreen = false
+        return true
+    }
+
+    /// 데모 테트리스 장면 깃발을 **한 번** 꺼낸다(꺼내면 비운다 — 같은 규약). 게임 탭이 두 계기에서 부르므로
+    /// (`onAppear` · `routeSerial`) 비우지 않으면 화면이 두 번 쌓인다.
+    package func consumePendingDemoTetrisScreen() -> Bool {
+        guard pendingDemoTetrisScreen else { return false }
+        pendingDemoTetrisScreen = false
         return true
     }
 
@@ -618,13 +646,19 @@ package final class GamesStore {
     ///   화면**이 30초 서 있다. 되돌려도 빨개지는 테스트가 없게 두지 마라 — 못은
     ///   `GamesTetrisDuelWiringTests.theScreenHookOpensTheReadyReport`(깃발이 아니라 **그 결과로 보고가 나가는지**를
     ///   재고, 훅을 안 부른 기준선과 나란히 본다).
-    /// ★ `focusMatchID` 는 nil 이다. 사람이 쓰는 길에서는 코어가 로비 `me.active_match_id` 로 내 판을 스스로 연다.
-    ///   체스에는 데모 라우트 꼬리(`MobileDemoChessRoute`)가 들어가는데 테트리스 쪽 그 값은 **레인 D 몫**이라
-    ///   이 나무에 아직 없다 — 통합 때 `demoTetrisRoute?.focusMatchID` 로 바꾸면 체스와 같은 꼴이 된다.
+    /// ★ `focusMatchID` 는 **데모 라우트의 꼬리**다(`games/tetris/match/<장면>`). 사람이 쓰는 길에서는 nil 이다 —
+    ///   코어가 로비 `me.active_match_id` 로 내 판을 스스로 연다. 두 갈래는 **같은 동작**이다:
+    ///   `demoTetrisRoute` 는 DEBUG 전용 값이고 Release 에서는 원래부터 영원히 nil 이었다.
+    ///   (장면 폴더의 로비 픽스처가 `me.active_match_id` 로도 같은 판을 가리키므로 두 길이 겹치지만 멱등이다 —
+    ///   `refreshMatch` 가 도는 중이면 뒤따르는 한 번으로 합친다. 까닭은 `MobileDemoTetrisRoute` 머리말 2.)
     package func tetrisScreenDidAppear() {
         let tetris = context.tetris
         isTetrisScreenVisible = true
+        #if DEBUG
+        tetris.openWindow(focusMatchID: demoTetrisRoute?.focusMatchID)
+        #else
         tetris.openWindow(focusMatchID: nil)
+        #endif
         if isAppActive { tetris.windowDidShow() }
     }
 

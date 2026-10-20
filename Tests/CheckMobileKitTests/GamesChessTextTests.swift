@@ -239,10 +239,17 @@ struct GamesChessTextTests {
                 "체스 로비 안내가 두는 판을 오목으로 박아 뒀다 — 스토어 판정(`chessEntryBlock`)을 그대로 써라")
         // 게임 탭 두 카드도 **양방향 모두** 힌트를 그린다(한 방향만 두 줄이면 다른 입구가 더 불친절하다).
         let tab = try Self.code("Sources/CheckMobileKit/Games/GamesTab.swift")
-        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlock(playing:").count - 1 == 2,
-                "게임 탭의 막힌 칩이 두 자리가 아니다(오목 카드·체스 카드)")
-        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlockHint(playing:").count - 1 >= 2,
-                "게임 탭 카드가 양방향 모두 힌트를 그리지 않는다")
+        // ★ **1.0.11 부터 카드가 셋이다**(오목 · 체스 · 1:1 테트리스). 셋째 카드의 칩·보조 줄 판정은
+        //   `GamesTetrisDuelScreen.swift` 의 `GamesTetrisDuelCard` 에 있다(서열을 맥 스위트가 값으로 재야 해서
+        //   뷰 밖으로 뺐다 — 폰 뷰는 맥 스위트가 못 본다). 그래서 **두 파일을 합쳐** 센다: 자리는 셋이고,
+        //   어느 하나라도 문구 함수를 안 지나면 그 카드가 사유를 지어내는 것이다.
+        let tetrisCard = try Self.code("Sources/CheckMobileKit/Games/GamesTetrisDuelScreen.swift")
+        let blockChips = (tab + tetrisCard).components(separatedBy: "ChessPhoneText.entryBlock(playing:").count - 1
+        #expect(blockChips == 3, "게임 탭 카드 셋의 막힌 칩이 세 자리가 아니다: \(blockChips)")
+        #expect(tetrisCard.contains("ChessPhoneText.entryBlockHint(playing: store.tetrisEntryBlock?.text, blocked: .tetris)"),
+                "★ 테트리스 카드가 **언제 풀리는지**를 안 말한다 — 칩 한 자리만 그리면 사용자가 기다릴 끝을 모른다")
+        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlockHint(playing:").count - 1 >= 3,
+                "게임 탭 카드 셋이 모두 힌트를 그리지 않는다")
     }
 
     // MARK: - 4. ★ 로봇 판은 로그인을 안 본다

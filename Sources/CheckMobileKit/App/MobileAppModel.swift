@@ -321,6 +321,22 @@ public final class MobileAppModel {
             router.open(.games)
             return
         }
+        // 1:1 테트리스 장면(`games/tetris/lobby…` · `…/ranking` · `…/match/<장면>`)도 **`AingRoute` 에 가지가
+        // 없다** — 체스와 같은 꼴로 게임 탭만 열고 탭이 테트리스를 쌓는다(`GamesTab.applyDemoTetrisRoute`).
+        //
+        // ★★ **`games/tetris` 한 토막을 여기서 가로채면 안 된다.** 그 글자는 `AingRoute.parse` 의 `("games", 1)`
+        //   가지가 `.miniGame(.tetris)` 로 읽는 **솔로** 미니게임 딥링크다(v0.3.38 에 나갔다). 이 갈래가
+        //   `AingRoute` **앞**에 있으므로 그 한 토막을 받으면 솔로 테트리스 데모 라우트가 **조용히 사라진다** —
+        //   설계서 P1("솔로 테트리스는 한 글자도 건드리지 않는다")을 글자가 아니라 동작으로 어기는 일이다.
+        //   그래서 판정을 **여기서 다시 적지 않는다**: 꼬리를 푸는 자리는 `MobileDemoTetrisRoute(demoRoute:)`
+        //   하나이고(그 값이 `games/tetris/` 접두만 받는다 — 한 토막에 nil) 이 갈래는 **그 값이 섰는가만** 본다.
+        //   두 자리에서 판정하면 한쪽만 고쳐져 솔로 링크가 다시 사라진다.
+        if let tetris = MobileDemoTetrisRoute(demoRoute: raw) {
+            games.pendingDemoTetrisScreen = true
+            games.demoTetrisRoute = tetris
+            router.open(.games)
+            return
+        }
         #endif
         guard let route = AingRoute(path: raw) ?? Self.demoOnlyRoute(raw) else { return }
         router.open(route)

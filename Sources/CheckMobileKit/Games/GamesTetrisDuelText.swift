@@ -73,6 +73,13 @@ package enum TetrisPhoneText {
     //   (`MobileComponentRules.retry` · `.checkConnection` · `LoadFailureRow` · `EmptyStateView`) —
     //   `IntegrationFixTests.designConsistencyContracts` 가 그 리터럴이 CheckMobileKit 안에서 **한 파일에만**
     //   있는지 센다. 맥 표에는 `reloadUsers`·`usersLoadFailed` 가 있지만 폰에 옮기면 그 단언이 빨개진다.
+    /// 상대 목록을 불러오지 못했다(한 번도 못 받았을 때만 그린다 — `MobileLoadKnowledge`).
+    ///
+    /// ★ 값이 **맥 표와 다르다**: 맥 `TetrisDuelText.usersLoadFailed` 는 공용 연결 안내
+    ///   (`TetrisDuelNoticeText.checkConnection`)를 그대로 쓰는데, 폰에서 그 문장은 공용 부품 한 벌이 쥐고
+    ///   (`MobileComponentRules`) **CheckMobileKit 안에서 한 파일에만** 있어야 한다. [다시 시도] 글자도 여기
+    ///   없다 — `LoadFailureRow` 가 공용 글자로 그린다.
+    package static let usersLoadFailed = "상대 목록을 불러오지 못했어요"
     package static let challenge = "신청"
     package static let needsUpdate = "앱 업데이트 필요"
     package static let inMatch = "대결 중"
@@ -107,6 +114,147 @@ package enum TetrisPhoneText {
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.dateFormat = "M월 d일부터"
         return formatter.string(from: date)
+    }
+
+    // ── 상대 한 줄 (레인 B 가 더했다) ───────────────────────────────────────────────────────────
+
+    package static let notWorking = "근무 안 함"
+
+    /// 상대 한 줄의 두 자리. **한 함수가 둘을 같이 고른다** — 자리마다 따로 고르면 같은 문장이 한 줄에 두 번
+    /// 나오고(체스 헤드리스 실측 D4) 근무 축이 덮인다.
+    package struct OpponentRow: Equatable, Sendable {
+        package let subtitle: String
+        package let buttonTitle: String
+
+        package init(subtitle: String, buttonTitle: String) {
+            self.subtitle = subtitle
+            self.buttonTitle = buttonTitle
+        }
+    }
+
+    /// 부제는 **늘 근무 축**, 버튼은 **막힌 까닭 하나**다. 버튼이 말할 수 있는 까닭은 하나뿐이라, 겹치는 갈래
+    /// (옛 버전 + 대결 중 + 집중)에서 버튼이 못 말한 축을 부제 꼬리로 보낸다 — 그러지 않으면 축 하나가 사라진다.
+    ///
+    /// 서열은 **옛 버전이 먼저**다(체스와 같은 근거): 상대가 앱을 올릴 때까지 서버가 `target_outdated` 로 거절하는,
+    /// 가장 오래 가는 막힘이다. 서버 `capable` 이 nil 로 와도 코어가 false 로 읽으므로(`TetrisDuelStore.user(from:)`)
+    /// **모르는 상대는 불가로 그린다** — 신청해서 거절을 받는 것보다 낫다.
+    ///
+    /// ★ 버튼이 [신청]인 것과 코어의 `canBeChallenged` 가 **같은 집합**이어야 한다(테스트가 16 갈래를 다 센다).
+    ///   갈리면 눌리는 버튼이 서버 거절을 받거나, 신청할 수 있는 사람에게 회색 알약이 선다.
+    package static func opponentRow(for user: TetrisDuelUser) -> OpponentRow {
+        let work = user.isWorking ? working : notWorking
+        var tail: [String] = []
+        let button: String
+        if !user.isCapable {
+            button = needsUpdate
+            if user.inMatch { tail.append(inMatch) }
+            if user.isFocused { tail.append(focused) }
+        } else if user.inMatch {
+            button = inMatch
+            if user.isFocused { tail.append(focused) }
+        } else if user.isFocused {
+            button = focused
+        } else {
+            button = challenge
+        }
+        return OpponentRow(subtitle: ([work] + tail).joined(separator: " · "), buttonTitle: button)
+    }
+
+    package static func peopleCount(_ count: Int) -> String { "\(count)명" }
+    package static func liveCount(_ count: Int) -> String { "\(count)판" }
+    /// [신청] 버튼의 보이스오버 힌트 — 누르면 **바로 신청이 나가지 않는다**(판돈 시트가 먼저다).
+    package static func challengeHint(name: String) -> String { "\(name)님에게 판돈을 골라 신청해요" }
+    /// 머리 두 칸 왼쪽(내 전적)의 보이스오버 — 제목과 값이 한 요소로 합쳐지므로 무슨 전적인지 말한다.
+    package static func myRecordAccessibility(_ record: TetrisDuelRecord?) -> String {
+        "내 1:1 테트리스 전적 \(self.record(record))"
+    }
+
+    // ── 신청 카드 ─────────────────────────────────────────────────────────────────────────────
+
+    package static func incomingTitle(name: String) -> String { "\(name)님의 신청" }
+    package static func outgoingTitle(name: String) -> String { "\(name)님에게 신청했어요" }
+
+    /// 받은 신청 절 머리의 오른쪽 한 줄. ★ **초를 박지 않는다** — 서버가 `invite_ttl_seconds` 로 말하고 코어가
+    /// 그 값을 쥔다(`TetrisDuelStore.inviteTTLSeconds`). 상수를 베끼면 서버가 TTL 을 바꾼 날 화면만 옛 숫자다.
+    package static func inviteTtlHint(ttlSeconds: Int) -> String { "\(ttlSeconds)초 안에 응답하세요" }
+
+    /// ★ 신청만 한 상태를 말하는 줄. "신청하면 빠져요" 로 적으면 **거짓**이다 — 신청은 0원도 움직이지 않고
+    /// 응답이 없으면 그대로 사라진다. 빠지는 순간은 **수락**이다(서버 §2.4 `tetris_respond`).
+    package static func stakeNotHeldYet(ttlSeconds: Int) -> String {
+        "신청만 해서는 루비가 빠지지 않아요 · \(ttlSeconds)초 안에 응답이 없으면 신청이 사라져요"
+    }
+
+    package static func remaining(_ seconds: Double) -> String { "\(Int(max(0, seconds).rounded(.up)))초" }
+    /// "42초 남음"(받은·보낸 신청 부제 · 준비 대기).
+    package static func remainingPhrase(_ seconds: Double) -> String { "\(remaining(seconds)) 남음" }
+    /// 남은 초의 보이스오버("남은 시간 42초") — 화면 글자와 어순이 다르다.
+    package static func remainingAccessibility(_ seconds: Double) -> String { "남은 시간 \(remaining(seconds))" }
+
+    // ── 판돈 고르기 ───────────────────────────────────────────────────────────────────────────
+
+    /// 고를 수 있는 판돈 셋(3 · 5 · 10). 집합의 주인은 서버(`stakes`)이고 앱 값과 갈리면 진실은 거절한 쪽에 있다.
+    package static let stakes = TetrisDuelStake.allCases.map(\.rawValue)
+    /// "이기면 +4" — 판돈 칸 아래 줄(꼬리 `stakeGainSuffix` 와 달리 앞 가운뎃점이 없다).
+    package static func stakeGain(_ stake: Int) -> String { "이기면 +\(DuelFee.winnerNet(stake: stake))" }
+    package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
+    package static func stakePromptChosen(_ stake: Int) -> String { "판돈 \(stakeLine(stake))" }
+    /// 루비가 모자라 못 고르는 판돈의 이유 한 줄. 정본은 앱의 다른 화면과 **같은 말**이다.
+    package static let stakeShortfall = CheckCoreShared.shortfallNotice(need: nil, have: nil)
+    /// 판돈이 **언제** 빠지는지(주어가 '수락'이다) — 오목·체스와 같은 한 문장.
+    package static let stakeCaption = GomokuPhoneText.stakeCaption
+    package static let selected = "선택됨"
+    package static func stakeOptionAccessibility(_ stake: Int) -> String { "판돈 루비 \(stake)" }
+
+    package static let myRubyTitle = "내 루비"
+    /// 값을 아직 모르는 숫자 칸(루비 잔액 미러가 비었다).
+    package static let unknownNumber = "–"
+    /// 한 줄 안에서 토막을 잇는 머리("· 루비가 모자라요").
+    package static let bulletPrefix = "· "
+
+    // ── 지금 대결 중 ──────────────────────────────────────────────────────────────────────────
+
+    /// "테트라이벌 vs 구름빵" — 로비 "지금 대결 중" 한 줄. 관전은 **없다**(D8) 이므로 누를 것이 없는 줄이다.
+    package static func liveRow(_ a: String, _ b: String) -> String { "\(a) vs \(b)" }
+
+    // ── 순위 탭 ──────────────────────────────────────────────────────────────────────────────
+
+    package static let rankTitle = "테트리스 순위"
+    /// 절 아래 캡션(승점의 뜻) — `rankHelp` 과 같은 한 문장이다(두 벌로 적지 않는다).
+    package static var rankCaption: String { rankHelp }
+    /// 0판인 사람은 순위판에 안 낀다(서버가 아예 안 준다). 빈 순위를 사고로 읽지 않게 하는 줄이다.
+    package static let rankZeroGamesNote = "한 판도 대결하지 않으면 순위에 들어가지 않아요"
+    package static let rankEmptyHint = "첫 대결이 끝나면 순위가 올라와요"
+    package static let rankLoadFailed = "순위를 불러오지 못했어요"
+    /// 실패 줄 **아래** 한 줄 — 원인이 둘(연결·구버전 거절)인데 뷰가 가릴 수 없으므로 단정하지 않는다.
+    package static let rankLoadFailedHint = "계속 안 되면 앱을 업데이트해 주세요"
+    package static let myRankTitle = "내 순위"
+    package static let outOfRank = "순위 밖"
+    /// 컷이 없다(응답 `record_since_ms` 가 null) — 기간이 통째다.
+    package static let rankWholePeriod = "전체 기간"
+    /// 접힌 상태에서 보여 주는 행 수 · 펼쳤을 때의 상한(서버도 100행까지 준다 — D11).
+    package static let rankCollapsedRows = 5
+    package static let rankRowLimit = 100
+    package static func rankSeeAll(total: Int) -> String { "전체 보기 · \(peopleCount(total))" }
+    package static let rankCollapse = "접기"
+
+    /// 목록 밖 내 순위 한 줄 — "12위 · 승점 +4 · 6승 2패 1무"(0판이면 "순위 밖 · 0승 0패 0무").
+    package static func myRankLine(_ mine: TetrisDuelMyRank) -> String {
+        let line = record(wins: mine.wins, losses: mine.losses, draws: mine.draws)
+        guard let rank = mine.rank else { return "\(outOfRank) · \(line)" }
+        return "\(rank)위 · \(points(mine.points)) · \(line)"
+    }
+
+    /// 순위 한 행의 보이스오버 — "3위, 나, 민트별, 승점 +4, 6승 2패 1무".
+    ///
+    /// ★ 행은 **순위 · 이름 · 승점 · 승 · 패 · 무를 다 말한다**(체스·오목과 같은 사용자 지시). 순위 원을
+    ///   `accessibilityHidden` 으로 두므로 묶기가 아니라 조립한 라벨을 쓴다.
+    package static func rankRowAccessibility(_ entry: TetrisDuelRankEntry, isMe: Bool) -> String {
+        var parts = ["\(entry.rank)위"]
+        if isMe { parts.append(me) }
+        parts.append(entry.user.displayName)
+        parts.append(points(entry.points))
+        parts.append(record(wins: entry.wins, losses: entry.losses, draws: entry.draws))
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - 대결 (레인 C)

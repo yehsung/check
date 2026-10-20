@@ -423,9 +423,13 @@ enum MeDemoHooks {
 
     /// 상점 뽑기 장면(`-AingCheckDemoMeGacha odds|exchange|pull|machine`) — 확률표·교환 시트를 열거나 · 한 번 뽑거나 · 캡슐 뽑기
     /// 기계 덮개를 연다(스크린샷용). 뽑기 응답은 데모 픽스처(`Demo/Fixtures/me/rpc.gacha_pull.json`)다 — 실제 서버에 닿지 않는다.
+    /// 라우트 `me/shop/odds` · `me/shop/exchange` 도 **같은 자리로** 온다(`MobileDemoShopSheetRoute` — 깃발과 라우트를
+    /// 손으로 맞추지 않게). 깃발이 있으면 깃발이 이긴다. 그 값은 `Demo/` 안 `#if DEBUG` 파일이라 Release 에는 이름이 없고,
+    /// 여기 쓰는 자리도 `#if DEBUG` 안이다(출시 게이트의 금지 심볼 `MobileDemo`).
     static func gachaAction() -> String? {
         #if DEBUG
-        return argument("-AingCheckDemoMeGacha")
+        if let flag = argument("-AingCheckDemoMeGacha") { return flag }
+        return argument("-AingCheckDemoRoute").flatMap { MobileDemoShopSheetRoute(demoRoute: $0)?.action }
         #else
         return nil
         #endif

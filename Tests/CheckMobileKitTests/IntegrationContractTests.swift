@@ -114,6 +114,9 @@ import Testing
         "games/chess/ranking", "games/chess/ranking/unlisted",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
         "me/",
+        // 상점 뽑기 시트(폰 1.0.10 색 시안): 라우트는 `me/shop` 으로 열리고 장면도 `_me-shop` 이다 —
+        // 시트 이름만 따로 간다(`MobileDemoShopSheetRoute`). 새 장면 폴더가 없으므로 아래 장면 대조에는 걸리지 않는다.
+        "me/shop/odds", "me/shop/exchange",
         // 로그인 **아래** 화면(w16): 탭 라우트가 아니라 `MobileAuthRoute` 다. 가입 인증코드 장면(`_signup-confirm`)만
         // 픽스처를 덮어쓴다 — 그 장면의 가입 응답은 세션이 없다(설정을 켠 서버).
         "signup", "signup/create", "signup/confirm", "reset",

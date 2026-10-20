@@ -753,6 +753,9 @@ struct V0351MacAppStoreEditionTests {
             // 나눠 받기 함수도 같은 울타리 안이다(앱스토어 판에는 받을 업데이트가 없다).
             "static let pfetchFunction", "static let brewSpawnWrapper", "static let brewUpgradeScript",
             "static func brewUpgradeArguments(",
+            // 0.3.61 검토 수리: 스폰 인자 잇기(시험이 그대로 던지는 순수 함수)와 DMG 감시 시한도 같은 울타리 안이다.
+            "static func brewSpawnCommandArguments(", "static func dmgSpawnCommandArguments(",
+            "static let pfetchWorstCaseSeconds", "static let dmgWatchdogSeconds",
         ])
         try v0351ExpectExcluded("CheckMenuView.swift", ["private struct UpdateBanner", "UpdateBanner(versionText:"])
         try v0351ExpectExcluded("CheckApp.swift", ["updateCheck.serverFetcher =", "updateCheck.onNewVersionAvailable ="])

@@ -729,11 +729,59 @@ func dmgUpdateScriptParsesUnderZsh() throws {
     #expect(proc.terminationStatus == 0, "zsh 가 스크립트를 파싱하지 못했다: \(message)")
 }
 
+/// DMG 스크립트에서 맨 앞에 이어 붙인 나눠 받기 함수(`pfetchFunction`)를 뺀 **DMG 자신의 본문**.
+/// 0.3.61 부터 스크립트가 pfetch 로 시작해서, 전체를 보는 `contains` 는 pfetch 쪽 글자로 초록이 될 수 있다(검토 지적).
+private func dmgOwnBody() throws -> String {
+    let prefix = UpdateRunner.pfetchFunction + "\n"
+    try #require(dmgScript.hasPrefix(prefix), "DMG 스크립트가 pfetch 로 시작하지 않는다")
+    return String(dmgScript.dropFirst(prefix.count))
+}
+
 // zsh 는 단어 앞의 `=https` 를 `=명령어` 확장으로 읽는다(실측: "https not found" 로 죽었다).
 // 작은 인용을 걷어내는 '정리'가 스크립트를 통째로 죽이므로 글자로 못박는다.
+// 0.3.61: 스크립트 앞에 붙은 pfetch 의 탐색 curl 에도 `--proto '=https'` 가 있어 전체를 보면 늘 참이었다(빈 단언 — 검토 지적).
+// 그래서 DMG 자신의 본문에서, 그것도 **기존 단일 curl 자리**에서 잰다.
 @Test
-func dmgUpdateScriptQuotesTheProtoArgument() {
-    #expect(dmgScript.contains("--proto '=https'"))
+func dmgUpdateScriptQuotesTheProtoArgument() throws {
+    let body = try dmgOwnBody()
+    #expect(body.contains("|| curl -fL --proto '=https' --tlsv1.2"), "DMG 단일 curl 의 '=https' 작은 인용이 사라졌다")
+    #expect(body.components(separatedBy: "--proto '=https'").count - 1 == 1, "DMG 본문의 https 고정 curl 이 하나가 아니다")
+    #expect(!body.contains("--proto ="), "작은 인용 없는 =https 가 있다(zsh 가 =명령어 확장으로 죽는다)")
+}
+
+// ── 감시 시한 ↔ 실제 받기 시간 (검토 지적: DMG 최악 받기 660초 > 감시 600초)
+// 숫자를 테스트에 다시 적지 않고 **스크립트 글자에서 뽑는다** — 누가 `--max-time` 을 바꾸면 상수와 함께 빨개진다.
+private func maxTimes(in text: String) -> [Int] {
+    var out: [Int] = []
+    var rest = Substring(text)
+    while let r = rest.range(of: "--max-time ") {
+        rest = rest[r.upperBound...]
+        if let n = Int(rest.prefix { $0.isNumber }) { out.append(n) }
+    }
+    return out
+}
+
+@Test
+func pfetchWorstCaseMatchesTheTimeoutsInTheFunction() {
+    // 차례: 탐색(pf_probe) · 조각(pf_piece). 최악 = 탐색 + 조각(동시라 한 번) + 재탐색 + 재시도 = 2 × (탐색 + 조각).
+    let pf = maxTimes(in: UpdateRunner.pfetchFunction)
+    #expect(pf == [30, 90], "나눠 받기의 시간 한도가 바뀌었다 — pfetchWorstCaseSeconds 와 주석의 계산을 다시 적는다: \(pf)")
+    #expect(UpdateRunner.pfetchWorstCaseSeconds == Double(2 * pf.reduce(0, +)))
+}
+
+@Test
+func dmgWatchdogCoversTheWorstDownloadAndKeepsTheOldTailBudget() throws {
+    let body = try dmgOwnBody()
+    let whole = maxTimes(in: body)
+    #expect(whole == [UpdateRunner.dmgDownloadTimeoutSeconds], "DMG 단일 curl 의 --max-time 이 상수와 다르다: \(whole)")
+    let worstDownload = UpdateRunner.pfetchWorstCaseSeconds + Double(whole.reduce(0, +))
+    #expect(worstDownload == 660)
+    // 받기가 최악이어도 그 뒤 단계(검증·스테이징·종료 대기·교체)에 0.3.60 과 같은 몫(600 - 420 = 180초)이 남아야 한다.
+    let oldTail = UpdateRunner.watchdogSeconds - Double(UpdateRunner.dmgDownloadTimeoutSeconds)
+    #expect(UpdateRunner.dmgWatchdogSeconds - worstDownload >= oldTail,
+            "DMG 감시 \(UpdateRunner.dmgWatchdogSeconds)초가 최악 받기 \(worstDownload)초 + 뒤 단계 \(oldTail)초를 못 덮는다")
+    // brew 경로는 그대로 600 — 미리 받기 혼자서는 240 이라 넘지 않는다.
+    #expect(UpdateRunner.pfetchWorstCaseSeconds < UpdateRunner.watchdogSeconds)
 }
 
 // 검증을 하나라도 건너뛰면 네트워크에서 받은 것을 그대로 실행 위치에 넣는 셈이다.
@@ -967,6 +1015,22 @@ func standaloneStillFailsWhenTheScriptLeavesNoTrace() async {
     await runner.runUpgrade()?.value
     #expect(runner.status == .failed)
     #expect(runner.progress == .unknown)
+}
+
+// 받기 단계에서 오래 머무는 스크립트(나눠 받기가 느리게 실패하고 단일 curl 이 한도 직전에 성공 — 최악 660초)를
+// 600초에 실패로 내리면, 배너는 실패를 띄우는데 스크립트는 계속 가서 앱을 종료하고 교체한다(검토 지적).
+// DMG 감시는 `dmgWatchdogSeconds` 를 끝까지 기다려야 한다 — brew 의 600 이 아니라.
+@MainActor
+@Test
+func standaloneWatchdogWaitsForTheDMGBudgetNotTheBrewOne() async {
+    final class Naps: @unchecked Sendable { var total = 0.0 }
+    let naps = Naps()
+    let runner = makeStandaloneRunner(state: "stage=start\nstage=download\n", watchdogSleep: { naps.total += $0 })
+    await runner.runUpgrade()?.value
+    #expect(runner.status == .failed)
+    #expect(runner.progress.stage == .download)
+    #expect(naps.total == UpdateRunner.dmgWatchdogSeconds, "DMG 감시가 \(naps.total)초에 실패로 내렸다")
+    #expect(naps.total > UpdateRunner.watchdogSeconds)
 }
 
 // MARK: - SIGTERM → 평소 종료 절차

@@ -737,8 +737,21 @@ final class UpdateRunner {
     /// 실패로 판정해 배너가 재시도를 열었고, 사용자가 다시 누르면 두 번째 brew 가 같은 락을 다퉈 둘 다 깨졌다.
     ///
     /// DMG 경로는 이 시한에 **의존하지 않는다** — 상태 파일이 단계와 실패를 알려 주므로 오프라인은 1초에,
-    /// 자산 없음은 즉시 판정된다. 여기서 이 시한은 "스크립트가 말없이 사라진" 경우의 마지막 그물일 뿐이다.
+    /// 자산 없음은 즉시 판정된다. 거기서 시한은 "스크립트가 말없이 사라진" 경우의 마지막 그물일 뿐이고, 0.3.61 부터는
+    /// 받기 앞에 나눠 받기가 붙어 따로 둔다(`dmgWatchdogSeconds`).
     nonisolated static let watchdogSeconds: Double = 600
+
+    /// 나눠 받기(`pfetchFunction`)의 최악 시간(초): 탐색 `--max-time 30` + 조각 `--max-time 90`(동시라 한 번) + 재탐색 30 +
+    /// 재시도 90 = 240. 시험이 함수 본문의 `--max-time` 값으로 이 숫자를 다시 계산한다(`pfetchWorstCaseMatchesTheTimeoutsInTheFunction`).
+    nonisolated static let pfetchWorstCaseSeconds: Double = 240
+
+    /// DMG 경로의 감시 시한(초) = 0.3.60 의 시한 600(단일 curl `--max-time 420` + 그 뒤 검증·스테이징·종료 대기·교체에 180) +
+    /// 그 앞에 붙은 나눠 받기의 최악 240 = **840**. 받기가 최악(240 + 420 = 660초)이어도 그 뒤 단계에 0.3.60 과 같은 180초가 남는다.
+    ///
+    /// 왜 600 을 그대로 두지 않는가(검토 지적): 나눠 받기가 느리게 실패하고 단일 curl 이 한도 직전에 성공하면 받기만 660초다.
+    /// 그때 600초 감시가 먼저 실패를 띄우면 사용자가 다시 누르고(자물쇠에 막혀 busy), 그사이 첫 스크립트는 계속 가서
+    /// 앱을 종료하고 교체한다 — 배너가 거짓말을 한다. brew 경로는 그대로 600이다(미리 받기 혼자서는 240 — `pfetchFunction` 주석).
+    nonisolated static let dmgWatchdogSeconds: Double = watchdogSeconds + pfetchWorstCaseSeconds
 
     /// DMG 내려받기 제한 시간(초). **`--retry` 를 쓰지 않는다** — `man curl` 에 따르면 `--max-time` 은 전송마다
     /// 리셋되므로 `--retry 3 --max-time 420` 의 최악은 4배가 되어 감시 시한을 넘긴다. 실패하면 사용자가 다시 누른다.
@@ -954,8 +967,9 @@ final class UpdateRunner {
             // failed 로 내려 배너가 폴백 안내와 함께 재시도를 허용하게 한다.
             status = .failed
         case .standalone:
+            // 시한은 DMG 전용이다 — 받기 앞에 나눠 받기(최악 240초)가 붙었다(`dmgWatchdogSeconds` 주석).
             var elapsed = 0.0
-            while elapsed < Self.watchdogSeconds {
+            while elapsed < Self.dmgWatchdogSeconds {
                 await watchdogSleep(Self.progressPollSeconds)
                 elapsed += Self.progressPollSeconds
                 guard !Task.isCancelled, status == .running else { return }
@@ -1031,27 +1045,48 @@ final class UpdateRunner {
     ///  2. 조각 — 8MB 이상이면 8갈래(크기 ceil(전체/8)), 미만이면 한 줄(`-r 0-(전체-1)`). `--speed-limit 65536 --speed-time 12`
     ///     는 **멎은 연결을 끊는 장치**다(초당 64KB 미만이 12초면 끊는다) — 초당 0.2MB 로 느리게라도 흐르는 조각(4.4MB ≈ 22초)은
     ///     끊지 않는다.
-    ///  3. 검사·재시도 — 크기가 틀린 조각만 **한 번 더**(새 연결) 동시에 받는다. 그 전에 탐색을 다시 해 서명 주소를 새로 받는다
-    ///     (만료·403 대비). 전체 크기가 바뀌었거나 두 번째도 틀리면 폴백.
+    ///     ★ **조각마다 응답 머리도 본다**(검토 지적 수리): 코드가 206 이고 마지막 블록의 `Content-Range` 가 정확히
+    ///     `bytes <요청한 a>-<요청한 b>/<전체>` 일 때만 그 조각을 남긴다. 한 줄(a=0, b=전체-1)일 때만 200 도 받는다(본문이 곧 전체).
+    ///     크기만 보면 Range 를 무시하는 중간 캐시가 조각마다 **첫 조각 본문을 되풀이**할 때(전체가 8의 배수면 조각 크기가 전부 같다)
+    ///     내용이 틀린 OUT 을 "완전하다"고 돌려준다 — DMG 경로는 그러면 단일 curl 로 떨어지지 못하고 검증(image)에서 실패로 끝난다.
+    ///     그래서 "0 = 완전하다" 가 두 호출자 모두에게 참이 되도록 여기서 거른다(어긋난 조각은 지우고 재시도·폴백으로 보낸다).
+    ///  3. 검사·재시도 — 크기가 틀렸거나 머리가 어긋나 지운 조각만 **한 번 더**(새 연결) 동시에 받는다. 그 전에 탐색을 다시 해
+    ///     서명 주소를 새로 받는다(만료·403 대비). 전체 크기가 바뀌었거나 두 번째도 틀리면 폴백.
     ///  4. 차례대로 이어 `OUT.part` 를 만들고 크기가 전체와 같을 때만 `mv` 로 OUT. 임시 조각은 성공·실패 모두 지운다 —
     ///     trap 을 걸지 않고 명시적으로 지운다(호출자의 `trap cleanup EXIT` 을 덮어쓰지 않는다).
     ///  5. 로그 — 전체 크기 · 걸린 초 · 재시도한 조각 수 · 폴백 사유. 주소는 **쿼리 없이**(`${1%%\?*}`)만 적고 서명된 최종 주소는
     ///     아예 적지 않는다 — 서명 토큰을 로그 파일에 남기지 않는다.
     ///
-    /// **최악 시간 상한**: 탐색 30 + 조각 90(동시라 한 번) + 재탐색 30 + 재시도 90 = **240초**(+ 잇기·크기 확인 몇 초).
+    /// **최악 시간 상한**: 탐색 30 + 조각 90(동시라 한 번) + 재탐색 30 + 재시도 90 = **240초**(`pfetchWorstCaseSeconds`,
+    /// + 잇기·크기 확인 몇 초). 시험이 이 함수 본문의 `--max-time` 값에서 그 숫자를 다시 계산해 맞춰 본다 — 바꾸면 상수도 함께 바뀐다.
     ///  · brew 경로: brew update(예전과 같음) + 미리 받기 ≤ 240 + brew upgrade(캐시가 맞으면 내려받기 없이 몇 초).
-    ///    이 함수 혼자서는 감시 시한(`watchdogSeconds` 600)을 넘기지 않게 고른 숫자다 — 바꾸면 이 계산을 다시 적는다.
-    ///  · DMG 경로: 이 함수가 240초를 다 쓰고 실패한 뒤 기존 단일 curl(`--max-time 420`)까지 최악이면 받기만 660초로 감시
-    ///    600초를 넘는다. 회선이 거의 죽은 경우뿐이고, 그때 배너가 실패를 먼저 띄워도 스크립트는 계속 가서 검증(그대로)을
-    ///    통과해야만 교체한다.
+    ///    이 함수 혼자서는 감시 시한(`watchdogSeconds` 600)을 넘기지 않게 고른 숫자다.
+    ///  · DMG 경로: 이 함수가 240초를 다 쓰고 실패한 뒤 기존 단일 curl(`--max-time 420`)까지 최악이면 받기만 660초다 —
+    ///    0.3.60 의 감시 600초를 넘는다. 그래서 DMG 경로는 감시 시한을 따로 둔다(`dmgWatchdogSeconds` = 600 + 240 = 840초).
+    ///    안 그러면 배너가 실패를 띄운 뒤에도 스크립트는 계속 가서 앱을 종료하고 교체한다.
     ///
     /// 본문에 슬래시 두 개 · 슬래시-별표를 쓰지 않는다 — 소스를 읽는 계약 테스트의 주석 걷어내기가 그것을 주석 시작으로
     /// 읽는다(`AppStoreRetireRemoval.brewUninstallScript` 주석). 그래서 `https:` 뒤 두 슬래시는 `[/][/]` 로 잰다.
     /// 탐색 본문(1바이트)은 `/dev/null` 이 아니라 임시 폴더에 받는다 — brew 스크립트에 `/dev/null` 이 없다는 계약
     /// (brew 출력을 버리지 않는다 — `brewUpgradeScriptUpdatesTapFirstAndTargetsTheCask`)을 그대로 지키려고.
     nonisolated static let pfetchFunction = #"""
+        pf_cr() {
+          local line=""
+          PF_CR=""
+          [ -f "$1" ] || return 1
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            line="${(L)line}"
+            case "$line" in
+              (http[/]?*) PF_CR="" ;;
+              (content-range:*) PF_CR="${line#content-range:}" ;;
+            esac
+          done < "$1"
+          PF_CR="${PF_CR#"${PF_CR%%[![:space:]]*}"}"
+          PF_CR="${PF_CR%"${PF_CR##*[![:space:]]}"}"
+        }
         pf_probe() {
-          local r="" rc=0 line="" cr=""
+          local r="" rc=0 cr=""
           rm -f "$PF_W/h" "$PF_W/b"
           r="$(curl -fsS -L --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 -r 0-0 -o "$PF_W/b" -D "$PF_W/h" -w '%{http_code} %{url_effective}' "$1")"
           rc=$?
@@ -1062,17 +1097,8 @@ final class UpdateRunner {
             (https:[/][/]?*) ;;
             (*) PF_WHY="최종 주소가 https 가 아닙니다"; return 1 ;;
           esac
-          if [ ! -f "$PF_W/h" ]; then PF_WHY="응답 머리가 없습니다"; return 1; fi
-          while IFS= read -r line || [ -n "$line" ]; do
-            line="${line%$'\r'}"
-            line="${(L)line}"
-            case "$line" in
-              (http[/]?*) cr="" ;;
-              (content-range:*) cr="${line#content-range:}" ;;
-            esac
-          done < "$PF_W/h"
-          cr="${cr#"${cr%%[![:space:]]*}"}"
-          cr="${cr%"${cr##*[![:space:]]}"}"
+          pf_cr "$PF_W/h" || { PF_WHY="응답 머리가 없습니다"; return 1; }
+          cr="$PF_CR"
           case "$cr" in
             ("bytes 0-0"[/]*) cr="${cr##*[/]}" ;;
             (*) PF_WHY="Content-Range 가 없습니다"; return 1 ;;
@@ -1090,7 +1116,13 @@ final class UpdateRunner {
           PF_B=$(( PF_B - 1 ))
         }
         pf_piece() {
-          curl -fsS --proto '=https' --tlsv1.2 --connect-timeout 15 --speed-limit 65536 --speed-time 12 --max-time 90 -r "${2}-${3}" -o "$PF_W/p$1" "$PF_FINAL" || rm -f "$PF_W/p$1"
+          local r=""
+          rm -f "$PF_W/h$1"
+          r="$(curl -fsS --proto '=https' --tlsv1.2 --connect-timeout 15 --speed-limit 65536 --speed-time 12 --max-time 90 -r "${2}-${3}" -o "$PF_W/p$1" -D "$PF_W/h$1" -w '%{http_code}' "$PF_FINAL")" || { rm -f "$PF_W/p$1"; return 1; }
+          if [ "$r" = "206" ] && pf_cr "$PF_W/h$1" && [ "$PF_CR" = "bytes ${2}-${3}/$PF_TOTAL" ]; then return 0; fi
+          if [ "$r" = "200" ] && [ "$2" = "0" ] && [ "$3" = "$(( PF_TOTAL - 1 ))" ]; then return 0; fi
+          rm -f "$PF_W/p$1"
+          return 1
         }
         pf_check() {
           local i="" got=""
@@ -1133,7 +1165,7 @@ final class UpdateRunner {
           mv -f "$PF_OUT.part" "$PF_OUT" || { PF_WHY="이름을 바꾸지 못했습니다"; return 1; }
         }
         pfetch() {
-          local PF_W="" PF_OUT="$2" PF_FINAL="" PF_TOTAL="" PF_WHY="" PF_N=0 PF_SIZE=0 PF_A=0 PF_B=0 PF_RETRIED=0 PF_T0=$SECONDS rc=0
+          local PF_W="" PF_OUT="$2" PF_FINAL="" PF_TOTAL="" PF_CR="" PF_WHY="" PF_N=0 PF_SIZE=0 PF_A=0 PF_B=0 PF_RETRIED=0 PF_T0=$SECONDS rc=0
           local -a PF_ALL PF_BAD
           echo "$M 나눠 받기 시작: ${1%%\?*}"
           PF_W="$(mktemp -d "${TMPDIR:-/tmp}/aing-check-pfetch.XXXXXX")" || { echo "$M 나눠 받기 폴백: 임시 폴더를 만들지 못했습니다"; return 1; }
@@ -1180,6 +1212,13 @@ final class UpdateRunner {
     ///  · ★ **검증 없이 캐시에 넣지 않는다.** brew 는 캐시 파일의 지문이 틀리면 다시 받지 않고 ChecksumMismatch 로 실패한다 —
     ///    그래서 `shasum -a 256` 이 cask 의 sha256 과 같을 때만 **같은 폴더 안에서** `mv` 로 넣는다(반쪽 파일이 그 이름으로
     ///    보이는 순간이 없게). 아니면 지우고 brew 가 스스로 받는다.
+    ///  · 받는 자리(PART)는 **실행마다 고유한 숨김 이름**이다(`mktemp <캐시 폴더>/.aing-check-part.XXXXXX` — 검토 지적 수리).
+    ///    예전의 고정 이름 `<CACHE>.aing-check-part` 에는 구멍이 둘 있었다(실측): ① 감시 600초 뒤 다시 눌러 두 벌이 겹치면
+    ///    한쪽이 **자기가 검증한 경로**를 mv 하는 사이 다른 쪽이 같은 이름에 자기 바이트를 써 넣어, 검증 안 된 바이트가 캐시에
+    ///    들어갔다(검증·mv 가 둘 다 경로를 보는 TOCTOU). ② 잇는 도중 죽으면 `<sha>--…aing-check-part.part` 가 남는데, brew 의 캐시
+    ///    찾기(`downloads/<url sha>--*` 에서 `.incomplete` 만 뺀다)가 그것을 캐시 본체로 집었다. 숨김 이름(`.`)은 그 glob 에
+    ///    걸리지 않고, 같은 폴더라 mv 는 그대로 원자적이다. 죽은 실행이 남긴 숨김 조각은 다음 실행이 60분 넘은 것만 지운다
+    ///    (미리 받기의 최악은 240초라 60분 넘은 것은 반드시 죽은 실행의 것이다 — 자물쇠의 `-mmin +60` 과 같은 규칙).
     ///  · 로그에 "미리 받기: N초 · 성공/건너뜀(사유)/실패(사유)" 한 줄.
     /// 효과는 0.3.61 을 설치한 **다음** 업데이트부터다 — 업데이트는 깔려 있는 앱의 스크립트가 실행한다.
     ///
@@ -1191,7 +1230,7 @@ final class UpdateRunner {
         M="[aing-check-update]"
         pre_log() { echo "$M 미리 받기: $(( SECONDS - PRE_T0 ))초 · $1"; }
         prefetch() {
-          local PRE_T0=$SECONDS J="" U="" SHA="" VER="" INST="" CACHE="" PART="" GOT=""
+          local PRE_T0=$SECONDS J="" U="" SHA="" VER="" INST="" CACHE="" D="" PART="" GOT=""
           J="$(mktemp "${TMPDIR:-/tmp}/aing-check-info.XXXXXX")" || { pre_log "실패(임시 파일)"; return 1; }
           if ! HOMEBREW_NO_AUTO_UPDATE=1 "$BREW" info --cask --json=v2 "$CASK" > "$J"; then
             rm -f "$J"; pre_log "건너뜀(brew info 가 실패)"; return 1
@@ -1218,9 +1257,10 @@ final class UpdateRunner {
             (*) pre_log "건너뜀(캐시 자리를 모름)"; return 1 ;;
           esac
           if [ -e "$CACHE" ]; then pre_log "건너뜀(캐시에 이미 있음 — brew 가 그대로 쓴다)"; return 0; fi
-          mkdir -p "$(dirname "$CACHE")" || { pre_log "실패(캐시 폴더를 만들지 못함)"; return 1; }
-          PART="$CACHE.aing-check-part"
-          rm -f "$PART"
+          D="$(dirname "$CACHE")"
+          mkdir -p "$D" || { pre_log "실패(캐시 폴더를 만들지 못함)"; return 1; }
+          find "$D" -maxdepth 1 -type f -name '.aing-check-part.*' -mmin +60 -exec rm -f {} +
+          PART="$(mktemp "$D/.aing-check-part.XXXXXX")" || { pre_log "실패(임시 파일)"; return 1; }
           if ! pfetch "$U" "$PART"; then rm -f "$PART"; pre_log "실패(나눠 받기 — brew 가 스스로 받는다)"; return 1; fi
           GOT="$(shasum -a 256 "$PART")" || GOT=""
           GOT="${GOT%% *}"
@@ -1240,6 +1280,15 @@ final class UpdateRunner {
         ["aing-check-update", brewUpgradeScript, brew, caskName, appPath, logPath]
     }
 
+    /// `detachedSpawn` 이 `/bin/zsh` 에 그대로 넘기는 인자 전부: `["-c", 래퍼] + brewUpgradeArguments`.
+    /// 순수 함수로 떼어 둔 까닭(검토 지적): 래퍼와 인자를 잇는 이 한 줄이 어긋나면(argv0 를 빠뜨려 `$1`…`$5` 가 한 칸씩
+    /// 밀리면) 모든 brew 원클릭이 엉뚱한 인자로 돌고 감시 600초 뒤에야 실패로 보인다. 그런데 시험은 spawn 을 주입하므로
+    /// `detachedSpawn` 은 한 번도 불리지 않는다 — 시험이 이 식을 스스로 다시 만들면 소스를 되돌려도 초록이다.
+    /// 그래서 시험이 **이 함수의 결과를 그대로** 실제 zsh 로 던진다(V0361 `brew_래퍼와_인자를_실제로_던지면_자리가_맞는다`).
+    nonisolated static func brewSpawnCommandArguments(brew: String) -> [String] {
+        ["-c", brewSpawnWrapper] + brewUpgradeArguments(brew: brew)
+    }
+
     /// 기본 brew 스폰: 앱 종료에도 살아남는 분리 프로세스로 `brewUpgradeScript` 를 띄운다.
     ///
     /// 왜 nohup/이중 분리: brew cask 의 `quit` 스탠자가 업그레이드 도중 이 앱을 종료시킨다. 그래서 부모(앱)가 죽어도
@@ -1249,7 +1298,7 @@ final class UpdateRunner {
     nonisolated static func detachedSpawn(brew: String) -> Bool {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        proc.arguments = ["-c", brewSpawnWrapper] + brewUpgradeArguments(brew: brew)
+        proc.arguments = brewSpawnCommandArguments(brew: brew)
         do {
             try proc.run()
             return true
@@ -1447,11 +1496,18 @@ final class UpdateRunner {
         echo "$M ---- 완료"
         """
 
+    /// `detachedSpawnDMG` 가 `/bin/zsh` 에 그대로 넘기는 인자 전부: `["-c", 래퍼] + plan.arguments`.
+    /// `brewSpawnCommandArguments` 와 같은 까닭으로 떼어 두고, 시험이 이 결과를 그대로 실제 zsh 로 던진다
+    /// (V0361 `dmg_래퍼와_인자를_실제로_던지면_자리가_맞는다`).
+    nonisolated static func dmgSpawnCommandArguments(_ plan: DMGUpdatePlan) -> [String] {
+        ["-c", dmgSpawnWrapper] + plan.arguments
+    }
+
     /// 기본 DMG 스폰. 래퍼만 셸 텍스트로 주고 나머지는 전부 인자로 넘긴다(`dmgSpawnWrapper` 주석).
     nonisolated static func detachedSpawnDMG(_ plan: DMGUpdatePlan) -> Bool {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        proc.arguments = ["-c", dmgSpawnWrapper] + plan.arguments
+        proc.arguments = dmgSpawnCommandArguments(plan)
         do {
             try proc.run()
             return true

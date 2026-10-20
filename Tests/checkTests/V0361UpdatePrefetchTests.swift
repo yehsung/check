@@ -9,9 +9,12 @@ import Testing
 //  · 가짜 curl — 테스트가 임시 폴더에 쓰는 실행 스크립트(PATH 맨 앞). 실제 curl 이 받는 옵션(-D · -w · -r · -o · -L ·
 //    --speed-limit …)을 받아들이고 **모르는 옵션이면 2 로 죽는다**(실제 curl 과 같은 종료코드). 픽스처의 바이트 범위를 내주고,
 //    탐색에는 302 블록(가짜 Content-Range 가 섞인) + 206 블록 머리를 쓴다 — "마지막 응답 블록" 을 읽는지 잰다.
-//    시나리오는 환경변수로 가른다(FAKE_NORANGE · FAKE_STALL_ONCE · FAKE_SHORT_ALWAYS · FAKE_WHOLE_RC · FAKE_CR_NAME).
+//    시나리오는 환경변수로 가른다(FAKE_NORANGE · FAKE_STALL_ONCE · FAKE_SHORT_ALWAYS · FAKE_WHOLE_RC · FAKE_CR_NAME ·
+//    FAKE_PIECE_MODE · FAKE_TOTAL_TEXT · FAKE_TOTAL_CHANGES — 각 뜻은 `fakeCurl` 주석).
 //  · 가짜 brew · 가짜 open — 호출을 차례대로 적고, 준비된 JSON · 캐시 경로를 내준다. 앱 경로도 실험실 안의 없는 경로라
 //    가짜 open 이 어긋나도 실제 앱이 뜨지 않는다.
+//  · 가짜 cat · 가짜 shasum — 진짜 도구로 일하면서 잇기·지문 검사의 **순간**을 적는다(그때 OUT·캐시 이름이 보였는가).
+//    두 벌을 겹치는 시험은 가짜 shasum 이 표식 파일로 차례를 못박는다.
 // 네트워크 · 실제 brew · 사용자 Homebrew 캐시 · 화면을 건드리지 않는다(`sandbox-exec … deny network-outbound` 아래에서 초록).
 
 @Suite("0.3.61 원클릭 업데이트 나눠 받기 — 가짜 curl · 가짜 brew 로 실제 zsh 실행")
@@ -21,12 +24,15 @@ struct V0361UpdatePrefetchTests {
 
     @Test func pfetch_정상_8조각은_픽스처와_같은_바이트를_남기고_조각을_치운다() throws {
         let lab = try PrefetchLab(fixtureSize: 9_000_001)
-        let run = try lab.runPfetch(url: PrefetchLab.originURL)
+        // 가짜 cat 이 조각을 이을 때마다 OUT 이 그 이름으로 보이는지 적는다 — 잇기는 `OUT.part` 에서 하고 다 맞을 때만 mv 로 OUT.
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_CAT_PROBE": lab.outFile.path])
 
         #expect(run.status == 0, "pfetch 가 실패했다: \(run.output)")
         #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData, "받은 바이트가 픽스처와 다르다")
         #expect(lab.names(in: lab.out) == ["a.bin"], "OUT 옆에 잔재가 있다: \(lab.names(in: lab.out))")
         #expect(lab.names(in: lab.tmp).isEmpty, "임시 조각이 남았다: \(lab.names(in: lab.tmp))")
+        #expect(lab.lines("catprobe") == Array(repeating: "absent", count: 8),
+                "잇는 동안 OUT 이 그 이름으로 보였다(반쪽 파일이 OUT 으로 보이는 순간): \(lab.lines("catprobe"))")
 
         // 탐색 1회(원래 주소로) · 조각 8개(크기 ceil(전체/8)) — 전부 **서명된 최종 주소**로.
         let calls = lab.calls()
@@ -48,6 +54,9 @@ struct V0361UpdatePrefetchTests {
             #expect(line.hasPrefix("argv -fsS --proto =https --tlsv1.2 --connect-timeout 15 --speed-limit 65536 --speed-time 12 --max-time 90 -r "),
                     "조각 명령이 설계와 다르다: \(line)")
             #expect(!line.contains(" -L "), "조각이 리다이렉트를 다시 따라간다: \(line)")
+            // 조각마다 응답 머리(-D)와 코드(-w)를 받아 요청한 범위와 맞춰 본다(검토 지적 수리 — 크기만 보면 내용이 틀려도 통과한다).
+            #expect(line.contains(" -D \(lab.tmp.path)/aing-check-pfetch."), "조각의 응답 머리를 받지 않는다: \(line)")
+            #expect(line.hasSuffix(" -w %{http_code} \(PrefetchLab.finalURL(1))"), "조각의 응답 코드를 받지 않는다: \(line)")
         }
 
         #expect(run.output.contains("나눠 받기 끝: 9000001 bytes · 8갈래"), "\(run.output)")
@@ -137,6 +146,89 @@ struct V0361UpdatePrefetchTests {
         #expect(lab.names(in: lab.out).isEmpty, "반쪽 파일이 남았다: \(lab.names(in: lab.out))")
         #expect(lab.names(in: lab.tmp).isEmpty, "임시 조각이 남았다: \(lab.names(in: lab.tmp))")
         #expect(run.output.contains("조각을 잇지 못했습니다"), "\(run.output)")
+    }
+
+    // 잇기가 **0 을 돌려주면서** 짧게 쓴 경우(조각 검사 뒤의 마지막 그물) — 이은 크기가 전체와 다르면 OUT 을 만들지 않는다.
+    @Test func pfetch_이은_크기가_전체와_다르면_OUT_을_만들지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_CAT_SHORT": "1"])
+
+        #expect(run.status != 0, "짧게 이은 파일을 완전하다고 했다: \(run.output)")
+        #expect(lab.names(in: lab.out).isEmpty, "OUT(또는 .part)이 남았다: \(lab.names(in: lab.out))")
+        #expect(lab.names(in: lab.tmp).isEmpty, "임시 조각이 남았다: \(lab.names(in: lab.tmp))")
+        #expect(run.output.contains("나눠 받기 폴백: 이은 크기가 다릅니다"), "\(run.output)")
+    }
+
+    // ★ 검토 지적 수리: 크기만 맞으면 성공으로 보던 구멍. Range 를 잘못 다루는 중간자(TLS 를 가로채는 프록시 · 캐시)가 조각마다
+    // **첫 조각 본문을 되풀이**하면, 전체가 8의 배수일 때 조각 크기가 전부 같아 내용이 틀린 OUT 이 "완전하다"로 나갔다.
+    // 조각마다 코드와 마지막 블록의 Content-Range 를 요청한 범위·전체와 맞춰 본다. 갈래마다 한 가지씩 어긋나게 한다:
+    //  · samebody    — 206 + 첫 조각의 머리·본문을 되풀이(범위가 다르다)
+    //  · samebody200 — 같은 되풀이를 200 으로(여러 갈래에 200 은 받지 않는다)
+    //  · wrongtotal  — 본문·범위는 맞는데 전체 크기가 다르다(그사이 자산이 바뀌었다)
+    //  · nocr        — 206 인데 Content-Range 가 없다
+    @Test func pfetch_조각_응답의_코드나_Content_Range_가_요청과_다르면_받지_않는다() throws {
+        let total = 9_000_000                       // 8의 배수 — 조각 크기가 전부 같아 크기 검사로는 못 거른다
+        for (mode, badPerRound) in [("samebody", 7), ("samebody200", 8), ("wrongtotal", 8), ("nocr", 8)] {
+            let lab = try PrefetchLab(fixtureSize: total, label: mode)
+            let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_PIECE_MODE": mode])
+
+            #expect(run.status != 0, "\(mode): 요청과 다른 조각을 받아들였다: \(run.output)")
+            #expect(lab.names(in: lab.out).isEmpty, "\(mode): OUT(또는 .part)이 남았다: \(lab.names(in: lab.out))")
+            #expect(lab.names(in: lab.tmp).isEmpty, "\(mode): 임시 조각이 남았다: \(lab.names(in: lab.tmp))")
+            let calls = lab.calls()
+            // 어긋난 조각만 새 서명 주소로 한 번 더 — samebody 는 첫 조각(0번)만 진짜로 맞다.
+            #expect(calls.filter { $0.hasPrefix("piece ") }.count == 8 + badPerRound, "\(mode): \(calls)")
+            #expect(calls.filter { $0.hasPrefix("probe ") }.count == 2, "\(mode): \(calls)")
+            #expect(run.output.contains("두 번 다 어긋났습니다"), "\(mode): \(run.output)")
+            #expect(run.output.contains("재시도한 조각 \(badPerRound)개"), "\(mode): \(run.output)")
+        }
+    }
+
+    // 한 줄(a=0, b=전체-1)이면 200 + 전체 본문도 받는다 — 요청 범위가 곧 전체라 본문이 그대로 답이다.
+    @Test func pfetch_한_줄이면_200_전체_응답도_받는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_PIECE_MODE": "code200"])
+
+        #expect(run.status == 0, "\(run.output)")
+        #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData)
+        #expect(lab.calls().filter { $0.hasPrefix("piece ") } == ["piece 0-299999 \(PrefetchLab.finalURL(1))"])
+        #expect(run.output.contains("재시도한 조각 0개"), "\(run.output)")
+    }
+
+    // latest/download 주소는 재탐색 사이에 새 릴리스로 바뀔 수 있다 — 전체 크기가 바뀌면 다른 자산의 조각을 섞지 않고 폴백한다.
+    @Test func pfetch_재탐색에서_전체_크기가_바뀌면_폴백한다() throws {
+        let lab = try PrefetchLab(fixtureSize: 9_000_001)
+        let stalled = PrefetchLab.ranges(total: 9_000_001, parts: 8)[3]
+        let start = String(stalled.prefix { $0 != "-" })
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_STALL_ONCE": start, "FAKE_TOTAL_CHANGES": "1"])
+
+        #expect(run.status != 0, "\(run.output)")
+        #expect(run.output.contains("나눠 받기 폴백: 받는 사이 전체 크기가 바뀌었습니다"), "\(run.output)")
+        #expect(lab.calls().filter { $0.hasPrefix("piece ") }.count == 8, "크기가 바뀐 뒤에도 조각을 더 받았다: \(lab.calls())")
+        #expect(lab.calls().filter { $0.hasPrefix("probe ") }.count == 2)
+        #expect(lab.names(in: lab.out).isEmpty)
+        #expect(lab.names(in: lab.tmp).isEmpty)
+    }
+
+    // Content-Range 의 전체 크기가 숫자가 아니거나(`*` 는 RFC 의 '모름') 0 이거나 터무니없이 길면 조각을 보내지 않는다.
+    // 이 검사가 없으면 산술식이 `*`·글자에서 죽어(set -u) 사유 로그도 없이 임시 폴더를 남긴다(검토 실측).
+    @Test func pfetch_Content_Range_전체_크기가_이상하면_조각을_보내지_않는다() throws {
+        for (label, text, reason) in [
+            ("star", "*", "전체 크기를 모릅니다"),
+            ("word", "abc", "전체 크기를 모릅니다"),
+            ("empty", "", "전체 크기를 모릅니다"),
+            ("zero", "0", "전체 크기가 이상합니다(0)"),
+            ("long", "1234567890123", "전체 크기가 이상합니다(1234567890123)"),
+        ] {
+            let lab = try PrefetchLab(fixtureSize: 300_000, label: label)
+            let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_TOTAL_TEXT": text])
+
+            #expect(run.status != 0, "\(label): \(run.output)")
+            #expect(lab.calls().filter { $0.hasPrefix("piece ") }.isEmpty, "\(label): \(lab.calls())")
+            #expect(run.output.contains("나눠 받기 폴백: \(reason)"), "\(label): \(run.output)")
+            #expect(lab.names(in: lab.out).isEmpty, "\(label)")
+            #expect(lab.names(in: lab.tmp).isEmpty, "\(label): 임시 폴더가 남았다: \(lab.names(in: lab.tmp))")
+        }
     }
 
     // 경계를 양쪽에서 잰다 — 8MB(8,388,608) 미만은 한 줄, 8MB 부터 8갈래. 머리 이름은 소문자(HTTP/2)로 대소문자 무시를 함께 잰다.
@@ -309,6 +401,133 @@ struct V0361UpdatePrefetchTests {
         #expect(!lab.sequence().contains { $0.hasPrefix("open ") }, "업그레이드가 실패했는데 앱을 열었다")
     }
 
+    // ★ 불변식 2(검증 없이 brew 캐시에 넣지 않는다)를 **과정**에서 잰다 — 끝 상태만 보면 "캐시 이름으로 받고 그 자리에서 재다가
+    // 틀리면 지우는" 코드도 초록이다(검토 T06a). 그 순간 스크립트가 죽으면 brew 는 지문이 틀린 캐시를 다시 받지 않고 실패한다.
+    // 가짜 shasum 이 대상 경로와 그 순간 CACHE 가 있는지를 적는다: 대상은 캐시와 **같은 폴더**(mv 가 원자적이게)의
+    // **숨김 고유 이름**(`.aing-check-part.XXXXXX` — brew 의 `<url sha>--*` glob 에 안 걸리게)이고, 그때 CACHE 는 없다.
+    @Test func brew_지문_검사는_캐시_이름_밖의_숨김_고유_이름에서_한다() throws {
+        for (label, mismatch) in [("ok", false), ("bad", true)] {
+            let lab = try PrefetchLab(fixtureSize: 300_000, label: label)
+            let run = try lab.runBrew(sha: mismatch ? String(repeating: "ab", count: 32) : lab.fixtureSHA)
+            #expect(run.status == 0, "\(label): \(run.output)")
+
+            let checks = lab.lines("shasum")
+            #expect(checks.count == 1, "\(label): 지문 검사가 정확히 한 번이 아니다: \(checks)")
+            let check = try #require(checks.first)
+            let target = URL(fileURLWithPath: String(try #require(check.components(separatedBy: " cache=").first)))
+            #expect(check.hasSuffix(" cache=absent"), "\(label): 지문을 재는 동안 캐시 이름에 파일이 보였다: \(check)")
+            #expect(target.deletingLastPathComponent().path == lab.brewCache.deletingLastPathComponent().path,
+                    "\(label): 캐시와 다른 폴더에서 쟀다(mv 가 원자적이지 않다): \(check)")
+            #expect(target.lastPathComponent.hasPrefix(".aing-check-part."), "\(label): 숨김 고유 이름이 아니다: \(check)")
+            #expect(target.lastPathComponent != ".aing-check-part.XXXXXX", "\(label): 이름이 고유하지 않다: \(check)")
+            if mismatch {
+                #expect(lab.names(in: lab.brewCache.deletingLastPathComponent()).isEmpty, "\(label): 잔재가 남았다")
+            } else {
+                #expect(try Data(contentsOf: lab.brewCache) == lab.fixtureData)
+                #expect(lab.names(in: lab.brewCache.deletingLastPathComponent()) == [lab.brewCache.lastPathComponent])
+            }
+        }
+    }
+
+    // ★ 검토 지적 수리(고정 이름의 경합): 감시 600초 뒤 다시 눌러 두 벌이 겹친 상황. A 는 맞는 바이트, B 는 크기만 맞고 내용이 틀린
+    // 바이트를 받는다. 가짜 shasum 이 차례를 못박는다 — A 는 자기 파일을 잰 뒤 B 가 잴 때까지 기다리고, B 는 잰 뒤 A 가 upgrade 할 때까지
+    // 기다린다. 받는 이름이 고정(`<CACHE>.aing-check-part`)이면 그사이 B 가 같은 이름에 자기 바이트를 써 넣고, A 는 **자기가 검증한
+    // 경로**를 mv 해 B 의 바이트를 캐시에 넣는다(검토 실측 그대로). 이름이 실행마다 고유하면 캐시에는 A 의 맞는 바이트만 들어간다.
+    @Test func brew_두_벌이_겹쳐도_검증_안_된_바이트는_캐시에_들어가지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        try lab.writeBrewFixture(sha: lab.fixtureSHA, installed: "0.3.61")
+        let bad = lab.root.appendingPathComponent("fixture-bad.bin")
+        try PrefetchLab.bytes(300_000, seed: 0xBAD5EED).write(to: bad)
+        let script = ["-c", UpdateRunner.brewUpgradeScript, "aing-check-update",
+                      lab.bin.appendingPathComponent("brew").path, UpdateRunner.caskName, lab.appPath]
+
+        let a = try ChildProcess("/bin/zsh", script, env: lab.environment.merging(["FAKE_ROLE": "A"]) { $1 })
+        let hashedA = lab.state.appendingPathComponent("hashed-A")
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline, !FileManager.default.fileExists(atPath: hashedA.path) { Thread.sleep(forTimeInterval: 0.02) }
+        #expect(FileManager.default.fileExists(atPath: hashedA.path), "A 가 지문 검사에 닿지 못했다")
+        let runB = try runProcess("/bin/zsh", script,
+                                  env: lab.environment.merging(["FAKE_ROLE": "B", "FAKE_FIXTURE": bad.path]) { $1 })
+        let runA = a.finish()
+
+        #expect(runA.status == 0, "\(runA.output)")
+        #expect(runB.status == 0, "\(runB.output)")
+        #expect(runA.output.contains("· 성공(0.3.62)"), "A: \(runA.output)")
+        #expect(runB.output.contains("실패(지문 불일치"), "B: \(runB.output)")
+        #expect(lab.lines("shasum").count == 2, "두 벌이 각각 한 번씩 재야 한다: \(lab.lines("shasum"))")
+        #expect(try Data(contentsOf: lab.brewCache) == lab.fixtureData, "검증 안 된 바이트가 brew 캐시에 들어갔다")
+        #expect(!lab.sequence().contains { $0.hasPrefix("cache-at-upgrade ") && $0 != "cache-at-upgrade \(lab.fixtureSHA)" },
+                "brew 가 upgrade 하는 순간 지문이 틀린 캐시를 봤다: \(lab.sequence())")
+        #expect(lab.names(in: lab.brewCache.deletingLastPathComponent()) == [lab.brewCache.lastPathComponent],
+                "캐시 폴더에 잔재가 남았다: \(lab.names(in: lab.brewCache.deletingLastPathComponent()))")
+    }
+
+    // ★ 검토 지적 수리(잔재): 잇는 도중 죽으면(종료·로그아웃) 받던 파일이 캐시 폴더에 남는다. 그 이름이 `<url sha>--` 로 시작하면
+    // brew 의 캐시 찾기(`downloads/<url sha>--*` 에서 `.incomplete` 만 뺀다)가 그것을 캐시 본체로 집는다(검토 실측). 숨김 이름이어야 한다.
+    // 가짜 cat 이 잇는 도중 미리 받기 서브셸을 SIGKILL 로 죽인다 — 스크립트 본체는 살아 upgrade 로 간다(지금 동작).
+    @Test func brew_잇다가_죽어도_brew_가_집을_이름의_잔재를_남기지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        let run = try lab.runBrew(sha: lab.fixtureSHA, env: ["FAKE_CAT_KILL": "1"])
+
+        #expect(run.status == 0, "\(run.output)")
+        let dir = lab.brewCache.deletingLastPathComponent()
+        let left = lab.names(in: dir)
+        #expect(!left.isEmpty, "죽인 흔적이 없다 — 시나리오가 헛돈다: \(run.output)")
+        let brewGlob = String(lab.brewCache.lastPathComponent.prefix { $0 != "-" }) + "--"
+        #expect(left.allSatisfy { !$0.hasPrefix(brewGlob) }, "brew 가 캐시 본체로 집을 이름의 잔재가 남았다: \(left)")
+        #expect(left.allSatisfy { $0.hasPrefix(".aing-check-part.") }, "\(left)")
+        #expect(lab.sequence().suffix(3) == ["brew upgrade --cask aing-check [auto=unset]", "cache-at-upgrade none", "open -a \(lab.appPath)"],
+                "\(lab.sequence())")
+    }
+
+    // 고유 이름이라 죽은 실행의 숨김 조각은 다음 실행이 치운다 — **60분 넘은 것만**(미리 받기의 최악은 240초라 그건 반드시 죽은 것).
+    // 막 생긴 것(겹친 다른 실행의 것일 수 있다)과 brew 자신의 파일은 건드리지 않는다.
+    @Test func brew_죽은_실행의_숨김_조각은_60분_넘은_것만_지운다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        let dir = lab.brewCache.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let old = Date().addingTimeInterval(-2 * 3600)
+        for (name, date) in [(".aing-check-part.OLD111", old), (".aing-check-part.OLD111.part", old),
+                             (".aing-check-part.NEW222", Date()), ("deadbeef--other-1.0.zip", old)] {
+            let url = dir.appendingPathComponent(name)
+            try Data("x".utf8).write(to: url)
+            try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        }
+        let run = try lab.runBrew(sha: lab.fixtureSHA)
+
+        #expect(run.status == 0, "\(run.output)")
+        #expect(try Data(contentsOf: lab.brewCache) == lab.fixtureData)
+        #expect(lab.names(in: dir) == [".aing-check-part.NEW222", lab.brewCache.lastPathComponent, "deadbeef--other-1.0.zip"].sorted(),
+                "\(lab.names(in: dir))")
+    }
+
+    // `brew --cache` 출력이 여러 줄이면(경고가 섞이는 등) 그 값을 경로로 쓰지 않는다. 첫 줄은 절대경로라 절대경로 방어에 먼저 걸리지 않는다.
+    @Test func brew_cache_출력이_여러_줄이면_받지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        let run = try lab.runBrew(sha: lab.fixtureSHA, env: ["FAKE_BREW_CACHE_OUT": "\(lab.brewCache.path)\n/second/line"])
+
+        #expect(run.status == 0, "\(run.output)")
+        #expect(lab.calls().isEmpty, "여러 줄 캐시 자리로 받았다: \(lab.calls())")
+        #expect(run.output.contains("건너뜀(캐시 자리가 여러 줄)"), "\(run.output)")
+        #expect(lab.sequence().suffix(3) == ["brew upgrade --cask aing-check [auto=unset]", "cache-at-upgrade none", "open -a \(lab.appPath)"],
+                "\(lab.sequence())")
+    }
+
+    // 빈 값이나 상대경로면 작업 폴더에 폴더를 만들고 받게 된다 — 받지 않는다. 작업 폴더를 실험실로 둔다(방어가 빠져도 저장소에 안 생기게).
+    @Test func brew_cache_출력이_절대경로가_아니면_받지_않는다() throws {
+        for (label, value) in [("empty", ""), ("relative", "relative/x.zip")] {
+            let lab = try PrefetchLab(fixtureSize: 300_000, label: label)
+            let run = try lab.runBrew(sha: lab.fixtureSHA, env: ["FAKE_BREW_CACHE_OUT": value], cwd: lab.root)
+
+            #expect(run.status == 0, "\(label): \(run.output)")
+            #expect(lab.calls().isEmpty, "\(label): 절대경로가 아닌 캐시 자리로 받았다: \(lab.calls())")
+            #expect(run.output.contains("건너뜀(캐시 자리를 모름)"), "\(label): \(run.output)")
+            #expect(!FileManager.default.fileExists(atPath: lab.root.appendingPathComponent("relative").path), "\(label)")
+            #expect(lab.sequence().suffix(3) == ["brew upgrade --cask aing-check [auto=unset]", "cache-at-upgrade none",
+                                                 "open -a \(lab.appPath)"], "\(label): \(lab.sequence())")
+        }
+    }
+
     // 래퍼는 값을 끼우지 않는다(`dmgSpawnWrapperInterpolatesNothing` 과 같은 모양).
     @Test func brew_래퍼는_아무_값도_끼우지_않는다() {
         let wrapper = UpdateRunner.brewSpawnWrapper
@@ -319,18 +538,24 @@ struct V0361UpdatePrefetchTests {
     }
 
     // 래퍼 + 인자를 **실제로** 던져 본다: `$1`…`$5` 가 한 자리씩 맞아야 brew 가 cask 이름을, open 이 앱 경로를 받는다.
-    // 앱 경로·로그 자리만 실험실로 바꾸고(실제 로그·실제 앱을 건드리지 않게) 나머지는 프로덕션 인자 그대로다.
+    // `detachedSpawn` 이 zsh 에 넘기는 인자 배열(`brewSpawnCommandArguments`)을 **그대로** 쓴다 — 시험이 `["-c", 래퍼] + 인자` 를
+    // 스스로 다시 만들면 소스에서 argv0 를 빠뜨려도 초록이다(검토 T12b). 앱 경로·로그 자리만 실험실로 바꾼다
+    // (실제 로그·실제 앱을 건드리지 않게) — 나머지는 프로덕션 인자 그대로다.
     @Test func brew_래퍼와_인자를_실제로_던지면_자리가_맞는다() throws {
         let lab = try PrefetchLab(fixtureSize: 300_000)
         try lab.writeBrewFixture(sha: lab.fixtureSHA, installed: "0.3.61")
-        var args = UpdateRunner.brewUpgradeArguments(brew: lab.bin.appendingPathComponent("brew").path)
-        #expect(args.count == 6)
-        #expect(args[4] == UpdateRunner.appPath)
-        #expect(args[5] == UpdateRunner.logPath)
+        let brew = lab.bin.appendingPathComponent("brew").path
+        var argv = UpdateRunner.brewSpawnCommandArguments(brew: brew)
+        try #require(argv.count == 8, "zsh 에 넘길 인자 수가 다르다(래퍼 $1…$5 가 밀린다): \(argv.count)")
+        #expect(argv[0] == "-c")
+        #expect(argv[1] == UpdateRunner.brewSpawnWrapper)
+        #expect(argv[3] == UpdateRunner.brewUpgradeScript)       // 래퍼의 $1
+        #expect(argv[6] == UpdateRunner.appPath)                 // 래퍼의 $4
+        #expect(argv[7] == UpdateRunner.logPath)                 // 래퍼의 $5
         let log = lab.root.appendingPathComponent("update.log")
-        args[4] = lab.appPath
-        args[5] = log.path
-        let run = try runProcess("/bin/zsh", ["-c", UpdateRunner.brewSpawnWrapper] + args, env: lab.environment)
+        argv[6] = lab.appPath
+        argv[7] = log.path
+        let run = try runProcess("/bin/zsh", argv, env: lab.environment)
         #expect(run.status == 0, "\(run.output)")
 
         // nohup 으로 떨어져 나간 셸이 끝날 때까지(가짜 open 이 마지막 줄을 적을 때까지) 기다린다.
@@ -380,6 +605,74 @@ struct V0361UpdatePrefetchTests {
         #expect(whole.hasSuffix("/a.dmg \(PrefetchLab.originURL)"))
         #expect(lab.stateLines() == ["stage=start", "stage=download"], "\(lab.stateLines())")
         #expect(lab.names(in: lab.tmp).isEmpty)
+    }
+
+    // ★ 검토 지적 수리(불변식 1): 나눠 받기가 크기만 맞고 내용이 틀린 파일을 "완전하다"고 돌려주면, DMG 경로에는 지문이 없어서
+    // 기존 단일 curl 로 떨어지지 못하고 검증(image)에서 업데이트가 실패로 끝났다(검토 실측: whole-curl-calls 0). 조각 응답을
+    // 요청 범위와 맞춰 보게 고친 뒤에는 나눠 받기가 0 아님을 돌려주고 **기존 단일 curl 그대로** 받는다.
+    @Test func dmg_나눠_받은_조각이_요청과_다르면_기존_단일_curl_로_받는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 9_000_000)        // 8의 배수 — 되풀이한 조각도 크기는 전부 맞다
+        let run = try lab.runDMGDownloadStage(env: ["FAKE_PIECE_MODE": "samebody"])
+
+        #expect(run.status == 0, "\(run.output)")
+        #expect(lab.calls().filter { $0.hasPrefix("whole ") } == ["whole \(PrefetchLab.originURL)"],
+                "내용이 틀린 나눠 받기를 믿고 단일 curl 로 떨어지지 않았다: \(lab.calls())")
+        #expect(try Data(contentsOf: lab.dmgCapture) == lab.fixtureData, "검증 단계로 넘어간 파일이 원본과 다르다")
+        #expect(run.output.contains("나눠 받기 폴백: "), "\(run.output)")
+        #expect(lab.stateLines() == ["stage=start", "stage=download"], "\(lab.stateLines())")
+        #expect(lab.names(in: lab.tmp).isEmpty)
+    }
+
+    // DMG 래퍼 + 인자를 **실제로** 던져 본다(brew 와 같은 까닭 — `detachedSpawnDMG` 는 시험에서 불리지 않는다).
+    // `dmgSpawnCommandArguments` 의 결과를 그대로 쓰고, 스크립트 자리(래퍼의 $1)만 인자를 적기만 하는 탐침으로, 로그 자리($8)만
+    // 실험실로 바꾼다 — 실제 DMG 스크립트는 돌지 않는다. 번들 경로는 일부러 악의적인 글자로 — 한 토막 그대로 와야 한다.
+    @MainActor
+    @Test func dmg_래퍼와_인자를_실제로_던지면_자리가_맞는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 1)
+        let nasty = lab.root.appendingPathComponent("It's \"My\" Apps; rm -rf ~/x $(whoami)/aing-check.app").path
+        let runner = UpdateRunner(
+            fileExists: { _ in false },
+            directoryContents: { _ in [] },
+            resolvePath: { $0 },
+            isWritable: { _ in true },
+            bundlePath: nasty,
+            processID: 4242,
+            currentBuild: 100,
+            readState: { _ in nil },
+            clearState: { _ in },
+            spawn: { _ in Issue.record("스폰하지 않는다"); return false },
+            spawnDMG: { _ in Issue.record("스폰하지 않는다"); return false },
+            watchdogSleep: { _ in }
+        )
+        let plan = try #require(runner.dmgUpdatePlan())
+        var argv = UpdateRunner.dmgSpawnCommandArguments(plan)
+        try #require(argv.count == 11, "zsh 에 넘길 인자 수가 다르다(래퍼 $1…$8 이 밀린다): \(argv.count)")
+        #expect(argv[0] == "-c")
+        #expect(argv[1] == UpdateRunner.dmgSpawnWrapper)
+        #expect(argv[3] == UpdateRunner.dmgUpdateScript)         // 래퍼의 $1
+        #expect(argv[10] == UpdateRunner.logPath)                // 래퍼의 $8
+        let log = lab.root.appendingPathComponent("dmg-wrapper.log")
+        argv[3] = #"print -r -- "0=<$0>"; i=1; for a in "$@"; do print -r -- "$i=<$a>"; i=$(( i + 1 )); done; print -r -- "argc=$#""#
+        argv[10] = log.path
+        let run = try runProcess("/bin/zsh", argv, env: lab.environment)
+        #expect(run.status == 0, "\(run.output)")
+
+        // nohup 으로 떨어져 나간 셸이 끝날 때까지(마지막 줄을 적을 때까지) 기다린다.
+        func lines() -> [String] {
+            ((try? String(contentsOf: log, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+        }
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline, !lines().contains(where: { $0.hasPrefix("argc=") }) { Thread.sleep(forTimeInterval: 0.05) }
+        #expect(lines() == [
+            "0=<aing-check-update>",
+            "1=<\(nasty)>",                                // 번들 경로 — 손대지 않은 그대로
+            "2=<\(UpdateRunner.dmgURL)>",
+            "3=<4242>",
+            "4=<\(UpdateRunner.codeRequirement)>",
+            "5=<100>",
+            "6=<\(UpdateRunner.statePath)>",
+            "argc=6",
+        ], "래퍼 자리가 어긋났다: \(lines())")
     }
 
     @Test func dmg_둘_다_안_되면_download_실패를_상태_파일에_적는다() throws {
@@ -461,7 +754,7 @@ private struct PrefetchLab {
         fixtureData = Self.bytes(fixtureSize, seed: UInt64(fixtureSize) &* 0x9E37_79B9_7F4A_7C15)
         try fixtureData.write(to: root.appendingPathComponent("fixture.bin"))
         fixtureSHA = sha256Hex(of: root.appendingPathComponent("fixture.bin"))
-        for (name, text) in [("curl", fakeCurl), ("brew", fakeBrew), ("open", fakeOpen), ("cat", fakeCat)] {
+        for (name, text) in [("curl", fakeCurl), ("brew", fakeBrew), ("open", fakeOpen), ("cat", fakeCat), ("shasum", fakeShasum)] {
             let url = root.appendingPathComponent("bin/\(name)")
             try text.write(to: url, atomically: true, encoding: .utf8)
             try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
@@ -514,11 +807,11 @@ private struct PrefetchLab {
 
     /// brew 스크립트를 프로덕션 모양 그대로(`zsh -c <스크립트> argv0 brew cask 앱`) 돌린다.
     func runBrew(sha: String, installed: String = "0.3.61", url: String = PrefetchLab.caskURL,
-                 env: [String: String] = [:]) throws -> ProcessRun {
+                 env: [String: String] = [:], cwd: URL? = nil) throws -> ProcessRun {
         try writeBrewFixture(sha: sha, installed: installed, url: url)
         return try runProcess("/bin/zsh", ["-c", UpdateRunner.brewUpgradeScript, "aing-check-update",
                                            bin.appendingPathComponent("brew").path, UpdateRunner.caskName, appPath],
-                              env: environment.merging(env) { $1 })
+                              env: environment.merging(env) { $1 }, cwd: cwd)
     }
 
     /// DMG 스크립트의 **앞부분만**(시작 ~ "받음" 로그 줄) 돌리고 받은 파일을 `$7` 로 복사한다. 그 뒤 단계(hdiutil · spctl ·
@@ -563,25 +856,45 @@ private struct ProcessRun {
 }
 
 /// 자식 프로세스를 돌리고 stdout+stderr 를 모은다. 60초 안에 안 끝나면 끊는다(멈춘 시험이 스위트를 붙잡지 않게).
-private func runProcess(_ path: String, _ arguments: [String], env: [String: String]) throws -> ProcessRun {
-    final class Box: @unchecked Sendable {
-        let process = Process()
+private func runProcess(_ path: String, _ arguments: [String], env: [String: String], cwd: URL? = nil) throws -> ProcessRun {
+    try ChildProcess(path, arguments, env: env, cwd: cwd).finish()
+}
+
+/// 띄워 두고 나중에 거두는 자식 프로세스 — 두 실행을 겹치게 하는 시험이 쓴다. 출력은 뒤에서 읽어 파이프가 막히지 않게 한다.
+private final class ChildProcess: @unchecked Sendable {
+    private let process = Process()
+    private let lock = NSLock()
+    private var collected = Data()
+    private let done = DispatchSemaphore(value: 0)
+
+    init(_ path: String, _ arguments: [String], env: [String: String], cwd: URL? = nil) throws {
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        process.environment = env
+        if let cwd { process.currentDirectoryURL = cwd }
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        process.standardInput = FileHandle.nullDevice
+        try process.run()
+        let handle = pipe.fileHandleForReading
+        DispatchQueue.global().async { [self] in
+            let data = handle.readDataToEndOfFile()
+            lock.lock(); collected = data; lock.unlock()
+            done.signal()
+        }
     }
-    let box = Box()
-    box.process.executableURL = URL(fileURLWithPath: path)
-    box.process.arguments = arguments
-    box.process.environment = env
-    let pipe = Pipe()
-    box.process.standardOutput = pipe
-    box.process.standardError = pipe
-    box.process.standardInput = FileHandle.nullDevice
-    try box.process.run()
-    let guardItem = DispatchWorkItem { if box.process.isRunning { box.process.terminate() } }
-    DispatchQueue.global().asyncAfter(deadline: .now() + 60, execute: guardItem)
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    box.process.waitUntilExit()
-    guardItem.cancel()
-    return ProcessRun(status: box.process.terminationStatus, output: String(decoding: data, as: UTF8.self))
+
+    /// 끝나기를 기다려 거둔다. `timeout` 안에 안 끝나면 끊는다.
+    func finish(timeout: TimeInterval = 60) -> ProcessRun {
+        if done.wait(timeout: .now() + timeout) == .timedOut {
+            if process.isRunning { process.terminate() }
+            _ = done.wait(timeout: .now() + 5)
+        }
+        process.waitUntilExit()
+        lock.lock(); defer { lock.unlock() }
+        return ProcessRun(status: process.terminationStatus, output: String(decoding: collected, as: UTF8.self))
+    }
 }
 
 private func sha256Hex(of url: URL) -> String {
@@ -592,24 +905,33 @@ private func sha256Hex(of url: URL) -> String {
 // MARK: - 가짜 도구
 
 /// 가짜 curl. 실제 curl 이 받는 옵션만 받아들이고(모르면 2 — 실제 curl 과 같은 종료코드), 픽스처의 바이트 범위를 내준다.
-///  · 탐색(`-D` + `-r 0-0`): 302 블록(가짜 `Content-Range: bytes 0-0/1` 이 섞인) + 206 블록 머리를 쓰고, `-w` 자리에
+///  · 탐색(`-L` · `-D` · `-r 0-0`): 302 블록(가짜 `Content-Range: bytes 0-0/1` 이 섞인) + 206 블록 머리를 쓰고, `-w` 자리에
 ///    `206 <서명된 최종 주소 — 탐색마다 sig 번호가 는다>` 를 낸다. FAKE_NORANGE 면 200 + 본문 전체(Range 무시 서버).
-///  · 조각(`-r a-b`): 그 범위를 낸다. FAKE_STALL_ONCE=<시작 바이트> 면 처음 한 번은 절반만 쓰고 28(멎음),
-///    FAKE_SHORT_ALWAYS=<시작 바이트> 면 매번 한 바이트 모자라게 쓰고 0.
+///    탐색은 `-L` 이 붙은 `-D` 요청으로 가른다(조각도 `-D` 를 받는다). FAKE_TOTAL_TEXT 면 206 블록 Content-Range 의 전체 크기
+///    글자를 그것으로 바꾸고(`*` · `0` · 글자), FAKE_TOTAL_CHANGES 면 두 번째 탐색부터 전체 크기를 1 늘려 알린다(그사이 자산이 바뀜).
+///  · 조각(`-r a-b`, `-L` 없음): 그 범위를 내고 `-D` 에 `HTTP/2 206` + `content-range: bytes a-b/전체` 를, `-w %{http_code}` 자리에
+///    코드를 낸다. FAKE_STALL_ONCE=<시작 바이트> 면 처음 한 번은 절반만 쓰고 28(멎음), FAKE_SHORT_ALWAYS=<시작 바이트> 면 매번
+///    한 바이트 모자라게 쓰고 0. FAKE_PIECE_MODE 로 응답을 어긋나게 한다:
+///      samebody    — Range 를 무시하는 캐시가 첫 206(0번 조각)의 머리·본문을 조각마다 되풀이(크기 ceil(전체/8))
+///      samebody200 — 같은 되풀이를 200 으로(Content-Range 없음)
+///      wrongtotal  — 본문·범위는 맞고 전체 크기만 +1
+///      nocr        — 206 인데 Content-Range 가 없다
+///      code200     — 범위를 무시하고 200 + 본문 전체
 ///  · 단일(`-r` 없음): 본문 전체. FAKE_WHOLE_RC 면 그 코드로 실패.
 private let fakeCurl = #"""
     #!/bin/zsh
     set -u
     S="$FAKE_STATE"; FIX="$FAKE_FIXTURE"
     print -r -- "argv $*" >> "$S/curl.argv"
-    range="" out="" hdr="" url=""
+    range="" out="" hdr="" url="" wfmt="" follow=""
     while [ $# -gt 0 ]; do
       case "$1" in
         (-r|-o|-D|-w|--proto|--proto-redir|--connect-timeout|--max-time|--speed-limit|--speed-time)
           [ $# -ge 2 ] || { print -u2 "fake curl: $1 에 값이 없다"; exit 2; }
-          case "$1" in (-r) range="$2" ;; (-o) out="$2" ;; (-D) hdr="$2" ;; esac
+          case "$1" in (-r) range="$2" ;; (-o) out="$2" ;; (-D) hdr="$2" ;; (-w) wfmt="$2" ;; esac
           shift 2 ;;
-        (-f|-s|-S|-L|-fsS|-fL|--tlsv1.2) shift ;;
+        (-L|-fL) follow=1; shift ;;
+        (-f|-s|-S|-fsS|--tlsv1.2) shift ;;
         (-*) print -u2 "fake curl: 모르는 옵션 $1"; exit 2 ;;
         (*) [ -z "$url" ] || { print -u2 "fake curl: 주소가 둘"; exit 2; }; url="$1"; shift ;;
       esac
@@ -617,7 +939,7 @@ private let fakeCurl = #"""
     [ -n "$url" ] && [ -n "$out" ] || { print -u2 "fake curl: 주소나 -o 가 없다"; exit 2; }
     total=$(stat -f %z "$FIX")
     serve() { tail -c +$(( $1 + 1 )) "$FIX" | head -c "$2" > "$out"; }
-    if [ -n "$hdr" ]; then
+    if [ -n "$hdr" ] && [ -n "$follow" ]; then
       [ "$range" = "0-0" ] || { print -u2 "fake curl: 탐색 범위가 0-0 이 아니다"; exit 2; }
       n=$(( $(cat "$S/probes" 2>/dev/null || print 0) + 1 )); print $n > "$S/probes"
       final="${FAKE_FINAL_BASE:-https://objects.example.invalid}/asset.bin?sig=SECRET-$n"
@@ -629,25 +951,47 @@ private let fakeCurl = #"""
         printf '200 %s' "$final"
         exit 0
       fi
+      ctotal="${FAKE_TOTAL_TEXT-$total}"
+      if [ -n "${FAKE_TOTAL_CHANGES:-}" ] && [ "$n" -ge 2 ]; then ctotal=$(( total + 1 )); fi
       if [ -n "${FAKE_NO_FINAL_CR:-}" ]; then
         printf 'HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Range: bytes 0-0/1\r\n\r\nHTTP/2 206\r\ncontent-length: 1\r\n\r\n' "$final" > "$hdr"
       else
-        printf 'HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Range: bytes 0-0/1\r\n\r\nHTTP/2 206\r\n%s: bytes 0-0/%s\r\ncontent-length: 1\r\n\r\n' "$final" "${FAKE_CR_NAME:-Content-Range}" "$total" > "$hdr"
+        printf 'HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Range: bytes 0-0/1\r\n\r\nHTTP/2 206\r\n%s: bytes 0-0/%s\r\ncontent-length: 1\r\n\r\n' "$final" "${FAKE_CR_NAME:-Content-Range}" "$ctotal" > "$hdr"
       fi
       serve 0 1
       printf '206 %s' "$final"
       exit 0
     fi
     if [ -z "$range" ]; then
+      [ -z "$hdr" ] || { print -u2 "fake curl: 단일 받기에 -D 가 있다"; exit 2; }
       print -r -- "whole $url" >> "$S/calls"
       print -r -- "curl whole" >> "$S/seq"
       if [ -n "${FAKE_WHOLE_RC:-}" ]; then print -u2 "curl: (${FAKE_WHOLE_RC}) 가짜 실패"; exit "$FAKE_WHOLE_RC"; fi
       cat "$FIX" > "$out"
       exit 0
     fi
+    [ -z "$follow" ] || { print -u2 "fake curl: 조각이 리다이렉트를 따라간다"; exit 2; }
+    [ -z "$wfmt" ] || [ "$wfmt" = '%{http_code}' ] || { print -u2 "fake curl: 조각의 -w 가 다르다: $wfmt"; exit 2; }
     a="${range%-*}"; b="${range#*-}"; len=$(( b - a + 1 ))
     print -r -- "piece $range $url" >> "$S/calls"
     print -r -- "curl piece" >> "$S/seq"
+    code=206; cr="bytes $a-$b/$total"; from=$a; count=$len
+    case "${FAKE_PIECE_MODE:-}" in
+      (samebody) count=$(( (total + 7) / 8 )); from=0; cr="bytes 0-$(( count - 1 ))/$total" ;;
+      (samebody200) count=$(( (total + 7) / 8 )); from=0; code=200; cr="" ;;
+      (wrongtotal) cr="bytes $a-$b/$(( total + 1 ))" ;;
+      (nocr) cr="" ;;
+      (code200) code=200; cr=""; from=0; count=$total ;;
+      ('') ;;
+      (*) print -u2 "fake curl: 모르는 FAKE_PIECE_MODE"; exit 2 ;;
+    esac
+    if [ -n "$hdr" ]; then
+      if [ -n "$cr" ]; then
+        printf 'HTTP/2 %s\r\ncontent-range: %s\r\ncontent-length: %s\r\n\r\n' "$code" "$cr" "$count" > "$hdr"
+      else
+        printf 'HTTP/2 %s\r\ncontent-length: %s\r\n\r\n' "$code" "$count" > "$hdr"
+      fi
+    fi
     if [ "${FAKE_STALL_ONCE:-x}" = "$a" ] && [ ! -e "$S/stalled" ]; then
       : > "$S/stalled"
       serve "$a" $(( len / 2 ))
@@ -656,14 +1000,19 @@ private let fakeCurl = #"""
     fi
     if [ "${FAKE_SHORT_ALWAYS:-x}" = "$a" ]; then
       serve "$a" $(( len - 1 ))
+      [ -z "$wfmt" ] || printf '%s' "$code"
       exit 0
     fi
-    serve "$a" "$len"
+    serve "$from" "$count"
+    [ -z "$wfmt" ] || printf '%s' "$code"
     exit 0
     """#
 
 /// 가짜 brew. 호출을 차례대로 적고(`HOMEBREW_NO_AUTO_UPDATE` 값까지), 준비된 JSON · 캐시 경로를 낸다.
 /// upgrade 하는 순간 캐시 자리에 무엇이 있는지(지문)를 적는다 — brew 가 그 파일을 쓸 수 있었는지 재는 자리다.
+/// FAKE_BREW_CACHE_OUT 이 **있으면**(빈 값 포함) `--cache` 가 그 글자를 그대로 낸다(여러 줄 · 빈 값 · 상대경로).
+/// FAKE_ROLE 이 있으면 upgrade 뒤에 `upgraded-<역할>` 표식을 남긴다(두 벌을 겹치는 시험의 차례 맞추기 — 가짜 shasum 참고).
+/// 지문은 진짜 `/usr/bin/shasum` 으로 잰다 — 가짜 shasum 의 기록에 섞이지 않게.
 private let fakeBrew = #"""
     #!/bin/zsh
     set -u
@@ -672,27 +1021,56 @@ private let fakeBrew = #"""
     case "${1:-}" in
       (update) exit "${FAKE_BREW_UPDATE_RC:-0}" ;;
       (info) cat "$FAKE_BREW_JSON"; exit 0 ;;
-      (--cache) print -r -- "$FAKE_BREW_CACHE"; exit 0 ;;
+      (--cache) print -r -- "${FAKE_BREW_CACHE_OUT-$FAKE_BREW_CACHE}"; exit 0 ;;
       (upgrade)
         if [ -e "$FAKE_BREW_CACHE" ]; then
-          g="$(shasum -a 256 "$FAKE_BREW_CACHE")"; print -r -- "cache-at-upgrade ${g%% *}" >> "$S/seq"
+          g="$(/usr/bin/shasum -a 256 "$FAKE_BREW_CACHE")"; print -r -- "cache-at-upgrade ${g%% *}" >> "$S/seq"
         else
           print -r -- "cache-at-upgrade none" >> "$S/seq"
         fi
+        [ -z "${FAKE_ROLE:-}" ] || : > "$S/upgraded-$FAKE_ROLE"
         exit "${FAKE_BREW_UPGRADE_RC:-0}" ;;
     esac
     exit 1
     """#
 
-/// 가짜 cat — 평소엔 진짜 cat 그대로. FAKE_CAT_FAIL 이면 pfetch 의 조각(`…/aing-check-pfetch.*/p<n>`)을 이을 때 10바이트만
-/// 쓰고 1 로 죽는다(잇는 도중 디스크가 찬 경우). `OUT.part` 가 생긴 **뒤의** 실패 갈래를 재는 유일한 자리다.
+/// 가짜 cat — 평소엔 진짜 cat 그대로. pfetch 가 조각(`…/aing-check-pfetch.*/p<n>`)을 이을 때만 갈래를 탄다:
+///  · FAKE_CAT_PROBE=<경로> — 이을 때마다 그 경로(OUT)가 그 이름으로 보이는지(present/absent) `catprobe` 에 적는다.
+///  · FAKE_CAT_FAIL  — 10바이트만 쓰고 1 로 죽는다(잇는 도중 디스크가 찬 경우). `OUT.part` 가 생긴 **뒤의** 실패 갈래.
+///  · FAKE_CAT_SHORT — 10바이트만 쓰고 **0** 을 돌려준다(짧게 쓰고도 성공이라 한 경우 — 이은 크기 검사만 잡는다).
+///  · FAKE_CAT_KILL  — 10바이트만 쓰고 부모(미리 받기 서브셸)를 SIGKILL 로 죽인다(잇는 도중 종료·로그아웃).
 private let fakeCat = #"""
     #!/bin/zsh
-    if [ -n "${FAKE_CAT_FAIL:-}" ] && [ $# -eq 1 ] && [[ "$1" == *aing-check-pfetch.*/p[0-9]* ]]; then
-      head -c 10 "$1"
-      exit 1
+    if [ $# -eq 1 ] && [[ "$1" == *aing-check-pfetch.*/p[0-9]* ]]; then
+      if [ -n "${FAKE_CAT_PROBE:-}" ]; then
+        if [ -e "$FAKE_CAT_PROBE" ]; then print -r -- present >> "$FAKE_STATE/catprobe"; else print -r -- absent >> "$FAKE_STATE/catprobe"; fi
+      fi
+      if [ -n "${FAKE_CAT_FAIL:-}" ]; then head -c 10 "$1"; exit 1; fi
+      if [ -n "${FAKE_CAT_SHORT:-}" ]; then head -c 10 "$1"; exit 0; fi
+      if [ -n "${FAKE_CAT_KILL:-}" ]; then head -c 10 "$1"; kill -9 "$PPID"; exit 1; fi
     fi
     exec /bin/cat "$@"
+    """#
+
+/// 가짜 shasum — 진짜 `/usr/bin/shasum` 으로 재고, 잰 대상(마지막 인자)과 **그 순간 brew 캐시 자리에 파일이 있는지**를
+/// `shasum` 에 적는다(불변식 2: 검증은 캐시 이름 밖에서 끝나야 한다). FAKE_ROLE 이 있으면 두 벌의 차례를 못박는다:
+///  · A — 잰 뒤 `hashed-A` 를 남기고 `hashed-B` 가 생길 때까지(최대 30초) 결과를 쥐고 기다린다(검증과 mv 사이를 넓힌다).
+///  · B — 잰 뒤 `hashed-B` 를 남기고 `upgraded-A` 가 생길 때까지 기다린다(A 가 mv·upgrade 를 다 마칠 때까지).
+private let fakeShasum = #"""
+    #!/bin/zsh
+    t="${@[-1]}"
+    if [ -e "$FAKE_BREW_CACHE" ]; then c=present; else c=absent; fi
+    print -r -- "${FAKE_ROLE:+$FAKE_ROLE }$t cache=$c" >> "$FAKE_STATE/shasum"
+    r="$(/usr/bin/shasum "$@")"; rc=$?
+    w=0
+    case "${FAKE_ROLE:-}" in
+      (A) : > "$FAKE_STATE/hashed-A"
+          while [ ! -e "$FAKE_STATE/hashed-B" ] && [ "$w" -lt 300 ]; do sleep 0.1; w=$(( w + 1 )); done ;;
+      (B) : > "$FAKE_STATE/hashed-B"
+          while [ ! -e "$FAKE_STATE/upgraded-A" ] && [ "$w" -lt 300 ]; do sleep 0.1; w=$(( w + 1 )); done ;;
+    esac
+    print -r -- "$r"
+    exit "$rc"
     """#
 
 /// 가짜 open — 적기만 한다(아무것도 띄우지 않는다).

@@ -580,4 +580,20 @@ import Testing
         touch.updateCellWidth(TetrisLayout.cell * 1.1747)      // SE 배율
         #expect(TetrisLayout.cell * 1.1747 > 15, "SE 배율에서 한 칸 문턱이 15pt 아래다")
     }
+
+    /// 머리 띠의 [기권]은 **줄이 깨지지 않는다**.
+    ///
+    /// ★ 값으로는 못 잡는 결함이다(배치다). SE(375pt)에서 칩이 넷일 때(판돈 · 경과 · 가속 · 기권) HStack 이
+    ///   유연한 쪽부터 좁히는데 그게 이 버튼이어서 글자가 "기 / 권" 두 줄로 쪼개졌다 — 헤드리스 스틸로 실제
+    ///   그 꼴을 보고 고쳤다. 다시 깨지지 않게 **고정 폭과 우선권**을 소스 계약으로 박는다.
+    @Test("머리 띠 [기권]은 고정 폭이다 — SE 에서 글자가 두 줄로 쪼개지지 않는다")
+    func theResignButtonNeverWraps() throws {
+        let code = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesTetrisDuelMatch.swift")
+        let strip = try #require(code.components(separatedBy: "if chrome.canResign {").last)
+        let head = String(strip.prefix(900))
+        #expect(head.contains(".fixedSize(horizontal: true, vertical: false)"),
+                "[기권] 이 고정 폭이 아니다 — 좁은 화면에서 글자가 쪼개진다")
+        #expect(head.contains(".layoutPriority(1)"),
+                "[기권] 에 우선권이 없다 — 가속 칩이 먼저 접히지 않는다")
+    }
 }

@@ -445,6 +445,12 @@ struct GamesTetrisDuelMatchView: View {
                            role: .destructive) {
                     confirmsResign = true
                 }
+                // ★ **줄이 깨지지 않는다**(`fixedSize` + 우선권). 안 걸면 SE(375pt)에서 칩이 넷일 때
+                //   (판돈 · 경과 · 가속 · 기권) HStack 이 이 버튼부터 좁혀 글자가 "기 / 권" 두 줄로 쪼개진다 —
+                //   헤드리스 스틸로 실제로 그 꼴을 봤다(`se-light-match-speedup`). 가속 칩이 먼저 짧은 꼴로
+                //   접히는 것이 맞다(레벨은 판 안에도 "Lv N" 으로 있다).
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
                 .accessibilityHint(TetrisPhoneText.resignWarning)
             }
         }

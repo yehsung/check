@@ -11,9 +11,10 @@ import Foundation
 extension MeStore {
     // MARK: 능력 번호
 
-    /// 상점 RPC 에 싣는 능력 번호(v0.3.43 로봇). 파생 자리는 여기 하나다 — 목록과 구매가 **같은 번호**로 가야 한다
-    /// (목록만 가리고 구매를 열어 두면 게이트가 장식이다 — B12). 재료와 "숫자를 박지 않는" 근거는
-    /// `MeStore.drawableCharacterIDs` 주석에 있다.
+    /// 상점 RPC 에 싣는 능력 번호(v0.3.43 로봇 1 · v0.3.54 금 2 · v0.3.59 무지개 **3**). 파생 자리는 여기 하나다 —
+    /// 목록과 구매가 **같은 번호**로 가야 한다(목록만 가리고 구매를 열어 두면 게이트가 장식이다 — B12). 재료와
+    /// "숫자를 박지 않는" 근거는 `MeStore.drawableCharacterIDs` 주석에 있다. 번호가 3 이어야 서버가 무지개 행을 보낸다
+    /// (`MeRainbowProtocolTests` 가 번들 ⟺ 3 을 양방향으로 잰다).
     package var shopProtocolVersion: Int {
         ShopWire.protocolVersion(drawableCharacterIDs: drawableCharacterIDs)
     }
@@ -126,7 +127,7 @@ extension MeStore {
 
     /// 고르기 목록: 아잉 + 이 빌드가 아는 캐릭터 + 서버가 준 모르는 캐릭터(이름은 id).
     ///
-    /// 뽑기 전용(황금 아잉이)은 **서버 상점이 그 캐릭터를 말했거나 내가 가졌을 때만** 선다 — 뽑기가 아직 없는 서버(db push 전 ·
+    /// 뽑기 전용(황금 · 무지개 아잉이)은 **서버 상점이 그 캐릭터를 말했거나 내가 가졌을 때만** 선다 — 뽑기가 아직 없는 서버(db push 전 ·
     /// 옛 서버)에서 얻을 길이 없는 "뽑기 전용" 타일이 서지 않게. 상점을 아직 못 읽었으면 막지 않는다(다른 캐릭터와 같은 관용).
     package var pickerIDs: [String] {
         var ids = MeCharacterCards.knownIDs.filter { id in
@@ -145,16 +146,23 @@ extension MeStore {
         !shopState.hasLoaded || isOwned(id)
     }
 
-    /// 상점가. **살 수 있는 줄만** 값이 있다 — 뽑기 전용(황금 아잉이)의 `price` 는 서버가 싣는 명목값(1000)이라 화면·구매에 쓰면
+    /// 상점가. **살 수 있는 줄만** 값이 있다 — 뽑기 전용(황금 · 무지개 아잉이)의 `price` 는 서버가 싣는 명목값(1000)이라 화면·구매에 쓰면
     /// [1000 사기] 가 켜지고 서버가 `not_for_sale` 로 거절한다(`ShopCharacterRow.isPurchasable`).
     package func price(of id: String) -> Int? {
         guard let row = shopCharacters.first(where: { $0.id == id }), row.isPurchasable else { return nil }
         return row.price
     }
 
-    /// 뽑기·조각 교환으로만 얻는 캐릭터인가(서버 표식 · 황금 아잉이는 표식과 무관하게 언제나).
+    /// 뽑기·조각 교환으로만 얻는 캐릭터인가(서버 표식 · **내장 뽑기 전용**은 표식과 무관하게 언제나).
+    ///
+    /// 내장 뽑기 전용은 둘이다 — 황금 아잉이(v0.3.54)와 무지개 아잉이(v0.3.59). 판정은 코어 한 곳
+    /// (`CharacterCatalog.isGachaOnlyBuiltIn`)에서 가져온다: 확률표 · 교환표 · 희귀 연출을 만드는 코어 `GachaRules` 도
+    /// 같은 함수로 간다(`Gacha.swift` — `gachaOnly == true || isGachaOnlyBuiltIn(id)`). 금만 세던 시절의 모양으로 되돌리면
+    /// 무지개 타일이 **사는 줄**로 서서 명목가 1000 짜리 [사기] 가 켜지고, 서버가 `not_for_sale` 로 거절한다.
+    ///
+    /// 서버 표식(`gacha_only`)을 같이 보는 이유는 그대로다: 앞으로 서버가 다른 캐릭터를 뽑기 전용으로 돌려도 앱 업데이트 없이 따라간다.
     package func isGachaOnly(_ id: String) -> Bool {
-        CharacterCatalog.isGoldAing(id) || shopCharacters.first { $0.id == id }?.gachaOnly == true
+        CharacterCatalog.isGachaOnlyBuiltIn(id) || shopCharacters.first { $0.id == id }?.gachaOnly == true
     }
 
     // MARK: 상점
@@ -261,7 +269,7 @@ extension MeStore {
     package func chooseCharacter(_ id: String) {
         guard savingCharacterID == nil, context.session.isSignedIn else { return }
         guard isUnlocked(id) else {
-            // 뽑기 전용(황금 아잉이)에게 "상점에서 살 수 있어요"는 거짓이다 — 얻는 길을 그대로 말한다.
+            // 뽑기 전용(황금 · 무지개 아잉이)에게 "상점에서 살 수 있어요"는 거짓이다 — 얻는 길을 그대로 말한다.
             let name = MeCharacterCards.displayName(for: id)
             characterNotice = isGachaOnly(id)
                 ? MeText.lockedGachaCharacter(name, shardCost: gachaShardCost(of: id))

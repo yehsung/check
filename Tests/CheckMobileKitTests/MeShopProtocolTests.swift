@@ -34,22 +34,27 @@ import Testing
         let derived = ShopWire.protocolVersion(drawableCharacterIDs: known)
 
         // 필요충분: 초상 파일이 있다 ⟺ 1 **이상**을 보낸다. (둘 중 하나만 고치면 빨개진다 — 그게 이 단언의 일이다.)
-        // v0.3.54: 번호는 누적이다 — 황금 아잉이 초상까지 있으면 2(⊇ robot). 2 의 기준선은 MeGoldShopProtocolTests 가 잰다.
+        // 번호는 누적이다 — 황금 아잉이 초상까지 있으면 2, 무지개 아잉이까지 있으면 3(⊇ robot). 그 두 문턱의 기준선은
+        // MeGoldShopProtocolTests(2)·MeRainbowProtocolTests(3)가 각자의 초상 파일로 잰다. 여기서 재는 건 robot 하나다.
         #expect((derived >= ShopWire.robotProtocol) == Self.robotPortraitExists,
                 Comment(rawValue: "초상 \(Self.robotPortraitExists) · 목록 \(known) → \(derived)"))
         #expect(known.contains(ShopWire.robotCharacterID) == Self.robotPortraitExists,
                 "번들 초상과 knownIDs 가 갈렸다 — 목록에만 있으면 아잉이 그려지고, 파일만 있으면 아무도 못 본다")
     }
 
-    /// ★ **지금 폰 값은 0 이어야 한다.** 그림이 아직 없다 — 0 이 아니면 폰 상점에 "아잉 그림 + robot 이름" 카드가
-    ///   뜨고 그걸 살 수 있다. 그림이 들어오는 날 이 한 줄이 빨개지고, 그게 "폰도 1 을 보내도록 배선하라"는 신호다.
-    @Test("그림이 없는 지금, 폰은 0 을 보낸다")
+    /// 그림과 번호가 **같은 방향으로** 움직이는지 — 두 세계를 각각 못 박는다.
+    ///
+    /// 지금(0.3.43 부터)은 robot 초상이 번들에 있으니 아래 첫 가지가 돈다: 폰은 1 **이상**을 보낸다(1.0.10 실제 값은 3 —
+    /// 정확한 값은 MeRainbowProtocolTests). 초상을 번들에서 빼 보면 둘째 가지가 돌고, 그때는 0 이어야 한다 — 0 이 아니면
+    /// 폰 상점에 "아잉 그림 + robot 이름" 카드가 뜨고 그걸 살 수 있다(mapC §7 ③ 실측).
+    @Test("robot 초상이 번들에 있으니 폰은 1 이상을 보낸다 — 초상을 빼면 0 이어야 한다")
     func phoneStillSendsLegacyProtocol() {
         guard !Self.robotPortraitExists else {
-            // 그림이 들어왔다 = 모바일 세션이 배선할 차례다. 조용히 통과시키지 않고 사실을 적는다.
             #expect(ShopWire.protocolVersion(drawableCharacterIDs: AingCharacterArt.knownIDs)
                     >= ShopWire.robotProtocol,
                     "robot 초상이 번들에 들어왔는데 폰이 아직 0 을 보낸다 — knownIDs 에 robot 을 더해라")
+            #expect(AingCharacterArt.knownIDs.contains("robot"),
+                    "robot 초상이 번들에 있는데 목록에 없다 — 맥에만 있는 캐릭터는 폰에서 아잉으로 접힌다")
             return
         }
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: AingCharacterArt.knownIDs)

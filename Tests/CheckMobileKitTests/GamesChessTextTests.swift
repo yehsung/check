@@ -231,7 +231,7 @@ struct GamesChessTextTests {
         #expect(ChessPhoneText.entryBlockNotice(playing: nil, blocked: .chess) == nil, "두는 판이 없는데 안내가 선다")
         // 체스 로비 안내가 **그 두 줄 짜리 함수**를 쓴다(제목만 쓰는 함수로 되돌리면 빨개진다).
         let screen = try Self.code("Sources/CheckMobileKit/Games/GamesChessScreen.swift")
-        #expect(screen.contains("ChessPhoneText.entryBlockNotice(playing: playing, blocked: .chess)"),
+        #expect(screen.contains("ChessPhoneText.entryBlockNotice(playing: playing.text, blocked: .chess)"),
                 "체스 로비 안내가 제목 한 줄만 그린다 — `entryBlockNotice` 를 써라")
         // ★ 두는 판을 **박아 두지 않는다**: 1.0.11 부터 체스를 막는 판이 오목·테트리스 둘이라
         //   `.gomoku` 를 박으면 테트리스 대결 중에 안내가 통째로 사라진다(버튼만 흐려지고 까닭이 없다).

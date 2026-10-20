@@ -226,7 +226,7 @@ struct GamesChessScreen: View {
             //   칩 + 보조 줄로 그리는 것과 같은 짝이고, 조립은 문구 표가 쥔다(뷰에서 이으면 맥 스위트가 못 본다).
             // ★ `.gomoku` 를 박아 두지 **않는다**: 1.0.11 부터 체스를 막는 판이 오목·테트리스 둘이다
             //   (박아 두면 테트리스 대결 중에 이 안내가 통째로 사라진다 — 버튼만 흐려지고 까닭이 없어진다).
-            InlineNotice(text: ChessPhoneText.entryBlockNotice(playing: playing, blocked: .chess) ?? "", kind: .warning)
+            InlineNotice(text: ChessPhoneText.entryBlockNotice(playing: playing.text, blocked: .chess) ?? "", kind: .warning)
                 .padding(.top, MobileTheme.rowSpacing)
         } else if store.hasLiveChessRobotGame {
             // 로봇 판 중에는 [도전]이 막힌다(게이트의 `store.match == nil`). **왜**인지 말하지 않으면

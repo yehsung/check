@@ -9,8 +9,12 @@ import Testing
 //  · 가짜 curl — 테스트가 임시 폴더에 쓰는 실행 스크립트(PATH 맨 앞). 실제 curl 이 받는 옵션(-D · -w · -r · -o · -L ·
 //    --speed-limit …)을 받아들이고 **모르는 옵션이면 2 로 죽는다**(실제 curl 과 같은 종료코드). 픽스처의 바이트 범위를 내주고,
 //    탐색에는 302 블록(가짜 Content-Range 가 섞인) + 206 블록 머리를 쓴다 — "마지막 응답 블록" 을 읽는지 잰다.
-//    시나리오는 환경변수로 가른다(FAKE_NORANGE · FAKE_STALL_ONCE · FAKE_SHORT_ALWAYS · FAKE_WHOLE_RC · FAKE_CR_NAME ·
-//    FAKE_PIECE_MODE · FAKE_TOTAL_TEXT · FAKE_TOTAL_CHANGES — 각 뜻은 `fakeCurl` 주석).
+//    시나리오는 환경변수로 가른다(FAKE_NORANGE · FAKE_STALL_ONCE · FAKE_BADCUT_ONCE · FAKE_TRICKLE_END · FAKE_DEAD ·
+//    FAKE_SHORT_ALWAYS · FAKE_OVERLONG · FAKE_WHOLE_RC · FAKE_CR_NAME · FAKE_PIECE_MODE · FAKE_TOTAL_TEXT · FAKE_TOTAL_CHANGES ·
+//    FAKE_PROBE_SLEEP_AT — 각 뜻은 `fakeCurl` 주석). 끊김 갈래는 실제 curl 처럼 **받은 앞부분만 쓰고 28 로 끝나면서 `-D` 머리와
+//    `-w` 코드는 정상으로** 낸다(문턱에 걸려 끊긴 연결) — 이어 받기가 그 앞부분을 쓰는지 잰다.
+//  · 가짜 시계 — 시한(120초)은 실제로 기다리지 않는다. 시험 래퍼가 `wait` 를 감싸 바퀴가 끝날 때마다 zsh 의 `SECONDS` 를
+//    앞으로 민다(`runPfetch(clockJump:)`). 운영 함수는 한 글자도 바꾸지 않는다 — 환경변수 훅이 없다.
 //  · 가짜 brew · 가짜 open — 호출을 차례대로 적고, 준비된 JSON · 캐시 경로를 내준다. 앱 경로도 실험실 안의 없는 경로라
 //    가짜 open 이 어긋나도 실제 앱이 뜨지 않는다.
 //  · 가짜 cat · 가짜 shasum — 진짜 도구로 일하면서 잇기·지문 검사의 **순간**을 적는다(그때 OUT·캐시 이름이 보였는가).
@@ -51,7 +55,9 @@ struct V0361UpdatePrefetchTests {
         let pieceArgv = argv.filter { !$0.contains("-r 0-0") }
         #expect(pieceArgv.count == 8)
         for line in pieceArgv {
-            #expect(line.hasPrefix("argv -fsS --proto =https --tlsv1.2 --connect-timeout 15 --speed-limit 65536 --speed-time 12 --max-time 90 -r "),
+            // 갇힌 연결(초당 0.5MB 이하)을 3초 만에 끊는 문턱 — 초당 1MB · 3초. 예전 문턱(64KB · 12초)은 그런 연결을 안 끊었다.
+            // `-f` 는 없다(코드를 직접 본다). 첫 바퀴의 `--max-time` 은 min(90, 남은 시간) = 90.
+            #expect(line.hasPrefix("argv -sS --proto =https --tlsv1.2 --connect-timeout 10 --speed-limit 1048576 --speed-time 3 --max-time 90 -r "),
                     "조각 명령이 설계와 다르다: \(line)")
             #expect(!line.contains(" -L "), "조각이 리다이렉트를 다시 따라간다: \(line)")
             // 조각마다 응답 머리(-D)와 코드(-w)를 받아 요청한 범위와 맞춰 본다(검토 지적 수리 — 크기만 보면 내용이 틀려도 통과한다).
@@ -59,8 +65,8 @@ struct V0361UpdatePrefetchTests {
             #expect(line.hasSuffix(" -w %{http_code} \(PrefetchLab.finalURL(1))"), "조각의 응답 코드를 받지 않는다: \(line)")
         }
 
-        #expect(run.output.contains("나눠 받기 끝: 9000001 bytes · 8갈래"), "\(run.output)")
-        #expect(run.output.contains("재시도한 조각 0개"), "\(run.output)")
+        #expect(run.output.contains("나눠 받기 끝: 9000001 bytes · 8갈래 · "), "\(run.output)")
+        #expect(run.output.contains("초 · 1바퀴 · 다시 받은 조각 0개\n"), "\(run.output)")
         lab.expectNoSignature(run.output)
     }
 
@@ -72,45 +78,174 @@ struct V0361UpdatePrefetchTests {
         #expect(lab.names(in: lab.out).isEmpty, "OUT(또는 .part)이 생겼다: \(lab.names(in: lab.out))")
         #expect(lab.names(in: lab.tmp).isEmpty, "임시 폴더가 남았다: \(lab.names(in: lab.tmp))")
         #expect(lab.calls().filter { $0.hasPrefix("piece ") }.isEmpty, "Range 를 안 받는 원본에 조각을 보냈다")
-        #expect(run.output.contains("나눠 받기 폴백: Range 를 받지 않습니다(HTTP 200)"), "\(run.output)")
+        #expect(run.output.contains("나눠 받기 폴백: Range 를 받지 않습니다(HTTP 200) · "), "\(run.output)")
+        #expect(run.output.contains("초 · 0바퀴\n"), "\(run.output)")
         lab.expectNoSignature(run.output)
     }
 
-    @Test func pfetch_멎은_조각은_새_서명_주소로_한_번_더_받아_성공한다() throws {
+    // ★ 이어 받기(2026-10-21 실측 수리): 갇힌 연결이 문턱에 걸려 28 로 끊겨도 그때까지 받은 앞부분은 맞는 바이트다(머리가 맞으니까).
+    // 그것을 버리고 처음부터 받으면(예전) 갇힌 연결에 또 걸릴 때마다 처음으로 돌아간다. 둘째 바퀴는 새 서명 주소로 **받은 데서부터**
+    // 요청한다 — 요청 범위를 글자로 못박는다(처음부터 다시 받아도 OUT 은 맞으니 OUT 만 보면 초록이다).
+    @Test func pfetch_끊긴_조각은_받은_데서부터_새_서명_주소로_이어_받는다() throws {
         let lab = try PrefetchLab(fixtureSize: 9_000_001)
-        let stalled = PrefetchLab.ranges(total: 9_000_001, parts: 8)[3]
-        let start = String(stalled.prefix { $0 != "-" })
-        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_STALL_ONCE": start])
+        let (a, b) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[3])
+        let half = (b - a + 1) / 2
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_STALL_ONCE": "\(a)"])
 
-        #expect(run.status == 0, "한 번 멎은 조각을 다시 받지 못했다: \(run.output)")
-        #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData)
+        #expect(run.status == 0, "끊긴 조각을 이어 받지 못했다: \(run.output)")
+        #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData, "이어 붙인 바이트가 픽스처와 다르다")
+        #expect(lab.names(in: lab.out) == ["a.bin"])
         #expect(lab.names(in: lab.tmp).isEmpty)
         let calls = lab.calls()
-        // 재시도 전에 탐색을 한 번 더 한다(서명 주소 만료·403 대비) — 그리고 재시도는 **그 새 주소**로 간다.
+        // 둘째 바퀴 전에 탐색을 한 번 더 한다(서명 주소 만료·403 대비) — 그리고 이어 받기는 **그 새 주소**로 간다.
         #expect(calls.filter { $0.hasPrefix("probe ") }.count == 2, "재탐색이 없다: \(calls)")
-        #expect(calls.filter { $0.hasPrefix("piece \(stalled) ") }
-                == ["piece \(stalled) \(PrefetchLab.finalURL(1))", "piece \(stalled) \(PrefetchLab.finalURL(2))"],
-                "멎은 조각의 재시도가 새 서명 주소로 가지 않았다: \(calls)")
-        // 틀린 조각만 다시 받는다(맞은 일곱은 한 번씩).
+        #expect(lab.pieceCalls(endingAt: b)
+                == ["piece \(a)-\(b) \(PrefetchLab.finalURL(1))", "piece \(a + half)-\(b) \(PrefetchLab.finalURL(2))"],
+                "끊긴 조각을 받은 데서부터 새 주소로 잇지 않았다: \(calls)")
+        // 덜 받은 조각만 다시 받는다(맞은 일곱은 한 번씩).
         #expect(calls.filter { $0.hasPrefix("piece ") }.count == 9)
-        #expect(run.output.contains("재시도한 조각 1개"), "\(run.output)")
+        #expect(run.output.contains("초 · 2바퀴 · 다시 받은 조각 1개\n"), "\(run.output)")
         lab.expectNoSignature(run.output)
     }
 
-    @Test func pfetch_두_번_다_짧은_조각이면_0이_아니고_OUT_도_조각도_남지_않는다() throws {
+    // curl 종료 코드는 판정에 쓰지 않는다 — 0 으로 끝났는데 짧아도(연결이 조용히 닫힘) 머리가 맞으면 받은 만큼 잇고 나머지만 받는다.
+    @Test func pfetch_짧게_끝난_조각도_종료_코드와_상관없이_나머지만_받는다() throws {
         let lab = try PrefetchLab(fixtureSize: 9_000_001)
-        let short = PrefetchLab.ranges(total: 9_000_001, parts: 8)[5]
-        let start = String(short.prefix { $0 != "-" })
-        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_SHORT_ALWAYS": start])
+        let (a, b) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[5])
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_SHORT_ALWAYS": "\(a)"])
 
-        #expect(run.status != 0, "두 번 다 짧은 조각을 받아들였다: \(run.output)")
+        #expect(run.status == 0, "\(run.output)")
+        #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData)
+        #expect(lab.pieceCalls(endingAt: b) == ["piece \(a)-\(b) \(PrefetchLab.finalURL(1))", "piece \(b)-\(b) \(PrefetchLab.finalURL(2))"],
+                "모자란 한 바이트만 받지 않았다: \(lab.calls())")
+        #expect(run.output.contains("초 · 2바퀴 · 다시 받은 조각 1개\n"), "\(run.output)")
+    }
+
+    // 갇힌 연결에 거듭 걸려도 바퀴마다 받은 만큼 쌓인다 — 한 조각이 시도마다 1/4 씩만 주면 4바퀴에 완성된다.
+    @Test func pfetch_시도마다_조금씩_받는_조각은_여러_바퀴에_걸쳐_완성된다() throws {
+        let lab = try PrefetchLab(fixtureSize: 9_000_001)
+        let (a, b) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[2])
+        let quarter = (b - a + 1 + 3) / 4
+        let run = try lab.runPfetch(url: PrefetchLab.originURL,
+                                    env: ["FAKE_TRICKLE_END": "\(b)", "FAKE_TRICKLE_BYTES": "\(quarter)"])
+
+        #expect(run.status == 0, "\(run.output)")
+        #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData)
+        #expect(lab.names(in: lab.tmp).isEmpty)
+        #expect(lab.pieceCalls(endingAt: b) == (0..<4).map { "piece \(a + $0 * quarter)-\(b) \(PrefetchLab.finalURL($0 + 1))" },
+                "바퀴마다 받은 데서부터 잇지 않았다: \(lab.calls())")
+        #expect(lab.calls().filter { $0.hasPrefix("probe ") }.count == 4, "바퀴마다 다시 탐색하지 않았다: \(lab.calls())")
+        #expect(lab.calls().filter { $0.hasPrefix("piece ") }.count == 8 + 3)
+        #expect(run.output.contains("초 · 4바퀴 · 다시 받은 조각 3개\n"), "\(run.output)")
+    }
+
+    // 한 바퀴 동안 한 바이트도 늘지 않으면 더 돌아도 소용없다 — 폴백(호출자가 지금 동작으로). OUT · .part · 임시 폴더가 남지 않는다.
+    @Test func pfetch_한_바퀴_동안_0바이트면_폴백하고_아무것도_남기지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 9_000_001)
+        let (a, b) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[5])
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_DEAD": "\(a)"])
+
+        #expect(run.status != 0, "아무것도 못 받는 조각을 받아들였다: \(run.output)")
         #expect(lab.names(in: lab.out).isEmpty, "OUT(또는 .part)이 남았다: \(lab.names(in: lab.out))")
         #expect(lab.names(in: lab.tmp).isEmpty, "임시 조각이 남았다: \(lab.names(in: lab.tmp))")
-        let calls = lab.calls()
-        #expect(calls.filter { $0.hasPrefix("piece \(short) ") }.count == 2, "재시도가 정확히 한 번이 아니다: \(calls)")
-        #expect(calls.filter { $0.hasPrefix("probe ") }.count == 2)
-        #expect(run.output.contains("두 번 다 어긋났습니다"), "\(run.output)")
+        // 첫 바퀴엔 다른 일곱이 늘어 둘째 바퀴로 간다. 둘째 바퀴에 0 이면 거기서 멈춘다(셋째는 없다).
+        #expect(lab.pieceCalls(endingAt: b) == ["piece \(a)-\(b) \(PrefetchLab.finalURL(1))", "piece \(a)-\(b) \(PrefetchLab.finalURL(2))"],
+                "\(lab.calls())")
+        #expect(lab.calls().filter { $0.hasPrefix("probe ") }.count == 2)
+        #expect(run.output.contains("나눠 받기 폴백: 한 바퀴 동안 받은 것이 없습니다 · "), "\(run.output)")
+        #expect(run.output.contains("초 · 2바퀴\n"), "\(run.output)")
         lab.expectNoSignature(run.output)
+    }
+
+    // ★ 이어 받기의 전제는 "머리가 맞으면 앞부분도 맞다" 다. 끊긴 시도의 머리가 어긋나면(Range 를 무시하는 캐시가 0번부터의 본문을
+    // 내다 끊김) 그 바이트를 잇지 않고 버린다 — 이었다면 다음 바퀴가 그 뒤부터 이어 받아 **크기는 맞고 내용이 틀린** OUT 이 된다.
+    // 그래서 OUT 을 바이트로 비교하고, 둘째 바퀴 요청이 처음부터(a-b)인지 본다.
+    // 한 줄에서 이어 받는 요청(s > 0)에 200 + 본문 전체가 오면 그것도 받지 않는다(200 은 s = 0 일 때만 본문이 곧 답이다).
+    @Test func pfetch_끊긴_시도의_머리가_어긋나면_그_바이트는_잇지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 9_000_001, label: "badcut")
+        let (a, b) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[3])
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_BADCUT_ONCE": "\(a)"])
+
+        #expect(run.status == 0, "\(run.output)")
+        #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData, "머리가 어긋난 앞부분을 이어 붙였다")
+        #expect(lab.pieceCalls(endingAt: b) == ["piece \(a)-\(b) \(PrefetchLab.finalURL(1))", "piece \(a)-\(b) \(PrefetchLab.finalURL(2))"],
+                "머리가 어긋난 바이트를 받은 것으로 셌다: \(lab.calls())")
+        #expect(run.output.contains("초 · 2바퀴 · 다시 받은 조각 1개\n"), "\(run.output)")
+
+        let single = try PrefetchLab(fixtureSize: 300_000, label: "resume200")
+        let resumed = try single.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_STALL_ONCE": "0", "FAKE_PIECE_MODE": "code200"])
+        #expect(resumed.status != 0, "이어 받는 요청에 온 200 전체 본문을 이어 붙였다: \(resumed.output)")
+        #expect(single.calls().filter { $0.hasPrefix("piece ") }
+                == ["piece 0-299999 \(PrefetchLab.finalURL(1))", "piece 150000-299999 \(PrefetchLab.finalURL(2))"],
+                "\(single.calls())")
+        #expect(resumed.output.contains("나눠 받기 폴백: 한 바퀴 동안 받은 것이 없습니다 · "), "\(resumed.output)")
+        #expect(single.names(in: single.out).isEmpty)
+        #expect(single.names(in: single.tmp).isEmpty)
+    }
+
+    // 머리가 맞는데 본문이 요청보다 길면(조각 파일이 기대보다 커짐) 그 파일은 더는 맞출 수 없다 — 바로 폴백한다.
+    @Test func pfetch_조각_파일이_기대보다_커지면_바로_폴백한다() throws {
+        let lab = try PrefetchLab(fixtureSize: 9_000_001)
+        let (a, b) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[2])
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_OVERLONG": "\(a)"])
+
+        #expect(run.status != 0, "\(run.output)")
+        #expect(run.output.contains("나눠 받기 폴백: 조각 2 의 크기가 기대보다 큽니다(\(b - a + 2) > \(b - a + 1)) · "), "\(run.output)")
+        #expect(run.output.contains("초 · 1바퀴\n"), "\(run.output)")
+        #expect(lab.calls().filter { $0.hasPrefix("probe ") }.count == 1, "커진 조각을 두고 바퀴를 더 돌았다: \(lab.calls())")
+        #expect(lab.calls().filter { $0.hasPrefix("piece ") }.count == 8)
+        #expect(lab.names(in: lab.out).isEmpty)
+        #expect(lab.names(in: lab.tmp).isEmpty)
+    }
+
+    // ★ 시한 120초 — 바퀴가 몇 번이든 그 안에서 끝난다(`pfetchWorstCaseSeconds` 와 감시 시한의 전제). 실제로 기다리지 않고 가짜 시계로 잰다:
+    // 바퀴가 끝날 때마다(`wait`) 시계를 앞으로 민다. 한 조각은 시도마다 1,000바이트만 줘서(0바이트 폴백에 안 걸리게) 끝나지 않는다.
+    //  · 30초씩 — 넷째 바퀴 뒤 남은 0초: 다섯째 바퀴의 재탐색을 보내지 않는다(탐색 4회).
+    //  · 29초씩 + 다섯째 탐색이 2초 걸림 — 남은 4초로 탐색은 가지만 끝나고 남은 2초: 조각을 보내지 않는다.
+    // 그리고 `--max-time` 은 탐색 min(30, 남은) · 조각 min(90, 남은) — 시한을 넘어 도는 curl 이 없다.
+    @Test func pfetch_시한을_다_쓰면_새_바퀴를_시작하지_않고_curl_도_시한을_넘지_않는다() throws {
+        let (a, b) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[3])
+        for (jump, slowProbe, probes, pieceTimes, reason) in [
+            (30, false, [30, 30, 30, 30], [90, 90, 60, 30], "다시 탐색: 시간이 다 됐습니다"),
+            (29, true, [30, 30, 30, 30, 4], [90, 90, 62, 33], "시간이 다 됐습니다"),
+        ] {
+            let lab = try PrefetchLab(fixtureSize: 9_000_001, label: "jump\(jump)")
+            var env = ["FAKE_TRICKLE_END": "\(b)", "FAKE_TRICKLE_BYTES": "1000"]
+            if slowProbe { env["FAKE_PROBE_SLEEP_AT"] = "5"; env["FAKE_PROBE_SLEEP_SECS"] = "2" }
+            let run = try lab.runPfetch(url: PrefetchLab.originURL, env: env, clockJump: jump)
+
+            #expect(run.status != 0, "\(jump): \(run.output)")
+            #expect(run.output.contains("나눠 받기 폴백: \(reason) · "), "\(jump): \(run.output)")
+            #expect(run.output.contains("초 · 5바퀴\n"), "\(jump): \(run.output)")
+            // 값은 가짜 시계가 정한다. 다만 한 바퀴가 실제로 1초를 넘기면(부하) `SECONDS` 가 1 더 가 남은 시간이 1 줄 수 있어
+            // 각 값은 [기대-1, 기대] 안이면 맞다 — 개수는 정확히 같아야 한다(고정 30·90 이나 시한 검사 누락은 그 폭을 한참 넘는다).
+            let argv = lab.curlArgv()
+            let probeTimes = argv.filter { $0.contains(" -r 0-0 ") }.map(PrefetchLab.maxTime)
+            #expect(PrefetchLab.within1(probeTimes, of: probes),
+                    "\(jump): 탐색의 --max-time 이 min(30, 남은 시간)이 아니다: \(probeTimes) — 기대 \(probes)")
+            let slowTimes = argv.filter { $0.contains("-\(b) -o ") }.map(PrefetchLab.maxTime)
+            #expect(PrefetchLab.within1(slowTimes, of: pieceTimes),
+                    "\(jump): 조각의 --max-time 이 min(90, 남은 시간)이 아니다: \(slowTimes) — 기대 \(pieceTimes)")
+            #expect(lab.pieceCalls(endingAt: b).count == 4, "\(jump): \(lab.calls())")
+            #expect(lab.pieceCalls(endingAt: b).first == "piece \(a)-\(b) \(PrefetchLab.finalURL(1))")
+            #expect(lab.names(in: lab.out).isEmpty, "\(jump)")
+            #expect(lab.names(in: lab.tmp).isEmpty, "\(jump)")
+        }
+    }
+
+    // 안전핀 — 시한과 0바이트 검사를 다 지나도(바퀴마다 조금씩은 는다) 40바퀴를 넘기지 않는다.
+    // 한 줄 100바이트를 시도마다 1바이트씩 주면 100바퀴가 걸린다 — 40바퀴째에서 멈추고 41번째 요청은 없다.
+    @Test func pfetch_40바퀴를_넘기면_폴백한다() throws {
+        let lab = try PrefetchLab(fixtureSize: 100)
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_TRICKLE_END": "99", "FAKE_TRICKLE_BYTES": "1"])
+
+        #expect(run.status != 0, "\(run.output)")
+        #expect(run.output.contains("나눠 받기 폴백: 40바퀴 안에 끝나지 않았습니다 · "), "\(run.output)")
+        #expect(run.output.contains("초 · 40바퀴\n"), "\(run.output)")
+        #expect(lab.pieceCalls(endingAt: 99) == (0..<40).map { "piece \($0)-99 \(PrefetchLab.finalURL($0 + 1))" }, "\(lab.calls())")
+        #expect(lab.calls().filter { $0.hasPrefix("probe ") }.count == 40)
+        #expect(lab.names(in: lab.out).isEmpty)
+        #expect(lab.names(in: lab.tmp).isEmpty)
     }
 
     // 리다이렉트 끝이 https 가 아니면(`--proto-redir '=https'` 를 지나 온 값이라도) 그 주소로 조각을 보내지 않는다.
@@ -166,21 +301,26 @@ struct V0361UpdatePrefetchTests {
     //  · samebody200 — 같은 되풀이를 200 으로(여러 갈래에 200 은 받지 않는다)
     //  · wrongtotal  — 본문·범위는 맞는데 전체 크기가 다르다(그사이 자산이 바뀌었다)
     //  · nocr        — 206 인데 Content-Range 가 없다
+    // 어긋난 응답은 한 바이트도 잇지 않는다 — 그래서 그 바퀴에 늘어난 바이트가 없으면 거기서 폴백한다. samebody 는 첫 조각(0번)만
+    // 진짜로 맞아 첫 바퀴에 그것만 늘고, 둘째 바퀴(새 서명 주소)에 나머지 일곱을 **처음부터** 다시 요청했다가 0 이라 멈춘다.
+    // 나머지 셋은 첫 바퀴부터 0 이라 첫 바퀴에서 멈춘다.
     @Test func pfetch_조각_응답의_코드나_Content_Range_가_요청과_다르면_받지_않는다() throws {
         let total = 9_000_000                       // 8의 배수 — 조각 크기가 전부 같아 크기 검사로는 못 거른다
-        for (mode, badPerRound) in [("samebody", 7), ("samebody200", 8), ("wrongtotal", 8), ("nocr", 8)] {
+        let ranges = PrefetchLab.ranges(total: total, parts: 8)
+        for (mode, rounds) in [("samebody", 2), ("samebody200", 1), ("wrongtotal", 1), ("nocr", 1)] {
             let lab = try PrefetchLab(fixtureSize: total, label: mode)
             let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_PIECE_MODE": mode])
 
             #expect(run.status != 0, "\(mode): 요청과 다른 조각을 받아들였다: \(run.output)")
             #expect(lab.names(in: lab.out).isEmpty, "\(mode): OUT(또는 .part)이 남았다: \(lab.names(in: lab.out))")
             #expect(lab.names(in: lab.tmp).isEmpty, "\(mode): 임시 조각이 남았다: \(lab.names(in: lab.tmp))")
-            let calls = lab.calls()
-            // 어긋난 조각만 새 서명 주소로 한 번 더 — samebody 는 첫 조각(0번)만 진짜로 맞다.
-            #expect(calls.filter { $0.hasPrefix("piece ") }.count == 8 + badPerRound, "\(mode): \(calls)")
-            #expect(calls.filter { $0.hasPrefix("probe ") }.count == 2, "\(mode): \(calls)")
-            #expect(run.output.contains("두 번 다 어긋났습니다"), "\(mode): \(run.output)")
-            #expect(run.output.contains("재시도한 조각 \(badPerRound)개"), "\(mode): \(run.output)")
+            let pieces = lab.calls().filter { $0.hasPrefix("piece ") }
+            var expected = ranges.map { "piece \($0) \(PrefetchLab.finalURL(1))" }
+            if rounds == 2 { expected += ranges.dropFirst().map { "piece \($0) \(PrefetchLab.finalURL(2))" } }
+            #expect(pieces.sorted() == expected.sorted(), "\(mode): \(pieces)")
+            #expect(lab.calls().filter { $0.hasPrefix("probe ") }.count == rounds, "\(mode): \(lab.calls())")
+            #expect(run.output.contains("나눠 받기 폴백: 한 바퀴 동안 받은 것이 없습니다 · "), "\(mode): \(run.output)")
+            #expect(run.output.contains("초 · \(rounds)바퀴\n"), "\(mode): \(run.output)")
         }
     }
 
@@ -192,18 +332,18 @@ struct V0361UpdatePrefetchTests {
         #expect(run.status == 0, "\(run.output)")
         #expect(try Data(contentsOf: lab.outFile) == lab.fixtureData)
         #expect(lab.calls().filter { $0.hasPrefix("piece ") } == ["piece 0-299999 \(PrefetchLab.finalURL(1))"])
-        #expect(run.output.contains("재시도한 조각 0개"), "\(run.output)")
+        #expect(run.output.contains("초 · 1바퀴 · 다시 받은 조각 0개\n"), "\(run.output)")
     }
 
     // latest/download 주소는 재탐색 사이에 새 릴리스로 바뀔 수 있다 — 전체 크기가 바뀌면 다른 자산의 조각을 섞지 않고 폴백한다.
     @Test func pfetch_재탐색에서_전체_크기가_바뀌면_폴백한다() throws {
         let lab = try PrefetchLab(fixtureSize: 9_000_001)
-        let stalled = PrefetchLab.ranges(total: 9_000_001, parts: 8)[3]
-        let start = String(stalled.prefix { $0 != "-" })
-        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_STALL_ONCE": start, "FAKE_TOTAL_CHANGES": "1"])
+        let (a, _) = PrefetchLab.bounds(PrefetchLab.ranges(total: 9_000_001, parts: 8)[3])
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_STALL_ONCE": "\(a)", "FAKE_TOTAL_CHANGES": "1"])
 
         #expect(run.status != 0, "\(run.output)")
-        #expect(run.output.contains("나눠 받기 폴백: 받는 사이 전체 크기가 바뀌었습니다"), "\(run.output)")
+        #expect(run.output.contains("나눠 받기 폴백: 받는 사이 전체 크기가 바뀌었습니다 · "), "\(run.output)")
+        #expect(run.output.contains("초 · 2바퀴\n"), "\(run.output)")
         #expect(lab.calls().filter { $0.hasPrefix("piece ") }.count == 8, "크기가 바뀐 뒤에도 조각을 더 받았다: \(lab.calls())")
         #expect(lab.calls().filter { $0.hasPrefix("probe ") }.count == 2)
         #expect(lab.names(in: lab.out).isEmpty)
@@ -255,7 +395,7 @@ struct V0361UpdatePrefetchTests {
         let good = try ok.runPfetch(url: PrefetchLab.originURL)
         #expect(good.status == 0, "\(good.output)")
         let bad = try PrefetchLab(fixtureSize: 100_000, label: "bad")
-        let failed = try bad.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_SHORT_ALWAYS": "0"])
+        let failed = try bad.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_DEAD": "0"])
         #expect(failed.status != 0, "\(failed.output)")
         for log in [good.output, failed.output] {
             #expect(!log.contains("SECRET"), "서명 토큰이 로그에 남았다:\n\(log)")
@@ -480,7 +620,7 @@ struct V0361UpdatePrefetchTests {
                 "\(lab.sequence())")
     }
 
-    // 고유 이름이라 죽은 실행의 숨김 조각은 다음 실행이 치운다 — **60분 넘은 것만**(미리 받기의 최악은 240초라 그건 반드시 죽은 것).
+    // 고유 이름이라 죽은 실행의 숨김 조각은 다음 실행이 치운다 — **60분 넘은 것만**(미리 받기의 최악은 120초라 그건 반드시 죽은 것).
     // 막 생긴 것(겹친 다른 실행의 것일 수 있다)과 brew 자신의 파일은 건드리지 않는다.
     @Test func brew_죽은_실행의_숨김_조각은_60분_넘은_것만_지운다() throws {
         let lab = try PrefetchLab(fixtureSize: 300_000)
@@ -725,6 +865,23 @@ private struct PrefetchLab {
         return (0..<parts).map { i in "\(i * size)-\(min((i + 1) * size, total) - 1)" }
     }
 
+    /// `a-b` → (a, b).
+    static func bounds(_ range: String) -> (Int, Int) {
+        let parts = range.split(separator: "-").map { Int($0)! }
+        return (parts[0], parts[1])
+    }
+
+    /// 가짜 curl 이 받은 인자 한 줄의 `--max-time` 값(없거나 숫자가 아니면 -1).
+    static func maxTime(_ argvLine: String) -> Int {
+        guard let r = argvLine.range(of: "--max-time ") else { return -1 }
+        return Int(argvLine[r.upperBound...].prefix { $0 != " " }) ?? -1
+    }
+
+    /// 개수가 같고 값마다 [기대-1, 기대] 안인가(가짜 시계 시험 — 실제 시간 1초 미끄러짐만 허용).
+    static func within1(_ observed: [Int], of expected: [Int]) -> Bool {
+        observed.count == expected.count && zip(observed, expected).allSatisfy { $0 <= $1 && $0 >= $1 - 1 }
+    }
+
     let root: URL
     let fixtureData: Data
 
@@ -789,8 +946,15 @@ private struct PrefetchLab {
 
     /// `pfetch URL OUT` 를 **호출자와 같은 조건**(`set -u` · `$M`)으로 직접 부른다 — 서브셸로 감싸지 않아
     /// 함수 안의 `set -u` 위반도 빨갛게 드러난다.
-    func runPfetch(url: String, env: [String: String] = [:]) throws -> ProcessRun {
-        let script = "set -u\nM=\"[aing-check-update]\"\n" + UpdateRunner.pfetchFunction + "\npfetch \"$1\" \"$2\"\n"
+    ///
+    /// `clockJump` — **가짜 시계**. 시한(120초)을 실제로 기다리지 않으려고, 바퀴의 `wait` 를 감싸 바퀴가 끝날 때마다 zsh 의
+    /// `SECONDS` 를 그만큼 앞으로 민다(대입하면 그 값부터 다시 센다 — 바퀴 안의 실제 몇십 ms 는 버려진다). 함수 본문은 그대로다:
+    /// 운영 코드에 환경변수 훅을 넣지 않고, 함수를 다른 시한으로 다시 정의하지도 않는다. 시계를 0 에서 시작해 숫자가 결정적이다.
+    func runPfetch(url: String, env: [String: String] = [:], clockJump: Int? = nil) throws -> ProcessRun {
+        let clock = clockJump.map {
+            "FAKE_NOW=0\nwait() { builtin wait \"$@\"; FAKE_NOW=$(( FAKE_NOW + \($0) )); SECONDS=$FAKE_NOW; }\nSECONDS=0\n"
+        } ?? ""
+        let script = "set -u\nM=\"[aing-check-update]\"\n" + UpdateRunner.pfetchFunction + "\n" + clock + "pfetch \"$1\" \"$2\"\n"
         return try runProcess("/bin/zsh", ["-c", script, "aing-check-update", url, outFile.path],
                               env: environment.merging(env) { $1 })
     }
@@ -833,6 +997,10 @@ private struct PrefetchLab {
     }
     /// 가짜 curl 이 적은 요청(`probe n 주소` · `piece a-b 주소` · `whole 주소`).
     func calls() -> [String] { lines("calls") }
+    /// 끝이 `b` 인 조각 요청들(차례대로) — 이어 받기는 시작이 바뀌고 끝은 그대로라 끝으로 한 조각의 시도를 모은다.
+    func pieceCalls(endingAt b: Int) -> [String] {
+        calls().filter { $0.hasPrefix("piece ") && $0.contains("-\(b) ") }
+    }
     /// 가짜 curl 이 받은 인자 그대로(`argv …`).
     func curlArgv() -> [String] { lines("curl.argv") }
     /// 가짜 brew · open · curl 이 적은 차례.
@@ -909,14 +1077,22 @@ private func sha256Hex(of url: URL) -> String {
 ///    `206 <서명된 최종 주소 — 탐색마다 sig 번호가 는다>` 를 낸다. FAKE_NORANGE 면 200 + 본문 전체(Range 무시 서버).
 ///    탐색은 `-L` 이 붙은 `-D` 요청으로 가른다(조각도 `-D` 를 받는다). FAKE_TOTAL_TEXT 면 206 블록 Content-Range 의 전체 크기
 ///    글자를 그것으로 바꾸고(`*` · `0` · 글자), FAKE_TOTAL_CHANGES 면 두 번째 탐색부터 전체 크기를 1 늘려 알린다(그사이 자산이 바뀜).
+///    FAKE_PROBE_SLEEP_AT=<n> 이면 n 번째 탐색이 FAKE_PROBE_SLEEP_SECS 초 동안 쉰다(탐색이 시간을 먹는 경우).
 ///  · 조각(`-r a-b`, `-L` 없음): 그 범위를 내고 `-D` 에 `HTTP/2 206` + `content-range: bytes a-b/전체` 를, `-w %{http_code}` 자리에
-///    코드를 낸다. FAKE_STALL_ONCE=<시작 바이트> 면 처음 한 번은 절반만 쓰고 28(멎음), FAKE_SHORT_ALWAYS=<시작 바이트> 면 매번
-///    한 바이트 모자라게 쓰고 0. FAKE_PIECE_MODE 로 응답을 어긋나게 한다:
+///    코드를 낸다. FAKE_PIECE_MODE 로 응답을 어긋나게 한다:
 ///      samebody    — Range 를 무시하는 캐시가 첫 206(0번 조각)의 머리·본문을 조각마다 되풀이(크기 ceil(전체/8))
 ///      samebody200 — 같은 되풀이를 200 으로(Content-Range 없음)
 ///      wrongtotal  — 본문·범위는 맞고 전체 크기만 +1
 ///      nocr        — 206 인데 Content-Range 가 없다
 ///      code200     — 범위를 무시하고 200 + 본문 전체
+///    **끊김 갈래** — 실제 curl 처럼 받은 앞부분만 쓰고 28 로 끝나되 `-D` 머리와 `-w` 코드는 그대로 낸다(문턱에 걸려 끊긴 연결):
+///      FAKE_STALL_ONCE=<시작 바이트>   그 바이트에서 시작하는 첫 요청 한 번만 절반을 쓰고 28
+///      FAKE_BADCUT_ONCE=<시작 바이트>  첫 요청 한 번만 **머리가 어긋난** 응답(0번부터의 본문 · `bytes 0-…`)의 절반을 쓰고 28
+///      FAKE_TRICKLE_END=<끝 바이트>    그 바이트로 끝나는 요청마다 FAKE_TRICKLE_BYTES 바이트만 쓰고 28(남은 게 그 이하면 다 쓰고 0)
+///                                       — 이어 받기는 시작이 바뀌고 끝은 그대로라 끝으로 가른다
+///      FAKE_DEAD=<시작 바이트>          그 바이트에서 시작하는 요청마다 0바이트를 쓰고 28
+///    그 밖에: FAKE_SHORT_ALWAYS=<시작 바이트> 면 그 시작의 요청마다 한 바이트 모자라게 쓰고 **0**(짧게 끝나도 종료코드는 성공),
+///    FAKE_OVERLONG=<시작 바이트> 면 요청보다 한 바이트 더 쓰고 0(머리는 맞다).
 ///  · 단일(`-r` 없음): 본문 전체. FAKE_WHOLE_RC 면 그 코드로 실패.
 private let fakeCurl = #"""
     #!/bin/zsh
@@ -931,20 +1107,21 @@ private let fakeCurl = #"""
           case "$1" in (-r) range="$2" ;; (-o) out="$2" ;; (-D) hdr="$2" ;; (-w) wfmt="$2" ;; esac
           shift 2 ;;
         (-L|-fL) follow=1; shift ;;
-        (-f|-s|-S|-fsS|--tlsv1.2) shift ;;
+        (-f|-s|-S|-sS|-fsS|--tlsv1.2) shift ;;
         (-*) print -u2 "fake curl: 모르는 옵션 $1"; exit 2 ;;
         (*) [ -z "$url" ] || { print -u2 "fake curl: 주소가 둘"; exit 2; }; url="$1"; shift ;;
       esac
     done
     [ -n "$url" ] && [ -n "$out" ] || { print -u2 "fake curl: 주소나 -o 가 없다"; exit 2; }
     total=$(stat -f %z "$FIX")
-    serve() { tail -c +$(( $1 + 1 )) "$FIX" | head -c "$2" > "$out"; }
+    serve() { if [ "$2" -gt 0 ]; then tail -c +$(( $1 + 1 )) "$FIX" | head -c "$2" > "$out"; else : > "$out"; fi; }
     if [ -n "$hdr" ] && [ -n "$follow" ]; then
       [ "$range" = "0-0" ] || { print -u2 "fake curl: 탐색 범위가 0-0 이 아니다"; exit 2; }
       n=$(( $(cat "$S/probes" 2>/dev/null || print 0) + 1 )); print $n > "$S/probes"
       final="${FAKE_FINAL_BASE:-https://objects.example.invalid}/asset.bin?sig=SECRET-$n"
       print -r -- "probe $n $url" >> "$S/calls"
       print -r -- "curl probe" >> "$S/seq"
+      if [ "${FAKE_PROBE_SLEEP_AT:-x}" = "$n" ]; then sleep "$FAKE_PROBE_SLEEP_SECS"; fi
       if [ -n "${FAKE_NORANGE:-}" ]; then
         printf 'HTTP/1.1 302 Found\r\nLocation: %s\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$final" "$total" > "$hdr"
         cat "$FIX" > "$out"
@@ -975,7 +1152,7 @@ private let fakeCurl = #"""
     a="${range%-*}"; b="${range#*-}"; len=$(( b - a + 1 ))
     print -r -- "piece $range $url" >> "$S/calls"
     print -r -- "curl piece" >> "$S/seq"
-    code=206; cr="bytes $a-$b/$total"; from=$a; count=$len
+    code=206; cr="bytes $a-$b/$total"; from=$a; count=$len; rc=0
     case "${FAKE_PIECE_MODE:-}" in
       (samebody) count=$(( (total + 7) / 8 )); from=0; cr="bytes 0-$(( count - 1 ))/$total" ;;
       (samebody200) count=$(( (total + 7) / 8 )); from=0; code=200; cr="" ;;
@@ -985,27 +1162,31 @@ private let fakeCurl = #"""
       ('') ;;
       (*) print -u2 "fake curl: 모르는 FAKE_PIECE_MODE"; exit 2 ;;
     esac
+    promised=$count
+    if [ "${FAKE_STALL_ONCE:-x}" = "$a" ] && [ ! -e "$S/stalled" ]; then
+      : > "$S/stalled"; count=$(( count / 2 )); rc=28
+    elif [ "${FAKE_BADCUT_ONCE:-x}" = "$a" ] && [ ! -e "$S/badcut" ]; then
+      : > "$S/badcut"; from=0; promised=$len; cr="bytes 0-$(( len - 1 ))/$total"; count=$(( len / 2 )); rc=28
+    elif [ "${FAKE_TRICKLE_END:-x}" = "$b" ] && [ "$count" -gt "$FAKE_TRICKLE_BYTES" ]; then
+      count=$FAKE_TRICKLE_BYTES; rc=28
+    elif [ "${FAKE_DEAD:-x}" = "$a" ]; then
+      count=0; rc=28
+    elif [ "${FAKE_SHORT_ALWAYS:-x}" = "$a" ]; then
+      count=$(( count - 1 ))
+    elif [ "${FAKE_OVERLONG:-x}" = "$a" ]; then
+      count=$(( count + 1 ))
+    fi
     if [ -n "$hdr" ]; then
       if [ -n "$cr" ]; then
-        printf 'HTTP/2 %s\r\ncontent-range: %s\r\ncontent-length: %s\r\n\r\n' "$code" "$cr" "$count" > "$hdr"
+        printf 'HTTP/2 %s\r\ncontent-range: %s\r\ncontent-length: %s\r\n\r\n' "$code" "$cr" "$promised" > "$hdr"
       else
-        printf 'HTTP/2 %s\r\ncontent-length: %s\r\n\r\n' "$code" "$count" > "$hdr"
+        printf 'HTTP/2 %s\r\ncontent-length: %s\r\n\r\n' "$code" "$promised" > "$hdr"
       fi
-    fi
-    if [ "${FAKE_STALL_ONCE:-x}" = "$a" ] && [ ! -e "$S/stalled" ]; then
-      : > "$S/stalled"
-      serve "$a" $(( len / 2 ))
-      print -u2 "curl: (28) Operation too slow. Less than 65536 bytes/sec transferred the last 12 seconds"
-      exit 28
-    fi
-    if [ "${FAKE_SHORT_ALWAYS:-x}" = "$a" ]; then
-      serve "$a" $(( len - 1 ))
-      [ -z "$wfmt" ] || printf '%s' "$code"
-      exit 0
     fi
     serve "$from" "$count"
     [ -z "$wfmt" ] || printf '%s' "$code"
-    exit 0
+    if [ "$rc" -eq 28 ]; then print -u2 "curl: (28) Operation too slow. Less than 1048576 bytes/sec transferred the last 3 seconds"; fi
+    exit "$rc"
     """#
 
 /// 가짜 brew. 호출을 차례대로 적고(`HOMEBREW_NO_AUTO_UPDATE` 값까지), 준비된 JSON · 캐시 경로를 낸다.

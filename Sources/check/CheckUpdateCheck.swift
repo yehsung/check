@@ -741,16 +741,19 @@ final class UpdateRunner {
     /// 받기 앞에 나눠 받기가 붙어 따로 둔다(`dmgWatchdogSeconds`).
     nonisolated static let watchdogSeconds: Double = 600
 
-    /// 나눠 받기(`pfetchFunction`)의 최악 시간(초): 탐색 `--max-time 30` + 조각 `--max-time 90`(동시라 한 번) + 재탐색 30 +
-    /// 재시도 90 = 240. 시험이 함수 본문의 `--max-time` 값으로 이 숫자를 다시 계산한다(`pfetchWorstCaseMatchesTheTimeoutsInTheFunction`).
-    nonisolated static let pfetchWorstCaseSeconds: Double = 240
+    /// 나눠 받기(`pfetchFunction`)의 최악 시간(초) = 함수의 **시한 한 곳**(`PF_DEADLINE=$(( SECONDS + 120 ))`) = 120.
+    /// 모든 curl 의 `--max-time` 이 그 시한에서 남은 시간으로 정해지고(탐색 min(30, 남은) · 조각 min(90, 남은)), 남은 시간이
+    /// 3초 미만이면 새 바퀴를 시작하지 않는다 — 그래서 바퀴가 몇 번이든 120초(+ 잇기·크기 확인 몇 초)를 넘지 않는다.
+    /// 시험이 함수 본문에서 그 시한 숫자를 읽어 이 상수와 맞춰 본다(`pfetchWorstCaseIsTheDeadlineInTheFunction`).
+    nonisolated static let pfetchWorstCaseSeconds: Double = 120
 
     /// DMG 경로의 감시 시한(초) = 0.3.60 의 시한 600(단일 curl `--max-time 420` + 그 뒤 검증·스테이징·종료 대기·교체에 180) +
-    /// 그 앞에 붙은 나눠 받기의 최악 240 = **840**. 받기가 최악(240 + 420 = 660초)이어도 그 뒤 단계에 0.3.60 과 같은 180초가 남는다.
+    /// 그 앞에 붙은 나눠 받기의 최악 120 = **720**. 받기가 최악(120 + 420 = 540초)이어도 그 뒤 단계에 0.3.60 과 같은 180초가 남는다.
     ///
-    /// 왜 600 을 그대로 두지 않는가(검토 지적): 나눠 받기가 느리게 실패하고 단일 curl 이 한도 직전에 성공하면 받기만 660초다.
-    /// 그때 600초 감시가 먼저 실패를 띄우면 사용자가 다시 누르고(자물쇠에 막혀 busy), 그사이 첫 스크립트는 계속 가서
-    /// 앱을 종료하고 교체한다 — 배너가 거짓말을 한다. brew 경로는 그대로 600이다(미리 받기 혼자서는 240 — `pfetchFunction` 주석).
+    /// 왜 600 을 그대로 두지 않는가(검토 지적): 나눠 받기가 느리게 실패하고 단일 curl 이 한도 직전에 성공하면 받기만 540초다.
+    /// 그때 600초 감시는 뒤 단계에 60초만 남긴다 — 감시가 먼저 실패를 띄우면 사용자가 다시 누르고(자물쇠에 막혀 busy), 그사이
+    /// 첫 스크립트는 계속 가서 앱을 종료하고 교체한다 — 배너가 거짓말을 한다. brew 경로는 그대로 600이다(미리 받기 혼자서는
+    /// 120 — `pfetchFunction` 주석).
     nonisolated static let dmgWatchdogSeconds: Double = watchdogSeconds + pfetchWorstCaseSeconds
 
     /// DMG 내려받기 제한 시간(초). **`--retry` 를 쓰지 않는다** — `man curl` 에 따르면 `--max-time` 은 전송마다
@@ -967,7 +970,7 @@ final class UpdateRunner {
             // failed 로 내려 배너가 폴백 안내와 함께 재시도를 허용하게 한다.
             status = .failed
         case .standalone:
-            // 시한은 DMG 전용이다 — 받기 앞에 나눠 받기(최악 240초)가 붙었다(`dmgWatchdogSeconds` 주석).
+            // 시한은 DMG 전용이다 — 받기 앞에 나눠 받기(최악 120초)가 붙었다(`dmgWatchdogSeconds` 주석).
             var elapsed = 0.0
             while elapsed < Self.dmgWatchdogSeconds {
                 await watchdogSleep(Self.progressPollSeconds)
@@ -1042,28 +1045,40 @@ final class UpdateRunner {
     ///  1. 탐색 — `-r 0-0` 한 바이트를 `-L` 로 받아 최종 코드가 206 이고 **마지막 응답 블록**의 `Content-Range: bytes 0-0/<전체>`
     ///     (대소문자 무시)에서 전체 크기를 읽는다. 숫자가 아니거나 0 이하면 폴백. 조각은 `url_effective`(서명된 최종 주소)로
     ///     받는다 — 리다이렉트를 조각마다 되풀이하지 않는다. 최종 주소가 https 가 아니면 폴백.
-    ///  2. 조각 — 8MB 이상이면 8갈래(크기 ceil(전체/8)), 미만이면 한 줄(`-r 0-(전체-1)`). `--speed-limit 65536 --speed-time 12`
-    ///     는 **멎은 연결을 끊는 장치**다(초당 64KB 미만이 12초면 끊는다) — 초당 0.2MB 로 느리게라도 흐르는 조각(4.4MB ≈ 22초)은
-    ///     끊지 않는다.
-    ///     ★ **조각마다 응답 머리도 본다**(검토 지적 수리): 코드가 206 이고 마지막 블록의 `Content-Range` 가 정확히
-    ///     `bytes <요청한 a>-<요청한 b>/<전체>` 일 때만 그 조각을 남긴다. 한 줄(a=0, b=전체-1)일 때만 200 도 받는다(본문이 곧 전체).
-    ///     크기만 보면 Range 를 무시하는 중간 캐시가 조각마다 **첫 조각 본문을 되풀이**할 때(전체가 8의 배수면 조각 크기가 전부 같다)
-    ///     내용이 틀린 OUT 을 "완전하다"고 돌려준다 — DMG 경로는 그러면 단일 curl 로 떨어지지 못하고 검증(image)에서 실패로 끝난다.
-    ///     그래서 "0 = 완전하다" 가 두 호출자 모두에게 참이 되도록 여기서 거른다(어긋난 조각은 지우고 재시도·폴백으로 보낸다).
-    ///  3. 검사·재시도 — 크기가 틀렸거나 머리가 어긋나 지운 조각만 **한 번 더**(새 연결) 동시에 받는다. 그 전에 탐색을 다시 해
-    ///     서명 주소를 새로 받는다(만료·403 대비). 전체 크기가 바뀌었거나 두 번째도 틀리면 폴백.
+    ///  2. 조각 한 번 받기(`pf_piece`) — 8MB 이상이면 8갈래(크기 ceil(전체/8)), 미만이면 한 줄(`-r 0-(전체-1)`).
+    ///     **이어 받는다**: 조각 파일 `p<i>` 에 이미 `have` 바이트가 있으면 `s = a + have` 부터 b 까지만 요청한다(`s > b` 면 할 일 없음).
+    ///     `--speed-limit 1048576 --speed-time 3` — **갇힌 연결을 3초 만에 끊는 장치**다(초당 1MB 미만이 3초면 끊는다).
+    ///     ★ 왜 이 문턱인가(2026-10-21 04시 실측, 실제 GitHub 0.3.60 자산 35MB): 자산 서버에 대한 연결 하나하나가 **둘 중 하나**다 —
+    ///     빠르면 초당 5~25MB(4MB 를 0.2~0.9초), 갇히면 초당 0.06~0.5MB. 주소별 고정이 아니라 연결마다 운(약 20%)이라 8조각이면
+    ///     거의 매번 한 조각이 갇힌 연결에 걸리고, 그 조각 하나(4.4MB ÷ 0.15MB/s ≈ 30초)가 전체 시간을 정했다. 예전 문턱(초당
+    ///     64KB · 12초)은 그런 연결을 끊지 않았고, 끊겨도 받은 바이트를 버리고 처음부터 한 번만 다시 받았다 — 5회에 28 · 2 · 37 ·
+    ///     45초 · 폴백. 빠른 연결은 4.4MB 조각을 1초 안에 끝내 이 문턱에 안 걸린다. 이 함수로 바꾼 시제품은 5회 8 · 9 · 7 · 21 · 3초
+    ///     (5회 모두 지문 일치 · 폴백 0).
+    ///     ★ **응답 머리는 엄격하게 본다**(검토 지적 수리): 코드가 206 이고 마지막 블록의 `Content-Range` 가 정확히
+    ///     `bytes <요청한 s>-<요청한 b>/<전체>` 일 때만, 또는 s=0 이고 b=전체-1(한 줄)일 때만 200(본문이 곧 전체). 머리가 맞으면
+    ///     **받은 만큼**(끊겼어도 앞부분은 맞는 바이트다) 임시 `t<i>` 를 `p<i>` 뒤에 잇고, 틀리면 `t<i>` 를 버린다(`p<i>` 는 그대로).
+    ///     curl 종료 코드는 판정에 쓰지 않는다 — 28(느려서 끊김)이어도 받은 앞부분은 쓴다. 크기만 보면 Range 를 무시하는 중간 캐시가
+    ///     조각마다 **첫 조각 본문을 되풀이**할 때(전체가 8의 배수면 조각 크기가 전부 같다) 내용이 틀린 OUT 을 "완전하다"고 돌려준다 —
+    ///     DMG 경로는 그러면 단일 curl 로 떨어지지 못하고 검증(image)에서 실패로 끝난다. 그래서 "0 = 완전하다" 가 두 호출자 모두에게
+    ///     참이 되도록 여기서 거른다.
+    ///  3. 바퀴(`pf_run`) — 모든 조각이 기대 크기가 될 때까지 덜 받은 조각만 동시에 받고(`wait`) 크기를 본다. 둘째 바퀴부터는
+    ///     시작 전에 **다시 탐색**해 서명 주소를 새로 받는다(만료·403 대비). 폴백: ① 시한 소진(남은 시간 3초 미만이면 새 바퀴를
+    ///     시작하지 않는다) ② 한 바퀴 동안 늘어난 바이트가 0 ③ 탐색 실패 ④ 전체 크기가 바뀜 ⑤ 조각 파일이 기대보다 커짐
+    ///     ⑥ 안전핀 — 40바퀴를 넘김.
     ///  4. 차례대로 이어 `OUT.part` 를 만들고 크기가 전체와 같을 때만 `mv` 로 OUT. 임시 조각은 성공·실패 모두 지운다 —
     ///     trap 을 걸지 않고 명시적으로 지운다(호출자의 `trap cleanup EXIT` 을 덮어쓰지 않는다).
-    ///  5. 로그 — 전체 크기 · 걸린 초 · 재시도한 조각 수 · 폴백 사유. 주소는 **쿼리 없이**(`${1%%\?*}`)만 적고 서명된 최종 주소는
+    ///  5. 로그 한 줄 — `나눠 받기 끝: <전체> bytes · <N>갈래 · <초>초 · <바퀴>바퀴 · 다시 받은 조각 <누계>개` 또는
+    ///     `나눠 받기 폴백: <사유> · <초>초 · <바퀴>바퀴`. 주소는 **쿼리 없이**(`${1%%\?*}`)만 적고 서명된 최종 주소는
     ///     아예 적지 않는다 — 서명 토큰을 로그 파일에 남기지 않는다.
     ///
-    /// **최악 시간 상한**: 탐색 30 + 조각 90(동시라 한 번) + 재탐색 30 + 재시도 90 = **240초**(`pfetchWorstCaseSeconds`,
-    /// + 잇기·크기 확인 몇 초). 시험이 이 함수 본문의 `--max-time` 값에서 그 숫자를 다시 계산해 맞춰 본다 — 바꾸면 상수도 함께 바뀐다.
-    ///  · brew 경로: brew update(예전과 같음) + 미리 받기 ≤ 240 + brew upgrade(캐시가 맞으면 내려받기 없이 몇 초).
+    /// **최악 시간 상한 = 시한 120초**(`PF_DEADLINE`, + 잇기·크기 확인 몇 초 — `pfetchWorstCaseSeconds`). 탐색의 `--max-time` 은
+    /// min(30, 남은 시간), 조각은 min(90, 남은 시간)이라 어떤 curl 도 시한을 넘어 돌지 않고, 남은 시간이 3초 미만이면 새 바퀴를
+    /// 시작하지 않는다. 시험이 이 함수 본문에서 시한 숫자를 읽어 상수와 맞춰 본다 — 바꾸면 상수도 함께 바뀐다.
+    ///  · brew 경로: brew update(예전과 같음) + 미리 받기 ≤ 120 + brew upgrade(캐시가 맞으면 내려받기 없이 몇 초).
     ///    이 함수 혼자서는 감시 시한(`watchdogSeconds` 600)을 넘기지 않게 고른 숫자다.
-    ///  · DMG 경로: 이 함수가 240초를 다 쓰고 실패한 뒤 기존 단일 curl(`--max-time 420`)까지 최악이면 받기만 660초다 —
-    ///    0.3.60 의 감시 600초를 넘는다. 그래서 DMG 경로는 감시 시한을 따로 둔다(`dmgWatchdogSeconds` = 600 + 240 = 840초).
-    ///    안 그러면 배너가 실패를 띄운 뒤에도 스크립트는 계속 가서 앱을 종료하고 교체한다.
+    ///  · DMG 경로: 이 함수가 120초를 다 쓰고 실패한 뒤 기존 단일 curl(`--max-time 420`)까지 최악이면 받기만 540초다 —
+    ///    0.3.60 의 감시 600초로는 뒤 단계 몫(180초)이 모자란다. 그래서 DMG 경로는 감시 시한을 따로 둔다
+    ///    (`dmgWatchdogSeconds` = 600 + 120 = 720초). 안 그러면 배너가 실패를 띄운 뒤에도 스크립트는 계속 가서 앱을 종료하고 교체한다.
     ///
     /// 본문에 슬래시 두 개 · 슬래시-별표를 쓰지 않는다 — 소스를 읽는 계약 테스트의 주석 걷어내기가 그것을 주석 시작으로
     /// 읽는다(`AppStoreRetireRemoval.brewUninstallScript` 주석). 그래서 `https:` 뒤 두 슬래시는 `[/][/]` 로 잰다.
@@ -1085,10 +1100,17 @@ final class UpdateRunner {
           PF_CR="${PF_CR#"${PF_CR%%[![:space:]]*}"}"
           PF_CR="${PF_CR%"${PF_CR##*[![:space:]]}"}"
         }
+        pf_left() {
+          local l=$(( PF_DEADLINE - SECONDS ))
+          if [ "$l" -gt "$1" ]; then l=$1; fi
+          echo "$l"
+        }
         pf_probe() {
-          local r="" rc=0 cr=""
+          local r="" rc=0 cr="" t=""
+          t="$(pf_left 30)"
+          if [ "$t" -lt 3 ]; then PF_WHY="시간이 다 됐습니다"; return 1; fi
           rm -f "$PF_W/h" "$PF_W/b"
-          r="$(curl -fsS -L --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 -r 0-0 -o "$PF_W/b" -D "$PF_W/h" -w '%{http_code} %{url_effective}' "$1")"
+          r="$(curl -fsS -L --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time "$t" -r 0-0 -o "$PF_W/b" -D "$PF_W/h" -w '%{http_code} %{url_effective}' "$1")"
           rc=$?
           if [ "$rc" -ne 0 ]; then PF_WHY="탐색이 실패했습니다(curl $rc)"; return 1; fi
           if [ "${r%% *}" != "206" ]; then PF_WHY="Range 를 받지 않습니다(HTTP ${r%% *})"; return 1; fi
@@ -1115,48 +1137,65 @@ final class UpdateRunner {
           if [ "$PF_B" -gt "$PF_TOTAL" ]; then PF_B=$PF_TOTAL; fi
           PF_B=$(( PF_B - 1 ))
         }
+        pf_have() {
+          local n=""
+          if [ -f "$1" ]; then n="$(stat -f %z "$1")"; fi
+          case "$n" in
+            (''|*[!0-9]*) n=0 ;;
+          esac
+          echo "$n"
+        }
         pf_piece() {
-          local r=""
-          rm -f "$PF_W/h$1"
-          r="$(curl -fsS --proto '=https' --tlsv1.2 --connect-timeout 15 --speed-limit 65536 --speed-time 12 --max-time 90 -r "${2}-${3}" -o "$PF_W/p$1" -D "$PF_W/h$1" -w '%{http_code}' "$PF_FINAL")" || { rm -f "$PF_W/p$1"; return 1; }
-          if [ "$r" = "206" ] && pf_cr "$PF_W/h$1" && [ "$PF_CR" = "bytes ${2}-${3}/$PF_TOTAL" ]; then return 0; fi
-          if [ "$r" = "200" ] && [ "$2" = "0" ] && [ "$3" = "$(( PF_TOTAL - 1 ))" ]; then return 0; fi
-          rm -f "$PF_W/p$1"
-          return 1
+          local r="" have=0 s=0 ok=""
+          have="$(pf_have "$PF_W/p$1")"
+          s=$(( $2 + have ))
+          if [ "$s" -gt "$3" ]; then return 0; fi
+          rm -f "$PF_W/h$1" "$PF_W/t$1"
+          r="$(curl -sS --proto '=https' --tlsv1.2 --connect-timeout 10 --speed-limit 1048576 --speed-time 3 --max-time "$4" -r "${s}-${3}" -o "$PF_W/t$1" -D "$PF_W/h$1" -w '%{http_code}' "$PF_FINAL")"
+          if [ "$r" = "206" ] && pf_cr "$PF_W/h$1" && [ "$PF_CR" = "bytes ${s}-${3}/$PF_TOTAL" ]; then ok=1; fi
+          if [ "$r" = "200" ] && [ "$s" = "0" ] && [ "$3" = "$(( PF_TOTAL - 1 ))" ]; then ok=1; fi
+          if [ -n "$ok" ] && [ -f "$PF_W/t$1" ]; then cat "$PF_W/t$1" >> "$PF_W/p$1" || rm -f "$PF_W/p$1"; fi
+          rm -f "$PF_W/t$1"
         }
         pf_check() {
-          local i="" got=""
+          local i="" g=0 want=0
           PF_BAD=()
-          for i in "$@"; do
+          PF_GOT=0
+          for i in "${PF_ALL[@]}"; do
             pf_range "$i"
-            got=""
-            if [ -f "$PF_W/p$i" ]; then got="$(stat -f %z "$PF_W/p$i")"; fi
-            if [ "$got" != "$(( PF_B - PF_A + 1 ))" ]; then PF_BAD+=("$i"); fi
+            g="$(pf_have "$PF_W/p$i")"
+            want=$(( PF_B - PF_A + 1 ))
+            if [ "$g" -gt "$want" ]; then PF_WHY="조각 $i 의 크기가 기대보다 큽니다($g > $want)"; return 1; fi
+            PF_GOT=$(( PF_GOT + g ))
+            if [ "$g" -lt "$want" ]; then PF_BAD+=("$i"); fi
           done
         }
         pf_run() {
-          local i="" total=""
-          local -a redo
+          local i="" total="" before=0 t=""
           pf_probe "$1" || return 1
           PF_N=8
           if [ "$PF_TOTAL" -lt 8388608 ]; then PF_N=1; fi
           PF_SIZE=$(( (PF_TOTAL + PF_N - 1) / PF_N ))
           PF_ALL=()
           for (( i = 0; i < PF_N; i++ )); do PF_ALL+=("$i"); done
-          for i in "${PF_ALL[@]}"; do pf_range "$i"; pf_piece "$i" "$PF_A" "$PF_B" & done
-          wait
-          pf_check "${PF_ALL[@]}"
-          if [ "${#PF_BAD}" -gt 0 ]; then
-            redo=("${PF_BAD[@]}")
-            PF_RETRIED=${#redo}
-            total="$PF_TOTAL"
-            pf_probe "$1" || { PF_WHY="다시 탐색: $PF_WHY"; return 1; }
-            if [ "$PF_TOTAL" != "$total" ]; then PF_WHY="받는 사이 전체 크기가 바뀌었습니다"; return 1; fi
-            for i in "${redo[@]}"; do rm -f "$PF_W/p$i"; pf_range "$i"; pf_piece "$i" "$PF_A" "$PF_B" & done
+          pf_check || return 1
+          while [ "${#PF_BAD}" -gt 0 ]; do
+            if [ "$PF_ROUNDS" -ge 40 ]; then PF_WHY="40바퀴 안에 끝나지 않았습니다"; return 1; fi
+            PF_ROUNDS=$(( PF_ROUNDS + 1 ))
+            if [ "$PF_ROUNDS" -gt 1 ]; then
+              PF_RETRIED=$(( PF_RETRIED + ${#PF_BAD} ))
+              total="$PF_TOTAL"
+              pf_probe "$1" || { PF_WHY="다시 탐색: $PF_WHY"; return 1; }
+              if [ "$PF_TOTAL" != "$total" ]; then PF_WHY="받는 사이 전체 크기가 바뀌었습니다"; return 1; fi
+            fi
+            t="$(pf_left 90)"
+            if [ "$t" -lt 3 ]; then PF_WHY="시간이 다 됐습니다"; return 1; fi
+            before=$PF_GOT
+            for i in "${PF_BAD[@]}"; do pf_range "$i"; pf_piece "$i" "$PF_A" "$PF_B" "$t" & done
             wait
-            pf_check "${redo[@]}"
-            if [ "${#PF_BAD}" -gt 0 ]; then PF_WHY="조각 ${PF_BAD[*]} 이 두 번 다 어긋났습니다"; return 1; fi
-          fi
+            pf_check || return 1
+            if [ "$PF_GOT" -le "$before" ]; then PF_WHY="한 바퀴 동안 받은 것이 없습니다"; return 1; fi
+          done
           : > "$PF_OUT.part" || { PF_WHY="이을 파일을 만들지 못했습니다"; return 1; }
           for i in "${PF_ALL[@]}"; do
             cat "$PF_W/p$i" >> "$PF_OUT.part" || { PF_WHY="조각을 잇지 못했습니다"; return 1; }
@@ -1165,7 +1204,7 @@ final class UpdateRunner {
           mv -f "$PF_OUT.part" "$PF_OUT" || { PF_WHY="이름을 바꾸지 못했습니다"; return 1; }
         }
         pfetch() {
-          local PF_W="" PF_OUT="$2" PF_FINAL="" PF_TOTAL="" PF_CR="" PF_WHY="" PF_N=0 PF_SIZE=0 PF_A=0 PF_B=0 PF_RETRIED=0 PF_T0=$SECONDS rc=0
+          local PF_W="" PF_OUT="$2" PF_FINAL="" PF_TOTAL="" PF_CR="" PF_WHY="" PF_N=0 PF_SIZE=0 PF_A=0 PF_B=0 PF_GOT=0 PF_ROUNDS=0 PF_RETRIED=0 PF_T0=$SECONDS PF_DEADLINE=$(( SECONDS + 120 )) rc=0
           local -a PF_ALL PF_BAD
           echo "$M 나눠 받기 시작: ${1%%\?*}"
           PF_W="$(mktemp -d "${TMPDIR:-/tmp}/aing-check-pfetch.XXXXXX")" || { echo "$M 나눠 받기 폴백: 임시 폴더를 만들지 못했습니다"; return 1; }
@@ -1173,10 +1212,10 @@ final class UpdateRunner {
           rc=$?
           rm -rf "$PF_W"
           if [ "$rc" -eq 0 ]; then
-            echo "$M 나눠 받기 끝: $PF_TOTAL bytes · ${PF_N}갈래 · $(( SECONDS - PF_T0 ))초 · 재시도한 조각 ${PF_RETRIED}개"
+            echo "$M 나눠 받기 끝: $PF_TOTAL bytes · ${PF_N}갈래 · $(( SECONDS - PF_T0 ))초 · ${PF_ROUNDS}바퀴 · 다시 받은 조각 ${PF_RETRIED}개"
           else
             rm -f "$PF_OUT.part"
-            echo "$M 나눠 받기 폴백: ${PF_WHY:-알 수 없음} · $(( SECONDS - PF_T0 ))초 · 재시도한 조각 ${PF_RETRIED}개"
+            echo "$M 나눠 받기 폴백: ${PF_WHY:-알 수 없음} · $(( SECONDS - PF_T0 ))초 · ${PF_ROUNDS}바퀴"
           fi
           return "$rc"
         }
@@ -1218,7 +1257,7 @@ final class UpdateRunner {
     ///    들어갔다(검증·mv 가 둘 다 경로를 보는 TOCTOU). ② 잇는 도중 죽으면 `<sha>--…aing-check-part.part` 가 남는데, brew 의 캐시
     ///    찾기(`downloads/<url sha>--*` 에서 `.incomplete` 만 뺀다)가 그것을 캐시 본체로 집었다. 숨김 이름(`.`)은 그 glob 에
     ///    걸리지 않고, 같은 폴더라 mv 는 그대로 원자적이다. 죽은 실행이 남긴 숨김 조각은 다음 실행이 60분 넘은 것만 지운다
-    ///    (미리 받기의 최악은 240초라 60분 넘은 것은 반드시 죽은 실행의 것이다 — 자물쇠의 `-mmin +60` 과 같은 규칙).
+    ///    (미리 받기의 최악은 120초라 60분 넘은 것은 반드시 죽은 실행의 것이다 — 자물쇠의 `-mmin +60` 과 같은 규칙).
     ///  · 로그에 "미리 받기: N초 · 성공/건너뜀(사유)/실패(사유)" 한 줄.
     /// 효과는 0.3.61 을 설치한 **다음** 업데이트부터다 — 업데이트는 깔려 있는 앱의 스크립트가 실행한다.
     ///

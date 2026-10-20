@@ -749,8 +749,8 @@ func dmgUpdateScriptQuotesTheProtoArgument() throws {
     #expect(!body.contains("--proto ="), "작은 인용 없는 =https 가 있다(zsh 가 =명령어 확장으로 죽는다)")
 }
 
-// ── 감시 시한 ↔ 실제 받기 시간 (검토 지적: DMG 최악 받기 660초 > 감시 600초)
-// 숫자를 테스트에 다시 적지 않고 **스크립트 글자에서 뽑는다** — 누가 `--max-time` 을 바꾸면 상수와 함께 빨개진다.
+// ── 감시 시한 ↔ 실제 받기 시간 (검토 지적: 나눠 받기 + 단일 curl 의 최악이 감시 600초 안에서 뒤 단계 몫을 먹는다)
+// 숫자를 테스트에 다시 적지 않고 **스크립트 글자에서 뽑는다** — 누가 시한이나 `--max-time` 을 바꾸면 상수와 함께 빨개진다.
 private func maxTimes(in text: String) -> [Int] {
     var out: [Int] = []
     var rest = Substring(text)
@@ -761,12 +761,29 @@ private func maxTimes(in text: String) -> [Int] {
     return out
 }
 
+// 0.3.61 이어 받기: 바퀴 수가 정해져 있지 않아 `--max-time` 을 더해서는 최악을 못 구한다. 대신 **시한 한 곳**
+// (`PF_DEADLINE=$(( SECONDS + N ))`)이 있고, 모든 curl 의 `--max-time` 이 그 시한에서 남은 시간으로 정해진다 — 그 둘을 글자로 본다.
 @Test
-func pfetchWorstCaseMatchesTheTimeoutsInTheFunction() {
-    // 차례: 탐색(pf_probe) · 조각(pf_piece). 최악 = 탐색 + 조각(동시라 한 번) + 재탐색 + 재시도 = 2 × (탐색 + 조각).
-    let pf = maxTimes(in: UpdateRunner.pfetchFunction)
-    #expect(pf == [30, 90], "나눠 받기의 시간 한도가 바뀌었다 — pfetchWorstCaseSeconds 와 주석의 계산을 다시 적는다: \(pf)")
-    #expect(UpdateRunner.pfetchWorstCaseSeconds == Double(2 * pf.reduce(0, +)))
+func pfetchWorstCaseIsTheDeadlineInTheFunction() throws {
+    let body = UpdateRunner.pfetchFunction
+    let marker = "PF_DEADLINE=$(( SECONDS + "
+    #expect(body.components(separatedBy: marker).count - 1 == 1, "나눠 받기의 시한이 한 곳이 아니다")
+    let at = try #require(body.range(of: marker))
+    let deadline = try #require(Int(body[at.upperBound...].prefix { $0.isNumber }), "시한 숫자를 못 읽었다")
+    #expect(deadline == 120)
+    #expect(UpdateRunner.pfetchWorstCaseSeconds == Double(deadline),
+            "pfetchWorstCaseSeconds 가 함수의 시한과 다르다 — 상수와 주석의 계산을 다시 적는다")
+    // 고정 숫자 `--max-time` 이 하나라도 있으면 시한을 넘어 도는 curl 이 생긴다. curl 은 탐색·조각 둘뿐이고 둘 다 남은 시간을 쓴다:
+    // 탐색은 자기 `t` = min(30, 남은), 조각은 넷째 인자 = 바퀴의 `t` = min(90, 남은).
+    #expect(maxTimes(in: body).isEmpty, "고정 --max-time 이 있다: \(maxTimes(in: body))")
+    #expect(body.components(separatedBy: "--max-time ").count - 1 == 2, "curl 의 --max-time 이 탐색·조각 두 곳이 아니다")
+    #expect(body.contains(#"t="$(pf_left 30)""#), "탐색의 --max-time 이 min(30, 남은 시간)이 아니다")
+    #expect(body.components(separatedBy: #"-L --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time "$t" "#).count - 1 == 1,
+            "탐색의 --max-time 이 남은 시간이 아니다")
+    #expect(body.contains(#"t="$(pf_left 90)""#), "조각의 --max-time 이 min(90, 남은 시간)이 아니다")
+    #expect(body.components(separatedBy: #"--max-time "$4" "#).count - 1 == 1, "조각의 --max-time 이 넘겨받은 남은 시간이 아니다")
+    #expect(body.contains(#"pf_piece "$i" "$PF_A" "$PF_B" "$t" &"#), "바퀴가 조각에 남은 시간을 넘기지 않는다")
+    #expect(body.contains(#"local l=$(( PF_DEADLINE - SECONDS ))"#), "남은 시간이 시한에서 오지 않는다")
 }
 
 @Test
@@ -775,12 +792,12 @@ func dmgWatchdogCoversTheWorstDownloadAndKeepsTheOldTailBudget() throws {
     let whole = maxTimes(in: body)
     #expect(whole == [UpdateRunner.dmgDownloadTimeoutSeconds], "DMG 단일 curl 의 --max-time 이 상수와 다르다: \(whole)")
     let worstDownload = UpdateRunner.pfetchWorstCaseSeconds + Double(whole.reduce(0, +))
-    #expect(worstDownload == 660)
+    #expect(worstDownload == 540)
     // 받기가 최악이어도 그 뒤 단계(검증·스테이징·종료 대기·교체)에 0.3.60 과 같은 몫(600 - 420 = 180초)이 남아야 한다.
     let oldTail = UpdateRunner.watchdogSeconds - Double(UpdateRunner.dmgDownloadTimeoutSeconds)
     #expect(UpdateRunner.dmgWatchdogSeconds - worstDownload >= oldTail,
             "DMG 감시 \(UpdateRunner.dmgWatchdogSeconds)초가 최악 받기 \(worstDownload)초 + 뒤 단계 \(oldTail)초를 못 덮는다")
-    // brew 경로는 그대로 600 — 미리 받기 혼자서는 240 이라 넘지 않는다.
+    // brew 경로는 그대로 600 — 미리 받기 혼자서는 120 이라 넘지 않는다.
     #expect(UpdateRunner.pfetchWorstCaseSeconds < UpdateRunner.watchdogSeconds)
 }
 
@@ -1017,7 +1034,7 @@ func standaloneStillFailsWhenTheScriptLeavesNoTrace() async {
     #expect(runner.progress == .unknown)
 }
 
-// 받기 단계에서 오래 머무는 스크립트(나눠 받기가 느리게 실패하고 단일 curl 이 한도 직전에 성공 — 최악 660초)를
+// 받기 단계에서 오래 머무는 스크립트(나눠 받기가 느리게 실패하고 단일 curl 이 한도 직전에 성공 — 최악 540초 + 뒤 단계)를
 // 600초에 실패로 내리면, 배너는 실패를 띄우는데 스크립트는 계속 가서 앱을 종료하고 교체한다(검토 지적).
 // DMG 감시는 `dmgWatchdogSeconds` 를 끝까지 기다려야 한다 — brew 의 600 이 아니라.
 @MainActor

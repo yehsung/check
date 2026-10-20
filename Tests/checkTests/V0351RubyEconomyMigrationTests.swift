@@ -320,8 +320,13 @@ struct V0351RubyEconomyMigrationTests {
         // ★ 뽑기 전용 캐릭터(가격표에 gacha_only = true 로 들어간 id — 20261015121000 aing_gold)는 **팔지 않으므로** 유료가 아니다.
         //   그 명단도 손으로 적지 않고 마이그레이션에서 읽는다(기준선: 지금 정확히 aing_gold 하나다).
         let gachaOnly = try reGachaOnlyIDs()
-        #expect(gachaOnly == ["aing_gold"], "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold]")
-        let paid = Set(CheckMascotAssets.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID }).subtracting(gachaOnly)
+        // v0.3.59: 무지개 아잉이(20261020120000_gacha_rainbow.sql)도 뽑기 전용이다 — 그 파일이 이 트리에 들어오기 전에도(앱이 먼저 들어올 수 있다)
+        //   무지개는 루비로 안 판다(설계 확정 · 카탈로그 내장). 그래서 명단은 금을 꼭 품고, 그 밖에는 무지개만 허락한다.
+        #expect(gachaOnly.contains("aing_gold") && gachaOnly.isSubset(of: ["aing_gold", "aing_rainbow"]),
+                "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow)]")
+        let paid = Set(CheckMascotAssets.catalog.allIDs.filter {
+            $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isRainbowAing($0)
+        }).subtracting(gachaOnly)
         #expect(Set(newPrices.keys) == paid, "가격을 고친 캐릭터 \(newPrices.keys.sorted()) ≠ 번들의 유료 캐릭터 \(paid.sorted())")
     }
 

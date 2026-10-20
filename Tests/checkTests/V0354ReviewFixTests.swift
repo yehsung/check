@@ -345,8 +345,11 @@ import Testing
         for server in Server.allCases {
             let ids = Self.store(server).characterPickerIDs
             #expect(ids.contains(Self.gold) == expected[server], "\(server): 고르기 목록 \(ids)")
-            // 금 말고는 그대로다(번들 순서 · 아잉 먼저).
-            #expect(ids.filter { $0 != Self.gold } == CheckCharacter3DScene.catalog.allIDs.filter { $0 != Self.gold }, "\(server)")
+            // 금 말고는 그대로다(번들 순서 · 아잉 먼저). 무지개(v0.3.59)는 이 픽스처의 어느 서버도 내지 않아(확률표 · 상점 목록에 없음 ·
+            // 안 가짐) 같은 문에 걸려 빠진다 — 무지개 쪽 판정은 `V0359RainbowMacTests` 가 잰다.
+            let plain = { (id: String) in id != Self.gold && !CharacterCatalog.isRainbowAing(id) }
+            #expect(ids.filter(plain) == CheckCharacter3DScene.catalog.allIDs.filter(plain), "\(server)")
+            #expect(ids.contains(CharacterCatalog.rainbowAingID) == (server == .notLoaded), "\(server): 무지개 \(ids)")
         }
         // 화면: 옛 서버의 고르기는 뽑기 서버의 고르기와 **다른 그림**이다(금 카드가 빠져 카드가 한 칸씩 당겨진다).
         // 기준선 — 같은 조건을 두 번 그리면 같다(렌더 잡음이 아니라 카드 목록이 그림을 가른다는 증거).
@@ -396,8 +399,9 @@ import Testing
         #expect(selection.selectedID == CharacterCatalog.builtInAingID,
                 "옛 서버가 금을 모르는데 로컬은 금 그대로다 — 내 화면엔 금, 남에게는 아잉")
         #expect(store.syncMessage.contains(GachaText.gachaOnlyHint), "되돌린 사실·얻는 길을 안 말했다: \(store.syncMessage)")
-        // 기준선: 금이 아닌 캐릭터의 unknown_character 는 되돌리지 않는다(앱 번들과 서버 명단이 갈린 것 — 기존 계약).
-        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGoldAing($0) })
+        // 기준선: 금이 아닌(루비로 파는) 캐릭터의 unknown_character 는 되돌리지 않는다(앱 번들과 서버 명단이 갈린 것 — 기존 계약).
+        // 무지개(v0.3.59)는 금과 같은 쪽이다(`V0359RainbowMacTests`) — 기준선에서 뺀다.
+        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) })
         let (_, other) = await Self.push(fox, reply: #"{"status":"unknown_character","id":"x"}"#, label: "unknown-other")
         #expect(other.selectedID == fox)
     }
@@ -409,7 +413,7 @@ import Testing
         let notice = goldStore.syncMessage
         #expect(notice.contains(GachaText.gachaOnlyHint), "금 되돌림 안내 '\(notice)' — 얻는 길(뽑기·조각)을 안 말한다")
         #expect(!notice.contains("상점에서 살 수 있어요"), "금 되돌림 안내 '\(notice)' — 금은 상점에서 못 산다")
-        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGoldAing($0) })
+        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) })
         let (foxStore, _) = await Self.push(fox, reply: #"{"status":"not_owned","id":"x"}"#, label: "not-owned-fox")
         #expect(foxStore.syncMessage == WorkTimerStore.notOwnedRevertNotice)
     }

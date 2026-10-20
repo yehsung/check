@@ -766,7 +766,7 @@ struct CheckMenuView: View {
                             isUnlocked: { store.isCharacterUnlocked($0) },
                             onLocked: { store.openShopForLockedCharacter($0) },
                             priceOf: { store.shopPrice(of: $0) },
-                            // 얻을 길이 안 보이는 황금 아잉이(뽑기 없는 서버)는 카드째 뺀다 — 폰 고르기와 같은 규칙(v0.3.54).
+                            // 얻을 길이 안 보이는 황금 · 무지개 아잉이(그 캐릭터를 안 내는 뽑기 · 뽑기 없는 서버)는 카드째 뺀다 — 폰 고르기와 같은 규칙(v0.3.54 · v0.3.59).
                             isListed: { store.isCharacterListed($0) }
                         )
                     } else {

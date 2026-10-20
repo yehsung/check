@@ -828,7 +828,7 @@ final class WorkTimerStore {
 
     /// 상점 목록에서 이 캐릭터의 가격(모르면 nil).
     ///
-    /// ★ **루비로 살 수 없는 캐릭터는 nil 이다**(v0.3.54 황금 아잉이). 서버는 그 행에도 명목가(1000)를 싣는데, 그 숫자를 그대로 주면
+    /// ★ **루비로 살 수 없는 캐릭터는 nil 이다**(v0.3.54 황금 아잉이 · v0.3.59 무지개 아잉이). 서버는 그 행에도 명목가(1000)를 싣는데, 그 숫자를 그대로 주면
     ///   캐릭터 고르기의 자물쇠 배지가 "1000" 을 말하고 하단 바가 "루비 N개 더 필요해요" 라고 한다 — 둘 다 거짓이다(뽑기·조각으로만 얻는다).
     func shopPrice(of id: String) -> Int? {
         guard let row = shopCharacters.first(where: { $0.id == id }), row.isPurchasable else { return nil }

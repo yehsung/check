@@ -74,7 +74,8 @@ struct GCrackOverlay: View {
     var tapTimes: [Date]
     var now: Date
     var glow: Double          // 0…1.6
-    var gold: Bool
+    /// 희귀 캡슐(황금 · 무지개)이면 그 빛깔로 샌다. nil = 평범한 흰 빛.
+    var rare: GRare?
     var body: some View {
         Canvas { ctx, size in
             let R = size.width / 2
@@ -90,8 +91,8 @@ struct GCrackOverlay: View {
                 paths.append(p)
             }
             guard !paths.isEmpty else { return }
-            let light = gold ? GPalette.goldLight : Color.white
-            let glowColor = gold ? GPalette.gold : GPalette.hex(0xFFF6D8)
+            let light = rare?.light ?? Color.white
+            let glowColor = rare?.primary ?? GPalette.hex(0xFFF6D8)
             // 어두운 가장자리
             for p in paths {
                 ctx.stroke(p, with: .color(GPalette.plum.opacity(0.45)), style: StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round))
@@ -127,13 +128,14 @@ struct GLeakLight: View {
     var now: Date
     var intensity: Double     // 0…2
     var halo: Double          // 0…1 둥근 후광
-    var gold: Bool
+    /// 희귀 캡슐(황금 · 무지개)이면 그 빛깔. 무지개는 빛줄기마다 일곱 빛을 돈다.
+    var rare: GRare?
     var capsuleD: CGFloat
     var body: some View {
         Canvas { ctx, size in
             let c = CGPoint(x: size.width / 2, y: size.height / 2)
             let R = capsuleD / 2
-            let col = gold ? GPalette.gold : GPalette.hex(0xFFF8E4)
+            let col = rare?.primary ?? GPalette.hex(0xFFF8E4)
             if halo > 0 {
                 ctx.drawLayer { l in
                     l.addFilter(.blur(radius: 14))
@@ -146,10 +148,11 @@ struct GLeakLight: View {
             guard intensity > 0 else { return }
             ctx.drawLayer { l in
                 l.addFilter(.blur(radius: 3.5))
-                for cr in cracks {
+                for (ci, cr) in cracks.enumerated() {
                     let f = GCracks.progress(cr, tapTimes: tapTimes, now: now)
                     let pts = GCracks.partial(cr.pts, f)
                     for (i, p) in pts.enumerated() where i > 0 {
+                        let rayCol = rare.map { $0 == .rainbow ? $0.ray(ci * 3 + i, of: 14) : col } ?? col
                         let dist = hypot(p.x, p.y)
                         guard dist > 0.25 else { continue }
                         let a = atan2(p.y, p.x)
@@ -161,7 +164,7 @@ struct GLeakLight: View {
                         path.addLine(to: CGPoint(x: o.x + cos(a - w) * len, y: o.y + sin(a - w) * len))
                         path.addLine(to: CGPoint(x: o.x + cos(a + w) * len, y: o.y + sin(a + w) * len))
                         path.closeSubpath()
-                        l.fill(path, with: .radialGradient(Gradient(colors: [col.opacity(min(1, 0.75 * intensity)), col.opacity(0)]),
+                        l.fill(path, with: .radialGradient(Gradient(colors: [rayCol.opacity(min(1, 0.75 * intensity)), rayCol.opacity(0)]),
                                                            center: o, startRadius: 0, endRadius: len))
                     }
                 }
@@ -175,7 +178,8 @@ struct GLeakLight: View {
 
 struct GLightBurst: View {
     var t: Double            // 터진 뒤 시간(음수면 아무것도)
-    var gold: Bool
+    /// 희귀 공개(황금 · 무지개)면 그 빛깔 · 긴 빛줄기 · 고리 넷. nil = 평범한 흰 빛.
+    var rare: GRare?
     var center: CGPoint
     var dark: Bool           // 어두운 바탕
     /// 빛줄기 회전 각(라디안). 시간에 곱하지 않고 밖에서 넘긴다 — 잦아들 때 멈출 수 있게.
@@ -185,9 +189,9 @@ struct GLightBurst: View {
     var body: some View {
         Canvas { ctx, size in
             guard t >= 0 else { return }
+            let gold = rare != nil
             let c = center
             if !reduced {
-                let rayCol = gold ? GPalette.hex(0xFFE08A) : Color.white
                 // 빛줄기: 확 켜졌다가 은은하게 남는다
                 let rise = GMath.easeOutCubic(t / (gold ? 0.35 : 0.18))
                 let hold = gold ? 0.75 : 0.55
@@ -208,6 +212,7 @@ struct GLightBurst: View {
                         p.addLine(to: CGPoint(x: c.x + cos(a + half) * len, y: c.y + sin(a + half) * len))
                         p.closeSubpath()
                         let alpha = (dark ? 0.55 : 0.75) * rays * (longRay ? 1 : 0.75)
+                        let rayCol = rare?.ray(i, of: n) ?? Color.white
                         l.fill(p, with: .radialGradient(Gradient(colors: [rayCol.opacity(alpha), rayCol.opacity(0)]),
                                                         center: c, startRadius: 10, endRadius: len))
                     }
@@ -219,7 +224,7 @@ struct GLightBurst: View {
             ctx.drawLayer { l in
                 l.addFilter(.blur(radius: 10))
                 let r = (gold ? 120.0 : 95.0) * (reduced ? 1 : GMath.lerp(0.6, 1, GMath.easeOutCubic(t / 0.4)))
-                let col = gold ? GPalette.hex(0xFFE9A8) : Color.white
+                let col = rare?.core ?? Color.white
                 l.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
                        with: .radialGradient(Gradient(colors: [col.opacity(0.95 * core), col.opacity(0.35 * core), col.opacity(0)]),
                                              center: c, startRadius: 0, endRadius: r))
@@ -230,14 +235,14 @@ struct GLightBurst: View {
             let dur = gold ? 1.6 : 0.85
             ctx.drawLayer { l in
                 l.addFilter(.blur(radius: gold ? 4 : 3))
-                for s in starts {
+                for (k, s) in starts.enumerated() {
                     let tau = t - s
                     guard tau > 0, tau < dur else { continue }
                     let p = tau / dur
                     let r = GMath.lerp(50, gold ? 420 : 300, GMath.easeOutCubic(p))
                     let w = (gold ? 18.0 : 12.0) * (1 - p) + 1.5
                     let a = (gold ? 0.85 : 0.75) * pow(1 - p, 1.6)
-                    let col = gold ? GPalette.gold : Color.white
+                    let col = rare?.ring(k) ?? Color.white
                     l.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
                              with: .color(col.opacity(a)), lineWidth: w)
                 }
@@ -291,7 +296,7 @@ struct GHintArc: View {
     }
 }
 
-// MARK: - 금빛 글자 반짝임
+// MARK: - 금빛(무지개빛) 글자 반짝임
 
 struct GShimmerTitle: View {
     var text: String
@@ -299,6 +304,8 @@ struct GShimmerTitle: View {
     var t: Double
     /// 지나가는 반짝임 횟수 상한(그 뒤엔 멈춘 글자 — 매 프레임 그릴 일이 없다). 0 이면 반짝임 없음.
     var passes: Int = 2
+    /// 글자 빛깔(황금 · 무지개 — v0.3.59). 반짝임 · 둘레 빛 모양은 같다.
+    var rare: GRare = .gold
     var body: some View {
         let label = Text(text).font(.system(size: size, weight: .heavy, design: .rounded))
         let cycle = 2.4
@@ -306,8 +313,7 @@ struct GShimmerTitle: View {
         let p = index < passes ? (t.truncatingRemainder(dividingBy: cycle)) / 1.2 : 2   // 1.2초 지나가고 1.2초 쉼
         let x = GMath.lerp(-0.4, 1.4, GMath.easeInOutCubic(p))
         label
-            .foregroundStyle(LinearGradient(colors: [GPalette.hex(0xFFF0B0), GPalette.gold, GPalette.hex(0xF0A800)],
-                                            startPoint: .top, endPoint: .bottom))
+            .foregroundStyle(rare.titleFill)
             .overlay {
                 if p < 1 {
                     LinearGradient(colors: [.clear, Color.white.opacity(0.95), .clear],
@@ -315,7 +321,7 @@ struct GShimmerTitle: View {
                         .mask(label)
                 }
             }
-            .shadow(color: GPalette.gold.opacity(0.65), radius: 10)
-            .shadow(color: GPalette.hex(0x7A4D00, 0.35), radius: 1, y: 1)
+            .shadow(color: rare.titleGlow, radius: 10)
+            .shadow(color: rare.titleEdge, radius: 1, y: 1)
     }
 }

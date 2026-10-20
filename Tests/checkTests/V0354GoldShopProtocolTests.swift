@@ -125,14 +125,18 @@ struct V0354GoldShopProtocolTests {
     func shippedMacFollowsTheArtInTheTree() async throws {
         let robot = V0343RobotShopProtocolTests.robotArtInSourceTree
         let gold = V0354CoreArtBaseline.macGoldArtInSourceTree
-        let expected = robot ? (gold ? ShopWire.goldProtocol : ShopWire.robotProtocol) : ShopWire.legacyProtocol
+        // v0.3.59: 번호는 누적이라 무지개 그림까지 실리면 3 이다(무지개의 기준선은 V0359RainbowShopProtocolTests). 이 시험은 금의 몫 —
+        // "금 그림이 있으면 2 이상, 없으면 robot 까지" — 를 잰다.
+        let rainbow = V0359RainbowShopProtocolTests.macRainbowArtInSourceTree
+        let expected = robot ? (gold ? (rainbow ? ShopWire.rainbowProtocol : ShopWire.goldProtocol) : ShopWire.robotProtocol)
+                             : ShopWire.legacyProtocol
 
         let host = "v0354-gold-bundle-\(UUID().uuidString.prefix(8))".lowercased()
         GomokuStubProtocol.register(host: host, handler: V0354CoreStub.shopHandler)
         let store = Self.store(host: host, label: "bundle")
         #expect(store.shopProtocolVersion == expected,
                 Comment(rawValue: "robot 그림 \(robot) · 금 그림 \(gold) · 명단 \(store.drawableCharacterIDs) → \(store.shopProtocolVersion)"
-                        + (gold && store.shopProtocolVersion != ShopWire.goldProtocol
+                        + (gold && store.shopProtocolVersion < ShopWire.goldProtocol
                            ? " — 금 그림이 실렸는데 맥이 2 를 안 말한다: CheckMascotAssets.drawableCharacterIDs 에 GoldAingArt.isDrawable(on: .mac) 를 배선해라"
                            : "")))
         // 금 그림이 없는 빌드는 **절대** aing_gold 를 그릴 수 있다고 말하지 않는다(위험한 방향 — 아잉 그림의 금 카드가 팔린다).

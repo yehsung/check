@@ -568,8 +568,8 @@ struct V0330CharacterSyncStoreTests {
     @MainActor
     @Test("not_owned 되돌리기는 그대로 — 로컬 아잉 + 안내")
     func notOwnedRevertStillWorks() async throws {
-        // 루비로 파는 캐릭터로 잰다 — 황금 아잉이(v0.3.54)의 되돌림 안내는 뽑기 문구다(`V0354GoldPickerGateTests`).
-        let x = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != aing && !CharacterCatalog.isGoldAing($0) })
+        // 루비로 파는 캐릭터로 잰다 — 황금·무지개 아잉이(v0.3.54 · v0.3.59)의 되돌림 안내는 뽑기 문구다(`V0354GoldPickerGateTests`).
+        let x = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != aing && !CharacterCatalog.isGachaOnlyBuiltIn($0) })
         let host = csUnique("not-owned")
         let server = CSServer(character: nil)
         server.setCharacterReply = .init(body: #"{"status":"not_owned","id":"\#(x)"}"#)

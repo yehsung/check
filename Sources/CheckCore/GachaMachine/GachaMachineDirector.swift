@@ -142,19 +142,19 @@ enum GTiming {
     static let dupCondense0 = 1.25, dupCondense1 = 1.80, dupFly1 = 2.35
     static let goldTitleAt = 0.85, goldSubAt = 1.20
     static func buttonsAt(_ kind: GachaRevealKind) -> Double {
-        switch kind { case .new: 0.95; case .duplicate: 2.25; case .gold: 2.40 }
+        switch kind { case .new: 0.95; case .duplicate: 2.25; case .gold, .rainbow: 2.40 }
     }
     /// 조각 칩이 올라가는 때(공개 기준). 조각을 안 받았으면 nil.
     static func shardLandAt(_ outcome: GachaRevealOutcome, reduced: Bool) -> Double? {
         switch outcome.kind {
         case .duplicate: return reduced ? Reduced.dupSwap : dupFly1
-        case .gold: return outcome.shardsGained > 0 ? (reduced ? Reduced.nameAt + 0.6 : goldSubAt + 0.2) : nil
+        case .gold, .rainbow: return outcome.shardsGained > 0 ? (reduced ? Reduced.nameAt + 0.6 : goldSubAt + 0.2) : nil
         case .new: return nil
         }
     }
     /// 공개 뒤 한 번 일어나는 움직임(빛 고리 · 칩 튐 · "+1 조각" 글자 …)이 모두 끝나는 때.
     static func revealOneShotEnd(_ kind: GachaRevealKind) -> Double {
-        switch kind { case .new: 1.6; case .duplicate: 3.9; case .gold: 2.9 }
+        switch kind { case .new: 1.6; case .duplicate: 3.9; case .gold, .rainbow: 2.9 }
     }
 
     // 동작 줄이기(흔들기·튀기·입자 없음 — 떨어짐 → 겹쳐 바뀌는 공개)
@@ -164,7 +164,7 @@ enum GTiming {
         static let fade = 0.35
         static let dupSwap = 1.0
         static func buttonsAt(_ kind: GachaRevealKind) -> Double {
-            switch kind { case .new: 0.6; case .duplicate: 1.35; case .gold: 1.0 }
+            switch kind { case .new: 0.6; case .duplicate: 1.35; case .gold, .rainbow: 1.0 }
         }
         static func oneShotEnd(_ kind: GachaRevealKind) -> Double { buttonsAt(kind) + 0.5 }
     }
@@ -183,7 +183,7 @@ enum GPhase: Equatable {
     case shaking(t: Double, pending: Bool)  // 한 바퀴 뒤(t=커밋 후 시간)
     case dropping(t: Double)
     case tapping(taps: Int)
-    case building(t: Double)                // 황금만: 터지기 전 모으기
+    case building(t: Double)                // 희귀(황금 · 무지개)만: 터지기 전 모으기
     case reveal(t: Double)
     case failed(t: Double)
 
@@ -304,8 +304,13 @@ final class GachaMachineDirector {
     }
 
     var isGold: Bool { result?.kind == .gold }
-    var drop: GDropTimes { reduced ? .reduced : ((isGold && !tease) ? .gold : .normal) }
-    var goldBuild: Double { (isGold && !reduced) ? GTiming.goldBuild : 0 }
+    /// 희귀 공개(황금 · 무지개 — v0.3.59)인가. 시간표(늦게 떨어짐 · 모으기) · 반전 · 어둠 · 섬광이 이 값으로 갈린다 — 둘의 모양은 같고 색만
+    /// 다르다(`rare`).
+    var isRare: Bool { result?.kind.isRare == true }
+    /// 희귀 공개의 빛깔(평범하면 nil).
+    var rare: GRare? { result.flatMap { GRare($0.kind) } }
+    var drop: GDropTimes { reduced ? .reduced : ((isRare && !tease) ? .gold : .normal) }
+    var goldBuild: Double { (isRare && !reduced) ? GTiming.goldBuild : 0 }
 
     // MARK: 단계 판정(순수)
 
@@ -575,7 +580,7 @@ final class GachaMachineDirector {
         if new.kicks > old.kicks && new.kicks > 1 && !reduced { h.play(.rumble) }
         if new.landed && !old.landed { h.play(.land) }
         if new.phaseKey == GPhase.reveal(t: 0).key && old.phaseKey != new.phaseKey {
-            h.play(isGold ? .goldReveal : .reveal)
+            h.play(isRare ? .goldReveal : .reveal)
             if let r = result {
                 AccessibilityNotification.Announcement(GachaMachineText.announcement(r)).post()
             }
@@ -728,7 +733,7 @@ extension GachaMachineDirector {
         result = r
         arrivedAt = now
         let teaseChance = env?.teaseChance ?? 0
-        tease = !reduced && r.kind == .gold && Double.random(in: 0..<1) < teaseChance
+        tease = !reduced && r.kind.isRare && Double.random(in: 0..<1) < teaseChance
         guard let commit = commitTime else { return }
         let earliest = commit.addingTimeInterval(GTiming.minShake)
         dropStart = skipWhenReady ? now.addingTimeInterval(-drop.total) : max(now, earliest)
@@ -789,7 +794,7 @@ extension GachaMachineDirector {
     func skipTaps(_ now: Date? = nil) {
         let now = now ?? clock()
         guard case .tapping = phase(now) else { return }
-        burstTime = isGold ? now.addingTimeInterval(-goldBuild) : now
+        burstTime = isRare ? now.addingTimeInterval(-goldBuild) : now
         touched(now)
     }
 

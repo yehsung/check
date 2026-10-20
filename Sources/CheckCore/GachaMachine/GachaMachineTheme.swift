@@ -92,3 +92,107 @@ struct GachaMachineTheme {
 
     static func of(_ scheme: ColorScheme) -> GachaMachineTheme { scheme == .dark ? night : light }
 }
+
+/// 희귀 공개(황금 · 무지개 — v0.3.59)의 빛깔. 연출의 **모양**(늦게 떨어짐 · 반전 · 어두운 무대 · 모으기 · 빛줄기 18 · 고리 넷 · 반짝 제목)은
+/// 둘이 같고 **색만** 갈린다 — 금은 따뜻한 한 색, 무지개는 빛줄기 · 고리 · 제목 글자가 일곱 빛(빨→보, 사용자 시안 E 의 파스텔 무지개)을 돌고
+/// 한 색이 필요한 자리(새는 빛 · 그림자 · 섬광 심)는 옅은 분홍빛 흰색이다. 무지개도 정적이다(시간에 따라 흐르는 색 없음 — 시안 결정).
+enum GRare: Equatable, Sendable {
+    case gold
+    case rainbow
+
+    init?(_ kind: GachaRevealKind) {
+        switch kind {
+        case .gold: self = .gold
+        case .rainbow: self = .rainbow
+        case .new, .duplicate: return nil
+        }
+    }
+
+    /// 무지개 일곱 빛(빨 · 주 · 노 · 초 · 파 · 남 · 보). 어두운 무대에 더하기 합성으로 얹어도 형광으로 안 튀는 밝은 파스텔.
+    static let spectrum: [Color] = [
+        GPalette.hex(0xFF7A90), GPalette.hex(0xFFAE5E), GPalette.hex(0xFFE35A), GPalette.hex(0x7EDF8C),
+        GPalette.hex(0x6CB8FF), GPalette.hex(0x9C8CFF), GPalette.hex(0xE08CFF),
+    ]
+
+    /// 한 색이 필요한 자리의 주 색(새는 빛 · 결정 테 · 초상 그림자 · 빛 고리 기본).
+    var primary: Color {
+        switch self {
+        case .gold: return GPalette.gold
+        case .rainbow: return GPalette.hex(0xF2B6FF)
+        }
+    }
+
+    /// 밝은 심(금 사이 밝은 선 · 반전 고리 · 부제 글자).
+    var light: Color {
+        switch self {
+        case .gold: return GPalette.goldLight
+        case .rainbow: return GPalette.hex(0xFFF0FB)
+        }
+    }
+
+    /// 빛줄기 i(전체 n)의 색 — 금은 한 색, 무지개는 둘레를 따라 일곱 빛.
+    func ray(_ i: Int, of n: Int) -> Color {
+        switch self {
+        case .gold: return GPalette.hex(0xFFE08A)
+        case .rainbow: return Self.spectrum[(i * Self.spectrum.count / max(1, n)) % Self.spectrum.count]
+        }
+    }
+
+    /// 퍼지는 빛 고리 k 번째의 색.
+    func ring(_ k: Int) -> Color {
+        switch self {
+        case .gold: return GPalette.gold
+        case .rainbow: return Self.spectrum[(k * 2) % Self.spectrum.count]
+        }
+    }
+
+    /// 가운데 심 광채.
+    var core: Color {
+        switch self {
+        case .gold: return GPalette.hex(0xFFE9A8)
+        case .rainbow: return GPalette.hex(0xFFF3FC)
+        }
+    }
+
+    /// 터지는 순간의 섬광(가운데 → 가장자리, 더하기 합성).
+    var flash: [Color] {
+        switch self {
+        case .gold: return [GPalette.hex(0xFFE7A6), GPalette.hex(0xFFC94A, 0.85), GPalette.hex(0xB07A10, 0.5)]
+        case .rainbow: return [GPalette.hex(0xFFF5FD), GPalette.hex(0xF0C4FF, 0.85), GPalette.hex(0x6F55D8, 0.5)]
+        }
+    }
+
+    /// 어두운 무대 가운데에 도는 빛(금 = 갈색 온기 · 무지개 = 보랏빛).
+    var dimGlow: Color {
+        switch self {
+        case .gold: return GPalette.hex(0x7A5212)
+        case .rainbow: return GPalette.hex(0x5A3296)
+        }
+    }
+
+    /// 반짝 제목의 글자 칠 — 금은 위 → 아래 금빛, 무지개는 왼쪽 → 오른쪽 일곱 빛.
+    var titleFill: LinearGradient {
+        switch self {
+        case .gold:
+            return LinearGradient(colors: [GPalette.hex(0xFFF0B0), GPalette.gold, GPalette.hex(0xF0A800)],
+                                  startPoint: .top, endPoint: .bottom)
+        case .rainbow:
+            return LinearGradient(colors: Self.spectrum, startPoint: .leading, endPoint: .trailing)
+        }
+    }
+
+    /// 제목 둘레 빛 · 글자 아래 테.
+    var titleGlow: Color {
+        switch self {
+        case .gold: return GPalette.gold.opacity(0.65)
+        case .rainbow: return GPalette.hex(0xE6A6FF, 0.65)
+        }
+    }
+
+    var titleEdge: Color {
+        switch self {
+        case .gold: return GPalette.hex(0x7A4D00, 0.35)
+        case .rainbow: return GPalette.hex(0x3B2370, 0.45)
+        }
+    }
+}

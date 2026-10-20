@@ -44,7 +44,7 @@ struct CheckCharacterPanel: View {
     /// 잠긴 카드에 얹을 가격(모르면 nil — 숫자를 지어내지 않는다).
     var priceOf: (String) -> Int? = { _ in nil }
     /// 이 캐릭터의 카드를 **세우는가**(v0.3.54). 기본값은 전부 — 앱은 `WorkTimerStore.isCharacterListed` 를 넣어, 얻을 길이 안 보이는
-    /// 황금 아잉이(뽑기 없는 서버 · 안 가짐 · 서버 목록에 없음)를 뺀다(잠긴 카드가 뽑기 없는 상점으로 보내는 막다른 길이 된다).
+    /// 황금·무지개 아잉이(뽑기가 그 캐릭터를 안 냄 · 안 가짐 · 서버 목록에 없음)를 뺀다(잠긴 카드가 그 캐릭터 없는 뽑기로 보내는 막다른 길이 된다).
     var isListed: (String) -> Bool = { _ in true }
 
     /// 저장이 **이긴 뒤** 한 번 불린다. 서버(`profiles.character`)에 밀어 넣는 자리다 —
@@ -249,8 +249,8 @@ struct CheckCharacterPanel: View {
         // 팝오버가 열릴 때 첫 포커스 링이 카드 위에 사각으로 겹치는 것을 막는다(이 앱의 기존 규약).
         .focusEffectDisabled()
         .accessibilityLabel(isUnlocked(id) ? (manifest?.displayName ?? id)
-                                           : (CharacterCatalog.isGoldAing(id)
-                                              // 황금 아잉이(v0.3.54)는 상점에서 못 산다 — "상점에서 사기"는 거짓이다.
+                                           : (CharacterCatalog.isGachaOnlyBuiltIn(id)
+                                              // 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 상점에서 못 산다 — "상점에서 사기"는 거짓이다.
                                               ? "\(manifest?.displayName ?? id) 잠김 — \(GachaText.gachaOnlyHint)"
                                               : "\(manifest?.displayName ?? id) 잠김 — 상점에서 사기"))
         .accessibilityAddTraits(isOn && isUnlocked(id) ? [.isButton, .isSelected] : .isButton)

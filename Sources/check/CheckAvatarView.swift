@@ -250,7 +250,9 @@ enum AppUserAvatarArt {
         // 황금 아잉이(v0.3.54)의 초상엔 후광이 구워져 있다(몸 0.88배 + 둘레 빛). 알파 상자로 조이면 빛까지 '몸'으로 쳐서 26pt 원에서
         // 얼굴이 18pt 로 작아진다(다른 캐릭터 19.4~23.3pt — V0336 얼굴 크기 계약 실측). 그래서 **몸 상자 + 둘레 8%** 로 잘라 다른
         // 캐릭터와 같은 눈금에 세운다 — 남는 빛은 몸 둘레 고리로 보이고, 자른 가장자리는 원이 가린다(`bodyFramed` 주석).
-        let tight = CharacterCatalog.isGoldAing(characterID) ? CharacterCardArt.bodyFramed(raw) : CharacterCardArt.tightened(raw)
+        // 무지개 아잉이(v0.3.59)의 초상도 같은 규약(같은 2D 몸 · 무지개 후광)이라 같이 자른다 — 희귀 마감 = 후광 구운 초상.
+        let haloBaked = CharacterManifest.Finish(characterID: characterID).isRare
+        let tight = haloBaked ? CharacterCardArt.bodyFramed(raw) : CharacterCardArt.tightened(raw)
         cache[characterID] = tight
         return tight
     }

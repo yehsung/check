@@ -35,6 +35,14 @@ package nonisolated enum ShopWire {
     /// 이 번호를 요구하는 캐릭터. `CharacterCatalog.goldAingID` 와 같은 값이다(서버 CHECK·가격표의 id).
     package static let goldCharacterID = CharacterCatalog.goldAingID
 
+    /// 무지개 아잉이(v0.3.59)가 든 명단 · 확률표 · 교환표를 받을 수 있는 번호. 서버 `character_prices.min_protocol = 3` 인 행이
+    /// aing_rainbow 이고, 서버는 이 번호 미만인 클라에게 그 행을 **아예 안 보인다**(목록 · 확률표 · 교환표에서 빠지고, 뽑기도 그 클라가
+    /// 쓸 수 있는 행만으로 추첨한다 — 2 인 클라의 확률표는 합 98 을 100 으로 다시 나눈 소수다). 뽑기 문턱(`supportsGacha`)은 2 그대로다.
+    package static let rainbowProtocol = 3
+
+    /// 이 번호를 요구하는 캐릭터. `CharacterCatalog.rainbowAingID` 와 같은 값이다.
+    package static let rainbowCharacterID = CharacterCatalog.rainbowAingID
+
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
     /// 맥은 `CheckMascotAssets.drawableCharacterIDs`(초상·아틀라스 **파일 실재**)가, 폰은 `AingCharacterArt.knownIDs`
@@ -46,10 +54,13 @@ package nonisolated enum ShopWire {
     ///   그래서 2 는 "aing_gold **와** robot 을 둘 다 그릴 수 있다"일 때만 보낸다 — 금 그림만 있고 robot 이 없는 번들이
     ///   2 를 보내면 robot 카드가 아잉 그림으로 팔린다(v0.3.43 이 막은 바로 그 사고). 그 번들은 0 이다
     ///   (robot 이 없으면 1 도 못 보내고, 2 를 건너뛰어 말할 수도 없다 — 보수적인 쪽으로 틀린다).
+    ///   3(v0.3.59)도 같다: robot · aing_gold · aing_rainbow 를 **셋 다** 그릴 수 있을 때만. 무지개만 있고 금이 없으면 2 도 못 보내
+    ///   robot 까지의 번호(1 또는 0)에 머문다 — 무지개 그림이 없는 빌드가 3 을 보내면 아잉 그림의 '무지개 아잉이'를 뽑게 된다.
     package static func protocolVersion(drawableCharacterIDs: some Sequence<String>) -> Int {
         let drawable = Set(drawableCharacterIDs)
         guard drawable.contains(robotCharacterID) else { return legacyProtocol }
-        return drawable.contains(goldCharacterID) ? goldProtocol : robotProtocol
+        guard drawable.contains(goldCharacterID) else { return robotProtocol }
+        return drawable.contains(rainbowCharacterID) ? rainbowProtocol : goldProtocol
     }
 
     /// 이 번호로 뽑기를 쓸 수 있는가(서버 `gacha_pull`·`gacha_exchange` 의 `p_protocol >= 2` 와 같은 문턱).

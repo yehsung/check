@@ -95,6 +95,16 @@ for HALO_DEG in $(seq 0 10 350); do
     exit 1
   fi
 done
+# 무지개 아잉이 후광 각도 칸 36장도 같은 규약이다(v0.3.59). 이름은 RainbowAingArt.haloResourceName(cell:) 와 같다
+# (0° aing_rainbow-halo, 그다음 -010 … -350). 빠지면 정면 후광으로 접혀 옆모습 뒤에 날개 모양 빛이 선다.
+RAINBOW_ART_DIR="$RES_DIR/check_check.bundle/Contents/Resources"
+for HALO_DEG in $(seq 0 10 350); do
+  if [[ "$HALO_DEG" == 0 ]]; then HALO_PNG="aing_rainbow-halo"; else HALO_PNG="$(printf 'aing_rainbow-halo-%03d' "$HALO_DEG")"; fi
+  if [[ ! -s "$RAINBOW_ART_DIR/$HALO_PNG.png" ]]; then
+    echo "error: 무지개 아잉이 후광 칸이 앱에 없다: $RAINBOW_ART_DIR/$HALO_PNG.png" >&2
+    exit 1
+  fi
+done
 
 if [[ -n "${CHECK_SUPABASE_ANON_KEY:-}" ]]; then
   CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
@@ -123,9 +133,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.58</string>
+  <string>0.3.59</string>
   <key>CFBundleVersion</key>
-  <string>111</string>
+  <string>112</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

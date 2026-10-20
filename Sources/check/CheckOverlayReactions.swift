@@ -511,7 +511,8 @@ final class ReactionEngine {
         var found: (material: SCNMaterial, image: CGImage, geometry: SCNGeometry?)?
         sceneRoot.enumerateHierarchy { node, stop in
             for material in node.geometry?.materials ?? [] {
-                // 황금 아잉이의 후광 판(512² CGImage)은 얼굴이 아니다 — 크기 조건을 만족하므로 이름으로 건너뛴다(v0.3.54).
+                // 황금 아잉이·무지개 아잉이의 후광 판(512² CGImage)은 얼굴이 아니다 — 크기 조건을 만족하므로 이름으로 건너뛴다
+                // (v0.3.54 · 무지개 후광도 같은 재질 이름 — `GoldAingFinish.makeHaloNode(name:cells:…)`).
                 guard material.name != GoldAingFinish.haloMaterialName else { continue }
                 let contents = material.diffuse.contents
                 // CF 불투명 타입은 `as?` 가 항상 성공하므로 반드시 CFGetTypeID 로 판별한다.
@@ -593,9 +594,13 @@ final class ReactionEngine {
     ///
     /// 3D 는 아잉과 황금 아잉이가 **같은 메시**라 종류로 못 가른다 — 캐릭터 노드에 붙은 금 표식(후광 노드)으로 가른다(v0.3.54).
     /// 이 판정이 "전부 아잉"이면 금 착용자가 아잉 착용자에게 울트라를 맞을 때 교체가 생략돼 내 금 아잉이 5초 서 있다(지도 함정 8).
+    /// 무지개 아잉이(v0.3.59)도 같은 메시라 자기 표식(`RainbowAingFinish.haloNodeName`)으로 가른다 — 금과 무지개 사이의 울트라도 갈아입는다.
     var currentCharacterID: String {
         if let id = spriteRuntime?.manifest.id { return id }
-        return GoldAingFinish.isGold(facingNode?.childNodes.first) ? CharacterCatalog.goldAingID : CharacterCatalog.builtInAingID
+        let character = facingNode?.childNodes.first
+        if GoldAingFinish.isGold(character) { return CharacterCatalog.goldAingID }
+        if RainbowAingFinish.isRainbow(character) { return CharacterCatalog.rainbowAingID }
+        return CharacterCatalog.builtInAingID
     }
 
     /// 헤드리스 검증 지점: 지금 몰고 있는 것이 스프라이트인가.
@@ -1367,8 +1372,8 @@ final class ReactionEngine {
             .rootNode: reactionNode as Any,      // 캐릭터 서브트리만(색종이·💤 노드 제외).
             .boundingBoxOnly: false,             // 지오메트리 정밀.
             .ignoreHiddenNodes: true,
-            // 황금 아잉이의 후광 판은 몸이 아니다(v0.3.54) — 그 판의 카테고리 비트만 빼고 묻는다. 안 빼면 몸 둘레 2배 정사각이
-            // 클릭을 먹어 바탕화면이 안 눌린다(투명한 빛 위 클릭이 우리 창에 걸린다).
+            // 황금 아잉이·무지개 아잉이의 후광 판은 몸이 아니다(v0.3.54 · v0.3.59 — 같은 카테고리 비트) — 그 비트만 빼고 묻는다.
+            // 안 빼면 몸 둘레 2배 정사각이 클릭을 먹어 바탕화면이 안 눌린다(투명한 빛 위 클릭이 우리 창에 걸린다).
             .categoryBitMask: GoldAingFinish.bodyHitCategoryMask
         ])
         if let runtime = spriteRuntime, let plane = spriteNode {

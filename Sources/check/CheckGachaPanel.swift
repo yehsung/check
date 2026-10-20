@@ -8,7 +8,8 @@ import CheckCore
 // 자리를 빌려** 선다 — 확성기 작성기와 같은 자리이고 둘은 서로 배타다. 높이를 상수로 못 박아(`height`) 그 자리의 최소보다 커지지
 // 않으므로 팝오버 700pt 예산(`ShopPanelGridBudget`)에 새 항목이 생기지 않는다(`V0354GachaMacTests` 가 렌더로 잰다).
 //
-// 보기 셋(높이 고정이라 한 번에 하나): [뽑기] 확률 한눈에 + 큰 [뽑기 · 50] · [확률 보기] 일곱 줄 · [조각 교환] 내 조각 + 교환 목록.
+// 보기 셋(높이 고정이라 한 번에 하나): [뽑기] 확률 한눈에 + 큰 [뽑기 · 50] · [확률 보기] 여덟 줄 · [조각 교환] 내 조각 + 교환 목록.
+// 희귀 둘(황금 아잉이 · v0.3.59 무지개 아잉이)은 같은 급으로 강조한다 — 금은 금빛, 무지개는 일곱 빛(`GachaPalette.rare`).
 // **[뽑기 · 50] 은 뽑지 않는다 — 뽑기 창(캡슐 기계 · `CheckGachaWindow.swift`)을 연다.** 뽑기·연출은 그 창의 몫이고(0.3.54 — 예전의
 // 0.8초 결과 카드는 걷어냈다), 이 패널은 마지막 결과를 **한 줄**로만 말한다.
 // 판정·문구·확률표·교환 목록은 전부 코어(`GachaRules` · `GachaText`)가 만든다 — 이 파일은 그리기만 한다. **숫자를 적지 않는다**
@@ -23,19 +24,28 @@ struct GachaOddsLine: Equatable, Identifiable {
     /// 상점가 칸: "60" · "뽑기 전용"(또는 코어가 정한 금 문구) · "—".
     let priceText: String
     let percentText: String
-    let isGold: Bool
+    /// 희귀 강조(.gold · .rainbow · .standard — v0.3.59). 코어 `GachaOddsRow.finish`(= 3D 마감과 같은 판정)에서 온다.
+    let finish: CharacterManifest.Finish
+    var isGold: Bool { finish == .gold }
+    var isRainbow: Bool { finish == .rainbow }
 
-    init(id: String, name: String, priceText: String, percentText: String, isGold: Bool) {
+    init(id: String, name: String, priceText: String, percentText: String, finish: CharacterManifest.Finish) {
         self.id = id
         self.name = name
         self.priceText = priceText
         self.percentText = percentText
-        self.isGold = isGold
+        self.finish = finish
+    }
+
+    /// 스냅샷 호환(v0.3.54 모양): 금이 아니면 id 로 무지개를 가린다.
+    init(id: String, name: String, priceText: String, percentText: String, isGold: Bool) {
+        self.init(id: id, name: name, priceText: priceText, percentText: percentText,
+                  finish: isGold ? .gold : (CharacterCatalog.isRainbowAing(id) ? .rainbow : .standard))
     }
 
     init(_ row: GachaOddsRow) {
         self.init(id: row.characterID, name: row.name, priceText: row.priceText, percentText: row.percentText,
-                  isGold: row.isGold)
+                  finish: row.finish)
     }
 }
 
@@ -80,9 +90,9 @@ enum GachaPanelText {
 
     static let pulling = "뽑는 중…"
     /// 마지막 결과 한 줄(패널은 연출하지 않는다 — 연출은 뽑기 창): "방금 · 새 캐릭터: 여우" · "방금 · 이미 있는 다람쥐 → 조각 +1" ·
-    /// "방금 · 황금 아잉이!"(이미 있던 금이면 조각 줄).
+    /// "방금 · 황금 아잉이!" · "방금 · 무지개 아잉이!"(이미 있던 희귀면 조각 줄).
     static func lastResult(_ result: GachaPullResult, name: String) -> String {
-        let line = result.kind == .gold && result.isDuplicate
+        let line = GachaText.rareHeadline(result.kind) != nil && result.isDuplicate
             ? GachaText.duplicate(name: name, shardsGained: result.shardsGained)
             : GachaText.headline(for: result, name: name)
         return "방금 · \(line)"
@@ -95,9 +105,34 @@ enum GachaPanelText {
     static let exchangeEmpty = "교환할 수 있는 캐릭터가 없어요"
 }
 
-/// 황금 아잉이 강조색(결과 한 줄 · 금 칸 테두리). 금 초상과 같은 계열의 진한 금.
+/// 희귀 강조색(결과 한 줄 · 확률표 줄 · 교환 칸 테두리 · 상점 카드 문구). 금은 금 초상과 같은 계열의 진한 금,
+/// 무지개(v0.3.59)는 무지개 초상과 같은 차례(빨 → 보)의 일곱 빛 — 어두운 판(`CheckTheme`) 위 글자라 밝은 파스텔이다.
 enum GachaPalette {
     static let gold = Color(red: 0.96, green: 0.76, blue: 0.27)
+    static let rainbowColors: [Color] = [
+        Color(red: 1.00, green: 0.56, blue: 0.64), Color(red: 1.00, green: 0.72, blue: 0.44),
+        Color(red: 1.00, green: 0.90, blue: 0.43), Color(red: 0.56, green: 0.90, blue: 0.61),
+        Color(red: 0.49, green: 0.76, blue: 1.00), Color(red: 0.65, green: 0.61, blue: 1.00),
+        Color(red: 0.91, green: 0.61, blue: 1.00),
+    ]
+    /// 글자 · 테두리에 거는 무지개(왼쪽 → 오른쪽).
+    static var rainbow: LinearGradient {
+        LinearGradient(colors: rainbowColors, startPoint: .leading, endPoint: .trailing)
+    }
+
+    /// 희귀 강조 칠. 평범한 캐릭터는 nil — 호출부가 제 기본색을 쓴다.
+    static func rare(_ finish: CharacterManifest.Finish) -> AnyShapeStyle? {
+        switch finish {
+        case .gold: return AnyShapeStyle(gold)
+        case .rainbow: return AnyShapeStyle(rainbow)
+        case .standard: return nil
+        }
+    }
+
+    /// 희귀면 그 칠, 아니면 `otherwise`.
+    static func ink(_ finish: CharacterManifest.Finish, otherwise: Color) -> AnyShapeStyle {
+        rare(finish) ?? AnyShapeStyle(otherwise)
+    }
 }
 
 struct CheckGachaPanel: View {
@@ -121,8 +156,11 @@ struct CheckGachaPanel: View {
     /// 교환 칸 높이 · 열 수.
     static let exchangeCellHeight: CGFloat = 27
     static let exchangeColumns = 2
-    /// 확률표 한 줄 높이(caption2 한 줄). 일곱 줄 + 머리 + 각주 두 줄이 패널 안에 들어가는 값이다.
-    static let oddsRowHeight: CGFloat = 13
+    /// 확률표 한 줄 높이(caption2 한 줄). **여덟 줄**(v0.3.59 무지개) + 머리 + 각주 두 줄이 패널 안에 들어가는 값이다 —
+    /// 일곱 줄일 땐 13pt + 줄 간격 1pt 였고 그 합(14 × 9)이 자리(145pt)를 꽉 채웠다. 간격을 0 으로, 줄을 12.5pt 로 줄여 한 줄을 들였다.
+    static let oddsRowHeight: CGFloat = 12.5
+    /// 확률표 줄 간격.
+    static let oddsRowSpacing: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
@@ -220,7 +258,7 @@ struct CheckGachaPanel: View {
                         Text(line.percentText)
                             .font(.system(size: 9, weight: .bold))
                             .monospacedDigit()
-                            .foregroundStyle(line.isGold ? GachaPalette.gold : CheckTheme.secondaryText)
+                            .foregroundStyle(GachaPalette.ink(line.finish, otherwise: CheckTheme.secondaryText))
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
@@ -235,14 +273,15 @@ struct CheckGachaPanel: View {
         .padding(.horizontal, 8)
     }
 
-    /// 무대 첫 줄. 결과가 있으면 그 한 줄(황금이면 금빛), 없으면 값 안내.
+    /// 무대 첫 줄. 결과가 있으면 그 한 줄(황금이면 금빛 · 무지개면 무지개빛), 없으면 값 안내.
     @ViewBuilder
     private var topLine: some View {
         if let result = store.gachaLastResult {
             let line = GachaPanelText.lastResult(result, name: store.gachaDisplayName(result.characterID))
             Text(line)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(result.kind == .gold ? GachaPalette.gold : CheckTheme.primaryText)
+                .foregroundStyle(GachaPalette.ink(CharacterManifest.Finish(characterID: result.characterID),
+                                                  otherwise: CheckTheme.primaryText))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .accessibilityLabel(line)
@@ -317,12 +356,12 @@ struct CheckGachaPanel: View {
     }
 
     private var oddsView: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: Self.oddsRowSpacing) {
             oddsRow(name: GachaPanelText.oddsHeaderName, price: GachaPanelText.oddsHeaderPrice,
-                    percent: GachaPanelText.oddsHeaderPercent, header: true, gold: false)
+                    percent: GachaPanelText.oddsHeaderPercent, header: true, finish: .standard)
             Rectangle().fill(CheckTheme.border).frame(height: 1)
             ForEach(oddsLines) { line in
-                oddsRow(name: line.name, price: line.priceText, percent: line.percentText, header: false, gold: line.isGold)
+                oddsRow(name: line.name, price: line.priceText, percent: line.percentText, header: false, finish: line.finish)
             }
             Spacer(minLength: 0)
             // 규칙 한 줄(공용 문구 — 폰과 같은 말). 두 줄까지, 잘리지 않게 세로 고정.
@@ -344,11 +383,13 @@ struct CheckGachaPanel: View {
         .accessibilityLabel(GachaText.oddsTitle)
     }
 
-    private func oddsRow(name: String, price: String, percent: String, header: Bool, gold: Bool) -> some View {
-        HStack(spacing: 6) {
+    /// 확률표 한 줄. 희귀(황금 · 무지개)는 이름과 확률을 그 빛깔로 칠한다(머리 줄은 언제나 흐린 글자).
+    private func oddsRow(name: String, price: String, percent: String, header: Bool, finish: CharacterManifest.Finish) -> some View {
+        let ink = header ? AnyShapeStyle(CheckTheme.secondaryText) : GachaPalette.ink(finish, otherwise: CheckTheme.primaryText)
+        return HStack(spacing: 6) {
             Text(name)
                 .font(header ? .caption2.weight(.semibold) : .caption2.weight(.semibold))
-                .foregroundStyle(header ? CheckTheme.secondaryText : (gold ? GachaPalette.gold : CheckTheme.primaryText))
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .frame(width: 78, alignment: .leading)
             Text(price)
@@ -361,7 +402,7 @@ struct CheckGachaPanel: View {
             Text(percent)
                 .font(header ? .caption2.weight(.semibold) : .caption2.weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(header ? CheckTheme.secondaryText : (gold ? GachaPalette.gold : CheckTheme.primaryText))
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .frame(width: 40, alignment: .trailing)
         }
@@ -370,7 +411,7 @@ struct CheckGachaPanel: View {
 
     // MARK: [조각 교환]
 
-    /// 교환 목록(코어 순서 그대로 — 금이 교환표에 있으면 맨 위).
+    /// 교환 목록(코어 순서 그대로 — 금이 교환표에 있으면 맨 위, 무지개가 그 다음).
     var exchangeLines: [GachaExchangeLine] {
         if let previewExchangeLines { return previewExchangeLines }
         guard let info = store.gachaInfo else { return [] }
@@ -412,7 +453,7 @@ struct CheckGachaPanel: View {
     }
 
     private func exchangeCell(_ line: GachaExchangeLine) -> some View {
-        let gold = CharacterCatalog.isGoldAing(line.id)
+        let finish = CharacterManifest.Finish(characterID: line.id)
         let busy = store.gachaExchangingID == line.id
         let enabled = line.availability.canExchange && !store.isGachaBusy && store.purchasingID == nil
         return HStack(spacing: 5) {
@@ -421,7 +462,7 @@ struct CheckGachaPanel: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(line.name)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(gold ? GachaPalette.gold : CheckTheme.primaryText)
+                    .foregroundStyle(GachaPalette.ink(finish, otherwise: CheckTheme.primaryText))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 // 보유면 아랫줄을 비운다 — 오른쪽 "보유" 와 같은 말을 두 번 하지 않는다(높이는 그대로).
@@ -451,7 +492,8 @@ struct CheckGachaPanel: View {
                 .fill(CheckTheme.trackFill)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(gold ? GachaPalette.gold.opacity(0.7) : CheckTheme.border, lineWidth: 1)
+                        .strokeBorder(GachaPalette.rare(finish) ?? AnyShapeStyle(CheckTheme.border), lineWidth: 1)
+                        .opacity(finish.isRare ? 0.7 : 1)
                 }
         }
         .accessibilityElement(children: .combine)

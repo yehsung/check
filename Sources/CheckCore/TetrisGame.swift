@@ -18,6 +18,12 @@ import Foundation
 // 그건 "완벽해도 벽에 못 닿는다"가 아니라 "조작이 고장 났다"로 느껴진다. DAS 충전 자체는 표준대로 텀 동안에도 도는데
 // (`advanceRepeatClock`), 그건 타이머만 도는 것이고 **조각이 없는 동안의 키 입력은 어디에도 쌓이지 않는다.**
 
+//
+// ── v0.3.60 1:1 대결 확장(전부 기본값 '꺼짐') ─────────────────────────────────────────────
+// 방해 줄 대기열(`receiveGarbage`) · 상쇄 · 줄을 안 지운 굳힘에서의 삽입과 그때의 탑아웃 · 따로 도는 구멍 난수 ·
+// 공격 누계(`attackSentTotal`) · 가속 바닥(`setLevelFloor`). 판 시계·서버 시계·보고는 엔진 밖(`TetrisDuelSession`)이다.
+// 솔로 판은 이 칸들을 켜지 않으므로 비트 단위로 그대로다(`V0360TetrisSoloGoldenTests`).
+
 /// 테트리스 규칙. 시드만 주면 결정론적으로 같은 판이 나온다(테스트가 시드를 고정한다).
 package struct TetrisGame: Equatable, Sendable {
 
@@ -105,6 +111,9 @@ package struct TetrisGame: Equatable, Sendable {
         package var points: Int
         /// 판 시각(초). 벽시계가 아니라 `step(dt:)` 이 흘린 시간이다.
         package var at: TimeInterval
+        /// v0.3.60 대결: 이 배치가 만든 공격 줄 수(상쇄 **전**, `attackLines(lines:)`). 솔로는 읽지 않는다.
+        /// 기본값이 있어야 한다 — 테스트가 합성 memberwise init 을 이 칸 없이 부른다.
+        package var attack: Int = 0
     }
 
     package enum Phase: Equatable, Sendable {
@@ -170,6 +179,30 @@ package struct TetrisGame: Equatable, Sendable {
     /// 플래피가 같은 이유로 엔진에서 자른다(FlappyGame.swift:336-337). 구조적 최대가 실측 1,412만이라
     /// 이 문은 실제로는 한 번도 안 열린다 — 이중 안전망이다.
     package static let maxScore = 100_000_000
+
+    // MARK: - v0.3.60 1:1 대결 상수
+    //
+    // 대결 확장은 전부 **기본값이 '꺼짐'** 이다(방해 줄 0 · 레벨 바닥 1). 솔로 판은 이 칸들을 한 번도 켜지 않으므로
+    // 비트 단위로 그대로다 — `V0360TetrisSoloGoldenTests` 가 그 사실을 박아 둔다.
+
+    /// 줄을 안 지운 굳힘 한 번에 들어오는 방해 줄 상한. 남은 줄은 대기열에 남아 다음 굳힘을 기다린다.
+    package static let maxGarbageInsertPerLock = 8
+    /// 레벨 바닥의 상한. 난이도 곡선은 L30 에서 이미 바닥이라(락딜레이 0.16 · 리셋 한도 2 · 20G) 그 위는 뜻이 없고,
+    /// 자르지 않으면 `gravityStage` 의 `4 + level` 이 터무니없는 값에서 넘친다.
+    package static let maxLevelFloor = 30
+    /// 방해 줄 구멍 난수의 시드 소금. 조각 난수와 **다른 스트림**이어야 한다 — 같은 스트림이면 공격이 도착한 시점에 따라
+    /// 7-bag 순서가 갈린다(두 사람이 같은 시드로 같은 조각 순서를 받는다는 대결의 전제가 깨진다).
+    private static let garbageSeedSalt: UInt64 = 0x6A09_E667_F3BC_C909
+
+    /// 공격 표(사용자 확정 2026-10-20): 1줄 0 · 2줄 1 · 3줄 2 · 4줄 4. T-스핀·콤보·B2B·퍼펙트 가산은 **없다**.
+    package static func attackLines(lines: Int) -> Int {
+        switch lines {
+        case ..<2: return 0
+        case 2: return 1
+        case 3: return 2
+        default: return 4
+        }
+    }
 
     // MARK: - 순수 규칙 — 레벨·중력·락다운
 
@@ -425,6 +458,17 @@ package struct TetrisGame: Equatable, Sendable {
     /// 마지막 배치 결과(그림 전용).
     package private(set) var lastClear: ClearEvent?
 
+    // ── v0.3.60 대결 상태(기본값 = 꺼짐) ──────────────────────────────────────────────────
+    /// 들어올 방해 줄 묶음들(도착 순서). 묶음 하나 = `receiveGarbage(lines:)` 한 번이고 같은 구멍 열을 쓴다.
+    package private(set) var pendingGarbage: [Int]
+    /// 보낸 공격 누계(상쇄하고 남은 것만). **단조 증가**한다 — 허브는 직전 값과의 차분만 보내면 되고, 그래서 멱등이다.
+    package private(set) var attackSentTotal: Int
+    /// 방해 줄 칸 표시(행마다 bit c = c열이 방해 줄 칸). `board` 와 같은 40행이고 **그림·인코딩 전용**이다 —
+    /// 규칙은 `board` 의 non-nil 만 찬 칸으로 본다.
+    package private(set) var garbageMask: [UInt16]
+    /// 대결 가속 바닥(기본 1 = 꺼짐). 난이도 다섯 자리는 `max(level, levelFloor)` 를 읽는다.
+    package private(set) var levelFloor: Int
+
     // ── 내부 시계·상태 ───────────────────────────────────────────────────────────────
     // 전부 초 단위 '남은 시간' 카운트다운이다. 프레임 수가 아니라 dt 를 깎으므로 주사율과 무관하다.
     private var rng: MiniGameRandom
@@ -450,11 +494,24 @@ package struct TetrisGame: Equatable, Sendable {
     private var lastActionWasRotation: Bool
     /// 그 회전이 킥표의 5번째(마지막) 오프셋으로 성공했는가(미니를 완전으로 올리는 조건).
     private var lastKickWasFinal: Bool
+    /// 방해 줄 구멍 열 난수(조각 난수와 따로 돈다 — `garbageSeedSalt`).
+    private var garbageRng: MiniGameRandom
+    /// 앞 묶음이 상한(`maxGarbageInsertPerLock`)에 잘려 일부만 들어갔을 때 그 묶음의 구멍 열. 남은 줄도 같은 구멍을 쓴다.
+    private var garbageHeadHole: Int?
 
     // MARK: - 읽기
 
-    /// 지금 레벨(난이도가 읽는 값).
+    /// advance 로 정한 레벨(점수 배수·화면 표시가 읽는 값). 대결 가속 바닥은 여기 안 들어간다 — `difficultyLevel` 을 보라.
     package var level: Int { Self.level(forAdvance: advance) }
+    /// 난이도가 실제로 읽는 레벨 = `max(level, levelFloor)`. 솔로는 바닥이 1 이라 언제나 `level` 과 같다.
+    package var difficultyLevel: Int { max(level, levelFloor) }
+    /// 들어올 방해 줄 합(화면 미터용).
+    package var pendingGarbageLines: Int { pendingGarbage.reduce(0, +) }
+    /// 이 칸이 방해 줄 칸인가(그림·인코딩 전용).
+    package func isGarbage(row: Int, column: Int) -> Bool {
+        guard row >= 0, row < Self.totalRows, column >= 0, column < Self.columns else { return false }
+        return garbageMask[row] & (UInt16(1) << column) != 0
+    }
     /// 점수 배수·화면 표시용 레벨(`min(level, 30)`).
     package var scoreLevel: Int { Self.scoreLevel(forLevel: level) }
     /// 다음 레벨까지 남은 advance. 진행 표시는 **줄 수가 아니라 이 값**을 봐야 한다 —
@@ -531,6 +588,12 @@ package struct TetrisGame: Equatable, Sendable {
         lowestRow = -1
         lastActionWasRotation = false
         lastKickWasFinal = false
+        pendingGarbage = []
+        attackSentTotal = 0
+        garbageMask = Array(repeating: 0, count: Self.totalRows)
+        levelFloor = 1
+        garbageRng = MiniGameRandom(seed: seed ^ Self.garbageSeedSalt)
+        garbageHeadHole = nil
     }
 
     /// 테스트 픽스처 — 임의 상태에서 시작한다(난수는 seed).
@@ -548,7 +611,11 @@ package struct TetrisGame: Equatable, Sendable {
                  combo: Int = -1,
                  backToBack: Int = -1,
                  elapsed: TimeInterval = 0,
-                 softDropHeld: Bool = false) {
+                 softDropHeld: Bool = false,
+                 pendingGarbage: [Int] = [],
+                 attackSentTotal: Int = 0,
+                 garbageMask: [UInt16] = [],
+                 levelFloor: Int = 1) {
         self.init(seed: seed)
         self.board = Self.normalized(board)
         self.active = active
@@ -563,6 +630,10 @@ package struct TetrisGame: Equatable, Sendable {
         self.backToBack = backToBack
         self.elapsed = elapsed
         self.softDropHeld = softDropHeld
+        self.pendingGarbage = pendingGarbage.filter { $0 > 0 }
+        self.attackSentTotal = max(0, attackSentTotal)
+        self.garbageMask = Self.normalizedMask(garbageMask)
+        self.levelFloor = Self.clampedLevelFloor(levelFloor)
         refillNext()
         fallCountdown = fallInterval
         lowestRow = active.map { Self.bottomRow(of: $0) } ?? -1
@@ -588,6 +659,34 @@ package struct TetrisGame: Equatable, Sendable {
             }
         }
         return board
+    }
+
+    /// 방해 줄 표시 픽스처. `boardFixture(bottomRows:)` 와 같은 줄을 받아 `G`·`g` 칸에만 비트를 세운다
+    /// (그 판 픽스처는 `G` 를 `.i` 로 채우므로 두 함수에 같은 줄을 주면 판과 표시가 맞는다).
+    package static func garbageMaskFixture(bottomRows rows: [String]) -> [UInt16] {
+        var mask = [UInt16](repeating: 0, count: totalRows)
+        let start = totalRows - rows.count
+        for (offset, line) in rows.enumerated() {
+            let row = start + offset
+            guard row >= 0, row < totalRows else { continue }
+            for (column, character) in line.enumerated() where column < columns && (character == "G" || character == "g") {
+                mask[row] |= UInt16(1) << column
+            }
+        }
+        return mask
+    }
+
+    /// 표시를 40행으로 맞춘다(판 픽스처와 같은 규칙 — 모자라면 위를 0 으로, 넘치면 위를 버린다).
+    private static func normalizedMask(_ mask: [UInt16]) -> [UInt16] {
+        let allColumns = UInt16((1 << columns) - 1)
+        var rows = mask.map { $0 & allColumns }
+        if rows.count > totalRows { rows = Array(rows.suffix(totalRows)) }
+        if rows.count < totalRows { rows = Array(repeating: 0, count: totalRows - rows.count) + rows }
+        return rows
+    }
+
+    private static func clampedLevelFloor(_ floor: Int) -> Int {
+        min(max(1, floor), maxLevelFloor)
     }
 
     private static func piece(forFixtureCharacter character: Character) -> Piece {
@@ -619,7 +718,7 @@ package struct TetrisGame: Equatable, Sendable {
         return rows
     }
 
-    /// 난수 상태는 비교하지 않는다 — "같은 판"인지가 관심사이고, `MiniGameRandom` 은 Equatable 이 아니다.
+    /// 난수 상태(조각 · 방해 줄 구멍 둘 다)는 비교하지 않는다 — "같은 판"인지가 관심사이고, `MiniGameRandom` 은 Equatable 이 아니다.
     /// 나머지는 **내부 시계까지 전부** 본다: 접지 시계 하나가 갈라져도 다음 프레임의 결과가 갈리므로,
     /// 비교에서 빼 두면 "같다고 했는데 다음 프레임에 다른 판"이 된다.
     package static func == (lhs: TetrisGame, rhs: TetrisGame) -> Bool {
@@ -636,6 +735,9 @@ package struct TetrisGame: Equatable, Sendable {
             && lhs.lockResets == rhs.lockResets && lhs.lowestRow == rhs.lowestRow
             && lhs.lastActionWasRotation == rhs.lastActionWasRotation
             && lhs.lastKickWasFinal == rhs.lastKickWasFinal
+            && lhs.pendingGarbage == rhs.pendingGarbage && lhs.attackSentTotal == rhs.attackSentTotal
+            && lhs.garbageMask == rhs.garbageMask && lhs.levelFloor == rhs.levelFloor
+            && lhs.garbageHeadHole == rhs.garbageHeadHole
     }
 
     // MARK: - 입력
@@ -744,6 +846,28 @@ package struct TetrisGame: Equatable, Sendable {
         spawn(incoming, fromHold: true)
     }
 
+    /// v0.3.60 대결: 상대 공격 `lines` 줄을 대기열 끝에 묶음 하나로 받는다. 판에는 **다음 '줄을 안 지운 굳힘'** 에서야
+    /// 들어온다(그 전에 내 공격이 앞에서부터 깎는다 — `lockPiece`). 도착 시각은 결정적이지 않지만 그 판의 진실은 받는 쪽이
+    /// 쥐므로 괜찮다. 판이 진행 중(조각·텀)일 때만 받는다 — 시작 전·끝난 뒤의 공격은 버려지므로, 허브는 **받아들여졌을 때만**
+    /// 반영 누계를 올려야 한다(돌려주는 값).
+    @discardableResult
+    package mutating func receiveGarbage(lines: Int) -> Bool {
+        guard lines > 0 else { return false }
+        switch phase {
+        case .running, .lineClear, .are:
+            pendingGarbage.append(lines)
+            return true
+        case .ready, .over, .result:
+            return false
+        }
+    }
+
+    /// v0.3.60 대결: 가속 바닥. 허브가 서버 기준 경과초로 매 걸음 넣는다(엔진은 시계를 모른다). 1 = 꺼짐, `maxLevelFloor` 에서 자른다.
+    /// 다음 간격 계산부터 곧바로 반영된다(낙하 간격은 매 걸음 새로 읽는다).
+    package mutating func setLevelFloor(_ floor: Int) {
+        levelFloor = Self.clampedLevelFloor(floor)
+    }
+
     /// 허브가 판을 끊을 때(창 닫힘·포커스 상실·게임 전환). 진행 중이면 그 점수로 결과 확정 — 점수는 유효하다.
     package mutating func interrupt() {
         switch phase {
@@ -823,11 +947,11 @@ package struct TetrisGame: Equatable, Sendable {
             if grounded {
                 // 접지 만료 셋 중 하나라도 걸리면 굳는다: ① 락딜레이 ② 배치당 접지 총량 ③ 리셋 예산 소진.
                 // ③ 은 표준 Extended Placement 의 "예산을 다 쓰면 바닥에 닿는 순간 곧바로 고정"이다.
-                if lockResets >= Self.lockResetLimit(forLevel: level) {
+                if lockResets >= Self.lockResetLimit(forLevel: difficultyLevel) {
                     lockPiece()
                     return remaining
                 }
-                let untilLock = min(Self.lockDelaySeconds(forLevel: level) - groundedSeconds,
+                let untilLock = min(Self.lockDelaySeconds(forLevel: difficultyLevel) - groundedSeconds,
                                     Self.maxGroundedSeconds - groundedTotalSeconds)
                 if untilLock <= 0 {
                     lockPiece()
@@ -860,7 +984,7 @@ package struct TetrisGame: Equatable, Sendable {
 
     /// 지금 조각이 한 칸 떨어지는 데 걸리는 시간. 소프트드롭이 눌려 있으면 중력의 1/20.
     private var fallInterval: TimeInterval {
-        softDropHeld ? Self.softDropSeconds(forLevel: level) : Self.gravitySeconds(forLevel: level)
+        softDropHeld ? Self.softDropSeconds(forLevel: difficultyLevel) : Self.gravitySeconds(forLevel: difficultyLevel)
     }
 
     /// DAS/ARR 시계만 흘린다. **조각이 없는 동안(ARE·줄소거)에도 돈다** — 표준이 그렇고, 그래야 텀이 끝나자마자
@@ -956,7 +1080,7 @@ package struct TetrisGame: Equatable, Sendable {
     /// 예산을 다 쓰면 **바닥에 닿는 순간 곧바로 고정**된다 — 여기서는 조각이 이미 닿아 있으면 다음 걸음에서 굳고
     /// (`advanceRunning` 의 ③), 공중이면 착지하는 순간 굳는다. 이 회계가 곧 '리셋 바닥 2' 의 종료 보장이다.
     private mutating func registerPlacementAction() {
-        let limit = Self.lockResetLimit(forLevel: level)
+        let limit = Self.lockResetLimit(forLevel: difficultyLevel)
         if lockResets < limit {
             lockResets += 1
             groundedSeconds = 0
@@ -970,7 +1094,7 @@ package struct TetrisGame: Equatable, Sendable {
         let bottom = Self.bottomRow(of: active)
         guard bottom > lowestRow else { return }
         lowestRow = bottom
-        if Self.lockResetRefreshes(forLevel: level) {
+        if Self.lockResetRefreshes(forLevel: difficultyLevel) {
             lockResets = 0
             groundedSeconds = 0
         }
@@ -1010,15 +1134,77 @@ package struct TetrisGame: Equatable, Sendable {
         let points = Self.placementPoints(lines: cleared, spin: spin, scoreLevel: scoreLevel,
                                           backToBack: b2bApplies, combo: combo, perfectClear: perfect)
         addScore(points)
+
+        // v0.3.60 대결: 공격은 먼저 내 대기열을 앞에서부터 깎고(상쇄), 남은 것만 누계에 더한다.
+        // 솔로는 대기열이 언제나 비어 있어 누계만 오를 뿐 판에는 아무 일도 없다(누계는 아무도 안 읽는다).
+        let attack = Self.attackLines(lines: cleared)
+        let canceled = cancelPendingGarbage(upTo: attack)
+        attackSentTotal += attack - canceled
+
         lastClear = ClearEvent(lines: cleared, spin: spin, backToBack: b2bApplies,
-                               perfectClear: perfect, points: points, at: elapsed)
+                               perfectClear: perfect, points: points, at: elapsed, attack: attack)
 
         // 난이도 시계는 **여기서만** 움직인다: 고정 1 + 지운 줄. 시간도 프레임도 아니다.
         advance += 1 + cleared
         lines += cleared
 
         holdUsed = false
+        // 방해 줄은 **줄을 안 지운 굳힘**에서만 들어온다(표준). 넣다가 꼭대기를 넘으면 그 자리에서 끝난다.
+        if cleared == 0, !pendingGarbage.isEmpty, !insertPendingGarbage() { return }
         phase = cleared > 0 ? .lineClear(remaining: Self.lineClearSeconds) : .are(remaining: Self.areSeconds)
+    }
+
+    /// 대기열을 앞에서부터 `amount` 줄까지 깎는다. 실제로 깎은 줄 수를 돌려준다.
+    private mutating func cancelPendingGarbage(upTo amount: Int) -> Int {
+        var left = amount
+        while left > 0, let first = pendingGarbage.first {
+            if first <= left {
+                left -= first
+                pendingGarbage.removeFirst()
+                garbageHeadHole = nil
+            } else {
+                pendingGarbage[0] = first - left
+                left = 0
+            }
+        }
+        return amount - left
+    }
+
+    /// 대기열 앞에서부터 최대 `maxGarbageInsertPerLock` 줄을 판 바닥에 밀어 넣는다(묶음마다 구멍 한 열 · 같은 묶음은 같은 구멍).
+    /// 먼저 온 묶음이 먼저 들어가므로 나중 묶음이 그 아래에 깔린다. 잘린 묶음의 나머지는 대기열 앞에 남고 구멍을 기억한다.
+    ///
+    /// **탑아웃 검사를 먼저 한다**: 맨 위 n행에 칸이 하나라도 있으면 밀어 올릴 때 판 밖으로 **조용히 사라진다**
+    /// (스폰은 3~6열만 보므로 양옆 탑은 블록아웃보다 먼저 꼭대기에 닿을 수 있다). 그 경우 판을 건드리지 않고 끝낸다.
+    /// - Returns: 판이 계속되면 true, 탑아웃이면 false(이때 단계는 `.over`).
+    private mutating func insertPendingGarbage() -> Bool {
+        let count = min(Self.maxGarbageInsertPerLock, pendingGarbageLines)
+        guard count > 0 else { return true }
+        if board.prefix(count).contains(where: { row in row.contains { $0 != nil } }) {
+            phase = .over(hold: Self.overHold)
+            releaseAllKeys()
+            return false
+        }
+        var holes: [Int] = []
+        holes.reserveCapacity(count)
+        while holes.count < count, let first = pendingGarbage.first {
+            let hole = garbageHeadHole ?? Int(garbageRng.next() % UInt64(Self.columns))
+            let take = min(first, count - holes.count)
+            holes.append(contentsOf: Array(repeating: hole, count: take))
+            if take == first {
+                pendingGarbage.removeFirst()
+                garbageHeadHole = nil
+            } else {
+                pendingGarbage[0] = first - take
+                garbageHeadHole = hole
+            }
+        }
+        let fullMask = UInt16((1 << Self.columns) - 1)
+        let rows: [[Piece?]] = holes.map { hole in
+            (0..<Self.columns).map { $0 == hole ? nil : Piece.i }
+        }
+        board = Array(board.dropFirst(holes.count)) + rows
+        garbageMask = Array(garbageMask.dropFirst(holes.count)) + holes.map { fullMask & ~(UInt16(1) << $0) }
+        return true
     }
 
     /// 3코너 규칙. 마지막 행동이 회전인 T 만 본다.
@@ -1050,17 +1236,22 @@ package struct TetrisGame: Equatable, Sendable {
     private mutating func clearFullRows() -> Int {
         var kept: [[Piece?]] = []
         kept.reserveCapacity(Self.totalRows)
+        // 방해 줄 표시도 **같은 술어**로 거른다 — 판과 한 칸이라도 어긋나면 회색이 엉뚱한 칸에 칠해진다.
+        var keptMask: [UInt16] = []
+        keptMask.reserveCapacity(Self.totalRows)
         var cleared = 0
-        for row in board {
+        for (index, row) in board.enumerated() {
             if row.allSatisfy({ $0 != nil }) {
                 cleared += 1
             } else {
                 kept.append(row)
+                keptMask.append(garbageMask[index])
             }
         }
         guard cleared > 0 else { return 0 }
         let pad = Array(repeating: Array(repeating: Piece?.none, count: Self.columns), count: cleared)
         board = pad + kept
+        garbageMask = Array(repeating: 0, count: cleared) + keptMask
         return cleared
     }
 
@@ -1093,6 +1284,12 @@ package struct TetrisGame: Equatable, Sendable {
         lowestRow = -1
         lastActionWasRotation = false
         lastKickWasFinal = false
+        // 대결 상태도 새 판 값으로(방해 줄 난수는 조각 난수처럼 이어 받는다).
+        pendingGarbage = []
+        attackSentTotal = 0
+        garbageMask = Array(repeating: 0, count: Self.totalRows)
+        garbageHeadHole = nil
+        levelFloor = 1
         phase = .running
         spawn(takeFromQueue(), fromHold: false)
     }

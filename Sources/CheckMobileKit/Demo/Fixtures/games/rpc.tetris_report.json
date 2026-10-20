@@ -1,0 +1,9 @@
+{
+  "__note" : [
+    "판 보고(1초 하트비트 겸)의 응답. **판 장면이 서려면 이 파일이 반드시 있어야 한다** — 없으면 1초 뒤 404 PGRST202 가 noteServerMissing() 을 때려 판 화면이 '서버가 모른다'로 바뀐다(applyReportResult → isSchemaMissing).",
+    "★ **state 를 싣지 않는다**(ok 만). 데모 시계는 1789621500000 에 멈춰 있고 이 파일은 고정값이라, 매 보고에 같은 state 를 실으면 서버가 1초마다 '네 판은 그때 그 판이다'라고 말하는 꼴이 된다. 와이어 계약은 state 를 Optional 로 뒀고(nil = 모른다) 코어는 nil 이면 **아무것도 바꾸지 않는다** — 그래서 화면은 열 때 받은 state 에서 출발해 제 단조 시계로 계속 흐른다(D10). 운영 서버는 언제나 state 를 싣는다.",
+    "실패가 아니라 성공이라는 것이 중요하다: 실패면 reportFailureStreak 이 둘 쌓여 '연결 확인 중'(connectionTrouble)이 판 위에 뜬다."
+  ],
+  "server_now_ms" : 1789621500000,
+  "status" : "ok"
+}

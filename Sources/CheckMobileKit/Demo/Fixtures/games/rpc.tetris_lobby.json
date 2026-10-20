@@ -1,0 +1,128 @@
+{
+  "__note" : [
+    "1:1 테트리스 로비(기본 · 장면 없음이라 장면 폴더가 없는 모든 테트리스 라우트에 걸린다).",
+    "닿는 길: -AingCheckDemoRoute games/tetris/lobby · games/tetris/ranking.",
+    "상대 목록이 신청을 막는 네 까닭을 다 덮는다: ① 근무 중·가능(구름빵) ② 근무 안 함·가능(초코칩) ③ 대결 중(민트별·달토끼 — 아래 matches 의 두 사람) ④ 구버전 capable=false(보리차 · 근무 중인 솜사탕) ⑤ 집중 모드(모카빵). capable 과 is_working 과 focus_mode 는 서로 다른 축이다.",
+    "users[] 에 **내가 없다** — 서버가 호출자를 뺀다(체스 로비와 같다).",
+    "사람 행의 id 키는 user_id 가 아니라 **id** 다(TetrisWire 머리말 — 로비 users · 순위 rows · state me/opponent 전부). user_id 로 적으면 디코드가 조용히 nil 이 되어 목록이 빈다.",
+    "me 가 전적(6승 4패 1무)과 루비(42)를 싣는다. active_match_id 가 null 이라 이 파일만으로는 로비가 그대로 선다 — 판 장면은 _games-tetris-match-<장면> 폴더가 이 파일을 덮어쓴다.",
+    "matches[] 의 시각 키는 started_at_ms 다(TetrisLobbyMatchRow.startedAtMs) — 체스 키 이름(started_ms)을 베껴 쓰면 liveMatch(from:) 이 startedAt 을 못 읽어 '지금 대결 중' 카드가 **통째로 사라진다**(그 함수는 하나라도 모르면 카드를 만들지 않는다)."
+  ],
+  "matches" : [
+    {
+      "a" : {
+        "avatar_url" : null,
+        "character" : null,
+        "display_name" : "민트별",
+        "id" : "d0000000-0000-4000-8000-0000000000b3"
+      },
+      "b" : {
+        "avatar_url" : null,
+        "character" : "fox",
+        "display_name" : "달토끼",
+        "id" : "d0000000-0000-4000-8000-0000000000b6"
+      },
+      "id" : "demo-tetris-live",
+      "stake" : 10,
+      "started_at_ms" : 1789621404000
+    }
+  ],
+  "me" : {
+    "active_match_id" : null,
+    "draws" : 1,
+    "incoming" : [],
+    "losses" : 4,
+    "outgoing" : null,
+    "ruby_balance" : 42,
+    "wins" : 6
+  },
+  "server_now_ms" : 1789621500000,
+  "stakes" : [
+    3,
+    5,
+    10
+  ],
+  "status" : "ok",
+  "users" : [
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "in_match" : false,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "ghost",
+      "display_name" : "초코칩",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b2",
+      "in_match" : false,
+      "is_working" : false
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : null,
+      "display_name" : "민트별",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b3",
+      "in_match" : true,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b4",
+      "in_match" : false,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "character" : "squirrel",
+      "display_name" : "보리차",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b5",
+      "in_match" : false,
+      "is_working" : false
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "fox",
+      "display_name" : "달토끼",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b6",
+      "in_match" : true,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b7",
+      "in_match" : false,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "robot",
+      "display_name" : "모카빵",
+      "focus_mode" : true,
+      "id" : "d0000000-0000-4000-8000-0000000000b8",
+      "in_match" : false,
+      "is_working" : false
+    }
+  ]
+}

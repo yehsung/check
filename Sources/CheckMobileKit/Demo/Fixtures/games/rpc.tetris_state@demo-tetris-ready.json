@@ -1,0 +1,56 @@
+{
+  "__note" : [
+    "준비 대기(나만 준비). 닿는 길: games/tetris/match/ready.",
+    "start_at_ms 가 **null** 이다 — 서버는 둘 다 첫 보고를 낸 뒤에야 시작 시각을 정한다(D4). 그래서 코어 refreshPhase 가 .ready 로 두고 화면은 '상대를 기다리는 중'을 그린다.",
+    "ready_deadline_ms = accepted_at_ms + 30초(tetris_ready_timeout_seconds) — 그때까지 둘 다 안 들어오면 서버가 무승부 no_show 로 판돈을 돌려준다. 고정 시계로 남은 22초다.",
+    "재개(resumePoint)는 **서지 않는다**: start_at_ms 가 없으면 이어 받을 판이 없다(준비 보고는 빈 판이다). 그래서 me.board 는 200개 점이다.",
+    "opponent.board 는 null 이다 — 아직 보고가 한 번도 없으면 서버 칸이 null 이다(0글자 빈 문자열이 아니다)."
+  ],
+  "state" : {
+    "accepted_at_ms" : 1789621492000,
+    "end_reason" : null,
+    "finished_at_ms" : null,
+    "match_id" : "demo-tetris-ready",
+    "max_end_ms" : null,
+    "me" : {
+      "avatar_url" : null,
+      "board" : "........................................................................................................................................................................................................",
+      "character" : "fox",
+      "display_name" : "새벽",
+      "garbage_applied" : 0,
+      "garbage_sent" : 0,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "last_seen_ms" : 1789621499400,
+      "lines" : 0,
+      "pending" : 0,
+      "ready" : true,
+      "seq" : 1,
+      "topped_out" : false
+    },
+    "opponent" : {
+      "avatar_url" : null,
+      "board" : null,
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "garbage_applied" : 0,
+      "garbage_sent" : 0,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "last_seen_ms" : null,
+      "lines" : 0,
+      "pending" : 0,
+      "ready" : false,
+      "seq" : 0,
+      "topped_out" : false
+    },
+    "ready_deadline_ms" : 1789621522000,
+    "result" : null,
+    "ruby_balance" : 37,
+    "seed" : 20260917,
+    "server_now_ms" : 1789621500000,
+    "stake" : 5,
+    "start_at_ms" : null,
+    "status" : "active",
+    "winner" : null
+  },
+  "status" : "ok"
+}

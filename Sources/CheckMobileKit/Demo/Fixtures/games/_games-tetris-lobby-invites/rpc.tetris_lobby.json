@@ -1,0 +1,159 @@
+{
+  "__note" : [
+    "신청이 와 있고 보낸 신청도 있는 로비. 닿는 길: games/tetris/lobby/invites.",
+    "받은 신청 둘(구름빵 5루비 · 초코칩 10루비)과 보낸 신청 하나(호두과자 3루비). 남은 초는 고정 시계(1789621500000)에서 읽는다: 41초 · 17초 · 52초. 판돈은 받은 신청 첫 건 ↔ demo-tetris-ready · 보낸 신청 ↔ demo-tetris-invite-out 의 state 와 같은 숫자여야 한다(계약 테스트가 센다).",
+    "incoming 은 배열이고 from 을 싣는다 · outgoing 은 하나이고 to 를 싣는다(체스처럼 id 만 받아 상태를 한 번 더 부르지 않는다 — §2.4).",
+    "보낸 신청은 5초마다 그 판의 상태를 묻는다(TetrisDuelStore.pollTick · outgoingPollSeconds) — 그래서 rpc.tetris_state@demo-tetris-invite-out.json 이 **반드시** 있어야 한다. 없으면 404 PGRST202 가 noteServerMissing() 을 때려 5초 뒤 화면이 '서버가 모른다'로 바뀐다.",
+    "받은 신청의 첫 건 match_id 는 demo-tetris-ready 다 — [수락]을 누르면 rpc.tetris_respond@true.json 이 그 판의 준비 대기 상태를 돌려준다(장면 games/tetris/match/ready 와 같은 판)."
+  ],
+  "matches" : [
+    {
+      "a" : {
+        "avatar_url" : null,
+        "character" : null,
+        "display_name" : "민트별",
+        "id" : "d0000000-0000-4000-8000-0000000000b3"
+      },
+      "b" : {
+        "avatar_url" : null,
+        "character" : "fox",
+        "display_name" : "달토끼",
+        "id" : "d0000000-0000-4000-8000-0000000000b6"
+      },
+      "id" : "demo-tetris-live",
+      "stake" : 10,
+      "started_at_ms" : 1789621404000
+    }
+  ],
+  "me" : {
+    "active_match_id" : null,
+    "draws" : 1,
+    "incoming" : [
+      {
+        "expires_at_ms" : 1789621541000,
+        "from" : {
+          "avatar_url" : null,
+          "character" : "jellyfish",
+          "display_name" : "구름빵",
+          "id" : "d0000000-0000-4000-8000-0000000000b1"
+        },
+        "match_id" : "demo-tetris-ready",
+        "stake" : 5
+      },
+      {
+        "expires_at_ms" : 1789621517000,
+        "from" : {
+          "avatar_url" : null,
+          "character" : "ghost",
+          "display_name" : "초코칩",
+          "id" : "d0000000-0000-4000-8000-0000000000b2"
+        },
+        "match_id" : "demo-tetris-invite-in-2",
+        "stake" : 10
+      }
+    ],
+    "losses" : 4,
+    "outgoing" : {
+      "expires_at_ms" : 1789621552000,
+      "match_id" : "demo-tetris-invite-out",
+      "stake" : 3,
+      "to" : {
+        "avatar_url" : null,
+        "character" : "shiba",
+        "display_name" : "호두과자",
+        "id" : "d0000000-0000-4000-8000-0000000000b4"
+      }
+    },
+    "ruby_balance" : 42,
+    "wins" : 6
+  },
+  "server_now_ms" : 1789621500000,
+  "stakes" : [
+    3,
+    5,
+    10
+  ],
+  "status" : "ok",
+  "users" : [
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "in_match" : false,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "ghost",
+      "display_name" : "초코칩",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b2",
+      "in_match" : false,
+      "is_working" : false
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : null,
+      "display_name" : "민트별",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b3",
+      "in_match" : true,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b4",
+      "in_match" : false,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "character" : "squirrel",
+      "display_name" : "보리차",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b5",
+      "in_match" : false,
+      "is_working" : false
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "fox",
+      "display_name" : "달토끼",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b6",
+      "in_match" : true,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : false,
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "focus_mode" : false,
+      "id" : "d0000000-0000-4000-8000-0000000000b7",
+      "in_match" : false,
+      "is_working" : true
+    },
+    {
+      "avatar_url" : null,
+      "capable" : true,
+      "character" : "robot",
+      "display_name" : "모카빵",
+      "focus_mode" : true,
+      "id" : "d0000000-0000-4000-8000-0000000000b8",
+      "in_match" : false,
+      "is_working" : false
+    }
+  ]
+}

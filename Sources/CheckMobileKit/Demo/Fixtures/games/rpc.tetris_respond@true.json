@@ -1,0 +1,55 @@
+{
+  "__note" : [
+    "받은 신청 [수락] 의 응답(accepted=true). 바늘 `true` 는 본문 p_accept 의 값이다 — 거절 본문에는 `false` 가 들어 있어 짝 파일(@false)로 간다.",
+    "돌려주는 state 는 **준비 대기**(demo-tetris-ready)다: 수락하면 양쪽 판돈을 걷고 seed 를 뽑지만 start_at 은 둘 다 첫 보고를 낸 뒤에 정해진다(D4). 그래서 수락 직후 화면은 결과도 판도 아니고 '상대를 기다리는 중'이다.",
+    "★ 데모의 한계 하나: 바늘이 p_accept 하나뿐이라 **둘째 받은 신청(demo-tetris-invite-in-2)을 수락해도 이 판**이 열린다. 바늘 둘을 AND 로 거는 길이 스텁에 없다(MobileDemo 규칙 2 — 한 바늘). 스틸에는 영향이 없다."
+  ],
+  "accepted" : true,
+  "state" : {
+    "accepted_at_ms" : 1789621492000,
+    "end_reason" : null,
+    "finished_at_ms" : null,
+    "match_id" : "demo-tetris-ready",
+    "max_end_ms" : null,
+    "me" : {
+      "avatar_url" : null,
+      "board" : "........................................................................................................................................................................................................",
+      "character" : "fox",
+      "display_name" : "새벽",
+      "garbage_applied" : 0,
+      "garbage_sent" : 0,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "last_seen_ms" : 1789621499400,
+      "lines" : 0,
+      "pending" : 0,
+      "ready" : true,
+      "seq" : 1,
+      "topped_out" : false
+    },
+    "opponent" : {
+      "avatar_url" : null,
+      "board" : null,
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "garbage_applied" : 0,
+      "garbage_sent" : 0,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "last_seen_ms" : null,
+      "lines" : 0,
+      "pending" : 0,
+      "ready" : false,
+      "seq" : 0,
+      "topped_out" : false
+    },
+    "ready_deadline_ms" : 1789621522000,
+    "result" : null,
+    "ruby_balance" : 37,
+    "seed" : 20260917,
+    "server_now_ms" : 1789621500000,
+    "stake" : 5,
+    "start_at_ms" : null,
+    "status" : "active",
+    "winner" : null
+  },
+  "status" : "ok"
+}

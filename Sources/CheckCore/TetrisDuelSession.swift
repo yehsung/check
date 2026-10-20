@@ -35,6 +35,32 @@ package struct TetrisDuelReport: Equatable, Sendable {
     package var toppedOut: Bool
 }
 
+/// 앱을 다시 열어 판으로 돌아올 때의 출발점 — 서버가 들고 있는 **내** 판 행(마지막으로 받아 적은 보고)이다.
+package struct TetrisDuelResumePoint: Equatable, Sendable {
+    /// 서버 저장 seq(다음 보고는 이 값 + 1).
+    package var seq: Int
+    /// 그 보고의 판 200글자.
+    package var board: String
+    package var lines: Int
+    package var garbageSent: Int
+    /// 서버가 '받아들였다'고 적어 둔 상대 공격 누계 — 이만큼은 다시 넣지 않는다.
+    package var garbageApplied: Int
+    package var pending: Int
+    /// 그 보고가 서버에 닿은 판 경과초(`last_seen_ms − start_at_ms`). 판 시계는 여기서부터 지금까지를 따라잡는다.
+    package var elapsedSeconds: TimeInterval
+
+    package init(seq: Int, board: String, lines: Int, garbageSent: Int, garbageApplied: Int, pending: Int,
+                 elapsedSeconds: TimeInterval) {
+        self.seq = seq
+        self.board = board
+        self.lines = lines
+        self.garbageSent = garbageSent
+        self.garbageApplied = garbageApplied
+        self.pending = pending
+        self.elapsedSeconds = elapsedSeconds
+    }
+}
+
 /// 지금 보고해야 하는 까닭.
 package enum TetrisDuelReportReason: Equatable, Sendable {
     /// 첫 보고 = 준비 완료(서버가 둘째 준비 시각 + 3초로 판 시작을 정한다).
@@ -109,7 +135,9 @@ package struct TetrisDuelSession: Equatable, Sendable {
     /// - Parameters:
     ///   - seed: 서버 `seed`.
     ///   - startingSeq: 서버에 이미 저장된 seq(앱을 다시 열어 이어 보고할 때). 다음 보고는 이 값 + 1 이다.
-    package init(seed: Int, startingSeq: Int = 0) {
+    ///   - garbageApplied: 서버가 이미 '받아들였다'고 적어 둔 상대 공격 누계(`me.garbage_applied`). 이만큼은 다시 넣지 않는다 —
+    ///     0 에서 출발하면 앱을 다시 연 사람이 상대의 공격 이력을 통째로 한 번 더 맞는다(리뷰 RV1).
+    package init(seed: Int, startingSeq: Int = 0, garbageApplied: Int = 0) {
         self.seed = seed
         game = TetrisGame(seed: UInt64(clamping: seed))
         startAt = nil
@@ -117,11 +145,51 @@ package struct TetrisDuelSession: Equatable, Sendable {
         started = false
         finished = false
         droppedSeconds = 0
-        garbageApplied = 0
+        self.garbageApplied = max(0, garbageApplied)
         seq = max(0, startingSeq)
         lastReportAt = nil
         reportedAttackSent = 0
         reportedToppedOut = false
+    }
+
+    /// 앱을 다시 열어 **이미 시작한** 판으로 돌아온다 — 서버가 들고 있는 내 마지막 보고(판 200글자 · 누계)에서 판을 다시 세운다.
+    ///
+    /// 왜 빈 판에서 다시 시작하지 않는가(리뷰 RV1): 서버 침묵 판정(15초) 안에 앱을 껐다 켜면 거의 찬 판이 공짜로 비워진다.
+    /// 판은 서버의 마지막 판 그대로(방해 줄 `G` 는 회색 표시까지), 지운 줄 · 보낸 공격 · 받아들인 공격 · 대기 방해 줄도 그 값에서
+    /// 잇는다 — 보낸 공격을 0 에서 다시 세면 서버가 단조 최댓값으로 받으므로 옛 누계를 넘을 때까지 새 공격이 상대에게 안 간다.
+    /// 판 시계는 **그 보고가 닿은 판 시각**(`point.elapsedSeconds`)에 서 있고, 다음 `advance` 가 지금까지의 공백을 따라잡는다
+    /// (D10 — 앱이 꺼져 있던 동안에도 조각은 떨어졌다). 떨어지던 조각 · 넥스트 · 홀드 · 레벨 시계는 보고에 없어 새로 시작한다
+    /// (첫 조각은 ARE 뒤에 나온다). 엔진은 고치지 않았다 — 임의 상태에서 여는 엔진 init(규칙 픽스처와 같은 문)을 쓴다.
+    /// - Returns: 판 글자가 서버 CHECK 모양(200글자 · `.IJLOSTZG`)이 아니면 nil — 깨진 판을 지어내지 않는다.
+    package init?(seed: Int, resumingFrom point: TetrisDuelResumePoint) {
+        guard let cells = TetrisDuelBoard.decode(point.board) else { return nil }
+        var board = TetrisGame.emptyBoard()
+        var mask = [UInt16](repeating: 0, count: TetrisGame.totalRows)
+        for (offset, row) in cells.enumerated() {
+            let boardRow = TetrisGame.firstVisibleRow + offset
+            for (column, cell) in row.enumerated() {
+                switch cell {
+                case .empty:
+                    continue
+                case .piece(let piece):
+                    board[boardRow][column] = piece
+                case .garbage:
+                    // 엔진이 방해 줄을 넣을 때와 같은 모양: 찬 칸(.i) + 표시 비트.
+                    board[boardRow][column] = .i
+                    mask[boardRow] |= UInt16(1) << column
+                }
+            }
+        }
+        self.init(seed: seed, startingSeq: point.seq, garbageApplied: point.garbageApplied)
+        game = TetrisGame(seed: UInt64(clamping: seed), board: board, active: nil,
+                          phase: .are(remaining: TetrisGame.areSeconds),
+                          lines: max(0, point.lines),
+                          pendingGarbage: point.pending > 0 ? [point.pending] : [],
+                          attackSentTotal: max(0, point.garbageSent),
+                          garbageMask: mask)
+        started = true
+        simulated = point.elapsedSeconds.isFinite ? max(0, point.elapsedSeconds) : 0
+        reportedAttackSent = game.attackSentTotal
     }
 
     /// 테스트 픽스처 — **이미 시작한** 판에서 출발한다(엔진 상태를 직접 준다. 판 시계 0 = `startAt`).

@@ -233,6 +233,20 @@ private final class TDServer: @unchecked Sendable {
     }
 }
 
+/// 첫 호출에만 참(스텁 응답기는 URL 로딩 스레드에서 불린다).
+private final class TDFirstCall: @unchecked Sendable {
+    private let lock = NSLock()
+    private var used = false
+
+    func take() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if used { return false }
+        used = true
+        return true
+    }
+}
+
 @MainActor
 private final class TDTally {
     var presents = 0
@@ -705,8 +719,9 @@ struct V0360TetrisDuelStoreTests {
         store.tick(now: t0 + 2.3)
         await tdWait { tdCount(host, "tetris_report") == base + 3 }     // 요청이 스텁에 닿았다(답은 0.3초 뒤)
         #expect(store.reportInFlight)
-        // 하트비트 간격(1초)을 여섯 번 넘겨 부른다 — 겹쳐 나가면 여기서 여섯 건이 더 나간다.
-        for step in 1...6 { store.tick(now: t0 + 2.3 + Double(step)) }
+        // 여섯 번 부르며 하트비트 간격(1초)을 두 번 넘긴다 — 겹쳐 나가면 여기서 건이 더 나간다.
+        // 멎음 문턱(`reportStallSeconds` 3초) 안에서만 부른다: 그 너머는 일부러 버리고 새로 내는 자리다(아래 멎은 보고 시험).
+        for step in 1...6 { store.tick(now: t0 + 2.3 + Double(step) * 0.45) }
         #expect(store.reportInFlight, "전제: 아직 첫 보고의 답이 안 왔다")
         await tdSettle(store)
         #expect(!store.reportInFlight)
@@ -853,6 +868,135 @@ struct V0360TetrisDuelStoreTests {
         await tdSettle(store)
         #expect(server.lastReport["p_garbage_applied"] as? Int == 6)
         #expect(server.lastReport["p_pending"] as? Int == 6)
+        store.reset()
+    }
+
+    // MARK: 재개 · 멎은 보고 (리뷰 RV1 · RV2)
+
+    @MainActor
+    @Test("재개: 앱을 다시 열고 이미 시작한 판에 돌아오면 서버의 내 판·누계에서 다시 선다 — 받아들인 공격은 다시 안 들어온다")
+    func reopeningResumesFromTheServerRow() async throws {
+        // 없으면: 껐다 켜면 빈 판에서 다시 시작하고 상대 공격 이력 전부가 대기열에 다시 쌓인다
+        // (RV1 실측: garbageApplied=12 · pending=12 · 서버 판 153칸 → 재개한 판 16칸).
+        let tall = (Array(repeating: "..........", count: 3) + Array(repeating: "IIIIIIIII.", count: 15)
+            + ["GGGGGGG.GG", "GGGGGGG.GG"]).joined()
+        let script = TDScript()
+        let server = TDServer()
+        server.edit {
+            $0.startAtMs = tdNowMs - 60_000
+            $0.me = TDPlayer(id: tdMe, name: "나", ready: true, seq: 60, board: tall, lines: 30, sent: 7, applied: 12,
+                             pending: 3, lastSeenMs: tdNowMs - 500)
+            $0.opponent = TDPlayer(id: tdRival, name: "라이벌", ready: true, seq: 70, sent: 12, lastSeenMs: tdNowMs - 300)
+        }
+        script.respond("tetris_report") { server.report($0) }
+        script.stand("tetris_lobby", tdLobby(active: tdMatch))
+        let (store, clock, _, _) = tdMake("resume", script: script)
+        store.applyState(try tdDecode(TetrisStatePayload.self, tdJSON(server.state())), receivedAt: clock.uptime)
+        store.tick()
+        let duel = try #require(store.duel)
+        #expect(duel.garbageApplied == 12, "서버가 이미 받아들였다고 적은 누계를 0 에서 다시 셌다")
+        #expect(duel.game.pendingGarbageLines == 3, "이미 받아들인 공격이 다시 들어왔다(\(duel.game.pendingGarbageLines)줄)")
+        #expect(TetrisDuelBoard.encode(duel.game) == tall, "재개한 판이 서버가 들고 있는 내 판이 아니다")
+        #expect(store.phase == .playing && store.myStats?.lines == 30 && store.myStats?.attackSent == 7)
+
+        // 다음 보고는 서버 seq 위로 · 누계는 그 값에서 잇는다(창이 안 보여도 — 서버가 이미 준비를 받았다).
+        await tdSettle(store)
+        #expect(server.lastReport["p_seq"] as? Int == 61)
+        #expect(server.lastReport["p_garbage_applied"] as? Int == 12 && server.lastReport["p_garbage_sent"] as? Int == 7)
+        #expect(server.lastReport["p_board"] as? String == tall && server.lastReport["p_pending"] as? Int == 3)
+
+        // 그 뒤 상대가 2줄 더 보내면 차분 2만 들어간다.
+        server.edit { $0.opponent.sent = 14; $0.opponent.seq = 71 }
+        clock.uptime += 1.0
+        store.tick()
+        await tdSettle(store)
+        #expect(store.duel?.garbageApplied == 14 && store.myStats?.pendingGarbage == 5)
+        store.reset()
+
+        // ★ 기준선: 시작 전(카운트다운 하트비트)에 적힌 내 행 · 판 중 보고가 없는 행은 재개하지 않는다(새 판으로 연다).
+        func row(seq: Int, board: String?, lastSeen: Double?) -> TetrisPlayerRow {
+            try! tdDecode(TetrisPlayerRow.self, tdJSON(TDPlayer(id: tdMe, name: "나", ready: true, seq: seq, board: board,
+                                                                lastSeenMs: lastSeen).json))
+        }
+        let start = tdNowMs - 60_000
+        #expect(TetrisDuelStore.resumePoint(me: row(seq: 3, board: TetrisDuelBoard.emptyText, lastSeen: start - 1_000),
+                                            startAtMs: start) == nil, "카운트다운 중 보고를 판 중 보고로 이었다")
+        #expect(TetrisDuelStore.resumePoint(me: row(seq: 0, board: nil, lastSeen: nil), startAtMs: start) == nil)
+        #expect(TetrisDuelStore.resumePoint(me: row(seq: 5, board: tall, lastSeen: start + 4_000), startAtMs: nil) == nil)
+        #expect(TetrisDuelStore.resumePoint(me: row(seq: 5, board: tall, lastSeen: start + 4_000), startAtMs: start)?
+            .elapsedSeconds == 4)
+    }
+
+    @MainActor
+    @Test("멎은 보고: 답이 3초 없으면 버리고 새로 낸다 — 멎음 15초 안에 네 번 넘게 시도 · 두 번 연달아면 '연결 확인 중' · 돌아오면 내린다")
+    func aStalledReportIsAbandonedInsideTheSilenceWindow() async throws {
+        // 없으면: 멎은 요청 하나(세션 요청 타임아웃 15초)가 하트비트를 전부 막아, 망이 돌아와도 서버 침묵 판정 15초로
+        // 연결 끊김 패가 난다(RV2 실측: 판 시계 16초 동안 보고 0건).
+        let (store, clock, host, server, script) = await tdStartedStore("stall")
+        #expect(store.phase == .playing)
+        let base = tdCount(host, "tetris_report")
+        // 지금부터 모든 보고의 답이 실시간 1초 뒤에야 온다(판 시계로는 그사이 15초를 민다).
+        script.respond("tetris_report") { body in
+            var reply = server.report(body)
+            reply.delay = 1.0
+            return reply
+        }
+        for _ in 1...15 {
+            clock.uptime += 1.0
+            store.tick()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        await tdWait { tdCount(host, "tetris_report") >= base + 5 }
+        let sent = tdCount(host, "tetris_report") - base
+        #expect(sent >= 4, "멎은 동안 판 시계 15초에 보고를 \(sent)번만 시도했다 — 서버 침묵 판정(15초)에 걸린다")
+        #expect(sent <= 6, "멎은 보고를 3초도 안 기다리고 버렸다(\(sent)건)")
+        #expect(store.connectionTrouble, "보고가 두 번 연달아 멎었는데 '연결 확인 중' 이 안 떴다")
+
+        // 망이 돌아왔다 — 마지막으로 멎은 보고도 3초 뒤 버리고, 새 보고의 답이 곧바로 온다.
+        script.respond("tetris_report") { server.report($0) }
+        clock.uptime += 3.0
+        store.tick()
+        await tdSettle(store)
+        #expect(tdCount(host, "tetris_report") == base + sent + 1)
+        #expect(!store.connectionTrouble && store.reportFailureStreak == 0, "돌아온 답이 '연결 확인 중' 을 안 내렸다")
+        #expect(!store.reportInFlight)
+        // 멎었던 답들이 늦게 닿아도(실시간 1초) 아무 일도 안 생긴다 — 판 · 흐름 그대로.
+        try? await Task.sleep(for: .milliseconds(1_200))
+        #expect(!store.reportInFlight && store.phase == .playing && !store.connectionTrouble)
+        store.reset()
+    }
+
+    @MainActor
+    @Test("멎어서 버린 보고의 늦은 답은 옮기지 않는다 — 그 뒤에 낸 보고가 자리를 쥔다")
+    func theLateReplyOfAnAbandonedReportIsDropped() async throws {
+        // 없으면: 버린 보고의 답이 늦게 닿아 새 보고가 나가 있는 동안 '나가 있음'을 내리고(보고가 겹쳐 나간다),
+        // 그 답에 실린 옛 사실로 판을 덮는다.
+        let (store, clock, host, server, script) = await tdStartedStore("abandoned")
+        let real = String(repeating: ".", count: 190) + "SSSSS.SSSS"
+        server.edit { $0.opponent = TDPlayer(id: tdRival, name: "라이벌", ready: true, seq: 5, board: real, lines: 1, sent: 0) }
+        // 탐지자: 버린 보고의 답은 seq 를 크게 실어(나 999 · 상대 99) seq 가드로는 못 거르게 한다 — 걸러지면 표(ticket) 덕이다.
+        let ghost = String(repeating: ".", count: 190) + "OOOOOOOOO."
+        var ghostState = server.state()
+        ghostState["me"] = TDPlayer(id: tdMe, name: "나", ready: true, seq: 999).json
+        ghostState["opponent"] = TDPlayer(id: tdRival, name: "라이벌", ready: true, seq: 99, board: ghost, lines: 9).json
+        let ghostBody = tdEnvelope(state: ghostState)
+        let first = TDFirstCall()
+        script.respond("tetris_report") { body in
+            first.take() ? GomokuStubProtocol.Reply(body: ghostBody, delay: 0.8) : server.report(body)
+        }
+        let base = tdCount(host, "tetris_report")
+        clock.uptime += 1.0
+        store.tick()                                   // 하트비트 — 멎는다
+        await tdWait { tdCount(host, "tetris_report") == base + 1 }
+        #expect(store.reportInFlight)
+        clock.uptime += 3.0
+        store.tick()                                   // 3초 — 버리고 새로
+        await tdSettle(store)
+        #expect(tdCount(host, "tetris_report") == base + 2)
+        #expect(store.match?.opponentBoard.cells == TetrisDuelBoard.decode(real))
+        try? await Task.sleep(for: .milliseconds(1_000))  // 버린 보고의 답이 닿는다
+        #expect(store.match?.opponentBoard.cells == TetrisDuelBoard.decode(real), "버린 보고의 늦은 답이 상대 판을 덮었다")
+        #expect((store.duel?.seq ?? 0) < 999, "버린 보고의 늦은 답의 seq 를 따라잡았다")
         store.reset()
     }
 

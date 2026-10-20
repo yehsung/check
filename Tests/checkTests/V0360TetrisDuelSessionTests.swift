@@ -172,6 +172,55 @@ struct V0360TetrisDuelSessionTests {
         #expect(s.game.pendingGarbage == [2, 3])
     }
 
+    // MARK: 재개(앱을 다시 열었다 — 리뷰 RV1)
+
+    @Test("재개 — 서버의 내 마지막 판(조각·방해 줄 표시)과 누계에서 다시 선다 · 받아들인 공격은 다시 안 넣는다 · 판 시계는 그 보고 시각부터")
+    func resumingRebuildsTheServerBoard() throws {
+        // 없으면: 앱을 다시 연 사람이 빈 판에서 다시 시작하고(침묵 15초 안에 껐다 켜면 거의 찬 판이 공짜로 비워진다),
+        // 이미 받아들인 상대 공격이 0 에서 다시 세어져 통째로 한 번 더 들어온다.
+        let rows = Array(repeating: "..........", count: 14)
+            + ["...T......", "..TTT.....", "ZZ..SS....", "IJLOSTZ...", "GGGG.GGGGG", "GGGG.GGGGG"]
+        let board = rows.joined()
+        let point = TetrisDuelResumePoint(seq: 60, board: board, lines: 30, garbageSent: 7, garbageApplied: 12,
+                                          pending: 3, elapsedSeconds: 59.5)
+        var s = try #require(TetrisDuelSession(seed: 4_242, resumingFrom: point))
+        #expect(TetrisDuelBoard.encode(s.game) == board, "재개한 판이 서버가 들고 있는 판과 다르다")
+        let bottom = TetrisGame.totalRows - 1
+        #expect(s.game.isGarbage(row: bottom, column: 0) && !s.game.isGarbage(row: bottom, column: 4))
+        #expect(s.game.board[bottom][4] == nil && s.game.board[bottom][0] != nil, "방해 줄 구멍이 메워졌다")
+        #expect(!s.game.isGarbage(row: bottom - 2, column: 0), "조각 칸을 방해 줄로 칠했다")
+        #expect(s.started && s.isLive && !s.toppedOut)
+        #expect(s.game.lines == 30 && s.game.attackSentTotal == 7 && s.game.pendingGarbageLines == 3)
+        #expect(s.garbageApplied == 12 && s.seq == 60)
+
+        // 상대 누계 12 = 이미 받아들인 만큼 → 아무것도 안 들어간다. 14 면 차분 2만.
+        #expect(s.absorbOpponentAttack(total: 12) == 0, "이미 받아들인 공격을 다시 넣었다")
+        #expect(s.absorbOpponentAttack(total: 14) == 2)
+        #expect(s.game.pendingGarbageLines == 5 && s.garbageApplied == 14)
+
+        // 판 시계: 시작(로컬 1,000)에서 60초 지난 지금 — 마지막 보고(59.5초) 뒤 공백 0.5초만 흘린다(ARE 뒤 첫 조각).
+        s.syncStart(startAtMs: 5_000_000, serverNowMs: 5_060_000, localNow: 1_060)
+        s.advance(to: 1_060)
+        #expect(abs(s.simulated - 60) < 1e-9 && s.droppedSeconds == 0, "재개가 판 시계를 0 에서 다시 돌렸다")
+        #expect(s.game.active != nil, "ARE 뒤 첫 조각이 안 나왔다")
+        #expect(TetrisDuelBoard.encode(s.game) == board, "0.5초 공백에 굳은 판이 바뀌었다")
+
+        // 다음 보고는 서버 seq 위로, 누계는 이어서.
+        let report = s.makeReport(at: 1_060)
+        #expect(report.seq == 61 && report.garbageApplied == 14 && report.garbageSent == 7)
+        #expect(report.lines == 30 && report.pending == 5 && !report.toppedOut)
+
+        // 깨진 판 글자(길이 · 모르는 글자)는 재개하지 않는다 — 지어낸 판보다 새 판이 낫다.
+        var broken = point
+        broken.board = String(board.dropLast())
+        #expect(TetrisDuelSession(seed: 1, resumingFrom: broken) == nil)
+        broken.board = String(board.dropLast()) + "x"
+        #expect(TetrisDuelSession(seed: 1, resumingFrom: broken) == nil)
+        // 새 판 init 도 받아들인 누계를 서버 값에서 잇는다.
+        var fresh = TetrisDuelSession(seed: 1, startingSeq: 3, garbageApplied: 4)
+        #expect(fresh.garbageApplied == 4 && fresh.makeReport(at: 0).garbageApplied == 4)
+    }
+
     // MARK: 보고 차분
 
     @Test("보고 — 첫 보고는 준비 · 그 뒤 1초 하트비트 · 0.5초엔 없음 · 번호는 1씩 · 서버 seq 따라잡기")

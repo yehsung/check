@@ -9,25 +9,50 @@ import Foundation
 //   입력 문(하드드롭)       ─────┘                                                        │
 //                         reportReason: 준비 · 탑아웃 · 공격 증가(0.25초 바닥) · 1초 하트비트  │
 //                         한 번에 하나(reportInFlight) — 응답이 오면 곧바로 한 번 더 묻는다 ←──┘
+//                         3초 넘게 답이 없으면 그 보고를 버리고 새로 낸다(reportStallSeconds · reportTicket)
 //   응답(ok/stale) → applyState: 시작 시각(단조 시계로) · 서버 seq 따라잡기 · 상대 판 · 상대 공격 누계 · 정산
 //
-// ★ 보고 값은 전부 **누계**다(지운 줄 · 보낸 공격 · 받아들인 공격). 그래서 보고 하나가 사라져도(오프라인 · 15초 타임아웃)
+// ★ 보고 값은 전부 **누계**다(지운 줄 · 보낸 공격 · 받아들인 공격). 그래서 보고 하나가 사라져도(오프라인 · 멎어서 버림)
 //   다음 보고가 같은 사실을 다시 싣고, 서버 seq 가 늦게 온 옛 보고를 `stale` 로 버린다 — 재전송 큐가 필요 없다.
+// ★ 앱을 다시 열면 판은 서버가 들고 있는 내 마지막 보고에서 다시 선다(`prepareDuel` · `resumePoint`) — 빈 판이 아니다.
 
 extension TetrisDuelStore {
     // MARK: - 판 구동기 수명
 
     /// 진행 중 판의 구동기를 준비한다(같은 판이면 그대로 둔다). 시드가 없으면 만들지 않는다 — 서버 계약상 진행 중 판에는
     /// 언제나 있지만, 없으면 지어낸 시드로 두 사람의 조각 순서가 갈리는 것보다 판을 못 여는 편이 낫다.
-    func prepareDuel(matchID: String, seed: Int?, startingSeq: Int) {
+    ///
+    /// 이 프로세스가 이 판을 처음 보는데 서버가 **판 중에 받은 내 보고**를 이미 들고 있으면(앱을 다시 열었다 · 다시 로그인했다)
+    /// 그 보고에서 판을 다시 세운다(`resumePoint` — 리뷰 RV1). 빈 판에서 다시 시작하면 침묵 판정(15초) 안에 앱을 껐다 켜는 것만으로
+    /// 거의 찬 판이 비워지고, 받아들인 누계를 0 으로 두면 상대의 공격 이력이 통째로 한 번 더 들어온다.
+    func prepareDuel(matchID: String, seed: Int?, me: TetrisPlayerRow?, startAtMs: Double?) {
         guard duel == nil || duelMatchID != matchID else { return }
         discardDuel()
         guard let seed else {
             Self.logger.notice("duel not prepared — active match without seed")
             return
         }
-        duel = TetrisDuelSession(seed: seed, startingSeq: startingSeq)
+        if let point = Self.resumePoint(me: me, startAtMs: startAtMs),
+           let resumed = TetrisDuelSession(seed: seed, resumingFrom: point) {
+            Self.logger.notice("duel resumed from server row seq=\(point.seq) applied=\(point.garbageApplied)")
+            duel = resumed
+        } else {
+            // 판 시작 전(준비 · 카운트다운)이거나 판 중 보고가 없다 — 새 판. 받아들인 누계는 그래도 서버 값에서 잇는다.
+            duel = TetrisDuelSession(seed: seed, startingSeq: me?.seq ?? 0, garbageApplied: me?.garbageApplied ?? 0)
+        }
         duelMatchID = matchID
+    }
+
+    /// 서버의 내 행이 **판이 시작된 뒤에** 받아 적은 보고면 그 보고를 재개 출발점으로(순수). 아니면 nil(새 판으로 연다).
+    /// 시작 전 보고(준비 · 카운트다운 하트비트)는 빈 판이고 엔진도 아직 안 열렸으므로 이어 받을 것이 없다.
+    package nonisolated static func resumePoint(me: TetrisPlayerRow?, startAtMs: Double?) -> TetrisDuelResumePoint? {
+        guard let me, let seq = me.seq, seq > 0, let board = me.board, TetrisDuelBoard.isValid(board),
+              let startAtMs, let lastSeenMs = me.lastSeenMs, startAtMs.isFinite, lastSeenMs.isFinite,
+              lastSeenMs > startAtMs
+        else { return nil }
+        return TetrisDuelResumePoint(seq: seq, board: board, lines: me.lines ?? 0, garbageSent: me.garbageSent ?? 0,
+                                     garbageApplied: me.garbageApplied ?? 0, pending: me.pending ?? 0,
+                                     elapsedSeconds: (lastSeenMs - startAtMs) / 1000)
     }
 
     /// 구동기를 버린다(판 루프를 멈추고, 나가 있는 보고의 응답은 세대로 버려진다 — 요청 자체는 끊지 않는다).
@@ -35,6 +60,7 @@ extension TetrisDuelStore {
         stopGameLoop()
         duelGeneration &+= 1
         reportInFlight = false
+        reportSentAt = nil
         reportFailureStreak = 0
         duel = nil
         duelMatchID = nil
@@ -175,7 +201,12 @@ extension TetrisDuelStore {
     // MARK: - 보고 루프
 
     /// 보고할 때면 한 벌을 만들어 보낸다. 한 번에 하나만 나간다(응답이 오면 곧바로 다시 묻는다).
+    /// 나가 있는 보고가 `reportStallSeconds` 넘게 답이 없으면 버리고 새로 낸다(리뷰 RV2 — 멎은 요청 하나가 하트비트를
+    /// 15초 막으면 서버가 연결 끊김 패로 닫는다).
     func considerReport(at now: TimeInterval) {
+        if reportInFlight, let sentAt = reportSentAt, now - sentAt >= Self.reportStallSeconds {
+            abandonStalledReport(sentAt: sentAt, now: now)
+        }
         guard !reportInFlight, let current = match, !current.isFinished,
               let duel, duelMatchID == current.id, host?.session != nil else { return }
         // 준비(첫 보고)는 창이 화면에 떠 있을 때만(머리말 ⑨). 서버가 이미 준비를 받았으면(앱을 다시 열었다) 묻지 않는다.
@@ -184,11 +215,26 @@ extension TetrisDuelStore {
         var next = duel
         let report = next.makeReport(at: now)
         self.duel = next
-        sendReport(report, reason: reason, matchID: current.id)
+        sendReport(report, reason: reason, matchID: current.id, at: now)
     }
 
-    private func sendReport(_ report: TetrisDuelReport, reason: TetrisDuelReportReason, matchID: String) {
+    /// 멎은 보고를 놓는다. 요청은 끊지 않는다(세션 재시도·토큰 갱신 경로를 취소로 건드리지 않게) — 그 답은 표가 바뀌어 버려지고,
+    /// 서버에 늦게 닿아도 seq 가 더 큰 다음 보고 앞에서 stale 이다. 실패 한 번으로 세어 두 번 연달아면 "연결 확인 중" 이 뜬다.
+    private func abandonStalledReport(sentAt: TimeInterval, now: TimeInterval) {
+        reportTicket &+= 1
+        reportInFlight = false
+        reportSentAt = nil
+        reportFailureStreak += 1
+        if reportFailureStreak >= Self.reportFailureLimit, !connectionTrouble { connectionTrouble = true }
+        Self.logger.notice("report stalled \(now - sentAt, format: .fixed(precision: 1))s — abandoned streak=\(self.reportFailureStreak)")
+    }
+
+    private func sendReport(_ report: TetrisDuelReport, reason: TetrisDuelReportReason, matchID: String,
+                            at now: TimeInterval) {
         reportInFlight = true
+        reportSentAt = now
+        reportTicket &+= 1
+        let ticket = reportTicket
         let token = duelGeneration
         if reason != .heartbeat {
             Self.logger.notice("report reason=\(String(describing: reason), privacy: .public) seq=\(report.seq)")
@@ -201,7 +247,10 @@ extension TetrisDuelStore {
             let receivedAt = self.uptime()
             // 판이 바뀌었다(접기 · 로그아웃 · 다른 판) — 이 응답은 지금 판의 것이 아니다.
             guard token == self.duelGeneration else { return }
+            // 멎어서 버린 보고의 늦은 답이다 — 그 뒤에 낸 보고가 자리를 쥐고 있다(그 답이 같은 사실을 더 새로 싣는다).
+            guard ticket == self.reportTicket else { return }
             self.reportInFlight = false
+            self.reportSentAt = nil
             guard let result else { return }
             self.applyReportResult(result, matchID: matchID, receivedAt: receivedAt)
             // 왕복 사이에 공격이 늘었거나 탑아웃했다 — 다음 판 루프 걸음을 기다리지 않는다.

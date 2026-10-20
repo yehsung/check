@@ -439,6 +439,12 @@ package final class TetrisDuelStore {
     package nonisolated static let inviteExpiryToleranceSeconds: TimeInterval = 1
     /// 보고가 이만큼 연달아 실패하면 `connectionTrouble` 을 세운다(화면: "연결 확인 중").
     package nonisolated static let reportFailureLimit = 2
+    /// 나가 있는 보고가 이만큼(단조 시계 초) 답이 없으면 **버리고** 새 보고를 낸다(리뷰 RV2).
+    /// 왜: 보고는 한 번에 하나라 멎은 요청 하나가 하트비트를 전부 막는다. 세션 요청 타임아웃(15초)은 서버 침묵 판정
+    /// (`tetris_silence_ms` 15초)과 같아서, 그대로 두면 망이 이미 돌아왔어도 그 15초로 연결 끊김 패가 난다.
+    /// 3초면 침묵 창 15초 안에 다섯 번을 시도한다. 보고 값은 전부 누계이고 서버 seq 가 옛 보고를 stale 로 버리므로
+    /// 버린 보고가 늦게 닿아도 안전하다(그 답은 `reportTicket` 으로 버린다). 버린 보고는 실패 한 번으로 센다.
+    package nonisolated static let reportStallSeconds: TimeInterval = 3
 
     package nonisolated static let logger = Logger(subsystem: "kingcheck", category: "tetris-duel")
 
@@ -531,6 +537,10 @@ package final class TetrisDuelStore {
     /// 지금 나가 있는 보고(한 번에 하나). 테스트가 `await reportTask?.value` 로 기다린다.
     @ObservationIgnored package internal(set) var reportTask: Task<Void, Never>?
     @ObservationIgnored package internal(set) var reportInFlight = false
+    /// 나가 있는 보고를 낸 단조 시각(멎음 판정 — `reportStallSeconds`). 나가 있는 보고가 없으면 nil.
+    @ObservationIgnored package internal(set) var reportSentAt: TimeInterval?
+    /// 보고를 낼 때마다 오른다 — 멎어서 버린 보고의 늦은 답이 그 뒤에 낸 보고의 자리를 건드리지 못하게 한다.
+    @ObservationIgnored package internal(set) var reportTicket = 0
     @ObservationIgnored package internal(set) var reportFailureStreak = 0
     /// 서버가 말한 내 seq·상대 seq 의 최댓값(같은 판의 옛 스냅숏을 버리는 기준 — 머리말 ④).
     @ObservationIgnored package internal(set) var heldMySeq = 0
@@ -919,7 +929,7 @@ package final class TetrisDuelStore {
             }
             stopGameLoop()
         } else {
-            prepareDuel(matchID: id, seed: next.seed, startingSeq: mySeq)
+            prepareDuel(matchID: id, seed: next.seed, me: payload.me, startAtMs: payload.startAtMs)
             if duelMatchID == id {
                 if let startMs = payload.startAtMs, let serverNow = payload.serverNowMs {
                     duel?.syncStart(startAtMs: startMs, serverNowMs: serverNow, localNow: receivedAt ?? uptime())

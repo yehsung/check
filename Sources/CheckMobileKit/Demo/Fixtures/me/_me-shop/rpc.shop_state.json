@@ -45,15 +45,25 @@
       "price": 1000,
       "owned": false,
       "gacha_only": true
+    },
+    {
+      "id": "aing_rainbow",
+      "price": 1000,
+      "owned": false,
+      "gacha_only": true
     }
   ],
   "gacha": {
     "price": 50,
-    "shards": 3,
+    "shards": 23,
     "odds": [
       {
         "character_id": "aing_gold",
-        "percent": 5
+        "percent": 3
+      },
+      {
+        "character_id": "aing_rainbow",
+        "percent": 2
       },
       {
         "character_id": "fox",
@@ -82,6 +92,7 @@
     ],
     "shard_costs": {
       "aing_gold": 20,
+      "aing_rainbow": 20,
       "fox": 2,
       "squirrel": 2,
       "shiba": 4,

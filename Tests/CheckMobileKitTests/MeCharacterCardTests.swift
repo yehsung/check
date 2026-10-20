@@ -89,6 +89,14 @@ struct MeCharacterCardTests {
         let goldCrop = try #require(gold.cropping(to: goldBox))
         result.append(Source(id: CharacterCatalog.goldAingID, displayName: CharacterCatalog.builtInGoldAing.displayName,
                              pixelArt: false, crop: goldCrop))
+        // 무지개 아잉이(v0.3.59 맥 / 폰 1.0.10)는 **금과 같은 갈래**다 — 매니페스트·아틀라스가 없고 원천은 맥 초상 PNG 다.
+        // 파일 이름을 이 자리에 다시 적지 않는다(`RainbowAingArt` 가 유일한 출처 — 맥 번들·폰 초상·아트 스크립트가 같은 글자를 쓴다).
+        let rainbow = try loadImage(repoRoot.appendingPathComponent(
+            "Sources/check/Resources/\(RainbowAingArt.neutralPortraitResourceName).\(RainbowAingArt.resourceExtension)"))
+        let rainbowBox = try #require(alphaBounds(rainbow))
+        let rainbowCrop = try #require(rainbow.cropping(to: rainbowBox))
+        result.append(Source(id: CharacterCatalog.rainbowAingID, displayName: CharacterCatalog.builtInRainbowAing.displayName,
+                             pixelArt: false, crop: rainbowCrop))
         let charactersDir = repoRoot.appendingPathComponent("Sources/check/Characters")
         let names = try FileManager.default.contentsOfDirectory(atPath: charactersDir.path).sorted()
         for name in names {
@@ -158,6 +166,11 @@ struct MeCharacterCardTests {
         #expect(MeCharacterCards.equippedID(fromServer: "aing_gold") == "aing_gold")
         #expect(MeCharacterCards.displayName(for: "aing_gold") == CharacterCatalog.builtInGoldAing.displayName)
         #expect(MeCharacterCards.displayName(for: "aing_gold") == "황금 아잉이")
+        // 무지개 아잉이(폰 1.0.10): 카드가 박혔으므로 접히지 않는다. 1.0.9 는 이 값을 몰라 아잉으로 접었다(그게 회귀의 모양이다).
+        #expect(MeCharacterCards.equippedID(fromServer: "aing_rainbow") == "aing_rainbow")
+        #expect(MeCharacterCards.equippedID(fromServer: " aing_rainbow ") == "aing_rainbow")
+        #expect(MeCharacterCards.displayName(for: "aing_rainbow") == CharacterCatalog.builtInRainbowAing.displayName)
+        #expect(MeCharacterCards.displayName(for: "aing_rainbow") == "무지개 아잉이")
     }
 
     // MARK: 다시 굽기

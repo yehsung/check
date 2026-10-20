@@ -518,6 +518,10 @@ struct MeCharacterTile: View {
     let status: Status
     let mark: Mark
 
+    /// 반짝임 기호 하나만 모드를 본다(라이트 무지개는 단색 — `MobileTheme.sparkle(_:in:)`). 다른 색은 전부 동적 `Color` 라
+    /// 모드를 묻지 않는다.
+    @Environment(\.colorScheme) private var colorScheme
+
     /// 두 화면 같은 순서: 가진 것 먼저(아잉 → 나머지는 받은 순서), 그다음 안 가진 것(받은 순서). 안정 정렬.
     static func ordered(_ ids: [String], isOwned: (String) -> Bool) -> [String] {
         ids.filter(isOwned) + ids.filter { !isOwned($0) }
@@ -584,7 +588,11 @@ struct MeCharacterTile: View {
     }
 
     /// 상태 줄. **무엇을 말하는지는 `status.content`**(플랫폼 무관)가 정하고, 여기서는 칠하기만 한다 —
-    /// 뽑기 전용(황금 · 무지개)은 반짝임이 그 캐릭터의 희귀 빛깔이다(금빛 · 일곱 빛 · 서버가 표식만 준 평범한 id 면 금빛).
+    /// 뽑기 전용(황금 · 무지개)은 반짝임이 그 캐릭터의 희귀 빛깔이다.
+    ///
+    /// 빛깔은 **글자 갈래(`ink`)가 아니라 기호 갈래(`MobileTheme.sparkle(_:in:)`)**다(폰 1.0.10 색 고르기) — 짧은 기호에는
+    /// 그라데이션이 안 읽히고(라이트 무지개 = 단색 보라), 장식이라 글자 4.5:1 을 안 지킨다(라이트 금 = 메달 금 `#F5B700`).
+    /// 다크는 두 빛깔 다 1.0.9 값 그대로다. 서버가 표식만 준 평범한 id 면 금빛이다.
     @ViewBuilder
     private var statusLine: some View {
         switch status.content {
@@ -598,7 +606,7 @@ struct MeCharacterTile: View {
             HStack(spacing: 3) {
                 Image(systemName: "sparkles")
                     .font(.caption2)
-                    .foregroundStyle(MobileTheme.ink(CharacterManifest.Finish(characterID: id), otherwise: MobileTheme.goldText))
+                    .foregroundStyle(MobileTheme.sparkle(CharacterManifest.Finish(characterID: id), in: colorScheme))
                     .accessibilityHidden(true)
                 Text(text)
                     .font(.footnote)

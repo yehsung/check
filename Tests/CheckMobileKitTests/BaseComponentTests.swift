@@ -13,7 +13,7 @@ import Testing
 
     // MARK: 에셋
 
-    @Test("초상 16장: 8 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
+    @Test("초상 18장: 9 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
     func portraitsAreBundledCopiesOfMacArt() throws {
         // 0.3.43(2026-10-05)에 로봇이 들어와 6 → **7 캐릭터 · 14장**이 됐다(맥 `AppUserAvatarArt.knownIDs` 도 7).
         // 개수를 **두 자리**에서 잰다: 명단 길이(7)와 **맥 원본과 실제로 대조한 장수**(14). 명단만 재면 번들 사본이
@@ -21,9 +21,11 @@ import Testing
         // 다르게 보인다(위젯까지 이 번들을 읽는다).
         // 0.3.54(폰 1.0.8, 2026-10-15)에 황금 아잉이가 들어와 **8 캐릭터 · 16장**이 됐다. 원본은 아잉처럼 맥 `Resources/` 의
         // `aing_gold-<표정>.png` 다(내장 3D 캐릭터라 `Characters/<id>/` 폴더가 없다).
-        #expect(AingCharacterArt.knownIDs.count == 8, "폰 초상 명단이 8 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
+        // 0.3.59(폰 1.0.10, 2026-10-20)에 무지개 아잉이가 들어와 **9 캐릭터 · 18장**이 됐다 — 금과 같은 자리(`Resources/aing_rainbow-<표정>.png`).
+        #expect(AingCharacterArt.knownIDs.count == 9, "폰 초상 명단이 9 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
         #expect(AingCharacterArt.knownIDs.contains("robot"), "로봇(0.3.43)이 폰 초상 명단에 없다 — 맥에만 있는 캐릭터는 폰에서 이니셜로 선다")
         #expect(AingCharacterArt.knownIDs.contains("aing_gold"), "황금 아잉이(0.3.54)가 폰 초상 명단에 없다 — 폰이 뽑기를 못 보고 금 착용자는 아잉으로 선다")
+        #expect(AingCharacterArt.knownIDs.contains("aing_rainbow"), "무지개 아잉이(0.3.59)가 폰 초상 명단에 없다 — 폰이 상점 능력 번호 3 을 못 말해 무지개를 아예 못 받고, 무지개 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.Expression.allCases.count == 2, "표정이 둘(neutral·negative)이 아니다")
         var comparedWithMac = 0
         for id in AingCharacterArt.knownIDs {
@@ -43,7 +45,7 @@ import Testing
                 comparedWithMac += 1
             }
         }
-        #expect(comparedWithMac == 16, "맥 원본과 대조한 초상이 16장이 아니다: \(comparedWithMac)장")
+        #expect(comparedWithMac == 18, "맥 원본과 대조한 초상이 18장이 아니다: \(comparedWithMac)장")
     }
 
     @Test("초상 id 목록은 앱 캐릭터 카드(MeCharacterCards)와 같고, 착용값 접기도 같다")

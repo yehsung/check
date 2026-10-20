@@ -116,6 +116,29 @@ struct V0361UpdatePrefetchTests {
         #expect(run.output.contains("최종 주소가 https 가 아닙니다"), "\(run.output)")
     }
 
+    // 크기는 **마지막 응답 블록**에서만 읽는다. 앞 블록(302)의 Content-Range 를 주워 쓰면 전체를 1바이트로 알고
+    // 1바이트짜리 OUT 을 "완전하다"고 돌려준다(DMG 는 검증에서, brew 는 지문에서 걸리지만 그건 우연이다).
+    @Test func pfetch_마지막_응답_블록에_Content_Range_가_없으면_앞_블록_값을_쓰지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_NO_FINAL_CR": "1"])
+
+        #expect(run.status != 0, "앞 블록의 Content-Range 를 썼다: \(run.output)")
+        #expect(lab.calls().filter { $0.hasPrefix("piece ") }.isEmpty, "\(lab.calls())")
+        #expect(lab.names(in: lab.out).isEmpty)
+        #expect(run.output.contains("Content-Range 가 없습니다"), "\(run.output)")
+    }
+
+    // `OUT.part` 를 만든 **뒤에** 실패하면(잇는 도중 디스크가 찬 경우) 반쪽 파일을 남기지 않는다.
+    @Test func pfetch_잇다가_실패하면_OUT_도_part_도_조각도_남지_않는다() throws {
+        let lab = try PrefetchLab(fixtureSize: 300_000)
+        let run = try lab.runPfetch(url: PrefetchLab.originURL, env: ["FAKE_CAT_FAIL": "1"])
+
+        #expect(run.status != 0, "잇기가 실패했는데 성공이라 했다: \(run.output)")
+        #expect(lab.names(in: lab.out).isEmpty, "반쪽 파일이 남았다: \(lab.names(in: lab.out))")
+        #expect(lab.names(in: lab.tmp).isEmpty, "임시 조각이 남았다: \(lab.names(in: lab.tmp))")
+        #expect(run.output.contains("조각을 잇지 못했습니다"), "\(run.output)")
+    }
+
     // 경계를 양쪽에서 잰다 — 8MB(8,388,608) 미만은 한 줄, 8MB 부터 8갈래. 머리 이름은 소문자(HTTP/2)로 대소문자 무시를 함께 잰다.
     @Test func pfetch_8MB_미만은_한_줄로_받고_8MB_부터_8갈래다() throws {
         for (size, parts) in [(8_388_607, 1), (8_388_608, 8)] {
@@ -438,7 +461,7 @@ private struct PrefetchLab {
         fixtureData = Self.bytes(fixtureSize, seed: UInt64(fixtureSize) &* 0x9E37_79B9_7F4A_7C15)
         try fixtureData.write(to: root.appendingPathComponent("fixture.bin"))
         fixtureSHA = sha256Hex(of: root.appendingPathComponent("fixture.bin"))
-        for (name, text) in [("curl", fakeCurl), ("brew", fakeBrew), ("open", fakeOpen)] {
+        for (name, text) in [("curl", fakeCurl), ("brew", fakeBrew), ("open", fakeOpen), ("cat", fakeCat)] {
             let url = root.appendingPathComponent("bin/\(name)")
             try text.write(to: url, atomically: true, encoding: .utf8)
             try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
@@ -606,7 +629,11 @@ private let fakeCurl = #"""
         printf '200 %s' "$final"
         exit 0
       fi
-      printf 'HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Range: bytes 0-0/1\r\n\r\nHTTP/2 206\r\n%s: bytes 0-0/%s\r\ncontent-length: 1\r\n\r\n' "$final" "${FAKE_CR_NAME:-Content-Range}" "$total" > "$hdr"
+      if [ -n "${FAKE_NO_FINAL_CR:-}" ]; then
+        printf 'HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Range: bytes 0-0/1\r\n\r\nHTTP/2 206\r\ncontent-length: 1\r\n\r\n' "$final" > "$hdr"
+      else
+        printf 'HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Range: bytes 0-0/1\r\n\r\nHTTP/2 206\r\n%s: bytes 0-0/%s\r\ncontent-length: 1\r\n\r\n' "$final" "${FAKE_CR_NAME:-Content-Range}" "$total" > "$hdr"
+      fi
       serve 0 1
       printf '206 %s' "$final"
       exit 0
@@ -655,6 +682,17 @@ private let fakeBrew = #"""
         exit "${FAKE_BREW_UPGRADE_RC:-0}" ;;
     esac
     exit 1
+    """#
+
+/// 가짜 cat — 평소엔 진짜 cat 그대로. FAKE_CAT_FAIL 이면 pfetch 의 조각(`…/aing-check-pfetch.*/p<n>`)을 이을 때 10바이트만
+/// 쓰고 1 로 죽는다(잇는 도중 디스크가 찬 경우). `OUT.part` 가 생긴 **뒤의** 실패 갈래를 재는 유일한 자리다.
+private let fakeCat = #"""
+    #!/bin/zsh
+    if [ -n "${FAKE_CAT_FAIL:-}" ] && [ $# -eq 1 ] && [[ "$1" == *aing-check-pfetch.*/p[0-9]* ]]; then
+      head -c 10 "$1"
+      exit 1
+    fi
+    exec /bin/cat "$@"
     """#
 
 /// 가짜 open — 적기만 한다(아무것도 띄우지 않는다).

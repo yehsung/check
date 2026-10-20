@@ -119,6 +119,7 @@ enum TetrisDuelText {
     static let incomingLinesTitle = "들어올 줄"
     static let ready = "준비 완료"
     static let notReady = "들어오는 중"
+    static let finishedPresence = "대결 끝"
     static let waitingTitle = "상대를 기다리는 중"
     static func waitingSubtitle(seconds: Int) -> String { "\(seconds)초 안에 둘 다 들어오면 시작해요" }
     static let waitingAction = "창을 열어 두세요"
@@ -1158,7 +1159,7 @@ private struct TetrisDuelOpponentColumn: View {
 }
 
 /// 상대 상태 한 줄 — 준비 · 연결 확인 중(잎 — 침묵 초를 읽는 것은 여기 TimelineView 뿐이다).
-private struct TetrisDuelOpponentPresence: View {
+struct TetrisDuelOpponentPresence: View {
     let store: TetrisDuelStore
     let board: TetrisDuelOpponentBoard
     let isFinished: Bool
@@ -1169,11 +1170,19 @@ private struct TetrisDuelOpponentPresence: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1, paused: !store.isWindowVisible || isFinished)) { _ in
             let silent = !isFinished && board.ready && (store.opponentSilenceSeconds() ?? 0) >= Self.silenceHintSeconds
-            Text(silent ? TetrisDuelText.opponentSilent : (board.ready ? TetrisDuelText.ready : TetrisDuelText.notReady))
+            Text(silent ? TetrisDuelText.opponentSilent : Self.label(board: board, phase: store.phase, isFinished: isFinished))
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(silent ? CheckTheme.pending : CheckTheme.secondaryText)
                 .lineLimit(1)
         }
+    }
+
+    /// "준비 완료" 는 판이 서기 전까지만 — 판 중·끝난 뒤에도 남으면 상대가 아직 안 들어온 것처럼 읽힌다.
+    static func label(board: TetrisDuelOpponentBoard, phase: TetrisDuelPhase, isFinished: Bool) -> String {
+        if board.toppedOut { return TetrisDuelText.toppedOutTitle }
+        if !board.ready { return TetrisDuelText.notReady }
+        if isFinished { return TetrisDuelText.finishedPresence }
+        return phase == .playing ? TetrisDuelText.playingNow : TetrisDuelText.ready
     }
 }
 

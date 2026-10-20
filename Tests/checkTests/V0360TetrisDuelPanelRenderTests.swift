@@ -534,3 +534,25 @@ struct TetrisDuelPanelRenderTests {
         #expect(green > 200, "머리글에 1:1 입구 묶음이 안 보인다")
     }
 }
+
+// MARK: - 상대 상태 한 줄
+
+/// "준비 완료" 는 판이 서기 전까지만이다 — 판 중·끝난 뒤에도 남으면 상대가 아직 안 들어온 것처럼 읽힌다(0.3.60 스틸에서 잡았다).
+@MainActor
+@Test("상대 상태 줄 — 준비 완료는 판 전까지만, 판 중엔 대결 중, 탑아웃·끝은 따로")
+func tetrisDuelOpponentPresenceFollowsPhase() {
+    func board(ready: Bool, toppedOut: Bool = false) -> TetrisDuelOpponentBoard {
+        TetrisDuelOpponentBoard(cells: TetrisDuelOpponentBoard.emptyCells, hasBoard: ready, lines: 0, attackSent: 0,
+                                pending: 0, toppedOut: toppedOut, ready: ready)
+    }
+    let label = TetrisDuelOpponentPresence.label
+    #expect(label(board(ready: false), .ready, false) == "들어오는 중")
+    #expect(label(board(ready: true), .ready, false) == "준비 완료")
+    #expect(label(board(ready: true), .countdown, false) == "준비 완료")
+    #expect(label(board(ready: true), .playing, false) == "대결 중")
+    #expect(label(board(ready: true, toppedOut: true), .playing, false) == "꼭대기에 닿았어요")
+    #expect(label(board(ready: true, toppedOut: true), .finished, true) == "꼭대기에 닿았어요")
+    #expect(label(board(ready: true), .finished, true) == "대결 끝")
+    // no_show: 상대가 끝내 안 들어왔으면 끝난 뒤에도 "들어오는 중" 이 아니라… 준비 안 한 사실이 남는다.
+    #expect(label(board(ready: false), .finished, true) == "들어오는 중")
+}

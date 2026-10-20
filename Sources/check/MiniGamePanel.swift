@@ -318,11 +318,14 @@ enum MiniGameSpaceKey {
     /// 컨트롤러를 찾다 못 찾고 "등록이 빠졌다"로 읽는다.
     /// v0.3.54: 캐릭터 뽑기 창이 더해져 **넷**이다. 그 창은 글을 받지 않지만 [한 번 더]·[닫기]·"확률 보기" 가 키보드로도 눌린다
     /// (전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 그 단추를 스페이스로 누를 때 게임이 삼킨다.
+    /// v0.3.60: 1:1 테트리스 창이 더해져 **다섯**이다. 그 창의 스페이스는 **하드드롭**이라, 등록이 빠지면 미니게임 창을 띄워 둔 채
+    /// 대결 창에서 누른 스페이스를 미니게임 모니터가 먼저 삼킨다 — 루비가 걸린 판에서 조각이 안 떨어진다.
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
          CheckSettingsWindowController.frameAutosaveName,
-         CheckGachaWindowController.frameAutosaveName]
+         CheckGachaWindowController.frameAutosaveName,
+         CheckTetrisDuelWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -569,7 +572,8 @@ struct CheckMiniGameWindowView: View {
             onSelect: { store.selectMiniGame($0) },
             onPause: { togglePause() },
             onGomoku: { store.openGomokuFromMiniGame() },
-            onChess: { store.openChessFromMiniGame() }
+            onChess: { store.openChessFromMiniGame() },
+            onTetrisDuel: { store.openTetrisDuelFromMiniGame() }
         )
     }
 
@@ -1079,6 +1083,8 @@ struct MiniGameGameHeader: View {
     let onPause: () -> Void
     let onGomoku: () -> Void
     let onChess: () -> Void
+    /// [1:1 테트리스] 입구(v0.3.60). **기본값이 있는 채로 맨 끝** — 머리글을 부르는 기존 호출부(테스트 여섯 곳)가 그대로 산다.
+    var onTetrisDuel: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1116,8 +1122,17 @@ struct MiniGameGameHeader: View {
                 //   그 경계를 그 시험이 숫자로 지킨다(아이콘 전용으로 접는 길은 `showsTitle: false` 로 열어 뒀다).
                 //   이름을 떼지 않은 이유: 이 버튼은 '다른 창을 여는 문' 이라 아이콘만으로는 어디로 가는지
                 //   읽히지 않고, 종류 칩과 달리 **고른 상태가 없어** "지금 있는 자리" 라는 단서도 없다.
-                MiniGameGomokuEntryButton { onGomoku() }
-                MiniGameChessEntryButton { onChess() }
+                //
+                // ★ v0.3.60 — 문이 **셋**(오목 · 체스 · 테트리스)이 되며 예산을 다시 쟀다. 위 경계 그대로 이름 단 캡슐 셋은
+                //   344pt 를 넘는다(`theHeaderFitsInThreeHundredFortyFour` 가 그 대조군을 잰다). 그래서 **"1:1" 을 한 번만**
+                //   말하는 묶음 캡슐 하나(`MiniGameDuelEntryGroup`)로 접었다: [1:1 | 오목 | 체스 | 테트리스]. 이름은 셋 다 남는다
+                //   (아이콘 전용으로 접지 않은 이유는 위와 같다) — 반복되던 "1:1 " 접두와 아이콘 셋만 빠진다.
+                //   각 문은 여전히 **자기 버튼**이고(말풍선 · 보이스오버 이름 · 탭이 따로) 묶음은 그리기만 바꾼다(환경값).
+                MiniGameDuelEntryGroup {
+                    MiniGameGomokuEntryButton { onGomoku() }
+                    MiniGameChessEntryButton { onChess() }
+                    MiniGameTetrisDuelEntryButton { onTetrisDuel() }
+                }
             }
         }
     }
@@ -1207,10 +1222,13 @@ struct MiniGameGomokuEntryButton: View {
     @State private var hovering = false
 
     var body: some View {
-        MiniGameEntryCapsule(title: Self.title, icon: Self.icon, help: Self.help,
+        MiniGameEntryCapsule(title: Self.title, icon: Self.icon, help: Self.help, segmentTitle: Self.segmentTitle,
                              showsTitle: showsTitle, hovering: hovering, action: action)
             .onHover { hovering = $0 }
     }
+
+    /// 묶음 캡슐 안에서 쓰는 짧은 이름("1:1" 은 묶음이 한 번만 말한다).
+    static let segmentTitle = "오목"
 }
 
 /// 헤더의 [1:1 체스] 입구(v0.3.44). 오목 입구와 **같은 초록 캡슐**이다 — 색의 뜻이 "이 창의 게임"(파랑 칩)이
@@ -1229,8 +1247,71 @@ struct MiniGameChessEntryButton: View {
     var body: some View {
         // 아이콘 이름은 이 맥에서 실제로 풀리는 것만 쓴다(없으면 아무것도 안 그려 자리만 빈다 — ChessEntryIcon).
         MiniGameEntryCapsule(title: Self.title, icon: ChessEntryIcon.resolved, help: Self.help,
+                             segmentTitle: Self.segmentTitle,
                              showsTitle: showsTitle, hovering: hovering, action: action)
             .onHover { hovering = $0 }
+    }
+
+    static let segmentTitle = "체스"
+}
+
+/// 헤더의 [1:1 테트리스] 입구(v0.3.60). 오목·체스 입구와 **같은 부품**이다. 아이콘은 두 판이 나란히 선 그림
+/// (`TetrisDuelEntryIcon`) — 이 창의 솔로 테트리스 칩(`square.grid.2x2.fill`)과 갈린다. 렌더 테스트가 단독으로 잰다(internal).
+struct MiniGameTetrisDuelEntryButton: View {
+    static let title = "1:1 테트리스"
+    static let segmentTitle = "테트리스"
+    static let help = "공격형 1:1 테트리스 대결 창을 열어요"
+
+    var showsTitle: Bool = true
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        MiniGameEntryCapsule(title: Self.title, icon: TetrisDuelEntryIcon.resolved, help: Self.help,
+                             segmentTitle: Self.segmentTitle,
+                             showsTitle: showsTitle, hovering: hovering, action: action)
+            .onHover { hovering = $0 }
+    }
+}
+
+/// 묶음 안에서는 입구가 **조각(세그먼트)** 으로 그려진다는 표시(환경값). 입구 버튼의 호출 모양은 그대로 둔 채
+/// 그리기만 바꾸려고 둔 문이다 — 버튼마다 인자를 하나씩 더하면 세 입구의 호출부가 갈린다.
+private struct MiniGameDuelEntryCompactKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    fileprivate var miniGameDuelEntryCompact: Bool {
+        get { self[MiniGameDuelEntryCompactKey.self] }
+        set { self[MiniGameDuelEntryCompactKey.self] = newValue }
+    }
+}
+
+/// 1:1 대결 입구 **묶음**(v0.3.60): 초록 캡슐 하나에 "1:1" 머리 + 문 조각들. 렌더 테스트가 단독으로 폭을 잰다(internal).
+///
+/// 왜 묶음인가: 문이 셋이 되자 이름 단 캡슐 셋이 344pt 를 넘었다(머리글 실측은 V0338 의 헤더 시험이 출력한다).
+/// "1:1 오목 · 1:1 체스 · 1:1 테트리스" 에서 겹치는 것은 "1:1 " 과 캡슐 테두리뿐이라, 그것을 한 번만 그리면 이름 셋이
+/// 그대로 들어간다. 색은 입구와 같은 초록이다(뜻: "다른 창으로 가는 1:1 대결 문").
+struct MiniGameDuelEntryGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Text("1:1")
+                .font(.caption2.weight(.heavy))
+                .foregroundStyle(CheckTheme.working.opacity(0.75))
+                .padding(.leading, 9)
+                .padding(.trailing, 3)
+                .accessibilityHidden(true)
+            content
+        }
+        .padding(.trailing, 3)
+        .frame(height: 26)
+        .background(Capsule().fill(CheckTheme.working.opacity(0.14)))
+        .overlay(Capsule().stroke(CheckTheme.working.opacity(0.45), lineWidth: 1))
+        .environment(\.miniGameDuelEntryCompact, true)
+        .fixedSize()
     }
 }
 
@@ -1240,11 +1321,40 @@ private struct MiniGameEntryCapsule: View {
     let title: String
     let icon: String
     let help: String
+    /// 묶음(`MiniGameDuelEntryGroup`) 안에서 쓰는 짧은 이름.
+    let segmentTitle: String
     let showsTitle: Bool
     let hovering: Bool
     let action: () -> Void
 
+    @Environment(\.miniGameDuelEntryCompact) private var compact
+
     var body: some View {
+        if compact {
+            segment
+        } else {
+            capsule
+        }
+    }
+
+    /// 묶음 안의 조각 — 캡슐 테두리는 묶음이 한 번 그리고, 조각은 글자와 호버 바탕만 그린다.
+    private var segment: some View {
+        Button(action: action) {
+            Text(segmentTitle)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.working)
+                .padding(.horizontal, 6)
+                .frame(height: 20)
+                .background(Capsule().fill(CheckTheme.working.opacity(hovering ? 0.24 : 0)))
+                .contentShape(Capsule())
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .checkTooltip(help)
+    }
+
+    private var capsule: some View {
         Button(action: action) {
             Group {
                 if showsTitle {

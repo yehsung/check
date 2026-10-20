@@ -27,6 +27,9 @@ import Testing
 // `chess__settle(…, 'abandoned')` 로 닫는 절을 더한다. 아래 §① 의 `deleteAccountLaterRedefinitionsAllowed` 가 그 덮어쓰기를
 // 허용하면서 **근거(체스 정산)와 이 파일이 지키던 것(오목 기권 정산 · 판돈 잠금 · 신원 게이트)이 그 본문에 남아 있는지**
 // 를 잰다. 나머지 절(②~⑤)은 여전히 정본 20260918120000 의 본문을 읽는다.
+//
+// 2026-10-21(0.3.60): `20261021120000_tetris_duel.sql` §7A.2 가 한 번 더 다시 만든다 — 진행 중 테트리스 판을
+// `tetris__settle(…, 'abandoned')` 로 닫는 절과 세 게임 상대의 지갑 키를 한 번에 정렬해 잡는 모으기를 더했다. 같은 표에 등록했다.
 
 // MARK: - 마이그레이션 찾기
 
@@ -175,6 +178,42 @@ private let deleteAccountLaterRedefinitionsAllowed:
             ],
             // 토큰이 **있다**는 것만으로는 순서가 안 잡힌다 — 정산은 auth.users 삭제보다 앞이어야 한다.
             ["perform public.gomoku__settle(", "perform public.chess__settle("]
+        ),
+        // 2026-10-21 테트리스(20261021120000 §7A.2)가 왜 덮어썼는가: `tetris_matches.challenger/opponent` 도 auth.users 에
+        // on delete cascade 라, 진행 중 테트리스 판을 먼저 닫지 않으면 수락 순간 양쪽에서 빠진 판돈
+        // (`spend:tetris:stake:<판>`)이 체스 때와 똑같이 소각된다. 떠나는 사람 패 'abandoned' → 남는 사람이
+        // 2×판돈 − duel_fee 를 받는다(수수료는 tetris__settle 이 뗀다). 지갑 키는 세 게임의 상대를 **한 번의 정렬**로 잡고,
+        // 잡은 뒤 판 참가자를 다시 모아 빠진 키는 try 로만 잡는다(못 잡으면 정산 전에 40001 — 리뷰 R1 의 교착 수리).
+        // 이 파일이 체인의 **마지막 정의**이므로 체스 절(20261005160000 이 더한 것)도 여기서 다시 잰다.
+        "20261021120000_tetris_duel.sql:delete_my_account": (
+            "테트리스 판을 닫는다 — 진행 중 판을 abandoned 로 정산해야 상대 판돈이 소각되지 않는다(tetris_duel §7A.2) · 지갑 키는 한 번의 정렬",
+            [
+                // ㉠ 덮어쓴 이유 — 테트리스 판 정산과 그 상대의 지갑 키.
+                // 테트리스 상대는 **정렬해서 기다리는** 키 집합(v_keys)에 있어야 한다. 뒤의 다시 모으기(v_late)도 같은
+                // union 을 쓰므로 `… ) k` 까지만 재면 정렬 집합에서 테트리스를 빼도 초록이다(뮤턴트 m6 실측) — 그래서
+                // 그 집합을 닫고 곧바로 기다리는 잠금으로 들어가는 자리까지 함께 잰다.
+                "union select unnest(array[g.challenger, g.opponent]) from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent)) k; foreach v_key in array v_keys loop perform pg_advisory_xact_lock(",
+                "for v_tmatch in select g.id, g.challenger from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent) order by g.id loop",
+                "perform public.tetris__settle(v_tmatch.id, case when v_tmatch.challenger = v_uid then 'opponent_win' else 'challenger_win' end, 'abandoned');",
+                "if exists (select 1 from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent)) then raise exception",
+                // 잠금 뒤 다시 모은 늦은 키는 기다리지 않는다(정렬 밖에서 기다리면 40P01) — 못 잡으면 정산 전에 재시도 코드로 멈춘다.
+                "if not pg_try_advisory_xact_lock(hashtext('ultra_wallet:' || v_key::text)) then raise exception",
+                "using errcode = '40001';",
+                // 체스 절(20261005160000)은 그대로 — 베껴 쓰다 빠뜨리면 체스 판돈 소각 P0 이 돌아온다.
+                "from public.chess_matches g where g.status = 'active' and v_uid in (g.white, g.black)",
+                "perform public.chess__settle(v_cmatch.id, case when v_cmatch.white = v_uid then 'black_win' else 'white_win' end, 'abandoned');",
+                "if exists (select 1 from public.chess_matches g where g.status = 'active' and v_uid in (g.white, g.black)) then raise exception",
+                // ㉡ 원래 이 파일(20260918120000)이 지키던 것.
+                "perform public.gomoku__settle(v_match.id, case when v_match.black = v_uid then 'white_win' else 'black_win' end, 'resign');",
+                "if exists (select 1 from public.gomoku_matches g where g.status = 'active' and v_uid in (g.black, g.white)) then raise exception",
+                "perform pg_advisory_xact_lock(hashtext('ultra_wallet:' || v_key::text));",
+                "order by k.uid",
+                "v_uid uuid := auth.uid();",
+                "raise exception 'authentication required' using errcode = '28000';",
+                "delete from auth.users where id = v_uid;",
+                "delete from public.teams t where t.id = any(v_teams) and not exists (select 1 from public.memberships m where m.team_id = t.id);",
+            ],
+            ["perform public.gomoku__settle(", "perform public.chess__settle(", "perform public.tetris__settle("]
         ),
     ]
 

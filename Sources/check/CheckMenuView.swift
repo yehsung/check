@@ -38,6 +38,8 @@ struct CheckMenuView: View {
     var previewGomokuInvite: GomokuInvite? = nil
     /// 스냅샷 전용: 받은 **체스** 신청 배너(v0.3.44)를 강제로 그린다. 앱에서는 store.chess.visibleIncoming 로만 결정.
     var previewChessInvite: ChessInvite? = nil
+    /// 스냅샷 전용: 받은 **테트리스** 신청 배너(v0.3.60)를 강제로 그린다. 앱에서는 store.tetris.visibleIncoming 로만 결정.
+    var previewTetrisInvite: TetrisDuelInvite? = nil
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -67,6 +69,9 @@ struct CheckMenuView: View {
         /// 둔다(둘이 동시에 올 수 있고, 그때는 먼저 선 오목이 이기고 체스는 다음 팝오버로 밀린다. 신청은 서버에
         /// 남아 있어 밀려도 체스 창 로비에서 다시 보인다).
         case chessInvite
+        /// 받은 **테트리스** 대결 신청(v0.3.60). 체스 신청과 같은 급함(TTL 60초 · 판돈 루비)이라 체스 바로 뒤다 —
+        /// 둘이 동시에 오면 먼저 선 쪽이 이기고 테트리스는 다음 팝오버로 밀린다(신청은 서버에 남아 창 로비에서 다시 보인다).
+        case tetrisInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -95,6 +100,8 @@ struct CheckMenuView: View {
     static let gomokuInviteBannerHeight: CGFloat = 92
     /// 받은 체스 신청 배너(v0.3.44). `ChessInviteBanner` 는 오목 배너와 **같은 모양**이라 높이도 같다.
     static let chessInviteBannerHeight: CGFloat = 92
+    /// 받은 테트리스 신청 배너(v0.3.60). `TetrisDuelInviteBanner` 는 체스 배너와 **같은 모양**이라 높이도 같다.
+    static let tetrisInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
@@ -198,6 +205,46 @@ struct CheckMenuView: View {
         }
     }
 
+    /// 팝오버에 띄울 받은 **테트리스** 신청(없으면 nil). 체스와 같은 규약: **스토어가 만료 판정을 끝낸 결과만** 읽는다.
+    private var tetrisBannerInvite: TetrisDuelInvite? {
+        previewTetrisInvite ?? store.tetris.visibleIncoming
+    }
+
+    /// 배너 [수락]: 서버 수락 → 테트리스 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 닫기는 이 한 곳에서만).
+    private func acceptTetrisInvite(_ invite: TetrisDuelInvite) {
+        let tetris = store.tetris
+        Task { @MainActor in
+            await tetris.respond(inviteID: invite.id, accept: true)
+            tetris.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineTetrisInvite(_ invite: TetrisDuelInvite) {
+        let tetris = store.tetris
+        Task { @MainActor in
+            await tetris.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    private func openTetrisInvite(_ invite: TetrisDuelInvite) {
+        store.tetris.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 테트리스 신청 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var tetrisInviteBanner: some View {
+        if topBanner == .tetrisInvite, let invite = tetrisBannerInvite {
+            TetrisDuelInviteBanner(
+                invite: invite,
+                onAccept: { acceptTetrisInvite(invite) },
+                onDecline: { declineTetrisInvite(invite) },
+                onOpen: { openTetrisInvite(invite) }
+            )
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -217,6 +264,7 @@ struct CheckMenuView: View {
         if isMainScreen, showsLongSessionBanner { return .longSession }
         if store.isSignedIn, gomokuBannerInvite != nil { return .gomokuInvite }
         if store.isSignedIn, chessBannerInvite != nil { return .chessInvite }
+        if store.isSignedIn, tetrisBannerInvite != nil { return .tetrisInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -233,6 +281,7 @@ struct CheckMenuView: View {
         case .longSession: return Self.longSessionBannerHeight
         case .gomokuInvite: return Self.gomokuInviteBannerHeight
         case .chessInvite: return Self.chessInviteBannerHeight
+        case .tetrisInvite: return Self.tetrisInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -470,6 +519,7 @@ struct CheckMenuView: View {
                     // 무소속이어도 오목 신청은 온다(앱 사용자 전체가 상대다). 헤더 카드가 없는 화면이라 맨 위에 선다.
                     gomokuInviteBanner
                     chessInviteBanner
+                    tetrisInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -496,6 +546,8 @@ struct CheckMenuView: View {
                     // 받은 체스 신청도 **같은 자리**에 선다(v0.3.44). 체스 폴링은 창이 보일 때만 돌고 창을 여는 길은
                     // 미니게임 머리글 하나뿐이라, 팝오버를 연 사람에게는 이 배너가 신청을 보는 유일한 자리다.
                     chessInviteBanner
+                    // 받은 테트리스 신청도 **같은 자리**(v0.3.60 — 체스와 같은 사정).
+                    tetrisInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -1143,11 +1195,14 @@ struct MenuBarStatusLabel: View {
     /// 팝오버 배너·캐릭터 말풍선뿐이다. **맨 뒤에 선언**한다(멤버와이즈 인자 순서 — 기존 호출부 보호).
     var hasChessInvite: Bool = false
 
+    /// 받은 **테트리스** 신청이 있다(v0.3.60). 체스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다.
+    var hasTetrisInvite: Bool = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
-            openReports: hasOpenReports, chessInvite: hasChessInvite
+            openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite
         )
     }
 
@@ -1276,13 +1331,18 @@ struct MenuBarDotReasons: Equatable, Sendable {
     /// 기존 호출 `MenuBarDotReasons(unreadMessages:gomokuInvite:updateAvailable:openReports:)` 이 컴파일되지 않는다.
     /// 말하는 순서는 선언 순서와 무관하다(아래 `accessibilityDescription` 이 정한다).
     var chessInvite: Bool = false
+    /// 받은 테트리스 신청이 있다(v0.3.60). 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var tetrisInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
     static let chessInviteText = "체스 신청"
+    static let tetrisInviteText = "테트리스 신청"
     static let openReportsText = "처리할 신고"
 
-    var isEmpty: Bool { !unreadMessages && !gomokuInvite && !chessInvite && !updateAvailable && !openReports }
+    var isEmpty: Bool {
+        !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !updateAvailable && !openReports
+    }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
     var accessibilityDescription: String? {
@@ -1291,6 +1351,8 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if gomokuInvite { parts.append(Self.gomokuInviteText) }
         // 체스 신청은 오목 신청과 같은 급함(TTL 60초 · 판돈)이라 바로 뒤다.
         if chessInvite { parts.append(Self.chessInviteText) }
+        // 테트리스 신청도 같은 급함이라 체스 바로 뒤다.
+        if tetrisInvite { parts.append(Self.tetrisInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }

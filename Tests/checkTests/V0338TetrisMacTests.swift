@@ -420,14 +420,15 @@ func theGhostIsFaintButVisible() {
 // MARK: - 헤더 실측 폭
 
 @MainActor
-@Test("헤더 실측: 칩 셋 + [일시정지] / 입구 둘이 344pt 안에 든다(고른 칩만 이름 · 입구는 아이콘 전용)")
+@Test("헤더 실측: 칩 셋 + [일시정지] / 1:1 입구 묶음(오목·체스·테트리스)이 344pt 안에 든다 · 캡슐 셋이면 넘친다")
 func theHeaderFitsInThreeHundredFortyFour() throws {
     let budget = MiniGameWindowLayout.canvasSize.width
     for (label, playing, frozen) in [("판이 도는 중(일시정지 버튼)", true, false),
-                                     ("정지·시작 전(오목·체스 입구 둘)", false, false),
-                                     ("정지 카드(칩 잠금 해제 + 입구 둘)", true, true)] {
+                                     ("정지·시작 전(1:1 입구 묶음)", false, false),
+                                     ("정지 카드(칩 잠금 해제 + 1:1 입구 묶음)", true, true)] {
         let header = MiniGameGameHeader(selected: .flappy, isPlaying: playing, isFrozen: frozen,
-                                        onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {})
+                                        onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {},
+                                        onTetrisDuel: {})
         let width = try tmNaturalWidth(header)
         print("[헤더] \(label): \(String(format: "%.1f", width))pt / \(budget)pt")
         #expect(width <= budget, "\(label) 에서 헤더가 \(width)pt 라 344 를 넘는다")
@@ -439,30 +440,48 @@ func theHeaderFitsInThreeHundredFortyFour() throws {
     print("[헤더] 이름 셋 전부: \(String(format: "%.1f", allTitles))pt (아이콘 전용 \(String(format: "%.1f", iconOnly))pt)")
     #expect(allTitles > iconOnly + 40, "이름을 다 달아도 폭이 안 늘었다 — showsTitle 이 그림을 안 바꾼다")
 
-    // ★ v0.3.44 — 입구가 **둘**이 되며 예산이 빠듯해졌다. 두 사실을 숫자로 못 박는다:
-    //   ① 지금 배치(이름 둘)가 실제로 들어간다 — 위 세 갈래가 이미 잰다(정지·시작 전 = 입구 둘).
-    //   ② **문을 하나만 더 달면 넘친다.** 이 단언이 없으면 "들어간다"는 넉넉한 헤더에서도 참이라
-    //      예산이 언제 깨지는지 아무도 모른다(기준선이 갈려야 한다).
+    // ★ v0.3.44 — 입구가 **둘**이 되며 예산이 빠듯해졌다(이름 둘 머리글 330.5pt · 여유 13.5pt).
+    // ★ v0.3.60 — 문이 **셋**(오목 · 체스 · 테트리스)이 됐다. 그래서 다시 쟀고 사실 셋을 숫자로 못 박는다:
+    //   ① **옛 배치 그대로(이름 단 캡슐 셋)는 넘친다** — 그래서 배치를 바꿨다는 근거다. 이 단언이 없으면 묶음으로 접은 이유가
+    //      숫자 없이 남고, 다음 사람이 캡슐 셋으로 되돌려도 아무도 모른다(기준선이 갈려야 한다).
+    //   ② 지금 배치(묶음 캡슐 하나 — [1:1 | 오목 | 체스 | 테트리스])는 들어간다 — 위 세 갈래가 이미 잰다(정지·시작 전 = 묶음).
+    //   ③ 묶음은 이름을 셋 다 단 채로 아이콘 전용 캡슐 셋과 맞먹는 폭이다(이름을 지키면서 아낀 폭이 실제로 있다).
     let titledEntries = try tmNaturalWidth(tmEntriesRow(showsTitle: true))
     let iconEntries = try tmNaturalWidth(tmEntriesRow(showsTitle: false))
+    let group = try tmNaturalWidth(tmEntriesGroup())
     let entriesHeader = try tmNaturalWidth(
         MiniGameGameHeader(selected: .flappy, isPlaying: false, isFrozen: false,
-                           onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}))
-    let oneEntry = (titledEntries - 6) / 2
-    print("[입구] 이름 둘 \(String(format: "%.1f", titledEntries))pt · 아이콘 둘 \(String(format: "%.1f", iconEntries))pt"
-          + " · 입구 둘 머리글 \(String(format: "%.1f", entriesHeader))pt (여유 \(String(format: "%.1f", budget - entriesHeader))pt)")
-    #expect(iconEntries < titledEntries - 60, "아이콘 전용 입구가 이름 달린 입구와 폭이 비슷하다 — showsTitle 이 그림을 안 바꾼다")
-    #expect(entriesHeader <= budget, "입구 둘에 이름을 달면 \(entriesHeader)pt 라 344 를 넘는다")
-    #expect(entriesHeader + 6 + oneEntry > budget,
-            "문을 하나 더 달아도 \(entriesHeader + 6 + oneEntry)pt 라 들어간다 — 이 예산 시험이 아무 경계도 안 지킨다")
+                           onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}, onTetrisDuel: {}))
+    // 옛 배치의 머리글 폭 = 지금 머리글에서 묶음을 빼고 캡슐 셋을 넣은 값(칩·Spacer 최소·간격은 그대로다).
+    let oldStyleHeader = entriesHeader - group + titledEntries
+    print("[입구] 이름 캡슐 셋 \(String(format: "%.1f", titledEntries))pt · 아이콘 캡슐 셋 \(String(format: "%.1f", iconEntries))pt"
+          + " · 묶음 \(String(format: "%.1f", group))pt")
+    print("[입구] 묶음 머리글 \(String(format: "%.1f", entriesHeader))pt (여유 \(String(format: "%.1f", budget - entriesHeader))pt)"
+          + " · 캡슐 셋이었다면 \(String(format: "%.1f", oldStyleHeader))pt")
+    #expect(iconEntries < titledEntries - 90, "아이콘 전용 입구가 이름 달린 입구와 폭이 비슷하다 — showsTitle 이 그림을 안 바꾼다")
+    #expect(oldStyleHeader > budget,
+            "이름 단 캡슐 셋이 \(oldStyleHeader)pt 라 들어간다 — 묶음으로 접은 근거가 사라졌다(캡슐로 되돌려도 된다)")
+    #expect(entriesHeader <= budget, "묶음 입구 머리글이 \(entriesHeader)pt 라 344 를 넘는다")
+    #expect(group < titledEntries - 60, "묶음이 캡슐 셋보다 별로 안 좁다(\(group) vs \(titledEntries))")
 }
 
-/// 헤더 오른쪽의 입구 둘만 떼어 잰다(칩·Spacer 를 뺀 순수 입구 폭).
+/// 헤더 오른쪽의 입구 셋을 **캡슐로** 떼어 잰다(칩·Spacer 를 뺀 순수 입구 폭 — 옛 배치의 대조군).
 @MainActor
 private func tmEntriesRow(showsTitle: Bool) -> some View {
     HStack(spacing: 6) {
         MiniGameGomokuEntryButton(showsTitle: showsTitle) {}
         MiniGameChessEntryButton(showsTitle: showsTitle) {}
+        MiniGameTetrisDuelEntryButton(showsTitle: showsTitle) {}
+    }
+}
+
+/// 지금 배치 — 묶음 캡슐 하나(머리글이 그리는 그것과 같은 부품).
+@MainActor
+private func tmEntriesGroup() -> some View {
+    MiniGameDuelEntryGroup {
+        MiniGameGomokuEntryButton {}
+        MiniGameChessEntryButton {}
+        MiniGameTetrisDuelEntryButton {}
     }
 }
 

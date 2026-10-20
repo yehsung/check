@@ -229,7 +229,10 @@ struct V0351MASPackagingTests {
         func isExecutableLookup(_ path: String) -> Bool {
             path.split(separator: "/").contains("bin") || path.hasPrefix(".nvm/")
         }
-        let read = derived.filter { !isExecutableLookup($0) }
+        // 경로가 아닌데 `let x = ".…"` 모양이라 뽑히는 글자값 — 이름을 박아 하나씩만 뺀다(새 진짜 경로는 여전히 빨갛다).
+        // `.IJLOSTZG` = 1:1 테트리스 200글자 판의 칸 알파벳(TetrisDuelBoard.alphabet, 0.3.60) — 파일을 읽지 않는다.
+        let notPaths: Set<String> = [".IJLOSTZG"]
+        let read = derived.filter { !isExecutableLookup($0) && !notPaths.contains($0) }
         for path in read.sorted() {
             #expect(covered(path), "코드가 ~/\(path) 를 읽는데 덮는 읽기 전용 예외가 없다 — 샌드박스에서 소리 없이 0 이 된다. packaging/mas.entitlements 와 심사 설명을 같이 고친다")
         }

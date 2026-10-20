@@ -190,6 +190,11 @@ extension WorkTimerStore {
             // 체스도 같다(v0.3.44) — 뚜껑을 닫아 둔 사이에 온 신청은 TTL 60초이고 진행 중 판은 시간이 흐른다.
             chess.systemDidWake()
         }
+        // 테트리스(v0.3.60)도 같은 게이트다. 위 중괄호에 넣지 않고 따로 두는 까닭은 소스 계약(V0327GomokuRealtimeTests)이
+        // 오목·체스 두 줄의 중괄호를 글자 그대로 읽기 때문이다 — 뜻은 같다(조회뿐, 근무 게이트 없음).
+        if case .didWake = event, !realtime.transportAvailable {
+            tetris.systemDidWake()
+        }
     }
 
     /// full jitter 의 난수원. 링은 순수해야 하므로 난수는 **주입**이다.
@@ -231,6 +236,8 @@ extension WorkTimerStore {
                 // 체스도 같다(v0.3.44). 받은 신청은 TTL 60초이고 진행 중 판은 시간이 흐르므로, 조인 직후
                 // 한 번 따라잡지 않으면 소켓이 끊겼던 사이에 온 신청·수를 창을 열 때까지 모른다.
                 chess.realtimeDidJoin()
+                // 테트리스도 같다(v0.3.60) — 받은 신청은 TTL 60초이고, 진행 중 판의 정산·시작 시각도 이 한 번이 따라잡는다.
+                tetris.realtimeDidJoin()
             case .drain:
                 // 근무중 게이트를 지난 뒤에만 소비한다. 여기서 requestDrain 을 무조건 부르면
                 // 집 맥이 회사 맥의 찌르기를 훔친다(위 realtimeMayConsumePokes 주석).
@@ -255,6 +262,9 @@ extension WorkTimerStore {
             case .chessSignal:
                 // 체스 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
                 chess.handleSignal()
+            case .tetrisSignal:
+                // 테트리스 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
+                tetris.handleSignal()
             case .pushAccessToken(let token):
                 realtime.transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

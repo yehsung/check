@@ -209,6 +209,13 @@ package final class MobileRealtimeRunner {
                 // `.drain` 으로 떨어지지 않는 것**이다: 떨어지면 체스 초인종마다(블리츠 한 판 40수 = 왕복 80회)
                 // 폰이 소비할 것도 없는 `take_pokes` 를 한 번씩 더 부른다. 폰이 체스를 받으면 여기서 잇는다.
                 break
+            case .tetrisSignal:
+                // 1:1 테트리스(맥 0.3.60)도 폰 화면은 다음 폰 버전(1.0.11)이다. 체스 가지와 같은 이유로 **비워 두되 따로 둔다** —
+                // drain 으로 떨어지면 테트리스 초인종(판 중 공격마다 울린다)마다 메시지 활동 조회가 한 번씩 더 나간다.
+                // **1.0.11 에서 반드시 여기서 `TetrisDuelStore.handleSignal()` 로 잇는다** — 체스처럼 break 로 두면
+                // 맥 대 폰 판에서 폰만 방해 줄을 하트비트(1초)까지 늦게 받는다. 그 전엔 서버 `tetris_ios_min_build()` 가
+                // 도달 불가 값이라 폰에는 신청이 오지 않는다(1.0.11 승인 뒤 한 줄 마이그레이션으로 내린다).
+                break
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

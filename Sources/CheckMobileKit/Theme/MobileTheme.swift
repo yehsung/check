@@ -1,4 +1,5 @@
 #if os(iOS)
+import CheckCore
 import SwiftUI
 import UIKit
 
@@ -55,7 +56,48 @@ package enum MobileTheme {
     package static let bronze = color(MobileThemePalette.bronze)
     package static let crownInk = color(MobileThemePalette.crownInk)
 
-    // MARK: 그라디언트(뜻으로만 — '우리 팀' 게이지 · 로그인 버튼 · 나무판)
+    // MARK: 희귀 강조(뽑기 전용 내장 둘 — 황금 · 무지개)
+
+    /// 금빛 글자·기호(메달 `gold` 는 원 바탕 전용 — 글자로 쓰면 라이트에서 1.8:1 이다).
+    package static let goldText = color(MobileThemePalette.goldText)
+    /// 무지개 일곱 빛을 글자·테두리에 거는 칠(왼쪽 → 오른쪽 — 맥 `GachaPalette.rainbow` 와 같은 방향).
+    package static let rainbow = LinearGradient(colors: MobileThemePalette.rainbowStops.map(color),
+                                                startPoint: .leading, endPoint: .trailing)
+    /// 무지개 받침(결과 줄 바탕) — 같은 일곱 빛을 금 받침과 같은 세기로 깐다.
+    package static let rainbowTint = LinearGradient(
+        colors: MobileThemePalette.rainbowStops.map { color($0, opacity: MobileThemePalette.rareTintOpacity) },
+        startPoint: .leading, endPoint: .trailing)
+
+    /// 희귀 강조 칠(황금 = 금빛 글자색 · 무지개 = 일곱 빛 · 평범 = nil → 호출부가 제 기본색을 쓴다).
+    /// 맥 `GachaPalette.rare(_:)` 와 같은 갈림이고, 판정은 3D 마감과 한 곳(`CharacterManifest.Finish`)이다.
+    package static func rare(_ finish: CharacterManifest.Finish) -> AnyShapeStyle? {
+        switch finish {
+        case .gold: return AnyShapeStyle(goldText)
+        case .rainbow: return AnyShapeStyle(rainbow)
+        case .standard: return nil
+        }
+    }
+
+    /// 희귀면 그 칠, 아니면 `otherwise`(맥 `GachaPalette.ink(_:otherwise:)` 와 같은 모양).
+    package static func ink(_ finish: CharacterManifest.Finish, otherwise: Color) -> AnyShapeStyle {
+        rare(finish) ?? AnyShapeStyle(otherwise)
+    }
+
+    /// 희귀 받침(금빛 14% · 무지개 일곱 빛 14%). 평범은 nil.
+    package static func rareTint(_ finish: CharacterManifest.Finish) -> AnyShapeStyle? {
+        switch finish {
+        case .gold: return AnyShapeStyle(gold.opacity(MobileThemePalette.rareTintOpacity))
+        case .rainbow: return AnyShapeStyle(rainbowTint)
+        case .standard: return nil
+        }
+    }
+
+    /// 희귀 받침, 아니면 `otherwise`.
+    package static func tint(_ finish: CharacterManifest.Finish, otherwise: Color) -> AnyShapeStyle {
+        rareTint(finish) ?? AnyShapeStyle(otherwise)
+    }
+
+    // MARK: 그라디언트(뜻으로만 — '우리 팀' 게이지 · 로그인 버튼 · 나무판 · 희귀 강조의 무지개는 '희귀 강조' 절에)
     package static let gaugeGradient = LinearGradient(colors: MobileThemePalette.gaugeStops.map(fixed), startPoint: .leading, endPoint: .trailing)
     package static let startGradient = LinearGradient(colors: MobileThemePalette.startStops.map(fixed), startPoint: .topLeading, endPoint: .bottomTrailing)
     package static let woodGradient = LinearGradient(colors: MobileThemePalette.woodStops.map(fixed), startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -130,6 +172,11 @@ package enum MobileTheme {
 
     private static func fixed(_ rgb: MobileThemePalette.RGB) -> Color {
         Color(uiColor: ui(rgb))
+    }
+
+    /// 같은 토큰을 다른 불투명도로(희귀 받침 — 일곱 빛을 14% 로 깐다).
+    private static func color(_ pair: MobileThemePalette.Pair, opacity: Double) -> Color {
+        color(MobileThemePalette.Pair(light: pair.light.opacity(opacity), dark: pair.dark.opacity(opacity)))
     }
 
     /// UIKit 색(토큰 → 외관별). 시스템 부품(탭 막대 모양 등)에 넘길 때.

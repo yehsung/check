@@ -551,14 +551,33 @@ package enum MeText {
     /// 상점 카드의 마지막 결과 줄(보이스오버 앞말) — 기계를 닫은 뒤에도(공개 전에 닫았어도) 무엇을 뽑았는지 남긴다.
     package static let gachaLastResult = "방금 뽑은 결과"
 
-    /// 뽑기 전용 캐릭터를 얻는 길. 교환값을 알면(서버 `shard_costs`) "뽑기 또는 조각 N개", 모르면 코어의 "뽑기로만" 문장.
+    /// 뽑기 결과 줄(상점 카드)이 그리는 값 — 머리말 · 둘째 줄 · 희귀 마감. **문구는 코어 `GachaText` 그대로**다(같은 말을 두 곳에
+    /// 두지 않는다). 희귀 둘(황금 v0.3.54 · 무지개 v0.3.59)은 머리말이 "황금 아잉이!" · "무지개 아잉이!" 이고 둘째 줄이 **늘** 있다
+    /// (처음이면 "새 캐릭터: …" · 중복이면 "이미 있는 … → 조각 +1"). 평범한 캐릭터는 머리말 한 줄뿐이다.
+    ///
+    /// 왜 여기인가: 뷰(`MeGachaLastResultRow`)는 `#if os(iOS)` 라 macOS 스위트가 한 줄도 못 본다(저장소 메모 '폰 뷰는 맥 스위트가
+    /// 못 본다'). 머리말을 금으로 못 박는 결함(`goldHeadline`)은 **값으로** 잡혀야 하므로 판정을 플랫폼 무관한 이 자리에 두고,
+    /// 뷰는 이 값만 받아 칠한다(`MobileTheme.ink(_:otherwise:)` · `MobileTheme.tint(_:otherwise:)`).
+    package static func gachaResultLines(_ result: GachaPullResult, name: String)
+        -> (headline: String, detail: String?, finish: CharacterManifest.Finish) {
+        (GachaText.rareHeadline(result.kind) ?? GachaText.headline(for: result, name: name),
+         GachaText.detail(for: result, name: name),
+         CharacterManifest.Finish(characterID: result.characterID))
+    }
+
+    /// 확률 시트 한 줄을 강조하는가(이름 굵게 + 이름·확률을 희귀 빛깔로). **희귀 둘 다** 참이다 —
+    /// `isGold` 로 가르면 무지개가 평범한 줄이 된다(v0.3.59). 뷰가 가르는 그 값이 여기 있다.
+    package static func gachaOddsEmphasized(_ row: GachaOddsRow) -> Bool { row.finish.isRare }
+
+    /// 뽑기 전용 캐릭터(황금 · 무지개)를 얻는 길. 교환값을 알면(서버 `shard_costs`) "뽑기 또는 조각 N개", 모르면 코어의 "뽑기로만" 문장.
     /// 값은 서버가 준 것만 쓴다 — 교환값을 박아 두면 서버가 값을 바꾸는 날 화면이 거짓말을 한다.
     package static func gachaAcquirePhrase(shardCost: Int?) -> String {
         guard let shardCost, shardCost > 0 else { return GachaText.gachaOnlyHint }
         return "뽑기 또는 \(GachaText.shardCost(shardCost))로 얻을 수 있어요"
     }
 
-    /// 상점에서 뽑기 전용 타일을 눌렀을 때: "황금 아잉이는 뽑기 또는 조각 20개로 얻을 수 있어요".
+    /// 상점에서 뽑기 전용 타일을 눌렀을 때: "황금 아잉이는 뽑기 또는 조각 20개로 얻을 수 있어요"(무지개 아잉이도 같은 말 —
+    /// 이름·교환값을 받으므로 희귀가 늘어도 문구는 그대로다).
     package static func gachaOnlyNotice(_ name: String, shardCost: Int?) -> String {
         "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) \(gachaAcquirePhrase(shardCost: shardCost))"
     }
@@ -577,7 +596,7 @@ package enum MeText {
         return "\(GachaText.pullButton) · 조각 \(shardCost)"
     }
 
-    /// 타일 보이스오버: "황금 아잉이, 뽑기 또는 조각 20개로 얻을 수 있어요".
+    /// 타일 보이스오버: "황금 아잉이, 뽑기 또는 조각 20개로 얻을 수 있어요"(무지개 아잉이도 같은 꼴).
     package static func gachaTileAccessibility(name: String, shardCost: Int?) -> String {
         "\(name), \(gachaAcquirePhrase(shardCost: shardCost))"
     }

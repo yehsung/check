@@ -209,6 +209,11 @@ package final class MobileRealtimeRunner {
                 // `.drain` 으로 떨어지지 않는 것**이다: 떨어지면 체스 초인종마다(블리츠 한 판 40수 = 왕복 80회)
                 // 폰이 소비할 것도 없는 `take_pokes` 를 한 번씩 더 부른다. 폰이 체스를 받으면 여기서 잇는다.
                 break
+            case .tetrisSignal:
+                // 1:1 테트리스(맥 0.3.60)도 폰 화면은 다음 폰 버전(1.0.11)이다. 체스 가지와 같은 이유로 **비워 두되 따로 둔다** —
+                // drain 으로 떨어지면 테트리스 초인종(판 중 공격마다 울린다)마다 메시지 활동 조회가 한 번씩 더 나간다.
+                // 폰이 테트리스를 받으면 여기서 `TetrisDuelStore.handleSignal()` 로 잇는다.
+                break
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

@@ -109,6 +109,15 @@ package enum RealtimeLinkConstants {
     /// (신청·수락·거절·취소·착수·기권·무승부·정산마다 **두 사람 모두**에게 온다) 소비할 행이 없어 화면은
     /// 한 픽셀도 안 바뀐다 — 무료 플랜에서 요청만 태운다.
     package static let chessBroadcastEvent = "chess"
+
+    /// 1:1 테트리스 신호의 브로드캐스트 이벤트 이름(v0.3.60). 서버 `tetris__ring` 의
+    /// `realtime.send(…, 'tetris', poke_topic(…), true)` 와 **문자 그대로 같다**.
+    ///
+    /// 체스 가지와 **같은 이유로** 따로 둔다: 이 이름이 없으면 테트리스 초인종(신청·수락·준비 완료·공격 누계 증가·정산)이
+    /// '모르는 이름' 갈래로 떨어져 **울릴 때마다 `take_pokes` 가 한 번씩 더** 나간다. 테트리스는 판 중 공격마다 울리므로
+    /// 체스보다 잦다. (구버전 — 맥 ≤ 0.3.59 · 폰 ≤ 1.0.10 — 은 이 이름을 몰라 drain 한다. 같은 계정의 옛 기기만 해당하고
+    /// 서버가 하트비트마다 울리지 않는 것이 그 누수를 묶는 장치다 — 설계 D3.)
+    package static let tetrisBroadcastEvent = "tetris"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,6 +195,9 @@ package enum RealtimeEffect: Equatable, Sendable {
     /// 체스 신호('chess')를 받았다 → 체스 상태 재조회 1회(직렬화는 `ChessStore.handleSignal` 이 한다).
     /// **take_pokes 가 아니다** — 오목과 같은 사정이고, 체스는 블리츠라 그 낭비가 더 크다.
     case chessSignal
+    /// 테트리스 신호('tetris')를 받았다 → 테트리스 상태 재조회 1회(직렬화는 `TetrisDuelStore.handleSignal` 이 한다).
+    /// **take_pokes 가 아니다** — 오목·체스와 같은 사정이다. 폰은 1.0.11 전까지 이 가지를 **비워 둔다**(drain 으로 안 떨어지게).
+    case tetrisSignal
     /// 읽음 신호('message_read')를 받았다 → 메시지 활동 새로고침(요약 + 대화 패널이 보이면 이력) 1회.
     /// **take_pokes 가 아니다**(v0.3.30) — 읽음은 소비할 행을 만들지 않는다.
     case messageReadSignal
@@ -480,6 +492,10 @@ package struct RealtimeLink: Equatable, Sendable {
             // 경계가 **실제로 커질 때만** 보내는 이유다. 이 줄을 오목 줄 **앞**에 두는 것은 순서에 뜻이 있어서가 아니라
             // 오목 가지와 drain 기본값이 한 문장으로 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다.
             if event == RealtimeLinkConstants.messageReadBroadcastEvent { return [.messageReadSignal] }
+            // 테트리스(v0.3.60)는 오목 줄 **앞**에 선다 — 순서에 뜻이 있어서가 아니라 오목·체스 가지와 drain 기본값이 한 문장으로
+            // 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다. 이 줄이 없으면 테트리스 초인종이 아래
+            // 기본값으로 떨어져 **울릴 때마다 take_pokes 가 한 번씩 더** 나가고 소켓은 테트리스 상태를 한 번도 당기지 않는다.
+            if event == RealtimeLinkConstants.tetrisBroadcastEvent { return [.tetrisSignal] }
             if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] }
             // 체스(v0.3.44)도 같은 자리에 선다. 이 줄이 없으면 체스 초인종이 아래 기본값으로 떨어져
             // **수마다 take_pokes 가 한 번씩 더** 나가고(블리츠 한 판 40수 = 왕복 80회) 소켓은 체스 상태를

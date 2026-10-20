@@ -127,6 +127,37 @@ import Testing
         #expect(activity == 1, "취소한 핸들러가 불렸다")
     }
 
+    @Test("테트리스 초인종(맥 0.3.60)은 폰에서 자기 가지로 가고 아무것도 부르지 않는다 — drain(메시지 활동 조회)으로 새지 않는다")
+    func tetrisSignalIsItsOwnEmptyBranchOnThePhone() async {
+        // 없으면: 폰 화면이 없는 1.0.11 전까지 'tetris' 초인종(판 중 공격마다 울린다)이 drain 갈래로 떨어져
+        // 울릴 때마다 메시지 활동 조회가 한 번씩 더 나간다.
+        let h = await makeHarness()
+        defer { h.tearDown() }
+        var activity = 0
+        let token = h.runner.onMessageActivity { activity += 1 }
+        h.runner.appDidBecomeActive()
+        h.transport.emit(.joined)                               // → .catchUp(합치기 창에 한 번)
+        h.runner.flushCoalescedSignals()
+        let afterJoin = activity
+        #expect(afterJoin == 1, "전제: 조인 따라잡기가 활동 조회를 한 번 부른다")
+
+        h.transport.emit(.broadcast(event: "tetris"))
+        h.transport.emit(.broadcast(event: "tetris"))
+        #expect(h.runner.effectLog.filter { $0 == .tetrisSignal }.count == 2)
+        #expect(!h.runner.effectLog.suffix(2).contains(.drain))
+        h.runner.flushCoalescedSignals()
+        #expect(activity == afterJoin, "테트리스 초인종이 메시지 활동 조회로 샜다")
+
+        // ★ 기준선: 모르는 이름은 예전 그대로 drain → 활동 조회 한 번(그래야 위 '안 늘었다' 가 뜻을 가진다).
+        h.transport.emit(.broadcast(event: "모르는이름"))
+        h.runner.flushCoalescedSignals()
+        #expect(activity == afterJoin + 1)
+        await baseBarrier(h.session.service)
+        #expect(!h.requests.contains { ($0.rpcName ?? "").hasPrefix("tetris_") }, "폰이 테트리스 RPC 를 불렀다(화면이 없다)")
+        #expect(!h.requests.map(\.path).contains("/rest/v1/rpc/take_pokes"))
+        token.cancel()
+    }
+
     @Test("background → willSleep(소켓 내림) · active → didWake(다시 붙음) · 로그아웃 → signedOut")
     func lifecycle() async {
         let h = await makeHarness()

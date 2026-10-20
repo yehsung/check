@@ -354,6 +354,10 @@ struct GamesTetrisDuelMatchView: View {
                       chrome: GamesTetrisDuelChrome(match: match, phase: tetris.phase, myStats: tetris.myStats,
                                                     notice: tetris.notice,
                                                     connectionTrouble: tetris.connectionTrouble))
+                // 탭 막대를 숨긴다(체스·오목 판과 같은 수단 · `TabBarPolicy.tetrisMatch`). 까닭이 더 세다:
+                // 판 시간이 단조 시계로 흐르므로(D10) 탭을 잘못 눌러 나가면 **안 보이는 채로 조각이 계속
+                // 떨어진다** — 판돈이 걸린 판이다. 작은 화면(SE)에서는 그 49pt 가 판 폭으로 돌아온다.
+                .hidesTabBar(for: .tetrisMatch)
         }
     }
 

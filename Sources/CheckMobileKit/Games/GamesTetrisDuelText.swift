@@ -56,7 +56,7 @@ package enum TetrisPhoneText {
         ("방해 줄", "줄을 지우지 못한 채 조각이 굳으면 아래에서 회색 줄이 올라와요. 판 왼쪽 빨간 막대가 들어올 줄이에요."),
         ("승부", "먼저 꼭대기까지 쌓이는 쪽이 져요. 2분이 지나면 떨어지는 속도가 점점 빨라져요."),
         ("조작", "판을 좌우로 끌어 옮기고, 아래로 끌어 내려요. 판을 톡 누르면 회전해요. "
-            + "아래 버튼으로 홀드 · 반대로 회전 · 바로 내리기를 해요."),
+            + "아래 버튼으로 \(holdButton) · \(rotateCounterButton) 회전 · \(hardDropButton)를 해요."),
         ("앱을 나가면", "판 중에 앱을 나가면 판이 멈춰서 15초 뒤에 져요. 대결이 끝날 때까지 앱을 켜 두세요."),
         ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고(수수료 \(DuelFee.percent)% 빼고), "
             + "무승부면 돌려받아요. 30초 안에 둘 다 들어오지 않아도 돌려받아요.")
@@ -295,7 +295,9 @@ package enum TetrisPhoneText {
     /// 조작 안내(솔로 폰과 같은 제스처·버튼). **정지는 없다** — 대결은 멈출 수 없다.
     package static let controls: [(gesture: String, action: String)] = [
         ("좌우로 끌기", "이동"), ("톡 누르기", "회전"), ("아래로 끌기", "빨리 내리기"),
-        ("[홀드]", "홀드"), ("[반대로]", "반대로 회전"), ("[바로 내리기]", "바로 내리기")
+        ("[" + holdButton + "]", holdButton),
+        ("[" + rotateCounterButton + "]", rotateCounterButton + " 회전"),
+        ("[" + hardDropButton + "]", hardDropButton)
     ]
 
     package static func outcomeTitle(_ outcome: TetrisDuelOutcome?) -> String {
@@ -332,11 +334,14 @@ package enum TetrisPhoneText {
 
     /// 조작 버튼 세 개의 **글자**. `controls` 표의 꺾쇠 안 말과 **같아야 한다**(규칙 시트와 버튼이 갈리면
     /// 같은 버튼을 두 이름으로 부르게 된다 — 테스트가 그 둘을 묶어 둔다).
-    /// ⚠️ 솔로 폰은 같은 버튼을 "반시계"·"즉시 내리기" 로 부른다(`GamesMiniGameText`). 1.0.11 은 대결 표의
-    /// 말을 쓴다 — 통합 때 메인 세션이 한쪽으로 모으면 여기와 `controls` 두 줄만 고치면 된다.
-    package static let holdButton = "홀드"
-    package static let rotateCounterButton = "반대로"
-    package static let hardDropButton = "바로 내리기"
+    ///
+    /// ★ **솔로 표를 가리킨다**(글자를 베끼지 않는다). 같은 기기의 같은 버튼이 화면에 따라 "반시계"와 "반대로"
+    ///   두 이름으로 불리면, 솔로로 배운 사람이 대결에서 버튼을 다시 찾는다. 솔로 말이 먼저 나갔으니
+    ///   (v0.3.38 · 1.0.x) 그쪽이 기준이다. 가리키면 **나중에 솔로 말이 바뀌어도 둘이 갈라지지 않는다** —
+    ///   베껴 두면 한쪽만 고쳐질 자리다(통합에서 실제로 갈라져 있었다).
+    package static let holdButton = GamesMiniGameText.tetrisHold
+    package static let rotateCounterButton = GamesMiniGameText.tetrisRotateCounterClockwise
+    package static let hardDropButton = GamesMiniGameText.tetrisHardDrop
     /// 홀드를 이미 쓴 조각(버튼의 보이스오버 값).
     package static let holdSpent = "이미 썼어요"
 

@@ -195,16 +195,24 @@ import Testing
         #expect(gems.contains("Sources/CheckMobileKit/Components/RubyComponents.swift"), "대조: 보석 부품을 못 찾았다")
     }
 
-    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 여섯")
+    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 일곱")
     func tabBarPolicy() throws {
         // grassDetail 은 0.3.31 에 늘었다 — 잔디 상세는 **자체 하단 값 막대**를 가져 탭 막대와 둘이 쌓이면 엄지 사정권이 좁아진다.
+        // tetrisMatch 는 1:1 테트리스(1.0.11)에 늘었다 — 체스보다 까닭이 세다: 판 시간이 단조 시계로 흐르므로(D10)
+        // 탭을 잘못 눌러 나가면 **안 보이는 채로 조각이 계속 떨어진다**(판돈이 걸린 판이다). 갈래만 더하고
+        // 호출을 잊으면 목록만 늘고 화면은 그대로이므로, 아래 소스 계약이 그 호출 자리까지 되묻는다.
         // chessMatch 는 폰 체스(1.0.5)에 늘었다 — 오목 대국과 같은 몰입 화면이고, 그 갈래가 없으면 체스 대국 화면이
         // 탭 막대를 **숨길 수단이 없다**(직접 `toolbar(.hidden, for: .tabBar)` 를 쓰는 길은 게임 폴더 계약이 막는다).
         #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue })
-                == ["conversation", "gomokuMatch", "chessMatch", "shop", "miniGamePlay", "grassDetail"])
+                == ["conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "shop", "miniGamePlay", "grassDetail"])
         let chrome = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/SheetChrome.swift")
         // d7701ab 부터 숨김은 정책 표(`TabBarPolicy.hidesTabBar(on:)`)를 거쳐 `.hidden`/`.automatic` 중 하나를 고른다 — 리터럴
         // `toolbar(.hidden, for: .tabBar)` 는 주석에만 남아 이 대조가 주석을 걷어낸 소스에서 늘 빨갰다(1.0.6 이후).
+        // ★ 목록에 든 게임 화면은 **실제로 부르는 자리**가 있어야 한다(chessMatch 가 선언만 돼 있던 동안
+        //   체스 대국의 [기권]이 탭 막대 뒤에 가렸다 — 이 파일 머리말의 그 사고다).
+        let tetrisMatchView = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesTetrisDuelMatch.swift")
+        #expect(tetrisMatchView.contains(".hidesTabBar(for: .tetrisMatch)"),
+                "1:1 테트리스 판이 탭 막대 숨김을 부르지 않는다 — 갈래만 늘었다")
         #expect(chrome.contains("func hidesTabBar(for screen: TabBarPolicy.Screen)")
                 && chrome.contains("toolbar(TabBarPolicy.hidesTabBar(on: screen) ? .hidden : .automatic, for: .tabBar)"))
     }

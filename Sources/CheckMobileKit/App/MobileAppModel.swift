@@ -21,6 +21,7 @@ public final class MobileAppModel {
     package let gomokuHost: MobileGomokuHost
     package let gomoku: GomokuStore
     package let chess: ChessStore
+    package let tetris: TetrisDuelStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -104,6 +105,14 @@ public final class MobileAppModel {
         // **"기본값이니 지워도 되겠지"로 지우지 마라.** 꺼짐은 맥 작업이 남긴 의도된 보호다(그리지도 않는 폰이
         // 순위를 1분마다 당기지 않게) — 폰이 그 화면을 갖는 지금은 폰도 자기 배선에서 켠다. 바로 위 오목 한 줄과 짝이다.
         chess.spectatorFeaturesEnabled = true
+        // 1:1 테트리스(0.3.60 서버·맥 · 폰은 1.0.11). 호스트는 **오목·체스와 같은 하나**다(루비 미러 한 칸).
+        let tetris = TetrisDuelStore(host: host)
+        tetris.clock = { clock.now() }
+        // 순위의 **주 스위치**. 기본이 꺼짐이라 이 한 줄이 없으면 `tetris_ranking` 이 **한 번도 안 나가고**
+        // 순위 탭은 영영 로딩 문구다 — 오목·체스의 바로 위 두 줄과 같은 못이고, 같은 까닭으로 지우지 마라
+        // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisDuelWiringTests.swift`
+        // (`GamesTetrisWiringTests` 는 **솔로** 테트리스 것이다 — 섞지 마라).
+        tetris.rankingEnabled = true
         let links = MobileStoreLinks()
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let characters = AppUserCharacterStore(session: session, clock: env.clock)
@@ -116,6 +125,7 @@ public final class MobileAppModel {
             widgetSnapshots: writer,
             gomoku: gomoku,
             chess: chess,
+            tetris: tetris,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -132,6 +142,7 @@ public final class MobileAppModel {
         self.gomokuHost = host
         self.gomoku = gomoku
         self.chess = chess
+        self.tetris = tetris
         self.links = links
         self.appearance = appearance
         self.characters = characters

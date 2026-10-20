@@ -293,6 +293,31 @@ package struct TetrisDuelSession: Equatable, Sendable {
         game.rotate(clockwise: clockwise)
     }
 
+    /// 가로 **한 칸**(폰 끌기 · 보이스오버 이동 액션). 엔진 무수정으로, 누름과 뗌을 **같은 호출 안에서 연달아** 준다 —
+    /// `updateRepeat(pressed:)` 가 이동을 즉시 하고 뗌은 이동을 안 주므로, 쌍 사이에 시간이 안 흘러 DAS(0.167초)가
+    /// 만기될 수 없고 쌍이 끝나면 반복 상태가 완전히 원상복구된다.
+    /// ⚠️ **쌍 사이에 `advance(to:)`·`step(dt:)` 을 끼우지 마라** — 그 순간 자동 반복이 살아나 한 걸음이 여러 칸이 된다.
+    /// 솔로 폰이 같은 배선으로 먼저 증명한 자리다(`GamesPlayController.feed`).
+    package mutating func moveLeftOneCell() {
+        guard isLive else { return }
+        game.setLeftHeld(true)
+        game.setLeftHeld(false)
+    }
+
+    package mutating func moveRightOneCell() {
+        guard isLive else { return }
+        game.setRightHeld(true)
+        game.setRightHeld(false)
+    }
+
+    /// 세로 한 칸(엔진 `softDropOneCell` — 한 칸 · 1점 · 접지 리셋 예산 안 씀 · 중력 되감기).
+    /// 눌림(`setSoftDropHeld`)으로 흉내 내지 마라: 폰 제스처는 **거리**를 주고 눌린 시간을 주지 않는다.
+    @discardableResult
+    package mutating func softDropOneCell() -> Bool {
+        guard isLive else { return false }
+        return game.softDropOneCell()
+    }
+
     package mutating func hold() {
         guard isLive else { return }
         game.holdCurrentPiece()

@@ -8,6 +8,8 @@ package enum GamesDestination: Hashable, Sendable {
     case miniGame(MiniGameKind)
     case gomoku
     case chess
+    /// 1:1 테트리스(1.0.11) — 로비·준비·판·결과·순위를 **입구 하나**로 연다(체스와 같은 구조).
+    case tetrisDuel
 }
 
 /// 지금 **사람과의** 판을 들고 있는 게임 — 한 사람 한 판(B8)의 까닭을 화면이 말할 수 있게 하는 값.
@@ -19,11 +21,22 @@ package enum GamesDestination: Hashable, Sendable {
 package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
     case gomoku
     case chess
+    /// 1:1 테트리스(1.0.11). 서버 `chess__busy` 는 셋을 함께 보지만 **오목 쪽 게이트는 여전히 남을 모른다** —
+    /// 그래서 클라가 세 방향을 다 막는다.
+    case tetris
 
     /// 문구 표가 쓰는 짝(`ChessPhoneText.BusyGame`). 두 열거가 따로 있는 까닭: 이쪽은 **스토어 판정**이고
     /// 그쪽은 **문구 표**다(문구 표는 뷰·스토어를 모르는 자리라야 맥 스위트가 값으로 잰다). 옮기는 자리를
     /// 여기 하나로 둬서 두 꼴을 손으로 가르는 switch 가 화면마다 생기지 않게 한다.
-    package var text: ChessPhoneText.BusyGame { self == .chess ? .chess : .gomoku }
+    /// ⚠️ **빠짐없이 가르는 switch 로 둔다.** 삼항으로 두면 새 게임이 들어올 때 조용히 엉뚱한 이름이 되고
+    /// (테트리스가 "오목" 으로 읽힌다) 테스트는 초록이다 — 1.0.11 에서 실제로 그 꼴이 됐다.
+    package var text: ChessPhoneText.BusyGame {
+        switch self {
+        case .gomoku: return .gomoku
+        case .chess: return .chess
+        case .tetris: return .tetris
+        }
+    }
 }
 
 /// 딥링크 한 건을 게임 탭 경로에 옮기는 동작(`GamesStore.routeStep(for:)`). 뷰는 돌려받은 대로 경로만 바꾼다.
@@ -202,6 +215,9 @@ package final class GamesStore {
     /// 코어 체스 스토어 줄임(= `context.chess`). 화면·다른 레인이 읽는 자리는 **두 이름이 같은 인스턴스**다.
     package var chess: ChessStore { context.chess }
 
+    /// 코어 테트리스 대결 스토어 줄임(= `context.tetris`). 같은 규약이다.
+    package var tetris: TetrisDuelStore { context.tetris }
+
     /// 탭 배지: 만료 안 된 받은 오목 신청 수.
     ///
     /// ⚠️ **체스 신청은 아직 안 센다.** 체스는 받은함 RPC 가 없어 받은 신청을 `chess_lobby` 로만 알고(머리말 ⑪),
@@ -239,6 +255,15 @@ package final class GamesStore {
         return users.filter { !hidden.contains($0.id) }
     }
 
+    /// 테트리스 로비의 상대 고르기 목록 — 같은 근거·같은 방식(위 두 주석). **정렬은 하지 않는다**(코어
+    /// `applyLobby` 가 서버와 같은 규칙으로 이미 맞춰 뒀다 — 화면이 다시 정렬하면 두 규칙이 갈린다).
+    package var tetrisLobbyUsers: [TetrisDuelUser] {
+        let hidden = context.links.messages?.hiddenBlockedPeerIDs ?? []
+        let users = context.tetris.visibleUsers
+        guard !hidden.isEmpty else { return users }
+        return users.filter { !hidden.contains($0.id) }
+    }
+
     // MARK: 한 사람 한 판 (B8 — 양방향)
 
     /// 사람과의 **오목** 판이 지금 흐르고 있는가.
@@ -261,13 +286,34 @@ package final class GamesStore {
         return !chess.isAIMatch
     }
 
-    /// 체스 입구를 막는 까닭(없으면 nil). 오목 판이 흐르면 체스를 신청·수락할 수 없다 —
+    /// 사람과의 **테트리스** 대결이 지금 흐르고 있는가. 테트리스에는 AI 판이 없으므로 가를 것이 하나 적다
+    /// (끝난 판은 판이 아니다 — 결과 카드가 떠 있는 동안 다른 게임 입구를 잠그면 안 된다).
+    package var hasLiveTetrisMatch: Bool {
+        let tetris = context.tetris
+        guard let match = tetris.match else { return false }
+        return !match.isFinished
+    }
+
+    /// 체스 입구를 막는 까닭(없으면 nil). 오목·테트리스 판이 흐르면 체스를 신청·수락할 수 없다 —
     /// 서버도 같은 판정을 한다(`chess__busy`), 그래서 이 쪽은 **클라가 사실을 먼저 그리는 것**이다.
-    package var chessEntryBlock: GamesBusyGame? { hasLiveGomokuMatch ? .gomoku : nil }
+    package var chessEntryBlock: GamesBusyGame? {
+        if hasLiveGomokuMatch { return .gomoku }
+        return hasLiveTetrisMatch ? .tetris : nil
+    }
 
     /// 오목 입구를 막는 까닭(없으면 nil). ★ **이 방향은 클라밖에 막는 데가 없다** — 서버의 오목 게이트는
-    /// 체스를 모른다(`GamesBusyGame` 머리말). 안 막으면 체스 중인 사람이 오목을 수락해 체스를 시간패한다.
-    package var gomokuEntryBlock: GamesBusyGame? { hasLiveChessMatch ? .chess : nil }
+    /// 체스·테트리스를 모른다(`GamesBusyGame` 머리말). 안 막으면 체스 중인 사람이 오목을 수락해 체스를 시간패한다.
+    package var gomokuEntryBlock: GamesBusyGame? {
+        if hasLiveChessMatch { return .chess }
+        return hasLiveTetrisMatch ? .tetris : nil
+    }
+
+    /// 테트리스 입구를 막는 까닭(없으면 nil). 테트리스는 **판돈이 걸린 실시간 판**이라 막는 쪽이 더 무겁다 —
+    /// 오목·체스 판을 두는 중에 테트리스를 수락하면 그 판은 15초 침묵으로 **진다**(서버 D5).
+    package var tetrisEntryBlock: GamesBusyGame? {
+        if hasLiveGomokuMatch { return .gomoku }
+        return hasLiveChessMatch ? .chess : nil
+    }
 
     /// **로봇 체스 판**이 지금 진행 중인가(끝난 판은 아니다).
     ///

@@ -36,7 +36,10 @@ package enum TetrisMiniBoardLayout {
     package static let cell: CGFloat = 9
     /// 판 테두리 안쪽 여백(테두리 선이 칸을 덮지 않게).
     package static let inset: CGFloat = 2
-    package static var boardSize: CGSize {
+    package static var boardSize: CGSize { boardSize(cell: cell) }
+
+    /// 셀 변을 주면 그 판의 크기. 폰은 머리글에 들어갈 작은 셀을 준다(기본 9pt 면 세로 184pt).
+    package static func boardSize(cell: CGFloat) -> CGSize {
         CGSize(width: cell * CGFloat(TetrisGame.columns) + inset * 2,
                height: cell * CGFloat(TetrisGame.visibleRows) + inset * 2)
     }
@@ -151,8 +154,10 @@ package enum TetrisBoardPainter {
     }
 
     /// 상대 판(20행 × 10칸, 행 0 = 맨 위)을 작게. 바닥은 불투명 한 색이고, 빈 판에도 격자가 보인다.
-    package static func drawMiniBoard(_ cells: [[TetrisDuelCell]], into context: inout GraphicsContext, size: CGSize) {
-        let cell = TetrisMiniBoardLayout.cell
+    /// - Parameter cell: 한 칸 변(pt). 기본값은 맥 미니판 상수이고, **폰은 더 작은 값을 준다** — 세로 20행이라
+    ///   기본값이면 180pt 를 먹어 폰 머리글에 안 들어간다(`.scaleEffect` 로 줄이면 1pt 선이 흐려진다).
+    package static func drawMiniBoard(_ cells: [[TetrisDuelCell]], into context: inout GraphicsContext, size: CGSize,
+                                      cell: CGFloat = TetrisMiniBoardLayout.cell) {
         let inset = TetrisMiniBoardLayout.inset
         let frame = CGRect(origin: .zero, size: size)
         context.fill(Path(roundedRect: frame, cornerRadius: 4), with: .color(TetrisDuelPalette.miniWellColor))

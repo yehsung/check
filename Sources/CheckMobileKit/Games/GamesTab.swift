@@ -159,7 +159,7 @@ struct GamesTab: View {
         let record = gomoku.record.map { GomokuPhoneText.recordTitle + " " + GomokuPhoneText.record($0) }
         // 칩이 없을 때: 보낸 신청 대기·받은함 실패는 그 한 줄이 먼저, 아니면 전적(모르면 안내 한 줄).
         let detail: String? = blockedBy != nil
-            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text)
+            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .gomoku)
             : (chip != nil ? record : ((gomoku.outgoing != nil || gomoku.inboxLoadFailed) ? line : (record ?? line)))
         return Button {
             store.context.router.push(GamesDestination.gomoku, on: .games)
@@ -198,7 +198,7 @@ struct GamesTab: View {
         .disabled(blockedBy != nil)
         .accessibilityHint(blockedBy == nil
                            ? "오목 대결 화면을 열어요"
-                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text) ?? ""))
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .gomoku) ?? ""))
     }
 
     // MARK: 체스 카드
@@ -220,7 +220,7 @@ struct GamesTab: View {
             : (active ? GamesText.activeMatchChip : (incoming != nil ? ChessPhoneText.incomingChip : nil))
         let record = chess.record.map { ChessPhoneText.recordTitle + " " + ChessPhoneText.record($0) }
         let detail: String? = blockedBy != nil
-            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text)
+            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .chess)
             : (chip != nil ? record : (chess.outgoing != nil ? ChessPhoneText.outgoingLine
                                                             : (record ?? ChessPhoneText.idleLine)))
         return Button {
@@ -260,7 +260,7 @@ struct GamesTab: View {
         .disabled(blockedBy != nil)
         .accessibilityHint(blockedBy == nil
                            ? ChessPhoneText.cardOpenHint
-                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text) ?? ""))
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .chess) ?? ""))
     }
 
     @ViewBuilder

@@ -1,0 +1,55 @@
+{
+  "__note" : [
+    "보낸 신청의 상태(pending). 닿는 길: games/tetris/lobby/invites 에서 5초마다 자동으로.",
+    "**이 파일은 화면을 만들지 않는다** — applyState 는 pending 을 보면 카드를 세우지 않고 돌아선다(신청은 로비가 통째로 준다). 있는 까닭은 404 를 막는 것 하나다: 없으면 PGRST202 가 isSchemaMissing → noteServerMissing() 을 때려 신청 장면이 5초 뒤 '서버가 모른다'로 바뀐다.",
+    "수락 전이라 tetris_players 행이 없다 — ready·seq·board·lines·누계·last_seen 이 전부 null 이고 seed 도 null 이다(수락 순간 뽑는다). 판돈은 걷히지 않았으므로 ruby_balance 는 42 그대로다.",
+    "state 에는 신청 만료 시각 칸이 없다(§2.5) — 남은 초는 로비 outgoing.expires_at_ms 가 쥔다."
+  ],
+  "state" : {
+    "accepted_at_ms" : null,
+    "end_reason" : null,
+    "finished_at_ms" : null,
+    "match_id" : "demo-tetris-invite-out",
+    "max_end_ms" : null,
+    "me" : {
+      "avatar_url" : null,
+      "board" : null,
+      "character" : "fox",
+      "display_name" : "새벽",
+      "garbage_applied" : null,
+      "garbage_sent" : null,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "last_seen_ms" : null,
+      "lines" : null,
+      "pending" : null,
+      "ready" : null,
+      "seq" : null,
+      "topped_out" : null
+    },
+    "opponent" : {
+      "avatar_url" : null,
+      "board" : null,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "garbage_applied" : null,
+      "garbage_sent" : null,
+      "id" : "d0000000-0000-4000-8000-0000000000b4",
+      "last_seen_ms" : null,
+      "lines" : null,
+      "pending" : null,
+      "ready" : null,
+      "seq" : null,
+      "topped_out" : null
+    },
+    "ready_deadline_ms" : null,
+    "result" : null,
+    "ruby_balance" : 42,
+    "seed" : null,
+    "server_now_ms" : 1789621500000,
+    "stake" : 3,
+    "start_at_ms" : null,
+    "status" : "pending",
+    "winner" : null
+  },
+  "status" : "ok"
+}

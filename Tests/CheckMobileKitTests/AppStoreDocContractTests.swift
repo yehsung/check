@@ -100,6 +100,59 @@ struct AppStoreDocContractTests {
         #expect(gambling[2].contains("수수료 10%") && gambling[2].contains("5/9/18"), "모의 도박 근거가 수수료 뒤 상금을 말하지 않는다")
     }
 
+    // MARK: 1.0.11 — 1:1 테트리스
+
+    @Test("1.0.11: §0.1 게임 탭 줄 · §5.2 New in · §5.3 한글 요약 셋이 다 있고, 숫자가 코드 사실과 맞고, 도박 어휘가 없다")
+    func tetrisDuelIsDocumentedWithoutWageringLanguage() throws {
+        // 대조 — 코드 사실(이 전제가 사라지면 문서의 결론도 같이 고친다).
+        #expect([2, 3, 4].map { TetrisGame.attackLines(lines: $0) } == [1, 2, 4], "전제: 공격 표(D2)")
+        #expect(TetrisDuelStake.allCases.map(\.rawValue) == [3, 5, 10], "전제: 판돈 집합")
+        #expect(TetrisDuelSession.rampStartSeconds == 120, "전제: 2분 뒤 가속(D7)")
+
+        let doc = try Self.document("docs/appstore.md")
+
+        // ① §0.1 기능 범위 표의 게임 탭 줄 — 심사팀이 "앱에 무엇이 있나" 를 읽는 자리다.
+        let scope = try Self.section(of: doc, heading: "### 0.1 실제 기능 범위")
+        let games = try Self.row(in: scope, containing: "| 게임 |")
+        // 칸 넷: [탭 이름, 화면에 있는 것, 서버에 **쓰는** 것, 근거].
+        #expect(games[0] == "게임", "표 모양이 바뀌었다: \(games)")
+        #expect(games[1].contains("1:1 테트리스"), "게임 탭 줄이 1:1 테트리스를 말하지 않는다: \(games[1])")
+        #expect(games[1].contains("1.0.11"), "어느 버전에 들어왔는지가 없다")
+        #expect(games[2].contains("tetris_report"), "서버에 쓰는 것 칸에 판 보고가 없다: \(games[2])")
+
+        // ② §5.2 심사원용 영어 메모 — 1.0.11 블록.
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.11"), "§5.2 에 New in 1.0.11 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let end = rest.range(of: "**Screens that")?.lowerBound ?? rest.endIndex
+        let newIn1011 = String(rest[..<end])
+        #expect(newIn1011.contains("1:1 테트리스"), "앱 안 이름(한글)을 적어야 심사원이 화면에서 찾는다")
+        for number in ["3, 5 or 10", "10%", "2 minutes", "15 seconds"] {
+            #expect(newIn1011.contains(number), "§5.2 1.0.11 블록에 \(number) 가 없다")
+        }
+        // 공격 표가 문서와 엔진에서 같은 숫자여야 한다(2→1 · 3→2 · 4→4).
+        #expect(newIn1011.contains("Clearing 2 lines at once drops 1 extra row"), "공격 표 첫 줄이 다르다")
+        #expect(newIn1011.contains("3 lines drops 2, and 4 lines drops 4"), "공격 표 둘째·셋째가 다르다")
+        // ★ 심사 메모는 **못 하는 것**도 적는다(2.3.1(a) 숨은 기능). 서버 상수가 아직 도달 불가라 폰↔폰 대결이 안 된다.
+        #expect(newIn1011.contains("not enabled in this build"), "폰↔폰 대결이 안 된다는 사실을 메모가 숨긴다")
+        // ★ 도박을 연상시키는 어휘와 제공자 이름을 쓰지 않는다(사용자 지시 · 루비는 앱 안 재화다).
+        for word in ["gambl", "wager", "bet ", "betting", "casino", "jackpot", "cash prize",
+                     "Supabase", "supabase", "Apple Pay"] {
+            #expect(!newIn1011.contains(word), "§5.2 1.0.11 블록에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ③ §5.3 한글 요약 — 내부 확인용이지만 **제출 전 결정**이 여기 적혀 있어야 한다.
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let line = try #require(korean.split(separator: "\n").first { $0.contains("1.0.11") },
+                                "§5.3 에 1.0.11 요약 줄이 없다")
+        #expect(line.contains("1:1 테트리스"))
+        #expect(korean.contains("tetris_ios_min_build"), "§5.3 이 심사원이 대결을 못 하는 까닭(서버 상수)을 안 적는다")
+        #expect(korean.contains("판 중에 앱을 나가면 져요"), "§5.3 이 P7 경고 한 줄을 안 적는다")
+        // 연령 설문의 답은 **바뀌지 않는다**(판돈·수수료가 오목·체스와 같은 값이다) — 그 결론을 적어야 다음 사람이
+        // §3 을 다시 손대지 않는다.
+        #expect(korean.contains("바뀌지 않는다"), "§5.3 이 연령 설문이 그대로라는 결론을 안 적는다")
+    }
+
     // MARK: medium 2 — 처리방침의 오목 구멍
 
     @Test("§2.1 라벨이 오목을 수집 항목으로 신고하면, privacy.md 가 오목 데이터를 서술하거나 §7 위험 5 개정 목록이 그 구멍을 적어야 한다")

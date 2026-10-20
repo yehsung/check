@@ -1,0 +1,55 @@
+{
+  "__note" : [
+    "카운트다운(둘 다 준비 · 1.8초 뒤 시작). 닿는 길: games/tetris/match/countdown.",
+    "start_at_ms = 둘째 준비 + 3초(tetris_countdown_ms). 고정 시계보다 **1.8초 뒤**라 코어 duel.started 가 거짓이고 phase 는 .countdown 이다(화면은 3·2·1 중 2).",
+    "재개는 **서지 않는다**: last_seen_ms(1789621499500)가 start_at_ms(1789621501800)보다 **앞**이다 — 시작 전 하트비트는 이어 받을 판이 아니다(resumePoint 의 lastSeenMs > startAtMs 조건).",
+    "카운트다운 중 보고도 last_seen_at 을 갱신한다(§2.4 5번) — 그래서 seq 가 1 보다 크다."
+  ],
+  "state" : {
+    "accepted_at_ms" : 1789621488000,
+    "end_reason" : null,
+    "finished_at_ms" : null,
+    "match_id" : "demo-tetris-countdown",
+    "max_end_ms" : 1789621981800,
+    "me" : {
+      "avatar_url" : null,
+      "board" : "........................................................................................................................................................................................................",
+      "character" : "fox",
+      "display_name" : "새벽",
+      "garbage_applied" : 0,
+      "garbage_sent" : 0,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "last_seen_ms" : 1789621499500,
+      "lines" : 0,
+      "pending" : 0,
+      "ready" : true,
+      "seq" : 3,
+      "topped_out" : false
+    },
+    "opponent" : {
+      "avatar_url" : null,
+      "board" : "........................................................................................................................................................................................................",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "garbage_applied" : 0,
+      "garbage_sent" : 0,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "last_seen_ms" : 1789621499300,
+      "lines" : 0,
+      "pending" : 0,
+      "ready" : true,
+      "seq" : 2,
+      "topped_out" : false
+    },
+    "ready_deadline_ms" : 1789621518000,
+    "result" : null,
+    "ruby_balance" : 37,
+    "seed" : 20260918,
+    "server_now_ms" : 1789621500000,
+    "stake" : 5,
+    "start_at_ms" : 1789621501800,
+    "status" : "active",
+    "winner" : null
+  },
+  "status" : "ok"
+}

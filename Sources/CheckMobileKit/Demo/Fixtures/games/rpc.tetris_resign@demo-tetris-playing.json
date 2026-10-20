@@ -1,0 +1,55 @@
+{
+  "__note" : [
+    "판 진행 장면에서 [기권] → 결과 카드(패 · 사유 기권). 바늘은 본문 p_match_id 다.",
+    "서버는 기권을 믿는다(D9 — 자기에게 불리한 신고). 상대 승 resign 이고 카운트다운 중에도 된다.",
+    "result 는 'opponent_win' 이고 winner 가 구름빵이다 — 이 판에서 나는 신청한 쪽(challenger)이다. 위 won/lost 장면과 **내 칸이 반대**라 result 글자 두 값이 승패 두 값에 모두 짝지어진다(네 짝 중 셋을 덮는다).",
+    "루비: 37(판돈 걷힌 뒤) 그대로 — 기권하면 걸어 둔 5 를 잃는다(결과 카드 눈금 −5). 더 떼지 않는다."
+  ],
+  "state" : {
+    "accepted_at_ms" : 1789621420000,
+    "end_reason" : "resign",
+    "finished_at_ms" : 1789621500000,
+    "match_id" : "demo-tetris-playing",
+    "max_end_ms" : 1789621907000,
+    "me" : {
+      "avatar_url" : null,
+      "board" : "......................................................................................................................................TT.......TTT......LLJJJ....LLLJZZS..GGGG.GGGGGGGGG.GGGGGGGGGGGG.GG",
+      "character" : "fox",
+      "display_name" : "새벽",
+      "garbage_applied" : 5,
+      "garbage_sent" : 4,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "last_seen_ms" : 1789621499600,
+      "lines" : 12,
+      "pending" : 2,
+      "ready" : true,
+      "seq" : 74,
+      "topped_out" : false
+    },
+    "opponent" : {
+      "avatar_url" : null,
+      "board" : "............................................................................................................................................................OO...SSIIIIOO.GG.GGGGGGGGG.GGGGGGGGGGGGGGGG.",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "garbage_applied" : 4,
+      "garbage_sent" : 5,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "last_seen_ms" : 1789621499400,
+      "lines" : 9,
+      "pending" : 1,
+      "ready" : true,
+      "seq" : 73,
+      "topped_out" : false
+    },
+    "ready_deadline_ms" : 1789621450000,
+    "result" : "opponent_win",
+    "ruby_balance" : 37,
+    "seed" : 20260919,
+    "server_now_ms" : 1789621500000,
+    "stake" : 5,
+    "start_at_ms" : 1789621427000,
+    "status" : "finished",
+    "winner" : "d0000000-0000-4000-8000-0000000000b1"
+  },
+  "status" : "ok"
+}

@@ -1,0 +1,10 @@
+{
+  "__note" : [
+    "받은 신청 [거절] 의 응답(accepted=false). 바늘 `false` 는 본문 p_accept 의 값이다.",
+    "거절은 state 를 싣지 않는다(§2.4 — ok{accepted:false}). 코어는 그 신청 카드를 걷고 안내 한 줄(TetrisDuelNoticeText)을 둔다."
+  ],
+  "accepted" : false,
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "status" : "ok"
+}

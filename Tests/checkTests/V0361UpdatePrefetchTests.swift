@@ -370,6 +370,28 @@ struct V0361UpdatePrefetchTests {
         #expect(UpdateProgress.parse(try String(contentsOf: lab.statePath, encoding: .utf8)).failedStep == "download")
         #expect(lab.names(in: lab.tmp).isEmpty, "실패 뒤 정리(trap)가 돌지 않았다: \(lab.names(in: lab.tmp))")
     }
+
+    // MARK: - E. 버전
+
+    @Test("버전 0.3.61 / 114 · CHANGELOG 0.3.61 은 맨 위 세 줄 이하(사용자 말투)")
+    func versionAndChangelog() throws {
+        let root = CheckCoreSourceLayout.repoRoot
+        let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
+        let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
+        #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.61</string>"))
+        #expect(squashed.contains("<key>CFBundleVersion</key><string>114</string>"))
+        let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
+        let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.61\n") })
+        let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
+        #expect((1...3).contains(items.count), "항목 \(items)")
+        #expect(items.contains { $0.contains("업데이트") })
+        #expect(items.allSatisfy { $0.count <= 40 }, "배너 폭에서 잘릴 만큼 긴 줄이 있다: \(items)")
+        for banned in ["brew", "curl", "Range", "8갈래", "pfetch", "GitHub", "MB", "초"] {
+            #expect(!section.contains(banned), "사용자 문구에 내부 구조·숫자('\(banned)')가 있다")
+        }
+        #expect(changelog.range(of: "## 0.3.61")!.lowerBound < changelog.range(of: "## 0.3.60")!.lowerBound,
+                "0.3.61 이 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
+    }
 }
 
 // MARK: - 실험실

@@ -1003,37 +1003,253 @@ final class UpdateRunner {
         )
     }
 
-    /// 기본 스폰: 앱 종료에도 살아남는 분리 프로세스로 `brew update && brew upgrade --cask … && open -a …` 를 띄운다.
+    /// 업데이트 로그(두 경로 공통 — 이 맥에만 남는다, 전송 없음).
+    ///
+    /// 예전 brew 경로는 출력을 통째로 /dev/null 에 버려 실패 원인을 아무도 볼 수 없었다. 이제 파일에 남겨
+    /// 사용자가 붙여넣을 수 있게 한다. 덧붙이기(append)라 직전 시도와 비교할 수 있다.
+    nonisolated static let logPath = NSString(string: "~/Library/Logs/aing-check-update.log").expandingTildeInPath
+
+    // MARK: 나눠 받기 (0.3.61 — 두 업데이트 경로가 함께 쓰는 셸 함수)
+
+    /// 여러 갈래(Range) 동시 받기 셸 함수 `pfetch URL OUT`. **상수**이고, brew 스크립트와 DMG 스크립트가 맨 앞에
+    /// **이어 붙여** 품는다 — 값을 끼우지 않는다(`dmgSpawnWrapper` 주석의 이유).
+    ///
+    /// **왜 필요한가(2026-10-21 실측, 사용자 맥)**: 0.3.60 원클릭 업데이트는 brew update 3초 · zip 35MB 받기 약 3분
+    /// (초당 ~0.2MB) · 설치 몇 초였다 — 받기가 전부였다. 회선은 빠른데(초당 25~31MB) 해외 원본(GitHub 릴리스 자산 — LAX 경유)에
+    /// 대한 **연결 하나하나의 속도가 들쭉날쭉**하다: 같은 파일을 연달아 받으면 어떤 연결은 초당 10~20MB, 어떤 연결은
+    /// 초당 0.15~0.25MB 에 갇힌다. brew 와 옛 DMG 경로는 연결 하나로 끝까지 받는다. 같은 자산을 8갈래로 받으면
+    /// 1.4초 · 7.0초 · 11.3초였다(3회 모두 지문 일치).
+    ///
+    /// 반환: OUT 이 완전하면 0, 아니면 0 아님 — 그때 **호출자가 지금 동작으로 떨어진다**(brew 는 스스로 받고, DMG 는
+    /// 기존 단일 curl 그대로). 그래서 이 함수의 어떤 실패도 지금보다 나빠지지 않는다. 호출자는 `( pfetch … )` **서브셸로**
+    /// 부른다 — 함수 안에서 `set -u` 를 어기면 zsh 는 스크립트를 통째로 끝내는데(실측), 서브셸 안이면 그 서브셸만 끝나고
+    /// 호출자는 폴백으로 간다(EXIT trap 은 서브셸에서 돌지 않는다 — 실측, 그래서 DMG 의 cleanup 이 중간에 불리지 않는다).
+    ///
+    ///  1. 탐색 — `-r 0-0` 한 바이트를 `-L` 로 받아 최종 코드가 206 이고 **마지막 응답 블록**의 `Content-Range: bytes 0-0/<전체>`
+    ///     (대소문자 무시)에서 전체 크기를 읽는다. 숫자가 아니거나 0 이하면 폴백. 조각은 `url_effective`(서명된 최종 주소)로
+    ///     받는다 — 리다이렉트를 조각마다 되풀이하지 않는다. 최종 주소가 https 가 아니면 폴백.
+    ///  2. 조각 — 8MB 이상이면 8갈래(크기 ceil(전체/8)), 미만이면 한 줄(`-r 0-(전체-1)`). `--speed-limit 65536 --speed-time 12`
+    ///     는 **멎은 연결을 끊는 장치**다(초당 64KB 미만이 12초면 끊는다) — 초당 0.2MB 로 느리게라도 흐르는 조각(4.4MB ≈ 22초)은
+    ///     끊지 않는다.
+    ///  3. 검사·재시도 — 크기가 틀린 조각만 **한 번 더**(새 연결) 동시에 받는다. 그 전에 탐색을 다시 해 서명 주소를 새로 받는다
+    ///     (만료·403 대비). 전체 크기가 바뀌었거나 두 번째도 틀리면 폴백.
+    ///  4. 차례대로 이어 `OUT.part` 를 만들고 크기가 전체와 같을 때만 `mv` 로 OUT. 임시 조각은 성공·실패 모두 지운다 —
+    ///     trap 을 걸지 않고 명시적으로 지운다(호출자의 `trap cleanup EXIT` 을 덮어쓰지 않는다).
+    ///  5. 로그 — 전체 크기 · 걸린 초 · 재시도한 조각 수 · 폴백 사유. 주소는 **쿼리 없이**(`${1%%\?*}`)만 적고 서명된 최종 주소는
+    ///     아예 적지 않는다 — 서명 토큰을 로그 파일에 남기지 않는다.
+    ///
+    /// **최악 시간 상한**: 탐색 30 + 조각 90(동시라 한 번) + 재탐색 30 + 재시도 90 = **240초**(+ 잇기·크기 확인 몇 초).
+    ///  · brew 경로: brew update(예전과 같음) + 미리 받기 ≤ 240 + brew upgrade(캐시가 맞으면 내려받기 없이 몇 초).
+    ///    이 함수 혼자서는 감시 시한(`watchdogSeconds` 600)을 넘기지 않게 고른 숫자다 — 바꾸면 이 계산을 다시 적는다.
+    ///  · DMG 경로: 이 함수가 240초를 다 쓰고 실패한 뒤 기존 단일 curl(`--max-time 420`)까지 최악이면 받기만 660초로 감시
+    ///    600초를 넘는다. 회선이 거의 죽은 경우뿐이고, 그때 배너가 실패를 먼저 띄워도 스크립트는 계속 가서 검증(그대로)을
+    ///    통과해야만 교체한다.
+    ///
+    /// 본문에 슬래시 두 개 · 슬래시-별표를 쓰지 않는다 — 소스를 읽는 계약 테스트의 주석 걷어내기가 그것을 주석 시작으로
+    /// 읽는다(`AppStoreRetireRemoval.brewUninstallScript` 주석). 그래서 `https:` 뒤 두 슬래시는 `[/][/]` 로 잰다.
+    /// 탐색 본문(1바이트)은 `/dev/null` 이 아니라 임시 폴더에 받는다 — brew 스크립트에 `/dev/null` 이 없다는 계약
+    /// (brew 출력을 버리지 않는다 — `brewUpgradeScriptUpdatesTapFirstAndTargetsTheCask`)을 그대로 지키려고.
+    nonisolated static let pfetchFunction = #"""
+        pf_probe() {
+          local r="" rc=0 line="" cr=""
+          rm -f "$PF_W/h" "$PF_W/b"
+          r="$(curl -fsS -L --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 -r 0-0 -o "$PF_W/b" -D "$PF_W/h" -w '%{http_code} %{url_effective}' "$1")"
+          rc=$?
+          if [ "$rc" -ne 0 ]; then PF_WHY="탐색이 실패했습니다(curl $rc)"; return 1; fi
+          if [ "${r%% *}" != "206" ]; then PF_WHY="Range 를 받지 않습니다(HTTP ${r%% *})"; return 1; fi
+          PF_FINAL="${r#* }"
+          case "$PF_FINAL" in
+            (https:[/][/]?*) ;;
+            (*) PF_WHY="최종 주소가 https 가 아닙니다"; return 1 ;;
+          esac
+          if [ ! -f "$PF_W/h" ]; then PF_WHY="응답 머리가 없습니다"; return 1; fi
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            line="${(L)line}"
+            case "$line" in
+              (http[/]?*) cr="" ;;
+              (content-range:*) cr="${line#content-range:}" ;;
+            esac
+          done < "$PF_W/h"
+          cr="${cr#"${cr%%[![:space:]]*}"}"
+          cr="${cr%"${cr##*[![:space:]]}"}"
+          case "$cr" in
+            ("bytes 0-0"[/]*) cr="${cr##*[/]}" ;;
+            (*) PF_WHY="Content-Range 가 없습니다"; return 1 ;;
+          esac
+          case "$cr" in
+            (''|*[!0-9]*) PF_WHY="전체 크기를 모릅니다"; return 1 ;;
+          esac
+          if [ "${#cr}" -gt 12 ] || [ "$cr" -le 0 ]; then PF_WHY="전체 크기가 이상합니다($cr)"; return 1; fi
+          PF_TOTAL="$cr"
+        }
+        pf_range() {
+          PF_A=$(( $1 * PF_SIZE ))
+          PF_B=$(( ($1 + 1) * PF_SIZE ))
+          if [ "$PF_B" -gt "$PF_TOTAL" ]; then PF_B=$PF_TOTAL; fi
+          PF_B=$(( PF_B - 1 ))
+        }
+        pf_piece() {
+          curl -fsS --proto '=https' --tlsv1.2 --connect-timeout 15 --speed-limit 65536 --speed-time 12 --max-time 90 -r "${2}-${3}" -o "$PF_W/p$1" "$PF_FINAL" || rm -f "$PF_W/p$1"
+        }
+        pf_check() {
+          local i="" got=""
+          PF_BAD=()
+          for i in "$@"; do
+            pf_range "$i"
+            got=""
+            if [ -f "$PF_W/p$i" ]; then got="$(stat -f %z "$PF_W/p$i")"; fi
+            if [ "$got" != "$(( PF_B - PF_A + 1 ))" ]; then PF_BAD+=("$i"); fi
+          done
+        }
+        pf_run() {
+          local i="" total=""
+          local -a redo
+          pf_probe "$1" || return 1
+          PF_N=8
+          if [ "$PF_TOTAL" -lt 8388608 ]; then PF_N=1; fi
+          PF_SIZE=$(( (PF_TOTAL + PF_N - 1) / PF_N ))
+          PF_ALL=()
+          for (( i = 0; i < PF_N; i++ )); do PF_ALL+=("$i"); done
+          for i in "${PF_ALL[@]}"; do pf_range "$i"; pf_piece "$i" "$PF_A" "$PF_B" & done
+          wait
+          pf_check "${PF_ALL[@]}"
+          if [ "${#PF_BAD}" -gt 0 ]; then
+            redo=("${PF_BAD[@]}")
+            PF_RETRIED=${#redo}
+            total="$PF_TOTAL"
+            pf_probe "$1" || { PF_WHY="다시 탐색: $PF_WHY"; return 1; }
+            if [ "$PF_TOTAL" != "$total" ]; then PF_WHY="받는 사이 전체 크기가 바뀌었습니다"; return 1; fi
+            for i in "${redo[@]}"; do rm -f "$PF_W/p$i"; pf_range "$i"; pf_piece "$i" "$PF_A" "$PF_B" & done
+            wait
+            pf_check "${redo[@]}"
+            if [ "${#PF_BAD}" -gt 0 ]; then PF_WHY="조각 ${PF_BAD[*]} 이 두 번 다 어긋났습니다"; return 1; fi
+          fi
+          : > "$PF_OUT.part" || { PF_WHY="이을 파일을 만들지 못했습니다"; return 1; }
+          for i in "${PF_ALL[@]}"; do
+            cat "$PF_W/p$i" >> "$PF_OUT.part" || { PF_WHY="조각을 잇지 못했습니다"; return 1; }
+          done
+          if [ "$(stat -f %z "$PF_OUT.part")" != "$PF_TOTAL" ]; then PF_WHY="이은 크기가 다릅니다"; return 1; fi
+          mv -f "$PF_OUT.part" "$PF_OUT" || { PF_WHY="이름을 바꾸지 못했습니다"; return 1; }
+        }
+        pfetch() {
+          local PF_W="" PF_OUT="$2" PF_FINAL="" PF_TOTAL="" PF_WHY="" PF_N=0 PF_SIZE=0 PF_A=0 PF_B=0 PF_RETRIED=0 PF_T0=$SECONDS rc=0
+          local -a PF_ALL PF_BAD
+          echo "$M 나눠 받기 시작: ${1%%\?*}"
+          PF_W="$(mktemp -d "${TMPDIR:-/tmp}/aing-check-pfetch.XXXXXX")" || { echo "$M 나눠 받기 폴백: 임시 폴더를 만들지 못했습니다"; return 1; }
+          pf_run "$1"
+          rc=$?
+          rm -rf "$PF_W"
+          if [ "$rc" -eq 0 ]; then
+            echo "$M 나눠 받기 끝: $PF_TOTAL bytes · ${PF_N}갈래 · $(( SECONDS - PF_T0 ))초 · 재시도한 조각 ${PF_RETRIED}개"
+          else
+            rm -f "$PF_OUT.part"
+            echo "$M 나눠 받기 폴백: ${PF_WHY:-알 수 없음} · $(( SECONDS - PF_T0 ))초 · 재시도한 조각 ${PF_RETRIED}개"
+          fi
+          return "$rc"
+        }
+        """#
+
+    // MARK: brew 원클릭 (상수 스크립트 + 위치 인자 — 0.3.61)
+
+    /// brew 분리 스폰 래퍼. **순수 상수다 — 어떤 값도 끼워 넣지 않는다**(`dmgSpawnWrapper` 와 같은 모양).
+    /// 0.3.60 까지는 brew 경로를 `zsh -c '…'` 의 작은 인용 안에 끼웠다. 후보가 고정(`brewCandidates`)이라 그때도 안전했지만,
+    /// 두 경로를 같은 모양으로 맞춰야 다음 사람이 사용자 값을 같은 자리에 끼우는 일이 생기지 않는다.
+    /// `$1` 스크립트 · `$2` brew · `$3` cask 이름 · `$4` 앱 경로(`open -a` 대상) · `$5` 로그 파일.
+    nonisolated static let brewSpawnWrapper =
+        #"nohup zsh -c "$1" aing-check-update "$2" "$3" "$4" >>"$5" 2>&1 &"#
+
+    /// brew 원클릭 스크립트. **상수**이고 값은 전부 위치 인자다: `$1` brew 실행파일 · `$2` cask 이름 · `$3` 앱 경로.
+    ///
+    /// ```
+    /// "$BREW" update || exit $?                          지금과 같은 의미(&& 사슬) — update 가 실패하면 멈춘다
+    /// ( prefetch )                                       최선 노력 — 무엇이 실패해도 다음 줄로 간다
+    /// "$BREW" upgrade --cask "$CASK" && open -a "$APP"
+    /// ```
+    ///
+    /// **왜 `brew update` 를 먼저 하는가**: brew 의 자동 갱신은 `HOMEBREW_AUTO_UPDATE_SECS` 로 스로틀된다(기본 하루). 최근에
+    /// 다른 brew 명령을 쓴 사람은 그 창 안에서 자동 갱신이 **건너뛰어져** 탭이 낡은 채로 남고, `brew upgrade` 는 새 버전을 못 본 채
+    /// "이미 최신"으로 조용히 끝난다. 그러면 앱은 죽지 않고 배너만 "업데이트 중…"으로 굳는다(실사용 신고 증상).
+    /// **왜 `--cask` 를 명시하는가**: 이름만 주면 brew 가 포뮬러를 먼저 찾는다 — 동명 포뮬러가 생기면 엉뚱한 것을 올린다.
+    ///
+    /// **미리 받기(prefetch, 0.3.61)**: brew 는 `brew --cache --cask <이름>` 자리에 지문이 맞는 파일이 이미 있으면 내려받기를
+    /// 건너뛴다(실측: `brew fetch --cask` 1초). 그래서 `brew info --json=v2` 의 url · sha256 · version · installed 를 plutil 로 읽어
+    /// (JSON 을 plutil 로 읽는 것은 실측 확인 — null 이 섞여도 읽고, null 칸은 실패로 돌아온다) `pfetch` 로 받아 둔다.
+    ///  · installed == version 이면 건너뛴다(올릴 것이 없다). sha256 이 64자리 소문자 16진이 아니거나 url 이 https 가 아니면 건너뛴다.
+    ///  · 캐시 자리에 이미 파일이 있으면 건너뛴다(brew 가 그대로 쓴다). 부모 폴더가 없으면 만든다.
+    ///  · ★ **검증 없이 캐시에 넣지 않는다.** brew 는 캐시 파일의 지문이 틀리면 다시 받지 않고 ChecksumMismatch 로 실패한다 —
+    ///    그래서 `shasum -a 256` 이 cask 의 sha256 과 같을 때만 **같은 폴더 안에서** `mv` 로 넣는다(반쪽 파일이 그 이름으로
+    ///    보이는 순간이 없게). 아니면 지우고 brew 가 스스로 받는다.
+    ///  · 로그에 "미리 받기: N초 · 성공/건너뜀(사유)/실패(사유)" 한 줄.
+    /// 효과는 0.3.61 을 설치한 **다음** 업데이트부터다 — 업데이트는 깔려 있는 앱의 스크립트가 실행한다.
+    ///
+    /// `/dev/null` 이 한 글자도 없다 — brew 와 plutil 의 경고까지 로그로 간다(실패 원인을 볼 수 있어야 한다).
+    /// 본문에 슬래시 두 개 · 슬래시-별표를 쓰지 않는다(`pfetchFunction` 주석).
+    nonisolated static let brewUpgradeScript = pfetchFunction + "\n" + #"""
+        set -u
+        BREW="$1"; CASK="$2"; APP="$3"
+        M="[aing-check-update]"
+        pre_log() { echo "$M 미리 받기: $(( SECONDS - PRE_T0 ))초 · $1"; }
+        prefetch() {
+          local PRE_T0=$SECONDS J="" U="" SHA="" VER="" INST="" CACHE="" PART="" GOT=""
+          J="$(mktemp "${TMPDIR:-/tmp}/aing-check-info.XXXXXX")" || { pre_log "실패(임시 파일)"; return 1; }
+          if ! HOMEBREW_NO_AUTO_UPDATE=1 "$BREW" info --cask --json=v2 "$CASK" > "$J"; then
+            rm -f "$J"; pre_log "건너뜀(brew info 가 실패)"; return 1
+          fi
+          U="$(plutil -extract casks.0.url raw "$J")" || U=""
+          SHA="$(plutil -extract casks.0.sha256 raw "$J")" || SHA=""
+          VER="$(plutil -extract casks.0.version raw "$J")" || VER=""
+          INST="$(plutil -extract casks.0.installed raw "$J")" || INST=""
+          rm -f "$J"
+          if [ -z "$VER" ]; then pre_log "건너뜀(새 버전을 읽지 못함)"; return 1; fi
+          if [ "$INST" = "$VER" ]; then pre_log "건너뜀(이미 $VER — 올릴 것이 없음)"; return 0; fi
+          case "$SHA" in
+            (''|*[!0-9a-f]*) pre_log "건너뜀(지문이 소문자 16진이 아님)"; return 1 ;;
+          esac
+          if [ "${#SHA}" -ne 64 ]; then pre_log "건너뜀(지문이 64자리가 아님)"; return 1; fi
+          case "$U" in
+            (https:[/][/]?*) ;;
+            (*) pre_log "건너뜀(주소가 https 가 아님)"; return 1 ;;
+          esac
+          CACHE="$(HOMEBREW_NO_AUTO_UPDATE=1 "$BREW" --cache --cask "$CASK")" || CACHE=""
+          case "$CACHE" in
+            (*$'\n'*) pre_log "건너뜀(캐시 자리가 여러 줄)"; return 1 ;;
+            ([/]?*) ;;
+            (*) pre_log "건너뜀(캐시 자리를 모름)"; return 1 ;;
+          esac
+          if [ -e "$CACHE" ]; then pre_log "건너뜀(캐시에 이미 있음 — brew 가 그대로 쓴다)"; return 0; fi
+          mkdir -p "$(dirname "$CACHE")" || { pre_log "실패(캐시 폴더를 만들지 못함)"; return 1; }
+          PART="$CACHE.aing-check-part"
+          rm -f "$PART"
+          if ! pfetch "$U" "$PART"; then rm -f "$PART"; pre_log "실패(나눠 받기 — brew 가 스스로 받는다)"; return 1; fi
+          GOT="$(shasum -a 256 "$PART")" || GOT=""
+          GOT="${GOT%% *}"
+          if [ "$GOT" != "$SHA" ]; then rm -f "$PART"; pre_log "실패(지문 불일치 — 넣지 않았다, brew 가 스스로 받는다)"; return 1; fi
+          mv -f "$PART" "$CACHE" || { rm -f "$PART"; pre_log "실패(캐시에 넣지 못함)"; return 1; }
+          pre_log "성공($VER)"
+        }
+        echo "$M ---- brew 업데이트 시작 $(date +%Y-%m-%dT%H:%M:%S)"
+        "$BREW" update || exit $?
+        ( prefetch )
+        "$BREW" upgrade --cask "$CASK" && open -a "$APP"
+        """#
+
+    /// brew 원클릭이 `zsh -c <brewSpawnWrapper>` 뒤에 붙일 인자들. 테스트가 각 자리의 뜻을 글자로 못박는다.
+    /// `[argv0, 스크립트, brew, cask 이름, 앱 경로, 로그 파일]` — 래퍼의 `$1`…`$5` 와 한 자리씩 대응한다.
+    nonisolated static func brewUpgradeArguments(brew: String) -> [String] {
+        ["aing-check-update", brewUpgradeScript, brew, caskName, appPath, logPath]
+    }
+
+    /// 기본 brew 스폰: 앱 종료에도 살아남는 분리 프로세스로 `brewUpgradeScript` 를 띄운다.
     ///
     /// 왜 nohup/이중 분리: brew cask 의 `quit` 스탠자가 업그레이드 도중 이 앱을 종료시킨다. 그래서 부모(앱)가 죽어도
     /// 명령이 이어지고 끝나면 앱을 다시 열도록, 세션에서 떼어(nohup) 백그라운드(&)로 던진다. 여기선 실행만 하고
     /// 완료를 기다리지 않으므로 UI 를 막지 않는다(Process.run 은 spawn 직후 반환).
-    ///
-    /// **왜 `brew update` 를 먼저 하는가(이 수리의 핵심)**: brew 의 자동 갱신은 `HOMEBREW_AUTO_UPDATE_SECS`
-    /// 로 스로틀된다(기본 하루). 최근에 다른 brew 명령을 쓴 사람은 그 창 안에서 자동 갱신이 **건너뛰어져** 탭이
-    /// 낡은 채로 남고, `brew upgrade` 는 새 버전을 못 본 채 "이미 최신"으로 조용히 끝난다. 그러면 앱은 죽지 않고
-    /// 배너만 "업데이트 중…"으로 굳는다 — 실사용에서 보고된 증상이 정확히 이것이다.
-    ///
-    /// **왜 `--cask` 를 명시하는가**: 이름만 주면 brew 가 포뮬러를 먼저 찾는다. 지금은 동명 포뮬러가 없어 우연히
-    /// 동작하지만, 언젠가 생기면 엉뚱한 것을 올린다. 문서·복사 명령과도 같은 형태로 맞춘다.
-    ///
-    /// **로그**: 예전엔 출력을 통째로 /dev/null 에 버려 실패 원인을 아무도 볼 수 없었다. 이제 파일에 남겨
-    /// 사용자가 붙여넣을 수 있게 한다(전송 없음 — 이 맥에만 남는다).
-    nonisolated static let logPath = NSString(string: "~/Library/Logs/aing-check-update.log").expandingTildeInPath
-
-    /// 스폰할 셸 스크립트 문자열. **테스트가 이 함수를 직접 검사한다** — 테스트가 문자열을 재조립하면
-    /// 소스를 되돌려도 초록이라 회귀를 못 잡는다.
-    nonisolated static func upgradeScript(brew: String) -> String {
-        let inner = "\"\(brew)\" update && \"\(brew)\" upgrade --cask \(caskName) && open -a \"\(appPath)\""
-        // 실패해도 로그가 남도록 파이프 전체를 파일로 리다이렉트한다(append — 직전 시도와 비교할 수 있게).
-        return "nohup zsh -c '\(inner)' >>\"\(logPath)\" 2>&1 &"
-    }
-
+    /// 래퍼만 셸 텍스트로 주고 나머지는 전부 인자로 넘긴다(`brewSpawnWrapper` 주석).
     nonisolated static func detachedSpawn(brew: String) -> Bool {
-        let script = upgradeScript(brew: brew)
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        proc.arguments = ["-c", script]
+        proc.arguments = ["-c", brewSpawnWrapper] + brewUpgradeArguments(brew: brew)
         do {
             try proc.run()
             return true
@@ -1056,7 +1272,7 @@ final class UpdateRunner {
     /// 분리 스폰 래퍼. **순수 상수다 — 어떤 값도 문자열에 끼워 넣지 않는다.**
     ///
     /// 왜 이렇게까지 하는가: 교체 대상은 `Bundle.main.bundlePath` 이고 그건 **사용자가 정하는 값**이다
-    /// (앱을 어느 폴더에 끌어다 놓았는지). 기존 brew 경로처럼 `zsh -c '…경로…'` 로 끼워 넣으면 폴더 이름에
+    /// (앱을 어느 폴더에 끌어다 놓았는지). 0.3.60 까지의 brew 경로처럼 `zsh -c '…경로…'` 로 끼워 넣으면 폴더 이름에
     /// 작은 인용(`'`)이 하나 있는 것만으로 스크립트가 끊기고 그 뒤가 명령으로 해석된다 — 실측으로 임의 명령이
     /// 실행됐고, 평범한 `Yesung's Apps` 같은 폴더만으로도 `unmatched "` 로 통째로 죽었다. 이 스크립트에는
     /// `rm -rf` 가 들어 있으므로 인용이 깨지는 것 자체가 위험하다.
@@ -1080,7 +1296,10 @@ final class UpdateRunner {
     /// **`xcrun stapler` 를 쓰지 않는다**: Xcode 명령행 도구가 없는 맥에서는 그 자체로 실패하고,
     /// DMG 로 설치하는 사람이야말로 개발자 도구가 없을 확률이 높다. `spctl` 이 이미 공증을 본다
     /// (실측: 마운트한 앱에 `source=Notarized Developer ID`).
-    nonisolated static let dmgUpdateScript = """
+    ///
+    /// **받기(0.3.61)**: 맨 앞에 `pfetchFunction` 을 이어 붙여 품고, 1) 받기만 `( pfetch … ) || <기존 단일 curl 그대로>` 로
+    /// 바꿨다. 2) 이후의 검증 단계(hdiutil verify · spctl · codesign -R · build 결박 · 스테이징 · 교체 · 재검증)는 한 글자도 바뀌지 않았다.
+    nonisolated static let dmgUpdateScript = pfetchFunction + "\n" + """
         set -u
         DEST="$1"; URL="$2"; APP_PID="$3"; REQ="$4"; MIN_BUILD="$5"; STATE="$6"
         M="[aing-check-update]"
@@ -1125,10 +1344,13 @@ final class UpdateRunner {
         rm -rf "$OLD"
         find "$PARENT" -maxdepth 1 -name '.aing-check-update.*' -exec rm -rf {} + 2>/dev/null
 
-        # 1) 받는다. `'=https'` 의 작은 인용은 **지워선 안 된다**: zsh 는 단어 앞의 `=https` 를 `=명령어` 확장으로
+        # 1) 받는다. 먼저 여러 갈래(맨 앞의 pfetch)로 받고, 어떤 이유로든 안 되면 예전 단일 curl 그대로 받는다(0.3.61).
+        #    pfetch 는 서브셸에서 부른다 — 함수 안의 어떤 사고도 이 스크립트를 끝내지 않고 단일 curl 로 떨어지게.
+        #    `'=https'` 의 작은 인용은 **지워선 안 된다**: zsh 는 단어 앞의 `=https` 를 `=명령어` 확장으로
         #    읽어 "https not found" 로 죽는다(실측). 스크립트를 위치 인자로 넘기므로 작은 인용을 마음껏 쓸 수 있다.
         note download
-        curl -fL --proto '=https' --tlsv1.2 --connect-timeout 20 --max-time 420 -o "$TMP/a.dmg" "$URL" \\
+        ( pfetch "$URL" "$TMP/a.dmg" ) \\
+          || curl -fL --proto '=https' --tlsv1.2 --connect-timeout 20 --max-time 420 -o "$TMP/a.dmg" "$URL" \\
           || fail download $? "내려받지 못했습니다(연결 또는 주소)"
         echo "$M 받음: $(stat -f %z "$TMP/a.dmg") bytes"
 

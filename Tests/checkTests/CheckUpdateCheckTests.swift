@@ -443,26 +443,37 @@ func copyCommandIsExact() {
 // 원클릭이 실제로 던지는 명령이 (1) brew update 를 **먼저** 하고 (2) --cask 를 명시하는지 문자열로 못박는다.
 // (1)이 없으면 HOMEBREW_AUTO_UPDATE_SECS 스로틀 창 안에 있는 사용자는 낡은 탭으로 upgrade 를 돌려
 // 새 버전을 못 본 채 끝나고, 앱은 죽지 않아 배너가 "업데이트 중…"으로 굳는다(실사용 신고 증상).
+// 0.3.61: brew 경로도 "상수 스크립트 + 위치 인자" 로 바뀌어 단언을 그 구조로 옮겼다 — 값은 인자 자리에서, 순서·리다이렉트는
+// 상수에서 잰다(느슨해진 것은 없다: 예전 단언 다섯 가지가 전부 대응하는 자리에 있다). 실제로 돌려 보는 것은 V0361UpdatePrefetchTests.
 @Test
-func upgradeScriptUpdatesTapFirstAndTargetsTheCask() {
-    // 프로덕션 스폰이 만드는 **실제 스크립트 문자열**을 본다. 테스트가 문자열을 재조립하면
+func brewUpgradeScriptUpdatesTapFirstAndTargetsTheCask() {
+    // 프로덕션 스폰이 만드는 **실제 스크립트·인자**를 본다. 테스트가 문자열을 재조립하면
     // 소스를 되돌려도 초록이라 아무것도 못 잡는다.
-    let script = UpdateRunner.upgradeScript(brew: "/opt/homebrew/bin/brew")
+    let script = UpdateRunner.brewUpgradeScript
+    let wrapper = UpdateRunner.brewSpawnWrapper
+    let args = UpdateRunner.brewUpgradeArguments(brew: "/opt/homebrew/bin/brew")
 
-    let updateAt = script.range(of: "brew\" update")
-    let upgradeAt = script.range(of: "brew\" upgrade")
+    let updateAt = script.range(of: #""$BREW" update"#)
+    let upgradeAt = script.range(of: #""$BREW" upgrade"#)
     #expect(updateAt != nil)
     #expect(upgradeAt != nil)
     // 순서가 뒤집히면 낡은 탭으로 upgrade 가 돌아 새 버전을 못 본다.
     if let u = updateAt, let g = upgradeAt { #expect(u.lowerBound < g.lowerBound) }
     // 이름만 주면 brew 가 포뮬러를 먼저 찾는다 — 동명 포뮬러가 생기면 엉뚱한 것을 올린다.
-    #expect(script.contains("upgrade --cask \(UpdateRunner.caskName)"))
-    // 실패 원인을 볼 수 있어야 한다 — /dev/null 로 버리면 지원이 불가능하다.
+    #expect(script.contains(#""$BREW" upgrade --cask "$CASK" && open -a "$APP""#))
+    #expect(script.contains(#"BREW="$1"; CASK="$2"; APP="$3""#))
+    #expect(args == ["aing-check-update", script, "/opt/homebrew/bin/brew",
+                     UpdateRunner.caskName, UpdateRunner.appPath, UpdateRunner.logPath])
+    #expect(args[3] == "aing-check")
+    // 실패 원인을 볼 수 있어야 한다 — /dev/null 로 버리면 지원이 불가능하다(미리 받기까지 포함해 스크립트 전체에 없다).
     #expect(!script.contains("/dev/null"))
-    #expect(script.contains(UpdateRunner.logPath))
+    #expect(!wrapper.contains("/dev/null"))
+    // 로그는 래퍼의 마지막 인자 자리로 간다(stdout·stderr 둘 다).
+    #expect(wrapper.hasSuffix(#">>"$5" 2>&1 &"#))
+    #expect(args.last == UpdateRunner.logPath)
     // 앱 종료에도 살아남아야 한다(cask 의 quit 스탠자가 이 앱을 죽인다).
-    #expect(script.hasPrefix("nohup "))
-    #expect(script.hasSuffix("&"))
+    #expect(wrapper.hasPrefix("nohup "))
+    #expect(wrapper.hasSuffix("&"))
 }
 
 // running 은 종착역이 아니다. 업그레이드가 실제로 일어나면 cask 의 quit 스탠자가 앱을 죽이므로

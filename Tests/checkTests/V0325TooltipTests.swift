@@ -715,9 +715,10 @@ struct V0325TooltipTests {
         // v0.3.45 는 AI 리밋 창(CheckAILimitsView)이 일곱 번째였고, v0.3.46 에 그 창이 사라져 **여섯**으로
         // 돌아왔다 — 리밋 카드는 팝오버 안에 있고 팝오버 루트의 레이어를 쓴다(`CheckAILimitsRow.swift` 머리말).
         // 그 카드의 `.checkTooltip` 이 실제로 말풍선을 받는다는 사실은 아래 `.checkTooltip(` 자리 대조가 잰다.
+        // v0.3.60: 1:1 테트리스 창(TetrisDuelPanel) 루트가 일곱 번째다.
         #expect(layerSites == [
             "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
-            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1",
+            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "TetrisDuelPanel.swift:1",
         ], "레이어 자리: \(layerSites)")
         // 체스 창도 오목과 **같은 자리**다: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
         let chess = try #require(Self.between(sources["ChessPanel.swift"] ?? "",

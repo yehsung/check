@@ -71,7 +71,10 @@ struct CheckApp: App {
             hasOpenReports: appDelegate.store.reportOpenCount > 0,
             // v0.3.44: 받은 **체스** 신청도 같은 점. 체스 창을 여는 길은 미니게임 머리글 하나뿐이고 체스 폴링은
             // 창이 보일 때만 돌아서, 창을 안 연 사람에게 이 점은 신청을 아는 세 표면(점·팝오버 배너·말풍선) 중 하나다.
-            hasChessInvite: appDelegate.store.chess.visibleIncoming != nil
+            hasChessInvite: appDelegate.store.chess.visibleIncoming != nil,
+            // v0.3.60: 받은 **테트리스** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 머리글 하나뿐이고
+            // 테트리스 폴링은 창이 보일 때만 돈다). 만료는 스토어 타이머가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
+            hasTetrisInvite: appDelegate.store.tetris.visibleIncoming != nil
         )
     }
 }
@@ -161,6 +164,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 1:1 체스(v0.3.44) — 창 여는 문 · 순위·관전 주 스위치 · 로그아웃 닫기 · **받은 신청·내 차례 말풍선**.
         // 오목과 **같은 순서 제약**이 있다: 말풍선 큐가 오버레이 컨트롤러에 살아서, 먼저 이으면 첫 신청이 받을 곳 없이 사라진다.
         wireChess()
+        // 1:1 테트리스(v0.3.60) — 체스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        wireTetrisDuel()
         // 전역 단축키도 **오버레이 컨트롤러를 만든 뒤에** 잇는다 — 단축키로 시작한 근무도 알약으로 시작한 근무와 똑같이
         // 캐릭터가 나와야 하는데, 그 표시 전환이 위에서 배선된다.
         // ★ 진짜 Carbon 등록기는 **여기서만** 만든다. 테스트 프로세스가 실제 전역 키를 잡으면 스위트를 도는 동안
@@ -306,6 +311,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
         }, safety: store)
+        // 1:1 테트리스 창(v0.3.60)도 같은 자리에서 배선한다 — 체스 창의 형제다(키를 잃거나 닫혀도 판을 끝내지 않는다).
+        CheckTetrisDuelWindowController.shared.configure(store: store.tetris, me: { [weak self] in
+            guard let self else { return ChessPlayerFace.fallback }
+            return ChessPlayerFace.me(from: self.store)
+        }, safety: store)
         // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
         // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
         CheckGachaWindowController.shared.configure(store: store)
@@ -318,7 +328,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ★ **제보·메시지 창은 v0.2.50 에 사라졌다.** 둘 다 팝오버 하위 패널로 내려왔고(사용자 지시:
         //   "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 그 사람과의 1대1 메시지 화면으로만"),
         //   패널은 배선할 창 수명이 없다 — 그리는 것은 `CheckMenuView` 이고 상태는 스토어 깃발 하나다.
-        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임·1:1 오목·1:1 체스·캐릭터 뽑기 다섯이다.
+        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임·1:1 오목·1:1 체스·1:1 테트리스·캐릭터 뽑기 여섯이다.
         // 실행 중인 앱에서 창이 **실제로** 떴는지 밖에서 재기 위한 문(인자가 없으면 아무 일도 안 한다).
         // 이 저장소에서 창 검증은 CGWindowList 실측 없이는 성립하지 않는다 — 근거는 그 타입 주석 참고.
         CheckSettingsWindowProbe.startIfRequested()
@@ -393,6 +403,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
             CheckChessWindowController.shared.close()
             self?.overlayController?.clearChessInvites()
+        }.start()
+    }
+
+    /// 1:1 테트리스(v0.3.60)의 문들을 잇는다(실행당 1회). **전부 빠져도 컴파일·스토어 테스트는 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 테스트(V0360TetrisDuelWindowTests)가 줄마다 되묻는다.
+    ///   ① `rankingEnabled` — 순위의 **주 스위치**. 스토어는 폰과 공용이라 기본이 꺼짐이고, 없으면 순위 탭은 영영 로딩이다.
+    ///   ② `presentWindow` — `openWindow(focusMatchID:)` 와 **판 시작**이 창을 앞으로 띄우는 유일한 문. 없으면 상대가
+    ///      수락해도 신청자 화면에는 아무것도 안 뜨고, 창을 못 띄운 사람은 준비하지 못해 30초 뒤 판이 무산된다(no_show).
+    ///   ③ `dismissWindow` — 로그아웃·계정 전환의 `reset()` 이 부르는 닫기 문(아래 감시자와 겹쳐도 멱등이다).
+    ///   ④ `requestAttention` — 판이 막 시작됐는데 앱이 뒤에 있을 때 주의를 끈다.
+    ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 테트리스를 아는 길**(받은 신청 · "대결이 시작됐어요" 말풍선).
+    ///   ⑥ `onOpenTetrisDuel` — 그 말풍선을 눌렀을 때 그 판의 창.
+    private func wireTetrisDuel() {
+        let tetris = store.tetris
+        tetris.rankingEnabled = true
+        tetris.presentWindow = { CheckTetrisDuelWindowController.shared.show() }
+        tetris.dismissWindow = { CheckTetrisDuelWindowController.shared.close() }
+        tetris.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        tetris.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueTetrisInvite(invite)
+        }
+        tetris.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueTetrisAttention(attention)
+        }
+        overlayController?.onOpenTetrisDuel = { [weak self] matchID in
+            self?.store.tetris.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckTetrisDuelWindowController.shared.close()
+            self?.overlayController?.clearTetrisInvites()
         }.start()
     }
 

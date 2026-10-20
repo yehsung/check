@@ -775,13 +775,11 @@ struct V0359RainbowPackagingTests {
         }
     }
 
-    @Test("버전 0.3.59 / 112 · CHANGELOG 0.3.59 는 사용자 말투 세 줄(무지개 2% · 황금 3% · 조각 20개)")
+    // v0.3.60: 빌드 번호 고정(0.3.59 / 112)과 "맨 위 섹션" 단언은 다음 버전이 올라가며 거짓이 됐다 — 그 두 사실은 이제
+    // `V0360TetrisDuelWindowTests.versionAndChangelog` 가 0.3.60 / 113 으로 잰다. 여기는 0.3.59 섹션의 **내용**만 남긴다.
+    @Test("CHANGELOG 0.3.59 는 사용자 말투 세 줄(무지개 2% · 황금 3% · 조각 20개)")
     func versionAndChangelog() throws {
         let root = CheckCoreSourceLayout.repoRoot
-        let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-        let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-        #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.59</string>"))
-        #expect(squashed.contains("<key>CFBundleVersion</key><string>112</string>"))
         let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
         let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.59\n") })
         let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -789,7 +787,6 @@ struct V0359RainbowPackagingTests {
         #expect(items.contains { $0.contains("무지개 아잉이") && $0.contains("2%") })
         #expect(items.contains { $0.contains("황금 아잉이") && $0.contains("3%") })
         #expect(items.contains { $0.contains("조각 20개") })
-        // 첫 섹션이다(릴리스 스크립트가 맨 위 버전을 쓴다).
         #expect(changelog.range(of: "## 0.3.59")!.lowerBound < changelog.range(of: "## 0.3.58")!.lowerBound)
     }
 }

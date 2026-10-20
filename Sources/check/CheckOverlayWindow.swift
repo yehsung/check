@@ -236,6 +236,16 @@ final class CheckOverlayController {
     private(set) var pendingChessAttention: ChessAttention?
     private var chessAttentionTask: Task<Void, Never>?
     private(set) var shownChessAttention: (text: String, matchID: String)?
+    /// 1:1 테트리스(v0.3.60)의 같은 네 칸. 체스와 형제이고 규약이 글자 그대로 같다 — 다른 것은 문구와 여는 창, 그리고
+    /// 차례가 없어 알림이 "대결이 시작됐어요" 하나뿐이라는 것이다(창을 못 띄운 사람은 준비하지 못해 판이 무산된다).
+    private(set) var tetrisInviteQueue: [TetrisDuelInvite] = []
+    private var tetrisDrainTask: Task<Void, Never>?
+    private(set) var shownTetrisInvite: (text: String, matchID: String)?
+    /// 테트리스 말풍선을 눌렀을 때 열 곳(인자 = 판 id). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
+    var onOpenTetrisDuel: ((String) -> Void)?
+    private(set) var pendingTetrisAttention: TetrisDuelAttention?
+    private var tetrisAttentionTask: Task<Void, Never>?
+    private(set) var shownTetrisAttention: (text: String, matchID: String)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -819,6 +829,8 @@ final class CheckOverlayController {
         if let rect = gomokuInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 체스 말풍선(v0.3.44)도 같은 이유로 몸체로 쳐 준다.
         if let rect = chessInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
+        // 테트리스 말풍선(v0.3.60)도 같은 이유로 몸체로 쳐 준다.
+        if let rect = tetrisInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
@@ -950,6 +962,10 @@ final class CheckOverlayController {
         }
         if let rect = chessInviteBubbleScreenRect(), rect.contains(location), let matchID = chessBubbleMatchID() {
             onOpenChess?(matchID)
+            return
+        }
+        if let rect = tetrisInviteBubbleScreenRect(), rect.contains(location), let matchID = tetrisBubbleMatchID() {
+            onOpenTetrisDuel?(matchID)
             return
         }
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
@@ -1524,6 +1540,144 @@ final class CheckOverlayController {
                 await tick(Self.messageBubbleTickSeconds)
             }
             self?.chessAttentionTask = nil
+        }
+    }
+
+    // MARK: - 1:1 테트리스 말풍선 (v0.3.60 — 체스 네 묶음의 형제)
+    //
+    // ★ 테트리스 폴링도 `isWindowVisible` 을 요구하고 창을 여는 길은 미니게임 머리글 하나뿐이다. 받은 신청의 TTL 은 60초이고
+    //   이번 버전은 푸시가 없다(설계 D8) — 이 말풍선 · 팝오버 배너 · 메뉴바 점이 신청을 아는 세 표면이다.
+
+    /// 테트리스 신청 말풍선 문구(순수). 체스 문구와 **같은 접기 규칙**이고 게임 이름만 다르다.
+    nonisolated static func tetrisInviteBubbleText(name: String, stake: Int) -> String {
+        let shortName = OverlayMessageBubble.clippedName(name)
+        let full = "\(shortName)님이 테트리스 대결을 신청했어요 · \(stake)💎"
+        if OverlayMessageBubble.fitsCapsule(full) { return full }
+        let short = "\(shortName)님의 테트리스 신청 · \(stake)💎"
+        if OverlayMessageBubble.fitsCapsule(short) { return short }
+        return "테트리스 대결 신청 · \(stake)💎"
+    }
+
+    /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 판 id 는 한 번만). `TetrisDuelStore.onInviteArrived` 가 부른다.
+    func enqueueTetrisInvite(_ invite: TetrisDuelInvite) {
+        guard !tetrisInviteQueue.contains(where: { $0.id == invite.id }) else { return }
+        tetrisInviteQueue.append(invite)
+        drainTetrisInvitesIfNeeded()
+    }
+
+    /// 큐를 비운다(로그아웃·계정 전환).
+    func clearTetrisInvites() {
+        tetrisInviteQueue.removeAll()
+        shownTetrisInvite = nil
+        pendingTetrisAttention = nil
+        shownTetrisAttention = nil
+    }
+
+    /// 큐 맨 앞 신청 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
+    /// 테트리스는 받은 신청이 **여럿**일 수 있다(서버 배열) — 살아 있음은 스토어가 화면에 보이는 받은 신청 전부로 판정한다.
+    @discardableResult
+    func showNextTetrisInviteBubble(now: Date = Date()) -> Bool {
+        let alive = Set(store.tetris.visibleIncomingInvites.map(\.id))
+        tetrisInviteQueue.removeAll { $0.expiresAt <= now || !alive.contains($0.id) }
+        guard let invite = tetrisInviteQueue.first else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.tetrisInviteBubbleText(name: invite.peer.displayName, stake: invite.stake)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownTetrisInvite = (text, invite.id)
+        tetrisInviteQueue.removeFirst()
+        return true
+    }
+
+    func drainTetrisInvitesIfNeeded() {
+        guard tetrisDrainTask == nil, !tetrisInviteQueue.isEmpty else { return }
+        let tick = messageBubbleSleep
+        tetrisDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, !self.tetrisInviteQueue.isEmpty else { break }
+                self.showNextTetrisInviteBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.tetrisDrainTask = nil
+        }
+    }
+
+    /// 헤드리스 검증 지점: 테트리스 신청 펌프가 돌고 있는가.
+    var isDrainingTetrisInvites: Bool { tetrisDrainTask != nil }
+
+    /// 지금 **누를 수 있는** 테트리스 말풍선(신청·시작)의 화면 사각형(아니면 nil).
+    func tetrisInviteBubbleScreenRect() -> NSRect? {
+        guard tetrisBubbleMatchID() != nil else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 지금 떠 있는 테트리스 말풍선이 열 판 id. 문구와 id 를 **함께** 본다.
+    func tetrisBubbleMatchID() -> String? {
+        guard onOpenTetrisDuel != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownTetrisAttention, shown.text == text { return shown.matchID }
+        if let shown = shownTetrisInvite, shown.text == text { return shown.matchID }
+        return nil
+    }
+
+    /// "대결이 시작됐어요" 말풍선 문구(순수). 차례가 없는 게임이라 알림은 이 하나뿐이다.
+    nonisolated static func tetrisAttentionBubbleText(_ attention: TetrisDuelAttention) -> String {
+        switch attention.kind {
+        case .matchStarted:
+            let name = OverlayMessageBubble.clippedName(attention.opponentName)
+            if !name.isEmpty {
+                let full = "\(name)님과 테트리스 대결이 시작됐어요"
+                if OverlayMessageBubble.fitsCapsule(full) { return full }
+            }
+            return "테트리스 대결이 시작됐어요"
+        }
+    }
+
+    /// 시작 알림을 넣고 펌프를 돌린다. `TetrisDuelStore.onAttention` 이 부른다.
+    func enqueueTetrisAttention(_ attention: TetrisDuelAttention) {
+        pendingTetrisAttention = attention
+        drainTetrisAttentionIfNeeded()
+    }
+
+    @discardableResult
+    func showPendingTetrisAttentionBubble() -> Bool {
+        guard let attention = pendingTetrisAttention else { return false }
+        guard Self.tetrisAttentionIsCurrent(attention, in: store.tetris) else {
+            pendingTetrisAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.tetrisAttentionBubbleText(attention)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownTetrisAttention = (text, attention.matchID)
+        pendingTetrisAttention = nil
+        return true
+    }
+
+    /// 시작 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 떠 있으면 거짓이다(화면이 이미 말한다).
+    static func tetrisAttentionIsCurrent(_ attention: TetrisDuelAttention, in tetris: TetrisDuelStore) -> Bool {
+        guard !tetris.isWindowVisible, let match = tetris.match else { return false }
+        return match.id == attention.matchID && !match.isFinished
+    }
+
+    func drainTetrisAttentionIfNeeded() {
+        guard tetrisAttentionTask == nil, pendingTetrisAttention != nil else { return }
+        let tick = messageBubbleSleep
+        tetrisAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingTetrisAttention != nil else { break }
+                self.showPendingTetrisAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.tetrisAttentionTask = nil
         }
     }
 

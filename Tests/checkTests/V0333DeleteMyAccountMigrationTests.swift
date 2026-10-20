@@ -189,7 +189,10 @@ private let deleteAccountLaterRedefinitionsAllowed:
             "테트리스 판을 닫는다 — 진행 중 판을 abandoned 로 정산해야 상대 판돈이 소각되지 않는다(tetris_duel §7A.2) · 지갑 키는 한 번의 정렬",
             [
                 // ㉠ 덮어쓴 이유 — 테트리스 판 정산과 그 상대의 지갑 키.
-                "union select unnest(array[g.challenger, g.opponent]) from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent)) k",
+                // 테트리스 상대는 **정렬해서 기다리는** 키 집합(v_keys)에 있어야 한다. 뒤의 다시 모으기(v_late)도 같은
+                // union 을 쓰므로 `… ) k` 까지만 재면 정렬 집합에서 테트리스를 빼도 초록이다(뮤턴트 m6 실측) — 그래서
+                // 그 집합을 닫고 곧바로 기다리는 잠금으로 들어가는 자리까지 함께 잰다.
+                "union select unnest(array[g.challenger, g.opponent]) from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent)) k; foreach v_key in array v_keys loop perform pg_advisory_xact_lock(",
                 "for v_tmatch in select g.id, g.challenger from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent) order by g.id loop",
                 "perform public.tetris__settle(v_tmatch.id, case when v_tmatch.challenger = v_uid then 'opponent_win' else 'challenger_win' end, 'abandoned');",
                 "if exists (select 1 from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent)) then raise exception",

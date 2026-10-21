@@ -190,5 +190,9 @@ for f in "$HERE"/../*.ps1 "$HERE"/../../../spikes/windows/ci/*.ps1 "$HERE"/../..
 done
 [ $nobom -eq 0 ] && ok "모든 .ps1 이 UTF-8 BOM 으로 시작한다" || bad "BOM" "$nobom 개"
 
+# 15. winrun.ps1 은 표준 사용자 SSH 로 돈다 — CIM/WMI 는 거부된다(러너 예행 실측). 주석을 걷고 본다.
+cim="$(sed -e 's/#.*$//' "$HERE/../winrun.ps1" | grep -ciE 'Get-CimInstance|Get-WmiObject|Invoke-CimMethod' || true)"
+[ "$cim" -eq 0 ] && ok "winrun.ps1 은 CIM/WMI 를 쓰지 않는다" || bad "winrun CIM" "$cim 곳"
+
 printf '\n%d 통과 · %d 실패\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

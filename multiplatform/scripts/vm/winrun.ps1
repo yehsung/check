@@ -111,7 +111,9 @@ switch ($Action) {
             userInteractive = [Environment]::UserInteractive
             explorerSessions = @(Get-Process explorer -ErrorAction SilentlyContinue | ForEach-Object { $_.SessionId })
             arch = $env:PROCESSOR_ARCHITECTURE
-            os = (Get-CimInstance Win32_OperatingSystem).Caption
+            # 표준 사용자의 SSH 세션은 CIM(WMI)이 거부된다(0x80041003, run 39600888145) — 레지스트리로 읽는다.
+            os = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ProductName
+            displayVersion = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion
             build = [Environment]::OSVersion.Version.ToString()
         })
         exit 0

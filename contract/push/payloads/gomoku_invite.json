@@ -1,0 +1,17 @@
+{
+  "_apns": {
+    "collapse_id": "0f0f0000-0000-4000-8000-00000000f506",
+    "expiration": 1792582130
+  },
+  "aps": {
+    "alert": {
+      "body": "보낸사람님이 오목 대결을 신청했어요 · 루비 3",
+      "title": "오목 신청"
+    },
+    "category": "GOMOKU_INVITE",
+    "sound": "default",
+    "thread-id": "gomoku"
+  },
+  "match_id": "0f0f0000-0000-4000-8000-00000000f506",
+  "type": "gomoku_invite"
+}

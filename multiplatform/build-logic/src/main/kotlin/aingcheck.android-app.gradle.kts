@@ -31,6 +31,14 @@ android {
     buildFeatures {
         compose = true
     }
+    buildTypes {
+        // stub(E§4.6): 데모 픽스처로 도는 시험·스크린샷 변형. debug 설정을 물려받고 운영 구성·Firebase 는 언제나 빈 값이다
+        // (isRelease 가 거짓). 소스셋 src/stub(W1-g)이 CurrentVariant = STUB 을 준다.
+        create("stub") {
+            initWith(getByName("debug"))
+            matchingFallbacks += listOf("debug")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -62,6 +70,11 @@ extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents")
             header.set("운영 구성(§8-5). release 변형만 Gradle 속성 aingcheck.prod.* 를 읽는다. 기본 .invalid")
             constants.put("SUPABASE_URL", values.supabaseUrl)
             constants.put("SUPABASE_ANON_KEY", values.supabaseAnonKey)
+            // Firebase(E§6.6): release 만 속성을 읽는다. debug·stub 은 빈 값 — 앱의 FirebaseSettings.parse 가 null 로 읽어 초기화하지 않는다.
+            constants.put("FIREBASE_APP_ID", values.firebaseAppId)
+            constants.put("FIREBASE_PROJECT_ID", values.firebaseProjectId)
+            constants.put("FIREBASE_SENDER_ID", values.firebaseSenderId)
+            constants.put("FIREBASE_API_KEY", values.firebaseApiKey)
             outputDir.set(project.layout.buildDirectory.dir("generated/aingcheck/prodConfig/${variant.name}"))
         }
         val identityTask = project.tasks.register<GenerateKotlinConstants>("generate${cap}BuildIdentity") {

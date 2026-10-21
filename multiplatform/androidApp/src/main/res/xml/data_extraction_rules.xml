@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ 클라우드 백업·기기 이전 규칙(W1-g, E§5.2 · G §8-13 기본 적용). 전부 뺀다 — 설치 UUID·금고는 어차피 noBackupFilesDir 이고,
+     할 일은 서버 동기화다. Android 12+ 에서 백업 제외를 보증하는 것은 이 파일 + noBackupFilesDir 다(fullBackupContent 는 11 이하 몫).
+     매니페스트 allowBackup=false · fullBackupContent=false 와 겹으로 둔다(lint DataExtractionRules). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -58,7 +58,19 @@ const val AINGCHECK_INVALID_URL = "https://aingcheck.invalid"
  * - 저장소에는 운영 주소·키가 없다. 출시 스크립트(W6)가 속성으로 넣는다.
  * - 비밀 키가 섞여 들어오면 빌드를 멈춘다(산출물 금지 문자열과 같은 목록, A§6-1).
  */
-data class ProdConfigValues(val supabaseUrl: String, val supabaseAnonKey: String)
+data class ProdConfigValues(
+    val supabaseUrl: String,
+    val supabaseAnonKey: String,
+    /**
+     * Firebase 앱 설정 넷(E§6.6 — google-services.json 없이 FirebaseOptions 로 손수 초기화). release 조립 지점에서만 속성
+     * `aingcheck.prod.firebase{AppId,ProjectId,SenderId,ApiKey}` 로 들어온다. 기본은 빈 값(= 앱이 초기화하지 않는다).
+     * 넷 다 비었거나 넷 다 찼다(섞이면 빌드를 멈춘다).
+     */
+    val firebaseAppId: String = "",
+    val firebaseProjectId: String = "",
+    val firebaseSenderId: String = "",
+    val firebaseApiKey: String = "",
+)
 
 // 표식 글자는 이어 붙여 만든다 — 이 파일이 저장소 푸시 전 비밀 검사(글자 그대로의 grep)에 걸리지 않게.
 private val FORBIDDEN_SECRET_MARKERS = listOf(
@@ -89,7 +101,18 @@ fun Project.aingcheckProdConfig(releaseAssembly: Boolean): ProdConfigValues {
             throw GradleException("aingcheck.prod.supabaseAnonKey 에 비밀 키 표식('$marker')이 있다 — anon 키만 넣는다")
         }
     }
-    return ProdConfigValues(url, key)
+    val firebaseKeys = listOf("firebaseAppId", "firebaseProjectId", "firebaseSenderId", "firebaseApiKey")
+    val firebase = firebaseKeys.map { providers.gradleProperty("aingcheck.prod.$it").orNull?.trim().orEmpty() }
+    if (firebase.any { it.isNotEmpty() } && firebase.any { it.isEmpty() }) {
+        throw GradleException("Firebase 속성 넷(aingcheck.prod.${firebaseKeys.joinToString(",")})은 다 넣거나 하나도 넣지 않는다")
+    }
+    if (firebase.any { v -> v.any { it.isWhitespace() || it == '"' || it == '\\' || it == '$' } }) {
+        throw GradleException("aingcheck.prod.firebase* 에 공백·따옴표가 있다")
+    }
+    for (marker in FORBIDDEN_SECRET_MARKERS) {
+        if (firebase.any { it.contains(marker) }) throw GradleException("aingcheck.prod.firebase* 에 비밀 키 표식('$marker')이 있다")
+    }
+    return ProdConfigValues(url, key, firebase[0], firebase[1], firebase[2], firebase[3])
 }
 
 /** 문자열 상수만 담은 Kotlin 파일 하나를 만든다. 값은 Kotlin 문자열 리터럴로 안전하게 적는다. */

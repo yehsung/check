@@ -6,6 +6,7 @@
 #  - windows-arm64   : windows-11-arm, 방화벽 봉인 아래 데스크톱 시험(mp-ci windows-x64 와 같은 절차).
 #  - release-dryrun  : 봉인 아래 assembleRelease(.invalid) → APK 네이티브 점검(G §8-12): .so 허용 목록 + 16 KB 정렬
 #                      (zipalign -c -P 16 · PT_LOAD p_align ≥ 0x4000). 옛 "lib/ 0개" 기준은 버렸다(Compose 가 .so 를 싣는다).
+#                      → APK 내용 점검(W1-g ⑦): 자기 시험(가짜 APK 양성 대조) 뒤 진짜 APK 의 assets Fixtures 0 · dex 운영 주소 0.
 name: mp-nightly
 
 on:
@@ -117,3 +118,11 @@ jobs:
         run: |
           apk="$(ls androidApp/build/outputs/apk/release/*.apk | head -1)"
           bash scripts/apk-native-check.sh "$apk"
+      - name: APK 내용 점검 자기 시험(가짜 APK 넷 — Fixtures·운영 주소를 잡고 깨끗한 판은 통과, W1-g ⑦ 양성 대조)
+        working-directory: multiplatform
+        run: bash scripts/apk-content-check.sh --self-test
+      - name: APK 내용 점검(assets Fixtures 0 · dex 운영 주소 0 · .invalid 기준선, W1-g ⑦)
+        working-directory: multiplatform
+        run: |
+          apk="$(ls androidApp/build/outputs/apk/release/*.apk | head -1)"
+          bash scripts/apk-content-check.sh "$apk" --expect-invalid

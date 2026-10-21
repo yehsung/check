@@ -70,9 +70,19 @@ class MergedManifestTest {
     @Test
     fun backupIsOffAndCleartextIsOff() {
         assertEquals("false", application.a("allowBackup"))
-        // fullBackupContent=false 는 Android 11 이하 Auto Backup 을 끈다. Android 12+ 클라우드 백업·기기 이전은 데이터 추출 규칙 파일
-        // (조정자 패치 w1g-01, 기본 적용 — 그 단언은 패치와 함께 이 시험에 들어온다)과 noBackupFilesDir 가 보증한다.
+        // fullBackupContent=false 는 Android 11 이하 Auto Backup 을 끈다. Android 12+ 클라우드 백업·기기 이전은 데이터 추출 규칙 파일과
+        // noBackupFilesDir 가 보증한다.
         assertEquals("false", application.a("fullBackupContent"))
+        // Android 12+ 규칙 파일: 클라우드 백업·기기 이전 둘 다 모든 도메인을 뺀다.
+        assertEquals("@xml/data_extraction_rules", application.a("dataExtractionRules"))
+        val rules = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(File("src/main/res/xml/data_extraction_rules.xml")).documentElement
+        val domains = setOf("root", "file", "database", "sharedpref", "external", "device_root", "device_file", "device_database", "device_sharedpref")
+        for (section in listOf("cloud-backup", "device-transfer")) {
+            val node = rules.children(section).single()
+            assertTrue("$section 에 include 가 있다", node.children("include").isEmpty())
+            assertEquals("$section 이 모든 도메인을 빼지 않는다", domains, node.children("exclude").filter { it.getAttribute("path") == "." }.map { it.getAttribute("domain") }.toSet())
+        }
         assertEquals("false", application.a("usesCleartextTraffic"))
         // 네트워크 보안 설정이 평문을 다시 여는 길을 두지 않는다.
         assertEquals(null, application.a("networkSecurityConfig"))

@@ -7,7 +7,7 @@
     FOREGROUND_SERVICE 는 WorkManager 가 끌어오지만 이 앱은 포그라운드 서비스를 쓰지 않아(E§4.2) 지운다.
   - 백업: allowBackup=false + fullBackupContent=false(Android 11 이하 Auto Backup) + 설치 UUID·금고는 noBackupFilesDir
     (플랫폼이 언제나 건너뛰는 자리, E§5.2). Android 12+ 클라우드 백업·기기 이전은 데이터 추출 규칙 파일
-    (res/xml/data_extraction_rules.xml — 조정자 몫, 패치 w1g-01 기본 적용)과 noBackupFilesDir 가 보증한다.
+    (res/xml/data_extraction_rules.xml — 모든 도메인 제외)과 noBackupFilesDir 가 보증한다.
     fullBackupContent 가 Android 12+ 기기 이전까지 끈다고는 기대지 않는다(실측하지 않았다).
   - 평문 통신 0(usesCleartextTraffic=false — debug 도 같다. localhost 예외를 두지 않는다).
   - MainActivity launchMode=singleTask(E-U16: 딥링크 → 프로세스 죽음 → 런처 아이콘 뒤 Activity 1개).
@@ -30,6 +30,7 @@
     <application
         android:name=".app.AingApplication"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
         android:label="아잉체크"
         android:supportsRtl="true"

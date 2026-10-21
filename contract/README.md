@@ -157,10 +157,10 @@ Kotlin 쪽 약속(C-X10 실측 — `MirrorDumpProbeTest`):
 같은 K1 형식이고 같은 비교/쓰기 모드로 지킨다(`_manifest.json` 의 `probes`). 계약이 아니라서 지문(_digests)에는 넣지 않는다.
 Kotlin 은 `Golden.loadProbe("w0b-probe/<이름>")`. **W0-f ③(ART API 26·36)** 은 이 파일들을 그대로 계측 시험 assets 로 복사해 읽는다.
 
-| 파일 | 실험 | 읽는 법(요약 — 자세히는 각 파일 `spec`) | JVM 실측(JDK 21.0.10, aarch64) |
+| 파일 | 실험 | 읽는 법(요약 — 자세히는 각 파일 `spec`) | JVM 실측(맥 JDK 21.0.10 aarch64 · CI 결과도 같으면 따로 안 적음) |
 |---|---|---|---|
-| `pow3.json` | C-X1 | x = SplitMix64(`spec.seed`).unit() 를 100만 개. Darwin `pow(x,3)` = `(x*x)*x` 의 비트 + δ(`deltas`: 36진 건너뛴 수 + `+`/`-`/`=δ;`). 되살린 값을 FNV 로 접어 `powDigest` 와 먼저 맞춘다 | `Math.pow`·`StrictMath.pow` 가 Darwin 과 다른 x **98,069개(9.81%)**, 둘끼리는 0. `(x*x)*x` 는 256,870개(25.7%, 전부 ±1ulp) |
-| `gravity.json` | C-X1 | 단계 1~20: `baseBits`·`exponentBits`·Darwin `powBits` | 20단계 중 **1단계**가 Darwin 과 다르다 → 중력은 비트 표 상수(W1-a) |
+| `pow3.json` | C-X1 | x = SplitMix64(`spec.seed`).unit() 를 100만 개. Darwin `pow(x,3)` = `(x*x)*x` 의 비트 + δ(`deltas`: 36진 건너뛴 수 + `+`/`-`/`=δ;`). 되살린 값을 FNV 로 접어 `powDigest` 와 먼저 맞춘다 | aarch64(맥): `Math.pow`·`StrictMath.pow` 가 Darwin 과 다른 x **98,069개(9.81%)**, 둘끼리 0. amd64(CI ubuntu·windows, JDK 21.0.12): `Math.pow` **1,443개**, `StrictMath.pow` 98,069개, 둘끼리 97,708개 — **`Math.pow` 는 JVM 끼리도 아키텍처마다 비트가 다르다.** `(x*x)*x` 는 256,870개(25.7%, 전부 ±1ulp) |
+| `gravity.json` | C-X1 | 단계 1~20: `baseBits`·`exponentBits`·Darwin `powBits` | 단계 18 이 1ulp 다르다(aarch64 `Math.pow`·`StrictMath.pow`, amd64 `StrictMath.pow`). amd64 `Math.pow` 는 20단계 다 같다 → 중력은 비트 표 상수(W1-a) |
 | `text-scalars.json` | C-X4 | 평면마다 `ranges` = `시작-끝:분류`(분류 = 일반 범주 2자 + White_Space + 보이는 글자 + NFC 안정, 각 0/1). 구간 4,257개 | 일반 범주 **10,617** 스칼라 다름(JDK 21 = 유니코드 15.0, Swift 쪽이 더 새 판) · 보이는 글자 10,615 · White_Space 0 · NFC 안정 0 |
 | `graphemes.json` | C-X4·C-X13 | `cps` → `clusters`(그래핌마다 스칼라 수) · `count` | `BreakIterator` 가 300줄 중 **2줄** 다름(인도계 결합 InCB, 유니코드 15.1 규칙) |
 | `nfc.json` | C-X4 | `cps` → `nfc`(Swift `precomposedStringWithCanonicalMapping`) | `java.text.Normalizer` 와 **6줄** 다름 — **Swift(Foundation) 쪽이 표준과 어긋난다**(아래) |

@@ -214,8 +214,8 @@ lanes:
 
   W1-e:
     wave: W1
-    # 완료 기준 덧붙임(W0 검증): 골든이 생기면 verifyRoborazzi*(Android·데스크톱)를 gate-fast 에 넣는다 —
-    # 지금 Robolectric·Roborazzi 시험은 모드 속성이 없으면 캡처가 비어 게이트 아래에서 단언이 없다.
+    # 스냅숏(G §8-13): verifyRoborazzi* 를 따로 넣지 않는다 — Gallery*SnapshotTest 가 Roborazzi 모드 속성 없이 스스로 골든과
+    # 대조한다(기록 기계는 픽셀 그대로, 다른 러너는 굵은 대조 문턱 64). gate-fast 의 일반 시험 작업 안에서 단언이 돈다.
     title: 디자인 시스템
     owns:
       - "multiplatform/ui/src/*/kotlin/{pkg:ui}/{theme,components,icons,fonts}/**"

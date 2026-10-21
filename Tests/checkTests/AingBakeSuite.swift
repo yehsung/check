@@ -16,10 +16,16 @@ import simd
 // 테스트 타깃만 할 수 있어서다. 장면을 스크립트로 옮겨 적으면 두 벌이 되므로 **앱이 그리는 장면을 그대로** 굽는다.
 //
 // 굽기(`bake`)는 `CHECK_AING_BAKE_OUT=<폴더>` 가 있을 때만 돈다(진입점 `multiplatform/scripts/bake-aing/bake.sh`).
-// 나머지 셋은 늘 돈다:
+// 나머지 넷은 늘 돈다:
 //   · 구운 매니페스트를 **지금의** Swift `CharacterManifest` 가 2칸 스프라이트로 읽는다(구버전 호환 — 설계 F §3.5)
 //   · 진짜 `ReactionEngine` 졸기(.drowsy) 렌더 = 굽기 경로(감은 눈) 렌더, 바이트 동치(설계 F §3.2-3)
 //   · SceneKit 이징 곡선 3종이 실측식과 소수 넷째 자리까지 같다(설계 F §3.2-4)
+//   · 재현성 탐침(F-10)이 그리는 칸이 커밋된 lock.json.raw 에 실제로 있다(없으면 완벽히 재현돼도 늘 "다름"으로 찍힌다)
+//
+// 알파(마스터 계획 G §8-12 — 설계 F §3.4 "파일은 직선 알파"를 대체한다): 칸 · 감은 눈 패치 · 💤 글리프는
+// **SceneKit 이 쓴 프리멀티 바이트 그대로** 담는다. SceneKit 은 반투명을 "선형 프리멀티 후 sRGB 부호화"로 적어서
+// 가장자리 픽셀의 색이 알파를 넘는다(실측 97.4%) — 직선으로 바꾸면 C 가 255 로 잘려 최대 73단계 어두워진다.
+// legacy.webp(기존 스프라이트 디코더가 읽는 2칸)만 표준 WebP 의미(직선 알파)로 둔다. 매니페스트 `bake.alpha` 가 이 표를 적는다.
 //
 // 규칙: 창을 띄우지 않는다(`SCNRenderer` 오프스크린만, 엔진은 view: nil 로 붙인다). UserDefaults 를 읽지 않는다(캐릭터는 인자).
 // 네트워크가 없다(bake.sh 가 sandbox-exec 로 막는다). 저장소에는 쓰지 않는다 — 산출물은 바깥 폴더로만 나가고,
@@ -60,6 +66,15 @@ struct AingBakeSuite {
             for page in try #require(bake["pages"] as? [String]) {
                 #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent(page).path), "\(finish.assetID)/\(page) 가 없다")
             }
+            // 알파 형식이 파일 역할마다 적혀 있다(G §8-12) — 재생기(W5-a)는 이 표로 디코드 방식을 고른다.
+            let alpha = try #require(bake["alpha"] as? [String: Any], "\(finish.assetID): bake.alpha 가 없다")
+            #expect((alpha["pages"] as? String) == "premultiplied", "\(finish.assetID): 칸 · 패치 페이지는 프리멀티여야 한다")
+            #expect((alpha["glyph"] as? String) == "premultiplied")
+            #expect((alpha["legacy"] as? String) == "straight", "\(finish.assetID): legacy.webp 는 기존 스프라이트 디코더용 직선 알파")
+            // 손실 RGB 의 알파 0 빛을 지우는 디코드 클램프 표(256칸, A = 0 → 0).
+            let clamp = try #require(alpha["decodeClamp"] as? [String: Any], "\(finish.assetID): bake.alpha.decodeClamp 가 없다")
+            let table = try #require(clamp["table"] as? [Int])
+            #expect(table.count == 256 && table.first == 0 && table.last == 255)
 
             let manifest = try JSONDecoder().decode(CharacterManifest.self, from: data)
             #expect(manifest.id == finish.assetID)
@@ -165,8 +180,43 @@ struct AingBakeSuite {
     nonisolated static let probeOut = ProcessInfo.processInfo.environment["CHECK_AING_BAKE_PROBE_OUT"]
     nonisolated static var probeEnabled: Bool { probeOut != nil }
 
-    /// 굽기와 **같은 함수**(`Baker.renderCell`)로 칸 몇 개를 그려 원본 다이제스트를 lock.json.raw 와 같은 키로 쓴다.
-    /// 다른 맥(CI 러너)에서 돌려 이 맥의 굽기와 바이트로 같은지 잰다. 직선 RGBA 도 함께 써서 다르면 최대 Δ 를 잴 수 있게 한다.
+    /// 탐침이 그리는 칸. **솎기와 무관하게 늘 구워지는 칸만** 고른다 — 솎기에서 빠진 칸(예전 `S:+180:14.0`)은 lock.json.raw 에
+    /// 없어서, 완벽히 재현되는 기계에서도 늘 "다름"으로 찍혔다(W0-d 검증 지적).
+    ///   · S 쉬는 ψ0 · ψ+40(τ = restTilt): legacy 2칸의 원본이라 없으면 굽기가 실패한다. ψ0 은 감은 눈 패치도 그린다.
+    ///   · S ψ0 τ10(띠) · S ψ180 τ10(스핀): 솎기 안전망(30°×10°)의 격자점과 **정확히 같은 방향**이라 각 0 으로 뽑힌다.
+    ///   · L 쉬는 ψ0 · U ψ0 τ13: L 쉬는 행과 U 단은 솎지 않는다.
+    /// 늘 도는 시험 `probeCellsAreInCommittedLock` 이 이 목록 ⊂ lock.json.raw 를 잰다.
+    nonisolated static func probeCells(_ config: BakeConfig) -> [(cell: BakeCell, patch: Bool)] {
+        [(BakeCell(tier: "S", group: .rest, yaw: 0, tilt: config.grid.restTilt), true),
+         (BakeCell(tier: "S", group: .rest, yaw: 40, tilt: config.grid.restTilt), false),
+         (BakeCell(tier: "S", group: .band, yaw: 0, tilt: 10), false),
+         (BakeCell(tier: "S", group: .spin, yaw: 180, tilt: 10), false),
+         (BakeCell(tier: "L", group: .rest, yaw: 0, tilt: config.grid.restTilt), false),
+         (BakeCell(tier: "U", group: .ultra, yaw: 0, tilt: 13), false)]
+    }
+
+    /// 탐침이 쓰는 raw 키(칸 + 패치).
+    nonisolated static func probeKeys(_ config: BakeConfig) -> [String] {
+        probeCells(config).flatMap { $0.patch ? ["aing/\($0.cell.id)", "aing/\($0.cell.id)#closed"] : ["aing/\($0.cell.id)"] }
+    }
+
+    // MARK: - 늘 도는 시험 ④: 탐침 칸 ⊂ 잠금
+
+    @Test("재현성 탐침(F-10)의 칸이 커밋된 lock.json.raw 에 모두 있다 — 잠금에 없는 칸을 그리면 재현돼도 '다름'으로 찍힌다")
+    func probeCellsAreInCommittedLock() throws {
+        let config = try BakeConfig.load(Self.repoRoot.appendingPathComponent("multiplatform/scripts/bake-aing/config.json"))
+        let lockURL = Self.repoRoot.appendingPathComponent("multiplatform/assets/aing-bake/lock.json")
+        let lock = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: lockURL)) as? [String: Any])
+        let raw = try #require(lock["raw"] as? [String: String])
+        let keys = Self.probeKeys(config)
+        #expect(keys.count == 7)
+        let missing = keys.filter { raw[$0] == nil }
+        #expect(missing.isEmpty, "탐침 칸이 잠금에 없다: \(missing)")
+    }
+
+    /// 굽기와 **같은 함수**(`Baker.renderCell`)로 칸 몇 개를 그려 원본(프리멀티) 다이제스트를 lock.json.raw 와 같은 키로 쓴다.
+    /// 다른 맥(CI 러너)에서 돌려 이 맥의 굽기와 바이트로 같은지 잰다. 원본 RGBA 도 함께 써서 다르면 최대 Δ 를 잴 수 있게 한다.
+    /// 대조는 `bake.py probe-compare`(같음 · 다름 · 잠금에 없음을 따로 센다).
     @Test("재현성 탐침 — CHECK_AING_BAKE_PROBE_OUT 이 있을 때만", .enabled(if: probeEnabled))
     func reproducibilityProbe() throws {
         let out = URL(fileURLWithPath: try #require(Self.probeOut))
@@ -178,19 +228,18 @@ struct AingBakeSuite {
         let camera = BakeCamera(world: BakeMath.d(rig.camera.simdWorldTransform), fovDeg: Double(rig.camera.camera!.fieldOfView),
                                 zNear: Double(rig.camera.camera!.zNear), zFar: Double(rig.camera.camera!.zFar),
                                 verticalFov: rig.camera.camera!.projectionDirection == .vertical)
-        let cells = [BakeCell(tier: "S", group: .rest, yaw: 0, tilt: config.grid.restTilt),
-                     BakeCell(tier: "S", group: .rest, yaw: 40, tilt: config.grid.restTilt),
-                     BakeCell(tier: "S", group: .band, yaw: 0, tilt: 28),
-                     BakeCell(tier: "S", group: .spin, yaw: 180, tilt: 14),
-                     BakeCell(tier: "L", group: .rest, yaw: 0, tilt: config.grid.restTilt),
-                     BakeCell(tier: "U", group: .ultra, yaw: 0, tilt: 13)]
         var raw: [String: String] = [:]
-        for cell in cells {
+        for (cell, patch) in Self.probeCells(config) {
             let render = try baker.renderCell(cell, rig: rig, size: config.size(cell.tier), camera: camera,
-                                              cameraDirection: simd_normalize(camera.position), patch: false)
-            raw["aing/\(cell.id)"] = Baker.sha256(render.straight, w: render.crop.w, h: render.crop.h)
-            try baker.emitImage(bytes: render.straight, w: render.crop.w, h: render.crop.h,
-                                rawName: "aing/\(cell.id.replacingOccurrences(of: ":", with: "_"))", destination: "-", mode: "none")
+                                              cameraDirection: simd_normalize(camera.position), patch: patch)
+            let name = "aing/\(cell.id.replacingOccurrences(of: ":", with: "_"))"
+            raw["aing/\(cell.id)"] = Baker.sha256(render.crop.px, w: render.crop.w, h: render.crop.h)
+            try baker.emitImage(bytes: render.crop.px, w: render.crop.w, h: render.crop.h, rawName: name, destination: "-", mode: "none")
+            if patch {
+                let p = try #require(render.patch, "\(cell.id): 감은 눈 패치가 없다")
+                raw["aing/\(cell.id)#closed"] = Baker.sha256(p.image.px, w: p.image.w, h: p.image.h)
+                try baker.emitImage(bytes: p.image.px, w: p.image.w, h: p.image.h, rawName: "\(name)_closed", destination: "-", mode: "none")
+            }
         }
         try baker.write(["gpu": device.name, "raw": raw, "images": baker.images], to: "probe.json")
     }
@@ -488,10 +537,11 @@ struct BakeImage {
         return BakeImage(w: cw, h: ch, px: out)
     }
 
-    /// 파일용 직선(straight) 알파: C = min(255, round(P·255/A)). 디코더가 다시 곱한 round(C·A/255) 와 원래 P 의 차이를 함께 잰다.
+    /// 직선(straight) 알파: C = min(255, round(P·255/A)). 디코더가 다시 곱한 round(C·A/255) 와 원래 P 의 차이를 함께 잰다.
     /// ⚠️ 설계 F §3.4 는 이 변환이 무손실이라고 적었지만 **P > A 인 픽셀에서는 손실이 난다**: SceneKit 은 반투명을 "선형 프리멀티 후
     /// sRGB 부호화"로 적어서 밝은 가장자리 픽셀의 P(부호화된 값)가 A 를 넘는다(sRGB 부호화가 오목하다). 그 픽셀은 C 가 255 로
-    /// 잘려 P' = A 가 된다. 실측 수치는 plan.reports["alpha"] — 보고서의 설계 충돌 항목.
+    /// 잘려 P' = A 가 된다. 그래서 G §8-12 가 칸을 프리멀티 그대로 담게 바꿨다 — 이 변환을 쓰는 파일은 legacy.webp 하나뿐이고,
+    /// 나머지는 손실 집계(plan.reports.renders.alpha)에만 쓴다. A = 0 인데 색이 0 이 아닌 픽셀도 센다(프리멀티 파일엔 그대로 남는다).
     func straightened() -> (bytes: [UInt8], stats: AlphaStats) {
         var out = [UInt8](repeating: 0, count: px.count)
         var stats = AlphaStats()
@@ -499,7 +549,10 @@ struct BakeImage {
             out.withUnsafeMutableBufferPointer { o in
                 for i in stride(from: 0, to: p.count, by: 4) {
                     let a = Int(p[i + 3])
-                    guard a > 0 else { continue }
+                    guard a > 0 else {
+                        if p[i] != 0 || p[i + 1] != 0 || p[i + 2] != 0 { stats.zeroAlphaWithColor += 1 }
+                        continue
+                    }
                     stats.translucent += a < 255 ? 1 : 0
                     stats.visible += 1
                     o[i + 3] = UInt8(a)
@@ -521,16 +574,46 @@ struct BakeImage {
     }
 }
 
+/// 프리멀티 칸의 디코드 클램프(재생기 몫, 매니페스트 `bake.alpha.decodeClamp`).
+///
+/// 칸 페이지의 RGB 평면은 손실 WebP 라 코덱 잡음이 **알파 0 자리에도 색을 남긴다**(첫 프리멀티 굽기 실측: 알파 0 인 픽셀 채널
+/// 13,190,070개에 빛, 최대 90단계). 직선 알파에선 곱해서 사라지던 잡음이 프리멀티 표면에선 몸 둘레에 빛으로 더해진다.
+/// SceneKit 의 프리멀티 값은 "선형 프리멀티 → sRGB 부호화"라 알파 a 에서 sRGB부호(a/255)·255 를 넘을 수 없다 → 재생기는
+/// 디코드 뒤 채널마다 min(값, T[A]) 를 한다. T[0] = 0 이라 알파 0 의 빛이 지워진다. 반올림 여유 +1 을 둔다 — 굽기는 모든
+/// 칸 · 패치 원본이 이 표 안에 있는지 재고, 넘으면 실패한다(클램프가 진짜 픽셀을 바꾸는 일이 없게).
+enum BakeAlpha {
+    static let clampTable: [Int] = (0...255).map { a in
+        guard a > 0 else { return 0 }
+        let x = Double(a) / 255
+        let e = x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055
+        return min(255, Int((e * 255).rounded()) + 1)
+    }
+
+    /// 원본이 클램프 표를 넘는 채널 수(0 이어야 한다).
+    static func overClamp(_ image: BakeImage) -> Int {
+        image.px.withUnsafeBufferPointer { p in
+            var n = 0
+            for i in stride(from: 0, to: p.count, by: 4) {
+                let t = clampTable[Int(p[i + 3])]
+                if Int(p[i]) > t { n += 1 }
+                if Int(p[i + 1]) > t { n += 1 }
+                if Int(p[i + 2]) > t { n += 1 }
+            }
+            return n
+        }
+    }
+}
+
 /// 직선 알파 왕복 손실 집계.
 struct AlphaStats {
-    var visible = 0, translucent = 0, overAlpha = 0, channelMismatches = 0, sumAbsError = 0, maxAbsError = 0
+    var visible = 0, translucent = 0, overAlpha = 0, channelMismatches = 0, sumAbsError = 0, maxAbsError = 0, zeroAlphaWithColor = 0
     mutating func add(_ o: AlphaStats) {
-        visible += o.visible; translucent += o.translucent; overAlpha += o.overAlpha
+        visible += o.visible; translucent += o.translucent; overAlpha += o.overAlpha; zeroAlphaWithColor += o.zeroAlphaWithColor
         channelMismatches += o.channelMismatches; sumAbsError += o.sumAbsError; maxAbsError = max(maxAbsError, o.maxAbsError)
     }
     var report: [String: Any] {
         ["visiblePixels": visible, "translucentPixels": translucent, "pixelsWithColorAboveAlpha": overAlpha,
-         "channelMismatches": channelMismatches, "maxAbsError": maxAbsError,
+         "channelMismatches": channelMismatches, "maxAbsError": maxAbsError, "zeroAlphaPixelsWithColor": zeroAlphaWithColor,
          "meanAbsErrorOverMismatches": channelMismatches == 0 ? 0 : BakeMath.r6(Double(sumAbsError) / Double(channelMismatches))]
     }
 }
@@ -1013,7 +1096,7 @@ final class Baker {
         try data.write(to: url)
     }
 
-    /// 직선 RGBA 를 deflate 로 눌러 쓰고, python 이 PAM 으로 풀어 cwebp 로 인코딩한다.
+    /// RGBA8 바이트를 손대지 않고 deflate 로 눌러 쓰고, python 이 PAM 으로 풀어 cwebp 로 인코딩한다(알파 형식은 부르는 쪽이 정한다).
     func emitImage(bytes: [UInt8], w: Int, h: Int, rawName: String, destination: String, mode: String) throws {
         let rawURL = out.appendingPathComponent("raw/\(rawName).rgba.z")
         try FileManager.default.createDirectory(at: rawURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -1649,10 +1732,11 @@ final class Baker {
         let size = BakeSize(512, 512)
         let (img, n) = try BakeRender.stable(renderer, size: size, time: 0)
         renderCounts[n, default: 0] += 1
-        let straight = img.straightened()
-        alphaOther.add(straight.stats)
-        raw["glyph-z"] = Self.sha256(straight.bytes, w: size.w, h: size.h)
-        try emitImage(bytes: straight.bytes, w: size.w, h: size.h, rawName: "glyph-z", destination: "glyph-z.webp", mode: "lossless")
+        // 칸과 같이 프리멀티 그대로(G §8-12) — 글리프는 보이는 픽셀 전부가 반투명(재질 알파 0.85)이고 전부 P > A 라
+        // 직선으로 바꾸면 통째로 어두워진다(실측 alpha.other). 무손실이라 파일 = 원본 바이트다.
+        alphaOther.add(img.straightened().stats)
+        raw["glyph-z"] = Self.sha256(img.px, w: size.w, h: size.h)
+        try emitImage(bytes: img.px, w: size.w, h: size.h, rawName: "glyph-z", destination: "glyph-z.webp", mode: "lossless")
         let unitsPerPixel = 2 * half / Double(size.h)
         reports["glyph"] = ["file": "glyph-z.webp", "sizePx": [512, 512],
                             "localBoxMin": [Double(minB.x), Double(minB.y)].map(BakeMath.r6), "localBoxMax": [Double(maxB.x), Double(maxB.y)].map(BakeMath.r6),
@@ -1754,14 +1838,14 @@ final class Baker {
 
     // MARK: 칸 굽기
 
+    /// 칸 하나. `crop`·`patch.image` 는 SceneKit 이 쓴 프리멀티 바이트 그대로다 — 파일 · raw 다이제스트가 이것이다(G §8-12).
     struct CellRender {
         let cell: BakeCell
         let crop: BakeImage           // 프리멀티
-        let straight: [UInt8]
         let originX: Int, originY: Int
         let quad: [[Double]]
         let pivot: [Double]
-        var patch: (straight: [UInt8], w: Int, h: Int, atX: Int, atY: Int)?
+        var patch: (image: BakeImage, atX: Int, atY: Int)?
     }
 
     func renderCell(_ cell: BakeCell, rig: BakeRig, size: BakeSize, camera: BakeCamera, cameraDirection: SIMD3<Double>,
@@ -1779,8 +1863,10 @@ final class Baker {
         }
         let ox = box.x0 - m, oy = box.y0 - m
         let crop = open.crop(x: ox, y: oy, w: box.x1 - box.x0 + 1 + 2 * m, h: box.y1 - box.y0 + 1 + 2 * m)
-        let straight = crop.straightened()
-        alphaCells.add(straight.stats)
+        // 파일은 프리멀티 그대로 담는다. 직선으로 바꿨다면 잃었을 값은 보고용으로만 센다(plan.reports.renders.alpha).
+        alphaCells.add(crop.straightened().stats)
+        let over = BakeAlpha.overClamp(crop)
+        if over > 0 { throw BakeError("\(cell.id): 원본 \(over)채널이 디코드 클램프 표(bake.alpha.decodeClamp)를 넘는다 — 재생기 클램프가 진짜 픽셀을 바꾼다") }
 
         // 4점: 몸 국소 피벗 ± h·r ± h·u (r·u ⟂ n) → 화면 → 칸 좌표. 순서 TL · TR · BR · BL.
         let nLocal = cell.direction
@@ -1794,7 +1880,7 @@ final class Baker {
             return [BakeMath.r3(p.x - Double(ox)), BakeMath.r3(p.y - Double(oy))]
         }
         let pv = camera.project(.zero, size: size)
-        var result = CellRender(cell: cell, crop: crop, straight: straight.bytes, originX: ox, originY: oy, quad: quad,
+        var result = CellRender(cell: cell, crop: crop, originX: ox, originY: oy, quad: quad,
                                 pivot: [BakeMath.r3(pv.x - Double(ox)), BakeMath.r3(pv.y - Double(oy))], patch: nil)
         if patch {
             try rig.setEyes(closed: true)
@@ -1809,9 +1895,10 @@ final class Baker {
                     throw BakeError("\(cell.id): 감은 눈 차이가 칸 밖으로 나간다")
                 }
                 let p = closed.crop(x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1)
-                let ps = p.straightened()
-                alphaCells.add(ps.stats)
-                result.patch = (ps.bytes, p.w, p.h, x0 - ox, y0 - oy)
+                alphaCells.add(p.straightened().stats)
+                let pOver = BakeAlpha.overClamp(p)
+                if pOver > 0 { throw BakeError("\(cell.id)#closed: 원본 \(pOver)채널이 디코드 클램프 표를 넘는다") }
+                result.patch = (p, x0 - ox, y0 - oy)
             }
         }
         return result
@@ -1884,7 +1971,7 @@ final class Baker {
                         if tier == "S", cell.group == .rest, cell.yaw == 0 || cell.yaw == 40 { legacyParts["\(cell.yaw)"] = render }
                     }
                     let pageName = "\(tier)-\(group.rawValue)-\(chunkIndex)"
-                    let packed = pack(renders.map { ($0.cell.id, $0.crop.w, $0.crop.h, $0.straight) }, maxWidth: t.pageMaxWidth)
+                    let packed = pack(renders.map { ($0.cell.id, $0.crop.w, $0.crop.h, $0.crop.px) }, maxWidth: t.pageMaxWidth)
                     if packed.h > 4096 || packed.w > 4096 { throw BakeError("\(pageName): 페이지가 4096 을 넘는다 \(packed.w)×\(packed.h)") }
                     let pageIndex = pages.count
                     pages.append("\(pageName).webp")
@@ -1892,7 +1979,7 @@ final class Baker {
                     try emitImage(bytes: packed.buffer, w: packed.w, h: packed.h, rawName: "\(finish.assetID)/\(pageName)",
                                   destination: "\(finish.assetID)/\(pageName).webp", mode: "lossy")
                     for (render, place) in zip(renders, packed.placed) {
-                        raw["\(finish.assetID)/\(render.cell.id)"] = Self.sha256(render.straight, w: render.crop.w, h: render.crop.h)
+                        raw["\(finish.assetID)/\(render.cell.id)"] = Self.sha256(render.crop.px, w: render.crop.w, h: render.crop.h)
                         bodyBoxes.append(max(render.crop.w, render.crop.h) - 2 * config.cellMarginPx)
                         var object: [String: Any] = [
                             "id": render.cell.id, "tier": tier, "group": render.cell.group.rawValue,
@@ -1902,10 +1989,10 @@ final class Baker {
                         ]
                         if let patch = render.patch {
                             let key = "\(render.cell.id)#closed"
-                            raw["\(finish.assetID)/\(key)"] = Self.sha256(patch.straight, w: patch.w, h: patch.h)
-                            patchItems.append((key, patch.w, patch.h, patch.straight))
+                            raw["\(finish.assetID)/\(key)"] = Self.sha256(patch.image.px, w: patch.image.w, h: patch.image.h)
+                            patchItems.append((key, patch.image.w, patch.image.h, patch.image.px))
                             patchOwners[key] = (cellObjects.count, patch.atX, patch.atY)
-                            patchAreas.append(Double(patch.w * patch.h) / Double(render.crop.w * render.crop.h))
+                            patchAreas.append(Double(patch.image.w * patch.image.h) / Double(render.crop.w * render.crop.h))
                         } else if wantPatches && BakeGrid.closedEyeCapable(render.cell, g) {
                             object["closedPatch"] = NSNull()
                         }
@@ -1939,8 +2026,11 @@ final class Baker {
         }
 
         // legacy 2칸(frontIdle = S ψ0 τ13, sideIdle = S ψ+40 τ13): 같은 캔버스 · 같은 피벗 픽셀.
+        // 이 파일만 **직선 알파**다: 읽는 쪽이 기존 스프라이트 디코더(맥 `CharacterManifest`·`SpriteRuntime`, 굽기를 모르는 재생기)라
+        // 표준 WebP 의미(디코드 때 곱한다)를 따라야 한다. P > A 픽셀은 C = 255 로 잘린다(보고 alpha.cells 와 같은 손실).
         guard let front = legacyParts["0"], let side = legacyParts["40"] else { throw BakeError("legacy 칸이 없다") }
         let parts = [front, side]
+        let straightParts = parts.map { $0.crop.straightened().bytes }
         let px = parts.map { Int($0.pivot[0].rounded()) }, py = parts.map { Int($0.pivot[1].rounded()) }
         let left = px.max()!, top = py.max()!
         let right = zip(parts, px).map { $0.crop.w - $1 }.max()!, bottom = zip(parts, py).map { $0.crop.h - $1 }.max()!
@@ -1950,7 +2040,7 @@ final class Baker {
             let dx = i * cw + (left - px[i]), dy = top - py[i]
             for row in 0..<part.crop.h {
                 for col in 0..<(part.crop.w * 4) {
-                    legacy[((dy + row) * cw * 2 + dx) * 4 + col] = part.straight[row * part.crop.w * 4 + col]
+                    legacy[((dy + row) * cw * 2 + dx) * 4 + col] = straightParts[i][row * part.crop.w * 4 + col]
                 }
             }
         }
@@ -1967,7 +2057,20 @@ final class Baker {
             "cellsNote": "cells live in cells-<tier>.json (page = index into bake.pages) — a platform ships only the tiers it uses",
             "legacyPivot": ["x": left, "y": top],
             "cellPixelConvention": "rect/quad/pivot in pixels, top-left origin; quad/pivot are continuous coordinates within the cell rect",
-            "alpha": "files are straight alpha; premultiply after decode (SceneKit wrote sRGB-encoded premultiplied values)",
+            // 알파 형식(G §8-12). pages = bake.pages 전부(칸 · 감은 눈 패치), glyph = bake.glyph, legacy = atlas.file.
+            "alpha": [
+                "pages": "premultiplied", "glyph": "premultiplied", "legacy": "straight",
+                "premultiplied": "RGBA8 bytes exactly as SceneKit wrote them (sRGB-encoded premultiplied; RGB may exceed A). Decode WITHOUT premultiplying (libwebp RGBA, Android inPremultiplied=false) and hand the bytes unchanged to a premultiplied surface (Skia kPremul_SkAlphaType, Android premultiplied Bitmap via copyPixelsFromBuffer)",
+                "straight": "standard WebP straight alpha; the decoder premultiplies (existing sprite decoders read the legacy 2-cell atlas this way)",
+                "decodeClamp": [
+                    "appliesTo": "pages",
+                    "rule": "after decoding a premultiplied page, set every color channel c := min(c, table[A]). Lossy RGB leaves codec light where A = 0 (and above what SceneKit can write at low A); SceneKit's sRGB-encoded premultiplied value never exceeds table[A], so the clamp never changes a true pixel (the bake fails if one would)",
+                    "table": BakeAlpha.clampTable,
+                    "tableFormula": "table[0] = 0; table[a] = min(255, round(255 * srgbEncode(a / 255)) + 1)"
+                ] as [String: Any]
+            ] as [String: Any],
+            // 인코딩(cwebp 인자는 bake.cwebpArgs — bake.py 가 config.json 의 encode 를 그대로 옮긴다). 알파 평면은 셋 다 무손실이다.
+            "encoding": ["pages": "lossy", "glyph": "lossless", "legacy": "lossy"],
             "inputsHash": "see ../lock.json"
         ]
         if let files = finish.haloCellFiles {

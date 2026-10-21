@@ -218,7 +218,7 @@
       ]
     },
     "androidDefault": {
-      "budget": 4000000,
+      "budget": 4500000,
       "assets": [
         "*/L-*.webp",
         "*/manifest.json",

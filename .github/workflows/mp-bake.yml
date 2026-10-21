@@ -5,6 +5,15 @@
 #                  맥 출시는 막지 않는다. 망 봉인(unshare --net) 안에서 돈다.
 # aing-bake-verify (macOS arm64, 실험 · 수동) Metal 장치 유무(F-5)와 같은 칸을 러너에서 렌더한 원본 다이제스트(F-10)를 잰다.
 #                  러너 Xcode 가 이 저장소를 못 빌드할 수 있어 실패해도 워크플로를 막지 않는다(continue-on-error).
+#
+# 설계 F §7 과 다른 점(W0-d — multiplatform/scripts/bake-aing/README.md 에 같은 표):
+#   · F §7 의 aing-bake-verify 는 "굽기 입력이 바뀐 PR 마다 bake.sh --check 로 다시 굽고, 원본 다이제스트가 다르면
+#     허용오차(최대 Δ ≤ 2 · IoU ≥ 0.999)로 GPU·OS 잡음과 실제 변화를 가른다"이다.
+#   · 지금 구현은 **수동 실행 전용 탐침**이다: 늘 구워지는 7칸(AingBakeSuite.probeCells)만 그려 lock.json.raw 와
+#     다이제스트로만 대조한다(bake.py probe-compare — 같음 · 다름 · 잠금에 없음을 따로 센다). 허용오차 비교와 diff 그림은 없다.
+#   · 이유: 러너 최신 Xcode 26.6(Swift 6.3.3)이 이 저장소 시험 타깃을 못 빌드한다(2026-10-21 실측). 그래서 F-10(맥 사이 렌더
+#     재현성)은 **미검증**이고, Windows/Android 출시 게이트는 aing-bake-lock(해시 잠금)만 지킨다.
+#   · Xcode 27 러너(또는 자체 러너)가 생기면 push 트리거로 되돌리고 `bake.sh --check` + 허용오차 비교로 올린다.
 name: mp-bake
 
 on:
@@ -105,23 +114,13 @@ jobs:
           tail -3 "$RUNNER_TEMP/build.log"
       - name: F-10 같은 칸을 러너에서 렌더(망 봉인)
         run: |
+          set -o pipefail
           mkdir -p "$RUNNER_TEMP/probe"
           sandbox-exec -p '(version 1)(allow default)(deny network-outbound (remote ip "*:*"))' \
             env CHECK_AING_BAKE_PROBE_OUT="$RUNNER_TEMP/probe" \
             swift test --disable-sandbox --skip-build --no-parallel --filter 'AingBakeSuite/reproducibility' 2>&1 | tail -30
-          python3 - "$RUNNER_TEMP/probe/probe.json" multiplatform/assets/aing-bake/lock.json <<'EOF'
-          import json, os, sys
-          probe = json.load(open(sys.argv[1]))
-          print("gpu:", probe["gpu"])
-          print("raw:", json.dumps(probe["raw"], sort_keys=True))
-          if not os.path.isfile(sys.argv[2]):
-              sys.exit("lock.json 이 커밋돼 있지 않다 — 위 raw 를 맥 굽기의 lock.json.raw 와 손으로 대조한다(아티팩트 aing-bake-probe)")
-          lock = json.load(open(sys.argv[2]))["raw"]
-          same = sorted(k for k, v in probe["raw"].items() if lock.get(k) == v)
-          diff = sorted(k for k, v in probe["raw"].items() if lock.get(k) != v)
-          print("same:", len(same), same)
-          print("diff:", len(diff), diff)
-          EOF
+          # 같음 · 다름 · 잠금에 없음을 따로 센다(잠금에 없는 칸은 재현성과 무관 — 탐침 칸 선택의 결함이다).
+          python3 -I multiplatform/scripts/bake-aing/bake.py probe-compare "$RUNNER_TEMP/probe/probe.json" multiplatform/assets/aing-bake/lock.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -7,8 +7,10 @@
 하위 명령
   finalize   --plan <굽기 출력> --assets <자산 폴더> --repo <저장소>   인코딩 · 매니페스트 · lock.json
   check-lock --repo <저장소>                                           CI(aing-bake-lock): 입력 해시 · 출력 해시가 lock 과 같은가
-  sizes      --assets <자산 폴더> --repo <저장소>                      크기 예산(Windows ≤ 20MB · Android 기본 ≤ 4MB)
+  sizes      --assets <자산 폴더> --repo <저장소>                      크기 예산(config.json bundles — Windows ≤ 20MB · Android 기본 ≤ 4.5MB)
   compare    <lock A> <lock B>                                         두 lock 의 raw · outputs 다이제스트 대조
+  probe-compare <probe.json> <lock.json>                               F-10 탐침 대조 — 같음 · 다름 · 잠금에 없음을 따로 센다
+  outside-snapshot --repo <저장소>                                     소유 경로 밖 더러운 파일의 (상태, 경로, sha256) — bake.sh 가 전후를 비교
 
 표준 라이브러리만 쓴다(CI 우분투에서 그대로 돈다). 네트워크를 쓰지 않는다.
 """
@@ -237,6 +239,8 @@ def finalize(args):
             shutil.copyfile(path, dst)
     for rel, manifest in plan["manifests"].items():
         manifest["bake"]["inputsHash"] = inputs_hash
+        # 알파 형식 · 인코딩 역할은 Swift 가 적고(bake.alpha · bake.encoding), 실제 cwebp 인자는 여기서 config 그대로 옮긴다.
+        manifest["bake"]["cwebpArgs"] = config["encode"]
         dump(manifest, os.path.join(assets, rel))
     dump(plan["reports"], os.path.join(plan_dir, "reports.json"))
 
@@ -344,6 +348,73 @@ def sizes(args):
     return 0
 
 
+# ---------------------------------------------------------------- outside-snapshot
+def outside_snapshot(args):
+    """소유 경로(ASSETS_REL) 밖의 더러운 파일마다 '상태<TAB>경로<TAB>sha256' 한 줄. 정렬해서 찍는다.
+
+    git status 줄만 비교하면 굽기 전에 이미 수정돼 있던 파일을 굽기가 또 바꿔도 줄이 같아 못 잡는다(W0-d 검증 지적) —
+    그래서 내용 해시를 같이 적는다. 지워진 파일은 '-', 폴더(서브모듈 등)는 'dir'."""
+    repo = os.path.abspath(args.repo)
+    out = subprocess.run(["git", "-C", repo, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=none"],
+                         capture_output=True, check=True).stdout.decode("utf-8", "surrogateescape")
+    parts = out.split("\0")
+    entries = []
+    i = 0
+    while i < len(parts):
+        item = parts[i]
+        i += 1
+        if not item:
+            continue
+        status, path = item[:2], item[3:]
+        paths = [path]
+        if status[0] in "RC" or status[1] in "RC":
+            paths.append(parts[i])  # -z 에서는 이름 바꾸기의 옛 경로가 다음 칸에 온다
+            i += 1
+        for rel in paths:
+            if rel == ASSETS_REL or rel.startswith(ASSETS_REL + "/"):
+                continue
+            full = os.path.join(repo, rel)
+            if os.path.isfile(full) and not os.path.islink(full):
+                digest = sha256_file(full)
+            elif os.path.islink(full):
+                digest = "link:" + os.readlink(full)
+            elif os.path.isdir(full):
+                digest = "dir"
+            else:
+                digest = "-"
+            entries.append(f"{status}\t{rel}\t{digest}")
+    for line in sorted(entries):
+        print(line)
+    return 0
+
+
+# ---------------------------------------------------------------- probe-compare (F-10)
+def probe_compare(args):
+    """탐침(probe.json · 다른 맥에서 그린 칸의 원본 다이제스트)과 커밋된 lock.json.raw 를 대조한다.
+    '잠금에 없음'은 '다름'과 따로 센다 — 잠금에 없는 칸은 재현성과 무관하게 비교할 수 없다(탐침 칸 선택의 결함).
+    종료 코드: 0 = 전부 같음, 1 = 다름이 있다, 2 = 잠금에 없는 칸이 있다(다름보다 먼저 고칠 것), 3 = 비교할 칸이 0."""
+    with open(args.probe, encoding="utf-8") as f:
+        probe = json.load(f)
+    with open(args.lock, encoding="utf-8") as f:
+        lock = json.load(f).get("raw", {})
+    raw = probe.get("raw", {})
+    same = sorted(k for k, v in raw.items() if k in lock and lock[k] == v)
+    diff = sorted(k for k, v in raw.items() if k in lock and lock[k] != v)
+    missing = sorted(k for k in raw if k not in lock)
+    print(f"[probe-compare] gpu: {probe.get('gpu', '?')}")
+    print(f"[probe-compare] 같음 {len(same)} · 다름 {len(diff)} · 잠금에 없음 {len(missing)} (탐침 {len(raw)}칸)")
+    for name, keys in (("같음", same), ("다름", diff), ("잠금에 없음", missing)):
+        if keys:
+            print(f"  {name}: {keys}")
+    if missing:
+        return 2
+    if diff:
+        return 1
+    if not same:
+        return 3
+    return 0
+
+
 # ---------------------------------------------------------------- compare
 def compare(args):
     with open(args.a, encoding="utf-8") as f:
@@ -375,6 +446,11 @@ def main():
     p = sub.add_parser("compare")
     p.add_argument("a")
     p.add_argument("b")
+    p = sub.add_parser("probe-compare")
+    p.add_argument("probe")
+    p.add_argument("lock")
+    p = sub.add_parser("outside-snapshot")
+    p.add_argument("--repo", required=True)
     p = sub.add_parser("strip")
     p.add_argument("file")
     args = parser.parse_args()
@@ -387,6 +463,10 @@ def main():
         return sizes(args)
     if args.cmd == "compare":
         return compare(args)
+    if args.cmd == "probe-compare":
+        return probe_compare(args)
+    if args.cmd == "outside-snapshot":
+        return outside_snapshot(args)
     if args.cmd == "strip":
         with open(args.file, encoding="utf-8") as f:
             sys.stdout.write(strip_swift_comments(f.read()))

@@ -1,5 +1,5 @@
-// 원본: Sources/CheckMobileKit/Components/ContributionGrid.swift @ a63fea2 (ContributionGridCanvas)
-// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ a63fea2 (ContributionLevels.opacity · ContributionGridLayout · ContributionAxis)
+// 원본: Sources/CheckMobileKit/Components/ContributionGrid.swift @ 862be0f (ContributionGridCanvas)
+// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ 862be0f (ContributionLevels.opacity · ContributionGridLayout · ContributionAxis)
 //
 // 12주 잔디(주 열 × 요일 7행). **기록이 없어도 늘 격자를 그린다**(빈 칸 = fill 트랙). 칸 크기는 받은 폭에 맞춘다(상한 13).
 // 값 → 단계(0…4) 계산은 기록 규칙(W1-c rules/insights) 몫이다 — 이 부품은 단계만 받아 그린다.

@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Theme/MobileAppearance.swift @ a63fea2
+// 원본: Sources/CheckMobileKit/Theme/MobileAppearance.swift @ 862be0f
 //
 // 화면 모드(나 → 설정 → 화면 모드). **기본은 다크**(사용자 결정 2026-09-18 — 그림이 어두운 바탕에서 만들어졌다).
 // 저장은 플랫폼 KeyValueStore 몫(W2·W3). 이 파일은 값 ↔ 모드 규칙만 둔다.

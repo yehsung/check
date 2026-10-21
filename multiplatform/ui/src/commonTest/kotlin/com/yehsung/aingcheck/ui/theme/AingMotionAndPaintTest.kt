@@ -1,3 +1,5 @@
+// 원본: 없음 — 이식 규칙 시험(기억 두 가지).
+//
 // 기억 두 가지를 값으로 잰다: 불투명도에 이징 금지(easing-must-not-drive-opacity) · 짧은 글자에 그라데이션 금지(short-text-kills-gradients).
 package com.yehsung.aingcheck.ui.theme
 

@@ -1,4 +1,6 @@
-// 아이콘 158개를 전부 실제로 그린다: 칸마다 잉크가 있고(빈 벡터·잘못 옮긴 좌표면 0), 칸을 넘치지 않고(좌표가 뒤집히면 칸 밖),
+// 원본: 없음 — 그림 검사(Material Symbols 벡터, 출처는 ui/snapshots/icons/material-symbols-source.tsv)
+//
+// 아이콘 전부(AppIcon.entries — 862be0f 기준 159개)를 실제로 그린다: 칸마다 잉크가 있고(빈 벡터·잘못 옮긴 좌표면 0), 칸을 넘치지 않고(좌표가 뒤집히면 칸 밖),
 // 채움 1 은 채움 0 보다 잉크가 많거나 같다(채움 파일을 뒤바꿔 실으면 잡힌다 — 모양이 같은 기호는 같을 수 있다).
 package com.yehsung.aingcheck.ui.icons
 

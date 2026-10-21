@@ -1,3 +1,5 @@
+// 원본: 없음 — Swift 원본 없음(iOS·맥은 시스템 SF). 글꼴 파일은 Pretendard 1.3.9 공식 배포본(아래 출처).
+//
 // 번들 글꼴 Pretendard 1.3.9(SIL OFL 1.1, Reserved Font Name "Pretendard") — D§13-2·A§4-5: OS 마다 기본 한글 글꼴이 달라
 // (맥 Apple SD 산돌고딕 Neo · Windows 맑은 고딕 · Android Noto/삼성) 두 플랫폼 화면과 스냅숏을 한 글꼴로 고정한다.
 //

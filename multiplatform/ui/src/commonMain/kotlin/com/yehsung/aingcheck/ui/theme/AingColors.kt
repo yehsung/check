@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Theme/MobileTheme.swift @ a63fea2
+// 원본: Sources/CheckMobileKit/Theme/MobileTheme.swift @ 862be0f
 //
 // 뜻 이름 색(라이트·다크 중 하나로 굳힌 Compose 색). 화면은 `AingTheme.colors.working` 처럼 쓴다 — 색 리터럴을 화면에 적지 않는다.
 package com.yehsung.aingcheck.ui.theme

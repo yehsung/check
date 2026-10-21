@@ -1,3 +1,5 @@
+// 원본: 없음 — 디자인 규칙 구조 시험.
+//
 // 디자인 규칙을 ui 모듈 main 소스로 잰다(주석은 걷어 내고 본다 — 기억 source-contract-tests-need-comment-stripping):
 //  D1 동적 색 금지: dynamicLightColorScheme·dynamicDarkColorScheme 를 부르는 자리 0(브랜드 보라 유지, G §8-12).
 //  D2 불투명도 이징 금지: fadeIn·fadeOut·Crossfade 는 AingMotion.fade 를 인자로 받는다. AnimatedVisibility 는 enter·exit 를 적는다

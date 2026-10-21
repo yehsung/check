@@ -1,3 +1,5 @@
+// 원본: Sources/CheckMobileKit/Components/MobileComponentsGallery.swift @ 862be0f (진열장 장면 — 스냅숏은 이식 시험)
+//
 // 부품 스냅숏(데스크톱 배율 2 × 밝음·어두움). 골든: ui/snapshots/{theme,components}/desktop/<장면>-<light|dark>.png
 //
 // 한 장면마다 세 가지를 잰다:

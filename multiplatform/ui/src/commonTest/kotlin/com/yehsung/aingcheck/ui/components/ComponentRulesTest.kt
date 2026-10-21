@@ -1,3 +1,5 @@
+// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ 862be0f (부품 순수 규칙)
+//
 // 부품 규칙(iOS MobileComponentModels 의 순수 규칙과 같은 값). 플랫폼 무관.
 package com.yehsung.aingcheck.ui.components
 

@@ -1,3 +1,5 @@
+// 원본: 없음 — 스냅숏 대조기(A§4-3). iOS 는 ImageRenderer 바이트 비교라 옮길 원본이 없다.
+//
 // 스냅숏 대조(플랫폼 무관 부분). 렌더·PNG 읽고 쓰기는 각 시험 소스셋(desktopTest·androidHostTest)이 한다.
 //
 // 대조는 **픽셀 그대로**(ARGB 정수 배열 일치)다. PNG 바이트는 인코더마다 달라 비교하지 않는다.
@@ -106,8 +108,12 @@ object SnapshotPolicy {
     /** 굵은 대조 칸 한 변(px, 배율 2 에서 4dp). */
     const val BLOCK = 8
     val BUCKETS = intArrayOf(8, 16, 24, 32, 48, 64, 96)
-    /** 칸 평균 차 상한(0…255). 글자 가장자리 차이는 칸 평균에서 이보다 작다(CI 실측으로 정한다 — 넘으면 빨강). */
-    const val COARSE_MAX_BLOCK_DELTA = 96
+    /**
+     * 칸 평균 차 상한(0…255). 글자 가장자리 차이는 칸 평균에서 이보다 작다 — G §8-13 으로 96 → 64.
+     * 근거(CI 실측, 맥 골든 대비 비기록 러너): ubuntu 칸 최대차 37~55 · windows 37~48. 한 군데만 다른 장면(음성 기준선)은 145~187.
+     * 64 는 실측 러너 최대(55) 바로 위라 그보다 큰 색·배치 회귀(칸 평균 65 이상)는 CI 러너에서도 빨강이다.
+     */
+    const val COARSE_MAX_BLOCK_DELTA = 64
     /** 이 문턱을 넘은 칸의 비율 상한. */
     const val COARSE_COUNTED_DELTA = 48
     const val COARSE_MAX_RATIO = 0.03

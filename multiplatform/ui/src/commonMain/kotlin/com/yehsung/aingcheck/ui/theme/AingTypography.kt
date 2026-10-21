@@ -1,7 +1,10 @@
-// 원본: Sources/CheckMobileKit/Theme/MobileTheme.swift @ a63fea2 (글꼴 — 큰 제목 34 · 섹션 19~20 bold · 행 이름 16 semibold · 부제 13 · 칩 11 semibold)
+// 원본: Sources/CheckMobileKit/Theme/MobileTheme.swift @ 862be0f (글꼴 — 큰 제목 34 · 섹션 19~20 bold · 행 이름 16 semibold · 부제 13 · 칩 11 semibold)
+// 원본: Sources/CheckMobileKit/Now/NowTab.swift @ 862be0f (지금 탭 타이머 scaledFont(size: 48, weight: .semibold))
 //
 // iOS 는 Dynamic Type 텍스트 스타일(시스템 SF)만 쓴다. 여기서는 같은 크기·행간(애플 HIG 기본 크기 표)을 Pretendard 로 M3 역할에 앉힌다.
 // sp 라 시스템 글자 크기를 따른다(iOS Dynamic Type 과 같은 뜻).
+// 시험(desktopTest AingTypographyTest)이 15역할의 크기·행간·굵기를 HIG 표 + Swift 원문(MobileTheme 의 굵기·NowTab 의 48)과 대조하고,
+// 컴포지션 안 aingTypography() 의 모든 역할 글꼴이 Pretendard 인지 잰다.
 //
 //   iOS 스타일(크기/행간)          → M3 역할
 //   largeTitle 34/41 bold         → headlineLarge
@@ -16,7 +19,8 @@
 //   subheadline 15/20 semibold    → labelLarge(단추 글자)
 //   caption1 12/16 semibold        → labelMedium
 //   caption2 11/13 semibold(칩)    → labelSmall
-//   타이머 48 · 위젯 큰 수 40 · 36  → displayLarge·Medium·Small(semibold, 고정 크기 글꼴 자리 — iOS scaledFont)
+//   타이머 48(NowTab)              → displayLarge(semibold, 고정 크기 글꼴 자리 — iOS scaledFont)
+//   40 · 36                        → displayMedium·Small(semibold) — iOS 원본 없음(이식 판단: 48 과 largeTitle 34 사이 계단, 행간 ≈ 1.2배)
 package com.yehsung.aingcheck.ui.theme
 
 import androidx.compose.material3.Typography
@@ -28,7 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.ui.fonts.pretendardFontFamily
 
 object AingTypeScale {
-    /** (M3 역할, 크기 sp, 행간 sp, 굵기). 시험이 iOS 표와 대조한다. */
+    /** (M3 역할, 크기 sp, 행간 sp, 굵기). 시험이 HIG 표·Swift 원문과 대조한다(desktopTest AingTypographyTest). */
     data class Step(val role: String, val size: Float, val lineHeight: Float, val weight: FontWeight)
 
     val steps: List<Step> = listOf(

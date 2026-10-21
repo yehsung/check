@@ -1,3 +1,5 @@
+// 원본: 없음 — 스냅숏 대조기 시험.
+//
 // 스냅숏 비교기 자체를 잰다: 픽셀 대조는 한 픽셀 차이도 본다 · 굵은 대조는 가장자리 한두 픽셀 차이는 녹이고 칸 하나가 통째로 바뀌면 잡는다.
 package com.yehsung.aingcheck.ui.components
 
@@ -41,6 +43,26 @@ class SnapshotCompareTest {
         assertEquals(1, c2.blocksOver(SnapshotPolicy.COARSE_COUNTED_DELTA))
         assertFalse(c2.withinTolerance)
         assertFalse(SnapshotCompare.coarse(base, image(w = 24)).withinTolerance, "크기가 다르면 굵은 대조도 빨강")
+    }
+
+    /**
+     * 문턱 64(G §8-13): 칸 하나가 고르게 65 만큼 옅어지면(테두리 굵기·투명도 같은 작은 색 회귀) 비기록 러너에서도 빨강,
+     * 실측 러너 잡음 상한(칸 차 55)은 초록. 문턱 96 이던 때는 앞쪽이 초록으로 빠져나갔다.
+     */
+    @Test
+    fun coarseThresholdCatchesSixtyFiveButNotRunnerNoise() {
+        // 256×256 = 칸 1,024개 — 칸 하나만 달라 비율 조건(3%)은 늘 통과한다. 그래서 갈리는 것은 칸 차 상한 하나다.
+        val base = image(w = 256, h = 256)
+        fun shifted(by: Int) = image(w = 256, h = 256) { x, y ->
+            if (x in 8 until 16 && y in 8 until 16) (0xFF shl 24) or ((255 - by) shl 16) or ((255 - by) shl 8) or (255 - by) else white
+        }
+        val regression = SnapshotCompare.coarse(base, shifted(65))
+        assertEquals(65, regression.maxBlockDelta)
+        assertEquals(1, regression.blocksOver(SnapshotPolicy.COARSE_COUNTED_DELTA))
+        assertFalse(regression.withinTolerance, "칸 차 65 를 굵은 대조가 넘겼다($regression)")
+        val runnerNoise = SnapshotCompare.coarse(base, shifted(55))
+        assertEquals(55, runnerNoise.maxBlockDelta)
+        assertTrue(runnerNoise.withinTolerance, "실측 러너 잡음 상한(칸 차 55)이 빨강이다($runnerNoise)")
     }
 
     @Test

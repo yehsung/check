@@ -1,6 +1,11 @@
+// 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ 862be0f
+// 원본: Sources/check/CheckGachaWindow.swift @ 862be0f (GachaWindowPalette)
+//
 // "iOS/맥 값 그대로"를 값으로 잰다: Swift 원문(MobileThemePalette.swift · CheckGachaWindow.swift)을 읽어 토큰마다 Kotlin 값과 대조한다.
 // 원본 색이 바뀌거나 토큰이 늘고 줄면 이 시험이 먼저 빨개진다(두 벌 유지 — G §5-4). 주석은 걷어 내고 본다
 // (기억 source-contract-tests-need-comment-stripping).
+// 예외(G §8-13): accent 가족 여섯 토큰은 iOS 파랑 대신 M3 primary(브랜드 보라) — 값 대조 대신 "Swift 파랑이 Kotlin 어디에도 없다 ·
+// 불투명도는 iOS 그대로"를 잰다(규칙 쪽 "accent = primary" 는 commonTest AingThemeRulesTest).
 package com.yehsung.aingcheck.ui.theme
 
 import com.yehsung.aingcheck.testkit.fixtures.RepoFiles
@@ -31,11 +36,47 @@ class AingPaletteSwiftContractTest {
         val swift = SwiftPalette.parse(RepoFiles.readText("Sources/CheckMobileKit/Theme/MobileThemePalette.swift"))
         assertTrue(swift.pairs.size >= 39, "Swift 토큰을 ${swift.pairs.size}개만 읽었다 — 파서가 원문을 못 읽는다")
         assertEquals(swift.pairs.keys.sorted(), kotlinPairs.keys.sorted(), "토큰 이름 집합이 다르다(빠짐·고아)")
-        val wrong = swift.pairs.mapNotNull { (name, pair) ->
+        val wrong = swift.pairs.filterKeys { it !in PRIMARY_SUBSTITUTED }.mapNotNull { (name, pair) ->
             val k = kotlinPairs.getValue(name)
             if (k.light.approximatelyEquals(pair.light) && k.dark.approximatelyEquals(pair.dark)) null else "$name: Swift=$pair Kotlin=$k"
         }
         assertTrue(wrong.isEmpty(), "Swift 와 값이 다르다:\n" + wrong.joinToString("\n"))
+    }
+
+    /**
+     * G §8-13 대체를 결과로 잰다: Swift accent 가족의 색(파랑)이 Kotlin 토큰·M3 역할 **어디에도 없다**(한 자리라도 iOS 파랑을
+     * 베껴 두면 주요색이 둘이 된다). 틴트·테두리의 불투명도는 iOS 와 같다(옅기는 그대로, 색만 바꾼다).
+     */
+    @Test
+    fun accentFamilyIsReplacedByPrimaryAndNoIosBlueRemains() {
+        val swift = SwiftPalette.parse(RepoFiles.readText("Sources/CheckMobileKit/Theme/MobileThemePalette.swift")).pairs
+        assertTrue(PRIMARY_SUBSTITUTED.all { it in swift }, "Swift 에 대체할 토큰이 없다: ${PRIMARY_SUBSTITUTED - swift.keys}")
+        val white = AingRgb.hex(0xFFFFFF)
+        val iosBlues = PRIMARY_SUBSTITUTED.flatMap { listOf(swift.getValue(it).light, swift.getValue(it).dark) }
+            .map { it.opacity(1.0) }.filter { !it.approximatelyEquals(white) }
+            .fold(emptyList<AingRgb>()) { acc, c -> if (acc.any { it.approximatelyEquals(c) }) acc else acc + c }
+        // #1864CF · (0.33, 0.67, 1.0) · #2A74DE · #7DC0FF — 파서가 넷을 다 읽었는지.
+        assertEquals(4, iosBlues.size, "Swift accent 가족의 파랑을 ${iosBlues.size}개 읽었다: $iosBlues")
+        fun isIosBlue(c: AingRgb) = iosBlues.any { it.approximatelyEquals(c.opacity(1.0), 1.0 / 512) }
+        val inPalette = kotlinPairs.flatMap { (name, pair) ->
+            listOf("$name.light" to pair.light, "$name.dark" to pair.dark).filter { isIosBlue(it.second) }.map { it.first }
+        }
+        assertTrue(inPalette.isEmpty(), "Kotlin 토큰에 iOS 파랑이 남았다: $inPalette")
+        val inScheme = listOf(false, true).flatMap { dark ->
+            materialColorRoles().filter { role ->
+                val c = role.read(AingColorScheme.of(dark))
+                isIosBlue(AingRgb(c.red.toDouble(), c.green.toDouble(), c.blue.toDouble()))
+            }.map { "${if (dark) "다크" else "라이트"} ${it.name}" }
+        }
+        assertTrue(inScheme.isEmpty(), "M3 역할에 iOS 파랑이 있다: $inScheme")
+        for (name in listOf("accentTint", "accentLine")) {
+            val s = swift.getValue(name)
+            val k = kotlinPairs.getValue(name)
+            assertEquals(s.light.alpha, k.light.alpha, "$name 라이트 불투명도")
+            assertEquals(s.dark.alpha, k.dark.alpha, "$name 다크 불투명도")
+            assertTrue(k.light.opacity(1.0).approximatelyEquals(AingPalette.brandInk.light), "$name 라이트 색 = primary")
+            assertTrue(k.dark.opacity(1.0).approximatelyEquals(AingPalette.brandInk.dark), "$name 다크 색 = primary")
+        }
     }
 
     @Test
@@ -92,6 +133,9 @@ class AingPaletteSwiftContractTest {
         assertTrue("ghost" !in commented.pairs)
     }
 }
+
+/** G §8-13: iOS '선택·주요 동작' 파랑 가족 — 이식에서는 M3 primary(브랜드 보라)에서 나온다. */
+private val PRIMARY_SUBSTITUTED = setOf("accent", "accentFill", "accentTint", "accentLine", "onAccentFill", "tabSelected")
 
 /** MobileThemePalette.swift 의 숫자를 읽는 작은 파서(RGB 생성자 네 꼴: hex · r255 · 채널 셋 · alpha). */
 internal object SwiftPalette {

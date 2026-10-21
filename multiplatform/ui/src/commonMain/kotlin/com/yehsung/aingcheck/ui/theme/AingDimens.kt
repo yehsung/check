@@ -1,5 +1,5 @@
-// 원본: Sources/CheckMobileKit/Theme/MobileTheme.swift @ a63fea2 (치수 — 4pt 계단)
-// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ a63fea2 (AingButtonMetrics.minimumTarget)
+// 원본: Sources/CheckMobileKit/Theme/MobileTheme.swift @ 862be0f (치수 — 4pt 계단)
+// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ 862be0f (AingButtonMetrics.minimumTarget)
 //
 // iOS pt = Compose dp. 모서리는 iOS `.continuous`(스쿼클)이지만 M3·Compose 는 원호 모서리다 — 같은 반지름 숫자를 쓴다(판단: 차이는 2px 안팎).
 package com.yehsung.aingcheck.ui.theme

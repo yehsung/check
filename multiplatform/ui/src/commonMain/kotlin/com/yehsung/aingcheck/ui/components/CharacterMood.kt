@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ a63fea2 (PresenceStatus · CharacterMood)
+// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ 862be0f (PresenceStatus · CharacterMood)
 //
 // 캐릭터 초상의 기분 = 근무 상태(맥 헤더 문법). 그리는 쪽(초상·무대·탭 아이콘)이 같은 규칙을 쓰도록 한 곳에 둔다.
 package com.yehsung.aingcheck.ui.components

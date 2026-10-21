@@ -1,11 +1,13 @@
-// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ a63fea2 (초상 이름 `<id>-<표정>` · 192px)
-// 원본: Sources/CheckMobileKit/Components/MobileArt.swift @ a63fea2 (루비·무대 그림 창구)
+// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ 862be0f (초상 이름 `<id>-<표정>` · 192px)
+// 원본: Sources/CheckMobileKit/Components/MobileArt.swift @ 862be0f (루비·무대 그림 창구)
+// 원본: Sources/CheckCore/AingSticker.swift @ 862be0f (이모티콘 그림 이름 `sticker-<rawValue>.png`)
 //
 // 그림 창구. 그림 파일은 **git 에 사본을 두지 않는다**(A-X18): ui 빌드의 Gradle Sync 작업이 맥 원본을 빌드 폴더로 모아
 // Compose 리소스 files/ 아래에 싣는다(조정자 패치 — ui/build.gradle.kts `aingcheckSyncCharacterArt`).
 //   Sources/check/Characters/<id>/{manifest.json, portrait-neutral.png, portrait-negative.png} → files/characters/<id>/…
 //   Sources/check/Resources/<aing·aing_gold·aing_rainbow>-<표정>.png                     → files/characters/<id>/portrait-<표정>.png
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-<id>-neutral}.png    → files/art/…
+//   Sources/CheckCore/Resources/Stickers/sticker-<이름>.png(0.3.62 아잉이 이모티콘)           → files/stickers/…
 // 스프라이트 아틀라스(atlas.png)는 싣지 않는다 — 살아 있는 캐릭터는 구운 자산(W0-d·W5)이 맡는다.
 package com.yehsung.aingcheck.ui.components
 
@@ -32,6 +34,12 @@ object CharacterArt {
     fun rubyPath(pointSize: Float, density: Float): String = "files/art/${RubyGlyph.assetName(pointSize, density)}.png"
 
     fun stagePath(id: String): String = "files/art/stage-$id-neutral.png"
+
+    /** 이모티콘 그림이 있는 맥 원본 폴더(저장소 뿌리 기준). Gradle Sync 가 이 폴더의 sticker-*.png 를 files/stickers 로 싣는다. */
+    const val STICKER_SOURCE_DIR = "Sources/CheckCore/Resources/Stickers"
+
+    /** 이모티콘 그림(이름 = Swift `AingSticker.rawValue`, 예: "joy"). 전선 토큰·판정은 W1-c 글자 규칙 몫이다. */
+    fun stickerPath(name: String): String = "files/stickers/sticker-$name.png"
 
     /** 리소스 바이트(없으면 null — 이 빌드에 그림이 빠졌다는 뜻이다). */
     @OptIn(ExperimentalResourceApi::class)

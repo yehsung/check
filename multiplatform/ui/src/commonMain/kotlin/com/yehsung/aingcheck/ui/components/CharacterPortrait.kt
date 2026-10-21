@@ -1,5 +1,5 @@
-// 원본: Sources/CheckMobileKit/Components/CharacterPortrait.swift @ a63fea2
-// 원본: Sources/CheckMobileKit/Components/CharacterTabIcon.swift @ a63fea2
+// 원본: Sources/CheckMobileKit/Components/CharacterPortrait.swift @ 862be0f
+// 원본: Sources/CheckMobileKit/Components/CharacterTabIcon.swift @ 862be0f
 //
 // 캐릭터 초상 — **나를 가리키는 자리에만** 쓴다(지금 상태 카드 · 나 머리 · 순위의 내 행 · 오목 플레이어 · 위젯).
 // 표정 = 근무 상태: 근무 중 웃음 + 초록 링·발광 · 끊김 웃음 + 앰버 링 · 근무 안 함 시무룩 + 청회색 링 · Plain 은 링 없이 받침만.

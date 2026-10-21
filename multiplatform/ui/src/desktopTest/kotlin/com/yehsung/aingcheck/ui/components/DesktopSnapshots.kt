@@ -1,3 +1,5 @@
+// 원본: 없음 — 데스크톱 스냅숏 하네스(시험 도구).
+//
 // 데스크톱 스냅숏 하네스: ImageComposeScene(오프스크린, java.awt.headless=true) 로 그리고 Skia 로 PNG 를 읽고 쓴다.
 package com.yehsung.aingcheck.ui.components
 

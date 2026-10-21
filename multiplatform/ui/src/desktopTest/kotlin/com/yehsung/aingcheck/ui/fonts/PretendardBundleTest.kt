@@ -1,3 +1,5 @@
+// 원본: 없음 — 번들 글꼴 시험(Swift 원본 없음).
+//
 // W1-e 완료 기준 ①: Pretendard 번들 로드(데스크톱). Android 판은 조정자 패치(호스트 시험 — androidResources 켬 뒤)에 있다.
 //  - 번들 바이트 = 공식 배포본(sha256) · 출처 표(ui/snapshots/fonts/pretendard-source.tsv)와 같은 값
 //  - Skia 가 연 글꼴의 가족 이름 "Pretendard" · 굵기 · 한글 11,172 음절 전부와 화면 문장부호에 글리프가 있다

@@ -1,5 +1,5 @@
-// 원본: Sources/CheckMobileKit/Me/MeTab.swift @ a63fea2 (MeStageCard.stage · floorTint — 나 탭 무대, 시안 A 09)
-// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ a63fea2 (CharacterArtChoice — 무대 고해상 고르기)
+// 원본: Sources/CheckMobileKit/Me/MeTab.swift @ 862be0f (MeStageCard.stage · floorTint — 나 탭 무대, 시안 A 09)
+// 원본: Sources/CheckMobileKit/Components/MobileComponentModels.swift @ 862be0f (CharacterArtChoice — 무대 고해상 고르기)
 //
 // 캐릭터 무대: 착용 캐릭터를 원·링 없이 크게(132) 세우고 발밑에 근무 상태 색 빛(타원 122×28, 45% → 12% → 투명)을 깐다.
 // 그림자: iOS 는 그림 모양 그림자(검정 22% · 번짐 8 · 아래 6). Compose blur 는 Android 12 미만에서 꺼지므로, 그림을 검정으로 물들여

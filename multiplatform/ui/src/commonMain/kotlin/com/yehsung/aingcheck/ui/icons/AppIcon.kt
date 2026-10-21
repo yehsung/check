@@ -1,5 +1,5 @@
 // 원본: google/material-design-icons @ 49d4db35df873165d6bd6ba09b063c7dafbac2f4 — Material Symbols Rounded(wght 400 · GRAD 0 · opsz 24), Apache-2.0
-// 원본 대응: Sources/**/*.swift @ a63fea2 의 SF Symbols 이름(SfSymbols.kt) — 출처·sha256 표는 ui/snapshots/icons/material-symbols-source.tsv
+// 원본 대응: Sources/**/*.swift @ 862be0f 의 SF Symbols 이름(SfSymbols.kt) — 출처·sha256 표는 ui/snapshots/icons/material-symbols-source.tsv
 //
 // 앱 아이콘 집합(D§13-3 → G §8-1 #13: Fluent 대신 Material Symbols). SF Symbols 는 애플 플랫폼 밖에서 쓰지 않는다.
 // 그림은 composeResources/drawable/ms_<이름>[_fill].xml(벡터) — 채움 0/1 은 따로 그린 두 장이다(축 보간이 아니다).
@@ -104,6 +104,7 @@ import com.yehsung.aingcheck.ui.resources.ms_mark_email_unread_fill
 import com.yehsung.aingcheck.ui.resources.ms_memory
 import com.yehsung.aingcheck.ui.resources.ms_menu_book
 import com.yehsung.aingcheck.ui.resources.ms_menu_book_fill
+import com.yehsung.aingcheck.ui.resources.ms_mood
 import com.yehsung.aingcheck.ui.resources.ms_more_horiz
 import com.yehsung.aingcheck.ui.resources.ms_north_east
 import com.yehsung.aingcheck.ui.resources.ms_notifications
@@ -265,6 +266,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     Memory("memory", false),
     MenuBook("menu_book", false),
     MenuBookFill("menu_book", true),
+    Mood("mood", false),
     MoreHoriz("more_horiz", false),
     NorthEast("north_east", false),
     Notifications("notifications", false),
@@ -327,7 +329,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     WbTwilightFill("wb_twilight", true),
     ;
 
-    /** composeResources/drawable 안 파일 이름(확장자 뺀 것). */
+    /** composeResources/drawable 안 파일 이름(확장자 뺀 것). [drawable] 이 이 이름의 리소스를 가리키는지 시험이 잰다(생성된 Res 의 이름표와 대조). */
     val resourceName: String get() = "ms_" + materialName + if (filled) "_fill" else ""
 
     val drawable: DrawableResource
@@ -430,6 +432,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             Memory -> Res.drawable.ms_memory
             MenuBook -> Res.drawable.ms_menu_book
             MenuBookFill -> Res.drawable.ms_menu_book_fill
+            Mood -> Res.drawable.ms_mood
             MoreHoriz -> Res.drawable.ms_more_horiz
             NorthEast -> Res.drawable.ms_north_east
             Notifications -> Res.drawable.ms_notifications

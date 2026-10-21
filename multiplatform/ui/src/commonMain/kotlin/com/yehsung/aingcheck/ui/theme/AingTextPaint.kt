@@ -1,5 +1,5 @@
-// 원본: Sources/check/CheckGachaWindow.swift @ a63fea2 (GachaWindowPalette.light.rainbow — 흰 판 위 진한 일곱 빛)
-// 원본: Sources/check/CheckGachaPanel.swift @ a63fea2 (GachaPalette.rainbowColors — 어두운·보라 판 위 밝은 파스텔)
+// 원본: Sources/check/CheckGachaWindow.swift @ 862be0f (GachaWindowPalette.light.rainbow — 흰 판 위 진한 일곱 빛)
+// 원본: Sources/check/CheckGachaPanel.swift @ 862be0f (GachaPalette.rainbowColors — 어두운·보라 판 위 밝은 파스텔)
 //
 // 글자 칠 규칙(기억 short-text-kills-gradients, 2026-10-20 폰 1.0.10 실측):
 //

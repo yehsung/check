@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Components/MobileComponentsGallery.swift @ a63fea2 (부품 진열장 — 같은 구실)
+// 원본: Sources/CheckMobileKit/Components/MobileComponentsGallery.swift @ 862be0f (부품 진열장 — 같은 구실)
 //
 // 디자인 시스템 진열장 두 장: ① 테마(M3 뼈대: 탭 막대·스위치·단추·대화상자·시트 + 글자·뜻 색) ② 브랜드 부품(초상·무대·루비·잔디·글자 칠).
 // 스냅숏 골든(ui/snapshots/{theme,components}/…)이 이 두 장을 밝음·어두움 × 폰(Android)·데스크톱 배율 2 로 찍는다.
@@ -97,9 +97,10 @@ fun ThemeGallery(art: GalleryArt, modifier: Modifier = Modifier, variant: Galler
                     MeaningDot("퇴근", colors.offWork, colors.offWorkDot)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // 주요색(primary 보라)과 AI 토큰 보라를 나란히 — 둘이 구분되는지 골든에서 눈으로도 본다(G §8-13).
                     MeaningDot("선택", colors.accent, colors.accentFill)
-                    MeaningDot("위험", colors.danger, colors.danger)
                     MeaningDot("AI 토큰", colors.aiToken, colors.aiToken)
+                    MeaningDot("위험", colors.danger, colors.danger)
                 }
             }
             GalleryCard {

@@ -1,3 +1,5 @@
+// 원본: Sources/CheckMobileKit/Theme/MobileTheme.swift @ 862be0f (테마 입구 — 색·글꼴·치수를 한 곳에서 내준다)
+//
 // 아잉체크 테마 = Material 3 뼈대 + 아잉체크 색·글꼴(사용자 결정 2026-10-21, G §8-12).
 //  - 탭 막대·시트·대화상자·스위치는 M3 부품을 그대로 쓰고, 색은 AingColorScheme(브랜드 보라 · iOS 바탕) 이 칠한다.
 //  - **동적 색(Material You)은 쓰지 않는다** — dynamic*ColorScheme 를 부르는 자리가 ui main 에 0 이어야 한다(구조 시험).

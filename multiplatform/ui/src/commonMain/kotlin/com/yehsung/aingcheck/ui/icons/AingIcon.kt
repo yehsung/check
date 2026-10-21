@@ -1,3 +1,5 @@
+// 원본: 없음 — 이식에서 새로 둔 그리기 창구(iOS 는 Image(systemName:)).
+//
 // 아이콘 한 개(Material Symbols 벡터). 색은 지금 글자 색(LocalContentColor)을 따른다 — 기호는 늘 단색이다
 // (그라데이션을 기호에 깔면 가운데 색만 걸려 탁해진다 — 기억 short-text-kills-gradients).
 package com.yehsung.aingcheck.ui.icons

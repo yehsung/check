@@ -1,9 +1,11 @@
-// 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ a63fea2
-// 원본: Sources/check/CheckGachaWindow.swift @ a63fea2 (GachaWindowPalette — 브랜드 보라 판·글자)
-// 원본: Sources/CheckCore/CheckTheme.swift @ a63fea2 (맥 다크 남색 가족 — 다크 값의 출처)
+// 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ 862be0f
+// 원본: Sources/check/CheckGachaWindow.swift @ 862be0f (GachaWindowPalette — 브랜드 보라 판·글자)
+// 원본: Sources/CheckCore/CheckTheme.swift @ 862be0f (맥 다크 남색 가족 — 다크 값의 출처)
 //
 // 색 토큰의 **숫자**. 화면은 이 값을 직접 쓰지 않고 AingTheme.colors(뜻 이름) 또는 MaterialTheme.colorScheme(M3 부품)을 쓴다.
 // 값은 iOS·맥 원본 그대로다 — `AingPaletteSwiftContractTest` 가 Swift 원문을 읽어 토큰마다 대조한다(원본이 바뀌면 빨강).
+// **예외 하나(G §8-13, 2026-10-22)**: iOS 의 '선택·주요 동작' 파랑(accent 가족 여섯 토큰)은 이 이식에서 M3 primary(브랜드 보라)로
+// 바꾼다 — 주요색은 하나. 같은 시험이 "Swift 파랑이 Kotlin 어디에도 없다 · 불투명도는 iOS 그대로"를 잰다.
 package com.yehsung.aingcheck.ui.theme
 
 import androidx.compose.runtime.Immutable
@@ -78,7 +80,7 @@ data class AingPair(val light: AingRgb, val dark: AingRgb) {
 
 /**
  * 토큰 표. **한 줄 = 토큰 하나(라이트/다크 쌍)** — 이름과 순서는 Swift `MobileThemePalette` 와 같다.
- * 맨 아래 `brand*` 는 이식에서 더한 자리다: M3 뼈대(탭 막대·스위치·대화상자 단추)를 칠할 브랜드 보라(맥 뽑기 창 판·글자 색).
+ * `brand*` 는 이식에서 더한 자리다: M3 primary(탭 막대·스위치·대화상자 단추)와 accent 가족을 칠할 브랜드 보라(맥 뽑기 창 판·글자 색).
  */
 object AingPalette {
     // MARK: 바탕·표면
@@ -100,13 +102,28 @@ object AingPalette {
     /** 3단 글자(자리표시·끝난 할 일·모자란 가격). */
     val label3Text = AingPair(AingRgb.rgb255(60, 60, 67, 0.73), AingRgb.rgb255(235, 236, 245, 0.56))
 
-    // MARK: 뜻 색 — 이 뜻으로만 쓴다(초록 = 근무 중·달성 · 앰버 = 끊김·대기 · 파랑 = 선택·진행·링크 · 빨강 = 위험 · 보라 = AI 토큰)
-    val accent = AingPair(AingRgb.hex(0x1864CF), AingRgb(0.33, 0.67, 1.0))
-    val accentFill = AingPair(AingRgb.hex(0x1864CF), AingRgb.hex(0x2A74DE))
-    val accentTint = AingPair(AingRgb.hex(0x1864CF, 0.10), AingRgb(0.33, 0.67, 1.0, 0.11))
-    val accentLine = AingPair(AingRgb.hex(0x1864CF, 0.30), AingRgb(0.33, 0.67, 1.0, 0.38))
-    val onAccentFill = AingPair.both(AingRgb.hex(0xFFFFFF))
-    val tabSelected = AingPair(AingRgb.hex(0x1864CF), AingRgb.hex(0x7DC0FF))
+    // MARK: 브랜드 보라(이식에서 더함 — 맥 GachaWindowPalette 의 판·글자 색) = M3 primary(동적 색 대신)
+    // 아래 accent 가족이 이 값에서 나오므로 뜻 색보다 먼저 둔다(object 는 적힌 차례로 초기화된다).
+    /** 보라 글자·채움(라이트 진한 라벤더 · 다크 옅은 라벤더). = M3 primary. */
+    val brandInk = AingPair(AingRgb.hex(0x6A4FC8), AingRgb.hex(0xCDBDFF))
+    /** 보라 판 위 제목 글자(라이트 짙은 가지색 · 다크 거의 흰 라벤더). */
+    val brandTitle = AingPair(AingRgb.hex(0x2D2150), AingRgb.hex(0xF4EFFF))
+    /** 보라 판(라이트 흰 판 97% · 다크 보라 판). */
+    val brandCard = AingPair(AingRgb.hex(0xFFFFFF, 0.97), AingRgb.hex(0x2B2148))
+    /** brandInk 채움 위 글자(= M3 onPrimary): 라이트 흰색 · 다크는 옅은 보라 위라 짙은 가지색(맥 라이트 제목색). */
+    val brandOnInk = AingPair(AingRgb.hex(0xFFFFFF), brandTitle.light)
+
+    // MARK: 뜻 색 — 이 뜻으로만 쓴다(초록 = 근무 중·달성 · 앰버 = 끊김·대기 · 주요색 = 선택·진행·링크 · 빨강 = 위험 · 보라 = AI 토큰)
+    // 주요색(G §8-13): iOS 는 파랑(#1864CF 가족)이지만 이 이식은 **M3 primary 하나**(브랜드 보라)로 칠한다 — M3 단추·스위치와
+    // 손으로 칠한 선택 표시가 두 색으로 갈리지 않게. 불투명도(틴트 10/11% · 테두리 30/38%)는 iOS 그대로, 채움 위 글자는 onPrimary.
+    // AI 토큰 보라(iOS 값 그대로)는 primary 와 다른 값이고 나란히 놓여도 구분된다(AingThemeRulesTest — CIEDE2000).
+    val accent = brandInk
+    val accentFill = brandInk
+    val accentTint = AingPair(brandInk.light.opacity(0.10), brandInk.dark.opacity(0.11))
+    val accentLine = AingPair(brandInk.light.opacity(0.30), brandInk.dark.opacity(0.38))
+    val onAccentFill = brandOnInk
+    /** 탭 막대 선택 글자. iOS 는 다크 알약 위 파랑이 3.9:1 이라 한 단계 밝혔지만 보라 primary 는 알약 위 4.5:1 을 넘는다(시험). */
+    val tabSelected = brandInk
 
     val working = AingPair(AingRgb.hex(0x127A51), AingRgb(0.35, 0.88, 0.63))
     val workingDot = AingPair(AingRgb.hex(0x2FC47E), AingRgb(0.35, 0.88, 0.63))
@@ -167,14 +184,6 @@ object AingPalette {
 
     // MARK: 위젯
     val widgetBackground = AingPair(AingRgb.hex(0xFFFFFF), AingRgb.hex(0x232633))
-
-    // MARK: 브랜드 보라(이식에서 더함 — 맥 GachaWindowPalette 의 판·글자 색. M3 뼈대 칠, 동적 색 대신)
-    /** 보라 글자·채움(라이트 진한 라벤더 · 다크 옅은 라벤더). */
-    val brandInk = AingPair(AingRgb.hex(0x6A4FC8), AingRgb.hex(0xCDBDFF))
-    /** 보라 판 위 제목 글자(라이트 짙은 가지색 · 다크 거의 흰 라벤더). */
-    val brandTitle = AingPair(AingRgb.hex(0x2D2150), AingRgb.hex(0xF4EFFF))
-    /** 보라 판(라이트 흰 판 97% · 다크 보라 판). */
-    val brandCard = AingPair(AingRgb.hex(0xFFFFFF, 0.97), AingRgb.hex(0x2B2148))
 
     // MARK: 대비 검사 대상(BaseThemeTests 와 같은 묶음)
     val textTokens: List<Pair<String, AingPair>> = listOf(

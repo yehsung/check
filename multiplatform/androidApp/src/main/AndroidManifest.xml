@@ -1,5 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- W0-a 뼈대: 빈 manifest(빌드가 서도록만). W1-g 가 Activity·권한·채널·백업 제외를 채우고, 그 뒤로는 조정자 몫이다(K11, §8-3). -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:allowBackup="false" />
+<!--
+  아잉체크 Android 매니페스트(W1-g 셸 — W1 병합 뒤로는 조정자 몫, K11·§8-3).
+  병합 매니페스트를 시험이 직접 읽어 단언한다(androidApp …/app/MergedManifestTest):
+  - 권한 허용 목록(E§9.8): INTERNET · ACCESS_NETWORK_STATE · POST_NOTIFICATIONS · VIBRATE · WAKE_LOCK(FCM) · c2dm RECEIVE(FCM)
+    · RECEIVE_BOOT_COMPLETED(WorkManager) · DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION(androidx.core 서명 권한). AD_ID 없음.
+    FOREGROUND_SERVICE 는 WorkManager 가 끌어오지만 이 앱은 포그라운드 서비스를 쓰지 않아(E§4.2) 지운다.
+  - 백업: allowBackup=false + fullBackupContent=false(Auto Backup 과 Android 12+ 기기 이전 둘 다 꺼짐) + 설치 UUID·금고는
+    noBackupFilesDir(플랫폼이 언제나 건너뛰는 자리). 세 겹(E§5.2).
+  - 평문 통신 0(usesCleartextTraffic=false — debug 도 같다. localhost 예외를 두지 않는다).
+  - MainActivity launchMode=singleTask(E-U16: 딥링크 → 프로세스 죽음 → 런처 아이콘 뒤 Activity 1개).
+  - Firebase 자동 초기화 0: FirebaseInitProvider 를 지우고, 메시징 자동 토큰도 끈다(release 조립 지점만 손으로 초기화 — E§6.6).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:node="remove" />
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+
+    <application
+        android:name=".app.AingApplication"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:label="아잉체크"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
+        tools:targetApi="36">
+
+        <activity
+            android:name=".shell.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aingcheck" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".push.AingMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+    </application>
 </manifest>

@@ -1,0 +1,78 @@
+// 알림 사양 → 시스템 알림. E§6.5:
+// - 탭은 PendingIntent.getActivity(Android 12+ 트램펄린 금지 — 수신기·서비스에서 Activity 를 띄우지 않는다), FLAG_IMMUTABLE.
+// - 여는 Intent 는 MainActivity 를 가리키는 명시적 Intent + 라우트 extra(RouteIntents). MainActivity 는 singleTask 라
+//   떠 있으면 onNewIntent 로 받는다(E-U16).
+// - [수락] 은 Activity 를 직접 열고 수락 증표(RouteProof)를 싣는다 — 다른 앱이 수락을 흉내 내지 못하게.
+// - 알림 권한이 꺼져 있으면 게시하지 않는다(시스템이 어차피 버린다 — 예외 대신 조용히).
+package com.yehsung.aingcheck.android.push
+
+import android.annotation.SuppressLint
+import android.app.PendingIntent
+import android.content.Context
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.yehsung.aingcheck.android.routing.RouteIntents
+import com.yehsung.aingcheck.android.routing.RouteRequest
+
+class NotificationPoster(
+    private val context: Context,
+    /** 수락 증표. 못 만들면 null — 그때는 [수락] 버튼을 싣지 않는다. */
+    private val acceptProof: () -> String?,
+) {
+    /** 게시했으면 true. 권한이 없거나 채널이 막혀 있으면 false. */
+    @SuppressLint("MissingPermission") // areNotificationsEnabled() 로 먼저 거른다(API 33+ 권한 거부면 false).
+    fun post(spec: NotificationSpec): Boolean {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return false
+        val proof = if (spec.actions.any { it.request.accept }) acceptProof() else null
+        val builder = NotificationCompat.Builder(context, spec.channel.id)
+            // 앱 전용 알림 아이콘은 디자인 시스템(W1-e)·조정자 자원 몫이다. 그때까지 시스템 아이콘(흰 실루엣)을 쓴다.
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(spec.title)
+            .setContentText(spec.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(spec.body))
+            .setCategory(spec.category)
+            .setPriority(if (spec.channel.importance == ChannelImportance.HIGH) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent(spec.tap, proof = null, requestCode = requestCode(spec.tag, 0)))
+        spec.group?.let { builder.setGroup(it) }
+        spec.actions.forEachIndexed { index, action ->
+            if (action.request.accept && proof == null) return@forEachIndexed // 증표 없이 수락 버튼을 만들지 않는다
+            builder.addAction(
+                NotificationCompat.Action.Builder(0, action.title, pendingIntent(action.request, proof, requestCode(spec.tag, index + 1))).build(),
+            )
+        }
+        manager.notify(spec.tag, NOTIFICATION_ID, builder.build())
+        spec.group?.let { group -> postGroupSummary(manager, spec, group) }
+        return true
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun postGroupSummary(manager: NotificationManagerCompat, spec: NotificationSpec, group: String) {
+        val summary = NotificationCompat.Builder(context, spec.channel.id)
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(spec.channel.title)
+            .setGroup(group)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .setCategory(spec.category)
+            .build()
+        manager.notify("$group-summary", NOTIFICATION_ID, summary)
+    }
+
+    private fun pendingIntent(request: RouteRequest, proof: String?, requestCode: Int): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            requestCode,
+            RouteIntents.explicit(context, request, proof),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+    companion object {
+        /** 알림은 태그로 가른다(같은 태그 = 교체). id 는 하나로 둔다. */
+        const val NOTIFICATION_ID = 1
+
+        /** 태그·버튼마다 다른 요청 번호(같으면 FLAG_UPDATE_CURRENT 가 다른 알림의 extra 를 덮는다). */
+        fun requestCode(tag: String, slot: Int): Int = tag.hashCode() * 31 + slot
+    }
+}

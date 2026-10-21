@@ -7,8 +7,13 @@
 // CLAUDE_CONFIG_DIR 은 일부러 넓히지 않는다 — 맥도 두 번째 계정을 못 본다, 플랫폼마다 세는 범위가 다르면 순위가 불공정하다(D§12-1).
 package com.yehsung.aingcheck.desktop.platform.windows.env
 
+import com.sun.jna.Pointer
+import com.sun.jna.platform.win32.Advapi32
 import com.sun.jna.platform.win32.Advapi32Util
+import com.sun.jna.platform.win32.WinError
+import com.sun.jna.platform.win32.WinNT
 import com.sun.jna.platform.win32.WinReg
+import com.sun.jna.ptr.IntByReference
 import com.yehsung.aingcheck.core.foundation.platform.desktop.EnvReader
 
 /** 레지스트리 문자열 값과 그 형(REG_EXPAND_SZ 면 펼쳐야 한다). */
@@ -92,13 +97,33 @@ class WindowsEnvironment(
             machineRegistry = registryReader(WinReg.HKEY_LOCAL_MACHINE, MACHINE_ENV_KEY),
         )
 
+        /**
+         * 형을 가려 읽는다: REG_SZ 는 그대로, REG_EXPAND_SZ 는 펼친다(같은 문자열이라도 뜻이 다르다).
+         * jna-platform 의 registryGetStringValue 는 REG_EXPAND_SZ 도 받아 버린다(windows-latest 러너 실측, run 39621457060) —
+         * 그래서 형은 RegQueryValueEx 로 따로 묻는다.
+         */
         fun registryReader(root: WinReg.HKEY, key: String) = RegistryEnvironmentReader { name ->
             runCatching {
-                if (!Advapi32Util.registryValueExists(root, key, name)) return@runCatching null
-                // 형을 가려 읽는다: REG_SZ 는 그대로, REG_EXPAND_SZ 는 펼친다(같은 문자열이라도 뜻이 다르다).
-                runCatching { RegistryString(Advapi32Util.registryGetStringValue(root, key, name), expandable = false) }.getOrNull()
-                    ?: RegistryString(Advapi32Util.registryGetExpandableStringValue(root, key, name), expandable = true)
+                when (registryValueType(root, key, name)) {
+                    WinNT.REG_SZ -> RegistryString(Advapi32Util.registryGetStringValue(root, key, name), expandable = false)
+                    WinNT.REG_EXPAND_SZ -> RegistryString(Advapi32Util.registryGetExpandableStringValue(root, key, name), expandable = true)
+                    else -> null
+                }
             }.getOrNull()
+        }
+
+        /** 값의 레지스트리 형(REG_SZ=1, REG_EXPAND_SZ=2 …). 키·값이 없으면 null. */
+        fun registryValueType(root: WinReg.HKEY, key: String, name: String): Int? {
+            val hk = WinReg.HKEYByReference()
+            if (Advapi32.INSTANCE.RegOpenKeyEx(root, key, 0, WinNT.KEY_READ, hk) != WinError.ERROR_SUCCESS) return null
+            try {
+                val type = IntByReference()
+                val size = IntByReference()
+                val rc = Advapi32.INSTANCE.RegQueryValueEx(hk.value, name, 0, type, null as Pointer?, size)
+                return if (rc == WinError.ERROR_SUCCESS || rc == WinError.ERROR_MORE_DATA) type.value else null
+            } finally {
+                Advapi32.INSTANCE.RegCloseKey(hk.value)
+            }
         }
     }
 }

@@ -106,6 +106,29 @@ class WindowsProbesWindowsTest {
         //  ① 기본값: 지정한 jna.tmpdir 에 jnidispatch 가 풀린다(관측기가 동작한다는 증거)
         //  ② 패키지 꼴(jna.boot.library.path + nounpack + nosys): 같은 자리가 비어 있다.
         val resource = "com/sun/jna/${com.sun.jna.Platform.RESOURCE_PREFIX}/jnidispatch.dll"
+        // @TempDir 를 쓰지 않는다: 자식이 막 내려놓은 DLL 은 잠깐 지워지지 않는다(러너 실측 AccessDenied, run 39621457060) —
+        // JUnit 의 정리 실패가 시험 실패로 번지지 않게 직접 만들고 재시도로 지운다.
+        val work = Files.createTempDirectory("aingcheck-jna")
+        try {
+            jnaPair(resource, work)
+        } finally {
+            deleteWithRetry(work)
+        }
+    }
+
+    private fun deleteWithRetry(root: Path) {
+        repeat(50) {
+            val left = runCatching {
+                Files.walk(root).use { s -> s.sorted(Comparator.reverseOrder()).forEach { p -> runCatching { Files.deleteIfExists(p) } } }
+                Files.exists(root)
+            }.getOrDefault(true)
+            if (!left) return
+            Thread.sleep(100)
+        }
+        println("AINGCHECK-JNA 정리 못 한 임시 폴더(잠김): $root")
+    }
+
+    private fun jnaPair(resource: String, tmp: Path) {
         val boot = Files.createDirectories(tmp.resolve("boot"))
         javaClass.classLoader.getResourceAsStream(resource).use { input ->
             assertNotNull(input, "jna jar 에 $resource 가 없다")

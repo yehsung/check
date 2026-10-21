@@ -27,7 +27,8 @@ object Goldens {
             fail("골든을 기록했다($f) — 기록 실행은 실패로 끝난다. 변수를 빼고 다시 돌려라")
         }
         if (!f.isFile) fail("골든이 없다: $f (AINGCHECK_GOLDEN_RECORD=1 로 기록)")
-        assertEquals(f.readText(), actual, "골든과 다르다: $relative")
+        // Windows 체크아웃(core.autocrlf=true)은 글 파일을 CRLF 로 바꿔 놓는다(windows-latest 실측) — 줄 끝만 맞춰 대조한다.
+        assertEquals(f.readText().replace("\r\n", "\n"), actual, "골든과 다르다: $relative")
     }
 
     /** ARGB 픽셀 배열을 PNG 골든과 대조한다. 다르면 처음 어긋난 픽셀 좌표·값을 알린다. */

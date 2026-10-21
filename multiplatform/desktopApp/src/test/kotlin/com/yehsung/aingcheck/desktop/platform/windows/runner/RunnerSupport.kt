@@ -7,6 +7,7 @@ import com.yehsung.aingcheck.desktop.platform.windows.identity.Uuid5
 import com.yehsung.aingcheck.desktop.platform.windows.instance.InstanceSignal
 import com.yehsung.aingcheck.desktop.platform.windows.instance.WindowsSingleInstanceGuard
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.fail
@@ -34,12 +35,26 @@ object RunnerSupport {
 
     data class ChildResult(val exitCode: Int, val stdout: String, val stderr: String)
 
-    /** 같은 JDK·classpath 로 [ChildProbe] 를 띄운다. classpath 는 CLASSPATH 환경 변수로 넘긴다(Windows 명령줄 32K 상한). */
+    /**
+     * 같은 JDK·classpath 로 [ChildProbe] 를 띄운다. classpath 는 @인자 파일로 넘긴다 — Windows 는 명령줄과 환경 변수 하나가
+     * 32K 자에서 잘리는데 데스크톱 시험 classpath(Compose·Ktor·skiko jar 수십 개)는 그 근처다. 인자 파일 안에서는 따옴표 안
+     * 역슬래시가 이스케이프 문자라 두 번 쓴다(java 런처 @argfiles 규칙).
+     */
     fun runChild(args: List<String>, jvmArgs: List<String> = emptyList(), timeoutSeconds: Long = 60): ChildResult {
-        val java = ProcessHandle.current().info().command().orElseThrow { IllegalStateException("java 경로를 모른다") }
-        val cmd = listOf(java, "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8") + jvmArgs + listOf(ChildProbe::class.java.name) + args
+        val javaExe = ProcessHandle.current().info().command().orElseThrow { IllegalStateException("java 경로를 모른다") }
+        val argFile = Files.createTempFile("aingcheck-child-cp", ".args")
+        val cp = System.getProperty("java.class.path").replace("\\", "\\\\").replace("\"", "\\\"")
+        Files.writeString(argFile, "-cp\n\"" + cp + "\"\n")
+        try {
+            return runChildWith(javaExe, listOf("@" + argFile.toAbsolutePath()), args, jvmArgs, timeoutSeconds)
+        } finally {
+            Files.deleteIfExists(argFile)
+        }
+    }
+
+    private fun runChildWith(javaExe: String, cpArgs: List<String>, args: List<String>, jvmArgs: List<String>, timeoutSeconds: Long): ChildResult {
+        val cmd = listOf(javaExe, "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8") + cpArgs + jvmArgs + listOf(ChildProbe::class.java.name) + args
         val pb = ProcessBuilder(cmd)
-        pb.environment()["CLASSPATH"] = System.getProperty("java.class.path")
         pb.redirectInput(ProcessBuilder.Redirect.from(File(if (File.separatorChar == '\\') "NUL" else "/dev/null")))
         val p = pb.start()
         val out = p.inputStream.bufferedReader().readText()

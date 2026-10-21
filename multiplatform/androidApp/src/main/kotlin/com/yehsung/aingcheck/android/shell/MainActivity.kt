@@ -69,9 +69,10 @@ class MainActivity : ComponentActivity() {
         if (intent != null && (incoming.routeExtra != null || incoming.acceptExtra || incoming.proofExtra != null)) {
             setIntent(RouteIntents.consumed(intent))
         }
+        // 기기 시나리오(E-U16 · §8-13)가 읽는 한 줄. 증표는 있었는지(참·거짓)만 싣는다 — 값은 싣지 않는다.
         container.logger.log(
             LogLevel.INFO, "AingShell",
-            "route accept=${request?.accept} history=${incoming.launchedFromHistory} opened=${request != null}",
+            "route accept=${request?.accept} history=${incoming.launchedFromHistory} proof=${incoming.proofExtra != null} opened=${request != null}",
         )
         request?.let { requests.trySend(it) }
     }

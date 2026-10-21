@@ -70,13 +70,16 @@ jobs:
 
   aing-bake-verify:
     name: aing-bake-verify (experiment F-5 · F-10)
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: 도구 판
+      - name: 도구 판 — 가장 새 Xcode 를 고른다(이 저장소는 Xcode 27 · Swift 6.4 로 빌드된다)
         run: |
+          ls -d /Applications/Xcode*.app || true
+          newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
           sw_vers
           xcodebuild -version
           swift --version
@@ -92,7 +95,10 @@ jobs:
           EOF
           swift "$RUNNER_TEMP/metal.swift"
       - name: 빌드
-        run: swift build --build-tests 2>&1 | tail -40
+        run: |
+          set -o pipefail
+          swift build --build-tests > "$RUNNER_TEMP/build.log" 2>&1 || { grep -nE "error:" "$RUNNER_TEMP/build.log" | head -40; tail -20 "$RUNNER_TEMP/build.log"; exit 1; }
+          tail -3 "$RUNNER_TEMP/build.log"
       - name: F-10 같은 칸을 러너에서 렌더(망 봉인)
         run: |
           mkdir -p "$RUNNER_TEMP/probe"

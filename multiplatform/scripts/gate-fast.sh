@@ -66,9 +66,9 @@ if [[ "${AINGCHECK_GATE_INNER:-}" != "1" ]]; then
       # sudo -E 는 HOME 을 루트 것(/root)으로 남긴다(CI 실측) — 원래 HOME·PATH 를 인자로 넘겨 되돌린다.
       exec sudo -n unshare --net -- /bin/sh -c '
         ip link set lo up || exit 3
-        user="$1"; path="$2"; home="$3"; shift 3
-        exec sudo -n -E -u "$user" env PATH="$path" HOME="$home" AINGCHECK_GATE_INNER=1 AINGCHECK_NETWORK_SEALED=1 /bin/bash "$@"
-      ' sh "$(id -un)" "$PATH" "$HOME" "$SELF" "$@"
+        user="$1"; path="$2"; home="$3"; jhome="$4"; shift 4
+        exec sudo -n -E -u "$user" env PATH="$path" HOME="$home" JAVA_HOME="$jhome" AINGCHECK_GATE_INNER=1 AINGCHECK_NETWORK_SEALED=1 /bin/bash "$@"
+      ' sh "$(id -un)" "$PATH" "$HOME" "${JAVA_HOME:-}" "$SELF" "$@"
       ;;
     windows)
       [[ "${AINGCHECK_EXTERNAL_SEAL:-}" == "windows-firewall" ]] \

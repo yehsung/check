@@ -62,6 +62,7 @@ val syncRobolectricJars = tasks.register<Sync>("aingcheckSyncRobolectricJars") {
 }
 
 val includeSlow = providers.gradleProperty("aingcheck.includeSlow").map { it.toBoolean() }.orElse(false)
+val launcher21 = extensions.getByType<JavaToolchainService>().launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) }
 val mpRoot = rootProject.layout.projectDirectory.asFile
 val prodUrlForScan = providers.gradleProperty("aingcheck.prod.supabaseUrl").orElse("")
 
@@ -76,6 +77,9 @@ tasks.withType<Test>().configureEach {
     useJUnitPlatform {
         if (!slow) excludeTags("slow")
     }
+    // 시험 JVM 은 언제나 JDK 21 이다. Android 앱 모듈은 툴체인을 따로 정하지 않아 Gradle 을 띄운 JVM 을 쓰는데,
+    // CI 실측에서 Java 17 로 떠 Robolectric 이 "Android SDK 36 requires Java 21" 로 멈췄다.
+    javaLauncher.set(launcher21)
     dependsOn(syncRobolectricJars)
 
     systemProperty("java.awt.headless", "true")

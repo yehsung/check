@@ -279,7 +279,8 @@ package struct FlappyGame: Equatable, Sendable {
         flapCount += 1
     }
 
-    /// 허브가 판을 끊을 때(창 닫힘·포커스 상실·게임 전환). 진행 중이면 그 점수로 결과 확정 — 점수는 유효하다.
+    /// 허브가 판을 끊을 때(창 닫힘·게임 전환·[그만두기]·정지 상한). 진행 중이면 그 점수로 결과 확정 — 점수는 유효하다.
+    /// **포커스 상실은 여기로 안 온다**(v0.3.62) — 키를 잃으면 판을 끝내지 않고 멈춘다(`MiniGameHost.isPaused`).
     package mutating func interrupt() {
         switch phase {
         case .running, .over:

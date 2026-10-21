@@ -71,15 +71,22 @@ let package = Package(
             name: "CheckRenderTestSupport",
             path: "Tests/CheckRenderTestSupport"
         ),
+        // xplat W0-b: Swift → Kotlin 골든 작성기(정규 JSON · 비트 표기 · FNV-1a 64 · Mirror 덤프 · 비교/쓰기 모드).
+        // 두 시험 타깃의 `GoldenExport/<갈래>/` 가 같은 작성기를 써야 골든 바이트가 한 벌이라 지원 타깃으로 뺐다(위와 같은 이유).
+        // 제품에 없으므로 앱 어디에도 링크되지 않는다. Foundation 만 쓴다. 형식은 contract/README.md(K1).
+        .target(
+            name: "CheckGoldenSupport",
+            path: "Tests/CheckGoldenSupport"
+        ),
         // D-base: 폰 스토어·세션·라우터·실시간 러너 테스트(macOS `swift test --filter CheckMobileKitTests`). 스텁 서버는
         // CheckMobileKit 의 DEBUG 전용 `MobileStubURLProtocol`(호스트별 응답기 · 요청 기록 · 금지 호출 판정)을 쓴다.
         .testTarget(
             name: "CheckMobileKitTests",
-            dependencies: ["CheckMobileKit", "CheckMobileShared", "CheckWidgetsKit", "CheckCore", "CheckRenderTestSupport"]
+            dependencies: ["CheckMobileKit", "CheckMobileShared", "CheckWidgetsKit", "CheckCore", "CheckRenderTestSupport", "CheckGoldenSupport"]
         ),
         .testTarget(
             name: "checkTests",
-            dependencies: ["check", "CheckCore", "CheckRenderTestSupport"],
+            dependencies: ["check", "CheckCore", "CheckRenderTestSupport", "CheckGoldenSupport"],
             // 렌주 판정 코퍼스(JSON)는 테스트가 #filePath 로 직접 읽는다 — 리소스로 묶지 않는다.
             exclude: ["Fixtures"]
         )

@@ -1,0 +1,156 @@
+{
+  "cases": [
+    {
+      "baseBits": "3fe999999999999a",
+      "exponentBits": "0000000000000000",
+      "id": "stage-1",
+      "powBits": "3ff0000000000000",
+      "stage": 1
+    },
+    {
+      "baseBits": "3fe9604189374bc7",
+      "exponentBits": "3ff0000000000000",
+      "id": "stage-2",
+      "powBits": "3fe9604189374bc7",
+      "stage": 2
+    },
+    {
+      "baseBits": "3fe926e978d4fdf4",
+      "exponentBits": "4000000000000000",
+      "id": "stage-3",
+      "powBits": "3fe3c4fc1df3300e",
+      "stage": 3
+    },
+    {
+      "baseBits": "3fe8ed916872b021",
+      "exponentBits": "4008000000000000",
+      "id": "stage-4",
+      "powBits": "3fde4131b7f7c25e",
+      "stage": 4
+    },
+    {
+      "baseBits": "3fe8b4395810624e",
+      "exponentBits": "4010000000000000",
+      "id": "stage-5",
+      "powBits": "3fd6bb8be59ff28a",
+      "stage": 5
+    },
+    {
+      "baseBits": "3fe87ae147ae147b",
+      "exponentBits": "4014000000000000",
+      "id": "stage-6",
+      "powBits": "3fd0c4aa89a5e27c",
+      "stage": 6
+    },
+    {
+      "baseBits": "3fe84189374bc6a8",
+      "exponentBits": "4018000000000000",
+      "id": "stage-7",
+      "powBits": "3fc847580ebfec1d",
+      "stage": 7
+    },
+    {
+      "baseBits": "3fe8083126e978d5",
+      "exponentBits": "401c000000000000",
+      "id": "stage-8",
+      "powBits": "3fc13efcd73e7cf2",
+      "stage": 8
+    },
+    {
+      "baseBits": "3fe7ced916872b02",
+      "exponentBits": "4020000000000000",
+      "id": "stage-9",
+      "powBits": "3fb808aac4b7f144",
+      "stage": 9
+    },
+    {
+      "baseBits": "3fe795810624dd30",
+      "exponentBits": "4022000000000000",
+      "id": "stage-10",
+      "powBits": "3fb06c3cff639f17",
+      "stage": 10
+    },
+    {
+      "baseBits": "3fe75c28f5c28f5c",
+      "exponentBits": "4024000000000000",
+      "id": "stage-11",
+      "powBits": "3fa600fbefc7ca72",
+      "stage": 11
+    },
+    {
+      "baseBits": "3fe722d0e560418a",
+      "exponentBits": "4026000000000000",
+      "id": "stage-12",
+      "powBits": "3f9ce5184d4d1360",
+      "stage": 12
+    },
+    {
+      "baseBits": "3fe6e978d4fdf3b7",
+      "exponentBits": "4028000000000000",
+      "id": "stage-13",
+      "powBits": "3f9296c941a1be2b",
+      "stage": 13
+    },
+    {
+      "baseBits": "3fe6b020c49ba5e4",
+      "exponentBits": "402a000000000000",
+      "id": "stage-14",
+      "powBits": "3f876d828a2366a0",
+      "stage": 14
+    },
+    {
+      "baseBits": "3fe676c8b4395811",
+      "exponentBits": "402c000000000000",
+      "id": "stage-15",
+      "powBits": "3f7ce97edd2eceaf",
+      "stage": 15
+    },
+    {
+      "baseBits": "3fe63d70a3d70a3e",
+      "exponentBits": "402e000000000000",
+      "id": "stage-16",
+      "powBits": "3f7176a9daf17423",
+      "stage": 16
+    },
+    {
+      "baseBits": "3fe604189374bc6b",
+      "exponentBits": "4030000000000000",
+      "id": "stage-17",
+      "powBits": "3f64a4ffc76e4356",
+      "stage": 17
+    },
+    {
+      "baseBits": "3fe5cac083126e98",
+      "exponentBits": "4031000000000000",
+      "id": "stage-18",
+      "powBits": "3f57dfaecd02a35f",
+      "stage": 18
+    },
+    {
+      "baseBits": "3fe5916872b020c5",
+      "exponentBits": "4032000000000000",
+      "id": "stage-19",
+      "powBits": "3f4aff6e95f09144",
+      "stage": 19
+    },
+    {
+      "baseBits": "3fe55810624dd2f2",
+      "exponentBits": "4033000000000000",
+      "id": "stage-20",
+      "powBits": "3f3dd84e47b9ce37",
+      "stage": 20
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+  "golden": "w0b-probe/gravity",
+  "platformSensitive": true,
+  "schema": 1,
+  "spec": {
+    "experiment": "C-X1 — 테트리스 중력 pow 를 플랫폼마다 다시 계산해 Darwin 비트와 대조(W1-a 는 런타임 pow 대신 이 비트를 상수 표로 쓴다, C§5.3)",
+    "formula": "base = 0.8 - 0.007 * (E - 1); exponent = E - 1; seconds = pow(base, exponent) — TetrisGame.gravitySeconds(forStage:)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/TetrisGame.swift"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "goldens": {
+    "rng/splitmix64": {
+      "file": "f6edadac695055f1b2012240b614ed9cb6140f2d1b4f6f5cae5ae4456f565b5e",
+      "generator": {
+        "Tests/checkTests/GoldenExport/_base/GoldenExportBase.swift": "c5fec9c0d3c8da60ba37e219fe2664513fd4c39999b87ab84611b62bf706579c"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
+        "Sources/CheckCore/MiniGameEngine.swift": "c2340e96a366a2ee00319cabc5b7313c45f4fd1af2aed724b96510cf528425c0"
+      }
+    }
+  },
+  "schema": 1,
+  "strip": "swift_source.strip_comments v1 — 주석·빈 줄·줄 끝 공백을 뺀 UTF-8 의 sha256",
+  "support": {
+    "Tests/CheckGoldenSupport/GoldenBits.swift": "29d24d82e11cabdefff93b4c7032daea1c273f163c1dda373270a02f9d89a0ba",
+    "Tests/CheckGoldenSupport/GoldenExport.swift": "325d496a7320f8a5c7c1503f1c04b12f85643ec4f095b8e573c01423a0955272",
+    "Tests/CheckGoldenSupport/GoldenJSON.swift": "2e02b3021c69fead0acc51e73232628291cdfed413fd62d07d3b338c1807abac",
+    "Tests/CheckGoldenSupport/GoldenMirror.swift": "8fdd8f46dc1758f5e3cd2dde02ab277e90e1e77854f96550dc523552ff38f152"
+  }
+}

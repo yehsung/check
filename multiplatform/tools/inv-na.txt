@@ -1,0 +1,3 @@
+# 해당 없음 표기(C§4.2) — Swift ★·⚠️ 규약 가운데 Kotlin 으로 옮기지 않는 것.
+# 한 줄에 하나: "INV-<파일>-<해시8> 해당 없음: 이유". ID 는 python3 -I multiplatform/tools/port-invariants.py --list 로 본다.
+# 갈래는 자기 몫(Swift 파일 + 줄 구간, G §8-3)을 port-invariants.py --coverage --files … 로 재서 100% 를 만든다.

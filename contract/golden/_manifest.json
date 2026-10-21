@@ -1,0 +1,69 @@
+{
+  "exportTests": 13,
+  "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
+  "goldens": [
+    {
+      "cases": 12,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportBase.swift",
+      "golden": "rng/splitmix64",
+      "path": "contract/golden/rng/splitmix64.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/MiniGameEngine.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift"
+      ]
+    }
+  ],
+  "probes": [
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/decoder",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/decoder.json",
+      "platformSensitive": false
+    },
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/graphemes",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/graphemes.json",
+      "platformSensitive": true
+    },
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/gravity",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/gravity.json",
+      "platformSensitive": true
+    },
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/kst",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/kst.json",
+      "platformSensitive": true
+    },
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/mirror-dump",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/mirror-dump.json",
+      "platformSensitive": false
+    },
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/nfc",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/nfc.json",
+      "platformSensitive": true
+    },
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/pow3",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/pow3.json",
+      "platformSensitive": true
+    },
+    {
+      "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+      "golden": "w0b-probe/text-scalars",
+      "path": "multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/text-scalars.json",
+      "platformSensitive": true
+    }
+  ],
+  "schema": 1
+}

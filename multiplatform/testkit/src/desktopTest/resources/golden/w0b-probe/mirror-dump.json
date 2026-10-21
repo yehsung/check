@@ -1,0 +1,239 @@
+{
+  "cases": [
+    {
+      "dump": "notSignedIn",
+      "id": "tetris-rpc-status",
+      "type": "TetrisRPCStatus"
+    },
+    {
+      "dump": "unknown",
+      "id": "tetris-rpc-status-unknown",
+      "type": "TetrisRPCStatus"
+    },
+    {
+      "dump": "ok",
+      "id": "gacha-pull-status-ok",
+      "type": "GachaPullStatus"
+    },
+    {
+      "dump": {
+        "$case": "unknown",
+        "$value": "weird_status"
+      },
+      "id": "gacha-pull-status-unknown",
+      "type": "GachaPullStatus"
+    },
+    {
+      "dump": {
+        "$case": "idle",
+        "$value": "disabled"
+      },
+      "id": "realtime-idle",
+      "type": "RealtimeState"
+    },
+    {
+      "dump": {
+        "$case": "connecting",
+        "$value": {
+          "attempt": 3,
+          "since": {
+            "$date": "41daac4ee0100000"
+          }
+        }
+      },
+      "id": "realtime-connecting",
+      "type": "RealtimeState"
+    },
+    {
+      "dump": {
+        "$case": "subscribed",
+        "$value": {
+          "lastHeardAt": {
+            "$date": "41daac4ee7a00000"
+          },
+          "since": {
+            "$date": "41daac4ee0100000"
+          }
+        }
+      },
+      "id": "realtime-subscribed",
+      "type": "RealtimeState"
+    },
+    {
+      "dump": {
+        "$case": "failed",
+        "$value": [
+          {
+            "attempt": 2,
+            "failingSince": {
+              "$date": "41daac4ee0100000"
+            },
+            "retryAt": {
+              "$date": "41daac4ee7a00000"
+            }
+          },
+          "topicDenied"
+        ]
+      },
+      "id": "realtime-failed",
+      "type": "RealtimeState"
+    },
+    {
+      "dump": {
+        "$case": "closed",
+        "$value": null
+      },
+      "id": "transport-closed-nil",
+      "type": "RealtimeTransportEvent"
+    },
+    {
+      "dump": {
+        "$case": "closed",
+        "$value": 1006
+      },
+      "id": "transport-closed-1006",
+      "type": "RealtimeTransportEvent"
+    },
+    {
+      "dump": {
+        "$case": "joinRejected",
+        "$value": {
+          "$case": "unknown",
+          "$value": "x"
+        }
+      },
+      "id": "transport-join-rejected",
+      "type": "RealtimeTransportEvent"
+    },
+    {
+      "dump": {
+        "$case": "lineClear",
+        "$value": {
+          "$f64": "3fd0000000000000"
+        }
+      },
+      "id": "tetris-phase-line-clear",
+      "type": "Phase"
+    },
+    {
+      "dump": {
+        "odds": [
+          {
+            "characterID": "aing_gold",
+            "percent": {
+              "$f64": "4008000000000000"
+            }
+          },
+          {
+            "characterID": "robot",
+            "percent": {
+              "$f64": "4058400000000000"
+            }
+          }
+        ],
+        "price": 50,
+        "shardCosts": {
+          "aing_gold": 20,
+          "robot": 4
+        },
+        "shards": null
+      },
+      "id": "gacha-info",
+      "type": "GachaInfo"
+    },
+    {
+      "dump": {
+        "odds": null,
+        "price": null,
+        "shardCosts": null,
+        "shards": null
+      },
+      "id": "gacha-info-empty",
+      "type": "GachaInfo"
+    },
+    {
+      "dump": null,
+      "id": "optional-some-nil",
+      "type": "Optional<Optional<Int>>"
+    },
+    {
+      "dump": 5,
+      "id": "optional-some-some",
+      "type": "Optional<Optional<Int>>"
+    },
+    {
+      "dump": null,
+      "id": "optional-none",
+      "type": "Optional<Optional<Int>>"
+    },
+    {
+      "dump": {
+        "big": {
+          "$int": "0xffffffffffffffff"
+        },
+        "blob": {
+          "$data": "AAEC+g=="
+        },
+        "byNumber": [
+          [
+            10,
+            "ten"
+          ],
+          [
+            2,
+            "two"
+          ]
+        ],
+        "initial": "한",
+        "link": {
+          "$url": "https://aingcheck.invalid/a?b=1"
+        },
+        "maybe": [
+          1,
+          null,
+          3
+        ],
+        "nested": null,
+        "ratio": {
+          "$f64": "3fb99999a0000000"
+        },
+        "small": {
+          "$int": "0x8000000000000000"
+        },
+        "tags": [
+          "a",
+          "b",
+          "가"
+        ],
+        "token": {
+          "$uuid": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f"
+        }
+      },
+      "id": "sample-struct",
+      "type": "DumpSample"
+    },
+    {
+      "dump": {
+        "baseValue": 1,
+        "derivedValue": "d"
+      },
+      "id": "class-derived",
+      "type": "DumpDerived"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+  "golden": "w0b-probe/mirror-dump",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "experiment": "C-X10 — Swift Mirror 정규 덤프(GoldenMirror)가 연관값 열거 · 겹친 Optional · 사전 · Set · 상속 클래스를 Kotlin 리플렉션과 같은 모양으로 내는가. 규칙 정본: contract/README.md 「디코드 덤프 규칙(G6)」",
+    "type": "String(describing: type(of:)) — 참고용(대조 키 아님)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/RealtimeLink.swift",
+    "Sources/CheckCore/Gacha.swift",
+    "Sources/CheckCore/TetrisWire.swift",
+    "Sources/CheckCore/TetrisGame.swift"
+  ]
+}

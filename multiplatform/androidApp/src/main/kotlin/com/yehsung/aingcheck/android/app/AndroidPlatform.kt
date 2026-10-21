@@ -50,18 +50,26 @@ class SharedPreferencesKeyValueStore(context: Context, name: String = DEFAULT_NA
 
 /**
  * 시험 실행 감지(C§3.4 "계측 인자"): Robolectric(지문 "robolectric") 또는 기기 계측(AndroidJUnitRunner 가 등록한 Instrumentation).
- * 출시 APK 에는 androidx.test 가 없어 언제나 거짓이다.
+ * 출시 APK 에는 androidx.test 가 없어(레지스트리 클래스 없음) 언제나 거짓이다. 이 값이 잘못 참이 되면 release 가
+ * SKIP_RUNNING_TESTS 로 빠져 운영에서 FCM 이 영영 초기화되지 않는다 — 그래서 판정을 순수 함수로 떼어 짝으로 잰다(AndroidRunningTestsTest).
  */
 object AndroidRunningTests : RunningTests {
-    override val isRunningTests: Boolean by lazy { detect() }
+    const val ROBOLECTRIC_FINGERPRINT = "robolectric"
+    const val REGISTRY_CLASS = "androidx.test.platform.app.InstrumentationRegistry"
 
-    private fun detect(): Boolean {
-        if (Build.FINGERPRINT == "robolectric") return true
-        return runCatching {
-            val registry = Class.forName("androidx.test.platform.app.InstrumentationRegistry")
-            registry.getMethod("getInstrumentation").invoke(null) != null
-        }.getOrDefault(false)
+    override val isRunningTests: Boolean by lazy { detect(Build.FINGERPRINT) { registeredInstrumentation(REGISTRY_CLASS) } }
+
+    /**
+     * 순수 판정. [instrumentation] 은 등록된 계측을 돌려준다 — 클래스가 없거나(출시 APK) 등록 전이라 던지거나 null 이면 거짓.
+     */
+    fun detect(fingerprint: String?, instrumentation: () -> Any?): Boolean {
+        if (fingerprint == ROBOLECTRIC_FINGERPRINT) return true
+        return runCatching { instrumentation() != null }.getOrDefault(false)
     }
+
+    /** [registryClass] 의 정적 getInstrumentation() 을 부른다. 클래스가 없으면 ClassNotFoundException, 등록 전이면 그 예외를 던진다. */
+    fun registeredInstrumentation(registryClass: String): Any? =
+        Class.forName(registryClass).getMethod("getInstrumentation").invoke(null)
 }
 
 /** Android 는 프로세스가 하나라 늘 잡힌다(C§3.4 — 단일 실행 가드는 Windows 몫). */

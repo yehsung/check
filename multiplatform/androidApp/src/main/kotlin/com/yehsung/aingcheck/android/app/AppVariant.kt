@@ -1,6 +1,6 @@
 // 이 APK 가 어느 변형인가. 값은 변형 소스셋(src/debug · src/release · src/stub)의 CurrentVariant 한 곳에서 온다 —
 // 변형을 하나 더 만들고 그 소스셋에 CurrentVariant 를 두지 않으면 컴파일이 막힌다(조용히 기본값으로 접지 않는다).
-// stub 은 데모 픽스처로 도는 시험·스크린샷 변형(E§4.6) — 빌드 유형은 조정자 패치(androidApp/build.gradle.kts)가 만든다.
+// stub 은 데모 픽스처로 도는 시험·스크린샷 변형(E§4.6) — 빌드 유형은 조정자 패치 w1g-02(build-logic aingcheck.android-app)가 만든다.
 package com.yehsung.aingcheck.android.app
 
 enum class AppVariantKind {

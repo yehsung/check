@@ -33,6 +33,16 @@ class RouteIntentsTest {
         assertFalse(RouteIntents.parse(open(url, true, ""), null)!!.accept)
     }
 
+    /** G §8-13: 최근 앱(기록)에서 다시 온 작업 뿌리 Intent 는 증표가 맞아도 수락이 아니다 — 화면은 연다. */
+    @Test
+    fun historyRelaunchNeverAccepts() {
+        val url = AingRoute.GomokuInvite("m1").url
+        val replay = open(url, true, proof).copy(launchedFromHistory = true)
+        assertEquals(RouteRequest(AingRoute.GomokuInvite("m1"), accept = false), RouteIntents.parse(replay, proof))
+        // 기준선: 같은 증표·같은 라우트라도 기록 표시가 없으면 수락이다.
+        assertTrue(RouteIntents.parse(replay.copy(launchedFromHistory = false), proof)!!.accept)
+    }
+
     @Test
     fun acceptOnlyForInvites() {
         assertFalse(RouteIntents.parse(open(AingRoute.Message("p").url, true, proof), proof)!!.accept)

@@ -2,7 +2,9 @@
 package com.yehsung.aingcheck.android.push
 
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.AingRoute
@@ -57,6 +59,12 @@ class NotificationChannelsTest {
         // 그 Intent 를 셸이 읽으면 수락이 참이다(다른 증표면 거짓 — RouteIntentsTest).
         assertEquals(RouteRequest(route, accept = true), RouteIntents.parse(RouteIntents.read(accept)!!, proof))
         assertTrue(shadowOf(posted.contentIntent).isActivityIntent)
+        // 증표가 실린 PendingIntent 는 바꿀 수 없어야 한다(FLAG_IMMUTABLE — 받은 쪽이 fillIn 으로 extra 를 바꾸지 못하게).
+        assertTrue("본문 PendingIntent 가 바뀔 수 있다", shadowOf(posted.contentIntent).isImmutable)
+        assertTrue("[수락] PendingIntent 가 바뀔 수 있다", shadowOf(posted.actions.single().actionIntent).isImmutable)
+        // 기준선(다른 입력): 같은 판별이 FLAG_MUTABLE 로 만든 PendingIntent 는 거짓으로 읽는다 — 위 참이 늘 참인 판별이 아니다.
+        val mutable = PendingIntent.getActivity(app, 99, Intent(app, MainActivity::class.java), PendingIntent.FLAG_MUTABLE)
+        assertFalse(shadowOf(mutable).isImmutable)
     }
 
     @Test
@@ -72,6 +80,9 @@ class NotificationChannelsTest {
         assertEquals(setOf("message-p1", "message-p2", "message-summary"), active.keys)
         assertEquals("둘", active.getValue("message-p1").extras.getCharSequence("android.text").toString())
         assertTrue(active.values.all { it.group == NotificationSpecs.MESSAGE_GROUP })
+        val taps = active.values.mapNotNull { it.contentIntent }
+        assertEquals("상대별 알림 둘에 탭 PendingIntent 가 있다(요약은 없다)", 2, taps.size)
+        assertTrue("메시지 알림 PendingIntent 가 바뀔 수 있다", taps.all { shadowOf(it).isImmutable })
     }
 
     @Test

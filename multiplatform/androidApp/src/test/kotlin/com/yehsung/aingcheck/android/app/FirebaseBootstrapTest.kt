@@ -16,20 +16,34 @@ import org.robolectric.annotation.Config
 private val FAKE = FirebaseSettings.parse("1:123456789012:android:0123456789abcdef", "aingcheck-dev", "123456789012", "fake-api-key-0123456789abcdef0123")
 
 class FirebaseDecisionTest {
+    /** 명세 표(E§6.6·§8-5) 12칸을 글자로 적는다 — 구현의 when 을 다시 쓴 거울이 아니다. 변형 · 시험 실행 · 설정 → 판정. */
     @Test
     fun onlyReleaseWithConfigOutsideTestsInitializes() {
         assertTrue(FAKE != null)
-        for (variant in AppVariantKind.entries) for (tests in listOf(false, true)) for (settings in listOf(FAKE, null)) {
-            val expected = when {
-                variant != AppVariantKind.RELEASE -> FirebaseDecision.SKIP_NOT_RELEASE
-                tests -> FirebaseDecision.SKIP_RUNNING_TESTS
-                settings == null -> FirebaseDecision.SKIP_NO_CONFIG
-                else -> FirebaseDecision.INITIALIZE
-            }
-            assertEquals("$variant tests=$tests settings=${settings != null}", expected, FirebaseBootstrap.decide(variant, settings, tests))
+        val table = listOf(
+            "DEBUG   tests=false config=yes -> SKIP_NOT_RELEASE",
+            "DEBUG   tests=false config=no  -> SKIP_NOT_RELEASE",
+            "DEBUG   tests=true  config=yes -> SKIP_NOT_RELEASE",
+            "DEBUG   tests=true  config=no  -> SKIP_NOT_RELEASE",
+            "STUB    tests=false config=yes -> SKIP_NOT_RELEASE",
+            "STUB    tests=false config=no  -> SKIP_NOT_RELEASE",
+            "STUB    tests=true  config=yes -> SKIP_NOT_RELEASE",
+            "STUB    tests=true  config=no  -> SKIP_NOT_RELEASE",
+            "RELEASE tests=false config=yes -> INITIALIZE",
+            "RELEASE tests=false config=no  -> SKIP_NO_CONFIG",
+            "RELEASE tests=true  config=yes -> SKIP_RUNNING_TESTS",
+            "RELEASE tests=true  config=no  -> SKIP_RUNNING_TESTS",
+        )
+        val row = Regex("""(\w+) +tests=(true|false) +config=(yes|no) +-> (\w+)""")
+        val seen = table.map { line ->
+            val (variant, tests, config, want) = row.matchEntire(line)!!.destructured
+            val got = FirebaseBootstrap.decide(AppVariantKind.valueOf(variant), if (config == "yes") FAKE else null, tests.toBoolean())
+            assertEquals(line, FirebaseDecision.valueOf(want), got)
+            Triple(variant, tests, config)
         }
-        // 표의 단 하나의 INITIALIZE.
-        assertEquals(FirebaseDecision.INITIALIZE, FirebaseBootstrap.decide(AppVariantKind.RELEASE, FAKE, runningTests = false))
+        // 표가 변형 전부 × 둘 × 둘을 빠짐없이 덮는다(변형이 늘면 이 시험이 표를 늘리라고 빨개진다).
+        assertEquals(AppVariantKind.entries.size * 2 * 2, seen.toSet().size)
+        assertEquals(AppVariantKind.entries.map { it.name }.toSet(), seen.map { it.first }.toSet())
     }
 
     @Test

@@ -15,6 +15,7 @@ import com.yehsung.aingcheck.android.routing.VisibleRoute
 import com.yehsung.aingcheck.android.shell.ShellPhase
 import com.yehsung.aingcheck.android.vault.AndroidKeystoreCipher
 import com.yehsung.aingcheck.android.vault.KeystoreTokenVault
+import com.yehsung.aingcheck.android.vault.VaultCipher
 import com.yehsung.aingcheck.core.foundation.identity.ClientIdentity
 import com.yehsung.aingcheck.core.foundation.platform.InstallationIdentity
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
@@ -27,7 +28,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
-class AppContainer(private val app: Application) {
+class AppContainer(
+    private val app: Application,
+    /**
+     * 금고 봉투. 운영은 언제나 Android Keystore 다. Robolectric 에는 AndroidKeyStore 제공자가 없어서, 호스트 시험만 소프트웨어 봉투를
+     * 넘겨 **이 그릇이 고른 자리**에 금고가 실제로 쓰는지 잰다(AppContainerVaultTest).
+     */
+    private val vaultCipher: () -> VaultCipher = { AndroidKeystoreCipher() },
+) {
     /** K4: (android, versionCode, versionName) — version.properties 한 곳에서 온다. */
     val clientIdentity: ClientIdentity = ClientIdentity.fromGenerated(BuildIdentity.PLATFORM, BuildIdentity.BUILD, BuildIdentity.VERSION)
 
@@ -38,7 +46,7 @@ class AppContainer(private val app: Application) {
     val monotonicClock: MonotonicClock = ElapsedRealtimeClock
 
     /** 금고·설치 UUID 는 noBackupFilesDir 아래(백업·기기 이전에서 빠진다, E§5.2). */
-    val tokenVault: TokenVault by lazy { KeystoreTokenVault(File(app.noBackupFilesDir, VAULT_DIR), AndroidKeystoreCipher()) }
+    val tokenVault: TokenVault by lazy { KeystoreTokenVault(File(app.noBackupFilesDir, VAULT_DIR), vaultCipher()) }
     val installationIdentity: InstallationIdentity by lazy { AndroidInstallationIdentity(app.noBackupFilesDir) }
 
     val lifecycle = AppLifecycle()

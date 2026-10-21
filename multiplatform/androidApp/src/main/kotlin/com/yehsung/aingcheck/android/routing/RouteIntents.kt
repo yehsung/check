@@ -4,6 +4,9 @@
 // [수락](오목·체스 신청 알림 버튼)은 서버에 쓰는 일(판돈이 걸린 respond)이다. MainActivity 는 런처 때문에 exported 라
 // 다른 앱이 같은 extra 를 실은 명시적 Intent 를 보낼 수 있다 → 수락은 **이 설치만 아는 증표**가 맞을 때만 참이다.
 // 증표는 앱 전용 저장소의 무작위 값이고(RouteProof), 알림 PendingIntent(FLAG_IMMUTABLE)에만 실린다.
+//
+// 최근 앱(기록)에서 다시 띄우면 시스템은 작업 뿌리 Intent 를 extra 째 다시 배달한다(FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY).
+// 알림 [수락] 이 작업 뿌리였다면 증표까지 그대로 다시 온다 → 기록에서 온 Intent 의 수락은 버리고 화면만 연다(G §8-13).
 package com.yehsung.aingcheck.android.routing
 
 import android.content.Context
@@ -29,12 +32,14 @@ object RouteIntents {
         val routeExtra: String?,
         val acceptExtra: Boolean,
         val proofExtra: String?,
+        /** 최근 앱(기록)에서 다시 띄운 작업 뿌리 Intent 인가(FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY). 그러면 수락은 언제나 거짓이다. */
+        val launchedFromHistory: Boolean = false,
     )
 
     /**
      * 순수 판정.
      * - VIEW + aingcheck:// → 라우트(수락 없음). extra 는 보지 않는다.
-     * - OPEN_ROUTE + 라우트 extra → 라우트. 수락은 신청 라우트이고 증표가 [expectedProof] 와 같을 때만.
+     * - OPEN_ROUTE + 라우트 extra → 라우트. 수락은 신청 라우트이고 증표가 [expectedProof] 와 같고 기록에서 다시 온 것이 아닐 때만.
      * - 그 밖(런처 MAIN 등)·모르는 모양 → null(화면을 바꾸지 않는다).
      */
     fun parse(incoming: Incoming, expectedProof: String?): RouteRequest? = when (incoming.action) {
@@ -43,7 +48,7 @@ object RouteIntents {
             val acceptable = route is AingRoute.GomokuInvite || route is AingRoute.ChessInvite
             val proven = !expectedProof.isNullOrEmpty() && !incoming.proofExtra.isNullOrEmpty() &&
                 MessageDigest.isEqual(expectedProof.toByteArray(), incoming.proofExtra.toByteArray())
-            RouteRequest(route, accept = incoming.acceptExtra && acceptable && proven)
+            RouteRequest(route, accept = incoming.acceptExtra && acceptable && proven && !incoming.launchedFromHistory)
         }
         else -> null
     }
@@ -55,7 +60,15 @@ object RouteIntents {
             routeExtra = it.getStringExtra(EXTRA_ROUTE),
             acceptExtra = it.getBooleanExtra(EXTRA_ACCEPT, false),
             proofExtra = it.getStringExtra(EXTRA_PROOF),
+            launchedFromHistory = (it.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0,
         )
+    }
+
+    /** 처리한 Intent 의 사본에서 라우트·수락 extra 를 지운다(getIntent() 를 다시 읽어도 수락이 한 번 더 실리지 않게). */
+    fun consumed(intent: Intent): Intent = Intent(intent).apply {
+        removeExtra(EXTRA_ROUTE)
+        removeExtra(EXTRA_ACCEPT)
+        removeExtra(EXTRA_PROOF)
     }
 
     /** 알림·위젯이 여는 명시적 Intent. [proof] 는 수락 요청일 때만 싣는다. */

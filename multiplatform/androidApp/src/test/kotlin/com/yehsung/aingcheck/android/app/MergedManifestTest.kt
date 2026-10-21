@@ -70,7 +70,8 @@ class MergedManifestTest {
     @Test
     fun backupIsOffAndCleartextIsOff() {
         assertEquals("false", application.a("allowBackup"))
-        // Android 12+ 기기 이전은 allowBackup 을 무시한다 — fullBackupContent=false 가 Auto Backup·기기 이전 둘 다 끈다.
+        // fullBackupContent=false 는 Android 11 이하 Auto Backup 을 끈다. Android 12+ 클라우드 백업·기기 이전은 데이터 추출 규칙 파일
+        // (조정자 패치 w1g-01, 기본 적용 — 그 단언은 패치와 함께 이 시험에 들어온다)과 noBackupFilesDir 가 보증한다.
         assertEquals("false", application.a("fullBackupContent"))
         assertEquals("false", application.a("usesCleartextTraffic"))
         // 네트워크 보안 설정이 평문을 다시 여는 길을 두지 않는다.

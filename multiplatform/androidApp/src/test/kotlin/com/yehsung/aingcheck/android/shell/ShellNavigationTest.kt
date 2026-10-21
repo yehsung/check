@@ -15,6 +15,8 @@ import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.AingRoute
 import com.yehsung.aingcheck.android.routing.RouteIntents
 import com.yehsung.aingcheck.android.routing.RouteRequest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -81,9 +83,34 @@ class ShellNavigationTest {
             assertNull("증표가 틀린 수락이 통과했다", app.container.pendingInviteAccept.value)
         }
         val real = RouteIntents.explicit(app, RouteRequest(route, accept = true), proof = proof)
-        ActivityScenario.launch<MainActivity>(real).use {
+        ActivityScenario.launch<MainActivity>(real).use { scenario ->
             compose.onNodeWithText(route.url).assertExists()
             compose.waitUntil { app.container.pendingInviteAccept.value == route }
+            // 처리한 Intent 는 라우트·수락 extra 가 지워져 있다(getIntent() 를 다시 읽어도 수락이 다시 실리지 않는다).
+            scenario.onActivity { activity ->
+                val kept = listOf(RouteIntents.EXTRA_ROUTE, RouteIntents.EXTRA_ACCEPT, RouteIntents.EXTRA_PROOF).filter(activity.intent::hasExtra)
+                assertEquals("처리한 Intent 에 extra 가 남았다", emptyList<String>(), kept)
+            }
+        }
+    }
+
+    /**
+     * G §8-13: 최근 앱(기록)에서 다시 띄우면 작업 뿌리 Intent 가 증표째 다시 온다(FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY).
+     * 증표가 맞아도 수락은 버리고 화면만 연다. 기준선은 위 시험의 같은 증표·같은 라우트(기록 표시 없음 → 수락).
+     */
+    @Test
+    fun historyRelaunchOfAcceptOpensTheInviteWithoutAccepting() {
+        val route = AingRoute.GomokuInvite("m1")
+        val proof = app.container.routeProof.value()!!
+        val replay = RouteIntents.explicit(app, RouteRequest(route, accept = true), proof = proof)
+            .addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+        ActivityScenario.launch<MainActivity>(replay).use { scenario ->
+            compose.onNodeWithText(route.url).assertExists()
+            compose.waitForIdle()
+            assertNull("기록에서 다시 온 수락이 통과했다", app.container.pendingInviteAccept.value)
+            scenario.onActivity { activity ->
+                assertFalse("기록 Intent 의 증표가 남았다", activity.intent.hasExtra(RouteIntents.EXTRA_PROOF))
+            }
         }
     }
 

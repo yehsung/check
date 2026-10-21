@@ -6,6 +6,7 @@
 #  - lane-tools    : lanes.yml 확인 + lane-ownership 자기 시험 + 브랜치의 갈래 소유 검사.
 #                    xplat/ 브랜치가 갈래(xplat/w<N>-<x>)·통합(xplat/w<N>-int·xplat/main → 조정자)으로 안 풀리면 빨강.
 #  - jvm-gate      : ubuntu, sudo unshare -n 봉인 아래 빠른 게이트 + 봉인 없는 카나리아 빨강 대조(A-X15). changes 경로 필터로만 거른다.
+#                    경로 필터의 Sources/ 는 통째다(W1-e): ui 시험이 Swift 원문(SF 기호 대응·팔레트 대조)과 맥 그림(Gradle Sync)을 읽는다.
 #  - windows-x64   : windows-latest, java.exe 아웃바운드 차단 방화벽 봉인 아래 데스크톱 시험 + 대조(A-X16). changes 경로 필터로만 거른다.
 # 대조는 scripts/canary-contrast.sh 가 '봉인이 새었다'는 이유의 빨강일 때만 통과시킨다. 봉인 게이트의 시험 결과는 대조 전에 따로 올린다.
 # 액션은 SHA 로 고정한다(공개 저장소 공급망).
@@ -54,7 +55,7 @@ jobs:
           fi
           if [ "$EVENT" = "pull_request" ]; then range="$from...$to"; else range="$from..$to"; fi
           if git diff --name-only "$range" \
-             | grep -qE '^(multiplatform/|contract/|Tests/checkTests/Fixtures/|Sources/CheckMobileKit/Demo/Fixtures/|Sources/check/Characters/|\.github/workflows/mp-)'; then
+             | grep -qE '^(multiplatform/|contract/|Tests/checkTests/Fixtures/|Sources/|\.github/workflows/mp-)'; then
             echo "mp=true" >> "$GITHUB_OUTPUT"
           else
             echo "mp=false" >> "$GITHUB_OUTPUT"

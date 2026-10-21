@@ -1,8 +1,11 @@
 // 원본: Sources/CheckCore/TokenVault.swift @ a63fea2 (계약: write 가 실패한 키는 read 가 반드시 nil)
 //       · 시험은 새 코드: 설계 D§7(DPAPI 파일 금고) · D-E10(읽기 전용 폴더 주입) · W0-e 실측(엔트로피 거부)
-//       · R2 검증 지적(V2: 사다리 ③ 독을 Windows 에서도 ACL 로 같은 짝을 둔다)
+//       · R2 검증 지적(V2: 사다리 ③ 독을 Windows 에서도 같은 짝으로 — ACL 거부 + 공유 READ 핸들, 아래 시험 주석)
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
+import com.sun.jna.platform.win32.Kernel32
+import com.sun.jna.platform.win32.WinBase
+import com.sun.jna.platform.win32.WinNT
 import com.yehsung.aingcheck.core.foundation.platform.TokenVault
 import com.yehsung.aingcheck.desktop.platform.windows.vault.DataProtector
 import com.yehsung.aingcheck.desktop.platform.windows.vault.DpapiProtector
@@ -125,37 +128,60 @@ class DpapiFileRulesWindowsTest {
     }
 
     /**
-     * 사다리 ③(독)의 Windows 짝(맥·Linux 는 FileTokenVaultFileRulesTest 의 0444/0555). 현재 사용자에게
-     *  - 대상 파일: WRITE_DATA·APPEND_DATA·DELETE 거부 → 자르기·지우기 실패
-     *  - 금고 폴더: WRITE_DATA(파일 추가)·APPEND_DATA(하위 폴더 추가)·DELETE_CHILD 거부 → 새 임시 파일 실패, 부모 권한으로 지우기도 실패
-     * (NTFS 는 파일의 DELETE 가 거부돼도 부모의 FILE_DELETE_CHILD 로 지울 수 있어 폴더 쪽도 막는다.)
+     * 사다리 ③(독)의 Windows 짝(맥·Linux 는 FileTokenVaultFileRulesTest 의 0444/0555). 현재 사용자에게 세 겹으로 막는다:
+     *  - 금고 폴더 ACL: WRITE_DATA(파일 추가)·APPEND_DATA(하위 폴더 추가)·DELETE_CHILD 거부 → 새 임시 파일 실패(쓰기 실패)
+     *  - 대상 파일 ACL: WRITE_DATA·APPEND_DATA·DELETE 거부 → 0바이트 자르기 실패(②)
+     *  - 대상 파일을 공유 READ 만 허락하는 핸들로 쥐고 있는다(백신·백업·색인기가 쥔 꼴 — 금고 머리의 '잠금') → 지우기 실패(①)
+     * 핸들이 필요한 까닭(실측, run 39638126754·39639966589): windows-latest 러너의 토큰은 SeBackupPrivilege·SeRestorePrivilege 가
+     * **켜져(Enabled)** 있어, 파일 DELETE·폴더 DELETE_CHILD 를 거부(icacls 로 (DENY)(DE,WD,AD) 확인)해도 DeleteFileW 가 성공했다 —
+     * ACL 만으로는 ③ 까지 가지 못했다(NoSuchFileException). 공유 위반은 특권과 무관하다. 같은 ACL 만 단 쌍둥이 파일의 지우기
+     * 결과·특권 상태를 AINGCHECK-ACL 줄로 남긴다(러너 환경의 사실이라 단언하지 않는다 — 보통 사용자 토큰에는 두 특권이 꺼져 있다).
      */
     @Test
-    fun poisonKeepsTheSameRunNullWhenAclDeniesDeleteAndTruncate() {
+    fun poisonKeepsTheSameRunNullWhenTheFileCanBeNeitherDeletedNorTruncated() {
         val dir = tmp.resolve("vault")
         val vault = FileTokenVault(dir, DpapiProtector())
         vault.write("rotated-before", "refresh")
         val file = vault.fileFor("refresh")
         val before = Files.readAllBytes(file)
+        val twin = dir.resolve("acl-twin.bin")
+        Files.write(twin, byteArrayOf(1, 2, 3))
         val me = dir.fileSystem.userPrincipalLookupService.lookupPrincipalByName(System.getProperty("user.name"))
         fun deny(vararg perms: AclEntryPermission) =
             AclEntry.newBuilder().setType(AclEntryType.DENY).setPrincipal(me).setPermissions(*perms).build()
-        val dirView = Files.getFileAttributeView(dir, AclFileAttributeView::class.java)
-        val fileView = Files.getFileAttributeView(file, AclFileAttributeView::class.java)
-        val dirAcl = dirView.acl
-        val fileAcl = fileView.acl
+        val views = listOf(dir, file, twin).associateWith { Files.getFileAttributeView(it, AclFileAttributeView::class.java) }
+        val saved = views.mapValues { (_, v) -> v.acl }
+        var lock: WinNT.HANDLE? = null
         try {
-            fileView.acl = listOf(deny(AclEntryPermission.WRITE_DATA, AclEntryPermission.APPEND_DATA, AclEntryPermission.DELETE)) + fileAcl
-            dirView.acl = listOf(deny(AclEntryPermission.WRITE_DATA, AclEntryPermission.APPEND_DATA, AclEntryPermission.DELETE_CHILD)) + dirAcl
+            for (f in listOf(file, twin)) {
+                views.getValue(f).acl = listOf(deny(AclEntryPermission.WRITE_DATA, AclEntryPermission.APPEND_DATA, AclEntryPermission.DELETE)) + saved.getValue(f)
+            }
+            views.getValue(dir).acl =
+                listOf(deny(AclEntryPermission.WRITE_DATA, AclEntryPermission.APPEND_DATA, AclEntryPermission.DELETE_CHILD)) + saved.getValue(dir)
+            // 관측(단언 아님): ACL 만으로 지우기가 막히는가 — 쌍둥이 파일로 잰다.
+            val twinAcl = runCatching { RunnerSupport.runTool("icacls.exe", twin.toString()) }.getOrElse { "icacls 실패: $it" }
+            val twinDelete = runCatching { Files.delete(twin) }
+            val priv = runCatching { RunnerSupport.runTool("whoami.exe", "/priv", "/fo", "csv", "/nh") }.getOrElse { "" }
+                .lines().filter { l -> listOf("SeBackup", "SeRestore", "SeTakeOwnership").any { it in l } }.joinToString(" ")
+            println(
+                "AINGCHECK-ACL acl-only-delete=" +
+                    (if (twinDelete.isSuccess) "succeeded" else "denied(${twinDelete.exceptionOrNull()?.javaClass?.simpleName})") +
+                    " owner=${Files.getOwner(dir)} user=$me priv=[$priv] twin-acl=[${twinAcl.trim().lines().joinToString(" | ")}]",
+            )
+            lock = Kernel32.INSTANCE.CreateFile(
+                file.toString(), WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ, null, WinNT.OPEN_EXISTING, WinNT.FILE_ATTRIBUTE_NORMAL, null,
+            )
+            check(lock != null && lock != WinBase.INVALID_HANDLE_VALUE) { "잠금 핸들을 못 열었다(err ${Kernel32.INSTANCE.GetLastError()})" }
             // 주입이 실제로 걸렸는지 먼저 잰다(안 걸렸으면 이 시험은 ③ 을 재지 못한다). 쓰기로 열기는 자르지 않는다.
             check(runCatching { Files.createTempFile(dir, "probe", ".tmp") }.isFailure) { "폴더에 새 파일을 만들 수 있다" }
             check(runCatching { Files.newOutputStream(file, StandardOpenOption.WRITE).close() }.isFailure) { "파일을 쓰기로 열 수 있다" }
+            check(runCatching { Files.delete(file) }.isFailure) { "대상 파일을 지울 수 있다" }
             vault.write("rotated-after", "refresh")
             assertContentEquals(before, Files.readAllBytes(file), "주입이 새었다 — 지우기나 자르기가 됐다(③ 까지 가지 않았다)")
             assertNull(vault.read("refresh"), "같은 실행에서 낡은 토큰이 돌아왔다(독이 없다)")
         } finally {
-            runCatching { fileView.acl = fileAcl }
-            runCatching { dirView.acl = dirAcl }
+            lock?.let { if (it != WinBase.INVALID_HANDLE_VALUE) Kernel32.INSTANCE.CloseHandle(it) }
+            for ((path, acl) in saved) runCatching { views.getValue(path).acl = acl }
         }
     }
 

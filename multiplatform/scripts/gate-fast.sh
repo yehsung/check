@@ -63,11 +63,12 @@ if [[ "${AINGCHECK_GATE_INNER:-}" != "1" ]]; then
     linux)
       command -v unshare >/dev/null || die "unshare 가 없다"
       # 루트로 새 망 이름공간을 만들고 lo 만 올린 뒤, 원래 사용자로 내려와 같은 스크립트를 다시 부른다.
+      # sudo -E 는 HOME 을 루트 것(/root)으로 남긴다(CI 실측) — 원래 HOME·PATH 를 인자로 넘겨 되돌린다.
       exec sudo -n unshare --net -- /bin/sh -c '
         ip link set lo up || exit 3
-        user="$1"; path="$2"; shift 2
-        exec sudo -n -E -u "$user" env PATH="$path" AINGCHECK_GATE_INNER=1 AINGCHECK_NETWORK_SEALED=1 /bin/bash "$@"
-      ' sh "$(id -un)" "$PATH" "$SELF" "$@"
+        user="$1"; path="$2"; home="$3"; shift 3
+        exec sudo -n -E -u "$user" env PATH="$path" HOME="$home" AINGCHECK_GATE_INNER=1 AINGCHECK_NETWORK_SEALED=1 /bin/bash "$@"
+      ' sh "$(id -un)" "$PATH" "$HOME" "$SELF" "$@"
       ;;
     windows)
       [[ "${AINGCHECK_EXTERNAL_SEAL:-}" == "windows-firewall" ]] \
@@ -117,7 +118,7 @@ elapsed=$(( $(date +%s) - started ))
 # 카나리아가 실제로 돌았는가(건너뜀 = 게이트 아님).
 canary_xml="$MP/testkit/build/test-results/desktopTest/TEST-com.yehsung.aingcheck.testkit.seal.NetworkCanaryTest.xml"
 [[ -n "$PY" ]] || die "결과 XML 을 읽을 python3 가 없다"
-canary_status="$("$PY" -I - "$canary_xml" <<'PY'
+canary_report="$("$PY" -I - "$canary_xml" <<'PY'
 import sys, xml.etree.ElementTree as ET
 try:
     root = ET.parse(sys.argv[1]).getroot()
@@ -128,8 +129,18 @@ t = sum(int(s.get("tests", 0)) for s in suites)
 sk = sum(int(s.get("skipped", 0)) for s in suites)
 f = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
 print("ran" if t >= 1 and sk == 0 and f == 0 else f"bad tests={t} skipped={sk} failed={f}")
+# 근거 줄(카나리아 연결 결과)을 게이트 로그에 남긴다 — CI 로그만으로 봉인을 확인할 수 있게.
+for s in suites:
+    out = s.find("system-out")
+    for line in ((out.text or "") if out is not None else "").splitlines():
+        if "AINGCHECK-" in line:
+            print(line.strip())
 PY
 )"
+canary_status="$(printf '%s\n' "$canary_report" | head -n 1)"
+printf '%s\n' "$canary_report" | tail -n +2 | sed "s/^/gate-$KIND: /"
+ancestry_xml="$MP/testkit/build/test-results/desktopTest/TEST-com.yehsung.aingcheck.testkit.seal.SealAncestryTest.xml"
+if [[ -f "$ancestry_xml" ]]; then grep -o 'AINGCHECK-ANCESTRY.*' "$ancestry_xml" | head -n 1 | sed -e 's/]]>.*$//' -e "s/^/gate-$KIND: /" || true; fi
 
 # 홈 잔재: 새 꼭대기 항목(빌드 도구 캐시 폴더는 뺀다)과 java.util.prefs plist 변화.
 ls -A "$HOME" | LC_ALL=C sort > "$gate_dir/home-after.txt"

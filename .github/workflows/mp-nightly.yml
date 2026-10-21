@@ -109,7 +109,7 @@ jobs:
       - name: assembleRelease(.invalid) 를 봉인 아래에서
         working-directory: multiplatform
         run: |
-          sudo -n unshare --net -- /bin/sh -c 'ip link set lo up && exec sudo -n -E -u "$1" env PATH="$2" ./gradlew --offline --no-daemon :androidApp:assembleRelease' sh "$(id -un)" "$PATH"
+          sudo -n unshare --net -- /bin/sh -c 'ip link set lo up && exec sudo -n -E -u "$1" env PATH="$2" HOME="$3" ./gradlew --offline --no-daemon :androidApp:assembleRelease' sh "$(id -un)" "$PATH" "$HOME"
       - name: APK 안 네이티브 라이브러리 0개(16 KB 요건)
         working-directory: multiplatform
         run: |

@@ -5,8 +5,8 @@ import Testing
 @testable import CheckCore
 
 // v0.2.46 미니게임 **창**(팝오버 패널에서 이사). 설정 창(CheckSettingsWindowController)과 같은 수명 규약을 쓰고,
-// 다른 점만 여기서 못 박는다: 제목·자동저장 이름·기본/최소 크기, 창이 키를 잃거나 닫히면 진행 중인 판이 끝난다(interruptToken),
-// 그리고 창 크기 → (캔버스, 무스크롤 행수) 레이아웃 표.
+// 다른 점만 여기서 못 박는다: 제목·자동저장 이름·기본/최소 크기, 창을 **닫으면** 진행 중인 판이 끝나고(interruptToken)
+// **키를 잃으면 멈춘다**(pauseRequestToken — 0.3.62 전에는 키 상실도 끝냈다), 그리고 창 크기 → (캔버스, 무스크롤 행수) 레이아웃 표.
 //
 // 창을 실제로 띄우는 테스트는 `CheckPanelVisibility.isRunningTests` 알파 0 을 지난다(사용자 화면 오염 금지 —
 // 이 저장소는 "테스트가 사장님 데스크톱을 도배했다"를 이미 한 번 겪었다). `isVisible` 은 믿지 않는다(v0.2.27 에 거짓말했다):
@@ -142,7 +142,7 @@ struct MiniGameWindowLifecycleTests {
         #expect(!controller.isOpen)
     }
 
-    // MARK: - 창이 게임을 멈춘다
+    // MARK: - 창 닫힘은 판을 끝내고, 키 상실은 판을 멈춘다
 
     @Test
     func closingTheWindowEndsTheRoundAndClearsTheEntryButtonHighlight() throws {
@@ -161,20 +161,33 @@ struct MiniGameWindowLifecycleTests {
         #expect(!controller.isOpen)
     }
 
+    /// 0.3.62 에 **계약이 뒤집혔다.** 예전 이 테스트(`losingKeyEndsTheRoundButKeepsTheWindowOpen`)는 키 상실이
+    /// `miniGameInterruptToken` 을 올리는 것을 지켰고, 그것이 바로 실사용 제보의 원인이었다 —
+    /// "테트리스 일시정지하고 다른 창을 클릭하면 아예 끝나버려요"(0.3.61 · build 114).
+    /// 유휴 0% 는 멈추는 것만으로 지켜진다(정지 중에는 `TimelineView(.animation(paused:))` 가 루프를 안 돌린다).
     @Test
-    func losingKeyEndsTheRoundButKeepsTheWindowOpen() throws {
+    func losingKeyPausesTheRoundInsteadOfEndingIt() throws {
         let store = mgwStore()
         let controller = mgwController(store)
         defer { controller.close() }
         store.openMiniGameWindow()
         controller.show()
         let window = try #require(controller.currentWindow)
-        let token = store.miniGameInterruptToken
+        let interrupt = store.miniGameInterruptToken
+        let pause = store.miniGamePauseRequestToken
 
         controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: window))
-        #expect(store.miniGameInterruptToken == token + 1, "다른 창으로 갔는데 게임이 계속 돈다(유휴 0% 위반)")
+        #expect(store.miniGameInterruptToken == interrupt,
+                "키를 잃었다고 판을 끝냈다 — 제보의 그 증상이 그대로 돌아왔다(다른 창 클릭 = 판 종료)")
+        #expect(store.miniGamePauseRequestToken == pause + 1,
+                "키를 잃었는데 정지 요청이 안 갔다 — 안 보이는 창에서 60Hz 루프가 계속 돈다(유휴 0% 위반)")
         #expect(store.isMiniGamePanelVisible, "키를 잃은 것은 닫힌 것이 아니다 — 창은 그대로 떠 있다")
         #expect(controller.isOpen)
+
+        // 두 번 잃으면 두 번 알린다. 같은 값으로 두면 `@Observable` 수신처가 깨어나지 않아
+        // "다른 창 → 돌아옴 → 다시 다른 창" 의 둘째 이탈에서 판이 안 멈춘다.
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: window))
+        #expect(store.miniGamePauseRequestToken == pause + 2, "연속 키 상실마다 새 신호여야 한다")
 
         // 남의 창 알림은 무시한다(다른 창을 클릭할 때마다 토큰이 오르면 안 된다).
         // ★ isReleasedWhenClosed 를 끄고 orderOut 으로 치운다 — 기본값(true)인 창을 close() 하면 그 자리에서
@@ -183,10 +196,12 @@ struct MiniGameWindowLifecycleTests {
                                 styleMask: [.titled], backing: .buffered, defer: true)
         stranger.isReleasedWhenClosed = false
         defer { stranger.orderOut(nil) }
-        let after = store.miniGameInterruptToken
+        let afterInterrupt = store.miniGameInterruptToken
+        let afterPause = store.miniGamePauseRequestToken
         controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: stranger))
         controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: stranger))
-        #expect(store.miniGameInterruptToken == after, "남의 창 알림이 우리 게임을 끝냈다")
+        #expect(store.miniGameInterruptToken == afterInterrupt, "남의 창 알림이 우리 게임을 끝냈다")
+        #expect(store.miniGamePauseRequestToken == afterPause, "남의 창 알림이 우리 판을 멈췄다")
     }
 
     // MARK: - 팝오버와 공존한다
@@ -495,7 +510,9 @@ func pauseFreezesTheBoardAndUnlocksTheKindChips() throws {
     let disappear = try #require(source.range(of: ".onDisappear {"))
     let tail = String(source[disappear.upperBound...].prefix(200))
     #expect(tail.contains("cancelResume()"), "창이 사라져도 1초 Task 가 남는다")
-    // interrupt(창 닫힘·포커스 상실·종류 전환·그만두기) 가 오면 즉시 풀린다 + Task 취소.
+    // interrupt(창 닫힘·로그아웃·종류 전환·그만두기·패널 닫기) 가 오면 즉시 풀린다 + Task 취소.
+    // 포커스 상실은 0.3.62 부터 이 토큰을 안 올린다 — 판을 끝내지 않고 멈추므로 `miniGamePauseRequestToken`
+    // 수신처가 따로 받는다(V0362MiniGamePauseOnResignTests).
     let interrupt = try #require(source.range(of: ".onChange(of: store.miniGameInterruptToken)"))
     let body = String(source[interrupt.upperBound...].prefix(240))
     #expect(body.contains("cancelResume()") && body.contains("pauseState = .none"),
@@ -531,13 +548,13 @@ func escapeIsHandledByTheSameMonitorAsSpaceAndOnlySwallowedWhenUsed() {
     let box = Box()
     // 화면이 "안 썼다"고 답하는 경우: ESC 는 삼켜지지 않아야 한다(다른 화면의 취소 키를 훔치지 않는다).
     MiniGameSpaceKey.install(shouldConsume: { true }, action: { box.space += 1 },
-                             onEscape: { box.escape += 1; return false })
+                             onEscape: { _ in box.escape += 1; return false })
     #expect(MiniGameSpaceKey.fireEscapeForTesting() == false, "안 쓴 ESC 를 삼켰다")
     #expect(box.escape == 1 && box.space == 0, "ESC 가 스페이스 동작을 태웠다")
 
     // 화면이 "정지했다"고 답하면 삼킨다.
     MiniGameSpaceKey.install(shouldConsume: { true }, action: { box.space += 1 },
-                             onEscape: { box.escape += 1; return true })
+                             onEscape: { _ in box.escape += 1; return true })
     #expect(MiniGameSpaceKey.fireEscapeForTesting() == true)
     #expect(box.escape == 2)
     // 재설치는 여전히 최신 화면으로 갈아 끼운다(스페이스 쪽 계약을 ESC 가 깨지 않았다).
@@ -564,7 +581,11 @@ func escapeSharesTheSpaceMonitorGate() throws {
     // 모니터는 여전히 **하나**다.
     #expect(source.components(separatedBy: "NSEvent.addLocalMonitorForEvents").count - 1 == 1,
             "모니터가 두 벌이다 — 설치·제거 규약이 갈린다")
-    #expect(source.contains("onEscape: { togglePause() }"), "화면이 ESC 를 정지 토글에 안 물렸다")
+    // v0.3.62: 모니터는 ESC 처리기에 **키가 향한 창을 넘기고**, 화면이 소유권 게이트를 단다. 창을 안 넘기면
+    // 화면은 가릴 재료가 없어 남의 창 ESC 로 정지해 둔 판이 재개된다(그 단언은 V0362 에 있다).
+    #expect(install.contains("if isEscape { return onEscape(target) }"),
+            "ESC 처리기에 키가 향한 창을 안 넘긴다 — 화면이 소유권을 가릴 재료가 없다")
+    #expect(source.contains("onEscape: { eventWindow in"), "화면이 ESC 처리기에서 이벤트 창을 안 받는다")
 }
 
 // MARK: - 프레임 상한 = 화면 주사율의 약수 (v0.2.50)

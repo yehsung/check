@@ -1,0 +1,129 @@
+# 3D 아잉이 굽기 잠금(설계 F §7 · 마스터 계획 W0-d).
+#
+# aing-bake-lock   (ubuntu) 굽기 입력의 해시를 다시 재서 multiplatform/assets/aing-bake/lock.json 과 대조한다.
+#                  입력이 바뀌었는데 다시 굽지 않았거나, 구운 파일이 잠금과 다르면 빨갛다 → Windows/Android 출시를 막는다.
+#                  맥 출시는 막지 않는다. 망 봉인(unshare --net) 안에서 돈다.
+# aing-bake-verify (macOS arm64, 실험 · 수동) Metal 장치 유무(F-5)와 같은 칸을 러너에서 렌더한 원본 다이제스트(F-10)를 잰다.
+#                  러너 Xcode 가 이 저장소를 못 빌드할 수 있어 실패해도 워크플로를 막지 않는다(continue-on-error).
+#
+# 설계 F §7 과 다른 점(W0-d — multiplatform/scripts/bake-aing/README.md 에 같은 표):
+#   · F §7 의 aing-bake-verify 는 "굽기 입력이 바뀐 PR 마다 bake.sh --check 로 다시 굽고, 원본 다이제스트가 다르면
+#     허용오차(최대 Δ ≤ 2 · IoU ≥ 0.999)로 GPU·OS 잡음과 실제 변화를 가른다"이다.
+#   · 지금 구현은 **수동 실행 전용 탐침**이다: 늘 구워지는 7칸(AingBakeSuite.probeCells)만 그려 lock.json.raw 와
+#     다이제스트로만 대조한다(bake.py probe-compare — 같음 · 다름 · 잠금에 없음을 따로 센다). 허용오차 비교와 diff 그림은 없다.
+#   · 이유: 러너 최신 Xcode 26.6(Swift 6.3.3)이 이 저장소 시험 타깃을 못 빌드한다(2026-10-21 실측). 그래서 F-10(맥 사이 렌더
+#     재현성)은 **미검증**이고, Windows/Android 출시 게이트는 aing-bake-lock(해시 잠금)만 지킨다.
+#   · Xcode 27 러너(또는 자체 러너)가 생기면 push 트리거로 되돌리고 `bake.sh --check` + 허용오차 비교로 올린다.
+name: mp-bake
+
+on:
+  push:
+    paths:
+      - "Sources/check/Resources/aing*"
+      - "Sources/check/CheckCharacter3DView.swift"
+      - "Sources/check/CheckOverlayReactions.swift"
+      - "Sources/check/GoldAingFinish.swift"
+      - "Sources/check/RainbowAingFinish.swift"
+      - "Sources/check/MiniGameMascot.swift"
+      - "Sources/check/Characters/**"
+      - "Sources/CheckCore/CharacterKit/**"
+      - "Tests/checkTests/AingBakeSuite.swift"
+      - "multiplatform/assets/aing-bake/**"
+      - "multiplatform/scripts/bake-aing/**"
+      - ".github/workflows/mp-bake.yml"
+  pull_request:
+    paths:
+      - "Sources/check/Resources/aing*"
+      - "Sources/check/CheckCharacter3DView.swift"
+      - "Sources/check/CheckOverlayReactions.swift"
+      - "Sources/check/GoldAingFinish.swift"
+      - "Sources/check/RainbowAingFinish.swift"
+      - "Sources/check/MiniGameMascot.swift"
+      - "Sources/check/Characters/**"
+      - "Sources/CheckCore/CharacterKit/**"
+      - "Tests/checkTests/AingBakeSuite.swift"
+      - "multiplatform/assets/aing-bake/**"
+      - "multiplatform/scripts/bake-aing/**"
+      - ".github/workflows/mp-bake.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mp-bake-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aing-bake-lock:
+    name: aing-bake-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: 망 봉인 카나리아 — 봉인 안에서는 바깥 연결이 실패해야 한다
+        run: |
+          sudo unshare --net -- python3 - <<'EOF'
+          import socket, sys
+          s = socket.socket()
+          s.settimeout(3)
+          try:
+              s.connect(("1.1.1.1", 443))
+          except OSError as e:
+              print("봉인 확인(연결 실패):", e)
+          else:
+              sys.exit("봉인이 새었다 — 바깥 연결이 됐다")
+          EOF
+      - name: 잠금 대조(봉인 안)
+        run: sudo unshare --net -- python3 multiplatform/scripts/bake-aing/bake.py check-lock --repo "$GITHUB_WORKSPACE"
+
+  aing-bake-verify:
+    name: aing-bake-verify (experiment F-5 · F-10)
+    # 수동 실행만: 2026-10-21 실측 — 러너 최신 Xcode 26.6(Swift 6.3.3)이 이 저장소 시험 타깃을 못 빌드한다
+    # (기존 시험의 #require 매크로 전개 오류 11곳). Metal 장치는 있다(Apple Paravirtual device, macos-15 · macos-26).
+    # Xcode 27 이미지가 생기거나 자체 러너가 붙으면 push 로 되돌린다.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: 도구 판 — 가장 새 Xcode 를 고른다(이 저장소는 Xcode 27 · Swift 6.4 로 빌드된다)
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
+          sw_vers
+          xcodebuild -version
+          swift --version
+      - name: F-5 Metal 장치
+        run: |
+          cat > "$RUNNER_TEMP/metal.swift" <<'EOF'
+          import Metal
+          if let d = MTLCreateSystemDefaultDevice() {
+              print("metal-device: \(d.name) lowPower=\(d.isLowPower) headless=\(d.isHeadless) registry=\(d.registryID)")
+          } else {
+              print("metal-device: none")
+          }
+          EOF
+          swift "$RUNNER_TEMP/metal.swift"
+      - name: 빌드
+        run: |
+          set -o pipefail
+          swift build --build-tests > "$RUNNER_TEMP/build.log" 2>&1 || { grep -nE "error:" "$RUNNER_TEMP/build.log" | head -40; tail -20 "$RUNNER_TEMP/build.log"; exit 1; }
+          tail -3 "$RUNNER_TEMP/build.log"
+      - name: F-10 같은 칸을 러너에서 렌더(망 봉인)
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/probe"
+          sandbox-exec -p '(version 1)(allow default)(deny network-outbound (remote ip "*:*"))' \
+            env CHECK_AING_BAKE_PROBE_OUT="$RUNNER_TEMP/probe" \
+            swift test --disable-sandbox --skip-build --no-parallel --filter 'AingBakeSuite/reproducibility' 2>&1 | tail -30
+          # 같음 · 다름 · 잠금에 없음을 따로 센다(잠금에 없는 칸은 재현성과 무관 — 탐침 칸 선택의 결함이다).
+          python3 -I multiplatform/scripts/bake-aing/bake.py probe-compare "$RUNNER_TEMP/probe/probe.json" multiplatform/assets/aing-bake/lock.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aing-bake-probe
+          path: ${{ runner.temp }}/probe
+          if-no-files-found: ignore

@@ -1,0 +1,243 @@
+{
+  "bakeFormat": 1,
+  "cwebp": "1.6.0",
+  "encode": {
+    "lossy": [
+      "-q",
+      "90",
+      "-alpha_q",
+      "100",
+      "-m",
+      "6",
+      "-exact",
+      "-quiet"
+    ],
+    "lossless": [
+      "-lossless",
+      "-z",
+      "9",
+      "-exact",
+      "-quiet"
+    ]
+  },
+  "trackHz": 480,
+  "stabilizeMin": 3,
+  "stabilizeMax": 6,
+  "slotAlign": 16,
+  "cellMarginPx": 2,
+  "patchMarginPx": 2,
+  "quadHalfUnits": 0.8,
+  "tiers": {
+    "S": {
+      "viewport": [
+        280,
+        340
+      ],
+      "pageMaxWidth": 2048,
+      "pageMaxCells": 80
+    },
+    "L": {
+      "viewport": [
+        420,
+        510
+      ],
+      "pageMaxWidth": 2048,
+      "pageMaxCells": 80
+    },
+    "U": {
+      "viewport": [
+        1404,
+        1404
+      ],
+      "pageMaxWidth": 4096,
+      "pageMaxCells": 25
+    }
+  },
+  "grid": {
+    "restTilt": 13.0,
+    "restBands": [
+      {
+        "center": 0,
+        "half": 9,
+        "step": 1
+      },
+      {
+        "center": 40,
+        "half": 9,
+        "step": 1
+      },
+      {
+        "center": -40,
+        "half": 9,
+        "step": 1
+      }
+    ],
+    "bandTilts": [
+      1,
+      4,
+      7,
+      10,
+      16,
+      19,
+      22,
+      25,
+      28,
+      31,
+      34,
+      37,
+      40
+    ],
+    "bandBands": [
+      {
+        "center": 0,
+        "half": 8,
+        "step": 2
+      },
+      {
+        "center": 40,
+        "half": 8,
+        "step": 4
+      },
+      {
+        "center": -40,
+        "half": 8,
+        "step": 4
+      }
+    ],
+    "spinTilts": [
+      -2,
+      2,
+      6,
+      10,
+      14,
+      18,
+      22
+    ],
+    "spinYawStep": 10,
+    "ultraTilts": {
+      "from": 1,
+      "to": 37,
+      "step": 3
+    },
+    "ultraBand": {
+      "center": 0,
+      "half": 8,
+      "step": 4
+    },
+    "closedEyeTiltMin": 13,
+    "closedEyeTiltMax": 31
+  },
+  "cull": {
+    "simHz": 240,
+    "facingsDeg": [
+      -40,
+      0,
+      40
+    ],
+    "swayPhases": 144,
+    "swayPhaseStepS": 0.1,
+    "slowDegPerS": 20,
+    "slowTolDeg": 0.75,
+    "fastDegPerS": 150,
+    "fastTolDeg": 6.0,
+    "safetyYawStep": 30,
+    "safetyTilts": [
+      0,
+      10,
+      20,
+      30,
+      40
+    ]
+  },
+  "golden": {
+    "viewport": [
+      280,
+      340
+    ],
+    "swayPhasesS": [
+      1.8,
+      9.0
+    ],
+    "facingsDeg": [
+      0,
+      40,
+      -40
+    ],
+    "fractions": [
+      0.1,
+      0.3,
+      0.5,
+      0.7,
+      0.9
+    ]
+  },
+  "inputs": [
+    "Sources/check/Resources/aing.scn",
+    "Sources/check/Resources/aing.usdz",
+    "Sources/check/Resources/aing_gold-*.png",
+    "Sources/check/Resources/aing_rainbow-*.png",
+    "Sources/check/Resources/aing-neutral.png",
+    "Sources/check/Resources/aing-negative.png",
+    "Sources/check/CheckCharacter3DView.swift",
+    "Sources/check/CheckOverlayReactions.swift",
+    "Sources/check/GoldAingFinish.swift",
+    "Sources/check/RainbowAingFinish.swift",
+    "Sources/check/MiniGameMascot.swift",
+    "Sources/CheckCore/CharacterKit/CharacterCatalog.swift",
+    "Sources/CheckCore/CharacterKit/CharacterManifest.swift",
+    "Sources/CheckCore/CharacterKit/GoldAing.swift",
+    "Sources/CheckCore/CharacterKit/RainbowAing.swift",
+    "Sources/CheckCore/CharacterKit/SpriteCharacterNode.swift",
+    "Tests/checkTests/AingBakeSuite.swift",
+    "multiplatform/scripts/bake-aing/config.json",
+    "multiplatform/scripts/bake-aing/bake.sh",
+    "multiplatform/scripts/bake-aing/bake.py"
+  ],
+  "copied": [
+    "Sources/check/Characters/**"
+  ],
+  "bundles": {
+    "windows": {
+      "budget": 20000000,
+      "assets": [
+        "*/S-*.webp",
+        "*/U-*.webp",
+        "*/manifest.json",
+        "*/cells-S.json",
+        "*/cells-U.json",
+        "*/legacy.webp",
+        "camera.json",
+        "motion.json",
+        "particles.json",
+        "glyph-z.webp",
+        "tracks/*.f32"
+      ],
+      "repo": [
+        "Sources/check/Resources/aing_gold-halo*.png",
+        "Sources/check/Resources/aing_rainbow-halo*.png"
+      ]
+    },
+    "androidDefault": {
+      "budget": 4500000,
+      "assets": [
+        "*/L-*.webp",
+        "*/manifest.json",
+        "*/cells-L.json",
+        "*/legacy.webp",
+        "camera.json",
+        "motion.json",
+        "tracks/hit.f32",
+        "tracks/greeting.f32"
+      ],
+      "repo": [
+        "Sources/check/Resources/aing_gold-halo*.png",
+        "Sources/check/Resources/aing_rainbow-halo*.png"
+      ]
+    },
+    "goldenTestOnly": {
+      "assets": [
+        "golden/*"
+      ]
+    }
+  }
+}

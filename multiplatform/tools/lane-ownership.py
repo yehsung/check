@@ -11,7 +11,11 @@
   --lane W0-a [--base xplat/main] [--head HEAD]   git diff --no-renames --name-only base...head
   --lane W0-a --names-from FILE                    경로 목록 파일(한 줄에 하나, '#' 주석) — 가짜 diff 로 시험할 때
   --include-worktree                               커밋 안 된 변경(git status)도 더한다
-  --resolve-branch xplat/w1-a                      브랜치 이름 → 갈래(CI 가 쓴다). xplat/main·xplat/w<N>-int → coordinator,
+  --upstream origin/main                           기준선 병합(main → xplat) 몫을 뺀다: merge-base(base, upstream)..upstream 에서
+                                                   바뀐 경로 가운데 머리의 내용이 upstream 과 바이트까지 같은 것만 뺀다(그 경로는 main 의
+                                                   변경이지 이 브랜치의 변경이 아니다). main 이 안 바꾼 경로를 main 판으로 되돌리면 그대로
+                                                   센다(xplat 변경을 몰래 되돌리는 것은 빨강). xplat/main 이 main 을 따라잡았으면 뺄 것이 0.
+  --resolve-branch xplat/w1-a                      브랜치 이름 → 갈래(CI 가 쓴다). xplat/main·xplat/w<N>-int·xplat/int-<x> → coordinator,
                                                    xplat/w<N>-<x>[숫자] → 그 갈래. xplat/ 인데 갈래로 안 풀리면 종료 2(빨강).
                                                    xplat/ 밖 브랜치(main 등)는 빈 줄 · 종료 0(갈래 소유 검사 대상 아님)
   --validate                                       lanes.yml 문법·글롭·패키지 표만 확인
@@ -284,7 +288,8 @@ class Lanes:
 
 
 BRANCH_LANE = re.compile(r"xplat/w(\d+)-([a-z]\d*)")
-INTEGRATION_BRANCH = re.compile(r"xplat/(?:main|w\d+-int)")
+# 통합 브랜치(조정자 대리): xplat/main · 웨이브 통합 xplat/w<N>-int · 묶음 통합 xplat/int-<소문자로 시작하는 이름>(3차 묶음부터).
+INTEGRATION_BRANCH = re.compile(r"xplat/(?:main|w\d+-int|int-[a-z][a-z0-9]*)")
 
 
 def resolve_branch(lanes: Lanes, branch: str):
@@ -299,7 +304,7 @@ def resolve_branch(lanes: Lanes, branch: str):
         if lane in lanes.lanes:
             return lane
         raise ValueError(f"{branch}: lanes.yml 에 갈래 {lane} 가 없다")
-    raise ValueError(f"{branch}: 갈래로 풀리지 않는 xplat/ 브랜치(xplat/w<N>-<갈래> · xplat/w<N>-int · xplat/main 만)")
+    raise ValueError(f"{branch}: 갈래로 풀리지 않는 xplat/ 브랜치(xplat/w<N>-<갈래> · xplat/w<N>-int · xplat/int-<x> · xplat/main 만)")
 
 
 def load_lanes(path: str) -> Lanes:
@@ -313,11 +318,31 @@ def repo_root() -> str:
     return subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True, cwd=HERE).stdout.strip()
 
 
-def changed_paths(base: str, head: str, include_worktree: bool):
-    root = repo_root()
-    out = subprocess.run(["git", "diff", "--no-renames", "--name-only", f"{base}...{head}"],
+def _git_names(root: str, *args: str):
+    out = subprocess.run(["git", "diff", "--no-renames", "--name-only", *args],
                          check=True, capture_output=True, text=True, cwd=root).stdout.splitlines()
-    paths = set(p for p in out if p)
+    return set(p for p in out if p)
+
+
+def split_upstream(changed, upstream_changed, differs_from_upstream):
+    """기준선 병합 몫 가르기(순수 함수). (남길 경로, 뺄 경로).
+
+    뺀다 = upstream 이 (base 와 갈라진 뒤) 바꾼 경로 ∧ 머리 내용이 upstream 과 같다.
+    남긴다 = 그 밖 전부 — 특히 upstream 이 안 바꾼 경로를 upstream 판으로 되돌린 것(xplat 변경을 지운 것)은 남긴다.
+    """
+    dropped = {p for p in changed if p in upstream_changed and p not in differs_from_upstream}
+    return sorted(set(changed) - dropped), sorted(dropped)
+
+
+def changed_paths(base: str, head: str, include_worktree: bool, upstream: str | None = None):
+    root = repo_root()
+    paths = _git_names(root, f"{base}...{head}")
+    if upstream:
+        mb = subprocess.run(["git", "merge-base", base, upstream],
+                            check=True, capture_output=True, text=True, cwd=root).stdout.strip()
+        kept, dropped = split_upstream(paths, _git_names(root, mb, upstream), _git_names(root, upstream, head))
+        print(f"upstream {upstream}: merge-base({base}, {upstream})={mb[:12]} · upstream 그대로인 기준선 병합 몫 {len(dropped)} 경로는 뺐다")
+        paths = set(kept)
     if include_worktree:
         st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--no-renames"],
                             check=True, capture_output=True, text=True, cwd=root).stdout.splitlines()
@@ -389,6 +414,24 @@ SELF_TEST_CASES = [
     ("W3-a", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/screens/me/MeScreen.kt", "outside"),
     ("coordinator", "multiplatform/version.properties", "ok"),
     ("coordinator", "supabase/migrations/x.sql", "forbidden"),
+    # W0-c·W0-d 는 기준선 통합(xplat/int-a)에서 닫혔다 — 자기 자리였던 파일도 빨강, 다시 굽기·서버 ① 시험 손질은 조정자 경유.
+    ("W0-c", "Tests/checkTests/XplatServerMigrationTests.swift", "closed"),
+    ("W0-c", "contract/push/payloads/message.json", "closed"),
+    ("W0-d", "multiplatform/assets/aing-bake/lock.json", "closed"),
+    ("W0-d", "Tests/checkTests/AingBakeSuite.swift", "closed"),
+    ("coordinator", "Tests/checkTests/XplatServerMigrationTests.swift", "ok"),
+    ("coordinator", "multiplatform/assets/aing-bake/lock.json", "ok"),
+    ("coordinator", "multiplatform/scripts/bake-aing/bake.sh", "ok"),
+    ("coordinator", ".github/workflows/mp-bake.yml", "ok"),
+    ("coordinator", "Sources/check/CheckMessageView.swift", "outside"),
+]
+
+# 기준선 병합 몫 가르기(--upstream) 사례: (경로, upstream 이 바꿈, 머리가 upstream 과 다름, 기대: 뺌|남김).
+UPSTREAM_CASES = [
+    ("Sources/check/CheckMessageView.swift", True, False, "뺌"),     # main 이 바꾸고 머리가 그대로 가져옴(0.3.62 병합)
+    ("Package.swift", True, True, "남김"),                            # main 도 xplat 도 바꿈 — 합친 내용은 이 브랜치 변경
+    ("Sources/check/WorkTimerStore.swift", False, False, "남김"),     # main 이 안 바꾼 경로를 main 판으로 되돌림 — xplat 변경 지우기
+    ("multiplatform/settings.gradle.kts", False, True, "남김"),       # xplat 만의 경로
 ]
 
 
@@ -410,6 +453,21 @@ def self_test(lanes_path: str) -> int:
     if bad != 3:
         failures += 1
         print(f"  BAD 가짜 diff 위반 수 {bad} ≠ 3")
+    # 기준선 병합 몫 가르기 — 순수 함수 사례 + report 까지(조정자: main 몫을 빼면 0, 되돌리기는 빨강 1).
+    paths = [c[0] for c in UPSTREAM_CASES]
+    up_changed = {c[0] for c in UPSTREAM_CASES if c[1]}
+    differs = {c[0] for c in UPSTREAM_CASES if c[2]}
+    kept, dropped = split_upstream(paths, up_changed, differs)
+    for path, _, _, expected in UPSTREAM_CASES:
+        got = "뺌" if path in dropped else "남김"
+        mark = "ok " if got == expected else "BAD"
+        if got != expected:
+            failures += 1
+        print(f"  {mark} upstream {expected}←{got} {path}")
+    bad = report(lanes, "coordinator", kept)
+    if bad != 1:
+        failures += 1
+        print(f"  BAD upstream 가른 뒤 조정자 위반 수 {bad} ≠ 1(되돌린 Sources 하나)")
     # 브랜치 → 갈래(CI lane-tools). 못 푸는 xplat/ 브랜치는 빨강이어야 한다(W0 검증: 전엔 notice 만 남기고 초록).
     branch_cases = [
         ("xplat/w0-a", "W0-a"), ("xplat/w1-g", "W1-g"), ("xplat/w3-c1", "W3-c1"),
@@ -417,6 +475,8 @@ def self_test(lanes_path: str) -> int:
         ("main", None), ("feature/x", None),
         ("xplat/w0-a-fix", ValueError), ("xplat/W0-a", ValueError), ("xplat/w9-z", ValueError),
         ("xplat/w3-c", ValueError), ("xplat/foo", ValueError),
+        ("xplat/int-a", "coordinator"), ("xplat/int-b2", "coordinator"),
+        ("xplat/int", ValueError), ("xplat/int-", ValueError), ("xplat/int-A", ValueError), ("xplat/int-a-fix", ValueError),
     ]
     for branch, expected in branch_cases:
         try:
@@ -427,7 +487,7 @@ def self_test(lanes_path: str) -> int:
         if got != expected:
             failures += 1
         print(f"  {mark} 브랜치 {branch:16s} → {getattr(got, '__name__', got)}")
-    print(f"self-test: 사례 {len(SELF_TEST_CASES) + 1 + len(branch_cases)} · 실패 {failures}")
+    print(f"self-test: 사례 {len(SELF_TEST_CASES) + 1 + len(UPSTREAM_CASES) + 1 + len(branch_cases)} · 실패 {failures}")
     return 1 if failures else 0
 
 
@@ -439,6 +499,7 @@ def main(argv) -> int:
     ap.add_argument("--head", default="HEAD")
     ap.add_argument("--names-from")
     ap.add_argument("--include-worktree", action="store_true")
+    ap.add_argument("--upstream", help="기준선 병합 몫을 뺄 upstream(예: origin/main) — --upstream 설명은 모듈 머리말")
     ap.add_argument("--validate", action="store_true")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--resolve-branch")
@@ -463,7 +524,9 @@ def main(argv) -> int:
         if args.lane not in lanes.lanes:
             print(f"모르는 갈래: {args.lane}", file=sys.stderr)
             return 2
-        paths = read_names(args.names_from) if args.names_from else changed_paths(args.base, args.head, args.include_worktree)
+        if args.names_from and args.upstream:
+            ap.error("--names-from 과 --upstream 은 함께 쓰지 않는다(가짜 diff 에는 upstream 이 없다)")
+        paths = read_names(args.names_from) if args.names_from else changed_paths(args.base, args.head, args.include_worktree, args.upstream)
         return 1 if report(lanes, args.lane, paths) else 0
     except YamlError as e:
         print(f"lanes.yml 오류: {e}", file=sys.stderr)

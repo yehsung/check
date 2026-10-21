@@ -138,6 +138,11 @@ enum MiniGameWindowLayout {
 ///
 /// v0.3.38 에 방향·회전·홀드가 **같은 모니터**에 얹혔고, `.keyUp` 도 받기 시작했다(뗌이 있어야 눌림이 안 굳는다).
 /// 스페이스와 **게이트가 반대 방향**인 것이 이 확장의 핵심이다 — 아래 `strokeBelongsToGame` 주석.
+///
+/// v0.3.62 에 ESC 가 **스페이스 쪽에서 방향키 쪽으로 넘어갔다.** 키 상실이 판을 끝내는 대신 멈추게 되면서
+/// 남의 창에서 누른 ESC 가 정지해 둔 판을 자동 재개했기 때문이다 — 그래서 모니터는 ESC 처리기에 **키가 향한
+/// 창을 넘기고**, 화면이 `strokeBelongsToGame` 으로 가린다. 스페이스의 관대한 게이트는 **그대로 둔다**
+/// (창을 막 연 순간 스페이스가 죽는 2026-09-09 사고가 그 관대함의 이유다).
 enum MiniGameSpaceKey {
     nonisolated(unsafe) private static var token: Any?
     /// 스페이스 keyCode.
@@ -185,15 +190,24 @@ enum MiniGameSpaceKey {
 
     /// 방향·회전·홀드를 **게임이 받는가**. 스페이스(`yieldsToOtherWindow`)와 정확히 반대 방향의 게이트다.
     ///
+    /// v0.3.62 에 **ESC 도 이 판정을 쓴다**(`installSpaceKey` 의 onEscape). 키 상실이 판을 끝내는 대신
+    /// 멈추게 되면서 "키 없는 창에 살아 있는 정지된 판" 이 생겼고, 남의 창에서 누른 ESC 가 그 판을 자동
+    /// 재개했기 때문이다. 즉 이 함수는 이제 **엄격한 게이트가 필요한 키 전부**의 판정이다.
+    ///
     /// 스페이스는 "양보할 근거가 분명할 때만" 양보한다 — 창을 막 연 순간을 살리기 위해서다(v0.3.30).
     /// 방향키는 그 관대함을 쓸 수 없다: `yieldsToOtherWindow` 가 아는 독립 창은 오목·설정 둘뿐이고
     /// 팝오버·할 일 보드는 identifier 가 없어 "모르는 창"으로 떨어진다. 그 창들에서 누른 ←/→/↑/↓ 를
     /// 삼키면 리스트 선택과 커서가 통째로 죽는다 — 2026-09-17 오목 채팅 사고(스페이스를 삼켜 띄어쓰기가
     /// 안 됐다)의 화살표판이다.
     ///
-    /// 엄격하게 해도 플레이 손실이 0 인 이유: 판이 도는 동안 게임 창은 **언제나 키 창**이다(포커스를 잃는
-    /// 순간 `windowDidResignKey` 가 판을 끝낸다 — CheckMiniGameWindow.swift). 그래서 "키가 향한 창이
-    /// 게임 창인가"를 요구해도 정상 플레이에서는 한 번도 안 걸린다.
+    /// 엄격하게 해도 플레이 손실이 0 인 이유: 판이 **실제로 도는 동안** 게임 창은 언제나 키 창이다(포커스를
+    /// 잃는 순간 `windowDidResignKey` 가 판을 **멈춘다** — CheckMiniGameWindow.swift · 0.3.62 전에는 끝냈다).
+    /// 그래서 "키가 향한 창이 게임 창인가"를 요구해도 정상 플레이에서는 한 번도 안 걸린다.
+    ///
+    /// 끝내기에서 멈추기로 바뀌어도 **조작키가 새지 않는다** — 게이트가 둘이기 때문이다. 이 판정과 별개로
+    /// `wantsStrokes` 가 `!pauseState.isFrozen` 을 요구하므로(`installSpaceKey`), 키를 잃어 얼어붙은 동안은
+    /// 방향·회전·홀드를 **아예 안 받는다**. 창이 키를 되찾아도 사용자가 [이어하기] 를 눌러 카운트다운이
+    /// 끝나기 전까지 그대로다(`.resuming` 도 `isFrozen` 이다). 그 사이의 키는 남의 창 몫으로 흘러간다.
     /// `isKeyWindow` 로 묻지 않는다(창을 막 연 순간이 죽는 그 금지는 여기서도 유효하다) — 키가 실제로
     /// 향한 창이 게임 창과 **같은 객체인지**로만 잰다.
     @MainActor
@@ -213,12 +227,14 @@ enum MiniGameSpaceKey {
     /// (2026-09-09 실사용 제보). 항상 최신 화면의 클로저를 쥐게 갈아 끼운다.
     ///
     /// - Parameter onEscape: ESC 처리기. **참을 돌려준 경우에만** 이벤트를 삼킨다(기본값은 "안 씀").
+    ///   **키가 향한 창을 함께 넘긴다**(v0.3.62) — ESC 는 그 창이 게임 창일 때만 받아야 하기 때문이다
+    ///   (`strokeBelongsToGame` 짝 게이트 · 아래 `installSpaceKey` 의 onEscape 주석).
     /// - Parameter gameWindow: 게임 창. 다른 창으로 향한 키를 양보할지 가를 때 "게임 창이 아닌가"를 이것으로 잰다.
     /// - Parameter wantsStrokes: 지금 방향·회전·홀드를 받는가(테트리스이고 판이 도는 중이며 얼어 있지 않을 때).
     /// - Parameter onStroke: 조작 키 한 번. **뗌은 게이트와 무관하게 언제나 온다** — 아래 ★★ 참고.
     static func install(shouldConsume: @escaping @MainActor () -> Bool,
                         action: @escaping @MainActor () -> Void,
-                        onEscape: @escaping @MainActor () -> Bool = { false },
+                        onEscape: @escaping @MainActor (NSWindow?) -> Bool = { _ in false },
                         gameWindow: @escaping @MainActor () -> NSWindow? = { nil },
                         wantsStrokes: @escaping @MainActor () -> Bool = { false },
                         onStroke: @escaping @MainActor (Stroke) -> Void = { _ in }) {
@@ -273,7 +289,9 @@ enum MiniGameSpaceKey {
                 guard shouldConsume() else { return false }
                 guard !isRepeat else { return true }
                 // ESC 는 화면이 실제로 정지/재개를 했을 때만 삼킨다 — 아니면 그대로 흘려 보낸다.
-                if isEscape { return onEscape() }
+                // **키가 향한 창을 함께 넘긴다**(v0.3.62) — 여기까지 온 ESC 는 스페이스의 관대한 게이트만
+                // 지난 것이라 "남의 창으로 간 ESC" 가 섞여 있다. 그것을 가리는 것은 화면 몫이다(소유권 게이트).
+                if isEscape { return onEscape(target) }
                 action()
                 return true
             }
@@ -332,8 +350,8 @@ enum MiniGameSpaceKey {
     /// 헤드리스 검증이 합성 NSEvent 없이 "어느 화면에 묶여 있는가"를 확인하는 지점이다(합성 이벤트로는
     /// 팝오버·창이 열리지 않는다는 것을 이 저장소가 이미 겪었다).
     nonisolated(unsafe) private static var armed: (@MainActor () -> Void)?
-    /// 같은 모니터가 쥔 ESC 처리기(반환값 = 삼켰는가).
-    nonisolated(unsafe) private static var armedEscape: (@MainActor () -> Bool)?
+    /// 같은 모니터가 쥔 ESC 처리기(인자 = 키가 향한 창 · 반환값 = 삼켰는가).
+    nonisolated(unsafe) private static var armedEscape: (@MainActor (NSWindow?) -> Bool)?
     /// 같은 모니터가 쥔 조작 키 처리기(v0.3.38).
     nonisolated(unsafe) private static var armedStroke: (@MainActor (Stroke) -> Void)?
 
@@ -341,10 +359,11 @@ enum MiniGameSpaceKey {
     @MainActor
     static func fireForTesting() { armed?() }
 
-    /// ESC 발화(반환값 = 화면이 처리했는가 = 삼켰는가).
+    /// ESC 발화(인자 = 키가 향한 창 · 반환값 = 화면이 처리했는가 = 삼켰는가).
+    /// 창을 안 주면 "키가 아직 어느 창에도 안 간 순간"과 같다 — 소유권 게이트가 있으면 거짓이 돌아온다.
     @MainActor
     @discardableResult
-    static func fireEscapeForTesting() -> Bool { armedEscape?() ?? false }
+    static func fireEscapeForTesting(_ eventWindow: NSWindow? = nil) -> Bool { armedEscape?(eventWindow) ?? false }
 
     /// 조작 키 발화. 합성 NSEvent 로는 창·팝오버가 열리지 않으므로, 모니터가 **어느 화면의 클로저를 쥐고
     /// 있는가**를 이 지점으로 확인한다(`fireForTesting` 과 같은 규약).
@@ -421,7 +440,12 @@ struct CheckMiniGameWindowView: View {
         /// 그 이상 멈춰 두면 돌아와 끝내도 제출이 `token_expired` 로 거절된다 — **멈춰 뒀다는 이유로 기록을 잃는다.**
         /// 5분에서 잘라 그 시점 점수를 확정하면, 잃는 것은 "이어서 더 할 기회"뿐이고 번 점수는 남는다.
         /// 이것은 설정 스위치가 아니라 게임 상수다(2026-09-15 '자동 종료는 사용자 스위치로 주지 않는다').
-        /// 두 기존 게임에는 걸지 않는다 — 한 판이 짧아 이 여유를 쓸 일이 없다.
+        /// 거는 범위는 **접었을 때 기록이 남는 게임**이다(v0.3.62 · `quittingKeepsTheScore`) — 0.3.61 까지는
+        /// "두 기존 게임은 한 판이 짧아 이 여유를 쓸 일이 없다"로 테트리스에만 걸었는데, 자동 정지(키 상실)가
+        /// 그 전제를 무너뜨려 플래피가 들어왔다. 타이밍 바는 접어도 남는 것이 없어 빠진다.
+        ///
+        /// **이 상한은 앱이 켜져 있는 동안만 산다** — 집행하는 쪽이 1초씩 자는 Task 라 프로세스가 죽으면 같이
+        /// 죽는다(`armPauseWatchdog`). 5분이 차기 전에 앱을 끄면 그 판 점수는 어디에도 안 남는다.
         static let pauseLimitSeconds = 5 * 60
 
         /// 판이 얼어 있는가(= `MiniGameHost.isPaused`). 카운트다운 중에도 참이다.
@@ -443,6 +467,79 @@ struct CheckMiniGameWindowView: View {
             case .none: return isPlaying ? .paused : .none
             case .paused: return .resuming(Self.countdownStart)
             case .resuming: return .paused          // 카운트다운 중 ESC 는 다시 정지(취소)
+            }
+        }
+
+        /// **ESC 한 번**의 전이(0.3.62). 게이트에 걸리면 `nil` 이다 — 수신처는 그때 이벤트를 **안 삼키고**
+        /// 남의 창으로 흘려보낸다(그래야 그 창의 ESC, 예컨대 팝오버 닫기가 산다).
+        ///
+        /// 왜 뷰 클로저에서 떼어내 여기 두는가: 판정이 클로저 안에 있던 동안은 헤드리스에서 부를 수가 없어
+        /// 이 게이트를 지키는 단언이 전부 **소스의 모양**(substring·순서)뿐이었다. 그래서 게이트 극성을
+        /// 뒤집어도(`guard !strokeBelongsToGame`) `gameWindow` 에 nil 을 넘겨도 시험이 통째로 초록이었다 —
+        /// 그 구멍으로 되살아나는 것이 바로 이 게이트가 막는 사고다(팝오버를 닫으려고 누른 ESC 가 게임 창으로
+        /// 가 정지해 둔 판을 3-2-1 뒤 재개한다. 조작키는 `strokeBelongsToGame` 가 전부 막으므로 한 수도 못 두고
+        /// 탑아웃 → 그 점수로 확정되고, 그 ESC 는 삼켜져 팝오버도 안 닫힌다).
+        ///
+        /// `nil` 인 자리 둘:
+        ///   · **키가 게임 창으로 간 것이 아니다** — 남의 창·팝오버·'아직 어느 창에도 안 간 순간'. 판정은
+        ///     방향키와 같은 `strokeBelongsToGame`(이벤트 창이 게임 창과 같은 객체인가 + 보이는가)이다.
+        ///   · **판이 도는 중이 아니다** — 시작 전·결과 화면의 ESC 까지 먹으면 다른 화면의 취소 키를 훔친다.
+        ///
+        /// 셋째 가드(`next != self`)는 **오늘은 도달할 수 없다** — `isPlaying` 이 참이면 `toggled` 가 세 상태
+        /// 모두에서 제자리를 안 돌려준다. 지우지 않고 두는 이유는 `toggled` 에 제자리 전이가 생기는 날
+        /// "바뀌지도 않았는데 ESC 를 삼키는" 상태를 여기서 막기 위해서다. 재현 가능한 분기로 읽지 마라
+        /// (그래서 위 목록에서 뺐다 — 뮤테이션을 넣어도 빨개지는 시험이 없는 것이 정상이다).
+        ///
+        /// 규칙은 `toggled(isPlaying:)` **한 벌**이다. 여기서 베껴 적으면 두 벌이 되어 언젠가 갈린다.
+        @MainActor
+        func escaped(eventWindow: NSWindow?, gameWindow: NSWindow?, isPlaying: Bool) -> PauseState? {
+            guard MiniGameSpaceKey.strokeBelongsToGame(eventWindow, gameWindow: gameWindow) else { return nil }
+            guard isPlaying else { return nil }
+            let next = toggled(isPlaying: isPlaying)
+            guard next != self else { return nil }
+            return next
+        }
+
+        /// **정지 상한을 이 게임에 거는가.** 기준은 게임 이름이 아니라 **"접었을 때 기록이 남는가"** 다 —
+        /// 상한이 하는 일은 `quitRound()` 로 판을 접는 것 하나이고, 접는 결과가 게임마다 다르기 때문이다.
+        /// 기록이 남는 게임에서 상한은 **점수를 건진다**(멈춰 뒀다는 이유로 토큰이 늙어 판을 통째로 잃는 것을
+        /// 막는다). 기록이 안 남는 게임에서는 같은 동작이 **판을 없앤다** — 거기 걸면 돕는 게 아니라 뺏는다.
+        ///
+        /// 코드에서 확인한 사실(2026-10-21):
+        ///   · 테트리스·플래피 — `interrupt()` 가 `phase = .result` 로 **결과를 확정**하고(TetrisGame·FlappyGame),
+        ///     잎 뷰의 `onChange(of: game.phase)` 가 그 전이에서 `host.onFinished(점수)` 를 부른다 → 기록이 남는다.
+        ///   · 타이밍 바 — `interrupt()` 가 `game.invalidate()` 만 한다(MiniGameTimingBar). phase 가 `.ready` 로
+        ///     되돌아가고 `onFinished` 는 **안 불린다** → 남는 것이 없다(10라운드를 못 채워 애초에 점수가 없다).
+        ///
+        /// 그래서 타이밍 바의 정지는 상한 없이 얼어 있어도 **해롭지 않다**: 프레임 루프가 멈춰 있어 유휴 0% 는
+        /// 그대로고(`TimelineView(.animation(paused:))`), 접어 봐야 건질 점수가 없으며, 라운드 토큰이 30분에
+        /// 만료되면 어차피 기록되지 않는다 — 상한이 있든 없든 그 판의 결과는 '없음'으로 같고, 상한을 걸면
+        /// 돌아와 이어서 끝낼 기회만 사라진다.
+        ///
+        /// **게임이 늘면 여기서 멈춰 서서 그 게임의 `interrupt()` 를 읽어라.** 기본 가지를 두지 않는 이유다.
+        static func quittingKeepsTheScore(_ kind: MiniGameKind) -> Bool {
+            switch kind {
+            case .tetris, .flappy: return true
+            case .timingBar: return false
+            }
+        }
+
+        /// **창이 키를 잃었을 때**의 전이(0.3.62 — 실사용 제보 "테트리스 일시정지하고 다른 창을 클릭하면
+        /// 아예 끝나버려요"의 수리). `toggled(isPlaying:)` 를 재사용하지 않는 이유는 **방향이 하나**라는 것이다 —
+        /// 키 상실은 언제나 '얼린다'이고 절대 풀지 않는다. `toggled` 를 그대로 쓰면 이미 정지해 둔 판이 키를
+        /// 잃는 순간 `.resuming` 으로 **풀려** 안 보이는 창에서 3-2-1 이 흐른다(제보의 반대 방향 사고다).
+        ///
+        /// `nil` 은 "아무 일도 하지 않는다"다(지금 상태를 그대로 둔다). 두 자리에서 돌려준다:
+        ///   · **판이 도는 중이 아니다** — 시작 전·결과 화면에서 얼리면 클릭이 안 먹는 창이 된다(위 `toggled` 와 같은 근거).
+        ///   · **이미 `.paused` 다** — 여기서 또 얼리면 수신처가 정지 감시(`armPauseWatchdog`)를 새로 걸고,
+        ///     그 시계는 1초 수면부터 다시 시작한다. 1초 안에 키를 잃었다 되찾기를 반복하면 누적(`pausedSecondsUsed`)이
+        ///     영영 안 올라 5분 상한이 통째로 무력해진다 — 그 상한은 순위 공정성의 보루다.
+        func resigningKey(isPlaying: Bool) -> PauseState? {
+            guard isPlaying else { return nil }
+            switch self {
+            case .paused: return nil
+            // 카운트다운 중이면 **취소하고 다시 언다.** 안 그러면 안 보이는 창에서 3-2-1 이 흘러 판이 저절로 풀린다.
+            case .none, .resuming: return .paused
             }
         }
 
@@ -536,14 +633,37 @@ struct CheckMiniGameWindowView: View {
             MiniGameKeyLatch.releaseAll(&input)
         }
         .onChange(of: store.miniGameInterruptToken) { _, _ in
-            // 판이 끝났다(창 닫힘·포커스 이동·종류 전환·[그만두기]·패널 닫기). 눌린 채 끝났어도 래치를 풀어
+            // 판이 끝났다(창 닫힘·로그아웃·종류 전환·[그만두기]·패널 닫기). 눌린 채 끝났어도 래치를 풀어
             // 다음 판의 첫 클릭이 먹히게 한다. 출구 ②~⑥의 **공통 수신처**다 — 토큰을 올리는 다섯 자리가
-            // 전부 여기로 모인다(WorkTimerStoreMiniGame · CheckMiniGameWindow).
+            // 전부 여기로 모인다(WorkTimerStoreMiniGame · CheckMiniGameWindow · WorkTimerStore.signOut).
+            // ★ **포커스 상실은 여기로 안 온다**(0.3.62) — 그 신호는 판을 끝내지 않고 멈추므로 아래
+            //   `miniGamePauseRequestToken` 수신처(출구 ⑩)가 따로 받는다. 거기를 이 자리로 합치면
+            //   고치려던 제보("다른 창을 클릭하면 아예 끝나버려요")가 그대로 돌아온다.
             pressLatched = false
             isPlaying = false
             cancelResume()
             pauseState = .none
             MiniGameKeyLatch.releaseAll(&input)
+        }
+        .onChange(of: store.miniGamePauseRequestToken) { _, _ in
+            // 출구 ⑩ 키 상실(0.3.62). 판을 **끝내지 않고 멈춘다** — 실사용 제보 "테트리스 일시정지하고
+            // 다른 창을 클릭하면 아예 끝나버려요"(0.3.61 · build 114). 자동 재개는 하지 않는다: 창이 키를
+            // 되찾은 순간에 사람이 화면을 보고 있다는 보장이 없다. [이어하기] 로 3-2-1 뒤 이어서 한다.
+            //
+            // 할지 말지와 어디로 갈지는 순수 값이 정한다(`PauseState.resigningKey`) — 판이 안 도는 중이거나
+            // 이미 `.paused` 면 nil 이고, 여기서 **아무것도 하지 않는다**(특히 정지 감시를 다시 걸지 않는다).
+            guard let next = pauseState.resigningKey(isPlaying: isPlaying) else { return }
+            // 순서는 `togglePause` 와 **정확히 같다**: 카운트다운 Task 를 거두고 → 눌린 키를 놓고 → 상태를
+            // 옮기고 → 정지 감시를 건다. 해제가 빠지면 "← 를 누른 채 다른 창을 클릭 → 손을 뗌 → 이어하기" 에서
+            // 엔진이 아직 ← 를 눌린 것으로 알고 판이 왼쪽으로 붙는다(출구 ⑦ 과 같은 함정이다).
+            // 이 자리는 interruptToken 을 **안 올린다** — 올리면 고치려던 바로 그 '판이 끝남'이 돌아온다.
+            cancelResume()
+            MiniGameKeyLatch.releaseAll(&input)
+            pauseState = next
+            // `next` 는 언제나 `.paused` 다(위 순수 값의 유일한 비-nil 결과). 감시는 카드가 떠 있는 동안만 돈다.
+            // 여기서는 게임 종류를 **묻지 않는다** — 범위 판정은 `armPauseWatchdog` 한 자리에 있다(수동 정지와
+            // 같은 문으로 들어가야 두 길이 갈리지 않는다).
+            armPauseWatchdog()
         }
     }
 
@@ -760,7 +880,30 @@ struct CheckMiniGameWindowView: View {
                 guard !pauseState.isFrozen else { return }
                 input.actionCount += 1
             },
-            onEscape: { togglePause() },
+            // ESC 는 **그 키가 실제로 게임 창으로 간 것일 때만** 받는다 — 스페이스와 달리 짝 게이트를 단다.
+            // 게이트도 전이도 순수 값 하나(`PauseState.escaped`)가 정하고 여기는 배선뿐이다 — 판정이 이
+            // 클로저 안에 있던 동안은 헤드리스에서 못 불러 그물이 소스의 모양밖에 못 쟀다(그 함수 머리말).
+            //
+            // 왜 필요한가(v0.3.62): 키를 잃으면 판을 **끝내지 않고 멈추므로** "키 없는 창에 살아 있는 정지된 판"
+            // 이라는 상태가 생겼다. 위의 관대한 게이트(창 가시성 + `yieldsToOtherWindow`)는 그 상태를 못 가린다 —
+            // 팝오버·할 일 보드는 identifier 가 없어 "모르는 창"으로 놓아 주므로, 거기서 **팝오버를 닫으려고**
+            // 누른 ESC 가 게임 창으로 가서 정지해 둔 판을 자동 재개했다(3-2-1 뒤 60Hz 재개 → 조작키는
+            // `strokeBelongsToGame` 가 전부 막아 한 수도 못 두고 탑아웃 → 그 점수로 확정). 이 수리가 못 박은
+            // "자동 재개는 없다"가 ESC 한 번에 깨지고, 고치려던 제보가 다른 길로 돌아오는 자리다.
+            // 게다가 그 ESC 는 삼켜져 **팝오버가 안 닫혔다**(두 번째 ESC 는 `.resuming → .paused` 로 또 삼켜진다).
+            //
+            // 왜 ESC 는 엄격해도 손실이 0 인가: 정지·재개는 **판이 도는 중에만** 뜻이 있고(시작 전·결과 화면의
+            // ESC 는 `togglePause` 가 이미 거짓을 돌려준다), 그때 게임 창은 사용자가 보고 **클릭해 둔** 창이다.
+            // 스페이스를 살린 그 관대함의 이유(창을 막 연 순간 키가 아직 안 넘어와 스페이스가 죽었다 —
+            // 2026-09-09 제보)는 ESC 에 없다: 창을 막 연 그 순간에는 정지할 판이 아직 없다.
+            onEscape: { eventWindow in
+                guard let next = pauseState.escaped(eventWindow: eventWindow,
+                                                    gameWindow: CheckMiniGameWindowController.shared.currentWindow,
+                                                    isPlaying: isPlaying)
+                else { return false }
+                applyPause(next)
+                return true
+            },
             gameWindow: { CheckMiniGameWindowController.shared.currentWindow },
             // 방향·회전·홀드는 **테트리스가 도는 동안에만** 받는다. 다른 게임에서 받으면 쓰지도 않을 키를
             // 삼켜 다른 창의 커서를 훔친다(얻는 것이 0 인 위험이다).
@@ -784,12 +927,21 @@ struct CheckMiniGameWindowView: View {
 
     // MARK: 일시정지 전이
 
-    /// ESC · [일시정지] 버튼 · [이어하기] 가 모두 여기로 온다. 반환값은 "화면이 실제로 처리했는가" —
-    /// ESC 모니터가 이 값으로 이벤트를 삼킬지 정한다.
+    /// [일시정지] 버튼 · [이어하기] 가 여기로 온다. 반환값은 "화면이 실제로 처리했는가"다.
+    /// ESC 는 **여기로 오지 않는다** — 소유권 게이트가 더 붙어야 해서 `PauseState.escaped` 를 거쳐
+    /// 곧장 `applyPause` 로 간다(규칙은 같은 `toggled` 한 벌을 쓴다).
     @discardableResult
     private func togglePause() -> Bool {
         let next = pauseState.toggled(isPlaying: isPlaying)
         guard next != pauseState else { return false }
+        applyPause(next)
+        return true
+    }
+
+    /// 정해진 다음 상태를 화면에 **옮긴다.** 어디로 갈지는 순수 값이 정하고(`toggled` · `escaped`),
+    /// 여기는 @State 와 Task 를 그 결과에 맞추는 일만 한다 — [일시정지] 버튼과 ESC 가 **같은 순서**를
+    /// 밟게 하는 한 자리다(순서를 두 벌로 적으면 한쪽만 고쳐진 채 남는다).
+    private func applyPause(_ next: PauseState) {
         cancelResume()
         // 출구 ⑦ 일시정지 — **토큰을 안 올리는 자리라 공통 수신처가 못 잡는다**(직접 확인: 이 함수 전문에
         // `store.miniGameInterruptToken` 이 한 번도 없다). 여기를 빠뜨리면 "← 를 누른 채 ESC → 손을 뗌 →
@@ -804,7 +956,6 @@ struct CheckMiniGameWindowView: View {
         // 정지 감시는 **카드가 떠 있는 동안만** 돈다. 카운트다운(`resuming`)은 3초짜리라 상한과 무관하고,
         // 재개 취소로 다시 `.paused` 가 되면 여기서 새로 걸린다(멱등 — 시계가 처음부터 다시 간다).
         if case .paused = pauseState { armPauseWatchdog() } else { cancelPauseWatchdog() }
-        return true
     }
 
     /// 재개: 스크림은 그대로 두고 숫자만 3 → 2 → 1 로 내린다.
@@ -828,10 +979,28 @@ struct CheckMiniGameWindowView: View {
         resumeTask = nil
     }
 
-    /// 정지 감시를 건다(멱등 — 이미 걸려 있으면 갈아 끼운다). 테트리스에서만 건다.
+    /// 정지 감시를 건다(멱등 — 이미 걸려 있으면 갈아 끼운다). 거는 범위는 **접었을 때 기록이 남는 게임**
+    /// 이다(`PauseState.quittingKeepsTheScore` — 왜 그 기준인지는 거기 적어 뒀다).
+    ///
+    /// 0.3.61 까지는 `guard store.miniGameKind == .tetris` 였다. 그 전제("두 기존 게임은 한 판이 짧아 이 여유를
+    /// 쓸 일이 없다")는 **v0.3.62 의 자동 정지가 무너뜨렸다** — 이제 플래피도 다른 창을 클릭하는 것만으로
+    /// 정지에 들어가므로, 테트리스에만 남기면 플래피의 판이 **무기한 정지**로 남고 30분 뒤 돌아와 이어해도
+    /// 라운드 토큰이 서버 TTL 을 넘겨 `token_expired` 로 거절된다(= 0.3.61 이 포커스 상실 때 해 주던
+    /// '그 점수로 확정'이 플래피에서 사라진다). 그렇다고 가드를 **통째로 걷으면** 범위가 한 칸 넓어져
+    /// 타이밍 바의 **수동 정지**까지 5분에 잘리는데, 거기서는 접어도 남는 것이 없어 상한이 '점수를 건진다'가
+    /// 아니라 '판을 없앤다'로 뒤집힌다 — 0.3.61 에는 없던 손해다. 그래서 이름이 아니라 **기록이 남는가**로 가른다.
+    ///
+    /// 상한에서 `quitRound()` 로 접는 길은 [그만두기]와 같고, 그 결과(그 점수로 확정)는 0.3.61 이 포커스
+    /// 상실 때 하던 것과 정확히 같다 — 되돌리는 것이지 새로 만드는 것이 아니다.
+    ///
+    /// **상한이 사는 경우는 "앱이 켜진 채 5분이 지난" 경우뿐이다.** 1초씩 자는 Task 라 프로세스가 죽으면
+    /// 같이 죽는다 — 자동 정지 뒤 5분 안에 ⌘Q 하면 그 판 점수는 어디에도 안 남는다(0.3.61 은 포커스를 잃는
+    /// 그 클릭 자체로 즉시 확정했으니 거기서는 남았다). 종료 시 저장은 이 수리의 범위 밖이다.
     private func armPauseWatchdog() {
         cancelPauseWatchdog()
-        guard store.miniGameKind == .tetris else { return }
+        // 접어도 기록이 안 남는 게임에는 안 건다 — 거는 순간 상한이 점수를 건지는 장치가 아니라 판을
+        // 없애는 장치가 된다(위 머리말 · `PauseState.quittingKeepsTheScore`).
+        guard PauseState.quittingKeepsTheScore(store.miniGameKind) else { return }
         // 1초씩 센다. **남은 시간이 아니라 쓴 시간을 누적**하므로, 정지를 풀었다 다시 걸어도
         // 시계가 처음부터 가지 않는다(`pausedSecondsUsed` 가 판 단위로 산다).
         pauseWatchdog = Task { @MainActor in
@@ -1112,7 +1281,9 @@ struct MiniGameGameHeader: View {
             } else {
                 // 1:1 대결 창 입구 **둘**(오목 v0.3.27 · 체스 v0.3.44). 둘 다 이 창과 **별도의 넓은 창**이다
                 // (사용자 결정) — 여기는 문만 둔다. [일시정지] 와 **같은 자리를 번갈아 쓴다**: 판이 도는 중에는
-                // 어차피 누를 수 없는 문이다(누르는 순간 이 창이 키를 잃어 판이 끝난다).
+                // [일시정지]가 이 자리를 쓰고, **정지 중에는 이 문이 열린다**(0.3.62 — 키를 잃으면 판이 끝나는
+                // 대신 멈추므로 정지한 판 위에서 누를 수 있는 문이 됐다). 누르면 `openGomokuFromMiniGame` 쪽의
+                // `closeMiniGamePanel()` 이 판을 끝낸다 — 대결 창으로 가는 것은 분명한 의사표시다.
                 // **누르면 이 창은 내려간다**(0.3.50 — `WorkTimerStore.openGomokuFromMiniGame`): 대결 창과 둘이 떠 있지 않게.
                 // 팝오버를 닫지 않는다 — 이 창에서 오는 길이면 팝오버는 이미 닫혀 있다(토글이라 부르면 오히려 열린다).
                 //

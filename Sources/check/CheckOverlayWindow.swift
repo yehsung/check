@@ -1146,8 +1146,17 @@ final class CheckOverlayController {
 
     /// 메시지 말풍선 문구(순수 함수 — 헤드리스로 고정한다). 갈래 판정은 `OverlayMessageBubble` 이 하고
     /// 여기는 **기존 호출부가 쓰는 이름**만 남긴다(문구 규칙을 두 벌로 적으면 언젠가 한쪽만 바뀐다).
+    ///
+    /// ★ **여기는 글자만 들어가는 자리다**(v0.3.62). 캐릭터는 그림을 그릴 수 없으므로 아잉이 이모티콘 본문은
+    ///   이름으로 읽힌다("아잉이 기쁨") — 날것 토큰(`[아잉:기쁨]`)을 그대로 말하면, 팝오버가 닫혀 있는 평시에
+    ///   받는 사람이 보는 **유일한** 도착 신호가 대괄호 글자가 된다(팝오버 수신 줄 `PokeMessageReceiptStrip`
+    ///   은 팝오버를 연 사람만 본다). 그래서 팝오버와 **같은 한 함수**(`AingStickerText.preview`)를 쓴다.
+    ///
+    ///   변환을 **호출부가 아니라 여기**에 두는 이유: 호출부에 두면 다음에 생기는 호출부가 빠뜨린다
+    ///   (0.3.62 가 정확히 그렇게 갈렸다 — 팝오버 한 줄만 고쳐지고 캐릭터는 날것이었다).
+    ///   평범한 본문은 `preview` 가 글자 하나도 바꾸지 않으므로 갈래 판정(폭·줄 수·CJK)은 그대로다.
     nonisolated static func messageBubbleText(name: String, body: String) -> String {
-        OverlayMessageBubble.form(name: name, body: body).text
+        OverlayMessageBubble.form(name: name, body: AingStickerText.preview(for: body)).text
     }
 
     /// 글자수 기준 자르기 + 말줄임(순수 함수). 세는 단위가 `Character`(확장 자소 클러스터)라 이모지 가족·국기·

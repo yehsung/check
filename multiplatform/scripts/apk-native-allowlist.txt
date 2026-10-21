@@ -1,3 +1,7 @@
 # APK 에 실려도 되는 네이티브 라이브러리(파일 이름, 한 줄에 하나) — G §8-12. 늘릴 때는 조정자 결정으로.
 # Compose(ui-graphics 1.12.1 → androidx.graphics:graphics-path 1.0.1)가 싣는다. 피할 수 없다(W0-f A-X17 실측).
 libandroidx.graphics.path.so
+# 출처 androidx.datastore:datastore-core-android 1.2.1(설정 저장용 datastore-preferences 가 끌어온다, 공식 라이브러리).
+# 16KB 정렬 통과(zipalign -P 16 · PT_LOAD p_align 0x4000, W0 통합 실측). 패키징에서 빼지 않는다 — 라이브러리 내부가
+# 언제 이 파일을 여는지 우리가 보증할 수 없다(G §8-13).
+libdatastore_shared_counter.so

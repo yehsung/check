@@ -1,0 +1,430 @@
+# 갈래 소유 표 — G §2-3 + §8-3·§8-4 (W0-a 가 만든다, §8-3).
+# multiplatform/tools/lane-ownership.py 가 읽는다: 브랜치 diff 가 갈래 소유 밖이거나, 옛 경로(§8-1)에 쓰거나,
+# 예약 경로를 남이 건드리면 빨강이다. 이 파일은 W0 뒤로 조정자 몫이다.
+#
+# 문법(이 파일이 쓰는 YAML 부분집합 — 도구가 직접 읽는다):
+#   매핑(키: 값 / 키: 아래 들여쓰기), 블록 목록("- 값"), 흐름 목록([a, b]), 따옴표 문자열, # 주석.
+# 경로 글롭: 저장소 뿌리 기준. "**" = 0개 이상 경로 마디, "*" = 한 마디 안, "{a,b}" = 고르기.
+#   {pkg:<모듈>} 은 아래 package_root 의 Kotlin 패키지 폴더로 바뀐다.
+#   G 의 "…/" 약어 = src/*/kotlin/{pkg:<모듈>}.
+# 갈래 이름 뒤 "제안" 표시는 G 가 하위 패키지를 정하지 않아 이 표가 고른 이름이다 — 조정자가 그 웨이브 시작 때 바꿀 수 있다.
+
+version: 1
+
+# 모듈 → Kotlin 패키지 폴더(A§2-2: 뿌리 com.yehsung.aingcheck, 모듈과 1:1. 앱은 android·desktop).
+package_root:
+  core/foundation: com/yehsung/aingcheck/core/foundation
+  core/wire: com/yehsung/aingcheck/core/wire
+  core/net: com/yehsung/aingcheck/core/net
+  core/rules: com/yehsung/aingcheck/core/rules
+  core/session: com/yehsung/aingcheck/core/session
+  core/stores: com/yehsung/aingcheck/core/stores
+  feature/phone: com/yehsung/aingcheck/feature/phone
+  feature/desktop: com/yehsung/aingcheck/feature/desktop
+  ui: com/yehsung/aingcheck/ui
+  character: com/yehsung/aingcheck/character
+  testkit: com/yehsung/aingcheck/testkit
+  androidApp: com/yehsung/aingcheck/android
+  desktopApp: com/yehsung/aingcheck/desktop
+
+# §8-1 옛 경로 — 어느 갈래든 쓰면 빨강(저장소 꼭대기 기준). supabase/ 는 git 밖이고 서버 초안은 저장소 밖에 둔다.
+forbidden:
+  - "xplat/**"
+  - "kmp/**"
+  - "contracts/**"
+  - "tools/**"
+  - "backups/**"
+  - "supabase/**"
+
+# 예약 경로: 갈래의 owns 글롭이 덮더라도 여기 적힌 갈래만 쓸 수 있다(나머지는 완료 보고에 패치로 낸다).
+reserved:
+  "multiplatform/settings.gradle.kts": [W0-a, coordinator]
+  "multiplatform/build.gradle.kts": [W0-a, coordinator]
+  "multiplatform/gradle.properties": [W0-a, coordinator]
+  "multiplatform/{gradlew,gradlew.bat}": [W0-a, coordinator]
+  "multiplatform/gradle/**": [W0-a, coordinator]
+  "multiplatform/build-logic/**": [W0-a, coordinator]
+  "multiplatform/**/build.gradle.kts": [W0-a, coordinator]
+  "multiplatform/version.properties": [W0-a, coordinator]
+  "multiplatform/tools/{lanes.yml,lane-ownership.py}": [W0-a, coordinator]
+  "multiplatform/androidApp/src/main/AndroidManifest.xml": [W0-a, W1-g, coordinator]
+  "multiplatform/androidApp/src/main/res/xml/**": [coordinator]
+  "multiplatform/ui/src/*/composeResources/**": [W1-e, coordinator]
+  "multiplatform/desktopApp/src/main/kotlin/{pkg:desktopApp}/{AppGraph,Main}.kt": [W1-f, coordinator]
+  "multiplatform/androidApp/src/main/kotlin/{pkg:androidApp}/nav/NavGraph.kt": [W1-g, coordinator]
+  "contract/golden/{_manifest,_digests}.json": [W0-b, coordinator]
+  ".gitignore": [W0-a, coordinator]
+
+# 조정자(메인 에이전트) 몫 공용 조립 파일(K11 + §8-3). 웨이브 병합 때만 고친다.
+coordinator:
+  owns:
+    - "multiplatform/**"
+    - "contract/**"
+    - ".github/workflows/mp-*.yml"
+    - ".gitignore"
+    - "Package.swift"
+    - "Tests/**"
+    - "scripts/golden-export.sh"
+    - "landing/**"
+    - "docs/**"
+
+lanes:
+  # ---------------- W0 ----------------
+  W0-a:
+    wave: W0
+    title: 빌드·봉인·CI
+    owns:
+      - "multiplatform/{settings,build}.gradle.kts"
+      - "multiplatform/gradle.properties"
+      - "multiplatform/{gradlew,gradlew.bat}"
+      - "multiplatform/gradle/**"
+      - "multiplatform/build-logic/**"
+      - "multiplatform/version.properties"
+      - "multiplatform/*/build.gradle.kts"
+      - "multiplatform/{core,feature}/*/build.gradle.kts"
+      - "multiplatform/testkit/**"
+      - "multiplatform/core/foundation/**"
+      - "multiplatform/scripts/{seal.sb,gate-fast.sh,gate-full.sh}"
+      - "multiplatform/tools/{lanes.yml,lane-ownership.py}"
+      - ".github/workflows/{mp-ci,mp-nightly}.yml"
+      - ".gitignore"
+      # 빌드가 서도록 둔 뼈대(빈 Composable·시험 견본·빈 manifest). 각 모듈 갈래가 이어 쓰지 않는 자리다.
+      - "multiplatform/ui/src/*/kotlin/{pkg:ui}/scaffold/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/scaffold/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/scaffold/**"
+      - "multiplatform/androidApp/src/main/AndroidManifest.xml"
+    excludes:
+      - "multiplatform/testkit/src/*/kotlin/{pkg:testkit}/golden/**"
+      - "multiplatform/testkit/src/*/resources/golden/**"
+      - "multiplatform/core/foundation/src/*/kotlin/{pkg:core/foundation}/rng/**"
+    golden: []
+
+  W0-b:
+    wave: W0
+    title: 골든 바탕
+    owns:
+      - "Package.swift"
+      - "Tests/CheckGoldenSupport/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/_base/**"
+      - "scripts/golden-export.sh"
+      - "contract/README.md"
+      - "contract/golden/rng/**"
+      - "contract/golden/{_manifest,_digests}.json"
+      - "multiplatform/core/foundation/src/*/kotlin/{pkg:core/foundation}/rng/**"
+      - "multiplatform/tools/**"
+      - "multiplatform/testkit/src/*/kotlin/{pkg:testkit}/golden/**"
+      - "multiplatform/testkit/src/*/resources/golden/**"
+    excludes:
+      - "multiplatform/tools/{lanes.yml,lane-ownership.py}"
+    golden: [rng]
+
+  W0-c:
+    wave: W0
+    title: 서버 초안(저장소 밖 ~/.claude/projects/-Users-yesung-check/xplat-staging/ 가 본체, §8-1)
+    owns:
+      - "contract/push/payloads/**"
+      - "Tests/checkTests/XplatServerMigrationTests.swift"
+    golden: []
+
+  W0-d:
+    wave: W0
+    title: 굽기 도구
+    owns:
+      - "Tests/checkTests/AingBakeSuite.swift"
+      - "multiplatform/scripts/bake-aing/**"
+      - "multiplatform/assets/aing-bake/**"
+      - ".github/workflows/mp-bake.yml"
+    golden: []
+
+  W0-e:
+    wave: W0
+    title: Windows 실험
+    owns:
+      - "multiplatform/scripts/vm/**"
+      - "multiplatform/spikes/windows/**"
+      - ".github/workflows/mp-windows-spike.yml"
+    golden: []
+
+  W0-f:
+    wave: W0
+    title: Android 실험
+    owns:
+      - "multiplatform/scripts/emu.sh"
+    golden: []
+
+  # ---------------- W1 ----------------
+  W1-a:
+    wave: W1
+    title: 테트리스·미니게임 규칙
+    owns:
+      - "multiplatform/core/rules/src/*/kotlin/{pkg:core/rules}/{tetris,minigame}/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/games-tetris-minigame/**"
+      - "contract/golden/{tetris,flappy,timing-bar,framerate}/**"
+    golden: [tetris, flappy, timing-bar, framerate]
+
+  W1-b:
+    wave: W1
+    title: 렌주·체스·AI·판돈 수수료
+    owns:
+      - "multiplatform/core/rules/src/*/kotlin/{pkg:core/rules}/{renju,chess,ai,duel}/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/games-board/**"
+      - "contract/golden/{renju,chess,duel-fee}/**"
+    golden: [renju, chess, duel-fee]
+
+  W1-c:
+    wave: W1
+    title: 앱 규칙(+이모티콘 판정 표, 매니페스트·프레임 시계·카탈로그 한 곳 — §8-1·§8-2)
+    owns:
+      - "multiplatform/core/rules/src/*/kotlin/{pkg:core/rules}/{gacha,weekly,achievements,insights,todo,text,character,ailimit,token,format}/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/app-rules/**"
+      - "contract/golden/{gacha,insights,weekly,todo,text,sort,dates,stickers}/**"
+    golden: [gacha, insights, weekly, todo, text, sort, dates, stickers]
+
+  W1-d:
+    wave: W1
+    title: 와이어·통신·실시간
+    owns:
+      - "multiplatform/core/wire/**"
+      - "multiplatform/core/net/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/wire/**"
+      - "contract/golden/{wire,errors,jwt,realtime}/**"
+    golden: [wire, errors, jwt, realtime]
+
+  W1-e:
+    wave: W1
+    title: 디자인 시스템
+    owns:
+      - "multiplatform/ui/src/*/kotlin/{pkg:ui}/{theme,components,icons,fonts}/**"
+      - "multiplatform/ui/src/*/composeResources/**"
+      - "multiplatform/ui/snapshots/{theme,components,icons,fonts}/**"
+    golden: []
+
+  W1-f:
+    wave: W1
+    title: Windows OS 층(+AppGraph 뼈대)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/platform/windows/**"
+      - "multiplatform/desktopApp/src/main/kotlin/{pkg:desktopApp}/{AppGraph,Main}.kt"
+    golden: []
+
+  W1-g:
+    wave: W1
+    title: Android 셸
+    owns:
+      - "multiplatform/androidApp/src/main/AndroidManifest.xml"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/{app,shell,nav,push,vault,identity,lifecycle,routing}/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/*/Placeholder.kt"
+      - "multiplatform/androidApp/src/stub/**"
+    golden: []
+
+  # ---------------- W2 ----------------
+  W2-a:
+    wave: W2
+    title: 세션
+    owns:
+      - "multiplatform/core/session/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/session/**"
+      - "contract/golden/session/**"
+    golden: [session]
+
+  W2-b:
+    wave: W2
+    title: 메시지·지금·순위(+이모티콘 메시지 스토어 — §8-2)
+    owns:
+      - "multiplatform/core/stores/src/*/kotlin/{pkg:core/stores}/{messages,now,rankings,characters}/**"
+    golden: []
+
+  W2-c:
+    wave: W2
+    title: 나
+    owns:
+      - "multiplatform/core/stores/src/*/kotlin/{pkg:core/stores}/me/**"
+    golden: []
+
+  W2-d:
+    wave: W2
+    title: 오목·체스 스토어
+    owns:
+      - "multiplatform/core/stores/src/*/kotlin/{pkg:core/stores}/{gomoku,chess}/**"
+    golden: []
+
+  W2-e:
+    wave: W2
+    title: 테트리스·미니게임·허브(+자동 일시정지 PauseState — §8-2)
+    owns:
+      - "multiplatform/core/stores/src/*/kotlin/{pkg:core/stores}/{tetris,minigame,games}/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/duel/**"
+      - "contract/golden/{duel,pause}/**"
+    golden: [duel, pause]
+
+  W2-f:
+    wave: W2
+    title: Android 로직
+    owns:
+      - "multiplatform/feature/phone/**"
+    golden: []
+
+  W2-g:
+    wave: W2
+    title: 데스크톱 근무·찌르기·울트라
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{work,poke,ultra,realtime}/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/desktop-work/**"
+      - "contract/golden/desktop-work/**"
+    golden: [desktop-work]
+
+  W2-h:
+    wave: W2
+    title: 데스크톱 토큰·리밋
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{tokens,ailimits}/**"
+      - "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/**"
+      - "contract/golden/token-usage/**"
+    golden: [token-usage]
+
+  W2-i:
+    wave: W2
+    title: 웹 계정 삭제·문서 초안
+    owns:
+      - "landing/app/delete-account/**"
+      - "landing/lib/delete-account*"
+      - "landing/**/delete-account*.test.ts"
+      - "docs/{privacy,index}.md"
+    golden: []
+
+  # ---------------- W3 (§8-4: 공용 화면은 ui/screens 한 벌, 앱 쪽은 껍데기만) ----------------
+  W3-a:
+    wave: W3
+    title: 화면 1(세션·지금·메시지·프로필)
+    owns:
+      - "multiplatform/ui/src/*/kotlin/{pkg:ui}/screens/{session,messages,profile}/**"
+      - "multiplatform/ui/snapshots/screens/{session,messages,profile}/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/{session,now,messages}/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{session,messages,profile}/**"
+    golden: []
+
+  W3-b:
+    wave: W3
+    title: 화면 2(순위·나·설정·위젯) — 공용 설정 패키지는 settingscommon(제안, '-' 는 패키지 이름에 못 쓴다)
+    owns:
+      - "multiplatform/ui/src/*/kotlin/{pkg:ui}/screens/{rankings,me,settingscommon}/**"
+      - "multiplatform/ui/snapshots/screens/{rankings,me,settingscommon}/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/{rankings,me,settings,account}/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/widget/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{rankings,me,settingscommon}/**"
+    golden: []
+
+  W3-c1:
+    wave: W3
+    title: Windows 껍데기(트레이·플라이아웃·알림+중재 함수·업데이트·단일 실행)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/shell/{tray,flyout,notify,update,instance}/**"
+    golden: []
+
+  W3-c2:
+    wave: W3
+    title: 근무·팀(하위 패키지 이름은 제안)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{work,team,banners}/**"
+    golden: []
+
+  W3-c3:
+    wave: W3
+    title: 소셜 데스크톱 전용(하위 패키지 이름은 제안)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{poke,ultra,focus}/**"
+    golden: []
+
+  W3-c4:
+    wave: W3
+    title: AI·데스크톱 설정(하위 패키지 이름은 제안)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{aitokens,ailimits,devices,desktopsettings}/**"
+    golden: []
+
+  W3-d:
+    wave: W3
+    title: Windows 연결
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/wiring/{work,power,input,tokens,ailimits}/**"
+    golden: []
+
+  # ---------------- W4 ----------------
+  W4-a:
+    wave: W4
+    title: 오목·체스 화면
+    owns:
+      - "multiplatform/ui/src/*/kotlin/{pkg:ui}/games/{gomoku,chess}/**"
+      - "multiplatform/ui/snapshots/games/{gomoku,chess}/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/games/{gomoku,chess}/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/games/{gomoku,chess}/**"
+    golden: []
+
+  W4-b:
+    wave: W4
+    title: 테트리스·미니게임 화면
+    owns:
+      - "multiplatform/ui/src/*/kotlin/{pkg:ui}/games/{tetris,minigame}/**"
+      - "multiplatform/ui/snapshots/games/{tetris,minigame}/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/games/{tetris,minigame,hub}/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/games/{tetris,minigame}/**"
+    golden: []
+
+  W4-c:
+    wave: W4
+    title: 상점·뽑기 기계·미션
+    owns:
+      - "multiplatform/ui/src/*/kotlin/{pkg:ui}/{shop,gacha,missions,weekly}/**"
+      - "multiplatform/ui/snapshots/{shop,gacha,missions,weekly}/**"
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/shop/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/{shop,gacha}/**"
+    golden: []
+
+  # ---------------- W5 ----------------
+  W5-a:
+    wave: W5
+    title: 캐릭터 재생기
+    owns:
+      - "multiplatform/character/**"
+    golden: []
+
+  W5-b:
+    wave: W5
+    title: Windows 오버레이
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/overlay/**"
+    golden: []
+
+  W5-c:
+    wave: W5
+    title: Android 살아 있는 미리보기(결정 #2 대기)
+    owns:
+      - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/stage/**"
+    golden: []
+
+  # ---------------- W6 ----------------
+  W6-a:
+    wave: W6
+    title: Android 출시
+    owns:
+      - "multiplatform/androidApp/release/**"
+      - "multiplatform/androidApp/proguard-rules.pro"
+      - "multiplatform/scripts/release-android.sh"
+    golden: []
+
+  W6-b:
+    wave: W6
+    title: Windows 포장·배포
+    owns:
+      - "multiplatform/desktopApp/packaging/**"
+      - "multiplatform/scripts/release-windows.ps1"
+      - ".github/workflows/mp-release-windows.yml"
+    golden: []
+
+  W6-c:
+    wave: W6
+    title: 등록정보·문서
+    owns:
+      - "docs/android/**"
+      - "docs/windows/**"
+    golden: []

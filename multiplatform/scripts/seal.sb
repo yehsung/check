@@ -1,0 +1,10 @@
+;; 망 봉인 ③층(맥) — scripts/gate-*.sh 가 sandbox-exec -f 로 건다(A§4-1, K12).
+;; 바깥 IP 로 나가는 연결을 전부 막고, localhost(Gradle 클라이언트↔일회용 데몬↔시험 작업자 루프백)만 연다.
+;; 자식 프로세스(일회용 데몬·시험 JVM)는 이 봉인을 물려받는다(SealAncestryTest 가 부모 사슬로 확인).
+;; 유닉스 소켓은 연다: 로컬 IPC 다(밖으로 나가는 길이 아니다). DNS 풀이가 mDNSResponder 를 거쳐 사는 것은
+;; 카나리아가 기록만 한다 — 판정은 '연결'로 한다(NetworkCanary).
+(version 1)
+(allow default)
+(deny network-outbound (remote ip "*:*"))
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-outbound (remote unix-socket))

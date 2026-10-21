@@ -17,3 +17,12 @@ __pycache__/
 ios/AingCheck.xcodeproj/
 # D-base: .env.local 의 anon 키로 만든 xcconfig(ios/scripts/sync-local-config.sh) — 커밋 금지
 ios/Config/Local.xcconfig
+
+# Android·Windows(KMP) — multiplatform/ 빌드 산출물·로컬 설정·서명 키(A§1-2). 커밋 전 git status 는 절차다.
+multiplatform/**/build/
+multiplatform/**/.gradle/
+multiplatform/**/.kotlin/
+multiplatform/local.properties
+multiplatform/**/roborazzi/out/
+*.jks
+*.keystore

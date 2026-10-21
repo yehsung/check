@@ -1,0 +1,135 @@
+# Android·Windows(KMP) 야간·수동 — A§5. 비밀값 0개.
+# 주의: schedule·workflow_dispatch 는 이 파일이 **기본 브랜치(main)** 에 있어야 돈다. 그 전까지는 정의만 있다.
+#  - gate-full-linux : unshare 봉인 아래 전체 게이트(slow·lint·assembleRelease(.invalid)·jar). 기기 계측은 emu.sh(W0-f) 뒤.
+#  - windows-arm64   : windows-11-arm, 방화벽 봉인 아래 데스크톱 시험(mp-ci windows-x64 와 같은 절차).
+#  - release-dryrun  : 봉인 아래 assembleRelease(.invalid) → APK 안 lib/*.so 0개(16 KB 요건, A§6-1).
+#  - android-emulator: emu.sh(W0-f)가 생기면 계측 시험. 없으면 자리표시로 알린다.
+name: mp-nightly
+
+on:
+  schedule:
+    - cron: '17 18 * * *' # 매일 03:17 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mp-nightly
+  cancel-in-progress: true
+
+jobs:
+  gate-full-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Android SDK 플랫폼
+        run: (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
+      - name: 의존 예열(봉인 밖)
+        run: bash multiplatform/scripts/gate-fast.sh --warm
+      - name: 전체 게이트(봉인, 기기 계측 제외)
+        env:
+          AINGCHECK_ALLOW_NO_DEVICE: '1'
+        run: bash multiplatform/scripts/gate-full.sh
+      - name: 시험 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gate-full-linux-results
+          path: multiplatform/**/build/test-results/**/*.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-arm64:
+    runs-on: windows-11-arm
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          architecture: aarch64
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Android SDK 플랫폼(설정 단계가 compileSdk 37 을 찾는다)
+        run: (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --install "platforms;android-37.0" > /dev/null
+      - name: 의존 예열(봉인 밖)
+        run: bash multiplatform/scripts/gate-fast.sh --warm
+      - name: 방화벽 봉인 걸기
+        shell: pwsh
+        run: |
+          Set-NetFirewallProfile -All -Enabled True
+          $javas = @()
+          $javas += Get-ChildItem -Path "$env:JAVA_HOME\bin" -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('java.exe','javaw.exe') }
+          if (Test-Path 'C:\hostedtoolcache\windows') {
+            $javas += Get-ChildItem -Path 'C:\hostedtoolcache\windows' -Recurse -Filter java*.exe -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('java.exe','javaw.exe') }
+          }
+          $javas = $javas | Sort-Object FullName -Unique
+          $i = 0
+          foreach ($j in $javas) { New-NetFirewallRule -DisplayName "aingcheck-seal-$i" -Direction Outbound -Action Block -Program $j.FullName -Profile Any | Out-Null; $i++ }
+          if ($i -eq 0) { throw "막을 java.exe 를 찾지 못했다" }
+      - name: 방화벽 봉인 게이트
+        env:
+          AINGCHECK_EXTERNAL_SEAL: windows-firewall
+        run: bash multiplatform/scripts/gate-fast.sh
+      - name: 방화벽 봉인 풀기
+        if: always()
+        shell: pwsh
+        run: Get-NetFirewallRule -DisplayName 'aingcheck-seal-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+
+  release-dryrun:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Android SDK 플랫폼
+        run: (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
+      - name: 의존 예열(봉인 밖)
+        run: bash multiplatform/scripts/gate-fast.sh --warm
+      - name: assembleRelease(.invalid) 를 봉인 아래에서
+        working-directory: multiplatform
+        run: |
+          sudo -n unshare --net -- /bin/sh -c 'ip link set lo up && exec sudo -n -E -u "$1" env PATH="$2" ./gradlew --offline --no-daemon :androidApp:assembleRelease' sh "$(id -un)" "$PATH"
+      - name: APK 안 네이티브 라이브러리 0개(16 KB 요건)
+        working-directory: multiplatform
+        run: |
+          apk="$(ls androidApp/build/outputs/apk/release/*.apk | head -1)"
+          n="$(unzip -l "$apk" | awk '{print $4}' | grep -c '^lib/.*\.so$' || true)"
+          echo "apk=$apk lib/*.so=$n"
+          [ "$n" -eq 0 ]
+
+  android-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 계측 시험 자리(emu.sh 는 W0-f 몫)
+        run: |
+          if [ ! -x multiplatform/scripts/emu.sh ]; then
+            echo "::notice::multiplatform/scripts/emu.sh 가 아직 없다 — W0-f 병합 뒤 이 잡이 에뮬레이터 계측을 돈다(자리표시)"
+            exit 0
+          fi
+          echo "::error::emu.sh 가 생겼다 — 이 잡을 계측 실행으로 바꿔야 한다(조정자)"
+          exit 1

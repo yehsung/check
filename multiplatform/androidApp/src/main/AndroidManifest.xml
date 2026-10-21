@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W0-a 뼈대: 빈 manifest(빌드가 서도록만). W1-g 가 Activity·권한·채널·백업 제외를 채우고, 그 뒤로는 조정자 몫이다(K11, §8-3). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:allowBackup="false" />
+</manifest>

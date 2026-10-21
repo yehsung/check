@@ -155,7 +155,10 @@ function Install-Jdk([string]$arch, [string]$dest) {
     New-Item -ItemType Directory -Force -Path $dl | Out-Null
     $zip = Join-Path $dl 'jdk.zip'
     if (-not (Test-Path $zip)) { Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip }
-    $expected = ((Invoke-WebRequest -UseBasicParsing -Uri "$url.sha256sum.txt").Content -split '\s+')[0].ToLowerInvariant()
+    # Windows PowerShell 5.1 은 octet-stream 응답의 .Content 를 바이트 배열로 준다 — 파일로 받아 글로 읽는다(러너 run 39592962558 실측).
+    $shaFile = Join-Path $dl 'jdk.sha256sum.txt'
+    Invoke-WebRequest -UseBasicParsing -Uri "$url.sha256sum.txt" -OutFile $shaFile
+    $expected = (((Get-Content -Raw $shaFile).Trim()) -split '\s+')[0].ToLowerInvariant()
     $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
     if ($expected -ne $actual) { Remove-Item $zip; throw "JDK $arch SHA256 불일치" }
     if (-not (Test-Path (Join-Path $dest 'bin\java.exe'))) {

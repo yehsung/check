@@ -127,6 +127,31 @@ jobs:
           if (Test-Path "$env:OUT\smoke-app.json") { Get-Content "$env:OUT\smoke-app.json" }
           exit $p.ExitCode
 
+      - name: (arm64 기록) OOBE 개인정보 화면을 걷은 뒤 트레이 다시 재기
+        # run 39592962558: windows-11-arm 의 대화형 데스크톱은 "Choose privacy settings for your device" 가 덮고 있었고 NIM_ADD 가 0x80004005.
+        # 러너 환경 정리일 뿐 판정에 넣지 않는다(기록). W1-f 가 arm64 러너에서 트레이 시험을 돌릴 수 있는지 알려 준다.
+        id: tray_after_oobe
+        if: matrix.arch == 'arm64'
+        continue-on-error: true
+        run: |
+          $re = 'CloudExperienceHost|WWAHost|UserOOBEBroker|PrivacyExperience'
+          $before = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' | Out-Null
+          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name DisablePrivacyExperience -Value 1 -Type DWord
+          Get-Process | Where-Object { $_.ProcessName -match $re } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          $after = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+          $bmp.Save((Join-Path $env:OUT 'screen-after-oobe.png'), [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()
+          & "$env:SEALED_JDK\bin\java.exe" -cp "$env:SPIKE/build/probe-lib/*" com.yehsung.aingcheck.spike.windows.MainKt smoke "--out=$env:OUT\smoke-after-oobe.json"
+          $code = $LASTEXITCODE
+          [ordered]@{ oobeProcessesBefore = $before; oobeProcessesAfter = $after; smokeExit = $code } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $env:OUT 'tray-after-oobe.json')
+          Get-Content (Join-Path $env:OUT 'tray-after-oobe.json')
+          exit $code
+
       - name: launcher DPI manifest (D-E22)
         id: dpi
         continue-on-error: true
@@ -280,11 +305,16 @@ jobs:
           Start-Service sshd
           $keyDir = Join-Path $env:RUNNER_TEMP 'k'
           New-Item -ItemType Directory -Force -Path $keyDir | Out-Null
-          & ssh-keygen.exe -q -t ed25519 -N '' -f (Join-Path $keyDir 'id') | Out-Null
+          $ssh = @("$env:WINDIR\System32\OpenSSH\ssh.exe", "$env:ProgramFiles\OpenSSH\ssh.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          & (Join-Path (Split-Path $ssh) 'ssh-keygen.exe') -q -t ed25519 -N '' -f (Join-Path $keyDir 'id') | Out-Null
+          & icacls.exe (Join-Path $keyDir 'id') /inheritance:r /grant:r "$($env:USERNAME):F" | Out-Null   # ssh 는 남이 읽을 수 있는 개인키를 거절한다
           New-Item -ItemType Directory -Force -Path 'C:\ProgramData\ssh' | Out-Null
           Copy-Item (Join-Path $keyDir 'id.pub') 'C:\ProgramData\ssh\administrators_authorized_keys' -Force
           & icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
           "KEY=$((Join-Path $keyDir 'id').Replace('\','/'))" >> $env:GITHUB_ENV
+          # 손님 흉내의 ssh 클라이언트: Windows 기본(System32\OpenSSH) → 없으면 Win32-OpenSSH MSI 판(arm64 이미지엔 기본 클라이언트가 없었다, run 39592962558)
+          "SSH_EXE=$($ssh.Replace('\','/'))" >> $env:GITHUB_ENV
+          "ssh client: $ssh"
           (Get-Service sshd).Status
 
       - name: winprep-admin (Accounts, TesterSsh, DevMode, Jdk, Seal, WorkDir, Config)
@@ -307,7 +337,7 @@ jobs:
           printf 'ethernet0.generatedAddress = "00:0c:29:00:00:01"\n' > "$T/test.vmx"
           export AINGCHECK_VMX="$T/test.vmx" AINGCHECK_VMRUN="$PWD/multiplatform/scripts/vm/tests/fake-vmrun.sh"
           # 손님 쪽 ssh 는 Windows 기본 OpenSSH(키 ACL 검사가 맞다). 경로는 cygpath -m(D:/…) 꼴로 넘긴다.
-          export AINGCHECK_SSH=/c/Windows/System32/OpenSSH/ssh.exe AINGCHECK_SCP=/c/Windows/System32/OpenSSH/scp.exe
+          export AINGCHECK_SSH="$SSH_EXE" AINGCHECK_SCP="${SSH_EXE%ssh.exe}scp.exe"
           export FAKE_VMRUN_STATE="$T/state" FAKE_VMRUN_IP=127.0.0.1 AINGCHECK_VM_KEY="$KEY" AINGCHECK_VM_LOCK="$T/lock" AINGCHECK_VM_STATE="$(cygpath -m "$T/st")"
           export AINGCHECK_WINPROBE="$PWD/multiplatform/scripts/vm/tests/fake-winprobe.sh"
           export AINGCHECK_VM_ARCH=${{ matrix.arch }}
@@ -328,7 +358,7 @@ jobs:
         shell: bash
         run: |
           set +e -uo pipefail
-          SSH=/c/Windows/System32/OpenSSH/ssh.exe
+          SSH="$SSH_EXE"
           run=$(ls -d /c/work/runs/*/ | head -1)
           win=$(cygpath -w "$run")
           seal="${win}multiplatform\\scripts\\vm\\winseal.ps1"

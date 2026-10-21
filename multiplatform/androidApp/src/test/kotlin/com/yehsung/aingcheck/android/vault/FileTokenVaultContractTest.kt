@@ -66,6 +66,20 @@ class KeystoreTokenVaultFileTest {
         assertEquals("a", KeystoreTokenVault(dir, SoftwareVaultCipher(3)).read("access"))
     }
 
+    /** 파일도 디렉터리도 쓸 수 없으면(지우기·자르기 둘 다 실패) 이 프로세스는 독 기억으로 null 을 낸다. */
+    @Test
+    fun unwritableFileAndDirectoryFallBackToPoison() {
+        val dir = freshDir()
+        val v = KeystoreTokenVault(dir, SoftwareVaultCipher(6))
+        v.write("rotated-before", "refresh")
+        val file = dir.listFiles()!!.single { it.name.endsWith(".bin") }
+        check(file.setWritable(false) && dir.setWritable(false))
+        v.write("rotated-after", "refresh")
+        assertTrue("기준선: 파일이 그대로 남아 있어야 이 경로를 잰다", file.length() > 0)
+        assertNull("같은 프로세스가 낡은 refresh 를 돌려줬다", v.read("refresh"))
+        file.setWritable(true)
+    }
+
     @Test
     fun otherKeyOrTamperedFileDoesNotOpen() {
         val dir = freshDir()

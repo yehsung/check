@@ -48,7 +48,8 @@ class FirebaseNotInitializedInTestsTest {
     @Test
     fun testBuildStartsWithoutFirebase() {
         val app = ApplicationProvider.getApplicationContext<AingApplication>()
-        assertEquals(AppVariantKind.DEBUG, AppVariant.kind)
+        // 호스트 시험은 debug(그리고 조정자 패치 뒤 stub) 변형에서 돈다 — 어느 쪽이든 release 가 아니다.
+        assertTrue("시험이 release 변형에서 돈다", AppVariant.kind != AppVariantKind.RELEASE)
         assertTrue("Robolectric 은 시험 실행으로 읽혀야 한다", app.container.runningTests.isRunningTests)
         assertEquals(FirebaseDecision.SKIP_NOT_RELEASE, app.firebaseDecision)
         assertEquals("시험 빌드가 Firebase 를 초기화했다", emptyList<FirebaseApp>(), FirebaseApp.getApps(app))

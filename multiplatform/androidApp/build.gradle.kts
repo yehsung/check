@@ -24,6 +24,10 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
+    // WorkManager 고정(G §8-12, W0-f A-X17 실측): Glance 1.2.0 → work-runtime 2.7.1 → room-runtime 2.2.5 의 consumer keep 규칙
+    // `-keep class * extends androidx.room.RoomDatabase` 에 <init>() 가 없어, R8 전체 모드가 WorkDatabase 생성자를 지운다 →
+    // 릴리스 판이 시작하자마자 "Failed to create an instance of androidx.work.impl.WorkDatabase" 로 죽는다. 디버그는 멀쩡하다.
+    implementation(libs.androidx.work.runtime)
     implementation(libs.jetbrains.navigation.compose)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
@@ -33,6 +37,8 @@ dependencies {
     testImplementation(libs.roborazzi.junit.rule)
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.test.core)
+    // HttpEngineFactoryTest(호스트): 끊긴 재사용 연결 재현으로 POST 재전송 0 을 잰다(C-X6, G §8-12).
+    testImplementation(libs.okhttp.mockwebserver3)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     androidTestImplementation(project(":testkit"))

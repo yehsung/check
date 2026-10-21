@@ -165,10 +165,12 @@ tasks.register("aingcheckPrefetch") {
     description = "모든 classpath 의 바깥 모듈을 받아 둔다(봉인 전 예열, A§4-1)."
     dependsOn(syncRobolectricJars)
     // 설정 단계에서 파일 묶음을 잡아 둔다(실행 중 Task.project 접근은 Gradle 10 에서 오류 — 실측 경고).
+    // unified-test-platform-*: AGP 의 기기 계측 실행기(UTP)가 실행 때 푸는 설정. 봉인(--offline) 아래 emu.sh instrumented 가
+    // 처음 돌 때 "No cached version of com.android.tools.utp:…" 로 멈췄다(W0 통합 실측) — 예열에서 같이 받는다.
     val targets = configurations.names.filter { name ->
         val cfg = configurations.getByName(name)
         cfg.isCanBeResolved && (name.endsWith("CompileClasspath") || name.endsWith("RuntimeClasspath") ||
-            name == "compileClasspath" || name == "runtimeClasspath")
+            name == "compileClasspath" || name == "runtimeClasspath" || name.startsWith("unified-test-platform"))
     }
     val collections = targets.map { name ->
         configurations.getByName(name).incoming.artifactView {

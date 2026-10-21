@@ -1,15 +1,20 @@
-# Android·Windows(KMP) 매 푸시 게이트 — A§5, K12. 비밀값 0개. 주소는 https://aingcheck.invalid 뿐이다.
-# 트리거: xplat/** 브랜치 푸시 + 수동 실행(수동 실행은 이 파일이 기본 브랜치에 있어야 버튼이 생긴다).
-#  - golden-digest : 경로 필터 없이 매 푸시(§8-10). 스크립트(W0-b)가 아직 없으면 자리표시로 통과한다.
-#  - lane-tools    : lanes.yml 확인 + lane-ownership 자기 시험 + (브랜치 이름이 갈래면) 그 갈래 소유 검사.
-#  - jvm-gate      : ubuntu, sudo unshare -n 봉인 아래 빠른 게이트 + 봉인 없는 카나리아 빨강 대조(A-X15).
-#  - windows-x64   : windows-latest, java.exe 아웃바운드 차단 방화벽 봉인 아래 데스크톱 시험 + 대조(A-X16).
+# Android·Windows(KMP) 매 푸시·PR 게이트 — A§5("매 푸시·PR"), K12. 비밀값 0개. 주소는 https://aingcheck.invalid 뿐이다.
+# 트리거: main·xplat/** 푸시 + pull_request(어느 브랜치로든) + 수동 실행(수동 실행은 이 파일이 기본 브랜치에 있어야 버튼이 생긴다).
+#   pull_request_target 은 쓰지 않는다(공개 저장소 — 포크 코드가 쓰기 권한·비밀과 같이 돌면 안 된다).
+#   main 푸시에서도 돈다: Swift 엔진·픽스처만 고친 커밋도 지문이 어긋나면 빨강이어야 한다(§8-10 양쪽 잠금).
+#  - golden-digest : 조건 없이 매 푸시·PR(§8-10). 스크립트(W0-b)가 아직 없으면 자리표시로 통과한다.
+#  - lane-tools    : lanes.yml 확인 + lane-ownership 자기 시험 + 브랜치의 갈래 소유 검사.
+#                    xplat/ 브랜치가 갈래(xplat/w<N>-<x>)·통합(xplat/w<N>-int·xplat/main → 조정자)으로 안 풀리면 빨강.
+#  - jvm-gate      : ubuntu, sudo unshare -n 봉인 아래 빠른 게이트 + 봉인 없는 카나리아 빨강 대조(A-X15). changes 경로 필터로만 거른다.
+#  - windows-x64   : windows-latest, java.exe 아웃바운드 차단 방화벽 봉인 아래 데스크톱 시험 + 대조(A-X16). changes 경로 필터로만 거른다.
+# 대조는 scripts/canary-contrast.sh 가 '봉인이 새었다'는 이유의 빨강일 때만 통과시킨다. 봉인 게이트의 시험 결과는 대조 전에 따로 올린다.
 # 액션은 SHA 로 고정한다(공개 저장소 공급망).
 name: mp-ci
 
 on:
   push:
-    branches: ['xplat/**']
+    branches: ['main', 'xplat/**']
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -31,16 +36,24 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: filter
-        name: 멀티플랫폼 경로가 바뀌었나(A§5 경로 필터)
+        name: 멀티플랫폼 경로가 바뀌었나(A§5 경로 필터 — 무거운 잡만 이것으로 거른다)
         env:
-          BEFORE: ${{ github.event.before }}
           EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "$EVENT" != "push" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            echo "mp=true" >> "$GITHUB_OUTPUT"; exit 0
+          case "$EVENT" in
+            push) from="$BEFORE"; to="$GITHUB_SHA" ;;
+            pull_request) from="$PR_BASE"; to="$PR_HEAD" ;;
+            *) echo "mp=true" >> "$GITHUB_OUTPUT"; echo "이벤트 $EVENT → 전부 돈다"; exit 0 ;;
+          esac
+          if [ -z "$from" ] || [ "$from" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$from^{commit}" 2>/dev/null || ! git cat-file -e "$to^{commit}" 2>/dev/null; then
+            echo "mp=true" >> "$GITHUB_OUTPUT"; echo "비교 기준 없음($EVENT from=$from) → 전부 돈다"; exit 0
           fi
-          if git diff --name-only "$BEFORE" "$GITHUB_SHA" \
+          if [ "$EVENT" = "pull_request" ]; then range="$from...$to"; else range="$from..$to"; fi
+          if git diff --name-only "$range" \
              | grep -qE '^(multiplatform/|contract/|Tests/checkTests/Fixtures/|Sources/CheckMobileKit/Demo/Fixtures/|Sources/check/Characters/|\.github/workflows/mp-)'; then
             echo "mp=true" >> "$GITHUB_OUTPUT"
           else
@@ -48,7 +61,7 @@ jobs:
           fi
 
   golden-digest:
-    # §8-10: 경로 필터 없이 매 푸시에 돈다(수 초). 맥 엔진만 고친 커밋에서도 지문이 어긋나면 빨강.
+    # §8-10: 조건(needs·if·경로 필터) 없이 매 푸시·PR 에 돈다(수 초). 맥 엔진만 고친 커밋(main)에서도 지문이 어긋나면 빨강.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -75,14 +88,18 @@ jobs:
         run: |
           python3 -I multiplatform/tools/lane-ownership.py --validate
           python3 -I multiplatform/tools/lane-ownership.py --self-test
-      - name: 이 브랜치 갈래의 소유 검사(xplat/w0-a → W0-a)
+      - name: 이 브랜치 갈래의 소유 검사(xplat/w1-a → W1-a · xplat/w0-int → 조정자 · 못 풀면 빨강)
         env:
-          REF_NAME: ${{ github.ref_name }}
+          # PR 이면 머리 브랜치 이름과 머리 커밋(병합 커밋이 아니라 — main 쪽 변경이 섞이지 않게).
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          lane="$(python3 -I -c 'import sys,re; m=re.fullmatch(r"xplat/(w\d+-[a-z]\d*)", sys.argv[1]); print(m.group(1).upper()[:2] + m.group(1)[2:] if m else "")' "$REF_NAME")"
-          if [ -z "$lane" ]; then echo "::notice::갈래 브랜치가 아니다($REF_NAME) — 소유 검사 생략"; exit 0; fi
+          set -euo pipefail
+          lane="$(python3 -I multiplatform/tools/lane-ownership.py --resolve-branch "$BRANCH")"
+          if [ -z "$lane" ]; then echo "::notice::xplat/ 브랜치가 아니다($BRANCH) — 갈래 소유 검사 대상이 아니다"; exit 0; fi
           git fetch --no-tags origin "+refs/heads/xplat/main:refs/remotes/origin/xplat/main"
-          python3 -I multiplatform/tools/lane-ownership.py --lane "$lane" --base origin/xplat/main --head HEAD
+          echo "브랜치 $BRANCH → 갈래 $lane (기준 origin/xplat/main, 머리 $HEAD_SHA)"
+          python3 -I multiplatform/tools/lane-ownership.py --lane "$lane" --base origin/xplat/main --head "$HEAD_SHA"
 
   jvm-gate:
     needs: changes
@@ -105,24 +122,27 @@ jobs:
       - name: 의존 예열(봉인 밖 — 게이트가 아니다)
         run: bash multiplatform/scripts/gate-fast.sh --warm
       - name: 봉인 게이트(sudo unshare -n)
+        id: sealed
         run: bash multiplatform/scripts/gate-fast.sh
-      - name: 대조 — 봉인 없이 카나리아는 빨강이어야 한다(A-X15)
-        working-directory: multiplatform
-        run: |
-          set +e
-          AINGCHECK_NETWORK_SEALED=1 ./gradlew --offline --no-daemon :testkit:desktopTest --tests '*NetworkCanaryTest*'
-          rc=$?
-          set -e
-          if [ "$rc" -eq 0 ]; then echo "::error::봉인 없이도 카나리아가 초록 — 카나리아가 아무것도 재지 않는다"; exit 1; fi
-          echo "봉인 없는 카나리아 빨강(rc=$rc) — 예상대로"
-      - name: 시험 결과 올리기
+      - name: 봉인 게이트 시험 결과 올리기(대조가 덮어쓰기 전에)
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: jvm-gate-test-results
+          name: jvm-gate-sealed-test-results
           path: |
             multiplatform/**/build/test-results/**/*.xml
             multiplatform/**/build/tripwire/*.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: 대조 — 봉인 없이 카나리아는 '봉인이 새었다'로 빨강이어야 한다(A-X15)
+        if: steps.sealed.outcome == 'success'
+        run: bash multiplatform/scripts/canary-contrast.sh
+      - name: 대조 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jvm-gate-contrast-results
+          path: multiplatform/testkit/build/test-results/desktopTest/TEST-com.yehsung.aingcheck.testkit.seal.NetworkCanaryTest.xml
           if-no-files-found: ignore
           retention-days: 7
 
@@ -169,31 +189,34 @@ jobs:
           }
           if ($i -eq 0) { throw "막을 java.exe 를 찾지 못했다" }
       - name: 방화벽 봉인 게이트(데스크톱 JVM 시험)
+        id: sealed
         env:
           AINGCHECK_EXTERNAL_SEAL: windows-firewall
         run: bash multiplatform/scripts/gate-fast.sh
+      - name: 봉인 게이트 시험 결과 올리기(대조가 덮어쓰기 전에)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x64-sealed-test-results
+          path: |
+            multiplatform/**/build/test-results/**/*.xml
+            multiplatform/**/build/tripwire/*.txt
+          if-no-files-found: error
+          retention-days: 7
       - name: 방화벽 봉인 풀기
         if: always()
         shell: pwsh
         run: |
           Get-NetFirewallRule -DisplayName 'aingcheck-seal-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
           Write-Host "봉인 규칙 제거"
-      - name: 대조 — 봉인 없이 카나리아는 빨강이어야 한다(A-X16)
-        working-directory: multiplatform
-        run: |
-          set +e
-          AINGCHECK_NETWORK_SEALED=1 ./gradlew --offline --no-daemon :testkit:desktopTest --tests '*NetworkCanaryTest*'
-          rc=$?
-          set -e
-          if [ "$rc" -eq 0 ]; then echo "::error::봉인 없이도 카나리아가 초록 — 카나리아가 아무것도 재지 않는다"; exit 1; fi
-          echo "봉인 없는 카나리아 빨강(rc=$rc) — 예상대로"
-      - name: 시험 결과 올리기
+      - name: 대조 — 봉인 없이 카나리아는 '봉인이 새었다'로 빨강이어야 한다(A-X16)
+        if: steps.sealed.outcome == 'success'
+        run: bash multiplatform/scripts/canary-contrast.sh
+      - name: 대조 결과 올리기
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: windows-x64-test-results
-          path: |
-            multiplatform/**/build/test-results/**/*.xml
-            multiplatform/**/build/tripwire/*.txt
+          name: windows-x64-contrast-results
+          path: multiplatform/testkit/build/test-results/desktopTest/TEST-com.yehsung.aingcheck.testkit.seal.NetworkCanaryTest.xml
           if-no-files-found: ignore
           retention-days: 7

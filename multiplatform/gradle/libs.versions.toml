@@ -29,6 +29,8 @@ androidx-core = "1.19.1"
 androidx-lifecycle = "2.11.0"
 androidx-datastore = "1.2.1"
 androidx-glance = "1.2.0"
+# Glance 1.2.0 이 끌어오는 work-runtime 2.7.1 을 덮는 고정(G §8-12): 옛 판의 Room keep 규칙 결함으로 R8 릴리스가 시작 즉시 죽는다(W0-f 실측)
+androidx-work = "2.11.2"
 androidx-test-core = "1.7.0"
 androidx-test-runner = "1.7.0"
 androidx-test-ext-junit = "1.3.0"
@@ -76,6 +78,7 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "androidx-datastore" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "androidx-glance" }
 androidx-glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "androidx-glance" }
+androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "androidx-work" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }

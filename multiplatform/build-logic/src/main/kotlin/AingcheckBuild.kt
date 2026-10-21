@@ -139,9 +139,10 @@ const val PROD_CONFIG_OBJECT = "ProdConfig"
 const val BUILD_IDENTITY_OBJECT = "BuildIdentity"
 
 /**
- * compileSdk 37: CMP 1.12.2 가 끌어오는 Jetpack Compose 1.12.1 AAR 이 "compileSdk 37 이상"을 요구한다
- * (checkDebugAarMetadata 실측, 2026-10-21). A§2-3 의 36 과 다르다 — targetSdk 는 Play 요건대로 36 을 둔다.
- * 이 맥의 SDK 플랫폼 디렉터리 이름은 android-37.0 이다.
+ * compileSdk 37(G §8-12 확정): CMP 1.12.2 가 끌어오는 Jetpack Compose 1.12.1 AAR 과 okhttp-android 5.5.0(Ktor 3.6.0 이 끌어옴)이
+ * "compileSdk 37 이상"을 요구한다(W0-a checkDebugAarMetadata · W0-f checkReleaseAarMetadata 9건 실측, 2026-10-21).
+ * A§2-3·E§1.2 의 36 과 다르다 — targetSdk 36 · minSdk 26 은 그대로다(Play 요건). android-37.0 플랫폼은 AGP 가 자동 설치했고
+ * CI 는 sdkmanager 로 넣는다. 이 맥의 SDK 플랫폼 디렉터리 이름은 android-37.0 이다.
  */
 const val AINGCHECK_COMPILE_SDK = 37
 const val AINGCHECK_TARGET_SDK = 36

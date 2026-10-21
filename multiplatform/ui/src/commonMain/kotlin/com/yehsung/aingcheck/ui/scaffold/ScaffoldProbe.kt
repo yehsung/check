@@ -14,9 +14,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
+/** [accent] 는 렌더 비교의 기준선용이다 — 같은 크기에 색 하나만 다른 장면(A-X6, 기억 comparison-baseline-must-differ). */
 @Composable
-fun ScaffoldProbe(modifier: Modifier = Modifier) {
-    Box(modifier.size(64.dp).background(Color(0xFF6B4EFF), RoundedCornerShape(12.dp)).padding(8.dp)) {
+fun ScaffoldProbe(modifier: Modifier = Modifier, accent: Color = Color(0xFF6B4EFF)) {
+    Box(modifier.size(64.dp).background(accent, RoundedCornerShape(12.dp)).padding(8.dp)) {
         Canvas(Modifier.size(48.dp)) {
             drawCircle(Color(0xFFFFD54F), radius = size.minDimension / 3f, center = Offset(size.width / 2f, size.height / 2f))
             drawLine(Color.White, Offset(0f, size.height), Offset(size.width, 0f), strokeWidth = 3f)

@@ -4,20 +4,25 @@
 #
 #   multiplatform/scripts/gate-full.sh
 #
-# 기기 계측: multiplatform/scripts/emu.sh(W0-f)가 있어야 돈다. 없으면 실패한다 — 조용히 건너뛰지 않는다.
-#   일부러 빼려면 AINGCHECK_ALLOW_NO_DEVICE=1 (보고에 "기기 계측 빠짐"이 남는다).
+# 기기 계측: multiplatform/scripts/emu.sh instrumented(api36 AVD · 포트 5560 · 봉인 기본 → 계측 시험 → 끄기, 종료 코드 전달).
+#   emu.sh 가 없으면 실패한다 — 조용히 건너뛰지 않는다.
+#   일부러 빼려면 AINGCHECK_ALLOW_NO_DEVICE=1. 그때는 **언제나** "기기 계측 빠짐"을 찍는다(이 실행은 기기 몫을 재지 않았다).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+skip_device=0
 if [[ "${AINGCHECK_GATE_INNER:-}" != "1" ]]; then
-  if [[ ! -x "$HERE/emu.sh" ]]; then
-    if [[ "${AINGCHECK_ALLOW_NO_DEVICE:-}" == "1" ]]; then
-      echo "gate-full: 기기 계측 빠짐(emu.sh 없음, AINGCHECK_ALLOW_NO_DEVICE=1)" >&2
+  if [[ "${AINGCHECK_ALLOW_NO_DEVICE:-}" == "1" ]]; then
+    skip_device=1
+    if [[ -x "$HERE/emu.sh" ]]; then
+      echo "gate-full: 기기 계측 빠짐(AINGCHECK_ALLOW_NO_DEVICE=1 — emu.sh instrumented 를 부르지 않는다)" >&2
     else
-      echo "gate-full: multiplatform/scripts/emu.sh 가 없다(W0-f). 기기 계측 없이 돌리려면 AINGCHECK_ALLOW_NO_DEVICE=1" >&2
-      exit 2
+      echo "gate-full: 기기 계측 빠짐(emu.sh 없음, AINGCHECK_ALLOW_NO_DEVICE=1)" >&2
     fi
+  elif [[ ! -x "$HERE/emu.sh" ]]; then
+    echo "gate-full: multiplatform/scripts/emu.sh 가 없다(W0-f). 기기 계측 없이 돌리려면 AINGCHECK_ALLOW_NO_DEVICE=1" >&2
+    exit 2
   fi
 fi
 
@@ -25,6 +30,13 @@ fi
 AINGCHECK_GATE_KIND=full "$HERE/gate-fast.sh" "$@"
 
 # 기기 계측(봉인은 emu.sh 가 건다 — A-X7 결과에 따른다). 에뮬레이터 수명은 emu.sh 가 쥔다.
-if [[ -x "$HERE/emu.sh" && "${AINGCHECK_ALLOW_NO_DEVICE:-}" != "1" ]]; then
-  "$HERE/emu.sh" instrumented
+if [[ "$skip_device" -eq 1 ]]; then
+  echo "gate-full: 기기 계측 빠짐 — JVM·조립 몫만 초록이다" >&2
+  exit 0
 fi
+set +e
+"$HERE/emu.sh" instrumented
+device_rc=$?
+set -e
+echo "gate-full: device-exit=$device_rc"
+exit "$device_rc"

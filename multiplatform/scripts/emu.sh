@@ -15,6 +15,10 @@
 #   emu.sh windows --port N        # 이 포트로 띄운 프로세스의 창 수 + 이름이 qemu/emulator 인 모든 창 수(둘 중 하나라도 0 이 아니면 1)
 #   emu.sh procs   --port N        # 이 포트로 띄운 프로세스 중 살아 있는 수(0 이 아니면 종료 코드 1)
 #   emu.sh sealcheck --port N      # 손님 안에서 바깥 TCP(1.1.1.1:443)가 실패하고 adb 는 사는지. 둘 다면 0, 아니면 1
+#   emu.sh instrumented [--avd aingcheck-api36] [--port 5560] [--seal PROFILE | --no-seal] [--task :androidApp:connectedDebugAndroidTest]
+#                                  # gate-full.sh 가 부른다(W0 통합): 띄우기(봉인 기본) → sealcheck·창 0 → 계측 시험(Gradle 도 같은 봉인,
+#                                  # --offline --no-daemon, ANDROID_SERIAL 로 이 기기만) → 결과 XML 로 시험 ≥1·건너뜀 0·실패 0 확인
+#                                  # → 언제나 끄기·남은 프로세스 0 확인. 종료 코드: Gradle 실패면 그 코드, 아니면 판정 실패 1, 정리 실패 1.
 #
 # 환경
 #   ANDROID_SDK_ROOT / ANDROID_HOME (없으면 ~/Library/Android/sdk)
@@ -31,10 +35,13 @@ DEFAULT_SEAL="$SCRIPT_DIR/seal.sb"
 die() { echo "emu.sh: $*" >&2; exit 2; }
 log() { echo "emu.sh: $*" >&2; }
 
-cmd="${1:-}"; [ -n "$cmd" ] || die "명령이 없다 (start|stop|shot|windows|procs|sealcheck)"; shift
+cmd="${1:-}"; [ -n "$cmd" ] || die "명령이 없다 (start|stop|shot|windows|procs|sealcheck|instrumented)"; shift
 
 AVD=""; PORT=""; SEAL="$DEFAULT_SEAL"; SEALED=1; BOOT_TIMEOUT=120; STOP_TIMEOUT=30; OUT=""
+TASK=":androidApp:connectedDebugAndroidTest"
 EXTRA=()
+# instrumented 의 기본값(gate-full.sh 가 인자 없이 부른다): api36 AVD · 갈래 포트 5560(5560+2k 의 k=0, W0-f 가 쓴 자리).
+if [ "$cmd" = "instrumented" ]; then AVD="aingcheck-api36"; PORT="5560"; BOOT_TIMEOUT=180; fi
 while [ $# -gt 0 ]; do
   case "$1" in
     --avd) AVD="${2:?}"; shift 2 ;;
@@ -44,6 +51,7 @@ while [ $# -gt 0 ]; do
     --boot-timeout) BOOT_TIMEOUT="${2:?}"; shift 2 ;;
     --timeout) STOP_TIMEOUT="${2:?}"; shift 2 ;;
     --out) OUT="${2:?}"; shift 2 ;;
+    --task) TASK="${2:?}"; shift 2 ;;
     --) shift; EXTRA=("$@"); break ;;
     *) die "모르는 인자: $1" ;;
   esac
@@ -195,6 +203,74 @@ procs)
   n="$(alive_count)"
   echo "alive=$n pids=[$(tree_pids | sort -u | tr '\n' ' ' | sed 's/ $//')]"
   [ "$n" -eq 0 ]
+  ;;
+
+instrumented)
+  MP="$(cd "$SCRIPT_DIR/.." && pwd)"
+  case "$TASK" in :*:*) ;; *) die "--task 는 :모듈:작업 꼴이다: $TASK" ;; esac
+  module_dir="$(printf '%s' "$TASK" | sed -e 's/^://' -e 's/:[^:]*$//' -e 's#:#/#g')"
+  results="$MP/$module_dir/build/outputs/androidTest-results/connected"
+  PY="$(command -v python3 || true)"; [ -n "$PY" ] || die "결과 XML 을 읽을 python3 가 없다"
+  [ "$SEALED" -eq 0 ] || [ -f "$SEAL" ] || die "봉인 프로파일이 없다: $SEAL"
+  started_emu=0
+  # 언제나 끈다: 실패·중단에도 이 포트로 띄운 것을 거두고 0 인지 센다(남의 에뮬레이터·adb 서버는 건드리지 않는다).
+  finish() {
+    local rc=$1 n
+    if [ "$started_emu" -eq 1 ]; then
+      "$0" stop --port "$PORT" --timeout 30 >&2
+      n="$(alive_count)"
+      if [ "$n" -ne 0 ]; then log "끈 뒤에도 프로세스 $n 개가 산다"; [ "$rc" -ne 0 ] || rc=1; fi
+      echo "instrumented: 정리 alive=$n" >&2
+    fi
+    exit "$rc"
+  }
+  trap 'finish 130' INT TERM
+
+  seal_args=(--seal "$SEAL"); [ "$SEALED" -eq 1 ] || seal_args=(--no-seal)
+  started_emu=1
+  "$0" start --avd "$AVD" --port "$PORT" "${seal_args[@]}" --boot-timeout "$BOOT_TIMEOUT" || { log "에뮬레이터를 못 띄웠다"; finish 1; }
+  if [ "$SEALED" -eq 1 ]; then
+    "$0" sealcheck --port "$PORT" || { log "봉인 확인 실패 — 손님 안 바깥 연결이 열렸거나 adb 가 죽었다"; finish 1; }
+  fi
+  "$0" windows --port "$PORT" || { log "에뮬레이터가 창을 가졌다"; finish 1; }
+
+  rm -rf "$results"
+  gradle_cmd=( "$MP/gradlew" -p "$MP" --offline --no-daemon "$TASK"
+               "-Pandroid.testInstrumentationRunnerArguments.aingcheckSealed=$SEALED" )
+  log "계측 시작 task=$TASK serial=$SERIAL sealed=$SEALED"
+  t0=$(date +%s)
+  if [ "$SEALED" -eq 1 ]; then
+    # Gradle·UTP 도 같은 봉인 아래(바깥 IP 거부, localhost — adb 서버 5037·에뮬레이터 콘솔 — 허용).
+    /usr/bin/sandbox-exec -f "$SEAL" /usr/bin/env AINGCHECK_NETWORK_SEALED=1 ANDROID_SERIAL="$SERIAL" "${gradle_cmd[@]}"
+  else
+    ANDROID_SERIAL="$SERIAL" "${gradle_cmd[@]}"
+  fi
+  grc=$?
+  # 시험이 찍은 근거 줄(System.out → logcat)을 남긴다.
+  "$ADB" -s "$SERIAL" logcat -d -s System.out:I 2>/dev/null | grep 'AINGCHECK-' | sed 's/^/instrumented: /' >&2 || true
+  verdict="$("$PY" -I - "$results" <<'PY'
+import os, sys, xml.etree.ElementTree as ET
+root = sys.argv[1]
+t = sk = f = 0; files = 0
+for dirpath, _, names in os.walk(root):
+    for n in names:
+        if n.startswith("TEST-") and n.endswith(".xml"):
+            files += 1
+            r = ET.parse(os.path.join(dirpath, n)).getroot()
+            for s in ([r] if r.tag == "testsuite" else list(r.iter("testsuite"))):
+                t += int(s.get("tests", 0)); sk += int(s.get("skipped", 0))
+                f += int(s.get("failures", 0)) + int(s.get("errors", 0))
+ok = files >= 1 and t >= 1 and sk == 0 and f == 0
+print(("ok" if ok else "bad") + f" files={files} tests={t} skipped={sk} failed={f}")
+PY
+)"
+  echo "instrumented: gradle-exit=$grc elapsed=$(( $(date +%s) - t0 ))s results=[$verdict] avd=$AVD serial=$SERIAL sealed=$SEALED"
+  rc=0
+  if [ "$grc" -ne 0 ]; then rc=$grc
+  elif [ "${verdict%% *}" != "ok" ]; then log "결과가 게이트 조건(시험 ≥1 · 건너뜀 0 · 실패 0)을 못 채웠다: $verdict"; rc=1
+  fi
+  "$0" windows --port "$PORT" >&2 || { log "시험 뒤 창이 생겼다"; [ "$rc" -ne 0 ] || rc=1; }
+  finish "$rc"
   ;;
 
 *) die "모르는 명령: $cmd" ;;

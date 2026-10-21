@@ -34,7 +34,7 @@ class StructureTest {
             "androidApp/build.gradle.kts",
             "feature/phone/build.gradle.kts",
             "core/foundation/src/commonMain/kotlin/com/yehsung/aingcheck/core/foundation/platform/PlatformContracts.kt",
-        )) {
+        ) + StructureRules.HTTP_ENGINE_FACTORY_FILES) {
             assertTrue(must in paths, "구조 시험이 '$must' 를 읽지 않았다(수집 범위가 비었나?) — 읽은 파일 ${files.size}개")
         }
         val generated = StructureRules.collectGenerated(mpRoot)
@@ -60,7 +60,12 @@ class StructureTest {
     private val rules = "core/rules/src/commonMain/kotlin/com/yehsung/aingcheck/core/rules/X.kt"
     private val phone = "feature/phone/src/commonMain/kotlin/com/yehsung/aingcheck/feature/phone/X.kt"
     private val appMain = "desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/X.kt"
+    private val androidAppMain = "androidApp/src/main/kotlin/com/yehsung/aingcheck/android/X.kt"
+    private val desktopFactory = "desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/http/HttpEngineFactory.kt"
+    private val netMain = "core/net/src/commonMain/kotlin/com/yehsung/aingcheck/core/net/X.kt"
     private val prodHost = "abcd" + ".supa" + "base.co"
+    private val okBuilder = "OkHttpClient" + ".Builder()"
+    private val retryOff = ".retryOnConnectionFailure" + "(false)"
 
     @Test
     fun eachRuleCatchesAPlantedViolation() {
@@ -91,13 +96,73 @@ class StructureTest {
         assertEquals(emptySet(), plant(emptyMap(), mapOf("$gen/ProdConfig.kt" to "const val U = \"https://$prodHost\"")))
     }
 
+    /**
+     * W0 검증(w0-round1 refuted ⑥·issues)이 실제로 빠져나간 모양을 그대로 심는다. 고치기 전 규칙에서는 셋 다 위반 0 이었다.
+     * ① 앱 main 의 `okhttp3.OkHttpClient()`(기본 생성자) ② 엔진을 ServiceLoader 로 고르는 `io.ktor.client.HttpClient { }`
+     * ③ `client.newBuilder().build()`(복제) — 단일 팩토리 밖이라 R3c, 기본 생성자는 R3b 도.
+     */
+    @Test
+    fun httpEnginesOutsideTheSingleFactoryAreRed() {
+        val planted: List<Triple<String, String, String>> = listOf(
+            Triple(StructureRules.R_FACTORY, appMain, "val client = okhttp3.OkHttpClient()"),
+            Triple(StructureRules.R_RETRY, appMain, "val client = okhttp3.OkHttpClient()"),
+            Triple(StructureRules.R_FACTORY, appMain, "val ktor = io.ktor.client.HttpClient { }"),
+            Triple(StructureRules.R_FACTORY, appMain, "val c2 = client.newBuilder().build()"),
+            Triple(StructureRules.R_FACTORY, androidAppMain, "val ktor = HttpClient()"),
+            Triple(StructureRules.R_FACTORY, androidAppMain, "val ktor = HttpClient(OkHttp) { engine { config { $retryOff } } }"),
+            Triple(StructureRules.R_FACTORY, androidAppMain, "val e = OkHttp.create { }"),
+            Triple(StructureRules.R_FACTORY, androidAppMain, "val c = $okBuilder$retryOff.build()"),
+            Triple(StructureRules.R_FACTORY, netMain, "val jdk = java.net.http.HttpClient.newHttpClient()"),
+            // 팩토리 안이어도: 재전송을 끌 수 없는 기본 생성자·재전송 켬·retry(false) 없는 빌더는 R3b.
+            Triple(StructureRules.R_RETRY, desktopFactory, "val c = okhttp3.OkHttpClient()"),
+            Triple(StructureRules.R_RETRY, desktopFactory, "val c = $okBuilder.retryOnConnectionFailure(true).build()"),
+            Triple(StructureRules.R_RETRY, desktopFactory, "val c = $okBuilder.build()"),
+            // main 소스셋은 허용 목록이 아니라 '시험이 아닌 것 전부'(jvmSharedMain 에 심은 OkHttp 가 빠져나갔었다).
+            Triple(StructureRules.R_OKHTTP, "core/net/src/jvmSharedMain/kotlin/com/yehsung/aingcheck/core/net/X.kt", "val c = $okBuilder.build()"),
+            Triple(StructureRules.R_FACTORY, "core/net/src/jvmSharedMain/kotlin/com/yehsung/aingcheck/core/net/X.kt", "val k = HttpClient(OkHttp)"),
+            // 폰 금지 RPC: 문자열 안 경로·템플릿 꼴(전엔 통째 문자열 `"take_pokes"` 만 잡았다).
+            Triple(StructureRules.R_PHONE, phone, "c.post(\"https://aingcheck.invalid/rest/v1/rpc/take" + "_pokes\")"),
+            Triple(StructureRules.R_PHONE, phone, "c.post(\"\${base}/rpc/ultra_wallet" + "_sync\")"),
+            Triple(StructureRules.R_PHONE, phone, "val p = \"\"\"rpc/poke" + "_user\"\"\""),
+            Triple(StructureRules.R_PHONE, "feature/phone/src/androidRelease/kotlin/X.kt", "rpc(\"away" + "_sync\")"),
+        )
+        for ((rule, path, body) in planted) {
+            val found = plant(mapOf(path to body))
+            assertTrue(rule in found, "규칙 $rule 이 심은 위반을 못 잡았다: $path ← $body → $found")
+        }
+    }
+
+    @Test
+    fun theFactoryItselfAndInjectedEnginesStayGreen() {
+        val ok = mapOf(
+            desktopFactory to "object HttpEngineFactory {\n private val base = $okBuilder$retryOff.build()\n" +
+                " fun okHttpClient() = base\n fun ktorClient(): HttpClient = HttpClient(OkHttp) { engine { preconfigured = base } }\n}",
+            // core/net 은 주입받은 엔진으로 짓는다 · 반환형 자리의 `: HttpClient {` 는 생성이 아니다.
+            netMain to "class Net(engine: HttpClientEngine) {\n val c = HttpClient(engine) { expectSuccess = false }\n fun make(): HttpClient {\n  return c\n }\n}",
+            // 낱말 경계: 다른 이름 속의 조각·p_ 칸은 걸리지 않는다. 시험 소스셋(test·…Test)은 실험 자리다.
+            phone to "val a = \"take" + "_pokes_count\"\nval b = \"p_app" + "_build\"",
+            "androidApp/src/test/kotlin/X.kt" to "val c = okhttp3.OkHttpClient()\nval k = HttpClient { }",
+            "androidApp/src/androidTest/kotlin/X.kt" to "val c = $okBuilder.build()",
+            "core/net/src/desktopTest/kotlin/X.kt" to "val c = client.newBuilder().build()",
+        )
+        assertEquals(emptySet(), plant(ok), "허용된 자리가 걸렸다")
+    }
+
+    @Test
+    fun stringLiteralScannerSeesPathsTemplatesAndRawStrings() {
+        val code = "val a = \"x/rpc/y\" + 'q' + '\"'\nval b = \"\${f(\"in\")}/tail\"\nval c = \"\"\"raw \$x\"\"\""
+        val bodies = StructureRules.stringLiterals(code).map { it.second }
+        assertEquals(listOf("x/rpc/y", "\${f(\"in\")}/tail", "raw \$x"), bodies)
+    }
+
     @Test
     fun allowedPlacesAndCommentsDoNotTrip() {
         val ok = mapOf(
             // 주석 속 설명은 코드 규칙에 걸리지 않는다(운영 주소 R5 만 주석까지 본다).
             main to "// java.util." + "prefs 는 금지 · Clock." + "System 금지\n/* okhttp3" + ". 설명 */ val a = 1",
-            // 조립 지점(앱 main)은 벽시계·OkHttp(retry 끔)를 쓸 수 있다.
-            appMain to "val t = Clock." + "System\nval c = OkHttpClient" + ".Builder().retryOnConnectionFailure(false).build()",
+            // 조립 지점(앱 main)은 벽시계를, 앱의 단일 HTTP 팩토리 파일은 OkHttp(retry 끔)를 쓸 수 있다.
+            appMain to "val t = Clock." + "System",
+            desktopFactory to "val c = OkHttpClient" + ".Builder().retryOnConnectionFailure(false).build()",
             // 시험 쪽 OkHttp(localhost 실험)는 허용.
             "core/net/src/desktopTest/kotlin/X.kt" to "import okhttp3" + ".OkHttpClient",
             // 폰 모듈의 p_app_build 는 금지 칸이 아니다.

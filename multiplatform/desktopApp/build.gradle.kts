@@ -25,4 +25,6 @@ dependencies {
 
     testImplementation(libs.compose.ui.test)
     testImplementation(libs.roborazzi.compose.desktop)
+    // HttpEngineFactoryTest: 끊긴 재사용 연결을 localhost 에서 재현해 POST 재전송 0 을 잰다(C-X6, G §8-12).
+    testImplementation(libs.okhttp.mockwebserver3)
 }

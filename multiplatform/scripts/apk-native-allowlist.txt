@@ -1,0 +1,3 @@
+# APK 에 실려도 되는 네이티브 라이브러리(파일 이름, 한 줄에 하나) — G §8-12. 늘릴 때는 조정자 결정으로.
+# Compose(ui-graphics 1.12.1 → androidx.graphics:graphics-path 1.0.1)가 싣는다. 피할 수 없다(W0-f A-X17 실측).
+libandroidx.graphics.path.so

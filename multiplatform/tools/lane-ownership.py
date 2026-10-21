@@ -2,6 +2,7 @@
 """갈래 소유 검사(§8-3, W0-a). 실행은 `python3 -I multiplatform/tools/lane-ownership.py …`.
 
 브랜치 diff(기준...머리)의 경로마다 판정한다:
+  0. 닫힌 갈래(lanes.yml closed — 예: W0 통합 뒤의 W0-a)                        → 빨강
   1. 옛 경로(§8-1: 꼭대기 xplat/ kmp/ contracts/ tools/ backups/ supabase/)  → 빨강
   2. 예약 경로인데 이 갈래가 예약 목록에 없음                                   → 빨강
   3. 이 갈래 owns 글롭 밖이거나 excludes 에 걸림                                 → 빨강
@@ -10,6 +11,9 @@
   --lane W0-a [--base xplat/main] [--head HEAD]   git diff --no-renames --name-only base...head
   --lane W0-a --names-from FILE                    경로 목록 파일(한 줄에 하나, '#' 주석) — 가짜 diff 로 시험할 때
   --include-worktree                               커밋 안 된 변경(git status)도 더한다
+  --resolve-branch xplat/w1-a                      브랜치 이름 → 갈래(CI 가 쓴다). xplat/main·xplat/w<N>-int → coordinator,
+                                                   xplat/w<N>-<x>[숫자] → 그 갈래. xplat/ 인데 갈래로 안 풀리면 종료 2(빨강).
+                                                   xplat/ 밖 브랜치(main 등)는 빈 줄 · 종료 0(갈래 소유 검사 대상 아님)
   --validate                                       lanes.yml 문법·글롭·패키지 표만 확인
   --self-test                                      위반을 심은 가짜 diff 로 빨강을 확인(자기 시험)
 
@@ -214,6 +218,10 @@ class Lanes:
         if not isinstance(data, dict) or data.get("version") != 1:
             raise YamlError("version: 1 이 아니다")
         self.package_root = data.get("package_root") or {}
+        closed = data.get("closed") or []
+        if not isinstance(closed, list):
+            raise YamlError("closed 는 갈래 이름 목록이어야 한다")
+        self.closed = set(closed)
         self.forbidden = [self._compile(g) for g in (data.get("forbidden") or [])]
         self.forbidden_src = list(data.get("forbidden") or [])
         self.reserved = []
@@ -233,6 +241,11 @@ class Lanes:
             unknown = allowed - set(self.lanes)
             if unknown:
                 raise YamlError(f"reserved '{glob}' 에 없는 갈래: {sorted(unknown)}")
+            if allowed & self.closed:
+                raise YamlError(f"reserved '{glob}' 에 닫힌 갈래가 있다: {sorted(allowed & self.closed)}")
+        unknown_closed = self.closed - set(self.lanes)
+        if unknown_closed or "coordinator" in self.closed:
+            raise YamlError(f"closed 에 없는 갈래·조정자: {sorted(unknown_closed | ({'coordinator'} & self.closed))}")
 
     def _substitute(self, glob: str) -> str:
         def repl(m):
@@ -252,9 +265,11 @@ class Lanes:
         return any(r.match(path) for r in compiled)
 
     def judge(self, lane: str, path: str):
-        """(판정, 이유). 판정은 ok|forbidden|reserved|outside."""
+        """(판정, 이유). 판정은 ok|closed|forbidden|reserved|outside."""
         if lane not in self.lanes:
             raise KeyError(lane)
+        if lane in self.closed:
+            return "closed", "닫힌 갈래 — 후속 변경은 조정자 경유(xplat/w<N>-int)"
         for src, comp in zip(self.forbidden_src, self.forbidden):
             if self._match(comp, path):
                 return "forbidden", f"옛 경로(§8-1) {src}"
@@ -266,6 +281,25 @@ class Lanes:
         if any(self._match(c, path) for c in self.owns[lane]):
             return "ok", ""
         return "outside", "이 갈래 owns 밖"
+
+
+BRANCH_LANE = re.compile(r"xplat/w(\d+)-([a-z]\d*)")
+INTEGRATION_BRANCH = re.compile(r"xplat/(?:main|w\d+-int)")
+
+
+def resolve_branch(lanes: Lanes, branch: str):
+    """브랜치 → 갈래 이름. xplat/ 밖이면 None(검사 대상 아님). xplat/ 인데 못 풀면 ValueError."""
+    if not branch.startswith("xplat/"):
+        return None
+    if INTEGRATION_BRANCH.fullmatch(branch):
+        return "coordinator"
+    m = BRANCH_LANE.fullmatch(branch)
+    if m:
+        lane = f"W{m.group(1)}-{m.group(2)}"
+        if lane in lanes.lanes:
+            return lane
+        raise ValueError(f"{branch}: lanes.yml 에 갈래 {lane} 가 없다")
+    raise ValueError(f"{branch}: 갈래로 풀리지 않는 xplat/ 브랜치(xplat/w<N>-<갈래> · xplat/w<N>-int · xplat/main 만)")
 
 
 def load_lanes(path: str) -> Lanes:
@@ -314,19 +348,30 @@ def report(lanes: Lanes, lane: str, paths, stream=sys.stdout) -> int:
 
 SELF_TEST_CASES = [
     # (갈래, 경로, 기대 판정)
-    ("W0-a", "multiplatform/settings.gradle.kts", "ok"),
-    ("W0-a", "multiplatform/testkit/src/commonMain/kotlin/com/yehsung/aingcheck/testkit/mock/MockRouter.kt", "ok"),
-    ("W0-a", "multiplatform/core/net/build.gradle.kts", "ok"),
-    ("W0-a", ".github/workflows/mp-ci.yml", "ok"),
-    ("W0-a", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt", "outside"),
-    ("W0-a", "multiplatform/core/foundation/src/commonMain/kotlin/com/yehsung/aingcheck/core/foundation/rng/SplitMix64.kt", "outside"),
-    ("W0-a", "multiplatform/core/rules/src/commonMain/kotlin/com/yehsung/aingcheck/core/rules/tetris/TetrisGame.kt", "outside"),
-    ("W0-a", "supabase/migrations/20261101000000_x.sql", "forbidden"),
-    ("W0-a", "kmp/core/build.gradle.kts", "forbidden"),
-    ("W0-a", "contracts/golden/rng/splitmix64.json", "forbidden"),
-    ("W0-a", "tools/port-invariants.py", "forbidden"),
-    ("W0-a", "backups/2026-10-21-push-send/index.ts", "forbidden"),
-    ("W0-a", "xplat/aing-bake/lock.json", "forbidden"),
+    # W0-a 는 W0 통합에서 닫혔다 — 자기 자리였던 파일도 빨강(후속은 조정자 경유).
+    ("W0-a", "multiplatform/settings.gradle.kts", "closed"),
+    ("W0-a", "multiplatform/testkit/src/commonMain/kotlin/com/yehsung/aingcheck/testkit/mock/MockRouter.kt", "closed"),
+    ("coordinator", "multiplatform/settings.gradle.kts", "ok"),
+    ("coordinator", "multiplatform/core/net/build.gradle.kts", "ok"),
+    ("coordinator", ".github/workflows/mp-ci.yml", "ok"),
+    ("coordinator", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/http/HttpEngineFactory.kt", "ok"),
+    ("coordinator", "supabase/migrations/20261101000000_x.sql", "forbidden"),
+    ("coordinator", "kmp/core/build.gradle.kts", "forbidden"),
+    ("coordinator", "contracts/golden/rng/splitmix64.json", "forbidden"),
+    ("coordinator", "tools/port-invariants.py", "forbidden"),
+    ("coordinator", "backups/2026-10-21-push-send/index.ts", "forbidden"),
+    ("coordinator", "xplat/aing-bake/lock.json", "forbidden"),
+    # W0-e 의 탐침은 자기 완결 빌드라 그 build.gradle.kts 는 이 빌드의 모듈 예약에 들지 않는다(W0 통합에서 고침).
+    ("W0-e", "multiplatform/spikes/windows/build.gradle.kts", "ok"),
+    ("W0-e", "multiplatform/scripts/vm/vm.sh", "ok"),
+    ("W0-e", "multiplatform/build.gradle.kts", "reserved"),
+    ("W0-f", "multiplatform/scripts/emu.sh", "ok"),
+    ("W0-f", "multiplatform/scripts/gate-full.sh", "reserved"),
+    ("W5-a", "multiplatform/character/build.gradle.kts", "reserved"),
+    ("W2-f", "multiplatform/feature/phone/build.gradle.kts", "reserved"),
+    ("W1-g", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/http/HttpEngineFactory.kt", "reserved"),
+    ("W1-f", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/http/HttpEngineFactory.kt", "reserved"),
+    ("W1-e", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/scaffold/ScaffoldProbe.kt", "reserved"),
     ("W0-b", "multiplatform/tools/golden-digest.py", "ok"),
     ("W0-b", "multiplatform/tools/lanes.yml", "reserved"),
     ("W0-b", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt", "ok"),
@@ -356,15 +401,33 @@ def self_test(lanes_path: str) -> int:
         if got != expected:
             failures += 1
         print(f"  {mark} {lane:12s} {expected:9s}←{got:9s} {path} {why}")
-    # 가짜 diff 전체로 report 경로까지: W0-a 에 위반 셋(옛 경로·남의 소유·골든 로더)을 심으면 빨강 3.
-    fake = ["multiplatform/settings.gradle.kts", "supabase/functions/push-send/index.ts",
-            "multiplatform/core/rules/src/commonMain/kotlin/com/yehsung/aingcheck/core/rules/tetris/T.kt",
-            "multiplatform/testkit/src/commonMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt"]
-    bad = report(lanes, "W0-a", fake)
+    # 가짜 diff 전체로 report 경로까지: W1-a 에 위반 셋(옛 경로·남의 소유·예약 빌드 파일)을 심으면 빨강 3.
+    fake = ["multiplatform/core/rules/src/commonMain/kotlin/com/yehsung/aingcheck/core/rules/tetris/T.kt",
+            "supabase/functions/push-send/index.ts",
+            "multiplatform/core/rules/src/commonMain/kotlin/com/yehsung/aingcheck/core/rules/renju/R.kt",
+            "multiplatform/core/rules/build.gradle.kts"]
+    bad = report(lanes, "W1-a", fake)
     if bad != 3:
         failures += 1
         print(f"  BAD 가짜 diff 위반 수 {bad} ≠ 3")
-    print(f"self-test: 사례 {len(SELF_TEST_CASES) + 1} · 실패 {failures}")
+    # 브랜치 → 갈래(CI lane-tools). 못 푸는 xplat/ 브랜치는 빨강이어야 한다(W0 검증: 전엔 notice 만 남기고 초록).
+    branch_cases = [
+        ("xplat/w0-a", "W0-a"), ("xplat/w1-g", "W1-g"), ("xplat/w3-c1", "W3-c1"),
+        ("xplat/w0-int", "coordinator"), ("xplat/w1-int", "coordinator"), ("xplat/main", "coordinator"),
+        ("main", None), ("feature/x", None),
+        ("xplat/w0-a-fix", ValueError), ("xplat/W0-a", ValueError), ("xplat/w9-z", ValueError),
+        ("xplat/w3-c", ValueError), ("xplat/foo", ValueError),
+    ]
+    for branch, expected in branch_cases:
+        try:
+            got = resolve_branch(lanes, branch)
+        except ValueError:
+            got = ValueError
+        mark = "ok " if got == expected else "BAD"
+        if got != expected:
+            failures += 1
+        print(f"  {mark} 브랜치 {branch:16s} → {getattr(got, '__name__', got)}")
+    print(f"self-test: 사례 {len(SELF_TEST_CASES) + 1 + len(branch_cases)} · 실패 {failures}")
     return 1 if failures else 0
 
 
@@ -378,13 +441,22 @@ def main(argv) -> int:
     ap.add_argument("--include-worktree", action="store_true")
     ap.add_argument("--validate", action="store_true")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--resolve-branch")
     args = ap.parse_args(argv)
     try:
         if args.self_test:
             return self_test(args.lanes)
         lanes = load_lanes(args.lanes)
         if args.validate:
-            print(f"lanes.yml 확인: 갈래 {len(lanes.lanes)} · 예약 {len(lanes.reserved)} · 옛 경로 {len(lanes.forbidden)}")
+            print(f"lanes.yml 확인: 갈래 {len(lanes.lanes)} · 예약 {len(lanes.reserved)} · 옛 경로 {len(lanes.forbidden)} · 닫힘 {len(lanes.closed)}")
+            return 0
+        if args.resolve_branch is not None:
+            try:
+                lane = resolve_branch(lanes, args.resolve_branch)
+            except ValueError as e:
+                print(f"갈래로 풀리지 않는다: {e}", file=sys.stderr)
+                return 2
+            print(lane or "")
             return 0
         if not args.lane:
             ap.error("--lane 이 필요하다")

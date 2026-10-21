@@ -15,11 +15,16 @@ data class Violation(val rule: String, val file: String, val line: Int, val snip
 class SourceFile(val relPath: String, val raw: String, val code: String) {
     val module: String = moduleOf(relPath)
     val sourceSet: String? = Regex("""(?:^|/)src/([^/]+)/""").find(relPath)?.groupValues?.get(1)
-    val isMainSourceSet: Boolean get() = sourceSet in MAIN_SOURCE_SETS
+    val isMainSourceSet: Boolean get() = isMainSourceSetName(sourceSet)
     val isCode: Boolean get() = relPath.endsWith(".kt") || relPath.endsWith(".kts") || relPath.endsWith(".java")
 
     companion object {
-        val MAIN_SOURCE_SETS = setOf("commonMain", "androidMain", "desktopMain", "main")
+        /**
+         * 시험 소스셋이 아니면 전부 main 으로 본다(허용 목록이 아니라 거부 목록 — W0 검증: 이름 목록 밖의 `jvmSharedMain`
+         * 같은 main 소스셋이 시험 쪽으로 빠져 R3·R3b·R7 이 꺼졌다). 시험 = 이름이 `test` 이거나 `Test` 로 끝난다
+         * (`desktopTest`·`androidHostTest`·`androidTest`·`androidDeviceTest`…). `src/` 밖 파일(build.gradle.kts 등)은 null.
+         */
+        fun isMainSourceSetName(name: String?): Boolean = name != null && name != "test" && !name.endsWith("Test")
 
         fun moduleOf(relPath: String): String {
             val parts = relPath.split('/')
@@ -36,6 +41,7 @@ object StructureRules {
     const val R_CLOCK = "R2-clock-outside-assembly"
     const val R_OKHTTP = "R3-okhttp-outside-app"
     const val R_RETRY = "R3b-okhttp-retry-on"
+    const val R_FACTORY = "R3c-http-engine-outside-factory"
     const val R_ROUND = "R4-rounding-in-rules"
     const val R_PROD = "R5-prod-address"
     const val R_PRODCFG = "R5b-prodconfig-outside-app"
@@ -60,6 +66,43 @@ object StructureRules {
         "poke_user", "ultra_poke_user", "away_sync",
     )
     private val PHONE_FORBIDDEN_COLUMNS = listOf("app_build", "app_version", "focus_mode")
+
+    /**
+     * 앱의 HTTP 엔진을 만드는 **단일 팩토리 파일**(G §8-12, C-X6). 앱 모듈마다 한 파일이고, 그 밖의 main 에서는
+     * 엔진·클라이언트를 만들지 않는다(주입받은 엔진으로 `HttpClient(engine)` 을 짓는 것은 된다).
+     * 팩토리가 만든 클라이언트의 재전송 끔은 앱 시험이 **실행해서** 단언한다: 끊긴 연결 재현으로 POST 도착 수
+     * (desktopApp·androidApp 호스트 `HttpEngineFactoryTest` — OkHttp·Ktor 둘 다) + 기기(ART) 위 `retryOnConnectionFailure == false`.
+     */
+    val HTTP_ENGINE_FACTORY_FILES: Set<String> = setOf(
+        "androidApp/src/main/kotlin/com/yehsung/aingcheck/android/http/HttpEngineFactory.kt",
+        "desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/http/HttpEngineFactory.kt",
+    )
+
+    private const val KTOR_ENGINES = """(?:OkHttp|CIO|Java|Apache5?|Android|Jetty|Curl|WinHttp|Darwin)"""
+
+    /**
+     * 엔진·클라이언트를 **만드는** 모양(팩토리 밖 main 이면 빨강).
+     * `OkHttpClient(`(기본 생성자 — 재전송 켜짐) · `OkHttpClient.Builder(` · `.newBuilder(`(기존 클라이언트 복제 — 설정을 바꿀 수 있다) ·
+     * 인자 없는 `HttpClient {`/`HttpClient()`(Ktor 가 ServiceLoader 로 엔진을 고른다) · `HttpClient(OkHttp…)` 처럼 엔진을 고르는 꼴 ·
+     * `OkHttp.create(`·`OkHttp.create {` 같은 엔진 직접 생성 · JDK `HttpClient.newHttpClient(`.
+     * 반환형 자리의 `: HttpClient {`(함수 본문)는 생성이 아니다 — 앞의 `:` 로 가른다.
+     */
+    private val ENGINE_CREATION = Regex(
+        """\bOkHttpClient\s*\(""" +
+            """|\bOkHttpClient\s*\.\s*Builder\s*\(""" +
+            """|\.\s*newBuilder\s*\(""" +
+            """|(?<!:\s{0,4})\bHttpClient\s*\{""" +
+            """|\bHttpClient\s*\(\s*\)""" +
+            """|\bHttpClient\s*\(\s*""" + KTOR_ENGINES + """\b""" +
+            """|\b""" + KTOR_ENGINES + """\s*\.\s*create\s*[({]""" +
+            """|\bOkHttpEngine\s*\(""" +
+            """|\bHttpClient\s*\.\s*newHttpClient\s*\(""",
+    )
+
+    /** OkHttp 클라이언트를 짓는 모양(R3b: 이 파일에 retryOnConnectionFailure(false) 가 있어야 한다). */
+    private val OKHTTP_BUILD = Regex("""\bOkHttpClient\s*\.\s*Builder\s*\(|\bHttpClient\s*\(\s*OkHttp\b|\bOkHttp\s*\.\s*create\s*[({]""")
+    /** 재전송을 끌 수 없는 기본 생성자, 또는 재전송을 켜는 꼴(R3b: 어디서든 빨강). */
+    private val OKHTTP_RETRY_ON = Regex("""\bOkHttpClient\s*\(\s*\)|\bretryOnConnectionFailure\s*(?:\(\s*true\b|=\s*true\b)""")
 
     // ---------- 수집 ----------
 
@@ -121,11 +164,19 @@ object StructureRules {
                         v += it.copy(rule = R_OKHTTP)
                     }
                 }
-                // R3b: main 에서 OkHttp 클라이언트를 만들면 같은 파일에 retryOnConnectionFailure(false) 가 있어야 한다(C-X6).
-                if (f.isMainSourceSet && Regex("""OkHttpClient\.Builder\(|HttpClient\(\s*OkHttp""").containsMatchIn(f.code) &&
-                    !Regex("""retryOnConnectionFailure\(\s*false\s*\)""").containsMatchIn(f.code)
-                ) {
-                    v += Violation(R_RETRY, f.relPath, 1, "OkHttp 클라이언트를 만들면서 retryOnConnectionFailure(false) 가 없다")
+                // R3b: main 에서 OkHttp 클라이언트를 지으면 같은 파일에 retryOnConnectionFailure(false) 가 있어야 하고(C-X6),
+                // 재전송을 끌 수 없는 기본 생성자 `OkHttpClient()` 와 재전송을 켜는 꼴은 어디서든 빨강이다.
+                // 파일 단위 판정이라 한 파일 안 여러 빌더를 하나하나 가르지 못한다 — 그 몫은 팩토리 런타임 시험이 진다.
+                if (f.isMainSourceSet) {
+                    if (OKHTTP_BUILD.containsMatchIn(f.code) && !Regex("""retryOnConnectionFailure\(\s*false\s*\)""").containsMatchIn(f.code)) {
+                        v += Violation(R_RETRY, f.relPath, 1, "OkHttp 클라이언트를 만들면서 retryOnConnectionFailure(false) 가 없다")
+                    }
+                    findAll(f, OKHTTP_RETRY_ON) { v += it.copy(rule = R_RETRY) }
+                }
+
+                // R3c: HTTP 엔진·클라이언트는 앱 모듈의 단일 팩토리 파일에서만 만든다(G §8-12). 시험 소스셋은 실험(localhost)이라 뺀다.
+                if (f.isMainSourceSet && f.relPath !in HTTP_ENGINE_FACTORY_FILES) {
+                    findAll(f, ENGINE_CREATION) { v += it.copy(rule = R_FACTORY) }
                 }
 
                 // R4: core/rules 의 반올림은 허용 목록에만(Swift .rounded() 와 Kotlin round 의 .5 처리가 다르다).
@@ -144,8 +195,19 @@ object StructureRules {
                 findAll(f, Regex("""\.env""" + """\.local\b""")) { v += it.copy(rule = R_ENV) }
 
                 // R7: 폰 금지 호출(RPC 8 · 칸 3)을 폰 모듈 main 이 부르지 않는다.
+                //  - RPC 이름은 문자열 리터럴 **안 어디든** 낱말로 있으면 빨강(`"take_pokes"` · `"…/rest/v1/rpc/take_pokes"` ·
+                //    `"$base/rpc/take_pokes"`). W0 검증에서 경로 문자열 꼴이 빠져나갔다.
+                //  - 칸 이름은 통째 문자열만 본다(`"p_app_build"`·select 목록 읽기는 금지가 아니다).
+                //  다른 모듈 상수를 거쳐 부르는 꼴은 정적으로 못 잡는다 — 런타임 그물(PhoneForbiddenCalls + MockRouter)이 W2 폰 스토어 시험에 필수다.
                 if (f.module in PHONE_MODULES && f.isMainSourceSet) {
-                    for (name in PHONE_FORBIDDEN_RPCS + PHONE_FORBIDDEN_COLUMNS) {
+                    val literals = stringLiterals(f.code)
+                    for (name in PHONE_FORBIDDEN_RPCS) {
+                        val word = Regex("""(?<![A-Za-z0-9_])""" + Regex.escape(name) + """(?![A-Za-z0-9_])""")
+                        for ((offset, body) in literals) {
+                            if (word.containsMatchIn(body)) v += violationAt(f, offset, R_PHONE)
+                        }
+                    }
+                    for (name in PHONE_FORBIDDEN_COLUMNS) {
                         findAll(f, Regex("\"" + Regex.escape(name) + "\"")) { v += it.copy(rule = R_PHONE) }
                     }
                 }
@@ -185,6 +247,76 @@ object StructureRules {
                 "목록 ${config.slowListing.sorted()} ≠ 실제 ${slowFound.sorted()}")
         }
         return v
+    }
+
+    private fun violationAt(f: SourceFile, offset: Int, rule: String): Violation {
+        val line = f.code.substring(0, offset.coerceIn(0, f.code.length)).count { it == '\n' } + 1
+        return Violation(rule, f.relPath, line, f.raw.lines().getOrElse(line - 1) { "" }.trim().take(160))
+    }
+
+    /**
+     * 주석을 걷은 코드에서 문자열 리터럴을 (여는 따옴표 위치, 본문) 으로 낸다. Kotlin 원시 문자열(`"""`)·Java 글 블록 포함.
+     * 템플릿 `${…}` 안의 글자(중첩 문자열 포함)도 본문에 든다 — 판정이 넓어질 뿐 좁아지지 않는다.
+     */
+    fun stringLiterals(code: String): List<Pair<Int, String>> {
+        val out = mutableListOf<Pair<Int, String>>()
+        var i = 0
+        val n = code.length
+        while (i < n) {
+            val c = code[i]
+            when {
+                c == '"' && code.startsWith("\"\"\"", i) -> {
+                    val end = code.indexOf("\"\"\"", i + 3).let { if (it < 0) n else it }
+                    out += i to code.substring(i + 3, end)
+                    i = minOf(n, end + 3)
+                }
+                c == '"' -> {
+                    val end = endOfQuoted(code, i)
+                    out += i to code.substring(i + 1, end).removeSuffix("\"")
+                    i = maxOf(end, i + 1)
+                }
+                c == '\'' -> {
+                    // 글자 리터럴('"' · '\'' · 'x')을 건너뛴다 — 안의 따옴표를 문자열 시작으로 읽지 않게.
+                    val close = code.indexOf('\'', i + 1)
+                    i = if (close in (i + 1)..(i + 8) && !code.substring(i + 1, close).contains('\n')) {
+                        if (code[i + 1] == '\\' && close == i + 2) code.indexOf('\'', close + 1).let { if (it < 0) close + 1 else it + 1 } else close + 1
+                    } else {
+                        i + 1
+                    }
+                }
+                else -> i++
+            }
+        }
+        return out
+    }
+
+    /** `"` 로 여는 한 줄 문자열의 끝(닫는 따옴표 다음, 닫히지 않았으면 줄 끝). 템플릿 `${…}` 의 중괄호·중첩 문자열을 건너뛴다. */
+    private fun endOfQuoted(s: String, start: Int): Int {
+        var i = start + 1
+        val n = s.length
+        while (i < n) {
+            val c = s[i]
+            when {
+                c == '\\' -> i += 2
+                c == '"' -> return i + 1
+                c == '\n' -> return i
+                c == '$' && i + 1 < n && s[i + 1] == '{' -> {
+                    var depth = 1
+                    i += 2
+                    while (i < n && depth > 0) {
+                        when (s[i]) {
+                            '{' -> { depth++; i++ }
+                            '}' -> { depth--; i++ }
+                            '"' -> i = maxOf(endOfQuoted(s, i), i + 1)
+                            '\n' -> return i
+                            else -> i++
+                        }
+                    }
+                }
+                else -> i++
+            }
+        }
+        return n
     }
 
     private fun findAll(f: SourceFile, regex: Regex, sink: (Violation) -> Unit) = scan(f.relPath, f.code, f.raw, regex, sink)

@@ -5,7 +5,8 @@ name: mp-windows-spike
 
 on:
   push:
-    branches: ["xplat/w0-e"]
+    # W0 통합 뒤로는 xplat/ 어느 브랜치(갈래·통합·xplat/main)든 탐침·VM 하네스를 건드리면 돈다.
+    branches: ["xplat/**"]
     paths:
       - "multiplatform/spikes/windows/**"
       - "multiplatform/scripts/vm/**"
@@ -110,6 +111,28 @@ jobs:
           Copy-Item -Recurse -ErrorAction SilentlyContinue (Join-Path $env:SPIKE 'build/test-results') (Join-Path $env:OUT 'test-results')
           exit $code
 
+      - name: (arm64 준비) OOBE 개인정보 화면 걷기 — 트레이 스모크 전에(G §8-12)
+        # run 39592962558·39602890115: windows-11-arm 의 대화형 데스크톱을 "Choose privacy settings for your device"(WWAHost@세션2)가
+        # 덮고 있어 Shell_NotifyIcon NIM_ADD 가 0x80004005 였다. 정책을 켜고 그 프로세스를 닫으면 1회 만에 성공했다(W0-e 실측).
+        # 러너 환경 준비일 뿐 판정 완화가 아니다 — 스모크의 단언(트레이 추가·버전·삭제)은 그대로이고 실패하면 필수 실패다.
+        id: oobe
+        if: matrix.arch == 'arm64'
+        run: |
+          $re = 'CloudExperienceHost|WWAHost|UserOOBEBroker|PrivacyExperience'
+          $before = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' | Out-Null
+          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name DisablePrivacyExperience -Value 1 -Type DWord
+          Get-Process | Where-Object { $_.ProcessName -match $re } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          $after = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+          $bmp.Save((Join-Path $env:OUT 'screen-after-oobe.png'), [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()
+          [ordered]@{ oobeProcessesBefore = $before; oobeProcessesAfter = $after } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $env:OUT 'oobe-walk.json')
+          Get-Content (Join-Path $env:OUT 'oobe-walk.json')
+
       - name: JNA smoke — sealed JDK + classpath
         id: smoke_cp
         continue-on-error: true
@@ -126,31 +149,6 @@ jobs:
           if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }
           if (Test-Path "$env:OUT\smoke-app.json") { Get-Content "$env:OUT\smoke-app.json" }
           exit $p.ExitCode
-
-      - name: (arm64 기록) OOBE 개인정보 화면을 걷은 뒤 트레이 다시 재기
-        # run 39592962558: windows-11-arm 의 대화형 데스크톱은 "Choose privacy settings for your device" 가 덮고 있었고 NIM_ADD 가 0x80004005.
-        # 러너 환경 정리일 뿐 판정에 넣지 않는다(기록). W1-f 가 arm64 러너에서 트레이 시험을 돌릴 수 있는지 알려 준다.
-        id: tray_after_oobe
-        if: matrix.arch == 'arm64'
-        continue-on-error: true
-        run: |
-          $re = 'CloudExperienceHost|WWAHost|UserOOBEBroker|PrivacyExperience'
-          $before = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
-          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' | Out-Null
-          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name DisablePrivacyExperience -Value 1 -Type DWord
-          Get-Process | Where-Object { $_.ProcessName -match $re } | Stop-Process -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 5
-          $after = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
-          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
-          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-          $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
-          $bmp.Save((Join-Path $env:OUT 'screen-after-oobe.png'), [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()
-          & "$env:SEALED_JDK\bin\java.exe" -cp "$env:SPIKE/build/probe-lib/*" com.yehsung.aingcheck.spike.windows.MainKt smoke "--out=$env:OUT\smoke-after-oobe.json"
-          $code = $LASTEXITCODE
-          [ordered]@{ oobeProcessesBefore = $before; oobeProcessesAfter = $after; smokeExit = $code } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $env:OUT 'tray-after-oobe.json')
-          Get-Content (Join-Path $env:OUT 'tray-after-oobe.json')
-          exit $code
 
       - name: launcher DPI manifest (D-E22)
         id: dpi

@@ -2,14 +2,24 @@
 # multiplatform/tools/lane-ownership.py 가 읽는다: 브랜치 diff 가 갈래 소유 밖이거나, 옛 경로(§8-1)에 쓰거나,
 # 예약 경로를 남이 건드리면 빨강이다. 이 파일은 W0 뒤로 조정자 몫이다.
 #
+# W0 통합(xplat/w0-int, 2026-10-21 밤)에서 정리한 것:
+#   - W0-a 는 닫혔다(closed). W0-a 가 쥐던 빌드·봉인·CI·testkit·core/foundation·뼈대(scaffold) 자리는 이제 조정자 몫이다.
+#   - AndroidManifest.xml 은 W1 동안 W1-g, W1 병합 뒤로는 조정자만 쓴다(그때 reserved 에서 W1-g 를 뺀다).
+#   - 뼈대 패키지(ui·androidApp·desktopApp 의 scaffold)와 앱의 단일 HTTP 엔진 팩토리(http, G §8-12)는 조정자만.
+#   - settingscommon(W3-b) · W3-c1~c4 하위 패키지 · ui/snapshots 자리는 '제안'에서 확정으로 바꿨다.
+#   - W0-b(골든 바탕)·W0-c(서버 초안)·W0-d(굽기)는 아직 병합 전이라 그대로 둔다. W0-e(VM 몫)·W0-f(③⑤ 후속)도 열려 있다.
+#
 # 문법(이 파일이 쓰는 YAML 부분집합 — 도구가 직접 읽는다):
 #   매핑(키: 값 / 키: 아래 들여쓰기), 블록 목록("- 값"), 흐름 목록([a, b]), 따옴표 문자열, # 주석.
 # 경로 글롭: 저장소 뿌리 기준. "**" = 0개 이상 경로 마디, "*" = 한 마디 안, "{a,b}" = 고르기.
 #   {pkg:<모듈>} 은 아래 package_root 의 Kotlin 패키지 폴더로 바뀐다.
 #   G 의 "…/" 약어 = src/*/kotlin/{pkg:<모듈>}.
-# 갈래 이름 뒤 "제안" 표시는 G 가 하위 패키지를 정하지 않아 이 표가 고른 이름이다 — 조정자가 그 웨이브 시작 때 바꿀 수 있다.
+# G 가 하위 패키지를 정하지 않은 자리(settingscommon · W3-c1~c4 · ui/snapshots)는 W0-a 가 제안하고 W0 통합에서 확정했다.
 
 version: 1
+
+# 닫힌 갈래: 그 이름으로 오는 변경은 경로와 상관없이 빨강이다(후속 수정은 조정자 경유).
+closed: [W0-a]
 
 # 모듈 → Kotlin 패키지 폴더(A§2-2: 뿌리 com.yehsung.aingcheck, 모듈과 1:1. 앱은 android·desktop).
 package_root:
@@ -38,22 +48,29 @@ forbidden:
 
 # 예약 경로: 갈래의 owns 글롭이 덮더라도 여기 적힌 갈래만 쓸 수 있다(나머지는 완료 보고에 패치로 낸다).
 reserved:
-  "multiplatform/settings.gradle.kts": [W0-a, coordinator]
-  "multiplatform/build.gradle.kts": [W0-a, coordinator]
-  "multiplatform/gradle.properties": [W0-a, coordinator]
-  "multiplatform/{gradlew,gradlew.bat}": [W0-a, coordinator]
-  "multiplatform/gradle/**": [W0-a, coordinator]
-  "multiplatform/build-logic/**": [W0-a, coordinator]
-  "multiplatform/**/build.gradle.kts": [W0-a, coordinator]
-  "multiplatform/version.properties": [W0-a, coordinator]
-  "multiplatform/tools/{lanes.yml,lane-ownership.py}": [W0-a, coordinator]
-  "multiplatform/androidApp/src/main/AndroidManifest.xml": [W0-a, W1-g, coordinator]
+  "multiplatform/settings.gradle.kts": [coordinator]
+  "multiplatform/build.gradle.kts": [coordinator]
+  "multiplatform/gradle.properties": [coordinator]
+  "multiplatform/{gradlew,gradlew.bat}": [coordinator]
+  "multiplatform/gradle/**": [coordinator]
+  "multiplatform/build-logic/**": [coordinator]
+  # 이 빌드의 모듈 빌드 파일. spikes/windows 는 자기 완결 Gradle 빌드(W0-e 소유, 출시 빌드 제외)라 여기 들지 않는다.
+  "multiplatform/{*,core/*,feature/*}/build.gradle.kts": [coordinator]
+  "multiplatform/version.properties": [coordinator]
+  "multiplatform/tools/{lanes.yml,lane-ownership.py}": [coordinator]
+  # W1 동안 W1-g(Activity·권한·채널·백업 제외·launchMode — E-U16), W1 병합 뒤 조정자만(K11, §8-3).
+  "multiplatform/androidApp/src/main/AndroidManifest.xml": [W1-g, coordinator]
   "multiplatform/androidApp/src/main/res/xml/**": [coordinator]
+  # 뼈대(빌드·하네스가 도는지만 재는 자리)와 앱의 단일 HTTP 엔진 팩토리(G §8-12 · 구조 시험 R3c)는 조정자만 고친다.
+  "multiplatform/ui/src/*/kotlin/{pkg:ui}/scaffold/**": [coordinator]
+  "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/{scaffold,http}/**": [coordinator]
+  "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/{scaffold,http}/**": [coordinator]
+  "multiplatform/scripts/{seal.sb,gate-fast.sh,gate-full.sh,canary-contrast.sh,apk-native-check.sh,apk-native-allowlist.txt}": [coordinator]
   "multiplatform/ui/src/*/composeResources/**": [W1-e, coordinator]
   "multiplatform/desktopApp/src/main/kotlin/{pkg:desktopApp}/{AppGraph,Main}.kt": [W1-f, coordinator]
   "multiplatform/androidApp/src/main/kotlin/{pkg:androidApp}/nav/NavGraph.kt": [W1-g, coordinator]
   "contract/golden/{_manifest,_digests}.json": [W0-b, coordinator]
-  ".gitignore": [W0-a, coordinator]
+  ".gitignore": [coordinator]
 
 # 조정자(메인 에이전트) 몫 공용 조립 파일(K11 + §8-3). 웨이브 병합 때만 고친다.
 coordinator:
@@ -72,7 +89,7 @@ lanes:
   # ---------------- W0 ----------------
   W0-a:
     wave: W0
-    title: 빌드·봉인·CI
+    title: 빌드·봉인·CI(닫힘 — W0 통합 뒤 이 자리는 조정자 몫, 아래 목록은 기록)
     owns:
       - "multiplatform/{settings,build}.gradle.kts"
       - "multiplatform/gradle.properties"
@@ -92,7 +109,6 @@ lanes:
       - "multiplatform/ui/src/*/kotlin/{pkg:ui}/scaffold/**"
       - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/scaffold/**"
       - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/scaffold/**"
-      - "multiplatform/androidApp/src/main/AndroidManifest.xml"
     excludes:
       - "multiplatform/testkit/src/*/kotlin/{pkg:testkit}/golden/**"
       - "multiplatform/testkit/src/*/resources/golden/**"
@@ -192,6 +208,8 @@ lanes:
 
   W1-e:
     wave: W1
+    # 완료 기준 덧붙임(W0 검증): 골든이 생기면 verifyRoborazzi*(Android·데스크톱)를 gate-fast 에 넣는다 —
+    # 지금 Robolectric·Roborazzi 시험은 모드 속성이 없으면 캡처가 비어 게이트 아래에서 단언이 없다.
     title: 디자인 시스템
     owns:
       - "multiplatform/ui/src/*/kotlin/{pkg:ui}/{theme,components,icons,fonts}/**"
@@ -305,7 +323,7 @@ lanes:
 
   W3-b:
     wave: W3
-    title: 화면 2(순위·나·설정·위젯) — 공용 설정 패키지는 settingscommon(제안, '-' 는 패키지 이름에 못 쓴다)
+    title: 화면 2(순위·나·설정·위젯) — 공용 설정 패키지는 settingscommon(확정. G §8-4 의 settings-common, '-' 는 패키지 이름에 못 쓴다)
     owns:
       - "multiplatform/ui/src/*/kotlin/{pkg:ui}/screens/{rankings,me,settingscommon}/**"
       - "multiplatform/ui/snapshots/screens/{rankings,me,settingscommon}/**"
@@ -316,28 +334,28 @@ lanes:
 
   W3-c1:
     wave: W3
-    title: Windows 껍데기(트레이·플라이아웃·알림+중재 함수·업데이트·단일 실행)
+    title: Windows 껍데기(트레이·플라이아웃·알림+중재 함수·업데이트·단일 실행 — shell/{tray,flyout,notify,update,instance} 확정)
     owns:
       - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/shell/{tray,flyout,notify,update,instance}/**"
     golden: []
 
   W3-c2:
     wave: W3
-    title: 근무·팀(하위 패키지 이름은 제안)
+    title: 근무·팀(pages/{work,team,banners} 확정)
     owns:
       - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{work,team,banners}/**"
     golden: []
 
   W3-c3:
     wave: W3
-    title: 소셜 데스크톱 전용(하위 패키지 이름은 제안)
+    title: 소셜 데스크톱 전용(pages/{poke,ultra,focus} 확정)
     owns:
       - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{poke,ultra,focus}/**"
     golden: []
 
   W3-c4:
     wave: W3
-    title: AI·데스크톱 설정(하위 패키지 이름은 제안)
+    title: AI·데스크톱 설정(pages/{aitokens,ailimits,devices,desktopsettings} 확정)
     owns:
       - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{aitokens,ailimits,devices,desktopsettings}/**"
     golden: []

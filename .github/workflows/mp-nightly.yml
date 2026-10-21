@@ -1,9 +1,11 @@
 # Android·Windows(KMP) 야간·수동 — A§5. 비밀값 0개.
 # 주의: schedule·workflow_dispatch 는 이 파일이 **기본 브랜치(main)** 에 있어야 돈다. 그 전까지는 정의만 있다.
-#  - gate-full-linux : unshare 봉인 아래 전체 게이트(slow·lint·assembleRelease(.invalid)·jar). 기기 계측은 emu.sh(W0-f) 뒤.
+#  - gate-full-linux : unshare 봉인 아래 전체 게이트(slow·lint·assembleRelease(.invalid)·jar). 기기 계측은 빠진다(로그에 "기기 계측 빠짐").
+#                      기기 계측은 맥에서만 돈다: gate-full.sh → emu.sh instrumented(sandbox-exec 봉인·CGWindowList 창 0 — 맥 전용).
+#                      Linux 러너용 봉인 에뮬레이터 잡은 아직 없다(KVM·봉인 방식이 다르다 — 조정자 후속).
 #  - windows-arm64   : windows-11-arm, 방화벽 봉인 아래 데스크톱 시험(mp-ci windows-x64 와 같은 절차).
-#  - release-dryrun  : 봉인 아래 assembleRelease(.invalid) → APK 안 lib/*.so 0개(16 KB 요건, A§6-1).
-#  - android-emulator: emu.sh(W0-f)가 생기면 계측 시험. 없으면 자리표시로 알린다.
+#  - release-dryrun  : 봉인 아래 assembleRelease(.invalid) → APK 네이티브 점검(G §8-12): .so 허용 목록 + 16 KB 정렬
+#                      (zipalign -c -P 16 · PT_LOAD p_align ≥ 0x4000). 옛 "lib/ 0개" 기준은 버렸다(Compose 가 .so 를 싣는다).
 name: mp-nightly
 
 on:
@@ -110,26 +112,8 @@ jobs:
         working-directory: multiplatform
         run: |
           sudo -n unshare --net -- /bin/sh -c 'ip link set lo up && exec sudo -n -E -u "$1" env PATH="$2" HOME="$3" ./gradlew --offline --no-daemon :androidApp:assembleRelease' sh "$(id -un)" "$PATH" "$HOME"
-      - name: APK 안 네이티브 라이브러리 0개(16 KB 요건)
+      - name: APK 네이티브 점검(.so 허용 목록 + 16 KB 정렬, G §8-12)
         working-directory: multiplatform
         run: |
           apk="$(ls androidApp/build/outputs/apk/release/*.apk | head -1)"
-          n="$(unzip -l "$apk" | awk '{print $4}' | grep -c '^lib/.*\.so$' || true)"
-          echo "apk=$apk lib/*.so=$n"
-          [ "$n" -eq 0 ]
-
-  android-emulator:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: 계측 시험 자리(emu.sh 는 W0-f 몫)
-        run: |
-          if [ ! -x multiplatform/scripts/emu.sh ]; then
-            echo "::notice::multiplatform/scripts/emu.sh 가 아직 없다 — W0-f 병합 뒤 이 잡이 에뮬레이터 계측을 돈다(자리표시)"
-            exit 0
-          fi
-          echo "::error::emu.sh 가 생겼다 — 이 잡을 계측 실행으로 바꿔야 한다(조정자)"
-          exit 1
+          bash scripts/apk-native-check.sh "$apk"

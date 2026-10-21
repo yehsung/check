@@ -4,8 +4,17 @@ import Testing
 // xplat(Android·Windows) 서버 초안 M1~M5 의 **파일 계약**.
 //
 // 초안은 저장소 밖 비공개 스테이징에 있다(맥 출시의 db push 가 에이전트 초안까지 올리지 않게 — supabase/ 는 git 밖).
-// 스테이징 경로를 환경변수 `CHECK_XPLAT_STAGING=<경로>` 로 받고, **없으면 건너뛴다**. 기본 체인은 `CHECK_MIGRATIONS_DIR`
-// (다른 마이그레이션 시험과 같은 이름) 또는 조상의 `supabase/migrations` 다 — 워크트리에는 그 폴더가 없으니 덮어써서 돌린다.
+// 스테이징은 환경변수 `CHECK_XPLAT_STAGING` 으로 받는다.
+//   · 없거나 빈 값 → 스테이징 전용 묶음은 건너뛴다(체인 묶음은 아래 문턱을 따른다).
+//   · `1` → 기본 스테이징 경로 `$HOME/.claude/projects/-Users-yesung-check/xplat-staging`.
+//   · 그 밖의 값 → 그 경로.
+//   · 값이 있는데 `migrations-draft/` 를 가진 디렉터리가 아니면 **빨강**이다(조용히 건너뛰어 "통과"로 찍히지 않게).
+// 기본 체인은 `CHECK_MIGRATIONS_DIR`(다른 마이그레이션 시험과 같은 이름) 또는 조상의 `supabase/migrations` 다 — 워크트리에는
+// 그 폴더가 없으니 덮어써서 돌린다.
+//
+// **단계별 문턱**: 서버 ①(M1~M3) · ③(+M4) · ④(+M5)는 초안을 나눠 옮긴다. 체인 묶음은 "이번 체인에 들어온 초안"만 잰다 —
+// 스테이징이 있으면 다섯 다, 없으면 기본 체인에 옮겨진 것만(M1 부터 끊김 없이). M4·M5 를 보는 단언은 그 초안이 들어온
+// 모양에서만 돈다. 아직 안 옮긴 단계는 그 단계의 대조(예: M5 전에는 fork_safe 리터럴이 M5 대상 세 함수에만 있다)로 잰다.
 //
 // 행동은 초안 자신이 증명한다(사후 단언 · 센티널 롤백 프로브 — 하네스에서 3회 멱등). 여기서 보는 것은 SQL 단언이 적용 순간에만
 // 도는 규칙을 **파일 기준으로 영구히** 재는 것이다(B§2-6): 마지막 정의가 초안인가, ios 만 아는 함수가 없는가, 발송 경로 계약,
@@ -19,6 +28,7 @@ private struct XpError: Error, CustomStringConvertible {
 }
 
 private enum Xp {
+    static let order = ["M1", "M2", "M3", "M4", "M5"]
     static let drafts = [
         "M1": "_client_platforms_android_windows.sql",
         "M2": "_device_capable_platforms.sql",
@@ -26,27 +36,72 @@ private enum Xp {
         "M4": "_push_fcm_desktop_suppress.sql",
         "M5": "_token_fork_safe_windows.sql",
     ]
+    /// `CHECK_XPLAT_STAGING=1` 이 가리키는 곳(HOME 아래 · 메인 체크아웃 /Users/yesung/check 의 Claude 프로젝트 폴더).
+    static let defaultStagingSuffix = ".claude/projects/-Users-yesung-check/xplat-staging"
 
-    static var staging: URL? {
-        guard let raw = ProcessInfo.processInfo.environment["CHECK_XPLAT_STAGING"], !raw.isEmpty else { return nil }
-        let url = URL(fileURLWithPath: raw, isDirectory: true)
-        var isDir: ObjCBool = false
-        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue ? url : nil
+    enum StagingSetting {
+        case absent
+        case dir(URL)
+        case invalid(String)
     }
 
-    /// 체인 기준 시험의 문턱. 지금은 스테이징이 있을 때만 돈다(초안이 저장소 밖에 있다).
-    /// 서버 ① 커밋(초안을 supabase/migrations 로 옮기는 커밋)에서 swift-patches/0002 가 이 줄을
-    /// `staging != nil || baseHasDraft("M1")` 로 바꿔 상시로 켠다.
-    static var chainEnabled: Bool { staging != nil }
+    static let stagingSetting: StagingSetting = {
+        let env = ProcessInfo.processInfo.environment
+        guard let raw = env["CHECK_XPLAT_STAGING"], !raw.isEmpty else { return .absent }
+        let path: String
+        if raw == "1" {
+            let home = env["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
+            path = URL(fileURLWithPath: home, isDirectory: true).appendingPathComponent(defaultStagingSuffix).path
+        } else {
+            path = raw
+        }
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
+            return .invalid("CHECK_XPLAT_STAGING=\(raw) → \(path) 가 디렉터리가 아니다(1 = 기본 스테이징 경로, 그 밖은 경로)")
+        }
+        let draftDir = url.appendingPathComponent("migrations-draft", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: draftDir.path, isDirectory: &isDir), isDir.boolValue else {
+            return .invalid("CHECK_XPLAT_STAGING=\(raw) → \(path) 에 migrations-draft/ 가 없다 — 스테이징 폴더가 아니다")
+        }
+        return .dir(url)
+    }()
+
+    /// 변수가 있다(올바르든 아니든). 있으면 스테이징 전용 묶음이 돌고, 틀린 값이면 그 안에서 빨갛다.
+    static var stagingRequested: Bool {
+        if case .absent = stagingSetting { return false }
+        return true
+    }
+
+    static var staging: URL? {
+        if case .dir(let url) = stagingSetting { return url }
+        return nil
+    }
+
+    static func stagingDir() throws -> URL {
+        switch stagingSetting {
+        case .dir(let url): return url
+        case .invalid(let message): throw XpError(message)
+        case .absent: throw XpError("CHECK_XPLAT_STAGING 이 없다(건너뛰어야 했다)")
+        }
+    }
+
+    /// 기본 체인(supabase/migrations)에 이미 옮겨진 초안 단계(이름 꼬리로 찾는다).
+    static let baseDraftStages: [String] = order.filter { baseHasDraft($0) }
+
+    /// 이번 실행의 체인에 들어온 초안 단계 — 스테이징이 있으면 다섯 다(합친다), 없으면 기본 체인에 옮겨진 것만.
+    static let stages: [String] = stagingRequested ? order : baseDraftStages
+
+    static func has(_ m: String) -> Bool { stages.contains(m) }
+
+    /// 체인 기준 묶음의 문턱. 지금은 스테이징이 있을 때만 돈다(초안이 저장소 밖에 있다).
+    /// 서버 ① 커밋(M1~M3 을 supabase/migrations 로 옮기는 커밋)에서 swift-patches/0002 가 이 줄을
+    /// `stagingRequested || !baseDraftStages.isEmpty` 로 바꿔 상시로 켠다. 빠뜨리면 `xplat_스테이징_변수와_단계_문턱` 이 빨갛다.
+    static var chainEnabled: Bool { stagingRequested }
 
     static func baseHasDraft(_ m: String) -> Bool {
         guard let base = try? baseMigrations(), let names = try? sqlFiles(base) else { return false }
         return names.contains { $0.hasSuffix(drafts[m]!) }
-    }
-
-    static func stagingDir() throws -> URL {
-        guard let s = staging else { throw XpError("CHECK_XPLAT_STAGING 이 없다(건너뛰어야 했다)") }
-        return s
     }
 
     static func baseMigrations() throws -> URL {
@@ -84,8 +139,8 @@ private enum Xp {
         let base = try baseMigrations()
         var byName: [String: URL] = [:]
         for n in try sqlFiles(base) { byName[n] = base.appendingPathComponent(n) }
-        guard let staging else { return byName.keys.sorted().map { ($0, byName[$0]!) } }
-        let draftDir = staging.appendingPathComponent("migrations-draft", isDirectory: true)
+        guard stagingRequested else { return byName.keys.sorted().map { ($0, byName[$0]!) } }
+        let draftDir = try stagingDir().appendingPathComponent("migrations-draft", isDirectory: true)
         for n in try sqlFiles(draftDir) {
             let d = draftDir.appendingPathComponent(n)
             if let existing = byName[n], try read(existing) != read(d) {
@@ -96,8 +151,9 @@ private enum Xp {
         return byName.keys.sorted().map { ($0, byName[$0]!) }
     }
 
-    /// 초안 파일(합친 체인에서 이름 꼬리로 찾는다 — 서버 ① 뒤에는 기본 체인에 있다).
+    /// 초안 파일(합친 체인에서 이름 꼬리로 찾는다 — 서버 ① 뒤에는 기본 체인에 있다). 이번 체인에 안 들어온 단계를 부르면 오류다.
     static func draft(_ m: String) throws -> (name: String, url: URL) {
+        guard has(m) else { throw XpError("\(m) 은 이번 체인에 들어온 단계(\(stages))가 아니다 — 시험이 단계 문턱을 빠뜨렸다") }
         let hits = try mergedChain().filter { $0.name.hasSuffix(drafts[m]!) }
         guard hits.count == 1 else { throw XpError("\(m) 초안(*\(drafts[m]!))이 체인에 \(hits.count)개다") }
         return hits[0]
@@ -177,15 +233,16 @@ private enum Xp {
     }()
 }
 
-@Suite("xplat 서버 초안 M1~M5 — 체인 기준 계약", .enabled(if: Xp.chainEnabled, "CHECK_XPLAT_STAGING=<스테이징 경로> 가 없으면 건너뛴다"))
+@Suite("xplat 서버 초안 M1~M5 — 체인 기준 계약(이번 체인에 들어온 단계만)", .enabled(if: Xp.chainEnabled, "CHECK_XPLAT_STAGING 이 없고 기본 체인에 초안이 없으면 건너뛴다"))
 struct XplatServerChainTests {
-    @Test("초안 5개 — 이름 모양 · 기본 체인 뒤 타임스탬프 · 버전 중복 0 · 최상위 트랜잭션 제어 0 · 달러 태그 짝")
+    @Test("들어온 초안 — 이름 모양 · 기본 체인 뒤 타임스탬프 · 버전 중복 0 · 최상위 트랜잭션 제어 0 · 달러 태그 짝")
     func 초안_모양() throws {
         // 없으면: 타임스탬프가 체인 마지막보다 작은 초안이 운영 CLI 에서 순서가 틀어지거나, 파일 안 begin/commit 이 원자 적용을 깬다.
         let base = try Xp.sqlFiles(try Xp.baseMigrations())
         let lastBase = try #require(base.last)
         var versions = Set(base.compactMap { $0.split(separator: "_").first.map(String.init) })
-        for m in ["M1", "M2", "M3", "M4", "M5"] {
+        #expect(!Xp.stages.isEmpty, "체인 묶음이 켜졌는데 들어온 초안이 0개다")
+        for m in Xp.stages {
             let (name, url) = try Xp.draft(m)
             #expect(name.range(of: #"^[0-9]{14}_[a-z0-9_]+\.sql$"#, options: .regularExpression) != nil, "\(name): 운영 CLI 이름 모양이 아니다")
             #expect(name > lastBase || base.contains(name), "\(name) 이 기본 체인 마지막(\(lastBase))보다 앞이다")
@@ -211,7 +268,7 @@ struct XplatServerChainTests {
         }
     }
 
-    @Test("마지막 정의 = 초안 — register_device·capable 4종·발송 3함수·토큰 3함수 등을 옛 파일 재정의가 되돌리지 못한다")
+    @Test("마지막 정의 = 초안(들어온 단계마다) — register_device·capable 4종·발송 3함수·토큰 3함수 등을 옛 파일 재정의가 되돌리지 못한다")
     func 마지막_정의() throws {
         // 없으면: 20260917130000(client_devices) · 20260917150000(gomoku capable) 같은 옛 파일이 초안 뒤에 다시 들어와도 초록이다
         //         (그 파일의 프로브는 android 를 invalid 로 **기대**한다 — B§8).
@@ -225,18 +282,29 @@ struct XplatServerChainTests {
             "M4": ["push__enqueue", "push_outbox_claim", "push_outbox_complete", "push__at_desktop", "push_windows_surface_min_build"],
             "M5": ["token_usage_board", "codex_account_group", "token_scan_health", "token_device_fork_safe"],
         ]
-        for (m, fns) in expect {
-            let file = try Xp.draftName(m)
-            for fn in fns {
-                #expect(last[fn]?.file == file, "\(fn) 의 마지막 정의가 \(last[fn]?.file ?? "없음") 이다(기대 \(file))")
+        for m in Xp.order {
+            let fns = try #require(expect[m])
+            if Xp.has(m) {
+                let file = try Xp.draftName(m)
+                for fn in fns {
+                    #expect(last[fn]?.file == file, "\(fn) 의 마지막 정의가 \(last[fn]?.file ?? "없음") 이다(기대 \(file))")
+                }
+            } else {
+                // 아직 안 들어온 단계: 그 단계가 처음 만드는 함수가 체인에 먼저 나타나면 안 된다(초안 일부만 손으로 옮긴 사고).
+                let fresh = ["register_device_fcm", "client_publish_release_v2", "gomoku_device_min_build", "app_current_notice_for",
+                             "push__at_desktop", "push_windows_surface_min_build", "token_device_fork_safe"]
+                for fn in fns where fresh.contains(fn) {
+                    #expect(last[fn] == nil, "\(m) 가 안 들어왔는데 \(fn) 이 \(last[fn]?.file ?? "") 에 정의돼 있다")
+                }
             }
         }
     }
 
-    @Test("capable 4종 — 본문에 'ios' 0 · 플랫폼 분기 호출 1 · 공통 A: 'ios' 를 품은 함수는 'android' 도 품는다(파일 기준)")
+    @Test("capable 4종(M2) — 본문에 'ios' 0 · 플랫폼 분기 호출 1 · 공통 A(M1~M3 뒤): 'ios' 를 품은 함수는 'android' 도 품는다(파일 기준)")
     func ios_만_아는_함수_없음() throws {
         // 없으면: 누가 capable 을 ios 판으로 되돌리거나, 새 함수가 'ios' 만 말해 Android·Windows 갈래가 조용히 빠져도 초록이다.
         let last = try Xp.lastDefinitions()
+        try #require(Xp.has("M2") && Xp.has("M3"), "서버 ① 은 M1~M3 을 함께 옮긴다 — 이번 체인 \(Xp.stages)")
         for fn in ["gomoku_capable", "gomoku_chat_capable", "chess_capable", "tetris_capable"] {
             let body = Xp.codeOnly(try #require(last[fn]?.body, "\(fn) 본문 없음"))
             #expect(Xp.count("'ios'", body) == 0, "\(fn) 에 'ios' 가 남았다")
@@ -246,78 +314,110 @@ struct XplatServerChainTests {
         #expect(iosOnly.isEmpty, "ios 만 아는 함수(마지막 정의 기준): \(iosOnly)")
     }
 
-    @Test("FCM 등록·발송 계약 — lower 금지 · profiles 0 · btrim · push__at_desktop · provider · FCM 비우기 줄 lower 0 · 출처 windows")
+    @Test("FCM 등록(M1) · 출처 windows(M3) · 발송(M4: lower 금지 · push__at_desktop · provider · FCM 비우기 줄 lower 0) 계약")
     func 발송_계약() throws {
         // 없으면: FCM 토큰을 소문자로 저장·비교해(push_pipeline 의 APNs 함정) Android 알림이 영구히 안 가거나, 억제가 옛 맥 판정으로 돌아가도 초록이다.
         let last = try Xp.lastDefinitions()
+        try #require(Xp.has("M1") && Xp.has("M3"), "서버 ① 은 M1~M3 을 함께 옮긴다 — 이번 체인 \(Xp.stages)")
         let fcm = Xp.codeOnly(try #require(last["register_device_fcm"]?.body))
         #expect(!fcm.contains("lower("))
         #expect(!fcm.contains("profiles"))
         #expect(fcm.contains("btrim("))
         #expect(fcm.contains("'android'"))
         #expect(!(try #require(last["register_device"]?.body)).contains("profiles"), "register_device 는 profiles 글자 0(client_devices.sql:12-13)")
+        #expect(Xp.codeOnly(try #require(last["phone_work__session_json"]?.body)).contains("then 'windows'"), "§8-1 origin 'windows'")
         let enqueue = Xp.codeOnly(try #require(last["push__enqueue"]?.body))
-        #expect(enqueue.contains("d.fcm_token is not null"))
-        #expect(enqueue.contains("public.push__at_desktop(p_user, p_kind)"))
-        #expect(!enqueue.contains("push__at_mac("))
-        #expect(enqueue.contains("(p_kind in ('message', 'gomoku_invite') or p_kind = 'chess_invite')"), "억제 목록 글자열(push_pipeline §6)")
         let claim = Xp.codeOnly(try #require(last["push_outbox_claim"]?.body))
-        #expect(claim.contains("'provider'") && claim.contains("d.user_id = c.user_id") && claim.contains("d.user_id = o.user_id"))
         let complete = Xp.codeOnly(try #require(last["push_outbox_complete"]?.body))
         let fcmLines = complete.split(separator: "\n").filter { $0.contains("fcm_token") || $0.contains("btrim(t, E") }
-        #expect(!fcmLines.isEmpty && fcmLines.allSatisfy { !$0.contains("lower(") }, "FCM 비우기 줄에 lower(: \(fcmLines)")
-        #expect(Xp.codeOnly(try #require(last["phone_work__session_json"]?.body)).contains("then 'windows'"), "§8-1 origin 'windows'")
-        let desktop = Xp.codeOnly(try #require(last["push__at_desktop"]?.body))
-        #expect(desktop.contains("<> all") && desktop.contains("can_show"), "못 띄우는 Windows 입력을 빼는 귀속 규칙(B-9.8)")
+        if Xp.has("M4") {
+            #expect(enqueue.contains("d.fcm_token is not null"))
+            #expect(enqueue.contains("public.push__at_desktop(p_user, p_kind)"))
+            #expect(!enqueue.contains("push__at_mac("))
+            #expect(enqueue.contains("(p_kind in ('message', 'gomoku_invite') or p_kind = 'chess_invite')"), "억제 목록 글자열(push_pipeline §6)")
+            #expect(claim.contains("'provider'") && claim.contains("d.user_id = c.user_id") && claim.contains("d.user_id = o.user_id"))
+            #expect(!fcmLines.isEmpty && fcmLines.allSatisfy { !$0.contains("lower(") }, "FCM 비우기 줄에 lower(: \(fcmLines)")
+            let desktop = Xp.codeOnly(try #require(last["push__at_desktop"]?.body))
+            #expect(desktop.contains("<> all") && desktop.contains("can_show"), "못 띄우는 Windows 입력을 빼는 귀속 규칙(B-9.8)")
+        } else {
+            // M4 전(서버 ① 뒤): 발송 경로는 옛 APNs 판 그대로여야 한다 — FCM 기기를 고르는 발송이 M4 없이 생기면(공급자 판정 없는
+            // 옛 Edge 가 provider 없는 FCM 토큰을 APNs 로 보낸다) 안 된다. M1 이 fcm_token 칸을 더해도 발송 함수는 그 칸을 모른다.
+            #expect(!enqueue.contains("fcm_token") && !claim.contains("fcm_token") && fcmLines.isEmpty,
+                    "M4 전에 발송 함수가 fcm_token 을 안다: enqueue \(enqueue.contains("fcm_token")) · claim \(claim.contains("fcm_token")) · complete \(fcmLines)")
+            #expect(enqueue.contains("push__at_mac("), "M4 전 억제는 옛 맥 판정(push__at_mac) 그대로")
+        }
     }
 
-    @Test("fork_safe 리터럴 0(공통 E) · 새 플랫폼 상수는 도달 불가로 시작 · 울트라 Windows 경제 1")
+    @Test("fork_safe 리터럴(공통 E: M5 뒤 0 · 전에는 M5 대상 세 함수에만) · 새 플랫폼 상수는 도달 불가로 시작 · 울트라 Windows 경제 1")
     func 상수와_fork_safe() throws {
         // 없으면: Windows 빌드를 맥 52 와 비교하는 리터럴이 남거나, 예측 빌드 번호를 박은 상수가 대조 없이 대결을 연다(체스 1.0.5 사고).
         let last = try Xp.lastDefinitions()
-        let literal = last.filter { $0.value.body.range(of: #"codex_diag_build\s*,\s*0\s*\)\s*(>=|<)\s*52"#, options: .regularExpression) != nil }
-        #expect(literal.isEmpty, "fork_safe 리터럴이 남은 함수: \(literal.keys.sorted())")
-        let unreachable = ["gomoku_android_min_build", "gomoku_windows_min_build", "gomoku_chat_android_min_build",
-                           "gomoku_chat_windows_min_build", "chess_android_min_build", "chess_windows_min_build",
-                           "tetris_android_min_build", "tetris_windows_min_build", "push_windows_message_min_build",
-                           "phone_work_poke_windows_min_build", "token_windows_fork_safe_build"]
-        let draftFiles = Set(try ["M2", "M3", "M4", "M5"].map { try Xp.draftName($0) })
-        for fn in unreachable {
-            let def = try #require(last[fn], "\(fn) 정의 없음")
-            let value = def.body.trimmingCharacters(in: .whitespacesAndNewlines)
-            if draftFiles.contains(def.file) {
-                #expect(value == "select 2147483647", "\(fn) 의 첫 값이 도달 불가가 아니다: \(value)")
-            } else {
-                // 서버 ⑤·⑥ 의 한 줄 파일이 내렸다 — 양의 정수여야 한다(V0341 등록은 그 커밋의 swift 패치가 맡는다).
-                #expect(value.range(of: #"^select [1-9][0-9]*$"#, options: .regularExpression) != nil, "\(fn) = \(value) (\(def.file))")
+        let literal = Set(last.filter { $0.value.body.range(of: #"codex_diag_build\s*,\s*0\s*\)\s*(>=|<)\s*52"#, options: .regularExpression) != nil }.keys)
+        if Xp.has("M5") {
+            #expect(literal.isEmpty, "fork_safe 리터럴이 남은 함수: \(literal.sorted())")
+        } else {
+            let m5Targets: Set<String> = ["token_usage_board", "codex_account_group", "token_scan_health"]
+            #expect(!literal.isEmpty && literal.isSubset(of: m5Targets), "M5 전 fork_safe 리터럴은 M5 대상 세 함수에만 있어야 한다: \(literal.sorted())")
+        }
+        let unreachable: [String: [String]] = [
+            "M2": ["gomoku_android_min_build", "gomoku_windows_min_build", "gomoku_chat_android_min_build", "gomoku_chat_windows_min_build",
+                   "chess_android_min_build", "chess_windows_min_build", "tetris_android_min_build", "tetris_windows_min_build"],
+            "M3": ["phone_work_poke_windows_min_build"],
+            "M4": ["push_windows_message_min_build"],
+            "M5": ["token_windows_fork_safe_build"],
+        ]
+        for (m, fns) in unreachable.sorted(by: { $0.key < $1.key }) {
+            guard Xp.has(m) else {
+                for fn in fns { #expect(last[fn] == nil, "\(m) 가 안 들어왔는데 상수 \(fn) 이 있다(\(last[fn]?.file ?? ""))") }
+                continue
+            }
+            let draftFile = try Xp.draftName(m)
+            for fn in fns {
+                let def = try #require(last[fn], "\(fn) 정의 없음")
+                let value = def.body.trimmingCharacters(in: .whitespacesAndNewlines)
+                if def.file == draftFile {
+                    #expect(value == "select 2147483647", "\(fn) 의 첫 값이 도달 불가가 아니다: \(value)")
+                } else {
+                    // 서버 ⑤·⑥ 의 한 줄 파일이 내렸다 — 양의 정수여야 한다(V0341 등록은 그 커밋의 swift 패치가 맡는다).
+                    #expect(def.file > draftFile && value.range(of: #"^select [1-9][0-9]*$"#, options: .regularExpression) != nil,
+                            "\(fn) = \(value) (\(def.file))")
+                }
             }
         }
-        #expect(last["ultra_windows_new_economy_build"]?.body.trimmingCharacters(in: .whitespacesAndNewlines) == "select 1")
-        #expect(last["token_mac_fork_safe_build"]?.body.trimmingCharacters(in: .whitespacesAndNewlines) == "select 52")
+        if Xp.has("M3") {
+            #expect(last["ultra_windows_new_economy_build"]?.body.trimmingCharacters(in: .whitespacesAndNewlines) == "select 1")
+        }
+        if Xp.has("M5") {
+            #expect(last["token_mac_fork_safe_build"]?.body.trimmingCharacters(in: .whitespacesAndNewlines) == "select 52")
+        }
     }
-
 }
 
-@Suite("xplat 서버 초안 — 스테이징 전용(핀 · 패치 · 되돌림 · payload 두 벌)", .enabled(if: Xp.staging != nil, "CHECK_XPLAT_STAGING 이 없으면 건너뛴다"))
+@Suite("xplat 서버 초안 — 스테이징 전용(핀 · 패치 · 되돌림 · payload 두 벌)", .enabled(if: Xp.stagingRequested, "CHECK_XPLAT_STAGING 이 없으면 건너뛴다"))
 struct XplatServerStagingTests {
-    @Test("정본 md5 19개(B§9-2 18 + tetris)가 초안의 사전 단언 핀에 박혀 있고 canonical-defs/MD5.txt 와 같다")
+    @Test("정본 md5 19개(B§9-2 18 + tetris) — 초안 사전 단언 핀이 (함수 서명, 정본 md5) 한 쌍으로 canonical-defs/MD5.txt 와 같다")
     func 정본_md5_핀() throws {
         // 없으면: 운영 본문이 그 사이 바뀌었는데 초안이 옛 정본을 가정한 채 create or replace 해 남의 수정을 조용히 되돌린다.
+        //         md5 와 함수가 따로따로 초안 어딘가에 있기만 하면 통과하는 판(두 함수의 핀이 서로 뒤바뀐 사고)도 막는다.
         let staging = try Xp.stagingDir()
         let md5Text = try Xp.read(staging.appendingPathComponent("tools/canonical-defs/MD5.txt"))
-        var pins: [String: String] = [:]
+        var pins: [String: (sig: String, md5: String)] = [:]
         for line in md5Text.split(separator: "\n") {
             let p = line.split(separator: " ")
-            if p.count >= 3 { pins[String(p[0])] = String(p[2]) }
+            if p.count >= 3 { pins[String(p[0])] = (String(p[1]), String(p[2])) }
         }
         #expect(pins.count == 19, "MD5.txt 가 19줄이 아니다: \(pins.count)")
         var drafts = ""
-        for m in ["M1", "M2", "M3", "M4", "M5"] { drafts += try Xp.read(try Xp.draft(m).url) }
-        for (fn, md5) in pins.sorted(by: { $0.key < $1.key }) {
-            #expect(md5.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil)
-            #expect(drafts.contains("'\(md5)'") && drafts.contains("public.\(fn)("), "\(fn) 의 정본 md5 \(md5) 가 초안 핀에 없다")
+        for m in Xp.order { drafts += try Xp.read(try Xp.draft(m).url) }
+        for (fn, pin) in pins.sorted(by: { $0.key < $1.key }) {
+            #expect(pin.md5.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil, "\(fn): md5 모양 \(pin.md5)")
+            #expect(pin.sig.hasPrefix("\(fn)(") && pin.sig.hasSuffix(")"), "\(fn): 서명 \(pin.sig)")
+            // 핀 한 줄: ('public.<서명>', '<정본 md5>', '<새 md5>') — 서명과 정본 md5 가 같은 튜플에 있어야 한다.
+            let pattern = #"\('public\."# + NSRegularExpression.escapedPattern(for: pin.sig) + #"',\s*'"# + pin.md5 + #"',\s*'[0-9a-f]{32}'\)"#
+            let hits = try NSRegularExpression(pattern: pattern).numberOfMatches(in: drafts, range: NSRange(drafts.startIndex..., in: drafts))
+            #expect(hits == 1, "('public.\(pin.sig)', '\(pin.md5)', …) 핀 튜플이 초안에 \(hits)개다(기대 1)")
         }
-        #expect(pins["tetris_capable"] == "4316e54d6ed2f51f15e5376bb23d9150", "tetris 정본은 20261022120000:199 의 운영 값과 같아야 한다")
+        #expect(pins["tetris_capable"]?.md5 == "4316e54d6ed2f51f15e5376bb23d9150", "tetris 정본은 20261022120000:199 의 운영 값과 같아야 한다")
     }
 
     @Test("V0341 등록 패치 — M2 가 정의하는 gomoku 접두 함수마다 '<파일>:<함수>' 키가 있다 · 되돌림 초안 5개")
@@ -334,7 +434,7 @@ struct XplatServerStagingTests {
         let patch = try Xp.read(staging.appendingPathComponent("swift-patches/\(v0341)"))
         for fn in gomoku { #expect(patch.contains("\"\(m2):\(fn)\""), "V0341 패치에 \(m2):\(fn) 등록이 없다") }
         let reverts = try FileManager.default.contentsOfDirectory(atPath: staging.appendingPathComponent("revert").path).filter { $0.hasSuffix(".sql") }
-        for m in ["M1", "M2", "M3", "M4", "M5"] {
+        for m in Xp.order {
             let r = reverts.filter { $0.hasPrefix("revert-\(m)-") }
             #expect(r.count == 1, "\(m) 되돌림 초안이 \(r.count)개")
             if let f = r.first {
@@ -356,7 +456,21 @@ struct XplatServerStagingTests {
     }
 }
 
-// MARK: - 스테이징 없이도 도는 저장소 위생(§8-9 · M-15)
+// MARK: - 스테이징 없이도 도는 시험(§8-9 · M-15 · 문턱 위생)
+
+@Test("CHECK_XPLAT_STAGING 은 비었거나 스테이징 폴더(1 = 기본 경로) · 기본 체인의 초안은 M1 부터 끊김 없다 · 들어왔으면 체인 묶음이 켜져 있다")
+func xplat_스테이징_변수와_단계_문턱() throws {
+    // 없으면: 변수를 틀리게 줘도(계획 원문의 =1 · 오타 경로) 두 묶음이 조용히 건너뛰어 "통과"로 찍히거나, 서버 ① 커밋에서
+    //         0002 를 빠뜨려 체인 묶음이 꺼진 채 초록이거나, M4 만 먼저 옮긴 사고가 지나간다.
+    if case .invalid(let message) = Xp.stagingSetting {
+        Issue.record(Comment(rawValue: message))
+    }
+    let base = Xp.baseDraftStages
+    #expect(base == Array(Xp.order.prefix(base.count)), "기본 체인의 초안 단계가 M1 부터 이어지지 않는다: \(base)")
+    if !base.isEmpty {
+        #expect(Xp.chainEnabled, "기본 체인에 초안 \(base) 이 들어왔는데 체인 묶음이 꺼져 있다 — swift-patches/0002 를 같은 커밋에 적용하라")
+    }
+}
 
 @Test("저장소 꼭대기에 backups/ 가 없다 · payload 정본 5종은 kind 와 type 이 같고 비밀 모양 글자가 0")
 func xplat_저장소_위생() throws {

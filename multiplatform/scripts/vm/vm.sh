@@ -158,11 +158,15 @@ guest_ps() {
 }
 
 wait_ssh() {
-    local deadline=$((SECONDS + ${1:-180}))
+    local deadline=$((SECONDS + ${1:-180})) got=""
     while [ $SECONDS -lt $deadline ]; do
-        if [ "$(guest "cmd /c echo ok" 2>/dev/null | tr -d '\r')" = "ok" ]; then return 0; fi
+        got="$(guest "cmd /c echo ok" 2>/dev/null | tr -d '\r' || true)"
+        if [ "$got" = "ok" ]; then return 0; fi
         sleep 3
     done
+    # 시한이 지나면 마지막 한 번은 오류를 보여 준다(원인 없이 "안 열렸다"만 남지 않게).
+    log "마지막 응답: '${got}'"
+    guest "cmd /c echo ok" >&2 || true
     return 1
 }
 

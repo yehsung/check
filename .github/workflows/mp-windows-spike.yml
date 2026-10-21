@@ -327,6 +327,21 @@ jobs:
           $o
           exit $code
 
+      - name: sshd diagnostics for tester (기록)
+        if: always()
+        continue-on-error: true
+        run: |
+          $d = [ordered]@{}
+          $d.sshdConfig = @(Get-Content "$env:ProgramData\ssh\sshd_config" -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch '^\s*#' -and $_.Trim() })
+          $d.testerAuthorizedKeysAcl = (& icacls.exe 'C:\Users\tester\.ssh\authorized_keys' 2>&1) -join ' '
+          $d.testerSshDirAcl = (& icacls.exe 'C:\Users\tester\.ssh' 2>&1) -join ' '
+          $probe = & $env:SSH_EXE -v -i $env:KEY -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$env:RUNNER_TEMP\kh-diag" tester@127.0.0.1 "cmd /c echo ok" 2>&1
+          $d.sshExit = $LASTEXITCODE
+          $d.sshTail = @($probe | Select-Object -Last 15 | ForEach-Object { "$_" })
+          $d.events = @(Get-WinEvent -LogName 'OpenSSH/Operational' -MaxEvents 15 -ErrorAction SilentlyContinue | ForEach-Object { "$($_.TimeCreated.ToString('HH:mm:ss')) $($_.Message)" })
+          $d | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 (Join-Path $env:OUT 'sshd-diag.json')
+          Get-Content (Join-Path $env:OUT 'sshd-diag.json')
+
       - name: vm.sh batch against the runner (fake vmrun · real ssh tester@127.0.0.1 · tar · winrun)
         id: batch
         continue-on-error: true

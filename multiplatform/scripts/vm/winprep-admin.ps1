@@ -118,7 +118,7 @@ if (Want 'TesterSsh') {
     New-Item -ItemType Directory -Force -Path $sshDir | Out-Null
     $ak = Join-Path $sshDir 'authorized_keys'
     Copy-Item -Force $PublicKeyFile $ak
-    & icacls.exe $ak /inheritance:r /grant:r "*S-1-5-18:F" "*S-1-5-32-544:F" "${sid}:R" | Out-Null
+    & icacls.exe $ak /inheritance:r /grant:r "*S-1-5-18:F" "*S-1-5-32-544:F" "*${sid}:R" | Out-Null
     $result.testerSsh = [ordered]@{ profilePath = $profilePath; createProfileHr = $hr; authorizedKeys = $ak; keyLines = @(Get-Content $ak | Where-Object { $_ -match '^ssh-' }).Count; acl = ((& icacls.exe $ak) -join ' ') }
 }
 
@@ -171,7 +171,12 @@ function Install-Jdk([string]$arch, [string]$dest) {
         Move-Item $inner.FullName $dest
     }
     # 다른 아키텍처 JDK(x64 손님에서 arm64 등)는 실행이 안 될 수 있다 — 설치는 하고 버전 확인 실패만 기록한다.
-    $ver = try { ((& (Join-Path $dest 'bin\java.exe') -version 2>&1) | Select-Object -First 1 | Out-String).Trim() } catch { "실행 불가: $($_.Exception.Message)" }
+    # java -version 은 stderr 로 쓴다 — 5.1 에서 Stop 이면 그 줄이 예외가 되므로 이 호출만 Continue 로 본다.
+    $ver = try {
+        $ErrorActionPreference = 'Continue'
+        $lines = & (Join-Path $dest 'bin\java.exe') -version 2>&1
+        if ($LASTEXITCODE -eq 0) { (($lines | Select-Object -First 1) | Out-String).Trim() } else { "exit $LASTEXITCODE" }
+    } catch { "실행 불가: $($_.Exception.Message.Split([Environment]::NewLine)[0])" } finally { $ErrorActionPreference = 'Stop' }
     return [ordered]@{ path = $dest; sha256 = $actual; version = $ver }
 }
 

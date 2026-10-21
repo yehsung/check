@@ -1,0 +1,16 @@
+{
+  "_apns": {
+    "collapse_id": null,
+    "expiration": 1792668470
+  },
+  "aps": {
+    "alert": {
+      "body": "확인했어요. 다음 판에서 고칠게요.",
+      "title": "제보에 답장이 왔어요"
+    },
+    "category": "FEEDBACK_REPLY",
+    "sound": "default"
+  },
+  "report_id": "1b1b0000-0000-4000-8000-00000001b508",
+  "type": "feedback_reply"
+}

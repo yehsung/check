@@ -1,0 +1,226 @@
+{
+  "format": 1,
+  "note": "read from SCNParticleSystem instances that the real ReactionEngine attached; colors resolved under aqua and darkAqua; F-6 semantics in plan reports",
+  "systems": {
+    "confetti": {
+      "acceleration": [
+        0,
+        -1.5,
+        0
+      ],
+      "angle": 0,
+      "angleVariation": 180,
+      "angularVelocity": 3,
+      "angularVelocityVariation": 5,
+      "attachedTo": "sceneRoot",
+      "birthDirection": "random",
+      "birthLocation": "surface",
+      "birthRate": 800,
+      "birthRateVariation": 0,
+      "blendMode": "alpha",
+      "colorSRGB": {
+        "aqua": [
+          1,
+          0.176471,
+          0.333333,
+          1
+        ],
+        "darkAqua": [
+          1,
+          0.215686,
+          0.372549,
+          1
+        ]
+      },
+      "colorVariation": [
+        0.9,
+        0.9,
+        0.9,
+        0
+      ],
+      "dampingFactor": 0,
+      "emissionDurationS": 0.1,
+      "emissionDurationVariation": 0,
+      "emitterPositionExtent": [
+        0,
+        0.5,
+        0
+      ],
+      "emitterShape": {
+        "radius": 0.02,
+        "type": "sphere"
+      },
+      "emittingDirection": [
+        0,
+        1,
+        0
+      ],
+      "fresnelExponent": 0,
+      "idleDurationS": 0,
+      "isAffectedByGravity": false,
+      "isBlackPassEnabled": false,
+      "isLightingEnabled": false,
+      "lifeSpanS": 1.2,
+      "lifeSpanVariation": 0.4,
+      "loops": false,
+      "orientationMode": 0,
+      "particleImage": "nil(default)",
+      "size": 0.03,
+      "sizeVariation": 0.02,
+      "sortingMode": 0,
+      "speedFactor": 1,
+      "spreadingAngleDeg": 180,
+      "stretchFactor": 0,
+      "velocity": 1.2,
+      "velocityVariation": 0.8,
+      "warmupDurationS": 0
+    },
+    "goalSpark": {
+      "acceleration": [
+        0,
+        0.6,
+        0
+      ],
+      "angle": 0,
+      "angleVariation": 0,
+      "angularVelocity": 0,
+      "angularVelocityVariation": 0,
+      "attachedTo": "sceneRoot",
+      "birthDirection": "constant",
+      "birthLocation": "surface",
+      "birthRate": 420,
+      "birthRateVariation": 0,
+      "blendMode": "additive",
+      "colorSRGB": {
+        "aqua": [
+          1,
+          0.8,
+          0,
+          1
+        ],
+        "darkAqua": [
+          1,
+          0.839216,
+          0,
+          1
+        ]
+      },
+      "colorVariation": [
+        0.06,
+        0.5,
+        0.4,
+        0
+      ],
+      "dampingFactor": 0,
+      "emissionDurationS": 0.6,
+      "emissionDurationVariation": 0,
+      "emitterPositionExtent": [
+        0,
+        -0.45,
+        0
+      ],
+      "emitterShape": {
+        "height": 0.01,
+        "radius": 0.12,
+        "type": "cylinder"
+      },
+      "emittingDirection": [
+        0,
+        1,
+        0
+      ],
+      "fresnelExponent": 0,
+      "idleDurationS": 0,
+      "isAffectedByGravity": false,
+      "isBlackPassEnabled": false,
+      "isLightingEnabled": false,
+      "lifeSpanS": 1.8,
+      "lifeSpanVariation": 0.5,
+      "loops": false,
+      "orientationMode": 0,
+      "particleImage": "nil(default)",
+      "size": 0.022,
+      "sizeVariation": 0.012,
+      "sortingMode": 0,
+      "speedFactor": 1,
+      "spreadingAngleDeg": 26,
+      "stretchFactor": 0,
+      "velocity": 1.5,
+      "velocityVariation": 0.5,
+      "warmupDurationS": 0
+    },
+    "ultraCharge": {
+      "acceleration": [
+        0,
+        0,
+        0
+      ],
+      "angle": 0,
+      "angleVariation": 0,
+      "angularVelocity": 0,
+      "angularVelocityVariation": 0,
+      "attachedTo": "sceneRoot",
+      "birthDirection": "surfaceNormal",
+      "birthLocation": "surface",
+      "birthRate": 300,
+      "birthRateVariation": 0,
+      "blendMode": "additive",
+      "colorSRGB": {
+        "aqua": [
+          0.33,
+          0.67,
+          1,
+          1
+        ],
+        "darkAqua": [
+          0.33,
+          0.67,
+          1,
+          1
+        ]
+      },
+      "colorVariation": [
+        0.04,
+        0.2,
+        0.2,
+        0
+      ],
+      "dampingFactor": 0,
+      "emissionDurationS": 0.7,
+      "emissionDurationVariation": 0,
+      "emitterPositionExtent": [
+        0,
+        0,
+        0
+      ],
+      "emitterShape": {
+        "radius": 0.960515,
+        "type": "sphere"
+      },
+      "emittingDirection": [
+        0,
+        1,
+        0
+      ],
+      "fresnelExponent": 0,
+      "idleDurationS": 0,
+      "isAffectedByGravity": false,
+      "isBlackPassEnabled": false,
+      "isLightingEnabled": false,
+      "lifeSpanS": 0.5,
+      "lifeSpanVariation": 0.2,
+      "loops": false,
+      "orientationMode": 0,
+      "particleImage": "nil(default)",
+      "size": 0.02,
+      "sizeVariation": 0.008,
+      "sortingMode": 0,
+      "speedFactor": 1,
+      "spreadingAngleDeg": 180,
+      "stretchFactor": 0,
+      "velocity": 0.22,
+      "velocityVariation": 0.1,
+      "warmupDurationS": 0
+    }
+  }
+}

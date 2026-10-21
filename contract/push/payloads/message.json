@@ -1,0 +1,18 @@
+{
+  "_apns": {
+    "collapse_id": null,
+    "expiration": 1792668470
+  },
+  "aps": {
+    "alert": {
+      "body": "오늘 회의 몇 시예요?",
+      "title": "보낸사람"
+    },
+    "category": "MESSAGE",
+    "sound": "default",
+    "thread-id": "message-0a11ce00-0000-4000-8000-00000000a501"
+  },
+  "message_id": "0e0e0000-0000-4000-8000-00000000e505",
+  "peer_id": "0a11ce00-0000-4000-8000-00000000a501",
+  "type": "message"
+}

@@ -34,7 +34,8 @@ STATE="${AINGCHECK_VM_STATE:-$HOME/.cache/aingcheck-vm}"
 GUEST_ROOT="${AINGCHECK_VM_GUEST_ROOT:-C:/work/runs}"
 SSH_BIN="${AINGCHECK_SSH:-ssh}"
 SCP_BIN="${AINGCHECK_SCP:-scp}"
-DEFAULT_PATHS="multiplatform,contract,Tests/checkTests/Fixtures,Sources/CheckMobileKit/Demo/Fixtures,Sources/check/Characters"
+# Sources 는 통째다(W1-e): ui 시험이 Swift 원문(SF 기호 대응·팔레트 대조)과 맥 그림(Sources/check/Resources·CheckMobileKit/Resources/Art — Gradle Sync)을 읽는다. 약 32MB.
+DEFAULT_PATHS="multiplatform,contract,Tests/checkTests/Fixtures,Sources"
 FUSION_WINDOW_RE='VMware Fusion|vmware-vmx'
 
 log() { printf 'vm.sh: %s\n' "$*" >&2; }

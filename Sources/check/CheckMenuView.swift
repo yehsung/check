@@ -3325,7 +3325,11 @@ struct PokeMessageReceiptStrip: View {
                 .fixedSize()
             // 본문 자체가 주인공이라 캡슐로 띄운다(이름·시각보다 한 급 크게).
             // **`fixedSize()` 금지**(위 ① — 200자가 행을 밀어낸다). 남는 폭을 받아 말줄임한다.
-            Text(message.body)
+            //
+            // ★ 아잉이 이모티콘(v0.3.62)은 여기서 **"아잉이 기쁨"으로 읽힌다**. 이 줄은 34pt 짜리 글자 자리라
+            //   그림을 그릴 수 없는데, 날것(`[아잉:기쁨]`)을 그대로 띄우면 사용자는 그것을 '깨진 메시지'로 읽는다.
+            //   평범한 본문은 `AingStickerText.preview` 가 **손대지 않고** 그대로 돌려준다.
+            Text(AingStickerText.preview(for: message.body))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(CheckTheme.accent)
                 .lineLimit(1)

@@ -629,9 +629,18 @@ final class WorkTimerStore {
     //    이 플래그는 '창이 열려 있다'는 뜻이고, 레일 진입 버튼의 하이라이트와 순위 재조회 게이트로 쓴다.
     var isMiniGamePanelVisible = false
     /// 값이 바뀌면 게임 잎 뷰가 진행 중인 판을 즉시 끝낸다(MiniGameHost.interruptToken). 팝오버가 닫혀도 뷰 트리는 상주하고
-    /// isMenuPresented 는 관찰 대상이 아니라서, **이것이 게임을 멈추는 유일하게 관찰 가능한 신호**다 — setMenuPresented(false)·
+    /// isMenuPresented 는 관찰 대상이 아니라서, **판을 끝내는 신호는 관찰 가능한 이것 하나뿐**이다 — setMenuPresented(false)·
     /// closeMiniGamePanel·selectMiniGame·로그아웃이 올린다. 60Hz 게임 상태는 여기 두지 않는다(잎 뷰 @State).
+    /// 게임을 멈추는 **관찰 가능한 신호는 이제 둘**이다(0.3.62) — 끝내는 이것과, 아래에서 멈추기만 하는
+    /// `miniGamePauseRequestToken`. 끝내려는 자리가 아래 토큰을 올리면 판이 안 끝나고, 그 반대면 고친 제보가 돌아온다.
     var miniGameInterruptToken = 0
+    /// 값이 바뀌면 화면이 진행 중인 판을 **일시정지**한다(끝내지 않는다 — 0.3.62). 올리는 곳은 미니게임 창이
+    /// 키를 잃는 순간 하나뿐이다(`CheckMiniGameWindowController.windowDidResignKey` → `requestMiniGamePause()`).
+    /// 0.3.61(build 114)까지는 그 자리가 위의 interruptToken 을 올려 판을 통째로 끝냈고, 실사용자가
+    /// "테트리스 일시정지하고 다른 창을 클릭하면 아예 끝나버려요"로 제보했다. 토큰을 **나눠 두는** 이유는
+    /// '끝내라'는 되돌릴 수 없고 '멈춰라'는 되돌릴 수 있다는 것이다 — 한 토큰에 두 뜻을 담으면 받는 쪽이
+    /// 어느 뜻인지 못 가린다. 멈출지 말지는 화면이 정한다(`CheckMiniGameWindowView.PauseState.resigningKey`).
+    var miniGamePauseRequestToken = 0
     /// 마지막으로 고른 게임(UserDefaults 영속, 기본 타이밍 바).
     var miniGameKind: MiniGameKind = .timingBar
     /// 오늘(KST) 순위(RPC 행 자체 완결). 종류 전환·로그아웃에 비운다. 3플래그 규약은 tokenBoard 와 같다.

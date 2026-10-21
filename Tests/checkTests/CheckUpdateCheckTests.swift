@@ -443,26 +443,37 @@ func copyCommandIsExact() {
 // 원클릭이 실제로 던지는 명령이 (1) brew update 를 **먼저** 하고 (2) --cask 를 명시하는지 문자열로 못박는다.
 // (1)이 없으면 HOMEBREW_AUTO_UPDATE_SECS 스로틀 창 안에 있는 사용자는 낡은 탭으로 upgrade 를 돌려
 // 새 버전을 못 본 채 끝나고, 앱은 죽지 않아 배너가 "업데이트 중…"으로 굳는다(실사용 신고 증상).
+// 0.3.61: brew 경로도 "상수 스크립트 + 위치 인자" 로 바뀌어 단언을 그 구조로 옮겼다 — 값은 인자 자리에서, 순서·리다이렉트는
+// 상수에서 잰다(느슨해진 것은 없다: 예전 단언 다섯 가지가 전부 대응하는 자리에 있다). 실제로 돌려 보는 것은 V0361UpdatePrefetchTests.
 @Test
-func upgradeScriptUpdatesTapFirstAndTargetsTheCask() {
-    // 프로덕션 스폰이 만드는 **실제 스크립트 문자열**을 본다. 테스트가 문자열을 재조립하면
+func brewUpgradeScriptUpdatesTapFirstAndTargetsTheCask() {
+    // 프로덕션 스폰이 만드는 **실제 스크립트·인자**를 본다. 테스트가 문자열을 재조립하면
     // 소스를 되돌려도 초록이라 아무것도 못 잡는다.
-    let script = UpdateRunner.upgradeScript(brew: "/opt/homebrew/bin/brew")
+    let script = UpdateRunner.brewUpgradeScript
+    let wrapper = UpdateRunner.brewSpawnWrapper
+    let args = UpdateRunner.brewUpgradeArguments(brew: "/opt/homebrew/bin/brew")
 
-    let updateAt = script.range(of: "brew\" update")
-    let upgradeAt = script.range(of: "brew\" upgrade")
+    let updateAt = script.range(of: #""$BREW" update"#)
+    let upgradeAt = script.range(of: #""$BREW" upgrade"#)
     #expect(updateAt != nil)
     #expect(upgradeAt != nil)
     // 순서가 뒤집히면 낡은 탭으로 upgrade 가 돌아 새 버전을 못 본다.
     if let u = updateAt, let g = upgradeAt { #expect(u.lowerBound < g.lowerBound) }
     // 이름만 주면 brew 가 포뮬러를 먼저 찾는다 — 동명 포뮬러가 생기면 엉뚱한 것을 올린다.
-    #expect(script.contains("upgrade --cask \(UpdateRunner.caskName)"))
-    // 실패 원인을 볼 수 있어야 한다 — /dev/null 로 버리면 지원이 불가능하다.
+    #expect(script.contains(#""$BREW" upgrade --cask "$CASK" && open -a "$APP""#))
+    #expect(script.contains(#"BREW="$1"; CASK="$2"; APP="$3""#))
+    #expect(args == ["aing-check-update", script, "/opt/homebrew/bin/brew",
+                     UpdateRunner.caskName, UpdateRunner.appPath, UpdateRunner.logPath])
+    #expect(args[3] == "aing-check")
+    // 실패 원인을 볼 수 있어야 한다 — /dev/null 로 버리면 지원이 불가능하다(미리 받기까지 포함해 스크립트 전체에 없다).
     #expect(!script.contains("/dev/null"))
-    #expect(script.contains(UpdateRunner.logPath))
+    #expect(!wrapper.contains("/dev/null"))
+    // 로그는 래퍼의 마지막 인자 자리로 간다(stdout·stderr 둘 다).
+    #expect(wrapper.hasSuffix(#">>"$5" 2>&1 &"#))
+    #expect(args.last == UpdateRunner.logPath)
     // 앱 종료에도 살아남아야 한다(cask 의 quit 스탠자가 이 앱을 죽인다).
-    #expect(script.hasPrefix("nohup "))
-    #expect(script.hasSuffix("&"))
+    #expect(wrapper.hasPrefix("nohup "))
+    #expect(wrapper.hasSuffix("&"))
 }
 
 // running 은 종착역이 아니다. 업그레이드가 실제로 일어나면 cask 의 quit 스탠자가 앱을 죽이므로
@@ -718,11 +729,76 @@ func dmgUpdateScriptParsesUnderZsh() throws {
     #expect(proc.terminationStatus == 0, "zsh 가 스크립트를 파싱하지 못했다: \(message)")
 }
 
+/// DMG 스크립트에서 맨 앞에 이어 붙인 나눠 받기 함수(`pfetchFunction`)를 뺀 **DMG 자신의 본문**.
+/// 0.3.61 부터 스크립트가 pfetch 로 시작해서, 전체를 보는 `contains` 는 pfetch 쪽 글자로 초록이 될 수 있다(검토 지적).
+private func dmgOwnBody() throws -> String {
+    let prefix = UpdateRunner.pfetchFunction + "\n"
+    try #require(dmgScript.hasPrefix(prefix), "DMG 스크립트가 pfetch 로 시작하지 않는다")
+    return String(dmgScript.dropFirst(prefix.count))
+}
+
 // zsh 는 단어 앞의 `=https` 를 `=명령어` 확장으로 읽는다(실측: "https not found" 로 죽었다).
 // 작은 인용을 걷어내는 '정리'가 스크립트를 통째로 죽이므로 글자로 못박는다.
+// 0.3.61: 스크립트 앞에 붙은 pfetch 의 탐색 curl 에도 `--proto '=https'` 가 있어 전체를 보면 늘 참이었다(빈 단언 — 검토 지적).
+// 그래서 DMG 자신의 본문에서, 그것도 **기존 단일 curl 자리**에서 잰다.
 @Test
-func dmgUpdateScriptQuotesTheProtoArgument() {
-    #expect(dmgScript.contains("--proto '=https'"))
+func dmgUpdateScriptQuotesTheProtoArgument() throws {
+    let body = try dmgOwnBody()
+    #expect(body.contains("|| curl -fL --proto '=https' --tlsv1.2"), "DMG 단일 curl 의 '=https' 작은 인용이 사라졌다")
+    #expect(body.components(separatedBy: "--proto '=https'").count - 1 == 1, "DMG 본문의 https 고정 curl 이 하나가 아니다")
+    #expect(!body.contains("--proto ="), "작은 인용 없는 =https 가 있다(zsh 가 =명령어 확장으로 죽는다)")
+}
+
+// ── 감시 시한 ↔ 실제 받기 시간 (검토 지적: 나눠 받기 + 단일 curl 의 최악이 감시 600초 안에서 뒤 단계 몫을 먹는다)
+// 숫자를 테스트에 다시 적지 않고 **스크립트 글자에서 뽑는다** — 누가 시한이나 `--max-time` 을 바꾸면 상수와 함께 빨개진다.
+private func maxTimes(in text: String) -> [Int] {
+    var out: [Int] = []
+    var rest = Substring(text)
+    while let r = rest.range(of: "--max-time ") {
+        rest = rest[r.upperBound...]
+        if let n = Int(rest.prefix { $0.isNumber }) { out.append(n) }
+    }
+    return out
+}
+
+// 0.3.61 이어 받기: 바퀴 수가 정해져 있지 않아 `--max-time` 을 더해서는 최악을 못 구한다. 대신 **시한 한 곳**
+// (`PF_DEADLINE=$(( SECONDS + N ))`)이 있고, 모든 curl 의 `--max-time` 이 그 시한에서 남은 시간으로 정해진다 — 그 둘을 글자로 본다.
+@Test
+func pfetchWorstCaseIsTheDeadlineInTheFunction() throws {
+    let body = UpdateRunner.pfetchFunction
+    let marker = "PF_DEADLINE=$(( SECONDS + "
+    #expect(body.components(separatedBy: marker).count - 1 == 1, "나눠 받기의 시한이 한 곳이 아니다")
+    let at = try #require(body.range(of: marker))
+    let deadline = try #require(Int(body[at.upperBound...].prefix { $0.isNumber }), "시한 숫자를 못 읽었다")
+    #expect(deadline == 120)
+    #expect(UpdateRunner.pfetchWorstCaseSeconds == Double(deadline),
+            "pfetchWorstCaseSeconds 가 함수의 시한과 다르다 — 상수와 주석의 계산을 다시 적는다")
+    // 고정 숫자 `--max-time` 이 하나라도 있으면 시한을 넘어 도는 curl 이 생긴다. curl 은 탐색·조각 둘뿐이고 둘 다 남은 시간을 쓴다:
+    // 탐색은 자기 `t` = min(30, 남은), 조각은 넷째 인자 = 바퀴의 `t` = min(90, 남은).
+    #expect(maxTimes(in: body).isEmpty, "고정 --max-time 이 있다: \(maxTimes(in: body))")
+    #expect(body.components(separatedBy: "--max-time ").count - 1 == 2, "curl 의 --max-time 이 탐색·조각 두 곳이 아니다")
+    #expect(body.contains(#"t="$(pf_left 30)""#), "탐색의 --max-time 이 min(30, 남은 시간)이 아니다")
+    #expect(body.components(separatedBy: #"-L --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 15 --max-time "$t" "#).count - 1 == 1,
+            "탐색의 --max-time 이 남은 시간이 아니다")
+    #expect(body.contains(#"t="$(pf_left 90)""#), "조각의 --max-time 이 min(90, 남은 시간)이 아니다")
+    #expect(body.components(separatedBy: #"--max-time "$4" "#).count - 1 == 1, "조각의 --max-time 이 넘겨받은 남은 시간이 아니다")
+    #expect(body.contains(#"pf_piece "$i" "$PF_A" "$PF_B" "$t" &"#), "바퀴가 조각에 남은 시간을 넘기지 않는다")
+    #expect(body.contains(#"local l=$(( PF_DEADLINE - SECONDS ))"#), "남은 시간이 시한에서 오지 않는다")
+}
+
+@Test
+func dmgWatchdogCoversTheWorstDownloadAndKeepsTheOldTailBudget() throws {
+    let body = try dmgOwnBody()
+    let whole = maxTimes(in: body)
+    #expect(whole == [UpdateRunner.dmgDownloadTimeoutSeconds], "DMG 단일 curl 의 --max-time 이 상수와 다르다: \(whole)")
+    let worstDownload = UpdateRunner.pfetchWorstCaseSeconds + Double(whole.reduce(0, +))
+    #expect(worstDownload == 540)
+    // 받기가 최악이어도 그 뒤 단계(검증·스테이징·종료 대기·교체)에 0.3.60 과 같은 몫(600 - 420 = 180초)이 남아야 한다.
+    let oldTail = UpdateRunner.watchdogSeconds - Double(UpdateRunner.dmgDownloadTimeoutSeconds)
+    #expect(UpdateRunner.dmgWatchdogSeconds - worstDownload >= oldTail,
+            "DMG 감시 \(UpdateRunner.dmgWatchdogSeconds)초가 최악 받기 \(worstDownload)초 + 뒤 단계 \(oldTail)초를 못 덮는다")
+    // brew 경로는 그대로 600 — 미리 받기 혼자서는 120 이라 넘지 않는다.
+    #expect(UpdateRunner.pfetchWorstCaseSeconds < UpdateRunner.watchdogSeconds)
 }
 
 // 검증을 하나라도 건너뛰면 네트워크에서 받은 것을 그대로 실행 위치에 넣는 셈이다.
@@ -956,6 +1032,22 @@ func standaloneStillFailsWhenTheScriptLeavesNoTrace() async {
     await runner.runUpgrade()?.value
     #expect(runner.status == .failed)
     #expect(runner.progress == .unknown)
+}
+
+// 받기 단계에서 오래 머무는 스크립트(나눠 받기가 느리게 실패하고 단일 curl 이 한도 직전에 성공 — 최악 540초 + 뒤 단계)를
+// 600초에 실패로 내리면, 배너는 실패를 띄우는데 스크립트는 계속 가서 앱을 종료하고 교체한다(검토 지적).
+// DMG 감시는 `dmgWatchdogSeconds` 를 끝까지 기다려야 한다 — brew 의 600 이 아니라.
+@MainActor
+@Test
+func standaloneWatchdogWaitsForTheDMGBudgetNotTheBrewOne() async {
+    final class Naps: @unchecked Sendable { var total = 0.0 }
+    let naps = Naps()
+    let runner = makeStandaloneRunner(state: "stage=start\nstage=download\n", watchdogSleep: { naps.total += $0 })
+    await runner.runUpgrade()?.value
+    #expect(runner.status == .failed)
+    #expect(runner.progress.stage == .download)
+    #expect(naps.total == UpdateRunner.dmgWatchdogSeconds, "DMG 감시가 \(naps.total)초에 실패로 내렸다")
+    #expect(naps.total > UpdateRunner.watchdogSeconds)
 }
 
 // MARK: - SIGTERM → 평소 종료 절차

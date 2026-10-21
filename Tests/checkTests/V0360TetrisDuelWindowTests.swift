@@ -590,14 +590,17 @@ func everyWindowAutosaveNameIsStillUniqueAfterAddingTetris() throws {
     #expect(Set(names).count == names.count, "자동저장 이름이 겹친다: \(names)")
 }
 
-@Test("버전 0.3.60 / 113 · CHANGELOG 0.3.60 은 맨 위 세 줄(사용자 말투)")
+// v0.3.61: 빌드 번호 고정(0.3.60 / 113)과 "맨 위 섹션" 단언은 다음 버전이 올라가며 거짓이 됐다 — 그 두 사실은 이제
+// `V0361UpdatePrefetchTests.versionAndChangelog` 가 0.3.61 / 114 로 잰다. 여기는 0.3.60 섹션의 **내용**과, 테트리스가
+// 기대는 하한(빌드가 113 아래로 내려가면 `tetris_min_build() = 113` 서버가 이 맥을 구버전으로 보고 신청을 막는다)만 남긴다.
+@Test("CHANGELOG 0.3.60 은 세 줄(사용자 말투) · 빌드는 113 이상")
 func versionAndChangelog() throws {
-    // 없으면: 빌드 번호가 112 로 남아 `tetris_min_build() = 113` 서버가 이 맥을 구버전으로 보고 신청을 막는다.
     let root = CheckCoreSourceLayout.repoRoot
     let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
     let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.60</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>113</string>"))
+    let afterKey = squashed.components(separatedBy: "<key>CFBundleVersion</key><string>").dropFirst().first ?? ""
+    let buildNumber = Int(afterKey.prefix { $0.isNumber })
+    #expect((buildNumber ?? 0) >= 113, "빌드 번호가 테트리스 하한(113) 아래다: \(String(describing: buildNumber))")
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.60\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -607,8 +610,7 @@ func versionAndChangelog() throws {
     for banned in ["RPC", "서버", "스토어", "테스트", "tetris_"] {
         #expect(!section.contains(banned), "사용자 문구에 내부 어휘('\(banned)')가 있다")
     }
-    #expect(changelog.range(of: "## 0.3.60")!.lowerBound < changelog.range(of: "## 0.3.59")!.lowerBound,
-            "0.3.60 이 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
+    #expect(changelog.range(of: "## 0.3.60")!.lowerBound < changelog.range(of: "## 0.3.59")!.lowerBound)
 }
 
 // MARK: - 도우미

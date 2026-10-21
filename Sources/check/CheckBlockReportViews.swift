@@ -294,7 +294,12 @@ struct BlockReportSheetView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let quoted = sheet.target.messageBody {
                 // 신고하는 메시지 한 장(읽기 전용 · 세 줄까지) — 무엇을 신고하는지 눈으로 확인하는 자리다.
-                Text(quoted)
+                //
+                // ★ **글자만 들어가는 자리다**(v0.3.62). 사용자는 아잉이 이모티콘 **그림**을 우클릭해 신고하는데
+                //   여기에 날것 토큰(`[아잉:기쁨]`)이 적히면 "내가 신고하려던 게 이게 맞나"가 된다.
+                //   서버로 가는 증거(`messageBody` 그 값 · 운영자 화면)는 **날것 그대로** 남긴다 — 바꾸는 것은
+                //   사용자에게 보여 주는 인용 한 장뿐이다.
+                Text(AingStickerText.preview(for: quoted))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(3)

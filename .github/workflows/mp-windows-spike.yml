@@ -1,0 +1,357 @@
+# W0-e Windows 실험 — GitHub 러너 몫(G §2-3 W0-e ①②, §8-3·§8-6).
+# 탐침: multiplatform/spikes/windows(자기 완결 Gradle 빌드, 출시 빌드 제외). VM 하네스: multiplatform/scripts/vm.
+# 비밀값 0개 · 운영 서버 호출 0 · 서명 키는 러너에서 그때 만들고 남기지 않는다. 실패도 결과다 — 단계별 수치는 artifact 와 요약에 남는다.
+name: mp-windows-spike
+
+on:
+  push:
+    branches: ["xplat/w0-e"]
+    paths:
+      - "multiplatform/spikes/windows/**"
+      - "multiplatform/scripts/vm/**"
+      - ".github/workflows/mp-windows-spike.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mp-windows-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SPIKE: multiplatform/spikes/windows
+  GRADLE_VERSION: "9.7.0"
+  GRADLE_SHA256: "84fbba45c7f4c64abc77460e1c00f541e9f960e3c7ed2538f1ede19eacd873ae"
+
+jobs:
+  probe:
+    name: probe (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+            jdkArch: x64
+          - runner: windows-11-arm
+            arch: arm64
+            jdkArch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: microsoft
+          java-version: "21"
+          architecture: ${{ matrix.jdkArch }}
+
+      - name: paths
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'spike-out'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          "OUT=$out" >> $env:GITHUB_ENV
+          "SEALED_JDK=$(Join-Path $env:RUNNER_TEMP 'jdk-sealed')" >> $env:GITHUB_ENV
+          "BUILD_TIME=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))" >> $env:GITHUB_ENV
+
+      - name: env report (A-X14 · D-E24)
+        id: env
+        continue-on-error: true
+        run: pwsh -NoProfile -File "$env:SPIKE/ci/env-report.ps1" -Out $env:OUT
+
+      - name: gradle distribution (sha256 pinned)
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'gradle.zip'
+          Invoke-WebRequest -UseBasicParsing -Uri "https://services.gradle.org/distributions/gradle-$env:GRADLE_VERSION-bin.zip" -OutFile $zip
+          $h = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($h -ne $env:GRADLE_SHA256) { throw "gradle zip sha256 불일치: $h" }
+          Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP
+          "GRADLE=$(Join-Path $env:RUNNER_TEMP "gradle-$env:GRADLE_VERSION\bin\gradle.bat")" >> $env:GITHUB_ENV
+
+      - name: seal — test-only JDK outbound block + paired canary (winseal.ps1)
+        id: seal
+        continue-on-error: true
+        run: |
+          Copy-Item -Recurse -Path $env:JAVA_HOME -Destination $env:SEALED_JDK
+          $seal = 'multiplatform/scripts/vm/winseal.ps1'
+          $inst = pwsh -NoProfile -File $seal -Action install -SealedJdk $env:SEALED_JDK; $instCode = $LASTEXITCODE
+          $status = pwsh -NoProfile -File $seal -Action status -SealedJdk $env:SEALED_JDK; $statusCode = $LASTEXITCODE
+          $canary = pwsh -NoProfile -File $seal -Action canary -SealedJdk $env:SEALED_JDK -OpenJdk $env:JAVA_HOME; $canaryCode = $LASTEXITCODE
+          $r = [ordered]@{ installExit = $instCode; install = ($inst | Select-Object -Last 1); statusExit = $statusCode; status = ($status | Select-Object -Last 1); canaryExit = $canaryCode; canary = ($canary | Select-Object -Last 1) }
+          $r | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 (Join-Path $env:OUT 'seal.json')
+          $r | ConvertTo-Json -Depth 4
+          if ($instCode -ne 0 -or $canaryCode -ne 0) { exit 1 }
+
+      - name: gradle assemble + createDistributable + packageMsi (Gradle 은 비봉인 JDK, 내려받기 예열)
+        id: build
+        continue-on-error: true
+        run: |
+          & $env:GRADLE --no-daemon -p $env:SPIKE "-Pspike.build=${{ github.run_number }}" "-Pspike.buildTime=$env:BUILD_TIME" assemble testClasses resolveTestRuntime createDistributable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:GRADLE --no-daemon -p $env:SPIKE "-Pspike.build=${{ github.run_number }}" "-Pspike.buildTime=$env:BUILD_TIME" packageMsi
+          "PACKAGE_MSI_EXIT=$LASTEXITCODE" >> $env:GITHUB_ENV
+          exit 0
+
+      - name: unit tests on the sealed JDK (AINGCHECK_NETWORK_SEALED=1, --offline)
+        id: test
+        continue-on-error: true
+        env:
+          AINGCHECK_NETWORK_SEALED: "1"
+        run: |
+          & $env:GRADLE --no-daemon --offline -p $env:SPIKE "-Pspike.build=${{ github.run_number }}" "-Pspike.buildTime=$env:BUILD_TIME" "-PtestJavaExecutable=$env:SEALED_JDK\bin\java.exe" test
+          $code = $LASTEXITCODE
+          Copy-Item -Recurse -ErrorAction SilentlyContinue (Join-Path $env:SPIKE 'build/test-results') (Join-Path $env:OUT 'test-results')
+          exit $code
+
+      - name: JNA smoke — sealed JDK + classpath
+        id: smoke_cp
+        continue-on-error: true
+        run: |
+          & "$env:SEALED_JDK\bin\java.exe" -cp "$env:SPIKE/build/probe-lib/*" com.yehsung.aingcheck.spike.windows.MainKt smoke "--out=$env:OUT\smoke-cp.json"
+          exit $LASTEXITCODE
+
+      - name: JNA smoke — jpackage launcher (app-image)
+        id: smoke_app
+        continue-on-error: true
+        run: |
+          $exe = (Resolve-Path (Join-Path $env:SPIKE 'build/compose/binaries/main/app/AingSpike/AingSpike.exe')).Path
+          $p = Start-Process -FilePath $exe -ArgumentList @('smoke', "--out=$env:OUT\smoke-app.json") -PassThru -WindowStyle Hidden
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }
+          if (Test-Path "$env:OUT\smoke-app.json") { Get-Content "$env:OUT\smoke-app.json" }
+          exit $p.ExitCode
+
+      - name: launcher DPI manifest (D-E22)
+        id: dpi
+        continue-on-error: true
+        run: |
+          $app = (Resolve-Path (Join-Path $env:SPIKE 'build/compose/binaries/main/app/AingSpike')).Path
+          $cp = "$env:SPIKE/build/probe-lib/*"
+          & "$env:JAVA_HOME\bin\java.exe" -cp $cp com.yehsung.aingcheck.spike.windows.MainKt manifest "--exe=$app\AingSpike.exe" --require-pmv2 "--out=$env:OUT\dpi.json"
+          $code = $LASTEXITCODE
+          $refs = @("$env:JAVA_HOME\bin\java.exe", "$env:JAVA_HOME\bin\javaw.exe") + @(Get-ChildItem "$app\runtime\bin" -Filter *.exe -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+          & "$env:JAVA_HOME\bin\java.exe" -cp $cp com.yehsung.aingcheck.spike.windows.MainKt manifest @($refs | ForEach-Object { "--exe=$_" }) "--out=$env:OUT\dpi-reference.json"
+          $mtRoot = 'C:\Program Files (x86)\Windows Kits\10\bin'
+          $kitArch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+          $mt = Get-ChildItem $mtRoot -Recurse -Filter mt.exe -ErrorAction SilentlyContinue | Where-Object { $_.Directory.Name -eq $kitArch } | Select-Object -First 1
+          if ($mt) {
+            & $mt.FullName -nologo "-inputresource:$app\AingSpike.exe;#1" "-out:$env:OUT\launcher.manifest.xml"
+            "mt.exe exit=$LASTEXITCODE (교차 확인용)"
+          }
+          exit $code
+
+      - name: packageMsi silent install · selfcheck · uninstall (A-X13)
+        id: msi
+        continue-on-error: true
+        run: |
+          if ($env:PACKAGE_MSI_EXIT -ne '0') { "packageMsi 실패: exit=$env:PACKAGE_MSI_EXIT"; exit 1 }
+          $msi = Get-ChildItem (Join-Path $env:SPIKE 'build/compose/binaries/main/msi') -Filter *.msi | Select-Object -First 1
+          pwsh -NoProfile -File "$env:SPIKE/ci/msi-roundtrip.ps1" -Msi $msi.FullName -BuildInfo "$env:SPIKE/build/buildinfo.json" -Out "$env:OUT\msi"
+          exit $LASTEXITCODE
+
+      - name: MSIX makeappx · test-signed · WACK (D-E15 runner part)
+        id: msix
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          $app = (Resolve-Path (Join-Path $env:SPIKE 'build/compose/binaries/main/app/AingSpike')).Path
+          pwsh -NoProfile -File "$env:SPIKE/msix/make-msix.ps1" -AppImage $app -Arch ${{ matrix.arch }} -Version "1.0.${{ github.run_number }}.0" -Out "$env:OUT\msix"
+          exit $LASTEXITCODE
+
+      - name: vm harness — snapshot (vm.sh, Git Bash) → Windows tar → winrun verify-tree, tamper pair
+        id: vmtree
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          new="multiplatform/scripts/vm/tests/runner-untracked-$RANDOM.txt"
+          printf 'runner new file\n' > "$new"   # 추적 안 되는 새 파일도 담기는지(H M-6)
+          bash multiplatform/scripts/vm/vm.sh snapshot --paths multiplatform/spikes/windows,multiplatform/scripts/vm --out "$RUNNER_TEMP/push.tar" | tee "$OUT/vm-snapshot.json"
+          run="$RUNNER_TEMP/vmrun-dir"
+          mkdir -p "$run"
+          /c/Windows/System32/tar.exe -xf "$(cygpath -w "$RUNNER_TEMP/push.tar")" -C "$(cygpath -w "$run")"
+          test -f "$run/$new"
+          test ! -e "$run/multiplatform/spikes/windows/build"
+          pwsh -NoProfile -File multiplatform/scripts/vm/winrun.ps1 -Action verify-tree -RunDir "$(cygpath -w "$run")" | tee "$OUT/vm-verify.json"
+          printf 'x' >> "$run/multiplatform/scripts/vm/vm.sh"
+          if pwsh -NoProfile -File multiplatform/scripts/vm/winrun.ps1 -Action verify-tree -RunDir "$(cygpath -w "$run")" > "$OUT/vm-verify-tampered.json"; then
+            echo "변조를 못 잡았다"; exit 1
+          fi
+          rm -f "$new"
+
+      - name: PowerShell parse (pwsh 7 + Windows PowerShell 5.1)
+        id: psparse
+        continue-on-error: true
+        run: |
+          $code = 'param($root) $n=0; Get-ChildItem $root -Recurse -Filter *.ps1 | ForEach-Object { $t=$null; $e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$t,[ref]$e); foreach ($x in $e) { $n++; Write-Output ("{0}:{1} {2}" -f $_.FullName,$x.Extent.StartLineNumber,$x.Message) } }; exit [int]($n -gt 0)'
+          Set-Content -Path (Join-Path $env:RUNNER_TEMP 'psparse.ps1') -Value $code
+          pwsh -NoProfile -File (Join-Path $env:RUNNER_TEMP 'psparse.ps1') multiplatform; $a = $LASTEXITCODE
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $env:RUNNER_TEMP 'psparse.ps1') multiplatform; $b = $LASTEXITCODE
+          "pwsh=$a powershell51=$b"
+          if ($a -ne 0 -or $b -ne 0) { exit 1 }
+
+      - name: verdict
+        if: always()
+        env:
+          OUTCOME_ENV: ${{ steps.env.outcome }}
+          OUTCOME_SEAL: ${{ steps.seal.outcome }}
+          OUTCOME_TEST: ${{ steps.test.outcome }}
+          OUTCOME_SMOKE_CP: ${{ steps.smoke_cp.outcome }}
+          OUTCOME_SMOKE_APP: ${{ steps.smoke_app.outcome }}
+          OUTCOME_DPI: ${{ steps.dpi.outcome }}
+          OUTCOME_MSI: ${{ steps.msi.outcome }}
+          OUTCOME_MSIX: ${{ steps.msix.outcome }}
+          OUTCOME_VMTREE: ${{ steps.vmtree.outcome }}
+          OUTCOME_PSPARSE: ${{ steps.psparse.outcome }}
+          OUTCOME_BUILD: ${{ steps.build.outcome }}
+        run: pwsh -NoProfile -File "$env:SPIKE/ci/verdict.ps1" -Out $env:OUT -Arch ${{ matrix.arch }}
+
+      - name: keyless app-image for D-E31 (Mac repack experiment)
+        if: always()
+        run: |
+          $app = Join-Path $env:SPIKE 'build/compose/binaries/main/app/AingSpike'
+          if (Test-Path $app) { Compress-Archive -Path $app -DestinationPath (Join-Path $env:RUNNER_TEMP 'app-image.zip') -Force }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: spike-${{ matrix.arch }}
+          path: ${{ runner.temp }}/spike-out
+          retention-days: 7
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: app-image-${{ matrix.arch }}
+          path: ${{ runner.temp }}/app-image.zip
+          retention-days: 7
+          if-no-files-found: warn
+
+  vm-rehearsal:
+    # VM 하네스 예행: 러너를 "손님"으로 보고 winprep-admin(일부) → tester 로 SSH → vm.sh batch(가짜 vmrun, 진짜 ssh·tar·PowerShell).
+    # VM 판정을 대신하지 않는다 — 스크립트가 실제 Windows 에서 도는지만 본다.
+    name: vm-rehearsal (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: sshd + throwaway key (러너에서 만든 일회용 키 — 사용자 키 아님)
+        id: sshd
+        continue-on-error: true
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'rehearsal-out'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          "OUT=$out" >> $env:GITHUB_ENV
+          $svc = Get-Service sshd -ErrorAction SilentlyContinue
+          if (-not $svc) {
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null
+            "Add-WindowsCapability ms=$($sw.ElapsedMilliseconds)"
+          }
+          Start-Service sshd
+          $keyDir = Join-Path $env:RUNNER_TEMP 'k'
+          New-Item -ItemType Directory -Force -Path $keyDir | Out-Null
+          & ssh-keygen.exe -q -t ed25519 -N '' -f (Join-Path $keyDir 'id') | Out-Null
+          New-Item -ItemType Directory -Force -Path 'C:\ProgramData\ssh' | Out-Null
+          Copy-Item (Join-Path $keyDir 'id.pub') 'C:\ProgramData\ssh\administrators_authorized_keys' -Force
+          & icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+          "KEY=$((Join-Path $keyDir 'id').Replace('\','/'))" >> $env:GITHUB_ENV
+          (Get-Service sshd).Status
+
+      - name: winprep-admin (Accounts, TesterSsh, DevMode, Jdk, Seal, WorkDir, Config)
+        id: prep
+        continue-on-error: true
+        run: |
+          $o = powershell.exe -NoProfile -ExecutionPolicy Bypass -File multiplatform/scripts/vm/winprep-admin.ps1 -Steps Accounts,TesterSsh,DevMode,Jdk,Seal,WorkDir,Config
+          $code = $LASTEXITCODE
+          $o | Set-Content -Encoding utf8 (Join-Path $env:OUT 'winprep.json')
+          $o
+          exit $code
+
+      - name: vm.sh batch against the runner (fake vmrun · real ssh tester@127.0.0.1 · tar · winrun)
+        id: batch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          T="$RUNNER_TEMP/vmfake"; mkdir -p "$T"
+          printf 'ethernet0.generatedAddress = "00:0c:29:00:00:01"\n' > "$T/test.vmx"
+          export AINGCHECK_VMX="$T/test.vmx" AINGCHECK_VMRUN="$PWD/multiplatform/scripts/vm/tests/fake-vmrun.sh"
+          # 손님 쪽 ssh 는 Windows 기본 OpenSSH(키 ACL 검사가 맞다). 경로는 cygpath -m(D:/…) 꼴로 넘긴다.
+          export AINGCHECK_SSH=/c/Windows/System32/OpenSSH/ssh.exe AINGCHECK_SCP=/c/Windows/System32/OpenSSH/scp.exe
+          export FAKE_VMRUN_STATE="$T/state" FAKE_VMRUN_IP=127.0.0.1 AINGCHECK_VM_KEY="$KEY" AINGCHECK_VM_LOCK="$T/lock" AINGCHECK_VM_STATE="$(cygpath -m "$T/st")"
+          export AINGCHECK_WINPROBE="$PWD/multiplatform/scripts/vm/tests/fake-winprobe.sh"
+          export AINGCHECK_VM_ARCH=${{ matrix.arch }}
+          printf 'push --paths multiplatform/scripts/vm,multiplatform/spikes/windows\ninfo\ngradle help\n' > "$T/plan"
+          bash multiplatform/scripts/vm/vm.sh batch "$T/plan" > "$OUT/batch.out" 2> "$OUT/batch.err"
+          rc=$?
+          cat "$OUT/batch.out"; tail -20 "$OUT/batch.err"
+          echo "batch exit=$rc (기대 91: 봉인 카나리아 통과 뒤 gradlew.bat 없음 — W0-a 전이라 정상)"
+          lock_left=$([ -d "$T/lock" ] && echo yes || echo no)
+          state=$(cat "$T/state")
+          printf '{"batchExit":%s,"lockLeft":"%s","vmState":"%s"}\n' "$rc" "$lock_left" "$state" > "$OUT/batch.json"
+          cat "$OUT/batch.json"
+          [ "$rc" -eq 91 ] && [ "$lock_left" = no ] && [ "$state" = stopped ] && grep -q '"match":true' "$OUT/batch.out" && grep -q '"isAdmin":false' "$OUT/batch.out"
+
+      - name: standard user canary + status over SSH (H M-5)
+        id: canary
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          SSH=/c/Windows/System32/OpenSSH/ssh.exe
+          run=$(ls -d /c/work/runs/*/ | head -1)
+          win=$(cygpath -w "$run")
+          seal="${win}multiplatform\\scripts\\vm\\winseal.ps1"
+          q() { "$SSH" -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$(cygpath -m "$RUNNER_TEMP/kh")" tester@127.0.0.1 "$@"; }
+          q "powershell -NoProfile -ExecutionPolicy Bypass -File \"$seal\" -Action status" | tee "$OUT/seal-status-tester.json"
+          echo "status exit=${PIPESTATUS[0]}"
+          if [ "${{ matrix.arch }}" = x64 ]; then
+            q "powershell -NoProfile -ExecutionPolicy Bypass -File \"$seal\" -Action canary -SealedJdk \"C:\\Program Files\\aingcheck\\jdk21-x64-sealed\" -OpenJdk C:\\aingcheck\\jdk21-x64" | tee "$OUT/seal-canary-tester.json"
+            rc=${PIPESTATUS[0]}
+          else
+            q "powershell -NoProfile -ExecutionPolicy Bypass -File \"$seal\" -Action canary" | tee "$OUT/seal-canary-tester.json"
+            rc=${PIPESTATUS[0]}
+            # 기록만(D-E30 예비): arm64 Windows 11 에서 x64 JDK(에뮬레이션)도 같은 규칙에 막히는가
+            q "powershell -NoProfile -ExecutionPolicy Bypass -File \"$seal\" -Action canary -SealedJdk \"C:\\Program Files\\aingcheck\\jdk21-x64-sealed\" -OpenJdk C:\\aingcheck\\jdk21-x64" | tee "$OUT/seal-canary-tester-x64-emulated.json" || true
+          fi
+          echo "canary exit=$rc"
+          [ "$rc" -eq 0 ]
+
+      - name: upload
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vm-rehearsal-${{ matrix.arch }}
+          path: ${{ runner.temp }}/rehearsal-out
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: verdict
+        if: always()
+        run: |
+          $o = [ordered]@{ sshd = '${{ steps.sshd.outcome }}'; prep = '${{ steps.prep.outcome }}'; batch = '${{ steps.batch.outcome }}'; canary = '${{ steps.canary.outcome }}' }
+          $o | ConvertTo-Json
+          "## vm-rehearsal ${{ matrix.arch }}`n" + (($o.GetEnumerator() | ForEach-Object { "- $($_.Key): $($_.Value)" }) -join "`n") | Add-Content $env:GITHUB_STEP_SUMMARY
+          if ($o.Values | Where-Object { $_ -ne 'success' }) { exit 1 }

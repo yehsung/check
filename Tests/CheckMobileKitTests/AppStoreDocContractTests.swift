@@ -133,8 +133,11 @@ struct AppStoreDocContractTests {
         // 공격 표가 문서와 엔진에서 같은 숫자여야 한다(2→1 · 3→2 · 4→4).
         #expect(newIn1011.contains("Clearing 2 lines at once drops 1 extra row"), "공격 표 첫 줄이 다르다")
         #expect(newIn1011.contains("3 lines drops 2, and 4 lines drops 4"), "공격 표 둘째·셋째가 다르다")
-        // ★ 심사 메모는 **못 하는 것**도 적는다(2.3.1(a) 숨은 기능). 서버 상수가 아직 도달 불가라 폰↔폰 대결이 안 된다.
-        #expect(newIn1011.contains("not enabled in this build"), "폰↔폰 대결이 안 된다는 사실을 메모가 숨긴다")
+        // ★ 제출일에 서버 상수를 22 로 내렸다 — 메모는 심사원이 **할 수 있는 것**을 정확히 적는다(기기 둘 · 데모 계정 둘).
+        //   "못 한다"로 되돌아가면 거짓이 되므로 옛 문구가 남아 있는지도 같이 본다.
+        #expect(newIn1011.contains("Two demo accounts on two devices can play a real match"),
+                "메모가 두 계정·두 기기 대결 방법을 안 적는다")
+        #expect(!newIn1011.contains("not enabled in this build"), "상수를 내렸는데 메모가 아직 못 한다고 적는다")
         // ★ 도박을 연상시키는 어휘와 제공자 이름을 쓰지 않는다(사용자 지시 · 루비는 앱 안 재화다).
         for word in ["gambl", "wager", "bet ", "betting", "casino", "jackpot", "cash prize",
                      "Supabase", "supabase", "Apple Pay"] {
@@ -146,7 +149,9 @@ struct AppStoreDocContractTests {
         let line = try #require(korean.split(separator: "\n").first { $0.contains("1.0.11") },
                                 "§5.3 에 1.0.11 요약 줄이 없다")
         #expect(line.contains("1:1 테트리스"))
-        #expect(korean.contains("tetris_ios_min_build"), "§5.3 이 심사원이 대결을 못 하는 까닭(서버 상수)을 안 적는다")
+        #expect(korean.contains("tetris_ios_min_build"), "§5.3 이 폰 능력을 가르는 서버 상수와 그 값을 안 적는다")
+        // ★ 둘째 데모 계정은 ASC 칸에만 — 이 문서에 자격증명을 적는 쪽으로 되돌아가지 않게 결정을 박아 둔다.
+        #expect(korean.contains("ASC 심사 메모 칸에만"), "§5.3 이 둘째 계정 자격증명을 어디 적는지 안 적는다")
         #expect(korean.contains("판 중에 앱을 나가면 져요"), "§5.3 이 P7 경고 한 줄을 안 적는다")
         // 연령 설문의 답은 **바뀌지 않는다**(판돈·수수료가 오목·체스와 같은 값이다) — 그 결론을 적어야 다음 사람이
         // §3 을 다시 손대지 않는다.

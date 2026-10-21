@@ -1,4 +1,4 @@
-# Windows 망 봉인(G §8-6, H M-5). 시험 전용 JDK 경로의 java.exe·javaw.exe 에 상시 아웃바운드 차단 규칙을 둔다.
+﻿# Windows 망 봉인(G §8-6, H M-5). 시험 전용 JDK 경로의 java.exe·javaw.exe 에 상시 아웃바운드 차단 규칙을 둔다.
 # - install : 관리자 1회(winprep-admin.ps1 이 부른다). 방화벽 프로필을 켜고 규칙을 만든다.
 # - status  : 표준 사용자. 봉인 JDK 의 두 실행 파일에 켜진 아웃바운드 차단 규칙이 있는지(읽기 권한이 없으면 2).
 # - canary  : 표준 사용자. 짝으로 잰다 — 봉인 JDK = DENIED(3), 비봉인 JDK = DENIED 가 아님(연결 시도가 방화벽에 안 막힘).

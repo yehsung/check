@@ -217,8 +217,23 @@ object Smoke {
         data.hIcon = User32X.INSTANCE.LoadIconW(null, Pointer(User32X.IDI_APPLICATION))
         data.setTip("aing-check spike")
         val sizeOk = Native.POINTER_SIZE != 8 || size == NOTIFYICONDATAW.EXPECTED_SIZE_64
-        val added = s.Shell_NotifyIconW(Shell32X.NIM_ADD, data)
-        val addErr = if (added) 0 else Native.getLastError()
+        // 작업 표시줄이 아직 없거나(탐색기 시작 중) 바쁘면 NIM_ADD 가 실패한다 — 10초 동안 0.5초마다 다시 시도하고 횟수를 남긴다.
+        val trayWnd = User32.INSTANCE.FindWindow("Shell_TrayWnd", null)
+        val notifyWnd = trayWnd?.let { User32.INSTANCE.FindWindowEx(it, null, "TrayNotifyWnd", null) }
+        var added = false
+        var addErr = 0
+        var attempts = 0
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (!added && System.nanoTime() < deadline) {
+            attempts++
+            added = s.Shell_NotifyIconW(Shell32X.NIM_ADD, data)
+            if (!added) {
+                addErr = Native.getLastError()
+                Thread.sleep(500)
+            } else {
+                addErr = 0
+            }
+        }
         var versionSet = false
         var rectHr: Int? = null
         var rect: List<Int>? = null
@@ -241,8 +256,12 @@ object Smoke {
                 "structSize" to size,
                 "structSizeOk" to sizeOk,
                 "iconLoaded" to (data.hIcon != null),
+                "shellTrayWnd" to (trayWnd != null),
+                "trayNotifyWnd" to (notifyWnd != null),
                 "added" to added,
+                "addAttempts" to attempts,
                 "addError" to addErr,
+                "addErrorHex" to "0x" + Integer.toHexString(addErr),
                 "versionSet" to versionSet,
                 "getRectHresult" to rectHr?.let { "0x" + Integer.toHexString(it) },
                 "rect" to rect,

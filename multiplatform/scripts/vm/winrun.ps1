@@ -1,4 +1,4 @@
-# VM 손님 쪽 실행기(표준 사용자 tester 로, SSH 를 거쳐 vm.sh 가 부른다). 관리자 권한이 필요한 일은 하지 않는다.
+﻿# VM 손님 쪽 실행기(표준 사용자 tester 로, SSH 를 거쳐 vm.sh 가 부른다). 관리자 권한이 필요한 일은 하지 않는다.
 #   verify-tree  -RunDir D                 받은 파일의 지문을 다시 계산해 맥이 보낸 값(.aingcheck-push.json)과 대조
 #   gradle       -RunDir D -ArgsB64 B [-Arch arm64|x64]   봉인 카나리아 → gradlew.bat --offline --no-daemon (종료 코드 그대로)
 #   gui          -RunDir D -ArgsB64 B [-TimeoutSec N]     schtasks /IT 로 대화형 세션에서 실행(종료 코드 그대로)

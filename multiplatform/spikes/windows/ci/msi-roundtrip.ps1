@@ -1,4 +1,4 @@
-# A-X13: packageMsi 산출물을 조용히 설치 → 설치된 exe 로 --selfcheck → 이번 빌드인지(빌드 시각·SHA) → 조용히 제거 → 파일이 사라졌는지.
+﻿# A-X13: packageMsi 산출물을 조용히 설치 → 설치된 exe 로 --selfcheck → 이번 빌드인지(빌드 시각·SHA) → 조용히 제거 → 파일이 사라졌는지.
 # 사용: pwsh -File msi-roundtrip.ps1 -Msi <file.msi> -BuildInfo <buildinfo.json> -Out <dir>
 param(
     [Parameter(Mandatory = $true)][string]$Msi,

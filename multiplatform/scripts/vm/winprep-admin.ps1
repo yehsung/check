@@ -1,4 +1,4 @@
-# VM 1회 준비(관리자). SETUP-ko.md 를 마친 뒤 에이전트가 SSH(사용자 관리자 계정 + 공개키)로 한 번 돌린다. 몇 번 돌려도 같다(멱등).
+﻿# VM 1회 준비(관리자). SETUP-ko.md 를 마친 뒤 에이전트가 SSH(사용자 관리자 계정 + 공개키)로 한 번 돌린다. 몇 번 돌려도 같다(멱등).
 # 하는 일(-Steps 로 고를 수 있다, 기본 전부):
 #   Accounts   시험용 로컬 표준 계정 tester + 하네스 관리자 aingadmin. 비밀번호는 무작위로 만들고 화면·파일에 남기지 않는다
 #   TesterSsh  tester 프로필을 만들고 관리자 공개키를 tester 의 authorized_keys 로 복사(권한: tester 읽기, SYSTEM·Administrators 전체)

@@ -161,7 +161,8 @@ jobs:
         timeout-minutes: 30
         run: |
           $app = (Resolve-Path (Join-Path $env:SPIKE 'build/compose/binaries/main/app/AingSpike')).Path
-          pwsh -NoProfile -File "$env:SPIKE/msix/make-msix.ps1" -AppImage $app -Arch ${{ matrix.arch }} -Version "1.0.${{ github.run_number }}.0" -Out "$env:OUT\msix"
+          $extra = @(); if ('${{ matrix.arch }}' -eq 'x64') { $extra += '-RequireWack' }   # arm64 러너에는 WACK 이 없다
+          pwsh -NoProfile -File "$env:SPIKE/msix/make-msix.ps1" -AppImage $app -Arch ${{ matrix.arch }} -Version "1.0.${{ github.run_number }}.0" -Out "$env:OUT\msix" @extra
           exit $LASTEXITCODE
 
       - name: vm harness — snapshot (vm.sh, Git Bash) → Windows tar → winrun verify-tree, tamper pair
@@ -259,15 +260,22 @@ jobs:
       - name: sshd + throwaway key (러너에서 만든 일회용 키 — 사용자 키 아님)
         id: sshd
         continue-on-error: true
+        timeout-minutes: 10
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'rehearsal-out'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           "OUT=$out" >> $env:GITHUB_ENV
           $svc = Get-Service sshd -ErrorAction SilentlyContinue
           if (-not $svc) {
+            # windows-11-arm 이미지에는 sshd 가 없고 Add-WindowsCapability 는 20분 넘게 끝나지 않았다(run 39591985078).
+            # 예행에서만 Win32-OpenSSH ARM64 MSI(sha256 고정)로 대신한다. VM 은 SETUP-ko.md 의 Add-WindowsCapability 를 쓴다.
+            $msi = Join-Path $env:RUNNER_TEMP 'openssh-arm64.msi'
+            Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.4.0.0p1-Preview/OpenSSH-ARM64-v10.4.0.0.msi' -OutFile $msi
+            $h = (Get-FileHash -Algorithm SHA256 $msi).Hash.ToLowerInvariant()
+            if ($h -ne '75fa139d8975eedb706d9180f454e2148af09d417692825f383fe00610b00e21') { throw "openssh msi sha256 불일치: $h" }
             $sw = [Diagnostics.Stopwatch]::StartNew()
-            Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null
-            "Add-WindowsCapability ms=$($sw.ElapsedMilliseconds)"
+            $p = Start-Process msiexec.exe -ArgumentList @('/i', $msi, '/qn', '/norestart') -Wait -PassThru
+            "openssh msi exit=$($p.ExitCode) ms=$($sw.ElapsedMilliseconds)"
           }
           Start-Service sshd
           $keyDir = Join-Path $env:RUNNER_TEMP 'k'
@@ -294,7 +302,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          set -uo pipefail
+          set +e -uo pipefail
           T="$RUNNER_TEMP/vmfake"; mkdir -p "$T"
           printf 'ethernet0.generatedAddress = "00:0c:29:00:00:01"\n' > "$T/test.vmx"
           export AINGCHECK_VMX="$T/test.vmx" AINGCHECK_VMRUN="$PWD/multiplatform/scripts/vm/tests/fake-vmrun.sh"
@@ -319,7 +327,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          set -uo pipefail
+          set +e -uo pipefail
           SSH=/c/Windows/System32/OpenSSH/ssh.exe
           run=$(ls -d /c/work/runs/*/ | head -1)
           win=$(cygpath -w "$run")

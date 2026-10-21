@@ -181,5 +181,14 @@ printf 'changed\n' >>"$R/multiplatform/sub/new.kt"
 c="$(vm snapshot --paths multiplatform 2>/dev/null | sed -n 's/.*"tree":"\([0-9a-f]*\)".*/\1/p')"
 [ -n "$a" ] && [ "$a" = "$b" ] && [ "$a" != "$c" ] && ok "스냅숏 트리: 같은 입력 같음, 새 파일 수정은 다름" || bad "스냅숏 결정성" "$a $b $c"
 
+# 14. .ps1 은 UTF-8 BOM 으로 시작한다 — Windows PowerShell 5.1 은 BOM 없는 UTF-8 을 ANSI(CP949·1252)로 읽어
+#     한글 주석·문자열에서 구문 오류가 난다(러너 run 39591985078 에서 실측). VM 은 5.1 로 돈다.
+nobom=0
+for f in "$HERE"/../*.ps1 "$HERE"/../../../spikes/windows/ci/*.ps1 "$HERE"/../../../spikes/windows/msix/*.ps1; do
+    [ -f "$f" ] || continue
+    [ "$(head -c 3 "$f" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ] || { nobom=$((nobom + 1)); printf '  BOM 없음: %s\n' "$f"; }
+done
+[ $nobom -eq 0 ] && ok "모든 .ps1 이 UTF-8 BOM 으로 시작한다" || bad "BOM" "$nobom 개"
+
 printf '\n%d 통과 · %d 실패\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -1,4 +1,4 @@
-# W0-e 러너 판정 모음. 각 단계의 outcome(환경변수 OUTCOME_*)과 보고서 JSON 을 한 표로 모은다.
+﻿# W0-e 러너 판정 모음. 각 단계의 outcome(환경변수 OUTCOME_*)과 보고서 JSON 을 한 표로 모은다.
 # 필수 단계 중 하나라도 success 가 아니면 1 로 끝난다 — 실패도 수치와 함께 남는다(artifact).
 param(
     [Parameter(Mandatory = $true)][string]$Out,

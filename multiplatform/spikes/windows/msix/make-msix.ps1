@@ -1,4 +1,4 @@
-# W0-e ②(D-E15 러너 몫): createDistributable 앱 이미지 → 레이아웃 → makeappx pack → 시험용 자체 서명 → WACK.
+﻿# W0-e ②(D-E15 러너 몫): createDistributable 앱 이미지 → 레이아웃 → makeappx pack → 시험용 자체 서명 → WACK.
 # 덤으로(필수 아님) 러너에 설치해 패키지 안에서 selfcheck·홈 폴더 읽기·%LOCALAPPDATA% 쓰기 위치를 기록한다.
 # 서명 키는 러너에서 그때 만들고 저장소·산출물에 남기지 않는다. 게시자는 시험용 CN 이다(Partner Center 값 아님).
 # 사용: pwsh -File make-msix.ps1 -AppImage <dir with AingSpike.exe> -Arch x64|arm64 -Version 1.0.N.0 -Out <dir> [-SkipWack] [-SkipInstall]
@@ -9,6 +9,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Out,
     [string]$Publisher = 'CN=AingCheck Spike Test',
     [switch]$SkipWack,
+    [switch]$RequireWack,
     [switch]$SkipInstall
 )
 $ErrorActionPreference = 'Stop'
@@ -32,10 +33,11 @@ function Find-KitTool([string]$name) {
         Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
+# 주의: PowerShell 변수는 대소문자를 가리지 않는다 — 지역 변수를 $out 으로 두면 스크립트 인자 $Out 을 가린다.
 function Run([string]$exe, [string[]]$argv, [string]$log) {
-    $out = & $exe @argv 2>&1
+    $captured = & $exe @argv 2>&1
     $code = $LASTEXITCODE
-    Set-Content -Encoding utf8 -Path (Join-Path $Out $log) -Value ($out -join "`n")
+    Set-Content -Encoding utf8 -Path (Join-Path $Out $log) -Value (($captured | ForEach-Object { "$_" }) -join "`n")
     return $code
 }
 
@@ -152,5 +154,8 @@ if (-not $SkipInstall) {
 Remove-Item -Path ("Cert:\CurrentUser\My\" + $cert.Thumbprint) -ErrorAction SilentlyContinue
 Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Thumbprint -eq $cert.Thumbprint } | Remove-Item -ErrorAction SilentlyContinue
 
-$r.ok = ($r.packExit -eq 0) -and ($r.signExit -eq 0) -and ($SkipWack -or ($r.wack.available -and $r.wack.overall -eq 'PASS'))
+# WACK 은 x64 러너에만 있다(windows-11-arm 이미지에는 App Certification Kit 이 없다 — env.json tools.appcert).
+# -RequireWack 이면 WACK PASS 까지 요구, 아니면 도구가 있을 때만 결과를 요구한다(없으면 wack.available=false 로 남긴다).
+$wackOk = if ($SkipWack) { $true } elseif ($r.wack.available) { $r.wack.overall -eq 'PASS' } else { -not $RequireWack }
+$r.ok = ($r.packExit -eq 0) -and ($r.signExit -eq 0) -and $wackOk
 if ($r.ok) { Save 0 } else { Save 1 }

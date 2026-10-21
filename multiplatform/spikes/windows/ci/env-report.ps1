@@ -1,4 +1,4 @@
-# W0-e: 러너 환경 기록(A-X14·D-E24 대화형 세션, 도구 유무). 판정이 아니라 기록이다 — 종료 코드는 스크립트 오류일 때만 0 이 아니다.
+﻿# W0-e: 러너 환경 기록(A-X14·D-E24 대화형 세션, 도구 유무). 판정이 아니라 기록이다 — 종료 코드는 스크립트 오류일 때만 0 이 아니다.
 # 사용: pwsh -File env-report.ps1 -Out <dir>
 param(
     [Parameter(Mandatory = $true)][string]$Out
@@ -42,14 +42,17 @@ function Probe-InteractiveTask {
     $createCode = $LASTEXITCODE
     $run = & schtasks.exe /Run /TN $tn 2>&1
     $runCode = $LASTEXITCODE
-    $deadline = (Get-Date).AddSeconds(30)
-    while (-not (Test-Path $marker) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while (-not (Test-Path $marker) -and $sw.Elapsed.TotalSeconds -lt 90) { Start-Sleep -Milliseconds 500 }
     $result = if (Test-Path $marker) { Get-Content $marker -Raw | ConvertFrom-Json } else { $null }
+    $query = (& schtasks.exe /Query /TN $tn /V /FO LIST 2>&1) | Where-Object { $_ -match '^(Status|Last Run Time|Last Result|Logon Mode|Run As User):' }
     & schtasks.exe /Delete /TN $tn /F 2>&1 | Out-Null
     [ordered]@{
         createExit = $createCode; createOut = ($create -join ' ')
         runExit = $runCode; runOut = ($run -join ' ')
-        ranWithin30s = [bool]$result
+        ranWithin90s = [bool]$result
+        secondsToMarker = $(if ($result) { [math]::Round($sw.Elapsed.TotalSeconds, 1) } else { $null })
+        taskQuery = ($query -join ' | ')
         result = $result
     }
 }

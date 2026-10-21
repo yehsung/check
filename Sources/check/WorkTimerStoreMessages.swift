@@ -510,7 +510,48 @@ extension WorkTimerStore {
         guard canSendMessageNow, let peer = selectedMessagePeerID else { return }
         // 신고 결과 한 줄(v0.3.34)은 입력칸 위 같은 자리를 쓴다 — 새로 보낸 말의 결과가 그 자리를 이어받는다.
         clearBlockReportNotice(on: .message)
-        sendMessage(to: peer, body: messageDraft)
+        // **이 전송이 초안에서 나왔다**고 알린다 — 성공하면 입력칸을 비우는 쪽이다(`sendMessage` 의 그 인자).
+        sendMessage(to: peer, body: messageDraft, clearsDraftOnSuccess: true)
+    }
+
+    /// 지금 아잉이 이모티콘을 보낼 수 있는가(v0.3.62).
+    ///
+    /// `canSendMessageNow` 를 쓰지 않는 이유는 **그 판정이 입력칸 글을 보기 때문**이다(빈 칸이면 false).
+    /// 이모티콘의 본문은 상수 토큰이라 빈 칸·200자 판정이 **언제나** 통과한다 — 그래서 남는 조건은 둘뿐이고,
+    /// 그 둘은 `canSendMessageNow` 의 앞 두 줄과 **글자 그대로 같다**(순서까지 같게 적어 둔다).
+    /// 근무 여부·집중 모드는 여기서도 보지 않는다(v0.3.30 — 서버가 그 조건을 지웠다. `sendMessage` 주석).
+    var canSendStickerNow: Bool {
+        guard !isSendingMessage, selectedMessagePeerID != nil else { return false }
+        return true
+    }
+
+    /// 아잉이 이모티콘 한 장을 보낸다(v0.3.62 — 사용자 요청 "메시지에 아잉이 이모티콘 만들어주세요").
+    ///
+    /// **입력칸을 거치지 않는다.** 이모티콘은 말풍선 한 칸을 통째로 차지하므로 글과 섞지 않고(사용자 결정),
+    /// 고른 그 순간 그 자리에서 나간다. 입력칸에 쓰던 글은 **건드리지 않는다** — 토큰을 초안에 넣고 보내는
+    /// 식으로 만들면 성공 분기의 `messageDraft = ""`(비동기)가 사용자가 쓰던 글을 뒤늦게 지운다.
+    /// 그 분기는 **이 전송이 초안에서 나왔는지**로 가른다(`clearsDraftOnSuccess` — 기본값이 거짓이라
+    /// 여기서는 아무것도 안 적으면 된다. 글자 비교로 가르면 평범한 글의 비우기가 같이 깨진다).
+    ///
+    /// ★ **전송 문을 새로 뚫지 않는다.** 본문을 만든 뒤로는 `sendMessage(to:body:)` **그대로**다 —
+    ///   왕복 겹침 방지 · 세션 세대 검사 · 아홉 가지 실패 문구 · 성공 뒤 이력 재조회가 전부 그 함수 하나에
+    ///   있고, 그중 하나라도 여기 다시 적으면 두 벌이 갈린다(갈린 쪽은 실패한 날에만 드러난다).
+    ///   서버·마이그레이션은 **하나도 안 고쳤다**: 이모티콘은 평범한 텍스트 메시지다(`AingSticker` 머리말).
+    ///
+    /// **나갔는가를 돌려준다.** 그리드는 이 값으로 접을지 정한다 — 못 보냈는데 접으면 화면에 남는 신호가
+    /// "그리드가 닫혔다" 하나뿐이라, 직전 전송의 "보냈어요"를 보고 이모티콘도 간 줄 안다.
+    /// 왕복 중에 고른 경우에는 **문구 한 줄을 남긴다**(상대를 안 골랐으면 남기지 않는다 — 그 화면엔
+    /// 대화도 그리드도 없고, 그 침묵은 `sendDraftMessage` 와 같은 규약이다).
+    @discardableResult
+    func sendSticker(_ sticker: AingSticker) -> Bool {
+        guard canSendStickerNow, let peer = selectedMessagePeerID else {
+            if selectedMessagePeerID != nil { messageNotice = AingStickerText.sendingNowNotice }
+            return false
+        }
+        // 신고 결과 한 줄은 입력칸 위 같은 자리를 쓴다 — 방금 보낸 이모티콘의 결과가 그 자리를 이어받는다.
+        clearBlockReportNotice(on: .message)
+        sendMessage(to: peer, body: sticker.token)
+        return true
     }
 
     /// 대상에게 메시지를 보낸다.
@@ -526,7 +567,18 @@ extension WorkTimerStore {
     /// 빈 본문·200자 초과도 여기서 판정하지 않는다. `service.sendMessage` 가 MessageBody 로 사전 판정해
     /// **네트워크를 타지 않고** 서버와 같은 status 를 즉답하므로, 아래 switch 하나가 로컬 거절과 서버 거절을
     /// 같은 문구로 다룬다(같은 실패를 catch 와 switch 두 곳에서 다루면 그 둘은 반드시 갈린다).
-    func sendMessage(to userID: String, body: String) {
+    ///
+    /// ## `clearsDraftOnSuccess` — **"이 전송이 초안에서 나왔는가"**(v0.3.62)
+    /// 성공했을 때 입력칸을 비울지는 **부르는 쪽이 안다.** 초안 전송(`sendDraftMessage`)은 참,
+    /// 이모티콘(`sendSticker`)은 거짓이다. 기본값이 거짓인 이유: 모르는 호출부가 **사용자가 쓰던 글을
+    /// 지우는** 쪽으로 기울면 그건 되돌릴 수 없다(왕복이 끝난 뒤에 지워진다).
+    ///
+    /// ⚠️ **보낸 글자와 입력칸 글자를 비교해서 가르지 마라.** 한 번 그렇게 좁힌 적이 있는데(0.3.62 초안),
+    ///    평범한 글의 계약이 깨졌다 — 왕복(0.2~1.5초) 중에 다음 문장을 한 글자라도 이어 치면 비교가
+    ///    어긋나 **보낸 말이 입력칸에 그대로 남고**, 지우지 않고 Enter 를 누르면 같은 말이 또 나간다.
+    ///    반대로 사용자가 우연히 `[아잉:기쁨]` 을 손으로 쳐 둔 경우에는 비교가 참이 되어 이모티콘이
+    ///    쓰던 글을 지웠다. 가르는 기준은 글자가 아니라 **의도**다.
+    func sendMessage(to userID: String, body: String, clearsDraftOnSuccess: Bool = false) {
         guard session != nil else { return }
         // ★ 근무중 선게이트(`startedAt != nil`)는 **v0.3.30 에 걷었다.** 서버가 send_message 의 보낸이·받는이 근무 조건을
         //   지웠으므로 그 게이트는 서버가 허락하는 전송을 클라가 막는 자리가 된다(찌르기 sendPoke 의 게이트는 서버 규칙이
@@ -550,7 +602,13 @@ extension WorkTimerStore {
                     messageNotice = Self.messageSentNotice
                     // 보낸 값을 비운다 — 남아 있으면 다음 Enter 에 같은 말이 또 나간다.
                     // **비우는 자리는 여기 하나뿐이다**: 창을 닫아도, 실패해도 글은 남는다.
-                    if selectedMessagePeerID == userID { messageDraft = "" }
+                    //
+                    // ★ **초안에서 나온 전송만** 비운다(v0.3.62 — 위 `clearsDraftOnSuccess` 주석).
+                    //   아잉이 이모티콘은 입력칸을 거치지 않고 상수 토큰으로 나가는데(`sendSticker`),
+                    //   조건이 "상대가 같다" 하나면 이모티콘 한 장이 **사용자가 쓰던 글을 지운다**
+                    //   — 왕복이 끝난 뒤라 되돌릴 수도 없다. 상대 비교는 그대로 남는다(왕복 중에 다른
+                    //   대화로 옮겨 갔으면 그쪽 입력칸을 비울 이유가 없다).
+                    if clearsDraftOnSuccess, selectedMessagePeerID == userID { messageDraft = "" }
                     // 방금 보낸 말이 그 자리에서 대화에 나타나야 "메신저"다. 낙관 삽입 대신 이력을 다시 받는 이유는
                     // **서버가 본문을 정규화하고 시각을 정하기 때문**이다 — 내가 만든 가짜 행과 다음 갱신의 진짜 행이
                     // 다르면 말풍선이 순간 두 개로 보이거나 순서가 튄다(그 어긋남은 사용자에게 설명할 길이 없다).

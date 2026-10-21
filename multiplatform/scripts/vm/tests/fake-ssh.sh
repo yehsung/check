@@ -32,6 +32,7 @@ case "$remote" in
         fi
         ;;
     *winrun.ps1*)
+        cat >/dev/null # 진짜 ssh 처럼 표준 입력을 읽는다(batch 계획 파일을 삼키는 결함을 시험이 보게)
         run_dir="$(map "$(arg_of -RunDir)")"
         action="$(arg_of -Action)"
         case "$action" in

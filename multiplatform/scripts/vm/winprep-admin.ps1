@@ -123,7 +123,7 @@ if (Want 'TesterSsh') {
     # 키가 맞아도 들어온다(run 39596497443: "none of user's groups are listed in AllowGroups"). 그 그룹이 없는 판(구버전·Win32-OpenSSH)은 건너뛴다.
     $sshUsers = Get-LocalGroup -SID 'S-1-5-32-585' -ErrorAction SilentlyContinue
     if ($sshUsers -and -not (Get-LocalGroupMember -Group $sshUsers.Name -Member $Tester -ErrorAction SilentlyContinue)) { Add-LocalGroupMember -Group $sshUsers.Name -Member $Tester }
-    $allowGroups = @(Get-Content "$env:ProgramData\ssh\sshd_config" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^\s*AllowGroups' })
+    $allowGroups = @(Get-Content "$env:ProgramData\ssh\sshd_config" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^\s*AllowGroups' } | ForEach-Object { "$_" })
     $result.testerSsh = [ordered]@{ openSshUsersGroup = [bool]$sshUsers; allowGroups = $allowGroups; profilePath = $profilePath; createProfileHr = $hr; authorizedKeys = $ak; keyLines = @(Get-Content $ak | Where-Object { $_ -match '^ssh-' }).Count; acl = ((& icacls.exe $ak) -join ' ') }
 }
 
@@ -174,6 +174,8 @@ function Install-Jdk([string]$arch, [string]$dest) {
         New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
         Remove-Item -Recurse -Force $dest -ErrorAction SilentlyContinue
         Move-Item $inner.FullName $dest
+        # 같은 볼륨 안의 이동은 원래 ACL(관리자 TEMP — tester 접근 불가)을 가져온다. 부모 상속으로 되돌린다(run 39598726185 실측).
+        & icacls.exe $dest /reset /T /C /Q | Out-Null
     }
     # 다른 아키텍처 JDK(x64 손님에서 arm64 등)는 실행이 안 될 수 있다 — 설치는 하고 버전 확인 실패만 기록한다.
     # java -version 은 stderr 로 쓴다 — 5.1 에서 Stop 이면 그 줄이 예외가 되므로 이 호출만 Continue 로 본다.
@@ -200,6 +202,11 @@ if (Want 'Jdk') {
         sealedArm64 = Install-Jdk 'aarch64' $paths.SealedJdk
         gradleX64 = Install-Jdk 'x64' $paths.GradleJdkX64
         sealedX64 = Install-Jdk 'x64' $paths.SealedJdkX64
+    }
+    $result.jdkUsersCanRead = [ordered]@{}
+    foreach ($k in @('GradleJdk', 'SealedJdk', 'GradleJdkX64', 'SealedJdkX64')) {
+        $acl = (& icacls.exe (Join-Path $paths[$k] 'bin\java.exe') 2>&1) -join ' '
+        $result.jdkUsersCanRead[$k] = ($acl -match 'BUILTIN\\Users:\(.*R') -or ($acl -match 'Authenticated Users:\(.*R')
     }
 }
 

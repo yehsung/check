@@ -12,6 +12,8 @@ param(
     [string]$RuleGroup = 'AingCheck Seal'
 )
 $ErrorActionPreference = 'Stop'
+# SSH 로 돌 때 한글이 ?? 로 깨지지 않게(run 39598726185) — 콘솔이 없으면 조용히 넘어간다.
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 
 function Emit($obj, [int]$code) {
     Write-Output ($obj | ConvertTo-Json -Depth 6 -Compress)
@@ -67,8 +69,9 @@ switch ($Action) {
         $src = Join-Path $PSScriptRoot 'Canary.java'
         function Probe([string]$jdk) {
             $java = Join-Path $jdk 'bin\java.exe'
-            $out = & $java $src $hostPort[0] $hostPort[1] 2>&1
-            $code = $LASTEXITCODE
+            # 실행 자체가 안 되면(경로·권한·아키텍처) 판정 불가로 남긴다 — 봉인이 새었다고 하지 않는다.
+            if (-not (Test-Path -LiteralPath $java)) { return [ordered]@{ java = $java; exit = -1; result = 'NOT_RUNNABLE'; ms = $null; error = '보이지 않는다(경로 또는 읽기 권한)' } }
+            try { $out = & $java $src $hostPort[0] $hostPort[1] 2>&1; $code = $LASTEXITCODE } catch { return [ordered]@{ java = $java; exit = -1; result = 'NOT_RUNNABLE'; ms = $null; error = $_.Exception.Message } }
             $line = ($out | Where-Object { "$_".StartsWith('{') } | Select-Object -Last 1)
             $parsed = $null
             if ($line) { try { $parsed = $line | ConvertFrom-Json } catch { } }
@@ -78,7 +81,7 @@ switch ($Action) {
         $open = Probe ([IO.Path]::GetFullPath($OpenJdk))
         # 봉인 JDK 가 연결되면 새는 것(1). 봉인 JDK 가 방화벽에 막히고 비봉인 JDK 는 방화벽에 안 막히면 봉인(0).
         # 그 밖(망 자체가 없음·비봉인도 막힘)은 봉인을 증명하지 못한다(2) — 게이트는 0 일 때만 돈다.
-        $code = if ($sealed.exit -eq 0) { 1 } elseif ($sealed.exit -eq 3 -and $open.exit -ne 3 -and $open.exit -ne 2) { 0 } else { 2 }
+        $code = if ($sealed.exit -eq 0) { 1 } elseif ($sealed.exit -eq 3 -and $open.exit -ne 3 -and $open.exit -ne 2 -and $open.exit -ne -1) { 0 } else { 2 }
         $verdict = switch ($code) { 0 { 'sealed' } 1 { 'LEAK: 봉인 JDK 가 연결됐다' } 2 { '판정 불가: 봉인 JDK 가 방화벽 거부가 아니거나 비봉인 JDK 도 막혔다' } }
         Emit ([ordered]@{ action = 'canary'; target = $Target; sealed = $sealed; open = $open; verdict = $verdict }) $code
     }

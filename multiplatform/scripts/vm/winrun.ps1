@@ -16,6 +16,8 @@ param(
     [int]$TimeoutSec = 600
 )
 $ErrorActionPreference = 'Stop'
+# SSH 로 돌 때 한글이 ?? 로 깨지지 않게(run 39598726185) — 콘솔이 없으면 조용히 넘어간다.
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 
 function Emit($obj) { Write-Output ($obj | ConvertTo-Json -Depth 6 -Compress) }
 

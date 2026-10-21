@@ -130,13 +130,16 @@ ssh_opts() {
         -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$STATE/known_hosts" -o LogLevel=ERROR
 }
 
-guest() {
+guest_stdin() {
     local ip opts=()
     ip="$(state_get ip)"
     [ -n "$ip" ] || die 69 "손님 IP 를 모른다(up 을 먼저)"
     while IFS= read -r o; do opts+=("$o"); done < <(ssh_opts)
     "$SSH_BIN" "${opts[@]}" -T "$VM_USER@$ip" "$@"
 }
+
+# ssh 는 표준 입력을 읽어 손님에 넘긴다 — batch 의 계획 파일을 삼키지 않게 기본은 /dev/null(러너 예행 run 39598726185 실측).
+guest() { guest_stdin "$@" </dev/null; }
 
 # 손님에서 PowerShell 스크립트를 부른다. 인자는 base64 JSON 으로만 넘긴다(인용·주입 방지).
 b64_json_args() {
@@ -303,7 +306,7 @@ cmd_push() {
     run_id="$(date -u +%Y%m%dT%H%M%SZ)-${SNAP_TREE:0:8}"
     run_dir="$GUEST_ROOT/$run_id"
     local win_dir="${run_dir//\//\\}"
-    guest "mkdir $win_dir && tar -xf - -C $win_dir" <"$SNAP_TAR"
+    guest_stdin "mkdir $win_dir && tar -xf - -C $win_dir" <"$SNAP_TAR"
     rm -rf "$(dirname "$SNAP_TAR")"
     state_set run_dir "$run_dir"
     state_set tree "$SNAP_TREE"
@@ -395,7 +398,7 @@ cmd_batch() {
     cmd_up >&2
     trap batch_exit EXIT
     local line words n=0
-    while IFS= read -r line || [ -n "$line" ]; do
+    while IFS= read -r line <&3 || [ -n "$line" ]; do
         line="${line%%#*}"
         [[ "$line" =~ [^[:space:]] ]] || continue
         read -r -a words <<<"$line"
@@ -405,7 +408,7 @@ cmd_batch() {
             push | gradle | gui | shot | info | revert) "cmd_${words[0]}" "${words[@]:1}" ;;
             *) die 64 "batch: 허용하지 않는 명령 ${words[0]}" ;;
         esac
-    done <"$plan"
+    done 3<"$plan"
 }
 
 cmd_snapshot() {

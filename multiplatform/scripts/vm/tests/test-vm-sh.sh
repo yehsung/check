@@ -43,7 +43,7 @@ reset_env() {
     unset AINGCHECK_VM_TOKEN FAKE_TAMPER FAKE_GRADLE_EXIT FAKE_VMRUN_NOIP FAKE_VMRUN_START_FAIL AINGCHECK_VM_ALLOW_GP 2>/dev/null || true
 }
 
-vm() { (cd "$R" && /bin/bash "$VM" "$@"); }
+vm() { (cd "$R" && /bin/bash "$VM" "$@" </dev/null); }
 up_token() { vm up 2>"$T/up.err" | sed -n 's/^export AINGCHECK_VM_TOKEN=//p'; }
 
 # 1. 잠금: 두 번째 up 은 기다리지 않고 75

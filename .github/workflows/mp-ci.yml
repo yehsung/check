@@ -266,6 +266,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: (arm64 준비) OOBE 개인정보 화면 걷기 · OneDrive 동기화 앱 끄기 — 맨 앞에서(G §8-12, mp-windows-spike.yml 과 같은 걷기)
+        # OOBE 화면을 닫으면 멈춰 있던 첫 로그온이 이어지고 셸이 %USERPROFILE%\OneDrive 를 만든다. 예열 뒤·게이트 직전에 걸었을 때는
+        # 그 폴더가 게이트 도중(닫고 2~4분 뒤)에 생겨 홈 잔재 검사가 빨갰다(run 39657334138 — 시험 258 · 실패 0, 잔재 'OneDrive').
+        # 시험 JVM 의 HOME·USERPROFILE 은 빌드 폴더로 돌려져 있어 이 폴더는 시험이 남긴 것이 아니다. 그래서 잔재 규칙은 그대로 두고
+        # 걷기를 맨 앞으로 옮겨(SDK·예열 동안 첫 로그온이 끝난다) OneDrive 동기화 앱을 정책으로 끈다.
+        shell: pwsh
+        run: |
+          $re = 'CloudExperienceHost|WWAHost|UserOOBEBroker|PrivacyExperience'
+          $before = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' | Out-Null
+          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name DisablePrivacyExperience -Value 1 -Type DWord
+          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' | Out-Null
+          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' -Name DisableFileSyncNGSC -Value 1 -Type DWord
+          Get-Process | Where-Object { $_.ProcessName -match $re } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process | Where-Object { $_.ProcessName -match '^OneDrive' } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          $after = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          "OOBE 앞: $($before -join ', ') / 뒤: $($after -join ', ') / OneDrive 폴더: $(Test-Path (Join-Path $env:USERPROFILE 'OneDrive'))"
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: microsoft
@@ -304,17 +322,6 @@ jobs:
           exit 1
       - name: 의존 예열(봉인 밖 — 게이트가 아니다)
         run: bash multiplatform/scripts/gate-fast.sh --warm
-      - name: (arm64 준비) OOBE 개인정보 화면 걷기 — 트레이 시험 전에(G §8-12, mp-windows-spike.yml 과 같은 단계)
-        shell: pwsh
-        run: |
-          $re = 'CloudExperienceHost|WWAHost|UserOOBEBroker|PrivacyExperience'
-          $before = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
-          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' | Out-Null
-          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name DisablePrivacyExperience -Value 1 -Type DWord
-          Get-Process | Where-Object { $_.ProcessName -match $re } | Stop-Process -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 5
-          $after = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
-          "OOBE 앞: $($before -join ', ') / 뒤: $($after -join ', ')"
       - name: 방화벽 봉인 걸기(모든 JDK 의 java.exe 아웃바운드 차단)
         shell: pwsh
         run: |
@@ -341,7 +348,9 @@ jobs:
         id: sealed
         env:
           AINGCHECK_EXTERNAL_SEAL: windows-firewall
-        run: bash multiplatform/scripts/gate-fast.sh
+        run: |
+          echo "HOME 꼭대기(게이트 직전 — 잔재 검사의 기준): $(ls -A "$HOME" | tr '\n' ' ')"
+          bash multiplatform/scripts/gate-fast.sh
       - name: 봉인 게이트 시험 결과 올리기(대조가 덮어쓰기 전에)
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

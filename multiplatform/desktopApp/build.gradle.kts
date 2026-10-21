@@ -28,3 +28,30 @@ dependencies {
     // HttpEngineFactoryTest: 끊긴 재사용 연결을 localhost 에서 재현해 POST 재전송 0 을 잰다(C-X6, G §8-12).
     testImplementation(libs.okhttp.mockwebserver3)
 }
+
+// W1-f(D§2-4, W0-e 관측): jnidispatch.dll 을 앱 자원 폴더에 실어 %TEMP%\jna--* 에 풀지 않게 한다.
+// Main 의 JnaBootstrap 이 compose.application.resources.dir 에서 이 파일을 찾을 때만 jna.boot.library.path·jna.nounpack·jna.nosys 를 켠다
+// (파일이 없으면 아무것도 바꾸지 않는다 — 개발 실행·시험). Compose 는 appResourcesRootDir 의 <os>-<arch> 몫을 그 폴더로 싣는다.
+val aingcheckJnaJar = configurations.create("aingcheckJnaJar") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    isTransitive = false
+}
+dependencies { add(aingcheckJnaJar.name, libs.jna) }
+val aingcheckJnaAppResources = tasks.register<Sync>("aingcheckJnaAppResources") {
+    description = "jna jar 의 Windows jnidispatch.dll 을 앱 자원 폴더(windows-x64·windows-arm64)로 꺼낸다."
+    val jar = aingcheckJnaJar
+    into(layout.buildDirectory.dir("aingcheck/app-resources"))
+    from({ zipTree(jar.singleFile) }) {
+        include("com/sun/jna/win32-x86-64/jnidispatch.dll")
+        eachFile { path = "windows-x64/$name" }
+    }
+    from({ zipTree(jar.singleFile) }) {
+        include("com/sun/jna/win32-aarch64/jnidispatch.dll")
+        eachFile { path = "windows-arm64/$name" }
+    }
+    includeEmptyDirs = false
+}
+compose.desktop.application.nativeDistributions.appResourcesRootDir.set(
+    aingcheckJnaAppResources.map { layout.buildDirectory.dir("aingcheck/app-resources").get() },
+)

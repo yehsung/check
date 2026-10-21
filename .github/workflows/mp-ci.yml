@@ -8,6 +8,7 @@
 #  - jvm-gate      : ubuntu, sudo unshare -n 봉인 아래 빠른 게이트 + 봉인 없는 카나리아 빨강 대조(A-X15). changes 경로 필터로만 거른다.
 #                    경로 필터의 Sources/ 는 통째다(W1-e): ui 시험이 Swift 원문(SF 기호 대응·팔레트 대조)과 맥 그림(Gradle Sync)을 읽는다.
 #  - windows-x64   : windows-latest, java.exe 아웃바운드 차단 방화벽 봉인 아래 데스크톱 시험 + 대조(A-X16). changes 경로 필터로만 거른다.
+#  - windows-arm64 : windows-11-arm, 같은 방화벽 봉인 게이트(W1-f ① 러너 2종). Android SDK 를 받고 OOBE 화면을 걷는 준비 단계가 더 있다.
 # 대조는 scripts/canary-contrast.sh 가 '봉인이 새었다'는 이유의 빨강일 때만 통과시킨다. 봉인 게이트의 시험 결과는 대조 전에 따로 올린다.
 # 액션은 SHA 로 고정한다(공개 저장소 공급망).
 name: mp-ci
@@ -220,6 +221,121 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-x64-contrast-results
+          path: multiplatform/testkit/build/test-results/desktopTest/TEST-com.yehsung.aingcheck.testkit.seal.NetworkCanaryTest.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-arm64:
+    # W1-f(Windows OS 층)의 러너 2종 중 arm64 몫(G §2-3 W1-f ①). x64 잡과 같은 방화벽 봉인 게이트를 windows-11-arm 에서 돈다.
+    # 이 이미지에는 Android SDK 가 없다(actions/partner-runner-images arm-windows-11-image.md "Omitted software: Android") —
+    # 설정 단계가 compileSdk 37 을 찾으므로 cmdline-tools 를 sha1 고정으로 받아 플랫폼만 넣는다(봉인 밖 예열 단계).
+    # 트레이 시험 전에 OOBE 개인정보 화면을 걷는다(W0-e 실측: 이 화면이 대화형 데스크톱을 덮으면 NIM_ADD 가 0x80004005, G §8-12).
+    needs: changes
+    if: needs.changes.outputs.mp == 'true'
+    runs-on: windows-11-arm
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: microsoft
+          java-version: '21'
+          architecture: aarch64
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Android SDK 플랫폼(이 이미지엔 SDK 가 없다 — cmdline-tools 16111833 sha1 고정, Google repository2-3.xml)
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'android-sdk'
+          $zip = Join-Path $env:RUNNER_TEMP 'cmdline-tools.zip'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://dl.google.com/android/repository/commandlinetools-win-16111833_latest.zip' -OutFile $zip
+          $h = (Get-FileHash -Algorithm SHA1 $zip).Hash.ToLowerInvariant()
+          if ($h -ne '57d04f2d75eb8e8fffc5000a987e5de4b5a63e9d') { throw "cmdline-tools sha1 불일치: $h" }
+          $stage = Join-Path $env:RUNNER_TEMP 'cmdline-stage'
+          Expand-Archive -Path $zip -DestinationPath $stage -Force
+          New-Item -ItemType Directory -Force -Path (Join-Path $root 'cmdline-tools') | Out-Null
+          Move-Item (Join-Path $stage 'cmdline-tools') (Join-Path $root 'cmdline-tools\latest')
+          "ANDROID_HOME=$root" >> $env:GITHUB_ENV
+          "ANDROID_SDK_ROOT=$root" >> $env:GITHUB_ENV
+      - name: Android SDK 플랫폼 설치(compileSdk 37)
+        run: |
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --sdk_root="$ANDROID_HOME" --install "platforms;android-37.0" > /dev/null
+          ls "$ANDROID_HOME/platforms"
+      - name: 파이썬 확인(게이트가 결과 XML 을 python3·python 으로 읽는다 — 이 이미지에 있는지 먼저 드러낸다)
+        run: |
+          for c in python3 python; do
+            if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; print(sys.version)'; then exit 0; fi
+          done
+          echo "::error::python3·python 이 없다 — gate-fast.sh 가 카나리아 결과를 못 읽는다(actions/setup-python 을 SHA 로 고정해 더할 것)"
+          exit 1
+      - name: 의존 예열(봉인 밖 — 게이트가 아니다)
+        run: bash multiplatform/scripts/gate-fast.sh --warm
+      - name: (arm64 준비) OOBE 개인정보 화면 걷기 — 트레이 시험 전에(G §8-12, mp-windows-spike.yml 과 같은 단계)
+        shell: pwsh
+        run: |
+          $re = 'CloudExperienceHost|WWAHost|UserOOBEBroker|PrivacyExperience'
+          $before = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' | Out-Null
+          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name DisablePrivacyExperience -Value 1 -Type DWord
+          Get-Process | Where-Object { $_.ProcessName -match $re } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          $after = @(Get-Process | Where-Object { $_.ProcessName -match $re } | ForEach-Object { "$($_.ProcessName)@$($_.SessionId)" })
+          "OOBE 앞: $($before -join ', ') / 뒤: $($after -join ', ')"
+      - name: 방화벽 봉인 걸기(모든 JDK 의 java.exe 아웃바운드 차단)
+        shell: pwsh
+        run: |
+          $before = Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultOutboundAction
+          $before | Format-Table | Out-String | Write-Host
+          Set-NetFirewallProfile -All -Enabled True
+          $javas = @()
+          $javas += Get-ChildItem -Path "$env:JAVA_HOME\bin" -Filter java*.exe -ErrorAction SilentlyContinue
+          # 파트너 이미지의 도구 캐시 자리가 C:\hostedtoolcache 가 아닐 수 있어 RUNNER_TOOL_CACHE 도 훑는다.
+          foreach ($cache in @($env:RUNNER_TOOL_CACHE, 'C:\hostedtoolcache\windows') | Where-Object { $_ } | Sort-Object -Unique) {
+            if (Test-Path $cache) {
+              $javas += Get-ChildItem -Path $cache -Recurse -Filter java*.exe -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('java.exe','javaw.exe') }
+            }
+          }
+          $javas = $javas | Where-Object { $_.Name -in @('java.exe','javaw.exe') } | Sort-Object FullName -Unique
+          $i = 0
+          foreach ($j in $javas) {
+            New-NetFirewallRule -DisplayName "aingcheck-seal-$i" -Direction Outbound -Action Block -Program $j.FullName -Profile Any | Out-Null
+            Write-Host "봉인: $($j.FullName)"
+            $i++
+          }
+          if ($i -eq 0) { throw "막을 java.exe 를 찾지 못했다" }
+      - name: 방화벽 봉인 게이트(데스크톱 JVM 시험)
+        id: sealed
+        env:
+          AINGCHECK_EXTERNAL_SEAL: windows-firewall
+        run: bash multiplatform/scripts/gate-fast.sh
+      - name: 봉인 게이트 시험 결과 올리기(대조가 덮어쓰기 전에)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-arm64-sealed-test-results
+          path: |
+            multiplatform/**/build/test-results/**/*.xml
+            multiplatform/**/build/tripwire/*.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: 방화벽 봉인 풀기
+        if: always()
+        shell: pwsh
+        run: |
+          Get-NetFirewallRule -DisplayName 'aingcheck-seal-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+          Write-Host "봉인 규칙 제거"
+      - name: 대조 — 봉인 없이 카나리아는 '봉인이 새었다'로 빨강이어야 한다(A-X16)
+        if: steps.sealed.outcome == 'success'
+        run: bash multiplatform/scripts/canary-contrast.sh
+      - name: 대조 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-arm64-contrast-results
           path: multiplatform/testkit/build/test-results/desktopTest/TEST-com.yehsung.aingcheck.testkit.seal.NetworkCanaryTest.xml
           if-no-files-found: ignore
           retention-days: 7

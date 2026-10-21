@@ -75,7 +75,9 @@ reserved:
   "multiplatform/ui/src/*/composeResources/**": [W1-e, coordinator]
   "multiplatform/desktopApp/src/main/kotlin/{pkg:desktopApp}/{AppGraph,Main}.kt": [W1-f, coordinator]
   "multiplatform/androidApp/src/main/kotlin/{pkg:androidApp}/nav/NavGraph.kt": [W1-g, coordinator]
-  "contract/golden/{_manifest,_digests}.json": [W0-b, coordinator]
+  # 생성물(golden-export.sh 쓰기 모드가 영수증·지문으로 다시 만든다). 골든을 더하는 갈래는 자기 브랜치에서 다시 만들어 커밋해야
+  # 그 브랜치의 비교 모드·CI golden-digest 가 초록이다. 병합 때 두 파일이 부딪히면 어느 쪽이든 받고 쓰기 모드로 다시 만든다(G §2-5).
+  "contract/golden/{_manifest,_digests}.json": [W0-b, W1-a, W1-b, W1-c, W1-d, W2-a, W2-e, W2-g, W2-h, coordinator]
   ".gitignore": [coordinator]
 
 # 조정자(메인 에이전트) 몫 공용 조립 파일(K11 + §8-3). 웨이브 병합 때만 고친다.
@@ -182,6 +184,7 @@ lanes:
       - "multiplatform/core/rules/src/*/kotlin/{pkg:core/rules}/{tetris,minigame}/**"
       - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/games-tetris-minigame/**"
       - "contract/golden/{tetris,flappy,timing-bar,framerate}/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [tetris, flappy, timing-bar, framerate]
 
   W1-b:
@@ -191,6 +194,7 @@ lanes:
       - "multiplatform/core/rules/src/*/kotlin/{pkg:core/rules}/{renju,chess,ai,duel}/**"
       - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/games-board/**"
       - "contract/golden/{renju,chess,duel-fee}/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [renju, chess, duel-fee]
 
   W1-c:
@@ -200,6 +204,7 @@ lanes:
       - "multiplatform/core/rules/src/*/kotlin/{pkg:core/rules}/{gacha,weekly,achievements,insights,todo,text,character,ailimit,token,format}/**"
       - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/app-rules/**"
       - "contract/golden/{gacha,insights,weekly,todo,text,sort,dates,stickers}/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [gacha, insights, weekly, todo, text, sort, dates, stickers]
 
   W1-d:
@@ -210,6 +215,7 @@ lanes:
       - "multiplatform/core/net/**"
       - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/wire/**"
       - "contract/golden/{wire,errors,jwt,realtime}/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [wire, errors, jwt, realtime]
 
   W1-e:
@@ -249,6 +255,7 @@ lanes:
       - "multiplatform/core/session/**"
       - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/session/**"
       - "contract/golden/session/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [session]
 
   W2-b:
@@ -279,6 +286,7 @@ lanes:
       - "multiplatform/core/stores/src/*/kotlin/{pkg:core/stores}/{tetris,minigame,games}/**"
       - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/duel/**"
       - "contract/golden/{duel,pause}/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [duel, pause]
 
   W2-f:
@@ -295,6 +303,7 @@ lanes:
       - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{work,poke,ultra,realtime}/**"
       - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/desktop-work/**"
       - "contract/golden/desktop-work/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [desktop-work]
 
   W2-h:
@@ -304,6 +313,7 @@ lanes:
       - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{tokens,ailimits}/**"
       - "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/**"
       - "contract/golden/token-usage/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [token-usage]
 
   W2-i:

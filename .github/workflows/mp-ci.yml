@@ -70,13 +70,35 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: golden-digest --check
+      - name: golden-digest --check · 도구 자기 시험(W0-b)
         run: |
           if [ -f multiplatform/tools/golden-digest.py ]; then
+            set -euo pipefail
             python3 -I multiplatform/tools/golden-digest.py --check
+            # 결함을 심은 사본에서 --check 가 빨개지는지(주석만 바꾼 소스는 초록 · 코드·골든 바이트·고아는 빨강).
+            python3 -I multiplatform/tools/golden-digest.py --self-test
+            # INV 스캐너(C§4.2): 자기 시험 + 개수(기록용 — 0.3.62 기준선 671 = core 240 · mac 133 · phone 298. C 의 686 은 옛 기준선).
+            python3 -I multiplatform/tools/port-invariants.py --self-test
+            python3 -I multiplatform/tools/port-invariants.py
           else
             echo "::notice::multiplatform/tools/golden-digest.py 가 아직 없다 — W0-b 가 채운다(자리표시 통과)"
           fi
+
+  swift-golden:
+    # 수동 참고용(A§9-14 · G §8-1): Swift 골든 비교 모드의 정본은 이 맥의 scripts/golden-export.sh(맥 전체 스위트)다.
+    # 러너의 Xcode 판이 이 맥(Xcode 27 · Swift 6.4)과 다를 수 있어 결과는 참고만 한다 — 실패해도 워크플로를 빨갛게 하지 않는다.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Swift 판
+        run: swift --version
+      - name: golden-export 비교 모드(sandbox-exec 봉인)
+        run: bash scripts/golden-export.sh
 
   lane-tools:
     runs-on: ubuntu-24.04

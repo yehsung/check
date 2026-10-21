@@ -403,7 +403,8 @@ SELF_TEST_CASES = [
     ("W1-a", "multiplatform/core/rules/src/commonMain/kotlin/com/yehsung/aingcheck/core/rules/tetris/TetrisGame.kt", "ok"),
     ("W1-a", "multiplatform/core/rules/src/commonMain/kotlin/com/yehsung/aingcheck/core/rules/renju/Renju.kt", "outside"),
     ("W1-a", "contract/golden/tetris/scripted-A.json", "ok"),
-    ("W1-a", "contract/golden/_manifest.json", "reserved"),
+    ("W1-a", "contract/golden/_manifest.json", "ok"),        # 골든 갈래는 생성물 목록·지문을 다시 만들어 커밋한다(lanes.yml reserved)
+    ("W1-e", "contract/golden/_manifest.json", "reserved"),  # 골든 없는 갈래는 여전히 못 쓴다
     ("W1-d", "multiplatform/core/net/src/commonMain/kotlin/com/yehsung/aingcheck/core/net/Service.kt", "ok"),
     ("W1-d", "multiplatform/core/net/build.gradle.kts", "reserved"),
     ("W1-g", "multiplatform/androidApp/src/main/AndroidManifest.xml", "ok"),

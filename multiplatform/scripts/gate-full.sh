@@ -7,6 +7,10 @@
 # 기기 계측: multiplatform/scripts/emu.sh instrumented(api36 AVD · 포트 5560 · 봉인 기본 → 계측 시험 → 끄기, 종료 코드 전달).
 #   emu.sh 가 없으면 실패한다 — 조용히 건너뛰지 않는다.
 #   일부러 빼려면 AINGCHECK_ALLOW_NO_DEVICE=1. 그때는 **언제나** "기기 계측 빠짐"을 찍는다(이 실행은 기기 몫을 재지 않았다).
+# Swift 골든 비교(맥에서만, G §4-1 "Swift 쪽" · contract/README.md §3): scripts/golden-export.sh 비교 모드를 먼저 돈다.
+#   맥 전체 스위트(swift test)만으로는 GoldenExport 개수·건너뜀·스위트 밖 시험·영수증 고아를 재지 않는다 — 그 잠금은 이 스크립트에만 있다.
+#   golden-export.sh 는 자기 sandbox-exec 봉인을 건다. gate-fast.sh 의 봉인 안에서 부르면 겹 봉인으로 SwiftPM 이 막히므로 봉인 밖 단계에서 부른다.
+#   일부러 빼려면 AINGCHECK_ALLOW_NO_SWIFT_GOLDEN=1. 그때는 **언제나** "Swift 골든 비교 빠짐"을 찍는다.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +27,24 @@ if [[ "${AINGCHECK_GATE_INNER:-}" != "1" ]]; then
   elif [[ ! -x "$HERE/emu.sh" ]]; then
     echo "gate-full: multiplatform/scripts/emu.sh 가 없다(W0-f). 기기 계측 없이 돌리려면 AINGCHECK_ALLOW_NO_DEVICE=1" >&2
     exit 2
+  fi
+fi
+
+if [[ "${AINGCHECK_GATE_INNER:-}" != "1" && "$(uname -s)" == Darwin ]]; then
+  if [[ "${AINGCHECK_ALLOW_NO_SWIFT_GOLDEN:-}" == "1" ]]; then
+    echo "gate-full: Swift 골든 비교 빠짐(AINGCHECK_ALLOW_NO_SWIFT_GOLDEN=1 — scripts/golden-export.sh 를 부르지 않는다)" >&2
+  else
+    golden_export="$(cd "$HERE/../.." && pwd)/scripts/golden-export.sh"
+    [[ -x "$golden_export" ]] || { echo "gate-full: scripts/golden-export.sh 가 없다(W0-b). 빼려면 AINGCHECK_ALLOW_NO_SWIFT_GOLDEN=1" >&2; exit 2; }
+    set +e
+    "$golden_export"
+    golden_rc=$?
+    set -e
+    echo "gate-full: golden-export-exit=$golden_rc"
+    if [[ $golden_rc -ne 0 ]]; then
+      echo "gate-full: Swift 골든 비교 모드가 빨갛다(scripts/golden-export.sh exit $golden_rc) — JVM·기기 몫을 돌리지 않고 멈춘다" >&2
+      exit 1
+    fi
   fi
 fi
 

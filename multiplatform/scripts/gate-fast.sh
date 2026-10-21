@@ -83,6 +83,18 @@ fi
 [[ "${AINGCHECK_NETWORK_SEALED:-}" == "1" ]] || die "AINGCHECK_NETWORK_SEALED=1 이 없는 실행은 게이트가 아니다"
 cd "$MP"
 
+# 골든 지문(G §8-1: 맥 빠른 게이트·이 게이트에는 golden-digest --check 만 — Swift 비교 모드는 맥 전체 스위트).
+# Swift 엔진·골든·작성기·바탕이 _digests.json 과 어긋나거나 생성 시험 이름이 주석에만 남으면
+# "맥에서 scripts/golden-export.sh 를 돌려라"로 빨강(C§5.4 ③). Windows 러너에서도 돈다 — golden-digest 는 CRLF 체크아웃
+# (골든 지문을 LF 로 접어 센다)과 cp1252 파이프(표준 출력을 UTF-8 로 바꾼다)에 견딘다(W0-b 검증 지적 수정).
+[[ -n "$PY" ]] || die "golden-digest 를 돌릴 python3 가 없다"
+golden_rc=0
+if [[ -f "$MP/tools/golden-digest.py" ]]; then
+  "$PY" -I "$MP/tools/golden-digest.py" --check || golden_rc=$?
+else
+  echo "gate-$KIND: multiplatform/tools/golden-digest.py 가 없다(W0-b 병합 전)" >&2
+fi
+
 # 시험 JVM 이 봉인 프로세스의 자손인지(SealAncestryTest). Windows 의 bash PID 는 Windows PID 가 아니라 뺀다.
 if [[ "$OS" != windows ]]; then export AINGCHECK_GATE_PID="$$"; fi
 
@@ -149,8 +161,9 @@ prefs_after="absent"
 if [[ -e "$prefs_plist" ]]; then prefs_after="$(stat -f '%m' "$prefs_plist" 2>/dev/null || echo present)"; fi
 
 status=0
-echo "gate-$KIND: os=$OS gradle-exit=$rc elapsed=${elapsed}s canary=$canary_status"
+echo "gate-$KIND: os=$OS gradle-exit=$rc golden-digest-exit=$golden_rc elapsed=${elapsed}s canary=$canary_status"
 if [[ $rc -ne 0 ]]; then status=1; fi
+if [[ $golden_rc -ne 0 ]]; then echo "gate-$KIND: golden-digest --check 빨강(exit $golden_rc)" >&2; status=1; fi
 if [[ "$canary_status" != "ran" ]]; then echo "gate-$KIND: NetworkCanaryTest 가 초록으로 돌지 않았다($canary_status)" >&2; status=1; fi
 if [[ -n "$new_home" ]]; then echo "gate-$KIND: 시험이 \$HOME 에 새 항목을 남겼다: $new_home" >&2; status=1; fi
 if [[ "$prefs_before" != "$prefs_after" ]]; then echo "gate-$KIND: java.util.prefs plist 가 바뀌었다($prefs_before → $prefs_after)" >&2; status=1; fi

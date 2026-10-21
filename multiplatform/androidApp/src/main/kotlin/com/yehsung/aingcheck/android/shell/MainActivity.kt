@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.RouteIntents
@@ -36,11 +37,13 @@ class MainActivity : ComponentActivity() {
         val c = container
         setContent {
             val phase by c.shellPhase.collectAsStateWithLifecycle()
+            // 흐름 하나를 붙잡아 둔다 — 다시 그릴 때마다 새로 만들면 수집이 끊겼다 다시 붙으며 받은 요청을 흘릴 수 있다.
+            val requestFlow = remember { requests.receiveAsFlow() }
             MaterialTheme {
                 Surface {
                     AingShell(
                         phase = phase,
-                        requests = requests.receiveAsFlow(),
+                        requests = requestFlow,
                         onVisibleRoute = c.visibleRoute::setRoute,
                         onAccept = { c.pendingInviteAccept.value = it },
                     )
@@ -57,7 +60,9 @@ class MainActivity : ComponentActivity() {
 
     private fun route(intent: Intent?) {
         val incoming = RouteIntents.read(intent) ?: return
-        val request = RouteIntents.parse(incoming, expectedProof = container.routeProof.value()) ?: return
+        // 증표는 수락을 요청한 Intent 에서만 꺼낸다(처음 쓸 때 만들어 저장한다 — 화면만 여는 딥링크에 디스크 쓰기를 붙이지 않는다).
+        val proof = if (incoming.acceptExtra) container.routeProof.value() else null
+        val request = RouteIntents.parse(incoming, expectedProof = proof) ?: return
         requests.trySend(request)
     }
 

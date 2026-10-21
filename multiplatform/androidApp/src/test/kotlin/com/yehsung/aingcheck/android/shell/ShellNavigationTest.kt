@@ -13,6 +13,9 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.AingRoute
+import com.yehsung.aingcheck.android.routing.RouteIntents
+import com.yehsung.aingcheck.android.routing.RouteRequest
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,6 +66,24 @@ class ShellNavigationTest {
         ActivityScenario.launch<MainActivity>(deepLink("aingcheck://rankings/tokens")).use {
             compose.onNodeWithText("aingcheck://rankings/tokens").assertExists()
             compose.onNodeWithTag("tab:rankings").assertIsSelected()
+        }
+    }
+
+    /** 알림 [수락]: 증표가 맞으면 신청 화면 + 수락 요청 한 번, 틀리면 화면만(다른 앱이 흉내 낸 Intent). */
+    @Test
+    fun notificationAcceptNeedsProofAndOpensTheInvite() {
+        val route = AingRoute.GomokuInvite("m1")
+        val proof = app.container.routeProof.value()!!
+        val forged = RouteIntents.explicit(app, RouteRequest(route, accept = true), proof = "0".repeat(64))
+        ActivityScenario.launch<MainActivity>(forged).use {
+            compose.onNodeWithText(route.url).assertExists()
+            compose.waitForIdle()
+            assertNull("증표가 틀린 수락이 통과했다", app.container.pendingInviteAccept.value)
+        }
+        val real = RouteIntents.explicit(app, RouteRequest(route, accept = true), proof = proof)
+        ActivityScenario.launch<MainActivity>(real).use {
+            compose.onNodeWithText(route.url).assertExists()
+            compose.waitUntil { app.container.pendingInviteAccept.value == route }
         }
     }
 

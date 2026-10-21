@@ -1,3 +1,5 @@
+// 원본: Sources/check/CheckApp.swift:133-137·242-250·458-477 @ a63fea2 (--autostart 면 창을 열지 않음, 종료 절차) — 시험은 새 코드:
+//       G K11(조립 지점) · K4(ClientIdentity) · K6(device_id = 'win:' + 신원) · 설계 D§2-4(JNA DLL 을 %TEMP% 에 풀지 않음)·D§3-2·E11
 package com.yehsung.aingcheck.desktop.platform.windows.app
 
 import com.yehsung.aingcheck.core.foundation.platform.InstallationIdentity

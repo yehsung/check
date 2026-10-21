@@ -1,3 +1,5 @@
+// 원본: Sources/CheckCore/TokenVault.swift @ a63fea2 (계약: write 가 실패한 키는 read 가 반드시 nil — '없다 > 낡았다')
+//       · 시험은 새 코드: 설계 D§7(DPAPI 파일 금고 규약) · testkit TokenVaultContract · R2 검증 지적(V2: 사다리 ③ 독을 지워도 초록이었다)
 package com.yehsung.aingcheck.desktop.platform.windows.vault
 
 import com.yehsung.aingcheck.core.foundation.platform.TokenVault
@@ -8,8 +10,10 @@ import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFilePermissions
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -136,6 +140,35 @@ class FileTokenVaultFileRulesTest {
         vault.write("x", "k0")
         val leftovers = Files.list(dir).use { s -> s.filter { it.fileName.toString().endsWith(".tmp") }.count() }
         assertEquals(0L, leftovers)
+    }
+
+    /**
+     * 사다리 ③(독): 쓰기도, 지우기도, 0바이트 자르기도 다 막히면 이 실행 동안은 독으로 null 을 지킨다.
+     * 파일 0444 + 폴더 0555 — 폴더에 새 임시 파일을 못 만들고(쓰기 실패), 폴더 쓰기 권한이 없어 지우지 못하고(①),
+     * 파일 쓰기 권한이 없어 자르지 못한다(②). 디스크에는 낡은 봉인이 그대로 남으므로 독이 없으면 read 가 낡은 값을 돌려준다.
+     * Windows 짝은 runner/DpapiVaultWindowsTest(파일 ACL 로 WRITE_DATA·DELETE 거부 + 폴더 DELETE_CHILD 거부).
+     */
+    @DisabledOnOs(OS.WINDOWS)
+    @Test
+    fun poisonKeepsTheSameRunNullWhenTheFileCanBeNeitherDeletedNorTruncated() {
+        val dir = tmp.resolve("vault")
+        val vault = FileTokenVault(dir, FakeProtector())
+        vault.write("rotated-before", "refresh")
+        val file = vault.fileFor("refresh")
+        val before = Files.readAllBytes(file)
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("r--r--r--"))
+        Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("r-xr-xr-x"))
+        try {
+            // 주입이 실제로 걸렸는지 먼저 잰다(루트로 돌면 권한이 안 먹는다 — 그러면 이 시험은 ③ 을 재지 못한다).
+            check(runCatching { Files.createTempFile(dir, "probe", ".tmp") }.isFailure) { "폴더에 새 파일을 만들 수 있다" }
+            check(runCatching { Files.newOutputStream(file, StandardOpenOption.WRITE).close() }.isFailure) { "파일을 쓰기로 열 수 있다" }
+            vault.write("rotated-after", "refresh")
+            assertContentEquals(before, Files.readAllBytes(file), "주입이 새었다 — 지우기나 자르기가 됐다(③ 까지 가지 않았다)")
+            assertNull(vault.read("refresh"), "같은 실행에서 낡은 토큰이 돌아왔다(독이 없다)")
+        } finally {
+            Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwx------"))
+            Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-------"))
+        }
     }
 
     @DisabledOnOs(OS.WINDOWS)

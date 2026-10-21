@@ -36,6 +36,13 @@ data class TrayStatus(
     val lastError: Int,
     /** TaskbarCreated 를 받아 다시 붙인 횟수. */
     val reattached: Int,
+    /** update·show 가 부른 NIM_MODIFY 횟수. */
+    val modifyCalls: Int = 0,
+    /**
+     * 마지막 NIM_MODIFY 의 BOOL(아직 안 불렀으면 null). Shell_NotifyIcon 은 실패해도 GetLastError 를 늘 채우지 않아
+     * [lastError] 만으로는 갱신 실패를 놓친다(R2 검증 지적) — 반환값 그대로를 남긴다.
+     */
+    val lastModifyOk: Boolean? = null,
 )
 
 /** 화면 좌표 사각형(물리 픽셀). */
@@ -58,6 +65,8 @@ class WindowsTrayHost(
     private var attempts = 0
     private var lastError = 0
     private var reattached = 0
+    private var modifyCalls = 0
+    private var lastModifyOk: Boolean? = null
     private var retryDeadline = 0L
 
     private val clickListeners = CopyOnWriteArrayList<(TrayClick, Int, Int) -> Unit>()
@@ -131,7 +140,7 @@ class WindowsTrayHost(
         return Registration { clickListeners -= listener }
     }
 
-    fun status(): TrayStatus = thread.call { TrayStatus(wanted, added, versionSet, attempts, lastError, reattached) }
+    fun status(): TrayStatus = thread.call { TrayStatus(wanted, added, versionSet, attempts, lastError, reattached, modifyCalls, lastModifyOk) }
 
     /**
      * 아이콘 자리(Shell_NotifyIconGetRect). 플라이아웃 배치의 입력. 아이콘이 없거나 실패면 null.
@@ -155,7 +164,10 @@ class WindowsTrayHost(
 
     private fun modify() {
         val d = data ?: return
-        if (!Shell32X.INSTANCE.Shell_NotifyIconW(Win32.NIM_MODIFY, d)) lastError = Native.getLastError()
+        modifyCalls++
+        val ok = Shell32X.INSTANCE.Shell_NotifyIconW(Win32.NIM_MODIFY, d)
+        lastModifyOk = ok
+        if (!ok) lastError = Native.getLastError()
     }
 
     /** 메시지 스레드에서. 실패하면 재시도 창 안에서만 다음 시도를 예약한다. */

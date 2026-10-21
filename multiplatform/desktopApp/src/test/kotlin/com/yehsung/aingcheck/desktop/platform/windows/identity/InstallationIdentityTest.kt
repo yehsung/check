@@ -1,6 +1,10 @@
+// 원본: Sources/check/WorkTimerStore.swift:1142-1148 @ a63fea2 (맥은 UUID 를 한 번 만들어 둔다) — 시험은 새 코드:
+//       G §5-1 #6(레지스트리를 못 읽으면 무작위 UUID — 써 놓고 다시 읽어 같을 때만, 아니면 토큰 업로드 0)
+//       · 기억 device-identity-must-not-be-invented · R2 검증 지적(I1: '다시 읽어 같을 때만' 비교를 지워도 초록이었다)
 package com.yehsung.aingcheck.desktop.platform.windows.identity
 
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
@@ -89,6 +93,60 @@ class InstallationIdentityTest {
         val r = WindowsInstallationIdentity(FakeSource(null, null), file, randomUuid = { UUID(7, 8) }).resolve()
         assertEquals(UUID(7, 8).toString(), r.installationId)
         assertTrue(Files.readString(file).trim() == UUID(7, 8).toString())
+    }
+
+    /**
+     * 저장 이음매 가짜: 쓰기는 늘 성공하고, 쓴 **뒤의** 읽기를 [readBack] 이 정한다(쓰기 전 읽기는 null — 파일 없음).
+     * 디스크로는 "썼는데 다시 읽으니 다르다"를 싸게 만들 수 없어서 이 이음매로 주입한다.
+     */
+    private class ScriptedStore(private val readBack: (written: String) -> String?) : FallbackIdStore {
+        var written: String? = null
+        var writes = 0
+        override fun read(): String? = written?.let(readBack)
+        override fun write(text: String) {
+            writes++
+            written = text
+        }
+    }
+
+    private fun resolveWith(store: ScriptedStore): WindowsInstallationIdentity =
+        WindowsInstallationIdentity(FakeSource(null, sid), store, randomUuid = { UUID.fromString("0f3c2a1e-58f4-4b9e-9c1d-2a7b6e5d4c3b") })
+
+    @Test
+    fun faithfulStoreGivesTheWrittenValue() {
+        // 기준선(다른 입력): 쓴 그대로 읽히면 그 값을 쓴다 — 아래 세 사례와 저장 결과만 다르다.
+        val store = ScriptedStore { it }
+        val identity = resolveWith(store)
+        assertEquals(WindowsInstallationIdentity.Resolved("0f3c2a1e-58f4-4b9e-9c1d-2a7b6e5d4c3b", WindowsInstallationIdentity.Origin.FALLBACK_FILE), identity.resolve())
+        assertEquals(1, store.writes)
+    }
+
+    @Test
+    fun writeSucceedsButReadBackDiffersMeansNoIdentity() {
+        // 쓰기는 성공했다고 했는데 다시 읽으니 다른(그러나 모양은 멀쩡한) 값 — 저장이 다른 자리로 갔거나 덮였다.
+        val store = ScriptedStore { "9b2d6c1e-7a40-4f3e-8c55-1d2e3f405162\n" }
+        val identity = resolveWith(store)
+        val r = identity.resolve()
+        assertEquals(WindowsInstallationIdentity.Origin.UNAVAILABLE, r.origin)
+        assertNull(r.installationId)
+        assertEquals(1, store.writes, "쓰기를 시도하지 않았다 — 이 사례는 '쓴 뒤 다시 읽기'를 재지 못한다")
+        assertNull(WindowsDeviceIdentity.deviceId(r.installationId), "확인 안 된 신원으로 device_id 를 만들었다(토큰 업로드 0 이어야)")
+    }
+
+    @Test
+    fun writeSucceedsButReadBackFailsMeansNoIdentity() {
+        val store = ScriptedStore { throw IOException("주입된 다시 읽기 실패") }
+        val r = resolveWith(store).resolve()
+        assertEquals(WindowsInstallationIdentity.Resolved(null, WindowsInstallationIdentity.Origin.UNAVAILABLE), r)
+        assertEquals(1, store.writes)
+    }
+
+    @Test
+    fun writeSucceedsButValueVanishesMeansNoIdentity() {
+        val store = ScriptedStore { null }
+        val r = resolveWith(store).resolve()
+        assertEquals(WindowsInstallationIdentity.Resolved(null, WindowsInstallationIdentity.Origin.UNAVAILABLE), r)
+        assertEquals(1, store.writes)
     }
 
     @Test

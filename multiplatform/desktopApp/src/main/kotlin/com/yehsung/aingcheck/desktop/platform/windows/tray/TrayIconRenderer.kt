@@ -1,4 +1,5 @@
-// 원본: Sources/CheckCore/MenuBarStatusFormatter.swift @ a63fea2 (상태 우선순위: 동기화 대기 > 근무 중 > 오프, 시:분 표기)
+// 원본: Sources/CheckCore/MenuBarStatusFormatter.swift @ a63fea2 (상태 우선순위: 동기화 대기 > 근무 중 > 오프, 시:분 표기,
+//       툴팁 상태 글자 = localizedStatus "근무중"·"근무종료"·"동기화 대기" 그대로 — G §8-13)
 //       · Sources/check/CheckMenuView.swift:1160-1166 @ a63fea2 (빨간 점 = 새 버전·안 읽은 메시지·받은 신청·미해결 신고, 이미지에 굽는다)
 //       · 설계 D§3-2·§4-2(아이콘 안 숫자 = 경과 시, 24px 이상은 15분 눈금 4칸, 오프 = 회색 아잉이 얼굴, 대기 = 주황 '!')
 //
@@ -47,11 +48,15 @@ data class TrayIconSpec(
 }
 
 object TrayTooltip {
-    /** NIF_SHOWTIP 기본 툴팁(127자 상한). 분은 아이콘에 없으므로 툴팁이 시:분을 말한다(D§4-2). */
+    /**
+     * NIF_SHOWTIP 기본 툴팁(127자 상한). 분은 아이콘에 없으므로 툴팁이 시:분을 말한다(D§4-2).
+     * 상태 글자는 맥 `WorkStatusSnapshot.localizedStatus`(Sources/CheckCore/MenuBarStatusFormatter.swift) **그대로** —
+     * "근무중"·"근무종료"·"동기화 대기"(띄어쓰기까지, G §8-13). 시험이 맥 소스의 글자와 대조한다.
+     */
     fun text(status: TrayIconStatus): String = when (status) {
         TrayIconStatus.Pending -> "아잉체크 · 동기화 대기"
-        TrayIconStatus.Off -> "아잉체크 · 근무 종료"
-        is TrayIconStatus.Working -> "아잉체크 · 근무 중 ${hhmm(status.elapsedSeconds)}"
+        TrayIconStatus.Off -> "아잉체크 · 근무종료"
+        is TrayIconStatus.Working -> "아잉체크 · 근무중 ${hhmm(status.elapsedSeconds)}"
     }
 
     /** 맥 titleDuration 그대로: 항상 HH:MM, 초는 내림, 음수는 0. */

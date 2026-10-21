@@ -1,3 +1,4 @@
+// 원본: 없음(새 시험) — 설계 D§3-1(NOTIFYICON_VERSION_4 콜백: wParam 에 부호 있는 16비트 기준 좌표)
 package com.yehsung.aingcheck.desktop.platform.windows.tray
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.TrayClick

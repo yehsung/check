@@ -1,3 +1,4 @@
+// 원본: 없음(새 시험) — 설계 D§2-5(%LOCALAPPDATA%\aing-check, 로밍 아님) · G §8-12(MSIX 리디렉션 자리) · W0-e 러너 실측
 package com.yehsung.aingcheck.desktop.platform.windows.paths
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.EnvReader

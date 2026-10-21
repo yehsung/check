@@ -1,3 +1,4 @@
+// 원본: 없음(새 시험) — RFC 9562 §5.5(UUIDv5) · 설계 D§2-5 · G §5-1 #6 · K6. 기대값은 Python 3 uuid.uuid5 로 따로 낸 벡터
 package com.yehsung.aingcheck.desktop.platform.windows.identity
 
 import java.util.UUID

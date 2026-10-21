@@ -1,3 +1,5 @@
+// 원본: 없음(새 시험) — 설계 D§3-1(Shell_NotifyIcon 직접, TaskbarCreated 재부착) · W0-e 실측(NOTIFYICONDATAW 976B, arm64 OOBE)
+//       · G §2-3 W1-f ①(러너 2종) · R2 검증 지적(NIM_MODIFY 성공을 lastError·아이콘 존재로만 쟀다 → BOOL 반환을 단언)
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
 import com.sun.jna.Native
@@ -69,14 +71,43 @@ class TrayWindowsTest {
                 assertTrue(rect.right > rect.left && rect.bottom > rect.top, "빈 사각형 $rect")
                 println("AINGCHECK-TRAY addAttempts=${st.addAttempts} rect=$rect")
 
-                tray.update(icon(TrayIconStatus.Working(3600)), "aing-check 근무 중 01:00")
-                assertEquals(0, tray.status().lastError, "NIM_MODIFY 실패")
+                assertNull(st.lastModifyOk, "아직 MODIFY 를 부르지 않았다")
+                tray.update(icon(TrayIconStatus.Working(3600)), "aing-check 근무중 01:00")
+                val afterUpdate = tray.status()
+                assertEquals(1, afterUpdate.modifyCalls)
+                assertEquals(true, afterUpdate.lastModifyOk, "NIM_MODIFY 가 FALSE 를 돌려줬다: $afterUpdate")
                 assertTrue(shellHasIcon(thread))
+                // 툴팁·아이콘이 셸 안에서 실제로 바뀌었는지 되읽는 공개 API 는 없다(UI Automation 은 넘침 영역에 숨은 아이콘을 못 본다) — 미확인.
 
                 tray.remove()
                 assertFalse(tray.status().added)
                 assertFalse(shellHasIcon(thread), "NIM_DELETE 뒤에도 셸에 남았다")
                 assertNull(tray.iconRect())
+            }
+        }
+    }
+
+    /** 짝: 셸에서 아이콘이 사라진 뒤의 갱신은 NIM_MODIFY 가 FALSE 다 — 우리 상태가 그 BOOL 을 그대로 말해야 한다. */
+    @Test
+    fun modifyOnAnIconTheShellLostIsReportedAsFailed() {
+        Win32MessageThread.start(RunnerSupport.unique("AingCheck.Test.TrayMod")).use { thread ->
+            WindowsTrayHost(thread, iconId = iconId, retryWindowMillis = 20_000).use { tray ->
+                tray.show(icon(), "aing-check 갱신 실패 시험")
+                RunnerSupport.waitUntil(20_000, "NIM_ADD") { tray.status().added }
+                tray.update(icon(TrayIconStatus.Working(60)), "aing-check 근무중 00:01")
+                assertEquals(true, tray.status().lastModifyOk, "기준선: 아이콘이 있으면 MODIFY 는 성공")
+                thread.call { hwnd ->
+                    val d = NOTIFYICONDATAW()
+                    d.cbSize = d.size()
+                    d.hWnd = hwnd
+                    d.uID = iconId
+                    check(Shell32X.INSTANCE.Shell_NotifyIconW(Win32.NIM_DELETE, d)) { "시험 준비: 셸에서 지우지 못했다" }
+                }
+                assertFalse(shellHasIcon(thread))
+                tray.update(icon(TrayIconStatus.Working(120)), "aing-check 근무중 00:02")
+                val st = tray.status()
+                assertEquals(2, st.modifyCalls)
+                assertEquals(false, st.lastModifyOk, "셸에 없는 아이콘을 갱신했는데 성공이라 한다: $st")
             }
         }
     }

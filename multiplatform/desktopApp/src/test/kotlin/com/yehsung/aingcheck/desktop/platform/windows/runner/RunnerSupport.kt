@@ -1,3 +1,5 @@
+// 원본: 없음(새 시험 도우미) — 설계 D§2-5·§5-1·§6(러너에서 실제 OS 로 재는 것) · W0-e 탐침 Smoke(자식 JVM·SendInput)
+//       · R2 검증 지적(신원 재계산 단언이 같은 함수·같은 입력이었다 → PowerShell 로 다른 구현의 기대값)
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
 import com.sun.jna.platform.win32.User32
@@ -8,6 +10,7 @@ import com.yehsung.aingcheck.desktop.platform.windows.instance.InstanceSignal
 import com.yehsung.aingcheck.desktop.platform.windows.instance.WindowsSingleInstanceGuard
 import java.io.File
 import java.nio.file.Files
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.fail
@@ -64,6 +67,45 @@ object RunnerSupport {
             fail("자식 JVM 이 ${timeoutSeconds}초 안에 끝나지 않았다: $args")
         }
         return ChildResult(p.exitValue(), out.trim(), err.trim())
+    }
+
+    /**
+     * UUIDv5(RFC 9562 §5.5)를 **다른 구현**으로 계산한다: Windows PowerShell 5.1 의 .NET SHA1(모든 Windows 10/11·러너 2종에 있다).
+     * 우리 Kotlin [com.yehsung.aingcheck.desktop.platform.windows.identity.Uuid5] 와 기대값을 나누려는 것이다(기억 comparison-baseline-must-differ).
+     * 값은 스크립트 글에 끼워 넣지 않고 환경 변수로만 넘긴다(기억 shell-values-go-as-argv-not-interpolation). 스크립트는 ASCII 만 쓴다.
+     */
+    fun uuid5ViaPowerShell(namespaceHex: String, name: String): String {
+        val script = listOf(
+            "\$ErrorActionPreference = 'Stop'",
+            "\$ProgressPreference = 'SilentlyContinue'",
+            "\$hex = \$env:AINGCHECK_NS_HEX",
+            "if (\$hex -notmatch '^[0-9a-fA-F]{32}\$') { throw 'namespace hex' }",
+            "\$ns = New-Object 'byte[]' 16",
+            "for (\$i = 0; \$i -lt 16; \$i++) { \$ns[\$i] = [Convert]::ToByte(\$hex.Substring(\$i * 2, 2), 16) }",
+            "\$nb = [Text.Encoding]::UTF8.GetBytes(\$env:AINGCHECK_NAME)",
+            "\$buf = New-Object 'byte[]' (16 + \$nb.Length)",
+            "[Array]::Copy(\$ns, 0, \$buf, 0, 16)",
+            "[Array]::Copy(\$nb, 0, \$buf, 16, \$nb.Length)",
+            "\$h = [Security.Cryptography.SHA1]::Create().ComputeHash(\$buf)",
+            "\$h[6] = [byte]((\$h[6] -band 0x0F) -bor 0x50)",
+            "\$h[8] = [byte]((\$h[8] -band 0x3F) -bor 0x80)",
+            "\$s = (\$h[0..15] | ForEach-Object { \$_.ToString('x2') }) -join ''",
+            "[Console]::Out.Write(\$s.Substring(0, 8) + '-' + \$s.Substring(8, 4) + '-' + \$s.Substring(12, 4) + '-' + \$s.Substring(16, 4) + '-' + \$s.Substring(20, 12))",
+        ).joinToString("\n")
+        val encoded = Base64.getEncoder().encodeToString(script.toByteArray(Charsets.UTF_16LE))
+        val pb = ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded)
+        pb.environment()["AINGCHECK_NS_HEX"] = namespaceHex
+        pb.environment()["AINGCHECK_NAME"] = name
+        pb.redirectInput(ProcessBuilder.Redirect.from(File("NUL")))
+        pb.redirectError(ProcessBuilder.Redirect.DISCARD) // 진행 기록(CLIXML)이 표준 오류로 섞여 나올 수 있다 — 값은 표준 출력만 본다
+        val p = pb.start()
+        val out = p.inputStream.bufferedReader(Charsets.US_ASCII).readText()
+        if (!p.waitFor(60, TimeUnit.SECONDS)) {
+            p.destroyForcibly()
+            fail("powershell.exe 가 60초 안에 끝나지 않았다")
+        }
+        assertEquals(0, p.exitValue(), "powershell.exe 종료 코드 · $out")
+        return out.trim()
     }
 
     /** 외부 도구(reg.exe·whoami.exe)를 돌려 표준 출력을 받는다 — 우리 JNA 읽기와 다른 길로 같은 사실을 잰다. */

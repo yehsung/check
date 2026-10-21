@@ -1,3 +1,5 @@
+// 원본: Sources/check/WorkShortcut.swift:36-46 @ a63fea2 (조합 규칙) — 시험은 새 코드: 설계 D§6(겹치면 1409) · D§2-2(창 스레드에서만)
+//       · W0-e 실측 · G §2-3 W1-f ①(러너 2종)
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.HotkeyRegistrationResult

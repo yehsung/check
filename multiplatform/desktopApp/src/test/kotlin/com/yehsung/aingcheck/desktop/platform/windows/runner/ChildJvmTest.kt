@@ -1,3 +1,4 @@
+// 원본: 없음(새 시험) — W0-e 탐침의 자식 JVM 길(뮤텍스·활성화 신호·JNA 풀기 시험의 전제)
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
 import kotlin.test.Test

@@ -1,3 +1,5 @@
+// 원본: 없음(새 시험) — 설계 D§2-5(단일 실행 뮤텍스 Local\AingCheck.Instance · 두 번째 실행은 숨은 창으로 깨우기 · MachineGuid+SID 신원)
+//       · G §2-3 W1-f ① · G §5-1 #6 · K6 · R2 검증 지적(신원을 같은 함수로 다시 계산한 단언 → 다른 구현·다른 도구의 값과 대조)
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
 import com.yehsung.aingcheck.desktop.platform.windows.identity.RegistryMachineIdentitySource
@@ -94,6 +96,12 @@ class IdentityWindowsTest {
     }
 
     @Test
+    fun powerShellUuid5MatchesThePublishedVector() {
+        // 기대값 쪽 구현 자체의 검사: uuid5(NAMESPACE_DNS, 'python.org') — Python 문서의 예(Uuid5Test 와 같은 벡터).
+        assertEquals("886313e1-3b8a-5372-9b90-0c9aee199e5d", RunnerSupport.uuid5ViaPowerShell("6ba7b8109dad11d180b400c04fd430c8", "python.org"))
+    }
+
+    @Test
     fun computedTwiceInFreshInstancesIsTheSameLowercaseV5AndWritesNoFallback() {
         val file = tmp.resolve("aing-check").resolve("installation-id")
         val a = WindowsInstallationIdentity(RegistryMachineIdentitySource(), file).resolve()
@@ -103,8 +111,18 @@ class IdentityWindowsTest {
         val id = a.installationId!!
         assertEquals(id.lowercase(), id)
         assertEquals(5, UUID.fromString(id).version())
-        val src = RegistryMachineIdentitySource()
-        assertEquals(WindowsDeviceIdentity.installationId(src.machineGuid()!!, src.userSid()!!), id)
+        // 기대값은 다른 길로만 만든다: 재료는 reg.exe·whoami.exe 출력, 해시·UUID 꼴은 PowerShell(.NET SHA1), 이름공간은 고정 글자(G §8-13).
+        val regGuid = Regex("""MachineGuid\s+REG_SZ\s+(\S+)""").find(
+            RunnerSupport.runTool("reg.exe", "query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid", "/reg:64"),
+        )?.groupValues?.get(1)
+        val whoSid = Regex("""(S-1-[0-9-]+)""").find(RunnerSupport.runTool("whoami.exe", "/user", "/fo", "csv", "/nh"))?.groupValues?.get(1)
+        assertNotNull(regGuid)
+        assertNotNull(whoSid)
+        val expected = RunnerSupport.uuid5ViaPowerShell(
+            "aafb227dcd3f52449eb48496576dbc12",
+            "aing-check|" + regGuid.lowercase() + "|" + whoSid.uppercase(),
+        )
+        assertEquals(expected, id, "PowerShell 이 reg.exe·whoami 값으로 낸 v5 와 다르다")
         assertEquals("win:$id", WindowsDeviceIdentity.deviceId(id))
         assertFalse(Files.exists(file), "레지스트리를 읽었는데 무작위 폴백을 썼다")
         // 다른 JVM(자식)도 같은 재료에서 같은 값을 낸다 — 재실행·재설치 뒤에도 같은 기기라는 근거.

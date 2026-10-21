@@ -1,97 +1,193 @@
-# 플라이아웃 배치 표 — FlyoutPlacementTableTest 가 만든다. 배율% 가장자리 자동숨김 음수좌표 → l t r b 높이DIP 상한DIP 겹침
-100 LEFT fixed pos -> 60 244 474 804 560.0 700.0 false
-100 LEFT fixed neg -> -1476 -620 -1062 -60 560.0 700.0 false
-100 LEFT autohide pos -> 60 244 474 804 560.0 700.0 false
-100 LEFT autohide neg -> -1476 -620 -1062 -60 560.0 700.0 false
-100 TOP fixed pos -> 1110 60 1524 620 560.0 700.0 false
-100 TOP fixed neg -> -426 -804 -12 -244 560.0 700.0 false
-100 TOP autohide pos -> 1110 60 1524 620 560.0 700.0 false
-100 TOP autohide neg -> -426 -804 -12 -244 560.0 700.0 false
-100 RIGHT fixed pos -> 1062 244 1476 804 560.0 700.0 false
-100 RIGHT fixed neg -> -474 -620 -60 -60 560.0 700.0 false
-100 RIGHT autohide pos -> 1062 244 1476 804 560.0 700.0 false
-100 RIGHT autohide neg -> -474 -620 -60 -60 560.0 700.0 false
-100 BOTTOM fixed pos -> 1110 244 1524 804 560.0 700.0 false
-100 BOTTOM fixed neg -> -426 -620 -12 -60 560.0 700.0 false
-100 BOTTOM autohide pos -> 1110 244 1524 804 560.0 700.0 false
-100 BOTTOM autohide neg -> -426 -620 -12 -60 560.0 700.0 false
-125 LEFT fixed pos -> 75 305 593 1005 560.0 700.0 false
-125 LEFT fixed neg -> -1845 -775 -1327 -75 560.0 700.0 false
-125 LEFT autohide pos -> 75 305 593 1005 560.0 700.0 false
-125 LEFT autohide neg -> -1845 -775 -1327 -75 560.0 700.0 false
-125 TOP fixed pos -> 1387 75 1905 775 560.0 700.0 false
-125 TOP fixed neg -> -533 -1005 -15 -305 560.0 700.0 false
-125 TOP autohide pos -> 1387 75 1905 775 560.0 700.0 false
-125 TOP autohide neg -> -533 -1005 -15 -305 560.0 700.0 false
-125 RIGHT fixed pos -> 1327 305 1845 1005 560.0 700.0 false
-125 RIGHT fixed neg -> -593 -775 -75 -75 560.0 700.0 false
-125 RIGHT autohide pos -> 1327 305 1845 1005 560.0 700.0 false
-125 RIGHT autohide neg -> -593 -775 -75 -75 560.0 700.0 false
-125 BOTTOM fixed pos -> 1387 305 1905 1005 560.0 700.0 false
-125 BOTTOM fixed neg -> -533 -775 -15 -75 560.0 700.0 false
-125 BOTTOM autohide pos -> 1387 305 1905 1005 560.0 700.0 false
-125 BOTTOM autohide neg -> -533 -775 -15 -75 560.0 700.0 false
-150 LEFT fixed pos -> 90 366 711 1206 560.0 700.0 false
-150 LEFT fixed neg -> -2214 -930 -1593 -90 560.0 700.0 false
-150 LEFT autohide pos -> 90 366 711 1206 560.0 700.0 false
-150 LEFT autohide neg -> -2214 -930 -1593 -90 560.0 700.0 false
-150 TOP fixed pos -> 1665 90 2286 930 560.0 700.0 false
-150 TOP fixed neg -> -639 -1206 -18 -366 560.0 700.0 false
-150 TOP autohide pos -> 1665 90 2286 930 560.0 700.0 false
-150 TOP autohide neg -> -639 -1206 -18 -366 560.0 700.0 false
-150 RIGHT fixed pos -> 1593 366 2214 1206 560.0 700.0 false
-150 RIGHT fixed neg -> -711 -930 -90 -90 560.0 700.0 false
-150 RIGHT autohide pos -> 1593 366 2214 1206 560.0 700.0 false
-150 RIGHT autohide neg -> -711 -930 -90 -90 560.0 700.0 false
-150 BOTTOM fixed pos -> 1665 366 2286 1206 560.0 700.0 false
-150 BOTTOM fixed neg -> -639 -930 -18 -90 560.0 700.0 false
-150 BOTTOM autohide pos -> 1665 366 2286 1206 560.0 700.0 false
-150 BOTTOM autohide neg -> -639 -930 -18 -90 560.0 700.0 false
-175 LEFT fixed pos -> 105 427 830 1407 560.0 700.0 false
-175 LEFT fixed neg -> -2583 -1085 -1858 -105 560.0 700.0 false
-175 LEFT autohide pos -> 105 427 830 1407 560.0 700.0 false
-175 LEFT autohide neg -> -2583 -1085 -1858 -105 560.0 700.0 false
-175 TOP fixed pos -> 1942 105 2667 1085 560.0 700.0 false
-175 TOP fixed neg -> -746 -1407 -21 -427 560.0 700.0 false
-175 TOP autohide pos -> 1942 105 2667 1085 560.0 700.0 false
-175 TOP autohide neg -> -746 -1407 -21 -427 560.0 700.0 false
-175 RIGHT fixed pos -> 1858 427 2583 1407 560.0 700.0 false
-175 RIGHT fixed neg -> -830 -1085 -105 -105 560.0 700.0 false
-175 RIGHT autohide pos -> 1858 427 2583 1407 560.0 700.0 false
-175 RIGHT autohide neg -> -830 -1085 -105 -105 560.0 700.0 false
-175 BOTTOM fixed pos -> 1942 427 2667 1407 560.0 700.0 false
-175 BOTTOM fixed neg -> -746 -1085 -21 -105 560.0 700.0 false
-175 BOTTOM autohide pos -> 1942 427 2667 1407 560.0 700.0 false
-175 BOTTOM autohide neg -> -746 -1085 -21 -105 560.0 700.0 false
-200 LEFT fixed pos -> 120 488 948 1608 560.0 700.0 false
-200 LEFT fixed neg -> -2952 -1240 -2124 -120 560.0 700.0 false
-200 LEFT autohide pos -> 120 488 948 1608 560.0 700.0 false
-200 LEFT autohide neg -> -2952 -1240 -2124 -120 560.0 700.0 false
-200 TOP fixed pos -> 2220 120 3048 1240 560.0 700.0 false
-200 TOP fixed neg -> -852 -1608 -24 -488 560.0 700.0 false
-200 TOP autohide pos -> 2220 120 3048 1240 560.0 700.0 false
-200 TOP autohide neg -> -852 -1608 -24 -488 560.0 700.0 false
-200 RIGHT fixed pos -> 2124 488 2952 1608 560.0 700.0 false
-200 RIGHT fixed neg -> -948 -1240 -120 -120 560.0 700.0 false
-200 RIGHT autohide pos -> 2124 488 2952 1608 560.0 700.0 false
-200 RIGHT autohide neg -> -948 -1240 -120 -120 560.0 700.0 false
-200 BOTTOM fixed pos -> 2220 488 3048 1608 560.0 700.0 false
-200 BOTTOM fixed neg -> -852 -1240 -24 -120 560.0 700.0 false
-200 BOTTOM autohide pos -> 2220 488 3048 1608 560.0 700.0 false
-200 BOTTOM autohide neg -> -852 -1240 -24 -120 560.0 700.0 false
-250 LEFT fixed pos -> 150 610 1185 2010 560.0 700.0 false
-250 LEFT fixed neg -> -3690 -1550 -2655 -150 560.0 700.0 false
-250 LEFT autohide pos -> 150 610 1185 2010 560.0 700.0 false
-250 LEFT autohide neg -> -3690 -1550 -2655 -150 560.0 700.0 false
-250 TOP fixed pos -> 2775 150 3810 1550 560.0 700.0 false
-250 TOP fixed neg -> -1065 -2010 -30 -610 560.0 700.0 false
-250 TOP autohide pos -> 2775 150 3810 1550 560.0 700.0 false
-250 TOP autohide neg -> -1065 -2010 -30 -610 560.0 700.0 false
-250 RIGHT fixed pos -> 2655 610 3690 2010 560.0 700.0 false
-250 RIGHT fixed neg -> -1185 -1550 -150 -150 560.0 700.0 false
-250 RIGHT autohide pos -> 2655 610 3690 2010 560.0 700.0 false
-250 RIGHT autohide neg -> -1185 -1550 -150 -150 560.0 700.0 false
-250 BOTTOM fixed pos -> 2775 610 3810 2010 560.0 700.0 false
-250 BOTTOM fixed neg -> -1065 -1550 -30 -150 560.0 700.0 false
-250 BOTTOM autohide pos -> 2775 610 3810 2010 560.0 700.0 false
-250 BOTTOM autohide neg -> -1065 -1550 -30 -150 560.0 700.0 false
+# 플라이아웃 배치 표 — FlyoutPlacementTableTest 가 만든다. 배율% 가장자리 자동숨김 음수좌표 내용DIP → l t r b 높이DIP 상한DIP 겹침
+100 LEFT fixed pos 560.0 -> 60 244 474 804 560.0 700.0 false
+100 LEFT fixed pos 900.0 -> 60 104 474 804 700.0 700.0 false
+100 LEFT fixed neg 560.0 -> -1476 -620 -1062 -60 560.0 700.0 false
+100 LEFT fixed neg 900.0 -> -1476 -760 -1062 -60 700.0 700.0 false
+100 LEFT autohide pos 560.0 -> 60 244 474 804 560.0 700.0 false
+100 LEFT autohide pos 900.0 -> 60 104 474 804 700.0 700.0 false
+100 LEFT autohide neg 560.0 -> -1476 -620 -1062 -60 560.0 700.0 false
+100 LEFT autohide neg 900.0 -> -1476 -760 -1062 -60 700.0 700.0 false
+100 TOP fixed pos 560.0 -> 1110 60 1524 620 560.0 700.0 false
+100 TOP fixed pos 900.0 -> 1110 60 1524 760 700.0 700.0 false
+100 TOP fixed neg 560.0 -> -426 -804 -12 -244 560.0 700.0 false
+100 TOP fixed neg 900.0 -> -426 -804 -12 -104 700.0 700.0 false
+100 TOP autohide pos 560.0 -> 1110 60 1524 620 560.0 700.0 false
+100 TOP autohide pos 900.0 -> 1110 60 1524 760 700.0 700.0 false
+100 TOP autohide neg 560.0 -> -426 -804 -12 -244 560.0 700.0 false
+100 TOP autohide neg 900.0 -> -426 -804 -12 -104 700.0 700.0 false
+100 RIGHT fixed pos 560.0 -> 1062 244 1476 804 560.0 700.0 false
+100 RIGHT fixed pos 900.0 -> 1062 104 1476 804 700.0 700.0 false
+100 RIGHT fixed neg 560.0 -> -474 -620 -60 -60 560.0 700.0 false
+100 RIGHT fixed neg 900.0 -> -474 -760 -60 -60 700.0 700.0 false
+100 RIGHT autohide pos 560.0 -> 1062 244 1476 804 560.0 700.0 false
+100 RIGHT autohide pos 900.0 -> 1062 104 1476 804 700.0 700.0 false
+100 RIGHT autohide neg 560.0 -> -474 -620 -60 -60 560.0 700.0 false
+100 RIGHT autohide neg 900.0 -> -474 -760 -60 -60 700.0 700.0 false
+100 BOTTOM fixed pos 560.0 -> 1110 244 1524 804 560.0 700.0 false
+100 BOTTOM fixed pos 900.0 -> 1110 104 1524 804 700.0 700.0 false
+100 BOTTOM fixed neg 560.0 -> -426 -620 -12 -60 560.0 700.0 false
+100 BOTTOM fixed neg 900.0 -> -426 -760 -12 -60 700.0 700.0 false
+100 BOTTOM autohide pos 560.0 -> 1110 244 1524 804 560.0 700.0 false
+100 BOTTOM autohide pos 900.0 -> 1110 104 1524 804 700.0 700.0 false
+100 BOTTOM autohide neg 560.0 -> -426 -620 -12 -60 560.0 700.0 false
+100 BOTTOM autohide neg 900.0 -> -426 -760 -12 -60 700.0 700.0 false
+125 LEFT fixed pos 560.0 -> 75 305 593 1005 560.0 700.0 false
+125 LEFT fixed pos 900.0 -> 75 130 593 1005 700.0 700.0 false
+125 LEFT fixed neg 560.0 -> -1845 -775 -1327 -75 560.0 700.0 false
+125 LEFT fixed neg 900.0 -> -1845 -950 -1327 -75 700.0 700.0 false
+125 LEFT autohide pos 560.0 -> 75 305 593 1005 560.0 700.0 false
+125 LEFT autohide pos 900.0 -> 75 130 593 1005 700.0 700.0 false
+125 LEFT autohide neg 560.0 -> -1845 -775 -1327 -75 560.0 700.0 false
+125 LEFT autohide neg 900.0 -> -1845 -950 -1327 -75 700.0 700.0 false
+125 TOP fixed pos 560.0 -> 1387 75 1905 775 560.0 700.0 false
+125 TOP fixed pos 900.0 -> 1387 75 1905 950 700.0 700.0 false
+125 TOP fixed neg 560.0 -> -533 -1005 -15 -305 560.0 700.0 false
+125 TOP fixed neg 900.0 -> -533 -1005 -15 -130 700.0 700.0 false
+125 TOP autohide pos 560.0 -> 1387 75 1905 775 560.0 700.0 false
+125 TOP autohide pos 900.0 -> 1387 75 1905 950 700.0 700.0 false
+125 TOP autohide neg 560.0 -> -533 -1005 -15 -305 560.0 700.0 false
+125 TOP autohide neg 900.0 -> -533 -1005 -15 -130 700.0 700.0 false
+125 RIGHT fixed pos 560.0 -> 1327 305 1845 1005 560.0 700.0 false
+125 RIGHT fixed pos 900.0 -> 1327 130 1845 1005 700.0 700.0 false
+125 RIGHT fixed neg 560.0 -> -593 -775 -75 -75 560.0 700.0 false
+125 RIGHT fixed neg 900.0 -> -593 -950 -75 -75 700.0 700.0 false
+125 RIGHT autohide pos 560.0 -> 1327 305 1845 1005 560.0 700.0 false
+125 RIGHT autohide pos 900.0 -> 1327 130 1845 1005 700.0 700.0 false
+125 RIGHT autohide neg 560.0 -> -593 -775 -75 -75 560.0 700.0 false
+125 RIGHT autohide neg 900.0 -> -593 -950 -75 -75 700.0 700.0 false
+125 BOTTOM fixed pos 560.0 -> 1387 305 1905 1005 560.0 700.0 false
+125 BOTTOM fixed pos 900.0 -> 1387 130 1905 1005 700.0 700.0 false
+125 BOTTOM fixed neg 560.0 -> -533 -775 -15 -75 560.0 700.0 false
+125 BOTTOM fixed neg 900.0 -> -533 -950 -15 -75 700.0 700.0 false
+125 BOTTOM autohide pos 560.0 -> 1387 305 1905 1005 560.0 700.0 false
+125 BOTTOM autohide pos 900.0 -> 1387 130 1905 1005 700.0 700.0 false
+125 BOTTOM autohide neg 560.0 -> -533 -775 -15 -75 560.0 700.0 false
+125 BOTTOM autohide neg 900.0 -> -533 -950 -15 -75 700.0 700.0 false
+150 LEFT fixed pos 560.0 -> 90 366 711 1206 560.0 700.0 false
+150 LEFT fixed pos 900.0 -> 90 156 711 1206 700.0 700.0 false
+150 LEFT fixed neg 560.0 -> -2214 -930 -1593 -90 560.0 700.0 false
+150 LEFT fixed neg 900.0 -> -2214 -1140 -1593 -90 700.0 700.0 false
+150 LEFT autohide pos 560.0 -> 90 366 711 1206 560.0 700.0 false
+150 LEFT autohide pos 900.0 -> 90 156 711 1206 700.0 700.0 false
+150 LEFT autohide neg 560.0 -> -2214 -930 -1593 -90 560.0 700.0 false
+150 LEFT autohide neg 900.0 -> -2214 -1140 -1593 -90 700.0 700.0 false
+150 TOP fixed pos 560.0 -> 1665 90 2286 930 560.0 700.0 false
+150 TOP fixed pos 900.0 -> 1665 90 2286 1140 700.0 700.0 false
+150 TOP fixed neg 560.0 -> -639 -1206 -18 -366 560.0 700.0 false
+150 TOP fixed neg 900.0 -> -639 -1206 -18 -156 700.0 700.0 false
+150 TOP autohide pos 560.0 -> 1665 90 2286 930 560.0 700.0 false
+150 TOP autohide pos 900.0 -> 1665 90 2286 1140 700.0 700.0 false
+150 TOP autohide neg 560.0 -> -639 -1206 -18 -366 560.0 700.0 false
+150 TOP autohide neg 900.0 -> -639 -1206 -18 -156 700.0 700.0 false
+150 RIGHT fixed pos 560.0 -> 1593 366 2214 1206 560.0 700.0 false
+150 RIGHT fixed pos 900.0 -> 1593 156 2214 1206 700.0 700.0 false
+150 RIGHT fixed neg 560.0 -> -711 -930 -90 -90 560.0 700.0 false
+150 RIGHT fixed neg 900.0 -> -711 -1140 -90 -90 700.0 700.0 false
+150 RIGHT autohide pos 560.0 -> 1593 366 2214 1206 560.0 700.0 false
+150 RIGHT autohide pos 900.0 -> 1593 156 2214 1206 700.0 700.0 false
+150 RIGHT autohide neg 560.0 -> -711 -930 -90 -90 560.0 700.0 false
+150 RIGHT autohide neg 900.0 -> -711 -1140 -90 -90 700.0 700.0 false
+150 BOTTOM fixed pos 560.0 -> 1665 366 2286 1206 560.0 700.0 false
+150 BOTTOM fixed pos 900.0 -> 1665 156 2286 1206 700.0 700.0 false
+150 BOTTOM fixed neg 560.0 -> -639 -930 -18 -90 560.0 700.0 false
+150 BOTTOM fixed neg 900.0 -> -639 -1140 -18 -90 700.0 700.0 false
+150 BOTTOM autohide pos 560.0 -> 1665 366 2286 1206 560.0 700.0 false
+150 BOTTOM autohide pos 900.0 -> 1665 156 2286 1206 700.0 700.0 false
+150 BOTTOM autohide neg 560.0 -> -639 -930 -18 -90 560.0 700.0 false
+150 BOTTOM autohide neg 900.0 -> -639 -1140 -18 -90 700.0 700.0 false
+175 LEFT fixed pos 560.0 -> 105 427 830 1407 560.0 700.0 false
+175 LEFT fixed pos 900.0 -> 105 182 830 1407 700.0 700.0 false
+175 LEFT fixed neg 560.0 -> -2583 -1085 -1858 -105 560.0 700.0 false
+175 LEFT fixed neg 900.0 -> -2583 -1330 -1858 -105 700.0 700.0 false
+175 LEFT autohide pos 560.0 -> 105 427 830 1407 560.0 700.0 false
+175 LEFT autohide pos 900.0 -> 105 182 830 1407 700.0 700.0 false
+175 LEFT autohide neg 560.0 -> -2583 -1085 -1858 -105 560.0 700.0 false
+175 LEFT autohide neg 900.0 -> -2583 -1330 -1858 -105 700.0 700.0 false
+175 TOP fixed pos 560.0 -> 1942 105 2667 1085 560.0 700.0 false
+175 TOP fixed pos 900.0 -> 1942 105 2667 1330 700.0 700.0 false
+175 TOP fixed neg 560.0 -> -746 -1407 -21 -427 560.0 700.0 false
+175 TOP fixed neg 900.0 -> -746 -1407 -21 -182 700.0 700.0 false
+175 TOP autohide pos 560.0 -> 1942 105 2667 1085 560.0 700.0 false
+175 TOP autohide pos 900.0 -> 1942 105 2667 1330 700.0 700.0 false
+175 TOP autohide neg 560.0 -> -746 -1407 -21 -427 560.0 700.0 false
+175 TOP autohide neg 900.0 -> -746 -1407 -21 -182 700.0 700.0 false
+175 RIGHT fixed pos 560.0 -> 1858 427 2583 1407 560.0 700.0 false
+175 RIGHT fixed pos 900.0 -> 1858 182 2583 1407 700.0 700.0 false
+175 RIGHT fixed neg 560.0 -> -830 -1085 -105 -105 560.0 700.0 false
+175 RIGHT fixed neg 900.0 -> -830 -1330 -105 -105 700.0 700.0 false
+175 RIGHT autohide pos 560.0 -> 1858 427 2583 1407 560.0 700.0 false
+175 RIGHT autohide pos 900.0 -> 1858 182 2583 1407 700.0 700.0 false
+175 RIGHT autohide neg 560.0 -> -830 -1085 -105 -105 560.0 700.0 false
+175 RIGHT autohide neg 900.0 -> -830 -1330 -105 -105 700.0 700.0 false
+175 BOTTOM fixed pos 560.0 -> 1942 427 2667 1407 560.0 700.0 false
+175 BOTTOM fixed pos 900.0 -> 1942 182 2667 1407 700.0 700.0 false
+175 BOTTOM fixed neg 560.0 -> -746 -1085 -21 -105 560.0 700.0 false
+175 BOTTOM fixed neg 900.0 -> -746 -1330 -21 -105 700.0 700.0 false
+175 BOTTOM autohide pos 560.0 -> 1942 427 2667 1407 560.0 700.0 false
+175 BOTTOM autohide pos 900.0 -> 1942 182 2667 1407 700.0 700.0 false
+175 BOTTOM autohide neg 560.0 -> -746 -1085 -21 -105 560.0 700.0 false
+175 BOTTOM autohide neg 900.0 -> -746 -1330 -21 -105 700.0 700.0 false
+200 LEFT fixed pos 560.0 -> 120 488 948 1608 560.0 700.0 false
+200 LEFT fixed pos 900.0 -> 120 208 948 1608 700.0 700.0 false
+200 LEFT fixed neg 560.0 -> -2952 -1240 -2124 -120 560.0 700.0 false
+200 LEFT fixed neg 900.0 -> -2952 -1520 -2124 -120 700.0 700.0 false
+200 LEFT autohide pos 560.0 -> 120 488 948 1608 560.0 700.0 false
+200 LEFT autohide pos 900.0 -> 120 208 948 1608 700.0 700.0 false
+200 LEFT autohide neg 560.0 -> -2952 -1240 -2124 -120 560.0 700.0 false
+200 LEFT autohide neg 900.0 -> -2952 -1520 -2124 -120 700.0 700.0 false
+200 TOP fixed pos 560.0 -> 2220 120 3048 1240 560.0 700.0 false
+200 TOP fixed pos 900.0 -> 2220 120 3048 1520 700.0 700.0 false
+200 TOP fixed neg 560.0 -> -852 -1608 -24 -488 560.0 700.0 false
+200 TOP fixed neg 900.0 -> -852 -1608 -24 -208 700.0 700.0 false
+200 TOP autohide pos 560.0 -> 2220 120 3048 1240 560.0 700.0 false
+200 TOP autohide pos 900.0 -> 2220 120 3048 1520 700.0 700.0 false
+200 TOP autohide neg 560.0 -> -852 -1608 -24 -488 560.0 700.0 false
+200 TOP autohide neg 900.0 -> -852 -1608 -24 -208 700.0 700.0 false
+200 RIGHT fixed pos 560.0 -> 2124 488 2952 1608 560.0 700.0 false
+200 RIGHT fixed pos 900.0 -> 2124 208 2952 1608 700.0 700.0 false
+200 RIGHT fixed neg 560.0 -> -948 -1240 -120 -120 560.0 700.0 false
+200 RIGHT fixed neg 900.0 -> -948 -1520 -120 -120 700.0 700.0 false
+200 RIGHT autohide pos 560.0 -> 2124 488 2952 1608 560.0 700.0 false
+200 RIGHT autohide pos 900.0 -> 2124 208 2952 1608 700.0 700.0 false
+200 RIGHT autohide neg 560.0 -> -948 -1240 -120 -120 560.0 700.0 false
+200 RIGHT autohide neg 900.0 -> -948 -1520 -120 -120 700.0 700.0 false
+200 BOTTOM fixed pos 560.0 -> 2220 488 3048 1608 560.0 700.0 false
+200 BOTTOM fixed pos 900.0 -> 2220 208 3048 1608 700.0 700.0 false
+200 BOTTOM fixed neg 560.0 -> -852 -1240 -24 -120 560.0 700.0 false
+200 BOTTOM fixed neg 900.0 -> -852 -1520 -24 -120 700.0 700.0 false
+200 BOTTOM autohide pos 560.0 -> 2220 488 3048 1608 560.0 700.0 false
+200 BOTTOM autohide pos 900.0 -> 2220 208 3048 1608 700.0 700.0 false
+200 BOTTOM autohide neg 560.0 -> -852 -1240 -24 -120 560.0 700.0 false
+200 BOTTOM autohide neg 900.0 -> -852 -1520 -24 -120 700.0 700.0 false
+250 LEFT fixed pos 560.0 -> 150 610 1185 2010 560.0 700.0 false
+250 LEFT fixed pos 900.0 -> 150 260 1185 2010 700.0 700.0 false
+250 LEFT fixed neg 560.0 -> -3690 -1550 -2655 -150 560.0 700.0 false
+250 LEFT fixed neg 900.0 -> -3690 -1900 -2655 -150 700.0 700.0 false
+250 LEFT autohide pos 560.0 -> 150 610 1185 2010 560.0 700.0 false
+250 LEFT autohide pos 900.0 -> 150 260 1185 2010 700.0 700.0 false
+250 LEFT autohide neg 560.0 -> -3690 -1550 -2655 -150 560.0 700.0 false
+250 LEFT autohide neg 900.0 -> -3690 -1900 -2655 -150 700.0 700.0 false
+250 TOP fixed pos 560.0 -> 2775 150 3810 1550 560.0 700.0 false
+250 TOP fixed pos 900.0 -> 2775 150 3810 1900 700.0 700.0 false
+250 TOP fixed neg 560.0 -> -1065 -2010 -30 -610 560.0 700.0 false
+250 TOP fixed neg 900.0 -> -1065 -2010 -30 -260 700.0 700.0 false
+250 TOP autohide pos 560.0 -> 2775 150 3810 1550 560.0 700.0 false
+250 TOP autohide pos 900.0 -> 2775 150 3810 1900 700.0 700.0 false
+250 TOP autohide neg 560.0 -> -1065 -2010 -30 -610 560.0 700.0 false
+250 TOP autohide neg 900.0 -> -1065 -2010 -30 -260 700.0 700.0 false
+250 RIGHT fixed pos 560.0 -> 2655 610 3690 2010 560.0 700.0 false
+250 RIGHT fixed pos 900.0 -> 2655 260 3690 2010 700.0 700.0 false
+250 RIGHT fixed neg 560.0 -> -1185 -1550 -150 -150 560.0 700.0 false
+250 RIGHT fixed neg 900.0 -> -1185 -1900 -150 -150 700.0 700.0 false
+250 RIGHT autohide pos 560.0 -> 2655 610 3690 2010 560.0 700.0 false
+250 RIGHT autohide pos 900.0 -> 2655 260 3690 2010 700.0 700.0 false
+250 RIGHT autohide neg 560.0 -> -1185 -1550 -150 -150 560.0 700.0 false
+250 RIGHT autohide neg 900.0 -> -1185 -1900 -150 -150 700.0 700.0 false
+250 BOTTOM fixed pos 560.0 -> 2775 610 3810 2010 560.0 700.0 false
+250 BOTTOM fixed pos 900.0 -> 2775 260 3810 2010 700.0 700.0 false
+250 BOTTOM fixed neg 560.0 -> -1065 -1550 -30 -150 560.0 700.0 false
+250 BOTTOM fixed neg 900.0 -> -1065 -1900 -30 -150 700.0 700.0 false
+250 BOTTOM autohide pos 560.0 -> 2775 610 3810 2010 560.0 700.0 false
+250 BOTTOM autohide pos 900.0 -> 2775 260 3810 2010 700.0 700.0 false
+250 BOTTOM autohide neg 560.0 -> -1065 -1550 -30 -150 560.0 700.0 false
+250 BOTTOM autohide neg 900.0 -> -1065 -1900 -30 -150 700.0 700.0 false

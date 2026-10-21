@@ -1,3 +1,6 @@
+// 원본: Sources/check/CheckWorkNudge.swift:72-77 @ a63fea2 (키·클릭·스크롤만 의미 있는 입력, 이동은 뺀다)
+//       · Sources/check/WorkTimerStore.swift:2277-2299 @ a63fea2 (미래 시각은 보내지 않는다) — 시험은 새 코드: 설계 D§5-1 · D-E05 러너 몫
+//       · R2 검증 지적(`last <= clock.now()` 는 부를 때마다 가는 시계라 늘 참이었다 → 미래 관측을 넣어 잘리는지로)
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.InputKind
@@ -17,6 +20,8 @@ import kotlin.test.assertTrue
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
@@ -29,6 +34,11 @@ class RawInputWindowsTest {
     private class TickingClock : Clock {
         private val ms = AtomicLong(0)
         override fun now(): Instant = Instant.parse("2026-09-17T05:05:00Z") + ms.incrementAndGet().milliseconds
+    }
+
+    /** 시험이 손으로 옮기는 시계. */
+    private class ManualClock(@Volatile var t: Instant) : Clock {
+        override fun now(): Instant = t
     }
 
     @Test
@@ -52,13 +62,35 @@ class RawInputWindowsTest {
     }
 
     @Test
+    fun futureObservationIsClampedToNowWhilePastOnesAreKept() {
+        // 맥 WorkTimerStore.swift:2277-2299: 미래 시각은 보내지 않는다(시계가 뒤로 간 기기·늦게 처리된 관측).
+        val t0 = Instant.parse("2026-09-17T05:05:00Z")
+        val clock = ManualClock(t0)
+        Win32MessageThread.start(RunnerSupport.unique("AingCheck.Test.RawClamp")).use { thread ->
+            val idle = WindowsIdleSource(thread, clock)
+            // 기준선(다른 입력): 과거 관측은 그대로 돌아온다.
+            idle.record(InputKind.CLICK, t0 - 5.seconds)
+            assertEquals(t0 - 5.seconds, idle.lastInput(setOf(InputKind.CLICK)))
+            // 미래 관측은 지금으로 잘린다 — 저장한 값은 바꾸지 않는다.
+            idle.record(InputKind.KEY, t0 + 10.minutes)
+            assertEquals(t0, idle.lastInput(setOf(InputKind.KEY)))
+            assertEquals(t0, idle.lastInput(setOf(InputKind.KEY, InputKind.CLICK)))
+            // 시계가 그 시각을 지나면 저장한 관측이 그대로 보인다(잘림은 '지금'까지일 뿐, 값을 덮지 않았다).
+            clock.t = t0 + 11.minutes
+            assertEquals(t0 + 10.minutes, idle.lastInput(setOf(InputKind.KEY)))
+            idle.close()
+        }
+    }
+
+    @Test
     fun injectedInputIsClassifiedAndMovementAloneDoesNotCount() {
         assumeTrue(RunnerSupport.inputInjectionAllowed(), "입력 주입은 CI·시험 VM 에서만")
         val clock = TickingClock()
         Win32MessageThread.start(RunnerSupport.unique("AingCheck.Test.RawIn")).use { thread ->
             val idle = WindowsIdleSource(thread, clock)
             val seen = LinkedBlockingQueue<InputKind>()
-            idle.addListener { kind, _ -> seen.add(kind) }
+            val stamps = java.util.concurrent.ConcurrentHashMap<InputKind, Instant>()
+            idle.addListener { kind, at -> stamps[kind] = at; seen.add(kind) }
             assertEquals(WindowsIdleSource.Mode.RAW_INPUT, idle.start())
             val meaningful = setOf(InputKind.KEY, InputKind.CLICK, InputKind.WHEEL)
 
@@ -102,9 +134,14 @@ class RawInputWindowsTest {
             Thread.sleep(300)
             assertEquals(0, seen.count { it == InputKind.CLICK }, "단추 뗌을 클릭으로 셌다")
 
-            val last = idle.lastInput(meaningful)
-            assertNotNull(last)
-            assertTrue(last <= clock.now(), "미래 시각")
+            // 의미 있는 마지막 입력 = 가장 늦게 받은 의미 있는 관측(여기서는 X1 누름). 리스너가 받은 시각과 따로 대조한다 —
+            // 이동(MOVE)이 그 뒤에 와도 끼지 않는다.
+            Inject.mouseMove(1, 0)
+            Thread.sleep(200)
+            val clickAt = stamps[InputKind.CLICK]
+            assertNotNull(clickAt)
+            assertTrue(clickAt > stamps.getValue(InputKind.KEY) && clickAt > stamps.getValue(InputKind.WHEEL), "주입 순서와 다른 시각 $stamps")
+            assertEquals(clickAt, idle.lastInput(meaningful))
             idle.close()
         }
     }

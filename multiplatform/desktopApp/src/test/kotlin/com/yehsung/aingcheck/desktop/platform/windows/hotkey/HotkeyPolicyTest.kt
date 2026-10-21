@@ -1,3 +1,4 @@
+// 원본: Sources/check/WorkShortcut.swift:36-46 @ a63fea2 (수식키만 있는 조합을 막는다) — 시험은 새 코드: 설계 D§6(Win 키 예약·수식키 둘 이상·IME 키 금지)
 package com.yehsung.aingcheck.desktop.platform.windows.hotkey
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.HotkeyChord

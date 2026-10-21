@@ -1,3 +1,5 @@
+// 원본: Sources/check/CheckWorkNudge.swift:13-19, 72-77 @ a63fea2 (키·클릭·스크롤만 센다, 이동은 뺀다) — 시험은 새 코드:
+//       설계 D§5-1(RAWINPUT 바이트 배치는 winuser.h 대로 손으로 짓는다)
 package com.yehsung.aingcheck.desktop.platform.windows.input
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.InputKind

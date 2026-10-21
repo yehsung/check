@@ -1,3 +1,5 @@
+// 원본: Sources/check/CheckApp.swift:222-241 @ a63fea2 (자동 실행: 기본 켜짐·사용자가 끈 것 존중) — 시험은 새 코드:
+//       설계 D§2-4(JNA DLL 풀기)·D§2-5(패키지 신원)·D§3-3(작업 표시줄)·D§12-1(레지스트리 환경 값의 형) · E11 · G §8-12
 package com.yehsung.aingcheck.desktop.platform.windows.runner
 
 import com.sun.jna.platform.win32.Advapi32Util

@@ -1,3 +1,4 @@
+// 원본: 없음(새 시험 도우미) — G §2-3 W1-f ②(골든) · W0-b CHECK_GOLDEN_WRITE 규약(기록 실행은 실패로 끝난다)
 package com.yehsung.aingcheck.desktop.platform.windows.support
 
 import java.awt.image.BufferedImage

@@ -1,8 +1,12 @@
-// 원본: Sources/check/CheckCodexAccountUsage.swift:204-210 @ a63fea2 (맥은 로그인 셸에 CODEX_HOME 을 묻는다)
-//       · 설계 D§12-1(CODEX_HOME 찾기: ① 프로세스 환경 → ② HKCU\Environment → ③ HKLM\…\Session Manager\Environment,
-//         레지스트리는 스캔마다 다시 읽는다, REG_EXPAND_SZ 는 펼친다) · gh:openai/codex codex-rs/utils/home-dir(기본 ~/.codex)
+// 원본: Sources/CheckCore/CheckCodexAccountUsage.swift:204-210 @ a63fea2 (맥은 로그인 셸에 CODEX_HOME 을 묻는다)
+//       · 설계 D§12-1(레지스트리는 스캔마다 다시 읽는다, REG_EXPAND_SZ 는 펼친다) · **G §8-13(찾는 순서는 ① HKCU\Environment →
+//         ② HKLM\…\Session Manager\Environment → ③ 프로세스 환경 — D§12-1 의 '프로세스 먼저'를 대체)**
+//       · gh:openai/codex codex-rs/utils/home-dir(기본 ~/.codex)
 //
-// 왜 레지스트리까지 보나: 실행 중인 프로세스는 로그인 뒤 사용자가 바꾼 환경 변수를 모른다(트레이 앱은 로그인 때 떠서 며칠 산다).
+// 왜 레지스트리가 먼저인가: 실행 중인 프로세스의 환경은 **로그인 때 받은 복사본**이라 그 뒤 사용자가 바꾼 값을 모른다(트레이 앱은
+// 로그인 때 떠서 며칠 산다). 프로세스를 먼저 보면 로그인 때 있던 낡은 값이 레지스트리의 새 값을 늘 가린다(R2 검증 지적).
+// 프로세스 환경은 레지스트리에 값이 없을 때만 쓴다(터미널에서 `set CODEX_HOME=…` 하고 앱을 띄운 경우).
+// 남은 한계: 로그인 뒤 레지스트리에서 **지운** 값은 프로세스 환경에 남아 있어 계속 보인다(지움과 '프로세스에만 둠'을 가를 길이 없다).
 // PowerShell 프로필을 실행해 묻는 길은 부작용·지연이 있어 쓰지 않는다(D§12-1).
 // CLAUDE_CONFIG_DIR 은 일부러 넓히지 않는다 — 맥도 두 번째 계정을 못 본다, 플랫폼마다 세는 범위가 다르면 순위가 불공정하다(D§12-1).
 package com.yehsung.aingcheck.desktop.platform.windows.env
@@ -31,19 +35,19 @@ class WindowsEnvironment(
 ) : EnvReader {
     override fun get(name: String): String? = process[name]
 
-    enum class CodexHomeSource { PROCESS_ENV, USER_REGISTRY, MACHINE_REGISTRY, DEFAULT }
+    enum class CodexHomeSource { USER_REGISTRY, MACHINE_REGISTRY, PROCESS_ENV, DEFAULT }
 
     data class CodexHome(val path: String, val source: CodexHomeSource)
 
-    /** 부를 때마다 레지스트리를 다시 읽는다(스캔마다). 빈 값은 없는 것으로 본다. */
+    /** 부를 때마다 레지스트리를 다시 읽는다(스캔마다). 순서는 HKCU → HKLM → 프로세스 환경 → 기본(G §8-13). 빈 값은 없는 것으로 본다. */
     fun codexHome(): CodexHome {
-        process[CODEX_HOME]?.takeIf { it.isNotBlank() }?.let { return CodexHome(it.trim(), CodexHomeSource.PROCESS_ENV) }
         userRegistry.read(CODEX_HOME)?.let { v ->
             expandIfNeeded(v)?.let { return CodexHome(it, CodexHomeSource.USER_REGISTRY) }
         }
         machineRegistry.read(CODEX_HOME)?.let { v ->
             expandIfNeeded(v)?.let { return CodexHome(it, CodexHomeSource.MACHINE_REGISTRY) }
         }
+        process[CODEX_HOME]?.takeIf { it.isNotBlank() }?.let { return CodexHome(it.trim(), CodexHomeSource.PROCESS_ENV) }
         val profile = process["USERPROFILE"]?.takeIf { it.isNotBlank() } ?: System.getProperty("user.home")
         return CodexHome(profile.trimEnd('\\', '/') + "\\.codex", CodexHomeSource.DEFAULT)
     }

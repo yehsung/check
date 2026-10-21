@@ -20,12 +20,49 @@ interface MachineIdentitySource {
     fun userSid(): String?
 }
 
+/**
+ * 폴백 ID 의 저장 이음매. 앱은 [FileFallbackIdStore], 시험은 "쓰기는 성공했는데 다시 읽으니 다르다"·"다시 읽기 실패"를
+ * 주입한다 — 디스크로는 그 경우를 싸게 만들 수 없어서, 이 이음매가 없으면 '다시 읽어 같을 때만' 규칙을 잴 수 없다.
+ */
+interface FallbackIdStore {
+    /** 저장된 글. 없으면 null, 읽기 실패는 예외. */
+    fun read(): String?
+
+    /** 통째로 바꿔 쓴다. 실패는 예외. */
+    fun write(text: String)
+}
+
+/** %LOCALAPPDATA%\aing-check\installation-id — 같은 폴더의 임시 파일에 쓰고 원자 이동한다. */
+class FileFallbackIdStore(private val file: Path) : FallbackIdStore {
+    override fun read(): String? = if (Files.exists(file)) Files.readString(file) else null
+
+    override fun write(text: String) {
+        val dir = file.toAbsolutePath().parent
+        Files.createDirectories(dir)
+        val tmp = Files.createTempFile(dir, ".id-", ".tmp")
+        try {
+            Files.writeString(tmp, text)
+            try {
+                Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(tmp, file)
+            }
+        } finally {
+            runCatching { Files.deleteIfExists(tmp) }
+        }
+    }
+}
+
 class WindowsInstallationIdentity(
     private val source: MachineIdentitySource,
-    /** 레지스트리를 못 읽을 때만 쓰는 무작위 ID 파일(%LOCALAPPDATA%\aing-check\installation-id). */
-    private val fallbackFile: Path,
+    /** 레지스트리를 못 읽을 때만 쓰는 무작위 ID 저장소. */
+    private val store: FallbackIdStore,
     private val randomUuid: () -> UUID = UUID::randomUUID,
 ) : InstallationIdentity {
+    /** 앱 조립: [fallbackFile] = %LOCALAPPDATA%\aing-check\installation-id(MSIX 안이면 리디렉션 자리, WindowsAppPaths). */
+    constructor(source: MachineIdentitySource, fallbackFile: Path, randomUuid: () -> UUID = UUID::randomUUID) :
+        this(source, FileFallbackIdStore(fallbackFile), randomUuid)
+
     enum class Origin { MACHINE_DERIVED, FALLBACK_FILE, UNAVAILABLE }
 
     data class Resolved(val installationId: String?, val origin: Origin)
@@ -54,33 +91,25 @@ class WindowsInstallationIdentity(
         return fallback()
     }
 
-    /** 이미 확인된 파일이 있으면 그것, 없으면 새로 써 놓고 다시 읽어 같을 때만. 어느 단계든 어긋나면 null(닫힘). */
+    /**
+     * 이미 확인된 파일이 있으면 그것, 없으면 새로 써 놓고 **다시 읽어 같을 때만**. 어느 단계든 어긋나면 null(닫힘) —
+     * "썼다"는 사실만 믿고 쓰면, 저장이 조용히 다른 자리로 가거나 사라진 기기가 실행마다 새 기기가 된다
+     * (기억 device-identity-must-not-be-invented: 순위표 두 배).
+     */
     private fun fallback(): Resolved {
         readValid()?.let { return Resolved(it, Origin.FALLBACK_FILE) }
         val fresh = randomUuid().toString().lowercase()
-        return try {
-            Files.createDirectories(fallbackFile.toAbsolutePath().parent)
-            val tmp = Files.createTempFile(fallbackFile.toAbsolutePath().parent, ".id-", ".tmp")
-            try {
-                Files.writeString(tmp, fresh + "\n")
-                try {
-                    Files.move(tmp, fallbackFile, StandardCopyOption.ATOMIC_MOVE)
-                } catch (_: AtomicMoveNotSupportedException) {
-                    Files.move(tmp, fallbackFile)
-                }
-            } finally {
-                runCatching { Files.deleteIfExists(tmp) }
-            }
-            val back = readValid()
-            if (back == fresh) Resolved(fresh, Origin.FALLBACK_FILE) else Resolved(null, Origin.UNAVAILABLE)
-        } catch (_: Exception) {
+        val wrote = runCatching { store.write(fresh + "\n") }.isSuccess
+        if (!wrote) {
             // 다른 실행이 먼저 썼을 수 있다(FileAlreadyExists) — 그 값이 확인되면 그것을 쓴다.
-            readValid()?.let { Resolved(it, Origin.FALLBACK_FILE) } ?: Resolved(null, Origin.UNAVAILABLE)
+            return readValid()?.let { Resolved(it, Origin.FALLBACK_FILE) } ?: Resolved(null, Origin.UNAVAILABLE)
         }
+        val back = readValid()
+        return if (back == fresh) Resolved(fresh, Origin.FALLBACK_FILE) else Resolved(null, Origin.UNAVAILABLE)
     }
 
     private fun readValid(): String? {
-        val text = runCatching { Files.readString(fallbackFile) }.getOrNull()?.trim() ?: return null
+        val text = runCatching { store.read() }.getOrNull()?.trim() ?: return null
         val parsed = runCatching { UUID.fromString(text) }.getOrNull() ?: return null
         val canonical = parsed.toString()
         return if (canonical == text.lowercase()) canonical else null

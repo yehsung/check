@@ -1,3 +1,4 @@
+// 원본: Sources/check/CheckWorkNudge.swift:63-65 @ a63fea2 (lastTickAt — 벽시계 간격으로 잠자기 공백) — 시험은 새 코드: 설계 D§5-2
 package com.yehsung.aingcheck.desktop.platform.windows.power
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.SessionEvent

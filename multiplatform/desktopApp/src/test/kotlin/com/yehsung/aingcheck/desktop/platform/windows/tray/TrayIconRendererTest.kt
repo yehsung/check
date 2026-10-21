@@ -1,7 +1,11 @@
+// 원본: Sources/CheckCore/MenuBarStatusFormatter.swift @ a63fea2 (localizedStatus·titleDuration·우선순위)
+//       · Sources/check/CheckMenuView.swift:1160-1166 @ a63fea2 (빨간 점) — 시험은 새 코드: 설계 D§3-2·§4-2 · G §2-3 W1-f ②
+//       · G §8-13(툴팁 문구는 맥 그대로: 근무중·근무종료) · R2 검증 지적(시험 이름은 '맥과 같다'인데 문구가 '근무 중'이었다)
 package com.yehsung.aingcheck.desktop.platform.windows.tray
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.RasterImage
 import com.yehsung.aingcheck.desktop.platform.windows.support.Goldens
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -137,11 +141,36 @@ class TrayIconRendererTest {
         )
     }
 
+    /**
+     * 툴팁의 상태 글자가 맥 소스의 `localizedStatus` 글자와 **같은 글자**인지 맥 파일을 읽어 대조한다(기대값을 손으로 다시 적지 않는
+     * 다른 출처 — 맥 문구가 바뀌면 여기서 먼저 빨갛다). 주석은 걷어 낸다(기억 source-contract-tests-need-comment-stripping).
+     */
+    @Test
+    fun tooltipStatusWordsAreTheMacLocalizedStatusLiterals() {
+        val repo = System.getProperty("aingcheck.repoRoot") ?: error("aingcheck.repoRoot 시스템 속성이 없다(aingcheck.test-seal 밖 실행)")
+        val swift = File(repo, "Sources/CheckCore/MenuBarStatusFormatter.swift").readText()
+        val code = swift.replace(Regex("""/\*[\s\S]*?\*/"""), "").lines().joinToString("\n") { it.replace(Regex("""//.*$"""), "") }
+        // WorkStatusSnapshot 선언부(다음 선언 `enum WorkStatus` 앞까지)만 본다 — 그 안의 글자 return 은 localizedStatus 뿐이다.
+        val start = code.indexOf("struct WorkStatusSnapshot")
+        val end = code.indexOf("enum WorkStatus", start + 1)
+        check(start >= 0 && end > start) { "맥 소스에서 WorkStatusSnapshot 선언을 못 찾았다" }
+        val body = code.substring(start, end)
+        val pending = Regex("""if\s+pendingSync\s*\{\s*return\s+"([^"]+)"""").find(body)?.groupValues?.get(1)
+        val working = Regex("""case\s+\.working\s*:\s*return\s+"([^"]+)"""").find(body)?.groupValues?.get(1)
+        val off = Regex("""case\s+\.offWork\s*:\s*return\s+"([^"]+)"""").find(body)?.groupValues?.get(1)
+        checkNotNull(pending) { "맥 localizedStatus 의 동기화 대기 글자를 못 찾았다" }
+        checkNotNull(working) { "맥 localizedStatus 의 근무 글자를 못 찾았다" }
+        checkNotNull(off) { "맥 localizedStatus 의 근무 종료 글자를 못 찾았다" }
+        assertEquals("아잉체크 · $working 00:00", TrayTooltip.text(TrayIconStatus.Working(0)))
+        assertEquals("아잉체크 · $off", TrayTooltip.text(TrayIconStatus.Off))
+        assertEquals("아잉체크 · $pending", TrayTooltip.text(TrayIconStatus.Pending))
+    }
+
     @Test
     fun tooltipMatchesMacTitleRules() {
-        assertEquals("아잉체크 · 근무 중 01:23", TrayTooltip.text(TrayIconStatus.Working(1 * 3600 + 23 * 60 + 59)))
-        assertEquals("아잉체크 · 근무 중 27:05", TrayTooltip.text(TrayIconStatus.Working(27 * 3600 + 5 * 60)))
-        assertEquals("아잉체크 · 근무 종료", TrayTooltip.text(TrayIconStatus.Off))
+        assertEquals("아잉체크 · 근무중 01:23", TrayTooltip.text(TrayIconStatus.Working(1 * 3600 + 23 * 60 + 59)))
+        assertEquals("아잉체크 · 근무중 27:05", TrayTooltip.text(TrayIconStatus.Working(27 * 3600 + 5 * 60)))
+        assertEquals("아잉체크 · 근무종료", TrayTooltip.text(TrayIconStatus.Off))
         assertEquals("아잉체크 · 동기화 대기", TrayTooltip.text(TrayIconStatus.Pending))
         // 맥 우선순위: 동기화 대기 > 근무 중 > 오프.
         assertEquals(TrayIconStatus.Pending, TrayIconStatus.of(isWorking = true, elapsedSeconds = 60, pendingSync = true))

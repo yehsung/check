@@ -1,3 +1,4 @@
+// 원본: 없음(새 시험 도우미) — 설계 D§7(DPAPI 의 두 성질만 흉내: 봉인 ≠ 원문, 다른 엔트로피·손상은 거부)
 package com.yehsung.aingcheck.desktop.platform.windows.vault
 
 import java.security.MessageDigest

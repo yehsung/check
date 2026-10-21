@@ -72,11 +72,19 @@ compose.desktop {
             // MSI 버전 칸: MAJOR.MINOR.BUILD, BUILD ≤ 65535(A§6-2).
             packageVersion = versions.required("windowsVersion")
             windows {
-                // 영구 식별자 후보(A§9-7) — 첫 출시 전에 확정한다. 바꾸면 업그레이드 설치가 깨진다.
+                // 영구 식별자(A§9-7) — G §8-13 에서 잠갔다. 바꾸면 새 판이 옛 판을 업그레이드로 못 알아봐 둘이 나란히 깔린다.
                 upgradeUuid = versions.required("windowsUpgradeUuid")
                 perUserInstall = true
                 menu = true
             }
         }
     }
+}
+
+// 영구 식별자 값 고정(G §8-13): 패키징이 **실제로 쓰는** upgradeUuid 를 시험 JVM 에 넘긴다. PermanentIdentifierPinTest 가 손으로 적은
+// 값과 대조한다 — version.properties 의 글자만 재면 이 파일이 다른 값·다른 키를 넣어도 초록이다(기억 tests-measure-shape-not-result).
+// 모듈 빌드 파일이 나중에 덮어쓴 값까지 보도록 평가가 끝난 뒤에 읽는다.
+afterEvaluate {
+    val effectiveUpgradeUuid = compose.desktop.application.nativeDistributions.windows.upgradeUuid.orEmpty()
+    tasks.withType<Test>().configureEach { systemProperty("aingcheck.msiUpgradeUuid", effectiveUpgradeUuid) }
 }

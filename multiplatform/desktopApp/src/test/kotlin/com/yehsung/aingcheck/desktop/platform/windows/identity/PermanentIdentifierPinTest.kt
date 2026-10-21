@@ -48,4 +48,12 @@ class PermanentIdentifierPinTest {
         val props = Properties().apply { File(mp, "version.properties").reader(Charsets.UTF_8).use { load(it) } }
         assertEquals("6798ece1-0749-4a92-856f-ca1f4847c522", props.getProperty("windowsUpgradeUuid"))
     }
+
+    @Test
+    fun msiUpgradeUuidReachesThePackagingConfig() {
+        // 값의 자리가 아니라 쓰는 자리: compose nativeDistributions.windows.upgradeUuid(빌드 논리 aingcheck.desktop-app 이 평가 뒤에 넘긴다).
+        val effective = System.getProperty("aingcheck.msiUpgradeUuid")
+            ?: fail("aingcheck.msiUpgradeUuid 시스템 속성이 없다(aingcheck.desktop-app 밖 실행)")
+        assertEquals("6798ece1-0749-4a92-856f-ca1f4847c522", effective)
+    }
 }

@@ -15,6 +15,12 @@
 #   - 통합 브랜치 이름에 xplat/int-<x> 를 더했다(lane-ownership.py --resolve-branch → coordinator).
 #   - CI 소유 검사는 --upstream origin/main 으로 기준선 병합 몫(main 이 바꾸고 머리가 그대로 가져온 경로)을 뺀다.
 #
+# 3차 통합(xplat/int-b, 2026-10-22)에서 정리한 것:
+#   - W1-e(디자인 시스템)·W1-f(Windows OS 층)·W1-g(Android 셸)·W0-b(골든 바탕)를 병합하고 닫았다. 그 자리(theme·components·icons·fonts,
+#     platform/windows·AppGraph·Main, androidApp 셸 패키지·NavGraph, 골든 도구·testkit/golden·Package.swift 지원 타깃)는 조정자 경유다.
+#   - AndroidManifest.xml · composeResources · AppGraph/Main · NavGraph 예약에서 갈래를 빼 조정자만 남겼다(K11, §8-3).
+#   - 골든 생성물(_manifest·_digests)은 골든 갈래가 자기 브랜치에서 다시 만들어 커밋한다(W0-b 패치 03). 병합 때는 조정자가 다시 만든다(G §2-5).
+#
 # 문법(이 파일이 쓰는 YAML 부분집합 — 도구가 직접 읽는다):
 #   매핑(키: 값 / 키: 아래 들여쓰기), 블록 목록("- 값"), 흐름 목록([a, b]), 따옴표 문자열, # 주석.
 # 경로 글롭: 저장소 뿌리 기준. "**" = 0개 이상 경로 마디, "*" = 한 마디 안, "{a,b}" = 고르기.
@@ -25,7 +31,7 @@
 version: 1
 
 # 닫힌 갈래: 그 이름으로 오는 변경은 경로와 상관없이 빨강이다(후속 수정은 조정자 경유).
-closed: [W0-a, W0-c, W0-d]
+closed: [W0-a, W0-c, W0-d, W1-e, W1-f, W1-g, W0-b]
 
 # 모듈 → Kotlin 패키지 폴더(A§2-2: 뿌리 com.yehsung.aingcheck, 모듈과 1:1. 앱은 android·desktop).
 package_root:
@@ -64,20 +70,21 @@ reserved:
   "multiplatform/{*,core/*,feature/*}/build.gradle.kts": [coordinator]
   "multiplatform/version.properties": [coordinator]
   "multiplatform/tools/{lanes.yml,lane-ownership.py}": [coordinator]
-  # W1 동안 W1-g(Activity·권한·채널·백업 제외·launchMode — E-U16), W1 병합 뒤 조정자만(K11, §8-3).
-  "multiplatform/androidApp/src/main/AndroidManifest.xml": [W1-g, coordinator]
+  # W1 동안 W1-g 가 썼고(Activity·권한·채널·백업 제외·launchMode — E-U16), W1-g 병합(xplat/int-b) 뒤로는 조정자만(K11, §8-3).
+  "multiplatform/androidApp/src/main/AndroidManifest.xml": [coordinator]
   "multiplatform/androidApp/src/main/res/xml/**": [coordinator]
   # 뼈대(빌드·하네스가 도는지만 재는 자리)와 앱의 단일 HTTP 엔진 팩토리(G §8-12 · 구조 시험 R3c)는 조정자만 고친다.
   "multiplatform/ui/src/*/kotlin/{pkg:ui}/scaffold/**": [coordinator]
   "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/{scaffold,http}/**": [coordinator]
   "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/{scaffold,http}/**": [coordinator]
   "multiplatform/scripts/{seal.sb,gate-fast.sh,gate-full.sh,canary-contrast.sh,apk-native-check.sh,apk-native-allowlist.txt}": [coordinator]
-  "multiplatform/ui/src/*/composeResources/**": [W1-e, coordinator]
-  "multiplatform/desktopApp/src/main/kotlin/{pkg:desktopApp}/{AppGraph,Main}.kt": [W1-f, coordinator]
-  "multiplatform/androidApp/src/main/kotlin/{pkg:androidApp}/nav/NavGraph.kt": [W1-g, coordinator]
+  # 새 자산 추가·조립 지점은 W1-e·f·g 병합(xplat/int-b) 뒤로 조정자만(§8-3 · K11). 갈래는 완료 보고에 패치로 낸다.
+  "multiplatform/ui/src/*/composeResources/**": [coordinator]
+  "multiplatform/desktopApp/src/main/kotlin/{pkg:desktopApp}/{AppGraph,Main}.kt": [coordinator]
+  "multiplatform/androidApp/src/main/kotlin/{pkg:androidApp}/nav/NavGraph.kt": [coordinator]
   # 생성물(golden-export.sh 쓰기 모드가 영수증·지문으로 다시 만든다). 골든을 더하는 갈래는 자기 브랜치에서 다시 만들어 커밋해야
   # 그 브랜치의 비교 모드·CI golden-digest 가 초록이다. 병합 때 두 파일이 부딪히면 어느 쪽이든 받고 쓰기 모드로 다시 만든다(G §2-5).
-  "contract/golden/{_manifest,_digests}.json": [W0-b, W1-a, W1-b, W1-c, W1-d, W2-a, W2-e, W2-g, W2-h, coordinator]
+  "contract/golden/{_manifest,_digests}.json": [W1-a, W1-b, W1-c, W1-d, W2-a, W2-e, W2-g, W2-h, coordinator]
   ".gitignore": [coordinator]
 
 # 조정자(메인 에이전트) 몫 공용 조립 파일(K11 + §8-3). 웨이브 병합 때만 고친다.

@@ -122,12 +122,31 @@ enum MessagePanelLayout {
             case .day:
                 total += 18
             case .bubble(let entry):
+                // 아잉이 이모티콘(v0.3.62)은 **글자가 아니라 그림 한 장**이라 줄 수로 세면 7글자 = 한 줄 =
+                // 25pt 로 센다. 실제로는 120pt 를 쓰므로 틀의 높이가 그림의 1/5 로 잡혀, 이모티콘 하나뿐인
+                // 대화가 통째로 스크롤 안에 갇힌다(스크롤이 붙긴 하지만 보이는 것이 그림의 윗동만이다).
+                //
+                // ★ 판정은 **말풍선 행과 같은 하나**(`AingStickerArt.drawable`)다. `parse` 만 보면 그림을
+                //   못 읽는 배포본에서 행은 글자 한 줄로 접히는데 여기는 122pt 로 세어, 이모티콘 건수만큼
+                //   회색 빈 판이 쌓인다(아래 "2026-09-10 스냅샷"이 바로 그 증상이다).
+                if AingStickerArt.drawable(for: entry.body) != nil {
+                    total += stickerSide + 2   // 그림 + 말풍선 배경이 없는 자리의 아주 작은 숨통
+                    continue
+                }
                 let lines = max(1, Int((Double(entry.body.count) / Double(charactersPerBubbleLine)).rounded(.up)))
                 total += CGFloat(lines) * 15 + 10   // 줄 높이 + 말풍선 세로 padding 5×2
             }
         }
         return total
     }
+
+    /// 말풍선 안 아잉이 이모티콘 한 장의 한 변(pt · v0.3.62).
+    ///
+    /// **왜 120 인가**: 이 패널의 말풍선이 쓸 수 있는 폭은 292 − 반대쪽 여백 40 − 아바타 20 − 시각 26 ≈ 206pt 다
+    /// (위 `charactersPerBubbleLine` 주석의 같은 산식). 120 은 그 폭의 절반을 조금 넘겨 "글이 아니라 그림"으로
+    /// 읽히는 크기이고, 세로로는 대화 틀(무크롬 250pt)의 절반이라 **이모티콘 두 장이 한 화면에 들어온다**.
+    /// 더 키우면(160) 한 장이 틀을 거의 다 먹어서 직전 대화가 안 보이고, 줄이면(80) 표정이 안 읽힌다.
+    static let stickerSide: CGFloat = 120
 
     /// 대화가 아무리 짧아도 틀에 남기는 높이(pt). 말풍선 하나가 판 안에 앉아 보이는 최소치.
     static let minShownConversationHeight: CGFloat = 56
@@ -225,6 +244,23 @@ struct CheckMessageView: View {
     /// `WorkTimerStore.messageConversationViewTokens` 주석(나타남·사라짐이 어느 순서로 와도 수렴).
     @State private var viewToken = UUID()
 
+    /// 아잉이 이모티콘 그리드가 펼쳐져 있는가(v0.3.62).
+    ///
+    /// **스토어가 아니라 뷰가 든다.** 이 깃발은 서버·세션과 아무 관계가 없고, [뒤로]로 나가면 접혀 있는 쪽이
+    /// 맞다(다시 들어오면 뷰가 새로 만들어진다). 스토어에 두면 팝오버를 닫고 열어도 펼친 채로 남는다.
+    @State private var stickerGridOpen = false
+
+    /// 보이스오버·스냅샷 프로브 전용: 그리드를 **펼친 채로 못 박는다**. 앱은 언제나 false 다
+    /// (파일 머리 "두 스위치의 기본값이 false 이고 프로덕션에 true 를 주는 자리는 없다"와 같은 규약).
+    ///
+    /// 왜 필요한가: 펼친 화면은 `@State` 뒤에 있어 **밖에서 만들 길이 없다**. 그러면 덮개의 보이스오버
+    /// 단언이 소스 substring 으로 내려앉고, 그 단언은 `.accessibilityHidden` 한 줄을 `.overlay` **뒤**로
+    /// 옮겨도(그리드까지 보이스오버에서 사라진다 — 고치려던 것보다 나쁘다) 그대로 초록이다.
+    var pinsStickerGridOpen: Bool = false
+
+    /// 읽는 자리는 전부 이것을 본다(상태 ∨ 못 박기).
+    private var showsStickerGrid: Bool { stickerGridOpen || pinsStickerGridOpen }
+
     private var thread: MessageThread? { store.selectedMessageThread }
     private var hasPeer: Bool { store.selectedMessagePeerID != nil }
 
@@ -317,10 +353,56 @@ struct CheckMessageView: View {
 
     // MARK: 본문 — 말풍선
 
+    /// 대화 자리. **아잉이 이모티콘 그리드(v0.3.62)는 이 자리를 덮는다 — 패널 높이를 1pt 도 늘리지 않는다.**
+    ///
+    /// 신고·차단 시트가 대화 **자리에** 서는 것과 같은 규약이다(이 파일 머리의 `BlockReportSheetView` 갈래):
+    /// 팝오버는 콘텐츠 높이가 곧 창 높이라 **겹쳐 띄울 자리가 없다**. 아래로 펼치는 서랍으로 만들면
+    /// 그 높이가 그대로 창 높이에 더해져, 새 버전 배너가 떠 있는 날 푸터(로그아웃)가 잘린다
+    /// (`conversationHeight` 의 부등식 ②).
+    ///
+    /// ★ 그리드가 펼쳐지면 대화 자리가 **예산 전체(cap)** 를 쓴다. 평소에는 "내용만큼만" 쓰므로
+    ///   말풍선 한 줄짜리 대화에서는 56pt 밖에 없는데, 거기에 여섯 칸을 세우면 두 줄 중 아래 줄이 사라진다.
+    ///   cap 은 이 패널이 **이미 쓸 수 있도록 예산된** 높이라 여기서 창 상한을 넘기지 않는다.
     @ViewBuilder
     private var conversation: some View {
         // 상한은 크롬 예산이 정하고, 그 안에서 **내용만큼만** 쓴다(짧은 대화가 긴 대화만큼 자리를 먹지 않게).
         let cap = MessagePanelLayout.conversationHeight(extraChromeHeight: extraChromeHeight)
+        conversationBody(cap: cap)
+            .frame(height: showsStickerGrid ? cap : nil)
+            // 덮개는 **눈만** 가린다 — 보이스오버에는 가려진 말풍선이 그대로 남아, 훑으면 안 보이는 본문·
+            // 시각·'안 읽음'이 계속 읽히고 여섯 칸이 어디서 시작하는지 알 수 없다(신고·차단 시트는 대화를
+            // **교체**해서 이 문제가 없었다 — 이 그리드가 이 패널의 첫 겹침 덮개다).
+            .accessibilityHidden(showsStickerGrid)
+            .overlay {
+                if showsStickerGrid {
+                    AingStickerGridView(
+                        availableHeight: cap,
+                        // 칸도 버튼과 **같은 판정**을 본다. 펼쳐 둔 뒤에 못 보내는 상태가 되면(글을 보낸
+                        // 왕복 0.2~1.5초) 버튼만 흐려지고 칸 여섯 개는 그대로라, 누른 이모티콘이 아무
+                        // 안내 없이 삼켜졌다(두 겹 게이트의 뷰 쪽 짝 — 한쪽만 걸면 조용히 아무 일도 안 난다).
+                        canSend: store.canSendStickerNow,
+                        onPick: { sticker in
+                            // 고른 그 순간 **그 자리에서 전송**된다(사용자 결정 — 글과 섞지 않는다).
+                            // 문은 스토어 하나다: `sendSticker` 가 `sendMessage(to:body:)` 로 들어간다.
+                            //
+                            // ★ **보냈을 때만 접는다.** 못 보냈는데 접으면 화면에 남는 신호가 "그리드가
+                            //   닫혔다" 하나뿐이라, 직전 전송의 "보냈어요"를 보고 이모티콘도 간 줄 안다.
+                            if store.sendSticker(sticker) { stickerGridOpen = false }
+                        },
+                        onClose: { stickerGridOpen = false }
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: MessagePanelLayout.corner, style: .continuous)
+                            // 대화를 **가린다**(반투명으로 두면 말풍선 글자가 그림 뒤에 겹쳐 읽힌다).
+                            .fill(CheckTheme.background)
+                            .overlay(conversationBackground)
+                    )
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func conversationBody(cap: CGFloat) -> some View {
         if let thread, !thread.messages.isEmpty {
             let items = MessageThreadBuilder.timeline(thread.messages, now: now)
             let natural = max(
@@ -395,7 +477,15 @@ struct CheckMessageView: View {
     // MARK: 작성기
 
     private var composer: some View {
-        MessageComposerView(store: store, rendersPlainText: rendersPlainTextEditor)
+        // 이모티콘 깃발은 **뷰 하나가 들고** 작성기와 대화 자리가 같은 값을 본다 — 두 벌로 나누면
+        // 버튼은 눌렸는데 그리드는 안 뜨는(또는 그 반대) 조합이 생긴다.
+        MessageComposerView(
+            store: store,
+            rendersPlainText: rendersPlainTextEditor,
+            // 못 박기(`pinsStickerGridOpen`)까지 함께 보는 묶음이다 — 작성기 버튼과 대화 자리가 다른 값을
+            // 보면 프로브가 "버튼은 닫기인데 그리드는 없는" 화면을 재게 된다.
+            stickerGridShown: Binding(get: { showsStickerGrid }, set: { stickerGridOpen = $0 })
+        )
     }
 }
 
@@ -706,8 +796,40 @@ private struct MessageBubbleRow: View {
         }
     }
 
+    /// 본문이 아잉이 이모티콘 하나면 **글자 대신 그림**이다(v0.3.62). 아니면 예전 그대로 글자 말풍선이다.
+    ///
+    /// ★ **그림을 못 읽으면 글자로 접는다.** 번들이 깨진 배포본(맥 패키징이 리소스 번들 복사를 빠뜨린 경우)에서
+    ///   빈 말풍선이 되면 사용자는 상대가 뭘 보냈는지 알 길이 없다 — 이름 글자("아잉이 기쁨")가 보이는 쪽이
+    ///   낫다. 그 판정은 `AingStickerArt.drawable` 하나이고, **틀 높이 추정이 부르는 것과 같은 함수다**
+    ///   (`MessagePanelLayout.conversationContentHeight` — 두 자리가 갈리면 빈 회색 판이 생긴다).
+    @ViewBuilder
     private var bubbleText: some View {
-        Text(entry.body)
+        if let drawn = AingStickerArt.drawable(for: entry.body) {
+            stickerBubble(drawn.art)
+        } else {
+            textBubble
+        }
+    }
+
+    /// 이모티콘 말풍선. **배경·테두리가 없다** — 카톡 이모티콘처럼 그림만 뜬다(사용자 결정: 말풍선 한 칸을
+    /// 통째로 차지하는 큰 그림). 읽음 표시·시각·정렬은 바깥 행이 그리므로 **예전과 똑같다**.
+    ///
+    /// ★ 보이스오버 문구는 **그림 안에** 있다(`AingStickerArt.labeledImage`). 여기서 `.accessibilityLabel` 로
+    ///   붙이지 않는 이유는 그 실측이다 — 꾸밈용 그림에 건 라벨은 AX 요소가 없어 **버려진다**.
+    private func stickerBubble(_ art: Image) -> some View {
+        art
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: MessagePanelLayout.stickerSide, height: MessagePanelLayout.stickerSide)
+    }
+
+    /// 글자 말풍선. **이모티콘 폴백도 이 자리로 온다** — 그때는 날것 토큰(`[아잉:기쁨]`) 대신 이름으로
+    /// 읽힌다("아잉이 기쁨"). 같은 저장소가 날것을 "깨진 메시지로 읽힌다"고 적어 둔 그 글자이고,
+    /// 폴백의 목적(상대가 뭘 보냈는지 알게)은 이름이 더 잘 달성한다. 평범한 본문은 `preview` 가
+    /// **글자 하나도** 바꾸지 않는다. 우클릭 [복사]는 날것 그대로다(붙여넣어 다시 보내면 그림이 된다).
+    private var textBubble: some View {
+        Text(AingStickerText.preview(for: entry.body))
             .font(.caption)
             .foregroundStyle(entry.isMine ? .white : CheckTheme.primaryText)
             .multilineTextAlignment(.leading)
@@ -737,6 +859,12 @@ struct MessageComposerView: View {
     @Bindable var store: WorkTimerStore
     var rendersPlainText: Bool = false
 
+    /// 아잉이 이모티콘 그리드가 펼쳐져 있는가(v0.3.62). 깃발은 **대화 패널이 들고** 그리드는 대화 자리에 선다.
+    ///
+    /// `@Binding` 대신 `Binding<Bool>` 프로퍼티인 이유: 기본값 `.constant(false)` 를 줄 수 있어
+    /// `MessageComposerView(store:)` 로 쓰는 기존 테스트·스냅샷 호출부가 **무수정으로** 컴파일된다.
+    var stickerGridShown: Binding<Bool> = .constant(false)
+
     private var length: Int { store.messageDraftLength }
     private var isOverflowing: Bool { length > MessageBody.maxLength }
 
@@ -752,21 +880,26 @@ struct MessageComposerView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            MessageDraftEditor(
-                text: $store.messageDraft,
-                height: MessagePanelLayout.editorHeight,
-                isOverflowing: isOverflowing,
-                rendersPlainText: rendersPlainText,
-                // ★ **대화 패널에 들어오면 커서가 여기 있다**(사용자 지시 2026-09-11 ④: 콕찌르기에서
-                //   말풍선을 눌러 들어가면 마우스 클릭 없이 바로 타자가 되게). 이 칸은 대화 패널이 화면에
-                //   설 때만 존재하므로(`CheckMenuView` 의 `if store.isMessagePanelVisible`) 다른 화면의
-                //   포커스를 훔칠 경로가 없고, [뒤로]로 나갔다 들어오면 뷰가 새로 만들어져 다시 잡는다.
-                focusesWhenShown: true,
-                // ★ 판정도 문도 **버튼과 같은 것**을 넘긴다. 여기서 조건을 다시 세면 Enter 와 버튼이
-                //   서로 다른 날 갈린다(그리고 갈린 쪽은 아무 화면에도 안 보인다).
-                canSendNow: { store.canSendMessageNow },
-                onSend: send
-            )
+            // 입력칸 **옆**에 아잉이 버튼 하나(v0.3.62). 같은 줄에 두므로 이 블록의 높이는
+            // 예전과 같은 `editorHeight` 고정값이다 — 줄을 하나 더 세우면 그만큼 대화가 깎인다.
+            HStack(alignment: .center, spacing: 6) {
+                MessageDraftEditor(
+                    text: $store.messageDraft,
+                    height: MessagePanelLayout.editorHeight,
+                    isOverflowing: isOverflowing,
+                    rendersPlainText: rendersPlainText,
+                    // ★ **대화 패널에 들어오면 커서가 여기 있다**(사용자 지시 2026-09-11 ④: 콕찌르기에서
+                    //   말풍선을 눌러 들어가면 마우스 클릭 없이 바로 타자가 되게). 이 칸은 대화 패널이 화면에
+                    //   설 때만 존재하므로(`CheckMenuView` 의 `if store.isMessagePanelVisible`) 다른 화면의
+                    //   포커스를 훔칠 경로가 없고, [뒤로]로 나갔다 들어오면 뷰가 새로 만들어져 다시 잡는다.
+                    focusesWhenShown: true,
+                    // ★ 판정도 문도 **버튼과 같은 것**을 넘긴다. 여기서 조건을 다시 세면 Enter 와 버튼이
+                    //   서로 다른 날 갈린다(그리고 갈린 쪽은 아무 화면에도 안 보인다).
+                    canSendNow: { store.canSendMessageNow },
+                    onSend: send
+                )
+                stickerButton
+            }
             HStack(spacing: 8) {
                 // **사라지는 규칙을 모르면 사용자는 그것을 버그로 읽는다**(그 오해는 제보로 온다).
                 // 줄을 따로 세우지 않고 이 줄의 남는 폭에 9pt 로 얹는다 — 자리를 많이 먹지 않게.
@@ -799,6 +932,52 @@ struct MessageComposerView: View {
                 .checkTooltip(sendHelp)
             }
         }
+    }
+
+    /// 아잉이 이모티콘 그리드를 펼치는 버튼(v0.3.62). 누르면 대화 자리에 여섯 칸이 선다.
+    ///
+    /// **그림이 아니라 SF 심볼이다.** 버튼 얼굴에 이모티콘 그림을 쓰면 번들이 빠진 배포본에서
+    /// **아무것도 없는 버튼**이 된다(그림을 못 읽는 바로 그 상황이라 폴백도 같이 사라진다).
+    /// 저장소의 그림은 512×512 로 구운 진짜 그림이지만(`scripts/bake-aing-stickers.swift`),
+    /// 그 사실은 이 결론을 바꾸지 않는다 — 막는 것은 "그림이 없는 배포본"이다.
+    ///
+    /// 못 보낼 때(상대 없음 · 왕복 중)는 [보내기]와 **같은 모양으로** 흐려진다 — 열어 놓고 골랐는데
+    /// 아무 일도 안 일어나는 것이 가장 나쁘다.
+    ///
+    /// ★ **펼쳐 둔 동안에는 못 보내도 눌린다**(v0.3.62 검토 지적 ①). 펼친 뒤에 왕복이 시작되면 이 버튼은
+    ///   더 이상 "보내기 문"이 아니라 **닫기**다 — 그때 같이 잠그면 그리드 쪽 [x] 와 함께 탈출구가 0 이 된다.
+    private var stickerButton: some View {
+        Button {
+            stickerGridShown.wrappedValue.toggle()
+        } label: {
+            Image(systemName: "face.smiling")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(stickerGridShown.wrappedValue ? CheckTheme.accent : CheckTheme.secondaryText)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.white.opacity(stickerGridShown.wrappedValue ? 0.12 : 0.06))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!stickerCanToggle)
+        .opacity(stickerCanToggle ? 1 : 0.35)
+        .accessibilityLabel(stickerGridShown.wrappedValue ? AingStickerText.closeGridLabel : AingStickerText.buttonLabel)
+        .checkTooltip(stickerHelp)
+    }
+
+    /// 이 버튼이 눌리는가. 펼친 상태면 **언제나** 눌린다(= 닫기), 접힌 상태면 보낼 수 있을 때만 눌린다(= 펼치기).
+    var stickerCanToggle: Bool { stickerGridShown.wrappedValue || store.canSendStickerNow }
+
+    /// 이모티콘 버튼의 툴팁. 못 누르는 사유는 [보내기]와 **같은 어휘**로 말한다(사유가 두 어휘면 한쪽이 낡는다).
+    ///
+    /// **펼친 상태가 사유보다 먼저다**: 그때 이 버튼은 닫기라 눌리는데, "보내는 중이에요"라고 말하면
+    /// 눌리는 버튼을 못 누르는 것으로 읽는다.
+    var stickerHelp: String {
+        if stickerGridShown.wrappedValue { return AingStickerText.closeGridLabel }
+        if store.isSendingMessage { return "보내는 중이에요" }
+        if store.selectedMessagePeerID == nil { return "콕 찌르기에서 대화 상대를 골라 주세요" }
+        return AingStickerText.buttonLabel
     }
 
     /// 입력칸 위 한 줄: 신고·차단 결과(이 자리 몫)가 먼저, 없으면 전송 결과. 전송하면 신고 결과는 내려간다(`sendDraftMessage`).
@@ -926,5 +1105,191 @@ struct MessageDraftEditor: View {
             }
         }
         .frame(height: height, alignment: .topLeading)
+    }
+}
+
+// MARK: - 아잉이 이모티콘 고르기 (v0.3.62)
+
+/// 여섯 칸 그리드의 치수. **한 곳에서만 온다** — 칸 크기는 폭과 "남은 높이" 둘 다에 걸려 있어서
+/// 뷰 안에 숫자를 흩어 두면 크롬이 큰 조합에서만 아래 줄이 사라진다(그 조합은 테스트가 잘 안 그린다).
+enum AingStickerGridLayout {
+    /// 가로 칸 수. 여섯 종 ÷ 3 = 두 줄이다(네 줄로 세우면 한 줄이 넷·둘로 갈려 아래 줄이 비뚤어진다).
+    static let columns = 3
+    static let rows = 2
+    /// 칸 사이 간격(pt). 제목 줄과 칸 사이에도 한 번 들어간다.
+    static let spacing: CGFloat = 6
+    /// 제목 줄(제목 + [닫기])의 높이(pt).
+    static let titleHeight: CGFloat = 20
+    /// 바깥 여백(pt) — 제목을 접은 좁은 자리에서는 더 얇다(아래 `padding(availableHeight:)`).
+    static let roomyPadding: CGFloat = 8
+    static let tightPadding: CGFloat = 4
+    /// 칸 한 변이 아무리 깎여도 이보다 작아지지 않는다(pt). 이보다 작으면 **누를 수 없는 과녁**이다 —
+    /// 넘치는 것은 잘려도 괜찮지만 못 누르는 것은 기능이 없는 것과 같다.
+    static let minCell: CGFloat = 28
+
+    /// 제목 줄을 세우는가. **좁으면 접는다** — 제목을 지키려다 아래 줄 세 칸이 잘리면 그 세 표정은
+    /// 화면에 없는 기능이 된다.
+    ///
+    /// ★ **접는 것은 제목 글자뿐이고 [x] 는 접지 않는다**(v0.3.62 검토 지적 ①). 예전엔 "닫는 길은 입력칸 옆
+    ///   토글이 들고 있다"고 적혀 있었는데, 그 토글은 **못 보내는 동안 잠긴다**(왕복 0.2~1.5초) — 제목이
+    ///   접히는 좁은 크롬에서 그 두 가지가 겹치면 탈출구가 **0** 이 된다(칸도 `.disabled` 라 눌러도 안 닫힌다).
+    ///   그래서 좁은 자리에서는 [x] 가 세로를 안 먹는 **겹침**으로 자리를 옮긴다(`AingStickerGridView`).
+    ///
+    /// 경계는 "제목을 세운 채 두 줄을 최소 과녁으로 그릴 수 있는 가장 낮은 높이"다
+    /// (= 여백 16 + 제목 20 + 간격 12 + 과녁 56 = 104pt).
+    static func showsTitle(availableHeight: CGFloat) -> Bool {
+        availableHeight >= roomyPadding * 2 + titleHeight + spacing * 2 + minCell * CGFloat(rows)
+    }
+
+    static func padding(availableHeight: CGFloat) -> CGFloat {
+        showsTitle(availableHeight: availableHeight) ? roomyPadding : tightPadding
+    }
+
+    /// 칸을 뺀 세로 크롬(pt): 바깥 여백 둘 + (제목 + 그 아래 간격) + 줄 사이 간격 하나.
+    static func verticalChrome(availableHeight: CGFloat) -> CGFloat {
+        let pad = padding(availableHeight: availableHeight) * 2
+        let title = showsTitle(availableHeight: availableHeight) ? titleHeight + spacing : 0
+        return pad + title + spacing * CGFloat(rows - 1)
+    }
+
+    /// 칸 한 변(pt). 폭이 정하는 값과 **남은 높이**가 정하는 값 중 작은 쪽이다.
+    ///
+    /// 높이를 보는 이유: 이 그리드는 대화 자리를 쓰고, 그 자리는 크롬(새 버전 배너 + 패치노트 + 주간 목표 편집)에
+    /// 76pt 까지 깎인다(`MessagePanelLayout.conversationHeight` 의 부등식 ②). 폭만 보고 64pt 칸을 그리면
+    /// 그 조합에서 아래 줄 세 칸이 통째로 사라진다 — 화면에 없는 기능이 된다.
+    static func cellSide(availableHeight: CGFloat, width: CGFloat = MessagePanelLayout.contentWidth) -> CGFloat {
+        let pad = padding(availableHeight: availableHeight)
+        let byWidth = (width - pad * 2 - spacing * CGFloat(columns - 1)) / CGFloat(columns)
+        let byHeight = (availableHeight - verticalChrome(availableHeight: availableHeight)) / CGFloat(rows)
+        return max(minCell, min(byWidth, byHeight))
+    }
+
+    /// 이 높이에서 그리드가 **실제로 쓰는** 세로 길이(pt). 뷰와 테스트가 같은 산식을 본다 —
+    /// 테스트가 숫자를 따로 적으면 뷰를 고친 날 테스트만 초록으로 남는다.
+    static func usedHeight(availableHeight: CGFloat, width: CGFloat = MessagePanelLayout.contentWidth) -> CGFloat {
+        verticalChrome(availableHeight: availableHeight)
+            + cellSide(availableHeight: availableHeight, width: width) * CGFloat(rows)
+    }
+}
+
+/// 아잉이 이모티콘 여섯 칸. **고르면 그 자리에서 전송된다**(사용자 결정 — 이모티콘은 말풍선 한 칸을 통째로
+/// 차지하므로 글과 섞지 않는다). 그래서 이 뷰에는 "담기"가 없고 `onPick` 하나뿐이다.
+///
+/// ★ **전송 문을 여기서 만들지 않는다.** `onPick` 은 대화 패널이 `store.sendSticker(_:)` 로 잇고,
+///   그 함수가 기존 전송 문(`sendMessage(to:body:)`)으로 들어간다 — 실패 문구·왕복 겹침 방지·성공 뒤
+///   이력 재조회가 전부 그 한 자리에 있다.
+///
+/// 칸 순서는 `AingSticker.allCases` 그대로다(열거 선언 순서 = 사용자가 보는 차례).
+struct AingStickerGridView: View {
+    /// 이 그리드가 쓸 수 있는 높이(pt). 대화 패널이 자기 예산에서 계산해 넘긴다.
+    let availableHeight: CGFloat
+    /// 지금 이모티콘을 보낼 수 있는가(`store.canSendStickerNow`). **칸이 이것을 본다** —
+    /// 입력칸 옆 버튼과 같은 판정·같은 흐림이어야 "눌렀는데 아무 일도 안 난다"가 없다.
+    var canSend: Bool = true
+    let onPick: (AingSticker) -> Void
+    let onClose: () -> Void
+
+    private var cell: CGFloat { AingStickerGridLayout.cellSide(availableHeight: availableHeight) }
+    /// 좁은 자리에서는 제목을 접는다(여섯 칸이 제목보다 먼저다 — `AingStickerGridLayout.showsTitle`).
+    private var showsTitle: Bool { AingStickerGridLayout.showsTitle(availableHeight: availableHeight) }
+
+    private var columns: [GridItem] {
+        Array(
+            repeating: GridItem(.fixed(cell), spacing: AingStickerGridLayout.spacing),
+            count: AingStickerGridLayout.columns
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AingStickerGridLayout.spacing) {
+            if showsTitle {
+                HStack(spacing: 6) {
+                    Text(AingStickerText.gridTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    closeButton
+                }
+                .frame(height: AingStickerGridLayout.titleHeight)
+            }
+            // ★ 열을 **고정 폭**(`.fixed(cell)`)으로 둔다: 칸이 여섯뿐이라 게으름은 필요 없지만,
+            //   유동 열이 "남는 폭을 나눠 갖는" 기본 동작을 하면 칸이 정사각이 아니게 된다.
+            LazyVGrid(columns: columns, spacing: AingStickerGridLayout.spacing) {
+                ForEach(AingSticker.allCases, id: \.self) { sticker in
+                    AingStickerGridCell(sticker: sticker, side: cell, canSend: canSend) { onPick(sticker) }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(AingStickerGridLayout.padding(availableHeight: availableHeight))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // ★ 제목이 접힌 좁은 자리의 [x]. **겹쳐서** 둔다 — 세로를 1pt 도 안 쓰므로 여섯 칸이 그대로다.
+        //   여기서 안 그리면 탈출구가 0 인 조합이 생긴다(위 `showsTitle` 주석 ★ · 칸은 왕복 중 `.disabled`).
+        //   칸을 안 가린다: 76pt 에서 칸 띠는 75…209.5pt 이고(`LazyVGrid` 가 남는 폭 안에서 가운데로 선다 —
+        //   렌더 실측) 이 손잡이는 270…288pt 다. 그 둘이 안 겹친다는 것까지 시험이 그림으로 되묻는다.
+        .overlay(alignment: .topTrailing) {
+            if !showsTitle {
+                closeButton.padding(AingStickerGridLayout.tightPadding)
+            }
+        }
+        // 덮개가 **보이스오버에서도** 덮개다 — 밑의 대화는 `.accessibilityHidden` 으로 내려가 있고,
+        // 훑기는 이 여섯 칸(과 [x]) 안에서 돈다.
+        .accessibilityAddTraits(.isModal)
+    }
+
+    /// 닫기 손잡이. **`canSend` 를 보지 않는다** — 못 보내는 상태야말로 닫고 싶은 상태다.
+    /// 제목 줄과 겹침 자리가 **같은 하나**를 쓴다(두 벌로 두면 한쪽만 고쳐지는 날이 온다).
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(CheckTheme.secondaryText)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Color.white.opacity(0.08)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(AingStickerText.closeGridLabel)
+        .checkTooltip(AingStickerText.closeGridLabel)
+    }
+}
+
+/// 그리드 한 칸. 그림을 못 읽으면 **이름 글자**로 접는다(`AingSticker` 머리말의 폴백 규약) —
+/// 번들이 깨진 배포본에서 "아무것도 없는 여섯 칸"이 되면 고를 수가 없다.
+private struct AingStickerGridCell: View {
+    let sticker: AingSticker
+    let side: CGFloat
+    /// 보낼 수 있는가. 못 보낼 때는 **[보내기]와 같은 모양으로** 흐려지고 눌리지 않는다.
+    var canSend: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                if let art = AingStickerArt.image(sticker) {
+                    art
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .padding(3)
+                } else {
+                    Text(sticker.label)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(2)
+                }
+            }
+            .frame(width: side, height: side)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSend)
+        .opacity(canSend ? 1 : 0.35)
+        .accessibilityLabel(AingStickerText.accessibilityLabel(sticker))
+        .checkTooltip(canSend ? AingStickerText.accessibilityLabel(sticker) : AingStickerText.sendingNowNotice)
     }
 }

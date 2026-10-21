@@ -30,7 +30,9 @@ let package = Package(
             // ⚠️ 맥 패키징은 이 번들을 **손으로 복사**해야 한다(scripts/build-local.sh 의 RESOURCE_BUNDLES).
             // v0.3.54: 캡슐 뽑기 기계 그림 다섯 장(GachaMachine/ — 몸통 · 손잡이 · 캡슐 · 황금 캡슐 · 뚜껑). 맥 뽑기 창과 폰 전체 화면이
             // 같은 기계 뷰(CheckCore/GachaMachine)를 쓰므로 여기다. 같은 번들째 복사되므로 패키징 스크립트는 그대로다.
-            resources: [.copy("Resources/ProviderMarks"), .copy("Resources/GachaMachine")]
+            // v0.3.62: 아잉이 이모티콘 여덟 장(Stickers/). 맥이 보낸 이모티콘을 **폰도 같은 그림으로** 그려야 하므로
+            // 셋 다 링크하는 이 모듈에 둔다(위 ProviderMarks 와 같은 근거). 같은 번들째 복사되므로 패키징 스크립트는 그대로다.
+            resources: [.copy("Resources/ProviderMarks"), .copy("Resources/GachaMachine"), .copy("Resources/Stickers")]
         ),
         // D1: 폰 앱·위젯 공용(App Group 경로 · 키체인 설정 · 위젯 스냅샷 모델 · 할 일 파일 위치 · 기기 식별자). 플랫폼 무관.
         .target(

@@ -829,13 +829,17 @@ struct V0361UpdatePrefetchTests {
 
     // MARK: - E. 버전
 
-    @Test("버전 0.3.61 / 114 · CHANGELOG 0.3.61 은 맨 위 세 줄 이하(사용자 말투)")
+    // v0.3.62: 버전 고정(0.3.61 / 114)과 "맨 위 섹션" 단언은 다음 버전이 올라가며 거짓이 됐다 — 그 두 사실은 이제
+    // `V0362AingStickerTests.swift` 옆의 `v0362VersionAndChangelog` 가 0.3.62 / 115 로 잰다(0.3.60 → 0.3.61 때와 같은 넘김).
+    // 여기는 0.3.61 섹션의 **내용**과, 이 파일이 재는 나눠 받기가 실린 하한(114)만 남긴다.
+    @Test("CHANGELOG 0.3.61 은 세 줄 이하(사용자 말투) · 빌드는 114 이상")
     func versionAndChangelog() throws {
         let root = CheckCoreSourceLayout.repoRoot
         let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
         let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-        #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.61</string>"))
-        #expect(squashed.contains("<key>CFBundleVersion</key><string>114</string>"))
+        let afterKey = squashed.components(separatedBy: "<key>CFBundleVersion</key><string>").dropFirst().first ?? ""
+        let buildNumber = Int(afterKey.prefix { $0.isNumber })
+        #expect((buildNumber ?? 0) >= 114, "빌드 번호가 나눠 받기가 실린 하한(114) 아래다: \(String(describing: buildNumber))")
         let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
         let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.61\n") })
         let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -846,7 +850,7 @@ struct V0361UpdatePrefetchTests {
             #expect(!section.contains(banned), "사용자 문구에 내부 구조·숫자('\(banned)')가 있다")
         }
         #expect(changelog.range(of: "## 0.3.61")!.lowerBound < changelog.range(of: "## 0.3.60")!.lowerBound,
-                "0.3.61 이 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
+                "0.3.61 섹션이 0.3.60 보다 아래에 있다")
     }
 }
 

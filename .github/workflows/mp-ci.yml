@@ -97,9 +97,11 @@ jobs:
           set -euo pipefail
           lane="$(python3 -I multiplatform/tools/lane-ownership.py --resolve-branch "$BRANCH")"
           if [ -z "$lane" ]; then echo "::notice::xplat/ 브랜치가 아니다($BRANCH) — 갈래 소유 검사 대상이 아니다"; exit 0; fi
-          git fetch --no-tags origin "+refs/heads/xplat/main:refs/remotes/origin/xplat/main"
-          echo "브랜치 $BRANCH → 갈래 $lane (기준 origin/xplat/main, 머리 $HEAD_SHA)"
-          python3 -I multiplatform/tools/lane-ownership.py --lane "$lane" --base origin/xplat/main --head "$HEAD_SHA"
+          git fetch --no-tags origin "+refs/heads/xplat/main:refs/remotes/origin/xplat/main" "+refs/heads/main:refs/remotes/origin/main"
+          echo "브랜치 $BRANCH → 갈래 $lane (기준 origin/xplat/main, 머리 $HEAD_SHA, 기준선 병합 몫은 origin/main 으로 뺀다)"
+          # --upstream: main 이 바꾸고 머리가 바이트까지 그대로 가져온 경로(기준선 병합 몫, G §8-13)만 뺀다.
+          # main 이 안 바꾼 경로를 main 판으로 되돌리는 것은 그대로 센다(lane-ownership.py 머리말 · self-test UPSTREAM_CASES).
+          python3 -I multiplatform/tools/lane-ownership.py --lane "$lane" --base origin/xplat/main --head "$HEAD_SHA" --upstream origin/main
 
   jvm-gate:
     needs: changes

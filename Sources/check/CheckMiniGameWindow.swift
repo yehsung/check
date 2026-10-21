@@ -18,9 +18,22 @@ import CheckCore
 //   · `.miniaturizable` 을 **넣는다.** 설정은 잠깐 들렀다 닫는 표면이라 최소화가 오히려 창을 잃는 길이지만
 //     (LSUIElement 는 Dock 타일이 없다), 게임 창은 "치워 뒀다 이따 다시" 가 자연스러운 표면이다.
 //     Dock 타일이 없어 되찾는 길은 결국 팝오버 레일의 미니게임 버튼(= `show()`)인데, 그 버튼이 최소화된 창도 되살린다.
-//   · **창이 키를 잃거나 닫히면 진행 중인 판을 끝낸다**(`miniGameInterruptToken`). 유휴 0% 불변이
-//     팝오버 시절엔 `setMenuPresented(false)` 로 지켜졌는데, 창은 팝오버와 무관하게 살아 있으므로
-//     정지 신호가 여기로 옮겨 왔다. 닫힘은 진입 버튼 하이라이트(`isMiniGamePanelVisible`)도 함께 내린다.
+//   · **창이 키를 잃으면 진행 중인 판을 일시정지하고**(`miniGamePauseRequestToken`), **닫으면 끝낸다**
+//     (`miniGameInterruptToken`). 유휴 0% 불변이 팝오버 시절엔 `setMenuPresented(false)` 로 지켜졌는데,
+//     창은 팝오버와 무관하게 살아 있으므로 정지 신호가 여기로 옮겨 왔다.
+//     0.3.61(build 114)까지는 **키 상실도 판을 끝냈다.** 실사용 제보가 그 대가다 — "테트리스 일시정지하고
+//     다른 창을 클릭하면 아예 끝나버려요". 끝낼 이유는 애초에 없었다: 정지 중에는 60Hz 루프가 **이미 완전히
+//     멈춰 있다**(`TimelineView(.animation(paused: !game.isPlaying || host.isPaused))` — MiniGameTetris ·
+//     MiniGameFlappy). 유휴 0% 는 멈추는 것만으로 지켜진다.
+//     돌아온 사람은 [이어하기] 로 3-2-1 뒤 이어서 한다(**자동 재개는 안 한다** — 창이 키를 되찾은 순간에
+//     사람이 화면을 보고 있다는 보장이 없다). 안 돌아오면 5분 정지 상한이 그 점수로 확정한다
+//     (`CheckMiniGameWindowView.PauseState.pauseLimitSeconds`) — 순위 공정성은 그 상한이 지킨다.
+//     그 상한은 **접었을 때 기록이 남는 게임**에만 건다(v0.3.62 — `PauseState.quittingKeepsTheScore`).
+//     테트리스·플래피는 `interrupt()` 가 그 점수로 결과를 확정하지만 타이밍 바는 `invalidate()` 뿐이라
+//     접어도 남는 것이 없다 — 거기에 상한을 걸면 "점수를 건진다"가 "판을 없앤다"로 뒤집힌다.
+//     타이밍 바의 정지는 상한 없이 얼어 있어도 해롭지 않다(루프가 멈춰 유휴 0% 이고, 라운드 토큰이
+//     30분에 만료되면 어차피 기록되지 않는다).
+//     닫힘은 진입 버튼 하이라이트(`isMiniGamePanelVisible`)도 함께 내린다.
 
 // MARK: - 미니게임 창 컨트롤러
 
@@ -239,11 +252,22 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
         endRound(closing: true)
     }
 
-    /// 다른 창으로 포커스가 갔다. 창은 그대로 떠 있지만 **판은 끝낸다** — 안 그러면 보이지도 않는 창에서
-    /// 60Hz 루프가 계속 돈다(유휴 0% 불변). 다시 하려면 캔버스를 클릭하면 된다(그 클릭이 새 판을 연다).
+    /// 다른 창으로 포커스가 갔다. 창은 그대로 떠 있고 **판도 살아 있다 — 일시정지만 한다**(0.3.62).
+    ///
+    /// 0.3.61(build 114)까지 이 자리는 `endRound(closing: false)` 였다. 근거는 "보이지도 않는 창에서 60Hz
+    /// 루프가 계속 돌면 안 된다(유휴 0% 불변)" 였는데, **정지 중에는 그 루프가 이미 완전히 멈춰 있다**
+    /// (`TimelineView(.animation(paused:))` — 머리 주석). 즉 끝낼 이유가 애초에 없었고, 실사용자는 그 대가를
+    /// "테트리스 일시정지하고 다른 창을 클릭하면 아예 끝나버려요"로 돌려보냈다.
+    ///
+    /// 멈출지 말지는 **화면이** 정한다(`PauseState.resigningKey`) — 판이 안 도는 중이거나 이미 정지 중이면
+    /// 아무 일도 없다. 여기서 그것을 못 가리는 이유는 진행 여부·정지 상태가 전부 허브 뷰의 @State 안이라는
+    /// 것이다. 안 돌아오면 5분 정지 상한이 그 점수로 확정한다(**접었을 때 기록이 남는 게임만** —
+    /// `PauseState.quittingKeepsTheScore`. 타이밍 바는 접어도 남는 것이 없어 빼 두었다) — 순위 공정성은 거기서 지켜진다.
+    /// **창을 닫는 것은 지금도 판을 끝낸다**(`windowWillClose`). 닫음은 "그만두겠다"는 분명한 의사표시다.
     func windowDidResignKey(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
-        endRound(closing: false)
+        // 스토어가 없으면(배선 전) 아무 일도 없다 — `endRound` 의 가드와 같은 규약이다.
+        wiring?.store.requestMiniGamePause()
     }
 
     /// **창이 다른 화면으로 옮겨졌다**(v0.2.50). 주사율이 통째로 달라지는 순간이다 — 75Hz 노트북 화면에서
@@ -271,6 +295,9 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     }
 
     /// 진행 중인 판을 끝낸다(+ 닫힘이면 진입 버튼 하이라이트도 내린다). 스토어가 없으면(배선 전) 아무 일도 없다.
+    ///
+    /// 부르는 자리는 이제 **창 닫힘 하나**다(0.3.62 전에는 키 상실도 여기로 왔다). `closing` 을 남겨 두는 것은
+    /// 스토어의 `closeMiniGamePanel()` 경로와 신호 모양을 같게 유지하려는 것이다.
     private func endRound(closing: Bool) {
         guard let store = wiring?.store else { return }
         store.miniGameInterruptToken += 1

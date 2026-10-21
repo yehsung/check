@@ -163,7 +163,8 @@ extension WorkTimerStore {
     ///  · 이 메서드는 팝오버 **안의** 버튼이 부른다. 먼저 닫으면 자기를 그린 뷰 계층을 액션 도중에 걷어낸다.
     ///  · 닫는 수단이 상태바 아이템 클릭이라, 창이 먼저 키를 가져간 뒤 눌러야 포커스가 게임 창에 남는다.
     ///
-    /// **판은 안 끊긴다.** `miniGameInterruptToken` 을 올리는 곳은 게임 창 자신의 닫힘·포커스 상실뿐이고
+    /// **판은 안 끊긴다.** `miniGameInterruptToken` 을 올리는 곳은 게임 창 자신의 **닫힘**뿐이고(0.3.62 —
+    /// 포커스 상실은 이제 이 토큰을 안 올리고 `requestMiniGamePause()` 로 **멈추게만** 한다)
     /// (`CheckMiniGameWindowController`), 팝오버가 닫히며 흐르는 `setMenuPresented(false)` 는 그 토큰을
     /// 건드리지 않는다 — 그 사실은 소스 계약 테스트가 이미 못 박고 있다.
     func openMiniGameWindow() {
@@ -209,8 +210,10 @@ extension WorkTimerStore {
     ///
     /// 순서는 **여는 것이 먼저**다 — 대결 창이 키를 가져간 뒤에 이 창을 내린다(`openMiniGameWindow` 가 창 먼저 ·
     /// 팝오버 나중으로 정한 것과 같은 순서다).
-    /// 이 문은 판이 도는 중에는 화면에 없다(같은 자리를 [일시정지] 가 쓴다) — 정지해 둔 판이 있었다면 여기서 끝나는데,
-    /// 그것은 예전에도 같았다(대결 창이 키를 가져가는 순간 `windowDidResignKey` 가 판을 끝냈다).
+    /// 이 문은 판이 도는 중에는 화면에 없다(같은 자리를 [일시정지] 가 쓴다) — 정지해 둔 판이 있었다면 여기서 끝난다
+    /// (`closeMiniGamePanel()` 이 interruptToken 을 올린다). 0.3.62 전에는 대결 창이 키를 가져가는 순간
+    /// `windowDidResignKey` 가 이미 판을 끝냈으니 결과가 같았지만, 지금 키 상실은 **멈추기만** 한다 —
+    /// 그래서 여기서 판이 끝나는 이유는 이제 **창 닫힘** 하나다.
     func openGomokuFromMiniGame() {
         gomoku.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
@@ -231,14 +234,30 @@ extension WorkTimerStore {
     /// 진행 중인 판을 **사용자 의사로** 접는다(정지 카드의 [그만두기] — v0.2.48).
     ///
     /// 하는 일은 `miniGameInterruptToken += 1` 하나뿐이다. 그런데도 새 메서드를 낸 이유: 지금까지 이 토큰을
-    /// 올리는 길은 창 컨트롤러가 스토어 프로퍼티를 **직접** 만지는 경로(`windowWillClose` · `windowDidResignKey`)
-    /// 뿐이었고, 화면에서 부를 이름이 없었다. 창 닫힘·포커스 상실과 같은 신호를 **사용자 의사**로 보내는 문이다.
+    /// 올리는 길은 창 컨트롤러가 스토어 프로퍼티를 **직접** 만지는 경로(`windowWillClose` · 그때는
+    /// `windowDidResignKey` 도) 뿐이었고, 화면에서 부를 이름이 없었다. **창 닫힘과 같은 신호**를
+    /// **사용자 의사**로 보내는 문이다(0.3.62 부터 포커스 상실은 이 신호가 아니다 — 멈추기만 한다).
     ///
     /// 판을 어떻게 접을지는 게임이 정한다 — 플래피는 그 순간 점수로 결과 확정, 타이밍 바는 10라운드를 못
     /// 채웠으므로 무효(`MiniGameHost.interruptToken` 주석). 스토어는 그 차이를 모른다.
     /// 창은 그대로 둔다(`isMiniGamePanelVisible` 을 안 내린다) — 그만둔 사람은 대개 다른 게임을 하려는 것이다.
     func abortMiniGameRound() {
         miniGameInterruptToken += 1
+    }
+
+    /// 미니게임 창이 **키를 잃었다** — 진행 중인 판을 일시정지해 달라고 화면에 알린다(0.3.62).
+    ///
+    /// 왜 창 컨트롤러가 화면에 직접 말하지 않고 스토어를 거치는가: **정지 상태의 유일한 소유자가 허브 뷰**다
+    /// (`CheckMiniGameWindowView.PauseState` — 스크림·정지 카드·3-2-1 카운트다운·5분 상한이 전부 그 @State 안에 있다).
+    /// 컨트롤러가 쥔 것은 NSWindow 뿐이고 그 안의 SwiftUI @State 를 만질 길이 없다. 그래서 `@Observable` 스토어의
+    /// 토큰을 올리고 화면이 `.onChange` 로 받는다 — `miniGameInterruptToken` 과 똑같은 배선이고, 이 저장소가
+    /// "창은 스토어를 거쳐 화면에 말한다"로 이미 치러 본 값이다.
+    ///
+    /// `abortMiniGameRound()` 와 토큰을 **나눠 쓴다**(위 프로퍼티 주석). 멈출지 말지는 **화면이** 정한다 —
+    /// 판이 안 도는 중이거나 이미 정지 중이면 아무 일도 없다(`PauseState.resigningKey`). 스토어는 그 조건을
+    /// 모른다(진행 여부·정지 상태가 전부 뷰의 @State 안이다).
+    func requestMiniGamePause() {
+        miniGamePauseRequestToken += 1
     }
 
     /// 게임 종류 전환. 진행 중인 판을 끝내고(토큰) 그 게임의 오늘 순위를 다시 받는다. 선택은 영속한다.

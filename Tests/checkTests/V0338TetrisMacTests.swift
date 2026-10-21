@@ -244,21 +244,31 @@ func exitTopOutReleasesHeldKeys() throws {
     #expect(block.contains(tmRelease), "탑아웃 뒤에도 눌림이 남는다 — 다음 판이 왼쪽으로 출발한다")
 }
 
-@Test("출구 ②~⑥ 공통 수신처(창 닫힘·포커스 상실·종류 전환·그만두기·패널 닫기)")
+// ★ 0.3.62 에 **포커스 상실이 이 목록에서 빠졌다.** 그 신호는 이제 판을 끝내지 않고 멈추므로
+//   `miniGamePauseRequestToken` 수신처(출구 ⑩)로 간다 — 눌림 해제는 거기서 따로 재고(V0362), 여기 단언은
+//   그대로 유효하다. 이름에 '포커스 상실'을 남겨 두면 초록인 채로 거짓을 보증한다.
+@Test("출구 ②~⑥ 공통 수신처(창 닫힘·로그아웃·종류 전환·그만두기·패널 닫기)")
 func exitInterruptTokenReleasesHeldKeys() throws {
     let block = try tmRegion(after: ".onChange(of: store.miniGameInterruptToken)",
                              in: tmStripped(try tmPanelSource()))
     #expect(block.contains(tmRelease), "토큰으로 끝난 판의 눌림이 남는다")
 }
 
-@Test("출구 ⑦ 일시정지 — togglePause 는 interruptToken 을 안 올린다(공통 수신처가 못 잡는다)")
+@Test("출구 ⑦ 일시정지 — applyPause 는 interruptToken 을 안 올린다(공통 수신처가 못 잡는다)")
 func exitPauseReleasesHeldKeys() throws {
     let source = tmStripped(try tmPanelSource())
-    let block = try tmRegion(after: "private func togglePause() -> Bool", in: source)
+    // 0.3.62: 적용 단계를 `applyPause` 로 떼어냈다 — [일시정지] 버튼과 ESC 가 **같은 순서**를 밟게 하는
+    // 한 자리다(ESC 는 소유권 게이트가 더 붙어 `PauseState.escaped` 를 거쳐 곧장 여기로 온다).
+    let block = try tmRegion(after: "private func applyPause(_ next: PauseState)", in: source)
     #expect(block.contains(tmRelease), "정지에 들어갈 때 눌림을 안 비운다")
     // ★ 전제 확인: 이 함수가 정말로 토큰을 안 올린다(올린다면 이 출구는 공통 수신처가 잡고, 이 테스트는 헛돈다).
     #expect(!block.contains("miniGameInterruptToken"),
-            "togglePause 가 토큰을 올리게 바뀌었다 — 이 출구의 전제가 달라졌으니 주석을 고쳐라")
+            "applyPause 가 토큰을 올리게 바뀌었다 — 이 출구의 전제가 달라졌으니 주석을 고쳐라")
+    // 두 입구가 모두 이 문으로 들어온다. 한쪽이 제 순서를 따로 적으면 해제가 한쪽에서만 고쳐진 채 남는다.
+    let toggle = try tmRegion(after: "private func togglePause() -> Bool", in: source)
+    #expect(toggle.contains("applyPause(next)"), "[일시정지] 버튼이 적용 단계를 따로 적는다")
+    let install = try tmRegion(after: "private func installSpaceKey()", in: source)
+    #expect(install.contains("applyPause(next)"), "ESC 가 적용 단계를 따로 적는다")
 }
 
 @Test("출구 ⑧ 뷰 사라짐 — AppKit 창은 이 콜백이 안 올 수 있어 이것만 믿지 않는다")
@@ -787,7 +797,13 @@ func pauseWatchdogArmsOnlyWhileTheCardIsUpAndConfirmsTheScore() throws {
             "정지 예산을 판 시작 말고 다른 곳에서도 되돌린다(재개에서 되돌리면 회당 상한이 된다)")
     let begin = try tmRegion(after: "if playing {", in: panel, includingAnchorBrace: true)
     #expect(begin.contains("pausedSecondsUsed = 0"), "새 판에 정지 예산을 안 준다")
-    #expect(watchdog.contains("store.miniGameKind == .tetris"), "두 기존 게임에도 상한이 걸린다")
+    // ★ 0.3.62: 종류 가드의 **기준을 바꿨다.** 전에는 `guard store.miniGameKind == .tetris` 였고 그 전제는
+    //   "두 기존 게임은 한 판이 짧아 이 여유를 쓸 일이 없다" 였는데, 자동 정지(키 상실)가 그 전제를 무너뜨려
+    //   플래피가 들어왔다. 그렇다고 통째로 걷으면 타이밍 바의 **수동 정지**까지 잘리는데 거기서는 접어도
+    //   기록이 안 남아 상한이 판을 없애는 장치가 된다. 그래서 이름이 아니라 "접으면 기록이 남는가"로 가른다
+    //   (범위가 사실과 어긋나는지는 V0362 가 엔진에서 직접 재서 대조한다).
+    #expect(watchdog.contains("guard PauseState.quittingKeepsTheScore(store.miniGameKind) else { return }"),
+            "상한이 범위를 안 가른다 — 걷으면 타이밍 바가, 테트리스로 좁히면 플래피가 손해를 본다")
     #expect(watchdog.contains("guard case .paused = pauseState, isPlaying else { return }"),
             "이어하기·그만두기·판 종료 뒤에도 발화한다")
     // 거두는 자리 넷(이어하기·그만두기·판 종료·재무장). 하나라도 빠지면 끝난 판에서 발화한다.

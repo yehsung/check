@@ -3,7 +3,7 @@
 # aing-bake-lock   (ubuntu) 굽기 입력의 해시를 다시 재서 multiplatform/assets/aing-bake/lock.json 과 대조한다.
 #                  입력이 바뀌었는데 다시 굽지 않았거나, 구운 파일이 잠금과 다르면 빨갛다 → Windows/Android 출시를 막는다.
 #                  맥 출시는 막지 않는다. 망 봉인(unshare --net) 안에서 돈다.
-# aing-bake-verify (macOS arm64, 실험) Metal 장치 유무(F-5)와 같은 칸을 러너에서 렌더한 원본 다이제스트(F-10)를 잰다.
+# aing-bake-verify (macOS arm64, 실험 · 수동) Metal 장치 유무(F-5)와 같은 칸을 러너에서 렌더한 원본 다이제스트(F-10)를 잰다.
 #                  러너 Xcode 가 이 저장소를 못 빌드할 수 있어 실패해도 워크플로를 막지 않는다(continue-on-error).
 name: mp-bake
 
@@ -70,6 +70,10 @@ jobs:
 
   aing-bake-verify:
     name: aing-bake-verify (experiment F-5 · F-10)
+    # 수동 실행만: 2026-10-21 실측 — 러너 최신 Xcode 26.6(Swift 6.3.3)이 이 저장소 시험 타깃을 못 빌드한다
+    # (기존 시험의 #require 매크로 전개 오류 11곳). Metal 장치는 있다(Apple Paravirtual device, macos-15 · macos-26).
+    # Xcode 27 이미지가 생기거나 자체 러너가 붙으면 push 로 되돌린다.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 60
     continue-on-error: true

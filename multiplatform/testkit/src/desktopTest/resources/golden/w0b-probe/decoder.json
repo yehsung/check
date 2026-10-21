@@ -1,0 +1,475 @@
+{
+  "cases": [
+    {
+      "id": "value-int",
+      "json": "{\"value\": 3}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:4008000000000000",
+        "Int": "ok:3",
+        "Int32": "ok:3",
+        "Int64": "ok:3",
+        "OptionalInt": "ok:3",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:3"
+      }
+    },
+    {
+      "id": "value-int-negative",
+      "json": "{\"value\": -3}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:c008000000000000",
+        "Int": "ok:-3",
+        "Int32": "ok:-3",
+        "Int64": "ok:-3",
+        "OptionalInt": "ok:-3",
+        "String": "error:typeMismatch",
+        "UInt64": "error:dataCorrupted"
+      }
+    },
+    {
+      "id": "value-zero",
+      "json": "{\"value\": 0}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:0000000000000000",
+        "Int": "ok:0",
+        "Int32": "ok:0",
+        "Int64": "ok:0",
+        "OptionalInt": "ok:0",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:0"
+      }
+    },
+    {
+      "id": "value-float-integral",
+      "json": "{\"value\": 3.0}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:4008000000000000",
+        "Int": "ok:3",
+        "Int32": "ok:3",
+        "Int64": "ok:3",
+        "OptionalInt": "ok:3",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:3"
+      }
+    },
+    {
+      "id": "value-float-fraction",
+      "json": "{\"value\": 3.5}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:400c000000000000",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "error:dataCorrupted"
+      }
+    },
+    {
+      "id": "value-negative-zero",
+      "json": "{\"value\": -0.0}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:8000000000000000",
+        "Int": "ok:0",
+        "Int32": "ok:0",
+        "Int64": "ok:0",
+        "OptionalInt": "ok:0",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:0"
+      }
+    },
+    {
+      "id": "value-exponent",
+      "json": "{\"value\": 1e2}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:4059000000000000",
+        "Int": "ok:100",
+        "Int32": "ok:100",
+        "Int64": "ok:100",
+        "OptionalInt": "ok:100",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:100"
+      }
+    },
+    {
+      "id": "value-exponent-upper",
+      "json": "{\"value\": 1E2}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:4059000000000000",
+        "Int": "ok:100",
+        "Int32": "ok:100",
+        "Int64": "ok:100",
+        "OptionalInt": "ok:100",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:100"
+      }
+    },
+    {
+      "id": "value-exponent-fraction",
+      "json": "{\"value\": 1.0e2}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:4059000000000000",
+        "Int": "ok:100",
+        "Int32": "ok:100",
+        "Int64": "ok:100",
+        "OptionalInt": "ok:100",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:100"
+      }
+    },
+    {
+      "id": "value-string-int",
+      "json": "{\"value\": \"3\"}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "error:typeMismatch",
+        "Int": "error:typeMismatch",
+        "Int32": "error:typeMismatch",
+        "Int64": "error:typeMismatch",
+        "OptionalInt": "error:typeMismatch",
+        "String": "ok:3",
+        "UInt64": "error:typeMismatch"
+      }
+    },
+    {
+      "id": "value-string-float",
+      "json": "{\"value\": \"3.0\"}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "error:typeMismatch",
+        "Int": "error:typeMismatch",
+        "Int32": "error:typeMismatch",
+        "Int64": "error:typeMismatch",
+        "OptionalInt": "error:typeMismatch",
+        "String": "ok:3.0",
+        "UInt64": "error:typeMismatch"
+      }
+    },
+    {
+      "id": "value-string-text",
+      "json": "{\"value\": \"abc\"}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "error:typeMismatch",
+        "Int": "error:typeMismatch",
+        "Int32": "error:typeMismatch",
+        "Int64": "error:typeMismatch",
+        "OptionalInt": "error:typeMismatch",
+        "String": "ok:abc",
+        "UInt64": "error:typeMismatch"
+      }
+    },
+    {
+      "id": "value-true",
+      "json": "{\"value\": true}",
+      "results": {
+        "Bool": "ok:true",
+        "Double": "error:typeMismatch",
+        "Int": "error:typeMismatch",
+        "Int32": "error:typeMismatch",
+        "Int64": "error:typeMismatch",
+        "OptionalInt": "error:typeMismatch",
+        "String": "error:typeMismatch",
+        "UInt64": "error:typeMismatch"
+      }
+    },
+    {
+      "id": "value-false",
+      "json": "{\"value\": false}",
+      "results": {
+        "Bool": "ok:false",
+        "Double": "error:typeMismatch",
+        "Int": "error:typeMismatch",
+        "Int32": "error:typeMismatch",
+        "Int64": "error:typeMismatch",
+        "OptionalInt": "error:typeMismatch",
+        "String": "error:typeMismatch",
+        "UInt64": "error:typeMismatch"
+      }
+    },
+    {
+      "id": "value-null",
+      "json": "{\"value\": null}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "error:valueNotFound",
+        "Int": "error:valueNotFound",
+        "Int32": "error:valueNotFound",
+        "Int64": "error:valueNotFound",
+        "OptionalInt": "ok:nil",
+        "String": "error:valueNotFound",
+        "UInt64": "error:valueNotFound"
+      }
+    },
+    {
+      "id": "value-two53-plus-one",
+      "json": "{\"value\": 9007199254740993}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:4340000000000000",
+        "Int": "ok:9007199254740993",
+        "Int32": "error:dataCorrupted",
+        "Int64": "ok:9007199254740993",
+        "OptionalInt": "ok:9007199254740993",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:9007199254740993"
+      }
+    },
+    {
+      "id": "value-int64-max",
+      "json": "{\"value\": 9223372036854775807}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:43e0000000000000",
+        "Int": "ok:9223372036854775807",
+        "Int32": "error:dataCorrupted",
+        "Int64": "ok:9223372036854775807",
+        "OptionalInt": "ok:9223372036854775807",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:9223372036854775807"
+      }
+    },
+    {
+      "id": "value-two63",
+      "json": "{\"value\": 9223372036854775808}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:43e0000000000000",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:9223372036854775808"
+      }
+    },
+    {
+      "id": "value-int64-min",
+      "json": "{\"value\": -9223372036854775808}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:c3e0000000000000",
+        "Int": "ok:-9223372036854775808",
+        "Int32": "error:dataCorrupted",
+        "Int64": "ok:-9223372036854775808",
+        "OptionalInt": "ok:-9223372036854775808",
+        "String": "error:typeMismatch",
+        "UInt64": "error:dataCorrupted"
+      }
+    },
+    {
+      "id": "value-int64-min-minus-one",
+      "json": "{\"value\": -9223372036854775809}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:c3e0000000000000",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "error:dataCorrupted"
+      }
+    },
+    {
+      "id": "value-uint64-max",
+      "json": "{\"value\": 18446744073709551615}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:43f0000000000000",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:18446744073709551615"
+      }
+    },
+    {
+      "id": "value-two64",
+      "json": "{\"value\": 18446744073709551616}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:43f0000000000000",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "error:dataCorrupted"
+      }
+    },
+    {
+      "id": "value-float-1e19",
+      "json": "{\"value\": 1e19}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:43e158e460913d00",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "ok:10000000000000000000"
+      }
+    },
+    {
+      "id": "value-double-max",
+      "json": "{\"value\": 1.7976931348623157e308}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "ok:7fefffffffffffff",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "error:dataCorrupted"
+      }
+    },
+    {
+      "id": "value-overflow-1e400",
+      "json": "{\"value\": 1e400}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "error:dataCorrupted",
+        "Int": "error:dataCorrupted",
+        "Int32": "error:dataCorrupted",
+        "Int64": "error:dataCorrupted",
+        "OptionalInt": "error:dataCorrupted",
+        "String": "error:typeMismatch",
+        "UInt64": "error:dataCorrupted"
+      }
+    },
+    {
+      "id": "value-array",
+      "json": "{\"value\": []}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "error:typeMismatch",
+        "Int": "error:typeMismatch",
+        "Int32": "error:typeMismatch",
+        "Int64": "error:typeMismatch",
+        "OptionalInt": "error:typeMismatch",
+        "String": "error:typeMismatch",
+        "UInt64": "error:typeMismatch"
+      }
+    },
+    {
+      "id": "value-object",
+      "json": "{\"value\": {}}",
+      "results": {
+        "Bool": "error:typeMismatch",
+        "Double": "error:typeMismatch",
+        "Int": "error:typeMismatch",
+        "Int32": "error:typeMismatch",
+        "Int64": "error:typeMismatch",
+        "OptionalInt": "error:typeMismatch",
+        "String": "error:typeMismatch",
+        "UInt64": "error:typeMismatch"
+      }
+    },
+    {
+      "id": "value-missing",
+      "json": "{}",
+      "results": {
+        "Bool": "error:keyNotFound",
+        "Double": "error:keyNotFound",
+        "Int": "error:keyNotFound",
+        "Int32": "error:keyNotFound",
+        "Int64": "error:keyNotFound",
+        "OptionalInt": "ok:nil",
+        "String": "error:keyNotFound",
+        "UInt64": "error:keyNotFound"
+      }
+    },
+    {
+      "id": "keys-decoded",
+      "map": {
+        "0049 0044": "0049 0044",
+        "0055 0053 0045 0052 005f 0049 0044": "0075 0073 0065 0072 0049 0064",
+        "005f": "005f",
+        "005f 005f": "005f 005f",
+        "005f 005f 0061 005f 005f 0062 005f 005f": "005f 005f 0061 0042 005f 005f",
+        "005f 0075 0073 0065 0072 005f 0069 0064": "005f 0075 0073 0065 0072 0049 0064",
+        "0061 005f 005f 0062": "0061 0042",
+        "0061 005f 0062 005f 0063": "0061 0042 0043",
+        "0063 0061 0066 00e9 005f 006e 0061 006d 0065": "0063 0061 0066 00e9 004e 0061 006d 0065",
+        "0063 0068 0061 0072 0061 0063 0074 0065 0072 005f 0069 0064": "0063 0068 0061 0072 0061 0063 0074 0065 0072 0049 0064",
+        "0063 006c 0061 0069 006d 0065 0064 005f 0061 0074 005f 006d 0073": "0063 006c 0061 0069 006d 0065 0064 0041 0074 004d 0073",
+        "0067 006f 006c 0064 005f 0061 0069 006e 0067": "0067 006f 006c 0064 0041 0069 006e 0067",
+        "0069 0064": "0069 0064",
+        "0070 005f 0070 0072 006f 0074 006f 0063 006f 006c": "0070 0050 0072 006f 0074 006f 0063 006f 006c",
+        "0070 005f 0073 0069 006e 0063 0065 005f 006d 0073": "0070 0053 0069 006e 0063 0065 004d 0073",
+        "0073 0068 0061 0072 0064 005f 0063 006f 0073 0074 0073": "0073 0068 0061 0072 0064 0043 006f 0073 0074 0073",
+        "0075 0072 006c 005f 0032 0078": "0075 0072 006c 0032 0058",
+        "0075 0073 0065 0072 002d 0069 0064": "0075 0073 0065 0072 002d 0069 0064",
+        "0075 0073 0065 0072 0049 0044": "0075 0073 0065 0072 0049 0044",
+        "0075 0073 0065 0072 005f 0069 005f 0064": "0075 0073 0065 0072 0049 0044",
+        "0075 0073 0065 0072 005f 0069 0064": "0075 0073 0065 0072 0049 0064",
+        "0075 0073 0065 0072 005f 0069 0064 005f": "0075 0073 0065 0072 0049 0064 005f",
+        "0078 0032 005f 0079": "0078 0032 0059"
+      },
+      "note": "키·값 모두 코드포인트 16진 목록(전선 키 → convertFromSnakeCase 뒤 키)"
+    },
+    {
+      "dictionaryKeys": [
+        "gold_aing",
+        "rainbow_aing",
+        "robot"
+      ],
+      "id": "keys-dictionary",
+      "json": "{\"shard_costs\": {\"gold_aing\": 20, \"rainbow_aing\": 40, \"robot\": 4}}",
+      "nestedJson": "{\"outer_map\": {\"inner_key\": {\"deep_key\": 1}}}",
+      "nestedKeys": [
+        "inner_key/deep_key"
+      ]
+    },
+    {
+      "id": "keys-encoded",
+      "map": {
+        "HTTPStatus": "h_ttp_status",
+        "_private": "_private",
+        "a": "a",
+        "aB": "a_b",
+        "appBuild": "app_build",
+        "characterID": "character_id",
+        "iOSVersion": "i_os_version",
+        "isOK": "is_ok",
+        "myURLValue": "my_url_value",
+        "pFCMToken": "p_fcm_token",
+        "pProtocol": "p_protocol",
+        "pSinceMs": "p_since_ms",
+        "p_already": "p_already",
+        "requestID": "request_id",
+        "sinceMs": "since_ms",
+        "trailing_": "trailing_",
+        "url2x": "url2x",
+        "userID": "user_id",
+        "x2Y": "x2_y"
+      },
+      "note": "프로퍼티 이름 → convertToSnakeCase 뒤 전선 키"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift",
+  "golden": "w0b-probe/decoder",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "experiment": "C-X3 — Swift JSONDecoder(keyDecodingStrategy = .convertFromSnakeCase, SupabaseWorkService.swift:89) 의 숫자·키 처리. Kotlin lossy 직렬화기(W1-d)가 이 표와 같게 맞춘다(C§2.6)",
+    "results": "칸 타입별 'ok:<값>' 또는 'error:<DecodingError 갈래>'. Double 값은 비트 16진. OptionalInt 는 합성 decodeIfPresent(Int?) 결과(ok:nil = 키 없음·null)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkService.swift"
+  ]
+}

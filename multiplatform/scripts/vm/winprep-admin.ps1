@@ -119,7 +119,12 @@ if (Want 'TesterSsh') {
     $ak = Join-Path $sshDir 'authorized_keys'
     Copy-Item -Force $PublicKeyFile $ak
     & icacls.exe $ak /inheritance:r /grant:r "*S-1-5-18:F" "*S-1-5-32-544:F" "*${sid}:R" | Out-Null
-    $result.testerSsh = [ordered]@{ profilePath = $profilePath; createProfileHr = $hr; authorizedKeys = $ak; keyLines = @(Get-Content $ak | Where-Object { $_ -match '^ssh-' }).Count; acl = ((& icacls.exe $ak) -join ' ') }
+    # Windows Server 2025 기본 sshd_config 는 `AllowGroups administrators "openssh users"` 다 — 표준 사용자는 OpenSSH Users(S-1-5-32-585)에 넣어야
+    # 키가 맞아도 들어온다(run 39596497443: "none of user's groups are listed in AllowGroups"). 그 그룹이 없는 판(구버전·Win32-OpenSSH)은 건너뛴다.
+    $sshUsers = Get-LocalGroup -SID 'S-1-5-32-585' -ErrorAction SilentlyContinue
+    if ($sshUsers -and -not (Get-LocalGroupMember -Group $sshUsers.Name -Member $Tester -ErrorAction SilentlyContinue)) { Add-LocalGroupMember -Group $sshUsers.Name -Member $Tester }
+    $allowGroups = @(Get-Content "$env:ProgramData\ssh\sshd_config" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^\s*AllowGroups' })
+    $result.testerSsh = [ordered]@{ openSshUsersGroup = [bool]$sshUsers; allowGroups = $allowGroups; profilePath = $profilePath; createProfileHr = $hr; authorizedKeys = $ak; keyLines = @(Get-Content $ak | Where-Object { $_ -match '^ssh-' }).Count; acl = ((& icacls.exe $ak) -join ' ') }
 }
 
 if (Want 'Autologon') {

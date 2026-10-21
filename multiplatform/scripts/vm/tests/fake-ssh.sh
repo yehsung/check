@@ -21,7 +21,7 @@ map() {
 arg_of() { sed -n "s/.*$1 \"\\{0,1\\}\\([^\" ]*\\)\"\\{0,1\\}.*/\\1/p" <<<"$remote"; }
 
 case "$remote" in
-    "cmd /c echo ok") echo ok ;;
+    "echo ok") echo ok ;;
     *"tar -xf -"*)
         dir="$(sed -n 's/.*mkdir \([^ ]*\) .*/\1/p' <<<"$remote")"
         d="$(map "$dir")"

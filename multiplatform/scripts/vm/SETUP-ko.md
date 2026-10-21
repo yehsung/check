@@ -144,7 +144,7 @@ ssh -i ~/.aing-check-secrets/vm/aingcheck_vm_ed25519 -o IdentitiesOnly=yes <사�
 - 7단계 4)의 **관리자 사용자 이름**(Microsoft 계정의 로컬 이름). IP 는 하네스가 다시 찾는다.
 - VM 이름이나 위치를 바꿨다면 그 `.vmx` 경로.
 
-그다음은 에이전트가 한다: 관리자 SSH 로 `winprep-admin.ps1` 을 한 번 돌려 시험용 **표준 계정 `tester`**·하네스 관리자 `aingadmin` 을 만들고(비밀번호는 무작위·어디에도 안 남김), `tester` 자동 로그인, 개발자 모드, JDK 21(Gradle 용·시험 전용 봉인 두 벌 × arm64·x64), **시험 전용 JDK 아웃바운드 상시 차단 규칙**, Git, Windows SDK, 한국어 입력기 구성 요소를 넣고, 스냅숏 `toolchain` 을 뜬다.
+그다음은 에이전트가 한다: 관리자 SSH 로 `winprep-admin.ps1` 을 한 번 돌려 시험용 **표준 계정 `tester`**·하네스 관리자 `aingadmin` 을 만들고(비밀번호는 무작위·어디에도 안 남김, `tester` 는 sshd 의 `AllowGroups` 를 통과하도록 **OpenSSH Users** 그룹에 넣는다), `tester` 자동 로그인, 개발자 모드, JDK 21(Gradle 용·시험 전용 봉인 두 벌 × arm64·x64), **시험 전용 JDK 아웃바운드 상시 차단 규칙**, Git, Windows SDK, 한국어 입력기 구성 요소를 넣고, 스냅숏 `toolchain` 을 뜬다.
 
 ## 하지 않는 것
 

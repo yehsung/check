@@ -160,13 +160,14 @@ guest_ps() {
 wait_ssh() {
     local deadline=$((SECONDS + ${1:-180})) got=""
     while [ $SECONDS -lt $deadline ]; do
-        got="$(guest "cmd /c echo ok" 2>/dev/null | tr -d '\r' || true)"
+        # 손님 기본 셸은 cmd.exe 다 — cmd 를 한 번 더 감싸지 않는다. Win32-OpenSSH 10.x 는 `cmd /c echo ok` 에 `ok"` 를 돌려줬다(run 39596497443).
+        got="$(guest "echo ok" 2>/dev/null | tr -d '\r" ' || true)"
         if [ "$got" = "ok" ]; then return 0; fi
         sleep 3
     done
     # 시한이 지나면 마지막 한 번은 오류를 보여 준다(원인 없이 "안 열렸다"만 남지 않게).
     log "마지막 응답: '${got}'"
-    guest "cmd /c echo ok" >&2 || true
+    guest "echo ok" >&2 || true
     return 1
 }
 
@@ -302,7 +303,7 @@ cmd_push() {
     run_id="$(date -u +%Y%m%dT%H%M%SZ)-${SNAP_TREE:0:8}"
     run_dir="$GUEST_ROOT/$run_id"
     local win_dir="${run_dir//\//\\}"
-    guest "cmd /c \"mkdir $win_dir && tar -xf - -C $win_dir\"" <"$SNAP_TAR"
+    guest "mkdir $win_dir && tar -xf - -C $win_dir" <"$SNAP_TAR"
     rm -rf "$(dirname "$SNAP_TAR")"
     state_set run_dir "$run_dir"
     state_set tree "$SNAP_TREE"

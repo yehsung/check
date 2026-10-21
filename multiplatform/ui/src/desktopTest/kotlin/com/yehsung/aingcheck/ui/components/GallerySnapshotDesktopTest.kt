@@ -2,7 +2,8 @@
 //
 // 한 장면마다 세 가지를 잰다:
 //  ① 같은 장면을 새로 세 번 그리면 픽셀이 같다(굳은 렌더 — 기억 imagerenderer-first-two-renders-differ)
-//  ② 골든과 픽셀이 같다(기록은 AINGCHECK_SNAPSHOT_RECORD=1, 이 맥에서만 — 기록 실행은 실패로 끝난다)
+//  ② 골든과 픽셀이 같다(기록은 AINGCHECK_SNAPSHOT_RECORD=1, 이 맥에서만 — 기록 실행은 실패로 끝난다).
+//     기록 기계가 아닌 러너(CI ubuntu·windows)는 글자 래스터라이저가 달라 굵은 대조로 낮춘다(SnapshotPolicy, A§4-3)
 //  ③ 같은 크기에 한 군데만 다른 장면(음성 기준선)은 골든과 다르다 — 비교가 내용을 본다는 증거(기억 comparison-baseline-must-differ)
 package com.yehsung.aingcheck.ui.components
 
@@ -58,18 +59,25 @@ class GallerySnapshotDesktopTest {
         }
         assertTrue(golden.isFile, "$name: 골든이 없다(${golden.path}) — 이 맥에서 ${SnapshotCompare.RECORD_ENV}=1 로 기록한다")
         val expected = DesktopSnapshots.readPng(golden)
+        val exact = SnapshotPolicy.isRecordingHost(System.getProperty("os.name"), System.getProperty("os.arch"))
         val diff = SnapshotCompare.diff(expected, actual)
-        println("AINGCHECK-SNAPSHOT desktop $name os=${System.getProperty("os.name")} arch=${System.getProperty("os.arch")} ${actual.width}x${actual.height} diff=$diff")
-        if (!diff.identical) {
+        val coarse = SnapshotCompare.coarse(expected, actual)
+        println("AINGCHECK-SNAPSHOT desktop $name os=${System.getProperty("os.name")} arch=${System.getProperty("os.arch")} mode=${if (exact) "exact" else "coarse"} ${actual.width}x${actual.height} diff=$diff coarse=$coarse")
+        val ok = if (exact) diff.identical else coarse.withinTolerance
+        if (!ok) {
             DesktopSnapshots.writePng(actual, java.io.File(out, "$name-actual.png"))
             SnapshotCompare.diffImage(expected, actual)?.let { DesktopSnapshots.writePng(it, java.io.File(out, "$name-diff.png")) }
-            fail("$name: 골든과 다르다($diff) — build/aingcheck-snapshots/desktop/$name-{actual,diff}.png")
+            fail("$name: 골든과 다르다(${if (exact) "픽셀 그대로" else "굵은 대조"} — $diff · $coarse) — build/aingcheck-snapshots/desktop/$name-{actual,diff}.png")
         }
-        // 음성 기준선: 같은 크기·한 군데만 다른 장면.
+        // 음성 기준선: 같은 기계·같은 크기·한 군데만 다른 장면은 픽셀이 다르다(비교가 내용을 본다).
         val baseline = DesktopSnapshots.render(width, heightDp, content = other)
         assertEquals(actual.width to actual.height, baseline.width to baseline.height, "$name: 기준선 크기가 다르다 — 크기로 갈리는 비교는 빈 비교다")
-        val negative = SnapshotCompare.diff(expected, baseline)
-        assertFalse(negative.identical, "$name: 한 군데 다른 장면인데 골든과 같다 — 비교가 내용을 못 본다")
+        val negative = SnapshotCompare.diff(actual, baseline)
+        val negativeCoarse = SnapshotCompare.coarse(actual, baseline)
+        println("AINGCHECK-SNAPSHOT-NEGATIVE desktop $name diff=$negative coarse=$negativeCoarse")
+        assertFalse(negative.identical, "$name: 한 군데 다른 장면인데 같은 픽셀 — 비교가 내용을 못 본다")
         assertTrue(negative.differingPixels in 1 until actual.argb.size / 10, "$name: 기준선 차이 ${negative.differingPixels}px — 한 군데만 달라야 한다")
+        // 굵은 대조(CI 러너가 쓰는 판정)도 이 한 군데 차이를 잡는다 — 문턱이 너무 느슨하면 여기서 빨강.
+        assertFalse(negativeCoarse.withinTolerance, "$name: 굵은 대조가 한 군데 다른 장면을 못 잡는다($negativeCoarse)")
     }
 }

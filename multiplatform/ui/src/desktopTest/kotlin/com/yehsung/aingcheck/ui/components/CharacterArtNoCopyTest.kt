@@ -32,7 +32,7 @@ class CharacterArtNoCopyTest {
     private fun findCopies(root: File, hashes: Map<String, File>): List<String> = root.walkTopDown()
         .onEnter { it == root || (it.name != "build" && it.name != ".gradle" && it.name != ".kotlin" && it.name != "spikes") }
         .filter { it.isFile && (it.name.endsWith(".png") || it.name.endsWith(".json")) }
-        .mapNotNull { f -> hashes[sha(f)]?.let { "${f.relativeTo(root)} = ${it.name}" } }
+        .mapNotNull { f -> hashes[sha(f)]?.let { "${f.relativeTo(root).invariantSeparatorsPath} = ${it.name}" } }
         .toList()
 
     /** 내용 대조가 실제로 잡는다(심은 결함): 원본 한 장의 바이트가 이름만 바꿔 들어오면 걸린다. */

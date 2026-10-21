@@ -60,7 +60,8 @@ class PretendardBundleTest {
 
     @Test
     fun licenseShipsAsResource() {
-        val text = runBlocking { Res.readBytes(Pretendard.LICENSE_PATH) }
+        // Windows 러너는 git 이 글자 파일 줄끝을 CRLF 로 바꿔 꺼낸다(core.autocrlf, CI 실측) — 원문 대조는 LF 로 되돌려 잰다.
+        val text = runBlocking { Res.readBytes(Pretendard.LICENSE_PATH) }.decodeToString().replace("\r\n", "\n").encodeToByteArray()
         assertEquals("b04538c9abec39a3db75108cf0af0fd9c77032fe8aa2cf38345b4d250e98e38e", sha256(text))
         val s = text.decodeToString()
         assertTrue(s.contains("SIL Open Font License, Version 1.1") && s.contains("Reserved Font Name Pretendard"))

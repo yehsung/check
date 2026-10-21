@@ -3,7 +3,7 @@
     "rng/splitmix64": {
       "file": "f6edadac695055f1b2012240b614ed9cb6140f2d1b4f6f5cae5ae4456f565b5e",
       "generator": {
-        "Tests/checkTests/GoldenExport/_base/GoldenExportBase.swift": "c5fec9c0d3c8da60ba37e219fe2664513fd4c39999b87ab84611b62bf706579c"
+        "Tests/checkTests/GoldenExport/_base/GoldenExportBase.swift": "dcc201b10c3b8faac9eef127473e526a99763ddbee692d7d870fad6070e842bc"
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
@@ -12,11 +12,18 @@
     }
   },
   "schema": 1,
-  "strip": "swift_source.strip_comments v1 — 주석·빈 줄·줄 끝 공백을 뺀 UTF-8 의 sha256",
+  "strip": "swift_source.strip_comments v1 — 주석·빈 줄·줄 끝 공백을 뺀 UTF-8 의 sha256 · 골든 파일(file)은 줄 끝 CRLF 를 LF 로 접은 바이트의 sha256",
   "support": {
     "Tests/CheckGoldenSupport/GoldenBits.swift": "29d24d82e11cabdefff93b4c7032daea1c273f163c1dda373270a02f9d89a0ba",
     "Tests/CheckGoldenSupport/GoldenExport.swift": "325d496a7320f8a5c7c1503f1c04b12f85643ec4f095b8e573c01423a0955272",
     "Tests/CheckGoldenSupport/GoldenJSON.swift": "2e02b3021c69fead0acc51e73232628291cdfed413fd62d07d3b338c1807abac",
-    "Tests/CheckGoldenSupport/GoldenMirror.swift": "8fdd8f46dc1758f5e3cd2dde02ab277e90e1e77854f96550dc523552ff38f152"
+    "Tests/CheckGoldenSupport/GoldenMirror.swift": "8fdd8f46dc1758f5e3cd2dde02ab277e90e1e77854f96550dc523552ff38f152",
+    "Tests/CheckMobileKitTests/GoldenExport/_base/GoldenEmit.swift": "856accf80f95850526a47009d0c961fc62b0af4198587a45590a21d09f1a435f",
+    "Tests/CheckMobileKitTests/GoldenExport/_base/GoldenExperimentSessionW0b.swift": "1958a3022910d3de25ccf6d9248ace7c480f550b11770207b14b4a52e662d805",
+    "Tests/checkTests/GoldenExport/_base/GoldenEmit.swift": "70f83214bbe26429d7bd1dbeec487ffcf7061860d23bf0644f53020a37aececa",
+    "Tests/checkTests/GoldenExport/_base/GoldenExportBase.swift": "dcc201b10c3b8faac9eef127473e526a99763ddbee692d7d870fad6070e842bc",
+    "Tests/checkTests/GoldenExport/_base/GoldenExportProbeW0b.swift": "004dc05fc8efbbeb9aa2adb229146345bb2783c3dd6a633b677216210ae95ada",
+    "Tests/checkTests/GoldenExport/_base/GoldenExportReplayW0b.swift": "e802aa4ed2b6d45671d9642e729f74d75df01d4ae4a8a57e21e78f360356943b",
+    "Tests/checkTests/GoldenExport/_base/GoldenTetrisOps.swift": "c749c08688365edf7b542aaae7f3bbf9b04c8d36e1f936e732979cea3123df5e"
   }
 }

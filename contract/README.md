@@ -64,6 +64,10 @@
 - 들여쓰기 2칸, 항목 사이 `,` + 줄바꿈, 키와 값 사이 `": "`, 빈 배열 `[]`·빈 객체 `{}`, 끝에 줄바꿈 하나.
 - 글자는 `"` `\` 와 제어 문자만 이스케이프한다(`\b \f \n \r \t`, 나머지 `\u00xx` 소문자 16진). 다른 글자는 그대로 — **NFC 로 바꾸지 않는다.**
 - 시각·기계 이름·툴체인 판·커밋 SHA 를 싣지 않는다(같은 소스면 같은 바이트). Swift `Dictionary`·`Set` 을 순회한 순서로 내지 않는다.
+- 줄 끝은 LF 로 쓴다. 그러나 **바이트를 견주는 것은 맥 Swift 비교 모드뿐**이다. Kotlin 은 파일 날바이트가 아니라 **파싱한 값**으로 견준다(`Golden.load`).
+  그래서 Windows 체크아웃(`core.autocrlf=true` 면 글자 파일이 CRLF 로 풀린다 — 저장소에 `.gitattributes` 가 없다)에서도 대조가 같다.
+  `golden-digest.py` 의 골든 파일 지문은 CRLF 를 LF 로 접어 센다(지문이 체크아웃 줄 끝에 따라 갈리지 않게). Kotlin `GoldenCoverageTest` 가
+  체크아웃의 줄 끝을 `AINGCHECK-GOLDEN-EOL` 줄로 시험 결과에 남긴다.
 
 ### 2-2. 값 표기
 
@@ -126,15 +130,36 @@ Kotlin 쪽 약속(C-X10 실측 — `MirrorDumpProbeTest`):
 - 동시에 떠나는 요청(`register_device` 와 `memberships`)의 **순서가 부하에서 뒤집힌다**(7묶음 중 2묶음에서 20회 중 1회).
 - 본문 정규화 + 요청 묶음을 **순서 없는 모음**으로 보면 140회 전부 같은 바이트였다. G7 골든은 이 두 정규화를 거친 모양으로만 만든다.
 
-## 3. 잠금 세 겹(C§5.4 · A§4-2)
+## 3. 잠금 세 겹(C§5.4 · A§4-2)과 어디서 무엇을 재나
 
 1. **Swift 비교 모드** — `GoldenExport` 스위트는 기본으로 비교 모드다. 엔진을 바꿨는데 골든을 안 다시 쓰면 Swift 가 빨갛다.
-   맥 **전체 스위트**(출시 게이트, G §8-1)에 든다. `scripts/golden-export.sh` 가 그 소속을 개수로 잰다: `swift test list` 의 GoldenExport 시험 수 =
-   실제로 돈 수(건너뜀 0) = `_manifest.json` 의 `exportTests`. 영수증 없는 골든 파일(생성 시험이 없거나 건너뛴 것)은 고아로 빨강.
+   이 시험들은 맥 **전체 스위트**(`swift test`, 출시 게이트 — G §8-1)에 그대로 든다.
 2. **Kotlin 대조** — 각 골든에 `Golden.load("<이름>")` 하는 Kotlin 시험이 있어야 한다(`GoldenCoverageTest` — 미소비 금지). 목록에 없는 이름을 읽어도 빨강.
-3. **소스 지문** — `golden-digest.py --check` 가 `swiftSources`·생성 시험·작성기(Tests/CheckGoldenSupport)를 주석을 걷어 sha256 으로 세고
-   골든 파일 바이트까지 `_digests.json` 과 대조한다. CI(`mp-ci` golden-digest 잡, main·xplat 매 푸시)와 빠른 게이트가 돈다.
-   다르면 "맥에서 `scripts/golden-export.sh` 를 돌려라". 주석·빈 줄만 바꾼 커밋은 그대로 초록이다.
+   소비로 세는 것은 **게이트가 돌리는 소스셋**(commonTest · desktopTest · androidHostTest · 앱 모듈 test)의 주석 밖 코드에서 이름을 **글자 리터럴**로 부른 것뿐이다(§5).
+3. **소스 지문** — `golden-digest.py --check` 가 `swiftSources`·생성 시험·작성기와 바탕(`Tests/CheckGoldenSupport/*.swift` · `Tests/*/GoldenExport/_base/*.swift`)을
+   주석을 걷어 sha256 으로 세고 골든 파일 바이트(CRLF→LF)까지 `_digests.json` 과 대조한다. 생성 시험 파일의 코드(주석 밖)에 골든 이름이
+   글자 리터럴로 있는지도 여기서 본다(주석 걷기는 `swift_source.py` 한 벌 — Swift 에 둘째 구현을 두지 않는다).
+   CI(`mp-ci` golden-digest 잡, main·xplat 매 푸시)와 빠른 게이트가 돈다. 다르면 "맥에서 `scripts/golden-export.sh` 를 돌려라". 주석·빈 줄만 바꾼 커밋은 그대로 초록이다.
+
+| 무엇을 재나 | 맥 전체 스위트(`swift test`) | `scripts/golden-export.sh`(비교 모드) | `golden-digest --check` | Kotlin 게이트 |
+|---|---|---|---|---|
+| 골든 값 = Swift 가 지금 내는 값 | ○(GoldenExport 시험) | ○ | — | — |
+| 목록 = 디스크의 골든 파일(정적 고아·목록만) · 생성 시험 파일 있음 · 목록 정규 바이트 | ○(`GoldenExportBase.manifestMatchesFiles`) | ○ | 계약 고아 · 생성 시험 파일 | 계약 고아(`GoldenCoverageTest`) |
+| 생성 시험 코드(주석 밖)에 이름 글자 리터럴 | — | ○(`--check` 를 부른다) | ○ | — |
+| GoldenExport 시험 개수(목록 = 돈 수 = `exportTests`) · 건너뜀 0 · 스위트 밖 시험 0 | — | ○ | — | — |
+| 영수증 고아(이번 실행에서 아무 시험도 쓰지 않은 골든·실험 표) · 목록 조립 | — | ○ | — | — |
+| 소스 지문(`swiftSources` · 생성 시험 · 작성기·바탕 · 골든 바이트) | — | ○ | ○ | — |
+| Kotlin 소비(미소비 · 목록 밖) | — | — | — | ○ |
+
+**맥 전체 스위트만으로는 개수 · 건너뜀 · 스위트 밖 시험 · 영수증 고아를 재지 않는다.** 전체 스위트의 정적 잠금은 약하다 —
+파일 집합만 보고, 어느 시험이 실제로 그 골든을 썼는지(영수증) · 몇 개가 돌았는지 · 건너뛰었는지는 모른다.
+예: 실험 표(지문 밖)의 생성 시험에 `.disabled` 를 붙이면 전체 스위트는 그 시험을 건너뛰고 초록, `golden-digest --check` 도 초록이다 —
+스크립트만 "건너뜀"·"영수증 고아"로 빨갛다. 그래서 `scripts/golden-export.sh`(비교 모드)를 **따로** 돌린다:
+
+- 골든을 더하거나 고친 갈래의 완료 보고 전(브랜치에서 종료 0).
+- 갈래를 병합할 때마다(G §2-5 — 생성물 `_manifest.json`·`_digests.json` 도 이때 다시 만든다).
+- Android·Windows 출시 전(G §4-1 "Swift 쪽: 맥 빠른 게이트 + `golden-export.sh` 비교 모드 초록").
+- 맥 앱 출시 스크립트는 이 스크립트를 부르지 않는다. 맥 출시를 막는 것은 전체 스위트 안의 비교 모드 시험뿐이다.
 
 ## 4. 갱신 절차(사람·에이전트 공통)
 
@@ -146,9 +171,15 @@ Kotlin 쪽 약속(C-X10 실측 — `MirrorDumpProbeTest`):
 ## 5. 갈래가 골든을 더하는 법
 
 - Swift: `Tests/checkTests/GoldenExport/<갈래>/` 또는 `Tests/CheckMobileKitTests/GoldenExport/<갈래>/` 에 `@Suite struct GoldenExport<갈래>`
-  (이름이 `GoldenExport` 로 시작 — 스크립트의 `--filter GoldenExport`; 자유 함수 `@Test` 금지 — `--filter` 가 빠뜨린다).
-  `goldenEmit(GoldenFile(golden:equivalence:swiftSources:platformSensitive:spec:cases:))` 한 줄. UserDefaults·키체인·네트워크·창 금지.
-- Kotlin: `Golden.load("<영역/이름>")` 로 읽고, 실패 문구는 `golden.failure(caseId, "…")`(골든 이름 · case · 첫 불일치 · swiftSources · Swift 자세히 보기 명령).
+  (이름이 `GoldenExport` 로 시작 — 스크립트의 `--filter GoldenExport` 와 `swift test list` 의 `.GoldenExport…/메서드` 개수).
+  자유 함수 `@Test` 금지 — GoldenExport 파일 안의 자유 함수는 시험 ID 에 파일 이름이 들어 `--filter` 에 걸려 **돌기는 하지만**(W0-b 검증 실측)
+  목록 정규식이 스위트 메서드만 세므로 "돈 수 ≠ 목록 수"로 빨갛다. 스크립트가 xunit 결과로 스위트 밖 시험 이름을 짚어 준다.
+  `goldenEmit(GoldenFile(golden: "<영역/이름>", equivalence:swiftSources:platformSensitive:spec:cases:))` 한 줄 — 이름은 **글자 리터럴**로
+  (`golden-digest --check` 가 생성 시험 코드에서 찾는다). UserDefaults·키체인·네트워크·창 금지.
+- Kotlin: `Golden.load("<영역/이름>")` 로 읽는다. 이름은 **글자 리터럴**로 쓴다 — 상수로 빼면(`Golden.load(NAME)`) 실제로 대조해도
+  `GoldenCoverageTest` 가 미소비로 센다. 소비 시험은 게이트가 돌리는 소스셋(commonTest · desktopTest · androidHostTest · 앱 모듈 test)에 둔다 —
+  기기 계측(androidDeviceTest·androidTest)에만 있는 호출은 세지 않는다(골든은 JVM 에서 전부 대조하고 계측은 그 위에 더한다, C§5.5).
+  실패 문구는 `golden.failure(caseId, "…")`(골든 이름 · case · 첫 불일치 · swiftSources · Swift 자세히 보기 명령).
   Swift 쪽 한 case 를 자세히 보려면 `CHECK_GOLDEN_VERBOSE=<id> scripts/golden-export.sh`.
 - 서버 SQL 의 판정 결과(예: `minigame_min_seconds`, `gomoku_judge` 내부)는 싣지 않는다 — 공개 저장소다(C§5.6). 클라 상수만.
 

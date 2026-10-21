@@ -82,26 +82,13 @@ struct GoldenExportBase {
         ))
     }
 
-    // MARK: - 골든 목록 정적 잠금(고아 금지). 스크립트 없이 도는 전체 스위트에서도 돈다.
-
-    /// `//` 줄 주석을 걷어낸다(글자 리터럴 안의 `//` 는 남긴다). 설명 주석에 골든 이름이 남아 있어도 생성기로 치지 않게.
-    static func strippingLineComments(_ source: String) -> String {
-        source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> Substring in
-            var inString = false
-            var previous: Character = " "
-            var index = line.startIndex
-            while index < line.endIndex {
-                let ch = line[index]
-                if ch == "\"" && previous != "\\" { inString.toggle() }
-                if !inString, ch == "/", previous == "/" {
-                    return line[..<line.index(before: index)]
-                }
-                previous = ch
-                index = line.index(after: index)
-            }
-            return line
-        }.joined(separator: "\n")
-    }
+    // MARK: - 골든 목록 정적 잠금(고아 금지). 스크립트 없이 도는 전체 스위트에서도 돈다 — 그러나 **약한 잠금**이다.
+    //
+    // 여기서 보는 것: _manifest.json 의 항목 = 디스크의 골든 파일(계약 · 실험 표), 생성 시험 파일이 있다, 목록이 정규 바이트다.
+    // 여기서 안 보는 것(contract/README.md §3):
+    //   · 생성 시험 코드(주석 밖)에 이름이 글자 리터럴로 있는가 — 주석 걷기는 Python 한 벌(C§5.4)이라
+    //     golden-digest.py --check(CI 매 푸시 · 빠른 게이트)가 swift_source.py 로 판정한다. Swift 에 둘째 구현을 두지 않는다.
+    //   · GoldenExport 시험 개수 · 건너뜀 0 · 영수증(이번 실행에서 실제로 쓴 파일) 기반 고아 — scripts/golden-export.sh 만 잰다.
 
     static func jsonFiles(under relative: String) -> Set<String> {
         let base = GoldenRepo.url(relative)
@@ -114,9 +101,9 @@ struct GoldenExportBase {
         return found
     }
 
-    /// 목록 문제(빈 배열이면 통과). 시험과 대조 시험이 같은 판정을 쓴다.
+    /// 목록 문제(빈 배열이면 통과). 시험과 대조 시험이 같은 판정을 쓴다. `generatorExists` 는 저장소 상대 경로를 받는다.
     static func manifestProblems(manifest: GoldenJSON, contractFiles: Set<String>, probeFiles: Set<String>,
-                                 readSource: (String) -> String?) -> [String] {
+                                 generatorExists: (String) -> Bool) -> [String] {
         var problems: [String] = []
         func entries(_ key: String) -> [GoldenJSON] {
             if case .array(let items)? = manifest[key] { return items }
@@ -132,12 +119,8 @@ struct GoldenExportBase {
                     continue
                 }
                 listed.insert(path)
-                guard let source = readSource(generator) else {
+                if !generatorExists(generator) {
                     problems.append("\(label) \(golden): 생성 시험 \(generator) 가 없다")
-                    continue
-                }
-                if !strippingLineComments(source).contains("\"\(golden)\"") {
-                    problems.append("\(label) \(golden): 생성 시험 \(generator) 의 코드(주석 밖)에 이름 \"\(golden)\" 이 없다")
                 }
             }
             for orphan in files.subtracting(listed).sorted() { problems.append("\(label): 목록에 없는 파일(고아) \(orphan)") }
@@ -159,41 +142,41 @@ struct GoldenExportBase {
         return (contract, jsonFiles(under: GoldenRoot.probe.directory))
     }
 
-    static func readRepoText(_ relative: String) -> String? {
-        try? String(contentsOf: GoldenRepo.url(relative), encoding: .utf8)
+    static func repoFileExists(_ relative: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: GoldenRepo.url(relative).path, isDirectory: &isDirectory) && !isDirectory.boolValue
     }
 
-    @Test("_manifest.json = 디스크의 골든 파일(계약 · 실험 표) — 고아 0 · 목록만 0 · 생성 시험 코드에 이름이 있다 · 정규 바이트")
+    @Test("_manifest.json = 디스크의 골든 파일(계약 · 실험 표) — 고아 0 · 목록만 0 · 생성 시험 파일이 있다 · 정규 바이트")
     func manifestMatchesFiles() throws {
         let (manifest, bytes) = try Self.loadManifest()
         let files = Self.currentFiles()
         #expect(files.contract.contains("contract/golden/rng/splitmix64.json"), "견본 골든이 디스크에 없다")
         let problems = Self.manifestProblems(manifest: manifest, contractFiles: files.contract, probeFiles: files.probes,
-                                             readSource: Self.readRepoText)
+                                             generatorExists: Self.repoFileExists)
         #expect(problems == [], "\(problems.joined(separator: "\n"))")
         // 파이썬(golden-digest.py)이 쓴 목록이 Swift 정규 작성기와 바이트까지 같다 — 두 작성기가 한 형식이다.
         #expect(try manifest.canonicalData() == bytes, "_manifest.json 이 정규 형식(contract/README.md)과 바이트가 다르다")
     }
 
-    /// 대조(기준선이 다른 입력): 고아 파일 하나 · 주석에만 남은 이름 · 목록만 있는 항목은 각각 빨갛다.
-    @Test("대조: 고아 파일 · 주석에만 남은 생성기 이름 · 목록에만 있는 파일을 심으면 각각 문제로 잡힌다")
+    /// 대조(기준선이 다른 입력): 고아 파일 하나 · 목록에만 있는 항목 · 없는 생성 시험은 각각 빨갛다.
+    @Test("대조: 고아 파일 · 목록에만 있는 파일 · 없는 생성 시험을 심으면 각각 문제로 잡힌다")
     func manifestProblemsCatchPlantedDefects() throws {
         let (manifest, _) = try Self.loadManifest()
         let files = Self.currentFiles()
         let orphan = Self.manifestProblems(manifest: manifest,
                                            contractFiles: files.contract.union(["contract/golden/rng/orphan.json"]),
-                                           probeFiles: files.probes, readSource: Self.readRepoText)
+                                           probeFiles: files.probes, generatorExists: Self.repoFileExists)
         #expect(orphan.contains { $0.contains("고아") && $0.contains("orphan.json") })
-        // 이름은 조각으로 만든다 — 이 파일(생성 시험) 코드에 이름 글자가 통째로 한 번 더 있으면 대조가 무력해진다.
-        let name = ["rng", "splitmix64"].joined(separator: "/")
-        let commentOnly = Self.manifestProblems(manifest: manifest, contractFiles: files.contract, probeFiles: files.probes) { path in
-            guard let text = Self.readRepoText(path) else { return nil }
-            return text.replacingOccurrences(of: "golden: \"\(name)\"", with: "// golden: \"\(name)\"")
-        }
-        #expect(commentOnly.contains { $0.contains(name) && $0.contains("주석 밖") })
         let missing = Self.manifestProblems(manifest: manifest,
                                             contractFiles: files.contract.subtracting(["contract/golden/rng/splitmix64.json"]),
-                                            probeFiles: files.probes, readSource: Self.readRepoText)
+                                            probeFiles: files.probes, generatorExists: Self.repoFileExists)
         #expect(missing.contains { $0.contains("목록에만") })
+        let generator = "Tests/checkTests/GoldenExport/_base/GoldenExportBase.swift"
+        #expect(Self.repoFileExists(generator), "대조의 기준선: 견본 골든의 생성 시험이 디스크에 있다")
+        let noGenerator = Self.manifestProblems(manifest: manifest, contractFiles: files.contract, probeFiles: files.probes) { path in
+            path != generator && Self.repoFileExists(path)
+        }
+        #expect(noGenerator.contains { $0.contains("생성 시험") && $0.contains("가 없다") && $0.contains(generator) })
     }
 }

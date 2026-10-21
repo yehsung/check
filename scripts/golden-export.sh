@@ -11,11 +11,15 @@
 #   2. 개수 단언(A-X24 — G §8-1 로 '맥 전체 스위트' 소속): `swift test list`(= 전체 스위트 목록)의 GoldenExport 시험 수 L.
 #   3. `swift test --filter GoldenExport` 를 영수증 폴더(CHECK_GOLDEN_RUN_DIR)와 함께 돌린다. 돈 수 = L, 건너뜀 0,
 #      그리고 L = _manifest.json 에 박힌 exportTests(이름이 바뀌어 필터에서 조용히 빠지는 것을 막는다).
+#      xunit 결과의 classname 으로 `GoldenExport…` 스위트 밖에서 돈 시험(파일 이름 때문에 필터에 걸린 자유 함수 등)을 짚는다.
 #   4. 영수증으로 _manifest.json 조립 · 고아(영수증 없는 골든 파일) 검사(golden-digest.py assemble).
 #   5. 비교 모드: golden-digest.py --check(CI 와 같은 지문) · 저장소에 쓴 것 0(git status 전후 같음).
 #      쓰기 모드: golden-digest.py --write, 바뀐 파일 목록을 보이고 1 로 끝낸다(실수로 초록이 되지 않게).
 # 실패를 삼키지 않는다(set -euo pipefail · 시험과 푸시는 다른 호출 — 기억 test-grep-chain-masks-failure).
 # 종료 코드: 0 비교 모드 초록 · 1 불일치·시험 실패·쓰기 모드 · 2 도구·인자 문제.
+#
+# 맥 전체 스위트(swift test)만으로는 2·3·4(개수 · 건너뜀 0 · 스위트 밖 시험 · 영수증 고아 · 목록 조립)를 재지 않는다 —
+# 이 스크립트를 따로 돌린다: 갈래 완료·병합마다(G §2-5), Android·Windows 출시 전(G §4-1). contract/README.md §3.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +32,7 @@ SKIP_BUILD=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --skip-build) SKIP_BUILD=1 ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
     *) echo "golden-export: 모르는 인자 $1" >&2; exit 2 ;;
   esac
   shift
@@ -74,13 +78,15 @@ listed="$(grep -cE "\.${FILTER}[A-Za-z0-9_]*/" "$RUN/list.txt" || true)"
 started=$(date +%s)
 set +e
 sealed env CHECK_GOLDEN_RUN_DIR="$RUN" CHECK_GOLDEN_REPO_ROOT="$ROOT" CHECK_GOLDEN_WRITE="${CHECK_GOLDEN_WRITE:-}" \
-  swift test --skip-build --disable-sandbox --filter "$FILTER" >"$RUN/test.log" 2>&1
+  swift test --skip-build --disable-sandbox --filter "$FILTER" --xunit-output "$RUN/xunit.xml" >"$RUN/test.log" 2>&1
 test_rc=$?
 set -e
 elapsed=$(( $(date +%s) - started ))
 
-counts="$(python3 -I - "$RUN/test.log" <<'PY'
-import re, sys
+# 첫 줄: 돈 수 · 건너뜀 · 실패. 둘째 줄부터: GoldenExport… 스위트 밖에서 돈 시험(xunit classname 기준, "classname · name").
+counts="$(python3 -I - "$RUN/test.log" "$RUN" "$FILTER" <<'PY'
+import glob, os, re, sys
+import xml.etree.ElementTree as ET
 text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
 # 시험 타깃(맥 · 폰)마다 따로 돌아 요약 줄이 여럿일 수 있다 — 전부 더한다.
 m = re.findall(r"Test run with (\d+) tests? in \d+ suites? (passed|failed)", text)
@@ -88,9 +94,20 @@ ran = sum(int(n) for n, _ in m) if m else -1
 skipped = len(re.findall(r"^\S+ Test .* skipped", text, re.M))
 failed = len(re.findall(r"^\S+ Test (?!run with ).* failed after", text, re.M))
 print(ran, skipped, failed)
+suite = re.compile(r"^[^.]+\." + re.escape(sys.argv[3]) + r"[A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$")
+for path in sorted(glob.glob(os.path.join(sys.argv[2], "xunit*.xml"))):
+    try:
+        root = ET.parse(path).getroot()
+    except Exception:
+        continue
+    for case in root.iter("testcase"):
+        classname = case.get("classname", "")
+        if not suite.match(classname):
+            print(f"{classname} · {case.get('name', '')}")
 PY
 )"
-read -r ran skipped failed_tests <<<"$counts"
+read -r ran skipped failed_tests <<<"$(printf '%s\n' "$counts" | head -n 1)"
+outside="$(printf '%s\n' "$counts" | tail -n +2)"
 pinned="$(python3 -I -c 'import json,sys
 try: print(json.load(open(sys.argv[1]))["exportTests"])
 except Exception: print(-1)' "$ROOT/contract/golden/_manifest.json")"
@@ -98,7 +115,16 @@ except Exception: print(-1)' "$ROOT/contract/golden/_manifest.json")"
 echo "golden-export: 모드=$MODE swift-test-exit=$test_rc ${elapsed}초 · 전체 스위트 목록의 ${FILTER} 시험 $listed · 돈 시험 $ran · 건너뜀 $skipped · 실패 $failed_tests · 목록에 박힌 수 $pinned"
 
 problems=0
-if [ "$ran" != "$listed" ]; then echo "golden-export: 돈 시험 수($ran) ≠ 전체 스위트 목록의 ${FILTER} 시험 수($listed)" >&2; problems=1; fi
+if [ -n "$outside" ]; then
+  echo "golden-export: ${FILTER} 스위트 밖에서 돈 시험이 있다 — 파일·이름이 --filter ${FILTER} 에 걸렸지만 @Suite struct ${FILTER}<…> 의 메서드가 아니다(자유 함수 등). 스위트 메서드로 옮긴다:" >&2
+  printf '%s\n' "$outside" | sed 's/^/  - /' >&2
+  problems=1
+fi
+if [ "$ran" != "$listed" ]; then
+  echo "golden-export: 돈 시험 수($ran) ≠ 전체 스위트 목록의 ${FILTER} 시험 수($listed) — 목록 정규식은 ${FILTER}<…> 스위트의 메서드만 센다." >&2
+  echo "  돈 수가 더 크면: ${FILTER} 파일·이름에 걸렸지만 ${FILTER}<…> 스위트 밖인 시험(자유 함수 등)이 있다(위 목록). 작으면: 목록에 있는 시험이 안 돌았다." >&2
+  problems=1
+fi
 if [ "$skipped" != 0 ]; then echo "golden-export: 건너뛴 ${FILTER} 시험이 있다($skipped) — 건너뛰어서 초록은 게이트가 아니다" >&2; problems=1; fi
 
 # 4. 영수증 → _manifest.json(쓰기 모드는 개수도 새로 박는다).

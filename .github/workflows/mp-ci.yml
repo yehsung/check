@@ -251,6 +251,9 @@ jobs:
     # W1-f(Windows OS 층)의 러너 2종 중 arm64 몫(G §2-3 W1-f ①). x64 잡과 같은 방화벽 봉인 게이트를 windows-11-arm 에서 돈다.
     # 이 이미지에는 Android SDK 가 없다(actions/partner-runner-images arm-windows-11-image.md "Omitted software: Android") —
     # 설정 단계가 compileSdk 37 을 찾으므로 cmdline-tools 를 sha1 고정으로 받아 플랫폼만 넣는다(봉인 밖 예열 단계).
+    # cmdline-tools 는 22.0(15859902)이다 — 23.0(16111833)의 sdkmanager 는 'Android CLI' 를 내려받아 넘겨주고 --sdk_root 에
+    # 아무것도 설치하지 않았다(xplat/int-b 첫 실행 run 39655694065: platforms 폴더 없음). 22.0 의 sdkmanager 는 이 맥에서
+    # 같은 명령으로 platforms/android-37.0(package.xml 포함)을 깔고, AGP 가 그 플랫폼을 알아본다(실측).
     # 트레이 시험 전에 OOBE 개인정보 화면을 걷는다(W0-e 실측: 이 화면이 대화형 데스크톱을 덮으면 NIM_ADD 가 0x80004005, G §8-12).
     needs: changes
     if: needs.changes.outputs.mp == 'true'
@@ -269,23 +272,28 @@ jobs:
           java-version: '21'
           architecture: aarch64
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-      - name: Android SDK 플랫폼(이 이미지엔 SDK 가 없다 — cmdline-tools 16111833 sha1 고정, Google repository2-3.xml)
+      - name: Android SDK 도구(이 이미지엔 SDK 가 없다 — cmdline-tools 22.0 · 15859902 sha1 고정, Google repository2-3.xml)
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'android-sdk'
           $zip = Join-Path $env:RUNNER_TEMP 'cmdline-tools.zip'
-          Invoke-WebRequest -UseBasicParsing -Uri 'https://dl.google.com/android/repository/commandlinetools-win-16111833_latest.zip' -OutFile $zip
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://dl.google.com/android/repository/commandlinetools-win-15859902_latest.zip' -OutFile $zip
           $h = (Get-FileHash -Algorithm SHA1 $zip).Hash.ToLowerInvariant()
-          if ($h -ne '57d04f2d75eb8e8fffc5000a987e5de4b5a63e9d') { throw "cmdline-tools sha1 불일치: $h" }
+          if ($h -ne 'b9862337a13e2809a5159dc3a08d058091bd59f6') { throw "cmdline-tools sha1 불일치: $h" }
           $stage = Join-Path $env:RUNNER_TEMP 'cmdline-stage'
           Expand-Archive -Path $zip -DestinationPath $stage -Force
           New-Item -ItemType Directory -Force -Path (Join-Path $root 'cmdline-tools') | Out-Null
           Move-Item (Join-Path $stage 'cmdline-tools') (Join-Path $root 'cmdline-tools\latest')
           "ANDROID_HOME=$root" >> $env:GITHUB_ENV
           "ANDROID_SDK_ROOT=$root" >> $env:GITHUB_ENV
-      - name: Android SDK 플랫폼 설치(compileSdk 37)
+      - name: Android SDK 플랫폼 설치(compileSdk 37 — 깔린 자리에 package.xml 이 없으면 빨강)
         run: |
-          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --sdk_root="$ANDROID_HOME" --install "platforms;android-37.0" > /dev/null
+          log="$RUNNER_TEMP/sdkmanager.log"
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --sdk_root="$ANDROID_HOME" --install "platforms;android-37.0" > "$log" 2>&1 \
+            || { tail -40 "$log"; exit 1; }
+          if [ ! -f "$ANDROID_HOME/platforms/android-37.0/package.xml" ]; then
+            tail -40 "$log"; echo "::error::platforms;android-37.0 이 $ANDROID_HOME 에 깔리지 않았다"; exit 1
+          fi
           ls "$ANDROID_HOME/platforms"
       - name: 파이썬 확인(게이트가 결과 XML 을 python3·python 으로 읽는다 — 이 이미지에 있는지 먼저 드러낸다)
         run: |

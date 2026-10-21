@@ -1,0 +1,28 @@
+// desktopApp — 트레이·플라이아웃·창·platform/windows(JNA)·overlay·packaging(W1-f·W3-c·W3-d·W4·W5-b·W6-b).
+// 에이전트는 :desktopApp:run 을 하지 않는다(창). 시험은 java.awt.headless=true 아래에서만 돈다.
+// 운영 구성은 Gradle 속성 → 생성 소스 한 파일(ProdConfig.kt), 기본 .invalid(§8-5, aingcheck.desktop-app).
+plugins {
+    id("aingcheck.desktop-app")
+    id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+dependencies {
+    implementation(project(":feature:desktop"))
+    implementation(project(":ui"))
+    implementation(project(":character"))
+    implementation(compose.desktop.currentOs)
+    implementation(libs.kotlinx.coroutines.swing)
+
+    // 실서버 엔진은 앱 조립 지점에서만(A§4-1 ①). retryOnConnectionFailure(false) 로 만든다(C-X6).
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.okhttp)
+
+    // Windows OS 층(D§2-4): jna + jna-platform. DLL 은 패키지에 넣고 jna.nounpack=true(W1-f).
+    implementation(libs.jna)
+    implementation(libs.jna.platform)
+    // 비밀 아닌 설정(A§3-4): DataStore Preferences(파일 경로 주입). java.util.prefs 금지(구조 시험).
+    implementation(libs.androidx.datastore.preferences.core)
+
+    testImplementation(libs.compose.ui.test)
+    testImplementation(libs.roborazzi.compose.desktop)
+}

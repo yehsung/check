@@ -1,0 +1,199 @@
+# Android·Windows(KMP) 매 푸시 게이트 — A§5, K12. 비밀값 0개. 주소는 https://aingcheck.invalid 뿐이다.
+# 트리거: xplat/** 브랜치 푸시 + 수동 실행(수동 실행은 이 파일이 기본 브랜치에 있어야 버튼이 생긴다).
+#  - golden-digest : 경로 필터 없이 매 푸시(§8-10). 스크립트(W0-b)가 아직 없으면 자리표시로 통과한다.
+#  - lane-tools    : lanes.yml 확인 + lane-ownership 자기 시험 + (브랜치 이름이 갈래면) 그 갈래 소유 검사.
+#  - jvm-gate      : ubuntu, sudo unshare -n 봉인 아래 빠른 게이트 + 봉인 없는 카나리아 빨강 대조(A-X15).
+#  - windows-x64   : windows-latest, java.exe 아웃바운드 차단 방화벽 봉인 아래 데스크톱 시험 + 대조(A-X16).
+# 액션은 SHA 로 고정한다(공개 저장소 공급망).
+name: mp-ci
+
+on:
+  push:
+    branches: ['xplat/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mp-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      mp: ${{ steps.filter.outputs.mp }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        name: 멀티플랫폼 경로가 바뀌었나(A§5 경로 필터)
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "push" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "mp=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" \
+             | grep -qE '^(multiplatform/|contract/|Tests/checkTests/Fixtures/|Sources/CheckMobileKit/Demo/Fixtures/|Sources/check/Characters/|\.github/workflows/mp-)'; then
+            echo "mp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mp=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  golden-digest:
+    # §8-10: 경로 필터 없이 매 푸시에 돈다(수 초). 맥 엔진만 고친 커밋에서도 지문이 어긋나면 빨강.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: golden-digest --check
+        run: |
+          if [ -f multiplatform/tools/golden-digest.py ]; then
+            python3 -I multiplatform/tools/golden-digest.py --check
+          else
+            echo "::notice::multiplatform/tools/golden-digest.py 가 아직 없다 — W0-b 가 채운다(자리표시 통과)"
+          fi
+
+  lane-tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: lanes.yml 확인 · 자기 시험(위반을 심은 가짜 diff 가 빨강)
+        run: |
+          python3 -I multiplatform/tools/lane-ownership.py --validate
+          python3 -I multiplatform/tools/lane-ownership.py --self-test
+      - name: 이 브랜치 갈래의 소유 검사(xplat/w0-a → W0-a)
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          lane="$(python3 -I -c 'import sys,re; m=re.fullmatch(r"xplat/(w\d+-[a-z]\d*)", sys.argv[1]); print(m.group(1).upper()[:2] + m.group(1)[2:] if m else "")' "$REF_NAME")"
+          if [ -z "$lane" ]; then echo "::notice::갈래 브랜치가 아니다($REF_NAME) — 소유 검사 생략"; exit 0; fi
+          git fetch --no-tags origin "+refs/heads/xplat/main:refs/remotes/origin/xplat/main"
+          python3 -I multiplatform/tools/lane-ownership.py --lane "$lane" --base origin/xplat/main --head HEAD
+
+  jvm-gate:
+    needs: changes
+    if: needs.changes.outputs.mp == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Android SDK 플랫폼(compileSdk 37 · build-tools 36)
+        run: |
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
+          ls "$ANDROID_HOME/platforms"
+      - name: 의존 예열(봉인 밖 — 게이트가 아니다)
+        run: bash multiplatform/scripts/gate-fast.sh --warm
+      - name: 봉인 게이트(sudo unshare -n)
+        run: bash multiplatform/scripts/gate-fast.sh
+      - name: 대조 — 봉인 없이 카나리아는 빨강이어야 한다(A-X15)
+        working-directory: multiplatform
+        run: |
+          set +e
+          AINGCHECK_NETWORK_SEALED=1 ./gradlew --offline --no-daemon :testkit:desktopTest --tests '*NetworkCanaryTest*'
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then echo "::error::봉인 없이도 카나리아가 초록 — 카나리아가 아무것도 재지 않는다"; exit 1; fi
+          echo "봉인 없는 카나리아 빨강(rc=$rc) — 예상대로"
+      - name: 시험 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jvm-gate-test-results
+          path: |
+            multiplatform/**/build/test-results/**/*.xml
+            multiplatform/**/build/tripwire/*.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-x64:
+    needs: changes
+    if: needs.changes.outputs.mp == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Android SDK 플랫폼(설정 단계가 compileSdk 37 을 찾는다)
+        run: |
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --install "platforms;android-37.0" > /dev/null
+          ls "$ANDROID_HOME/platforms"
+      - name: 의존 예열(봉인 밖 — 게이트가 아니다)
+        run: bash multiplatform/scripts/gate-fast.sh --warm
+      - name: 방화벽 봉인 걸기(모든 JDK 의 java.exe 아웃바운드 차단)
+        shell: pwsh
+        run: |
+          $before = Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultOutboundAction
+          $before | Format-Table | Out-String | Write-Host
+          Set-NetFirewallProfile -All -Enabled True
+          $javas = @()
+          $javas += Get-ChildItem -Path "$env:JAVA_HOME\bin" -Filter java*.exe -ErrorAction SilentlyContinue
+          if (Test-Path 'C:\hostedtoolcache\windows') {
+            $javas += Get-ChildItem -Path 'C:\hostedtoolcache\windows' -Recurse -Filter java*.exe -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('java.exe','javaw.exe') }
+          }
+          $javas = $javas | Where-Object { $_.Name -in @('java.exe','javaw.exe') } | Sort-Object FullName -Unique
+          $i = 0
+          foreach ($j in $javas) {
+            New-NetFirewallRule -DisplayName "aingcheck-seal-$i" -Direction Outbound -Action Block -Program $j.FullName -Profile Any | Out-Null
+            Write-Host "봉인: $($j.FullName)"
+            $i++
+          }
+          if ($i -eq 0) { throw "막을 java.exe 를 찾지 못했다" }
+      - name: 방화벽 봉인 게이트(데스크톱 JVM 시험)
+        env:
+          AINGCHECK_EXTERNAL_SEAL: windows-firewall
+        run: bash multiplatform/scripts/gate-fast.sh
+      - name: 방화벽 봉인 풀기
+        if: always()
+        shell: pwsh
+        run: |
+          Get-NetFirewallRule -DisplayName 'aingcheck-seal-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+          Write-Host "봉인 규칙 제거"
+      - name: 대조 — 봉인 없이 카나리아는 빨강이어야 한다(A-X16)
+        working-directory: multiplatform
+        run: |
+          set +e
+          AINGCHECK_NETWORK_SEALED=1 ./gradlew --offline --no-daemon :testkit:desktopTest --tests '*NetworkCanaryTest*'
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then echo "::error::봉인 없이도 카나리아가 초록 — 카나리아가 아무것도 재지 않는다"; exit 1; fi
+          echo "봉인 없는 카나리아 빨강(rc=$rc) — 예상대로"
+      - name: 시험 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x64-test-results
+          path: |
+            multiplatform/**/build/test-results/**/*.xml
+            multiplatform/**/build/tripwire/*.txt
+          if-no-files-found: ignore
+          retention-days: 7

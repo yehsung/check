@@ -148,6 +148,28 @@ enum MessagePanelLayout {
     /// 더 키우면(160) 한 장이 틀을 거의 다 먹어서 직전 대화가 안 보이고, 줄이면(80) 표정이 안 읽힌다.
     static let stickerSide: CGFloat = 120
 
+    /// 찌르기 기록 한 줄의 높이(pt · v0.3.65). 9pt 글자 한 줄 + 위아래 숨통 — 날짜 구분선(18)보다 낮게 둔다(말이 주인공이다).
+    static let pokeLineHeight: CGFloat = 16
+
+    /// 대화 줄(찌르기 기록 포함)의 **추정** 자연 높이(pt · v0.3.65). 말풍선·날짜 줄은 위 `conversationContentHeight(_:)` 의 산식을
+    /// **그대로 빌린다**(한 줄짜리 타임라인으로 물어 바깥 padding 16 을 뺀다) — 두 산식이 갈리면 빈 회색 판이 생긴다.
+    static func conversationContentHeight(lines: [MessageConversationLine]) -> CGFloat {
+        guard !lines.isEmpty else { return 0 }
+        var total: CGFloat = 16   // 위아래 padding 8×2
+        for (index, line) in lines.enumerated() {
+            if index > 0 { total += 6 }   // LazyVStack spacing
+            switch line {
+            case .day(let key, let label):
+                total += conversationContentHeight([.day(key: key, label: label)]) - 16
+            case .bubble(let entry):
+                total += conversationContentHeight([.bubble(entry)]) - 16
+            case .poke:
+                total += pokeLineHeight
+            }
+        }
+        return total
+    }
+
     /// 대화가 아무리 짧아도 틀에 남기는 높이(pt). 말풍선 하나가 판 안에 앉아 보이는 최소치.
     static let minShownConversationHeight: CGFloat = 56
     /// 빈 상태(아이콘 + 제목 + 보조 한 줄 + 때때로 [다시 시도])가 쓰는 높이(pt). 상한에 걸리면 그만큼 줄어든다.
@@ -403,18 +425,25 @@ struct CheckMessageView: View {
 
     @ViewBuilder
     private func conversationBody(cap: CGFloat) -> some View {
-        if let thread, !thread.messages.isEmpty {
-            let items = MessageThreadBuilder.timeline(thread.messages, now: now)
+        // v0.3.65: 메시지 사이에 **찌르기 기록**을 시간 순서로 끼운다(서버가 24시간 안의 것만 내려 주므로 오래된 줄은 저절로 사라진다).
+        // 끼움 판정은 코어 `MessageConversationTimeline` 한 곳이다 — 뷰는 자리만 그린다. 찌르기가 없으면 예전 타임라인과 줄 단위로 같다.
+        let messages = thread?.messages ?? []
+        let pokes = store.selectedMessagePokeLog
+        if let peer = store.selectedMessagePeerID, !messages.isEmpty || !pokes.isEmpty {
+            let lines = MessageConversationTimeline.lines(
+                messages: messages, pokes: pokes, chronology: store.messagePokeChronology, now: now
+            )
             let natural = max(
                 MessagePanelLayout.minShownConversationHeight,
-                MessagePanelLayout.conversationContentHeight(items)
+                MessagePanelLayout.conversationContentHeight(lines: lines)
             )
             MessageConversationView(
-                items: items,
-                peerUserID: thread.peerUserID,
-                lastMessageID: thread.messages.last?.id,
+                lines: lines,
+                peerUserID: peer,
+                // 새 줄(메시지든 찌르기든)이 붙었는지 아는 키 — 바닥 근처면 따라 내려간다.
+                lastMessageID: lines.last?.id,
                 // 내가 보낸 말은 위로 올려 둔 상태여도 바닥으로 따라간다(v0.3.31 M4 — 메신저 감각: 방금 친 말이 화면 밖에 붙으면 안 된다).
-                lastMessageIsMine: thread.messages.last?.isMine ?? false,
+                lastMessageIsMine: lines.last?.isMine ?? false,
                 // 읽음 기능 여부는 **값**으로 내린다(v0.3.30). 시계가 아니라 이력 응답이 바꾸는 값이라 잎으로 가둘 이유가 없다.
                 readReceiptsAvailable: store.messageReadReceiptsAvailable,
                 clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll,
@@ -493,9 +522,9 @@ struct CheckMessageView: View {
 
 /// 한 사람과의 대화. 말풍선을 **시간순으로 쌓고**, 처음 열면 맨 아래(최신)에 있다.
 struct MessageConversationView: View {
-    /// **이미 계산된** 타임라인(날짜 구분선 포함). 부모가 같은 값으로 틀 높이도 정하므로 여기서 다시
+    /// **이미 계산된** 대화 줄(날짜 구분선 · 말풍선 · 찌르기 기록 — v0.3.65). 부모가 같은 값으로 틀 높이도 정하므로 여기서 다시
     /// 만들지 않는다 — 두 번 만들면 두 계산이 언젠가 갈리고, 그때 틀과 내용의 높이가 어긋난다.
-    let items: [MessageTimelineItem]
+    let lines: [MessageConversationLine]
     /// 상대가 바뀌었는지 알기 위한 키(스크롤을 맨 아래로 되돌리는 트리거).
     let peerUserID: String
     /// 새 말이 도착했는지 알기 위한 키(같은 트리거의 애니메이션 갈래).
@@ -597,8 +626,8 @@ struct MessageConversationView: View {
 
     private var content: some View {
         LazyVStack(alignment: .leading, spacing: 6) {
-            ForEach(items) { item in
-                switch item {
+            ForEach(lines) { line in
+                switch line {
                 case .day(_, let label):
                     MessageDaySeparator(label: label)
                 case .bubble(let entry):
@@ -609,12 +638,78 @@ struct MessageConversationView: View {
                         ),
                         onReport: MessageBubbleReportRule.offersReport(for: entry) ? onReport.map { report in { report(entry) } } : nil
                     )
+                case .poke(let entry):
+                    // 말풍선이 아니다 — 답장·읽음 1·신고 메뉴 대상이 아니다(v0.3.65).
+                    MessagePokeLogLine(entry: entry)
                 }
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension MessageConversationView {
+    /// 찌르기 기록이 없는 타임라인으로 만든다(v0.3.65 이전 모양 — 스냅샷·프로브 호출부가 그대로 쓴다). 줄은 그대로 옮긴다.
+    init(
+        items: [MessageTimelineItem],
+        peerUserID: String,
+        lastMessageID: String?,
+        lastMessageIsMine: Bool = false,
+        readReceiptsAvailable: Bool = false,
+        clipsInsteadOfScrolling: Bool = false,
+        onFollowChange: ((MessageScrollFollow) -> Void)? = nil,
+        onReport: ((MessageHistoryEntry) -> Void)? = nil
+    ) {
+        self.init(
+            lines: items.map { item in
+                switch item {
+                case .day(let key, let label): return .day(key: key, label: label)
+                case .bubble(let entry): return .bubble(entry)
+                }
+            },
+            peerUserID: peerUserID,
+            lastMessageID: lastMessageID,
+            lastMessageIsMine: lastMessageIsMine,
+            readReceiptsAvailable: readReceiptsAvailable,
+            clipsInsteadOfScrolling: clipsInsteadOfScrolling,
+            onFollowChange: onFollowChange,
+            onReport: onReport
+        )
+    }
+}
+
+/// 대화 사이에 끼는 **찌르기 기록 한 줄**(v0.3.65 — 사용자 결정 "서로 찌르거나 울트라 찌르기 한거 메세지창에 기록으로").
+///
+/// 가운데 정렬 작은 회색 줄이다: 아이콘(레일 콕 손가락 · 울트라 번개) + "○○님이 콕 찔렀어요 · 15:12" / "내가 울트라 찔렀어요 · 15:15".
+/// **말풍선이 아니다** — 배경·아바타·읽음 1·우클릭 메뉴가 없다. 이름이 길면 주어만 줄이고 시각은 언제나 보인다.
+/// 높이는 `MessagePanelLayout.pokeLineHeight` 하나다(틀 높이 추정과 같은 값).
+struct MessagePokeLogLine: View {
+    let entry: MessagePokeLogEntry
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: MessagePokeLogText.symbol(entry.kind))
+                .font(.system(size: 8, weight: .semibold))
+            // 주어와 술어 사이는 낱말 띄어쓰기 한 칸 폭이다(바깥 4pt 간격을 그대로 쓰면 두 칸처럼 벌어진다).
+            HStack(spacing: 2.5) {
+                Text(MessagePokeLogText.subject(for: entry))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(MessagePokeLogText.predicate(for: entry))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .font(.system(size: 9).monospacedDigit())
+        .foregroundStyle(CheckTheme.secondaryText.opacity(0.85))
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(height: MessagePanelLayout.pokeLineHeight)
+        // 보이스오버는 한 문장으로 읽는다(아이콘 이름 · 조각 셋으로 끊어 읽히면 무엇의 기록인지 흩어진다).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(MessagePokeLogText.line(for: entry))
     }
 }
 

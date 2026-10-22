@@ -213,7 +213,7 @@ private func v0313PokeList() -> some View {
                 onPoke: {},
                 onUltra: {},
                 onOpenMessages: {},
-                hasUnreadMessages: index == 1
+                unread: index == 1 ? .messages : .none   // v0.3.65: 점의 사유(메시지/찌르기)를 함께 싣는다
             )
             .frame(width: V0313Layout.popoverRowWidth, height: V0313Layout.pokeRowHeight)
         }

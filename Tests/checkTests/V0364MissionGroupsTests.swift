@@ -906,19 +906,13 @@ private func v0364Calls(_ host: String, _ rpc: String = "achievements_status") -
     }
 }
 
-// MARK: - 릴리스 게이트 (v0.3.64)
+// MARK: - 0.3.64 체인지로그 (내용만)
 //
-// **관행**: 버전 고정과 "맨 위 섹션" 단언은 *그 릴리스의 시험 파일*이 든다(0.3.60 → … → 0.3.63 → 여기).
-// 다음 릴리스가 오면 이 둘을 그쪽 파일로 옮기고, 여기는 0.3.64 섹션의 **내용**만 남겨라 —
-// 안 옮기면 버전을 올리는 그 커밋에서 전체 스위트가 빨개진다.
-@Test("버전 0.3.64 / 117 · CHANGELOG 0.3.64 는 맨 위 네 줄(사용자 말투 · 배너 폭 안)")
+// 버전 고정과 "맨 위 섹션" 단언은 0.3.65 에서 `V0365MessagePokeTests` 로 넘겼다(관행 — 그 릴리스의 시험 파일이 든다).
+// 여기는 0.3.64 섹션의 **내용**만 남는다.
+@Test("CHANGELOG 0.3.64 는 네 줄(사용자 말투 · 배너 폭 안)")
 func v0364VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.64</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>117</string>"))
-
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.64\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -937,8 +931,6 @@ func v0364VersionAndChangelog() throws {
     // "관전" 은 같은 판에 들어간 테트리스 관전·관전자 수 묶음의 증표다(0.3.64 로 합쳐 내면서 한 줄로 묶었다).
     #expect(section.contains("일일") && section.contains("20·10·5") && section.contains("수수료")
             && section.contains("관전"))
-    #expect(changelog.range(of: "## 0.3.64")!.lowerBound < changelog.range(of: "## 0.3.63")!.lowerBound,
-            "0.3.64 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }
 
 // MARK: - 미리보기(환경변수가 있을 때만 — 창은 띄우지 않는다)

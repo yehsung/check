@@ -510,7 +510,8 @@ struct V0238MenuTests {
         #expect(!panel.contains("isPokeDisconnected()"), "연결 경고 판정을 패널 body 가 직접 불렀다.")
         #expect(panel.contains("PokePanelNoticeLine("), "안내줄이 잎(PokePanelNoticeLine)이 아니다.")
         // 정렬은 body 맨 위에서 한 번 — computed 프로퍼티(sortedEntries)로 되돌리면 한 body 에 세 번 정렬한다.
-        #expect(panel.contains("let sorted = Self.sortedForDisplay(entries)"))
+        // v0.3.65: 안 읽음 두 집합(메시지 · 찌르기)도 같은 한 번의 호출에 넘긴다(안 읽은 사람이 맨 위).
+        #expect(panel.contains("let sorted = Self.sortedForDisplay(entries, unreadMessages: unreadMessagePeerIDs, unreadPokes: unreadPokePeerIDs)"))
         #expect(!panel.contains("var sortedEntries"))
 
         let row = try #require(swiftTypeBody(source, name: "PokeDirectoryRowView"))

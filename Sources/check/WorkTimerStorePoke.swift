@@ -117,6 +117,8 @@ extension WorkTimerStore {
                 case .ok:
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(Self.pokeCooldownSeconds)
                     pokeNotice = nil
+                    // 그 사람과의 대화가 떠 있으면 방금 찌른 기록이 곧 보이게(v0.3.65).
+                    refreshConversationAfterPokeSent(to: userID)
                 case .cooldown(let retryAfterSeconds):
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(TimeInterval(retryAfterSeconds))
                 case .ultraUsedToday:
@@ -192,6 +194,8 @@ extension WorkTimerStore {
                     //     발화다. 울트라를 써도 todayDuration 은 1초도 안 움직이므로 두 발화는 겹치지
                     //     않는다 — 지금 이 지점이 없으면 방금 쓴 사람에게 즉시 지급할 경로가 없다.
                     syncUltraWallet(reason: .missionCandidate)
+                    // 그 사람과의 대화가 떠 있으면 방금 찌른 기록이 곧 보이게(v0.3.65).
+                    refreshConversationAfterPokeSent(to: userID)
                 case .ultraUsedToday:
                     // 상태 어휘는 서버가 확정한 7개 중 하나이고 이름만 옛것이다(ultra_used_today).
                     // 의미는 이제 "잔량 0"이다 — 팀 무제한이 폐지돼 팀원에게도 재화를 쓴다.
@@ -593,6 +597,9 @@ extension WorkTimerStore {
             // v0.3.31 M4: 그 앞에 **보이는 대화에 곧바로 넣는다**(신선도와 무관) — 본문을 이미 들고 왔는데 이력 왕복을 기다리지 않는다.
             // 도착 새로고침도 말풍선 큐가 아니라 **소비한 메시지 행**을 기준으로 부른다(신선도가 큐를 비우면 갱신까지 건너뛰던 틈).
             receiveConsumedMessages(rows: rows, now: now)
+            // v0.3.65: 같은 응답의 찌르기(일반·울트라)는 대화 기록에 **곧바로** 넣는다 — 왕복 없이 목록 맨 위로 올라오고,
+            // 그 사람과의 대화가 떠 있으면 그 자리에 줄이 선다(말풍선 신선도와 무관 — 24시간 안이면 기록이다).
+            insertConsumedPokesIntoLog(rows: rows)
             // count 는 **소비된 행 전체 수**(신선도 필터 이전)다. 초인종 페이로드의 pending 과 견주면
             // 소비 경로가 새는지 보이는데, 필터 뒤 개수를 세면 '오래돼서 안 보여준 것'까지 유실로 오진한다.
             return .ok(count: rows.count)

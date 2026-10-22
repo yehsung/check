@@ -822,7 +822,7 @@ private func v0313PokeRow(center: String?) -> some View {
         onPoke: {},
         onUltra: {},
         onOpenMessages: {},
-        hasUnreadMessages: false
+        unread: .none
     )
 }
 

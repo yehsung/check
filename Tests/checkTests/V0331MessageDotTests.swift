@@ -246,7 +246,12 @@ func 점이_뜨는_세_자리가_모두_같은_판정_하나를_읽는다() thro
         "MessageRules.swift",                      // 판정 규칙 본문(D-base 에서 코어로 뗀 조각 — 같은 파일의 나머지 반쪽)
         "WorkTimerStore.swift",                    // 저장 프로퍼티 선언 · 로그아웃 비우기
         "SupabaseWorkServiceMessageReads.swift",   // 서버 응답 → 재료
-        "SupabaseWorkModels.swift"                 // 모델 필드 선언
+        "SupabaseWorkModels.swift",                // 모델 필드 선언
+        // v0.3.65: **찌르기** 안 읽음(사용자 결정 "찌르기도 친다")은 메시지 판정과 섞지 않는 별도 판정이다 — 규칙 본문(코어)과
+        // 그 배선(맥 스토어) 두 파일이 찌르기 기록의 `isUnread` 를 읽는다. 메뉴바·레일 점은 여전히 메시지 판정 하나만 읽고(아래 readers),
+        // 목록 행의 점은 두 판정의 합집합(`PokeRowUnreadMark`)이다. 메시지 재료(요약·도장·낙관 읽음)는 이 두 파일도 안 만진다.
+        "MessagePokeLog.swift",
+        "WorkTimerStoreMessagePokes.swift"
     ]
     let sourcesURL = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

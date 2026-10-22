@@ -1466,6 +1466,20 @@ final class WorkTimerStore {
     /// 상대별 낙관 읽음 — 읽음 처리를 보낸 순간 점을 바로 끄기 위한 기록. 서버 스냅샷이 이 기록보다 **나중에**
     /// 나간 요청이면 서버가 이긴다(`MessageUnreadRules`). 실패해도 되돌리지 않는다(다음 새로고침이 사실을 말한다).
     var messageOptimisticReads: [String: MessageOptimisticRead] = [:]
+
+    // ── 대화창 찌르기 기록(v0.3.65) — 로직은 `WorkTimerStoreMessagePokes.swift` ──
+    // 메시지 상태와 **따로** 든다: 찌르기가 `messageHistory` 에 섞이면 메시지 읽음 경계·메뉴바 점·말풍선 필터가 찌르기 id 를 메시지로 읽는다.
+    // 셋 다 계정에 묶인다 — clearPersistedSession 이 지운다.
+
+    /// 대화 기록의 찌르기 줄(시간순). 마지막 이력 응답의 찌르기 + 그 뒤 take_pokes 로 받아 바로 넣은 것.
+    var messagePokeLog: [MessagePokeLogEntry] = []
+    /// 찌르기 기록을 실어 온 마지막 이력의 일련번호와 서버 순서. **nil = 서버가 찌르기 기록을 모른다**(옛 서버로 접었다 · 아직 못 받았다) —
+    /// 그때는 찌르기 줄도 찌르기 안 읽음도 없다(지금처럼).
+    var messagePokeLogSnapshot: MessageHistoryReadSnapshot?
+    /// 마지막 이력 응답의 서버 시각 순위(행 id → 순위). 같은 초의 메시지·찌르기 선후다(`MessageConversationTimeline`).
+    var messagePokeChronology: [String: Int] = [:]
+    /// 상대별 찌르기 낙관 읽음(메시지의 `messageOptimisticReads` 와 같은 규칙).
+    var messagePokeOptimisticReads: [String: MessageOptimisticRead] = [:]
     /// 읽음 절의 비관찰 장부(일련번호 · 왕복 직렬화 · 스로틀). 한 덩어리로 들어 로그아웃에서 한 줄로 비운다
     /// (RealtimeRuntime 과 같은 이유 — 흩뿌리면 "하나를 안 지웠다"가 이 계층에서 가장 흔한 누수다).
     @ObservationIgnored var messageReadRuntime = MessageReadRuntime()
@@ -3950,6 +3964,11 @@ extension WorkTimerStore {
         messageUnreadSummary = nil
         messageHistoryReadSnapshot = nil
         messageOptimisticReads = [:]
+        // 대화창 찌르기 기록(v0.3.65)도 계정에 묶인다 — 남기면 다음 계정의 목록 맨 위에 앞 사람을 찌른 사람이 뜬다.
+        messagePokeLog = []
+        messagePokeLogSnapshot = nil
+        messagePokeChronology = [:]
+        messagePokeOptimisticReads = [:]
         // 장부는 **통째로 새것**으로 바꾼다 — 앞 계정의 늦은 Task 는 옛 장부를 붙잡고 있으므로 새 장부의 직렬화·스로틀을
         // 건드릴 수 없다(세대 가드와 이중 안전).
         messageReadRuntime.cancelAll()

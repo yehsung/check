@@ -717,6 +717,9 @@ struct CheckMenuView: View {
                             // 사라지면서(v0.2.50) 안 읽음을 말할 자리가 여기밖에 안 남았다.
                             // 시계를 읽지 않는 값이라(도장 비교는 스토어가 끝낸다) 잎으로 가둘 이유가 없다.
                             unreadMessagePeerIDs: store.unreadMessagePeerIDs,
+                            // 안 본 찌르기가 있는 상대들(v0.3.65 — 사용자 결정 "찌르기도 친다"). 목록 순서와 행의 점이 메시지와 **합쳐** 읽는다.
+                            // 메뉴바 빨간 점은 이 값을 읽지 않는다(메시지만 — `hasUnreadMessages`).
+                            unreadPokePeerIDs: store.unreadPokePeerIDs,
                             messageNotice: store.messageNotice,
                             // 큐의 맨 앞 = 아직 사용자에게 보여 주지 않은 가장 오래된 1건.
                             // ⚠︎ 말풍선(오버레이 담당)이 consumeCurrentMessage 로 큐를 밀면 이 자리도 함께 비워진다.
@@ -3474,6 +3477,45 @@ enum PokePanelRenderProbe {
 }
 #endif
 
+/// 콕찌르기 목록 순서(v0.3.65 — 순수 · 결정적 검증 지점). **합치는 자리가 여기 하나다**: 메시지 안 읽음 ∪ 안 본 찌르기를 만들어
+/// 코어 `sortedForPokeDisplay(unreadPeerIDs:)`(안 읽음 → 근무중 → 이름 → id)에 넘긴다. 행의 점(`PokeRowUnreadMark`)도 같은 두 집합을 본다 —
+/// 순서와 점이 다른 집합을 보면 "맨 위에 올라왔는데 점이 없는" 사람이 생긴다.
+enum PokePanelOrder {
+    static func sorted(
+        _ entries: [PokeDirectoryEntry],
+        unreadMessagePeerIDs: Set<String>,
+        unreadPokePeerIDs: Set<String>
+    ) -> [PokeDirectoryEntry] {
+        entries.sortedForPokeDisplay(unreadPeerIDs: unreadMessagePeerIDs.union(unreadPokePeerIDs))
+    }
+}
+
+/// 목록 행 말풍선 버튼의 안 읽음(v0.3.65). 점은 메시지든 찌르기든 하나지만, **말은 갈린다** — 찌르기만 있는 사람에게
+/// "안 읽은 메시지가 있어요"라고 읽어 주면 대화를 열어도 새 메시지가 없다.
+enum PokeRowUnreadMark: Equatable, Sendable {
+    case none
+    /// 안 읽은 메시지가 있다(찌르기도 있을 수 있다 — 메시지가 더 큰 소식이라 그 말을 한다).
+    case messages
+    /// 안 본 찌르기만 있다.
+    case pokesOnly
+
+    static func of(_ userID: String, unreadMessagePeerIDs: Set<String>, unreadPokePeerIDs: Set<String>) -> PokeRowUnreadMark {
+        if unreadMessagePeerIDs.contains(userID) { return .messages }
+        if unreadPokePeerIDs.contains(userID) { return .pokesOnly }
+        return .none
+    }
+
+    var showsDot: Bool { self != .none }
+
+    func help(name: String) -> String {
+        switch self {
+        case .none: return "\(name)님과의 대화 열기"
+        case .messages: return "\(name)님과의 대화 — 안 읽은 메시지가 있어요"
+        case .pokesOnly: return "\(name)님과의 대화 — 안 본 찌르기가 있어요"
+        }
+    }
+}
+
 /// 팀 카드 자리를 대체하는 콕찌르기 페이지(앱 로그인 사용자 전체). 리그/토큰 보드와 같은 뼈대다:
 /// 뒤로 버튼 + 제목 + (조건부 안내줄) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 행은 아바타 + 이름 +
 /// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/대상 자리비움=흐린 비활성).
@@ -3483,7 +3525,7 @@ enum PokePanelRenderProbe {
 /// 안에서만 푼다 — 그래서 티커가 매초 다시 그리는 것은 행 속 버튼 하나·작성기·수신 줄·안내줄이고, 목록 정렬과 26행
 /// 레이아웃은 입력(entries 등)이 바뀔 때만 돈다.
 private struct PokePanel: View {
-    // 근무중 먼저·이름순으로 정렬된 사용자 목록(store 에서 이미 정렬됨). 뷰에서도 같은 규약으로 다시 정렬한다.
+    // 사용자 목록(store 는 근무중 먼저·이름순으로 들고 있다). 뷰는 안 읽음 → 근무중 → 이름으로 다시 정렬한다(v0.3.65 · `PokePanelOrder`).
     let entries: [PokeDirectoryEntry]
     // 내가 근무중인지. 비근무면 어떤 대상도 찌를 수 없다(서버 강제) — 안내줄 + 버튼 비활성으로 반영한다.
     let isMyselfWorking: Bool
@@ -3536,6 +3578,9 @@ private struct PokePanel: View {
     // 사라졌다(사용자 지시 1). 남은 자리가 이 버튼뿐이라, 안 넣으면 "안 읽음"이라는 개념이 앱에서 통째로
     // 사라진다 — 스토어의 `unreadMessagePeerIDs`/`messageReadStamps` 도 그 순간 아무도 안 읽는 값이 된다.
     var unreadMessagePeerIDs: Set<String> = []
+    // 안 본 찌르기가 있는 상대들(v0.3.65). 위 메시지 집합과 **합집합**이 목록 순서와 행의 점이다(`PokePanelOrder`).
+    // 따로 받는 이유는 행의 보이스오버 문구 하나다 — 찌르기만 있는 사람에게 "안 읽은 메시지가 있어요"라고 말하면 거짓이다.
+    var unreadPokePeerIDs: Set<String> = []
     // 메시지 전송 결과 1줄 안내. 찌르기 notice 와 **다른 칸**이라 따로 받는다(스토어가 상태를 나눠 둔 이유와 같다).
     // 창에서 보낸 결과지만 이 줄도 함께 읽는다 — 같은 계정의 같은 사실이라 두 화면이 다른 말을 하면 안 된다.
     var messageNotice: String? = nil
@@ -3589,9 +3634,9 @@ private struct PokePanel: View {
         let _ = PokePanelRenderProbe.notePanelBody()
         #endif
         // 정렬은 body 당 **1회**. 아래 rowCount/entryList/rows 가 이 결과를 나눠 쓴다 — 예전엔 computed 프로퍼티라
-        // 한 body 에 세 번 정렬했고, 그 body 가 매초 돌았다. 정렬 키는 근무중 여부·이름뿐이라(쿨타임은 안 들어간다)
-        // 초침이 순서를 바꿀 일도 없다 — 순서는 entries 가 바뀔 때만 바뀐다.
-        let sorted = Self.sortedForDisplay(entries)
+        // 한 body 에 세 번 정렬했고, 그 body 가 매초 돌았다. 정렬 키는 안 읽음·근무중 여부·이름뿐이라(쿨타임은 안 들어간다)
+        // 초침이 순서를 바꿀 일도 없다 — 순서는 entries 나 안 읽음 집합이 바뀔 때만 바뀐다(v0.3.65 — 안 읽은 사람이 맨 위).
+        let sorted = Self.sortedForDisplay(entries, unreadMessages: unreadMessagePeerIDs, unreadPokes: unreadPokePeerIDs)
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
@@ -3654,12 +3699,16 @@ private struct PokePanel: View {
         .pagePanelStyle()
     }
 
-    // 서버 정렬을 신뢰하지 않고 뷰에서도 근무중 먼저·이름순으로 다시 정렬한다. body 맨 위에서 **한 번만** 부른다.
-    private static func sortedForDisplay(_ entries: [PokeDirectoryEntry]) -> [PokeDirectoryEntry] {
+    // 서버 정렬을 신뢰하지 않고 뷰에서 다시 정렬한다(안 읽음 → 근무중 → 이름 — `PokePanelOrder`). body 맨 위에서 **한 번만** 부른다.
+    private static func sortedForDisplay(
+        _ entries: [PokeDirectoryEntry],
+        unreadMessages: Set<String>,
+        unreadPokes: Set<String>
+    ) -> [PokeDirectoryEntry] {
         #if DEBUG
         PokePanelRenderProbe.sortCalls += 1
         #endif
-        return entries.sortedForPokeDisplay()
+        return PokePanelOrder.sorted(entries, unreadMessagePeerIDs: unreadMessages, unreadPokePeerIDs: unreadPokes)
     }
 
     // 리스트 높이 = 행 높이의 합. 상한(capHeight, **점 예산**)까지는 그대로 자라고(스크롤 없음), 넘으면 그 높이로 고정 후 스크롤.
@@ -3710,7 +3759,9 @@ private struct PokePanel: View {
                         onPoke: { onPoke(entry.userID) },
                         onUltra: { onUltra(entry.userID) },
                         onOpenMessages: { onOpenMessages(entry.userID) },
-                        hasUnreadMessages: unreadMessagePeerIDs.contains(entry.userID)
+                        unread: PokeRowUnreadMark.of(
+                            entry.userID, unreadMessagePeerIDs: unreadMessagePeerIDs, unreadPokePeerIDs: unreadPokePeerIDs
+                        )
                     )
                     // 행마다 높이가 다르다(상태메시지가 있으면 62, 없으면 48) — 규칙은 행 쪽 한 곳이다.
                     .frame(height: PokeDirectoryRowView.rowHeight(for: entry))
@@ -3844,8 +3895,8 @@ struct PokeDirectoryRowView: View {
     /// 말풍선 버튼 — **그 사람과의 1:1 대화 화면으로 넘어간다**(v0.2.50 — 창이 아니라 이 팝오버 안이다).
     /// 여기서 아무것도 보내지 않는다. 옛 `isComposing`/`onToggleCompose`(행 아래 인라인 작성기 펼침)도 없다.
     var onOpenMessages: () -> Void = {}
-    /// 이 사람에게서 온 것 중 아직 안 읽은 것이 있는가. 말풍선 위 점 하나로 그린다.
-    var hasUnreadMessages: Bool = false
+    /// 이 사람에게서 온 것 중 아직 안 읽은 것(메시지 · v0.3.65 부터 안 본 찌르기)이 있는가. 말풍선 위 점 하나로 그린다.
+    var unread: PokeRowUnreadMark = .none
 
     // ── 높이(v0.3.51 상태메시지) ──
     /// 상태메시지가 없는 행. v0.3.50 까지의 유일한 높이이고 지금도 상태가 없는 사람은 이 높이 그대로다.
@@ -4004,7 +4055,7 @@ struct PokeDirectoryRowView: View {
                 // 안 읽음 점. **원 바깥 모서리에 걸친다** — 아이콘 위에 얹으면 말풍선 글리프와 겹쳐
                 // 둘 다 안 읽힌다. 색은 danger 가 아니라 accent 다: 안 읽은 메시지는 사고가 아니다.
                 .overlay(alignment: .topTrailing) {
-                    if hasUnreadMessages {
+                    if unread.showsDot {
                         Circle()
                             .fill(CheckTheme.accent)
                             .frame(width: 7, height: 7)
@@ -4018,9 +4069,9 @@ struct PokeDirectoryRowView: View {
         .accessibilityLabel(messageHelp)
     }
 
-    /// 툴팁 = 접근성 라벨. 두 벌로 적으면 한쪽만 낡는다.
+    /// 툴팁 = 접근성 라벨. 두 벌로 적으면 한쪽만 낡는다. 문장은 `PokeRowUnreadMark.help` 한 곳이다(찌르기만 있으면 찌르기라고 말한다).
     private var messageHelp: String {
-        hasUnreadMessages ? "\(entry.name)님과의 대화 — 안 읽은 메시지가 있어요" : "\(entry.name)님과의 대화 열기"
+        unread.help(name: entry.name)
     }
 
     // 말풍선 라벨. 활성은 accent 글자 + 옅은 accent 원형(찌르기의 꽉 찬 accent 보다 한 급 낮은 무게),

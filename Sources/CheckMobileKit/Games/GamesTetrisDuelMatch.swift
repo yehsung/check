@@ -105,7 +105,7 @@ package struct GamesTetrisDuelChrome: Equatable, Sendable {
 
     package let stage: Stage
     package let stake: Int
-    /// "5 · 이기면 +4" — 이기면 받는 **순이익**(수수료 뺀 값)이라 결과 카드의 루비와 같은 숫자다.
+    /// "5 · 이기면 +5" — 이기면 받는 **순이익**(`DuelFee.winnerNet` — v0.3.64 부터 수수료 0)이라 결과 카드의 루비와 같은 숫자다.
     package let stakeLine: String
     /// ★ 화면이 손가락·버튼을 엔진으로 보내는가. 준비·카운트다운·탑아웃·끝에서는 거짓이다.
     /// 코어(`TetrisDuelSession.isLive`)가 이미 막지만 **화면도 눌림을 안 보내는 쪽**이 맞다 — 보내는 화면은

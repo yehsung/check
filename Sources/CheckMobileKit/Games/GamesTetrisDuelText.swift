@@ -29,7 +29,7 @@ package enum TetrisPhoneText {
     package static let cardOpenHint = "1:1 테트리스 대결 화면을 열어요"
     package static let close = "닫기"
 
-    /// 판돈 줄. 이기면 **순이익**(판돈 − 수수료, `DuelFee.winnerNet`) — 결과 카드의 루비 변화와 같은 숫자다.
+    /// 판돈 줄. 이기면 **순이익**(`DuelFee.winnerNet` — v0.3.64 부터 수수료 0 이라 +판돈) — 결과 카드의 루비 변화와 같은 숫자다.
     package static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
     package static func challengeWithStake(_ stake: Int) -> String { "\(stake) 걸고 신청하기" }
     package static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
@@ -58,7 +58,8 @@ package enum TetrisPhoneText {
         ("조작", "판을 좌우로 끌어 옮기고, 아래로 끌어 내려요. 판을 톡 누르면 회전해요. "
             + "아래 버튼으로 \(holdButton) · \(rotateCounterButton) 회전 · \(hardDropButton)를 해요."),
         ("앱을 나가면", "판 중에 앱을 나가면 판이 멈춰서 15초 뒤에 져요. 대결이 끝날 때까지 앱을 켜 두세요."),
-        ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고(수수료 \(DuelFee.percent)% 빼고), "
+        // v0.3.64: 판돈 수수료를 없앴다(사용자 결정 2026-10-22) — 맥 `TetrisDuelText` 규칙 줄과 같은 문장.
+        ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, "
             + "무승부면 돌려받아요. 30초 안에 둘 다 들어오지 않아도 돌려받아요.")
     ]
 
@@ -194,7 +195,7 @@ package enum TetrisPhoneText {
 
     /// 고를 수 있는 판돈 셋(3 · 5 · 10). 집합의 주인은 서버(`stakes`)이고 앱 값과 갈리면 진실은 거절한 쪽에 있다.
     package static let stakes = TetrisDuelStake.allCases.map(\.rawValue)
-    /// "이기면 +4" — 판돈 칸 아래 줄(꼬리 `stakeGainSuffix` 와 달리 앞 가운뎃점이 없다).
+    /// "이기면 +5" — 판돈 칸 아래 줄(꼬리 `stakeGainSuffix` 와 달리 앞 가운뎃점이 없다).
     package static func stakeGain(_ stake: Int) -> String { "이기면 +\(DuelFee.winnerNet(stake: stake))" }
     package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
     package static func stakePromptChosen(_ stake: Int) -> String { "판돈 \(stakeLine(stake))" }

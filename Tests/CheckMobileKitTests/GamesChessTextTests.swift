@@ -131,8 +131,8 @@ struct GamesChessTextTests {
     @Test("판돈 문구는 '신청 시점에 빠진다'고 말하지 않는다")
     func stakeTextNeverClaimsRubyLeavesOnChallenge() {
         // 참인 사실 둘을 먼저 못 박는다(없는 말을 금지하는 단언만 두면, 문장을 통째로 지워도 초록이다).
-        // v0.3.54: 승자 상금에서 수수료 10% 를 뗀다 — 캡션이 그 사실을 한 번 말한다(오목과 같은 문장).
-        #expect(ChessPhoneText.stakeCaption == "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요(수수료 10% 빼고)")
+        // v0.3.64: 판돈 수수료가 없어졌다 — 캡션이 수수료를 말하지 않는다(오목 · 맥과 같은 문장).
+        #expect(ChessPhoneText.stakeCaption == "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요")
         #expect(ChessPhoneText.stakeCaption == GomokuPhoneText.stakeCaption, "체스와 오목이 같은 판돈 규칙을 다르게 말한다")
         #expect(ChessPhoneText.stakeCaption.contains("수락"), "루비가 빠지는 순간을 말하지 않는다")
         #expect(ChessPhoneText.stakeNotHeldYet(ttlSeconds: 60)

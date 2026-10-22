@@ -21,7 +21,7 @@ import Testing
 //   ⑤ 가속 장면은 서버 경과초가 120 을 **넘는다**(D7). 안 넘으면 '속도 올라가는 중 · 레벨 N' 이 아예 안 뜬다.
 //   ⑥ 결과 장면의 승패·사유 쌍이 서버 CHECK 를 지키고(topout 은 승패가 있다 · time_cap·no_show 는 무승부),
 //      `result` 글자가 **내 기준이 아니다**(won 은 `opponent_win`, lost 는 `challenger_win` — 두 장면이 갈린다).
-//   ⑦ 루비가 수수료 식(`DuelFee`)과 맞고, 장면 로비의 잔액과 같은 숫자다(한 화면에 함께 뜬다).
+//   ⑦ 루비가 정산 식(`DuelFee` — v0.3.64 부터 수수료 0)과 맞고, 장면 로비의 잔액과 같은 숫자다(한 화면에 함께 뜬다).
 //   ⑧ 공격 누계가 서로 맞물리고 서버 상한(`8 + 3×경과초`) 아래다.
 //   ⑨ 마지막으로 **갈림 자체**를 단언한다 — 여섯 판 장면의 state 가 서로 달라야 한다(기준선이 같은 입력이면
 //      그 테스트는 영원히 초록이다).
@@ -82,7 +82,7 @@ import Testing
         .init(route: "games/tetris/match/speedup", matchID: "demo-tetris-speedup", stake: 10,
               resumes: true, elapsed: 168, levelFloor: 14, finished: false, ruby: 32, opponent: walnut),
         .init(route: "games/tetris/match/won", matchID: "demo-tetris-won", stake: 5,
-              resumes: true, elapsed: 214, levelFloor: 19, finished: true, ruby: 46, opponent: cloud),
+              resumes: true, elapsed: 214, levelFloor: 19, finished: true, ruby: 47, opponent: cloud),  // 42 − 5 + 10(2×판돈)
         .init(route: "games/tetris/match/lost", matchID: "demo-tetris-lost", stake: 10,
               resumes: true, elapsed: 151, levelFloor: 13, finished: true, ruby: 32, opponent: choco),
     ]
@@ -324,7 +324,7 @@ import Testing
         #expect(lost.result == "challenger_win" && lost.winner == Self.choco)
     }
 
-    // MARK: - ⑦ 루비 · 수수료
+    // MARK: - ⑦ 루비 · 정산
 
     @Test("장면마다 루비가 DuelFee 식과 맞고, 같은 장면 로비의 잔액과 같은 숫자다")
     func rubyFollowsTheFeeFormula() throws {
@@ -332,7 +332,7 @@ import Testing
             let payload = try Self.state(scene)
             #expect(payload.stake == scene.stake, "\(scene.matchID): 판돈 \(payload.stake ?? -1)")
             #expect(TetrisDuelStake(rawValue: scene.stake) != nil, "\(scene.matchID): 판돈이 3·5·10 밖이다")
-            // 수락 때 양쪽에서 판돈을 걷고, 이기면 2×판돈 − 수수료를 받는다(서버 duel_fee 와 같은 식).
+            // 수락 때 양쪽에서 판돈을 걷고, 이기면 2×판돈 − 수수료를 받는다(서버 duel_fee 와 같은 식 — v0.3.64 부터 0).
             let iWon = payload.winner == Self.me
             let want = Self.baseRuby - scene.stake + (iWon ? DuelFee.winnerPayout(stake: scene.stake) : 0)
             #expect(payload.rubyBalance == want,
@@ -352,7 +352,7 @@ import Testing
                 #expect(delta == (iWon ? scene.stake - DuelFee.fee(stake: scene.stake) : -scene.stake))
             }
         }
-        // 판돈 세 값이 모두 쓰인다 — 한 값만 쓰면 수수료 계산이 틀려도 안 보인다(3→1 · 5→1 · 10→2).
+        // 판돈 세 값이 모두 쓰인다 — 한 값만 쓰면 정산 계산이 틀려도 안 보인다.
         #expect(Set(Self.matchScenes.map(\.stake) + [3]) == [3, 5, 10])
         let invite = try Self.action(rpc: "tetris_state", matchID: "demo-tetris-invite-out",
                                      route: "games/tetris/lobby/invites")

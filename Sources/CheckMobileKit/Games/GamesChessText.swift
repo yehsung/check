@@ -295,11 +295,11 @@ package enum ChessPhoneText {
     package static let stakeTitle = "판돈"
     /// 고를 수 있는 판돈 셋(3 · 5 · 10). 집합의 주인은 서버이고(`stakes`) 앱 값과 갈리면 진실은 거절한 쪽에 있다.
     package static let stakes = ChessStake.allCases.map(\.rawValue)
-    /// "5 · 이기면 +4" — v0.3.54 부터 꼬리 숫자는 **순이익**(판돈 − 수수료 10% 반올림, `DuelFee.winnerNet`)이다.
+    /// "5 · 이기면 +5" — 꼬리 숫자는 **순이익**(`DuelFee.winnerNet`)이다. v0.3.54~0.3.63 은 수수료 10% 를 뗀 +2/+4/+8, v0.3.64 부터 수수료 0 이라 +판돈.
     package static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
-    /// " · 이기면 +4"(판돈 5 의 줄 꼬리 — 순이익).
+    /// " · 이기면 +5"(판돈 5 의 줄 꼬리 — 순이익).
     package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
-    /// "이기면 +4" — 판돈 칸(타일) 아래 줄. 꼬리(`stakeGainSuffix`)와 달리 **앞 가운뎃점이 없다**.
+    /// "이기면 +5" — 판돈 칸(타일) 아래 줄. 꼬리(`stakeGainSuffix`)와 달리 **앞 가운뎃점이 없다**.
     package static func stakeGain(_ stake: Int) -> String { "이기면 +\(DuelFee.winnerNet(stake: stake))" }
     package static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     package static let stakePromptCaption = "판돈을 고르세요"
@@ -307,7 +307,7 @@ package enum ChessPhoneText {
     package static func challengeWithStake(_ stake: Int) -> String { "\(stake) 걸고 도전하기" }
     /// 루비가 모자라 못 고르는 판돈의 이유 한 줄. 정본은 앱의 다른 화면과 **같은 말**이다.
     package static let stakeShortfall = CheckCoreShared.shortfallNotice(need: nil, have: nil)
-    /// 판돈이 **언제** 빠지는지. 주어가 '수락' 이다 — 오목과 같은 문장(v0.3.54 수수료 한 마디 포함).
+    /// 판돈이 **언제** 빠지는지. 주어가 '수락' 이다 — 오목과 같은 문장(v0.3.64 에 수수료 한 마디를 뺐다).
     package static let stakeCaption = GomokuPhoneText.stakeCaption
     /// ★ 신청만 한 상태를 말하는 줄. "신청하면 빠져요" 로 적으면 **거짓**이다 — 신청은 0원도 움직이지 않고,
     /// 응답이 없으면 그대로 사라진다(루비 이동 없음). 이 문장과 그 테스트가 그 거짓말이 돌아오는 길을 막는다.

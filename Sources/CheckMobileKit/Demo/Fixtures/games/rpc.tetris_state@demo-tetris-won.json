@@ -3,7 +3,7 @@
     "결과 카드(이겼다 · 상대가 꼭대기에 닿았다). 닿는 길: games/tetris/match/won.",
     "★ result 가 **'opponent_win' 인데 내가 이겼다**. result 는 판 표의 challenger/opponent 칸 기준이고 **내 기준이 아니다** — 나는 신청받은 쪽(opponent)이다. 내 승패는 winner 와 내 uuid 를 맞춰서만 가른다(applyState). result 글자로 승패를 가르는 화면이 있으면 이 장면이 '졌어요'를 그린다.",
     "쌍방 규칙(§2.2): topout 은 승패가 있어야 한다 — winner 가 null 이면 서버 CHECK 가 막는다. 지는 쪽만 자기 탑아웃을 신고하므로(D9) opponent.topped_out=true · me.topped_out=false 다.",
-    "루비: 42(기본) − 5(판돈) + 9(승자 수령 2×5−수수료 1) = 46. 결과 카드의 눈금은 순이익 +4(DuelFee.winnerNet)다 — 수령액 9 를 그리면 거짓이다.",
+    "루비: 42(기본) − 5(판돈) + 10(승자 수령 2×5 — v0.3.64 부터 수수료 0) = 47. 결과 카드의 눈금은 순이익 +5(DuelFee.winnerNet)다 — 수령액 10 을 그리면 거짓이다.",
     "끝난 판은 코어가 판 구동기를 버린다(applyState → discardDuel) — me.board 는 마지막 보고 그대로이고 결과 카드는 판을 다시 돌리지 않는다."
   ],
   "state" : {
@@ -44,7 +44,7 @@
     },
     "ready_deadline_ms" : 1789621311000,
     "result" : "opponent_win",
-    "ruby_balance" : 46,
+    "ruby_balance" : 47,
     "seed" : 20260921,
     "server_now_ms" : 1789621500000,
     "stake" : 5,

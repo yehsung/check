@@ -64,7 +64,9 @@ struct AppStoreDocContractTests {
         #expect(contests[1].contains("예") && !contests[1].contains("아니오") && !contests[1].contains("확인 필요"),
                 "애플의 경연 정의엔 실물 상품 조건이 없다 — 순위·보상을 두고 겨루면 경연이다: \(contests[1])")
         #expect(contests[1].contains("13+"), "매일 자정 상품은 '잦음' 이라 13+ 다: \(contests[1])")
-        #expect(contests[2].contains("\(prizes[0])·\(prizes[1])·\(prizes[2])"), "근거 칸의 상품 숫자가 코드와 다르다: \(contests[2])")
+        // "1·2·3등에게 루비 N·N·N" 의 **현재형 문장**으로 잰다 — 근거 칸은 지난 값(10·5·3 · 그 전 20·10·5)도 적으므로 숫자 셋만 찾으면
+        // 현재형을 옛 값으로 되돌려도 역사 쪽 글자에 걸려 초록이다(2026-10-22 에 상금이 20·10·5 로 돌아오며 생긴 구멍).
+        #expect(contests[2].contains("1·2·3등에게 루비 \(prizes[0])·\(prizes[1])·\(prizes[2])"), "근거 칸의 상품 숫자가 코드와 다르다: \(contests[2])")
         #expect(contests[2].contains("\(GamesMiniGameText.prizeQuorum)명"), "정족수(\(GamesMiniGameText.prizeQuorum)명)를 빠뜨렸다: \(contests[2])")
 
         let verdict = try #require(survey.split(separator: "\n").first { $0.hasPrefix("예상 결과 등급") }, "예상 등급 줄이 없다")
@@ -93,11 +95,14 @@ struct AppStoreDocContractTests {
         #expect(lootBox[2].contains(GachaText.oddsButton), "근거 칸이 확률을 보여 주는 자리(앱 버튼 '\(GachaText.oddsButton)')를 말하지 않는다")
         #expect(lootBox[2].contains(GachaText.title), "근거 칸이 앱의 뽑기 이름('\(GachaText.title)')을 쓰지 않는다")
         #expect(lootBox[2].contains("\(price) 루비"), "근거 칸의 1회 값이 데모 상점(\(price))과 다르다")
-        // 모의 도박 근거 칸도 1.0.8 수수료를 말한다(이긴 쪽이 '두 사람 몫' 전부를 받는다고 쓰면 거짓이다).
+        // 모의 도박 근거 칸은 승자가 실제로 받는 루비를 말한다 — 1.0.8~1.0.12 는 수수료 10% 를 뗀 5/9/18,
+        // 2026-10-22(서버 `20261022142000_duel_fee_off.sql`) 부터 수수료 없이 두 사람 몫 전부 6/10/20.
         let gambling = try Self.row(in: survey, containing: "모의 도박(Simulated Gambling)")
-        let payouts = [3, 5, 10].map { 2 * $0 - DuelFee.fee(stake: $0) }
-        #expect(payouts == [5, 9, 18], "전제: 손으로 적은 승자 수령표")
-        #expect(gambling[2].contains("수수료 10%") && gambling[2].contains("5/9/18"), "모의 도박 근거가 수수료 뒤 상금을 말하지 않는다")
+        let payouts = [3, 5, 10].map { DuelFee.winnerPayout(stake: $0) }
+        #expect(payouts == [6, 10, 20], "전제: 손으로 적은 승자 수령표(수수료 없음)")
+        #expect(gambling[2].contains("6/10/20") && gambling[2].contains("수수료 없이"), "모의 도박 근거가 지금 승자 수령을 말하지 않는다: \(gambling[2])")
+        // 옛 현재형 문장("두 사람 몫에서 수수료 … 를 뺀")이 남으면 안 된다 — 지난 값은 '그 전' 으로만 적는다.
+        #expect(!gambling[2].contains("두 사람 몫에서 수수료"), "모의 도박 근거가 아직 수수료를 지금 사실로 적는다: \(gambling[2])")
     }
 
     // MARK: 1.0.11 — 1:1 테트리스

@@ -187,9 +187,10 @@ struct MeTextParityTests {
         for sentence in sentences {
             #expect(code.contains(sentence), "맥 코드에 없는 문장: \(sentence)")
         }
-        #expect(code.contains("static let rubyPrizes = [10, 5, 3]") && code.contains("static let prizeQuorum = 5"), "상품·정족수 상수가 바뀌었다")
+        // 2026-10-22(맥 0.3.64 · 서버 20261022141000) 사용자 결정으로 10·5·3 → 20·10·5.
+        #expect(code.contains("static let rubyPrizes = [20, 10, 5]") && code.contains("static let prizeQuorum = 5"), "상품·정족수 상수가 바뀌었다")
         // 폰 두 벌(게임 탭 · 순위 탭)도 맥과 같은 값이다 — 서버는 금액을 내려 주지 않아 셋이 갈리면 화면끼리 다른 상금을 말한다.
-        #expect(GamesMiniGameText.rubyPrizes == [10, 5, 3] && RankingsText.rubyPrizes == GamesMiniGameText.rubyPrizes)
+        #expect(GamesMiniGameText.rubyPrizes == [20, 10, 5] && RankingsText.rubyPrizes == GamesMiniGameText.rubyPrizes)
         #expect(code.contains("displayNameCooldownSeconds: TimeInterval = 7 * 24 * 3600"))
     }
 }

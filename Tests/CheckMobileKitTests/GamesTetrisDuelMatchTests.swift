@@ -297,7 +297,7 @@ import Testing
 
     @Test("결과 카드: 사유는 **코어 표**이고 루비는 서버 값 우선 · 없으면 승 +순이익 · 패 −판돈 · 무 0")
     func theResultCardMatchesTheServerState() {
-        // 서버가 말한 루비가 있으면 그것이 답이다(수수료 식이 서버에서 바뀌어도 화면이 안 거짓말한다).
+        // 서버가 말한 루비가 있으면 그것이 답이다(폴백 +10 과 다른 18 — 정산 식이 서버에서 바뀌어도 화면이 안 거짓말한다).
         let given = GamesTetrisDuelChrome.result(Self.match(stake: 10, finished: true, outcome: .won,
                                                             reason: .topout, delta: 18))
         #expect(given.title == "이겼어요")
@@ -305,11 +305,12 @@ import Testing
         #expect(given.rubyDelta == 18 && given.rubyDeltaText == "+18")
         #expect(given.tone == .good && !given.isDraw)
 
-        // 없으면 같은 식으로 센다: 3 → +2 · 5 → +4 · 10 → +8(`DuelFee.winnerNet`).
+        // 없으면 같은 식으로 센다: 3 → +3 · 5 → +5 · 10 → +10(`DuelFee.winnerNet` — v0.3.64 부터 수수료 0).
+        // 기대값은 **손으로 적은 값**(판돈 그대로)이다 — `DuelFee` 로 다시 만들면 식이 틀려도 초록이다.
         for stake in [3, 5, 10] {
             let won = GamesTetrisDuelChrome.result(Self.match(stake: stake, finished: true, outcome: .won,
                                                               reason: .resign, delta: nil))
-            #expect(won.rubyDelta == DuelFee.winnerNet(stake: stake), "판돈 \(stake) 승리 순이익이 틀렸다")
+            #expect(won.rubyDelta == stake && won.rubyDeltaText == "+\(stake)", "판돈 \(stake) 승리 순이익이 틀렸다: \(won.rubyDeltaText)")
             #expect(won.reason == "상대가 기권했어요")
             let lost = GamesTetrisDuelChrome.result(Self.match(stake: stake, finished: true, outcome: .lost,
                                                                reason: .resign, delta: nil))
@@ -319,8 +320,8 @@ import Testing
 
         // 사유 다섯 × 내 기준(승자면 주어가 '상대'). **코어 표와 글자가 같아야 한다** — 두 벌로 쓰면 맥과 갈린다.
         let cases: [(TetrisDuelEndReason, TetrisDuelOutcome?, Int)] = [
-            (.topout, .lost, -5), (.resign, .won, 4), (.disconnect, .won, 4), (.disconnect, .lost, -5),
-            (.disconnect, .draw, 0), (.timeCap, .draw, 0), (.noShow, .draw, 0), (.abandoned, .won, 4)
+            (.topout, .lost, -5), (.resign, .won, 5), (.disconnect, .won, 5), (.disconnect, .lost, -5),
+            (.disconnect, .draw, 0), (.timeCap, .draw, 0), (.noShow, .draw, 0), (.abandoned, .won, 5)
         ]
         for (reason, outcome, delta) in cases {
             let result = GamesTetrisDuelChrome.result(Self.match(finished: true, outcome: outcome,

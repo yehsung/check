@@ -702,7 +702,8 @@ struct MeAchievementClaimTests {
 
     @Test("문구: 낱말 · 진행 숫자 · 보상 · 받을 보상 수 · 보이스오버 · 실패 한 줄")
     func copyValues() {
-        #expect(MeText.missionsTitle == "도전 미션")
+        // 맥 0.3.64 가 "도전 미션" → "누적 미션"(사용자 결정 2026-10-22 — 일일 · 주간 · 누적 세 묶음). 이 카드가 누적 13개다.
+        #expect(MeText.missionsTitle == "누적 미션")
         #expect(MeText.claimButton == "받기" && MeText.claimedMark == "받음" && MeText.claimedMark == MeText.weeklyGrantSuffix)
         #expect(MeText.missionsLoadFailed == "미션을 불러오지 못했어요")
         #expect(MeText.claimFailed == "받지 못했어요 · 다시 눌러 주세요" && MeText.claimFailed == AchievementNoticeText.claimFailedRow)

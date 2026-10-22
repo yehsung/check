@@ -85,8 +85,9 @@ package enum GamesText {
 package enum GamesMiniGameText {
     package static let rankTitle = "오늘 순위"
     /// 자정 상품(루비). 서버 `ruby_prize_amounts()` 와 짝인 상수(맥 `MiniGamePanel.rubyPrizes` · 같은 탭 `RankingsText.rubyPrizes`).
-    /// 2026-10-14(1.0.7 · 서버 20261014120000) 20·10·5 → 10·5·3. 서버는 금액을 내려 주지 않으므로 바꿀 땐 세 곳을 함께.
-    package static let rubyPrizes = [10, 5, 3]
+    /// 2026-10-14(1.0.7 · 서버 20261014120000) 20·10·5 → 10·5·3, 2026-10-22(맥 0.3.64 · 서버 20261022141000) 사용자 결정
+    /// ("일반 미니게임 3종 상금루비 올려야할듯 20 10 5 로 다시 해줘")으로 다시 20·10·5. 서버는 금액을 내려 주지 않으므로 바꿀 땐 세 곳을 함께.
+    package static let rubyPrizes = [20, 10, 5]
     /// 상품 정족수. 서버 `minigame_prize_quorum()` 과 짝인 상수(맥 `MiniGamePanel.prizeQuorum`).
     package static let prizeQuorum = 5
     package static let prizeCaption = "자정에 1·2·3등에게 루비 \(rubyPrizes[0])·\(rubyPrizes[1])·\(rubyPrizes[2])"
@@ -224,8 +225,9 @@ package enum GomokuPhoneText {
     package static let reloadUsers = MobileLoadText.retry
     package static let challenge = "도전"
     package static let stakeTitle = "판돈"
-    /// v0.3.54: 승자 상금 2×판돈에서 수수료 10%(반올림)를 뗀다 — 문장이 그 사실을 한 번 말한다(비율은 `DuelFee.percent`).
-    package static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요(수수료 \(DuelFee.percent)% 빼고)"
+    /// v0.3.64(2026-10-22 사용자 결정 "멀티 미니게임 수수료 다시 제거해줘"): 판돈 수수료가 없어졌다 — 이긴 사람은 2×판돈을 받는다.
+    /// 맥 `GomokuText.stakeCaption` 과 같은 문장이다. 화면 어디에도 "수수료" 글자를 남기지 않는다(`GamesDuelFeeCopyTests`).
+    package static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요"
     package static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     package static let stakePromptCaption = "판돈을 고르세요"
     package static func stakePromptChosen(_ stake: Int) -> String { "판돈 \(stakeLine(stake))" }
@@ -289,7 +291,7 @@ package enum GomokuPhoneText {
         reason == .budget ? "판정할 수 없는 자리예요" : "\(reasonLabel(reason))라 둘 수 없어요"
     }
 
-    /// "5 · 이기면 +4" — 꼬리 숫자는 **순이익**(판돈 − 수수료, `DuelFee.winnerNet`)이다. 결과 카드의 +N 과 같은 눈금.
+    /// "5 · 이기면 +5" — 꼬리 숫자는 **순이익**(`DuelFee.winnerNet` — v0.3.64 부터 수수료 0 이라 +판돈)이다. 결과 카드의 +N 과 같은 눈금.
     package static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
 
     package static func stoneName(_ color: GomokuColor) -> String { color == .black ? "흑 · 먼저 둬요" : "백" }
@@ -349,9 +351,9 @@ package enum GomokuPhoneText {
     package static func liveCount(_ count: Int) -> String { "\(count)판" }
     package static let inMatchButton = "대국 중"
     package static let needsUpdate = "앱 업데이트가 필요해요"
-    /// " · 이기면 +4"(판돈 5 의 줄 꼬리 — 순이익, `DuelFee.winnerNet`).
+    /// " · 이기면 +5"(판돈 5 의 줄 꼬리 — 순이익, `DuelFee.winnerNet`).
     package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
-    /// "이기면 +4" — 판돈 시트의 칸 아래 줄(앞 가운뎃점 없음 · 순이익). 체스 `ChessPhoneText.stakeGain` 과 같은 말.
+    /// "이기면 +5" — 판돈 시트의 칸 아래 줄(앞 가운뎃점 없음 · 순이익). 체스 `ChessPhoneText.stakeGain` 과 같은 말.
     package static func stakeGain(_ stake: Int) -> String { "이기면 +\(DuelFee.winnerNet(stake: stake))" }
     /// "42초 남음"(받은 신청 머리 · 보낸 신청 부제).
     package static func remainingPhrase(_ seconds: Double) -> String { "\(remaining(seconds)) 남음" }

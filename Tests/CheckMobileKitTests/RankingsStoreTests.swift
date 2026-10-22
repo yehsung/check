@@ -325,8 +325,8 @@ struct RankingsStoreTests {
         #expect(RankingsText.quorumCaption(players: 3) == "오늘 3명 참여 · 5명부터 지급")
         #expect(RankingsText.quorumCaption(players: 5) == "오늘 5명 참여 · 지급 조건 충족")
         #expect(RankingsText.score(1000) == "1000점")
-        #expect(RankingsText.prizeCaption == "자정에 1·2·3등에게 루비 10·5·3")
-        #expect(RankingsText.awardedChip == "루비 +10 받음")
+        #expect(RankingsText.prizeCaption == "자정에 1·2·3등에게 루비 20·10·5")
+        #expect(RankingsText.awardedChip == "루비 +20 받음")
         #expect(GamesMiniGameText.prizeCaption == RankingsText.prizeCaption && GamesMiniGameText.awardedChip == RankingsText.awardedChip)
         #expect(RankingsText.tokenTitle(month: "2025-12", now: RankMeFixture.now) == "2025년 12월 AI 토큰 소모량")
 

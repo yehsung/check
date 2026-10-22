@@ -301,7 +301,7 @@ struct MeAchievementViewTests {
         #expect(MeText.claimAllAccessibility(-1) == "전부 받기, 루비 0개")
         #expect(MeText.claimableMark == "받을 수 있어요")
         // 기존 낱말은 한 글자도 안 바뀌었다(맥과 한 벌).
-        #expect(MeText.missionsTitle == "도전 미션" && MeText.claimButton == "받기" && MeText.claimedMark == "받음")
+        #expect(MeText.missionsTitle == "누적 미션" && MeText.claimButton == "받기" && MeText.claimedMark == "받음")
         #expect(MeText.claimFailed == AchievementNoticeText.claimFailedRow)
         #expect(MeText.claimPendingHint(2) == "받을 보상 2개" && MeText.claimPendingHint(0) == nil)
     }

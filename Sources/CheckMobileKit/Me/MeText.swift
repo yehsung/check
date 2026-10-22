@@ -378,8 +378,9 @@ package enum MeText {
     //   (폰 로그인 · 할 일 3개 · 오목 · 체스 · 미니게임 3종 · 콕 10/50/100 · 울트라 5회 · 팀 2/3명 · 연속 근무 14/30일 →
     //   `AchievementStatus.seriesRows` 가 계열마다 한 줄로 접는다). 여기 있는 것은 **말투**뿐이다.
 
-    /// 절 소제목(맥 `AchievementCopy.sectionTitle`).
-    package static let missionsTitle = "도전 미션"
+    /// 절 소제목(맥 `AchievementCopy.sectionTitle`). 맥 0.3.64 가 미션 화면을 일일 · 주간 · 누적 세 묶음으로 나누며 "도전 미션"을
+    /// "누적 미션"으로 바꿨다(사용자 결정 2026-10-22) — 이 카드가 그 누적 13개라 같은 이름을 쓴다. 일일 묶음은 아직 폰에 없다(모바일 세션 몫).
+    package static let missionsTitle = "누적 미션"
     /// 한 번도 못 읽었을 때의 실패 문장(맥 `MissionPanelCopy.failedCaption`). 불러오는 중은 `MeText.loading`.
     package static let missionsLoadFailed = "미션을 불러오지 못했어요"
     /// 받기 버튼의 낱말 — 도전 미션 줄과 이번 주 근무 카드가 **같은 버튼**이다(맥 `AchievementCopy.claimButton`).

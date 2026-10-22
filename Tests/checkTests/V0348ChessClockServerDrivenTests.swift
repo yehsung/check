@@ -452,9 +452,9 @@ struct V0348ChessClockServerDrivenTests {
         #expect(match.isFinished)
         #expect(match.outcome == .won)
         #expect(match.endReason == .resign)
-        // v0.3.54 수수료 10%: 판돈 5 승리의 순이익은 +4(승자 수령 9 − 낸 판돈 5). 손으로 적은 값이다 — `DuelFee` 식으로
-        // 기대값을 만들면 식이 틀려도 초록이다. (픽스처 잔량은 수수료 전 서버의 녹화본이다 — V0354DuelFeeTests 머리말.)
-        #expect(match.rubyDelta == 4)
+        // v0.3.64 수수료 0: 판돈 5 승리의 순이익은 +5(승자 수령 10 − 낸 판돈 5). 손으로 적은 값이다 — `DuelFee` 식으로
+        // 기대값을 만들면 식이 틀려도 초록이다. 수수료 10% 시절에는 +4 였다.
+        #expect(match.rubyDelta == 5)
         #expect(match.stake == 5)
         #expect(match.clock.whiteMsLeft == white)
         #expect(match.clock.blackMsLeft == black)

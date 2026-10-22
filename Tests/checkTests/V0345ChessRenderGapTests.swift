@@ -371,8 +371,8 @@ private func cgResultStore(fen: String) -> ChessStore {
 @Test
 func theSpectateStakeChipNeverPromisesAReward() throws {
     // 값으로 되묻는다(칩은 순수 함수로 글자를 뗀다).
-    // v0.3.54: 이기면 순이익(판돈 10 − 수수료 2) = +8.
-    #expect(ChessStakeChip.text(stake: 10, showsReward: true) == "10 · 이기면 +8")
+    // v0.3.64 수수료 0: 이기면 순이익 = 판돈 그대로 = +10(수수료 10% 시절에는 +8 이었다).
+    #expect(ChessStakeChip.text(stake: 10, showsReward: true) == "10 · 이기면 +10")
     #expect(ChessStakeChip.text(stake: 10, showsReward: false) == "10")
     // ★ 기준선 갈림: 같은 판돈인데 두 갈래가 **다른 글자**다(같으면 아래 단언이 영원히 초록이다).
     #expect(ChessStakeChip.text(stake: 10, showsReward: true) != ChessStakeChip.text(stake: 10, showsReward: false))

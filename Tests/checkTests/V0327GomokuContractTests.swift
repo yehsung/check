@@ -175,9 +175,10 @@ private func expectMatchEqualsServer(
     }
     let expectedDelta: Int? = facts.expectedOutcome.flatMap { outcome -> Int? in
         switch outcome {
-        // v0.3.54 수수료 10%: 승리 순이익 = 판돈 − 반올림 10%(2×판돈). 표는 **손으로 적은 값**이다(설계서 3/5/10 → +2/+4/+8) —
-        // `DuelFee` 식으로 기대값을 만들면 식이 틀려도 초록이다. 표에 없는 판돈이 오면 빨개지게 둔다(nil ≠ 숫자).
-        case .won: return [3: 2, 5: 4, 10: 8][facts.stake]
+        // v0.3.64 수수료 0: 승리 순이익 = 판돈 그대로(승자 수령 2×판돈 − 낸 판돈). 표는 **손으로 적은 값**이다
+        // (3/5/10 → +3/+5/+10) — `DuelFee` 식으로 기대값을 만들면 식이 틀려도 초록이다.
+        // 표에 없는 판돈이 오면 빨개지게 둔다(nil ≠ 숫자). 수수료 10% 시절에는 +2/+4/+8 이었다.
+        case .won: return [3: 3, 5: 5, 10: 10][facts.stake]
         case .lost: return -facts.stake
         case .draw: return 0
         }
@@ -457,11 +458,11 @@ func 실서버_M1_흐름을_두_사람_시점으로_재생하면_화면이_서�
     #expect(final.moveCount == 9)
     #expect(final.outcome == (perspective == "black" ? .won : .lost))
     #expect(final.endReason == .five)
-    // 결과 카드 눈금(클라 계산): 판돈 5 승리 → +4(수수료 1) · 패배 → −5.
-    #expect(final.rubyDelta == (perspective == "black" ? 4 : -5))
-    // 서버 정산 산수(**녹화 당시 서버** — 수수료 전): 100 → 수락 −5 → 승자 +10.
-    // ⚠️ 이 픽스처는 v0.3.54 수수료 전 서버의 실출력이라 승자 잔량이 105 다(수수료 뒤 서버라면 104).
-    //    잔량은 서버 값을 그대로 옮기는 칸이라 이 단언은 "옮겼다"만 잰다 — 재생 하네스로 다시 녹화하면 104 로 바꿔라.
+    // 결과 카드 눈금(클라 계산): 판돈 5 승리 → +5(v0.3.64 수수료 0) · 패배 → −5.
+    #expect(final.rubyDelta == (perspective == "black" ? 5 : -5))
+    // 서버 정산 산수(**녹화 당시 서버**): 100 → 수락 −5 → 승자 +10 = 105.
+    // 이 픽스처는 수수료가 생기기 **전** 서버의 실출력인데, v0.3.64 가 수수료를 다시 0 으로 되돌려 지금 서버와도
+    // 같은 값이 됐다(수수료 10% 시절이었다면 104 였다). 잔량은 서버 값을 그대로 옮기는 칸이라 이 단언은 "옮겼다"만 잰다.
     #expect(gomoku.rubyBalance == (perspective == "black" ? 105 : 95))
     // 판이 끝난 순간 전적을 다시 읽는다(스토어 계약) — 서버 로비 me 가 이 판을 센다.
     await contractWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_lobby") == 1 && gomoku.record != nil }

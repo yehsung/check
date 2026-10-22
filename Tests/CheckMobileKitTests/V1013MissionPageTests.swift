@@ -40,6 +40,18 @@ struct V1013MissionPageTests {
 
     static func code(_ path: String) throws -> String { try IntegrationContractTests.code(path) }
 
+    /// [미션] 줄의 소스 — 버튼 껍데기(`MeMissionsRow`)와 내용(`MeMissionsRowContent`)을 **합쳐서** 본다.
+    ///
+    /// 줄은 메뉴 그룹(`MeMenuGroup` + `MeMenuRowContent`)의 관용구를 그대로 써서 **두 struct 로 갈려** 있다.
+    /// 껍데기만 재면 내용을 다른 struct 로 옮기기만 해도 꺾쇠·보조 글자·큰 글자 분기 단언이 조용히 빠진다
+    /// (통합 때 실제로 그렇게 빨개졌다 — 레인 B 프로브는 한 struct 였다). 줄의 계약은 **두 블록의 합**이다.
+    static func rowSource() throws -> String {
+        let page = try code(pagePath)
+        let shell = try GamesChessSpectateTests.block(of: "struct MeMissionsRow", in: page)
+        let content = try GamesChessSpectateTests.block(of: "struct MeMissionsRowContent", in: page)
+        return shell + "\n" + content
+    }
+
     /// 요청을 `METHOD 경로` 로 센 표(쿼리·본문은 세지 않는다 — 어느 덩어리가 다시 읽혔는지만 본다).
     func requestCounts(_ harness: RankMeHarness) -> [String: Int] {
         var counts: [String: Int] = [:]
@@ -88,8 +100,7 @@ struct V1013MissionPageTests {
                 "나 탭이 .missions 갈래에서 미션 화면을 띄우지 않는다 — 줄을 누르면 빈 화면이 쌓인다")
 
         // 줄은 **나 탭 위에** 쌓는다(다른 탭에 쌓으면 누른 사람이 있는 화면이 안 바뀐다).
-        let page = try Self.code(Self.pagePath)
-        let row = try GamesChessSpectateTests.block(of: "struct MeMissionsRow", in: page)
+        let row = try Self.rowSource()
         #expect(row.contains("store.context.router.push(MeDestination.missions, on: .me)"),
                 "[미션] 줄을 눌러도 미션 화면을 나 탭에 쌓지 않는다")
         #expect(row.contains("store.showsMissionsRow"),
@@ -231,8 +242,7 @@ struct V1013MissionPageTests {
         harness.expectNoForbiddenCalls()
 
         // 줄 소스가 **그 전체 수**를 지나는가 — 반쪽 값(도전 미션만 · 주간 루비만)을 읽으면 빨개진다.
-        let row = try GamesChessSpectateTests.block(of: "struct MeMissionsRow",
-                                                   in: try Self.code(Self.pagePath))
+        let row = try Self.rowSource()
         #expect(row.contains("MeText.claimPendingHint(store.missionClaimableCount)"),
                 "줄이 탭 막대 배지와 같은 수를 말하지 않는다 — 배지 \"5\" 를 보고 들어온 사람이 줄에서 다른 수를 본다")
         for half in ["achievementClaimableCount", "achievementClaimableRuby", "weeklyClaimableRuby", "showsWeeklyClaim"] {

@@ -95,9 +95,11 @@ package struct MobileDemoMissionsRoute: Hashable, Sendable {
     /// `MeDemoHooks.initialDestination()` 한 곳이 이 판정을 쓴다 — 깃발(`-AingCheckDemoMeScreen missions`)과
     /// 라우트 글자를 손으로 맞추지 않으려고 여기 둔다(상점 시트 라우트와 같은 관용구).
     package static func opensMissionsPage(route: String) -> Bool {
-        let path = route.hasPrefix("/") ? String(route.dropFirst()) : route
-        return path == "me/missions" || path.hasPrefix("me/missions/")
-            || path == "me/weekly" || path.hasPrefix("me/weekly/")
+        // 글자 판정을 **다시 쓰지 않는다** — 바로 위 `init?(demoRoute:)` 가 이미 그 판정이고, 그쪽은 앞뒤 공백과
+        // 대소문자까지 다듬는다(`trimmingCharacters` · `lowercased`). 여기서 따로 비교하면 둘이 어긋나서
+        // `" /ME/Missions/ "` 같은 라우트가 **장면은 풀리는데 화면은 안 열리는** 짝이 된다(통합 검토 1.0.13 에서 실제로
+        // 그 상태였다). 장면을 아는 라우트 = 미션 화면을 여는 라우트, 한 곳에서 정한다.
+        Self(demoRoute: route) != nil
     }
 
     /// 바늘을 **요청 본문 꼬리에 붙인** 사본. 픽스처 고르기는 본문+쿼리 글자에서 바늘을 찾으므로(`MobileDemoFixtures.entry`)

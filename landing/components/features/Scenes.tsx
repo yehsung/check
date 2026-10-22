@@ -1,18 +1,9 @@
-import { FeatureRow } from "./FeatureRow";
-import { SCENES } from "./scenes.data";
+import { FeatureStage } from './FeatureStage';
 
-// v2.1 장면 ×6(brief-v21 §1·§3·§4) — server. 엔진(FeatureRow, client)의 '통째 렌더' 모드에 데이터만 넘긴다.
-// 장면 <section id="f-…"> 6개가 맞붙어 스파인(.rail-seg, 늘 켜짐)이 장면 1 위(투명에서 시작)에서 장면 6 아래까지 끊김 없이 이어진다.
-//
-
+// 핵심 기능 6장면(docs/v3/brief.md §4.4) — app/page.tsx 가 부르는 이름. 본체는 FeatureStage(client: 고정 무대·세그먼트·흐름 배치).
+// 문구 = copy.ts(§8 글자 그대로) · 렌더 구성 = scenes.data.ts · 배치 = features.css(전역 — 이름은 전부 fx-).
 export function Scenes() {
-  return (
-    <div data-scenes="">
-      {SCENES.map((scene, i) => (
-        <FeatureRow key={scene.id} {...scene} mode="scene" railStart={i === 0} />
-      ))}
-    </div>
-  );
+  return <FeatureStage />;
 }
 
 export default Scenes;

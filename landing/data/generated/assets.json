@@ -41,6 +41,18 @@
     "h": 1108,
     "bytes": 34592
   },
+  "ios/conv-gureum-read": {
+    "src": "/assets/ios/conv-gureum-read.webp?v=66fb4aa9",
+    "w": 600,
+    "h": 1304,
+    "bytes": 25118
+  },
+  "ios/conv-gureum-sent": {
+    "src": "/assets/ios/conv-gureum-sent.webp?v=ccf010b6",
+    "w": 600,
+    "h": 1304,
+    "bytes": 25206
+  },
   "ios/games": {
     "src": "/assets/ios/games.webp?v=a484159c",
     "w": 600,
@@ -71,6 +83,12 @@
     "h": 1304,
     "bytes": 34654
   },
+  "ios/widget-limits-medium": {
+    "src": "/assets/ios/widget-limits-medium.webp?v=c7335ec6",
+    "w": 728,
+    "h": 340,
+    "bytes": 14324
+  },
   "ios/widget-today-small": {
     "src": "/assets/ios/widget-today-small.webp?v=bd46ca11",
     "w": 340,
@@ -88,6 +106,12 @@
     "w": 728,
     "h": 764,
     "bytes": 19920
+  },
+  "ui/ai-limits-card": {
+    "src": "/assets/ui/ai-limits-card.webp?v=2f21ffc4",
+    "w": 1020,
+    "h": 417,
+    "bytes": 10970
   },
   "ui/bubble-autostart": {
     "src": "/assets/ui/bubble-autostart.webp?v=16b66983",
@@ -148,6 +172,12 @@
     "w": 828,
     "h": 990,
     "bytes": 35798
+  },
+  "ui/chess-board": {
+    "src": "/assets/ui/chess-board.webp?v=cb5c319d",
+    "w": 700,
+    "h": 700,
+    "bytes": 21606
   },
   "ui/gomoku-board-sm": {
     "src": "/assets/ui/gomoku-board-sm.webp?v=ce5dfd81",
@@ -382,6 +412,12 @@
     "w": 828,
     "h": 1306,
     "bytes": 41442
+  },
+  "ui/tetris-duel": {
+    "src": "/assets/ui/tetris-duel.webp?v=491c065e",
+    "w": 1200,
+    "h": 865,
+    "bytes": 31544
   },
   "ui/timer-00-00": {
     "src": "/assets/ui/timer-00-00.webp?v=ecf3ef48",

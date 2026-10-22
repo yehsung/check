@@ -1,6 +1,6 @@
 // node --experimental-strip-types --test components/faq/faq.test.ts
-// FAQ 의 사실 계약(SPEC v2 §S7 · §1.4 · brief-v21 §2): 5문항이 CB §7 의 1–5번(CB:254–263)과 글자·순서까지 같다 · 제목 = CB:252 ·
-// JSON-LD 가 같은 문장 5개 · 금지어 0.
+// FAQ 의 사실 계약(docs/v3/brief.md §8 '자주 묻는 질문' · §4.6): 5문항이 §8 의 1–5번과 글자·순서까지 같다 · 제목 = §8 H2(= 내비 이름) ·
+// 화면 데이터 = JSON-LD(같은 문장 5개) · #faq-1…#faq-5 · JS 없이 열리는 <details>/<summary> · 금지어 0.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,54 +8,57 @@ import { FAQ_ITEMS, faqId, faqJsonLd } from "../../data/faq-items.ts";
 import { FAQ_TITLE } from "./copy.ts";
 import { jsonLdHtml } from "./jsonld.ts";
 
-const CB = readFileSync(new URL("../../docs/content-brief.md", import.meta.url), "utf8");
+const BRIEF = readFileSync(new URL("../../docs/v3/brief.md", import.meta.url), "utf8");
+const S8 = BRIEF.slice(BRIEF.indexOf("## 8."));
+const faqBlock = S8.slice(S8.indexOf("\n자주 묻는 질문(#faq)"), S8.indexOf("\n아웃트로"));
+const navLine = S8.split("\n").find((l) => l.startsWith("내비")) ?? "";
 
-/** CB §7 의 번호 목록 → { q, a }. 답 줄 끝의 ' — 출처' 는 뗀다. '예비' 줄에서 멈춘다. */
-function cbFaq(): { q: string; a: string }[] {
-  const lines = CB.split("\n");
-  const start = lines.findIndex((l) => l.startsWith("## 7. FAQ"));
-  assert.ok(start >= 0, "content-brief.md 에 '## 7. FAQ' 절이 있다");
+/** §8 의 번호 목록 `n. \`질문\` — \`답\`` → { q, a }. */
+function briefFaq(): { q: string; a: string }[] {
   const out: { q: string; a: string }[] = [];
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.startsWith("예비") || line.startsWith("## ")) break;
-    const m = /^\s*\d+\.\s+\*\*(.+?)\*\*\s*$/.exec(line);
-    if (!m) continue;
-    const answer = (lines[i + 1] ?? "").trim().split(" — ")[0];
-    out.push({ q: m[1], a: answer });
+  for (const line of faqBlock.split("\n")) {
+    const m = /^\d+\.\s+`(.+?)`\s+—\s+`(.+)`\s*$/.exec(line);
+    if (m) out.push({ q: m[1], a: m[2] });
   }
   return out;
 }
 
-// SPEC v2 §1.4.1 금지어(수용 테스트 T4 와 같은 목록).
+/** 소스 계약용 — 주석을 걷어낸 본문(설명을 지워야만 초록이 되는 일이 없게). */
+function code(path: string): string {
+  return readFileSync(new URL(path, import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:"'])\/\/.*$/gm, "$1")
+    .replace(/\{\s*\}/g, "");
+}
+
+// 금지어(히어로 copy.test 와 같은 결 + v2 수용 테스트 목록에서 지금도 유효한 것). '클릭' 규칙·'잔디' 규칙도 여기서 본다.
 const FORBIDDEN = [
-  "오픈소스", "판돈", "베팅", "걸고", "서울", "부산", "소마", "마에스트로", "울찌", "열품타", "경고 없이",
-  "확인 메일", "이메일 인증", "일곱", "별점", "Learn more", "더보기", "눌러 보세요", "체험", "Mac 링크 보내기", "Gemini",
+  "오픈소스", "판돈", "베팅", "내기", "걸고", "체험", "눌러 보세요", "Learn more", "더보기", "Mac 링크 보내기",
+  "작은 팀", "작은 Mac", "AI 토큰 리밋", "서울", "부산", "소마", "마에스트로", "울찌", "열품타",
+  "확인 메일", "이메일 인증", "일곱", "별점", "격자", "센터",
 ];
 
-test("FAQ 5문항이 CB §7 의 1–5번(CB:254–263)과 글자까지 같다(순서 포함 — brief-v21 §2)", () => {
-  const cb = cbFaq();
-  assert.equal(cb.length, 10, "CB §7 원본은 10문항 그대로");
+test("FAQ 5문항이 §8 의 1–5번과 글자까지 같다(순서 포함)", () => {
+  const brief = briefFaq();
+  assert.equal(brief.length, 5, "§8 FAQ 는 5문항");
   assert.equal(FAQ_ITEMS.length, 5);
-  assert.deepEqual(
-    FAQ_ITEMS.map((it) => it.q),
-    ["요금이 있나요?", "어떤 기기에서 쓰나요?", "팀 코드는 어디서 받나요?", "화면이나 키 입력을 보나요?", "누가 내 근무 시간을 보나요?"],
-  );
   FAQ_ITEMS.forEach((it, i) => {
-    assert.equal(it.q, cb[i].q, `${i + 1}번 질문`);
-    assert.equal(it.a, cb[i].a, `${i + 1}번 답`);
+    assert.equal(it.q, brief[i].q, `${i + 1}번 질문`);
+    assert.equal(it.a, brief[i].a, `${i + 1}번 답`);
   });
 });
 
-test("제목은 CB:252 의 「자주 묻는 것.」 한 줄", () => {
-  assert.deepEqual([...FAQ_TITLE], ["자주 묻는 것."]);
-  assert.ok(CB.includes("「자주 묻는 것.」"));
+test("제목 = §8 H2 「자주 묻는 질문」 한 줄 · 내비 링크 이름과 같다", () => {
+  assert.deepEqual([...FAQ_TITLE], ["자주 묻는 질문"]);
+  assert.ok(faqBlock.includes(`H2 \`${FAQ_TITLE[0]}\``), "§8 FAQ H2");
+  assert.ok(navLine.includes(`\`${FAQ_TITLE[0]}\``), "§8 내비 이름");
 });
 
 test("문항 앵커는 #faq-1 … #faq-5", () => {
-  assert.equal(faqId(1), "faq-1");
-  assert.equal(faqId(3), "faq-3");
-  assert.equal(faqId(5), "faq-5");
+  assert.deepEqual(
+    FAQ_ITEMS.map((_, i) => faqId(i + 1)),
+    ["faq-1", "faq-2", "faq-3", "faq-4", "faq-5"],
+  );
 });
 
 test("JSON-LD: FAQPage · 질문 5개 · 화면 문장과 같다 · '<' 가 본문에 날것으로 없다", () => {
@@ -79,8 +82,19 @@ test("jsonLdHtml 은 '</script>' 를 깨뜨리지 못하게 한다", () => {
   assert.deepEqual(JSON.parse(html), { x: "</script><b>" });
 });
 
-test("FAQ 문장에 금지어 0(SPEC §1.4.1) · 센터 문항 없음", () => {
+test("FAQ 문장에 금지어 0 · 맥 동작은 '클릭'(누르다 0)", () => {
   const text = [...FAQ_TITLE, ...FAQ_ITEMS.flatMap((it) => [it.q, it.a])].join("\n");
   for (const w of FORBIDDEN) assert.ok(!text.includes(w), `금지어 '${w}'`);
-  assert.ok(!text.includes("센터"), "센터 문항은 싣지 않는다(DECISIONS §1 v1 §8)");
+  assert.ok(!/누르|눌러|누른/.test(text), "'누르다' 대신 '클릭'");
+});
+
+test("Faq.tsx: #faq 절 · <details name=\"faq\"> + <summary>(JS 없이 열림) · 문항 id 는 faqId · JSON-LD 는 같은 데이터", () => {
+  const src = code("./Faq.tsx");
+  assert.match(src, /id="faq"/, "내비가 링크하는 #faq");
+  assert.match(src, /<details[\s\S]*?name="faq"/, "네이티브 details 그룹(FaqHash 가 찾는 이름)");
+  assert.match(src, /id=\{faqId\(i \+ 1\)\}/, "문항 앵커");
+  assert.match(src, /<summary/, "summary");
+  assert.match(src, /FAQ_ITEMS\.map/, "화면 = 데이터");
+  assert.match(src, /jsonLdHtml\(faqJsonLd\(\)\)/, "JSON-LD = 같은 데이터");
+  assert.match(src, /<FaqHash\s*\/>/, "딥링크 보험");
 });

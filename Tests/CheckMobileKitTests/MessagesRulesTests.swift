@@ -156,14 +156,14 @@ import Testing
         }
         let entries = [person("1", "한결", working: false), person("2", "소라", working: true),
                        person("3", "Mina", working: false), person("4", "하린", working: true)]
-        let all = MessagesDirectoryRules.filter(entries, query: "")
+        let all = MessagesDirectoryRules.filter(entries, query: "", unreadPeerIDs: [])
         #expect(all.prefix(2).map(\.name) == ["소라", "하린"], "근무 중 먼저, 그 안에서 이름순")
         #expect(Set(all.suffix(2).map(\.name)) == ["Mina", "한결"])
-        #expect(MessagesDirectoryRules.filter(entries, query: "  min ").map(\.name) == ["Mina"])
-        #expect(MessagesDirectoryRules.filter(entries, query: "결").map(\.name) == ["한결"])
-        #expect(MessagesDirectoryRules.filter(entries, query: "ㅎㄱ").map(\.name) == ["한결"])
-        #expect(MessagesDirectoryRules.filter(entries, query: "ㅎ").map(\.name) == ["하린", "한결"])
-        #expect(MessagesDirectoryRules.filter(entries, query: "없는사람").isEmpty)
+        #expect(MessagesDirectoryRules.filter(entries, query: "  min ", unreadPeerIDs: []).map(\.name) == ["Mina"])
+        #expect(MessagesDirectoryRules.filter(entries, query: "결", unreadPeerIDs: []).map(\.name) == ["한결"])
+        #expect(MessagesDirectoryRules.filter(entries, query: "ㅎㄱ", unreadPeerIDs: []).map(\.name) == ["한결"])
+        #expect(MessagesDirectoryRules.filter(entries, query: "ㅎ", unreadPeerIDs: []).map(\.name) == ["하린", "한결"])
+        #expect(MessagesDirectoryRules.filter(entries, query: "없는사람", unreadPeerIDs: []).isEmpty)
         #expect(MessagesDirectoryRules.initials(of: "김 지우A") == "ㄱㅈㅇA")
     }
 
@@ -179,7 +179,7 @@ import Testing
             Self.entry("m1", mine: true, at: -240, readByPeer: true),
             Self.entry("m2", mine: true, at: -235, readByPeer: false),
         ]
-        let items = MessagesConversationRules.items(messages: messages, pending: [], receiptsAvailable: true, now: Self.now)
+        let items = MessagesConversationRules.items(messages: messages, pokes: [], chronology: [:], pending: [], receiptsAvailable: true, now: Self.now)
         #expect(items.count == 7)
         guard case .day(_, let yesterday) = items[0], case .day(_, let today) = items[2] else {
             Issue.record("구분선 자리가 틀렸다: \(items.map(\.id))")
@@ -198,17 +198,17 @@ import Testing
         #expect(line(5)?.showsUnreadOne == false && line(6)?.showsUnreadOne == true)
         #expect(line(5)?.startsGroup == true && line(6)?.startsGroup == false, "말한 쪽이 바뀐 첫 말풍선만 띄운다")
         // 읽음을 모르는 서버면 1 이 없다.
-        let unknown = MessagesConversationRules.items(messages: messages, pending: [], receiptsAvailable: false, now: Self.now)
+        let unknown = MessagesConversationRules.items(messages: messages, pokes: [], chronology: [:], pending: [], receiptsAvailable: false, now: Self.now)
         #expect(!unknown.contains { if case .bubble(let l) = $0 { return l.showsUnreadOne } else { return false } })
 
         // 자리 말풍선: 마지막 날짜가 어제면 오늘 구분선을 먼저 세운다.
         let pending = MessagesPendingOutgoing(id: "l1", peerUserID: "p", body: "지금", createdAt: Self.now, state: .sending)
-        let onlyYesterday = MessagesConversationRules.items(messages: [messages[0]], pending: [pending], receiptsAvailable: true, now: Self.now)
+        let onlyYesterday = MessagesConversationRules.items(messages: [messages[0]], pokes: [], chronology: [:], pending: [pending], receiptsAvailable: true, now: Self.now)
         #expect(onlyYesterday.map(\.id) == ["day-" + MessageThreadBuilder.dayKey(messages[0].createdAt, calendar: MobileRelativeTime.kst),
                                             "y1", "day-" + MessageThreadBuilder.dayKey(Self.now, calendar: MobileRelativeTime.kst), "pending-l1"])
-        let withToday = MessagesConversationRules.items(messages: messages, pending: [pending], receiptsAvailable: true, now: Self.now)
+        let withToday = MessagesConversationRules.items(messages: messages, pokes: [], chronology: [:], pending: [pending], receiptsAvailable: true, now: Self.now)
         #expect(withToday.last?.id == "pending-l1" && withToday.count == 8)
-        let empty = MessagesConversationRules.items(messages: [], pending: [pending], receiptsAvailable: true, now: Self.now)
+        let empty = MessagesConversationRules.items(messages: [], pokes: [], chronology: [:], pending: [pending], receiptsAvailable: true, now: Self.now)
         #expect(empty.count == 2)
     }
 

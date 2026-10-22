@@ -57,6 +57,13 @@ struct MeHomeView: View {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
                     MeStageCard(store: store)
                         .id(MeAnchor.header)
+                    // ★ 1.0.13 「일일 미션」 절은 **여기 두지 않는다.** 한때 주간 카드 위에 뒀었는데, 같은 날
+                    //   사용자가 정반대를 지시했다: "폰에서 나 탭에 미션들 쭈루룩 다 나열하니까 칸이 너무 길어져.
+                    //   미션 창 버튼 두고 그거 누르면 미션 페이지 따로 있게 해줘." 루트에 미션 블록을 하나 더
+                    //   세우는 것은 그 지시를 **더 나쁘게** 만드는 일이다.
+                    //   자리는 [미션] 화면 안, 맥 0.3.64 와 같은 **일일 → 주간 → 누적** 순서다(두 기계가 같아야 한다).
+                    //   루트에는 [미션] 줄 하나만 남고, 받을 것이 있는지는 그 줄의 배지가 말한다
+                    //   (`missionClaimableCount` = 일일 + 누적 + 주간, 날을 넘긴 일일 줄은 뺀다).
                     // v0.3.55 「이번 주 근무」 보상 카드 — 루비 칩 바로 아래(루비가 어디서 오는지 옆에서 보인다). 범위는 '이번 주'라
                     // 「지난주」 카드 **앞**이 맞다(지금 → 지난주 → 12주 순으로 넓어진다). 서버에 함수가 없으면 통째로 빠진다.
                     MeWeeklyWorkCard(store: store)
@@ -109,7 +116,7 @@ struct MeHomeView: View {
 
 /// 루트 스크롤 앵커(데모 스크린샷이 아래 절을 찍을 때 쓴다).
 enum MeAnchor: String {
-    case header, records, tokenGrass, characters, menu, rhythm, missions
+    case header, records, tokenGrass, characters, menu, rhythm, missions, dailyMissions
     /// v0.3.45 「AI 리밋」 카드. 이름은 데모 스크린샷 명령(`-AingCheckDemoMeAnchor aiLimits`)의 인자다 — 바꾸면
     /// 저장소 밖 스크린샷 스크립트가 깨진다(`MeDesignContractTests` 가 이름 목록을 되묻는다).
     case aiLimits

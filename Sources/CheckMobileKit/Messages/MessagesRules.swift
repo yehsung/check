@@ -275,13 +275,23 @@ package enum MessagesDirectoryRules {
         "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
     ]
 
-    /// 이름 검색. 빈 검색어면 전부(근무 중 먼저 · 이름순 — 코어 `sortedForPokeDisplay`).
+    /// 이름 검색. 빈 검색어면 전부(**안 읽음 먼저 → 근무 중 먼저 → 이름순** — 코어 `sortedForPokeDisplay`).
     /// - 보통 검색: 대소문자·발음 구별 없이 이름에 들어 있으면.
     /// - 초성 검색: 검색어가 한글 자음(ㄱ~ㅎ)만이면 이름의 초성열에 들어 있으면("ㅎㄱ" → "한결").
-    package static func filter(_ entries: [PokeDirectoryEntry], query: String) -> [PokeDirectoryEntry] {
+    ///
+    /// `unreadPeerIDs` 는 **메시지 안 읽음 ∪ 안 본 찌르기**다(사용자 결정 2026-10-23 "찌르기도 친다" — 합치는 자리는
+    /// 스토어다: `MessagesStore.sortUnreadPeerIDs`). 명부 엔트리는 자기 `isWorking` 을 서버에서 들고 오므로 근무 축은
+    /// 언제나 '안다'(`workKnown: true`) — 대화 목록과 달리 여기서는 축을 접지 않는다.
+    ///
+    /// ★ **기본값을 달지 마라.** 코어 `sortedForPokeDisplay` 가 0.3.65 에서 기본값을 걷어낸 까닭이 이것이다 —
+    ///   한 겹 위에서 `= []` 로 되살리면 "안 읽음을 안 넘긴 호출"이 다시 조용히 생긴다(이 건의 출발점).
+    package static func filter(
+        _ entries: [PokeDirectoryEntry],
+        query: String,
+        unreadPeerIDs: Set<String>
+    ) -> [PokeDirectoryEntry] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        // 폰 1.0.13 에서 '버그 개선' 세션이 채운다(안 읽음 집합 · 근무 여부 모름). 지금은 명시적 빈 집합 — 폰 화면 순서는 예전 그대로(근무중 → 이름).
-        let sorted = entries.sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true)
+        let sorted = entries.sortedForPokeDisplay(unreadPeerIDs: unreadPeerIDs, workKnown: true)
         guard !trimmed.isEmpty else { return sorted }
         let compact = trimmed.filter { !$0.isWhitespace }
         if !compact.isEmpty, compact.allSatisfy({ choseong.contains($0) }) {
@@ -301,6 +311,279 @@ package enum MessagesDirectoryRules {
             }
         }
         return result
+    }
+}
+
+// MARK: - 콕/메시지 4단 정렬 · 찌르기가 낀 대화 목록 (1.0.13)
+
+// 사용자 결정(2026-10-23 원문): "콕/메세지 창에서 메세지 안읽은 사람들이 제일 상단에 떴으면 좋겠어. 상단 정렬 순위가
+// 1. 근무중이면서 메세지 아직 안읽은 사람, 2. 근무중 아니면서 메세지 아직 안읽은 사람, 3. 근무중이면서 메세지 다 읽거나 없는사람,
+// 4. 근무중 아니면서 메세지 다 읽거나 없는 사람." · 물어서 정한 것: "안 본 찌르기도 '안 읽음'으로 친다".
+//
+// 맥(0.3.65)과 **같은 규칙**이다. 맥 명부는 코어 `sortedForPokeDisplay` 하나로 끝나지만, 폰에는 목록이 둘이다:
+//  · 대화 목록(스레드) — 같은 무리 안은 **최근순**(폰 스레드의 원래 축).
+//  · 사람 찾기 명부 — 같은 무리 안은 **이름순**(`MessagesDirectoryRules.filter` → 코어 `sortedForPokeDisplay`).
+//
+// ★ 줄을 세우는 규칙은 **여기 한 벌뿐**이다(`MessagesThreadListRules.rows`). 화면은 `MessagesStore.threadItems(now:)` 를
+//   부르고 값을 그대로 그린다 — 뷰가 안 읽음·배지·시각을 다시 세면 "찌르기뿐인 행에 안 읽은 메시지 숫자"가 되살아난다.
+
+/// 대화 목록 한 줄(1.0.13). 코어 대화(`MessageThread`) + 그 사람과 오간 찌르기 + **다 정해진 표시값**.
+///
+/// ★ **찌르기만 있는 사람도 한 줄이 선다**(조정자 결정 2026-10-23 (가)) — 그때 `thread.messages` 는 비어 있다.
+///   행이 없으면 안 읽은 찌르기가 폰에서 영영 안 보이고, 정렬이 그 사람을 올릴 자리도 없다.
+package struct MessagesThreadItem: Identifiable, Equatable {
+    /// 메시지 묶음. 찌르기만 있는 사람은 `messages` 가 빈 배열이다.
+    package let thread: MessageThread
+    /// 그 사람과 오간 찌르기(시간순 — 받은 것·보낸 것 모두).
+    package let pokes: [MessagePokeLogEntry]
+    /// 목록 정렬·오른쪽 위 시각의 기준 = **찌르기를 포함한 마지막 활동**.
+    package let lastActivityAt: Date
+    /// 한 줄 미리보기. 마지막 활동이 메시지면 접은 본문, 찌르기면 "○○님이 콕 찔렀어요".
+    package let previewText: String
+    /// 마지막 활동이 내 것인가(바닥 따라가기·보이스오버).
+    package let lastIsMine: Bool
+    /// 미리보기가 **찌르기 문구**인가. 그 문구는 주어("내가" · "○○님이")를 이미 말하므로 보이스오버에 "나: "를 덧붙이지 않는다.
+    package let previewIsPoke: Bool
+    /// 줄 오른쪽 위 시각("13:58" · "어제").
+    package let timeText: String
+    /// 굵게 · 위로 올리는 기준 = 안 읽은 메시지 ∪ 안 본 찌르기.
+    package let isUnread: Bool
+    /// 개수 배지. **메시지** 안 읽음에만 선다(찌르기뿐이면 nil — 인수인계 §6-4).
+    package let countBadge: String?
+    /// 정렬 무리(근무를 알면 0…3, 모르면 0…1).
+    package let group: Int
+
+    package init(
+        thread: MessageThread, pokes: [MessagePokeLogEntry], lastActivityAt: Date, previewText: String,
+        lastIsMine: Bool, previewIsPoke: Bool, timeText: String, isUnread: Bool, countBadge: String?, group: Int
+    ) {
+        self.thread = thread
+        self.pokes = pokes
+        self.lastActivityAt = lastActivityAt
+        self.previewText = previewText
+        self.lastIsMine = lastIsMine
+        self.previewIsPoke = previewIsPoke
+        self.timeText = timeText
+        self.isUnread = isUnread
+        self.countBadge = countBadge
+        self.group = group
+    }
+
+    /// 보이스오버에서 미리보기 앞에 "나: " 를 붙이는가(**메시지일 때만**).
+    package var previewNeedsMinePrefix: Bool { lastIsMine && !previewIsPoke }
+
+    package var id: String { thread.peerUserID }
+    package var peerUserID: String { thread.peerUserID }
+    package var peerName: String { thread.peerName }
+    package var peerAvatarURL: URL? { thread.peerAvatarURL }
+}
+
+package enum MessagesThreadListRules {
+    /// 보이스오버에서 개수 배지 자리에 들어가는 말(안 읽음이 **찌르기뿐**일 때).
+    package static let unseenPokeAccessibilityLabel = "안 본 찌르기"
+
+    /// 대화 목록 줄 전체 — 재료 모으기(스레드 ∪ 찌르기) → 표시값 → 4단 정렬. **화면이 지나는 유일한 자리**다.
+    ///
+    /// - `messageUnreadPeerIDs`: 안 읽은 **메시지**가 있는 상대(숫자 배지의 근거 — `MessagesStore.unreadPeerIDs`).
+    /// - `pokeUnreadPeerIDs`: 안 **본** 찌르기가 있는 상대(코어 `MessagePokeLogRules.unreadPeerIDs` — 낙관 읽음을 뺀 값).
+    /// - `chronology`: 서버 시각 순위(같은 초의 메시지·찌르기 선후). 대화 화면과 **같은 표**를 쓴다.
+    package static func rows(
+        threads: [MessageThread],
+        pokes: [MessagePokeLogEntry],
+        chronology: [String: Int],
+        messageUnreadPeerIDs: Set<String>,
+        pokeUnreadPeerIDs: Set<String>,
+        unreadCounts: [String: Int],
+        workingPeerIDs: Set<String>,
+        workKnown: Bool,
+        now: Date,
+        calendar: Calendar = MobileRelativeTime.kst
+    ) -> [MessagesThreadItem] {
+        let unread = MessagesSortRules.combinedUnreadPeerIDs(messages: messageUnreadPeerIDs, pokes: pokeUnreadPeerIDs)
+        let assembled = items(threads: threads, pokes: pokes, chronology: chronology, calendar: calendar)
+        let decorated = assembled.map { item in
+            let peer = item.peerUserID
+            let isUnread = unread.contains(peer)
+            return MessagesThreadItem(
+                thread: item.thread,
+                pokes: item.pokes,
+                lastActivityAt: item.lastActivityAt,
+                previewText: item.previewText,
+                lastIsMine: item.lastIsMine,
+                previewIsPoke: item.previewIsPoke,
+                timeText: MessagesListRules.timeText(item.lastActivityAt, now: now, calendar: calendar),
+                isUnread: isUnread,
+                // ★ 숫자는 **메시지** 안 읽음에만(인수인계 §6-4 · 문서 §1 — 배지는 메시지만 센다).
+                countBadge: messageUnreadPeerIDs.contains(peer)
+                    ? MessagesListRules.countBadge(isUnread: true, count: unreadCounts[peer])
+                    : nil,
+                group: MessagesSortRules.rank(
+                    isUnread: isUnread, isWorking: workingPeerIDs.contains(peer), workKnown: workKnown
+                )
+            )
+        }
+        return MessagesSortRules.sortedThreads(decorated)
+    }
+
+    /// 코어 대화 + 찌르기 기록 → 목록 줄 재료(표시값·정렬 전). `rows` 가 부른다 — 바깥에서는 쓰지 마라.
+    ///
+    /// 들어온 찌르기 배열의 순서를 믿지 않는다: 코어 `MessagePokeLogRules.sorted` 를 지나게 한다
+    /// (묶음의 `last` 가 그 대화의 마지막 찌르기여야 미리보기·최근 시각이 맞는다).
+    static func items(
+        threads: [MessageThread],
+        pokes: [MessagePokeLogEntry],
+        chronology: [String: Int],
+        calendar: Calendar
+    ) -> [MessagesThreadItem] {
+        func plain(_ thread: MessageThread) -> MessagesThreadItem {
+            let last = thread.lastMessage
+            return draft(
+                thread: thread, pokes: [],
+                lastActivityAt: last?.createdAt ?? .distantPast,
+                previewText: last.map { MessagesListRules.preview($0.body) } ?? "",
+                lastIsMine: last?.isMine ?? false
+            )
+        }
+        guard !pokes.isEmpty else { return threads.map(plain) }
+        let ordered = MessagePokeLogRules.sorted(pokes, chronology: chronology)
+        var byPeer: [String: [MessagePokeLogEntry]] = [:]
+        var pokeOnlyOrder: [String] = []
+        for poke in ordered {
+            byPeer[poke.peerUserID, default: []].append(poke)
+        }
+        var items = threads.map { thread in
+            item(thread: thread, pokes: byPeer[thread.peerUserID] ?? [], chronology: chronology, calendar: calendar)
+        }
+        let known = Set(threads.map(\.peerUserID))
+        for poke in ordered where !known.contains(poke.peerUserID) {
+            if !pokeOnlyOrder.contains(poke.peerUserID) { pokeOnlyOrder.append(poke.peerUserID) }
+        }
+        for peer in pokeOnlyOrder {
+            let own = byPeer[peer] ?? []
+            // 이름·아바타는 **가장 최근 행의 것**이다(코어 `MessageThreadBuilder.threads` 와 같은 규약 — 별명을 바꾼
+            // 사람의 옛 행이 목록에 옛 이름을 남기면 같은 사람이 두 사람으로 읽힌다).
+            guard let latest = own.last else { continue }
+            let thread = MessageThread(
+                peerUserID: peer, peerName: latest.peerName, peerAvatarURL: latest.peerAvatarURL, messages: []
+            )
+            items.append(item(thread: thread, pokes: own, chronology: chronology, calendar: calendar))
+        }
+        return items
+    }
+
+    private static func item(
+        thread: MessageThread, pokes: [MessagePokeLogEntry], chronology: [String: Int], calendar: Calendar
+    ) -> MessagesThreadItem {
+        let lastMessage = thread.lastMessage
+        let lastPoke = pokes.last
+        guard let anchor = lastMessage?.createdAt ?? lastPoke?.createdAt else {
+            return draft(thread: thread, pokes: pokes, lastActivityAt: .distantPast, previewText: "", lastIsMine: false)
+        }
+        // ★ "둘 중 어느 쪽이 더 최근인가"를 **코어 병합 규칙에 물어본다**(두 줄짜리 타임라인을 세워 마지막 줄을 본다).
+        //   같은 초의 선후 규칙(서버 순위 → 모르면 메시지가 먼저)을 여기서 다시 적으면 대화 화면과 갈리는 날이 온다.
+        let lines = MessageConversationTimeline.lines(
+            messages: [lastMessage].compactMap { $0 },
+            pokes: [lastPoke].compactMap { $0 },
+            chronology: chronology,
+            now: anchor,
+            calendar: calendar
+        )
+        switch lines.last {
+        case .poke(let entry):
+            return draft(
+                thread: thread, pokes: pokes, lastActivityAt: entry.createdAt,
+                previewText: MessagesSortRules.pokePreview(entry, calendar: calendar),
+                lastIsMine: entry.isMine, previewIsPoke: true
+            )
+        case .bubble(let entry):
+            return draft(
+                thread: thread, pokes: pokes, lastActivityAt: entry.createdAt,
+                previewText: MessagesListRules.preview(entry.body), lastIsMine: entry.isMine, previewIsPoke: false
+            )
+        default:
+            return draft(thread: thread, pokes: pokes, lastActivityAt: anchor, previewText: "", lastIsMine: false)
+        }
+    }
+
+    /// 표시값이 아직 안 정해진 줄(정렬·배지는 `rows` 가 채운다).
+    private static func draft(
+        thread: MessageThread, pokes: [MessagePokeLogEntry], lastActivityAt: Date, previewText: String,
+        lastIsMine: Bool, previewIsPoke: Bool = false
+    ) -> MessagesThreadItem {
+        MessagesThreadItem(
+            thread: thread, pokes: pokes, lastActivityAt: lastActivityAt, previewText: previewText,
+            lastIsMine: lastIsMine, previewIsPoke: previewIsPoke,
+            timeText: "", isUnread: false, countBadge: nil, group: 0
+        )
+    }
+
+    /// 목록 줄 보이스오버. 안 읽음이 **찌르기뿐**이면 "안 읽은 메시지"라고 말하지 않는다(인수인계 §6-4).
+    package static func accessibilityText(row: MessagesThreadItem, presenceLine: String?) -> String {
+        var parts = [row.peerName]
+        if let presenceLine { parts.append(presenceLine) }
+        if let countBadge = row.countBadge {
+            parts.append("안 읽은 메시지 \(countBadge)개")
+        } else if row.isUnread {
+            parts.append(unseenPokeAccessibilityLabel)
+        }
+        parts.append((row.previewNeedsMinePrefix ? "나: " : "") + row.previewText)
+        parts.append(row.timeText)
+        return parts.joined(separator: ", ")
+    }
+}
+
+package enum MessagesSortRules {
+    /// 정렬이 쓰는 안 읽음 = **안 읽은 메시지 ∪ 안 본 찌르기**.
+    ///
+    /// ★ 이 집합을 "안 읽은 메시지 N" 한 줄(`MessagesListRules.subtitle`)·탭 배지·줄 개수 배지에 **먹이지 마라.**
+    ///   그 수는 메시지 전용이다(`message_unread_summary`). 안 읽음이 찌르기뿐인 사람에게 "안 읽은 메시지 1"이라고
+    ///   말하면 거짓말이다(인수인계 §6-4).
+    package static func combinedUnreadPeerIDs(messages: Set<String>, pokes: Set<String>) -> Set<String> {
+        pokes.isEmpty ? messages : messages.union(pokes)
+    }
+
+    /// 근무 중으로 치는 상태. **`.pending`(앰버 점 · 연결 끊김)도 근무중이다** — 두 세션 합의(인수인계 §1).
+    package static func isWorking(_ presence: MessagesPeerPresence?) -> Bool {
+        switch presence?.status {
+        case .working, .pending: return true
+        case .off, nil: return false
+        }
+    }
+
+    /// 판에서 근무 중인 사람들.
+    package static func workingPeerIDs(_ board: MessagesPresenceBoard) -> Set<String> {
+        guard board.isKnown else { return [] }
+        var ids: Set<String> = []
+        for (id, presence) in board.peers where isWorking(presence) { ids.insert(id) }
+        return ids
+    }
+
+    /// 무리 번호(작을수록 위). 근무 여부를 **모르는 동안**(`workKnown == false` — 팀·사람 목록을 한 번도 못 받은 창)에는
+    /// 근무 축을 아예 쓰지 않는다: 안 읽음만으로 두 무리다. 모르면서 "근무 안 함"으로 접으면 근무 중인 사람이
+    /// 아래로 내려갔다가 목록이 도착하는 순간 위로 튄다.
+    package static func rank(isUnread: Bool, isWorking: Bool, workKnown: Bool) -> Int {
+        guard workKnown else { return isUnread ? 0 : 2 }
+        if isUnread { return isWorking ? 0 : 1 }
+        return isWorking ? 2 : 3
+    }
+
+    /// 대화 목록 4단 정렬. 무리(`item.group` — `rank` 가 정한 값)가 먼저, 같은 무리 안은 **최근순**(찌르기를 포함한
+    /// 마지막 활동), 동점은 id 로 깬다(결정성 — `sorted` 는 안정 정렬이 아니라서 안 깨면 새로고침마다 두 줄이 자리를 바꾼다).
+    package static func sortedThreads(_ items: [MessagesThreadItem]) -> [MessagesThreadItem] {
+        items.sorted { lhs, rhs in
+            if lhs.group != rhs.group { return lhs.group < rhs.group }
+            if lhs.lastActivityAt != rhs.lastActivityAt { return lhs.lastActivityAt > rhs.lastActivityAt }
+            return lhs.peerUserID < rhs.peerUserID
+        }
+    }
+
+    /// 목록 미리보기용 찌르기 한 줄 — 대화 줄과 **같은 문구**에서 시각 꼬리만 뗀다(목록은 시각을 오른쪽 위에 따로 그린다).
+    /// 코어에 시각 없는 문구가 없어 `MessagePokeLogText.line` 에서 `clockText` 꼬리를 떼는 것으로 한 벌을 지킨다 —
+    /// "콕 찔렀어요"를 여기 다시 적으면 맥이 말을 바꾸는 날 폰만 옛말을 한다.
+    package static func pokePreview(_ entry: MessagePokeLogEntry, calendar: Calendar = MobileRelativeTime.kst) -> String {
+        let full = MessagePokeLogText.line(for: entry, calendar: calendar)
+        let tail = " · " + MessageThreadBuilder.clockText(entry.createdAt, calendar: calendar)
+        return full.hasSuffix(tail) ? String(full.dropLast(tail.count)) : full
     }
 }
 
@@ -360,19 +643,52 @@ package enum MessagesListRules {
 
 // MARK: - 대화 줄
 
-/// 대화 화면 한 줄(코어 `MessageThreadBuilder.timeline` 위에 폰의 모양 결정을 얹은 것 — 뷰가 조건을 다시 세지 않는다).
+/// 대화 화면 한 줄(코어 `MessageConversationTimeline.lines` 위에 폰의 모양 결정을 얹은 것 — 뷰가 조건을 다시 세지 않는다).
 package enum MessagesConversationItem: Identifiable, Equatable {
     case day(key: String, label: String)
     case bubble(MessagesBubbleLine)
+    /// 찌르기 기록 줄(1.0.13) — **말풍선이 아니다.** 답장·읽음 표시·복사·신고 대상이 아니다.
+    case poke(MessagesPokeLogLine)
     case pending(MessagesPendingOutgoing)
 
     package var id: String {
         switch self {
         case .day(let key, _): return "day-\(key)"
         case .bubble(let line): return line.entry.id
+        case .poke(let line): return line.id
         case .pending(let item): return "pending-\(item.id)"
         }
     }
+
+    /// 바닥 따라가기의 "마지막 줄이 내 것인가"(자리 말풍선은 언제나 내 것).
+    package var isMine: Bool {
+        switch self {
+        case .day: return false
+        case .bubble(let line): return line.entry.isMine
+        case .poke(let line): return line.entry.isMine
+        case .pending: return true
+        }
+    }
+}
+
+/// 대화창 찌르기 줄 하나(그릴 값만 — 뷰는 조건을 다시 세지 않는다). 모양은 `MessagesPokeLogRow`(iOS)다.
+///
+/// 글자·아이콘은 전부 코어(`MessagePokeLogText`)가 쥐고 있다 — 맥과 한 벌이다.
+package struct MessagesPokeLogLine: Identifiable, Equatable {
+    package let entry: MessagePokeLogEntry
+    /// 줄 글자 전체("한결님이 콕 찔렀어요 · 15:12") — 코어 `MessagePokeLogText.line`.
+    package let text: String
+    /// 아이콘(콕 손가락 · 울트라 번개) — 코어 `MessagePokeLogText.symbol`.
+    package let symbol: String
+
+    package init(entry: MessagePokeLogEntry, text: String, symbol: String) {
+        self.entry = entry
+        self.text = text
+        self.symbol = symbol
+    }
+
+    /// 말풍선 id 와 겹치면 `ForEach` 가 두 줄을 한 줄로 묶는다.
+    package var id: String { "poke-\(entry.id)" }
 }
 
 package struct MessagesBubbleLine: Equatable {
@@ -398,24 +714,56 @@ package enum MessagesConversationRules {
         receiptsAvailable && entry.isMine && entry.readByPeer == false
     }
 
-    /// 시간순 이력(한 사람) + 그 사람에게 보내는 중인 자리 말풍선 → 화면 줄.
+    /// 찌르기 줄 한 줄(글자·아이콘은 코어). 달력을 **반드시 넘긴다** — 코어 기본값은 `.current` 인데 폰 메시지 화면의
+    /// 눈금은 KST(`MobileRelativeTime.kst`)다. 안 넘기면 기기 표준시가 다른 사람에게만 날짜 줄·시각이 말풍선과 갈린다.
+    package static func pokeLine(
+        for entry: MessagePokeLogEntry, calendar: Calendar = MobileRelativeTime.kst
+    ) -> MessagesPokeLogLine {
+        MessagesPokeLogLine(
+            entry: entry,
+            text: MessagePokeLogText.line(for: entry, calendar: calendar),
+            symbol: MessagePokeLogText.symbol(entry.kind)
+        )
+    }
+
+    /// 시간순 이력(한 사람) + 그 사람과 오간 **찌르기** + 보내는 중 자리 말풍선 → 화면 줄.
+    ///
+    /// 끼워 넣기·날짜 줄은 코어(`MessageConversationTimeline.lines`)가 한다. 그 병합은 두 수열이 **이미 시간순**이라고
+    /// 전제하는 안정 병합이라 찌르기를 `MessagePokeLogRules.sorted` 에 먼저 통과시킨다.
+    /// 찌르기가 없으면 결과는 `MessageThreadBuilder.timeline` 을 쓰던 예전과 줄 단위로 같다.
     package static func items(
         messages: [MessageHistoryEntry],
+        pokes: [MessagePokeLogEntry],
+        chronology: [String: Int],
         pending: [MessagesPendingOutgoing],
         receiptsAvailable: Bool,
         now: Date,
         calendar: Calendar = MobileRelativeTime.kst
     ) -> [MessagesConversationItem] {
-        let timeline = MessageThreadBuilder.timeline(messages, now: now, calendar: calendar)
+        let timeline = MessageConversationTimeline.lines(
+            messages: messages,
+            pokes: MessagePokeLogRules.sorted(pokes, chronology: chronology),
+            chronology: chronology,
+            now: now,
+            calendar: calendar
+        )
+        func bubbleEntry(_ line: MessageConversationLine) -> MessageHistoryEntry? {
+            if case .bubble(let entry) = line { return entry }
+            return nil
+        }
         var items: [MessagesConversationItem] = []
         for (index, item) in timeline.enumerated() {
             switch item {
             case .day(let key, let label):
                 items.append(.day(key: key, label: label))
+            case .poke(let entry):
+                items.append(.poke(pokeLine(for: entry, calendar: calendar)))
             case .bubble(let entry):
                 let clock = MessageThreadBuilder.clockText(entry.createdAt, calendar: calendar)
-                let previous: MessageHistoryEntry? = index > 0 ? timeline[index - 1].bubbleEntry : nil
-                let next: MessageHistoryEntry? = index + 1 < timeline.count ? timeline[index + 1].bubbleEntry : nil
+                // 앞뒤로 **말풍선이 아닌 줄**(날짜 · 찌르기)이 끼면 묶음이 끊긴다 — 찌르기 줄이 사이에 서면
+                // 같은 분의 앞 말풍선에도 시각이 찍히고, 찌르기 뒤 첫 말풍선은 추가 틈을 두지 않는다(줄이 이미 띄운다).
+                let previous: MessageHistoryEntry? = index > 0 ? bubbleEntry(timeline[index - 1]) : nil
+                let next: MessageHistoryEntry? = index + 1 < timeline.count ? bubbleEntry(timeline[index + 1]) : nil
                 let continuesToNext = next.map {
                     $0.isMine == entry.isMine && MessageThreadBuilder.clockText($0.createdAt, calendar: calendar) == clock
                 } ?? false

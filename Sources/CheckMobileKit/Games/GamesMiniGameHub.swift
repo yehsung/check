@@ -452,6 +452,11 @@ package final class GamesMiniGameHub {
                 clearPendingSubmit(token: token)
                 // 출구에서 세운 안내("앱을 나가서 …")는 제출과 무관한 사실이라 지우지 않는다.
                 if !exitNoticeIsSticky { submitNotice = nil }
+                // 일일 미션(v0.3.64) — 판이 서버에 남은 직후 **한 번** 묻는다(새 타이머 없이 이벤트로).
+                // 오늘 이 게임 줄을 이미 채웠으면 요청 0건이고, 미션 조회가 떠 있으면 그 옛 답에 합류하지 않고 끝난 뒤 한 번 더다
+                // (`MeStore.refreshAchievementsAfterGameResult` 주석). 순위 재조회보다 **앞**에 둔다 — 순위 왕복을 기다리는
+                // 동안 사용자는 이미 미션 화면으로 갈 수 있다.
+                context.links.me?.refreshAchievementsAfterGameResult(game: kind.rawValue)
                 // 순위 재조회는 **화면을 떠난 뒤에도** 한다(activeKind 로 막으면 뒤로가기로 끝낸 판이 반영되지 않는다).
                 await loadBoard(kind, withWinner: false)
             } else if Self.retryableSubmitStatuses.contains(response.status) {

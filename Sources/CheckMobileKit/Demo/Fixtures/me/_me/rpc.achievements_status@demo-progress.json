@@ -205,5 +205,91 @@
   "claimable_count": 0,
   "claimable_ruby": 0,
   "ruby_balance": 120,
-  "server_now_ms": 1789621500000
+  "server_now_ms": 1789621500000,
+  "daily": {
+    "kst_day": "2026-09-17",
+    "reset_at_ms": 1789657200000,
+    "missions": [
+      {
+        "key": "daily_timing_bar",
+        "game": "timing_bar",
+        "title": "타이밍 바 한 판 하기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 10
+      },
+      {
+        "key": "daily_flappy",
+        "game": "flappy",
+        "title": "플래피 아잉 한 판 하기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 20
+      },
+      {
+        "key": "daily_tetris",
+        "game": "tetris",
+        "title": "테트리스 한 판 하기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 30
+      },
+      {
+        "key": "daily_gomoku",
+        "game": "gomoku",
+        "title": "1:1 오목 한 판 두기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 40
+      },
+      {
+        "key": "daily_chess",
+        "game": "chess",
+        "title": "1:1 체스 한 판 두기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 50
+      },
+      {
+        "key": "daily_tetris_duel",
+        "game": "tetris_duel",
+        "title": "1:1 테트리스 한 판 하기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 60
+      }
+    ],
+    "claimable_count": 0,
+    "claimable_ruby": 0
+  }
 }

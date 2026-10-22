@@ -78,8 +78,12 @@ import Testing
 
     /// 서버 칸 이름 — `achievements__status` · `achievement_claim` · `weekly_work__status` · `weekly_work_claim` 의 jsonb 그대로.
     enum Keys {
+        /// ★ `daily`(v0.3.64 — 일일 미션)는 **최상위 칸이 하나 더해진 것**이다(기존 칸과 그 뜻은 한 글자도 안 바뀐다).
+        /// 여기 더한 까닭: 이 집합은 **정확히 같아야** 하므로 픽스처에 `daily` 를 넣으면 여덟 장 전부가 빨개진다 —
+        /// 그래서 픽스처와 이 줄을 **같이** 고친다(관전자 수 때는 이 못을 피해 가느라 데모에서 수가 늘 0 이었다).
+        /// `daily` 안의 칸 · 값은 `MeDailyMissionViewTests` 가 잰다(그 절의 소유다).
         static let status: Set<String> = ["launch_at_ms", "missions", "claimable_count", "claimable_ruby",
-                                          "ruby_balance", "server_now_ms"]
+                                          "ruby_balance", "server_now_ms", "daily"]
         static let mission: Set<String> = ["key", "series", "tier", "title", "detail", "reward", "target", "progress",
                                           "achieved", "claimed", "achieved_at_ms", "claimed_at_ms", "sort"]
         static let claim: Set<String> = ["key", "title", "reward"]

@@ -379,7 +379,8 @@ package enum MeText {
     //   `AchievementStatus.seriesRows` 가 계열마다 한 줄로 접는다). 여기 있는 것은 **말투**뿐이다.
 
     /// 절 소제목(맥 `AchievementCopy.sectionTitle`). 맥 0.3.64 가 미션 화면을 일일 · 주간 · 누적 세 묶음으로 나누며 "도전 미션"을
-    /// "누적 미션"으로 바꿨다(사용자 결정 2026-10-22) — 이 카드가 그 누적 13개라 같은 이름을 쓴다. 일일 묶음은 아직 폰에 없다(모바일 세션 몫).
+    /// "누적 미션"으로 바꿨다(사용자 결정 2026-10-22) — 이 카드가 그 누적 13개라 같은 이름을 쓴다. 일일 묶음은 폰 1.0.13 에서
+    /// 주간 카드 **위**에 따로 선다(`MeDailyMissionsSection` · 아래 `dailyMissionsTitle`).
     package static let missionsTitle = "누적 미션"
     /// 한 번도 못 읽었을 때의 실패 문장(맥 `MissionPanelCopy.failedCaption`). 불러오는 중은 `MeText.loading`.
     package static let missionsLoadFailed = "미션을 불러오지 못했어요"
@@ -461,6 +462,32 @@ package enum MeText {
     }
 
     package static let missionFallbackIcon = "star.fill"
+
+    // MARK: 일일 미션 (v0.3.64 서버 `daily` — 폰 1.0.13 · 맥 `DailyMissionCopy` 와 같은 낱말)
+    //
+    // ★ 여기에도 **제목 · 보상 숫자가 없다**. 일일 6줄의 제목("… 한 판 하기")과 5 는 서버 `daily_mission_defs()` 가 말한다
+    //   (인수인계 §5-7 — 게임 이름이 바뀌면 서버가 바꾼다). 이 절에 있는 것은 묶음 이름 · 안내 한 줄 · 아이콘 표뿐이다.
+
+    /// 일일 묶음 소제목(맥 `DailyMissionCopy.sectionTitle` 과 같은 낱말).
+    package static let dailyMissionsTitle = "일일 미션"
+
+    /// 머리 아래 회색 한 줄 — 하루가 자정(KST)에 끝나고 **받지 않은 보상은 사라진다**(사용자 결정 2026-10-22).
+    /// 맥 `DailyMissionCopy.resetNote` 와 한 글자도 다르지 않다.
+    package static let dailyMissionsResetNote = "자정에 초기화 · 안 받으면 사라져요"
+
+    /// 일일 줄 아이콘(SF Symbol) — **게임 이름으로 고른다**(키가 아니다: 누적 미션의 `gomoku1` 과 일일 `daily_gomoku` 가
+    /// 같은 기호를 쓰게). 미니게임 셋은 코어 `MiniGameKind.icon`(게임 화면 · 순위표가 쓰는 그 기호)이고, 1:1 셋은 맥 입구
+    /// 기호와 같다(오목 3×3 격자 · 체스 체커보드 · 1:1 테트리스 반으로 나뉜 네모). 모르는 게임은 별 —
+    /// 서버가 일일 미션을 더해도 줄은 그려지고 아이콘만 기본값이 된다.
+    package static func dailyMissionIcon(game: String) -> String {
+        if let kind = MiniGameKind(rawValue: game) { return kind.icon }
+        let table: [(game: String, symbol: String)] = [
+            ("gomoku", "circle.grid.3x3.fill"),
+            ("chess", "checkerboard.rectangle"),
+            ("tetris_duel", "rectangle.split.2x1.fill"),
+        ]
+        return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
+    }
 
     // MARK: 메뉴 그룹
 

@@ -14,7 +14,7 @@
 | 번들 ID | `com.yehsung.aingcheck` | `ios/project.yml:100`, `Sources/CheckMobileShared/CheckMobileIdentifiers.swift:10` |
 | 위젯 확장 번들 ID | `com.yehsung.aingcheck.widgets` | `ios/project.yml:181`, `CheckMobileIdentifiers.swift:12` |
 | 표시 이름 | `아잉체크` | `ios/project.yml:71, 167`, `ios/App/Info.plist`·`ios/Widgets/Info.plist`(CFBundleDisplayName), `Sources/CheckMobileShared/CheckMobileIdentifiers.swift`(`appDisplayName` — 앱 안 문구가 읽는 한 벌) |
-| 버전 · 빌드 | `0.1.0` · `3` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
+| 버전 · 빌드 | `1.0.12` · `23` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
 | 팀 ID | `MQ2KQK37WD` | `ios/project.yml:23` |
 | 지원 기기 · OS | iPhone 전용(`TARGETED_DEVICE_FAMILY: "1"`) · iOS 18.0 이상 · 세로 방향만 | `ios/project.yml:26, 104`, `:15-16, 27`, `:75-76`; `Package.swift:9` |
 | 백그라운드 모드 | `remote-notification` 하나 | `ios/project.yml:78-79` |

@@ -94,11 +94,11 @@ done
 #   여섯 토큰은 `V1012StickerMobileTests.swift` 가 값으로 들고 있다). 바닥 한 줄은 그대로 1.0.11 것이다.
 #
 # 기대 수의 근거(= 그 글자를 품은 문구 표의 리터럴 수):
-#   일일 · 이번 주 · 누적 미션          ?  (missionsRowDetail 37B — 루트 [미션] 줄의 보조 글자. 1.0.13 에 글자가 바뀌었다:
+#   일일 · 이번 주 · 누적 미션          1  (missionsRowDetail 37B — 루트 [미션] 줄의 보조 글자. 1.0.13 에 글자가 바뀌었다:
 #                                         일일이 생기고 「도전 미션」이 「누적 미션」으로 개명됐다)
-#   자정에 초기화 · 안 받으면 사라져요    ?  (dailyMissionsResetNote 49B — 일일 미션 절 머리의 안내. 1.0.13 신규)
-#   울트라 찔렀어요                    ?  (CheckCore `MessagePokeLog` 의 기록 줄 동사 25B — 대화창 찌르기 기록. 1.0.13 신규)
-#   받을 수 있는 미션이 아직 없어요      ?  (missionsEmpty 44B — 미션 화면이 세 묶음을 다 못 그릴 때. 맥 `MissionPanelCopy.emptyCaption` 과
+#   자정에 초기화 · 안 받으면 사라져요    1  (dailyMissionsResetNote 49B — 일일 미션 절 머리의 안내. 1.0.13 신규)
+#   울트라 찔렀어요                    1  (CheckCore `MessagePokeLog` 의 기록 줄 동사 25B — 대화창 찌르기 기록. 1.0.13 신규)
+#   받을 수 있는 미션이 아직 없어요      1  (missionsEmpty 44B — 미션 화면이 세 묶음을 다 못 그릴 때. 맥 `MissionPanelCopy.emptyCaption` 과
 #                                         같은 문장이지만 그 값은 맥 앱 타깃 `Sources/check` 에 있어 폰 바이너리에 안 들어온다
 #                                         — 수가 겹치지 않는다. 폰이 링크하는 것은 CheckMobileKit → CheckCore 뿐이다)
 #   판 중에 앱을 나가면 져요            1  (1.0.11 leaveWarning — 앞 버전 것을 한 줄만 바닥으로 남긴다. 1.0.12 아카이브 실측값)
@@ -113,8 +113,9 @@ done
 # ★ **1.0.12 의 이모티콘 세 줄은 지웠다.** 게이트 표는 **그 판의 기능만** 잰다(그 검사는 1.0.12 게이트가 이미 했고,
 #   여섯 토큰은 `V1012StickerMobileTests.swift` 가 값으로 들고 있다). 바닥 한 줄은 그대로 1.0.11 것이다.
 #
-# ※ 횟수 `?`/`None` = **아직 안 쟀다**. build 25 아카이브(디바이스 · Release)로 재서 박는다. **시뮬레이터 Release 는
-#   같은 글자를 2회로 센다**(구성이 다르다 — 2026-10-23 실측) → 기대값은 반드시 아카이브로 재라.
+# ※ 네 줄은 2026-10-23 **build 25 아카이브(디바이스 · Release)로 재서** 박았다 — 전부 1회다. **시뮬레이터 Release 는
+#   같은 글자를 2회로 센다**(구성이 다르다 — 실측) → 기대값은 반드시 아카이브로 재라. 아직 안 쟨 줄은 `None` 으로 두면
+#   된다(`None` = "0 이면 막고, 수는 알리기만 한다").
 # **0 이면 막고, 기대와 다르면 알리기만 한다.** 화면이 문장을 하나 늘리는 것은 정상이고(수가 오른다), 쓰이지 않는
 # 리터럴이 Release 에서 걷히는 것도 정상이다(수가 내린다). 막아야 하는 것은 **그 글자가 아예 없는** 바이너리다 —
 # 그건 문구 표가 화면에 안 붙었다는 뜻이고, 글자 없이 나간 기능은 사용자가 쓸 수 없다.
@@ -126,10 +127,10 @@ import sys
 # 횟수 `None` = **아직 안 쟀다**(아카이브로 확정한다). 0 이면 막고, 수는 알리기만 한다.
 want = [
     # 1.0.13 — 「미션」 화면 분리 · 일일 미션 · 찌르기 기록 (앱 문구 표의 값과 글자가 같다)
-    ("일일 · 이번 주 · 누적 미션", None),      # MeText.missionsRowDetail — 루트 [미션] 줄의 보조 글자
-    ("자정에 초기화 · 안 받으면 사라져요", None),  # MeText.dailyMissionsResetNote — 일일 미션 절 머리
-    ("울트라 찔렀어요", None),                # CheckCore MessagePokeLog — 대화창 찌르기 기록 줄
-    ("받을 수 있는 미션이 아직 없어요", None),   # MeText.missionsEmpty — 미션 화면이 셋 다 못 그릴 때
+    ("일일 · 이번 주 · 누적 미션", 1),      # MeText.missionsRowDetail — 루트 [미션] 줄의 보조 글자
+    ("자정에 초기화 · 안 받으면 사라져요", 1),  # MeText.dailyMissionsResetNote — 일일 미션 절 머리
+    ("울트라 찔렀어요", 1),                # CheckCore MessagePokeLog — 대화창 찌르기 기록 줄
+    ("받을 수 있는 미션이 아직 없어요", 1),   # MeText.missionsEmpty — 미션 화면이 셋 다 못 그릴 때
     # 1.0.11 — 1:1 테트리스. 앞 버전 것을 **한 줄만** 바닥으로 남긴다(기능이 통째로 빠진 바이너리를 막는 그물).
     ("판 중에 앱을 나가면 져요", 1),
 ]
@@ -160,6 +161,7 @@ PY
 )"
   echo "1.0.13 기능 문구(미션 화면 분리):"
   echo "${feature_report%$'\n'MISSING:*}"
+  feature_found="$(printf '%s\n' "${feature_report%$'\n'MISSING:*}" | grep -c '회' || true)"
   if [[ "$feature_report" == *$'\n'MISSING:* ]]; then
     report "1.0.13 기능 문구가 앱 바이너리에 없다: ${feature_report##*$'\n'MISSING:}"
   fi
@@ -171,4 +173,4 @@ if [[ "$fail" -ne 0 ]]; then
   echo "Release 번들 계약 위반"
   exit 1
 fi
-echo "OK: 픽스처 0 · 금지 문자열 0 · 금지 심볼 0(뒤에서 도는 알림 액션 흔적 포함) · 1.0.13 기능 문구 3/3"
+echo "OK: 픽스처 0 · 금지 문자열 0 · 금지 심볼 0(뒤에서 도는 알림 액션 흔적 포함) · 1.0.13 기능 문구 ${feature_found:-0}/${feature_found:-0} 전부 있음"

@@ -600,6 +600,7 @@ package final class GomokuStore {
         // 수·차례·끝남이 바뀔 때만 한 줄 남긴다(v0.3.31 진단 — `GomokuSeenTurn` 주석). 같은 값을 다시 넣는 되맞춤은 조용하다.
         didSet {
             if let line = Self.matchTransitionLine(from: oldValue, to: match) { Self.logger.notice("\(line, privacy: .public)") }
+            if Self.matchJustFinished(from: oldValue, to: match), !isAIMatch { onMatchFinished?() }
             // AI 판은 `match` 가 그 판 id 를 들고 있는 동안만 산다 — 1:1 판이 열리거나 판이 내려가면 버린다(GomokuStoreAI.swift).
             if let game = aiGame, match?.id != game.id { discardAIGame() }
             // 내 판이 섰으면(수락·신호·인박스·AI 시작 어느 경로든, **끝난 판 포함**) 관전은 내려간다(0.3.41).
@@ -790,6 +791,10 @@ package final class GomokuStore {
     @ObservationIgnored package var requestAttention: (@MainActor () -> Void)?
     /// 창이 안 보이는 동안 차례가 나에게 왔다(같은 판 id·기록 수에 한 번). CheckApp 이 캐릭터 말풍선으로 잇는다.
     @ObservationIgnored package var onAttention: (@MainActor (GomokuAttention) -> Void)?
+    /// v0.3.64: 내 1:1 판이 끝난 것을 **처음 본** 순간(결과를 받은 순간) 한 번 부른다 — 같은 판을 다시 받아도(폴링 · 받은함) 또 안 부른다.
+    /// 맥은 여기서 일일 미션 진행을 한 번 묻는다(새 타이머 없이 이벤트로 — WorkTimerStoreAchievements.swift). AI 판은 부르지 않는다
+    /// (서버 판이 아니라 일일 미션이 세지 않는다).
+    @ObservationIgnored package var onMatchFinished: (@MainActor () -> Void)?
 
     // MARK: 내부 장부 (관찰 대상 아님)
 
@@ -2197,6 +2202,13 @@ package final class GomokuStore {
             view=(moves=\(seen.moveCount, privacy: .public) turn=\(seen.turn?.rawValue ?? "none", privacy: .public)) \
             store=(moves=\(self.match?.moveCount ?? -1, privacy: .public) turn=\(self.match?.turn?.rawValue ?? "none", privacy: .public))
             """)
+    }
+
+
+    /// 판이 **막 끝났는가**(v0.3.64) — 새 판이 끝났고, 같은 판의 끝난 모양을 이미 들고 있던 게 아니다. 순수 함수라 시험이 값으로 잰다.
+    package nonisolated static func matchJustFinished(from old: GomokuMatchState?, to new: GomokuMatchState?) -> Bool {
+        guard let new, new.isFinished else { return false }
+        return !(old?.id == new.id && old?.isFinished == true)
     }
 
     /// 판 상태 변화 한 줄(없으면 nil). 수·차례·끝남·판 교체만 본다 — 시계·채팅·루비는 이 줄을 만들지 않는다.

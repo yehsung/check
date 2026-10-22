@@ -1261,14 +1261,16 @@ final class CheckOverlayController {
 
     /// 신청 말풍선 문구(순수 함수). 두 줄 캡슐에 들어가면 판돈까지 다 싣고, 안 들어가면 짧은 꼴로 접는다
     /// (말풍선은 두 줄 넘치면 꼬리가 잘린다 — 잘리는 쪽이 판돈이면 문구가 약속을 못 한다).
+    /// v0.3.64: 판돈 단위는 **"루비 N" 글자**다(체스 · 테트리스 말풍선도 같다). 이 문장은 말풍선 · 숨김 때의 peek 로 가는 **순수
+    /// 문자열**이라 분홍 루비 그림을 넣을 수 없고, 예전의 파란 💎 글자는 앱의 루비 그림과 다른 것이었다(사용자 2026-10-22 "루비 아이콘 통일").
     nonisolated static func gomokuInviteBubbleText(name: String, stake: Int) -> String {
         let shortName = OverlayMessageBubble.clippedName(name)
-        let full = "\(shortName)님이 오목 대결을 신청했어요 · \(stake)💎"
+        let full = "\(shortName)님이 오목 대결을 신청했어요 · 루비 \(stake)"
         if OverlayMessageBubble.fitsCapsule(full) { return full }
-        let short = "\(shortName)님의 오목 신청 · \(stake)💎"
+        let short = "\(shortName)님의 오목 신청 · 루비 \(stake)"
         if OverlayMessageBubble.fitsCapsule(short) { return short }
         // 이름이 폭을 다 먹는 극단(넓은 글자로만 된 이름). 누가 보냈는지는 배너·로비가 말한다 — 판돈은 잘리지 않게 남긴다.
-        return "오목 대결 신청 · \(stake)💎"
+        return "오목 대결 신청 · 루비 \(stake)"
     }
 
     /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 대국 id 는 한 번만). `GomokuStore.onInviteArrived` 가 부른다.
@@ -1419,11 +1421,11 @@ final class CheckOverlayController {
     /// 체스 신청 말풍선 문구(순수). 오목 문구와 **같은 접기 규칙**이고 게임 이름만 다르다.
     nonisolated static func chessInviteBubbleText(name: String, stake: Int) -> String {
         let shortName = OverlayMessageBubble.clippedName(name)
-        let full = "\(shortName)님이 체스 대결을 신청했어요 · \(stake)💎"
+        let full = "\(shortName)님이 체스 대결을 신청했어요 · 루비 \(stake)"
         if OverlayMessageBubble.fitsCapsule(full) { return full }
-        let short = "\(shortName)님의 체스 신청 · \(stake)💎"
+        let short = "\(shortName)님의 체스 신청 · 루비 \(stake)"
         if OverlayMessageBubble.fitsCapsule(short) { return short }
-        return "체스 대결 신청 · \(stake)💎"
+        return "체스 대결 신청 · 루비 \(stake)"
     }
 
     /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 대국 id 는 한 번만). `ChessStore.onInviteArrived` 가 부른다.
@@ -1560,11 +1562,11 @@ final class CheckOverlayController {
     /// 테트리스 신청 말풍선 문구(순수). 체스 문구와 **같은 접기 규칙**이고 게임 이름만 다르다.
     nonisolated static func tetrisInviteBubbleText(name: String, stake: Int) -> String {
         let shortName = OverlayMessageBubble.clippedName(name)
-        let full = "\(shortName)님이 테트리스 대결을 신청했어요 · \(stake)💎"
+        let full = "\(shortName)님이 테트리스 대결을 신청했어요 · 루비 \(stake)"
         if OverlayMessageBubble.fitsCapsule(full) { return full }
-        let short = "\(shortName)님의 테트리스 신청 · \(stake)💎"
+        let short = "\(shortName)님의 테트리스 신청 · 루비 \(stake)"
         if OverlayMessageBubble.fitsCapsule(short) { return short }
-        return "테트리스 대결 신청 · \(stake)💎"
+        return "테트리스 대결 신청 · 루비 \(stake)"
     }
 
     /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 판 id 는 한 번만). `TetrisDuelStore.onInviteArrived` 가 부른다.

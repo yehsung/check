@@ -596,12 +596,14 @@ struct CheckMiniGameWindowView: View {
     static let quitAction = "그만두기"
     static let noRankToday = "오늘 기록 없음"
 
-    /// 자정 상품(루비). 서버 `public.ruby_prize_amounts()` 와 **짝인 상수**다(둘 다 {10,5,3}).
+    /// 자정 상품(루비). 서버 `public.ruby_prize_amounts()` 와 **짝인 상수**다(둘 다 {20,10,5}).
     /// 2026-09-13 에 상품이 **울트라 +10(1등만) → 루비 20·10·5(1·2·3등)** 로 바뀌었고,
-    /// 2026-10-14(0.3.51 · 서버 20261014120000)에 **10·5·3** 으로 줄었다.
+    /// 2026-10-14(0.3.51 · 서버 20261014120000)에 **10·5·3** 으로 줄었다가,
+    /// 2026-10-22(0.3.64 · 서버 20261022141000) 사용자 결정("일반 미니게임 3종 상금루비 올려야할듯 20 10 5 로 다시 해줘")으로
+    /// **20·10·5** 로 돌아왔다.
     /// 서버 배열을 고치면 여기도 같이 고쳐야 하단 안내가 거짓말이 되지 않는다 — 서버는 금액을 내려 주지 않는다
     /// (`minigame_yesterday_winner` 는 awarded 참/거짓뿐). 폰 `GamesMiniGameText`·`RankingsText` 에도 같은 상수가 있다.
-    static let rubyPrizes = [10, 5, 3]
+    static let rubyPrizes = [20, 10, 5]
 
     /// 자정 상품 정족수. 서버 `public.minigame_prize_quorum()` 과 **짝인 상수**다(둘 다 5).
     /// 서버는 지급을 막고 화면은 그 조건을 미리 알린다 — 서버 함수를 바꾸면 여기도 같이 바꿔야
@@ -1613,7 +1615,7 @@ private struct MiniGamePauseAction: View {
     }
 }
 
-/// 어제 챔피언 카드(48pt). 왕관 · 아바타 · 이름 · 점수 · "루비 +10 받음"(1등 몫 `rubyPrizes[0]`). 금색 채움 + 금색 테두리로 순위 행과 층을 가른다.
+/// 어제 챔피언 카드(48pt). 왕관 · 아바타 · 이름 · 점수 · "루비 +20 받음"(1등 몫 `rubyPrizes[0]`). 금색 채움 + 금색 테두리로 순위 행과 층을 가른다.
 private struct MiniGameChampionCard: View {
     let winner: MiniGameWinner
     let awardedChip: String

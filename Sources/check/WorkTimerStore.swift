@@ -1312,6 +1312,14 @@ final class WorkTimerStore {
     var missionClaimBursts: [String: MissionClaimBurst] = [:]
     /// 연출 순번(같은 줄을 또 받으면 새 순번 → 뷰가 처음부터 다시 그린다). 화면이 읽지 않는다.
     @ObservationIgnored var missionClaimBurstSerial = 0
+    // ── 일일 미션(v0.3.64 · 응답의 최상위 `daily` · `daily_mission_claim`) — 반영 · 받기 · 배지는 WorkTimerStoreAchievements.swift.
+    /// 떠 있는 일일 받기(키 — 전부 받기는 `achievementClaimAllSlot`). 누적 미션 받기와 **따로** 센다(받는 함수가 다르다).
+    var dailyMissionClaimsInFlight: Set<String> = []
+    /// 마지막 받기가 실패한 일일 키(그 줄의 보조 문장 자리가 실패를 말한다 — 누적 줄과 같은 규약).
+    var dailyMissionClaimFailedKeys: Set<String> = []
+    /// 서버 시계 − 이 맥 시계(밀리초). 마지막 도전 미션 응답의 `server_now_ms` 로 잰다 — 일일 줄의 "하루가 끝났나"를 **서버 시각**으로
+    /// 판정하려고(이 맥의 시계가 틀려도 어제 [받기]를 세우지 않게). 화면이 직접 읽지 않는다(`estimatedServerNowMs()`).
+    @ObservationIgnored var achievementsServerClockOffsetMs = 0
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     /// 공개 여부가 **확정**됐는가 — 서버 응답이 왔거나 **사용자가 직접 골랐거나**(setTokenUsagePublic 이 GET 전에 세운다:
@@ -1890,6 +1898,10 @@ final class WorkTimerStore {
         gomoku.attach(host: self)
         chess.attach(host: self)
         tetris.attach(host: self)
+        // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
+        gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult() }
+        chess.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult() }
+        tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult() }
         megaphone.attach(host: self)
     }
 
@@ -3999,6 +4011,10 @@ extension WorkTimerStore {
         missionClaimBursts = [:]
         achievementClaimFailedKeys = []
         weeklyClaimFailed = false
+        // 일일 미션 받기(v0.3.64)도 같은 이유로 내린다.
+        dailyMissionClaimsInFlight = []
+        dailyMissionClaimFailedKeys = []
+        achievementsServerClockOffsetMs = 0
         // 갱신 조정자도 계정에 묶인다. 진행 중이던 갱신 결과가 새 세션에 적용되면 남의 토큰으로 근무를 기록한다.
         sessionRefreshCoordinator.invalidate()
         // 리얼타임 링도 함께 내린다. realtimeApply 가 소켓을 끊고 예약 타이머를 취소하며 realtimeState 를

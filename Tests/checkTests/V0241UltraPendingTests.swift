@@ -189,7 +189,8 @@ func pendingCopyIsCharacterForCharacterAndOutranksTheFullWarning() {
     // 대조군 ②: 평상시 줄은 보상 칩과 진행 문장을 그대로 유지한다(회귀 방지).
     let plain = MissionProgress(kind: .todayThreeHours, progress: 0.4, claimedToday: false,
                                 cappedToday: false, detail: "다음 하나까지 1시간 48분")
-    #expect(MissionCopy.chip(plain) == .reward("💎 +3"))
+    // v0.3.64: 루비 칩은 그림(`RubyIcon`) + "+3" 이다 — 글자 칩(`.reward`)이 아니라 `.ruby(3)`.
+    #expect(MissionCopy.chip(plain) == .ruby(3))
     #expect(MissionCopy.detail(plain) == plain.detail)
 
     // 대조군 ③: `.claimed` 가지는 밑바닥 보정 줄에서 여전히 살아 있다(대기를 앞에 얹었을 뿐

@@ -40,6 +40,9 @@ struct CheckMenuView: View {
     var previewChessInvite: ChessInvite? = nil
     /// 스냅샷 전용: 받은 **테트리스** 신청 배너(v0.3.60)를 강제로 그린다. 앱에서는 store.tetris.visibleIncoming 로만 결정.
     var previewTetrisInvite: TetrisDuelInvite? = nil
+    /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
+    /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
+    var previewFullMissionList: Bool = false
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -739,6 +742,8 @@ struct CheckMenuView: View {
                         // 목록 패널이라 다른 목록과 **같은 창 높이 예산**을 받는다(배너 · 목표 편집이 얹히면 줄이 스크롤로 밀린다).
                         MissionPanel(
                             missions: store.missions,
+                            // 일일 미션 6줄(v0.3.64 — 응답의 `daily`, 하루가 끝났으면 새 날의 모양). nil 이면 6줄만 감춘다(3시간 줄은 남는다).
+                            dailyMissions: store.dailyMissionRows,
                             weeklyWork: store.weeklyWork,
                             hasLoaded: store.missionsLoaded,
                             hasFailed: store.ultraBalanceFailed,
@@ -758,12 +763,17 @@ struct CheckMenuView: View {
                                 bursts: store.missionClaimBursts,
                                 // 실패는 그 줄 안에서 말한다(안내줄로 절을 밀지 않는다 — 검토 지적 2026-10-19).
                                 failedKeys: store.achievementClaimFailedKeys,
-                                weeklyFailed: store.weeklyClaimFailed
+                                weeklyFailed: store.weeklyClaimFailed,
+                                // 일일 미션 받기(v0.3.64 — `daily_mission_claim`). 떠 있음 · 실패는 누적과 따로 센다.
+                                claimDaily: { store.claimDailyMission(key: $0) },
+                                dailyInFlightKeys: store.dailyMissionClaimsInFlight,
+                                dailyFailedKeys: store.dailyMissionClaimFailedKeys
                             ),
                             // 미션 화면이 떠 있으니 이 sync 가 도전 미션도 다시 묻는다(`achievementsReason(forWallet:)`).
                             onRetry: { store.syncUltraWallet(reason: .panelOpen) },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            showsFullContentForPreview: previewFullMissionList,
                             onBack: { store.closeMissionPanel() }
                         )
                     } else if store.isInsightsPanelVisible {
@@ -4689,10 +4699,20 @@ enum MissionCopy {
     ///   "+1"로 적으면 열흘 잠수 후 10개를 기대하게 되는데 실제로는 1개다(도장이 하루 하나뿐이라
     ///   보정도 한 번이다).
     static func reward(_ kind: MissionProgress.Kind) -> String? {
+        if let ruby = rubyReward(kind) { return "+\(ruby)" }
         switch kind {
-        case .todayThreeHours: return "💎 +3"   // 서버 ruby_mission_grant() 와 짝인 상수
+        case .todayThreeHours: return nil
         case .dailyFloor:      return "0개면 1개로"
         case .arrivalStreak:   return nil
+        }
+    }
+
+    /// 루비로 주는 줄의 루비 수(v0.3.64 — 칩은 분홍 `RubyIcon` + "+3" 으로 그린다, 파란 💎 글자는 버렸다). 루비가 아니면 nil.
+    /// 3 은 서버 `ruby_mission_grant()` 와 짝인 상수다(V0351 시험이 마이그레이션의 가장 나중 정의와 대조한다).
+    static func rubyReward(_ kind: MissionProgress.Kind) -> Int? {
+        switch kind {
+        case .todayThreeHours: return 3
+        case .dailyFloor, .arrivalStreak: return nil
         }
     }
 
@@ -4749,6 +4769,8 @@ enum MissionCopy {
         if mission.isPending { return .pending }
         if mission.cappedToday { return .capped }
         if mission.claimedToday { return .claimed }
+        // 루비 줄은 그림 칩(v0.3.64) — 글자 칩은 루비가 아닌 줄(밑바닥 보정 "0개면 1개로")뿐이다.
+        if let ruby = rubyReward(mission.kind) { return .ruby(ruby) }
         return .reward(reward)
     }
 }
@@ -4757,6 +4779,8 @@ enum MissionCopy {
 enum MissionChip: Equatable {
     case none
     case reward(String)
+    /// 루비 보상(v0.3.64) — `RubyIcon` + "+N". 3시간 줄이 이것이다.
+    case ruby(Int)
     case claimed
     case capped
     /// 3시간을 채워 두고 기다리는 중. `.capped` 와 **다른 색**으로 그린다 —
@@ -4777,11 +4801,11 @@ enum WeeklyWorkCopy {
         gauge.isComplete ? "\(title) 완료" : "\(title) · \(gauge.questHours)시간 달성하기"
     }
 
-    /// 오른쪽 칩 — 진행 중 "💎 +50"(지금 퀘스트의 보상), 완료 "💎 +270 받았어요".
+    /// 오른쪽 칩의 글자 — 진행 중 "+50"(지금 퀘스트의 보상), 완료 "+270 받았어요". 앞의 루비는 **그림**(`RubyIcon` — v0.3.64).
     /// 완료 칩의 숫자는 **장부에 들어간 합**(`claimedTotal`)만이다 — cron 이 아직이면 70 이고, 하나도 안 들어왔으면 칩이 없다.
     static func chip(_ gauge: WeeklyWorkGauge) -> String? {
-        if gauge.isComplete { return gauge.claimedTotal > 0 ? "💎 +\(gauge.claimedTotal) 받았어요" : nil }
-        return "💎 +\(gauge.reward)"
+        if gauge.isComplete { return gauge.claimedTotal > 0 ? "+\(gauge.claimedTotal) 받았어요" : nil }
+        return "+\(gauge.reward)"
     }
 
     /// 게이지 아래 보조 문장 — 진행 중 "23시간 12분 / 40시간", 완료면 누적만("61시간 3분" — 다음 목표는 없다).
@@ -4961,8 +4985,18 @@ enum MissionPanelCopy {
 ///   연속 근무일수는 [헤더 카드] 여기에 뜨게끔 밖으로 빼줘"). **화면에서만 뺐다** — 서버의 밑바닥 보정 규칙(잔량 0이면 1개로)은
 ///   그대로 돌고, 연속 일수는 헤더 카드의 칩(`HeaderStreakChip`)이 말한다. 코어 `MissionProgress.rows(from:)` 는 그 두 줄을
 ///   계속 만든다(폰 · 기존 테스트가 순서와 내용에 기댄다) — 거르는 자리는 이 뷰 하나다(`hiddenKinds`).
+///
+/// ★ **v0.3.64 — 세 묶음**(사용자 결정 2026-10-22: "일일미션, 주간미션, 누적미션 이렇게 3개로 나눠서"). 순서는 **일일 → 주간 → 누적**
+///   이고 머리는 셋 다 예전 "도전 미션" 소제목 모양(`MissionGroupHeader`)이다:
+///   · 일일 미션 — 머리 옆 "자정에 초기화 · 안 받으면 사라져요" · 맨 위 "근무 3시간마다"(자동 지급 · 버튼 없음 그대로) · 안내줄 ·
+///     서버 `daily` 6줄(미니게임 3종 · 1:1 3종, sort 순 — `dailyMissions`, nil 이면 6줄만 감춘다).
+///   · 주간 미션 — "이번 주 근무" 줄 그대로(줄을 그릴 만큼 모르면 머리째 안 그린다).
+///   · 누적 미션 — 예전 도전 미션 13개(계열 한 줄) 그대로(`AchievementSectionView`).
+///   스크롤 창 높이(`capHeight`)는 그대로다 — 묶음 머리는 **스크롤 내용**의 높이에만 더해진다(`contentHeight`). 창이 안 자란다.
 private struct MissionPanel: View {
     let missions: [MissionProgress]
+    /// 일일 미션 줄(v0.3.64 — 서버 `daily`, 하루가 끝난 응답이면 새 날의 모양). **nil = 감춘다**(옛 서버 · 404 · 해석 실패 · 아직 모름).
+    var dailyMissions: [DailyMissionStatus.Mission]? = nil
     /// 이번 주 누적 근무 보상(v0.3.55). nil 이거나 줄을 그릴 만큼 모르면(`gauge == nil`) 줄을 **안 그린다** — 함수가 없는
     /// 옛 서버 · 첫 조회 전. 3시간 줄 **바로 아래**에 선다(둘 다 근무로 받는 루비다).
     var weeklyWork: WeeklyWorkStatus? = nil
@@ -4980,6 +5014,8 @@ private struct MissionPanel: View {
     var onRetry: (() -> Void)? = nil
     var extraChromeHeight: CGFloat = 0
     var clipsOverflowInsteadOfScroll: Bool = false
+    /// 스냅샷 전용(v0.3.64 — `CheckMenuView.previewFullMissionList`): 스크롤 창에 자르지 않고 내용을 통째로 그린다. 앱은 언제나 false.
+    var showsFullContentForPreview: Bool = false
     let onBack: () -> Void
 
     /// 화면에서 빼는 줄(위 ★). 코어가 줄을 더 만들게 돼도(새 미션) 여기 없는 것은 그대로 선다.
@@ -5038,31 +5074,48 @@ private struct MissionPanel: View {
         .pagePanelStyle()
     }
 
+    /// 일일 묶음 머리 오른쪽 "받을 보상 N개"(그리는 줄에서 센다 — 하루가 끝난 줄은 이미 [받기]가 없다).
+    private var dailyClaimableCount: Int {
+        (dailyMissions ?? []).filter(\.row.isClaimable).count
+    }
+
+    /// 스크롤 **내용**의 높이(v0.3.64 — 세 묶음). 그리기와 같은 셈이다: 일일 머리 + 일일 줄(3시간 · 그 밖의 미션 줄 · 서버 일일 줄) +
+    /// 안내줄 + 주간 묶음(머리 + 줄) + 누적 절. 창 높이를 정하는 것은 이 값이 아니라 `capHeight`(예전 줄 상한)다 — 넘치면 스크롤이다.
+    static func contentHeight(missionRowCount: Int, dailyRowCount: Int, hasNotice: Bool, hasWeekly: Bool,
+                              achievementSection: AchievementSectionState) -> CGFloat {
+        let groupHeader = MissionGroupLayout.headerHeight + rowSpacing
+        let dailyRows = max(1, missionRowCount) + dailyRowCount
+        let weekly = hasWeekly ? rowSpacing + groupHeader + rowHeight : 0
+        return groupHeader + listContentHeight(rowCount: dailyRows) + (hasNotice ? noticeStripHeight : 0)
+            + weekly + AchievementSectionLayout.height(achievementSection)
+    }
+
     @ViewBuilder
     private var missionList: some View {
         let missions = shownMissions
+        let daily = dailyMissions ?? []
         // 스크롤 창 = 예전 줄 상한 + 안내줄 몫(안내줄이 스크롤 안으로 들어왔다 — 창 높이 합은 v0.3.56 과 같다).
         let capHeight = Self.listContentHeight(rowCount: visibleRows) + noticeHeight
-        // 주간 줄도 한 줄이다 — 빼고 세면 스크롤로 넘어가야 할 높이를 그대로 펼쳐 창이 자란다.
-        let rowCount = (missions.isEmpty ? 1 : missions.count) + (weeklyRow == nil ? 0 : 1)
-        // 도전 미션 절(소제목 + 줄)도 같은 셈에 든다 — 빼면 절이 붙은 화면이 스크롤 대신 창을 키운다.
-        let contentHeight = Self.listContentHeight(rowCount: rowCount) + noticeHeight
-            + AchievementSectionLayout.height(achievementSection)
+        // 묶음 머리 · 일일 줄 · 주간 줄 · 누적 절도 같은 셈에 든다 — 빼고 세면 스크롤로 넘어가야 할 높이를 펼쳐 창이 자란다.
+        let contentHeight = Self.contentHeight(missionRowCount: missions.count, dailyRowCount: daily.count,
+                                               hasNotice: noticeHeight > 0, hasWeekly: weeklyRow != nil,
+                                               achievementSection: achievementSection)
         let rows = VStack(spacing: Self.rowSpacing) {
+            // ── 일일 미션(v0.3.64) — 머리 · 3시간 줄 · 안내줄 · 서버 일일 줄 ──
+            MissionGroupHeader(title: DailyMissionCopy.sectionTitle, note: DailyMissionCopy.resetNote,
+                               pendingCount: dailyClaimableCount)
             if missions.isEmpty {
                 Text(hasLoaded ? MissionPanelCopy.emptyCaption
                                : (hasFailed ? MissionPanelCopy.failedCaption : MissionPanelCopy.loadingCaption))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
-                if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }
             } else {
                 ForEach(missions.prefix(1)) { MissionRowView(mission: $0) }
-                if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }
                 ForEach(missions.dropFirst()) { MissionRowView(mission: $0) }
             }
-            // 안내줄 — 줄들 바로 아래, 위 여백은 예전과 같은 12pt(간격 8 + 4). 높이를 박아 두는 이유: 스크롤 판정이 이 몫을
-            // `noticeStripHeight` 로 센다(글자 크기가 달라져도 셈과 그림이 안 갈린다).
+            // 안내줄 — 3시간 줄 바로 아래(그 줄이 낸 "3시간 채웠어요 — 루비 +3"이다), 위 여백은 예전과 같은 12pt(간격 8 + 4).
+            // 높이를 박아 두는 이유: 스크롤 판정이 이 몫을 `noticeStripHeight` 로 센다(글자 크기가 달라져도 셈과 그림이 안 갈린다).
             if let notice, !notice.isEmpty {
                 Text(notice)
                     .font(.caption2.weight(.semibold))
@@ -5072,12 +5125,20 @@ private struct MissionPanel: View {
                            maxHeight: Self.noticeStripHeight - 12, alignment: .leading)
                     .padding(.top, 12 - Self.rowSpacing)
             }
-            // 도전 미션(v0.3.58) — 기존 줄 · 안내줄 **아래**. 절이 없으면(`.hidden`) 아무것도 안 그린다(간격도 없다).
+            ForEach(daily) { AchievementRowView(mission: $0.row, group: .daily(game: $0.game)) }
+            // ── 주간 미션 — 줄을 그릴 만큼 모르면 머리째 안 그린다(빈 묶음을 세우지 않는다) ──
+            if let weeklyRow {
+                MissionGroupHeader(title: WeeklyMissionCopy.sectionTitle)
+                WeeklyWorkRowView(status: weeklyRow)
+            }
+            // ── 누적 미션(v0.3.58 의 도전 미션) — 절이 없으면(`.hidden`) 아무것도 안 그린다(간격도 없다) ──
             if achievementSection != .hidden {
                 AchievementSectionView(state: achievementSection)
             }
         }
-        if contentHeight <= capHeight {
+        if showsFullContentForPreview {
+            rows.frame(maxWidth: .infinity, alignment: .top)
+        } else if contentHeight <= capHeight {
             // 도전 미션 절이 줄을 아직 모르면(불러오는 중 · 실패) 받은 뒤의 높이(스크롤 상한)를 미리 잡는다 — 문구 한 줄로 세면
             // 첫 열기마다 팝오버가 답이 올 때 100pt 자랐다(검토 지적 2026-10-19 · `AchievementSectionState.reservesViewport`).
             rows.frame(maxWidth: .infinity, alignment: .top)
@@ -5177,6 +5238,13 @@ private struct MissionRowView: View {
         case .reward(let text):
             Text(text)
                 .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.accent)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(CheckTheme.accent.opacity(0.16)))
+        case .ruby(let amount):
+            // 분홍 루비 그림 + "+3"(v0.3.64 — 상단 잔량 칩과 같은 그림). 칩 모양 · 색은 글자 칩 그대로다.
+            RubyRewardLabel(text: "+\(amount)")
                 .foregroundStyle(CheckTheme.accent)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -5287,12 +5355,8 @@ struct WeeklyWorkRowView: View {
     private func chip(_ gauge: WeeklyWorkGauge) -> some View {
         if let text = WeeklyWorkCopy.chip(gauge) {
             let tint = gauge.isComplete ? CheckTheme.working : CheckTheme.accent
-            HStack(spacing: 3) {
-                if gauge.isComplete {
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
-                }
-                Text(text).font(.caption2.weight(.bold))
-            }
+            // 분홍 루비 그림 + 글자(v0.3.64). 완료면 앞에 체크.
+            RubyRewardLabel(text: text, leadingSymbol: gauge.isComplete ? "checkmark" : nil)
             .foregroundStyle(tint)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

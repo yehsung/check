@@ -545,7 +545,10 @@ extension WorkTimerStore {
             // 꼬리에서 다음 인편을 밀어야 하므로 깃발은 **여기서** 내린다(defer 는 꼬리 뒤에 돈다 — 그때는 이미 늦다).
             miniGameSubmittingKinds.remove(kind)
             var reloadsBoard = false
+            // 서버에 이 판이 남았다(v0.3.64 — 일일 미션이 세는 것은 제출된 판이다). 꼬리에서 도전 미션을 한 번 묻는다.
+            var recorded = false
             if response.status == "ok" || response.status == "token_used" {
+                recorded = true
                 // ★ `token_used` 는 **성공이다.** 서버는 제출이 성공한 순간 그 토큰에 used_at 을 찍고, 이미 쓴 토큰에는
                 //   `token_used` 를 돌려준다. 즉 이 응답을 받는 경우는 **응답만 유실된 첫 제출의 재시도**뿐이고,
                 //   그때 점수는 이미 올라가 있다. 이걸 거절로 그리면 올라간 점수를 "못 올렸어요"라고 말하는 거짓말이 된다(5번 갈래).
@@ -604,6 +607,8 @@ extension WorkTimerStore {
             // (방금 쓴 토큰은 죽었다). 인편이 남아 있으면 선발급하지 않는다 — 그게 불변식이다. 이 꼬리는 방아쇠가 아니다(주석 위).
             retryMiniGamePendingSubmitIfAny(fromTrigger: false)
             if !hasMiniGamePendingSubmit(for: kind) { prefetchMiniGameRoundToken(kind: kind) }
+            // 일일 미션(v0.3.64) — 판 제출이 성공한 뒤 한 번(새 타이머 없이 이벤트로). 선발급 **뒤**에 둔다(다음 판 토큰이 먼저다).
+            if recorded { refreshAchievementsAfterGameResult() }
             if reloadsBoard { await performLoadMiniGameBoard() }
         } catch {
             if case .cancelled = classifyAuthError(error) { return }

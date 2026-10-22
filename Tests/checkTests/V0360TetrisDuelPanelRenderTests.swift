@@ -502,7 +502,9 @@ struct TetrisDuelPanelRenderTests {
         #expect(attack.contains("2줄") && attack.contains("1줄") && attack.contains("3줄은 2줄") && attack.contains("4줄은 4줄"),
                 "공격 표가 설계(2→1 · 3→2 · 4→4)와 다르다: \(attack)")
         #expect((1...4).map { TetrisGame.attackLines(lines: $0) } == [0, 1, 2, 4], "엔진 공격 표가 규칙 글과 갈렸다")
-        #expect(TetrisDuelText.rules[4].detail.contains("\(DuelFee.percent)%"))
+        // v0.3.64: 수수료를 없앴다 — 판돈 줄은 "판돈만큼 더"만 말하고 수수료 · 비율을 말하지 않는다.
+        #expect(TetrisDuelText.rules[4].detail.contains("판돈만큼 더"))
+        #expect(!TetrisDuelText.rules[4].detail.contains("수수료") && !TetrisDuelText.rules[4].detail.contains("%"))
         #expect(TetrisDuelText.rules[3].detail.contains("15초"))
     }
 

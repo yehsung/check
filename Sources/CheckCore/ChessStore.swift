@@ -634,6 +634,7 @@ package final class ChessStore {
             if let line = Self.matchTransitionLine(from: oldValue, to: match) {
                 Self.logger.notice("\(line, privacy: .public)")
             }
+            if Self.matchJustFinished(from: oldValue, to: match), !isAIMatch { onMatchFinished?() }
             // 판이 바뀌면 입력 2단은 통째로 접는다(⑧ — 앞 판의 선택이 새 판의 칸을 가리키면 그게 사고다).
             if oldValue?.id != match?.id || oldValue?.plyCount != match?.plyCount {
                 if selection != nil { selection = nil }
@@ -771,6 +772,9 @@ package final class ChessStore {
     @ObservationIgnored package var onInviteArrived: (@MainActor (ChessInvite) -> Void)?
     @ObservationIgnored package var requestAttention: (@MainActor () -> Void)?
     @ObservationIgnored package var onAttention: (@MainActor (ChessAttention) -> Void)?
+    /// v0.3.64: 내 1:1 판이 끝난 것을 **처음 본** 순간(결과를 받은 순간) 한 번 부른다 — 같은 판을 다시 받아도(폴링 · 받은함) 또 안 부른다.
+    /// 맥은 여기서 일일 미션 진행을 한 번 묻는다(새 타이머 없이 이벤트로 — WorkTimerStoreAchievements.swift). AI(로봇) 판은 부르지 않는다.
+    @ObservationIgnored package var onMatchFinished: (@MainActor () -> Void)?
 
     // MARK: 내부 장부 (관찰 대상 아님)
 
@@ -2157,6 +2161,12 @@ package final class ChessStore {
             mine=\(self.match?.myColor.rawValue ?? "none", privacy: .public) \
             busy=\(self.isBusy ? "true" : "false", privacy: .public)
             """)
+    }
+
+    /// 판이 **막 끝났는가**(v0.3.64) — 새 판이 끝났고, 같은 판의 끝난 모양을 이미 들고 있던 게 아니다. 순수 함수라 시험이 값으로 잰다.
+    package nonisolated static func matchJustFinished(from old: ChessMatchState?, to new: ChessMatchState?) -> Bool {
+        guard let new, new.isFinished else { return false }
+        return !(old?.id == new.id && old?.isFinished == true)
     }
 
     /// 판 상태 변화 한 줄(없으면 nil). 수·차례·끝남·판 교체만 본다 — 시계·루비는 이 줄을 만들지 않는다.

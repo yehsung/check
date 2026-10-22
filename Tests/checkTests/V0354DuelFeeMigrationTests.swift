@@ -15,6 +15,9 @@ import Testing
 // 하우스 규칙: `--` 주석은 걷어내고 본다(바이트 비교는 원문으로 — 본문 안 주석도 prosrc 의 일부다).
 
 private let dfMigration = "20261015120000_duel_fee.sql"
+/// v0.3.64(2026-10-22 사용자 결정 "멀티 미니게임 수수료 다시 제거해줘") — `duel_fee` 를 0 으로 다시 정의한 뒤 파일. 이 파일 뒤에
+/// `duel_fee` 를 정의하는 것은 이것 하나뿐이어야 하고, 정산 함수는 다시 정의하지 않는다(그대로 `2*판돈 − duel_fee` 를 준다).
+private let dfFeeOffMigration = "20261022142000_duel_fee_off.sql"
 private let dfGomokuCanon = "20260916210000_gomoku_timeout_autoplace.sql"
 private let dfChessCanon = "20261005160000_chess_duel.sql"
 
@@ -158,11 +161,19 @@ struct V0354DuelFeeMigrationTests {
         }
     }
 
-    @Test("duel_fee 는 이 파일에서 한 번만 create or replace 되고 실행권 줄이 없다(PUBLIC 회수 = 소유자가 다른 definer 의 42501)")
+    @Test("duel_fee 는 이 파일에서 한 번만 create or replace 되고 실행권 줄이 없다(PUBLIC 회수 = 소유자가 다른 definer 의 42501) · 뒤에는 수수료 0 파일 하나뿐")
     func feeFunctionKeepsPublicExecute() throws {
         let sql = dfStrip(try dfRaw(dfMigration))
         let defining = try dfDefiningFiles("duel_fee")
-        #expect(defining == [dfMigration], "duel_fee 를 정의하는 파일이 \(defining) 다")
+        // v0.3.64: 체인의 마지막 정의는 수수료 0 파일이다(그 파일이 값 0 · ACL 그대로를 스스로 단언한다). 이 파일은 그 앞의 역사다.
+        #expect(defining == [dfMigration, dfFeeOffMigration], "duel_fee 를 정의하는 파일이 \(defining) 다")
+        let off = dfStrip(try dfRaw(dfFeeOffMigration))
+        #expect(try dfMatches(#"create\s+or\s+replace\s+function\s+public\.duel_fee\s*\(\s*p_stake\s+int\s*\)\s*returns\s+int\s+language\s+sql\s+immutable\s+as\s+\$fn\$\s*select\s+0\s*\$fn\$"#,
+                                in: off).count == 1, "\(dfFeeOffMigration) 의 duel_fee 가 '언제나 0' 이 아니다")
+        #expect(try dfMatches(#"^\s*(revoke|grant)\b[^;]*duel_fee"#, in: off).isEmpty, "수수료 0 파일이 duel_fee 실행권을 다시 적는다")
+        for fn in ["gomoku__settle", "chess__settle", "tetris__settle"] {
+            #expect(try dfDefiningFiles(fn).last != dfFeeOffMigration, "수수료 0 파일이 \(fn) 을 다시 정의했다(명세: 정산은 그대로)")
+        }
         #expect(try dfMatches(#"^\s*(revoke|grant)\b[^;]*duel_fee"#, in: sql).isEmpty, "duel_fee 의 실행권을 다시 적는다")
         #expect(try dfMatches(#"^\s*drop\s+function\s+(?:if\s+exists\s+)?public\."#, in: sql).isEmpty, "public 함수를 drop 한다 — ACL·주석을 버린다")
         #expect(!dfSquash(sql).contains("function public.gomoku_stakes") && !dfSquash(sql).contains("function public.chess_stakes"),

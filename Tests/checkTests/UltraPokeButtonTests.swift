@@ -290,7 +290,7 @@ struct UltraPokeButtonTests {
         let pending = MissionProgress(kind: .todayThreeHours, progress: 0.4, claimedToday: false, cappedToday: false, detail: "다음 하나까지 1시간 48분")
         // '받음' 칩이 남는 자리는 밑바닥 보정 줄이다 — 3시간 줄의 claimed 는 서버가 언제나 false 로 보낸다.
         let claimed = MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "잔량 0이면 1개로")
-        #expect(MissionCopy.chip(pending) == .reward("💎 +3"))
+        #expect(MissionCopy.chip(pending) == .ruby(3))   // v0.3.64: 루비는 그림 칩(`RubyIcon` + "+3")
         #expect(MissionCopy.chip(claimed) == .claimed)
         // 진행 시간은 상한에 안 걸린 줄에서만 말한다.
         #expect(MissionCopy.detail(pending) == pending.detail)

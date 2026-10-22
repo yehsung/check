@@ -107,7 +107,7 @@ enum ChessText {
 
     static let stakeTitle = "판돈"
     static let stakeUnknown = "—"
-    /// 판돈 줄. 이기면 **순이익**(판돈 − 수수료 10%, `DuelFee.winnerNet` — v0.3.54) — 결과 카드의 루비 변화와 같은 숫자다.
+    /// 판돈 줄. 이기면 **순이익**(판돈 − 수수료, `DuelFee.winnerNet` — v0.3.54 · v0.3.64 부터 수수료 0) — 결과 카드의 루비 변화와 같은 숫자다.
     static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
     static func watchStakeLine(_ stake: Int) -> String { "\(stake)" }
     static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
@@ -2355,8 +2355,8 @@ enum ChessRulesOverlayLines {
         ("승격", "폰이 맨 끝 줄에 닿으면 퀸·룩·비숍·나이트 중 하나로 바꿉니다."),
         ("무승부", "둘 곳이 없는데 체크가 아니면(스테일메이트), 50수 동안 잡기·폰 이동이 없으면, 같은 국면이 세 번 나오면, 메이트할 기물이 없으면, 또는 두 사람이 합의하면 무승부입니다."),
         ("시간", "시간을 다 쓰면 집니다. 다만 상대에게 메이트할 기물이 없으면 무승부입니다."),
-        // v0.3.54 — 판돈 수수료를 이 창에서 말하는 곳은 이 한 줄이다(숫자는 판돈 줄 "이기면 +N" 이 순이익으로 말한다).
-        ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고(수수료 \(DuelFee.percent)% 빼고), 무승부면 건 판돈을 돌려받아요.")
+        // v0.3.64 — 판돈 수수료를 없앴다(사용자 결정 2026-10-22). 숫자는 판돈 줄 "이기면 +N"(= +판돈)이 말한다.
+        ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, 무승부면 건 판돈을 돌려받아요.")
     ]
 }
 

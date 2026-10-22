@@ -475,6 +475,7 @@ package final class TetrisDuelStore {
             if let line = Self.matchTransitionLine(from: oldValue, to: match) {
                 Self.logger.notice("\(line, privacy: .public)")
             }
+            if Self.matchJustFinished(from: oldValue, to: match) { onMatchFinished?() }
         }
     }
     /// 내 판의 숫자들(조각이 굳을 때만 바뀐다). 판이 없으면 nil.
@@ -523,6 +524,9 @@ package final class TetrisDuelStore {
     @ObservationIgnored package var onInviteArrived: (@MainActor (TetrisDuelInvite) -> Void)?
     @ObservationIgnored package var requestAttention: (@MainActor () -> Void)?
     @ObservationIgnored package var onAttention: (@MainActor (TetrisDuelAttention) -> Void)?
+    /// v0.3.64: 내 1:1 판이 끝난 것을 **처음 본** 순간(결과를 받은 순간) 한 번 부른다 — 같은 판을 다시 받아도(폴링 · 받은함) 또 안 부른다.
+    /// 맥은 여기서 일일 미션 진행을 한 번 묻는다(새 타이머 없이 이벤트로 — WorkTimerStoreAchievements.swift).
+    @ObservationIgnored package var onMatchFinished: (@MainActor () -> Void)?
 
     // MARK: 판 (관찰 대상 아님 — 머리말 ⑦)
 
@@ -1391,6 +1395,12 @@ package final class TetrisDuelStore {
     /// 안내줄 한 문.
     package func setNotice(_ text: String?) {
         if notice != text { notice = text }
+    }
+
+    /// 판이 **막 끝났는가**(v0.3.64) — 새 판이 끝났고, 같은 판의 끝난 모양을 이미 들고 있던 게 아니다. 순수 함수라 시험이 값으로 잰다.
+    package nonisolated static func matchJustFinished(from old: TetrisDuelMatchState?, to new: TetrisDuelMatchState?) -> Bool {
+        guard let new, new.isFinished else { return false }
+        return !(old?.id == new.id && old?.isFinished == true)
     }
 
     /// 판 상태 변화 한 줄(없으면 nil). 판 교체·끝남·시작 시각·준비만 본다 — 상대 판·루비는 이 줄을 만들지 않는다.

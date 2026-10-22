@@ -602,7 +602,7 @@ struct V0360TetrisDuelStoreTests {
             "finished", result: "challenger_win", winner: tdMe, endReason: "meteor_strike"))))
         #expect(store.match?.isFinished == true && store.match?.endReason == nil)
         #expect(store.match?.outcome == .won && store.match?.rubyDelta == DuelFee.winnerNet(stake: 3))
-        #expect(store.match?.rubyDelta == 2)
+        #expect(store.match?.rubyDelta == 3)   // v0.3.64: 수수료 0 — 판돈 3 승리 = +3
         store.reset()
     }
 
@@ -1059,11 +1059,11 @@ struct V0360TetrisDuelStoreTests {
     }
 
     @MainActor
-    @Test("판 결과의 루비: 승 +(판돈−수수료) · 패 −판돈 · 무 0 — 3·5·10 모두 DuelFee 와 같다")
+    @Test("판 결과의 루비: 승 +판돈(수수료 0 — v0.3.64) · 패 −판돈 · 무 0 — 3·5·10 모두 DuelFee 와 같다")
     func rubyDeltaFollowsDuelFee() throws {
-        // 없으면: 결과 카드가 서버 정산(수수료 10%)과 다른 숫자를 말한다.
+        // 없으면: 결과 카드가 서버 정산(v0.3.64 부터 수수료 0 — 2×판돈)과 다른 숫자를 말한다.
         let (store, _, _, _) = tdMake("ruby", script: TDScript())
-        for (stake, net) in [(3, 2), (5, 4), (10, 8)] {
+        for (stake, net) in [(3, 3), (5, 5), (10, 10)] {
             for (winner, result, outcome, delta) in [
                 (tdMe as String?, "opponent_win", TetrisDuelOutcome.won, net),
                 (tdRival as String?, "challenger_win", .lost, -stake),

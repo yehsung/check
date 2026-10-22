@@ -147,18 +147,14 @@ func v0363StickerBottomsAreRound() throws {
     }
 }
 
-// MARK: - 릴리스 게이트 (v0.3.63)
+// MARK: - 0.3.63 체인지로그 (내용만)
 //
-// **관행**: 버전 고정과 "맨 위 섹션" 단언은 *그 릴리스의 시험 파일*이 든다(0.3.60 → 0.3.61 → 0.3.62 → 여기).
-// 다음 릴리스가 오면 이 둘을 그쪽 파일로 옮기고, 여기는 0.3.63 섹션의 **내용**만 남겨라 —
-// 안 옮기면 버전을 올리는 그 커밋에서 전체 스위트가 빨개진다.
-@Test("버전 0.3.63 / 116 · CHANGELOG 0.3.63 은 맨 위 한 줄(사용자 말투)")
+// **관행**: 버전 고정과 "맨 위 섹션" 단언은 *그 릴리스의 시험 파일*이 든다(0.3.60 → 0.3.61 → 0.3.62 → 0.3.63 → …).
+// 0.3.64 가 올라가며 그 둘은 `V0364MissionGroupsTests.swift` 의 `v0364VersionAndChangelog` 로 넘겼다 —
+// 안 옮기면 버전을 올리는 그 커밋에서 전체 스위트가 빨개진다. 여기는 0.3.63 섹션의 **내용**만 지킨다(이미 배포된 역사다).
+@Test("CHANGELOG 0.3.63 은 두 줄(사용자 말투) · 0.3.62 보다 위")
 func v0363VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.63</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>116</string>"))
 
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.63\n") })
@@ -172,5 +168,5 @@ func v0363VersionAndChangelog() throws {
         #expect(!section.contains(banned), "사용자 문구에 내부 어휘('\(banned)')가 있다")
     }
     #expect(changelog.range(of: "## 0.3.63")!.lowerBound < changelog.range(of: "## 0.3.62")!.lowerBound,
-            "0.3.63 이 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
+            "0.3.63 섹션이 0.3.62 보다 아래에 있다")
 }

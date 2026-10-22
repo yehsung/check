@@ -239,10 +239,10 @@ final class V0355Clock {
         return (WeeklyWorkCopy.title(gauge), WeeklyWorkCopy.chip(gauge), WeeklyWorkCopy.detail(status, gauge: gauge))
     }
 
-    @Test("0시간 — '이번 주 근무 · 20시간 달성하기' · '💎 +20' · '0분 / 20시간'")
+    @Test("0시간 — '이번 주 근무 · 20시간 달성하기' · '(루비) +20' · '0분 / 20시간'")
     func zeroHours() throws {
         let c = try copy(0)
-        #expect(c.title == "이번 주 근무 · 20시간 달성하기" && c.chip == "💎 +20" && c.detail == "0분 / 20시간")
+        #expect(c.title == "이번 주 근무 · 20시간 달성하기" && c.chip == "+20" && c.detail == "0분 / 20시간")
     }
 
     @Test("19:59:59 — 아직 20시간 퀘스트(분은 내림)")
@@ -251,31 +251,31 @@ final class V0355Clock {
         #expect(c.title == "이번 주 근무 · 20시간 달성하기" && c.detail == "19시간 59분 / 20시간")
     }
 
-    @Test("23시간 12분 — 설계서 예시 그대로('이번 주 근무 · 40시간 달성하기' · '23시간 12분 / 40시간' · '💎 +50')")
+    @Test("23시간 12분 — 설계서 예시 그대로('이번 주 근무 · 40시간 달성하기' · '23시간 12분 / 40시간' · '(루비) +50')")
     func specExampleLine() throws {
         let c = try copy(23 * h + 12 * 60 + 5, [true, false, false])
         #expect(c.title == "이번 주 근무 · 40시간 달성하기")
         #expect(c.detail == "23시간 12분 / 40시간")
-        #expect(c.chip == "💎 +50")
+        #expect(c.chip == "+50")
     }
 
-    @Test("40시간 · 59시간 — 60시간 퀘스트 · '💎 +200'")
+    @Test("40시간 · 59시간 — 60시간 퀘스트 · '(루비) +200'")
     func sixtyQuest() throws {
         #expect(try copy(40 * h, [true, true, false]).title == "이번 주 근무 · 60시간 달성하기")
         let c = try copy(59 * h, [true, true, false])
-        #expect(c.detail == "59시간 / 60시간" && c.chip == "💎 +200")
+        #expect(c.detail == "59시간 / 60시간" && c.chip == "+200")
     }
 
-    @Test("60시간+ — '이번 주 근무 완료' · '💎 +270 받았어요'(장부 합) · 다음 목표 없음")
+    @Test("60시간+ — '이번 주 근무 완료' · '(루비) +270 받았어요'(장부 합) · 다음 목표 없음")
     func complete() throws {
         let c = try copy(71 * h, [true, true, true])
-        #expect(c.title == "이번 주 근무 완료" && c.chip == "💎 +270 받았어요" && c.detail == "71시간")
+        #expect(c.title == "이번 주 근무 완료" && c.chip == "+270 받았어요" && c.detail == "71시간")
         #expect(!c.detail.contains("/"), "완료인데 다음 목표를 말한다")
     }
 
     @Test("완료인데 장부가 늦다 — 받은 만큼만(+70) · 하나도 없으면 칩 없음(안 준 루비를 받았다고 말하지 않는다)")
     func completeButLagging() throws {
-        #expect(try copy(61 * h, [true, true, false]).chip == "💎 +70 받았어요")
+        #expect(try copy(61 * h, [true, true, false]).chip == "+70 받았어요")
         let none = try copy(61 * h)
         #expect(none.title == "이번 주 근무 완료" && none.chip == nil)
     }
@@ -285,7 +285,7 @@ final class V0355Clock {
         let other = try V0355WeeklyStub.decode(#"{"worked_seconds":3600,"tiers":[{"hours":10,"ruby":7,"claimed":false},{"hours":30,"ruby":11,"claimed":false}]}"#)
         let gauge = try #require(other.gauge)
         #expect(WeeklyWorkCopy.title(gauge) == "이번 주 근무 · 10시간 달성하기")
-        #expect(WeeklyWorkCopy.chip(gauge) == "💎 +7" && WeeklyWorkCopy.detail(other, gauge: gauge) == "1시간 / 10시간")
+        #expect(WeeklyWorkCopy.chip(gauge) == "+7" && WeeklyWorkCopy.detail(other, gauge: gauge) == "1시간 / 10시간")
         #expect(WeeklyWorkCopy.rule(other) == "월요일 0시에 새로 세요 · 10시간 7 · 30시간 11")
         #expect(other.totalRuby == 18)
     }
@@ -683,7 +683,9 @@ final class V0355Clock {
         #expect(done != almost)
     }
 
-    @Test("팝오버 높이 상한 — 안내줄 × 배너 네 조합 전부 ≤ 700pt · 주간 줄은 미션 줄과 똑같이 한 줄로 세여 목록 상한을 넘기지 않는다")
+    // v0.3.64: 주간 줄은 이제 **주간 묶음**(머리 20 + 간격 8 + 줄 56 + 간격 8 = 92pt)이다(세 묶음 — 사용자 결정 2026-10-22).
+    // 그래서 "한 줄만큼 자라거나 안 자란다" 대신 "묶음만큼 자라되 목록 상한에서 멈춘다"를 잰다 — 상한 = 미션이 넘치게 많은 같은 조합의 창.
+    @Test("팝오버 높이 상한 — 안내줄 × 배너 네 조합 전부 ≤ 700pt · 주간 묶음(머리 + 줄)도 셈에 들어 목록 상한을 넘기지 않는다")
     func heightBudget() throws {
         let h = V0355WeeklyStub.hour
         let weekly = V0355WeeklyStub.status(worked: 71 * h, claimed: [true, true, true])
@@ -702,21 +704,19 @@ final class V0355Clock {
         // 정한다)보다 커야 줄 값이 그림에 나타난다 — 하나 → 둘로 재면 둘 다 432 라 0 이 나온다(v0.3.56 실측).
         let rowUnit = try height(nil, missions: 4, notice: nil, banner: false) - height(nil, missions: 3, notice: nil, banner: false)
         #expect(rowUnit > 40, "한 줄 값이 \(rowUnit)pt — 잴 수 없다")
+        let weeklyGroup = Double(MissionGroupLayout.headerHeight + 8 + 56 + 8)
         for (withNotice, banner) in [(false, false), (false, true), (true, false), (true, true)] {
             let label = "안내줄 \(withNotice ? "있음" : "없음") · 배너 \(banner ? "있음" : "없음")"
             let with = try height(weekly, notice: withNotice ? notice : nil, banner: banner)
             let without = try height(nil, notice: withNotice ? notice : nil, banner: banner)
+            // 같은 조합의 목록 상한(미션이 넘치게 많아 스크롤 창이 가득 찬 창).
+            let cap = try height(nil, missions: 8, notice: withNotice ? notice : nil, banner: banner)
             #expect(with <= 700, "\(label): 팝오버 높이 \(with)pt")
-            // 주간 줄은 다섯째 줄이다 — 목록에 자리가 있으면 한 줄만큼 자라고, 없으면(스크롤) 한 픽셀도 안 자란다. 그 사이 값은 없다.
-            #expect(with == without || with == without + rowUnit, "\(label): 주간 줄이 \(with - without)pt 를 더했다(0 또는 \(rowUnit))")
-            if !withNotice && !banner {
-                // 덧붙는 크롬이 없으면 목록은 다섯 줄까지 펼친다(가장 큰 창 — 이 조합이 ≤ 700 의 진짜 최악이다).
-                #expect(with == without + rowUnit, "\(label): 다섯째 줄(주간)이 펼쳐지지 않았다")
-            } else {
-                // 안내줄 · 배너가 줄 자리를 먹으면 목록은 넷 이하 — 미션 넷이 이미 채웠으니 주간 줄은 스크롤로 간다.
-                // 주간 줄을 줄 수에서 빼고 세면(`rowCount` 에서 weeklyRow 누락) 여기서 창이 한 줄만큼 자란다.
-                #expect(with == without, "\(label): 목록 상한을 넘어 창이 \(with - without)pt 자랐다 — 주간 줄을 줄 수에 안 셌다")
-            }
+            // 주간 묶음은 목록에 자리가 있는 만큼만 창을 키운다 — 묶음 전부(92pt) 또는 상한까지. 상한을 넘는 값은 없다.
+            #expect(with == min(without + weeklyGroup, cap),
+                    "\(label): 주간 묶음이 \(with - without)pt 를 더했다(기대 \(min(without + weeklyGroup, cap) - without) · 상한 \(cap))")
+            // 주간 묶음을 셈에서 빼면(`contentHeight` 에서 weekly 누락) 상한 아래에서 스크롤로 접혀 창이 덜 자라거나, 상한을 넘겨 더 자란다.
+            #expect(with <= cap, "\(label): 목록 상한(\(cap))을 넘어 창이 자랐다 — 주간 묶음을 셈에 안 넣었다")
         }
         // 미션이 아직 없는 화면(불러오는 중)에서도 주간 줄이 서고 상한 안이다.
         let loading = Self.store(weekly: V0355WeeklyStub.status(worked: h), missionCount: 0)
@@ -751,12 +751,15 @@ final class V0355Clock {
         // v0.3.56: 줄들은 **미션 화면** 선언 안에 있어야 한다(울트라 화면은 보유 수량만 — 사장님 지시 2026-10-16).
         let head = try #require(whole.range(of: "private struct MissionPanel: View {"), "미션 화면 선언이 없다")
         let tail = try #require(whole.range(of: "\nprivate struct MissionRowView: View {", range: head.upperBound..<whole.endIndex))
-        let code = String(whole[head.lowerBound..<tail.lowerBound])
+        // 공백을 한 칸으로 접는다(v0.3.64 — 주간 묶음은 여러 줄이라 줄바꿈 · 들여쓰기에 기대지 않게).
+        let code = String(whole[head.lowerBound..<tail.lowerBound]).split(whereSeparator: \.isWhitespace).joined(separator: " ")
         #expect(!code.contains("private struct UltraPanel"), "미션 화면 추출 범위가 울트라 화면까지 삼켰다")
+        // v0.3.64: 세 묶음 — 3시간 줄(과 그 밖의 미션 줄)은 일일 묶음, 주간 줄은 그 아래 **주간 묶음**(머리 + 줄)이다.
         let lap = try #require(code.range(of: "ForEach(missions.prefix(1)) { MissionRowView(mission: $0) }"))
-        let weekly = try #require(code.range(of: "if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }", range: lap.upperBound..<code.endIndex))
-        let rest = try #require(code.range(of: "ForEach(missions.dropFirst()) { MissionRowView(mission: $0) }", range: weekly.upperBound..<code.endIndex))
-        #expect(lap.upperBound <= weekly.lowerBound && weekly.upperBound <= rest.lowerBound)
+        let rest = try #require(code.range(of: "ForEach(missions.dropFirst()) { MissionRowView(mission: $0) }", range: lap.upperBound..<code.endIndex))
+        let weekly = try #require(code.range(of: "if let weeklyRow { MissionGroupHeader(title: WeeklyMissionCopy.sectionTitle) WeeklyWorkRowView(status: weeklyRow) }",
+                                             range: rest.upperBound..<code.endIndex))
+        #expect(lap.upperBound <= rest.lowerBound && rest.upperBound <= weekly.lowerBound)
         #expect(whole.contains(".checkTooltip(WeeklyWorkCopy.rule(status))"), "규칙 툴팁이 줄에 없다")
     }
 }

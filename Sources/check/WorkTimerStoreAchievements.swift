@@ -32,6 +32,15 @@ import Foundation
 //     팝오버를 닫으면 비운다.
 //
 // 판정은 서버가 한다(달성 기록은 cron 1분 + 조회 · 받기의 선정산). 이 파일은 **아무것도 판정하지 않는다.**
+//
+// ── v0.3.64 일일 미션(사용자 결정 2026-10-22 — 미니게임 3종 · 1:1 3종 각각 하루 한 판 = 루비 5, 자정(KST)까지 안 받으면 사라진다) ──
+//  ⑥ 조회는 **새 RPC · 새 타이머 없이** 위 박자의 `achievements_status` 응답에 같이 온다(최상위 `daily`). 더해진 박자는 이벤트 둘뿐이다:
+//     미니게임 판 제출 성공 · 1:1 판이 끝난(결과를 받은) 순간(`refreshAchievementsAfterGameResult`) — 겹치면 떠 있는 조회를 같이
+//     기다리는 위 규약 그대로다.
+//  ⑦ 받기는 `daily_mission_claim(p_key)` — 누적 받기와 **같은 모양**(같은 키 한 번에 하나 · 실패는 그 줄 · 응답이 상태 · 잔량을 옮김 ·
+//     `claimed_now` 만큼 연출)이되 떠 있음 · 실패 표시는 따로 센다(`dailyMissionClaimsInFlight` · `dailyMissionClaimFailedKeys`).
+//  ⑧ 날짜 넘김 — 응답의 `reset_at_ms` 를 **서버 시각**(`server_now_ms` 로 잰 시계 차)으로 넘긴 줄은 [받기]를 세우지 않고(코어
+//     `DailyMissionStatus.rows(serverNowMs:)`) 그 키의 받기도 안 나간다. 배지도 그 줄을 세지 않는다.
 
 /// 받기 연출 한 번(어느 줄에 · 얼마를 · 몇 번째로). 줄은 `target` 으로 자기 연출을 찾고 `serial` 로 처음부터 다시 그린다.
 struct MissionClaimBurst: Equatable, Sendable {
@@ -43,6 +52,8 @@ struct MissionClaimBurst: Equatable, Sendable {
     static func achievementTarget(series: String) -> String { "achievement:\(series)" }
     /// 이번 주 근무 줄의 자리.
     static let weeklyTarget = "weekly"
+    /// 일일 미션 줄의 자리(v0.3.64 — 키마다 한 줄이라 키가 곧 자리다). 누적 미션 자리와 겹치지 않는다.
+    static func dailyTarget(key: String) -> String { "daily:\(key)" }
 }
 
 extension WorkTimerStore {
@@ -54,6 +65,8 @@ extension WorkTimerStore {
         case periodic
         /// 로그인 · 저장 세션 활성화 직후 지갑 sync 에 얹힌 한 번(레일 배지가 패널을 안 열어도 켜진다 — 머리 주석 ①).
         case signIn
+        /// 게임 한 판이 서버에 남은 직후(v0.3.64 — 미니게임 제출 성공 · 1:1 판 끝남). 일일 미션이 그 판을 세었는지 묻는다(머리 주석 ⑥).
+        case gameResult
     }
 
     /// 전부 받기(`achievement_claim(null)`)가 떠 있음을 적는 자리. 키가 아니다(서버 키에 `*` 는 없다).
@@ -84,6 +97,14 @@ extension WorkTimerStore {
         }
         achievementsFetchTask = task
         return task
+    }
+
+    /// 게임 한 판이 서버에 남은 직후의 조회(v0.3.64 — 머리 주석 ⑥). **이벤트로만** 부른다: 미니게임 제출 성공
+    /// (`performSubmitMiniGameScore`) · 1:1 판이 끝난 것을 처음 본 순간(코어 스토어의 `onMatchFinished`). 떠 있는 조회가 있으면
+    /// 그 답을 같이 기다린다(요청 0건 — 기존 규약).
+    @discardableResult
+    func refreshAchievementsAfterGameResult() -> Task<Void, Never>? {
+        refreshAchievements(reason: .gameResult)
     }
 
     /// 실제 왕복. 함수가 없는 서버(404 · PGRST202)는 절을 감추고, 그 밖의 실패는 **알던 값을 지우지 않는다** — 다음 박자가 다시 묻는다.
@@ -124,6 +145,8 @@ extension WorkTimerStore {
     /// `rubyWriteSerialAtDeparture` = 요청이 떠날 때의 `rubyBalanceWriteSerial`. nil 이면 비교하지 않는다(직접 부르는 테스트).
     func applyAchievements(_ status: AchievementStatus, rubyWriteSerialAtDeparture: Int? = nil) {
         achievementsApplySerial &+= 1
+        // 서버 시계 − 이 맥 시계(일일 줄의 날짜 넘김을 서버 시각으로 판정 — 머리 주석 ⑧). 서버 시각이 없으면 이 맥 시계를 믿는다(0).
+        achievementsServerClockOffsetMs = status.serverNowMs.map { $0 - Self.epochMs(clock()) } ?? 0
         if let ruby = status.rubyBalance {
             let untouched = rubyWriteSerialAtDeparture.map { $0 == rubyBalanceWriteSerial } ?? true
             if untouched {
@@ -219,6 +242,84 @@ extension WorkTimerStore {
         onRewardTrigger?(.rubyReward(amount: status.claimedNowRuby))
     }
 
+    // MARK: 일일 미션 받기(v0.3.64)
+
+    /// 서버 시각의 추정(밀리초) — 이 맥 시계 + 마지막 응답이 잰 시계 차. 일일 줄의 날짜 넘김 판정에만 쓴다.
+    func estimatedServerNowMs() -> Int { Self.epochMs(clock()) + achievementsServerClockOffsetMs }
+
+    nonisolated static func epochMs(_ date: Date) -> Int { Int((date.timeIntervalSince1970 * 1000).rounded(.down)) }
+
+    /// 미션 화면이 그릴 일일 줄. **nil = 감춘다**(서버에 도전 미션이 없다 · 아직 모른다 · 응답에 `daily` 가 없다 — 3시간 줄은 남는다).
+    /// 하루가 끝난 응답이면 새 날의 모양(진행 0 · [받기] 없음)이다(코어 `rows(serverNowMs:)`).
+    var dailyMissionRows: [DailyMissionStatus.Mission]? {
+        guard !achievementsUnavailable, let daily = achievements?.daily, !daily.missions.isEmpty else { return nil }
+        return daily.rows(serverNowMs: estimatedServerNowMs())
+    }
+
+    /// 일일 미션 받기. `key` 가 nil 이면 오늘 받을 것 전부. **지금 받을 수 있는 줄이 아니면 요청 0건**(하루가 끝났으면 어제 줄은 받을
+    /// 수 없다 — 머리 주석 ⑧) · 같은 키가 떠 있어도 0건. 발사했으면 그 Task 를 돌려준다(테스트가 기다린다).
+    @discardableResult
+    func claimDailyMission(key: String?) -> Task<Void, Never>? {
+        guard session != nil, !achievementsUnavailable, let daily = achievements?.daily else { return nil }
+        let claimable = daily.claimable(serverNowMs: estimatedServerNowMs())
+        if let key {
+            guard claimable.contains(where: { $0.key == key }) else { return nil }
+        } else {
+            guard !claimable.isEmpty else { return nil }
+        }
+        let slot = key ?? Self.achievementClaimAllSlot
+        guard !dailyMissionClaimsInFlight.contains(slot),
+              !dailyMissionClaimsInFlight.contains(Self.achievementClaimAllSlot) else { return nil }
+        dailyMissionClaimsInFlight.insert(slot)
+        let generation = sessionGeneration
+        let rubySerial = rubyBalanceWriteSerial
+        return Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if generation == self.sessionGeneration { self.dailyMissionClaimsInFlight.remove(slot) }
+            }
+            do {
+                let status = try await self.withSessionRetry { activeSession in
+                    try await self.service.dailyMissionClaim(accessToken: activeSession.accessToken, key: key)
+                }
+                guard generation == self.sessionGeneration else { return }
+                self.applyAchievements(status, rubyWriteSerialAtDeparture: rubySerial)
+                self.markDailyMissionClaim(key, failed: false)
+                self.celebrateDailyMissionClaims(status)
+            } catch {
+                if case .cancelled = self.classifyAuthError(error) { return }
+                guard generation == self.sessionGeneration else { return }
+                // 실패는 그 줄이 말한다(누적 줄과 같은 규약 — 버튼은 그대로 남아 다시 누르는 것이 재시도다).
+                self.markDailyMissionClaim(key, failed: true)
+            }
+        }
+    }
+
+    /// 일일 받기 실패 표시를 세우거나 내린다. `key` 가 nil(전부 받기)이면 지금 받을 수 있는 일일 줄 전부다.
+    private func markDailyMissionClaim(_ key: String?, failed: Bool) {
+        let claimable = achievements?.daily?.claimable(serverNowMs: estimatedServerNowMs()).map(\.key) ?? []
+        let keys = key.map { Set([$0]) } ?? Set(claimable)
+        var next = dailyMissionClaimFailedKeys
+        if failed {
+            next.formUnion(keys)
+        } else if key == nil {
+            next.removeAll()
+        } else {
+            next.subtract(keys)
+        }
+        if next != dailyMissionClaimFailedKeys { dailyMissionClaimFailedKeys = next }
+    }
+
+    /// 이 호출이 넣은 일일 지급만큼 연출한다 — 줄마다 하나 · 캐릭터 말풍선은 합계로 한 번. 넣은 것이 없으면 조용하다.
+    private func celebrateDailyMissionClaims(_ status: AchievementStatus) {
+        let paid = status.claimedNow.filter { $0.reward > 0 }
+        guard !paid.isEmpty else { return }
+        for claim in paid {
+            startClaimBurst(target: MissionClaimBurst.dailyTarget(key: claim.key), amount: claim.reward)
+        }
+        onRewardTrigger?(.rubyReward(amount: status.claimedNowRuby))
+    }
+
     /// 이번 주 근무 받기 — **받을 것 전부(어느 주든)** 한 번에. 떠 있으면 요청 0건. 받을 것이 없으면(옛 서버 포함) 나가지 않는다.
     @discardableResult
     func claimWeeklyWork() -> Task<Void, Never>? {
@@ -258,6 +359,7 @@ extension WorkTimerStore {
     /// 받기 실패 문장을 비운다(미션 화면 · 팝오버를 닫을 때 — 다시 열면 화면이 새로 묻는다). 비어 있으면 대입하지 않는다.
     func clearMissionClaimFailures() {
         if !achievementClaimFailedKeys.isEmpty { achievementClaimFailedKeys = [] }
+        if !dailyMissionClaimFailedKeys.isEmpty { dailyMissionClaimFailedKeys = [] }
         if weeklyClaimFailed { weeklyClaimFailed = false }
     }
 
@@ -271,10 +373,11 @@ extension WorkTimerStore {
         if !missionClaimBursts.isEmpty { missionClaimBursts = [:] }
     }
 
-    /// 레일 [미션] 칸의 숫자 = 받을 도전 미션 수(계열로 접기 전 — 콕 10 · 50 을 둘 다 채웠으면 2) + 받을 주간 단계 수(어느 주든).
-    /// 서버에 도전 미션이 없으면 그쪽은 0 이다(옛 서버 주간 응답도 0 — 받기가 없다).
+    /// 레일 [미션] 칸의 숫자 = 받을 일일 미션 수(v0.3.64 — 하루가 끝난 줄은 안 센다) + 받을 누적 미션 수(계열로 접기 전 — 콕 10 · 50 을
+    /// 둘 다 채웠으면 2) + 받을 주간 단계 수(어느 주든). 서버에 도전 미션이 없으면 앞의 둘은 0 이다(옛 서버 주간 응답도 0 — 받기가 없다).
     var missionClaimableCount: Int {
         let achievementCount = achievementsUnavailable ? 0 : (achievements?.claimableCount ?? 0)
-        return achievementCount + (weeklyWork?.pendingCount ?? 0)
+        let dailyCount = achievementsUnavailable ? 0 : (achievements?.daily?.claimableCount(serverNowMs: estimatedServerNowMs()) ?? 0)
+        return dailyCount + achievementCount + (weeklyWork?.pendingCount ?? 0)
     }
 }

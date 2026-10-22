@@ -1,0 +1,12 @@
+{
+  "__note" : [
+    "[신청] 의 응답(ok). 없으면 404 가 noteServerMissing() 을 때려 로비가 통째로 '서버가 모른다'로 바뀐다 — 그래서 둔다.",
+    "ok 는 match_id 와 expires_at_ms 만 싣는다(§2.4) — 상대는 클라가 누른 사람이다. 돌려주는 id 는 보낸 신청 장면의 것과 같은 demo-tetris-invite-out 이라 뒤따르는 5초 폴링도 픽스처에 닿는다.",
+    "★ 데모의 한계: 바깥 층 로비(outgoing=null)가 30초마다 다시 오면 코어가 '거절됐다'로 읽고 카드를 걷는다(applyLobbyInvites 의 늦은 응답 가드는 **이 기기가 먼저**인 경우만 지킨다). 스틸은 3초 안에 찍으므로 영향이 없다."
+  ],
+  "expires_at_ms" : 1789621560000,
+  "match_id" : "demo-tetris-invite-out",
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "status" : "ok"
+}

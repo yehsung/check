@@ -348,10 +348,18 @@ package enum MeText {
         "+\(ruby)"
     }
 
-    /// 보이스오버 칩: "20시간 루비 20개, 받음" · "40시간 루비 50개".
-    package static func weeklyTierAccessibility(hours: Int, ruby: Int, claimed: Bool) -> String {
-        "\(hours)시간 루비 \(ruby)개" + (claimed ? ", 받음" : "")
+    /// 보이스오버 칩: "20시간 루비 20개, 받음" · "20시간 루비 20개, 받을 수 있어요"(v0.3.58 받기 서버) · "40시간 루비 50개".
+    ///
+    /// `claimable` 은 **기본값이 있다** — 세 칸 호출부(`weeklyTierAccessibility(hours:ruby:claimed:)`)를 글자로 읽는
+    /// 소스 계약이 있어 서명을 깨지 않으려는 것이다(저장소 메모 '함수 서명을 바꾸기 전에 Tests 에서 서명 문자열을 grep 하라').
+    /// 받음이 이긴다: 받은 칸은 더 받을 것이 없다.
+    package static func weeklyTierAccessibility(hours: Int, ruby: Int, claimed: Bool, claimable: Bool = false) -> String {
+        let tail = claimed ? ", 받음" : (claimable ? ", \(claimableMark)" : "")
+        return "\(hours)시간 루비 \(ruby)개" + tail
     }
+
+    /// 아직 안 받았지만 **받을 수 있는** 칸 · 줄의 말. 글자로는 칩에 안 쓰고(색과 버튼이 말한다) 보이스오버만 쓴다.
+    package static let claimableMark = "받을 수 있어요"
 
     /// 보이스오버 값 줄: "23시간 12분 / 40시간, 달성하면 루비 50개" · "61시간 03분, 루비 270개 받았어요".
     package static func weeklyGaugeAccessibility(worked: Int, gauge: WeeklyWorkGauge) -> String {
@@ -361,6 +369,97 @@ package enum MeText {
         }
         return "\(value), 달성하면 루비 \(gauge.reward)개"
     }
+
+    // MARK: 도전 미션 · 받기 (v0.3.58 서버 — 맥 `AchievementCopy` · `MissionCopy` · `MissionPanelCopy` 와 같은 낱말)
+    //
+    // ★ **제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다**(응답의 `title` · `detail` · `reward` · `target` · `sort`).
+    //   그래서 이 절에는 미션 제목이 한 줄도 없고 50 · 20 · 10 같은 숫자도 없다 — 서버가 미션을 더하거나 값을 바꿔도 앱을 다시
+    //   낼 필요가 없고(모르는 키도 그대로 그린다), 화면이 서버와 다른 숫자를 약속하지 않는다. 지금 계열은 아홉이다
+    //   (폰 로그인 · 할 일 3개 · 오목 · 체스 · 미니게임 3종 · 콕 10/50/100 · 울트라 5회 · 팀 2/3명 · 연속 근무 14/30일 →
+    //   `AchievementStatus.seriesRows` 가 계열마다 한 줄로 접는다). 여기 있는 것은 **말투**뿐이다.
+
+    /// 절 소제목(맥 `AchievementCopy.sectionTitle`).
+    package static let missionsTitle = "도전 미션"
+    /// 한 번도 못 읽었을 때의 실패 문장(맥 `MissionPanelCopy.failedCaption`). 불러오는 중은 `MeText.loading`.
+    package static let missionsLoadFailed = "미션을 불러오지 못했어요"
+    /// 받기 버튼의 낱말 — 도전 미션 줄과 이번 주 근무 카드가 **같은 버튼**이다(맥 `AchievementCopy.claimButton`).
+    package static let claimButton = "받기"
+    /// 절 머리의 [전부 받기] — 받을 줄이 **둘 이상**일 때만 선다(하나뿐이면 그 줄의 [받기]와 같은 일을 하는 버튼이 둘이 된다).
+    /// 맥 미션 화면에는 이 버튼이 없다(줄이 다섯 줄 창에 다 보인다) — 폰은 절이 스크롤 안이라 머리에서 한 번에 받게 한다.
+    package static let claimAllButton = "전부 받기"
+    /// 받은 줄의 표시(진행 숫자 자리). 체크 기호는 화면이 그린다(주간 칸 칩과 같은 관용구) — 글자는 "받음" 하나다
+    /// (맥 `MissionCopy.claimedChip` · 주간 칩 꼬리 `weeklyGrantSuffix` 와 같은 낱말).
+    package static let claimedMark = weeklyGrantSuffix
+    /// 받기가 실패한 **그 줄** 안의 문장(코어 `AchievementNoticeText.claimFailedRow` — 맥과 한 글자도 다르지 않다).
+    /// 절 위 안내줄에 띄우지 않는다: 맥이 검토(2026-10-19)에서 버린 방식이다 — 안내줄은 줄을 밀고, 아래쪽 줄을 누른 사람에겐
+    /// 스크롤 밖이라 안 보였다. [받기]는 그대로 남아 있으니 **다시 누르는 것이 재시도**다.
+    package static let claimFailed = AchievementNoticeText.claimFailedRow
+
+    /// 진행 숫자 "23/50". 받은 줄은 이 자리에 `claimedMark` 를 그린다(연속 근무는 받은 뒤 지금 연속이 다시 낮아질 수 있어
+    /// 숫자가 거짓이 된다 — 달성은 끈적하다).
+    package static func missionProgress(_ mission: AchievementStatus.Mission) -> String {
+        "\(mission.progress)/\(mission.target)"
+    }
+
+    /// 보상 숫자 "+50"(루비 보석은 화면이 `RubyIcon` 으로 그린다 — 폰은 💎 이모지를 쓰지 않는다). 0 이면 nil(칩 없음).
+    package static func missionReward(_ ruby: Int) -> String? {
+        ruby > 0 ? weeklyRubyGain(ruby) : nil
+    }
+
+    /// 받기 버튼의 숫자 "+50"(0 이어도 글자는 만든다 — 버튼을 세우는 판단은 스토어가 한다).
+    package static func claimAmount(_ ruby: Int) -> String {
+        weeklyRubyGain(max(0, ruby))
+    }
+
+    /// 절 머리 오른쪽 "받을 보상 2개"(줄이 스크롤 아래에 있어도 여기서 보인다 — 맥 `AchievementCopy.pendingHint`). 없으면 nil.
+    package static func claimPendingHint(_ count: Int) -> String? {
+        count > 0 ? "받을 보상 \(count)개" : nil
+    }
+
+    /// 받기 버튼의 보이스오버 "받기, 루비 50개"(맥 `AchievementCopy.claimAccessibility`). 주간 버튼도 같은 문구다.
+    package static func claimAccessibility(_ amount: Int) -> String {
+        "\(claimButton), 루비 \(max(0, amount))개"
+    }
+
+    /// 절 머리 [전부 받기] 의 보이스오버 "전부 받기, 루비 75개"(= `achievementClaimableRuby`).
+    package static func claimAllAccessibility(_ amount: Int) -> String {
+        "\(claimAllButton), 루비 \(max(0, amount))개"
+    }
+
+    /// 줄 전체의 보이스오버. 주간 게이지(`weeklyGaugeAccessibility`)와 같은 말투다 — 진행이면 "달성하면 루비 N개",
+    /// 받았으면 "루비 N개 받았어요". 받을 수 있는 줄의 금액은 **버튼이** 읽으므로(`claimAccessibility`) 여기서 또 읽지 않는다.
+    package static func missionAccessibility(_ mission: AchievementStatus.Mission) -> String {
+        switch mission.state {
+        case .inProgress:
+            let progress = "\(mission.title), \(missionProgress(mission))"
+            return mission.reward > 0 ? "\(progress), 달성하면 루비 \(mission.reward)개" : progress
+        case .claimable:
+            return "\(mission.title), 달성했어요"
+        case .claimed:
+            return mission.reward > 0 ? "\(mission.title), 루비 \(mission.reward)개 받았어요" : "\(mission.title), \(claimedMark)"
+        }
+    }
+
+    /// 줄 아이콘(SF Symbol). **키 앞부분으로 고른다** — 계열 이름은 서버가 정하고 키는 계약 표에 있다. 모르는 키는 별이다
+    /// (서버가 미션을 더하는 날 줄은 그려지고 아이콘만 기본값이 된다). 맥 `AchievementCopy.icon` 과 같은 기호를 쓴다:
+    /// 다른 화면에서 이미 그 기능을 뜻하던 그림(콕 = 손가락 · 미니게임 = 게임기 · 오목 = 3×3 격자 · 체스 = 체커보드 ·
+    /// 연속 근무 = 불꽃 · 울트라 = 번개 · 팀 = 세 사람 · 할 일 = 체크 목록 · 폰 = 아이폰). 전부 iOS 17 이하(배포 타깃 18 ✓).
+    package static func missionIcon(_ key: String) -> String {
+        let table: [(prefix: String, symbol: String)] = [
+            ("phone", "iphone"),
+            ("todo", "checklist"),
+            ("gomoku", "circle.grid.3x3.fill"),
+            ("chess", "checkerboard.rectangle"),
+            ("minigame", "gamecontroller.fill"),
+            ("team", "person.3.fill"),
+            ("poke", "hand.point.right.fill"),
+            ("ultra", "bolt.fill"),
+            ("streak", "flame.fill"),
+        ]
+        return table.first { key.hasPrefix($0.prefix) }?.symbol ?? missionFallbackIcon
+    }
+
+    package static let missionFallbackIcon = "star.fill"
 
     // MARK: 메뉴 그룹
 
@@ -452,14 +551,33 @@ package enum MeText {
     /// 상점 카드의 마지막 결과 줄(보이스오버 앞말) — 기계를 닫은 뒤에도(공개 전에 닫았어도) 무엇을 뽑았는지 남긴다.
     package static let gachaLastResult = "방금 뽑은 결과"
 
-    /// 뽑기 전용 캐릭터를 얻는 길. 교환값을 알면(서버 `shard_costs`) "뽑기 또는 조각 N개", 모르면 코어의 "뽑기로만" 문장.
+    /// 뽑기 결과 줄(상점 카드)이 그리는 값 — 머리말 · 둘째 줄 · 희귀 마감. **문구는 코어 `GachaText` 그대로**다(같은 말을 두 곳에
+    /// 두지 않는다). 희귀 둘(황금 v0.3.54 · 무지개 v0.3.59)은 머리말이 "황금 아잉이!" · "무지개 아잉이!" 이고 둘째 줄이 **늘** 있다
+    /// (처음이면 "새 캐릭터: …" · 중복이면 "이미 있는 … → 조각 +1"). 평범한 캐릭터는 머리말 한 줄뿐이다.
+    ///
+    /// 왜 여기인가: 뷰(`MeGachaLastResultRow`)는 `#if os(iOS)` 라 macOS 스위트가 한 줄도 못 본다(저장소 메모 '폰 뷰는 맥 스위트가
+    /// 못 본다'). 머리말을 금으로 못 박는 결함(`goldHeadline`)은 **값으로** 잡혀야 하므로 판정을 플랫폼 무관한 이 자리에 두고,
+    /// 뷰는 이 값만 받아 칠한다(`MobileTheme.ink(_:otherwise:)` · `MobileTheme.tint(_:otherwise:)`).
+    package static func gachaResultLines(_ result: GachaPullResult, name: String)
+        -> (headline: String, detail: String?, finish: CharacterManifest.Finish) {
+        (GachaText.rareHeadline(result.kind) ?? GachaText.headline(for: result, name: name),
+         GachaText.detail(for: result, name: name),
+         CharacterManifest.Finish(characterID: result.characterID))
+    }
+
+    /// 확률 시트 한 줄을 강조하는가(이름 굵게 + 이름·확률을 희귀 빛깔로). **희귀 둘 다** 참이다 —
+    /// `isGold` 로 가르면 무지개가 평범한 줄이 된다(v0.3.59). 뷰가 가르는 그 값이 여기 있다.
+    package static func gachaOddsEmphasized(_ row: GachaOddsRow) -> Bool { row.finish.isRare }
+
+    /// 뽑기 전용 캐릭터(황금 · 무지개)를 얻는 길. 교환값을 알면(서버 `shard_costs`) "뽑기 또는 조각 N개", 모르면 코어의 "뽑기로만" 문장.
     /// 값은 서버가 준 것만 쓴다 — 교환값을 박아 두면 서버가 값을 바꾸는 날 화면이 거짓말을 한다.
     package static func gachaAcquirePhrase(shardCost: Int?) -> String {
         guard let shardCost, shardCost > 0 else { return GachaText.gachaOnlyHint }
         return "뽑기 또는 \(GachaText.shardCost(shardCost))로 얻을 수 있어요"
     }
 
-    /// 상점에서 뽑기 전용 타일을 눌렀을 때: "황금 아잉이는 뽑기 또는 조각 20개로 얻을 수 있어요".
+    /// 상점에서 뽑기 전용 타일을 눌렀을 때: "황금 아잉이는 뽑기 또는 조각 20개로 얻을 수 있어요"(무지개 아잉이도 같은 말 —
+    /// 이름·교환값을 받으므로 희귀가 늘어도 문구는 그대로다).
     package static func gachaOnlyNotice(_ name: String, shardCost: Int?) -> String {
         "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) \(gachaAcquirePhrase(shardCost: shardCost))"
     }
@@ -478,7 +596,7 @@ package enum MeText {
         return "\(GachaText.pullButton) · 조각 \(shardCost)"
     }
 
-    /// 타일 보이스오버: "황금 아잉이, 뽑기 또는 조각 20개로 얻을 수 있어요".
+    /// 타일 보이스오버: "황금 아잉이, 뽑기 또는 조각 20개로 얻을 수 있어요"(무지개 아잉이도 같은 꼴).
     package static func gachaTileAccessibility(name: String, shardCost: Int?) -> String {
         "\(name), \(gachaAcquirePhrase(shardCost: shardCost))"
     }

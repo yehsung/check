@@ -400,10 +400,10 @@ struct MessagesBubbleRow: View {
         }
     }
 
-    /// 복사는 길게 눌러 메뉴로(원문 그대로). 본문이 `UILabel`(어절 줄바꿈)이라 SwiftUI `textSelection` 이 닿지 않는다.
+    /// 복사는 길게 눌러 메뉴로(원문 그대로 — 붙여넣어 다시 보내면 그림이 된다). 본문이 `UILabel`(어절 줄바꿈)이라
+    /// SwiftUI `textSelection` 이 닿지 않는다. 메뉴는 **이모티콘 말풍선에도 그대로 달린다**(두 갈래가 이 한 자리를 쓴다).
     private var bubble: some View {
-        MessagesBubbleText(text: line.entry.body, isMine: line.entry.isMine)
-            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: MessagesBubbleText.cornerRadius, style: .continuous))
+        bubbleContent
             .contextMenu {
                 Button {
                     MessagesBubbleCopy.copy(line.entry.body)
@@ -416,6 +416,29 @@ struct MessagesBubbleRow: View {
                     }
                 }
             }
+    }
+
+    /// 본문이 아잉이 이모티콘 하나면 **글자 대신 그림**이다(1.0.12). 아니면 예전 그대로 글자 말풍선이다.
+    ///
+    /// ★ **판정하는 자리는 `AingStickerArt.drawable` 하나다.** 자리 말풍선(`MessagesPendingBubbleRow`)도 같은 함수를
+    ///   부른다 — 한쪽이 `AingSticker.parse` 만 보면 번들이 깨진 배포본에서 두 자리가 갈리고(그림을 그릴 수 있다고
+    ///   센 쪽과 못 그린 쪽), 보낸 순간엔 글자였다가 이력이 오면 그림이 되는 꼴이 된다(맥 v0.3.62 의 그 사고).
+    ///   그림을 못 읽으면 **빈 말풍선이 아니라 지금 그대로의 글자 말풍선**으로 접는다.
+    ///
+    /// 누르는 모양(`contentShape`)만 갈래마다 다르다: 그림은 배경이 없으니 그림 사각형, 글자는 말풍선 반경이다.
+    @ViewBuilder
+    private var bubbleContent: some View {
+        if let drawn = AingStickerArt.drawable(for: line.entry.body) {
+            MessagesStickerBubble(art: drawn.art)
+                .contentShape(.contextMenuPreview, Rectangle())
+        } else {
+            // 그림 길이 아니면 글자 말풍선이다. ★ 번들 그림을 못 읽은 이모티콘은 **날것 토큰이 아니라**
+            // "아잉이 기쁨"으로 접는다 — `AingStickerArt` 머리말의 계약이고 맥이 하는 것과 같다(`[아잉:기쁨]` 은
+            // "깨진 메시지"로 읽힌다). 평범한 본문은 `preview` 가 **손대지 않고** 그대로 돌려준다.
+            // 복사는 아래 메뉴에서 `entry.body` 원문 그대로다 — 이 줄은 **보여 주는 글자**만 바꾼다.
+            MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine)
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: MessagesBubbleText.cornerRadius, style: .continuous))
+        }
     }
 
     @ViewBuilder
@@ -442,9 +465,14 @@ struct MessagesBubbleRow: View {
         }
     }
 
+    /// 줄 전체 보이스오버. 이모티콘이면 날것 토큰(`[아잉:기쁨]`)이 아니라 이름으로 읽힌다("아잉이 기쁨").
+    ///
+    /// ★ 그림 안에는 이미 문구가 구워져 있지만(`AingStickerArt.labeledImage`) 이 줄은
+    ///   `accessibilityElement(children: .ignore)` 라 **그 라벨이 줄 라벨에 섞이지 않는다** — 여기를 안 바꾸면
+    ///   보이스오버가 대괄호 토큰을 또박또박 읽는다. 평범한 본문은 `preview` 가 한 글자도 바꾸지 않는다.
     private var accessibilityText: String {
         let entry = line.entry
-        var parts = [(entry.isMine ? "나" : entry.peerName) + ": " + entry.body, line.clockText]
+        var parts = [(entry.isMine ? "나" : entry.peerName) + ": " + AingStickerText.preview(for: entry.body), line.clockText]
         if line.showsUnreadOne { parts.append(MessagesConversationRules.unreadOneAccessibilityLabel) }
         return parts.joined(separator: ", ")
     }
@@ -478,6 +506,31 @@ private struct MessagesBubbleText: View {
                     .fill(isMine ? MobileTheme.accentFill : MobileTheme.bubbleIn)
                     .opacity(isPending ? 0.6 : 1)
             )
+    }
+}
+
+/// 이모티콘 말풍선 — **배경·테두리·안쪽 여백이 없다.** 사용자 결정이 "말풍선 한 칸을 통째로 차지하는 큰 그림"이고,
+/// 읽음 표시·시각·좌우 정렬은 바깥 행이 그리므로 그 자리들은 예전과 똑같다(맥 `stickerBubble` 과 한 모양).
+///
+/// ★ 여기에 `.accessibilityLabel` 을 붙이지 않는다. 보이스오버 문구는 **그림 안에 구워져 있고**
+///   (`AingStickerArt.labeledImage`), 꾸밈용 그림에 건 라벨은 AX 요소가 없어 **버려진다**(2026-10-21 실측).
+///   이 줄을 읽는 것은 바깥 행의 줄 라벨(`accessibilityText`)이다.
+private struct MessagesStickerBubble: View {
+    /// 그림 한 변(pt). 맥(`MessagePanelLayout.stickerSide`)과 **같은 120** — 두 화면의 그림 크기 인상을 맞춘다.
+    /// Dynamic Type 을 따라 키우지 않는다: 그림은 글자가 아니고, 큰 글자에서 화면 폭을 통째로 먹는다.
+    static let side: CGFloat = 120
+
+    let art: Image
+    /// 자리 말풍선은 글자 말풍선과 **같은 투명도**로 흐려진다(`MessagesBubbleText.isPending` 와 한 값).
+    var isPending = false
+
+    var body: some View {
+        art
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: Self.side, height: Self.side)
+            .opacity(isPending ? 0.6 : 1)
     }
 }
 
@@ -552,11 +605,17 @@ struct MessagesPendingBubbleRow: View {
                     .controlSize(.mini)
                     .accessibilityHidden(true)
             }
-            MessagesBubbleText(text: item.body, isMine: true, isPending: true)
+            // 판정은 말풍선 행과 **같은 한 함수**다(갈리면 보낸 순간엔 글자, 이력이 오면 그림이 된다).
+            if let drawn = AingStickerArt.drawable(for: item.body) {
+                MessagesStickerBubble(art: drawn.art, isPending: true)
+            } else {
+                // 자리 말풍선도 같은 폴백을 쓴다(위 말풍선 주석).
+                MessagesBubbleText(text: AingStickerText.preview(for: item.body), isMine: true, isPending: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("나: \(item.body), " + (item.state == .sending ? "보내는 중" : "보냄")))
+        .accessibilityLabel(Text("나: \(AingStickerText.preview(for: item.body)), " + (item.state == .sending ? "보내는 중" : "보냄")))
     }
 }
 #endif

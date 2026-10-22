@@ -1,0 +1,9 @@
+{
+  "__note" : [
+    "보낸 신청 [취소] 의 응답(ok). state 가 없다(§2.4 — ok | not_found | not_pending).",
+    "판돈은 아직 걷히지 않았으므로 환불이 없다 — ruby_balance 는 42 그대로다."
+  ],
+  "ruby_balance" : 42,
+  "server_now_ms" : 1789621500000,
+  "status" : "ok"
+}

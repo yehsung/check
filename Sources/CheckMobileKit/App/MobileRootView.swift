@@ -107,6 +107,8 @@ struct MobileTabsView: View {
                 .tag(AingTab.games)
             MeTab(store: model.me)
                 .tabItem { meLabel }
+                // 받을 보상 수(도전 미션 + 이번 주 근무 단계 — v0.3.58). 앱 아이콘 배지에는 더하지 않는다(`appBadgeTotal`).
+                .badge(badges.badge(for: .me) ?? 0)
                 .tag(AingTab.me)
         }
         // 사람 아바타(사진 → 착용 캐릭터 → 이니셜)가 찾는 캐릭터 한 표 — 탭 다섯과 그 위에 뜨는 시트가 모두 이어받는다.

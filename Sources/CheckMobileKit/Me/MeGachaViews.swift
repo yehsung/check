@@ -81,27 +81,29 @@ struct MeGachaCard: View {
     }
 }
 
-/// 마지막 뽑기 결과 한 줄(움직임 없음 — 연출은 기계 몫이다). 황금 아잉이는 금빛 바탕 + "황금 아잉이!" · 새 캐릭터 "새 캐릭터: 여우" ·
-/// 중복 "이미 있는 여우 → 조각 +1"(문구는 코어 `GachaText` — 맥과 같은 글자).
+/// 마지막 뽑기 결과 한 줄(움직임 없음 — 연출은 기계 몫이다). 희귀 둘은 그 빛깔 받침 + 테두리 + 머리말:
+/// 황금은 금빛 + "황금 아잉이!" · 무지개(v0.3.59)는 일곱 빛 + "무지개 아잉이!" · 새 캐릭터 "새 캐릭터: 여우" ·
+/// 중복 "이미 있는 여우 → 조각 +1"(문구·마감은 `MeText.gachaResultLines` → 코어 `GachaText` — 맥과 같은 글자).
+///
+/// 머리말 **글자**는 희귀여도 `label` 이다: 금빛·무지개를 받침으로 깔고 그 위 글자까지 같은 빛으로 칠하면 라이트에서
+/// 4.2:1 로 내려간다(받침 14% 가 바탕을 띄운다). 희귀 표시는 받침 · 1pt 테두리 · 머리말 글귀가 셋이서 한다.
 struct MeGachaLastResultRow: View {
     let result: GachaPullResult
     let name: String
 
     var body: some View {
-        let isGold = result.kind == .gold
+        let lines = MeText.gachaResultLines(result, name: name)
         let shape = RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous)
-        let headline = GachaText.headline(for: result, name: name)
-        let detail = GachaText.detail(for: result, name: name)
         HStack(spacing: MobileTheme.space3) {
             MeCharacterArt(id: result.characterID, size: 40)
                 .frame(width: 44, height: 44)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(headline)
+                Text(lines.headline)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(MobileTheme.label)
                     .fixedSize(horizontal: false, vertical: true)
-                if let detail {
+                if let detail = lines.detail {
                     Text(detail)
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.label2)
@@ -112,9 +114,14 @@ struct MeGachaLastResultRow: View {
         }
         .padding(MobileTheme.space2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(shape.fill(isGold ? MobileTheme.gold.opacity(0.14) : MobileTheme.surface2))
+        .background(shape.fill(MobileTheme.tint(lines.finish, otherwise: MobileTheme.surface2)))
+        .overlay {
+            if let rare = MobileTheme.rare(lines.finish) {
+                shape.strokeBorder(rare, lineWidth: 1)
+            }
+        }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text([MeText.gachaLastResult, headline, detail].compactMap { $0 }.joined(separator: ", ")))
+        .accessibilityLabel(Text([MeText.gachaLastResult, lines.headline, lines.detail].compactMap { $0 }.joined(separator: ", ")))
     }
 }
 
@@ -208,7 +215,7 @@ struct MeGachaMachineScreen: View {
     }
 
     private func portrait(_ id: String) -> Image {
-        // 기계는 초상을 150~172pt × 무대 배율로 그린다 — 그 크기면 여섯 캐릭터는 무대용 420px, 아잉 · 황금 아잉이는 192px 초상이 온다.
+        // 기계는 초상을 150~172pt × 무대 배율로 그린다 — 그 크기면 여섯 캐릭터는 무대용 420px, 아잉 · 황금 · 무지개 아잉이는 192px 초상이 온다.
         guard let image = MobileArt.character(id: id, expression: .neutral, pointSize: 180, displayScale: displayScale) else {
             return Image(systemName: "questionmark.circle")
         }
@@ -220,10 +227,12 @@ struct MeGachaMachineScreen: View {
 
 /// "확률 보기" 시트: 서버가 준 표 그대로(순서까지) — 캐릭터 · 상점가(뽑기 전용이면 그 말) · 확률 + 규칙 한 줄.
 /// 앱스토어 지침(확률형 아이템은 **사기 전에** 확률 공개)이 요구하는 자리다 — 표가 불완전하면 카드가 아예 안 서므로
-/// 여기 오는 표는 늘 합 100% 다(`GachaInfo.isUsable`).
+/// 여기 오는 표는 늘 합 100% 다(`GachaInfo.isUsable`). **합계 줄은 두지 않는다** — 화면 표시는 한 자리 반올림이라 더하면 100.1% 가 된다.
 struct MeGachaOddsSheet: View {
     let store: MeStore
     @Environment(\.dismiss) private var dismiss
+    /// B안(폰 1.0.10 색 고르기): 라이트에서만 확률 숫자를 단색으로 — 모드를 봐야 하므로 뷰가 읽는다.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let rows = store.gachaOddsRows
@@ -244,22 +253,30 @@ struct MeGachaOddsSheet: View {
                         .foregroundStyle(MobileTheme.label2)
                         .accessibilityHidden(true)
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                            // 희귀 둘(황금 · 무지개)은 같은 급으로 강조한다 — 이름을 굵게, 이름·확률을 그 빛깔로. 가름은
+                            // `MeText.gachaOddsEmphasized`(= `finish.isRare`)뿐이다(`isGold` 로 가르면 무지개가 평범해진다).
+                            let emphasized = MeText.gachaOddsEmphasized(row)
+                            let ink = MobileTheme.ink(row.finish, otherwise: MobileTheme.label)
+                            // B안: **라이트에서만** 확률 숫자(두세 글자)를 일곱 빛 대신 단색으로 — 짧은 글자에 일곱 빛을 깔면
+                            // 두어 색만 지나가 애매한 한 색으로 읽힌다. 이름은 길어서 그대로 일곱 빛, 다크도 그대로다.
+                            let percentInk = (row.finish == .rainbow && colorScheme == .light)
+                                ? AnyShapeStyle(MobileTheme.rainbowSolid) : ink
                             GroupRow(divider: index == rows.count - 1 ? .none : .inset(MobileTheme.cardPadding + 40 + MobileTheme.space3)) {
                                 MeCharacterArt(id: row.characterID, size: 40)
                                     .frame(width: 40, height: 40)
                                     .accessibilityHidden(true)
                                 Text(row.name)
-                                    .font(.subheadline.weight(row.isGold ? .bold : .semibold))
-                                    .foregroundStyle(MobileTheme.label)
+                                    .font(.subheadline.weight(emphasized ? .bold : .semibold))
+                                    .foregroundStyle(ink)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                                 Spacer(minLength: MobileTheme.space2)
                                 priceCell(row)
                                     .frame(minWidth: 72, maxWidth: 104, alignment: .trailing)
                                 Text(row.percentText)
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.subheadline.weight(emphasized ? .bold : .semibold))
                                     .monospacedDigit()
-                                    .foregroundStyle(MobileTheme.label)
+                                    .foregroundStyle(percentInk)
                                     .frame(minWidth: 48, alignment: .trailing)
                             }
                             .accessibilityElement(children: .ignore)
@@ -278,7 +295,7 @@ struct MeGachaOddsSheet: View {
             }
         }
         .background(MobileTheme.background.ignoresSafeArea())
-        // 표 전체(7줄 + 규칙 한 줄)가 한 번에 보이게 — 중간 높이면 마지막 줄이 잘려 공개한 확률이 반만 보인다.
+        // 표 전체(여덟 줄 + 규칙 한 줄 — v0.3.59 무지개)가 한 번에 보이게 — 중간 높이면 마지막 줄이 잘려 공개한 확률이 반만 보인다.
         .presentationDetents([.large])
     }
 
@@ -287,7 +304,7 @@ struct MeGachaOddsSheet: View {
         if let price = row.shopPrice {
             RubyPrice(price, isShort: false, gemSize: 14, style: .footnote)
         } else {
-            // 금 줄은 "뽑기 또는 조각 20개"(코어 문구)처럼 길 수 있다 — 두 줄까지 접고 오른쪽에 붙인다(글자를 줄여 숨기지 않는다).
+            // 희귀 줄(금 · 무지개)은 "뽑기 또는 조각 20개"(코어 문구)처럼 길 수 있다 — 두 줄까지 접고 오른쪽에 붙인다(글자를 줄여 숨기지 않는다).
             Text(row.priceText)
                 .font(.footnote)
                 .foregroundStyle(MobileTheme.label2)
@@ -300,7 +317,7 @@ struct MeGachaOddsSheet: View {
 
 // MARK: - 조각 교환 시트
 
-/// 조각 교환: 서버 교환표 그대로(확률표 순서 — 황금 아잉이가 맨 앞) · 줄마다 그림 · 이름 · 값 · [교환](모자라면 잠김 · 가졌으면 "보유").
+/// 조각 교환: 서버 교환표 그대로(**코어가 준 순서** — 황금 아잉이 → 무지개 아잉이 → 서버 순서. 화면이 다시 정렬하지 않는다) · 줄마다 그림 · 이름 · 값 · [교환](모자라면 잠김 · 가졌으면 "보유").
 /// 교환은 확인 대화상자의 [교환하기] 로만 나간다(상점 구매와 같은 관례 — 카드를 눌러 바로 쓰이지 않는다).
 struct MeGachaExchangeSheet: View {
     let store: MeStore
@@ -360,13 +377,15 @@ struct MeGachaExchangeSheet: View {
 
     @ViewBuilder
     private func exchangeRow(_ row: GachaExchangeRow) -> some View {
+        // 희귀 둘은 이름을 그 빛깔로(금빛 · 일곱 빛) — 확률 시트와 같은 급. 값 줄은 코어 문구 그대로("조각 20개").
+        let finish = CharacterManifest.Finish(characterID: row.characterID)
         MeCharacterArt(id: row.characterID, size: 44)
             .frame(width: 44, height: 44)
             .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 2) {
             Text(row.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.label)
+                .font(.subheadline.weight(finish.isRare ? .bold : .semibold))
+                .foregroundStyle(MobileTheme.ink(finish, otherwise: MobileTheme.label))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             if let cost = row.availability.cost {

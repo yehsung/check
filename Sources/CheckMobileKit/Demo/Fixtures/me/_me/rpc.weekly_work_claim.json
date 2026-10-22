@@ -1,0 +1,51 @@
+{
+  "__note": [
+    "weekly_work_claim(p_week_start = null, p_hours = null) — **받을 것 전부**(어느 주든). 응답은 상태와 같은 모양 + claimed_now.",
+    "claimed_now 는 이 호출이 장부에 넣은 두 건(지난주 40시간 50 · 이번 주 20시간 20 — order by week_start, hours) · 합 70 → 잔량 190.",
+    "받은 뒤 pending 은 비고 claimable_ruby 는 0 이다. tiers[20] 이 claimed=true · claimable=false 로 바뀐다.",
+    "granted_now 는 여기서도 **빈 배열**이다 — '받았다'는 claimed_now 하나로만 말한다."
+  ],
+  "week_start": "2026-09-14",
+  "next_week_start": "2026-09-21",
+  "worked_seconds": 83520,
+  "tiers": [
+    {
+      "hours": 20,
+      "ruby": 20,
+      "claimed": true,
+      "achieved": true,
+      "claimable": false
+    },
+    {
+      "hours": 40,
+      "ruby": 50,
+      "claimed": false,
+      "achieved": false,
+      "claimable": false
+    },
+    {
+      "hours": 60,
+      "ruby": 200,
+      "claimed": false,
+      "achieved": false,
+      "claimable": false
+    }
+  ],
+  "granted_now": [],
+  "ruby_balance": 190,
+  "server_now_ms": 1789621500000,
+  "pending": [],
+  "claimable_ruby": 0,
+  "claimed_now": [
+    {
+      "week_start": "2026-09-07",
+      "hours": 40,
+      "ruby": 50
+    },
+    {
+      "week_start": "2026-09-14",
+      "hours": 20,
+      "ruby": 20
+    }
+  ]
+}

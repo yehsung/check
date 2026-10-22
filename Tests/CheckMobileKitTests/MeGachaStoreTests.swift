@@ -12,7 +12,13 @@ import Testing
 @MainActor
 @Suite("나 탭 캐릭터 뽑기(v0.3.54)")
 struct MeGachaStoreTests {
-    /// 서버 `shop_state(p_protocol >= 2)` 모양(AMENDMENT 1 교환값 — 금 20 · 2/2/4/4/5/8). 상점 목록은 서버처럼 가격순(금은 명목가 1000 이라 맨 뒤).
+    /// 서버 `shop_state` 가 **무지개 행 없이** 준 응답(AMENDMENT 1 교환값 — 금 20 · 2/2/4/4/5/8). 상점 목록은 서버처럼 가격순(금은 명목가 1000 이라 맨 뒤).
+    ///
+    /// ★ 폰 1.0.10 은 `p_protocol = 3` 을 싣고(무지개 초상이 번들에 있다), 지금 운영 서버는 3 에 **8줄**(무지개 2 포함)을 준다.
+    ///   이 픽스처는 그 8줄이 아니라 **금까지만 있는 7줄**이다 — 그래도 재는 것이 그대로 산다: 이 절들이 묻는 것은
+    ///   "서버가 말한 표를 그대로 세우는가"이고, 기대값은 손으로 적은 글자다. 무지개가 **든** 응답(8줄 정수)과 서버가 무지개를
+    ///   **안 준** 응답(7줄 소수 — 2 를 받은 클라가 보는 모양)은 `MeRainbowProtocolTests` 가 따로 잰다.
+    ///   (이 픽스처를 8줄로 바꾸지 않은 이유: `MeGachaMachineTests` 가 `typealias Fixture = MeGachaStoreTests` 로 같은 글자를 쓴다.)
     static func shopV2(ruby: Int = 120, shards: Int = 0, owned: Set<String> = ["fox"]) -> String {
         func row(_ id: String, _ price: Int, gachaOnly: Bool = false) -> String {
             #"{"id":"\#(id)","price":\#(price),"owned":\#(owned.contains(id)),"gacha_only":\#(gachaOnly)}"#
@@ -44,7 +50,11 @@ struct MeGachaStoreTests {
         let harness = await RankMeHarness(label: "me-gacha-gate") { _ in nil }
         defer { harness.tearDown() }
         let store = harness.me
-        #expect(store.shopProtocolVersion == ShopWire.goldProtocol, "전제: 이 번들은 2 를 보낸다(금 초상 + robot 초상)")
+        // 전제는 **번들이 실제로 싣는 번호**다. 1.0.10 은 3 이다 — robot · 금 · 무지개 초상이 모두 번들에 있어서
+        // (`AingCharacterArt.knownIDs`), 번호는 누적으로 3 까지 올라간다. 뽑기 문턱 자체는 2 그대로다(`supportsGacha`).
+        #expect(store.shopProtocolVersion == ShopWire.rainbowProtocol,
+                "전제: 이 번들은 3 을 보낸다(robot + 금 + 무지개 초상)")
+        #expect(ShopWire.supportsGacha(protocolVersion: store.shopProtocolVersion), "전제: 이 번호로 뽑기가 열린다")
 
         harness.enqueue("shop_state", .json(Self.shopWithoutGacha))
         harness.enqueue("shop_state", .json(Self.shopV2()))
@@ -89,7 +99,8 @@ struct MeGachaStoreTests {
         #expect(!store.isPulling)
         let first = try #require(harness.requests(rpc: "gacha_pull").last?.jsonBody)
         #expect(Set(first.keys) == ["p_protocol", "p_request_id"], "본문 \(first)")
-        #expect(first["p_protocol"] as? Int == 2)
+        // 3 이다(2 가 아니다 — v0.3.59 무지개). 2 를 실으면 서버가 무지개를 뺀 7줄로 추첨해 무지개가 영영 안 나온다.
+        #expect(first["p_protocol"] as? Int == 3)
         let firstID = try #require(first["p_request_id"] as? String)
         #expect(UUID(uuidString: firstID) != nil && firstID == firstID.lowercased(), "request_id 가 소문자 uuid 가 아니다: \(firstID)")
         let newResult = try #require(store.lastGachaResult)
@@ -301,7 +312,8 @@ struct MeGachaStoreTests {
         #expect(harness.requests(rpc: "gacha_exchange").count == 1, "교환 중에 또 눌러 요청이 더 나갔다")
         let body = try #require(harness.requests(rpc: "gacha_exchange").first?.jsonBody)
         #expect(Set(body.keys) == ["p_character_id", "p_protocol", "p_request_id"], "본문 \(body)")
-        #expect(body["p_character_id"] as? String == "squirrel" && body["p_protocol"] as? Int == 2)
+        // 번호 3 — 2 를 실으면 서버 교환표에 무지개(조각 20)가 아예 없어 무지개 교환이 `needs_update` 로 거절된다.
+        #expect(body["p_character_id"] as? String == "squirrel" && body["p_protocol"] as? Int == 3)
         #expect(store.isOwned("squirrel") && store.gachaShards == 3)
         #expect(store.exchangeNotice == "교환했어요: 다람쥐" && !store.isExchangeNoticeError)
         #expect(store.rubyBalance == 120, "교환이 루비를 움직였다")

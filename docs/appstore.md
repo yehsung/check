@@ -14,7 +14,7 @@
 | 번들 ID | `com.yehsung.aingcheck` | `ios/project.yml:100`, `Sources/CheckMobileShared/CheckMobileIdentifiers.swift:10` |
 | 위젯 확장 번들 ID | `com.yehsung.aingcheck.widgets` | `ios/project.yml:181`, `CheckMobileIdentifiers.swift:12` |
 | 표시 이름 | `아잉체크` | `ios/project.yml:71, 167`, `ios/App/Info.plist`·`ios/Widgets/Info.plist`(CFBundleDisplayName), `Sources/CheckMobileShared/CheckMobileIdentifiers.swift`(`appDisplayName` — 앱 안 문구가 읽는 한 벌) |
-| 버전 · 빌드 | `0.1.0` · `3` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
+| 버전 · 빌드 | `1.0.12` · `23` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
 | 팀 ID | `MQ2KQK37WD` | `ios/project.yml:23` |
 | 지원 기기 · OS | iPhone 전용(`TARGETED_DEVICE_FAMILY: "1"`) · iOS 18.0 이상 · 세로 방향만 | `ios/project.yml:26, 104`, `:15-16, 27`, `:75-76`; `Package.swift:9` |
 | 백그라운드 모드 | `remote-notification` 하나 | `ios/project.yml:78-79` |
@@ -34,10 +34,10 @@
 | 탭 | 화면에 있는 것 | 서버에 **쓰는** 것 | 근거 |
 | --- | --- | --- | --- |
 | 지금 | 내 상태 카드(착용 캐릭터·오늘 타이머·이번 주 막대), 오늘 할 일, 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기), 주간 목표 편집 시트 | 할 일(`todo_sync`), 팀 주간 목표(`set_team_weekly_goal`). **근무 시작/종료**(1.0.7 — `work_phone_start/stop/touch`, 서버 시계) | `Now/NowTab.swift:7-9`, `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22` |
-| 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift` |
+| 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번), 입력칸 왼쪽 이모티콘 버튼 → **아잉이 이모티콘 여섯 종**(1.0.12 — 앱 번들에 든 그림 여섯 장. 본문이 `[아잉:기쁨]` 같은 토큰과 **통째로 같을 때만** 그림으로 그린다) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인). **이모티콘도 같은 `send_message` 로 글자만 간다**(1.0.12 — 새 RPC·새 칸·새 열거값 0) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift`, `Sources/CheckCore/AingSticker.swift`, `Messages/MessagesComposerView.swift` |
 | 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘) 세 판 | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
-| 게임 | 미니게임 둘(타이밍 바·플래피 아잉), 1:1 오목(로비·신청·대국·채팅), 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출, 오목 신청·수락·착수·기권·채팅·음소거 | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290` |
-| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
+| 게임 | 미니게임 셋(타이밍 바·플래피 아잉·테트리스 혼자), 1:1 오목(로비·신청·대국·채팅), 1:1 체스(1.0.6), **1:1 테트리스(1.0.11 — 로비·신청·준비·판·결과·순위. 둘이 같은 시드로 각자 판을 돌리고 지운 줄 수만큼 상대 바닥에 방해 줄이 올라간다. 먼저 꼭대기까지 쌓이는 쪽이 진다)**, 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출, 오목 신청·수락·착수·기권·채팅·음소거, 체스 신청·수락·착수·기권, 테트리스 신청·수락·판 보고·기권(`tetris_challenge` · `tetris_respond` · `tetris_report` · `tetris_resign`) | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290`, `Sources/CheckCore/TetrisWire.swift`, `Sources/CheckMobileKit/Games/GamesTetrisDuelText.swift` |
+| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 이번 주 근무(1.0.8 — 20/40/60시간 단계) → 도전 미션(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환 / 1.0.10 — 무지개 아잉이 2% 추가 · 황금 아잉이 5 → 3%, 둘 다 루비로 못 사고 조각 20개로 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
 | (홈 위젯) | 지금 근무 중 · 내 오늘 · 할 일 — 세 종류. 앱이 쓴 스냅샷 파일만 그린다 | 할 일 체크 인텐트의 `todo_sync` 한 번뿐 | `Sources/CheckWidgetsKit/AingWidgetModel.swift:11-16`, `Sources/CheckMobileShared/WidgetSnapshot.swift:6`, `Sources/CheckWidgetsKit/WidgetTodoToggle.swift:11` |
 | (푸시) | 새 메시지 · 오목 신청(수락 버튼) · 제보 답장 세 종류, 앱 배지 = 안 읽은 메시지 + 받은 오목 신청 | 기기 등록(`register_device`), 알림 종류별 설정(`set_push_prefs`) | `Push/PushPayload.swift:6-10`, `Push/PushCoordinator.swift:14-27`, `Session/MobileDeviceService.swift:116-164` |
 
@@ -277,6 +277,37 @@
 > **Reporting and blocking (Guideline 1.2)**
 > Every screen where users exchange their own content has both: a 1:1 conversation (Messages tab → a conversation → **···** in the top right → "신고하기" Report / "차단하기" Block; long-press a received bubble to report that single message) and the Gomoku match chat drawer (**···** in the drawer header → the same two items). Reporting asks for a reason (spam / harassment / inappropriate / other), an optional 200-character note, and has "report and block" on by default. Blocked people are listed under "나" (Me) → 설정 (Settings) → 차단한 사람 (Blocked people), where a block can be lifted. Reports are reviewed within 24 hours; the same promise is on the support page and in the terms (<https://yehsung.github.io/check/terms>).
 >
+> **New in 1.0.9 — rewards are now collected with a [받기] (Claim) button**
+> Until now, in-app points (rubies) earned from work milestones were granted automatically. In 1.0.9 the user taps a button to collect them.
+> - "나" (Me) tab → a new **「도전 미션」 (Challenges)** section lists missions whose progress comes from the user's own work records. When a mission is achieved, a **[받기] (Claim)** button appears on that row, and the rubies are granted only when it is tapped. There is no expiry.
+> - The existing weekly work goal (20 / 40 / 60 hours) is collected the same way.
+> - The only automatic grant left is 3 rubies for every 3 hours worked.
+>
+> **How to see it right after signing in**
+> Sign in with the demo account on the iPhone, open the "나" (Me) tab and scroll to 「도전 미션」. The first row — "폰 앱에서 로그인하기 · +50" (Sign in on the phone app) — is already achieved on the demo account, so its **[받기]** button is visible immediately. Tapping it increases the ruby count at the top of the screen by 50 and the row changes to "✓ 받음" (Claimed). The weekly-goal [받기] button needs 20 hours of work in the current week, so it will usually not appear during review.
+> Rubies still cannot be bought or cashed out, and there are no in-app purchases.
+>
+> **New in 1.0.10 — one more character in the draw: 무지개 아잉이 (Rainbow Aing)**
+> The character draw itself, its price, and the way odds are disclosed are unchanged from 1.0.8, which completed review. One character is added and the published odds change.
+> - Odds now — eight entries, total 100%: **무지개 아잉이 (Rainbow Aing) 2%** (new) · 황금 아잉이 (Golden Aing) **3%** (was 5%) · 여우 Fox 24% · 다람쥐 Squirrel 24% · 강아지 Shiba 14% · 유령 Ghost 14% · 해파리 Jellyfish 11% · 로봇 Robot 8%. The app shows this table under **"확률 보기"** (Show odds), both on the draw card and on the capsule-machine screen.
+> - Like 황금 아잉이, the new character **cannot be bought with rubies** — it comes from the draw, or from exchanging 20 duplicate shards. A duplicate of any character still gives one shard.
+> - A draw still costs 50 in-app rubies. Rubies are earned only by working and by playing mini games; they cannot be bought with money or cashed out, and there are no in-app purchases. A draw only gives a cosmetic character.
+> - Older builds are not offered the new character at all — the server hides that row from clients that cannot draw it — so a device still on 1.0.9 keeps seeing a seven-entry table. There the percentages are shown rounded to one decimal place, so adding up the numbers on screen can give 100.1%; the odds themselves total exactly 100% there too. **On this build (1.0.10) all eight values are whole numbers and add up to exactly 100%.**
+>
+> **New in 1.0.11 — a second head-to-head game in the Games tab: 1:1 테트리스 (1:1 Tetris)**
+> The Games tab already had 1:1 Gomoku and 1:1 Chess, where you pick someone and send them a challenge. 1.0.11 adds a third one with the same flow. It is a cosmetic/leisure feature; nothing about accounts, work records, data collection, or purchases changes.
+> - **How a match works.** Games tab → 「1:1 테트리스」 → pick someone from the list → send a challenge → they accept → both players get the same piece order and play their own board side by side. Clearing 2 lines at once drops 1 extra row onto the other player's board, 3 lines drops 2, and 4 lines drops 4. The player whose board reaches the top first loses. After 2 minutes the pieces start falling faster so a match always ends; there is also a hard 8-minute limit, after which the match is a draw. Controls are the same as the existing single-player Tetris mini game: drag the board left/right to move, drag down to drop faster, tap to rotate, and three buttons (hold / rotate the other way / drop now).
+> - **In-app points are unchanged from 1:1 Gomoku and 1:1 Chess**, which both completed review: a match is for 3, 5 or 10 rubies, the winner receives the two contributions minus a 10% fee, and a draw returns them. Rubies are earned only by working and by playing mini games; **they cannot be bought with money or cashed out, and there are no in-app purchases.** The age-rating answers in this submission are therefore the same as the previous version's.
+> - **The match keeps running while the app is in the background, and the app says so.** A line on the board and a line in the rules sheet both read "판 중에 앱을 나가면 져요" (If you leave the app during a match, you lose). This is intentional: the server closes a match when one side stops reporting for 15 seconds, so hiding the app cannot be used to pause a match that is going badly.
+> - **Records and ranking** are a tab inside the same screen (wins − losses, players with no matches excluded). No new notification type is added in this version.
+> - **What a reviewer can do.** On one device, the Games tab → 「1:1 테트리스」 shows the lobby, the stake buttons, the 「규칙 보기」 (Rules) sheet, your own record, and the 「순위」 (Ranking) tab. **Two demo accounts on two devices can play a real match.** Sign in as demo account A on one device and B on the other, open the Games tab, tap 「1:1 테트리스」, pick the other account from the lobby list and send a challenge; accepting it on the second device starts the match. Each device only has to have launched this build once — signing in is enough — because the server allows a challenge only to a client that can already play it. The two demo accounts see only each other in this lobby, so a review match never involves one of our real users.
+>
+> **New in 1.0.12 — six built-in pictures for 1:1 messages (아잉이 이모티콘)**
+> A message is drawn as a picture only when its whole body is exactly one of six tokens: `[아잉:기쁨]` `[아잉:하트]` `[아잉:슬픔]` `[아잉:화남]` `[아잉:졸림]` `[아잉:놀람]`. A body with anything else around a token stays text. Nothing else changes — the same `send_message` call, the same 200-character text message, **no server, network or data change at all**, no new permission and no new notification type.
+> - **Not user-generated content (Guideline 1.2).** The app carries exactly six (6) fixed pictures in its own bundle — no upload, no import, no user-supplied art, nothing fetched from anywhere — so the user-generated-content requirements of 1.2 are not involved here. Reporting and blocking work on a picture message exactly as on a text one (long-press the bubble → "신고하기" Report).
+> - **What a reviewer can do on one device.** You cannot message yourself, so use the two demo accounts: sign in as A → Messages tab → open a conversation with B ("새 대화" starts one) → tap the sticker button left of the input field → the sheet shows the six pictures → tap one. Your own bubble renders it as a picture at once, and the conversation list shows that message as readable text, "아잉이 기쁨". Whatever you had typed is left untouched; a second device is not needed.
+> - **Older builds stay readable.** What travels is text, so a build that does not know the tokens shows plain `[아잉:기쁨]` — never an empty bubble, never a missing-glyph box.
+>
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.
 
@@ -285,6 +316,27 @@
 - 데모 계정 둘(A·B, 숨김 팀 "앱 심사 팀") · 비밀번호 무기한.
 - 팀 코드 없이 "팀 만들기" 로 혼자 시작 가능(작업 B 뒤) · 비밀번호 재설정 6자리 코드 앱 안 완결(작업 B 뒤) · 계정 삭제는 나 → 설정 → 계정 삭제, 비밀번호 재입력(작업 C 뒤).
 - 푸시 세 종류·설명 시트 먼저(`Push/PushCoordinator.swift:14-20`) · 맥에서 근무 중이면 폰 알림 생략(`Push/PushPayload.swift:263` `primerMacNote`, `privacy.md:108`) — 데모엔 해당 없음.
+- 1.0.9 부터 보상은 [받기] 버튼으로 받는다 — 나 탭 「도전 미션」 절 · 주간 근무 단계도 같은 방식(3시간 랩 3루비만 자동).
+- 1.0.10 은 뽑기에 **무지개 아잉이(2% 신규)**를 더하고 **황금 아잉이를 5% → 3%** 로 내린다(서버 `20261020120000_gacha_rainbow`, 2026-10-20 07:27 운영 반영 — 클라보다 먼저 가 있다).
+  확률표는 여덟 줄 합 100%(앱 [확률 보기]) · 루비로 못 사고 조각 20개로 교환 · 1회 50루비 그대로.
+  ★ **반올림 주의는 1.0.10 의 성질이 아니다**: 능력 번호 3 은 여덟 줄이 **정수**라 화면 숫자의 합도 정확히 100 이다. 표시값을 더해 100.1 이 되는 것은 **번호 2(1.0.9)의 일곱 줄 소수 표**뿐이다(전선값 합은 그때도 정확히 100.0000 — `round(…,4)`). 심사 메모에 '합 100%'를 적을 때 이 두 층과 두 버전을 섞지 마라.
+  ★ 서버는 능력 번호 3 미만 클라에게 무지개 행을 **아예 안 보낸다**(`ShopWire.rainbowProtocol`) — 1.0.9 는 무지개를 뺀 일곱 줄 소수 표(합 100.0000)를 본다. 폰이 3 을 보내는 방아쇠는 `AingCharacterArt.knownIDs` 에 `aing_rainbow` 가 있는 것 하나다.
+  ★ **데모 계정은 숨김(`profiles.is_hidden`)이라 서버가 미션을 판정하지 않는다** — `achievements_settle` 이 숨김 사용자를
+  `status: hidden` 으로 바로 돌려보낸다(`20261019120000_achievements.sql:515-521`). 소급(phone_login)도 할 일 3개도 저절로는
+  달성되지 않는다. 그래서 **제출 직전에 운영에 데모 두 계정의 `phone_login` 달성 행(미수령, +50)을 직접 넣는다**(2026-10-19 결정).
+  심사원이 누르면 '받음'으로 남으므로 **재심사·다음 버전 때는 다시 넣어야 한다.**
+- 1.0.11 은 게임 탭에 **1:1 테트리스**를 더한다(맥 0.3.60 과 같은 서버 · `20261021120000_tetris_duel.sql`). 흐름은 오목·체스와 같다: 사람을 골라 신청 → 수락 → 둘이 **같은 시드**로 각자 판을 돌리고 지운 줄만큼 상대 바닥에 방해 줄이 올라간다(2줄→1 · 3→2 · 4→4) · 먼저 꼭대기까지 쌓이는 쪽이 패 · 2분 뒤 가속 · 8분 상한은 무승부.
+  판돈·수수료는 **오목·체스와 같은 값 그대로**다(3/5/10 · 10% · 승자 수령 5/9/18) — 그래서 §3 연령 설문의 답과 등급(13+)이 **바뀌지 않는다.** 새 푸시 종류도 없다(D8).
+  ★ **"판 중에 앱을 나가면 져요" 는 장식이 아니라 기능의 일부다**(설계서 P7): 폰은 background 로 가면 판 루프가 멎고 서버가 15초 침묵에 그쪽 패로 닫는다. 그래서 판 위 한 줄 + 규칙 시트 한 줄에 그 경고가 있고, 출시 게이트(`ios/scripts/check-release-app.sh` 5번)가 그 글자가 Release 바이너리에 실제로 있는지 센다.
+  ★ **심사원이 폰↔폰 대결을 할 수 있다 — 제출일에 서버 상수를 내렸다**: `tetris_ios_min_build()` 를 2147483647 → **22**(1.0.11 빌드)로 낮췄다(사용자 동석, 1.0.6 체스 전례와 같은 제출일 반영). `tetris_capable` 의 폰 갈래는 `client_devices` 에 platform=ios · build ≥ 22 · 최근 30일 행이 있으면 참이므로, 심사원이 두 기기에 데모 A·B 로 로그인해 앱을 한 번 열면 둘 다 능력이 켜진다. 로비는 `same_visibility` 라 **숨김 계정끼리만 서로 보인다** — 심사 대결에 실제 사용자가 끌려들 일이 없다. build ≤ 21 폰은 그대로 incapable 이다. 그래서 §5.2 메모도 "두 계정·두 기기로 대결 가능"으로 고쳤다(2.3.1(a) 숨은 기능이 아니다).
+  ★ **둘째 데모 계정(B)의 로그인 정보는 ASC 심사 메모 칸에만 적는다**(2026-10-21 사용자 승인) — ASC 는 데모 계정을 한 쌍만 들고 있어서 B 를 안 주면 심사원이 대결을 할 수 없다. 이 문서·저장소·로그·스크린샷에는 절대 적지 않는다(제출 스크립트가 치환은 메모리에서만 하고 `leak-check.py` 로 스크래치까지 훑는다).
+  ★ 데모 스크린샷 라우트는 `games/tetris/lobby` 다 — `games/tetris` **한 토막은 혼자 하는 미니게임 테트리스**(`AingRoute.MiniGame.tetris`, v0.3.38)의 글자라 1:1 쪽이 가로채지 않는다.
+- 1.0.12 는 메시지에 **아잉이 이모티콘 여섯 종**을 더한다(맥 0.3.62·0.3.63 과 **같은 그림·같은 토큰** — `Sources/CheckCore/AingSticker.swift`).
+  본문이 여섯 토큰과 **통째로 같을 때만** 그림이고 전선은 `send_message` 글자 그대로다 — **서버 상수 없음 · 마이그레이션·db push 없음 · 연령 설문 그대로**(새 재화·새 판돈·새 수집 항목이 하나도 없다).
+  ★ 그림은 **앱 번들 안 여섯 장뿐**이고 업로드·사용자 생성·외부 내려받기 경로가 없다 → **1.2 UGC 조항과 무관**. 신고·차단은 그림 말풍선에도 그대로 붙는다.
+  ★ 심사원은 **한 기기**로 확인한다: 자기 자신에게는 못 보내니 데모 A 로 로그인 → B 와의 대화 → 입력칸 왼쪽 이모티콘 버튼 → 고르면 **내 말풍선이 그림**으로 뜨고 대화 목록엔 "아잉이 기쁨"으로 보인다. 둘째 계정 로그인 정보는 (위 결정 그대로) **ASC 심사 메모 칸에만** 적는다.
+  ★ 구버전은 `[아잉:기쁨]` 이라는 **읽을 수 있는 글자**로 본다(깨진 네모·빈 말풍선이 아니다) — 쓰기 경로를 거두지 않았기 때문이다.
+  ★ **푸시 본문은 서버가 만든다** — 이모티콘 메시지의 알림은 `[아잉:기쁨]` 날것으로 뜬다(맥 0.3.62 부터 운영에서 이미 그렇다). 폰이 못 고치고 이번 범위 밖이다(설계서 §6).
 - 1.0.7 부터 근무 시작/종료는 폰 지금 탭에서도 된다 — 심사 메모에 [근무 시작] 위치와 2시간 30분 확인 알림을 적는다.
 
 ---

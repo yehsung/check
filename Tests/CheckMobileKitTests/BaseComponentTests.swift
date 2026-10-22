@@ -13,7 +13,7 @@ import Testing
 
     // MARK: 에셋
 
-    @Test("초상 16장: 8 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
+    @Test("초상 18장: 9 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
     func portraitsAreBundledCopiesOfMacArt() throws {
         // 0.3.43(2026-10-05)에 로봇이 들어와 6 → **7 캐릭터 · 14장**이 됐다(맥 `AppUserAvatarArt.knownIDs` 도 7).
         // 개수를 **두 자리**에서 잰다: 명단 길이(7)와 **맥 원본과 실제로 대조한 장수**(14). 명단만 재면 번들 사본이
@@ -21,9 +21,11 @@ import Testing
         // 다르게 보인다(위젯까지 이 번들을 읽는다).
         // 0.3.54(폰 1.0.8, 2026-10-15)에 황금 아잉이가 들어와 **8 캐릭터 · 16장**이 됐다. 원본은 아잉처럼 맥 `Resources/` 의
         // `aing_gold-<표정>.png` 다(내장 3D 캐릭터라 `Characters/<id>/` 폴더가 없다).
-        #expect(AingCharacterArt.knownIDs.count == 8, "폰 초상 명단이 8 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
+        // 0.3.59(폰 1.0.10, 2026-10-20)에 무지개 아잉이가 들어와 **9 캐릭터 · 18장**이 됐다 — 금과 같은 자리(`Resources/aing_rainbow-<표정>.png`).
+        #expect(AingCharacterArt.knownIDs.count == 9, "폰 초상 명단이 9 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
         #expect(AingCharacterArt.knownIDs.contains("robot"), "로봇(0.3.43)이 폰 초상 명단에 없다 — 맥에만 있는 캐릭터는 폰에서 이니셜로 선다")
         #expect(AingCharacterArt.knownIDs.contains("aing_gold"), "황금 아잉이(0.3.54)가 폰 초상 명단에 없다 — 폰이 뽑기를 못 보고 금 착용자는 아잉으로 선다")
+        #expect(AingCharacterArt.knownIDs.contains("aing_rainbow"), "무지개 아잉이(0.3.59)가 폰 초상 명단에 없다 — 폰이 상점 능력 번호 3 을 못 말해 무지개를 아예 못 받고, 무지개 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.Expression.allCases.count == 2, "표정이 둘(neutral·negative)이 아니다")
         var comparedWithMac = 0
         for id in AingCharacterArt.knownIDs {
@@ -43,7 +45,7 @@ import Testing
                 comparedWithMac += 1
             }
         }
-        #expect(comparedWithMac == 16, "맥 원본과 대조한 초상이 16장이 아니다: \(comparedWithMac)장")
+        #expect(comparedWithMac == 18, "맥 원본과 대조한 초상이 18장이 아니다: \(comparedWithMac)장")
     }
 
     @Test("초상 id 목록은 앱 캐릭터 카드(MeCharacterCards)와 같고, 착용값 접기도 같다")
@@ -193,16 +195,24 @@ import Testing
         #expect(gems.contains("Sources/CheckMobileKit/Components/RubyComponents.swift"), "대조: 보석 부품을 못 찾았다")
     }
 
-    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 여섯")
+    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 일곱")
     func tabBarPolicy() throws {
         // grassDetail 은 0.3.31 에 늘었다 — 잔디 상세는 **자체 하단 값 막대**를 가져 탭 막대와 둘이 쌓이면 엄지 사정권이 좁아진다.
+        // tetrisMatch 는 1:1 테트리스(1.0.11)에 늘었다 — 체스보다 까닭이 세다: 판 시간이 단조 시계로 흐르므로(D10)
+        // 탭을 잘못 눌러 나가면 **안 보이는 채로 조각이 계속 떨어진다**(판돈이 걸린 판이다). 갈래만 더하고
+        // 호출을 잊으면 목록만 늘고 화면은 그대로이므로, 아래 소스 계약이 그 호출 자리까지 되묻는다.
         // chessMatch 는 폰 체스(1.0.5)에 늘었다 — 오목 대국과 같은 몰입 화면이고, 그 갈래가 없으면 체스 대국 화면이
         // 탭 막대를 **숨길 수단이 없다**(직접 `toolbar(.hidden, for: .tabBar)` 를 쓰는 길은 게임 폴더 계약이 막는다).
         #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue })
-                == ["conversation", "gomokuMatch", "chessMatch", "shop", "miniGamePlay", "grassDetail"])
+                == ["conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "shop", "miniGamePlay", "grassDetail"])
         let chrome = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/SheetChrome.swift")
         // d7701ab 부터 숨김은 정책 표(`TabBarPolicy.hidesTabBar(on:)`)를 거쳐 `.hidden`/`.automatic` 중 하나를 고른다 — 리터럴
         // `toolbar(.hidden, for: .tabBar)` 는 주석에만 남아 이 대조가 주석을 걷어낸 소스에서 늘 빨갰다(1.0.6 이후).
+        // ★ 목록에 든 게임 화면은 **실제로 부르는 자리**가 있어야 한다(chessMatch 가 선언만 돼 있던 동안
+        //   체스 대국의 [기권]이 탭 막대 뒤에 가렸다 — 이 파일 머리말의 그 사고다).
+        let tetrisMatchView = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesTetrisDuelMatch.swift")
+        #expect(tetrisMatchView.contains(".hidesTabBar(for: .tetrisMatch)"),
+                "1:1 테트리스 판이 탭 막대 숨김을 부르지 않는다 — 갈래만 늘었다")
         #expect(chrome.contains("func hidesTabBar(for screen: TabBarPolicy.Screen)")
                 && chrome.contains("toolbar(TabBarPolicy.hidesTabBar(on: screen) ? .hidden : .automatic, for: .tabBar)"))
     }

@@ -169,11 +169,13 @@ struct GamesChessTextTests {
 
     // MARK: - 3. ★ 한 사람 한 판 — 양방향
 
-    @Test("막힌 입구는 양방향 모두 말한다 — '오목을 두는 중' 과 '체스를 두는 중'")
-    func oneMatchPerPersonIsSaidInBothDirections() {
-        #expect(ChessPhoneText.BusyGame.allCases.count == 2, "두 게임뿐이다 — 늘면 문구를 더해라")
+    @Test("막힌 입구는 세 방향 모두 말한다 — 두는 판과 **막힌 입구**를 둘 다 이름으로")
+    func oneMatchPerPersonIsSaidInEveryDirection() {
+        #expect(ChessPhoneText.BusyGame.allCases.count == 3, "게임이 셋이다(오목·체스·테트리스) — 늘면 문구를 더해라")
         #expect(ChessPhoneText.busyTitle(.gomoku) == "오목을 두는 중이에요")
         #expect(ChessPhoneText.busyTitle(.chess) == "체스를 두는 중이에요")
+        // 테트리스는 '둔다'고 하지 않는다 — 같은 틀에 끼우면 "1:1 테트리스를 두는 중" 이 된다.
+        #expect(ChessPhoneText.busyTitle(.tetris) == "1:1 테트리스 대결 중이에요")
         // 조사가 갈린다(오목**을** · 체스**를**) — 한 꼴로 조립하면 한쪽이 틀린 한국어가 된다.
         #expect(ChessPhoneText.objectParticle("오목") == "을")
         #expect(ChessPhoneText.objectParticle("체스") == "를")
@@ -181,17 +183,31 @@ struct GamesChessTextTests {
         for game in ChessPhoneText.BusyGame.allCases {
             let title = ChessPhoneText.busyTitle(game)
             #expect(title.contains(game.gameName), "막힌 사유가 두는 게임을 말하지 않는다: \(title)")
-            #expect(!title.contains(game.otherGame.gameName), "막힌 사유가 반대쪽 게임 이름을 말한다: \(title)")
-            // 아래 한 줄은 **언제 풀리는지** 말한다. 두 게임 이름이 다 들어간다(무엇이 끝나면 무엇을 할 수 있는지).
-            let hint = ChessPhoneText.busyHint(game)
-            #expect(hint.contains(game.gameName) && hint.contains(game.otherGame.gameName), "풀리는 조건이 불분명하다: \(hint)")
+            for other in ChessPhoneText.BusyGame.allCases where other != game {
+                #expect(!title.contains(other.gameName), "막힌 사유가 다른 게임 이름을 말한다: \(title)")
+            }
             // ★ 입구 게이트는 **그 사유를 그대로** 낸다(뷰가 제 문구를 또 만들지 않는다).
             #expect(ChessPhoneText.entryBlock(playing: game) == title)
         }
-        // 두는 판이 없으면 막지 않는다. 그리고 두 방향의 문장이 **서로 다르다**(한 벌로 두면 한 방향만 막은 것과 같다).
+
+        // ★ 아래 한 줄은 **언제 풀리는지**와 **무엇을 할 수 있는지**를 말한다. 게임이 셋이 된 뒤로는
+        //   두는 판만으로 이 문장을 쓸 수 없다 — 막힌 입구가 둘이고 각 카드는 **자기 이름**을 말해야 한다.
+        //   (1.0.11 전에는 `otherGame` 이진 뒤집기였고, 그대로 두면 테트리스 카드가 "체스를 신청할 수 있어요"
+        //    라고 틀린 말을 했다. 그 식으로는 이 반복문이 통째로 참이 되지 않는다.)
+        var hints: Set<String> = []
+        for playing in ChessPhoneText.BusyGame.allCases {
+            for blocked in ChessPhoneText.BusyGame.allCases where blocked != playing {
+                let hint = ChessPhoneText.busyHint(playing: playing, blocked: blocked)
+                #expect(hint.contains(playing.matchNoun), "무엇이 끝나야 하는지가 없다: \(hint)")
+                #expect(hint.contains(blocked.gameName), "막힌 입구가 자기 이름을 말하지 않는다: \(hint)")
+                #expect(ChessPhoneText.entryBlockHint(playing: playing, blocked: blocked) == hint)
+                hints.insert(hint)
+            }
+        }
+        // 여섯 쌍이 **여섯 문장**이다(한 벌로 접히면 어느 방향은 남의 이름을 말한다).
+        #expect(hints.count == 6, "막힌 입구 안내가 쌍마다 다르지 않다: \(hints.sorted())")
         #expect(ChessPhoneText.entryBlock(playing: nil) == nil)
-        #expect(ChessPhoneText.busyTitle(.gomoku) != ChessPhoneText.busyTitle(.chess))
-        #expect(ChessPhoneText.busyHint(.gomoku) != ChessPhoneText.busyHint(.chess))
+        #expect(ChessPhoneText.entryBlockHint(playing: nil, blocked: .chess) == nil)
     }
 
     /// 막힌 입구는 **왜**와 **언제 풀리는지**를 같이 말한다. 통합이 안내를 `entryBlock`(제목) 한 줄로 모으면서
@@ -202,25 +218,38 @@ struct GamesChessTextTests {
     ///   안내는 **한 칸 두 줄**(`entryBlockNotice`). 두 자리 **모두** 제목과 힌트를 함께 내야 한다.
     @Test("막힌 입구 안내는 제목 + 언제 풀리는지 **두 줄**이다 — 양방향 모두 같은 꼴")
     func theBlockedEntryNoticeSaysWhenItClears() throws {
-        for game in ChessPhoneText.BusyGame.allCases {
-            let notice = try #require(ChessPhoneText.entryBlockNotice(playing: game))
-            let lines = notice.components(separatedBy: "\n")
-            #expect(lines.count == 2, "안내가 두 줄이 아니다: \(lines)")
-            #expect(lines.first == ChessPhoneText.busyTitle(game), "첫 줄이 막힌 사유가 아니다: \(lines)")
-            #expect(lines.last == ChessPhoneText.busyHint(game),
-                    "★ 둘째 줄(언제 풀리는지)이 빠졌다 — 사용자는 기다릴 끝을 모른다: \(lines)")
+        for playing in ChessPhoneText.BusyGame.allCases {
+            for blocked in ChessPhoneText.BusyGame.allCases where blocked != playing {
+                let notice = try #require(ChessPhoneText.entryBlockNotice(playing: playing, blocked: blocked))
+                let lines = notice.components(separatedBy: "\n")
+                #expect(lines.count == 2, "안내가 두 줄이 아니다: \(lines)")
+                #expect(lines.first == ChessPhoneText.busyTitle(playing), "첫 줄이 막힌 사유가 아니다: \(lines)")
+                #expect(lines.last == ChessPhoneText.busyHint(playing: playing, blocked: blocked),
+                        "★ 둘째 줄(언제 풀리는지)이 빠졌다 — 사용자는 기다릴 끝을 모른다: \(lines)")
+            }
         }
-        #expect(ChessPhoneText.entryBlockNotice(playing: nil) == nil, "두는 판이 없는데 안내가 선다")
+        #expect(ChessPhoneText.entryBlockNotice(playing: nil, blocked: .chess) == nil, "두는 판이 없는데 안내가 선다")
         // 체스 로비 안내가 **그 두 줄 짜리 함수**를 쓴다(제목만 쓰는 함수로 되돌리면 빨개진다).
         let screen = try Self.code("Sources/CheckMobileKit/Games/GamesChessScreen.swift")
-        #expect(screen.contains("ChessPhoneText.entryBlockNotice(playing: .gomoku)"),
+        #expect(screen.contains("ChessPhoneText.entryBlockNotice(playing: playing.text, blocked: .chess)"),
                 "체스 로비 안내가 제목 한 줄만 그린다 — `entryBlockNotice` 를 써라")
+        // ★ 두는 판을 **박아 두지 않는다**: 1.0.11 부터 체스를 막는 판이 오목·테트리스 둘이라
+        //   `.gomoku` 를 박으면 테트리스 대결 중에 안내가 통째로 사라진다(버튼만 흐려지고 까닭이 없다).
+        #expect(!screen.contains("entryBlockNotice(playing: .gomoku"),
+                "체스 로비 안내가 두는 판을 오목으로 박아 뒀다 — 스토어 판정(`chessEntryBlock`)을 그대로 써라")
         // 게임 탭 두 카드도 **양방향 모두** 힌트를 그린다(한 방향만 두 줄이면 다른 입구가 더 불친절하다).
         let tab = try Self.code("Sources/CheckMobileKit/Games/GamesTab.swift")
-        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlock(playing:").count - 1 == 2,
-                "게임 탭의 막힌 칩이 두 자리가 아니다(오목 카드·체스 카드)")
-        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlockHint(playing:").count - 1 >= 2,
-                "게임 탭 카드가 양방향 모두 힌트를 그리지 않는다")
+        // ★ **1.0.11 부터 카드가 셋이다**(오목 · 체스 · 1:1 테트리스). 셋째 카드의 칩·보조 줄 판정은
+        //   `GamesTetrisDuelScreen.swift` 의 `GamesTetrisDuelCard` 에 있다(서열을 맥 스위트가 값으로 재야 해서
+        //   뷰 밖으로 뺐다 — 폰 뷰는 맥 스위트가 못 본다). 그래서 **두 파일을 합쳐** 센다: 자리는 셋이고,
+        //   어느 하나라도 문구 함수를 안 지나면 그 카드가 사유를 지어내는 것이다.
+        let tetrisCard = try Self.code("Sources/CheckMobileKit/Games/GamesTetrisDuelScreen.swift")
+        let blockChips = (tab + tetrisCard).components(separatedBy: "ChessPhoneText.entryBlock(playing:").count - 1
+        #expect(blockChips == 3, "게임 탭 카드 셋의 막힌 칩이 세 자리가 아니다: \(blockChips)")
+        #expect(tetrisCard.contains("ChessPhoneText.entryBlockHint(playing: store.tetrisEntryBlock?.text, blocked: .tetris)"),
+                "★ 테트리스 카드가 **언제 풀리는지**를 안 말한다 — 칩 한 자리만 그리면 사용자가 기다릴 끝을 모른다")
+        #expect(tab.components(separatedBy: "ChessPhoneText.entryBlockHint(playing:").count - 1 >= 3,
+                "게임 탭 카드 셋이 모두 힌트를 그리지 않는다")
     }
 
     // MARK: - 4. ★ 로봇 판은 로그인을 안 본다

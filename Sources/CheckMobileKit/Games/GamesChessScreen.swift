@@ -219,12 +219,14 @@ struct GamesChessScreen: View {
     /// 알 길이 없어(폰엔 호버 툴팁이 없다) 절 위에 까닭을 한 줄로 세운다. 판정은 `GamesStore.chessEntryBlock`.
     @ViewBuilder
     private var blockedByOtherGame: some View {
-        if store.chessEntryBlock == .gomoku {
-            // 양방향 판정·문구가 **한 함수**에 있다(`entryBlockNotice(playing:)`) — 화면이 사유를 지어내지 않는다.
+        if let playing = store.chessEntryBlock {
+            // 판정·문구가 **한 함수**에 있다(`entryBlockNotice(playing:blocked:)`) — 화면이 사유를 지어내지 않는다.
             // ★ **두 줄**이다: 제목(`busyTitle`)만 그리면 왜 막혔는지만 알고 **언제 풀리는지**를 모른다.
-            //   둘째 줄(`busyHint`)이 "오목 판이 끝나면 체스를 신청할 수 있어요" 를 말한다 — 게임 탭 두 카드가
+            //   둘째 줄(`busyHint`)이 "오목 판이 끝나면 체스를 신청할 수 있어요" 를 말한다 — 게임 탭 카드들이
             //   칩 + 보조 줄로 그리는 것과 같은 짝이고, 조립은 문구 표가 쥔다(뷰에서 이으면 맥 스위트가 못 본다).
-            InlineNotice(text: ChessPhoneText.entryBlockNotice(playing: .gomoku) ?? "", kind: .warning)
+            // ★ `.gomoku` 를 박아 두지 **않는다**: 1.0.11 부터 체스를 막는 판이 오목·테트리스 둘이다
+            //   (박아 두면 테트리스 대결 중에 이 안내가 통째로 사라진다 — 버튼만 흐려지고 까닭이 없어진다).
+            InlineNotice(text: ChessPhoneText.entryBlockNotice(playing: playing.text, blocked: .chess) ?? "", kind: .warning)
                 .padding(.top, MobileTheme.rowSpacing)
         } else if store.hasLiveChessRobotGame {
             // 로봇 판 중에는 [도전]이 막힌다(게이트의 `store.match == nil`). **왜**인지 말하지 않으면

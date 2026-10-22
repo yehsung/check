@@ -17,6 +17,23 @@ extension MeStore {
         return weeklyWork != nil || weeklyWorkState.isLoading || weeklyWorkState.hasFailed
     }
 
+    /// [받기 +N] 을 세우는가(v0.3.58) — 받기 서버이고 받을 단계가 있다. 옛 서버(`supportsClaim == false`)는 언제나 거짓이다.
+    package var showsWeeklyClaim: Bool {
+        guard showsWeeklyWork else { return false }
+        return weeklyWork?.hasClaimable == true
+    }
+
+    /// 버튼의 숫자 — 받을 루비 합(어느 주든). 받을 것이 없으면 0.
+    package var weeklyClaimableRuby: Int {
+        guard weeklyWorkAvailable else { return 0 }
+        return weeklyWork?.pendingRuby ?? 0
+    }
+
+    /// 지금 누를 수 있는가(떠 있는 받기가 없고 받을 것이 있다).
+    package var canClaimWeeklyWork: Bool {
+        !weeklyClaimInFlight && showsWeeklyClaim
+    }
+
     // MARK: 읽기
 
     /// 낡았으면 읽는다(60초 스로틀 · 주가 바뀌었으면 바로). 떠 있으면 겹쳐 띄우지 않는다.
@@ -49,6 +66,8 @@ extension MeStore {
         let generation = context.generation
         // 루비 미러에 쓴 횟수를 떠날 때 찍는다 — 도착했을 때 그 사이 누가 썼으면 그쪽이 더 새 값일 수 있다(`shouldApplyRuby`).
         let rubyWriteAtDeparture = context.gomokuHost.rubyWriteSerial
+        // 받기를 옮긴 횟수도 찍는다(v0.3.58) — 받기 뒤에 도착한 **받기 전** 조회를 덮어쓰기에서 막는다.
+        let claimStamp = writeStamp(Self.weeklyClaimWriteKey)
         weeklyWorkState.isLoading = true
         defer { if isCurrent("weekly", serial) { weeklyWorkState.isLoading = false } }
         let service = context.service
@@ -57,6 +76,9 @@ extension MeStore {
                 try await service.weeklyWorkStatus(accessToken: session.accessToken)
             }
             guard generation == context.generation, isCurrent("weekly", serial) else { return }
+            // 떠난 뒤 받기 응답이 옮겨졌다 — 이 답은 받기 **전**의 서버를 말할 수 있다(방금 받은 단계에 [받기]가 다시 선다).
+            // 버린다: 받기 응답이 이미 더 새 상태 · 잔량을 줬고 신선도 도장도 찍었다.
+            guard writeStamp(Self.weeklyClaimWriteKey) == claimStamp else { return }
             applyWeeklyWorkStatus(status, rubyWriteSerialAtDeparture: rubyWriteAtDeparture)
         } catch {
             guard generation == context.generation, isCurrent("weekly", serial) else { return }
@@ -93,7 +115,7 @@ extension MeStore {
                                            currentWriteSerial: context.gomokuHost.rubyWriteSerial),
            let ruby = status.rubyBalance {
             context.gomokuHost.rubyBalance = ruby
-        } else if !grants.isEmpty || !status.grantedNow.isEmpty {
+        } else if !grants.isEmpty || !status.grantedNow.isEmpty || !status.claimedNow.isEmpty {
             // 받은 게 있는데 그 사이 미러가 바뀌어 잔량을 못 썼다 — 상점을 다시 읽어 지급이 들어간 잔량으로 맞춘다
             // (나 탭이 뜰 때 상점·주간이 함께 떠서 상점 값이 먼저 내려앉는 흔한 경우).
             launch { [weak self] in await self?.loadShop() }
@@ -103,6 +125,47 @@ extension MeStore {
         weeklyGrantNotice = notice
         weeklyGrantSerial &+= 1
         weeklyGrantNoticeSeen = isTabVisible
+    }
+
+    // MARK: 받기 (v0.3.58 — 사장님 2026-10-19 "기존의 주간 목표시간 달성하는것도 받는 버튼으로 받게 바꿔주고")
+
+    /// 이번 주 근무 받기 — **받을 것 전부(어느 주든)** 한 번에(`weekly_work_claim(null, null)`). 떠 있으면 요청 0건,
+    /// 받을 것이 없으면(옛 서버 포함) 나가지 않는다.
+    ///
+    /// 받음을 알리는 것은 **연출**이다(`MeClaimBurst.weeklyTarget` + `missionClaimBurstSerial` 햅틱). 자동 지급 칩
+    /// (`weeklyGrantNotice`)은 쓰지 않는다 — 받기 서버에서 `claimed` 가 거짓 → 참이 되는 길은 사람이 [받기]를 누른 것뿐이라
+    /// 그걸 "N시간 채웠어요"로 또 말하면 같은 일을 두 번 알린다(맥 `newlyGranted` 와 같은 판단).
+    package func claimWeeklyWork() {
+        guard context.session.isSignedIn, !weeklyClaimInFlight, weeklyWork?.hasClaimable == true else { return }
+        // '떠 있음'은 띄우는 이 자리에서 적는다(같은 턴 두 번째 누름이 또 띄우지 않게).
+        weeklyClaimInFlight = true
+        let generation = context.generation
+        let rubyWriteAtDeparture = context.gomokuHost.rubyWriteSerial
+        let service = context.service
+        launch { [weak self] in
+            guard let self else { return }
+            defer { if generation == self.context.generation { self.weeklyClaimInFlight = false } }
+            do {
+                let status = try await self.context.withMobileSessionRetry { session in
+                    try await service.weeklyWorkClaim(accessToken: session.accessToken)
+                }
+                guard generation == self.context.generation else { return }
+                // 받기 전에 떠난 주간 조회가 이 뒤에 도착하면 버린다(`loadWeeklyWork` 의 도장 비교).
+                self.noteLocalWrite(Self.weeklyClaimWriteKey)
+                self.applyWeeklyWorkStatus(status, rubyWriteSerialAtDeparture: rubyWriteAtDeparture)
+                if self.weeklyClaimFailed { self.weeklyClaimFailed = false }
+                // 이 호출이 **실제로 넣은** 지급만큼 연출한다(이미 받았거나 미달이면 서버가 `claimed_now: []` 를 주고 아무 말도 안 한다).
+                self.startClaimBurst(target: MeClaimBurst.weeklyTarget, amount: status.claimedNowRuby)
+            } catch {
+                guard generation == self.context.generation else { return }
+                if AuthErrorRules.classify(error) == .cancelled { return }
+                // 함수 없음(404)도 여기서는 그냥 실패다(맥 `claimWeeklyWork` 와 같다) — 버튼을 세우는 `supportsClaim` 은
+                // 상태 응답이 말하고 상태 · 받기는 한 마이그레이션이라, "상태엔 받을 것이 있는데 받기 함수가 없다"는 서버는 없다.
+                // 조용히 삼키면 누른 사람에게 아무 일도 안 일어난다 — 그게 더 나쁘다.
+                // 실패는 주간 줄이 말한다(도전 미션과 같은 규약 — 안내줄로 카드를 밀지 않는다).
+                if !self.weeklyClaimFailed { self.weeklyClaimFailed = true }
+            }
+        }
     }
 
     /// 나 탭을 떠날 때: 본 알림은 걷는다. 안 본 알림(탭이 안 보일 때 들어온 것)은 남긴다.

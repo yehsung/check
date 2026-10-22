@@ -105,6 +105,33 @@ struct AppStoreDocContractTests {
         #expect(!gambling[2].contains("두 사람 몫에서 수수료"), "모의 도박 근거가 아직 수수료를 지금 사실로 적는다: \(gambling[2])")
     }
 
+    // MARK: 1.0.9 — 미션 절 이름(0.3.64 짝에서 「도전 미션」 → 「누적 미션」)
+
+    /// 메모는 다음 제출로 **승계**된다 — 심사원이 찾아갈 절 이름은 앱 글자 그대로(`MeText.missionsTitle`)여야 한다.
+    /// 옛 이름은 역사 괄호("titled 「…」 in 1.0.9–1.0.12")로만 남으므로, 낱말만 찾지 않고 **안내 문장 자리**의 「…」 를 잰다
+    /// (낱말만 찾으면 안내가 옛 이름으로 돌아가도 역사 괄호의 새 이름에 걸려 초록이다).
+    @Test("1.0.9: §0.1 나 줄 · §5.2 New in 1.0.9 블록 · §5.3 요약이 미션 절을 앱 글자 그대로(MeText.missionsTitle) 부른다")
+    func missionSectionIsNamedAsTheAppNamesIt() throws {
+        let title = MeText.missionsTitle
+        let doc = try Self.document("docs/appstore.md")
+
+        let scope = try Self.section(of: doc, heading: "### 0.1 실제 기능 범위")
+        let me = try Self.row(in: scope, containing: "| 나 |")
+        #expect(me[1].contains("→ \(title)("), "§0.1 나 줄의 절 순서가 앱의 미션 절 이름(\(title))을 쓰지 않는다")
+
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.9"), "§5.2 에 New in 1.0.9 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let end = rest.range(of: "**New in 1.0.10")?.lowerBound ?? rest.endIndex
+        let newIn109 = String(rest[..<end])
+        #expect(newIn109.contains("a new **「\(title)」"), "§5.2 1.0.9 블록이 절을 앱 이름(\(title))으로 소개하지 않는다")
+        #expect(newIn109.contains("scroll to 「\(title)」"), "§5.2 1.0.9 블록이 심사원을 화면에 없는 절 이름으로 보낸다")
+
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let line = try #require(korean.split(separator: "\n").first { $0.contains("1.0.9 부터 보상은") }, "§5.3 에 1.0.9 받기 요약 줄이 없다")
+        #expect(line.contains("나 탭 「\(title)」 절"), "§5.3 1.0.9 요약이 앱의 미션 절 이름(\(title))을 쓰지 않는다: \(line)")
+    }
+
     // MARK: 1.0.11 — 1:1 테트리스
 
     @Test("1.0.11: §0.1 게임 탭 줄 · §5.2 New in · §5.3 한글 요약 셋이 다 있고, 숫자가 코드 사실과 맞고, 도박 어휘가 없다")
@@ -132,8 +159,17 @@ struct AppStoreDocContractTests {
         let end = rest.range(of: "**Screens that")?.lowerBound ?? rest.endIndex
         let newIn1011 = String(rest[..<end])
         #expect(newIn1011.contains("1:1 테트리스"), "앱 안 이름(한글)을 적어야 심사원이 화면에서 찾는다")
-        for number in ["3, 5 or 10", "10%", "2 minutes", "15 seconds"] {
+        // 승자 수령은 코드(`DuelFee`)에서 읽는다 — 메모는 다음 제출로 **승계**되므로 1.0.11 블록도 지금 값을 말해야 한다
+        // (2026-10-22 수수료 0 이전엔 "minus a 10% fee" 였다. 그 문장이 남으면 심사원이 화면과 다른 정산을 읽는다).
+        let payouts = TetrisDuelStake.allCases.map { DuelFee.winnerPayout(stake: $0.rawValue) }
+        let payoutPhrase = "\(payouts[0]), \(payouts[1]) or \(payouts[2]) rubies"
+        for number in ["3, 5 or 10", payoutPhrase, "2 minutes", "15 seconds"] {
             #expect(newIn1011.contains(number), "§5.2 1.0.11 블록에 \(number) 가 없다")
+        }
+        if DuelFee.percent == 0 {
+            #expect(!newIn1011.contains("% fee"), "수수료가 0 인데 §5.2 1.0.11 블록이 아직 수수료를 뗀다고 적는다")
+        } else {
+            #expect(newIn1011.contains("\(DuelFee.percent)% fee"), "§5.2 1.0.11 블록의 수수료가 코드(\(DuelFee.percent)%)와 다르다")
         }
         // 공격 표가 문서와 엔진에서 같은 숫자여야 한다(2→1 · 3→2 · 4→4).
         #expect(newIn1011.contains("Clearing 2 lines at once drops 1 extra row"), "공격 표 첫 줄이 다르다")

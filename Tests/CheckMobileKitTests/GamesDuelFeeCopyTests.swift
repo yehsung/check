@@ -93,6 +93,42 @@ struct GamesDuelFeeCopyTests {
         #expect(stripComments(#"let a = "(수수료 0% 빼고)""#).contains("수수료"))
     }
 
+    /// 번들 리소스도 앱의 일부다 — `Sources/**` 의 JSON(데모 픽스처)은 `check_CheckMobileKit.bundle` 에 **통째로** 실린다.
+    /// 화면에 나가는 값과 설명(`__note`)을 가르지 않고 전부 잰다(2026-10-22 검증: 빌드한 앱을 바이트로 세니 Swift 는 0 인데
+    /// 테트리스 이긴 장면 픽스처의 `__note` 에 1건이 남아 있었다). 글자를 `\uXXXX` 로 적어도 빠지지 않게 디코드한 값도 본다.
+    @Test("소스 계약: Sources/** JSON(데모 픽스처 — 설명 __note 포함)에 '수수료' 글자가 한 번도 없다")
+    func noFeeWordInBundledJSON() throws {
+        func strings(in object: Any) -> [String] {
+            switch object {
+            case let text as String: [text]
+            case let array as [Any]: array.flatMap(strings(in:))
+            case let dictionary as [String: Any]: dictionary.flatMap { [$0.key] + strings(in: $0.value) }
+            default: []
+            }
+        }
+        let sources = Self.root.appendingPathComponent("Sources", isDirectory: true)
+        let walker = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        var scanned = 0
+        var offenders: [String] = []
+        for case let file as URL in walker where file.pathExtension == "json" {
+            scanned += 1
+            let data = try Data(contentsOf: file)
+            let raw = String(decoding: data, as: UTF8.self)
+            let decoded = (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])).map(strings(in:)) ?? []
+            if raw.contains("수수료") || decoded.contains(where: { $0.contains("수수료") }) {
+                offenders.append(file.path.replacingOccurrences(of: sources.path + "/", with: ""))
+            }
+        }
+        // 빈 검사 방지: 뿌리를 잘못 잡으면 파일 0 개로 초록이다(2026-10-22 기준 173개).
+        #expect(scanned > 100, "검사한 JSON 파일 수가 너무 적다: \(scanned)")
+        #expect(offenders.isEmpty, "'수수료' 가 남은 JSON: \(offenders)")
+        // 기준선: 이스케이프로 적힌 글자도 디코드 쪽에서 잡힌다(원문만 보면 놓친다).
+        let escapes = "수수료".unicodeScalars.map { String(format: "\\u%04x", $0.value) }.joined()
+        let escaped = Data(("{\"__note\":[\"" + escapes + " 0\"]}").utf8)
+        let escapedObject = try JSONSerialization.jsonObject(with: escaped)
+        #expect(!String(decoding: escaped, as: UTF8.self).contains("수수료") && strings(in: escapedObject).contains { $0.contains("수수료") })
+    }
+
     @Test("체스 결과 폴백(서버 값이 없을 때): 이기면 +판돈 · 지면 −판돈 · 무승부 ±0 + 환불 줄 · 서버 값이 있으면 그 값")
     func chessResultFallback() throws {
         for (stake, net) in Self.netTable {

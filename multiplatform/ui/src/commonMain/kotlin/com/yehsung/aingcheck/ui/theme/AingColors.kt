@@ -65,7 +65,7 @@ class AingColors private constructor(val isDark: Boolean) {
     // 위젯
     val widgetBackground = c(AingPalette.widgetBackground)
 
-    // 브랜드 보라(M3 뼈대 칠)
+    // 브랜드 보라 — 브랜드 자리 전용(뽑기·아잉이·이모티콘·앱 아이콘, G §8-15). M3 뼈대·선택 표시는 위 accent 가족(iOS 파랑).
     val brandInk = c(AingPalette.brandInk)
     val brandTitle = c(AingPalette.brandTitle)
     val brandCard = c(AingPalette.brandCard)

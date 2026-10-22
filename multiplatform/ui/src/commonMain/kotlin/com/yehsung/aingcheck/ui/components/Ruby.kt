@@ -3,7 +3,7 @@
 // 원본: Sources/CheckMobileKit/Components/AingButtons.swift @ 862be0f (GlassBackground — 유리 알약)
 //
 // 루비 = ruby.png 하나, 문법 셋(시안 B "2 · 루비"):
-//  - 잔량: 주요색 캡슐 속 보석(accentTint 바탕 + accentLine 테두리 — iOS 는 파랑, 이식은 primary 보라 G §8-13) — RubyBalanceChip
+//  - 잔량: 주요색 캡슐 속 보석(accentTint 바탕 + accentLine 테두리 — iOS 와 같은 파랑, G §8-15) — RubyBalanceChip
 //  - 가격: 맨 보석 + 숫자, 모자라면 글자 label3Text + 보석 50% — RubyPrice
 //  - 획득: 초록 +N — RubyGain
 // 진홍 마름모 기호·자물쇠 가격표는 쓰지 않는다. 숫자는 고정폭 숫자(tnum).

@@ -85,7 +85,8 @@ object TrayIconRenderer {
         return (16 * scalePercent + 50) / 100
     }
 
-    // 색(ARGB, 직선 알파). 보라는 아잉체크 테마를 따른다 — 흰 숫자 대비를 위해 브랜드 라벤더(0x9979E6)보다 진하다.
+    // 색(ARGB, 직선 알파). 보라는 브랜드 자리다(G §8-15 — 앱 주요색은 iOS 파랑이지만 트레이 아이콘은 브랜드 보라 그대로).
+    // 흰 숫자 대비를 위해 브랜드 라벤더(0x9979E6)보다 진하다.
     internal const val PURPLE = 0xFF6E4FD8.toInt()
     internal const val ORANGE = 0xFFE8590C.toInt()
     internal const val WHITE = 0xFFFFFFFF.toInt()

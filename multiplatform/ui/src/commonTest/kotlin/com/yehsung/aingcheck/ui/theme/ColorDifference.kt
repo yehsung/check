@@ -1,7 +1,7 @@
 // 원본: 없음 — 색 차 CIEDE2000(Sharma·Wu·Dalal 2005, "The CIEDE2000 Color-Difference Formula: Implementation Notes,
 // Supplementary Test Data, and Mathematical Observations", 식 1~22). 시험 도구다(앱에 실리지 않는다).
 //
-// sRGB(D65) → CIE XYZ → L*a*b* → ΔE00. 쓰는 곳: "AI 토큰 보라가 주요색(primary 보라)과 나란히 놓여도 구분된다"(G §8-13).
+// sRGB(D65) → CIE XYZ → L*a*b* → ΔE00. 쓰는 곳: "AI 토큰 보라가 주요색(primary — G §8-15 부터 iOS 파랑)과 나란히 놓여도 구분된다"(G §8-13).
 // 식이 맞는지는 같은 논문 표 1 의 기준 쌍과 sRGB 빨강의 L*a*b*(53.2408, 80.0925, 67.2032)로 검산한다(AingThemeRulesTest).
 package com.yehsung.aingcheck.ui.theme
 

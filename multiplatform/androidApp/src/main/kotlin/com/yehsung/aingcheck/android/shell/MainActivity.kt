@@ -14,7 +14,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -23,6 +22,8 @@ import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.RouteIntents
 import com.yehsung.aingcheck.android.routing.RouteRequest
 import com.yehsung.aingcheck.core.foundation.platform.LogLevel
+import com.yehsung.aingcheck.ui.theme.AingAppearanceMode
+import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 
@@ -41,7 +42,10 @@ class MainActivity : ComponentActivity() {
             val phase by c.shellPhase.collectAsStateWithLifecycle()
             // 흐름 하나를 붙잡아 둔다 — 다시 그릴 때마다 새로 만들면 수집이 끊겼다 다시 붙으며 받은 요청을 흘릴 수 있다.
             val requestFlow = remember { requests.receiveAsFlow() }
-            MaterialTheme {
+            // 아잉체크 테마(M3 뼈대 + iOS 파랑 주요색, G §8-15). 인자 없는 MaterialTheme 은 M3 기준 보라(#6750A4)로 칠한다(DesignRules D4).
+            // 화면 모드(저장값 · 기본 다크 · 상태 막대 글자색 맞추기)는 설정 갈래(W3-b) 몫 — 그때까지 OS 설정을 따른다.
+            // enableEdgeToEdge 기본값도 OS 설정으로 상태 막대 글자색을 고르므로 둘이 어긋나지 않는다.
+            AingTheme(mode = AingAppearanceMode.System) {
                 Surface {
                     AingShell(
                         phase = phase,

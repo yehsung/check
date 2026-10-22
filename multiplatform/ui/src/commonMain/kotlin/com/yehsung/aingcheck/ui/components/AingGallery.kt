@@ -97,7 +97,7 @@ fun ThemeGallery(art: GalleryArt, modifier: Modifier = Modifier, variant: Galler
                     MeaningDot("퇴근", colors.offWork, colors.offWorkDot)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // 주요색(primary 보라)과 AI 토큰 보라를 나란히 — 둘이 구분되는지 골든에서 눈으로도 본다(G §8-13).
+                    // 주요색(iOS 파랑 = primary)과 AI 토큰 보라를 나란히 — 둘이 구분되는지 골든에서 눈으로도 본다(G §8-15).
                     MeaningDot("선택", colors.accent, colors.accentFill)
                     MeaningDot("AI 토큰", colors.aiToken, colors.aiToken)
                     MeaningDot("위험", colors.danger, colors.danger)
@@ -109,8 +109,9 @@ fun ThemeGallery(art: GalleryArt, modifier: Modifier = Modifier, variant: Galler
                     Switch(checked = variant.switchOn, onCheckedChange = null)
                     Switch(checked = !variant.switchOn, onCheckedChange = null)
                 }
+                // M3 단추 셋은 주요색(파랑). 글자는 주요 동작 예시 — '뽑기'는 브랜드 자리(보라)라 M3 단추 예시로 쓰지 않는다(G §8-15).
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {}) { Text("뽑기") }
+                    Button(onClick = {}) { Text("보내기") }
                     FilledTonalButton(onClick = {}) { Text("상점") }
                     TextButton(onClick = {}) { Text("닫기") }
                 }

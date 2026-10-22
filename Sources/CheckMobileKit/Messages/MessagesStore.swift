@@ -94,10 +94,11 @@ package final class MessagesStore {
     package private(set) var pendingOutgoing: [MessagesPendingOutgoing] = []
     /// 상대별 전송 실패 안내(입력칸 위 한 줄). 성공은 문구를 세우지 않는다.
     ///
-    /// 설정자가 **모듈 안으로 열려 있는** 이유(1.0.12): 이모티콘 그리드는 왕복 중에 칸을 골랐을 때 시트를
-    /// **열어 둔 채** 이 줄을 세운다(`AingStickerText.sendingNowNotice`) — 조용히 닫으면 직전 전송의 안내가
-    /// 그 자리에 남아 사용자는 이모티콘도 나간 줄 안다. 차단·신고 한 줄(`blockNotice`)과 같은 규약이다.
-    package internal(set) var sendNotices: [String: String] = [:]
+    /// ★ 설정자는 **이 파일 안으로 닫아 둔다.** 1.0.12 통합 때 한 번 열었다가 되돌렸다 — 이모티콘 그리드가
+    /// 왕복 중 안내를 세우려고 열었는데, 그리드는 **시트** 안에 있어서 입력줄의 이 한 줄이 시트에 **가려** 안
+    /// 보인다. 그래서 그 안내는 시트가 자기 `@State` 로 들고(`MessagesStickerSheet`), 이 문은 다시 닫혔다.
+    /// 쓰는 자리가 없는 접근 확대는 남겨 두지 않는다.
+    package private(set) var sendNotices: [String: String] = [:]
     /// 전송 왕복 중인가. **한 번에 하나** — 순서가 곧 상대가 읽는 순서라 두 전송을 나란히 띄우지 않는다.
     package private(set) var isSending = false
 

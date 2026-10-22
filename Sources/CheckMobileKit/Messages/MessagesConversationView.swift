@@ -432,7 +432,11 @@ struct MessagesBubbleRow: View {
             MessagesStickerBubble(art: drawn.art)
                 .contentShape(.contextMenuPreview, Rectangle())
         } else {
-            MessagesBubbleText(text: line.entry.body, isMine: line.entry.isMine)
+            // 그림 길이 아니면 글자 말풍선이다. ★ 번들 그림을 못 읽은 이모티콘은 **날것 토큰이 아니라**
+            // "아잉이 기쁨"으로 접는다 — `AingStickerArt` 머리말의 계약이고 맥이 하는 것과 같다(`[아잉:기쁨]` 은
+            // "깨진 메시지"로 읽힌다). 평범한 본문은 `preview` 가 **손대지 않고** 그대로 돌려준다.
+            // 복사는 아래 메뉴에서 `entry.body` 원문 그대로다 — 이 줄은 **보여 주는 글자**만 바꾼다.
+            MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine)
                 .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: MessagesBubbleText.cornerRadius, style: .continuous))
         }
     }
@@ -605,7 +609,8 @@ struct MessagesPendingBubbleRow: View {
             if let drawn = AingStickerArt.drawable(for: item.body) {
                 MessagesStickerBubble(art: drawn.art, isPending: true)
             } else {
-                MessagesBubbleText(text: item.body, isMine: true, isPending: true)
+                // 자리 말풍선도 같은 폴백을 쓴다(위 말풍선 주석).
+                MessagesBubbleText(text: AingStickerText.preview(for: item.body), isMine: true, isPending: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

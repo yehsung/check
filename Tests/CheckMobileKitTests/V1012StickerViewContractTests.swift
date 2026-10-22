@@ -32,14 +32,18 @@ import Testing
         let bubble = try Self.block(of: "private var bubbleContent", in: code)
         #expect(bubble.contains("AingStickerArt.drawable(for: line.entry.body)"), "말풍선이 판정을 안 지난다")
         #expect(bubble.contains("MessagesStickerBubble(art: drawn.art)"), "말풍선이 그림을 안 그린다")
-        #expect(bubble.contains("MessagesBubbleText(text: line.entry.body"),
-                "그림을 못 읽을 때 접을 글자 말풍선이 없다 — 빈 말풍선이 된다")
+        // ★ 폴백 글자는 **날것 토큰이 아니다**(1.0.12 통합 결정): 번들 그림을 못 읽은 이모티콘은
+        //   "아잉이 기쁨"으로 접힌다 — `AingStickerArt` 머리말의 계약이고 맥이 하는 것과 같다.
+        //   평범한 본문은 `preview` 가 손대지 않고 그대로 돌려주므로 글자 말풍선의 기존 동작은 그대로다.
+        #expect(bubble.contains("MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body)"),
+                "그림을 못 읽을 때 접을 글자 말풍선이 없거나, 날것 토큰으로 접는다(깨진 메시지로 읽힌다)")
 
         let pending = try Self.block(of: "struct MessagesPendingBubbleRow", in: code)
         #expect(pending.contains("AingStickerArt.drawable(for: item.body)"), "자리 말풍선이 판정을 안 지난다")
         #expect(pending.contains("MessagesStickerBubble(art: drawn.art, isPending: true)"),
                 "자리 말풍선의 그림이 흐려지지 않는다(글자 말풍선과 모양이 갈린다)")
-        #expect(pending.contains("MessagesBubbleText(text: item.body"), "자리 말풍선에 글자 폴백이 없다")
+        #expect(pending.contains("MessagesBubbleText(text: AingStickerText.preview(for: item.body)"),
+                "자리 말풍선에 글자 폴백이 없거나, 날것 토큰으로 접는다")
     }
 
     // MARK: - 2. 보이스오버는 이름으로 읽는다

@@ -203,8 +203,11 @@ struct MessagesReportSheet: View {
     }
 
     /// 신고하는 메시지 본문 한 장(읽기 전용 · 세 줄까지). 무엇을 신고하는지 눈으로 확인하는 자리다.
+    ///
+    /// 이모티콘은 이름으로 읽힌다("아잉이 기쁨") — 날것 토큰(`[아잉:기쁨]`)은 신고하려는 사람에게 "깨진 메시지"로
+    /// 보인다. **서버로 가는 본문은 원문 그대로다**(`MessagesConversationView` 의 `messageBody:` — 운영자는 날것을 본다).
     private func quotedMessage(_ body: String) -> some View {
-        Text(body)
+        Text(AingStickerText.preview(for: body))
             .font(.subheadline)
             .foregroundStyle(MobileTheme.label)
             .lineLimit(3)

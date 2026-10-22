@@ -682,7 +682,10 @@ package struct AILimitCodexReader: Sendable {
         let plan = AILimitPlanLabelContract.normalized(root["plan_type"] as? String) ?? fallbackPlanLabel
         let rateLimit = root["rate_limit"] as? [String: Any]
         var windows: [AILimitWindowSnapshot] = []
-        for (key, window) in [
+        // ★ 이름은 **폴백일 뿐**이다. 어느 창인지는 `limit_window_seconds` 가 말한다 —
+        //   Codex 는 pro·prolite 에서 **주간 창 하나만** `primary_window` 라는 이름으로 보낸다(2026-10-23 제보·실측).
+        //   이름을 믿으면 그 주간 값이 5시간 칸에 앉고 주간 칸은 영영 빈다. `AILimitWindow.matching` 머리말 참고.
+        for (key, nameFallback) in [
             ("primary_window", AILimitWindow.fiveHour),
             ("secondary_window", AILimitWindow.weekly)
         ] {
@@ -690,6 +693,7 @@ package struct AILimitCodexReader: Sendable {
             guard let row = rateLimit?[key] as? [String: Any],
                   let used = (row["used_percent"] as? NSNumber)?.doubleValue else { continue }
             let windowSeconds = (row["limit_window_seconds"] as? NSNumber)?.doubleValue
+            let window = AILimitWindow.matching(lengthSeconds: windowSeconds) ?? nameFallback
             let resetAfter = (row["reset_after_seconds"] as? NSNumber)?.doubleValue
             let trusted = AILimitResetTrust.trusts(
                 usedPercent: used, resetAfterSeconds: resetAfter, windowSeconds: windowSeconds

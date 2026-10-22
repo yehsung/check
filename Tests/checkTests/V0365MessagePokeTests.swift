@@ -1088,6 +1088,9 @@ func v0365VersionAndChangelog() throws {
     // 두 변화가 각자 한 줄로 있는가 — 목록 정렬(맨 위) · 대화창 찌르기 기록.
     #expect(items.contains { $0.contains("맨 위") && $0.contains("찌르기") }, "목록 정렬 줄이 없다")
     #expect(items.contains { $0.contains("대화창") && $0.contains("찌른 기록") }, "대화창 찌르기 기록 줄이 없다")
+    // AI 리밋 줄(같은 판에 들어간 Codex 창 수리). 없으면 pro·prolite 사용자는 **자기에게 일어난 수리를 모른 채**
+    // 업데이트한다 — 0.3.64 에서 실제로 한 줄이 빠진 채 나가 서버 알림을 다시 게시해야 했다.
+    #expect(items.contains { $0.contains("코덱스") }, "코덱스 사용량 수리 줄이 없다")
     #expect(changelog.range(of: "## 0.3.65")!.lowerBound < changelog.range(of: "## 0.3.64")!.lowerBound,
             "0.3.65 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }

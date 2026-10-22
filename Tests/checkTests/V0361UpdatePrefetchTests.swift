@@ -830,7 +830,7 @@ struct V0361UpdatePrefetchTests {
     // MARK: - E. 버전
 
     // v0.3.62: 버전 고정(0.3.61 / 114)과 "맨 위 섹션" 단언은 다음 버전이 올라가며 거짓이 됐다 — 그 두 사실은 이제
-    // `V0362AingStickerTests.swift` 옆의 `v0362VersionAndChangelog` 가 0.3.62 / 115 로 잰다(0.3.60 → 0.3.61 때와 같은 넘김).
+    // `V0363StickerArtTests.swift` 의 `v0363VersionAndChangelog` 가 그 둘을 든다(릴리스마다 넘겨받는 관행).
     // 여기는 0.3.61 섹션의 **내용**과, 이 파일이 재는 나눠 받기가 실린 하한(114)만 남긴다.
     @Test("CHANGELOG 0.3.61 은 세 줄 이하(사용자 말투) · 빌드는 114 이상")
     func versionAndChangelog() throws {

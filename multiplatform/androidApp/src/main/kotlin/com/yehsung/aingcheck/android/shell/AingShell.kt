@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -100,8 +100,10 @@ fun AingShell(
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = { navigator.selectTab(tab) },
-                                // 탭 기호(Material Symbols 대응표)는 W1-e 몫 — 그때까지 점 하나.
-                                icon = { Box(Modifier.size(10.dp).background(MaterialTheme.colorScheme.primary, CircleShape)) },
+                                // 탭 기호(Material Symbols 대응표)는 W1-e 몫 — 그때까지 점 하나. 색은 NavigationBarItem 이 내려 주는 기호 색
+                                // (선택 = onSecondaryContainer = iOS tabSelected 파랑 · 안 선택 = onSurfaceVariant 회색). 파랑은 '선택'만 뜻한다(G §8-15) —
+                                // primary 로 칠하면 안 고른 탭 다섯 개에도 파란 점이 찍힌다(ShellTabColorsTest).
+                                icon = { Box(Modifier.size(10.dp).background(LocalContentColor.current, CircleShape)) },
                                 label = { Text(tab.title) },
                                 modifier = Modifier.testTag("tab:${tab.name.lowercase()}"),
                             )

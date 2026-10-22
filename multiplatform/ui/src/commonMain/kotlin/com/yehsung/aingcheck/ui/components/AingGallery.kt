@@ -1,6 +1,7 @@
 // 원본: Sources/CheckMobileKit/Components/MobileComponentsGallery.swift @ 862be0f (부품 진열장 — 같은 구실)
 //
-// 디자인 시스템 진열장 두 장: ① 테마(M3 뼈대: 탭 막대·스위치·단추·대화상자·시트 + 글자·뜻 색) ② 브랜드 부품(초상·무대·루비·잔디·글자 칠).
+// 디자인 시스템 진열장 두 장: ① 테마(M3 뼈대: 탭 막대·스위치·단추·체크·라디오·슬라이더·진행 표시·대화상자·시트 + 글자·뜻 색)
+// ② 브랜드 부품(초상·무대·루비·잔디·글자 칠).
 // 스냅숏 골든(ui/snapshots/{theme,components}/…)이 이 두 장을 밝음·어두움 × 폰(Android)·데스크톱 배율 2 로 찍는다.
 // 그림은 부르는 쪽이 넘긴다(시험은 저장소 원본을 직접 읽고, 앱은 CharacterArt 로 읽는다) — 진열장은 불러오기를 하지 않는다.
 // 글자는 전부 Pretendard 범위(한글·라틴·숫자·기본 문장부호) 안이다 — 대체 글꼴이 끼면 플랫폼마다 픽셀이 갈린다.
@@ -22,12 +23,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -63,7 +68,8 @@ data class GalleryVariant(val rubyCount: Int = 30, val switchOn: Boolean = true,
 object GalleryFrame {
     val phoneWidth: Dp = 360.dp
     val desktopWidth: Dp = 380.dp
-    val themeHeight: Dp = 820.dp
+    // 테마 장은 체크·라디오·슬라이더·진행 표시 줄(G §8-15)이 들어와 60dp 늘었다.
+    val themeHeight: Dp = 880.dp
     val componentsHeight: Dp = 820.dp
 }
 
@@ -115,6 +121,15 @@ fun ThemeGallery(art: GalleryArt, modifier: Modifier = Modifier, variant: Galler
                     FilledTonalButton(onClick = {}) { Text("상점") }
                     TextButton(onClick = {}) { Text("닫기") }
                 }
+                // 체크·라디오·슬라이더·진행 표시도 M3 뼈대라 파랑(G §8-15): 켠 칸·고른 원·채운 트랙 = primary, 빈 트랙 = secondaryContainer(파랑 받침).
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Checkbox(checked = true, onCheckedChange = null)
+                    Checkbox(checked = false, onCheckedChange = null)
+                    RadioButton(selected = true, onClick = null)
+                    RadioButton(selected = false, onClick = null)
+                    Slider(value = 0.6f, onValueChange = {}, modifier = Modifier.weight(1f))
+                }
+                LinearProgressIndicator(progress = { 0.4f }, modifier = Modifier.fillMaxWidth())
             }
             // 대화상자(M3 AlertDialog 의 면·모양·글자 역할을 창 없이 같은 자리로 — 실제 대화상자는 창이라 스냅숏에 안 잡힌다).
             Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {

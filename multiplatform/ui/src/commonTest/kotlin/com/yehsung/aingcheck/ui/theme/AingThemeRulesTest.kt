@@ -74,9 +74,15 @@ class AingThemeRulesTest {
             need("onSurface on surface", s.onSurface, s.surface, 4.5)
             need("onSurfaceVariant on sheet(surfaceContainerLow)", s.onSurfaceVariant, s.surfaceContainerLow, 4.5)
             need("onError on error", s.onError, s.error, 4.5)
-            // 부품(글자 아님): 스위치 켠 트랙 · 테두리.
-            need("primary(스위치 트랙) on card", s.primary, card, 3.0)
+            // 반대 면(스낵바): 글자와 동작 글자(M3 SnackbarTokens — 동작은 inversePrimary).
+            need("inverseOnSurface(스낵바 글자) on inverseSurface", s.inverseOnSurface, s.inverseSurface, 4.5)
+            need("inversePrimary(스낵바 동작) on inverseSurface", s.inversePrimary, s.inverseSurface, 4.5)
+            // 부품(글자 아님): 스위치 켠 트랙·켠 체크 칸·고른 라디오·슬라이더 채운 트랙(primary) · 테두리 · 빈 체크·라디오 테두리(onSurfaceVariant).
+            // 빈 트랙(슬라이더·진행 표시 = secondaryContainer)은 재지 않는다: §8-15 받침 정의(accentTint 겹침)를 따르면 카드 위 1.15:1 · 다크 1.21:1 로
+            // M3 기준 팔레트(1.23:1)·iOS 슬라이더 빈 트랙과 같은 결이다 — 값은 채운 트랙·손잡이가 알린다(xplat/int-c 마무리 결정).
+            need("primary(스위치 트랙·체크·라디오·슬라이더) on card", s.primary, card, 3.0)
             need("outline on card", s.outline, card, 3.0)
+            need("onSurfaceVariant(빈 체크·라디오 테두리) on card", s.onSurfaceVariant, card, 3.0)
             // 고정 역할: on…Fixed 는 …Fixed·…FixedDim 위, on…FixedVariant 는 …Fixed 위 4.5:1.
             for ((name, fixed, dim, on, onVariant) in listOf(
                 FixedSet("primary", s.primaryFixed, s.primaryFixedDim, s.onPrimaryFixed, s.onPrimaryFixedVariant),

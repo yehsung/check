@@ -7,6 +7,10 @@
 //  D3 짧은 글자 그라데이션 금지: 글자 붓(TextStyle·SpanStyle 의 brush)은 AingTextPaint.kt 안에서만 건다(기억 short-text-kills-gradients).
 //  D4 M3 기준 색 금지(G §8-15): MaterialTheme 은 colorScheme 을 적어 부르고, light·darkColorScheme 은 AingColorScheme.kt 에서만 만든다.
 //     인자 없는 MaterialTheme { } 은 M3 기준 보라(#6750A4)로 단추·스위치·탭을 칠한다 — Android 셸이 그렇게 떠 있었다(xplat/int-c 에서 고침).
+//  D5 앱 셸 색 리터럴 금지(G §8-15): androidApp·desktopApp 의 시험 아닌 소스는 색을 손으로 만들지 않는다 — Color(…)·Color.rgb/argb/parseColor 같은
+//     만들기 호출·Color.<이름>(Transparent·Unspecified 빼고)·ARGB 정수(0xFF……) 를 금지한다. 색은 AingTheme.colors·MaterialTheme.colorScheme 로 받는다.
+//     허용 목록은 Windows 트레이 아이콘(TrayIconRenderer — §8-15 가 지정한 브랜드 자리 PURPLE, Compose 밖 AWT 그림) 하나다.
+//     D4 만으로는 셸이 테마 안에서 Color(0xFF6750A4) 를 박아 넣는 결함이 386건 초록으로 살아남았다(xplat/int-c 검증 V8).
 // 각 규칙은 심은 위반으로 빨강이 되는 것을 같은 시험에서 확인한다.
 package com.yehsung.aingcheck.ui.theme
 
@@ -34,13 +38,15 @@ class DesignRulesStructureTest {
         assertTrue(violations.isEmpty(), "디자인 규칙 위반:\n" + violations.joinToString("\n"))
     }
 
-    /** 앱 셸도 같은 규칙: 셸이 테마를 감싸는 자리(MainActivity·데스크톱 창)가 M3 기준 보라로 뜨지 않는다(D4). */
+    /** 앱 셸도 같은 규칙: 셸이 테마를 감싸는 자리(MainActivity·데스크톱 창)가 M3 기준 보라로 뜨지 않고(D4) 색을 손으로 박지 않는다(D5). */
     @Test
     fun appMainFollowsDesignRules() {
         val android = mainSources(File(mpRoot, "androidApp/src"), mpRoot)
         val desktop = mainSources(File(mpRoot, "desktopApp/src"), mpRoot)
         assertTrue(android.size >= 20 && desktop.size >= 20, "앱 main 소스를 Android ${android.size}개 · 데스크톱 ${desktop.size}개만 읽었다")
         assertTrue(android.any { it.first.endsWith("/shell/MainActivity.kt") }, "Android 셸(MainActivity)을 못 읽었다")
+        assertTrue(android.any { it.first.endsWith("/shell/AingShell.kt") }, "Android 탭 막대(AingShell)를 못 읽었다")
+        assertTrue(desktop.any { it.first == DesignRules.TRAY_ICON_FILE }, "D5 허용 목록의 트레이 아이콘 파일(${DesignRules.TRAY_ICON_FILE})이 없다 — 옮겼으면 허용 목록도 옮긴다")
         val violations = (android + desktop).flatMap { (path, code) -> DesignRules.check(path, code) }
         assertTrue(violations.isEmpty(), "디자인 규칙 위반:\n" + violations.joinToString("\n"))
     }
@@ -60,7 +66,22 @@ class DesignRulesStructureTest {
         assertEquals(listOf("D4"), rules("MaterialTheme(typography = t, shapes = s) { Shell() }"))
         assertEquals(listOf("D4"), rules("val s = lightColorScheme()"))
         assertEquals(listOf("D4"), rules("val s = darkColorScheme(primary = p)"))
+        // D5 — 앱 셸(androidApp·desktopApp)에서 손으로 만든 색. 검증 V8 의 결함(탭 점을 M3 기준 보라로)이 첫 줄이다.
+        val shell = "androidApp/src/main/kotlin/x/Planted.kt"
+        val desktop = "desktopApp/src/main/kotlin/x/Planted.kt"
+        assertEquals(listOf("D5"), rules("Box(Modifier.size(10.dp).background(Color(0xFF6750A4), CircleShape))", shell))
+        assertEquals(listOf("D5"), rules("val c = androidx.compose.ui.graphics.Color(red = 103, green = 80, blue = 164)", shell))
+        assertEquals(listOf("D5"), rules("val c = Color(0.40f, 0.31f, 0.64f)", "androidApp/src/debug/kotlin/x/Planted.kt"))
+        assertEquals(listOf("D5"), rules("paint.color = android.graphics.Color.parseColor(\"#6750A4\")", shell))
+        assertEquals(listOf("D5"), rules("val c = Color.Magenta", shell))
+        assertEquals(listOf("D5"), rules("g.color = java.awt.Color(0x6750A4)", desktop))
+        assertEquals(listOf("D5"), rules("internal const val INK = 0xFF6750A4.toInt()", desktop))
         // 허용되는 꼴.
+        assertEquals(emptyList(), rules("Box(Modifier.size(10.dp).background(LocalContentColor.current, CircleShape))", shell))
+        assertEquals(emptyList(), rules("val c = MaterialTheme.colorScheme.secondary; val t = Color.Transparent; val u = Color.Unspecified", shell))
+        assertEquals(emptyList(), rules("val elapsed = (now - last) and 0xFFFFFFFFL; const val WS_POPUP = 0x80000000.toInt()", desktop))
+        assertEquals(emptyList(), rules("internal const val PURPLE = 0xFF6E4FD8.toInt()", DesignRules.TRAY_ICON_FILE))
+        assertEquals(emptyList(), rules("Box(Modifier.background(Color(0xFF6750A4)))"), "D5 는 앱 셸만 잰다 — ui 의 색 정의(AingPalette)는 팔레트 계약 시험이 잰다")
         assertEquals(emptyList(), rules("val e = fadeIn(AingMotion.fade(150)) + slideInVertically(AingMotion.move())"))
         assertEquals(emptyList(), rules("AnimatedVisibility(v, enter = fadeIn(AingMotion.fade()), exit = fadeOut(AingMotion.fade())) { }"))
         assertEquals(emptyList(), rules("Crossfade(s, animationSpec = AingMotion.fade()) { }"))
@@ -77,6 +98,20 @@ class DesignRulesStructureTest {
 internal object DesignRules {
     private const val TEXT_PAINT_FILE = "/com/yehsung/aingcheck/ui/theme/AingTextPaint.kt"
     private const val COLOR_SCHEME_FILE = "/com/yehsung/aingcheck/ui/theme/AingColorScheme.kt"
+
+    /** D5 허용 목록(mpRoot 기준 경로): Windows 트레이 아이콘 — G §8-15 의 브랜드 자리(PURPLE). */
+    const val TRAY_ICON_FILE = "desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/platform/windows/tray/TrayIconRenderer.kt"
+    private val APP_ROOTS = listOf("androidApp/src/", "desktopApp/src/")
+    private val D5_PATTERNS = listOf(
+        // 만들기: Color(…) — Compose·AWT·완전 이름(androidx.compose.ui.graphics.Color(…)) 모두. LocalContentColor( 같은 이름 꼬리는 \b 로 뺀다.
+        Regex("""\bColor\s*\("""),
+        // 만들기 함수: Color.rgb · Color.argb · Color.parseColor · Color.valueOf · Color.hsv · Color.hsl …
+        Regex("""\bColor\.[a-z]\w*\s*\("""),
+        // 이름 붙은 색: Color.Red · Color.Magenta · AWT Color.MAGENTA … (빈 색 Transparent·Unspecified 는 색을 칠하지 않는다)
+        Regex("""\bColor\.(?!Transparent\b|Unspecified\b)[A-Z]\w*"""),
+        // ARGB 정수(불투명 0xFF + RGB 여섯 자리). L 꼬리(Long 마스크 0xFFFFFFFFL)는 색이 아니다.
+        Regex("""\b0[xX][fF]{2}[0-9a-fA-F]{6}(?![0-9a-fA-F_lL])"""),
+    )
 
     fun check(path: String, code: String): List<String> {
         val out = mutableListOf<String>()
@@ -112,6 +147,11 @@ internal object DesignRules {
             Regex("""\b(?:light|dark)ColorScheme\s*\(""").findAll(code).forEach {
                 out += "D4 $path:${line(it.range.first)} M3 색 체계는 AingColorScheme.kt 에서만 만든다"
             }
+        }
+        if (APP_ROOTS.any(path::startsWith) && path != TRAY_ICON_FILE) {
+            // 한 줄에 여러 문형이 걸려도(Color(0xFF……)) 위반은 줄마다 하나로 센다.
+            val lines = D5_PATTERNS.flatMap { p -> p.findAll(code).map { line(it.range.first) }.toList() }.toSortedSet()
+            lines.forEach { out += "D5 $path:$it 앱 셸이 색을 손으로 만든다(AingTheme.colors·MaterialTheme.colorScheme 로 받는다 — G §8-15)" }
         }
         return out
     }

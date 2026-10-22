@@ -96,7 +96,7 @@ struct AppStoreDocContractTests {
         #expect(lootBox[2].contains(GachaText.title), "근거 칸이 앱의 뽑기 이름('\(GachaText.title)')을 쓰지 않는다")
         #expect(lootBox[2].contains("\(price) 루비"), "근거 칸의 1회 값이 데모 상점(\(price))과 다르다")
         // 모의 도박 근거 칸은 승자가 실제로 받는 루비를 말한다 — 1.0.8~1.0.12 는 수수료 10% 를 뗀 5/9/18,
-        // 2026-10-22(서버 `20261022142000_duel_fee_off.sql`) 부터 수수료 없이 두 사람 몫 전부 6/10/20.
+        // 2026-10-22(서버 `20261023132000_duel_fee_off.sql`) 부터 수수료 없이 두 사람 몫 전부 6/10/20.
         let gambling = try Self.row(in: survey, containing: "모의 도박(Simulated Gambling)")
         let payouts = [3, 5, 10].map { DuelFee.winnerPayout(stake: $0) }
         #expect(payouts == [6, 10, 20], "전제: 손으로 적은 승자 수령표(수수료 없음)")

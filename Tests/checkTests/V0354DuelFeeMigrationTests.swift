@@ -17,7 +17,7 @@ import Testing
 private let dfMigration = "20261015120000_duel_fee.sql"
 /// v0.3.64(2026-10-22 사용자 결정 "멀티 미니게임 수수료 다시 제거해줘") — `duel_fee` 를 0 으로 다시 정의한 뒤 파일. 이 파일 뒤에
 /// `duel_fee` 를 정의하는 것은 이것 하나뿐이어야 하고, 정산 함수는 다시 정의하지 않는다(그대로 `2*판돈 − duel_fee` 를 준다).
-private let dfFeeOffMigration = "20261022142000_duel_fee_off.sql"
+private let dfFeeOffMigration = "20261023132000_duel_fee_off.sql"
 private let dfGomokuCanon = "20260916210000_gomoku_timeout_autoplace.sql"
 private let dfChessCanon = "20261005160000_chess_duel.sql"
 

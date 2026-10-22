@@ -23,7 +23,7 @@ import Testing
 
 private let reNewMigration = "20261014120000_ruby_economy_v2.sql"
 /// v0.3.64(2026-10-22 사용자 결정 "20 10 5 로 다시 해줘") — 상금 상수를 **마지막으로** 정의하는 파일. 상금 짝 상수는 이제 이 파일과 맞춘다.
-private let rePrizeMigration = "20261022141000_minigame_prize_20_10_5.sql"
+private let rePrizeMigration = "20261023131000_minigame_prize_20_10_5.sql"
 private let reShopMigration = "20260913170100_shop.sql"
 private let reRobotMigration = "20261005120000_character_roster_v3_robot.sql"
 

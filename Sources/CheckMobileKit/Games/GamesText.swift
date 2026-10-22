@@ -85,7 +85,7 @@ package enum GamesText {
 package enum GamesMiniGameText {
     package static let rankTitle = "오늘 순위"
     /// 자정 상품(루비). 서버 `ruby_prize_amounts()` 와 짝인 상수(맥 `MiniGamePanel.rubyPrizes` · 같은 탭 `RankingsText.rubyPrizes`).
-    /// 2026-10-14(1.0.7 · 서버 20261014120000) 20·10·5 → 10·5·3, 2026-10-22(맥 0.3.64 · 서버 20261022141000) 사용자 결정
+    /// 2026-10-14(1.0.7 · 서버 20261014120000) 20·10·5 → 10·5·3, 2026-10-22(맥 0.3.64 · 서버 20261023131000) 사용자 결정
     /// ("일반 미니게임 3종 상금루비 올려야할듯 20 10 5 로 다시 해줘")으로 다시 20·10·5. 서버는 금액을 내려 주지 않으므로 바꿀 땐 세 곳을 함께.
     package static let rubyPrizes = [20, 10, 5]
     /// 상품 정족수. 서버 `minigame_prize_quorum()` 과 짝인 상수(맥 `MiniGamePanel.prizeQuorum`).

@@ -43,7 +43,7 @@ enum V0364Fixture {
     /// 렌더 스토어는 진짜 시계를 쓴다(응답을 직접 꽂아 시계 차가 0) — 리셋을 먼 미래(2100-01-01)로 두어 어느 날 돌려도 날이 안 넘어가게.
     static let resetFar = 4_102_444_800_000
 
-    /// 서버 정의표(20261022140000 `daily_mission_defs`) 그대로의 여섯 줄 — 섞인 상태:
+    /// 서버 정의표(20261023130000 `daily_mission_defs`) 그대로의 여섯 줄 — 섞인 상태:
     /// 타이밍 바 **받기** · 플래피 받음 · 테트리스 0/1 · 오목 **받기** · 체스 0/1 · 1:1 테트리스 0/1. 받을 것 = 2개 · 10.
     static let base: [Daily] = [
         Daily(key: "daily_timing_bar", game: "timing_bar", title: "타이밍 바 한 판 하기", achieved: true, claimed: false, sort: 10),
@@ -1000,7 +1000,7 @@ private func v0364SQL(_ name: String) throws -> String {
 }
 
 @Suite struct V0364DailyMissionMigrationTests {
-    static let file = "20261022140000_daily_missions.sql"
+    static let file = "20261023130000_daily_missions.sql"
 
     @Test("서버 정의표(daily_mission_defs) = 이 시험의 픽스처 — 여섯 키 · 게임 · 제목 · 보상 5 · 목표 1 · 순서, 제목은 앱 이름으로 시작한다")
     @MainActor

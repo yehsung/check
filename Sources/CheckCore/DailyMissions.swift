@@ -6,7 +6,7 @@ import Foundation
 // 일일미션에 미션들을 몇개 추가할려고 해. 미니게임 일반이랑 멀티 총 합쳐서 6개 있잖아. 그거 각각 하나마다 미션 넣어줘. 하루 1회
 // 플레이 달성하면 루비 5개 주는걸로." 묻고 정한 것: **자정(KST)까지 [받기]를 안 누르면 사라진다**.
 //
-// 서버 정본은 `supabase/migrations/20261022140000_daily_missions.sql` 이다. 요점만:
+// 서버 정본은 `supabase/migrations/20261023130000_daily_missions.sql` 이다. 요점만:
 //   · `achievements_status()` · `achievement_claim(p_key)` 응답에 최상위 `daily` 가 **더해진다**(기존 키는 그대로 — 옛 앱은 버린다).
 //   · `daily_mission_claim(p_key)` — 같은 모양 전체를 돌려주고 `claimed_now` 에는 **이 호출이 넣은 일일 지급만** 싣는다.
 //   · 하루 = Asia/Seoul 자정~자정. 달성은 매번 판정하고 **받은 것만** 행이 남는다 — 안 받은 달성은 자정에 저절로 사라진다.

@@ -384,6 +384,12 @@ package enum MeText {
     package static let missionsTitle = "누적 미션"
     /// 한 번도 못 읽었을 때의 실패 문장(맥 `MissionPanelCopy.failedCaption`). 불러오는 중은 `MeText.loading`.
     package static let missionsLoadFailed = "미션을 불러오지 못했어요"
+    /// 미션 화면 제목(맥 `MissionPanelCopy.title` 과 **같은 낱말** — 레일 [미션]·폰 [미션] 줄이 같은 곳을 가리킨다).
+    package static let missionsPageTitle = "미션"
+    /// 루트 [미션] 줄의 보조 글자 — 받을 것이 없을 때 그 자리에 선다(받을 것이 있으면 배지가 이긴다).
+    package static let missionsRowDetail = "이번 주 근무 · 도전 미션"
+    /// 미션 화면이 비었을 때(서버에 둘 다 없다 — 맥 `MissionPanelCopy.emptyCaption` 과 같은 문장).
+    package static let missionsEmpty = "받을 수 있는 미션이 아직 없어요"
     /// 받기 버튼의 낱말 — 도전 미션 줄과 이번 주 근무 카드가 **같은 버튼**이다(맥 `AchievementCopy.claimButton`).
     package static let claimButton = "받기"
     /// 절 머리의 [전부 받기] — 받을 줄이 **둘 이상**일 때만 선다(하나뿐이면 그 줄의 [받기]와 같은 일을 하는 버튼이 둘이 된다).

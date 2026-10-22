@@ -15,6 +15,10 @@ package enum MeDestination: Hashable, Sendable {
     /// 잔디 상세(칸을 탭하면 그 날 실제 값). 연관값은 **처음 색으로 볼 축** — 누른 잔디의 축으로 연다.
     /// 딥링크(`AingRoute`)는 두지 않는다 — `.characters`·`.profile`·`.blocked` 처럼 push 만 하는 화면이다(URL 로 열 이유가 없다).
     case grass(ContributionAxis)
+    /// v1.0.13 「미션」 화면 — 「이번 주 근무」 카드 + 「도전 미션」 절. 루트에서 둘을 빼고 [미션] 줄 하나로 바꿨다
+    /// (사용자 지시 2026-10-23: "나 탭에 미션들 쭈루룩 다 나열하니까 칸이 너무 길어져"). 딥링크는 두지 않는다
+    /// (`.characters`·`.profile` 처럼 push 만 하는 화면이다 — 데모는 `-AingCheckDemoRoute me/missions` 로 연다).
+    case missions
 }
 
 /// 한 덩어리(머리·기록·상점…)의 불러오기 상태 — 순위 탭과 같은 뜻의 세 깃발 + 마지막 성공 시각.

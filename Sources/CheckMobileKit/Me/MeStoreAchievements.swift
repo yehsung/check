@@ -129,6 +129,18 @@ extension MeStore {
         dailyMissionClaimableCount + achievementClaimableCount + (weeklyWorkAvailable ? (weeklyWork?.pendingCount ?? 0) : 0)
     }
 
+    /// 루트에 [미션] 줄을 세우는가 — 주간·도전 미션 **둘 중 하나라도** 그릴 것이 있을 때. 둘 다 없는 서버(옛 서버 ·
+    /// 로그인 전)엔 줄이 없다: 1.0.12 까지 카드 둘이 통째로 빠지던 것과 **같은 규약**이라 빈 줄만 남지 않는다.
+    package var showsMissionsRow: Bool {
+        showsWeeklyWork || achievementSection != .hidden
+    }
+
+    /// 미션 화면이 둘 다 못 그리는가(서버에 둘 다 없다). 줄을 눌러 들어온 뒤 빈 화면이 되는 일은 없지만
+    /// (줄 자체가 안 선다), 들어간 **뒤** 서버가 기능을 잃을 수는 있어 화면이 할 말을 갖는다.
+    package var missionsPageIsEmpty: Bool {
+        !showsWeeklyWork && achievementSection == .hidden
+    }
+
     /// 이 줄의 [받기]가 떠 있는가(흐려지고 눌리지 않는다). 전부 받기가 떠 있으면 낱개 줄도 떠 있는 것으로 본다.
     package func isClaimingAchievement(_ key: String) -> Bool {
         achievementClaimsInFlight.contains(key) || achievementClaimsInFlight.contains(Self.achievementClaimAllSlot)
@@ -166,6 +178,16 @@ extension MeStore {
         guard context.session.isSignedIn, !achievementsState.isLoading else { return }
         achievementsState.isLoading = true
         launch { [weak self] in await self?.loadAchievements() }
+    }
+
+    /// 미션 화면 당겨서 새로 고치기 — **이 화면에 있는 것만** 다시 읽는다(루트 전체를 다시 읽지 않는다:
+    /// 머리·상점·기록·AI 리밋은 이 화면에 없다). 일일 미션은 `achievements_status()` 응답의 `daily` 라
+    /// `loadAchievements()` 하나가 **일일·누적을 같이** 데려온다 — 호출을 더 두지 마라.
+    package func refreshMissions() async {
+        guard context.session.isSignedIn else { return }
+        async let weekly: Void = loadWeeklyWork()
+        async let missions: Void = loadAchievements()
+        _ = await (weekly, missions)
     }
 
     /// `achievements_status()` 한 번 **+ 꼬리**: 이 조회가 떠 있는 동안 판이 끝났으면(`achievementsRefetchAfterGame`) 끝난 뒤

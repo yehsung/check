@@ -100,7 +100,7 @@ extension WorkTimerStore {
     /// take_pokes 가 **소비한** 행 중 찌르기(일반·울트라)를 기록에 곧바로 넣는다(drain 이 부른다). 반환값은 넣은 개수.
     ///
     /// · 서버가 찌르기 기록을 모르면 넣지 않는다 — 넣으면 다음 이력에서 사라지는(서버가 안 내려 주는) 줄이 된다.
-    /// · 보관 창(24시간) 밖 · 이미 있는 id · 차단으로 걷어낸 사람 · 메시지 행은 넣지 않는다.
+    /// · 보관 창(24시간) 밖 · 이미 있는 id · 차단으로 걷어낸 사람 · 메시지 행 · 모르는 종류는 넣지 않는다(이력 디코더와 같은 종류 규칙).
     /// · 받은 것이므로 안 읽음이다. 그 사람과의 대화를 **보고 있으면** 곧바로 읽음 판정이 돈다(`evaluateMessageReadMarking`).
     @discardableResult
     func insertConsumedPokesIntoLog(rows: [TakenPokeRow]) -> Int {
@@ -109,12 +109,11 @@ extension WorkTimerStore {
         var known = Set(messagePokeLog.map(\.id))
         var additions: [MessagePokeLogEntry] = []
         for row in rows {
-            let kind: MessagePokeLogKind
-            switch PokeKind(rawServerValue: row.kind) {
-            case .normal: kind = .poke
-            case .ultra: kind = .ultra
-            case .message: continue
-            }
+            // 종류는 **이력 디코더와 같은 규칙**(`MessagePokeLogKind(serverKind:)`)으로 가른다 — 'message' · 모르는 값은 건너뛴다.
+            // `PokeKind(rawServerValue:)` 는 말풍선을 위해 모르는 값을 일반으로 접는데, 그 규칙을 여기 쓰면 미래 종류가 "콕 찔렀어요" 줄 ·
+            // 안 읽음으로 들어갔다가 다음 이력(서버는 normal · ultra 만 내려 준다)에서 사라진다 — 그동안 그 사람은 점을 단 채 맨 위에 머문다.
+            // kind 가 nil 인 행은 종류 칸이 생기기 전 옛 서버의 행이라 일반 찌르기다.
+            guard let kind = MessagePokeLogKind(serverKind: row.kind ?? "normal") else { continue }
             guard !row.id.isEmpty, !row.fromUser.isEmpty, !known.contains(row.id),
                   !blockHiddenPeerIDs.contains(row.fromUser)
             else { continue }

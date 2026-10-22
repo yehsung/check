@@ -86,7 +86,9 @@ extension WorkTimerStore {
                 try await service.fetchPokeDirectory(accessToken: activeSession.accessToken)
             }
             guard generation == sessionGeneration else { return }
-            let entries = rows.toPokeDirectoryEntries().sortedForPokeDisplay()
+            // 저장 순서는 근무중 → 이름이다(맥 명부는 isWorking 과 함께 온다). 안 읽음 무리는 **화면이** body 마다 입힌다
+            // (`PokePanelOrder`) — 안 읽음은 이력 박자마다 바뀌는데, 그때마다 저장 순서를 다시 세우지 않는다.
+            let entries = rows.toPokeDirectoryEntries().sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true)
             if pokeDirectory != entries { pokeDirectory = entries }
             if !pokeDirectoryLoaded { pokeDirectoryLoaded = true }
             // 지난 쿨타임 엔트리 정리(만료분 제거). displayNow 가 아니라 지금 시각 기준으로 판정한다.

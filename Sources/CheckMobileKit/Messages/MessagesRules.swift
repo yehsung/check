@@ -280,7 +280,8 @@ package enum MessagesDirectoryRules {
     /// - 초성 검색: 검색어가 한글 자음(ㄱ~ㅎ)만이면 이름의 초성열에 들어 있으면("ㅎㄱ" → "한결").
     package static func filter(_ entries: [PokeDirectoryEntry], query: String) -> [PokeDirectoryEntry] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sorted = entries.sortedForPokeDisplay()
+        // 폰 1.0.13 에서 '버그 개선' 세션이 채운다(안 읽음 집합 · 근무 여부 모름). 지금은 명시적 빈 집합 — 폰 화면 순서는 예전 그대로(근무중 → 이름).
+        let sorted = entries.sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true)
         guard !trimmed.isEmpty else { return sorted }
         let compact = trimmed.filter { !$0.isWhitespace }
         if !compact.isEmpty, compact.allSatisfy({ choseong.contains($0) }) {

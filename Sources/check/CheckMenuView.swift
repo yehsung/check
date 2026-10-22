@@ -3478,7 +3478,7 @@ enum PokePanelRenderProbe {
 #endif
 
 /// 콕찌르기 목록 순서(v0.3.65 — 순수 · 결정적 검증 지점). **합치는 자리가 여기 하나다**: 메시지 안 읽음 ∪ 안 본 찌르기를 만들어
-/// 코어 `sortedForPokeDisplay(unreadPeerIDs:)`(안 읽음 → 근무중 → 이름 → id)에 넘긴다. 행의 점(`PokeRowUnreadMark`)도 같은 두 집합을 본다 —
+/// 코어 `sortedForPokeDisplay(unreadPeerIDs:workKnown:)`(안 읽음 → 근무중 → 이름 → id)에 넘긴다. 행의 점(`PokeRowUnreadMark`)도 같은 두 집합을 본다 —
 /// 순서와 점이 다른 집합을 보면 "맨 위에 올라왔는데 점이 없는" 사람이 생긴다.
 enum PokePanelOrder {
     static func sorted(
@@ -3486,7 +3486,8 @@ enum PokePanelOrder {
         unreadMessagePeerIDs: Set<String>,
         unreadPokePeerIDs: Set<String>
     ) -> [PokeDirectoryEntry] {
-        entries.sortedForPokeDisplay(unreadPeerIDs: unreadMessagePeerIDs.union(unreadPokePeerIDs))
+        // 근무 축은 늘 쓴다 — 맥 명부(app_user_directory)는 isWorking 과 함께 와서 "근무 여부 모름" 구간이 없다.
+        entries.sortedForPokeDisplay(unreadPeerIDs: unreadMessagePeerIDs.union(unreadPokePeerIDs), workKnown: true)
     }
 }
 

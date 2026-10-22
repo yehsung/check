@@ -1540,14 +1540,19 @@ extension [PokeDirectoryEntry] {
     /// 아직 안읽은 사람, 3. 근무중이면서 메세지 다 읽거나 없는사람, 4. 근무중 아니면서 메세지 다 읽거나 없는 사람").
     ///
     /// 키는 (안 읽음 → 근무중 → 이름 → id) 사전식이다. `unreadPeerIDs` 는 **메시지 안 읽음 ∪ 안 본 찌르기**다(사용자 결정 "찌르기도 친다" —
-    /// 합치는 자리는 부르는 쪽이다). 기본값이 빈 집합이라 안 넘기는 호출부(폰 · 스토어의 받은 순서 저장)는 예전 그대로 근무중 → 이름이다.
-    /// 이름이 같은 두 사람은 id 로 깬다 — 안 깨면 새로고침마다 두 행이 자리를 바꾼다(`sorted` 는 안정 정렬이 아니다).
-    package func sortedForPokeDisplay(unreadPeerIDs: Set<String> = []) -> [PokeDirectoryEntry] {
+    /// 합치는 자리는 부르는 쪽이다). 이름이 같은 두 사람은 id 로 깬다 — 안 깨면 새로고침마다 두 행이 자리를 바꾼다(`sorted` 는 안정 정렬이 아니다).
+    ///
+    /// `workKnown` 이 false 면 근무 축을 건너뛴다(안 읽음 → 이름 두 무리). 근무 여부를 아직 모르는 동안의 몫이다 — 맥은 명부가 isWorking 과
+    /// 함께 와서 늘 true 고, 폰이 쓴다(합의: pending 은 근무중으로 넘기고, 모름은 false).
+    ///
+    /// ★ **두 인자 모두 기본값을 주지 마라**(명세 §3.0). 기본값이 있으면 인자를 안 넘긴 호출부(폰 두 자리 · 스토어)가 조용히 옛 2단으로 남고
+    ///   시험은 초록이다. 기본값이 없어야 컴파일러가 부르는 자리를 하나씩 세워 무엇을 넘길지 정하게 한다.
+    package func sortedForPokeDisplay(unreadPeerIDs: Set<String>, workKnown: Bool) -> [PokeDirectoryEntry] {
         sorted { lhs, rhs in
             let lhsUnread = unreadPeerIDs.contains(lhs.userID)
             let rhsUnread = unreadPeerIDs.contains(rhs.userID)
             if lhsUnread != rhsUnread { return lhsUnread }
-            if lhs.isWorking != rhs.isWorking { return lhs.isWorking }
+            if workKnown, lhs.isWorking != rhs.isWorking { return lhs.isWorking }
             switch lhs.name.localizedStandardCompare(rhs.name) {
             case .orderedAscending: return true
             case .orderedDescending: return false

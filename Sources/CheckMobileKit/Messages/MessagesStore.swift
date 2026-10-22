@@ -518,7 +518,8 @@ package final class MessagesStore {
                 }
                 guard generation == self.context.generation else { return }
                 self.directoryLoading = false
-                self.directory = rows.toPokeDirectoryEntries().sortedForPokeDisplay()
+                // 폰 1.0.13 에서 '버그 개선' 세션이 채운다(안 읽음 집합 · 근무 여부 모름). 지금은 명시적 빈 집합 — 폰 화면 순서는 예전 그대로(근무중 → 이름).
+                self.directory = rows.toPokeDirectoryEntries().sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true)
                 self.directoryLoaded = true
                 self.directoryFailed = false
             } catch {

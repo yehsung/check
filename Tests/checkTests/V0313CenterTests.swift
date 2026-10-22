@@ -593,7 +593,8 @@ func 센터는_순위를_가르지_않는다() {
         person("u3", "킹예성", working: true, center: "서울")
     ]
     let plain = people.map { person($0.userID, $0.name, working: $0.isWorking, center: nil) }
-    #expect(people.sortedForPokeDisplay().map(\.userID) == plain.sortedForPokeDisplay().map(\.userID))
+    #expect(people.sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true).map(\.userID)
+            == plain.sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true).map(\.userID))
 }
 
 // MARK: - 두 입력 경로의 그림 (사람이 눈으로 볼 자리 + 픽셀 단언)

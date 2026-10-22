@@ -171,7 +171,7 @@ struct UltraPokeButtonTests {
         // 활성 분기가 Button 에서 제스처 뷰(PokeChargeButton)로 바뀌었다 — 그래도 **그려지긴** 해야 한다.
         //
         // 앞선 판은 근무중 목록 vs 전원 자리비움 목록을 비교했는데, 그건 헛된 확신이었다: isWorking 을 뒤집으면
-        // 상태 칩("근무중"↔"자리비움")과 sortedForPokeDisplay() 정렬까지 함께 바뀌어, 충전 버튼이 **아예 안 그려져도**
+        // 상태 칩("근무중"↔"자리비움")과 sortedForPokeDisplay(unreadPeerIDs:workKnown:) 정렬까지 함께 바뀌어, 충전 버튼이 **아예 안 그려져도**
         // 두 그림은 반드시 달랐다. 그래서 지금은 행의 나머지가 **완전히 같은** 두 그림을 만든다 —
         // 목록·이름·칩·정렬·안내줄·힌트가 모두 동일하고 오직 쿨타임 유무만 갈린다. 쿨타임 중인 행은 활성 분기 대신
         // 흐린 라벨(pokeIconLabel(active: false))을 그리므로, 두 PNG 가 다르다 = 활성 분기가 실제로 무언가를 그린다.

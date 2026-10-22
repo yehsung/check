@@ -170,12 +170,47 @@ struct V0365MessagePokeSortTests {
             V365Fx.entry("u-b0", "가람", working: false),             // ②
         ]
         let unread: Set<String> = ["u-a1", "u-a2", "u-b0", "u-b1"]
-        let order = entries.sortedForPokeDisplay(unreadPeerIDs: unread).map(\.userID)
+        let order = entries.sortedForPokeDisplay(unreadPeerIDs: unread, workKnown: true).map(\.userID)
         #expect(order == ["u-a1", "u-a2", "u-b0", "u-b1", "u-c1", "u-d0", "u-d1", "u-d2"], "\(order)")
         // 입력 순서를 뒤집어도 같은 답(전순서 — 새로고침마다 행이 자리를 바꾸지 않는다).
-        #expect(entries.reversed().sortedForPokeDisplay(unreadPeerIDs: unread).map(\.userID) == order)
-        // 안 읽음을 안 넘기는 옛 호출부(폰)는 예전 그대로 근무중 → 이름.
-        #expect(entries.sortedForPokeDisplay().map(\.userID) == ["u-c1", "u-a1", "u-a2", "u-b0", "u-d0", "u-d1", "u-b1", "u-d2"])
+        #expect(entries.reversed().sortedForPokeDisplay(unreadPeerIDs: unread, workKnown: true).map(\.userID) == order)
+        // 명시적 빈 집합(스토어의 저장 순서 · 폰 두 자리)은 예전 그대로 근무중 → 이름.
+        #expect(entries.sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true).map(\.userID)
+                == ["u-c1", "u-a1", "u-a2", "u-b0", "u-d0", "u-d1", "u-b1", "u-d2"])
+    }
+
+    /// 근무 여부를 모르면(`workKnown: false`) 근무 축을 건너뛴다 — 안 읽음 → 이름 **두 무리**(합의: 모름 = 안 읽음 → 이름).
+    /// 근무 칸 값이 무엇이든 순서가 같아야 한다(모르는 값을 근무 축에 태우면 "근무중 아님"이 아래로 밀린다).
+    @Test func 근무_여부를_모르면_안_읽음과_이름_두_무리() {
+        let entries = [
+            V365Fx.entry("u-d2", "라온", working: false),
+            V365Fx.entry("u-c1", "다온", working: true),
+            V365Fx.entry("u-b1", "나래", working: false),
+            V365Fx.entry("u-a2", "사람10", working: true),
+            V365Fx.entry("u-a1", "사람2", working: true),
+            V365Fx.entry("u-d1", "같은이름", working: false),
+            V365Fx.entry("u-d0", "같은이름", working: false),
+            V365Fx.entry("u-b0", "가람", working: false),
+        ]
+        let unread: Set<String> = ["u-a1", "u-a2", "u-b0", "u-b1"]
+        let order = entries.sortedForPokeDisplay(unreadPeerIDs: unread, workKnown: false).map(\.userID)
+        // 안 읽음 무리: 가람 · 나래 · 사람2 · 사람10(근무중인 사람10·사람2 가 앞으로 오지 않는다). 나머지: 같은이름(id) · 다온 · 라온.
+        #expect(order == ["u-b0", "u-b1", "u-a1", "u-a2", "u-d0", "u-d1", "u-c1", "u-d2"], "\(order)")
+        // 근무 칸을 전부 뒤집어도 같은 답(근무 축을 정말 안 쓴다).
+        let flipped = entries.map { V365Fx.entry($0.userID, $0.name, working: !$0.isWorking) }
+        #expect(flipped.sortedForPokeDisplay(unreadPeerIDs: unread, workKnown: false).map(\.userID) == order)
+        // 안 읽음이 없으면 이름 하나(id 로 동률을 깬다).
+        #expect(entries.sortedForPokeDisplay(unreadPeerIDs: [], workKnown: false).map(\.userID)
+                == ["u-b0", "u-d0", "u-d1", "u-b1", "u-c1", "u-d2", "u-a1", "u-a2"])
+    }
+
+    /// 정렬 입력 둘 다 **기본값이 없다**(명세 §3.0) — 기본값을 주면 인자를 안 넘긴 호출부(폰 두 자리 · 스토어)가 조용히 옛 2단으로 남고
+    /// 시험은 초록이다. 기본값이 없으면 컴파일러가 부르는 자리를 다 세운다.
+    @Test func 정렬_입력에_기본값이_없다() throws {
+        let source = try v0331Source("SupabaseWorkModels.swift")   // 주석을 걷어낸 소스
+        let parameters = try #require(v365Region(source, from: "func sortedForPokeDisplay(", to: ")"))
+        #expect(parameters.replacingOccurrences(of: " ", with: "") == "unreadPeerIDs:Set<String>,workKnown:Bool", "\(parameters)")
+        #expect(!parameters.contains("="), "정렬 입력에 기본값이 붙었다: \(parameters)")
     }
 
     /// 목록 순서와 행의 점은 **같은 두 집합**(메시지 ∪ 찌르기)을 본다. 찌르기만 있는 사람도 맨 위 무리다.
@@ -683,23 +718,68 @@ struct V0365MessagePokeStoreTests {
         #expect(store.unreadPokePeerIDs.isEmpty)
     }
 
-    /// 보낸 찌르기: 그 사람과의 대화가 **떠 있을 때만** 이력을 한 번 받는다(새 타이머 없음 — 성공 이벤트 1회).
+    /// take_pokes 즉시 삽입은 **이력 디코더와 같은 종류 규칙**이다 — 'message' · 모르는 종류는 넣지 않는다. 넣으면 다음 이력(서버는
+    /// normal · ultra 만 내려 준다)에서 사라질 줄이 그동안 "콕 찔렀어요" 로 서고, 그 사람을 목록 맨 위 안 읽음에 붙든다.
+    /// kind 가 없는 행(종류 칸이 생기기 전 옛 서버)만 일반 찌르기다.
+    @Test(.gomokuDefaultsCleanup)
+    func 받은_찌르기의_종류는_이력과_같은_규칙() async {
+        let store = makeMessageReadStore("v365-kind").store
+        store.applyMessagePokeLog(
+            MessageConversationLoad(history: MessageHistoryLoad(entries: [], hasReadReceipts: true), pokes: []),
+            serial: store.messageReadRuntime.nextHistorySerial()
+        )
+        func taken(_ id: String, _ kind: String?) -> TakenPokeRow {
+            TakenPokeRow(id: id, fromUser: Fx.peerA, fromDisplayName: "민수", fromAvatarUrl: nil, createdEpoch: v365Epoch - 3, kind: kind)
+        }
+        // ① 모르는 종류 · 3글자 메시지: 기록에도, 목록 안 읽음에도 안 든다.
+        #expect(store.insertConsumedPokesIntoLog(rows: [taken("t-sticker", "sticker"), taken("t-message", "message")]) == 0)
+        #expect(store.messagePokeLog.isEmpty, "모르는 종류를 콕 기록에 넣었다: \(store.messagePokeLog.map { MessagePokeLogText.line(for: $0) })")
+        #expect(store.unreadPokePeerIDs.isEmpty, "모르는 종류가 목록 맨 위 안 읽음으로 셌다: \(store.unreadPokePeerIDs)")
+
+        // ② 같은 글자를 두 길(즉시 삽입 · 이력 디코더)이 같은 쪽으로 가른다.
+        let service = v365Service(host: "v365-kind-decode")
+        for kind in ["sticker", "message", "normal", "ultra"] {
+            let decoded = await service.messageHistoryWithPokes(fromRows: [MessageHistoryWithPokesRow(
+                id: "d-\(kind)", fromUser: Fx.peerA, toUser: Fx.me, createdAt: "2026-09-21T12:00:00.000000+00:00", isMine: false,
+                peerUserId: Fx.peerA, peerDisplayName: "민수", createdEpoch: v365Epoch, unread: true, kind: kind
+            )])
+            let id = "p-\(kind)"
+            let inserted = store.insertConsumedPokesIntoLog(rows: [taken(id, kind)])
+            let insertedKind = inserted == 1 ? store.messagePokeLog.first(where: { $0.id == id })?.kind : nil
+            #expect(insertedKind == decoded.pokes.first?.kind, "'\(kind)': 즉시 삽입 \(String(describing: insertedKind)) ≠ 이력 \(String(describing: decoded.pokes.first?.kind))")
+        }
+        #expect(store.messagePokeLog.map(\.kind).sorted { $0.rawValue < $1.rawValue } == [.poke, .ultra])
+
+        // ③ 종류 칸이 없는 옛 행은 일반 찌르기다.
+        #expect(store.insertConsumedPokesIntoLog(rows: [taken("t-legacy", nil)]) == 1)
+        #expect(store.messagePokeLog.first(where: { $0.id == "t-legacy" })?.kind == .poke)
+    }
+
+    /// 보낸 찌르기(일반 · 울트라): 그 사람과의 대화가 **떠 있을 때만** 이력을 한 번 받는다(새 타이머 없음 — 성공 이벤트 1회).
     @Test(.gomokuDefaultsCleanup)
     func 보낸_찌르기는_그_대화가_떠_있을_때만_이력_한_번() async {
         let (store, host) = makeMessageReadStore("v365-send") { call, _ in
             switch call.rpc {
             case "message_history_with_pokes": return V365Fx.reply([])
             case "poke_user": return MessageReadStubProtocol.Reply(body: #"{"status":"ok"}"#)
+            case "ultra_poke_user": return MessageReadStubProtocol.Reply(body: #"{"status":"ok"}"#)
             case "message_unread_summary": return Fx.summaryReply([])
             default: return nil
             }
         }
         store.startedAt = v365Now.addingTimeInterval(-600)
         await v365OpenConversation(store)
-        let before = v365Count(host, "message_history_with_pokes")
+        var before = v365Count(host, "message_history_with_pokes")
         store.sendPoke(to: Fx.peerA)
         await messageReadWait { v365Count(host, "message_history_with_pokes") > before && messageReadIdle(store) }
         #expect(v365Count(host, "message_history_with_pokes") == before + 1, "보이는 대화의 상대를 찔렀는데 기록을 안 받았다")
+
+        // 울트라도 같다(명세 §3.4 '보내면 곧 보이게'는 울트라 포함).
+        before = v365Count(host, "message_history_with_pokes")
+        store.sendUltraPoke(to: Fx.peerA)
+        await messageReadWait { v365Count(host, "message_history_with_pokes") > before && messageReadIdle(store) }
+        #expect(v365Count(host, "ultra_poke_user") == 1)
+        #expect(v365Count(host, "message_history_with_pokes") == before + 1, "보이는 대화의 상대에게 울트라를 썼는데 기록을 안 받았다")
 
         // 다른 사람을 찌르면 이 대화를 다시 받지 않는다.
         store.sendPoke(to: Fx.peerB)

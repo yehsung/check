@@ -72,46 +72,62 @@
 
 ### 1.3 프로모션 텍스트 (170자)
 
-> 맥에서 켠 근무가 폰에서도 보여요. 우리 팀이 지금 누가 일하는지, 이번 주 목표는 얼마나 왔는지 한눈에. 팀원과 1:1 메시지, 1:1 오목 대결, 미니게임 순위까지 — 일한 만큼 모은 루비로 캐릭터를 고르세요. (약 110자)
+**지금 ASC 에는 프로모션 텍스트가 비어 있다**(`promotionalText: null` — 2026-10-23 확인). 아래 초안은
+출시 전에 적어 둔 것이고 **한 번도 올라간 적이 없다**. 프로모션 텍스트는 심사 없이 언제든 바꿀 수 있다.
 
-프로모션 텍스트는 심사 없이 언제든 바꿀 수 있다(App Store Connect 도움말) — 정식 출시 뒤 첫 업데이트 예고에 쓴다.
+> (옛 초안 · 낡았다 — 1:1 이 오목뿐이던 때다) 맥에서 켠 근무가 폰에서도 보여요. 우리 팀이 지금 누가 일하는지, 이번 주 목표는 얼마나 왔는지 한눈에. 팀원과 1:1 메시지, 1:1 오목 대결, 미니게임 순위까지 — 일한 만큼 모은 루비로 캐릭터를 고르세요.
 
 ### 1.4 설명 (4000자)
 
-아래 문안은 약 1,300자. 모든 문장은 코드·`docs/privacy.md`·`README.md` 의 사실만 담았다(과장 금지 — 4.2/2.3 대비).
+★ **정본은 이 문서가 아니라 ASC 다.** 이 절은 2026-10-23 에 ASC 에서 **읽어 온 실제 문구**를 1.0.13 기준으로
+맞춘 것이다(1604자). 출시 전 초안(약 1,300자)이 여덟 버전 동안 안 따라와 「미니게임 두 가지」·「근무 시작은 맥만」
+같은 **틀린 문장을 품고 있었다** — 그 초안은 버렸다. 다음에도 **ASC 를 읽어 와서 고쳐라**(문서를 보고 쓰면 또 어긋난다).
 
-> **아잉체크(aing-check)는 작은 팀을 위한 근무 타이머의 아이폰 동반 앱입니다.**
-> 맥 메뉴바 앱(aing-check for Mac)이나 아이폰에서 누른 근무 시작·종료가 팀 전체에 실시간으로 공유되고, 아이폰에서는 그 현황을 언제 어디서나 확인하고 팀원과 이야기할 수 있습니다.
->
-> **지금** — 내 오늘 근무 시간과 이번 주 목표 달성률, 우리 팀에서 지금 누가 일하고 있는지, 오늘 할 일을 한 화면에서 봅니다. 할 일은 계정에 저장되어 맥과 아이폰, 홈 화면 위젯에서 같은 목록을 씁니다.
->
-> **메시지** — 같은 앱을 쓰는 사람 누구와도 1:1 메시지를 주고받습니다(한 번에 200자). 메시지는 24시간이 지나면 서버에서 자동으로 지워집니다. 새 메시지는 푸시 알림으로 받습니다.
->
-> **순위** — 팀 리그(이번 주 1인당 평균 근무시간), AI 도구 토큰 사용량(이번 달), 미니게임(오늘) 세 가지 순위판이 있습니다. 내 사용량·기록을 순위판에 공개할지는 설정에서 직접 고릅니다.
->
-> **게임** — 타이밍 바와 플래피 아잉, 두 가지 미니게임의 오늘 순위에 도전하세요. 매일 자정 1·2·3등에게 루비를 드립니다. 팀원과 1:1 오목 대결(렌주룰, 한 수 30초)도 할 수 있고, 대국 중에는 짧은 대화를 나눌 수 있습니다.
->
-> **나** — 내 캐릭터와 지난주 회고, 최근 12주 근무 잔디, 요일·시간대별 근무 리듬을 봅니다. 근무하며 모은 루비로 상점에서 캐릭터를 사고 착용할 수 있습니다. 루비는 앱 안 포인트이며 현금으로 사거나 바꿀 수 없습니다.
->
-> **위젯** — 지금 근무 중인 사람, 내 오늘 근무, 오늘 할 일 위젯을 홈 화면에 둘 수 있습니다. 할 일은 위젯에서 바로 체크됩니다.
->
-> **알아 두세요**
-> - 지금 탭에서 근무를 켜고 끌 수 있습니다. 폰을 잠가도 근무는 이어지고, 오래 확인하지 않으면 알림으로 물어봅니다.
-> - 팀에 들어가려면 팀원에게 받은 팀 코드가 필요하고, 코드가 없으면 새 팀을 만들어 혼자 시작할 수 있습니다.
-> - 광고·분석·추적 도구를 쓰지 않고, 앱 안 결제가 없습니다. 카메라·마이크·위치·연락처 권한을 요청하지 않습니다.
-> - 계정과 기록은 앱 안(나 → 설정)에서 언제든 삭제할 수 있습니다.
->
-> 개인정보 처리방침: (§4 의 URL)
+1.0.13 에 고친 세 곳:
+1. **1:1 대결 셋** — 「오목과 체스 두 가지」였다. 1.0.11 테트리스 대결이 두 버전째 빠져 있었다.
+2. **아잉이 이모티콘** — 1.0.12 기능이 메시지 절에 없었다. "앱이 주는" 을 분명히 적는다(1.2 UGC 가 아니다).
+3. **미션 자리** — 「나」 절이 "여기서 보고" 라고 했는데 1.0.13 부터 [미션] 화면이다.
 
-근거(문장별): 근무 시작/종료는 맥만 `docs/privacy.md:99`; 할 일 계정 저장·위젯 `privacy.md:19`, `WidgetTodoToggle.swift:11`; 메시지 200자·24시간 `privacy.md:17`, `SupabaseWorkModels.swift:2094`; 순위 세 판·기간 `RankingsText.swift:21-27`; 공개 스위치 `MeText.swift:412-414`; 미니게임 상품 `GamesText.swift:80-83`; 오목 규칙(렌주룰·30초) 사용자 결정 2026-09-16(메모리 gomoku-pvp-decisions) — **확인 필요: 코어 `GomokuRules.swift` 문구와 대조**; 오목 채팅 `Games/GamesGomokuChat.swift:5`; 기록 화면 `Me/MeTab.swift:6-7`; 루비 현금 불가 `privacy.md:103`; 위젯 3종 `AingWidgetModel.swift:11-16`; 권한 없음 `privacy.md:112-114`; 팀 만들기·계정 삭제는 **작업 B·C 뒤에만 참** — 병합 전 제출이면 두 줄을 뺀다.
+> 아잉체크는 작은 팀을 위한 근무 타이머의 아이폰 앱입니다.
+> 맥 메뉴바 앱이나 아이폰에서 누른 근무 시작·종료가 팀 전체에 실시간으로 공유되고, 아이폰에서는 그 현황을 언제 어디서나 보고 팀원과 이야기할 수 있습니다.
+>
+> ■ 지금
+> 지금 탭에서 근무를 켜고 끌 수 있습니다. 폰을 잠가도 근무는 이어지고, 오래 앱을 열지 않으면 알림으로 아직 일하는지 물어봅니다.
+> 내 오늘 근무 시간과 이번 주 목표 달성률, 우리 팀에서 지금 누가 일하고 있는지, 오늘 할 일을 한 화면에서 봅니다. 할 일은 계정에 저장되어 맥과 아이폰, 홈 화면 위젯에서 같은 목록을 씁니다.
+>
+> ■ 메시지
+> 같은 앱을 쓰는 사람과 1:1 메시지를 주고받습니다(한 번에 200자). 메시지는 24시간이 지나면 서버에서 자동으로 지워집니다. 새 메시지는 알림으로 받습니다. 프로필에 한 줄 상태메시지를 달 수 있고, 루비로 확성기를 보내면 앱을 쓰는 모두에게 한 번에 인사할 수 있습니다. 앱이 주는 아잉이 이모티콘 여섯 종(기쁨·하트·슬픔·화남·졸림·놀람)을 글자 대신 큰 그림으로 보낼 수 있습니다.
+>
+> ■ 순위
+> 팀 리그(이번 주 1인당 평균 근무시간), AI 도구 토큰 사용량(이번 달), 미니게임(오늘) 세 가지 순위판이 있습니다. 내 사용량과 기록을 순위판에 공개할지는 설정에서 직접 고릅니다.
+>
+> ■ 게임
+> 타이밍 바, 플래피 아잉, 테트리스 세 가지 미니게임의 오늘 순위에 도전하세요. 매일 자정 상위 세 명에게 루비를 드립니다.
+> 1:1 대결은 오목·체스·테트리스 세 가지입니다. 오목(렌주룰, 한 수 30초)은 대국 중 짧은 대화를 나눌 수 있고, 체스(10분, 한 수 3초 가산)는 승점 순위표와 다른 사람 대국 관전이 있습니다. 테트리스 대결은 둘이 같은 블록 순서로 각자 판을 돌리고, 줄을 지우면 그만큼 상대 바닥에 방해 줄이 올라갑니다. 상대가 없을 때는 체스를 로봇과 둘 수 있습니다.
+>
+> ■ 나
+> 내 캐릭터와 지난주 회고, 최근 12주 근무 잔디, 요일·시간대별 근무 리듬을 봅니다. 이번 주 근무 목표와 「도전 미션」은 [미션] 화면에서 보고, 달성한 줄의 [받기]를 눌러 루비를 받습니다. 근무하며 모은 루비로 상점에서 캐릭터를 사거나 뽑고(뽑기 확률은 앱 안에 공개합니다), 겹친 캐릭터의 조각으로 원하는 캐릭터를 바꿔 착용할 수 있습니다. 루비는 앱 안 포인트이며 현금으로 사거나 바꿀 수 없습니다. 맥에서 쓰는 AI 도구의 사용량이 얼마나 남았는지도 여기서 봅니다. 맥이 여러 대면 맥마다 따로 보여 줍니다.
+>
+> ■ 위젯
+> 지금 근무 중인 사람, 내 오늘 근무, 오늘 할 일, AI 리밋 네 가지 위젯을 홈 화면에 둘 수 있습니다. 할 일은 위젯에서 바로 체크됩니다. AI 리밋 위젯은 맥 앱에서 고른 맥 한 대를 보여 줍니다.
+>
+> ■ 알아 두세요
+> · 근무는 맥 앱과 아이폰 지금 탭 어디서든 켜고 끌 수 있습니다. 근무 시간을 재는 일은 서버 시계로 합니다.
+> · 아이폰에서 가입할 수 있습니다. 팀 코드가 있으면 그 팀으로 들어가고, 없으면 새 팀을 만들어 혼자 시작할 수 있습니다.
+> · 계정과 기록은 앱 안(나 → 설정 → 계정 삭제)에서 직접 지울 수 있습니다.
+> · 광고·분석·추적 도구를 쓰지 않고, 앱 안 결제가 없습니다. 카메라·마이크·위치·연락처 권한을 요청하지 않습니다.
+
+근거: 위 문구는 **ASC 에서 읽어 온 것**이므로 문장별 근거 표를 다시 달지 않는다. 고친 세 문장의 근거는
+1:1 테트리스 `20261021120000_tetris_duel.sql` · 이모티콘 `Sources/CheckCore/AingSticker.swift` ·
+[미션] 화면 `Sources/CheckMobileKit/Me/MeMissionsView.swift` 다.
 
 ### 1.5 키워드 (100자)
 
-문자 기준(54자): `근무,팀,타이머,출퇴근,협업,메시지,오목,미니게임,순위,위젯,할일,루비,캐릭터,소마,SW마에스트로`
-바이트 기준 대비(≈71바이트): `근무,팀,타이머,메시지,오목,미니게임,순위,위젯,할일`
+ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,메시지,오목,체스,미니게임,순위,위젯,할일`
+**1.0.13 에 `테트리스` 를 더한다**(37자): `근무,팀,타이머,메시지,오목,체스,테트리스,미니게임,순위,위젯,할일`
 
 - 앱 이름은 키워드에 넣지 않는다(이름은 이미 검색된다). 쉼표 뒤 공백 없이.
-- "소마·SW마에스트로" 는 첫 배포 대상이 소마 연수생이라 넣었다(사용자 발언 "우선은 테스트 플라잇으로 소마 내부에서만"). 밖에 열 때는 빼도 된다.
+- 출시 전 초안에 있던 `소마,SW마에스트로` 는 실제로 올라가 있지 않다 — 테스트플라이트 시절 문안이었다.
 
 ### 1.6 카테고리 후보
 
@@ -127,7 +143,8 @@
 애플 심사원은 영어로 읽는다. 스토어 페이지는 한국어만 내도 되지만, **심사 노트는 영어를 함께**(§5). 영어 로컬라이제이션을 열면 아래를 쓴다.
 
 - Name: `aing-check` · Subtitle: `Team work status, chat & games`
-- Description(초안): "aing-check is the iPhone companion of a small-team work timer for Mac. See who on your team is working right now, your weekly goal progress, and today's to-dos; chat 1:1 with teammates, play quick mini games and 1:1 Gomoku, and spend the rubies you earn on characters. Starting and ending work is done in the Mac app; the phone app reads that record. No ads, no analytics, no in-app purchases."
+- Description(초안 · 2026-10-23 사실 반영): "aing-check is the iPhone app of a small-team work timer. Start and end a work session from the Mac menu bar app **or from the iPhone**; the team sees it in real time. See who is working right now, your weekly goal progress and today's to-dos; chat 1:1 with teammates (stickers included), play **three** quick mini games, take on 1:1 Gomoku, Chess or Tetris, and spend the rubies you earn on characters. No ads, no analytics, no in-app purchases."
+- ★ 고친 것 둘: `play quick mini games and 1:1 Gomoku`(실제 미니게임 3종 · 1:1 셋) · `Starting and ending work is done in the Mac app`(**1.0.7 부터 폰에서도 된다** — 이 문장이 여덟 버전 동안 남아 있었다).
 
 ---
 
@@ -252,9 +269,19 @@
 ### 5.2 노트 본문 (영어 — 심사원용) — 자리표시자는 제출 때 채운다
 
 > **What this app is**
-> 아잉체크 (aing-check) is the iPhone companion app of "aing-check for Mac", a menu-bar work timer used by small teams. On the phone you can see who on your team is working now, your weekly goal progress, and today's to-dos; send 1:1 messages; play two mini games and 1:1 Gomoku with teammates; and manage your character with in-app points (rubies). **Starting/ending a work session is only possible in the Mac app** — the phone reads that record. All features are tied to a team account, so sign-in is required (5.1.1). No ads, no analytics, no third-party SDKs, no in-app purchases; rubies cannot be bought or cashed out.
+> 아잉체크 (aing-check) is the iPhone app of "aing-check for Mac", a menu-bar work timer used by small teams. **A work session can be started and ended from the Mac menu bar app or from this iPhone app** (since 1.0.7); either way the whole team sees it in real time. On the phone you can see who on your team is working now, your weekly goal progress, and today's to-dos; send 1:1 messages (with app-provided stickers); play three quick mini games; take on 1:1 Gomoku, Chess or Tetris with teammates; and manage your character with in-app points (rubies). All features are tied to a team account, so sign-in is required (5.1.1). No ads, no analytics, no third-party SDKs, no in-app purchases; rubies cannot be bought or cashed out.
 >
-> **Demo accounts (two, so you can test messaging and Gomoku between them)**
+> ★ 이 문단은 2026-10-23 에 고쳤다. 여덟 버전 동안 `play two mini games and 1:1 Gomoku`(실제 미니게임 3종 ·
+> 1:1 은 오목·체스·테트리스 셋)와 `Starting/ending a work session is only possible in the Mac app`
+> (**1.0.7 부터 폰에서도 된다**)가 남아 있었다. 다행히 **실제로 ASC 에 올라간 1.0.12 메모에는 두 문장이 없다**
+> (2026-10-23 ASC 를 읽어 확인 — 0회). 메모를 지을 때 이 절의 **일부만 골라 썼기** 때문이다. 그래도 여기 남겨 두면
+> 다음 사람이 그 조각을 집는다.
+>
+> **Demo account** — ★ 2026-10-22 부터 ASC 에는 **한 쌍만** 들어 있다(1.0.12 제출 때 둘째 계정 자격증명을 지웠다).
+> 1:1 기능도 심사원은 한 기기로 보고 승인한다([[appstore-metadata-inherits]] 실측). 둘째 계정이 꼭 필요한 판이면
+> 메모 자유 칸에 적어라 — 다만 **자격증명은 이 문서·저장소·로그에 절대 적지 않는다.**
+>
+> **(옛 문단 · 두 계정 전제)**
 > Account A — email: `<A_EMAIL>` / password: `<A_PASSWORD>`
 > Account B — email: `<B_EMAIL>` / password: `<B_PASSWORD>`
 > Both belong to the demo team "앱 심사 팀" and are isolated from real users. Passwords do not expire.

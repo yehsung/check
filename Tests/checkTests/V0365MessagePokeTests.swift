@@ -228,9 +228,9 @@ struct V0365MessagePokeSortTests {
         #expect(PokeRowUnreadMark.of("n", unreadMessagePeerIDs: ["m"], unreadPokePeerIDs: ["p"]) == .none)
         #expect(PokeRowUnreadMark.pokesOnly.showsDot && PokeRowUnreadMark.messages.showsDot && !PokeRowUnreadMark.none.showsDot)
         // 찌르기만 있을 때 "메시지" 라고 말하지 않는다(보이스오버 = 툴팁).
-        #expect(PokeRowUnreadMark.pokesOnly.help(name: "민수") == "민수님과의 대화 — 안 본 찌르기가 있어요")
-        #expect(PokeRowUnreadMark.messages.help(name: "민수") == "민수님과의 대화 — 안 읽은 메시지가 있어요")
-        #expect(PokeRowUnreadMark.none.help(name: "민수") == "민수님과의 대화 열기")
+        #expect(PokeRowUnreadMark.pokesOnly.tooltip(name: "민수") == "민수님과의 대화 — 안 본 찌르기가 있어요")
+        #expect(PokeRowUnreadMark.messages.tooltip(name: "민수") == "민수님과의 대화 — 안 읽은 메시지가 있어요")
+        #expect(PokeRowUnreadMark.none.tooltip(name: "민수") == "민수님과의 대화 열기")
     }
 
     /// 스토어: 안 본 찌르기는 목록 합집합에만 든다 — 메뉴바 빨간 점(`hasUnreadMessages`)은 **메시지만**.

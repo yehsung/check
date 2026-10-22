@@ -3508,7 +3508,7 @@ enum PokeRowUnreadMark: Equatable, Sendable {
 
     var showsDot: Bool { self != .none }
 
-    func help(name: String) -> String {
+    func tooltip(name: String) -> String {
         switch self {
         case .none: return "\(name)님과의 대화 열기"
         case .messages: return "\(name)님과의 대화 — 안 읽은 메시지가 있어요"
@@ -4072,7 +4072,7 @@ struct PokeDirectoryRowView: View {
 
     /// 툴팁 = 접근성 라벨. 두 벌로 적으면 한쪽만 낡는다. 문장은 `PokeRowUnreadMark.help` 한 곳이다(찌르기만 있으면 찌르기라고 말한다).
     private var messageHelp: String {
-        unread.help(name: entry.name)
+        unread.tooltip(name: entry.name)
     }
 
     // 말풍선 라벨. 활성은 accent 글자 + 옅은 accent 원형(찌르기의 꽉 찬 accent 보다 한 급 낮은 무게),

@@ -93,7 +93,11 @@ package final class MessagesStore {
     /// 보내기를 누른 뒤 서버 이력이 들고 올 때까지 대화 끝에 서는 자리 말풍선.
     package private(set) var pendingOutgoing: [MessagesPendingOutgoing] = []
     /// 상대별 전송 실패 안내(입력칸 위 한 줄). 성공은 문구를 세우지 않는다.
-    package private(set) var sendNotices: [String: String] = [:]
+    ///
+    /// 설정자가 **모듈 안으로 열려 있는** 이유(1.0.12): 이모티콘 그리드는 왕복 중에 칸을 골랐을 때 시트를
+    /// **열어 둔 채** 이 줄을 세운다(`AingStickerText.sendingNowNotice`) — 조용히 닫으면 직전 전송의 안내가
+    /// 그 자리에 남아 사용자는 이모티콘도 나간 줄 안다. 차단·신고 한 줄(`blockNotice`)과 같은 규약이다.
+    package internal(set) var sendNotices: [String: String] = [:]
     /// 전송 왕복 중인가. **한 번에 하나** — 순서가 곧 상대가 읽는 순서라 두 전송을 나란히 띄우지 않는다.
     package private(set) var isSending = false
 
@@ -401,16 +405,54 @@ package final class MessagesStore {
     ///
     /// 누르는 즉시 입력칸을 비우고 자리 말풍선을 세운다(메신저 감각). 서버가 거절하면 말풍선을 거두고, 그 사이 새로 친 글이 없으면
     /// 입력칸에 글을 되돌리고 문구를 세운다 — **보내지 못한 글은 사라지지 않는다**(맥: "실패해도 글은 남는다").
+    ///
+    /// 입력칸을 비우는 자리는 **여기 하나다**(`performSend` 가 아니다 — 이모티콘 입구는 초안을 읽지도 쓰지도 않는다).
     @discardableResult
     package func sendDraft(to peerID: String, isComposing: Bool) -> Bool {
         guard !isComposing, canSend(to: peerID) else { return false }
         guard case .ok(let body) = MessageBody.validate(draft(for: peerID)) else { return false }
+        drafts[peerID] = ""
+        return performSend(body: body, to: peerID, restoresDraftOnFailure: true)
+    }
+
+    /// 지금 아잉이 이모티콘을 보낼 수 있는가(1.0.12).
+    ///
+    /// **`canSend` 를 쓰지 않는 이유는 그 판정이 입력칸 글을 보기 때문이다**(`validate(draft) == .ok` — 빈 칸이면 거짓).
+    /// 이모티콘의 본문은 상수 토큰이라 빈 칸·200자 판정이 **언제나** 통과하므로 남는 조건은 셋뿐이고, 그 셋은
+    /// `canSend` 의 첫 줄과 **글자 그대로 같다**(순서까지 같게 적어 둔다). 근무 여부·집중 모드는 여기서도 보지 않는다
+    /// (v0.3.30 에 서버가 그 조건을 지웠다 — `sendDraft` 주석).
+    package func canSendSticker(to peerID: String) -> Bool {
+        isSignedIn && !peerID.isEmpty && !isSending
+    }
+
+    /// 아잉이 이모티콘 한 장을 보낸다(1.0.12 · 맥 0.3.62 의 폰 쪽 사본).
+    ///
+    /// **입력칸을 거치지 않는다** — `drafts[peerID]` 를 읽지도 쓰지도 않는다. 토큰을 초안에 넣고 `sendDraft` 를
+    /// 부르는 식으로 만들면 성공 분기의 `drafts[peerID] = ""` 가 사용자가 쓰던 글을 지우고, 실패 분기는 쓰던 글
+    /// 대신 **토큰**을 입력칸에 꽂는다(맥에서 실제로 났던 결함 둘).
+    ///
+    /// 나갔는가를 돌려준다 — 그리드는 이 값으로 접을지 정한다. 못 보냈는데 접으면 화면에 남는 신호가 "그리드가
+    /// 닫혔다" 하나뿐이라, 직전 전송의 안내를 보고 이모티콘도 간 줄 안다(맥 `sendSticker` 와 같은 규약).
+    @discardableResult
+    package func sendSticker(_ sticker: AingSticker, to peerID: String) -> Bool {
+        guard canSendSticker(to: peerID) else { return false }
+        return performSend(body: sticker.token, to: peerID, restoresDraftOnFailure: false)
+    }
+
+    /// 본문 하나를 보낸다 — 자리 말풍선 · 재시도 · 세대 가드 · 아홉 가지 실패 문구 · 성공 뒤 이력 재조회의 **공통 몸통**.
+    /// 입구는 둘뿐이다(`sendDraft` · `sendSticker`). **새 전송 길을 뚫지 마라** — 두 벌이 갈리면 갈린 쪽은 실패한 날에만 드러난다.
+    ///
+    /// - Parameter restoresDraftOnFailure: 서버가 거절했을 때 본문을 입력칸으로 되돌릴지. **초안 전송 `true` · 이모티콘 `false`.**
+    ///   두 값이 있는 이유는 맥에서 난 결함이다(v0.3.62): 이모티콘 전송이 입력칸을 공유하면 쓰던 글이 사라지거나
+    ///   `[아잉:기쁨]` 으로 덮였다. 가르는 기준은 글자가 아니라 **의도**다 — 보낸 본문과 입력칸 글자를 비교해서
+    ///   가르면, 왕복(0.2~1.5초) 중에 한 글자라도 이어 친 평범한 전송이 같이 깨진다.
+    @discardableResult
+    private func performSend(body: String, to peerID: String, restoresDraftOnFailure: Bool) -> Bool {
         let generation = context.generation
         let localID = UUID().uuidString.lowercased()
         pendingOutgoing.append(MessagesPendingOutgoing(
             id: localID, peerUserID: peerID, body: body, createdAt: context.clock.now(), state: .sending
         ))
-        drafts[peerID] = ""
         sendNotices[peerID] = nil
         isSending = true
         let service = context.service
@@ -447,7 +489,9 @@ package final class MessagesStore {
                 return
             }
             self.pendingOutgoing.removeAll { $0.id == localID }
-            if self.draft(for: peerID).isEmpty { self.drafts[peerID] = body }
+            // 되돌리는 쪽만 입력칸을 만진다(이모티콘은 거짓 — 위 `restoresDraftOnFailure` 주석).
+            // "비어 있을 때만"은 그대로다: 왕복 중에 새로 친 글을 실패한 옛 글이 덮으면 안 된다.
+            if restoresDraftOnFailure, self.draft(for: peerID).isEmpty { self.drafts[peerID] = body }
             if !cancelled, let notice { self.sendNotices[peerID] = notice }
             if refreshesDirectory { self.loadDirectory(force: true) }
         }

@@ -312,8 +312,18 @@ package enum MessagesDestination: Hashable, Sendable {
 
 package enum MessagesListRules {
     /// 목록 한 줄 미리보기: 줄바꿈·연속 공백을 한 칸으로 접는다(한 줄에 첫 줄만 남으면 "안녕\n…" 이 "안녕" 으로 읽힌다).
+    ///
+    /// 아잉이 이모티콘(1.0.12)을 **먼저** 거친다 — 목록은 그림을 그릴 수 없는 자리라 `[아잉:기쁨]` 이 날것으로
+    /// 나오면 "깨진 메시지"로 읽힌다(`AingStickerText.preview` 머리말). 이모티콘이 아니면 그 함수가 원문을
+    /// 그대로 돌려주므로 아래 접기는 **지금과 한 글자도 다르지 않다**.
+    ///
+    /// ⚠️ **순서가 거꾸로면 안 된다.** 판정(`AingSticker.parse`)은 `MessageBody.sanitized` 를 거친 **원문**을
+    ///    봐야 한다 — 접힌 글자를 넘기면 공백·줄바꿈이 섞인 본문이 판정 앞에서 이미 달라져 있다. 토큰 안에는
+    ///    공백이 없어 지금은 값이 같지만, 값이 같다는 사실로 순서를 정하면 다음 토큰이 그 사실을 깬다.
     package static func preview(_ body: String) -> String {
-        body.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).joined(separator: " ")
+        AingStickerText.preview(for: body)
+            .split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+            .joined(separator: " ")
     }
 
     /// 목록 줄 오른쪽 위 시각(시안 B 03): 오늘이면 "13:58"(24시간제 — 대화 말풍선 곁 시각과 같은 글자), 아니면 "어제"·"9월 8일".

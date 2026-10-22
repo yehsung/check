@@ -469,14 +469,20 @@ struct MeDailyMissionViewTests {
         let home = try IntegrationContractTests.code(Self.tabPath)
         #expect(!home.contains("MeDailyMissionsSection(store: store)"),
                 "일일 미션 절이 나 탭 루트에 다시 섰다 — 사용자가 빼라고 한 바로 그것이다")
-        // 기준선: 루트에 남아야 하는 둘은 그대로 있고 순서도 그대로다(절을 빼면서 옆 것을 건드리지 않았는가).
+        // 기준선(1.0.13 통합 뒤): 루트에 남는 미션 자리는 **[미션] 줄 하나**다 — 세 묶음 전부 루트에 없다.
+        // 처음 쓸 때는 "주간 카드는 루트에 남는다"를 기준선으로 두었는데, 같은 판에서 주간·누적도 미션 화면으로
+        // 갔다(사용자 지시의 "미션들"은 일일만이 아니었다). 기준선을 그 사실로 바꾼다.
         let stage = try #require(home.range(of: "MeStageCard(store: store)"))
-        let weekly = try #require(home.range(of: "MeWeeklyWorkCard(store: store)"))
-        #expect(stage.upperBound < weekly.lowerBound, "무대 → 이번 주 근무 순서가 깨졌다")
-        // 햅틱이 두 곳이면 한 번 받고 두 번 운다 — 일일 절이 자기 것을 달지 않았는지 저장소 전체에서 센다.
+        let row = try #require(home.range(of: "MeMissionsRow(store: store)"), "루트에 [미션] 줄이 없다")
+        #expect(stage.upperBound < row.lowerBound, "무대 → [미션] 줄 순서가 깨졌다")
+        for moved in ["MeWeeklyWorkCard(store: store)", "MeAchievementsSection(store: store)"] {
+            #expect(!home.contains(moved), "\(moved) 가 루트에 다시 섰다 — 셋 다 미션 화면 안이다")
+        }
+        // 햅틱이 두 곳이면 한 번 받고 두 번 운다 — 저장소 전체에서 센다. 한 곳은 이제 **미션 화면**이다
+        // ([받기] 버튼이 루트에 하나도 없으니 루트에 달아 두면 영원히 울지 않는 수식어가 된다).
         let haptic = try IntegrationContractTests.files(
             containing: [".sensoryFeedback(.success, trigger: store.missionClaimBurstSerial)"], under: "Sources/CheckMobileKit")
-        #expect(haptic == [Self.tabPath], "받기 햅틱이 한 곳이 아니다: \(haptic)")
+        #expect(haptic == ["Sources/CheckMobileKit/Me/MeMissionsView.swift"], "받기 햅틱이 한 곳이 아니다: \(haptic)")
     }
 
     @Test("줄 · 절: 순수 값을 그리고 버튼 · 연출은 누적과 **같은 부품** · 제목 · 보상 숫자 · 💎 를 박지 않는다")

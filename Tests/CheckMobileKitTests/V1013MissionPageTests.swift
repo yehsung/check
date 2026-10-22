@@ -118,15 +118,27 @@ struct V1013MissionPageTests {
 
     @Test("두 카드는 루트에서 **미션 화면으로 옮겨졌다**: 저장소에서 호출부가 그 화면 한 곳 · 각각 한 번씩")
     func bothCardsMovedExactlyOnce() throws {
-        for needle in ["MeWeeklyWorkCard(store: store)", "MeAchievementsSection(store: store)"] {
+        // 1.0.13 통합: 묶음은 **셋**이다(일일 미션이 같은 판에 생겼다 — 다른 세션 작업). 일일 절도 한때 나 탭
+        // 루트의 주간 카드 위에 서 있었고, 그건 사용자가 고치라고 한 "쭈루룩 나열"을 하나 더 늘리는 일이었다.
+        let sections = ["MeDailyMissionsSection(store: store)",
+                        "MeWeeklyWorkCard(store: store)",
+                        "MeAchievementsSection(store: store)"]
+        for needle in sections {
             let users = try IntegrationContractTests.files(containing: [needle], under: "Sources/CheckMobileKit")
             #expect(users == [Self.pagePath],
                     "\(needle) 를 그리는 곳이 미션 화면 하나가 아니다: \(users) — 루트에 남았거나 두 곳에서 그린다")
         }
 
+        // 순서: **일일 → 이번 주 → 누적**(맥 0.3.64 미션 화면과 같다 — 범위가 좁은 쪽부터 넓어진다).
+        // 이 순서를 재는 자리는 **여기 하나**다(일일 쪽 시험은 "루트에 없다"만 잰다 — 한 자리를 두 파일이 재면 싸운다).
+        let pageSource = try Self.code(Self.pagePath)
+        let spots = try sections.map { try #require(pageSource.range(of: $0), "미션 화면에 \($0) 가 없다") }
+        #expect(spots[0].lowerBound < spots[1].lowerBound && spots[1].lowerBound < spots[2].lowerBound,
+                "미션 화면 순서가 일일 → 이번 주 → 누적이 아니다 — 맥과 다른 순서를 보게 된다")
+
         // 한 화면 안에서 두 번 그려도 위 단언은 초록이다(파일 목록은 같다) — 그래서 **셈**으로 다시 막는다.
-        let page = try Self.code(Self.pagePath)
-        for needle in ["MeWeeklyWorkCard(store: store)", "MeAchievementsSection(store: store)"] {
+        let page = pageSource
+        for needle in sections {
             let count = page.components(separatedBy: needle).count - 1
             #expect(count == 1, "미션 화면이 \(needle) 를 \(count)번 그린다(한 번이어야 한다)")
         }
@@ -331,11 +343,16 @@ struct V1013MissionPageTests {
     @Test("문구: 제목 '미션'(맥 레일과 같은 낱말) · 보조 글자 '이번 주 근무 · 도전 미션' · 빈 화면 문장(맥과 같은 문장)")
     func theCopyIsPinned() throws {
         #expect(MeText.missionsPageTitle == "미션")
-        #expect(MeText.missionsRowDetail == "이번 주 근무 · 도전 미션")
+        #expect(MeText.missionsRowDetail == "일일 · 이번 주 · 누적 미션")
         #expect(MeText.missionsEmpty == "받을 수 있는 미션이 아직 없어요")
-        // 보조 글자는 **그 화면에 있는 두 절의 제목**이다 — 한쪽 제목을 다듬으면 줄이 거짓말을 하게 된다.
-        #expect(MeText.missionsRowDetail == "\(MeText.weeklyTitle) · \(MeText.missionsTitle)",
-                "[미션] 줄 보조 글자가 화면 안 두 절의 제목과 다른 낱말이다")
+        // 보조 글자는 **그 화면에 있는 세 묶음**을 가리킨다 — 묶음 이름을 다듬으면 줄이 거짓말을 하게 된다.
+        // 제목을 그대로 이어 붙이면 줄에 안 들어가 `ViewThatFits` 가 통째로 버리므로(그러면 아무 안내도 안 보인다)
+        // 줄여 쓴다. 그래서 **세 제목의 머리 낱말이 다 있는지**로 잰다 — 1.0.13 의 「도전 미션」 → 「누적 미션」
+        // 개명이 여기서 물렸다(옛 글자는 "도전"이었다).
+        for head in [MeText.dailyMissionsTitle, MeText.weeklyTitle, MeText.missionsTitle].map({ String($0.prefix(2)) }) {
+            #expect(MeText.missionsRowDetail.contains(head),
+                    "[미션] 줄 보조 글자가 '\(head)' 묶음을 가리키지 않는다 — 묶음 이름이 바뀌었는데 줄이 안 따라왔다")
+        }
 
         // 맥 [미션] 화면과 **같은 낱말**인가 — 레일 [미션]·폰 [미션] 줄이 같은 곳을 가리킨다는 약속이다.
         // (맥 타입은 이 테스트 타깃에서 import 할 수 없어 소스를 맞댄다 — 저장소 관례.)

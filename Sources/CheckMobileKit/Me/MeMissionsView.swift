@@ -123,8 +123,9 @@ private struct MeMissionsRowContent: View {
 
 // MARK: - 화면
 
-/// 「미션」 화면(1.0.13) — 「이번 주 근무」 카드 → 「도전 미션」 절. 루트에 있던 **그 순서 그대로** 옮겼다
-/// (맥 [미션] 화면도 주간 게이지 → 도전 미션이다 — 두 기계에서 같은 순서를 본다).
+/// 「미션」 화면(1.0.13) — 「일일 미션」 → 「이번 주 근무」 → 「누적 미션」 세 묶음.
+/// **맥 0.3.64 [미션] 화면과 같은 순서**다(두 기계에서 같은 순서를 본다). 주간·누적은 루트에서 옮겨 온 것이고
+/// 일일은 1.0.13 에 새로 생겼다.
 ///
 /// 하위 화면 스크롤 깃발(`MeDemoHooks.scrollTarget()`)은 쓰지 않는다 — 이 화면은 두 카드뿐이라 짧다.
 /// 당겨서 새로 고치기는 **이 화면에 있는 둘만** 다시 읽는다(`store.refreshMissions()` — 루트 새로고침이 아니다).
@@ -134,6 +135,11 @@ struct MeMissionsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+                // 1.0.13 세 묶음은 **맥 0.3.64 미션 화면과 같은 순서**다 — 일일 → 이번 주 → 누적.
+                // 범위가 좁은 쪽부터 넓어진다(오늘 → 이번 주 → 통산). 한때 일일 절이 나 탭 루트의 주간 카드
+                // 위에 서 있었는데, 그건 사용자가 고치라고 한 "쭈루룩 나열"을 하나 더 늘리는 일이었다
+                // (`MeTab.swift` 의 ★ 주석). 셋 다 서버에 기능이 없으면 자기 절이 통째로 빠진다.
+                MeDailyMissionsSection(store: store)
                 MeWeeklyWorkCard(store: store)
                 MeAchievementsSection(store: store)
                 if store.missionsPageIsEmpty {

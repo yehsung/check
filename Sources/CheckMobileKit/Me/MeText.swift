@@ -387,7 +387,14 @@ package enum MeText {
     /// 미션 화면 제목(맥 `MissionPanelCopy.title` 과 **같은 낱말** — 레일 [미션]·폰 [미션] 줄이 같은 곳을 가리킨다).
     package static let missionsPageTitle = "미션"
     /// 루트 [미션] 줄의 보조 글자 — 받을 것이 없을 때 그 자리에 선다(받을 것이 있으면 배지가 이긴다).
-    package static let missionsRowDetail = "이번 주 근무 · 도전 미션"
+    ///
+    /// 화면 안 **세 묶음을 순서대로** 가리킨다(일일 → 이번 주 → 누적). 제목을 그대로 이어 붙이면
+    /// (`일일 미션 · 이번 주 근무 · 누적 미션`, 20자) 줄 하나에 안 들어가 `ViewThatFits` 가 보조 글자를 통째로
+    /// 버린다 — 그러면 보통 아이폰에서 **아무 안내도 안 보인다.** 그래서 줄여 쓰고, 대신 시험이 세 제목의
+    /// 머리 낱말이 여기 다 있는지 되묻는다(묶음 이름을 바꾸면 빨개진다).
+    /// ★ 1.0.12 까지는 `이번 주 근무 · 도전 미션` 이었다 — 1.0.13 에 일일이 생기고 「도전 미션」이
+    ///   「누적 미션」으로 개명됐다(맥 0.3.64 와 같은 낱말).
+    package static let missionsRowDetail = "일일 · 이번 주 · 누적 미션"
     /// 미션 화면이 비었을 때(서버에 둘 다 없다 — 맥 `MissionPanelCopy.emptyCaption` 과 같은 문장).
     package static let missionsEmpty = "받을 수 있는 미션이 아직 없어요"
     /// 받기 버튼의 낱말 — 도전 미션 줄과 이번 주 근무 카드가 **같은 버튼**이다(맥 `AchievementCopy.claimButton`).

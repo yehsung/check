@@ -348,4 +348,71 @@ package enum TetrisPhoneText {
 
     /// 기권 확인 시트 제목(본문은 `resignWarning` · 버튼은 `confirmResign`/`keepPlaying`).
     package static let resignConfirmTitle = "기권할까요?"
+
+    // MARK: - 관전 (0.3.65 — 테트리스 관전은 이번에 생겼다)
+
+    /// 로비 "지금 대결 중" 행의 [관전] 알약. 낱말은 오목·체스와 **같다**(같은 일을 하는 버튼이 게임마다
+    /// 다른 이름이면 한 번 배운 것을 다시 배워야 한다).
+    package static let watchChip = "관전"
+    package static let watchChipHint = "이 판을 지켜봐요"
+    /// 서버에 `tetris_watch` 가 아직 없을 때 칩 대신 서는 캡션. **짧게** 둔 것이 핵심이다 — 칩 자리는 좁은 끝이라
+    /// 긴 문장을 넣으면 이름 줄이 낱글자로 꺾인다. 보이스오버는 대신 온전한 문장(`TetrisDuelNoticeText.unavailable`)을 읽는다.
+    package static let watchSoonCaption = "곧 열려요"
+
+    /// 관전 절 머리.
+    package static let watchTitle = "관전 중"
+    package static let leaveWatch = "나가기"
+    package static let leaveWatchHint = "로비로 돌아가요"
+    /// 첫 응답 전(상태 상자 머리). ★ **끝난 판에는 이 말을 쓰지 않는다** — 폴링이 이미 멈춰 더 올 것이 없는데
+    /// 진행형으로 말하면 거짓말이 된다(체스가 데인 자리). 끝난 판의 머리는 `watchEnded`·`watchEndedDraw` 다.
+    package static let watchLoading = "판을 불러오고 있어요"
+    /// 판돈을 아직 모른다(씨앗 없이 들어온 첫 틱).
+    package static let watchStakeUnknown = stakeTitle + " —"
+    /// 이름을 모르는 자리(em dash).
+    package static let watchUnknownName = "—"
+    /// 카드 밑 작은 줄 — 입력이 하나도 없다는 사실.
+    package static let watchCaption = "판만 보여 줘요 · 조작은 할 수 없어요"
+    package static let watchTailMinutes = 3
+    package static let watchTailCaption = "끝난 판은 \(watchTailMinutes)분 동안만 볼 수 있어요"
+
+    /// 끝난 판의 머리 한 줄 — **승자를 아는 판에는 쓰지 않는다**(그때는 `watchEndedWin`).
+    /// 승자를 모르는 정상 상태가 셋이다: 무승부(아래 `watchEndedDraw`) · 승자 칸을 안 싣는 옛 서버 ·
+    /// 그 자리의 사람을 아직 못 받은 틱. 그 셋에서 이름을 지어내지 않는 것이 이 글자의 일이다.
+    package static let watchEnded = "대결이 끝났어요"
+    package static let watchEndedDraw = "무승부예요"
+
+    /// 끝난 판에서 **이긴 사람**을 가리키는 머리 한 줄(체스 관전 `GamesChessText.endedWin` 과 같은 꼴).
+    ///
+    /// ★ **3인칭이다.** 관전자에게는 둘 다 남이라 "이겼어요"·"졌어요" 로는 누구 이야기인지 알 수 없다
+    ///   (`watchEndReason` 머리말이 적어 둔 그 함정 — 1인칭 표를 끌어다 쓰면 관전자가 "상대가 기권했어요" 를
+    ///   읽는다). 그래서 **이름을 부른다**.
+    /// ★ 어느 자리가 이겼는지는 서버가 실은 `match.winner`(uuid)로만 가른다 — `result`('challenger_win'…)로
+    ///   역산하지 마라. 관전 봉투에는 누가 challenger 인지가 없고 a/b 는 **uuid 오름차순 자리**일 뿐이다
+    ///   ([[binary-flip-derivations-break-on-third-case]] · `TetrisSpectateState.aWon` 주석).
+    package static func watchEndedWin(_ name: String) -> String { "\(name) 승리" }
+
+    /// 끝난 사유 한 줄 — **3인칭**이다. 내 기준 표(`TetrisDuelNoticeText.endReason(_:outcome:)`)를 쓰면
+    /// `outcome` 이 없어 언제나 패자 쪽 문장이 나오고, 관전자가 "상대가 기권했어요" 를 읽는다(누구의 상대인가).
+    /// 사유를 모르면 빈 문자열이고 그때 둘째 줄은 서지 않는다.
+    package static func watchEndReason(_ reason: TetrisDuelEndReason?) -> String {
+        guard let reason else { return "" }
+        switch reason {
+        case .topout: return "꼭대기까지 쌓여서 끝났어요"
+        case .resign: return "한쪽이 기권했어요"
+        case .disconnect: return "연결이 끊겨서 끝났어요"
+        case .timeCap: return "시간이 다 돼서 끝났어요"
+        case .noShow: return "대결이 시작되지 않았어요"
+        case .abandoned: return "대결이 중단됐어요"
+        }
+    }
+
+    /// 관전 판 한 장을 가리키는 말. ★ **대국용 `opponentBoardLabel`("상대 판")을 쓰지 마라** —
+    /// 관전자에게는 둘 다 '상대'가 아니다(누구의 상대인가). 자리는 **이름으로** 부른다.
+    package static let watchBoardLabel = "판"
+
+    /// 관전 판 한 장의 보이스오버. **느린 값만**(지운 줄 · 들어올 줄) — 조각·행·열은 1초 보고보다 빨리 바뀐다.
+    /// 이름이 앞에 서므로 보이스오버로도 어느 사람의 판인지가 먼저 들린다("앨리스 판, 지운 줄 7, 들어올 줄 0").
+    package static func watchBoardAccessibility(name: String, lines: Int, pending: Int) -> String {
+        "\(name) \(watchBoardLabel), \(linesTitle) \(lines), \(incomingLinesTitle) \(pending)"
+    }
 }

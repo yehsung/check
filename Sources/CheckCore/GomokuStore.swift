@@ -100,6 +100,11 @@ package nonisolated struct GomokuLiveMatch: Identifiable, Equatable, Sendable {
     package let stake: GomokuStake
     /// 기기 시계로 보정된 시작 시각(서버 `started_ms` = accepted_at).
     package let startedAt: Date
+    /// 0.3.64 — 이 판을 보고 있는 관전자 수. **서버가 안 싣는 창에서는 0** 이고, 화면은 0 이면 아무것도 그리지 않는다.
+    /// 기본값을 둔 까닭: 이 값을 모르는 호출부(렌더 테스트·미리보기)가 그대로 컴파일돼야 한다.
+    /// ★ `let` 으로 바꾸지 마라 — 기본값이 붙은 `let` 은 **기본 멤버와이즈 이니셜라이저에서 통째로 빠져**
+    ///   `liveMatch(from:)` 이 이 값을 넘길 자리가 사라진다(그러면 모든 카드가 조용히 0 이 된다).
+    package var watchers: Int = 0
 }
 
 package nonisolated enum GomokuPhase: Equatable, Sendable { case lobby, playing, result }
@@ -611,6 +616,9 @@ package final class GomokuStore {
                 spectating = nil
                 watchRuntime.bumpWatchGeneration()
             }
+            // 판이 내려갔다(결과 화면 닫기·로비로·초기화) — 남의 숫자가 로비 화면에 남지 않게 여기서 0 으로 돌린다.
+            // 관전으로 넘어가는 길은 `spectating` 쪽이 따로 세운다(`applyWatch`).
+            if match == nil, spectatorCount != 0 { spectatorCount = 0 }
         }
     }
     /// 지금 AI 대국(로컬 판, docs/plan/gomoku-ai.md). 서버 판과 섞이지 않는다 — 확장 파일 머리 주석.
@@ -672,6 +680,20 @@ package final class GomokuStore {
     /// 세우는 곳은 `noteWatchFailure` 의 databaseSchemaMissing 갈래 **하나**이고 조건이 없다. 내리는 곳은
     /// 관전이 실제로 성공한 순간(`applyWatch` 의 ok)과 `reset` 이다 — 서버가 올라오면 다음 성공이 저절로 연다.
     package var watchUnavailable = false
+    /// 서버에 `gomoku_watch_live`(관전 + 관전자 수)가 아직 없다 — 이 로그인 동안 옛 `gomoku_watch` 로 접어 쓴다.
+    ///
+    /// ★★ 바로 위 `watchUnavailable` 과 **절대 같은 깃발을 쓰지 마라.** 저 깃발은 관전 입구를 통째로 잠근다 —
+    ///    겸업시키면 "관전자 수 함수가 없다"는 이유로 멀쩡한 관전이 막힌다(저 주석의 2026-10-01 사고와 같은 모양).
+    ///    관전자 수가 없는 것과 관전을 못 하는 것은 **다른 사실**이다.
+    /// 세우는 곳은 `watchFetch` 의 PGRST202 갈래 하나, 내리는 곳은 `reset` 하나다(다음 로그인은 서버가 올라왔을
+    /// 수 있다). 접힌 동안 `spectatorCount` 는 0 이고 화면은 아무것도 그리지 않는다.
+    package var spectatorCountUnavailable = false
+    /// 지금 보고 있는 판(관전) 또는 내가 두고 있는 판의 **관전자 수**. 0 이면 화면은 아무것도 그리지 않는다.
+    ///
+    /// 한 칸인 까닭: 관전과 대국은 동시에 설 수 없다(`match` 가 서면 `spectating` 이 내려간다) — 두 칸을 두면
+    /// 둘이 갈리는 날 화면이 어느 쪽을 그릴지 고르게 된다. 세우는 곳은 `applyWatch`(관전 응답)와
+    /// `applyState`(내 판 응답) 둘이고, 0 으로 되돌리는 곳은 `stopWatching`·`match` didSet·`reset` 이다.
+    package var spectatorCount = 0
     /// 관전·순위 장부(요청 시각·in-flight·세대). 관찰 대상이 아니다.
     @ObservationIgnored package let watchRuntime = GomokuWatchRuntime()
 
@@ -1349,6 +1371,11 @@ package final class GomokuStore {
         let previous = match
         let windowWasVisible = isWindowVisible
         if match != next { match = next }
+        // 내 판을 보고 있는 사람 수(서버 `gomoku__state` 의 한 칸). **`match` 대입 뒤**에 세운다 —
+        // 그 didSet 이 판이 바뀌는 길목에서 0 으로 되돌리므로 앞에 두면 방금 받은 값이 지워진다.
+        // 안 싣는 서버면 0 이고, 그때 화면은 아무것도 그리지 않는다.
+        let watchers = max(0, payload.watchers ?? 0)
+        if spectatorCount != watchers { spectatorCount = watchers }
         let nextPhase: GomokuPhase = isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }
         // 채팅은 판을 옮긴 **뒤에** 옮긴다 — 순서가 바뀌면 방금 비운 대화 위에 옛 판의 줄이 다시 붙는다.
@@ -1882,6 +1909,9 @@ package final class GomokuStore {
         if hasLoadedRanking { hasLoadedRanking = false }
         if rankingUnavailable { rankingUnavailable = false }
         if watchUnavailable { watchUnavailable = false }
+        // 접힘도 로그아웃까지만 기억한다 — 다음 로그인은 서버가 올라왔을 수 있다(최악이 404 한 번).
+        if spectatorCountUnavailable { spectatorCountUnavailable = false }
+        if spectatorCount != 0 { spectatorCount = 0 }
         watchRuntime.clear()
         if autoAbandonStreak != GomokuStore.autoPlaceLossStreak {
             autoAbandonStreak = GomokuStore.autoPlaceLossStreak
@@ -2294,7 +2324,9 @@ package final class GomokuStore {
               let stake = row.stake.flatMap(GomokuStake.init(rawValue:)),
               let startedAt = deviceDate(serverMs: row.startedMs)
         else { return nil }
-        return GomokuLiveMatch(id: id, a: a, b: b, stake: stake, startedAt: startedAt)
+        // 안 싣는 서버면 0 — 카드는 그냥 눈 아이콘을 안 그린다(없는 숫자를 지어내지 않는다).
+        return GomokuLiveMatch(id: id, a: a, b: b, stake: stake, startedAt: startedAt,
+                               watchers: max(0, row.watchers ?? 0))
     }
 
     /// 사람 행 → GomokuUser. 행에 없는 칸(근무·가능·대국 중)은 로비 목록에서 빌리고, 거기에도 없으면 문맥 기본값이다.

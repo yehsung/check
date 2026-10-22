@@ -329,6 +329,15 @@ private func makeFixtureStore(_ label: String, me: String, queues: [String: [Str
     let host = "v0341-fx-\(label)-\(UUID().uuidString.prefix(8))".lowercased()
     let frozen = queues
     GomokuStubProtocol.register(host: host) { rpc, _, index in
+        // 0.3.64 — 이 픽스처 묶음에는 `*_watch_live`(관전 + 관전자 수)가 없다. 그 함수를 **모르는 서버**가 내는
+        //   404(PGRST202)로 답해 스토어가 옛 `gomoku_watch` 로 접게 한다 — 아래 500 으로 두면 접힘 갈래를
+        //   안 지나 관전이 통째로 실패한다(관전자 수 자체는 V0364 가 따로 잰다).
+        if rpc.hasSuffix("_watch_live"), frozen[rpc] == nil {
+            return GomokuStubProtocol.Reply(
+                status: 404,
+                body: #"{"code":"PGRST202","message":"Could not find the function public."# + rpc
+                    + #" in the schema cache"}"#)
+        }
         guard let list = frozen[rpc], index < list.count else {
             return GomokuStubProtocol.Reply(status: 500, body: #"{"message":"not scripted"}"#)
         }

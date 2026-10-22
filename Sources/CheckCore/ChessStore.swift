@@ -316,13 +316,18 @@ package nonisolated struct ChessLiveMatch: Identifiable, Equatable, Sendable {
     package let b: ChessUser
     package let stake: ChessStake
     package let startedAt: Date
+    /// 0.3.64 — 이 판을 보고 있는 관전자 수. **서버가 안 싣는 창에서는 0** 이고, 화면은 0 이면 아무것도 그리지 않는다.
+    /// 기본값을 둔 까닭: 이 값을 모르는 호출부(렌더 테스트·폰 미리보기)가 그대로 컴파일돼야 한다.
+    package let watchers: Int
 
-    package init(id: String, a: ChessUser, b: ChessUser, stake: ChessStake, startedAt: Date) {
+    package init(id: String, a: ChessUser, b: ChessUser, stake: ChessStake, startedAt: Date,
+                 watchers: Int = 0) {
         self.id = id
         self.a = a
         self.b = b
         self.stake = stake
         self.startedAt = startedAt
+        self.watchers = watchers
     }
 }
 
@@ -656,6 +661,9 @@ package final class ChessStore {
                 spectating = nil
                 watchRuntime.bumpWatchGeneration()
             }
+            // 판이 내려갔다(결과 화면 닫기·로비로·초기화) — 남의 숫자가 로비 화면에 남지 않게 여기서 0 으로 돌린다.
+            // 관전으로 넘어가는 길은 `spectating` 쪽이 따로 세운다(`applyWatch`).
+            if match == nil, spectatorCount != 0 { spectatorCount = 0 }
         }
     }
     /// 지금 AI 대국(로컬 판이 권위 — ChessStoreAI.swift).
@@ -754,6 +762,20 @@ package final class ChessStore {
     /// ★ `rankingUnavailable` 과 **따로** 둔다 — 오목에서 한 깃발이 두 소비자를 겸업하다 한쪽을 좁히는 순간
     ///   [관전] 칩 게이트가 조용히 죽었다(2026-10-01 실측). 게이트와 신호는 짝으로 움직인다.
     package var watchUnavailable = false
+    /// 서버에 `chess_watch_live`(관전 + 관전자 수)가 아직 없다 — 이 로그인 동안 옛 `chess_watch` 로 접어 쓴다.
+    ///
+    /// ★★ `watchUnavailable` 과 **절대 같은 깃발을 쓰지 마라.** 저 깃발은 관전 입구를 통째로 잠근다 —
+    ///    겸업시키면 "관전자 수 함수가 없다"는 이유로 멀쩡한 관전이 통째로 막힌다(이 파일 머리 위의 깃발 겸업
+    ///    사고와 같은 모양). 관전자 수가 없는 것과 관전을 못 하는 것은 **다른 사실**이다.
+    /// 세우는 곳은 `watchFetch` 의 PGRST202 갈래 하나이고, 내리는 곳은 `reset`(다음 로그인은 서버가 올라왔을 수
+    /// 있다) 하나다. 접힌 동안 `spectatorCount` 는 0 이고 화면은 아무것도 그리지 않는다.
+    package var spectatorCountUnavailable = false
+    /// 지금 보고 있는 판(관전) 또는 내가 두고 있는 판의 **관전자 수**. 0 이면 화면은 아무것도 그리지 않는다.
+    ///
+    /// 한 칸인 까닭: 관전과 대국은 동시에 설 수 없다(`match` 가 서면 `spectating` 이 내려간다) — 두 칸을 두면
+    /// 둘이 갈리는 날 화면이 어느 쪽을 그릴지 고르게 된다. 세우는 곳은 `applyWatch`(관전 응답)와
+    /// `applyState`(내 판 응답) 둘이고, 0 으로 되돌리는 곳은 `stopWatching`·`match` didSet·`reset` 이다.
+    package var spectatorCount = 0
     /// 관전·순위 장부(요청 시각·in-flight·세대). 관찰 대상이 아니다.
     @ObservationIgnored package let watchRuntime = ChessWatchRuntime()
 
@@ -1211,6 +1233,11 @@ package final class ChessStore {
         if incoming?.id == id { incoming = nil }
         if outgoing?.id == id { outgoing = nil }
         if match != next { match = next }
+        // 내 판을 보고 있는 사람 수(서버 `chess__state` 의 한 칸). **`match` 대입 뒤**에 세운다 —
+        // 그 didSet 이 판이 바뀌는 길목에서 0 으로 되돌리므로 앞에 두면 방금 받은 값이 지워진다.
+        // 안 싣는 서버면 0 이고, 그때 화면은 아무것도 그리지 않는다.
+        let watchers = max(0, payload.watchers ?? 0)
+        if spectatorCount != watchers { spectatorCount = watchers }
         // 한 수 미끄러진다(1:1 깔때기 — 내 수·상대 수·폴링·실시간이 전부 이 한 자리로 모인다).
         // 이전 판은 `base` 가 아니라 **`previous`** 로 잰다: `base` 는 id 가 같을 때만 서는 값이라
         // "판이 바뀌었다" 를 가릴 수 없고, 그러면 화면 전환이 애니메이션으로 둔갑한다.
@@ -2026,6 +2053,9 @@ package final class ChessStore {
         if hasLoadedRanking { hasLoadedRanking = false }
         if rankingUnavailable { rankingUnavailable = false }
         if watchUnavailable { watchUnavailable = false }
+        // 접힘도 로그아웃까지만 기억한다 — 다음 로그인은 서버가 올라왔을 수 있다(최악이 404 한 번).
+        if spectatorCountUnavailable { spectatorCountUnavailable = false }
+        if spectatorCount != 0 { spectatorCount = 0 }
         watchRuntime.clear()
         if initialMs != ChessClock.initialMs { initialMs = ChessClock.initialMs }
         if incrementMs != 3_000 { incrementMs = 3_000 }
@@ -2285,7 +2315,9 @@ package final class ChessStore {
               let stake = row.stake.flatMap(ChessStake.init(rawValue:)),
               let startedAt = deviceDate(serverMs: row.startedMs)
         else { return nil }
-        return ChessLiveMatch(id: id, a: a, b: b, stake: stake, startedAt: startedAt)
+        return ChessLiveMatch(id: id, a: a, b: b, stake: stake, startedAt: startedAt,
+                              // 안 싣는 서버면 0 — 카드는 그냥 눈 아이콘을 안 그린다(없는 숫자를 지어내지 않는다).
+                              watchers: max(0, row.watchers ?? 0))
     }
 
     /// 서버 사람 행 → ChessUser(로비). `capable` 이 nil 이면 **불가**다.

@@ -81,7 +81,39 @@ enum TetrisDuelWindowLayout {
     static var lobbyLiveHeight: CGFloat {
         bodyHeight - lobbyRecordHeight - invitesMaxHeight - lobbySideSpacing * 2
     }
+    /// 로비 "지금 대결 중" 한 줄의 [관전] 칩·관전자 칩 높이. **18 이어야** 줄이 얼굴(18)보다 자라지 않는다 —
+    /// 체스·오목이 같은 값으로 데인 자리다(20 으로 두면 카드가 통째로 자란다).
+    static let liveWatchChipHeight: CGFloat = 18
     static let stakePromptWidth: CGFloat = 340
+
+    // MARK: 관전 화면 (v0.3.65)
+    //
+    // 세 열 [a 280 | b 280 | 오른쪽 260]. **두 사람 판을 나란히** 놓는 것이 이 화면의 전부다.
+    // 한 열의 쌓는 차례는 **판 카드가 먼저, 이름 카드가 아래**다(명세 §4). 세로 예산은 차례와 무관하게
+    // 같은 합이므로 아래 상수는 그대로 쓴다 — 창은 한 톨도 자라지 않는다(시험이 그 항등식을 되묻는다).
+    // 세로 예산(462) = 판 카드 402 + 간격 8 + 이름 카드 52. 판 카드 안쪽(402 − 여백 12×2 = 378)은
+    // 판 304 + 간격 10 + 숫자 세 줄(18×3 + 4×2 = 62) = 376 이라 2pt 가 남는다 — 창 시험이 이 항등식을 되묻는다.
+    // 셀 15pt 를 고른 까닭: 20행이 세로 예산에 드는 가장 큰 정수 셀이다(16 이면 324 라 8pt 넘친다).
+
+    /// 관전 판 한 칸(pt). 대결 화면의 상대 미니 판(9pt)보다 크다 — 이 화면은 판 둘이 주인공이다.
+    static let spectateBoardCell: CGFloat = 15
+    /// 관전 판 하나의 크기(= 154 × 304). 그림은 **기존 `TetrisBoardPainter.drawMiniBoard`** 가 그린다.
+    static var spectateBoardSize: CGSize { TetrisMiniBoardLayout.boardSize(cell: spectateBoardCell) }
+    static let spectateSideWidth: CGFloat = 280
+    /// 오른쪽 열(판돈 · 관전자 수 · 상태 · [나가기]) = 나머지(= 260).
+    static var spectateInfoWidth: CGFloat { innerWidth - spectateSideWidth * 2 - columnSpacing * 2 }
+    static let spectateCardPadding: CGFloat = 12
+    /// 판과 숫자 세 줄 사이.
+    static let spectateBoardGap: CGFloat = 10
+    static let spectateStatRowHeight: CGFloat = 18
+    static let spectateStatSpacing: CGFloat = 4
+    /// 숫자 세 줄(지운 줄 · 보낸 공격 · 들어올 줄)이 차지하는 높이.
+    static var spectateStatsHeight: CGFloat { spectateStatRowHeight * 3 + spectateStatSpacing * 2 }
+    /// 판 카드 = 이름 카드와 간격을 뺀 나머지. 이름 카드가 **아래**로 내려가도 합은 같다(차례와 무관한 값).
+    static var spectateBoardCardHeight: CGFloat { bodyHeight - playerCardHeight - playerCardSpacing }
+    static let spectateInfoSpacing: CGFloat = 10
+    static let spectateStatusMinHeight: CGFloat = 56
+    static let spectateLeaveHeight: CGFloat = 34
 
     static var innerWidth: CGFloat {
         canvasSize.width + opponentColumnWidth + sideColumnWidth + columnSpacing * 2

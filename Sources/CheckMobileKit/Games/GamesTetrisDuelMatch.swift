@@ -435,6 +435,9 @@ struct GamesTetrisDuelMatchView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(TetrisPhoneText.stakeTitle) \(chrome.stakeLine)")
+            // 내 판을 보고 있는 사람 수(0.3.65 — 명세 §3 '대국자 본인 화면: 판돈 칩 줄에 같이').
+            // 0 이면 서지 않으므로 띠의 폭 예산(SE 에서 칩 넷)은 **관전자가 붙을 때만** 한 칸 늘어난다.
+            GamesWatcherBadge(count: tetris.spectatorCount, font: .footnote.weight(.semibold))
             GamesTetrisDuelElapsedLeaf(store: tetris, stage: chrome.stage)
             if chrome.showsSpeedUp {
                 speedChip(chrome)

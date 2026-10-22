@@ -148,6 +148,9 @@ package struct ChessLobbyMatchRow: Decodable, Equatable, Sendable {
     package var b: ChessUserRow?
     package var stake: Int?
     package var startedMs: Double?
+    /// 0.3.64 — 지금 이 판을 보고 있는 관전자 수(`match__watchers`). **안 싣는 서버면 nil 이고 화면 값은 0 이다.**
+    /// 참가자는 세지 않는다(서버가 등록 자리에서 거른다) — 그래서 내 판 카드도 0 에서 시작한다.
+    package var watchers: Int?
 }
 
 /// chess_lobby 응답.
@@ -228,6 +231,9 @@ package struct ChessStatePayload: Decodable, Equatable, Sendable {
     /// 화면의 "둘 수 있는 칸"은 이 배열이 권위다(서버가 판정 주인이다).
     package var legalMoves: [String]?
     package var serverNowMs: Double?
+    /// 0.3.64 — **내 판**을 보고 있는 관전자 수(`chess__state` 가 싣는다 — state·move·respond 응답 전부).
+    /// 안 싣는 옛 서버면 nil 이고 화면 값은 0 이다.
+    package var watchers: Int?
 }
 
 /// chess_state 응답.
@@ -355,6 +361,9 @@ package struct ChessWatchResponse: Decodable, Equatable, Sendable {
     package var inCheck: Bool?
     package var blackUser: ChessUserRow?
     package var whiteUser: ChessUserRow?
+    /// 0.3.64 — 이 판을 같이 보고 있는 관전자 수. **`chess_watch_live` 만 싣는다** — 옛 `chess_watch` 로
+    /// 접힌 세션에서는 키가 없어 nil 이고, 스토어가 0 으로 읽는다(그 상태에서는 화면이 아무것도 그리지 않는다).
+    package var watchers: Int?
 }
 
 // MARK: - 서비스 호출
@@ -439,6 +448,20 @@ extension SupabaseWorkService {
     ) async throws -> ChessWatchResponse {
         try await chessRPC(
             "chess_watch", body: ChessSinceRequest(pMatchId: matchID, pSinceSeq: sinceSeq),
+            accessToken: accessToken)
+    }
+
+    /// 관전 + 관전자 수(0.3.64). 서버가 읽기 전용 `chess_watch` 를 그대로 싣고 `watchers` 한 칸을 더한다 —
+    /// **요청 본문·응답 모양은 위와 같다**(키 하나가 늘 뿐이라 같은 디코더로 읽는다).
+    ///
+    /// 서버에 이 함수가 아직 없으면(앱이 db push 보다 먼저 나간 창) PGRST202 → `.databaseSchemaMissing` 으로
+    /// throw 한다. 접는 곳은 스토어다(`ChessStoreWatch.watchFetch`) — 옛 `chess_watch` 로 한 번 돌아가고,
+    /// **관전 입구는 잠그지 않는다**(관전자 수가 없는 것과 관전을 못 하는 것은 다른 사실이다).
+    package func chessWatchLive(
+        accessToken: String, matchID: String, sinceSeq: Int
+    ) async throws -> ChessWatchResponse {
+        try await chessRPC(
+            "chess_watch_live", body: ChessSinceRequest(pMatchId: matchID, pSinceSeq: sinceSeq),
             accessToken: accessToken)
     }
 

@@ -415,9 +415,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///   ④ `requestAttention` — 판이 막 시작됐는데 앱이 뒤에 있을 때 주의를 끈다.
     ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 테트리스를 아는 길**(받은 신청 · "대결이 시작됐어요" 말풍선).
     ///   ⑥ `onOpenTetrisDuel` — 그 말풍선을 눌렀을 때 그 판의 창.
+    ///   ⑦ `spectatorFeaturesEnabled`(v0.3.65) — **관전의 주 스위치**. 오목·체스와 같은 까닭으로 스토어 기본이 꺼짐이고,
+    ///      이 한 줄이 없으면 로비 줄에 [관전] 칩이 아예 안 서고 `tetris_watch` 요청도 **한 번도** 안 나간다
+    ///      (`rankingEnabled` 와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다).
     private func wireTetrisDuel() {
         let tetris = store.tetris
         tetris.rankingEnabled = true
+        tetris.spectatorFeaturesEnabled = true
         tetris.presentWindow = { CheckTetrisDuelWindowController.shared.show() }
         tetris.dismissWindow = { CheckTetrisDuelWindowController.shared.close() }
         tetris.requestAttention = {

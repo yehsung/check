@@ -3678,6 +3678,9 @@ package struct GomokuLobbyMatchRow: Decodable, Equatable, Sendable {
     package var stake: Int?
     /// 대국이 시작된 서버 시각(accepted_at). 경과는 앱이 잰다.
     package var startedMs: Double?
+    /// 0.3.64 — 지금 이 판을 보고 있는 관전자 수(`match__watchers`). **안 싣는 서버면 nil 이고 화면 값은 0 이다.**
+    /// 참가자는 세지 않는다(서버가 등록 자리에서 거른다) — 그래서 내 판 카드도 0 에서 시작한다.
+    package var watchers: Int?
 }
 
 /// gomoku_lobby 응답: { status, server_now_ms, stakes, turn_seconds, invite_ttl_seconds, me{…}, users[…], matches[…] }.
@@ -3774,6 +3777,9 @@ package struct GomokuStatePayload: Decodable, Equatable, Sendable {
     /// 0.3.28 — 내가 **연속으로** 자동 착수당한 횟수(직접 한 수라도 두면 0으로 돌아간다). 3이면 그 판을 잃는다.
     package var myAutoStreak: Int?
     package var opponentAutoStreak: Int?
+    /// 0.3.64 — **내 판**을 보고 있는 관전자 수(`gomoku__state` 가 싣는다 — state·move·respond 응답 전부).
+    /// 안 싣는 옛 서버면 nil 이고 화면 값은 0 이다.
+    package var watchers: Int?
 }
 
 /// gomoku_state 응답: { status, match{…}, moves[…], my_color, opponent{…}, ruby_balance, server_now_ms }.
@@ -3963,6 +3969,9 @@ package struct GomokuWatchResponse: Decodable, Equatable, Sendable {
     package var blackAutoStreak: Int?
     package var whiteAutoStreak: Int?
     package var autoAbandonStreak: Int?
+    /// 0.3.64 — 이 판을 같이 보고 있는 관전자 수. **`gomoku_watch_live` 만 싣는다** — 옛 `gomoku_watch` 로
+    /// 접힌 세션에서는 키가 없어 nil 이고, 스토어가 0 으로 읽는다(그 상태에서는 화면이 아무것도 그리지 않는다).
+    package var watchers: Int?
 }
 
 /// 대국 채팅 본문의 정규화·길이 판정. **MessageBody 의 정규화·눈금을 그대로 빌린다** — 상한(100)만 다르다.

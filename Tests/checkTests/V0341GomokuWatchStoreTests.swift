@@ -194,14 +194,25 @@ private func reply(_ object: [String: Any], delay: TimeInterval = 0) -> GomokuSt
 }
 
 /// 관전 외 RPC 의 기본 응답 — windowDidShow·leaveWatch 가 내는 로비·받은함·순위가 디코드 실패로 빨개지지 않게.
+///
+/// 0.3.64 — 이 스위트의 스텁 서버는 `gomoku_watch_live`(관전 + 관전자 수)를 **모르는 옛 서버**다.
+/// 실서버가 그때 내는 404(PGRST202)로 답해 스토어가 옛 `gomoku_watch` 로 접게 한다 — 이 파일이 재는 것은
+/// 관전의 세대·증분·실패 접힘이고 그 길은 접힌 뒤에도 그대로여야 한다(관전자 수 자체는 V0364 가 따로 잰다).
 private func baseReply(_ rpc: String) -> GomokuStubProtocol.Reply? {
     switch rpc {
+    case "gomoku_watch_live": return pgrst202Live
     case "gomoku_lobby": return reply(lobbyPayload())
     case "gomoku_inbox": return reply(inboxPayload())
     case "gomoku_ranking": return reply(["status": "ok", "server_now_ms": nowMs(), "record_since_ms": NSNull(), "me": NSNull(), "rows": []])
     default: return nil
     }
 }
+
+/// `gomoku_watch_live` 가 없는 서버의 404(0.3.64). 같은 모양이고 함수 이름만 다르다.
+private let pgrst202Live = GomokuStubProtocol.Reply(
+    status: 404,
+    body: #"{"code":"PGRST202","details":null,"hint":null,"message":"Could not find the function public.gomoku_watch_live(p_match_id, p_protocol, p_since_seq) in the schema cache"}"#
+)
 
 /// 실제 PGRST202 본문 모양(404). "schema cache" 가 공용 매핑에서 `.databaseSchemaMissing` 이 된다.
 private let pgrst202 = GomokuStubProtocol.Reply(

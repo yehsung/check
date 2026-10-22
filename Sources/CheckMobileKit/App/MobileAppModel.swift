@@ -113,6 +113,13 @@ public final class MobileAppModel {
         // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisDuelWiringTests.swift`
         // (`GamesTetrisWiringTests` 는 **솔로** 테트리스 것이다 — 섞지 마라).
         tetris.rankingEnabled = true
+        // 관전의 **주 스위치**(0.3.65 — 테트리스 관전은 이번에 생겼다). 기본이 꺼짐이라 이 한 줄이 없으면
+        // [관전] 칩이 뜨지도 않고 `tetris_watch` 가 **한 번도 안 나간다** — `startWatching`·`refreshWatch`·
+        // `pollWatch`·`spectatorWindowDidShow` 가 전부 `spectatorFeaturesEnabled` 를 먼저 본다
+        // (`canPollSpectatorFeatures`). 순위 스위치와 **따로** 두는 것이 코어 규약이다(순위 없이 관전만 여는 날).
+        // 바로 위 오목·체스 두 줄과 같은 못이고, 같은 까닭으로 "기본값이니 지워도 되겠지"로 지우지 마라
+        // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisWatchTests.swift`.
+        tetris.spectatorFeaturesEnabled = true
         // 실시간 'tetris' 초인종을 받을 자리(오목 `realtime.gomoku` 바로 옆 · 같은 꼴). 이 한 줄이 없으면
         // 러너의 `.tetrisSignal` 가지가 **nil 에 말을 걸어** 아무 일도 안 한다 — 초인종이 와도 폰은 자기 보고
         // 왕복(1초)까지 방해 줄을 모르고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.

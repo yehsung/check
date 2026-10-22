@@ -99,6 +99,14 @@ private func sdPatchedMatch(_ name: String, _ patch: [String: Any]) throws -> St
 private func sdHandler(_ map: [String: [String]]) -> GomokuStubProtocol.Handler {
     { rpc, _, index in
         guard let bodies = map[rpc], !bodies.isEmpty else {
+            // 0.3.64 — `*_watch_live`(관전 + 관전자 수)를 모르는 옛 서버다. "schema cache" 문구가 있어야
+            //   공용 매핑이 `.databaseSchemaMissing` 으로 접고 스토어가 옛 `chess_watch` 로 접는다.
+            if rpc.hasSuffix("_watch_live") {
+                return GomokuStubProtocol.Reply(
+                    status: 404,
+                    body: #"{"code":"PGRST202","message":"Could not find the function public."# + rpc
+                        + #" in the schema cache"}"#)
+            }
             return GomokuStubProtocol.Reply(status: 404, body: #"{"code":"PGRST202","message":"missing"}"#)
         }
         return GomokuStubProtocol.Reply(body: bodies[min(index, bodies.count - 1)])

@@ -382,6 +382,9 @@ struct GamesChessMatchView: View {
                     } else {
                         Label(GamesChessText.robotButton, systemImage: "cpu")
                     }
+                    // 내 판을 보고 있는 사람 수(0.3.65 — 명세 §3 '대국자 본인 화면: 판돈 칩 줄에 같이').
+                    // 폰에서 판돈 칩이 서는 줄은 **내비 부제**다. 0 이면 서지 않으므로 로봇 판에서도 모양이 그대로다.
+                    GamesWatcherBadge(count: store.spectatorCount, font: .caption)
                 }
             }
         }

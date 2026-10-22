@@ -1579,11 +1579,16 @@ private struct GomokuMatchSide: View {
 
     private var statusBox: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(statusLine.text)
-                .font(.headline)
-                .foregroundStyle(statusLine.tint)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 6) {
+                Text(statusLine.text)
+                    .font(.headline)
+                    .foregroundStyle(statusLine.tint)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                // 내 판을 보고 있는 사람 수(v0.3.65 — `gomoku__state` 의 한 칸). 0 이면 아무것도 안 그린다.
+                WatcherCountChip(count: store.spectatorCount, height: 18)
+            }
             if match.blackPassed {
                 Text(GomokuText.blackPassed)
                     .font(.caption)
@@ -2502,6 +2507,8 @@ private struct GomokuLiveMatchCard: View {
                     .foregroundStyle(CheckTheme.secondaryText)
                 face(live.b)
                 Spacer(minLength: 4)
+                // 관전자 수(v0.3.65) — [관전] 칩 **옆**. 높이는 칩과 같은 18 이어야 카드가 53 을 유지한다(C18).
+                WatcherCountChip(count: live.watchers, height: GomokuWindowLayout.liveWatchChipHeight)
                 if isMine {
                     Text(GomokuText.myMatch)
                         .font(.caption2.weight(.bold))
@@ -2818,7 +2825,8 @@ private struct GomokuSpectateSide: View {
                 // 관전 칩은 접미사를 뗀다 — "이기면 +5" 는 대국자의 문장이다(관전자는 이겨도 얻는 것이 없다).
                 GomokuStakeChip(stake: watch.stake, showsReward: false)
                     .frame(width: GomokuWindowLayout.stakeChipWidth)
-                GomokuWatchStatusBox(watch: watch, lossStreak: store.autoAbandonStreak, isLive: store.isWindowVisible)
+                GomokuWatchStatusBox(watch: watch, lossStreak: store.autoAbandonStreak, isLive: store.isWindowVisible,
+                                     watchers: store.spectatorCount)
             }
             .fixedSize(horizontal: false, vertical: true)
 
@@ -2996,17 +3004,23 @@ private struct GomokuWatchStatusBox: View {
     /// 자동 착수 패배 임계(스토어 `autoAbandonStreak`) — 경고는 임계 − 1 에서만 뜬다.
     let lossStreak: Int
     let isLive: Bool
+    /// 나까지 포함해 이 판을 보고 있는 사람 수(v0.3.65 — `gomoku_watch_live` 의 한 칸). 0 이면 칩이 안 선다.
+    var watchers: Int = 0
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1, paused: !isLive || watch.isFinished || watch.deadline == nil)) { context in
             let kind = GomokuWatchStatusRule.kind(for: watch, now: context.date)
             let tint = Self.tint(kind)
             VStack(alignment: .leading, spacing: 4) {
-                Text(GomokuWatchStatusRule.text(for: watch, now: context.date))
-                    .font(.headline)
-                    .foregroundStyle(tint)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: 6) {
+                    Text(GomokuWatchStatusRule.text(for: watch, now: context.date))
+                        .font(.headline)
+                        .foregroundStyle(tint)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    WatcherCountChip(count: watchers, height: 18)
+                }
                 if let warning = GomokuWatchStatusRule.streakWarning(for: watch, lossStreak: lossStreak) {
                     Text(warning)
                         .font(.caption.weight(.bold))
@@ -3035,7 +3049,9 @@ private struct GomokuWatchStatusBox: View {
     }
 }
 
-/// 관전 안내 카드(남는 자리). "관전 중" · 수 · 경과 · 대국자 채팅은 보이지 않는다는 말 · 자동 착수 개수. 관전자 수는 없다(U4).
+/// 관전 안내 카드(남는 자리). "관전 중" · 수 · 경과 · 대국자 채팅은 보이지 않는다는 말 · 자동 착수 개수.
+/// ★ **관전자 수는 여기가 아니다**(v0.3.65). 그 숫자는 위 상태 상자의 `WatcherCountChip` 한 자리에만 선다 —
+///   두 자리에 그리면 폴링마다 같은 숫자가 두 번 튀고, 한쪽만 고치는 날이 온다.
 /// 경과는 잎(`GomokuElapsedText`)이 센다. 끝난 판은 경과를 멈춘 채 숨긴다(끝난 뒤 흐르는 시간은 아무 뜻도 없다).
 private struct GomokuWatchInfoCard: View {
     let watch: GomokuSpectateState

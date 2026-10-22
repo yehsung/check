@@ -1680,6 +1680,20 @@ extension SupabaseWorkService {
         )
     }
 
+    /// 관전 + 관전자 수(0.3.64). 서버가 읽기 전용 `gomoku_watch` 를 그대로 싣고 `watchers` 한 칸을 더한다 —
+    /// **요청 본문·응답 모양은 위와 같다**(키 하나가 늘 뿐이라 같은 디코더로 읽는다).
+    ///
+    /// 서버에 이 함수가 아직 없으면(앱이 db push 보다 먼저 나간 창) PGRST202 → `.databaseSchemaMissing` 으로
+    /// throw 한다. 접는 곳은 스토어다(`GomokuStoreWatch.watchFetch`) — 옛 `gomoku_watch` 로 한 번 돌아가고,
+    /// **관전 입구는 잠그지 않는다**(관전자 수가 없는 것과 관전을 못 하는 것은 다른 사실이다).
+    package func gomokuWatchLive(accessToken: String, matchID: String, sinceSeq: Int) async throws -> GomokuWatchResponse {
+        try await gomokuRPC(
+            "gomoku_watch_live",
+            body: GomokuWatchRequest(pMatchId: matchID, pSinceSeq: sinceSeq),
+            accessToken: accessToken
+        )
+    }
+
     /// Postgres 교착(SQLSTATE 40P01). PostgREST 는 500 + 본문 `code` 로 싣는다 — 공용 `send` 의 매핑은 5xx 를
     /// 코드 없이 접으므로, 오목 호출은 본문 코드를 직접 본다(헤더 구성은 `send` 와 같다).
     package static let gomokuDeadlockCode = "40P01"

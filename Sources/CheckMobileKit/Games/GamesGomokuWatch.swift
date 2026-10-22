@@ -13,7 +13,8 @@ import SwiftUI
 ///   `GamesGomokuPlayBoard` 는 `match.myColor`·탭에 묶여 있어 쓰지 않는다.
 /// - 차례 링은 `watch.deadline` 을 **직접** 센다 — 스토어 `remainingSeconds` 는 내 판만 알고, 관전 중 `match` 는 nil 이라
 ///   그 값을 쓰면 링이 0초로 빨갛게 선다.
-/// - 채팅·관전자 수는 그리지 않는다(서버 응답에 그 키 자체가 없다).
+/// - 채팅은 그리지 않는다(서버 응답에 그 키 자체가 없다). 관전자 수는 0.3.65 에 덮개 함수(`gomoku_watch_live`)가
+///   한 칸으로 더해 주고 코어가 `gomoku.spectatorCount` 에 담는다 — 그 함수가 없는 창에서는 0 이라 안 그린다.
 /// - 끝난 판을 다시 조회하지 않는다 — 폴링은 스토어가 멈추고(`isFinished`) 결과는 [나가기] 전까지 이 값에 남는다.
 ///   3분이 지나면 서버가 `not_found` 를 주므로 **화면이 들고 있는 것이 결과의 유일한 출처**다.
 struct GamesGomokuWatch: View {
@@ -251,13 +252,22 @@ struct GamesGomokuWatch: View {
             GroupRow(divider: .none) {
                 if typeSize.isAccessibilitySize {
                     // 큰 글자: 판돈 줄과 수·경과가 한 줄에 몰리면 "이기면 / +5"로 꺾인다(신청 카드에서 실측된 같은 결).
-                    VStack(alignment: .leading, spacing: 4) { stakeLine; GamesGomokuWatchMoveLine(store: store, watch: watch) }
+                    VStack(alignment: .leading, spacing: 4) { stakeRow; GamesGomokuWatchMoveLine(store: store, watch: watch) }
                 } else {
-                    stakeLine
+                    stakeRow
                     Spacer(minLength: MobileTheme.space2)
                     GamesGomokuWatchMoveLine(store: store, watch: watch)
                 }
             }
+        }
+    }
+
+    /// 판돈 + **관전자 수**(0.3.65 — 명세 §3 '관전 화면: 판돈 칩 근처'). 0 이면 눈 칸이 서지 않아
+    /// 이 줄은 전과 똑같은 모양이다(관전 응답에 `watchers` 가 없는 서버·접힌 길도 0 이다).
+    private var stakeRow: some View {
+        HStack(spacing: 6) {
+            stakeLine
+            GamesWatcherBadge(count: gomoku.spectatorCount)
         }
     }
 

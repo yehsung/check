@@ -402,6 +402,12 @@ struct GamesTetrisDuelScreen: View {
         // 순위는 **로비에서만** 갱신된다(화면을 떠나면 폴링이 죽는다) — 탭을 고른 그 순간이 조회를 낼 자리다.
         // 판정은 `GamesTetrisDuelRankingPlan` 한 곳이다(스로틀·단계 가드를 뷰가 다시 적지 않게).
         .onChange(of: tab) { _, value in
+            // ★ 먼저 관전을 거둔다. 관전 판은 [상대] 탭의 "지금 대결 중" 자리에만 있어서, 탭을 바꾸면
+            //   **화면에서는 사라지는데 `spectating` 은 살아** 2초 폴링이 계속 나간다 — 아무것도 안 보는
+            //   사람이 남의 카드에 관전자로 잡히고 [나가기]는 그 사라진 절 안에 있다. 코어
+            //   (`shouldPollWatch`)는 탭을 모르므로 **화면이 풀어야 하는 매듭**이다
+            //   (까닭과 고르지 않은 다른 길은 `GamesTetrisWatchPlan.tabDidChange` 머리말에).
+            GamesTetrisWatchPlan.tabDidChange(tetris, to: value)
             GamesTetrisDuelRankingPlan.refreshIfNeeded(tetris, tab: value)
         }
     }
@@ -451,18 +457,28 @@ struct GamesTetrisDuelScreen: View {
             .padding(.top, MobileTheme.space2)
     }
 
-    // MARK: 지금 대결 중 (관전은 없다 — D8)
+    // MARK: 지금 대결 중 (0.3.65 부터 관전 입구가 있다 — D8 을 되돌린 것)
 
+    /// 관전 중이면 **이 자리가 관전 판으로 바뀐다**(새 화면을 밀지 않는다 — `GamesTetrisWatch.swift` 자리 계약).
+    /// 자식 라우트를 push 하면 이 화면의 `onDisappear` 로 폴링이 죽어 판이 갱신되지 않는다.
     @ViewBuilder
     private var liveMatches: some View {
+        if let watch = tetris.spectating {
+            GamesTetrisWatchPanel(store: tetris, watch: watch)
+        } else {
+            liveMatchList
+        }
+    }
+
+    @ViewBuilder
+    private var liveMatchList: some View {
         let lives = tetris.liveMatches
         // 한 번도 안 받았으면 절을 통째로 접는다(머리만 번쩍이지 않게 — 체스 순위 절과 같은 규약).
         if !lives.isEmpty {
             SectionHeader(TetrisPhoneText.liveTitle, trailing: .text(TetrisPhoneText.liveCount(lives.count)), padded: true)
             InsetGroup {
                 ForEach(Array(lives.enumerated()), id: \.element.id) { index, live in
-                    GamesTetrisLiveRow(live: live, isMine: live.id == tetris.match?.id,
-                                       isLast: index == lives.count - 1)
+                    GamesTetrisLiveRow(store: tetris, live: live, isLast: index == lives.count - 1)
                 }
             }
         } else if tetris.hasLoadedLobby, !tetris.lobbyLoadFailed {
@@ -675,29 +691,69 @@ private struct GamesTetrisOutgoingRow: View {
 
 // MARK: - 지금 대결 중 한 줄
 
-/// 로비 "지금 대결 중" 한 줄 — 누를 것이 **없다**(관전은 이번 범위에서 뺐다 · D8). 내 판은 칩으로 표시한다.
+/// 로비 "지금 대결 중" 한 줄 — 이름 둘 · 판돈 · 오른쪽 끝에 **관전자 수 + [관전] 입구**(0.3.65).
+///
+/// 내 판은 칩 대신 그 자리에 "내 판" 캡션이 선다(`GamesTetrisWatchEntry` — 오목·체스와 같은 관용구).
+/// 큰 글자·좁은 폭에서는 입구가 글 아래로 내려간다(오목에서 320pt 실측으로 고친 자리 — 칩이 붙으면서
+/// 판돈 줄에 남는 폭이 줄어 판돈이 줄임표로 잘렸다).
 private struct GamesTetrisLiveRow: View {
+    let store: TetrisDuelStore
     let live: TetrisDuelLiveMatch
-    let isMine: Bool
     let isLast: Bool
+
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         GroupRow(divider: isLast ? .none : .inset(MobileTheme.cardPadding), minHeight: 48) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(TetrisPhoneText.liveRow(live.a.displayName, live.b.displayName))
-                        .font(MobileTheme.rowTitle)
-                        .foregroundStyle(MobileTheme.label)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if isMine { AingChip(text: TetrisPhoneText.myMatch).fixedSize() }
+            if typeSize.isAccessibilitySize {
+                stacked
+            } else if hasEntry {
+                // 오른쪽 끝에 무엇이든 붙는 행만 폭을 재본다(없으면 전과 같은 한 줄 — 빈 모양을 바꾸지 않는다).
+                ViewThatFits(in: .horizontal) {
+                    inline
+                    stacked
                 }
-                GamesStakeLine(stake: live.stake.rawValue, prefix: TetrisPhoneText.stakeTitle)
-                    .font(MobileTheme.rowSubtitle)
-                    .foregroundStyle(MobileTheme.label2)
+            } else {
+                inline
             }
-            Spacer(minLength: 0)
         }
+    }
+
+    /// 입구 슬롯이 실제로 뷰를 그리는가. 위 폭 재보기와 `entry` 가 **이 하나**를 본다 — 조건을 두 곳에 적으면
+    /// 한쪽만 고쳐져 "빈 슬롯 때문에 줄을 접는" 꼴이 된다.
+    private var hasEntry: Bool { GamesTetrisWatchPlan.hasTrailingContent(store, live: live) }
+
+    private var inline: some View {
+        HStack(spacing: MobileTheme.space3) {
+            texts
+            Spacer(minLength: 0)
+            entry
+        }
+    }
+
+    private var stacked: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            texts
+            entry
+        }
+    }
+
+    private var texts: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(TetrisPhoneText.liveRow(live.a.displayName, live.b.displayName))
+                .font(MobileTheme.rowTitle)
+                .foregroundStyle(MobileTheme.label)
+                .fixedSize(horizontal: false, vertical: true)
+            GamesStakeLine(stake: live.stake.rawValue, prefix: TetrisPhoneText.stakeTitle)
+                .font(MobileTheme.rowSubtitle)
+                .foregroundStyle(MobileTheme.label2)
+        }
+        // 합치기는 **이 글 묶음에만** 둔다 — 행 전체를 합치면 [관전]이 한 덩이에 삼켜져 보이스오버가 누를 수 없다.
         .accessibilityElement(children: .combine)
+    }
+
+    private var entry: some View {
+        GamesTetrisWatchEntry(store: store, live: live)
     }
 }
 

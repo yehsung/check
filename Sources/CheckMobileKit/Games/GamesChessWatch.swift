@@ -27,8 +27,10 @@ import SwiftUI
 // `swift test` 가 **부르는 자리와 결과**를 값으로 잰다.
 //
 // ── 관전은 판만이다 ──
-// 서버 `chess_watch` 는 판(FEN)·수순·남은 시간·두 사람·판돈만 준다. **채팅도 관전자 수도 없다**(그 키 자체가
-// 응답에 없다). 끝난 판은 **3분 꼬리** 안에서만 보이고 그 뒤엔 `not_found` 다 — 그때 코어가 관전을 내리고
+// 서버 `chess_watch` 는 판(FEN)·수순·남은 시간·두 사람·판돈만 준다. **채팅이 없다**(그 키 자체가 응답에 없다).
+// 관전자 수는 0.3.65 에 **덮개 함수**(`chess_watch_live`)가 한 칸으로 더해 주고 코어가 `store.spectatorCount`
+// 한 칸에 담는다 — 그 함수가 없는 창에서는 0 이라 이 절이 아무것도 안 그린다(`GamesWatcherCount.shows`).
+// 끝난 판은 **3분 꼬리** 안에서만 보이고 그 뒤엔 `not_found` 다 — 그때 코어가 관전을 내리고
 // 안내(`ChessNoticeText.watchGone`)를 남기므로, 로비 화면이 `store.notice` 를 그려야 그 말이 사용자에게 닿는다
 // (맥은 `ChessLobbyInvitesBox` 가 그 자리다). 이 절은 안내줄을 따로 그리지 않는다 — 두 벌이 되면 같은 문장이
 // 한 화면에 두 번 뜬다.
@@ -251,7 +253,7 @@ private struct GamesChessLiveRow: View {
             if typeSize.isAccessibilitySize {
                 stacked
             } else if hasEntry {
-                // 입구가 붙는 행만 폭을 재본다(없으면 전과 같은 한 줄 — 칩이 없는 모양을 바꾸지 않는다).
+                // 오른쪽 끝에 무엇이든 붙는 행만 폭을 재본다(없으면 전과 같은 한 줄 — 빈 모양을 바꾸지 않는다).
                 ViewThatFits(in: .horizontal) {
                     inline
                     stacked
@@ -281,7 +283,13 @@ private struct GamesChessLiveRow: View {
 
     /// 입구 슬롯이 실제로 뷰를 그리는가. 위 폭 재보기와 아래 `entry` 가 **이 하나**를 본다 — 조건을 두 곳에
     /// 적으면 한쪽만 고쳐져 "빈 슬롯 때문에 줄을 접는" 꼴이 된다.
-    private var hasEntry: Bool { GamesChessWatchPlan.entry(store, isMine: store.isMine(live)) != .absent }
+    ///
+    /// ★ 0.3.65 로 그 슬롯에 **관전자 수**가 같이 선다. 그래서 이 술어가 둘을 **합쳐서** 답한다 — 수만 있고
+    ///   입구가 없는 행(주 스위치가 꺼진 배선)에서도 폭을 재야 하고, 반대로 둘 다 없으면 재지 않는다.
+    private var hasEntry: Bool {
+        GamesChessWatchPlan.entry(store, isMine: store.isMine(live)) != .absent
+            || GamesWatcherCount.shows(live.watchers)
+    }
 
     private var faces: some View {
         HStack(spacing: 8) {
@@ -320,10 +328,21 @@ private struct GamesChessLiveRow: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// 오른쪽 끝 슬롯: **관전자 수**(0.3.65) + 관전 입구. 둘 다 없으면 아무것도 그리지 않는다.
+    @ViewBuilder
+    private var entry: some View {
+        if hasEntry {
+            HStack(spacing: 6) {
+                GamesWatcherBadge(count: live.watchers)
+                entryControl
+            }
+        }
+    }
+
     /// 관전 입구. 판정은 `GamesChessWatchPlan.entry` **하나**다(뷰가 깃발을 다시 읽지 않는다 — 그래야 맥
     /// 스위트가 게이트를 잴 수 있고, `watchUnavailable` 을 `rankingUnavailable` 로 바꾸면 빨개진다).
     @ViewBuilder
-    private var entry: some View {
+    private var entryControl: some View {
         switch GamesChessWatchPlan.entry(store, isMine: store.isMine(live)) {
         case .absent:
             EmptyView()
@@ -554,13 +573,22 @@ private struct GamesChessWatchPanel: View {
         InsetGroup {
             GroupRow(divider: .none) {
                 if typeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 4) { stakeLine; moveLine }
+                    VStack(alignment: .leading, spacing: 4) { stakeRow; moveLine }
                 } else {
-                    stakeLine
+                    stakeRow
                     Spacer(minLength: MobileTheme.space2)
                     moveLine
                 }
             }
+        }
+    }
+
+    /// 판돈 + **관전자 수**(0.3.65 — 명세 §3 '관전 화면: 판돈 칩 근처'). 0 이면 눈 칸이 아예 서지 않아
+    /// 이 줄은 전과 똑같은 모양이다.
+    private var stakeRow: some View {
+        HStack(spacing: 6) {
+            stakeLine
+            GamesWatcherBadge(count: store.spectatorCount)
         }
     }
 

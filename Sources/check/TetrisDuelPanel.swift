@@ -86,6 +86,24 @@ enum TetrisDuelText {
     static let noLive = "지금 진행 중인 대결이 없어요"
     static let myMatch = "내 판"
 
+    // ── 관전 (v0.3.65) ──
+    static let watch = "관전"
+    static let watchHelp = "이 대결을 구경해요"
+    static let watching = "관전 중"
+    static let watchLoading = "판을 불러오고 있어요"
+    static let watchEnded = "대결이 끝났어요"
+    static let watchDraw = "무승부로 끝났어요"
+    /// 끝난 판의 승자 한 줄. **3인칭이다** — 관전자에게 "이겼어요" 는 누구 얘긴지 뜻이 없다.
+    /// 쓰는 자리는 서버가 `match.winner`(uuid)를 실어 **어느 자리가 이겼는지 아는 때뿐**이다.
+    static func watchWinner(_ name: String) -> String { "\(name) 승리" }
+    /// 이긴 자리의 이름 카드 캡션(판 아래 줄). 위 머리글과 같은 사실을 짧게 되풀이한다.
+    static let watchWinnerCaption = "승리"
+    /// 진행 중 관전의 설명 줄. 관전자가 **쓸 수 있는 것이 하나도 없다**는 사실을 말한다.
+    static let watchNoInput = "보기만 할 수 있어요"
+    static let leaveWatch = "나가기"
+    static let leaveWatchHelp = "관전을 끝내고 로비로 돌아가요"
+    static let watchBoardMissing = "아직 판이 오지 않았어요"
+
     static let rankLoading = "순위를 불러오고 있어요"
     static let rankEmpty = "아직 순위가 없어요"
     static let rankFailed = TetrisDuelNoticeText.checkConnection
@@ -244,6 +262,10 @@ struct TetrisDuelPanel: View {
     private var content: some View {
         if let match = store.match, store.phase != .lobby {
             matchView(match)
+        } else if let watch = store.spectating {
+            // 관전은 **로비 자리**에 선다(`phase` 는 `.lobby` 그대로이고 `spectating` 하나가 화면을 가른다 — 체스와 같다).
+            // 내 판 갈래를 **먼저** 본다: 내 판이 서면 스토어가 관전을 내리지만, 그 한 틱 사이에도 판이 관전을 이긴다.
+            TetrisDuelSpectateView(store: store, watch: watch)
         } else {
             lobby
         }
@@ -639,7 +661,13 @@ private struct TetrisDuelLobbySide: View {
                 TetrisDuelScrollBox(clips: clipsOverflowInsteadOfScroll) {
                     VStack(spacing: 6) {
                         ForEach(store.liveMatches) { live in
-                            TetrisDuelLiveRow(live: live, isMine: isMine(live))
+                            // [관전](v0.3.65): 주 스위치가 꺼진 배선에서는 **칩 자체를 두지 않는다**(`onWatch` nil).
+                            // 잠금 게이트는 `watchUnavailable` 하나다 — `rankingUnavailable` 과 겸업시키면 멀쩡한
+                            // 관전 입구가 순위 404 하나로 죽는다(오목이 2026-10-01 에 데인 자리).
+                            TetrisDuelLiveRow(
+                                live: live, isMine: isMine(live), canWatch: !store.watchUnavailable,
+                                onWatch: store.spectatorFeaturesEnabled
+                                    ? { store.startWatching(matchID: live.id) } : nil)
                         }
                     }
                 }
@@ -659,6 +687,10 @@ private struct TetrisDuelLobbySide: View {
 private struct TetrisDuelLiveRow: View {
     let live: TetrisDuelLiveMatch
     let isMine: Bool
+    /// [관전] 칩을 누를 수 있는가(서버에 관전이 열렸는가). 잠기면 흐리게 서 있다.
+    var canWatch: Bool = true
+    /// [관전] 칩. **nil 이면 칩이 없다** — 주 스위치가 꺼진 배선이 그렇다.
+    var onWatch: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -672,17 +704,24 @@ private struct TetrisDuelLiveRow: View {
                             characterHint: live.b.characterID)
             Text(live.b.displayName).font(.caption2).lineLimit(1)
             Spacer(minLength: 4)
+            HStack(spacing: 3) {
+                RubyIcon(size: 11)
+                Text("\(live.stake.rawValue)").monospacedDigit()
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(CheckTheme.secondaryText)
+            // 관전자 수(v0.3.65) — [관전] 칩 **옆**. 높이는 칩과 같은 18 이라 줄이 32 를 유지한다.
+            WatcherCountChip(count: live.watchers, height: TetrisDuelWindowLayout.liveWatchChipHeight)
             if isMine {
                 Text(TetrisDuelText.myMatch)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(CheckTheme.secondaryText)
-            } else {
-                HStack(spacing: 3) {
-                    RubyIcon(size: 11)
-                    Text("\(live.stake.rawValue)").monospacedDigit()
-                }
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(CheckTheme.secondaryText)
+                    .frame(height: TetrisDuelWindowLayout.liveWatchChipHeight)
+            } else if let onWatch {
+                TetrisDuelActionButton(title: TetrisDuelText.watch, icon: "eye", style: .outline,
+                                       height: TetrisDuelWindowLayout.liveWatchChipHeight,
+                                       isEnabled: canWatch, action: onWatch)
+                    .checkTooltip(canWatch ? TetrisDuelText.watchHelp : TetrisDuelNoticeText.unavailable)
             }
         }
         .padding(.horizontal, 10)
@@ -806,6 +845,8 @@ private struct TetrisDuelTopBar: View {
             .frame(height: TetrisDuelWindowLayout.matchTopBarHeight)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+            // 내 판을 보고 있는 사람 수(v0.3.65 — `tetris__state` 가 싣는다). **판돈 칩 줄**에 같이 선다. 0 이면 안 그린다.
+            WatcherCountChip(count: store.spectatorCount, height: 22)
             TetrisDuelElapsedLeaf(store: store)
             if let floor = store.myStats?.levelFloor, floor > 1, !match.isFinished {
                 // 2분이 지나 가속이 걸렸다(D7). 바닥은 10초마다 오르므로 이 칩은 그때만 다시 그려진다(관찰 값).
@@ -1362,6 +1403,283 @@ struct TetrisDuelResultCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .tetrisDuelCard(padding: 12)
+    }
+}
+
+// MARK: - 관전 (v0.3.65)
+//
+// 본보기는 **체스 관전**이다(`ChessPanel.swift` 관전 절): 로비 자리에 서고, 읽기 전용이고, [나가기] 하나로 돌아온다.
+// 테트리스에서 달라지는 것은 둘이다.
+//   · 그리는 것이 **두 사람 판**이다(체스는 한 판이다). a·b 는 **uuid 오름차순**이고 색이 아니다 — 왼쪽이 흑도
+//     challenger 도 아니다. 그래서 자리에 "누가 도전자" 라는 말을 적지 않는다.
+//   · ★ **승자는 서버가 말해 줄 때만 말한다.** 전선의 `match.winner`(이긴 사람 uuid)가 `TetrisSpectateState.aWon`·
+//     `.bWon` 으로 와 있고, 화면은 그 uuid 가 **어느 자리의 사람인지만** 본다. `result`("challenger_win"…)로
+//     역산하지 마라 — 관전 봉투에는 challenger 표시가 없어 둘일 때 맞는 식이 셋째 경우에 거짓말한다.
+//     둘 다 거짓인 정상 상태가 있다(무승부 · 진행 중 · 승자 칸을 모르는 옛 서버) — 그때는 "대결이 끝났어요"
+//     (무승부만 따로)와 **3인칭 사유**까지다. 시간이 다 돼 보여도 결과를 지어내지 마라(체스 0.3.41 이 데인 자리).
+//   · ★ 승자 문장도 **3인칭**이다("밥 승리"). 관전자에게 "이겼어요/졌어요" 는 누구 얘긴지 뜻이 없다(오목이 데인 자리).
+// 판 그림은 **기존 `TetrisBoardPainter.drawMiniBoard`** 한 벌을 그대로 쓴다(새로 그리지 않는다 — 두 벌을 두면
+// 방해 줄 회색이 언젠가 한쪽에서만 바뀐다). 입력은 0건이다: 이 절의 판·카드에는 Button·제스처·탭이 하나도 없다.
+
+/// 관전 상태 상자가 그리는 **두 줄**(순수 값). 뷰에서 떼어 두어야 테스트가 "관전자가 읽는 글자" 를 되묻는다 —
+/// 체스 `ChessWatchStatusText` 와 같은 규약이다.
+///
+/// ★ `headline` 은 `result` 가 'challenger_win' 이든 'opponent_win' 이든 **같은 글자**다. 그것이 계약이다 —
+///   다르게 만드는 순간 관전 화면이 모르는 것을 아는 척하게 된다. 승자를 말하는 유일한 근거는
+///   `winnerUserID`(= 서버의 `match.winner`)가 어느 자리의 사람인지 가린 `aWon`·`bWon` 뿐이다.
+enum TetrisWatchStatusText {
+    static func headline(_ watch: TetrisSpectateState) -> String {
+        if watch.isFinished {
+            // 서버가 이긴 사람 uuid 를 실었고 그게 두 자리 중 하나면 **그 사람 이름**을 3인칭으로 말한다.
+            if let name = winnerName(watch) { return TetrisDuelText.watchWinner(name) }
+            // 모르면(무승부 · 승자 칸이 없는 옛 서버 · 아직 이름을 못 받음) 승자를 말하지 않는다.
+            return watch.result == "draw" ? TetrisDuelText.watchDraw : TetrisDuelText.watchEnded
+        }
+        if !watch.hasServerState { return TetrisDuelText.watchLoading }
+        return TetrisDuelText.watching
+    }
+
+    /// 이긴 사람의 **이름**. 값이 있는 때는 하나뿐이다 — 서버가 `match.winner` 를 실었고, 그 uuid 가 a·b 두
+    /// 자리 중 한 사람이고, 그 사람의 이름이 비어 있지 않을 때. 그 밖에는 nil 이고 화면은 승자를 말하지 않는다.
+    ///
+    /// ★ `result` 를 보지 않는다. 이 함수가 `result` 를 읽기 시작하면 'challenger_win' 이 **어느 자리**인지
+    ///   모르는 채로 한쪽을 지목하게 된다(관전 봉투에 challenger 표시가 없다).
+    static func winnerName(_ watch: TetrisSpectateState) -> String? {
+        let raw: String?
+        if watch.aWon {
+            raw = watch.a.user?.displayName
+        } else if watch.bWon {
+            raw = watch.b.user?.displayName
+        } else {
+            return nil
+        }
+        guard let name = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
+        return name
+    }
+
+    /// 둘째 줄. 끝난 판은 **3인칭 사유**(`TetrisDuelNoticeText.endReason` 은 내 기준 1인칭이라 관전에 쓰면
+    /// 관전자가 패자의 문장을 읽는다 — 체스가 2026-10-05 에 고친 그것).
+    static func detail(_ watch: TetrisSpectateState, notice: String?) -> String {
+        if watch.isFinished { return reason(watch.endReason) }
+        if let notice { return notice }
+        return TetrisDuelText.watchNoInput
+    }
+
+    /// 끝난 사유(3인칭 · **누가 이겼는지 말하지 않는다**). 모르면 빈 문자열.
+    static func reason(_ reason: TetrisDuelEndReason?) -> String {
+        guard let reason else { return "" }
+        switch reason {
+        case .topout: return "한쪽이 꼭대기까지 쌓였어요"
+        case .resign: return "한 사람이 기권했어요"
+        // ★ "연결이 끊겼어요" 로 쓰지 마라 — 그건 **내 기준 패배** 문장과 글자까지 같아서, 관전 사유가
+        //   1인칭으로 되돌아가도 아무 그물에 안 걸린다(실측으로 걸린 자리다).
+        case .disconnect: return "한쪽 연결이 끊겼어요"
+        case .timeCap: return "시간이 다 돼 끝났어요"
+        case .noShow: return "대결이 시작되지 않았어요"
+        case .abandoned: return "한 사람이 대결을 떠났어요"
+        }
+    }
+}
+
+/// 관전 화면 — 세 열 [a | b | 오른쪽]. 입력은 [나가기] 하나뿐이다(판에는 하나도 없다).
+private struct TetrisDuelSpectateView: View {
+    let store: TetrisDuelStore
+    let watch: TetrisSpectateState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: TetrisDuelWindowLayout.columnSpacing) {
+            TetrisDuelSpectateSide(side: watch.a, seat: watch.faces.first, isFinished: watch.isFinished,
+                                   didWin: watch.aWon)
+                .frame(width: TetrisDuelWindowLayout.spectateSideWidth,
+                       height: TetrisDuelWindowLayout.bodyHeight, alignment: .top)
+                .clipped()
+            TetrisDuelSpectateSide(side: watch.b, seat: watch.faces.count > 1 ? watch.faces[1] : nil,
+                                   isFinished: watch.isFinished, didWin: watch.bWon)
+                .frame(width: TetrisDuelWindowLayout.spectateSideWidth,
+                       height: TetrisDuelWindowLayout.bodyHeight, alignment: .top)
+                .clipped()
+            TetrisDuelSpectateInfo(store: store, watch: watch)
+                .frame(width: TetrisDuelWindowLayout.spectateInfoWidth,
+                       height: TetrisDuelWindowLayout.bodyHeight, alignment: .top)
+                .clipped()
+        }
+    }
+}
+
+/// 한 자리(a 또는 b): **판이 먼저, 이름·숫자가 아래**다(명세 §4 — 관전자의 눈이 먼저 가는 것은 판이다).
+/// **탑아웃한 쪽은 흐리게.**
+private struct TetrisDuelSpectateSide: View {
+    let side: TetrisSpectateSide
+    /// 로비 카드에서 빌린 얼굴(첫 응답 전에는 이것만 있다). 서버 행이 오면 `side.user` 가 이긴다.
+    let seat: TetrisDuelUser?
+    /// 서버가 판을 닫았는가. **승패가 아니라** 캡션 한 줄만 가른다("대결 중" → "대결 끝").
+    let isFinished: Bool
+    /// 이 자리의 사람이 이겼는가. 부모가 `watch.aWon`/`watch.bWon` 을 그대로 넘긴다 — 서버가 실은
+    /// `match.winner`(uuid)가 이 자리의 사람일 때만 참이고, 모르면(무승부·진행 중·옛 서버) **거짓**이다.
+    /// ★ 이 값을 `result` 로 만들어 넘기지 마라(관전 봉투에 challenger 표시가 없다).
+    let didWin: Bool
+
+    private var user: TetrisDuelUser? { side.user ?? seat }
+
+    /// 이름 아래 캡션. 승패를 말하는 근거는 `didWin` **하나뿐**이다. 탑아웃은 서버가 그 자리에 대해 직접
+    /// 말해 준 사실이라 먼저 온다(진 쪽이 흐려진 채 "승리" 라고 적히는 일이 없다).
+    private var caption: String {
+        if side.toppedOut { return TetrisDuelText.toppedOutTitle }
+        if didWin { return TetrisDuelText.watchWinnerCaption }
+        return isFinished ? TetrisDuelText.finishedPresence : TetrisDuelText.playingNow
+    }
+
+    private var captionTint: Color {
+        if side.toppedOut { return CheckTheme.danger }
+        return didWin ? CheckTheme.working : CheckTheme.secondaryText
+    }
+
+    var body: some View {
+        VStack(spacing: TetrisDuelWindowLayout.playerCardSpacing) {
+            boardCard
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            nameCard
+                .frame(height: TetrisDuelWindowLayout.playerCardHeight)
+        }
+        // 탑아웃한 쪽은 흐리게 — "이쪽은 이미 끝났다" 를 색이 아니라 밝기로 말한다(색은 방해 줄·조각이 이미 쓴다).
+        .opacity(side.toppedOut ? 0.55 : 1)
+    }
+
+    private var nameCard: some View {
+        HStack(spacing: 8) {
+            // 관전 카드의 얼굴은 **초상**이다(체스 `ChessWatchPlayerCard` · 오목 `GomokuSpectateFaceCard` 와 같다).
+            // 사진 아바타(`CheckAvatarView`)는 로비 줄의 것이다 — 관전 카드에서 두 벌을 섞으면 같은 사람이
+            // 화면마다 다른 얼굴로 보인다.
+            CharacterPortrait(characterID: user?.characterID ?? ChessPlayerFace.fallbackCharacterID)
+                .frame(width: 34, height: 34)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(user?.displayName ?? "—")
+                    .font(.callout.weight(.bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text(caption)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(captionTint)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(CheckTheme.panel.opacity(0.9)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+    }
+
+    private var boardCard: some View {
+        VStack(spacing: TetrisDuelWindowLayout.spectateBoardGap) {
+            board
+            VStack(spacing: TetrisDuelWindowLayout.spectateStatSpacing) {
+                statRow(TetrisDuelText.linesTitle, side.lines, tint: CheckTheme.primaryText)
+                statRow(TetrisDuelText.attackTitle, side.attackSent, tint: CheckTheme.working)
+                statRow(TetrisDuelText.incomingLinesTitle, side.pending,
+                        tint: side.pending > 0 ? TetrisDuelPalette.meterColor : CheckTheme.secondaryText)
+            }
+            .frame(height: TetrisDuelWindowLayout.spectateStatsHeight)
+        }
+        .padding(TetrisDuelWindowLayout.spectateCardPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .tetrisDuelCard(padding: 0)
+    }
+
+    /// 판 한 장. 보고가 아직 없거나 글자가 망가진 자리는 `cells` 가 nil 이고 — **그래도 화면은 선다**(빈 우물 + 안내 한 줄).
+    @ViewBuilder
+    private var board: some View {
+        let size = TetrisDuelWindowLayout.spectateBoardSize
+        Canvas(rendersAsynchronously: false) { canvas, canvasSize in
+            TetrisBoardPainter.drawMiniBoard(side.cells ?? [], into: &canvas, size: canvasSize,
+                                             cell: TetrisDuelWindowLayout.spectateBoardCell)
+        }
+        .frame(width: size.width, height: size.height)
+        .overlay {
+            if side.cells == nil {
+                Text(TetrisDuelText.watchBoardMissing)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.black.opacity(0.65)))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(user?.displayName ?? "—") 판")
+    }
+
+    private func statRow(_ title: String, _ value: Int, tint: Color) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(CheckTheme.secondaryText)
+            Spacer(minLength: 4)
+            Text(String(value))
+                .font(.callout.weight(.heavy))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+        }
+        .frame(height: TetrisDuelWindowLayout.spectateStatRowHeight)
+    }
+}
+
+/// 관전 오른쪽 열 — 판돈 칩(관전자 수와 **같은 줄**) · 상태 상자 · [나가기].
+private struct TetrisDuelSpectateInfo: View {
+    let store: TetrisDuelStore
+    let watch: TetrisSpectateState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: TetrisDuelWindowLayout.spectateInfoSpacing) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Text(TetrisDuelText.stakeTitle).foregroundStyle(CheckTheme.secondaryText)
+                    RubyIcon(size: 15)
+                    // ★ 관전 칩은 판돈 **숫자만** 말한다 — "이기면 +n" 은 대국자의 문장이다(관전자는 이겨도 얻는 것이 없다).
+                    Text(watch.stake.map(String.init) ?? "—").monospacedDigit().lineLimit(1)
+                }
+                .font(.callout.weight(.semibold))
+                .padding(.horizontal, 12)
+                .frame(height: TetrisDuelWindowLayout.matchTopBarHeight)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+                Spacer(minLength: 4)
+            }
+            // 나 말고 몇 명이 같이 보고 있는가. **여기만 글자 문구**("N명이 보고 있어요")다 — 이 열은 자리가 넉넉하고
+            // 로비 줄처럼 숫자만 두면 옆에 견줄 것이 없어 무엇의 N 인지 안 읽힌다. 0 이면 아무것도 안 그린다
+            // (서버가 수를 모르는 접힌 길도 0 으로 온다 — 없는 숫자를 지어내지 않는다).
+            WatcherCountChip(count: store.spectatorCount, height: 24, showsCaption: true)
+            statusBox
+            Spacer(minLength: 0)
+            TetrisDuelActionButton(title: TetrisDuelText.leaveWatch, icon: "xmark", tint: CheckTheme.offWork,
+                                   style: .outline, height: TetrisDuelWindowLayout.spectateLeaveHeight,
+                                   fullWidth: true) {
+                store.leaveWatch()
+            }
+            .frame(height: TetrisDuelWindowLayout.spectateLeaveHeight)
+            .checkTooltip(TetrisDuelText.leaveWatchHelp)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var statusBox: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(TetrisWatchStatusText.headline(watch))
+                .font(.headline)
+                .foregroundStyle(watch.isFinished ? CheckTheme.offWork : CheckTheme.working)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(TetrisWatchStatusText.detail(watch, notice: store.notice))
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: TetrisDuelWindowLayout.spectateStatusMinHeight, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
     }
 }
 

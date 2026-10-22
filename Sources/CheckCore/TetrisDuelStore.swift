@@ -240,13 +240,18 @@ package nonisolated struct TetrisDuelLiveMatch: Identifiable, Equatable, Sendabl
     package let b: TetrisDuelUser
     package let stake: TetrisDuelStake
     package let startedAt: Date
+    /// 지금 이 판을 보고 있는 사람 수(v0.3.64). 옛 서버는 안 싣는다 → 0. **0 이면 화면에 아무것도 그리지 않는다.**
+    package let watchers: Int
 
-    package init(id: String, a: TetrisDuelUser, b: TetrisDuelUser, stake: TetrisDuelStake, startedAt: Date) {
+    /// `watchers` 에 기본값을 둔 까닭: 호출부(테스트·미리보기)가 이 칸을 모르던 때 그대로 산다.
+    package init(id: String, a: TetrisDuelUser, b: TetrisDuelUser, stake: TetrisDuelStake, startedAt: Date,
+                 watchers: Int = 0) {
         self.id = id
         self.a = a
         self.b = b
         self.stake = stake
         self.startedAt = startedAt
+        self.watchers = watchers
     }
 }
 
@@ -337,6 +342,8 @@ package nonisolated enum TetrisDuelNoticeText {
     package static let targetBusy = "상대가 다른 대결 중이에요"
     /// 서버에 테트리스 대결이 아직 없다(PGRST202 — 배포 중간 창).
     package static let unavailable = "1:1 테트리스는 곧 열려요"
+    /// 관전 — 볼 수 없는 판(끝난 지 3분이 넘었거나 숨김 격리). 서버는 있다/없다를 가르지 않는다.
+    package static let watchGone = "지금은 볼 수 없는 판이에요"
 
     /// 신청 결과. 근무 조건은 없다(D1) — 클라가 근무를 보고 미리 막는 선게이트를 만들지 마라.
     package static func challenge(_ status: TetrisRPCStatus, need: Int? = nil, have: Int? = nil) -> String {
@@ -439,6 +446,10 @@ package final class TetrisDuelStore {
     package nonisolated static let inviteExpiryToleranceSeconds: TimeInterval = 1
     /// 보고가 이만큼 연달아 실패하면 `connectionTrouble` 을 세운다(화면: "연결 확인 중").
     package nonisolated static let reportFailureLimit = 2
+    /// 관전 중 남의 판을 다시 읽는 주기(초). 서버 보고가 1초라 2초면 충분하다.
+    package nonisolated static let watchPollSeconds: TimeInterval = 2
+    /// 관전 조회가 이만큼 연달아 실패하면 관전을 내리고 안내 한 줄을 남긴다(빈 화면이 영영 폴링하지 않게).
+    package nonisolated static let watchFailureLimit = 3
     /// 나가 있는 보고가 이만큼(단조 시계 초) 답이 없으면 **버리고** 새 보고를 낸다(리뷰 RV2).
     /// 왜: 보고는 한 번에 하나라 멎은 요청 하나가 하트비트를 전부 막는다. 세션 요청 타임아웃(15초)은 서버 침묵 판정
     /// (`tetris_silence_ms` 15초)과 같아서, 그대로 두면 망이 이미 돌아왔어도 그 15초로 연결 끊김 패가 난다.
@@ -475,6 +486,10 @@ package final class TetrisDuelStore {
             if let line = Self.matchTransitionLine(from: oldValue, to: match) {
                 Self.logger.notice("\(line, privacy: .public)")
             }
+            // 내 판이 섰으면(끝난 판 포함) 관전은 내려간다. 세대를 올려 나가 있던 관전 응답도 함께 버린다.
+            // ★ 바깥에 알리기(`onMatchFinished`)보다 **먼저** 둔다 — 그 콜백은 조회를 띄우므로, 관전을 내리기 전에
+            //   부르면 "내 판이 끝났는데 관전도 켜져 있는" 한 틱을 바깥이 보게 된다.
+            if match != nil, spectating != nil { dropSpectating() }
             if Self.matchJustFinished(from: oldValue, to: match) { onMatchFinished?() }
         }
     }
@@ -500,6 +515,26 @@ package final class TetrisDuelStore {
     package var hasLoadedRanking = false
     /// 서버에 `tetris_ranking` 이 아직 없다(PGRST202).
     package var rankingUnavailable = false
+
+    // 관전(로직은 TetrisDuelStoreWatch.swift — 저장 프로퍼티만 여기, 확장에는 못 둔다).
+
+    /// **관전의 주 스위치. 기본 false.** 공용 스토어라 관전을 그리지도 않는 기기가 `tetris_watch` 를 2초마다 당기지
+    /// 않게 한다. 꺼져 있으면 진입(`startWatching`)·조회(`refreshWatch`)·폴링(`pollWatch`)이 **한 번도** 안 돈다.
+    /// 켜는 곳은 맥·폰 배선 한 줄씩이다(`rankingEnabled` 와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다).
+    package var spectatorFeaturesEnabled = false
+    /// 관전 중인 남의 판(nil = 관전 중 아님).
+    package var spectating: TetrisSpectateState?
+    /// 지금 이 판을 보고 있는 사람 수. **한 칸을 둘이 나눠 쓴다** — 대국 중이면 내 판의 수(`tetris_state`·
+    /// `tetris_report` 응답), 관전 중이면 보는 판의 수(`tetris_watch_live`). 관전·대국이 내려가면 0 이다.
+    package var spectatorCount = 0
+    /// 서버에 `tetris_watch` 가 아직 없다(PGRST202). **관전 입구를 잠그는 신호는 이것뿐이다.**
+    package var watchUnavailable = false
+    /// 서버에 `tetris_watch_live` 만 없다 → 관전자 수 칸을 접었다(관전 자체는 멀쩡하다).
+    /// ★ `watchUnavailable` 과 **반드시 따로** 둔다 — 겸업시키면 "관전자 수가 없다" 는 이유로 관전 입구가 통째로
+    ///   잠긴다(체스가 `rankingUnavailable` 겸업으로 데인 자리). 화면은 이 깃발이 서면 눈 아이콘을 안 그린다.
+    package var spectatorCountUnavailable = false
+    /// 관전 장부(요청 시각·in-flight·세대). 관찰 대상이 아니다.
+    @ObservationIgnored package let watchRuntime = TetrisWatchRuntime()
 
     /// 차단으로 걷어낸 상대(소유자가 채운다). 코어 목록은 서버 답 그대로 두고 화면이 읽는 파생값만 거른다.
     package var hiddenPeerIDs: Set<String> = []
@@ -634,6 +669,7 @@ package final class TetrisDuelStore {
            now.timeIntervalSince(lastRankingRequestAt) >= Self.reloadDedupeSeconds {
             Task { [weak self] in await self?.loadRanking() }
         }
+        spectatorWindowDidShow(at: now)
     }
 
     /// 창이 숨었다·최소화됐다. 폴링만 멈춘다 — **판은 계속 흐른다**(D10). 눌린 키는 놓는다(숨은 창은 keyUp 을 못 받는다).
@@ -648,6 +684,9 @@ package final class TetrisDuelStore {
     /// 다시 열면 이어진다. 끝난 판은 여기서 접는다(다음에 창을 열면 결과가 아니라 로비가 선다 — 체스 0.3.50 과 같다).
     package func windowDidClose() {
         releaseAllKeys()
+        // 창을 정말 닫았으면 관전에서 나간 것이다(요청은 쏘지 않는다 — 테트리스에 `leave` RPC 는 없다).
+        // 최소화·가려짐은 이 문을 지나지 않으므로 보던 판은 그대로 남는다.
+        if spectating != nil { stopWatching() }
         foldFinishedMatch()
     }
 
@@ -951,6 +990,10 @@ package final class TetrisDuelStore {
         if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
         if outgoing?.id == id { outgoing = nil }
         if match != next { match = next }
+        // 내 판을 보고 있는 사람 수. **`match` 대입 뒤**에 적는다 — 그 didSet 이 관전을 내리며 수를 0 으로 되돌린다.
+        // 옛 서버는 이 칸을 안 싣는다 → 0(화면은 0 이면 아무것도 그리지 않는다).
+        let watchers = max(0, payload.watchers ?? 0)
+        if spectatorCount != watchers { spectatorCount = watchers }
         activeMatchID = isFinished ? nil : id
         refreshPhase()
         syncStats()
@@ -1232,6 +1275,9 @@ package final class TetrisDuelStore {
             await refreshLobby()
         }
         guard isWindowVisible else { return }
+        // 관전 중이면 이 걸음은 관전이 가져간다(순위는 돌리지 않는다 — 돌아올 때 로비가 한 번 읽는다).
+        if await pollWatch(at: now) { return }
+        guard isWindowVisible else { return }
         if rankingEnabled, phase == .lobby, now.timeIntervalSince(lastRankingRequestAt) >= Self.rankingPollSeconds {
             await loadRanking()
         }
@@ -1277,6 +1323,12 @@ package final class TetrisDuelStore {
         if rankingLoadFailed { rankingLoadFailed = false }
         if hasLoadedRanking { hasLoadedRanking = false }
         if rankingUnavailable { rankingUnavailable = false }
+        // 관전. **배선 값인 `spectatorFeaturesEnabled` 는 건드리지 않는다**(끄면 재로그인 뒤 관전이 영영 안 열린다).
+        if spectating != nil { spectating = nil }
+        if spectatorCount != 0 { spectatorCount = 0 }
+        if watchUnavailable { watchUnavailable = false }
+        if spectatorCountUnavailable { spectatorCountUnavailable = false }
+        watchRuntime.clear()
         serverClockOffset = 0
         hasServerClockOffset = false
         isWindowOccluded = false
@@ -1426,6 +1478,8 @@ package final class TetrisDuelStore {
     /// 판을 내린다(판 구동기·판 루프·보고까지).
     package func clearMatch() {
         if match != nil { match = nil }
+        // 대국이 내려갔다 — 관전자 수는 내 판의 것이었다.
+        if spectatorCount != 0, spectating == nil { spectatorCount = 0 }
         discardDuel()
         refreshPhase()
         syncStats()
@@ -1510,7 +1564,8 @@ package final class TetrisDuelStore {
               let stake = row.stake.flatMap(TetrisDuelStake.init(rawValue:)),
               let startedAt = deviceDate(serverMs: row.startedAtMs)
         else { return nil }
-        return TetrisDuelLiveMatch(id: id, a: a, b: b, stake: stake, startedAt: startedAt)
+        return TetrisDuelLiveMatch(id: id, a: a, b: b, stake: stake, startedAt: startedAt,
+                                   watchers: max(0, row.watchers ?? 0))
     }
 
     /// 서버 사람 행 → 화면 값(로비). `capable` 이 nil 이면 **불가**다.

@@ -14,7 +14,7 @@
 | 번들 ID | `com.yehsung.aingcheck` | `ios/project.yml:100`, `Sources/CheckMobileShared/CheckMobileIdentifiers.swift:10` |
 | 위젯 확장 번들 ID | `com.yehsung.aingcheck.widgets` | `ios/project.yml:181`, `CheckMobileIdentifiers.swift:12` |
 | 표시 이름 | `아잉체크` | `ios/project.yml:71, 167`, `ios/App/Info.plist`·`ios/Widgets/Info.plist`(CFBundleDisplayName), `Sources/CheckMobileShared/CheckMobileIdentifiers.swift`(`appDisplayName` — 앱 안 문구가 읽는 한 벌) |
-| 버전 · 빌드 | `1.0.12` · `23` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
+| 버전 · 빌드 | `1.0.13` · `24` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
 | 팀 ID | `MQ2KQK37WD` | `ios/project.yml:23` |
 | 지원 기기 · OS | iPhone 전용(`TARGETED_DEVICE_FAMILY: "1"`) · iOS 18.0 이상 · 세로 방향만 | `ios/project.yml:26, 104`, `:15-16, 27`, `:75-76`; `Package.swift:9` |
 | 백그라운드 모드 | `remote-notification` 하나 | `ios/project.yml:78-79` |
@@ -37,7 +37,7 @@
 | 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번), 입력칸 왼쪽 이모티콘 버튼 → **아잉이 이모티콘 여섯 종**(1.0.12 — 앱 번들에 든 그림 여섯 장. 본문이 `[아잉:기쁨]` 같은 토큰과 **통째로 같을 때만** 그림으로 그린다) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인). **이모티콘도 같은 `send_message` 로 글자만 간다**(1.0.12 — 새 RPC·새 칸·새 열거값 0) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift`, `Sources/CheckCore/AingSticker.swift`, `Messages/MessagesComposerView.swift` |
 | 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘) 세 판 | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
 | 게임 | 미니게임 셋(타이밍 바·플래피 아잉·테트리스 혼자), 1:1 오목(로비·신청·대국·채팅), 1:1 체스(1.0.6), **1:1 테트리스(1.0.11 — 로비·신청·준비·판·결과·순위. 둘이 같은 시드로 각자 판을 돌리고 지운 줄 수만큼 상대 바닥에 방해 줄이 올라간다. 먼저 꼭대기까지 쌓이는 쪽이 진다)**, 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출, 오목 신청·수락·착수·기권·채팅·음소거, 체스 신청·수락·착수·기권, 테트리스 신청·수락·판 보고·기권(`tetris_challenge` · `tetris_respond` · `tetris_report` · `tetris_resign`) | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290`, `Sources/CheckCore/TetrisWire.swift`, `Sources/CheckMobileKit/Games/GamesTetrisDuelText.swift` |
-| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → 이번 주 근무(1.0.8 — 20/40/60시간 단계) → 누적 미션(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다 · 1.0.9~1.0.12 의 이름은 「도전 미션」, 다음 빌드부터 맥 0.3.64 와 같은 「누적 미션」) → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환 / 1.0.10 — 무지개 아잉이 2% 추가 · 황금 아잉이 5 → 3%, 둘 다 루비로 못 사고 조각 20개로 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔 | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
+| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → **[미션] 줄(1.0.13 — 누르면 별도 「미션」 화면이 열리고 그 안에 **일일 미션**(1.0.13 — 오늘 할 6가지 · 각 5루비 · 자정 KST 초기화) → **이번 주 근무**(1.0.8 — 20/40/60시간 단계) → **누적 미션**(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다 · 1.0.9~1.0.12 의 이름은 「도전 미션」, 1.0.13 부터 맥 0.3.64 와 같은 「누적 미션」)이 **맥 미션 화면과 같은 순서로** 있다. 1.0.12 까지는 주간·누적이 이 루트에 펼쳐져 있었고 일일은 없었다 — 1.0.13 은 **화면 재배치 + 일일 미션 추가**다)** → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환 / 1.0.10 — 무지개 아잉이 2% 추가 · 황금 아잉이 5 → 3%, 둘 다 루비로 못 사고 조각 20개로 교환) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔, 일일·누적 미션 받기(`daily_mission_claim` · `achievement_claim`) | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeMissionsView.swift`(1.0.13 — [미션] 줄 + 미션 화면), `Me/MeDailyMissionViews.swift`(1.0.13 — 일일 미션 절), `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
 | (홈 위젯) | 지금 근무 중 · 내 오늘 · 할 일 — 세 종류. 앱이 쓴 스냅샷 파일만 그린다 | 할 일 체크 인텐트의 `todo_sync` 한 번뿐 | `Sources/CheckWidgetsKit/AingWidgetModel.swift:11-16`, `Sources/CheckMobileShared/WidgetSnapshot.swift:6`, `Sources/CheckWidgetsKit/WidgetTodoToggle.swift:11` |
 | (푸시) | 새 메시지 · 오목 신청(수락 버튼) · 제보 답장 세 종류, 앱 배지 = 안 읽은 메시지 + 받은 오목 신청 | 기기 등록(`register_device`), 알림 종류별 설정(`set_push_prefs`) | `Push/PushPayload.swift:6-10`, `Push/PushCoordinator.swift:14-27`, `Session/MobileDeviceService.swift:116-164` |
 
@@ -308,6 +308,10 @@
 > - **What a reviewer can do on one device.** You cannot message yourself, so use the two demo accounts: sign in as A → Messages tab → open a conversation with B ("새 대화" starts one) → tap the sticker button left of the input field → the sheet shows the six pictures → tap one. Your own bubble renders it as a picture at once, and the conversation list shows that message as readable text, "아잉이 기쁨". Whatever you had typed is left untouched; a second device is not needed.
 > - **Older builds stay readable.** What travels is text, so a build that does not know the tokens shows plain `[아잉:기쁨]` — never an empty bubble, never a missing-glyph box.
 >
+> **New in 1.0.13 — the two reward sections moved onto a screen of their own (no new feature)**
+> This version only rearranges the "나" (Me) tab. Until 1.0.12 the weekly-work card 「이번 주 근무」 and the 「도전 미션」 (Challenges) list were both laid out on the first Me screen, making it over two screens long. They now sit behind a single **[미션] (Missions)** row: tapping it pushes a 「미션」 screen that holds both, unchanged. Same missions, same [받기] (Claim) button, same rubies — **no server, network, data or permission change, no new notification type, no in-app purchases.** Rubies still cannot be bought or cashed out.
+> - **A reviewer needs one account and one device; the Mac app is not involved.** Sign in on the iPhone → "나" (Me) tab → tap the [미션] row just under the ruby count → the 「미션」 screen shows the weekly card and the challenge list, with the [받기] button on any achieved row. The number on that row is the same number as the tab-bar badge. A second demo account is not needed for this version.
+>
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.
 
@@ -338,6 +342,26 @@
   ★ 심사원은 **한 기기**로 확인한다: 자기 자신에게는 못 보내니 데모 A 로 로그인 → B 와의 대화 → 입력칸 왼쪽 이모티콘 버튼 → 고르면 **내 말풍선이 그림**으로 뜨고 대화 목록엔 "아잉이 기쁨"으로 보인다. 둘째 계정 로그인 정보는 (위 결정 그대로) **ASC 심사 메모 칸에만** 적는다.
   ★ 구버전은 `[아잉:기쁨]` 이라는 **읽을 수 있는 글자**로 본다(깨진 네모·빈 말풍선이 아니다) — 쓰기 경로를 거두지 않았기 때문이다.
   ★ **푸시 본문은 서버가 만든다** — 이모티콘 메시지의 알림은 `[아잉:기쁨]` 날것으로 뜬다(맥 0.3.62 부터 운영에서 이미 그렇다). 폰이 못 고치고 이번 범위 밖이다(설계서 §6).
+- 1.0.13 은 **나 탭 재배치**다 — 서버 변경 0 · 마이그레이션 0 · 새 RPC 0 · 새 푸시 종류 0 · 연령 설문 그대로.
+  1.0.12 까지 나 탭 루트에 펼쳐져 있던 「이번 주 근무」 카드와 「도전 미션」 절(계열마다 한 줄 · 9줄 ≈ 672pt)을
+  **[미션] 줄 하나 + 별도 미션 화면**으로 옮겼다(사용자 지시 2026-10-23: "나 탭에 미션들 쭈루룩 다 나열하니까 칸이 너무 길어져").
+  ★ **둘을 함께 옮긴 까닭**: 탭 막대 배지가 이미 **둘을 합친 수**(`missionClaimableCount` = 도전 미션 + 주간 대기)이고,
+  맥 레일 [미션] 화면도 그 둘을 담는다(2026-10-16 결정) — 갈라 두면 배지가 가리키는 곳이 둘로 갈리고 같은 사람이 두 기계에서 다른 곳을 찾는다.
+  ★ **심사원은 한 계정·한 기기로 다 본다 — 둘째 데모 계정도, 맥도 필요 없다.** 1.0.12 제출 때 ASC 에서 둘째 계정 자격증명을 지웠고(2026-10-22),
+  이 판은 그것을 다시 요구하지 않는다. 자격증명은 이 문서·저장소·로그에 **절대 적지 않는다**(1.0.11 결정 그대로).
+  ★ **데모 계정 미션 소급 주의는 1.0.9 와 같다**: 숨김 계정은 서버가 미션을 판정하지 않아(`achievements_settle` → `status: hidden`)
+  제출 직전에 데모 계정의 `phone_login` 달성 행(미수령, +50)을 운영에 다시 넣어야 심사원이 미션 화면에서 [받기] 를 볼 수 있다.
+  ★ 데모 스크린샷 라우트는 `me/missions` 다(`me/weekly` 도 **같은 화면**을 연다 — 그 둘이 루트에서 나갔기 때문이다).
+  ★ 출시 게이트(`ios/scripts/check-release-app.sh` 5번)를 1.0.13 문구 둘로 옮겼다: `이번 주 근무 · 도전 미션`(34바이트) ·
+  `받을 수 있는 미션이 아직 없어요`(44바이트). 화면 제목 `"미션"`·버튼 `"받기"` 는 **6바이트**라 15/16 경계에 걸려
+  Release 바이너리에서 못 잰다(값으로 못 박는 일은 `Tests/CheckMobileKitTests/` 가 한다). 1.0.12 이모티콘 세 줄은 지웠고
+  바닥 한 줄(1.0.11 `판 중에 앱을 나가면 져요`)은 남겼다. **두 줄의 기대 횟수는 아직 안 쟀다** — 아카이브로 재서 확정한다(지금 `None`).
+  ★ `whatsNew` 초안(한국어 3줄 — **제출은 운영자가 ASC 에 직접**):
+    ```
+    「나」 탭이 짧아졌어요. 이번 주 근무와 도전 미션은 이제 [미션] 화면 한 곳에 모였습니다.
+    받을 보상이 있으면 [미션] 줄에 개수가 뜨고, 탭 막대 배지와 같은 수를 가리킵니다.
+    미션 화면을 아래로 당기면 새로 고쳐집니다.
+    ```
 - 1.0.7 부터 근무 시작/종료는 폰 지금 탭에서도 된다 — 심사 메모에 [근무 시작] 위치와 2시간 30분 확인 알림을 적는다.
 
 ---

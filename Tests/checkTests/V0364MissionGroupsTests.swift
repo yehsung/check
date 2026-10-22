@@ -614,12 +614,17 @@ private func v0364Calls(_ host: String, _ rpc: String = "achievements_status") -
                     "\(file): '막 끝났다' 판정이 바뀌었다")
         }
         let store = V0317ShopTests.stripped(try V0317ShopTests.source("WorkTimerStore.swift"))
-        for game in ["gomoku", "chess", "tetris"] {
-            #expect(store.contains("\(game).onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult() }"),
-                    "\(game) 판 끝남이 일일 미션 조회에 안 이어졌다")
+        // 게임 이름 = 일일 미션 키의 꼬리(서버 정의표 · 픽스처와 같은 글자 — 다르면 '이미 채웠으면 안 묻는다' 문이 영영 안 닫힌다).
+        for (field, game) in [("gomoku", "gomoku"), ("chess", "chess"), ("tetris", "tetris_duel")] {
+            #expect(store.contains("\(field).onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: \"\(game)\") }"),
+                    "\(field) 판 끝남이 일일 미션 조회(\(game))에 안 이어졌다")
+            #expect(V0364Fixture.base.contains { $0.key == DailyMissionStatus.key(game: game) && $0.game == game }, "\(game) 는 일일 미션 키가 아니다")
         }
         let minigame = V0317ShopTests.stripped(try V0317ShopTests.source("WorkTimerStoreMiniGame.swift"))
-        #expect(minigame.contains("if recorded { refreshAchievementsAfterGameResult() }"))
+        #expect(minigame.contains("if recorded { refreshAchievementsAfterGameResult(game: kind.rawValue) }"))
+        for kind in MiniGameKind.allCases {
+            #expect(V0364Fixture.base.contains { $0.key == DailyMissionStatus.key(game: kind.rawValue) }, "\(kind) 원시값이 일일 미션 키가 아니다")
+        }
         #expect(minigame.components(separatedBy: "recorded = true").count - 1 == 1, "제출 성공이 아닌 갈래에서도 조회한다")
     }
 }
@@ -850,19 +855,35 @@ private func v0364Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(CheckMiniGameWindowView.awardedChip == "루비 +20 받음")
     }
 
-    @Test("💎 0 — 맥 앱 소스(주석 걷음)에 💎 가 한 글자도 없다 · 보상 문구도 루비 그림 + 숫자 · 신청 말풍선은 '루비 N'")
+    @Test("💎 0 — Sources/** 전부(맥 · CheckCore · CheckMobileKit · CheckMobileShared · 위젯, 주석 걷음)에 💎 가 한 글자도 없다 · 보상 문구도 루비 그림 + 숫자 · 신청 말풍선은 '루비 N'")
     @MainActor
     func noBlueDiamond() throws {
-        let root = CheckCoreSourceLayout.repoRoot.appendingPathComponent("Sources/check", isDirectory: true)
-        let enumerator = try #require(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
-        var scanned = 0
+        // 명세 §2-3 추가 3: 맥만이 아니라 Sources 아래 모든 Swift(폰 · 코어가 다시 💎 를 들여와도 잡는다 — 검토 지적 2026-10-22:
+        // 예전 뿌리는 Sources/check 하나라 CheckCore 에 심은 💎 뮤턴트가 살아남았다).
+        let sources = CheckCoreSourceLayout.repoRoot.appendingPathComponent("Sources", isDirectory: true)
+        let modules = try FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: [.isDirectoryKey])
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .map(\.lastPathComponent)
+        #expect(Set(["check", "CheckCore", "CheckMobileKit", "CheckMobileShared"]).isSubset(of: Set(modules)),
+                "Sources 아래 모듈을 못 찾았다(\(modules)) — 뿌리가 틀렸다")
+        var scannedPerModule: [String: Int] = [:]
         var offenders: [String] = []
-        for case let file as URL in enumerator where file.pathExtension == "swift" {
-            scanned += 1
-            let code = V0317ShopTests.stripped(try String(contentsOf: file, encoding: .utf8))
-            if code.contains("💎") { offenders.append(file.lastPathComponent) }
+        for module in modules.sorted() {
+            let root = sources.appendingPathComponent(module, isDirectory: true)
+            let enumerator = try #require(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+            for case let file as URL in enumerator where file.pathExtension == "swift" {
+                scannedPerModule[module, default: 0] += 1
+                let code = V0317ShopTests.stripped(try String(contentsOf: file, encoding: .utf8))
+                if code.contains("💎") { offenders.append("\(module)/\(file.lastPathComponent)") }
+            }
         }
-        #expect(scanned > 50, "Swift 소스를 \(scanned)개밖에 못 읽었다 — 이 검사가 헛돈다")
+        let scanned = scannedPerModule.values.reduce(0, +)
+        print("[v0364] 💎 검사 — 모듈별 Swift 파일 \(scannedPerModule.sorted { $0.key < $1.key })")
+        // 폴더마다 적어도 한 파일(한 폴더가 비어 헛도는 것을 막는다) · 합은 오늘 실측(맥 78 · 코어 102 · 폰 149 · 공유 9 · 위젯 9)의 하한.
+        for module in modules { #expect((scannedPerModule[module] ?? 0) >= 1, "\(module) 에서 Swift 를 하나도 못 읽었다 — 이 검사가 헛돈다") }
+        #expect((scannedPerModule["check"] ?? 0) > 50 && (scannedPerModule["CheckCore"] ?? 0) > 50 && (scannedPerModule["CheckMobileKit"] ?? 0) > 100,
+                "모듈별 Swift 수가 너무 적다: \(scannedPerModule)")
+        #expect(scanned > 300, "Swift 소스를 \(scanned)개밖에 못 읽었다 — 이 검사가 헛돈다")
         #expect(offenders.isEmpty, "주석 밖 💎 가 남은 파일: \(offenders)")
         // 기준선: 걷어내기가 주석 안 💎 는 지우고 문자열 안 💎 는 남긴다(둘이 같게 나오면 이 검사는 영원히 초록이다).
         #expect(!V0317ShopTests.stripped("let a = 1 // 💎 +3").contains("💎"))
@@ -943,6 +964,12 @@ func v0364VersionAndChangelog() throws {
             }.frame(width: 292).padding(12).background(CheckTheme.panel), scheme: scheme)
             let oldServer = v0364RenderStore(achievements: V0358Fixture.status(), weekly: weekly, line: 910 + offset)
             try save("4-mission-panel-old-server", CheckMenuView(store: oldServer, previewFullMissionList: true), scheme: scheme)
+            // 루비 대체 그림(에셋을 못 읽을 때) — 왼쪽부터 RubyIcon 대체 · 뽑기 rubyImage 대체 · 에셋. 바깥 강조색을 일부러 건다.
+            try save("5-ruby-fallback", HStack(spacing: 10) {
+                RubyIcon(size: 26, simulatesMissingAsset: true)
+                CheckGachaWindowView.rubyImage(asset: nil).resizable().interpolation(.high).frame(width: 26, height: 26)
+                RubyIcon(size: 26)
+            }.foregroundStyle(CheckTheme.accent).padding(10).background(CheckTheme.panel), scheme: scheme)
         }
     }
 }
@@ -1014,5 +1041,250 @@ private func v0364SQL(_ name: String) throws -> String {
         #expect(flat.contains("create or replace function public.daily_mission_claim(p_key text default null)"),
                 "받기 함수 서명이 (p_key text default null) 가 아니다 — 앱은 본문에 p_key 하나를 언제나 싣는다")
         #expect(flat.contains("'daily', public.daily_missions__status(p_uid)"), "상태 응답에 daily 를 싣지 않는다")
+    }
+}
+
+// MARK: - H 검토 지적 수리(2026-10-22)
+//
+//  ① 자정을 넘겨도 관찰 무효화가 없어 열린 화면에 어제 [받기] · 배지가 남고, 눌러도 요청 0건이었다 → 넘김을 관찰 값에 적는다
+//     (깨우개 · 팝오버 다시 열기 · 막힌 [받기]) + 막힌 [받기]는 조회 1건.
+//  ② 판 전에 떠난 조회에 게임 결과 조회가 합류해 달성이 다음 박자까지 안 보였다 → 그 조회가 끝난 뒤 정확히 한 번 더.
+//  ③ 오늘 이미 채운 게임은 판마다 묻지 않는다(하루 첫 판만).
+//  ④ 루비 대체 기호(에셋을 못 읽을 때)가 파란 강조색이었다 → 분홍으로 구운 그림.
+
+/// 관찰 무효화가 일어났는가.
+final class V0364ObservationFlag: @unchecked Sendable { var hit = false }
+
+/// 일일 줄 · 레일 배지(화면이 읽는 두 값)의 관찰을 건다.
+@MainActor
+private func v0364Track(_ store: WorkTimerStore) -> V0364ObservationFlag {
+    let flag = V0364ObservationFlag()
+    withObservationTracking {
+        _ = store.dailyMissionRows
+        _ = store.missionClaimableCount
+    } onChange: { flag.hit = true }
+    return flag
+}
+
+/// 뷰 값 트리에서 타입 이름이 같은 첫 노드(클래스 · 클로저 안은 못 들어간다 — V0356 `v0356Collect` 와 같은 자).
+private func v0364Find(_ name: String, in value: Any, budget: inout Int) -> Any? {
+    guard budget > 0 else { return nil }
+    budget -= 1
+    let mirror = Mirror(reflecting: value)
+    if String(describing: mirror.subjectType) == name { return value }
+    guard mirror.displayStyle != .class else { return nil }
+    for child in mirror.children {
+        if let hit = v0364Find(name, in: child.value, budget: &budget) { return hit }
+    }
+    return nil
+}
+
+/// 강조색(파랑 84,171,255) 픽셀 — 예전 루비 대체 기호의 색.
+private func v0364AccentPixels(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>) -> Int {
+    v0364Count(bitmap, x: x, y: y) { r, g, b in b > 200 && b - r > 100 && b - g > 40 }
+}
+
+@MainActor
+@Suite(.serialized) struct V0364ReviewFixTests {
+    /// 리셋 = 서버 t + 60초 · 서버 시각 t · 이 맥 시계 t0(시계가 틀린 맥). `next` 가 있으면 둘째 조회부터 그 응답(새 날).
+    static func rolloverStore(_ label: String, clock: V0355Clock, next: String? = nil,
+                              function: String = #function) -> (WorkTimerStore, String) {
+        v0364Store(label, clock: clock, achievements: { index in
+            if index > 0, let next { return .init(body: next) }
+            return .init(body: V0364Fixture.json(daily: V0364Fixture.dailyObject(resetAt: V0364Fixture.t + 60_000)))
+        }, function: function)
+    }
+
+    /// 새 날(2026-06-13)의 응답 — 여섯 줄 다 0/1 · 서버 시각 t + 61초 · 리셋은 그 다음 자정.
+    static let nextDayJSON = V0364Fixture.json(daily: V0364Fixture.dailyObject(V0364Fixture.fresh, day: "2026-06-13",
+                                                                              resetAt: V0364Fixture.t + 60_000 + 86_400_000),
+                                               serverNow: V0364Fixture.t + 61_000)
+
+    @Test("자정 ① — 리셋 전엔 적지 않는다(무효화 0) · 넘기면 한 번 적어 일일 줄 · 배지의 관찰이 무효화된다 · 두 번째는 0 · 적은 넘김은 시계가 뒤로 흔들려도 안 되돌아간다")
+    func rolloverNoteInvalidates() async throws {
+        let clock = V0355Clock(V0355WeeklyStoreTests.t0)
+        let (store, _) = Self.rolloverStore("note", clock: clock)
+        await store.refreshAchievements(reason: .missionPanel)?.value
+        #expect(store.dailyMissionRows?.filter(\.row.isClaimable).count == 2 && store.missionClaimableCount == 4, "전제")
+        clock.advance(59)
+        let early = v0364Track(store)
+        #expect(store.noteDailyMissionRollover() == false && !early.hit, "리셋 전인데 넘김을 적었다")
+        clock.advance(2)
+        let flag = v0364Track(store)
+        #expect(store.noteDailyMissionRollover(), "리셋을 넘겼는데 안 적었다")
+        #expect(flag.hit, "넘김을 적었는데 일일 줄 · 배지의 관찰이 무효화되지 않았다 — 열린 화면에 어제 [받기] · 배지가 남는다")
+        #expect(store.dailyMissionRows?.allSatisfy { $0.row.state == .inProgress } == true && store.missionClaimableCount == 2)
+        let again = v0364Track(store)
+        #expect(store.noteDailyMissionRollover() == false && !again.hit, "같은 넘김을 또 적었다(헛무효화)")
+        clock.advance(-30)
+        #expect(store.dailyMissionRows?.allSatisfy { $0.row.state == .inProgress } == true && store.missionClaimableCount == 2,
+                "적은 넘김이 시계가 뒤로 흔들리자 어제 [받기]를 되살렸다")
+    }
+
+    @Test("자정 ① — 깨우는 시각 = 리셋 − 시계 차(이 맥 시계) · 그 1ms 전엔 안 넘고 그 순간 넘는다 · 적으면 일정이 사라진다 · 깨우개 일정은 리셋 · +1초 · +5초")
+    func rolloverWakeDate() async throws {
+        let clock = V0355Clock(V0355WeeklyStoreTests.t0)
+        let (store, _) = Self.rolloverStore("wake-date", clock: clock)
+        #expect(store.dailyMissionRolloverDate == nil, "모르는데 깨울 시각이 있다")
+        await store.refreshAchievements(reason: .missionPanel)?.value
+        let date = try #require(store.dailyMissionRolloverDate)
+        // 서버 시각 t 를 이 맥 시계 t0 에 받았으니 리셋(t + 60초)은 이 맥 시계로 t0 + 60초다.
+        #expect(abs(date.timeIntervalSince(V0355WeeklyStoreTests.t0) - 60) < 0.002, "깨울 시각이 틀렸다: \(date)")
+        clock.now = date.addingTimeInterval(-0.002)
+        #expect(store.noteDailyMissionRollover() == false, "깨울 시각 전인데 넘었다")
+        clock.now = date
+        #expect(store.noteDailyMissionRollover(), "깨울 시각에 안 넘었다 — 깨우개가 헛깬다")
+        #expect(store.dailyMissionRolloverDate == nil, "적었는데 깨울 시각이 남았다(헛깸)")
+        #expect(DailyMissionRolloverWake.wakeDates(rollover: nil).isEmpty)
+        #expect(DailyMissionRolloverWake.wakeDates(rollover: date) == [date, date.addingTimeInterval(1), date.addingTimeInterval(5)])
+    }
+
+    @Test("자정 ① — 깨우개가 레일 [미션] 칸 뒤에 이 스토어로 붙어 있다 · 레일은 팝오버에 있다")
+    func wakeIsWiredIntoTheRail() throws {
+        let (store, _) = v0364Store("wake-wire")
+        var budget = 200_000
+        let wake = try #require(v0364Find("DailyMissionRolloverWake", in: CheckMenuSideRail(store: store).body, budget: &budget),
+                                "레일에 깨우개가 없다 — 열린 화면이 자정을 모른다")
+        #expect((v0364Child("store", of: wake) as? WorkTimerStore) === store)
+        budget = 400_000
+        #expect(v0364Find("CheckMenuSideRail", in: CheckMenuView(store: store).body, budget: &budget) != nil, "팝오버에 레일이 없다")
+    }
+
+    @Test("자정 ① — 닫힌 동안 자정을 넘기고 팝오버를 다시 열면 넘김을 적는다(요청 0건)")
+    func reopenNotesRollover() async throws {
+        let clock = V0355Clock(V0355WeeklyStoreTests.t0)
+        let (store, host) = Self.rolloverStore("reopen", clock: clock)
+        await store.refreshAchievements(reason: .missionPanel)?.value
+        let before = v0364Calls(host)
+        clock.advance(61)
+        let flag = v0364Track(store)
+        store.setMenuPresented(true)
+        #expect(store.dailyMissionRolloverNoted == V0364Fixture.t + 60_000, "다시 열었는데 넘김을 안 적었다")
+        #expect(flag.hit, "다시 연 화면의 일일 줄 · 배지가 다시 그려지지 않는다")
+        await V0355WeeklyStoreTests.settle()
+        #expect(v0364Calls(host) == before, "다시 열기가 도전 미션을 물었다(미션 화면이 안 떠 있다)")
+    }
+
+    @Test("자정 ① — 화면에 남은 [받기]를 눌렀는데 리셋을 넘겼다 → 받기 0건 · 조회 1건 · 그 자리에서 무효화 · 새 날 응답이 오면 새 날 줄")
+    func blockedClaimRefreshes() async throws {
+        let clock = V0355Clock(V0355WeeklyStoreTests.t0)
+        let (store, host) = Self.rolloverStore("blocked", clock: clock, next: Self.nextDayJSON)
+        await store.refreshAchievements(reason: .missionPanel)?.value
+        let before = v0364Calls(host)
+        clock.advance(61)
+        let flag = v0364Track(store)
+        #expect(store.claimDailyMission(key: "daily_timing_bar") == nil, "어제 줄의 받기가 나갔다")
+        #expect(flag.hit, "눌렀는데 무효화 0 — 버튼이 계속 선다")
+        #expect(await V0354CoreStub.waitUntil { v0364Calls(host) == before + 1 && store.achievementsFetchTask == nil },
+                "막힌 [받기]가 새 날을 묻지 않았다(\(v0364Calls(host) - before)회) — 반응 없는 버튼")
+        #expect(v0364Calls(host, "daily_mission_claim") == 0)
+        #expect(store.achievements?.daily?.kstDay == "2026-06-13")
+        #expect(store.dailyMissionRows?.allSatisfy { $0.row.state == .inProgress } == true && store.missionClaimableCount == 2)
+        // 받을 수 없던 줄(진행 중 · 이미 받음)을 누른 것은 날짜 넘김이 아니다 — 묻지 않는다.
+        let settled = v0364Calls(host)
+        #expect(store.claimDailyMission(key: "daily_chess") == nil && store.claimDailyMission(key: nil) == nil)
+        await V0355WeeklyStoreTests.settle()
+        #expect(v0364Calls(host) == settled, "받을 것이 없는 새 날에 [받기] 갈래가 조회를 냈다")
+    }
+
+    @Test("겹침 ② — 판 전에 떠난 조회가 떠 있으면 그 조회가 끝난 뒤 정확히 한 번 더 묻는다(판이 둘 끝나도 +1건) · 달성이 바로 보인다")
+    func gameResultRefetchesAfterInFlight() async throws {
+        let (store, host) = v0364Store("refetch", achievements: { index in
+            let rows = index == 0 ? V0364Fixture.with("daily_timing_bar", achieved: false) : V0364Fixture.base
+            return .init(body: V0364Fixture.json(daily: V0364Fixture.dailyObject(rows, resetAt: V0364Fixture.resetFar)), delay: 0.5)
+        }, extra: { rpc, _, _ in
+            switch rpc {
+            case "minigame_submit_score": return .init(body: #"{"status":"ok","best_score":3,"plays":1,"improved":true}"#)
+            case "minigame_start_round": return .init(body: #"{"status":"ok","token":"tok-next"}"#)
+            default: return nil
+            }
+        })
+        let periodic = store.refreshAchievements(reason: .periodic)
+        #expect(periodic != nil, "전제: 5분 박자 조회가 떠났다")
+        for round in 0..<2 {
+            let entry = MiniGamePendingSubmit(id: UUID(), kind: .timingBar, score: 3 + round, token: "tok-\(round)",
+                                              tokenIssuedAt: V0355WeeklyStoreTests.t0, recordedAt: V0355WeeklyStoreTests.t0, attempts: 0)
+            await store.performSubmitMiniGameScore(entry: entry)
+        }
+        #expect(v0364Calls(host, "minigame_submit_score") == 2, "전제: 제출 둘 다 성공")
+        #expect(v0364Calls(host) == 1, "떠 있는 조회가 있는데 또 발사했다(겹침)")
+        await periodic?.value
+        #expect(await V0354CoreStub.waitUntil { v0364Calls(host) == 2 && store.achievementsFetchTask == nil },
+                "판 전 조회에 합류만 하고 다시 안 물었다(\(v0364Calls(host))회)")
+        await V0355WeeklyStoreTests.settle()
+        #expect(v0364Calls(host) == 2, "뒤따르는 조회가 한 번이 아니다(\(v0364Calls(host))회)")
+        #expect(store.achievements?.daily?.mission("daily_timing_bar")?.row.state == .claimable, "서버는 달성인데 줄이 미달성으로 남았다")
+        #expect(store.achievementsRefetchAfterInFlight == false)
+        // 지갑 박자끼리 겹친 것은 예전처럼 같이 기다린다(깃발 없음 — 뒤따르는 조회 0).
+        let a = store.refreshAchievements(reason: .periodic)
+        #expect(a != nil && store.refreshAchievements(reason: .missionPanel) == nil)
+        await a?.value
+        await V0355WeeklyStoreTests.settle()
+        #expect(v0364Calls(host) == 3, "게임 결과가 아닌 겹침에 뒤따르는 조회가 붙었다")
+    }
+
+    @Test("하루 첫 판 ③ — 오늘 그 게임 줄을 채웠으면(받음 · 받기 대기) 판마다 묻지 않는다 · 다른 게임 · 모름 · 하루가 넘어간 줄은 묻는다")
+    func gameResultSkipsAchievedToday() async throws {
+        let clock = V0355Clock(V0355WeeklyStoreTests.t0)
+        let (store, host) = v0364Store("first-round", clock: clock, achievements: { _ in
+            .init(body: V0364Fixture.json(daily: V0364Fixture.dailyObject(V0364Fixture.with("daily_timing_bar", claimed: true),
+                                                                          resetAt: V0364Fixture.t + 3_600_000)))
+        }, extra: { rpc, _, _ in
+            switch rpc {
+            case "minigame_submit_score": return .init(body: #"{"status":"ok","best_score":3,"plays":1,"improved":true}"#)
+            case "minigame_start_round": return .init(body: #"{"status":"ok","token":"tok-next"}"#)
+            default: return nil
+            }
+        })
+        func play(_ kind: MiniGameKind, _ round: Int) async {
+            let entry = MiniGamePendingSubmit(id: UUID(), kind: kind, score: 3 + round, token: "tok-\(kind.rawValue)-\(round)",
+                                              tokenIssuedAt: V0355WeeklyStoreTests.t0, recordedAt: V0355WeeklyStoreTests.t0, attempts: 0)
+            await store.performSubmitMiniGameScore(entry: entry)
+            _ = await V0354CoreStub.waitUntil { store.achievementsFetchTask == nil }
+        }
+        await store.refreshAchievements(reason: .missionPanel)?.value
+        // 타이밍 바 = 받음 · 플래피 = 받음 · 오목 = 받기 대기(채움) · 테트리스 · 체스 = 0/1.
+        var before = v0364Calls(host)
+        for round in 0..<5 { await play(.timingBar, round) }
+        await play(.flappy, 0)
+        #expect(v0364Calls(host, "minigame_submit_score") == 6)
+        #expect(v0364Calls(host) == before, "이미 채운 게임인데 판마다 물었다(\(v0364Calls(host) - before)회)")
+        #expect(store.refreshAchievementsAfterGameResult(game: "gomoku") == nil, "받기 대기(채움)인 오목에 또 물었다")
+        await V0355WeeklyStoreTests.settle()
+        #expect(v0364Calls(host) == before)
+        await play(.tetris, 0)
+        #expect(v0364Calls(host) == before + 1, "아직 안 채운 테트리스를 안 물었다")
+        #expect(store.refreshAchievementsAfterGameResult(game: "chess") != nil, "아직 안 채운 체스를 안 물었다")
+        _ = await V0354CoreStub.waitUntil { store.achievementsFetchTask == nil }
+        // 하루가 넘어간 응답의 '채움'은 어제 것이다 — 오늘 첫 판은 묻는다.
+        clock.advance(3_700)
+        before = v0364Calls(host)
+        await play(.timingBar, 9)
+        #expect(v0364Calls(host) == before + 1, "날이 바뀌었는데 어제 채움을 믿고 안 물었다")
+    }
+
+    @Test("루비 ④ — 에셋을 못 읽어도 분홍(바깥 강조색이 못 덮는다) · 뽑기 창 그림도 같다 · 옛 대체 기호는 파랬다(기준선) · 에셋 갈래도 분홍")
+    func rubyFallbackIsPink() throws {
+        let box: ClosedRange<CGFloat> = 0...34
+        func render(_ view: some View) throws -> NSBitmapImageRep {
+            try v0364Bitmap(view.padding(4).background(Color.black).environment(\.colorScheme, .dark))
+        }
+        #expect(RubyAsset.fallbackImage != nil, "대체 그림을 못 구웠다")
+        let icon = try render(RubyIcon(size: 26, simulatesMissingAsset: true).foregroundStyle(CheckTheme.accent))
+        let gacha = try render(CheckGachaWindowView.rubyImage(asset: nil).resizable().interpolation(.high)
+            .frame(width: 26, height: 26).foregroundStyle(CheckTheme.accent))
+        let asset = try render(RubyIcon(size: 26).foregroundStyle(CheckTheme.accent))
+        // 기준선 — 예전 대체 갈래 그대로(강조색 기호). 이 자가 파랑을 잡고 분홍을 안 잡아야 위 단언이 뜻이 있다.
+        let old = try render(Image(systemName: "diamond.fill").font(.system(size: 26 * 0.8, weight: .bold))
+            .foregroundStyle(CheckTheme.accent).frame(width: 26, height: 26))
+        let counts = [("RubyIcon 대체", icon), ("뽑기 rubyImage 대체", gacha), ("RubyIcon 에셋", asset), ("옛 대체(기준선)", old)].map {
+            ($0.0, v0364PinkPixels($0.1, x: box, y: box), v0364AccentPixels($0.1, x: box, y: box))
+        }
+        print("[v0364] 루비 대체 그림 — (이름, 분홍, 파랑) \(counts)")
+        #expect(counts[3].1 == 0 && counts[3].2 > 300, "기준선이 파란 기호를 못 잡는다 — 이 자는 헛잰다: \(counts[3])")
+        for (name, pink, blue) in counts.prefix(3) {
+            #expect(pink > 300, "\(name): 분홍이 \(pink)px 뿐이다")
+            #expect(blue == 0, "\(name): 파란 픽셀 \(blue)px — 바깥 강조색이 루비를 덮었다")
+        }
     }
 }

@@ -42,23 +42,64 @@ enum RubyAsset {
     }
 
     static func resetCacheForTesting() { cached = nil }
+
+    /// 에셋을 못 읽을 때 대체 기호의 색 — 그림(`ruby.png`)의 자홍에 맞춘다(실측: 불투명 픽셀 평균 237,119,239 · 가장 흔한 칸
+    /// 240,96,240). 예전엔 강조색(파랑)이라 그 순간 "루비는 분홍"이 깨졌다(사용자 결정 2026-10-22 "루비 아이콘 통일" · 검토 지적).
+    static let fallbackColor = NSColor(srgbRed: 0.93, green: 0.38, blue: 0.93, alpha: 1)
+
+    private static var fallbackCached: CGImage??
+
+    /// 대체 그림 — SF 기호 `diamond.fill` 을 위 분홍으로 **구운** CGImage(한 번만 굽는다). 색이 그림에 박혀 있어 부르는 쪽의
+    /// `foregroundStyle` 이 덮지 못한다 — `Image(systemName:)` 은 템플릿이라 뽑기 기계 안내 줄에선 글자색으로 칠해졌다.
+    static var fallbackImage: CGImage? {
+        if let fallbackCached { return fallbackCached }
+        let made = bakeFallback()
+        fallbackCached = .some(made)
+        return made
+    }
+
+    /// 정사각 `pixels` 칸 가운데에 기호를 80% 크기로 그리고(예전 대체 기호의 글자 크기 비율) 그 모양 위에만 분홍을 덮는다(sourceAtop).
+    private static func bakeFallback(pixels: Int = 64) -> CGImage? {
+        guard let symbol = NSImage(systemSymbolName: "diamond.fill", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: CGFloat(pixels), weight: .bold)),
+              symbol.size.width > 0, symbol.size.height > 0,
+              let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        let side = CGFloat(pixels)
+        let scale = min(side / symbol.size.width, side / symbol.size.height) * 0.8
+        let width = symbol.size.width * scale, height = symbol.size.height * scale
+        let rect = NSRect(x: (side - width) / 2, y: (side - height) / 2, width: width, height: height)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        symbol.draw(in: rect)
+        fallbackColor.setFill()
+        rect.fill(using: .sourceAtop)
+        NSGraphicsContext.restoreGraphicsState()
+        return context.makeImage()
+    }
 }
 
-/// 루비 아이콘 한 장. 에셋이 없으면 SF Symbol 로 접는다 — 그림이 통째로 사라지면 "루비 3" 이 "3" 이 된다.
+/// 루비 아이콘 한 장. 에셋이 없으면 분홍으로 구운 SF Symbol 로 접는다(`RubyAsset.fallbackImage`) — 그림이 통째로 사라지면
+/// "루비 3" 이 "3" 이 된다.
 struct RubyIcon: View {
     var size: CGFloat = 13
+    /// 시험 전용 — 에셋을 못 읽은 경우를 **이 한 장만** 흉내 낸다(전역 깃발이 아니다 — 같은 프로세스의 다른 시험 그림을 건드리지 않게).
+    var simulatesMissingAsset = false
 
     var body: some View {
-        if let image = RubyAsset.image {
+        if let image = (simulatesMissingAsset ? nil : RubyAsset.image) ?? RubyAsset.fallbackImage {
             Image(decorative: image, scale: 1)
                 .resizable()
                 .interpolation(.high)
                 .scaledToFit()
                 .frame(width: size, height: size)
         } else {
+            // 굽기마저 실패한 경우(기호를 못 찾았다) — 분홍 기호를 그대로. 안쪽 `foregroundStyle` 이라 바깥 색이 못 덮는다.
             Image(systemName: "diamond.fill")
                 .font(.system(size: size * 0.8, weight: .bold))
-                .foregroundStyle(CheckTheme.accent)
+                .foregroundStyle(Color(nsColor: RubyAsset.fallbackColor))
                 .frame(width: size, height: size)
         }
     }

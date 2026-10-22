@@ -127,9 +127,13 @@ struct CheckGachaWindowView: View {
 
     // MARK: 그림
 
-    /// 루비 아이콘(번들 ruby.png — `Image(nsImage:)` 는 보간을 무시하므로 CGImage 로 내린다). 없으면 SF Symbol.
-    @MainActor static var rubyImage: Image {
-        RubyAsset.image.map { Image(decorative: $0, scale: 1) } ?? Image(systemName: "diamond.fill")
+    /// 루비 아이콘(번들 ruby.png — `Image(nsImage:)` 는 보간을 무시하므로 CGImage 로 내린다). 없으면 분홍으로 구운 대체 그림
+    /// (`RubyAsset.fallbackImage` — v0.3.64: 템플릿 기호였을 땐 기계 안내 줄의 글자색 · 강조색으로 칠해져 파랬다).
+    @MainActor static var rubyImage: Image { rubyImage(asset: RubyAsset.image) }
+
+    /// `asset` 이 nil 이면 대체 그림. 시험이 nil 을 넣어 에셋 없는 갈래를 잰다.
+    @MainActor static func rubyImage(asset: CGImage?) -> Image {
+        (asset ?? RubyAsset.fallbackImage).map { Image(decorative: $0, scale: 1) } ?? Image(systemName: "diamond.fill")
     }
 
     @MainActor private static var portraitCache: [String: CGImage] = [:]

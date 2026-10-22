@@ -133,6 +133,37 @@ enum MissionRailBadge {
     }
 }
 
+/// 일일 미션의 자정(KST) 깨우개(v0.3.64 — 검토 지적 2026-10-22). 레일 [미션] 칸 뒤에 붙는 **보이지 않는 잎**이다.
+///
+/// 날짜 넘김 판정은 시계(관찰 밖)로 하므로, 팝오버를 연 채 자정을 넘기면 어제 [받기] · "받을 보상 N개" · 레일 배지가 다음 조회
+/// 박자까지 남았다(근무 밖이면 다시 열 때까지). 이 잎이 리셋 시각에 `TimelineView(.explicit)` 로 깨어나 스토어에 넘김을 **적고**
+/// (`noteDailyMissionRollover()`), 그 관찰 값을 읽은 화면 · 배지가 다시 그려진다. 뷰 일정이라 스토어 타이머 · 요청이 늘지 않고,
+/// 근무 밖이라 티커가 멎은 자정에도 깬다. 넘김을 적으면 `dailyMissionRolloverDate` 가 nil 이 되어 일정이 사라진다.
+///
+/// 리셋 시각 뒤 1초 · 5초에도 깬다 — 첫 깸이 시계 차 추정의 흔들림으로 리셋 직전에 닿아도 다음 깸이 적는다(적었으면 나머지는 헛깸이다).
+/// 왜 미션 화면 · 레일을 통째로 감싸지 않는가: `TimelineView` 의 내용은 클로저라 팝오버 뷰 트리 배선 시험(미러)이 그 안을 못 읽는다.
+struct DailyMissionRolloverWake: View {
+    let store: WorkTimerStore
+
+    /// 깨는 시각들(리셋 · +1초 · +5초). 리셋을 모르면 빈 목록.
+    static func wakeDates(rollover: Date?) -> [Date] {
+        guard let rollover else { return [] }
+        return [rollover, rollover.addingTimeInterval(1), rollover.addingTimeInterval(5)]
+    }
+
+    var body: some View {
+        let dates = Self.wakeDates(rollover: store.dailyMissionRolloverDate)
+        if !dates.isEmpty {
+            TimelineView(.explicit(dates)) { context in
+                Color.clear
+                    .onChange(of: context.date) { _ = store.noteDailyMissionRollover() }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
 /// 미션 화면이 도전 미션 절을 어떻게 그리는가. 스토어 값 셋에서 **한 곳**(`make`)이 고른다.
 enum AchievementSectionState: Equatable {
     /// 절이 없다 — 이 서버엔 도전 미션이 없다(404 · PGRST202) 또는 줄이 하나도 없다. 실패 문구도 소제목도 안 그린다.

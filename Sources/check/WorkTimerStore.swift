@@ -308,6 +308,9 @@ final class WorkTimerStore {
             // 얹힌 주간 조회가 채운다(1분 창이 막는다 — `syncUltraWallet`). 홈 화면 재오픈은 묻지 않는다(왕복을 늘리지 않는다).
             // 미션 화면을 연 채 다시 열었으면 이 sync 가 도전 미션(v0.3.58)도 함께 묻는다(미션 화면의 `.panelOpen`).
             if isMissionPanelVisible || isUltraPanelVisible { syncUltraWallet(reason: .panelOpen) }
+            // 닫힌 동안 자정(KST)을 넘겼으면 그 사실을 적는다(v0.3.64) — 시계는 관찰 밖이라 이것이 없으면 다시 연 화면에 어제
+            // [받기] · 레일 배지가 남는다. 요청 0건(새 날의 사실은 다음 조회 박자가 가져온다).
+            noteDailyMissionRollover()
             // 개인 기록: 패널이 열려 있으면 재조회하고, 닫혀 있어도 아직 한 번도 못 받았으면 조용히 받아 온다
             // — 월요일 첫 팝오버의 지난주 회고 배너는 retro 가 계산돼 있어야 뜨기 때문이다(실행당 1회 수준).
             // 주가 바뀌었으면(insightsWeekKey 불일치) 반드시 다시 계산한다 — needsInsightsReload 참고.
@@ -1320,6 +1323,13 @@ final class WorkTimerStore {
     /// 서버 시계 − 이 맥 시계(밀리초). 마지막 도전 미션 응답의 `server_now_ms` 로 잰다 — 일일 줄의 "하루가 끝났나"를 **서버 시각**으로
     /// 판정하려고(이 맥의 시계가 틀려도 어제 [받기]를 세우지 않게). 화면이 직접 읽지 않는다(`estimatedServerNowMs()`).
     @ObservationIgnored var achievementsServerClockOffsetMs = 0
+    /// 넘긴 것을 **적어 둔** 일일 리셋 시각(`reset_at_ms`). 관찰 대상이다 — 시계는 관찰 밖이라, 자정을 넘긴 사실을 여기 한 번 써야
+    /// 열린 화면의 [받기] · "받을 보상 N개" · 레일 배지가 그 자리에서 다시 그려진다(검토 지적 2026-10-22). 쓰는 곳은
+    /// `noteDailyMissionRollover()` 하나다(깨우개 · 팝오버 다시 열기 · 막힌 [받기]). 적은 넘김은 시계 차 추정이 흔들려도 되돌아가지 않는다.
+    var dailyMissionRolloverNoted: Int?
+    /// 게임 결과 조회가 떠 있는 조회에 막혔다 — 그 조회는 판이 서버에 남기 **전**에 떠났을 수 있으니, 끝나면 정확히 한 번 더 묻는다
+    /// (검토 지적 2026-10-22 · `GomokuStore` 의 stateAgain 과 같은 꼴 · 타이머 없음 · 최대 +1건). 화면이 읽지 않는다.
+    @ObservationIgnored var achievementsRefetchAfterInFlight = false
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     /// 공개 여부가 **확정**됐는가 — 서버 응답이 왔거나 **사용자가 직접 골랐거나**(setTokenUsagePublic 이 GET 전에 세운다:
@@ -1899,9 +1909,10 @@ final class WorkTimerStore {
         chess.attach(host: self)
         tetris.attach(host: self)
         // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
-        gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult() }
-        chess.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult() }
-        tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult() }
+        // 게임 이름은 일일 미션 키(`daily_<게임>`)의 꼬리다 — 그 줄을 이미 채웠으면 묻지 않는다.
+        gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "gomoku") }
+        chess.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "chess") }
+        tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         megaphone.attach(host: self)
     }
 
@@ -4015,6 +4026,8 @@ extension WorkTimerStore {
         dailyMissionClaimsInFlight = []
         dailyMissionClaimFailedKeys = []
         achievementsServerClockOffsetMs = 0
+        dailyMissionRolloverNoted = nil
+        achievementsRefetchAfterInFlight = false
         // 갱신 조정자도 계정에 묶인다. 진행 중이던 갱신 결과가 새 세션에 적용되면 남의 토큰으로 근무를 기록한다.
         sessionRefreshCoordinator.invalidate()
         // 리얼타임 링도 함께 내린다. realtimeApply 가 소켓을 끊고 예약 타이머를 취소하며 realtimeState 를

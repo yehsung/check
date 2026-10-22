@@ -1077,8 +1077,13 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         func count(_ needle: String) -> Int { callers.map { $0.components(separatedBy: needle).count - 1 }.reduce(0, +) }
         // v0.3.64: 박자가 하나 더 있다 — 게임 한 판이 서버에 남은 직후(`refreshAchievementsAfterGameResult` → `.gameResult`). 그 문은
         // 이벤트 둘(미니게임 제출 성공 1 · 1:1 판 끝남 3 = 오목 · 체스 · 테트리스)에서만 열린다. 타이머는 여전히 없다.
-        #expect(count("refreshAchievements(") == 3, "refreshAchievements 를 부르는 자리가 지갑 sync · 게임 결과 둘이 아니다(정의 1 + 호출 2)")
-        #expect(count("refreshAchievementsAfterGameResult()") == 5,
+        // 검토 지적(2026-10-22) 뒤로 이벤트에 딸린 자리가 둘 더 있다 — 떠 있던 조회가 끝난 뒤의 '뒤따르는 한 번'(게임 결과 깃발) ·
+        // 자정을 넘겨 막힌 일일 [받기](사람이 누른 순간). 둘 다 사건 하나에 많아야 1건이다.
+        #expect(count("refreshAchievements(") == 5,
+                "refreshAchievements 를 부르는 자리가 정의 1 + 지갑 sync · 게임 결과 · 뒤따르는 한 번 · 막힌 일일 받기 가 아니다")
+        #expect(count("refreshAchievements(reason: .gameResult)") == 2 && count("refreshAchievements(reason: .missionPanel)") == 1,
+                "게임 결과 박자(문 1 + 뒤따르는 한 번 1) · 막힌 일일 받기(1) 자리가 바뀌었다")
+        #expect(count("refreshAchievementsAfterGameResult(game:") == 5,
                 "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 1:1 판 끝남 3 이 아니다")
         // 받기를 부르는 자리는 미션 화면의 맥락 하나뿐이다(스토어 어디서도 스스로 받지 않는다 — 자동 지급 금지).
         #expect(count("claimAchievement(key: $0)") == 1 && count("claimWeeklyWork()") == 2,

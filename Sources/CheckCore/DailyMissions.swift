@@ -109,6 +109,12 @@ package struct DailyMissionStatus: Equatable, Sendable {
     /// 키 → 줄(받기 연출 · 배선이 그 줄을 찾을 때). 모르는 키는 nil.
     package func mission(_ key: String) -> Mission? { missions.first { $0.key == key } }
 
+    /// 게임 → 일일 미션 키(`daily_<게임>` — 서버 `daily_mission_defs()` 의 규칙). 판이 끝난 쪽은 게임 이름만 안다.
+    package static func key(game: String) -> String { keyPrefix + game }
+
+    /// 일일 미션 키의 머리(`daily_`). 디코드가 게임 칸 없는 줄의 게임을 키에서 읽을 때도 이 글자를 쓴다.
+    package static let keyPrefix = "daily_"
+
     /// `previous`(같은 사람의 지난 응답) 위에 이 응답을 얹는다 — **같은 `kst_day` 안에서만** 받음은 되돌아가지 않는다.
     /// 날이 바뀌었거나(어제 받은 줄) 어느 쪽이든 날을 모르면 이 응답 그대로다.
     package func merged(over previous: DailyMissionStatus?) -> DailyMissionStatus {
@@ -166,8 +172,9 @@ private struct DailyLossyMission: Decodable {
         let claimedAtMs = c.achievementLossyInt(forKey: .claimedAtMs)
         // 누적 미션과 같은 판단: 칸이 없거나 모양이 틀리면 시각으로(시각이 있으면 행이 있다), 둘 다 없으면 **아니다**.
         let claimed = c.achievementLossy(Bool.self, forKey: .claimed) ?? (claimedAtMs != nil)
+        let prefix = DailyMissionStatus.keyPrefix
         let game = c.achievementLossy(String.self, forKey: .game).flatMap { $0.isEmpty ? nil : $0 }
-            ?? (key.hasPrefix(Self.keyPrefix) ? String(key.dropFirst(Self.keyPrefix.count)) : "")
+            ?? (key.hasPrefix(prefix) ? String(key.dropFirst(prefix.count)) : "")
         mission = DailyMissionStatus.Mission(game: game, row: AchievementStatus.Mission(
             key: key,
             title: title,
@@ -182,8 +189,6 @@ private struct DailyLossyMission: Decodable {
             sort: c.achievementLossyInt(forKey: .sort) ?? Int.max
         ))
     }
-
-    static let keyPrefix = "daily_"
 }
 
 // MARK: - 서비스

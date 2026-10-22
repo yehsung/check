@@ -35,12 +35,22 @@ import Foundation
 //
 // ── v0.3.64 일일 미션(사용자 결정 2026-10-22 — 미니게임 3종 · 1:1 3종 각각 하루 한 판 = 루비 5, 자정(KST)까지 안 받으면 사라진다) ──
 //  ⑥ 조회는 **새 RPC · 새 타이머 없이** 위 박자의 `achievements_status` 응답에 같이 온다(최상위 `daily`). 더해진 박자는 이벤트 둘뿐이다:
-//     미니게임 판 제출 성공 · 1:1 판이 끝난(결과를 받은) 순간(`refreshAchievementsAfterGameResult`) — 겹치면 떠 있는 조회를 같이
-//     기다리는 위 규약 그대로다.
+//     미니게임 판 제출 성공 · 1:1 판이 끝난(결과를 받은) 순간(`refreshAchievementsAfterGameResult(game:)`). 둘 다
+//     · 오늘 그 게임 줄을 이미 채웠으면(받았든 안 받았든) **묻지 않는다** — 하루 첫 판만 나간다(검토 지적 2026-10-22: 받은 뒤에도
+//       판마다 settle 을 도는 조회가 한 번씩 더 나갔다).
+//     · 떠 있는 조회가 있으면 같이 기다리지 **않고** 그 조회가 끝난 뒤 정확히 한 번 더 묻는다(`achievementsRefetchAfterInFlight`) —
+//       떠 있는 조회는 판이 서버에 남기 **전**에 떠났을 수 있다(검토 지적 2026-10-22: 그 옛 답에 합류해 달성이 다음 박자까지 안 보였다).
+//       다른 박자(지갑 sync)는 예전처럼 같이 기다린다.
 //  ⑦ 받기는 `daily_mission_claim(p_key)` — 누적 받기와 **같은 모양**(같은 키 한 번에 하나 · 실패는 그 줄 · 응답이 상태 · 잔량을 옮김 ·
 //     `claimed_now` 만큼 연출)이되 떠 있음 · 실패 표시는 따로 센다(`dailyMissionClaimsInFlight` · `dailyMissionClaimFailedKeys`).
 //  ⑧ 날짜 넘김 — 응답의 `reset_at_ms` 를 **서버 시각**(`server_now_ms` 로 잰 시계 차)으로 넘긴 줄은 [받기]를 세우지 않고(코어
 //     `DailyMissionStatus.rows(serverNowMs:)`) 그 키의 받기도 안 나간다. 배지도 그 줄을 세지 않는다.
+//     시계는 관찰 밖이라 판정만으로는 열린 화면이 다시 그려지지 않는다(검토 지적 2026-10-22 — 팝오버 루트는 초 시계를 일부러 안 본다).
+//     그래서 넘긴 사실을 관찰 값 하나(`dailyMissionRolloverNoted`)에 **적는다**(`noteDailyMissionRollover()`). 적는 때는 셋:
+//       · 깨우개(`DailyMissionRolloverWake` — 레일 [미션] 칸 뒤의 잎 뷰)가 리셋 시각에 `TimelineView(.explicit)` 로 깨어날 때
+//         (뷰 일정이다 — 스토어 타이머 · 요청이 늘지 않는다. 근무 밖이라 티커가 멎은 자정에도 깬다).
+//       · 팝오버를 다시 여는 순간(`setMenuPresented(true)` — 닫힌 동안 넘긴 자정).
+//       · 화면에 남은 [받기]를 눌렀는데 리셋을 넘겨 막혔을 때 — 그때는 조회도 한 번 부른다(새 날의 사실을 가져온다 · 반응 없는 버튼 금지).
 
 /// 받기 연출 한 번(어느 줄에 · 얼마를 · 몇 번째로). 줄은 `target` 으로 자기 연출을 찾고 `serial` 로 처음부터 다시 그린다.
 struct MissionClaimBurst: Equatable, Sendable {
@@ -94,17 +104,35 @@ extension WorkTimerStore {
             await self?.performAchievementsFetch()
             guard let self, generation == self.sessionGeneration else { return }
             self.achievementsFetchTask = nil
+            // 이 조회가 떠 있는 동안 게임 한 판이 서버에 남았다 — 이 답은 그 판 **전**의 서버일 수 있으니 한 번 더 묻는다(머리 주석 ⑥).
+            // 깃발은 하나라 판이 몇 번 끝났든 +1건이다.
+            if self.achievementsRefetchAfterInFlight {
+                self.achievementsRefetchAfterInFlight = false
+                self.refreshAchievements(reason: .gameResult)
+            }
         }
         achievementsFetchTask = task
         return task
     }
 
     /// 게임 한 판이 서버에 남은 직후의 조회(v0.3.64 — 머리 주석 ⑥). **이벤트로만** 부른다: 미니게임 제출 성공
-    /// (`performSubmitMiniGameScore`) · 1:1 판이 끝난 것을 처음 본 순간(코어 스토어의 `onMatchFinished`). 떠 있는 조회가 있으면
-    /// 그 답을 같이 기다린다(요청 0건 — 기존 규약).
+    /// (`performSubmitMiniGameScore` — `game` 은 `MiniGameKind` 원시값) · 1:1 판이 끝난 것을 처음 본 순간(코어 스토어의
+    /// `onMatchFinished` — `gomoku` · `chess` · `tetris_duel`).
+    ///  · 오늘 그 게임의 일일 줄을 이미 채웠으면 요청 0건(nil) — 이 조회는 일일 미션에 아무것도 바꾸지 못한다. 모르면(아직 못 받았다 ·
+    ///    그 줄이 없다 · 하루가 넘어갔다) 묻는다.
+    ///  · 떠 있는 조회가 있으면 요청 0건(nil)이되 깃발을 세운다 — 그 조회가 끝나면 한 번 더 묻는다.
     @discardableResult
-    func refreshAchievementsAfterGameResult() -> Task<Void, Never>? {
-        refreshAchievements(reason: .gameResult)
+    func refreshAchievementsAfterGameResult(game: String) -> Task<Void, Never>? {
+        guard session != nil else { return nil }
+        if let daily = achievements?.daily,
+           daily.rows(serverNowMs: dailyServerNowMs(daily)).first(where: { $0.key == DailyMissionStatus.key(game: game) })?.row.achieved == true {
+            return nil
+        }
+        guard achievementsFetchTask == nil else {
+            achievementsRefetchAfterInFlight = true
+            return nil
+        }
+        return refreshAchievements(reason: .gameResult)
     }
 
     /// 실제 왕복. 함수가 없는 서버(404 · PGRST202)는 절을 감추고, 그 밖의 실패는 **알던 값을 지우지 않는다** — 다음 박자가 다시 묻는다.
@@ -249,23 +277,57 @@ extension WorkTimerStore {
 
     nonisolated static func epochMs(_ date: Date) -> Int { Int((date.timeIntervalSince1970 * 1000).rounded(.down)) }
 
+    /// 이 응답의 줄을 판정할 서버 시각. 넘김을 적어 둔 응답이면 리셋 시각 아래로 내려가지 않는다(시계 차 추정이 흔들려도 [받기]가
+    /// 되살아나지 않게). **이 읽기가 관찰 등록이다** — `dailyMissionRolloverNoted` 를 쓰면 이 값을 읽은 화면 · 배지가 다시 그려진다.
+    func dailyServerNowMs(_ daily: DailyMissionStatus) -> Int {
+        let now = estimatedServerNowMs()
+        guard let noted = dailyMissionRolloverNoted, noted == daily.resetAtMs else { return now }
+        return max(now, noted)
+    }
+
     /// 미션 화면이 그릴 일일 줄. **nil = 감춘다**(서버에 도전 미션이 없다 · 아직 모른다 · 응답에 `daily` 가 없다 — 3시간 줄은 남는다).
     /// 하루가 끝난 응답이면 새 날의 모양(진행 0 · [받기] 없음)이다(코어 `rows(serverNowMs:)`).
     var dailyMissionRows: [DailyMissionStatus.Mission]? {
         guard !achievementsUnavailable, let daily = achievements?.daily, !daily.missions.isEmpty else { return nil }
-        return daily.rows(serverNowMs: estimatedServerNowMs())
+        return daily.rows(serverNowMs: dailyServerNowMs(daily))
     }
 
-    /// 일일 미션 받기. `key` 가 nil 이면 오늘 받을 것 전부. **지금 받을 수 있는 줄이 아니면 요청 0건**(하루가 끝났으면 어제 줄은 받을
+    /// 이 응답의 하루가 끝나는 순간(**이 맥 시계** — 리셋 시각 − 시계 차). 깨우개가 이 시각에 깨어난다. 일일이 없거나 · 리셋을 모르거나 ·
+    /// 이미 넘김을 적었으면 nil(깨울 일이 없다).
+    var dailyMissionRolloverDate: Date? {
+        guard !achievementsUnavailable, let daily = achievements?.daily, !daily.missions.isEmpty,
+              let reset = daily.resetAtMs, dailyMissionRolloverNoted != reset else { return nil }
+        return Date(timeIntervalSince1970: Double(reset - achievementsServerClockOffsetMs) / 1000)
+    }
+
+    /// 서버 시각으로 이 응답의 하루가 끝났으면 그 사실을 **한 번** 적는다(머리 주석 ⑧). 적었으면 참. 아직이거나 · 이미 적었거나 ·
+    /// 일일이 없으면 아무것도 쓰지 않는다(관찰 무효화 0). 요청은 내지 않는다.
+    @discardableResult
+    func noteDailyMissionRollover() -> Bool {
+        guard let daily = achievements?.daily, let reset = daily.resetAtMs, dailyMissionRolloverNoted != reset,
+              daily.hasRolledOver(serverNowMs: estimatedServerNowMs()) else { return false }
+        dailyMissionRolloverNoted = reset
+        return true
+    }
+
+    /// 일일 미션 받기. `key` 가 nil 이면 오늘 받을 것 전부. **지금 받을 수 있는 줄이 아니면 받기 0건**(하루가 끝났으면 어제 줄은 받을
     /// 수 없다 — 머리 주석 ⑧) · 같은 키가 떠 있어도 0건. 발사했으면 그 Task 를 돌려준다(테스트가 기다린다).
+    ///
+    /// 응답으로는 받을 수 있던 줄인데 리셋을 넘겨 막혔으면(화면에 어제 [받기]가 남아 있던 순간) 넘김을 적고(버튼이 그 자리에서
+    /// 내려간다) 조회를 한 번 부른다(새 날의 사실 — 반응 없는 버튼 금지 · 검토 지적 2026-10-22). 그때도 돌려주는 값은 nil 이다(받기는 안 나갔다).
     @discardableResult
     func claimDailyMission(key: String?) -> Task<Void, Never>? {
         guard session != nil, !achievementsUnavailable, let daily = achievements?.daily else { return nil }
-        let claimable = daily.claimable(serverNowMs: estimatedServerNowMs())
-        if let key {
-            guard claimable.contains(where: { $0.key == key }) else { return nil }
-        } else {
-            guard !claimable.isEmpty else { return nil }
+        let claimable = daily.claimable(serverNowMs: dailyServerNowMs(daily))
+        let wanted = key.map { key in claimable.contains(where: { $0.key == key }) } ?? !claimable.isEmpty
+        guard wanted else {
+            let wasClaimable = key.map { key in daily.mission(key)?.row.isClaimable == true }
+                ?? daily.missions.contains(where: \.row.isClaimable)
+            if wasClaimable, daily.hasRolledOver(serverNowMs: dailyServerNowMs(daily)) {
+                noteDailyMissionRollover()
+                refreshAchievements(reason: .missionPanel)
+            }
+            return nil
         }
         let slot = key ?? Self.achievementClaimAllSlot
         guard !dailyMissionClaimsInFlight.contains(slot),
@@ -297,7 +359,7 @@ extension WorkTimerStore {
 
     /// 일일 받기 실패 표시를 세우거나 내린다. `key` 가 nil(전부 받기)이면 지금 받을 수 있는 일일 줄 전부다.
     private func markDailyMissionClaim(_ key: String?, failed: Bool) {
-        let claimable = achievements?.daily?.claimable(serverNowMs: estimatedServerNowMs()).map(\.key) ?? []
+        let claimable = achievements?.daily.map { $0.claimable(serverNowMs: dailyServerNowMs($0)).map(\.key) } ?? []
         let keys = key.map { Set([$0]) } ?? Set(claimable)
         var next = dailyMissionClaimFailedKeys
         if failed {
@@ -377,7 +439,7 @@ extension WorkTimerStore {
     /// 둘 다 채웠으면 2) + 받을 주간 단계 수(어느 주든). 서버에 도전 미션이 없으면 앞의 둘은 0 이다(옛 서버 주간 응답도 0 — 받기가 없다).
     var missionClaimableCount: Int {
         let achievementCount = achievementsUnavailable ? 0 : (achievements?.claimableCount ?? 0)
-        let dailyCount = achievementsUnavailable ? 0 : (achievements?.daily?.claimableCount(serverNowMs: estimatedServerNowMs()) ?? 0)
+        let dailyCount = achievementsUnavailable ? 0 : (achievements?.daily.map { $0.claimableCount(serverNowMs: dailyServerNowMs($0)) } ?? 0)
         return dailyCount + achievementCount + (weeklyWork?.pendingCount ?? 0)
     }
 }

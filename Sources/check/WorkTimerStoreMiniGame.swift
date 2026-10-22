@@ -608,7 +608,8 @@ extension WorkTimerStore {
             retryMiniGamePendingSubmitIfAny(fromTrigger: false)
             if !hasMiniGamePendingSubmit(for: kind) { prefetchMiniGameRoundToken(kind: kind) }
             // 일일 미션(v0.3.64) — 판 제출이 성공한 뒤 한 번(새 타이머 없이 이벤트로). 선발급 **뒤**에 둔다(다음 판 토큰이 먼저다).
-            if recorded { refreshAchievementsAfterGameResult() }
+            // 오늘 이 게임 줄을 이미 채웠으면(받았든 안 받았든) 묻지 않는다 — 하루 첫 판만 나간다(검토 지적 2026-10-22).
+            if recorded { refreshAchievementsAfterGameResult(game: kind.rawValue) }
             if reloadsBoard { await performLoadMiniGameBoard() }
         } catch {
             if case .cancelled = classifyAuthError(error) { return }

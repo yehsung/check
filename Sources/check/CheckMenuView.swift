@@ -973,9 +973,10 @@ struct CheckMenuSideRail: View {
             // 근무 줄이 콕찌르기 → 잔량 배지 → 울트라 화면 안에만 있어서 사장님조차 못 찾았다. 자리가 [상점] 바로 아래인
             // 이유: 미션으로 버는 것이 **루비**이고 그 루비를 쓰는 곳이 [상점]이다(벌고 · 쓰는 문이 나란히 선다).
             // `checklist` 는 macOS 12+ (배포 타깃 14 ✓ — CoreGlyphs name_availability: 2021 = macOS 12.0).
-            // v0.3.58: 받을 보상이 있으면 숫자 배지(받을 도전 미션 수 + 받을 주간 단계 수 — `missionClaimableCount`). [제보] 칸의
-            // 배지와 같은 모양이고, 받으면 내려간다(본 적 있는지는 적지 않는다). 매초 값이 아니다(조회 · 받기 응답에만 바뀐다) —
-            // 잎으로 가둘 이유가 없다.
+            // v0.3.58: 받을 보상이 있으면 숫자 배지(받을 일일 + 누적 + 주간 — `missionClaimableCount`). [제보] 칸의
+            // 배지와 같은 모양이고, 받으면 내려간다(본 적 있는지는 적지 않는다). 매초 값이 아니다 — 조회 · 받기 응답과 **일일 미션의
+            // 자정(KST)** 에만 바뀐다(v0.3.64). 자정은 시계라 관찰이 못 보므로, 칸 뒤의 깨우개(`DailyMissionRolloverWake`)가 그 한
+            // 순간에 깨어나 넘김을 스토어에 적는다 — 그 한 번 말고는 잎으로 가둘 이유가 없다.
             let missionClaimable = store.missionClaimableCount
             CheckMenuRailButton(
                 icon: "checklist",
@@ -986,6 +987,7 @@ struct CheckMenuSideRail: View {
             ) {
                 store.toggleMissionPanel()
             }
+            .background(DailyMissionRolloverWake(store: store))
             CheckMenuRailButton(
                 icon: "chart.bar.xaxis",
                 label: "팀 현황",

@@ -398,6 +398,24 @@ struct V0367CrossyEngineTests {
         #expect(off.death?.cause == .water, "통나무 밖으로 뛰었는데 안 빠졌다")
     }
 
+    @Test("통나무 위 끝 칸에서 놀이 칸 밖으로 옆 뛰기 = 제자리 통통(땅과 같다) · 흘러 나가는 것만 죽음이다")
+    func lateralHopOffTheEdgeOnALogBumps() {
+        for (x, direction) in [(8.0, CG.Direction.right), (0.0, CG.Direction.left), (7.7, CG.Direction.right), (0.3, CG.Direction.left)] {
+            var game = cgGame(lanes: [cgRiver(1, direction: 1, speed: 0.0001, logs: [(x: -1.0, length: 4), (x: 5.5, length: 4)])])
+            game.placePlayerForTesting(row: 1, x: x, riding: true)
+            game.input(direction)
+            #expect(game.hop?.bumped == true, "x \(x) 에서 \(direction) 이 놀이 칸 밖으로 뛰었다")
+            cgRun(&game, seconds: CG.hopSeconds + 0.05)
+            #expect(game.death == nil && game.player.riding, "x \(x) 끝 칸 옆 뛰기가 죽음이 됐다(\(game.death?.cause.rawValue ?? "-"))")
+            #expect(abs(game.player.x - x) < 0.01, "제자리가 아니다(\(x) → \(game.player.x))")
+        }
+        // 안쪽으로는 그대로 뛴다.
+        var inward = cgGame(lanes: [cgRiver(1, direction: 1, speed: 0.0001, logs: [(x: 5.5, length: 4)])])
+        inward.placePlayerForTesting(row: 1, x: 8.0, riding: true)
+        inward.input(.left)
+        #expect(inward.hop?.bumped == false)
+    }
+
     @Test("기찻길: 나타나기 1초 전부터 경고등 · 지나가는 동안 켜짐 · 닿으면 기차(train) · 지나가면 꺼지고 다음 기차를 센다")
     func railWarnsThenKills() throws {
         var game = cgGame(lanes: [cgRail(2, direction: 1, countdown: 3.0)])
@@ -587,7 +605,16 @@ struct V0367CrossyWiringTests {
         #expect(Set(MiniGameKind.allCases.map(\.icon)).count == MiniGameKind.allCases.count, "아이콘이 겹친다")
         #expect(MiniGameKind.crossy.icon != MiniGameGomokuEntryButton.icon)
         #expect(MiniGameKind.crossy.maxScore == 5000)
-        #expect(MiniGameKind.crossy.roundTokenReuseSeconds == MiniGameKind.flappy.roundTokenReuseSeconds)
+        // 토큰: 판 시작에 거의 새것(2분) · 판 도중 20분마다 갈아 끼움 — 끝이 정해지지 않은 판이 TTL 30분에 잘리지 않게.
+        #expect(MiniGameKind.crossy.roundTokenReuseSeconds == 2 * 60)
+        #expect(MiniGameKind.crossy.roundTokenMidRunRefreshSeconds == 20.0 * 60)
+        #expect(MiniGameKind.crossy.roundTokenMidRunRefreshSeconds! + MiniGameKind.crossy.roundTokenReuseSeconds
+                + CheckMiniGameWindowView.tokenKeeperInterval < WorkTimerStore.miniGamePendingSubmitTTL,
+                "판 시작 토큰 나이 + 갈아 끼우는 나이 + 감시 간격이 TTL 을 넘는다")
+        for kind in [MiniGameKind.timingBar, .flappy, .tetris] {
+            #expect(kind.roundTokenMidRunRefreshSeconds == nil, "\(kind) 의 판 도중 토큰 동작이 바뀌었다")
+        }
+        #expect(MiniGameKind.flappy.roundTokenReuseSeconds == 20 * 60 && MiniGameKind.tetris.roundTokenReuseSeconds == 12 * 60)
         #expect(MiniGameKind.macCases.contains(.crossy))
         #expect(!MiniGameKind.phoneCases.contains(.crossy) && !MiniGameKind.crossy.isPhoneSupported, "폰에 길건너가 보인다")
         #expect(MiniGameKind.tetris.isPhoneSupported && MiniGameKind.flappy.isPhoneSupported)
@@ -613,6 +640,30 @@ struct V0367CrossyWiringTests {
             #expect(MiniGameSpaceKey.Stroke.key(forKeyCode: code) == nil, "테트리스 표가 W·A·S·D(\(code)) 를 받기 시작했다")
         }
         #expect(MiniGameSpaceKey.Stroke.key(forKeyCode: 126) == .rotateCW, "테트리스 ↑ 가 바뀌었다")
+    }
+
+    @Test("뛰기 입력: 누른 순서 그대로 적고 · 한 갱신에 여럿이어도 접지 않으며 · 꼬리는 8개까지")
+    func hopInputKeepsPressOrder() {
+        var input = MiniGameInput()
+        let before = input.hopCount
+        input.recordHop(.forward)
+        input.recordHop(.right)
+        input.recordHop(.forward)
+        #expect(input.hops(since: before) == [.forward, .right, .forward], "누른 순서가 아니다: \(input.hops(since: before))")
+        let mid = input.hopCount
+        input.recordHop(.left)
+        #expect(input.hops(since: mid) == [.left])
+        #expect(input.hops(since: input.hopCount).isEmpty)
+        var flood = MiniGameInput()
+        for i in 0..<12 { flood.recordHop(i.isMultiple(of: 2) ? .back : .right) }
+        #expect(flood.recentHops.count == MiniGameInput.recentHopLimit)
+        #expect(flood.hops(since: 0).count == MiniGameInput.recentHopLimit && flood.hops(since: 0).last == .right)
+        #expect(MiniGameInput() != input, "새 칸이 Equatable 밖이다 — 화면이 뛰기를 못 본다")
+        // 엔진에 순서대로 넣으면 ↑ 다음 → 는 앞 칸 다음 오른쪽 칸이다(→ 다음 ↑ 와 다르다).
+        var game = cgGame()
+        for direction in input.hops(since: before).prefix(2) { game.input(direction) }
+        cgRun(&game, seconds: 0.3)
+        #expect(game.player.row == 1 && game.player.x == 5)
     }
 
     @MainActor
@@ -654,6 +705,7 @@ struct V0367CrossyWiringTests {
                 "테트리스 게이트가 바뀌었다")
         let handle = try #require(cgBlock(after: "private func handleHop(", in: panel))
         #expect(handle.contains("guard !pauseState.isFrozen else { return }"), "얼어 있는데 뛴다")
+        #expect(handle.contains("input.recordHop(direction)"), "뛰기를 누른 순서대로 안 적는다")
 
         let canvas = try #require(cgBlock(after: "private func canvasStack(size: CGSize)", in: panel))
         #expect(canvas.contains("case .crossy:") && canvas.contains("CrossyGameView(host: host, input: input)"))
@@ -670,6 +722,10 @@ struct V0367CrossyWiringTests {
         #expect(leaf.contains("host.onPlayingChanged(playing)"), "판 시작이 허브에 안 알려진다 — 라운드 토큰을 못 받는다")
         // 3D 판은 처음 한 번만 만든다 — `@State` 면 허브가 잎 뷰를 다시 지을 때마다(정지 · 판 시작) 아잉이 모델을 다시 읽는다.
         #expect(leaf.contains("@StateObject private var scene = CrossyScene()"), "3D 판을 @StateObject 로 안 쥔다")
+        // 뛰기는 한 갱신에 여럿이어도 누른 순서대로 다 넣는다(방향별 카운터 + onChange 한 번 = 접힘).
+        #expect(leaf.contains("for direction in input.hops(since: old) { act { $0.input(direction) } }"),
+                "뛰기 입력을 순서대로 다 안 꺼낸다(마지막 하나만 · 방향별 하나만 쓰면 접힌다)")
+        #expect(!leaf.contains("hopForwardCount") && !leaf.contains("hopRightCount"), "방향별 카운터가 남았다")
         #expect(!leaf.contains("repeatForever"))
     }
 
@@ -811,6 +867,254 @@ struct V0367CrossyStoreTests {
         first.selectMiniGame(.crossy)
         let second = cgStore(host: host, defaults: defaults)
         #expect(second.miniGameKind == .crossy, "저장된 crossy 가 타이밍 바로 접혔다")
+    }
+
+    // MARK: 토큰 수명(검토 지적 1)
+
+    @Test("판 시작 토큰: 길건너는 2분 넘은 토큰을 안 쓴다(새로 받는다) · 1분이면 쓴다 · 플래피는 15분도 쓴다")
+    func runStartTokenIsFresh() async {
+        let host = "crossy-token-age.test"
+        let store = cgStore(host: host)
+        store.miniGameRoundToken = "tok-old"
+        store.miniGameRoundTokenKind = .crossy
+        store.miniGameRoundTokenAt = Date().addingTimeInterval(-3 * 60)
+        #expect(!store.hasUsableMiniGameToken(for: .crossy), "3분 묵은 길건너 토큰을 판 시작에 그대로 쓴다")
+        store.beginMiniGameRound(kind: .crossy)
+        await cgWait { store.miniGameRoundToken == "tok-next" }
+        #expect(store.miniGameRoundToken == "tok-next", "판 시작에 새 토큰을 안 받았다")
+        store.miniGameRoundTokenAt = Date().addingTimeInterval(-60)
+        #expect(store.hasUsableMiniGameToken(for: .crossy))
+        store.miniGameRoundToken = "tok-flappy"
+        store.miniGameRoundTokenKind = .flappy
+        store.miniGameRoundTokenAt = Date().addingTimeInterval(-15 * 60)
+        #expect(store.hasUsableMiniGameToken(for: .flappy), "플래피의 토큰 재사용이 바뀌었다")
+    }
+
+    @Test("판 도중 토큰 갈아 끼우기: 길건너 토큰이 20분 넘으면 새로 받아 그 토큰으로 제출 · 젊으면 · 다른 게임이면 · 인편이 있으면 안 받는다")
+    func midRunRefreshKeepsLongRunsAlive() async throws {
+        let host = "crossy-midrun.test"
+        V0367AllTimeURLProtocol.script(host, path: "/rest/v1/rpc/minigame_start_round", game: "crossy",
+                                       [.init(status: 200, body: #"{"status":"ok","token":"tok-fresh"}"#)])
+        let store = cgStore(host: host)
+        store.miniGameKind = .crossy
+        func starts() -> Int { V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_start_round").count }
+
+        // 젊은 토큰(5분) — 안 받는다.
+        store.miniGameRoundToken = "tok-start"
+        store.miniGameRoundTokenKind = .crossy
+        store.miniGameRoundTokenAt = Date().addingTimeInterval(-5 * 60)
+        store.keepMiniGameRoundTokenFresh(kind: .crossy)
+        try? await Task.sleep(for: .milliseconds(60))
+        #expect(starts() == 0, "젊은 토큰을 갈아 끼웠다")
+        // 다른 게임(플래피 25분) — 판 도중 갈아 끼우지 않는 게임이다.
+        store.keepMiniGameRoundTokenFresh(kind: .flappy)
+        try? await Task.sleep(for: .milliseconds(60))
+        #expect(starts() == 0, "플래피 판 도중에 토큰을 갈아 끼웠다")
+
+        // 21분 — 갈아 끼운다. 29분째에 끝난 판은 새 토큰으로 올라간다(옛 토큰이면 token_expired).
+        store.miniGameRoundTokenAt = Date().addingTimeInterval(-21 * 60)
+        store.keepMiniGameRoundTokenFresh(kind: .crossy)
+        await cgWait { store.miniGameRoundToken == "tok-fresh" }
+        #expect(starts() == 1 && store.miniGameRoundToken == "tok-fresh", "늙은 토큰을 안 갈아 끼웠다")
+        #expect(store.miniGameRoundTokenAt.map { Date().timeIntervalSince($0) < 5 } ?? false)
+        store.recordMiniGameScore(kind: .crossy, score: 812)
+        await cgWait { !V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_submit_score").isEmpty }
+        let submit = try #require(V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_submit_score").first)
+        #expect(submit.body.contains("tok-fresh") && submit.body.contains("812"), "갈아 끼운 토큰으로 안 올렸다: \(submit.body)")
+
+        // 인편이 살아 있으면 갈아 끼우지 않는다(새 토큰이 인편의 옛 토큰을 죽인다 — 불변식).
+        let held = cgStore(host: "crossy-midrun-pending.test")
+        held.miniGameKind = .crossy
+        held.miniGamePendingSubmits = [MiniGamePendingSubmit(id: UUID(), kind: .crossy, score: 3, token: "tok-pending",
+                                                             tokenIssuedAt: Date(), recordedAt: Date(), attempts: 0)]
+        held.miniGamePendingSubmitsOwner = held.session?.userID
+        held.miniGameRoundToken = nil
+        held.keepMiniGameRoundTokenFresh(kind: .crossy)
+        await cgWait { !V0367AllTimeURLProtocol.allCalls("crossy-midrun-pending.test").isEmpty }
+        try? await Task.sleep(for: .milliseconds(80))
+        // 인편을 **먼저** 민다 — start_round 는 (나간다면) 그 인편 제출이 끝난 뒤의 꼬리 선발급뿐이다.
+        let order = V0367AllTimeURLProtocol.allCalls("crossy-midrun-pending.test")
+            .map(\.path).filter { $0.hasSuffix("minigame_submit_score") || $0.hasSuffix("minigame_start_round") }
+        #expect(order.first?.hasSuffix("minigame_submit_score") == true,
+                "인편이 있는데 start_round 가 먼저 나갔다 — 인편의 토큰이 죽는다: \(order)")
+    }
+
+    @Test("토큰 감시(허브 소스 계약): 판 시작에 걸고 · 끝 · 접기 · 사라짐에 거두며 · 30초마다 스토어에 묻는다")
+    func tokenKeeperIsWired() throws {
+        let panel = cgStrip(try cgSource("MiniGamePanel.swift"))
+        let arm = try #require(cgBlock(after: "private func armTokenKeeper(kind: MiniGameKind)", in: panel))
+        #expect(arm.contains("guard kind.roundTokenMidRunRefreshSeconds != nil else { return }"))
+        #expect(arm.contains("store.keepMiniGameRoundTokenFresh(kind: kind)") && arm.contains("Self.tokenKeeperInterval"))
+        let host = try #require(cgBlock(after: "private var host: MiniGameHost", in: panel))
+        let playingBranch = try #require(cgBlock(after: "if playing", in: host))
+        #expect(playingBranch.contains("armTokenKeeper(kind: kind)"), "판 시작에 토큰 감시를 안 건다")
+        let endingBranch = try #require(cgBlock(after: "if !playing", in: host))
+        #expect(endingBranch.contains("cancelTokenKeeper()"), "판이 끝나도 토큰 감시가 돈다")
+        let interrupt = try #require(cgBlock(after: ".onChange(of: store.miniGameInterruptToken)", in: panel))
+        #expect(interrupt.contains("cancelTokenKeeper()"))
+        let disappear = try #require(cgBlock(after: ".onDisappear", in: panel))
+        #expect(disappear.contains("cancelTokenKeeper()"))
+    }
+
+    // MARK: 접힌 판의 점수(검토 지적 7)
+
+    @Test("장부: 멈춰 둔 플래피 판에서 다른 칩을 누르면 그 점수가 바로 올라가고, 늦게 온 onFinished 는 두 번 안 올린다")
+    func switchingGamesKeepsTheScore() async {
+        let host = "crossy-ledger-switch.test"
+        let store = cgStore(host: host)
+        store.selectMiniGame(.flappy)
+        await cgWait { store.hasUsableMiniGameToken(for: .flappy) }   // 판을 하던 중이면 토큰은 이미 와 있다
+        store.beginMiniGameLiveRound(kind: .flappy)
+        for score in 1...13 { store.noteMiniGameLiveScore(kind: .flappy, score: score) }
+        store.selectMiniGame(.crossy)              // 잎 뷰는 이 갱신에서 사라진다 — interrupt 를 못 본다
+        await cgWait { V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_submit_score").count >= 1 }
+        store.finishMiniGameLiveRound(kind: .flappy, score: 13)   // (살아 있었다면) 늦게 온 잎 뷰의 끝
+        try? await Task.sleep(for: .milliseconds(100))
+        let submits = V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_submit_score")
+        #expect(submits.count == 1, "칩 전환 판이 \(submits.count)번 올라갔다")
+        #expect(submits.first.map { $0.game == "flappy" && $0.body.contains("\"p_score\":13") } ?? false,
+                "칩 전환에서 플래피 13점이 안 올라갔다: \(submits.map(\.body))")
+    }
+
+    @Test("장부: 타이밍 바는 접으면 무효(안 올림) · 길건너 창 닫기 · [그만두기] · 로그아웃은 올림 · 자연 종료 뒤 접기는 두 번 안 올림")
+    func settlingFollowsQuittingKeepsTheScore() async {
+        func submits(_ host: String) -> [V0367AllTimeURLProtocol.Call] {
+            V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_submit_score")
+        }
+        let timing = "crossy-ledger-timing.test"
+        let t = cgStore(host: timing)
+        t.prefetchMiniGameRoundToken(kind: .timingBar)
+        await cgWait { t.hasUsableMiniGameToken(for: .timingBar) }
+        t.beginMiniGameLiveRound(kind: .timingBar)
+        t.noteMiniGameLiveScore(kind: .timingBar, score: 500)
+        t.selectMiniGame(.crossy)
+        #expect(!t.hasMiniGamePendingSubmit(for: .timingBar), "타이밍 바를 접었는데 점수를 인편에 적었다 — 정지 카드는 '기록되지 않아요' 라고 했다")
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(submits(timing).isEmpty, "타이밍 바를 접었는데 점수가 올라갔다")
+
+        let close = "crossy-ledger-close.test"
+        let c = cgStore(host: close)
+        c.selectMiniGame(.crossy)
+        await cgWait { c.hasUsableMiniGameToken(for: .crossy) }
+        c.isMiniGamePanelVisible = true
+        c.beginMiniGameLiveRound(kind: .crossy)
+        c.noteMiniGameLiveScore(kind: .crossy, score: 7)
+        c.closeMiniGamePanel()
+        await cgWait { !submits(close).isEmpty }
+        #expect(submits(close).first.map { $0.game == "crossy" && $0.body.contains("\"p_score\":7") } ?? false, "창 닫기에서 길건너 7점이 안 올라갔다")
+
+        let quit = "crossy-ledger-quit.test"
+        let q = cgStore(host: quit)
+        q.selectMiniGame(.tetris)
+        await cgWait { q.hasUsableMiniGameToken(for: .tetris) }
+        q.beginMiniGameLiveRound(kind: .tetris)
+        q.noteMiniGameLiveScore(kind: .tetris, score: 4200)
+        q.abortMiniGameRound()
+        q.finishMiniGameLiveRound(kind: .tetris, score: 4200)
+        await cgWait { !submits(quit).isEmpty }
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(submits(quit).count == 1 && submits(quit).first?.game == "tetris", "[그만두기] 판: \(submits(quit).map(\.body))")
+
+        let natural = "crossy-ledger-natural.test"
+        let n = cgStore(host: natural)
+        n.selectMiniGame(.crossy)
+        await cgWait { n.hasUsableMiniGameToken(for: .crossy) }
+        n.beginMiniGameLiveRound(kind: .crossy)
+        n.noteMiniGameLiveScore(kind: .crossy, score: 30)
+        n.finishMiniGameLiveRound(kind: .crossy, score: 30)
+        n.selectMiniGame(.flappy)
+        await cgWait { !submits(natural).isEmpty }
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(submits(natural).count == 1, "자연 종료 뒤 칩 전환이 한 번 더 올렸다")
+
+        let out = "crossy-ledger-signout.test"
+        let o = cgStore(host: out)
+        o.selectMiniGame(.crossy)
+        o.beginMiniGameLiveRound(kind: .crossy)
+        o.noteMiniGameLiveScore(kind: .crossy, score: 11)
+        let owner = o.session?.userID
+        o.clearPersistedSession()
+        #expect(o.miniGameLiveRound?.settled == true)
+        let saved = owner.flatMap { o.defaults.data(forKey: WorkTimerStore.miniGamePendingKey(userID: $0)) } ?? Data()
+        #expect(String(decoding: saved, as: UTF8.self).contains("\"score\":11"), "로그아웃 직전 판이 그 계정 인편으로 안 남았다")
+    }
+
+    @Test("장부 배선(소스 계약): 허브의 끝은 장부로 · 판 시작이 장부를 연다 · 접는 문 다섯이 토큰보다 먼저 접는다 · 잎 셋이 점수를 알린다")
+    func ledgerIsWired() throws {
+        let panel = cgStrip(try cgSource("MiniGamePanel.swift"))
+        #expect(panel.contains("onFinished: { score in store.finishMiniGameLiveRound(kind: kind, score: score) }"))
+        #expect(!panel.contains("onFinished: { score in store.recordMiniGameScore"), "허브가 장부를 건너뛰고 올린다 — 두 번 올라간다")
+        #expect(panel.contains("onScoreChanged: { score in store.noteMiniGameLiveScore(kind: kind, score: score) }"))
+        let host = try #require(cgBlock(after: "private var host: MiniGameHost", in: panel))
+        let playingBranch = try #require(cgBlock(after: "if playing", in: host))
+        #expect(playingBranch.contains("store.beginMiniGameLiveRound(kind: kind)"))
+        let store = cgStrip(try cgSource("WorkTimerStoreMiniGame.swift"))
+        for anchor in ["func selectMiniGame(_ kind: MiniGameKind)", "func closeMiniGamePanel()", "func abortMiniGameRound()"] {
+            let body = try #require(cgBlock(after: anchor, in: store))
+            let settle = try #require(body.range(of: "settleMiniGameLiveRound()"), "\(anchor) 가 판을 안 접는다")
+            if let token = body.range(of: "miniGameInterruptToken += 1") {
+                #expect(settle.lowerBound < token.lowerBound, "\(anchor) 가 토큰을 올린 뒤에 접는다")
+            }
+            if let kindChange = body.range(of: "miniGameKind = kind") {
+                #expect(settle.lowerBound < kindChange.lowerBound, "\(anchor) 가 종류를 바꾼 뒤에 접는다 — 남의 게임으로 올라간다")
+            }
+        }
+        let window = cgStrip(try cgSource("CheckMiniGameWindow.swift"))
+        let endRound = try #require(cgBlock(after: "private func endRound(closing: Bool)", in: window))
+        let settleAt = try #require(endRound.range(of: "store.settleMiniGameLiveRound()"), "창 닫기가 판을 안 접는다")
+        let tokenAt = try #require(endRound.range(of: "store.miniGameInterruptToken += 1"))
+        #expect(settleAt.lowerBound < tokenAt.lowerBound)
+        let main = cgStrip(try cgSource("WorkTimerStore.swift"))
+        let clear = try #require(cgBlock(after: "func clearPersistedSession()", in: main))
+        let clearSettle = try #require(clear.range(of: "settleMiniGameLiveRound()"), "로그아웃이 판을 안 접는다")
+        let sessionNil = try #require(clear.range(of: "session = nil"))
+        #expect(clearSettle.lowerBound < sessionNil.lowerBound, "세션을 지운 뒤에 접는다 — 인편을 못 적는다")
+        for file in ["MiniGameFlappy.swift", "MiniGameTetris.swift", "MiniGameCrossy.swift"] {
+            #expect(cgStrip(try cgSource(file)).contains("host.onScoreChanged(score)"), "\(file) 이 진행 중 점수를 안 알린다")
+        }
+    }
+
+    // MARK: 역대 표 최신 표시 경합(검토 지적 6)
+
+    @Test("역대 표: 제출 전에 떠난 받기가 제출 뒤에 닿으면 '최신'으로 표시하지 않는다 → [역대] 로 다시 넘어가면 또 받는다")
+    func allTimeFetchStartedBeforeASubmitIsNotFresh() async {
+        let host = "crossy-alltime-race.test"
+        V0367AllTimeURLProtocol.script(host, path: "/rest/v1/rpc/minigame_alltime_board", game: "crossy", [
+            .init(status: 200, body: "[]", delay: 0.4),
+            .init(status: 200, body: "[]"),
+        ])
+        let store = cgStore(host: host)
+        store.selectMiniGame(.crossy)
+        await cgWait { store.hasUsableMiniGameToken(for: .crossy) }
+        func fetches() -> Int { V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_alltime_board").count }
+        store.selectMiniGameBoardScope(.allTime)      // 받기 A 떠남(0.4초 뒤 닿는다)
+        await cgWait { fetches() == 1 }
+        store.selectMiniGameBoardScope(.today)        // [오늘] 로 돌아온 사이
+        store.recordMiniGameScore(kind: .crossy, score: 99)   // 판이 기록됐다 — 역대는 낡았다(보는 중이 아니라 다시 받지 않는다)
+        await cgWait { !V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_submit_score").isEmpty && !store.hasMiniGamePendingSubmit(for: .crossy) }
+        await cgWait(2) { store.miniGameAllTimeLoaded }          // A 가 늦게 닿는다
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(store.miniGameAllTimeFreshKind == nil, "제출 전에 떠난 받기가 '최신'으로 표시됐다 — 새 개인 최고가 빠진 표를 다시 안 받는다")
+        store.selectMiniGameBoardScope(.allTime)
+        await cgWait { fetches() == 2 }
+        #expect(fetches() == 2, "[역대] 로 다시 넘어갔는데 안 받았다(\(fetches())번)")
+    }
+
+    @Test("역대 표: 늦게 닿은 옛 받기가 새 받기의 표를 덮지 않는다")
+    func olderAllTimeFetchDoesNotOverwriteNewer() async {
+        let host = "crossy-alltime-order.test"
+        V0367AllTimeURLProtocol.script(host, path: "/rest/v1/rpc/minigame_alltime_board", game: "crossy", [
+            .init(status: 200, body: #"[{"user_id":"cccccccc-0000-0000-0000-00000000000a","display_name":"옛표","avatar_url":null,"best_score":10,"best_at":"2026-10-01T00:00:00Z","day":"2026-10-01","center":null}]"#, delay: 0.4),
+            .init(status: 200, body: #"[{"user_id":"cccccccc-0000-0000-0000-00000000000b","display_name":"새표","avatar_url":null,"best_score":20,"best_at":"2026-10-02T00:00:00Z","day":"2026-10-02","center":null}]"#),
+        ])
+        let store = cgStore(host: host)
+        store.selectMiniGame(.crossy)
+        store.selectMiniGameBoardScope(.allTime)       // 옛 받기(느림)
+        await cgWait { V0367AllTimeURLProtocol.calls(host, path: "/rest/v1/rpc/minigame_alltime_board").count == 1 }
+        await store.performLoadMiniGameAllTimeBoard()  // 새 받기(빠름) — 먼저 닿는다
+        #expect(store.miniGameAllTimeBoard.first?.name == "새표")
+        try? await Task.sleep(for: .milliseconds(600))  // 옛 받기가 닿는다
+        #expect(store.miniGameAllTimeBoard.first?.name == "새표", "늦게 닿은 옛 받기가 새 표를 덮었다")
     }
 }
 
@@ -1121,6 +1425,48 @@ struct V0367CrossyRenderTests {
         print("[길건너] 프레임 비용(규칙 + 노드 옮기기, 그리기 제외): 평균 \(String(format: "%.3f", ms))ms × \(n)프레임")
         #expect(n > 100)
         #expect(ms < 4, "한 프레임에 \(ms)ms — 60Hz 예산을 먹는다")
+    }
+
+    @Test("미리 만들기: 씬이 설 때 판이 쓸 모양을 전부 만든다 — 긴 판을 돌려도 모양이 하나도 새로 안 생긴다")
+    func prewarmCoversEveryShape() throws {
+        let palette = CrossyPalette.shared
+        palette.resetForTesting()
+        let scene = CrossyScene()
+        let prepared = palette.shapeCount
+        // 줄 4종 × 홀짝 × 안/밖(16) + 무늬 6 + 물건 4 + 차/트럭 10 + 통나무 3 + 기차 · 기둥 · 등 둘 · 그림자 · 고리(6)
+        #expect(prepared >= 45, "미리 만든 모양이 \(prepared)개뿐이다")
+        var game = CG(seed: 777)
+        game.action()
+        for _ in 0..<(60 * 60) where game.phase == .running {
+            cgBotStep(&game)
+            scene.apply(game, reduceMotion: false)
+        }
+        // 기차 · 경고 레일까지 나오게 기찻길에서 한 번 더(경고 켜짐 + 기차 지나감).
+        var rail = cgGame(lanes: [cgRail(1, countdown: 0.05), cgRoad(2, cars: [1], truck: true), cgRiver(3, logs: [(x: 1, length: 4)])])
+        for _ in 0..<60 { rail.step(dt: 1.0 / 60); scene.apply(rail, reduceMotion: false) }
+        #expect(palette.shapeCount == prepared, "판 도중에 모양을 \(palette.shapeCount - prepared)개 새로 만들었다(메인 스레드에서 굳히기)")
+        #expect(scene.prewarmShapes.count == prepared)
+    }
+
+    @Test("창 닫기: 허브는 창이 닫혀 있으면 3D 판을 안 세운다 · SCNView 가 내려갈 때 씬을 놓는다(그림자 맵 · MSAA 버퍼가 남지 않게)")
+    func sceneIsDroppedWhenTheWindowCloses() throws {
+        let panel = cgStrip(try cgSource("MiniGamePanel.swift"))
+        let canvas = try #require(cgBlock(after: "private func canvasStack(size: CGSize)", in: panel))
+        let gate = try #require(canvas.range(of: "if store.isMiniGamePanelVisible {"), "닫힌 창에서도 3D 판이 산다")
+        let view = try #require(canvas.range(of: "CrossyGameView(host: host, input: input)"))
+        #expect(gate.lowerBound < view.lowerBound)
+        weak var released: CrossyScene?
+        let scnView = CrossySCNView(frame: NSRect(x: 0, y: 0, width: 344, height: 356))
+        do {
+            let scene = CrossyScene()
+            released = scene
+            scnView.scene = scene.scene
+            scnView.crossyScene = scene
+            scnView.pending = (CG(seed: 1), false)
+            CrossySceneView.dismantleNSView(scnView, coordinator: ())
+        }
+        #expect(scnView.scene == nil && scnView.crossyScene == nil && scnView.pending == nil, "내려간 SCNView 가 씬을 쥐고 있다")
+        #expect(released == nil, "씬이 해제되지 않았다 — 누군가 붙들고 있다")
     }
 
     @Test("SCNView: 마우스를 안 받는다(클릭은 허브 제스처로) · 창에 안 붙으면 화면 밖 · 그리기는 바뀔 때만")

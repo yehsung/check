@@ -499,6 +499,9 @@ package struct CrossyGame: Equatable, Sendable {
             // 강으로 — 칸에 붙지 않는다(통나무 위 자리 그대로 · 착지에서 통나무를 찾는다).
             floats = true
             if !player.riding { toX = toX.rounded() }
+            // 놀이 칸 밖으로 뛰는 것은 막힘이다 — 땅에서 같은 입력이 제자리 통통인 것과 같다(검토 지적 2026-10-27:
+            // 통나무 위에서만 끝 칸 옆 뛰기가 그 자리에서 '떠내려감' 죽음이 됐다). 흘러 나가는 것은 여전히 죽음이다(checkDeaths).
+            if toX < Self.playMinX || toX > Self.playMaxX { bumped = true }
         } else {
             // 땅으로 — 칸에 붙는다. 통나무에서 내릴 때는 가장 가까운 칸.
             // 놀이 칸 밖 · 나무 · 바위 · 아직 없는 줄은 전부 막힘이다(`isBlocked` 가 칸 범위까지 본다).

@@ -192,6 +192,9 @@ struct FlappyGameView: View {
         .onChange(of: game.isPlaying) { _, playing in
             host.onPlayingChanged(playing)
         }
+        // 진행 중 점수를 허브의 장부에 알린다(v0.3.67) — 칩 전환 · 창 닫기처럼 이 뷰가 토큰을 못 보고 사라지는 접기에서도
+        // 정지 카드가 약속한 "지금까지의 점수가 기록돼요" 가 지켜지게(`WorkTimerStore.settleMiniGameLiveRound`).
+        .onChange(of: game.score) { _, score in host.onScoreChanged(score) }
         .onChange(of: game.phase) { old, new in
             // 결과 확정은 판마다 한 번 — running/over → result 전이가 그 순간이다(interrupt 포함).
             if new == .result, old != .result { host.onFinished(game.score) }

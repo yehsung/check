@@ -50,16 +50,20 @@ struct CrossyGameView: View {
                 .onChange(of: context.date) { _, now in tick(now) }
         }
         .onChange(of: input.actionCount) { _, _ in act { $0.action() } }
-        .onChange(of: input.hopForwardCount) { _, _ in act { $0.input(.forward) } }
-        .onChange(of: input.hopBackCount) { _, _ in act { $0.input(.back) } }
-        .onChange(of: input.hopLeftCount) { _, _ in act { $0.input(.left) } }
-        .onChange(of: input.hopRightCount) { _, _ in act { $0.input(.right) } }
+        // 뛰기는 **누른 순서 그대로** 엔진에 넣는다 — 한 갱신에 둘 이상 눌렸어도 접지 않는다(`MiniGameInput.hops(since:)`).
+        // 엔진이 한 칸만 줄 세우므로 셋째부터는 엔진이 버린다(그것은 규칙이다 — 화면이 미리 거르지 않는다).
+        .onChange(of: input.hopCount) { old, _ in
+            for direction in input.hops(since: old) { act { $0.input(direction) } }
+        }
         .onChange(of: host.interruptToken) { _, _ in
             game.interrupt()
         }
         .onChange(of: game.isPlaying) { _, playing in
             host.onPlayingChanged(playing)
         }
+        // 진행 중 점수를 허브의 장부에 알린다(v0.3.67) — 칩 전환 · 창 닫기처럼 이 뷰가 토큰을 못 보고 사라지는 접기에서도
+        // 정지 카드가 약속한 "지금까지의 점수가 기록돼요" 가 지켜지게(`WorkTimerStore.settleMiniGameLiveRound`).
+        .onChange(of: game.score) { _, score in host.onScoreChanged(score) }
         .onChange(of: game.phase) { old, new in
             // 결과 확정은 판마다 한 번 — running/over → result 전이가 그 순간이다(interrupt 포함).
             if new == .result, old != .result { host.onFinished(game.score) }
@@ -208,8 +212,18 @@ struct CrossySceneView: NSViewRepresentable {
         view.rendersContinuously = false
         view.isPlaying = false
         view.preferredFramesPerSecond = framesPerSecond
+        // 모양을 GPU 에 미리 올린다(백그라운드 — 판 도중 첫 등장에서 올리지 않게). 모양 자체는 `CrossyScene.init` 이 이미 만들었다.
+        view.prepare(scene.prewarmShapes, completionHandler: nil)
         scene.apply(game, reduceMotion: reduceMotion)
         return view
+    }
+
+    /// 화면에서 내려갈 때(창 닫힘 · 다른 게임 · 계정 전환) 씬을 놓는다(v0.3.67) — SCNView 가 씬을 쥐고 있으면 그림자 맵 ·
+    /// MSAA 버퍼 · 노드 풀이 뷰가 해제될 때까지 산다. 밀린 판 · 판 참조도 비운다(가려짐 관찰은 창에서 떨어질 때 거둔다).
+    static func dismantleNSView(_ view: CrossySCNView, coordinator: ()) {
+        view.pending = nil
+        view.crossyScene = nil
+        view.scene = nil
     }
 
     func updateNSView(_ view: CrossySCNView, context: Context) {

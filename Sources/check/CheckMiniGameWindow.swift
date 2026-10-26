@@ -300,6 +300,8 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     /// 스토어의 `closeMiniGamePanel()` 경로와 신호 모양을 같게 유지하려는 것이다.
     private func endRound(closing: Bool) {
         guard let store = wiring?.store else { return }
+        // 돌던(또는 멈춰 둔) 판의 점수를 **지금** 올린다(v0.3.67) — 닫힌 창 안의 잎 뷰가 토큰을 언제 볼지에 기대지 않는다.
+        store.settleMiniGameLiveRound()
         store.miniGameInterruptToken += 1
         if closing, store.isMiniGamePanelVisible { store.isMiniGamePanelVisible = false }
     }

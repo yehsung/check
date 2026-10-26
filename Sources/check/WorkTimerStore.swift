@@ -669,6 +669,17 @@ final class WorkTimerStore {
     /// 게임을 바꿨거나, [오늘] 을 보는 사이 그 게임 판이 기록돼 표가 낡았다(새 개인 최고가 들어갔을 수 있다).
     /// 화면은 이 값을 그리지 않는다(관찰 대상 아님).
     @ObservationIgnored var miniGameAllTimeFreshKind: MiniGameKind?
+    /// 역대 표가 **낡았다고 표시된 횟수**(v0.3.67 — 판 기록 · 게임 전환이 올린다). 받기를 시작할 때 이 값을 쥐고, 응답이 왔을 때
+    /// 그 사이 올랐으면 그 응답을 '최신'으로 표시하지 않는다 — 제출 **전에** 떠난 받기가 제출 **뒤에** 닿아 최신 표시를 다시
+    /// 세우면, [역대] 로 넘어가도 새 개인 최고가 빠진 표를 안 받는다(검토 지적 2026-10-27).
+    @ObservationIgnored var miniGameAllTimeInvalidation = 0
+    /// 역대 표 받기의 일련번호와, 마지막으로 **반영한** 받기의 번호. 늦게 닿은 옛 받기가 새 받기의 표를 덮지 않게 한다.
+    @ObservationIgnored var miniGameAllTimeFetchSerial = 0
+    @ObservationIgnored var miniGameAllTimeAppliedSerial = 0
+    /// **진행 중인 판의 장부**(v0.3.67) — 어느 게임의 판이 돌고 있고 지금 몇 점이며, 이미 기록했는가.
+    /// 판을 접는 자리(게임 칩 전환 · 창 닫기 · 로그아웃 · [그만두기])가 잎 뷰의 생사와 무관하게 그 점수를 **바로** 올린다
+    /// (`settleMiniGameLiveRound`). 잎 뷰가 늦게 `onFinished` 를 불러도 장부가 두 번 올리지 않는다.
+    @ObservationIgnored var miniGameLiveRound: MiniGameLiveRound?
     /// 내 미니게임 순위 공개 여부(profiles.minigame_public 미러). 끄면 순위표에서 빠지고 업로드도 건너뛴다.
     var miniGamePublic = true
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
@@ -3920,6 +3931,8 @@ extension WorkTimerStore {
     }
 
     func clearPersistedSession() {
+        // 진행 중인 미니게임 판은 **세션을 지우기 전에** 접어 올린다(v0.3.67) — 지운 뒤에는 인편을 그 계정의 키에 못 적는다.
+        settleMiniGameLiveRound()
         // 이 경로는 사용자가 누른 로그아웃(signOut)만이 아니라 토큰 만료 강제 로그아웃도 함께 탄다. 그래서
         // 세션을 지우기 전에 '지금까지의 소유 계정'을 남겨 둔다 — 미반영 근무 큐/진행 중 근무는 여기서 버리지
         // 않고(재로그인하면 그대로 재생돼야 한다), 다음 로그인이 다른 계정일 때 adoptWorkStateOwner 가 버린다.

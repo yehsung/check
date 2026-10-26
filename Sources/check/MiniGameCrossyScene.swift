@@ -158,7 +158,14 @@ final class CrossyScene: ObservableObject {
         aingRoot.addChildNode(aingBody)
         world.addChildNode(aingRoot)
         loadAing()
+        // 판이 쓸 모든 모양을 **지금** 만든다(v0.3.67 검토 지적) — 첫 기찻길 · 첫 트럭 색 · 첫 4칸 통나무가 판 **도중**에 처음
+        // 나타나는 순간 메인 스레드에서 상자 수십 개를 굳히던(flattenedClone) 것을 판 밖(뷰가 처음 설 때)으로 옮겼다.
+        // 팔레트는 앱 전체가 나눠 쓰므로 두 번째 판부터는 이미 다 있다(사전 조회뿐이다).
+        palette.prewarm()
     }
+
+    /// GPU 로 미리 올릴 모양 전부(`SCNView.prepare` — 화면이 처음 설 때 백그라운드에서 올린다).
+    var prewarmShapes: [SCNGeometry] { palette.allShapes }
 
     // MARK: 아잉이 모델
 
@@ -585,6 +592,46 @@ final class CrossyPalette {
     static let carColors: [UInt32] = [0x3A7BF0, 0xE0479E, 0xF2B632, 0x35C2A0, 0xF06A3C]
 
     private var cache: [String: SCNGeometry] = [:]
+
+    /// 판이 쓸 수 있는 **모든** 모양을 만들어 둔다(멱등 — 이미 있으면 사전 조회뿐). 줄 종류 × 홀짝 × 안/밖 땅, 무늬 넷,
+    /// 경계 숲 둘, 풀밭 물건 넷, 차 · 트럭 색 다섯씩, 통나무 2~4칸, 기차, 경고등 기둥 · 등 둘, 발밑 그림자, 물결 고리.
+    /// 여기서 빠진 모양은 판 도중 처음 나타날 때 만들어진다 — 시험(`prewarmCoversEveryShape`)이 긴 판을 돌려 늘지 않음을 잰다.
+    func prewarm() {
+        for kind in CrossyGame.LaneKind.allCases {
+            for dark in [false, true] {
+                for outside in [false, true] { _ = slab(kind, darkRow: dark, outside: outside) }
+            }
+        }
+        _ = roadDashes
+        for variant in 0...1 {
+            _ = riverWaves(variant: variant)
+            _ = borderForest(variant: variant)
+        }
+        _ = railTrack
+        _ = railTrackWarning
+        for key in ["tree.0", "tree.1", "tree.2", "rock"] { _ = prop(key) }
+        for color in Self.carColors.indices {
+            _ = vehicle("car.\(color)")
+            _ = vehicle("truck.\(color)")
+        }
+        for length in 2...4 { _ = log("log.\(length)") }
+        _ = train
+        _ = signalPost
+        _ = lampOn
+        _ = lampOff
+        _ = blobPlane
+        _ = splashRing
+    }
+
+    /// 지금 만들어 둔 모양 전부.
+    var allShapes: [SCNGeometry] { Array(cache.values) }
+    /// 지금 만들어 둔 모양 수(시험이 "판 도중에 새로 안 만든다"를 잰다).
+    var shapeCount: Int { cache.count }
+
+    #if DEBUG
+    /// 시험 전용: 만들어 둔 모양을 비운다(미리 만들기가 정말 다 만드는지 빈 데서부터 재려고).
+    func resetForTesting() { cache.removeAll() }
+    #endif
 
     func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
         NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,

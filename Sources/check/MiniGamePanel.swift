@@ -619,6 +619,11 @@ struct CheckMiniGameWindowView: View {
     @State private var pausedSecondsUsed = 0
     /// 정지 감시(v0.3.38). 너무 오래 멈춰 있으면 그 점수로 확정하고 판을 끝낸다 — 아래 `pauseLimitSeconds` 참조.
     @State private var pauseWatchdog: Task<Void, Never>?
+    /// 판 도중 토큰 감시(v0.3.67 — 끝이 정해지지 않은 판만). `tokenKeeperInterval` 마다 스토어에 "토큰이 늙었으면 갈아 끼워라" 를 묻는다.
+    @State private var tokenKeeper: Task<Void, Never>?
+
+    /// 토큰 감시 간격(초). 갈아 끼우는 나이(20분)와 TTL(30분) 사이 10분 안에 스무 번 묻는다.
+    static let tokenKeeperInterval: Double = 30
 
     /// - Parameter initialPause: **스냅샷·프리뷰 전용** 초기 정지 상태. 앱은 언제나 `.none` 으로 연다.
     ///   `.none` 이 아니면 `isPlaying` 도 참으로 시작한다 — 정지는 진행 중일 때만 가능한 상태이기 때문이다.
@@ -687,6 +692,7 @@ struct CheckMiniGameWindowView: View {
         .onDisappear {
             MiniGameSpaceKey.remove()
             cancelResume()
+            cancelTokenKeeper()
             // 출구 ⑧ 뷰 사라짐. ⚠️ AppKit 창은 orderOut 뒤에도 뷰가 살아 있어 이 콜백이 **안 올 수 있다**
             // (install 의 ★ 주석 — 2026-09-09 실측). 그래서 이것만 믿지 않고 아래 출구들에도 같이 건다.
             MiniGameKeyLatch.releaseAll(&input)
@@ -703,6 +709,7 @@ struct CheckMiniGameWindowView: View {
             cancelResume()
             pauseState = .none
             MiniGameKeyLatch.releaseAll(&input)
+            cancelTokenKeeper()
         }
         .onChange(of: store.miniGamePauseRequestToken) { _, _ in
             // 출구 ⑩ 키 상실(0.3.62). 판을 **끝내지 않고 멈춘다** — 실사용 제보 "테트리스 일시정지하고
@@ -810,7 +817,8 @@ struct CheckMiniGameWindowView: View {
             // 프레임 상한의 재료(v0.2.50). 창 컨트롤러가 창이 선 화면에서 읽어 두고, 화면을 옮기면 갱신한다.
             // `@Observable` 이라 **여기서 읽는 것만으로** 값이 바뀔 때 이 뷰가 다시 그려진다.
             refreshHz: MiniGameFrameRateMonitor.shared.refreshHz,
-            onFinished: { score in store.recordMiniGameScore(kind: kind, score: score) },
+            // 끝난 판은 **장부를 거쳐** 올린다(v0.3.67) — 판을 접는 문(칩 전환 · 창 닫기)이 먼저 올렸으면 두 번 안 올린다.
+            onFinished: { score in store.finishMiniGameLiveRound(kind: kind, score: score) },
             onPlayingChanged: { playing in
                 isPlaying = playing
                 // ★ 판이 **시작되는** 이 순간이 서버 토큰을 받는 자리다(v0.3.17 위조 차단).
@@ -819,6 +827,10 @@ struct CheckMiniGameWindowView: View {
                 //   `beginMiniGameRound` 는 Task 로 띄우고 기다리지 않는다(60Hz 판을 막지 않는다).
                 if playing {
                     store.beginMiniGameRound(kind: kind)
+                    // 진행 중인 판의 장부를 연다(v0.3.67 — 판을 접는 문이 잎 뷰 없이도 이 점수를 올린다).
+                    store.beginMiniGameLiveRound(kind: kind)
+                    // 끝이 정해지지 않은 판(길건너)은 판 도중 토큰을 갈아 끼운다 — 감시는 그 게임에서만 돈다.
+                    armTokenKeeper(kind: kind)
                     // 정지 예산은 **판마다** 새로 준다(위 `pausedSecondsUsed` 주석).
                     pausedSecondsUsed = 0
                 }
@@ -827,12 +839,14 @@ struct CheckMiniGameWindowView: View {
                 if !playing {
                     cancelResume()
                     cancelPauseWatchdog()
+                    cancelTokenKeeper()
                     pauseState = .none
                     // 출구 ① 탑아웃(자연 종료). 토큰이 **안 오르는** 자리라 공통 수신처가 못 잡는다 —
                     // 결과 카드를 보는 동안 ← 를 놓았는데 그 뗌이 반영되지 않으면 다음 판이 왼쪽으로 출발한다.
                     MiniGameKeyLatch.releaseAll(&input)
                 }
-            }
+            },
+            onScoreChanged: { score in store.noteMiniGameLiveScore(kind: kind, score: score) }
         )
     }
 
@@ -848,7 +862,14 @@ struct CheckMiniGameWindowView: View {
             case .tetris:
                 TetrisGameView(host: host, input: input)
             case .crossy:
-                CrossyGameView(host: host, input: input)
+                // 창이 닫혀 있으면 3D 판을 **통째로 내린다**(v0.3.67) — 창은 재사용되므로(CheckMiniGameWindow) 그대로 두면 SCNView ·
+                // 2048² 그림자 맵 · 4× MSAA 버퍼 · 노드 풀이 닫힌 창 안에서 계속 산다. 다시 열면 새로 만든다(판은 닫을 때 이미 접혔다 —
+                // 점수는 장부가 올렸다: `settleMiniGameLiveRound`).
+                if store.isMiniGamePanelVisible {
+                    CrossyGameView(host: host, input: input)
+                } else {
+                    CheckTheme.fieldFill
+                }
             }
             if pauseState.isFrozen {
                 pauseOverlay
@@ -980,15 +1001,11 @@ struct CheckMiniGameWindowView: View {
         )
     }
 
-    /// 모니터가 준 뛰기 한 번. 방향마다 카운터 하나 — 잎 뷰는 "늘었다"만 본다(`MiniGameInput.hop*Count`).
+    /// 모니터가 준 뛰기 한 번. **누른 순서 그대로** 적는다(`MiniGameInput.recordHop`) — 잎 뷰는 `hops(since:)` 로
+    /// 그 사이 누른 것을 순서대로 받는다(한 프레임에 둘이 와도 접히지 않는다).
     private func handleHop(_ direction: CrossyGame.Direction) {
         guard !pauseState.isFrozen else { return }
-        switch direction {
-        case .forward: input.hopForwardCount &+= 1
-        case .back: input.hopBackCount &+= 1
-        case .left: input.hopLeftCount &+= 1
-        case .right: input.hopRightCount &+= 1
-        }
+        input.recordHop(direction)
     }
 
     /// 모니터가 준 조작 키 한 번. 규칙은 `MiniGameKeyLatch`(순수)에 있고 여기는 배선뿐이다.
@@ -1097,6 +1114,25 @@ struct CheckMiniGameWindowView: View {
     private func cancelPauseWatchdog() {
         pauseWatchdog?.cancel()
         pauseWatchdog = nil
+    }
+
+    /// 판 도중 토큰 감시를 건다(멱등). 갈아 끼우지 않는 게임(`roundTokenMidRunRefreshSeconds == nil`)에는 안 건다.
+    /// 판이 끝나면(`!playing`) · 판이 접히면(interruptToken) · 화면이 사라지면 거둔다. 정지 중에도 돈다 — 멈춰 둔 동안에도 TTL 은 흐른다.
+    private func armTokenKeeper(kind: MiniGameKind) {
+        cancelTokenKeeper()
+        guard kind.roundTokenMidRunRefreshSeconds != nil else { return }
+        tokenKeeper = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.tokenKeeperInterval))
+                guard !Task.isCancelled, isPlaying else { return }
+                store.keepMiniGameRoundTokenFresh(kind: kind)
+            }
+        }
+    }
+
+    private func cancelTokenKeeper() {
+        tokenKeeper?.cancel()
+        tokenKeeper = nil
     }
 
     /// [그만두기]. 스토어의 `abortMiniGameRound()` 가 토큰을 올려 잎 뷰의 판을 끝낸다(플래피는 그 점수로 확정,

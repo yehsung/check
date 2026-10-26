@@ -15,13 +15,16 @@ import Foundation
 
 /// 축하 창을 띄우고 내리는 문. 스토어가 쥔다(`WorkTimerStore.cakeGiftWindowHooks`) — 테스트가 갈아 끼워 "창이 열렸는가"를 센다.
 struct CakeGiftWindowHooks {
-    var show: @MainActor () -> Void
+    /// 창을 띄운다. 인자 = **앱을 앞으로 데려와 키를 잡는가**(`activating`). 사용자가 누른 [고르기]는 참, 스스로 띄우기는 거짓이다 —
+    /// 선물 조회는 박자(시작 · 15초 폴링)에 얹혀 아무 때나 끝나므로, 키를 잡으면 1:1 대결 창(테트리스 하드드롭 = 스페이스)이나 다른 앱에서
+    /// 치던 키를 이 창이 가로챈다. 거짓이면 창은 맨 앞에 서되 키는 그대로다(누르면 그때 잡는다).
+    var show: @MainActor (_ activating: Bool) -> Void
     var close: @MainActor () -> Void
     /// 창이 지금 떠 있는가(자동 띄우기가 이미 뜬 창을 다시 앞으로 끌지 않게).
     var isOpen: @MainActor () -> Bool
 
     @MainActor static var live: CakeGiftWindowHooks {
-        CakeGiftWindowHooks(show: { CheckCakeGiftWindowController.shared.show() },
+        CakeGiftWindowHooks(show: { CheckCakeGiftWindowController.shared.show(activating: $0) },
                             close: { CheckCakeGiftWindowController.shared.close() },
                             isOpen: { CheckCakeGiftWindowController.shared.isOpen })
     }
@@ -80,7 +83,9 @@ extension WorkTimerStore {
         let protocolVersion = shopProtocolVersion
         return Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { self.cakeGiftChecking = false }
+            // 세대가 바뀌었으면(로그아웃 · 계정 전환) 깃발은 `resetCakeGiftState` 가 이미 내렸고, 그 뒤 새 계정의 조회가 다시 들었을 수 있다 —
+            // 옛 조회가 그 깃발을 내리면 겹쳐 쏜다. 내 세대일 때만 내린다.
+            defer { if generation == self.sessionGeneration { self.cakeGiftChecking = false } }
             do {
                 let offer = try await self.withSessionRetry { activeSession in
                     try await self.service.fetchCharacterGiftPending(accessToken: activeSession.accessToken,
@@ -105,7 +110,8 @@ extension WorkTimerStore {
         cakeGiftAutoShownIDs.insert(offer.id)
         // 이미 떠 있으면(다시 열기로 연 창) 끌어오지 않는다.
         guard !cakeGiftWindowHooks.isOpen() else { return }
-        presentCakeGiftWindow(offer)
+        // 스스로 띄울 때는 키를 잡지 않는다(`CakeGiftWindowHooks.show` 주석 — 대결 · 다른 앱의 키를 가로채지 않게).
+        presentCakeGiftWindow(offer, activating: false)
     }
 
     // MARK: 축하 창
@@ -114,19 +120,19 @@ extension WorkTimerStore {
     /// (뽑기 창과 같은 순서 — `openGachaWindow` 주석).
     func openCakeGiftWindow() {
         guard let offer = cakeGiftOffer else { return }
-        presentCakeGiftWindow(offer)
+        presentCakeGiftWindow(offer, activating: true)
         WindowTopAnchor.dismissMenuPopover()
     }
 
     /// 창 상태를 이 선물의 고르기 화면으로 세우고 창을 띄운다. 선택지가 하나뿐이면(하나는 이미 가졌다) 미리 골라 둔다.
-    private func presentCakeGiftWindow(_ offer: CharacterGiftOffer) {
+    private func presentCakeGiftWindow(_ offer: CharacterGiftOffer, activating: Bool) {
         if cakeGiftPresented?.id != offer.id || cakeGiftReceivedID != nil {
             cakeGiftChoice = offer.options.count == 1 ? offer.options.first : nil
             cakeGiftReceivedID = nil
         }
         cakeGiftPresented = offer
         cakeGiftNotice = nil
-        cakeGiftWindowHooks.show()
+        cakeGiftWindowHooks.show(activating)
     }
 
     /// 축하 창에서 하나를 고른다(받지 않는다 — 확인 단추가 받는다). 선택지 밖 id · 받는 중 · 받은 뒤는 무시한다.
@@ -137,9 +143,11 @@ extension WorkTimerStore {
         cakeGiftNotice = nil
     }
 
-    /// 확인 단추를 누를 수 있는가.
+    /// 확인 단추를 누를 수 있는가. 창이 그리는 선물이 **아직 열려 있어야** 한다 — 받지 못한 채 끝난 선물(`not_found` · 받은 것을 모르는
+    /// `already_claimed`)이나 조회가 '없음'으로 내린 선물에 다시 눌러 봐야 같은 실패 문구만 되풀이된다.
     var canConfirmCakeGift: Bool {
-        !cakeGiftClaiming && cakeGiftReceivedID == nil && cakeGiftPresented != nil && cakeGiftChoice != nil
+        !cakeGiftClaiming && cakeGiftReceivedID == nil && cakeGiftChoice != nil
+            && cakeGiftPresented != nil && cakeGiftOffer?.id == cakeGiftPresented?.id
     }
 
     /// 확인 단추(`CakeGiftText.confirmButton`) — 고른 캐릭터로 선물을 받는다. **수령 RPC 는 여기 하나뿐이다.**
@@ -153,7 +161,8 @@ extension WorkTimerStore {
         let protocolVersion = shopProtocolVersion
         return Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { self.cakeGiftClaiming = false }
+            // 조회와 같은 이유로 내 세대일 때만 내린다(로그아웃이 이미 내렸다).
+            defer { if generation == self.sessionGeneration { self.cakeGiftClaiming = false } }
             do {
                 let response = try await self.withSessionRetry { activeSession in
                     try await self.service.claimCharacterGift(accessToken: activeSession.accessToken, giftID: offer.id,

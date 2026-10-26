@@ -366,7 +366,7 @@ enum CharacterCardArt {
 
     /// 케이크 아잉이(v0.3.66) 초상의 **몸** 상자. 장식(딸기 · 초 · 크림)도 불투명이라 알파 > `bodyThreshold` 상자는 머리 위 장식까지 든다 —
     /// 그래서 몸의 폭 · 바닥만 알파로 재고(장식은 몸보다 좁고 머리 위에만 있다) 높이는 몸 비(`bodyAspect` = 높이 ÷ 폭)로 되짚는다.
-    /// 비는 같은 2D 몸 · 같은 0.88 배율로 구운 황금 · 무지개 초상의 몸 상자(142×133 — 알파 > 250)에서 왔다(`V0366CakeMacAvatarTests` 가
+    /// 비는 같은 2D 몸 · 같은 0.88 배율로 구운 황금 · 무지개 초상의 몸 상자(142×133 — 알파 > 250)에서 왔다(`V0366CakeMacScreensTests.avatarFaceMatchesTheAingVariants` 가
     /// 금 초상에서 다시 재 맞댄다). 몸을 못 찾으면 nil.
     static func cakeBodyBox(_ image: CGImage, bodyThreshold: UInt8 = 250, bodyAspect: CGFloat = cakeBodyAspect) -> CGRect? {
         guard let opaque = alphaBounds(image, threshold: bodyThreshold) else { return nil }

@@ -403,7 +403,8 @@ import Testing
         #expect(store.syncMessage.contains(GachaText.gachaOnlyHint), "되돌린 사실·얻는 길을 안 말했다: \(store.syncMessage)")
         // 기준선: 금이 아닌(루비로 파는) 캐릭터의 unknown_character 는 되돌리지 않는다(앱 번들과 서버 명단이 갈린 것 — 기존 계약).
         // 무지개(v0.3.59)는 금과 같은 쪽이다(`V0359RainbowMacTests`) — 기준선에서 뺀다.
-        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) })
+        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0)
+            && !CharacterCatalog.isGiftOnlyBuiltIn($0) })
         let (_, other) = await Self.push(fox, reply: #"{"status":"unknown_character","id":"x"}"#, label: "unknown-other")
         #expect(other.selectedID == fox)
     }
@@ -415,7 +416,8 @@ import Testing
         let notice = goldStore.syncMessage
         #expect(notice.contains(GachaText.gachaOnlyHint), "금 되돌림 안내 '\(notice)' — 얻는 길(뽑기·조각)을 안 말한다")
         #expect(!notice.contains("상점에서 살 수 있어요"), "금 되돌림 안내 '\(notice)' — 금은 상점에서 못 산다")
-        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) })
+        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0)
+            && !CharacterCatalog.isGiftOnlyBuiltIn($0) })
         let (foxStore, _) = await Self.push(fox, reply: #"{"status":"not_owned","id":"x"}"#, label: "not-owned-fox")
         #expect(foxStore.syncMessage == WorkTimerStore.notOwnedRevertNotice)
     }

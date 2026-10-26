@@ -113,8 +113,10 @@ struct V0359RainbowShopProtocolTests {
         let robot = V0343RobotShopProtocolTests.robotArtInSourceTree
         let gold = V0354CoreArtBaseline.macGoldArtInSourceTree
         let rainbow = Self.macRainbowArtInSourceTree
+        // v0.3.66: 케이크 아잉이 둘의 초상이 실리면 번호는 누적으로 4 다(무지개 몫은 "3 이상"이 된다 — 4 의 기준선은 V0366CakeCoreTests).
+        let cakes = ShopWire.cakeCharacterIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree)
         let expected = ShopWire.protocolVersion(drawableCharacterIDs:
-            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []))
+            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes)
         #expect(rainbow, "무지개 그림 네 장이 소스 트리에 없다 — scripts/make-rainbow-aing.swift 를 돌려라")
 
         let host = "v0359-rainbow-bundle-\(UUID().uuidString.prefix(8))".lowercased()

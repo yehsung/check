@@ -651,10 +651,12 @@ struct CheckShopPanel: View {
         // 루비로 안 파는 캐릭터(황금 아잉이 — v0.3.54 · 무지개 아잉이 — v0.3.59): 가격 대신 "뽑기 또는 조각 20개", 흐리게 하지 않는다
         // (살 수 없는 게 아니라 다른 길로 얻는다). 누르면 뽑기 패널이 열린다(`selectShopItem` 이 가른다). 문구는 금빛 · 무지개빛(희귀 강조) —
         // 서버 표식으로만 뽑기 전용인 캐릭터(희귀 아님)는 금빛 그대로다(v0.3.54 와 같다).
-        let gachaOnly = WorkTimerStore.isGachaOnly(entry.id, rows: store.shopCharacters)
         // 생일 선물 전용(케이크 아잉이 — v0.3.66): 안 가진 사람에겐 **잠긴 칸**이다 — 가격 · 루비 아이콘 대신 자물쇠 + '생일 선물 전용', 흐리게.
         // 누르면 고르지 않고 얻는 길을 말한다(`selectShopItem` → `CakeGiftText.lockedHint`). 가진 사람은 보통 보유 칸이다.
-        let giftLocked = !owned && WorkTimerStore.isGiftOnly(entry.id, rows: store.shopCharacters)
+        // 아래 줄의 갈래는 순수 판정 한 곳(`ShopCardLine.of`)이 정한다 — 시험이 같은 함수를 부른다.
+        let line = ShopCardLine.of(id: entry.id, owned: owned, rows: store.shopCharacters)
+        let gachaOnly = line == .gachaOnly
+        let giftLocked = line == .giftLocked
         let affordable = !giftLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         let picked = store.shopSelection == .character(entry.id)
@@ -722,12 +724,44 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .checkTooltip(owned ? "\(name) — 보유 중"
-                            : (giftLocked ? "\(name) — \(CakeGiftText.lockedHint)"
-                                          : (gachaOnly ? "\(name) — \(GachaText.gachaOnlyHint)" : "\(name) 사기")))
-        .accessibilityLabel(owned ? "\(name) 보유 중"
-                                  : (giftLocked ? "\(name) 잠김, \(CakeGiftText.lockedHint)"
-                                                : (gachaOnly ? "\(name), \(GachaText.gachaOnlyHint)" : "\(name) 사기")))
+        .checkTooltip(line.tooltip(name: name, owned: owned))
+        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned))
+    }
+}
+
+/// 상점 캐릭터 카드 아래 줄의 갈래(순수 — 카드가 이 판정 하나로 그리고, 시험이 같은 함수를 부른다).
+enum ShopCardLine: Equatable, Sendable {
+    /// 생일 선물 전용 잠긴 칸(안 가진 케이크 아잉이 — v0.3.66): 자물쇠 + `CakeGiftText.lockedCaption`. 가격 · 루비 아이콘이 없다.
+    case giftLocked
+    /// 뽑기 전용(황금 · 무지개 아잉이 — 서버 표식 포함): "뽑기 또는 조각 20개" / 보유.
+    case gachaOnly
+    /// 루비 가격 / 보유. 가진 케이크도 여기다(보통 보유 칸).
+    case price
+
+    static func of(id: String, owned: Bool, rows: [ShopCharacterRow]) -> ShopCardLine {
+        if !owned, WorkTimerStore.isGiftOnly(id, rows: rows) { return .giftLocked }
+        if WorkTimerStore.isGachaOnly(id, rows: rows) { return .gachaOnly }
+        return .price
+    }
+
+    /// 말풍선 — 얻는 길을 말한다(잠긴 칸 · 뽑기 전용에 "사기"는 거짓이다).
+    func tooltip(name: String, owned: Bool) -> String {
+        if owned { return "\(name) — 보유 중" }
+        switch self {
+        case .giftLocked: return "\(name) — \(CakeGiftText.lockedHint)"
+        case .gachaOnly: return "\(name) — \(GachaText.gachaOnlyHint)"
+        case .price: return "\(name) 사기"
+        }
+    }
+
+    /// 읽기 이름.
+    func accessibilityLabel(name: String, owned: Bool) -> String {
+        if owned { return "\(name) 보유 중" }
+        switch self {
+        case .giftLocked: return "\(name) 잠김, \(CakeGiftText.lockedCaption) — \(CakeGiftText.lockedHint)"
+        case .gachaOnly: return "\(name), \(GachaText.gachaOnlyHint)"
+        case .price: return "\(name) 사기"
+        }
     }
 }
 

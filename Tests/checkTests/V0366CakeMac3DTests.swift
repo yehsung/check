@@ -172,7 +172,12 @@ import Testing
             let shadeMap = material.value(forKey: CakeAingFinish.ChocoBody.shadeMapKey) as? SCNMaterialProperty
             #expect((shadeMap != nil) == (kind == .choco), "\(manifest.id) ckShadeMap \(shadeMap == nil ? "없음" : "있음")")
             let decor = try #require(Self.decor(scene), "\(manifest.id) 장식이 없다")
-            #expect(decor.parent === character, "장식이 캐릭터(메시) 노드 자식이 아니다")
+            // 장식은 **몸 메시 노드**(얼굴 재질을 쥔 지오메트리 노드 — 정수리 hitTest 가 그 물체 좌표로 자리를 잡았다)의 자식이고, 그 노드는 캐릭터 아래다.
+            let mesh = try #require(decor.parent, "\(manifest.id) 장식에 부모가 없다")
+            #expect(mesh.geometry?.materials.contains { $0 === material } == true, "장식이 몸 메시 노드 자식이 아니다(\(mesh.name ?? "?"))")
+            var cursor: SCNNode? = mesh
+            while let current = cursor, current !== character { cursor = current.parent }
+            #expect(cursor === character, "장식이 캐릭터 노드 아래가 아니다")
             #expect(CakeAingFinish.kind(of: character) == kind)
             #expect(abs(character.simdPosition.y + CakeAingFinish.framingDrop) < 1e-6, "\(manifest.id) 프레이밍 내림 \(character.simdPosition.y)")
             #expect(scene.rootNode.childNode(withName: RainbowAingFinish.haloNodeName, recursively: true) == nil, "케이크에 무지개 후광이 섰다")

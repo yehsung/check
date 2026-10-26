@@ -262,6 +262,8 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
     private var windowStorage: NSWindow?
     /// 표시 의도(헤드리스 검증 지점 — `isVisible` 은 이 저장소에서 거짓말한 적이 있다).
     private(set) var isOpen = false
+    /// 마지막 `show` 가 키를 잡았는가(창 재생성 복구가 같은 방식으로 다시 연다 — 스스로 띄운 창을 복구하다 키를 뺏지 않게).
+    private var lastShowActivated = true
     var hasWindow: Bool { windowStorage != nil }
     var currentWindow: NSWindow? { windowStorage }
     private(set) var frameAutosaveActive = false
@@ -333,7 +335,9 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
     // MARK: - 열기 / 닫기
 
     /// 축하 창을 연다(멱등 — 최소화돼 있으면 되살린다).
-    func show() {
+    /// `activating` = 앱을 앞으로 데려와 키를 잡는가. 사용자가 누른 [고르기]는 참, 열린 선물을 보고 **스스로** 띄울 때는 거짓이다
+    /// (`CakeGiftWindowHooks.show` 주석 — 대결 창 · 다른 앱에서 치던 키를 가로채지 않는다). 거짓이면 창은 맨 앞에 서되 키는 그대로다.
+    func show(activating: Bool = true) {
         guard let window else { return }
         if window.isMiniaturized { window.deminiaturize(nil) }
         let fixedFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: Self.fixedContentSize)).size
@@ -342,10 +346,13 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
             // 키를 가져가지 않고, 모든 화면 밖에 세운다(머리 주석).
             window.setFrameOrigin(Self.testParkingOrigin)
             window.orderFront(nil)
-        } else {
+        } else if activating {
             NSApp.activate()
             window.makeKeyAndOrderFront(nil)
+        } else {
+            window.orderFrontRegardless()
         }
+        lastShowActivated = activating
         isOpen = true
         armStuckWindowWatchdog()
     }
@@ -408,7 +415,7 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
         old.close()
         windowStorage = nil
         isOpen = false
-        show()
+        show(activating: lastShowActivated)
     }
 
     #if DEBUG

@@ -1287,9 +1287,11 @@ enum CakeAingFinish {
         }
         guard hasDecor else { return node.boundingBox }
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        // ★ 노드의 `boundingBox` 가 아니라 **지오메트리의** `boundingBox` 를 잰다: SceneKit 노드 상자는 자손을 감싼다 — 장식은 몸 메시 노드의
+        //   자식이라 그 노드 상자에 초 · 빛 번짐이 그대로 들어온다(`V0366CakeMac3DTests.bodyBoundingBoxIgnoresTheDecor` 실측 — 몸 위 끝 0.849 → 1.122).
         node.enumerateHierarchy { child, _ in
-            guard child.geometry != nil, !isDecor(child) else { return }
-            let (a, b) = child.boundingBox
+            guard let geometry = child.geometry, !isDecor(child) else { return }
+            let (a, b) = geometry.boundingBox
             for corner in [SCNVector3(a.x, a.y, a.z), SCNVector3(b.x, a.y, a.z), SCNVector3(a.x, b.y, a.z), SCNVector3(b.x, b.y, a.z),
                            SCNVector3(a.x, a.y, b.z), SCNVector3(b.x, a.y, b.z), SCNVector3(a.x, b.y, b.z), SCNVector3(b.x, b.y, b.z)] {
                 let p = child.convertPosition(corner, to: node)

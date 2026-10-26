@@ -191,7 +191,8 @@ struct V0317ShopTests {
         //   그래서 스토어에 `characterDefaults` 주입 지점을 두고 여기서는 격리 suite 만 쓴다.
         // 상점에서 **루비로 파는** 캐릭터로 잰다 — 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 되돌림 안내가 뽑기 문구다(`V0354GoldPickerGateTests`).
         let target = try #require(
-            CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) },
+            CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0)
+            && !CharacterCatalog.isGiftOnlyBuiltIn($0) },
             "번들에 아잉 말고 캐릭터가 없다")
         let store = Self.stubStore(host: host)
         let defaults = store.characterDefaults

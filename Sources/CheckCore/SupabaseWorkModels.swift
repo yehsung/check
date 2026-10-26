@@ -3132,6 +3132,157 @@ package enum MiniGameDayKey {
     }
 }
 
+// MARK: - 미니게임 역대 순위 (v0.3.67)
+//
+// 사용자 결정(2026-10-27): "미니게임 멀티 아닌 3종 에서 역대 최고 점수 랭킹 볼 수 있는 창도 만들어줘."
+// 맥 미니게임 창 순위 열에 [오늘 | 역대] 전환이 붙는다. 역대 = 지금 고른 혼자 하는 게임의 **사람마다 전체 기간 최고 한 줄**.
+// 서버는 `minigame_alltime_board(p_game)` 하나다(20261027120000) — 가시성(공개 끔 = 본인만 · 숨김 격리)·0점 제외·50행은
+// `minigame_board` 와 같은 술어다. 폰은 다음 버전이라 전선 모양·디코드·정렬·날짜 글자는 **여기(CheckCore)** 에 둔다.
+
+/// 순위 열이 보여 주는 판. 앱이 떠 있는 동안만 기억한다(영속하지 않는다).
+package enum MiniGameBoardScope: String, CaseIterable, Identifiable, Equatable, Sendable {
+    case today
+    case allTime
+
+    package var id: String { rawValue }
+
+    /// 전환 단추의 글자.
+    package var label: String {
+        switch self {
+        case .today: return "오늘"
+        case .allTime: return "역대"
+        }
+    }
+
+    /// 순위 열 머리 제목(보이스오버 이름도 이것이다 — 단추 글자 두 자만으로는 무엇을 고르는지 안 들린다).
+    package var boardTitle: String {
+        switch self {
+        case .today: return "오늘 순위"
+        case .allTime: return "역대 순위"
+        }
+    }
+}
+
+/// `minigame_alltime_board(p_game)` RPC 본문. 인자는 이것 하나이고 서버에 DEFAULT 가 없다 — 키를 빼면 PGRST202 다.
+package struct MiniGameAllTimeBoardRequest: Encodable {
+    package let pGame: String
+}
+
+/// `minigame_alltime_board` 응답 배열의 한 원소. **전부 옵셔널이고 칸마다 따로 읽는다** — 원소 하나가 이상해도(칸 없음·
+/// 타입 어긋남·객체가 아닌 원소) 배열 디코드가 통째로 throw 되지 않는다(`AppUserCharacterRow` 와 같은 관용).
+/// 쓸 수 없는 원소(user_id 나 best_score 가 없다)는 서비스가 버린다. 배열이 아닌 본문은 그대로 throw 한다(실패로 그린다).
+///
+/// 키는 `.convertFromSnakeCase` 뒤의 카멜 이름이다(`best_score` → `bestScore`). 서버 키 일곱 개는 마이그레이션 §3 ⑤ 가
+/// 실호출로 못 박는다: user_id · display_name · avatar_url · best_score · best_at · day · center.
+package struct MiniGameAllTimeBoardRow: Decodable, Equatable, Sendable {
+    package let userId: String?
+    package let displayName: String?
+    package let avatarUrl: String?
+    package let bestScore: Int?
+    /// 그 점수에 처음 닿은 날의 best_at(timestamptz 문자열 — 서비스가 parseDate 로 푼다).
+    package let bestAt: String?
+    /// 그 점수에 처음 닿은 KST 날짜 'YYYY-MM-DD'.
+    package let day: String?
+    /// 소속 센터 **서버값**(화면 글자로 바꾸는 것은 서비스 경계 한 번 — `CenterLabel.display`).
+    package let center: String?
+
+    package enum CodingKeys: String, CodingKey, CaseIterable {
+        case userId, displayName, avatarUrl, bestScore, bestAt, day, center
+    }
+
+    package init(
+        userId: String?, displayName: String?, avatarUrl: String?, bestScore: Int?,
+        bestAt: String?, day: String?, center: String?
+    ) {
+        self.userId = userId
+        self.displayName = displayName
+        self.avatarUrl = avatarUrl
+        self.bestScore = bestScore
+        self.bestAt = bestAt
+        self.day = day
+        self.center = center
+    }
+
+    package init(from decoder: any Decoder) throws {
+        guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+            self.init(userId: nil, displayName: nil, avatarUrl: nil, bestScore: nil, bestAt: nil, day: nil, center: nil)
+            return
+        }
+        func text(_ key: CodingKeys) -> String? {
+            guard let value = (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        // 점수는 정수로 온다(jsonb integer). 정수인 소수 표기(800.0)는 JSONDecoder 가 Int 로 받고, 그 밖(800.5 · 글자)은
+        // 그 원소만 버린다 — Double 로 한 번 더 읽는 폴백은 두지 않는다(뮤테이션 실측: 지워도 결과가 같은 죽은 갈래였다).
+        func score() -> Int? { (try? container.decodeIfPresent(Int.self, forKey: .bestScore)) ?? nil }
+        self.init(
+            userId: text(.userId),
+            displayName: (try? container.decodeIfPresent(String.self, forKey: .displayName)) ?? nil,
+            avatarUrl: text(.avatarUrl),
+            bestScore: score(),
+            bestAt: text(.bestAt),
+            day: text(.day),
+            center: text(.center)
+        )
+    }
+}
+
+/// 미니게임 역대 순위 한 행(표시용). 정렬 순서가 곧 순위다(등수는 뷰가 인덱스로 센다 — 오늘 순위와 같다).
+package struct MiniGameAllTimeEntry: Identifiable, Equatable, Sendable {
+    package let userID: String
+    package var name: String
+    package var avatarURL: URL?
+    /// 그 사람의 그 게임 역대 최고(하루 최고들의 최고).
+    package let bestScore: Int
+    /// 그 점수에 처음 닿은 시각(동률 타이브레이크 — 먼저 닿은 사람이 위). 모르면 nil(맨 뒤).
+    package let bestAt: Date?
+    /// 그 점수에 처음 닿은 KST 날짜 'YYYY-MM-DD'. 모르면 nil(날짜 글자 없음).
+    package let day: String?
+    /// 소속 센터의 **화면 글자**. nil 이면 배지 없음.
+    package var center: String? = nil
+
+    package var id: String { userID }
+
+    /// 행의 작은 날짜 글자("9/13"). 연도는 뺀다 — 기록은 2026-09-08 부터라 한 해 안이고, 314pt 열에서 연도는 이름 칸을 먹는다.
+    package var dayCaption: String? { Self.dayCaption(day) }
+
+    /// 오늘 순위 행과 **같은 행 뷰**로 그리기 위한 모양(맥 `MiniGameRankRow` 가 `MiniGameBoardEntry` 를 읽는다 — 행 뷰를
+    /// 두 벌로 두면 열 규격이 언젠가 갈린다). 판 수는 역대에 없다(0) — 행 뷰는 판 수를 그리지 않는다.
+    package var rankRowEntry: MiniGameBoardEntry {
+        MiniGameBoardEntry(
+            userID: userID, name: name, avatarURL: avatarURL, bestScore: bestScore, bestAt: bestAt, plays: 0, center: center)
+    }
+
+    /// 'YYYY-MM-DD' → "M/d"(앞자리 0 없음). 모양이 아니면 nil — **시계를 읽지 않는다**(뷰가 `Date()` 를 못 쓰는 계약).
+    package static func dayCaption(_ day: String?) -> String? {
+        guard let day else { return nil }
+        let parts = day.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
+              parts.allSatisfy({ $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }),
+              let month = Int(parts[1]), let date = Int(parts[2]),
+              (1...12).contains(month), (1...31).contains(date) else { return nil }
+        return "\(month)/\(date)"
+    }
+}
+
+extension Array where Element == MiniGameAllTimeEntry {
+    /// 서버 정렬을 믿지 않고 다시 세운다: 점수 내림차순 → 먼저 닿은 사람(best_at 오름차순, nil 은 뒤) → user_id.
+    /// 마지막 축이 이름이 아니라 user_id 인 이유: 서버(`… b.best_at asc, b.user_id`)와 같은 축이어야 같은 입력에서 같은 줄이 선다.
+    package func sortedForMiniGameAllTimeBoard() -> [MiniGameAllTimeEntry] {
+        sorted { lhs, rhs in
+            if lhs.bestScore != rhs.bestScore { return lhs.bestScore > rhs.bestScore }
+            switch (lhs.bestAt, rhs.bestAt) {
+            case let (l?, r?) where l != r: return l < r
+            case (nil, .some): return false
+            case (.some, nil): return true
+            default: break
+            }
+            return lhs.userID < rhs.userID
+        }
+    }
+}
+
 // MARK: - 제보(버그·요청) (v0.2.48)
 //
 // 사용자가 쓴 글을 나른다. **본문은 로그·에러 메시지·테스트 픽스처 어디에도 흘리지 않는다** — 여기 타입들이

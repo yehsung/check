@@ -653,6 +653,22 @@ final class WorkTimerStore {
     var miniGameBoardFailed = false
     /// 어제 1등(상품 표시). 순위 조회와 같은 자리에서 **독립 실패**로 받는다.
     var miniGameYesterdayWinner: MiniGameWinner?
+    /// 순위 열이 보여 주는 판 [오늘 | 역대](v0.3.67). **앱이 떠 있는 동안만** 기억한다 — 영속하지 않고, 로그아웃도 되돌리지
+    /// 않는다(계정이 아니라 이 앱 실행의 보기 선택이다). 어제 1등 카드·상금 안내는 오늘 판에만 있다.
+    var miniGameBoardScope: MiniGameBoardScope = .today
+    /// 지금 고른 게임의 **역대** 최고 순위(사람마다 한 줄 — `minigame_alltime_board`). 3플래그 규약은 오늘 순위와 같다.
+    /// 종류 전환·로그아웃에 비운다.
+    var miniGameAllTimeBoard: [MiniGameAllTimeEntry] = []
+    var miniGameAllTimeLoaded = false
+    var miniGameAllTimeLoading = false
+    var miniGameAllTimeFailed = false
+    /// 서버에 함수가 아직 없다(PGRST202 · 본문 없는 404 — 앱이 db push 보다 먼저 나간 창). **실패가 아니다** — [다시 시도]
+    /// 없이 "준비 중" 한 줄을 그린다(사용자가 고칠 수 없는 일에 실패 문구를 쓰지 않는다).
+    var miniGameAllTimeUnavailable = false
+    /// 지금 들고 있는 역대 표가 **어느 게임의 최신 응답인가.** nil 이면 다음에 [역대] 를 열 때 다시 받는다 —
+    /// 게임을 바꿨거나, [오늘] 을 보는 사이 그 게임 판이 기록돼 표가 낡았다(새 개인 최고가 들어갔을 수 있다).
+    /// 화면은 이 값을 그리지 않는다(관찰 대상 아님).
+    @ObservationIgnored var miniGameAllTimeFreshKind: MiniGameKind?
     /// 내 미니게임 순위 공개 여부(profiles.minigame_public 미러). 끄면 순위표에서 빠지고 업로드도 건너뛴다.
     var miniGamePublic = true
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
@@ -4144,6 +4160,13 @@ extension WorkTimerStore {
         miniGameBoardLoading = false
         miniGameBoardFailed = false
         miniGameYesterdayWinner = nil
+        // 역대 순위(v0.3.67)도 남의 행이라 계정에 묶인다. 보기 선택(miniGameBoardScope)은 앱 실행의 것이라 그대로 둔다.
+        miniGameAllTimeBoard = []
+        miniGameAllTimeLoaded = false
+        miniGameAllTimeLoading = false
+        miniGameAllTimeFailed = false
+        miniGameAllTimeUnavailable = false
+        miniGameAllTimeFreshKind = nil
         miniGamePublic = true
         miniGamePublicLoaded = false
         // 토큰은 **계정에 묶인다**(서버가 소유자를 대조한다). 남기면 다음 사람이 앞 사람 토큰으로

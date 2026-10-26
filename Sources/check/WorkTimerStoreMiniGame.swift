@@ -174,6 +174,12 @@ extension WorkTimerStore {
         loadMiniGameBoard()
         // 창을 닫아 둔 사이에 죽은 점수가 있으면 **여기서 한 번 말하고 표식을 지운다**(아래 밀기가 문구를 덮기 전에).
         showMiniGameLostNoticeIfAny()
+        // [역대] 를 보던 채로 닫았다가 다시 열면 역대 표도 새로 받는다(오늘 순위의 '열림' 방아쇠와 같은 자리 — 다른 맥에서
+        // 세운 기록·남의 새 기록이 들어왔을 수 있다). [오늘] 이면 아무것도 안 나간다(역대는 처음 넘어갈 때 받는다).
+        if miniGameBoardScope == .allTime {
+            if !miniGameAllTimeLoaded { miniGameAllTimeLoading = true }
+            loadMiniGameAllTimeBoard()
+        }
         // 인편이 남아 있으면 **먼저 밀어낸다**(모든 게임의 것을). 선발급은 살아 있는 인편을 보면 스스로 비켜서므로
         // 여기서 풀어 두지 않으면 사람이 판을 시작할 때까지 토큰이 없다. 비워지는 순간 제출의 꼬리가 새 토큰을 받아 준다.
         retryMiniGamePendingSubmitIfAny()
@@ -285,6 +291,15 @@ extension WorkTimerStore {
         miniGameYesterdayWinner = nil
         miniGameBoardLoading = true
         loadMiniGameBoard()
+        // 역대 표도 같은 이유로 비운다(앞 게임의 역대 1등이 '이 게임 1등인 척' 보이면 안 된다). [역대] 를 보는 중이면
+        // 바뀐 게임의 역대를 곧바로 받고, [오늘] 이면 다음에 [역대] 로 넘어갈 때 받는다(freshKind = nil).
+        miniGameAllTimeBoard = []
+        miniGameAllTimeLoaded = false
+        miniGameAllTimeFailed = false
+        miniGameAllTimeUnavailable = false
+        miniGameAllTimeFreshKind = nil
+        miniGameAllTimeLoading = miniGameBoardScope == .allTime
+        if miniGameBoardScope == .allTime { loadMiniGameAllTimeBoard() }
     }
 
     // MARK: 최고기록 · 제출
@@ -562,6 +577,9 @@ extension WorkTimerStore {
                 // 창이 열려 있으면 재조회한다(팝오버는 닫혀 있어도 된다 — 게임은 별도 창이다). **아래 선발급 뒤에** 한다 —
                 // 앞에 두면 두 왕복(순위·어제 1등)만큼 다음 판의 토큰이 늦어져 그 사이 시작한 짧은 판이 토큰 없이 끝난다.
                 reloadsBoard = isMiniGamePanelVisible && miniGameKind == kind
+                // 이 게임의 역대 표는 이제 낡았다(새 개인 최고가 들어갔을 수 있다). [역대] 를 보는 중이면 꼬리에서 바로 다시 받고,
+                // 아니면 다음에 [역대] 로 넘어갈 때 받는다 — 보지도 않는 표를 판마다 받지 않는다.
+                if miniGameAllTimeFreshKind == kind { miniGameAllTimeFreshKind = nil }
             } else if Self.miniGameTerminalSubmitStatuses.contains(response.status) {
                 // ⚠️ `need_seconds`/`elapsed_seconds` 는 **화면에도 로그에도 쓰지 않는다** — "얼마나 더
                 //    기다리면 통과하는지"를 알려 주는 순간 그건 위조 보조 도구다. status 이름이면 진단에 충분하다.
@@ -611,6 +629,8 @@ extension WorkTimerStore {
             // 오늘 이 게임 줄을 이미 채웠으면(받았든 안 받았든) 묻지 않는다 — 하루 첫 판만 나간다(검토 지적 2026-10-22).
             if recorded { refreshAchievementsAfterGameResult(game: kind.rawValue) }
             if reloadsBoard { await performLoadMiniGameBoard() }
+            // 역대(v0.3.67) — [역대] 를 보는 중일 때만, 오늘 순위 **뒤에** 받는다(선발급·오늘 순위가 먼저다).
+            if reloadsBoard, miniGameBoardScope == .allTime { await performLoadMiniGameAllTimeBoard() }
         } catch {
             if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration else {
@@ -813,6 +833,76 @@ extension WorkTimerStore {
         guard generation == sessionGeneration, kind == miniGameKind else { return }
         if let winner, miniGameYesterdayWinner != winner { miniGameYesterdayWinner = winner }
         if winner == nil, miniGameYesterdayWinner != nil { miniGameYesterdayWinner = nil }
+    }
+
+    // MARK: 역대 순위 (v0.3.67)
+    //
+    // 사용자 결정(2026-10-27): "미니게임 멀티 아닌 3종 에서 역대 최고 점수 랭킹 볼 수 있는 창도 만들어줘."
+    // 순위 열 머리의 [오늘 | 역대] 가 이 절을 부른다. 받는 때는 넷뿐이다 — ① [역대] 로 넘어갈 때(그 게임 표가 최신이 아닐 때만)
+    // ② [역대] 를 보는 중에 게임을 바꿀 때 ③ [역대] 를 보는 중에 판이 기록됐을 때 ④ [역대] 를 보던 채로 창을 다시 열 때.
+    // 30초 루프에 얹지 않는다(오늘 순위와 같은 이유).
+
+    /// 순위 열의 [오늘 | 역대] 전환. 같은 쪽을 다시 누르면 아무 일도 없다.
+    /// [역대] 로 넘어갈 때 그 게임의 최신 표를 들고 있으면 **다시 받지 않는다**(오가며 누를 때마다 요청이 나가지 않게).
+    /// 실패한 채였으면 넘어갈 때 한 번 더 받는다 — 사용자가 다시 보러 온 것이 곧 재시도 의사다.
+    func selectMiniGameBoardScope(_ scope: MiniGameBoardScope) {
+        guard scope != miniGameBoardScope else { return }
+        miniGameBoardScope = scope
+        guard scope == .allTime else { return }
+        guard miniGameAllTimeFreshKind != miniGameKind || miniGameAllTimeFailed else { return }
+        // 첫 프레임부터 빈 자리에 "불러오는 중…"이 뜨게 한다(오늘 순위와 같은 규약 — 본문 자리에 엉뚱한 문구 금지).
+        if !miniGameAllTimeLoaded { miniGameAllTimeLoading = true }
+        loadMiniGameAllTimeBoard()
+    }
+
+    /// 역대 순위를 받는다(Task 발사). 위 네 방아쇠와 [다시 시도] 가 부른다.
+    func loadMiniGameAllTimeBoard() {
+        Task { @MainActor in await performLoadMiniGameAllTimeBoard() }
+    }
+
+    /// `minigame_alltime_board` 를 받아 반영한다. 응답이 오는 사이 게임을 바꿨거나 계정이 바뀌었으면 버린다(오늘 순위와 같은 가드).
+    ///
+    /// 실패는 셋으로 가른다.
+    ///  · 서버에 함수가 아직 없다(PGRST202 · 본문 없는 404) → **준비 중**(빈 표 + `miniGameAllTimeUnavailable`). 실패 문구도
+    ///    [다시 시도] 도 없다 — 앱이 db push 보다 먼저 나간 창이고, 두드려 봐야 같은 답이다(오류 고리를 만들지 않는다).
+    ///  · 그 밖(네트워크 · 5xx · 배열이 아닌 본문) → 실패. 이미 그린 표가 있으면 그대로 두고, 없을 때만 실패 문구 + [다시 시도].
+    ///  · 취소 → 아무것도 안 바꾼다.
+    func performLoadMiniGameAllTimeBoard() async {
+        guard session != nil else { return }
+        let kind = miniGameKind
+        let generation = sessionGeneration
+        if !miniGameAllTimeLoading { miniGameAllTimeLoading = true }
+        if miniGameAllTimeFailed { miniGameAllTimeFailed = false }
+        defer { if kind == miniGameKind, miniGameAllTimeLoading { miniGameAllTimeLoading = false } }
+        do {
+            let entries = try await withSessionRetry { activeSession in
+                try await service.fetchMiniGameAllTimeBoard(accessToken: activeSession.accessToken, kind: kind)
+            }
+            guard generation == sessionGeneration, kind == miniGameKind else { return }
+            let sorted = entries.sortedForMiniGameAllTimeBoard()
+            if miniGameAllTimeBoard != sorted { miniGameAllTimeBoard = sorted }
+            if !miniGameAllTimeLoaded { miniGameAllTimeLoaded = true }
+            if miniGameAllTimeFailed { miniGameAllTimeFailed = false }
+            if miniGameAllTimeUnavailable { miniGameAllTimeUnavailable = false }
+            miniGameAllTimeFreshKind = kind
+            // 내 역대 행은 이 계정의 **진짜** 전체 기간 최고다 — 로컬 캐시("최고 N")가 그보다 작으면(다른 맥 · 재설치) 올린다.
+            if let me = session?.userID, let mine = sorted.first(where: { $0.userID == me }) {
+                raiseMiniGameBest(kind, to: mine.bestScore)
+            }
+        } catch {
+            if case .cancelled = classifyAuthError(error) { return }
+            guard generation == sessionGeneration, kind == miniGameKind else { return }
+            if let serviceError = error as? SupabaseWorkServiceError, BlockReportRules.isMissingFunction(serviceError) {
+                if !miniGameAllTimeBoard.isEmpty { miniGameAllTimeBoard = [] }
+                if !miniGameAllTimeUnavailable { miniGameAllTimeUnavailable = true }
+                if !miniGameAllTimeLoaded { miniGameAllTimeLoaded = true }
+                // 같은 게임으로 오가며 누를 때마다 404 를 다시 두드리지 않는다(판 기록 · 게임 전환 · 창 열기가 다시 묻는다).
+                miniGameAllTimeFreshKind = kind
+            } else {
+                Self.miniGameLogger.notice("alltime board fetch failed game=\(kind.rawValue, privacy: .public)")
+                if !miniGameAllTimeFailed { miniGameAllTimeFailed = true }
+            }
+        }
     }
 
     // MARK: 공개 설정

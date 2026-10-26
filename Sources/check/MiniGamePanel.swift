@@ -584,7 +584,15 @@ struct CheckMiniGameWindowView: View {
     }
 
     static let title = "미니게임"
-    static let rankTitle = "오늘 순위"
+    static let rankTitle = MiniGameBoardScope.today.boardTitle
+    /// [역대] 판의 머리 제목(v0.3.67). 글자의 정본은 코어 `MiniGameBoardScope` 다(폰이 같은 글자를 쓴다).
+    static let allTimeRankTitle = MiniGameBoardScope.allTime.boardTitle
+    /// [역대] 판의 바닥 안내 두 줄 — 상금·정족수 안내 자리를 **같은 크기로** 대신한다(상금은 오늘 판의 것이다).
+    static let allTimeRuleCaption = "사람마다 가장 높은 점수 하나만 올라가요"
+    static let allTimeDayCaption = "날짜는 그 점수를 처음 낸 날이에요"
+    static let allTimeFailedCaption = "역대 순위를 불러오지 못했어요"
+    /// 서버에 함수가 아직 없을 때(앱이 db push 보다 먼저 나간 창). 실패가 아니라서 [다시 시도] 를 달지 않는다.
+    static let allTimeUnavailableCaption = "역대 순위는 준비 중이에요 — 곧 열려요"
     static let prizeCaption =
         "자정에 1·2·3등에게 루비 \(rubyPrizes[0])·\(rubyPrizes[1])·\(rubyPrizes[2])"
     static let emptyBoard = "아직 기록이 없어요 — 첫 기록의 주인공이 되세요"
@@ -613,7 +621,8 @@ struct CheckMiniGameWindowView: View {
     static let prizeQuorum = 5
 
     var body: some View {
-        let layout = MiniGameWindowLayout.layout(hasChampionRow: store.miniGameYesterdayWinner != nil)
+        // 어제 1등 카드는 [오늘] 판에만 선다 — [역대] 에서는 그 48pt 를 순위 행이 쓴다(무스크롤 9 → 10행).
+        let layout = MiniGameWindowLayout.layout(hasChampionRow: showsChampionCard)
         // 가로 2단: 왼쪽이 게임(헤더 + 캔버스 + 하단 스트립), 오른쪽이 오늘 순위. 순위를 캔버스 **아래**에 두면 눈이
         // 세로로 멀어지고 창을 낮출 때 순위부터 잘린다("게임 창 밑에 뜨니까 보기 힘들다" — 실사용 지적).
         HStack(alignment: .top, spacing: MiniGameWindowLayout.columnSpacing) {
@@ -1038,9 +1047,15 @@ struct CheckMiniGameWindowView: View {
         store.abortMiniGameRound()
     }
 
-    // MARK: 오늘 순위
+    // MARK: 순위 열 — [오늘 | 역대] (v0.3.67 에 역대가 붙었다)
 
     private var myUserID: String? { store.session?.userID }
+
+    /// 순위 열이 [역대] 를 보고 있는가. 어제 1등 카드·상금 안내는 [오늘] 판에만 있다.
+    private var showsAllTime: Bool { store.miniGameBoardScope == .allTime }
+
+    /// 어제 1등 카드를 세우는가 — [오늘] 판이고 어제 1등이 있을 때만. 레이아웃(무스크롤 행수)도 이 값 하나를 읽는다.
+    private var showsChampionCard: Bool { !showsAllTime && store.miniGameYesterdayWinner != nil }
 
     /// 내 오늘 순위(1부터). 순위 밖/없음이면 nil.
     private var myRank: Int? {
@@ -1048,15 +1063,19 @@ struct CheckMiniGameWindowView: View {
         return index + 1
     }
 
-    /// 내 최고 점수. 로컬 캐시와 오늘 내 행 중 큰 쪽이다 — 순위 응답이 로컬을 올리기 전 첫 프레임에도
+    /// 내 최고 점수. 로컬 캐시 · 오늘 내 행 · 역대 내 행 중 가장 큰 쪽이다 — 순위 응답이 로컬을 올리기 전 첫 프레임에도
     /// "최고 0점 · 오늘 953점" 같은 모순을 그리지 않는다.
     private var bestScore: Int {
-        let mine = myUserID.flatMap { me in store.miniGameBoard.first { $0.userID == me } }
-        return max(store.miniGameBest(store.miniGameKind), mine?.bestScore ?? 0)
+        let today = myUserID.flatMap { me in store.miniGameBoard.first { $0.userID == me } }
+        let allTime = myUserID.flatMap { me in store.miniGameAllTimeBoard.first { $0.userID == me } }
+        return max(store.miniGameBest(store.miniGameKind), today?.bestScore ?? 0, allTime?.bestScore ?? 0)
     }
 
     /// 오늘 참여 인원(= 순위 행 수). 정족수 안내의 분자다.
     private var players: Int { store.miniGameBoard.count }
+
+    /// 머리 칩의 인원 — 지금 보는 판의 행 수다([역대] 면 역대에 이름이 오른 사람 수).
+    private var headerCount: Int { showsAllTime ? store.miniGameAllTimeBoard.count : players }
 
     /// 정족수 안내. 5는 서버 `minigame_prize_quorum()` 과 짝인 상수다(위 `prizeQuorum`).
     /// 0명일 때만 문장을 바꾼다 — "오늘 0명 참여"는 사람이 쓰는 말이 아니다.
@@ -1073,29 +1092,32 @@ struct CheckMiniGameWindowView: View {
             rankHeader
                 .frame(height: MiniGameWindowLayout.headerHeight)
             Color.clear.frame(height: MiniGameWindowLayout.headerSpacing)
-            if let winner = store.miniGameYesterdayWinner {
+            if showsChampionCard, let winner = store.miniGameYesterdayWinner {
                 MiniGameChampionCard(winner: winner, awardedChip: Self.awardedChip)
                     .frame(height: MiniGameWindowLayout.championHeight)
                 Color.clear.frame(height: MiniGameWindowLayout.championSpacing)
             }
             rankList(visibleRows: visibleRows)
             Spacer(minLength: MiniGameWindowLayout.prizeSpacing)
-            prizeFooter
-                .frame(height: MiniGameWindowLayout.prizeHeight)
+            // 바닥 띠는 두 판 모두 **같은 크기의 카드**다 — 하나만 비우면 게임 열 하단 스트립과 한 띠로 안 읽힌다.
+            Group {
+                if showsAllTime { allTimeFooter } else { prizeFooter }
+            }
+            .frame(height: MiniGameWindowLayout.prizeHeight)
             // 게임 열의 하단 스트립과 **같은 줄**에서 끝난다.
             Color.clear.frame(height: MiniGameWindowLayout.footerBaselineGap)
         }
     }
 
-    /// 머리글(32pt): "오늘 순위" + 참여 인원 칩.
+    /// 머리글(32pt): 제목("오늘 순위" / "역대 순위") + 인원 칩 + [오늘 | 역대] 전환.
     private var rankHeader: some View {
         HStack(spacing: 6) {
-            Text(Self.rankTitle)
+            Text(store.miniGameBoardScope.boardTitle)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)
             Spacer(minLength: 4)
-            if players > 0 {
-                Label("\(players)명", systemImage: "person.2.fill")
+            if headerCount > 0 {
+                Label("\(headerCount)명", systemImage: "person.2.fill")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(CheckTheme.secondaryText)
                     .monospacedDigit()
@@ -1105,6 +1127,9 @@ struct CheckMiniGameWindowView: View {
                     .overlay(Capsule().stroke(CheckTheme.border, lineWidth: 1))
                     .fixedSize()
             }
+            MiniGameBoardScopePicker(selected: store.miniGameBoardScope) { scope in
+                store.selectMiniGameBoardScope(scope)
+            }
         }
     }
 
@@ -1112,26 +1137,45 @@ struct CheckMiniGameWindowView: View {
     /// 게임 열의 하단 스트립과 **같은 카드 처리**다(테두리 있는 fieldFill) — 한쪽만 맨 텍스트면
     /// 두 단의 바닥이 하나의 띠로 읽히지 않는다(2026-09-10 지적).
     private var prizeFooter: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        footerCard {
             Label {
                 Text(Self.prizeCaption)
             } icon: {
                 Image(systemName: "trophy.fill").foregroundStyle(CheckTheme.pending)
             }
-            .font(.caption2)
-            .foregroundStyle(CheckTheme.secondaryText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
             Label {
                 Text(quorumCaption).monospacedDigit()
             } icon: {
                 Image(systemName: players >= Self.prizeQuorum ? "checkmark.seal.fill" : "person.2.fill")
                     .foregroundStyle(players >= Self.prizeQuorum ? CheckTheme.working : CheckTheme.secondaryText)
             }
-            .font(.caption2)
-            .foregroundStyle(CheckTheme.secondaryText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+        }
+    }
+
+    /// [역대] 판의 바닥 안내(2줄): 무엇이 올라가는가 + 날짜가 무엇인가. **상금 이야기는 없다** — 상금은 오늘 판의 것이다.
+    private var allTimeFooter: some View {
+        footerCard {
+            Label {
+                Text(Self.allTimeRuleCaption)
+            } icon: {
+                Image(systemName: "rosette").foregroundStyle(CheckTheme.accent)
+            }
+            Label {
+                Text(Self.allTimeDayCaption)
+            } icon: {
+                Image(systemName: "calendar").foregroundStyle(CheckTheme.secondaryText)
+            }
+        }
+    }
+
+    /// 바닥 카드 껍데기 — 두 판의 안내가 **같은 글꼴·여백·테두리**를 쓰게 한 벌로 둔다.
+    private func footerCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            content()
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -1139,7 +1183,10 @@ struct CheckMiniGameWindowView: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
     }
 
-    private var rowCount: Int { max(1, store.miniGameBoard.count) }
+    /// 지금 보는 판의 행 수.
+    private var boardCount: Int { showsAllTime ? store.miniGameAllTimeBoard.count : store.miniGameBoard.count }
+
+    private var rowCount: Int { max(1, boardCount) }
 
     @ViewBuilder
     private func rankList(visibleRows: Int) -> some View {
@@ -1178,16 +1225,20 @@ struct CheckMiniGameWindowView: View {
     @ViewBuilder
     private func rows(placeholders visibleRows: Int) -> some View {
         VStack(spacing: MiniGameWindowLayout.rowSpacing) {
-            if store.miniGameBoard.isEmpty {
+            if boardCount == 0 {
                 HStack(spacing: 8) {
-                    Text(emptyText)
+                    Text(showsAllTime ? allTimeEmptyText : emptyText)
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
-                    if store.miniGameBoardFailed, !store.miniGameBoardLoaded {
+                    if showsAllTime {
+                        if store.miniGameAllTimeFailed, !store.miniGameAllTimeLoaded {
+                            MiniGameRetryButton { store.loadMiniGameAllTimeBoard() }
+                        }
+                    } else if store.miniGameBoardFailed, !store.miniGameBoardLoaded {
                         MiniGameRetryButton { store.loadMiniGameBoard() }
                     }
                 }
@@ -1195,6 +1246,18 @@ struct CheckMiniGameWindowView: View {
                 .frame(maxWidth: .infinity, minHeight: MiniGameWindowLayout.rowHeight * 1.5, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.fieldFill))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+            } else if showsAllTime {
+                ForEach(Array(store.miniGameAllTimeBoard.enumerated()), id: \.element.id) { index, entry in
+                    // 오늘 행과 **같은 행 뷰**다(배지·아바타·이름·"나" 칩·우측 점수). 다른 것은 점수 앞의 작은 날짜("9/13") 하나.
+                    MiniGameRankRow(
+                        rank: index + 1,
+                        entry: entry.rankRowEntry,
+                        center: entry.center,
+                        isMe: myUserID != nil && entry.userID == myUserID,
+                        dateCaption: entry.dayCaption
+                    )
+                        .frame(height: MiniGameWindowLayout.rowHeight)
+                }
             } else {
                 ForEach(Array(store.miniGameBoard.enumerated()), id: \.element.id) { index, entry in
                     // 내 행에도 단다(토큰 순위판·리그와 같은 규약).
@@ -1209,8 +1272,8 @@ struct CheckMiniGameWindowView: View {
             }
             // 빈 안내 카드는 1.5행을 먹는다 — 자리 계산에서는 그만큼 빼되(안 그러면 단 밖으로 넘친다),
             // **등수는 1부터** 센다. 안내 문구는 순위가 아니라 메시지이므로 "1·2위는 어디 갔나"가 되면 안 된다.
-            let usedRows = store.miniGameBoard.isEmpty ? 2 : store.miniGameBoard.count
-            let firstPlaceholderRank = store.miniGameBoard.count + 1
+            let usedRows = boardCount == 0 ? 2 : boardCount
+            let firstPlaceholderRank = boardCount + 1
             ForEach(0..<max(0, visibleRows - usedRows), id: \.self) { index in
                 MiniGameRankPlaceholderRow(rank: firstPlaceholderRank + index)
                     .frame(height: MiniGameWindowLayout.rowHeight)
@@ -1222,6 +1285,14 @@ struct CheckMiniGameWindowView: View {
     private var emptyText: String {
         if store.miniGameBoardFailed, !store.miniGameBoardLoaded { return Self.failedCaption }
         if !store.miniGameBoardLoaded { return Self.loadingCaption }
+        return Self.emptyBoard
+    }
+
+    /// [역대] 빈 목록 문구: 실패 → 실패 문구, 서버 준비 전 → 준비 중, 로드 전 → 불러오는 중, 로드 성공 → 아직 없음.
+    private var allTimeEmptyText: String {
+        if store.miniGameAllTimeFailed, !store.miniGameAllTimeLoaded { return Self.allTimeFailedCaption }
+        if store.miniGameAllTimeUnavailable { return Self.allTimeUnavailableCaption }
+        if !store.miniGameAllTimeLoaded { return Self.loadingCaption }
         return Self.emptyBoard
     }
 }
@@ -1679,7 +1750,7 @@ private struct MiniGameChampionCard: View {
     }
 }
 
-/// 오늘 순위 행(30pt): 순위 배지 22 · 아바타 22 · 이름(+"나" 칩) · 우측 "N점".
+/// 순위 행(30pt): 순위 배지 22 · 아바타 22 · 이름(+"나" 칩) · 우측 "N점". [역대] 판은 같은 행에 점수 앞 작은 날짜("9/13")가 붙는다(v0.3.67).
 /// 1·2·3위는 금·은·동 배지, 4위부터는 투명 배지에 흐린 숫자. 내 행은 accent 채움 + 테두리다.
 struct MiniGameRankRow: View {
     /// 열 규격. **어제 챔피언 카드가 같은 값을 읽는다** — 두 벌로 적으면 두 카드의 이름·점수가 어긋난다.
@@ -1697,12 +1768,17 @@ struct MiniGameRankRow: View {
     /// 이름은 이미 `lineLimit(1) + minimumScaleFactor(0.75)` 라 긴 별명도 줄어들 뿐 잘리지 않는다.
     /// **어제 챔피언 카드가 같은 상수를 읽는다** — 두 벌로 적으면 두 카드의 점수가 어긋난다.
     static let scoreWidth: CGFloat = 66
+    /// [역대] 행의 날짜 칸(v0.3.67) — "12/31" 이 9pt 로 들어가는 **고정폭**이라 행마다 점수 칸 왼쪽 끝이 한 줄로 선다.
+    /// 대가는 이름 칸이다: 30 + 간격 7 = 37pt → 이름 135pt(172 − 37). 오늘 행은 이 칸이 없어 172pt 그대로다.
+    static let dateWidth: CGFloat = 30
 
     let rank: Int
     let entry: MiniGameBoardEntry
     /// 소속 센터. 아바타 모서리에 겹쳐 그린다.
     var center: String? = nil
     var isMe: Bool = false
+    /// [역대] 행의 작은 날짜("9/13" — 그 점수를 처음 낸 KST 날). nil 이면 칸 자체가 없다(오늘 행).
+    var dateCaption: String? = nil
 
     private var medal: Color? { MiniGameMedal.color(rank: rank) }
 
@@ -1725,6 +1801,16 @@ struct MiniGameRankRow: View {
                     .fixedSize()
             }
             Spacer(minLength: 4)
+            if let dateCaption {
+                Text(dateCaption)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(width: Self.dateWidth, alignment: .trailing)
+                    .accessibilityLabel(dateCaption + " 달성")
+            }
             // String(...) 인 이유: 보간(`"\(entry.bestScore)점"`)은 로캘 자리수 구분을 붙여 만점에서
             // "1,000점"이 된다 — 이 46pt 예산이 재던 글자보다 넓고, 게임 쪽 "1000" 표기와도 갈린다.
             Text(String(entry.bestScore) + "점")
@@ -1794,6 +1880,40 @@ private struct MiniGameRankPlaceholderRow: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .stroke(CheckTheme.border.opacity(0.45), lineWidth: 1))
         .accessibilityHidden(true)
+    }
+}
+
+/// 순위 열 머리의 [오늘 | 역대] 전환(v0.3.67). **한 캡슐 안의 두 칸**이다 — 떨어진 칩 둘이면 게임 열 머리의
+/// 종류 칩 줄(이 창의 게임 고르기)과 같은 물건으로 읽힌다. 고른 칸의 말씨(accent 채움 + 테두리)는 종류 칩과 같다.
+/// 렌더 테스트가 단독으로 폭을 잰다(internal) — 머리글 314pt 에 제목·인원 칩과 함께 서야 한다.
+struct MiniGameBoardScopePicker: View {
+    let selected: MiniGameBoardScope
+    let onSelect: (MiniGameBoardScope) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(MiniGameBoardScope.allCases) { scope in
+                let isSelected = scope == selected
+                Button { onSelect(scope) } label: {
+                    Text(scope.label)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(isSelected ? CheckTheme.accent : CheckTheme.secondaryText)
+                        .padding(.horizontal, 9)
+                        .frame(height: 20)
+                        .background(Capsule().fill(isSelected ? CheckTheme.accent.opacity(0.20) : Color.clear))
+                        .overlay(Capsule().stroke(isSelected ? CheckTheme.accent.opacity(0.55) : Color.clear, lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                // 단추 글자 두 자("오늘")만으로는 무엇을 고르는지 안 들린다 — 보이스오버에는 판 이름을 준다.
+                .accessibilityLabel(scope.boardTitle)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(Color.white.opacity(0.04)))
+        .overlay(Capsule().stroke(CheckTheme.border, lineWidth: 1))
+        .fixedSize()
     }
 }
 

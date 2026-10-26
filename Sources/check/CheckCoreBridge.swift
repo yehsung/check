@@ -42,6 +42,10 @@ extension CharacterCatalog {
         if CharacterCatalog.isRainbowAing(id) {
             return entry(id: id) == nil ? nil : RainbowAingFinish.portraitURL(for: mood)
         }
+        // 케이크 아잉이 둘(v0.3.66 내장)도 같은 자리(`aing_cake_{strawberry,choco}-*.png`) — 축하 창 · 아바타 · 상점 · 고르기 카드가 이 한 길을 탄다.
+        if let cake = CakeAingFinish.Kind(characterID: id) {
+            return entry(id: id) == nil ? nil : CakeAingFinish.portraitURL(cake, mood: mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

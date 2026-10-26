@@ -150,6 +150,9 @@ enum CheckMascotAssets {
             // 무지개 아잉이(v0.3.59): 초상 두 장 + 3D 무지개 마감 두 장(밝기 맵 · 후광) — 정의는 `RainbowAingArt.isDrawable(on: .mac)` 한 곳.
             // 이 셋(robot · 금 · 무지개)이 다 서야 상점 능력 번호 3 이 나간다(`ShopWire.protocolVersion`).
             if CharacterCatalog.isRainbowAing(id) { return RainbowAingFinish.isDrawable(fileManager: fileManager) }
+            // 케이크 아잉이 둘(v0.3.66): 초상 두 장 + 무지개와 **같이 쓰는** 밝기 맵(`aing_rainbow-shade.png`) — 장식 텍스처는 코드가 만든다.
+            // 둘 다 서야 상점 능력 번호 4 가 나간다(`ShopWire.protocolVersion` — 하나만이면 3). 정의는 `CakeAingFinish.isDrawable` 한 곳.
+            if let cake = CakeAingFinish.Kind(characterID: id) { return CakeAingFinish.isDrawable(cake, fileManager: fileManager) }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]

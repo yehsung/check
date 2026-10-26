@@ -319,6 +319,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
         // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
         CheckGachaWindowController.shared.configure(store: store)
+        // 생일 축하 창(v0.3.66 — 케이크 아잉이 선물)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(열린 선물이 있으면 실행당 한 번
+        // 스스로 · 메뉴 팝오버의 '다시 열기' 카드). 로그아웃은 스토어가 닫는다(`resetCakeGiftState`).
+        CheckCakeGiftWindowController.shared.configure(store: store)
         // ★ **AI 리밋 창은 v0.3.46 에 사라졌다.** 카드가 팝오버 안으로 들어왔다(사용자 지시: "메인 화면
         //   자체에 다 뜨게끔") — 그리는 것은 `CheckAILimitsCard` 이고 배선할 창 수명이 없다. 여기에
         //   `CheckAILimitsWindowController` 를 다시 더하지 마라.

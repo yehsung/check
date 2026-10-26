@@ -248,12 +248,17 @@ struct CheckCharacterPanel: View {
         .buttonStyle(.plain)
         // 팝오버가 열릴 때 첫 포커스 링이 카드 위에 사각으로 겹치는 것을 막는다(이 앱의 기존 규약).
         .focusEffectDisabled()
-        .accessibilityLabel(isUnlocked(id) ? (manifest?.displayName ?? id)
-                                           : (CharacterCatalog.isGachaOnlyBuiltIn(id)
-                                              // 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 상점에서 못 산다 — "상점에서 사기"는 거짓이다.
-                                              ? "\(manifest?.displayName ?? id) 잠김 — \(GachaText.gachaOnlyHint)"
-                                              : "\(manifest?.displayName ?? id) 잠김 — 상점에서 사기"))
+        .accessibilityLabel(isUnlocked(id) ? (manifest?.displayName ?? id) : Self.lockedLabel(id, name: manifest?.displayName ?? id))
         .accessibilityAddTraits(isOn && isUnlocked(id) ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// 잠긴 카드의 읽기 이름(순수 — 값으로 검증한다). 얻는 길을 말한다:
+    /// 생일 선물 전용(케이크 아잉이 — v0.3.66)은 생일 선물 · 황금 · 무지개 아잉이(v0.3.54 · v0.3.59)는 뽑기 · 그 밖은 상점.
+    /// 앞의 둘은 상점에서 못 산다 — "상점에서 사기"는 그 캐릭터에 거짓이다.
+    nonisolated static func lockedLabel(_ id: String, name: String) -> String {
+        if CharacterCatalog.isGiftOnlyBuiltIn(id) { return "\(name) 잠김 — \(CakeGiftText.lockedHint)" }
+        if CharacterCatalog.isGachaOnlyBuiltIn(id) { return "\(name) 잠김 — \(GachaText.gachaOnlyHint)" }
+        return "\(name) 잠김 — 상점에서 사기"
     }
 }
 
@@ -353,6 +358,29 @@ enum CharacterCardArt {
     /// 아바타 상자는 지름보다 크고(높이 1.03 · 폭 1.02) 원이 그 모서리를 가린다. 몸을 못 찾으면 `tightened` 와 같다.
     static func bodyFramed(_ image: CGImage, bodyThreshold: UInt8 = 250, margin: CGFloat = 0.08) -> CGImage {
         guard let body = alphaBounds(image, threshold: bodyThreshold) else { return tightened(image) }
+        let pad = (max(body.width, body.height) * margin).rounded()
+        let frame = body.insetBy(dx: -pad, dy: -pad)
+            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return image.cropping(to: frame) ?? tightened(image)
+    }
+
+    /// 케이크 아잉이(v0.3.66) 초상의 **몸** 상자. 장식(딸기 · 초 · 크림)도 불투명이라 알파 > `bodyThreshold` 상자는 머리 위 장식까지 든다 —
+    /// 그래서 몸의 폭 · 바닥만 알파로 재고(장식은 몸보다 좁고 머리 위에만 있다) 높이는 몸 비(`bodyAspect` = 높이 ÷ 폭)로 되짚는다.
+    /// 비는 같은 2D 몸 · 같은 0.88 배율로 구운 황금 · 무지개 초상의 몸 상자(142×133 — 알파 > 250)에서 왔다(`V0366CakeMacAvatarTests` 가
+    /// 금 초상에서 다시 재 맞댄다). 몸을 못 찾으면 nil.
+    static func cakeBodyBox(_ image: CGImage, bodyThreshold: UInt8 = 250, bodyAspect: CGFloat = cakeBodyAspect) -> CGRect? {
+        guard let opaque = alphaBounds(image, threshold: bodyThreshold) else { return nil }
+        let height = (opaque.width * bodyAspect).rounded()
+        return CGRect(x: opaque.minX, y: opaque.maxY - height, width: opaque.width, height: height)
+    }
+
+    /// 아잉 몸의 높이 ÷ 폭(0.88 배율 초상의 알파 > 250 상자 — 황금 아잉이 초상 실측 133 ÷ 142).
+    static let cakeBodyAspect: CGFloat = 133.0 / 142.0
+
+    /// 케이크 초상을 **몸 상자 + 둘레 `margin`** 으로 자른다(`bodyFramed` 와 같은 규칙 — 황금 · 무지개와 같은 눈금에 얼굴이 선다).
+    /// 머리 위 장식은 자른 테두리 위로 넘친 만큼 잘린다 — 사람 아바타(원으로 잘리는 자리) 전용이다(조정자 결정: 장식이 원 위로 조금 잘리는 것은 괜찮다).
+    static func cakeBodyFramed(_ image: CGImage, margin: CGFloat = 0.08) -> CGImage {
+        guard let body = cakeBodyBox(image) else { return tightened(image) }
         let pad = (max(body.width, body.height) * margin).rounded()
         let frame = body.insetBy(dx: -pad, dy: -pad)
             .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))

@@ -652,7 +652,10 @@ struct CheckShopPanel: View {
         // (살 수 없는 게 아니라 다른 길로 얻는다). 누르면 뽑기 패널이 열린다(`selectShopItem` 이 가른다). 문구는 금빛 · 무지개빛(희귀 강조) —
         // 서버 표식으로만 뽑기 전용인 캐릭터(희귀 아님)는 금빛 그대로다(v0.3.54 와 같다).
         let gachaOnly = WorkTimerStore.isGachaOnly(entry.id, rows: store.shopCharacters)
-        let affordable = gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false)
+        // 생일 선물 전용(케이크 아잉이 — v0.3.66): 안 가진 사람에겐 **잠긴 칸**이다 — 가격 · 루비 아이콘 대신 자물쇠 + '생일 선물 전용', 흐리게.
+        // 누르면 고르지 않고 얻는 길을 말한다(`selectShopItem` → `CakeGiftText.lockedHint`). 가진 사람은 보통 보유 칸이다.
+        let giftLocked = !owned && WorkTimerStore.isGiftOnly(entry.id, rows: store.shopCharacters)
+        let affordable = !giftLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         let picked = store.shopSelection == .character(entry.id)
         Button {
@@ -669,7 +672,9 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                if gachaOnly {
+                if giftLocked {
+                    ShopGiftLockedCaption()
+                } else if gachaOnly {
                     // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
                     // 문구는 코어 한 벌(`GachaText.gachaOnlyPrice` — 확률표 금 줄 · 폰과 같은 글자): "뽑기 또는 조각 20개", 교환값을 모르면
                     // "뽑기 전용". 숫자는 서버 `shard_costs` 다. 가진 것은 다른 카드처럼 "보유".
@@ -717,8 +722,28 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .checkTooltip(owned ? "\(name) — 보유 중" : (gachaOnly ? "\(name) — \(GachaText.gachaOnlyHint)" : "\(name) 사기"))
-        .accessibilityLabel(owned ? "\(name) 보유 중" : (gachaOnly ? "\(name), \(GachaText.gachaOnlyHint)" : "\(name) 사기"))
+        .checkTooltip(owned ? "\(name) — 보유 중"
+                            : (giftLocked ? "\(name) — \(CakeGiftText.lockedHint)"
+                                          : (gachaOnly ? "\(name) — \(GachaText.gachaOnlyHint)" : "\(name) 사기")))
+        .accessibilityLabel(owned ? "\(name) 보유 중"
+                                  : (giftLocked ? "\(name) 잠김, \(CakeGiftText.lockedHint)"
+                                                : (gachaOnly ? "\(name), \(GachaText.gachaOnlyHint)" : "\(name) 사기")))
+    }
+}
+
+/// 상점 잠긴 칸(생일 선물 전용 — v0.3.66 케이크 아잉이)의 아래 줄: 자물쇠 + `CakeGiftText.lockedCaption`. 가격 · 사기 단추 자리를 대신한다.
+/// 카드 높이(112)는 그대로다(가격 줄 한 줄 자리에 든다).
+struct ShopGiftLockedCaption: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(CakeGiftText.lockedCaption)
+                .font(.caption2.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundStyle(CheckTheme.secondaryText)
     }
 }
 

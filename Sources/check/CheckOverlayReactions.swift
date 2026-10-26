@@ -435,7 +435,8 @@ final class ReactionEngine {
         self.sceneRoot = sceneRoot
         self.attachedView = view
         invalidateBodyHitCache() // A1: 새 뷰/노드 → 몸체 투영 캐시 무효화(다음 조회에 지연 계산).
-        let (minB, maxB) = node.boundingBox
+        // 몸만 잰다 — 케이크 장식(초 · 빛 번짐 — v0.3.66)이 섞이면 케이크만 진폭이 커진다. 장식이 없으면 SceneKit 값 그대로다.
+        let (minB, maxB) = CakeAingFinish.bodyBoundingBox(of: node)
         let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
         modelExtent = extent > 0 ? extent : 1
         bindSpriteRuntime(under: node)
@@ -510,6 +511,8 @@ final class ReactionEngine {
         if restoreParkedEyeCache(for: character) { return }
         var found: (material: SCNMaterial, image: CGImage, geometry: SCNGeometry?)?
         sceneRoot.enumerateHierarchy { node, stop in
+            // 케이크 장식(v0.3.66 — 딸기 판 텍스처 512×256)도 얼굴이 아니다. `check.cakeDecor` 를 조상으로 가진 노드는 건너뛴다.
+            guard !CakeAingFinish.isDecor(node) else { return }
             for material in node.geometry?.materials ?? [] {
                 // 황금 아잉이·무지개 아잉이의 후광 판(512² CGImage)은 얼굴이 아니다 — 크기 조건을 만족하므로 이름으로 건너뛴다
                 // (v0.3.54 · 무지개 후광도 같은 재질 이름 — `GoldAingFinish.makeHaloNode(name:cells:…)`).
@@ -600,6 +603,8 @@ final class ReactionEngine {
         let character = facingNode?.childNodes.first
         if GoldAingFinish.isGold(character) { return CharacterCatalog.goldAingID }
         if RainbowAingFinish.isRainbow(character) { return CharacterCatalog.rainbowAingID }
+        // 케이크 아잉이 둘(v0.3.66)도 같은 메시라 자기 표식(`CakeAingFinish.Kind.markerName`)으로 가른다 — 딸기 ↔ 초코 사이의 울트라도 갈아입는다.
+        if let cake = CakeAingFinish.kind(of: character) { return cake.characterID }
         return CharacterCatalog.builtInAingID
     }
 
@@ -1384,7 +1389,9 @@ final class ReactionEngine {
             //   (2-A 뮤테이션 실측: 800점 중 327점 불일치 — 걷는 동안에만 클릭이 빗나가는 결함).
             return runtime.isOpaque(planeUV: hit.textureCoordinates(withMappingChannel: 0))
         }
-        return hits.isEmpty == false
+        // 케이크 장식(v0.3.66 — 딸기 · 초 · 크림)은 몸이 아니다(후광과 같은 결정). `check.cakeDecor` 를 조상으로 가진 맞음은 빼고 센다 —
+        // 장식 뒤에 몸이 있으면 그 몸 맞음이 남으므로 몸 앞의 딸기를 눌러도 몸이다.
+        return hits.contains { !CakeAingFinish.isDecor($0.node) }
     }
 
     /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 영역(뷰 로컬, bob/sway 대비 12pt 인플레이트). 1회 계산 후 캐시.
@@ -1395,7 +1402,8 @@ final class ReactionEngine {
         // 그 사이에 낀 조회 하나가 옛 크기의 rect 를 다시 박아 넣을 수 있기 때문이다.
         if let cachedBodyViewRect, cachedBodyViewSize == view.bounds.size { return cachedBodyViewRect }
         guard let node = reactionNode, view.bounds.width > 1, view.bounds.height > 1 else { return nil }
-        let (minB, maxB) = node.boundingBox
+        // 몸만(케이크 장식 제외 — 장식 맞음은 어차피 몸이 아니다). 장식이 없으면 SceneKit 값 그대로다.
+        let (minB, maxB) = CakeAingFinish.bodyBoundingBox(of: node)
         let corners = [
             SCNVector3(minB.x, minB.y, minB.z), SCNVector3(maxB.x, minB.y, minB.z),
             SCNVector3(minB.x, maxB.y, minB.z), SCNVector3(maxB.x, maxB.y, minB.z),

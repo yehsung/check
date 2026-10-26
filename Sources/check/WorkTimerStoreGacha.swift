@@ -115,7 +115,13 @@ extension WorkTimerStore {
             return
         }
         if !isShopPanelVisible { toggleShopPanel() }
-        guard isShopPanelVisible, CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
+        guard isShopPanelVisible else { return }
+        // 생일 선물 전용(케이크 아잉이 — v0.3.66): 상점을 열고 얻는 길(생일 선물)을 말한다 — 뽑기 창도 [구매하기]도 그 캐릭터에는 거짓이다.
+        if CharacterCatalog.isGiftOnlyBuiltIn(id) {
+            shopNotice = CakeGiftText.lockedHint
+            return
+        }
+        guard CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
         shopNotice = GachaText.gachaOnlyHint
     }
 
@@ -207,10 +213,22 @@ extension WorkTimerStore {
     /// 상점 격자의 줄. 서버 목록이 유일한 출처다 — 아직 못 읽었거나 비었으면 **번들 목록으로 자리만**(가격 없음) 그리되,
     /// 금 · 무지개는 고르기와 같은 규칙으로 거른다(`isCharacterListed`).
     func shopGridRows(catalog: CharacterCatalog) -> [ShopCharacterRow] {
-        guard shopCharacters.isEmpty else { return shopCharacters }
+        guard shopCharacters.isEmpty else { return Self.giftOnlyInDisplayOrder(shopCharacters) }
         return catalog.allIDs
             .filter { $0 != CharacterCatalog.builtInAingID && isCharacterListed($0) }
             .map { ShopCharacterRow(id: $0, price: nil, owned: false) }
+    }
+
+    /// 서버 목록의 순서를 지키되 **케이크 둘끼리만** 표시 순서(딸기 → 초코 — `CharacterCatalog.giftOnlyBuiltInIDs`)로 바로 세운다(순수).
+    /// 서버는 값 · id 순이라 같은 값(2000)의 두 케이크가 초코 → 딸기로 온다(설계서 §1 은 딸기 먼저). 다른 줄의 자리는 한 칸도 안 옮긴다.
+    nonisolated static func giftOnlyInDisplayOrder(_ rows: [ShopCharacterRow]) -> [ShopCharacterRow] {
+        let order = CharacterCatalog.giftOnlyBuiltInIDs
+        let slots = rows.indices.filter { order.contains(rows[$0].id) }
+        guard slots.count > 1 else { return rows }
+        let sorted = slots.map { rows[$0] }.sorted { (order.firstIndex(of: $0.id) ?? 0) < (order.firstIndex(of: $1.id) ?? 0) }
+        var out = rows
+        for (slot, row) in zip(slots, sorted) { out[slot] = row }
+        return out
     }
 
     // MARK: 뽑기

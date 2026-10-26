@@ -873,6 +873,30 @@ final class WorkTimerStore {
     /// 뽑기 창을 띄우고 내리는 문(테스트 이음새 — 앱은 언제나 `.live`, 곧 `CheckGachaWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var gachaWindowHooks = GachaWindowHooks.live
 
+    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66) — 상태. 동작은 WorkTimerStoreCakeGift.swift
+
+    /// 서버가 말한 **열린** 생일 선물(`character_gift_pending`). nil = 없음(또는 아직 모름). 메뉴 팝오버의 '다시 열기' 카드가 이 값으로 선다 —
+    /// 받거나(`settlesGift`) 서버가 없다고 하면 내려간다.
+    var cakeGiftOffer: CharacterGiftOffer?
+    /// 축하 창이 지금 그리는 선물(창을 연 순간의 사본). 창이 떠 있는 동안 조회가 `cakeGiftOffer` 를 바꿔도 고르던 화면이 흔들리지 않게 나눈다.
+    var cakeGiftPresented: CharacterGiftOffer?
+    /// 축하 창에서 고른 캐릭터(아직 받은 것이 아니다 — 확인 단추가 받는다).
+    var cakeGiftChoice: String?
+    /// 수령 왕복 중(확인 단추 잠금 — 같은 선택으로 다시 불러도 서버는 `replayed` 로 같은 답을 주지만, 연타는 막는다).
+    var cakeGiftClaiming = false
+    /// 받은 캐릭터 — 축하 창이 '받은 뒤 화면'([지금 입기] · [닫기])으로 넘어간다. nil 이면 고르기 화면.
+    var cakeGiftReceivedID: String?
+    /// 축하 창의 한 줄(실패 · 거절 — `CakeGiftText.notice`). nil 이면 비운다.
+    var cakeGiftNotice: String?
+    /// 마지막으로 선물을 **물어본** 시각(성공 여부 무관). 주기 새로고침의 10분 문이 이 값을 본다. 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftLastCheckAt: Date?
+    /// 조회가 떠 있다(겹쳐 쏘지 않는다). 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftChecking = false
+    /// 이 실행에서 스스로 띄운 선물 id(실행당 한 번 — 닫으면 다시 안 뜨고 '다시 열기' 카드가 남는다). 로그아웃해도 비우지 않는다(실행 단위다).
+    @ObservationIgnored var cakeGiftAutoShownIDs: Set<String> = []
+    /// 축하 창을 띄우고 내리는 문(테스트 이음새 — 앱은 `.live`, 곧 `CheckCakeGiftWindowController.shared`). 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
+
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
     var feedbackList: [FeedbackReport] = []
@@ -2951,6 +2975,8 @@ final class WorkTimerStore {
         loadShopState()
         // 확성기 카드의 가격(💎50)도 서버가 말한다 — 작성기를 열기 전부터 보이게 같이 읽는다(v0.3.51).
         prefetchMegaphoneInfo()
+        // 생일 선물(v0.3.66)도 상점 진입에 묻는다 — 잠긴 케이크 칸을 본 사람이 받을 선물이 있으면 축하 창 · 다시 열기 카드가 선다.
+        refreshCakeGift(reason: .shop)
     }
 
     /// 헤더 마스코트 버튼 액션. 캐릭터 선택 패널을 토글하고, 여는 순간 다른 패널을 전부 내린다.
@@ -4066,6 +4092,8 @@ extension WorkTimerStore {
         megaphone.reset()
         // 뽑기 정보·결과·요청 id 도 계정에 묶인다(v0.3.54).
         resetGachaState()
+        // 생일 선물(v0.3.66)도 계정에 묶인다 — 앞 사람의 선물 창 · 다시 열기 카드를 다음 사람이 보지 않게.
+        resetCakeGiftState()
         // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
         isEditingDisplayName = false
         displayNameDraft = ""
@@ -4197,6 +4225,7 @@ extension WorkTimerStore {
         tetris.reset()
         megaphone.reset()
         resetGachaState()
+        resetCakeGiftState()
         startedAt = nil
         accumulatedSeconds = 0
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())

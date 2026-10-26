@@ -338,12 +338,14 @@ enum MiniGameSpaceKey {
     /// (전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 그 단추를 스페이스로 누를 때 게임이 삼킨다.
     /// v0.3.60: 1:1 테트리스 창이 더해져 **다섯**이다. 그 창의 스페이스는 **하드드롭**이라, 등록이 빠지면 미니게임 창을 띄워 둔 채
     /// 대결 창에서 누른 스페이스를 미니게임 모니터가 먼저 삼킨다 — 루비가 걸린 판에서 조각이 안 떨어진다.
+    /// v0.3.66: 생일 축하 창이 더해져 **여섯**이다. 글을 받지 않지만 두 초상 · [이걸로 받을게요] · [지금 입기] 가 키보드로도 눌린다(뽑기 창과 같은 이유).
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
          CheckSettingsWindowController.frameAutosaveName,
          CheckGachaWindowController.frameAutosaveName,
-         CheckTetrisDuelWindowController.frameAutosaveName]
+         CheckTetrisDuelWindowController.frameAutosaveName,
+         CheckCakeGiftWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —

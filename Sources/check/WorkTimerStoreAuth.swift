@@ -76,6 +76,8 @@ extension WorkTimerStore {
         syncEquippedCharacterFromServer(reason: .launch)
         // 사람 아바타의 캐릭터 한 표(2026-09-20) — 세션이 생기는 순간 한 번. 그 뒤로는 팝오버 열기의 60초 스로틀이 맡는다.
         refreshAppUserCharacters()
+        // 생일 선물(v0.3.66) — 앱 시작에 한 번 묻는다. 열린 선물이 있으면 축하 창이 이 실행에 한 번 스스로 뜬다(WorkTimerStoreCakeGift.swift).
+        refreshCakeGift(reason: .launch)
     }
 
     func signIn(email: String, password: String) async {
@@ -119,6 +121,8 @@ extension WorkTimerStore {
         syncEquippedCharacterFromServer(reason: .signIn)
         // 사람 아바타의 캐릭터 한 표(2026-09-20) — 로그인 직후 한 번(팝오버를 연 채 로그인하는 정상 동선은 열기 훅을 이미 지나쳤다).
         refreshAppUserCharacters()
+        // 생일 선물(v0.3.66) — 로그인 직후 한 번 묻는다(시작 경로와 같은 이유).
+        refreshCakeGift(reason: .signIn)
     }
 
     func signUp(email: String, password: String, displayName: String, center: String? = nil) async {
@@ -368,9 +372,10 @@ extension WorkTimerStore {
                 //   사람(로컬 선택은 있는데 소유권 행이 없다 — 0.3.30 부터는 옮겨 가기 1회 밀기에서)
                 //   (나) 기기 두 대 중 한쪽에서만 산 사람.
                 revertCharacterToDefault()
-            case "unknown_character" where CharacterCatalog.isGachaOnlyBuiltIn(id):
+            case "unknown_character" where CharacterCatalog.isGachaOnlyBuiltIn(id) || CharacterCatalog.isGiftOnlyBuiltIn(id):
                 // 황금·무지개 아잉이(v0.3.54 · v0.3.59)만은 not_owned 와 같다: 그 마이그레이션 전 서버는 CHECK 에서 그 id 를 모르므로
                 // **그 서버에선 아무도 가질 수 없다.** 그대로 두면 상점을 읽기 전(아무것도 안 막는 창)에 고른 것이 내 화면엔 서고 남에게는 아잉이다.
+                // 케이크 아잉이(v0.3.66 생일 선물 전용)도 같다 — 케이크 마이그레이션 전 서버(앱이 db push 보다 먼저 나간 창)에선 아무도 못 가진다.
                 revertCharacterToDefault()
             default:
                 // unknown_character = 서버 CHECK 에 없는 id. 앱 번들과 서버 명단이 갈린 것이라
@@ -408,9 +413,20 @@ extension WorkTimerStore {
     /// 얻는 길(뽑기 · 조각)을 말한다.
     nonisolated static let gachaOnlyRevertNotice = "아직 없는 캐릭터라 기본으로 돌아갔어요 — " + GachaText.gachaOnlyHint
 
+    /// 생일 선물 전용(케이크 아잉이 — v0.3.66)을 되돌렸을 때. "상점에서 살 수 있어요" · "뽑기나 조각…" 은 그 캐릭터에 거짓이라 얻는 길(생일 선물)을 말한다.
+    nonisolated static let giftOnlyRevertNotice = "아직 없는 캐릭터라 기본으로 돌아갔어요 — " + CakeGiftText.lockedHint
+
     /// 되돌린 캐릭터에 맞는 안내(순수).
     nonisolated static func revertNotice(for id: String, rows: [ShopCharacterRow]) -> String {
-        isGachaOnly(id, rows: rows) ? gachaOnlyRevertNotice : notOwnedRevertNotice
+        if isGiftOnly(id, rows: rows) { return giftOnlyRevertNotice }
+        return isGachaOnly(id, rows: rows) ? gachaOnlyRevertNotice : notOwnedRevertNotice
+    }
+
+    /// 생일 선물로만 얻는(루비 · 뽑기 · 조각 ✗) 캐릭터인가 — 케이크 id 는 서버 표식과 무관하게 언제나, 그 밖은 서버 `gift_only` 표식으로
+    /// (`ShopCharacterRow.isGiftOnly` 와 같은 규칙 — 목록에 아직 없는 id 도 케이크면 참).
+    nonisolated static func isGiftOnly(_ id: String, rows: [ShopCharacterRow]) -> Bool {
+        if CharacterCatalog.isGiftOnlyBuiltIn(id) { return true }
+        return rows.first { $0.id == id }?.isGiftOnly == true
     }
 
     // MARK: - 착용 캐릭터 서버 기준 동기화 (v0.3.30)
@@ -639,6 +655,12 @@ extension WorkTimerStore {
             shopNotice = Self.alreadyOwnedNotice
             return
         }
+        // 생일 선물 전용(케이크 아잉이 — v0.3.66)은 **고르지 않는다** — 가격도 [구매하기]도 없는 잠긴 칸이다. 얻는 길만 말한다.
+        if case .character(let id) = selection, Self.isGiftOnly(id, rows: shopCharacters) {
+            shopSelection = nil
+            shopNotice = CakeGiftText.lockedHint
+            return
+        }
         // 루비로 살 수 없는 캐릭터(황금 · 무지개 아잉이)는 **고르지 않는다** — 하단 바에 [구매하기]를 세우면 거짓이다. 뽑기 패널을 연다.
         if case .character(let id) = selection, Self.isGachaOnly(id, rows: shopCharacters) {
             shopSelection = nil
@@ -701,6 +723,12 @@ extension WorkTimerStore {
             shopNotice = GachaText.gachaOnlyHint
             return
         }
+        // 생일 선물 전용(v0.3.66)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
+        if case .character(let id) = selection, Self.isGiftOnly(id, rows: shopCharacters) {
+            shopSelection = nil
+            shopNotice = CakeGiftText.lockedHint
+            return
+        }
         guard let have = rubyBalance else {
             loadShopState()
             return
@@ -751,7 +779,8 @@ extension WorkTimerStore {
                     self.shopNotice = Self.shortfallNotice(need: response.need, have: response.have)
                 case "not_for_sale":
                     // 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 루비로 안 판다 — 루비는 안 깎였다. "구매 실패"로 뭉개면 다시 눌러 보게 된다.
-                    self.shopNotice = GachaText.gachaOnlyHint
+                    // 케이크 아잉이(v0.3.66)도 같은 갈래로 거절되지만 얻는 길이 다르다(생일 선물).
+                    self.shopNotice = Self.isGiftOnly(id, rows: self.shopCharacters) ? CakeGiftText.lockedHint : GachaText.gachaOnlyHint
                 case "needs_update":
                     // 서버는 "이 앱은 그 캐릭터를 아직 못 산다"고 거절했고 **루비는 안 깎였다**.
                     // `default:` 의 "구매 실패" 로 떨어지면 사용자는 돈이 빠졌는지, 다시 눌러야 하는지 알 수 없다.

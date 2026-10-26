@@ -1059,19 +1059,13 @@ struct V0365MessagePokeMigrationContractTests {
     }
 }
 
-// MARK: - ⑨ 릴리스 게이트 (v0.3.65)
+// MARK: - ⑨ 0.3.65 체인지로그 (내용만)
 //
-// **관행**: 버전 고정과 "맨 위 섹션" 단언은 *그 릴리스의 시험 파일*이 든다(0.3.60 → … → 0.3.64 → 여기).
-// 다음 릴리스가 오면 이 둘을 그쪽 파일로 옮기고, 여기는 0.3.65 섹션의 **내용**만 남겨라.
-// 줄 수는 **박지 않는다**: 같은 판에 "버그 개선" 세션의 AI 리밋 줄이 더해질 수 있다(명세 §3.5) — 필수 낱말 + 배너 상한 4줄로 잰다.
-@Test("버전 0.3.65 / 118 · CHANGELOG 0.3.65 가 맨 위(목록 정렬 · 대화창 찌르기 기록 · 4줄 이하 · 배너 폭 안)")
+// 버전 고정과 "맨 위 섹션" 단언은 0.3.66 에서 `V0366CakeMacScreensTests` 로 넘겼다(관행 — 그 릴리스의 시험 파일이 든다).
+// 여기는 0.3.65 섹션의 **내용**만 남는다. 줄 수는 박지 않는다(필수 낱말 + 배너 상한 4줄).
+@Test("CHANGELOG 0.3.65(목록 정렬 · 대화창 찌르기 기록 · 4줄 이하 · 배너 폭 안)")
 func v0365VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.65</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>118</string>"))
-
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.65\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -1091,6 +1085,4 @@ func v0365VersionAndChangelog() throws {
     // AI 리밋 줄(같은 판에 들어간 Codex 창 수리). 없으면 pro·prolite 사용자는 **자기에게 일어난 수리를 모른 채**
     // 업데이트한다 — 0.3.64 에서 실제로 한 줄이 빠진 채 나가 서버 알림을 다시 게시해야 했다.
     #expect(items.contains { $0.contains("코덱스") }, "코덱스 사용량 수리 줄이 없다")
-    #expect(changelog.range(of: "## 0.3.65")!.lowerBound < changelog.range(of: "## 0.3.64")!.lowerBound,
-            "0.3.65 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }

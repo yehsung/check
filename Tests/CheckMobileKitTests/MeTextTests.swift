@@ -178,7 +178,7 @@ struct MeTextParityTests {
             MeText.tokenPublicTitle, MeText.tokenPublicDetail, MeText.miniGamePublicTitle, MeText.miniGamePublicDetail,
             "일주일에 한 번만 바꿀 수 있어요 · ",
             RankingsText.leagueFilteredOut, RankingsText.tokenNoUploads, RankingsText.tokenNoPastRecords, RankingsText.tokenFailed,
-            RankingsText.miniGameEmpty, RankingsText.miniGameFailed, "어제 1등", "우리 팀", " AI 토큰 소모량", "오늘 순위",
+            RankingsText.miniGameEmpty, RankingsText.miniGameFailed, "어제 1등", "우리 팀", " AI 토큰 소모량",
             "자정에 1·2·3등에게 루비 ", "명부터 지급", "지급 조건 충족", "각자 목표 ", "명 근무중",
             // v0.3.37 지난 6주 보기 — 폰이 맥 문장을 **글자 단위로** 옮겼다는 못.
             RankingsText.leaguePastFilteredOut, RankingsText.leagueWeekBasis, RankingsText.leagueMyTeamMissing,
@@ -187,6 +187,10 @@ struct MeTextParityTests {
         for sentence in sentences {
             #expect(code.contains(sentence), "맥 코드에 없는 문장: \(sentence)")
         }
+        // v0.3.67: 맥 순위 머리 "오늘 순위" 는 [오늘 | 역대] 전환과 함께 CheckCore `MiniGameBoardScope` 로 옮겨 갔다 —
+        // 맥 앱 폴더에 글자가 없으니 폰 두 벌을 그 값에 바로 잰다.
+        #expect(GamesMiniGameText.rankTitle == MiniGameBoardScope.today.boardTitle)
+        #expect(RankingsText.miniGameRankTitle == MiniGameBoardScope.today.boardTitle)
         // 2026-10-22(맥 0.3.64 · 서버 20261023131000) 사용자 결정으로 10·5·3 → 20·10·5.
         #expect(code.contains("static let rubyPrizes = [20, 10, 5]") && code.contains("static let prizeQuorum = 5"), "상품·정족수 상수가 바뀌었다")
         // 폰 두 벌(게임 탭 · 순위 탭)도 맥과 같은 값이다 — 서버는 금액을 내려 주지 않아 셋이 갈리면 화면끼리 다른 상금을 말한다.

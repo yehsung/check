@@ -397,7 +397,7 @@ final class CrossyScene: ObservableObject {
                 scaleXZ = 1 + 0.08 * squash
             }
         }
-        // 얼굴이 보이게 튼다 — 앞·뒤는 시안처럼 카메라 쪽(−8°), 옆은 그쪽으로 55°(얼굴 반쪽이 남는 각).
+        // 뛰는 쪽을 본다 — 앞으로 가면 뒷모습(사용자 지시 2026-10-27: "밑에서 위로 움직이는게 맞는거 아니야? 왜 다 뒤를 보고있어?").
         var yaw = Self.facingYaw(game.player.facing)
         var roll: Float = 0
         var pitch: Float = 0
@@ -474,12 +474,15 @@ final class CrossyScene: ObservableObject {
         }
     }
 
-    /// 몸을 트는 각(라디안, y 축). 모델의 얼굴은 +z(카메라 쪽)다.
+    /// 몸을 트는 각(라디안, y 축). 모델의 얼굴은 +z(카메라 쪽 = 뒤)이고 앞은 −z 다 — y 축으로 θ 돌리면 얼굴이 (sin θ, 0, cos θ) 를 본다.
+    /// 처음에는 얼굴이 보이게 앞·뒤 모두 카메라 쪽(−8°)으로 틀었는데, 그러면 앞으로 뛰는 아잉이가 **아래로 가는 것처럼** 보였다
+    /// (사용자 지적 2026-10-27). 그래서 언제나 뛰는 쪽을 본다.
     static func facingYaw(_ direction: CrossyGame.Direction) -> Float {
         switch direction {
-        case .forward, .back: -8 * .pi / 180
-        case .left: -55 * .pi / 180
-        case .right: 55 * .pi / 180
+        case .forward: .pi
+        case .back: 0
+        case .left: -.pi / 2
+        case .right: .pi / 2
         }
     }
 

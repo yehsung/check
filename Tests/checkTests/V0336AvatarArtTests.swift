@@ -208,9 +208,11 @@ struct V0336AvatarArtSourceTests {
         // 금 초상이 있을 때만 세는 것도 V0335 와 같다(v0.3.54).
         let goldPortraits = V0354CoreArtBaseline.macGoldPortraitsInSourceTree
         let rainbowPortraits = V0359RainbowBaseline.macRainbowPortraitsInSourceTree
+        // v0.3.66: 케이크 둘(내장)도 같은 규칙 — 기준선은 소스 트리의 그 케이크 초상 파일이다.
         #expect(Set(AppUserAvatarArt.knownIDs)
                 == Set(CheckMascotAssets.catalog.allIDs.filter {
                     (!CharacterCatalog.isGoldAing($0) || goldPortraits) && (!CharacterCatalog.isRainbowAing($0) || rainbowPortraits)
+                        && (!CharacterCatalog.isCakeAing($0) || V0366CakeCoreTests.macCakePortraitsInSourceTree($0))
                 }))
     }
 }

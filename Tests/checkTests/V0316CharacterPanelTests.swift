@@ -291,7 +291,8 @@ func 캐릭터가_늘어도_창이_상한_안에_선다() throws {
     // 그때 창이 상한을 넘지 않는지 **지금** 재 둔다 — 에셋이 들어오는 날 이 검사는 이미 초록이어야 한다.
     let suite = cpSuite()
     defer { cpDrop(suite) }
-    let many = CharacterCatalog(manifests: (0..<12).map {
+    // v0.3.66: 내장이 다섯(아잉 · 황금 · 무지개 · 딸기 · 초코 케이크)이라 filler 8 로 같은 13종을 만든다.
+    let many = CharacterCatalog(manifests: (0..<8).map {
         CharacterManifest(id: "filler-\($0)", displayName: "캐릭터\($0)", kind: .scene3D)
     })
     let panel = CheckCharacterPanel(
@@ -303,7 +304,8 @@ func 캐릭터가_늘어도_창이_상한_안에_선다() throws {
         onBack: {}
     )
     let height = try #require(cpHeight(panel, width: CheckMenuView.contentColumnWidth))
-    // 13종(아잉 + filler 12) = 5행 = 자연 512pt 인데 예산이 깎아 격자는 상한(400pt)에서 멈춘다.
+    // 13종(내장 5 + filler 8) = 5행 = 자연 512pt 인데 예산이 깎아 격자는 상한(400pt)에서 멈춘다.
+    #expect(many.allIDs.count == 13, "전제: 13종 — \(many.allIDs)")
     #expect(CharacterPanelGridBudget.rowCount(cardCount: many.allIDs.count) == 5)
     #expect(CharacterPanelGridBudget.naturalHeight(rowCount: 5) > CharacterPanelGridBudget.maxGridHeight,
             "이 검사는 예산을 넘기는 행 수라야 의미가 있다")
@@ -330,7 +332,8 @@ func 캐릭터_패널_높이_예산이_실측과_맞다() throws {
     let store = cpTeamStore(members: 8, tokenUsage: cpSeededTokenStore())
     store.toggleCharacterPanel()
     let popover = try #require(cpPopoverHeight(CheckMenuView(store: store, characterDefaults: suite.defaults)))
-    let rows = CharacterPanelGridBudget.rowCount(cardCount: CheckCharacter3DScene.catalog.allIDs.count)
+    // 팝오버 패널은 스토어가 세우는 카드만 그린다(`characterPickerIDs` — v0.3.66 케이크는 가진 사람에게만 선다).
+    let rows = CharacterPanelGridBudget.rowCount(cardCount: store.characterPickerIDs.count)
     let panelHeight = CharacterPanelGridBudget.naturalHeight(rowCount: rows)
         + CharacterPanelGridBudget.chromeOutsideGrid
     #expect(popover - panelHeight == CharacterPanelGridBudget.popoverChromeOutsidePanel,
@@ -554,7 +557,9 @@ private func cpPanelBitmap(defaults: UserDefaults) throws -> NSBitmapImageRep {
         catalog: catalog,
         selection: CharacterSelection(defaults: defaults, catalog: catalog),
         broadcast: CharacterSelectionBroadcast(),
-        onBack: {}
+        onBack: {},
+        // 앱과 같은 문(상점 로드 전 · 아무것도 안 가진 사람) — v0.3.66 케이크(생일 선물 전용)는 가진 사람에게만 선다.
+        isListed: { WorkTimerStore.isCharacterListed($0, shopLoaded: false, gachaAvailable: false, owned: [], rows: []) }
     )
     guard let bitmap = cpBitmap(panel, width: CheckMenuView.contentColumnWidth) else {
         throw CPError.renderFailed

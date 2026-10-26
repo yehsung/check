@@ -191,6 +191,10 @@ extension WorkTimerStore {
     /// 위 판정의 순수 본체(값으로 검증한다). `gachaAvailable` = 뽑기가 **이 캐릭터를** 낸다(앱은 `gachaOffers(id)` 를 넣는다).
     nonisolated static func isCharacterListed(_ id: String, shopLoaded: Bool, gachaAvailable: Bool,
                                               owned: Set<String>, rows: [ShopCharacterRow]) -> Bool {
+        // 케이크 아잉이(v0.3.66 생일 선물 전용)는 **가진 사람에게만** 선다 — 코어 내장(`CharacterCatalog.builtIns`)에 둘이 붙으며
+        // 모든 사람의 고르기에 잠긴 카드 둘이 늘어 격자가 높이 예산(4행)을 넘던 자리다. 안 가진 사람의 잠긴 칸('생일 선물 전용')은
+        // 상점(서버 목록 — `shopGridRows` 는 서버 목록이 있으면 그것을 그대로 쓴다)에서 보인다. 고르기에도 잠긴 칸을 세울지는 화면 단계가 정한다.
+        if CharacterCatalog.isGiftOnlyBuiltIn(id) { return owned.contains(id) }
         guard isGachaOnly(id, rows: rows) else { return true }
         return !shopLoaded || gachaAvailable || owned.contains(id) || rows.contains { $0.id == id }
     }

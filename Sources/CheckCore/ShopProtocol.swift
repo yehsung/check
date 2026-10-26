@@ -43,6 +43,14 @@ package nonisolated enum ShopWire {
     /// 이 번호를 요구하는 캐릭터. `CharacterCatalog.rainbowAingID` 와 같은 값이다.
     package static let rainbowCharacterID = CharacterCatalog.rainbowAingID
 
+    /// 케이크 아잉이 둘(v0.3.66 생일 선물 전용)이 든 명단과 생일 선물(`character_gift_pending` · `claim_character_gift`)을 받을 수 있는 번호.
+    /// 서버 `character_prices.min_protocol = 4` 인 행이 두 케이크이고, 4 미만인 클라에게는 그 행이 **아예 안 보이며**(가진 사람은 예외 —
+    /// 기존 규칙), 선물 조회는 gift 를 싣지 않고 수령은 `needs_update` 로 거절한다(아무것도 안 움직인다).
+    package static let cakeProtocol = 4
+
+    /// 이 번호를 요구하는 캐릭터 — **둘 다**다(`CharacterCatalog.giftOnlyBuiltInIDs` 와 같은 값 · 같은 순서).
+    package static let cakeCharacterIDs = CharacterCatalog.giftOnlyBuiltInIDs
+
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
     /// 맥은 `CheckMascotAssets.drawableCharacterIDs`(초상·아틀라스 **파일 실재**)가, 폰은 `AingCharacterArt.knownIDs`
@@ -56,11 +64,21 @@ package nonisolated enum ShopWire {
     ///   (robot 이 없으면 1 도 못 보내고, 2 를 건너뛰어 말할 수도 없다 — 보수적인 쪽으로 틀린다).
     ///   3(v0.3.59)도 같다: robot · aing_gold · aing_rainbow 를 **셋 다** 그릴 수 있을 때만. 무지개만 있고 금이 없으면 2 도 못 보내
     ///   robot 까지의 번호(1 또는 0)에 머문다 — 무지개 그림이 없는 빌드가 3 을 보내면 아잉 그림의 '무지개 아잉이'를 뽑게 된다.
+    ///   4(v0.3.66)도 같다: robot · aing_gold · aing_rainbow · **두 케이크**를 전부 그릴 수 있을 때만. 케이크가 하나만 있으면 3 에 머문다 —
+    ///   4 를 말하면 서버가 두 케이크를 다 선물 선택지로 내려 주므로, 그림 없는 쪽을 고른 사용자는 아잉 그림의 '케이크 아잉이'를 받는다.
+    ///   케이크 둘이 다 있어도 무지개가 없으면 4 는커녕 3 도 못 보낸다(번호를 건너뛰어 말할 수 없다 — 보수적인 쪽으로 틀린다).
     package static func protocolVersion(drawableCharacterIDs: some Sequence<String>) -> Int {
         let drawable = Set(drawableCharacterIDs)
         guard drawable.contains(robotCharacterID) else { return legacyProtocol }
         guard drawable.contains(goldCharacterID) else { return robotProtocol }
-        return drawable.contains(rainbowCharacterID) ? rainbowProtocol : goldProtocol
+        guard drawable.contains(rainbowCharacterID) else { return goldProtocol }
+        return cakeCharacterIDs.allSatisfy(drawable.contains) ? cakeProtocol : rainbowProtocol
+    }
+
+    /// 이 번호로 생일 선물(케이크 아잉이)을 조회 · 수령할 수 있는가(서버 `character_gift_pending` · `claim_character_gift` 의
+    /// `p_protocol >= 4` 와 같은 문턱). 판정의 권위는 서버다 — 이건 헛왕복을 줄이는 문이다.
+    package static func supportsCakeGift(protocolVersion: Int) -> Bool {
+        protocolVersion >= cakeProtocol
     }
 
     /// 이 번호로 뽑기를 쓸 수 있는가(서버 `gacha_pull`·`gacha_exchange` 의 `p_protocol >= 2` 와 같은 문턱).

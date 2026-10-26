@@ -135,6 +135,8 @@ enum CheckCharacter3DScene {
         case .standard: break
         case .gold: GoldAingFinish.apply(to: character)
         case .rainbow: RainbowAingFinish.apply(to: character)
+        // 케이크(v0.3.66)는 아직 마감이 없다 — 그림 단계(`CakeAingFinish`)가 붙기 전까지 아잉과 같은 갈래로 둔다.
+        case .cakeStrawberry, .cakeChoco: break
         }
     }
 

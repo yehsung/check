@@ -16,14 +16,15 @@ struct V0359RainbowCatalogTests {
     @Test("번들이 비어도 무지개 아잉이가 있다 — 셋째 내장 · 3D · 이름 '무지개 아잉이' · 아틀라스·초상·폴더 없음")
     func rainbowIsBuiltIn() {
         let empty = CharacterCatalog.load(charactersDirectory: nil)
-        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow"])
+        // v0.3.66: 케이크 둘이 넷째 · 다섯째 내장으로 붙는다(V0366CakeCoreTests).
+        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco"])
         let rainbow = empty.manifest(id: "aing_rainbow")
         #expect(rainbow?.displayName == "무지개 아잉이")
         #expect(rainbow?.kind == .scene3D)
         #expect(rainbow?.atlas == nil && rainbow?.portrait == nil)
         #expect(empty.entry(id: "aing_rainbow")?.directory == nil)
         #expect(empty.atlasURL(for: "aing_rainbow") == nil)
-        #expect(CharacterCatalog.builtIns.map(\.id) == ["aing", "aing_gold", "aing_rainbow"])
+        #expect(CharacterCatalog.builtIns.map(\.id) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco"])
         #expect(CharacterCatalog.rainbowAingID == "aing_rainbow")
         #expect(CharacterCatalog.builtInRainbowAing.id == CharacterCatalog.rainbowAingID)
     }
@@ -32,8 +33,8 @@ struct V0359RainbowCatalogTests {
     @Test("실제 번들: 아잉 → 황금 → 무지개 → 나머지(id 정렬) — 스프라이트 6종은 그대로 · 3D 경로 카탈로그도 같은 목록")
     func bundledOrder() {
         let ids = CheckMascotAssets.catalog.allIDs
-        #expect(Array(ids.prefix(3)) == ["aing", "aing_gold", "aing_rainbow"])
-        let rest = Array(ids.dropFirst(3))
+        #expect(Array(ids.prefix(5)) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco"])   // v0.3.66 케이크 둘이 넷째 · 다섯째
+        let rest = Array(ids.dropFirst(5))
         #expect(rest == rest.sorted())
         #expect(Set(rest) == ["fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"], Comment(rawValue: "\(rest)"))
         #expect(CheckCharacter3DScene.catalog.allIDs == ids)
@@ -69,7 +70,7 @@ struct V0359RainbowCatalogTests {
         let catalog = CharacterCatalog(manifests: [fake, CharacterManifest(id: "fox", displayName: "여우", kind: .sprite)])
         #expect(catalog.manifest(id: "aing_rainbow")?.kind == .scene3D)
         #expect(catalog.manifest(id: "aing_rainbow")?.displayName == "무지개 아잉이")
-        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "fox"])
+        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "fox"])
     }
 
     @MainActor

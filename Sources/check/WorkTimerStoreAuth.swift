@@ -658,7 +658,9 @@ extension WorkTimerStore {
     /// (`ShopCharacterRow.isPurchasable` 과 같은 규칙 — 목록에 아직 없는 id 도 금 · 무지개면 참).
     nonisolated static func isGachaOnly(_ id: String, rows: [ShopCharacterRow]) -> Bool {
         if CharacterCatalog.isGachaOnlyBuiltIn(id) { return true }
-        return rows.first { $0.id == id }?.gachaOnly == true
+        // 케이크(v0.3.66 생일 선물 전용)는 서버가 `gacha_only = true` 를 함께 실어도 뽑기 전용이 아니다(`ShopCharacterRow.isGachaOnly`).
+        if CharacterCatalog.isGiftOnlyBuiltIn(id) { return false }
+        return rows.first { $0.id == id }?.isGachaOnly == true
     }
 
     /// 이미 가진 것을 눌렀을 때의 문구(순수 — 값으로 검증한다).

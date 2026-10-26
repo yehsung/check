@@ -162,7 +162,9 @@ extension MeStore {
     ///
     /// 서버 표식(`gacha_only`)을 같이 보는 이유는 그대로다: 앞으로 서버가 다른 캐릭터를 뽑기 전용으로 돌려도 앱 업데이트 없이 따라간다.
     package func isGachaOnly(_ id: String) -> Bool {
-        CharacterCatalog.isGachaOnlyBuiltIn(id) || shopCharacters.first { $0.id == id }?.gachaOnly == true
+        // 케이크(v0.3.66 생일 선물 전용)는 서버가 `gacha_only = true` 를 함께 실어도 뽑기 전용이 아니다(`ShopCharacterRow.isGachaOnly`).
+        guard !CharacterCatalog.isGiftOnlyBuiltIn(id) else { return false }
+        return CharacterCatalog.isGachaOnlyBuiltIn(id) || shopCharacters.first { $0.id == id }?.isGachaOnly == true
     }
 
     // MARK: 상점

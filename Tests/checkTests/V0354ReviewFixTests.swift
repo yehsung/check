@@ -347,7 +347,9 @@ import Testing
             #expect(ids.contains(Self.gold) == expected[server], "\(server): 고르기 목록 \(ids)")
             // 금 말고는 그대로다(번들 순서 · 아잉 먼저). 무지개(v0.3.59)는 이 픽스처의 어느 서버도 내지 않아(확률표 · 상점 목록에 없음 ·
             // 안 가짐) 같은 문에 걸려 빠진다 — 무지개 쪽 판정은 `V0359RainbowMacTests` 가 잰다.
-            let plain = { (id: String) in id != Self.gold && !CharacterCatalog.isRainbowAing(id) }
+            // 케이크(v0.3.66 생일 선물 전용)는 가진 사람에게만 선다 — 이 픽스처는 아무도 안 가졌다(`V0366CakeCoreTests`).
+            let plain = { (id: String) in id != Self.gold && !CharacterCatalog.isRainbowAing(id) && !CharacterCatalog.isGiftOnlyBuiltIn(id) }
+            #expect(!ids.contains { CharacterCatalog.isGiftOnlyBuiltIn($0) }, "\(server): 안 가진 케이크가 고르기에 섰다 \(ids)")
             #expect(ids.filter(plain) == CheckCharacter3DScene.catalog.allIDs.filter(plain), "\(server)")
             #expect(ids.contains(CharacterCatalog.rainbowAingID) == (server == .notLoaded), "\(server): 무지개 \(ids)")
         }

@@ -79,6 +79,8 @@ package enum MobileTheme {
         case .gold: return AnyShapeStyle(goldText)
         case .rainbow: return AnyShapeStyle(rainbow)
         case .standard: return nil
+        // 케이크(v0.3.66)는 희귀가 아니다 — 생일 선물 전용이라 뽑기 화면에 서지 않는다(`Finish.isRare` 거짓).
+        case .cakeStrawberry, .cakeChoco: return nil
         }
     }
 
@@ -103,6 +105,8 @@ package enum MobileTheme {
         switch finish {
         case .rainbow: return colorScheme == .light ? AnyShapeStyle(rainbowSolid) : AnyShapeStyle(rainbow)
         case .gold, .standard: return AnyShapeStyle(gold)
+        // 케이크(v0.3.66)는 당분간 평범과 같은 갈래(진짜 그림은 다음 단계 — 케이크는 뽑기 전용 타일이 아니다).
+        case .cakeStrawberry, .cakeChoco: return AnyShapeStyle(gold)
         }
     }
 
@@ -112,6 +116,8 @@ package enum MobileTheme {
         case .gold: return AnyShapeStyle(gold.opacity(MobileThemePalette.rareTintOpacity))
         case .rainbow: return AnyShapeStyle(rainbowTint)
         case .standard: return nil
+        // 케이크(v0.3.66)는 희귀가 아니다 — 생일 선물 전용이라 뽑기 화면에 서지 않는다(`Finish.isRare` 거짓).
+        case .cakeStrawberry, .cakeChoco: return nil
         }
     }
 

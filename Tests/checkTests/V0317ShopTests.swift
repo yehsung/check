@@ -544,9 +544,11 @@ struct V0317ShopTests {
 
     // MARK: - 헬퍼
 
+    /// 상점 픽스처의 줄(아잉 제외 번들 전부). v0.3.66 케이크 둘(생일 선물 전용 내장)은 뺀다 — 서버는 그 행을 능력 번호 4 인 클라에게만
+    /// 보이고(이 빌드는 케이크를 못 그려 3 이다) 파는 줄도 아니다. 넣으면 '30 루비짜리 케이크' 가 상점 격자 · 높이 예산에 섞인다.
     @MainActor
     static var sprites: [String] {
-        CheckCharacter3DScene.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID }
+        CheckCharacter3DScene.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGiftOnlyBuiltIn($0) }
     }
 
     /// **실제 서버 가격**(2026-10-14 `20261014120000_ruby_economy_v2.sql` — 그 전 30·30·50·50·70·100).

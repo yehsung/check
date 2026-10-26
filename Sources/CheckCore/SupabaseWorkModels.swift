@@ -1646,19 +1646,39 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     /// 뽑기로만 얻는 캐릭터인가(v0.3.54 황금 아잉이 · v0.3.59 무지개 아잉이). 참이면 `price` 는 명목값이라 **팔지 않는다**
     /// (서버 `buy_character` 가 `not_for_sale` 로 거절한다). 이 키를 모르는 옛 서버는 nil — "아니다"로 읽는다.
     package var gachaOnly: Bool?
+    /// 생일 선물로만 얻는 캐릭터인가(v0.3.66 케이크 아잉이 둘 — 서버 `shop_state` 의 `gift_only`). 참이면 `price` 는 장식값이라
+    /// **팔지 않는다**. 이 키를 모르는 옛 서버는 nil — "아니다"로 읽되, 케이크 id 는 표식과 무관하게 언제나 선물 전용이다
+    /// (`CharacterCatalog.isGiftOnlyBuiltIn`). 서버는 케이크 행에 `gacha_only = true` 도 함께 싣는다(not_for_sale 갈래를 타려고).
+    package var giftOnly: Bool?
 
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
-    package init(id: String, price: Int? = nil, owned: Bool? = nil, gachaOnly: Bool? = nil) {
+    package init(id: String, price: Int? = nil, owned: Bool? = nil, gachaOnly: Bool? = nil, giftOnly: Bool? = nil) {
         self.id = id
         self.price = price
         self.owned = owned
         self.gachaOnly = gachaOnly
+        self.giftOnly = giftOnly
     }
 
-    /// 상점에서 살 수 있는 줄인가 — 뽑기 전용이 아니고 값이 있을 때만. (보유 여부는 묻지 않는다 — 그건 화면의 다른 판정이다.)
+    /// 상점에서 살 수 있는 줄인가 — 뽑기 전용도 선물 전용도 아니고 값이 있을 때만. (보유 여부는 묻지 않는다 — 그건 화면의 다른 판정이다.)
     /// 황금·무지개 아잉이는 서버 표식과 무관하게 **언제나** 못 산다(사장님 결정 — 뽑기로만). 표식이 빠진 응답이 와도 팔리는 카드가 서지 않게.
+    /// 케이크 아잉이(v0.3.66)도 같다 — `gift_only` 가 빠지거나 false 로 와도 케이크 id 는 언제나 못 산다(생일 선물로만).
     package var isPurchasable: Bool {
-        gachaOnly != true && !CharacterCatalog.isGachaOnlyBuiltIn(id) && price != nil
+        gachaOnly != true && !CharacterCatalog.isGachaOnlyBuiltIn(id)
+            && giftOnly != true && !CharacterCatalog.isGiftOnlyBuiltIn(id)
+            && price != nil
+    }
+
+    /// 생일 선물 전용 줄인가(서버 표식 **또는** 케이크 id). 상점의 잠긴 칸 '생일 선물 전용'이 이 값으로 선다.
+    package var isGiftOnly: Bool {
+        giftOnly == true || CharacterCatalog.isGiftOnlyBuiltIn(id)
+    }
+
+    /// 뽑기 · 조각 교환으로 얻는 줄인가(화면의 '뽑기 전용' · "뽑기나 조각 교환으로 얻을 수 있어요"의 판정).
+    /// ★ 선물 전용이 **먼저 이긴다**: 서버는 케이크 행에 not_for_sale 갈래를 타려고 `gacha_only = true` 도 싣는데, 그 표식만 보면
+    ///   케이크가 '뽑기 전용'으로 읽혀 뽑기 창을 열거나 "뽑기나 조각 교환으로…"라고 거짓말한다(케이크는 뽑기에 없다).
+    package var isGachaOnly: Bool {
+        !isGiftOnly && (gachaOnly == true || CharacterCatalog.isGachaOnlyBuiltIn(id))
     }
 }
 

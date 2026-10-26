@@ -126,6 +126,8 @@ enum GachaPalette {
         case .gold: return AnyShapeStyle(gold)
         case .rainbow: return AnyShapeStyle(rainbow)
         case .standard: return nil
+        // 케이크(v0.3.66)는 희귀가 아니다 — 생일 선물 전용이라 뽑기 화면에 서지 않는다(`Finish.isRare` 거짓).
+        case .cakeStrawberry, .cakeChoco: return nil
         }
     }
 

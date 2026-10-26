@@ -346,10 +346,13 @@ struct V0351RubyEconomyMigrationTests {
         let gachaOnly = try reGachaOnlyIDs()
         // v0.3.59: 무지개 아잉이(20261020120000_gacha_rainbow.sql)도 뽑기 전용이다 — 그 파일이 이 트리에 들어오기 전에도(앱이 먼저 들어올 수 있다)
         //   무지개는 루비로 안 판다(설계 확정 · 카탈로그 내장). 그래서 명단은 금을 꼭 품고, 그 밖에는 무지개만 허락한다.
-        #expect(gachaOnly.contains("aing_gold") && gachaOnly.isSubset(of: ["aing_gold", "aing_rainbow"]),
-                "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow)]")
+        // v0.3.66: 케이크 둘(20261026120000_cake_aing_gift.sql)은 not_for_sale 갈래를 타려고 `gacha_only = true` 로 들어간다 — 생일 선물
+        //   전용이라 루비로 안 판다(카탈로그 내장 · `isGiftOnlyBuiltIn`). 명단에 있어도 되고, 유료 명단에서는 언제나 빠진다.
+        #expect(gachaOnly.contains("aing_gold")
+                && gachaOnly.isSubset(of: Set(["aing_gold", "aing_rainbow"] + CharacterCatalog.giftOnlyBuiltInIDs)),
+                "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow, 케이크 둘)]")
         let paid = Set(CheckMascotAssets.catalog.allIDs.filter {
-            $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isRainbowAing($0)
+            $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isRainbowAing($0) && !CharacterCatalog.isGiftOnlyBuiltIn($0)
         }).subtracting(gachaOnly)
         #expect(Set(newPrices.keys) == paid, "가격을 고친 캐릭터 \(newPrices.keys.sorted()) ≠ 번들의 유료 캐릭터 \(paid.sorted())")
     }

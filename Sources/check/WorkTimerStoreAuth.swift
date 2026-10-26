@@ -184,6 +184,9 @@ extension WorkTimerStore {
         startStatusRefreshLoop()
         // 사람 아바타의 캐릭터 한 표(2026-09-20) — 가입으로 세션이 생긴 직후 한 번(로그인 마무리와 같은 이유).
         refreshAppUserCharacters()
+        // 생일 선물(v0.3.66) — 가입 직후 한 번 묻는다(로그인 마무리와 같은 첫 조회). 15초 폴링의 10분 문은 **앞선 조회가 있어야** 열리므로
+        // (`refreshCakeGiftIfDue`) 이 한 줄이 없으면 가입으로 세션을 얻은 실행에서는 주기 조회가 영영 돌지 않는다.
+        refreshCakeGift(reason: .signUp)
     }
 
     /// 코드 모드 가입 성공 후. signupTeamCode 로 join_team 을 실행하고 confirmMembership 으로 팀을 확정한다.
@@ -634,6 +637,8 @@ extension WorkTimerStore {
         var owned: Set<String> = [CharacterCatalog.builtInAingID]
         for row in rows where row.owned == true { owned.insert(row.id) }
         ownedCharacterIDs = owned
+        // 생일 선물(v0.3.66): 다른 기기에서 받았으면 열린 선물의 선택지가 보유와 어긋난다 — 맞추고, 남는 게 없으면 선물 · 카드를 거둔다.
+        reconcileCakeGiftWithOwnership()
     }
 
     /// 상점 카드를 눌렀을 때. **고르기만 한다 — 여기서는 아무것도 사지 않는다.**

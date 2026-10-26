@@ -879,6 +879,8 @@ final class WorkTimerStore {
     /// 받거나(`settlesGift`) 서버가 없다고 하면 내려간다.
     var cakeGiftOffer: CharacterGiftOffer?
     /// 축하 창이 지금 그리는 선물(창을 연 순간의 사본). 창이 떠 있는 동안 조회가 `cakeGiftOffer` 를 바꿔도 고르던 화면이 흔들리지 않게 나눈다.
+    /// 확인 단추는 **이 선물로** 받는다 — 조회가 선물을 내려도(응답을 잃은 수령이 커밋됐다 · 다른 기기에서 먼저 받았다) 서버의 결론
+    /// (`replayed` · `already_claimed`)이 받은 뒤 화면으로 데려간다(`canConfirmCakeGift`).
     var cakeGiftPresented: CharacterGiftOffer?
     /// 축하 창에서 고른 캐릭터(아직 받은 것이 아니다 — 확인 단추가 받는다).
     var cakeGiftChoice: String?
@@ -888,6 +890,10 @@ final class WorkTimerStore {
     var cakeGiftReceivedID: String?
     /// 축하 창의 한 줄(실패 · 거절 — `CakeGiftText.notice`). nil 이면 비운다.
     var cakeGiftNotice: String?
+    /// 서버가 **결론을 준** 선물 id(받았다 · 이미 받았다 · 내 선물이 아니거나 없다 — `CharacterGiftClaimOutcome.settlesGift`). 실행 단위다.
+    /// 두 자리가 읽는다: ① 같은 id 를 말하는 조회 응답은 수령 전에 떠난 낡은 것이라 버린다(받았는데 '다시 열기' 카드가 되살아나지 않게) ·
+    /// ② 축하 창의 확인 단추는 이 집합에 든 선물에만 잠긴다(다시 눌러도 같은 결론만 되풀이된다). 확인 단추가 읽으므로 관찰한다.
+    var cakeGiftSettledIDs: Set<String> = []
     /// 마지막으로 선물을 **물어본** 시각(성공 여부 무관). 주기 새로고침의 10분 문이 이 값을 본다. 화면이 읽지 않는다.
     @ObservationIgnored var cakeGiftLastCheckAt: Date?
     /// 조회가 떠 있다(겹쳐 쏘지 않는다). 화면이 읽지 않는다.

@@ -179,6 +179,13 @@ enum ShopText {
         }
     }
 
+    /// 하단 바에 [구매하기] 를 세우는가. 생일 선물 전용 잠긴 칸(케이크 아잉이 — v0.3.66)을 눌러 바가 **얻는 길**(`CakeGiftText.lockedHint`)을
+    /// 말하는 동안은 세우지 않는다 — 루비로 살 수 없는 것을 말하는 줄 옆에 흐린 [구매하기] 가 서면 "지금은 못 산다(루비가 모자라다)"로
+    /// 읽힌다(폰 검토의 흐린 '사기' 단추와 같은 결함). 그 자리는 안내가 두 줄로 쓴다. 그 밖(아무것도 안 고름 · 고름 · 다른 안내)은 그대로다.
+    static func barShowsBuyButton(selection: ShopSelection?, notice: String?) -> Bool {
+        !(selection == nil && notice == CakeGiftText.lockedHint)
+    }
+
     /// 바의 둘째 줄. **언제나 문자열을 돌려준다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
     ///
     /// 우선순위: 방금 일어난 일(`notice`) > 모자란 양 > 침묵.
@@ -358,25 +365,39 @@ struct CheckShopPanel: View {
         let price = store.shopSelectionPrice
         let busy = store.purchasingID != nil
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(ShopText.barTitle(selection: selection, catalog: catalog))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(selection == nil ? CheckTheme.secondaryText : CheckTheme.primaryText)
-                    .lineLimit(1)
-                // 둘째 줄은 **언제나 그려진다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
-                Text(ShopText.barDetail(notice: store.shopNotice, selection: selection,
-                                        price: price, balance: store.rubyBalance))
-                    .font(.caption2)
+            if ShopText.barShowsBuyButton(selection: selection, notice: store.shopNotice) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ShopText.barTitle(selection: selection, catalog: catalog))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(selection == nil ? CheckTheme.secondaryText : CheckTheme.primaryText)
+                        .lineLimit(1)
+                    // 둘째 줄은 **언제나 그려진다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
+                    Text(ShopText.barDetail(notice: store.shopNotice, selection: selection,
+                                            price: price, balance: store.rubyBalance))
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                if let price {
+                    RubyBalanceChip(balance: price)
+                }
+                BuyButton(title: busy ? "…" : "구매하기",
+                          enabled: store.canConfirmShopPurchase) {
+                    store.confirmShopPurchase()
+                }
+            } else {
+                // 생일 선물 전용 잠긴 칸을 눌렀다(v0.3.66) — 살 수 없으므로 [구매하기] · 값을 세우지 않고, 얻는 길만 두 줄로 말한다
+                // (한 줄이면 "루비나 뽑기로…" 에서 잘린다). 두 줄 caption2 는 바의 고정 높이 안에 든다 — 높이는 그대로다.
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 6)
-            if let price {
-                RubyBalanceChip(balance: price)
-            }
-            BuyButton(title: busy ? "…" : "구매하기",
-                      enabled: store.canConfirmShopPurchase) {
-                store.confirmShopPurchase()
+                Text(CakeGiftText.lockedHint)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity)

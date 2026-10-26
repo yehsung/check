@@ -170,6 +170,39 @@ struct V0366CakeMacScreensTests {
         #expect(CheckCharacterPanel.lockedLabel("fox", name: "여우") == "여우 잠김 — 상점에서 사기")
     }
 
+    @Test("고르기: 입고 있는 케이크 카드는 상점을 읽기 전 · 오프라인 · 낡은 보유에서도 선다(입고 있으면 가진 것이다) — 안 입은 케이크는 여전히 안 선다")
+    func wornCakeStaysInThePickerBeforeTheShopLoads() throws {
+        let store = V0317ShopTests.plainStore()
+        store.characterDefaults = CheckTestScratch.defaults("v0366-worn-cake")
+        // 시작 직후(상점 미로드 · 보유 = 아잉뿐) — 아무 케이크도 안 입었으면 둘 다 안 선다(기준선).
+        #expect(!store.shopLoaded && store.ownedCharacterIDs == [CharacterCatalog.builtInAingID])
+        #expect(!store.characterPickerIDs.contains(scStrawberry) && !store.characterPickerIDs.contains(scChoco), "기준선: 안 입은 케이크가 섰다")
+        // 딸기를 입고 있다(다른 기기 · 지난 실행에서 받아 입었다).
+        #expect(CharacterSelection(defaults: store.characterDefaults, catalog: CheckCharacter3DScene.catalog).select(scStrawberry))
+        #expect(store.characterPickerIDs.contains(scStrawberry), "상점을 읽기 전에 입고 있는 케이크 카드가 숨었다 — \(store.characterPickerIDs)")
+        #expect(!store.characterPickerIDs.contains(scChoco), "안 입은 초코까지 섰다(가진 사람에게만)")
+        #expect(store.isCharacterUnlocked(scStrawberry), "로드 전에 입은 케이크가 잠겼다")
+        // 착용 관용은 고르기 몫이다 — 상점 자리표시 격자(로드 전)에 입은 케이크가 잠긴 칸으로 서지 않는다.
+        #expect(!store.shopGridRows(catalog: CheckCharacter3DScene.catalog).contains { $0.id == scStrawberry },
+                "상점 자리표시 격자에 입은 케이크가 '생일 선물 전용' 잠긴 칸으로 섰다")
+        // 오프라인(상점 읽기 실패).
+        store.shopFailed = true
+        #expect(store.characterPickerIDs.contains(scStrawberry), "오프라인에서 입고 있는 케이크 카드가 숨었다")
+        // 상점은 읽었지만 이 맥의 보유가 낡았다(다른 기기에서 받아 입은 뒤 이 맥은 아직 모른다).
+        store.shopFailed = false
+        store.applyShopState(ShopStateResponse(rubyBalance: 3_000, ultraBalance: 7, ultraPrice: V0317ShopTests.realUltraPrice,
+                                               ultraBuyMax: 20, characters: scRows()))
+        store.shopLoaded = true
+        #expect(!store.ownedCharacterIDs.contains(scStrawberry), "전제: 보유가 딸기를 안다")
+        #expect(store.characterPickerIDs.contains(scStrawberry), "입은 케이크 카드가 낡은 보유에 숨었다")
+        // 다른 것으로 갈아입으면 가지지 않은 케이크는 다시 안 선다.
+        #expect(CharacterSelection(defaults: store.characterDefaults, catalog: CheckCharacter3DScene.catalog).select("fox"))
+        #expect(!store.characterPickerIDs.contains(scStrawberry), "안 입고 안 가진 케이크가 섰다")
+        // 순수 문.
+        #expect(WorkTimerStore.isCharacterListed(scChoco, shopLoaded: false, gachaAvailable: false, owned: [], rows: [], wearing: scChoco))
+        #expect(!WorkTimerStore.isCharacterListed(scChoco, shopLoaded: false, gachaAvailable: false, owned: [], rows: [], wearing: scStrawberry))
+    }
+
     @Test("되돌림: 케이크를 모르는 서버(unknown_character) · 안 가진 케이크(not_owned)는 아잉으로 되돌리고 얻는 길(생일 선물)을 말한다",
           arguments: ["unknown_character", "not_owned"])
     func revertSpeaksTheGiftWay(status: String) async throws {
@@ -333,6 +366,58 @@ struct V0366CakeMacScreensTests {
         scSave(picked, "gift-window-picked.png")
         scSave(failed, "gift-window-failed.png")
         scSave(received, "gift-window-received.png")
+    }
+
+    @Test("상점 패널: 잠긴 케이크 칸을 고르면 하단 바에 [구매하기] 가 서지 않고 얻는 길(lockedHint)을 말한다 — 여우를 고르면 [구매하기] 가 선다(기준선)")
+    func lockedCakeBarHasNoBuyButton() throws {
+        // 하단 바의 판정(뷰가 부르는 그 함수).
+        #expect(!ShopText.barShowsBuyButton(selection: nil, notice: CakeGiftText.lockedHint))
+        #expect(ShopText.barShowsBuyButton(selection: nil, notice: nil), "기준선: 아무것도 안 고른 바는 [구매하기] 자리를 지킨다")
+        #expect(ShopText.barShowsBuyButton(selection: .character("fox"), notice: nil))
+
+        func panel(_ select: String?) throws -> (WorkTimerStore, NSBitmapImageRep) {
+            let store = scLoadedStore(owned: [])
+            let keep: Set<String> = ["fox", CharacterCatalog.goldAingID, scChoco, scStrawberry]
+            store.applyShopState(ShopStateResponse(rubyBalance: 3_000, ultraBalance: 7, ultraPrice: V0317ShopTests.realUltraPrice,
+                                                   ultraBuyMax: 20, characters: scRows().filter { keep.contains($0.id) }))
+            store.ownedCharacterIDs = [CharacterCatalog.builtInAingID]
+            if let select { store.selectShopItem(.character(select)) }
+            let bitmap = try #require(V0317ShopTests.bitmap(CheckShopPanel(store: store, onBack: {}), width: CheckMenuView.contentColumnWidth))
+            return (store, bitmap)
+        }
+        let (lockedStore, locked) = try panel(scStrawberry)
+        #expect(lockedStore.shopSelection == nil && lockedStore.shopNotice == CakeGiftText.lockedHint, "전제: 잠긴 칸을 고른 상태가 아니다")
+        let (_, idle) = try panel(nil)
+        let (foxStore, fox) = try panel("fox")
+        #expect(foxStore.shopSelection == .character("fox"))
+        #expect(locked.pixelsHigh == idle.pixelsHigh, "잠긴 칸 안내가 하단 바 높이를 바꿨다(\(locked.pixelsHigh) vs \(idle.pixelsHigh))")
+        // 하단 바 오른쪽 끝(단추 자리)에서 [구매하기] 캡슐의 테두리를 찾는다: 캡슐 위 · 아래 테두리는 바탕과 다른 색이 **가로로 길게 이어진**
+        // 줄이다(흐린 단추도 1pt 테두리가 있다). 글자는 획마다 끊겨 그만큼 길게 이어지지 않는다 — 잠긴 칸 안내 두 줄이 그 자리까지 와도 단추로 안 읽힌다.
+        func longestRun(_ bitmap: NSBitmapImageRep) -> Int {
+            let scale = 2
+            let barHeight = Int(CheckShopPanel.purchaseBarHeight) * scale
+            let y1 = bitmap.pixelsHigh - 12 * scale, y0 = y1 - barHeight
+            let x1 = bitmap.pixelsWide - 12 * scale - 10 * scale, x0 = x1 - 70 * scale
+            guard let fill = bitmap.colorAt(x: x0, y: y0 + barHeight / 2)?.usingColorSpace(.deviceRGB) else { return -1 }
+            var longest = 0
+            for y in (y0 + 6)..<(y1 - 6) {
+                var run = 0
+                for x in x0..<x1 {
+                    guard let c = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { run = 0; continue }
+                    let d = abs(c.redComponent - fill.redComponent) + abs(c.greenComponent - fill.greenComponent) + abs(c.blueComponent - fill.blueComponent)
+                    run = d > 0.03 ? run + 1 : 0
+                    longest = max(longest, run)
+                }
+            }
+            return longest
+        }
+        let idleRun = longestRun(idle), foxRun = longestRun(fox), lockedRun = longestRun(locked)
+        print("[v0366-shop-bar] 단추 자리 가장 긴 가로 줄(px): 안 고름 \(idleRun) · 여우 \(foxRun) · 잠긴 케이크 \(lockedRun)")
+        #expect(idleRun >= 60 && foxRun >= 60, "기준선: [구매하기] 캡슐 테두리가 안 잡힌다 — 시험이 헛돈다(\(idleRun) · \(foxRun))")
+        #expect(lockedRun < 30, "잠긴 케이크를 골랐는데 하단 바에 [구매하기] 단추가 남았다(가로 줄 \(lockedRun)px)")
+        #expect(scFingerprint(locked) != scFingerprint(idle), "잠긴 칸 안내가 하단 바에 안 섰다")
+        #expect(V0317ShopTests.longestYellowRun(locked) < 24, "'못 그림' 상자")
+        scSave(locked, "shop-panel-locked-selected.png")
     }
 
     @Test("상점 패널: 잠긴 케이크 칸(안 가짐) · 보유 칸(가짐) — 서로 다르고 카드가 칠해진다")

@@ -248,6 +248,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 로 로그인 자동 실행은 이미 켜져 있으니, 부팅 후 아이콘을 안 누르는 사용자에게는 "앱은 떠 있는데 근무가
         // 하나도 기록되지 않는" 상태가 하루 종일 지속된다.
         store.activateStoredSessionOnLaunch()
+        // 케이크 아잉이 장식 원본(v0.3.66)을 시작 뒤 한가할 때 **메인 밖에서** 미리 굽는다. 처음 굽기는 무겁다(딸기 release ~78ms) —
+        // 미리 안 구우면 케이크를 입은 사람의 첫 오버레이나, 케이크를 안 입은 사람이 울트라로 남의 케이크를 맞는 순간 메인이 그만큼 멎는다.
+        // 조건 없이 누구에게나 한 번이다(`CakeAingFinish.prewarmDecorTemplates` 주석).
+        CakeAingFinish.prewarmDecorTemplates(after: 5)
         // 맥 앱스토어 판(v0.3.51): 첫 실행 안내(로그인 시 자동 실행 · AI 기록 읽기 동의를 한 화면에서 — 한 번만)와
         // 다른 판(brew·DMG) 동시 실행 경고(한 번만). Developer ID 판에서는 `start()` 가 아무 창도 만들지 않는다.
         masOnboarding = MacAppStoreOnboardingController(store: store)

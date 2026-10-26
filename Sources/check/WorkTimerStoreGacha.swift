@@ -191,16 +191,19 @@ extension WorkTimerStore {
     /// 같은 결의 규칙이다.
     func isCharacterListed(_ id: String) -> Bool {
         Self.isCharacterListed(id, shopLoaded: shopLoaded, gachaAvailable: gachaOffers(id),
-                               owned: ownedCharacterIDs, rows: shopCharacters)
+                               owned: ownedCharacterIDs, rows: shopCharacters, wearing: localEquippedCharacterID)
     }
 
     /// 위 판정의 순수 본체(값으로 검증한다). `gachaAvailable` = 뽑기가 **이 캐릭터를** 낸다(앱은 `gachaOffers(id)` 를 넣는다).
+    /// `wearing` = 지금 입은 캐릭터(앱은 이 맥의 착용 `localEquippedCharacterID` 를 넣는다 — 모르면 nil).
     nonisolated static func isCharacterListed(_ id: String, shopLoaded: Bool, gachaAvailable: Bool,
-                                              owned: Set<String>, rows: [ShopCharacterRow]) -> Bool {
+                                              owned: Set<String>, rows: [ShopCharacterRow], wearing: String? = nil) -> Bool {
         // 케이크 아잉이(v0.3.66 생일 선물 전용)는 **가진 사람에게만** 선다 — 코어 내장(`CharacterCatalog.builtIns`)에 둘이 붙으며
         // 모든 사람의 고르기에 잠긴 카드 둘이 늘어 격자가 높이 예산(4행)을 넘던 자리다. 안 가진 사람의 잠긴 칸('생일 선물 전용')은
         // 상점(서버 목록 — `shopGridRows` 는 서버 목록이 있으면 그것을 그대로 쓴다)에서 보인다. 고르기에도 잠긴 칸을 세울지는 화면 단계가 정한다.
-        if CharacterCatalog.isGiftOnlyBuiltIn(id) { return owned.contains(id) }
+        // **입고 있으면 가진 것이다**(서버 `set_character` 는 안 가진 캐릭터를 거절한다) — 상점을 아직 못 읽었거나(시작 직후 · 오프라인)
+        // 다른 기기에서 받아 입은 뒤 이 맥의 보유가 낡았어도, 지금 입은 케이크 카드는 선다(금 · 무지개의 '로드 전 관용'과 같은 결).
+        if CharacterCatalog.isGiftOnlyBuiltIn(id) { return owned.contains(id) || id == wearing }
         guard isGachaOnly(id, rows: rows) else { return true }
         return !shopLoaded || gachaAvailable || owned.contains(id) || rows.contains { $0.id == id }
     }
@@ -214,8 +217,11 @@ extension WorkTimerStore {
     /// 금 · 무지개는 고르기와 같은 규칙으로 거른다(`isCharacterListed`).
     func shopGridRows(catalog: CharacterCatalog) -> [ShopCharacterRow] {
         guard shopCharacters.isEmpty else { return Self.giftOnlyInDisplayOrder(shopCharacters) }
+        // 착용 관용(`wearing` — 입은 케이크)은 고르기 몫이다: 자리표시 줄은 `owned: false` 라 입은 케이크를 세우면 잠긴 칸('생일 선물 전용')으로 선다.
         return catalog.allIDs
-            .filter { $0 != CharacterCatalog.builtInAingID && isCharacterListed($0) }
+            .filter { $0 != CharacterCatalog.builtInAingID
+                && Self.isCharacterListed($0, shopLoaded: shopLoaded, gachaAvailable: gachaOffers($0),
+                                          owned: ownedCharacterIDs, rows: shopCharacters) }
             .map { ShopCharacterRow(id: $0, price: nil, owned: false) }
     }
 

@@ -11,6 +11,8 @@ import Testing
 //     키를 잡고 띄운다 · 옛 서버(404)는 조용히 '선물 없음'.
 //  ③ 수령: ok · replayed · already_claimed 는 받은 뒤 화면 + 보유 + 카드 거둠 + 상점 다시 읽기 · 실패 갈래는 문구 + 다시 시도 ·
 //     본문 키 셋 · [지금 입기]는 기존 착용 경로(set_character).
+//  ③-b 결론은 서버가(검토 수리): 결과를 모르는 수령 · 다른 기기 수령 뒤에도 창은 그리던 선물로 확인한다(replayed · already_claimed) · 보유를
+//     다시 읽는다 · not_found 는 잠근다 · 수령 전에 떠난 낡은 조회는 카드를 되살리지 않는다 · 상점 보유와 선택지를 맞춘다 · 가입도 첫 조회를 한다.
 //  ④ 로그아웃: 선물 상태가 다음 계정으로 새지 않는다(떠 있던 조회 응답도 버린다).
 
 private let gcGiftID = "6f1c2a7e-1d1f-4b0e-9a55-0c5d7f3b2a10"
@@ -449,6 +451,174 @@ struct V0366CakeMacGiftStoreTests {
             #expect(store.cakeGiftReceivedID == gcChoco && store.cakeGiftNotice == nil, "\(kind): 다시 시도가 안 받았다")
             #expect(GomokuStubProtocol.count(host: host, rpc: "claim_character_gift") == 2)
         }
+    }
+
+    // MARK: ③-b 결론은 서버가 — 창은 자기가 그리는 선물로 확인한다 (검토 수리)
+
+    @Test("결과를 모르는 수령(502 — 서버엔 커밋됐다) 뒤 조회가 '선물 없음': 창의 확인 단추는 잠기지 않고 · 보유를 다시 읽고 · 다시 누르면 replayed 로 받은 뒤 화면")
+    func lostClaimResponseStillConfirmsThroughTheServer() async throws {
+        let host = gcHost("lost-502")
+        let server = GiftServer()
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: server, spy: spy)
+        await store.refreshCakeGift(reason: .launch)?.value
+        #expect(spy.open, "기준선: 축하 창이 안 떴다")
+        store.chooseCakeGift(gcChoco)
+        server.claim = .init(status: 502, body: #"{"message":"bad gateway"}"#)
+        await store.claimCakeGift()?.value
+        #expect(store.cakeGiftNotice == CakeGiftText.claimFailed && store.canConfirmCakeGift, "기준선: 502 뒤 다시 시도 화면이 아니다")
+
+        // 서버는 수령을 커밋했다 — 응답만 잃었다. 다음 조회는 '없음', 상점은 초코를 가졌다고 말한다.
+        server.owned = [gcChoco]
+        server.pending = .init(body: gcPendingNone)
+        server.claim = .init(body: #"{"status":"ok","character_id":"aing_cake_choco","replayed":true}"#)
+        let shopBefore = GomokuStubProtocol.count(host: host, rpc: "shop_state")
+        await store.refreshCakeGift(reason: .periodic)?.value
+        #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard, "선물이 없다는데 카드가 남았다")
+        #expect(store.canConfirmCakeGift, "창이 '다시 시도해 주세요'를 말하는데 확인 단추가 잠겼다")
+        #expect(await V0354CoreStub.waitUntil { GomokuStubProtocol.count(host: host, rpc: "shop_state") > shopBefore },
+                "그리던 선물이 조회에서 사라졌는데 보유를 다시 안 읽었다")
+        #expect(await V0354CoreStub.waitUntil { store.ownedCharacterIDs.contains(gcChoco) }, "다시 읽은 보유가 초코를 모른다")
+
+        // 다시 누른다 — 서버의 결론(replayed)이 받은 뒤 화면으로 데려간다.
+        await store.claimCakeGift()?.value
+        #expect(GomokuStubProtocol.count(host: host, rpc: "claim_character_gift") == 2, "다시 누른 수령이 안 나갔다")
+        #expect(store.cakeGiftReceivedID == gcChoco && store.cakeGiftNotice == nil, "받은 뒤 화면이 아니다 — \(store.cakeGiftReceivedID ?? "nil") · \(store.cakeGiftNotice ?? "nil")")
+        #expect(!store.canConfirmCakeGift)
+    }
+
+    @Test("창이 떠 있는 동안 다른 기기에서 먼저 받음: 맥 단추는 회색이 아니고 · 누르면 already_claimed 가 받은 뒤 화면(받은 케이크)으로")
+    func claimedElsewhereWhileTheWindowIsOpen() async throws {
+        let host = gcHost("elsewhere")
+        let server = GiftServer()
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: server, spy: spy)
+        await store.refreshCakeGift(reason: .launch)?.value
+        store.chooseCakeGift(gcStrawberry)
+        #expect(spy.open && store.canConfirmCakeGift)
+
+        // 폰이 초코로 받았다.
+        server.owned = [gcChoco]
+        server.pending = .init(body: gcPendingNone)
+        server.claim = .init(body: #"{"status":"already_claimed","character_id":"aing_cake_choco"}"#)
+        await store.refreshCakeGift(reason: .periodic)?.value
+        #expect(!store.showsCakeGiftCard)
+        #expect(store.canConfirmCakeGift, "다른 기기에서 받은 뒤 맥 확인 단추가 말없이 잠겼다")
+        #expect(await V0354CoreStub.waitUntil { store.ownedCharacterIDs.contains(gcChoco) }, "보유를 다시 안 읽었다")
+
+        await store.claimCakeGift()?.value
+        let sent = try #require(GomokuStubProtocol.calls(host: host, rpc: "claim_character_gift").last)
+        #expect(sent.json["p_gift"] as? String == gcGiftID && sent.json["p_character"] as? String == gcStrawberry, "그리던 선물로 확인하지 않았다 — \(sent.json)")
+        #expect(store.cakeGiftReceivedID == gcChoco, "받은 뒤 화면이 받은 케이크(초코)가 아니다 — \(store.cakeGiftReceivedID ?? "nil")")
+        #expect(store.cakeGiftNotice == nil)
+    }
+
+    @Test("not_found 로 끝난 선물에는 확인 단추가 잠긴다(같은 결론만 되풀이) — 조회가 같은 선물을 다시 말해도 카드가 안 선다")
+    func notFoundSettlesTheGift() async throws {
+        let host = gcHost("settled-404")
+        let server = GiftServer()
+        server.claim = .init(body: #"{"status":"not_found"}"#)
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: server, spy: spy)
+        await store.refreshCakeGift(reason: .launch)?.value
+        store.chooseCakeGift(gcStrawberry)
+        await store.claimCakeGift()?.value
+        #expect(store.cakeGiftNotice == CakeGiftText.notFound && !store.canConfirmCakeGift)
+        #expect(store.claimCakeGift() == nil, "끝난 선물에 수령이 또 나간다")
+        await store.refreshCakeGift(reason: .shop)?.value
+        #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard, "결론 난 선물을 말하는 조회가 카드를 되살렸다")
+    }
+
+    @Test("수령 전에 떠난 조회가 수령 뒤에 도착해도 '다시 열기' 카드가 되살아나지 않는다 — 다른(새) 선물은 그대로 선다")
+    func staleLookupDoesNotReviveTheCard() async throws {
+        let host = gcHost("stale")
+        let server = GiftServer()
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: server, spy: spy)
+        await store.refreshCakeGift(reason: .launch)?.value
+        #expect(store.cakeGiftOffer?.id == gcGiftID)
+
+        // 둘째 조회는 받기 **전**의 서버 값(열린 선물)을 늦게 준다.
+        server.pending = .init(body: gcPendingWithGift, delay: 0.6)
+        let stale = store.refreshCakeGift(reason: .shop)
+        #expect(stale != nil, "기준선: 둘째 조회가 안 떠났다")
+        store.chooseCakeGift(gcStrawberry)
+        await store.claimCakeGift()?.value
+        #expect(store.cakeGiftReceivedID == gcStrawberry && !store.showsCakeGiftCard, "기준선: 받지 못했다")
+        await stale?.value
+        #expect(GomokuStubProtocol.count(host: host, rpc: "character_gift_pending") == 2, "기준선: 낡은 조회가 도착하지 않았다")
+        #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard, "받은 뒤 도착한 낡은 조회가 '다시 열기' 카드를 되살렸다")
+        #expect(store.cakeGiftReceivedID == gcStrawberry, "낡은 조회가 받은 뒤 화면을 흔들었다")
+
+        // 정말 새 선물(다른 id)은 선다 — 결론 난 id 만 버린다.
+        let nextID = "7a2b3c4d-0000-4000-8000-00000000abcd"
+        server.pending = .init(body: #"{"status":"ok","gift":{"id":"\#(nextID)","options":["aing_cake_choco"],"note":null,"created_at":"2027-10-26T07:51:40+00:00"}}"#)
+        await store.refreshCakeGift(reason: .shop)?.value
+        #expect(store.cakeGiftOffer?.id == nextID && store.showsCakeGiftCard, "새 선물까지 버렸다")
+    }
+
+    // MARK: ③-c 다른 기기에서 받은 선물 — 보유와 맞추기
+
+    @Test("상점 상태를 읽으면 열린 선물의 선택지를 보유와 맞춘다 — 하나 남으면 그것만(미리 골라 둠), 남는 게 없으면 선물 · 카드를 거둔다")
+    func ownershipReconcilesTheOpenGift() async throws {
+        let host = gcHost("reconcile")
+        let server = GiftServer()
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: server, spy: spy)
+        await store.refreshCakeGift(reason: .launch)?.value
+        store.closeCakeGiftWindow()
+        #expect(store.showsCakeGiftCard && store.cakeGiftOffer?.options == [gcStrawberry, gcChoco])
+
+        // 다른 기기에서 딸기를 얻었다(이 선물과 무관하게라도 — 보유는 줄지 않는다). 상점만 다시 읽는다.
+        server.owned = [gcStrawberry]
+        store.loadShopState()
+        #expect(await V0354CoreStub.waitUntil { store.ownedCharacterIDs.contains(gcStrawberry) })
+        #expect(store.cakeGiftOffer?.options == [gcChoco], "가진 딸기가 선택지에 남았다 — \(store.cakeGiftOffer?.options ?? [])")
+        #expect(store.showsCakeGiftCard, "고를 것이 남았는데 카드가 내려갔다")
+        store.openCakeGiftWindow()
+        #expect(store.cakeGiftPresented?.options == [gcChoco] && store.cakeGiftChoice == gcChoco, "하나 남은 선택지를 미리 골라 두지 않았다")
+        store.closeCakeGiftWindow()
+
+        // 초코도 가졌다(다른 기기에서 받았다) — 고를 것이 없다.
+        server.owned = [gcStrawberry, gcChoco]
+        store.loadShopState()
+        #expect(await V0354CoreStub.waitUntil { store.ownedCharacterIDs.contains(gcChoco) })
+        #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard, "다 가졌는데 선물 · 카드가 남았다")
+
+        // 그 뒤 조회가(서버가 아직 모르고) 같은 선물을 말해도 보유로 걸러 안 선다.
+        await store.refreshCakeGift(reason: .shop)?.value
+        #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard, "다 가진 선물을 조회가 되살렸다")
+    }
+
+    // MARK: ③-d 가입 마무리
+
+    @Test("가입 마무리도 선물을 묻는다(로그인과 같은 첫 조회) — 그래서 그 실행에서도 10분 주기가 돈다")
+    func signUpAsksAndArmsThePeriodicCheck() async throws {
+        let host = gcHost("signup")
+        let server = GiftServer()
+        server.pending = .init(body: gcPendingNone)
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: server, spy: spy, signedIn: false)
+        defer { gcStopLoops(store) }
+        let t0 = Date(timeIntervalSince1970: 1_793_000_000)
+        var now = t0
+        store.clock = { now }
+        func pendingCount() -> Int { GomokuStubProtocol.count(host: host, rpc: "character_gift_pending") }
+
+        await store.completeSignUp(SupabaseSession(accessToken: "signed-up", refreshToken: "r", userID: gcUser),
+                                   email: "new@example.com", displayName: "새사람", center: nil)
+        #expect(store.isSignedIn, "전제: 가입이 세션을 세우지 않았다")
+        #expect(await V0354CoreStub.waitUntil { pendingCount() == 1 }, "가입 마무리가 선물을 안 물었다")
+        _ = await V0354CoreStub.waitUntil { !store.cakeGiftChecking }
+        #expect(store.cakeGiftLastCheckAt == t0)
+
+        now = t0.addingTimeInterval(599)
+        await store.localExpiryTick()
+        await gcQuiet()
+        #expect(pendingCount() == 1, "10분 안에 다시 물었다")
+        now = t0.addingTimeInterval(600)
+        await store.localExpiryTick()
+        #expect(await V0354CoreStub.waitUntil { pendingCount() == 2 }, "가입으로 세션을 얻은 실행에서 10분 주기가 안 돈다")
     }
 
     // MARK: ④ 로그아웃

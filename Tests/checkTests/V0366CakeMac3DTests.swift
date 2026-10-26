@@ -156,6 +156,83 @@ import Testing
         }
     }
 
+    /// 장식 트리의 지문(이름 · 자리 · 지오메트리 종류 · 재질 수 · 텍스처 크기와 바이트) — 같은 조립인가를 값으로 잰다.
+    static func decorSignature(_ node: SCNNode) -> [String] {
+        var out: [String] = []
+        node.enumerateHierarchy { child, _ in
+            var line = "\(child.name ?? "-")@\(String(format: "%.5f,%.5f,%.5f", child.simdPosition.x, child.simdPosition.y, child.simdPosition.z))"
+            if let geometry = child.geometry {
+                line += " \(type(of: geometry)) e\(geometry.elements.count) m\(geometry.materials.count)"
+                for material in geometry.materials {
+                    if let contents = material.diffuse.contents, CFGetTypeID(contents as CFTypeRef) == CGImage.typeID {
+                        let image = contents as! CGImage
+                        let bytes = image.dataProvider?.data.map { CFDataGetLength($0) } ?? -1
+                        let sum = image.dataProvider?.data.map { data -> Int in
+                            let ptr = CFDataGetBytePtr(data)!
+                            return (0..<CFDataGetLength(data)).reduce(0) { ($0 &* 31) &+ Int(ptr[$1]) }
+                        } ?? 0
+                        line += " tex\(image.width)x\(image.height):\(bytes):\(sum)"
+                    }
+                }
+            }
+            out.append(line)
+        }
+        return out
+    }
+
+    @Test("장식 원본 미리 굽기: 메인 밖(utility)에서 두 케이크를 굽고 · 그 뒤 메인은 굽지 않고 사본만 받는다 · 메인이 굽는 것과 같은 조립이다 · 앱 시작이 부른다")
+    func decorPrewarmBuildsOffTheMainThread() async throws {
+        // 앱 구도 한 장(딸기 — 장식이 가장 무겁다)을 PNG 바이트로.
+        func still() throws -> NSBitmapImageRep {
+            let image = try V0354GoldAing3DTests.render(try V0354GoldAing3DTests.scene(Self.strawberry), size: CGSize(width: 140, height: 170))
+            return NSBitmapImageRep(cgImage: image)
+        }
+        // 기준선: 메인에서 구운 원본의 지문 · 그림.
+        CakeAingFinish.resetCacheForTesting()
+        var onMain: [CakeAingFinish.Kind: [String]] = [:]
+        for kind in CakeAingFinish.Kind.allCases { onMain[kind] = Self.decorSignature(try #require(CakeAingFinish.decorNode(kind))) }
+        #expect(CakeAingFinish.decorBuildLogForTesting.onMain == [true, true], "기준선: 메인에서 안 구웠다")
+        let mainStill = try still()
+
+        // 미리 굽기 — 메인 밖에서 끝까지.
+        CakeAingFinish.resetCacheForTesting()
+        let work = CakeAingFinish.prewarmDecorTemplates()
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in work.notify(queue: .main) { done.resume() } }
+        let log = CakeAingFinish.decorBuildLogForTesting
+        #expect(log.count == 2 && log.onMain == [false, false], "미리 굽기가 메인 밖에서 둘을 굽지 않았다 — \(log)")
+        for kind in CakeAingFinish.Kind.allCases {
+            let decor = try #require(CakeAingFinish.decorNode(kind))
+            #expect(decor.name == CakeAingFinish.cakeDecorNodeName)
+            #expect(Self.decorSignature(decor) == onMain[kind], "\(kind): 메인 밖에서 구운 장식이 메인에서 구운 것과 다르다")
+        }
+        #expect(CakeAingFinish.decorBuildLogForTesting.count == 2, "미리 구웠는데 메인이 또 구웠다")
+        // 그림으로도 같다: 메인 밖에서 구운 장식을 붙인 씬 = 메인에서 구운 장식을 붙인 씬.
+        let prewarmedStill = try still()
+        var differing = 0
+        for y in 0..<mainStill.pixelsHigh { for x in 0..<mainStill.pixelsWide {
+            guard let a = mainStill.colorAt(x: x, y: y), let b = prewarmedStill.colorAt(x: x, y: y) else { continue }
+            if abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent) + abs(a.blueComponent - b.blueComponent)
+                + abs(a.alphaComponent - b.alphaComponent) > 0.03 { differing += 1 }
+        } }
+        print("[v0366-prewarm] 메인 굽기 · 미리 굽기 그림 차이 \(differing)/\(mainStill.pixelsWide * mainStill.pixelsHigh)px")
+        #expect(mainStill.pixelsWide == prewarmedStill.pixelsWide && differing == 0, "미리 구운 장식으로 그린 케이크가 다르다(\(differing)px)")
+
+        // 겹침: 미리 굽기가 도는 사이 메인이 장식을 찾아도 같은 것을 두 번 굽지 않는다(자물쇠에서 기다렸다 받는다).
+        CakeAingFinish.resetCacheForTesting()
+        let race = CakeAingFinish.prewarmDecorTemplates()
+        _ = try #require(CakeAingFinish.decorNode(.strawberry))
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in race.notify(queue: .main) { done.resume() } }
+        #expect(CakeAingFinish.decorBuildLogForTesting.count == 2, "겹친 굽기가 같은 장식을 두 번 구웠다 — \(CakeAingFinish.decorBuildLogForTesting)")
+
+        // 부르는 자리: 앱 시작(applicationDidFinishLaunching)이 미리 굽기를 건다(주석을 걷고 읽는다).
+        let app = V0351IfConfig.strippingComments(try Self.source("Sources/check/CheckApp.swift"))
+        let launch = try Self.region(app, from: "func applicationDidFinishLaunching", to: "private func wireTodoBoard")
+        #expect(launch.contains("CakeAingFinish.prewarmDecorTemplates("), "앱 시작이 케이크 장식을 미리 굽지 않는다")
+        let kick = try #require(launch.range(of: "store.activateStoredSessionOnLaunch()"))
+        let prewarm = try #require(launch.range(of: "CakeAingFinish.prewarmDecorTemplates("))
+        #expect(kick.upperBound <= prewarm.lowerBound, "미리 굽기가 세션 활성화보다 앞이다 — 시작의 급한 일보다 먼저 CPU 를 쓴다")
+    }
+
     // MARK: ② 마감이 선다
 
     @Test("케이크 씬: 얼굴 = 무지개와 같은 합성 디퓨즈 + 케이크 몸 셰이더(초코는 ckShadeMap) · 몸 메시에 장식 · 표식 · 프레이밍 내림 — 아잉·황금·무지개엔 없다")

@@ -5,13 +5,16 @@ import Foundation
 //
 // 전선 모양 · 결과 분류 · 문구는 전부 코어 `CharacterGift.swift`(폰과 한 벌)에 있다. 맥이 더하는 것은 세 가지다:
 //  ① 박자 — 열린 선물을 **이 자리에서만** 묻는다(설계서 §5 · 조정자 결정 — 이 이상 자주 부르지 마라):
-//     앱 시작(저장 세션 활성화) · 로그인 직후 · 상점 진입 · 기존 15초 폴링에 얹되 **10분에 1번 이하**(`cakeGiftPeriodicSeconds`).
+//     앱 시작(저장 세션 활성화) · 로그인 직후 · 가입 직후 · 상점 진입 · 기존 15초 폴링에 얹되 **10분에 1번 이하**(`cakeGiftPeriodicSeconds`).
 //     이 빌드가 케이크를 못 그리면(능력 번호 < 4) 묻지 않는다 — 서버도 gift 를 싣지 않는다(`ShopWire.supportsCakeGift`).
 //  ② 축하 창 — 열린 선물이 있으면 **실행당 한 번** 스스로 띄운다(`cakeGiftAutoShownIDs`). 고르지 않고 닫으면 메뉴 팝오버의 '다시 열기' 카드
 //     (`CheckMenuView.TopBanner.cakeGift`)가 수령할 때까지 남는다(`cakeGiftOffer` 가 있는 동안).
 //  ③ 수령 — `claim_character_gift` 를 상점 구매와 같은 모양으로 부른다(세대 가드 · 세션 재시도 · 취소 무시). 받으면 보유를 서버 값으로 다시 읽고
 //     (`loadShopState`), [지금 입기]는 **기존 착용 경로**(`CheckCharacterPicker.choose` → `pushSelectedCharacter`)를 탄다 — 서버 수령은 착용을
 //     움직이지 않는다(설계서 §2-4).
+//  ④ 결론은 서버가 낸다(검토 수리) — 축하 창은 **자기가 그리는 선물**로 확인한다(조회가 그 선물을 내려도 `replayed` · `already_claimed` 가
+//     받은 뒤 화면으로 데려간다). 결론이 난 선물 id(`cakeGiftSettledIDs`)를 말하는 낡은 조회는 버리고, 상점 보유를 읽으면 열린 선물의
+//     선택지를 보유와 맞춘다(`reconcileCakeGiftWithOwnership` — 다른 기기에서 받은 선물).
 
 /// 축하 창을 띄우고 내리는 문. 스토어가 쥔다(`WorkTimerStore.cakeGiftWindowHooks`) — 테스트가 갈아 끼워 "창이 열렸는가"를 센다.
 struct CakeGiftWindowHooks {
@@ -36,6 +39,8 @@ enum CakeGiftCheckReason: String, Equatable, Sendable {
     case launch
     /// 로그인 마무리 직후.
     case signIn
+    /// 가입 마무리 직후(가입으로 세션을 손에 쥔 순간 — 로그인과 같은 첫 조회다. 없으면 이 실행의 10분 주기가 영영 안 돈다).
+    case signUp
     /// 상점 진입(`toggleShopPanel` 이 여는 순간).
     case shop
     /// 15초 폴링(`localExpiryTick`) — 10분 문을 지날 때만.
@@ -104,8 +109,15 @@ extension WorkTimerStore {
     func applyCakeGiftPending(_ offer: CharacterGiftOffer?) {
         // 받는 중에는 손대지 않는다 — 수령 응답이 곧 사실을 말한다(그 사이 조회가 "없음"을 말해 카드가 깜빡이지 않게).
         guard !cakeGiftClaiming else { return }
-        cakeGiftOffer = offer
-        guard let offer else { return }
+        // 결론이 난 선물을 말하는 응답은 수령 **전에** 떠난 낡은 조회다 — 받았는데 '다시 열기' 카드가 되살아나지 않게 '없음'으로 읽는다.
+        // 보유로 이미 다 가진 선택지는 거른다(다른 기기에서 받은 뒤 아직 서버 조회가 그 사실을 모를 때 — `reconcileCakeGiftWithOwnership`).
+        let fresh = offer.flatMap { cakeGiftSettledIDs.contains($0.id) ? nil : cakeGiftFilteredByOwnership($0) }
+        let vanished = cakeGiftOffer.map { $0.id != fresh?.id } ?? false
+        cakeGiftOffer = fresh
+        // 알던 선물이 조회에서 사라졌다 — 응답을 잃은 수령이 서버엔 커밋됐거나 다른 기기에서 먼저 받았다. 보유를 서버 값으로 다시 읽는다
+        // (축하 창은 그리던 선물 그대로 확인할 수 있다 — 서버가 `replayed` · `already_claimed` 로 결론을 준다).
+        if vanished { loadShopState() }
+        guard let offer = fresh else { return }
         guard !cakeGiftAutoShownIDs.contains(offer.id) else { return }
         cakeGiftAutoShownIDs.insert(offer.id)
         // 이미 떠 있으면(다시 열기로 연 창) 끌어오지 않는다.
@@ -125,8 +137,9 @@ extension WorkTimerStore {
     }
 
     /// 창 상태를 이 선물의 고르기 화면으로 세우고 창을 띄운다. 선택지가 하나뿐이면(하나는 이미 가졌다) 미리 골라 둔다.
+    /// 같은 선물이라도 선택지가 바뀌었으면(보유로 걸렀다 — `reconcileCakeGiftWithOwnership`) 고르기를 새로 세운다.
     private func presentCakeGiftWindow(_ offer: CharacterGiftOffer, activating: Bool) {
-        if cakeGiftPresented?.id != offer.id || cakeGiftReceivedID != nil {
+        if cakeGiftPresented != offer || cakeGiftReceivedID != nil {
             cakeGiftChoice = offer.options.count == 1 ? offer.options.first : nil
             cakeGiftReceivedID = nil
         }
@@ -143,11 +156,14 @@ extension WorkTimerStore {
         cakeGiftNotice = nil
     }
 
-    /// 확인 단추를 누를 수 있는가. 창이 그리는 선물이 **아직 열려 있어야** 한다 — 받지 못한 채 끝난 선물(`not_found` · 받은 것을 모르는
-    /// `already_claimed`)이나 조회가 '없음'으로 내린 선물에 다시 눌러 봐야 같은 실패 문구만 되풀이된다.
+    /// 확인 단추를 누를 수 있는가. 창은 **자기가 그리는 선물**(`cakeGiftPresented`)로 확인한다 — 조회가 그 선물을 내렸어도(응답을 잃은
+    /// 수령이 서버엔 커밋됐다 · 창이 떠 있는 동안 폰에서 먼저 받았다) 누르면 서버가 결론을 준다(같은 선택 = `replayed`, 다른 선택 =
+    /// `already_claimed` → 둘 다 받은 뒤 화면). 잠그는 것은 서버가 **이미 결론을 준** 선물뿐이다(`cakeGiftSettledIDs` — 받지 못한 채 끝난
+    /// `not_found` · 받은 것을 모르는 `already_claimed`): 다시 눌러 봐야 같은 결론만 되풀이된다.
     var canConfirmCakeGift: Bool {
-        !cakeGiftClaiming && cakeGiftReceivedID == nil && cakeGiftChoice != nil
-            && cakeGiftPresented != nil && cakeGiftOffer?.id == cakeGiftPresented?.id
+        guard let presented = cakeGiftPresented else { return false }
+        return !cakeGiftClaiming && cakeGiftReceivedID == nil && cakeGiftChoice != nil
+            && !cakeGiftSettledIDs.contains(presented.id)
     }
 
     /// 확인 단추(`CakeGiftText.confirmButton`) — 고른 캐릭터로 선물을 받는다. **수령 RPC 는 여기 하나뿐이다.**
@@ -197,9 +213,31 @@ extension WorkTimerStore {
             cakeGiftNotice = CakeGiftText.notice(for: outcome) { self.gachaDisplayName($0) }
         }
         if outcome.settlesGift {
+            cakeGiftSettledIDs.insert(giftID)
             if cakeGiftOffer?.id == giftID { cakeGiftOffer = nil }
             loadShopState()
         }
+    }
+
+    // MARK: 보유와 맞추기
+
+    /// 이 선물에서 **이미 가진** 선택지를 뺀다(남는 게 없으면 nil — 고를 것이 없는 선물이다). 보유를 모르면(상점 미로드) 그대로다 —
+    /// `ownedCharacterIDs` 는 그때 아잉뿐이라 아무것도 안 빠진다. 서버 조회는 읽는 시점에 이미 거르므로 이 거름은 **우리가 더 최근에 안**
+    /// 보유(다른 기기에서 받은 뒤 다시 읽은 상점)만 반영한다. 보유는 줄지 않으므로 거르는 쪽이 늘 안전하다.
+    func cakeGiftFilteredByOwnership(_ offer: CharacterGiftOffer) -> CharacterGiftOffer? {
+        let left = offer.options.filter { !ownedCharacterIDs.contains($0) }
+        guard !left.isEmpty else { return nil }
+        guard left.count != offer.options.count else { return offer }
+        return CharacterGiftOffer(id: offer.id, options: left, note: offer.note, createdAt: offer.createdAt)
+    }
+
+    /// 상점 상태(보유)를 읽은 뒤 — 열린 선물의 선택지를 보유와 맞추고, 남는 게 없으면 선물 · '다시 열기' 카드를 거둔다(다른 기기에서 받았다).
+    /// 축하 창이 그리는 선물(`cakeGiftPresented`)은 건드리지 않는다 — 창은 그 선물로 확인하고 서버가 결론을 준다(`canConfirmCakeGift`).
+    /// `applyShopState` 가 보유를 옮긴 직후에 부른다.
+    func reconcileCakeGiftWithOwnership() {
+        guard let offer = cakeGiftOffer else { return }
+        let kept = cakeGiftFilteredByOwnership(offer)
+        if kept != offer { cakeGiftOffer = kept }
     }
 
     /// 받은 뒤 화면의 [지금 입기] — **기존 착용 경로**를 탄다(고르기 패널과 같다: 로컬 저장 → 방송 → 서버 `set_character`). 창을 닫는다.

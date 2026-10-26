@@ -1167,29 +1167,72 @@ enum CakeAingFinish {
 
     private static let templates = Templates()
 
-    /// 이 케이크의 장식 사본(루트 이름 `cakeDecorNodeName`). 처음 한 번은 몸 메시를 따로 읽어 정수리 hitTest 로 자리를 잡아 만든다 —
-    /// 메시가 한 벌이라 자리가 캐릭터마다 같다. 사본은 지오메트리 · 재질을 나눠 쓴다(빌보드 제약은 노드째 복사된다). 메시를 못 읽으면 nil.
-    static func decorNode(_ kind: Kind) -> SCNNode? {
-        if let hit = templates.withLock({ $0[kind] }) { return hit.clone() }
-        guard let scene = CheckCharacter3DScene.loadModelScene(), let body = firstGeometryNode(in: scene.rootNode) else {
-            logger.error("cake finish: 장식 자리를 잴 메시가 없다 — 장식 없이 선다")
-            return nil
-        }
-        let started = CFAbsoluteTimeGetCurrent()
-        let template = kind.makeDecor(probe: meshSurfaceProbe(body))
-        let ms = (CFAbsoluteTimeGetCurrent() - started) * 1_000
-        logger.notice("cake decor built kind=\(kind.rawValue, privacy: .public) ms=\(ms, format: .fixed(precision: 1), privacy: .public)")
-        let kept = templates.withLock { made -> SCNNode in
-            if let existing = made[kind] { return existing }
-            made[kind] = template
-            return template
-        }
-        return kept.clone()
+    /// 원본 만들기를 한 줄로 세우는 자물쇠. 미리 만들기(`prewarmDecorTemplates` — 메인 밖)가 만드는 동안 메인이 같은 장식을 찾으면
+    /// **기다렸다가 그 원본을 받는다**(같은 것을 두 번 굽지 않는다 — 기다림은 혼자 굽는 시간보다 길지 않다). 우선순위 상속이 있는
+    /// 자물쇠라(`OSAllocatedUnfairLock`) 메인이 기다리는 동안 낮은 QoS 의 굽는 스레드가 끌어올려진다.
+    private static let buildLock = OSAllocatedUnfairLock()
+
+    /// 원본을 **새로 구운** 횟수와 마지막으로 구운 스레드가 메인이었는가(시험 전용 관찰 — 앱 동작은 읽지 않는다).
+    private final class BuildLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _count = 0
+        private var _onMain: [Bool] = []
+        func record(onMain: Bool) { lock.withLock { _count += 1; _onMain.append(onMain) } }
+        var snapshot: (count: Int, onMain: [Bool]) { lock.withLock { (_count, _onMain) } }
+        func reset() { lock.withLock { _count = 0; _onMain = [] } }
     }
 
-    /// 테스트 전용: 장식 원본을 버린다.
+    private static let buildLog = BuildLog()
+
+    /// 이 케이크의 장식 사본(루트 이름 `cakeDecorNodeName`). 처음 한 번은 몸 메시를 따로 읽어 정수리 hitTest 로 자리를 잡아 만든다 —
+    /// 메시가 한 벌이라 자리가 캐릭터마다 같다. 사본은 지오메트리 · 재질을 나눠 쓴다(빌보드 제약은 노드째 복사된다). 메시를 못 읽으면 nil.
+    ///
+    /// ★ 처음 만들기는 무겁다(딸기 텍스처 굽기 — release 78ms · debug 2.7초). 메인에서 처음 만들면 그만큼 화면이 멎으므로 앱은 시작 뒤
+    ///   한가할 때 메인 밖에서 미리 만든다(`prewarmDecorTemplates`). 어느 스레드에서 불러도 된다: 원본은 **어느 씬에도 붙지 않은** 새 노드라
+    ///   SceneKit 렌더 스레드와 나누는 것이 없고(지오메트리 · 텍스처는 CGContext 로 굽는다), 자물쇠를 지나 캐시에 들어간 뒤로는 아무도 고치지
+    ///   않는다 — 메인은 그 원본의 `clone()` 만 렌더 중인 씬에 붙인다.
+    static func decorNode(_ kind: Kind) -> SCNNode? {
+        if let hit = templates.withLock({ $0[kind] }) { return hit.clone() }
+        return buildLock.withLockUnchecked { () -> SCNNode? in
+            // 기다리는 사이 다른 스레드(미리 만들기)가 구웠을 수 있다.
+            if let hit = templates.withLock({ $0[kind] }) { return hit.clone() }
+            guard let scene = CheckCharacter3DScene.loadModelScene(), let body = firstGeometryNode(in: scene.rootNode) else {
+                logger.error("cake finish: 장식 자리를 잴 메시가 없다 — 장식 없이 선다")
+                return nil
+            }
+            let started = CFAbsoluteTimeGetCurrent()
+            let template = kind.makeDecor(probe: meshSurfaceProbe(body))
+            let ms = (CFAbsoluteTimeGetCurrent() - started) * 1_000
+            let onMain = Thread.isMainThread
+            // 런 루프가 없는 스레드(GCD 일꾼)에서 노드를 만들면 SceneKit 의 암묵 트랜잭션이 닫히지 않은 채 남는다 — 여기서 닫는다
+            // (어느 씬에도 안 붙은 원본이라 화면에는 상관없지만, 열린 트랜잭션을 스레드에 남기지 않는다).
+            if !onMain { SCNTransaction.flush() }
+            buildLog.record(onMain: onMain)
+            logger.notice("cake decor built kind=\(kind.rawValue, privacy: .public) ms=\(ms, format: .fixed(precision: 1), privacy: .public) main=\(onMain, privacy: .public)")
+            templates.withLock { $0[kind] = template }
+            return template.clone()
+        }
+    }
+
+    /// 미리 만들기 — 두 케이크의 장식 원본을 **메인 밖**(utility QoS)에서 `delay` 초 뒤에 굽는다. 앱 시작이 부른다(`AppDelegate`).
+    /// 조건을 두지 않는다: 케이크를 안 입은 사람도 울트라로 남의 케이크를 맞으면 그 순간 메인에서 굽게 되므로, 누구에게나 한 번 굽는다
+    /// (release 합 ~80ms · 메모리는 장식 노드 두 벌). 이미 구웠으면 아무것도 안 한다. 반환 = 끝을 기다리는 손잡이(시험용).
+    @discardableResult
+    static func prewarmDecorTemplates(after delay: TimeInterval = 0) -> DispatchWorkItem {
+        let work = DispatchWorkItem(qos: .utility) {
+            for kind in Kind.allCases { _ = decorNode(kind) }
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(0, delay), execute: work)
+        return work
+    }
+
+    /// 시험 전용: 지금까지 원본을 새로 구운 (횟수, 스레드가 메인이었는가 목록).
+    static var decorBuildLogForTesting: (count: Int, onMain: [Bool]) { buildLog.snapshot }
+
+    /// 테스트 전용: 장식 원본을 버린다(굽기 기록도).
     static func resetCacheForTesting() {
         templates.withLock { $0.removeAll() }
+        buildLog.reset()
     }
 
     private static func firstGeometryNode(in root: SCNNode) -> SCNNode? {

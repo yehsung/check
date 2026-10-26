@@ -118,7 +118,8 @@ extension WorkTimerStore {
     }
 
     /// 이 맥의 착용 선택(서버 어휘와 같은 id — 모르는 저장값은 아잉으로 접힌다). 메뉴바·헤더·오버레이·오목 '나' 카드가 그리는 그 값이다.
-    private var localEquippedCharacterID: String {
+    /// 캐릭터 고르기의 케이크 카드 판정(`isCharacterListed` — 입고 있으면 가진 것이다)도 이 값을 읽는다.
+    var localEquippedCharacterID: String {
         CharacterSelection(defaults: characterDefaults, catalog: CheckCharacter3DScene.catalog).selectedID
     }
 

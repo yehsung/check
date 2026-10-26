@@ -99,6 +99,11 @@ package final class GamesStore {
     /// 거짓인데 `windowDidShow()` 를 부르면 **보이지도 않는 판의 준비 보고가 나가고**(코어 머리말 ⑨) 사용자는
     /// 못 보는 카운트다운에 끌려 들어가 판돈을 잃는다.
     package private(set) var isTetrisScreenVisible = false
+    /// 오목 · 체스 · 테트리스 화면(로비 · 대국 · 관전) 중 하나가 떠 있다. 생일 선물 축하 시트(v0.3.66)가 이때는 스스로 뜨지 않는다
+    /// (`MeStore.presentCakeGiftIfDue` — 시트가 수 시계 · 15초 침묵이 걸린 판을 덮지 않게).
+    package var isAnyMatchScreenVisible: Bool {
+        isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible
+    }
     /// 앱이 active 다(로그인 상태에서 appDidBecomeActive ~ appDidEnterBackground).
     package private(set) var isAppActive = false
     /// 오목 화면을 열 때 보여 줄 신청·판 id(딥링크 `gomoku/invite/<id>` · `gomoku/match/<id>`). 화면이 한 번 꺼내 쓴다.

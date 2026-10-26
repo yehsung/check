@@ -87,6 +87,9 @@ package final class MeStore {
     /// 상점에서 마지막으로 누른 뽑기 전용 타일(황금 아잉이). 안내 줄(`shopBarDetail`)이 **읽을 때** 문장을 만든다 —
     /// 누를 때 만들어 두면 상점이 아직 안 읽힌 순간의 "뽑기로만"이 교환값(조각 20)을 안 뒤에도 남는다(시뮬레이터 실측).
     package internal(set) var shopGachaHintID: String?
+    /// 상점에서 마지막으로 누른 **생일 선물 전용** 잠긴 칸(케이크 아잉이 — v0.3.66). 고른 것(`shopSelection`)이 아니다 — 살 수 없다.
+    /// 아래 막대가 이 값으로 그 칸 이름과 얻는 길(`CakeGiftText.lockedHint`)만 말하고 사기 단추를 세우지 않는다.
+    package internal(set) var shopGiftHintID: String?
     package internal(set) var purchasingID: String?
     /// 상점 RPC(`shop_state`·`buy_character`)에 싣는 능력 번호의 **재료**: 이 번들에 초상이 있는 캐릭터 id.
     ///
@@ -142,8 +145,11 @@ package final class MeStore {
     /// 마지막으로 선물을 **물으러 떠난** 시각(10분 스로틀 — `cakeGiftCheckInterval`). 계정이 바뀌면 비운다.
     @ObservationIgnored package internal(set) var cakeGiftCheckedAt: Date?
     @ObservationIgnored var cakeGiftLoading = false
-    /// 이 실행에서 스스로 띄운 선물 id — **실행당 한 번**. 로그아웃(`reset`)에도 비우지 않는다(같은 실행에서 같은 선물을 두 번 띄우지 않는다).
+    /// 이 실행에서 **실제로 화면에 선**(시트 뷰의 onAppear) 선물 id — **실행당 한 번**은 이 기록으로 센다. 스토어가 시트를 세웠어도
+    /// 화면에 못 섰으면(다른 시트 · 대국 화면) 쓰지 않은 것이다. 로그아웃(`reset`)에도 비우지 않는다(같은 실행에서 같은 선물을 두 번 띄우지 않는다).
     @ObservationIgnored package internal(set) var cakeGiftAutoShownIDs: Set<String> = []
+    /// '다시 열기' 줄의 [고르기]가 서버에 다시 묻는 중(단추가 돈다 · 겹쳐 누르기 막기).
+    package internal(set) var cakeGiftReopening = false
 
     // MARK: 이번 주 근무 보상 (v0.3.55 · 폰 1.0.8(19) — MeStoreWeeklyWork.swift)
     /// 서버 `weekly_work_status()` 의 마지막 **그릴 만한** 응답(CheckCore 모델 — 맥과 한 벌). nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
@@ -272,7 +278,9 @@ package final class MeStore {
         // **배지 숫자**로 생겼다.
         refreshAchievementsIfStale()
         // 생일 선물(v0.3.66)도 탭과 무관하게 앞에 올 때마다 — 단 **10분에 한 번 이하**(`cakeGiftCheckInterval`). 열린 선물이면
-        // 축하 시트가 실행당 한 번 스스로 뜬다(어느 탭에 있든 — 시트는 탭 막대 위에서 띄운다).
+        // 축하 시트가 실행당 한 번 스스로 뜬다(어느 탭에 있든 — 시트는 탭 막대 위에서 띄운다). 대국·관전 화면 때문에 미뤄 둔
+        // 선물은 묻지 않고도 이미 안다 — 앞에 온 지금이 그 '다음 기회'다(`presentCakeGiftIfDue`).
+        presentCakeGiftIfDue()
         refreshCakeGiftIfStale()
         guard isTabVisible else { return }
         refreshRootIfStale()
@@ -306,6 +314,7 @@ package final class MeStore {
         shopSelection = nil
         shopNotice = nil
         shopGachaHintID = nil
+        shopGiftHintID = nil
         purchasingID = nil
         equippedServerID = nil
         equippedLoaded = false
@@ -333,6 +342,7 @@ package final class MeStore {
         cakeGiftSheetOnScreen = false
         cakeGiftCheckedAt = nil
         cakeGiftLoading = false
+        cakeGiftReopening = false
         // 주간 보상도 계정에 묶인다 — 안 비우면 다음 계정 카드에 앞 사람의 근무 시간·받은 칸·'받았어요'가 선다.
         // 계정별 '본 칸' 저장값(defaults)은 키가 계정별이라 그대로 둔다.
         weeklyWork = nil

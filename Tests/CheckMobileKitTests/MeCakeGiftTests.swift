@@ -193,11 +193,19 @@ import Testing
         #expect(store.price(of: Self.choco) == nil && store.price(of: Self.strawberry) == nil, "장식값 2000 이 가격으로 섰다")
         store.selectShopItem(Self.choco)
         #expect(store.shopSelection == nil && store.shopGachaHintID == nil, "잠긴 칸이 사는 줄로 골라졌다")
+        // 아래 막대의 대상은 그 칸(이름 · 얻는 길) — 사기 단추는 이 값이 있으면 서지 않는다(`MeShopView.purchaseBar`).
+        #expect(store.shopGiftHintID == Self.choco)
         #expect(store.shopNotice == CakeGiftText.lockedHint && store.shopBarDetail == CakeGiftText.lockedHint)
         #expect(!store.canConfirmPurchase)
         store.confirmPurchase()
+        store.selectShopItem(Self.choco)
+        #expect(store.shopGiftHintID == Self.choco, "잠긴 칸을 다시 눌렀더니 안내가 풀렸다(사는 줄처럼 토글한다)")
         store.selectShopItem(Self.strawberry)
         #expect(store.shopNotice == MeText.alreadyOwned)
+        #expect(store.shopGiftHintID == nil, "다른 칸을 눌렀는데 잠긴 칸 막대가 남았다")
+        store.selectShopItem(Self.choco)
+        store.shopDidDisappear()
+        #expect(store.shopGiftHintID == nil && store.shopNotice == nil)
         // 고르기에서 안 가진 케이크를 누르면(목록에 안 서지만 — 안전망) 같은 안내이고 요청은 없다.
         store.chooseCharacter(Self.choco)
         #expect(store.characterNotice == CakeGiftText.lockedHint)
@@ -277,15 +285,21 @@ import Testing
         let store = h.me
         await store.loadCakeGift()
         #expect(store.cakeGiftSheet != nil)
+        store.cakeGiftSheetDidAppear()      // 시트 뷰가 화면에 섰다 — 이때 '띄웠다'로 센다
         store.dismissCakeGiftSheet()
+        store.cakeGiftSheetDidDisappear()
         #expect(store.showsCakeGiftReopen, "고르지 않고 닫았는데 다시 열기 줄이 없다")
         await store.loadCakeGift()
         #expect(store.cakeGiftSheet == nil, "같은 실행에서 같은 선물로 시트가 또 떴다")
         #expect(store.showsCakeGiftReopen)
+        let asked = h.requests(rpc: "character_gift_pending").count
         store.reopenCakeGift()
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "character_gift_pending").count == asked + 1, "[고르기]가 서버에 다시 묻지 않았다(10분 스로틀 안)")
         #expect(store.cakeGiftSheet?.gift.id == Self.giftID && !store.showsCakeGiftReopen)
         // 다른 선물(새 지급)이면 그것은 처음 보는 선물이다 — 닫혀 있으면 스스로 뜬다.
         store.dismissCakeGiftSheet()
+        store.cakeGiftSheetDidDisappear()
         server.pending.mutate { $0 = .json(Self.pendingJSON(options: [Self.choco], id: "another-gift")) }
         await store.loadCakeGift()
         #expect(store.cakeGiftSheet?.gift.id == "another-gift" && store.cakeGiftSheet?.gift.options == [Self.choco])
@@ -373,6 +387,7 @@ import Testing
 
         // ③ 서버 미배포(404) — 받을 수 없다는 안내, 선물은 그대로.
         store.reopenCakeGift()
+        await h.quiesceMe()
         store.selectCakeGiftOption(Self.choco)
         server.claim.mutate { $0 = .missingFunction("claim_character_gift") }
         store.confirmCakeGift()
@@ -434,6 +449,7 @@ import Testing
         store.refreshCakeGiftIfStale()
         await h.quiesceMe()
         #expect(store.cakeGift != nil && store.cakeGiftCheckedAt != nil)
+        store.cakeGiftSheetDidAppear()
         store.reset()
         #expect(store.cakeGift == nil && store.cakeGiftSheet == nil && store.cakeGiftCheckedAt == nil && !store.showsCakeGiftReopen)
         #expect(store.cakeGiftAutoShownIDs.contains(Self.giftID), "실행당 한 번 기록은 계정이 아니라 실행에 묶인다")
@@ -495,7 +511,7 @@ import Testing
         }
     }
 
-    @Test("데모 me/gift…: 바늘로 열린 선물(딸기 · 초코)을 고르고 나 탭을 연다 · 수령 응답은 고른 것을 돌려준다")
+    @Test("데모 me/gift…: 바늘로 열린 선물(딸기 · 초코)을 고르고 나 탭을 연다 · 케이크 없는 여우 착용자 · 받은 뒤엔 받은 것만 보유 · 선물 없음")
     func demoGiftRoute() throws {
         #expect(MobileDemoCakeGiftRoute(demoRoute: "me/gift") == MobileDemoCakeGiftRoute(action: nil))
         #expect(MobileDemoCakeGiftRoute(demoRoute: "me/gift/picked")?.action == "picked")
@@ -510,23 +526,59 @@ import Testing
         let offer = try #require(try Self.snakeDecoder.decode(CharacterGiftPendingResponse.self, from: pending.body).offer,
                                  "me/gift 장면에 열린 선물이 없다")
         #expect(offer.options == [Self.strawberry, Self.choco])
-        // 선물 장면의 나는 딸기 케이크를 입고 있다(탭 막대 '나' 아이콘 · 무대 — 내 아바타 틀 스크린샷). 다른 장면은 여우 그대로.
+        // 서버가 만들 수 있는 상태여야 한다: 서버는 가진 케이크를 선택지에서 뺀다 — 선물 장면의 나는 케이크를 **하나도** 안 가졌고
+        // 여우를 입고 있다(예전 픽스처는 딸기를 가지고 입은 사람에게 딸기 · 초코를 선택지로 줬다).
         let equipped = MobileStubRequest(method: "GET", host: MobileDemo.host, path: "/rest/v1/profiles", query: "select=character&id=eq.\(MobileDemo.userID)",
                                          headers: [:], bodyText: "")
         let worn = Self.fixtures.response(for: route.rewrite(equipped), scenario: route.scene)
-        #expect(String(decoding: worn.body, as: UTF8.self).contains(Self.strawberry))
-        let plain = Self.fixtures.response(for: equipped, scenario: "me")
-        #expect(String(decoding: plain.body, as: UTF8.self).contains("\"fox\""), "선물 장면 밖의 데모 착용값(여우)이 바뀌었다")
+        #expect(String(decoding: worn.body, as: UTF8.self).contains("\"fox\""), "선물 장면의 착용값이 여우가 아니다")
+        let shopRequest = Self.demoRequest("shop_state", body: #"{"p_protocol":4}"#)
+        let before = try Self.demoOwnedCakes(Self.fixtures.response(for: route.rewrite(shopRequest), scenario: route.scene))
+        #expect(before.isEmpty, "선물 장면(받기 전)에 이미 가진 케이크가 있다: \(before)")
+        #expect(Set(offer.options).isDisjoint(with: before), "가진 케이크가 선택지에 있다 — 서버에서 불가능한 상태")
+        // 일반 상점 장면(심사원의 기본 경로)은 케이크 두 행(딸기 보유 · 초코 잠김) 그대로 — 그 장면의 선물 조회는 '선물 없음'이다.
+        #expect(try Self.demoOwnedCakes(Self.fixtures.response(for: shopRequest, scenario: "me")) == [Self.strawberry])
+        let plainPending = Self.fixtures.response(for: Self.demoRequest("character_gift_pending", body: #"{"p_protocol":4}"#), scenario: "me")
+        #expect(try Self.snakeDecoder.decode(CharacterGiftPendingResponse.self, from: plainPending.body).offer == nil)
         for choice in [Self.strawberry, Self.choco] {
-            let claim = Self.fixtures.response(
-                for: route.rewrite(Self.demoRequest("claim_character_gift",
-                                                    body: #"{"p_gift":"\#(offer.id)","p_character":"\#(choice)","p_protocol":4}"#)),
-                scenario: route.scene)
+            // 데모 한 실행 = 기록 한 벌. 받기 전 바늘로 수령을 부르고, 응답을 기록하면 그 뒤 요청은 받은 뒤 바늘로 고른다.
+            let ledger = MobileDemoCakeGiftRoute.Ledger()
+            let claimRequest = Self.demoRequest("claim_character_gift",
+                                                body: #"{"p_gift":"\#(offer.id)","p_character":"\#(choice)","p_protocol":4}"#)
+            let claim = Self.fixtures.response(for: route.rewrite(claimRequest, ledger: ledger), scenario: route.scene)
             let decoded = try Self.snakeDecoder.decode(CharacterGiftClaimResponse.self, from: claim.body)
             #expect(CharacterGiftClaimOutcome(response: decoded, requestedID: choice) == .received(characterID: choice, replayed: false))
-            let wear = Self.fixtures.response(for: Self.demoRequest("set_character", body: #"{"p_id":"\#(choice)"}"#), scenario: "me")
+            ledger.record(claimRequest, response: claim)
+            // 받은 뒤: 상점은 받은 것**만** 보유 · 선물 조회는 선물 없음(받은 케이크와 열린 선물이 같이 서지 않는다).
+            let after = try Self.demoOwnedCakes(Self.fixtures.response(for: route.rewrite(shopRequest, ledger: ledger), scenario: route.scene))
+            #expect(after == [choice], "받은 뒤 상점 보유가 \(after) 다(기대 \(choice) 하나)")
+            let pendingAfter = Self.fixtures.response(
+                for: route.rewrite(Self.demoRequest("character_gift_pending", body: #"{"p_protocol":4}"#), ledger: ledger), scenario: route.scene)
+            #expect(pendingAfter.status == 200)
+            #expect(try Self.snakeDecoder.decode(CharacterGiftPendingResponse.self, from: pendingAfter.body).offer == nil,
+                    "받은 뒤에도 선물이 열려 있다")
+            // [지금 입기]는 받은 것으로 · 받은 뒤 바늘이 다른 착용 요청을 가로채지 않는다(바늘에 캐릭터 id 를 통째로 넣지 않는 까닭).
+            let wear = Self.fixtures.response(for: route.rewrite(Self.demoRequest("set_character", body: #"{"p_id":"\#(choice)"}"#),
+                                                                 ledger: ledger), scenario: route.scene)
             #expect(try Self.snakeDecoder.decode(SetCharacterResponse.self, from: wear.body).character == choice)
+            let other = Self.fixtures.response(for: route.rewrite(Self.demoRequest("set_character", body: #"{"p_id":"fox"}"#),
+                                                                  ledger: ledger), scenario: route.scene)
+            #expect(try Self.snakeDecoder.decode(SetCharacterResponse.self, from: other.body).character?.hasPrefix("aing_cake") == false,
+                    "받은 뒤 바늘이 여우 착용 요청을 케이크 응답으로 가로챘다")
         }
+        // 수령이 아닌 요청 · 실패한 수령은 기록하지 않는다(받기 전 바늘 그대로).
+        let idle = MobileDemoCakeGiftRoute.Ledger()
+        idle.record(shopRequest, response: .json(#"{"status":"ok","character_id":"aing_cake_choco"}"#))
+        idle.record(Self.demoRequest("claim_character_gift", body: "{}"), response: .json(#"{"status":"not_found"}"#))
+        idle.record(Self.demoRequest("claim_character_gift", body: "{}"), response: .json(#"{"status":"ok","character_id":"fox"}"#))
+        #expect(idle.needle == MobileDemoCakeGiftRoute.needle)
+    }
+
+    /// 데모 상점 응답에서 **가진** 케이크 id(서버 순서).
+    static func demoOwnedCakes(_ response: MobileStubResponse) throws -> [String] {
+        #expect(response.status == 200)
+        let rows = try #require(try snakeDecoder.decode(ShopStateResponse.self, from: response.body).characters)
+        return rows.filter { CharacterCatalog.isCakeAing($0.id) && $0.owned == true }.map(\.id)
     }
 
     @Test("데모 선물 라우트 값은 #if DEBUG 안에만 있다 — Release 바이너리에 이름이 남지 않는다(출시 게이트 금지 심볼 MobileDemo)")

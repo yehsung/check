@@ -84,6 +84,8 @@ extension MeStore {
         var owned: Set<String> = [MeCharacterCards.aingID]
         for row in rows where row.owned == true { owned.insert(row.id) }
         ownedCharacterIDs = owned
+        // 생일 선물(v0.3.66): 새 보유와 선택지를 맞춘다 — 다른 기기에서 받은 케이크가 폰 선물 · '다시 열기' 줄에 남지 않게.
+        reconcileCakeGiftWithOwnership()
     }
 
     /// 착용값 읽기. `set_character` 가 **끝날 때** 이 순번을 올리므로, 저장 전·저장 중에 나간 GET 은 저장이 끝난 뒤 도착해도 버려진다
@@ -192,15 +194,19 @@ extension MeStore {
     package func selectShopItem(_ id: String) {
         guard purchasingID == nil else { return }
         shopGachaHintID = nil
+        shopGiftHintID = nil
         if isOwned(id) {
             shopSelection = nil
             shopNotice = MeText.alreadyOwned
             return
         }
         // 생일 선물 전용(케이크 아잉이)은 사는 줄도 뽑는 줄도 아니다 — 고르지 않고 얻는 길을 말한다(잠긴 칸 안내).
+        // 아래 막대는 이 칸의 이름과 안내만 세우고 사기 단추를 세우지 않는다(`shopGiftHintID` — 흐린 '사기'가 남지 않게).
+        // 다시 눌러도 풀지 않는다(살 것을 고른 것이 아니라 안내를 연 것이다 — 화면 onAppear 가 두 번 불러도 같다).
         if isGiftOnly(id) {
             shopSelection = nil
             shopNotice = CakeGiftText.lockedHint
+            shopGiftHintID = id
             return
         }
         // 뽑기 전용은 사는 줄이 아니다 — 고르지 않고 얻는 길(뽑기 · 조각 교환)을 말한다. 화면은 이 안내와 함께 뽑기 카드로 올라간다.
@@ -373,6 +379,7 @@ extension MeStore {
     package func shopDidDisappear() {
         shopNotice = nil
         shopGachaHintID = nil
+        shopGiftHintID = nil
         if purchasingID == nil { shopSelection = nil }
         gachaDidDisappear()
     }

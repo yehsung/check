@@ -12,40 +12,50 @@ import SwiftUI
 /// "○○를 받았어요!" + [지금 입기] [닫기]. 실패하면 한 줄 안내를 보이고 다시 누르게 한다.
 struct MeCakeGiftSheetView: View {
     let store: MeStore
+    /// `.sheet(item:)` 클로저가 받은 값 — 시트가 **내려가는 동안**에도 쥐고 있는 마지막 상태다(스토어 값은 이미 nil).
+    let item: MeCakeGiftSheet
     @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// 그릴 상태: 같은 선물의 스토어 값이 있으면 그것(떠 있는 동안의 고르기 · 받는 중 · 받은 뒤), 없으면 받은 item(내려가는 중).
+    /// 스토어 값만 보면 닫는 순간 nil 이 되어 내려가는 판이 텅 비었다(머리 [X] 만 남은 흰 판).
+    private var sheet: MeCakeGiftSheet {
+        if let live = store.cakeGiftSheet, live.id == item.id { return live }
+        return item
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            // 받는 중에는 [X] 를 끈다 — 결과를 모른 채 닫히면 수령이 성공해도 받은 뒤 화면 · [지금 입기]가 안 선다
+            // (스토어 `dismissCakeGiftSheet` 도 그 단계에선 닫지 않는다 — 두 겹).
             SheetHeader("", onClose: { store.dismissCakeGiftSheet() })
-            if let sheet = store.cakeGiftSheet {
-                // 내용이 화면보다 짧으면 세로 가운데(큰 시트 아래가 텅 비지 않게 — 시뮬레이터 실측), 길면(큰 글자) 스크롤.
-                GeometryReader { proxy in
-                    ScrollView {
-                        VStack(spacing: MobileTheme.space4) {
-                            switch sheet.phase {
-                            case .choosing, .claiming:
-                                choosing(sheet)
-                            case .received(let id):
-                                received(id)
-                            case .closed:
-                                closed(sheet)
-                            }
+                .disabled(sheet.phase == .claiming)
+            // 내용이 화면보다 짧으면 세로 가운데(큰 시트 아래가 텅 비지 않게 — 시뮬레이터 실측), 길면(큰 글자) 스크롤.
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: MobileTheme.space4) {
+                        switch sheet.phase {
+                        case .choosing, .claiming:
+                            choosing(sheet)
+                        case .received(let id):
+                            received(id)
+                        case .closed:
+                            closed(sheet)
                         }
-                        .padding(.horizontal, MobileTheme.sideMargin)
-                        .padding(.bottom, MobileTheme.space4)
-                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .center)
                     }
-                    .scrollBounceBehavior(.basedOnSize)
+                    .padding(.horizontal, MobileTheme.sideMargin)
+                    .padding(.bottom, MobileTheme.space4)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .center)
                 }
-                bottomBar(sheet)
+                .scrollBounceBehavior(.basedOnSize)
             }
+            bottomBar(sheet)
         }
         .background(MobileTheme.surface.ignoresSafeArea())
         .presentationDetents([.large])
         .presentationBackground(MobileTheme.surface)
         .presentationDragIndicator(.visible)
         // 받는 중에는 끌어 닫지 못한다(결과를 모른 채 닫히면 다시 열기 줄이 남았다가 다음 조회에서야 걷힌다).
-        .interactiveDismissDisabled(store.cakeGiftSheet?.phase == .claiming)
+        .interactiveDismissDisabled(sheet.phase == .claiming)
         .onAppear {
             store.cakeGiftSheetDidAppear()
             applyDemoActionIfAsked()
@@ -205,7 +215,7 @@ struct MeCakeGiftSheetView: View {
 
     /// 데모(DEBUG) 스크린샷: `me/gift/picked` 는 첫 선택지를 골라 두고, `me/gift/received` 는 골라서 받는다(픽스처 응답 — 서버에 닿지 않는다).
     private func applyDemoActionIfAsked() {
-        guard let action = MeDemoHooks.takeCakeGiftAction(), let first = store.cakeGiftSheet?.gift.options.first else { return }
+        guard let action = MeDemoHooks.takeCakeGiftAction(), let first = sheet.gift.options.first else { return }
         switch action {
         case "picked":
             store.selectCakeGiftOption(first)
@@ -262,7 +272,8 @@ struct MeCakeGiftReopenRow: View {
 
     private var button: some View {
         // 틴트 — 나 탭에는 이미 채운 버튼(주간 [받기])이 있다(채운 버튼은 화면당 하나 — 버튼 3단 규칙).
-        AingButton(CakeGiftText.reopenButton, kind: .tinted, size: .md) {
+        // [고르기]는 서버에 다시 묻고 연다(`reopenCakeGift`) — 묻는 동안 단추가 돈다(겹쳐 누르기 막기).
+        AingButton(CakeGiftText.reopenButton, kind: .tinted, size: .md, isBusy: store.cakeGiftReopening) {
             store.reopenCakeGift()
         }
     }

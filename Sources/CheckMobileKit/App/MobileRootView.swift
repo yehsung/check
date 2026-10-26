@@ -118,12 +118,21 @@ struct MobileTabsView: View {
             model.tabDidChange()
         }
         // 생일 선물 축하 시트(v0.3.66 · 폰 1.0.14) — 탭 막대 위에서 띄워 어느 탭에 있든 뜬다. 상태는 나 탭 스토어가 쥔다
-        // (`MeStoreCakeGift.swift` — 실행당 한 번 · 닫으면 나 탭 '다시 열기' 줄).
-        .sheet(item: cakeGiftSheet) { _ in
-            MeCakeGiftSheetView(store: model.me)
+        // (`MeStoreCakeGift.swift` — 실행당 한 번 · 대국 중엔 미룸 · 닫으면 나 탭 '다시 열기' 줄).
+        // ★ 내용은 **클로저가 받은 item** 으로 그린다: 닫을 때 스토어 값은 곧바로 nil 이 되지만 SwiftUI 는 내려가는 애니메이션 동안
+        //   마지막 item 을 쥐고 있다 — 스토어 값으로 그리면 내려가는 판이 텅 빈다. 떠 있는 동안의 단계 변화(받는 중 → 받은 뒤)는 뷰가
+        //   같은 선물의 스토어 값을 먼저 본다(`MeCakeGiftSheetView.sheet`).
+        .sheet(item: cakeGiftSheet) { item in
+            MeCakeGiftSheetView(store: model.me, item: item)
+        }
+        // 대국·관전 화면을 떠나 **다른 탭으로** 갔다 — 미뤄 둔 축하 시트의 다음 기회다(요청 없음). 게임 탭 안의 이동(화면이 잠깐
+        // 내려갔다 서는 것 포함)은 기다린다 — 그건 판을 떠난 것이 아니다.
+        .onChange(of: model.games.isAnyMatchScreenVisible) { _, visible in
+            if !visible, router.selectedTab != .games { model.me.presentCakeGiftIfDue() }
         }
         // 못 띄운 시트 거두기: 스토어가 시트를 세웠는데 2초 안에 화면에 안 섰으면(다른 시트 · 덮개가 떠 있어 SwiftUI 가 조용히 못 띄웠다 ·
-        // 알림 설명 시트가 떠 있다) 닫은 것으로 친다 — 그러면 나 탭 '다시 열기' 줄이 서서 수령 길이 막히지 않는다(실행당 한 번은 쓴 것이다).
+        // 알림 설명 시트가 떠 있다 · 대국 화면이 섰다) 내린다 — 그러면 나 탭 '다시 열기' 줄이 서서 수령 길이 막히지 않는다. 실행당 한 번은
+        // **화면에 선 때** 세므로(`cakeGiftSheetDidAppear`) 이렇게 내린 선물은 다음 기회(앞으로 올 때 · 탭을 옮길 때)에 다시 뜬다.
         .task(id: model.me.cakeGiftSheet?.id) {
             guard model.me.cakeGiftSheet != nil, !model.me.cakeGiftSheetOnScreen else { return }
             try? await Task.sleep(for: .seconds(2))
@@ -132,14 +141,14 @@ struct MobileTabsView: View {
         }
     }
 
-    /// 축하 시트 바인딩. **아직 화면에 서기 전에만** 알림 설명 시트(UIKit — `PushNotificationCenterAdapter`)를 피한다 — 같은 화면이 이미
-    /// 무엇을 띄우고 있으면 SwiftUI 시트는 조용히 안 뜬다. 이미 서 있으면 설명 시트가 위에 올라와도 내리지 않는다.
+    /// 축하 시트 바인딩. **아직 화면에 서기 전에만** 알림 설명 시트(UIKit — `PushNotificationCenterAdapter`)와 대국·관전 화면을 피한다 —
+    /// 같은 화면이 이미 무엇을 띄우고 있으면 SwiftUI 시트는 조용히 안 뜨고, 판 위에 뜨면 수 시계를 가린다. 이미 서 있으면 내리지 않는다.
     private var cakeGiftSheet: Binding<MeCakeGiftSheet?> {
         Binding(
             get: {
                 guard let sheet = model.me.cakeGiftSheet else { return nil }
                 if model.me.cakeGiftSheetOnScreen { return sheet }
-                guard !model.push.isPrimerPresented else { return nil }
+                guard !model.push.isPrimerPresented, !model.games.isAnyMatchScreenVisible else { return nil }
                 #if DEBUG
                 // 데모 `me/gift/dismissed`: 띄우지 않는다 — 위 거두기가 닫은 것으로 쳐 나 탭 '다시 열기' 줄이 선다(스크린샷).
                 if MeDemoHooks.cakeGiftAction() == "dismissed" { return nil }

@@ -1,0 +1,126 @@
+{
+  "ruby_balance": 120,
+  "ultra_balance": 2,
+  "ultra_price": 5,
+  "ultra_buy_max": 20,
+  "characters": [
+    {
+      "id": "fox",
+      "price": 60,
+      "owned": true,
+      "gacha_only": false,
+      "gift_only": false
+    },
+    {
+      "id": "squirrel",
+      "price": 60,
+      "owned": false,
+      "gacha_only": false,
+      "gift_only": false
+    },
+    {
+      "id": "ghost",
+      "price": 100,
+      "owned": false,
+      "gacha_only": false,
+      "gift_only": false
+    },
+    {
+      "id": "shiba",
+      "price": 100,
+      "owned": true,
+      "gacha_only": false,
+      "gift_only": false
+    },
+    {
+      "id": "jellyfish",
+      "price": 140,
+      "owned": false,
+      "gacha_only": false,
+      "gift_only": false
+    },
+    {
+      "id": "robot",
+      "price": 200,
+      "owned": false,
+      "gacha_only": false,
+      "gift_only": false
+    },
+    {
+      "id": "aing_gold",
+      "price": 1000,
+      "owned": false,
+      "gacha_only": true,
+      "gift_only": false
+    },
+    {
+      "id": "aing_rainbow",
+      "price": 1000,
+      "owned": false,
+      "gacha_only": true,
+      "gift_only": false
+    },
+    {
+      "id": "aing_cake_strawberry",
+      "price": 2000,
+      "owned": true,
+      "gacha_only": true,
+      "gift_only": true
+    },
+    {
+      "id": "aing_cake_choco",
+      "price": 2001,
+      "owned": false,
+      "gacha_only": true,
+      "gift_only": true
+    }
+  ],
+  "gacha": {
+    "price": 50,
+    "shards": 23,
+    "odds": [
+      {
+        "character_id": "aing_gold",
+        "percent": 3
+      },
+      {
+        "character_id": "aing_rainbow",
+        "percent": 2
+      },
+      {
+        "character_id": "fox",
+        "percent": 24
+      },
+      {
+        "character_id": "squirrel",
+        "percent": 24
+      },
+      {
+        "character_id": "shiba",
+        "percent": 14
+      },
+      {
+        "character_id": "ghost",
+        "percent": 14
+      },
+      {
+        "character_id": "jellyfish",
+        "percent": 11
+      },
+      {
+        "character_id": "robot",
+        "percent": 8
+      }
+    ],
+    "shard_costs": {
+      "aing_gold": 20,
+      "aing_rainbow": 20,
+      "fox": 2,
+      "squirrel": 2,
+      "shiba": 4,
+      "ghost": 4,
+      "jellyfish": 5,
+      "robot": 8
+    }
+  }
+}

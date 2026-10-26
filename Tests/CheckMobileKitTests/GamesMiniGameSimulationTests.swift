@@ -47,6 +47,11 @@ import Testing
             }
             let seconds = 0.1 * Double(advance) + 0.025 * max(0, (4 * Double(advance) - 200) / 14.0)
             return ((seconds * margin) * 10_000).rounded() / 10_000
+        case .crossy:
+            // 서버 20261027130000_minigame_crossy.sql 의 crossy 갈래(설계서 §1): 앞으로 한 칸 = hopSeconds(0.12) 에
+            // 입력 연타 여유 25% → s × 0.09. **여유 계수가 0.95 가 아니다**(위 셋과 다른 갈래 — `margin` 을 안 쓴다).
+            // 폰에는 아직 길건너가 없어(`phoneCases`) 이 갈래를 도는 시뮬은 없다 — 망라 switch 를 지키는 옮김이다.
+            return ((0.09 * Double(max(score, 0))) * 10_000).rounded() / 10_000
         }
     }
 

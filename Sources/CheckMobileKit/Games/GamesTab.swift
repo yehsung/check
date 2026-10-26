@@ -474,6 +474,8 @@ private struct GamesTileArt: View {
             case .timingBar: timing(geo.size)
             case .flappy: flappy(geo.size)
             case .tetris: tetris(geo.size)
+            // 길건너 아잉이(v0.3.67)는 폰 타일 목록(`phoneCases`)에 없어 여기 오지 않는다 — 망라 switch 를 지키는 빈 그림.
+            case .crossy: EmptyView()
             }
         }
         .accessibilityHidden(true)
@@ -616,6 +618,11 @@ private struct GamesGameIconSquare: View {
                         .frame(width: 10, height: 10)
                         .offset(y: 2)
                 }
+            case .crossy:
+                // 폰에 없음(`phoneCases`) — 기호 하나로 망라 switch 만 지킨다.
+                Image(systemName: kind.icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white)
             }
         }
         .frame(width: 30, height: 30)
@@ -628,6 +635,7 @@ private struct GamesGameIconSquare: View {
         case .timingBar: return [gamesHex(0x4B3274), gamesHex(0x8A4F74)]
         case .flappy: return [gamesHex(0x1F4A63), gamesHex(0x3C8A6C)]
         case .tetris: return [gamesHex(0x24204E), gamesHex(0x3A2A5E)]
+        case .crossy: return [gamesHex(0x2E5A2A), gamesHex(0x4F8A3C)]   // 폰에 없음(`phoneCases`)
         }
     }
 }

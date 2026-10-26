@@ -123,6 +123,9 @@ package enum GamesMiniGameText {
         switch kind {
         case .timingBar, .flappy: return "앱을 나가서 이번 판은 기록하지 않았어요"
         case .tetris: return "앱을 나가서 이번 판을 여기까지 기록했어요"
+        // 길건너 아잉이(v0.3.67)는 폰에 아직 없다(`phoneCases`) — 망라 switch 를 지키는 자리다. 폰 판이 붙으면 그 판의
+        // `endRound` 의미론(확정인가 버림인가)에 맞춰 다시 적는다.
+        case .crossy: return "앱을 나가서 이번 판은 기록하지 않았어요"
         }
     }
     /// 공개를 끈 사람(맥 설정 문구 "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요." 와 같은 뜻).
@@ -144,6 +147,7 @@ package enum GamesMiniGameText {
         // 반시계다) 그 사실을 말하는 자리가 시작 카드뿐이라, 빼면 아무도 시계 회전을 못 찾는다.
         // 홀드·즉시 내리기는 글자가 붙은 진짜 버튼이라 여기서는 어디에 있는지만 가리킨다.
         case .tetris: return kind.howToPlay + "\n끌어서 이동 · 탭해서 회전 · 버튼으로 홀드·즉시 내리기"
+        case .crossy: return kind.howToPlay   // 폰에 없음(위 endedInBackground 주석)
         }
     }
 
@@ -172,6 +176,7 @@ package enum GamesMiniGameText {
         switch kind {
         case .timingBar, .flappy: return "\(kind.title) 게임 화면 — 탭해서 조작"
         case .tetris: return "\(kind.title) 게임 화면 — 탭해서 회전 · 이동은 액션으로"
+        case .crossy: return "\(kind.title) 게임 화면"   // 폰에 없음(위 endedInBackground 주석)
         }
     }
 

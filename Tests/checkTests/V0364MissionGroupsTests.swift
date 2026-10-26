@@ -362,7 +362,8 @@ private func v0364Calls(_ host: String, _ rpc: String = "achievements_status") -
             let name = names[row.game]
             #expect(name != nil && row.title.hasPrefix(name! + " "), "'\(row.title)' 가 앱 이름 '\(name ?? "?")' 로 시작하지 않는다")
         }
-        #expect(Set(MiniGameKind.allCases.map(\.rawValue)) == ["timing_bar", "flappy", "tetris"])
+        // v0.3.67: 넷째 `crossy` — 그 일일 줄(daily_crossy)은 20261027130000 이 더한다(이 픽스처는 20261023130000 의 여섯 줄이다).
+        #expect(Set(MiniGameKind.allCases.map(\.rawValue)) == ["timing_bar", "flappy", "tetris", "crossy"])
     }
 }
 
@@ -622,9 +623,12 @@ private func v0364Calls(_ host: String, _ rpc: String = "achievements_status") -
         }
         let minigame = V0317ShopTests.stripped(try V0317ShopTests.source("WorkTimerStoreMiniGame.swift"))
         #expect(minigame.contains("if recorded { refreshAchievementsAfterGameResult(game: kind.rawValue) }"))
-        for kind in MiniGameKind.allCases {
+        // `crossy`(v0.3.67)는 뺀다 — 이 픽스처는 0.3.64 정의표(여섯 줄)의 사본이고, `daily_crossy` 는 20261027130000 이
+        // 일곱 번째로 더한다. 그 줄의 키 · 게임 · 제목 · 보상은 V0367CrossyServerContractTests 가 서버 파일에서 직접 잰다.
+        for kind in MiniGameKind.allCases where kind != .crossy {
             #expect(V0364Fixture.base.contains { $0.key == DailyMissionStatus.key(game: kind.rawValue) }, "\(kind) 원시값이 일일 미션 키가 아니다")
         }
+        #expect(DailyMissionStatus.key(game: MiniGameKind.crossy.rawValue) == "daily_crossy")
         #expect(minigame.components(separatedBy: "recorded = true").count - 1 == 1, "제출 성공이 아닌 갈래에서도 조회한다")
     }
 }

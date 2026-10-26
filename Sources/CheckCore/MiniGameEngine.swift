@@ -11,6 +11,9 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// v0.3.38. **맨 뒤에 더한다** — `allCases` 순서가 곧 맥 헤더 칩·폰 타일의 화면 순서라, 사이에 끼우면
     /// 기존 두 게임의 자리가 말없이 밀린다(사용자가 근육으로 외운 자리다).
     case tetris = "tetris"
+    /// v0.3.67 "길건너 아잉이". 테트리스와 같은 이유로 **맨 뒤**다(설계서 §1 — `allCases` 맨 뒤).
+    /// 폰에는 아직 없다(`phoneCases` 가 거른다 — 폰은 다음 판).
+    case crossy = "crossy"
 
     package var id: String { rawValue }
 
@@ -20,6 +23,7 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: "타이밍 바"
         case .flappy: "플래피 아잉"
         case .tetris: "테트리스"
+        case .crossy: "길건너 아잉이"
         }
     }
 
@@ -34,6 +38,11 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: "metronome.fill"
         case .flappy: "bird.fill"
         case .tetris: "square.grid.2x2.fill"
+        // 길건너 아잉이가 `figure.walk` 인 이유: 사람이 앞으로 걷는 실루엣이 "길을 건넌다"를 한 글자로 말하고,
+        // 다른 넷(메트로놈 · 새 · 2×2 격자 · 오목 3×3 격자)과 실루엣이 겹치지 않는다. macOS 11(2020) 에 들어온
+        // 이름이라 이 앱의 바닥(macOS 14)에서 실재한다 — 시험이 `NSImage(systemSymbolName:)` 로 확인한다.
+        // 일일 미션 줄 아이콘도 이 값이다(`DailyMissionCopy.icon(game:)` · 폰 `MeText.dailyMissionIcon`).
+        case .crossy: "figure.walk"
         }
     }
 
@@ -49,6 +58,8 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: 1000
         case .flappy: 999
         case .tetris: 100_000_000
+        // 서버 `minigame_score_cap('crossy')` 와 같은 값(설계서 §1). 엔진은 `CrossyGame.maxScore` 로 이 값을 그대로 읽는다.
+        case .crossy: 5000
         }
     }
 
@@ -62,7 +73,8 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     ///     12분이면 여유가 30 − 12 − 8.7 = 9.3분이다.
     package var roundTokenReuseSeconds: TimeInterval {
         switch self {
-        case .timingBar, .flappy: 20 * 60
+        // 길건너 아잉이는 플래피와 같다(설계서 §1) — 멈춤 벌칙이 있어 한 판이 플래피처럼 몇 분 안에 끝난다.
+        case .timingBar, .flappy, .crossy: 20 * 60
         case .tetris: 12 * 60
         }
     }
@@ -73,6 +85,7 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: "움직이는 마커가 밝은 구간에 들어올 때 멈춰 · 10라운드"
         case .flappy: "눌러서 점프 · 기둥 사이를 지나갈수록 +1"
         case .tetris: "줄을 채워 지워 · 쌓여서 꼭대기에 닿으면 끝"
+        case .crossy: "한 칸씩 뛰어 앞으로 · 차 · 강 · 기차를 피해"
         }
     }
 
@@ -85,6 +98,8 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         // 하단 스트립은 32pt 한 줄에 최고·순위와 자리를 나눠 갖는다(`.minimumScaleFactor(0.8)`) — 길면 줄어든다.
         // Z(반시계)·X(시계)·ESC(정지)는 여기 안 적는다: 화면이 받는 키 전부가 아니라 **처음 한 판에 필요한 것**만이다.
         case .tetris: "← → 이동 · ↑ 회전 · ↓ 소프트드롭 · 스페이스 하드드롭 · C 홀드"
+        // 방향키와 WASD 를 같이 받는다(자리로 — 한글 입력기에서도 같다). 클릭·스페이스는 앞으로 한 칸이다.
+        case .crossy: "↑↓←→ · WASD 로 뛰기 · 클릭·스페이스 앞으로"
         }
     }
 
@@ -96,7 +111,7 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// 소스 계약 테스트(V0338)가 이 두 파일 밖의 정적 호출을 빨갛게 만든다.
     package static let controlHint = "클릭 또는 스페이스"
 
-    /// 맥에서 고를 수 있는 게임 — 전부다. 맥 창은 셋을 다 그린다.
+    /// 맥에서 고를 수 있는 게임 — 전부다. 맥 창은 넷을 다 그린다.
     package static let macCases: [MiniGameKind] = allCases
 
     /// 폰에서 **보이는** 게임. 테트리스는 아직 목록에서 뺀다.
@@ -117,7 +132,14 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// **전부**를 알아야 한다. 폰에서 보이지 않는 것과 폰이 값을 모르는 것은 다르다 — 모르면 옛 저장값이 기본값으로
     /// 조용히 접히고, 그건 사용자가 고른 것을 잃는 일이다.
     /// (지금은 셋이 같지만 넷째 게임이 생기면 다시 갈린다 — 그때 이 자리가 다시 게이트가 된다.)
+    ///
+    /// **v0.3.67 — 넷째(`crossy`)가 생겨 다시 갈렸다.** 맥 먼저, 폰은 다음 판(사용자 결정 2026-10-27). 폰 허브 · 게임 탭 ·
+    /// 순위 칩 · 허브 요약이 전부 이 목록을 돌므로 여기서 빠지면 폰 어디에도 안 보인다. 플립 조건은 테트리스 때와 같다
+    /// (위 ①②③ — 서버 마이그레이션 실서버 확인 · `AingRoute.MiniGame` 확장 · 폰 화면·조작).
     package static let phoneCases: [MiniGameKind] = [.timingBar, .flappy, .tetris]
+
+    /// 폰에서 보이는 게임인가 — `phoneCases` 의 한 줄 판정(폰 화면이 낱낱의 kind 를 거를 때 쓰는 한 곳).
+    package var isPhoneSupported: Bool { Self.phoneCases.contains(self) }
 }
 
 /// 게임 논리 좌표계. 게임 규칙은 언제나 이 크기 안에서 계산하고, 뷰는 실제 캔버스 크기에 **비율 유지**로 맞춘다.
@@ -322,6 +344,20 @@ package struct MiniGameInput: Equatable, Sendable {
     package var rotateCounterClockwiseCount: Int = 0
     /// 홀드(C)가 올 때마다 1 증가. 조각당 1회 제한은 **엔진**이 건다(화면이 세지 않는다).
     package var holdCount: Int = 0
+
+    // ── 길건너 아잉이(v0.3.67)만 읽는 칸들 ──────────────────────────────────────────────────
+    // 테트리스 때와 같은 원칙으로 **더하는 방향으로만** 넓혔다(기존 셋의 잎 뷰는 이 칸을 안 본다).
+    // 뛰기는 누름 한 번 = 한 칸이라 전부 **카운터**다(누르고 있기는 뛰기가 아니다 — 키 반복은 모니터가 삼킨다).
+    // 방향마다 칸을 따로 둔 이유: 한 프레임 안에 ↑ 와 → 가 같이 오면 카운터 하나 + "마지막 방향" 으로는 하나가 사라진다.
+
+    /// ↑ · W 가 올 때마다 1 증가(앞으로 한 칸).
+    package var hopForwardCount: Int = 0
+    /// ↓ · S(뒤로 한 칸).
+    package var hopBackCount: Int = 0
+    /// ← · A(왼쪽 한 칸).
+    package var hopLeftCount: Int = 0
+    /// → · D(오른쪽 한 칸).
+    package var hopRightCount: Int = 0
 
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
     /// 새 인자는 전부 기본값이라 `MiniGameInput()` · `MiniGameInput(actionCount:)` 호출이 그대로 산다.

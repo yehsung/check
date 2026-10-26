@@ -188,6 +188,22 @@ enum MiniGameSpaceKey {
         }
     }
 
+    /// 길건너 아잉이(v0.3.67)의 **뛰기 키** — ↑↓←→ 와 W·A·S·D. 테트리스 표(`Stroke.key`)와 **따로** 둔다:
+    /// 같은 ↑ 가 저쪽에서는 회전이고 이쪽에서는 앞으로 한 칸이며, W·A·S·D(13·0·1·2)는 저 표에서 **반드시 nil**
+    /// 이어야 한다(아무 글자나 삼키면 다른 창의 타이핑을 훔친다 — V0338 이 그 자리를 잰다). 이 표의 글자 키는
+    /// 길건너 판이 **게임 창으로 간 키**만 받는 엄격한 게이트(`strokeBelongsToGame`) 뒤에서만 쓰인다.
+    /// 물리 키 자리(ANSI keyCode)로만 받는다 — 한글 입력 상태에서 W·A·S·D 는 'ㅈ'·'ㅁ'·'ㄴ'·'ㅇ' 으로 온다.
+    /// ↑ 126 · ↓ 125 · ← 123 · → 124 · W 13 · S 1 · A 0 · D 2.
+    static func hopDirection(forKeyCode code: UInt16) -> CrossyGame.Direction? {
+        switch code {
+        case 126, 13: return .forward
+        case 125, 1: return .back
+        case 123, 0: return .left
+        case 124, 2: return .right
+        default: return nil
+        }
+    }
+
     /// 방향·회전·홀드를 **게임이 받는가**. 스페이스(`yieldsToOtherWindow`)와 정확히 반대 방향의 게이트다.
     ///
     /// v0.3.62 에 **ESC 도 이 판정을 쓴다**(`installSpaceKey` 의 onEscape). 키 상실이 판을 끝내는 대신
@@ -232,16 +248,21 @@ enum MiniGameSpaceKey {
     /// - Parameter gameWindow: 게임 창. 다른 창으로 향한 키를 양보할지 가를 때 "게임 창이 아닌가"를 이것으로 잰다.
     /// - Parameter wantsStrokes: 지금 방향·회전·홀드를 받는가(테트리스이고 판이 도는 중이며 얼어 있지 않을 때).
     /// - Parameter onStroke: 조작 키 한 번. **뗌은 게이트와 무관하게 언제나 온다** — 아래 ★★ 참고.
+    /// - Parameter wantsHops: 지금 뛰기 키(↑↓←→ · WASD)를 받는가(길건너 아잉이이고 얼어 있지 않을 때 — v0.3.67).
+    /// - Parameter onHop: 뛰기 한 번(누름만 — 뛰기는 누름 한 번이 한 칸이라 뗌이 뜻이 없다).
     static func install(shouldConsume: @escaping @MainActor () -> Bool,
                         action: @escaping @MainActor () -> Void,
                         onEscape: @escaping @MainActor (NSWindow?) -> Bool = { _ in false },
                         gameWindow: @escaping @MainActor () -> NSWindow? = { nil },
                         wantsStrokes: @escaping @MainActor () -> Bool = { false },
-                        onStroke: @escaping @MainActor (Stroke) -> Void = { _ in }) {
+                        onStroke: @escaping @MainActor (Stroke) -> Void = { _ in },
+                        wantsHops: @escaping @MainActor () -> Bool = { false },
+                        onHop: @escaping @MainActor (CrossyGame.Direction) -> Void = { _ in }) {
         remove()
         armed = action
         armedEscape = onEscape
         armedStroke = onStroke
+        armedHop = onHop
         // `.keyUp` 이 있어야 눌림이 안 굳는다. 스페이스·ESC 는 여전히 keyDown 만 본다(아래 `!isUp` 가드).
         token = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
             let isUp = event.type == .keyUp
@@ -255,7 +276,24 @@ enum MiniGameSpaceKey {
             let isRepeat = isUp ? false : event.isARepeat
             // 창은 번호로 넘긴다 — NSEvent 를 메인 액터 클로저로 보내면 Swift 6 가 데이터 경쟁으로 막는다.
             let windowNumber = event.windowNumber
+            let hop = hopDirection(forKeyCode: keyCode)
             let consumed = MainActor.assumeIsolated { () -> Bool in
+                // ── 뛰기(길건너 아잉이 · v0.3.67) ───────────────────────────────────────────────
+                // 테트리스 가지보다 **앞**이다 — ↑↓←→ 가 두 표에 다 있어서, 길건너 판이 받는 동안에는 이쪽이 먹어야 한다
+                // (`wantsHops` 는 길건너일 때만 참이라 테트리스 판에서는 이 가지가 통째로 지나간다).
+                // 게이트는 방향 가지와 **같은 엄격한 쪽**(키가 게임 창으로 갔는가)이고, 스페이스 쪽 게이트는 안 쓴다.
+                if let hop, wantsHops() {
+                    let belongs = strokeBelongsToGame(NSApp.window(withWindowNumber: windowNumber),
+                                                      gameWindow: gameWindow())
+                    guard belongs else { return false }
+                    // 뗌은 뜻이 없다 — 게임 창으로 간 뗌만 삼킨다(누름을 삼키고 뗌을 흘리면 짝 잃은 뗌이 남의 손에 간다).
+                    if isUp { return true }
+                    guard !hasModifier else { return false }
+                    // 누르고 있기는 뛰기가 아니다(한 번 누름 = 한 칸) — OS 키 반복은 삼키기만 한다.
+                    guard !isRepeat else { return true }
+                    onHop(hop)
+                    return true
+                }
                 // ── 방향·회전·홀드(테트리스) ────────────────────────────────────────────────────
                 // 스페이스 가지보다 **앞**이지만, 이 가지 안에는 `shouldConsume` 도 양보 판정도 넣지 않는다 —
                 // 게이트가 서로 반대 방향이라 섞으면 둘 중 하나가 무너진다(소스 계약이 순서를 못 박는다).
@@ -305,6 +343,7 @@ enum MiniGameSpaceKey {
         armed = nil
         armedEscape = nil
         armedStroke = nil
+        armedHop = nil
     }
 
     /// 이 키를 **다른 창에 양보하는가**(v0.3.30). 순수 판정이라 실제 창으로 잰다.
@@ -356,6 +395,8 @@ enum MiniGameSpaceKey {
     nonisolated(unsafe) private static var armedEscape: (@MainActor (NSWindow?) -> Bool)?
     /// 같은 모니터가 쥔 조작 키 처리기(v0.3.38).
     nonisolated(unsafe) private static var armedStroke: (@MainActor (Stroke) -> Void)?
+    /// 같은 모니터가 쥔 뛰기 처리기(v0.3.67).
+    nonisolated(unsafe) private static var armedHop: (@MainActor (CrossyGame.Direction) -> Void)?
 
     #if DEBUG
     @MainActor
@@ -371,6 +412,10 @@ enum MiniGameSpaceKey {
     /// 있는가**를 이 지점으로 확인한다(`fireForTesting` 과 같은 규약).
     @MainActor
     static func fireStrokeForTesting(_ stroke: Stroke) { armedStroke?(stroke) }
+
+    /// 뛰기 발화(v0.3.67) — `fireStrokeForTesting` 과 같은 규약.
+    @MainActor
+    static func fireHopForTesting(_ direction: CrossyGame.Direction) { armedHop?(direction) }
     #endif
 }
 
@@ -521,7 +566,8 @@ struct CheckMiniGameWindowView: View {
         /// **게임이 늘면 여기서 멈춰 서서 그 게임의 `interrupt()` 를 읽어라.** 기본 가지를 두지 않는 이유다.
         static func quittingKeepsTheScore(_ kind: MiniGameKind) -> Bool {
             switch kind {
-            case .tetris, .flappy: return true
+            // 길건너 아잉이(v0.3.67)도 `interrupt()` 가 그 점수로 결과를 확정한다(CrossyGame) — 접어도 기록이 남는다.
+            case .tetris, .flappy, .crossy: return true
             case .timingBar: return false
             }
         }
@@ -801,6 +847,8 @@ struct CheckMiniGameWindowView: View {
                 FlappyGameView(host: host, input: input)
             case .tetris:
                 TetrisGameView(host: host, input: input)
+            case .crossy:
+                CrossyGameView(host: host, input: input)
             }
             if pauseState.isFrozen {
                 pauseOverlay
@@ -877,6 +925,8 @@ struct CheckMiniGameWindowView: View {
         // 그래서 "기록되지 않아요"라고 쓰면 거짓말이 된다. 숫자를 못 적는 이유는 위 주석과 같다(진행 중 점수가
         // 잎 뷰의 @State 안이고 `MiniGameHost` 에 내보내는 문이 없다).
         case .tetris: return "지금 그만두면 지금까지 쌓은 점수가 기록돼요"
+        // 길건너도 같은 의미론이다(`CrossyGame.interrupt` 가 그 점수로 확정) — 점수 = 간 가장 앞 줄.
+        case .crossy: return "지금 그만두면 지금까지 간 줄 수가 점수로 기록돼요"
         }
     }
 
@@ -921,8 +971,24 @@ struct CheckMiniGameWindowView: View {
             // 방향·회전·홀드는 **테트리스가 도는 동안에만** 받는다. 다른 게임에서 받으면 쓰지도 않을 키를
             // 삼켜 다른 창의 커서를 훔친다(얻는 것이 0 인 위험이다).
             wantsStrokes: { store.miniGameKind == .tetris && isPlaying && !pauseState.isFrozen },
-            onStroke: { handleStroke($0) }
+            onStroke: { handleStroke($0) },
+            // 뛰기 키는 **길건너 아잉이가 고른 동안만** 받는다(다른 게임에서 받으면 쓰지도 않을 키를 삼킨다).
+            // 판이 도는 중이 아니어도 받는다 — 시작 카드에서 방향키로 바로 시작한다(결과 화면의 방향키는 엔진이 무시한다).
+            // 얼어 있으면 안 받는다 — 스크림 뒤에서 판이 뛰면 정지가 아니다(그 키는 남의 창 몫으로 흘러간다).
+            wantsHops: { store.miniGameKind == .crossy && !pauseState.isFrozen },
+            onHop: { handleHop($0) }
         )
+    }
+
+    /// 모니터가 준 뛰기 한 번. 방향마다 카운터 하나 — 잎 뷰는 "늘었다"만 본다(`MiniGameInput.hop*Count`).
+    private func handleHop(_ direction: CrossyGame.Direction) {
+        guard !pauseState.isFrozen else { return }
+        switch direction {
+        case .forward: input.hopForwardCount &+= 1
+        case .back: input.hopBackCount &+= 1
+        case .left: input.hopLeftCount &+= 1
+        case .right: input.hopRightCount &+= 1
+        }
     }
 
     /// 모니터가 준 조작 키 한 번. 규칙은 `MiniGameKeyLatch`(순수)에 있고 여기는 배선뿐이다.
@@ -1330,25 +1396,36 @@ struct MiniGameGameHeader: View {
     /// [1:1 테트리스] 입구(v0.3.60). **기본값이 있는 채로 맨 끝** — 머리글을 부르는 기존 호출부(테스트 여섯 곳)가 그대로 산다.
     var onTetrisDuel: () -> Void = {}
 
+    /// 종류 칩끼리의 간격(v0.3.67 — 넷째 칩 "길건너 아잉이"가 들어오며 344pt 예산을 다시 쟀다).
+    ///
+    /// 칩이 셋일 때는 머리글 전체가 한 간격(6)이었다. 넷째 칩(아이콘 전용 ≈33pt + 간격)이 들어오고 고른 칩의 이름이
+    /// 가장 긴 "길건너 아잉이"면, 1:1 입구 묶음이 선 머리글이 **349.5pt** 로 344 를 넘었다(실측 — V0367CrossyTests 의
+    /// `headerFitsWithFourChips`). 그래서 칩끼리만 4pt 로 좁히고(테두리 있는 캡슐이라 4pt 로도 갈린다) 칩 묶음과 입구 사이
+    /// Spacer 의 최소 폭을 4 → 0 으로 내렸다(바깥 간격 6 + 6 = 12pt 가 그대로 남는다). 이름을 줄이거나 칩 여백을 깎는
+    /// 길은 고르지 않았다 — 이름은 사용자가 지었고, 아이콘 전용 칩 여백(8)은 V0338 이 못 박은 값이다.
+    static let chipSpacing: CGFloat = 4
+
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(MiniGameKind.macCases) { kind in
-                MiniGameKindChip(
-                    title: kind.title,
-                    icon: kind.icon,
-                    isSelected: kind == selected,
-                    // 게임이 셋이 되면서 "칩 셋 + [일시정지]" 가 344pt 예산을 다툰다(사용자 확정 2026-09-23:
-                    // "고른 칩만 이름, 나머지는 아이콘 전용"). 고른 칩만 이름을 다는 이유는 폭만이 아니다 —
-                    // 지금 무엇을 하고 있는지는 **한 번만** 말하면 되고, 나머지는 "다른 게임으로 가는 문"이다.
-                    showsTitle: kind == selected,
-                    // 정지 중에는 다른 게임 칩을 **푼다** — 사용자가 원한 것이 정확히 "포기하고 다른 게임 하기"다
-                    // (2026-09-10). 다른 칩을 누르면 selectMiniGame 이 토큰을 올려 판을 무효화하고 넘어간다.
-                    isEnabled: !isPlaying || isFrozen || kind == selected
-                ) {
-                    onSelect(kind)
+            HStack(spacing: Self.chipSpacing) {
+                ForEach(MiniGameKind.macCases) { kind in
+                    MiniGameKindChip(
+                        title: kind.title,
+                        icon: kind.icon,
+                        isSelected: kind == selected,
+                        // 게임이 셋이 되면서 "칩 셋 + [일시정지]" 가 344pt 예산을 다툰다(사용자 확정 2026-09-23:
+                        // "고른 칩만 이름, 나머지는 아이콘 전용"). 고른 칩만 이름을 다는 이유는 폭만이 아니다 —
+                        // 지금 무엇을 하고 있는지는 **한 번만** 말하면 되고, 나머지는 "다른 게임으로 가는 문"이다.
+                        showsTitle: kind == selected,
+                        // 정지 중에는 다른 게임 칩을 **푼다** — 사용자가 원한 것이 정확히 "포기하고 다른 게임 하기"다
+                        // (2026-09-10). 다른 칩을 누르면 selectMiniGame 이 토큰을 올려 판을 무효화하고 넘어간다.
+                        isEnabled: !isPlaying || isFrozen || kind == selected
+                    ) {
+                        onSelect(kind)
+                    }
                 }
             }
-            Spacer(minLength: 4)
+            Spacer(minLength: 0)
             if isPlaying, !isFrozen {
                 MiniGameChromeButton(title: CheckMiniGameWindowView.pauseTitle, icon: "pause.fill", tint: CheckTheme.pending) {
                     onPause()

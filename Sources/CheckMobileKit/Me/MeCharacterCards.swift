@@ -18,7 +18,7 @@ package struct MeCharacterCard: Equatable, Sendable {
     package let heicBase64: String
 }
 
-/// 나 탭의 캐릭터 카탈로그(이름·그림). **순서·기본값 규칙은 코어 `CharacterCatalog` 와 같다**: 아잉 먼저, 나머지 id 정렬.
+/// 나 탭의 캐릭터 카탈로그(이름·그림). **순서·기본값 규칙은 코어 `CharacterCatalog` 와 같다**: 내장 먼저(그 순서), 나머지 id 정렬.
 /// 서버(`shop_state`)가 이 빌드가 모르는 캐릭터를 주면 이름은 id 그대로, 그림은 없음(뷰가 자리표시를 그린다) — 맥 상점과 같은 관용.
 package enum MeCharacterCards {
     package static let aingID = CharacterCatalog.builtInAingID
@@ -31,9 +31,13 @@ package enum MeCharacterCards {
         card(id: id)?.displayName ?? id
     }
 
-    /// 이 빌드가 아는 캐릭터 id(아잉 먼저, 나머지 정렬).
+    /// 이 빌드가 아는 캐릭터 id — 코어 `CharacterCatalog.allIDs` 와 같은 순서: 내장(아잉 · 황금 · 무지개 · 딸기 케이크 · 초코 케이크)이
+    /// 그 순서로 먼저, 나머지는 정렬. (v0.3.66 전에는 "아잉 먼저, 나머지 정렬"이었다 — 금 · 무지개는 정렬로도 그 자리였지만
+    /// 케이크 둘은 정렬이면 금보다 앞이고 초코가 딸기보다 앞이라 내장 순서로 박는다.)
     package static var knownIDs: [String] {
-        [aingID] + bundled.map(\.id).filter { $0 != aingID }.sorted()
+        let ids = bundled.map(\.id)
+        let builtIns = CharacterCatalog.builtIns.map(\.id).filter(ids.contains)
+        return builtIns + ids.filter { !builtIns.contains($0) }.sorted()
     }
 
     package static func isKnown(_ id: String) -> Bool {

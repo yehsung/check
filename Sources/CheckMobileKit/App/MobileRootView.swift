@@ -117,6 +117,39 @@ struct MobileTabsView: View {
         .onChange(of: router.selectedTab) { _, _ in
             model.tabDidChange()
         }
+        // 생일 선물 축하 시트(v0.3.66 · 폰 1.0.14) — 탭 막대 위에서 띄워 어느 탭에 있든 뜬다. 상태는 나 탭 스토어가 쥔다
+        // (`MeStoreCakeGift.swift` — 실행당 한 번 · 닫으면 나 탭 '다시 열기' 줄).
+        .sheet(item: cakeGiftSheet) { _ in
+            MeCakeGiftSheetView(store: model.me)
+        }
+        // 못 띄운 시트 거두기: 스토어가 시트를 세웠는데 2초 안에 화면에 안 섰으면(다른 시트 · 덮개가 떠 있어 SwiftUI 가 조용히 못 띄웠다 ·
+        // 알림 설명 시트가 떠 있다) 닫은 것으로 친다 — 그러면 나 탭 '다시 열기' 줄이 서서 수령 길이 막히지 않는다(실행당 한 번은 쓴 것이다).
+        .task(id: model.me.cakeGiftSheet?.id) {
+            guard model.me.cakeGiftSheet != nil, !model.me.cakeGiftSheetOnScreen else { return }
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, model.me.cakeGiftSheet != nil, !model.me.cakeGiftSheetOnScreen else { return }
+            model.me.dismissCakeGiftSheet()
+        }
+    }
+
+    /// 축하 시트 바인딩. **아직 화면에 서기 전에만** 알림 설명 시트(UIKit — `PushNotificationCenterAdapter`)를 피한다 — 같은 화면이 이미
+    /// 무엇을 띄우고 있으면 SwiftUI 시트는 조용히 안 뜬다. 이미 서 있으면 설명 시트가 위에 올라와도 내리지 않는다.
+    private var cakeGiftSheet: Binding<MeCakeGiftSheet?> {
+        Binding(
+            get: {
+                guard let sheet = model.me.cakeGiftSheet else { return nil }
+                if model.me.cakeGiftSheetOnScreen { return sheet }
+                guard !model.push.isPrimerPresented else { return nil }
+                #if DEBUG
+                // 데모 `me/gift/dismissed`: 띄우지 않는다 — 위 거두기가 닫은 것으로 쳐 나 탭 '다시 열기' 줄이 선다(스크린샷).
+                if MeDemoHooks.cakeGiftAction() == "dismissed" { return nil }
+                #endif
+                return sheet
+            },
+            set: { value in
+                if value == nil { model.me.dismissCakeGiftSheet() }
+            }
+        )
     }
 
     /// '나' 탭 이름 + 초상 기호. 착용 캐릭터·근무 상태·화면 모드가 바뀌면 이 본문이 다시 돌아 새 이미지를 받는다

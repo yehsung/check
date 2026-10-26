@@ -66,14 +66,19 @@ package enum MobileDemo {
         // 상점 뽑기 시트 장면(`me/shop/odds` · `me/shop/exchange`)은 **라우트를 상점으로 바꿔** 푼다 — 그러면 아래 장면 이름도
         // `me-shop` 으로 제대로 풀린다(바꾸지 않으면 장면이 `me-shop-odds` 가 되어 픽스처가 하나도 안 닿는다).
         // 열어 둘 시트 이름은 `MeDemoHooks.gachaAction()` 이 같은 값에서 따로 읽는다(까닭은 그 값의 머리말에).
-        let route = MobileDemoShopSheetRoute(demoRoute: requested)?.openRoute ?? requested
+        // 생일 선물 축하 시트 장면(`me/gift…`)도 **라우트를 나 탭으로 바꿔** 푼다(장면 `me` — 기존 장면만 쓴다). 열린 선물은 바늘로 고른다
+        // (아래 스텁 응답기 — 까닭은 `MobileDemoCakeGiftRoute` 머리말), 시트에 시킬 일은 `MeDemoHooks.cakeGiftAction()` 이 읽는다.
+        let cakeGift = MobileDemoCakeGiftRoute(demoRoute: requested)
+        let route = cakeGift?.openRoute ?? MobileDemoShopSheetRoute(demoRoute: requested)?.openRoute ?? requested
         let scenario = route.replacingOccurrences(of: "/", with: "-").lowercased()
         let index = MobileDemoFixtures.load()
         // 도전 미션 · 주간 받기 장면(`me/missions…` · `me/weekly…`)은 **기존 장면 + 픽스처 바늘**로 푼다.
         // 새 장면 폴더를 만들지 않는 까닭과 바늘을 본문 꼬리에 붙이는 까닭은 `MobileDemoMissionsRoute` 머리말에 있다.
         let missions = MobileDemoMissionsRoute(demoRoute: route)
-        MobileStubURLProtocol.register(host: host) { request in
-            index.response(for: missions?.rewrite(request) ?? request, scenario: missions?.scene ?? scenario)
+        MobileStubURLProtocol.register(host: host) { raw in
+            // 선물 장면이면 바늘(`demo-gift`)을 먼저 붙인다 — 그 뒤는 다른 장면과 같은 길이다.
+            let request = cakeGift?.rewrite(raw) ?? raw
+            return index.response(for: missions?.rewrite(request) ?? request, scenario: missions?.scene ?? scenario)
         }
 
         let storage = AingSharedStorage.temporary(name: "demo")

@@ -99,7 +99,8 @@ struct MeRainbowProtocolTests {
         let known = AingCharacterArt.knownIDs
         let derived = ShopWire.protocolVersion(drawableCharacterIDs: known)
         let expectsRainbow = Self.rainbowPortraitsExist && Self.goldPortraitsExist && Self.robotPortraitExists
-        #expect((derived == ShopWire.rainbowProtocol) == expectsRainbow,
+        // 1.0.14 부터 번들은 케이크 둘까지 그려 **4** 를 말한다(`MeCakeGiftTests`) — 번호는 누적이라 "3 이상"이 무지개의 문턱이다.
+        #expect((derived >= ShopWire.rainbowProtocol) == expectsRainbow,
                 Comment(rawValue: "무지개 초상 \(Self.rainbowPortraitsExist) · 금 \(Self.goldPortraitsExist) · robot \(Self.robotPortraitExists)"
                         + " · 목록 \(known) → \(derived)"
                         + (Self.rainbowPortraitsExist && !known.contains(ShopWire.rainbowCharacterID)
@@ -325,7 +326,8 @@ struct MeRainbowProtocolTests {
         let list = try #require(harness.requests(rpc: "shop_state").last?.jsonBody)
         let sent = list["p_protocol"] as? Int ?? ShopWire.legacyProtocol
         let expectsRainbow = Self.rainbowPortraitsExist && Self.goldPortraitsExist && Self.robotPortraitExists
-        #expect((sent == ShopWire.rainbowProtocol) == expectsRainbow,
+        // 1.0.14 번들은 4(케이크 둘까지)다 — 무지개의 문턱은 "3 이상"이다(번호는 누적).
+        #expect((sent >= ShopWire.rainbowProtocol) == expectsRainbow,
                 Comment(rawValue: "본문 \(list) · 무지개 초상 \(Self.rainbowPortraitsExist)"))
         // 위험한 방향: 무지개 초상이 없는 폰은 절대 3 을 보내지 않는다(아잉 그림의 '무지개 아잉이'를 뽑게 된다).
         if !Self.rainbowPortraitsExist { #expect(sent < ShopWire.rainbowProtocol) }

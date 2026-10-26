@@ -1069,8 +1069,14 @@ struct V0367CrossyStoreTests {
         let clearSettle = try #require(clear.range(of: "settleMiniGameLiveRound()"), "로그아웃이 판을 안 접는다")
         let sessionNil = try #require(clear.range(of: "session = nil"))
         #expect(clearSettle.lowerBound < sessionNil.lowerBound, "세션을 지운 뒤에 접는다 — 인편을 못 적는다")
-        for file in ["MiniGameFlappy.swift", "MiniGameTetris.swift", "MiniGameCrossy.swift"] {
-            #expect(cgStrip(try cgSource(file)).contains("host.onScoreChanged(score)"), "\(file) 이 진행 중 점수를 안 알린다")
+        // 플래피·테트리스는 쪼갠 파일이다 — 조각을 이어 읽는다(반쪽 읽기 금지, CheckCoreSourceLayoutTests).
+        let games: [(String, String)] = [
+            ("플래피", try CheckCoreSourceLayout.joinedSplitSource("MiniGameFlappy.swift")),
+            ("테트리스", try CheckCoreSourceLayout.joinedSplitSource("MiniGameTetris.swift")),
+            ("길건너", try CheckCoreSourceLayout.joinedSplitSource("MiniGameCrossy.swift")),
+        ]
+        for (game, source) in games {
+            #expect(cgStrip(source).contains("host.onScoreChanged(score)"), "\(game) 화면이 진행 중 점수를 안 알린다")
         }
     }
 

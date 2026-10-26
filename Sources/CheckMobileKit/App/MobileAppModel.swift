@@ -184,9 +184,12 @@ public final class MobileAppModel {
     package var badges: MobileBadges { links.badges }
 
     /// 탭을 바꿨을 때(탭 막대). 캐릭터 한 표만 60초 스로틀로 다시 묻는다 — 탭 스토어의 갱신은 각 탭 화면이 스스로 한다.
+    /// 대국·관전 화면 때문에 미뤄 둔 생일 선물 축하 시트도 이때 띄운다(요청 없음 — 이미 아는 선물만, `MeStore.presentCakeGiftIfDue`).
+    /// 게임 탭으로 **들어갈** 때는 띄우지 않는다 — 그 탭의 대국 화면은 아직 안 섰을 뿐 곧 선다(덮으면 진다).
     package func tabDidChange() {
         guard session.isSignedIn else { return }
         characters.refreshIfStale()
+        if router.selectedTab != .games { me.presentCakeGiftIfDue() }
     }
 
     // MARK: - 시작 · scenePhase · URL

@@ -199,7 +199,8 @@ struct MeShopView: View {
 
     private func shopTile(_ id: String, onGachaOnly: @escaping () -> Void) -> some View {
         let owned = store.isOwned(id)
-        let picked = store.shopSelection == id
+        // 생일 선물 전용 잠긴 칸을 누르면 그 칸이 '고름' 틴트를 받는다 — 아래 막대가 그 칸의 이름과 얻는 길을 말한다(사지는 않는다).
+        let picked = store.shopSelection == id || store.shopGiftHintID == id
         let equipped = store.equippedLoaded && store.equippedCharacterID == id
         let name = MeCharacterName.display(id)
         let status: MeCharacterTile.Status
@@ -235,20 +236,24 @@ struct MeShopView: View {
 
     private var purchaseBar: some View {
         let selection = store.shopSelection
+        // 생일 선물 전용 잠긴 칸(케이크 아잉이)을 골랐으면 막대는 **그 칸의 이름 + 얻는 길**만 말한다 — 사기 단추를 세우지 않는다.
+        // 예전엔 고른 것이 없는 막대("살 것을 골라 주세요" + 흐린 '사기')가 그대로 남아 살 수 있는 것처럼 보였다(증거 shop-locked.png).
+        let giftHint = selection == nil ? store.shopGiftHintID : nil
+        let lead = selection ?? giftHint
         return VStack(spacing: 0) {
             Rectangle()
                 .fill(MobileTheme.separator)
                 .frame(height: MobileTheme.hairline)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: MobileTheme.space3) {
-                    barLead(selection: selection)
+                    barLead(selection: lead)
                     Spacer(minLength: MobileTheme.space2)
-                    buyButton(selection: selection)
+                    if giftHint == nil { buyButton(selection: selection) }
                 }
                 // 긴 안내(예: 황금 아잉이를 얻는 길)로 두 줄 모양이 되면 왼쪽에 붙인다 — 폭을 안 채우면 가운데로 떠 보인다(시뮬레이터 실측).
                 VStack(alignment: .leading, spacing: 10) {
-                    barLead(selection: selection)
-                    buyButton(selection: selection)
+                    barLead(selection: lead)
+                    if giftHint == nil { buyButton(selection: selection) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

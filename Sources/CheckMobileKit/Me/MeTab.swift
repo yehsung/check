@@ -57,6 +57,9 @@ struct MeHomeView: View {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
                     MeStageCard(store: store)
                         .id(MeAnchor.header)
+                    // v0.3.66 생일 선물 '다시 열기' 줄 — 축하 시트를 고르지 않고 닫았으면 **수령할 때까지** 무대 바로 아래에 선다
+                    // (열린 선물이 없거나 시트가 떠 있으면 아무것도 그리지 않는다).
+                    MeCakeGiftReopenRow(store: store)
                     // v0.3.55 「이번 주 근무」 보상 카드 — 루비 칩 바로 아래(루비가 어디서 오는지 옆에서 보인다). 범위는 '이번 주'라
                     // 「지난주」 카드 **앞**이 맞다(지금 → 지난주 → 12주 순으로 넓어진다). 서버에 함수가 없으면 통째로 빠진다.
                     MeWeeklyWorkCard(store: store)
@@ -442,6 +445,24 @@ enum MeDemoHooks {
         guard !gachaActionTaken else { return nil }
         guard let action = gachaAction() else { return nil }
         gachaActionTaken = true
+        return action
+    }
+
+    /// 생일 선물 축하 시트 장면(`me/gift/picked|received|dismissed` — `MobileDemoCakeGiftRoute`)이 시트에 시킬 일. Release 는 nil.
+    static func cakeGiftAction() -> String? {
+        #if DEBUG
+        return argument("-AingCheckDemoRoute").flatMap { MobileDemoCakeGiftRoute(demoRoute: $0)?.action }
+        #else
+        return nil
+        #endif
+    }
+
+    private static var cakeGiftActionTaken = false
+
+    /// `cakeGiftAction()` 을 **한 번만** 내준다 — 받은 뒤 시트를 닫았다 다시 열 때 또 고르거나 받지 않게.
+    static func takeCakeGiftAction() -> String? {
+        guard !cakeGiftActionTaken, let action = cakeGiftAction() else { return nil }
+        cakeGiftActionTaken = true
         return action
     }
 

@@ -130,6 +130,21 @@ package final class MeStore {
     /// 사용자 동작 한 번 = request_id 하나(결과를 모르는 실패 뒤 다시 누르면 같은 id — 서버가 처음 결과를 `replayed` 로 돌려준다).
     @ObservationIgnored package internal(set) var gachaRequestIDs = GachaRequestIDs()
 
+    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66 · 폰 1.0.14 — MeStoreCakeGift.swift)
+    /// 서버가 말한 **열린** 생일 선물(`character_gift_pending`). nil = 없음이거나 아직 모름 — 못 읽었으면 지난 값을 둔다.
+    /// 이 값이 있고 시트가 닫혀 있으면 나 탭에 '다시 열기' 줄이 선다(수령할 때까지).
+    package internal(set) var cakeGift: CharacterGiftOffer?
+    /// 떠 있는 축하 시트(nil = 닫힘). 탭 막대 위에서 띄운다(`MobileTabsView`).
+    package internal(set) var cakeGiftSheet: MeCakeGiftSheet?
+    /// 시트가 **실제로 화면에 서 있는가**(시트 뷰의 onAppear/onDisappear 가 적는다). 스토어가 시트를 세워도 다른 시트가 떠 있으면
+    /// SwiftUI 가 조용히 못 띄운다 — 탭 막대가 이 값으로 그 경우를 가려 닫은 것으로 친다(`MobileTabsView`).
+    package internal(set) var cakeGiftSheetOnScreen = false
+    /// 마지막으로 선물을 **물으러 떠난** 시각(10분 스로틀 — `cakeGiftCheckInterval`). 계정이 바뀌면 비운다.
+    @ObservationIgnored package internal(set) var cakeGiftCheckedAt: Date?
+    @ObservationIgnored var cakeGiftLoading = false
+    /// 이 실행에서 스스로 띄운 선물 id — **실행당 한 번**. 로그아웃(`reset`)에도 비우지 않는다(같은 실행에서 같은 선물을 두 번 띄우지 않는다).
+    @ObservationIgnored package internal(set) var cakeGiftAutoShownIDs: Set<String> = []
+
     // MARK: 이번 주 근무 보상 (v0.3.55 · 폰 1.0.8(19) — MeStoreWeeklyWork.swift)
     /// 서버 `weekly_work_status()` 의 마지막 **그릴 만한** 응답(CheckCore 모델 — 맥과 한 벌). nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
     package internal(set) var weeklyWork: WeeklyWorkStatus?
@@ -256,6 +271,9 @@ package final class MeStore {
         // 사람)에게만 영영 안 선다. 받기 전에 루비가 안 움직이는 것은 여전히 사실이지만, 이제 화면 밖에서 알아 둘 값이
         // **배지 숫자**로 생겼다.
         refreshAchievementsIfStale()
+        // 생일 선물(v0.3.66)도 탭과 무관하게 앞에 올 때마다 — 단 **10분에 한 번 이하**(`cakeGiftCheckInterval`). 열린 선물이면
+        // 축하 시트가 실행당 한 번 스스로 뜬다(어느 탭에 있든 — 시트는 탭 막대 위에서 띄운다).
+        refreshCakeGiftIfStale()
         guard isTabVisible else { return }
         refreshRootIfStale()
     }
@@ -307,6 +325,14 @@ package final class MeStore {
         exchangeNotice = nil
         isExchangeNoticeError = false
         gachaRequestIDs.reset()
+        // 생일 선물도 계정에 묶인다 — 안 비우면 다음 계정 나 탭에 앞 사람의 '다시 열기' 줄이 서고, 그 시트에서 앞 사람의 선물 id 로
+        // 수령을 부른다(서버는 not_found 로 막지만 화면이 거짓말을 한다). 스로틀 도장도 비워 새 계정은 곧바로 묻는다.
+        // 스스로 띄운 기록(`cakeGiftAutoShownIDs`)은 **실행** 단위라 그대로 둔다.
+        cakeGift = nil
+        cakeGiftSheet = nil
+        cakeGiftSheetOnScreen = false
+        cakeGiftCheckedAt = nil
+        cakeGiftLoading = false
         // 주간 보상도 계정에 묶인다 — 안 비우면 다음 계정 카드에 앞 사람의 근무 시간·받은 칸·'받았어요'가 선다.
         // 계정별 '본 칸' 저장값(defaults)은 키가 계정별이라 그대로 둔다.
         weeklyWork = nil

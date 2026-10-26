@@ -25,7 +25,7 @@ import Testing
 //      루비·조각이 상점 값과 어긋나지 않는다 · 교환은 바늘(`@aing_rainbow`)로 무지개 줄에 닿는다.
 //   §5 `app_user_characters`: 무지개 착용자가 **한 명 이상** 있고 그 값이 정확히 `aing_rainbow` 다(공백·대소문자 섞임 없음) ·
 //      초상을 그릴 수 있는 빌드에서는 **이니셜로 접히지 않는다**.
-//   §6 카드 그림이 9장이고 무지개 카드의 픽셀 크기가 0이 아니다(1.0.9 는 8장이었고 무지개 착용자가 이니셜로 떨어졌다).
+//   §6 카드 그림이 11장(1.0.14 케이크 둘 포함)이고 무지개 카드의 픽셀 크기가 0이 아니다(1.0.9 는 8장이었고 무지개 착용자가 이니셜로 떨어졌다).
 //
 // ── 닿는 길(데모 라우트) ──
 //   me                                      나 탭 — 캐릭터 카드 · 상점 카드(장면 `_me`)
@@ -351,9 +351,9 @@ import Testing
 
     // MARK: - §6 카드 그림
 
-    @Test("카드 그림: 아홉 장이고 무지개 카드의 픽셀 크기가 0이 아니다")
+    @Test("카드 그림: 열한 장이고(1.0.14 케이크 둘을 더해) 무지개 카드의 픽셀 크기가 0이 아니다")
     func rainbowCardIsBaked() throws {
-        #expect(MeCharacterCards.bundled.count == 9, "카드가 \(MeCharacterCards.bundled.count)장이다(무지개를 더해 9장)")
+        #expect(MeCharacterCards.bundled.count == 11, "카드가 \(MeCharacterCards.bundled.count)장이다(무지개 9장 + 케이크 둘 = 11장)")
         #expect(MeCharacterCards.knownIDs.contains(Self.rainbowID), "카드 표가 무지개를 모른다")
         let card = try #require(MeCharacterCards.card(id: Self.rainbowID), "무지개 카드가 없다")
         #expect(card.displayName == "무지개 아잉이")

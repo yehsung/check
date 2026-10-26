@@ -41,10 +41,13 @@ package enum CharacterTabIcon {
             circle.fill()
             context.cgContext.saveGState()
             circle.addClip()
-            let artSide = inner.width * 0.88
+            // 케이크 아잉이는 아바타 틀로 얼굴 크기를 다른 아잉 변형과 맞춘다(`AingCharacterArt.avatarFraming` — `CharacterPortrait` 와 같은 기하).
+            let base = inner.width * 0.88
+            let framing = AingCharacterArt.avatarFraming(id: resolved)
+            let artSide = base * framing.scale
             UIImage(cgImage: art).draw(in: CGRect(
                 x: inner.midX - artSide / 2,
-                y: inner.midY - artSide / 2 + inner.height * 0.05,
+                y: inner.midY - artSide / 2 + inner.height * 0.05 + base * framing.offsetY,
                 width: artSide,
                 height: artSide
             ))

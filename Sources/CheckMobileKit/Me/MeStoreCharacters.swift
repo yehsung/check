@@ -11,10 +11,10 @@ import Foundation
 extension MeStore {
     // MARK: 능력 번호
 
-    /// 상점 RPC 에 싣는 능력 번호(v0.3.43 로봇 1 · v0.3.54 금 2 · v0.3.59 무지개 **3**). 파생 자리는 여기 하나다 —
+    /// 상점 RPC 에 싣는 능력 번호(v0.3.43 로봇 1 · v0.3.54 금 2 · v0.3.59 무지개 3 · v0.3.66 케이크 **4**). 파생 자리는 여기 하나다 —
     /// 목록과 구매가 **같은 번호**로 가야 한다(목록만 가리고 구매를 열어 두면 게이트가 장식이다 — B12). 재료와
-    /// "숫자를 박지 않는" 근거는 `MeStore.drawableCharacterIDs` 주석에 있다. 번호가 3 이어야 서버가 무지개 행을 보낸다
-    /// (`MeRainbowProtocolTests` 가 번들 ⟺ 3 을 양방향으로 잰다).
+    /// "숫자를 박지 않는" 근거는 `MeStore.drawableCharacterIDs` 주석에 있다. 번호가 3 이상이어야 서버가 무지개 행을, 4 여야 케이크 행과
+    /// 생일 선물을 보낸다(`MeRainbowProtocolTests` · `MeCakeGiftTests` 가 번들 ⟺ 번호를 양방향으로 잰다).
     package var shopProtocolVersion: Int {
         ShopWire.protocolVersion(drawableCharacterIDs: drawableCharacterIDs)
     }
@@ -129,12 +129,31 @@ extension MeStore {
     ///
     /// 뽑기 전용(황금 · 무지개 아잉이)은 **서버 상점이 그 캐릭터를 말했거나 내가 가졌을 때만** 선다 — 뽑기가 아직 없는 서버(db push 전 ·
     /// 옛 서버)에서 얻을 길이 없는 "뽑기 전용" 타일이 서지 않게. 상점을 아직 못 읽었으면 막지 않는다(다른 캐릭터와 같은 관용).
+    ///
+    /// 생일 선물 전용(케이크 아잉이 둘 — v0.3.66)은 **가진 사람에게만** 선다(조정자 결정 · 맥 `WorkTimerStore.isCharacterListed` 와 같은 규칙).
+    /// 안 가진 사람의 '생일 선물 전용' 잠긴 칸은 상점 격자에만 선다. 상점을 아직 못 읽어도 관용이 없다 — 지금 입고 있으면(착용값을 안다)
+    /// 가진 것이므로 그때는 선다(상점보다 착용 조회가 먼저 도착한 창에서 입은 캐릭터가 목록에 없지 않게).
     package var pickerIDs: [String] {
         var ids = MeCharacterCards.knownIDs.filter { id in
-            !shopState.hasLoaded || !isGachaOnly(id) || isOwned(id) || shopCharacters.contains { $0.id == id }
+            if isGiftOnly(id) { return isOwned(id) || isWearing(id) }
+            return !shopState.hasLoaded || !isGachaOnly(id) || isOwned(id) || shopCharacters.contains { $0.id == id }
         }
-        for row in shopCharacters where !ids.contains(row.id) { ids.append(row.id) }
+        for row in shopCharacters where !ids.contains(row.id) {
+            if row.isGiftOnly, !(isOwned(row.id) || isWearing(row.id)) { continue }
+            ids.append(row.id)
+        }
         return ids
+    }
+
+    /// 지금 입고 있는가(착용값을 알 때만).
+    package func isWearing(_ id: String) -> Bool {
+        equippedLoaded && equippedCharacterID == id
+    }
+
+    /// 생일 선물로만 얻는 캐릭터인가(케이크 아잉이 둘 — **내장 id 는 표식과 무관하게 언제나**, 그 밖은 서버 `gift_only` 표식).
+    /// 판정은 코어 한 곳(`CharacterCatalog.isGiftOnlyBuiltIn` · `ShopCharacterRow.isGiftOnly`)에서 가져온다.
+    package func isGiftOnly(_ id: String) -> Bool {
+        CharacterCatalog.isGiftOnlyBuiltIn(id) || shopCharacters.first { $0.id == id }?.isGiftOnly == true
     }
 
     package func isOwned(_ id: String) -> Bool {
@@ -176,6 +195,12 @@ extension MeStore {
         if isOwned(id) {
             shopSelection = nil
             shopNotice = MeText.alreadyOwned
+            return
+        }
+        // 생일 선물 전용(케이크 아잉이)은 사는 줄도 뽑는 줄도 아니다 — 고르지 않고 얻는 길을 말한다(잠긴 칸 안내).
+        if isGiftOnly(id) {
+            shopSelection = nil
+            shopNotice = CakeGiftText.lockedHint
             return
         }
         // 뽑기 전용은 사는 줄이 아니다 — 고르지 않고 얻는 길(뽑기 · 조각 교환)을 말한다. 화면은 이 안내와 함께 뽑기 카드로 올라간다.
@@ -272,10 +297,15 @@ extension MeStore {
         guard savingCharacterID == nil, context.session.isSignedIn else { return }
         guard isUnlocked(id) else {
             // 뽑기 전용(황금 · 무지개 아잉이)에게 "상점에서 살 수 있어요"는 거짓이다 — 얻는 길을 그대로 말한다.
+            // 생일 선물 전용(케이크)에게는 둘 다 거짓이다 — 잠긴 칸 안내 그대로.
             let name = MeCharacterCards.displayName(for: id)
-            characterNotice = isGachaOnly(id)
-                ? MeText.lockedGachaCharacter(name, shardCost: gachaShardCost(of: id))
-                : MeText.lockedCharacter(name)
+            if isGiftOnly(id) {
+                characterNotice = CakeGiftText.lockedHint
+            } else {
+                characterNotice = isGachaOnly(id)
+                    ? MeText.lockedGachaCharacter(name, shardCost: gachaShardCost(of: id))
+                    : MeText.lockedCharacter(name)
+            }
             isCharacterNoticeError = false
             return
         }
@@ -309,7 +339,8 @@ extension MeStore {
                 case "not_owned":
                     // 다른 기기에서 환불·운영자 정리 등으로 소유가 사라졌다 — 상점 상태를 다시 읽어 화면을 사실에 맞춘다.
                     self.ownedCharacterIDs.remove(id)
-                    self.characterNotice = self.isGachaOnly(id) ? MeText.gachaCharacterNotOwned : MeText.characterNotOwned
+                    self.characterNotice = self.isGiftOnly(id) ? CakeGiftText.lockedHint
+                        : (self.isGachaOnly(id) ? MeText.gachaCharacterNotOwned : MeText.characterNotOwned)
                     self.isCharacterNoticeError = true
                     needsReread = !self.equippedLoaded
                     await self.loadShop()

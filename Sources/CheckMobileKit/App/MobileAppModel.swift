@@ -174,6 +174,15 @@ public final class MobileAppModel {
         links.me = me
         // 표가 바뀌면 위젯 근무 중 얼굴도 다시 쓴다(지금 탭이 위젯의 유일한 작성자 — 같은 값이면 쓰기 창구가 건너뛴다).
         characters.onDirectoryChange = { [weak now] in now?.writeWidgetSnapshot() }
+        // 일일 미션(v0.3.64) — **1:1 판이 끝난 것을 처음 보는 자리**가 여기다(코어 스토어가 `match` 가 끝으로 바뀐 그 자리에서
+        // 부른다 — `GomokuStore.matchJustFinished` 계열). 그 순간 미션 진행을 **한 번** 묻는다: 새 타이머도 새 주기 RPC 도 없고,
+        // 오늘 그 게임 줄을 이미 채웠으면 요청 0건이다(`MeStore.refreshAchievementsAfterGameResult`).
+        // 게임 이름은 **서버 `daily_mission_defs()` 의 game 값**이다 — 1:1 테트리스는 `tetris_duel`(솔로 `tetris` 가 아니다).
+        // 맥의 같은 세 줄은 `WorkTimerStore.wireGomoku` 에 있다. 빠지면 "판을 했는데 [받기]가 안 뜬다"가 되고,
+        // 뷰가 아니라 배선이라 **화면만 보는 테스트로는 안 잡힌다** — 못: `Tests/CheckMobileKitTests/MeDailyMissionStoreTests.swift`.
+        gomoku.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "gomoku") }
+        chess.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "chess") }
+        tetris.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }

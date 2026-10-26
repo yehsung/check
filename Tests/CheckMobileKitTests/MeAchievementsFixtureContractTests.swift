@@ -78,8 +78,12 @@ import Testing
 
     /// 서버 칸 이름 — `achievements__status` · `achievement_claim` · `weekly_work__status` · `weekly_work_claim` 의 jsonb 그대로.
     enum Keys {
+        /// ★ `daily`(v0.3.64 — 일일 미션)는 **최상위 칸이 하나 더해진 것**이다(기존 칸과 그 뜻은 한 글자도 안 바뀐다).
+        /// 여기 더한 까닭: 이 집합은 **정확히 같아야** 하므로 픽스처에 `daily` 를 넣으면 여덟 장 전부가 빨개진다 —
+        /// 그래서 픽스처와 이 줄을 **같이** 고친다(관전자 수 때는 이 못을 피해 가느라 데모에서 수가 늘 0 이었다).
+        /// `daily` 안의 칸 · 값은 `MeDailyMissionViewTests` 가 잰다(그 절의 소유다).
         static let status: Set<String> = ["launch_at_ms", "missions", "claimable_count", "claimable_ruby",
-                                          "ruby_balance", "server_now_ms"]
+                                          "ruby_balance", "server_now_ms", "daily"]
         static let mission: Set<String> = ["key", "series", "tier", "title", "detail", "reward", "target", "progress",
                                           "achieved", "claimed", "achieved_at_ms", "claimed_at_ms", "sort"]
         static let claim: Set<String> = ["key", "title", "reward"]
@@ -586,12 +590,35 @@ import Testing
         let value = try Self.strippedSource("Sources/CheckMobileKit/Demo/MobileDemoMissionsRoute.swift")
         #expect(value.contains("package struct MobileDemoMissionsRoute"), "값 타입이 그 파일에 없다 — 경로가 틀렸다")
 
-        // ★ 그리고 **쓰는 자리가 Demo/ 밖에 없다**(Demo/ 의 파일은 통째로 DEBUG 다 — 위에서 쟀다).
-        // 한 자리라도 밖으로 나가면 Release 바이너리에 `MobileDemoMissionsRoute` 가 남아 출시 게이트가 막는다.
+        // ★ 그리고 **쓰는 자리가 정확히 셋**이다 — 값 자신 · 데모 조립(장면·바늘·라우트 바꿔치기) ·
+        // 화면을 여는 자리(`MeDemoHooks.initialDestination()` 의 `#if DEBUG` 훅). 넷째가 생기면 그 자리가
+        // `#if DEBUG` 안인지 사람이 봐야 한다 — 밖으로 나가면 Release 바이너리에 `MobileDemoMissionsRoute` 가
+        // 남아 출시 게이트의 금지 심볼 `MobileDemo` 가 아카이브를 막는다(1.0.6 build 16 에서 실제로 막혔다).
+        //
+        // v1.0.13 에 `MeTab.swift` 가 셋째로 들어왔다: 주간 카드·도전 미션 절이 루트에서 미션 화면으로 가면서
+        // 데모 라우트(`me/missions…` · `me/weekly…`)도 그 화면을 열어야 했고, **라우트 글자와 화면 깃발을 손으로
+        // 맞추지 않으려고** 판정(`opensMissionsPage(route:)`)을 이 Demo 파일에 두고 `MeDemoHooks` 의 `#if DEBUG`
+        // 훅이 그것을 부른다(상점 시트 라우트와 같은 관용구 — `MeDemoShopSheetRouteTests` 의 같은 단언 참고).
         let users = try Self.files(containing: "MobileDemoMissionsRoute", under: "Sources")
         #expect(users == ["Sources/CheckMobileKit/Demo/MobileDemo.swift",
-                          "Sources/CheckMobileKit/Demo/MobileDemoMissionsRoute.swift"],
-                "데모 미션 값을 Demo/ 밖에서 쓴다(Release 에 이름이 남는다): \(users)")
+                          "Sources/CheckMobileKit/Demo/MobileDemoMissionsRoute.swift",
+                          "Sources/CheckMobileKit/Me/MeTab.swift"],
+                "데모 미션 값을 쓰는 자리가 셋이 아니다(Release 에 이름이 남을 수 있다): \(users)")
+        // 그 셋째 자리는 **`#if DEBUG` 안**이어야 한다 — `MeTab.swift` 는 파일 통째가 DEBUG 가 아니라(화면이다)
+        // 위 루프처럼 파일 머리·꼬리로는 못 잰다. 그래서 그 훅이 `initialDestination()` 의 DEBUG 갈래 **안**에
+        // 있는지를 자리로 잰다(Release 갈래로 새면 바이너리에 이름이 남아 출시 게이트가 아카이브를 막는다).
+        let tab = try Self.strippedSource("Sources/CheckMobileKit/Me/MeTab.swift")
+        let declaration = try #require(tab.range(of: "static func initialDestination"),
+                                       "MeDemoHooks.initialDestination() 이 사라졌다(이름이 바뀌었나)")
+        let body = tab[declaration.upperBound...]
+        let hook = try #require(body.range(of: "MobileDemoMissionsRoute.opensMissionsPage(route:"),
+                                "MeTab 이 미션 라우트 판정을 안 쓴다 — 라우트만 넘긴 데모가 루트만 찍는다")
+        let debugStart = try #require(body.range(of: "#if DEBUG"), "initialDestination() 에 DEBUG 갈래가 없다")
+        // DEBUG 갈래가 닫히는 자리(`#else` 가 있으면 그것이 먼저다 — Release 갈래에 들어간 훅도 걸러낸다).
+        let closings = [body.range(of: "#else")?.lowerBound, body.range(of: "#endif")?.lowerBound].compactMap { $0 }
+        let close = try #require(closings.min(), "initialDestination() 의 DEBUG 갈래가 닫히지 않는다")
+        #expect(debugStart.upperBound < hook.lowerBound && hook.lowerBound < close,
+                "`MeTab` 의 미션 라우트 훅이 #if DEBUG 갈래 밖이다 — Release 바이너리에 MobileDemoMissionsRoute 이름이 남는다")
         // 배선 두 줄(장면·바늘을 스텁에 넘기는 자리 · 여는 라우트를 바꿔치기하는 자리)이 실제로 있는가 —
         // 없으면 위 §6 의 라우트 표는 **아무것도 안 하는 값**을 재고 있는 것이다.
         let demo = try Self.strippedSource("Sources/CheckMobileKit/Demo/MobileDemo.swift")

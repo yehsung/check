@@ -25,7 +25,10 @@ import Foundation
 /// 장면의 기본 파일이 언제나 이긴다(변형이 영영 안 쓰인다).
 ///
 /// ── 꼬리가 정하는 것 둘 ──
-/// | 라우트                     | scene | needle            | 보이는 것                                            |
+/// (1.0.13 부터 이 줄들이 보이는 곳은 나 탭 루트가 아니라 **미션 화면**이다 — 주간 카드 · 도전 미션 절이 루트에서 나갔고
+/// 루트에는 [미션] 줄만 남았다. 아래 라우트는 그 화면을 **열어** 준다: `MeDemoHooks.initialDestination()` 이
+/// `opensMissionsPage(route:)` 로 판정해 `MeDestination.missions` 를 쌓는다.)
+/// | 라우트                     | scene | needle            | 미션 화면에 보이는 것                                |
 /// | -------------------------- | ----- | ----------------- | ---------------------------------------------------- |
 /// | `me/missions`              | me    | nil               | 받을 것 넷(75루비) · 주간 [받기](70루비)             |
 /// | `me/missions/claimable`    | me    | nil               | 같다(이름만 또렷한 별칭)                             |
@@ -37,15 +40,17 @@ import Foundation
 /// | `me/weekly/legacy`         | me    | demo-week-legacy  | 옛 서버(0.3.55~57) — 받기 칸이 없다 · granted_now 로 알린다 |
 ///
 /// 라우트 글자가 `AingRoute` 에 없으므로(`me/missions` 는 nil 이다) **열 라우트는 `me` 로 바꿔 넘긴다**(`openRoute`) —
-/// 안 바꾸면 `MobileAppModel.openDemoRouteIfNeeded` 가 돌아서서 기본 탭(지금)에 머물고, 미션 절은 화면에 없다.
-/// 그 바꿔치기는 `MobileDemo.environment` 한 곳에서 한다.
+/// 안 바꾸면 `MobileAppModel.openDemoRouteIfNeeded` 가 돌아서서 기본 탭(지금)에 머물고, 나 탭이 아예 안 열린다.
+/// 그 바꿔치기는 `MobileDemo.environment` 한 곳에서 한다. 탭을 연 **뒤** 그 위에 미션 화면을 쌓는 것은 나 탭의 데모 훅이다
+/// (1.0.13 — `MeDemoHooks.initialDestination()` · `opensMissionsPage(route:)`).
 ///
 /// 실행:
 /// ```
 /// xcrun simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute me/missions
 /// ```
 package struct MobileDemoMissionsRoute: Hashable, Sendable {
-    /// 이 라우트들이 **실제로 여는** 탭 라우트(`AingRoute(path:)` 가 아는 글자). 미션 절 · 주간 카드는 둘 다 나 탭 첫 화면이다.
+    /// 이 라우트들이 **실제로 여는** 탭 라우트(`AingRoute(path:)` 가 아는 글자). 여는 탭은 나 탭이고, 미션 화면은
+    /// 1.0.13 부터 **그 위에 쌓인다**(`opensMissionsPage(route:)` → `MeDestination.missions`) — 이 값은 그대로다.
     package static let openRoute = "me"
 
     /// 스텁이 고를 장면 폴더 이름(`_me` → "me"). **기존 장면만** 쓴다(위 머리말 참고).
@@ -84,6 +89,17 @@ package struct MobileDemoMissionsRoute: Hashable, Sendable {
         default:
             self.init(scene: "me")
         }
+    }
+
+    /// 이 라우트 글자가 **미션 화면**을 여는가(1.0.13 — 주간 카드·도전 미션 절이 루트에서 나갔다).
+    /// `MeDemoHooks.initialDestination()` 한 곳이 이 판정을 쓴다 — 깃발(`-AingCheckDemoMeScreen missions`)과
+    /// 라우트 글자를 손으로 맞추지 않으려고 여기 둔다(상점 시트 라우트와 같은 관용구).
+    package static func opensMissionsPage(route: String) -> Bool {
+        // 글자 판정을 **다시 쓰지 않는다** — 바로 위 `init?(demoRoute:)` 가 이미 그 판정이고, 그쪽은 앞뒤 공백과
+        // 대소문자까지 다듬는다(`trimmingCharacters` · `lowercased`). 여기서 따로 비교하면 둘이 어긋나서
+        // `" /ME/Missions/ "` 같은 라우트가 **장면은 풀리는데 화면은 안 열리는** 짝이 된다(통합 검토 1.0.13 에서 실제로
+        // 그 상태였다). 장면을 아는 라우트 = 미션 화면을 여는 라우트, 한 곳에서 정한다.
+        Self(demoRoute: route) != nil
     }
 
     /// 바늘을 **요청 본문 꼬리에 붙인** 사본. 픽스처 고르기는 본문+쿼리 글자에서 바늘을 찾으므로(`MobileDemoFixtures.entry`)

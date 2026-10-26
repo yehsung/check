@@ -21,27 +21,39 @@ struct MeAchievementViewTests {
     static let tabPath = "Sources/CheckMobileKit/Me/MeTab.swift"
     static let viewsPath = "Sources/CheckMobileKit/Me/MeAchievementViews.swift"
     static let weeklyPath = "Sources/CheckMobileKit/Me/MeWeeklyWorkViews.swift"
+    /// v1.0.13 「미션」 화면 — 주간 카드 · 도전 미션 절이 루트에서 여기로 옮겨 왔다.
+    static let missionsPath = "Sources/CheckMobileKit/Me/MeMissionsView.swift"
 
     static func code(_ path: String) throws -> String { try IntegrationContractTests.code(path) }
 
     // MARK: - ① 절 자리 · 햅틱
 
-    @Test("절 자리: 「이번 주 근무」 바로 아래 · 「지난주」 위 — 그리고 햅틱은 나 탭 루트 **한 곳**이다")
+    @Test("절 자리: **미션 화면** 안 「이번 주 근무」 바로 아래 · 루트엔 [미션] 줄만 — 그리고 햅틱은 미션 화면 **한 곳**이다")
     func sectionSitsUnderWeekly() throws {
+        // v1.0.13: 두 카드가 루트에서 **미션 화면**으로 갔다(사용자 지시 2026-10-23 — 9줄 ≈ 672pt 가 루트를 두 화면 넘게
+        // 늘였다). 순서 단언은 **지우지 않고 그 화면으로 옮긴다** — 맥 [미션] 화면도 주간 게이지 → 도전 미션 순서다.
+        let page = try Self.code(Self.missionsPath)
+        let weekly = try #require(page.range(of: "MeWeeklyWorkCard(store: store)"), "미션 화면에 주간 보상 카드가 없다")
+        let missions = try #require(page.range(of: "MeAchievementsSection(store: store)"), "미션 화면에 도전 미션 절이 없다")
+        #expect(weekly.upperBound < missions.lowerBound,
+                "미션 화면 순서: 이번 주 근무 → 도전 미션(맥 [미션] 화면도 주간 게이지 → 도전 미션 순서다)")
+
+        // 루트에는 그 둘 대신 [미션] 줄 하나가 무대와 「지난주」 사이에 선다(루비 칩 바로 아래 — 루비가 어디서 오는지 옆에서 보인다).
         let home = try Self.code(Self.tabPath)
         let stage = try #require(home.range(of: "MeStageCard(store: store)"))
-        let weekly = try #require(home.range(of: "MeWeeklyWorkCard(store: store)"), "나 탭에 주간 보상 카드가 없다")
-        let missions = try #require(home.range(of: "MeAchievementsSection(store: store)"), "나 탭에 도전 미션 절이 없다")
+        let row = try #require(home.range(of: "MeMissionsRow(store: store)"), "나 탭 루트에 [미션] 줄이 없다")
         let records = try #require(home.range(of: "MeRecordsCard(store: store)"))
-        #expect(stage.upperBound < weekly.lowerBound && weekly.upperBound < missions.lowerBound
-                && missions.upperBound < records.lowerBound,
-                "절 자리: 무대 → 이번 주 근무 → 도전 미션 → 「지난주」(맥 [미션] 화면도 주간 게이지 → 도전 미션 순서다)")
+        #expect(stage.upperBound < row.lowerBound && row.upperBound < records.lowerBound,
+                "루트 자리: 무대 → [미션] 줄 → 「지난주」")
+        #expect(!home.contains("MeWeeklyWorkCard(store: store)") && !home.contains("MeAchievementsSection(store: store)"),
+                "두 카드가 루트로 되돌아왔다 — 나 탭이 다시 화면 두 장을 넘는다")
 
         // 햅틱이 두 곳이면 한 번 받고 두 번 운다 — 절 · 주간 카드가 각자 달지 않았는지 **저장소 전체**에서 센다.
+        // v1.0.13 에 그 한 곳은 **미션 화면**이다(루트엔 [받기] 버튼이 하나도 없다).
         let haptic = try IntegrationContractTests.files(
             containing: [".sensoryFeedback(.success, trigger: store.missionClaimBurstSerial)"],
             under: "Sources/CheckMobileKit")
-        #expect(haptic == [Self.tabPath], "받기 햅틱이 한 곳이 아니다: \(haptic)")
+        #expect(haptic == [Self.missionsPath], "받기 햅틱이 한 곳이 아니다: \(haptic)")
     }
 
     // MARK: - ② 줄은 서버 값만 그린다

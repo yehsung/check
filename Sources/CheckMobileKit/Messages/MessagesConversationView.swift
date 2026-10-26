@@ -13,6 +13,10 @@ import UIKit
 ///
 /// 오른쪽 위 ··· 메뉴(앱스토어 심사 지침 1.2): [신고하기] · [차단하기]. 둘 다 **시트만 연다** — 차단은 확인 시트를,
 /// 신고는 사유 시트를 지나야 서버로 나간다(소스 계약). 받은 말풍선을 길게 누르면 그 **메시지 한 건**을 신고한다.
+///
+/// 1.0.13: 말풍선 사이에 **찌르기 줄**(가운데 정렬 작은 회색 줄)이 시간 순서로 낀다 — 줄 만들기는
+/// `MessagesStore.conversationItems`(→ `MessagesConversationRules.items` → 코어 `MessageConversationTimeline`),
+/// 모양은 `MessagesPokeLogRow` 다.
 struct MessagesConversationView: View {
     let store: MessagesStore
     let peerID: String
@@ -83,12 +87,8 @@ struct MessagesConversationView: View {
                 }
             }
             .onChange(of: items.last?.id) { _, _ in
-                let isMine: Bool
-                switch items.last {
-                case .bubble(let line): isMine = line.entry.isMine
-                case .pending: isMine = true
-                default: isMine = false
-                }
+                // 찌르기 줄도 "마지막 줄"이다 — 내가 맥에서 찌른 줄이 들어오면 바닥을 따라간다(`MessagesConversationItem.isMine`).
+                let isMine = items.last?.isMine ?? false
                 if follow.lastItemChanged(isMine: isMine) {
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom) }
                 }
@@ -253,6 +253,9 @@ struct MessagesConversationView: View {
         switch item {
         case .day(_, let label):
             MessagesDaySeparator(label: label)
+        case .poke(let line):
+            // 찌르기 줄 — 말풍선이 아니라 가운데 작은 회색 줄이다. 답장·읽음 표시·신고 대상이 아니다.
+            MessagesPokeLogRow(line: line)
         case .bubble(let line):
             // 신고는 **받은 말풍선만**이다 — 내 말을 내가 신고하는 길은 만들지 않는다(그 메뉴는 뜻이 없다).
             MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) })

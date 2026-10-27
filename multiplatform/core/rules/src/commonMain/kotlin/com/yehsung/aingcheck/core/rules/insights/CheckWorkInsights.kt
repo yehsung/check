@@ -323,8 +323,10 @@ object WorkInsightsCalendar {
 object WorkInsightsDate {
     // ISO8601DateFormatter(.withInternetDateTime) 가 받는 꼴(골든 dates/parse 실측): yyyy-M(M)-d(d)TH(H):mm:ss + (Z | ±HH | ±HHmm | ±HH:mm).
     // 달 13 · 분/초 60 은 거절, 시 24 · 날 넘침(2월 29일 · 9월 31일)은 다음 날로 넘긴다. 소수초 판은 초 뒤 '.' + 숫자.
-    private val PLAIN = Regex("""^(\d{4})-(\d{1,2})-(\d{1,2})T(\d{1,2}):(\d{2}):(\d{2})(Z|[+-]\d{2}(?::?\d{2})?)$""")
-    private val FRACTIONAL = Regex("""^(\d{4})-(\d{1,2})-(\d{1,2})T(\d{1,2}):(\d{2}):(\d{2})\.(\d+)(Z|[+-]\d{2}(?::?\d{2})?)$""")
+    // ★ 숫자는 `[0-9]` 로 적는다(`\d` 금지): ART 의 java.util.regex 는 ICU 라 `\d` 가 아랍-인도 숫자 같은 Nd 전부를 받는다(에뮬레이터 API 36 실측 —
+    //   "0.١٢" 가 소수부로 잡혀 toDouble 이 터졌다). JDK 는 ASCII 만 받아 데스크톱 시험만으로는 안 보인다.
+    private val PLAIN = Regex("""^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})T([0-9]{1,2}):([0-9]{2}):([0-9]{2})(Z|[+-][0-9]{2}(?::?[0-9]{2})?)$""")
+    private val FRACTIONAL = Regex("""^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})T([0-9]{1,2}):([0-9]{2}):([0-9]{2})\.([0-9]+)(Z|[+-][0-9]{2}(?::?[0-9]{2})?)$""")
 
     fun parse(value: String): Double? {
         val raw = parseRaw(value) ?: return null

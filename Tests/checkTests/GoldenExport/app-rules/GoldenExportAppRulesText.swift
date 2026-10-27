@@ -1,3 +1,4 @@
+// 원본: 없음(W1-c 골든 생성기 · 글자 · 정렬 · 이모티콘 — Sources/CheckCore/{StatusMessage,AingSticker}.swift · SupabaseWorkModels.swift(MessageBody) · Foundation 정렬 를 잰다)
 import CheckGoldenSupport
 import Foundation
 import Testing

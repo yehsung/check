@@ -1,3 +1,4 @@
+// 원본: 없음(W1-c 골든 생성기 · 주간 · 날짜 · 기록 · 토큰 · 숫자 · AI 리밋 — Sources/CheckCore/{WeeklyWorkReward,CheckWorkInsights,MilestoneTracker,CheckTokenRowDisplay,CodexEffectiveRule,MenuBarStatusFormatter,AILimits,AILimitFreshnessRule}.swift 를 잰다)
 import CheckGoldenSupport
 import Foundation
 import Testing

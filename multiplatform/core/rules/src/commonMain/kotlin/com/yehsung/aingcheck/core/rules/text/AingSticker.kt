@@ -32,7 +32,7 @@ enum class AingSticker(val rawValue: String, val token: String, val label: Strin
          *
          * INV-AingSticker-c811ca4a 이식: 앞에 둘 수 있는 것은 **정규화와 무관한 검사뿐**이다 — 첫 글자(앞 공백류를 건너뛴)가 `[` 인가 하나. `[` 는 ASCII 라
          * 정규화가 건드리지 않는다. 자모 분해(NFD)로 들어온 한글 토큰도 그림이어야 한다(머리 검사에서 빠지면 안 된다).
-         * INV-AingSticker-6615f703 · INV-AingSticker-ea235ead 이식: 건너뛰는 집합은 아래 sanitized 의 trim 집합과 **글자 하나까지 같아야 한다**(Foundation `.whitespacesAndNewlines` —
+         * INV-AingSticker-6615f703 이식: · INV-AingSticker-ea235ead 이식: 건너뛰는 집합은 아래 sanitized 의 trim 집합과 **글자 하나까지 같아야 한다**(Foundation `.whitespacesAndNewlines` —
          * White_Space 속성으로 재면 U+200B 하나가 어긋나 그림이 글자가 된다, v0.3.62 검토 지적 ②).
          */
         fun parse(body: String): AingSticker? {
@@ -68,14 +68,28 @@ object AingStickerText {
 }
 
 /**
- * 그림 폴더 이름(Swift `AingStickerArt.folderName`) — Android·Windows 는 Gradle Sync 로 같은 6장을 읽는다(git 사본 0).
+ * 그림 폴더 이름과 "그림으로 그리는가"의 판정(Swift `AingStickerArt.folderName` · `drawable(for:)`) — Android·Windows 는
+ * Gradle Sync 로 같은 6장을 읽는다(git 사본 0). 그림 읽기 · 캐시 자체는 화면 갈래(W3-a 메시지 화면 · Compose)가 옮긴다.
  *
- * 그림 읽기(`AingStickerArt`)는 화면 갈래(W3-a 메시지 화면 · Compose)가 옮긴다. 그 몫의 규약은 이 자리에서 이름만 넘긴다:
- *  - INV-AingSticker-4d915e2f 이식(화면 갈래 몫 — 여기는 판정만): 그림이 없으면 빈 말풍선이 아니라 [AingStickerText.preview] 글자로 접는다.
- *  - INV-AingSticker-a6bb0ef6 이식(화면 갈래 몫): "그림으로 그리는가"를 판정하는 자리는 하나 — [AingSticker.parse] + 그림 있음을 한 함수로.
- *  - INV-AingSticker-630f7c45 해당 없음(SwiftUI `Image(decorative:)` 의 보이스오버 문구 소실 — Compose 는 contentDescription 을 그림에 직접 단다).
- *  - INV-AingSticker-2828fac0 해당 없음(NSLock 재귀 금지 캐시 — Compose 리소스 캐시는 화면 갈래 몫).
+ * INV-AingSticker-a6bb0ef6 이식: **판정하는 자리는 [drawable] 하나다** — 말풍선 행과 틀 높이 추정이 각자 판정하면(`parse` 만 보는 쪽 ·
+ * `parse && 그림 있음` 을 보는 쪽) 그림이 빠진 배포본에서 둘이 갈려 이모티콘 건수만큼 빈 판이 쌓인다. 두 자리 모두 이 함수를 부른다.
+ * INV-AingSticker-4d915e2f 이식: **그림이 없을 때의 폴백은 "이름 글자로 읽어 준다"** — [drawable] 이 null 이면 호출부는 평범한 글자
+ * 말풍선으로 접되, 날것 토큰이 아니라 [AingStickerText.preview]("아잉이 기쁨")를 쓴다. 빈 말풍선 · 날것 대괄호가 되지 않게.
+ * (SwiftUI 보이스오버 문구 소실 · NSLock 캐시 두 규약은 플랫폼 몫이라 inv-na 에 적는다 — 조정자 패치.)
  */
 object AingStickerArtNames {
     const val folderName = "Stickers"
+
+    /**
+     * 이 본문을 **그림으로 그리는가** — 그리면 표정과 그릴 그림을 함께 돌려준다. [art] 는 그림을 읽는 자리(없으면 null).
+     * 그림 타입은 화면 갈래가 정한다(Compose ImageBitmap 등) — 이 판정은 그림 모양을 모른다.
+     */
+    fun <T : Any> drawable(body: String, art: (AingSticker) -> T?): Pair<AingSticker, T>? {
+        val sticker = AingSticker.parse(body) ?: return null
+        val image = art(sticker) ?: return null
+        return sticker to image
+    }
+
+    /** 말풍선 글자(그림을 못 그릴 때) — 이모티콘이면 "아잉이 <이름>", 아니면 원문. */
+    fun fallbackText(body: String): String = AingStickerText.preview(body)
 }

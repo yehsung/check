@@ -1,3 +1,4 @@
+// 원본: 없음(W1-c 골든 생성기 · 할 일 — Sources/CheckCore/{CheckTodoModel,TodoSync}.swift 를 잰다)
 import CheckGoldenSupport
 import Foundation
 import Testing

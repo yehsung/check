@@ -144,6 +144,11 @@ object TextGoldenChecks {
             val want = case["parsed"].let { if (it == null || it is JsonNull) null else it.jsonPrimitive.content }
             assertEquals(want, AingSticker.parse(raw)?.rawValue, golden.failure(id, "AingSticker.parse"))
             assertEquals(case.string("preview"), cps(AingStickerText.preview(raw)), golden.failure(id, "AingStickerText.preview"))
+            // 판정은 한 자리(INV-AingSticker-a6bb0ef6): 그림이 있으면 parse 와 같은 표정, 그림이 없으면 null 이고 글자는 preview 로 접는다.
+            assertEquals(want, AingStickerArtNames.drawable(raw) { "art:" + it.rawValue }?.first?.rawValue, golden.failure(id, "drawable(그림 있음)"))
+            if (want != null) assertEquals("art:$want", AingStickerArtNames.drawable(raw) { "art:" + it.rawValue }?.second, golden.failure(id, "drawable 그림"))
+            assertEquals(null, AingStickerArtNames.drawable<String>(raw) { null }, golden.failure(id, "drawable(그림 없음)"))
+            assertEquals(case.string("preview"), cps(AingStickerArtNames.fallbackText(raw)), golden.failure(id, "fallbackText"))
             parsed++
         }
         assertTrue(parsed > 40, "stickers/tokens 판정 줄이 너무 적다($parsed)")

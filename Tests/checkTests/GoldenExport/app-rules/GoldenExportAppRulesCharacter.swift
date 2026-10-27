@@ -1,3 +1,4 @@
+// 원본: 없음(W1-c 골든 생성기 · 선물 · 뽑기 · 상점 번호 · 캐릭터 키트 · 미션 — Sources/CheckCore/{CharacterGift,Gacha,ShopProtocol,Achievements,DailyMissions}.swift · CharacterKit/* 를 잰다)
 import CheckGoldenSupport
 import Foundation
 import Testing

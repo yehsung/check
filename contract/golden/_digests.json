@@ -1,9 +1,9 @@
 {
   "goldens": {
     "dates/ailimit": {
-      "file": "d8cf9cf748ad6fb2bf34c4e73a9c19a6517fc7422881bd5bcb5d784aacc57ed0",
+      "file": "0f4aa796a05e1739d29edd24601f890db90dcf0531c640dcf497660b5b65ffa5",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "45d5fc497d95519734a19360b3d4ad47eaeae37d59772085aec679048131faf9"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "4e0f5680a08e469369063cb80134b60d888b9cb102806523220d23f9ad7e9007"
       },
       "swiftSources": {
         "Sources/CheckCore/AILimitFreshnessRule.swift": "582e9642dcf060f38da273281b5b08594a8dea4164beec27bf7137ca8d7508f3",
@@ -14,7 +14,7 @@
     "dates/durations": {
       "file": "3cf2d5e0d1b0bce76234b79e56c74627aa051f3f66f757c1830e57a787da819a",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "45d5fc497d95519734a19360b3d4ad47eaeae37d59772085aec679048131faf9"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "4e0f5680a08e469369063cb80134b60d888b9cb102806523220d23f9ad7e9007"
       },
       "swiftSources": {
         "Sources/CheckCore/AILimitFreshnessRule.swift": "582e9642dcf060f38da273281b5b08594a8dea4164beec27bf7137ca8d7508f3",
@@ -26,7 +26,7 @@
     "dates/parse": {
       "file": "2cd98a21cb2bdfaa112c078dc1fe3f37844a243623317574daf23399e3277085",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "45d5fc497d95519734a19360b3d4ad47eaeae37d59772085aec679048131faf9"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "4e0f5680a08e469369063cb80134b60d888b9cb102806523220d23f9ad7e9007"
       },
       "swiftSources": {
         "Sources/CheckCore/CheckTodoModel.swift": "1ecc07d4f68e441f9c18c02dad34406af84731a8031a96ff936f19b0c00130bf",
@@ -94,7 +94,7 @@
     "insights/computation": {
       "file": "033869dbc2a4529af1f770e91a4502ecdbd2c54f3f4498e6dd6ff4dce5fd2e9d",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "45d5fc497d95519734a19360b3d4ad47eaeae37d59772085aec679048131faf9"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "4e0f5680a08e469369063cb80134b60d888b9cb102806523220d23f9ad7e9007"
       },
       "swiftSources": {
         "Sources/CheckCore/CheckWorkInsights.swift": "5aba205ce859558dbb4dbfff53c420b4efb3435e95182473c4450620a5a61817",
@@ -105,7 +105,7 @@
     "insights/token": {
       "file": "43e6cce20a127a767647b13f7c57445084cd832291542a88ad80004f6fe3d671",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "45d5fc497d95519734a19360b3d4ad47eaeae37d59772085aec679048131faf9"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "4e0f5680a08e469369063cb80134b60d888b9cb102806523220d23f9ad7e9007"
       },
       "swiftSources": {
         "Sources/CheckCore/CheckTokenRowDisplay.swift": "97685c087ab20d7112acea8e980b98b50e225da3ac40b4126092b2d0727510cc",
@@ -219,7 +219,7 @@
     "text/number-format": {
       "file": "6560768bba2ed62b2cd31f968e52ad528325e5b7edf56ceb5c1347409d053d35",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "45d5fc497d95519734a19360b3d4ad47eaeae37d59772085aec679048131faf9"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "4e0f5680a08e469369063cb80134b60d888b9cb102806523220d23f9ad7e9007"
       },
       "swiftSources": {
         "Sources/CheckCore/CheckTokenUsage.swift": "5707ba6fecc5742f6c3239a78b0029f86a76c9845ce10309a80f206866621e85"
@@ -272,7 +272,7 @@
     "weekly/status": {
       "file": "d023fdc5a90d301fe581dc187989ad9a08b952de89cc55058bf9a8d87e4e99c4",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "45d5fc497d95519734a19360b3d4ad47eaeae37d59772085aec679048131faf9"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "4e0f5680a08e469369063cb80134b60d888b9cb102806523220d23f9ad7e9007"
       },
       "swiftSources": {
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"

@@ -21565,6 +21565,66 @@
         }
       ],
       "mainEmpty": null,
+      "mainTies": [
+        {
+          "chosenLabel": "첫째",
+          "devices": [
+            {
+              "deviceID": "dev-x",
+              "label": "첫째",
+              "lastObservedAt": "41dab3f000000000"
+            },
+            {
+              "deviceID": "dev-x",
+              "label": "둘째",
+              "lastObservedAt": "41dab3f000000000"
+            },
+            {
+              "deviceID": "dev-a",
+              "label": "가",
+              "lastObservedAt": "41dab3effd800000"
+            }
+          ],
+          "resolvedLabel": "첫째"
+        },
+        {
+          "chosenLabel": "첫째",
+          "devices": [
+            {
+              "deviceID": "dev-n",
+              "label": "첫째",
+              "lastObservedAt": null
+            },
+            {
+              "deviceID": "dev-n",
+              "label": "둘째",
+              "lastObservedAt": null
+            }
+          ],
+          "resolvedLabel": "첫째"
+        },
+        {
+          "chosenLabel": "옛",
+          "devices": [
+            {
+              "deviceID": "dev-b",
+              "label": "옛",
+              "lastObservedAt": "41dab3f000000000"
+            },
+            {
+              "deviceID": "dev-a",
+              "label": "가",
+              "lastObservedAt": "41dab3f000000000"
+            },
+            {
+              "deviceID": "dev-a",
+              "label": "나",
+              "lastObservedAt": "41dab3f000000000"
+            }
+          ],
+          "resolvedLabel": "가"
+        }
+      ],
       "observations": [
         {
           "deviceID": "dev-a1b2",

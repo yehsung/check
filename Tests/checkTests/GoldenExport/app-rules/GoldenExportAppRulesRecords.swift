@@ -663,7 +663,19 @@ struct GoldenExportAppRulesRecords {
                           ["chosen": Self.s(chosen), "resolved": Self.s(AILimitMainDeviceRule.resolve(devices: devices, chosen: chosen)?.deviceID),
                            "resolvedReversed": Self.s(AILimitMainDeviceRule.resolve(devices: devices.reversed(), chosen: chosen)?.deviceID)]
                       }),
-                      "mainEmpty": Self.s(AILimitMainDeviceRule.resolve(devices: [], chosen: "x")?.deviceID)])
+                      "mainEmpty": Self.s(AILimitMainDeviceRule.resolve(devices: [], chosen: "x")?.deviceID),
+                      // 같은 id · 같은 시각이 둘(호출부가 접지 않은 배열) — Swift max(by:) 는 앞의 것을 둔다. 라벨로 어느 쪽인지 잰다.
+                      "mainTies": .array([
+                          [AILimitDevice(deviceID: "dev-x", label: "첫째", lastObservedAt: base), AILimitDevice(deviceID: "dev-x", label: "둘째", lastObservedAt: base),
+                           AILimitDevice(deviceID: "dev-a", label: "가", lastObservedAt: base.addingTimeInterval(-10))],
+                          [AILimitDevice(deviceID: "dev-n", label: "첫째", lastObservedAt: nil), AILimitDevice(deviceID: "dev-n", label: "둘째", lastObservedAt: nil)],
+                          [AILimitDevice(deviceID: "dev-b", label: "옛", lastObservedAt: base), AILimitDevice(deviceID: "dev-a", label: "가", lastObservedAt: base),
+                           AILimitDevice(deviceID: "dev-a", label: "나", lastObservedAt: base)],
+                      ].map { list in
+                          ["devices": .array(list.map { ["deviceID": .string($0.deviceID), "label": Self.s($0.label), "lastObservedAt": Self.d($0.lastObservedAt)] }),
+                           "resolvedLabel": Self.s(AILimitMainDeviceRule.resolve(devices: list, chosen: nil)?.label),
+                           "chosenLabel": Self.s(AILimitMainDeviceRule.resolve(devices: list, chosen: list[0].deviceID)?.label)]
+                      })])
         let fingerprints: [String?] = [nil, "", "  ", "someone@example.com", " someone@example.com\n", "acct-123", "한글 계정"]
         cases.append(["id": "fingerprints", "rows": .array(fingerprints.map { ["raw": Self.s($0), "fingerprint": Self.s(AILimitFingerprint.make($0))] })])
         goldenEmit(GoldenFile(

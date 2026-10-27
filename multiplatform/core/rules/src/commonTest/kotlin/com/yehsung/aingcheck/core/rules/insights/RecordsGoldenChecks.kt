@@ -510,6 +510,18 @@ object RecordsGoldenChecks {
             assertJson(r["resolvedReversed"], s(AILimitMainDeviceRule.resolve(devices.reversed(), chosen)?.deviceID), "main reversed $chosen")
         }
         assertJson(devicesCase["mainEmpty"], s(AILimitMainDeviceRule.resolve(emptyList(), "x")?.deviceID), "main empty")
+        var ties = 0
+        for (row in devicesCase.array("mainTies")) {
+            val r = row.jsonObject
+            val list = r.array("devices").map { e ->
+                val o = e.jsonObject
+                AILimitDevice(o.string("deviceID"), strOf(o["label"]), bitsOf(o["lastObservedAt"]))
+            }
+            assertJson(r["resolvedLabel"], s(AILimitMainDeviceRule.resolve(list, null)?.label), "main tie(같으면 앞의 것)")
+            assertJson(r["chosenLabel"], s(AILimitMainDeviceRule.resolve(list, list[0].deviceID)?.label), "main tie chosen(첫 일치)")
+            ties++
+        }
+        assertEquals(3, ties, "mainTies 판 수")
         for (row in golden.case("fingerprints").array("rows")) {
             val r = row.jsonObject
             assertJson(r["fingerprint"], s(AILimitFingerprint.make(strOf(r["raw"]))), "fingerprint ${r["raw"]}")

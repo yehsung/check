@@ -2,6 +2,7 @@
 //       Gacha.swift·Achievements.swift·DailyMissions.swift·WeeklyWorkReward.swift 의 lossy 디코드 보조 @ 1b8260d
 package com.yehsung.aingcheck.core.rules.format
 
+import com.yehsung.aingcheck.core.rules.text.TextScalars
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -44,15 +45,19 @@ fun convertFromSnakeCase(key: String): String {
     return key.substring(0, first) + joined + key.substring(last + 1)
 }
 
-/** Foundation `capitalized`(한 낱말): 첫 글자(문자)를 대문자로, 나머지는 소문자로. */
+/**
+ * Foundation `capitalized`(한 낱말): 첫 글자(문자)를 대문자로, 나머지는 소문자로.
+ * 문자 · 숫자 판정은 번들 표의 범주(L* · Nd)로 한다 — `Char.isLetter`/`isDigit` 는 `Character.getType` 이라 JDK · ART 판마다 다르다(G §8-16 ②).
+ */
 private fun capitalizedWord(word: String): String {
     val sb = StringBuilder(word.length)
     var done = false
     for (c in word) {
-        if (!done && c.isLetter()) {
+        val category = TextScalars.generalCategory(c.code)
+        if (!done && category[0] == 'L') {
             sb.append(c.uppercaseChar())
             done = true
-        } else if (!done && c.isDigit()) {
+        } else if (!done && category == "Nd") {
             sb.append(c)
         } else {
             sb.append(c.lowercaseChar())

@@ -1,5 +1,5 @@
 {
-  "exportTests": 38,
+  "exportTests": 39,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -73,7 +73,7 @@
       ]
     },
     {
-      "cases": 9,
+      "cases": 15,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
       "golden": "gacha/shop-protocol",
@@ -294,6 +294,18 @@
         "Sources/CheckCore/StatusMessage.swift",
         "Sources/CheckCore/CheckTodoModel.swift",
         "Sources/CheckCore/AingSticker.swift"
+      ]
+    },
+    {
+      "cases": 29,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesText.swift",
+      "golden": "text/status-message",
+      "path": "contract/golden/text/status-message.json",
+      "platformSensitive": true,
+      "swiftSources": [
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/CheckCoreShared.swift"
       ]
     },
     {

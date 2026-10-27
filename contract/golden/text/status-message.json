@@ -1,0 +1,466 @@
+{
+  "cases": [
+    {
+      "id": "r-00",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 바꿨어요"
+      },
+      "outcome": {
+        "cps": "c624 b298 c740 0020 c9d1 c911 0020 baa8 b4dc",
+        "kind": "saved"
+      },
+      "status": "ok",
+      "statusMessage": "c624 b298 c740 0020 c9d1 c911 0020 baa8 b4dc"
+    },
+    {
+      "id": "r-01",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 바꿨어요"
+      },
+      "outcome": {
+        "cps": "c548 b155 0020 d558 c138 c694",
+        "kind": "saved"
+      },
+      "status": "ok",
+      "statusMessage": "0020 0020 c548 b155 000a d558 c138 c694 0020 0020"
+    },
+    {
+      "id": "r-02",
+      "maxLength": 40,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 바꿨어요"
+      },
+      "outcome": {
+        "cps": "ac01",
+        "kind": "saved"
+      },
+      "status": "ok",
+      "statusMessage": "1100 1161 11a8"
+    },
+    {
+      "id": "r-03",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 지웠어요"
+      },
+      "outcome": {
+        "kind": "cleared"
+      },
+      "status": "ok",
+      "statusMessage": null
+    },
+    {
+      "id": "r-04",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 지웠어요"
+      },
+      "outcome": {
+        "kind": "cleared"
+      },
+      "status": "ok",
+      "statusMessage": ""
+    },
+    {
+      "id": "r-05",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 지웠어요"
+      },
+      "outcome": {
+        "kind": "cleared"
+      },
+      "status": "ok",
+      "statusMessage": "0020 0009 000a"
+    },
+    {
+      "id": "r-06",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 지웠어요"
+      },
+      "outcome": {
+        "kind": "cleared"
+      },
+      "status": "ok",
+      "statusMessage": "3164 3164"
+    },
+    {
+      "id": "r-07",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 지웠어요"
+      },
+      "outcome": {
+        "kind": "cleared"
+      },
+      "status": "ok",
+      "statusMessage": "200b"
+    },
+    {
+      "id": "r-08",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 바꿨어요"
+      },
+      "outcome": {
+        "cps": "1f600",
+        "kind": "saved"
+      },
+      "status": "ok",
+      "statusMessage": "1f600"
+    },
+    {
+      "id": "r-09",
+      "maxLength": null,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 지웠어요"
+      },
+      "outcome": {
+        "kind": "cleared"
+      },
+      "status": "cleared",
+      "statusMessage": null
+    },
+    {
+      "id": "r-10",
+      "maxLength": 40,
+      "notice": {
+        "isError": false,
+        "text": "상태메시지를 지웠어요"
+      },
+      "outcome": {
+        "kind": "cleared"
+      },
+      "status": "cleared",
+      "statusMessage": "b0a8 c740 0020 ac12"
+    },
+    {
+      "id": "r-11",
+      "maxLength": 40,
+      "notice": {
+        "isError": true,
+        "text": "상태메시지는 40자까지 쓸 수 있어요"
+      },
+      "outcome": {
+        "kind": "tooLong",
+        "maxLength": 40
+      },
+      "status": "too_long",
+      "statusMessage": null
+    },
+    {
+      "id": "r-12",
+      "maxLength": 25,
+      "notice": {
+        "isError": true,
+        "text": "상태메시지는 25자까지 쓸 수 있어요"
+      },
+      "outcome": {
+        "kind": "tooLong",
+        "maxLength": 25
+      },
+      "status": "too_long",
+      "statusMessage": null
+    },
+    {
+      "id": "r-13",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "상태메시지는 40자까지 쓸 수 있어요"
+      },
+      "outcome": {
+        "kind": "tooLong",
+        "maxLength": 40
+      },
+      "status": "too_long",
+      "statusMessage": null
+    },
+    {
+      "id": "r-14",
+      "maxLength": 0,
+      "notice": {
+        "isError": true,
+        "text": "상태메시지는 0자까지 쓸 수 있어요"
+      },
+      "outcome": {
+        "kind": "tooLong",
+        "maxLength": 0
+      },
+      "status": "too_long",
+      "statusMessage": "0078"
+    },
+    {
+      "id": "r-15",
+      "maxLength": -3,
+      "notice": {
+        "isError": true,
+        "text": "상태메시지는 -3자까지 쓸 수 있어요"
+      },
+      "outcome": {
+        "kind": "tooLong",
+        "maxLength": -3
+      },
+      "status": "too_long",
+      "statusMessage": null
+    },
+    {
+      "id": "r-16",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "쓸 수 없는 글자가 있어요"
+      },
+      "outcome": {
+        "kind": "notText"
+      },
+      "status": "not_text",
+      "statusMessage": null
+    },
+    {
+      "id": "r-17",
+      "maxLength": 40,
+      "notice": {
+        "isError": true,
+        "text": "쓸 수 없는 글자가 있어요"
+      },
+      "outcome": {
+        "kind": "notText"
+      },
+      "status": "not_text",
+      "statusMessage": "0061 0062 0063"
+    },
+    {
+      "id": "r-18",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "unauthorized",
+      "statusMessage": null
+    },
+    {
+      "id": "r-19",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "",
+      "statusMessage": null
+    },
+    {
+      "id": "r-20",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "OK",
+      "statusMessage": "b300 bb38 c790"
+    },
+    {
+      "id": "r-21",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "ok ",
+      "statusMessage": "acf5 bc31 0020 bd99 c740 0020 c0c1 d0dc"
+    },
+    {
+      "id": "r-22",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "Cleared",
+      "statusMessage": null
+    },
+    {
+      "id": "r-23",
+      "maxLength": 40,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "TOO_LONG",
+      "statusMessage": null
+    },
+    {
+      "id": "r-24",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "server_not_ready",
+      "statusMessage": null
+    },
+    {
+      "id": "r-25",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "invalid",
+      "statusMessage": null
+    },
+    {
+      "id": "r-26",
+      "maxLength": null,
+      "notice": {
+        "isError": true,
+        "text": "지금은 상태메시지를 바꿀 수 없어요"
+      },
+      "outcome": {
+        "kind": "invalid"
+      },
+      "status": "saved",
+      "statusMessage": "0078"
+    },
+    {
+      "id": "notices",
+      "rows": [
+        {
+          "notice": {
+            "isError": false,
+            "text": "상태메시지를 바꿨어요"
+          },
+          "outcome": {
+            "cps": "c0c1 d0dc",
+            "kind": "saved"
+          }
+        },
+        {
+          "notice": {
+            "isError": false,
+            "text": "상태메시지를 지웠어요"
+          },
+          "outcome": {
+            "kind": "cleared"
+          }
+        },
+        {
+          "notice": {
+            "isError": true,
+            "text": "상태메시지는 40자까지 쓸 수 있어요"
+          },
+          "outcome": {
+            "kind": "tooLong",
+            "maxLength": 40
+          }
+        },
+        {
+          "notice": {
+            "isError": true,
+            "text": "상태메시지는 7자까지 쓸 수 있어요"
+          },
+          "outcome": {
+            "kind": "tooLong",
+            "maxLength": 7
+          }
+        },
+        {
+          "notice": {
+            "isError": true,
+            "text": "쓸 수 없는 글자가 있어요"
+          },
+          "outcome": {
+            "kind": "notText"
+          }
+        },
+        {
+          "notice": {
+            "isError": true,
+            "text": "상태메시지는 서버 준비가 끝나면 쓸 수 있어요"
+          },
+          "outcome": {
+            "kind": "serverNotReady"
+          }
+        },
+        {
+          "notice": {
+            "isError": true,
+            "text": "지금은 상태메시지를 바꿀 수 없어요"
+          },
+          "outcome": {
+            "kind": "invalid"
+          }
+        }
+      ]
+    },
+    {
+      "clear": "지우기",
+      "cleared": "상태메시지를 지웠어요",
+      "hint": "다른 사람에게 보여요 · 비우면 지워져요",
+      "id": "texts",
+      "invalid": "지금은 상태메시지를 바꿀 수 없어요",
+      "maxLength": 40,
+      "network": "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+      "notText": "쓸 수 없는 글자가 있어요",
+      "placeholder": "지금 어떤지 한 줄로 남겨요",
+      "save": "저장",
+      "saved": "상태메시지를 바꿨어요",
+      "serverNotReady": "상태메시지는 서버 준비가 끝나면 쓸 수 있어요",
+      "title": "상태메시지",
+      "tooLong40": "상태메시지는 40자까지 쓸 수 있어요"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesText.swift",
+  "golden": "text/status-message",
+  "platformSensitive": true,
+  "schema": 1,
+  "spec": {
+    "notice": "StatusMessageText.notice: saved · cleared 는 오류 아님, 나머지 넷(tooLong · notText · serverNotReady · invalid)은 오류",
+    "outcome": "StatusMessageSaveOutcome(response:): ok → display(statusMessage)(NFC · 줄바꿈류 접기 · trim · 보이는 글자) 가 있으면 saved(그 값) 없으면 cleared · cleared → cleared · too_long → tooLong(max_length ?? 40) · not_text → notText · 그 밖(대소문자 · 공백 다른 것 포함) → invalid",
+    "platformSensitive": "true — saved 값이 display(NFC)를 거친다",
+    "wire": "요청 본문(p_text 키를 언제나 싣는다) · 응답 디코드 · 내 상태 GET 행은 W1-d wire 몫(G5 · G6) — 이 골든은 디코드한 세 칸에서 시작한다"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/StatusMessage.swift",
+    "Sources/CheckCore/CheckCoreShared.swift"
+  ]
+}

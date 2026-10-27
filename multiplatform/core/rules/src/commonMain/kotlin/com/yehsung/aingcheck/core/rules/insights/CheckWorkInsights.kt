@@ -6,6 +6,9 @@ import com.yehsung.aingcheck.core.rules.format.TokenNumberFormatter
 import com.yehsung.aingcheck.core.rules.format.parseSwiftInt
 import com.yehsung.aingcheck.core.rules.token.CodexEffectiveRule
 import com.yehsung.aingcheck.core.rules.token.TokenRowDisplayRule
+import com.yehsung.aingcheck.core.rules.text.Graphemes
+import com.yehsung.aingcheck.core.rules.text.TextScalars
+import com.yehsung.aingcheck.core.rules.text.codePointArray
 
 // 개인 근무 기록 인사이트의 순수 계산 계층. 서버는 work_sessions 원본 행만 주고 분해·요약은 전부 여기서 결정적으로 계산한다.
 // 모든 시간 경계는 KST. 시각은 1970 기준 초 Double(C§2.5 — Swift Date 와 1:1, 조각의 초는 Int(차) 로 자른다).
@@ -319,15 +322,10 @@ object WorkInsightsCalendar {
 /**
  * 서버 타임스탬프 파서(C§4 #30 — 골든 `dates/parse`). Apple `ISO8601DateFormatter`(.withInternetDateTime) → 소수초 판 → 소수부를
  * 도려내고(타임존이 없으면 Z) 다시. 결과는 언제나 **초 내림**(히트맵 조각마다 1초가 사라지지 않게).
+ * 포매터가 받는 꼴(ICU 파서 — Nd 숫자 · 부분 일치 시간대 · GMT/UTC 꼴)은 [IcuInternetDate] 가 옮긴다. 정규식은 쓰지 않는다
+ * (ART 의 java.util.regex 는 ICU 라 `\d` 가 Nd 전부를 받아 JDK 와 답이 갈린다 — 에뮬레이터 API 36 실측).
  */
 object WorkInsightsDate {
-    // ISO8601DateFormatter(.withInternetDateTime) 가 받는 꼴(골든 dates/parse 실측): yyyy-M(M)-d(d)TH(H):mm:ss + (Z | ±HH | ±HHmm | ±HH:mm).
-    // 달 13 · 분/초 60 은 거절, 시 24 · 날 넘침(2월 29일 · 9월 31일)은 다음 날로 넘긴다. 소수초 판은 초 뒤 '.' + 숫자.
-    // ★ 숫자는 `[0-9]` 로 적는다(`\d` 금지): ART 의 java.util.regex 는 ICU 라 `\d` 가 아랍-인도 숫자 같은 Nd 전부를 받는다(에뮬레이터 API 36 실측 —
-    //   "0.١٢" 가 소수부로 잡혀 toDouble 이 터졌다). JDK 는 ASCII 만 받아 데스크톱 시험만으로는 안 보인다.
-    private val PLAIN = Regex("""^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})T([0-9]{1,2}):([0-9]{2}):([0-9]{2})(Z|[+-][0-9]{2}(?::?[0-9]{2})?)$""")
-    private val FRACTIONAL = Regex("""^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})T([0-9]{1,2}):([0-9]{2}):([0-9]{2})\.([0-9]+)(Z|[+-][0-9]{2}(?::?[0-9]{2})?)$""")
-
     fun parse(value: String): Double? {
         val raw = parseRaw(value) ?: return null
         return kotlin.math.floor(raw)
@@ -346,50 +344,24 @@ object WorkInsightsDate {
     }
 
     private fun parseRaw(value: String): Double? {
-        plain(value)?.let { return it }
-        fractional(value)?.let { return it }
+        IcuInternetDate.parse(value, fractional = false)?.let { return it }
+        IcuInternetDate.parse(value, fractional = true)?.let { return it }
         val dot = value.indexOf('.')
         if (dot < 0) return null
         val rest = value.substring(dot + 1)
-        val firstNonDigit = rest.indexOfFirst { !isNumberCharacter(it) }
-        val trimmed = value.substring(0, dot) + if (firstNonDigit >= 0) rest.substring(firstNonDigit) else "Z"
-        return plain(trimmed)
-    }
-
-    /** Swift `Character.isNumber`(Nd · Nl · No) — 번들 표의 범주로. */
-    private fun isNumberCharacter(c: Char): Boolean =
-        com.yehsung.aingcheck.core.rules.text.TextScalars.generalCategory(c.code).let { it == "Nd" || it == "Nl" || it == "No" }
-
-    private fun plain(value: String): Double? {
-        val m = PLAIN.matchEntire(value) ?: return null
-        val g = m.groupValues
-        return compose(g[1], g[2], g[3], g[4], g[5], g[6], 0.0, g[7])
-    }
-
-    private fun fractional(value: String): Double? {
-        val m = FRACTIONAL.matchEntire(value) ?: return null
-        val g = m.groupValues
-        return compose(g[1], g[2], g[3], g[4], g[5], g[6], "0.${g[7]}".toDouble(), g[8])
-    }
-
-    private fun compose(y: String, mo: String, d: String, h: String, mi: String, s: String, fraction: Double, zone: String): Double? {
-        val year = y.toLong()
-        val month = mo.toLong()
-        val day = d.toLong()
-        val hour = h.toLong()
-        val minute = mi.toLong()
-        val second = s.toLong()
-        if (month !in 1L..12L || day !in 1L..31L || hour !in 0L..24L || minute !in 0L..59L || second !in 0L..59L) return null
-        val offsetSeconds = if (zone == "Z") 0L else {
-            val sign = if (zone[0] == '-') -1L else 1L
-            val digits = zone.substring(1).replace(":", "")
-            val minutes = if (digits.length >= 4) digits.substring(2, 4).toLong() else 0L
-            sign * (digits.substring(0, 2).toLong() * 3_600 + minutes * 60)
+        // Swift `rest.firstIndex(where: { !$0.isNumber })` — **글자(그래핌) 단위**, 그 글자의 첫 스칼라가 숫자인가.
+        var consumed = 0
+        for (cluster in Graphemes.clusters(rest)) {
+            if (!isNumberScalar(cluster.codePointArray()[0])) break
+            consumed += cluster.length
         }
-        val epochDay = KstCalendar.epochDayLenient(year, month, day)
-        val seconds = epochDay * 86_400 + hour * 3_600L + minute * 60L + second - offsetSeconds
-        return seconds.toDouble() + fraction
+        val trimmed = value.substring(0, dot) + if (consumed < rest.length) rest.substring(consumed) else "Z"
+        return IcuInternetDate.parse(trimmed, fractional = false)
     }
+
+    /** Swift `Character.isNumber`(첫 스칼라의 numericType != nil)을 번들 표의 범주 Nd · Nl · No 로(한자 수사 같은 Lo 숫자는 모형 밖). */
+    private fun isNumberScalar(cp: Int): Boolean =
+        TextScalars.generalCategory(cp).let { it == "Nd" || it == "Nl" || it == "No" }
 }
 
 /** 회고 배너를 이번 주에 보였는지 기록하는 키(KST 월요일 'YYYY-MM-DD'). */

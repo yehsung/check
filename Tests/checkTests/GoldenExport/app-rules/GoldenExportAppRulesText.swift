@@ -13,6 +13,7 @@ import Testing
 //   · text/graphemes       Swift String(확장 그래핌) 경계. G §8-16 ③: Kotlin 은 플랫폼 BreakIterator, InCB **2줄**을 `knownDivergence` 로 잠근다.
 //   · text/sanitize        MessageBody(sanitized · length · hasVisibleContent · validate) · StatusMessage(sanitized · length · validate ·
 //                          display · counterText) — 사용자 입력 → 서버와 같은 눈금.
+//   · text/status-message  StatusMessageSaveOutcome(response:) · StatusMessageText(notice · 고정 문구) — 디코드한 응답 세 칸 → 결과 → 문구.
 //   · stickers/tokens      아잉이 이모티콘(AingSticker): 토큰 여섯 · 통째 일치 판정(parse) · 글자 자리 미리보기(preview).
 //   · sort/natural-ko      이름 정렬(localizedStandardCompare = ko_KR 로캘의 compare(.caseInsensitive·.numeric·.widthInsensitive·
 //                          .forcedOrdering)) — C-X5 합성 이름 500개.
@@ -365,6 +366,78 @@ struct GoldenExportAppRulesText {
                 "status": "StatusMessage: sanitized = NFC → 줄바꿈류(09 0a 0b 0c 0d 85 2028 2029)가 든 공백·줄바꿈 묶음을 공백 하나로 → 앞뒤 trim(20 09 0a 0b 0c 0d a0 200b feff 3000) · validate = 빈·안 보임 먼저, 그다음 40 상한 · display = 안 보이면 null · counter = \"n/40\"",
                 "platformSensitive": "true — NFC 가 플랫폼 Normalizer 다(G §8-16 ①). 코퍼스는 NFC 갈림 조합(완성형 + 종성 자모 · 0f73 · 태그 + 결합)을 넣지 않는다 — 그 갈림은 text/nfc 가 잠근다",
                 "corpus": "손으로 고른 줄 + SplitMix64(0x5a710001) 무작위 240줄(입력 풀은 이 생성기의 sanitizePool)",
+            ],
+            cases: cases
+        ))
+    }
+
+    // MARK: text/status-message
+
+    static func statusOutcome(_ outcome: StatusMessageSaveOutcome) -> GoldenJSON {
+        switch outcome {
+        case .saved(let value): return ["kind": "saved", "cps": .string(Self.cps(value))]
+        case .cleared: return ["kind": "cleared"]
+        case .tooLong(let maxLength): return ["kind": "tooLong", "maxLength": .int(maxLength)]
+        case .notText: return ["kind": "notText"]
+        case .serverNotReady: return ["kind": "serverNotReady"]
+        case .invalid: return ["kind": "invalid"]
+        }
+    }
+
+    static func statusNotice(_ outcome: StatusMessageSaveOutcome) -> GoldenJSON {
+        let notice = StatusMessageText.notice(for: outcome)
+        return ["text": .string(notice.text), "isError": .bool(notice.isError)]
+    }
+
+    /// set_status_message 응답(이미 디코드한 세 칸 — 전선 디코드는 W1-d wire 몫) → 저장 결과 → 문구. status 는 대소문자 · 공백까지 정확히 본다.
+    static let statusResponses: [(status: String, statusMessage: String?, maxLength: Int?)] = [
+        ("ok", "오늘은 집중 모드", nil), ("ok", "  안녕\n하세요  ", nil), ("ok", "\u{1100}\u{1161}\u{11A8}", 40), ("ok", nil, nil),
+        ("ok", "", nil), ("ok", " \t\n", nil), ("ok", "\u{3164}\u{3164}", nil), ("ok", "\u{200B}", nil), ("ok", "😀", nil),
+        ("cleared", nil, nil), ("cleared", "남은 값", 40), ("too_long", nil, 40), ("too_long", nil, 25), ("too_long", nil, nil),
+        ("too_long", "x", 0), ("too_long", nil, -3), ("not_text", nil, nil), ("not_text", "abc", 40), ("unauthorized", nil, nil),
+        ("", nil, nil), ("OK", "대문자", nil), ("ok ", "공백 붙은 상태", nil), ("Cleared", nil, nil), ("TOO_LONG", nil, 40),
+        ("server_not_ready", nil, nil), ("invalid", nil, nil), ("saved", "x", nil),
+    ]
+
+    @Test("text/status-message — set_status_message 응답 → 저장 결과 → 문구(오류 여부) · 결과 여섯의 문구 · 고정 문구")
+    func statusMessageOutcome() {
+        var cases: [GoldenJSON] = []
+        for (index, response) in Self.statusResponses.enumerated() {
+            let outcome = StatusMessageSaveOutcome(response: SetStatusMessageResponse(
+                status: response.status, statusMessage: response.statusMessage, maxLength: response.maxLength))
+            cases.append([
+                "id": .string("r-" + Self.pad(index, 2)),
+                "status": .string(response.status),
+                "statusMessage": response.statusMessage.map { .string(Self.cps($0)) } ?? .null,
+                "maxLength": response.maxLength.map { .int($0) } ?? .null,
+                "outcome": Self.statusOutcome(outcome),
+                "notice": Self.statusNotice(outcome),
+            ])
+        }
+        // 응답에서 나오지 않는 결과(serverNotReady — 서비스가 PGRST202 · 404 에서 만든다)까지 결과 여섯의 문구.
+        let outcomes: [StatusMessageSaveOutcome] = [.saved("상태"), .cleared, .tooLong(maxLength: 40), .tooLong(maxLength: 7),
+                                                    .notText, .serverNotReady, .invalid]
+        cases.append(["id": "notices", "rows": .array(outcomes.map { ["outcome": Self.statusOutcome($0), "notice": Self.statusNotice($0)] })])
+        cases.append([
+            "id": "texts",
+            "title": .string(StatusMessageText.title), "placeholder": .string(StatusMessageText.placeholder),
+            "save": .string(StatusMessageText.save), "clear": .string(StatusMessageText.clear),
+            "saved": .string(StatusMessageText.saved), "cleared": .string(StatusMessageText.cleared),
+            "notText": .string(StatusMessageText.notText), "invalid": .string(StatusMessageText.invalid),
+            "serverNotReady": .string(StatusMessageText.serverNotReady), "network": .string(StatusMessageText.network),
+            "hint": .string(StatusMessageText.hint), "tooLong40": .string(StatusMessageText.tooLong(40)),
+            "maxLength": .int(StatusMessage.maxLength),
+        ])
+        goldenEmit(GoldenFile(
+            golden: "text/status-message",
+            equivalence: .bit,
+            swiftSources: ["Sources/CheckCore/StatusMessage.swift", "Sources/CheckCore/CheckCoreShared.swift"],
+            platformSensitive: true,
+            spec: [
+                "outcome": "StatusMessageSaveOutcome(response:): ok → display(statusMessage)(NFC · 줄바꿈류 접기 · trim · 보이는 글자) 가 있으면 saved(그 값) 없으면 cleared · cleared → cleared · too_long → tooLong(max_length ?? 40) · not_text → notText · 그 밖(대소문자 · 공백 다른 것 포함) → invalid",
+                "notice": "StatusMessageText.notice: saved · cleared 는 오류 아님, 나머지 넷(tooLong · notText · serverNotReady · invalid)은 오류",
+                "wire": "요청 본문(p_text 키를 언제나 싣는다) · 응답 디코드 · 내 상태 GET 행은 W1-d wire 몫(G5 · G6) — 이 골든은 디코드한 세 칸에서 시작한다",
+                "platformSensitive": "true — saved 값이 display(NFC)를 거친다",
             ],
             cases: cases
         ))

@@ -196,7 +196,9 @@ struct GoldenExportAppRulesCharacter {
             "alreadyClaimed": .string(CakeGiftText.alreadyClaimed),
         ])
         let words = ["딸기 케이크 아잉이", "초코 케이크 아잉이", "황금 아잉이", "곰", "각", "가", "힣", "aing", "", "  ", "아잉이 ", "케이크\n",
-                     "여우😀", "닭", "ㄱ", "123", "Kim", "뷁"]
+                     "여우😀", "닭", "ㄱ", "123", "Kim", "뷁",
+                     // 받침 있는 글자 + 꼬리 공백 · 줄바꿈(앞뒤를 걷어야 '을' — 걷지 않으면 마지막 스칼라가 공백이라 '를').
+                     "곰 ", "닭\n", "\t각\r\n", "곰\u{3000}", "  힣  ", "곰\u{2028}"]
         cases.append([
             "id": "particles",
             "rows": .array(words.map { word in
@@ -258,6 +260,23 @@ struct GoldenExportAppRulesCharacter {
         for (name, ids) in portraitSets {
             var files: [String] = []
             for id in ids { files += ["\(id)-neutral", "\(id)-negative"] }
+            cases.append(["id": .string("portraits-\(name)"), "portraitFiles": .array(files.map(GoldenJSON.string)),
+                          "protocol": .int(ShopWire.protocolVersion(drawableCharacterIDs: ids))])
+        }
+        // 초상이 **한 장만** 있는 id 는 그릴 수 없다(두 장 다 있어야 — 폰 `AingCharacterArt` 는 표정 둘을 다 그린다). ids 가 그릴 수 있는 집합,
+        // strays 는 짝 없이 한 장만 실린 그림이다 — 번호는 ids 로만 정한다(한 장짜리를 세면 그 캐릭터 카드가 아잉 그림으로 팔린다).
+        let strayPortraitSets: [(String, [String], [String])] = [
+            ("cake-choco-neutral-only", ["robot", "aing_gold", "aing_rainbow", "aing_cake_strawberry"], ["aing_cake_choco-neutral"]),
+            ("cake-strawberry-negative-only", ["robot", "aing_gold", "aing_rainbow", "aing_cake_choco"], ["aing_cake_strawberry-negative"]),
+            ("rainbow-neutral-only", ["robot", "aing_gold", "aing_cake_strawberry", "aing_cake_choco"], ["aing_rainbow-neutral"]),
+            ("gold-neutral-only", ["robot"], ["aing_gold-neutral"]),
+            ("robot-negative-only", ["fox", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco"], ["robot-negative"]),
+            ("robot-neutral-only", ["fox", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco"], ["robot-neutral"]),
+        ]
+        for (name, ids, strays) in strayPortraitSets {
+            var files: [String] = []
+            for id in ids { files += ["\(id)-neutral", "\(id)-negative"] }
+            files += strays
             cases.append(["id": .string("portraits-\(name)"), "portraitFiles": .array(files.map(GoldenJSON.string)),
                           "protocol": .int(ShopWire.protocolVersion(drawableCharacterIDs: ids))])
         }

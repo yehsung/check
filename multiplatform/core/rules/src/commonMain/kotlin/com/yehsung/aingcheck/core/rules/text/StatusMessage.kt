@@ -1,13 +1,6 @@
 // 원본: Sources/CheckCore/StatusMessage.swift @ 1b8260d (+ CheckCoreShared.swift statusMessageMaxLength)
 package com.yehsung.aingcheck.core.rules.text
 
-import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
-import com.yehsung.aingcheck.core.rules.format.swiftKeyed
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-
 // v0.3.51 · 상태메시지(사장님 결정 2026-10-14): 40자(코드포인트) · 한 줄 · 맥과 폰. 만료 없음 · 비우면 지움 · 쿨타임 없음.
 // 서버 정본은 set_status_message 다. 여기 있는 것은 ① 입력 카운터와 저장 게이트가 서버와 같은 눈금으로 세게 하는 정규화(서버 ①②③),
 // ② 남의 상태를 화면에 올리기 전 관문(display), ③ RPC 응답 → 결과 · 안내 문구(맥·폰·Android 가 같은 말을 한다).
@@ -86,39 +79,10 @@ object StatusMessage {
     fun counterText(raw: String): String = "${length(raw)}/$maxLength"
 }
 
-// MARK: - 전선 위 모양(이 파일 몫 — StatusMessage.swift 한 파일이 한 Kotlin 파일이다, C§2.3)
-
-/**
- * `set_status_message(p_text text default null)` 요청. **p_text 키를 언제나 싣는다**(null 이면 JSON null) —
- * PostgREST 는 본문 키 집합으로 함수를 고른다. 지우기를 `{}` 로 보내면 서버 기본값에 기대게 된다.
- */
-data class SetStatusMessageRequest(val pText: String?) {
-    /** 본문 JSON(키 `p_text` 를 언제나 싣는다 — 와이어 갈래의 요청 골든이 키 집합을 대조한다). */
-    fun body(): JsonObject = JsonObject(mapOf("p_text" to (pText?.let { JsonPrimitive(it) } ?: JsonNull)))
-}
-
-/** set_status_message 응답: { status, status_message?, max_length? }. status 만 필수 — 나머지는 있으면 모양이 맞아야 한다(합성 Decodable). */
-data class SetStatusMessageResponse(val status: String, val statusMessage: String? = null, val maxLength: Long? = null) {
-    companion object {
-        /** Swift `init(from:)` — status 가 없거나 글자가 아니면 [SwiftDecodingError]. */
-        fun decode(element: JsonElement): SetStatusMessageResponse {
-            val c = swiftKeyed(element)
-            return SetStatusMessageResponse(
-                status = c.string("status"),
-                statusMessage = c.stringIfPresent("statusMessage"),
-                maxLength = c.intIfPresent("maxLength"),
-            )
-        }
-    }
-}
-
-/** 내 상태메시지 GET 의 1칸 행(`profiles?select=status_message&id=eq.<me>`). 별도 GET 이다(42703 이 다른 요청을 죽이지 않게). */
-data class ProfileStatusMessageRow(val statusMessage: String?) {
-    companion object {
-        fun decode(element: JsonElement): ProfileStatusMessageRow =
-            ProfileStatusMessageRow(swiftKeyed(element).stringIfPresent("statusMessage"))
-    }
-}
+// MARK: - 저장 결과 · 문구
+//
+// 전선 위 모양(`set_status_message` 요청 본문 — p_text 키를 언제나 싣는다 · 응답 디코드 · 내 상태 GET 행)은 W1-d wire 몫이다
+// (core/wire models — G5 요청 골든 · G6 디코드). 여기는 디코드한 응답 세 칸에서 시작한다(골든 text/status-message).
 
 /** 저장 결과(스토어·화면 공유). 모르는 status 는 `invalid` 로 접는다. */
 sealed interface StatusMessageSaveOutcome {
@@ -133,11 +97,15 @@ sealed interface StatusMessageSaveOutcome {
     data object invalid : StatusMessageSaveOutcome
 
     companion object {
-        fun from(response: SetStatusMessageResponse): StatusMessageSaveOutcome = when (response.status) {
+        /**
+         * Swift `StatusMessageSaveOutcome(response:)` — 응답 `{ status, status_message?, max_length? }` 세 칸(디코드는 wire) → 결과.
+         * status 는 대소문자 · 공백까지 정확히 본다(모르면 `invalid`).
+         */
+        fun from(status: String, statusMessage: String?, maxLength: Long?): StatusMessageSaveOutcome = when (status) {
             // ok 인데 값이 없거나 비면 서버가 지운 것과 같다(빈 줄을 그리지 않는다).
-            "ok" -> StatusMessage.display(response.statusMessage)?.let { saved(it) } ?: cleared
+            "ok" -> StatusMessage.display(statusMessage)?.let { saved(it) } ?: cleared
             "cleared" -> cleared
-            "too_long" -> tooLong(response.maxLength?.toInt() ?: StatusMessage.maxLength)
+            "too_long" -> tooLong(maxLength?.toInt() ?: StatusMessage.maxLength)
             "not_text" -> notText
             else -> invalid
         }

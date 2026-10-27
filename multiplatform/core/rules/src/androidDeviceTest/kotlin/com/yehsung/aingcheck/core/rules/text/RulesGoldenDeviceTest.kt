@@ -63,6 +63,12 @@ class RulesGoldenDeviceTest {
     fun sanitizeMatchesSwift() = TextGoldenChecks.sanitize(load("text/sanitize"))
 
     @Test
+    fun statusMessageOutcomeMatchesSwift() {
+        val responses = TextGoldenChecks.statusMessage(load("text/status-message"))
+        note("text/status-message responses=$responses")
+    }
+
+    @Test
     fun stickerTokensMatchSwift() = TextGoldenChecks.stickers(load("stickers/tokens"))
 
     @Test

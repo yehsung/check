@@ -118,6 +118,71 @@ object TextGoldenChecks {
         is StatusMessageValidation.tooLong -> "tooLong:" + value.maxLength
     }
 
+    /** text/status-message — 디코드한 응답 세 칸 → 저장 결과 → 문구(오류 여부) · 결과 여섯의 문구 · 고정 문구. 돌려주는 값 = 응답 줄 수. */
+    fun statusMessage(golden: GoldenFile): Int {
+        var responses = 0
+        for (case in golden.cases.filter { it.string("id").startsWith("r-") }) {
+            val id = case.string("id")
+            val message = case["statusMessage"]
+            val maxLength = case["maxLength"]
+            val outcome = StatusMessageSaveOutcome.from(
+                status = case.string("status"),
+                statusMessage = if (message == null || message is JsonNull) null else text(message.jsonPrimitive.content),
+                maxLength = if (maxLength == null || maxLength is JsonNull) null else maxLength.jsonPrimitive.content.toLong(),
+            )
+            assertEquals(statusOutcome(case.obj("outcome")), describe(outcome), golden.failure(id, "StatusMessageSaveOutcome.from"))
+            assertEquals(statusNotice(case.obj("notice")), describeNotice(outcome), golden.failure(id, "StatusMessageText.notice"))
+            responses++
+        }
+        val notices = golden.case("notices").array("rows")
+        for ((index, row) in notices.withIndex()) {
+            val obj = row as JsonObject
+            val want = obj.obj("outcome")
+            val outcome = when (val kind = want.string("kind")) {
+                "saved" -> StatusMessageSaveOutcome.saved(text(want.string("cps")))
+                "cleared" -> StatusMessageSaveOutcome.cleared
+                "tooLong" -> StatusMessageSaveOutcome.tooLong(want.int("maxLength"))
+                "notText" -> StatusMessageSaveOutcome.notText
+                "serverNotReady" -> StatusMessageSaveOutcome.serverNotReady
+                "invalid" -> StatusMessageSaveOutcome.invalid
+                else -> fail("모르는 결과 kind $kind")
+            }
+            assertEquals(statusNotice(obj.obj("notice")), describeNotice(outcome), golden.failure("notices#$index", "StatusMessageText.notice"))
+        }
+        assertEquals(7, notices.size, "notices 는 결과 여섯(tooLong 두 값)을 다 싣는다")
+        val texts = golden.case("texts")
+        val got = mapOf(
+            "title" to StatusMessageText.title, "placeholder" to StatusMessageText.placeholder, "save" to StatusMessageText.save,
+            "clear" to StatusMessageText.clear, "saved" to StatusMessageText.saved, "cleared" to StatusMessageText.cleared,
+            "notText" to StatusMessageText.notText, "invalid" to StatusMessageText.invalid, "serverNotReady" to StatusMessageText.serverNotReady,
+            "network" to StatusMessageText.network, "hint" to StatusMessageText.hint, "tooLong40" to StatusMessageText.tooLong(40),
+        )
+        for ((key, value) in got) assertEquals(texts.string(key), value, golden.failure("texts", "StatusMessageText.$key"))
+        assertEquals(texts.int("maxLength"), StatusMessage.maxLength, golden.failure("texts", "StatusMessage.maxLength"))
+        return responses
+    }
+
+    private fun statusOutcome(obj: JsonObject): String = when (val kind = obj.string("kind")) {
+        "saved" -> "saved:" + obj.string("cps")
+        "tooLong" -> "tooLong:" + obj.int("maxLength")
+        "cleared", "notText", "serverNotReady", "invalid" -> kind
+        else -> fail("모르는 결과 kind $kind")
+    }
+
+    private fun describe(value: StatusMessageSaveOutcome): String = when (value) {
+        is StatusMessageSaveOutcome.saved -> "saved:" + cps(value.value)
+        StatusMessageSaveOutcome.cleared -> "cleared"
+        is StatusMessageSaveOutcome.tooLong -> "tooLong:" + value.maxLength
+        StatusMessageSaveOutcome.notText -> "notText"
+        StatusMessageSaveOutcome.serverNotReady -> "serverNotReady"
+        StatusMessageSaveOutcome.invalid -> "invalid"
+    }
+
+    private fun statusNotice(obj: JsonObject): String = obj.string("text") + "|error=" + obj["isError"]!!.jsonPrimitive.content
+
+    private fun describeNotice(outcome: StatusMessageSaveOutcome): String =
+        StatusMessageText.notice(outcome).let { (text, isError) -> "$text|error=$isError" }
+
     /** stickers/tokens — 여섯 토큰 · 판정 · 미리보기. */
     fun stickers(golden: GoldenFile) {
         val stickers = golden.cases.filter { it.string("id").startsWith("sticker-") }.sortedBy { it.int("order") }

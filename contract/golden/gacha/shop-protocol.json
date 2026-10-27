@@ -659,6 +659,94 @@
         "squirrel-negative"
       ],
       "protocol": 4
+    },
+    {
+      "id": "portraits-cake-choco-neutral-only",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_cake_strawberry-neutral",
+        "aing_cake_strawberry-negative",
+        "aing_cake_choco-neutral"
+      ],
+      "protocol": 3
+    },
+    {
+      "id": "portraits-cake-strawberry-negative-only",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_cake_choco-neutral",
+        "aing_cake_choco-negative",
+        "aing_cake_strawberry-negative"
+      ],
+      "protocol": 3
+    },
+    {
+      "id": "portraits-rainbow-neutral-only",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_cake_strawberry-neutral",
+        "aing_cake_strawberry-negative",
+        "aing_cake_choco-neutral",
+        "aing_cake_choco-negative",
+        "aing_rainbow-neutral"
+      ],
+      "protocol": 2
+    },
+    {
+      "id": "portraits-gold-neutral-only",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral"
+      ],
+      "protocol": 1
+    },
+    {
+      "id": "portraits-robot-negative-only",
+      "portraitFiles": [
+        "fox-neutral",
+        "fox-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_cake_strawberry-neutral",
+        "aing_cake_strawberry-negative",
+        "aing_cake_choco-neutral",
+        "aing_cake_choco-negative",
+        "robot-negative"
+      ],
+      "protocol": 0
+    },
+    {
+      "id": "portraits-robot-neutral-only",
+      "portraitFiles": [
+        "fox-neutral",
+        "fox-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_cake_strawberry-neutral",
+        "aing_cake_strawberry-negative",
+        "aing_cake_choco-neutral",
+        "aing_cake_choco-negative",
+        "robot-neutral"
+      ],
+      "protocol": 0
     }
   ],
   "equivalence": "bit",

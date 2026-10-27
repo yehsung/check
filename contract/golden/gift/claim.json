@@ -293,6 +293,36 @@
           "particle": "을",
           "received": "뷁을 받았어요!",
           "word": "뷁"
+        },
+        {
+          "particle": "을",
+          "received": "곰 을 받았어요!",
+          "word": "곰 "
+        },
+        {
+          "particle": "을",
+          "received": "닭\n을 받았어요!",
+          "word": "닭\n"
+        },
+        {
+          "particle": "을",
+          "received": "\t각\r\n을 받았어요!",
+          "word": "\t각\r\n"
+        },
+        {
+          "particle": "을",
+          "received": "곰　을 받았어요!",
+          "word": "곰　"
+        },
+        {
+          "particle": "을",
+          "received": "  힣  을 받았어요!",
+          "word": "  힣  "
+        },
+        {
+          "particle": "을",
+          "received": "곰 을 받았어요!",
+          "word": "곰 "
         }
       ]
     }

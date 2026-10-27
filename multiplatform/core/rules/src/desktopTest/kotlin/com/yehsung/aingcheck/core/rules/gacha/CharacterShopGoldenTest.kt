@@ -212,7 +212,8 @@ class CharacterShopGoldenTest {
             assertEquals(case.int("protocol"), ShopWire.protocolVersion(ShopWire.drawableCharacterIDs(files)), golden.failure(case.string("id"), "초상 집합 → 번호"))
             sets++
         }
-        assertEquals(7, sets)
+        // 짝 없는 한 장(…-neutral-only · …-negative-only) 여섯 줄 포함 — 초상 두 장 중 하나라도 빠진 id 는 그릴 수 없다.
+        assertEquals(13, sets)
     }
 
     // ---------- gacha/odds ----------

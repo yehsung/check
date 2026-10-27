@@ -1,0 +1,678 @@
+{
+  "cases": [
+    {
+      "id": "subsets",
+      "rows": [
+        {
+          "drawable": [],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow"
+          ],
+          "protocol": 3
+        },
+        {
+          "drawable": [
+            "aing_cake_strawberry"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_cake_strawberry"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_cake_strawberry"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_cake_strawberry"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow",
+            "aing_cake_strawberry"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow",
+            "aing_cake_strawberry"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry"
+          ],
+          "protocol": 3
+        },
+        {
+          "drawable": [
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_cake_choco"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_cake_choco"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow",
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow",
+            "aing_cake_choco"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_choco"
+          ],
+          "protocol": 3
+        },
+        {
+          "drawable": [
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "protocol": 4
+        },
+        {
+          "drawable": [
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "fox"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow",
+            "fox"
+          ],
+          "protocol": 3
+        },
+        {
+          "drawable": [
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "fox"
+          ],
+          "protocol": 3
+        },
+        {
+          "drawable": [
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 3
+        },
+        {
+          "drawable": [
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 2
+        },
+        {
+          "drawable": [
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 1
+        },
+        {
+          "drawable": [
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 0
+        },
+        {
+          "drawable": [
+            "robot",
+            "aing_gold",
+            "aing_rainbow",
+            "aing_cake_strawberry",
+            "aing_cake_choco",
+            "fox"
+          ],
+          "protocol": 4
+        }
+      ]
+    },
+    {
+      "cakeCharacterIDs": [
+        "aing_cake_strawberry",
+        "aing_cake_choco"
+      ],
+      "cakeProtocol": 4,
+      "goldCharacterID": "aing_gold",
+      "goldProtocol": 2,
+      "id": "constants",
+      "legacyProtocol": 0,
+      "rainbowCharacterID": "aing_rainbow",
+      "rainbowProtocol": 3,
+      "robotCharacterID": "robot",
+      "robotProtocol": 1,
+      "thresholds": [
+        {
+          "protocol": -1,
+          "supportsCakeGift": false,
+          "supportsGacha": false
+        },
+        {
+          "protocol": 0,
+          "supportsCakeGift": false,
+          "supportsGacha": false
+        },
+        {
+          "protocol": 1,
+          "supportsCakeGift": false,
+          "supportsGacha": false
+        },
+        {
+          "protocol": 2,
+          "supportsCakeGift": false,
+          "supportsGacha": true
+        },
+        {
+          "protocol": 3,
+          "supportsCakeGift": false,
+          "supportsGacha": true
+        },
+        {
+          "protocol": 4,
+          "supportsCakeGift": true,
+          "supportsGacha": true
+        },
+        {
+          "protocol": 5,
+          "supportsCakeGift": true,
+          "supportsGacha": true
+        },
+        {
+          "protocol": 6,
+          "supportsCakeGift": true,
+          "supportsGacha": true
+        }
+      ]
+    },
+    {
+      "id": "portraits-none",
+      "portraitFiles": [],
+      "protocol": 0
+    },
+    {
+      "id": "portraits-sprites-only",
+      "portraitFiles": [
+        "fox-neutral",
+        "fox-negative",
+        "robot-neutral",
+        "robot-negative"
+      ],
+      "protocol": 1
+    },
+    {
+      "id": "portraits-no-robot",
+      "portraitFiles": [
+        "fox-neutral",
+        "fox-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_cake_strawberry-neutral",
+        "aing_cake_strawberry-negative",
+        "aing_cake_choco-neutral",
+        "aing_cake_choco-negative"
+      ],
+      "protocol": 0
+    },
+    {
+      "id": "portraits-gold",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative"
+      ],
+      "protocol": 2
+    },
+    {
+      "id": "portraits-rainbow",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative"
+      ],
+      "protocol": 3
+    },
+    {
+      "id": "portraits-one-cake",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_cake_strawberry-neutral",
+        "aing_cake_strawberry-negative"
+      ],
+      "protocol": 3
+    },
+    {
+      "id": "portraits-all",
+      "portraitFiles": [
+        "robot-neutral",
+        "robot-negative",
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_cake_strawberry-neutral",
+        "aing_cake_strawberry-negative",
+        "aing_cake_choco-neutral",
+        "aing_cake_choco-negative",
+        "fox-neutral",
+        "fox-negative",
+        "squirrel-neutral",
+        "squirrel-negative"
+      ],
+      "protocol": 4
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
+  "golden": "gacha/shop-protocol",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "portraits": "G §8-7 ③ — 폰 · Android · Windows 첫 판의 '그릴 수 있다' = 그 id 의 초상 두 장(<id>-neutral · <id>-negative)이 번들에 있다. 그림 자산을 지운 빌드는 번호가 내려간다",
+    "protocol": "K9 — 번호는 그릴 수 있는 id 에서 파생한다(상수로 박지 않는다). 누적: robot 없으면 0, 금 없으면 1, 무지개 없으면 2, 케이크 둘이 다 있으면 4 아니면 3",
+    "thresholds": "supportsGacha = 번호 ≥ 2 · supportsCakeGift = 번호 ≥ 4"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/ShopProtocol.swift",
+    "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"
+  ]
+}

@@ -1,0 +1,2106 @@
+{
+  "cases": [
+    {
+      "id": "manifest-bundle-fox",
+      "json": "{\n  \"id\": \"fox\",\n  \"displayName\": \"여우\",\n  \"kind\": \"sprite\",\n  \"atlas\": {\n    \"file\": \"atlas.png\",\n    \"width\": 2412,\n    \"height\": 516,\n    \"states\": {\n      \"frontIdle\": {\n        \"frames\": [\n          {\n            \"x\": 0,\n            \"y\": 0,\n            \"w\": 603,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideIdle\": {\n        \"frames\": [\n          {\n            \"x\": 1206,\n            \"y\": 0,\n            \"w\": 603,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideWalk\": {\n        \"frames\": [\n          {\n            \"x\": 603,\n            \"y\": 0,\n            \"w\": 603,\n            \"h\": 516\n          },\n          {\n            \"x\": 1206,\n            \"y\": 0,\n            \"w\": 603,\n            \"h\": 516\n          },\n          {\n            \"x\": 1809,\n            \"y\": 0,\n            \"w\": 603,\n            \"h\": 516\n          },\n          {\n            \"x\": 1206,\n            \"y\": 0,\n            \"w\": 603,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          140,\n          140,\n          140,\n          140\n        ],\n        \"loop\": true\n      }\n    }\n  },\n  \"portrait\": {\n    \"neutral\": \"portrait-neutral.png\",\n    \"negative\": \"portrait-negative.png\"\n  },\n  \"pixelArt\": false\n}\n",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 516,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  603,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  1206,
+                  0,
+                  603,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                140,
+                140,
+                140,
+                140
+              ],
+              "frames": [
+                [
+                  603,
+                  0,
+                  603,
+                  516
+                ],
+                [
+                  1206,
+                  0,
+                  603,
+                  516
+                ],
+                [
+                  1809,
+                  0,
+                  603,
+                  516
+                ],
+                [
+                  1206,
+                  0,
+                  603,
+                  516
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 2412
+        },
+        "displayName": "여우",
+        "finish": "standard",
+        "id": "fox",
+        "kind": "sprite",
+        "pixelArt": false,
+        "portrait": {
+          "negative": "portrait-negative.png",
+          "neutral": "portrait-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-bundle-ghost",
+      "json": "{\n  \"id\": \"ghost\",\n  \"displayName\": \"유령\",\n  \"kind\": \"sprite\",\n  \"atlas\": {\n    \"file\": \"atlas.png\",\n    \"width\": 2032,\n    \"height\": 516,\n    \"states\": {\n      \"frontIdle\": {\n        \"frames\": [\n          {\n            \"x\": 0,\n            \"y\": 0,\n            \"w\": 508,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideIdle\": {\n        \"frames\": [\n          {\n            \"x\": 1016,\n            \"y\": 0,\n            \"w\": 508,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideWalk\": {\n        \"frames\": [\n          {\n            \"x\": 508,\n            \"y\": 0,\n            \"w\": 508,\n            \"h\": 516\n          },\n          {\n            \"x\": 1016,\n            \"y\": 0,\n            \"w\": 508,\n            \"h\": 516\n          },\n          {\n            \"x\": 1524,\n            \"y\": 0,\n            \"w\": 508,\n            \"h\": 516\n          },\n          {\n            \"x\": 1016,\n            \"y\": 0,\n            \"w\": 508,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          140,\n          140,\n          140,\n          140\n        ],\n        \"loop\": true\n      }\n    }\n  },\n  \"portrait\": {\n    \"neutral\": \"portrait-neutral.png\",\n    \"negative\": \"portrait-negative.png\"\n  },\n  \"pixelArt\": false\n}\n",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 516,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  508,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  1016,
+                  0,
+                  508,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                140,
+                140,
+                140,
+                140
+              ],
+              "frames": [
+                [
+                  508,
+                  0,
+                  508,
+                  516
+                ],
+                [
+                  1016,
+                  0,
+                  508,
+                  516
+                ],
+                [
+                  1524,
+                  0,
+                  508,
+                  516
+                ],
+                [
+                  1016,
+                  0,
+                  508,
+                  516
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 2032
+        },
+        "displayName": "유령",
+        "finish": "standard",
+        "id": "ghost",
+        "kind": "sprite",
+        "pixelArt": false,
+        "portrait": {
+          "negative": "portrait-negative.png",
+          "neutral": "portrait-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-bundle-jellyfish",
+      "json": "{\n  \"id\": \"jellyfish\",\n  \"displayName\": \"해파리\",\n  \"kind\": \"sprite\",\n  \"atlas\": {\n    \"file\": \"atlas.png\",\n    \"width\": 2444,\n    \"height\": 516,\n    \"states\": {\n      \"frontIdle\": {\n        \"frames\": [\n          {\n            \"x\": 0,\n            \"y\": 0,\n            \"w\": 611,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideIdle\": {\n        \"frames\": [\n          {\n            \"x\": 1222,\n            \"y\": 0,\n            \"w\": 611,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideWalk\": {\n        \"frames\": [\n          {\n            \"x\": 611,\n            \"y\": 0,\n            \"w\": 611,\n            \"h\": 516\n          },\n          {\n            \"x\": 1222,\n            \"y\": 0,\n            \"w\": 611,\n            \"h\": 516\n          },\n          {\n            \"x\": 1833,\n            \"y\": 0,\n            \"w\": 611,\n            \"h\": 516\n          },\n          {\n            \"x\": 1222,\n            \"y\": 0,\n            \"w\": 611,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          140,\n          140,\n          140,\n          140\n        ],\n        \"loop\": true\n      }\n    }\n  },\n  \"portrait\": {\n    \"neutral\": \"portrait-neutral.png\",\n    \"negative\": \"portrait-negative.png\"\n  },\n  \"pixelArt\": false\n}\n",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 516,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  611,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  1222,
+                  0,
+                  611,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                140,
+                140,
+                140,
+                140
+              ],
+              "frames": [
+                [
+                  611,
+                  0,
+                  611,
+                  516
+                ],
+                [
+                  1222,
+                  0,
+                  611,
+                  516
+                ],
+                [
+                  1833,
+                  0,
+                  611,
+                  516
+                ],
+                [
+                  1222,
+                  0,
+                  611,
+                  516
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 2444
+        },
+        "displayName": "해파리",
+        "finish": "standard",
+        "id": "jellyfish",
+        "kind": "sprite",
+        "pixelArt": false,
+        "portrait": {
+          "negative": "portrait-negative.png",
+          "neutral": "portrait-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-bundle-robot",
+      "json": "{\n  \"id\": \"robot\",\n  \"displayName\": \"로봇\",\n  \"kind\": \"sprite\",\n  \"atlas\": {\n    \"file\": \"atlas.png\",\n    \"width\": 1696,\n    \"height\": 516,\n    \"states\": {\n      \"frontIdle\": {\n        \"frames\": [\n          {\n            \"x\": 0,\n            \"y\": 0,\n            \"w\": 424,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideIdle\": {\n        \"frames\": [\n          {\n            \"x\": 848,\n            \"y\": 0,\n            \"w\": 424,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideWalk\": {\n        \"frames\": [\n          {\n            \"x\": 424,\n            \"y\": 0,\n            \"w\": 424,\n            \"h\": 516\n          },\n          {\n            \"x\": 848,\n            \"y\": 0,\n            \"w\": 424,\n            \"h\": 516\n          },\n          {\n            \"x\": 1272,\n            \"y\": 0,\n            \"w\": 424,\n            \"h\": 516\n          },\n          {\n            \"x\": 848,\n            \"y\": 0,\n            \"w\": 424,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          140,\n          140,\n          140,\n          140\n        ],\n        \"loop\": true\n      }\n    }\n  },\n  \"portrait\": {\n    \"neutral\": \"portrait-neutral.png\",\n    \"negative\": \"portrait-negative.png\"\n  },\n  \"pixelArt\": false\n}\n",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 516,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  424,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  848,
+                  0,
+                  424,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                140,
+                140,
+                140,
+                140
+              ],
+              "frames": [
+                [
+                  424,
+                  0,
+                  424,
+                  516
+                ],
+                [
+                  848,
+                  0,
+                  424,
+                  516
+                ],
+                [
+                  1272,
+                  0,
+                  424,
+                  516
+                ],
+                [
+                  848,
+                  0,
+                  424,
+                  516
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 1696
+        },
+        "displayName": "로봇",
+        "finish": "standard",
+        "id": "robot",
+        "kind": "sprite",
+        "pixelArt": false,
+        "portrait": {
+          "negative": "portrait-negative.png",
+          "neutral": "portrait-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-bundle-shiba",
+      "json": "{\n  \"id\": \"shiba\",\n  \"displayName\": \"강아지\",\n  \"kind\": \"sprite\",\n  \"atlas\": {\n    \"file\": \"atlas.png\",\n    \"width\": 2268,\n    \"height\": 516,\n    \"states\": {\n      \"frontIdle\": {\n        \"frames\": [\n          {\n            \"x\": 0,\n            \"y\": 0,\n            \"w\": 567,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideIdle\": {\n        \"frames\": [\n          {\n            \"x\": 1134,\n            \"y\": 0,\n            \"w\": 567,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideWalk\": {\n        \"frames\": [\n          {\n            \"x\": 567,\n            \"y\": 0,\n            \"w\": 567,\n            \"h\": 516\n          },\n          {\n            \"x\": 1134,\n            \"y\": 0,\n            \"w\": 567,\n            \"h\": 516\n          },\n          {\n            \"x\": 1701,\n            \"y\": 0,\n            \"w\": 567,\n            \"h\": 516\n          },\n          {\n            \"x\": 1134,\n            \"y\": 0,\n            \"w\": 567,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          140,\n          140,\n          140,\n          140\n        ],\n        \"loop\": true\n      }\n    }\n  },\n  \"portrait\": {\n    \"neutral\": \"portrait-neutral.png\",\n    \"negative\": \"portrait-negative.png\"\n  },\n  \"pixelArt\": false\n}\n",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 516,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  567,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  1134,
+                  0,
+                  567,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                140,
+                140,
+                140,
+                140
+              ],
+              "frames": [
+                [
+                  567,
+                  0,
+                  567,
+                  516
+                ],
+                [
+                  1134,
+                  0,
+                  567,
+                  516
+                ],
+                [
+                  1701,
+                  0,
+                  567,
+                  516
+                ],
+                [
+                  1134,
+                  0,
+                  567,
+                  516
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 2268
+        },
+        "displayName": "강아지",
+        "finish": "standard",
+        "id": "shiba",
+        "kind": "sprite",
+        "pixelArt": false,
+        "portrait": {
+          "negative": "portrait-negative.png",
+          "neutral": "portrait-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-bundle-squirrel",
+      "json": "{\n  \"id\": \"squirrel\",\n  \"displayName\": \"다람쥐\",\n  \"kind\": \"sprite\",\n  \"atlas\": {\n    \"file\": \"atlas.png\",\n    \"width\": 1768,\n    \"height\": 516,\n    \"states\": {\n      \"frontIdle\": {\n        \"frames\": [\n          {\n            \"x\": 0,\n            \"y\": 0,\n            \"w\": 442,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideIdle\": {\n        \"frames\": [\n          {\n            \"x\": 884,\n            \"y\": 0,\n            \"w\": 442,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          1000\n        ],\n        \"loop\": true\n      },\n      \"sideWalk\": {\n        \"frames\": [\n          {\n            \"x\": 442,\n            \"y\": 0,\n            \"w\": 442,\n            \"h\": 516\n          },\n          {\n            \"x\": 884,\n            \"y\": 0,\n            \"w\": 442,\n            \"h\": 516\n          },\n          {\n            \"x\": 1326,\n            \"y\": 0,\n            \"w\": 442,\n            \"h\": 516\n          },\n          {\n            \"x\": 884,\n            \"y\": 0,\n            \"w\": 442,\n            \"h\": 516\n          }\n        ],\n        \"durationsMs\": [\n          140,\n          140,\n          140,\n          140\n        ],\n        \"loop\": true\n      }\n    }\n  },\n  \"portrait\": {\n    \"neutral\": \"portrait-neutral.png\",\n    \"negative\": \"portrait-negative.png\"\n  },\n  \"pixelArt\": false\n}\n",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 516,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  442,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideIdle": {
+              "durationsMs": [
+                1000
+              ],
+              "frames": [
+                [
+                  884,
+                  0,
+                  442,
+                  516
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                140,
+                140,
+                140,
+                140
+              ],
+              "frames": [
+                [
+                  442,
+                  0,
+                  442,
+                  516
+                ],
+                [
+                  884,
+                  0,
+                  442,
+                  516
+                ],
+                [
+                  1326,
+                  0,
+                  442,
+                  516
+                ],
+                [
+                  884,
+                  0,
+                  442,
+                  516
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 1768
+        },
+        "displayName": "다람쥐",
+        "finish": "standard",
+        "id": "squirrel",
+        "kind": "sprite",
+        "pixelArt": false,
+        "portrait": {
+          "negative": "portrait-negative.png",
+          "neutral": "portrait-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-sprite-ok",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 32,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                100
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                120,
+                80
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ],
+                [
+                  32,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 64
+        },
+        "displayName": "여우",
+        "finish": "standard",
+        "id": "fox",
+        "kind": "sprite",
+        "pixelArt": null,
+        "portrait": {
+          "negative": "fox-negative.png",
+          "neutral": "fox-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-scene3d-ok",
+      "json": "{\"id\":\"aing-3d\",\"displayName\":\"아잉 3D\",\"kind\":\"scene3D\"}",
+      "manifest": {
+        "atlas": null,
+        "displayName": "아잉 3D",
+        "finish": "standard",
+        "id": "aing-3d",
+        "kind": "scene3D",
+        "pixelArt": null,
+        "portrait": null
+      }
+    },
+    {
+      "id": "manifest-pixel-art",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"pixelArt\":true,\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 32,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                100
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                120,
+                80
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ],
+                [
+                  32,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 64
+        },
+        "displayName": "여우",
+        "finish": "standard",
+        "id": "fox",
+        "kind": "sprite",
+        "pixelArt": true,
+        "portrait": {
+          "negative": "fox-negative.png",
+          "neutral": "fox-neutral.png"
+        }
+      }
+    },
+    {
+      "error": "invalidID",
+      "id": "manifest-bad-id-underscore",
+      "json": "{\"id\":\"fox_1\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "invalidID",
+      "id": "manifest-bad-id-upper",
+      "json": "{\"id\":\"Fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "invalidID",
+      "id": "manifest-bad-id-long",
+      "json": "{\"id\":\"abcdefghijklmnopqrstuvwxyz0123456\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "invalidID",
+      "id": "manifest-bad-id-empty",
+      "json": "{\"id\":\"\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "invalidID",
+      "id": "manifest-bad-id-hangul",
+      "json": "{\"id\":\"여우\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "emptyDisplayName",
+      "id": "manifest-empty-name",
+      "json": "{\"id\":\"fox\",\"displayName\":\" \\n \",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "decoding",
+      "id": "manifest-unknown-kind",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"video\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "unexpectedAtlas",
+      "id": "manifest-scene3d-with-atlas",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"scene3D\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "unexpectedPortrait",
+      "id": "manifest-scene3d-with-portrait",
+      "json": "{\"id\":\"x\",\"displayName\":\"엑스\",\"kind\":\"scene3D\",\"portrait\":{\"neutral\":\"a.png\",\"negative\":\"b.png\"}}"
+    },
+    {
+      "error": "missingAtlas",
+      "id": "manifest-sprite-no-atlas",
+      "json": "{\"id\":\"x\",\"displayName\":\"엑스\",\"kind\":\"sprite\",\"portrait\":{\"neutral\":\"a.png\",\"negative\":\"b.png\"}}"
+    },
+    {
+      "error": "missingPortrait",
+      "id": "manifest-sprite-no-portrait",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}}}"
+    },
+    {
+      "error": "invalidAssetFileName",
+      "id": "manifest-asset-slash",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"../atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "invalidAssetFileName",
+      "id": "manifest-asset-dot",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\".hidden.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "invalidAssetFileName",
+      "id": "manifest-asset-backslash",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"a\\\\b.png\"}}"
+    },
+    {
+      "error": "invalidAssetFileName",
+      "id": "manifest-asset-empty",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "invalidAtlasSize",
+      "id": "manifest-atlas-zero",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":0,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "missingRequiredState",
+      "id": "manifest-no-front",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdleX\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "missingRequiredState",
+      "id": "manifest-front-empty",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[],\"durationsMs\":[],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "frameDurationMismatch",
+      "id": "manifest-duration-mismatch",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "negativeDuration",
+      "id": "manifest-negative-duration",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,-1],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "zeroTotalDuration",
+      "id": "manifest-zero-total",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[0,0],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "rectOutsideAtlas",
+      "id": "manifest-rect-outside",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":33,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "rectOutsideAtlas",
+      "id": "manifest-rect-negative",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":-1,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "rectOutsideAtlas",
+      "id": "manifest-rect-zero-w",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":0,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "error": "decoding",
+      "id": "manifest-missing-loop",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80]}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "id": "manifest-unknown-state-ok",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"dance\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 32,
+          "states": {
+            "dance": {
+              "durationsMs": [
+                120,
+                80
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ],
+                [
+                  32,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            },
+            "frontIdle": {
+              "durationsMs": [
+                100
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 64
+        },
+        "displayName": "여우",
+        "finish": "standard",
+        "id": "fox",
+        "kind": "sprite",
+        "pixelArt": null,
+        "portrait": {
+          "negative": "fox-negative.png",
+          "neutral": "fox-neutral.png"
+        }
+      }
+    },
+    {
+      "id": "manifest-extra-key-ok",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"note\":\"무시\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 32,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                100
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                120,
+                80
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ],
+                [
+                  32,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 64
+        },
+        "displayName": "여우",
+        "finish": "standard",
+        "id": "fox",
+        "kind": "sprite",
+        "pixelArt": null,
+        "portrait": {
+          "negative": "fox-negative.png",
+          "neutral": "fox-neutral.png"
+        }
+      }
+    },
+    {
+      "error": "decoding",
+      "id": "manifest-pixel-art-string",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"pixelArt\":\"yes\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}"
+    },
+    {
+      "id": "manifest-width-float",
+      "json": "{\"id\":\"fox\",\"displayName\":\"여우\",\"kind\":\"sprite\",\"atlas\":{\"file\":\"atlas.png\",\"width\":64.0,\"height\":32,\"states\":{\"frontIdle\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[100],\"loop\":true},\"sideWalk\":{\"frames\":[{\"x\":0,\"y\":0,\"w\":32,\"h\":32},{\"x\":32,\"y\":0,\"w\":32,\"h\":32}],\"durationsMs\":[120,80],\"loop\":true}}},\"portrait\":{\"neutral\":\"fox-neutral.png\",\"negative\":\"fox-negative.png\"}}",
+      "manifest": {
+        "atlas": {
+          "file": "atlas.png",
+          "height": 32,
+          "states": {
+            "frontIdle": {
+              "durationsMs": [
+                100
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            },
+            "sideWalk": {
+              "durationsMs": [
+                120,
+                80
+              ],
+              "frames": [
+                [
+                  0,
+                  0,
+                  32,
+                  32
+                ],
+                [
+                  32,
+                  0,
+                  32,
+                  32
+                ]
+              ],
+              "loop": true
+            }
+          },
+          "width": 64
+        },
+        "displayName": "여우",
+        "finish": "standard",
+        "id": "fox",
+        "kind": "sprite",
+        "pixelArt": null,
+        "portrait": {
+          "negative": "fox-negative.png",
+          "neutral": "fox-neutral.png"
+        }
+      }
+    },
+    {
+      "error": "decoding",
+      "id": "manifest-not-object",
+      "json": "[1]"
+    },
+    {
+      "id": "valid-ids",
+      "rows": [
+        {
+          "text": "a",
+          "valid": true
+        },
+        {
+          "text": "fox",
+          "valid": true
+        },
+        {
+          "text": "fox-2",
+          "valid": true
+        },
+        {
+          "text": "a-",
+          "valid": true
+        },
+        {
+          "text": "-",
+          "valid": true
+        },
+        {
+          "text": "0",
+          "valid": true
+        },
+        {
+          "text": "",
+          "valid": false
+        },
+        {
+          "text": "Fox",
+          "valid": false
+        },
+        {
+          "text": "fox_1",
+          "valid": false
+        },
+        {
+          "text": "fox 1",
+          "valid": false
+        },
+        {
+          "text": "여우",
+          "valid": false
+        },
+        {
+          "text": "é",
+          "valid": false
+        },
+        {
+          "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "valid": true
+        },
+        {
+          "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "valid": false
+        },
+        {
+          "text": "á",
+          "valid": false
+        }
+      ]
+    },
+    {
+      "durationsMs": [
+        100,
+        100,
+        100,
+        100
+      ],
+      "frames": 4,
+      "id": "frames-walk-loop",
+      "loop": true,
+      "samples": [
+        {
+          "elapsedBits": "bff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "0000000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fa999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb9930be0ded289",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fbeb851eb851eb8",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fc999999999999a",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fd3333333333333",
+          "index": 3
+        },
+        {
+          "elapsedBits": "3fd3333333333334",
+          "index": 3
+        },
+        {
+          "elapsedBits": "3fd6666666666666",
+          "index": 3
+        },
+        {
+          "elapsedBits": "3fd999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3ff0000000000000",
+          "index": 1
+        },
+        {
+          "elapsedBits": "4028b0a3d70a3d71",
+          "index": 3
+        },
+        {
+          "elapsedBits": "7ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "fff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff8000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "41cdcd6500000000",
+          "index": 3
+        }
+      ],
+      "totalDurationBits": "3fd999999999999a"
+    },
+    {
+      "durationsMs": [
+        120,
+        80,
+        300
+      ],
+      "frames": 3,
+      "id": "frames-uneven-once",
+      "loop": false,
+      "samples": [
+        {
+          "elapsedBits": "bff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "0000000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fa999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb9930be0ded289",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fbeb851eb851eb8",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fc999999999999a",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fd3333333333333",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fd3333333333334",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fd6666666666666",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fd999999999999a",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fe0000000000000",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fe999999999999a",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3ff0000000000000",
+          "index": 2
+        },
+        {
+          "elapsedBits": "4028b0a3d70a3d71",
+          "index": 2
+        },
+        {
+          "elapsedBits": "7ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "fff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff8000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "41cdcd6500000000",
+          "index": 2
+        }
+      ],
+      "totalDurationBits": "3fe0000000000000"
+    },
+    {
+      "durationsMs": [
+        0
+      ],
+      "frames": 1,
+      "id": "frames-single",
+      "loop": true,
+      "samples": [
+        {
+          "elapsedBits": "bff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "0000000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fa999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb9930be0ded289",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fbeb851eb851eb8",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fc999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd3333333333333",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd3333333333334",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd6666666666666",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "4028b0a3d70a3d71",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "fff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff8000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "41cdcd6500000000",
+          "index": 0
+        }
+      ],
+      "totalDurationBits": "0000000000000000"
+    },
+    {
+      "durationsMs": [
+        100,
+        0
+      ],
+      "frames": 2,
+      "id": "frames-zero-tail",
+      "loop": true,
+      "samples": [
+        {
+          "elapsedBits": "bff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "0000000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fa999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb9930be0ded289",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fbeb851eb851eb8",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fc999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd3333333333333",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd3333333333334",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd6666666666666",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "4028b0a3d70a3d71",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "fff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff8000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "41cdcd6500000000",
+          "index": 0
+        }
+      ],
+      "totalDurationBits": "3fb999999999999a"
+    },
+    {
+      "durationsMs": [
+        50
+      ],
+      "frames": 2,
+      "id": "frames-short-durations",
+      "loop": true,
+      "samples": [
+        {
+          "elapsedBits": "bff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "0000000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fa999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb9930be0ded289",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fbeb851eb851eb8",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fc999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd3333333333333",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd3333333333334",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd6666666666666",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fe999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "4028b0a3d70a3d71",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "fff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff8000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "41cdcd6500000000",
+          "index": 0
+        }
+      ],
+      "totalDurationBits": "3fa999999999999a"
+    },
+    {
+      "durationsMs": [
+        100,
+        100,
+        100
+      ],
+      "frames": 3,
+      "id": "frames-tenths",
+      "loop": true,
+      "samples": [
+        {
+          "elapsedBits": "bff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "0000000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fa999999999999a",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb9930be0ded289",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fb999999999999a",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fbeb851eb851eb8",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fc999999999999a",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fd3333333333333",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd3333333333334",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd6666666666666",
+          "index": 0
+        },
+        {
+          "elapsedBits": "3fd999999999999a",
+          "index": 1
+        },
+        {
+          "elapsedBits": "3fe0000000000000",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3fe999999999999a",
+          "index": 2
+        },
+        {
+          "elapsedBits": "3ff0000000000000",
+          "index": 1
+        },
+        {
+          "elapsedBits": "4028b0a3d70a3d71",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "fff0000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "7ff8000000000000",
+          "index": 0
+        },
+        {
+          "elapsedBits": "41cdcd6500000000",
+          "index": 1
+        }
+      ],
+      "totalDurationBits": "3fd3333333333333"
+    },
+    {
+      "id": "sync-decide",
+      "known": [
+        "aing",
+        "aing_gold",
+        "fox",
+        "robot"
+      ],
+      "rows": [
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": null
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": null
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "migrate"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": null
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": null
+        },
+        {
+          "decision": {
+            "id": "aing_gold",
+            "kind": "migrate"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": null
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": null
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": ""
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": ""
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "migrate"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": ""
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": ""
+        },
+        {
+          "decision": {
+            "id": "aing_gold",
+            "kind": "migrate"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": ""
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": ""
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": "  "
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": "  "
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "migrate"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": "  "
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": "  "
+        },
+        {
+          "decision": {
+            "id": "aing_gold",
+            "kind": "migrate"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": "  "
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": "  "
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": "fox"
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": "fox"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": "fox"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": "fox"
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": "fox"
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": "fox"
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": " fox "
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": " fox "
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": " fox "
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": " fox "
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": " fox "
+        },
+        {
+          "decision": {
+            "id": "fox",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": " fox "
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": "robot"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": "robot"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": "robot"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": "robot"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": "robot"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": "robot"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": "ghost"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": "ghost"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": "ghost"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": "ghost"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": "ghost"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": "ghost"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": "aing"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": "aing"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": "aing"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": "aing"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": "aing"
+        },
+        {
+          "decision": {
+            "id": "aing",
+            "kind": "adopt"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": "aing"
+        },
+        {
+          "decision": {
+            "id": "aing_gold",
+            "kind": "adopt"
+          },
+          "localID": "aing",
+          "migrated": false,
+          "serverID": "aing_gold"
+        },
+        {
+          "decision": {
+            "id": "aing_gold",
+            "kind": "adopt"
+          },
+          "localID": "aing",
+          "migrated": true,
+          "serverID": "aing_gold"
+        },
+        {
+          "decision": {
+            "id": "aing_gold",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": false,
+          "serverID": "aing_gold"
+        },
+        {
+          "decision": {
+            "id": "aing_gold",
+            "kind": "adopt"
+          },
+          "localID": "fox",
+          "migrated": true,
+          "serverID": "aing_gold"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing_gold",
+          "migrated": false,
+          "serverID": "aing_gold"
+        },
+        {
+          "decision": {
+            "kind": "keep"
+          },
+          "localID": "aing_gold",
+          "migrated": true,
+          "serverID": "aing_gold"
+        }
+      ],
+      "unlocked": [
+        "aing",
+        "aing_gold",
+        "fox"
+      ]
+    },
+    {
+      "id": "sync-settled",
+      "migrationDefaultsKey": "check.character.serverAuthorityMigrated",
+      "rows": [
+        {
+          "settled": false,
+          "status": null
+        },
+        {
+          "settled": true,
+          "status": "ok"
+        },
+        {
+          "settled": true,
+          "status": "not_owned"
+        },
+        {
+          "settled": true,
+          "status": "unknown_character"
+        },
+        {
+          "settled": true,
+          "status": "no_profile"
+        },
+        {
+          "settled": false,
+          "status": "unauthorized"
+        },
+        {
+          "settled": false,
+          "status": ""
+        },
+        {
+          "settled": false,
+          "status": "OK"
+        }
+      ],
+      "selectionDefaultsKey": "check.character.selected"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
+  "golden": "gacha/character-kit",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "frames": "끝 시각은 정수 ms 로 누적해 마지막에 나눈다. 반열린 구간 — 경계면 다음 프레임. 루프면 접고, 아니면 마지막에서 멈춘다. 음수 · 무한 · NaN → 0",
+    "manifest": "디코드 = 검증. 실패면 그 캐릭터만 건너뛴다(error = CharacterManifestError 갈래 이름, 'decoding' = JSON 모양 오류). 키 변환 없는 기본 디코더",
+    "sync": "서버 기준 — null/공백 = 기본(아잉). 처음 한 번만 로컬의 비기본 선택을 민다(migrate). 모르거나 안 가진 id 는 아잉으로 접는다",
+    "validIds": "isValidID — 글자(그래핌) 1…32, 각 글자가 ASCII 소문자 · 숫자 · 하이픈"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/CharacterKit/CharacterManifest.swift",
+    "Sources/CheckCore/CharacterKit/SpriteFramePlayer.swift",
+    "Sources/CheckCore/CharacterKit/CharacterSync.swift",
+    "Sources/CheckCore/CharacterKit/CharacterSelection.swift"
+  ]
+}

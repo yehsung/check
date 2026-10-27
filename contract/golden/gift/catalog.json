@@ -1,0 +1,479 @@
+{
+  "cases": [
+    {
+      "builtInAingID": "aing",
+      "builtIns": [
+        {
+          "displayName": "아잉",
+          "finish": "standard",
+          "id": "aing",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "황금 아잉이",
+          "finish": "gold",
+          "id": "aing_gold",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "무지개 아잉이",
+          "finish": "rainbow",
+          "id": "aing_rainbow",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "딸기 케이크 아잉이",
+          "finish": "cakeStrawberry",
+          "id": "aing_cake_strawberry",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "초코 케이크 아잉이",
+          "finish": "cakeChoco",
+          "id": "aing_cake_choco",
+          "kind": "scene3D"
+        }
+      ],
+      "cakeChocoAingID": "aing_cake_choco",
+      "cakeStrawberryAingID": "aing_cake_strawberry",
+      "charactersSubdirectory": "Characters",
+      "gachaOnlyBuiltInIDs": [
+        "aing_gold",
+        "aing_rainbow"
+      ],
+      "giftOnlyBuiltInIDs": [
+        "aing_cake_strawberry",
+        "aing_cake_choco"
+      ],
+      "goldAingID": "aing_gold",
+      "id": "builtins",
+      "rainbowAingID": "aing_rainbow"
+    },
+    {
+      "characterID": "aing",
+      "finish": "standard",
+      "id": "id-0",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": true,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_gold",
+      "finish": "gold",
+      "id": "id-1",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": true,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": true,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": true
+    },
+    {
+      "characterID": "aing_rainbow",
+      "finish": "rainbow",
+      "id": "id-2",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": true,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": true,
+      "isRare": true
+    },
+    {
+      "characterID": "aing_cake_strawberry",
+      "finish": "cakeStrawberry",
+      "id": "id-3",
+      "isCake": true,
+      "isCakeAing": true,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": true,
+      "isGoldAing": false,
+      "isNeverExchangeable": true,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_cake_choco",
+      "finish": "cakeChoco",
+      "id": "id-4",
+      "isCake": true,
+      "isCakeAing": true,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": true,
+      "isGoldAing": false,
+      "isNeverExchangeable": true,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "robot",
+      "finish": "standard",
+      "id": "id-5",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "fox",
+      "finish": "standard",
+      "id": "id-6",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "",
+      "finish": "standard",
+      "id": "id-7",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": " aing_gold",
+      "finish": "standard",
+      "id": "id-8",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "AING_GOLD",
+      "finish": "standard",
+      "id": "id-9",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_cake",
+      "finish": "standard",
+      "id": "id-10",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_cake_strawberry ",
+      "finish": "standard",
+      "id": "id-11",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": null,
+      "finish": "standard",
+      "id": "id-12",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": null,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "allIDs": [
+        "aing",
+        "aing_gold",
+        "aing_rainbow",
+        "aing_cake_strawberry",
+        "aing_cake_choco"
+      ],
+      "bundled": [],
+      "displayNames": [
+        "아잉",
+        "황금 아잉이",
+        "무지개 아잉이",
+        "딸기 케이크 아잉이",
+        "초코 케이크 아잉이"
+      ],
+      "id": "catalog-0"
+    },
+    {
+      "allIDs": [
+        "aing",
+        "aing_gold",
+        "aing_rainbow",
+        "aing_cake_strawberry",
+        "aing_cake_choco",
+        "fox",
+        "robot"
+      ],
+      "bundled": [
+        {
+          "displayName": "여우",
+          "id": "fox"
+        },
+        {
+          "displayName": "로봇",
+          "id": "robot"
+        }
+      ],
+      "displayNames": [
+        "아잉",
+        "황금 아잉이",
+        "무지개 아잉이",
+        "딸기 케이크 아잉이",
+        "초코 케이크 아잉이",
+        "여우",
+        "로봇"
+      ],
+      "id": "catalog-1"
+    },
+    {
+      "allIDs": [
+        "aing",
+        "aing_gold",
+        "aing_rainbow",
+        "aing_cake_strawberry",
+        "aing_cake_choco",
+        "alpha",
+        "zeta"
+      ],
+      "bundled": [
+        {
+          "displayName": "제타",
+          "id": "zeta"
+        },
+        {
+          "displayName": "가짜 아잉",
+          "id": "aing"
+        },
+        {
+          "displayName": "가짜 금",
+          "id": "aing_gold"
+        },
+        {
+          "displayName": "알파",
+          "id": "alpha"
+        },
+        {
+          "displayName": "가짜 초코",
+          "id": "aing_cake_choco"
+        }
+      ],
+      "displayNames": [
+        "아잉",
+        "황금 아잉이",
+        "무지개 아잉이",
+        "딸기 케이크 아잉이",
+        "초코 케이크 아잉이",
+        "알파",
+        "제타"
+      ],
+      "id": "catalog-2"
+    },
+    {
+      "haloCells": [
+        "aing_gold-halo",
+        "aing_gold-halo-010",
+        "aing_gold-halo-020",
+        "aing_gold-halo-030",
+        "aing_gold-halo-040",
+        "aing_gold-halo-050",
+        "aing_gold-halo-060",
+        "aing_gold-halo-070",
+        "aing_gold-halo-080",
+        "aing_gold-halo-090",
+        "aing_gold-halo-100",
+        "aing_gold-halo-110",
+        "aing_gold-halo-120",
+        "aing_gold-halo-130",
+        "aing_gold-halo-140",
+        "aing_gold-halo-150",
+        "aing_gold-halo-160",
+        "aing_gold-halo-170",
+        "aing_gold-halo-180",
+        "aing_gold-halo-190",
+        "aing_gold-halo-200",
+        "aing_gold-halo-210",
+        "aing_gold-halo-220",
+        "aing_gold-halo-230",
+        "aing_gold-halo-240",
+        "aing_gold-halo-250",
+        "aing_gold-halo-260",
+        "aing_gold-halo-270",
+        "aing_gold-halo-280",
+        "aing_gold-halo-290",
+        "aing_gold-halo-300",
+        "aing_gold-halo-310",
+        "aing_gold-halo-320",
+        "aing_gold-halo-330",
+        "aing_gold-halo-340",
+        "aing_gold-halo-350"
+      ],
+      "id": "art-gold",
+      "mac": [
+        "aing_gold-neutral",
+        "aing_gold-negative",
+        "aing_gold-skin",
+        "aing_gold-halo"
+      ],
+      "phone": [
+        "aing_gold-neutral",
+        "aing_gold-negative"
+      ]
+    },
+    {
+      "haloCells": [
+        "aing_rainbow-halo",
+        "aing_rainbow-halo-010",
+        "aing_rainbow-halo-020",
+        "aing_rainbow-halo-030",
+        "aing_rainbow-halo-040",
+        "aing_rainbow-halo-050",
+        "aing_rainbow-halo-060",
+        "aing_rainbow-halo-070",
+        "aing_rainbow-halo-080",
+        "aing_rainbow-halo-090",
+        "aing_rainbow-halo-100",
+        "aing_rainbow-halo-110",
+        "aing_rainbow-halo-120",
+        "aing_rainbow-halo-130",
+        "aing_rainbow-halo-140",
+        "aing_rainbow-halo-150",
+        "aing_rainbow-halo-160",
+        "aing_rainbow-halo-170",
+        "aing_rainbow-halo-180",
+        "aing_rainbow-halo-190",
+        "aing_rainbow-halo-200",
+        "aing_rainbow-halo-210",
+        "aing_rainbow-halo-220",
+        "aing_rainbow-halo-230",
+        "aing_rainbow-halo-240",
+        "aing_rainbow-halo-250",
+        "aing_rainbow-halo-260",
+        "aing_rainbow-halo-270",
+        "aing_rainbow-halo-280",
+        "aing_rainbow-halo-290",
+        "aing_rainbow-halo-300",
+        "aing_rainbow-halo-310",
+        "aing_rainbow-halo-320",
+        "aing_rainbow-halo-330",
+        "aing_rainbow-halo-340",
+        "aing_rainbow-halo-350"
+      ],
+      "id": "art-rainbow",
+      "mac": [
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative",
+        "aing_rainbow-shade",
+        "aing_rainbow-halo"
+      ],
+      "phone": [
+        "aing_rainbow-neutral",
+        "aing_rainbow-negative"
+      ]
+    },
+    {
+      "id": "art-drawable",
+      "rows": [
+        {
+          "gold": true,
+          "missing": null,
+          "platform": "mac"
+        },
+        {
+          "gold": false,
+          "missing": "aing_gold-neutral",
+          "platform": "mac"
+        },
+        {
+          "gold": false,
+          "missing": "aing_gold-negative",
+          "platform": "mac"
+        },
+        {
+          "gold": false,
+          "missing": "aing_gold-skin",
+          "platform": "mac"
+        },
+        {
+          "gold": false,
+          "missing": "aing_gold-halo",
+          "platform": "mac"
+        },
+        {
+          "gold": true,
+          "missing": null,
+          "platform": "phone"
+        },
+        {
+          "gold": false,
+          "missing": "aing_gold-neutral",
+          "platform": "phone"
+        },
+        {
+          "gold": false,
+          "missing": "aing_gold-negative",
+          "platform": "phone"
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
+  "golden": "gift/catalog",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "art": "금 · 무지개 그림 이름과 플랫폼별 요구 파일(폰 = 초상 두 장, 맥 = 초상 + 3D 마감 두 장). 후광 칸 36장은 그릴 수 있다에 넣지 않는다",
+    "builtins": "코드에 박힌 다섯 — 표시 순서는 내장 순서(정렬에 기대지 않는다 — aing_cake_* 는 정렬로는 aing_gold 앞이다)",
+    "catalog": "번들 항목이 내장 id 를 덮으려 해도 내장이 이긴다. allIDs = 내장 다섯 + 나머지 id 사전순",
+    "finish": "id → 마감. isRare 는 금 · 무지개만(케이크는 희귀가 아니다 — 열거로 판정)",
+    "ids": "id 판정은 공백 · 대소문자를 봐주지 않는다. 케이크는 선물 전용이고 뽑기 전용이 아니다(겹치지 않는다). isNeverExchangeable = 아잉 · 선물 전용"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/CharacterKit/CharacterCatalog.swift",
+    "Sources/CheckCore/CharacterKit/GoldAing.swift",
+    "Sources/CheckCore/CharacterKit/RainbowAing.swift",
+    "Sources/CheckCore/Gacha.swift"
+  ]
+}

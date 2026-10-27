@@ -1,0 +1,1273 @@
+{
+  "cases": [
+    {
+      "birdXBits": "405470a3d70a3d71",
+      "centerMarginBits": "4042000000000000",
+      "firstPipeXBits": "4077400000000000",
+      "flapVelocityBits": "c073d00000000000",
+      "flashDurationBits": "3fc3333333333333",
+      "gravityBits": "4095400000000000",
+      "heightBits": "4072e00000000000",
+      "hitboxSizeBits": "4038000000000000",
+      "id": "constants",
+      "maxFallSpeedBits": "4081f00000000000",
+      "maxScore": 999,
+      "maxStepBits": "3fa1111111111111",
+      "overHoldBits": "3fd999999999999a",
+      "pipeCount": 3,
+      "pipeWidthBits": "4046000000000000",
+      "shiftChanceBits": "3fd3333333333333",
+      "shiftDelayMaxBits": "3ff199999999999a",
+      "shiftDelayMinBits": "3fdccccccccccccd",
+      "shiftDurationBits": "3fbeb851eb851eb8",
+      "shiftJumpBits": "404d000000000000",
+      "shiftMinScore": 15,
+      "spriteSizeBits": "4041000000000000",
+      "widthBits": "4072400000000000"
+    },
+    {
+      "from": -3,
+      "gapBits": "4060800000000000 4060800000000000 4060800000000000 4060800000000000 4060200000000000 405f800000000000 405ec00000000000 405e000000000000 405d400000000000 405c800000000000 405bc00000000000 405b000000000000 405a400000000000 4059800000000000 4058c00000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000 4058000000000000",
+      "id": "curves",
+      "spacingBits": "4062c00000000000 4062c00000000000 4062c00000000000 4062c00000000000 4062800000000000 4062400000000000 4062000000000000 4061c00000000000 4061800000000000 4061400000000000 4061000000000000 4060c00000000000 4060800000000000 4060400000000000 4060000000000000 405f800000000000 405f000000000000 405e800000000000 405e000000000000 405d800000000000 405d000000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000 405cc00000000000",
+      "speedBits": "4060400000000000 4060400000000000 4060400000000000 4060400000000000 4060a00000000000 4061000000000000 4061600000000000 4061c00000000000 4062200000000000 4062800000000000 4062e00000000000 4063400000000000 4063a00000000000 4064000000000000 4064600000000000 4064c00000000000 4065200000000000 4065800000000000 4065e00000000000 4066400000000000 4066a00000000000 4067000000000000 4067600000000000 4067c00000000000 4068200000000000 4068800000000000 4068e00000000000 4069400000000000 4069a00000000000 406a000000000000 406a600000000000 406ac00000000000 406b200000000000 406b800000000000 406be00000000000 406c400000000000 406ca00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000 406cc00000000000"
+    },
+    {
+      "dtBits": "0000000000000000 3f7c71c71c71c71c 3f91111111111111 3fa1111111111111 3fa999999999999a",
+      "id": "nextVelocity",
+      "spec": "vy 행 × dt 열 행 우선",
+      "valuesBits": "c073d00000000000 c07338e38e38e38e c072655555555555 c070faaaaaaaaaab c06f200000000000 c059000000000000 c056a38e38e38e39 c053555555555555 c04b555555555555 c040000000000000 0000000000000000 4022e38e38e38e39 4036aaaaaaaaaaab 4046aaaaaaaaaaab 4051000000000000 3fe0000000000000 4023e38e38e38e39 40372aaaaaaaaaab 4046eaaaaaaaaaab 4051200000000000 4072c00000000000 4073571c71c71c72 40742aaaaaaaaaab 4075955555555555 4077000000000000 4081ef3333333333 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000 4081f00000000000",
+      "vyBits": "c073d00000000000 c059000000000000 0000000000000000 3fe0000000000000 4072c00000000000 4081ef3333333333 4081f00000000000 4089000000000000"
+    },
+    {
+      "id": "makePipe-0",
+      "nextAfter": "0x530e0e6118e9685e",
+      "pipes": [
+        {
+          "centerYBits": "4063b0bcb2918e5d",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4072c00000000000"
+        },
+        {
+          "centerYBits": "4066fde9844f651a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "407a100000000000"
+        },
+        {
+          "centerYBits": "406ac3a8e922ef8b",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4080b00000000000"
+        },
+        {
+          "centerYBits": "4061f101cd2facdc",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4084580000000000"
+        },
+        {
+          "centerYBits": "40693212381f14cc",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4088000000000000"
+        },
+        {
+          "centerYBits": "405e9085c1140004",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408ba80000000000"
+        },
+        {
+          "centerYBits": "406144f62cc95665",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408f500000000000"
+        },
+        {
+          "centerYBits": "40621ec6144c7365",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40917c0000000000"
+        },
+        {
+          "centerYBits": "4062172fff98d367",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4093500000000000"
+        },
+        {
+          "centerYBits": "405a987df818275f",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4095240000000000"
+        },
+        {
+          "centerYBits": "40654f31e76889ce",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4096f80000000000"
+        },
+        {
+          "centerYBits": "4065eb26a313af7c",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4098cc0000000000"
+        },
+        {
+          "centerYBits": "405735acb3a9560e",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe8b6dc8f9a9bac",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "409aa00000000000"
+        },
+        {
+          "centerYBits": "405e9c8d4162efd7",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe91f70ba694fa6",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "409c740000000000"
+        },
+        {
+          "centerYBits": "4056772f6a107203",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "409e480000000000"
+        },
+        {
+          "centerYBits": "4064839711f97a72",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a00e0000000000"
+        },
+        {
+          "centerYBits": "40619d85d57e4ed8",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a0f80000000000"
+        },
+        {
+          "centerYBits": "4061da6006580474",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a1e20000000000"
+        },
+        {
+          "centerYBits": "405d7c120d3b24ed",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a2cc0000000000"
+        },
+        {
+          "centerYBits": "40639b42a5f92b77",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a3b60000000000"
+        },
+        {
+          "centerYBits": "406833ba46af5fea",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a4a00000000000"
+        },
+        {
+          "centerYBits": "4068ef850a0d1041",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a58a0000000000"
+        },
+        {
+          "centerYBits": "405ceb07278a27a9",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a6740000000000"
+        },
+        {
+          "centerYBits": "40690de1acdb343b",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a75e0000000000"
+        }
+      ],
+      "seed": "0x0000000000000001"
+    },
+    {
+      "id": "makePipe-1",
+      "nextAfter": "0x06ad07051c9dfa35",
+      "pipes": [
+        {
+          "centerYBits": "4065d58c2653cb04",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4072c00000000000"
+        },
+        {
+          "centerYBits": "405a5b643b43d878",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "407a100000000000"
+        },
+        {
+          "centerYBits": "405e554885e4fe8a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4080b00000000000"
+        },
+        {
+          "centerYBits": "405646258fcbbf70",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4084580000000000"
+        },
+        {
+          "centerYBits": "405c510afe330ec0",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4088000000000000"
+        },
+        {
+          "centerYBits": "4060319fd1c9fc46",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408ba80000000000"
+        },
+        {
+          "centerYBits": "405bdd3cf4be9e6c",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408f500000000000"
+        },
+        {
+          "centerYBits": "406319714abf1352",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40917c0000000000"
+        },
+        {
+          "centerYBits": "4064e5f09e172394",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4093500000000000"
+        },
+        {
+          "centerYBits": "405bd0a8d4d1a3c0",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4095240000000000"
+        },
+        {
+          "centerYBits": "40587840ad5ad8e5",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4096f80000000000"
+        },
+        {
+          "centerYBits": "4058213c4e77820a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4098cc0000000000"
+        },
+        {
+          "centerYBits": "406a8902b7eed09a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3feae04d4661aa06",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "409aa00000000000"
+        },
+        {
+          "centerYBits": "40577c00cc30758b",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fedd54a99b54c42",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "409c740000000000"
+        },
+        {
+          "centerYBits": "406a46fbffc236dd",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "409e480000000000"
+        },
+        {
+          "centerYBits": "4067bb206c4d12cc",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a00e0000000000"
+        },
+        {
+          "centerYBits": "4064ad49eb4044a4",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a0f80000000000"
+        },
+        {
+          "centerYBits": "406799e2dbe56990",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a1e20000000000"
+        },
+        {
+          "centerYBits": "40652db99d5c7188",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a2cc0000000000"
+        },
+        {
+          "centerYBits": "40571c809a07dedc",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fee3baa3eff6596",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a3b60000000000"
+        },
+        {
+          "centerYBits": "406361bacf8db21e",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe41469da4e40f5",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "40a4a00000000000"
+        },
+        {
+          "centerYBits": "4065b1a5bdcd73c4",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a58a0000000000"
+        },
+        {
+          "centerYBits": "4057d484065d7a68",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe8e6bcebf6b050",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a6740000000000"
+        },
+        {
+          "centerYBits": "4060aab2e1b1d3bc",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe19c2313331897",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a75e0000000000"
+        }
+      ],
+      "seed": "0x000000000000002a"
+    },
+    {
+      "id": "makePipe-2",
+      "nextAfter": "0x5fadd7f1ab339074",
+      "pipes": [
+        {
+          "centerYBits": "405e531a15c71572",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4072c00000000000"
+        },
+        {
+          "centerYBits": "4068586cfa122df4",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "407a100000000000"
+        },
+        {
+          "centerYBits": "40587bca828b2f44",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe16077cb73a30f",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "4080b00000000000"
+        },
+        {
+          "centerYBits": "4064e71640cd031a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4084580000000000"
+        },
+        {
+          "centerYBits": "406033bcfa9d10b5",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe57505ae9f0f64",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "4088000000000000"
+        },
+        {
+          "centerYBits": "406061a4d283d07e",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408ba80000000000"
+        },
+        {
+          "centerYBits": "4069ab1e50c33cb2",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408f500000000000"
+        },
+        {
+          "centerYBits": "405581696d132d35",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40917c0000000000"
+        },
+        {
+          "centerYBits": "406794690e2e0be4",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4093500000000000"
+        },
+        {
+          "centerYBits": "406868306266824c",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4095240000000000"
+        },
+        {
+          "centerYBits": "4067c9008951537c",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe34b9dfe991796",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "4096f80000000000"
+        },
+        {
+          "centerYBits": "40695da73d216386",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4098cc0000000000"
+        },
+        {
+          "centerYBits": "4064529a57f9b7ae",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe83bc4bd96565c",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "409aa00000000000"
+        },
+        {
+          "centerYBits": "4061aadcd61c082c",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "409c740000000000"
+        },
+        {
+          "centerYBits": "406755f758b87948",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "409e480000000000"
+        },
+        {
+          "centerYBits": "4055c4cfcf25a718",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a00e0000000000"
+        },
+        {
+          "centerYBits": "406400012a89ec3a",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a0f80000000000"
+        },
+        {
+          "centerYBits": "405d1ab4717bfe60",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a1e20000000000"
+        },
+        {
+          "centerYBits": "406218f062a71014",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fed430089fdb4ee",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a2cc0000000000"
+        },
+        {
+          "centerYBits": "405b5c69940a42a9",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3feec84e2c7eadd4",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a3b60000000000"
+        },
+        {
+          "centerYBits": "406154bb61861a7b",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe7326a2d2a3b9e",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a4a00000000000"
+        },
+        {
+          "centerYBits": "406a2772d2acbdf2",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a58a0000000000"
+        },
+        {
+          "centerYBits": "40648afc1f1f6aaa",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe6fa2fd2bf37aa",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "40a6740000000000"
+        },
+        {
+          "centerYBits": "4060c461aaed31c1",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a75e0000000000"
+        }
+      ],
+      "seed": "0x00000000feedbeef"
+    },
+    {
+      "id": "makePipe-3",
+      "nextAfter": "0xbca720bf33d872b2",
+      "pipes": [
+        {
+          "centerYBits": "4067b367adf30f97",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4072c00000000000"
+        },
+        {
+          "centerYBits": "4069c93780cba461",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "407a100000000000"
+        },
+        {
+          "centerYBits": "405c5a46fe0959fc",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4080b00000000000"
+        },
+        {
+          "centerYBits": "4066517ca84839a7",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4084580000000000"
+        },
+        {
+          "centerYBits": "406a49ee313a220a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fee67e3f8a82424",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "4088000000000000"
+        },
+        {
+          "centerYBits": "40557bd1e1a4fbe4",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408ba80000000000"
+        },
+        {
+          "centerYBits": "40553bd8b1cbb8e1",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "408f500000000000"
+        },
+        {
+          "centerYBits": "405bf995540b5694",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40917c0000000000"
+        },
+        {
+          "centerYBits": "4061c07c0015d8f0",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4093500000000000"
+        },
+        {
+          "centerYBits": "405b6f2b93aae95f",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4095240000000000"
+        },
+        {
+          "centerYBits": "405996b0c547f0bf",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4096f80000000000"
+        },
+        {
+          "centerYBits": "40609ab7da88e61e",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "4098cc0000000000"
+        },
+        {
+          "centerYBits": "40626482b9a1bd28",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe23c764fb1d8fd",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "409aa00000000000"
+        },
+        {
+          "centerYBits": "4068a959ca235056",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "409c740000000000"
+        },
+        {
+          "centerYBits": "40672c3613e65c88",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe162a263ae8b98",
+          "shiftOffsetBits": "c04d000000000000",
+          "xBits": "409e480000000000"
+        },
+        {
+          "centerYBits": "40616c7fec32fa4a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a00e0000000000"
+        },
+        {
+          "centerYBits": "4063d9d51e10c9bd",
+          "gapBits": "4060800000000000",
+          "passed": false,
+          "score": 0,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a0f80000000000"
+        },
+        {
+          "centerYBits": "40609a89eab10e7a",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 14,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a1e20000000000"
+        },
+        {
+          "centerYBits": "40571ee816aeddb6",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 15,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe308cf22739bd4",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a2cc0000000000"
+        },
+        {
+          "centerYBits": "406730198c83fd00",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 16,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a3b60000000000"
+        },
+        {
+          "centerYBits": "40568e29f6f8daed",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 22,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a4a00000000000"
+        },
+        {
+          "centerYBits": "406147efe31dab14",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 30,
+          "shiftAtBits": null,
+          "shiftDelayBits": "3fe8cc645d9d7c24",
+          "shiftOffsetBits": "404d000000000000",
+          "xBits": "40a58a0000000000"
+        },
+        {
+          "centerYBits": "4067b262d5032db6",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 60,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a6740000000000"
+        },
+        {
+          "centerYBits": "4059452b72bfe5f4",
+          "gapBits": "4058000000000000",
+          "passed": false,
+          "score": 999,
+          "shiftAtBits": null,
+          "shiftDelayBits": null,
+          "shiftOffsetBits": "0000000000000000",
+          "xBits": "40a75e0000000000"
+        }
+      ],
+      "seed": "0xffffffffffffffff"
+    },
+    {
+      "id": "center",
+      "pipes": [
+        {
+          "centersBits": "405e000000000000 405e000000000000 405e000000000000 405e2e34f9b44cd4 405f66f6d269bccc 406046b3fffffff9 4060d10afd318806 406152c71cbf7336 4061cc2f1a9fbe70 40623d89b2c86690 4062a71da12f6849 40630931a1cac089 4063640c70906c04 4063b7f4c976679a 406405316872b024 40644c09097b425e 40648cc268861b24 4064c7a44189374e 4064fcf5507a939a 40652cfc51502ce4 4065580000000001 40657e47188009b4 4065a01856c646da 4065bdba76c8b43a 4065d774347d4ea8 4065ed8c4bda12f8 4066004978d4fdf4 40660ff277640c70 40661cce037d3b3e 40662722d916872b 40662f37b425ed0a 4066355350a169aa 406639bc6a7ef9db 40663cb9bdb49a6f 40663e9206384836 40663f8c00000000 40663fee6701be9e 40663ffff73380df 4066400000000000 4066400000000000 4066400000000000",
+          "id": "pipe-0",
+          "pipe": {
+            "centerYBits": "405e000000000000",
+            "gapBits": "4058000000000000",
+            "passed": false,
+            "score": 0,
+            "shiftAtBits": "4000000000000000",
+            "shiftDelayBits": "3fe0000000000000",
+            "shiftOffsetBits": "404d000000000000",
+            "xBits": "4059000000000000"
+          },
+          "timesBits": "3fffd70a3d70a3d7 3fffe5604189374c 3ffff3b645a1cac0 4000010624dd2f1b 4000083126e978d5 40000f5c28f5c28f 400016872b020c4a 40001db22d0e5604 400024dd2f1a9fbe 40002c083126e979 4000333333333333 40003a5e353f7cee 40004189374bc6a8 400048b439581062 40004fdf3b645a1d 4000570a3d70a3d7 40005e353f7ced91 400065604189374c 40006c8b43958106 400073b645a1cac0 40007ae147ae147b 4000820c49ba5e35 400089374bc6a7f0 400090624dd2f1aa 4000978d4fdf3b64 40009eb851eb851f 4000a5e353f7ced9 4000ad0e56041893 4000b4395810624e 4000bb645a1cac08 4000c28f5c28f5c3 4000c9ba5e353f7d 4000d0e560418937 4000d810624dd2f2 4000df3b645a1cac 4000e66666666666 4000ed916872b021 4000f4bc6a7ef9db 4000fbe76c8b4396 400103126e978d50 40010a3d70a3d70a"
+        },
+        {
+          "centersBits": "4069000000000000 4069000000000000 4069000000000000 4068e8e58325d996 40684c8496cb219a 4067b94bfffffff4 40672ef502ce77fa 4066ad38e3408cb8 406633d0e5604180 4065c2764d379970 406558e25ed097a8 4064f6ce5e353f77 40649bf38f6f93fc 4064480b3689985b 4063face978d4fdc 4063b3f6f684bd98 4063733d9779e4d3 4063385bbe76c8b2 4063030aaf856c5e 4062d303aeafd315 4062a7ffffffffff 406281b8e77ff647 40625fe7a939b926 4062424589374bc6 4062288bcb82b155 40621273b425ed08 4061ffb6872b020a 4061f00d889bf38e 4061e331fc82c4c2 4061d8dd26e978d4 4061d0c84bda12f6 4061caacaf5e9656 4061c64395810624 4061c346424b6591 4061c16df9c7b7ca 4061c07400000000 4061c01198fe4162 4061c00008cc7f21 4061c00000000000 4061c00000000000 4061c00000000000",
+          "id": "pipe-1",
+          "pipe": {
+            "centerYBits": "4069000000000000",
+            "gapBits": "405b800000000000",
+            "passed": false,
+            "score": 0,
+            "shiftAtBits": "400a000000000000",
+            "shiftDelayBits": "3feccccccccccccd",
+            "shiftOffsetBits": "c04d000000000000",
+            "xBits": "4059000000000000"
+          },
+          "timesBits": "4009eb851eb851ec 4009f2b020c49ba6 4009f9db22d0e561 400a010624dd2f1b 400a083126e978d5 400a0f5c28f5c290 400a16872b020c4a 400a1db22d0e5605 400a24dd2f1a9fbf 400a2c083126e979 400a333333333334 400a3a5e353f7cee 400a4189374bc6a8 400a48b439581063 400a4fdf3b645a1d 400a570a3d70a3d8 400a5e353f7ced92 400a65604189374c 400a6c8b43958107 400a73b645a1cac1 400a7ae147ae147b 400a820c49ba5e36 400a89374bc6a7f0 400a90624dd2f1aa 400a978d4fdf3b65 400a9eb851eb851f 400aa5e353f7ceda 400aad0e56041894 400ab4395810624e 400abb645a1cac09 400ac28f5c28f5c3 400ac9ba5e353f7d 400ad0e560418938 400ad810624dd2f2 400adf3b645a1cad 400ae66666666667 400aed916872b021 400af4bc6a7ef9dc 400afbe76c8b4396 400b03126e978d50 400b0a3d70a3d70b"
+        },
+        {
+          "centersBits": "4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000 4050800000000000",
+          "id": "pipe-2",
+          "pipe": {
+            "centerYBits": "404e000000000000",
+            "gapBits": "4060800000000000",
+            "passed": false,
+            "score": 0,
+            "shiftAtBits": "3ff0000000000000",
+            "shiftDelayBits": "3fdccccccccccccd",
+            "shiftOffsetBits": "c04d000000000000",
+            "xBits": "4059000000000000"
+          },
+          "timesBits": "3fefae147ae147ae 3fefcac083126e97 3fefe76c8b439581 3ff0020c49ba5e35 3ff010624dd2f1aa 3ff01eb851eb851f 3ff02d0e56041893 3ff03b645a1cac08 3ff049ba5e353f7d 3ff05810624dd2f2 3ff0666666666666 3ff074bc6a7ef9db 3ff083126e978d50 3ff0916872b020c5 3ff09fbe76c8b439 3ff0ae147ae147ae 3ff0bc6a7ef9db23 3ff0cac083126e98 3ff0d916872b020c 3ff0e76c8b439581 3ff0f5c28f5c28f6 3ff104189374bc6a 3ff1126e978d4fdf 3ff120c49ba5e354 3ff12f1a9fbe76c9 3ff13d70a3d70a3d 3ff14bc6a7ef9db2 3ff15a1cac083127 3ff16872b020c49c 3ff176c8b4395810 3ff1851eb851eb85 3ff19374bc6a7efa 3ff1a1cac083126f 3ff1b020c49ba5e3 3ff1be76c8b43958 3ff1cccccccccccd 3ff1db22d0e56042 3ff1e978d4fdf3b6 3ff1f7ced916872b 3ff20624dd2f1aa0 3ff2147ae147ae14"
+        },
+        {
+          "centersBits": "4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000 4062e00000000000",
+          "id": "pipe-3",
+          "pipe": {
+            "centerYBits": "4062e00000000000",
+            "gapBits": "4058000000000000",
+            "passed": false,
+            "score": 0,
+            "shiftAtBits": null,
+            "shiftDelayBits": null,
+            "shiftOffsetBits": "0000000000000000",
+            "xBits": "4059000000000000"
+          },
+          "timesBits": "bf847ae147ae147b bf7a9fbe76c8b43a bf689374bc6a7efa 3f40624dd2f1aa00 3f70624dd2f1a9fc 3f7eb851eb851eba 3f86872b020c49bb 3f8db22d0e560419 3f926e978d4fdf3c 3f9604189374bc6a 3f9999999999999a 3f9d2f1a9fbe76c8 3fa0624dd2f1a9fc 3fa22d0e56041893 3fa3f7ced916872b 3fa5c28f5c28f5c2 3fa78d4fdf3b645a 3fa95810624dd2f2 3fab22d0e5604189 3faced916872b021 3faeb851eb851eb9 3fb04189374bc6a8 3fb126e978d4fdf4 3fb20c49ba5e3540 3fb2f1a9fbe76c8c 3fb3d70a3d70a3d8 3fb4bc6a7ef9db23 3fb5a1cac083126f 3fb6872b020c49bb 3fb76c8b43958107 3fb851eb851eb852 3fb9374bc6a7ef9e 3fba1cac083126ea 3fbb020c49ba5e36 3fbbe76c8b439582 3fbccccccccccccd 3fbdb22d0e560419 3fbe978d4fdf3b65 3fbf7ced916872b1 3fc03126e978d4fe 3fc0a3d70a3d70a4"
+        }
+      ],
+      "tolerance": "1e-9"
+    },
+    {
+      "id": "rectIntersects",
+      "rects": [
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": false,
+          "b": "4024000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": false,
+          "b": "0000000000000000 4024000000000000 4024000000000000 4024000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "4014000000000000 4014000000000000 0000000000000000 0000000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "4000000000000000 4014000000000000 4010000000000000 0000000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "4000000000000000 0000000000000000 4010000000000000 0000000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": false,
+          "b": "4000000000000000 4024000000000000 4010000000000000 0000000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "4023ff7ced916873 0000000000000000 4024000000000000 4024000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "402e000000000000 0000000000000000 c018000000000000 4024000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": false,
+          "b": "4024000000000000 4024000000000000 4014000000000000 4014000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "0000000000000000 4000000000000000 0000000000000000 4010000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": false,
+          "b": "4024000000000000 4000000000000000 0000000000000000 4010000000000000",
+          "ba": false
+        },
+        {
+          "a": "3ff0000000000000 3ff0000000000000 0000000000000000 0000000000000000",
+          "ab": false,
+          "b": "4000000000000000 4000000000000000 0000000000000000 0000000000000000",
+          "ba": false
+        },
+        {
+          "a": "3ff0000000000000 3ff0000000000000 0000000000000000 4014000000000000",
+          "ab": true,
+          "b": "3ff0000000000000 4008000000000000 0000000000000000 4014000000000000",
+          "ba": true
+        },
+        {
+          "a": "3ff0000000000000 3ff0000000000000 0000000000000000 4000000000000000",
+          "ab": false,
+          "b": "3ff0000000000000 4008000000000000 0000000000000000 4014000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 4014000000000000 4024000000000000 0000000000000000",
+          "ab": true,
+          "b": "4014000000000000 0000000000000000 0000000000000000 4024000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 4014000000000000 4024000000000000 0000000000000000",
+          "ab": false,
+          "b": "4024000000000000 0000000000000000 0000000000000000 4024000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 4014000000000000 4024000000000000 0000000000000000",
+          "ab": true,
+          "b": "0000000000000000 0000000000000000 0000000000000000 4024000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 4014000000000000 4024000000000000 0000000000000000",
+          "ab": false,
+          "b": "4014000000000000 0000000000000000 0000000000000000 4014000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 4014000000000000 4024000000000000 0000000000000000",
+          "ab": true,
+          "b": "4014000000000000 4014000000000000 0000000000000000 4014000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": false,
+          "b": "4000000000000000 4028000000000000 4010000000000000 c000000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "4000000000000000 4026000000000000 4010000000000000 c000000000000000",
+          "ba": true
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": false,
+          "b": "4024000000000000 4024000000000000 0000000000000000 0000000000000000",
+          "ba": false
+        },
+        {
+          "a": "0000000000000000 0000000000000000 4024000000000000 4024000000000000",
+          "ab": true,
+          "b": "0000000000000000 0000000000000000 0000000000000000 0000000000000000",
+          "ba": true
+        },
+        {
+          "a": "405170a3d70a3d71 0000000000000000 4038000000000000 4038000000000000",
+          "ab": true,
+          "b": "403e000000000000 0000000000000000 4046000000000000 0000000000000000",
+          "ba": true
+        },
+        {
+          "a": "405170a3d70a3d71 0000000000000000 4038000000000000 4038000000000000",
+          "ab": false,
+          "b": "405770a3d70a3d71 0000000000000000 4046000000000000 4059000000000000",
+          "ba": false
+        },
+        {
+          "a": "405170a3d70a3d71 4071600000000000 4038000000000000 4038000000000000",
+          "ab": false,
+          "b": "4049000000000000 4072e00000000000 4046000000000000 0000000000000000",
+          "ba": false
+        }
+      ],
+      "spec": "a·b = [x, y, w, h] 비트. ab = a.intersects(b), ba = b.intersects(a)"
+    }
+  ],
+  "equivalence": "discrete",
+  "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+  "golden": "flappy/rules",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "equivalence": "이산(G §8-14): center 의 centersBits 만 허용 오차 tolerance(절대값) — easeOut 의 1 − pow(1−p, 3) 를 Kotlin 은 곱셈으로 낸다. 그 밖의 칸(곡선 · 속도 · 새 기둥 · 사각형)은 비트 그대로 대조한다",
+    "makePipe": "MiniGameRandom(seed) 하나로 makePipe(x: 300 + 117·i, score: [0,14,15,16,22,30,60,999][i % 8]) 를 24번 — 기둥마다 x·centerY·gap·shiftDelay(없으면 null)·shiftOffset 비트. nextAfter = 그 뒤 rng.next()",
+    "rectIntersects": "맥 CoreGraphics CGRect.intersects 의 실측 의미(변만 맞닿으면 거짓 · 크기 0 은 점 · 반열린 [min, max))"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/FlappyGame.swift",
+    "Sources/CheckCore/MiniGameEngine.swift"
+  ]
+}

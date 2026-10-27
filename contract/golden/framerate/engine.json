@@ -1,0 +1,159 @@
+{
+  "cases": [
+    {
+      "allCases": "timing_bar flappy tetris crossy",
+      "id": "kinds",
+      "macCases": "timing_bar flappy tetris crossy",
+      "phoneCases": "timing_bar flappy tetris",
+      "sharedControlHint": "클릭 또는 스페이스",
+      "table": [
+        {
+          "controlHint": "클릭 또는 스페이스",
+          "howToPlay": "움직이는 마커가 밝은 구간에 들어올 때 멈춰 · 10라운드",
+          "icon": "metronome.fill",
+          "id": "timing_bar",
+          "isPhoneSupported": true,
+          "maxScore": 1000,
+          "rawValue": "timing_bar",
+          "roundTokenMidRunRefreshSecondsBits": null,
+          "roundTokenReuseSecondsBits": "4092c00000000000",
+          "title": "타이밍 바"
+        },
+        {
+          "controlHint": "클릭 또는 스페이스",
+          "howToPlay": "눌러서 점프 · 기둥 사이를 지나갈수록 +1",
+          "icon": "bird.fill",
+          "id": "flappy",
+          "isPhoneSupported": true,
+          "maxScore": 999,
+          "rawValue": "flappy",
+          "roundTokenMidRunRefreshSecondsBits": null,
+          "roundTokenReuseSecondsBits": "4092c00000000000",
+          "title": "플래피 아잉"
+        },
+        {
+          "controlHint": "← → 이동 · ↑ 회전 · ↓ 소프트드롭 · 스페이스 하드드롭 · C 홀드",
+          "howToPlay": "줄을 채워 지워 · 쌓여서 꼭대기에 닿으면 끝",
+          "icon": "square.grid.2x2.fill",
+          "id": "tetris",
+          "isPhoneSupported": true,
+          "maxScore": 100000000,
+          "rawValue": "tetris",
+          "roundTokenMidRunRefreshSecondsBits": null,
+          "roundTokenReuseSecondsBits": "4086800000000000",
+          "title": "테트리스"
+        },
+        {
+          "controlHint": "↑↓←→ · WASD 로 뛰기 · 클릭·스페이스 앞으로",
+          "howToPlay": "한 칸씩 뛰어 앞으로 · 차 · 강 · 기차를 피해",
+          "icon": "figure.walk",
+          "id": "crossy",
+          "isPhoneSupported": false,
+          "maxScore": 5000,
+          "rawValue": "crossy",
+          "roundTokenMidRunRefreshSecondsBits": "4092c00000000000",
+          "roundTokenReuseSecondsBits": "405e000000000000",
+          "title": "길건너 아잉이"
+        }
+      ]
+    },
+    {
+      "id": "canvas",
+      "logicalBits": "4072400000000000 4072e00000000000",
+      "transforms": [
+        {
+          "resultBits": "3ff2d96cb65b2d97 0000000000000000 3fbc0e070381c000",
+          "sizeBits": "4075800000000000 4076400000000000"
+        },
+        {
+          "resultBits": "3ff0000000000000 0000000000000000 0000000000000000",
+          "sizeBits": "4072400000000000 4072e00000000000"
+        },
+        {
+          "resultBits": "3fd5312a6254c4aa 407c3a7d74fae9f6 bd00000000000000",
+          "sizeBits": "408f400000000000 4059000000000000"
+        },
+        {
+          "resultBits": "3fd5eaf57abd5eaf 0000000000000000 407c049a4d26934a",
+          "sizeBits": "4059000000000000 408f400000000000"
+        },
+        {
+          "resultBits": "0000000000000000 0000000000000000 0000000000000000",
+          "sizeBits": "0000000000000000 0000000000000000"
+        },
+        {
+          "resultBits": "3ff49349a4d26935 0000000000000000 405a7c7e3f1f8fc6",
+          "sizeBits": "4077780000000000 4082c20000000000"
+        },
+        {
+          "resultBits": "bfa188c46231188c 0000000000000000 403e2bd5eaf57abd",
+          "sizeBits": "c024000000000000 4049000000000000"
+        }
+      ]
+    },
+    {
+      "finalHopCount": 45,
+      "finalRecent": "forward left left left back right back forward",
+      "id": "hops",
+      "recentHopLimit": 8,
+      "steps": "Rforward Rforward Rright Q-5=forward+forward+right Rforward Rforward Rback Q2=right+forward+forward+back Rleft Rright Rright Q3=forward+forward+back+left+right+right Rforward Rleft Rback Q1=forward+back+left+right+right+forward+left+back Rback Rback Rback Q8=right+forward+left+back+back+back+back Rright Rleft Rback Q11=back+back+back+back+right+left+back Rleft Rleft Rright Q16=left+back+left+left+right Rright Rright Rleft Q13=left+back+left+left+right+right+right+left Rleft Rright Rback Q20=right+right+right+left+left+right+back Rright Rright Rleft Q22=right+left+left+right+back+right+right+left Rforward Rback Rleft Q29=left+forward+back+left Rback Rforward Rback Q32=left+back+forward+back Rright Rforward Rleft Q39= Rleft Rleft Rback Q32=forward+back+right+forward+left+left+left+back Rright Rback Rforward Q34=forward+left+left+left+back+right+back+forward"
+    },
+    {
+      "flappy": "0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      "flappyFrom": -3,
+      "flappyThresholds": "0 6 13 22 34",
+      "id": "stages",
+      "table": [
+        {
+          "hasAuroraBands": false,
+          "id": 0,
+          "name": "새벽",
+          "starCount": 18
+        },
+        {
+          "hasAuroraBands": false,
+          "id": 1,
+          "name": "한낮",
+          "starCount": 0
+        },
+        {
+          "hasAuroraBands": false,
+          "id": 2,
+          "name": "노을",
+          "starCount": 10
+        },
+        {
+          "hasAuroraBands": false,
+          "id": 3,
+          "name": "밤",
+          "starCount": 46
+        },
+        {
+          "hasAuroraBands": true,
+          "id": 4,
+          "name": "오로라",
+          "starCount": 60
+        }
+      ],
+      "tetris": "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      "tetrisFrom": -5,
+      "tetrisThresholds": "0 30 110 290 650",
+      "timing": "0 0 0 0 0 1 1 2 2 3 3 4 4 4 4 4 4",
+      "timingFrom": -2
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+  "golden": "framerate/engine",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "canvas": "MiniGameCanvas.transform(in: size, logicalSize: 292×302) → [scale, origin.x, origin.y] 비트",
+    "hops": "MiniGameInput() 에 R<방향> = recordHop, Q<since>=<결과> = hops(since:) 를 + 로 이은 것(빈 결과는 빈 글자)",
+    "kinds": "MiniGameKind 표(순서 = allCases = 화면 순서). 글자 칸은 화면 문구 그대로",
+    "stages": "무대 id · 이름 · 별 수와 고르기(플래피 점수 · 타이밍 라운드 · 테트리스 advance) — 색은 그림의 것이라 싣지 않는다"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/MiniGameEngine.swift"
+  ]
+}

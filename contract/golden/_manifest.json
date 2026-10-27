@@ -1,7 +1,89 @@
 {
-  "exportTests": 13,
+  "exportTests": 29,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
+    {
+      "cases": 8,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift",
+      "golden": "crossy/lanes",
+      "path": "contract/golden/crossy/lanes.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/CrossyGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 6,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift",
+      "golden": "crossy/rules",
+      "path": "contract/golden/crossy/rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/CrossyGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 5,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift",
+      "golden": "crossy/scripted",
+      "path": "contract/golden/crossy/scripted.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/CrossyGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 9,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+      "golden": "flappy/rules",
+      "path": "contract/golden/flappy/rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/FlappyGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 5,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+      "golden": "flappy/scripted",
+      "path": "contract/golden/flappy/scripted.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/FlappyGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 4,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+      "golden": "framerate/engine",
+      "path": "contract/golden/framerate/engine.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 2,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+      "golden": "framerate/fps",
+      "path": "contract/golden/framerate/fps.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
     {
       "cases": 12,
       "equivalence": "bit",
@@ -12,6 +94,118 @@
       "swiftSources": [
         "Sources/CheckCore/MiniGameEngine.swift",
         "Sources/CheckCore/GomokuAIEngine.swift"
+      ]
+    },
+    {
+      "cases": 200,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/bags",
+      "path": "contract/golden/tetris/bags.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 4,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/duel",
+      "path": "contract/golden/tetris/duel.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisDuelSession.swift",
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/TetrisDuelBoard.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 17,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/duel-rules",
+      "path": "contract/golden/tetris/duel-rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisDuelSession.swift",
+        "Sources/CheckCore/TetrisDuelBoard.swift",
+        "Sources/CheckCore/TetrisGame.swift"
+      ]
+    },
+    {
+      "cases": 11,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/fixtures",
+      "path": "contract/golden/tetris/fixtures.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 64,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/garbage-holes",
+      "path": "contract/golden/tetris/garbage-holes.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 24,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/rules",
+      "path": "contract/golden/tetris/rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift",
+        "Sources/CheckCore/TetrisLayout.swift"
+      ]
+    },
+    {
+      "cases": 7,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/scripted",
+      "path": "contract/golden/tetris/scripted.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 6,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+      "golden": "timing-bar/rules",
+      "path": "contract/golden/timing-bar/rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TimingBarGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
+    {
+      "cases": 4,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift",
+      "golden": "timing-bar/scripted",
+      "path": "contract/golden/timing-bar/scripted.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TimingBarGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
       ]
     }
   ],

@@ -1,0 +1,721 @@
+{
+  "cases": [
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../...zz...../....zz..../....oo..../....oo..../iiiiii.iii/iiii.iiiii/iiiiiiii.i/.iiiiiiiii/iii.iiiiii/.iiiiiiiii/i.iiiiiiii/iiiiiii.ii/iiiii.iiii/iiiiiiiii./iii.iiiiii/iiiiiii.ii/iiiiiiiii./iiiiii.iii/iiiiiii.ii/ii.iiiiiii/iiiiii.iii/iiii.iiiii/iiiii.iiii/iiiiiii.ii/iiiii.iiii/ii.iiiiiii/iiii.iiiii/iiiii.iiii",
+      "holes": "6 4 8 0 3 0 1 7 5 9 3 7 9 6 7 2 6 4 5 7 5 2 4 5",
+      "id": "zero",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000000000000"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...zz...../....zz..../....t...../...ttt..../....oo..../....oo..../iiiiii.iii/iiiiiiii.i/i.iiiiiiii/iiiiii.iii/iiiiiiii.i/iiiiiiiii./ii.iiiiiii/ii.iiiiiii/iii.iiiiii/iiiiiiii.i/iiiii.iiii/ii.iiiiiii/iiiiiii.ii/iii.iiiiii/ii.iiiiiii/i.iiiiiiii/iiii.iiiii/iiii.iiiii/iiiiii.iii/iiiiiii.ii/i.iiiiiiii/iiiiii.iii/iiii.iiiii/iiiiiiiii.",
+      "holes": "6 8 1 6 8 9 2 2 3 8 5 2 7 3 2 1 4 4 6 7 1 6 4 9",
+      "id": "one",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000000000001"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../...zz...../....zz..../....oo..../....oo..../.iiiiiiiii/iiiiiiii.i/iiiii.iiii/iiii.iiiii/iii.iiiiii/ii.iiiiiii/iii.iiiiii/iiiiiiii.i/iiiiiiii.i/iiiii.iiii/iiiiiii.ii/iiiiii.iii/iiii.iiiii/iii.iiiiii/iiiii.iiii/iiiiiiiii./ii.iiiiiii/iii.iiiiii/iiiiii.iii/.iiiiiiiii/ii.iiiiiii/iiiiii.iii/iiiiiiiii./.iiiiiiiii",
+      "holes": "0 8 5 4 3 2 3 8 8 5 7 6 4 3 5 9 2 3 6 0 2 6 9 0",
+      "id": "server-max",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000007fffffff"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../...zz...../....zz..../....oo..../....oo..../i.iiiiiiii/iii.iiiiii/iiiiiiiii./iiiiiiii.i/iiiiii.iii/iiiiiiii.i/iiii.iiiii/iiiii.iiii/iiiiiii.ii/iiiiiii.ii/iii.iiiiii/iiiiii.iii/iii.iiiiii/iiii.iiiii/iiiiii.iii/iiii.iiiii/ii.iiiiiii/iiiiiiiii./iii.iiiiii/iiiiiii.ii/.iiiiiiiii/iiiii.iiii/.iiiiiiiii/iii.iiiiii",
+      "holes": "1 3 9 8 6 8 4 5 7 7 3 6 3 4 6 4 2 9 3 7 0 5 0 3",
+      "id": "int63-max",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x7fffffffffffffff"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../...iiii.../....oo..../....oo..../i.iiiiiiii/iiiiiiii.i/i.iiiiiiii/ii.iiiiiii/iiiii.iiii/.iiiiiiiii/iiiiiiiii./iii.iiiiii/i.iiiiiiii/i.iiiiiiii/iiii.iiiii/iiiii.iiii/iiiii.iiii/iiiiiiii.i/iiii.iiiii/iii.iiiiii/iii.iiiiii/iiiiiiii.i/ii.iiiiiii/iiii.iiiii/iiiiiii.ii/iiiii.iiii/iiiii.iiii/ii.iiiiiii",
+      "holes": "1 8 1 2 5 0 9 3 1 1 4 5 5 8 4 3 3 8 2 4 7 5 5 2",
+      "id": "int63-min",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x8000000000000000"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../....t...../...ttt..../....oo..../....oo..../.iiiiiiiii/iii.iiiiii/i.iiiiiiii/iiiiii.iii/iiiiii.iii/iiiiii.iii/iiiiiiii.i/iiiiiiii.i/iiii.iiiii/iiiiiiii.i/iiiii.iiii/iiiiiiii.i/iiiiii.iii/i.iiiiiiii/iiiii.iiii/.iiiiiiiii/iiii.iiiii/.iiiiiiiii/ii.iiiiiii/ii.iiiiiii/iiiiiii.ii/iiiiiiiii./iiiii.iiii/iiiii.iiii",
+      "holes": "0 3 1 6 6 6 8 8 4 8 5 8 6 1 5 0 4 0 2 2 7 9 5 5",
+      "id": "uint64-max",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xffffffffffffffff"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../....ss..../...ss...../....oo..../....oo..../iiiiiiii.i/ii.iiiiiii/i.iiiiiiii/iiiiii.iii/iiiiii.iii/ii.iiiiiii/iiiiiii.ii/.iiiiiiiii/iiiiiiii.i/iiii.iiiii/.iiiiiiiii/iiiii.iiii/iiiiiiii.i/ii.iiiiiii/.iiiiiiiii/iiiii.iiii/i.iiiiiiii/i.iiiiiiii/iiiiiiiii./iiiiii.iii/iiii.iiiii/i.iiiiiiii/iiiiii.iii/iiii.iiiii",
+      "holes": "8 2 1 6 6 2 7 0 8 4 0 5 8 2 0 5 1 1 9 6 4 1 6 4",
+      "id": "tetris-a",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000000135289c"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....oo..../....oo..../....oo..../....oo..../iiiiii.iii/.iiiiiiiii/iiiiiii.ii/iiiiiiiii./ii.iiiiiii/iiiiiiiii./iiiiiiii.i/i.iiiiiiii/iiiii.iiii/ii.iiiiiii/i.iiiiiiii/iii.iiiiii/iiiiiiii.i/iiiiiiiii./iiiii.iiii/iiiiii.iii/.iiiiiiiii/iiiiii.iii/iiiii.iiii/iiiiiiii.i/ii.iiiiiii/i.iiiiiiii/iiii.iiiii/ii.iiiiiii",
+      "holes": "6 0 7 9 2 9 8 1 5 2 1 3 8 9 5 6 0 6 5 8 2 1 4 2",
+      "id": "tetris-b",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000000001e61"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....ss..../...ss...../....oo..../....oo..../iiiiiii.ii/iiiiiii.ii/iiiiiiii.i/iiiiiiii.i/iiiiiii.ii/i.iiiiiiii/iiiii.iiii/iiiiii.iii/iiii.iiiii/iiii.iiiii/i.iiiiiiii/iiiiii.iii/i.iiiiiiii/i.iiiiiiii/iii.iiiiii/i.iiiiiiii/iiii.iiiii/iiii.iiiii/i.iiiiiiii/iiii.iiiii/iiiiiiiii./iiii.iiiii/iiiiiiiii./.iiiiiiiii",
+      "holes": "7 7 8 8 7 1 5 6 4 4 1 6 1 1 3 1 4 4 1 4 9 4 9 0",
+      "id": "tetris-c",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000000000014a"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../....oo..../....oo..../....oo..../....oo..../iii.iiiiii/ii.iiiiiii/iiiiiiiii./iiiii.iiii/iiiiiiiii./iiiiiiii.i/iiiiiiii.i/iiiii.iiii/.iiiiiiiii/iiiiii.iii/iiiii.iiii/ii.iiiiiii/iiiii.iiii/iiii.iiiii/ii.iiiiiii/iiiiiii.ii/iiiiiiii.i/ii.iiiiiii/iiiiiii.ii/iiiiii.iii/iiiiiiiii./iiiiii.iii/iiii.iiiii/iiii.iiiii",
+      "holes": "3 2 9 5 9 8 8 5 0 6 5 2 5 4 2 7 8 2 7 6 9 6 4 4",
+      "id": "tetris-d",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x00000000000003a2"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....t...../...ttt..../....oo..../....oo..../iiii.iiiii/iiiiiii.ii/ii.iiiiiii/iiiiii.iii/iii.iiiiii/i.iiiiiiii/iiiiiiii.i/iii.iiiiii/i.iiiiiiii/iiiiiii.ii/.iiiiiiiii/iiii.iiiii/iiiiiiiii./iii.iiiiii/i.iiiiiiii/iiii.iiiii/ii.iiiiiii/iiiiiii.ii/.iiiiiiiii/iiiiii.iii/iiiiiiii.i/iiii.iiiii/iiii.iiiii/iiiiiiiii.",
+      "holes": "4 7 2 6 3 1 8 3 1 7 0 4 9 3 1 4 2 7 0 6 8 4 4 9",
+      "id": "s0",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000051d8de1a"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../....ss..../...ss...../....oo..../....oo..../iiiiiii.ii/iii.iiiiii/iiiiii.iii/i.iiiiiiii/iii.iiiiii/i.iiiiiiii/iiiiiii.ii/.iiiiiiiii/iiiiii.iii/iiiiiiiii./iiiiiiii.i/i.iiiiiiii/iiiiiiii.i/i.iiiiiiii/i.iiiiiiii/iiiiiiii.i/iiii.iiiii/iiii.iiiii/ii.iiiiiii/iiiii.iiii/i.iiiiiiii/iiiiiii.ii/iiiiii.iii/iiiiiiiii.",
+      "holes": "7 3 6 1 3 1 7 0 6 9 8 1 8 1 1 8 4 4 2 5 1 7 6 9",
+      "id": "s1",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x038554cb2712ffee"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...zz...../....zz..../.....l..../...lll..../....oo..../....oo..../i.iiiiiiii/iii.iiiiii/.iiiiiiiii/iiiii.iiii/iiiii.iiii/iiiiiiiii./iiiiiiii.i/iiiii.iiii/iiiiiiii.i/iiiiiii.ii/iiiii.iiii/ii.iiiiiii/iiiii.iiii/iiiii.iiii/iiiiiiii.i/.iiiiiiiii/iiiiiiiii./.iiiiiiiii/iiiiiii.ii/i.iiiiiiii/i.iiiiiiii/i.iiiiiiii/iiiiiiiii./iiiiiii.ii",
+      "holes": "1 3 0 5 5 9 8 5 8 7 5 2 5 5 8 0 9 0 7 1 1 1 9 7",
+      "id": "s2",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000055d50349"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../...zz...../....zz..../....oo..../....oo..../iii.iiiiii/iiiiii.iii/iiiiii.iii/iiiiiiiii./.iiiiiiiii/iiiiiii.ii/iiiiii.iii/.iiiiiiiii/iiii.iiiii/.iiiiiiiii/.iiiiiiiii/iiiiiiiii./iiiiiii.ii/iii.iiiiii/iii.iiiiii/ii.iiiiiii/iiiiiiii.i/iiiiiii.ii/iiiiiiii.i/iiiiiiii.i/iii.iiiiii/iiiiiii.ii/iiii.iiiii/iiiiiiiii.",
+      "holes": "3 6 6 9 0 7 6 0 4 0 0 9 7 3 3 2 8 7 8 8 3 7 4 9",
+      "id": "s3",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x45724d0f094f6569"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../....t...../...ttt..../....oo..../....oo..../iiiiiii.ii/.iiiiiiiii/iiii.iiiii/iii.iiiiii/iiiiii.iii/iiiiii.iii/.iiiiiiiii/iiii.iiiii/ii.iiiiiii/iiiii.iiii/.iiiiiiiii/iiii.iiiii/iiiiiiiii./iiii.iiiii/iiiiii.iii/iiiiiiii.i/iiiii.iiii/iiiiii.iii/iii.iiiiii/iiiii.iiii/iiiiiiii.i/.iiiiiiiii/iiiiiiii.i/ii.iiiiiii",
+      "holes": "7 0 4 3 6 6 0 4 2 5 0 4 9 4 6 8 5 6 3 5 8 0 8 2",
+      "id": "s4",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000061e7bd11"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../....t...../...ttt..../....oo..../....oo..../iiiiiiii.i/iiiii.iiii/iii.iiiiii/iiiii.iiii/iiiiiiiii./iiiii.iiii/.iiiiiiiii/iiiii.iiii/iiiiii.iii/iiiiiiiii./iii.iiiiii/iii.iiiiii/iiiiii.iii/iiiiii.iii/ii.iiiiiii/iiiii.iiii/ii.iiiiiii/iiii.iiiii/iiiiii.iii/iiiiiiiii./i.iiiiiiii/iiiiiiii.i/iiiiiiii.i/i.iiiiiiii",
+      "holes": "8 5 3 5 9 5 0 5 6 9 3 3 6 6 2 5 2 4 6 9 1 8 8 1",
+      "id": "s5",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x112b303e0728c280"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../.....l..../...lll..../...iiii.../....oo..../....oo..../ii.iiiiiii/iiii.iiiii/ii.iiiiiii/iiii.iiiii/iiiiiii.ii/iiiiiiii.i/iiiiii.iii/iiiiiii.ii/iiiiiii.ii/i.iiiiiiii/iiiii.iiii/iiii.iiiii/iiiiii.iii/iiiiii.iii/iiiii.iiii/.iiiiiiiii/iiiiiiii.i/iiiiiiiii./iiiiiiii.i/iiiiiiii.i/iii.iiiiii/iiiiiiii.i/iiiiiiiii./iiiiiii.ii",
+      "holes": "2 4 2 4 7 8 6 7 7 1 5 4 6 6 5 0 8 9 8 8 3 8 9 7",
+      "id": "s6",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000000b75de2c"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../...iiii.../....oo..../....oo..../iiiiiiiii./.iiiiiiiii/iiiiiiiii./.iiiiiiiii/iiiiii.iii/iiiiiiii.i/iiiii.iiii/iii.iiiiii/iiiiii.iii/iiii.iiiii/iiiii.iiii/iiii.iiiii/ii.iiiiiii/.iiiiiiiii/iii.iiiiii/iiiiii.iii/iiiiiiiii./ii.iiiiiii/i.iiiiiiii/iiiiii.iii/iii.iiiiii/.iiiiiiiii/iiiiiiii.i/iiiii.iiii",
+      "holes": "9 0 9 0 6 8 5 3 6 4 5 4 2 0 3 6 9 2 1 6 3 0 8 5",
+      "id": "s7",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x73ecda55bbe44761"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....t...../...ttt..../....oo..../....oo..../iiii.iiiii/ii.iiiiiii/iiiiiii.ii/iiii.iiiii/iiiii.iiii/iiiiiiii.i/.iiiiiiiii/ii.iiiiiii/ii.iiiiiii/ii.iiiiiii/iiiiiii.ii/.iiiiiiiii/iiiiiiii.i/iii.iiiiii/iiiiiii.ii/iiii.iiiii/iiiiiiiii./iiiii.iiii/iii.iiiiii/iii.iiiiii/iii.iiiiii/iiiiiii.ii/iiiiii.iii/ii.iiiiiii",
+      "holes": "4 2 7 4 5 8 0 2 2 2 7 0 8 3 7 4 9 5 3 3 3 7 6 2",
+      "id": "s8",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000001fae0f43"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../...zz...../....zz..../....oo..../....oo..../iiiiiiii.i/.iiiiiiiii/iiiiiiiii./iiiiiiii.i/iii.iiiiii/ii.iiiiiii/iiiiiiii.i/ii.iiiiiii/iiiiiiii.i/iiiiiiiii./.iiiiiiiii/iiiiiiiii./iiiiiiii.i/.iiiiiiiii/.iiiiiiiii/.iiiiiiiii/iiiiiii.ii/iiiiiii.ii/iiii.iiiii/iiiiii.iii/iiiiiii.ii/iiiiii.iii/iiiiii.iii/ii.iiiiiii",
+      "holes": "8 0 9 8 3 2 8 2 8 9 0 9 8 0 0 0 7 7 4 6 7 6 6 2",
+      "id": "s9",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xf422da76f1632d56"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../...zz...../....zz..../....oo..../....oo..../iiiiiiii.i/iiiiiiii.i/iiiiiiii.i/i.iiiiiiii/iiiiiiiii./iiiiiiii.i/iiiii.iiii/i.iiiiiiii/iiiiiii.ii/iiiiiiii.i/iiiiiiii.i/iiiiiiii.i/iiii.iiiii/.iiiiiiiii/iiiiiiii.i/.iiiiiiiii/iiii.iiiii/iiiiiiiii./iiii.iiiii/iiiiiii.ii/iiiiiiiii./iiiiiiii.i/iii.iiiiii/i.iiiiiiii",
+      "holes": "8 8 8 1 9 8 5 1 7 8 8 8 4 0 8 0 4 9 4 7 9 8 3 1",
+      "id": "s10",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000006698e2df"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../...zz...../....zz..../....oo..../....oo..../iiiiiii.ii/iiiiiii.ii/iiiii.iiii/i.iiiiiiii/iiiiiii.ii/iiiii.iiii/iiiiiii.ii/iiiiiiii.i/iiiiiiii.i/iiiiiii.ii/iiiii.iiii/i.iiiiiiii/i.iiiiiiii/ii.iiiiiii/iiiii.iiii/iiiiiiiii./iiiiiiii.i/.iiiiiiiii/iiiii.iiii/iiii.iiiii/iiiiii.iii/.iiiiiiiii/iiiiiii.ii/iiiiiiii.i",
+      "holes": "7 7 5 1 7 5 7 8 8 7 5 1 1 2 5 9 8 0 5 4 6 0 7 8",
+      "id": "s11",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x4e85d942c6b36ae6"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../...j....../...jjj..../....oo..../....oo..../ii.iiiiiii/i.iiiiiiii/.iiiiiiiii/iiiiiii.ii/iiiii.iiii/ii.iiiiiii/ii.iiiiiii/iiiiiiii.i/iiiii.iiii/iiiii.iiii/iiiiiiii.i/iiiiiiii.i/iiiiiiii.i/iii.iiiiii/iiiiii.iii/iiiiiiii.i/iiiii.iiii/ii.iiiiiii/ii.iiiiiii/iiiiiiii.i/iii.iiiiii/i.iiiiiiii/i.iiiiiiii/iiii.iiiii",
+      "holes": "2 1 0 7 5 2 2 8 5 5 8 8 8 3 6 8 5 2 2 8 3 1 1 4",
+      "id": "s12",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000003c87cf3e"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../...zz...../....zz..../....oo..../....oo..../iii.iiiiii/iiiiiiii.i/iiiiiii.ii/ii.iiiiiii/i.iiiiiiii/i.iiiiiiii/.iiiiiiiii/iiiii.iiii/iii.iiiiii/iiiiiiii.i/iii.iiiiii/iiiiiii.ii/iiiii.iiii/iii.iiiiii/.iiiiiiiii/iiiiiii.ii/iiiiii.iii/iiiiiii.ii/i.iiiiiiii/iiiii.iiii/.iiiiiiiii/iiiiiiii.i/.iiiiiiiii/iiiiiii.ii",
+      "holes": "3 8 7 2 1 1 0 5 3 8 3 7 5 3 0 7 6 7 1 5 0 8 0 7",
+      "id": "s13",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x3b82aa4241c0a77e"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../...zz...../....zz..../....oo..../....oo..../i.iiiiiiii/iiiiiiiii./ii.iiiiiii/iiiiii.iii/iiiiiii.ii/i.iiiiiiii/iiiiii.iii/.iiiiiiiii/iiiiii.iii/iiiiiii.ii/iiiiii.iii/iiiiiiiii./i.iiiiiiii/iiiiiiii.i/.iiiiiiiii/iiiiiiii.i/iiiiiii.ii/iii.iiiiii/iiiii.iiii/iiiii.iiii/iiiiiiiii./iii.iiiiii/iiiiiii.ii/iiiiii.iii",
+      "holes": "1 9 2 6 7 1 6 0 6 7 6 9 1 8 0 8 7 3 5 5 9 3 7 6",
+      "id": "s14",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000006b1ea5e2"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../...j....../...jjj..../....oo..../....oo..../iiiiii.iii/iiiiiiiii./i.iiiiiiii/iiiii.iiii/iiiiiii.ii/iiiiiii.ii/iiiii.iiii/iiiiii.iii/iiii.iiiii/ii.iiiiiii/iiiiiii.ii/iiiiii.iii/iiiiii.iii/iiiiiii.ii/ii.iiiiiii/iiiii.iiii/.iiiiiiiii/iii.iiiiii/iiiiii.iii/iiiii.iiii/.iiiiiiiii/iiiiiii.ii/i.iiiiiiii/.iiiiiiiii",
+      "holes": "6 9 1 5 7 7 5 6 4 2 7 6 6 7 2 5 0 3 6 5 0 7 1 0",
+      "id": "s15",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xd4f543f6e2a48784"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../....t...../...ttt..../....oo..../....oo..../ii.iiiiiii/iiiiii.iii/iiiii.iiii/ii.iiiiiii/iiiii.iiii/i.iiiiiiii/iii.iiiiii/iii.iiiiii/iiiiii.iii/iiiiii.iii/iiiiiii.ii/iiiiii.iii/iii.iiiiii/iiiiiiii.i/iiiiiiii.i/iiii.iiiii/ii.iiiiiii/i.iiiiiiii/iiii.iiiii/i.iiiiiiii/ii.iiiiiii/iiiii.iiii/iiiiiiiii./iiiiiiiii.",
+      "holes": "2 6 5 2 5 1 3 3 6 6 7 6 3 8 8 4 2 1 4 1 2 5 9 9",
+      "id": "s16",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000002bbedcaa"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../.....l..../...lll..../....oo..../....oo..../iiiii.iiii/.iiiiiiiii/iiiiii.iii/i.iiiiiiii/iiiii.iiii/iiiiii.iii/iii.iiiiii/iiiiiiiii./iiii.iiiii/.iiiiiiiii/.iiiiiiiii/iiiiii.iii/iiiiii.iii/iiiiii.iii/iiiiiii.ii/iiiiiiii.i/ii.iiiiiii/iii.iiiiii/iiiii.iiii/ii.iiiiiii/iiiiiiii.i/iii.iiiiii/iiiiiii.ii/iiiiiiiii.",
+      "holes": "5 0 6 1 5 6 3 9 4 0 0 6 6 6 7 8 2 3 5 2 8 3 7 9",
+      "id": "s17",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xd0414801a93fe2ea"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../...j....../...jjj..../....oo..../....oo..../iiiiiiii.i/iii.iiiiii/iiiiiii.ii/i.iiiiiiii/iii.iiiiii/iii.iiiiii/iiiiiiii.i/.iiiiiiiii/.iiiiiiiii/iiiii.iiii/ii.iiiiiii/i.iiiiiiii/.iiiiiiiii/iiiii.iiii/i.iiiiiiii/ii.iiiiiii/iiiiiiiii./iii.iiiiii/i.iiiiiiii/iiii.iiiii/iiiiiii.ii/iiiiiii.ii/i.iiiiiiii/i.iiiiiiii",
+      "holes": "8 3 7 1 3 3 8 0 0 5 2 1 0 5 1 2 9 3 1 4 7 7 1 1",
+      "id": "s18",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000003ce32e6e"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../...iiii.../....oo..../....oo..../iiiiiii.ii/iiiii.iiii/i.iiiiiiii/iiiiiii.ii/iiiiiiiii./iii.iiiiii/iii.iiiiii/iiii.iiiii/iiiiii.iii/iiiiiiii.i/iiiiiiiii./iii.iiiiii/.iiiiiiiii/iiiiiii.ii/iiiiiiii.i/ii.iiiiiii/iiiiiiiii./iii.iiiiii/iiiiiii.ii/iiiiiiiii./iiii.iiiii/iiiiiiii.i/ii.iiiiiii/iiiiiiiii.",
+      "holes": "7 5 1 7 9 3 3 4 6 8 9 3 0 7 8 2 9 3 7 9 4 8 2 9",
+      "id": "s19",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x10443ca9869c7d0e"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../.....l..../...lll..../....oo..../....oo..../.iiiiiiiii/iiii.iiiii/.iiiiiiiii/iiiiiiii.i/iiiiiiii.i/iiiiiii.ii/ii.iiiiiii/iiiiiiii.i/iiiiiiiii./i.iiiiiiii/iii.iiiiii/iiiiiii.ii/iiiiii.iii/iiiiiiiii./.iiiiiiiii/ii.iiiiiii/.iiiiiiiii/iiiii.iiii/iiiiiiiii./iiiiiii.ii/iiiiiiiii./iii.iiiiii/iiiii.iiii/iiiiiiiii.",
+      "holes": "0 4 0 8 8 7 2 8 9 1 3 7 6 9 0 2 0 5 9 7 9 3 5 9",
+      "id": "s20",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000014f89731"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../....oo..../....oo..../....oo..../....oo..../iiii.iiiii/iiiiiii.ii/i.iiiiiiii/i.iiiiiiii/iiiiiiiii./iiiiiiii.i/iii.iiiiii/iiiiiii.ii/iiiiiiiii./iiiiii.iii/iiiii.iiii/iiiiiiii.i/iiiiiiiii./i.iiiiiiii/iii.iiiiii/iiiiiii.ii/ii.iiiiiii/i.iiiiiiii/ii.iiiiiii/iiiii.iiii/iiiiiiiii./iiii.iiiii/i.iiiiiiii/iiii.iiiii",
+      "holes": "4 7 1 1 9 8 3 7 9 6 5 8 9 1 3 7 2 1 2 5 9 4 1 4",
+      "id": "s21",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x1047e14050933e53"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../...j....../...jjj..../....oo..../....oo..../.iiiiiiiii/iiiiii.iii/iiiiiii.ii/iiiiiiiii./iiiiiii.ii/iiiiii.iii/iiiiiii.ii/ii.iiiiiii/iii.iiiiii/iiiiiiiii./.iiiiiiiii/ii.iiiiiii/iiiiiii.ii/iiiiii.iii/iii.iiiiii/iiiiii.iii/iiiii.iiii/iii.iiiiii/iiiii.iiii/iiii.iiiii/ii.iiiiiii/.iiiiiiiii/i.iiiiiiii/iiiiii.iii",
+      "holes": "0 6 7 9 7 6 7 2 3 9 0 2 7 6 3 6 5 3 5 4 2 0 1 6",
+      "id": "s22",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000001ff6e7b5"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../...zz...../....zz..../....oo..../....oo..../iiiiiii.ii/iii.iiiiii/i.iiiiiiii/iiiiii.iii/iiiiiii.ii/iii.iiiiii/iiiiiiiii./iii.iiiiii/i.iiiiiiii/i.iiiiiiii/.iiiiiiiii/i.iiiiiiii/.iiiiiiiii/i.iiiiiiii/iiiii.iiii/iiiiii.iii/iii.iiiiii/i.iiiiiiii/ii.iiiiiii/ii.iiiiiii/ii.iiiiiii/iiiiiiiii./.iiiiiiiii/i.iiiiiiii",
+      "holes": "7 3 1 6 7 3 9 3 1 1 0 1 0 1 5 6 3 1 2 2 2 9 0 1",
+      "id": "s23",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x466cc13766814590"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....t...../...ttt..../....oo..../....oo..../iiiiii.iii/ii.iiiiiii/iiiiii.iii/iiii.iiiii/iiiii.iiii/iiiiiiii.i/iiiii.iiii/i.iiiiiiii/iii.iiiiii/iiiiiii.ii/iii.iiiiii/iiiiiiiii./iiiiiiiii./ii.iiiiiii/iiiii.iiii/i.iiiiiiii/i.iiiiiiii/iiiiiiiii./iiiiiiiii./ii.iiiiiii/i.iiiiiiii/iii.iiiiii/iiiiiiiii./iiii.iiiii",
+      "holes": "6 2 6 4 5 8 5 1 3 7 3 9 9 2 5 1 1 9 9 2 1 3 9 4",
+      "id": "s24",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000040f71c04"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../....oo..../....oo..../....oo..../....oo..../iiiiiii.ii/iiiii.iiii/.iiiiiiiii/iiiiiiiii./iiiii.iiii/iiiiiiiii./iiiiiiii.i/.iiiiiiiii/iiiiiiiii./iii.iiiiii/iiiiiiiii./iiiiiii.ii/iiiiii.iii/iiiiiiiii./.iiiiiiiii/i.iiiiiiii/iiiii.iiii/iiii.iiiii/iiiiiii.ii/iiiiiiii.i/ii.iiiiiii/iiiiiii.ii/iiiii.iiii/ii.iiiiiii",
+      "holes": "7 5 0 9 5 9 8 0 9 3 9 7 6 9 0 1 5 4 7 8 2 7 5 2",
+      "id": "s25",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x8227a215d453edfb"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../....oo..../....oo..../....oo..../....oo..../iiiiii.iii/iii.iiiiii/iiiiiiiii./iiiii.iiii/iiiiiii.ii/iiiiiiiii./iiiiiiiii./iiiiiii.ii/iiiiiiii.i/i.iiiiiiii/ii.iiiiiii/iiiiii.iii/iiii.iiiii/iiiiiii.ii/iiiiii.iii/iiiiiiiii./.iiiiiiiii/iii.iiiiii/ii.iiiiiii/.iiiiiiiii/iii.iiiiii/iiiiii.iii/iiiiii.iii/iiii.iiiii",
+      "holes": "6 3 9 5 7 9 9 7 8 1 2 6 4 7 6 9 0 3 2 0 3 6 6 4",
+      "id": "s26",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000023291bdc"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../...zz...../....zz..../....oo..../....oo..../iiiiii.iii/i.iiiiiiii/ii.iiiiiii/i.iiiiiiii/iii.iiiiii/iiiii.iiii/iiiii.iiii/i.iiiiiiii/iii.iiiiii/.iiiiiiiii/iiiiiiiii./.iiiiiiiii/i.iiiiiiii/ii.iiiiiii/iiiiii.iii/i.iiiiiiii/.iiiiiiiii/iiiiiiiii./iiiii.iiii/iiiii.iiii/iiiiiiii.i/i.iiiiiiii/i.iiiiiiii/iiiiiiii.i",
+      "holes": "6 1 2 1 3 5 5 1 3 0 9 0 1 2 6 1 0 9 5 5 8 1 1 8",
+      "id": "s27",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xf7e4a1a3729955cb"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../.....l..../...lll..../....ss..../...ss...../....oo..../....oo..../iiiiiii.ii/iii.iiiiii/i.iiiiiiii/iiiiiiiii./iiiiii.iii/iiii.iiiii/iiiiiii.ii/i.iiiiiiii/iiii.iiiii/iii.iiiiii/iiii.iiiii/.iiiiiiiii/iii.iiiiii/iii.iiiiii/i.iiiiiiii/iiii.iiiii/i.iiiiiiii/iiiiiiii.i/ii.iiiiiii/iiii.iiiii/iiiii.iiii/iiiiiiii.i/ii.iiiiiii/iiiiiiiii.",
+      "holes": "7 3 1 9 6 4 7 1 4 3 4 0 3 3 1 4 1 8 2 4 5 8 2 9",
+      "id": "s28",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000004eb0e477"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../.....l..../...lll..../....oo..../....oo..../iiiiii.iii/iiiiiii.ii/iiiiiiiii./iiiiiiii.i/iiiii.iiii/iiiiiiii.i/iiiiiii.ii/iii.iiiiii/iiiiiiii.i/iiiiiiii.i/iiiii.iiii/iiiiiiiii./.iiiiiiiii/.iiiiiiiii/iiiiiiiii./iiiiiiii.i/iiiiiiiii./i.iiiiiiii/iiiii.iiii/iiii.iiiii/iiii.iiiii/iiiiii.iii/iiiiii.iii/iiiiiiii.i",
+      "holes": "6 7 9 8 5 8 7 3 8 8 5 9 0 0 9 8 9 1 5 4 4 6 6 8",
+      "id": "s29",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xcfa1b2332e222828"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....oo..../....oo..../....oo..../....oo..../iiiiii.iii/iiiii.iiii/iiiiiii.ii/.iiiiiiiii/.iiiiiiiii/.iiiiiiiii/iiiii.iiii/iiiiii.iii/ii.iiiiiii/iiiiiiiii./iiiiii.iii/iiii.iiiii/iiiii.iiii/iiiiiiii.i/iiiiiiii.i/i.iiiiiiii/iii.iiiiii/iiiiiiiii./iiiiiii.ii/.iiiiiiiii/iiiiiii.ii/iiiiiiiii./iiiii.iiii/iiiii.iiii",
+      "holes": "6 5 7 0 0 0 5 6 2 9 6 4 5 8 8 1 3 9 7 0 7 9 5 5",
+      "id": "s30",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000005267b6de"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../....oo..../...joo..../...jjj..../....oo..../....oo..../ii.iiiiiii/iiii.iiiii/iiii.iiiii/iiiiii.iii/iiiiiii.ii/iiiiiiii.i/iii.iiiiii/iiiiiii.ii/iii.iiiiii/ii.iiiiiii/ii.iiiiiii/iiiiiii.ii/iiiiiiiii./i.iiiiiiii/iiiiiiiii./iiiiiii.ii/i.iiiiiiii/iiiiiiii.i/.iiiiiiiii/iiii.iiiii/.iiiiiiiii/iiiiiii.ii/iiiiiii.ii/iiiiiii.ii",
+      "holes": "2 4 4 6 7 8 3 7 3 2 2 7 9 1 9 7 1 8 0 4 0 7 7 7",
+      "id": "s31",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xa71bdb19c8bae9a1"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../...zz...../....zz..../....oo..../....oo..../iiii.iiiii/iiiii.iiii/iiiii.iiii/iiiiiiii.i/iii.iiiiii/iiiiiiiii./iiiiiiiii./ii.iiiiiii/iii.iiiiii/ii.iiiiiii/i.iiiiiiii/iiiiiii.ii/iiiiiii.ii/.iiiiiiiii/iiii.iiiii/iiiiii.iii/.iiiiiiiii/iii.iiiiii/iiiiiiiii./iiiii.iiii/iiiiiii.ii/iiiiiii.ii/iiii.iiiii/iiiii.iiii",
+      "holes": "4 5 5 8 3 9 9 2 3 2 1 7 7 0 4 6 0 3 9 5 7 7 4 5",
+      "id": "s32",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000029d96617"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../...zz...../....zz..../....oo..../....oo..../iiiii.iiii/iiiiiiii.i/.iiiiiiiii/iiiii.iiii/iiiiii.iii/iiiiiiii.i/i.iiiiiiii/iiiii.iiii/iiiiii.iii/iiiiiii.ii/iiii.iiiii/iiiii.iiii/i.iiiiiiii/iii.iiiiii/iii.iiiiii/.iiiiiiiii/.iiiiiiiii/.iiiiiiiii/iiiiiiiii./iiiii.iiii/.iiiiiiiii/iiii.iiiii/.iiiiiiiii/iiiiii.iii",
+      "holes": "5 8 0 5 6 8 1 5 6 7 4 5 1 3 3 0 0 0 9 5 0 4 0 6",
+      "id": "s33",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x2731bec5694c0777"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../.....l..../...lll..../....oo..../....oo..../iii.iiiiii/.iiiiiiiii/iiiiiiii.i/.iiiiiiiii/.iiiiiiiii/iiiiiiii.i/iii.iiiiii/iiiiii.iii/iiiiiii.ii/iiiiiiiii./iii.iiiiii/i.iiiiiiii/iiiiiii.ii/iiiiiii.ii/i.iiiiiiii/iiiiiii.ii/i.iiiiiiii/iiiiiii.ii/iiiiii.iii/iiiiiiii.i/iiiiiiii.i/iiii.iiiii/iiiiiiiii./iiiiiiii.i",
+      "holes": "3 0 8 0 0 8 3 6 7 9 3 1 7 7 1 7 1 7 6 8 8 4 9 8",
+      "id": "s34",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000005485644d"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...zz...../....zz..../....ss..../...ss...../....oo..../....oo..../ii.iiiiiii/iiiiiii.ii/i.iiiiiiii/iiiii.iiii/iiii.iiiii/iiiii.iiii/iii.iiiiii/.iiiiiiiii/iiiii.iiii/.iiiiiiiii/i.iiiiiiii/.iiiiiiiii/ii.iiiiiii/iiiii.iiii/iiiiii.iii/iiii.iiiii/.iiiiiiiii/iii.iiiiii/iiiiiiiii./iii.iiiiii/iii.iiiiii/ii.iiiiiii/ii.iiiiiii/iiii.iiiii",
+      "holes": "2 7 1 5 4 5 3 0 5 0 1 0 2 5 6 4 0 3 9 3 3 2 2 4",
+      "id": "s35",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xf975f434b67499be"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../...iiii.../....oo..../....oo..../iiii.iiiii/iiii.iiiii/iiiiiiii.i/.iiiiiiiii/iiiiii.iii/ii.iiiiiii/iiiiii.iii/iiiii.iiii/iii.iiiiii/ii.iiiiiii/iiiiiiii.i/iiiiii.iii/iiiii.iiii/iiiiiiiii./iiiiiiii.i/i.iiiiiiii/iiiiii.iii/iiiiiii.ii/iiiiii.iii/iiiiiiiii./iiiiiii.ii/iiii.iiiii/iiiiiii.ii/ii.iiiiiii",
+      "holes": "4 4 8 0 6 2 6 5 3 2 8 6 5 9 8 1 6 7 6 9 7 4 7 2",
+      "id": "s36",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x0000000055b33cfe"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../.....l..../...lll..../...j....../...jjj..../....oo..../....oo..../iiiiiiii.i/iiiiii.iii/i.iiiiiiii/iiiii.iiii/iii.iiiiii/iiiii.iiii/iiiiii.iii/ii.iiiiiii/iiiiii.iii/.iiiiiiiii/iii.iiiiii/i.iiiiiiii/iiiiii.iii/iiii.iiiii/iiiiiiiii./iiiiiiiii./.iiiiiiiii/iiiiiii.ii/iiiii.iiii/ii.iiiiiii/i.iiiiiiii/iiiiiiiii./iii.iiiiii/iiiiii.iii",
+      "holes": "8 6 1 5 3 5 6 2 6 0 3 1 6 4 9 9 0 7 5 2 1 9 3 6",
+      "id": "s37",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x122ca7c8e959a649"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../...iiii.../....oo..../....oo..../iiiiiii.ii/iiii.iiiii/.iiiiiiiii/ii.iiiiiii/iiii.iiiii/iiiiii.iii/.iiiiiiiii/iiiiii.iii/iiiii.iiii/iiiiiiii.i/i.iiiiiiii/iiiiiii.ii/iiiiiiii.i/iiiiiiiii./iiiiiiiii./.iiiiiiiii/iiiiiiii.i/i.iiiiiiii/iiiiiiiii./iiiiiiii.i/iiiiii.iii/iiiiii.iii/iiiii.iiii/iiiiii.iii",
+      "holes": "7 4 0 2 4 6 0 6 5 8 1 7 8 9 9 0 8 1 9 8 6 6 5 6",
+      "id": "s38",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000002ec31a6c"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../...j....../...jjj..../.....l..../...lll..../....oo..../....oo..../.iiiiiiiii/iiiiiiiii./iiiiiiii.i/iiiiii.iii/iiiii.iiii/iiiiiii.ii/ii.iiiiiii/iiii.iiiii/iiiiii.iii/.iiiiiiiii/iiiii.iiii/iiiiiiiii./.iiiiiiiii/iii.iiiiii/iiiiii.iii/iii.iiiiii/iiiii.iiii/iii.iiiiii/iiii.iiiii/iii.iiiiii/i.iiiiiiii/.iiiiiiiii/ii.iiiiiii/i.iiiiiiii",
+      "holes": "0 9 8 6 5 7 2 4 6 0 5 9 0 3 6 3 5 3 4 3 1 0 2 1",
+      "id": "s39",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xa716b28f939d24cd"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../...iiii.../....oo..../....oo..../i.iiiiiiii/i.iiiiiiii/iiii.iiiii/iiiiiiii.i/.iiiiiiiii/iiiii.iiii/iiiiiii.ii/iiiiiiii.i/iiiiiii.ii/ii.iiiiiii/iiiiii.iii/ii.iiiiiii/iii.iiiiii/iiiiii.iii/iiii.iiiii/.iiiiiiiii/iii.iiiiii/iiiii.iiii/i.iiiiiiii/iiiiiii.ii/ii.iiiiiii/iiiiiii.ii/iiiiiiii.i/iii.iiiiii",
+      "holes": "1 1 4 8 0 5 7 8 7 2 6 2 3 6 4 0 3 5 1 7 2 7 8 3",
+      "id": "s40",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x00000000455d02c3"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../...j....../...jjj..../....oo..../....oo..../iiiiiii.ii/iii.iiiiii/iiiiiiii.i/i.iiiiiiii/i.iiiiiiii/.iiiiiiiii/.iiiiiiiii/iiii.iiiii/iiiiii.iii/iiiiiiiii./iiiiiii.ii/iiiiii.iii/iii.iiiiii/iiiii.iiii/i.iiiiiiii/iiiii.iiii/iiiii.iiii/iiiii.iiii/iiiiiiiii./iii.iiiiii/iiiiiiii.i/iiiii.iiii/iiiiiiiii./iiiiiii.ii",
+      "holes": "7 3 8 1 1 0 0 4 6 9 7 6 3 5 1 5 5 5 9 3 8 5 9 7",
+      "id": "s41",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xe13ee05aeaf7c45f"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../.....l..../...lll..../....oo..../....oo..../.iiiiiiiii/i.iiiiiiii/iiii.iiiii/iiii.iiiii/ii.iiiiiii/iiiiiiiii./ii.iiiiiii/ii.iiiiiii/iiiiii.iii/.iiiiiiiii/iii.iiiiii/iiiiiii.ii/i.iiiiiiii/i.iiiiiiii/iiiiii.iii/iii.iiiiii/i.iiiiiiii/iii.iiiiii/iii.iiiiii/iiiii.iiii/i.iiiiiiii/iiiiiii.ii/iiiiiii.ii/iiiiiiiii.",
+      "holes": "0 1 4 4 2 9 2 2 6 0 3 7 1 1 6 3 1 3 3 5 1 7 7 9",
+      "id": "s42",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000002fa75a76"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../.....l..../...lll..../....t...../...ttt..../....oo..../....oo..../.iiiiiiiii/iiiiiiiii./iiii.iiiii/iiii.iiiii/i.iiiiiiii/iiiiii.iii/iiiii.iiii/iiiii.iiii/iiiiiiii.i/iiiiiiiii./iiii.iiiii/.iiiiiiiii/iiiiiii.ii/iiiiiiiii./.iiiiiiiii/iiiiiiiii./iiiii.iiii/iiiiiiii.i/iii.iiiiii/iiiiiiii.i/.iiiiiiiii/iiiii.iiii/iiiiiiiii./iiiiii.iii",
+      "holes": "0 9 4 4 1 6 5 5 8 9 4 0 7 9 0 9 5 8 3 8 0 5 9 6",
+      "id": "s43",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0xd6aaa5faa71041b5"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../...iiii.../....oo..../....oo..../iiiiiii.ii/iiiii.iiii/i.iiiiiiii/iiii.iiiii/iii.iiiiii/.iiiiiiiii/iiiiiii.ii/iiiii.iiii/iiii.iiiii/iiiiiiiii./.iiiiiiiii/iii.iiiiii/i.iiiiiiii/iiiiiii.ii/iiiiii.iii/iii.iiiiii/iiiiii.iii/ii.iiiiiii/iiiii.iiii/.iiiiiiiii/ii.iiiiiii/.iiiiiiiii/iiiii.iiii/iiiiii.iii",
+      "holes": "7 5 1 4 3 0 7 5 4 9 0 3 1 7 6 3 6 2 5 0 2 0 5 6",
+      "id": "s44",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000005b51cb8a"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....oo..../....oo..../....t...../...ttt..../....oo..../....oo..../iiiiiiii.i/iii.iiiiii/i.iiiiiiii/.iiiiiiiii/iiiiiiii.i/ii.iiiiiii/iiiiiiiii./ii.iiiiiii/iiiiii.iii/iiiiiiiii./iiiiii.iii/i.iiiiiiii/iiiiii.iii/i.iiiiiiii/i.iiiiiiii/iiiii.iiii/.iiiiiiiii/iiii.iiiii/iiiiii.iii/iiiii.iiii/.iiiiiiiii/i.iiiiiiii/iiii.iiiii/iii.iiiiii",
+      "holes": "8 3 1 0 8 2 9 2 6 9 6 1 6 1 1 5 0 4 6 5 0 1 4 3",
+      "id": "s45",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x1071923bd032ced3"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../...j....../...jjj..../....oo..../....oo..../iiiiiiii.i/iiiii.iiii/iii.iiiiii/iiiii.iiii/iii.iiiiii/iiii.iiiii/iiiiiiiii./iiiiiiiii./iiii.iiiii/iii.iiiiii/iiii.iiiii/ii.iiiiiii/iiiiiii.ii/iiii.iiiii/ii.iiiiiii/iiiiiiiii./iiiiiiii.i/ii.iiiiiii/iiiiii.iii/iii.iiiiii/iiiiii.iii/ii.iiiiiii/iiiii.iiii/iiiiiiiii.",
+      "holes": "8 5 3 5 3 4 9 9 4 3 4 2 7 4 2 9 8 2 6 3 6 2 5 9",
+      "id": "s46",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x00000000160588cb"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../.....l..../...lll..../....t...../...ttt..../....oo..../....oo..../.iiiiiiiii/iiiiii.iii/iiiiii.iii/.iiiiiiiii/iiiiiii.ii/iiiiii.iii/iiiii.iiii/.iiiiiiiii/iiiiiiii.i/.iiiiiiiii/iii.iiiiii/ii.iiiiiii/iiiiiii.ii/iiiii.iiii/iiiii.iiii/iiiii.iiii/i.iiiiiiii/iiii.iiiii/iiiiiii.ii/iiiiiiii.i/iiiiiiii.i/iiiiiiii.i/iiiiiiiii./iii.iiiiii",
+      "holes": "0 6 6 0 7 6 5 0 8 0 3 2 7 5 5 5 1 4 7 8 8 8 9 3",
+      "id": "s47",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x872ccf52d05a46bb"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../....ss..../...ssl..../...lll..../....oo..../....oo..../iii.iiiiii/iiiiii.iii/iiiiii.iii/iiiiiii.ii/iiiii.iiii/iiiii.iiii/.iiiiiiiii/i.iiiiiiii/ii.iiiiiii/ii.iiiiiii/iiiiiiii.i/iiiiiii.ii/iii.iiiiii/i.iiiiiiii/iiiiiii.ii/iiiiiiiii./iiiiii.iii/.iiiiiiiii/iiii.iiiii/ii.iiiiiii/ii.iiiiiii/iiiii.iiii/iiiiiii.ii/ii.iiiiiii",
+      "holes": "3 6 6 7 5 5 0 1 2 2 8 7 3 1 7 9 6 0 4 2 2 5 7 2",
+      "id": "s48",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000003959ae10"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....ss..../...ss...../...j....../...jjj..../....oo..../....oo..../i.iiiiiiii/iii.iiiiii/iii.iiiiii/iii.iiiiii/iiiii.iiii/iiiiiiii.i/iiiiiiii.i/iiii.iiiii/i.iiiiiiii/i.iiiiiiii/iii.iiiiii/iiiiiiii.i/.iiiiiiiii/.iiiiiiiii/i.iiiiiiii/iiiiiiii.i/.iiiiiiiii/iiii.iiiii/iiiii.iiii/iiiiiii.ii/iiiiiii.ii/iiiiiiiii./iiiii.iiii/iiiiiii.ii",
+      "holes": "1 3 3 3 5 8 8 4 1 1 3 8 0 0 1 8 0 4 5 7 7 9 5 7",
+      "id": "s49",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x357775b8ccc9bd15"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../.....l..../...lll..../....oo..../....oo..../iiii.iiiii/iiiii.iiii/iiiiii.iii/iiiiiii.ii/iii.iiiiii/iiiiiiii.i/iiiiii.iii/iiiiiii.ii/i.iiiiiiii/i.iiiiiiii/i.iiiiiiii/iiiii.iiii/iii.iiiiii/iiii.iiiii/.iiiiiiiii/iii.iiiiii/ii.iiiiiii/iiii.iiiii/i.iiiiiiii/.iiiiiiiii/i.iiiiiiii/iiiiiii.ii/i.iiiiiiii/ii.iiiiiii",
+      "holes": "4 5 6 7 3 8 6 7 1 1 1 5 3 4 0 3 2 4 1 0 1 7 1 2",
+      "id": "s50",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x00000000255a22b1"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../....t...../...ttt..../....oo..../....oo..../....oo..../....oo..../.iiiiiiiii/iii.iiiiii/i.iiiiiiii/iiii.iiiii/iiiiiiiii./.iiiiiiiii/iii.iiiiii/iiiiii.iii/iiii.iiiii/iiii.iiiii/iiiiiii.ii/iiiiiiiii./iiiii.iiii/.iiiiiiiii/iiiii.iiii/iiiiiiiii./iiiii.iiii/iiii.iiiii/iiiiiiiii./.iiiiiiiii/iiiii.iiii/ii.iiiiiii/.iiiiiiiii/iiiiiiii.i",
+      "holes": "0 3 1 4 9 0 3 6 4 4 7 9 5 0 5 9 5 4 9 0 5 2 0 8",
+      "id": "s51",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x825d057263d3c139"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....oo..../....oo..../....oo..../....oo..../i.iiiiiiii/iiiiiii.ii/i.iiiiiiii/iiii.iiiii/i.iiiiiiii/ii.iiiiiii/i.iiiiiiii/i.iiiiiiii/iiii.iiiii/iiiiii.iii/iiiii.iiii/iiii.iiiii/iiiiiiiii./iiiiiiiii./iii.iiiiii/.iiiiiiiii/iiiii.iiii/iiiiiiiii./iiii.iiiii/iiiiiii.ii/iiiiiiii.i/iii.iiiiii/iiiiiii.ii/i.iiiiiiii",
+      "holes": "1 7 1 4 1 2 1 1 4 6 5 4 9 9 3 0 5 9 4 7 8 3 7 1",
+      "id": "s52",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x000000006c3ff155"
+    },
+    {
+      "board": "........../........../........../........../........../........../........../........../........../........../........../...iiii.../....oo..../....oo..../....oo..../....oo..../iiiiiiii.i/iii.iiiiii/iii.iiiiii/iii.iiiiii/ii.iiiiiii/.iiiiiiiii/i.iiiiiiii/iii.iiiiii/.iiiiiiiii/iiiii.iiii/ii.iiiiiii/iiiiiii.ii/.iiiiiiiii/iiiiiiiii./ii.iiiiiii/iiiiii.iii/ii.iiiiiii/.iiiiiiiii/iiiiiii.ii/iiii.iiiii/i.iiiiiiii/iiiiiiii.i/iii.iiiiii/ii.iiiiiii",
+      "holes": "8 3 3 3 2 0 1 3 0 5 2 7 0 9 2 6 2 0 7 4 1 8 3 2",
+      "id": "s53",
+      "locks": 4,
+      "phase": {
+        "holdBits": "3fd999999999999a",
+        "kind": "over"
+      },
+      "seed": "0x82536716227c5055"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+  "golden": "tetris/garbage-holes",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "holes": "구멍 열(0…9)을 넣은 순서대로 — 묶음 하나 = garbageRng(seed ^ 0x6a09e667f3bcc909).next() % 10 한 번",
+    "procedure": "game = TetrisGame(seed, board: 빈 판, active: O(spawn, 열 3, 행 18), phase: running, pendingGarbage: [1]×8). 굳힘 k = 1…4: (k>1 이면 step(0.05) 두 번 · receiveGarbage(1) 여덟 번) → action()(하드드롭 → 굳힘 → 8줄 삽입). 굳힘마다 단계가 over 면 멈춘다. 삽입 뒤 행 32…39 의 garbageMask 에서 비트가 빈 열이 그 줄의 구멍(넣은 순서)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/TetrisGame.swift",
+    "Sources/CheckCore/MiniGameEngine.swift"
+  ]
+}

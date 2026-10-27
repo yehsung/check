@@ -12,8 +12,9 @@ import Testing
 enum RealtimeWalk {
     static let start = Date(timeIntervalSince1970: 1_790_000_000)
 
+    /// 머리 조각은 `e30`(= base64url("{}")) — JWTClaims 는 가운데 조각만 읽는다. `eyJ…` 머리를 쓰지 않아 골든에 JWT 모양 글자가 남지 않는다.
     static func jwt(exp: Double) -> String {
-        "eyJhbGciOiJIUzI1NiJ9." + WireRulesSamples.base64URL("{\"exp\":\(Int(exp))}") + ".c2ln"
+        "e30." + WireRulesSamples.base64URL("{\"exp\":\(Int(exp))}") + ".c2ln"
     }
 
     static var tokOK: String { jwt(exp: start.timeIntervalSince1970 + 2_592_000) }
@@ -73,6 +74,48 @@ enum RealtimeWalk {
         ])
     }
 
+    /// 경계 대본(검증 지적: 무작위 걷기는 ms 누적이라 25·50·15·45초 경계에 정확히 닿지 않아 `>`↔`>=` 를 못 가렸다).
+    /// 정수 초만 더한다 — 2001 기준 Double 에서 정수 덧셈·뺄셈은 정확하므로 경계값이 그대로 선다. 지터 = 상한 × 0.75.
+    static func scriptedEvent(_ code: String) -> RealtimeEvent {
+        switch code {
+        case "signedIn:tokOK": return .signedIn(accessToken: tokOK)
+        case "joined": return .transport(.joined)
+        case "tick": return .tick
+        case "heartbeatAck": return .transport(.heartbeatAck)
+        case "closed:nil": return .transport(.closed(code: nil))
+        default: fatalError("모르는 대본 사건 \(code)")
+        }
+    }
+
+    static func script(id: String, _ steps: [(Int, String)]) throws -> GoldenJSON {
+        var link = RealtimeLink(transportAvailable: true)
+        var now = start
+        var records: [GoldenJSON] = []
+        for (dt, code) in steps {
+            now = now.addingTimeInterval(TimeInterval(dt))
+            let event = scriptedEvent(code)
+            let effects = link.apply(event, now: now) { ceiling in ceiling * 0.75 }
+            records.append(WireScrub.json(try record(link, event, effects, now: now)))
+        }
+        return .object([
+            "id": .string(id),
+            "script": .array(steps.map { .array([.int($0.0), .string($0.1)]) }),
+            "records": .array(records),
+        ])
+    }
+
+    /// 하트비트 25초(`sentAgo >= 25` 면 보낸다)와 무응답 50초(`silence > 50` 이면 끊는다)의 정확한 경계.
+    static let heartbeatScript: [(Int, String)] = [
+        (0, "signedIn:tokOK"), (0, "joined"), (1, "tick"), (0, "heartbeatAck"),
+        (24, "tick"), (1, "tick"),          // 보낸 지 24초: 안 보냄 · 25초: 보냄
+        (24, "tick"), (1, "tick"),          // 들은 지 50초 정확히: 안 끊고 보냄(25초 경과)
+        (1, "tick"),                        // 51초: 끊고 다시 붙기
+    ]
+    /// 조인 15초(`> 15` 이면 끊는다).
+    static let joinScript: [(Int, String)] = [(0, "signedIn:tokOK"), (15, "tick"), (1, "tick")]
+    /// 실패 표시 45초(`> 45` 이면 failed).
+    static let failedScript: [(Int, String)] = [(0, "signedIn:tokOK"), (1, "closed:nil"), (45, "tick"), (1, "tick")]
+
     static func walk(seed: UInt64, steps: Int, transportAvailable: Bool) throws -> GoldenJSON {
         var rng = MiniGameRandom(seed: seed)
         var link = RealtimeLink(transportAvailable: transportAvailable)
@@ -122,6 +165,9 @@ struct GoldenExportWireRealtime {
             try RealtimeWalk.walk(seed: 0x5EED_0000_0000_0004, steps: 10_000, transportAvailable: true),
             try RealtimeWalk.walk(seed: 42, steps: 2_000, transportAvailable: true),
             try RealtimeWalk.walk(seed: 7, steps: 300, transportAvailable: false),
+            try RealtimeWalk.script(id: "script-heartbeat-25-silence-50", RealtimeWalk.heartbeatScript),
+            try RealtimeWalk.script(id: "script-join-15", RealtimeWalk.joinScript),
+            try RealtimeWalk.script(id: "script-failed-45", RealtimeWalk.failedScript),
         ]
         goldenEmit(GoldenFile(
             golden: "realtime/link-walk",
@@ -130,7 +176,8 @@ struct GoldenExportWireRealtime {
             spec: [
                 "rng": .string("MiniGameRandom(SplitMix64)(seed). 걸음마다: dt = (next() % 20001)/1000 초, next() % 50 == 0 이면 dt += 60 → now += dt → 사건 = event(rng) → link.apply(사건, now, jitter: c → c * (0.5 + 0.5 * unit()))"),
                 "events": .string("next() % 34: 0 signedIn(tokOK) · 1 signedIn(tokSoon) · 2 signedIn(\"not-a-jwt\") · 3 signedOut · 4 willSleep · 5 didWake · 6 opened · 7,8 joined · 9 joinRejected(expiredToken) · 10 joinRejected(unauthorized) · 11 joinRejected(unknown(\"boom\")) · 12 gomoku · 13 chess · 14 tetris · 15 message_read · 16 poke(방송) · 17 heartbeatAck · 18 heartbeatTimedOut · 19 closed(next()%2==0 ? nil : 1006) · 20,21 backoffElapsed · 22…27 tick · 28 tokenRefreshed(tokOK) · 29 tokenRefreshed(tokSoon) · 30 tokenRefreshFailed(fatal: next()%2==0) · 31 userRequestedRetry · 32,33 tick"),
-                "tokens": .string("start = 1970+1790000000초. tokOK = JWT(exp = start+2592000), tokSoon = JWT(exp = start+100) — 머리 eyJhbGciOiJIUzI1NiJ9 · 꼬리 c2ln · 가운데 base64url({\"exp\":N})"),
+                "tokens": .string("start = 1970+1790000000초. tokOK = JWT(exp = start+2592000), tokSoon = JWT(exp = start+100) — 머리 e30 · 꼬리 c2ln · 가운데 base64url({\"exp\":N})"),
+                "script": .string("script 칸이 있는 case 는 무작위 걷기가 아니라 대본이다: [dt 정수 초, 사건 글자] 차례로 now += dt → apply(사건, now, jitter: c → c × 0.75). records = 걸음마다 기록(아래 record 와 같은 칸, JWT 모양 글자만 <jwt:길이>). 사건 글자: signedIn:tokOK · joined · tick · heartbeatAck · closed:nil"),
                 "record": .string("걸음 기록 = {now(비트) · e(사건 덤프) · fx(효과 덤프) · s(상태 덤프) · tok · fs(failingSince 비트) · fr(forcedRefreshUsedThisAttempt) · hb(lastHeartbeatSentAt 비트)} 의 정규 글자를 UTF-8 바이트로 FNV-1a 64 에 접는다. 500걸음마다 체크포인트, 앞 40걸음은 기록 그대로(JWT 모양 글자만 <jwt:길이> — 지문은 바꾸기 전 글자로 센다)"),
             ],
             cases: cases

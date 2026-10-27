@@ -25,6 +25,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -50,6 +54,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -76,6 +84,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -102,6 +114,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -125,6 +141,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -148,6 +168,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -167,6 +191,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -188,6 +216,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -211,6 +243,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -232,6 +268,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -255,6 +295,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -277,6 +321,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -298,6 +346,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -317,6 +369,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -343,6 +399,10 @@
           "status": 200
         }
       ],
+      "result": {
+        "ok": 40
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -364,6 +424,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -386,6 +450,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -405,6 +473,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -426,6 +498,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -447,6 +523,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -489,6 +569,14 @@
           "status": 200
         }
       ],
+      "result": {
+        "ok": {
+          "entries": [],
+          "requestedWeekOffset": 2,
+          "supportsWeekOffset": false
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -524,6 +612,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -627,6 +719,29 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": []
+      },
+      "routes": [
+        {
+          "body": "[]",
+          "path": "/rest/v1/work_statuses",
+          "query": null,
+          "status": 200
+        },
+        {
+          "body": "[]",
+          "path": "/rest/v1/work_sessions",
+          "query": null,
+          "status": 200
+        },
+        {
+          "body": "[]",
+          "path": "/rest/v1/work_status_devices",
+          "query": null,
+          "status": 200
+        }
+      ],
       "unordered": true
     },
     {
@@ -670,6 +785,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -709,6 +828,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -730,6 +853,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -757,6 +884,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -784,6 +915,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -811,6 +946,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -838,6 +977,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -859,6 +1002,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -880,6 +1027,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -907,6 +1058,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -934,6 +1089,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -955,6 +1114,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -982,6 +1145,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1003,6 +1170,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1024,6 +1195,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1051,6 +1226,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1078,6 +1257,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1113,6 +1296,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1155,6 +1342,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "https://golden.invalid/storage/v1/object/public/avatars/aa000000-0000-4000-8000-0000000000a1.jpg?v=<CACHE_BUSTER>"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1193,6 +1384,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "removed"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1211,6 +1406,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "gone"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1229,6 +1428,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1250,6 +1453,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1273,6 +1480,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1294,6 +1505,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1316,6 +1531,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1337,6 +1556,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1358,6 +1581,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1377,6 +1604,17 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "characters": null,
+          "gacha": null,
+          "rubyBalance": null,
+          "ultraBalance": null,
+          "ultraBuyMax": null,
+          "ultraPrice": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1398,6 +1636,17 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "characters": null,
+          "gacha": null,
+          "rubyBalance": null,
+          "ultraBalance": null,
+          "ultraBuyMax": null,
+          "ultraPrice": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1456,11 +1705,46 @@
           "status": 200
         }
       ],
+      "result": {
+        "ok": [
+          {
+            "characters": null,
+            "gacha": null,
+            "rubyBalance": null,
+            "ultraBalance": null,
+            "ultraBuyMax": null,
+            "ultraPrice": null
+          },
+          {
+            "characters": null,
+            "gacha": null,
+            "rubyBalance": null,
+            "ultraBalance": null,
+            "ultraBuyMax": null,
+            "ultraPrice": null
+          }
+        ]
+      },
+      "routes": [],
       "unordered": false
     },
     {
       "id": "fetchShopState(protocol)#plain404",
       "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
         {
           "body": {
             "p_protocol": 4
@@ -1490,6 +1774,17 @@
           "status": 200
         }
       ],
+      "result": {
+        "ok": {
+          "characters": null,
+          "gacha": null,
+          "rubyBalance": null,
+          "ultraBalance": null,
+          "ultraBuyMax": null,
+          "ultraPrice": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1511,6 +1806,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1533,6 +1832,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1578,6 +1881,17 @@
           "status": 200
         }
       ],
+      "result": {
+        "ok": {
+          "character": null,
+          "have": null,
+          "need": null,
+          "price": null,
+          "rubyBalance": null,
+          "status": "ok"
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1600,18 +1914,46 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
       "id": "sendMessage#empty",
       "requests": [],
       "responses": [],
+      "result": {
+        "ok": {
+          "maxLength": null,
+          "resetAfterSeconds": null,
+          "retryAfterSeconds": null,
+          "ring": null,
+          "status": "invalid",
+          "ultraBalance": null,
+          "ultraRemaining": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
       "id": "sendMessage#tooLong",
       "requests": [],
       "responses": [],
+      "result": {
+        "ok": {
+          "maxLength": 200,
+          "resetAfterSeconds": null,
+          "retryAfterSeconds": null,
+          "ring": null,
+          "status": "too_long",
+          "ultraBalance": null,
+          "ultraRemaining": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1634,6 +1976,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1656,6 +2002,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1675,6 +2025,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1697,6 +2051,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1716,6 +2074,14 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "peers": null,
+          "status": null,
+          "total": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1738,6 +2104,14 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "advanced": null,
+          "status": null,
+          "unread": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1759,6 +2133,14 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "advanced": null,
+          "status": null,
+          "unread": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1781,6 +2163,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1804,6 +2190,16 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "advanced": null,
+          "pokeAdvanced": null,
+          "pokeUnread": null,
+          "status": null,
+          "unread": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1825,6 +2221,16 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "advanced": null,
+          "pokeAdvanced": null,
+          "pokeUnread": null,
+          "status": null,
+          "unread": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1844,6 +2250,16 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "build": null,
+          "notes": null,
+          "publishedAt": null,
+          "v": null,
+          "version": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1863,6 +2279,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1887,6 +2307,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1908,6 +2332,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1930,6 +2358,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1952,6 +2384,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1975,6 +2411,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -1997,6 +2437,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$now"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2016,6 +2460,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2035,6 +2483,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": 0
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2056,6 +2508,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2077,6 +2533,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2096,6 +2556,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2121,6 +2585,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2146,6 +2614,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2165,6 +2637,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2186,6 +2662,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2209,6 +2689,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2231,6 +2715,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2254,6 +2742,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2276,6 +2768,17 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "full": null,
+          "items": null,
+          "max": null,
+          "rejected": null,
+          "status": null,
+          "watermarkMs": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2308,6 +2811,17 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "full": null,
+          "items": null,
+          "max": null,
+          "rejected": null,
+          "status": null,
+          "watermarkMs": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2327,6 +2841,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimedNow": [],
+          "daily": null,
+          "launchAtMs": null,
+          "missions": [],
+          "reportedClaimableCount": null,
+          "reportedClaimableRuby": null,
+          "rubyBalance": null,
+          "serverNowMs": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2348,6 +2875,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimedNow": [],
+          "daily": null,
+          "launchAtMs": null,
+          "missions": [],
+          "reportedClaimableCount": null,
+          "reportedClaimableRuby": null,
+          "rubyBalance": null,
+          "serverNowMs": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2369,6 +2909,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimedNow": [],
+          "daily": null,
+          "launchAtMs": null,
+          "missions": [],
+          "reportedClaimableCount": null,
+          "reportedClaimableRuby": null,
+          "rubyBalance": null,
+          "serverNowMs": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2390,6 +2943,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimedNow": [],
+          "daily": null,
+          "launchAtMs": null,
+          "missions": [],
+          "reportedClaimableCount": null,
+          "reportedClaimableRuby": null,
+          "rubyBalance": null,
+          "serverNowMs": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2411,6 +2977,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimedNow": [],
+          "daily": null,
+          "launchAtMs": null,
+          "missions": [],
+          "reportedClaimableCount": null,
+          "reportedClaimableRuby": null,
+          "rubyBalance": null,
+          "serverNowMs": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2430,6 +3009,21 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimableRuby": null,
+          "claimedNow": [],
+          "grantedNow": [],
+          "nextWeekStart": null,
+          "pending": null,
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "tiers": [],
+          "weekStart": null,
+          "workedSeconds": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2452,6 +3046,21 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimableRuby": null,
+          "claimedNow": [],
+          "grantedNow": [],
+          "nextWeekStart": null,
+          "pending": null,
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "tiers": [],
+          "weekStart": null,
+          "workedSeconds": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2474,6 +3083,21 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "claimableRuby": null,
+          "claimedNow": [],
+          "grantedNow": [],
+          "nextWeekStart": null,
+          "pending": null,
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "tiers": [],
+          "weekStart": null,
+          "workedSeconds": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2496,6 +3120,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2515,6 +3143,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "cooldownRemainingSeconds": null,
+          "cooldownSeconds": null,
+          "enabled": null,
+          "maxLength": null,
+          "price": null,
+          "recipients": null,
+          "rubyBalance": null,
+          "status": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2536,6 +3177,16 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "latestBuild": null,
+          "minBuild": null,
+          "notes": null,
+          "platform": null,
+          "status": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2562,6 +3213,14 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "deviceId": null,
+          "pushPrefs": null,
+          "status": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2585,6 +3244,14 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "deviceId": null,
+          "pushPrefs": null,
+          "status": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2606,6 +3273,13 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "removed": null,
+          "status": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2632,6 +3306,13 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "pushPrefs": null,
+          "status": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2651,6 +3332,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "checkAfterSeconds": null,
+          "checkAt": null,
+          "graceSeconds": null,
+          "last": null,
+          "serverNow": null,
+          "session": null,
+          "status": null,
+          "wallet": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2672,6 +3366,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "checkAfterSeconds": null,
+          "checkAt": null,
+          "graceSeconds": null,
+          "last": null,
+          "serverNow": null,
+          "session": null,
+          "status": null,
+          "wallet": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2691,6 +3398,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "checkAfterSeconds": null,
+          "checkAt": null,
+          "graceSeconds": null,
+          "last": null,
+          "serverNow": null,
+          "session": null,
+          "status": null,
+          "wallet": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2710,6 +3430,19 @@
         }
       ],
       "responses": [],
+      "result": {
+        "ok": {
+          "checkAfterSeconds": null,
+          "checkAt": null,
+          "graceSeconds": null,
+          "last": null,
+          "serverNow": null,
+          "session": null,
+          "status": null,
+          "wallet": null
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2731,6 +3464,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2754,6 +3491,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2776,6 +3517,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2799,6 +3544,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2824,6 +3573,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2876,6 +3629,13 @@
           "status": 400
         }
       ],
+      "result": {
+        "throws": {
+          "$case": "authMessage",
+          "$value": "deadlock detected"
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2898,6 +3658,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2922,6 +3686,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2951,6 +3719,13 @@
           "status": 400
         }
       ],
+      "result": {
+        "throws": {
+          "$case": "authMessage",
+          "$value": "deadlock detected"
+        }
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2972,6 +3747,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -2996,6 +3775,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3018,6 +3801,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3041,6 +3828,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3062,6 +3853,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3085,6 +3880,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3108,6 +3907,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3129,6 +3932,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3152,6 +3959,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3174,6 +3985,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3197,6 +4012,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3221,6 +4040,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3267,6 +4090,10 @@
           "status": 400
         }
       ],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3289,6 +4116,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3311,6 +4142,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3334,6 +4169,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3357,6 +4196,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3378,6 +4221,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3401,6 +4248,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3424,6 +4275,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3445,6 +4300,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3468,6 +4327,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3490,6 +4353,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3513,6 +4380,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3542,6 +4413,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3564,6 +4439,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3586,6 +4465,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3607,6 +4490,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3629,6 +4516,10 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
       "unordered": false
     },
     {
@@ -3651,6 +4542,3028 @@
         }
       ],
       "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "signIn#data",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid",
+            "password": "pw-123456"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "password"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"access_token\":\"acc-1\",\"refresh_token\":\"ref-1\",\"user\":{\"id\":\"U-1\"}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "accessToken": "acc-1",
+          "refreshToken": "ref-1",
+          "userID": "U-1"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "signUp#session",
+      "requests": [
+        {
+          "body": {
+            "data": {
+              "display_name": "아잉"
+            },
+            "email": "a@b.invalid",
+            "password": "pw-123456"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/signup",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"access_token\":\"acc-2\",\"refresh_token\":null,\"user\":{\"id\":\"U-2\",\"identities\":[{\"id\":\"i\"}]}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "accessToken": "acc-2",
+          "refreshToken": null,
+          "userID": "U-2"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "signUp#confirm",
+      "requests": [
+        {
+          "body": {
+            "data": {
+              "display_name": "아잉"
+            },
+            "email": "a@b.invalid",
+            "password": "pw-123456"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/signup",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"user\":{\"id\":\"U-3\",\"identities\":[{\"id\":\"i\"}]}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "signUp#exists",
+      "requests": [
+        {
+          "body": {
+            "data": {
+              "display_name": "아잉"
+            },
+            "email": "a@b.invalid",
+            "password": "pw-123456"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/signup",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"user\":{\"id\":\"U-4\",\"identities\":[]}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "throws": "emailAlreadyRegistered"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "signUp#noIdentitiesKey",
+      "requests": [
+        {
+          "body": {
+            "data": {
+              "display_name": "아잉"
+            },
+            "email": "a@b.invalid",
+            "password": "pw-123456"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/signup",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"user\":{\"id\":\"U-5\"}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "verifySignUpCode#expired",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid",
+            "token": "654321",
+            "type": "signup"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/verify",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":403,\"error_code\":\"otp_expired\",\"msg\":\"Token has expired or is invalid\"}",
+          "status": 403
+        }
+      ],
+      "result": {
+        "throws": "otpInvalidOrExpired"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "sendPasswordResetCode#rateLimited",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/recover",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"msg\":\"For security purposes, you can only request this after 30 seconds.\"}",
+          "status": 429
+        }
+      ],
+      "result": {
+        "throws": {
+          "$case": "rateLimited",
+          "$value": 30
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "updatePassword#same",
+      "requests": [
+        {
+          "body": {
+            "password": "new-pw-1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "PUT",
+          "path": "/auth/v1/user",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":422,\"error_code\":\"same_password\",\"msg\":\"New password should be different from the old password.\"}",
+          "status": 422
+        }
+      ],
+      "result": {
+        "throws": "samePasswordReuse"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "lookupTeamByCode#data",
+      "requests": [
+        {
+          "body": {
+            "code": "ABC123"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/lookup_team_by_code",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"team_id\":\"T-1\",\"name\":\"아잉팀\",\"weekly_goal_hours\":40,\"member_count\":3},{\"team_id\":\"T-2\",\"name\":\"둘\",\"weekly_goal_hours\":1,\"member_count\":1}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "memberCount": 3,
+          "name": "아잉팀",
+          "teamID": "T-1",
+          "weeklyGoalHours": 40
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "lookupTeamByCode#none",
+      "requests": [
+        {
+          "body": {
+            "code": "ABC123"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/lookup_team_by_code",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyInviteCode#data",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/my_team_invite_code",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"invite_code\":\"ABC123\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "ABC123"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "joinTeam#data",
+      "requests": [
+        {
+          "body": {
+            "code": "XYZ789"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/join_team",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"team_id\":\"T-1\",\"name\":\"아잉팀\",\"weekly_goal_hours\":30}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "goalHours": 30,
+          "name": "아잉팀",
+          "teamID": "T-1"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "joinTeam#none",
+      "requests": [
+        {
+          "body": {
+            "code": "XYZ789"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/join_team",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "createTeam#data",
+      "requests": [
+        {
+          "body": {
+            "goal_hours": 60,
+            "team_name": "새 팀"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/create_team",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"team_id\":\"T-9\",\"name\":\"새 팀\",\"invite_code\":\"XYZ789\",\"weekly_goal_hours\":60}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "goalHours": 60,
+          "inviteCode": "XYZ789",
+          "name": "새 팀",
+          "teamID": "T-9"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTeamLeaderboard#data",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/team_weekly_leaderboard",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"team_id\":\"T-1\",\"team_name\":\"아잉팀\",\"weekly_goal_hours\":40,\"total_seconds\":7200,\"working_count\":2,\"member_count\":null,\"center\":\"busan\",\"week_start\":\"2026-09-14\",\"participant_count\":3},{\"team_id\":\"T-2\",\"team_name\":\"둘\",\"weekly_goal_hours\":10,\"total_seconds\":0,\"working_count\":0,\"member_count\":4,\"center\":\"nowhere\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "center": "부산",
+            "id": "T-1",
+            "memberCount": 0,
+            "name": "아잉팀",
+            "participantCount": 3,
+            "totalSeconds": 7200,
+            "weekStart": "2026-09-14",
+            "weeklyGoalHours": 40,
+            "workingCount": 2
+          },
+          {
+            "center": null,
+            "id": "T-2",
+            "memberCount": 4,
+            "name": "둘",
+            "participantCount": null,
+            "totalSeconds": 0,
+            "weekStart": null,
+            "weeklyGoalHours": 10,
+            "workingCount": 0
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchOwnMembership#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"team_id\":\"T-1\",\"role\":\"owner\",\"teams\":{\"name\":\"아잉팀\",\"weekly_goal_hours\":45}}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "goalHours": 45,
+          "role": "owner",
+          "teamID": "T-1",
+          "teamName": "아잉팀"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchOwnMembership#defaults",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"team_id\":\"T-1\",\"role\":null,\"teams\":null}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "goalHours": 60,
+          "role": "member",
+          "teamID": "T-1",
+          "teamName": "팀"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchOwnMembership#none",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTeamStatuses#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "user_id,started_at,ended_at"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "ended_at",
+              "not.is.null"
+            ],
+            [
+              "ended_at",
+              "gte.2026-09-13T15:00:00Z"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "select",
+              "user_id,device_id,session_id,last_seen_at,opened_session"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "select",
+              "user_id,status,updated_at,last_seen_at,active_session_id,profiles(display_name,avatar_url)"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "order",
+              "updated_at.desc"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": [
+          {
+            "activeSessionID": "S-OPEN",
+            "avatarURL": {
+              "$url": "https://golden.invalid/a%20b.jpg"
+            },
+            "currentSessionStartedAt": {
+              "$date": "41daaacee4000000"
+            },
+            "deviceClaims": [
+              {
+                "deviceID": "mac-1",
+                "lastSeenAt": {
+                  "$date": "41daaadd30000000"
+                },
+                "openedSession": true,
+                "sessionID": "S-OPEN"
+              },
+              {
+                "deviceID": "phone-1",
+                "lastSeenAt": null,
+                "openedSession": false,
+                "sessionID": null
+              }
+            ],
+            "id": "u-work",
+            "lastSeenAt": {
+              "$date": "41daaadd37800000"
+            },
+            "name": "일꾼",
+            "openSession": {
+              "id": "abcdef00-0000-4000-8000-0000000000a0",
+              "startedAt": {
+                "$date": "41daaad42a200000"
+              }
+            },
+            "status": "working",
+            "todayDurationSeconds": 1800,
+            "updatedAt": {
+              "$date": "41daaadcf407df3b"
+            },
+            "weeklyDurationSeconds": 7200
+          },
+          {
+            "activeSessionID": null,
+            "avatarURL": null,
+            "currentSessionStartedAt": null,
+            "deviceClaims": [],
+            "id": "u-off",
+            "lastSeenAt": null,
+            "name": "쉬는이",
+            "openSession": null,
+            "status": "offWork",
+            "todayDurationSeconds": 3900,
+            "updatedAt": {
+              "$date": "41daaacee4000000"
+            },
+            "weeklyDurationSeconds": 3900
+          },
+          {
+            "activeSessionID": null,
+            "avatarURL": null,
+            "currentSessionStartedAt": null,
+            "deviceClaims": [],
+            "id": "u-odd",
+            "lastSeenAt": null,
+            "name": "팀원",
+            "openSession": null,
+            "status": "offWork",
+            "todayDurationSeconds": 0,
+            "updatedAt": null,
+            "weeklyDurationSeconds": 0
+          }
+        ]
+      },
+      "routes": [
+        {
+          "body": "[{\"user_id\":\"u-work\",\"status\":\"working\",\"updated_at\":\"2026-09-17T05:00:00.123Z\",\"last_seen_at\":\"2026-09-17T05:04:30Z\",\"active_session_id\":\"S-OPEN\",\"profiles\":{\"display_name\":\"일꾼\",\"avatar_url\":\"https://golden.invalid/a b.jpg\"}},{\"user_id\":\"u-off\",\"status\":\"off_work\",\"updated_at\":\"2026-09-17T01:00:00Z\",\"last_seen_at\":null,\"active_session_id\":null,\"profiles\":{\"display_name\":\"쉬는이\",\"avatar_url\":\"\"}},{\"user_id\":\"u-odd\",\"status\":\"paused\",\"updated_at\":\"bad-date\",\"profiles\":null}]",
+          "path": "/rest/v1/work_statuses",
+          "query": null,
+          "status": 200
+        },
+        {
+          "body": "[{\"id\":\"ABCDEF00-0000-4000-8000-0000000000A1\",\"user_id\":\"u-work\",\"started_at\":\"2026-09-17T03:00:00Z\",\"ended_at\":null,\"duration_seconds\":null},{\"id\":\"abcdef00-0000-4000-8000-0000000000a0\",\"user_id\":\"u-work\",\"started_at\":\"2026-09-17T02:30:00.5Z\"},{\"id\":null,\"user_id\":\"u-work\",\"started_at\":\"2026-09-17T01:00:00Z\"},{\"id\":\"x\",\"user_id\":\"u-off\",\"started_at\":\"garbage\"}]",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            "ended_at",
+            "is.null"
+          ],
+          "status": 200
+        },
+        {
+          "body": "[{\"user_id\":\"u-work\",\"started_at\":\"2026-09-13T14:00:00Z\",\"ended_at\":\"2026-09-13T16:00:00Z\"},{\"user_id\":\"u-work\",\"started_at\":\"2026-09-16T14:30:00Z\",\"ended_at\":\"2026-09-16T15:30:00Z\"},{\"user_id\":\"u-off\",\"started_at\":\"2026-09-17T04:00:00Z\",\"ended_at\":\"2026-09-17T06:00:00Z\"},{\"user_id\":\"u-off\",\"started_at\":\"2026-09-10T00:00:00Z\",\"ended_at\":\"2026-09-11T00:00:00Z\"},{\"user_id\":\"u-off\",\"started_at\":\"bad\",\"ended_at\":\"2026-09-17T00:00:00Z\"},{\"user_id\":\"u-odd\",\"started_at\":\"2026-09-17T05:00:00Z\",\"ended_at\":null}]",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            "ended_at",
+            "not.is.null"
+          ],
+          "status": 200
+        },
+        {
+          "body": "[{\"user_id\":\"u-work\",\"device_id\":\"mac-1\",\"session_id\":\"S-OPEN\",\"last_seen_at\":\"2026-09-17T05:04:00Z\",\"opened_session\":true},{\"user_id\":\"u-work\",\"device_id\":\"phone-1\",\"session_id\":null,\"last_seen_at\":null}]",
+          "path": "/rest/v1/work_status_devices",
+          "query": null,
+          "status": 200
+        }
+      ],
+      "unordered": true
+    },
+    {
+      "id": "fetchTeamStatuses#devicesFail",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "user_id,started_at,ended_at"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "ended_at",
+              "not.is.null"
+            ],
+            [
+              "ended_at",
+              "gte.2026-09-13T15:00:00Z"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "select",
+              "user_id,device_id,session_id,last_seen_at,opened_session"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "select",
+              "user_id,status,updated_at,last_seen_at,active_session_id,profiles(display_name,avatar_url)"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "order",
+              "updated_at.desc"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": [
+          {
+            "activeSessionID": "S-OPEN",
+            "avatarURL": {
+              "$url": "https://golden.invalid/a%20b.jpg"
+            },
+            "currentSessionStartedAt": {
+              "$date": "41daaacee4000000"
+            },
+            "deviceClaims": [],
+            "id": "u-work",
+            "lastSeenAt": {
+              "$date": "41daaadd37800000"
+            },
+            "name": "일꾼",
+            "openSession": {
+              "id": "abcdef00-0000-4000-8000-0000000000a0",
+              "startedAt": {
+                "$date": "41daaad42a200000"
+              }
+            },
+            "status": "working",
+            "todayDurationSeconds": 1800,
+            "updatedAt": {
+              "$date": "41daaadcf407df3b"
+            },
+            "weeklyDurationSeconds": 7200
+          },
+          {
+            "activeSessionID": null,
+            "avatarURL": null,
+            "currentSessionStartedAt": null,
+            "deviceClaims": [],
+            "id": "u-off",
+            "lastSeenAt": null,
+            "name": "쉬는이",
+            "openSession": null,
+            "status": "offWork",
+            "todayDurationSeconds": 3900,
+            "updatedAt": {
+              "$date": "41daaacee4000000"
+            },
+            "weeklyDurationSeconds": 3900
+          },
+          {
+            "activeSessionID": null,
+            "avatarURL": null,
+            "currentSessionStartedAt": null,
+            "deviceClaims": [],
+            "id": "u-odd",
+            "lastSeenAt": null,
+            "name": "팀원",
+            "openSession": null,
+            "status": "offWork",
+            "todayDurationSeconds": 0,
+            "updatedAt": null,
+            "weeklyDurationSeconds": 0
+          }
+        ]
+      },
+      "routes": [
+        {
+          "body": "[{\"user_id\":\"u-work\",\"status\":\"working\",\"updated_at\":\"2026-09-17T05:00:00.123Z\",\"last_seen_at\":\"2026-09-17T05:04:30Z\",\"active_session_id\":\"S-OPEN\",\"profiles\":{\"display_name\":\"일꾼\",\"avatar_url\":\"https://golden.invalid/a b.jpg\"}},{\"user_id\":\"u-off\",\"status\":\"off_work\",\"updated_at\":\"2026-09-17T01:00:00Z\",\"last_seen_at\":null,\"active_session_id\":null,\"profiles\":{\"display_name\":\"쉬는이\",\"avatar_url\":\"\"}},{\"user_id\":\"u-odd\",\"status\":\"paused\",\"updated_at\":\"bad-date\",\"profiles\":null}]",
+          "path": "/rest/v1/work_statuses",
+          "query": null,
+          "status": 200
+        },
+        {
+          "body": "[{\"id\":\"ABCDEF00-0000-4000-8000-0000000000A1\",\"user_id\":\"u-work\",\"started_at\":\"2026-09-17T03:00:00Z\",\"ended_at\":null,\"duration_seconds\":null},{\"id\":\"abcdef00-0000-4000-8000-0000000000a0\",\"user_id\":\"u-work\",\"started_at\":\"2026-09-17T02:30:00.5Z\"},{\"id\":null,\"user_id\":\"u-work\",\"started_at\":\"2026-09-17T01:00:00Z\"},{\"id\":\"x\",\"user_id\":\"u-off\",\"started_at\":\"garbage\"}]",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            "ended_at",
+            "is.null"
+          ],
+          "status": 200
+        },
+        {
+          "body": "[{\"user_id\":\"u-work\",\"started_at\":\"2026-09-13T14:00:00Z\",\"ended_at\":\"2026-09-13T16:00:00Z\"},{\"user_id\":\"u-work\",\"started_at\":\"2026-09-16T14:30:00Z\",\"ended_at\":\"2026-09-16T15:30:00Z\"},{\"user_id\":\"u-off\",\"started_at\":\"2026-09-17T04:00:00Z\",\"ended_at\":\"2026-09-17T06:00:00Z\"},{\"user_id\":\"u-off\",\"started_at\":\"2026-09-10T00:00:00Z\",\"ended_at\":\"2026-09-11T00:00:00Z\"},{\"user_id\":\"u-off\",\"started_at\":\"bad\",\"ended_at\":\"2026-09-17T00:00:00Z\"},{\"user_id\":\"u-odd\",\"started_at\":\"2026-09-17T05:00:00Z\",\"ended_at\":null}]",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            "ended_at",
+            "not.is.null"
+          ],
+          "status": 200
+        },
+        {
+          "body": "{\"message\":\"boom\"}",
+          "path": "/rest/v1/work_status_devices",
+          "query": null,
+          "status": 500
+        }
+      ],
+      "unordered": true
+    },
+    {
+      "id": "fetchMySessions#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "not.is.null"
+            ],
+            [
+              "ended_at",
+              "gte.2026-09-16T05:05:00Z"
+            ],
+            [
+              "order",
+              "started_at.desc"
+            ],
+            [
+              "limit",
+              "5000"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"S-1\",\"user_id\":\"U\",\"started_at\":\"2026-09-16T00:00:00Z\",\"ended_at\":\"2026-09-16T01:00:00Z\",\"duration_seconds\":3600}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "durationSeconds": 3600,
+            "endedAt": "2026-09-16T01:00:00Z",
+            "id": "S-1",
+            "startedAt": "2026-09-16T00:00:00Z",
+            "userId": "U"
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGamePublic#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "minigame_public"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"minigame_public\":false}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": false
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyCenter#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "center"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"center\":\"busan\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "busan"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyStatusMessage#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "status_message"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"status_message\":\"집중\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "집중"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTokenUsageSettings#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "token_usage_public,token_usage_collect,focus_mode"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"token_usage_public\":false,\"token_usage_collect\":null,\"focus_mode\":true}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "collects": true,
+          "focusMode": true,
+          "isPublic": false
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTokenUsageSettings#none",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "token_usage_public,token_usage_collect,focus_mode"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "collects": true,
+          "focusMode": false,
+          "isPublic": true
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "setDisplayName#data",
+      "requests": [
+        {
+          "body": {
+            "p_name": "새이름"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_display_name",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"ok\",\"display_name\":\"새이름\"}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "displayName": "새이름",
+          "maxLength": null,
+          "retryAfterSeconds": null,
+          "status": "ok"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchDisplayNameChangedAt#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "display_name_changed_at"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"display_name_changed_at\":\"2026-09-01T00:00:00.5Z\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "$date": "41daa58560200000"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchEquippedCharacter#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "select",
+              "character"
+            ],
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"character\":\"robot\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "robot"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchEquippedCharacter#noRow",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "select",
+              "character"
+            ],
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": "noProfileRow",
+          "$type": "CharacterSyncFetchError"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyAILimits#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/ai_limits",
+          "query": [
+            [
+              "select",
+              "device_id,device_label,provider,five_hour_percent,five_hour_resets_at,weekly_percent,weekly_resets_at,plan_label,observed_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "order",
+              "observed_at.desc"
+            ],
+            [
+              "limit",
+              "60"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"device_id\":\" mac-1 \",\"device_label\":\"  \",\"provider\":\"claude\",\"five_hour_percent\":12.5,\"five_hour_resets_at\":\"2026-09-17T06:00:00Z\",\"weekly_percent\":null,\"weekly_resets_at\":null,\"plan_label\":\"Max\",\"observed_at\":\"2026-09-17T05:00:00Z\"},{\"device_id\":\"\",\"provider\":\"codex\",\"observed_at\":\"2026-09-17T05:00:00Z\"},{\"device_id\":\"mac-2\",\"provider\":\"codex\",\"observed_at\":\"bad\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "deviceID": "mac-1",
+            "deviceLabel": null,
+            "fiveHourPercent": {
+              "$f64": "4029000000000000"
+            },
+            "fiveHourResetsAt": {
+              "$date": "41daaae078000000"
+            },
+            "observedAt": {
+              "$date": "41daaadcf4000000"
+            },
+            "planLabel": "Max",
+            "provider": "claude",
+            "weeklyPercent": null,
+            "weeklyResetsAt": null
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAILimitMainDeviceID",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/ai_limits_prefs",
+          "query": [
+            [
+              "select",
+              "main_device_id"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"main_device_id\":\"  mac-1 \\n\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "mac-1"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAILimitMainDeviceID#blank",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/ai_limits_prefs",
+          "query": [
+            [
+              "select",
+              "main_device_id"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"main_device_id\":\"   \"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAILimitMainDeviceID#none",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/ai_limits_prefs",
+          "query": [
+            [
+              "select",
+              "main_device_id"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAILimitMainDeviceID#null",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/ai_limits_prefs",
+          "query": [
+            [
+              "select",
+              "main_device_id"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"main_device_id\":null}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "removeAvatar#gone404",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "DELETE",
+          "path": "/storage/v1/object/avatars/aa000000-0000-4000-8000-0000000000a1.jpg",
+          "query": []
+        },
+        {
+          "body": {
+            "avatar_url": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=minimal"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "",
+          "status": 404
+        },
+        {
+          "body": "",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "removed"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "removeAvatar#left",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "DELETE",
+          "path": "/storage/v1/object/avatars/aa000000-0000-4000-8000-0000000000a1.jpg",
+          "query": []
+        },
+        {
+          "body": {
+            "avatar_url": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=minimal"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"message\":\"denied\"}",
+          "status": 403
+        },
+        {
+          "body": "",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "tableClearedFileLeft"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "deleteAvatarFile#notFoundBody",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "DELETE",
+          "path": "/storage/v1/object/avatars/aa000000-0000-4000-8000-0000000000a1.jpg",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"statusCode\":\"404\",\"error\":\"not_found\",\"message\":\"Object not found\"}",
+          "status": 400
+        }
+      ],
+      "result": {
+        "ok": "gone"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameBoard#data",
+      "requests": [
+        {
+          "body": {
+            "p_game": "flappy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_board",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"user_id\":\"U-1\",\"display_name\":null,\"avatar_url\":\"\",\"best_score\":120,\"best_at\":\"2026-09-17T01:00:00.123Z\",\"plays\":null,\"center\":\"busan\"},{\"user_id\":\"U-2\",\"display_name\":\"둘\",\"avatar_url\":\"https://golden.invalid/a b.png\",\"best_score\":3000000000,\"best_at\":\"bad\",\"plays\":7,\"center\":\"mars\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "avatarURL": null,
+            "bestAt": {
+              "$date": "41daaacee407df3b"
+            },
+            "bestScore": 120,
+            "center": "부산",
+            "name": "사용자",
+            "plays": 0,
+            "userID": "U-1"
+          },
+          {
+            "avatarURL": {
+              "$url": "https://golden.invalid/a%20b.png"
+            },
+            "bestAt": null,
+            "bestScore": 3000000000,
+            "center": null,
+            "name": "둘",
+            "plays": 7,
+            "userID": "U-2"
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameYesterdayWinner#data",
+      "requests": [
+        {
+          "body": {
+            "p_game": "crossy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_yesterday_winner",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"day\":null,\"user_id\":\"U-1\",\"display_name\":null,\"avatar_url\":\"%zz\",\"score\":42,\"awarded\":null,\"center\":\"seoul\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "avatarURL": {
+            "$url": "%25zz"
+          },
+          "awarded": false,
+          "center": "서울",
+          "day": "",
+          "name": "사용자",
+          "score": 42,
+          "userID": "U-1"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameYesterdayWinner#none",
+      "requests": [
+        {
+          "body": {
+            "p_game": "crossy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_yesterday_winner",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameAllTimeBoard#data",
+      "requests": [
+        {
+          "body": {
+            "p_game": "crossy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_alltime_board",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"user_id\":\"U-1\",\"display_name\":null,\"avatar_url\":\"\",\"best_score\":120,\"best_at\":\"2026-09-01T00:00:00Z\",\"day\":\"2026-09-01\",\"center\":\"busan\"},{\"user_id\":null,\"best_score\":5},{\"user_id\":\"U-2\",\"display_name\":\"둘\",\"best_score\":null},{\"user_id\":\"U-3\",\"display_name\":\"셋\",\"avatar_url\":\"https://golden.invalid/x y.png\",\"best_score\":7,\"best_at\":\"bad\",\"center\":\"weird\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "avatarURL": null,
+            "bestAt": {
+              "$date": "41daa58560000000"
+            },
+            "bestScore": 120,
+            "center": "부산",
+            "day": "2026-09-01",
+            "name": "사용자",
+            "userID": "U-1"
+          },
+          {
+            "avatarURL": {
+              "$url": "https://golden.invalid/x%20y.png"
+            },
+            "bestAt": null,
+            "bestScore": 7,
+            "center": null,
+            "day": null,
+            "name": "셋",
+            "userID": "U-3"
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage#data",
+      "requests": [
+        {
+          "body": {
+            "p_body": "안녕",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"cooldown\",\"retry_after_seconds\":5}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "maxLength": null,
+          "resetAfterSeconds": null,
+          "retryAfterSeconds": 5,
+          "ring": null,
+          "status": "cooldown",
+          "ultraBalance": null,
+          "ultraRemaining": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageHistory#data",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 12,
+            "p_limit": 200
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_history",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"m1\",\"body\":\"  안녕 \",\"created_at\":\"2026-09-17T05:00:00Z\",\"created_epoch\":1789621200,\"is_mine\":true,\"peer_user_id\":\"p1\",\"peer_display_name\":\"\",\"peer_avatar_url\":\"\",\"read_by_peer\":true,\"unread\":true},{\"id\":\"m2\",\"body\":\"둘째\",\"created_at\":\"2026-09-17T04:59:59.5Z\",\"is_mine\":false,\"peer_user_id\":\"p2\",\"peer_display_name\":\"친구\",\"peer_avatar_url\":\"https://golden.invalid/p 2.jpg\",\"read_by_peer\":true,\"unread\":false},{\"id\":\"m3\",\"body\":\" \\n \",\"created_epoch\":1789621000,\"peer_user_id\":\"p1\"},{\"id\":\"m4\",\"body\":\"상대 없음\",\"created_epoch\":1789621000,\"peer_user_id\":\"\"},{\"id\":\"m5\",\"body\":\"시각 없음\",\"peer_user_id\":\"p1\"},{\"id\":\"m6\",\"body\":\"옛 행\",\"created_at\":\"2026-09-17T04:00:00Z\",\"peer_user_id\":\"p3\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "body": "안녕",
+            "createdAt": {
+              "$date": "41daaadcf4000000"
+            },
+            "id": "m1",
+            "isMine": true,
+            "isUnread": null,
+            "peerAvatarURL": null,
+            "peerName": "사용자",
+            "peerUserID": "p1",
+            "readByPeer": null
+          },
+          {
+            "body": "둘째",
+            "createdAt": {
+              "$date": "41daaadcf3e00000"
+            },
+            "id": "m2",
+            "isMine": false,
+            "isUnread": null,
+            "peerAvatarURL": {
+              "$url": "https://golden.invalid/p%202.jpg"
+            },
+            "peerName": "친구",
+            "peerUserID": "p2",
+            "readByPeer": null
+          },
+          {
+            "body": "옛 행",
+            "createdAt": {
+              "$date": "41daaad970000000"
+            },
+            "id": "m6",
+            "isMine": false,
+            "isUnread": null,
+            "peerAvatarURL": null,
+            "peerName": "사용자",
+            "peerUserID": "p3",
+            "readByPeer": null
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageHistoryWithReads#data",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 24,
+            "p_limit": 500
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_history_with_reads",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"m1\",\"body\":\"  안녕 \",\"created_at\":\"2026-09-17T05:00:00Z\",\"created_epoch\":1789621200,\"is_mine\":true,\"peer_user_id\":\"p1\",\"peer_display_name\":\"\",\"peer_avatar_url\":\"\",\"read_by_peer\":true,\"unread\":true},{\"id\":\"m2\",\"body\":\"둘째\",\"created_at\":\"2026-09-17T04:59:59.5Z\",\"is_mine\":false,\"peer_user_id\":\"p2\",\"peer_display_name\":\"친구\",\"peer_avatar_url\":\"https://golden.invalid/p 2.jpg\",\"read_by_peer\":true,\"unread\":false},{\"id\":\"m3\",\"body\":\" \\n \",\"created_epoch\":1789621000,\"peer_user_id\":\"p1\"},{\"id\":\"m4\",\"body\":\"상대 없음\",\"created_epoch\":1789621000,\"peer_user_id\":\"\"},{\"id\":\"m5\",\"body\":\"시각 없음\",\"peer_user_id\":\"p1\"},{\"id\":\"m6\",\"body\":\"옛 행\",\"created_at\":\"2026-09-17T04:00:00Z\",\"peer_user_id\":\"p3\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "body": "안녕",
+            "createdAt": {
+              "$date": "41daaadcf4000000"
+            },
+            "id": "m1",
+            "isMine": true,
+            "isUnread": null,
+            "peerAvatarURL": null,
+            "peerName": "사용자",
+            "peerUserID": "p1",
+            "readByPeer": true
+          },
+          {
+            "body": "둘째",
+            "createdAt": {
+              "$date": "41daaadcf3e00000"
+            },
+            "id": "m2",
+            "isMine": false,
+            "isUnread": false,
+            "peerAvatarURL": {
+              "$url": "https://golden.invalid/p%202.jpg"
+            },
+            "peerName": "친구",
+            "peerUserID": "p2",
+            "readByPeer": null
+          },
+          {
+            "body": "옛 행",
+            "createdAt": {
+              "$date": "41daaad970000000"
+            },
+            "id": "m6",
+            "isMine": false,
+            "isUnread": null,
+            "peerAvatarURL": null,
+            "peerName": "사용자",
+            "peerUserID": "p3",
+            "readByPeer": null
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageHistoryWithPokes#data",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 24,
+            "p_limit": 500
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_history_with_pokes",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"m1\",\"kind\":\"message\",\"body\":\"  안녕 \",\"created_at\":\"2026-09-17T05:00:00.000002+00:00\",\"created_epoch\":1789621200,\"is_mine\":true,\"peer_user_id\":\"p1\",\"peer_display_name\":\"\",\"peer_avatar_url\":\"\",\"read_by_peer\":true,\"unread\":true},{\"id\":\"k1\",\"kind\":\"poke\",\"created_at\":\"2026-09-17T05:00:00.000001+00:00\",\"created_epoch\":1789621200,\"is_mine\":false,\"peer_user_id\":\"p1\",\"peer_display_name\":\"친구\",\"peer_avatar_url\":\"https://golden.invalid/p 1.jpg\",\"unread\":true},{\"id\":\"k2\",\"kind\":\" ultra \",\"created_epoch\":1789621100,\"is_mine\":true,\"peer_user_id\":\"p1\",\"unread\":true},{\"id\":\"m2\",\"body\":\"둘째\",\"created_at\":\"2026-09-17T04:59:59Z\",\"is_mine\":false,\"peer_user_id\":\"p2\",\"unread\":false},{\"id\":\"x1\",\"kind\":\"sticker\",\"body\":\"?\",\"created_epoch\":1789621000,\"peer_user_id\":\"p1\"},{\"id\":\"m3\",\"kind\":\"message\",\"body\":\" \\n \",\"created_epoch\":1789621000,\"peer_user_id\":\"p1\"},{\"id\":\"k3\",\"kind\":\"normal\",\"created_at\":\"2026-09-17T05:00:00.000001+00:00\",\"peer_user_id\":\"p2\",\"is_mine\":false},\"broken\",{\"id\":\"m1\",\"kind\":\"message\",\"body\":\"중복\",\"created_epoch\":1789621300,\"peer_user_id\":\"p1\"},{\"id\":\"k4\",\"kind\":\"poke\",\"peer_user_id\":\"p1\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "chronology": {
+            "k1": 2,
+            "k2": 0,
+            "k3": 3,
+            "m1": 4,
+            "m2": 1
+          },
+          "messages": [
+            {
+              "body": "안녕",
+              "createdAt": {
+                "$date": "41daaadcf4000000"
+              },
+              "id": "m1",
+              "isMine": true,
+              "isUnread": null,
+              "peerAvatarURL": null,
+              "peerName": "사용자",
+              "peerUserID": "p1",
+              "readByPeer": true
+            },
+            {
+              "body": "둘째",
+              "createdAt": {
+                "$date": "41daaadcf3c00000"
+              },
+              "id": "m2",
+              "isMine": false,
+              "isUnread": false,
+              "peerAvatarURL": null,
+              "peerName": "사용자",
+              "peerUserID": "p2",
+              "readByPeer": null
+            },
+            {
+              "body": "중복",
+              "createdAt": {
+                "$date": "41daaadd0d000000"
+              },
+              "id": "m1",
+              "isMine": false,
+              "isUnread": null,
+              "peerAvatarURL": null,
+              "peerName": "사용자",
+              "peerUserID": "p1",
+              "readByPeer": null
+            }
+          ],
+          "pokes": [
+            {
+              "createdAt": {
+                "$date": "41daaadcf4000000"
+              },
+              "id": "k1",
+              "isMine": false,
+              "isUnread": true,
+              "kind": "poke",
+              "peerAvatarURL": {
+                "$url": "https://golden.invalid/p%201.jpg"
+              },
+              "peerName": "친구",
+              "peerUserID": "p1"
+            },
+            {
+              "createdAt": {
+                "$date": "41daaadcdb000000"
+              },
+              "id": "k2",
+              "isMine": true,
+              "isUnread": null,
+              "kind": "ultra",
+              "peerAvatarURL": null,
+              "peerName": "사용자",
+              "peerUserID": "p1"
+            },
+            {
+              "createdAt": {
+                "$date": "41daaadcf4000000"
+              },
+              "id": "k3",
+              "isMine": false,
+              "isUnread": null,
+              "kind": "poke",
+              "peerAvatarURL": null,
+              "peerName": "사용자",
+              "peerUserID": "p2"
+            }
+          ]
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "appCurrentNotice#error",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_current_notice",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "",
+          "status": 500
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "submitFeedback#data",
+      "requests": [
+        {
+          "body": {
+            "p_app_version": "1.0.14",
+            "p_body": "기능 요청",
+            "p_kind": "request",
+            "p_os_version": "17.6"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/submit_feedback",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "\"fb-9\"",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "fb-9"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchFeedbackList#data",
+      "requests": [
+        {
+          "body": {
+            "p_limit": 50
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/feedback_list",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"fb-1\",\"user_id\":\"U-1\",\"kind\":\"bug\",\"body\":\"버그\",\"status\":\"doing\",\"admin_note\":\"보는 중\",\"admin_note_at\":\"2026-09-17T01:00:00Z\",\"app_version\":\"1.0.14\",\"os_version\":\"17.6\",\"created_at\":\"2026-09-16T01:00:00.5Z\",\"updated_at\":null,\"display_name\":null,\"avatar_url\":\"\"},{\"id\":\"fb-2\",\"kind\":\"zz\",\"body\":\"?\",\"status\":\"weird\"},{\"id\":\"fb-3\",\"kind\":\"request\",\"body\":\"!\",\"status\":null}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "adminNote": "보는 중",
+            "adminNoteAt": {
+              "$date": "41daaacee4000000"
+            },
+            "appVersion": "1.0.14",
+            "authorAvatarURL": null,
+            "authorName": "사용자",
+            "body": "버그",
+            "createdAt": {
+              "$date": "41daaa7a84200000"
+            },
+            "id": "fb-1",
+            "kind": "bug",
+            "osVersion": "17.6",
+            "status": "inProgress",
+            "updatedAt": null,
+            "userID": "U-1"
+          },
+          {
+            "adminNote": null,
+            "adminNoteAt": null,
+            "appVersion": null,
+            "authorAvatarURL": null,
+            "authorName": "사용자",
+            "body": "?",
+            "createdAt": null,
+            "id": "fb-2",
+            "kind": "request",
+            "osVersion": null,
+            "status": {
+              "$case": "other",
+              "$value": "weird"
+            },
+            "updatedAt": null,
+            "userID": null
+          },
+          {
+            "adminNote": null,
+            "adminNoteAt": null,
+            "appVersion": null,
+            "authorAvatarURL": null,
+            "authorName": "사용자",
+            "body": "!",
+            "createdAt": null,
+            "id": "fb-3",
+            "kind": "request",
+            "osVersion": null,
+            "status": "open",
+            "updatedAt": null,
+            "userID": null
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "replyFeedback#data",
+      "requests": [
+        {
+          "body": {
+            "p_id": "fb-1",
+            "p_note": "답장"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reply_feedback",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "\"2026-09-17T05:00:00.25Z\"",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "$date": "41daaadcf4100000"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "replyFeedback#garbage",
+      "requests": [
+        {
+          "body": {
+            "p_id": "fb-1",
+            "p_note": "답장"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reply_feedback",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "42",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$now"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "signOut#serverError",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "POST",
+          "path": "/auth/v1/logout",
+          "query": [
+            [
+              "scope",
+              "local"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"msg\":\"boom\"}",
+          "status": 500
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchFeedbackReplyLatest#data",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/feedback_reply_latest",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "\"2026-09-16T00:00:00Z\"",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "$date": "41daaa7700000000"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchFeedbackOpenCount#data",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/feedback_open_count",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "3",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": 3
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchBlocks#data",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/list_blocks",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"user_id\":\"B-1\",\"display_name\":\"\",\"avatar_url\":\"https://golden.invalid/b 1.jpg\",\"created_at\":\"2026-09-10T00:00:00Z\",\"created_epoch\":1789000000},{\"user_id\":\"\",\"display_name\":\"없음\"},{\"blocked\":\"B-2\",\"blocked_at\":\"2026-09-11T00:00:00.5Z\"},{\"id\":\"B-3\",\"display_name\":\"셋\",\"blocked_epoch\":1789100000}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "avatarURL": {
+              "$url": "https://golden.invalid/b%201.jpg"
+            },
+            "blockedAt": {
+              "$date": "41daa87e50000000"
+            },
+            "name": "사용자",
+            "userID": "B-1"
+          },
+          {
+            "avatarURL": null,
+            "blockedAt": {
+              "$date": "41daa8d120200000"
+            },
+            "name": "사용자",
+            "userID": "B-2"
+          },
+          {
+            "avatarURL": null,
+            "blockedAt": {
+              "$date": "41daa8dff8000000"
+            },
+            "name": "셋",
+            "userID": "B-3"
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAppUserCharacters#data",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_user_characters",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"user_id\":\" AA-1 \",\"character\":\"robot\"},{\"user_id\":null,\"character\":\"fox\"},{\"user_id\":\"bb-2\",\"character\":null},\"x\"]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "character": "robot",
+            "userId": "aa-1"
+          },
+          {
+            "character": null,
+            "userId": "bb-2"
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAppUserCharacters#missing",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_user_characters",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        }
+      ],
+      "result": {
+        "ok": []
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAppUserCharacters#plain404",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_user_characters",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "",
+          "status": 404
+        }
+      ],
+      "result": {
+        "ok": []
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAppUserCharacters#serverError",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_user_characters",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "",
+          "status": 503
+        }
+      ],
+      "result": {
+        "throws": {
+          "$case": "invalidResponse",
+          "$value": 503
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchCharacterGiftPending#missing",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/character_gift_pending",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "startPhoneWork#data",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_phone_start",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"ok\",\"session\":{\"id\":\"S-1\",\"started_at\":\"2026-09-17T05:00:00Z\",\"origin\":\"phone\"},\"server_now\":\"2026-09-17T05:05:00Z\",\"check_after_seconds\":\"x\",\"wallet\":{\"ruby_balance\":12}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "checkAfterSeconds": null,
+          "checkAt": null,
+          "graceSeconds": null,
+          "last": null,
+          "serverNow": "2026-09-17T05:05:00Z",
+          "session": {
+            "endedAt": null,
+            "id": "S-1",
+            "origin": "phone",
+            "reason": null,
+            "startedAt": "2026-09-17T05:00:00Z"
+          },
+          "status": "ok",
+          "wallet": {
+            "rubyBalance": 12
+          }
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchShopState(protocol)#html404",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "<html>404 Not Found</html>",
+          "status": 404
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "characters": null,
+            "gacha": null,
+            "rubyBalance": null,
+            "ultraBalance": null,
+            "ultraBuyMax": null,
+            "ultraPrice": null
+          },
+          {
+            "characters": null,
+            "gacha": null,
+            "rubyBalance": null,
+            "ultraBalance": null,
+            "ultraBuyMax": null,
+            "ultraPrice": null
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchShopState(protocol)#recheck",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "characters": null,
+            "gacha": null,
+            "rubyBalance": null,
+            "ultraBalance": null,
+            "ultraBuyMax": null,
+            "ultraPrice": null
+          },
+          {
+            "characters": null,
+            "gacha": null,
+            "rubyBalance": null,
+            "ultraBalance": null,
+            "ultraBuyMax": null,
+            "ultraPrice": null
+          },
+          {
+            "characters": null,
+            "gacha": null,
+            "rubyBalance": null,
+            "ultraBalance": null,
+            "ultraBuyMax": null,
+            "ultraPrice": null
+          }
+        ]
+      },
+      "routes": [],
       "unordered": false
     }
   ],
@@ -3660,6 +7573,7 @@
   "platformSensitive": false,
   "schema": 1,
   "spec": {
+    "clock": "서비스 시계 = values.nowSince1970. #recheck 는 둘째 호출 전 +299.999초, 셋째 호출 전 +300초로 옮긴다",
     "excluded": {
       "aiLimitClearingRow": "I",
       "aiLimitPercent": "I",
@@ -3668,7 +7582,6 @@
       "buyUltra": "H",
       "closeAbandonedSessions": "H",
       "fetchAILimitDevices": "I",
-      "fetchAILimitMainDeviceID": "I",
       "fetchLegacyTokenUsageTotal": "H",
       "fetchMyOverlappingSessions": "H",
       "fetchReportAdminList": "admin",
@@ -3699,6 +7612,24 @@
     },
     "request": "method · path · query(디코드한 [이름, 값] 쌍, 순서 그대로) · headers(apikey·authorization·accept·content-type·prefer·x-upsert 만, 소문자) · body(JSON 이면 정규 값 — 정수 글자 → 숫자, 그 밖 숫자 → {\"$num\": 글자}; 아니면 {\"$bytes\": base64}; 없으면 null)",
     "responses": "이 case 의 응답 대본(차례대로, 끝나면 200 {}). unordered = 동시에 떠나는 요청이라 정규 글자 순으로 정렬해 비교",
+    "result": "서비스 반환값: {\"ok\": GoldenMirror 덤프(Void = \"$void\", nil = null, 글자 잎은 요청과 같은 자리표시)} 또는 {\"throws\": SupabaseWorkServiceError 덤프 | \"$decoding\" | {\"$type\", \"$dump\"}}",
+    "resultOtherLanes": {
+      "achievementClaim": "W1-c(AchievementStatus)",
+      "achievementClaim(nil)": "W1-c(AchievementStatus)",
+      "achievementsStatus": "W1-c(AchievementStatus)",
+      "dailyMissionClaim": "W1-c(AchievementStatus)",
+      "dailyMissionClaim(nil)": "W1-c(AchievementStatus)",
+      "fetchMyAILimits": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
+      "fetchMyAILimits#data": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
+      "megaphoneInfo": "W1-c(MegaphoneInfo)",
+      "sendMegaphone": "W1-c(MegaphoneSendOutcome)",
+      "setStatusMessage": "W1-c(StatusMessageSaveOutcome — rules/text)",
+      "setStatusMessage(nil)": "W1-c(StatusMessageSaveOutcome — rules/text)",
+      "weeklyWorkClaim": "W1-c(WeeklyWorkClaim)",
+      "weeklyWorkClaim(args)": "W1-c(WeeklyWorkClaim)",
+      "weeklyWorkStatus": "W1-c(WeeklyWorkStatus)"
+    },
+    "routes": "routes 가 있으면 대본 대신 요청 모양(경로 + 디코드한 쿼리 쌍 하나)으로 응답을 고른다(처음 맞는 것, 없으면 200 {})",
     "values": {
       "accessToken": "<ACCESS>",
       "anonKey": "<ANON>",
@@ -3738,6 +7669,7 @@
     "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
     "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
     "Sources/CheckMobileKit/Me/MeProfileService.swift",
-    "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+    "Sources/CheckMobileKit/Me/MeAILimitsService.swift",
+    "Sources/CheckCore/SupabaseWorkServiceAILimits.swift"
   ]
 }

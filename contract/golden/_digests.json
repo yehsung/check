@@ -1,9 +1,9 @@
 {
   "goldens": {
     "errors/classify": {
-      "file": "a426bded281007f30cf1ddeb4d46adf0f6696c313b04e5025ee00c48b10e8f31",
+      "file": "6ac3f8b41ac2159e3ee94ab632e36561bc982ddf80a14e6d1294c173eb345c83",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "428b275aa4b51059ed9b7d04a602bba47f3f88f9eb6b3d2b416beaa11106813e"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
       },
       "swiftSources": {
         "Sources/CheckCore/AuthErrorRules.swift": "0995ed02ebb80a6d0190a2f704f11fe2c714451e2fd7750847cf7330f211a3c6",
@@ -13,9 +13,9 @@
       }
     },
     "jwt/expiry": {
-      "file": "2075c90ddeec6cb9fca07a77f468eea2c7111dcf1273bece7debf6a5587d67bb",
+      "file": "4a7322d4bcbe43c17efd6c0304fddaa0dec0798c73bf14d9d2a54fa2882f2554",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "428b275aa4b51059ed9b7d04a602bba47f3f88f9eb6b3d2b416beaa11106813e"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
       },
       "swiftSources": {
         "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696"
@@ -24,16 +24,16 @@
     "realtime/frames": {
       "file": "e10f467b468f476b56e10cada0b08c92de3ec23bad75c2d183dcb2c0cba98045",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift": "6f620a039352a21999471844857ff03467cd81c2c8f3bde685eab20f7578a762"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift": "477f2034193d370c9c4da76c2600a47493f000349d7d2f60b0aacde853d3bddf"
       },
       "swiftSources": {
         "Sources/CheckCore/RealtimeTransport.swift": "747976ab2c637aa63c8e21b80d2549d743ff7445b02a8b7fb94a3d665259b625"
       }
     },
     "realtime/link-walk": {
-      "file": "d5a20c9a438b14be0c3f2692b9b54e4ab7f4a841b32ebb97bda98570e11594b3",
+      "file": "9f9f65987eaf592d6758340f90ecdedd65586b9386641d23d12b60e1ecc7fe3f",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift": "6f620a039352a21999471844857ff03467cd81c2c8f3bde685eab20f7578a762"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift": "477f2034193d370c9c4da76c2600a47493f000349d7d2f60b0aacde853d3bddf"
       },
       "swiftSources": {
         "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696",
@@ -222,16 +222,16 @@
     "wire/numbers": {
       "file": "d149e5eda87ff838666b60277d51fc2ec41ec9cda8f27a63523d86d3eaf04d80",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "428b275aa4b51059ed9b7d04a602bba47f3f88f9eb6b3d2b416beaa11106813e"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
       },
       "swiftSources": {
         "Sources/CheckCore/SupabaseWorkService.swift": "12adc693c30b222d208b56f674345f63bc8736f476dc54acf390df4f66f3e404"
       }
     },
     "wire/requests": {
-      "file": "81ed3180274b6afa2297aba6330f896a07b6ac25f12001c20dfbb8f9bc5024ae",
+      "file": "c43e05e0bbfeb54d06d0ea6c41daa592cf0ca4a9dacf3467fa4ffbb3434bab33",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift": "3a788d0db0758074a4381bd0b17444533c3e6a1cd284b339f21a8c65dc8ad02f"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift": "3b108c511a2825084ef7ee56335fd366a10020f5be766ee8b0accbdea86b89e6"
       },
       "swiftSources": {
         "Sources/CheckCore/Achievements.swift": "ec7d18fc30b738157f331ba41e3afbe4e9f59e32ac0bf6c5622adddcdc8dda15",
@@ -247,6 +247,7 @@
         "Sources/CheckCore/SupabaseWorkHTTP.swift": "867512bfd55689c87800000591bdb7d298c7c9c9a1b51b5febedd1d18d3319e6",
         "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
         "Sources/CheckCore/SupabaseWorkService.swift": "12adc693c30b222d208b56f674345f63bc8736f476dc54acf390df4f66f3e404",
+        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift": "eba8ed3bb06401cb4b17784a7a8c31f74d25900e573f77939a4d2b1de93f7423",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -264,15 +265,19 @@
       }
     },
     "wire/rules": {
-      "file": "d82983bd303831bf8c92329b6a40e91c5911bfde5682c4f57a18f9591b6742ee",
+      "file": "90168a41c97758177ca5ca9f82ed9d2df1e0fcb9bb764e17b7d3df1c32318b66",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "428b275aa4b51059ed9b7d04a602bba47f3f88f9eb6b3d2b416beaa11106813e"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
       },
       "swiftSources": {
+        "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
         "Sources/CheckCore/CharacterGift.swift": "0638669379b9054521af55e6930d2d238cdd4362268a405f4ad6da71b0dd2393",
         "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "99c19fa22f414cfbd2fdbe74ae1300e3ef4ffdea508eb6b77f9554d50ee37597",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkService.swift": "12adc693c30b222d208b56f674345f63bc8736f476dc54acf390df4f66f3e404",
+        "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift": "0b142e721ce26eacf95187026ccd28ebf314c5e60c7962ae886c388ec1e957f6"
       }
     }
   },

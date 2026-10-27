@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkModels.swift:2987-3284(미니게임 순위 · 역대 순위 v0.3.67) · 3286-3480(제보 와이어) @ 1b8260d
 package com.yehsung.aingcheck.core.wire.models
 
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.foundation.platform.Collation
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.json.SwiftDecodableSerializer
@@ -93,7 +94,7 @@ data class MiniGameWinnerRow(
 data class MiniGameBoardEntry(
     val userID: String,
     val name: String,
-    val avatarURL: String?,
+    val avatarURL: SwiftURL?,
     val bestScore: Long,
     val bestAt: SwiftDate?,
     val plays: Long,
@@ -107,7 +108,7 @@ data class MiniGameWinner(
     val day: String,
     val userID: String,
     val name: String,
-    val avatarURL: String?,
+    val avatarURL: SwiftURL?,
     val score: Long,
     val awarded: Boolean,
     val center: String? = null,
@@ -192,7 +193,7 @@ data class MiniGameAllTimeBoardRow(
 data class MiniGameAllTimeEntry(
     val userID: String,
     val name: String,
-    val avatarURL: String?,
+    val avatarURL: SwiftURL?,
     val bestScore: Long,
     val bestAt: SwiftDate?,
     val day: String?,
@@ -335,7 +336,7 @@ data class FeedbackReport(
     val createdAt: SwiftDate?,
     val updatedAt: SwiftDate?,
     val authorName: String,
-    val authorAvatarURL: String?,
+    val authorAvatarURL: SwiftURL?,
 ) {
     /** 운영자 답장(앞뒤 공백을 자르고 비면 null). */
     val reply: String? get() = adminNote?.let { swiftTrim(it) }?.ifEmpty { null }

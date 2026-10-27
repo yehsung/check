@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkModels.swift:1417-1616(콕 디렉터리·공개 설정)·1757-1913(PokeSendResponse·TakenPokeRow)·2347-2805(메시지·이력·프로필 칸·릴리스·공지·별명) · CheckCore/StatusMessage.swift:95-170(전선 모양) @ 1b8260d
 package com.yehsung.aingcheck.core.wire.models
 
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.foundation.platform.Collation
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -58,7 +59,7 @@ data class PokeDirectoryRow(
 data class PokeDirectoryEntry(
     val userID: String,
     val name: String,
-    val avatarURL: String?,
+    val avatarURL: SwiftURL?,
     val isWorking: Boolean,
     val canReceiveMessage: Boolean = true,
     val center: String? = null,
@@ -72,7 +73,7 @@ fun List<PokeDirectoryRow>.toPokeDirectoryEntries(text: WireTextRules): List<Pok
     PokeDirectoryEntry(
         userID = row.userId,
         name = row.displayName,
-        avatarURL = row.avatarUrl,
+        avatarURL = SwiftURL.parse(row.avatarUrl),
         isWorking = row.isWorking,
         canReceiveMessage = row.canReceiveMessage ?: true,
         center = CenterLabel.display(row.center),
@@ -247,7 +248,7 @@ data class MessageHistoryEntry(
     val id: String,
     val peerUserID: String,
     val peerName: String,
-    val peerAvatarURL: String?,
+    val peerAvatarURL: SwiftURL?,
     val body: String,
     val createdAt: SwiftDate,
     val isMine: Boolean,

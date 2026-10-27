@@ -3,7 +3,7 @@
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
-      "cases": 83,
+      "cases": 100,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
       "golden": "errors/classify",
@@ -39,7 +39,7 @@
       ]
     },
     {
-      "cases": 3,
+      "cases": 6,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift",
       "golden": "realtime/link-walk",
@@ -257,7 +257,7 @@
       ]
     },
     {
-      "cases": 151,
+      "cases": 214,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift",
       "golden": "wire/requests",
@@ -290,11 +290,12 @@
         "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
         "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
         "Sources/CheckMobileKit/Me/MeProfileService.swift",
-        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift",
+        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift"
       ]
     },
     {
-      "cases": 56,
+      "cases": 283,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
       "golden": "wire/rules",
@@ -304,7 +305,11 @@
         "Sources/CheckCore/SupabaseWorkModels.swift",
         "Sources/CheckCore/CharacterGift.swift",
         "Sources/CheckCore/MessagePokeLog.swift",
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/SupabaseWorkService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift"
       ]
     }
   ],

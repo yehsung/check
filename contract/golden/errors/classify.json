@@ -401,6 +401,61 @@
       "text": "12second"
     },
     {
+      "id": "retry-after-after ３０ seconds",
+      "seconds": null,
+      "text": "after ３０ seconds"
+    },
+    {
+      "id": "retry-after-after ²30 seconds",
+      "seconds": null,
+      "text": "after ²30 seconds"
+    },
+    {
+      "id": "retry-after-after ٣٠ seconds",
+      "seconds": null,
+      "text": "after ٣٠ seconds"
+    },
+    {
+      "id": "retry-after-after Ⅻ30 seconds",
+      "seconds": null,
+      "text": "after Ⅻ30 seconds"
+    },
+    {
+      "id": "retry-after-after 一30 seconds",
+      "seconds": null,
+      "text": "after 一30 seconds"
+    },
+    {
+      "id": "retry-after-after ३0 seconds",
+      "seconds": null,
+      "text": "after ३0 seconds"
+    },
+    {
+      "id": "retry-after-after 3٠ seconds",
+      "seconds": null,
+      "text": "after 3٠ seconds"
+    },
+    {
+      "id": "retry-after-after ½ seconds",
+      "seconds": null,
+      "text": "after ½ seconds"
+    },
+    {
+      "id": "retry-after-after -30 seconds",
+      "seconds": 30,
+      "text": "after -30 seconds"
+    },
+    {
+      "id": "retry-after-after +30 seconds",
+      "seconds": 30,
+      "text": "after +30 seconds"
+    },
+    {
+      "id": "retry-after-99999999999999999999 seconds",
+      "seconds": null,
+      "text": "99999999999999999999 seconds"
+    },
+    {
       "disposition": "cancelled",
       "id": "auth-cancellation"
     },
@@ -415,6 +470,30 @@
     {
       "disposition": "transient",
       "id": "auth-urlError.timedOut"
+    },
+    {
+      "disposition": "transient",
+      "id": "auth-urlError.networkConnectionLost"
+    },
+    {
+      "disposition": "transient",
+      "id": "auth-urlError.secureConnectionFailed"
+    },
+    {
+      "disposition": "transient",
+      "id": "auth-urlError.serverCertificateUntrusted"
+    },
+    {
+      "disposition": "transient",
+      "id": "auth-urlError.badServerResponse"
+    },
+    {
+      "disposition": "transient",
+      "id": "auth-urlError.cannotConnectToHost"
+    },
+    {
+      "disposition": "transient",
+      "id": "auth-urlError.cannotFindHost"
     },
     {
       "disposition": "transient",

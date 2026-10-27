@@ -82,6 +82,7 @@ class SupabaseWorkService(
         const val sendMegaphonePath = "/rest/v1/rpc/send_megaphone"
         const val megaphoneInfoPath = "/rest/v1/rpc/megaphone_info"
         const val aiLimitsPath = "/rest/v1/ai_limits"
+        const val aiLimitsPrefsPath = "/rest/v1/ai_limits_prefs"
     }
 
     // ------------------------------------------------------------------ HTTP 바탕(SupabaseWorkHTTP.swift)
@@ -225,4 +226,17 @@ class SupabaseWorkService(
 
     /** Swift `UUID().uuidString.prefix(8)`(대문자 16진 8자). */
     internal fun newUUIDStringPrefix8(): String = newUUIDString().take(8)
+}
+
+/**
+ * Swift `try?` 를 **네트워크 호출**에 건 자리(로그아웃 · 팀 상태의 기기 주장 조회): 서비스 오류(비2xx)·전송 실패·디코드 실패 **모두** null.
+ * 와이어의 `swiftTry` 는 디코드 실패만 접는다(lossy 칸 전용) — 그걸 여기 쓰면 500 이 그대로 던져져 Swift 와 갈린다(G5 결과 대조
+ * `fetchTeamStatuses#devicesFail` · `signOut#serverError` 실측). 코루틴 취소는 삼키지 않는다(C§2.4).
+ */
+internal inline fun <T> swiftTryAll(block: () -> T): T? = try {
+    block()
+} catch (e: kotlin.coroutines.cancellation.CancellationException) {
+    throw e
+} catch (e: Exception) {
+    null
 }

@@ -23,7 +23,13 @@ import kotlin.test.fail
 class WireDecodeGoldenTest {
     companion object {
         /** Swift `Date` → `{"$date": 비트}`(core/wire 의 SwiftDate). */
-        val dumper = GoldenDump(leaf = { v -> if (v is SwiftDate) GoldenDump.date(v.timeIntervalSince1970) else null })
+        val dumper = GoldenDump(leaf = { v ->
+            when (v) {
+                is SwiftDate -> GoldenDump.date(v.timeIntervalSince1970)
+                is SwiftURL -> JsonObject(mapOf("\$url" to JsonPrimitive(v.absoluteString)))
+                else -> null
+            }
+        })
 
         /** 디코드 + 정규 덤프. 던지면 null(Swift `try?` 와 같은 자리). */
         fun dumpOrNull(type: String, element: JsonElement): JsonElement? {

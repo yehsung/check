@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkServiceBlocks.swift · SupabaseWorkServiceCharacter.swift · SupabaseWorkServiceMessageReads.swift · SupabaseWorkServiceTodoSync.swift · AppUserCharacters.swift:44-76 · CharacterGift.swift:218-268 · MessagePokeLog.swift:209-312 · Gacha.swift:330-370 · Achievements.swift:275-309 · DailyMissions.swift:194-213 · WeeklyWorkReward.swift:323-360 · Megaphone.swift:203-241 · CheckMobileKit/Session/MobileDeviceService.swift:86-165 · Session/MobilePhoneWorkService.swift:109-145 · Me/MeProfileService.swift · Me/MeAILimitsService.swift:91-139 @ 1b8260d
 package com.yehsung.aingcheck.core.net
 
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.EmptyBody
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -9,6 +10,7 @@ import com.yehsung.aingcheck.core.wire.gift.CharacterGiftClaimResponse
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftPendingRequest
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftPendingResponse
+import com.yehsung.aingcheck.core.wire.models.AILimitPrefsServerRow
 import com.yehsung.aingcheck.core.wire.models.AILimitServerRow
 import com.yehsung.aingcheck.core.wire.models.AppUserCharacterRow
 import com.yehsung.aingcheck.core.wire.models.BlockUserRequest
@@ -79,7 +81,7 @@ suspend fun SupabaseWorkService.fetchBlocks(accessToken: String): List<BlockedUs
         BlockedUser(
             userID = id,
             name = r.displayName?.ifEmpty { null } ?: "사용자",
-            avatarURL = r.avatarUrl,
+            avatarURL = SwiftURL.parse(r.avatarUrl),
             blockedAt = r.createdEpoch?.let { SwiftDate(it.toDouble()) } ?: r.createdAt?.let(::parseDate),
         )
     }
@@ -191,7 +193,7 @@ fun SupabaseWorkService.messageHistoryEntry(row: MessageHistoryReadsRow): Messag
     val createdAt = row.createdEpoch?.let { SwiftDate(it.toDouble()) } ?: row.createdAt?.let(::parseDate) ?: return null
     val isMine = row.isMine ?: false
     return MessageHistoryEntry(
-        id = id, peerUserID = peer, peerName = row.peerDisplayName?.ifEmpty { null } ?: "사용자", peerAvatarURL = row.peerAvatarUrl,
+        id = id, peerUserID = peer, peerName = row.peerDisplayName?.ifEmpty { null } ?: "사용자", peerAvatarURL = SwiftURL.parse(row.peerAvatarUrl),
         body = body, createdAt = createdAt, isMine = isMine,
         readByPeer = if (isMine) row.readByPeer else null,
         isUnread = if (isMine) null else row.unread,
@@ -266,7 +268,7 @@ private fun SupabaseWorkService.pokeLogEntry(row: MessageHistoryWithPokesRow, ki
     val createdAt = row.createdEpoch?.let { SwiftDate(it.toDouble()) } ?: row.createdAt?.let(::parseDate) ?: return null
     val isMine = row.isMine ?: false
     return MessagePokeLogEntry(
-        id = id, peerUserID = peer, peerName = row.peerDisplayName?.ifEmpty { null } ?: "사용자", peerAvatarURL = row.peerAvatarUrl,
+        id = id, peerUserID = peer, peerName = row.peerDisplayName?.ifEmpty { null } ?: "사용자", peerAvatarURL = SwiftURL.parse(row.peerAvatarUrl),
         createdAt = createdAt, isMine = isMine, kind = kind, isUnread = if (isMine) null else row.unread,
     )
 }
@@ -415,4 +417,19 @@ suspend fun SupabaseWorkService.fetchMyAILimitRows(accessToken: String, userID: 
     return decode(ListSerializer(AILimitServerRow.serializer()), data).filter { row ->
         parseDate(row.observedAt) != null && swiftTrim(row.deviceId ?: "").isNotEmpty()
     }
+}
+
+/**
+ * 계정이 고른 메인 맥(`ai_limits_prefs?select=main_device_id` — 폰 MeAILimitsStore 가 부르는 **읽기**). null = 아직 안 골랐다(행 0 개는 정상 —
+ * 가입 트리거가 이 행을 만들지 않는다, throw 하지 않는다). 칸은 앞뒤 공백·줄바꿈을 걷고 비면 null.
+ * 원본: Sources/CheckCore/SupabaseWorkServiceAILimits.swift:327-343(파일은 I 몫이지만 이 메서드는 폰이 부른다 — G5 태그는 메서드 단위).
+ */
+suspend fun SupabaseWorkService.fetchAILimitMainDeviceID(accessToken: String, userID: String): String? {
+    val data = send(
+        SupabaseWorkService.aiLimitsPrefsPath, "GET",
+        listOf("select" to "main_device_id", "user_id" to "eq.$userID"),
+        null, accessToken, null,
+    )
+    val raw = decode(ListSerializer(AILimitPrefsServerRow.serializer()), data).firstOrNull()?.mainDeviceId ?: return null
+    return swiftTrim(raw).ifEmpty { null }
 }

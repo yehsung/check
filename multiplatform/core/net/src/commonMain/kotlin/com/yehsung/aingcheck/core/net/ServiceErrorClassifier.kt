@@ -68,7 +68,12 @@ object ServiceErrorClassifier {
         return SupabaseWorkServiceError.InvalidResponse(statusCode)
     }
 
-    /** "…after 30 seconds" → 30. "second" 앞 숫자 덩어리를 뒤에서부터 모은다. 없으면 null. */
+    /**
+     * "…after 30 seconds" → 30. "second" 앞에서 뒤로 걸으며 **Swift `Character.isNumber`** 인 글자 덩어리를 모은 뒤 Swift `Int(String)`
+     * 으로 읽는다 — 덩어리에 ASCII 0-9 밖의 숫자(전각 ３０ · 위첨자 ² · 아랍 ٣٠ · 한자 一 · ½)가 하나라도 있으면 Swift 는 nil 이다(실측,
+     * 골든 errors retry-after-*). 없으면 null(0 으로 지어내면 재시도가 바로 열린다).
+     * 알려진 갈림: 보조 평면(서로게이트 쌍)의 숫자 글자(𝟑 등)는 범주를 공용 코드에서 못 읽어 숫자로 치지 않는다 — 골든에 잠겨 있다.
+     */
     fun retryAfterSeconds(lowercasedMessage: String): Long? {
         val at = lowercasedMessage.indexOf("second")
         if (at < 0) return null
@@ -78,11 +83,27 @@ object ServiceErrorClassifier {
             if (ch.isSwiftNumber()) digits.append(ch) else if (digits.isNotEmpty()) break
         }
         if (digits.isEmpty()) return null
-        return digits.reverse().toString().toLongOrNull()
+        val text = digits.reverse().toString()
+        if (!text.all { it in '0'..'9' }) return null
+        return text.toLongOrNull()
     }
 
-    /** Swift `Character.isNumber` 의 ASCII·전각 몫(본문은 GoTrue 영어 문장이다). Int(String) 은 ASCII 숫자만 받는다. */
-    private fun Char.isSwiftNumber(): Boolean = this.isDigit()
+    /**
+     * Swift `Character.isNumber`(= 첫 스칼라의 Unicode Numeric_Type 이 있다) = 범주 Nd·Nl·No + 숫자 값이 있는 한자 99자
+     * (BMP 75자는 아래 표 — 1b8260d 의 Swift 로 U+0000~U+10FFFF 를 전수 실측).
+     */
+    private fun Char.isSwiftNumber(): Boolean = when (category) {
+        CharCategory.DECIMAL_DIGIT_NUMBER, CharCategory.LETTER_NUMBER, CharCategory.OTHER_NUMBER -> true
+        else -> code in HAN_NUMERIC_BMP
+    }
+
+    private val HAN_NUMERIC_BMP: Set<Int> = setOf(
+        0x3405, 0x3483, 0x382A, 0x3B4D, 0x4E00, 0x4E03, 0x4E07, 0x4E09, 0x4E24, 0x4E5D, 0x4E8C, 0x4E94, 0x4E96, 0x4EAC, 0x4EBF,
+        0x4EC0, 0x4EDF, 0x4EE8, 0x4F0D, 0x4F70, 0x4FE9, 0x5006, 0x5104, 0x5146, 0x5169, 0x516B, 0x516D, 0x5341, 0x5343, 0x5344,
+        0x5345, 0x534C, 0x53C1, 0x53C2, 0x53C3, 0x53C4, 0x56DB, 0x58F1, 0x58F9, 0x5E7A, 0x5EFE, 0x5EFF, 0x5F0C, 0x5F0D, 0x5F0E,
+        0x5F10, 0x62D0, 0x62FE, 0x634C, 0x67D2, 0x6D1E, 0x6F06, 0x7396, 0x767E, 0x7695, 0x79ED, 0x8086, 0x842C, 0x8CAE, 0x8CB3,
+        0x8D30, 0x920E, 0x94A9, 0x9621, 0x9646, 0x964C, 0x9678, 0x96F6, 0xF96B, 0xF973, 0xF978, 0xF9B2, 0xF9D1, 0xF9D3, 0xF9FD,
+    )
 
     /** 비밀번호 재설정·가입 OTP 경로의 재분류(429 → rateLimited, GoTrue 문구 → otp 만료·세션 만료). */
     fun passwordRecoveryError(error: SupabaseWorkServiceError): SupabaseWorkServiceError {

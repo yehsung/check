@@ -144,6 +144,37 @@ data class PhoneWorkResponse(
     }
 }
 
+/**
+ * 응답의 뜻(Swift `PhoneWorkOutcome` — MobilePhoneWorkService.swift:68-97). 스토어(W2-f NowStorePhoneWork)가 이것으로만 가른다.
+ * 모르는 status 는 [Failed] — 지어내지 않는다.
+ */
+sealed interface PhoneWorkOutcome {
+    /** 근무 중(시작 ok · 이미 근무 중 · touch ok). [alreadyWorking] = 시작을 눌렀는데 이미 열린 세션이 있었다. */
+    data class Working(val session: PhoneWorkSessionInfo, val alreadyWorking: Boolean) : PhoneWorkOutcome
+    /** 종료가 닫았다. */
+    data class Stopped(val session: PhoneWorkSessionInfo?) : PhoneWorkOutcome
+    /** 근무 중이 아니다. [last] = 최근 12시간 안에 닫힌 내 폰 세션. */
+    data class NotWorking(val last: PhoneWorkSessionInfo?) : PhoneWorkOutcome
+    /** 종료가 가리킨 세션이 지금 열린 세션이 아니다. */
+    data object Mismatch : PhoneWorkOutcome
+    data object NoTeam : PhoneWorkOutcome
+    data object Unauthorized : PhoneWorkOutcome
+    data object Failed : PhoneWorkOutcome
+
+    companion object {
+        fun from(response: PhoneWorkResponse): PhoneWorkOutcome = when (response.status) {
+            // 종료 응답은 ended_at 이 찍힌 세션을 싣는다. 시작 · touch 는 열린 세션이다.
+            "ok" -> response.session?.let { if (it.endedAt == null) Working(it, alreadyWorking = false) else Stopped(it) } ?: Failed
+            "already_working" -> response.session?.let { Working(it, alreadyWorking = true) } ?: Failed
+            "not_working" -> NotWorking(response.last)
+            "mismatch" -> Mismatch
+            "no_team" -> NoTeam
+            "unauthorized" -> Unauthorized
+            else -> Failed
+        }
+    }
+}
+
 /** stop 본문 — 세션 id 는 소문자(nil 이면 키를 뺀다). start·touch 는 `{}`. */
 @Serializable
 data class PhoneWorkStopRequest(@SerialName("p_session_id") val pSessionId: String? = null)
@@ -155,6 +186,10 @@ data class MeProfileCardRow(
     @SerialName("display_name") val displayName: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
 )
+
+/** Swift `AILimitPrefsServerRow`(`ai_limits_prefs?select=main_device_id` 한 행). */
+@Serializable
+data class AILimitPrefsServerRow(@SerialName("main_device_id") val mainDeviceId: String? = null)
 
 /** Swift `AILimitServerRow`(ai_limits GET 행 — 폰은 읽기만, C§3.2 E-2). 정규화·접기는 W2-c `MeAILimitsService`. */
 @Serializable
@@ -198,7 +233,7 @@ data class TodoSyncWireItem(
     object Serializer : KSerializer<TodoSyncWireItem> {
         override val descriptor: SerialDescriptor = buildClassSerialDescriptor("TodoSyncWireItem")
         override fun deserialize(decoder: Decoder): TodoSyncWireItem {
-            val c = SwiftDecoding.keyed(decoder)
+            val c = SwiftDecoding.keyedPlain(decoder)
             return TodoSyncWireItem(
                 id = c.lossyString("id"),
                 title = c.lossyString("title"),
@@ -230,7 +265,7 @@ data class TodoSyncRequest(val changes: List<TodoSyncWireItem>, val sinceMs: Lon
 data class TodoSyncRejection(val id: String?, val reason: String?) {
     object Serializer : SwiftDecodableSerializer<TodoSyncRejection>("TodoSyncRejection") {
         override fun deserialize(decoder: Decoder): TodoSyncRejection {
-            val c = SwiftDecoding.keyed(decoder)
+            val c = SwiftDecoding.keyedPlain(decoder)
             return TodoSyncRejection(id = c.lossyString("id"), reason = c.lossyString("reason"))
         }
     }
@@ -248,7 +283,7 @@ data class TodoSyncResponse(
 ) {
     object Serializer : SwiftDecodableSerializer<TodoSyncResponse>("TodoSyncResponse") {
         override fun deserialize(decoder: Decoder): TodoSyncResponse {
-            val c = SwiftDecoding.keyed(decoder)
+            val c = SwiftDecoding.keyedPlain(decoder)
             return TodoSyncResponse(
                 status = c.lossyString("status"),
                 items = c.lossy("items", ListSerializer(TodoSyncWireItem.serializer())),

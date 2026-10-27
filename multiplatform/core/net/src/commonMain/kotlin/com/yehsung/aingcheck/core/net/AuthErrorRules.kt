@@ -2,6 +2,7 @@
 package com.yehsung.aingcheck.core.net
 
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
+import kotlinx.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
 /** 인증 경로 오류의 처분(Swift `AuthErrorDisposition`). */
@@ -23,17 +24,17 @@ object AuthErrorRules {
     }
 
     /**
-     * 전송 실패(Swift URLError — 취소 아닌 것). JVM·Android 의 IOException 계열과 Ktor 시간 초과를 이름으로 본다
-     * (commonMain 이라 java.io 를 직접 못 본다). Ktor `HttpRequestTimeoutException` 은 IOException 이면서 CancellationException 이 아니다.
+     * 전송 실패(Swift `URLError` — 취소 아닌 것 **전부**). Kotlin 의 꼴은 `kotlinx.io.IOException`(JVM·Android = java.io.IOException)
+     * 계열 전체다 — 이름 허용 목록이면 `InterruptedIOException`(OkHttp 호출 시간 초과)·`StreamResetException`(HTTP/2 끊김)·
+     * `SSLPeerUnverifiedException`·`ProtocolException` 같은 하위 예외가 빠져 **로그아웃**으로 갔다(검증 지적 · C§4 #3 "네트워크 → 세션 유지").
+     * Ktor `HttpRequestTimeoutException`·`ConnectTimeoutException`·`SocketTimeoutException` 도 IOException 이다.
+     * IOException 이 아닌 전송 실패 둘(`UnresolvedAddressException` = IllegalArgumentException, 웹소켓 `ClosedReceiveChannelException`)만
+     * 이름으로 더 본다. 원인 사슬을 네 겹까지 본다(엔진이 감싸서 던지는 경우).
      */
     fun isTransport(error: Throwable): Boolean =
-        generateSequence(error as Throwable?) { it.cause }.take(4).any { (it::class.simpleName ?: "") in TRANSPORT_NAMES }
+        generateSequence(error as Throwable?) { it.cause }.take(4).any { it is IOException || (it::class.simpleName ?: "") in NON_IO_TRANSPORT_NAMES }
 
-    private val TRANSPORT_NAMES = setOf(
-        "IOException", "UnknownHostException", "ConnectException", "SocketTimeoutException", "SocketException",
-        "UnresolvedAddressException", "HttpRequestTimeoutException", "ConnectTimeoutException", "EOFException",
-        "SSLException", "SSLHandshakeException", "NoRouteToHostException", "ClosedReceiveChannelException",
-    )
+    private val NON_IO_TRANSPORT_NAMES = setOf("UnresolvedAddressException", "ClosedReceiveChannelException")
 
     /** 인증 오류 → 사용자 문구. 서비스 오류가 아니면 fallback. */
     fun message(error: Throwable, fallback: String): String {

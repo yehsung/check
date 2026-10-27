@@ -142,7 +142,7 @@
   "schema": 1,
   "spec": {
     "rule": "가운데 조각을 base64url(-_ → +/, = 채우기)로 풀어 JSON 객체의 exp(NSNumber — 불도 숫자)를 1970 기준 초로. 못 읽으면 null(= 모른다, 만료가 아니다)",
-    "token": "payload 칸이 있으면 토큰 = \"eyJhbGciOiJIUzI1NiJ9.\" + base64url(payload, = 없음) + \".c2ln\"(골든에 토큰 글자를 싣지 않는다 — 비밀 검사). token 칸은 그대로 쓴다"
+    "token": "payload 칸이 있으면 토큰 = \"e30.\" + base64url(payload, = 없음) + \".c2ln\"(골든에 토큰 글자를 싣지 않는다 — 비밀 검사). token 칸은 그대로 쓴다"
   },
   "swiftSources": [
     "Sources/CheckCore/JWTClaims.swift"

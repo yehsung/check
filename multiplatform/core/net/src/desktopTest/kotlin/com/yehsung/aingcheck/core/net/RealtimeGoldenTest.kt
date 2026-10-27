@@ -58,7 +58,7 @@ class RealtimeGoldenTest {
     private object Walk {
         const val START = 1_790_000_000.0
         fun jwt(exp: Long): String =
-            "eyJhbGciOiJIUzI1NiJ9." + Base64.getUrlEncoder().withoutPadding().encodeToString("{\"exp\":$exp}".encodeToByteArray()) + ".c2ln"
+            "e30." + Base64.getUrlEncoder().withoutPadding().encodeToString("{\"exp\":$exp}".encodeToByteArray()) + ".c2ln"
         val tokOK = jwt((START + 2_592_000).toLong())
         val tokSoon = jwt((START + 100).toLong())
         const val tokBad = "not-a-jwt"
@@ -122,7 +122,13 @@ class RealtimeGoldenTest {
     fun linkWalkMatchesSwiftCheckpoints() {
         val golden = Golden.load("realtime/link-walk")
         var totalSteps = 0
+        var scripts = 0
         for (c in golden.cases) {
+            if ("script" in c) {
+                replayScript(golden, c)
+                scripts++
+                continue
+            }
             val rng = SplitMix64(c.hex64("seed"))
             val steps = c.int("steps")
             val link = RealtimeLink(transportAvailable = (c["transportAvailable"] as JsonPrimitive).content == "true")
@@ -155,8 +161,40 @@ class RealtimeGoldenTest {
             }
             assertEquals(c.string("final"), Golden.hex64Text(h), golden.failure(c.string("id"), "끝 해시"))
         }
-        println("AINGCHECK-G4 walks=${golden.cases.size} steps=$totalSteps")
+        println("AINGCHECK-G4 walks=${golden.cases.size - scripts} scripts=$scripts steps=$totalSteps")
         assertTrue(totalSteps >= 10_000, "G4 걸음이 1만 미만($totalSteps)")
+        assertTrue(scripts >= 3, "경계 대본(25·50·15·45초)이 골든에 없다($scripts)")
+    }
+
+    /** Swift `RealtimeWalk.scriptedEvent` 와 같은 글자. */
+    private fun scriptedEvent(code: String): RealtimeEvent = when (code) {
+        "signedIn:tokOK" -> RealtimeEvent.SignedIn(Walk.tokOK)
+        "joined" -> RealtimeEvent.Transport(RealtimeTransportEvent.Joined)
+        "tick" -> RealtimeEvent.Tick
+        "heartbeatAck" -> RealtimeEvent.Transport(RealtimeTransportEvent.HeartbeatAck)
+        "closed:nil" -> RealtimeEvent.Transport(RealtimeTransportEvent.Closed(null))
+        else -> error("모르는 대본 사건 $code")
+    }
+
+    /**
+     * 경계 대본(검증 지적: 무작위 걷기는 ms 누적이라 `>`↔`>=` 를 못 가렸다): 정수 초만 더해 25·50·15·45초에 **정확히** 닿는다.
+     * 걸음마다 기록 전체를 Swift 와 견준다(지터 = 상한 × 0.75).
+     */
+    private fun replayScript(golden: com.yehsung.aingcheck.testkit.golden.GoldenFile, c: JsonObject) {
+        val link = RealtimeLink(transportAvailable = true)
+        var now = SwiftDate(Walk.START)
+        val records = c.array("records")
+        val script = c.array("script")
+        assertEquals(script.size, records.size, golden.failure(c.string("id"), "대본 걸음 수와 기록 수"))
+        script.forEachIndexed { i, step ->
+            val pair = step as JsonArray
+            now = now.addingTimeInterval((pair[0] as JsonPrimitive).content.toDouble())
+            val event = scriptedEvent((pair[1] as JsonPrimitive).content)
+            val effects = link.apply(event, now) { ceiling -> ceiling * 0.75 }
+            val shown = GoldenCanonical.text(GoldenScrub.json(record(link, event, effects, now)))
+            val want = GoldenCanonical.text(records[i])
+            if (shown != want) fail(golden.failure(c.string("id"), "대본 걸음 ${i + 1}(${pair[1]}) 이 다르다\n  Swift : $want\n  Kotlin: $shown"))
+        }
     }
 
     @Test

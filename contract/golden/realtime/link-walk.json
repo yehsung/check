@@ -2,28 +2,28 @@
   "cases": [
     {
       "checkpoints": [
-        "0xea5cc818bfd5479b",
-        "0xeb66a56acd6a8384",
-        "0x283deb3e48104404",
-        "0xcd7ed37b08b0f258",
-        "0xbf3eba3a0e8df068",
-        "0x41d73785dc6923c9",
-        "0xbbfbfed78997b27e",
-        "0x9ab7fe8ae57cd796",
-        "0x1d85b4b687a96ede",
-        "0x60490f181faba576",
-        "0x37e67884fbec34f7",
-        "0xaf9e5db5b0396d28",
-        "0x2ee2e77306c1ebbe",
-        "0x2c538e5d955950db",
-        "0xae6817e4ee12bbe1",
-        "0xf10bfa9b74d2b3db",
-        "0x8fc5ab4829636da0",
-        "0x15350facd646d739",
-        "0xe6d3d8d8a02d097b",
-        "0xc2e28b7ff919fa58"
+        "0x9a08f831a526c330",
+        "0x5c1940304b4ebd24",
+        "0x032a7401d489f542",
+        "0x81bb5e4aa9ae8e74",
+        "0x8adc2b2a66c64e86",
+        "0x803e21488f233f89",
+        "0xd61ff1764a5551f2",
+        "0x79707d5f64e08fcc",
+        "0x671cd498579d384b",
+        "0x2c9f3be07af948d6",
+        "0x4d09709fb0576b76",
+        "0x6046bc69b191ffc8",
+        "0xd905a02a9a82d39f",
+        "0x2fe992f9f6f448d7",
+        "0xfc80f8a23b044820",
+        "0xca570e85a5d016aa",
+        "0x2107a7850e46020a",
+        "0xbd93d4fab83ec45a",
+        "0xae54ec7a4dec3b0f",
+        "0x0b371f557d90231e"
       ],
-      "final": "0xc2e28b7ff919fa58",
+      "final": "0x0b371f557d90231e",
       "head": [
         {
           "e": "userRequestedRetry",
@@ -127,7 +127,7 @@
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -138,12 +138,12 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -154,7 +154,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -173,7 +173,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -186,7 +186,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -199,12 +199,12 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -215,7 +215,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -234,7 +234,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -250,19 +250,19 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
             "$case": "signedIn",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
           "fx": [
             {
               "$case": "connect",
-              "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+              "$value": "e30.<jwt:24>.c2ln"
             },
             {
               "$case": "scheduleTokenRefresh",
@@ -282,7 +282,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -313,19 +313,19 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
             "$case": "signedIn",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
           "fx": [
             {
               "$case": "connect",
-              "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+              "$value": "e30.<jwt:24>.c2ln"
             },
             {
               "$case": "scheduleTokenRefresh",
@@ -345,7 +345,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -382,7 +382,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -409,7 +409,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -439,7 +439,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -460,7 +460,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -481,7 +481,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -505,7 +505,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -532,7 +532,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -559,7 +559,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "backoffElapsed",
@@ -568,7 +568,7 @@
           "fx": [
             {
               "$case": "connect",
-              "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+              "$value": "e30.<jwt:24>.c2ln"
             },
             {
               "$case": "scheduleTokenRefresh",
@@ -588,7 +588,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -612,7 +612,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "userRequestedRetry",
@@ -630,7 +630,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -659,7 +659,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -686,7 +686,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -713,7 +713,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -737,7 +737,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -767,7 +767,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -791,7 +791,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -821,7 +821,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "userRequestedRetry",
@@ -852,7 +852,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -885,7 +885,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -909,7 +909,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -936,7 +936,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -969,7 +969,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         }
       ],
       "id": "seed-5eed000000000004-10000-true",
@@ -989,12 +989,12 @@
     },
     {
       "checkpoints": [
-        "0x1b06452a74d0068d",
-        "0x03a57603e340af55",
-        "0x20ef0fa12837a049",
-        "0xbe0963f9a86d702e"
+        "0x2b88980234b504b7",
+        "0x9945fbfd90ae6b86",
+        "0x524fba8a62c9299d",
+        "0x4a52b815eb2316c0"
       ],
-      "final": "0xbe0963f9a86d702e",
+      "final": "0x4a52b815eb2316c0",
       "head": [
         {
           "e": {
@@ -1047,7 +1047,7 @@
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -1058,7 +1058,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "backoffElapsed",
@@ -1071,7 +1071,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "didWake",
@@ -1084,7 +1084,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1100,7 +1100,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "userRequestedRetry",
@@ -1113,7 +1113,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "signedOut",
@@ -1338,7 +1338,7 @@
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": "41daac4f15479db2",
@@ -1373,7 +1373,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1397,7 +1397,7 @@
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -1408,7 +1408,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1427,7 +1427,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1443,7 +1443,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "userRequestedRetry",
@@ -1456,12 +1456,12 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -1472,12 +1472,12 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -1488,7 +1488,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "backoffElapsed",
@@ -1501,7 +1501,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1520,7 +1520,7 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1536,19 +1536,19 @@
             "$case": "idle",
             "$value": "signedOut"
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
             "$case": "signedIn",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
           "fx": [
             {
               "$case": "connect",
-              "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+              "$value": "e30.<jwt:24>.c2ln"
             },
             {
               "$case": "scheduleTokenRefresh",
@@ -1568,7 +1568,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1592,7 +1592,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1629,7 +1629,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1656,7 +1656,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1680,7 +1680,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1707,7 +1707,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1731,7 +1731,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1755,7 +1755,7 @@
               }
             }
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -1779,7 +1779,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1809,7 +1809,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": "tick",
@@ -1833,7 +1833,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         },
         {
           "e": {
@@ -1866,7 +1866,7 @@
               "exhausted"
             ]
           },
-          "tok": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+          "tok": "e30.<jwt:24>.c2ln"
         }
       ],
       "id": "seed-2a-2000-true",
@@ -1885,7 +1885,7 @@
     },
     {
       "checkpoints": [],
-      "final": "0x8545940614a52b14",
+      "final": "0x7e426685efb1abe7",
       "head": [
         {
           "e": {
@@ -1909,7 +1909,7 @@
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -1980,7 +1980,7 @@
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -2371,7 +2371,7 @@
         {
           "e": {
             "$case": "tokenRefreshed",
-            "$value": "eyJhbGciOiJIUzI1NiJ9.<jwt:24>.c2ln"
+            "$value": "e30.<jwt:24>.c2ln"
           },
           "fr": false,
           "fs": null,
@@ -2511,6 +2511,496 @@
       },
       "steps": 300,
       "transportAvailable": false
+    },
+    {
+      "id": "script-heartbeat-25-silence-50",
+      "records": [
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "catchUp"
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0000000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "sendHeartbeat"
+          ],
+          "hb": "41daac4ee0400000",
+          "now": "41daac4ee0400000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0000000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatAck"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": "41daac4ee0400000",
+          "now": "41daac4ee0400000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": "41daac4ee0400000",
+          "now": "41daac4ee6400000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "sendHeartbeat"
+          ],
+          "hb": "41daac4ee6800000",
+          "now": "41daac4ee6800000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": "41daac4ee6800000",
+          "now": "41daac4eec800000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "sendHeartbeat"
+          ],
+          "hb": "41daac4eecc00000",
+          "now": "41daac4eecc00000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4eed000000",
+          "fx": [
+            "disconnect",
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4eed300000"
+              }
+            }
+          ],
+          "hb": "41daac4eecc00000",
+          "now": "41daac4eed000000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 1,
+              "failingSince": {
+                "$date": "41daac4eed000000"
+              },
+              "retryAt": {
+                "$date": "41daac4eed300000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "script": [
+        [
+          0,
+          "signedIn:tokOK"
+        ],
+        [
+          0,
+          "joined"
+        ],
+        [
+          1,
+          "tick"
+        ],
+        [
+          0,
+          "heartbeatAck"
+        ],
+        [
+          24,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ],
+        [
+          24,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ]
+      ]
+    },
+    {
+      "id": "script-join-15",
+      "records": [
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee3c00000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4ee4000000",
+          "fx": [
+            "disconnect",
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4ee4300000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee4000000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4ee4000000"
+              },
+              "retryAt": {
+                "$date": "41daac4ee4300000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "script": [
+        [
+          0,
+          "signedIn:tokOK"
+        ],
+        [
+          15,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ]
+      ]
+    },
+    {
+      "id": "script-failed-45",
+      "records": [
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "closed",
+              "$value": null
+            }
+          },
+          "fr": false,
+          "fs": "41daac4ee0400000",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4ee0700000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0400000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4ee0400000"
+              },
+              "retryAt": {
+                "$date": "41daac4ee0700000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4ee0400000",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eeb800000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4ee0400000"
+              },
+              "retryAt": {
+                "$date": "41daac4ee0700000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4ee0400000",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eebc00000",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4ee0400000"
+                },
+                "retryAt": {
+                  "$date": "41daac4ee0700000"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "script": [
+        [
+          0,
+          "signedIn:tokOK"
+        ],
+        [
+          1,
+          "closed:nil"
+        ],
+        [
+          45,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ]
+      ]
     }
   ],
   "equivalence": "bit",
@@ -2522,7 +3012,8 @@
     "events": "next() % 34: 0 signedIn(tokOK) · 1 signedIn(tokSoon) · 2 signedIn(\"not-a-jwt\") · 3 signedOut · 4 willSleep · 5 didWake · 6 opened · 7,8 joined · 9 joinRejected(expiredToken) · 10 joinRejected(unauthorized) · 11 joinRejected(unknown(\"boom\")) · 12 gomoku · 13 chess · 14 tetris · 15 message_read · 16 poke(방송) · 17 heartbeatAck · 18 heartbeatTimedOut · 19 closed(next()%2==0 ? nil : 1006) · 20,21 backoffElapsed · 22…27 tick · 28 tokenRefreshed(tokOK) · 29 tokenRefreshed(tokSoon) · 30 tokenRefreshFailed(fatal: next()%2==0) · 31 userRequestedRetry · 32,33 tick",
     "record": "걸음 기록 = {now(비트) · e(사건 덤프) · fx(효과 덤프) · s(상태 덤프) · tok · fs(failingSince 비트) · fr(forcedRefreshUsedThisAttempt) · hb(lastHeartbeatSentAt 비트)} 의 정규 글자를 UTF-8 바이트로 FNV-1a 64 에 접는다. 500걸음마다 체크포인트, 앞 40걸음은 기록 그대로(JWT 모양 글자만 <jwt:길이> — 지문은 바꾸기 전 글자로 센다)",
     "rng": "MiniGameRandom(SplitMix64)(seed). 걸음마다: dt = (next() % 20001)/1000 초, next() % 50 == 0 이면 dt += 60 → now += dt → 사건 = event(rng) → link.apply(사건, now, jitter: c → c * (0.5 + 0.5 * unit()))",
-    "tokens": "start = 1970+1790000000초. tokOK = JWT(exp = start+2592000), tokSoon = JWT(exp = start+100) — 머리 eyJhbGciOiJIUzI1NiJ9 · 꼬리 c2ln · 가운데 base64url({\"exp\":N})"
+    "script": "script 칸이 있는 case 는 무작위 걷기가 아니라 대본이다: [dt 정수 초, 사건 글자] 차례로 now += dt → apply(사건, now, jitter: c → c × 0.75). records = 걸음마다 기록(아래 record 와 같은 칸, JWT 모양 글자만 <jwt:길이>). 사건 글자: signedIn:tokOK · joined · tick · heartbeatAck · closed:nil",
+    "tokens": "start = 1970+1790000000초. tokOK = JWT(exp = start+2592000), tokSoon = JWT(exp = start+100) — 머리 e30 · 꼬리 c2ln · 가운데 base64url({\"exp\":N})"
   },
   "swiftSources": [
     "Sources/CheckCore/RealtimeLink.swift",

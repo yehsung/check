@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkService.swift:92-1315·1323-1592(인증·팀·프로필·미니게임·상점·메시지·제보) · SupabaseWorkServiceSignUp.swift · SupabaseWorkServiceSignUpOTP.swift @ 1b8260d
 package com.yehsung.aingcheck.core.net
 
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.core.wire.EmptyBody
 import com.yehsung.aingcheck.core.wire.MessageBody
@@ -140,7 +141,7 @@ suspend fun SupabaseWorkService.refreshSession(refreshToken: String): SupabaseSe
 
 /** 로그아웃은 `scope=local`(C§4 #6) — 다른 기기 세션을 끊지 않는다. 실패는 삼킨다. */
 suspend fun SupabaseWorkService.signOut(accessToken: String) {
-    swiftTry { send("/auth/v1/logout", "POST", listOf("scope" to "local"), null, accessToken, null) }
+    swiftTryAll { send("/auth/v1/logout", "POST", listOf("scope" to "local"), null, accessToken, null) }
 }
 
 /** 폰 로그아웃 장부의 서버 정리(MobileSignOutCleanup.swift — 실패를 던진다, 장부가 재시도한다). */
@@ -297,7 +298,7 @@ suspend fun SupabaseWorkService.fetchTeamStatuses(accessToken: String, teamID: S
     }
     val active = async { fetchActiveSessions(accessToken, teamID) }
     val weekly = async { fetchWeeklySessions(accessToken, teamID, now) }
-    val devices = async { swiftTry { fetchStatusDevices(accessToken, teamID) } }
+    val devices = async { swiftTryAll { fetchStatusDevices(accessToken, teamID) } }
     // 넷이 다 끝날 때까지 기다린 뒤 Swift 와 같은 차례(상태 → 활성 → 주간)로 결과·오류를 꺼낸다.
     joinAll(statusBytes, active, weekly, devices)
     val rows = decode(ListSerializer(WorkStatusRow.serializer()), statusBytes.await())
@@ -367,7 +368,7 @@ fun SupabaseWorkService.assembleTeamStatuses(
             currentSessionStartedAt = activeStartedAt,
             weeklyDurationSeconds = weeklyByUser[row.userId] ?: 0,
             todayDurationSeconds = todayByUser[row.userId] ?: 0,
-            avatarURL = row.profiles?.avatarUrl,
+            avatarURL = SwiftURL.parse(row.profiles?.avatarUrl),
             lastSeenAt = row.lastSeenAt?.let(::parseDate),
             activeSessionID = row.activeSessionId,
             deviceClaims = (devicesByUser[row.userId] ?: emptyList()).map { d ->
@@ -470,10 +471,13 @@ suspend fun SupabaseWorkService.setStatusMessage(accessToken: String, text: Stri
     return StatusMessageSaveResult.Response(decode(SetStatusMessageResponse.serializer(), data))
 }
 
-suspend fun SupabaseWorkService.fetchTokenUsageSettings(accessToken: String, userID: String): Triple<Boolean, Boolean, Boolean> {
+/** Swift `(isPublic: Bool, collects: Bool, focusMode: Bool)` — 칸이 없으면 공개 · 수집 · 집중 끔. */
+data class TokenUsageSettings(val isPublic: Boolean, val collects: Boolean, val focusMode: Boolean)
+
+suspend fun SupabaseWorkService.fetchTokenUsageSettings(accessToken: String, userID: String): TokenUsageSettings {
     val data = send("/rest/v1/profiles", "GET", profileQuery(userID, "token_usage_public,token_usage_collect,focus_mode"), null, accessToken, null)
     val first = decode(ListSerializer(ProfilePrivacyRow.serializer()), data).firstOrNull()
-    return Triple(first?.tokenUsagePublic ?: true, first?.tokenUsageCollect ?: true, first?.focusMode ?: false)
+    return TokenUsageSettings(first?.tokenUsagePublic ?: true, first?.tokenUsageCollect ?: true, first?.focusMode ?: false)
 }
 
 suspend fun SupabaseWorkService.updateTokenUsagePublic(accessToken: String, userID: String, isPublic: Boolean) {
@@ -565,7 +569,7 @@ suspend fun SupabaseWorkService.fetchMiniGameBoard(accessToken: String, game: St
     val data = send("/rest/v1/rpc/minigame_board", "POST", emptyList(), encode(MiniGameBoardRequest.serializer(), MiniGameBoardRequest(game, day)), accessToken, null)
     return decode(ListSerializer(MiniGameBoardRow.serializer()), data).map { r ->
         MiniGameBoardEntry(
-            userID = r.userId, name = r.displayName ?: "사용자", avatarURL = r.avatarUrl, bestScore = r.bestScore,
+            userID = r.userId, name = r.displayName ?: "사용자", avatarURL = SwiftURL.parse(r.avatarUrl), bestScore = r.bestScore,
             bestAt = r.bestAt?.let(::parseDate), plays = r.plays ?: 0, center = CenterLabel.display(r.center),
         )
     }
@@ -575,7 +579,7 @@ suspend fun SupabaseWorkService.fetchMiniGameYesterdayWinner(accessToken: String
     val data = send("/rest/v1/rpc/minigame_yesterday_winner", "POST", emptyList(), encode(MiniGameWinnerRequest.serializer(), MiniGameWinnerRequest(game)), accessToken, null)
     val r = decode(ListSerializer(MiniGameWinnerRow.serializer()), data).firstOrNull() ?: return null
     return MiniGameWinner(
-        day = r.day ?: "", userID = r.userId, name = r.displayName ?: "사용자", avatarURL = r.avatarUrl,
+        day = r.day ?: "", userID = r.userId, name = r.displayName ?: "사용자", avatarURL = SwiftURL.parse(r.avatarUrl),
         score = r.score, awarded = r.awarded ?: false, center = CenterLabel.display(r.center),
     )
 }
@@ -593,7 +597,7 @@ suspend fun SupabaseWorkService.fetchMiniGameAllTimeBoard(accessToken: String, g
         val userID = r.userId ?: return@mapNotNull null
         val score = r.bestScore ?: return@mapNotNull null
         MiniGameAllTimeEntry(
-            userID = userID, name = r.displayName ?: "사용자", avatarURL = r.avatarUrl, bestScore = score,
+            userID = userID, name = r.displayName ?: "사용자", avatarURL = SwiftURL.parse(r.avatarUrl), bestScore = score,
             bestAt = r.bestAt?.let(::parseDate), day = r.day, center = CenterLabel.display(r.center),
         )
     }
@@ -672,7 +676,7 @@ suspend fun SupabaseWorkService.fetchMessageHistory(accessToken: String, hours: 
         if (peer.isNullOrEmpty()) return@mapNotNull null
         val createdAt = r.createdEpoch?.let { SwiftDate(it.toDouble()) } ?: r.createdAt?.let(::parseDate) ?: return@mapNotNull null
         MessageHistoryEntry(
-            id = r.id, peerUserID = peer, peerName = r.peerDisplayName?.ifEmpty { null } ?: "사용자", peerAvatarURL = r.peerAvatarUrl,
+            id = r.id, peerUserID = peer, peerName = r.peerDisplayName?.ifEmpty { null } ?: "사용자", peerAvatarURL = SwiftURL.parse(r.peerAvatarUrl),
             body = body, createdAt = createdAt, isMine = r.isMine ?: false,
         )
     }
@@ -721,7 +725,7 @@ suspend fun SupabaseWorkService.fetchFeedbackList(accessToken: String, status: F
             status = FeedbackStatus.of(r.status ?: FeedbackStatus.Open.rawValue), adminNote = r.adminNote,
             adminNoteAt = r.adminNoteAt?.let(::parseDate), appVersion = r.appVersion, osVersion = r.osVersion,
             createdAt = r.createdAt?.let(::parseDate), updatedAt = r.updatedAt?.let(::parseDate),
-            authorName = r.displayName ?: "사용자", authorAvatarURL = r.avatarUrl,
+            authorName = r.displayName ?: "사용자", authorAvatarURL = SwiftURL.parse(r.avatarUrl),
         )
     }
 }

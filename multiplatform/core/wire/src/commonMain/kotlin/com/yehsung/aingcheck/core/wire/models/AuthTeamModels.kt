@@ -3,6 +3,7 @@
 
 package com.yehsung.aingcheck.core.wire.models
 
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.foundation.platform.Collation
 import com.yehsung.aingcheck.core.foundation.time.KST
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -62,7 +63,7 @@ data class TeamMemberStatus(
     val currentSessionStartedAt: SwiftDate?,
     val weeklyDurationSeconds: Long = 0,
     val todayDurationSeconds: Long = 0,
-    val avatarURL: String? = null,
+    val avatarURL: SwiftURL? = null,
     val lastSeenAt: SwiftDate? = null,
     val activeSessionID: String? = null,
     val deviceClaims: List<StatusDeviceClaim> = emptyList(),

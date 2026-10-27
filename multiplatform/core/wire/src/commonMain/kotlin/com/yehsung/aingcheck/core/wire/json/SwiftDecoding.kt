@@ -21,10 +21,11 @@ import kotlin.coroutines.cancellation.CancellationException
  *  · [lossy] = `try? c.decodeIfPresent` — 무엇이든 실패면 null(lossy 칸).
  * 키는 전선 snake 이름으로 준다(내부에서 Swift 처럼 camel 로 접어 견준다).
  */
-class SwiftKeyed internal constructor(val obj: JsonObject, val path: String) {
-    private val values = convertedKeys(obj)
+class SwiftKeyed internal constructor(val obj: JsonObject, val path: String, private val plainKeys: Boolean = false) {
+    /** [plainKeys] = Swift 기본 `JSONDecoder()`(키 변환 없음 — `TodoSyncResponse.decode`). 아니면 convertFromSnakeCase. */
+    private val values: Map<String, JsonElement> = if (plainKeys) obj else convertedKeys(obj)
 
-    private fun keyOf(key: String) = SwiftKeys.fromSnakeCase(key)
+    private fun keyOf(key: String) = if (plainKeys) key else SwiftKeys.fromSnakeCase(key)
 
     fun contains(key: String): Boolean = keyOf(key) in values
 
@@ -66,7 +67,7 @@ class SwiftKeyed internal constructor(val obj: JsonObject, val path: String) {
     fun lossyDouble(key: String): Double? = lossy(key, Double.serializer())
 
     /** `try c.nestedContainer(keyedBy:forKey:)`. */
-    fun nested(key: String): SwiftKeyed = SwiftDecoding.keyed(decoder(key))
+    fun nested(key: String): SwiftKeyed = if (plainKeys) SwiftDecoding.keyedPlain(decoder(key)) else SwiftDecoding.keyed(decoder(key))
 
     /** 같은 디코더에서 다른 타입을 통째로 읽기(`try T(from: decoder)` — 평평한 응답). */
     fun <T> decodeSelf(deserializer: DeserializationStrategy<T>): T = deserializer.deserialize(SwiftValueDecoder(obj, path))
@@ -93,6 +94,16 @@ object SwiftDecoding {
     fun keyed(decoder: Decoder): SwiftKeyed {
         val d = swift(decoder)
         return SwiftKeyed(d.obj(), d.path)
+    }
+
+    /**
+     * 키 변환 **없는** `try decoder.container(keyedBy:)` — Swift 가 기본 `JSONDecoder()` 로 읽는 타입(todo_sync 응답 셋)만 쓴다.
+     * 그 타입의 CodingKeys 는 snake 원문(`watermark_ms`)이라 camel 키(`watermarkMs`)는 **못 읽는다** — convertFromSnakeCase 로 읽으면
+     * camel 키도 맞아 Swift 와 갈린다(검증 지적의 알려진 갈림 — 골든 wire/rules todo-response-* 가 잠근다).
+     */
+    fun keyedPlain(decoder: Decoder): SwiftKeyed {
+        val d = swift(decoder)
+        return SwiftKeyed(d.obj(), d.path, plainKeys = true)
     }
 
     /** `try decoder.unkeyedContainer()` — 원소 디코더 목록. */

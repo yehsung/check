@@ -15,7 +15,7 @@ enum WireRulesSamples {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    static func jwt(_ payload: String) -> String { "eyJhbGciOiJIUzI1NiJ9." + base64URL(payload) + ".c2ln" }
+    static func jwt(_ payload: String) -> String { "e30." + base64URL(payload) + ".c2ln" }
 }
 
 @Suite("GoldenExport W1-d 와이어 — 오류·JWT·규칙 표")
@@ -75,6 +75,12 @@ struct GoldenExportWireRules {
         ("urlError.cancelled", URLError(.cancelled)),
         ("urlError.notConnectedToInternet", URLError(.notConnectedToInternet)),
         ("urlError.timedOut", URLError(.timedOut)),
+        ("urlError.networkConnectionLost", URLError(.networkConnectionLost)),
+        ("urlError.secureConnectionFailed", URLError(.secureConnectionFailed)),
+        ("urlError.serverCertificateUntrusted", URLError(.serverCertificateUntrusted)),
+        ("urlError.badServerResponse", URLError(.badServerResponse)),
+        ("urlError.cannotConnectToHost", URLError(.cannotConnectToHost)),
+        ("urlError.cannotFindHost", URLError(.cannotFindHost)),
         ("service.invalidResponse(500)", SupabaseWorkServiceError.invalidResponse(500)),
         ("service.invalidResponse(599)", SupabaseWorkServiceError.invalidResponse(599)),
         ("service.invalidResponse(429)", SupabaseWorkServiceError.invalidResponse(429)),
@@ -109,7 +115,9 @@ struct GoldenExportWireRules {
                 "recovered": try GoldenMirror.dump(SupabaseWorkService.passwordRecoveryError(input)),
             ]))
         }
-        for text in ["after 30 seconds", "in 1 minute and 07 seconds", "no number seconds", "5 minutes", "a3b4 second", "", "12second"] {
+        for text in ["after 30 seconds", "in 1 minute and 07 seconds", "no number seconds", "5 minutes", "a3b4 second", "", "12second",
+                     "after ３０ seconds", "after ²30 seconds", "after ٣٠ seconds", "after Ⅻ30 seconds", "after 一30 seconds", "after ३0 seconds",
+                     "after 3٠ seconds", "after ½ seconds", "after -30 seconds", "after +30 seconds", "99999999999999999999 seconds"] {
             cases.append(.object([
                 "id": .string("retry-after-\(text)"), "text": .string(text),
                 "seconds": SupabaseWorkService.retryAfterSeconds(in: text).map { .int($0) } ?? .null,
@@ -183,13 +191,13 @@ struct GoldenExportWireRules {
             swiftSources: ["Sources/CheckCore/JWTClaims.swift"],
             spec: [
                 "rule": .string("가운데 조각을 base64url(-_ → +/, = 채우기)로 풀어 JSON 객체의 exp(NSNumber — 불도 숫자)를 1970 기준 초로. 못 읽으면 null(= 모른다, 만료가 아니다)"),
-                "token": .string("payload 칸이 있으면 토큰 = \"eyJhbGciOiJIUzI1NiJ9.\" + base64url(payload, = 없음) + \".c2ln\"(골든에 토큰 글자를 싣지 않는다 — 비밀 검사). token 칸은 그대로 쓴다"),
+                "token": .string("payload 칸이 있으면 토큰 = \"e30.\" + base64url(payload, = 없음) + \".c2ln\"(골든에 토큰 글자를 싣지 않는다 — 비밀 검사). token 칸은 그대로 쓴다"),
             ],
             cases: cases
         ))
     }
 
-    @Test func wireFileRules() throws {
+    @Test func wireFileRules() async throws {
         var cases: [GoldenJSON] = []
         // 역대 순위 정렬(점수 내림 → bestAt 이른 순, nil 뒤 → userID)
         let t0 = Date(timeIntervalSince1970: 1_790_000_000)
@@ -258,19 +266,261 @@ struct GoldenExportWireRules {
             cases.append(.object(["id": .string("display-name-\(status)"), "response": try GoldenMirror.dump(r),
                                   "outcome": try GoldenMirror.dump(DisplayNameChangeOutcome(response: r))]))
         }
+        // ---- URL(string:) — 서비스가 아바타 글자를 URL 로 거르는 규칙(빈 글자 nil · 잘못된 글자 퍼센트 인코딩 · 호스트·포트가 틀리면 nil) ----
+        for (i, text) in Self.urlInputs.enumerated() {
+            cases.append(.object(["id": .string("url-\(i)"), "text": .string(text),
+                                  "url": URL(string: text).map { .string($0.absoluteString) } ?? .null]))
+        }
+        // ---- 날짜 파싱(parseDate: 소수초 포매터 → 기본 포매터). Kotlin 이 따르지 않는 관대함은 knownDivergence 로 잠근다 ----
+        let service = SupabaseWorkService(projectURL: URL(string: "https://golden.invalid")!, anonKey: "k", session: MobileStubURLProtocol.makeSession())
+        for (i, text) in Self.dateInputs.enumerated() {
+            let parsed = await service.parseDate(text)
+            cases.append(.object(["id": .string("date-\(i)"), "text": .string(text),
+                                  "date": parsed.map { .object(["$date": .bits($0.timeIntervalSince1970)]) } ?? .null]))
+        }
+        // ---- todo_sync 응답(키 변환 없는 JSONDecoder — camel 키는 못 읽는다) ----
+        for (i, json) in Self.todoResponses.enumerated() {
+            let decoded = try? TodoSyncResponse.decode(Data(json.utf8))
+            cases.append(.object(["id": .string("todo-response-\(i)"), "json": .string(json),
+                                  "decoded": try decoded.map { try GoldenMirror.dump($0) } ?? .string("error")]))
+        }
+        // ---- 아바타 디렉터리(AppUserCharacters ★ 접기 규칙 · ⚠️ 경합 — 갈아 끼운 뒤 내 착용값 다시 얹기) ----
+        cases.append(contentsOf: try Self.appUserCharacterCases())
+        // ---- 제보 글자 규칙(FeedbackComposer · FeedbackText) ----
+        cases.append(contentsOf: Self.feedbackCases())
+        // ---- 폰 근무 응답 → 뜻(PhoneWorkOutcome.from) ----
+        for (i, json) in Self.phoneWorkResponses.enumerated() {
+            let response = try WireDecodeRegistry.decoder.decode(PhoneWorkResponse.self, from: Data(json.utf8))
+            cases.append(.object(["id": .string("phone-work-outcome-\(i)"), "json": .string(json),
+                                  "outcome": try Self.phoneWorkOutcome(PhoneWorkOutcome.from(response))]))
+        }
         goldenEmit(GoldenFile(
             golden: "wire/rules",
             equivalence: .bit,
             swiftSources: ["Sources/CheckCore/SupabaseWorkModels.swift", "Sources/CheckCore/CharacterGift.swift",
-                           "Sources/CheckCore/MessagePokeLog.swift", "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"],
+                           "Sources/CheckCore/MessagePokeLog.swift", "Sources/CheckCore/CharacterKit/CharacterCatalog.swift",
+                           "Sources/CheckCore/AppUserCharacters.swift", "Sources/CheckCore/TodoSync.swift", "Sources/CheckCore/SupabaseWorkService.swift",
+                           "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift"],
             spec: [
                 "alltime": .string("sortedForMiniGameAllTimeBoard: 점수 내림 → bestAt 이른 순(nil 은 뒤) → userID. dayCaption: 'YYYY-MM-DD'(ASCII 숫자, 월 1~12, 일 1~31) → 'M/D'"),
                 "shop": .string("isPurchasable = gacha_only·gift_only 표식도 내장 판정도 아니고 값이 있다 · isGiftOnly 가 isGachaOnly 보다 먼저"),
                 "micros": .string("MessagePokeLogRules.microsecondsSinceEpoch(초 파서 = 기본 ISO8601). 값은 64비트 16진"),
+                "url": .string("URL(string:)?.absoluteString — 서비스가 아바타 글자를 거르는 규칙(null = 못 만든다)"),
+                "urlKnownDivergence": .array(Self.urlInputs.enumerated().compactMap { i, text in
+                    Self.urlKnownDivergence[text].map { .object(["id": .string("url-\(i)"), "text": .string(text), "reason": .string($0)]) }
+                }),
+                "date": .string("SupabaseWorkService.parseDate(소수초 포매터 → 기본 포매터) → $date 비트 또는 null"),
+                "dateKnownDivergence": .array(Self.dateInputs.enumerated().compactMap { i, text in
+                    Self.dateKnownDivergence[text].map { .object(["id": .string("date-\(i)"), "text": .string(text), "reason": .string($0)]) }
+                }),
+                "todoResponse": .string("TodoSyncResponse.decode(키 변환 없는 JSONDecoder) 덤프 또는 error"),
+                "appUserCharacters": .string("AppUserCharacterDirectory(knownIDs: [robot, ' fox ', '', aing_cake_choco, ROBOT], rows) → setEquipped(unicorn, aa-1) · setEquipped(nil, ZZ-9) · setEquipped(robot, '  ') → replace([dd-4 fox, ff-6 nil]) → removeAll. 사진 = https://golden.invalid/p.jpg. avatar = {kind photo|character|initials …}. hinted = 힌트 [nil, robot, fox, unicorn, ' robot ', '', aing] 마다 [사진 없음, 사진]"),
+                "feedback": .string("FeedbackComposer(자소 = Swift Character) · FeedbackText 상수·함수. age = now(values) - secondsAgo"),
+                "phoneWorkOutcome": .string("PhoneWorkResponse(convertFromSnakeCase) → PhoneWorkOutcome.from → {case, session|last|alreadyWorking}"),
             ],
             cases: cases
         ))
     }
+    // ---- 검증 지적 수리: 표 입력 ----
+
+    static let urlInputs: [String] = [
+        "", " ", "  https://x.invalid/a.jpg  ", "https://x.invalid/a b.jpg", "https://x.invalid/a.jpg", "not a url", "%", "%zz", "a%2",
+        "https://x.invalid/%E1%84", "https://x.invalid/한글.jpg", "https://x.invalid/a.jpg?v=1-ABCDEF12", "https://x.invalid/a%20b.jpg",
+        "https://x.invalid/a.jpg#frag", "https://x.invalid/a.jpg#fr ag", "http://[::1]/a", "https://x.invalid/a|b", "https://x.invalid/a\"b",
+        "https://x.invalid/a<b>c", "https://x.invalid/a{b}", "https://x.invalid/a\\b", "https://x.invalid/a^b`c", "javascript:alert(1)",
+        "https://user@x.invalid/", "https://us er@x.invalid/", "https://x.invalid:99999/", "https://x.invalid:abc/", "https://x .invalid/",
+        "https://x.invalid/?q=a b&r=한", "https://x.invalid/?q=%", "mailto:a b@c", "//x.invalid/a b", "/rel/a b", "a:b:c", "https://",
+        "https:", ":", "?", "#", "https://x.invalid/a\tb", "https://x.invalid/a\nb", "https://x.invalid/\u{7F}", "https://x.invalid/\u{00A0}",
+        "https://x.invalid/😀", "HTTPS://X.INVALID/A", "https://x.invalid/a[b]", "https://[x]/", "https://x.invalid/a%2Fb", "file:///a b",
+        "a b:c", "1a:b", ":a b", "+a:b", "a+.-:b", "https://한글.com/", "https://x.invalid/a#b#c", "https://x.invalid/a?b?c", "https://[a b]/",
+        "https://x.invalid:/", "https://@x.invalid/", "https://a:b@x.invalid/", "https://a@b@x.invalid/", "https://x.invalid/a@b:c",
+        "https://x_y.invalid/", "https://x~y.invalid/", "https://x%41.invalid/", "https://x%zz.invalid/", "https://x.invalid/%",
+        "https://x.invalid/?%41", "https://x.invalid/#%", "https://x.invalid/a%2g", "http://x.invalid/a b?c d#e f", "https://x.invalid//a b",
+        "x", "x y", "./a b", "../a", "a/b:c", "?a b", "#a b", "https://x.invalid?a", "https://x.invalid#a", "https://x.invalid:8%30/",
+        "https://x.invalid/\u{0}", "HTTP://X/ a", "h:ttps", "https://x.invalid/!$&'()*+,;=:@", "https://x.invalid/?!$&'()*+,;=:@/?",
+        "https://x.invalid/#!$&'()*+,;=:@/?", "https://x!.invalid/", "https://x$&'()*+,;=.invalid/", "https://[::1]:80/a", "https://[::1]x/",
+        "https://x.invalid/a\u{FEFF}b", "\u{FEFF}https://x.invalid/", "https://x.invalid/a\u{200B}b", "https://user:p w@x.invalid/",
+        "https://us%er@x.invalid/", "https://abcdefgh.supabase.invalid/storage/v1/object/public/avatars/aa000000-0000-4000-8000-0000000000a1.jpg?v=1789621500000-ABCDEF12",
+    ]
+
+    /// Kotlin `SwiftURL.parse` 가 따르지 않는 갈림(아바타 주소는 늘 Supabase Storage 의 ASCII 호스트다). 늘거나 줄면 Kotlin 이 빨갛다.
+    static let urlKnownDivergence: [String: String] = [
+        "https://한글.com/": "아스키 밖 호스트 — Apple 은 IDNA(punycode)로 바꾸고 Kotlin 은 null",
+    ]
+
+    static let dateInputs: [String] = [
+        "2026-09-17T05:05:00Z", "2026-09-17T05:05:00.123456+00:00", "2026-09-17T05:05:00.5Z", "2026-09-17T05:05:00+09:00",
+        "2026-09-17T05:05:00-03:30", "2026-09-17T05:05:00.1234567890Z", "2026-09-17T05:05:00.999999Z", "1970-01-01T00:00:00Z",
+        "1969-12-31T23:59:59.999Z", "２０２６-09-17T05:05:00Z", "2026-09-17T05:05:00.５Z", "٢٠٢٦-09-17T05:05:00Z", "२०२६-09-17T05:05:00Z",
+        "2026-09-17T05:05:00+0900", "2026-09-17T05:05:00+09", "2026-09-17 05:05:00Z", "2026-09-17t05:05:00z", "2026-09-17T05:05:60Z",
+        "2026-02-30T00:00:00Z", "2026-09-17T24:00:00Z", "2026-09-17T05:05Z", "+2026-09-17T05:05:00Z", "2026-09-17T05:05:00,5Z",
+        "2026-09-17T05:05:00.Z", "  2026-09-17T05:05:00Z", "2026-09-17T05:05:00Z ", "2026-9-17T05:05:00Z", "20260917T050500Z",
+        "2026-09-17T05:05:00", "", "bad-date",
+    ]
+
+    /// Kotlin `SwiftISO8601.parse` 가 **일부러** 따르지 않는 Apple 포매터의 관대함(서버 timestamptz 는 늘 ASCII · 두 자리 · ±hh:mm 이다).
+    /// 이 목록이 늘거나 줄면 Kotlin 시험이 빨갛다 — 갈림을 고치거나 새로 생기면 이 목록부터 바꾼다.
+    static let dateKnownDivergence: [String: String] = [
+        "２０２６-09-17T05:05:00Z": "전각 숫자", "2026-09-17T05:05:00.５Z": "전각 숫자(소수부)", "٢٠٢٦-09-17T05:05:00Z": "아랍-인도 숫자",
+        "२०२६-09-17T05:05:00Z": "데바나가리 숫자", "2026-09-17T05:05:00+09": "분 없는 시간대", "2026-02-30T00:00:00Z": "없는 날짜를 넘김",
+        "2026-09-17T24:00:00Z": "24시", "  2026-09-17T05:05:00Z": "앞 공백", "2026-09-17T05:05:00Z ": "뒤 공백",
+        "2026-9-17T05:05:00Z": "한 자리 월",
+    ]
+
+    static let todoResponses: [String] = [
+        #"{"status":"ok","items":[{"id":"a","title":"t","created_at_ms":1,"updated_at_ms":2,"completed_at_ms":null,"deleted_at_ms":null,"origin_day_key":"20260917"}],"watermark_ms":5,"rejected":[{"id":"b","reason":"stale"}],"full":true,"max":200}"#,
+        #"{"status":"ok","watermarkMs":5,"items":[{"id":"a","createdAtMs":1,"updatedAtMs":2,"originDayKey":"x"}]}"#,
+        #"{"status":"ok","WATERMARK_MS":5,"Watermark_Ms":6}"#,
+        #"{"status":"ok","watermark_ms":"5","full":"yes","max":3.5}"#,
+        #"{"status":3}"#,
+        #"[]"#,
+    ]
+
+    static let phoneWorkResponses: [String] = [
+        #"{"status":"ok","session":{"id":"S-1","started_at":"2026-09-17T05:00:00Z","origin":"phone"}}"#,
+        #"{"status":"ok","session":{"id":"S-1","started_at":"2026-09-17T05:00:00Z","ended_at":"2026-09-17T06:00:00Z","reason":"manual"}}"#,
+        #"{"status":"ok"}"#,
+        #"{"status":"already_working","session":{"id":"S-2","origin":"mac"}}"#,
+        #"{"status":"already_working"}"#,
+        #"{"status":"not_working","last":{"id":"S-0","ended_at":"2026-09-17T04:00:00Z","reason":"idle"}}"#,
+        #"{"status":"not_working"}"#,
+        #"{"status":"mismatch"}"#, #"{"status":"no_team"}"#, #"{"status":"unauthorized"}"#, #"{"status":"weird"}"#, #"{}"#,
+        #"{"status":3,"session":{"id":"S"}}"#,
+    ]
+
+    static func phoneWorkOutcome(_ outcome: PhoneWorkOutcome) throws -> GoldenJSON {
+        switch outcome {
+        case let .working(session, alreadyWorking):
+            return .object(["case": .string("working"), "session": try GoldenMirror.dump(session), "alreadyWorking": .bool(alreadyWorking)])
+        case .stopped(let session):
+            return .object(["case": .string("stopped"), "session": try session.map { try GoldenMirror.dump($0) } ?? .null])
+        case .notWorking(let last):
+            return .object(["case": .string("notWorking"), "last": try last.map { try GoldenMirror.dump($0) } ?? .null])
+        case .mismatch: return .object(["case": .string("mismatch")])
+        case .noTeam: return .object(["case": .string("noTeam")])
+        case .unauthorized: return .object(["case": .string("unauthorized")])
+        case .failed: return .object(["case": .string("failed")])
+        }
+    }
+
+    static func avatar(_ a: AppUserAvatar) -> GoldenJSON {
+        switch a {
+        case let .photo(url, fallback):
+            return .object(["kind": .string("photo"), "url": .string(url.absoluteString), "fallback": fallback.map(GoldenJSON.string) ?? .null])
+        case .character(let id): return .object(["kind": .string("character"), "id": .string(id)])
+        case .initials: return .object(["kind": .string("initials")])
+        }
+    }
+
+    /// 디렉터리 대본: 만들기(knownIDs · rows) → 물음들 → replace · setEquipped · removeAll 뒤 다시 물음.
+    static func appUserCharacterCases() throws -> [GoldenJSON] {
+        let known = ["robot", " fox ", "", "aing_cake_choco", "ROBOT"]
+        let rows: [AppUserCharacterRow] = [
+            .init(userId: "AA-1", character: "robot"), .init(userId: "bb-2", character: nil), .init(userId: "cc-3", character: "  "),
+            .init(userId: "dd-4", character: "unicorn"), .init(userId: " ee-5 ", character: " fox "), .init(userId: nil, character: "fox"),
+            .init(userId: "  ", character: "robot"), .init(userId: "aa-1", character: "aing_cake_choco"),
+        ]
+        let users: [String?] = ["aa-1", "AA-1", " aa-1 ", "bb-2", "cc-3", "dd-4", "ee-5", "zz-9", nil, ""]
+        let photo = URL(string: "https://golden.invalid/p.jpg")!
+        let hints: [String?] = [nil, "robot", "fox", "unicorn", " robot ", "", "aing"]
+        func snapshot(_ d: AppUserCharacterDirectory) -> GoldenJSON {
+            var perUser: [GoldenJSON] = []
+            for user in users {
+                var hinted: [GoldenJSON] = []
+                for hint in hints {
+                    hinted.append(.array([avatar(d.avatar(for: user, photoURL: nil, characterHint: hint)),
+                                          avatar(d.avatar(for: user, photoURL: photo, characterHint: hint))]))
+                }
+                perUser.append(.object([
+                    "user": user.map(GoldenJSON.string) ?? .null,
+                    "characterID": d.characterID(for: user).map(GoldenJSON.string) ?? .null,
+                    "equippedID": d.equippedID(for: user).map(GoldenJSON.string) ?? .null,
+                    "avatarNoPhoto": avatar(d.avatar(for: user, photoURL: nil)),
+                    "avatarPhoto": avatar(d.avatar(for: user, photoURL: photo)),
+                    "afterPhotoFailure": avatar(d.avatar(for: user, photoURL: photo).afterPhotoFailure),
+                    "hinted": .array(hinted),
+                ]))
+            }
+            return .object(["count": .int(d.count), "isEmpty": .bool(d.isEmpty),
+                            "knownIDs": .array(d.knownIDs.sorted().map(GoldenJSON.string)), "users": .array(perUser)])
+        }
+        var d = AppUserCharacterDirectory(knownIDs: known, rows: rows)
+        var out: [GoldenJSON] = [.object(["id": .string("app-user-characters-built"), "snapshot": snapshot(d)])]
+        d.setEquipped("unicorn", for: "aa-1")
+        d.setEquipped(nil, for: "ZZ-9")
+        d.setEquipped("robot", for: "  ")
+        out.append(.object(["id": .string("app-user-characters-setEquipped"), "snapshot": snapshot(d)]))
+        d.replace(with: [.init(userId: "dd-4", character: "fox"), .init(userId: "ff-6", character: nil)])
+        out.append(.object(["id": .string("app-user-characters-replaced"), "snapshot": snapshot(d)]))
+        d.removeAll()
+        out.append(.object(["id": .string("app-user-characters-removed"), "snapshot": snapshot(d)]))
+        for (i, raw) in [nil, "", "  ", " robot ", "\nfox\t"].enumerated() {
+            out.append(.object(["id": .string("app-user-characters-fold-\(i)"), "raw": raw.map(GoldenJSON.string) ?? .null,
+                                "folded": .string(AppUserCharacterDirectory.foldedEquippedID(raw)),
+                                "userKey": AppUserCharacterDirectory.normalizedUserID(raw).map(GoldenJSON.string) ?? .null]))
+        }
+        return out
+    }
+
+    static let feedbackInputs: [String] = [
+        "", "  ", " a ", "\n버그\n", String(repeating: "가", count: 1000), String(repeating: "가", count: 1001),
+        " " + String(repeating: "가", count: 1000) + " ", String(repeating: "👨‍👩‍👧", count: 1000), String(repeating: "👨‍👩‍👧", count: 1001),
+        String(repeating: "a", count: 900), String(repeating: "a", count: 901), String(repeating: "e\u{301}", count: 501),
+        String(repeating: "나", count: 499) + "e\u{301}" + "다", "\u{3000}전각 공백\u{3000}",
+    ]
+
+    static func feedbackCases() -> [GoldenJSON] {
+        var out: [GoldenJSON] = []
+        for (i, text) in feedbackInputs.enumerated() {
+            out.append(.object([
+                "id": .string("feedback-compose-\(i)"), "text": .string(text),
+                "normalized": .string(FeedbackComposer.normalized(text)),
+                "isSendable": .bool(FeedbackComposer.isSendable(text)),
+                "counterText": .string(FeedbackComposer.counterText(text)),
+                "isCounterWarning": .bool(FeedbackComposer.isCounterWarning(text)),
+                "normalizedNote": FeedbackComposer.normalizedNote(text).map(GoldenJSON.string) ?? .null,
+                "isSendableReplyNil": .bool(FeedbackComposer.isSendableReply(draft: text, savedNote: nil)),
+                "isSendableReplySame": .bool(FeedbackComposer.isSendableReply(draft: text, savedNote: FeedbackComposer.normalizedNote(text))),
+            ]))
+        }
+        let constants: [(String, String)] = [
+            ("windowTitle", FeedbackText.windowTitle), ("sendTab", FeedbackText.sendTab), ("inboxTab", FeedbackText.inboxTab),
+            ("placeholder", FeedbackText.placeholder), ("sendAction", FeedbackText.sendAction), ("sending", FeedbackText.sending),
+            ("sendSuccess", FeedbackText.sendSuccess), ("rateLimited", FeedbackText.rateLimited), ("sendFailed", FeedbackText.sendFailed),
+            ("sendSchemaMissing", FeedbackText.sendSchemaMissing), ("forbidden", FeedbackText.forbidden), ("statusFailed", FeedbackText.statusFailed),
+            ("mineTitle", FeedbackText.mineTitle), ("mineEmpty", FeedbackText.mineEmpty), ("inboxEmpty", FeedbackText.inboxEmpty),
+            ("inboxEmptyHint", FeedbackText.inboxEmptyHint), ("inboxFilterEmptyHint", FeedbackText.inboxFilterEmptyHint),
+            ("filterAll", FeedbackText.filterAll), ("loading", FeedbackText.loading), ("failed", FeedbackText.failed), ("retry", FeedbackText.retry),
+            ("notePlaceholder", FeedbackText.notePlaceholder), ("noteSave", FeedbackText.noteSave), ("replyAction", FeedbackText.replyAction),
+            ("replySending", FeedbackText.replySending), ("replyBlockTitle", FeedbackText.replyBlockTitle), ("replySent", FeedbackText.replySent),
+            ("replyFailed", FeedbackText.replyFailed), ("replySchemaMissing", FeedbackText.replySchemaMissing), ("replyEmpty", FeedbackText.replyEmpty),
+            ("replyTooLong", FeedbackText.replyTooLong), ("replyNotFound", FeedbackText.replyNotFound),
+            ("maxBodyLength", String(FeedbackComposer.maxBodyLength)), ("warnBodyLength", String(FeedbackComposer.warnBodyLength)),
+            ("maxNoteLength", String(FeedbackComposer.maxNoteLength)),
+        ]
+        for (name, value) in constants {
+            out.append(.object(["id": .string("feedback-text-\(name)"), "name": .string(name), "value": .string(value),
+                                "isSuccessNotice": .bool(FeedbackText.isSuccessNotice(value))]))
+        }
+        for status in FeedbackStatus.known + [.other("검토")] {
+            out.append(.object(["id": .string("feedback-filter-empty-\(status.rawValue)"), "status": .string(status.rawValue),
+                                "text": .string(FeedbackText.inboxFilterEmpty(status))]))
+        }
+        for (i, (version, build, os)) in [("0.3.67", 120, "15.6.1"), ("", nil, "14.0"), ("1.0", 0, "26"), ("", -3, "")].enumerated() {
+            out.append(.object(["id": .string("feedback-auto-attach-\(i)"), "appVersion": .string(version), "build": build.map { .int($0) } ?? .null,
+                                "osVersion": .string(os),
+                                "text": .string(FeedbackText.autoAttachNotice(appVersion: version, build: build, osVersion: os))]))
+        }
+        let now = WireGoldenValues.now
+        for offset in [nil, -5.0, 0, 59.9, 60, 3599, 3600, 86_399, 86_400, 172_800.5, 1e9] as [Double?] {
+            let date = offset.map { now.addingTimeInterval(-$0) }
+            out.append(.object(["id": .string("feedback-age-\(offset.map { String($0) } ?? "nil")"),
+                                "secondsAgo": offset.map { .object(["$f64": .bits($0)]) } ?? .null,
+                                "text": .string(FeedbackText.ageText(date, now: now))]))
+        }
+        return out
+    }
+
     /// 숫자 글자 → 칸 타입별 결과(C-X3 표의 확장 — 2^53 너머 소수 글자는 정수부를 정확히, 그 아래는 Double 을 거친다).
     @Test func numbers() throws {
         struct I: Decodable { let v: Int }

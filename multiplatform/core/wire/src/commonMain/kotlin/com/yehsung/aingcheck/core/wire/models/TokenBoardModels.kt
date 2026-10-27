@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkModels.swift:344-1059(MARK 팀원 이번 달 AI 토큰 보드 — 폰이 읽는 몫) @ 1b8260d
 package com.yehsung.aingcheck.core.wire.models
 
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.foundation.platform.Collation
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.core.wire.json.SwiftDecodableSerializer
@@ -64,7 +65,7 @@ data class TokenBoardRow(
 data class TokenBoardEntry(
     val userID: String,
     val name: String,
-    val avatarURL: String?,
+    val avatarURL: SwiftURL?,
     val total: Long,
     val claudeInput: Long,
     val claudeOutput: Long,
@@ -110,7 +111,7 @@ fun List<TokenBoardRow>.toTokenBoardEntries(): List<TokenBoardEntry> = map { row
     TokenBoardEntry(
         userID = row.userId,
         name = row.displayName,
-        avatarURL = row.avatarUrl,
+        avatarURL = SwiftURL.parse(row.avatarUrl),
         total = row.total,
         claudeInput = row.claudeInput,
         claudeOutput = row.claudeOutput,

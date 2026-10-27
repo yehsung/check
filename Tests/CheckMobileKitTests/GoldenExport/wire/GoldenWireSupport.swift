@@ -1,6 +1,8 @@
 // 원본: 없음
+@testable import CheckCore
 import CheckGoldenSupport
 import Foundation
+@testable import CheckMobileKit
 
 // W1-d 골든(와이어) 공용 도우미. 이 파일엔 시험이 없다(스위트는 GoldenExportWire*.swift).
 //
@@ -366,6 +368,73 @@ enum WireScrub {
         case .string(let t): return .string(text(t))
         case .array(let a): return .array(a.map(json))
         case .object(let o): return .object(o.mapValues(json))
+        default: return v
+        }
+    }
+}
+
+/// 요청 골든(G5)의 바늘 시계 — 한 case 안에서 시각을 옮겨 상점 번호 깃발의 5분 만료(C§4 #9)를 잰다.
+final class WireClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: Date
+    init(_ start: Date) { current = start }
+    var now: Date { lock.lock(); defer { lock.unlock() }; return current }
+    func set(secondsAfterStart seconds: TimeInterval) {
+        lock.lock(); defer { lock.unlock() }
+        current = WireGoldenValues.now.addingTimeInterval(seconds)
+    }
+}
+
+/// 동시에 떠나는 요청(팀 상태 네 GET)의 응답 고르기: 경로가 같고, `query` 가 있으면 디코드한 쿼리 쌍에 그 쌍이 있어야 한다.
+/// 처음 맞는 길의 응답을 쓰고, 맞는 길이 없으면 200 `{}`.
+struct WireRoute {
+    let path: String
+    var query: (String, String)? = nil
+    let response: MobileStubResponse
+
+    func matches(_ request: MobileStubRequest) -> Bool {
+        guard request.path == path else { return false }
+        guard let (name, value) = query else { return true }
+        let items = URLComponents(string: "https://x/?\(request.query)")?.queryItems ?? []
+        return items.contains { $0.name == name && $0.value == value }
+    }
+
+    var golden: GoldenJSON {
+        .object([
+            "path": .string(path),
+            "query": query.map { .array([.string($0.0), .string($0.1)]) } ?? .null,
+            "status": .int(response.status),
+            "body": .string(String(decoding: response.body, as: UTF8.self)),
+        ])
+    }
+}
+
+/// 서비스 반환값(결과) 덤프 — G5 가 요청만 보고 버리던 서비스 후처리(행 → 표시 변환)를 Kotlin 이 대조한다.
+///  · 성공: {"ok": GoldenMirror 덤프}(Void 는 "$void"). 글자 잎의 호스트 · 캐시 무력화 꼬리 · 토큰은 요청과 같은 자리표시로.
+///  · 실패: {"throws": SupabaseWorkServiceError 덤프 | "$decoding"(DecodingError) | {"$type": 타입 이름, "$dump": 덤프}}.
+enum WireResult {
+    static func ok(_ value: Any?, host: String) throws -> GoldenJSON {
+        guard let value else { return .object(["ok": .null]) }
+        if value is Void { return .object(["ok": .string("$void")]) }
+        return .object(["ok": scrub(try GoldenMirror.dump(value), host: host)])
+    }
+
+    static func thrown(_ error: Error) -> GoldenJSON {
+        if let service = error as? SupabaseWorkServiceError, let dumped = try? GoldenMirror.dump(service) {
+            return .object(["throws": dumped])
+        }
+        if error is DecodingError { return .object(["throws": .string("$decoding")]) }
+        if let dumped = try? GoldenMirror.dump(error) {
+            return .object(["throws": .object(["$type": .string(String(describing: type(of: error))), "$dump": dumped])])
+        }
+        return .object(["throws": .object(["$type": .string(String(describing: type(of: error)))])])
+    }
+
+    static func scrub(_ v: GoldenJSON, host: String) -> GoldenJSON {
+        switch v {
+        case .string(let t): return .string(WireScrub.text(WireRequestRecorder.scrub(t, host: host)))
+        case .array(let a): return .array(a.map { scrub($0, host: host) })
+        case .object(let o): return .object(o.mapValues { scrub($0, host: host) })
         default: return v
         }
     }

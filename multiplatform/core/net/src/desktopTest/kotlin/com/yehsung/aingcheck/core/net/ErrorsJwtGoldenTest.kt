@@ -8,6 +8,7 @@ import com.yehsung.aingcheck.testkit.golden.GoldenCanonical
 import com.yehsung.aingcheck.testkit.golden.int
 import com.yehsung.aingcheck.testkit.golden.string
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -52,20 +53,43 @@ fun errorFromDump(d: JsonElement): SupabaseWorkServiceError {
 }
 
 class ErrorsJwtGoldenTest {
-    private fun authError(id: String): Throwable = when {
-        id == "cancellation" -> CancellationException("취소")
-        id == "urlError.cancelled" -> CancellationException("요청 취소")
-        id == "urlError.notConnectedToInternet" -> UnknownHostException("golden.invalid")
-        id == "urlError.timedOut" -> HttpRequestTimeoutException("https://golden.invalid/x", 30_000)
+    /**
+     * 골든의 Swift 오류 id → 같은 뜻의 Kotlin 예외들(하나의 Swift `URLError` 에 JVM·OkHttp·Ktor 가 내는 꼴이 여럿이다 — 전부 같은 처분이어야
+     * 한다). 검증 지적: 이름 허용 목록이던 isTransport 가 InterruptedIOException·StreamResetException·SSLPeerUnverifiedException·
+     * ProtocolException 을 fatal(로그아웃)로 보냈다 — 그 넷을 해당 URLError 자리에 박는다.
+     */
+    private fun authErrors(id: String): List<Throwable> = when {
+        id == "cancellation" -> listOf(CancellationException("취소"))
+        id == "urlError.cancelled" -> listOf(CancellationException("요청 취소"))
+        id == "urlError.notConnectedToInternet" -> listOf(UnknownHostException("golden.invalid"), java.net.NoRouteToHostException("x"))
+        id == "urlError.timedOut" -> listOf(
+            HttpRequestTimeoutException("https://golden.invalid/x", 30_000),
+            java.io.InterruptedIOException("timeout"),
+            java.net.SocketTimeoutException("read timed out"),
+            io.ktor.client.network.sockets.ConnectTimeoutException("connect timeout"),
+        )
+        id == "urlError.networkConnectionLost" -> listOf(
+            okhttp3.internal.http2.StreamResetException(okhttp3.internal.http2.ErrorCode.CANCEL),
+            java.io.EOFException("unexpected end of stream"),
+            java.net.SocketException("Connection reset"),
+            IllegalStateException("감싼 전송 실패", java.io.IOException("unexpected end of stream on https://golden.invalid/...")),
+        )
+        id == "urlError.secureConnectionFailed" -> listOf(javax.net.ssl.SSLHandshakeException("handshake"), javax.net.ssl.SSLException("closed"))
+        id == "urlError.serverCertificateUntrusted" -> listOf(javax.net.ssl.SSLPeerUnverifiedException("Hostname golden.invalid not verified"))
+        id == "urlError.badServerResponse" -> listOf(java.net.ProtocolException("Unexpected status line"))
+        id == "urlError.cannotConnectToHost" -> listOf(java.net.ConnectException("Connection refused"))
+        id == "urlError.cannotFindHost" -> listOf(UnknownHostException("golden.invalid"), java.nio.channels.UnresolvedAddressException())
         id.startsWith("service.") -> {
             val body = id.removePrefix("service.")
             val m = Regex("""(\w+)\((.*)\)""").matchEntire(body)
-            if (body == "authMessage") SupabaseWorkServiceError.AuthMessage("x")
-            else if (m == null) errorFromDump(JsonPrimitive(body)) else when (m.groupValues[1]) {
-                "invalidResponse" -> SupabaseWorkServiceError.InvalidResponse(m.groupValues[2].toInt())
-                "rateLimited" -> SupabaseWorkServiceError.RateLimited(m.groupValues[2].toLongOrNull())
-                else -> error(id)
-            }
+            listOf(
+                if (body == "authMessage") SupabaseWorkServiceError.AuthMessage("x")
+                else if (m == null) errorFromDump(JsonPrimitive(body)) else when (m.groupValues[1]) {
+                    "invalidResponse" -> SupabaseWorkServiceError.InvalidResponse(m.groupValues[2].toInt())
+                    "rateLimited" -> SupabaseWorkServiceError.RateLimited(m.groupValues[2].toLongOrNull())
+                    else -> error(id)
+                },
+            )
         }
         else -> error("모르는 auth case $id")
     }
@@ -81,7 +105,9 @@ class ErrorsJwtGoldenTest {
                 id.startsWith("classify-") -> c["error"]!! to dumpError(ServiceErrorClassifier.classify(c.int("status"), c.string("body").encodeToByteArray()))
                 id.startsWith("recovery-") -> c["recovered"]!! to dumpError(ServiceErrorClassifier.passwordRecoveryError(errorFromDump(c["input"]!!)))
                 id.startsWith("retry-after-") -> c["seconds"]!! to (ServiceErrorClassifier.retryAfterSeconds(c.string("text"))?.let { JsonPrimitive(it) } ?: JsonNull)
-                id.startsWith("auth-") -> c["disposition"]!! to JsonPrimitive(AuthErrorRules.classify(authError(id.removePrefix("auth-"))).name)
+                id.startsWith("auth-") -> c["disposition"]!! to JsonArray(
+                    authErrors(id.removePrefix("auth-")).map { JsonPrimitive(AuthErrorRules.classify(it).name) }.distinct(),
+                ).let { if (it.size == 1) it[0] else it }
                 id.startsWith("message-") -> {
                     val e = errorFromDump(c["input"]!!)
                     JsonObject(mapOf("m" to c["message"]!!, "f" to c["missingFunction"]!!)) to
@@ -117,7 +143,7 @@ class ErrorsJwtGoldenTest {
         for (c in golden.cases) {
             // payload 칸이면 토큰을 같은 규칙으로 다시 만든다(골든에 토큰 글자를 싣지 않는다 — 비밀 검사).
             val token = (c["payload"] as? JsonPrimitive)?.content?.let { payload ->
-                "eyJhbGciOiJIUzI1NiJ9." + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload.encodeToByteArray()) + ".c2ln"
+                "e30." + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload.encodeToByteArray()) + ".c2ln"
             } ?: c.string("token")
             val got = JWTClaims.expiry(token)?.let { GoldenDump.date(it.timeIntervalSince1970) } ?: JsonNull
             if (GoldenCanonical.text(c["expiry"]!!) != GoldenCanonical.text(got)) {

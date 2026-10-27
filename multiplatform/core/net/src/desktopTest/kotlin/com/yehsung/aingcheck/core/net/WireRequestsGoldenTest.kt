@@ -1,7 +1,13 @@
 // 원본: 없음 — G5 요청 골든 대조(G §2-3 W1-d ①). 골든: Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift
 package com.yehsung.aingcheck.core.net
 
+import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.SwiftURL
+import com.yehsung.aingcheck.core.wire.models.CharacterSyncFetchError
+import com.yehsung.aingcheck.testkit.dump.GoldenDump
+import com.yehsung.aingcheck.testkit.dump.GoldenScrub
+import kotlinx.serialization.SerializationException
 import com.yehsung.aingcheck.core.wire.WireTextRules
 import com.yehsung.aingcheck.core.wire.games.GomokuChatKind
 import com.yehsung.aingcheck.core.wire.games.TetrisReportRequest
@@ -49,8 +55,11 @@ object GoldenTextRules : WireTextRules {
     override fun statusMessageSanitized(raw: String): String = sanitized(raw)
 }
 
-/** 요청 녹음 + 응답 대본(차례대로, 끝나면 200 `{}`). */
-class GoldenRecorder(private val script: List<Pair<Int, String>>) {
+/** 동시에 떠나는 요청의 응답 고르기(Swift `WireRoute`): 경로가 같고, 쿼리 쌍이 있으면 디코드한 쿼리에 그 쌍이 있어야 한다. */
+data class GoldenRoute(val path: String, val query: Pair<String, String>?, val status: Int, val body: String)
+
+/** 요청 녹음 + 응답 대본(차례대로, 끝나면 200 `{}`). 길이 있으면 차례 대신 요청 모양으로 고른다. */
+class GoldenRecorder(private val script: List<Pair<Int, String>>, private val routes: List<GoldenRoute> = emptyList()) {
     val requests = mutableListOf<JsonObject>()
     private var next = 0
 
@@ -86,7 +95,7 @@ class GoldenRecorder(private val script: List<Pair<Int, String>>) {
                 JsonObject(mapOf("\$bytes" to JsonPrimitive(Base64.getEncoder().encodeToString(bodyBytes))))
             }
         }
-        requests += JsonObject(
+        val recorded = JsonObject(
             mapOf(
                 "method" to JsonPrimitive(request.method.value),
                 "path" to JsonPrimitive(request.url.encodedPath),
@@ -95,7 +104,14 @@ class GoldenRecorder(private val script: List<Pair<Int, String>>) {
                 "body" to body,
             ),
         )
-        val (status, text) = if (next < script.size) script[next++] else 200 to "{}"
+        synchronized(this) { requests += recorded }
+        val (status, text) = if (routes.isNotEmpty()) {
+            val decoded = query.map { (it as JsonArray).let { p -> (p[0] as JsonPrimitive).content to (p[1] as JsonPrimitive).content } }
+            routes.firstOrNull { r -> r.path == request.url.encodedPath && (r.query == null || decoded.contains(r.query)) }
+                ?.let { it.status to it.body } ?: (200 to "{}")
+        } else {
+            synchronized(this) { if (next < script.size) script[next++] else 200 to "{}" }
+        }
         respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
     }
 
@@ -134,7 +150,7 @@ class WireRequestsGoldenTest {
     private val t = ACCESS
 
     /** Swift `GoldenExportWireRequests.calls` 와 같은 id · 같은 인자. 여기 없는 id 가 골든에 있으면 "미이식". */
-    private val registry: Map<String, suspend (SupabaseWorkService) -> Unit> = linkedMapOf(
+    private val registry: Map<String, suspend (SupabaseWorkService) -> Any?> = linkedMapOf(
         // ---- 인증 ----
         "signIn" to { s -> s.signIn("a@b.invalid", "pw-123456") },
         "signUp" to { s -> s.signUp("a@b.invalid", "pw-123456", "아잉") },
@@ -194,8 +210,11 @@ class WireRequestsGoldenTest {
         // ---- 상점 ----
         "fetchShopState" to { s -> s.fetchShopState(t) },
         "fetchShopState(protocol)" to { s -> s.fetchShopState(t, 4) },
-        "fetchShopState(protocol)#fallback" to { s -> s.fetchShopState(t, 4); s.fetchShopState(t, 4) },
-        "fetchShopState(protocol)#plain404" to { s -> s.fetchShopState(t, 4); s.fetchShopState(t, 4) },
+        "fetchShopState(protocol)#fallback" to { s -> listOf(s.fetchShopState(t, 4), s.fetchShopState(t, 4)) },
+        "fetchShopState(protocol)#plain404" to { s ->
+            try { s.fetchShopState(t, 4) } catch (e: SupabaseWorkServiceError) { /* authMessage("nope") — 되묻기 없음 */ }
+            s.fetchShopState(t, 4)
+        },
         "buyCharacter" to { s -> s.buyCharacter(t, "robot") },
         "buyCharacter(protocol)" to { s -> s.buyCharacter(t, "robot", 3) },
         "buyCharacter(protocol)#fallback" to { s -> s.buyCharacter(t, "fox", 3) },
@@ -222,7 +241,7 @@ class WireRequestsGoldenTest {
         "fetchFeedbackList(status)" to { s -> s.fetchFeedbackList(t, FeedbackStatus.InProgress, 20) },
         "setFeedbackStatus" to { s -> s.setFeedbackStatus(t, "fb-1", FeedbackStatus.Held, null) },
         "setFeedbackStatus(note)" to { s -> s.setFeedbackStatus(t, "fb-1", FeedbackStatus.Done, "고쳤어요") },
-        "replyFeedback" to { s -> s.replyFeedback(t, "fb-1", "답장") },
+        "replyFeedback" to { s -> nowMarked(s.replyFeedback(t, "fb-1", "답장")) },
         "fetchFeedbackReplyLatest" to { s -> s.fetchFeedbackReplyLatest(t) },
         "fetchFeedbackOpenCount" to { s -> s.fetchFeedbackOpenCount(t) },
         // ---- 차단 · 신고 ----
@@ -308,27 +327,159 @@ class WireRequestsGoldenTest {
         "tetrisRanking" to { s -> s.tetrisRanking(t) },
         "tetrisWatchLive" to { s -> s.tetrisWatchLive(t, m) },
         "tetrisWatch" to { s -> s.tetrisWatch(t, m) },
+        // ---- 결과 대조(서비스 후처리) ----
+        "signIn#data" to { s -> s.signIn("a@b.invalid", "pw-123456") },
+        "signUp#session" to { s -> s.signUp("a@b.invalid", "pw-123456", "아잉") },
+        "signUp#confirm" to { s -> s.signUp("a@b.invalid", "pw-123456", "아잉") },
+        "signUp#exists" to { s -> s.signUp("a@b.invalid", "pw-123456", "아잉") },
+        "signUp#noIdentitiesKey" to { s -> s.signUp("a@b.invalid", "pw-123456", "아잉") },
+        "verifySignUpCode#expired" to { s -> s.verifySignUpCode("a@b.invalid", "654321") },
+        "sendPasswordResetCode#rateLimited" to { s -> s.sendPasswordResetCode("a@b.invalid") },
+        "updatePassword#same" to { s -> s.updatePassword(t, "new-pw-1") },
+        "lookupTeamByCode#data" to { s -> s.lookupTeamByCode("abc-123") },
+        "lookupTeamByCode#none" to { s -> s.lookupTeamByCode("abc-123") },
+        "fetchMyInviteCode#data" to { s -> s.fetchMyInviteCode(t) },
+        "joinTeam#data" to { s -> s.joinTeam(t, "xyz-789") },
+        "joinTeam#none" to { s -> s.joinTeam(t, "xyz-789") },
+        "createTeam#data" to { s -> s.createTeam(t, "새 팀", 60) },
+        "fetchTeamLeaderboard#data" to { s -> s.fetchTeamLeaderboard(t) },
+        "fetchOwnMembership#data" to { s -> s.fetchOwnMembership(t, u) },
+        "fetchOwnMembership#defaults" to { s -> s.fetchOwnMembership(t, u) },
+        "fetchOwnMembership#none" to { s -> s.fetchOwnMembership(t, u) },
+        "fetchTeamStatuses#data" to { s -> s.fetchTeamStatuses(t, "team-1", now) },
+        "fetchTeamStatuses#devicesFail" to { s -> s.fetchTeamStatuses(t, "team-1", now) },
+        "fetchMySessions#data" to { s -> s.fetchMySessions(t, u, now.addingTimeInterval(-86_400.0)) },
+        "fetchMiniGamePublic#data" to { s -> s.fetchMiniGamePublic(t, u) },
+        "fetchMyCenter#data" to { s -> s.fetchMyCenter(t, u) },
+        "fetchMyStatusMessage#data" to { s -> s.fetchMyStatusMessage(t, u) },
+        "fetchTokenUsageSettings#data" to { s -> s.fetchTokenUsageSettings(t, u) },
+        "fetchTokenUsageSettings#none" to { s -> s.fetchTokenUsageSettings(t, u) },
+        "setDisplayName#data" to { s -> s.setDisplayName(t, "새이름") },
+        "fetchDisplayNameChangedAt#data" to { s -> s.fetchDisplayNameChangedAt(t, u) },
+        "fetchEquippedCharacter#data" to { s -> s.fetchEquippedCharacter(t, u) },
+        "fetchEquippedCharacter#noRow" to { s -> s.fetchEquippedCharacter(t, u) },
+        "fetchMyAILimits#data" to { s -> s.fetchMyAILimitRows(t, u) },
+        "fetchAILimitMainDeviceID" to { s -> s.fetchAILimitMainDeviceID(t, u) },
+        "fetchAILimitMainDeviceID#blank" to { s -> s.fetchAILimitMainDeviceID(t, u) },
+        "fetchAILimitMainDeviceID#none" to { s -> s.fetchAILimitMainDeviceID(t, u) },
+        "fetchAILimitMainDeviceID#null" to { s -> s.fetchAILimitMainDeviceID(t, u) },
+        "removeAvatar#gone404" to { s -> s.removeAvatar(t, u) },
+        "removeAvatar#left" to { s -> s.removeAvatar(t, u) },
+        "deleteAvatarFile#notFoundBody" to { s -> s.deleteAvatarFile(t, u) },
+        "fetchMiniGameBoard#data" to { s -> s.fetchMiniGameBoard(t, "flappy") },
+        "fetchMiniGameYesterdayWinner#data" to { s -> s.fetchMiniGameYesterdayWinner(t, "crossy") },
+        "fetchMiniGameYesterdayWinner#none" to { s -> s.fetchMiniGameYesterdayWinner(t, "crossy") },
+        "fetchMiniGameAllTimeBoard#data" to { s -> s.fetchMiniGameAllTimeBoard(t, "crossy") },
+        "sendMessage#data" to { s -> s.sendMessage(t, p, "안녕") },
+        "fetchMessageHistory#data" to { s -> s.fetchMessageHistory(t) },
+        "fetchMessageHistoryWithReads#data" to { s -> s.fetchMessageHistoryWithReads(t, 24, 600) },
+        "fetchMessageHistoryWithPokes#data" to { s -> s.fetchMessageHistoryWithPokes(t, 24, 500) },
+        "appCurrentNotice#error" to { s -> s.appCurrentNotice() },
+        "submitFeedback#data" to { s -> s.submitFeedback(t, FeedbackKind.request, "기능 요청", "1.0.14", "17.6") },
+        "fetchFeedbackList#data" to { s -> s.fetchFeedbackList(t, null, 50) },
+        "replyFeedback#data" to { s -> nowMarked(s.replyFeedback(t, "fb-1", "답장")) },
+        "replyFeedback#garbage" to { s -> nowMarked(s.replyFeedback(t, "fb-1", "답장")) },
+        "signOut#serverError" to { s -> s.signOut(t) },
+        "fetchFeedbackReplyLatest#data" to { s -> s.fetchFeedbackReplyLatest(t) },
+        "fetchFeedbackOpenCount#data" to { s -> s.fetchFeedbackOpenCount(t) },
+        "fetchBlocks#data" to { s -> s.fetchBlocks(t) },
+        "fetchAppUserCharacters#data" to { s -> s.fetchAppUserCharacters(t) },
+        "fetchAppUserCharacters#missing" to { s -> s.fetchAppUserCharacters(t) },
+        "fetchAppUserCharacters#plain404" to { s -> s.fetchAppUserCharacters(t) },
+        "fetchAppUserCharacters#serverError" to { s -> s.fetchAppUserCharacters(t) },
+        "fetchCharacterGiftPending#missing" to { s -> s.fetchCharacterGiftPending(t, 4) },
+        "startPhoneWork#data" to { s -> s.startPhoneWork(t) },
+        // ---- 상점 번호 깃발(C§4 #9) ----
+        "fetchShopState(protocol)#html404" to { s -> listOf(s.fetchShopState(t, 4), s.fetchShopState(t, 4)) },
+        "fetchShopState(protocol)#recheck" to { s ->
+            val first = s.fetchShopState(t, 4)
+            clockNow = now.addingTimeInterval(299.999)
+            val second = s.fetchShopState(t, 4)
+            clockNow = now.addingTimeInterval(300.0)
+            val third = s.fetchShopState(t, 4)
+            listOf(first, second, third)
+        },
     )
 
-    private fun record(script: List<Pair<Int, String>>, call: suspend (SupabaseWorkService) -> Unit): List<JsonObject> {
-        val recorder = GoldenRecorder(script)
+    /** 서비스 시계(Swift `WireClock`) — case 마다 [now] 로 되돌린다. */
+    private var clockNow = now
+
+    /** Swift `nowMarked`: 응답 시각을 못 읽어 시계로 떨어진 값 → "$now"(Swift = 벽시계 Date(), Kotlin = 주입 시계 — 앱 조립에서 시스템 시계). */
+    private fun nowMarked(date: SwiftDate): Any = if (date == clockNow) "\$now" else date
+
+    private val dumper = GoldenDump(leaf = { v ->
+        when (v) {
+            is SwiftDate -> GoldenDump.date(v.timeIntervalSince1970)
+            is SwiftURL -> JsonObject(mapOf("\$url" to JsonPrimitive(v.absoluteString)))
+            else -> null
+        }
+    })
+
+    /** Swift `WireResult` 와 같은 모양: {"ok": 덤프} · {"throws": …}. 글자 잎은 같은 자리표시로. */
+    private fun resultOf(value: Any?): JsonElement = when (value) {
+        null -> JsonObject(mapOf("ok" to JsonNull))
+        Unit -> JsonObject(mapOf("ok" to JsonPrimitive("\$void")))
+        else -> JsonObject(mapOf("ok" to scrubLeaves(dumper.dump(value))))
+    }
+
+    private fun thrownOf(e: Throwable): JsonElement = JsonObject(
+        mapOf(
+            "throws" to when (e) {
+                is SupabaseWorkServiceError -> dumpError(e)
+                is SerializationException -> JsonPrimitive("\$decoding")
+                is CharacterSyncFetchError.NoProfileRow ->
+                    JsonObject(mapOf("\$dump" to JsonPrimitive("noProfileRow"), "\$type" to JsonPrimitive("CharacterSyncFetchError")))
+                else -> JsonObject(mapOf("\$type" to JsonPrimitive(e::class.qualifiedName ?: "?"), "\$message" to JsonPrimitive(e.message ?: "")))
+            },
+        ),
+    )
+
+    private fun scrubLeaves(e: JsonElement): JsonElement = when (e) {
+        is JsonObject -> JsonObject(e.mapValues { scrubLeaves(it.value) })
+        is JsonArray -> JsonArray(e.map { scrubLeaves(it) })
+        is JsonPrimitive -> if (e.isString) JsonPrimitive(GoldenScrub.text(GoldenRecorder.scrub(e.content))) else e
+        else -> e
+    }
+
+    private class Recorded(val requests: List<JsonObject>, val result: JsonElement)
+
+    private fun record(
+        script: List<Pair<Int, String>>,
+        routes: List<GoldenRoute> = emptyList(),
+        call: suspend (SupabaseWorkService) -> Any?,
+    ): Recorded {
+        clockNow = now
+        val recorder = GoldenRecorder(script, routes)
         val client = HttpClient(recorder.engine) { SupabaseWorkService.clientConfig(this) }
         val service = SupabaseWorkService(
             projectURL = "https://golden.invalid", anonKey = ANON, client = client,
-            clock = { now }, text = GoldenTextRules, newUUIDString = { "ABCDEF12-3456-4789-8ABC-DEF012345678" },
+            clock = { clockNow }, text = GoldenTextRules, newUUIDString = { "ABCDEF12-3456-4789-8ABC-DEF012345678" },
         )
-        runBlocking {
-            try { call(service) } catch (e: CancellationException) { throw e } catch (e: Exception) { /* 요청만 본다 */ }
+        val result = runBlocking {
+            try {
+                resultOf(call(service))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                thrownOf(e)
+            }
         }
         client.close()
-        return recorder.requests
+        return Recorded(recorder.requests.toList(), result)
     }
+
+    private fun recordRequests(script: List<Pair<Int, String>>, call: suspend (SupabaseWorkService) -> Any?): List<JsonObject> =
+        record(script, emptyList(), call).requests
 
     @Test
     fun everyGoldenRequestIsPortedAndMatches() {
         val golden = Golden.load("wire/requests")
         val problems = mutableListOf<String>()
         val missing = mutableListOf<String>()
+        // 결과를 대조하지 않는 case 는 골든 spec 이 이름과 받을 갈래를 적은 것뿐이다(조용한 건너뛰기 금지 — 아래에서 집합이 같은지 본다).
+        val otherLaneResults = golden.spec.obj("resultOtherLanes").keys
+        val skippedResults = mutableSetOf<String>()
+        var comparedResults = 0
         for (c in golden.cases) {
             val id = c.string("id")
             val call = registry[id]
@@ -337,18 +488,37 @@ class WireRequestsGoldenTest {
                 continue
             }
             val script = c.array("responses").map { (it as JsonObject).int("status") to it.string("body") }
-            var got: List<JsonElement> = record(script, call)
+            val routes = c.array("routes").map {
+                val o = it as JsonObject
+                val q = o["query"] as? JsonArray
+                GoldenRoute(o.string("path"), q?.let { p -> (p[0] as JsonPrimitive).content to (p[1] as JsonPrimitive).content }, o.int("status"), o.string("body"))
+            }
+            val recorded = record(script, routes, call)
+            var got: List<JsonElement> = recorded.requests
             val unordered = (c["unordered"] as JsonPrimitive).booleanOrNull == true
             if (unordered) got = got.sortedWith { a, b -> GoldenCanonical.codePointOrder.compare(GoldenCanonical.text(a), GoldenCanonical.text(b)) }
             val want = c.array("requests")
             val wantText = GoldenCanonical.text(want)
             val gotText = GoldenCanonical.text(JsonArray(got))
             if (wantText != gotText) problems += golden.failure(id, "요청이 다르다\n  Swift : $wantText\n  Kotlin: $gotText")
+            if (id in otherLaneResults) {
+                skippedResults += id
+            } else {
+                comparedResults++
+                val wantResult = GoldenCanonical.text(c["result"]!!)
+                val gotResult = GoldenCanonical.text(recorded.result)
+                if (wantResult != gotResult) problems += golden.failure(id, "결과가 다르다\n  Swift : $wantResult\n  Kotlin: $gotResult")
+            }
         }
         val extra = registry.keys - golden.cases.map { it.string("id") }.toSet()
         val excluded = golden.spec.obj("excluded")
         val wronglyPorted = registry.keys.map { it.substringBefore('(').substringBefore('#') }.filter { it in excluded.keys }
-        println("AINGCHECK-G5 cases=${golden.cases.size} ported=${golden.cases.size - missing.size} 미이식=${missing.size} excluded=${excluded.size} problems=${problems.size}")
+        println(
+            "AINGCHECK-G5 cases=${golden.cases.size} ported=${golden.cases.size - missing.size} 미이식=${missing.size} excluded=${excluded.size} " +
+                "results=$comparedResults otherLane=${skippedResults.size} problems=${problems.size}",
+        )
+        assertEquals(otherLaneResults, skippedResults + missing.filter { it in otherLaneResults }, "resultOtherLanes 가 골든 case 와 맞지 않는다")
+        assertTrue(comparedResults >= 180, "결과를 대조한 case 가 적다($comparedResults)")
         assertTrue(missing.isEmpty(), "미이식 ${missing.size}: $missing")
         assertTrue(extra.isEmpty(), "골든에 없는 Kotlin id(오타?): $extra")
         assertTrue(wronglyPorted.isEmpty(), "H·I·admin 태그 이름이 W1-d 레지스트리에 있다: $wronglyPorted")
@@ -359,13 +529,13 @@ class WireRequestsGoldenTest {
     /** 경계(G §2-3 W1-d ⑥): 2^31 넘는 정수는 정밀도 그대로, 상점 번호 0 이면 키 생략, p_since_ms 는 null 이어도 싣는다. */
     @Test
     fun boundaryCases() {
-        val big = record(emptyList()) { s -> s.submitMiniGameScore(t, "tetris", 3_000_000_000, "tok") }.single()
+        val big = recordRequests(emptyList()) { s -> s.submitMiniGameScore(t, "tetris", 3_000_000_000, "tok") }.single()
         assertEquals("3000000000", (big["body"] as JsonObject)["p_score"].toString())
-        val legacy = record(emptyList()) { s -> s.fetchShopState(t, 0) }.single()
+        val legacy = recordRequests(emptyList()) { s -> s.fetchShopState(t, 0) }.single()
         assertEquals(JsonObject(emptyMap()), legacy["body"], "p_protocol 0 이면 키를 뺀다(옛 서명 `{}`)")
-        val withProtocol = record(emptyList()) { s -> s.fetchShopState(t, 4) }.single()
+        val withProtocol = recordRequests(emptyList()) { s -> s.fetchShopState(t, 4) }.single()
         assertEquals("4", (withProtocol["body"] as JsonObject)["p_protocol"].toString())
-        val todo = record(emptyList()) { s -> s.todoSync(t, TodoSyncRequest(emptyList(), null)) }.single()
+        val todo = recordRequests(emptyList()) { s -> s.todoSync(t, TodoSyncRequest(emptyList(), null)) }.single()
         val body = todo["body"] as JsonObject
         assertTrue("p_since_ms" in body && body["p_since_ms"] is JsonNull, "p_since_ms 는 null 이어도 키가 있어야 한다: $body")
     }

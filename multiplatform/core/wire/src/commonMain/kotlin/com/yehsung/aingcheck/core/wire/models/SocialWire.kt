@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkServiceBlocks.swift:105-255 · SupabaseWorkServiceMessageReads.swift:107-196 · SupabaseWorkServiceCharacter.swift:33-42 · AppUserCharacters.swift:77-111 · MessagePokeLog.swift:1-207·314-336(전선 · microsecondsSinceEpoch — 배정표 W1-d 몫 1–313 + 서비스가 부르는 한 함수) @ 1b8260d
 package com.yehsung.aingcheck.core.wire.models
 
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.json.SwiftDecodableSerializer
 import com.yehsung.aingcheck.core.wire.json.SwiftDecoding
@@ -74,7 +75,7 @@ data class BlockedUserRow(
 }
 
 /** Swift `BlockedUser`(표시). */
-data class BlockedUser(val userID: String, val name: String, val avatarURL: String?, val blockedAt: SwiftDate?) {
+data class BlockedUser(val userID: String, val name: String, val avatarURL: SwiftURL?, val blockedAt: SwiftDate?) {
     val id: String get() = userID
 }
 
@@ -231,7 +232,7 @@ data class MessagePokeLogEntry(
     val id: String,
     val peerUserID: String,
     val peerName: String,
-    val peerAvatarURL: String? = null,
+    val peerAvatarURL: SwiftURL? = null,
     val createdAt: SwiftDate,
     val isMine: Boolean,
     val kind: MessagePokeLogKind,

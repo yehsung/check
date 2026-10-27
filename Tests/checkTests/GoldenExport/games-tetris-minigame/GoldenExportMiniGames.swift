@@ -162,6 +162,10 @@ struct GoldenExportMiniGames {
             h.add(Double(p.x)); h.add(Double(p.centerY)); h.add(Double(p.gap)); h.add(p.passed)
             h.add(p.shiftDelay); h.add(Double(p.shiftOffset)); h.add(p.shiftAt)
         }
+        // 화면이 읽는 파생 값(검증 지적: 옮긴 공개 파생값도 골든에 싣는다).
+        h.add(g.isPlaying); h.add(g.isGameOver); h.add(g.stage.id)
+        let box = g.hitbox
+        h.add(Double(box.origin.x)); h.add(Double(box.origin.y)); h.add(Double(box.size.width)); h.add(Double(box.size.height))
     }
 
     struct FlappyCase {
@@ -310,7 +314,7 @@ struct GoldenExportMiniGames {
             spec: [
                 "start": "new = FlappyGame(seed). fixture = FlappyGame(seed, bird(x, y, vy), pipes: [Pipe(x, centerY, gap)], score, phase: running)",
                 "frame": "연산을 적힌 순서대로(F = flap(), I = interrupt()) → step(dt) → 접기. 처음 접기 = 시작 판",
-                "fold": "phase(ready 0 · running 1 · over 2+유예 · result 3) · score · bird x·y·vy · flashRemaining · elapsed · scrolled · flapCount · lastFlapAt(없으면 0, 있으면 1+비트) · lastScoreAt(같은 꼴) · lastScorePipeCenter 가 있는가 · 기둥 수 · 기둥마다 x·centerY·gap·passed·shiftDelay(꼴 같음)·shiftOffset·shiftAt(꼴 같음)",
+                "fold": "phase(ready 0 · running 1 · over 2+유예 · result 3) · score · bird x·y·vy · flashRemaining · elapsed · scrolled · flapCount · lastFlapAt(없으면 0, 있으면 1+비트) · lastScoreAt(같은 꼴) · lastScorePipeCenter 가 있는가 · 기둥 수 · 기둥마다 x·centerY·gap·passed·shiftDelay(꼴 같음)·shiftOffset·shiftAt(꼴 같음) · isPlaying · isGameOver · stage.id · hitbox x·y·w·h",
                 "discrete": "pow 에서 나온 값(lastScorePipeCenter)은 해시에 넣지 않고 centers(\"프레임:비트\")로 따로 싣는다 — Kotlin 은 1e-9 안에서 대조한다. 충돌 판정(단계)은 정수 출력이라 해시로 잰다",
             ],
             cases: cases
@@ -340,7 +344,8 @@ struct GoldenExportMiniGames {
                       "values": GoldenCompact.ints(distances.map { TimingBarGame.roundScore(distance: $0) })])
         cases.append(["id": "verdict", "from": -1,
                       "values": .string((-1...101).map { "\(TimingBarGame.verdict(score: $0))" }.joined(separator: " ")),
-                      "labels": .array([TimingBarGame.Verdict.perfect, .great, .good, .close, .miss].map { .string("\($0)=\($0.label)") })])
+                      "labels": .array([TimingBarGame.Verdict.perfect, .great, .good, .close, .miss].map { .string("\($0)=\($0.label)") }),
+                      "glyphs": .array([TimingBarGame.Verdict.perfect, .great, .good, .close, .miss].map { .string("\($0)=\($0.glyph)") })])
         cases.append(["id": "constants", "roundCount": .int(TimingBarGame.roundCount), "resultHoldBits": .bits(TimingBarGame.resultHold),
                       "maxStepBits": .bits(TimingBarGame.maxStep)])
         goldenEmit(GoldenFile(
@@ -350,7 +355,7 @@ struct GoldenExportMiniGames {
             spec: [
                 "markerPosition": "2·|x − floor(x + 0.5)|, x = t / period(Swift (x + 0.5).rounded(.down))",
                 "roundScore": "d ≤ 1 이면 100 − Int((30·d).rounded()) — .rounded() 는 0.5 를 0 에서 먼 쪽으로(경계 (k+0.5)/30 을 싣는다), 아니면(NaN 포함) 0",
-                "verdict": "점수 −1…101 → 등급 이름(공백으로 이음)",
+                "verdict": "점수 −1…101 → 등급 이름(공백으로 이음). labels = 등급=라벨, glyphs = 등급=라운드 스트립 글리프(TimingBarSegmentGlyph — 색을 못 보는 눈의 두 번째 채널)",
             ],
             cases: cases
         ))

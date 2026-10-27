@@ -111,6 +111,72 @@ enum GoldenTetrisText {
     }
 }
 
+/// _base `GoldenTetrisFold.light` 와 같은 값 열(두 해시 · 프레임 해시에 함께 싣기 위해 값으로 꺼낸다). 열이 _base 접기와 같은지
+/// 스스로 확인한다 — 갈리면 precondition 이 멈춘다.
+enum GoldenTetrisLight {
+    static func values(_ g: TetrisGame) -> [UInt64] {
+        var out: [UInt64] = []
+        func a(_ x: Int) { out.append(UInt64(bitPattern: Int64(x))) }
+        func d(_ x: Double) { out.append(x.bitPattern) }
+        func b(_ x: Bool) { out.append(x ? 1 : 0) }
+        if let p = g.active { a(p.piece.rawValue); a(p.rotation.rawValue); a(p.column); a(p.row) } else { a(-1) }
+        a(g.next.count)
+        for p in g.next { a(p.rawValue) }
+        a(g.heldPiece?.rawValue ?? -1)
+        b(g.holdUsed)
+        a(g.score); a(g.advance); a(g.lines); a(g.combo); a(g.backToBack)
+        switch g.phase {
+        case .ready: a(0)
+        case .running: a(1)
+        case .lineClear(let left): a(2); d(left)
+        case .are(let left): a(3); d(left)
+        case .over(let hold): a(4); d(hold)
+        case .result: a(5)
+        }
+        d(g.elapsed)
+        if let c = g.lastClear {
+            a(c.lines)
+            switch c.spin { case .none: a(0); case .mini: a(1); case .full: a(2) }
+            b(c.backToBack); b(c.perfectClear); a(c.points); d(c.at)
+        } else {
+            a(-2)
+        }
+        a(g.level); a(g.scoreLevel); b(g.isGrounded)
+        var mine = GoldenFNV1a64()
+        for v in out { mine.add(v) }
+        var check = GoldenFNV1a64()
+        GoldenTetrisFold.light(g, into: &check)
+        precondition(mine.value == check.value, "GoldenTetrisLight 값 열이 _base GoldenTetrisFold.light 와 갈렸다")
+        return out
+    }
+}
+
+/// 규칙 해시 밖에서 화면·조준이 읽는 파생 값(G §2-3 W1-a 검증 지적 — 옮긴 공개 파생값도 골든에 싣는다):
+/// ghost(piece · rotation · column · row, 없으면 −1) · isPlaying · isGameOver · difficultyLevel · pendingGarbageLines.
+enum GoldenTetrisDerived {
+    static func values(_ g: TetrisGame) -> [Int] {
+        var out: [Int] = []
+        if let ghost = g.ghost { out += [ghost.piece.rawValue, ghost.rotation.rawValue, ghost.column, ghost.row] } else { out.append(-1) }
+        out.append(g.isPlaying ? 1 : 0)
+        out.append(g.isGameOver ? 1 : 0)
+        out.append(g.difficultyLevel)
+        out.append(g.pendingGarbageLines)
+        return out
+    }
+
+    /// 굳힘 사건 글자: "줄:스핀(none·mini·full):B2B 0/1:퍼펙트 0/1:점수:공격".
+    static func event(_ c: TetrisGame.ClearEvent?) -> String {
+        guard let c else { return "-" }
+        let spin: String
+        switch c.spin {
+        case .none: spin = "none"
+        case .mini: spin = "mini"
+        case .full: spin = "full"
+        }
+        return "\(c.lines):\(spin):\(c.backToBack ? 1 : 0):\(c.perfectClear ? 1 : 0):\(c.points):\(c.attack)"
+    }
+}
+
 extension GoldenJSON {
     static func intArray(_ values: [Int]) -> GoldenJSON { .array(values.map { .int($0) }) }
     static func bitsArray(_ values: [Double]) -> GoldenJSON { .array(values.map { .bits($0) }) }

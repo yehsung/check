@@ -69,6 +69,7 @@ class TetrisDuelGoldenTest {
                     }
                     val want = case["decoded"].let { if (it == null || it is JsonNull) null else it.stringValue() }
                     f.check(id, decoded == want) { "decode Kotlin $decoded" }
+                    if (id == "board-empty") f.check(id, TetrisDuelBoard.emptyText == text) { "emptyText Kotlin ${TetrisDuelBoard.emptyText}" }
                 }
                 id == "encode-fixture" -> {
                     val rows = case.array("rows").map { it.stringValue() }
@@ -104,6 +105,7 @@ class TetrisDuelGoldenTest {
             }
         }
         f.assertNone()
+        assertEquals(DUEL_RULES_IDS, golden.cases.map { it.string("id") }, "tetris/duel-rules case 목록이 바뀌었다 — 빠진 표는 Kotlin 이 모른다")
         assertTrue(f.compared > 30)
     }
 
@@ -144,6 +146,7 @@ class TetrisDuelGoldenTest {
         }
         f.assertNone()
         assertTrue(maxFloor >= 12, "대본이 가속 바닥 12 까지 가지 않았다(최대 $maxFloor) — 골든이 바뀌었나")
+        assertEquals(listOf("phone-60", "keys-30", "resume-90", "negative-seed-24"), golden.cases.map { it.string("id") }, "tetris/duel case 목록이 바뀌었다")
     }
 
     class DuelRun(
@@ -222,7 +225,13 @@ class TetrisDuelGoldenTest {
             for (mask in s.game.garbageMask) h.add(mask)
         }
 
-        private fun fold(s: TetrisDuelSession, reason: TetrisDuelReportReason?, report: TetrisDuelReport?, h: DualFold) {
+        val DUEL_RULES_IDS: List<String> = listOf(
+            "rampLevelFloor", "localStart", "board-empty", "board-sample", "board-short", "board-long", "board-lower", "board-hangul",
+            "board-blank", "board-allG", "encode-fixture", "resume-sample", "resume-negative", "resume-nan", "resume-broken",
+            "new-negative", "new-resumed-seq",
+        )
+
+        private fun fold(s: TetrisDuelSession, now: Double, reason: TetrisDuelReportReason?, report: TetrisDuelReport?, h: DualFold) {
             val g = s.game
             TetrisGoldenSupport.light(g, h)
             h.add(g.levelFloor)
@@ -242,6 +251,11 @@ class TetrisDuelGoldenTest {
             h.add(s.reportedToppedOut)
             h.add(s.isLive)
             h.add(s.toppedOut)
+            // 화면이 읽는 시계·파생 값(Swift 접기와 같은 순서).
+            h.addOptional(s.matchElapsed(now))
+            h.addOptional(s.countdownRemaining(now))
+            h.add(s.currentLevelFloor)
+            TetrisGoldenSupport.derived(g, h)
             if (reason != null && report != null) {
                 h.add(reason.ordinal + 1)
                 h.add(report.seq)
@@ -294,7 +308,7 @@ class TetrisDuelGoldenTest {
                     reports += 1
                     lastReport = report
                 }
-                fold(session, reason, report, h)
+                fold(session, now, reason, report, h)
                 if (session.game.advance != before) boardFold(session, h)
                 trace.endFrame(h)
                 maxFloor = maxOf(maxFloor, session.game.levelFloor)

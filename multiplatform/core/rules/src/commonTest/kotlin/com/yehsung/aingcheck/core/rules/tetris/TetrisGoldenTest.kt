@@ -2,6 +2,7 @@
 package com.yehsung.aingcheck.core.rules.tetris
 
 import com.yehsung.aingcheck.core.rules.minigame.DualFold
+import com.yehsung.aingcheck.core.rules.minigame.Fnv1a64
 import com.yehsung.aingcheck.core.rules.minigame.GoldenFailures
 import com.yehsung.aingcheck.core.rules.minigame.GoldenOps
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
@@ -10,18 +11,22 @@ import com.yehsung.aingcheck.core.rules.minigame.ReplayTrace
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGoldenSupport.LETTERS
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGoldenSupport.bitsEqual
 import com.yehsung.aingcheck.testkit.golden.Golden
+import com.yehsung.aingcheck.testkit.golden.array
 import com.yehsung.aingcheck.testkit.golden.hex64
 import com.yehsung.aingcheck.testkit.golden.int
 import com.yehsung.aingcheck.testkit.golden.obj
 import com.yehsung.aingcheck.testkit.golden.string
+import com.yehsung.aingcheck.testkit.golden.stringValue
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Kotlin 테트리스 엔진이 Swift 와 비트로 같다(C§5.1 E2·E3, G §2-3 W1-a ①③). 골든 넷: 규칙표 · 7-bag · 방해 줄 구멍 · 대본 A~G.
+ * Kotlin 테트리스 엔진이 Swift 와 비트로 같다(C§5.1 E2·E3, G §2-3 W1-a ①③). 골든 다섯: 규칙표 · 7-bag · 방해 줄 구멍 · 대본 A~G ·
+ * 손으로 짠 판(T-스핀 정식·미니·마지막 킥 · B2B · 퍼펙트 클리어).
  * 대본은 조종사 없이 연산만 재생해 64프레임 체크포인트 · 프레임 바이트 · 끝 상태를 대조한다 — 갈리면 처음 갈린 **프레임 번호**를 말한다(②).
+ * 모든 골든은 case 목록을 잠근다 — 빠진 case 는 대조 없이 사라지므로(검증 지적) 늘거나 줄면 빨강이다.
  */
 class TetrisGoldenTest {
 
@@ -145,6 +150,7 @@ class TetrisGoldenTest {
             }
         }
         f.assertNone()
+        assertEquals(RULES_IDS, golden.cases.map { it.string("id") }, "tetris/rules case 목록이 바뀌었다 — 빠진 표는 Kotlin 이 모른다")
         assertTrue(f.compared > 2_500, "규칙표를 덜 읽었다(${f.compared})")
     }
 
@@ -181,7 +187,7 @@ class TetrisGoldenTest {
             f.check(id, TetrisGoldenSupport.pieces(game.next) == case.string("firstNext")) { "첫 넥스트 Kotlin ${TetrisGoldenSupport.pieces(game.next)}" }
         }
         f.assertNone()
-        assertEquals(200, golden.cases.size)
+        assertEquals(BAG_IDS, golden.cases.map { it.string("id") }, "tetris/bags case 목록이 바뀌었다")
         assertTrue(golden.cases.any { it.hex64("seed") >= 0x8000000000000000uL }, "위 비트가 선 시드가 없다(부호 없는 나머지를 못 잰다)")
     }
 
@@ -221,6 +227,7 @@ class TetrisGoldenTest {
             f.check(id, TetrisGoldenSupport.boardText(game) == case.string("board")) { "판 Kotlin ${TetrisGoldenSupport.boardText(game)}" }
         }
         f.assertNone()
+        assertEquals(BAG_IDS.take(64), golden.cases.map { it.string("id") }, "tetris/garbage-holes case 목록이 바뀌었다")
     }
 
     @Test
@@ -238,12 +245,59 @@ class TetrisGoldenTest {
             f.check(id, mismatch == null) { mismatch!! }
             val fields = TetrisGoldenSupport.finalMismatches(run.game, final)
             f.check(id, fields.isEmpty()) { "끝 상태 칸 $fields" }
+            // 파생 값(ghost · isPlaying · isGameOver · difficultyLevel · pendingGarbageLines) — 규칙 해시(V0360 고정) 밖의 따로 접은 해시.
+            val derived = case.obj("derived")
+            val wantDerived = GoldenOps.hexes(derived.string("checkpoints"))
+            val firstDerived = run.derivedCheckpoints.indices.firstOrNull { it >= wantDerived.size || run.derivedCheckpoints[it] != wantDerived[it] }
+            f.check(id, firstDerived == null && run.derivedCheckpoints.size == wantDerived.size && run.derived.value == derived.hex64("hash")) {
+                "파생 값(ghost·isPlaying·isGameOver·difficultyLevel·pendingGarbageLines)이 갈렸다 — 처음 갈린 체크포인트 구간 " +
+                    "${firstDerived?.let { "[${it * run.trace.checkpointEvery}, ${(it + 1) * run.trace.checkpointEvery}]" } ?: "없음(끝 해시)"}"
+            }
         }
         f.assertNone()
-        assertEquals(setOf("A", "B", "C", "D", "E", "F", "G"), golden.cases.map { it.string("id") }.toSet())
+        assertEquals(listOf("A", "B", "C", "D", "E", "F", "G"), golden.cases.map { it.string("id") })
     }
 
-    class Run(val game: TetrisGame, val fold: DualFold, val trace: ReplayTrace)
+    /**
+     * 손으로 짠 판(tetris/fixtures): 대본 A~G 가 한 번도 지나지 않는 E3 갈래 — T-스핀 정식(앞 모서리 둘) · 미니 · 킥 미니 ·
+     * 마지막(5번째) 킥 정식 · 반시계 마지막 킥 · TST · B2B(T-스핀 · 미니 · 테트리스) · 퍼펙트(B2B 테트리스 3200 포함).
+     */
+    @Test
+    fun fixtureReplaysMatchSwift() {
+        val golden = Golden.load("tetris/fixtures")
+        val f = GoldenFailures(golden)
+        val seen = HashSet<String>()
+        for (case in golden.cases) {
+            val id = case.string("id")
+            val run = replayFixture(case)
+            val final = case.obj("final")
+            val mismatch = run.trace.firstMismatch(
+                case.string("frameBytes"), GoldenOps.hexes(case.string("checkpoints")), final.int("frames"),
+                final.hex64("hash"), run.fold.total.value,
+            )
+            f.check(id, mismatch == null) { mismatch!! }
+            val events = run.events.joinToString(" ")
+            f.check(id, events == case.string("events")) { "굳힘 사건(줄:스핀:B2B:퍼펙트:점수:공격) 기대 ${case.string("events")} · Kotlin $events" }
+            val fields = TetrisGoldenSupport.finalMismatches(run.game, final)
+            f.check(id, fields.isEmpty()) { "끝 상태 칸 $fields" }
+            for (e in case.string("events").split(' ').filter { it.isNotEmpty() }) {
+                val (lines, spin, b2b, perfect) = e.split(':')
+                if (spin != "none") seen += "$spin-${if (lines == "0") "zero" else "lines"}"
+                if (b2b == "1") seen += "b2b-$spin"
+                if (perfect == "1") seen += if (b2b == "1") "pc-b2b" else "pc"
+                if (lines == "4") seen += "tetris"
+            }
+        }
+        f.assertNone()
+        assertEquals(FIXTURE_IDS, golden.cases.map { it.string("id") }, "tetris/fixtures case 목록이 바뀌었다")
+        // 골든이 다시 만들어져도 E3 갈래가 빠지지 않게(Swift 생성기의 #expect 와 같은 목록).
+        val required = setOf("full-lines", "mini-lines", "mini-zero", "b2b-full", "b2b-mini", "b2b-none", "pc", "pc-b2b", "tetris")
+        assertTrue(seen.containsAll(required), "손으로 짠 판 골든이 판정 갈래를 다 지나지 않는다: 빠짐 ${required - seen}")
+    }
+
+    class Run(val game: TetrisGame, val fold: DualFold, val trace: ReplayTrace, val derived: Fnv1a64, val derivedCheckpoints: List<ULong>)
+
+    class FixtureRun(val game: TetrisGame, val fold: DualFold, val trace: ReplayTrace, val events: List<String>)
 
     companion object {
         /** contract/README.md §2-4: 시작 판 → 판 전체 접기 → 프레임마다 [연산 → step(dt) → light, advance 가 바뀌면 board] · 결과면 멈춤. */
@@ -263,6 +317,10 @@ class TetrisGoldenTest {
             }
             val fold = DualFold()
             TetrisGoldenSupport.board(game, fold)
+            val derived = Fnv1a64()
+            fun foldDerived() { for (v in TetrisGoldenSupport.derivedValues(game)) derived.add(v) }
+            foldDerived()
+            val derivedCheckpoints = ArrayList<ULong>()
             val trace = ReplayTrace(case.int("checkpointEvery"))
             for (ops in GoldenOps.decode(case.string("ops"))) {
                 fold.beginFrame()
@@ -271,10 +329,69 @@ class TetrisGoldenTest {
                 game.step(dt)
                 TetrisGoldenSupport.light(game, fold)
                 if (game.advance != before) TetrisGoldenSupport.board(game, fold)
+                foldDerived()
+                trace.endFrame(fold)
+                if (trace.frames % trace.checkpointEvery == 0) derivedCheckpoints += derived.value
+                if (game.phase == TetrisGame.Phase.Result) break
+            }
+            return Run(game, fold, trace, derived, derivedCheckpoints)
+        }
+
+        private fun piece(letter: Char): TetrisGame.Piece = TetrisGame.Piece.entries[LETTERS.indexOf(letter).also { require(it >= 0) { "모르는 조각 글자 $letter" } }]
+
+        /** tetris/fixtures 재생(Swift `fixtureReplay`): 시작 판 → [board · light · derived] → 프레임마다 [연산 → step → light · derived, advance 가 바뀌면 board · 사건]. */
+        fun replayFixture(case: JsonObject): FixtureRun {
+            val start = case.obj("start")
+            require(start.string("kind") == "fixture") { "모르는 시작 ${start.string("kind")}" }
+            val a = start.obj("active")
+            val game = TetrisGame(
+                case.hex64("seed"),
+                TetrisGame.boardFixture(start.array("rows").map { it.stringValue() }),
+                active = TetrisGame.ActivePiece(
+                    piece(a.string("piece").single()), TetrisGame.Rotation.entries.first { it.rawValue == a.int("rotation") },
+                    column = a.int("column"), row = a.int("row"),
+                ),
+                next = start.string("next").map { piece(it) },
+                combo = start.int("combo"),
+                backToBack = start.int("backToBack"),
+            )
+            val dt = Golden.bits(case.string("dtBits"))
+            val fold = DualFold()
+            TetrisGoldenSupport.board(game, fold)
+            TetrisGoldenSupport.light(game, fold)
+            TetrisGoldenSupport.derived(game, fold)
+            val trace = ReplayTrace(case.int("checkpointEvery"))
+            val events = ArrayList<String>()
+            for (ops in GoldenOps.decode(case.string("ops"))) {
+                fold.beginFrame()
+                val before = game.advance
+                for (op in ops) TetrisGoldenSupport.applyBaseOp(op, game)
+                game.step(dt)
+                TetrisGoldenSupport.light(game, fold)
+                TetrisGoldenSupport.derived(game, fold)
+                if (game.advance != before) {
+                    TetrisGoldenSupport.board(game, fold)
+                    events += TetrisGoldenSupport.event(game.lastClear)
+                }
                 trace.endFrame(fold)
                 if (game.phase == TetrisGame.Phase.Result) break
             }
-            return Run(game, fold, trace)
+            return FixtureRun(game, fold, trace, events)
         }
+
+        val RULES_IDS: List<String> = listOf(
+            "level", "scoreLevel", "gravityStage", "gravitySecondsForStage", "gravitySecondsForLevel", "softDropSeconds",
+            "lockDelaySeconds", "lockResetLimit", "lockResetRefreshes", "attackLines",
+            "actionPoints-none", "isDifficult-none", "actionPoints-mini", "isDifficult-mini", "actionPoints-full", "isDifficult-full",
+            "perfectClearPoints", "comboPoints", "placementPoints", "shapes", "kicks", "advanceToNextLevel", "constants", "layout",
+        )
+
+        val BAG_IDS: List<String> = listOf(
+            "zero", "one", "server-max", "int63-max", "int63-min", "uint64-max", "tetris-a", "tetris-b", "tetris-c", "tetris-d",
+        ) + (0 until 190).map { "s$it" }
+
+        val FIXTURE_IDS: List<String> = listOf(
+            "tsd", "tsd-b2b", "no-rotation", "mini", "mini-kick", "mini-zero", "final-kick", "final-kick-ccw", "tst", "b2b-tetris-pc", "pc-double",
+        )
     }
 }

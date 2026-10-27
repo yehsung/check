@@ -1,5 +1,5 @@
 {
-  "exportTests": 28,
+  "exportTests": 29,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -133,6 +133,18 @@
         "Sources/CheckCore/TetrisDuelSession.swift",
         "Sources/CheckCore/TetrisDuelBoard.swift",
         "Sources/CheckCore/TetrisGame.swift"
+      ]
+    },
+    {
+      "cases": 11,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
+      "golden": "tetris/fixtures",
+      "path": "contract/golden/tetris/fixtures.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
       ]
     },
     {

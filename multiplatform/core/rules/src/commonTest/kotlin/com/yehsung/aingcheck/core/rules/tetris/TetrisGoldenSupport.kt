@@ -50,6 +50,30 @@ object TetrisGoldenSupport {
         h.add(g.level); h.add(g.scoreLevel); h.add(g.isGrounded)
     }
 
+    /**
+     * 화면·조준이 읽는 파생 값(Swift `GoldenTetrisDerived.values`): ghost(piece · rotation · column · row, 없으면 −1) ·
+     * isPlaying · isGameOver · difficultyLevel · pendingGarbageLines.
+     */
+    fun derivedValues(g: TetrisGame): List<Int> {
+        val out = ArrayList<Int>(9)
+        val ghost = g.ghost
+        if (ghost != null) out += listOf(ghost.piece.rawValue, ghost.rotation.rawValue, ghost.column, ghost.row) else out += -1
+        out += if (g.isPlaying) 1 else 0
+        out += if (g.isGameOver) 1 else 0
+        out += g.difficultyLevel
+        out += g.pendingGarbageLines
+        return out
+    }
+
+    fun derived(g: TetrisGame, h: DualFold) {
+        for (v in derivedValues(g)) h.add(v)
+    }
+
+    /** 굳힘 사건 글자(Swift `GoldenTetrisDerived.event`): "줄:스핀:B2B 0/1:퍼펙트 0/1:점수:공격", 없으면 "-". */
+    fun event(c: TetrisGame.ClearEvent?): String =
+        if (c == null) "-"
+        else "${c.lines}:${c.spin.name}:${if (c.backToBack) 1 else 0}:${if (c.perfectClear) 1 else 0}:${c.points}:${c.attack}"
+
     fun board(g: TetrisGame, h: DualFold) {
         for (r in 0 until TetrisGame.totalRows) for (c in 0 until TetrisGame.columns) h.add(g.cell(r, c)?.rawValue ?: -1)
     }

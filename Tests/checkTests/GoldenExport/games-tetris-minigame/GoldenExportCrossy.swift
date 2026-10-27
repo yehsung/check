@@ -210,6 +210,12 @@ struct GoldenExportCrossy {
                 }
             }
         }
+        // 화면·일시정지가 읽는 파생 값(검증 지적: isPlaying · lift 가 어떤 골든에도 없었다).
+        h.add(g.isPlaying); h.add(g.isGameOver)
+        let spot = g.occupancy
+        h.add(spot.row); h.add(spot.x)
+        let visual = g.playerVisual
+        h.add(visual.row); h.add(visual.x); h.add(visual.lift)
     }
 
     static func apply(_ op: String, to g: inout CrossyGame) {
@@ -409,7 +415,7 @@ struct GoldenExportCrossy {
             swiftSources: [Self.engine, Self.kinds],
             spec: [
                 "frame": "CrossyGame(seed) → 처음 접기 → 프레임 f(1부터): dt = dtCycle[(f−1) % 길이], 연산을 적힌 순서대로(F B L R = input(forward·back·left·right) · ACT = action() · INT = interrupt()) → step(dt) → 접기",
-                "fold": "phase(ready 0 · running 1 · over 2+유예 · result 3) · player row·x·riding·facing 순번(forward 0 back 1 left 2 right 3) · hop(없으면 0, 있으면 1 · fromRow · fromX · toRow · toX · toFloats · elapsed · direction 순번 · bumped · fromRiding) · queued(없으면 −1) · score · cameraRow · sinceProgress · death(없으면 0, 있으면 1 · cause 순번(car water carriedOff train leftBehind) · row · x · at · pushDirection) · elapsed · hopCount · roundSeed · 줄 수 · 줄마다 row · kind 순번(grass road river rail) · direction · speed · 물체 수 · 물체마다 x·length·variant·isTruck · train(0 또는 1·x·length) · trainCountdown · trainRandom 상태 · 칸마다 prop(없음 −1 · 바위 −2 · 나무 높이)",
+                "fold": "phase(ready 0 · running 1 · over 2+유예 · result 3) · player row·x·riding·facing 순번(forward 0 back 1 left 2 right 3) · hop(없으면 0, 있으면 1 · fromRow · fromX · toRow · toX · toFloats · elapsed · direction 순번 · bumped · fromRiding) · queued(없으면 −1) · score · cameraRow · sinceProgress · death(없으면 0, 있으면 1 · cause 순번(car water carriedOff train leftBehind) · row · x · at · pushDirection) · elapsed · hopCount · roundSeed · 줄 수 · 줄마다 row · kind 순번(grass road river rail) · direction · speed · 물체 수 · 물체마다 x·length·variant·isTruck · train(0 또는 1·x·length) · trainCountdown · trainRandom 상태 · 칸마다 prop(없음 −1 · 바위 −2 · 나무 높이) → isPlaying · isGameOver · occupancy row·x · playerVisual row·x·lift",
                 "deaths": "\"프레임:사유\" — 죽음이 생긴 프레임",
                 "final.lanes": "끝 판이 들고 있는 줄 글자(crossy/rules 의 lane text)",
             ],

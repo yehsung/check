@@ -56,6 +56,9 @@ class TimingBarGoldenTest {
                     val labels = case.array("labels").map { it.stringValue() }
                     val got = TimingBarGame.Verdict.entries.map { "${it.name}=${it.label}" }
                     f.check(id, got == labels) { "라벨 Kotlin $got" }
+                    val glyphs = case.array("glyphs").map { it.stringValue() }
+                    val gotGlyphs = TimingBarGame.Verdict.entries.map { "${it.name}=${it.glyph.name}" }
+                    f.check(id, gotGlyphs == glyphs) { "글리프 기대 $glyphs · Kotlin $gotGlyphs" }
                 }
                 "constants" -> {
                     f.check(id, TimingBarGame.roundCount == case.int("roundCount")) { "roundCount" }
@@ -66,6 +69,8 @@ class TimingBarGoldenTest {
             }
         }
         f.assertNone()
+        assertEquals(listOf("period", "targetWidth", "markerPosition", "roundScore", "verdict", "constants"), golden.cases.map { it.string("id") },
+            "timing-bar/rules case 목록이 바뀌었다 — 빠진 표는 Kotlin 이 모른다")
     }
 
     private fun fold(g: TimingBarGame, h: DualFold) {
@@ -117,6 +122,6 @@ class TimingBarGoldenTest {
             f.check(id, g.total == final.int("total")) { "총점" }
         }
         f.assertNone()
-        assertEquals(4, golden.cases.size)
+        assertEquals(listOf("A", "B", "C", "D"), golden.cases.map { it.string("id") })
     }
 }

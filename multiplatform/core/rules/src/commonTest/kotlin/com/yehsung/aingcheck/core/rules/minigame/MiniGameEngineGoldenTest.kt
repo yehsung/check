@@ -41,6 +41,7 @@ class MiniGameEngineGoldenTest {
             MiniGameFrameRate.vsyncHeadroom.toRawBits() == Golden.bits(c.string("vsyncHeadroomBits")).toRawBits()) { "상수" }
         f.assertNone()
         assertEquals(506, fps.size, "−5…500Hz 전수가 아니다")
+        assertEquals(listOf("hz", "constants"), golden.cases.map { it.string("id") }, "framerate/fps case 목록이 바뀌었다")
     }
 
     private fun boolOf(e: JsonElement?): Boolean = (e as JsonPrimitive).boolean
@@ -107,6 +108,7 @@ class MiniGameEngineGoldenTest {
 
         val stages = golden.case("stages")
         val table2 = stages.array("table").map { it as JsonObject }
+        f.check("stages", table2.size == MiniGameStage.all.size) { "무대 수 기대 ${table2.size} · Kotlin ${MiniGameStage.all.size}" }
         for ((row, stage) in table2.zip(MiniGameStage.all)) {
             f.check("stages", stage.id == row.int("id") && stage.stageName == row.string("name") &&
                 stage.starCount == row.int("starCount") && stage.hasAuroraBands == boolOf(row["hasAuroraBands"])) { "무대 ${stage.name}" }
@@ -126,5 +128,6 @@ class MiniGameEngineGoldenTest {
         }
         f.assertNone()
         assertTrue(f.compared > 900)
+        assertEquals(listOf("kinds", "canvas", "hops", "stages"), golden.cases.map { it.string("id") }, "framerate/engine case 목록이 바뀌었다")
     }
 }

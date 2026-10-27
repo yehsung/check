@@ -6,7 +6,8 @@ import kotlin.math.floor
 
 /**
  * 타이밍 바 규칙(10라운드). 동일성 등급 **비트**(C§5.1 E5 — 골든 `timing-bar/rules` · `timing-bar/scripted`).
- * 판정 색·글리프는 그림의 것이라 옮기지 않는다(등급 [Verdict] 와 라벨만 — 접근성 글자는 규칙과 한 벌).
+ * 판정 색은 그림의 것이라 옮기지 않는다. 등급 [Verdict] 와 라벨 · 글리프([SegmentGlyph] — 색을 못 보는 눈의 두 번째 채널)는
+ * 규칙과 한 벌이라 옮긴다(골든 `timing-bar/rules` verdict 의 labels · glyphs).
  * Swift 는 값 타입이다. Kotlin 은 참조라 복제가 필요하면 [copy] 를 부른다.
  */
 class TimingBarGame private constructor(
@@ -28,10 +29,20 @@ class TimingBarGame private constructor(
         data class Finished(val total: Int) : Phase
     }
 
-    /** 정지 순간의 판정 등급 — 점수에서만 나오는 순수 함수. 라벨은 색 없이도 결과를 말한다. */
-    enum class Verdict(val label: String) {
-        perfect("완벽!"), great("훌륭!"), good("좋아"), close("아슬"), miss("빗나감"),
+    /**
+     * 정지 순간의 판정 등급 — 점수에서만 나오는 순수 함수. 라벨은 색 없이도 결과를 말한다.
+     * [glyph] 는 라운드 스트립 칸 안의 형태(채운 정도: 꽉 참 → 테두리만 → ×) — 색을 못 보는 눈에도 순서로 읽힌다.
+     */
+    enum class Verdict(val label: String, val glyph: SegmentGlyph) {
+        perfect("완벽!", SegmentGlyph.star),
+        great("훌륭!", SegmentGlyph.disc),
+        good("좋아", SegmentGlyph.diamond),
+        close("아슬", SegmentGlyph.ring),
+        miss("빗나감", SegmentGlyph.cross),
     }
+
+    /** 라운드 스트립 칸 안에 그리는 등급 형태(Swift `TimingBarSegmentGlyph`). 그리기는 화면 몫이고 대응만 규칙이다. */
+    enum class SegmentGlyph { star, disc, diamond, ring, cross }
 
     var phase: Phase = phase
         private set

@@ -15,7 +15,6 @@ import com.yehsung.aingcheck.testkit.golden.string
 import com.yehsung.aingcheck.testkit.golden.stringValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * 길건너 아잉이(v0.3.67, G §8-16) — Kotlin 엔진이 Swift 와 비트로 같다: 규칙표 · 시드 줄 생성(첫 판·둘째 판) · 대본 다섯
@@ -134,6 +133,8 @@ class CrossyGoldenTest {
             f.check("hopProgress", got.toRawBits() == want[i].toRawBits()) { "elapsed $el: Kotlin $got" }
         }
         f.assertNone()
+        assertEquals(listOf("constants", "difficulty", "enums", "overlaps", "lanes", "hopProgress"), golden.cases.map { it.string("id") },
+            "crossy/rules case 목록이 바뀌었다 — 빠진 표는 Kotlin 이 모른다")
     }
 
     @Test
@@ -163,6 +164,8 @@ class CrossyGoldenTest {
         }
         f.assertNone()
         assertEquals(CrossyGame.LaneKind.entries.toSet(), kinds, "시드 줄이 네 종류를 다 내지 않았다")
+        assertEquals(listOf("zero", "one", "answer", "deadbeef", "int63-max", "uint64-max", "pattern", "server"), golden.cases.map { it.string("id") },
+            "crossy/lanes case 목록이 바뀌었다")
     }
 
     private fun fold(g: CrossyGame, h: DualFold) {
@@ -205,6 +208,12 @@ class CrossyGoldenTest {
                 },
             )
         }
+        // 화면·일시정지가 읽는 파생 값(Swift 접기와 같은 순서).
+        h.add(g.isPlaying); h.add(g.isGameOver)
+        val spot = g.occupancy
+        h.add(spot.row); h.add(spot.x)
+        val visual = g.playerVisual
+        h.add(visual.row); h.add(visual.x); h.add(visual.lift)
     }
 
     @Test
@@ -257,6 +266,6 @@ class CrossyGoldenTest {
         }
         f.assertNone()
         assertEquals(CrossyGame.DeathCause.entries.toSet(), causes, "대본이 죽음 다섯 갈래를 다 거치지 않았다")
-        assertTrue(golden.cases.size == 5)
+        assertEquals(listOf("A", "B", "C", "D", "E"), golden.cases.map { it.string("id") }, "crossy/scripted case 목록이 바뀌었다")
     }
 }

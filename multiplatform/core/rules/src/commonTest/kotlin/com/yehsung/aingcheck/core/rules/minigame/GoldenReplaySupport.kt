@@ -91,7 +91,7 @@ object GoldenOps {
 }
 
 /** 프레임 바이트 · 체크포인트를 모으고 Swift 값과 견준다. 실패 문구는 첫 불일치 프레임과 체크포인트 구간을 말한다. */
-class ReplayTrace(private val checkpointEvery: Int) {
+class ReplayTrace(val checkpointEvery: Int) {
     val checkpoints = ArrayList<ULong>()
     private val bytes = StringBuilder()
     var frames: Int = 0

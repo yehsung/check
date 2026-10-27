@@ -15,13 +15,24 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlin.math.abs
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
  * 플래피 — 동일성 등급 **이산**(G §8-14). 틈 중심(pow 에서 나온 값)만 허용 오차 1e-9 로, 나머지(정수·열거와 새·기둥·시계 실수)는 비트로
- * 대조한다. 실측 기록: pow 유도값이 Swift 와 비트까지 같은 비율을 `AINGCHECK-FLAPPY-POW` 줄로 남긴다(단언 아님).
+ * 대조한다. 1e-9 안에서 **비트가 갈린 자리 목록**은 잠근다([KNOWN_POW_BIT_DIVERGENCE_RULES] · [KNOWN_POW_BIT_DIVERGENCE_SCRIPTED],
+ * W1-c NFC 의 knownDivergence 와 같은 꼴) — 세제곱 식이 바뀌어 1e-9 안에서만 흔들려도 목록이 늘거나 줄어 빨강이 된다.
+ * Kotlin 은 (q·q)·q 곱셈뿐이라(IEEE 곱은 JVM·ART 어디서나 같은 비트) 이 목록은 플랫폼마다 같다. 기준은 Swift Darwin pow 의 비트(골든).
  */
 class FlappyGoldenTest {
+    companion object {
+        /** flappy/rules center: Kotlin 곱셈과 Darwin pow 가 비트로 갈린 표본("pipe-k@시각 순번"). 실측 164점 중 이 자리뿐. */
+        val KNOWN_POW_BIT_DIVERGENCE_RULES: Set<String> = setOf("pipe-0@7")
+
+        /** flappy/scripted 득점 틈 중심: 비트로 갈린 득점("case@프레임"). 실측 496점 중 없음. */
+        val KNOWN_POW_BIT_DIVERGENCE_SCRIPTED: Set<String> = emptySet()
+    }
+
     private fun bitsOf(e: JsonElement?): Double? = if (e == null || e is JsonNull) null else Golden.bits(e.stringValue())
     private fun same(a: Double?, b: Double?): Boolean = if (a == null || b == null) a == b else a.toRawBits() == b.toRawBits()
     private fun near(a: Double?, b: Double?, tolerance: Double): Boolean = if (a == null || b == null) a == b else abs(a - b) <= tolerance
@@ -38,6 +49,7 @@ class FlappyGoldenTest {
         val f = GoldenFailures(golden)
         var powExact = 0
         var powTotal = 0
+        val powDiverged = LinkedHashSet<String>()
         for (case in golden.cases) {
             val id = case.string("id")
             when {
@@ -102,7 +114,7 @@ class FlappyGoldenTest {
                         times.forEachIndexed { i, t ->
                             val got = pipe.center(t)
                             powTotal += 1
-                            if (same(got, want[i])) powExact += 1
+                            if (same(got, want[i])) powExact += 1 else powDiverged += "${p.string("id")}@$i"
                             f.check(id, near(got, want[i], tolerance)) { "${p.string("id")} t=$t: 기대 ${want[i]} · Kotlin $got" }
                         }
                     }
@@ -125,8 +137,13 @@ class FlappyGoldenTest {
             }
         }
         f.assertNone()
-        println("AINGCHECK-FLAPPY-POW rules center 비트 일치 $powExact/$powTotal (이산 등급 — 1e-9 안이면 통과)")
+        println("AINGCHECK-FLAPPY-POW rules center 비트 일치 $powExact/$powTotal (이산 등급 — 1e-9 안이면 통과) · 갈린 자리 $powDiverged")
         assertTrue(powTotal >= 100, "틈 중심 표본을 덜 읽었다")
+        assertEquals(KNOWN_POW_BIT_DIVERGENCE_RULES, powDiverged, "pow 유도값이 Swift 와 비트로 갈린 자리 목록이 바뀌었다(1e-9 안이어도) — 세제곱 식을 건드렸나")
+        assertEquals(
+            listOf("constants", "curves", "nextVelocity", "makePipe-0", "makePipe-1", "makePipe-2", "makePipe-3", "center", "rectIntersects"),
+            golden.cases.map { it.string("id") }, "flappy/rules case 목록이 바뀌었다 — 빠진 표는 Kotlin 이 모른다",
+        )
     }
 
     private fun fold(g: FlappyGame, h: DualFold) {
@@ -146,6 +163,10 @@ class FlappyGoldenTest {
             h.add(p.x); h.add(p.centerY); h.add(p.gap); h.add(p.passed)
             h.addOptional(p.shiftDelay); h.add(p.shiftOffset); h.addOptional(p.shiftAt)
         }
+        // 화면이 읽는 파생 값(Swift 접기와 같은 순서).
+        h.add(g.isPlaying); h.add(g.isGameOver); h.add(g.stage.id)
+        val box = g.hitbox
+        h.add(box.x); h.add(box.y); h.add(box.width); h.add(box.height)
     }
 
     @Test
@@ -154,6 +175,7 @@ class FlappyGoldenTest {
         val f = GoldenFailures(golden)
         var powExact = 0
         var powTotal = 0
+        val powDiverged = LinkedHashSet<String>()
         var shiftedPassed = 0
         for (case in golden.cases) {
             val id = case.string("id")
@@ -202,7 +224,7 @@ class FlappyGoldenTest {
             for ((frame, want) in wantCenters) {
                 val got = gotCenters[frame]
                 powTotal += 1
-                if (same(got, want)) powExact += 1
+                if (same(got, want)) powExact += 1 else powDiverged += "$id@$frame"
                 f.check(id, near(got, want, 1e-9)) { "프레임 $frame 득점 틈 중심: 기대 $want · Kotlin $got" }
             }
             f.check(id, g.score == final.int("score")) { "점수 Kotlin ${g.score}" }
@@ -212,7 +234,9 @@ class FlappyGoldenTest {
             f.check(id, near(g.lastScorePipeCenter, bitsOf(final["lastScorePipeCenterBits"]), 1e-9)) { "끝 lastScorePipeCenter" }
         }
         f.assertNone()
-        println("AINGCHECK-FLAPPY-POW scripted 득점 틈 중심 비트 일치 $powExact/$powTotal")
+        println("AINGCHECK-FLAPPY-POW scripted 득점 틈 중심 비트 일치 $powExact/$powTotal · 갈린 자리 $powDiverged")
         assertTrue(powTotal > 50 && shiftedPassed > 0, "대본이 득점·움직이는 기둥을 충분히 거치지 않았다($powTotal, $shiftedPassed)")
+        assertEquals(KNOWN_POW_BIT_DIVERGENCE_SCRIPTED, powDiverged, "득점 틈 중심이 Swift 와 비트로 갈린 자리 목록이 바뀌었다(1e-9 안이어도)")
+        assertEquals(listOf("A", "B", "C", "D", "E"), golden.cases.map { it.string("id") }, "flappy/scripted case 목록이 바뀌었다")
     }
 }

@@ -3,7 +3,7 @@
     "crossy/lanes": {
       "file": "13dae244963e3ca96b5894c4c5a5467f557de7d7520a364b7d47bb7676e5a4d6",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "185264a8d703021ebcc3d8032e0801fa8ea5b7ec8974bcdc940fb1e4db969049"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "adc0828fe98eea0978efcba1f7c73740a89f514c71a1aecf4c5861600f1cc8c5"
       },
       "swiftSources": {
         "Sources/CheckCore/CrossyGame.swift": "9d059c7a86139cad0acaf6af53f88b7cd306dbab54f96b7cd1f76550857a3f67",
@@ -13,7 +13,7 @@
     "crossy/rules": {
       "file": "817c3c4dff5ffa1f10135d6301cc18024e5a7d1e45e0d3d945a2a445610e9b7a",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "185264a8d703021ebcc3d8032e0801fa8ea5b7ec8974bcdc940fb1e4db969049"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "adc0828fe98eea0978efcba1f7c73740a89f514c71a1aecf4c5861600f1cc8c5"
       },
       "swiftSources": {
         "Sources/CheckCore/CrossyGame.swift": "9d059c7a86139cad0acaf6af53f88b7cd306dbab54f96b7cd1f76550857a3f67",
@@ -21,9 +21,9 @@
       }
     },
     "crossy/scripted": {
-      "file": "a8c167645e7d6bec5df562282ffab87409a2956695d11fa9d329480a910b5d78",
+      "file": "b52aa7e88c63f1a973b255151486f3ef6a100a80f7df4b499694e33a21b85bb5",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "185264a8d703021ebcc3d8032e0801fa8ea5b7ec8974bcdc940fb1e4db969049"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "adc0828fe98eea0978efcba1f7c73740a89f514c71a1aecf4c5861600f1cc8c5"
       },
       "swiftSources": {
         "Sources/CheckCore/CrossyGame.swift": "9d059c7a86139cad0acaf6af53f88b7cd306dbab54f96b7cd1f76550857a3f67",
@@ -33,7 +33,7 @@
     "flappy/rules": {
       "file": "e3c858577d40aba0cf583900afb5be5f49d9192e193d4f214ba63d08f2c069e8",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "f177648c901bdc46b5ed917539d524cc60937e800f52afffabf140f94f811695"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "e5d8b19a2ac780a8f9d2226bac20bc1e39976b5cf080ab8777c3c5f5d951ee74"
       },
       "swiftSources": {
         "Sources/CheckCore/FlappyGame.swift": "0e1a3b9d1c734d7f114faeb67de25d9d509e0eb91501513a5ce0e1bb46710cf4",
@@ -41,9 +41,9 @@
       }
     },
     "flappy/scripted": {
-      "file": "84590d13f2532077ab872dc3cf7d6a369be6d5d5d9c698d957b440a58d7910f0",
+      "file": "69b81d7475520cd0a9287d0a5664828e2f77904afa51146c6ce78976fe8ee786",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "f177648c901bdc46b5ed917539d524cc60937e800f52afffabf140f94f811695"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "e5d8b19a2ac780a8f9d2226bac20bc1e39976b5cf080ab8777c3c5f5d951ee74"
       },
       "swiftSources": {
         "Sources/CheckCore/FlappyGame.swift": "0e1a3b9d1c734d7f114faeb67de25d9d509e0eb91501513a5ce0e1bb46710cf4",
@@ -53,7 +53,7 @@
     "framerate/engine": {
       "file": "dcdf4af32f350fc10fa7f3006abf59ae9b54c8abde50dbdaa03aa781b39c2b46",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "f177648c901bdc46b5ed917539d524cc60937e800f52afffabf140f94f811695"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "e5d8b19a2ac780a8f9d2226bac20bc1e39976b5cf080ab8777c3c5f5d951ee74"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e"
@@ -62,7 +62,7 @@
     "framerate/fps": {
       "file": "fdfc0826b7b1248668881bf522017fd8b6b6c8d2e777415f8647e0b8cdb41c96",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "f177648c901bdc46b5ed917539d524cc60937e800f52afffabf140f94f811695"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "e5d8b19a2ac780a8f9d2226bac20bc1e39976b5cf080ab8777c3c5f5d951ee74"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e"
@@ -81,7 +81,7 @@
     "tetris/bags": {
       "file": "c54de62a8cd56d6873480a1d390218458f57b9ce14988ee2dffef1276f5a0c7c",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "f8cdc13d5750db27df037a033de8ac328c0e1959c4e9942bf10d9f92264ffb4e"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -89,9 +89,9 @@
       }
     },
     "tetris/duel": {
-      "file": "b06db46f0629c7c4cee1d6c07af30f4477acf28e1bf6b97474abd3554c43cca5",
+      "file": "6de07ee451b401dc28de6f16f2094d81f7b04952b765337991c18b9e599fea3c",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "f8cdc13d5750db27df037a033de8ac328c0e1959c4e9942bf10d9f92264ffb4e"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -103,7 +103,7 @@
     "tetris/duel-rules": {
       "file": "9e6132ae1251d4a4e3bac3d45964e74f77df409eadefb2323d395e0007ae732f",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "f8cdc13d5750db27df037a033de8ac328c0e1959c4e9942bf10d9f92264ffb4e"
       },
       "swiftSources": {
         "Sources/CheckCore/TetrisDuelBoard.swift": "99594e62723d91506f295d8a2ff788deff4afe0446d8b1b64ad79890ad5952d9",
@@ -111,10 +111,20 @@
         "Sources/CheckCore/TetrisGame.swift": "37e5fa3d35131071b360f7a4203c070b8b8326db6072938b3efb5fbfc005071c"
       }
     },
+    "tetris/fixtures": {
+      "file": "7ca9e1177107168a92d563d0556e4c70faabf38e735e5ddcc8c56e557b60192c",
+      "generator": {
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "f8cdc13d5750db27df037a033de8ac328c0e1959c4e9942bf10d9f92264ffb4e"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
+        "Sources/CheckCore/TetrisGame.swift": "37e5fa3d35131071b360f7a4203c070b8b8326db6072938b3efb5fbfc005071c"
+      }
+    },
     "tetris/garbage-holes": {
       "file": "ac638af19c89249147955188943552f3888c0c8274dc4d896592edd3662d1674",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "f8cdc13d5750db27df037a033de8ac328c0e1959c4e9942bf10d9f92264ffb4e"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -124,7 +134,7 @@
     "tetris/rules": {
       "file": "4951b8747644e10b9c74d6ab749387c503e8a4fa186f121f1648a1273e8a3581",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "f8cdc13d5750db27df037a033de8ac328c0e1959c4e9942bf10d9f92264ffb4e"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -133,9 +143,9 @@
       }
     },
     "tetris/scripted": {
-      "file": "8980284fdebaa5538a988595c356a3c64768aae5a5d935dd7796de07545abf2f",
+      "file": "9dd82b3443b125c67871340834047509b2147497f3b57bb20f109c4aa05dda3c",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "f8cdc13d5750db27df037a033de8ac328c0e1959c4e9942bf10d9f92264ffb4e"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -143,9 +153,9 @@
       }
     },
     "timing-bar/rules": {
-      "file": "f733de2d8172330a56f3b2e736a809cea6f70c4dccadc27391b7b22065ec1e5d",
+      "file": "e231ba55690c1d6550f4410bd5f01a9ca46851f5ccc3238acc4c3c682de08d5c",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "f177648c901bdc46b5ed917539d524cc60937e800f52afffabf140f94f811695"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "e5d8b19a2ac780a8f9d2226bac20bc1e39976b5cf080ab8777c3c5f5d951ee74"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -155,7 +165,7 @@
     "timing-bar/scripted": {
       "file": "6908df803a423954f3b13696f0a5e54b95e2f920e9214d7659332d3ca13c7f40",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "f177648c901bdc46b5ed917539d524cc60937e800f52afffabf140f94f811695"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportMiniGames.swift": "e5d8b19a2ac780a8f9d2226bac20bc1e39976b5cf080ab8777c3c5f5d951ee74"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",

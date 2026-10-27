@@ -251,13 +251,19 @@ struct GoldenExportTetris {
     static let checkpointEvery = 64
 
     /// 조종사 없이 연산만으로 다시 돈다 — 누적 해시(= C-X2 정의) · 체크포인트 · 프레임 바이트.
+    /// 파생 값(ghost · isPlaying · isGameOver · difficultyLevel · pendingGarbageLines)은 light 접기(V0360 고정)에 못 넣으므로
+    /// 따로 접은 누적 해시 · 체크포인트로 싣는다.
     static func replay(start: TetrisGame, preOps: [GoldenTetrisOp], frames: [[GoldenTetrisOp]], dt: Double)
-        -> (hash: UInt64, checkpoints: [UInt64], bytes: String, frames: Int, game: TetrisGame) {
+        -> (hash: UInt64, checkpoints: [UInt64], bytes: String, frames: Int, game: TetrisGame,
+            derivedHash: UInt64, derivedCheckpoints: [UInt64]) {
         var g = start
         for op in preOps { op.apply(to: &g) }
         var total = GoldenFNV1a64()
         GoldenTetrisFold.board(g, into: &total)
+        var derived = GoldenFNV1a64()
+        for v in GoldenTetrisDerived.values(g) { derived.add(v) }
         var checkpoints: [UInt64] = []
+        var derivedCheckpoints: [UInt64] = []
         var bytes = GoldenFrameBytes()
         var frame = 0
         for ops in frames {
@@ -272,11 +278,15 @@ struct GoldenExportTetris {
                 GoldenTetrisFold.board(g, into: &total)
                 GoldenTetrisFold.board(g, into: &local)
             }
+            for v in GoldenTetrisDerived.values(g) { derived.add(v) }
             bytes.append(local.value)
-            if frame % checkpointEvery == 0 { checkpoints.append(total.value) }
+            if frame % checkpointEvery == 0 {
+                checkpoints.append(total.value)
+                derivedCheckpoints.append(derived.value)
+            }
             if case .result = g.phase { break }
         }
-        return (total.value, checkpoints, bytes.text, frame, g)
+        return (total.value, checkpoints, bytes.text, frame, g, derived.value, derivedCheckpoints)
     }
 
     @Test("tetris/scripted — 대본 A~G: 연산 RLE → 64프레임 체크포인트 · 프레임 바이트 · 끝 상태(A~D 해시 = V0360)")
@@ -317,6 +327,8 @@ struct GoldenExportTetris {
                 "checkpoints": .string(run.checkpoints.map(GoldenBits.hex64).joined(separator: " ")),
                 "frameBytes": .string(run.bytes),
                 "final": GoldenTetrisText.final(run.game, hash: run.hash, frames: run.frames),
+                "derived": ["hash": .hex64(run.derivedHash),
+                            "checkpoints": .string(run.derivedCheckpoints.map(GoldenBits.hex64).joined(separator: " "))],
             ])
         }
         goldenEmit(GoldenFile(
@@ -330,6 +342,203 @@ struct GoldenExportTetris {
                 "frameBytes": "프레임마다 그 프레임 몫(light + 바뀐 판)만 새 FNV 로 접은 값의 아래 1바이트 16진 — 첫 불일치 프레임 번호를 짚는다",
                 "final.board": "40행을 / 로 이은 글자(. 빈 칸, ijlostz)",
                 "v0360": "A~D 의 final.hash = V0360TetrisSoloGoldenTests 박힌 해시(C-X2)",
+                "derived": "파생 값 누적 FNV(따로): 시작 판(preOps 뒤) 한 번 + 프레임마다 step 뒤 ghost(piece·rotation·column·row, 없으면 −1) · isPlaying · isGameOver · difficultyLevel · pendingGarbageLines(정수·불 1/0). checkpoints 는 checkpointEvery 마다",
+            ],
+            cases: cases
+        ))
+    }
+
+    // MARK: - tetris/fixtures (G3 — 손으로 짠 판: T-스핀 정식·미니·킥 · B2B · 퍼펙트 클리어)
+
+    /// 손으로 짠 판 대본 하나. 시작 = boardFixture(rows) + 활성 조각(piece · rotation · column · row) + 넥스트 + 사슬 값.
+    /// plans[k] = k 번째로 떨어지는 조각에 프레임마다 하나씩 넣을 연산(_base 연산 글자). expect = 처음 굳힘들의 사건 글자.
+    struct FixtureCase {
+        var id: String
+        var seed: UInt64
+        var rows: [String]
+        var piece: TetrisGame.Piece
+        var rotation: TetrisGame.Rotation
+        var column: Int
+        var row: Int
+        var next: [TetrisGame.Piece]
+        var backToBack: Int
+        var combo: Int
+        var plans: [[String]]
+        var expect: [String]
+    }
+
+    static let fixtureDt = 1.0 / 60.0
+    static let fixtureCheckpointEvery = 16
+    /// T-스핀 더블 자리(V0338 픽스처): 36행 4열 처마 + 37행 4~6열 슬롯 + 38행 5열 구멍.
+    static let tsdRows = ["...#......", "###...####", "####.#####", "#########."]
+    /// 5번째(마지막) 킥으로만 들어가는 자리. 앞 모서리 하나(아래 오른쪽)가 비어 있어 3코너만으로는 미니다 — 마지막 킥이 정식으로 올린다.
+    static let finalKickRows = [".#........", "#...######", "#.########", "#..#######", "#..#######"]
+    /// 위와 같되 맨 아래 줄이 막혀 4코너 · 세 줄(T-스핀 트리플).
+    static let tstRows = [".#........", "#...######", "#.########", "#..#######", "#.########"]
+    /// finalKickRows 를 좌우로 뒤집은 자리 — 반시계(0→3) 킥표의 마지막 칸.
+    static let finalKickMirrorRows = ["........#.", "######...#", "########.#", "#######..#", "#######..#"]
+    static let rightFour = ["R+", "R-", "R+", "R-", "R+", "R-", "R+", "R-"]
+
+    static let fixtureCases: [FixtureCase] = [
+        FixtureCase(id: "tsd", seed: 1, rows: tsdRows, piece: .t, rotation: .right, column: 3, row: 36,
+                    next: [.i, .o, .l], backToBack: -1, combo: -1, plans: [["CW", "ACT"], ["ACT"]],
+                    expect: ["2:full:0:0:1200:1"]),
+        FixtureCase(id: "tsd-b2b", seed: 2, rows: tsdRows, piece: .t, rotation: .right, column: 3, row: 36,
+                    next: [.o, .i, .s], backToBack: 0, combo: 2, plans: [["CW", "ACT"], ["ACT"]],
+                    expect: ["2:full:1:0:1950:1"]),
+        FixtureCase(id: "no-rotation", seed: 3, rows: tsdRows, piece: .t, rotation: .flip, column: 3, row: 36,
+                    next: [.j, .z], backToBack: 0, combo: -1, plans: [["ACT"]],
+                    expect: ["2:none:0:0:300:1"]),
+        FixtureCase(id: "mini", seed: 4, rows: ["#.........", "...#######", "#.########"], piece: .t, rotation: .spawn,
+                    column: 0, row: 37, next: [.t, .i], backToBack: -1, combo: -1, plans: [["CW", "ACT"], ["ACT"]],
+                    expect: ["1:mini:0:0:200:0"]),
+        FixtureCase(id: "mini-kick", seed: 5, rows: ["#.........", "....######", "#.########"], piece: .t, rotation: .spawn,
+                    column: 1, row: 37, next: [.s, .z], backToBack: 0, combo: -1, plans: [["CW", "ACT"]],
+                    expect: ["1:mini:1:0:300:0"]),
+        FixtureCase(id: "mini-zero", seed: 6, rows: ["#.........", "...#######", "#.#######."], piece: .t, rotation: .spawn,
+                    column: 0, row: 37, next: [.l, .o], backToBack: 1, combo: 4, plans: [["CW", "ACT"]],
+                    expect: ["0:mini:0:0:100:0"]),
+        FixtureCase(id: "final-kick", seed: 7, rows: finalKickRows, piece: .t, rotation: .spawn, column: 1, row: 35,
+                    next: [.i, .t], backToBack: -1, combo: -1, plans: [["CW", "ACT"], ["ACT"]],
+                    expect: ["2:full:0:0:1200:1"]),
+        FixtureCase(id: "final-kick-ccw", seed: 8, rows: finalKickMirrorRows, piece: .t, rotation: .spawn, column: 6, row: 35,
+                    next: [.o, .j], backToBack: -1, combo: -1, plans: [["CCW", "ACT"]],
+                    expect: ["2:full:0:0:1200:1"]),
+        FixtureCase(id: "tst", seed: 9, rows: tstRows, piece: .t, rotation: .spawn, column: 1, row: 35,
+                    next: [.i, .i], backToBack: 0, combo: -1, plans: [["CW", "ACT"], ["ACT"]],
+                    expect: ["3:full:1:0:2400:2"]),
+        FixtureCase(id: "b2b-tetris-pc", seed: 10, rows: Array(repeating: "#########.", count: 8), piece: .i, rotation: .right,
+                    column: 7, row: 20, next: [.i, .t, .o], backToBack: -1, combo: -1,
+                    plans: [["ACT"], ["CW"] + rightFour + ["ACT"]],
+                    expect: ["4:none:0:0:800:4", "4:none:1:1:4450:4"]),
+        FixtureCase(id: "pc-double", seed: 11, rows: ["########..", "########.."], piece: .o, rotation: .spawn,
+                    column: 7, row: TetrisGame.spawnRow, next: [.t, .s], backToBack: -1, combo: -1, plans: [["ACT"]],
+                    expect: ["2:none:0:1:1500:1"]),
+    ]
+
+    static func fixtureStart(_ c: FixtureCase) -> TetrisGame {
+        TetrisGame(seed: c.seed, board: TetrisGame.boardFixture(bottomRows: c.rows),
+                   active: TetrisGame.ActivePiece(piece: c.piece, rotation: c.rotation, column: c.column, row: c.row),
+                   next: c.next, combo: c.combo, backToBack: c.backToBack)
+    }
+
+    /// 조종사(Swift 몫만): 새 조각이 뜰 때마다 그 조각의 계획을 프레임마다 하나씩 넣는다. 계획이 끝난 다음 조각이 뜨면 20프레임 더 돌고 멈춘다.
+    static func fixturePilot(_ c: FixtureCase) -> [[String]] {
+        var g = fixtureStart(c)
+        var frames: [[String]] = []
+        var piece = -1
+        var opIndex = 0
+        var lastAdvance = Int.min
+        var tail = 0
+        while frames.count < 900 {
+            var ops: [String] = []
+            if case .running = g.phase, g.active != nil, g.advance != lastAdvance {
+                lastAdvance = g.advance
+                piece += 1
+                opIndex = 0
+            }
+            if case .running = g.phase, piece >= 0, piece < c.plans.count, opIndex < c.plans[piece].count {
+                ops.append(c.plans[piece][opIndex])
+                opIndex += 1
+            }
+            for op in ops { GoldenTetrisOp(rawValue: op)!.apply(to: &g) }
+            g.step(dt: Self.fixtureDt)
+            frames.append(ops)
+            if piece >= c.plans.count { tail += 1 }
+            if tail >= 20 { break }
+            if case .result = g.phase { break }
+        }
+        return frames
+    }
+
+    struct FixtureRun {
+        var hash: UInt64
+        var checkpoints: [UInt64]
+        var bytes: String
+        var frames: Int
+        var events: [String]
+        var game: TetrisGame
+    }
+
+    /// 재생(Kotlin 과 같은 순서): 시작 판 → [board · light · derived] 접기 → 프레임마다 [연산 → step(dt) → light · derived,
+    /// advance 가 바뀐 프레임엔 board 와 사건 글자] · 결과 단계면 멈춘다.
+    static func fixtureReplay(_ c: FixtureCase, frames: [[String]]) -> FixtureRun {
+        var g = Self.fixtureStart(c)
+        var h = GoldenDualFold()
+        func board() { for row in g.board { for cell in row { h.add(cell?.rawValue ?? -1) } } }
+        func lightAndDerived() {
+            for v in GoldenTetrisLight.values(g) { h.add(v) }
+            for v in GoldenTetrisDerived.values(g) { h.add(v) }
+        }
+        board()
+        lightAndDerived()
+        var checkpoints: [UInt64] = []
+        var bytes = GoldenFrameBytes()
+        var events: [String] = []
+        var frame = 0
+        for ops in frames {
+            frame += 1
+            h.beginFrame()
+            let before = g.advance
+            for op in ops { GoldenTetrisOp(rawValue: op)!.apply(to: &g) }
+            g.step(dt: Self.fixtureDt)
+            lightAndDerived()
+            if g.advance != before {
+                board()
+                events.append(GoldenTetrisDerived.event(g.lastClear))
+            }
+            bytes.append(h.frame.value)
+            if frame % Self.fixtureCheckpointEvery == 0 { checkpoints.append(h.total.value) }
+            if case .result = g.phase { break }
+        }
+        return FixtureRun(hash: h.total.value, checkpoints: checkpoints, bytes: bytes.text, frames: frame, events: events, game: g)
+    }
+
+    @Test("tetris/fixtures — 손으로 짠 판 열하나(TSD · B2B TSD · 회전 없음 · 미니 · 킥 미니 · 0줄 미니 · 마지막 킥 정식 · 반시계 마지막 킥 · TST · B2B 테트리스 + 퍼펙트 · 퍼펙트 더블)")
+    func fixtures() {
+        var cases: [GoldenJSON] = []
+        var seen = Set<String>()
+        for c in Self.fixtureCases {
+            let start = Self.fixtureStart(c)
+            #expect(start.fits(start.active!), "\(c.id): 시작 조각이 판에 안 들어간다")
+            let rle = GoldenOpsRLE.encode(Self.fixturePilot(c))
+            let run = Self.fixtureReplay(c, frames: GoldenOpsRLE.decode(rle))
+            #expect(Array(run.events.prefix(c.expect.count)) == c.expect, "\(c.id): 노린 판정이 아니다 — \(run.events)")
+            for e in run.events {
+                let parts = e.split(separator: ":")
+                if parts[1] != "none" { seen.insert("\(parts[1])-\(parts[0] == "0" ? "zero" : "lines")") }
+                if parts[2] == "1" { seen.insert("b2b-\(parts[1])") }
+                if parts[3] == "1" { seen.insert(parts[2] == "1" ? "pc-b2b" : "pc") }
+                if parts[0] == "4" { seen.insert("tetris") }
+            }
+            cases.append([
+                "id": .string(c.id), "seed": .hex64(c.seed), "dtBits": .bits(Self.fixtureDt),
+                "start": [
+                    "kind": "fixture", "rows": .array(c.rows.map { GoldenJSON.string($0) }),
+                    "active": ["piece": .string(String(GoldenTetrisText.letters[c.piece.rawValue])), "rotation": .int(c.rotation.rawValue),
+                               "column": .int(c.column), "row": .int(c.row)],
+                    "next": .string(GoldenTetrisText.pieces(c.next)), "backToBack": .int(c.backToBack), "combo": .int(c.combo),
+                ],
+                "ops": .string(rle), "checkpointEvery": .int(Self.fixtureCheckpointEvery),
+                "checkpoints": .string(run.checkpoints.map(GoldenBits.hex64).joined(separator: " ")),
+                "frameBytes": .string(run.bytes),
+                "events": .string(run.events.joined(separator: " ")),
+                "final": GoldenTetrisText.final(run.game, hash: run.hash, frames: run.frames),
+            ])
+        }
+        // 대본 전체가 E3 의 판정 갈래를 다 지난다(검증 지적: T-스핀 정식 · B2B · 마지막 킥 · 퍼펙트가 어떤 골든도 안 지났다).
+        let required: Set<String> = ["full-lines", "mini-lines", "mini-zero", "b2b-full", "b2b-mini", "b2b-none", "pc", "pc-b2b", "tetris"]
+        #expect(required.isSubset(of: seen), "손으로 짠 대본이 판정 갈래를 다 지나지 않았다: 빠짐 \(required.subtracting(seen).sorted())")
+        goldenEmit(GoldenFile(
+            golden: "tetris/fixtures",
+            equivalence: .bit,
+            swiftSources: [Self.engine, Self.rngSource],
+            spec: [
+                "start": "TetrisGame(seed, board: boardFixture(bottomRows: rows), active: ActivePiece(piece 글자 ijlostz, rotation rawValue, column, row), phase: running, next: 글자, combo, backToBack)",
+                "frame": "프레임 f(1부터): 연산(_base 글자 — L± R± SD± CW CCW HOLD ACT)을 적힌 순서대로 → step(dt) → 접기. 결과 단계면 멈춘다",
+                "fold": "누적 FNV(프레임 바이트는 그 프레임 몫만). 시작: board(40×10 rawValue, 빈 칸 −1) → light → derived. 프레임마다: light(tetris/scripted 와 같은 열) → derived(ghost · isPlaying · isGameOver · difficultyLevel · pendingGarbageLines) → advance 가 바뀐 프레임엔 board",
+                "events": "advance 가 바뀐 프레임마다 lastClear 를 \"줄:스핀(none·mini·full):B2B 0/1:퍼펙트 0/1:점수:공격\" 으로(공백으로 이음)",
+                "cases": "tsd(3코너 · 앞 모서리 둘 → 정식) · tsd-b2b(사슬 0 에서 정식 더블 → ×1.5 · 콤보) · no-rotation(회전 없이 같은 자리 → none) · mini(제자리 회전 · 앞 하나 → 미니 싱글) · mini-kick(2번째 킥 → 미니, B2B 사슬) · mini-zero(줄 없는 미니 — 사슬 그대로) · final-kick(5번째 킥 → 앞 하나여도 정식 더블) · final-kick-ccw(반시계 0→3 의 5번째 킥) · tst(5번째 킥 · 4코너 트리플 · B2B) · b2b-tetris-pc(테트리스 두 번 → 둘째가 B2B + 퍼펙트 3200) · pc-double(O 로 두 줄 → 퍼펙트 1200)",
             ],
             cases: cases
         ))
@@ -515,7 +724,7 @@ struct GoldenExportTetris {
                 "start": "resume 칸이 있으면 TetrisDuelSession(seed:resumingFrom:), 없으면 TetrisDuelSession(seed:). now = 0 에서 preOps → 판 전체 접기(아래 board)",
                 "frame": "프레임 f(1부터): now = f × dt. 연산을 적힌 순서대로 → (N 이 없으면) advance(to: now) → reportReason(at: now) 이 있으면 makeReport(at: now) → 접기",
                 "ops": "L+ L- R+ R- SD+ SD- = set*Held · CW CCW = rotate · HOLD = hold() · HD = hardDrop() · ML MR = moveLeft/RightOneCell() · SD1 = softDropOneCell() · REL = releaseAllKeys() · FIN = finish() · A<n> = absorbOpponentAttack(total: n) · Q<n> = adoptServerSeq(n) · SY<a>/<b> = syncStart(startAtMs: a, serverNowMs: b, localNow: now) · N = 이 프레임은 advance 를 부르지 않는다(멎은 화면 — 다음 advance 가 따라잡는다)",
-                "fold": "누적 FNV(프레임 바이트는 그 프레임 몫만): tetris/scripted 의 light(game) → levelFloor · pendingGarbage 개수·묶음 · attackSentTotal → 세션 startAt(없으면 0, 있으면 1+비트) · simulated · started · finished · droppedSeconds · garbageApplied · seq · lastReportAt(같은 꼴) · reportedAttackSent · reportedToppedOut · isLive · toppedOut → 보고(없으면 0, 있으면 까닭 순번+1(ready 1 · toppedOut 2 · attack 3 · heartbeat 4) · seq · board 바이트마다 · lines · garbageSent · garbageApplied · pending · toppedOut) → advance 가 바뀐 프레임엔 board(40×10 rawValue, 빈 칸 −1) + garbageMask 40행",
+                "fold": "누적 FNV(프레임 바이트는 그 프레임 몫만): tetris/scripted 의 light(game) → levelFloor · pendingGarbage 개수·묶음 · attackSentTotal → 세션 startAt(없으면 0, 있으면 1+비트) · simulated · started · finished · droppedSeconds · garbageApplied · seq · lastReportAt(같은 꼴) · reportedAttackSent · reportedToppedOut · isLive · toppedOut → matchElapsed(at: now)(같은 꼴) · countdownRemaining(at: now)(같은 꼴) · currentLevelFloor · tetris/scripted 의 derived 값 열(game) → 보고(없으면 0, 있으면 까닭 순번+1(ready 1 · toppedOut 2 · attack 3 · heartbeat 4) · seq · board 바이트마다 · lines · garbageSent · garbageApplied · pending · toppedOut) → advance 가 바뀐 프레임엔 board(40×10 rawValue, 빈 칸 −1) + garbageMask 40행",
                 "reports": "만든 보고 수",
                 "maxLevelFloor": "대본 동안 엔진이 받은 가속 바닥의 최댓값(재생 확인용)",
             ],
@@ -579,47 +788,10 @@ enum GoldenDuelReplay {
         for mask in s.game.garbageMask { h.add(Int(mask)) }
     }
 
-    static func fold(_ s: TetrisDuelSession, reason: TetrisDuelReportReason?, report: TetrisDuelReport?, into h: inout GoldenDualFold) {
-        var light = GoldenFNV1a64()
-        // light 접기는 _base 의 정의를 그대로 쓰되 두 해시에 같이 싣기 위해 값을 다시 접는다.
+    static func fold(_ s: TetrisDuelSession, now: Double, reason: TetrisDuelReportReason?, report: TetrisDuelReport?,
+                     into h: inout GoldenDualFold) {
         let g = s.game
-        func lightValues() -> [UInt64] {
-            var out: [UInt64] = []
-            func a(_ x: Int) { out.append(UInt64(bitPattern: Int64(x))) }
-            func d(_ x: Double) { out.append(x.bitPattern) }
-            func b(_ x: Bool) { out.append(x ? 1 : 0) }
-            if let p = g.active { a(p.piece.rawValue); a(p.rotation.rawValue); a(p.column); a(p.row) } else { a(-1) }
-            a(g.next.count)
-            for p in g.next { a(p.rawValue) }
-            a(g.heldPiece?.rawValue ?? -1)
-            b(g.holdUsed)
-            a(g.score); a(g.advance); a(g.lines); a(g.combo); a(g.backToBack)
-            switch g.phase {
-            case .ready: a(0)
-            case .running: a(1)
-            case .lineClear(let left): a(2); d(left)
-            case .are(let left): a(3); d(left)
-            case .over(let hold): a(4); d(hold)
-            case .result: a(5)
-            }
-            d(g.elapsed)
-            if let c = g.lastClear {
-                a(c.lines)
-                switch c.spin { case .none: a(0); case .mini: a(1); case .full: a(2) }
-                b(c.backToBack); b(c.perfectClear); a(c.points); d(c.at)
-            } else {
-                a(-2)
-            }
-            a(g.level); a(g.scoreLevel); b(g.isGrounded)
-            return out
-        }
-        let values = lightValues()
-        // 자기 확인: 위 값들이 _base 의 goldFoldLight 와 같은 열이다.
-        var check = GoldenFNV1a64()
-        GoldenTetrisFold.light(g, into: &check)
-        for v in values { light.add(v) }
-        precondition(light.value == check.value, "대결 접기의 light 몫이 _base GoldenTetrisFold.light 와 갈렸다")
-        for v in values { h.add(v) }
+        for v in GoldenTetrisLight.values(g) { h.add(v) }
         h.add(g.levelFloor)
         h.add(g.pendingGarbage.count)
         for n in g.pendingGarbage { h.add(n) }
@@ -636,6 +808,11 @@ enum GoldenDuelReplay {
         h.add(s.reportedToppedOut)
         h.add(s.isLive)
         h.add(s.toppedOut)
+        // 화면이 읽는 시계·파생 값(검증 지적: 카운트다운 클램프 · 판 경과 · 가속 바닥 · 고스트 등이 어느 골든에도 없었다).
+        h.add(s.matchElapsed(at: now))
+        h.add(s.countdownRemaining(at: now))
+        h.add(s.currentLevelFloor)
+        for v in GoldenTetrisDerived.values(g) { h.add(v) }
         if let reason, let report {
             h.add(Self.ordinal(reason) + 1)
             h.add(report.seq)
@@ -682,7 +859,7 @@ enum GoldenDuelReplay {
             let reason = s.reportReason(at: now)
             let report = reason.map { _ in s.makeReport(at: now) }
             if let reason { reports += 1; reasons.insert(ordinal(reason)); lastReport = report }
-            fold(s, reason: reason, report: report, into: &h)
+            fold(s, now: now, reason: reason, report: report, into: &h)
             if s.game.advance != before { board(s, into: &h) }
             bytes.append(h.frame.value)
             if frame % checkpointEvery == 0 { checkpoints.append(h.total.value) }
@@ -830,7 +1007,7 @@ enum GoldenDuelPilot {
             if !ops.contains("N") { s.advance(to: now) }
             let reason = s.reportReason(at: now)
             let report = reason.map { _ in s.makeReport(at: now) }
-            GoldenDuelReplay.fold(s, reason: reason, report: report, into: &h)
+            GoldenDuelReplay.fold(s, now: now, reason: reason, report: report, into: &h)
             if s.game.advance != before { GoldenDuelReplay.board(s, into: &h) }
             frames.append(ops)
         }

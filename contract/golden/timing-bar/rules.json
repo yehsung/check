@@ -24,6 +24,13 @@
     },
     {
       "from": -1,
+      "glyphs": [
+        "perfect=star",
+        "great=disc",
+        "good=diamond",
+        "close=ring",
+        "miss=cross"
+      ],
       "id": "verdict",
       "labels": [
         "perfect=완벽!",
@@ -49,7 +56,7 @@
   "spec": {
     "markerPosition": "2·|x − floor(x + 0.5)|, x = t / period(Swift (x + 0.5).rounded(.down))",
     "roundScore": "d ≤ 1 이면 100 − Int((30·d).rounded()) — .rounded() 는 0.5 를 0 에서 먼 쪽으로(경계 (k+0.5)/30 을 싣는다), 아니면(NaN 포함) 0",
-    "verdict": "점수 −1…101 → 등급 이름(공백으로 이음)"
+    "verdict": "점수 −1…101 → 등급 이름(공백으로 이음). labels = 등급=라벨, glyphs = 등급=라운드 스트립 글리프(TimingBarSegmentGlyph — 색을 못 보는 눈의 두 번째 채널)"
   },
   "swiftSources": [
     "Sources/CheckCore/TimingBarGame.swift",

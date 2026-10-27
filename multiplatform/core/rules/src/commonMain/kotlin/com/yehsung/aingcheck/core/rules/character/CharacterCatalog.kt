@@ -1,13 +1,15 @@
 // 원본: Sources/CheckCore/CharacterKit/CharacterCatalog.swift @ 1b8260d
 package com.yehsung.aingcheck.core.rules.character
 
+import com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds
+
 /**
  * 이 빌드가 세울 수 있는 캐릭터 전부. **안전망이 이 타입의 존재 이유다** — 번들이 비어도(또는 전부 깨져도) 아잉이 있고,
  * 파일에서 읽은 캐릭터가 하나 깨지면 **그 하나만 건너뛴다**.
  *
- * 의존 방향 메모(배정표 round5 · W1-d 와 맞출 것): 와이어(`ShopCharacterRow.isPurchasable/isGiftOnly` · `CharacterGiftOffer.choosable`)가
- * 아래 내장 id 상수와 [isGachaOnlyBuiltIn] · [isGiftOnlyBuiltIn] · [giftOnlyBuiltInIDs] 를 부른다. rules 는 wire 에 기대고 거꾸로는 안 되므로
- * 병합 때 이 상수·판정을 core/wire(`BuiltInCharacterIds`)로 옮기고 여기서는 다시 쓰기만 한다(값은 골든 `gift/catalog` 가 잠근다).
+ * 내장 id 상수와 [isGachaOnlyBuiltIn] · [isGiftOnlyBuiltIn] · [giftOnlyBuiltInIDs] 는 와이어(`core.wire.character.BuiltInCharacterIds`, W1-d)가
+ * 한 벌로 갖고 여기서는 다시 쓰기만 한다(배정표 round5 36행 — 와이어 `ShopCharacterRow` · `CharacterGiftOffer.choosable` 가 부른다).
+ * 값 · 차례는 골든 `gift/catalog` 가 이 겉을 거쳐 와이어 상수까지 잰다.
  */
 class CharacterCatalog(entries: List<Entry>) {
     /** 카탈로그 한 칸 — 매니페스트와 그 에셋이 있는 폴더(저장소·번들 상대 경로 글자). 내장 항목은 폴더가 없다. */
@@ -45,7 +47,7 @@ class CharacterCatalog(entries: List<Entry>) {
 
     companion object {
         /** 아잉의 고정 id — "모르는 캐릭터 → 아잉" 폴백이 전부 이 값을 쓴다. */
-        const val builtInAingID = "aing"
+        const val builtInAingID = BuiltInCharacterIds.builtInAingID
 
         /** 번들 안 캐릭터 폴더 이름. */
         const val charactersSubdirectory = "Characters"
@@ -56,16 +58,16 @@ class CharacterCatalog(entries: List<Entry>) {
          * 황금 아잉이(v0.3.54)의 고정 id. 서버 CHECK·가격표·`gacha_pool` 의 id 와 같다.
          * INV-CharacterCatalog-ccf7c186 이식: 매니페스트 파일로는 못 싣는다(파일 id 문법 `[a-z0-9-]` 은 밑줄 금지 · scene3D 는 초상을 못 가진다) — 코드에 박는다.
          */
-        const val goldAingID = "aing_gold"
+        const val goldAingID = BuiltInCharacterIds.goldAingID
         val builtInGoldAing = CharacterManifest(id = goldAingID, displayName = "황금 아잉이", kind = CharacterManifest.Kind.scene3D)
 
         /** 무지개 아잉이(v0.3.59). */
-        const val rainbowAingID = "aing_rainbow"
+        const val rainbowAingID = BuiltInCharacterIds.rainbowAingID
         val builtInRainbowAing = CharacterManifest(id = rainbowAingID, displayName = "무지개 아잉이", kind = CharacterManifest.Kind.scene3D)
 
         /** 딸기 · 초코 케이크 아잉이(v0.3.66 — 생일 선물 전용: 루비 · 뽑기 · 조각으로 못 얻고 운영자가 지급한 선물에서 골라 받는다). */
-        const val cakeStrawberryAingID = "aing_cake_strawberry"
-        const val cakeChocoAingID = "aing_cake_choco"
+        const val cakeStrawberryAingID = BuiltInCharacterIds.cakeStrawberryAingID
+        const val cakeChocoAingID = BuiltInCharacterIds.cakeChocoAingID
         val builtInCakeStrawberryAing = CharacterManifest(id = cakeStrawberryAingID, displayName = "딸기 케이크 아잉이", kind = CharacterManifest.Kind.scene3D)
         val builtInCakeChocoAing = CharacterManifest(id = cakeChocoAingID, displayName = "초코 케이크 아잉이", kind = CharacterManifest.Kind.scene3D)
 
@@ -75,26 +77,26 @@ class CharacterCatalog(entries: List<Entry>) {
         )
 
         /** 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 그 id 다). */
-        fun isGoldAing(id: String?): Boolean = id == goldAingID
-        fun isRainbowAing(id: String?): Boolean = id == rainbowAingID
+        fun isGoldAing(id: String?): Boolean = BuiltInCharacterIds.isGoldAing(id)
+        fun isRainbowAing(id: String?): Boolean = BuiltInCharacterIds.isRainbowAing(id)
 
         /** 루비로 **절대** 안 파는 내장(황금 · 무지개) — 서버 표식이 빠져도 뽑기 · 조각으로만 얻는다. */
-        fun isGachaOnlyBuiltIn(id: String?): Boolean = isGoldAing(id) || isRainbowAing(id)
+        fun isGachaOnlyBuiltIn(id: String?): Boolean = BuiltInCharacterIds.isGachaOnlyBuiltIn(id)
 
         /** 희귀 내장의 표시 순서 — 황금 먼저, 무지개 다음. */
-        val gachaOnlyBuiltInIDs: List<String> = listOf(goldAingID, rainbowAingID)
+        val gachaOnlyBuiltInIDs: List<String> = BuiltInCharacterIds.gachaOnlyBuiltInIDs
 
-        fun isCakeAing(id: String?): Boolean = id == cakeStrawberryAingID || id == cakeChocoAingID
+        fun isCakeAing(id: String?): Boolean = BuiltInCharacterIds.isCakeAing(id)
 
         /**
          * 생일 선물로만 얻는 내장(딸기 · 초코 케이크) — 서버 `gift_only` 표식이 빠져도 루비 · 뽑기 · 조각으로는 못 얻는다.
          * INV-CharacterCatalog-d7d845ac 이식: [isGachaOnlyBuiltIn] 과 **겹치지 않는다**(케이크는 뽑기 전용이 아니다 — 뽑기 화면 · 확률표 ·
          * 교환 목록에 서지 않는다). 서버가 케이크 행에 `gacha_only = true` 도 싣지만 '뽑기 전용' 판정은 선물 전용을 먼저 본다.
          */
-        fun isGiftOnlyBuiltIn(id: String?): Boolean = isCakeAing(id)
+        fun isGiftOnlyBuiltIn(id: String?): Boolean = BuiltInCharacterIds.isGiftOnlyBuiltIn(id)
 
         /** 생일 선물 내장의 순서 — **딸기 먼저, 초코 다음**(표시 순서 · 선물 선택지 순서가 같다). */
-        val giftOnlyBuiltInIDs: List<String> = listOf(cakeStrawberryAingID, cakeChocoAingID)
+        val giftOnlyBuiltInIDs: List<String> = BuiltInCharacterIds.giftOnlyBuiltInIDs
 
         /** 폴더 없는 매니페스트만으로 만드는 편의 생성자(시험·메모리 카탈로그). */
         fun of(manifests: List<CharacterManifest>): CharacterCatalog = CharacterCatalog(manifests.map { Entry(it, null) })

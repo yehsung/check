@@ -68,12 +68,7 @@ object StatusMessage {
     }
 
     /** 남의(또는 내) 상태를 화면에 올리기 전 관문. null · 빈 값 · 보이는 글자 없는 값은 null(줄을 안 그린다). */
-    fun display(raw: String?): String? {
-        if (raw == null) return null
-        val normalized = sanitized(raw)
-        if (normalized.isEmpty() || !MessageBody.hasVisibleContent(normalized)) return null
-        return normalized
-    }
+    fun display(raw: String?): String? = RulesWireTextRules.statusMessageDisplay(raw)   // 와이어 판정 한 벌(병합 접기)
 
     /** 입력칸 카운터 문구("12/40"). */
     fun counterText(raw: String): String = "${length(raw)}/$maxLength"

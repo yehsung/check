@@ -359,10 +359,16 @@ def self_test() -> int:
             if quiet_check() != 1:
                 failures.append("원본 Swift 코드를 바꿨는데 --check 가 초록이다")
             restore()
-            golden_rel = manifest["goldens"][0]["path"]
+            # 심는 결함은 값 한 글자다. "0x"(hex64) 가 있는 골든을 먼저 고르고, 없으면 첫 골든의 첫 case id 를 바꾼다 —
+            # 목록 첫 골든에 "0x" 가 없으면(W1-c 갈래 단독: dates/ailimit.json) replace 가 아무것도 안 바꿔 시험이 헛돌았다.
+            def plant(raw: bytes) -> bytes:
+                return raw.replace(b'"0x', b'"0X', 1) if b'"0x' in raw else raw.replace(b'"id": "', b'"id": "planted-', 1)
+            golden_rel = next((g["path"] for g in manifest["goldens"] if b'"0x' in originals[g["path"]]), manifest["goldens"][0]["path"])
             data = originals[golden_rel]
+            if plant(data) == data:
+                failures.append(f"심은 결함이 골든 바이트를 못 바꿨다({golden_rel}) — 자기 시험이 헛돈다")
             with open(os.path.join(tmp, golden_rel), "wb") as f:
-                f.write(data.replace(b'"0x', b'"0X', 1))
+                f.write(plant(data))
             if quiet_check() != 1:
                 failures.append("골든 바이트를 바꿨는데 --check 가 초록이다")
             restore()
@@ -382,7 +388,7 @@ def self_test() -> int:
                 failures.append("CRLF 로 풀린 체크아웃(Windows autocrlf)에서 --check 가 빨갛다")
             crlf_golden = open(os.path.join(tmp, golden_rel), "rb").read()
             with open(os.path.join(tmp, golden_rel), "wb") as f:
-                f.write(crlf_golden.replace(b'"0x', b'"0X', 1))
+                f.write(plant(crlf_golden))
             if quiet_check() != 1:
                 failures.append("CRLF 체크아웃 위에서 골든 값을 바꿨는데 --check 가 초록이다(줄 끝 접기가 값까지 가렸다)")
             restore()

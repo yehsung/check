@@ -1,14 +1,30 @@
 // 원본: Sources/CheckCore/SupabaseWorkModels.swift:2379-2450(MessageBodyValidation · MessageBody) @ 1b8260d
 package com.yehsung.aingcheck.core.rules.text
 
+import com.yehsung.aingcheck.core.wire.WireTextRules
+import com.yehsung.aingcheck.core.wire.MessageBody as WireMessageBody
+import com.yehsung.aingcheck.core.wire.MessageBodyValidation as WireMessageBodyValidation
+
 /**
- * 메시지 본문 사전 판정 결과(Swift `MessageBodyValidation`).
- *
- * 와이어 파일(SupabaseWorkModels)에 있던 **글자 규칙**이다(C§3.2 C-1 "와이어 파일에 있지만 규칙이다"). 보이는 글자 판정이
- * G §8-16 ② 의 번들 표에 기대므로 글자 규칙 자리(rules/text)에 둔다 — 와이어(W1-d)는 rules 를 부를 수 없으니(의존 rules → wire)
- * W1-d 는 글자 기초를 `WireTextRules` 이음새로 받는다. 병합 때 조정자 접기 패치(W1-c 5차 04)가 이 구현을 그 이음새에 꽂고, 한도 · 검사
- * 순서는 와이어 판정 한 벌로 모은다(같은 규칙의 사본이 둘이 되지 않게).
+ * W1-d 와이어의 글자 규칙 이음새([WireTextRules])에 꽂는 **실제 구현**(병합 접기 — 검증 지적: 같은 규칙의 사본이 둘이었다).
+ * 한도 · 검사 순서는 와이어(`core.wire.MessageBody` · `ContentReportDetail` · `statusMessageDisplay`)가 한 벌로 갖고, 글자 기초
+ * (NFC · 보이는 글자 번들 표 · 상태메시지 다듬기)는 여기(rules/text)가 댄다. 앱 조립(K11)은 서비스에 이 객체를 넘긴다.
+ * rules 쪽 `MessageBody` · `ContentReportDetail` · `StatusMessage.display` 는 와이어 판정을 부르는 얇은 겉이라 골든
+ * text/sanitize · text/block-report · text/megaphone · text/status-message 가 와이어 판정까지 잰다.
  */
+object RulesWireTextRules : WireTextRules {
+    override fun sanitized(raw: String): String = MessageBody.sanitized(raw)
+    override fun hasVisibleContent(text: String): Boolean = MessageBody.hasVisibleContent(text)
+    override fun statusMessageSanitized(raw: String): String = StatusMessage.sanitized(raw)
+}
+
+internal fun WireMessageBodyValidation.toRules(): MessageBodyValidation = when (this) {
+    is WireMessageBodyValidation.Ok -> MessageBodyValidation.ok(text)
+    WireMessageBodyValidation.Empty -> MessageBodyValidation.empty
+    is WireMessageBodyValidation.TooLong -> MessageBodyValidation.tooLong(maxLength.toInt())
+}
+
+/** 메시지 본문 사전 판정 결과(Swift `MessageBodyValidation`) — 와이어 판정([WireMessageBodyValidation])을 rules 모양으로. */
 sealed interface MessageBodyValidation {
     /** 실제로 보낼 문자열(정규화 완료). 원문이 아니라 **이 값**을 서버로 보내야 한다. */
     data class ok(val value: String) : MessageBodyValidation
@@ -23,7 +39,7 @@ sealed interface MessageBodyValidation {
  */
 object MessageBody {
     /** 상한. **단위는 유니코드 스칼라(코드포인트)** 이고 서버 `char_length` 와 같은 눈금이다(String.length·그래핌으로 세지 않는다). */
-    const val maxLength: Int = 200
+    val maxLength: Int = WireMessageBody.maxLength.toInt()
 
     /**
      * 사용자 입력 → 실제로 보낼 문자열: ① NFC(맥 입력기·파인더 붙여넣기의 자모 분해를 합친다) ② 앞뒤 공백·개행 trim.
@@ -34,7 +50,7 @@ object MessageBody {
     fun sanitized(raw: String): String = TextScalars.trimmingWhitespacesAndNewlines(TextNormalization.nfc(raw))
 
     /** 서버와 **같은 눈금**의 길이(정규화 후 코드포인트 수). 화면 카운터("N/200")도 이 값을 쓴다. */
-    fun length(raw: String): Int = sanitized(raw).codePointCountCompat()
+    fun length(raw: String): Int = WireMessageBody.length(raw, RulesWireTextRules)
 
     /**
      * 눈에 보이는 글자가 하나라도 있는가. 한글 채움(U+3164)처럼 폭 0 인 '글자'는 보이지 않는다(별명 사칭에 뚫린 전례).
@@ -46,11 +62,6 @@ object MessageBody {
         return false
     }
 
-    /** **검사 순서가 문구를 정한다.** 빈 판정이 먼저다 — 공백만 200자 친 입력에 "200자까지예요"라고 하지 않는다. */
-    fun validate(raw: String): MessageBodyValidation {
-        val normalized = sanitized(raw)
-        if (!hasVisibleContent(normalized)) return MessageBodyValidation.empty
-        if (normalized.codePointCountCompat() > maxLength) return MessageBodyValidation.tooLong(maxLength)
-        return MessageBodyValidation.ok(normalized)
-    }
+    /** **검사 순서가 문구를 정한다.** 빈 판정이 먼저다 — 공백만 200자 친 입력에 "200자까지예요"라고 하지 않는다(와이어 판정 한 벌). */
+    fun validate(raw: String): MessageBodyValidation = WireMessageBody.validate(raw, RulesWireTextRules).toRules()
 }

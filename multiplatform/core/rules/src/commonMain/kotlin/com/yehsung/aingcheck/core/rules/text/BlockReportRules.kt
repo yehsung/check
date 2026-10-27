@@ -145,14 +145,12 @@ object BlockReportRules {
  * Swift 는 서비스 파일(SupabaseWorkServiceBlocks)에 두었지만 글자 규칙이라 여기 둔다(전선 갈래가 쓰려면 조정자 이전 — 완료 보고).
  */
 object ContentReportDetail {
-    const val maxLength = 200
-    fun sanitized(raw: String): String = MessageBody.sanitized(raw)
-    fun length(raw: String): Int = MessageBody.length(raw)
+    /** 한도·판정은 와이어(`core.wire.ContentReportDetail`) 한 벌 — 여기는 [RulesWireTextRules] 를 꽂는 겉이다. */
+    val maxLength: Int = com.yehsung.aingcheck.core.wire.ContentReportDetail.maxLength.toInt()
+    fun sanitized(raw: String): String = RulesWireTextRules.sanitized(raw)
+    fun length(raw: String): Int = com.yehsung.aingcheck.core.wire.MessageBody.length(raw, RulesWireTextRules)
     /** 자유 입력은 **선택**이다 — 비어 있어도 신고는 나간다. 넘치면 보내지 않는다. */
-    fun isWithinLimit(raw: String): Boolean = length(raw) <= maxLength
+    fun isWithinLimit(raw: String): Boolean = com.yehsung.aingcheck.core.wire.ContentReportDetail.isWithinLimit(raw, RulesWireTextRules)
     /** 실제로 보낼 값(보이는 글자가 없으면 null — 전선에는 null 이 실린다). */
-    fun payload(raw: String): String? {
-        val normalized = sanitized(raw)
-        return if (MessageBody.hasVisibleContent(normalized)) normalized else null
-    }
+    fun payload(raw: String): String? = com.yehsung.aingcheck.core.wire.ContentReportDetail.payload(raw, RulesWireTextRules)
 }

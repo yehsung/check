@@ -105,13 +105,8 @@ object MegaphoneBody {
 
     fun length(raw: String): Int = MessageBody.length(raw)
 
-    fun validate(raw: String, maxLength: Int? = null): MessageBodyValidation {
-        val normalized = MessageBody.sanitized(raw)
-        if (!MessageBody.hasVisibleContent(normalized)) return MessageBodyValidation.empty
-        val cap = maxLength ?: this.maxLength
-        if (normalized.codePointCountCompat() > cap) return MessageBodyValidation.tooLong(cap)
-        return MessageBodyValidation.ok(normalized)
-    }
+    fun validate(raw: String, maxLength: Int? = null): MessageBodyValidation =
+        com.yehsung.aingcheck.core.wire.MessageBody.validate(raw, RulesWireTextRules, (maxLength ?: this.maxLength).toLong()).toRules()
 
     /** 서비스 래퍼의 사전 판정(Swift `sendMegaphone` 앞머리) — 빈/긴 본문은 서버를 부르지 않고 이 응답으로 끝낸다. 보낼 수 있으면 null. */
     fun localRefusal(raw: String): MegaphoneSendResponse? = when (val v = validate(raw)) {

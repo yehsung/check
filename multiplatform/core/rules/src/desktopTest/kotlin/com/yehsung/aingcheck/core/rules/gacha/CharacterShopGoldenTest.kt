@@ -82,6 +82,8 @@ class CharacterShopGoldenTest {
         assertJson(builtins["builtIns"], arr(CharacterCatalog.builtIns.map {
             obj("id" to s(it.id), "displayName" to s(it.displayName), "kind" to s(it.kind.rawValue), "finish" to s(it.finish.name))
         }), "내장 다섯(표시 순서)")
+        // 병합 접기: 내장 id 의 정본은 와이어(BuiltInCharacterIds, W1-d) — 카탈로그의 내장 차례가 그 목록과 같아야 한다.
+        assertEquals(com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds.builtInIDs, CharacterCatalog.builtIns.map { it.id }, "와이어 내장 id 차례")
         assertEquals(builtins.string("builtInAingID"), CharacterCatalog.builtInAingID)
         assertEquals(builtins.string("goldAingID"), CharacterCatalog.goldAingID)
         assertEquals(builtins.string("rainbowAingID"), CharacterCatalog.rainbowAingID)

@@ -9,6 +9,8 @@
 #                    경로 필터의 Sources/ 는 통째다(W1-e): ui 시험이 Swift 원문(SF 기호 대응·팔레트 대조)과 맥 그림(Gradle Sync)을 읽는다.
 #  - windows-x64   : windows-latest, java.exe 아웃바운드 차단 방화벽 봉인 아래 데스크톱 시험 + 대조(A-X16). changes 경로 필터로만 거른다.
 #  - windows-arm64 : windows-11-arm, 같은 방화벽 봉인 게이트(W1-f ① 러너 2종). Android SDK 를 받고 OOBE 화면을 걷는 준비 단계가 더 있다.
+#  - landing-unit  : ubuntu, landing 글자 검사(check-glyphs) + sudo unshare -n 봉인 아래 단위 시험(W2-i 검증 지적 — CI·gate-fast 어디에도
+#                    landing 이 없었다). changes 의 landing 경로 필터로만 거른다(landing/ · docs/privacy.md · 이 파일).
 # 대조는 scripts/canary-contrast.sh 가 '봉인이 새었다'는 이유의 빨강일 때만 통과시킨다. 봉인 게이트의 시험 결과는 대조 전에 따로 올린다.
 # 액션은 SHA 로 고정한다(공개 저장소 공급망).
 name: mp-ci
@@ -32,6 +34,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       mp: ${{ steps.filter.outputs.mp }}
+      landing: ${{ steps.filter.outputs.landing }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,11 +51,11 @@ jobs:
           case "$EVENT" in
             push) from="$BEFORE"; to="$GITHUB_SHA" ;;
             pull_request) from="$PR_BASE"; to="$PR_HEAD" ;;
-            *) echo "mp=true" >> "$GITHUB_OUTPUT"; echo "이벤트 $EVENT → 전부 돈다"; exit 0 ;;
+            *) { echo "mp=true"; echo "landing=true"; } >> "$GITHUB_OUTPUT"; echo "이벤트 $EVENT → 전부 돈다"; exit 0 ;;
           esac
           if [ -z "$from" ] || [ "$from" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$from^{commit}" 2>/dev/null || ! git cat-file -e "$to^{commit}" 2>/dev/null; then
-            echo "mp=true" >> "$GITHUB_OUTPUT"; echo "비교 기준 없음($EVENT from=$from) → 전부 돈다"; exit 0
+            { echo "mp=true"; echo "landing=true"; } >> "$GITHUB_OUTPUT"; echo "비교 기준 없음($EVENT from=$from) → 전부 돈다"; exit 0
           fi
           if [ "$EVENT" = "pull_request" ]; then range="$from...$to"; else range="$from..$to"; fi
           if git diff --name-only "$range" \
@@ -60,6 +63,14 @@ jobs:
             echo "mp=true" >> "$GITHUB_OUTPUT"
           else
             echo "mp=false" >> "$GITHUB_OUTPUT"
+          fi
+          # landing: 단위 시험이 docs/privacy.md 도 읽는다(계정 삭제 페이지의 백업 고지 ↔ 처리방침 확정 줄 맞물림).
+          #   목록을 변수로 받아 here-string 으로 거른다 — grep -q 가 일찍 끝나 앞 단계가 SIGPIPE 로 죽으면 pipefail 이 '안 바뀜'으로 뒤집는다.
+          changed="$(git diff --name-only "$range")"
+          if grep -E '^(landing/|docs/privacy\.md$|\.github/workflows/mp-ci\.yml$)' <<<"$changed" > /dev/null; then
+            echo "landing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "landing=false" >> "$GITHUB_OUTPUT"
           fi
 
   golden-digest:
@@ -126,6 +137,50 @@ jobs:
           # --upstream: main 이 바꾸고 머리가 바이트까지 그대로 가져온 경로(기준선 병합 몫, G §8-13)만 뺀다.
           # main 이 안 바꾼 경로를 main 판으로 되돌리는 것은 그대로 센다(lane-ownership.py 머리말 · self-test UPSTREAM_CASES).
           python3 -I multiplatform/tools/lane-ownership.py --lane "$lane" --base origin/xplat/main --head "$HEAD_SHA" --upstream origin/main
+
+  landing-unit:
+    # landing(웹 계정 삭제 /delete-account 등)의 회귀 방어(W2-i 검증 지적). next build 는 하지 않는다(배포는 사람이 Vercel CLI 로).
+    #  - 글자 검사: prebuild 와 같은 check-glyphs — 서브셋(public/fonts)에 없는 한글이 있으면 Vercel 빌드가 깨진다. 새 문구를 병합하며
+    #    글꼴 서브셋 갱신(npm run subset)을 빠뜨리면 여기서 빨강이다.
+    #  - 단위 시험: 실서버 0(가짜 fetch). jvm-gate 와 같은 sudo unshare -n 봉인(lo 만) 아래에서, 봉인이 걸렸는지 먼저 확인한다.
+    needs: changes
+    if: needs.changes.outputs.landing == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: landing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # 로컬(맥) 실측 판. test:unit 은 --experimental-strip-types 라 22.6 이상이어야 한다.
+          node-version: '22.13.1'
+          package-manager-cache: false
+      - name: 의존 받기(봉인 밖 — 설치 스크립트는 돌리지 않는다)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: 글자 검사(prebuild 의 check-glyphs)
+        run: node scripts/check-glyphs.mjs
+      - name: 단위 시험 — sudo unshare -n 봉인(lo 만) 아래
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/landing-sealed.sh" <<'SH'
+          set -euo pipefail
+          # 봉인 확인: 바깥 연결이 실패해야 한다(되면 봉인이 샌 것 — 빨강).
+          if node -e 'fetch("https://example.com").then(() => process.exit(0), () => process.exit(1))'; then
+            echo "::error::봉인이 새었다 — 봉인 안에서 바깥 연결이 됐다"; exit 1
+          fi
+          echo "봉인 확인: 바깥 연결 실패(정상)"
+          npm run test:unit
+          SH
+          # gate-fast.sh 의 Linux 봉인과 같은 꼴: 루트로 새 망 이름공간 → lo 만 올림 → 원래 사용자·PATH·HOME 으로 내려온다.
+          sudo -n unshare --net -- /bin/sh -c '
+            ip link set lo up || exit 3
+            user="$1"; path="$2"; home="$3"; shift 3
+            exec sudo -n -E -u "$user" env PATH="$path" HOME="$home" /bin/bash "$@"
+          ' sh "$(id -un)" "$PATH" "$HOME" "$RUNNER_TEMP/landing-sealed.sh"
 
   jvm-gate:
     needs: changes

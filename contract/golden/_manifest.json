@@ -1,7 +1,56 @@
 {
-  "exportTests": 13,
+  "exportTests": 28,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
+    {
+      "cases": 83,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+      "golden": "errors/classify",
+      "path": "contract/golden/errors/classify.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkHTTP.swift",
+        "Sources/CheckCore/SupabaseWorkService.swift",
+        "Sources/CheckCore/AuthErrorRules.swift",
+        "Sources/CheckCore/BlockReportRules.swift"
+      ]
+    },
+    {
+      "cases": 22,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+      "golden": "jwt/expiry",
+      "path": "contract/golden/jwt/expiry.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/JWTClaims.swift"
+      ]
+    },
+    {
+      "cases": 43,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift",
+      "golden": "realtime/frames",
+      "path": "contract/golden/realtime/frames.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RealtimeTransport.swift"
+      ]
+    },
+    {
+      "cases": 3,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift",
+      "golden": "realtime/link-walk",
+      "path": "contract/golden/realtime/link-walk.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RealtimeLink.swift",
+        "Sources/CheckCore/JWTClaims.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
+      ]
+    },
     {
       "cases": 12,
       "equivalence": "bit",
@@ -12,6 +61,250 @@
       "swiftSources": [
         "Sources/CheckCore/MiniGameEngine.swift",
         "Sources/CheckCore/GomokuAIEngine.swift"
+      ]
+    },
+    {
+      "cases": 66,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-demo-games",
+      "path": "contract/golden/wire/decode-demo-games.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 42,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-demo-me",
+      "path": "contract/golden/wire/decode-demo-me.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 52,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-demo-other",
+      "path": "contract/golden/wire/decode-demo-other.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 85,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-fixtures-chess",
+      "path": "contract/golden/wire/decode-fixtures-chess.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 104,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-fixtures-gomoku",
+      "path": "contract/golden/wire/decode-fixtures-gomoku.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 35,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-fixtures-message-todo",
+      "path": "contract/golden/wire/decode-fixtures-message-todo.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 22,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-synthetic",
+      "path": "contract/golden/wire/decode-synthetic.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 48,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+      "golden": "wire/numbers",
+      "path": "contract/golden/wire/numbers.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkService.swift"
+      ]
+    },
+    {
+      "cases": 151,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift",
+      "golden": "wire/requests",
+      "path": "contract/golden/wire/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkService.swift",
+        "Sources/CheckCore/SupabaseWorkHTTP.swift",
+        "Sources/CheckCore/DuelRPC.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/ChessWire.swift",
+        "Sources/CheckCore/TetrisWire.swift",
+        "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+        "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+        "Sources/CheckCore/SupabaseWorkServiceSignUp.swift",
+        "Sources/CheckCore/SupabaseWorkServiceSignUpOTP.swift",
+        "Sources/CheckCore/SupabaseWorkServiceTodoSync.swift",
+        "Sources/CheckCore/AppUserCharacters.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/DailyMissions.swift",
+        "Sources/CheckCore/Achievements.swift",
+        "Sources/CheckCore/Gacha.swift",
+        "Sources/CheckCore/WeeklyWorkReward.swift",
+        "Sources/CheckCore/Megaphone.swift",
+        "Sources/CheckCore/TodoSync.swift",
+        "Sources/CheckCore/StatusMessage.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+        "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
+        "Sources/CheckMobileKit/Me/MeProfileService.swift",
+        "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 56,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+      "golden": "wire/rules",
+      "path": "contract/golden/wire/rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"
       ]
     }
   ],

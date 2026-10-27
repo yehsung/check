@@ -1,0 +1,5784 @@
+{
+  "cases": [
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-10-20T03:04:05.123+00:00",
+          "bestScore": 4210,
+          "center": "seoul",
+          "day": "2026-10-20",
+          "displayName": " 아잉 ",
+          "userId": "AA000000-0000-4000-8000-0000000000A1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": null,
+          "bestScore": 5,
+          "center": null,
+          "day": null,
+          "displayName": null,
+          "userId": null
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": null,
+          "bestScore": null,
+          "center": null,
+          "day": null,
+          "displayName": null,
+          "userId": "bb"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": null,
+          "bestScore": null,
+          "center": null,
+          "day": null,
+          "displayName": null,
+          "userId": null
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "x",
+          "bestScore": 3,
+          "center": null,
+          "day": null,
+          "displayName": null,
+          "userId": "cc"
+        }
+      ],
+      "id": "alltime-basic",
+      "json": "[{\"user_id\":\" AA000000-0000-4000-8000-0000000000A1 \",\"display_name\":\" 아잉 \",\"avatar_url\":\"\",\"best_score\":4210,\"best_at\":\"2026-10-20T03:04:05.123+00:00\",\"day\":\"2026-10-20\",\"center\":\"seoul\"},{\"user_id\":null,\"best_score\":5},{\"user_id\":\"bb\",\"best_score\":\"7\",\"day\":\"  \"},7,{\"user_id\":\"cc\",\"best_score\":3.0,\"best_at\":\"x\"}]",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ],
+            [
+              "$[0].bestScore",
+              null
+            ],
+            [
+              "$[0].center",
+              null
+            ],
+            [
+              "$[0].day",
+              null
+            ],
+            [
+              "$[0].displayName",
+              null
+            ],
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ],
+            [
+              "$[0].bestScore",
+              null
+            ],
+            [
+              "$[0].center",
+              null
+            ],
+            [
+              "$[0].day",
+              null
+            ],
+            [
+              "$[0].displayName",
+              null
+            ],
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "enum",
+          "path": "$[0].avatar_url",
+          "result": [
+            [
+              "$[0].avatarUrl",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$[0].best_score",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [],
+      "id": "alltime-empty",
+      "json": "[]",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": []
+    },
+    {
+      "dump": {
+        "autoAbandonStreak": 2,
+        "blackAutoStreak": null,
+        "blackUser": {
+          "avatarUrl": null,
+          "capable": null,
+          "center": null,
+          "character": null,
+          "displayName": "가",
+          "inMatch": null,
+          "isWorking": null,
+          "userId": "a"
+        },
+        "match": {
+          "black": null,
+          "board": "b",
+          "challenger": null,
+          "deadlineMs": {
+            "$f64": "427a0c450e130800"
+          },
+          "endReason": null,
+          "finishedMs": null,
+          "id": "m",
+          "inviteExpiresMs": null,
+          "moveCount": null,
+          "opponent": null,
+          "result": null,
+          "stake": null,
+          "startedMs": null,
+          "status": "active",
+          "turn": null,
+          "turnStartedMs": null,
+          "white": null,
+          "winner": null
+        },
+        "moves": [
+          {
+            "auto": false,
+            "color": "black",
+            "kind": null,
+            "seq": 1,
+            "x": 7,
+            "y": 7
+          }
+        ],
+        "serverNowMs": {
+          "$f64": "427a0c4506c00000"
+        },
+        "status": "ok",
+        "watchers": 3,
+        "whiteAutoStreak": null,
+        "whiteUser": {
+          "avatarUrl": null,
+          "capable": null,
+          "center": null,
+          "character": null,
+          "displayName": null,
+          "inMatch": null,
+          "isWorking": null,
+          "userId": "b"
+        }
+      },
+      "id": "watch-live-gomoku",
+      "json": "{\"status\":\"ok\",\"server_now_ms\":1790000000000,\"watchers\":3,\"match\":{\"id\":\"m\",\"status\":\"active\",\"board\":\"b\",\"deadline_ms\":1790000030000.5},\"moves\":[{\"seq\":1,\"color\":\"black\",\"x\":7,\"y\":7,\"auto\":false}],\"black_user\":{\"user_id\":\"a\",\"display_name\":\"가\"},\"white_user\":{\"user_id\":\"b\"},\"auto_abandon_streak\":2}",
+      "type": "GomokuWatchResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "unknown"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.server_now_ms",
+          "result": [
+            [
+              "$.serverNowMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.server_now_ms",
+          "result": [
+            [
+              "$.serverNowMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.server_now_ms",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.server_now_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.server_now_ms",
+          "result": [
+            [
+              "$.serverNowMs.$f64",
+              "427a0c4506c00800"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.server_now_ms",
+          "result": [
+            [
+              "$.serverNowMs.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.watchers",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.watchers",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.watchers",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match",
+          "result": [
+            [
+              "$.match",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match",
+          "result": [
+            [
+              "$.match",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.status",
+          "result": [
+            [
+              "$.match.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.status",
+          "result": [
+            [
+              "$.match.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.status",
+          "result": [
+            [
+              "$.match.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.board",
+          "result": [
+            [
+              "$.match.board",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.board",
+          "result": [
+            [
+              "$.match.board",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.board",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.board",
+          "result": [
+            [
+              "$.match.board",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.deadline_ms",
+          "result": [
+            [
+              "$.match.deadlineMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.deadline_ms",
+          "result": [
+            [
+              "$.match.deadlineMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match.deadline_ms",
+          "result": "error"
+        },
+        {
+          "op": "int",
+          "path": "$.match.deadline_ms",
+          "result": [
+            [
+              "$.match.deadlineMs.$f64",
+              "4008000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves",
+          "result": [
+            [
+              "$.moves",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves",
+          "result": [
+            [
+              "$.moves",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves",
+          "result": "error"
+        },
+        {
+          "op": "empty",
+          "path": "$.moves",
+          "result": [
+            [
+              "$.moves",
+              []
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].seq",
+          "result": [
+            [
+              "$.moves[0].seq",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].seq",
+          "result": [
+            [
+              "$.moves[0].seq",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0].seq",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.moves[0].seq",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.moves[0].seq",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.moves[0].seq",
+          "result": [
+            [
+              "$.moves[0].seq",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].color",
+          "result": [
+            [
+              "$.moves[0].color",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].color",
+          "result": [
+            [
+              "$.moves[0].color",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.moves[0].color",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.moves[0].color",
+          "result": [
+            [
+              "$.moves[0].color",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].x",
+          "result": [
+            [
+              "$.moves[0].x",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].x",
+          "result": [
+            [
+              "$.moves[0].x",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0].x",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.moves[0].x",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.moves[0].x",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.moves[0].x",
+          "result": [
+            [
+              "$.moves[0].x",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].y",
+          "result": [
+            [
+              "$.moves[0].y",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].y",
+          "result": [
+            [
+              "$.moves[0].y",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0].y",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.moves[0].y",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.moves[0].y",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.moves[0].y",
+          "result": [
+            [
+              "$.moves[0].y",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].auto",
+          "result": [
+            [
+              "$.moves[0].auto",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].auto",
+          "result": [
+            [
+              "$.moves[0].auto",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0].auto",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.moves[0].auto",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.black_user",
+          "result": [
+            [
+              "$.blackUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.black_user",
+          "result": [
+            [
+              "$.blackUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.black_user",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.black_user.user_id",
+          "result": [
+            [
+              "$.blackUser.userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.black_user.user_id",
+          "result": [
+            [
+              "$.blackUser.userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.black_user.user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.black_user.user_id",
+          "result": [
+            [
+              "$.blackUser.userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.black_user.display_name",
+          "result": [
+            [
+              "$.blackUser.displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.black_user.display_name",
+          "result": [
+            [
+              "$.blackUser.displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.black_user.display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.black_user.display_name",
+          "result": [
+            [
+              "$.blackUser.displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.white_user",
+          "result": [
+            [
+              "$.whiteUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.white_user",
+          "result": [
+            [
+              "$.whiteUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.white_user",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.white_user.user_id",
+          "result": [
+            [
+              "$.whiteUser.userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.white_user.user_id",
+          "result": [
+            [
+              "$.whiteUser.userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.white_user.user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.white_user.user_id",
+          "result": [
+            [
+              "$.whiteUser.userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.auto_abandon_streak",
+          "result": [
+            [
+              "$.autoAbandonStreak",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.auto_abandon_streak",
+          "result": [
+            [
+              "$.autoAbandonStreak",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.auto_abandon_streak",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.auto_abandon_streak",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.auto_abandon_streak",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.auto_abandon_streak",
+          "result": [
+            [
+              "$.autoAbandonStreak",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "blackUser": null,
+        "inCheck": true,
+        "match": {
+          "black": null,
+          "blackGraceMs": null,
+          "blackMsLeft": null,
+          "challenger": null,
+          "deadlineMs": null,
+          "drawOfferBy": null,
+          "endReason": null,
+          "fen": "8/8/8/8/8/8/8/8 w - - 0 1",
+          "finishedMs": null,
+          "id": "m",
+          "incrementMs": 0,
+          "inviteExpiresMs": null,
+          "opponent": null,
+          "plyCount": null,
+          "result": null,
+          "stake": null,
+          "startedMs": null,
+          "status": null,
+          "turn": null,
+          "turnStartedMs": null,
+          "white": null,
+          "whiteGraceMs": null,
+          "whiteMsLeft": 59000,
+          "winner": null
+        },
+        "moves": [
+          {
+            "color": null,
+            "fen": null,
+            "from": 12,
+            "msLeft": null,
+            "msSpent": null,
+            "promo": null,
+            "san": "e4",
+            "seq": 1,
+            "to": 28
+          }
+        ],
+        "serverNowMs": null,
+        "status": "ok",
+        "watchers": 0,
+        "whiteUser": null
+      },
+      "id": "watch-live-chess",
+      "json": "{\"status\":\"ok\",\"watchers\":0,\"in_check\":true,\"match\":{\"id\":\"m\",\"fen\":\"8/8/8/8/8/8/8/8 w - - 0 1\",\"white_ms_left\":59000,\"increment_ms\":0},\"moves\":[{\"seq\":1,\"from\":12,\"to\":28,\"san\":\"e4\"}]}",
+      "type": "ChessWatchResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "unknown"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.watchers",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.watchers",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.watchers",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.in_check",
+          "result": [
+            [
+              "$.inCheck",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.in_check",
+          "result": [
+            [
+              "$.inCheck",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.in_check",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.in_check",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.match",
+          "result": [
+            [
+              "$.match",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match",
+          "result": [
+            [
+              "$.match",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.fen",
+          "result": [
+            [
+              "$.match.fen",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.fen",
+          "result": [
+            [
+              "$.match.fen",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.fen",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.fen",
+          "result": [
+            [
+              "$.match.fen",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.white_ms_left",
+          "result": [
+            [
+              "$.match.whiteMsLeft",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.white_ms_left",
+          "result": [
+            [
+              "$.match.whiteMsLeft",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match.white_ms_left",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.match.white_ms_left",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.match.white_ms_left",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.match.white_ms_left",
+          "result": [
+            [
+              "$.match.whiteMsLeft",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.increment_ms",
+          "result": [
+            [
+              "$.match.incrementMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.increment_ms",
+          "result": [
+            [
+              "$.match.incrementMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match.increment_ms",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.match.increment_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.match.increment_ms",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.match.increment_ms",
+          "result": [
+            [
+              "$.match.incrementMs",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves",
+          "result": [
+            [
+              "$.moves",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves",
+          "result": [
+            [
+              "$.moves",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves",
+          "result": "error"
+        },
+        {
+          "op": "empty",
+          "path": "$.moves",
+          "result": [
+            [
+              "$.moves",
+              []
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].seq",
+          "result": [
+            [
+              "$.moves[0].seq",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].seq",
+          "result": [
+            [
+              "$.moves[0].seq",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0].seq",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.moves[0].seq",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.moves[0].seq",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.moves[0].seq",
+          "result": [
+            [
+              "$.moves[0].seq",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].from",
+          "result": [
+            [
+              "$.moves[0].from",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].from",
+          "result": [
+            [
+              "$.moves[0].from",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0].from",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.moves[0].from",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.moves[0].from",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.moves[0].from",
+          "result": [
+            [
+              "$.moves[0].from",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].to",
+          "result": [
+            [
+              "$.moves[0].to",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].to",
+          "result": [
+            [
+              "$.moves[0].to",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.moves[0].to",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.moves[0].to",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.moves[0].to",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.moves[0].to",
+          "result": [
+            [
+              "$.moves[0].to",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.moves[0].san",
+          "result": [
+            [
+              "$.moves[0].san",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.moves[0].san",
+          "result": [
+            [
+              "$.moves[0].san",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.moves[0].san",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.moves[0].san",
+          "result": [
+            [
+              "$.moves[0].san",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "a": {
+          "board": "..........",
+          "garbageSent": 2,
+          "lastSeenMs": {
+            "$f64": "427a0c4506c00000"
+          },
+          "lines": 3,
+          "pending": 1,
+          "toppedOut": false,
+          "user": {
+            "avatarUrl": null,
+            "center": "busan",
+            "character": null,
+            "displayName": "A",
+            "id": "aa"
+          }
+        },
+        "b": {
+          "board": null,
+          "garbageSent": null,
+          "lastSeenMs": null,
+          "lines": null,
+          "pending": null,
+          "toppedOut": true,
+          "user": {
+            "avatarUrl": null,
+            "center": null,
+            "character": null,
+            "displayName": null,
+            "id": "bb"
+          }
+        },
+        "match": {
+          "finishedMs": {
+            "$f64": "427a0c4506c00000"
+          },
+          "id": "m",
+          "reason": "top_out",
+          "result": "a_win",
+          "stake": 5,
+          "startedMs": null,
+          "status": "finished",
+          "winner": "aa"
+        },
+        "serverNowMs": null,
+        "status": "ok",
+        "watchers": 12
+      },
+      "id": "watch-live-tetris",
+      "json": "{\"status\":\"ok\",\"watchers\":12,\"match\":{\"id\":\"m\",\"stake\":5,\"status\":\"finished\",\"result\":\"a_win\",\"winner\":\"aa\",\"reason\":\"top_out\",\"finished_ms\":1790000000000},\"a\":{\"user\":{\"id\":\"aa\",\"display_name\":\"A\",\"center\":\"busan\"},\"board\":\"..........\",\"lines\":3,\"pending\":1,\"garbage_sent\":2,\"topped_out\":false,\"last_seen_ms\":1790000000000},\"b\":{\"user\":{\"id\":\"bb\"},\"topped_out\":true}}",
+      "type": "TetrisWatchResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "unknown"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.watchers",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.watchers",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.watchers",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.watchers",
+          "result": [
+            [
+              "$.watchers",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match",
+          "result": [
+            [
+              "$.match",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match",
+          "result": [
+            [
+              "$.match",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.id",
+          "result": [
+            [
+              "$.match.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.stake",
+          "result": [
+            [
+              "$.match.stake",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.stake",
+          "result": [
+            [
+              "$.match.stake",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match.stake",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.match.stake",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.match.stake",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.match.stake",
+          "result": [
+            [
+              "$.match.stake",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.status",
+          "result": [
+            [
+              "$.match.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.status",
+          "result": [
+            [
+              "$.match.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.status",
+          "result": [
+            [
+              "$.match.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.result",
+          "result": [
+            [
+              "$.match.result",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.result",
+          "result": [
+            [
+              "$.match.result",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.result",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.result",
+          "result": [
+            [
+              "$.match.result",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.winner",
+          "result": [
+            [
+              "$.match.winner",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.winner",
+          "result": [
+            [
+              "$.match.winner",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.winner",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.winner",
+          "result": [
+            [
+              "$.match.winner",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.reason",
+          "result": [
+            [
+              "$.match.reason",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.reason",
+          "result": [
+            [
+              "$.match.reason",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.match.reason",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.match.reason",
+          "result": [
+            [
+              "$.match.reason",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.match.finished_ms",
+          "result": [
+            [
+              "$.match.finishedMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.match.finished_ms",
+          "result": [
+            [
+              "$.match.finishedMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.match.finished_ms",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.match.finished_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.match.finished_ms",
+          "result": [
+            [
+              "$.match.finishedMs.$f64",
+              "427a0c4506c00800"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.match.finished_ms",
+          "result": [
+            [
+              "$.match.finishedMs.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a",
+          "result": [
+            [
+              "$.a",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a",
+          "result": [
+            [
+              "$.a",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.a",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.a.user",
+          "result": [
+            [
+              "$.a.user",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.user",
+          "result": [
+            [
+              "$.a.user",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.a.user",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.a.user.id",
+          "result": [
+            [
+              "$.a.user.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.user.id",
+          "result": [
+            [
+              "$.a.user.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.a.user.id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.a.user.id",
+          "result": [
+            [
+              "$.a.user.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a.user.display_name",
+          "result": [
+            [
+              "$.a.user.displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.user.display_name",
+          "result": [
+            [
+              "$.a.user.displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.a.user.display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.a.user.display_name",
+          "result": [
+            [
+              "$.a.user.displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a.user.center",
+          "result": [
+            [
+              "$.a.user.center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.user.center",
+          "result": [
+            [
+              "$.a.user.center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.a.user.center",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.a.user.center",
+          "result": [
+            [
+              "$.a.user.center",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a.board",
+          "result": [
+            [
+              "$.a.board",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.board",
+          "result": [
+            [
+              "$.a.board",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.a.board",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.a.board",
+          "result": [
+            [
+              "$.a.board",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a.lines",
+          "result": [
+            [
+              "$.a.lines",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.lines",
+          "result": [
+            [
+              "$.a.lines",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.a.lines",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.a.lines",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.a.lines",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.a.lines",
+          "result": [
+            [
+              "$.a.lines",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a.pending",
+          "result": [
+            [
+              "$.a.pending",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.pending",
+          "result": [
+            [
+              "$.a.pending",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.a.pending",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.a.pending",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.a.pending",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.a.pending",
+          "result": [
+            [
+              "$.a.pending",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a.garbage_sent",
+          "result": [
+            [
+              "$.a.garbageSent",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.garbage_sent",
+          "result": [
+            [
+              "$.a.garbageSent",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.a.garbage_sent",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.a.garbage_sent",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.a.garbage_sent",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.a.garbage_sent",
+          "result": [
+            [
+              "$.a.garbageSent",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.a.topped_out",
+          "result": [
+            [
+              "$.a.toppedOut",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.topped_out",
+          "result": [
+            [
+              "$.a.toppedOut",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.a.topped_out",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.a.topped_out",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.a.last_seen_ms",
+          "result": [
+            [
+              "$.a.lastSeenMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.a.last_seen_ms",
+          "result": [
+            [
+              "$.a.lastSeenMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.a.last_seen_ms",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.a.last_seen_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.a.last_seen_ms",
+          "result": [
+            [
+              "$.a.lastSeenMs.$f64",
+              "427a0c4506c00800"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.a.last_seen_ms",
+          "result": [
+            [
+              "$.a.lastSeenMs.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.b",
+          "result": [
+            [
+              "$.b",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.b",
+          "result": [
+            [
+              "$.b",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.b",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.b.user",
+          "result": [
+            [
+              "$.b.user",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.b.user",
+          "result": [
+            [
+              "$.b.user",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.b.user",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.b.user.id",
+          "result": [
+            [
+              "$.b.user.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.b.user.id",
+          "result": [
+            [
+              "$.b.user.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.b.user.id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.b.user.id",
+          "result": [
+            [
+              "$.b.user.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.b.topped_out",
+          "result": [
+            [
+              "$.b.toppedOut",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.b.topped_out",
+          "result": [
+            [
+              "$.b.toppedOut",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.b.topped_out",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.b.topped_out",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": {
+        "a": null,
+        "b": null,
+        "match": null,
+        "serverNowMs": null,
+        "status": "unknown",
+        "watchers": null
+      },
+      "id": "tetris-status-unknown",
+      "json": "{\"status\":\"brand_new_status\"}",
+      "type": "TetrisWatchResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "body": "본문",
+        "id": "n1",
+        "linkLabel": "열기",
+        "linkURL": null,
+        "title": "제목"
+      },
+      "id": "notice-ok",
+      "json": "{\"id\":\" n1 \",\"title\":\" 제목 \",\"body\":\"본문\\n\",\"link_url\":\"  \",\"link_label\":\" 열기 \"}",
+      "type": "AppNotice",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.id",
+          "result": [
+            [
+              "$.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.title",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.title",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.title",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.title",
+          "result": [
+            [
+              "$.title",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.body",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.body",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.body",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.body",
+          "result": [
+            [
+              "$.body",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.link_url",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.link_url",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.link_url",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.link_url",
+          "result": [
+            [
+              "$.linkURL",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.link_label",
+          "result": [
+            [
+              "$.linkLabel",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.link_label",
+          "result": [
+            [
+              "$.linkLabel",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.link_label",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.link_label",
+          "result": [
+            [
+              "$.linkLabel",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": "$error",
+      "id": "notice-empty-title",
+      "json": "{\"id\":\"n1\",\"title\":\"  \",\"body\":\"b\"}",
+      "type": "AppNotice",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "createdAt": "2026-10-01T00:00:00Z",
+          "createdEpoch": 1790000000,
+          "displayName": "B",
+          "userID": "bb"
+        },
+        {
+          "avatarUrl": null,
+          "createdAt": null,
+          "createdEpoch": 1790000001,
+          "displayName": null,
+          "userID": "cc"
+        }
+      ],
+      "id": "blocks",
+      "json": "[{\"blocked\":\"bb\",\"display_name\":\"B\",\"blocked_at\":\"2026-10-01T00:00:00Z\",\"blocked_epoch\":1790000000},{\"id\":\"cc\",\"created_epoch\":1790000001.0}]",
+      "type": "[BlockedUserRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].blocked",
+          "result": [
+            [
+              "$[0].userID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].blocked",
+          "result": [
+            [
+              "$[0].userID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].blocked",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].blocked",
+          "result": [
+            [
+              "$[0].userID",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].blocked_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].blocked_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].blocked_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].blocked_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].blocked_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].blocked_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].blocked_epoch",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].blocked_epoch",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].blocked_epoch",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].blocked_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "advanced": true,
+        "pokeAdvanced": false,
+        "pokeUnread": 2,
+        "status": "ok",
+        "unread": 0
+      },
+      "id": "conversation-read",
+      "json": "{\"status\":\"ok\",\"advanced\":true,\"unread\":0,\"poke_advanced\":false,\"poke_unread\":2}",
+      "type": "MessageConversationReadMarkResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.advanced",
+          "result": [
+            [
+              "$.advanced",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.advanced",
+          "result": [
+            [
+              "$.advanced",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.advanced",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.advanced",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.unread",
+          "result": [
+            [
+              "$.unread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.unread",
+          "result": [
+            [
+              "$.unread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.unread",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.unread",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.unread",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.unread",
+          "result": [
+            [
+              "$.unread",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.poke_advanced",
+          "result": [
+            [
+              "$.pokeAdvanced",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.poke_advanced",
+          "result": [
+            [
+              "$.pokeAdvanced",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.poke_advanced",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.poke_advanced",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.poke_unread",
+          "result": [
+            [
+              "$.pokeUnread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.poke_unread",
+          "result": [
+            [
+              "$.pokeUnread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.poke_unread",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.poke_unread",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.poke_unread",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.poke_unread",
+          "result": [
+            [
+              "$.pokeUnread",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": {
+          "createdAt": "2026-10-25T00:00:00Z",
+          "id": "g1",
+          "note": null,
+          "options": [
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ]
+        },
+        "status": "ok"
+      },
+      "id": "gift-pending-cake",
+      "json": "{\"status\":\"ok\",\"gift\":{\"id\":\" g1 \",\"options\":[\"aing_cake_choco\",3,\"robot\",\"aing_cake_strawberry\",\"aing_cake_choco\"],\"note\":\"  \",\"created_at\":\"2026-10-25T00:00:00Z\"}}",
+      "type": "CharacterGiftPendingResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gift",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gift",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "empty",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.options[0]",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.gift.options[0]",
+          "result": []
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.options[0]",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.note",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.gift.note",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.gift.note",
+          "result": []
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.note",
+          "result": [
+            [
+              "$.gift.note",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": null,
+        "status": "ok"
+      },
+      "id": "gift-pending-no-options",
+      "json": "{\"status\":\"ok\",\"gift\":{\"id\":\"g1\",\"options\":[\"robot\"]}}",
+      "type": "CharacterGiftPendingResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "gift": {
+          "createdAt": null,
+          "id": "g1",
+          "note": null,
+          "options": [
+            "aing_cake_choco"
+          ]
+        },
+        "status": "unauthorized"
+      },
+      "id": "gift-pending-not-ok",
+      "json": "{\"status\":\"unauthorized\",\"gift\":{\"id\":\"g1\",\"options\":[\"aing_cake_choco\"]}}",
+      "type": "CharacterGiftPendingResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_choco",
+            "owned": null,
+            "price": 100
+          },
+          {
+            "gachaOnly": null,
+            "giftOnly": null,
+            "id": "aing_gold",
+            "owned": false,
+            "price": null
+          },
+          {
+            "gachaOnly": null,
+            "giftOnly": null,
+            "id": "robot",
+            "owned": null,
+            "price": 50
+          }
+        ],
+        "gacha": {
+          "odds": [
+            {
+              "characterID": "aing_gold",
+              "percent": {
+                "$f64": "4008000000000000"
+              }
+            },
+            {
+              "characterID": "robot",
+              "percent": {
+                "$f64": "4058400000000000"
+              }
+            }
+          ],
+          "price": 50,
+          "shardCosts": {
+            "aing_gold": 20
+          },
+          "shards": 3
+        },
+        "rubyBalance": 2147483648,
+        "ultraBalance": null,
+        "ultraBuyMax": null,
+        "ultraPrice": null
+      },
+      "id": "shop-gift-only",
+      "json": "{\"ruby_balance\":2147483648,\"characters\":[{\"id\":\"aing_cake_choco\",\"price\":100,\"gacha_only\":true,\"gift_only\":true},{\"id\":\"aing_gold\",\"owned\":false},{\"id\":\"robot\",\"price\":50}],\"gacha\":{\"price\":50,\"shards\":3,\"odds\":[{\"character_id\":\"aing_gold\",\"percent\":3},{\"character_id\":7},null,{\"character_id\":\"robot\",\"percent\":97.0}],\"shard_costs\":{\"aing_gold\":20,\"robot\":\"x\",\"rainbow_aing\":null}}}",
+      "type": "ShopStateResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.ruby_balance",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.ruby_balance",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.ruby_balance",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.characters",
+          "result": [
+            [
+              "$.characters",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters",
+          "result": [
+            [
+              "$.characters",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters",
+          "result": "error"
+        },
+        {
+          "op": "empty",
+          "path": "$.characters",
+          "result": [
+            [
+              "$.characters",
+              []
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.characters[0].id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.characters[0].id",
+          "result": [
+            [
+              "$.characters[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].price",
+          "result": [
+            [
+              "$.characters[0].price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].price",
+          "result": [
+            [
+              "$.characters[0].price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0].price",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.characters[0].price",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.characters[0].price",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.characters[0].price",
+          "result": [
+            [
+              "$.characters[0].price",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].gacha_only",
+          "result": [
+            [
+              "$.characters[0].gachaOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].gacha_only",
+          "result": [
+            [
+              "$.characters[0].gachaOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0].gacha_only",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.characters[0].gacha_only",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].gift_only",
+          "result": [
+            [
+              "$.characters[0].giftOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].gift_only",
+          "result": [
+            [
+              "$.characters[0].giftOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0].gift_only",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.characters[0].gift_only",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha",
+          "result": [
+            [
+              "$.gacha",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha",
+          "result": [
+            [
+              "$.gacha",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ],
+            [
+              "$.gacha.price",
+              null
+            ],
+            [
+              "$.gacha.shardCosts",
+              null
+            ],
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.price",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shards",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "empty",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              []
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds[0]",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.odds[0]",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds[0].characterID",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4058400000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.odds[0].percent",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds[0].percent.$f64",
+              "400c000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds[0].percent.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs",
+          "result": [
+            [
+              "$.gacha.shardCosts",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs",
+          "result": [
+            [
+              "$.gacha.shardCosts",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs",
+          "result": [
+            [
+              "$.gacha.shardCosts",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.robot",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.robot",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.gacha.shard_costs.robot",
+          "result": [
+            [
+              "$.gacha.shardCosts.robot",
+              3
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gacha.shard_costs.robot",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.rainbow_aing",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.rainbow_aing",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.gacha.shard_costs.rainbow_aing",
+          "result": [
+            [
+              "$.gacha.shardCosts.rainbow_aing",
+              3
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "characters": null,
+        "gacha": {
+          "odds": null,
+          "price": null,
+          "shardCosts": null,
+          "shards": null
+        },
+        "rubyBalance": null,
+        "ultraBalance": null,
+        "ultraBuyMax": null,
+        "ultraPrice": null
+      },
+      "id": "shop-gacha-not-object",
+      "json": "{\"gacha\":[1,2]}",
+      "type": "ShopStateResponse",
+      "variants": [
+        {
+          "op": "empty",
+          "path": "$.gacha",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.gacha[0]",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.gacha[0]",
+          "result": []
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha[0]",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha[0]",
+          "result": []
+        },
+        {
+          "op": "big",
+          "path": "$.gacha[0]",
+          "result": []
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "row": {
+            "body": null,
+            "createdAt": null,
+            "createdEpoch": 1790000001,
+            "fromUser": null,
+            "id": "1",
+            "isMine": null,
+            "kind": "poke",
+            "peerAvatarUrl": null,
+            "peerDisplayName": null,
+            "peerUserId": "p",
+            "readByPeer": null,
+            "toUser": null,
+            "unread": null
+          }
+        },
+        {
+          "row": {
+            "body": "hi",
+            "createdAt": null,
+            "createdEpoch": 1790000001,
+            "fromUser": null,
+            "id": "2",
+            "isMine": null,
+            "kind": "message",
+            "peerAvatarUrl": null,
+            "peerDisplayName": null,
+            "peerUserId": null,
+            "readByPeer": null,
+            "toUser": null,
+            "unread": null
+          }
+        },
+        {
+          "row": {
+            "body": null,
+            "createdAt": null,
+            "createdEpoch": -3,
+            "fromUser": null,
+            "id": "3",
+            "isMine": null,
+            "kind": " ultra ",
+            "peerAvatarUrl": null,
+            "peerDisplayName": null,
+            "peerUserId": null,
+            "readByPeer": null,
+            "toUser": null,
+            "unread": null
+          }
+        },
+        {
+          "row": null
+        },
+        {
+          "row": {
+            "body": null,
+            "createdAt": null,
+            "createdEpoch": null,
+            "fromUser": null,
+            "id": null,
+            "isMine": null,
+            "kind": null,
+            "peerAvatarUrl": null,
+            "peerDisplayName": null,
+            "peerUserId": null,
+            "readByPeer": null,
+            "toUser": null,
+            "unread": null
+          }
+        }
+      ],
+      "id": "poke-log-epochs",
+      "json": "[{\"id\":\"1\",\"kind\":\"poke\",\"created_epoch\":1790000000.5,\"peer_user_id\":\"p\"},{\"id\":\"2\",\"kind\":\"message\",\"created_epoch\":\"1790000001\",\"body\":\"hi\"},{\"id\":\"3\",\"kind\":\" ultra \",\"created_epoch\":-2.5},\"x\",{\"id\":4}]",
+      "type": "[MessagePokeLossyRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].row",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].row",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].row.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].row.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].row.id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].row.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].row.kind",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].row.kind",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].row.kind",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].row.kind",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].row.createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].row.createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].row.createdEpoch",
+              3
+            ]
+          ]
+        },
+        {
+          "op": "int",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].row.createdEpoch",
+              3
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].row.peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].row.peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].row.peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].row.peerUserId",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "error": null,
+        "errorCode": "invalid_credentials",
+        "errorDescription": null,
+        "message": null,
+        "msg": "Invalid login credentials"
+      },
+      "id": "error-body-gotrue",
+      "json": "{\"code\":400,\"error_code\":\"invalid_credentials\",\"msg\":\"Invalid login credentials\"}",
+      "type": "SupabaseErrorResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "float0",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "big",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.error_code",
+          "result": [
+            [
+              "$.errorCode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.error_code",
+          "result": [
+            [
+              "$.errorCode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.error_code",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.error_code",
+          "result": [
+            [
+              "$.errorCode",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.msg",
+          "result": [
+            [
+              "$.msg",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.msg",
+          "result": [
+            [
+              "$.msg",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.msg",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.msg",
+          "result": [
+            [
+              "$.msg",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "error": null,
+        "errorCode": null,
+        "errorDescription": null,
+        "message": "Could not find the function public.x",
+        "msg": null
+      },
+      "id": "error-body-postgrest",
+      "json": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x\",\"details\":null,\"hint\":null}",
+      "type": "SupabaseErrorResponse",
+      "variants": [
+        {
+          "op": "num",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "enum",
+          "path": "$.code",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.message",
+          "result": [
+            [
+              "$.message",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.message",
+          "result": [
+            [
+              "$.message",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.message",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.message",
+          "result": [
+            [
+              "$.message",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.details",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.details",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.details",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.hint",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.hint",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.hint",
+          "result": []
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "center": null,
+          "claudeCacheCreation": 3,
+          "claudeCacheRead": 2,
+          "claudeInput": 3000000000,
+          "claudeOutput": 1,
+          "codexAccountMonth": null,
+          "codexCacheRead": 0,
+          "codexEffective": null,
+          "codexInput": 4,
+          "codexOutput": 5,
+          "displayName": "D",
+          "todayDate": "",
+          "todayTotal": 0,
+          "total": {
+            "$int": "0x0020000000000001"
+          },
+          "userId": "u"
+        }
+      ],
+      "id": "token-board-legacy",
+      "json": "[{\"user_id\":\"u\",\"display_name\":\"D\",\"claude_input\":3000000000,\"claude_output\":1,\"claude_cache_read\":2,\"claude_cache_creation\":3,\"codex_input\":4,\"codex_output\":5,\"total\":9007199254740993}]",
+      "type": "[TokenBoardRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].claude_input",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].claude_input",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].claude_input",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].claude_input",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].claude_input",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].claude_input",
+          "result": [
+            [
+              "$[0].claudeInput",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].claude_output",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].claude_output",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].claude_output",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].claude_output",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].claude_output",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].claude_output",
+          "result": [
+            [
+              "$[0].claudeOutput",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].claude_cache_read",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].claude_cache_read",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].claude_cache_read",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].claude_cache_read",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].claude_cache_read",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].claude_cache_read",
+          "result": [
+            [
+              "$[0].claudeCacheRead",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].claude_cache_creation",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].claude_cache_creation",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].claude_cache_creation",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].claude_cache_creation",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].claude_cache_creation",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].claude_cache_creation",
+          "result": [
+            [
+              "$[0].claudeCacheCreation",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].codex_input",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].codex_input",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].codex_input",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].codex_input",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].codex_input",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].codex_input",
+          "result": [
+            [
+              "$[0].codexInput",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].codex_output",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].codex_output",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].codex_output",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].codex_output",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].codex_output",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].codex_output",
+          "result": [
+            [
+              "$[0].codexOutput",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].total",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].total",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].total",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].total",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].total",
+          "result": []
+        },
+        {
+          "op": "big",
+          "path": "$[0].total",
+          "result": [
+            [
+              "$[0].total",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "checkAfterSeconds": null,
+        "checkAt": null,
+        "graceSeconds": null,
+        "last": null,
+        "serverNow": null,
+        "session": null,
+        "status": "ok",
+        "wallet": {
+          "rubyBalance": 3
+        }
+      },
+      "id": "phone-work-lossy",
+      "json": "{\"status\":\"ok\",\"session\":{\"id\":\"S\",\"started_at\":5},\"check_after_seconds\":\"10\",\"wallet\":{\"ruby_balance\":3}}",
+      "type": "PhoneWorkResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.session",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.session",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.session",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.session.id",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.session.id",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.session.id",
+          "result": []
+        },
+        {
+          "op": "enum",
+          "path": "$.session.id",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.session.started_at",
+          "result": [
+            [
+              "$.session",
+              {
+                "endedAt": null,
+                "id": "S",
+                "origin": null,
+                "reason": null,
+                "startedAt": null
+              }
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.session.started_at",
+          "result": [
+            [
+              "$.session",
+              {
+                "endedAt": null,
+                "id": "S",
+                "origin": null,
+                "reason": null,
+                "startedAt": null
+              }
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.session.started_at",
+          "result": [
+            [
+              "$.session",
+              {
+                "endedAt": null,
+                "id": "S",
+                "origin": null,
+                "reason": null,
+                "startedAt": "3"
+              }
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.session.started_at",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.session.started_at",
+          "result": []
+        },
+        {
+          "op": "big",
+          "path": "$.session.started_at",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.check_after_seconds",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.check_after_seconds",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.check_after_seconds",
+          "result": [
+            [
+              "$.checkAfterSeconds",
+              3
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.check_after_seconds",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.wallet",
+          "result": [
+            [
+              "$.wallet",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.wallet",
+          "result": [
+            [
+              "$.wallet",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.wallet",
+          "result": [
+            [
+              "$.wallet",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.wallet.ruby_balance",
+          "result": [
+            [
+              "$.wallet.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.wallet.ruby_balance",
+          "result": [
+            [
+              "$.wallet.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.wallet.ruby_balance",
+          "result": [
+            [
+              "$.wallet",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.wallet.ruby_balance",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.wallet.ruby_balance",
+          "result": [
+            [
+              "$.wallet",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.wallet.ruby_balance",
+          "result": [
+            [
+              "$.wallet.rubyBalance",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "build": 120,
+        "notes": [
+          "a",
+          "b"
+        ],
+        "publishedAt": "2026-10-27T00:00:00Z",
+        "v": 1,
+        "version": "0.3.67"
+      },
+      "id": "latest-release",
+      "json": "{\"v\":1,\"version\":\"0.3.67\",\"build\":120,\"notes\":[\"a\",\"b\"],\"published_at\":\"2026-10-27T00:00:00Z\"}",
+      "type": "AppLatestRelease",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.v",
+          "result": [
+            [
+              "$.v",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.v",
+          "result": [
+            [
+              "$.v",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.v",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.v",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.v",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.v",
+          "result": [
+            [
+              "$.v",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.version",
+          "result": [
+            [
+              "$.version",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.version",
+          "result": [
+            [
+              "$.version",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.version",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.version",
+          "result": [
+            [
+              "$.version",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.build",
+          "result": [
+            [
+              "$.build",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.build",
+          "result": [
+            [
+              "$.build",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.build",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.build",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.build",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.build",
+          "result": [
+            [
+              "$.build",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.notes",
+          "result": [
+            [
+              "$.notes",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.notes",
+          "result": [
+            [
+              "$.notes",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.notes",
+          "result": "error"
+        },
+        {
+          "op": "empty",
+          "path": "$.notes",
+          "result": [
+            [
+              "$.notes",
+              []
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.notes[0]",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.notes[0]",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.notes[0]",
+          "result": [
+            [
+              "$.notes[0]",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.published_at",
+          "result": [
+            [
+              "$.publishedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.published_at",
+          "result": [
+            [
+              "$.publishedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.published_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.published_at",
+          "result": [
+            [
+              "$.publishedAt",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "deviceId": "d",
+          "lastSeenAt": null,
+          "openedSession": true,
+          "sessionId": null,
+          "userId": "u"
+        }
+      ],
+      "id": "devices",
+      "json": "[{\"user_id\":\"u\",\"device_id\":\"d\",\"session_id\":null,\"opened_session\":true}]",
+      "type": "[WorkStatusDeviceRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].device_id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].device_id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].device_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].device_id",
+          "result": [
+            [
+              "$[0].deviceId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].session_id",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].session_id",
+          "result": [
+            [
+              "$[0].sessionId",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].session_id",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].opened_session",
+          "result": [
+            [
+              "$[0].openedSession",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].opened_session",
+          "result": [
+            [
+              "$[0].openedSession",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].opened_session",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].opened_session",
+          "result": "error"
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+  "golden": "wire/decode-synthetic",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "decoder": "JSONDecoder(keyDecodingStrategy: .convertFromSnakeCase) — 서비스와 같다. TodoSyncResponse 만 키 변환 없는 JSONDecoder(TodoSyncResponse.decode)",
+    "dump": "contract/README.md §2-3 GoldenMirror 정규 덤프. 실패하면 \"$error\"",
+    "input": "case id = 저장소 상대 경로(픽스처 원문을 Kotlin 이 직접 읽는다 — 복사 0). 합성 입력은 case.json 에 싣는다",
+    "scrub": "덤프·결과의 JWT 모양 글자(eyJ + 20자 이상)는 <jwt:길이> 로 바꿔 싣는다(비밀 검사) — Kotlin 도 같은 규칙으로 바꿔 견준다",
+    "variants": "경로($.a[0].b) × op: remove · null · str(\"3\") · num(3) · enum(\"zz_unknown_value\") · bool(true) · float0(정수 글자+\".0\") · float5(+\".5\") · big(4294967296 — 2^31 넘는 정수) · int(3) · empty([]). 배열은 첫 원소 안만. 같은 (타입·정규 경로·op)는 처음 한 번만. result = \"error\" 또는 원본 덤프와 다른 점 [[경로, 새 값]…](\"$absent\" = 빠짐)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/ChessWire.swift",
+    "Sources/CheckCore/TetrisWire.swift",
+    "Sources/CheckCore/CharacterGift.swift",
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckCore/Gacha.swift",
+    "Sources/CheckCore/TodoSync.swift",
+    "Sources/CheckCore/AppUserCharacters.swift",
+    "Sources/CheckCore/StatusMessage.swift",
+    "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+    "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+    "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+    "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+    "Sources/CheckMobileKit/Me/MeProfileService.swift",
+    "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+  ]
+}

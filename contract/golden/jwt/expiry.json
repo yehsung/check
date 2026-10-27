@@ -1,0 +1,150 @@
+{
+  "cases": [
+    {
+      "expiry": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "int",
+      "payload": "{\"exp\":1789621500,\"sub\":\"u\"}"
+    },
+    {
+      "expiry": {
+        "$date": "41daaadd3f300000"
+      },
+      "id": "float",
+      "payload": "{\"exp\":1789621500.75}"
+    },
+    {
+      "expiry": null,
+      "id": "string",
+      "payload": "{\"exp\":\"1789621500\"}"
+    },
+    {
+      "expiry": {
+        "$date": "3ff0000000000000"
+      },
+      "id": "bool",
+      "payload": "{\"exp\":true}"
+    },
+    {
+      "expiry": null,
+      "id": "missing",
+      "payload": "{\"sub\":\"u\"}"
+    },
+    {
+      "expiry": null,
+      "id": "null",
+      "payload": "{\"exp\":null}"
+    },
+    {
+      "expiry": null,
+      "id": "array-root",
+      "payload": "[1,2]"
+    },
+    {
+      "expiry": {
+        "$date": "3ff0000000000000"
+      },
+      "id": "pad1",
+      "payload": "{\"exp\":1}"
+    },
+    {
+      "expiry": {
+        "$date": "4028000000000000"
+      },
+      "id": "pad2",
+      "payload": "{\"exp\":12}"
+    },
+    {
+      "expiry": {
+        "$date": "405ec00000000000"
+      },
+      "id": "pad0",
+      "payload": "{\"exp\":123}"
+    },
+    {
+      "expiry": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "url-chars",
+      "payload": "{\"exp\":1789621500,\"n\":\"?>?>\"}"
+    },
+    {
+      "expiry": {
+        "$date": "4045000000000000"
+      },
+      "id": "unicode",
+      "payload": "{\"exp\":42,\"name\":\"아잉\"}"
+    },
+    {
+      "expiry": {
+        "$date": "4340000000000000"
+      },
+      "id": "big",
+      "payload": "{\"exp\":9007199254740993}"
+    },
+    {
+      "expiry": {
+        "$date": "c014000000000000"
+      },
+      "id": "negative",
+      "payload": "{\"exp\":-5}"
+    },
+    {
+      "expiry": null,
+      "id": "one-part",
+      "token": "abc"
+    },
+    {
+      "expiry": null,
+      "id": "empty",
+      "token": ""
+    },
+    {
+      "expiry": {
+        "$date": "401c000000000000"
+      },
+      "id": "two-parts",
+      "token": "x.eyJleHAiOjd9"
+    },
+    {
+      "expiry": null,
+      "id": "bad-base64",
+      "token": "x.@@@@.y"
+    },
+    {
+      "expiry": null,
+      "id": "not-json",
+      "token": "x.bm90IGpzb24.y"
+    },
+    {
+      "expiry": {
+        "$date": "4020000000000000"
+      },
+      "id": "std-base64-padded",
+      "token": "x.eyJleHAiOjh9.y"
+    },
+    {
+      "expiry": null,
+      "id": "empty-payload",
+      "token": "x..y"
+    },
+    {
+      "expiry": null,
+      "id": "len-mod-1",
+      "token": "x.abcde.y"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+  "golden": "jwt/expiry",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "rule": "가운데 조각을 base64url(-_ → +/, = 채우기)로 풀어 JSON 객체의 exp(NSNumber — 불도 숫자)를 1970 기준 초로. 못 읽으면 null(= 모른다, 만료가 아니다)",
+    "token": "payload 칸이 있으면 토큰 = \"eyJhbGciOiJIUzI1NiJ9.\" + base64url(payload, = 없음) + \".c2ln\"(골든에 토큰 글자를 싣지 않는다 — 비밀 검사). token 칸은 그대로 쓴다"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/JWTClaims.swift"
+  ]
+}

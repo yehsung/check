@@ -1,0 +1,591 @@
+{
+  "cases": [
+    {
+      "id": "alltime-sort",
+      "input": [
+        {
+          "bestAtBits": null,
+          "bestScore": 10,
+          "userID": "d"
+        },
+        {
+          "bestAtBits": "41daac4ee0000000",
+          "bestScore": 10,
+          "userID": "b"
+        },
+        {
+          "bestAtBits": "41daac4ee0400000",
+          "bestScore": 10,
+          "userID": "a"
+        },
+        {
+          "bestAtBits": "41daac4ee0000000",
+          "bestScore": 10,
+          "userID": "c"
+        },
+        {
+          "bestAtBits": null,
+          "bestScore": 99,
+          "userID": "e"
+        },
+        {
+          "bestAtBits": null,
+          "bestScore": 10,
+          "userID": "f"
+        },
+        {
+          "bestAtBits": "41daac4ee0000000",
+          "bestScore": -1,
+          "userID": "A"
+        }
+      ],
+      "rule": "sortedForMiniGameAllTimeBoard",
+      "sorted": [
+        "e",
+        "b",
+        "c",
+        "a",
+        "d",
+        "f",
+        "A"
+      ]
+    },
+    {
+      "caption": "10/5",
+      "day": "2026-10-05",
+      "id": "day-caption-2026-10-05"
+    },
+    {
+      "caption": null,
+      "day": "2026-1-05",
+      "id": "day-caption-2026-1-05"
+    },
+    {
+      "caption": null,
+      "day": "2026-13-01",
+      "id": "day-caption-2026-13-01"
+    },
+    {
+      "caption": "12/31",
+      "day": "2026-12-31",
+      "id": "day-caption-2026-12-31"
+    },
+    {
+      "caption": "2/30",
+      "day": "2026-02-30",
+      "id": "day-caption-2026-02-30"
+    },
+    {
+      "caption": null,
+      "day": "2026-00-10",
+      "id": "day-caption-2026-00-10"
+    },
+    {
+      "caption": null,
+      "day": "2026-10-00",
+      "id": "day-caption-2026-10-00"
+    },
+    {
+      "caption": null,
+      "day": "26-10-05",
+      "id": "day-caption-26-10-05"
+    },
+    {
+      "caption": null,
+      "day": "2026-10-05T00:00:00Z",
+      "id": "day-caption-2026-10-05T00:00:00Z"
+    },
+    {
+      "caption": null,
+      "day": "２０２６-10-05",
+      "id": "day-caption-２０２６-10-05"
+    },
+    {
+      "caption": null,
+      "day": "2026/10/05",
+      "id": "day-caption-2026/10/05"
+    },
+    {
+      "caption": null,
+      "day": "",
+      "id": "day-caption-"
+    },
+    {
+      "caption": null,
+      "day": "2026--10",
+      "id": "day-caption-2026--10"
+    },
+    {
+      "caption": null,
+      "day": "2026-10-5x",
+      "id": "day-caption-2026-10-5x"
+    },
+    {
+      "caption": null,
+      "day": null,
+      "id": "day-caption-nil"
+    },
+    {
+      "id": "shop-row-0",
+      "isGachaOnly": false,
+      "isGiftOnly": false,
+      "isPurchasable": true,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "robot",
+        "owned": null,
+        "price": 50
+      }
+    },
+    {
+      "id": "shop-row-1",
+      "isGachaOnly": false,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "robot",
+        "owned": null,
+        "price": null
+      }
+    },
+    {
+      "id": "shop-row-2",
+      "isGachaOnly": true,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "aing_gold",
+        "owned": null,
+        "price": 99
+      }
+    },
+    {
+      "id": "shop-row-3",
+      "isGachaOnly": true,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "aing_rainbow",
+        "owned": null,
+        "price": null
+      }
+    },
+    {
+      "id": "shop-row-4",
+      "isGachaOnly": false,
+      "isGiftOnly": true,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": true,
+        "giftOnly": null,
+        "id": "aing_cake_choco",
+        "owned": null,
+        "price": 100
+      }
+    },
+    {
+      "id": "shop-row-5",
+      "isGachaOnly": false,
+      "isGiftOnly": true,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "aing_cake_strawberry",
+        "owned": null,
+        "price": null
+      }
+    },
+    {
+      "id": "shop-row-6",
+      "isGachaOnly": true,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": true,
+        "giftOnly": null,
+        "id": "fox",
+        "owned": null,
+        "price": 10
+      }
+    },
+    {
+      "id": "shop-row-7",
+      "isGachaOnly": false,
+      "isGiftOnly": true,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": true,
+        "id": "fox",
+        "owned": null,
+        "price": 10
+      }
+    },
+    {
+      "id": "shop-row-8",
+      "isGachaOnly": false,
+      "isGiftOnly": false,
+      "isPurchasable": true,
+      "row": {
+        "gachaOnly": false,
+        "giftOnly": false,
+        "id": "fox",
+        "owned": null,
+        "price": 10
+      }
+    },
+    {
+      "choosable": [
+        "aing_cake_strawberry",
+        "aing_cake_choco"
+      ],
+      "id": "gift-choosable-0",
+      "raw": [
+        "aing_cake_choco",
+        "aing_cake_strawberry"
+      ]
+    },
+    {
+      "choosable": [],
+      "id": "gift-choosable-1",
+      "raw": [
+        "robot"
+      ]
+    },
+    {
+      "choosable": [],
+      "id": "gift-choosable-2",
+      "raw": []
+    },
+    {
+      "choosable": [
+        "aing_cake_choco"
+      ],
+      "id": "gift-choosable-3",
+      "raw": [
+        "aing_cake_choco",
+        "aing_cake_choco"
+      ]
+    },
+    {
+      "choosable": [],
+      "id": "gift-choosable-4",
+      "raw": [
+        "AING_CAKE_CHOCO",
+        "aing_cake_strawberry "
+      ]
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.123456+00:00",
+      "micros": "0x00065e77873a3b00",
+      "text": "2026-10-23T01:02:03.123456+00:00"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03Z",
+      "micros": "0x00065e77873858c0",
+      "text": "2026-10-23T01:02:03Z"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.1Z",
+      "micros": "0x00065e778739df60",
+      "text": "2026-10-23T01:02:03.1Z"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.1234567Z",
+      "micros": "0x00065e77873a3b00",
+      "text": "2026-10-23T01:02:03.1234567Z"
+    },
+    {
+      "id": "micros-2026-10-23 01:02:03",
+      "micros": null,
+      "text": "2026-10-23 01:02:03"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.+00:00",
+      "micros": "0x00065e77873858c0",
+      "text": "2026-10-23T01:02:03.+00:00"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.000999+09:00",
+      "micros": "0x00065e6ffc0798a7",
+      "text": "2026-10-23T01:02:03.000999+09:00"
+    },
+    {
+      "id": "send-outcome-ok",
+      "message": "ok",
+      "poke": "ok",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "ok",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-cooldown",
+      "message": "invalid",
+      "poke": {
+        "$case": "cooldown",
+        "$value": 1
+      },
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "cooldown",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-not_working",
+      "message": "notWorking",
+      "poke": "notWorking",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "not_working",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-target_not_working",
+      "message": "targetNotWorking",
+      "poke": "targetNotWorking",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "target_not_working",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-ultra_used_today",
+      "message": "invalid",
+      "poke": {
+        "$case": "ultraUsedToday",
+        "$value": 1
+      },
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "ultra_used_today",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-target_focused",
+      "message": "targetFocused",
+      "poke": "targetFocused",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "target_focused",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-target_on_phone",
+      "message": "invalid",
+      "poke": "targetOnPhone",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "target_on_phone",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-blackout",
+      "message": "blackout",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "blackout",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-not_text",
+      "message": "notText",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "not_text",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-too_long",
+      "message": "tooLong",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "too_long",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-flood",
+      "message": "flood",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "flood",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-weird",
+      "message": "invalid",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "weird",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "display-name-ok",
+      "outcome": {
+        "$case": "ok",
+        "$value": "새이름"
+      },
+      "response": {
+        "displayName": "새이름",
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "ok"
+      }
+    },
+    {
+      "id": "display-name-unchanged",
+      "outcome": "unchanged",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "unchanged"
+      }
+    },
+    {
+      "id": "display-name-taken",
+      "outcome": "taken",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "taken"
+      }
+    },
+    {
+      "id": "display-name-cooldown",
+      "outcome": {
+        "$case": "cooldown",
+        "$value": 1
+      },
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": 0,
+        "status": "cooldown"
+      }
+    },
+    {
+      "id": "display-name-invalid_long",
+      "outcome": {
+        "$case": "tooLong",
+        "$value": 12
+      },
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "invalid_long"
+      }
+    },
+    {
+      "id": "display-name-invalid_empty",
+      "outcome": "empty",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "invalid_empty"
+      }
+    },
+    {
+      "id": "display-name-other",
+      "outcome": "invalid",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "other"
+      }
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+  "golden": "wire/rules",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "alltime": "sortedForMiniGameAllTimeBoard: 점수 내림 → bestAt 이른 순(nil 은 뒤) → userID. dayCaption: 'YYYY-MM-DD'(ASCII 숫자, 월 1~12, 일 1~31) → 'M/D'",
+    "micros": "MessagePokeLogRules.microsecondsSinceEpoch(초 파서 = 기본 ISO8601). 값은 64비트 16진",
+    "shop": "isPurchasable = gacha_only·gift_only 표식도 내장 판정도 아니고 값이 있다 · isGiftOnly 가 isGachaOnly 보다 먼저"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CharacterGift.swift",
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"
+  ]
+}

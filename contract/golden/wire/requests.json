@@ -1,0 +1,3743 @@
+{
+  "cases": [
+    {
+      "id": "signIn",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid",
+            "password": "pw-123456"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "password"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "signUp",
+      "requests": [
+        {
+          "body": {
+            "data": {
+              "display_name": "아잉"
+            },
+            "email": "a@b.invalid",
+            "password": "pw-123456"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/signup",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "signUp(center)",
+      "requests": [
+        {
+          "body": {
+            "data": {
+              "center": "busan",
+              "display_name": "아잉"
+            },
+            "email": "a@b.invalid",
+            "password": "pw"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/signup",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "refreshSession",
+      "requests": [
+        {
+          "body": {
+            "refresh_token": "refresh-1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "refresh_token"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "signOut",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "POST",
+          "path": "/auth/v1/logout",
+          "query": [
+            [
+              "scope",
+              "local"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "logoutLocalScope",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "POST",
+          "path": "/auth/v1/logout",
+          "query": [
+            [
+              "scope",
+              "local"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "deleteMyAccount",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/delete_my_account",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "sendPasswordResetCode",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/recover",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "verifyPasswordResetCode",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid",
+            "token": "123456",
+            "type": "recovery"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/verify",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "updatePassword",
+      "requests": [
+        {
+          "body": {
+            "password": "new-pw-1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "PUT",
+          "path": "/auth/v1/user",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "verifySignUpCode",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid",
+            "token": "654321",
+            "type": "signup"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/verify",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "resendSignUpCode",
+      "requests": [
+        {
+          "body": {
+            "email": "a@b.invalid",
+            "type": "signup"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/auth/v1/resend",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "lookupTeamByCode",
+      "requests": [
+        {
+          "body": {
+            "code": "ABC12"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/lookup_team_by_code",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyInviteCode",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/my_team_invite_code",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setTeamWeeklyGoal",
+      "requests": [
+        {
+          "body": {
+            "goal_hours": 40
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_team_weekly_goal",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"weekly_goal_hours\": 40}]",
+          "status": 200
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "joinTeam",
+      "requests": [
+        {
+          "body": {
+            "code": "XYZ789"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/join_team",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "createTeam",
+      "requests": [
+        {
+          "body": {
+            "goal_hours": 60,
+            "team_name": "새 팀"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/create_team",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTeamLeaderboard",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/team_weekly_leaderboard",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTeamLeaderboard(weekOffset)",
+      "requests": [
+        {
+          "body": {
+            "p_week_offset": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/team_weekly_leaderboard",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTeamLeaderboard(weekOffset)#clamp",
+      "requests": [
+        {
+          "body": {
+            "p_week_offset": 6
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/team_weekly_leaderboard",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTeamLeaderboard(weekOffset)#fallback",
+      "requests": [
+        {
+          "body": {
+            "p_week_offset": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/team_weekly_leaderboard",
+          "query": []
+        },
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/team_weekly_leaderboard",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        },
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "fetchOwnMembership",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTeamStatuses",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "user_id,started_at,ended_at"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "ended_at",
+              "not.is.null"
+            ],
+            [
+              "ended_at",
+              "gte.2026-09-13T15:00:00Z"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "select",
+              "user_id,device_id,session_id,last_seen_at,opened_session"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "select",
+              "user_id,status,updated_at,last_seen_at,active_session_id,profiles(display_name,avatar_url)"
+            ],
+            [
+              "team_id",
+              "eq.team-1"
+            ],
+            [
+              "order",
+              "updated_at.desc"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": true
+    },
+    {
+      "id": "fetchMySessions",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "not.is.null"
+            ],
+            [
+              "ended_at",
+              "gte.2026-08-18T05:05:00Z"
+            ],
+            [
+              "order",
+              "started_at.desc"
+            ],
+            [
+              "limit",
+              "5000"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyTokenDaily",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/token_usage_device_daily",
+          "query": [
+            [
+              "select",
+              "day,device_id,claude_total,codex_total,codex_utc_total,codex_account"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "day",
+              "gte.2026-08-01"
+            ],
+            [
+              "order",
+              "day.desc"
+            ],
+            [
+              "limit",
+              "1000"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTokenBoard",
+      "requests": [
+        {
+          "body": {
+            "p_month": "2026-09"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/token_usage_board",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGamePublic",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "minigame_public"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "updateMiniGamePublic",
+      "requests": [
+        {
+          "body": {
+            "minigame_public": false
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=minimal"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyCenter",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "center"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyStatusMessage",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "status_message"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setStatusMessage",
+      "requests": [
+        {
+          "body": {
+            "p_text": "집중 중"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_status_message",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setStatusMessage(nil)",
+      "requests": [
+        {
+          "body": {
+            "p_text": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_status_message",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchTokenUsageSettings",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "token_usage_public,token_usage_collect,focus_mode"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "updateTokenUsagePublic",
+      "requests": [
+        {
+          "body": {
+            "token_usage_public": true
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=minimal"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setDisplayName",
+      "requests": [
+        {
+          "body": {
+            "p_name": "새이름"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_display_name",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchDisplayNameChangedAt",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "display_name_changed_at"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setCharacter",
+      "requests": [
+        {
+          "body": {
+            "p_id": "aing_cake_choco"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_character",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setCharacter(nil)",
+      "requests": [
+        {
+          "body": {
+            "p_id": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_character",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchEquippedCharacter",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "select",
+              "character"
+            ],
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyProfileCard",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "select",
+              "display_name,avatar_url"
+            ],
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyAILimits",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/ai_limits",
+          "query": [
+            [
+              "select",
+              "device_id,device_label,provider,five_hour_percent,five_hour_resets_at,weekly_percent,weekly_resets_at,plan_label,observed_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "order",
+              "observed_at.desc"
+            ],
+            [
+              "limit",
+              "60"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "uploadAvatar",
+      "requests": [
+        {
+          "body": {
+            "$bytes": "SlBFRy1CWVRFUw=="
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "image/jpeg",
+            "x-upsert": "true"
+          },
+          "method": "POST",
+          "path": "/storage/v1/object/avatars/aa000000-0000-4000-8000-0000000000a1.jpg",
+          "query": []
+        },
+        {
+          "body": {
+            "avatar_url": "https://golden.invalid/storage/v1/object/public/avatars/aa000000-0000-4000-8000-0000000000a1.jpg?v=<CACHE_BUSTER>"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=minimal"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "removeAvatar",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "DELETE",
+          "path": "/storage/v1/object/avatars/aa000000-0000-4000-8000-0000000000a1.jpg",
+          "query": []
+        },
+        {
+          "body": {
+            "avatar_url": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=minimal"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "deleteAvatarFile",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "DELETE",
+          "path": "/storage/v1/object/avatars/aa000000-0000-4000-8000-0000000000a1.jpg",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "deleteAvatarIfAny",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "DELETE",
+          "path": "/storage/v1/object/avatars/aa000000-0000-4000-8000-0000000000a1.jpg",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "startMiniGameRound",
+      "requests": [
+        {
+          "body": {
+            "p_game": "flappy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_start_round",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "submitMiniGameScore",
+      "requests": [
+        {
+          "body": {
+            "p_game": "tetris",
+            "p_score": 3000000000,
+            "p_token": "tok"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_submit_score",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameBoard",
+      "requests": [
+        {
+          "body": {
+            "p_game": "timing_bar"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_board",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameBoard(day)",
+      "requests": [
+        {
+          "body": {
+            "p_day": "2026-09-16",
+            "p_game": "crossy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_board",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameYesterdayWinner",
+      "requests": [
+        {
+          "body": {
+            "p_game": "flappy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_yesterday_winner",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMiniGameAllTimeBoard",
+      "requests": [
+        {
+          "body": {
+            "p_game": "crossy"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/minigame_alltime_board",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchShopState",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchShopState(protocol)",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchShopState(protocol)#fallback",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        },
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "fetchShopState(protocol)#plain404",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/shop_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"message\":\"nope\"}",
+          "status": 404
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "buyCharacter",
+      "requests": [
+        {
+          "body": {
+            "p_id": "robot"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/buy_character",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "buyCharacter(protocol)",
+      "requests": [
+        {
+          "body": {
+            "p_id": "robot",
+            "p_protocol": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/buy_character",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "buyCharacter(protocol)#fallback",
+      "requests": [
+        {
+          "body": {
+            "p_id": "fox",
+            "p_protocol": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/buy_character",
+          "query": []
+        },
+        {
+          "body": {
+            "p_id": "fox"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/buy_character",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        },
+        {
+          "body": "{\"status\":\"ok\"}",
+          "status": 200
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage",
+      "requests": [
+        {
+          "body": {
+            "p_body": "안녕하세요",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage#empty",
+      "requests": [],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage#tooLong",
+      "requests": [],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageHistory",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 12,
+            "p_limit": 200
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_history",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageHistory#clamp",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 24,
+            "p_limit": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_history",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchPokeDirectory",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_user_directory",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageHistoryWithReads",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 24,
+            "p_limit": 500
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_history_with_reads",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageUnreadSummary",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_unread_summary",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "markMessagesRead",
+      "requests": [
+        {
+          "body": {
+            "p_peer": "bb000000-0000-4000-8000-0000000000b2",
+            "p_through": "msg-9"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mark_messages_read",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "markMessagesRead(nil)",
+      "requests": [
+        {
+          "body": {
+            "p_peer": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mark_messages_read",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageHistoryWithPokes",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 1,
+            "p_limit": 50
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_history_with_pokes",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "markConversationRead",
+      "requests": [
+        {
+          "body": {
+            "p_peer": "bb000000-0000-4000-8000-0000000000b2",
+            "p_through_message": "msg-9",
+            "p_through_poke": "poke-3"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mark_conversation_read",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "markConversationRead(nil)",
+      "requests": [
+        {
+          "body": {
+            "p_peer": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mark_conversation_read",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchLatestRelease",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_latest_release",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "appCurrentNotice",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_current_notice",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "submitFeedback",
+      "requests": [
+        {
+          "body": {
+            "p_app_version": "1.0.14",
+            "p_body": "버튼이 안 눌려요",
+            "p_kind": "bug",
+            "p_os_version": "17.6"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/submit_feedback",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchFeedbackList",
+      "requests": [
+        {
+          "body": {
+            "p_limit": 50
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/feedback_list",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchFeedbackList(status)",
+      "requests": [
+        {
+          "body": {
+            "p_limit": 20,
+            "p_status": "doing"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/feedback_list",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setFeedbackStatus",
+      "requests": [
+        {
+          "body": {
+            "p_id": "fb-1",
+            "p_status": "wontfix"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_feedback_status",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setFeedbackStatus(note)",
+      "requests": [
+        {
+          "body": {
+            "p_id": "fb-1",
+            "p_note": "고쳤어요",
+            "p_status": "done"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_feedback_status",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "replyFeedback",
+      "requests": [
+        {
+          "body": {
+            "p_id": "fb-1",
+            "p_note": "답장"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reply_feedback",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchFeedbackReplyLatest",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/feedback_reply_latest",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchFeedbackOpenCount",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/feedback_open_count",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "blockUser",
+      "requests": [
+        {
+          "body": {
+            "p_user": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/block_user",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "unblockUser",
+      "requests": [
+        {
+          "body": {
+            "p_user": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/unblock_user",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchBlocks",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/list_blocks",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "reportContent",
+      "requests": [
+        {
+          "body": {
+            "p_block": true,
+            "p_detail": "욕설",
+            "p_message_id": "msg-1",
+            "p_reason": "harassment",
+            "p_target": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/report_content",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "reportContent#empty",
+      "requests": [
+        {
+          "body": {
+            "p_block": false,
+            "p_detail": null,
+            "p_message_id": null,
+            "p_reason": "spam",
+            "p_target": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/report_content",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchAppUserCharacters",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/app_user_characters",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchCharacterGiftPending",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/character_gift_pending",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "claimCharacterGift",
+      "requests": [
+        {
+          "body": {
+            "p_character": "aing_cake_strawberry",
+            "p_gift": "gift-1",
+            "p_protocol": 4
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/claim_character_gift",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gachaPull",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 4,
+            "p_request_id": "dd000000-0000-4000-8000-0000000000d4"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gacha_pull",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gachaExchange",
+      "requests": [
+        {
+          "body": {
+            "p_character_id": "aing_rainbow",
+            "p_protocol": 4,
+            "p_request_id": "dd000000-0000-4000-8000-0000000000d4"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gacha_exchange",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "todoSync",
+      "requests": [
+        {
+          "body": {
+            "p_changes": [],
+            "p_since_ms": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/todo_sync",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "todoSync(changes)",
+      "requests": [
+        {
+          "body": {
+            "p_changes": [
+              {
+                "completed_at_ms": null,
+                "created_at_ms": 1726500000000,
+                "deleted_at_ms": null,
+                "id": "0000000a-0000-4000-8000-00000000000a",
+                "origin_day_key": "20240917",
+                "title": "할 일",
+                "updated_at_ms": 1726500005000
+              }
+            ],
+            "p_since_ms": 1726400000000
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/todo_sync",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "achievementsStatus",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/achievements_status",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "achievementClaim",
+      "requests": [
+        {
+          "body": {
+            "p_key": "poke10"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/achievement_claim",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "achievementClaim(nil)",
+      "requests": [
+        {
+          "body": {
+            "p_key": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/achievement_claim",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "dailyMissionClaim",
+      "requests": [
+        {
+          "body": {
+            "p_key": "daily_gomoku"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/daily_mission_claim",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "dailyMissionClaim(nil)",
+      "requests": [
+        {
+          "body": {
+            "p_key": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/daily_mission_claim",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "weeklyWorkStatus",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/weekly_work_status",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "weeklyWorkClaim",
+      "requests": [
+        {
+          "body": {
+            "p_hours": null,
+            "p_week_start": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/weekly_work_claim",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "weeklyWorkClaim(args)",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 40,
+            "p_week_start": "2026-09-14"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/weekly_work_claim",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMegaphone",
+      "requests": [
+        {
+          "body": {
+            "p_body": "다들 화이팅",
+            "p_request_id": "dd000000-0000-4000-8000-0000000000d4"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_megaphone",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "megaphoneInfo",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/megaphone_info",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchClientRelease",
+      "requests": [
+        {
+          "body": {
+            "p_platform": "ios"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ANON>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/client_release",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "registerDevice",
+      "requests": [
+        {
+          "body": {
+            "p_apns_env": "production",
+            "p_apns_token": "tok",
+            "p_app_build": 2147483648,
+            "p_app_version": "1.0.14",
+            "p_installation_id": "11111111-2222-4333-8444-555555555555",
+            "p_platform": "ios"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/register_device",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "registerDevice#tokenOnly",
+      "requests": [
+        {
+          "body": {
+            "p_app_build": 7,
+            "p_installation_id": "i",
+            "p_platform": "ios"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/register_device",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "unregisterDevice",
+      "requests": [
+        {
+          "body": {
+            "p_installation_id": "i"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/unregister_device",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "setPushPrefs",
+      "requests": [
+        {
+          "body": {
+            "p_installation_id": "i",
+            "p_prefs": {
+              "feedback_reply": true,
+              "gomoku_invite": true,
+              "message": false
+            }
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_push_prefs",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "startPhoneWork",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_phone_start",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "stopPhoneWork",
+      "requests": [
+        {
+          "body": {
+            "p_session_id": "abcdef00-0000-4000-8000-000000000001"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_phone_stop",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "stopPhoneWork(nil)",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_phone_stop",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "touchPhoneWork",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_phone_touch",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuLobby",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuChallenge",
+      "requests": [
+        {
+          "body": {
+            "p_opponent": "bb000000-0000-4000-8000-0000000000b2",
+            "p_protocol": 2,
+            "p_stake": 10
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_challenge",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuCancel",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_cancel",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuRespond",
+      "requests": [
+        {
+          "body": {
+            "p_accept": true,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_respond",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuMove",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 4,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2,
+            "p_x": 7,
+            "p_y": 8
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_move",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuMove#deadlock",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 4,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2,
+            "p_x": 7,
+            "p_y": 8
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_move",
+          "query": []
+        },
+        {
+          "body": {
+            "p_expected_seq": 4,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2,
+            "p_x": 7,
+            "p_y": 8
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_move",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"40P01\",\"message\":\"deadlock detected\"}",
+          "status": 400
+        },
+        {
+          "body": "{\"code\":\"40P01\",\"message\":\"deadlock detected\"}",
+          "status": 400
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "gomokuResign",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_resign",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuState",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2,
+            "p_since_chat_seq": 1,
+            "p_since_seq": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuState#deadlock",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2,
+            "p_since_chat_seq": 0,
+            "p_since_seq": 0
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"40P01\",\"message\":\"deadlock detected\"}",
+          "status": 400
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "gomokuInbox",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_inbox",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuChatSend",
+      "requests": [
+        {
+          "body": {
+            "p_body": "잘 부탁해요",
+            "p_kind": "quick",
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_chat_send",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuLeave",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_leave",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuChatMute",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_muted": true,
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_chat_mute",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuRanking",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_ranking",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuWatch",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2,
+            "p_since_seq": 12
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_watch",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "gomokuWatchLive",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 2,
+            "p_since_seq": 12
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/gomoku_watch_live",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessLobby",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessChallenge",
+      "requests": [
+        {
+          "body": {
+            "p_opponent": "bb000000-0000-4000-8000-0000000000b2",
+            "p_protocol": 1,
+            "p_stake": 5
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_challenge",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessCancel",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_cancel",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessRespond",
+      "requests": [
+        {
+          "body": {
+            "p_accept": false,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_respond",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessMove",
+      "requests": [
+        {
+          "body": {
+            "p_expected_ply": 2,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_uci": "e7e8q"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_move",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessMove#deadlock",
+      "requests": [
+        {
+          "body": {
+            "p_expected_ply": 2,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_uci": "e2e4"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_move",
+          "query": []
+        },
+        {
+          "body": {
+            "p_expected_ply": 2,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_uci": "e2e4"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_move",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"40P01\",\"message\":\"deadlock detected\"}",
+          "status": 400
+        }
+      ],
+      "unordered": false
+    },
+    {
+      "id": "chessResign",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_resign",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessOfferDraw",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_offer_draw",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessRespondDraw",
+      "requests": [
+        {
+          "body": {
+            "p_accept": true,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_respond_draw",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessState",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 9
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessRanking",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_ranking",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessWatch",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 0
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_watch",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "chessWatchLive",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 0
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/chess_watch_live",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisLobby",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisChallenge",
+      "requests": [
+        {
+          "body": {
+            "p_opponent": "bb000000-0000-4000-8000-0000000000b2",
+            "p_protocol": 1,
+            "p_stake": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_challenge",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisCancel",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_cancel",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisRespond",
+      "requests": [
+        {
+          "body": {
+            "p_accept": true,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_respond",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisReport",
+      "requests": [
+        {
+          "body": {
+            "p_board": "........................................................................................................................................................................................................",
+            "p_garbage_applied": 1,
+            "p_garbage_sent": 2,
+            "p_lines": 4,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_pending": 3,
+            "p_protocol": 1,
+            "p_seq": 12,
+            "p_topped_out": false
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_report",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisState",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisResign",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_resign",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisRanking",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_ranking",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisWatchLive",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_watch_live",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    },
+    {
+      "id": "tetrisWatch",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/tetris_watch",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "unordered": false
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift",
+  "golden": "wire/requests",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "excluded": {
+      "aiLimitClearingRow": "I",
+      "aiLimitPercent": "I",
+      "aiLimitRow": "I",
+      "awaySync": "H",
+      "buyUltra": "H",
+      "closeAbandonedSessions": "H",
+      "fetchAILimitDevices": "I",
+      "fetchAILimitMainDeviceID": "I",
+      "fetchLegacyTokenUsageTotal": "H",
+      "fetchMyOverlappingSessions": "H",
+      "fetchReportAdminList": "admin",
+      "fetchReportOpenCount": "admin",
+      "heartbeat": "H",
+      "insertClosedSession": "H",
+      "item": "admin",
+      "makeWorkTickRequest": "H",
+      "reopenSession": "H",
+      "reportDeviceInput": "H",
+      "sendPoke": "H",
+      "sendTokenScanHeartbeat": "H",
+      "sendUltraPoke": "H",
+      "startWork": "H",
+      "stopWork": "H",
+      "syncUltraWallet": "H",
+      "takePokes": "H",
+      "updateAppVersion": "H",
+      "updateFocusMode": "H",
+      "updateReportAdmin": "admin",
+      "upsertAILimitMainDeviceID": "I",
+      "upsertAILimits": "I",
+      "upsertLegacyTokenUsage": "H",
+      "upsertStatusDevice": "H",
+      "upsertTokenUsage": "H",
+      "upsertTokenUsageDaily": "H",
+      "workTick": "H"
+    },
+    "request": "method · path · query(디코드한 [이름, 값] 쌍, 순서 그대로) · headers(apikey·authorization·accept·content-type·prefer·x-upsert 만, 소문자) · body(JSON 이면 정규 값 — 정수 글자 → 숫자, 그 밖 숫자 → {\"$num\": 글자}; 아니면 {\"$bytes\": base64}; 없으면 null)",
+    "responses": "이 case 의 응답 대본(차례대로, 끝나면 200 {}). unordered = 동시에 떠나는 요청이라 정규 글자 순으로 정렬해 비교",
+    "values": {
+      "accessToken": "<ACCESS>",
+      "anonKey": "<ANON>",
+      "avatarCacheBuster": "?v=<ms>-<uuid 앞 8자> → ?v=<CACHE_BUSTER>",
+      "host": "golden.invalid",
+      "matchID": "cc000000-0000-4000-8000-0000000000c3",
+      "nowSince1970": 1789621500,
+      "peerID": "bb000000-0000-4000-8000-0000000000b2",
+      "requestID": "dd000000-0000-4000-8000-0000000000d4",
+      "userID": "aa000000-0000-4000-8000-0000000000a1"
+    }
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkService.swift",
+    "Sources/CheckCore/SupabaseWorkHTTP.swift",
+    "Sources/CheckCore/DuelRPC.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/ChessWire.swift",
+    "Sources/CheckCore/TetrisWire.swift",
+    "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+    "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+    "Sources/CheckCore/SupabaseWorkServiceSignUp.swift",
+    "Sources/CheckCore/SupabaseWorkServiceSignUpOTP.swift",
+    "Sources/CheckCore/SupabaseWorkServiceTodoSync.swift",
+    "Sources/CheckCore/AppUserCharacters.swift",
+    "Sources/CheckCore/CharacterGift.swift",
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckCore/DailyMissions.swift",
+    "Sources/CheckCore/Achievements.swift",
+    "Sources/CheckCore/Gacha.swift",
+    "Sources/CheckCore/WeeklyWorkReward.swift",
+    "Sources/CheckCore/Megaphone.swift",
+    "Sources/CheckCore/TodoSync.swift",
+    "Sources/CheckCore/StatusMessage.swift",
+    "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+    "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+    "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
+    "Sources/CheckMobileKit/Me/MeProfileService.swift",
+    "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+  ]
+}

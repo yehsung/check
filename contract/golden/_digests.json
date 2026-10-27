@@ -7,7 +7,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
-        "Sources/CheckCore/MiniGameEngine.swift": "c2340e96a366a2ee00319cabc5b7313c45f4fd1af2aed724b96510cf528425c0"
+        "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e"
       }
     }
   },

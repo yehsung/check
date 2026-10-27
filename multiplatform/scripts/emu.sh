@@ -1,6 +1,7 @@
 #!/bin/bash
 # 원본: 없음 (Swift 짝 없음 — 이식 도구)
 # emu.sh — 창 없는 Android 에뮬레이터를 띄우고·찍고·끄는 유일한 입구 (W0-f, A§4-3·A-X7)
+#   6차 int-f(조정자 대리, G §8-17 5): 전용 netsim 발견 폴더 · sealcheck 의 netsim Wi-Fi 길 측정 · 창 판정은 자기 PID 나무만(§8-6).
 #
 # 규칙(설계 G §2-2, A§4-3)
 #   - 언제나 -no-window -no-audio -no-boot-anim -no-snapshot. 스냅숏을 저장하지 않는다.
@@ -37,9 +38,19 @@
 #                                  #   기본 봉인 · stop 의 sync 순서 · avd-clone 거부와 표식 정리 · avd-protect. 실패 사례 수만큼 빨강(종료 코드 1).
 #   emu.sh stop    --port N [--timeout 30]
 #   emu.sh shot    --port N --out FILE.png
-#   emu.sh windows --port N        # 이 포트로 띄운 프로세스의 창 수 + 이름이 qemu/emulator 인 모든 창 수(둘 중 하나라도 0 이 아니면 1)
+#   emu.sh windows --port N        # 이 포트로 띄운 PID 나무(자손 포함 — qemu·netsimd)가 가진 창 수. 0 이 아니면 1, 살아 있는 자기 PID 가
+#                                  #   없으면(빈 판정) 1. 남의 에뮬레이터 창(나무 밖 qemu/emulator 이름)은 windows_foreign_emulator 로 찍기만
+#                                  #   한다(G §8-6 · §8-17 5 — 남의 세션이 게이트를 막지 않게).
 #   emu.sh procs   --port N        # 이 포트로 띄운 프로세스 중 살아 있는 수(0 이 아니면 종료 코드 1)
-#   emu.sh sealcheck --port N      # 손님 안에서 바깥 TCP(1.1.1.1:443)가 실패하고 adb 는 사는지. 둘 다면 0, 아니면 1
+#   emu.sh sealcheck --port N      # 봉인 확인(넷 다 맞으면 0, 아니면 1 — 한 줄에 근거를 찍는다):
+#                                  #   ① netsim: 전용 발견 폴더의 netsim.ini 가 가리키는 netsimd 가 이 포트 PID 나무 안(own) — 로그엔 netsim 이
+#                                  #      붙었는데 자기 것이 아니면 빨강(foreign) ② 길 기다리기(기준선): wlan0(netsim Wi-Fi)이 주소를 받고
+#                                  #      손님 → 10.0.2.2:<콘솔 포트>(호스트 루프백)가 붙을 때까지(EMU_NET_TIMEOUT 초, 기본 120) — 부팅 직후엔
+#                                  #      lo 밖 주소가 없어 '막힘'이 아무것도 재지 않는다 ③ 바깥 TCP 1.1.1.1:443·8.8.8.8:53 × EMU_PROBE_ROUNDS(기본 3,
+#                                  #      EMU_PROBE_GAP 초 간격) + DNS 풀이 1번(dns.google — 'unknown host' 여야) ④ dumpsys connectivity 의 어떤 망도
+#                                  #      VALIDATED·PARTIAL_CONNECTIVITY 가 아니다(안드로이드가 망마다 DNS·HTTP 로 잰 '인터넷 됨').
+#                                  #   start 는 에뮬레이터에 전용 TMPDIR(<EMU_STATE_DIR>/netsim-<포트>/)을 준다 — 에뮬레이터는 TMPDIR 의 netsim.ini 로
+#                                  #   떠 있는 netsimd 를 찾아 붙으므로, 기본 TMPDIR 이면 남의(봉인 안 된) netsimd 의 Wi-Fi 로 바깥이 열린다(int-e 실측).
 #   emu.sh instrumented [--avd aingcheck-api36] [--port 5560] [--seal PROFILE | --no-seal] [--task :androidApp:connectedDebugAndroidTest]
 #                                  # gate-full.sh 가 부른다(W0 통합): 띄우기(봉인 기본) → sealcheck·창 0 → 계측 시험(Gradle 도 같은 봉인,
 #                                  # --offline --no-daemon, ANDROID_SERIAL 로 이 기기만) → 결과 XML 로 시험 ≥1·건너뜀 0·실패 0 확인
@@ -192,23 +203,64 @@ self_test() {
   local T A A2 P=5682 bad=0 total=0 rc ci casefold
   T="$(mktemp -d "${TMPDIR:-/tmp}/emu-selftest.XXXXXX")" || die "self-test: 임시 폴더를 못 만들었다"
   A="$T/home/.android/avd"; A2="$T/avd2"
-  mkdir -p "$T/sdk/emulator" "$T/sdk/platform-tools" "$A" "$A2" "$T/stub" "$T/state" "$T/copy"
-  # 가짜 에뮬레이터: 인자와 받은 ANDROID_AVD_HOME 을 적고 PID 를 남긴 뒤 잠든다.
+  mkdir -p "$T/sdk/emulator" "$T/sdk/platform-tools" "$A" "$A2" "$T/stub" "$T/state" "$T/copy" "$T/callertmp"
+  # 가짜 에뮬레이터: 인자와 받은 ANDROID_AVD_HOME·TMPDIR 을 적고 PID 를 남긴 뒤 잠든다.
+  # netsim 흉내: 받은 TMPDIR 에 netsim.ini 가 이미 있었는지(지난 실행 찌꺼기) 적고, 자식 하나(가짜 netsimd)를 띄워
+  # 그 PID 로 TMPDIR/netsim.ini 를 쓴다. $STUBDIR/netsim-mode 가 foreign 이면 자기 ini 없이 'netsim 에 붙었다' 는 로그만 낸다
+  # (남의 netsimd 에 붙은 꼴).
   cat > "$T/sdk/emulator/emulator" <<'STUB'
 #!/bin/bash
 printf 'ARGS %s AVD_HOME=%s\n' "$*" "${ANDROID_AVD_HOME:-}" >> "$STUBDIR/emu-args"
+printf '%s\n' "${TMPDIR:-}" >> "$STUBDIR/emu-tmpdir"
+if [ -n "${TMPDIR:-}" ] && [ -e "${TMPDIR%/}/netsim.ini" ]; then echo stale >> "$STUBDIR/netsim-seen"; else echo clean >> "$STUBDIR/netsim-seen"; fi
+/bin/sleep 60 </dev/null >/dev/null 2>&1 &
+echo $! > "$STUBDIR/child.pid"
+if [ "$(cat "$STUBDIR/netsim-mode" 2>/dev/null)" = foreign ]; then
+  echo "INFO         | Successfully initialized netsim WiFi"
+elif [ -n "${TMPDIR:-}" ]; then
+  printf 'pid=%s\ngrpc.port=1\n' "$(cat "$STUBDIR/child.pid")" > "${TMPDIR%/}/netsim.ini"
+fi
 echo $$ >> "$STUBDIR/launches"
 echo $$ > "$STUBDIR/cur.pid"
 exec /bin/sleep 60
 STUB
-  # 가짜 adb: 부른 것을 적는다. 부팅은 곧바로 끝났다고 답하고, emu kill 은 가짜 에뮬레이터를 끈다.
+  # 가짜 adb: 부른 것을 적는다. 부팅은 곧바로 끝났다고 답하고, emu kill 은 가짜 에뮬레이터(와 자식)를 끈다.
+  # 손님 탐침(sealcheck 의 ': aingcheck-probe-*' 표식)은 $STUBDIR/net 의 장면대로 답한다:
+  #   sealed(기본) · leak-tcp · leak-dns · dns-timeout · validated · partial · nonai · wifidown · nowlan · nobase
   cat > "$T/sdk/platform-tools/adb" <<'STUB'
 #!/bin/bash
 echo "adb $*" >> "$STUBDIR/adb-log"
+net="$(cat "$STUBDIR/net" 2>/dev/null || echo sealed)"
+nai() { # 인터페이스 · 전송 · 능력 — 실기기 dumpsys connectivity 의 NetworkAgentInfo 줄 꼴
+  printf '  NetworkAgentInfo{network{100}  handle{1}  ni{%s CONNECTED extra: } lp{{InterfaceName: %s LinkAddresses: [ 10.0.2.16/24 ] }} nc{[ Transports: %s Capabilities: %s LinkUpBandwidth>=1Kbps]}}\n' "$2" "$1" "$2" "$3"
+}
 case "$*" in
   devices*) echo "List of devices attached" ;;
   *"getprop sys.boot_completed"*) [ -f "$STUBDIR/cur.pid" ] && echo 1 ;;   # 가짜 에뮬레이터가 돈 뒤에야 '부팅 끝' 
-  *"emu kill"*) [ -f "$STUBDIR/cur.pid" ] && kill "$(cat "$STUBDIR/cur.pid")" 2>/dev/null; rm -f "$STUBDIR/cur.pid" ;;
+  *"emu kill"*) for f in child.pid cur.pid; do [ -f "$STUBDIR/$f" ] && kill "$(cat "$STUBDIR/$f")" 2>/dev/null; rm -f "$STUBDIR/$f"; done ;;
+  *"shell echo pong"*) echo pong ;;
+  *aingcheck-probe-wlan-link*) [ "$net" = nowlan ] || echo wlan0 ;;
+  *aingcheck-probe-wlan-addr*)
+    echo "1: lo    inet 127.0.0.1/8 scope host lo"
+    echo "15: eth0    inet 10.0.2.15/24 brd 10.0.2.255 scope global eth0"
+    [ "$net" = wifidown ] || echo "16: wlan0    inet 10.0.2.16/24 brd 10.0.2.255 scope global wlan0" ;;
+  *aingcheck-probe-base*) [ "$net" = nobase ] && echo rc=1 || echo rc=0 ;;
+  *aingcheck-probe-out*)
+    if [ "$net" = leak-tcp ]; then echo "tcp 1.1.1.1:443 rc=0"; else echo "tcp 1.1.1.1:443 rc=1"; fi
+    echo "tcp 8.8.8.8:53 rc=1" ;;
+  *aingcheck-probe-dns*)
+    case "$net" in
+      leak-dns) echo "dns ping: sendmsg: Operation not permitted PING dns.google (8.8.8.8) 56(84) bytes of data. " ;;   # stderr 줄이 앞에 온 꼴
+      dns-timeout) echo "dns " ;;
+      *) echo "dns ping: unknown host dns.google" ;;
+    esac ;;
+  *aingcheck-probe-nai*)
+    case "$net" in
+      nonai) ;;
+      validated) nai wlan0 WIFI 'NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&VALIDATED&NOT_ROAMING'; nai eth0 CELLULAR 'INTERNET&NOT_RESTRICTED' ;;
+      partial) nai wlan0 WIFI 'INTERNET&PARTIAL_CONNECTIVITY&NOT_VPN'; nai eth0 CELLULAR 'INTERNET&NOT_RESTRICTED' ;;
+      *) nai wlan0 WIFI 'NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING'; nai eth0 CELLULAR 'INTERNET&NOT_RESTRICTED&TRUSTED' ;;
+    esac ;;
 esac
 exit 0
 STUB
@@ -229,9 +281,9 @@ STUB
   mk_avd "$A2" alias2 "$A/aingcheck-api36.avd"         # ANDROID_AVD_HOME 쪽 별칭이 기본 홈의 공용 폴더를 가리킨다
   cp "$SELF" "$T/copy/emu.sh"                          # 옆에 seal.sb 가 없는 사본(기본 봉인 확인용)
 
-  sub() { # 하위 실행 — 진짜 홈·SDK·AVD 폴더를 못 보게 덮는다
+  sub() { # 하위 실행 — 진짜 홈·SDK·AVD 폴더를 못 보게 덮는다. TMPDIR 은 '호출자 것'(에뮬레이터가 물려받으면 안 되는 값)으로.
     env -u ANDROID_AVD_HOME HOME="$T/home" ANDROID_SDK_ROOT="$T/sdk" ANDROID_HOME="$T/sdk" EMU_STATE_DIR="$T/state" STUBDIR="$T/stub" \
-      /bin/bash "$@" >>"$T/out.log" 2>&1
+      TMPDIR="$T/callertmp/" /bin/bash "$@" >>"$T/out.log" 2>&1
   }
   sub2() { # ANDROID_AVD_HOME 을 둘째 폴더로
     env ANDROID_AVD_HOME="$A2" HOME="$T/home" ANDROID_SDK_ROOT="$T/sdk" ANDROID_HOME="$T/sdk" EMU_STATE_DIR="$T/state" STUBDIR="$T/stub" \
@@ -321,6 +373,65 @@ STUB
   done
   check "공용 폴더에 표식 없음" 0 "$(ls -A "$A/aingcheck-api36.avd" "$A/aingcheck-api26.avd" | grep -c -F "$PROTECT_MARK")"
 
+  # N: 전용 netsim 발견 폴더(G §8-17 5) — 에뮬레이터는 호출자 TMPDIR 이 아니라 <상태>/netsim-<포트>/ 를 받는다(남의 netsim.ini 를
+  #    못 보게). 그 폴더는 띄울 때마다 비우고(지난 실행 찌꺼기), 다 내려가면 지운다.
+  subo() { # 하위 실행, 표준출력을 $1 파일로(나머지는 out.log). 앞에 붙인 환경 변수는 그대로 물려준다.
+    local o="$1"; shift
+    env -u ANDROID_AVD_HOME HOME="$T/home" ANDROID_SDK_ROOT="$T/sdk" ANDROID_HOME="$T/sdk" EMU_STATE_DIR="$T/state" STUBDIR="$T/stub" \
+      TMPDIR="$T/callertmp/" /bin/bash "$@" >"$o" 2>>"$T/out.log"
+  }
+  mkdir -p "$T/state/netsim-$P"; printf 'pid=1\n' > "$T/state/netsim-$P/netsim.ini"
+  rm -f "$T/stub/netsim-mode" "$T/stub/emu-tmpdir" "$T/stub/netsim-seen"; echo sealed > "$T/stub/net"
+  fresh; sub "$SELF" start --avd lane-a --port "$P" --no-seal; rc=$?
+  check "netsim: start 종료 코드" 0 "$rc"
+  check "netsim: 에뮬레이터 TMPDIR = 전용 폴더(호출자 TMPDIR 아님)" "$T/state/netsim-$P/" "$(tail -n 1 "$T/stub/emu-tmpdir" 2>/dev/null)"
+  check "netsim: 띄울 때 찌꺼기 netsim.ini 를 비움" clean "$(tail -n 1 "$T/stub/netsim-seen" 2>/dev/null)"
+  # S: sealcheck 판정 — 가짜 adb 가 손님 탐침에 장면대로 답한다(실기기 판정은 gate-full · 결함 심기 실측). 기다림은 짧게.
+  sc() { # 장면 → "종료코드 verdict"
+    echo "$1" > "$T/stub/net"
+    EMU_NET_TIMEOUT=2 EMU_PROBE_GAP=0 subo "$T/sc.out" "$SELF" sealcheck --port "$P"; local r=$?
+    echo "$r $(sed -n 's/.* verdict=//p' "$T/sc.out")"
+  }
+  check "sealcheck 봉인(자기 netsim · Wi-Fi 주소 · 기준선)" "0 sealed" "$(sc sealed)"
+  check "sealcheck netsim=own 근거" 1 "$(grep -c "netsim=own:$(cat "$T/stub/child.pid" 2>/dev/null) " "$T/sc.out")"
+  check "sealcheck 바깥 TCP 열림" "1 LEAK-OR-UNMEASURED(tcp-open)" "$(sc leak-tcp)"
+  check "sealcheck DNS 풀림" "1 LEAK-OR-UNMEASURED(dns-resolved)" "$(sc leak-dns)"
+  check "sealcheck DNS 답 없음(잰 것 없음)" "1 LEAK-OR-UNMEASURED(dns-unknown probes=6/7)" "$(sc dns-timeout)"
+  check "sealcheck 망 VALIDATED" "1 LEAK-OR-UNMEASURED(validated)" "$(sc validated)"
+  check "sealcheck VALIDATED 망 이름" 1 "$(grep -c 'validated=\[wlan0\]' "$T/sc.out")"
+  check "sealcheck 망 PARTIAL_CONNECTIVITY" "1 LEAK-OR-UNMEASURED(validated)" "$(sc partial)"
+  check "sealcheck 망 목록 없음(판정 비어 있음)" "1 LEAK-OR-UNMEASURED(no-networks)" "$(sc nonai)"
+  check "sealcheck Wi-Fi 주소 없음(netsim 길을 못 잼)" "1 LEAK-OR-UNMEASURED(wifi-down)" "$(sc wifidown)"
+  check "sealcheck 기준선(손님 → 호스트 루프백) 실패" "1 LEAK-OR-UNMEASURED(baseline)" "$(sc nobase)"
+  check "sealcheck wlan0 없는 기기는 Wi-Fi 기다림 없음" "0 sealed" "$(sc nowlan)"
+  echo sealed > "$T/stub/net"
+  printf 'pid=1\ngrpc.port=1\n' > "$T/state/netsim-$P/netsim.ini"   # 전용 폴더의 ini 가 나무 밖 PID 를 가리킨다
+  check "sealcheck netsim.ini 가 남의 PID" "1 LEAK-OR-UNMEASURED(netsim)" "$(sc sealed)"
+  EMU_PROBE_ROUNDS=0 subo "$T/sc.out" "$SELF" sealcheck --port "$P"; check "sealcheck 측정 0번 거부" 2 "$?"
+  # W2: 창 판정(G §8-6) — 이 포트 PID 나무(자손 포함)의 창만 센다. 가짜 창 목록(EMU_FAKE_WINDOWS)으로 판정 함수를 잰다.
+  cur="$(cat "$T/stub/cur.pid" 2>/dev/null)"; kid="$(cat "$T/stub/child.pid" 2>/dev/null)"
+  printf '1\tqemu-system-aarch64\n1\temulator\n' > "$T/win-foreign"
+  printf '1\tqemu-system-aarch64\n%s\tqemu-system-aarch64-headless\n' "$cur" > "$T/win-own"
+  printf '%s\tnetsimd\n' "$kid" > "$T/win-child"
+  : > "$T/win-empty"
+  wn() { EMU_FAKE_WINDOWS="$1" subo "$T/wn.out" "$SELF" windows --port "$P"; local r=$?
+    echo "$r $(sed -n 's/^windows_own=\([^ ]*\) windows_foreign_emulator=\([0-9?]*\).*/own=\1 foreign=\2/p' "$T/wn.out")"; }
+  check "windows 남의 에뮬레이터 창만 → 판정 밖" "0 own=0 foreign=2" "$(wn "$T/win-foreign")"
+  check "windows 자기 PID 의 창" "1 own=1 foreign=1" "$(wn "$T/win-own")"
+  check "windows 자손(가짜 netsimd) 의 창" "1 own=1 foreign=0" "$(wn "$T/win-child")"
+  check "windows 창 없음" "0 own=0 foreign=0" "$(wn "$T/win-empty")"
+  fresh; EMU_FAKE_WINDOWS="$T/win-empty" sub "$SELF" instrumented --avd lane-a --port "$P" --no-seal; rc=$?
+  check "instrumented 는 가짜 창 목록 거부" "2 none" "$rc $(launched)"
+  stopit
+  check "netsim: 다 내려간 뒤 전용 폴더 지움" 0 "$([ -e "$T/state/netsim-$P" ] && echo 1 || echo 0)"
+  check "windows 자기 PID 없음 → 판정 불가" 1 "$(wn "$T/win-empty" | cut -d' ' -f1)"
+  # N: 남의 netsimd 에 붙은 꼴(자기 ini 없이 로그만 'netsim WiFi')이면 sealcheck 빨강.
+  echo foreign > "$T/stub/netsim-mode"
+  fresh; sub "$SELF" start --avd lane-a --port "$P" --no-seal; rc=$?
+  check "netsim foreign: start 종료 코드" 0 "$rc"
+  check "sealcheck 남의 netsimd 에 붙음" "1 LEAK-OR-UNMEASURED(netsim)" "$(sc sealed)"
+  stopit; rm -f "$T/stub/netsim-mode"
+
   # 끝: 가짜 에뮬레이터가 살아 있지 않아야 한다 — 마지막으로 띄운 것(cur.pid 는 emu kill 이 지운다)과 emu.sh procs 로 센다.
   local alive=0 p
   if [ -f "$T/stub/cur.pid" ]; then
@@ -328,6 +439,12 @@ STUB
     if kill -0 "$p" 2>/dev/null && [ "$(ps -o comm= -p "$p" 2>/dev/null | sed 's#.*/##')" = sleep ]; then alive=1; kill -KILL "$p" 2>/dev/null; fi
   fi
   check "남은 가짜 에뮬레이터 0(cur.pid)" 0 "$alive"
+  alive=0
+  if [ -f "$T/stub/child.pid" ]; then
+    p="$(cat "$T/stub/child.pid")"
+    if kill -0 "$p" 2>/dev/null && [ "$(ps -o comm= -p "$p" 2>/dev/null | sed 's#.*/##')" = sleep ]; then alive=1; kill -KILL "$p" 2>/dev/null; fi
+  fi
+  check "남은 가짜 netsimd 0(child.pid)" 0 "$alive"
   sub "$SELF" procs --port "$P"; check "emu.sh procs 0" 0 "$?"
   echo "self-test: 사례 $total · 실패 $bad · 대소문자 무시 파일 시스템=$casefold · 띄운 가짜 에뮬레이터 $(grep -c . "$T/stub/launches" 2>/dev/null || echo 0)"
   if [ "$bad" -ne 0 ]; then echo "self-test: 하위 실행 로그 끝:"; tail -n 30 "$T/out.log"; fi
@@ -385,6 +502,11 @@ SERIAL="emulator-$PORT"
 PIDFILE="$STATE/emu-$PORT.pid"     # 첫 줄: 띄운 PID(sandbox-exec 가 exec 한 emulator), 둘째 줄부터: 자식 PID. 끈 뒤에도 남겨 procs 로 다시 센다
 WRITABLE_MARK="$STATE/emu-$PORT.writable"   # --writable 로 띄웠다는 표식(stop 이 손님 sync 를 먼저 부른다)
 LOGFILE="$STATE/emu-$PORT.log"
+# 이 포트 에뮬레이터 전용 netsim 발견 폴더(에뮬레이터의 TMPDIR). 에뮬레이터는 TMPDIR 의 netsim.ini 로 떠 있는 netsimd 를 찾아
+# 붙는다 — 기본 TMPDIR 을 물려주면 남이 띄운(봉인 안 된) netsimd 에 localhost 로 붙어 Wi-Fi 로 바깥이 열린다(int-e 실측,
+# 'Successfully initialized netsim WiFi' dns:///localhost:52001). 전용 폴더를 주면 에뮬레이터가 자기 netsimd 를 자식으로 띄우고,
+# 그 netsimd 는 같은 봉인을 물려받는다(G §8-17 5).
+NETSIM_DIR="$STATE/netsim-$PORT"
 mkdir -p "$STATE"
 
 # 이 포트로 띄운 PID 와 그 자손(재귀), 그리고 적어 둔 자식 중 살아 있는 것을 낸다(중복 있음).
@@ -403,24 +525,31 @@ tree_pids() {
 
 alive_count() { tree_pids | sort -u | grep -c . ; }
 
-# CGWindowList 에서 주어진 PID 들이 가진 창 수(화면 밖 포함 전부).
-window_count() {
-  local pids="$1"
-  /usr/bin/osascript -l JavaScript - "$pids" <<'JXA'
+# 창 목록: 한 줄에 "주인PID<탭>주인 이름"(CGWindowList, 화면 밖 포함 전부).
+# EMU_FAKE_WINDOWS(자기 시험 전용 — 같은 꼴의 파일 경로)가 있으면 그 파일을 읽는다. instrumented 는 이 변수가 있으면 거부한다.
+window_list() {
+  if [ -n "${EMU_FAKE_WINDOWS:-}" ]; then cat "$EMU_FAKE_WINDOWS"; return; fi
+  /usr/bin/osascript -l JavaScript <<'JXA'
 ObjC.import("CoreGraphics");
-function run(argv) {
-  var want = {};
-  (argv[0] || "").split(/\s+/).filter(String).forEach(function (p) { want[p] = true; });
+function run() {
   var arr = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll, 0))) || [];
-  var own = 0, any = 0;
-  arr.forEach(function (w) {
-    var owner = String(w.kCGWindowOwnerName || "");
-    if (want[String(w.kCGWindowOwnerPID)]) own++;
-    if (/qemu-system|^emulator$/i.test(owner)) any++;
-  });
-  return own + " " + any;
+  return arr.map(function (w) {
+    return String(w.kCGWindowOwnerPID) + "\t" + String(w.kCGWindowOwnerName || "").replace(/[\t\n]/g, " ");
+  }).join("\n");
 }
 JXA
+}
+
+# 창 판정(G §8-6 · §8-17 5): **이 포트로 띄운 PID 나무(자손 포함)가 가진 창만** 센다 → "own foreign".
+# foreign = 나무 밖인데 이름이 qemu/emulator 인 창(남의 에뮬레이터) — 알림으로만 찍고 판정에 넣지 않는다.
+window_count() {
+  window_list | /usr/bin/awk -F '\t' -v pids="$1" '
+    BEGIN { n = split(pids, a, " "); for (i = 1; i <= n; i++) if (a[i] != "") want[a[i]] = 1; own = 0; foreign = 0 }
+    NF >= 1 && $1 != "" {
+      if ($1 in want) own++
+      else if (tolower($2) ~ /qemu-system|^emulator$/) foreign++
+    }
+    END { print own, foreign }'
 }
 
 case "$cmd" in
@@ -452,12 +581,15 @@ start)
     launcher=( /usr/bin/sandbox-exec -f "$SEAL" )
   fi
   : > "$LOGFILE"
+  # 전용 netsim 발견 폴더는 띄울 때마다 비운다(지난 실행의 netsim.ini 가 죽은 PID·포트를 가리키지 않게).
+  rm -rf "$NETSIM_DIR" && mkdir -p "$NETSIM_DIR" || die "netsim 발견 폴더를 못 만들었다: $NETSIM_DIR"
   # 에뮬레이터가 여는 AVD 폴더 = 위에서 판정한 폴더(ANDROID_AVD_HOME 을 같은 값으로 넘긴다).
   export ANDROID_AVD_HOME="$AVD_HOME"
   t0=$(date +%s)
-  # 새 세션으로 떼어 낸다(부른 셸이 끝나도 산다). PID 는 sandbox-exec → exec → emulator 로 같다.
+  # 새 세션으로 떼어 낸다(부른 셸이 끝나도 산다). PID 는 env → sandbox-exec → exec → emulator 로 같다.
+  # TMPDIR 은 에뮬레이터(와 그 자식 netsimd)에게만 전용 폴더로 준다 — 남의 netsim.ini 를 못 보게.
   /usr/bin/perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die "exec: $!"' -- \
-    ${launcher[@]+"${launcher[@]}"} "$EMU_BIN" "${args[@]}" </dev/null >>"$LOGFILE" 2>&1 &
+    /usr/bin/env TMPDIR="$NETSIM_DIR/" ${launcher[@]+"${launcher[@]}"} "$EMU_BIN" "${args[@]}" </dev/null >>"$LOGFILE" 2>&1 &
   pid=$!
   echo "$pid" > "$PIDFILE"
   log "띄움 avd=$AVD port=$PORT sealed=$SEALED writable=$WRITABLE pid=$pid log=$LOGFILE"
@@ -509,6 +641,7 @@ stop)
     sleep 1
   fi
   n="$(alive_count)"
+  [ "$n" -ne 0 ] || rm -rf "$NETSIM_DIR"   # 자기 netsimd 까지 내려갔으면 전용 발견 폴더도 거둔다
   echo "stopped alive=$n seconds=$(( $(date +%s) - t0 ))"
   [ "$n" -eq 0 ]
   ;;
@@ -525,18 +658,96 @@ shot)
 
 windows)
   pids="$(tree_pids | sort -u | tr '\n' ' ')"
-  read -r own any <<<"$(window_count "$pids")"
-  echo "windows_own=$own windows_any_emulator=$any pids=[${pids% }]"
-  [ "$own" = "0" ] && [ "$any" = "0" ]
+  src=cgwindowlist; [ -z "${EMU_FAKE_WINDOWS:-}" ] || src=fake
+  if [ -z "${pids// /}" ]; then
+    # 자기 PID 가 없으면 '창 0' 은 아무것도 재지 않은 것이다(빈 판정) — 초록으로 치지 않는다.
+    echo "windows_own=? windows_foreign_emulator=? pids=[] source=$src — 포트 $PORT 로 띄운 살아 있는 프로세스가 없다(판정 불가)"
+    exit 1
+  fi
+  read -r own foreign <<<"$(window_count "$pids")"
+  echo "windows_own=$own windows_foreign_emulator=$foreign(판정 밖 — 남의 PID) pids=[${pids% }] source=$src"
+  [ "$own" = "0" ]
   ;;
 
 sealcheck)
+  # 봉인 확인(G §8-17 5). 부팅 직후의 손님에는 lo 밖 주소가 없다 — 그때 재면 '막힘'은 길이 없어서다(int-e 의 rc=1 이 그랬다).
+  # 그래서 (1) 호스트 쪽: 에뮬레이터가 붙은 netsimd 가 자기 PID 나무 안인가, (2) 손님 Wi-Fi(wlan0 = netsim 길)가 주소를 받고
+  # 손님 → 10.0.2.2:<콘솔 포트>(호스트 루프백, 봉인이 여는 길)가 붙을 때까지 기다린 뒤(기준선), (3) 바깥 TCP 둘·DNS 풀이를
+  # 여러 번 재고, (4) 안드로이드가 '인터넷 됨'(VALIDATED·PARTIAL_CONNECTIVITY)으로 본 망이 없는지 본다. 넷 다 맞아야 0.
   [ -f "$PIDFILE" ] && [ "$(alive_count)" -gt 0 ] || die "포트 $PORT 에 띄운 에뮬레이터가 없다"
-  pong="$("$ADB" -s "$SERIAL" shell echo pong 2>/dev/null | tr -d '\r')"
-  # toybox nc: 연결되면 0, 못 하면 1. 시한 5초.
-  out="$("$ADB" -s "$SERIAL" shell 'toybox nc -w 5 1.1.1.1 443 </dev/null >/dev/null 2>&1; echo rc=$?' 2>/dev/null | tr -d '\r')"
-  echo "adb=${pong:-dead} outbound_tcp_${out}"
-  [ "$pong" = "pong" ] && [ "$out" != "rc=0" ] && [ -n "$out" ]
+  NET_TIMEOUT="${EMU_NET_TIMEOUT:-120}"; ROUNDS="${EMU_PROBE_ROUNDS:-3}"; GAP="${EMU_PROBE_GAP:-5}"
+  for v in "$NET_TIMEOUT" "$ROUNDS" "$GAP"; do case "$v" in ''|*[!0-9]*) die "EMU_NET_TIMEOUT·EMU_PROBE_ROUNDS·EMU_PROBE_GAP 는 숫자: '$v'" ;; esac; done
+  [ "$ROUNDS" -ge 1 ] || die "EMU_PROBE_ROUNDS 는 1 이상(0 이면 아무것도 재지 않는다)"
+  gsh() { "$ADB" -s "$SERIAL" shell "$1" 2>/dev/null | tr -d '\r'; }
+  bad=()
+  pong="$(gsh 'echo pong')"
+  [ "$pong" = "pong" ] || bad+=("adb")
+  # (1) netsim 주인: 전용 발견 폴더의 netsim.ini 가 가리키는 netsimd 가 이 포트 PID 나무 안이어야 한다.
+  ns_ini="$NETSIM_DIR/netsim.ini"; ns_pid=""
+  [ -f "$ns_ini" ] && ns_pid="$(sed -n 's/^pid=//p' "$ns_ini" | head -n 1 | tr -dc '0-9')"
+  # (grep -q 를 파이프 끝에 두지 않는다 — pipefail 아래에서 앞 단계가 SIGPIPE 로 끝나 '없음'이 된다.)
+  if [ -n "$ns_pid" ] && [ "$(tree_pids | grep -cx "$ns_pid")" -gt 0 ]; then netsim="own:$ns_pid"
+  elif [ -f "$ns_ini" ]; then netsim="foreign:ini-pid=${ns_pid:-?}"; bad+=("netsim")   # 전용 폴더의 ini 가 나무 밖(또는 없는) PID
+  elif grep -q -E 'netsim|packet streamer' "$LOGFILE" 2>/dev/null; then netsim="foreign:no-own-ini"; bad+=("netsim")   # 로그엔 netsim 이 붙었는데 자기 것이 아니다
+  else netsim="none"; fi
+  # (2) 길 기다리기: wlan0 이 있으면 IPv4 를 받을 때까지, 그리고 손님 → 호스트 루프백(콘솔)이 붙을 때까지.
+  t0=$(date +%s); wifi="absent"; base="down"
+  # (셸 사용자는 'ip link show <장치>' 가 netlink 권한으로 막힌다 — 장치 있음은 /sys, 주소는 전체 목록에서 고른다.)
+  if [ "$(gsh ': aingcheck-probe-wlan-link; [ -e /sys/class/net/wlan0 ] && echo wlan0')" = "wlan0" ]; then
+    wifi="down"
+    while :; do
+      a="$(gsh ': aingcheck-probe-wlan-addr; ip -4 -o addr 2>/dev/null' | awk '$2 == "wlan0" {for (i=3;i<=NF;i++) if ($i=="inet") {print $(i+1); exit}}')"
+      [ -n "$a" ] && { wifi="up:$a"; break; }
+      [ $(( $(date +%s) - t0 )) -lt "$NET_TIMEOUT" ] || break
+      sleep 2
+    done
+    case "$wifi" in up:*) ;; *) bad+=("wifi-down") ;; esac
+  fi
+  while :; do
+    r="$(gsh ": aingcheck-probe-base; toybox nc -w 5 10.0.2.2 $PORT </dev/null >/dev/null 2>&1; echo rc=\$?")"
+    [ "$r" = "rc=0" ] && { base="connected"; break; }
+    [ $(( $(date +%s) - t0 )) -lt "$NET_TIMEOUT" ] || break
+    sleep 2
+  done
+  [ "$base" = "connected" ] || bad+=("baseline")
+  # (3) 바깥 TCP(1.1.1.1:443 · 8.8.8.8:53)를 ROUNDS 번(GAP 초 간격), 첫 번째 뒤에 DNS 풀이(손님 기본 망의 DNS) 한 번.
+  #     한 번이라도 열리거나 풀리면 샌다. DNS 는 막히면 손님 resolver 가 시한(실측 30초)까지 기다려 'unknown host' 를 낸다 —
+  #     60초 안에 답이 없으면 잰 것이 없다(빨강). 기대 측정 수 = ROUNDS×2 + 1.
+  tcp_open=0; dns_res=0; dns_odd=0; probes=0
+  for ((i = 1; i <= ROUNDS; i++)); do
+    out="$(gsh ': aingcheck-probe-out; for t in 1.1.1.1:443 8.8.8.8:53; do toybox nc -w 5 ${t%:*} ${t#*:} </dev/null >/dev/null 2>&1; echo "tcp $t rc=$?"; done')"
+    # ping 의 표준출력은 파이프에서 덩어리 버퍼라 stderr 줄(sendmsg 실패 등)이 'PING 이름 (주소)' 보다 먼저 올 수 있다 — 출력 전부를 한 줄로.
+    [ "$i" -eq 1 ] && out="$out"$'\n'"$(gsh ': aingcheck-probe-dns; echo "dns $(timeout 60 ping -c 1 -W 3 dns.google 2>&1 | tr "\n" " ")"')"
+    while IFS= read -r l; do
+      case "$l" in
+        "tcp "*" rc=0") tcp_open=$((tcp_open + 1)); probes=$((probes + 1)) ;;
+        "tcp "*" rc="[1-9]*) probes=$((probes + 1)) ;;
+        "dns "*"PING "*" ("*) dns_res=$((dns_res + 1)); probes=$((probes + 1)) ;;   # 이름이 주소로 풀렸다(먼저 본다)
+        "dns "*"unknown host"*) probes=$((probes + 1)) ;;
+        "dns "*) dns_odd=$((dns_odd + 1)) ;;
+      esac
+    done <<<"$out"
+    [ "$i" -lt "$ROUNDS" ] && sleep "$GAP"
+  done
+  [ "$tcp_open" -eq 0 ] || bad+=("tcp-open")
+  [ "$dns_res" -eq 0 ] || bad+=("dns-resolved")
+  [ "$dns_odd" -eq 0 ] || bad+=("dns-unknown")
+  [ "$probes" -eq $((ROUNDS * 2 + 1)) ] || bad+=("probes=$probes/$((ROUNDS * 2 + 1))")
+  # (4) 망마다 안드로이드 자체 검사(NetworkMonitor — 망에 묶어 DNS·HTTP 를 잰다)가 '인터넷 됨'으로 본 망.
+  nai="$(gsh ': aingcheck-probe-nai; dumpsys connectivity 2>/dev/null | grep "^  NetworkAgentInfo"')"
+  nets=0; validated=""
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    nets=$((nets + 1))
+    ifc="$(printf '%s' "$l" | sed -n 's/.*InterfaceName: \([A-Za-z0-9_.-]*\).*/\1/p' | head -n 1)"
+    # 줄 안의 Capabilities 묶음을 모두 낱말로 쪼개 정확히 맞춘다(NOT_ 꼴 같은 비슷한 이름에 걸리지 않게).
+    toks="$(printf '%s\n' "$l" | grep -o 'Capabilities: [A-Z_&]*' | sed 's/^Capabilities: //' | tr '&' '\n')"
+    if [ "$(printf '%s\n' "$toks" | grep -cx -E 'VALIDATED|PARTIAL_CONNECTIVITY')" -gt 0 ]; then validated="$validated${validated:+,}${ifc:-?}"; fi
+  done <<<"$nai"
+  [ "$nets" -ge 1 ] || bad+=("no-networks")
+  [ -z "$validated" ] || bad+=("validated")
+  echo "adb=${pong:-dead} netsim=$netsim wifi=$wifi host_loopback_via_guest=$base outbound_tcp_open=$tcp_open dns_resolved=$dns_res probes=$probes rounds=$ROUNDS networks=$nets validated=[${validated}] waited=$(( $(date +%s) - t0 ))s verdict=$([ ${#bad[@]} -eq 0 ] && echo sealed || echo "LEAK-OR-UNMEASURED(${bad[*]})")"
+  [ ${#bad[@]} -eq 0 ]
   ;;
 
 procs)
@@ -679,6 +890,8 @@ instrumented)
   results="$MP/$module_dir/build/outputs/androidTest-results/connected"
   PY="$(command -v python3 || true)"; [ -n "$PY" ] || die "결과 XML 을 읽을 python3 가 없다"
   [ "$SEALED" -eq 0 ] || [ -f "$SEAL" ] || die "봉인 프로파일이 없다: $SEAL"
+  # 가짜 창 목록은 self-test 전용이다 — 게이트가 그것으로 '창 0' 을 내면 아무것도 재지 않은 것이다.
+  [ -z "${EMU_FAKE_WINDOWS:-}" ] || die "EMU_FAKE_WINDOWS 는 self-test 전용이다 — instrumented 는 진짜 창 목록(CGWindowList)으로만 판정한다"
   started_emu=0
   # 언제나 끈다: 실패·중단에도 이 포트로 띄운 것을 거두고 0 인지 센다(남의 에뮬레이터·adb 서버는 건드리지 않는다).
   finish() {

@@ -1,0 +1,3023 @@
+{
+  "cases": [
+    {
+      "checkpoints": [
+        "0x9a08f831a526c330",
+        "0x5c1940304b4ebd24",
+        "0x032a7401d489f542",
+        "0x81bb5e4aa9ae8e74",
+        "0x8adc2b2a66c64e86",
+        "0x803e21488f233f89",
+        "0xd61ff1764a5551f2",
+        "0x79707d5f64e08fcc",
+        "0x671cd498579d384b",
+        "0x2c9f3be07af948d6",
+        "0x4d09709fb0576b76",
+        "0x6046bc69b191ffc8",
+        "0xd905a02a9a82d39f",
+        "0x2fe992f9f6f448d7",
+        "0xfc80f8a23b044820",
+        "0xca570e85a5d016aa",
+        "0x2107a7850e46020a",
+        "0xbd93d4fab83ec45a",
+        "0xae54ec7a4dec3b0f",
+        "0x0b371f557d90231e"
+      ],
+      "final": "0x0b371f557d90231e",
+      "head": [
+        {
+          "e": "userRequestedRetry",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee0b8e560",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "poke"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee4a3126f",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshFailed",
+            "$value": true
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "disconnect",
+            "cancelRetry"
+          ],
+          "hb": null,
+          "now": "41daac4ee908b43a",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eea46c8b5",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshFailed",
+            "$value": false
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eebd8624e",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "poke"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ef05ab022",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f01edf3b7",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f03d645a2",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "chess"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f078bd70b",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0bf872b1",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0f0bd70b",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f1025d2f2",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "closed",
+              "$value": null
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2351eb86",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f25ed4fe0",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f27472b03",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4f27472b03"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatTimedOut"
+          },
+          "fr": false,
+          "fs": "41daac4f27f47ae2",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4f282f5b11"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f27f47ae2",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f27f47ae2"
+              },
+              "retryAt": {
+                "$date": "41daac4f282f5b11"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f2834dd30",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4f2834dd30"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": {
+                "$case": "unknown",
+                "$value": "boom"
+              }
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f2906147c",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "tetris"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2d21999a",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": {
+                "$case": "unknown",
+                "$value": "boom"
+              }
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2e396874",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2ecf7cee",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2f7f3b66",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatTimedOut"
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f31d15812",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "message_read"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f351fef9f",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "closed",
+              "$value": null
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f38810626",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f293f6432"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "backoffElapsed",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f3aff4bc8",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 2,
+              "since": {
+                "$date": "41daac4f3aff4bc8"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "message_read"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3efd4fe0",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 2,
+              "since": {
+                "$date": "41daac4f3aff4bc8"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "userRequestedRetry",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f4136c8b6",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 2,
+              "since": {
+                "$date": "41daac4f3aff4bc8"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [
+            "disconnect",
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4f45703836"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f451a3d72",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 3,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f45703836"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": "expiredToken"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f4761999b",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 3,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f45703836"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "tetris"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f4b37be78",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 3,
+              "failingSince": {
+                "$date": "41daac4f2906147c"
+              },
+              "retryAt": {
+                "$date": "41daac4f45703836"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f4df5a1cc",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f45703836"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "gomoku"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f4ff41894",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f45703836"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f53789376",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f45703836"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "chess"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f546d70a5",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f45703836"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "userRequestedRetry",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4f55a851ec"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f55a851ec",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f55a851ec"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": {
+                "$case": "unknown",
+                "$value": "boom"
+              }
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f5a75c290",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f55a851ec"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f5c1f5c2a",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f55a851ec"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f5db4ccce",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f55a851ec"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": {
+                "$case": "unknown",
+                "$value": "boom"
+              }
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f2906147c",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f6031fbe8",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 3,
+                "failingSince": {
+                  "$date": "41daac4f2906147c"
+                },
+                "retryAt": {
+                  "$date": "41daac4f55a851ec"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "id": "seed-5eed000000000004-10000-true",
+      "seed": "0x5eed000000000004",
+      "stateCounts": {
+        "connecting": 2389,
+        "failed.exhausted": 554,
+        "failed.topicDenied": 289,
+        "failed.unauthorized": 16,
+        "idle.signedOut": 3406,
+        "idle.suspended": 883,
+        "reconnecting": 1822,
+        "subscribed": 641
+      },
+      "steps": 10000,
+      "transportAvailable": true
+    },
+    {
+      "checkpoints": [
+        "0x2b88980234b504b7",
+        "0x9945fbfd90ae6b86",
+        "0x524fba8a62c9299d",
+        "0x4a52b815eb2316c0"
+      ],
+      "final": "0x4a52b815eb2316c0",
+      "head": [
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "opened"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee2e8a3d7",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "poke"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ef301ba5e",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ef41147ae",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ef468f5c2",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "backoffElapsed",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ef7a96872",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "didWake",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ef831db22",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatTimedOut"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4efc4c7ae1",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "userRequestedRetry",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0051a9fc",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "signedOut",
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "disconnect",
+            "cancelRetry"
+          ],
+          "hb": null,
+          "now": "41daac4f02d65604",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": "expiredToken"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0476a7ef",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "closed",
+              "$value": null
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f09380000",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": {
+                "$case": "unknown",
+                "$value": "boom"
+              }
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0dc6d916",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "not-a-jwt"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "not-a-jwt"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41daac51ff4ae147"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f114ae147",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4f114ae147"
+              }
+            }
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatTimedOut"
+          },
+          "fr": false,
+          "fs": "41daac4f15479db2",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4f158068b8"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f15479db2",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f15479db2"
+              },
+              "retryAt": {
+                "$date": "41daac4f158068b8"
+              }
+            }
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f15479db2",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2639fbe6",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f15479db2"
+                },
+                "retryAt": {
+                  "$date": "41daac4f158068b8"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatAck"
+          },
+          "fr": false,
+          "fs": "41daac4f15479db2",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f268f4bc6",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f15479db2"
+                },
+                "retryAt": {
+                  "$date": "41daac4f158068b8"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "gomoku"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f15479db2",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2838f5c2",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f15479db2"
+                },
+                "retryAt": {
+                  "$date": "41daac4f158068b8"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": "41daac4f15479db2",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4f29d353f6"
+              }
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41daac4f315353f6"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f29d353f6",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f15479db2"
+                },
+                "retryAt": {
+                  "$date": "41daac4f29d353f6"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshFailed",
+            "$value": true
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "disconnect",
+            "cancelRetry"
+          ],
+          "hb": null,
+          "now": "41daac4f2c578d4e",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2ebfae13",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": "expiredToken"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f32a7df3a",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatAck"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f35f29fbd",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "userRequestedRetry",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f37ae45a0",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3c1926e8",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3c4ab020",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "backoffElapsed",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3e5d70a2",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "closed",
+              "$value": 1006
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f415c7ae0",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "opened"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f44252f1a",
+          "s": {
+            "$case": "idle",
+            "$value": "signedOut"
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41daac4f4c13b644"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f4493b644",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4f4493b644"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "tetris"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f48775c28",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4f4493b644"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": {
+                "$case": "unknown",
+                "$value": "boom"
+              }
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4f4c2357e9"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4f4bfc8b42",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f4bfc8b42"
+              },
+              "retryAt": {
+                "$date": "41daac4f4c2357e9"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": "unauthorized"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f4d77df3a",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f4bfc8b42"
+              },
+              "retryAt": {
+                "$date": "41daac4f4c2357e9"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "opened"
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f4f6bb644",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f4bfc8b42"
+              },
+              "retryAt": {
+                "$date": "41daac4f4c2357e9"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": "unauthorized"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f533c28f4",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f4bfc8b42"
+              },
+              "retryAt": {
+                "$date": "41daac4f4c2357e9"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f57b90624",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f4bfc8b42"
+              },
+              "retryAt": {
+                "$date": "41daac4f4c2357e9"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "opened"
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f5b819998",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4f4bfc8b42"
+              },
+              "retryAt": {
+                "$date": "41daac4f4c2357e9"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f5df21caa",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f4bfc8b42"
+                },
+                "retryAt": {
+                  "$date": "41daac4f4c2357e9"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "chess"
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f62584188",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f4bfc8b42"
+                },
+                "retryAt": {
+                  "$date": "41daac4f4c2357e9"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f636f6c8a",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f4bfc8b42"
+                },
+                "retryAt": {
+                  "$date": "41daac4f4c2357e9"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": {
+                "$case": "unknown",
+                "$value": "boom"
+              }
+            }
+          },
+          "fr": false,
+          "fs": "41daac4f4bfc8b42",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f677449b8",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4f4bfc8b42"
+                },
+                "retryAt": {
+                  "$date": "41daac4f4c2357e9"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "id": "seed-2a-2000-true",
+      "seed": "0x000000000000002a",
+      "stateCounts": {
+        "connecting": 494,
+        "failed.exhausted": 157,
+        "failed.topicDenied": 84,
+        "idle.signedOut": 549,
+        "idle.suspended": 181,
+        "reconnecting": 434,
+        "subscribed": 101
+      },
+      "steps": 2000,
+      "transportAvailable": true
+    },
+    {
+      "checkpoints": [],
+      "final": "0x7e426685efb1abe7",
+      "head": [
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "gomoku"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee3c1eb85",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee5b9ba5e",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee6f6978d",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eeaae45a2",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eed6b74bc",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eede3126e",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4efe03020c",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0038c49b",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatTimedOut"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f04f4fdf3",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f054bf7ce",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "poke"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0862e147",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0a5d6041",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0bb96872",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "message_read"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0e71db22",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f0ffbb645",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "poke"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f1098a3d6",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "poke"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f14571a9f",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f1533126e",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "poke"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f16ba3d70",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshFailed",
+            "$value": true
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f17278d4f",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "opened"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f26566666",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "userRequestedRetry",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f26d9ba5e",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "willSleep",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2854ac08",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": "unauthorized"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f2d1a0c49",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "signedOut",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3137ae14",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "joinRejected",
+              "$value": "unauthorized"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f33e6147a",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": "willSleep",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f353676c8",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": null
+        },
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "not-a-jwt"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f36e75c29",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "broadcast",
+              "$value": "message_read"
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f38b8b43a",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": "willSleep",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f39fae148",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3ccd70a4",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "tokenRefreshed",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3d5bd70a",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "closed",
+              "$value": 1006
+            }
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f3d6d4fe0",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f41148b44",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": "backoffElapsed",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f44b10626",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "opened"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f48598938",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": "backoffElapsed",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f59c1ba5f",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f5d09374c",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": "didWake",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f611374bd",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        },
+        {
+          "e": "backoffElapsed",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4f64f9eb86",
+          "s": {
+            "$case": "idle",
+            "$value": "disabled"
+          },
+          "tok": "not-a-jwt"
+        }
+      ],
+      "id": "seed-7-300-false",
+      "seed": "0x0000000000000007",
+      "stateCounts": {
+        "idle.disabled": 300
+      },
+      "steps": 300,
+      "transportAvailable": false
+    },
+    {
+      "id": "script-heartbeat-25-silence-50",
+      "records": [
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "joined"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "catchUp"
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0000000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "sendHeartbeat"
+          ],
+          "hb": "41daac4ee0400000",
+          "now": "41daac4ee0400000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0000000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": "heartbeatAck"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": "41daac4ee0400000",
+          "now": "41daac4ee0400000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": "41daac4ee0400000",
+          "now": "41daac4ee6400000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "sendHeartbeat"
+          ],
+          "hb": "41daac4ee6800000",
+          "now": "41daac4ee6800000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": "41daac4ee6800000",
+          "now": "41daac4eec800000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [
+            "sendHeartbeat"
+          ],
+          "hb": "41daac4eecc00000",
+          "now": "41daac4eecc00000",
+          "s": {
+            "$case": "subscribed",
+            "$value": {
+              "lastHeardAt": {
+                "$date": "41daac4ee0400000"
+              },
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4eed000000",
+          "fx": [
+            "disconnect",
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4eed300000"
+              }
+            }
+          ],
+          "hb": "41daac4eecc00000",
+          "now": "41daac4eed000000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 1,
+              "failingSince": {
+                "$date": "41daac4eed000000"
+              },
+              "retryAt": {
+                "$date": "41daac4eed300000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "script": [
+        [
+          0,
+          "signedIn:tokOK"
+        ],
+        [
+          0,
+          "joined"
+        ],
+        [
+          1,
+          "tick"
+        ],
+        [
+          0,
+          "heartbeatAck"
+        ],
+        [
+          24,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ],
+        [
+          24,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ]
+      ]
+    },
+    {
+      "id": "script-join-15",
+      "records": [
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": null,
+          "fx": [],
+          "hb": null,
+          "now": "41daac4ee3c00000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4ee4000000",
+          "fx": [
+            "disconnect",
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4ee4300000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee4000000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4ee4000000"
+              },
+              "retryAt": {
+                "$date": "41daac4ee4300000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "script": [
+        [
+          0,
+          "signedIn:tokOK"
+        ],
+        [
+          15,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ]
+      ]
+    },
+    {
+      "id": "script-failed-45",
+      "records": [
+        {
+          "e": {
+            "$case": "signedIn",
+            "$value": "e30.<jwt:24>.c2ln"
+          },
+          "fr": false,
+          "fs": null,
+          "fx": [
+            {
+              "$case": "connect",
+              "$value": "e30.<jwt:24>.c2ln"
+            },
+            {
+              "$case": "scheduleTokenRefresh",
+              "$value": {
+                "$date": "41dab631d5000000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0000000",
+          "s": {
+            "$case": "connecting",
+            "$value": {
+              "attempt": 1,
+              "since": {
+                "$date": "41daac4ee0000000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": {
+            "$case": "transport",
+            "$value": {
+              "$case": "closed",
+              "$value": null
+            }
+          },
+          "fr": false,
+          "fs": "41daac4ee0400000",
+          "fx": [
+            {
+              "$case": "scheduleRetry",
+              "$value": {
+                "$date": "41daac4ee0700000"
+              }
+            }
+          ],
+          "hb": null,
+          "now": "41daac4ee0400000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4ee0400000"
+              },
+              "retryAt": {
+                "$date": "41daac4ee0700000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4ee0400000",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eeb800000",
+          "s": {
+            "$case": "reconnecting",
+            "$value": {
+              "attempt": 2,
+              "failingSince": {
+                "$date": "41daac4ee0400000"
+              },
+              "retryAt": {
+                "$date": "41daac4ee0700000"
+              }
+            }
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        },
+        {
+          "e": "tick",
+          "fr": false,
+          "fs": "41daac4ee0400000",
+          "fx": [],
+          "hb": null,
+          "now": "41daac4eebc00000",
+          "s": {
+            "$case": "failed",
+            "$value": [
+              {
+                "attempt": 2,
+                "failingSince": {
+                  "$date": "41daac4ee0400000"
+                },
+                "retryAt": {
+                  "$date": "41daac4ee0700000"
+                }
+              },
+              "exhausted"
+            ]
+          },
+          "tok": "e30.<jwt:24>.c2ln"
+        }
+      ],
+      "script": [
+        [
+          0,
+          "signedIn:tokOK"
+        ],
+        [
+          1,
+          "closed:nil"
+        ],
+        [
+          45,
+          "tick"
+        ],
+        [
+          1,
+          "tick"
+        ]
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift",
+  "golden": "realtime/link-walk",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "events": "next() % 34: 0 signedIn(tokOK) · 1 signedIn(tokSoon) · 2 signedIn(\"not-a-jwt\") · 3 signedOut · 4 willSleep · 5 didWake · 6 opened · 7,8 joined · 9 joinRejected(expiredToken) · 10 joinRejected(unauthorized) · 11 joinRejected(unknown(\"boom\")) · 12 gomoku · 13 chess · 14 tetris · 15 message_read · 16 poke(방송) · 17 heartbeatAck · 18 heartbeatTimedOut · 19 closed(next()%2==0 ? nil : 1006) · 20,21 backoffElapsed · 22…27 tick · 28 tokenRefreshed(tokOK) · 29 tokenRefreshed(tokSoon) · 30 tokenRefreshFailed(fatal: next()%2==0) · 31 userRequestedRetry · 32,33 tick",
+    "record": "걸음 기록 = {now(비트) · e(사건 덤프) · fx(효과 덤프) · s(상태 덤프) · tok · fs(failingSince 비트) · fr(forcedRefreshUsedThisAttempt) · hb(lastHeartbeatSentAt 비트)} 의 정규 글자를 UTF-8 바이트로 FNV-1a 64 에 접는다. 500걸음마다 체크포인트, 앞 40걸음은 기록 그대로(JWT 모양 글자만 <jwt:길이> — 지문은 바꾸기 전 글자로 센다)",
+    "rng": "MiniGameRandom(SplitMix64)(seed). 걸음마다: dt = (next() % 20001)/1000 초, next() % 50 == 0 이면 dt += 60 → now += dt → 사건 = event(rng) → link.apply(사건, now, jitter: c → c * (0.5 + 0.5 * unit()))",
+    "script": "script 칸이 있는 case 는 무작위 걷기가 아니라 대본이다: [dt 정수 초, 사건 글자] 차례로 now += dt → apply(사건, now, jitter: c → c × 0.75). records = 걸음마다 기록(아래 record 와 같은 칸, JWT 모양 글자만 <jwt:길이>). 사건 글자: signedIn:tokOK · joined · tick · heartbeatAck · closed:nil",
+    "tokens": "start = 1970+1790000000초. tokOK = JWT(exp = start+2592000), tokSoon = JWT(exp = start+100) — 머리 e30 · 꼬리 c2ln · 가운데 base64url({\"exp\":N})"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/RealtimeLink.swift",
+    "Sources/CheckCore/JWTClaims.swift",
+    "Sources/CheckCore/MiniGameEngine.swift"
+  ]
+}

@@ -1,0 +1,349 @@
+{
+  "cases": [
+    {
+      "frame": {
+        "event": "phx_join",
+        "join_ref": "1",
+        "payload": {
+          "access_token": "tok",
+          "config": {
+            "broadcast": {
+              "ack": false,
+              "self": false
+            },
+            "postgres_changes": [],
+            "presence": {
+              "key": ""
+            },
+            "private": true
+          }
+        },
+        "ref": "1",
+        "topic": "realtime:poke:u1"
+      },
+      "id": "join-private"
+    },
+    {
+      "frame": {
+        "event": "phx_join",
+        "join_ref": "7",
+        "payload": {
+          "access_token": "tok",
+          "config": {
+            "broadcast": {
+              "ack": false,
+              "self": false
+            },
+            "postgres_changes": [],
+            "presence": {
+              "key": ""
+            },
+            "private": false
+          }
+        },
+        "ref": "7",
+        "topic": "realtime:poke:u1"
+      },
+      "id": "join-public"
+    },
+    {
+      "frame": {
+        "event": "heartbeat",
+        "payload": {},
+        "ref": "12",
+        "topic": "phoenix"
+      },
+      "id": "heartbeat"
+    },
+    {
+      "frame": {
+        "event": "access_token",
+        "join_ref": "1",
+        "payload": {
+          "access_token": "new"
+        },
+        "ref": "3",
+        "topic": "realtime:poke:u1"
+      },
+      "id": "access-token"
+    },
+    {
+      "id": "socket-url-0",
+      "projectURL": "https://abc.invalid",
+      "socketURL": "wss://abc.invalid/realtime/v1/websocket?apikey=k%26y&vsn=1.0.0"
+    },
+    {
+      "id": "socket-url-1",
+      "projectURL": "http://localhost:54321",
+      "socketURL": "ws://localhost:54321/realtime/v1/websocket?apikey=k%26y&vsn=1.0.0"
+    },
+    {
+      "id": "socket-url-2",
+      "projectURL": "https://abc.invalid/",
+      "socketURL": "wss://abc.invalid/realtime/v1/websocket?apikey=k%26y&vsn=1.0.0"
+    },
+    {
+      "id": "socket-url-3",
+      "projectURL": "https://abc.invalid/path?x=1",
+      "socketURL": "wss://abc.invalid/realtime/v1/websocket?apikey=k%26y&vsn=1.0.0"
+    },
+    {
+      "event": "heartbeatAck",
+      "id": "decode-0",
+      "joinRef": "1",
+      "text": "{\"topic\":\"phoenix\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"ok\"},\"ref\":\"9\"}"
+    },
+    {
+      "event": "joined",
+      "id": "decode-1",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"ok\",\"response\":{}},\"ref\":\"1\"}"
+    },
+    {
+      "event": null,
+      "id": "decode-2",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"ok\"},\"ref\":\"2\"}"
+    },
+    {
+      "event": null,
+      "id": "decode-3",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"ok\"},\"ref\":1}"
+    },
+    {
+      "event": "joined",
+      "id": "decode-4",
+      "joinRef": null,
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"ok\"},\"ref\":\"5\"}"
+    },
+    {
+      "event": {
+        "$case": "joinRejected",
+        "$value": "unauthorized"
+      },
+      "id": "decode-5",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"error\",\"response\":{\"reason\":\"Unauthorized: RLS policy\"}},\"ref\":\"1\"}"
+    },
+    {
+      "event": {
+        "$case": "joinRejected",
+        "$value": "expiredToken"
+      },
+      "id": "decode-6",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"error\",\"response\":{\"error\":\"InvalidJWTToken: Token has expired 30 seconds ago\"}},\"ref\":\"1\"}"
+    },
+    {
+      "event": {
+        "$case": "joinRejected",
+        "$value": {
+          "$case": "unknown",
+          "$value": "error"
+        }
+      },
+      "id": "decode-7",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{\"status\":\"error\",\"response\":{}},\"ref\":\"1\"}"
+    },
+    {
+      "event": {
+        "$case": "joinRejected",
+        "$value": {
+          "$case": "unknown",
+          "$value": ""
+        }
+      },
+      "id": "decode-8",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_reply\",\"payload\":{},\"ref\":\"1\"}"
+    },
+    {
+      "event": {
+        "$case": "broadcast",
+        "$value": "gomoku"
+      },
+      "id": "decode-9",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"broadcast\",\"payload\":{\"event\":\"gomoku\",\"payload\":{\"m\":\"x\"}}}"
+    },
+    {
+      "event": {
+        "$case": "broadcast",
+        "$value": ""
+      },
+      "id": "decode-10",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"broadcast\",\"payload\":{}}"
+    },
+    {
+      "event": {
+        "$case": "broadcast",
+        "$value": "chess"
+      },
+      "id": "decode-11",
+      "joinRef": "1",
+      "text": "{\"event\":\"broadcast\",\"payload\":{\"event\":\"chess\"}}"
+    },
+    {
+      "event": {
+        "$case": "broadcast",
+        "$value": "tetris"
+      },
+      "id": "decode-12",
+      "joinRef": "1",
+      "text": "{\"topic\":7,\"event\":\"broadcast\",\"payload\":{\"event\":\"tetris\"}}"
+    },
+    {
+      "event": null,
+      "id": "decode-13",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:other\",\"event\":\"broadcast\",\"payload\":{\"event\":\"gomoku\"}}"
+    },
+    {
+      "event": {
+        "$case": "closed",
+        "$value": null
+      },
+      "id": "decode-14",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_error\",\"payload\":{}}"
+    },
+    {
+      "event": {
+        "$case": "closed",
+        "$value": null
+      },
+      "id": "decode-15",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"phx_close\",\"payload\":{}}"
+    },
+    {
+      "event": {
+        "$case": "joinRejected",
+        "$value": "unauthorized"
+      },
+      "id": "decode-16",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"system\",\"payload\":{\"status\":\"error\",\"message\":\"permission denied for topic\"}}"
+    },
+    {
+      "event": null,
+      "id": "decode-17",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"system\",\"payload\":{\"status\":\"ok\",\"message\":\"subscribed\"}}"
+    },
+    {
+      "event": null,
+      "id": "decode-18",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"presence_state\",\"payload\":{}}"
+    },
+    {
+      "event": null,
+      "id": "decode-19",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"payload\":{}}"
+    },
+    {
+      "event": null,
+      "id": "decode-20",
+      "joinRef": "1",
+      "text": "[1,2]"
+    },
+    {
+      "event": null,
+      "id": "decode-21",
+      "joinRef": "1",
+      "text": "not json"
+    },
+    {
+      "event": {
+        "$case": "broadcast",
+        "$value": ""
+      },
+      "id": "decode-22",
+      "joinRef": "1",
+      "text": "{\"topic\":\"realtime:poke:u1\",\"event\":\"broadcast\",\"payload\":\"x\"}"
+    },
+    {
+      "id": "classify-",
+      "reason": "",
+      "rejection": {
+        "$case": "unknown",
+        "$value": ""
+      }
+    },
+    {
+      "id": "classify-Token has expired",
+      "reason": "Token has expired",
+      "rejection": "expiredToken"
+    },
+    {
+      "id": "classify-InvalidJWTToken",
+      "reason": "InvalidJWTToken",
+      "rejection": "expiredToken"
+    },
+    {
+      "id": "classify-invalid JWT",
+      "reason": "invalid JWT",
+      "rejection": "expiredToken"
+    },
+    {
+      "id": "classify-Unauthorized",
+      "reason": "Unauthorized",
+      "rejection": "unauthorized"
+    },
+    {
+      "id": "classify-You do not have permission",
+      "reason": "You do not have permission",
+      "rejection": "unauthorized"
+    },
+    {
+      "id": "classify-not authorized",
+      "reason": "not authorized",
+      "rejection": "unauthorized"
+    },
+    {
+      "id": "classify-Forbidden",
+      "reason": "Forbidden",
+      "rejection": "unauthorized"
+    },
+    {
+      "id": "classify-RLS",
+      "reason": "RLS",
+      "rejection": "unauthorized"
+    },
+    {
+      "id": "classify-expired and unauthorized",
+      "reason": "expired and unauthorized",
+      "rejection": "expiredToken"
+    },
+    {
+      "id": "classify-something else",
+      "reason": "something else",
+      "rejection": {
+        "$case": "unknown",
+        "$value": "something else"
+      }
+    },
+    {
+      "id": "classify-EXPIRED",
+      "reason": "EXPIRED",
+      "rejection": "expiredToken"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRealtime.swift",
+  "golden": "realtime/frames",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "decode": "RealtimeFrame.decode(text, channel: \"poke:u1\", joinRef) → 사건 덤프 또는 null",
+    "frame": "조립한 글자를 파싱한 JSON 값(키 순서 무관). 조인은 private 칸·access_token·join_ref = ref"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/RealtimeTransport.swift"
+  ]
+}

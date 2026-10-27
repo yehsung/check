@@ -1,0 +1,5883 @@
+{
+  "cases": [
+    {
+      "id": "alltime-sort",
+      "input": [
+        {
+          "bestAtBits": null,
+          "bestScore": 10,
+          "userID": "d"
+        },
+        {
+          "bestAtBits": "41daac4ee0000000",
+          "bestScore": 10,
+          "userID": "b"
+        },
+        {
+          "bestAtBits": "41daac4ee0400000",
+          "bestScore": 10,
+          "userID": "a"
+        },
+        {
+          "bestAtBits": "41daac4ee0000000",
+          "bestScore": 10,
+          "userID": "c"
+        },
+        {
+          "bestAtBits": null,
+          "bestScore": 99,
+          "userID": "e"
+        },
+        {
+          "bestAtBits": null,
+          "bestScore": 10,
+          "userID": "f"
+        },
+        {
+          "bestAtBits": "41daac4ee0000000",
+          "bestScore": -1,
+          "userID": "A"
+        }
+      ],
+      "rule": "sortedForMiniGameAllTimeBoard",
+      "sorted": [
+        "e",
+        "b",
+        "c",
+        "a",
+        "d",
+        "f",
+        "A"
+      ]
+    },
+    {
+      "caption": "10/5",
+      "day": "2026-10-05",
+      "id": "day-caption-2026-10-05"
+    },
+    {
+      "caption": null,
+      "day": "2026-1-05",
+      "id": "day-caption-2026-1-05"
+    },
+    {
+      "caption": null,
+      "day": "2026-13-01",
+      "id": "day-caption-2026-13-01"
+    },
+    {
+      "caption": "12/31",
+      "day": "2026-12-31",
+      "id": "day-caption-2026-12-31"
+    },
+    {
+      "caption": "2/30",
+      "day": "2026-02-30",
+      "id": "day-caption-2026-02-30"
+    },
+    {
+      "caption": null,
+      "day": "2026-00-10",
+      "id": "day-caption-2026-00-10"
+    },
+    {
+      "caption": null,
+      "day": "2026-10-00",
+      "id": "day-caption-2026-10-00"
+    },
+    {
+      "caption": null,
+      "day": "26-10-05",
+      "id": "day-caption-26-10-05"
+    },
+    {
+      "caption": null,
+      "day": "2026-10-05T00:00:00Z",
+      "id": "day-caption-2026-10-05T00:00:00Z"
+    },
+    {
+      "caption": null,
+      "day": "２０２６-10-05",
+      "id": "day-caption-２０２６-10-05"
+    },
+    {
+      "caption": null,
+      "day": "2026/10/05",
+      "id": "day-caption-2026/10/05"
+    },
+    {
+      "caption": null,
+      "day": "",
+      "id": "day-caption-"
+    },
+    {
+      "caption": null,
+      "day": "2026--10",
+      "id": "day-caption-2026--10"
+    },
+    {
+      "caption": null,
+      "day": "2026-10-5x",
+      "id": "day-caption-2026-10-5x"
+    },
+    {
+      "caption": null,
+      "day": null,
+      "id": "day-caption-nil"
+    },
+    {
+      "id": "shop-row-0",
+      "isGachaOnly": false,
+      "isGiftOnly": false,
+      "isPurchasable": true,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "robot",
+        "owned": null,
+        "price": 50
+      }
+    },
+    {
+      "id": "shop-row-1",
+      "isGachaOnly": false,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "robot",
+        "owned": null,
+        "price": null
+      }
+    },
+    {
+      "id": "shop-row-2",
+      "isGachaOnly": true,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "aing_gold",
+        "owned": null,
+        "price": 99
+      }
+    },
+    {
+      "id": "shop-row-3",
+      "isGachaOnly": true,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "aing_rainbow",
+        "owned": null,
+        "price": null
+      }
+    },
+    {
+      "id": "shop-row-4",
+      "isGachaOnly": false,
+      "isGiftOnly": true,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": true,
+        "giftOnly": null,
+        "id": "aing_cake_choco",
+        "owned": null,
+        "price": 100
+      }
+    },
+    {
+      "id": "shop-row-5",
+      "isGachaOnly": false,
+      "isGiftOnly": true,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": null,
+        "id": "aing_cake_strawberry",
+        "owned": null,
+        "price": null
+      }
+    },
+    {
+      "id": "shop-row-6",
+      "isGachaOnly": true,
+      "isGiftOnly": false,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": true,
+        "giftOnly": null,
+        "id": "fox",
+        "owned": null,
+        "price": 10
+      }
+    },
+    {
+      "id": "shop-row-7",
+      "isGachaOnly": false,
+      "isGiftOnly": true,
+      "isPurchasable": false,
+      "row": {
+        "gachaOnly": null,
+        "giftOnly": true,
+        "id": "fox",
+        "owned": null,
+        "price": 10
+      }
+    },
+    {
+      "id": "shop-row-8",
+      "isGachaOnly": false,
+      "isGiftOnly": false,
+      "isPurchasable": true,
+      "row": {
+        "gachaOnly": false,
+        "giftOnly": false,
+        "id": "fox",
+        "owned": null,
+        "price": 10
+      }
+    },
+    {
+      "choosable": [
+        "aing_cake_strawberry",
+        "aing_cake_choco"
+      ],
+      "id": "gift-choosable-0",
+      "raw": [
+        "aing_cake_choco",
+        "aing_cake_strawberry"
+      ]
+    },
+    {
+      "choosable": [],
+      "id": "gift-choosable-1",
+      "raw": [
+        "robot"
+      ]
+    },
+    {
+      "choosable": [],
+      "id": "gift-choosable-2",
+      "raw": []
+    },
+    {
+      "choosable": [
+        "aing_cake_choco"
+      ],
+      "id": "gift-choosable-3",
+      "raw": [
+        "aing_cake_choco",
+        "aing_cake_choco"
+      ]
+    },
+    {
+      "choosable": [],
+      "id": "gift-choosable-4",
+      "raw": [
+        "AING_CAKE_CHOCO",
+        "aing_cake_strawberry "
+      ]
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.123456+00:00",
+      "micros": "0x00065e77873a3b00",
+      "text": "2026-10-23T01:02:03.123456+00:00"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03Z",
+      "micros": "0x00065e77873858c0",
+      "text": "2026-10-23T01:02:03Z"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.1Z",
+      "micros": "0x00065e778739df60",
+      "text": "2026-10-23T01:02:03.1Z"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.1234567Z",
+      "micros": "0x00065e77873a3b00",
+      "text": "2026-10-23T01:02:03.1234567Z"
+    },
+    {
+      "id": "micros-2026-10-23 01:02:03",
+      "micros": null,
+      "text": "2026-10-23 01:02:03"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.+00:00",
+      "micros": "0x00065e77873858c0",
+      "text": "2026-10-23T01:02:03.+00:00"
+    },
+    {
+      "id": "micros-2026-10-23T01:02:03.000999+09:00",
+      "micros": "0x00065e6ffc0798a7",
+      "text": "2026-10-23T01:02:03.000999+09:00"
+    },
+    {
+      "id": "send-outcome-ok",
+      "message": "ok",
+      "poke": "ok",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "ok",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-cooldown",
+      "message": "invalid",
+      "poke": {
+        "$case": "cooldown",
+        "$value": 1
+      },
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "cooldown",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-not_working",
+      "message": "notWorking",
+      "poke": "notWorking",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "not_working",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-target_not_working",
+      "message": "targetNotWorking",
+      "poke": "targetNotWorking",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "target_not_working",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-ultra_used_today",
+      "message": "invalid",
+      "poke": {
+        "$case": "ultraUsedToday",
+        "$value": 1
+      },
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "ultra_used_today",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-target_focused",
+      "message": "targetFocused",
+      "poke": "targetFocused",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "target_focused",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-target_on_phone",
+      "message": "invalid",
+      "poke": "targetOnPhone",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "target_on_phone",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-blackout",
+      "message": "blackout",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "blackout",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-not_text",
+      "message": "notText",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "not_text",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-too_long",
+      "message": "tooLong",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "too_long",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-flood",
+      "message": "flood",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "flood",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "send-outcome-weird",
+      "message": "invalid",
+      "poke": "invalid",
+      "response": {
+        "maxLength": null,
+        "resetAfterSeconds": 0,
+        "retryAfterSeconds": -4,
+        "ring": null,
+        "status": "weird",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      }
+    },
+    {
+      "id": "display-name-ok",
+      "outcome": {
+        "$case": "ok",
+        "$value": "새이름"
+      },
+      "response": {
+        "displayName": "새이름",
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "ok"
+      }
+    },
+    {
+      "id": "display-name-unchanged",
+      "outcome": "unchanged",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "unchanged"
+      }
+    },
+    {
+      "id": "display-name-taken",
+      "outcome": "taken",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "taken"
+      }
+    },
+    {
+      "id": "display-name-cooldown",
+      "outcome": {
+        "$case": "cooldown",
+        "$value": 1
+      },
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": 0,
+        "status": "cooldown"
+      }
+    },
+    {
+      "id": "display-name-invalid_long",
+      "outcome": {
+        "$case": "tooLong",
+        "$value": 12
+      },
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "invalid_long"
+      }
+    },
+    {
+      "id": "display-name-invalid_empty",
+      "outcome": "empty",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "invalid_empty"
+      }
+    },
+    {
+      "id": "display-name-other",
+      "outcome": "invalid",
+      "response": {
+        "displayName": null,
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "other"
+      }
+    },
+    {
+      "id": "url-0",
+      "text": "",
+      "url": null
+    },
+    {
+      "id": "url-1",
+      "text": " ",
+      "url": "%20"
+    },
+    {
+      "id": "url-2",
+      "text": "  https://x.invalid/a.jpg  ",
+      "url": null
+    },
+    {
+      "id": "url-3",
+      "text": "https://x.invalid/a b.jpg",
+      "url": "https://x.invalid/a%20b.jpg"
+    },
+    {
+      "id": "url-4",
+      "text": "https://x.invalid/a.jpg",
+      "url": "https://x.invalid/a.jpg"
+    },
+    {
+      "id": "url-5",
+      "text": "not a url",
+      "url": "not%20a%20url"
+    },
+    {
+      "id": "url-6",
+      "text": "%",
+      "url": "%25"
+    },
+    {
+      "id": "url-7",
+      "text": "%zz",
+      "url": "%25zz"
+    },
+    {
+      "id": "url-8",
+      "text": "a%2",
+      "url": "a%252"
+    },
+    {
+      "id": "url-9",
+      "text": "https://x.invalid/%E1%84",
+      "url": "https://x.invalid/%E1%84"
+    },
+    {
+      "id": "url-10",
+      "text": "https://x.invalid/한글.jpg",
+      "url": "https://x.invalid/%ED%95%9C%EA%B8%80.jpg"
+    },
+    {
+      "id": "url-11",
+      "text": "https://x.invalid/a.jpg?v=1-ABCDEF12",
+      "url": "https://x.invalid/a.jpg?v=1-ABCDEF12"
+    },
+    {
+      "id": "url-12",
+      "text": "https://x.invalid/a%20b.jpg",
+      "url": "https://x.invalid/a%20b.jpg"
+    },
+    {
+      "id": "url-13",
+      "text": "https://x.invalid/a.jpg#frag",
+      "url": "https://x.invalid/a.jpg#frag"
+    },
+    {
+      "id": "url-14",
+      "text": "https://x.invalid/a.jpg#fr ag",
+      "url": "https://x.invalid/a.jpg#fr%20ag"
+    },
+    {
+      "id": "url-15",
+      "text": "http://[::1]/a",
+      "url": "http://[::1]/a"
+    },
+    {
+      "id": "url-16",
+      "text": "https://x.invalid/a|b",
+      "url": "https://x.invalid/a%7Cb"
+    },
+    {
+      "id": "url-17",
+      "text": "https://x.invalid/a\"b",
+      "url": "https://x.invalid/a%22b"
+    },
+    {
+      "id": "url-18",
+      "text": "https://x.invalid/a<b>c",
+      "url": "https://x.invalid/a%3Cb%3Ec"
+    },
+    {
+      "id": "url-19",
+      "text": "https://x.invalid/a{b}",
+      "url": "https://x.invalid/a%7Bb%7D"
+    },
+    {
+      "id": "url-20",
+      "text": "https://x.invalid/a\\b",
+      "url": "https://x.invalid/a%5Cb"
+    },
+    {
+      "id": "url-21",
+      "text": "https://x.invalid/a^b`c",
+      "url": "https://x.invalid/a%5Eb%60c"
+    },
+    {
+      "id": "url-22",
+      "text": "javascript:alert(1)",
+      "url": "javascript:alert(1)"
+    },
+    {
+      "id": "url-23",
+      "text": "https://user@x.invalid/",
+      "url": "https://user@x.invalid/"
+    },
+    {
+      "id": "url-24",
+      "text": "https://us er@x.invalid/",
+      "url": "https://us%20er@x.invalid/"
+    },
+    {
+      "id": "url-25",
+      "text": "https://x.invalid:99999/",
+      "url": "https://x.invalid:99999/"
+    },
+    {
+      "id": "url-26",
+      "text": "https://x.invalid:abc/",
+      "url": null
+    },
+    {
+      "id": "url-27",
+      "text": "https://x .invalid/",
+      "url": null
+    },
+    {
+      "id": "url-28",
+      "text": "https://x.invalid/?q=a b&r=한",
+      "url": "https://x.invalid/?q=a%20b&r=%ED%95%9C"
+    },
+    {
+      "id": "url-29",
+      "text": "https://x.invalid/?q=%",
+      "url": "https://x.invalid/?q=%25"
+    },
+    {
+      "id": "url-30",
+      "text": "mailto:a b@c",
+      "url": "mailto:a%20b@c"
+    },
+    {
+      "id": "url-31",
+      "text": "//x.invalid/a b",
+      "url": "//x.invalid/a%20b"
+    },
+    {
+      "id": "url-32",
+      "text": "/rel/a b",
+      "url": "/rel/a%20b"
+    },
+    {
+      "id": "url-33",
+      "text": "a:b:c",
+      "url": "a:b:c"
+    },
+    {
+      "id": "url-34",
+      "text": "https://",
+      "url": "https://"
+    },
+    {
+      "id": "url-35",
+      "text": "https:",
+      "url": "https:"
+    },
+    {
+      "id": "url-36",
+      "text": ":",
+      "url": ":"
+    },
+    {
+      "id": "url-37",
+      "text": "?",
+      "url": "?"
+    },
+    {
+      "id": "url-38",
+      "text": "#",
+      "url": "#"
+    },
+    {
+      "id": "url-39",
+      "text": "https://x.invalid/a\tb",
+      "url": "https://x.invalid/a%09b"
+    },
+    {
+      "id": "url-40",
+      "text": "https://x.invalid/a\nb",
+      "url": "https://x.invalid/a%0Ab"
+    },
+    {
+      "id": "url-41",
+      "text": "https://x.invalid/",
+      "url": "https://x.invalid/%7F"
+    },
+    {
+      "id": "url-42",
+      "text": "https://x.invalid/ ",
+      "url": "https://x.invalid/%C2%A0"
+    },
+    {
+      "id": "url-43",
+      "text": "https://x.invalid/😀",
+      "url": "https://x.invalid/%F0%9F%98%80"
+    },
+    {
+      "id": "url-44",
+      "text": "HTTPS://X.INVALID/A",
+      "url": "HTTPS://X.INVALID/A"
+    },
+    {
+      "id": "url-45",
+      "text": "https://x.invalid/a[b]",
+      "url": "https://x.invalid/a%5Bb%5D"
+    },
+    {
+      "id": "url-46",
+      "text": "https://[x]/",
+      "url": "https://[x]/"
+    },
+    {
+      "id": "url-47",
+      "text": "https://x.invalid/a%2Fb",
+      "url": "https://x.invalid/a%2Fb"
+    },
+    {
+      "id": "url-48",
+      "text": "file:///a b",
+      "url": "file:///a%20b"
+    },
+    {
+      "id": "url-49",
+      "text": "a b:c",
+      "url": null
+    },
+    {
+      "id": "url-50",
+      "text": "1a:b",
+      "url": null
+    },
+    {
+      "id": "url-51",
+      "text": ":a b",
+      "url": ":a%20b"
+    },
+    {
+      "id": "url-52",
+      "text": "+a:b",
+      "url": null
+    },
+    {
+      "id": "url-53",
+      "text": "a+.-:b",
+      "url": "a+.-:b"
+    },
+    {
+      "id": "url-54",
+      "text": "https://한글.com/",
+      "url": "https://xn--bj0bj06e.com/"
+    },
+    {
+      "id": "url-55",
+      "text": "https://x.invalid/a#b#c",
+      "url": "https://x.invalid/a#b%23c"
+    },
+    {
+      "id": "url-56",
+      "text": "https://x.invalid/a?b?c",
+      "url": "https://x.invalid/a?b?c"
+    },
+    {
+      "id": "url-57",
+      "text": "https://[a b]/",
+      "url": null
+    },
+    {
+      "id": "url-58",
+      "text": "https://x.invalid:/",
+      "url": "https://x.invalid:/"
+    },
+    {
+      "id": "url-59",
+      "text": "https://@x.invalid/",
+      "url": "https://@x.invalid/"
+    },
+    {
+      "id": "url-60",
+      "text": "https://a:b@x.invalid/",
+      "url": "https://a:b@x.invalid/"
+    },
+    {
+      "id": "url-61",
+      "text": "https://a@b@x.invalid/",
+      "url": "https://a%40b@x.invalid/"
+    },
+    {
+      "id": "url-62",
+      "text": "https://x.invalid/a@b:c",
+      "url": "https://x.invalid/a@b:c"
+    },
+    {
+      "id": "url-63",
+      "text": "https://x_y.invalid/",
+      "url": "https://x_y.invalid/"
+    },
+    {
+      "id": "url-64",
+      "text": "https://x~y.invalid/",
+      "url": "https://x~y.invalid/"
+    },
+    {
+      "id": "url-65",
+      "text": "https://x%41.invalid/",
+      "url": "https://x%41.invalid/"
+    },
+    {
+      "id": "url-66",
+      "text": "https://x%zz.invalid/",
+      "url": null
+    },
+    {
+      "id": "url-67",
+      "text": "https://x.invalid/%",
+      "url": "https://x.invalid/%25"
+    },
+    {
+      "id": "url-68",
+      "text": "https://x.invalid/?%41",
+      "url": "https://x.invalid/?%41"
+    },
+    {
+      "id": "url-69",
+      "text": "https://x.invalid/#%",
+      "url": "https://x.invalid/#%25"
+    },
+    {
+      "id": "url-70",
+      "text": "https://x.invalid/a%2g",
+      "url": "https://x.invalid/a%252g"
+    },
+    {
+      "id": "url-71",
+      "text": "http://x.invalid/a b?c d#e f",
+      "url": "http://x.invalid/a%20b?c%20d#e%20f"
+    },
+    {
+      "id": "url-72",
+      "text": "https://x.invalid//a b",
+      "url": "https://x.invalid//a%20b"
+    },
+    {
+      "id": "url-73",
+      "text": "x",
+      "url": "x"
+    },
+    {
+      "id": "url-74",
+      "text": "x y",
+      "url": "x%20y"
+    },
+    {
+      "id": "url-75",
+      "text": "./a b",
+      "url": "./a%20b"
+    },
+    {
+      "id": "url-76",
+      "text": "../a",
+      "url": "../a"
+    },
+    {
+      "id": "url-77",
+      "text": "a/b:c",
+      "url": "a/b:c"
+    },
+    {
+      "id": "url-78",
+      "text": "?a b",
+      "url": "?a%20b"
+    },
+    {
+      "id": "url-79",
+      "text": "#a b",
+      "url": "#a%20b"
+    },
+    {
+      "id": "url-80",
+      "text": "https://x.invalid?a",
+      "url": "https://x.invalid?a"
+    },
+    {
+      "id": "url-81",
+      "text": "https://x.invalid#a",
+      "url": "https://x.invalid#a"
+    },
+    {
+      "id": "url-82",
+      "text": "https://x.invalid:8%30/",
+      "url": null
+    },
+    {
+      "id": "url-83",
+      "text": "https://x.invalid/\u0000",
+      "url": "https://x.invalid/%00"
+    },
+    {
+      "id": "url-84",
+      "text": "HTTP://X/ a",
+      "url": "HTTP://X/%20a"
+    },
+    {
+      "id": "url-85",
+      "text": "h:ttps",
+      "url": "h:ttps"
+    },
+    {
+      "id": "url-86",
+      "text": "https://x.invalid/!$&'()*+,;=:@",
+      "url": "https://x.invalid/!$&'()*+,;=:@"
+    },
+    {
+      "id": "url-87",
+      "text": "https://x.invalid/?!$&'()*+,;=:@/?",
+      "url": "https://x.invalid/?!$&'()*+,;=:@/?"
+    },
+    {
+      "id": "url-88",
+      "text": "https://x.invalid/#!$&'()*+,;=:@/?",
+      "url": "https://x.invalid/#!$&'()*+,;=:@/?"
+    },
+    {
+      "id": "url-89",
+      "text": "https://x!.invalid/",
+      "url": "https://x!.invalid/"
+    },
+    {
+      "id": "url-90",
+      "text": "https://x$&'()*+,;=.invalid/",
+      "url": "https://x$&'()*+,;=.invalid/"
+    },
+    {
+      "id": "url-91",
+      "text": "https://[::1]:80/a",
+      "url": "https://[::1]:80/a"
+    },
+    {
+      "id": "url-92",
+      "text": "https://[::1]x/",
+      "url": null
+    },
+    {
+      "id": "url-93",
+      "text": "https://x.invalid/a﻿b",
+      "url": "https://x.invalid/a%EF%BB%BFb"
+    },
+    {
+      "id": "url-94",
+      "text": "﻿https://x.invalid/",
+      "url": null
+    },
+    {
+      "id": "url-95",
+      "text": "https://x.invalid/a​b",
+      "url": "https://x.invalid/a%E2%80%8Bb"
+    },
+    {
+      "id": "url-96",
+      "text": "https://user:p w@x.invalid/",
+      "url": "https://user:p%20w@x.invalid/"
+    },
+    {
+      "id": "url-97",
+      "text": "https://us%er@x.invalid/",
+      "url": "https://us%25er@x.invalid/"
+    },
+    {
+      "id": "url-98",
+      "text": "https://abcdefgh.supabase.invalid/storage/v1/object/public/avatars/aa000000-0000-4000-8000-0000000000a1.jpg?v=1789621500000-ABCDEF12",
+      "url": "https://abcdefgh.supabase.invalid/storage/v1/object/public/avatars/aa000000-0000-4000-8000-0000000000a1.jpg?v=1789621500000-ABCDEF12"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "date-0",
+      "text": "2026-09-17T05:05:00Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f07df3b"
+      },
+      "id": "date-1",
+      "text": "2026-09-17T05:05:00.123456+00:00"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f200000"
+      },
+      "id": "date-2",
+      "text": "2026-09-17T05:05:00.5Z"
+    },
+    {
+      "date": {
+        "$date": "41daaabd9b000000"
+      },
+      "id": "date-3",
+      "text": "2026-09-17T05:05:00+09:00"
+    },
+    {
+      "date": {
+        "$date": "41daaae98d000000"
+      },
+      "id": "date-4",
+      "text": "2026-09-17T05:05:00-03:30"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f07df3b"
+      },
+      "id": "date-5",
+      "text": "2026-09-17T05:05:00.1234567890Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f3fef9e"
+      },
+      "id": "date-6",
+      "text": "2026-09-17T05:05:00.999999Z"
+    },
+    {
+      "date": {
+        "$date": "0000000000000000"
+      },
+      "id": "date-7",
+      "text": "1970-01-01T00:00:00Z"
+    },
+    {
+      "date": {
+        "$date": "bf50628000000000"
+      },
+      "id": "date-8",
+      "text": "1969-12-31T23:59:59.999Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "date-9",
+      "text": "２０２６-09-17T05:05:00Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f200000"
+      },
+      "id": "date-10",
+      "text": "2026-09-17T05:05:00.５Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "date-11",
+      "text": "٢٠٢٦-09-17T05:05:00Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "date-12",
+      "text": "२०२६-09-17T05:05:00Z"
+    },
+    {
+      "date": {
+        "$date": "41daaabd9b000000"
+      },
+      "id": "date-13",
+      "text": "2026-09-17T05:05:00+0900"
+    },
+    {
+      "date": {
+        "$date": "41daaabd9b000000"
+      },
+      "id": "date-14",
+      "text": "2026-09-17T05:05:00+09"
+    },
+    {
+      "date": null,
+      "id": "date-15",
+      "text": "2026-09-17 05:05:00Z"
+    },
+    {
+      "date": null,
+      "id": "date-16",
+      "text": "2026-09-17t05:05:00z"
+    },
+    {
+      "date": null,
+      "id": "date-17",
+      "text": "2026-09-17T05:05:60Z"
+    },
+    {
+      "date": {
+        "$date": "41da6934c0000000"
+      },
+      "id": "date-18",
+      "text": "2026-02-30T00:00:00Z"
+    },
+    {
+      "date": {
+        "$date": "41daab1fc0000000"
+      },
+      "id": "date-19",
+      "text": "2026-09-17T24:00:00Z"
+    },
+    {
+      "date": null,
+      "id": "date-20",
+      "text": "2026-09-17T05:05Z"
+    },
+    {
+      "date": null,
+      "id": "date-21",
+      "text": "+2026-09-17T05:05:00Z"
+    },
+    {
+      "date": null,
+      "id": "date-22",
+      "text": "2026-09-17T05:05:00,5Z"
+    },
+    {
+      "date": null,
+      "id": "date-23",
+      "text": "2026-09-17T05:05:00.Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "date-24",
+      "text": "  2026-09-17T05:05:00Z"
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "date-25",
+      "text": "2026-09-17T05:05:00Z "
+    },
+    {
+      "date": {
+        "$date": "41daaadd3f000000"
+      },
+      "id": "date-26",
+      "text": "2026-9-17T05:05:00Z"
+    },
+    {
+      "date": null,
+      "id": "date-27",
+      "text": "20260917T050500Z"
+    },
+    {
+      "date": null,
+      "id": "date-28",
+      "text": "2026-09-17T05:05:00"
+    },
+    {
+      "date": null,
+      "id": "date-29",
+      "text": ""
+    },
+    {
+      "date": null,
+      "id": "date-30",
+      "text": "bad-date"
+    },
+    {
+      "decoded": {
+        "full": true,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1,
+            "deletedAtMs": null,
+            "id": "a",
+            "originDayKey": "20260917",
+            "title": "t",
+            "updatedAtMs": 2
+          }
+        ],
+        "max": 200,
+        "rejected": [
+          {
+            "id": "b",
+            "reason": "stale"
+          }
+        ],
+        "status": "ok",
+        "watermarkMs": 5
+      },
+      "id": "todo-response-0",
+      "json": "{\"status\":\"ok\",\"items\":[{\"id\":\"a\",\"title\":\"t\",\"created_at_ms\":1,\"updated_at_ms\":2,\"completed_at_ms\":null,\"deleted_at_ms\":null,\"origin_day_key\":\"20260917\"}],\"watermark_ms\":5,\"rejected\":[{\"id\":\"b\",\"reason\":\"stale\"}],\"full\":true,\"max\":200}"
+    },
+    {
+      "decoded": {
+        "full": null,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": null,
+            "deletedAtMs": null,
+            "id": "a",
+            "originDayKey": null,
+            "title": null,
+            "updatedAtMs": null
+          }
+        ],
+        "max": null,
+        "rejected": null,
+        "status": "ok",
+        "watermarkMs": null
+      },
+      "id": "todo-response-1",
+      "json": "{\"status\":\"ok\",\"watermarkMs\":5,\"items\":[{\"id\":\"a\",\"createdAtMs\":1,\"updatedAtMs\":2,\"originDayKey\":\"x\"}]}"
+    },
+    {
+      "decoded": {
+        "full": null,
+        "items": null,
+        "max": null,
+        "rejected": null,
+        "status": "ok",
+        "watermarkMs": null
+      },
+      "id": "todo-response-2",
+      "json": "{\"status\":\"ok\",\"WATERMARK_MS\":5,\"Watermark_Ms\":6}"
+    },
+    {
+      "decoded": {
+        "full": null,
+        "items": null,
+        "max": null,
+        "rejected": null,
+        "status": "ok",
+        "watermarkMs": null
+      },
+      "id": "todo-response-3",
+      "json": "{\"status\":\"ok\",\"watermark_ms\":\"5\",\"full\":\"yes\",\"max\":3.5}"
+    },
+    {
+      "decoded": {
+        "full": null,
+        "items": null,
+        "max": null,
+        "rejected": null,
+        "status": null,
+        "watermarkMs": null
+      },
+      "id": "todo-response-4",
+      "json": "{\"status\":3}"
+    },
+    {
+      "decoded": "error",
+      "id": "todo-response-5",
+      "json": "[]"
+    },
+    {
+      "id": "app-user-characters-built",
+      "snapshot": {
+        "count": 5,
+        "isEmpty": false,
+        "knownIDs": [
+          "ROBOT",
+          "aing",
+          "aing_cake_choco",
+          "fox",
+          "robot"
+        ],
+        "users": [
+          {
+            "afterPhotoFailure": {
+              "id": "aing_cake_choco",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing_cake_choco",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing_cake_choco",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing_cake_choco",
+            "equippedID": "aing_cake_choco",
+            "hinted": [
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "aa-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "aing_cake_choco",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing_cake_choco",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing_cake_choco",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing_cake_choco",
+            "equippedID": "aing_cake_choco",
+            "hinted": [
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "AA-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "aing_cake_choco",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing_cake_choco",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing_cake_choco",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing_cake_choco",
+            "equippedID": "aing_cake_choco",
+            "hinted": [
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing_cake_choco",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing_cake_choco",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": " aa-1 "
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing",
+            "equippedID": "aing",
+            "hinted": [
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "bb-2"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing",
+            "equippedID": "aing",
+            "hinted": [
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "cc-3"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": "unicorn",
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "dd-4"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "fox",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "fox",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "fox",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "fox",
+            "equippedID": "fox",
+            "hinted": [
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "ee-5"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "zz-9"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": null
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "app-user-characters-setEquipped",
+      "snapshot": {
+        "count": 6,
+        "isEmpty": false,
+        "knownIDs": [
+          "ROBOT",
+          "aing",
+          "aing_cake_choco",
+          "fox",
+          "robot"
+        ],
+        "users": [
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": "unicorn",
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "aa-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": "unicorn",
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "AA-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": "unicorn",
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": " aa-1 "
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing",
+            "equippedID": "aing",
+            "hinted": [
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "bb-2"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing",
+            "equippedID": "aing",
+            "hinted": [
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "cc-3"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": "unicorn",
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "dd-4"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "fox",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "fox",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "fox",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "fox",
+            "equippedID": "fox",
+            "hinted": [
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "ee-5"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "aing",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "aing",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "aing",
+            "equippedID": "aing",
+            "hinted": [
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "zz-9"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": null
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "app-user-characters-replaced",
+      "snapshot": {
+        "count": 2,
+        "isEmpty": false,
+        "knownIDs": [
+          "ROBOT",
+          "aing",
+          "aing_cake_choco",
+          "fox",
+          "robot"
+        ],
+        "users": [
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "aa-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "AA-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": " aa-1 "
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "bb-2"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "cc-3"
+          },
+          {
+            "afterPhotoFailure": {
+              "id": "fox",
+              "kind": "character"
+            },
+            "avatarNoPhoto": {
+              "id": "fox",
+              "kind": "character"
+            },
+            "avatarPhoto": {
+              "fallback": "fox",
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": "fox",
+            "equippedID": "fox",
+            "hinted": [
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "dd-4"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "ee-5"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "zz-9"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": null
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "app-user-characters-removed",
+      "snapshot": {
+        "count": 0,
+        "isEmpty": true,
+        "knownIDs": [
+          "ROBOT",
+          "aing",
+          "aing_cake_choco",
+          "fox",
+          "robot"
+        ],
+        "users": [
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "aa-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "AA-1"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": " aa-1 "
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "bb-2"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "cc-3"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "dd-4"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "ee-5"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": "zz-9"
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": null
+          },
+          {
+            "afterPhotoFailure": {
+              "kind": "initials"
+            },
+            "avatarNoPhoto": {
+              "kind": "initials"
+            },
+            "avatarPhoto": {
+              "fallback": null,
+              "kind": "photo",
+              "url": "https://golden.invalid/p.jpg"
+            },
+            "characterID": null,
+            "equippedID": null,
+            "hinted": [
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "fox",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "fox",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "robot",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "robot",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "kind": "initials"
+                },
+                {
+                  "fallback": null,
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ],
+              [
+                {
+                  "id": "aing",
+                  "kind": "character"
+                },
+                {
+                  "fallback": "aing",
+                  "kind": "photo",
+                  "url": "https://golden.invalid/p.jpg"
+                }
+              ]
+            ],
+            "user": ""
+          }
+        ]
+      }
+    },
+    {
+      "folded": "aing",
+      "id": "app-user-characters-fold-0",
+      "raw": null,
+      "userKey": null
+    },
+    {
+      "folded": "aing",
+      "id": "app-user-characters-fold-1",
+      "raw": "",
+      "userKey": null
+    },
+    {
+      "folded": "aing",
+      "id": "app-user-characters-fold-2",
+      "raw": "  ",
+      "userKey": null
+    },
+    {
+      "folded": "robot",
+      "id": "app-user-characters-fold-3",
+      "raw": " robot ",
+      "userKey": "robot"
+    },
+    {
+      "folded": "fox",
+      "id": "app-user-characters-fold-4",
+      "raw": "\nfox\t",
+      "userKey": "fox"
+    },
+    {
+      "counterText": "0/1000",
+      "id": "feedback-compose-0",
+      "isCounterWarning": false,
+      "isSendable": false,
+      "isSendableReplyNil": false,
+      "isSendableReplySame": false,
+      "normalized": "",
+      "normalizedNote": null,
+      "text": ""
+    },
+    {
+      "counterText": "2/1000",
+      "id": "feedback-compose-1",
+      "isCounterWarning": false,
+      "isSendable": false,
+      "isSendableReplyNil": false,
+      "isSendableReplySame": false,
+      "normalized": "",
+      "normalizedNote": null,
+      "text": "  "
+    },
+    {
+      "counterText": "3/1000",
+      "id": "feedback-compose-2",
+      "isCounterWarning": false,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "a",
+      "normalizedNote": "a",
+      "text": " a "
+    },
+    {
+      "counterText": "4/1000",
+      "id": "feedback-compose-3",
+      "isCounterWarning": false,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "버그",
+      "normalizedNote": "버그",
+      "text": "\n버그\n"
+    },
+    {
+      "counterText": "1000/1000",
+      "id": "feedback-compose-4",
+      "isCounterWarning": true,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "normalizedNote": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "text": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+    },
+    {
+      "counterText": "1001/1000",
+      "id": "feedback-compose-5",
+      "isCounterWarning": true,
+      "isSendable": false,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "normalizedNote": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "text": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+    },
+    {
+      "counterText": "1002/1000",
+      "id": "feedback-compose-6",
+      "isCounterWarning": true,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "normalizedNote": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "text": " 가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가 "
+    },
+    {
+      "counterText": "1000/1000",
+      "id": "feedback-compose-7",
+      "isCounterWarning": true,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧",
+      "normalizedNote": "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧",
+      "text": "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧"
+    },
+    {
+      "counterText": "1001/1000",
+      "id": "feedback-compose-8",
+      "isCounterWarning": true,
+      "isSendable": false,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧",
+      "normalizedNote": "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧",
+      "text": "👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧"
+    },
+    {
+      "counterText": "900/1000",
+      "id": "feedback-compose-9",
+      "isCounterWarning": false,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "normalizedNote": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "counterText": "901/1000",
+      "id": "feedback-compose-10",
+      "isCounterWarning": true,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "normalizedNote": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "counterText": "501/1000",
+      "id": "feedback-compose-11",
+      "isCounterWarning": false,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "normalizedNote": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "text": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "counterText": "501/1000",
+      "id": "feedback-compose-12",
+      "isCounterWarning": false,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나é다",
+      "normalizedNote": "나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나é",
+      "text": "나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나é다"
+    },
+    {
+      "counterText": "7/1000",
+      "id": "feedback-compose-13",
+      "isCounterWarning": false,
+      "isSendable": true,
+      "isSendableReplyNil": true,
+      "isSendableReplySame": false,
+      "normalized": "전각 공백",
+      "normalizedNote": "전각 공백",
+      "text": "　전각 공백　"
+    },
+    {
+      "id": "feedback-text-windowTitle",
+      "isSuccessNotice": false,
+      "name": "windowTitle",
+      "value": "제보"
+    },
+    {
+      "id": "feedback-text-sendTab",
+      "isSuccessNotice": false,
+      "name": "sendTab",
+      "value": "보내기"
+    },
+    {
+      "id": "feedback-text-inboxTab",
+      "isSuccessNotice": false,
+      "name": "inboxTab",
+      "value": "받은 제보"
+    },
+    {
+      "id": "feedback-text-placeholder",
+      "isSuccessNotice": false,
+      "name": "placeholder",
+      "value": "어떤 문제가 있었는지, 무엇을 하다 생겼는지 적어 주세요"
+    },
+    {
+      "id": "feedback-text-sendAction",
+      "isSuccessNotice": false,
+      "name": "sendAction",
+      "value": "보내기"
+    },
+    {
+      "id": "feedback-text-sending",
+      "isSuccessNotice": false,
+      "name": "sending",
+      "value": "보내는 중…"
+    },
+    {
+      "id": "feedback-text-sendSuccess",
+      "isSuccessNotice": true,
+      "name": "sendSuccess",
+      "value": "보냈어요. 고마워요!"
+    },
+    {
+      "id": "feedback-text-rateLimited",
+      "isSuccessNotice": false,
+      "name": "rateLimited",
+      "value": "오늘은 그만 받을게요 — 내일 다시 보내 주세요"
+    },
+    {
+      "id": "feedback-text-sendFailed",
+      "isSuccessNotice": false,
+      "name": "sendFailed",
+      "value": "보내지 못했어요 — 잠시 뒤 다시 시도해 주세요"
+    },
+    {
+      "id": "feedback-text-sendSchemaMissing",
+      "isSuccessNotice": false,
+      "name": "sendSchemaMissing",
+      "value": "이 기능은 곧 열려요 — 쓰신 글은 그대로 둘게요"
+    },
+    {
+      "id": "feedback-text-forbidden",
+      "isSuccessNotice": false,
+      "name": "forbidden",
+      "value": "권한이 없어요"
+    },
+    {
+      "id": "feedback-text-statusFailed",
+      "isSuccessNotice": false,
+      "name": "statusFailed",
+      "value": "상태를 바꾸지 못했어요"
+    },
+    {
+      "id": "feedback-text-mineTitle",
+      "isSuccessNotice": false,
+      "name": "mineTitle",
+      "value": "내가 보낸 제보"
+    },
+    {
+      "id": "feedback-text-mineEmpty",
+      "isSuccessNotice": false,
+      "name": "mineEmpty",
+      "value": "아직 보낸 제보가 없어요"
+    },
+    {
+      "id": "feedback-text-inboxEmpty",
+      "isSuccessNotice": false,
+      "name": "inboxEmpty",
+      "value": "받은 제보가 없어요"
+    },
+    {
+      "id": "feedback-text-inboxEmptyHint",
+      "isSuccessNotice": false,
+      "name": "inboxEmptyHint",
+      "value": "누가 보내면 여기에 바로 쌓여요"
+    },
+    {
+      "id": "feedback-text-inboxFilterEmptyHint",
+      "isSuccessNotice": false,
+      "name": "inboxFilterEmptyHint",
+      "value": "위 [전체]를 누르면 나머지가 보여요"
+    },
+    {
+      "id": "feedback-text-filterAll",
+      "isSuccessNotice": false,
+      "name": "filterAll",
+      "value": "전체"
+    },
+    {
+      "id": "feedback-text-loading",
+      "isSuccessNotice": false,
+      "name": "loading",
+      "value": "불러오는 중…"
+    },
+    {
+      "id": "feedback-text-failed",
+      "isSuccessNotice": false,
+      "name": "failed",
+      "value": "제보를 불러오지 못했어요"
+    },
+    {
+      "id": "feedback-text-retry",
+      "isSuccessNotice": false,
+      "name": "retry",
+      "value": "다시 시도"
+    },
+    {
+      "id": "feedback-text-notePlaceholder",
+      "isSuccessNotice": false,
+      "name": "notePlaceholder",
+      "value": "답장(500자까지)"
+    },
+    {
+      "id": "feedback-text-noteSave",
+      "isSuccessNotice": false,
+      "name": "noteSave",
+      "value": "상태와 답장은 따로 저장돼요 — 답장은 제보한 사람에게 보여요"
+    },
+    {
+      "id": "feedback-text-replyAction",
+      "isSuccessNotice": false,
+      "name": "replyAction",
+      "value": "답장 보내기"
+    },
+    {
+      "id": "feedback-text-replySending",
+      "isSuccessNotice": false,
+      "name": "replySending",
+      "value": "보내는 중…"
+    },
+    {
+      "id": "feedback-text-replyBlockTitle",
+      "isSuccessNotice": false,
+      "name": "replyBlockTitle",
+      "value": "답장"
+    },
+    {
+      "id": "feedback-text-replySent",
+      "isSuccessNotice": true,
+      "name": "replySent",
+      "value": "답장을 보냈어요"
+    },
+    {
+      "id": "feedback-text-replyFailed",
+      "isSuccessNotice": false,
+      "name": "replyFailed",
+      "value": "답장을 보내지 못했어요"
+    },
+    {
+      "id": "feedback-text-replySchemaMissing",
+      "isSuccessNotice": false,
+      "name": "replySchemaMissing",
+      "value": "답장 보내기는 곧 열려요 — 쓰신 글은 그대로 둘게요"
+    },
+    {
+      "id": "feedback-text-replyEmpty",
+      "isSuccessNotice": false,
+      "name": "replyEmpty",
+      "value": "답장을 적어야 보낼 수 있어요"
+    },
+    {
+      "id": "feedback-text-replyTooLong",
+      "isSuccessNotice": false,
+      "name": "replyTooLong",
+      "value": "답장이 너무 길어요 — 500자까지 보낼 수 있어요"
+    },
+    {
+      "id": "feedback-text-replyNotFound",
+      "isSuccessNotice": false,
+      "name": "replyNotFound",
+      "value": "그 제보를 찾지 못했어요 — 목록을 다시 열어 주세요"
+    },
+    {
+      "id": "feedback-text-maxBodyLength",
+      "isSuccessNotice": false,
+      "name": "maxBodyLength",
+      "value": "1000"
+    },
+    {
+      "id": "feedback-text-warnBodyLength",
+      "isSuccessNotice": false,
+      "name": "warnBodyLength",
+      "value": "900"
+    },
+    {
+      "id": "feedback-text-maxNoteLength",
+      "isSuccessNotice": false,
+      "name": "maxNoteLength",
+      "value": "500"
+    },
+    {
+      "id": "feedback-filter-empty-open",
+      "status": "open",
+      "text": "미해결 제보가 없어요"
+    },
+    {
+      "id": "feedback-filter-empty-doing",
+      "status": "doing",
+      "text": "진행 제보가 없어요"
+    },
+    {
+      "id": "feedback-filter-empty-done",
+      "status": "done",
+      "text": "완료 제보가 없어요"
+    },
+    {
+      "id": "feedback-filter-empty-wontfix",
+      "status": "wontfix",
+      "text": "보류 제보가 없어요"
+    },
+    {
+      "id": "feedback-filter-empty-검토",
+      "status": "검토",
+      "text": "검토 제보가 없어요"
+    },
+    {
+      "appVersion": "0.3.67",
+      "build": 120,
+      "id": "feedback-auto-attach-0",
+      "osVersion": "15.6.1",
+      "text": "앱 0.3.67 (120) · macOS 15.6.1 정보가 함께 전송돼요"
+    },
+    {
+      "appVersion": "",
+      "build": null,
+      "id": "feedback-auto-attach-1",
+      "osVersion": "14.0",
+      "text": "앱 · macOS 14.0 정보가 함께 전송돼요"
+    },
+    {
+      "appVersion": "1.0",
+      "build": 0,
+      "id": "feedback-auto-attach-2",
+      "osVersion": "26",
+      "text": "앱 1.0 · macOS 26 정보가 함께 전송돼요"
+    },
+    {
+      "appVersion": "",
+      "build": -3,
+      "id": "feedback-auto-attach-3",
+      "osVersion": "",
+      "text": "앱 · macOS  정보가 함께 전송돼요"
+    },
+    {
+      "id": "feedback-age-nil",
+      "secondsAgo": null,
+      "text": ""
+    },
+    {
+      "id": "feedback-age--5.0",
+      "secondsAgo": {
+        "$f64": "c014000000000000"
+      },
+      "text": "방금"
+    },
+    {
+      "id": "feedback-age-0.0",
+      "secondsAgo": {
+        "$f64": "0000000000000000"
+      },
+      "text": "방금"
+    },
+    {
+      "id": "feedback-age-59.9",
+      "secondsAgo": {
+        "$f64": "404df33333333333"
+      },
+      "text": "방금"
+    },
+    {
+      "id": "feedback-age-60.0",
+      "secondsAgo": {
+        "$f64": "404e000000000000"
+      },
+      "text": "1분 전"
+    },
+    {
+      "id": "feedback-age-3599.0",
+      "secondsAgo": {
+        "$f64": "40ac1e0000000000"
+      },
+      "text": "59분 전"
+    },
+    {
+      "id": "feedback-age-3600.0",
+      "secondsAgo": {
+        "$f64": "40ac200000000000"
+      },
+      "text": "1시간 전"
+    },
+    {
+      "id": "feedback-age-86399.0",
+      "secondsAgo": {
+        "$f64": "40f517f000000000"
+      },
+      "text": "23시간 전"
+    },
+    {
+      "id": "feedback-age-86400.0",
+      "secondsAgo": {
+        "$f64": "40f5180000000000"
+      },
+      "text": "1일 전"
+    },
+    {
+      "id": "feedback-age-172800.5",
+      "secondsAgo": {
+        "$f64": "4105180400000000"
+      },
+      "text": "2일 전"
+    },
+    {
+      "id": "feedback-age-1000000000.0",
+      "secondsAgo": {
+        "$f64": "41cdcd6500000000"
+      },
+      "text": "11574일 전"
+    },
+    {
+      "id": "phone-work-outcome-0",
+      "json": "{\"status\":\"ok\",\"session\":{\"id\":\"S-1\",\"started_at\":\"2026-09-17T05:00:00Z\",\"origin\":\"phone\"}}",
+      "outcome": {
+        "alreadyWorking": false,
+        "case": "working",
+        "session": {
+          "endedAt": null,
+          "id": "S-1",
+          "origin": "phone",
+          "reason": null,
+          "startedAt": "2026-09-17T05:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "phone-work-outcome-1",
+      "json": "{\"status\":\"ok\",\"session\":{\"id\":\"S-1\",\"started_at\":\"2026-09-17T05:00:00Z\",\"ended_at\":\"2026-09-17T06:00:00Z\",\"reason\":\"manual\"}}",
+      "outcome": {
+        "case": "stopped",
+        "session": {
+          "endedAt": "2026-09-17T06:00:00Z",
+          "id": "S-1",
+          "origin": null,
+          "reason": "manual",
+          "startedAt": "2026-09-17T05:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "phone-work-outcome-2",
+      "json": "{\"status\":\"ok\"}",
+      "outcome": {
+        "case": "failed"
+      }
+    },
+    {
+      "id": "phone-work-outcome-3",
+      "json": "{\"status\":\"already_working\",\"session\":{\"id\":\"S-2\",\"origin\":\"mac\"}}",
+      "outcome": {
+        "alreadyWorking": true,
+        "case": "working",
+        "session": {
+          "endedAt": null,
+          "id": "S-2",
+          "origin": "mac",
+          "reason": null,
+          "startedAt": null
+        }
+      }
+    },
+    {
+      "id": "phone-work-outcome-4",
+      "json": "{\"status\":\"already_working\"}",
+      "outcome": {
+        "case": "failed"
+      }
+    },
+    {
+      "id": "phone-work-outcome-5",
+      "json": "{\"status\":\"not_working\",\"last\":{\"id\":\"S-0\",\"ended_at\":\"2026-09-17T04:00:00Z\",\"reason\":\"idle\"}}",
+      "outcome": {
+        "case": "notWorking",
+        "last": {
+          "endedAt": "2026-09-17T04:00:00Z",
+          "id": "S-0",
+          "origin": null,
+          "reason": "idle",
+          "startedAt": null
+        }
+      }
+    },
+    {
+      "id": "phone-work-outcome-6",
+      "json": "{\"status\":\"not_working\"}",
+      "outcome": {
+        "case": "notWorking",
+        "last": null
+      }
+    },
+    {
+      "id": "phone-work-outcome-7",
+      "json": "{\"status\":\"mismatch\"}",
+      "outcome": {
+        "case": "mismatch"
+      }
+    },
+    {
+      "id": "phone-work-outcome-8",
+      "json": "{\"status\":\"no_team\"}",
+      "outcome": {
+        "case": "noTeam"
+      }
+    },
+    {
+      "id": "phone-work-outcome-9",
+      "json": "{\"status\":\"unauthorized\"}",
+      "outcome": {
+        "case": "unauthorized"
+      }
+    },
+    {
+      "id": "phone-work-outcome-10",
+      "json": "{\"status\":\"weird\"}",
+      "outcome": {
+        "case": "failed"
+      }
+    },
+    {
+      "id": "phone-work-outcome-11",
+      "json": "{}",
+      "outcome": {
+        "case": "failed"
+      }
+    },
+    {
+      "id": "phone-work-outcome-12",
+      "json": "{\"status\":3,\"session\":{\"id\":\"S\"}}",
+      "outcome": {
+        "case": "failed"
+      }
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+  "golden": "wire/rules",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "alltime": "sortedForMiniGameAllTimeBoard: 점수 내림 → bestAt 이른 순(nil 은 뒤) → userID. dayCaption: 'YYYY-MM-DD'(ASCII 숫자, 월 1~12, 일 1~31) → 'M/D'",
+    "appUserCharacters": "AppUserCharacterDirectory(knownIDs: [robot, ' fox ', '', aing_cake_choco, ROBOT], rows) → setEquipped(unicorn, aa-1) · setEquipped(nil, ZZ-9) · setEquipped(robot, '  ') → replace([dd-4 fox, ff-6 nil]) → removeAll. 사진 = https://golden.invalid/p.jpg. avatar = {kind photo|character|initials …}. hinted = 힌트 [nil, robot, fox, unicorn, ' robot ', '', aing] 마다 [사진 없음, 사진]",
+    "date": "SupabaseWorkService.parseDate(소수초 포매터 → 기본 포매터) → $date 비트 또는 null",
+    "dateKnownDivergence": [
+      {
+        "id": "date-9",
+        "reason": "전각 숫자",
+        "text": "２０２６-09-17T05:05:00Z"
+      },
+      {
+        "id": "date-10",
+        "reason": "전각 숫자(소수부)",
+        "text": "2026-09-17T05:05:00.５Z"
+      },
+      {
+        "id": "date-11",
+        "reason": "아랍-인도 숫자",
+        "text": "٢٠٢٦-09-17T05:05:00Z"
+      },
+      {
+        "id": "date-12",
+        "reason": "데바나가리 숫자",
+        "text": "२०२६-09-17T05:05:00Z"
+      },
+      {
+        "id": "date-14",
+        "reason": "분 없는 시간대",
+        "text": "2026-09-17T05:05:00+09"
+      },
+      {
+        "id": "date-18",
+        "reason": "없는 날짜를 넘김",
+        "text": "2026-02-30T00:00:00Z"
+      },
+      {
+        "id": "date-19",
+        "reason": "24시",
+        "text": "2026-09-17T24:00:00Z"
+      },
+      {
+        "id": "date-24",
+        "reason": "앞 공백",
+        "text": "  2026-09-17T05:05:00Z"
+      },
+      {
+        "id": "date-25",
+        "reason": "뒤 공백",
+        "text": "2026-09-17T05:05:00Z "
+      },
+      {
+        "id": "date-26",
+        "reason": "한 자리 월",
+        "text": "2026-9-17T05:05:00Z"
+      }
+    ],
+    "feedback": "FeedbackComposer(자소 = Swift Character) · FeedbackText 상수·함수. age = now(values) - secondsAgo",
+    "micros": "MessagePokeLogRules.microsecondsSinceEpoch(초 파서 = 기본 ISO8601). 값은 64비트 16진",
+    "phoneWorkOutcome": "PhoneWorkResponse(convertFromSnakeCase) → PhoneWorkOutcome.from → {case, session|last|alreadyWorking}",
+    "shop": "isPurchasable = gacha_only·gift_only 표식도 내장 판정도 아니고 값이 있다 · isGiftOnly 가 isGachaOnly 보다 먼저",
+    "todoResponse": "TodoSyncResponse.decode(키 변환 없는 JSONDecoder) 덤프 또는 error",
+    "url": "URL(string:)?.absoluteString — 서비스가 아바타 글자를 거르는 규칙(null = 못 만든다)",
+    "urlKnownDivergence": [
+      {
+        "id": "url-54",
+        "reason": "아스키 밖 호스트 — Apple 은 IDNA(punycode)로 바꾸고 Kotlin 은 null",
+        "text": "https://한글.com/"
+      }
+    ]
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CharacterGift.swift",
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckCore/CharacterKit/CharacterCatalog.swift",
+    "Sources/CheckCore/AppUserCharacters.swift",
+    "Sources/CheckCore/TodoSync.swift",
+    "Sources/CheckCore/SupabaseWorkService.swift",
+    "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift"
+  ]
+}

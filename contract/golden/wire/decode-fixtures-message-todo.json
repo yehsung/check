@@ -1,0 +1,3857 @@
+{
+  "cases": [
+    {
+      "dump": {
+        "peers": [],
+        "status": "ok",
+        "total": 0
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/flow_a_reads_all__summary.json",
+      "type": "MessageUnreadSummaryResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.peers",
+          "result": [
+            [
+              "$.peers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.peers",
+          "result": [
+            [
+              "$.peers",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.peers",
+          "result": "error"
+        },
+        {
+          "op": "empty",
+          "path": "$.peers",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.total",
+          "result": [
+            [
+              "$.total",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.total",
+          "result": [
+            [
+              "$.total",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.total",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.total",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.total",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.total",
+          "result": [
+            [
+              "$.total",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "body": "[c1] 점심 뭐 먹어요?",
+          "createdAt": "2026-09-16T14:46:00.1001+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[c2] 저는 국수요",
+          "createdAt": "2026-09-16T14:46:00.1002+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[b1] 배포 노트 봤어요?",
+          "createdAt": "2026-09-16T14:46:30.1001+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[b2] 두 줄 고쳤어요",
+          "createdAt": "2026-09-16T14:46:30.1002+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[b3] 확인 부탁해요",
+          "createdAt": "2026-09-16T14:46:30.1003+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[a1] 네 지금 볼게요",
+          "createdAt": "2026-09-16T14:47:00.1001+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a003",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": true,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[a2] 좋아요",
+          "createdAt": "2026-09-16T14:47:00.1002+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a002",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": true,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[a3] 올려 주세요",
+          "createdAt": "2026-09-16T14:47:00.1003+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a001",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": false,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[b4] 올렸어요",
+          "createdAt": "2026-09-16T14:47:30.1001+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b006",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[a4] 고마워요",
+          "createdAt": "2026-09-16T14:47:30.1002+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a004",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": false,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[b5] 오목 한 판?",
+          "createdAt": "2026-09-16T14:47:30.1003+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b005",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        }
+      ],
+      "id": "Tests/checkTests/Fixtures/message-rpc/flow_a_reads_all__with_reads_a.json",
+      "type": "[MessageHistoryReadsRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].from_user",
+          "result": [
+            [
+              "$[0].fromUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].from_user",
+          "result": [
+            [
+              "$[0].fromUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].from_user",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].from_user",
+          "result": [
+            [
+              "$[0].fromUser",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].to_user",
+          "result": [
+            [
+              "$[0].toUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].to_user",
+          "result": [
+            [
+              "$[0].toUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].to_user",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].to_user",
+          "result": [
+            [
+              "$[0].toUser",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].body",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].created_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].is_mine",
+          "result": [
+            [
+              "$[0].isMine",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].is_mine",
+          "result": [
+            [
+              "$[0].isMine",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].is_mine",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].is_mine",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].peer_user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].peerUserId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].peer_display_name",
+          "result": [
+            [
+              "$[0].peerDisplayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].peer_display_name",
+          "result": [
+            [
+              "$[0].peerDisplayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].peer_display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].peer_display_name",
+          "result": [
+            [
+              "$[0].peerDisplayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].peer_avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].peer_avatar_url",
+          "result": [
+            [
+              "$[0].peerAvatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].peer_avatar_url",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].created_epoch",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].read_by_peer",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].read_by_peer",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].read_by_peer",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].unread",
+          "result": [
+            [
+              "$[0].unread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].unread",
+          "result": [
+            [
+              "$[0].unread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].unread",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].unread",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": {
+        "advanced": true,
+        "status": "ok",
+        "unread": 0
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/flow_a_reads_b__mark.json",
+      "type": "MessageReadMarkResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.unread",
+          "result": [
+            [
+              "$.unread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.unread",
+          "result": [
+            [
+              "$.unread",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.unread",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.unread",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.unread",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.unread",
+          "result": [
+            [
+              "$.unread",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.advanced",
+          "result": [
+            [
+              "$.advanced",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.advanced",
+          "result": [
+            [
+              "$.advanced",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.advanced",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.advanced",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": {
+        "peers": [
+          {
+            "count": 2,
+            "lastEpochMs": {
+              "$f64": "427a0aaae88a4000"
+            },
+            "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044"
+          }
+        ],
+        "status": "ok",
+        "total": 2
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/flow_a_reads_b__summary.json",
+      "type": "MessageUnreadSummaryResponse",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$.peers[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$.peers[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.peers[0].count",
+          "result": [
+            [
+              "$.peers[0].count",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.peers[0].count",
+          "result": [
+            [
+              "$.peers[0].count",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.peers[0].count",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.peers[0].count",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.peers[0].count",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.peers[0].count",
+          "result": [
+            [
+              "$.peers[0].count",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.peers[0].peer_user_id",
+          "result": [
+            [
+              "$.peers[0].peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.peers[0].peer_user_id",
+          "result": [
+            [
+              "$.peers[0].peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.peers[0].peer_user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.peers[0].peer_user_id",
+          "result": [
+            [
+              "$.peers[0].peerUserId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.peers[0].last_epoch_ms",
+          "result": [
+            [
+              "$.peers[0].lastEpochMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.peers[0].last_epoch_ms",
+          "result": [
+            [
+              "$.peers[0].lastEpochMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.peers[0].last_epoch_ms",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.peers[0].last_epoch_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.peers[0].last_epoch_ms",
+          "result": [
+            [
+              "$.peers[0].lastEpochMs.$f64",
+              "427a0aaae88a4800"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.peers[0].last_epoch_ms",
+          "result": [
+            [
+              "$.peers[0].lastEpochMs.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "body": "[c1] 점심 뭐 먹어요?",
+          "createdAt": "2026-09-16T14:46:00.1001+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": true
+        },
+        {
+          "body": "[c2] 저는 국수요",
+          "createdAt": "2026-09-16T14:46:00.1002+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": true
+        },
+        {
+          "body": "[b1] 배포 노트 봤어요?",
+          "createdAt": "2026-09-16T14:46:30.1001+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[b2] 두 줄 고쳤어요",
+          "createdAt": "2026-09-16T14:46:30.1002+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[b3] 확인 부탁해요",
+          "createdAt": "2026-09-16T14:46:30.1003+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[a1] 네 지금 볼게요",
+          "createdAt": "2026-09-16T14:47:00.1001+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a003",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": true,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[a2] 좋아요",
+          "createdAt": "2026-09-16T14:47:00.1002+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a002",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": true,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[a3] 올려 주세요",
+          "createdAt": "2026-09-16T14:47:00.1003+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a001",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": false,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[b4] 올렸어요",
+          "createdAt": "2026-09-16T14:47:30.1001+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b006",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[a4] 고마워요",
+          "createdAt": "2026-09-16T14:47:30.1002+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a004",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": false,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[b5] 오목 한 판?",
+          "createdAt": "2026-09-16T14:47:30.1003+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b005",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        }
+      ],
+      "id": "Tests/checkTests/Fixtures/message-rpc/flow_a_reads_b__with_reads_a.json",
+      "type": "[MessageHistoryReadsRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "body": "[c3] 예은님 회의록 봤어요",
+          "createdAt": "2026-09-16T14:46:00.1003+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": false
+        },
+        {
+          "body": "[b1] 배포 노트 봤어요?",
+          "createdAt": "2026-09-16T14:46:30.1001+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b003",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": true,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[b2] 두 줄 고쳤어요",
+          "createdAt": "2026-09-16T14:46:30.1002+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b002",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": true,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[b3] 확인 부탁해요",
+          "createdAt": "2026-09-16T14:46:30.1003+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": true,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[a1] 네 지금 볼게요",
+          "createdAt": "2026-09-16T14:47:00.1001+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": false
+        },
+        {
+          "body": "[a2] 좋아요",
+          "createdAt": "2026-09-16T14:47:00.1002+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": false
+        },
+        {
+          "body": "[a3] 올려 주세요",
+          "createdAt": "2026-09-16T14:47:00.1003+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": true
+        },
+        {
+          "body": "[b4] 올렸어요",
+          "createdAt": "2026-09-16T14:47:30.1001+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b006",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": true,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[a4] 고마워요",
+          "createdAt": "2026-09-16T14:47:30.1002+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a004",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": true
+        },
+        {
+          "body": "[b5] 오목 한 판?",
+          "createdAt": "2026-09-16T14:47:30.1003+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b005",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": true,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        }
+      ],
+      "id": "Tests/checkTests/Fixtures/message-rpc/flow_a_reads_b__with_reads_b.json",
+      "type": "[MessageHistoryReadsRow]",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": true,
+        "status": "ok",
+        "unread": 3
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__advanced.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": true,
+        "status": "ok",
+        "unread": 2
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__advanced_b_through_a2.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": true,
+        "status": "ok",
+        "unread": 0
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__advanced_latest.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": null,
+        "status": "invalid",
+        "unread": null
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__invalid_null_peer.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": null,
+        "status": "invalid",
+        "unread": null
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__invalid_self.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": false,
+        "status": "ok",
+        "unread": 3
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__not_advanced.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": false,
+        "status": "ok",
+        "unread": 3
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__not_advanced_own_message.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "advanced": null,
+        "status": "unauthorized",
+        "unread": null
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/mark_messages_read__unauthorized.json",
+      "type": "MessageReadMarkResponse",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "body": "[c1] 점심 뭐 먹어요?",
+          "createdAt": "2026-09-16T14:46:00.1001+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1"
+        },
+        {
+          "body": "[c2] 저는 국수요",
+          "createdAt": "2026-09-16T14:46:00.1002+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1"
+        },
+        {
+          "body": "[b1] 배포 노트 봤어요?",
+          "createdAt": "2026-09-16T14:46:30.1001+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1"
+        },
+        {
+          "body": "[b2] 두 줄 고쳤어요",
+          "createdAt": "2026-09-16T14:46:30.1002+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1"
+        },
+        {
+          "body": "[b3] 확인 부탁해요",
+          "createdAt": "2026-09-16T14:46:30.1003+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1"
+        },
+        {
+          "body": "[a1] 네 지금 볼게요",
+          "createdAt": "2026-09-16T14:47:00.1001+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a003",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b"
+        },
+        {
+          "body": "[a2] 좋아요",
+          "createdAt": "2026-09-16T14:47:00.1002+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a002",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b"
+        },
+        {
+          "body": "[a3] 올려 주세요",
+          "createdAt": "2026-09-16T14:47:00.1003+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a001",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b"
+        },
+        {
+          "body": "[b4] 올렸어요",
+          "createdAt": "2026-09-16T14:47:30.1001+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b006",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1"
+        },
+        {
+          "body": "[a4] 고마워요",
+          "createdAt": "2026-09-16T14:47:30.1002+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a004",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b"
+        },
+        {
+          "body": "[b5] 오목 한 판?",
+          "createdAt": "2026-09-16T14:47:30.1003+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b005",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1"
+        }
+      ],
+      "id": "Tests/checkTests/Fixtures/message-rpc/message_history__a.json",
+      "type": "[MessageHistoryRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].from_user",
+          "result": [
+            [
+              "$[0].fromUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].from_user",
+          "result": [
+            [
+              "$[0].fromUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].from_user",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].from_user",
+          "result": [
+            [
+              "$[0].fromUser",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].to_user",
+          "result": [
+            [
+              "$[0].toUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].to_user",
+          "result": [
+            [
+              "$[0].toUser",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].to_user",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].to_user",
+          "result": [
+            [
+              "$[0].toUser",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].body",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].created_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].is_mine",
+          "result": [
+            [
+              "$[0].isMine",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].is_mine",
+          "result": [
+            [
+              "$[0].isMine",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].is_mine",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].is_mine",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].peerUserId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].peer_user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].peer_user_id",
+          "result": [
+            [
+              "$[0].peerUserId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].peer_display_name",
+          "result": [
+            [
+              "$[0].peerDisplayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].peer_display_name",
+          "result": [
+            [
+              "$[0].peerDisplayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].peer_display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].peer_display_name",
+          "result": [
+            [
+              "$[0].peerDisplayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].peer_avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].peer_avatar_url",
+          "result": [
+            [
+              "$[0].peerAvatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].peer_avatar_url",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].created_epoch",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "body": "[c1] 점심 뭐 먹어요?",
+          "createdAt": "2026-09-16T14:46:00.1001+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": true
+        },
+        {
+          "body": "[c2] 저는 국수요",
+          "createdAt": "2026-09-16T14:46:00.1002+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": true
+        },
+        {
+          "body": "[b1] 배포 노트 봤어요?",
+          "createdAt": "2026-09-16T14:46:30.1001+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[b2] 두 줄 고쳤어요",
+          "createdAt": "2026-09-16T14:46:30.1002+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": false
+        },
+        {
+          "body": "[b3] 확인 부탁해요",
+          "createdAt": "2026-09-16T14:46:30.1003+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": true
+        },
+        {
+          "body": "[a1] 네 지금 볼게요",
+          "createdAt": "2026-09-16T14:47:00.1001+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a003",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": true,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[a2] 좋아요",
+          "createdAt": "2026-09-16T14:47:00.1002+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a002",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": true,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[a3] 올려 주세요",
+          "createdAt": "2026-09-16T14:47:00.1003+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a001",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": false,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[b4] 올렸어요",
+          "createdAt": "2026-09-16T14:47:30.1001+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b006",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": true
+        },
+        {
+          "body": "[a4] 고마워요",
+          "createdAt": "2026-09-16T14:47:30.1002+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a004",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": false,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": null
+        },
+        {
+          "body": "[b5] 오목 한 판?",
+          "createdAt": "2026-09-16T14:47:30.1003+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b005",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑예은",
+          "peerUserId": "3e240c02-8972-478e-a674-014f498a641b",
+          "readByPeer": null,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": true
+        }
+      ],
+      "id": "Tests/checkTests/Fixtures/message-rpc/message_history_with_reads__a.json",
+      "type": "[MessageHistoryReadsRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "body": "[c3] 예은님 회의록 봤어요",
+          "createdAt": "2026-09-16T14:46:00.1003+00:00",
+          "createdEpoch": 1789569960,
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "코덱스토큰도둑지유",
+          "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": false
+        },
+        {
+          "body": "[b1] 배포 노트 봤어요?",
+          "createdAt": "2026-09-16T14:46:30.1001+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b003",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": true,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[b2] 두 줄 고쳤어요",
+          "createdAt": "2026-09-16T14:46:30.1002+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b002",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": true,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[b3] 확인 부탁해요",
+          "createdAt": "2026-09-16T14:46:30.1003+00:00",
+          "createdEpoch": 1789569990,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": false,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[a1] 네 지금 볼게요",
+          "createdAt": "2026-09-16T14:47:00.1001+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a003",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": false
+        },
+        {
+          "body": "[a2] 좋아요",
+          "createdAt": "2026-09-16T14:47:00.1002+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a002",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": false
+        },
+        {
+          "body": "[a3] 올려 주세요",
+          "createdAt": "2026-09-16T14:47:00.1003+00:00",
+          "createdEpoch": 1789570020,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a001",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": true
+        },
+        {
+          "body": "[b4] 올렸어요",
+          "createdAt": "2026-09-16T14:47:30.1001+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b006",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": false,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        },
+        {
+          "body": "[a4] 고마워요",
+          "createdAt": "2026-09-16T14:47:30.1002+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "id": "00000000-0000-4000-8000-00000000a004",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": null,
+          "toUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "unread": true
+        },
+        {
+          "body": "[b5] 오목 한 판?",
+          "createdAt": "2026-09-16T14:47:30.1003+00:00",
+          "createdEpoch": 1789570050,
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b005",
+          "isMine": true,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "abto.app",
+          "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "readByPeer": false,
+          "toUser": "267a3495-643c-40cc-b1a7-14967166eae1",
+          "unread": null
+        }
+      ],
+      "id": "Tests/checkTests/Fixtures/message-rpc/message_history_with_reads__b.json",
+      "type": "[MessageHistoryReadsRow]",
+      "variants": []
+    },
+    {
+      "dump": {
+        "peers": [
+          {
+            "count": 3,
+            "lastEpochMs": {
+              "$f64": "427a0aaafe834000"
+            },
+            "peerUserId": "3e240c02-8972-478e-a674-014f498a641b"
+          },
+          {
+            "count": 2,
+            "lastEpochMs": {
+              "$f64": "427a0aaae88a4000"
+            },
+            "peerUserId": "544e3837-f01c-4560-b82f-4d44c269f044"
+          }
+        ],
+        "status": "ok",
+        "total": 5
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/message_unread_summary__a.json",
+      "type": "MessageUnreadSummaryResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "peers": [
+          {
+            "count": 2,
+            "lastEpochMs": {
+              "$f64": "427a0aaafe834000"
+            },
+            "peerUserId": "267a3495-643c-40cc-b1a7-14967166eae1"
+          }
+        ],
+        "status": "ok",
+        "total": 2
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/message_unread_summary__b.json",
+      "type": "MessageUnreadSummaryResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "peers": null,
+        "status": "unauthorized",
+        "total": null
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/message_unread_summary__unauthorized.json",
+      "type": "MessageUnreadSummaryResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "maxLength": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": "sent",
+        "status": "ok",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/send_message__ok_not_working.json",
+      "type": "PokeSendResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.body",
+          "result": []
+        },
+        {
+          "op": "null",
+          "path": "$.body",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.body",
+          "result": []
+        },
+        {
+          "op": "enum",
+          "path": "$.body",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.ring",
+          "result": [
+            [
+              "$.ring",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ring",
+          "result": [
+            [
+              "$.ring",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.ring",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.ring",
+          "result": [
+            [
+              "$.ring",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "body": "[c1] 점심 뭐 먹어요?",
+          "createdEpoch": 1789569960,
+          "fromAvatarUrl": null,
+          "fromCharacter": null,
+          "fromDisplayName": "코덱스토큰도둑지유",
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c002",
+          "kind": "message"
+        },
+        {
+          "body": "[c2] 저는 국수요",
+          "createdEpoch": 1789569960,
+          "fromAvatarUrl": null,
+          "fromCharacter": null,
+          "fromDisplayName": "코덱스토큰도둑지유",
+          "fromUser": "544e3837-f01c-4560-b82f-4d44c269f044",
+          "id": "00000000-0000-4000-8000-00000000c001",
+          "kind": "message"
+        },
+        {
+          "body": "[b1] 배포 노트 봤어요?",
+          "createdEpoch": 1789569990,
+          "fromAvatarUrl": null,
+          "fromCharacter": null,
+          "fromDisplayName": "코덱스토큰도둑예은",
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b003",
+          "kind": "message"
+        },
+        {
+          "body": "[b2] 두 줄 고쳤어요",
+          "createdEpoch": 1789569990,
+          "fromAvatarUrl": null,
+          "fromCharacter": null,
+          "fromDisplayName": "코덱스토큰도둑예은",
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b002",
+          "kind": "message"
+        },
+        {
+          "body": "[b3] 확인 부탁해요",
+          "createdEpoch": 1789569990,
+          "fromAvatarUrl": null,
+          "fromCharacter": null,
+          "fromDisplayName": "코덱스토큰도둑예은",
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b001",
+          "kind": "message"
+        },
+        {
+          "body": "[b4] 올렸어요",
+          "createdEpoch": 1789570050,
+          "fromAvatarUrl": null,
+          "fromCharacter": null,
+          "fromDisplayName": "코덱스토큰도둑예은",
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b006",
+          "kind": "message"
+        },
+        {
+          "body": "[b5] 오목 한 판?",
+          "createdEpoch": 1789570050,
+          "fromAvatarUrl": null,
+          "fromCharacter": null,
+          "fromDisplayName": "코덱스토큰도둑예은",
+          "fromUser": "3e240c02-8972-478e-a674-014f498a641b",
+          "id": "00000000-0000-4000-8000-00000000b005",
+          "kind": "message"
+        }
+      ],
+      "id": "Tests/checkTests/Fixtures/message-rpc/take_pokes__a.json",
+      "type": "[TakenPokeRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].from_user",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].from_user",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].from_user",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].from_user",
+          "result": [
+            [
+              "$[0].fromUser",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].from_display_name",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].from_display_name",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].from_display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].from_display_name",
+          "result": [
+            [
+              "$[0].fromDisplayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].from_avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].from_avatar_url",
+          "result": [
+            [
+              "$[0].fromAvatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].from_avatar_url",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].created_epoch",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].created_epoch",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].created_epoch",
+          "result": [
+            [
+              "$[0].createdEpoch",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].kind",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].kind",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].kind",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].kind",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].body",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].from_character",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].from_character",
+          "result": [
+            [
+              "$[0].fromCharacter",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].from_character",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": {
+        "full": true,
+        "items": [],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279770
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__empty_user_full.json",
+      "type": "TodoSyncResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.full",
+          "result": [
+            [
+              "$.full",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.full",
+          "result": [
+            [
+              "$.full",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.full",
+          "result": [
+            [
+              "$.full",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.full",
+          "result": [
+            [
+              "$.full",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items",
+          "result": [
+            [
+              "$.items",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.items",
+          "result": [
+            [
+              "$.items",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.items",
+          "result": [
+            [
+              "$.items",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "empty",
+          "path": "$.items",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.rejected",
+          "result": [
+            [
+              "$.rejected",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.rejected",
+          "result": [
+            [
+              "$.rejected",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.rejected",
+          "result": [
+            [
+              "$.rejected",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "empty",
+          "path": "$.rejected",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.watermark_ms",
+          "result": [
+            [
+              "$.watermarkMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.watermark_ms",
+          "result": [
+            [
+              "$.watermarkMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.watermark_ms",
+          "result": [
+            [
+              "$.watermarkMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.watermark_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.watermark_ms",
+          "result": [
+            [
+              "$.watermarkMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.watermark_ms",
+          "result": [
+            [
+              "$.watermarkMs",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "full": true,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": 1726500002001,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "오목 로비 확인 ✅",
+            "updatedAtMs": 1726500002001
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          }
+        ],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279787
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__first_upload_full.json",
+      "type": "TodoSyncResponse",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$.items[0]",
+          "result": [
+            [
+              "$.items",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.items[0]",
+          "result": [
+            [
+              "$.items",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items[0].id",
+          "result": [
+            [
+              "$.items[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.items[0].id",
+          "result": [
+            [
+              "$.items[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.items[0].id",
+          "result": [
+            [
+              "$.items[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.items[0].id",
+          "result": [
+            [
+              "$.items[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items[0].title",
+          "result": [
+            [
+              "$.items[0].title",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.items[0].title",
+          "result": [
+            [
+              "$.items[0].title",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.items[0].title",
+          "result": [
+            [
+              "$.items[0].title",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.items[0].title",
+          "result": [
+            [
+              "$.items[0].title",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items[0].created_at_ms",
+          "result": [
+            [
+              "$.items[0].createdAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.items[0].created_at_ms",
+          "result": [
+            [
+              "$.items[0].createdAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.items[0].created_at_ms",
+          "result": [
+            [
+              "$.items[0].createdAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.items[0].created_at_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.items[0].created_at_ms",
+          "result": [
+            [
+              "$.items[0].createdAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.items[0].created_at_ms",
+          "result": [
+            [
+              "$.items[0].createdAtMs",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items[0].deleted_at_ms",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.items[0].deleted_at_ms",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.items[0].deleted_at_ms",
+          "result": [
+            [
+              "$.items[0].deletedAtMs",
+              3
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items[0].updated_at_ms",
+          "result": [
+            [
+              "$.items[0].updatedAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.items[0].updated_at_ms",
+          "result": [
+            [
+              "$.items[0].updatedAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.items[0].updated_at_ms",
+          "result": [
+            [
+              "$.items[0].updatedAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.items[0].updated_at_ms",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.items[0].updated_at_ms",
+          "result": [
+            [
+              "$.items[0].updatedAtMs",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.items[0].updated_at_ms",
+          "result": [
+            [
+              "$.items[0].updatedAtMs",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items[0].origin_day_key",
+          "result": [
+            [
+              "$.items[0].originDayKey",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.items[0].origin_day_key",
+          "result": [
+            [
+              "$.items[0].originDayKey",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.items[0].origin_day_key",
+          "result": [
+            [
+              "$.items[0].originDayKey",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.items[0].origin_day_key",
+          "result": [
+            [
+              "$.items[0].originDayKey",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.items[0].completed_at_ms",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.items[0].completed_at_ms",
+          "result": []
+        },
+        {
+          "op": "num",
+          "path": "$.items[0].completed_at_ms",
+          "result": [
+            [
+              "$.items[0].completedAtMs",
+              3
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "full": false,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "새 수정(이긴다)",
+            "updatedAtMs": 1726500009000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1789572279856,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "시계가 빠른 맥",
+            "updatedAtMs": 1789572279856
+          }
+        ],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279856
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__future_clamped.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": false,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": 1726500002001,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "오목 로비 확인 ✅",
+            "updatedAtMs": 1726500002001
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          }
+        ],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279804
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__incremental_overlap.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": null,
+        "items": null,
+        "max": null,
+        "rejected": null,
+        "status": "invalid",
+        "watermarkMs": null
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__invalid_not_array.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": false,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "새 수정(이긴다)",
+            "updatedAtMs": 1726500009000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          }
+        ],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279821
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__lww_lost_and_won.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": false,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20240917",
+            "title": "심은 줄 1 을 고침",
+            "updatedAtMs": 1726500005000
+          }
+        ],
+        "max": null,
+        "rejected": [
+          {
+            "id": "00000000-0000-4000-8000-00000000c0de",
+            "reason": "quota"
+          }
+        ],
+        "status": "ok",
+        "watermarkMs": 1789572280052
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__quota.json",
+      "type": "TodoSyncResponse",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$.rejected[0]",
+          "result": [
+            [
+              "$.rejected",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.rejected[0]",
+          "result": [
+            [
+              "$.rejected",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.rejected[0].id",
+          "result": [
+            [
+              "$.rejected[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.rejected[0].id",
+          "result": [
+            [
+              "$.rejected[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.rejected[0].id",
+          "result": [
+            [
+              "$.rejected[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.rejected[0].id",
+          "result": [
+            [
+              "$.rejected[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.rejected[0].reason",
+          "result": [
+            [
+              "$.rejected[0].reason",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.rejected[0].reason",
+          "result": [
+            [
+              "$.rejected[0].reason",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.rejected[0].reason",
+          "result": [
+            [
+              "$.rejected[0].reason",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.rejected[0].reason",
+          "result": [
+            [
+              "$.rejected[0].reason",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "full": false,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "새 수정(이긴다)",
+            "updatedAtMs": 1726500009000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1789572279856,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "시계가 빠른 맥",
+            "updatedAtMs": 1789572279856
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "정상 항목",
+            "updatedAtMs": 1726500000000
+          }
+        ],
+        "max": null,
+        "rejected": [
+          {
+            "id": "not-a-uuid",
+            "reason": "invalid"
+          },
+          {
+            "id": "00000000-0000-4000-8000-0000000000a6",
+            "reason": "invalid"
+          },
+          {
+            "id": "00000000-0000-4000-8000-0000000000a7",
+            "reason": "invalid"
+          },
+          {
+            "id": "00000000-0000-4000-8000-0000000000a8",
+            "reason": "invalid"
+          },
+          {
+            "id": "00000000-0000-4000-8000-0000000000a9",
+            "reason": "invalid"
+          },
+          {
+            "id": null,
+            "reason": "invalid"
+          },
+          {
+            "id": "00000000-0000-4000-8000-0000000000b2",
+            "reason": "invalid"
+          },
+          {
+            "id": "00000000-0000-4000-8000-0000000000b3",
+            "reason": "invalid"
+          }
+        ],
+        "status": "ok",
+        "watermarkMs": 1789572279873
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__rejected_mixed.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": false,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "새 수정(이긴다)",
+            "updatedAtMs": 1726500009000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          }
+        ],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279839
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__same_ms_tie.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": true,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "새 수정(이긴다)",
+            "updatedAtMs": 1726500009000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1789572279856,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "시계가 빠른 맥",
+            "updatedAtMs": 1789572279856
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "정상 항목",
+            "updatedAtMs": 1726500000000
+          }
+        ],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279891
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__since_81days_full.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": true,
+        "items": [
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "배포 노트 정리",
+            "updatedAtMs": 1726500001000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "새 수정(이긴다)",
+            "updatedAtMs": 1726500009000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000001,
+            "deletedAtMs": 1726500003999,
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "지운 할 일",
+            "updatedAtMs": 1726500003999
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 999,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+            "updatedAtMs": 1000
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1789572279856,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "시계가 빠른 맥",
+            "updatedAtMs": 1789572279856
+          },
+          {
+            "completedAtMs": null,
+            "createdAtMs": 1726500000000,
+            "deletedAtMs": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "정상 항목",
+            "updatedAtMs": 1726500000000
+          }
+        ],
+        "max": null,
+        "rejected": [],
+        "status": "ok",
+        "watermarkMs": 1789572279908
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__since_future_full.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "full": null,
+        "items": null,
+        "max": 500,
+        "rejected": null,
+        "status": "too_many",
+        "watermarkMs": null
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__too_many.json",
+      "type": "TodoSyncResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.max",
+          "result": [
+            [
+              "$.max",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.max",
+          "result": [
+            [
+              "$.max",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.max",
+          "result": [
+            [
+              "$.max",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.max",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.max",
+          "result": [
+            [
+              "$.max",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.max",
+          "result": [
+            [
+              "$.max",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "full": null,
+        "items": null,
+        "max": null,
+        "rejected": null,
+        "status": "unauthorized",
+        "watermarkMs": null
+      },
+      "id": "Tests/checkTests/Fixtures/todo-rpc/todo_sync__unauthorized.json",
+      "type": "TodoSyncResponse",
+      "variants": []
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+  "golden": "wire/decode-fixtures-message-todo",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "decoder": "JSONDecoder(keyDecodingStrategy: .convertFromSnakeCase) — 서비스와 같다. TodoSyncResponse 만 키 변환 없는 JSONDecoder(TodoSyncResponse.decode)",
+    "dump": "contract/README.md §2-3 GoldenMirror 정규 덤프. 실패하면 \"$error\"",
+    "input": "case id = 저장소 상대 경로(픽스처 원문을 Kotlin 이 직접 읽는다 — 복사 0). 합성 입력은 case.json 에 싣는다",
+    "notDecoded": [
+      "Tests/checkTests/Fixtures/message-rpc/realtime__message_read_rows.json"
+    ],
+    "scrub": "덤프·결과의 JWT 모양 글자(eyJ + 20자 이상)는 <jwt:길이> 로 바꿔 싣는다(비밀 검사) — Kotlin 도 같은 규칙으로 바꿔 견준다",
+    "variants": "경로($.a[0].b) × op: remove · null · str(\"3\") · num(3) · enum(\"zz_unknown_value\") · bool(true) · float0(정수 글자+\".0\") · float5(+\".5\") · big(4294967296 — 2^31 넘는 정수) · int(3) · empty([]). 배열은 첫 원소 안만. 같은 (타입·정규 경로·op)는 처음 한 번만. result = \"error\" 또는 원본 덤프와 다른 점 [[경로, 새 값]…](\"$absent\" = 빠짐)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/ChessWire.swift",
+    "Sources/CheckCore/TetrisWire.swift",
+    "Sources/CheckCore/CharacterGift.swift",
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckCore/Gacha.swift",
+    "Sources/CheckCore/TodoSync.swift",
+    "Sources/CheckCore/AppUserCharacters.swift",
+    "Sources/CheckCore/StatusMessage.swift",
+    "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+    "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+    "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+    "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+    "Sources/CheckMobileKit/Me/MeProfileService.swift",
+    "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+  ]
+}

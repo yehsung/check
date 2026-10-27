@@ -1,0 +1,7359 @@
+{
+  "cases": [
+    {
+      "dump": [],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rest.ai_limits.get.json",
+      "type": "[AILimitServerRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "character": null
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rest.profiles.get@select=character.json",
+      "type": "[CharacterSyncProfileRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].character",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].character",
+          "result": [
+            [
+              "$[0].character",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].character",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": [],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rest.token_usage_device_daily.get.json",
+      "type": "[TokenUsageDailyRow]",
+      "variants": []
+    },
+    {
+      "dump": [],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rest.work_sessions.get.json",
+      "type": "[WorkSessionRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T02:10:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "새벽",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T02:10:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rest.work_statuses.get.json",
+      "type": "[WorkStatusRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].status",
+          "result": [
+            [
+              "$[0].status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].updated_at",
+          "result": [
+            [
+              "$[0].updatedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].updated_at",
+          "result": [
+            [
+              "$[0].updatedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].updated_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].updated_at",
+          "result": [
+            [
+              "$[0].updatedAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].last_seen_at",
+          "result": [
+            [
+              "$[0].lastSeenAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].last_seen_at",
+          "result": [
+            [
+              "$[0].lastSeenAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].last_seen_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].last_seen_at",
+          "result": [
+            [
+              "$[0].lastSeenAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].active_session_id",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].active_session_id",
+          "result": [
+            [
+              "$[0].activeSessionId",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].active_session_id",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].profiles",
+          "result": [
+            [
+              "$[0].profiles",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].profiles",
+          "result": [
+            [
+              "$[0].profiles",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].profiles",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].profiles.display_name",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].profiles.display_name",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].profiles.display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].profiles.display_name",
+          "result": [
+            [
+              "$[0].profiles.displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].profiles.avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].profiles.avatar_url",
+          "result": [
+            [
+              "$[0].profiles.avatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].profiles.avatar_url",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": null,
+            "giftOnly": null,
+            "id": "fox",
+            "owned": false,
+            "price": 60
+          },
+          {
+            "gachaOnly": null,
+            "giftOnly": null,
+            "id": "ghost",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": null,
+            "giftOnly": null,
+            "id": "jellyfish",
+            "owned": false,
+            "price": 140
+          },
+          {
+            "gachaOnly": null,
+            "giftOnly": null,
+            "id": "shiba",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": null,
+            "giftOnly": null,
+            "id": "squirrel",
+            "owned": false,
+            "price": 60
+          }
+        ],
+        "gacha": null,
+        "rubyBalance": 12,
+        "ultraBalance": 0,
+        "ultraBuyMax": 20,
+        "ultraPrice": 5
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rpc.shop_state.json",
+      "type": "ShopStateResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.ruby_balance",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.ruby_balance",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.ruby_balance",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.ultra_balance",
+          "result": [
+            [
+              "$.ultraBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ultra_balance",
+          "result": [
+            [
+              "$.ultraBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.ultra_balance",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.ultra_balance",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.ultra_balance",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.ultra_balance",
+          "result": [
+            [
+              "$.ultraBalance",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.ultra_price",
+          "result": [
+            [
+              "$.ultraPrice",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ultra_price",
+          "result": [
+            [
+              "$.ultraPrice",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.ultra_price",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.ultra_price",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.ultra_price",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.ultra_price",
+          "result": [
+            [
+              "$.ultraPrice",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.ultra_buy_max",
+          "result": [
+            [
+              "$.ultraBuyMax",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ultra_buy_max",
+          "result": [
+            [
+              "$.ultraBuyMax",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.ultra_buy_max",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.ultra_buy_max",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.ultra_buy_max",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.ultra_buy_max",
+          "result": [
+            [
+              "$.ultraBuyMax",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.characters",
+          "result": [
+            [
+              "$.characters",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters",
+          "result": [
+            [
+              "$.characters",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters",
+          "result": "error"
+        },
+        {
+          "op": "empty",
+          "path": "$.characters",
+          "result": [
+            [
+              "$.characters",
+              []
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.characters[0].id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.characters[0].id",
+          "result": [
+            [
+              "$.characters[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].price",
+          "result": [
+            [
+              "$.characters[0].price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].price",
+          "result": [
+            [
+              "$.characters[0].price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0].price",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.characters[0].price",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.characters[0].price",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.characters[0].price",
+          "result": [
+            [
+              "$.characters[0].price",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].owned",
+          "result": [
+            [
+              "$.characters[0].owned",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].owned",
+          "result": [
+            [
+              "$.characters[0].owned",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0].owned",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.characters[0].owned",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "focusMode": null,
+          "minigamePublic": false,
+          "tokenUsageCollect": null,
+          "tokenUsagePublic": null
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-settings/rest.profiles.get@select=minigame_public.json",
+      "type": "[ProfilePrivacyRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].minigame_public",
+          "result": [
+            [
+              "$[0].minigamePublic",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].minigame_public",
+          "result": [
+            [
+              "$[0].minigamePublic",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].minigame_public",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].minigame_public",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "fox",
+            "owned": true,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "squirrel",
+            "owned": false,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "ghost",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "shiba",
+            "owned": true,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "jellyfish",
+            "owned": false,
+            "price": 140
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "robot",
+            "owned": false,
+            "price": 200
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_gold",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_rainbow",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_strawberry",
+            "owned": true,
+            "price": 2000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_choco",
+            "owned": false,
+            "price": 2001
+          }
+        ],
+        "gacha": {
+          "odds": [
+            {
+              "characterID": "aing_gold",
+              "percent": {
+                "$f64": "4008000000000000"
+              }
+            },
+            {
+              "characterID": "aing_rainbow",
+              "percent": {
+                "$f64": "4000000000000000"
+              }
+            },
+            {
+              "characterID": "fox",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "squirrel",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "shiba",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "ghost",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "jellyfish",
+              "percent": {
+                "$f64": "4026000000000000"
+              }
+            },
+            {
+              "characterID": "robot",
+              "percent": {
+                "$f64": "4020000000000000"
+              }
+            }
+          ],
+          "price": 50,
+          "shardCosts": {
+            "aing_gold": 20,
+            "aing_rainbow": 20,
+            "fox": 2,
+            "ghost": 4,
+            "jellyfish": 5,
+            "robot": 8,
+            "shiba": 4,
+            "squirrel": 2
+          },
+          "shards": 23
+        },
+        "rubyBalance": 120,
+        "ultraBalance": 2,
+        "ultraBuyMax": 20,
+        "ultraPrice": 5
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-shop/rpc.shop_state.json",
+      "type": "ShopStateResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.characters[0].gacha_only",
+          "result": [
+            [
+              "$.characters[0].gachaOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].gacha_only",
+          "result": [
+            [
+              "$.characters[0].gachaOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0].gacha_only",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.characters[0].gacha_only",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.characters[0].gift_only",
+          "result": [
+            [
+              "$.characters[0].giftOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.characters[0].gift_only",
+          "result": [
+            [
+              "$.characters[0].giftOnly",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.characters[0].gift_only",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.characters[0].gift_only",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha",
+          "result": [
+            [
+              "$.gacha",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha",
+          "result": [
+            [
+              "$.gacha",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ],
+            [
+              "$.gacha.price",
+              null
+            ],
+            [
+              "$.gacha.shardCosts",
+              null
+            ],
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.price",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.price",
+          "result": [
+            [
+              "$.gacha.price",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shards",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shards",
+          "result": [
+            [
+              "$.gacha.shards",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "empty",
+          "path": "$.gacha.odds",
+          "result": [
+            [
+              "$.gacha.odds",
+              []
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds[0]",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.odds[0]",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gacha.odds[0].character_id",
+          "result": [
+            [
+              "$.gacha.odds[0].characterID",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds",
+              [
+                {
+                  "characterID": "aing_rainbow",
+                  "percent": {
+                    "$f64": "4000000000000000"
+                  }
+                },
+                {
+                  "characterID": "fox",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "squirrel",
+                  "percent": {
+                    "$f64": "4038000000000000"
+                  }
+                },
+                {
+                  "characterID": "shiba",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "ghost",
+                  "percent": {
+                    "$f64": "402c000000000000"
+                  }
+                },
+                {
+                  "characterID": "jellyfish",
+                  "percent": {
+                    "$f64": "4026000000000000"
+                  }
+                },
+                {
+                  "characterID": "robot",
+                  "percent": {
+                    "$f64": "4020000000000000"
+                  }
+                }
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.odds[0].percent",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds[0].percent.$f64",
+              "400c000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.odds[0].percent",
+          "result": [
+            [
+              "$.gacha.odds[0].percent.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs",
+          "result": [
+            [
+              "$.gacha.shardCosts",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs",
+          "result": [
+            [
+              "$.gacha.shardCosts",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs",
+          "result": [
+            [
+              "$.gacha.shardCosts",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.aing_gold",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_gold",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.aing_rainbow",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_rainbow",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.aing_rainbow",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_rainbow",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.aing_rainbow",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_rainbow",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.aing_rainbow",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.aing_rainbow",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_rainbow",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.aing_rainbow",
+          "result": [
+            [
+              "$.gacha.shardCosts.aing_rainbow",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.fox",
+          "result": [
+            [
+              "$.gacha.shardCosts.fox",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.fox",
+          "result": [
+            [
+              "$.gacha.shardCosts.fox",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.fox",
+          "result": [
+            [
+              "$.gacha.shardCosts.fox",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.fox",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.fox",
+          "result": [
+            [
+              "$.gacha.shardCosts.fox",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.fox",
+          "result": [
+            [
+              "$.gacha.shardCosts.fox",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.squirrel",
+          "result": [
+            [
+              "$.gacha.shardCosts.squirrel",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.squirrel",
+          "result": [
+            [
+              "$.gacha.shardCosts.squirrel",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.squirrel",
+          "result": [
+            [
+              "$.gacha.shardCosts.squirrel",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.squirrel",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.squirrel",
+          "result": [
+            [
+              "$.gacha.shardCosts.squirrel",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.squirrel",
+          "result": [
+            [
+              "$.gacha.shardCosts.squirrel",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.shiba",
+          "result": [
+            [
+              "$.gacha.shardCosts.shiba",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.shiba",
+          "result": [
+            [
+              "$.gacha.shardCosts.shiba",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.shiba",
+          "result": [
+            [
+              "$.gacha.shardCosts.shiba",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.shiba",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.shiba",
+          "result": [
+            [
+              "$.gacha.shardCosts.shiba",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.shiba",
+          "result": [
+            [
+              "$.gacha.shardCosts.shiba",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.ghost",
+          "result": [
+            [
+              "$.gacha.shardCosts.ghost",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.ghost",
+          "result": [
+            [
+              "$.gacha.shardCosts.ghost",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.ghost",
+          "result": [
+            [
+              "$.gacha.shardCosts.ghost",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.ghost",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.ghost",
+          "result": [
+            [
+              "$.gacha.shardCosts.ghost",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.ghost",
+          "result": [
+            [
+              "$.gacha.shardCosts.ghost",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.jellyfish",
+          "result": [
+            [
+              "$.gacha.shardCosts.jellyfish",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.jellyfish",
+          "result": [
+            [
+              "$.gacha.shardCosts.jellyfish",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.jellyfish",
+          "result": [
+            [
+              "$.gacha.shardCosts.jellyfish",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.jellyfish",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.jellyfish",
+          "result": [
+            [
+              "$.gacha.shardCosts.jellyfish",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.jellyfish",
+          "result": [
+            [
+              "$.gacha.shardCosts.jellyfish",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gacha.shard_costs.robot",
+          "result": [
+            [
+              "$.gacha.shardCosts.robot",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gacha.shard_costs.robot",
+          "result": [
+            [
+              "$.gacha.shardCosts.robot",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gacha.shard_costs.robot",
+          "result": [
+            [
+              "$.gacha.shardCosts.robot",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.gacha.shard_costs.robot",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.gacha.shard_costs.robot",
+          "result": [
+            [
+              "$.gacha.shardCosts.robot",
+              "$absent"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.gacha.shard_costs.robot",
+          "result": [
+            [
+              "$.gacha.shardCosts.robot",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "durationSeconds": null,
+          "endedAt": null,
+          "id": "d0000000-0000-4000-8000-00000000a001",
+          "startedAt": "2026-09-17T01:20:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": null,
+          "id": "d0000000-0000-4000-8000-00000000a002",
+          "startedAt": "2026-09-17T00:55:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000102"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": null,
+          "id": "d0000000-0000-4000-8000-00000000a003",
+          "startedAt": "2026-09-17T03:30:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000103"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": null,
+          "id": "d0000000-0000-4000-8000-00000000a004",
+          "startedAt": "2026-09-17T02:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000104"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rest.work_sessions.get@team_id=eq.d0000000-0000-4000-8000-000000007ea1&ended_at=is.null.json",
+      "type": "[WorkSessionRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].started_at",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].started_at",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].started_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].started_at",
+          "result": [
+            [
+              "$[0].startedAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].ended_at",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].ended_at",
+          "result": [
+            [
+              "$[0].endedAt",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].ended_at",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].duration_seconds",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].duration_seconds",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].duration_seconds",
+          "result": [
+            [
+              "$[0].durationSeconds",
+              3
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-14T08:10:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-14T00:30:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-15T08:20:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-15T00:50:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-16T05:28:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-16T01:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-17T01:05:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-16T23:40:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-15T09:00:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-15T00:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000102"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-16T07:30:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-16T01:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000103"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-17T02:10:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-17T00:10:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000105"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rest.work_sessions.get@team_id=eq.d0000000-0000-4000-8000-000000007ea1&ended_at=not.is.null.json",
+      "type": "[WorkSessionRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0].ended_at",
+          "result": [
+            [
+              "$[0].endedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].ended_at",
+          "result": [
+            [
+              "$[0].endedAt",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a001",
+          "lastSeenAt": "2026-09-17T05:04:40.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "새벽",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T05:04:40.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a002",
+          "lastSeenAt": "2026-09-17T05:04:10.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "민트",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T05:04:10.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000102"
+        },
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a003",
+          "lastSeenAt": "2026-09-17T05:04:55.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "라임",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T05:04:55.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000103"
+        },
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a004",
+          "lastSeenAt": "2026-09-17T04:52:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "보리",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T04:52:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000104"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T02:10:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "자두",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T02:10:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000105"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rest.work_statuses.get.json",
+      "type": "[WorkStatusRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0].active_session_id",
+          "result": [
+            [
+              "$[0].activeSessionId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].active_session_id",
+          "result": [
+            [
+              "$[0].activeSessionId",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "fox",
+            "owned": true,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "squirrel",
+            "owned": false,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "ghost",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "shiba",
+            "owned": true,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "jellyfish",
+            "owned": false,
+            "price": 140
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "robot",
+            "owned": false,
+            "price": 200
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_gold",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_rainbow",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_strawberry",
+            "owned": true,
+            "price": 2000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_choco",
+            "owned": false,
+            "price": 2001
+          }
+        ],
+        "gacha": {
+          "odds": [
+            {
+              "characterID": "aing_gold",
+              "percent": {
+                "$f64": "4008000000000000"
+              }
+            },
+            {
+              "characterID": "aing_rainbow",
+              "percent": {
+                "$f64": "4000000000000000"
+              }
+            },
+            {
+              "characterID": "fox",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "squirrel",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "shiba",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "ghost",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "jellyfish",
+              "percent": {
+                "$f64": "4026000000000000"
+              }
+            },
+            {
+              "characterID": "robot",
+              "percent": {
+                "$f64": "4020000000000000"
+              }
+            }
+          ],
+          "price": 50,
+          "shardCosts": {
+            "aing_gold": 20,
+            "aing_rainbow": 20,
+            "fox": 2,
+            "ghost": 4,
+            "jellyfish": 5,
+            "robot": 8,
+            "shiba": 4,
+            "squirrel": 2
+          },
+          "shards": 23
+        },
+        "rubyBalance": 120,
+        "ultraBalance": 2,
+        "ultraBuyMax": 20,
+        "ultraPrice": 5
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.shop_state.json",
+      "type": "ShopStateResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "fox",
+            "owned": true,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "squirrel",
+            "owned": false,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "ghost",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "shiba",
+            "owned": true,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "jellyfish",
+            "owned": false,
+            "price": 140
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "robot",
+            "owned": false,
+            "price": 200
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_gold",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_rainbow",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_strawberry",
+            "owned": false,
+            "price": 2000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_choco",
+            "owned": true,
+            "price": 2001
+          }
+        ],
+        "gacha": {
+          "odds": [
+            {
+              "characterID": "aing_gold",
+              "percent": {
+                "$f64": "4008000000000000"
+              }
+            },
+            {
+              "characterID": "aing_rainbow",
+              "percent": {
+                "$f64": "4000000000000000"
+              }
+            },
+            {
+              "characterID": "fox",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "squirrel",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "shiba",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "ghost",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "jellyfish",
+              "percent": {
+                "$f64": "4026000000000000"
+              }
+            },
+            {
+              "characterID": "robot",
+              "percent": {
+                "$f64": "4020000000000000"
+              }
+            }
+          ],
+          "price": 50,
+          "shardCosts": {
+            "aing_gold": 20,
+            "aing_rainbow": 20,
+            "fox": 2,
+            "ghost": 4,
+            "jellyfish": 5,
+            "robot": 8,
+            "shiba": 4,
+            "squirrel": 2
+          },
+          "shards": 23
+        },
+        "rubyBalance": 120,
+        "ultraBalance": 2,
+        "ultraBuyMax": 20,
+        "ultraPrice": 5
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.shop_state@demo-gift-got-choco.json",
+      "type": "ShopStateResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "fox",
+            "owned": true,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "squirrel",
+            "owned": false,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "ghost",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "shiba",
+            "owned": true,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "jellyfish",
+            "owned": false,
+            "price": 140
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "robot",
+            "owned": false,
+            "price": 200
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_gold",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_rainbow",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_strawberry",
+            "owned": true,
+            "price": 2000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_choco",
+            "owned": false,
+            "price": 2001
+          }
+        ],
+        "gacha": {
+          "odds": [
+            {
+              "characterID": "aing_gold",
+              "percent": {
+                "$f64": "4008000000000000"
+              }
+            },
+            {
+              "characterID": "aing_rainbow",
+              "percent": {
+                "$f64": "4000000000000000"
+              }
+            },
+            {
+              "characterID": "fox",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "squirrel",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "shiba",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "ghost",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "jellyfish",
+              "percent": {
+                "$f64": "4026000000000000"
+              }
+            },
+            {
+              "characterID": "robot",
+              "percent": {
+                "$f64": "4020000000000000"
+              }
+            }
+          ],
+          "price": 50,
+          "shardCosts": {
+            "aing_gold": 20,
+            "aing_rainbow": 20,
+            "fox": 2,
+            "ghost": 4,
+            "jellyfish": 5,
+            "robot": 8,
+            "shiba": 4,
+            "squirrel": 2
+          },
+          "shards": 23
+        },
+        "rubyBalance": 120,
+        "ultraBalance": 2,
+        "ultraBuyMax": 20,
+        "ultraPrice": 5
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.shop_state@demo-gift-got-strawberry.json",
+      "type": "ShopStateResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "fox",
+            "owned": true,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "squirrel",
+            "owned": false,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "ghost",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "shiba",
+            "owned": true,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "jellyfish",
+            "owned": false,
+            "price": 140
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "robot",
+            "owned": false,
+            "price": 200
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_gold",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_rainbow",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_strawberry",
+            "owned": false,
+            "price": 2000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_choco",
+            "owned": false,
+            "price": 2001
+          }
+        ],
+        "gacha": {
+          "odds": [
+            {
+              "characterID": "aing_gold",
+              "percent": {
+                "$f64": "4008000000000000"
+              }
+            },
+            {
+              "characterID": "aing_rainbow",
+              "percent": {
+                "$f64": "4000000000000000"
+              }
+            },
+            {
+              "characterID": "fox",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "squirrel",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "shiba",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "ghost",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "jellyfish",
+              "percent": {
+                "$f64": "4026000000000000"
+              }
+            },
+            {
+              "characterID": "robot",
+              "percent": {
+                "$f64": "4020000000000000"
+              }
+            }
+          ],
+          "price": 50,
+          "shardCosts": {
+            "aing_gold": 20,
+            "aing_rainbow": 20,
+            "fox": 2,
+            "ghost": 4,
+            "jellyfish": 5,
+            "robot": 8,
+            "shiba": 4,
+            "squirrel": 2
+          },
+          "shards": 23
+        },
+        "rubyBalance": 120,
+        "ultraBalance": 2,
+        "ultraBuyMax": 20,
+        "ultraPrice": 5
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.shop_state@demo-gift.json",
+      "type": "ShopStateResponse",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "deviceId": null,
+          "deviceLabel": null,
+          "fiveHourPercent": {
+            "$f64": "403b000000000000"
+          },
+          "fiveHourResetsAt": "2026-09-17T07:40:00.434051+00:00",
+          "observedAt": "2026-09-17T05:03:00.128+00:00",
+          "planLabel": "max",
+          "provider": "claude",
+          "weeklyPercent": {
+            "$f64": "404e000000000000"
+          },
+          "weeklyResetsAt": "2026-09-22T10:05:00+00:00"
+        },
+        {
+          "deviceId": null,
+          "deviceLabel": null,
+          "fiveHourPercent": {
+            "$f64": "0000000000000000"
+          },
+          "fiveHourResetsAt": null,
+          "observedAt": "2026-09-17T05:00:00+00:00",
+          "planLabel": "plus",
+          "provider": "codex",
+          "weeklyPercent": {
+            "$f64": "404c000000000000"
+          },
+          "weeklyResetsAt": "2026-09-21T06:51:40+00:00"
+        },
+        {
+          "deviceId": null,
+          "deviceLabel": null,
+          "fiveHourPercent": null,
+          "fiveHourResetsAt": null,
+          "observedAt": "2026-09-17T04:55:00+00:00",
+          "planLabel": null,
+          "provider": "antigravity",
+          "weeklyPercent": {
+            "$f64": "4020000000000000"
+          },
+          "weeklyResetsAt": "2026-09-23T11:05:00+00:00"
+        },
+        {
+          "deviceId": null,
+          "deviceLabel": null,
+          "fiveHourPercent": {
+            "$f64": "4058c00000000000"
+          },
+          "fiveHourResetsAt": "2026-09-17T07:40:00+00:00",
+          "observedAt": "2026-09-17T05:04:00+00:00",
+          "planLabel": null,
+          "provider": "future-provider",
+          "weeklyPercent": {
+            "$f64": "4058c00000000000"
+          },
+          "weeklyResetsAt": "2026-09-22T10:05:00+00:00"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.ai_limits.get.json",
+      "type": "[AILimitServerRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].provider",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].provider",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].provider",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].provider",
+          "result": [
+            [
+              "$[0].provider",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].five_hour_percent",
+          "result": [
+            [
+              "$[0].fiveHourPercent",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].five_hour_percent",
+          "result": [
+            [
+              "$[0].fiveHourPercent",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].five_hour_percent",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].five_hour_percent",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].five_hour_percent",
+          "result": [
+            [
+              "$[0].fiveHourPercent.$f64",
+              "403b800000000000"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$[0].five_hour_percent",
+          "result": [
+            [
+              "$[0].fiveHourPercent.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].five_hour_resets_at",
+          "result": [
+            [
+              "$[0].fiveHourResetsAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].five_hour_resets_at",
+          "result": [
+            [
+              "$[0].fiveHourResetsAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].five_hour_resets_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].five_hour_resets_at",
+          "result": [
+            [
+              "$[0].fiveHourResetsAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].weekly_percent",
+          "result": [
+            [
+              "$[0].weeklyPercent",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].weekly_percent",
+          "result": [
+            [
+              "$[0].weeklyPercent",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].weekly_percent",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].weekly_percent",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].weekly_percent",
+          "result": [
+            [
+              "$[0].weeklyPercent.$f64",
+              "404e400000000000"
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$[0].weekly_percent",
+          "result": [
+            [
+              "$[0].weeklyPercent.$f64",
+              "41f0000000000000"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].weekly_resets_at",
+          "result": [
+            [
+              "$[0].weeklyResetsAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].weekly_resets_at",
+          "result": [
+            [
+              "$[0].weeklyResetsAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].weekly_resets_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].weekly_resets_at",
+          "result": [
+            [
+              "$[0].weeklyResetsAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].plan_label",
+          "result": [
+            [
+              "$[0].planLabel",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].plan_label",
+          "result": [
+            [
+              "$[0].planLabel",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].plan_label",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].plan_label",
+          "result": [
+            [
+              "$[0].planLabel",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].observed_at",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].observed_at",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].observed_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].observed_at",
+          "result": [
+            [
+              "$[0].observedAt",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "displayName": "새벽"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.profiles.get@display_name,avatar_url.json",
+      "type": "[MeProfileCardRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].avatar_url",
+          "result": [
+            [
+              "$[0].avatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].avatar_url",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "displayNameChangedAt": "2026-08-30T02:15:00.52+00:00"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.profiles.get@display_name_changed_at.json",
+      "type": "[DisplayNameChangedAtRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name_changed_at",
+          "result": [
+            [
+              "$[0].displayNameChangedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name_changed_at",
+          "result": [
+            [
+              "$[0].displayNameChangedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name_changed_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name_changed_at",
+          "result": [
+            [
+              "$[0].displayNameChangedAt",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "center": "seoul"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.profiles.get@select=center.json",
+      "type": "[ProfileCenterRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].center",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "character": "fox"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.profiles.get@select=character.json",
+      "type": "[CharacterSyncProfileRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0].character",
+          "result": [
+            [
+              "$[0].character",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].character",
+          "result": [
+            [
+              "$[0].character",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "statusMessage": "오후엔 리뷰 몰아서 해요 📝"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.profiles.get@select=status_message.json",
+      "type": "[ProfileStatusMessageRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].status_message",
+          "result": [
+            [
+              "$[0].statusMessage",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].status_message",
+          "result": [
+            [
+              "$[0].statusMessage",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].status_message",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].status_message",
+          "result": [
+            [
+              "$[0].statusMessage",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "focusMode": false,
+          "minigamePublic": null,
+          "tokenUsageCollect": true,
+          "tokenUsagePublic": true
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.profiles.get@token_usage_collect.json",
+      "type": "[ProfilePrivacyRow]",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$[0].token_usage_public",
+          "result": [
+            [
+              "$[0].tokenUsagePublic",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].token_usage_public",
+          "result": [
+            [
+              "$[0].tokenUsagePublic",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].token_usage_public",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].token_usage_public",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].token_usage_collect",
+          "result": [
+            [
+              "$[0].tokenUsageCollect",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].token_usage_collect",
+          "result": [
+            [
+              "$[0].tokenUsageCollect",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].token_usage_collect",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].token_usage_collect",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].focus_mode",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].focus_mode",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "claudeTotal": 25951977,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-09-17",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 55606557,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-09-16",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 24821496,
+          "codexAccount": null,
+          "codexTotal": 3096123,
+          "codexUtcTotal": 3096123,
+          "day": "2026-09-15",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 24787817,
+          "codexAccount": null,
+          "codexTotal": 16584882,
+          "codexUtcTotal": 16584882,
+          "day": "2026-09-14",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 53413907,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-09-11",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 34784236,
+          "codexAccount": null,
+          "codexTotal": 10835309,
+          "codexUtcTotal": 10835309,
+          "day": "2026-09-10",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 36801377,
+          "codexAccount": null,
+          "codexTotal": 8837454,
+          "codexUtcTotal": 8837454,
+          "day": "2026-09-09",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 61475327,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-09-08",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 53896032,
+          "codexAccount": null,
+          "codexTotal": 6489842,
+          "codexUtcTotal": 6489842,
+          "day": "2026-09-07",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 6291937,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-09-04",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 58285028,
+          "codexAccount": null,
+          "codexTotal": 13844140,
+          "codexUtcTotal": 13844140,
+          "day": "2026-09-03",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 15265393,
+          "codexAccount": null,
+          "codexTotal": 10533527,
+          "codexUtcTotal": 10533527,
+          "day": "2026-09-02",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 9983087,
+          "codexAccount": null,
+          "codexTotal": 3131225,
+          "codexUtcTotal": 3131225,
+          "day": "2026-09-01",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 35253565,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-31",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 55269136,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-28",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 61195077,
+          "codexAccount": null,
+          "codexTotal": 2086355,
+          "codexUtcTotal": 2086355,
+          "day": "2026-08-27",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 14929186,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-26",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 18080818,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-25",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 27780396,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-24",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 11010339,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-21",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 14854177,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-20",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 34403150,
+          "codexAccount": null,
+          "codexTotal": 9982153,
+          "codexUtcTotal": 9982153,
+          "day": "2026-08-19",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 38120877,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-18",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 25689561,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-17",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 24896148,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-14",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 20633220,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-13",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 10013490,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-12",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 51700322,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-11",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 32337151,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-10",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 35397398,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-08",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 13442683,
+          "codexAccount": null,
+          "codexTotal": 1607491,
+          "codexUtcTotal": 1607491,
+          "day": "2026-08-07",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 22780056,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-06",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 48111012,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-05",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 15619896,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-04",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 33853216,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-08-03",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 34470371,
+          "codexAccount": null,
+          "codexTotal": 6135533,
+          "codexUtcTotal": 6135533,
+          "day": "2026-08-02",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 33698706,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-31",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 20018598,
+          "codexAccount": null,
+          "codexTotal": 9917726,
+          "codexUtcTotal": 9917726,
+          "day": "2026-07-30",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 44832979,
+          "codexAccount": null,
+          "codexTotal": 11637737,
+          "codexUtcTotal": 11637737,
+          "day": "2026-07-29",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 15590160,
+          "codexAccount": null,
+          "codexTotal": 13025005,
+          "codexUtcTotal": 13025005,
+          "day": "2026-07-28",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 43719722,
+          "codexAccount": null,
+          "codexTotal": 11782494,
+          "codexUtcTotal": 11782494,
+          "day": "2026-07-27",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 54765319,
+          "codexAccount": null,
+          "codexTotal": 11865929,
+          "codexUtcTotal": 11865929,
+          "day": "2026-07-26",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 39854839,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-25",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 28275931,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-24",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 7431444,
+          "codexAccount": null,
+          "codexTotal": 9776214,
+          "codexUtcTotal": 9776214,
+          "day": "2026-07-23",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 20730076,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-22",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 7519913,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-21",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 28512620,
+          "codexAccount": null,
+          "codexTotal": 15662023,
+          "codexUtcTotal": 15662023,
+          "day": "2026-07-20",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 10641128,
+          "codexAccount": null,
+          "codexTotal": 7878271,
+          "codexUtcTotal": 7878271,
+          "day": "2026-07-17",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 25123186,
+          "codexAccount": null,
+          "codexTotal": 8080557,
+          "codexUtcTotal": 8080557,
+          "day": "2026-07-16",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 48140874,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-15",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 18898308,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-14",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 31165084,
+          "codexAccount": null,
+          "codexTotal": 5341031,
+          "codexUtcTotal": 5341031,
+          "day": "2026-07-13",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 57543500,
+          "codexAccount": null,
+          "codexTotal": 9838434,
+          "codexUtcTotal": 9838434,
+          "day": "2026-07-10",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 36835744,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-09",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 11243503,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-08",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 54231694,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-07",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 42393015,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-06",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 49449552,
+          "codexAccount": null,
+          "codexTotal": 11811968,
+          "codexUtcTotal": 11811968,
+          "day": "2026-07-03",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 43600366,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-07-02",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 44765685,
+          "codexAccount": null,
+          "codexTotal": 5122833,
+          "codexUtcTotal": 5122833,
+          "day": "2026-07-01",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 10250318,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-06-30",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 34818168,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-06-29",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 34961255,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-06-26",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 29755985,
+          "codexAccount": null,
+          "codexTotal": 1104411,
+          "codexUtcTotal": 1104411,
+          "day": "2026-06-25",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 5116877,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-06-24",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 44663874,
+          "codexAccount": null,
+          "codexTotal": 12096348,
+          "codexUtcTotal": 12096348,
+          "day": "2026-06-23",
+          "deviceId": "demo-mac-1"
+        },
+        {
+          "claudeTotal": 57001786,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": 0,
+          "day": "2026-06-22",
+          "deviceId": "demo-mac-1"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.token_usage_device_daily.get.json",
+      "type": "[TokenUsageDailyRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].day",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].day",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].day",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].device_id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].device_id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].device_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].device_id",
+          "result": [
+            [
+              "$[0].deviceId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].claude_total",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].claude_total",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].claude_total",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].claude_total",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].claude_total",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].claude_total",
+          "result": [
+            [
+              "$[0].claudeTotal",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].codex_total",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].codex_total",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0].codex_total",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].codex_total",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].codex_total",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].codex_total",
+          "result": [
+            [
+              "$[0].codexTotal",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].codex_utc_total",
+          "result": [
+            [
+              "$[0].codexUtcTotal",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].codex_utc_total",
+          "result": [
+            [
+              "$[0].codexUtcTotal",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].codex_utc_total",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$[0].codex_utc_total",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].codex_utc_total",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].codex_utc_total",
+          "result": [
+            [
+              "$[0].codexUtcTotal",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].codex_account",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].codex_account",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].codex_account",
+          "result": [
+            [
+              "$[0].codexAccount",
+              3
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-09-17T03:30:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000110",
+          "startedAt": "2026-09-17T01:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 11700,
+          "endedAt": "2026-09-16T08:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000109",
+          "startedAt": "2026-09-16T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10800,
+          "endedAt": "2026-09-16T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000108",
+          "startedAt": "2026-09-16T01:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13800,
+          "endedAt": "2026-09-15T07:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000107",
+          "startedAt": "2026-09-15T03:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 6900,
+          "endedAt": "2026-09-15T02:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000106",
+          "startedAt": "2026-09-15T00:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 17100,
+          "endedAt": "2026-09-11T08:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000105",
+          "startedAt": "2026-09-11T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12000,
+          "endedAt": "2026-09-11T03:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000104",
+          "startedAt": "2026-09-11T00:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 14700,
+          "endedAt": "2026-09-10T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000103",
+          "startedAt": "2026-09-10T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-09-10T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000102",
+          "startedAt": "2026-09-10T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 20700,
+          "endedAt": "2026-09-09T10:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000101",
+          "startedAt": "2026-09-09T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-09-09T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000100",
+          "startedAt": "2026-09-09T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16200,
+          "endedAt": "2026-09-08T09:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000099",
+          "startedAt": "2026-09-08T04:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13200,
+          "endedAt": "2026-09-08T03:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000098",
+          "startedAt": "2026-09-08T00:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 20100,
+          "endedAt": "2026-09-07T10:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000097",
+          "startedAt": "2026-09-07T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 11400,
+          "endedAt": "2026-09-07T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000096",
+          "startedAt": "2026-09-07T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 15300,
+          "endedAt": "2026-09-04T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000095",
+          "startedAt": "2026-09-04T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9900,
+          "endedAt": "2026-09-04T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000094",
+          "startedAt": "2026-09-04T01:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 15300,
+          "endedAt": "2026-09-03T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000093",
+          "startedAt": "2026-09-03T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 5700,
+          "endedAt": "2026-09-03T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000092",
+          "startedAt": "2026-09-03T02:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13800,
+          "endedAt": "2026-09-02T09:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000091",
+          "startedAt": "2026-09-02T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-09-02T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000090",
+          "startedAt": "2026-09-02T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 14700,
+          "endedAt": "2026-09-01T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000089",
+          "startedAt": "2026-09-01T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 5700,
+          "endedAt": "2026-09-01T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000088",
+          "startedAt": "2026-09-01T02:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 14400,
+          "endedAt": "2026-08-31T09:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000087",
+          "startedAt": "2026-08-31T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10500,
+          "endedAt": "2026-08-31T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000086",
+          "startedAt": "2026-08-31T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-08-29T06:30:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000085",
+          "startedAt": "2026-08-29T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16500,
+          "endedAt": "2026-08-28T09:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000084",
+          "startedAt": "2026-08-28T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9900,
+          "endedAt": "2026-08-28T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000083",
+          "startedAt": "2026-08-28T01:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 14400,
+          "endedAt": "2026-08-27T08:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000082",
+          "startedAt": "2026-08-27T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 4500,
+          "endedAt": "2026-08-27T03:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000081",
+          "startedAt": "2026-08-27T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16500,
+          "endedAt": "2026-08-26T08:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000080",
+          "startedAt": "2026-08-26T04:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-08-26T03:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000079",
+          "startedAt": "2026-08-26T00:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 15300,
+          "endedAt": "2026-08-24T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000078",
+          "startedAt": "2026-08-24T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13200,
+          "endedAt": "2026-08-24T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000077",
+          "startedAt": "2026-08-24T01:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13500,
+          "endedAt": "2026-08-21T07:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000076",
+          "startedAt": "2026-08-21T03:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 5400,
+          "endedAt": "2026-08-21T02:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000075",
+          "startedAt": "2026-08-21T00:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 18900,
+          "endedAt": "2026-08-20T10:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000074",
+          "startedAt": "2026-08-20T05:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 11400,
+          "endedAt": "2026-08-20T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000073",
+          "startedAt": "2026-08-20T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 17400,
+          "endedAt": "2026-08-19T10:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000072",
+          "startedAt": "2026-08-19T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12000,
+          "endedAt": "2026-08-19T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000071",
+          "startedAt": "2026-08-19T01:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-08-18T09:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000070",
+          "startedAt": "2026-08-18T06:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13200,
+          "endedAt": "2026-08-18T05:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000069",
+          "startedAt": "2026-08-18T02:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 17100,
+          "endedAt": "2026-08-17T09:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000068",
+          "startedAt": "2026-08-17T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9300,
+          "endedAt": "2026-08-17T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000067",
+          "startedAt": "2026-08-17T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 20100,
+          "endedAt": "2026-08-14T10:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000066",
+          "startedAt": "2026-08-14T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12300,
+          "endedAt": "2026-08-14T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000065",
+          "startedAt": "2026-08-14T01:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 18300,
+          "endedAt": "2026-08-12T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000064",
+          "startedAt": "2026-08-12T04:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 7500,
+          "endedAt": "2026-08-12T03:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000063",
+          "startedAt": "2026-08-12T01:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16500,
+          "endedAt": "2026-08-11T09:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000062",
+          "startedAt": "2026-08-11T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13200,
+          "endedAt": "2026-08-11T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000061",
+          "startedAt": "2026-08-11T01:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 15300,
+          "endedAt": "2026-08-10T09:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000060",
+          "startedAt": "2026-08-10T05:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 8100,
+          "endedAt": "2026-08-10T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000059",
+          "startedAt": "2026-08-10T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-08-08T06:30:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000058",
+          "startedAt": "2026-08-08T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13800,
+          "endedAt": "2026-08-07T09:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000057",
+          "startedAt": "2026-08-07T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 8100,
+          "endedAt": "2026-08-07T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000056",
+          "startedAt": "2026-08-07T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 17400,
+          "endedAt": "2026-08-06T09:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000055",
+          "startedAt": "2026-08-06T04:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-08-06T03:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000054",
+          "startedAt": "2026-08-06T00:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-08-05T08:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000053",
+          "startedAt": "2026-08-05T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10500,
+          "endedAt": "2026-08-05T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000052",
+          "startedAt": "2026-08-05T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9900,
+          "endedAt": "2026-08-04T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000051",
+          "startedAt": "2026-08-04T06:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10800,
+          "endedAt": "2026-08-04T05:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000050",
+          "startedAt": "2026-08-04T02:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 15300,
+          "endedAt": "2026-08-03T08:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000049",
+          "startedAt": "2026-08-03T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10500,
+          "endedAt": "2026-08-03T03:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000048",
+          "startedAt": "2026-08-03T00:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-08-01T06:30:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000047",
+          "startedAt": "2026-08-01T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16500,
+          "endedAt": "2026-07-31T07:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000046",
+          "startedAt": "2026-07-31T03:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9600,
+          "endedAt": "2026-07-31T02:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000045",
+          "startedAt": "2026-07-31T00:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13800,
+          "endedAt": "2026-07-30T10:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000044",
+          "startedAt": "2026-07-30T06:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-07-30T05:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000043",
+          "startedAt": "2026-07-30T02:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-07-29T08:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000042",
+          "startedAt": "2026-07-29T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9300,
+          "endedAt": "2026-07-29T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000041",
+          "startedAt": "2026-07-29T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 14700,
+          "endedAt": "2026-07-28T08:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000040",
+          "startedAt": "2026-07-28T04:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 11100,
+          "endedAt": "2026-07-28T03:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000039",
+          "startedAt": "2026-07-28T00:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16200,
+          "endedAt": "2026-07-27T10:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000038",
+          "startedAt": "2026-07-27T05:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-07-27T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000037",
+          "startedAt": "2026-07-27T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 17100,
+          "endedAt": "2026-07-24T10:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000036",
+          "startedAt": "2026-07-24T06:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13200,
+          "endedAt": "2026-07-24T05:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000035",
+          "startedAt": "2026-07-24T02:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 20100,
+          "endedAt": "2026-07-22T10:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000034",
+          "startedAt": "2026-07-22T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9900,
+          "endedAt": "2026-07-22T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000033",
+          "startedAt": "2026-07-22T01:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13500,
+          "endedAt": "2026-07-20T10:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000032",
+          "startedAt": "2026-07-20T06:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12300,
+          "endedAt": "2026-07-20T05:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000031",
+          "startedAt": "2026-07-20T02:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 18900,
+          "endedAt": "2026-07-16T10:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000030",
+          "startedAt": "2026-07-16T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12300,
+          "endedAt": "2026-07-16T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000029",
+          "startedAt": "2026-07-16T01:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 17100,
+          "endedAt": "2026-07-15T09:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000028",
+          "startedAt": "2026-07-15T05:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-07-15T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000027",
+          "startedAt": "2026-07-15T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-07-14T08:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000026",
+          "startedAt": "2026-07-14T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-07-14T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000025",
+          "startedAt": "2026-07-14T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16200,
+          "endedAt": "2026-07-10T10:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000024",
+          "startedAt": "2026-07-10T05:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 6300,
+          "endedAt": "2026-07-10T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000023",
+          "startedAt": "2026-07-10T02:15:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16500,
+          "endedAt": "2026-07-09T10:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000022",
+          "startedAt": "2026-07-09T06:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12000,
+          "endedAt": "2026-07-09T05:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000021",
+          "startedAt": "2026-07-09T02:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13800,
+          "endedAt": "2026-07-08T10:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000020",
+          "startedAt": "2026-07-08T06:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12000,
+          "endedAt": "2026-07-08T05:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000019",
+          "startedAt": "2026-07-08T02:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 11700,
+          "endedAt": "2026-07-07T07:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000018",
+          "startedAt": "2026-07-07T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 6600,
+          "endedAt": "2026-07-07T03:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000017",
+          "startedAt": "2026-07-07T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 17400,
+          "endedAt": "2026-07-06T10:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000016",
+          "startedAt": "2026-07-06T05:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10200,
+          "endedAt": "2026-07-06T04:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000015",
+          "startedAt": "2026-07-06T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 13500,
+          "endedAt": "2026-07-01T09:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000014",
+          "startedAt": "2026-07-01T05:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10800,
+          "endedAt": "2026-07-01T04:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000013",
+          "startedAt": "2026-07-01T01:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 12600,
+          "endedAt": "2026-06-30T07:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000012",
+          "startedAt": "2026-06-30T03:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 6600,
+          "endedAt": "2026-06-30T02:20:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000011",
+          "startedAt": "2026-06-30T00:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 16500,
+          "endedAt": "2026-06-26T08:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000010",
+          "startedAt": "2026-06-26T04:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10500,
+          "endedAt": "2026-06-26T03:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000009",
+          "startedAt": "2026-06-26T00:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9000,
+          "endedAt": "2026-06-25T08:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000008",
+          "startedAt": "2026-06-25T05:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 11400,
+          "endedAt": "2026-06-25T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000007",
+          "startedAt": "2026-06-25T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 10800,
+          "endedAt": "2026-06-24T07:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000006",
+          "startedAt": "2026-06-24T04:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 4500,
+          "endedAt": "2026-06-24T03:00:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000005",
+          "startedAt": "2026-06-24T01:45:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 14700,
+          "endedAt": "2026-06-23T07:15:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000004",
+          "startedAt": "2026-06-23T03:10:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 9600,
+          "endedAt": "2026-06-23T02:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000003",
+          "startedAt": "2026-06-23T00:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 15300,
+          "endedAt": "2026-06-22T09:45:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000002",
+          "startedAt": "2026-06-22T05:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "durationSeconds": 11400,
+          "endedAt": "2026-06-22T04:40:00+00:00",
+          "id": "d0000000-0000-4000-8000-5e5510000001",
+          "startedAt": "2026-06-22T01:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rest.work_sessions.get@limit=5000.json",
+      "type": "[WorkSessionRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0].duration_seconds",
+          "result": [
+            [
+              "$[0].durationSeconds",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$[0].duration_seconds",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].duration_seconds",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$[0].duration_seconds",
+          "result": [
+            [
+              "$[0].durationSeconds",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "character": "ghost",
+        "have": null,
+        "need": null,
+        "price": 100,
+        "rubyBalance": 20,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.buy_character.json",
+      "type": "BuyCharacterResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.character",
+          "result": [
+            [
+              "$.character",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.character",
+          "result": [
+            [
+              "$.character",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.character",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.character",
+          "result": [
+            [
+              "$.character",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.price",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.price",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.price",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.ruby_balance",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.ruby_balance",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.ruby_balance",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              4294967296
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending.json",
+      "type": "CharacterGiftPendingResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-gift-got.json",
+      "type": "CharacterGiftPendingResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "gift": {
+          "createdAt": "2026-09-17T04:30:00.123456+00:00",
+          "id": "d0000000-0000-4000-8000-0000000c4e01",
+          "note": null,
+          "options": [
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ]
+        },
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-gift.json",
+      "type": "CharacterGiftPendingResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.gift",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gift",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.id",
+          "result": [
+            [
+              "$.gift.id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "empty",
+          "path": "$.gift.options",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.options[0]",
+          "result": [
+            [
+              "$.gift.options",
+              [
+                "aing_cake_choco"
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.options[0]",
+          "result": [
+            [
+              "$.gift.options",
+              [
+                "aing_cake_choco"
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.options[0]",
+          "result": [
+            [
+              "$.gift.options",
+              [
+                "aing_cake_choco"
+              ]
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.note",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$.gift.note",
+          "result": [
+            [
+              "$.gift.note",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.note",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.created_at",
+          "result": [
+            [
+              "$.gift.createdAt",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "characterId": "aing_cake_strawberry",
+        "minProtocol": null,
+        "replayed": false,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.claim_character_gift.json",
+      "type": "CharacterGiftClaimResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "characterId": "aing_cake_choco",
+        "minProtocol": null,
+        "replayed": false,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.claim_character_gift@aing_cake_choco.json",
+      "type": "CharacterGiftClaimResponse",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "adminNote": null,
+          "adminNoteAt": null,
+          "appVersion": "iOS 0.1.0 (1)",
+          "avatarUrl": null,
+          "body": "폰에서도 오늘 할 일을 위젯으로 체크하고 싶어요. 잠금 화면에서 바로 보면 좋겠어요.",
+          "createdAt": "2026-09-17T02:30:00+00:00",
+          "displayName": "새벽",
+          "id": "d0000000-0000-4000-8000-00000000fb03",
+          "kind": "request",
+          "osVersion": "iOS 26.5",
+          "status": "open",
+          "updatedAt": "2026-09-17T02:30:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "adminNote": "알려 주셔서 고마워요! 원인을 찾았고 다음 버전에서 고칠게요.",
+          "adminNoteAt": "2026-09-16T08:00:00+00:00",
+          "appVersion": "0.3.31 (84)",
+          "avatarUrl": null,
+          "body": "미니게임 순위에서 어제 1등 카드가 가끔 비어 보여요. 앱을 다시 열면 돌아와요.",
+          "createdAt": "2026-09-15T05:12:00+00:00",
+          "displayName": "새벽",
+          "id": "d0000000-0000-4000-8000-00000000fb02",
+          "kind": "bug",
+          "osVersion": "15.6.1",
+          "status": "doing",
+          "updatedAt": "2026-09-16T08:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "adminNote": "반영했어요.",
+          "adminNoteAt": "2026-09-02T01:00:00+00:00",
+          "appVersion": "0.3.28 (80)",
+          "avatarUrl": null,
+          "body": "팀 리그에 지난주 순위도 보고 싶어요.",
+          "createdAt": "2026-08-28T09:40:00+00:00",
+          "displayName": "새벽",
+          "id": "d0000000-0000-4000-8000-00000000fb01",
+          "kind": "request",
+          "osVersion": "15.6",
+          "status": "done",
+          "updatedAt": "2026-09-02T01:00:00+00:00",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.feedback_list.json",
+      "type": "[FeedbackReportRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].id",
+          "result": [
+            [
+              "$[0].id",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].kind",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].kind",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].kind",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].kind",
+          "result": [
+            [
+              "$[0].kind",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].body",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].body",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].body",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].body",
+          "result": [
+            [
+              "$[0].body",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].status",
+          "result": [
+            [
+              "$[0].status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].status",
+          "result": [
+            [
+              "$[0].status",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].status",
+          "result": [
+            [
+              "$[0].status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].admin_note",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].admin_note",
+          "result": [
+            [
+              "$[0].adminNote",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].admin_note",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].admin_note_at",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].admin_note_at",
+          "result": [
+            [
+              "$[0].adminNoteAt",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].admin_note_at",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].app_version",
+          "result": [
+            [
+              "$[0].appVersion",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].app_version",
+          "result": [
+            [
+              "$[0].appVersion",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].app_version",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].app_version",
+          "result": [
+            [
+              "$[0].appVersion",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].os_version",
+          "result": [
+            [
+              "$[0].osVersion",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].os_version",
+          "result": [
+            [
+              "$[0].osVersion",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].os_version",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].os_version",
+          "result": [
+            [
+              "$[0].osVersion",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].created_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].created_at",
+          "result": [
+            [
+              "$[0].createdAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].updated_at",
+          "result": [
+            [
+              "$[0].updatedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].updated_at",
+          "result": [
+            [
+              "$[0].updatedAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].updated_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].updated_at",
+          "result": [
+            [
+              "$[0].updatedAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].avatar_url",
+          "result": [
+            [
+              "$[0].avatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].avatar_url",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": "2026-09-16T08:00:00+00:00",
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.feedback_reply_latest.json",
+      "type": "String",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characterID": "squirrel",
+        "cost": 2,
+        "have": null,
+        "need": null,
+        "replayed": false,
+        "requestID": "d0000000-0000-4000-8000-00000000a002",
+        "shards": 21,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.gacha_exchange.json",
+      "type": "GachaExchangeResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              {
+                "$case": "unknown",
+                "$value": "zz_unknown_value"
+              }
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.shards",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.cost",
+          "result": [
+            [
+              "$.cost",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.cost",
+          "result": [
+            [
+              "$.cost",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.cost",
+          "result": [
+            [
+              "$.cost",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.cost",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.cost",
+          "result": [
+            [
+              "$.cost",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.cost",
+          "result": [
+            [
+              "$.cost",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "characterID": "aing_rainbow",
+        "cost": 20,
+        "have": null,
+        "need": null,
+        "replayed": false,
+        "requestID": "d0000000-0000-4000-8000-00000000a003",
+        "shards": 3,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.gacha_exchange@aing_rainbow.json",
+      "type": "GachaExchangeResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characterID": "aing_rainbow",
+        "duplicate": false,
+        "have": null,
+        "need": null,
+        "price": 50,
+        "replayed": false,
+        "requestID": "d0000000-0000-4000-8000-00000000a001",
+        "rubyBalance": 70,
+        "shards": 23,
+        "shardsGained": 0,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.gacha_pull.json",
+      "type": "GachaPullResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              {
+                "$case": "unknown",
+                "$value": "zz_unknown_value"
+              }
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.character_id",
+          "result": [
+            [
+              "$.characterID",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.duplicate",
+          "result": [
+            [
+              "$.duplicate",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.duplicate",
+          "result": [
+            [
+              "$.duplicate",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.duplicate",
+          "result": [
+            [
+              "$.duplicate",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.duplicate",
+          "result": [
+            [
+              "$.duplicate",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.shards_gained",
+          "result": [
+            [
+              "$.shardsGained",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.shards_gained",
+          "result": [
+            [
+              "$.shardsGained",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.shards_gained",
+          "result": [
+            [
+              "$.shardsGained",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.shards_gained",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.shards_gained",
+          "result": [
+            [
+              "$.shardsGained",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.shards_gained",
+          "result": [
+            [
+              "$.shardsGained",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.shards",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.shards",
+          "result": [
+            [
+              "$.shards",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.ruby_balance",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.ruby_balance",
+          "result": [
+            [
+              "$.rubyBalance",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$.price",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$.price",
+          "result": [
+            [
+              "$.price",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.request_id",
+          "result": [
+            [
+              "$.requestID",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.replayed",
+          "result": [
+            [
+              "$.replayed",
+              null
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "inviteCode": "AING7K2Q"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.my_team_invite_code.json",
+      "type": "[InviteCodeRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].invite_code",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$[0].invite_code",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].invite_code",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$[0].invite_code",
+          "result": [
+            [
+              "$[0].inviteCode",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "character": "shiba",
+        "id": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.set_character.json",
+      "type": "SetCharacterResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.character",
+          "result": [
+            [
+              "$.character",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.character",
+          "result": [
+            [
+              "$.character",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.character",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.character",
+          "result": [
+            [
+              "$.character",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "character": "aing_cake_choco",
+        "id": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.set_character@aing_cake_choco.json",
+      "type": "SetCharacterResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "character": "aing_cake_strawberry",
+        "id": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.set_character@aing_cake_strawberry.json",
+      "type": "SetCharacterResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "displayName": "새벽별",
+        "maxLength": null,
+        "retryAfterSeconds": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.set_display_name.json",
+      "type": "DisplayNameChangeResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.display_name",
+          "result": [
+            [
+              "$.displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.display_name",
+          "result": [
+            [
+              "$.displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.display_name",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.display_name",
+          "result": [
+            [
+              "$.displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "maxLength": null,
+        "status": "ok",
+        "statusMessage": "오후엔 리뷰 몰아서 해요 📝"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.set_status_message.json",
+      "type": "SetStatusMessageResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.status_message",
+          "result": [
+            [
+              "$.statusMessage",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.status_message",
+          "result": [
+            [
+              "$.statusMessage",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.status_message",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status_message",
+          "result": [
+            [
+              "$.statusMessage",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": "d0000000-0000-4000-8000-00000000fb04",
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.submit_feedback.json",
+      "type": "String",
+      "variants": []
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+  "golden": "wire/decode-demo-me",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "decoder": "JSONDecoder(keyDecodingStrategy: .convertFromSnakeCase) — 서비스와 같다. TodoSyncResponse 만 키 변환 없는 JSONDecoder(TodoSyncResponse.decode)",
+    "dump": "contract/README.md §2-3 GoldenMirror 정규 덤프. 실패하면 \"$error\"",
+    "input": "case id = 저장소 상대 경로(픽스처 원문을 Kotlin 이 직접 읽는다 — 복사 0). 합성 입력은 case.json 에 싣는다",
+    "noDecode": [],
+    "otherLanes": [
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rpc.achievements_status.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rpc.weekly_work_status.json",
+        "W1-c WeeklyWorkStatus(weekly)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.achievement_claim.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.achievement_claim@poke10.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.achievement_claim@streak14.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.achievement_claim@todo3.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.achievements_status.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.achievements_status@demo-all-claimed.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.achievements_status@demo-progress.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.daily_mission_claim.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.daily_mission_claim@daily_gomoku.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.daily_mission_claim@daily_timing_bar.json",
+        "W1-c AchievementStatus(missions)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.weekly_work_claim.json",
+        "W1-c WeeklyWorkStatus(weekly)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.weekly_work_status.json",
+        "W1-c WeeklyWorkStatus(weekly)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.weekly_work_status@demo-week-done.json",
+        "W1-c WeeklyWorkStatus(weekly)"
+      ],
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.weekly_work_status@demo-week-legacy.json",
+        "W1-c WeeklyWorkStatus(weekly)"
+      ]
+    ],
+    "scrub": "덤프·결과의 JWT 모양 글자(eyJ + 20자 이상)는 <jwt:길이> 로 바꿔 싣는다(비밀 검사) — Kotlin 도 같은 규칙으로 바꿔 견준다",
+    "variants": "경로($.a[0].b) × op: remove · null · str(\"3\") · num(3) · enum(\"zz_unknown_value\") · bool(true) · float0(정수 글자+\".0\") · float5(+\".5\") · big(4294967296 — 2^31 넘는 정수) · int(3) · empty([]). 배열은 첫 원소 안만. 같은 (타입·정규 경로·op)는 처음 한 번만. result = \"error\" 또는 원본 덤프와 다른 점 [[경로, 새 값]…](\"$absent\" = 빠짐)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/ChessWire.swift",
+    "Sources/CheckCore/TetrisWire.swift",
+    "Sources/CheckCore/CharacterGift.swift",
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckCore/Gacha.swift",
+    "Sources/CheckCore/TodoSync.swift",
+    "Sources/CheckCore/AppUserCharacters.swift",
+    "Sources/CheckCore/StatusMessage.swift",
+    "Sources/CheckCore/SupabaseWorkServiceBlocks.swift",
+    "Sources/CheckCore/SupabaseWorkServiceCharacter.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift",
+    "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+    "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
+    "Sources/CheckMobileKit/Me/MeProfileService.swift",
+    "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+  ]
+}

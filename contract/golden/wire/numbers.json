@@ -1,0 +1,595 @@
+{
+  "cases": [
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "0000000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000000"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000000"
+      },
+      "String": "error",
+      "id": "0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "8000000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000000"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000000"
+      },
+      "String": "error",
+      "id": "-0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4008000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000003"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000003"
+      },
+      "String": "error",
+      "id": "3"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "c008000000000000"
+      },
+      "Int": {
+        "$int": "0xfffffffffffffffd"
+      },
+      "OptionalInt": {
+        "$int": "0xfffffffffffffffd"
+      },
+      "String": "error",
+      "id": "-3"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4008000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000003"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000003"
+      },
+      "String": "error",
+      "id": "3.0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "400c000000000000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "3.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "c004000000000000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "-2.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "3fe0000000000000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "0.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4059000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000064"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000064"
+      },
+      "String": "error",
+      "id": "1e2"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4059000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000064"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000064"
+      },
+      "String": "error",
+      "id": "1E2"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "3f847ae147ae147b"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "1e-2"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "3ff8000000000000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "15e-1"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "402e000000000000"
+      },
+      "Int": {
+        "$int": "0x000000000000000f"
+      },
+      "OptionalInt": {
+        "$int": "0x000000000000000f"
+      },
+      "String": "error",
+      "id": "1.5e1"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4093380000000000"
+      },
+      "Int": {
+        "$int": "0x00000000000004ce"
+      },
+      "OptionalInt": {
+        "$int": "0x00000000000004ce"
+      },
+      "String": "error",
+      "id": "123.0e1"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "8000000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000000"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000000"
+      },
+      "String": "error",
+      "id": "-0.0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "41dfffffffc00000"
+      },
+      "Int": {
+        "$int": "0x000000007fffffff"
+      },
+      "OptionalInt": {
+        "$int": "0x000000007fffffff"
+      },
+      "String": "error",
+      "id": "2147483647"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "41e0000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000080000000"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000080000000"
+      },
+      "String": "error",
+      "id": "2147483648"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "41f0000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000100000000"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000100000000"
+      },
+      "String": "error",
+      "id": "4294967296"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "41f0000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000100000000"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000100000000"
+      },
+      "String": "error",
+      "id": "4294967296.0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "41f0000000080000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "4294967296.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4340000000000000"
+      },
+      "Int": {
+        "$int": "0x0020000000000000"
+      },
+      "OptionalInt": {
+        "$int": "0x0020000000000000"
+      },
+      "String": "error",
+      "id": "9007199254740992"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4340000000000000"
+      },
+      "Int": {
+        "$int": "0x0020000000000001"
+      },
+      "OptionalInt": {
+        "$int": "0x0020000000000001"
+      },
+      "String": "error",
+      "id": "9007199254740993"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4340000000000000"
+      },
+      "Int": {
+        "$int": "0x0020000000000001"
+      },
+      "OptionalInt": {
+        "$int": "0x0020000000000001"
+      },
+      "String": "error",
+      "id": "9007199254740993.0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4340000000000001"
+      },
+      "Int": {
+        "$int": "0x0020000000000001"
+      },
+      "OptionalInt": {
+        "$int": "0x0020000000000001"
+      },
+      "String": "error",
+      "id": "9007199254740993.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4340000000000000"
+      },
+      "Int": {
+        "$int": "0x0020000000000001"
+      },
+      "OptionalInt": {
+        "$int": "0x0020000000000001"
+      },
+      "String": "error",
+      "id": "9007199254740993e0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4340000000000000"
+      },
+      "Int": {
+        "$int": "0x0020000000000001"
+      },
+      "OptionalInt": {
+        "$int": "0x0020000000000001"
+      },
+      "String": "error",
+      "id": "9.007199254740993e15"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4345ee2a2eb5a5c4"
+      },
+      "Int": {
+        "$int": "0x002bdc545d6b4b87"
+      },
+      "OptionalInt": {
+        "$int": "0x002bdc545d6b4b87"
+      },
+      "String": "error",
+      "id": "12345678901234567.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "43118b54f22aeb02"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "1234567890123456.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4376345785d8a000"
+      },
+      "Int": {
+        "$int": "0x016345785d89ffff"
+      },
+      "OptionalInt": {
+        "$int": "0x016345785d89ffff"
+      },
+      "String": "error",
+      "id": "99999999999999999.9"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "43e0000000000000"
+      },
+      "Int": {
+        "$int": "0x7fffffffffffffff"
+      },
+      "OptionalInt": {
+        "$int": "0x7fffffffffffffff"
+      },
+      "String": "error",
+      "id": "9223372036854775807"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "43e0000000000000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "9223372036854775808"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "43e0000000000000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "9223372036854775807.0"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "c3e0000000000000"
+      },
+      "Int": {
+        "$int": "0x8000000000000000"
+      },
+      "OptionalInt": {
+        "$int": "0x8000000000000000"
+      },
+      "String": "error",
+      "id": "-9223372036854775808"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "c3e0000000000000"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "-9223372036854775809"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "c340000000000001"
+      },
+      "Int": {
+        "$int": "0xffdfffffffffffff"
+      },
+      "OptionalInt": {
+        "$int": "0xffdfffffffffffff"
+      },
+      "String": "error",
+      "id": "-9007199254740993.5"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "3ff0000000000001"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "1.0000000000000002"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4000000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000002"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000002"
+      },
+      "String": "error",
+      "id": "2.0000000000000001"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "4020000000000000"
+      },
+      "Int": {
+        "$int": "0x0000000000000008"
+      },
+      "OptionalInt": {
+        "$int": "0x0000000000000008"
+      },
+      "String": "error",
+      "id": "7.99999999999999999"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "430c6bf526340000"
+      },
+      "Int": {
+        "$int": "0x00038d7ea4c68000"
+      },
+      "OptionalInt": {
+        "$int": "0x00038d7ea4c68000"
+      },
+      "String": "error",
+      "id": "1e15"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "43e158e460913d00"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "1e19"
+    },
+    {
+      "Bool": "error",
+      "Double": "error",
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "1e400"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "7fefffffffffffff"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "1.7976931348623157e308"
+    },
+    {
+      "Bool": "error",
+      "Double": {
+        "$f64": "0000000000000001"
+      },
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "4.9e-324"
+    },
+    {
+      "Bool": "error",
+      "Double": "error",
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "3",
+      "id": "\"3\""
+    },
+    {
+      "Bool": true,
+      "Double": "error",
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "true"
+    },
+    {
+      "Bool": "error",
+      "Double": "error",
+      "Int": "error",
+      "OptionalInt": null,
+      "String": "error",
+      "id": "null"
+    },
+    {
+      "Bool": "error",
+      "Double": "error",
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "[]"
+    },
+    {
+      "Bool": "error",
+      "Double": "error",
+      "Int": "error",
+      "OptionalInt": "error",
+      "String": "error",
+      "id": "{}"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift",
+  "golden": "wire/numbers",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "rule": "JSONDecoder 로 {\"v\": 글자} 를 칸 타입별로 읽은 결과(error = 던짐). Int 는 64비트 16진"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkService.swift"
+  ]
+}

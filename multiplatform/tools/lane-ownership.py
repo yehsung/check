@@ -287,7 +287,7 @@ class Lanes:
         return "outside", "이 갈래 owns 밖"
 
 
-BRANCH_LANE = re.compile(r"xplat/w(\d+)-([a-z]\d*)")
+BRANCH_LANE = re.compile(r"xplat/w(\d+)-([a-z])(\d*)")
 # 통합 브랜치(조정자 대리): xplat/main · 웨이브 통합 xplat/w<N>-int · 묶음 통합 xplat/int-<소문자로 시작하는 이름>(3차 묶음부터).
 INTEGRATION_BRANCH = re.compile(r"xplat/(?:main|w\d+-int|int-[a-z][a-z0-9]*)")
 
@@ -300,9 +300,14 @@ def resolve_branch(lanes: Lanes, branch: str):
         return "coordinator"
     m = BRANCH_LANE.fullmatch(branch)
     if m:
-        lane = f"W{m.group(1)}-{m.group(2)}"
+        lane = f"W{m.group(1)}-{m.group(2)}{m.group(3)}"
         if lane in lanes.lanes:
             return lane
+        # 같은 갈래를 다시 돌릴 때 옛 브랜치를 덮지 않으려고 숫자 꼬리를 붙인다(5차 W0-f ③ = xplat/w0-f3, G §8-16).
+        # 그 이름의 갈래(W3-c1 같은)가 없고 꼬리를 뗀 갈래가 있을 때만 뗀다 — 소유 검사는 뗀 갈래의 owns 그대로다.
+        base = f"W{m.group(1)}-{m.group(2)}"
+        if m.group(3) and base in lanes.lanes:
+            return base
         raise ValueError(f"{branch}: lanes.yml 에 갈래 {lane} 가 없다")
     raise ValueError(f"{branch}: 갈래로 풀리지 않는 xplat/ 브랜치(xplat/w<N>-<갈래> · xplat/w<N>-int · xplat/int-<x> · xplat/main 만)")
 
@@ -509,6 +514,7 @@ def self_test(lanes_path: str) -> int:
         ("main", None), ("feature/x", None),
         ("xplat/w0-a-fix", ValueError), ("xplat/W0-a", ValueError), ("xplat/w9-z", ValueError),
         ("xplat/w3-c", ValueError), ("xplat/foo", ValueError),
+        ("xplat/w0-f3", "W0-f"), ("xplat/w1-c2", "W1-c"), ("xplat/w3-c9", ValueError), ("xplat/w0-f3-x", ValueError),
         ("xplat/int-a", "coordinator"), ("xplat/int-b2", "coordinator"),
         ("xplat/int", ValueError), ("xplat/int-", ValueError), ("xplat/int-A", ValueError), ("xplat/int-a-fix", ValueError),
     ]

@@ -95,6 +95,21 @@ else
   echo "gate-$KIND: multiplatform/tools/golden-digest.py 가 없다(W0-b 병합 전)" >&2
 fi
 
+# emu.sh 안전장치 자기 시험(W0-f ③ 검증 지적 — 저장소 안 회귀 그물이 없었다): 가짜 SDK·가짜 HOME 으로 --writable 거부
+# (공용 이름·대소문자·별칭 .ini·보호 표식) · 기본 -read-only · 기본 봉인 · stop 의 sync 순서 · avd-clone · avd-protect 를 잰다.
+# 진짜 에뮬레이터·adb·~/.android·망을 쓰지 않는다. emu.sh 는 맥·Linux 도구라 Windows 에서는 돌지 않는다(그 줄을 찍는다).
+emu_rc=0
+emu_status="not-run(windows)"
+if [[ "$OS" != windows ]]; then
+  emu_log="$MP/build/gate/emu-self-test.log"
+  mkdir -p "$MP/build/gate"
+  /bin/bash "$HERE/emu.sh" self-test > "$emu_log" 2>&1 || emu_rc=$?
+  emu_status="exit=$emu_rc"
+  grep -E '^self-test: (FAIL|사례)' "$emu_log" | sed "s/^/gate-$KIND: emu.sh /" || true
+else
+  echo "gate-$KIND: emu.sh self-test 안 돎(Windows — emu.sh 는 맥·Linux 도구)"
+fi
+
 # 시험 JVM 이 봉인 프로세스의 자손인지(SealAncestryTest). Windows 의 bash PID 는 Windows PID 가 아니라 뺀다.
 if [[ "$OS" != windows ]]; then export AINGCHECK_GATE_PID="$$"; fi
 
@@ -161,9 +176,10 @@ prefs_after="absent"
 if [[ -e "$prefs_plist" ]]; then prefs_after="$(stat -f '%m' "$prefs_plist" 2>/dev/null || echo present)"; fi
 
 status=0
-echo "gate-$KIND: os=$OS gradle-exit=$rc golden-digest-exit=$golden_rc elapsed=${elapsed}s canary=$canary_status"
+echo "gate-$KIND: os=$OS gradle-exit=$rc golden-digest-exit=$golden_rc emu-self-test=$emu_status elapsed=${elapsed}s canary=$canary_status"
 if [[ $rc -ne 0 ]]; then status=1; fi
 if [[ $golden_rc -ne 0 ]]; then echo "gate-$KIND: golden-digest --check 빨강(exit $golden_rc)" >&2; status=1; fi
+if [[ $emu_rc -ne 0 ]]; then echo "gate-$KIND: emu.sh self-test 빨강(exit $emu_rc) — $MP/build/gate/emu-self-test.log" >&2; status=1; fi
 if [[ "$canary_status" != "ran" ]]; then echo "gate-$KIND: NetworkCanaryTest 가 초록으로 돌지 않았다($canary_status)" >&2; status=1; fi
 if [[ -n "$new_home" ]]; then echo "gate-$KIND: 시험이 \$HOME 에 새 항목을 남겼다: $new_home" >&2; status=1; fi
 if [[ "$prefs_before" != "$prefs_after" ]]; then echo "gate-$KIND: java.util.prefs plist 가 바뀌었다($prefs_before → $prefs_after)" >&2; status=1; fi

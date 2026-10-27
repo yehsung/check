@@ -202,3 +202,31 @@ Kotlin 은 `Golden.loadProbe("w0b-probe/<이름>")`. **W0-f ③(ART API 26·36)*
 `nfc.json` 의 Foundation 어긋남(맥·iOS 가 서버·JVM 과 다르게 정규화하는 입력 — W1-c 가 Kotlin 을 어느 쪽에 맞출지 정한다):
 완성형 LV + 종성 자모(`ac00 11a8` → Foundation 그대로, 표준 `ac01`) · 옛 종성(`1100 1161 11c3` → Foundation `ac1c` = 엉뚱한 음절, 표준은 조합 안 함) ·
 결합 등급 재배열 누락(`0f73`/`0345` 섞임 3줄) · 태그 글자 + 결합 점(`e0067 0307` → Foundation `0121`).
+
+### 6-1. ART 실측(W0-f ③) — **2026-10-28 에 한 번 잰 스냅숏**(게이트가 다시 재지 않는다)
+
+같은 표를 계측 APK assets 로 읽어 맥 arm64 에뮬레이터에서 쟀다. 봉인(sandbox-exec) · `-read-only` · debug 계측 APK.
+측정기는 JVM 쪽과 **같은 소스**다(JVM 은 맥 JDK 21.0.10 aarch64 로 위 표 숫자를 그대로 재현). "Swift" 는 이 표(1b8260d), "JDK" 는 위 JVM 실측이다.
+잰 판: API 26 = `system-images/android-26/google_apis/arm64-v8a` Pkg.Revision 1(OSR1.180418.028.A3) · API 36 = `system-images/android-36/google_apis_playstore/arm64-v8a`
+Pkg.Revision 7(BE2A.250530.026.D1). **27~35 와 실기기는 재지 않았다** — 기기의 ICU·tzdata 는 시스템 업데이트로 바뀔 수 있다.
+
+| 표 | API 26 — Android 8.0 · ICU 58.2 · Unicode 9.0 · tzdata 2017b | API 36 — Android 16 · ICU 76.1 · Unicode 16.0 · tzdata 2025a |
+|---|---|---|
+| `pow3.json` | `Math.pow` = `StrictMath.pow` = JDK aarch64 비트(지문 같음) → Darwin 과 **98,069**개 다름 | `Math.pow`(bionic libm) Darwin 과 **1,606**개, `StrictMath.pow` 는 JDK 와 같은 98,069 · 둘끼리 98,075 → **ART `Math.pow` 비트는 API 수준마다 다르다** |
+| `gravity.json` | 단계 18 이 1ulp(`Math`·`Strict` 둘 다) | `Math.pow` 20단계 모두 Darwin 과 같음, `StrictMath` 는 단계 18 |
+| `text-scalars.json` | 일반 범주 **31,683** · 보이는 글자 31,610 · White_Space 0 · NFC 안정 0(JDK 와는 21,066 · 20,995). 31,629 는 ART 쪽 Cn(배정 전), 54 는 둘 다 배정된 글자의 범주 차이 | 일반 범주 **4,804** · 보이는 글자 4,803 · White_Space 0 · NFC 안정 0(JDK 와는 5,813 — ART 가 더 새 판). 4,803 은 ART 쪽 Cn, 1 은 U+0295(Ll→Lo) |
+| `graphemes.json` | `BreakIterator`(java.text = android.icu 같은 답) **26줄**: InCB 2(JDK 와 같은 줄) + 이모지 수식자 U+1F3FB~1F3FF 가 든 줄 23 + ZWJ 뒤 그림 문자 1(g-023). 정규식 `\X` 는 99줄 | **0줄**(JDK 의 InCB 2줄도 Swift 와 같다). `\X` 도 0 |
+| `nfc.json` | `java.text.Normalizer` = `android.icu.text.Normalizer2` = JDK — 300줄 전부 같다 → Swift 와는 **위의 6줄만** 다르다 | 같음(6줄 · JDK 와 0) |
+| `kst.json` | kotlinx-datetime(디슈거링 없이 java.time) **63건** 다름 — 전부 1948-05-31~1951-09-09 서머타임(tzdata 2017b 의 옛 이력). 1952 이후 1,240건 0 | 0건 |
+
+덧붙여 잰 것: `Character.getType` 과 `android.icu.lang.UCharacter.getType` 은 두 API 모두 0 차이. 정규식 공백 속성 이름이 런타임마다 다르다 — JDK 21 은 `\p{IsWhite_Space}` 만(`\p{White_Space}` 는 PatternSyntaxException), ART API 26 은 `\p{White_Space}` 만, API 36 은 `\p{IsWhite_Space}` 도 된다. 공백 판정을 정규식 이름에 기대지 않는다.
+
+다시 재는 법과 맞춰 볼 값: 측정기 원문은 [`measurements/w0f-art/`](measurements/w0f-art/README.md)(빌드에 들지 않는다 — 그 README 대로 저장소 사본에 넣어 돌린다).
+측정기는 덤프를 쓴 **뒤** 표 sha256(W0-b 골든)·pow 표 지문·구간 연속·표 크기·예외 0 을 단언한다(깨진 표면 빨강 — 표 두 개를 바꾼 APK 로 API 26·36 모두 FAILURES 를 확인).
+덤프의 정규 지문(시간 칸·단언 칸을 빼고 키를 정렬한 JSON 의 sha256, `measurements/w0f-art/canon.py`) — 같은 판에서 다시 재면 같은 값이 나와야 한다(2026-10-28 두 번 재서 같음):
+
+| 덤프 | 정규 sha256 |
+|---|---|
+| JVM(JDK 21.0.10 aarch64) | `bbffba8122dea31866f77ae558d74a8c4065aaf030be6ea464b8fd2838ef715f` |
+| ART API 26 | `38c2f326e8e54d860ce69318b54633764d98ff7e5ca1e5527bc85279c707053d` |
+| ART API 36 | `936582a472b73c397e9e2e1478c1e5a99343d11fcb49021f1861d73d6fa9c656` |

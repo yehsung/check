@@ -3,6 +3,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkHTTP.swift @ 1b8260d (serviceError 실패 분류 — 90–188)
 // 원본: Sources/CheckCore/SupabaseWorkService.swift @ 1b8260d (passwordRecoveryError·retryAfterSeconds — 1383–1432)
 // 원본: Sources/CheckMobileKit/Me/MeText.swift @ 1b8260d (계정 삭제 문구 — 885–925)
+// 원본: Sources/CheckMobileKit/Session/MobileDeviceService.swift @ 1b8260d (isMissingFunction — 91–99: 삭제 RPC 의 404 를 '아직 준비 안 됨'으로)
 //
 // 웹 계정 삭제(/delete-account)의 **순수** 부분 — 설정 읽기 · 입력 정규화 · HTTP 실패 분류 · 화면 상태기계 · 문구.
 // 네트워크는 여기서 하지 않는다(lib/delete-account-client.ts 가 fetch 를 주입받아 한다). 그래서 `node --test` 로 실서버 없이 잰다.
@@ -148,7 +149,10 @@ export function classifyHttpFailure(status: number, bodyText: string, call: Call
   } catch {
     body = null;
   }
-  if (!body) return status === 401 ? { kind: 'sessionExpired' } : { kind: 'rejected', status };
+  if (!body) {
+    if (status === 401) return { kind: 'sessionExpired' };
+    return call === 'rpc' && status === 404 ? { kind: 'schemaMissing' } : { kind: 'rejected', status };
+  }
 
   const message = [body.message, body.msg, body.error_description, body.error].map(str).find((m) => m !== null) ?? null;
   const errorCode = str(body.error_code) ?? (typeof body.code === 'string' ? str(body.code) : null);
@@ -174,12 +178,11 @@ export function classifyHttpFailure(status: number, bodyText: string, call: Call
     if (lowered.includes('invalid jwt') || lowered.includes('bad_jwt') || lowered.includes('missing sub claim')) return { kind: 'sessionExpired' };
   }
   if (status === 401) return { kind: 'sessionExpired' };
+  // 앱 MobileDeviceRPC.isMissingFunction 의 `.invalidResponse(404)` 갈래 — 함수를 모르는 서버가 PGRST202 문구 없이(본문이 JSON 이
+  //   아니거나 메시지가 없게) 404 만 줄 때도 "아직 준비 안 됨"이다. 삭제 RPC 에서만 이렇게 읽는다(앱도 그 호출에만 건다 — 로그인·코드의
+  //   404 는 그냥 거절). 메시지가 있는 404 는 앱처럼 거절로 둔다(.authMessage → fatal → rejected). JSON 이 아닌 404 는 위에서 같은 판정.
+  if (call === 'rpc' && status === 404 && message === null) return { kind: 'schemaMissing' };
   return { kind: 'rejected', status };
-}
-
-/** 사람이 다시 눌러 볼 만한 일시 장애인가(AuthErrorRules.classify 의 transient). */
-export function isTransient(f: Failure): boolean {
-  return f.kind === 'network' || f.kind === 'server' || f.kind === 'rateLimited';
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -221,6 +224,8 @@ export function failureMessage(f: Failure, stage: Stage): string {
     case 'rateLimited':
       if (stage === 'sendCode') return TEXT.alreadySent;
       if (stage === 'verify') return TEXT.cooldown;
+      // 로그인·삭제의 429 — 앱(MobileSessionStore.deleteAccount)은 일시 장애를 한데 접어 '연결을 확인'이라고 하지만, 웹은 앱 공용 문장
+      //   AuthErrorRules.message(.rateLimited)를 쓴다(일부러 갈랐다): 연결은 멀쩡한데 '연결을 확인'이라 하면 곧바로 다시 눌러 제한만 늘린다.
       return TEXT.rateLimited;
     case 'config':
       return TEXT.unavailable;
@@ -433,9 +438,12 @@ export function reduce(s: DeleteAccountState, e: DeleteAccountEvent): DeleteAcco
         // 틀린 비밀번호는 비운다(같은 값으로 또 누르지 않게). 이메일은 남긴다.
         return { ...s, phase: 'editing', password: f.kind === 'wrongCredentials' ? '' : s.password, notice };
       }
-      // 코드는 1회용이다 — 본인 확인(verify)을 지난 뒤의 실패든 코드 거절이든 같은 코드로는 다시 못 쓴다.
-      // verify 의 연결 실패만 코드를 남긴다(서버에 닿았는지 모른다 — 안 닿았으면 그 코드가 아직 산다).
-      const codeSpent = e.stage !== 'verify' || f.kind === 'codeRejected' || f.kind === 'sessionExpired';
+      // 코드는 1회용이다 — 본인 확인(verify)을 지난 뒤의 실패는 이미 쓴 코드라 비운다. verify 단계에서도 서버가 코드를 보고 거절했으면
+      // (codeRejected · 죽은 recovery 토큰 sessionExpired · 그 밖의 4xx rejected — 화면 문장은 셋 다 "코드가 맞지 않거나 만료됐어요") 비운다.
+      // 서버가 코드를 **보기 전에** 멈춘 실패만 남긴다: 연결 실패(닿았는지 모른다 — 안 닿았으면 코드가 아직 산다) · 5xx · 429 ·
+      // 배포 설정(config · schemaMissing). 그때 문장은 코드 탓을 하지 않는다(연결 확인 · 조금 뒤 · 지금은 웹에서 못 지움).
+      const codeUnchecked = f.kind === 'network' || f.kind === 'server' || f.kind === 'rateLimited' || f.kind === 'config' || f.kind === 'schemaMissing';
+      const codeSpent = e.stage !== 'verify' || !codeUnchecked;
       const text = e.stage === 'delete' ? codeModeDeleteMessage(f) : notice.text;
       return { ...s, phase: 'editing', code: codeSpent ? '' : s.code, notice: err(text) };
     }

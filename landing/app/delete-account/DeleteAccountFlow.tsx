@@ -1,8 +1,9 @@
 // 원본: Sources/CheckMobileKit/Session/MobileSessionStore.swift @ 1b8260d (deleteAccount 순서 — 290–345)
 // 원본: Sources/CheckMobileKit/Session/MobilePasswordResetStore.swift @ 1b8260d (코드 받기·다시 받기·문구 — 60–200, 355–389)
 //
-// /delete-account 의 흐름 섬(client). 상태는 lib/delete-account.ts 의 순수 상태기계(reduce)가 쥐고, 왕복은
-// lib/delete-account-client.ts 가 브라우저 fetch 로 Supabase 를 **직접** 부른다(Vercel 서버를 거치지 않는다 — E§9.6).
+// /delete-account 의 흐름 섬(client). 상태는 lib/delete-account.ts 의 순수 상태기계(reduce)가 쥐고, 왕복과 이벤트 사상은
+// lib/delete-account-client.ts(requestCodeFlow · submitFlow · browserFetchFrom)가 브라우저 fetch 로 Supabase 를 **직접** 부르며
+// 한다(Vercel 서버를 거치지 않는다 — E§9.6). 이 파일은 렌더와 손잡이 배선만 — 행동은 lib 쪽 시험이 가짜 fetch 로 잰다.
 // 비밀번호·코드·토큰은 이 컴포넌트 메모리에만 있다(저장소·URL·로그 0). 지운 뒤에는 입력이 비워진다.
 "use client";
 
@@ -12,25 +13,22 @@ import {
   TEXT,
   canRequestCode,
   canSubmit,
-  deletionRequest,
   initialState,
   isBusy,
   readConfig,
   reduce,
   resendSecondsLeft,
-  type DeleteAccountConfig,
   type DeleteAccountEvent,
   type DeleteAccountState,
   type Mode,
 } from "@/lib/delete-account";
-import { runDeletion, sendRecoveryCode, type FetchLike } from "@/lib/delete-account-client";
+import { browserFetchFrom, requestCodeFlow, submitFlow, type FlowContext } from "@/lib/delete-account-client";
 
 // 배포 환경이 주는 공개 값(앱에도 실려 있는 프로젝트 주소·anon 키). NEXT_PUBLIC_* 는 빌드 때 글자로 박힌다 — 이름을 그대로 적어야 한다.
 const CONFIG = readConfig(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-/** 쿠키·리퍼러 없이, 캐시 없이. Supabase 는 다른 출처라 CORS 로 간다. */
-const browserFetch: FetchLike = (url, init) =>
-  fetch(url, { ...init, mode: "cors", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer" });
+/** 쿠키·리퍼러·캐시 없이 CORS 로(옵션은 lib 이 정한다). 화살표로 감싸 전역 fetch 를 this 없이 부르지 않는다. */
+const browserFetch = browserFetchFrom((url, init) => fetch(url, init));
 
 const MODES: { id: Mode; label: string; help: string }[] = [
   { id: "password", label: "비밀번호로 확인", help: "가입한 이메일과 비밀번호로 본인 확인을 해요." },
@@ -48,35 +46,8 @@ const BTN_DANGER =
   "t-small inline-flex min-h-12 items-center justify-center rounded-xl bg-[#C9373D] px-5 font-semibold text-white " +
   "hover:bg-[#B32F35] disabled:cursor-not-allowed disabled:opacity-50";
 
-/** 이벤트 처리기가 쓰는 손잡이(렌더 밖에서 돈다 — 시각 읽기·왕복은 여기서만). */
-interface FlowContext {
-  readonly config: DeleteAccountConfig;
-  readonly current: () => DeleteAccountState;
-  readonly apply: (e: DeleteAccountEvent) => DeleteAccountState;
-  readonly tick: (now: number) => void;
-}
-
-/** [코드 받기]·[다시 받기]. 형식·쿨다운은 상태기계가 왕복 전에 거른다. */
-async function requestCode(ctx: FlowContext): Promise<void> {
-  if (ctx.current().phase !== "editing") return;
-  const next = ctx.apply({ type: "requestCode", now: Date.now() });
-  if (next.phase !== "sendingCode") return;
-  const result = await sendRecoveryCode(browserFetch, ctx.config, next.email);
-  const t = Date.now();
-  ctx.tick(t);
-  ctx.apply(result.ok ? { type: "codeSent", now: t } : { type: "codeSendFailed", failure: result.failure, now: t });
-}
-
-/** [계정 영구 삭제](흐름 B 첫 화면의 Enter 는 [코드 받기]). 첫 누름이 곧바로 phase 를 바꿔 두 번째 누름은 아무것도 보내지 않는다. */
-async function submit(ctx: FlowContext): Promise<void> {
-  const s = ctx.current();
-  if (s.phase !== "editing") return;
-  if (s.mode === "code" && s.codeSentTo === null) return requestCode(ctx);
-  const request = deletionRequest(ctx.apply({ type: "submit" }));
-  if (!request) return;
-  const outcome = await runDeletion(browserFetch, ctx.config, request);
-  ctx.apply(outcome.ok ? { type: "deleted" } : { type: "deleteFailed", failure: outcome.failure, stage: outcome.stage });
-}
+/** 시각 읽기는 렌더 밖(이벤트 처리기 안)에서만 — react-hooks/purity. */
+const clock = () => Date.now();
 
 export function DeleteAccountFlow() {
   const [state, setState] = useState<DeleteAccountState>(initialState);
@@ -115,11 +86,11 @@ export function DeleteAccountFlow() {
   }
   const config = CONFIG;
 
-  const ctx: FlowContext = { config, current: () => ref.current, apply, tick: setNow };
-  const onRequestCode = () => requestCode(ctx);
+  const ctx: FlowContext = { config, fetch: browserFetch, now: clock, current: () => ref.current, apply, tick: setNow };
+  const onRequestCode = () => void requestCodeFlow(ctx);
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    void submit(ctx);
+    void submitFlow(ctx);
   };
 
   const busy = isBusy(state);

@@ -1,6 +1,7 @@
 // 원본: Sources/CheckMobileKit/Session/MobileSessionStore.swift @ 1b8260d (deleteAccount 순서 — 290–345)
 // 원본: Sources/CheckCore/SupabaseWorkService.swift @ 1b8260d (signIn 92–104 · deleteAvatarFile 429–457 · signOut 459–470 · deleteMyAccount 472–498 · 재설정 OTP 1320–1370)
 // 원본: Sources/CheckCore/SupabaseWorkHTTP.swift @ 1b8260d (요청 머리 apikey·Authorization — 55–80)
+// 원본: Sources/CheckMobileKit/Session/MobilePasswordResetStore.swift @ 1b8260d (코드 받기 왕복 전후 requestCode — 139–178)
 //
 // 웹 계정 삭제의 **왕복** — 브라우저가 Supabase 를 직접 부른다(E§9.6). Vercel 서버를 거치지 않는 이유: 모든 요청이 Vercel IP 하나로
 // 보이면 GoTrue 의 IP 기준 제한이 전원을 한꺼번에 막는다. fetch 는 주입받는다(시험은 가짜 fetch 로 순서·머리·본문을 잰다).
@@ -13,8 +14,19 @@
 //   3. `POST /rest/v1/rpc/delete_my_account` 본문 `{}` — 1 에서 받은 **새 토큰**으로.
 //   4. 3 이 실패했을 때만 그 세션을 `logout?scope=local` 로 닫는다(성공했으면 cascade 로 세션이 이미 없다).
 // 토큰은 이 함수들의 지역 변수로만 산다 — 화면 상태·저장소·로그 어디에도 남기지 않는다.
+// 맨 아래 흐름 섬 손잡이(browserFetchFrom · requestCodeFlow · submitFlow)는 화면이 부른다 — 이벤트 ↔ 왕복 사상도 여기서 잰다.
 
-import { classifyHttpFailure, type CallKind, type DeleteAccountConfig, type DeletionRequest, type Failure, type Stage } from './delete-account.ts';
+import {
+  classifyHttpFailure,
+  deletionRequest,
+  type CallKind,
+  type DeleteAccountConfig,
+  type DeleteAccountEvent,
+  type DeleteAccountState,
+  type DeletionRequest,
+  type Failure,
+  type Stage,
+} from './delete-account.ts';
 
 /** 브라우저 fetch 중 이 파일이 쓰는 모양만. */
 export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{
@@ -133,4 +145,65 @@ export async function runDeletion(fetchFn: FetchLike, config: DeleteAccountConfi
       : await verifyRecoveryCode(fetchFn, config, request.email, request.code);
   if (!auth.ok) return { ok: false, failure: auth.failure, stage: request.mode === 'password' ? 'signIn' : 'verify' };
   return deleteWithSession(fetchFn, config, auth.value);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 흐름 섬의 손잡이 — 화면(app/delete-account/DeleteAccountFlow.tsx)은 아래 셋을 부르기만 한다. 상태기계 이벤트 ↔ 왕복의 사상과
+// 브라우저 fetch 옵션이 여기 있어서 가짜 fetch·가짜 시계로 잰다(화면 파일은 렌더만 남는다).
+
+/** 브라우저 fetch 에 실제로 넘기는 옵션 — 이 흐름이 쓰는 모양만(시험이 받아 잰다). */
+export interface BrowserRequestInit {
+  readonly method: string;
+  readonly headers: Record<string, string>;
+  readonly body?: string;
+  readonly mode: 'cors';
+  readonly credentials: 'omit';
+  readonly cache: 'no-store';
+  readonly referrerPolicy: 'no-referrer';
+}
+
+export type BrowserFetch = (url: string, init: BrowserRequestInit) => Promise<{ readonly status: number; text(): Promise<string> }>;
+
+/**
+ * 브라우저 fetch → 이 흐름의 FetchLike. Supabase 는 다른 출처라 CORS 로 가고, **쿠키는 싣지 않는다**(credentials 'omit').
+ * 'include' 면 Supabase 게이트웨이의 `Access-Control-Allow-Origin: *` 응답을 브라우저가 거절해 모든 왕복이 연결 실패(network)가 된다
+ * (자격 증명을 실은 요청에는 와일드카드 출처가 안 된다 — Fetch 표준). 캐시·리퍼러도 남기지 않는다(토큰·비밀번호가 오가는 요청이다).
+ */
+export function browserFetchFrom(fetchImpl: BrowserFetch): FetchLike {
+  return (url, init) => fetchImpl(url, { ...init, mode: 'cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
+}
+
+/** 이벤트 처리기가 쓰는 손잡이(렌더 밖에서 돈다 — 시각 읽기·왕복은 여기서만). */
+export interface FlowContext {
+  readonly config: DeleteAccountConfig;
+  readonly fetch: FetchLike;
+  /** 지금 시각(epoch ms). 쿨다운이 이 값으로 잠긴다. */
+  readonly now: () => number;
+  /** 이벤트 처리의 진실(화면의 ref) — 두 번 누르기가 렌더 사이에 끼어들어도 같은 요청이 두 번 나가지 않게 첫 누름이 곧바로 바꾼다. */
+  readonly current: () => DeleteAccountState;
+  readonly apply: (e: DeleteAccountEvent) => DeleteAccountState;
+  /** 왕복이 끝난 시각을 화면 시계에 알린다(남은 초를 곧바로 다시 그리게). */
+  readonly tick: (now: number) => void;
+}
+
+/** [코드 받기]·[다시 받기]. 형식·쿨다운은 상태기계가 왕복 전에 거르고, 보낼 주소는 상태기계가 정규화한 값이다. */
+export async function requestCodeFlow(ctx: FlowContext): Promise<void> {
+  if (ctx.current().phase !== 'editing') return;
+  const next = ctx.apply({ type: 'requestCode', now: ctx.now() });
+  if (next.phase !== 'sendingCode') return;
+  const result = await sendRecoveryCode(ctx.fetch, ctx.config, next.email);
+  const t = ctx.now();
+  ctx.tick(t);
+  ctx.apply(result.ok ? { type: 'codeSent', now: t } : { type: 'codeSendFailed', failure: result.failure, now: t });
+}
+
+/** [계정 영구 삭제](흐름 B 첫 화면의 Enter 는 [코드 받기]). 첫 누름이 곧바로 phase 를 바꿔 두 번째 누름은 아무것도 보내지 않는다. */
+export async function submitFlow(ctx: FlowContext): Promise<void> {
+  const s = ctx.current();
+  if (s.phase !== 'editing') return;
+  if (s.mode === 'code' && s.codeSentTo === null) return requestCodeFlow(ctx);
+  const request = deletionRequest(ctx.apply({ type: 'submit' }));
+  if (!request) return;
+  const outcome = await runDeletion(ctx.fetch, ctx.config, request);
+  ctx.apply(outcome.ok ? { type: 'deleted' } : { type: 'deleteFailed', failure: outcome.failure, stage: outcome.stage });
 }

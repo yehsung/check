@@ -1,0 +1,468 @@
+{
+  "cases": [
+    {
+      "black": [
+        "H9",
+        "I9",
+        "J9",
+        "G10",
+        "M12"
+      ],
+      "expect": [
+        "G8",
+        "L8"
+      ],
+      "holdFor": null,
+      "id": "white-win-in-1",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "G8",
+      "toMove": "white",
+      "white": [
+        "H8",
+        "I8",
+        "J8",
+        "K8"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "H8",
+        "I8",
+        "J8",
+        "K8"
+      ],
+      "expect": [
+        "G8",
+        "L8"
+      ],
+      "holdFor": null,
+      "id": "black-win-in-1",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "G8",
+      "toMove": "black",
+      "white": [
+        "H9",
+        "I9",
+        "J9",
+        "H10"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "H8",
+        "I8",
+        "J8",
+        "K8",
+        "M8"
+      ],
+      "expect": [
+        "G8"
+      ],
+      "holdFor": null,
+      "id": "black-overline-is-not-five",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": [
+        "L8"
+      ],
+      "seed": "0x0000000000000007",
+      "swiftMove": "G8",
+      "toMove": "black",
+      "white": [
+        "A1",
+        "C1",
+        "E1",
+        "A3",
+        "C3"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "H8",
+        "I8",
+        "J8",
+        "K8",
+        "M8",
+        "N14"
+      ],
+      "expect": null,
+      "holdFor": null,
+      "id": "black-overline-only",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": [
+        "L8"
+      ],
+      "seed": "0x0000000000000007",
+      "swiftMove": "D1",
+      "toMove": "black",
+      "white": [
+        "G8",
+        "A1",
+        "C1",
+        "E1",
+        "A3",
+        "C3"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "H8",
+        "I8",
+        "J8",
+        "K8",
+        "N13"
+      ],
+      "expect": [
+        "L8"
+      ],
+      "holdFor": null,
+      "id": "white-blocks-black-four",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "L8",
+      "toMove": "white",
+      "white": [
+        "G8",
+        "B2",
+        "D2",
+        "F2"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "G8",
+        "B2",
+        "D2",
+        "F2"
+      ],
+      "expect": [
+        "L8"
+      ],
+      "holdFor": null,
+      "id": "black-blocks-white-four",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "L8",
+      "toMove": "black",
+      "white": [
+        "H8",
+        "I8",
+        "J8",
+        "K8"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "G8",
+        "H8",
+        "I8"
+      ],
+      "expect": [
+        "F8",
+        "J8"
+      ],
+      "holdFor": null,
+      "id": "black-makes-open-four",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "F8",
+      "toMove": "black",
+      "white": [
+        "B2",
+        "D2",
+        "B4"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "G8",
+        "H8",
+        "I8"
+      ],
+      "expect": [
+        "F8",
+        "J8"
+      ],
+      "holdFor": null,
+      "id": "white-blocks-open-three",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": [
+        "E8",
+        "K8"
+      ],
+      "seed": "0x0000000000000007",
+      "swiftMove": "J8",
+      "toMove": "white",
+      "white": [
+        "B2",
+        "D2"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "G8",
+        "I8",
+        "H7",
+        "H9",
+        "E5"
+      ],
+      "expect": [
+        "J10"
+      ],
+      "holdFor": null,
+      "id": "white-exploits-forbidden-block",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "J10",
+      "toMove": "white",
+      "white": [
+        "F6",
+        "G7",
+        "I9",
+        "A15"
+      ],
+      "winWithin": 2
+    },
+    {
+      "black": [
+        "C7",
+        "D8",
+        "H9",
+        "G6",
+        "A1",
+        "O1",
+        "A15",
+        "O15",
+        "C13"
+      ],
+      "expect": [
+        "H7",
+        "H8"
+      ],
+      "holdFor": null,
+      "id": "white-vcf",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "H7",
+      "toMove": "white",
+      "white": [
+        "D7",
+        "E7",
+        "F7",
+        "E8",
+        "F8",
+        "G8",
+        "H5",
+        "H6"
+      ],
+      "winWithin": 4
+    },
+    {
+      "black": [
+        "G8",
+        "I8",
+        "H7",
+        "H9",
+        "E5"
+      ],
+      "expect": null,
+      "holdFor": 3,
+      "id": "black-defends-forbidden-trap",
+      "loseAfter": "A2",
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "J10",
+      "toMove": "black",
+      "white": [
+        "F6",
+        "G7",
+        "I9",
+        "A15",
+        "O1"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "D7",
+        "E7",
+        "F7",
+        "H5",
+        "H6",
+        "G8",
+        "I8"
+      ],
+      "expect": null,
+      "holdFor": 4,
+      "id": "white-defends-black-vcf",
+      "loseAfter": "A2",
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "H7",
+      "toMove": "white",
+      "white": [
+        "C7",
+        "H4",
+        "A1",
+        "O1",
+        "A15",
+        "O15"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "D7",
+        "E7",
+        "F7",
+        "H5",
+        "H6",
+        "G8",
+        "I8"
+      ],
+      "expect": [
+        "H7"
+      ],
+      "holdFor": null,
+      "id": "black-vcf-four-three",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "H7",
+      "toMove": "black",
+      "white": [
+        "C7",
+        "H4",
+        "A1",
+        "O1",
+        "A15",
+        "O15",
+        "M14"
+      ],
+      "winWithin": 4
+    },
+    {
+      "black": [
+        "A1",
+        "O1",
+        "A15",
+        "O15",
+        "C3"
+      ],
+      "expect": [
+        "I8"
+      ],
+      "holdFor": null,
+      "id": "white-double-three",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "I8",
+      "toMove": "white",
+      "white": [
+        "G8",
+        "H8",
+        "I6",
+        "I7"
+      ],
+      "winWithin": 3
+    },
+    {
+      "black": [
+        "G8",
+        "H8",
+        "I6",
+        "I7"
+      ],
+      "expect": null,
+      "holdFor": null,
+      "id": "black-double-three-is-forbidden",
+      "loseAfter": null,
+      "maxDepth": 3,
+      "reject": [
+        "I8"
+      ],
+      "seed": "0x0000000000000007",
+      "swiftMove": "H7",
+      "toMove": "black",
+      "white": [
+        "A1",
+        "O1",
+        "A15",
+        "O15"
+      ],
+      "winWithin": null
+    },
+    {
+      "black": [
+        "A1",
+        "O1",
+        "A15",
+        "O15"
+      ],
+      "expect": null,
+      "holdFor": 3,
+      "id": "black-stops-white-double-three",
+      "loseAfter": "A2",
+      "maxDepth": 3,
+      "reject": null,
+      "seed": "0x0000000000000007",
+      "swiftMove": "I8",
+      "toMove": "black",
+      "white": [
+        "G8",
+        "H8",
+        "I6",
+        "I7"
+      ],
+      "winWithin": null
+    }
+  ],
+  "equivalence": "set",
+  "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+  "golden": "renju/ai-puzzles",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "holdFor": "엔진의 수를 둔 뒤 상대부터 2n−1 수 안에 상대가 못 이긴다. loseAfter(엉뚱한 수)를 둔 뒤에는 상대가 이긴다 — 위협이 진짜라는 대조군.",
+    "limits": "GomokuAISearchLimits(timeBudget: 600초, maxDepth, tieBreakSeed: seed). 깊이가 먼저 끊는다.",
+    "set": "Kotlin 의 bestMove 가 ① 둘 수 있는 수(legal·win) ② expect 가 있으면 그 안 ③ reject 가 있으면 밖. swiftMove 는 Swift 가 고른 수(참고 — 비트 대조는 renju/ai-trace).",
+    "winWithin": "엔진 대 엔진(같은 한도)으로 toMove 부터 2n−1 수를 두면 toMove 가 5목을 만든다. 모든 수는 규칙상 둘 수 있어야 한다(아니면 실패)."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/GomokuAI.swift",
+    "Sources/CheckCore/GomokuAIEngine.swift",
+    "Sources/CheckCore/GomokuRules.swift",
+    "Tests/checkTests/Fixtures/gomoku-ai-puzzles.json"
+  ]
+}

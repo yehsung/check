@@ -1,0 +1,764 @@
+{
+  "cases": [
+    {
+      "fee": 0,
+      "id": "stake-m5",
+      "net": 0,
+      "payout": 0,
+      "stake": -5
+    },
+    {
+      "fee": 0,
+      "id": "stake-m4",
+      "net": 0,
+      "payout": 0,
+      "stake": -4
+    },
+    {
+      "fee": 0,
+      "id": "stake-m3",
+      "net": 0,
+      "payout": 0,
+      "stake": -3
+    },
+    {
+      "fee": 0,
+      "id": "stake-m2",
+      "net": 0,
+      "payout": 0,
+      "stake": -2
+    },
+    {
+      "fee": 0,
+      "id": "stake-m1",
+      "net": 0,
+      "payout": 0,
+      "stake": -1
+    },
+    {
+      "fee": 0,
+      "id": "stake-0",
+      "net": 0,
+      "payout": 0,
+      "stake": 0
+    },
+    {
+      "fee": 0,
+      "id": "stake-1",
+      "net": 1,
+      "payout": 2,
+      "stake": 1
+    },
+    {
+      "fee": 0,
+      "id": "stake-2",
+      "net": 2,
+      "payout": 4,
+      "stake": 2
+    },
+    {
+      "fee": 0,
+      "id": "stake-3",
+      "net": 3,
+      "payout": 6,
+      "stake": 3
+    },
+    {
+      "fee": 0,
+      "id": "stake-4",
+      "net": 4,
+      "payout": 8,
+      "stake": 4
+    },
+    {
+      "fee": 0,
+      "id": "stake-5",
+      "net": 5,
+      "payout": 10,
+      "stake": 5
+    },
+    {
+      "fee": 0,
+      "id": "stake-6",
+      "net": 6,
+      "payout": 12,
+      "stake": 6
+    },
+    {
+      "fee": 0,
+      "id": "stake-7",
+      "net": 7,
+      "payout": 14,
+      "stake": 7
+    },
+    {
+      "fee": 0,
+      "id": "stake-8",
+      "net": 8,
+      "payout": 16,
+      "stake": 8
+    },
+    {
+      "fee": 0,
+      "id": "stake-9",
+      "net": 9,
+      "payout": 18,
+      "stake": 9
+    },
+    {
+      "fee": 0,
+      "id": "stake-10",
+      "net": 10,
+      "payout": 20,
+      "stake": 10
+    },
+    {
+      "fee": 0,
+      "id": "stake-11",
+      "net": 11,
+      "payout": 22,
+      "stake": 11
+    },
+    {
+      "fee": 0,
+      "id": "stake-12",
+      "net": 12,
+      "payout": 24,
+      "stake": 12
+    },
+    {
+      "fee": 0,
+      "id": "stake-13",
+      "net": 13,
+      "payout": 26,
+      "stake": 13
+    },
+    {
+      "fee": 0,
+      "id": "stake-14",
+      "net": 14,
+      "payout": 28,
+      "stake": 14
+    },
+    {
+      "fee": 0,
+      "id": "stake-15",
+      "net": 15,
+      "payout": 30,
+      "stake": 15
+    },
+    {
+      "fee": 0,
+      "id": "stake-16",
+      "net": 16,
+      "payout": 32,
+      "stake": 16
+    },
+    {
+      "fee": 0,
+      "id": "stake-17",
+      "net": 17,
+      "payout": 34,
+      "stake": 17
+    },
+    {
+      "fee": 0,
+      "id": "stake-18",
+      "net": 18,
+      "payout": 36,
+      "stake": 18
+    },
+    {
+      "fee": 0,
+      "id": "stake-19",
+      "net": 19,
+      "payout": 38,
+      "stake": 19
+    },
+    {
+      "fee": 0,
+      "id": "stake-20",
+      "net": 20,
+      "payout": 40,
+      "stake": 20
+    },
+    {
+      "fee": 0,
+      "id": "stake-21",
+      "net": 21,
+      "payout": 42,
+      "stake": 21
+    },
+    {
+      "fee": 0,
+      "id": "stake-22",
+      "net": 22,
+      "payout": 44,
+      "stake": 22
+    },
+    {
+      "fee": 0,
+      "id": "stake-23",
+      "net": 23,
+      "payout": 46,
+      "stake": 23
+    },
+    {
+      "fee": 0,
+      "id": "stake-24",
+      "net": 24,
+      "payout": 48,
+      "stake": 24
+    },
+    {
+      "fee": 0,
+      "id": "stake-25",
+      "net": 25,
+      "payout": 50,
+      "stake": 25
+    },
+    {
+      "fee": 0,
+      "id": "stake-26",
+      "net": 26,
+      "payout": 52,
+      "stake": 26
+    },
+    {
+      "fee": 0,
+      "id": "stake-27",
+      "net": 27,
+      "payout": 54,
+      "stake": 27
+    },
+    {
+      "fee": 0,
+      "id": "stake-28",
+      "net": 28,
+      "payout": 56,
+      "stake": 28
+    },
+    {
+      "fee": 0,
+      "id": "stake-29",
+      "net": 29,
+      "payout": 58,
+      "stake": 29
+    },
+    {
+      "fee": 0,
+      "id": "stake-30",
+      "net": 30,
+      "payout": 60,
+      "stake": 30
+    },
+    {
+      "fee": 0,
+      "id": "stake-31",
+      "net": 31,
+      "payout": 62,
+      "stake": 31
+    },
+    {
+      "fee": 0,
+      "id": "stake-32",
+      "net": 32,
+      "payout": 64,
+      "stake": 32
+    },
+    {
+      "fee": 0,
+      "id": "stake-33",
+      "net": 33,
+      "payout": 66,
+      "stake": 33
+    },
+    {
+      "fee": 0,
+      "id": "stake-34",
+      "net": 34,
+      "payout": 68,
+      "stake": 34
+    },
+    {
+      "fee": 0,
+      "id": "stake-35",
+      "net": 35,
+      "payout": 70,
+      "stake": 35
+    },
+    {
+      "fee": 0,
+      "id": "stake-36",
+      "net": 36,
+      "payout": 72,
+      "stake": 36
+    },
+    {
+      "fee": 0,
+      "id": "stake-37",
+      "net": 37,
+      "payout": 74,
+      "stake": 37
+    },
+    {
+      "fee": 0,
+      "id": "stake-38",
+      "net": 38,
+      "payout": 76,
+      "stake": 38
+    },
+    {
+      "fee": 0,
+      "id": "stake-39",
+      "net": 39,
+      "payout": 78,
+      "stake": 39
+    },
+    {
+      "fee": 0,
+      "id": "stake-40",
+      "net": 40,
+      "payout": 80,
+      "stake": 40
+    },
+    {
+      "fee": 0,
+      "id": "stake-41",
+      "net": 41,
+      "payout": 82,
+      "stake": 41
+    },
+    {
+      "fee": 0,
+      "id": "stake-42",
+      "net": 42,
+      "payout": 84,
+      "stake": 42
+    },
+    {
+      "fee": 0,
+      "id": "stake-43",
+      "net": 43,
+      "payout": 86,
+      "stake": 43
+    },
+    {
+      "fee": 0,
+      "id": "stake-44",
+      "net": 44,
+      "payout": 88,
+      "stake": 44
+    },
+    {
+      "fee": 0,
+      "id": "stake-45",
+      "net": 45,
+      "payout": 90,
+      "stake": 45
+    },
+    {
+      "fee": 0,
+      "id": "stake-46",
+      "net": 46,
+      "payout": 92,
+      "stake": 46
+    },
+    {
+      "fee": 0,
+      "id": "stake-47",
+      "net": 47,
+      "payout": 94,
+      "stake": 47
+    },
+    {
+      "fee": 0,
+      "id": "stake-48",
+      "net": 48,
+      "payout": 96,
+      "stake": 48
+    },
+    {
+      "fee": 0,
+      "id": "stake-49",
+      "net": 49,
+      "payout": 98,
+      "stake": 49
+    },
+    {
+      "fee": 0,
+      "id": "stake-50",
+      "net": 50,
+      "payout": 100,
+      "stake": 50
+    },
+    {
+      "fee": 0,
+      "id": "stake-51",
+      "net": 51,
+      "payout": 102,
+      "stake": 51
+    },
+    {
+      "fee": 0,
+      "id": "stake-52",
+      "net": 52,
+      "payout": 104,
+      "stake": 52
+    },
+    {
+      "fee": 0,
+      "id": "stake-53",
+      "net": 53,
+      "payout": 106,
+      "stake": 53
+    },
+    {
+      "fee": 0,
+      "id": "stake-54",
+      "net": 54,
+      "payout": 108,
+      "stake": 54
+    },
+    {
+      "fee": 0,
+      "id": "stake-55",
+      "net": 55,
+      "payout": 110,
+      "stake": 55
+    },
+    {
+      "fee": 0,
+      "id": "stake-56",
+      "net": 56,
+      "payout": 112,
+      "stake": 56
+    },
+    {
+      "fee": 0,
+      "id": "stake-57",
+      "net": 57,
+      "payout": 114,
+      "stake": 57
+    },
+    {
+      "fee": 0,
+      "id": "stake-58",
+      "net": 58,
+      "payout": 116,
+      "stake": 58
+    },
+    {
+      "fee": 0,
+      "id": "stake-59",
+      "net": 59,
+      "payout": 118,
+      "stake": 59
+    },
+    {
+      "fee": 0,
+      "id": "stake-60",
+      "net": 60,
+      "payout": 120,
+      "stake": 60
+    },
+    {
+      "fee": 0,
+      "id": "stake-61",
+      "net": 61,
+      "payout": 122,
+      "stake": 61
+    },
+    {
+      "fee": 0,
+      "id": "stake-62",
+      "net": 62,
+      "payout": 124,
+      "stake": 62
+    },
+    {
+      "fee": 0,
+      "id": "stake-63",
+      "net": 63,
+      "payout": 126,
+      "stake": 63
+    },
+    {
+      "fee": 0,
+      "id": "stake-64",
+      "net": 64,
+      "payout": 128,
+      "stake": 64
+    },
+    {
+      "fee": 0,
+      "id": "stake-65",
+      "net": 65,
+      "payout": 130,
+      "stake": 65
+    },
+    {
+      "fee": 0,
+      "id": "stake-66",
+      "net": 66,
+      "payout": 132,
+      "stake": 66
+    },
+    {
+      "fee": 0,
+      "id": "stake-67",
+      "net": 67,
+      "payout": 134,
+      "stake": 67
+    },
+    {
+      "fee": 0,
+      "id": "stake-68",
+      "net": 68,
+      "payout": 136,
+      "stake": 68
+    },
+    {
+      "fee": 0,
+      "id": "stake-69",
+      "net": 69,
+      "payout": 138,
+      "stake": 69
+    },
+    {
+      "fee": 0,
+      "id": "stake-70",
+      "net": 70,
+      "payout": 140,
+      "stake": 70
+    },
+    {
+      "fee": 0,
+      "id": "stake-71",
+      "net": 71,
+      "payout": 142,
+      "stake": 71
+    },
+    {
+      "fee": 0,
+      "id": "stake-72",
+      "net": 72,
+      "payout": 144,
+      "stake": 72
+    },
+    {
+      "fee": 0,
+      "id": "stake-73",
+      "net": 73,
+      "payout": 146,
+      "stake": 73
+    },
+    {
+      "fee": 0,
+      "id": "stake-74",
+      "net": 74,
+      "payout": 148,
+      "stake": 74
+    },
+    {
+      "fee": 0,
+      "id": "stake-75",
+      "net": 75,
+      "payout": 150,
+      "stake": 75
+    },
+    {
+      "fee": 0,
+      "id": "stake-76",
+      "net": 76,
+      "payout": 152,
+      "stake": 76
+    },
+    {
+      "fee": 0,
+      "id": "stake-77",
+      "net": 77,
+      "payout": 154,
+      "stake": 77
+    },
+    {
+      "fee": 0,
+      "id": "stake-78",
+      "net": 78,
+      "payout": 156,
+      "stake": 78
+    },
+    {
+      "fee": 0,
+      "id": "stake-79",
+      "net": 79,
+      "payout": 158,
+      "stake": 79
+    },
+    {
+      "fee": 0,
+      "id": "stake-80",
+      "net": 80,
+      "payout": 160,
+      "stake": 80
+    },
+    {
+      "fee": 0,
+      "id": "stake-81",
+      "net": 81,
+      "payout": 162,
+      "stake": 81
+    },
+    {
+      "fee": 0,
+      "id": "stake-82",
+      "net": 82,
+      "payout": 164,
+      "stake": 82
+    },
+    {
+      "fee": 0,
+      "id": "stake-83",
+      "net": 83,
+      "payout": 166,
+      "stake": 83
+    },
+    {
+      "fee": 0,
+      "id": "stake-84",
+      "net": 84,
+      "payout": 168,
+      "stake": 84
+    },
+    {
+      "fee": 0,
+      "id": "stake-85",
+      "net": 85,
+      "payout": 170,
+      "stake": 85
+    },
+    {
+      "fee": 0,
+      "id": "stake-86",
+      "net": 86,
+      "payout": 172,
+      "stake": 86
+    },
+    {
+      "fee": 0,
+      "id": "stake-87",
+      "net": 87,
+      "payout": 174,
+      "stake": 87
+    },
+    {
+      "fee": 0,
+      "id": "stake-88",
+      "net": 88,
+      "payout": 176,
+      "stake": 88
+    },
+    {
+      "fee": 0,
+      "id": "stake-89",
+      "net": 89,
+      "payout": 178,
+      "stake": 89
+    },
+    {
+      "fee": 0,
+      "id": "stake-90",
+      "net": 90,
+      "payout": 180,
+      "stake": 90
+    },
+    {
+      "fee": 0,
+      "id": "stake-91",
+      "net": 91,
+      "payout": 182,
+      "stake": 91
+    },
+    {
+      "fee": 0,
+      "id": "stake-92",
+      "net": 92,
+      "payout": 184,
+      "stake": 92
+    },
+    {
+      "fee": 0,
+      "id": "stake-93",
+      "net": 93,
+      "payout": 186,
+      "stake": 93
+    },
+    {
+      "fee": 0,
+      "id": "stake-94",
+      "net": 94,
+      "payout": 188,
+      "stake": 94
+    },
+    {
+      "fee": 0,
+      "id": "stake-95",
+      "net": 95,
+      "payout": 190,
+      "stake": 95
+    },
+    {
+      "fee": 0,
+      "id": "stake-96",
+      "net": 96,
+      "payout": 192,
+      "stake": 96
+    },
+    {
+      "fee": 0,
+      "id": "stake-97",
+      "net": 97,
+      "payout": 194,
+      "stake": 97
+    },
+    {
+      "fee": 0,
+      "id": "stake-98",
+      "net": 98,
+      "payout": 196,
+      "stake": 98
+    },
+    {
+      "fee": 0,
+      "id": "stake-99",
+      "net": 99,
+      "payout": 198,
+      "stake": 99
+    },
+    {
+      "fee": 0,
+      "id": "stake-100",
+      "net": 100,
+      "payout": 200,
+      "stake": 100
+    },
+    {
+      "id": "percent",
+      "percent": 0
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardDuelFee.swift",
+  "golden": "duel-fee/fee",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "fee": "DuelFee.fee(stake:) = 2·max(0, stake)·percent / 100(정수, 0 쪽 버림). percent 는 0(v0.3.64 — 서버 duel_fee 도 0, 20261023132000_duel_fee_off.sql).",
+    "net": "DuelFee.winnerNet(stake:) = max(0, stake) − fee — 결과 카드의 \"+N\".",
+    "payout": "DuelFee.winnerPayout(stake:) = 2·max(0, stake) − fee — 승자가 정산 때 받는 루비(수락 때 판돈을 이미 냈다).",
+    "range": "판돈 −5…100(G1 판돈 0~100 + 음수 방어선). 서버 판돈은 3·5·10 뿐이다."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/DuelFee.swift"
+  ]
+}

@@ -1,0 +1,1480 @@
+{
+  "cases": [
+    {
+      "black": ".LLLLLL..LL.L..LLL.LL.L.LLL.LL..LLL.L.LLL.LLL.LLLLLLL..L..L.L.L.LO.LWLLL.LLLL.L.L....LL....L..L.LLLL...LFLL.LLL.TLF..LL.F..L..L..FWL.LL....L.LLF..LLW..L..LLF.L.OLLLL.L.LL..FF..L.LLL.L...LL...FL.L..LLF..L.L.LLLLLLLLL....L..L.L",
+      "blackNodes": [
+        [
+          70,
+          2
+        ],
+        [
+          112,
+          4
+        ],
+        [
+          142,
+          4
+        ],
+        [
+          146,
+          2
+        ],
+        [
+          158,
+          3
+        ]
+      ],
+      "board": "b......bb..w.bw...b..w.w...b..bb...w.b...b...w.......wb.bb.b.w.b..w.....b....w.b.wwwb..wbbb.bb.w....bbb....b...w...wb..b.bb.bw.bb...b..bwwb.b...bb...bb.ww...b.b.....b.b..wb..bb.b...b.bwb..bwb..b.ww...bb.b.b.........bwwb.bw.b.",
+      "budget": 10000,
+      "forbidden": [
+        "F5:forbidden-overline",
+        "O7:forbidden-double-four",
+        "H8:forbidden-double-three",
+        "J8:forbidden-double-four",
+        "A9:forbidden-double-four",
+        "J9:forbidden-double-four",
+        "I10:forbidden-double-four",
+        "G11:forbidden-double-four",
+        "K11:forbidden-overline",
+        "H12:forbidden-double-four",
+        "I12:forbidden-double-four",
+        "L13:forbidden-double-four",
+        "E14:forbidden-double-four"
+      ],
+      "id": "board-00",
+      "white": ".LLLLLL..LL.L..LLL.LL.L.LLL.LL..LLL.L.LLL.LLL.LLLLLLL..L..L.L.L.LL.LLLLL.LLLL.L.L....LL....L..L.LLLL...LLLL.LLL.LLL..LL.L..L..L..LLL.LL....L.LLL..LLL..L..LLL.L.LLLLL.L.LL..LL..L.LLL.L...LL...LL.L..LLL..L.L.LLLLLLLLL....L..L.L"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLL..LLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLL.LLL.LL.LLLLLLLLLLL.LL.LLLLLLL.L..LTLLLLLLLLLLLLL.L.LLLLLLLL.LLLLLLLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          128,
+          3
+        ]
+      ],
+      "board": "................................................w....bb.........wb....b......................w...b..w...........b..w.......w.bb...............w.b........w..............bw....b..................................................",
+      "budget": 10000,
+      "forbidden": [
+        "I9:forbidden-double-three"
+      ],
+      "id": "board-01",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLL..LLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLL.LLL.LL.LLLLLLLLLLL.LL.LLLLLLL.L..LLLLLLLLLLLLLLL.L.LLLLLLLL.LLLLLLLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".L.L..WOLLLLLLLL.O.F...LLLLLLL......OL..LLLLL........LLLLLLL....WW...LLLLLLLW..L..W.LLLLLLLO...F...LLLLLLLL...L.LLL.LLLLLLWLLOLLLL.LLLLLLLLLL.LLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "b.b.ww..........w.w.bbb.......bbbbbb..wb.....wwbbbbww.......bbbb..bbw........bw.bw.b........bbb.wbb........bbb.w...b..............b..........b.....b.............................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "H1:forbidden-overline",
+        "C2:forbidden-overline",
+        "E2:forbidden-double-four",
+        "G3:forbidden-overline",
+        "B7:forbidden-overline",
+        "F7:forbidden-double-four",
+        "F9:forbidden-overline"
+      ],
+      "id": "board-02",
+      "white": ".L.L..LLLLLLLLLL.L.L...LLLLLLL......LL..LLLLL........LLLLLLL....LL...LLLLLLLL..L..L.LLLLLLLL...L...LLLLLLLL...L.LLL.LLLLLLLLLLLLLL.LLLLLLLLLL.LLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LWL..LLLLLLLL.....LLLLLLLLLF.......LLLLLLL......W.LLLLL.........W..LLLLL........L.LLL........O.LLLLLL.........WLLL.LL.......L.LLLL....L...LLLLLL.LL.....LLLL.LLLLLO..LL.LLLLLLLLLOLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "..................................b.w...ww........wbwwb..........bbbwbbw.......wbwbbb.b.....bbwbbwwwb.bw.....wwwbbbwb.w...wbbbwbwb.b......bbwwwbbbb....b..bwbwbbb.w....bwbw.bww......w..bwbbb....b......bb..w....................",
+      "budget": 10000,
+      "forbidden": [
+        "E5:forbidden-double-four",
+        "K9:forbidden-overline",
+        "E14:forbidden-overline",
+        "E15:forbidden-overline"
+      ],
+      "id": "board-03",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLL..LLLLLLLL.....LLLLLLLLLL.......LLLLLLW......L.LLLLL.........L..LLLLL........L.LLL........L.LLLLLL.........LLLL.LL.......L.LLLL....L...LLLLLL.LL.....LLLL.LLLLLL..LL.LLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".LLLLL.LLL..LLLLLLLL.L.LLLLLLLLLLLL..LLLLLLLL.LLLLLLLLLLLLL.LLLLTLLLLLLLLLLLLLLLLLLLLL.LL.LLLL..LLLLLLL..LLLL.LLLLLLL.LLLLLLLLLL.LLL.LLL.L.LLLLLLLLLLL.LLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLL.LLL.LLL.L.LLLL.LL.LLLLLLLLL.LLLLLLLLLLL",
+      "blackNodes": [
+        [
+          64,
+          3
+        ]
+      ],
+      "board": "b.....b...ww........b.b............wb........b.............b..........................b..b....bb.......bb....b.......b..........b...w...w.b...........b.............b....................b...w...b.w....w..w.........w...........",
+      "budget": 10000,
+      "forbidden": [
+        "E5:forbidden-double-three"
+      ],
+      "id": "board-04",
+      "white": ".LLLLL.LLL..LLLLLLLL.L.LLLLLLLLLLLL..LLLLLLLL.LLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLL.LL.LLLL..LLLLLLL..LLLL.LLLLLLL.LLLLLLLLLL.LLL.LLL.L.LLLLLLLLLLL.LLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLL.LLL.LLL.L.LLLL.LL.LLLLLLLLL.LLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLFLLLLLLLLLLLLLLL..LLLLLLLL.L...L.LLLLLLLFF...L...OLLLLLL.LOL.L..LLLLLLLLF.L....LFLLLLLLT..O..LLLLLLLLO......LLLLLLLL....LF..LLLLLLLLLWLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          139,
+          2
+        ],
+        [
+          155,
+          3
+        ]
+      ],
+      "board": "....................................................................................bb........b.bwb.b.........bbb.wwb.......b...w.bb.........b.wbbb.........bb.bw.........bbbbbw........wbbb..bb.................................",
+      "budget": 10000,
+      "forbidden": [
+        "I5:forbidden-double-four",
+        "D8:forbidden-double-four",
+        "E8:forbidden-double-four",
+        "M8:forbidden-overline",
+        "G9:forbidden-overline",
+        "F10:forbidden-double-four",
+        "N10:forbidden-double-four",
+        "F11:forbidden-double-three",
+        "I11:forbidden-overline",
+        "E12:forbidden-overline",
+        "J13:forbidden-double-four"
+      ],
+      "id": "board-05",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLL.L...L.LLLLLLLLL...L...LLLLLLL.LLL.L..LLLLLLLLL.L....LLLLLLLLL..L..LLLLLLLLL......LLLLLLLL....LL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLL.LLLLLLLLLLLLLL.L.LLLLLLLLLW....WL.LLLLLLLLL.LLOL.L.LLLLLL.LO.L....LLLLLLLLW....WLLLLLLLL.....L.LLLLLLL.L..L...LLLLL.L.L....W..LLLLLL........WL",
+      "blackNodes": [
+        [
+          96,
+          2
+        ]
+      ],
+      "board": ".................................................................b................w..............b.b..........bbbb..b.........b....b.w......w..b.bwww.........bbbb.........bbwbw.b.......b.ww.bbw.....b.w.bbww.bb......wwbwbbbb..",
+      "budget": 10000,
+      "forbidden": [
+        "J9:forbidden-overline",
+        "H10:forbidden-overline"
+      ],
+      "id": "board-06",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLL.LLLLLLLLLLLLLL.L.LLLLLLLLLL....LL.LLLLLLLLL.LLLL.L.LLLLLL.LL.L....LLLLLLLLL....LLLLLLLLL.....L.LLLLLLL.L..L...LLLLL.L.L....L..LLLLLL........LL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLL.LLL...LLLLLLLL..O...L..LLLL.L.L.....LL.LLLLFF.....L.LLLLLLF..........LLLL..O.......LLLLO..W......LLLLLL.L..LFWL.LLLLLLL.L..L.LLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".....................................................bb........w...wbw........bw.bwb.bb....b.w.bwwwb..w......bbbww.w.......bbbwwwwbww....bw.bbbbbww.....bw.bbbbww......b.ww....b.......w.bw.w............b.......................",
+      "budget": 10000,
+      "forbidden": [
+        "F6:forbidden-overline",
+        "C8:forbidden-double-four",
+        "D8:forbidden-double-four",
+        "C9:forbidden-double-four",
+        "E10:forbidden-overline",
+        "B11:forbidden-overline",
+        "H12:forbidden-double-four"
+      ],
+      "id": "board-07",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLW..LLLLLLLL.LLL...LLLLLLLL..L...L..LLLL.L.L.....LL.LLLLLL.....L.LLLLLLL..........LLLL..L.......LLLLL..L......WLLLLL.L..LLLW.LLLLLLL.L..L.LLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLL.LLLLLL.LLLLLLLLLLLLL.LL.LL.L.LLLLLL...W.LL.L.LL.LL.LL.L.LL.LT..LLLLL.LL.LL.LLL..LLLLLLL..L.L.LL..L..LLLLLL..O......OL.LL.LOLL.LLW.LL.LLL...LFW..L...LL.LLLLL..LLLL.LL.L.....L.LL....WLL.LW..LLLL.L..LLL.LF....LLLLLLLL.LL.L.L",
+      "blackNodes": [
+        [
+          64,
+          3
+        ],
+        [
+          162,
+          3
+        ],
+        [
+          192,
+          3
+        ]
+      ],
+      "board": "...b......w.............w..b..b.b......bbb.b..w.b..w..w..w.b..b..bw.....b..b..b...wb.......bb.b.w..ww.wb......bw.bbbbbb..w..w....b...w..b...bbb...bb.bwb..b.....bb....b..w.wbwbb.b..bbbb...w..bb....w.bw...b..wwbb........b..w.b.",
+      "budget": 10000,
+      "forbidden": [
+        "E5:forbidden-double-three",
+        "H8:forbidden-overline",
+        "O8:forbidden-overline",
+        "G9:forbidden-overline",
+        "J10:forbidden-double-four",
+        "K14:forbidden-double-four"
+      ],
+      "id": "board-08",
+      "white": "LLL.LLLLLL.LLLLLLLLLLLLL.LL.LL.L.LLLLLL...L.LL.L.LL.LL.LL.L.LL.LL..LLLLL.LL.LL.LLW..LLLLLLL..L.L.LL..L..LLLLLL..L......LL.LL.LLLL.LLL.LL.LLL...LLL..L...LL.LLLLL..LLLL.LL.L.....L.LL....LLL.LL..LLLL.L..LLL.LL....LLLLLLLL.LL.L.L"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLWTLLLLLLLLLLLFL...W...LLLLLLL.LW.....LLLLLLLL..F.O..LLLLLLL.L.TL.LLLLLLLLL...LL.WLLLLLLLL.LLLT.LLLLLLLLLL.LL..LLLLLLLLL..L..W.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          37,
+          3
+        ],
+        [
+          51,
+          5
+        ],
+        [
+          112,
+          5
+        ],
+        [
+          113,
+          5
+        ],
+        [
+          115,
+          2
+        ],
+        [
+          143,
+          3
+        ]
+      ],
+      "board": ".................................................................bbb.bwb.......b..bbbbw........bb.b.wb.......w.b..b.........www..b.........w....b..........b..bb.........bb.wb.b.................................................",
+      "budget": 10000,
+      "forbidden": [
+        "G4:forbidden-double-three",
+        "D5:forbidden-double-four",
+        "H7:forbidden-double-four",
+        "J7:forbidden-overline",
+        "H8:forbidden-double-three",
+        "I10:forbidden-double-three"
+      ],
+      "id": "board-09",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L...LLLLLLL.LL.....LLLLLLLL..L.L..LLLLLLL.L.LL.LLLLLLLLL...LL.LLLLLLLLL.LLLL.LLLLLLLLLL.LL..LLLLLLLLL..L..L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L...LLLLLLLLLLL....LLLLLLLLLL...W.L.LLLLLLL....L...LLLLLLLLLL.LLL.LLLLLLLL.L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "..................................b.www...........wbwb..........bbb.b.b.......bwwb.bww..........b...w........b.w.................................................................................................................",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-10",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L...LLLLLLLLLLL....LLLLLLLLLL...L.L.LLLLLLL....L...LLLLLLLLLL.LLL.LLLLLLLL.L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLL....L..LLLLLLLLLL..L..LLLLLLL.LLLLLL.LLLLLLLLLLL...LLLLLLLLLLL..LLLLLLLLLLLL.LLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "...............................b.bw..............................w.b............bbbw.bw..........wb.bw.......b......b...........wwb...........bw............w...w.............................w............w.....................",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-11",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLL....L..LLLLLLLLLL..L..LLLLLLL.LLLLLL.LLLLLLLLLLL...LLLLLLLLLLL..LLLLLLLLLLLL.LLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "L...LLLLLF...W.LL.LL....W.LLLLL...LL.F..L....LLLL.L..LLLL..L.L.L....LL.LLL.LLLLLWLLLL.L.LL.LLL..L.LL..L..L.LLL.....L..L.L.LL.L.F.L....L.LLLO.....OL.LL.LLL.LWLWL.L.LLL.......LLL.LL......LL.L.LL..L.L..L.L...LL.L.L.LL.L.LLL.LLLL",
+      "blackNodes": [
+        [
+          157,
+          2
+        ]
+      ],
+      "board": ".bww......bbb.b..b..bwbb.w.....bww..b.bb.wbbb....b.bb....ww.b.b.wbbw..b...b..........b.w..w...bw.w..ww.bb.b...wbwbw.bw.b.w..w.b.b.bbww.w....bbbbb..b..w...w.....w.b...bwwwwbb...w..bbwbbb..b.b..ww.b.bw.b.wbb..w.b.b..w.b...b....",
+      "budget": 10000,
+      "forbidden": [
+        "J1:forbidden-double-four",
+        "H3:forbidden-double-four",
+        "H9:forbidden-double-four",
+        "E10:forbidden-overline",
+        "K10:forbidden-overline"
+      ],
+      "id": "board-12",
+      "white": "L...LLLLLL...L.LL.LL....L.LLLLL...LL.L..L....LLLL.L..LLLL..L.L.L....LL.LLL.LLLLLLLLLL.L.LL.LLL..L.LL..L..L.LLL.....L..L.L.LL.L.L.L....L.LLLL.....LL.LL.LLL.LLLLL.L.LLL.......LLL.LL......LL.L.LL..L.L..L.L...LL.L.L.LL.L.LLL.LLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLTLLLLLLLLLLLL....LLLLLLLLLL..LL..LLLLLLLLLLL.LW.LLLLLL.FLL.....LLLLLL..L.LLF.WLLLLLL...O...W.LLLLLT..LL.L..LLLLLLL....FLL..LLLLLO..L.F..L.LLL",
+      "blackNodes": [
+        [
+          84,
+          4
+        ],
+        [
+          141,
+          3
+        ],
+        [
+          182,
+          4
+        ]
+      ],
+      "board": ".................................................................................................bbwb..........bb..bb...........w..b......w...bwbbb......bb.b...b.......bbb.bbb.b......bb..w.bw.......bwwb...wb......bb.w.bb.b...",
+      "budget": 10000,
+      "forbidden": [
+        "J6:forbidden-double-three",
+        "E10:forbidden-double-four",
+        "J11:forbidden-double-four",
+        "G12:forbidden-overline",
+        "C13:forbidden-double-three",
+        "H14:forbidden-double-four",
+        "C15:forbidden-overline",
+        "H15:forbidden-double-four"
+      ],
+      "id": "board-13",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL....LLLLLLLLLL..LL..LLLLLLLLLLL.LL.LLLLLL.LLL.....LLLLLL..L.LLL.LLLLLLL...L...L.LLLLLL..LL.L..LLLLLLL....LLL..LLLLLL..L.L..L.LLL"
+    },
+    {
+      "black": "LL.LLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLL.L..LLLLLLLLLLL...LLL.LLLLLLLL....L.LLLLLLLLLLL....LLLLLLLLL........LLLLLLLL......LL.LLLLLL......L.LLLLLL.O....WLLLLLLLL...L.W.LLLLLLLLLL..WOL.LLLLLLL.F.L.LLLWLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "..w...........................b.b............w.wb...........bwb...b........bwww.b...........wwww.........bwwwbbww........bbwwbw..b......wbbbbw.w......b.bbbb.........www.b.b..........bw...b.......b.b.b.........................",
+      "budget": 10000,
+      "forbidden": [
+        "B11:forbidden-overline",
+        "F13:forbidden-overline",
+        "B14:forbidden-double-four"
+      ],
+      "id": "board-14",
+      "white": "LL.LLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLL.L..LLLLLLLLLLL...WLL.LLLLLLLL....L.LLLLLLLLLLW....WLLLLLLLL........LLLLLLLL......LL.LLLLLL......L.LLLLLL.L....LLLLLLLLL...L.L.LLLLLLLLLL..LLL.LLLLLLL.L.L.LLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.TOLLLLLLLLL.L.LL.WLLLLLLLLLL....LLLLLLLL.LLLW....WLL.LLL....T...LLLLL..L...T..TLLLLL.....TL...LLLLLL..LL.LLLLLLLLLLLL.LL.LLLLLLLLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          39,
+          3
+        ],
+        [
+          99,
+          3
+        ],
+        [
+          114,
+          3
+        ],
+        [
+          117,
+          3
+        ],
+        [
+          128,
+          3
+        ]
+      ],
+      "board": "......................................w...........b.b..b...........wwbb........b....bbbb...w...bbwb.bww.....bw.bbw.bb......wbbww..wbw......wb..w............w..b..........wb.....................................................",
+      "budget": 10000,
+      "forbidden": [
+        "J3:forbidden-double-three",
+        "K3:forbidden-overline",
+        "J7:forbidden-double-three",
+        "J8:forbidden-double-three",
+        "M8:forbidden-double-three",
+        "I9:forbidden-double-three"
+      ],
+      "id": "board-15",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLL.L.LL.LLLLLLLLLLL....LLLLLLLL.LLLL....LLL.LLL....L...LLLLL..L...L..LLLLLL.....LL...LLLLLL..LL.LLLLLLLLLLLL.LL.LLLLLLLLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLL.L.LLL.L.LLLLLLL.LLLLLLLL.LLLL..L.LLLLLLL.LL..LLLL.L..LL.LLLLLLLLLLLLLLLLLLLTLT.LLLLL.LLLL.T.TLLLLL.L.LL.L.LLL.LLL.LLLLLL.LLL..L.LLLLTLLTLL.LLL.LLLLLLLLLLLLLLLLL.LL.L.LLLLLLLL....LLLL.LLL.LL.LLLL.LLLLLL..LLLLL.LLLLLLLLL",
+      "blackNodes": [
+        [
+          82,
+          3
+        ],
+        [
+          84,
+          3
+        ],
+        [
+          97,
+          3
+        ],
+        [
+          99,
+          3
+        ],
+        [
+          139,
+          3
+        ],
+        [
+          142,
+          3
+        ]
+      ],
+      "board": "......b.b...w.b.......w........w....bb.b.......b..bw....w.bw..b......................b.....b....b.b......b.b..w.b...b...b......b...bb.b..........b...w.................b..b.w........bwbb....b...b..w....b......bb.....b.........",
+      "budget": 10000,
+      "forbidden": [
+        "H6:forbidden-double-three",
+        "J6:forbidden-double-three",
+        "H7:forbidden-double-three",
+        "J7:forbidden-double-three",
+        "E10:forbidden-double-three",
+        "H10:forbidden-double-three"
+      ],
+      "id": "board-16",
+      "white": "LLLLLL.L.LLL.L.LLLLLLL.LLLLLLLL.LLLL..L.LLLLLLL.LL..LLLL.L..LL.LLLLLLLLLLLLLLLLLLLLLL.LLLLL.LLLL.L.LLLLLL.L.LL.L.LLL.LLL.LLLLLL.LLL..L.LLLLLLLLLL.LLL.LLLLLLLLLLLLLLLLL.LL.L.LLLLLLLL....LLLL.LLL.LL.LLLL.LLLLLL..LLLLL.LLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLOLLLLLTOLLLLLLL..LL.TT.LLLLLLLL..F....LLLLLLLWL...F..LLLLLLLL.F..FF.LLLLLLLLL.FL.W.LLLLLLLL.O.....LLLLLLL.L.L..L.LLLLLLW.L.....LO",
+      "blackNodes": [
+        [
+          102,
+          4
+        ],
+        [
+          116,
+          3
+        ],
+        [
+          117,
+          6
+        ]
+      ],
+      "board": "...............................................................................................................bb..b..b........bb.bwbb.........wbw.bb........b.bb..b.........b..b.b........b.bbbbw.......b.b.bb.b.......w.bbwwb..",
+      "budget": 10000,
+      "forbidden": [
+        "G7:forbidden-overline",
+        "M7:forbidden-double-three",
+        "N7:forbidden-overline",
+        "L8:forbidden-double-three",
+        "M8:forbidden-double-three",
+        "J9:forbidden-double-four",
+        "L10:forbidden-double-four",
+        "I11:forbidden-double-four",
+        "L11:forbidden-double-four",
+        "M11:forbidden-double-four",
+        "J12:forbidden-double-four",
+        "I13:forbidden-overline",
+        "O15:forbidden-overline"
+      ],
+      "id": "board-17",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LL.LL.LLLLLLLL..L....LLLLLLLLL...L..LLLLLLLL.L..LL.LLLLLLLLL.LL.L.LLLLLLLL.L.....LLLLLLL.L.L..L.LLLLLLL.L.....LL"
+    },
+    {
+      "black": "L.LLLLLLLL.LLLLLOO.WW.LLLLLLLLL...L....L.LLLLO......OLLLLLLL.......L.L.LLLL..L....LLLLLLLLL.LLLO.WLLLLLLLL.LLL.LLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".b........b.......b..w.........bwb.bwww.w.....bbbbbb........bbbwwbw.w.w....bb.wbbb.........w....w.........w...b............b.....................................................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "B2:forbidden-overline",
+        "C2:forbidden-overline",
+        "A4:forbidden-overline",
+        "H4:forbidden-overline",
+        "F7:forbidden-overline"
+      ],
+      "id": "board-18",
+      "white": "L.LLLLLLLL.LLLLLLL.LL.LLLLLLLLL...L....W.LLLLL......LLLLLLLL.......L.L.LLLL..L....LLLLLLLLL.LLLL.LLLLLLLLL.LLL.LLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLL.LLLLLLLLLL..L.LLLL..LLLLLLLLLLT..LLLLLLL.L....LLLLLLLLLL.L..LLL.LLLLL.L.LL.LLLL.LLLLL.LLTL..LLLLLLLLL.LLLL.LL.LLLLLLLLLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          83,
+          3
+        ],
+        [
+          141,
+          3
+        ]
+      ],
+      "board": "...................................b................b..........bw.w....wb...........bb.......b.wbbw..........w.bw...b.....b.b..b....b.....b....bb.........b....w..b..........w..........b........................................",
+      "budget": 10000,
+      "forbidden": [
+        "I6:forbidden-double-three",
+        "G10:forbidden-double-three"
+      ],
+      "id": "board-19",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLL.LLLLLLLLLL..L.LLLL..LLLLLLLLLLL..LLLLLLL.L....LLLLLLLLLL.L..LLL.LLLLL.L.LL.LLLL.LLLLL.LLLL..LLLLLLLLL.LLLL.LL.LLLLLLLLLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".LLL.LLL.L.LLLLLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLL.LLLLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLL..LLLLL..LLLLL.LLLLLLL.LL.LLLLLLLLLLLLLLLLL.LL.LLLLLL.LLLLLLLLLLLL.LLLLLLLLLLL.LL.L.LL.LLLLLLLLLLLL.LLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "b...w...w.b...........w..b......................................b...b.....b..........b........................ww.....wb.....b.......w..w.................w..w......b............b...........b..w.b..b............b...............",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-20",
+      "white": ".LLL.LLL.L.LLLLLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLL.LLLLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLL..LLLLL..LLLLL.LLLLLLL.LL.LLLLLLLLLLLLLLLLL.LL.LLLLLL.LLLLLLLLLLLL.LLLLLLLLLLL.LL.L.LL.LLLLLLLLLLLL.LLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLWLLL.L..LLLLLLL...FLLLLLLLLLLL.TW....WLLLLLLL.TL.LLL.LLLLLLL...LL.LLLLLLLLLWL..LLL.LLLLLLL.L..LL..LLLLLLL.L.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          92,
+          3
+        ],
+        [
+          107,
+          3
+        ],
+        [
+          108,
+          4
+        ]
+      ],
+      "board": ".................................................................w.wb.......bbb............b..bbbb........b..b...w.......bbw..b...........wb...w.......w.bw..wb.......b.w..b.....................................................",
+      "budget": 10000,
+      "forbidden": [
+        "E6:forbidden-double-four",
+        "C7:forbidden-double-three",
+        "C8:forbidden-double-three"
+      ],
+      "id": "board-21",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L..LLLLLLL...LLLLLLLLLLLL.LL....LLLLLLLL.LL.LLL.LLLLLLL...LL.LLLLLLLLLLL..LLL.LLLLLLL.L..LL..LLLLLLL.L.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".....LLLLLLLLLL...L.L..LLLLLLL......LLLLLLLLL.L.....LLLLLLLLL...LW.WLLLLLLLLL..L.LLLLLLLLLLLLL.LLLLLLLLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "bbwbb..........wbb.b.bw.......wwbbwb.........b.wwbwb.........bww..b..........bb.w.............b..........ww......................................................................................................................",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-22",
+      "white": ".....LLLLLLLLLL...L.L..LLLLLLL......LLLLLLLLL.L.....LLLLLLLLL...LL.LLLLLLLLLL..W.LLLLLLLLLLLLL.LLLLLLLLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLL.LLLLLLLLLLLLLLO.LL..LLLLLLLL...L..LL.L.LLLL....LLLFLOLLLLL.L....L..L.LLL..L....L.F.LLLLLL..L...W.LLLLLL.L.LT.T.LLLLLLLL.L..L.L.LLLLLLL.LLL.LOL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          157,
+          3
+        ],
+        [
+          159,
+          4
+        ]
+      ],
+      "board": "....................................b............b...............b..bw........bbb.ww..b.b....bwwb...........b.bwbw.wb.w...bw.wbwb.b.b......bw.bbb.b......w.w..b.b........b.bw.b.b.......b...w...w................................",
+      "budget": 10000,
+      "forbidden": [
+        "E5:forbidden-overline",
+        "K7:forbidden-double-four",
+        "M7:forbidden-overline",
+        "L9:forbidden-double-four",
+        "H11:forbidden-double-three",
+        "J11:forbidden-double-three",
+        "K13:forbidden-overline"
+      ],
+      "id": "board-23",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLL.LLLLLLLLLLLLLLL.LL..LLLLLLLL...L..LL.L.LLLL....WLLLLLLLLLL.L....L..L.LLL..L....L.L.LLLLLL..L...L.LLLLLL.L.LL.L.LLLLLLLL.L..L.L.LLLLLLL.LLL.LLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLL.LL.L.LLLLLLLLLLLLLLLLLLLL.LLLLLLL.L.LLLLLLLLLLL..LLLLLLL..LLLLLLLLL.L.LLL.LLLL.LLLLL.LL...LLLLL.LLLLLLLLLLLL.LLTLLLLLLL.TL.LLL.TLLLLLLLL.LLLL...LLLL.LLLL.L.TLLLLLLLLLLLLLLLLLLL...LLLLLLLLLLLLLLLL.LLLL.LLLLLL.LLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          115,
+          3
+        ],
+        [
+          124,
+          3
+        ],
+        [
+          131,
+          3
+        ],
+        [
+          160,
+          3
+        ]
+      ],
+      "board": "...b..b.b....................w.......w.b...........wb.......ww.........b.w...w....w.....b..wbw.....b............b..........b..b...b.........b....bbb....w....b.b....................bbw................b....w......w.............",
+      "budget": 10000,
+      "forbidden": [
+        "K8:forbidden-double-three",
+        "E9:forbidden-double-three",
+        "L9:forbidden-double-three",
+        "K11:forbidden-double-three"
+      ],
+      "id": "board-24",
+      "white": "LLL.LL.L.LLLLLLLLLLLLLLLLLLLL.LLLLLLL.L.LLLLLLLLLLL..LLLLLLL..LLLLLLLLL.L.LLL.LLLL.LLLLL.LL...LLLLL.LLLLLLLLLLLL.LLLLLLLLLL.LL.LLL.LLLLLLLLL.LLLL...LLLL.LLLL.L.LLLLLLLLLLLLLLLLLLLL...LLLLLLLLLLLLLLLL.LLLL.LLLLLL.LLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...W.LLLLLLLLLWLOLW..LLLLLLLLL.L.TL..LLLLLLLLL.F...LLLLLLLLL.L.L...LLLLLLLLLTL.L.LLLLLLLLLL..LW..LLLLLLLLLWLLLWLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          99,
+          3
+        ],
+        [
+          101,
+          3
+        ],
+        [
+          112,
+          2
+        ],
+        [
+          144,
+          3
+        ]
+      ],
+      "board": "....................................................................bbb.b..............bb.........b.b..ww.........b.bwb.........b.b.bbw...........b.b..........bb..bb............................................................",
+      "budget": 10000,
+      "forbidden": [
+        "J6:forbidden-overline",
+        "L7:forbidden-double-three",
+        "K8:forbidden-double-four",
+        "J10:forbidden-double-three"
+      ],
+      "id": "board-25",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L.LLLLLLLLLLLLLL..LLLLLLLLL.L.LL..LLLLLLLLL.L...LLLLLLLLL.L.L...LLLLLLLLLLL.L.LLLLLLLLLL..LL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLL.....O..LLLLLLLLL..L..LLLLLLL.LLL...L.LLLLLLLL.L....LLLLLLLLLLL.L...LLLLLLLLLLL.LLOLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".......bwbbb.bb.........wb.bw.......b...wbb.w........b.wbbb...........b.wbw...........b..........................................................................................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "M1:forbidden-overline",
+        "O6:forbidden-overline"
+      ],
+      "id": "board-26",
+      "white": "LLLLLLL.....L..LLLLLLLLL..L..LLLLLLL.LLL...L.LLLLLLLL.L....LLLLLLLLLLL.L...LLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLL.LLLLLLLLLL.LL....LLLLLLOLOLL...W.LLLLLL..F..W..L.LLLLLL.L.....O..LLLL.....O....LLLLLL...W....L..LLL..W......O.LLLL.OLL...LFLLLLLLL.L...OL.LLLLLLLLL.OWLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".......................w.............b..........w..bbbw...........wbb.b......bb.bw.bb.w......b.wbbww.bw....wbbwb.wbbb......bbb.bwwb.bb...wb.wbbbbb.b....w...bbb.........w.wwb..w.........b.......................................",
+      "budget": 10000,
+      "forbidden": [
+        "B5:forbidden-overline",
+        "D5:forbidden-overline",
+        "E6:forbidden-double-four",
+        "K7:forbidden-overline",
+        "H8:forbidden-overline",
+        "L10:forbidden-overline",
+        "D11:forbidden-overline",
+        "K11:forbidden-double-four",
+        "I12:forbidden-overline",
+        "G13:forbidden-overline"
+      ],
+      "id": "board-27",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLL.LLLLLLLLLL.LL....LLLLLLLLLLL...L.LLLLLL..L..L..L.LLLLLL.L.....L..LLLL.....L....LLLLLL...L....L..LLL..L......L.LLLL.LLL...LLLLLLLLL.L...LL.LLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LL...LW....WLLL.LL..L.LLLLLL.L.LLLLLL..LLLLLL....WL..L.L.L.LL.LF...LL.L..L....W.LL.L.L.LLLLOLLL.L.L.LLLLL..LLL.WFL.LLL.LF.LLF....L...LL..W...LF..W..L.L....FL.LL..L...LL...LL..LWL.LL...LL.LL.L...LLLLL..LLLL..LLL..LL.L.LLL.LLLL",
+      "blackNodes": [
+        [
+          62,
+          3
+        ],
+        [
+          92,
+          3
+        ]
+      ],
+      "board": "..bbw..bbbb....w..bw.w......w.b......wb......bbbb..bw.w.b.w..b..bbb..w.bw.bbbb.b..w.w.b........w.b.b.....bb...b...w...w..b...bbbw.bwb..bw.wbb..bb.bb.w.wbbb..b..wb.bbb..wbw..wb...b..wwb..w..w.bww.....ww....bb...bb..w.w...w....",
+      "budget": 10000,
+      "forbidden": [
+        "D5:forbidden-double-four",
+        "B7:forbidden-overline",
+        "H8:forbidden-double-four",
+        "A9:forbidden-double-four",
+        "E9:forbidden-double-four",
+        "H10:forbidden-double-four",
+        "F11:forbidden-double-four"
+      ],
+      "id": "board-28",
+      "white": "LL...LL....LLLL.LL..L.LLLLLL.L.LLLLLL..LLLLLL....LL..L.L.L.LL.LL...LL.L..L....L.LL.L.L.LLLLLLLL.L.L.LLLLL..LLL.LLL.LLL.LL.LLL....L...LL..L...LL..L..L.L....LL.LL..L...LL...LL..LLL.LL...LL.LL.L...LLLLL..LLLL..LLL..LL.L.LLL.LLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLWLLLLLLLLLLLLLL...L.LLLLLLLLLL.LL..LLLLLLLLLL.LLL..LLLLLLLLL.L.LLLLLLLLLLL.WL..LLLLLLLLLLLL.L.L.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".......................................bwb.b..........b..wb..........b...bw.........b.w...........w..wb............b.w.b..........b..............................................................................................",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-29",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L.LLLLLLLLLL.LL..LLLLLLLLLL.LLL..LLLLLLLLL.L.LLLLLLLLLLL.LL..LLLLLLLLLLLL.L.L.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLW...LLOLLLLLLLO......OLLLLLL.L......LLLLLLLL..L..W.LLLLLL........W.LLLLLLL.L..O..LLLLLLLL.OLO.LL.LLLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          115,
+          2
+        ]
+      ],
+      "board": ".........bbw...........bbbbbb.......w.wwbbbw........bw.bb.w......wwwbwbbb.b.......w.bb.bw........b...b..w.........b..b...........................................................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "O1:forbidden-overline",
+        "H2:forbidden-overline",
+        "O2:forbidden-overline",
+        "L6:forbidden-overline",
+        "I7:forbidden-overline",
+        "K7:forbidden-overline"
+      ],
+      "id": "board-30",
+      "white": "LLLLLLLLL...LLLLLLLLLLL......LLLLLLL.L......LLLLLLLL..L..L.LLLLLL........L.LLLLLLL.L..L..LLLLLLLL.LLL.LL.LLLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLWLOL.LLLLLLLLLLL...L..LLLLLLLLL......L.LLLLLLL.......LLLLLLWL........LLLLLL.........WLLLL...O.......WLLL.O..........LLL.........L.LLLLLL.......LLLLLLL.......LL.LLLLL.L.L.LLL.LLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "......................w...........bbw.bb.........bbbwbb.w.......bbbwwwb........wbwbbbwb......bwbwwwbwb.....wwb.wbwbbbb....w.bbbbbbwwww...wwwwbwwww.b......wbwwwbb.......bwbwwww..b.....b.w.b...b...........w.....................",
+      "budget": 10000,
+      "forbidden": [
+        "F2:forbidden-overline",
+        "F8:forbidden-overline",
+        "D9:forbidden-overline"
+      ],
+      "id": "board-31",
+      "white": "LLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLL...L..LLLLLLLLL......L.LLLLLLL.......LLLLLLLL........LLLLLL.........LLLLL...L.......LLLL.L..........WLW.........W.LLLLLL.......LLLLLLL.......WL.LLLLL.L.W.WLL.LLLLLLLWLLL.LLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".LL..LL...LLL.LL.LLLL.L.LLL.LLLLL.LL.L...LLLLL.L.L..LL..LL.LL....LLLLL.LLLLLLLLLLL.LL.LLL..LLLLL.LLLL.LL.LLL.LLL..LL.L..LLLLL.LL..L...L..LLL.L..F.FL..LLLLL.LLL.FLLLLLLL.LL.L.LL.LLLLL.L.LL.LL..L.L.LLL.LL.L.LLLLL.LLL..LL.LL.L.L",
+      "blackNodes": [],
+      "board": "w..wb..wwb...w..b....w.w...w.....b..b.bbw.....w.w.bb..bb..b..bwbw.....w...........w..w...ww.....w....b..b...w...bw..b.bw.....w..bw.bbb.bb...w.bb.b..wb.....w...w........b..w.b..b.....w.w..b..ww.b.b...b..b.b.....w...wb..w..w.b.",
+      "budget": 10000,
+      "forbidden": [
+        "J10:forbidden-double-four",
+        "L10:forbidden-double-four",
+        "K11:forbidden-double-four"
+      ],
+      "id": "board-32",
+      "white": ".LL..LL...LLL.LL.LLLL.L.LLL.LLLLL.LL.L...LLLLL.L.L..LL..LL.LL....LLLLL.LLLLLLLLLLL.LL.LLL..LLLLL.LLLL.LL.LLL.LLL..LL.L..LLLLL.LL..L...L..LLL.L..L.LL..LLLLL.LLL.LLLLLLLL.LL.L.LL.LLLLL.L.LL.LL..L.L.LLL.LL.L.LLLLL.LLL..LL.LL.L.L"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLTLLLLLLLLLLLL...L.L..LLLLLLL...L.T.LLLLLLLL..L...T.LLLLLLLLL..LLL.LLLLLLL.LLLLL.LLLLLLLLLLLLL..LLLLLLLL...LLL.LLLLLLLL.LLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          23,
+          3
+        ],
+        [
+          56,
+          3
+        ],
+        [
+          72,
+          3
+        ]
+      ],
+      "board": "....................................wbb.b.bb.......bww.b.b........wb.wwb.w.........wb...b.......b.....w.............bw........www...b........b....bb.............................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "I2:forbidden-double-three",
+        "L4:forbidden-double-three",
+        "M5:forbidden-double-three"
+      ],
+      "id": "board-33",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L.L..LLLLLLL...L.L.LLLLLLLL..L...L.LLLLLLLLL..LLL.LLLLLLL.LLLLL.LLLLLLLLLLLLL..LLLLLLLL...LLL.LLLLLLLL.LLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLL.W.....LLLLLLLLL.L..L..LLLLLLL...L...LLLLLLLL.W...L.L..LLL.L...L.L..LLL.LL.LL.L..L.L.LLL...L...LLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".....w.bbbbw.........w.bw.ww.......bwb.bbw........w.wwb.b.bw...b.bbw.b.ww...w..w..w.ww.w.b...bww.bwb.............b...............................................................................................................",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-34",
+      "white": "LLLLL.L.....LLLLLLLLL.L..L..LLLLLLL...L...LLLLLLLL.L...L.L..LLL.L...L.L..LLL.LL.LL.L..L.L.LLL...L...LLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLWLLL..LLLLLLLLLL.L.LLLLLLLLLLO.L...L...LLLL..........LLLLLLL......L.LLLLLL.......W.LLLLL............LLLL........LLLLLLL..L.....LLLLLLLLL.L.....L.LLLLLL..LLLWOLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".......................bb..........b.w...........b.bwb.wwb....bwbwwbwbbb.......wbbbbw.b......wwwbbbw.w.....wwbbwbwwbbww....wbbbwbbb.......ww.bbwbb.........b.wwwbw.w......wb............b..w.....................................",
+      "budget": 10000,
+      "forbidden": [
+        "D4:forbidden-overline",
+        "L12:forbidden-overline"
+      ],
+      "id": "board-35",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLLLL.L.LLLLLLLLLWL.L...L...LLLL..........LLLLLLW......L.LLLLLL.......L.LLLLL............LLWL........LLLLLLL..L.....LLLLLLLWL.L.....L.LLLLLL..LLLWLLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "..LL...LLL.....L.LLL..L..L..L.LLL..LL...LLLL..L..LL.LLL.LL.....LLW..LLLL.LL.LL...LLTL.LLLLL.LL.T.L.LLL.LLL.LLTT..L.L.LLL.LL.T.LL..LLLLL..LLLL.LLLLL.LLLL.LL..LLLLLLL..L..LLL.LL..L..LL.L.LLLLL.L...LL.LL.LLLL...FLLLLW....WLL...L",
+      "blackNodes": [
+        [
+          83,
+          3
+        ],
+        [
+          95,
+          3
+        ],
+        [
+          109,
+          3
+        ],
+        [
+          110,
+          3
+        ],
+        [
+          124,
+          3
+        ]
+      ],
+      "board": "bb..www...bwbbw.w...bw.bw.wb.b...bb..bbw....ww.ww..b...b..wwwbw...wb....b..w..wbb....w.....w..b.w.b...b...b....bb.w.b...w..b.b..bw.....bw....w.....b....w..ww.......bw.bw...b..wb.bw..b.b.....b.wbb..w..w....bbb......bbbb...bwb.",
+      "budget": 10000,
+      "forbidden": [
+        "I6:forbidden-double-three",
+        "F7:forbidden-double-three",
+        "E8:forbidden-double-three",
+        "F8:forbidden-double-three",
+        "E9:forbidden-double-three",
+        "N14:forbidden-double-four"
+      ],
+      "id": "board-36",
+      "white": "..LL...LLL.....L.LLL..L..L..L.LLL..LL...LLLL..L..LL.LLL.LL.....LLL..LLLL.LL.LL...LLLL.LLLLL.LL.L.L.LLL.LLL.LLLL..L.L.LLL.LL.L.LL..LLLLL..LLLL.LLLLL.LLLL.LL..LLLLLLL..L..LLL.LL..L..LL.L.LLLLL.L...LL.LL.LLLL...LLLLLL....LLL...L"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLTL..LLLLLL.L.L...LFLLLLLLL..L.....LLLLLL.LL.....LLLLLLL..L.LL...LLLLLLL..LL...LLLLLLL..LL.L...LLLLLL.L.......WLLLLLLLL...L.FLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          40,
+          4
+        ],
+        [
+          161,
+          3
+        ]
+      ],
+      "board": "...................................b......bb......b.w.bbb.........bw.bwwbb......w..wwwbw.......wb.w..bwb.......bw..bwb.......ww..b.wwb......b.bwwbbbb.........wbb.b..............................................................",
+      "budget": 10000,
+      "forbidden": [
+        "K3:forbidden-double-three",
+        "N4:forbidden-double-four",
+        "N11:forbidden-double-four"
+      ],
+      "id": "board-37",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLL..LLLLLL.L.L...LLLLLLLLL..L.....LLLLLL.LL.....LLLLLLL..L.LL...LLLLLLL..LL...LLLLLLL..LL.W...LLLLLL.L.......LLLLLLLLL...L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".......L.LLLLLL......O.LLLLLLL...........LLLL.O........LLLLL......OWWLLLLLL........LL.LLLL...FLOLOLLLLLLL...LFLLLLLLLLLLLLOL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "bbbwbbw.w......bwbbbb.b.......bbwbwwbbbww....b.bbbbwbww.....wbbbbb.........wwbwbwbb..w....wbb............bbb................w....................................................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "G2:forbidden-overline",
+        "B4:forbidden-overline",
+        "G5:forbidden-overline",
+        "D7:forbidden-double-four",
+        "F7:forbidden-overline",
+        "H7:forbidden-overline",
+        "E8:forbidden-double-four",
+        "C9:forbidden-overline"
+      ],
+      "id": "board-38",
+      "white": ".......L.LLLLLL......L.LLLLLLL...........LLLL.L........LLLLL......LLLLLLLLL........LL.LLLL...LLLLLLLLLLLL...LLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLWWLLLL.LLLLLLLLF..O..LLLLLLLLL.F..W...LLLLLLW........LLLLLLL.O....W..LLLLLL.........LLLLO..........LLLL.LW.W....W..LLLLLLW.......LLLLLLL..L.L.LFLLLLLLLLL...L.L.LLLLLLLW..W..OLLLLLLLLLLL.LLLLLLLLLLLLLLLWLLLLL",
+      "blackNodes": [
+        [
+          77,
+          3
+        ]
+      ],
+      "board": "........................b.........bb.bw.........w.bb.bww.......bwbbbbww.......b.wbbb.ww......bbwbbwwbb.....bbbbbwwbwb....w..w.bbbb.wb.......wwwbwbb.......bb.b.b...........bww.b.b........bb.bb............b.....................",
+      "budget": 10000,
+      "forbidden": [
+        "D3:forbidden-double-four",
+        "G3:forbidden-overline",
+        "E4:forbidden-double-four",
+        "E6:forbidden-overline",
+        "B8:forbidden-overline",
+        "L11:forbidden-double-four",
+        "L13:forbidden-overline"
+      ],
+      "id": "board-39",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLWL.LLLLLLLLL..L..LLLLLLLLL.L..L...LLLLLLL........LLLLLLL.L....L..LLLLLL.........WLLLL..........LLLL.LL.L....L..LLLLLLL.......LLLLLLL..L.L.LLLLLLLLLLL...L.L.LLLLLLLL..L..LLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "L.LLLL.LLLLLLL..L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLL.LLLL...LLLL.LLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLLLLLLL.LLLLLL",
+      "blackNodes": [],
+      "board": ".w....b.......bw.b...............................................w..w...............................................b.b.....b....wbb....b........w............................b.......................w.w.................w......",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-40",
+      "white": "L.LLLL.LLLLLLL..L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLL.LLLL...LLLL.LLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLLLLLLL.LLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L.L.LLLLLLLL....LLLLLLLLLLLLLLLLLLLLLLLLLL.L..L..LLLLLLLLL.LLLLTLLLLLLLL..L.L..LLLLLLLLLLL...LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          80,
+          2
+        ],
+        [
+          101,
+          3
+        ],
+        [
+          115,
+          3
+        ]
+      ],
+      "board": ".................................................bbb.w.b........wbbb..........................b.bw.bb.........w.............bw.w.bb...........bbw................................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "K8:forbidden-double-three"
+      ],
+      "id": "board-41",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L.L.LLLLLLLL....LLLLLLLLLLLLLLLLLLLLLLLLLL.L..L..LLLLLLLLL.LLLLLLLLLLLLL..L.L..LLLLLLLLLLL...LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLLLLLLLLLLWLLLLLLLLLLL...LLLLLLLLLL.TL.L.LLLLLLLL.O.....LLLLLL..LL....LL..LLL.L..L.L..LLLLLLLLL...L.L..LLLL.LLLL.......LLLLLLLLL..LL.LLLLLLLLLLLL.LLLLLL",
+      "blackNodes": [
+        [
+          109,
+          3
+        ]
+      ],
+      "board": ".................................................................ww............................bwb..........b..b.w........b.bbbbw......bw..bwbw..ww...b.ww.w.ww.........wwb.b.bb....b....wbwbwww.........bb..b............w......",
+      "budget": 10000,
+      "forbidden": [
+        "E8:forbidden-double-three",
+        "D9:forbidden-overline"
+      ],
+      "id": "board-42",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLL...LLLLLLLLLL.LL.L.LLLLLLLL.L.....LLLLLL..LL....LL..LLL.L..L.L..LLLLLLLLL...L.L..LLLL.LLLL.......LLLLLLLLL..LL.LLLLLLLLLLLL.LLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLL..LL.LLLLLLLL......LLLLLLL.LLT..LTTLLLLL.LLLL...LTLLLLLLLLLL.....LLLLL.LL..WL.L.LLLLLL....LL.LLLLLLLLLLLLL.LLLLLLL.LLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          96,
+          3
+        ],
+        [
+          100,
+          3
+        ],
+        [
+          101,
+          3
+        ],
+        [
+          116,
+          3
+        ]
+      ],
+      "board": ".....................................................b.............wb..w........wwbwbb.......w...bb........b....bww............bwbwb.....w..wb..b.b......bbbw..b.............w.......w....................w......................",
+      "budget": 10000,
+      "forbidden": [
+        "G7:forbidden-double-three",
+        "K7:forbidden-double-three",
+        "L7:forbidden-double-three",
+        "L8:forbidden-double-three"
+      ],
+      "id": "board-43",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLL..LL.LLLLLLLL......LLLLLLL.LLL..LLLLLLLL.LLLL...LLLLLLLLLLLL.....LLLLL.LL..LL.L.LLLLLL....LL.LLLLLLLLLLLLL.LLLLLLL.LLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLL.LL...LLLLLLLLLLLLLL.LLLLLLLLL.LLLLLL.LLLL..L.LLLLLLLLLLLLL.LLLLLLLLLL.LLL.LLLLLLLLLL.LLLW.LLLLLLLLLLLLL.LLLL.LLLLLLLLL.LLL.LLLL.LLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLL.LLLL.LLLLLLLLLLLLLLLLLLL.LL..LLLLLLLLLLLLLLL.LLLL",
+      "blackNodes": [],
+      "board": "....b..bbw..............w.........b......b....bb.b.............b..........w...b..........b....w.............b....b.........b...b....b........................b.................b....w...................w..ww...............w....",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-44",
+      "white": "LLLL.LL...LLLLLLLLLLLLLL.LLLLLLLLL.LLLLLL.LLLL..L.LLLLLLLLLLLLL.LLLLLLLLLL.LLL.LLLLLLLLLL.LLLL.LLLLLLLLLLLLL.LLLL.LLLLLLLLL.LLL.LLLL.LLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLL.LLLL.LLLLLLLLLLLLLLLLLLL.LL..LLLLLLLLLLLLLLL.LLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLLLL.L..FL..LLLLLLL.LL....LLLLLLLL.L...W..LLLLLLL.LL..W.LLLLLLLLT.LLF...LLLLLLLL.L.F..LLLLLLLLL..LL..LLLLLLLLLLLLLLOLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          151,
+          3
+        ],
+        [
+          199,
+          3
+        ]
+      ],
+      "board": "...............................................................................bw..........b.bb..wb.......b..bbbw........w.bwb.bw.......b..wb.b.........b...bbb........b.b.bb.........wb..bb.....................................",
+      "budget": 10000,
+      "forbidden": [
+        "F7:forbidden-double-four",
+        "B11:forbidden-double-three",
+        "F11:forbidden-double-four",
+        "F12:forbidden-double-four",
+        "H14:forbidden-overline"
+      ],
+      "id": "board-45",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLLLL.L..LL..LLLLLLL.LL....LLLLLLLL.L...L..LLLLLLL.LL..L.LLLLLLLLL.LLL...LLLLLLLL.L.L..LLLLLLLLL..LL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLOLLLLLLLL.LLLL..LLLLLLLL.L.....L.LLLLLFL.....LLLLLLLLLFF.......LLLLLL..........LLLLF.F......L.LLLLOL.W.....L.L",
+      "blackNodes": [],
+      "board": "............................................................................................................................b....bb........b.wbbww.w.......bbbwb...........bbbwwbb......bbbwwwwwbb.....b.bbwwbb.w......b.bwwbb.w.",
+      "budget": 10000,
+      "forbidden": [
+        "K8:forbidden-overline",
+        "D11:forbidden-double-four",
+        "E12:forbidden-double-four",
+        "F12:forbidden-double-four",
+        "D14:forbidden-double-four",
+        "F14:forbidden-double-four",
+        "D15:forbidden-overline"
+      ],
+      "id": "board-46",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLL..LLLLLLLL.L.....L.LLLLLLL.....LWLLLLLLLLL.......LLLLLL..........LLLLL.L......L.LLLLLL.L.....L.L"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLOLLLLLLLLL...L.LLLLL.LL..L...LLLLLLLL..WWO.LLLLLLL.......W.LOLLLW...........LLL...W........LLL.L.........LWLLLLL...L...LLLLLL..L........LLLLOLL.W.....OLLLLLL.L.LL.OLLLLLLLLLLLTLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          136,
+          3
+        ],
+        [
+          202,
+          3
+        ]
+      ],
+      "board": ".....................................wbb.b.....b..bb.wbb........ww...b.......bwwbbwb.b......wbbbbbbbwbw...bbw.bbbbwbbb...b.bwbwwbbbw.......bwb.bwb......bb.bwbbwbbw.......b.bwbbw.......b.w..w...................................",
+      "budget": 10000,
+      "forbidden": [
+        "M2:forbidden-overline",
+        "I5:forbidden-overline",
+        "M6:forbidden-overline",
+        "C12:forbidden-overline",
+        "M12:forbidden-overline",
+        "K13:forbidden-overline",
+        "H14:forbidden-double-three"
+      ],
+      "id": "board-47",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L.LLLLL.LL..L...LLLLLLLL..LLL.LLLLLLW.......L.LLLLLL...........LLL...L........LLL.L.........LLLLLLL...L...LLLLLL..L........LLLLLLL.L.....LLLLLLL.L.LL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LL.LL...LL.L..L.LLLL.LLL.LL.L.L..LL.LL.L.LLL..L.LLLL.LLLL...L..LLLLL..LLLLL.L.L.LLF.FLLL.LLLLL..F.W.F.WT.LLL..W..L...LLLL.L.F..F.L...LLLLLL....O....WL.LLW..FLWLLLLLL..LW.FL.LLLF..L..L.LLLL....LL.LL..LLLLLL.LLL.L..LLL.L.LLLLL.",
+      "blackNodes": [
+        [
+          103,
+          3
+        ]
+      ],
+      "board": "..b..wbb..w.bw.b....b...b..b.w.bb..b..w.w...bb.w....b....wbb.bw.....bw.....w.b.b...w....b.....wb.b.b.w..w...ww.bb.bwb....w.w.bb.b.bbw......bbwb.bbbb..b...bb.........bb..b..b....ww.ww.b....bbww..b..wb......b...b.bb...b.w.....w",
+      "budget": 10000,
+      "forbidden": [
+        "H6:forbidden-double-four",
+        "J6:forbidden-double-four",
+        "G7:forbidden-double-four",
+        "K7:forbidden-double-four",
+        "N7:forbidden-double-three",
+        "E9:forbidden-double-four",
+        "H9:forbidden-double-four",
+        "I10:forbidden-overline",
+        "G11:forbidden-double-four",
+        "F12:forbidden-double-four",
+        "L12:forbidden-double-four"
+      ],
+      "id": "board-48",
+      "white": "LL.LL...LL.L..L.LLLL.LLL.LL.L.L..LL.LL.L.LLL..L.LLLL.LLLL...L..LLLLL..LLLLL.L.L.LLL.LLLL.LLLLL..L.L.L.LL.LLL..L..L...LLLL.L.L..L.L...LLLLLL....L....LL.LLL..LLLLLLLLL..LL.LL.LLLL..L..L.LLLL....LL.LL..LLLLLL.LLL.L..LLL.L.LLLLL."
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLWLLLLLLL.L.LLL.L.LLLLLLLL....L..LLLLLLL.LL.L.TLLLLLLL..L.LLLLLLLLLLLLLW.LLL..LLLLLL.L.LL..LLLLLLLL.LLLLF.LLLLLLLL.LL....LLLLLLLLLLL.W...LLLLLLL",
+      "blackNodes": [
+        [
+          127,
+          3
+        ]
+      ],
+      "board": "..........................................................................................b.b...b.w........bwwb.bb.......b..b.b........wb.b..............b...bw......b.b..bw........w.....b........b..wwbb...........b.bbb.......",
+      "budget": 10000,
+      "forbidden": [
+        "H9:forbidden-double-three",
+        "F13:forbidden-double-four"
+      ],
+      "id": "board-49",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLL.L.LLLLLLLL....L..LLLLLLL.LL.L.LLLLLLLL..L.LLLLLLLLLLLLLL.LLL..LLLLLL.L.LL..LLLLLLLL.LLLLL.LLLLLLLL.LL....LLLLLLLLLLL.L...LLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLWLLLLLLLLLLLL.L.LLLL.LL.L.LLF...LL...LLLL..LL.LL.LLL..LL.LLL.LLLLLL....L.L.WLLLLLL........LLLLLLLL.W...LL.LLLLLLLL.L.L.L.LLLLLLL....L.LLLLLLLLLL..WLLLLLLLLLLLLLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".........................b.b....w..b.b...bbb..bwb....wb..b..b...wb..b...b......bwwb.w.w.......bbwwwbww........b.bbb..b........w.b.w.b.......wwbb.w..........ww...............b..........w........................................",
+      "budget": 10000,
+      "forbidden": [
+        "K3:forbidden-double-four"
+      ],
+      "id": "board-50",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLL.LL.L.LLL...LL...LLLL..LL.LL.LLL..LL.LLL.LLLLLL....L.L.LLLLLLL........LLLLLLLL.W...LL.LLLLLLLL.L.L.L.LLLLLLL....L.LLLLLLLLLL..LLLLLLLLLLLLLLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLW.LLLLLLLLLLLL.L.F.F.LLLLLLLL..L....LLLLL.LL..O..W..LLLLLLL.......LFLLLL...........LLLLL.........WLLLLL..........WLLL...L.....L.LLLL..L.......LWLLLLLL....L.LLLLLLL.L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": ".....................w............b.b.b.b........ww.bbww.....b..ww.bb.ww.......wwbbwbb......bbwwbwwbwbb.....bwbbwbbbb......wwwbbwbbbb....wwb.bwwww.b....ww.wwbbwww........wbww.b.......b.b.......................................",
+      "budget": 10000,
+      "forbidden": [
+        "H3:forbidden-double-four",
+        "J3:forbidden-double-four",
+        "G5:forbidden-overline",
+        "M6:forbidden-double-four"
+      ],
+      "id": "board-51",
+      "white": "LLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLL.W.L.L.LLLLLLLL..L....LLLLL.LL..L..L..LLLLLLL.......LLLLLL...........LLLLL.........LLLLLL..........LLLL...L.....W.LLLW..W.......LLLLLLLL....L.WLLLLLL.W.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".O.LLLLLLL....L.L.LLL.LL..LLLLLLW.LL.WLL....LL....O..LLL.LLLLL..L....LL.LLL...L.L.LLLLLL...LL.LLLO.L..LL.L..OLLLL.L.LLL.LL...LLLLLL...LLL.LL.LL.L.L.LL.LL.L..LTLL...L.LLL.LL.T.F.FL...L.LLLL....LL.L.WL..LLL......L.LLLL.L.LLLLL.",
+      "blackNodes": [
+        [
+          82,
+          4
+        ],
+        [
+          157,
+          4
+        ],
+        [
+          158,
+          4
+        ],
+        [
+          173,
+          4
+        ]
+      ],
+      "board": "b.b.......wwbw.b.b...w..bw.......b..w...bwwb..wbbb.bb...w.....bw.bwbb..b...www.b.b......bbw..b....w.ww..w.ww.....w.b...w..wbb......www...w..b..b.b.b..b..w.bb....wbb.w...b..b.b.b..wbw.b....bbwb..b.w..bb...wbwbww.b....w.w.....b",
+      "budget": 10000,
+      "forbidden": [
+        "B1:forbidden-overline",
+        "F4:forbidden-overline",
+        "H7:forbidden-overline",
+        "D8:forbidden-overline",
+        "I11:forbidden-double-three",
+        "I12:forbidden-double-three",
+        "K12:forbidden-double-four",
+        "M12:forbidden-double-four"
+      ],
+      "id": "board-52",
+      "white": ".L.LLLLLLL....L.L.LLL.LL..LLLLLLL.LL.LLL....LL....L..LLL.LLLLL..L....LL.LLL...L.L.LLLLLL...LW.LLLL.L..LL.L..LLLLL.L.LLL.LL...LLLLLL...LLL.LL.LL.L.L.LL.LL.L..LLLL...L.LLL.LL.L.L.LL...L.LLLL....LL.L.LL..LLL......L.LLLL.L.LLLLL."
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLOLOLLLLLLLLL........LLLLLLLO.L.L..LLLLLLLL.O..F...LLLLLLL..F.F...LLLLLLL........LLLLLLL...O.OLLLLLLLLL..W..F.FLLLLLLL.W......LLLLLLLOLLLLLTLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          186,
+          3
+        ]
+      ],
+      "board": "............................................................wbbbbwbb........b.b.ww........b.bb.wbw.......bb.b.wwb.......bbwbbbwb.......bbw.b..........bb.bb.b........b.wbwbbb....................................................",
+      "budget": 10000,
+      "forbidden": [
+        "D4:forbidden-overline",
+        "F4:forbidden-overline",
+        "A6:forbidden-overline",
+        "B7:forbidden-overline",
+        "E7:forbidden-double-four",
+        "C8:forbidden-double-four",
+        "E8:forbidden-double-four",
+        "D10:forbidden-overline",
+        "F10:forbidden-overline",
+        "F11:forbidden-double-four",
+        "H11:forbidden-double-four",
+        "A13:forbidden-overline",
+        "G13:forbidden-double-three"
+      ],
+      "id": "board-53",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLWLLLLLLLLL........LLLLLLLL.L.L..LLLLLLLL.L..L...LLLLLLL..L.L...LLLLLLL........LLLLLLL...L.LLLLLLLLLL..L..L.LLLLLLLL.L......LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LL.O.........LLLLL........LLLLLLLL..F.......LL.LO.........LLLLL.....W.W....LLLL......W...LLL.LLO..W..O...LLLL.L.OL.OLLLLLLLLLLLLL.L.L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "..w.bbbbbwbbb.....bwbwwbbb........bb.bwwbwwb..b..bbbbbwbwb.....bwbbb.b.bbww....wbwbbw.bww...b...bb.bb.bbb....w.w..w..............w.w.w...........................................................................................",
+      "budget": 10000,
+      "forbidden": [
+        "D1:forbidden-overline",
+        "G3:forbidden-double-four",
+        "D4:forbidden-overline",
+        "F7:forbidden-overline",
+        "L7:forbidden-overline",
+        "H8:forbidden-overline",
+        "K8:forbidden-overline"
+      ],
+      "id": "board-54",
+      "white": "LL.L.........LLLLL........LLLLLLLL..L.......LL.LL.........LLLLL.....L.L....LLLL......L...LLL.LLL..L..L...LLLL.L.LL.LLLLLLLLLLLLLL.L.L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLL.L.LLLLLLLLL....FL.LLLLLLLLLLL...LLLLLLLL.L..LWL.LLLLLLLL.FL...W.LLLLLLLLLL.LL..LLLLL..LLL.L.LLLLLLLLLL.LLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          160,
+          2
+        ]
+      ],
+      "board": "...............................................b...................w.b.........wwbw..w...........bwb........b.wb...b........b..bbb.b..........w..bb.....bb...b.w..........b...b..........w.......................................",
+      "budget": 10000,
+      "forbidden": [
+        "I6:forbidden-double-four",
+        "F9:forbidden-double-four"
+      ],
+      "id": "board-55",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLLLLL.L.LLLLLLLLL....LL.LLLLLLLLLLL...LLLLLLLL.L..LLL.LLLLLLLL.LL...L.LLLLLLLLLL.LL..LLLLL..LLL.L.LLLLLLLLLL.LLL.LLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "L.L.L..L.LL.LLLLLL..LWL.LLL.LL.LL.LL.LLLLL.L.LL.LLL.LLLLL.LLL..L...L..LLLL.L.LLLL..L.LL.LLLLLLLLLLLLL..L.LL...LL..LLL..LL....LL...LL.LLL.LLLFL.L.LLLLLLLLLLLL.LL..L..LLLL....LLLL.LLL.LLLLL.LT.LLL.LLL.LLLL...LLLLLL.L.L.LLLLL..L",
+      "blackNodes": [
+        [
+          189,
+          3
+        ]
+      ],
+      "board": ".w.w.wb.b..b......wb...w...w..b..b..b.....w.b..b...b.....b...ww.wwb.ww....b.b....ww.w..w.............bb.b..wbw..ww...ww..wbwb..wbb..b...b.....w.b............w..wb.wb....wwbb....b...b.....b..b...w...w....bwb......b.b.w.....bw.",
+      "budget": 10000,
+      "forbidden": [
+        "F10:forbidden-double-four",
+        "J13:forbidden-double-three"
+      ],
+      "id": "board-56",
+      "white": "L.L.L..L.LL.LLLLLL..LLL.LLL.LL.LL.LL.LLLLL.L.LL.LLL.LLLLL.LLL..W...L..LLLL.L.LLLL..L.LL.LLLLLLLLLWLLL..L.LL...LL..LLL..LL....LL...LL.LLL.LLLLL.L.LLLLLLLLLLLL.LL..L..LLLL....LLLL.LLL.LLLLL.LL.LLL.LLL.LLLL...LLLLLL.L.L.LLLLL..L"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL....L.L.LLLLLLL.LL.L.L.LLLLLLL...LLLLLLLLLLLLL..L.L..LLLLLLL.L.L..L.LLLLLLL..LLLL..LLLLLLLLLLL...LLLLLLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          144,
+          3
+        ]
+      ],
+      "board": "................................................................bbww.w.w.......b..b.b.w.......wbw.............bw.b.bb.......b.w.bb.b.......bw....ww...........bbw........bw......................................................",
+      "budget": 10000,
+      "forbidden": [],
+      "id": "board-57",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL....L.L.LLLLLLL.LW.L.L.LLLLLLL...LLLLLLLLLLLLL..L.L..LLLLLLL.L.L..L.LLLLLLL..LLLL..LLLLLLLLLLL...LLLLLLLL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLLLL...LLLLLLLLLL.L..L.LLLLLLLL.L..WLLLLLLLLL...L..LLLLLLLLLLW...LLLLLLLLLLL..LOLLLLLLLLL...LL..LLLLLLLLLO.....OLLLLLLL....L...LLLLLLL.L.LL.LLLLLLLLLLLL.LW.L.LLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          36,
+          3
+        ],
+        [
+          121,
+          2
+        ],
+        [
+          181,
+          2
+        ]
+      ],
+      "board": ".................................b.b..............wbw..........b.bb.b........b.bb..........www.bw...........wbb...........bb...........bbb..bw..........bbbbb........bbbw.bwb.......b.w..b............b..w.b.....................",
+      "budget": 10000,
+      "forbidden": [
+        "F9:forbidden-overline",
+        "B11:forbidden-overline",
+        "H11:forbidden-overline"
+      ],
+      "id": "board-58",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.L.LLLLLLLLLLLLLL...LLLLLLLLLL.L..L.LLLLLLLL.L..LLLLLLLLLL...L..LLLLLLLLLLL...LLLLLLLLLLL..LLLLLLLLLLL...LL..LLLLLLLLLL.....LLLLLLLL....L...LLLLLLL.L.LL.LLLLLLLLLLLL.LL.L.LLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLL.LLLLLLLLLLLL.F.LL..L.LLLLLL.L.L..L.LLLLLLLLLL.OL.LLLLLLLLLO...W..L.LLLLLL..L.FLTL..LLLLLLL....LLWLLLLLL.L..L.L.L.LLLLLLLFW...LLLLLLLLLLLL...LLLLLLLLLLLLFLOLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          129,
+          3
+        ]
+      ],
+      "board": "...................................b.............b............b.b..bw.w......b.b.bw.b..........b..b..........wwb.bb.w......bb.b....bb.......bbbw.........b.wb.w.b.w.........bbb............bbw...................................",
+      "budget": 10000,
+      "forbidden": [
+        "D5:forbidden-double-four",
+        "G7:forbidden-overline",
+        "D8:forbidden-overline",
+        "H9:forbidden-double-four",
+        "J9:forbidden-double-three",
+        "F12:forbidden-double-four",
+        "H14:forbidden-double-four",
+        "J14:forbidden-overline"
+      ],
+      "id": "board-59",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLL.LLLLLLLLLLLL.L.LL..L.LLLLLL.L.L..L.LLLLLLLLLL.LL.LLLLLLLLLL...L..L.LLLLLL..L.LLLL..LLLLLLL....LLLLLLLLL.L..L.L.L.LLLLLLLLL...LLLLLLLLLLLL...LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": ".LLL.LLLLLL.LL.L.LLLLLLLL.LLLLLL.LLL.L.LLLLLLL.LLLL.LLLLLLLLLL.LLL.LLLLLLLLLLLLLL.LL.LLLLLLLLLLTWLLL.LL.L.LW....WL.LL.LLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLL.LLLLL.LLLLLLLLLLLL.LL.LLLLLLL.LLLLL.L.LLLLL.LLLLLLLLLLL.LLLLLL.LLLLLLLLLLL",
+      "blackNodes": [
+        [
+          95,
+          3
+        ]
+      ],
+      "board": "b...w......b..b.b........b......b...w.w.......b....b..........w...b..............b..w...............w..w.b..bbbb..b..b......................b.........w.....w............b..b.......w.....b.w.....b...........b......w...........",
+      "budget": 10000,
+      "forbidden": [
+        "F7:forbidden-double-three"
+      ],
+      "id": "board-60",
+      "white": ".LLL.LLLLLL.LL.L.LLLLLLLL.LLLLLL.LLL.L.LLLLLLL.LLLL.LLLLLLLLLL.LLL.LLLLLLLLLLLLLL.LL.LLLLLLLLLLLLLLL.LL.L.LL....LL.LL.LLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLL.LLLLL.LLLLLLLLLLLL.LL.LLLLLLL.LLLLL.L.LLLLL.LLLLLLLLLLL.LLLLLL.LLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLFLLLLLLLL...LL..LLLLLLLL....L..LLLLLLLL.L..W...LLLLLLW.....LO.LLLLLLL..L...L.LLLLLLL...L.LLLLLLLLLL....L...LLLLLLLWL.LL.L.LLLLLLLLWLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [],
+      "board": "...............................................................bbb..bb........bbbw.wb........w.wb.bbb.......bbbbw..w.......bw.wbb.w.......bwb.b..........bwwb.bww.........b..b.w.................................................",
+      "budget": 10000,
+      "forbidden": [
+        "J4:forbidden-double-four",
+        "J8:forbidden-overline"
+      ],
+      "id": "board-61",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...LL..LLLLLLLL....L..LLLLLLLL.L..L...LLLLLLL.....LL.LLLLLLL..L...L.LLLLLLL...L.LLWLLLLLLL....L...LLLLLLLLL.LL.L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LOLLLLLLLLLLLLLL.WLLLLLLLLLL..F...LLLLLLLLLW....W.LLLLLLLLL.O...LLLLLLLLL.L....LLLLLLLLWL.L..LLLLLLLLLLLLLOL..LLLLLLLLLL.LLLLLLLLLL",
+      "blackNodes": [
+        [
+          152,
+          2
+        ],
+        [
+          158,
+          2
+        ]
+      ],
+      "board": ".............................................................................................b................b...........bw.bbb..........bbbb.w.........b.bbw.........b.wbwb..........w.bb...............bw..........w..........",
+      "budget": 10000,
+      "forbidden": [
+        "F7:forbidden-overline",
+        "E9:forbidden-double-four",
+        "E11:forbidden-overline",
+        "F14:forbidden-overline"
+      ],
+      "id": "board-62",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLLLLLLLLLLLLLL.LLLLLLLLLLL..L...LLLLLLLLLL....L.LLLLLLLLL.L...LLLLLLLLL.L....LLLLLLLLLL.L..LLLLLLLLLLLLLLL..LLLLLLLLLL.LLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLT..TLLLLLLL.LL.L..LLLLLLLL.W.L..L.LLLLLLL........LLWLLLLLL.....FL.LLL.L.......L.LLLLLL..LL....LLLLLL...W....O.LLLLLL...L.O.L..LLL.L...L..LLLLLLLLLLL.L.LLLLLLLLLLL.LLWLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          37,
+          3
+        ],
+        [
+          40,
+          3
+        ]
+      ],
+      "board": "......................................bb........b..w.bw........w.b.wb.b.......bbbwbwbb.........wbbww..b...b.wbbwbbw.b......ww..wwwb......wbw.bbbb.b......bww.b.b.bb...b.wbb.bw...........w.b...........b.........................",
+      "budget": 10000,
+      "forbidden": [
+        "H3:forbidden-double-three",
+        "K3:forbidden-double-three",
+        "K7:forbidden-double-four",
+        "K10:forbidden-overline",
+        "I11:forbidden-overline"
+      ],
+      "id": "board-63",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLWLL..LLLLLLLL.LL.L..LLLLLLLL.L.L..L.LLLLLLL........LLLLLLLLL.....LL.LLL.L.......W.LLLLLL..LL....LLLLLL...L....L.LLLLLL...L.L.L..LLL.L...L..LLLLLLLLLLL.L.LLLLLLLLLLL.LLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLL..LLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLL.LLL.LL.LLLLLLLLLLL.LL.LLLLLLL.L..LBLLLLLLLLLLLLL.L.LLLLLLLL.LLLLLLLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          128,
+          3
+        ]
+      ],
+      "board": "................................................w....bb.........wb....b......................w...b..w...........b..w.......w.bb...............w.b........w..............bw....b..................................................",
+      "budget": 2,
+      "forbidden": [
+        "I9:forbidden-budget"
+      ],
+      "id": "budget-01-2",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL.LLLL..LLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLL.LLL.LL.LLLLLLLLLLL.LL.LLLLLLL.L..LLLLLLLLLLLLLLL.L.LLLLLLLL.LLLLLLLLLLLLLL..LLLL.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLFLLLLLLLLLLLLLLL..LLLLLLLL.L...L.LLLLLLLFF...L...OLLLLLL.LOL.L..LLLLLLLLF.L....LFLLLLLLT..O..LLLLLLLLO......LLLLLLLL....LF..LLLLLLLLLWLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          139,
+          2
+        ],
+        [
+          155,
+          3
+        ]
+      ],
+      "board": "....................................................................................bb........b.bwb.b.........bbb.wwb.......b...w.bb.........b.wbbb.........bb.bw.........bbbbbw........wbbb..bb.................................",
+      "budget": 3,
+      "forbidden": [
+        "I5:forbidden-double-four",
+        "D8:forbidden-double-four",
+        "E8:forbidden-double-four",
+        "M8:forbidden-overline",
+        "G9:forbidden-overline",
+        "F10:forbidden-double-four",
+        "N10:forbidden-double-four",
+        "F11:forbidden-double-three",
+        "I11:forbidden-overline",
+        "E12:forbidden-overline",
+        "J13:forbidden-double-four"
+      ],
+      "id": "budget-05-3",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL..LLLLLLLL.L...L.LLLLLLLLL...L...LLLLLLL.LLL.L..LLLLLLLLL.L....LLLLLLLLL..L..LLLLLLLLL......LLLLLLLL....LL..LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLWTLLLLLLLLLLLFL...W...LLLLLLL.LW.....LLLLLLLL..F.O..LLLLLLL.L.TL.LLLLLLLLL...LL.WLLLLLLLL.LLLT.LLLLLLLLLL.LL..LLLLLLLLL..L..W.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+      "blackNodes": [
+        [
+          37,
+          3
+        ],
+        [
+          51,
+          5
+        ],
+        [
+          112,
+          5
+        ],
+        [
+          113,
+          5
+        ],
+        [
+          115,
+          2
+        ],
+        [
+          143,
+          3
+        ]
+      ],
+      "board": ".................................................................bbb.bwb.......b..bbbbw........bb.b.wb.......w.b..b.........www..b.........w....b..........b..bb.........bb.wb.b.................................................",
+      "budget": 5,
+      "forbidden": [
+        "G4:forbidden-double-three",
+        "D5:forbidden-double-four",
+        "H7:forbidden-double-four",
+        "J7:forbidden-overline",
+        "H8:forbidden-double-three",
+        "I10:forbidden-double-three"
+      ],
+      "id": "budget-09-5",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL...L...LLLLLLL.LL.....LLLLLLLL..L.L..LLLLLLL.L.LL.LLLLLLLLL...LL.LLLLLLLLL.LLLL.LLLLLLLLLL.LL..LLLLLLLLL..L..L.LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+    },
+    {
+      "black": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLTLLLLLLLLLLLL....LLLLLLLLLL..LL..LLLLLLLLLLL.LW.LLLLLL.FLL.....LLLLLL..L.LLF.WLLLLLL...O...W.LLLLLT..LL.L..LLLLLLL....FLL..LLLLLO..L.F..L.LLL",
+      "blackNodes": [
+        [
+          84,
+          4
+        ],
+        [
+          141,
+          3
+        ],
+        [
+          182,
+          4
+        ]
+      ],
+      "board": ".................................................................................................bbwb..........bb..bb...........w..b......w...bwbbb......bb.b...b.......bbb.bbb.b......bb..w.bw.......bwwb...wb......bb.w.bb.b...",
+      "budget": 8,
+      "forbidden": [
+        "J6:forbidden-double-three",
+        "E10:forbidden-double-four",
+        "J11:forbidden-double-four",
+        "G12:forbidden-overline",
+        "C13:forbidden-double-three",
+        "H14:forbidden-double-four",
+        "C15:forbidden-overline",
+        "H15:forbidden-double-four"
+      ],
+      "id": "budget-13-8",
+      "white": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL....LLLLLLLLLL..LL..LLLLLLLLLLL.LL.LLLLLL.LLL.....LLLLLL..L.LLL.LLLLLLL...L...L.LLLLLL..LL.L..LLLLLLL....LLL..LLLLLL..L.L..L.LLL"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift",
+  "golden": "renju/forbidden-points",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "black": "칸마다 흑 judgeCounting(budget) 의 판정 글자: '.' 돌 있음 · L legal · W win · T forbidden-double-three · F forbidden-double-four · O forbidden-overline · B forbidden-budget.",
+    "blackNodes": "노드 수가 1 이 아닌 빈칸만 [인덱스, 노드] — 나머지 빈칸은 1.",
+    "board": "GomokuBoard.serverString(225자, 인덱스 = y*15 + x, '.'·'b'·'w'). 판은 생성기의 무작위 국면(SplitMix64 + Swift Int.random)이라 Kotlin 은 판을 다시 만들지 않고 이 글자에서 읽는다.",
+    "forbidden": "GomokuRules.forbiddenPoints(board:budget:) 의 결과를 인덱스 순으로 '<좌표>:<rawValue>'. 사전이라 순서는 생성기가 정한다.",
+    "white": "칸마다 백 judge 판정 글자('.' · L · W)."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/GomokuRules.swift",
+    "Sources/CheckCore/GomokuAIEngine.swift"
+  ]
+}

@@ -1,0 +1,2152 @@
+{
+  "cases": [
+    {
+      "autoLossStreak": 3,
+      "board": "............................................................................................................bbbb...........wwww..................................................................................................",
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "human-five",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbb...........wwww..................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "H8",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbbb..........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 9,
+            "outcome": "won",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "3ff0000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "A1",
+          "result": "finished",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbbb..........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 9,
+            "outcome": "won",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "4000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "A2",
+          "result": false,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbbb..........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 9,
+            "outcome": "won",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "4008000000000000"
+        },
+        {
+          "index": 0,
+          "op": "auto",
+          "point": null,
+          "result": false,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbbb..........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 9,
+            "outcome": "won",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "4010000000000000"
+        },
+        {
+          "index": null,
+          "op": "resign",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbbb..........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 9,
+            "outcome": "won",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "4014000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "............................................................................................................bbbb...........wwww..................................................................................................",
+      "humanAutoStreak": 0,
+      "humanColor": "white",
+      "id": "ai-five",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbb...........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "H8",
+          "result": true,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbbb..........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 9,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "check",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "............................................................................................................bbbbb..........wwww..................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 9,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "3ff0000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "..bbb.bb...................................................................................................www.ww................................................................................................................",
+      "humanAutoStreak": 0,
+      "humanColor": "white",
+      "id": "white-overline",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "..bbb.bb...................................................................................................www.ww................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 10,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "F8",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "..bbb.bb...................................................................................................wwwwww................................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "F8",
+            "moveCount": 11,
+            "outcome": "won",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        }
+      ],
+      "turn": "white",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "refusals",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "H8",
+          "result": "forbidden:forbidden-double-three",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "F8",
+          "result": "occupied",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "A1",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "b...............................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "A1",
+            "moveCount": 9,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "3ff0000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "A2",
+          "result": "not-your-turn",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "b...............................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "A1",
+            "moveCount": 9,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "4000000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+      "humanAutoStreak": 0,
+      "humanColor": "white",
+      "id": "ai-refusals",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "A1",
+          "result": "not-your-turn",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "H8",
+          "result": false,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "F8",
+          "result": false,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": null,
+          "result": false,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 0,
+          "op": "fallback",
+          "point": null,
+          "result": "A1",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 999,
+          "op": "fallback",
+          "point": null,
+          "result": "O15",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": -4,
+          "op": "fallback",
+          "point": null,
+          "result": "A1",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "H9",
+          "result": true,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb...............b.................................................w............w.....w............................",
+            "deadlineBits": "403f000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "H9",
+            "moveCount": 9,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": true
+          },
+          "tBits": "3ff0000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "H10",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb...............b..............w..................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "H10",
+            "moveCount": 10,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "4004000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": null,
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "clock",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "check",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "403de66666666666"
+        },
+        {
+          "index": null,
+          "op": "check",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": true,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "403e000000000000"
+        },
+        {
+          "index": null,
+          "op": "pause",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": "4034000000000000",
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "4024000000000000"
+        },
+        {
+          "index": null,
+          "op": "check",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": "4034000000000000",
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "40c3880000000000"
+        },
+        {
+          "index": null,
+          "op": "resume",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": "405e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "4059000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "H8",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b................................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 1,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "4059400000000000"
+        },
+        {
+          "index": null,
+          "op": "pause",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b................................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 1,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "4059600000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "I9",
+          "result": true,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b...............w................................................................................................",
+            "deadlineBits": "4060800000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "I9",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "4059800000000000"
+        },
+        {
+          "index": null,
+          "op": "pause",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b...............w................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "I9",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": "3fe0000000000000",
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "4060700000000000"
+        },
+        {
+          "index": null,
+          "op": "resume",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b...............w................................................................................................",
+            "deadlineBits": "4069100000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "I9",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "4069000000000000"
+        },
+        {
+          "index": null,
+          "op": "pause",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b...............w................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "I9",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": "0000000000000000",
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "406f400000000000"
+        },
+        {
+          "index": null,
+          "op": "resume",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b...............w................................................................................................",
+            "deadlineBits": "4072c00000000000",
+            "endReason": null,
+            "expired": true,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "I9",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "4072c00000000000"
+        },
+        {
+          "index": null,
+          "op": "check",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b...............w................................................................................................",
+            "deadlineBits": "4072c00000000000",
+            "endReason": null,
+            "expired": true,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "I9",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "4072c00000000000"
+        },
+        {
+          "index": null,
+          "op": "resume",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b...............w................................................................................................",
+            "deadlineBits": "4072c00000000000",
+            "endReason": null,
+            "expired": true,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "I9",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "4072d00000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "auto-skips-forbidden",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.................................................................w............w.....w............................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 107,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "I8"
+            ],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.b...............................................................w............w.....w............................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": true,
+            "lastMove": "I8",
+            "moveCount": 9,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "403f000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "O15",
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "I8"
+            ],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.b...............................................................w............w.....w...........................w",
+            "deadlineBits": "404f000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "O15",
+            "moveCount": 10,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "4040000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "A15",
+          "result": null,
+          "state": {
+            "autoPoints": [
+              "I8"
+            ],
+            "blackPassed": false,
+            "board": "................................w.................................................b..............b............bb.b...............................................................w............w.....w.............b.............w",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "A15",
+            "moveCount": 11,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "4040800000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": null,
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "auto-streak-lose",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 0,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "A1"
+            ],
+            "blackPassed": false,
+            "board": "b................................................................................................................................................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": true,
+            "lastMove": "A1",
+            "moveCount": 1,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "403e000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "O14",
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "A1"
+            ],
+            "blackPassed": false,
+            "board": "b................................................................................................................................................................................................................w...............",
+            "deadlineBits": "404e800000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "O14",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "403f000000000000"
+        },
+        {
+          "index": 0,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "A1",
+              "B1"
+            ],
+            "blackPassed": false,
+            "board": "bb...............................................................................................................................................................................................................w...............",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": true,
+            "lastMove": "B1",
+            "moveCount": 3,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 2,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "404e800000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "O13",
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "A1",
+              "B1"
+            ],
+            "blackPassed": false,
+            "board": "bb................................................................................................................................................................................................w..............w...............",
+            "deadlineBits": "4057000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "O13",
+            "moveCount": 4,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 2,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "404f000000000000"
+        },
+        {
+          "index": 0,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "A1",
+              "B1",
+              "C1"
+            ],
+            "blackPassed": false,
+            "board": "bbb...............................................................................................................................................................................................w..............w...............",
+            "deadlineBits": null,
+            "endReason": "abandoned",
+            "expired": false,
+            "finished": true,
+            "lastAuto": true,
+            "lastMove": "C1",
+            "moveCount": 5,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 3,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "4057000000000000"
+        },
+        {
+          "index": 0,
+          "op": "auto",
+          "point": null,
+          "result": false,
+          "state": {
+            "autoPoints": [
+              "A1",
+              "B1",
+              "C1"
+            ],
+            "blackPassed": false,
+            "board": "bbb...............................................................................................................................................................................................w..............w...............",
+            "deadlineBits": null,
+            "endReason": "abandoned",
+            "expired": false,
+            "finished": true,
+            "lastAuto": true,
+            "lastMove": "C1",
+            "moveCount": 5,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 3,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "4057400000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 5,
+      "board": null,
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "auto-clamp",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 10000,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "O15"
+            ],
+            "blackPassed": false,
+            "board": "................................................................................................................................................................................................................................b",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": true,
+            "lastMove": "O15",
+            "moveCount": 1,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "403e000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "H8",
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "O15"
+            ],
+            "blackPassed": false,
+            "board": "................................................................................................................w...............................................................................................................b",
+            "deadlineBits": "404e800000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 2,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "403f000000000000"
+        },
+        {
+          "index": -5,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "A1",
+              "O15"
+            ],
+            "blackPassed": false,
+            "board": "b...............................................................................................................w...............................................................................................................b",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": true,
+            "lastMove": "A1",
+            "moveCount": 3,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 2,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "404e800000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "H9",
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "A1",
+              "O15"
+            ],
+            "blackPassed": false,
+            "board": "b...............................................................................................................w..............w................................................................................................b",
+            "deadlineBits": "4057000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "H9",
+            "moveCount": 4,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 2,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "404f000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "G7",
+          "result": null,
+          "state": {
+            "autoPoints": [
+              "A1",
+              "O15"
+            ],
+            "blackPassed": false,
+            "board": "b...............................................................................................b...............w..............w................................................................................................b",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "G7",
+            "moveCount": 5,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "404f800000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "bbbb..........................wwww...............................................................................................................................................................................................",
+      "humanAutoStreak": 2,
+      "humanColor": "black",
+      "id": "third-auto-five",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "bbbb..........................wwww...............................................................................................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 8,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 2,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 0,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "E1"
+            ],
+            "blackPassed": false,
+            "board": "bbbbb.........................wwww...............................................................................................................................................................................................",
+            "deadlineBits": null,
+            "endReason": "five",
+            "expired": false,
+            "finished": true,
+            "lastAuto": true,
+            "lastMove": "E1",
+            "moveCount": 9,
+            "outcome": "won",
+            "pausedBits": null,
+            "streak": 3,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "403e000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": ".bwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+      "humanAutoStreak": 0,
+      "humanColor": "white",
+      "id": "pass-and-draw",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".bwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 223,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "A1",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "A1",
+            "moveCount": 225,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "check",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "A1",
+            "moveCount": 225,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": true
+          },
+          "tBits": "403d800000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "H8",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbbwbbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": "board_full",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 226,
+            "outcome": "draw",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "3ff0000000000000"
+        }
+      ],
+      "turn": "white",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+      "humanAutoStreak": 0,
+      "humanColor": "white",
+      "id": "ai-black-pass",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 224,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "H8",
+          "result": false,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 224,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 0,
+          "op": "fallback",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 224,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 225,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "resign",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": "resign",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 225,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "3ff0000000000000"
+        },
+        {
+          "index": null,
+          "op": "resign",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": "resign",
+            "expired": false,
+            "finished": true,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 225,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 0,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "4000000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 3,
+      "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "auto-pass",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 224,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 0,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 225,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "403e000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": null,
+          "result": false,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 225,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "403f000000000000"
+        },
+        {
+          "index": null,
+          "op": "human",
+          "point": "H8",
+          "result": "not-your-turn",
+          "state": {
+            "autoPoints": [],
+            "blackPassed": true,
+            "board": "wbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbwbbb.bbwbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 225,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 1,
+            "turn": "white",
+            "watches": false
+          },
+          "tBits": "4040000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 1,
+      "board": null,
+      "humanAutoStreak": 0,
+      "humanColor": "black",
+      "id": "loss-streak-one",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 7,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "H1"
+            ],
+            "blackPassed": false,
+            "board": ".......b.........................................................................................................................................................................................................................",
+            "deadlineBits": null,
+            "endReason": "abandoned",
+            "expired": false,
+            "finished": true,
+            "lastAuto": true,
+            "lastMove": "H1",
+            "moveCount": 1,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 1,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "403e000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "autoLossStreak": 0,
+      "board": null,
+      "humanAutoStreak": 0,
+      "humanColor": "white",
+      "id": "loss-streak-zero",
+      "steps": [
+        {
+          "op": "start",
+          "result": null,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": ".................................................................................................................................................................................................................................",
+            "deadlineBits": null,
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": null,
+            "moveCount": 0,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "black",
+            "watches": false
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": null,
+          "op": "ai",
+          "point": "H8",
+          "result": true,
+          "state": {
+            "autoPoints": [],
+            "blackPassed": false,
+            "board": "................................................................................................................b................................................................................................................",
+            "deadlineBits": "403e000000000000",
+            "endReason": null,
+            "expired": false,
+            "finished": false,
+            "lastAuto": false,
+            "lastMove": "H8",
+            "moveCount": 1,
+            "outcome": null,
+            "pausedBits": null,
+            "streak": 0,
+            "turn": "white",
+            "watches": true
+          },
+          "tBits": "0000000000000000"
+        },
+        {
+          "index": 3,
+          "op": "auto",
+          "point": null,
+          "result": true,
+          "state": {
+            "autoPoints": [
+              "D1"
+            ],
+            "blackPassed": false,
+            "board": "...w............................................................................................................b................................................................................................................",
+            "deadlineBits": null,
+            "endReason": "abandoned",
+            "expired": false,
+            "finished": true,
+            "lastAuto": true,
+            "lastMove": "D1",
+            "moveCount": 2,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 1,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "403e000000000000"
+        },
+        {
+          "index": null,
+          "op": "check",
+          "point": null,
+          "result": null,
+          "state": {
+            "autoPoints": [
+              "D1"
+            ],
+            "blackPassed": false,
+            "board": "...w............................................................................................................b................................................................................................................",
+            "deadlineBits": null,
+            "endReason": "abandoned",
+            "expired": false,
+            "finished": true,
+            "lastAuto": true,
+            "lastMove": "D1",
+            "moveCount": 2,
+            "outcome": "lost",
+            "pausedBits": null,
+            "streak": 1,
+            "turn": null,
+            "watches": false
+          },
+          "tBits": "403f000000000000"
+        }
+      ],
+      "turn": "black",
+      "turnSecondsBits": "403e000000000000"
+    },
+    {
+      "freshPrefix": true,
+      "id": "ids",
+      "idPrefix": "ai-",
+      "matches": [
+        [
+          "ai-",
+          true
+        ],
+        [
+          "ai-x",
+          true
+        ],
+        [
+          "AI-x",
+          false
+        ],
+        [
+          "",
+          false
+        ],
+        [
+          "abababab-2222-3333-4444-555555555555",
+          false
+        ],
+        [
+          "xai-1",
+          false
+        ]
+      ],
+      "nilMatches": false
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+  "golden": "renju/ai-game",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "ops": "human(point) → humanPlace 의 거절('<kind>' 또는 '<kind>:<reason>', null = 받음) · ai(point|null) → applyAIMove 의 불 · auto(index) → autoPlaceHuman(randomIndex 는 언제나 index) 의 불 · fallback(index) → randomAIFallback 의 좌표|null(상태 불변) · pause · resume · resign · check(아무것도 안 함).",
+    "start": "board 가 null 이면 새 판 init(id:humanColor:autoLossStreak:now:)(흑 차례), 아니면 init(id:humanColor:board:turn:humanAutoStreak:autoLossStreak:now:). 시작 시각 t0 = 1970 기준 1_800_000_000초, 걸음 시각은 t0 + tBits(초). turnSeconds 30.",
+    "state": "board(serverString) · moveCount · lastMove · turn · deadline(t0 기준 초 비트|null) · paused(남은 초 비트|null) · finished · outcome(won·lost·draw) · endReason(rawValue) · autoPoints(인덱스 순 좌표) · lastAuto · blackPassed · streak(humanAutoStreak) · expired(isHumanClockExpired(now: 그 걸음 시각)) · watches(GomokuTurnWarning.watchesMyClock(matchState()) — 안 끝남 · 마감 있음 · 차례 = 사람)."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/GomokuAIGame.swift",
+    "Sources/CheckCore/GomokuRules.swift",
+    "Sources/CheckCore/GomokuStore.swift",
+    "Sources/CheckCore/GomokuTurnWarning.swift"
+  ]
+}

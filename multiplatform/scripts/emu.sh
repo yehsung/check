@@ -600,11 +600,22 @@ while True:
     time.sleep(1)
 UIPY
   }
+  # Gboard 설정을 열고 Languages 를 누른다. 부팅 직후에는 홈 화면이 뒤늦게 위로 올라와 설정을 덮는다(실측) — 최대 5번 다시 연다.
+  # 인자 -S 면 Gboard(IME 프로세스)를 멈췄다 다시 띄운다 — 받은 자료를 새로 읽게.
+  open_gb_languages() {
+    local i
+    for i in 1 2 3 4 5; do
+      sh_adb shell am start -W ${1:+"$1"} -n "$GB_SETTINGS" >/dev/null 2>&1
+      if ui tap '^Languages$' 20; then return 0; fi
+      log "Gboard 설정의 Languages 가 안 보인다($i) — 다시 연다"
+      sleep 5
+    done
+    return 1
+  }
   # 지금 띄운 기기에서 Gboard 설정 → Languages → Add keyboard 의 검색 칸(EditText)에 dkssud 를 넣고 칸 글자를 낸다.
-  # am start -S 가 Gboard(IME)도 다시 띄운다 — 받은 자료를 새로 읽게.
   ko_typed() {
-    sh_adb shell am start -W -S -n "$GB_SETTINGS" >/dev/null 2>&1 || return 1
-    ui tap '^Languages$' 30 && ui tap '^Add keyboard$' 20 && ui tap '^Search (for a )?language$' 20 || return 1
+    open_gb_languages -S || return 1
+    ui tap '^Add keyboard$' 20 && ui tap '^Search (for a )?language$' 20 || return 1
     sh_adb shell input text dkssud || return 1
     sleep 3
     ui edit . 10
@@ -627,8 +638,7 @@ UIPY
   started=1
   "$SELF" start --avd "$TO" --port "$PORT" --no-seal --writable --boot-timeout "$BOOT_TIMEOUT" || { log "띄우지 못했다(쓰기)"; finish_prep; exit 1; }
   sh_adb shell ime enable "$GB_IME" >/dev/null 2>&1; sh_adb shell ime set "$GB_IME" >/dev/null 2>&1
-  sh_adb shell am start -W -n "$GB_SETTINGS" >/dev/null 2>&1
-  ui tap '^Languages$' 30 || { finish_prep; exit 1; }
+  open_gb_languages || { log "Gboard 설정을 못 열었다"; finish_prep; exit 1; }
   if ui wait '^한국어$' 3 2>/dev/null; then
     log "Gboard 에 한국어가 이미 있다"
   else

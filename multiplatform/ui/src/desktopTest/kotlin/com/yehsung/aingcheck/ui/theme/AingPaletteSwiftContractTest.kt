@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ 862be0f
+// 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ 1b8260d
 // 원본: Sources/check/CheckGachaWindow.swift @ 862be0f (GachaWindowPalette)
 //
 // "iOS/맥 값 그대로"를 값으로 잰다: Swift 원문(MobileThemePalette.swift · CheckGachaWindow.swift)을 읽어 토큰마다 Kotlin 값과 대조한다.
@@ -29,7 +29,7 @@ class AingPaletteSwiftContractTest {
         "danger" to AingPalette.danger, "dangerTint" to AingPalette.dangerTint, "aiToken" to AingPalette.aiToken, "badge" to AingPalette.badge,
         "gold" to AingPalette.gold, "silver" to AingPalette.silver, "bronze" to AingPalette.bronze,
         "goldInk" to AingPalette.goldInk, "silverInk" to AingPalette.silverInk, "bronzeInk" to AingPalette.bronzeInk,
-        "crownInk" to AingPalette.crownInk, "widgetBackground" to AingPalette.widgetBackground,
+        "crownInk" to AingPalette.crownInk, "goldText" to AingPalette.goldText, "widgetBackground" to AingPalette.widgetBackground,
     )
 
     @Test
@@ -114,11 +114,19 @@ class AingPaletteSwiftContractTest {
         same("woodStops", AingPalette.woodStops)
         assertTrue(swift.scalars.getValue("brandNavy").approximatelyEquals(AingPalette.brandNavy))
         assertTrue(swift.scalars.getValue("brandLavender").approximatelyEquals(AingPalette.brandLavender))
-        val inks = swift.pairArrays.getValue("avatarInks")
-        assertEquals(inks.size, AingPalette.avatarInks.size)
-        inks.zip(AingPalette.avatarInks).forEachIndexed { i, (s, k) ->
-            assertTrue(s.light.approximatelyEquals(k.light) && s.dark.approximatelyEquals(k.dark), "avatarInks[$i]: Swift=$s Kotlin=$k")
+        fun samePairs(name: String, k: List<AingPair>) {
+            val sw = swift.pairArrays[name] ?: fail("Swift 에 $name [Pair] 배열이 없다")
+            assertEquals(sw.size, k.size, "$name 길이")
+            sw.zip(k).forEachIndexed { i, (s, kk) ->
+                assertTrue(s.light.approximatelyEquals(kk.light) && s.dark.approximatelyEquals(kk.dark), "$name[$i]: Swift=$s Kotlin=$kk")
+            }
         }
+        samePairs("avatarInks", AingPalette.avatarInks)
+        // 희귀 강조(1b8260d): 무지개 일곱 빛과 받침 세기. 받침 세기는 RGB 가 아니라 숫자라 따로 읽는다.
+        samePairs("rainbowStops", AingPalette.rainbowStops)
+        val tint = Regex("""static let rareTintOpacity = ([0-9.]+)""").find(SwiftPalette.stripComments(RepoFiles.readText("Sources/CheckMobileKit/Theme/MobileThemePalette.swift")))
+            ?: fail("Swift 에 rareTintOpacity 가 없다")
+        assertEquals(tint.groupValues[1].toDouble(), AingPalette.RARE_TINT_OPACITY, "rareTintOpacity")
     }
 
     @Test

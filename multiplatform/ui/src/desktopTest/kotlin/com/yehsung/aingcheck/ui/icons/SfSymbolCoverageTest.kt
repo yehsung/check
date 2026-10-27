@@ -1,4 +1,4 @@
-// 원본: Sources/**/*.swift @ 862be0f — Swift 가 쓰는 SF Symbols 이름(맥 check·CheckCore + 폰 CheckMobileKit·CheckMobileShared·CheckWidgetsKit)
+// 원본: Sources/**/*.swift @ 1b8260d — Swift 가 쓰는 SF Symbols 이름(맥 check·CheckCore + 폰 CheckMobileKit·CheckMobileShared·CheckWidgetsKit)
 //
 // W1-e 완료 기준 ②: Swift 가 쓰는 SF Symbols → Material Symbols 대응표에서 빠진 이름 0.
 //
@@ -146,6 +146,10 @@ internal object SfSymbolScan {
         "day.desc", "eq.abandoned", "is.null", "not.is.null",
         // 판 표기
         "v0.3.0",
+        // SceneKit 노드·재질 이름·모양 캐시 키(0.3.66 케이크 아잉이 장식 Sources/check/CakeAingFinish.swift ·
+        // 0.3.67 길건너 판 Sources/check/MiniGameCrossyScene.swift) — 기호가 아니다(CoreGlyphs 이름표에 없음)
+        "aing.fallback", "cake.cream", "cake.leaf", "cake.wick", "check.cake.candle", "check.cake.strawberry",
+        "lamp.off", "lamp.on", "road.dashes", "signal.post", "tree.0", "tree.1", "tree.2",
     )
 
     /** 문맥 낱말도 점도 없이 쓰이는 간접 기호(낱말 하나). 지금은 없다 — 생기면 여기 적고 원문 대조가 따라온다. */

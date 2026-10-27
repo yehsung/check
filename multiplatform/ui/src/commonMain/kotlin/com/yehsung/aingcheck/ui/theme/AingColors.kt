@@ -57,6 +57,12 @@ class AingColors private constructor(val isDark: Boolean) {
     val bronzeInk = c(AingPalette.bronzeInk)
     val crownInk = c(AingPalette.crownInk)
 
+    // 희귀 강조(뽑기 전용 내장 둘 — 황금 · 무지개). 브랜드 자리처럼 뽑기 화면에서만 쓴다.
+    /** 금빛 글자·기호(메달 [gold] 는 원 바탕 전용). */
+    val goldText = c(AingPalette.goldText)
+    /** 무지개 일곱 빛(빨 → 보) — 이름·테두리 칠. */
+    val rainbowStops: List<Color> = AingPalette.rainbowStops.map { c(it) }
+
     // 그라디언트 정지점(뜻으로만 — '우리 팀' 게이지 · 로그인 단추 · 나무판)
     val gaugeStops: List<Color> = AingPalette.gaugeStops.map { it.toColor() }
     val startStops: List<Color> = AingPalette.startStops.map { it.toColor() }

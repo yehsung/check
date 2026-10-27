@@ -444,6 +444,20 @@ SELF_TEST_CASES = [
     ("coordinator", "multiplatform/scripts/bake-aing/bake.sh", "ok"),
     ("coordinator", ".github/workflows/mp-bake.yml", "ok"),
     ("coordinator", "Sources/check/CheckMessageView.swift", "outside"),
+    # 5차 기준선 통합(xplat/int-d, G §8-16): 새 골든 폴더 crossy(W1-a) · missions·gift(W1-c) · messages(W2-b), W1-d 의 G6 덤프기 자리.
+    ("W1-a", "contract/golden/crossy/scripted-A.json", "ok"),
+    ("W1-b", "contract/golden/crossy/scripted-A.json", "outside"),
+    ("W1-c", "contract/golden/missions/daily-rollover.json", "ok"),
+    ("W1-c", "contract/golden/gift/claim-outcome.json", "ok"),
+    ("W1-d", "contract/golden/gift/claim-outcome.json", "outside"),
+    ("W2-b", "contract/golden/messages/sort.json", "ok"),
+    ("W2-b", "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift", "ok"),
+    ("W2-b", "contract/golden/_manifest.json", "ok"),
+    ("W2-c", "contract/golden/_manifest.json", "reserved"),  # 골든 폴더가 없는 스토어 갈래는 여전히 못 쓴다
+    ("W2-d", "contract/golden/messages/sort.json", "outside"),
+    ("W1-d", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/dump/DecodeDump.kt", "ok"),
+    ("W1-d", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt", "outside"),
+    ("W1-d", "multiplatform/testkit/build.gradle.kts", "reserved"),
 ]
 
 # 기준선 병합 몫 가르기(--upstream) 사례: (경로, upstream 이 바꿈, 머리가 upstream 과 다름, 기대: 뺌|남김).

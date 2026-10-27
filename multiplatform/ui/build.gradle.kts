@@ -42,12 +42,13 @@ kotlin {
 // --- 캐릭터·루비 그림: 맥 원본을 git 사본 없이 Compose 리소스로(A-X18, W1-e) ---
 // src/commonMain/composeResources(글꼴·아이콘·라이선스) + 맥 원본 그림을 빌드 폴더 하나로 모으고 그 폴더를 commonMain 리소스 자리로 쓴다.
 //   Sources/check/Characters/<id>/{manifest.json, portrait-*.png}           → files/characters/<id>/…
-//   Sources/check/Resources/<aing·aing_gold·aing_rainbow>-<표정>.png         → files/characters/<id>/portrait-<표정>.png
+//   Sources/check/Resources/<aing·aing_gold·aing_rainbow·aing_cake_strawberry·aing_cake_choco>-<표정>.png → files/characters/<id>/portrait-<표정>.png
+//     (케이크 둘은 0.3.66 생일 선물 전용 — 상점 번호 4(K9 · ShopProtocol.cakeProtocol)는 두 장이 그림 집합에 다 있어야 선다. 5차 int-d)
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-*-neutral}.png → files/art/…
 //   Sources/CheckCore/Resources/Stickers/sticker-*.png(0.3.62 아잉이 이모티콘, G §8-2) → files/stickers/…
 // 아틀라스(atlas.png)는 싣지 않는다(살아 있는 캐릭터는 구운 자산 — W0-d·W5).
 val repoDir = rootDir.parentFile
-val aingFamily = listOf("aing", "aing_gold", "aing_rainbow")
+val aingFamily = listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco")
 val composeResourcesSynced = layout.buildDirectory.dir("generated/aingcheck/composeResources/commonMain")
 val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
     description = "맥 원본 캐릭터·루비·이모티콘 그림과 ui 리소스를 Compose 리소스 폴더 하나로 모은다(git 사본 0, A-X18)."

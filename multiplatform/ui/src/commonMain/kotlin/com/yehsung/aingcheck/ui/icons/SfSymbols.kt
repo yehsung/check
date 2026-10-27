@@ -1,4 +1,4 @@
-// 원본: Sources/**/*.swift @ 862be0f — SF Symbols 이름(맥 Sources/check·CheckCore + 폰 CheckMobileKit·CheckMobileShared·CheckWidgetsKit)
+// 원본: Sources/**/*.swift @ 1b8260d — SF Symbols 이름(맥 Sources/check·CheckCore + 폰 CheckMobileKit·CheckMobileShared·CheckWidgetsKit)
 //
 // SF Symbol 이름 → AppIcon 대응표. 화면을 옮기는 갈래(W3·W4)가 Swift 의 `Image(systemName: "x")` 를 만나면 여기서 찾는다.
 // `SfSymbolCoverageTest` 가 Swift 소스를 읽어 쓰인 이름이 전부 여기 있는지(빠진 이름 0), 여기 이름이 전부 쓰이는지(고아 0)를 잰다 —
@@ -14,6 +14,8 @@ object SfSymbols {
         "arrow.right" to AppIcon.ArrowForward,
         "arrow.triangle.2.circlepath" to AppIcon.Sync,
         "arrow.up" to AppIcon.ArrowUpward,
+        // 0.3.64 폰 테트리스 1:1 "업데이트 필요" 안내(Sources/CheckMobileKit/Games/GamesTetrisDuelScreen.swift).
+        "arrow.up.circle" to AppIcon.ArrowCircleUp,
         "arrow.up.right" to AppIcon.NorthEast,
         "arrow.uturn.backward" to AppIcon.Undo,
         "arrowshape.turn.up.left.fill" to AppIcon.ReplyFill,
@@ -36,6 +38,8 @@ object SfSymbols {
         "bubble.left.and.bubble.right.fill" to AppIcon.ForumFill,
         "bubble.left.fill" to AppIcon.ChatBubbleFill,
         "building.2.fill" to AppIcon.ApartmentFill,
+        // 0.3.67 맥 미니게임 [역대] 판 바닥 안내의 날짜 줄(Sources/check/MiniGamePanel.swift allTimeFooter).
+        "calendar" to AppIcon.CalendarToday,
         "calendar.badge.clock" to AppIcon.CalendarClock,
         "camera.fill" to AppIcon.PhotoCameraFill,
         "chart.bar.xaxis" to AppIcon.BarChart,
@@ -77,9 +81,13 @@ object SfSymbols {
         "exclamationmark.triangle" to AppIcon.Warning,
         "exclamationmark.triangle.fill" to AppIcon.WarningFill,
         "eye" to AppIcon.Visibility,
+        // 0.3.65 관전자 수 칩(Sources/CheckMobileKit/Games/GamesComponents.swift GamesWatcherCount.symbol) — 세 화면 공용 눈.
+        "eye.fill" to AppIcon.VisibilityFill,
         // 0.3.62 메시지 이모티콘 버튼(Sources/check/CheckMessageView.swift stickerButton) — 웃는 얼굴.
         "face.smiling" to AppIcon.Mood,
         "figure.run.circle.fill" to AppIcon.DirectionsRunFill,
+        // 0.3.67 길건너 아잉이(MiniGameKind.crossy.symbol · 일일 미션 줄 아이콘).
+        "figure.walk" to AppIcon.DirectionsWalk,
         "flag" to AppIcon.Flag,
         "flag.checkered" to AppIcon.SportsScore,
         "flag.fill" to AppIcon.FlagFill,
@@ -147,6 +155,8 @@ object SfSymbols {
         "questionmark.circle" to AppIcon.Help,
         "rectangle.portrait.and.arrow.right" to AppIcon.Logout,
         "rectangle.split.2x1.fill" to AppIcon.SplitscreenLandscapeFill,
+        // 0.3.67 맥 미니게임 [역대] 판 바닥 안내의 규칙 줄(Sources/check/MiniGamePanel.swift allTimeFooter).
+        "rosette" to AppIcon.WorkspacePremium,
         "rotate.left" to AppIcon.RotateLeft,
         "shield" to AppIcon.Shield,
         "sparkles" to AppIcon.AutoAwesome,

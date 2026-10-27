@@ -3,7 +3,8 @@
 #  - gate-full-linux : unshare 봉인 아래 전체 게이트(slow·lint·assembleRelease(.invalid)·jar). 기기 계측은 빠진다(로그에 "기기 계측 빠짐").
 #                      기기 계측은 맥에서만 돈다: gate-full.sh → emu.sh instrumented(sandbox-exec 봉인·CGWindowList 창 0 — 맥 전용).
 #                      Linux 러너용 봉인 에뮬레이터 잡은 아직 없다(KVM·봉인 방식이 다르다 — 조정자 후속).
-#  - windows-arm64   : windows-11-arm, 방화벽 봉인 아래 데스크톱 시험(mp-ci windows-x64 와 같은 절차).
+#  - (windows-arm64 는 뺐다 — 5차 int-d, G §8-16) 옛 절차(cmdline-tools latest · OOBE·OneDrive 처리 없음)라 main 에 오르면 빨갛고,
+#    같은 windows-11-arm 방화벽 봉인 게이트를 mp-ci windows-arm64 가 매 푸시에 돈다(cmdline-tools 22.0 고정 · OOBE 걷기 · OneDrive 끔).
 #  - release-dryrun  : 봉인 아래 assembleRelease(.invalid) → APK 네이티브 점검(G §8-12): .so 허용 목록 + 16 KB 정렬
 #                      (zipalign -c -P 16 · PT_LOAD p_align ≥ 0x4000). 옛 "lib/ 0개" 기준은 버렸다(Compose 가 .so 를 싣는다).
 #                      → APK 내용 점검(W1-g ⑦): 자기 시험(가짜 APK 양성 대조) 뒤 진짜 APK 의 assets Fixtures 0 · dex 운영 주소 0.
@@ -50,48 +51,6 @@ jobs:
           path: multiplatform/**/build/test-results/**/*.xml
           if-no-files-found: ignore
           retention-days: 7
-
-  windows-arm64:
-    runs-on: windows-11-arm
-    timeout-minutes: 90
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: '21'
-          architecture: aarch64
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-      - name: Android SDK 플랫폼(설정 단계가 compileSdk 37 을 찾는다)
-        run: (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --install "platforms;android-37.0" > /dev/null
-      - name: 의존 예열(봉인 밖)
-        run: bash multiplatform/scripts/gate-fast.sh --warm
-      - name: 방화벽 봉인 걸기
-        shell: pwsh
-        run: |
-          Set-NetFirewallProfile -All -Enabled True
-          $javas = @()
-          $javas += Get-ChildItem -Path "$env:JAVA_HOME\bin" -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('java.exe','javaw.exe') }
-          if (Test-Path 'C:\hostedtoolcache\windows') {
-            $javas += Get-ChildItem -Path 'C:\hostedtoolcache\windows' -Recurse -Filter java*.exe -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @('java.exe','javaw.exe') }
-          }
-          $javas = $javas | Sort-Object FullName -Unique
-          $i = 0
-          foreach ($j in $javas) { New-NetFirewallRule -DisplayName "aingcheck-seal-$i" -Direction Outbound -Action Block -Program $j.FullName -Profile Any | Out-Null; $i++ }
-          if ($i -eq 0) { throw "막을 java.exe 를 찾지 못했다" }
-      - name: 방화벽 봉인 게이트
-        env:
-          AINGCHECK_EXTERNAL_SEAL: windows-firewall
-        run: bash multiplatform/scripts/gate-fast.sh
-      - name: 방화벽 봉인 풀기
-        if: always()
-        shell: pwsh
-        run: Get-NetFirewallRule -DisplayName 'aingcheck-seal-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
   release-dryrun:
     runs-on: ubuntu-24.04

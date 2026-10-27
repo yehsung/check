@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ 862be0f
+// 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ 1b8260d(희귀 강조 goldText · rainbowStops · rareTintOpacity — 폰 1.0.10 몫이 main 에 들어옴)
 // 원본: Sources/check/CheckGachaWindow.swift @ 862be0f (GachaWindowPalette — 브랜드 보라 판·글자)
 // 원본: Sources/CheckCore/CheckTheme.swift @ 862be0f (맥 다크 남색 가족 — 다크 값의 출처)
 //
@@ -163,6 +163,22 @@ object AingPalette {
     val brandNavy = AingRgb.hex(0x1A1A2E)
     /** 아잉이 몸 색(라벤더). */
     val brandLavender = AingRgb.hex(0x9979E6)
+
+    // MARK: 희귀 강조 — 뽑기 전용 내장 둘(황금 · 무지개). 칠 판정은 마감 한 곳(케이크는 희귀가 아니다 — 칠 없음).
+    /** 금빛 **글자·기호**(메달 [gold] 는 원 바탕 전용 — 글자로 쓰면 라이트 1.8:1). 라이트는 같은 색상에 밝기만 내려 4.5:1, 다크는 메달 금과 같다. */
+    val goldText = AingPair(AingRgb(0.55, 0.41, 0.00), AingRgb.hex(0xFFD24A))
+    /** 무지개 일곱 빛(빨 → 보). 다크 = 맥 `GachaPalette.rainbowColors` 숫자 그대로(정본), 라이트 = 색상·채도비 그대로 밝기만 4.5:1 선까지 내린 값. */
+    val rainbowStops = listOf(
+        AingPair(AingRgb(0.63, 0.35, 0.40), AingRgb(1.00, 0.56, 0.64)),
+        AingPair(AingRgb(0.56, 0.40, 0.25), AingRgb(1.00, 0.72, 0.44)),
+        AingPair(AingRgb(0.47, 0.43, 0.20), AingRgb(1.00, 0.90, 0.43)),
+        AingPair(AingRgb(0.29, 0.47, 0.31), AingRgb(0.56, 0.90, 0.61)),
+        AingPair(AingRgb(0.29, 0.45, 0.59), AingRgb(0.49, 0.76, 1.00)),
+        AingPair(AingRgb(0.43, 0.40, 0.66), AingRgb(0.65, 0.61, 1.00)),
+        AingPair(AingRgb(0.54, 0.36, 0.59), AingRgb(0.91, 0.61, 1.00)),
+    )
+    /** 희귀 받침(결과 줄 바탕)의 세기 — 금 14% 와 같다. */
+    const val RARE_TINT_OPACITY = 0.14
 
     // MARK: 이니셜 원(맥 해시 팔레트 6색의 틴트형 — 순서는 파랑·청록·주황·분홍·보라·초록)
     val avatarInks = listOf(

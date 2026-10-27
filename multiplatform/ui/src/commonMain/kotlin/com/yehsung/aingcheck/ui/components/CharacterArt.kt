@@ -1,11 +1,11 @@
-// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ 862be0f (초상 이름 `<id>-<표정>` · 192px)
+// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ 1b8260d (초상 이름 `<id>-<표정>` · 192px · 케이크 둘 0.3.66)
 // 원본: Sources/CheckMobileKit/Components/MobileArt.swift @ 862be0f (루비·무대 그림 창구)
 // 원본: Sources/CheckCore/AingSticker.swift @ 862be0f (이모티콘 그림 이름 `sticker-<rawValue>.png`)
 //
 // 그림 창구. 그림 파일은 **git 에 사본을 두지 않는다**(A-X18): ui 빌드의 Gradle Sync 작업이 맥 원본을 빌드 폴더로 모아
 // Compose 리소스 files/ 아래에 싣는다(조정자 패치 — ui/build.gradle.kts `aingcheckSyncCharacterArt`).
 //   Sources/check/Characters/<id>/{manifest.json, portrait-neutral.png, portrait-negative.png} → files/characters/<id>/…
-//   Sources/check/Resources/<aing·aing_gold·aing_rainbow>-<표정>.png                     → files/characters/<id>/portrait-<표정>.png
+//   Sources/check/Resources/<aing·aing_gold·aing_rainbow·aing_cake_strawberry·aing_cake_choco>-<표정>.png → files/characters/<id>/portrait-<표정>.png
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-<id>-neutral}.png    → files/art/…
 //   Sources/CheckCore/Resources/Stickers/sticker-<이름>.png(0.3.62 아잉이 이모티콘)           → files/stickers/…
 // 스프라이트 아틀라스(atlas.png)는 싣지 않는다 — 살아 있는 캐릭터는 구운 자산(W0-d·W5)이 맡는다.
@@ -22,7 +22,10 @@ import org.jetbrains.compose.resources.decodeToImageBitmap
 
 object CharacterArt {
     /** 초상이 실린 캐릭터(아잉 가족 먼저, 나머지 이름순). 상점 능력 번호(K9)는 W1-c 가 이 그림 집합에서 파생한다. */
-    val portraitIds: List<String> = listOf("aing", "aing_gold", "aing_rainbow", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel")
+    val portraitIds: List<String> = listOf(
+        "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco",
+        "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
+    )
 
     /** 매니페스트가 있는 스프라이트 캐릭터(Sources/check/Characters/<id>). */
     val spriteIds: List<String> = listOf("fox", "ghost", "jellyfish", "robot", "shiba", "squirrel")

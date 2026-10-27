@@ -60,10 +60,14 @@ kotlin {
             api(project.dependencies.platform(libs.junit.bom))
             api(libs.junit.jupiter)
             compileOnly(files(tripwireJar))
+            // W1-d G6 디코드 덤프기(C§5.2 · G §8-14): 칸을 **선언 타입**으로 읽는다 — JDK 리플렉션은 무부호·널 표기를 못 본다
+            // (MirrorDumpProbeTest). 판은 version.ref = "kotlin"(2.4.21)으로 컴파일러와 한 벌. 시험 classpath 전용(앱 산출물 0).
+            api(libs.kotlin.reflect)
         }
         getByName("androidMain").dependencies {
             api(libs.kotlin.test.junit)
             api(libs.junit4)
+            api(libs.kotlin.reflect) // 같은 덤프기를 Android 호스트 시험(Robolectric)에서도 쓸 수 있게.
         }
         getByName("desktopTest").dependencies {
             compileOnly(files(tripwireJar))

@@ -1,5 +1,5 @@
 // 원본: google/material-design-icons @ 49d4db35df873165d6bd6ba09b063c7dafbac2f4 — Material Symbols Rounded(wght 400 · GRAD 0 · opsz 24), Apache-2.0
-// 원본 대응: Sources/**/*.swift @ 862be0f 의 SF Symbols 이름(SfSymbols.kt) — 출처·sha256 표는 ui/snapshots/icons/material-symbols-source.tsv
+// 원본 대응: Sources/**/*.swift @ 1b8260d 의 SF Symbols 이름(SfSymbols.kt) — 출처·sha256 표는 ui/snapshots/icons/material-symbols-source.tsv
 //
 // 앱 아이콘 집합(D§13-3 → G §8-1 #13: Fluent 대신 Material Symbols). SF Symbols 는 애플 플랫폼 밖에서 쓰지 않는다.
 // 그림은 composeResources/drawable/ms_<이름>[_fill].xml(벡터) — 채움 0/1 은 따로 그린 두 장이다(축 보간이 아니다).
@@ -15,6 +15,7 @@ import com.yehsung.aingcheck.ui.resources.ms_alarm_on
 import com.yehsung.aingcheck.ui.resources.ms_apartment_fill
 import com.yehsung.aingcheck.ui.resources.ms_apps_fill
 import com.yehsung.aingcheck.ui.resources.ms_arrow_circle_down
+import com.yehsung.aingcheck.ui.resources.ms_arrow_circle_up
 import com.yehsung.aingcheck.ui.resources.ms_arrow_forward
 import com.yehsung.aingcheck.ui.resources.ms_arrow_left_fill
 import com.yehsung.aingcheck.ui.resources.ms_arrow_right_fill
@@ -28,6 +29,7 @@ import com.yehsung.aingcheck.ui.resources.ms_block
 import com.yehsung.aingcheck.ui.resources.ms_bolt_fill
 import com.yehsung.aingcheck.ui.resources.ms_brush_fill
 import com.yehsung.aingcheck.ui.resources.ms_calendar_clock
+import com.yehsung.aingcheck.ui.resources.ms_calendar_today
 import com.yehsung.aingcheck.ui.resources.ms_campaign
 import com.yehsung.aingcheck.ui.resources.ms_cancel_fill
 import com.yehsung.aingcheck.ui.resources.ms_celebration_fill
@@ -56,6 +58,7 @@ import com.yehsung.aingcheck.ui.resources.ms_delete
 import com.yehsung.aingcheck.ui.resources.ms_desktop_windows
 import com.yehsung.aingcheck.ui.resources.ms_diamond_fill
 import com.yehsung.aingcheck.ui.resources.ms_directions_run_fill
+import com.yehsung.aingcheck.ui.resources.ms_directions_walk
 import com.yehsung.aingcheck.ui.resources.ms_drafts_fill
 import com.yehsung.aingcheck.ui.resources.ms_eco_fill
 import com.yehsung.aingcheck.ui.resources.ms_edit
@@ -162,9 +165,11 @@ import com.yehsung.aingcheck.ui.resources.ms_verified_fill
 import com.yehsung.aingcheck.ui.resources.ms_verified_user_fill
 import com.yehsung.aingcheck.ui.resources.ms_vertical_align_bottom
 import com.yehsung.aingcheck.ui.resources.ms_visibility
+import com.yehsung.aingcheck.ui.resources.ms_visibility_fill
 import com.yehsung.aingcheck.ui.resources.ms_warning
 import com.yehsung.aingcheck.ui.resources.ms_warning_fill
 import com.yehsung.aingcheck.ui.resources.ms_wb_twilight_fill
+import com.yehsung.aingcheck.ui.resources.ms_workspace_premium
 import org.jetbrains.compose.resources.DrawableResource
 
 enum class AppIcon(val materialName: String, val filled: Boolean) {
@@ -177,6 +182,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     ApartmentFill("apartment", true),
     AppsFill("apps", true),
     ArrowCircleDown("arrow_circle_down", false),
+    ArrowCircleUp("arrow_circle_up", false),
     ArrowForward("arrow_forward", false),
     ArrowLeftFill("arrow_left", true),
     ArrowRightFill("arrow_right", true),
@@ -190,6 +196,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     BoltFill("bolt", true),
     BrushFill("brush", true),
     CalendarClock("calendar_clock", false),
+    CalendarToday("calendar_today", false),
     Campaign("campaign", false),
     CancelFill("cancel", true),
     CelebrationFill("celebration", true),
@@ -218,6 +225,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     DesktopWindows("desktop_windows", false),
     DiamondFill("diamond", true),
     DirectionsRunFill("directions_run", true),
+    DirectionsWalk("directions_walk", false),
     DraftsFill("drafts", true),
     EcoFill("eco", true),
     Edit("edit", false),
@@ -324,9 +332,11 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     VerifiedUserFill("verified_user", true),
     VerticalAlignBottom("vertical_align_bottom", false),
     Visibility("visibility", false),
+    VisibilityFill("visibility", true),
     Warning("warning", false),
     WarningFill("warning", true),
     WbTwilightFill("wb_twilight", true),
+    WorkspacePremium("workspace_premium", false),
     ;
 
     /** composeResources/drawable 안 파일 이름(확장자 뺀 것). [drawable] 이 이 이름의 리소스를 가리키는지 시험이 잰다(생성된 Res 의 이름표와 대조). */
@@ -343,6 +353,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             ApartmentFill -> Res.drawable.ms_apartment_fill
             AppsFill -> Res.drawable.ms_apps_fill
             ArrowCircleDown -> Res.drawable.ms_arrow_circle_down
+            ArrowCircleUp -> Res.drawable.ms_arrow_circle_up
             ArrowForward -> Res.drawable.ms_arrow_forward
             ArrowLeftFill -> Res.drawable.ms_arrow_left_fill
             ArrowRightFill -> Res.drawable.ms_arrow_right_fill
@@ -356,6 +367,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             BoltFill -> Res.drawable.ms_bolt_fill
             BrushFill -> Res.drawable.ms_brush_fill
             CalendarClock -> Res.drawable.ms_calendar_clock
+            CalendarToday -> Res.drawable.ms_calendar_today
             Campaign -> Res.drawable.ms_campaign
             CancelFill -> Res.drawable.ms_cancel_fill
             CelebrationFill -> Res.drawable.ms_celebration_fill
@@ -384,6 +396,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             DesktopWindows -> Res.drawable.ms_desktop_windows
             DiamondFill -> Res.drawable.ms_diamond_fill
             DirectionsRunFill -> Res.drawable.ms_directions_run_fill
+            DirectionsWalk -> Res.drawable.ms_directions_walk
             DraftsFill -> Res.drawable.ms_drafts_fill
             EcoFill -> Res.drawable.ms_eco_fill
             Edit -> Res.drawable.ms_edit
@@ -490,8 +503,10 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             VerifiedUserFill -> Res.drawable.ms_verified_user_fill
             VerticalAlignBottom -> Res.drawable.ms_vertical_align_bottom
             Visibility -> Res.drawable.ms_visibility
+            VisibilityFill -> Res.drawable.ms_visibility_fill
             Warning -> Res.drawable.ms_warning
             WarningFill -> Res.drawable.ms_warning_fill
             WbTwilightFill -> Res.drawable.ms_wb_twilight_fill
+            WorkspacePremium -> Res.drawable.ms_workspace_premium
         }
 }

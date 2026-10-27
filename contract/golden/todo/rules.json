@@ -1,0 +1,1813 @@
+{
+  "cases": [
+    {
+      "constants": {
+        "counterVisibleFrom": 90,
+        "maxTitleCodePoints": 1000,
+        "maxTitleLength": 100,
+        "oldItemDays": 7,
+        "purgeDays": 90,
+        "undoSecondsBits": "4014000000000000"
+      },
+      "id": "titles",
+      "rows": [
+        {
+          "cps": "",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": ""
+        },
+        {
+          "cps": "0020",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": ""
+        },
+        {
+          "cps": "d68c c758 0020 c900 be44",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d68c c758 0020 c900 be44"
+        },
+        {
+          "cps": "0020 0020 d68c c758 0020 0020 0020 c900 be44 0020 0020",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d68c c758 0020 c900 be44"
+        },
+        {
+          "cps": "d68c c758 000a c900 be44",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d68c c758 0020 c900 be44"
+        },
+        {
+          "cps": "d68c c758 0009 0009 c900 be44",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d68c c758 0020 c900 be44"
+        },
+        {
+          "cps": "d68c c758 0007 c900 be44",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d68c c758 c900 be44"
+        },
+        {
+          "cps": "d68c c758 200b c900 be44",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d68c c758 c900 be44"
+        },
+        {
+          "cps": "d68c c758 200d c900 be44",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d68c c758 200d c900 be44"
+        },
+        {
+          "cps": "1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871"
+        },
+        {
+          "cps": "1112 1161 11ab 1100 1173 11af",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "d55c ae00"
+        },
+        {
+          "cps": "0020 0301 0078",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0078"
+        },
+        {
+          "cps": "0061 00a0 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0020 0062"
+        },
+        {
+          "cps": "0061 3000 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0020 0062"
+        },
+        {
+          "cps": "0061 2028 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0020 0062"
+        },
+        {
+          "cps": "0061 0085 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0020 0062"
+        },
+        {
+          "cps": "0061 feff 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0062"
+        },
+        {
+          "cps": "0061 202e 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0062"
+        },
+        {
+          "cps": "0061 3164 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 3164 0062"
+        },
+        {
+          "cps": "200d",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "200d"
+        },
+        {
+          "cps": "000d 000a b450 0020 c904 000d 000a",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "b450 0020 c904"
+        },
+        {
+          "cps": "ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00"
+        },
+        {
+          "cps": "ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00",
+          "fits": false,
+          "fitsRaw": false,
+          "normalized": "ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00 ac00"
+        },
+        {
+          "cps": "1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd"
+        },
+        {
+          "cps": "1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd",
+          "fits": false,
+          "fitsRaw": false,
+          "normalized": "1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd 1f468 1f3fd 200d 1f469 1f3fd 200d 1f467 1f3fd 200d 1f466 1f3fd"
+        },
+        {
+          "cps": "0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301 0065 0301",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9 00e9"
+        },
+        {
+          "cps": "0061 180e 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0062"
+        },
+        {
+          "cps": "0061 2060 0062",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "0061 0062"
+        },
+        {
+          "cps": "b05d 0020",
+          "fits": true,
+          "fitsRaw": true,
+          "normalized": "b05d"
+        }
+      ]
+    },
+    {
+      "badges": [
+        {
+          "badge": null,
+          "days": -1
+        },
+        {
+          "badge": null,
+          "days": 0
+        },
+        {
+          "badge": "어제",
+          "days": 1
+        },
+        {
+          "badge": "2일 전",
+          "days": 2
+        },
+        {
+          "badge": "7일 전",
+          "days": 7
+        },
+        {
+          "badge": "100일 전",
+          "days": 100
+        }
+      ],
+      "id": "carried",
+      "rows": [
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261026",
+          "today": "20261026"
+        },
+        {
+          "badge": "7일 전",
+          "days": 7,
+          "origin": "20261026",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261026",
+          "today": "20250101"
+        },
+        {
+          "badge": "어제",
+          "days": 1,
+          "origin": "20261025",
+          "today": "20261026"
+        },
+        {
+          "badge": "8일 전",
+          "days": 8,
+          "origin": "20261025",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261025",
+          "today": "20250101"
+        },
+        {
+          "badge": "7일 전",
+          "days": 7,
+          "origin": "20261019",
+          "today": "20261026"
+        },
+        {
+          "badge": "14일 전",
+          "days": 14,
+          "origin": "20261019",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261019",
+          "today": "20250101"
+        },
+        {
+          "badge": "25일 전",
+          "days": 25,
+          "origin": "20261001",
+          "today": "20261026"
+        },
+        {
+          "badge": "32일 전",
+          "days": 32,
+          "origin": "20261001",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261001",
+          "today": "20250101"
+        },
+        {
+          "badge": "298일 전",
+          "days": 298,
+          "origin": "20260101",
+          "today": "20261026"
+        },
+        {
+          "badge": "305일 전",
+          "days": 305,
+          "origin": "20260101",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20260101",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261231",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261231",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261231",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20270101",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20270101",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20270101",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261027",
+          "today": "20261026"
+        },
+        {
+          "badge": "6일 전",
+          "days": 6,
+          "origin": "20261027",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261027",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "2026102",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "2026102",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "2026102",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "202610266",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "202610266",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "202610266",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "2026-10-",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "2026-10-",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "2026-10-",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "abcdefgh",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "abcdefgh",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "abcdefgh",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "２０２６１０２６",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "２０２６１０２６",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "２０２６１０２６",
+          "today": "20250101"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261326",
+          "today": "20261026"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261326",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261326",
+          "today": "20250101"
+        },
+        {
+          "badge": "26일 전",
+          "days": 26,
+          "origin": "20261000",
+          "today": "20261026"
+        },
+        {
+          "badge": "33일 전",
+          "days": 33,
+          "origin": "20261000",
+          "today": "20261102"
+        },
+        {
+          "badge": null,
+          "days": 0,
+          "origin": "20261000",
+          "today": "20250101"
+        },
+        {
+          "badge": "740282일 전",
+          "days": 740282,
+          "origin": "00000101",
+          "today": "20261026"
+        },
+        {
+          "badge": "740289일 전",
+          "days": 740289,
+          "origin": "00000101",
+          "today": "20261102"
+        },
+        {
+          "badge": "739619일 전",
+          "days": 739619,
+          "origin": "00000101",
+          "today": "20250101"
+        }
+      ]
+    },
+    {
+      "id": "visibility",
+      "items": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab78675000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab78675000000"
+        },
+        {
+          "completedAt": "41dab786a7000000",
+          "createdAt": "41dab7868e000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab7868e000000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab4e35c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000003",
+          "originDayKey": "20261018",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab4e35c000000"
+        },
+        {
+          "completedAt": "41dab78659800000",
+          "createdAt": "41dab78668800000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab78668800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7866b000000",
+          "deletedAt": "41dab7866d800000",
+          "id": "00000000-0000-4000-8000-000000000005",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab7866b000000"
+        },
+        {
+          "completedAt": "41dab786c0000000",
+          "createdAt": "41dab7868e000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000006",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab7868e000000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7868e000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000007",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab7868e000000"
+        },
+        {
+          "completedAt": "41da9836bc000000",
+          "createdAt": "41da9690dc000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000008",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41da9690dc000000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41da9690dc000000",
+          "deletedAt": "41da99883c000000",
+          "id": "00000000-0000-4000-8000-000000000009",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41da9690dc000000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41da9690dc000000",
+          "deletedAt": "41da9a30fc000000",
+          "id": "00000000-0000-4000-8000-000000000010",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41da9690dc000000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41da9690dc000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000011",
+          "originDayKey": "20260718",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41da9690dc000000"
+        },
+        {
+          "completedAt": "41dab786a7000000",
+          "createdAt": "41dab7868e000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000012",
+          "originDayKey": "20261026",
+          "title": "d560 0020 c77c",
+          "updatedAt": "41dab7868e000000"
+        }
+      ],
+      "pruned": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005",
+        "00000000-0000-4000-8000-000000000006",
+        "00000000-0000-4000-8000-000000000007",
+        "00000000-0000-4000-8000-000000000010",
+        "00000000-0000-4000-8000-000000000011",
+        "00000000-0000-4000-8000-000000000012"
+      ],
+      "rows": [
+        {
+          "old": [
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011"
+          ],
+          "today": "20261026",
+          "visible": [
+            "00000000-0000-4000-8000-000000000007",
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011",
+            "00000000-0000-4000-8000-000000000006",
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000012"
+          ],
+          "visibleKeeping5": [
+            "00000000-0000-4000-8000-000000000007",
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000005",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011",
+            "00000000-0000-4000-8000-000000000006",
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000012"
+          ]
+        },
+        {
+          "old": [
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011"
+          ],
+          "today": "20261025",
+          "visible": [
+            "00000000-0000-4000-8000-000000000007",
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011",
+            "00000000-0000-4000-8000-000000000004"
+          ],
+          "visibleKeeping5": [
+            "00000000-0000-4000-8000-000000000007",
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000005",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011",
+            "00000000-0000-4000-8000-000000000004"
+          ]
+        },
+        {
+          "old": [
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011"
+          ],
+          "today": "20261027",
+          "visible": [
+            "00000000-0000-4000-8000-000000000007",
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011"
+          ],
+          "visibleKeeping5": [
+            "00000000-0000-4000-8000-000000000007",
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000005",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000011"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "milliseconds",
+      "rows": [
+        {
+          "ms": 0,
+          "normalizedBits": "0000000000000000",
+          "roundTripBits": "0000000000000000",
+          "secondsBits": "0000000000000000"
+        },
+        {
+          "ms": 1000,
+          "normalizedBits": "3ff0000000000000",
+          "roundTripBits": "3ff0000000000000",
+          "secondsBits": "3ff0020c49ba5e35"
+        },
+        {
+          "ms": 1000,
+          "normalizedBits": "3ff0000000000000",
+          "roundTripBits": "3ff0000000000000",
+          "secondsBits": "3ff0020c2ee26b9b"
+        },
+        {
+          "ms": -1000,
+          "normalizedBits": "bff0000000000000",
+          "roundTripBits": "bff0000000000000",
+          "secondsBits": "bff0020c49ba5e35"
+        },
+        {
+          "ms": 1792940400123,
+          "normalizedBits": "41dab7865c07df3b",
+          "roundTripBits": "41dab7865c07df3b",
+          "secondsBits": "41dab7865c07e6b4"
+        },
+        {
+          "ms": 1792940400124,
+          "normalizedBits": "41dab7865c07ef9e",
+          "roundTripBits": "41dab7865c07ef9e",
+          "secondsBits": "41dab7865c07e76d"
+        },
+        {
+          "ms": 4102444800123,
+          "normalizedBits": "41ee90cae003ef9e",
+          "roundTripBits": "41ee90cae003ef9e",
+          "secondsBits": "41ee90cae003ef9e"
+        },
+        {
+          "ms": 8640000000000000,
+          "normalizedBits": "429f6ea086000000",
+          "roundTripBits": "429f6ea086000000",
+          "secondsBits": "433ff973cafa8000"
+        },
+        {
+          "ms": -8640000000000000,
+          "normalizedBits": "c29f6ea086000000",
+          "roundTripBits": "c29f6ea086000000",
+          "secondsBits": "c33ff973cafa8000"
+        },
+        {
+          "ms": 8640000000000000,
+          "normalizedBits": "429f6ea086000000",
+          "roundTripBits": "429f6ea086000000",
+          "secondsBits": "7ff0000000000000"
+        },
+        {
+          "ms": -8640000000000000,
+          "normalizedBits": "c29f6ea086000000",
+          "roundTripBits": "c29f6ea086000000",
+          "secondsBits": "fff0000000000000"
+        },
+        {
+          "ms": 0,
+          "normalizedBits": "0000000000000000",
+          "roundTripBits": "0000000000000000",
+          "secondsBits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-plain",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c800000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000003",
+          "originDayKey": "20261026",
+          "title": "b2e4",
+          "updatedAt": "41dab7865c800000"
+        }
+      ],
+      "pending": [],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00 0020 c11c bc84 0020 c0c8 ac83",
+            "updatedAt": "41dab78661000000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098 0020 c11c bc84",
+            "updatedAt": "41dab78663800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c800000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000003",
+            "originDayKey": "20261026",
+            "title": "b2e4",
+            "updatedAt": "41dab7865c800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865cc00000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000004",
+            "originDayKey": "20261026",
+            "title": "b77c 0028 c11c bc84 b9cc 0029",
+            "updatedAt": "41dab7865cc00000"
+          }
+        ],
+        "pending": []
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84 0020 c0c8 ac83",
+          "updatedAt": "41dab78661000000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098 0020 c11c bc84",
+          "updatedAt": "41dab78663800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865cc00000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "originDayKey": "20261026",
+          "title": "b77c 0028 c11c bc84 b9cc 0029",
+          "updatedAt": "41dab7865cc00000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-local-newer-pending",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098",
+            "updatedAt": "41dab7865c400000"
+          }
+        ],
+        "pending": [
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84",
+          "updatedAt": "41dab7865d400000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-same-ms-server-wins",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00 0020 c11c bc84 0020 b3d9 b960",
+            "updatedAt": "41dab7865e800000"
+          }
+        ],
+        "pending": []
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84 0020 b3d9 b960",
+          "updatedAt": "41dab7865e800000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-sent-unchanged",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00 0020 c11c bc84",
+            "updatedAt": "41dab7865d400000"
+          }
+        ],
+        "pending": []
+      },
+      "sent": {
+        "00000000-0000-4000-8000-000000000001": 1792940410000
+      },
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84",
+          "updatedAt": "41dab7865d400000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-sent-then-edited",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 b610 0020 ace0 ce68",
+          "updatedAt": "41dab7865fc00000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00 0020 b610 0020 ace0 ce68",
+            "updatedAt": "41dab7865fc00000"
+          }
+        ],
+        "pending": [
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      },
+      "sent": {
+        "00000000-0000-4000-8000-000000000001": 1792940410000
+      },
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84",
+          "updatedAt": "41dab7865d400000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-rejected-unchanged",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000009"
+      ],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098",
+            "updatedAt": "41dab7865c400000"
+          }
+        ],
+        "pending": []
+      },
+      "sent": {
+        "00000000-0000-4000-8000-000000000001": 1792940410000
+      },
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84",
+          "updatedAt": "41dab7865d400000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-rejected-edited",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 b610 0020 ace0 ce68",
+          "updatedAt": "41dab7865fc00000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00 0020 b610 0020 ace0 ce68",
+            "updatedAt": "41dab7865fc00000"
+          }
+        ],
+        "pending": [
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      },
+      "sent": {
+        "00000000-0000-4000-8000-000000000001": 1792940410000
+      },
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84",
+          "updatedAt": "41dab7865d400000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-rejected-same-row",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          }
+        ],
+        "pending": []
+      },
+      "sent": {
+        "00000000-0000-4000-8000-000000000001": 1792940410000
+      },
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "id": "merge-held-keeps-local",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        }
+      ],
+      "pending": [],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098",
+            "updatedAt": "41dab7865c400000"
+          }
+        ],
+        "pending": []
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84 0020 c0c8 ac83",
+          "updatedAt": "41dab78661000000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "id": "merge-held-vs-pending",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          }
+        ],
+        "pending": [
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84",
+          "updatedAt": "41dab7865d400000"
+        }
+      ]
+    },
+    {
+      "full": true,
+      "held": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "id": "merge-full-drops",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c800000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000003",
+          "originDayKey": "20261026",
+          "title": "b2e4",
+          "updatedAt": "41dab7865c800000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098",
+            "updatedAt": "41dab7865c400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c800000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000003",
+            "originDayKey": "20261026",
+            "title": "b2e4",
+            "updatedAt": "41dab7865c800000"
+          }
+        ],
+        "pending": [
+          "00000000-0000-4000-8000-000000000003"
+        ]
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        }
+      ]
+    },
+    {
+      "full": true,
+      "held": [],
+      "id": "merge-full-protected",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c800000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000003",
+          "originDayKey": "20261026",
+          "title": "b2e4",
+          "updatedAt": "41dab7865c800000"
+        }
+      ],
+      "pending": [],
+      "protected": [
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [
+          "00000000-0000-4000-8000-000000000002"
+        ],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098",
+            "updatedAt": "41dab7865c400000"
+          }
+        ],
+        "pending": [
+          "00000000-0000-4000-8000-000000000002"
+        ]
+      },
+      "sent": {},
+      "server": []
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-protected-defers",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        }
+      ],
+      "pending": [],
+      "protected": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098",
+            "updatedAt": "41dab7865c400000"
+          }
+        ],
+        "pending": [
+          "00000000-0000-4000-8000-000000000001"
+        ]
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00 0020 c11c bc84 0020 c0c8 ac83",
+          "updatedAt": "41dab78661000000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        }
+      ]
+    },
+    {
+      "full": false,
+      "held": [],
+      "id": "merge-duplicates",
+      "idempotent": true,
+      "local": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c000000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "updatedAt": "41dab7865e800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "updatedAt": "41dab7865c400000"
+        }
+      ],
+      "pending": [
+        "00000000-0000-4000-8000-000000000007"
+      ],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "41dab7865e800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865c400000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000002",
+            "originDayKey": "20261026",
+            "title": "b098 0020 c11c bc84",
+            "updatedAt": "41dab78663800000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41dab7865cc00000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000004",
+            "originDayKey": "20261026",
+            "title": "b77c 0028 c11c bc84 b9cc 0029",
+            "updatedAt": "41dab7865cc00000"
+          }
+        ],
+        "pending": []
+      },
+      "sent": {},
+      "server": [
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098 0020 c11c bc84",
+          "updatedAt": "41dab78663800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865c400000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000002",
+          "originDayKey": "20261026",
+          "title": "b098 0020 c11c bc84",
+          "updatedAt": "41dab78663800000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865cc00000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "originDayKey": "20261026",
+          "title": "b77c 0028 c11c bc84 b9cc 0029",
+          "updatedAt": "41dab7865cc00000"
+        },
+        {
+          "completedAt": null,
+          "createdAt": "41dab7865cc00000",
+          "deletedAt": null,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "originDayKey": "20261026",
+          "title": "b77c 0028 c11c bc84 b9cc 0029",
+          "updatedAt": "41dab7865cc00000"
+        }
+      ]
+    },
+    {
+      "full": true,
+      "held": [],
+      "id": "merge-empty",
+      "idempotent": true,
+      "local": [],
+      "pending": [],
+      "protected": [],
+      "rejected": [],
+      "result": {
+        "deferredIDs": [],
+        "heldRejectedIDs": [],
+        "items": [],
+        "pending": []
+      },
+      "sent": {},
+      "server": []
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesTodo.swift",
+  "golden": "todo/rules",
+  "platformSensitive": true,
+  "schema": 1,
+  "spec": {
+    "carried": "carriedDays — 'yyyyMMdd'(ASCII 숫자 8자) 두 개를 KST 0시로(lenient) 바꿔 달력 날 차(음수 0). 배지: 0 이하 없음 · 1 '어제' · N 'N일 전'",
+    "merge": "mergedSync — ⓪ 없는 id 버림 · pending 이 붙잡기를 이김 ① 보낸 값과 같으면 pending 해제 ② rejected: 안 고쳤으면 붙잡기(서버 행이 같으면 아무것도) · 고쳤으면 pending ③ 같은 id: 붙잡힘 → 로컬, pending 이고 로컬이 더 새것 → 로컬, 보호 → 로컬 + 미룸, 아니면 서버 ④ full 이면 서버에 없고 pending·붙잡기 아닌 로컬 삭제(보호는 미룸) ⑤ 서버에만 있는 것 뒤에(서버 순서). idempotent = 같은 응답을 한 번 더 합쳐도 같다",
+    "milliseconds": "(초 × 1000).rounded()(0.5 → 0 에서 먼 쪽), NaN → 0, ±8.64e15 로 누름",
+    "platformSensitive": "true — NFC · 그래핌 · KST 달력",
+    "titles": "normalizedTitle — NFC → 스칼라마다(ZWJ 는 둔다 · 제어 Cc/서식 Cf 는 White_Space 면 공백, 아니면 버림) → 글자(그래핌) 중 첫 스칼라가 White_Space 인 것을 가르개로 나눠 공백 하나로 잇기. titleFitsLimits = 그래핌 ≤ 100 · 스칼라 ≤ 1000",
+    "visibility": "isVisible = 삭제 아님 + (미완료 또는 완료 날 == 오늘) · 정렬 = 미완료 먼저 → 완료끼리는 완료 시각 최신 → 만든 시각 최신 → id(대문자 uuid 글자) · isOld = 미완료이고 이월 7일 이상 · pruned = 90일(KST 달력) 전보다 오래된 완료/삭제"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/CheckTodoModel.swift",
+    "Sources/CheckCore/MilestoneTracker.swift"
+  ]
+}

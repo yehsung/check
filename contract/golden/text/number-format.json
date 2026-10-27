@@ -1,0 +1,172 @@
+{
+  "cases": [
+    {
+      "compactKorean": "0",
+      "grouped": "0",
+      "id": "v-5",
+      "value": -5
+    },
+    {
+      "compactKorean": "0",
+      "grouped": "0",
+      "id": "v0",
+      "value": 0
+    },
+    {
+      "compactKorean": "1",
+      "grouped": "1",
+      "id": "v1",
+      "value": 1
+    },
+    {
+      "compactKorean": "9",
+      "grouped": "9",
+      "id": "v9",
+      "value": 9
+    },
+    {
+      "compactKorean": "999",
+      "grouped": "999",
+      "id": "v999",
+      "value": 999
+    },
+    {
+      "compactKorean": "1,000",
+      "grouped": "1,000",
+      "id": "v1000",
+      "value": 1000
+    },
+    {
+      "compactKorean": "9,999",
+      "grouped": "9,999",
+      "id": "v9999",
+      "value": 9999
+    },
+    {
+      "compactKorean": "1만",
+      "grouped": "10,000",
+      "id": "v10000",
+      "value": 10000
+    },
+    {
+      "compactKorean": "1만",
+      "grouped": "14,999",
+      "id": "v14999",
+      "value": 14999
+    },
+    {
+      "compactKorean": "2만",
+      "grouped": "15,000",
+      "id": "v15000",
+      "value": 15000
+    },
+    {
+      "compactKorean": "9,999만",
+      "grouped": "99,994,999",
+      "id": "v99994999",
+      "value": 99994999
+    },
+    {
+      "compactKorean": "1억",
+      "grouped": "99,995,000",
+      "id": "v99995000",
+      "value": 99995000
+    },
+    {
+      "compactKorean": "1억",
+      "grouped": "99,999,999",
+      "id": "v99999999",
+      "value": 99999999
+    },
+    {
+      "compactKorean": "1억",
+      "grouped": "100,000,000",
+      "id": "v100000000",
+      "value": 100000000
+    },
+    {
+      "compactKorean": "1억",
+      "grouped": "104,999,999",
+      "id": "v104999999",
+      "value": 104999999
+    },
+    {
+      "compactKorean": "1.1억",
+      "grouped": "105,000,000",
+      "id": "v105000000",
+      "value": 105000000
+    },
+    {
+      "compactKorean": "196.6억",
+      "grouped": "19,658,964,272",
+      "id": "v19658964272",
+      "value": 19658964272
+    },
+    {
+      "compactKorean": "200억",
+      "grouped": "20,000,000,000",
+      "id": "v20000000000",
+      "value": 20000000000
+    },
+    {
+      "compactKorean": "999.5억",
+      "grouped": "99,949,999,999",
+      "id": "v99949999999",
+      "value": 99949999999
+    },
+    {
+      "compactKorean": "999.5억",
+      "grouped": "99,950,000,000",
+      "id": "v99950000000",
+      "value": 99950000000
+    },
+    {
+      "compactKorean": "1,000억",
+      "grouped": "99,999,999,999",
+      "id": "v99999999999",
+      "value": 99999999999
+    },
+    {
+      "compactKorean": "1,000억",
+      "grouped": "100,000,000,000",
+      "id": "v100000000000",
+      "value": 100000000000
+    },
+    {
+      "compactKorean": "1,235억",
+      "grouped": "123,456,789,012",
+      "id": "v123456789012",
+      "value": 123456789012
+    },
+    {
+      "compactKorean": "45.6억",
+      "grouped": "4,564,338,243",
+      "id": "v4564338243",
+      "value": 4564338243
+    },
+    {
+      "compactKorean": "254만",
+      "grouped": "2,543,110",
+      "id": "v2543110",
+      "value": 2543110
+    },
+    {
+      "compactKorean": "",
+      "grouped": "9,223,372,036,854,775,807",
+      "id": "v9223372036854775807",
+      "value": "int:9223372036854775807"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift",
+  "golden": "text/number-format",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "compactKorean": "1억 이상 억 단위(1000억 미만 소수 첫째 반올림 · .0 떼기, 이상은 정수 반올림 + 콤마) · 1만 이상 만 단위 반올림(1억에 닿으면 '1억') · 그 미만 grouped · 0 이하 '0'. 정수 연산만",
+    "grouped": "콤마 천 단위 전체 숫자(축약 없음, 음수 0) — 로캘 무관 수동 조립(C§4 #32)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/CheckTokenUsage.swift"
+  ]
+}

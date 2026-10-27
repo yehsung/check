@@ -1,0 +1,769 @@
+{
+  "cases": [
+    {
+      "id": "timestamps",
+      "rows": [
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00+00:00"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00Z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T10:00:00+09:00"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.123Z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.123456+00:00"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.999999Z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.5"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.123456"
+        },
+        {
+          "parsed": null,
+          "text": "2026-09-17T01:00:00"
+        },
+        {
+          "parsed": null,
+          "text": "2026-09-17 01:00:00+00:00"
+        },
+        {
+          "parsed": null,
+          "text": "2026-09-17t01:00:00z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00+0000"
+        },
+        {
+          "parsed": "41daaaaf40000000",
+          "text": "2026-09-17T01:00:00+09"
+        },
+        {
+          "parsed": "41daab1fc0000000",
+          "text": "2026-09-17T24:00:00Z"
+        },
+        {
+          "parsed": "41da68e3e4000000",
+          "text": "2026-02-29T01:00:00Z"
+        },
+        {
+          "parsed": "41d978469fc00000",
+          "text": "2024-02-29T23:59:59Z"
+        },
+        {
+          "parsed": null,
+          "text": "2026-13-01T00:00:00Z"
+        },
+        {
+          "parsed": "41daaf68a0000000",
+          "text": "2026-09-31T00:00:00Z"
+        },
+        {
+          "parsed": null,
+          "text": "2026-09-17T01:60:00Z"
+        },
+        {
+          "parsed": null,
+          "text": "2026-09-17T01:00:60Z"
+        },
+        {
+          "parsed": "0000000000000000",
+          "text": "1970-01-01T00:00:00Z"
+        },
+        {
+          "parsed": "bff0000000000000",
+          "text": "1969-12-31T23:59:59.9Z"
+        },
+        {
+          "parsed": null,
+          "text": "2026-09-17"
+        },
+        {
+          "parsed": null,
+          "text": ""
+        },
+        {
+          "parsed": null,
+          "text": "garbage"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.Z"
+        },
+        {
+          "parsed": null,
+          "text": "2026-09-17T01:00:00.12x3Z"
+        },
+        {
+          "parsed": "41daaae078000000",
+          "text": "2026-09-17T01:00:00.1-05:00"
+        },
+        {
+          "parsed": "41daaabb8e000000",
+          "text": "2026-09-17T01:00:00.000+05:30"
+        },
+        {
+          "parsed": "c22cef2934000000",
+          "text": "0001-01-01T00:00:00Z"
+        },
+        {
+          "parsed": "424d7ffa20bf8000",
+          "text": "9999-12-31T23:59:59Z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.١٢Z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T01:00:00.12١Z"
+        },
+        {
+          "parsed": null,
+          "text": "+2026-09-17T01:00:00Z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-9-17T01:00:00Z"
+        },
+        {
+          "parsed": "41daaacee4000000",
+          "text": "2026-09-17T1:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "day-strings",
+      "rows": [
+        {
+          "kstMidnight": "41dab537bc000000",
+          "leagueDate": "41dab537bc000000",
+          "text": "2026-10-19",
+          "tokenGridDate": "41dab537bc000000"
+        },
+        {
+          "kstMidnight": "41dab7865c000000",
+          "leagueDate": "41dab7865c000000",
+          "text": "2026-10-26",
+          "tokenGridDate": "41dab7865c000000"
+        },
+        {
+          "kstMidnight": "41da554e9c000000",
+          "leagueDate": "41da554e9c000000",
+          "text": "2026-01-01",
+          "tokenGridDate": "41da554e9c000000"
+        },
+        {
+          "kstMidnight": "41dacd9b7c000000",
+          "leagueDate": "41dacd9b7c000000",
+          "text": "2026-13-01",
+          "tokenGridDate": "41dacd9b7c000000"
+        },
+        {
+          "kstMidnight": "41da69151c000000",
+          "leagueDate": "41da69151c000000",
+          "text": "2026-02-30",
+          "tokenGridDate": "41da69151c000000"
+        },
+        {
+          "kstMidnight": "41da4e0e5c000000",
+          "leagueDate": "41da4e0e5c000000",
+          "text": "2026-00-10",
+          "tokenGridDate": "41da4e0e5c000000"
+        },
+        {
+          "kstMidnight": "41daaef49c000000",
+          "leagueDate": "41daaef49c000000",
+          "text": "2026-10-00",
+          "tokenGridDate": "41daaef49c000000"
+        },
+        {
+          "kstMidnight": "41dab537bc000000",
+          "leagueDate": "41dab537bc000000",
+          "text": "2026-10-x-19",
+          "tokenGridDate": "41dab537bc000000"
+        },
+        {
+          "kstMidnight": "41dab537bc000000",
+          "leagueDate": "41dab537bc000000",
+          "text": "2026--10-19",
+          "tokenGridDate": "41dab537bc000000"
+        },
+        {
+          "kstMidnight": "41dab537bc000000",
+          "leagueDate": "41dab537bc000000",
+          "text": "-2026-10-19",
+          "tokenGridDate": "41dab537bc000000"
+        },
+        {
+          "kstMidnight": null,
+          "leagueDate": null,
+          "text": "2026-10",
+          "tokenGridDate": null
+        },
+        {
+          "kstMidnight": null,
+          "leagueDate": null,
+          "text": "2026-10-19-01",
+          "tokenGridDate": null
+        },
+        {
+          "kstMidnight": null,
+          "leagueDate": null,
+          "text": "",
+          "tokenGridDate": null
+        },
+        {
+          "kstMidnight": null,
+          "leagueDate": null,
+          "text": "abc",
+          "tokenGridDate": null
+        },
+        {
+          "kstMidnight": null,
+          "leagueDate": null,
+          "text": " 2026-10-19",
+          "tokenGridDate": null
+        },
+        {
+          "kstMidnight": null,
+          "leagueDate": null,
+          "text": "2026-10-19 ",
+          "tokenGridDate": null
+        },
+        {
+          "kstMidnight": "41dab537bc000000",
+          "leagueDate": "41dab537bc000000",
+          "text": "+2026-10-19",
+          "tokenGridDate": "41dab537bc000000"
+        },
+        {
+          "kstMidnight": "41dab537bc000000",
+          "leagueDate": "41dab537bc000000",
+          "text": "2026-010-019",
+          "tokenGridDate": "41dab537bc000000"
+        },
+        {
+          "kstMidnight": "c22cf2ef2c100000",
+          "leagueDate": "c22cf2ef2c100000",
+          "text": "0-1-1",
+          "tokenGridDate": "c22cf2ef2c100000"
+        },
+        {
+          "kstMidnight": "41da56a01c000000",
+          "leagueDate": "41da56a01c000000",
+          "text": "2026-1-5",
+          "tokenGridDate": "41da56a01c000000"
+        },
+        {
+          "kstMidnight": "4286821609c78000",
+          "leagueDate": "4286821609c78000",
+          "text": "99999-01-01",
+          "tokenGridDate": "4286821609c78000"
+        },
+        {
+          "kstMidnight": "41dacd9b7c000000",
+          "leagueDate": "41dacd9b7c000000",
+          "text": "2026-12-32",
+          "tokenGridDate": "41dacd9b7c000000"
+        }
+      ]
+    },
+    {
+      "id": "instants",
+      "rows": [
+        {
+          "dayKey": "2026-10-26",
+          "dayStart": "41dab7865c000000",
+          "hourStart": "41dab7865c000000",
+          "lastWeek": {
+            "end": "41dab7865c000000",
+            "previousStart": "41dab2e91c000000",
+            "start": "41dab537bc000000"
+          },
+          "leagueCurrentKey": "2026-10-26",
+          "milestoneDayKey": "20261026",
+          "monthKey": "2026-10",
+          "now": "41dab7865c000000",
+          "retroWeekKey": "2026-10-26",
+          "todoDayKey": "20261026",
+          "tokenDayString": "2026-10-26",
+          "weekStart": "41dab7865c000000",
+          "weekdayIndex": 0
+        },
+        {
+          "dayKey": "2026-10-25",
+          "dayStart": "41dab731fc000000",
+          "hourStart": "41dab782d8000000",
+          "lastWeek": {
+            "end": "41dab537bc000000",
+            "previousStart": "41dab09a7c000000",
+            "start": "41dab2e91c000000"
+          },
+          "leagueCurrentKey": "2026-10-19",
+          "milestoneDayKey": "20261025",
+          "monthKey": "2026-10",
+          "now": "41dab7865bc00000",
+          "retroWeekKey": "2026-10-19",
+          "todoDayKey": "20261025",
+          "tokenDayString": "2026-10-25",
+          "weekStart": "41dab537bc000000",
+          "weekdayIndex": 6
+        },
+        {
+          "dayKey": "2026-10-26",
+          "dayStart": "41dab7865c000000",
+          "hourStart": "41dab7865c000000",
+          "lastWeek": {
+            "end": "41dab7865c000000",
+            "previousStart": "41dab2e91c000000",
+            "start": "41dab537bc000000"
+          },
+          "leagueCurrentKey": "2026-10-26",
+          "milestoneDayKey": "20261026",
+          "monthKey": "2026-10",
+          "now": "41dab7865c400000",
+          "retroWeekKey": "2026-10-26",
+          "todoDayKey": "20261026",
+          "tokenDayString": "2026-10-26",
+          "weekStart": "41dab7865c000000",
+          "weekdayIndex": 0
+        },
+        {
+          "dayKey": "2026-10-28",
+          "dayStart": "41dab82f1c000000",
+          "hourStart": "41dab85244000000",
+          "lastWeek": {
+            "end": "41dab7865c000000",
+            "previousStart": "41dab2e91c000000",
+            "start": "41dab537bc000000"
+          },
+          "leagueCurrentKey": "2026-10-26",
+          "milestoneDayKey": "20261028",
+          "monthKey": "2026-10",
+          "now": "41dab85406000000",
+          "retroWeekKey": "2026-10-26",
+          "todoDayKey": "20261028",
+          "tokenDayString": "2026-10-28",
+          "weekStart": "41dab7865c000000",
+          "weekdayIndex": 2
+        },
+        {
+          "dayKey": "2026-11-01",
+          "dayStart": "41dab9809c000000",
+          "hourStart": "41dab9809c000000",
+          "lastWeek": {
+            "end": "41dab7865c000000",
+            "previousStart": "41dab2e91c000000",
+            "start": "41dab537bc000000"
+          },
+          "leagueCurrentKey": "2026-10-26",
+          "milestoneDayKey": "20261101",
+          "monthKey": "2026-11",
+          "now": "41dab9809c000000",
+          "retroWeekKey": "2026-10-26",
+          "todoDayKey": "20261101",
+          "tokenDayString": "2026-11-01",
+          "weekStart": "41dab7865c000000",
+          "weekdayIndex": 6
+        },
+        {
+          "dayKey": "2026-12-31",
+          "dayStart": "41dacd471c000000",
+          "hourStart": "41dacd97f8000000",
+          "lastWeek": {
+            "end": "41dacc49fc000000",
+            "previousStart": "41dac7acbc000000",
+            "start": "41dac9fb5c000000"
+          },
+          "leagueCurrentKey": "2026-12-28",
+          "milestoneDayKey": "20261231",
+          "monthKey": "2026-12",
+          "now": "41dacd9b7bc00000",
+          "retroWeekKey": "2026-12-28",
+          "todoDayKey": "20261231",
+          "tokenDayString": "2026-12-31",
+          "weekStart": "41dacc49fc000000",
+          "weekdayIndex": 3
+        },
+        {
+          "dayKey": "2027-01-01",
+          "dayStart": "41dacd9b7c000000",
+          "hourStart": "41dacd9b7c000000",
+          "lastWeek": {
+            "end": "41dacc49fc000000",
+            "previousStart": "41dac7acbc000000",
+            "start": "41dac9fb5c000000"
+          },
+          "leagueCurrentKey": "2026-12-28",
+          "milestoneDayKey": "20270101",
+          "monthKey": "2027-01",
+          "now": "41dacd9b7c000000",
+          "retroWeekKey": "2026-12-28",
+          "todoDayKey": "20270101",
+          "tokenDayString": "2027-01-01",
+          "weekStart": "41dacc49fc000000",
+          "weekdayIndex": 4
+        },
+        {
+          "dayKey": "2027-01-04",
+          "dayStart": "41dace989c000000",
+          "hourStart": "41daceb840000000",
+          "lastWeek": {
+            "end": "41dace989c000000",
+            "previousStart": "41dac9fb5c000000",
+            "start": "41dacc49fc000000"
+          },
+          "leagueCurrentKey": "2027-01-04",
+          "milestoneDayKey": "20270104",
+          "monthKey": "2027-01",
+          "now": "41daceb840000000",
+          "retroWeekKey": "2027-01-04",
+          "todoDayKey": "20270104",
+          "tokenDayString": "2027-01-04",
+          "weekStart": "41dace989c000000",
+          "weekdayIndex": 0
+        },
+        {
+          "dayKey": "2026-09-17",
+          "dayStart": "41daaaabbc000000",
+          "hourStart": "41daaadcf4000000",
+          "lastWeek": {
+            "end": "41daa9ae9c000000",
+            "previousStart": "41daa5115c000000",
+            "start": "41daa75ffc000000"
+          },
+          "leagueCurrentKey": "2026-09-14",
+          "milestoneDayKey": "20260917",
+          "monthKey": "2026-09",
+          "now": "41daaadd3f000000",
+          "retroWeekKey": "2026-09-14",
+          "todoDayKey": "20260917",
+          "tokenDayString": "2026-09-17",
+          "weekStart": "41daa9ae9c000000",
+          "weekdayIndex": 3
+        },
+        {
+          "dayKey": "2026-09-17",
+          "dayStart": "41daaaabbc000000",
+          "hourStart": "41daaadcf4000000",
+          "lastWeek": {
+            "end": "41daa9ae9c000000",
+            "previousStart": "41daa5115c000000",
+            "start": "41daa75ffc000000"
+          },
+          "leagueCurrentKey": "2026-09-14",
+          "milestoneDayKey": "20260917",
+          "monthKey": "2026-09",
+          "now": "41daaadd3f300000",
+          "retroWeekKey": "2026-09-14",
+          "todoDayKey": "20260917",
+          "tokenDayString": "2026-09-17",
+          "weekStart": "41daa9ae9c000000",
+          "weekdayIndex": 3
+        },
+        {
+          "dayKey": "2026-10-29",
+          "dayStart": "41dab8837c000000",
+          "hourStart": "41dab89f9c000000",
+          "lastWeek": {
+            "end": "41dab7865c000000",
+            "previousStart": "41dab2e91c000000",
+            "start": "41dab537bc000000"
+          },
+          "leagueCurrentKey": "2026-10-26",
+          "milestoneDayKey": "20261029",
+          "monthKey": "2026-10",
+          "now": "41dab8a31fc00000",
+          "retroWeekKey": "2026-10-26",
+          "todoDayKey": "20261029",
+          "tokenDayString": "2026-10-29",
+          "weekStart": "41dab7865c000000",
+          "weekdayIndex": 3
+        },
+        {
+          "dayKey": "2026-03-02",
+          "dayStart": "41da69151c000000",
+          "hourStart": "41da69151c000000",
+          "lastWeek": {
+            "end": "41da69151c000000",
+            "previousStart": "41da6477dc000000",
+            "start": "41da66c67c000000"
+          },
+          "leagueCurrentKey": "2026-03-02",
+          "milestoneDayKey": "20260302",
+          "monthKey": "2026-03",
+          "now": "41da69151c000000",
+          "retroWeekKey": "2026-03-02",
+          "todoDayKey": "20260302",
+          "tokenDayString": "2026-03-02",
+          "weekStart": "41da69151c000000",
+          "weekdayIndex": 0
+        },
+        {
+          "dayKey": "2024-02-29",
+          "dayStart": "41d977d29c000000",
+          "hourStart": "41d977fccc000000",
+          "lastWeek": {
+            "end": "41d976d57c000000",
+            "previousStart": "41d972383c000000",
+            "start": "41d97486dc000000"
+          },
+          "leagueCurrentKey": "2024-02-26",
+          "milestoneDayKey": "20240229",
+          "monthKey": "2024-02",
+          "now": "41d977fccc000000",
+          "retroWeekKey": "2024-02-26",
+          "todoDayKey": "20240229",
+          "tokenDayString": "2024-02-29",
+          "weekStart": "41d976d57c000000",
+          "weekdayIndex": 3
+        },
+        {
+          "dayKey": "2026-10-03",
+          "dayStart": "41daaff1bc000000",
+          "hourStart": "41daaff540000000",
+          "lastWeek": {
+            "end": "41daae4bdc000000",
+            "previousStart": "41daa9ae9c000000",
+            "start": "41daabfd3c000000"
+          },
+          "leagueCurrentKey": "2026-09-28",
+          "milestoneDayKey": "20261003",
+          "monthKey": "2026-10",
+          "now": "41daaff540000000",
+          "retroWeekKey": "2026-09-28",
+          "todoDayKey": "20261003",
+          "tokenDayString": "2026-10-03",
+          "weekStart": "41daae4bdc000000",
+          "weekdayIndex": 5
+        },
+        {
+          "dayKey": "1987-05-10",
+          "dayStart": "41c051a238000000",
+          "hourStart": "41c051b048000000",
+          "lastWeek": {
+            "end": "41c04dadb8000000",
+            "previousStart": "41c0447338000000",
+            "start": "41c0491078000000"
+          },
+          "leagueCurrentKey": "1987-05-04",
+          "milestoneDayKey": "19870510",
+          "monthKey": "1987-05",
+          "now": "41c051b048000000",
+          "retroWeekKey": "1987-05-04",
+          "todoDayKey": "19870510",
+          "tokenDayString": "1987-05-10",
+          "weekStart": "41c04dadb8000000",
+          "weekdayIndex": 6
+        },
+        {
+          "dayKey": "1987-10-11",
+          "dayStart": "41c0b71eb0000000",
+          "hourStart": "41c0b72cc0000000",
+          "lastWeek": {
+            "end": "41c0b32a30000000",
+            "previousStart": "41c0a9efb0000000",
+            "start": "41c0ae8cf0000000"
+          },
+          "leagueCurrentKey": "1987-10-05",
+          "milestoneDayKey": "19871011",
+          "monthKey": "1987-10",
+          "now": "41c0b72cc0000000",
+          "retroWeekKey": "1987-10-05",
+          "todoDayKey": "19871011",
+          "tokenDayString": "1987-10-11",
+          "weekStart": "41c0b32a30000000",
+          "weekdayIndex": 6
+        },
+        {
+          "dayKey": "1988-05-08",
+          "dayStart": "41c1419338000000",
+          "hourStart": "41c1419a40000000",
+          "lastWeek": {
+            "end": "41c13d9eb8000000",
+            "previousStart": "41c1346438000000",
+            "start": "41c1390178000000"
+          },
+          "leagueCurrentKey": "1988-05-02",
+          "milestoneDayKey": "19880508",
+          "monthKey": "1988-05",
+          "now": "41c1419a40000000",
+          "retroWeekKey": "1988-05-02",
+          "todoDayKey": "19880508",
+          "tokenDayString": "1988-05-08",
+          "weekStart": "41c13d9eb8000000",
+          "weekdayIndex": 6
+        },
+        {
+          "dayKey": "1988-10-09",
+          "dayStart": "41c1a70fb0000000",
+          "hourStart": "41c1a71dc0000000",
+          "lastWeek": {
+            "end": "41c1a31b30000000",
+            "previousStart": "41c199e0b0000000",
+            "start": "41c19e7df0000000"
+          },
+          "leagueCurrentKey": "1988-10-03",
+          "milestoneDayKey": "19881009",
+          "monthKey": "1988-10",
+          "now": "41c1a71dc0000000",
+          "retroWeekKey": "1988-10-03",
+          "todoDayKey": "19881009",
+          "tokenDayString": "1988-10-09",
+          "weekStart": "41c1a31b30000000",
+          "weekdayIndex": 6
+        },
+        {
+          "dayKey": "1960-06-01",
+          "dayStart": "c1b2081918000000",
+          "hourStart": "c1b2077058000000",
+          "lastWeek": {
+            "end": "c1b20abc18000000",
+            "previousStart": "c1b21d3118000000",
+            "start": "c1b213f698000000"
+          },
+          "leagueCurrentKey": "1960-05-30",
+          "milestoneDayKey": "19600601",
+          "monthKey": "1960-06",
+          "now": "c1b2077058000000",
+          "retroWeekKey": "1960-05-30",
+          "todoDayKey": "19600601",
+          "tokenDayString": "1960-06-01",
+          "weekStart": "c1b20abc18000000",
+          "weekdayIndex": 2
+        },
+        {
+          "dayKey": "2000-01-01",
+          "dayStart": "41cc366278000000",
+          "hourStart": "41cc366278000000",
+          "lastWeek": {
+            "end": "41cc3316b8000000",
+            "previousStart": "41cc29dc38000000",
+            "start": "41cc2e7978000000"
+          },
+          "leagueCurrentKey": "1999-12-27",
+          "milestoneDayKey": "20000101",
+          "monthKey": "2000-01",
+          "now": "41cc366278000000",
+          "retroWeekKey": "1999-12-27",
+          "todoDayKey": "20000101",
+          "tokenDayString": "2000-01-01",
+          "weekStart": "41cc3316b8000000",
+          "weekdayIndex": 5
+        },
+        {
+          "dayKey": "2038-01-19",
+          "dayStart": "41dfffd4fc000000",
+          "hourStart": "41dfffff2c000000",
+          "lastWeek": {
+            "end": "41dfff809c000000",
+            "previousStart": "41dffae35c000000",
+            "start": "41dffd31fc000000"
+          },
+          "leagueCurrentKey": "2038-01-18",
+          "milestoneDayKey": "20380119",
+          "monthKey": "2038-01",
+          "now": "41dfffff2c000000",
+          "retroWeekKey": "2038-01-18",
+          "todoDayKey": "20380119",
+          "tokenDayString": "2038-01-19",
+          "weekStart": "41dfff809c000000",
+          "weekdayIndex": 1
+        },
+        {
+          "dayKey": "2040-12-31",
+          "dayStart": "41e0b1666e000000",
+          "hourStart": "41e0b18edc000000",
+          "lastWeek": {
+            "end": "41e0b1666e000000",
+            "previousStart": "41e0af17ce000000",
+            "start": "41e0b03f1e000000"
+          },
+          "leagueCurrentKey": "2040-12-31",
+          "milestoneDayKey": "20401231",
+          "monthKey": "2040-12",
+          "now": "41e0b18edc000000",
+          "retroWeekKey": "2040-12-31",
+          "todoDayKey": "20401231",
+          "tokenDayString": "2040-12-31",
+          "weekStart": "41e0b1666e000000",
+          "weekdayIndex": 0
+        },
+        {
+          "dayKey": "1970-01-01",
+          "dayStart": "c0dfa40000000000",
+          "hourStart": "c0ac200000000000",
+          "lastWeek": {
+            "end": "c111cc4000000000",
+            "previousStart": "c136e81000000000",
+            "start": "c12b5b2000000000"
+          },
+          "leagueCurrentKey": "1969-12-29",
+          "milestoneDayKey": "19700101",
+          "monthKey": "1970-01",
+          "now": "bff8000000000000",
+          "retroWeekKey": "1969-12-29",
+          "todoDayKey": "19700101",
+          "tokenDayString": "1970-01-01",
+          "weekStart": "c111cc4000000000",
+          "weekdayIndex": 3
+        },
+        {
+          "dayKey": "1970-01-01",
+          "dayStart": "c0dfa40000000000",
+          "hourStart": "0000000000000000",
+          "lastWeek": {
+            "end": "c111cc4000000000",
+            "previousStart": "c136e81000000000",
+            "start": "c12b5b2000000000"
+          },
+          "leagueCurrentKey": "1969-12-29",
+          "milestoneDayKey": "19700101",
+          "monthKey": "1970-01",
+          "now": "0000000000000000",
+          "retroWeekKey": "1969-12-29",
+          "todoDayKey": "19700101",
+          "tokenDayString": "1970-01-01",
+          "weekStart": "c111cc4000000000",
+          "weekdayIndex": 3
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift",
+  "golden": "dates/parse",
+  "platformSensitive": true,
+  "schema": 1,
+  "spec": {
+    "days": "'YYYY-MM-DD' → KST 0시: '-' 로 나눠 정수가 아닌 조각은 버리고, 셋이면 lenient 그레고리력(달 13 → 다음 해, 날 0 → 전달 말일)",
+    "instants": "KST(Asia/Seoul tzdata — 1987·1988 서머타임 포함) 주 시작(월 0시) · 일 시작 · 요일(0=월) · 시 시작 · 날짜 키들 · 지난주 창",
+    "platformSensitive": "true — tzdata(Android API 마다 판이 다르다)",
+    "timestamps": "WorkInsightsDate.parse — ISO8601(인터넷 날짜·시간) → 소수초 판 → 소수부를 도려내고(숫자가 끝나는 자리까지, 시간대가 없으면 Z) 다시. 결과는 초 내림(1970 기준 초 Double 비트). 실패면 null"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/CheckWorkInsights.swift",
+    "Sources/CheckCore/WeeklyWorkReward.swift",
+    "Sources/CheckCore/MilestoneTracker.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CheckTodoModel.swift"
+  ]
+}

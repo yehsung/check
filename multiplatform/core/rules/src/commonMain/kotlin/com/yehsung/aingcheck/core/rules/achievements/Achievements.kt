@@ -4,6 +4,7 @@ package com.yehsung.aingcheck.core.rules.achievements
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
 import com.yehsung.aingcheck.core.rules.format.SwiftKeyed
 import com.yehsung.aingcheck.core.rules.format.SwiftValue
+import com.yehsung.aingcheck.core.rules.format.parseSwiftInt
 import com.yehsung.aingcheck.core.rules.text.TextScalars
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -250,15 +251,7 @@ internal object AchievementLossy {
             // 다음 꼴로.
         }
         val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
-        return swiftIntParse(TextScalars.trimmingWhitespaces(text))
-    }
-
-    /** Swift `Int(String)` — 부호 한 글자(+/-) 다음 ASCII 숫자만, 범위 밖이면 null. */
-    fun swiftIntParse(text: String): Long? {
-        if (text.isEmpty()) return null
-        val body = if (text[0] == '+' || text[0] == '-') text.substring(1) else text
-        if (body.isEmpty() || body.any { it !in '0'..'9' }) return null
-        return if (text[0] == '+') body.toLongOrNull() else text.toLongOrNull()
+        return parseSwiftInt(TextScalars.trimmingWhitespaces(text))
     }
 
     /** 배열이 아니면 null, 배열이면 원소들(원소마다 따로 읽는 것은 부르는 쪽). */

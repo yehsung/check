@@ -1,0 +1,1589 @@
+{
+  "cases": [
+    {
+      "full": true,
+      "id": "response-todo_sync__empty_user_full.json",
+      "items": [],
+      "json": "{\"full\": true, \"items\": [], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279770}",
+      "max": null,
+      "mergeable": {
+        "full": true,
+        "items": [],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279770
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279770
+    },
+    {
+      "full": true,
+      "id": "response-todo_sync__first_upload_full.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": 1726500002001,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c624 baa9 0020 b85c be44 0020 d655 c778 0020 2705",
+          "todoItem": {
+            "completedAt": "41d9ba1328801062",
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c624 baa9 0020 b85c be44 0020 d655 c778 0020 2705",
+            "updatedAt": "41d9ba1328801062"
+          },
+          "updatedAtMs": 1726500002001
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        }
+      ],
+      "json": "{\"full\": true, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"오목 로비 확인 ✅\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500002001, \"origin_day_key\": \"20240917\", \"completed_at_ms\": 1726500002001}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279787}",
+      "max": null,
+      "mergeable": {
+        "full": true,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": "41d9ba1328801062",
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c624 baa9 0020 b85c be44 0020 d655 c778 0020 2705",
+            "updatedAt": "41d9ba1328801062"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279787
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279787
+    },
+    {
+      "full": false,
+      "id": "response-todo_sync__future_clamped.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          "updatedAtMs": 1726500009000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1789572279856,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a5",
+          "originDayKey": "20260917",
+          "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          },
+          "updatedAtMs": 1789572279856
+        }
+      ],
+      "json": "{\"full\": false, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"새 수정(이긴다)\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500009000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a5\", \"title\": \"시계가 빠른 맥\", \"created_at_ms\": 1789572279856, \"deleted_at_ms\": null, \"updated_at_ms\": 1789572279856, \"origin_day_key\": \"20260917\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279856}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279856
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279856
+    },
+    {
+      "full": false,
+      "id": "response-todo_sync__incremental_overlap.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": 1726500002001,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c624 baa9 0020 b85c be44 0020 d655 c778 0020 2705",
+          "todoItem": {
+            "completedAt": "41d9ba1328801062",
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c624 baa9 0020 b85c be44 0020 d655 c778 0020 2705",
+            "updatedAt": "41d9ba1328801062"
+          },
+          "updatedAtMs": 1726500002001
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        }
+      ],
+      "json": "{\"full\": false, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"오목 로비 확인 ✅\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500002001, \"origin_day_key\": \"20240917\", \"completed_at_ms\": 1726500002001}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279804}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": "41d9ba1328801062",
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c624 baa9 0020 b85c be44 0020 d655 c778 0020 2705",
+            "updatedAt": "41d9ba1328801062"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279804
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279804
+    },
+    {
+      "full": null,
+      "id": "response-todo_sync__invalid_not_array.json",
+      "items": null,
+      "json": "{\"status\": \"invalid\"}",
+      "max": null,
+      "mergeable": null,
+      "rejected": null,
+      "status": "invalid",
+      "watermarkMs": null
+    },
+    {
+      "full": false,
+      "id": "response-todo_sync__lww_lost_and_won.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          "updatedAtMs": 1726500009000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        }
+      ],
+      "json": "{\"full\": false, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"새 수정(이긴다)\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500009000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279821}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279821
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279821
+    },
+    {
+      "full": false,
+      "id": "response-todo_sync__quota.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20240917",
+          "title": "c2ec c740 0020 c904 0020 0031 0020 c744 0020 ace0 ce68",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20240917",
+            "title": "c2ec c740 0020 c904 0020 0031 0020 c744 0020 ace0 ce68",
+            "updatedAt": "41d9ba1329400000"
+          },
+          "updatedAtMs": 1726500005000
+        }
+      ],
+      "json": "{\"full\": false, \"items\": [{\"id\": \"00000000-0000-4000-8000-000000000001\", \"title\": \"심은 줄 1 을 고침\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500005000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [{\"id\": \"00000000-0000-4000-8000-00000000c0de\", \"reason\": \"quota\"}], \"watermark_ms\": 1789572280052}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20240917",
+            "title": "c2ec c740 0020 c904 0020 0031 0020 c744 0020 ace0 ce68",
+            "updatedAt": "41d9ba1329400000"
+          }
+        ],
+        "rejectedIDs": [
+          "00000000-0000-4000-8000-00000000c0de"
+        ],
+        "watermarkMs": 1789572280052
+      },
+      "rejected": [
+        {
+          "id": "00000000-0000-4000-8000-00000000c0de",
+          "reason": "quota"
+        }
+      ],
+      "status": "ok",
+      "watermarkMs": 1789572280052
+    },
+    {
+      "full": false,
+      "id": "response-todo_sync__rejected_mixed.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          "updatedAtMs": 1726500009000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1789572279856,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a5",
+          "originDayKey": "20260917",
+          "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          },
+          "updatedAtMs": 1789572279856
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000b0",
+          "originDayKey": "20240917",
+          "title": "c815 c0c1 0020 d56d baa9",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "c815 c0c1 0020 d56d baa9",
+            "updatedAt": "41d9ba1328000000"
+          },
+          "updatedAtMs": 1726500000000
+        }
+      ],
+      "json": "{\"full\": false, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"새 수정(이긴다)\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500009000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a5\", \"title\": \"시계가 빠른 맥\", \"created_at_ms\": 1789572279856, \"deleted_at_ms\": null, \"updated_at_ms\": 1789572279856, \"origin_day_key\": \"20260917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000b0\", \"title\": \"정상 항목\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500000000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [{\"id\": \"not-a-uuid\", \"reason\": \"invalid\"}, {\"id\": \"00000000-0000-4000-8000-0000000000a6\", \"reason\": \"invalid\"}, {\"id\": \"00000000-0000-4000-8000-0000000000a7\", \"reason\": \"invalid\"}, {\"id\": \"00000000-0000-4000-8000-0000000000a8\", \"reason\": \"invalid\"}, {\"id\": \"00000000-0000-4000-8000-0000000000a9\", \"reason\": \"invalid\"}, {\"id\": null, \"reason\": \"invalid\"}, {\"id\": \"00000000-0000-4000-8000-0000000000b2\", \"reason\": \"invalid\"}, {\"id\": \"00000000-0000-4000-8000-0000000000b3\", \"reason\": \"invalid\"}], \"watermark_ms\": 1789572279873}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "c815 c0c1 0020 d56d baa9",
+            "updatedAt": "41d9ba1328000000"
+          }
+        ],
+        "rejectedIDs": [
+          "00000000-0000-4000-8000-0000000000a6",
+          "00000000-0000-4000-8000-0000000000a7",
+          "00000000-0000-4000-8000-0000000000a8",
+          "00000000-0000-4000-8000-0000000000a9",
+          "00000000-0000-4000-8000-0000000000b2",
+          "00000000-0000-4000-8000-0000000000b3"
+        ],
+        "watermarkMs": 1789572279873
+      },
+      "rejected": [
+        {
+          "id": "not-a-uuid",
+          "reason": "invalid"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a6",
+          "reason": "invalid"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a7",
+          "reason": "invalid"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a8",
+          "reason": "invalid"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a9",
+          "reason": "invalid"
+        },
+        {
+          "id": null,
+          "reason": "invalid"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000b2",
+          "reason": "invalid"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000b3",
+          "reason": "invalid"
+        }
+      ],
+      "status": "ok",
+      "watermarkMs": 1789572279873
+    },
+    {
+      "full": false,
+      "id": "response-todo_sync__same_ms_tie.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          "updatedAtMs": 1726500009000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        }
+      ],
+      "json": "{\"full\": false, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"새 수정(이긴다)\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500009000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279839}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279839
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279839
+    },
+    {
+      "full": true,
+      "id": "response-todo_sync__since_81days_full.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          "updatedAtMs": 1726500009000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1789572279856,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a5",
+          "originDayKey": "20260917",
+          "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          },
+          "updatedAtMs": 1789572279856
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000b0",
+          "originDayKey": "20240917",
+          "title": "c815 c0c1 0020 d56d baa9",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "c815 c0c1 0020 d56d baa9",
+            "updatedAt": "41d9ba1328000000"
+          },
+          "updatedAtMs": 1726500000000
+        }
+      ],
+      "json": "{\"full\": true, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"새 수정(이긴다)\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500009000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a5\", \"title\": \"시계가 빠른 맥\", \"created_at_ms\": 1789572279856, \"deleted_at_ms\": null, \"updated_at_ms\": 1789572279856, \"origin_day_key\": \"20260917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000b0\", \"title\": \"정상 항목\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500000000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279891}",
+      "max": null,
+      "mergeable": {
+        "full": true,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "c815 c0c1 0020 d56d baa9",
+            "updatedAt": "41d9ba1328000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279891
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279891
+    },
+    {
+      "full": true,
+      "id": "response-todo_sync__since_future_full.json",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "originDayKey": "20240917",
+          "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          "updatedAtMs": 1726500001000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "originDayKey": "20240917",
+          "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          "updatedAtMs": 1726500009000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000001,
+          "deletedAtMs": 1726500003999,
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "originDayKey": "20240917",
+          "title": "c9c0 c6b4 0020 d560 0020 c77c",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          "updatedAtMs": 1726500003999
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 999,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "originDayKey": "19700101",
+          "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          "updatedAtMs": 1000
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1789572279856,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000a5",
+          "originDayKey": "20260917",
+          "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          },
+          "updatedAtMs": 1789572279856
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1726500000000,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-0000000000b0",
+          "originDayKey": "20240917",
+          "title": "c815 c0c1 0020 d56d baa9",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "c815 c0c1 0020 d56d baa9",
+            "updatedAt": "41d9ba1328000000"
+          },
+          "updatedAtMs": 1726500000000
+        }
+      ],
+      "json": "{\"full\": true, \"items\": [{\"id\": \"00000000-0000-4000-8000-0000000000a1\", \"title\": \"배포 노트 정리\", \"created_at_ms\": 1726500000999, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500001000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a2\", \"title\": \"새 수정(이긴다)\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500009000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a3\", \"title\": \"지운 할 일\", \"created_at_ms\": 1726500000001, \"deleted_at_ms\": 1726500003999, \"updated_at_ms\": 1726500003999, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a4\", \"title\": \"\\\"따옴표\\\" \\\\역슬래시 👨‍👩‍👧‍👦 가족\", \"created_at_ms\": 999, \"deleted_at_ms\": null, \"updated_at_ms\": 1000, \"origin_day_key\": \"19700101\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000a5\", \"title\": \"시계가 빠른 맥\", \"created_at_ms\": 1789572279856, \"deleted_at_ms\": null, \"updated_at_ms\": 1789572279856, \"origin_day_key\": \"20260917\", \"completed_at_ms\": null}, {\"id\": \"00000000-0000-4000-8000-0000000000b0\", \"title\": \"정상 항목\", \"created_at_ms\": 1726500000000, \"deleted_at_ms\": null, \"updated_at_ms\": 1726500000000, \"origin_day_key\": \"20240917\", \"completed_at_ms\": null}], \"status\": \"ok\", \"rejected\": [], \"watermark_ms\": 1789572279908}",
+      "max": null,
+      "mergeable": {
+        "full": true,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba13283fef9e",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a1",
+            "originDayKey": "20240917",
+            "title": "bc30 d3ec 0020 b178 d2b8 0020 c815 b9ac",
+            "updatedAt": "41d9ba1328400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a2",
+            "originDayKey": "20240917",
+            "title": "c0c8 0020 c218 c815 0028 c774 ae34 b2e4 0029",
+            "updatedAt": "41d9ba132a400000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328001062",
+            "deletedAt": "41d9ba1328ffef9e",
+            "id": "00000000-0000-4000-8000-0000000000a3",
+            "originDayKey": "20240917",
+            "title": "c9c0 c6b4 0020 d560 0020 c77c",
+            "updatedAt": "41d9ba1328ffef9e"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "3feff7cec0000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a4",
+            "originDayKey": "19700101",
+            "title": "0022 b530 c634 d45c 0022 0020 005c c5ed c2ac b798 c2dc 0020 1f468 200d 1f469 200d 1f467 200d 1f466 0020 ac00 c871",
+            "updatedAt": "3ff0000000000000"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41daaaad2df6c8b4",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000a5",
+            "originDayKey": "20260917",
+            "title": "c2dc acc4 ac00 0020 be60 b978 0020 b9e5",
+            "updatedAt": "41daaaad2df6c8b4"
+          },
+          {
+            "completedAt": null,
+            "createdAt": "41d9ba1328000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-0000000000b0",
+            "originDayKey": "20240917",
+            "title": "c815 c0c1 0020 d56d baa9",
+            "updatedAt": "41d9ba1328000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1789572279908
+      },
+      "rejected": [],
+      "status": "ok",
+      "watermarkMs": 1789572279908
+    },
+    {
+      "full": null,
+      "id": "response-todo_sync__too_many.json",
+      "items": null,
+      "json": "{\"max\": 500, \"status\": \"too_many\"}",
+      "max": 500,
+      "mergeable": null,
+      "rejected": null,
+      "status": "too_many",
+      "watermarkMs": null
+    },
+    {
+      "full": null,
+      "id": "response-todo_sync__unauthorized.json",
+      "items": null,
+      "json": "{\"status\": \"unauthorized\"}",
+      "max": null,
+      "mergeable": null,
+      "rejected": null,
+      "status": "unauthorized",
+      "watermarkMs": null
+    },
+    {
+      "full": true,
+      "id": "response-synthetic-bad-rows",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "ac00",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3f50628000000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "3f60624000000000"
+          },
+          "updatedAtMs": 2
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1,
+          "deletedAtMs": null,
+          "id": "not-a-uuid",
+          "originDayKey": "20261026",
+          "title": "b098",
+          "todoItem": null,
+          "updatedAtMs": 2
+        },
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-000000000003",
+          "originDayKey": "20261026",
+          "title": null,
+          "todoItem": null,
+          "updatedAtMs": 2
+        },
+        {
+          "completedAtMs": 3,
+          "createdAtMs": null,
+          "deletedAtMs": null,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "originDayKey": "20261026",
+          "title": "b77c",
+          "todoItem": null,
+          "updatedAtMs": null
+        }
+      ],
+      "json": "{\"status\":\"ok\",\"watermark_ms\":1792940400123,\"full\":true,\"items\":[{\"id\":\"00000000-0000-4000-8000-000000000001\",\"title\":\"가\",\"created_at_ms\":1,\"updated_at_ms\":2,\"origin_day_key\":\"20261026\"},{\"id\":\"not-a-uuid\",\"title\":\"나\",\"created_at_ms\":1,\"updated_at_ms\":2,\"origin_day_key\":\"20261026\"},{\"id\":\"00000000-0000-4000-8000-000000000003\",\"title\":7,\"created_at_ms\":1,\"updated_at_ms\":2,\"origin_day_key\":\"20261026\"},{\"id\":\"00000000-0000-4000-8000-000000000004\",\"title\":\"라\",\"created_at_ms\":1.5,\"updated_at_ms\":\"2\",\"origin_day_key\":\"20261026\",\"completed_at_ms\":3,\"deleted_at_ms\":null}],\"rejected\":[{\"id\":\"00000000-0000-4000-8000-00000000000A\",\"reason\":\"too_long\"},{\"id\":\"zz\",\"reason\":\"x\"},{\"reason\":\"only\"},5],\"max\":\"500\"}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "3f50628000000000",
+            "deletedAt": null,
+            "id": "00000000-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "ac00",
+            "updatedAt": "3f60624000000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 1792940400123
+      },
+      "rejected": null,
+      "status": "ok",
+      "watermarkMs": 1792940400123
+    },
+    {
+      "full": null,
+      "id": "response-synthetic-status-only",
+      "items": null,
+      "json": "{\"status\":\"ok\"}",
+      "max": null,
+      "mergeable": null,
+      "rejected": null,
+      "status": "ok",
+      "watermarkMs": null
+    },
+    {
+      "id": "response-synthetic-not-object",
+      "json": "[1,2]",
+      "throws": true
+    },
+    {
+      "full": null,
+      "id": "response-synthetic-upper-id",
+      "items": [
+        {
+          "completedAtMs": null,
+          "createdAtMs": 1,
+          "deletedAtMs": null,
+          "id": "ABCDEF00-0000-4000-8000-000000000001",
+          "originDayKey": "20261026",
+          "title": "b300 bb38 c790",
+          "todoItem": {
+            "completedAt": null,
+            "createdAt": "3f50628000000000",
+            "deletedAt": null,
+            "id": "abcdef00-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "b300 bb38 c790",
+            "updatedAt": "3f50628000000000"
+          },
+          "updatedAtMs": 1
+        }
+      ],
+      "json": "{\"status\":\"ok\",\"watermark_ms\":5,\"items\":[{\"id\":\"ABCDEF00-0000-4000-8000-000000000001\",\"title\":\"대문자\",\"created_at_ms\":1,\"updated_at_ms\":1,\"origin_day_key\":\"20261026\"}]}",
+      "max": null,
+      "mergeable": {
+        "full": false,
+        "items": [
+          {
+            "completedAt": null,
+            "createdAt": "3f50628000000000",
+            "deletedAt": null,
+            "id": "abcdef00-0000-4000-8000-000000000001",
+            "originDayKey": "20261026",
+            "title": "b300 bb38 c790",
+            "updatedAt": "3f50628000000000"
+          }
+        ],
+        "rejectedIDs": [],
+        "watermarkMs": 5
+      },
+      "rejected": null,
+      "status": "ok",
+      "watermarkMs": 5
+    },
+    {
+      "changesJSON": "[]",
+      "id": "request-0",
+      "rpcBody": "{\"p_changes\":[],\"p_since_ms\":null}"
+    },
+    {
+      "changesJSON": "[{\"completed_at_ms\":1792940402000,\"created_at_ms\":1792940400001,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-000000000001\",\"origin_day_key\":\"20261026\",\"title\":\"가/나\",\"updated_at_ms\":1792940400002},{\"completed_at_ms\":null,\"created_at_ms\":1792940400000,\"deleted_at_ms\":1792940403000,\"id\":\"00000000-0000-4000-8000-000000000002\",\"origin_day_key\":\"20261026\",\"title\":\"😀\",\"updated_at_ms\":1792940400000}]",
+      "id": "request-1",
+      "rpcBody": "{\"p_changes\":[{\"completed_at_ms\":1792940402000,\"created_at_ms\":1792940400001,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-000000000001\",\"origin_day_key\":\"20261026\",\"title\":\"가/나\",\"updated_at_ms\":1792940400002},{\"completed_at_ms\":null,\"created_at_ms\":1792940400000,\"deleted_at_ms\":1792940403000,\"id\":\"00000000-0000-4000-8000-000000000002\",\"origin_day_key\":\"20261026\",\"title\":\"😀\",\"updated_at_ms\":1792940400000}],\"p_since_ms\":0}"
+    },
+    {
+      "changesJSON": "[{\"completed_at_ms\":1792940402000,\"created_at_ms\":1792940400001,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-000000000001\",\"origin_day_key\":\"20261026\",\"title\":\"가/나\",\"updated_at_ms\":1792940400002},{\"completed_at_ms\":null,\"created_at_ms\":1792940400000,\"deleted_at_ms\":1792940403000,\"id\":\"00000000-0000-4000-8000-000000000002\",\"origin_day_key\":\"20261026\",\"title\":\"😀\",\"updated_at_ms\":1792940400000}]",
+      "id": "request-2",
+      "rpcBody": "{\"p_changes\":[{\"completed_at_ms\":1792940402000,\"created_at_ms\":1792940400001,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-000000000001\",\"origin_day_key\":\"20261026\",\"title\":\"가/나\",\"updated_at_ms\":1792940400002},{\"completed_at_ms\":null,\"created_at_ms\":1792940400000,\"deleted_at_ms\":1792940403000,\"id\":\"00000000-0000-4000-8000-000000000002\",\"origin_day_key\":\"20261026\",\"title\":\"😀\",\"updated_at_ms\":1792940400000}],\"p_since_ms\":1792940400123}"
+    },
+    {
+      "batchLimit": 500,
+      "cooldownBits": "4072c00000000000",
+      "debounceBits": "3ff8000000000000",
+      "id": "batches",
+      "periodicBits": "4072c00000000000",
+      "rows": [
+        {
+          "count": 0,
+          "firsts": [
+            null
+          ],
+          "sizes": [
+            0
+          ]
+        },
+        {
+          "count": 1,
+          "firsts": [
+            "00000000-0000-4000-8000-000000000000"
+          ],
+          "sizes": [
+            1
+          ]
+        },
+        {
+          "count": 499,
+          "firsts": [
+            "00000000-0000-4000-8000-000000000000"
+          ],
+          "sizes": [
+            499
+          ]
+        },
+        {
+          "count": 500,
+          "firsts": [
+            "00000000-0000-4000-8000-000000000000"
+          ],
+          "sizes": [
+            500
+          ]
+        },
+        {
+          "count": 501,
+          "firsts": [
+            "00000000-0000-4000-8000-000000000000",
+            "00000000-0000-4000-8000-000000099798"
+          ],
+          "sizes": [
+            500,
+            1
+          ]
+        },
+        {
+          "count": 1000,
+          "firsts": [
+            "00000000-0000-4000-8000-000000000000",
+            "00000000-0000-4000-8000-000000049936"
+          ],
+          "sizes": [
+            500,
+            500
+          ]
+        },
+        {
+          "count": 1001,
+          "firsts": [
+            "00000000-0000-4000-8000-000000000000",
+            "00000000-0000-4000-8000-000000049843",
+            "00000000-0000-4000-8000-000000099984"
+          ],
+          "sizes": [
+            500,
+            500,
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesTodo.swift",
+  "golden": "todo/wire",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "batches": "pending id 를 대문자 uuid 글자 순으로 500 개씩, 비면 빈 묶음 하나(watermark 만 묻는다)",
+    "mergeable": "status 'ok' 이고 items · watermark 가 있을 때만. full 은 모든 행을 읽었을 때만 참(못 읽은 행이 있으면 full 병합을 끈다 — C§3.2 B-3)",
+    "request": "rpcBody = {p_changes, p_since_ms}(null 도 싣는다 · 키 정렬 · 슬래시 이스케이프 없음) — 전선 키는 snake 고정",
+    "response": "TodoSyncResponse — 칸마다 try?(모양이 틀리면 null), 최상위가 객체가 아니면 throw. todoItem = id 가 uuid 이고 제목 · 만든/고친 ms · 원래 날이 있을 때만(소문자로 접는다)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/TodoSync.swift",
+    "Sources/CheckCore/CheckTodoModel.swift",
+    "Tests/checkTests/Fixtures/todo-rpc/_manifest.json"
+  ]
+}

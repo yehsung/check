@@ -29,3 +29,23 @@ fun swiftIntTruncating(x: Double): Long {
     if (!x.isFinite() || x >= 9.223372036854775807E18 || x < -9.223372036854775808E18) throw ArithmeticException("Int 범위 밖: $x")
     return x.toLong()
 }
+
+/** Swift `Int(String)` — 부호 한 글자(+/-) 다음 ASCII 숫자만(공백 · 소수점 없음), 64비트 범위 밖이면 null. */
+fun parseSwiftInt(text: String): Long? {
+    if (text.isEmpty()) return null
+    val body = if (text[0] == '+' || text[0] == '-') text.substring(1) else text
+    if (body.isEmpty() || body.any { it !in '0'..'9' }) return null
+    return if (text[0] == '+') body.toLongOrNull() else text.toLongOrNull()
+}
+
+/**
+ * Swift `Date` 는 속으로 **2001-01-01 기준 초**(timeIntervalSinceReferenceDate)를 든다. 그래서 `Date(timeIntervalSince1970: t).timeIntervalSince1970`
+ * 은 t 가 아니라 `(t − 978307200) + 978307200` 이다(소수 초에서 비트가 바뀐다 — 골든 todo 실측: 0.999 → 3feff7cec0000000).
+ * Kotlin 은 1970 기준 초 Double 을 들되, Swift 가 1970 초로 Date 를 **만드는 자리**에서 이 왕복을 똑같이 거친다.
+ */
+object SwiftDate {
+    const val referenceDateOffset: Double = 978_307_200.0
+
+    /** `Date(timeIntervalSince1970: seconds).timeIntervalSince1970`. */
+    fun since1970(seconds: Double): Double = (seconds - referenceDateOffset) + referenceDateOffset
+}

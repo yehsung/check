@@ -1,15 +1,24 @@
 #!/bin/bash
+# 원본: 없음 (Swift 짝 없음 — 이식 도구)
 # emu.sh — 창 없는 Android 에뮬레이터를 띄우고·찍고·끄는 유일한 입구 (W0-f, A§4-3·A-X7)
 #
 # 규칙(설계 G §2-2, A§4-3)
-#   - 언제나 -no-window -no-audio -no-boot-anim -no-snapshot -read-only. 스냅숏을 저장하지 않는다.
+#   - 언제나 -no-window -no-audio -no-boot-anim -no-snapshot. 스냅숏을 저장하지 않는다.
+#   - 기본은 -read-only(바뀐 것을 버린다 — 여러 갈래가 같은 AVD 를 동시에 쓴다). 예외는 --writable 하나다:
+#     갈래 전용 AVD(avd-clone 으로 만든 것)를 준비할 때만 쓰고, 공용 AVD(aingcheck-api36·aingcheck-api26)에는 거부한다.
 #   - 포트는 갈래마다 고정(5560+2k). 기본값이 없다 — 남의 에뮬레이터와 겹치지 않게 반드시 적는다.
 #   - 기본은 망 봉인(sandbox-exec). 봉인 없이 띄우려면 --no-seal 을 적는다.
 #   - 끈 뒤에는 자기가 띄운 emulator·qemu 프로세스가 0 이어야 한다. 대기는 PID + kill -0 (pgrep 대기 금지).
 #   - adb 서버는 남과 같이 쓴다. adb kill-server 를 부르지 않는다.
 #
 # 사용
-#   emu.sh start   --avd NAME --port N [--seal PROFILE | --no-seal] [--boot-timeout 120] [-- 에뮬레이터 인자…]
+#   emu.sh start   --avd NAME --port N [--seal PROFILE | --no-seal] [--boot-timeout 120] [--writable] [-- 에뮬레이터 인자…]
+#                                  # --writable: -read-only 를 빼고 띄운다 → 손님 /data 에 바뀐 것이 그 AVD 에 남는다(AVD 준비 전용 —
+#                                  #   예: E-U5 Gboard 한국어 자료를 받아 둔 aingcheck-api36-ko). 공용 AVD 는 거부(종료 코드 2).
+#                                  #   끌 때(stop) 손님 안에서 sync 를 먼저 부른다(쓰던 것이 디스크 사본에 닿게).
+#   emu.sh avd-clone --from NAME --to NAME
+#                                  # 갈래 전용 AVD 를 APFS 사본(cp -c)으로 만든다 — 공용 AVD 를 쓰기로 띄우지 않으려고.
+#                                  #   대상이 이미 있으면 거부(종료 코드 2). 실행 중 표식(*.lock·bootcompleted.ini·tmpAdbCmds)은 옮기지 않는다.
 #   emu.sh stop    --port N [--timeout 30]
 #   emu.sh shot    --port N --out FILE.png
 #   emu.sh windows --port N        # 이 포트로 띄운 프로세스의 창 수 + 이름이 qemu/emulator 인 모든 창 수(둘 중 하나라도 0 이 아니면 1)
@@ -19,6 +28,13 @@
 #                                  # gate-full.sh 가 부른다(W0 통합): 띄우기(봉인 기본) → sealcheck·창 0 → 계측 시험(Gradle 도 같은 봉인,
 #                                  # --offline --no-daemon, ANDROID_SERIAL 로 이 기기만) → 결과 XML 로 시험 ≥1·건너뜀 0·실패 0 확인
 #                                  # → 언제나 끄기·남은 프로세스 0 확인. 종료 코드: Gradle 실패면 그 코드, 아니면 판정 실패 1, 정리 실패 1.
+#
+# 갈래 전용 AVD(W0-f 소유)
+#   aingcheck-api36-ko = aingcheck-api36 의 avd-clone + Gboard 두벌식 + 한국어 조합 자료(E-U5 후속, 2026-10-28).
+#     만든 법: avd-clone → start --no-seal --writable → Gboard 설정에서 한국어·두벌식 추가 → 한국어로 몇 번 쳐서 자료를 받음
+#     (Gboard 가 HMM 엔진을 source=DOWNLOAD 로 읽을 때까지) → stop. 그 뒤로는 봉인·-read-only 실행에서도 조합한다
+#     (키 탭 ㅇㅏㄴㄴㅕㅇ·adb input text dkssud → '안녕', setComposingText). 준비 안 된 공용 AVD 는 봉인에서 낱자모 commitText 다.
+#     IME 재생 시험(W3-a)은 이 AVD 를 봉인으로 띄워 쓴다. selected_input_method_subtype -1906255757(ko_KR 두벌식).
 #
 # 환경
 #   ANDROID_SDK_ROOT / ANDROID_HOME (없으면 ~/Library/Android/sdk)
@@ -35,9 +51,14 @@ DEFAULT_SEAL="$SCRIPT_DIR/seal.sb"
 die() { echo "emu.sh: $*" >&2; exit 2; }
 log() { echo "emu.sh: $*" >&2; }
 
-cmd="${1:-}"; [ -n "$cmd" ] || die "명령이 없다 (start|stop|shot|windows|procs|sealcheck|instrumented)"; shift
+cmd="${1:-}"; [ -n "$cmd" ] || die "명령이 없다 (start|stop|shot|windows|procs|sealcheck|instrumented|avd-clone)"; shift
+
+AVD_HOME="$HOME/.android/avd"
+# 공용 AVD: 여러 갈래·게이트가 -read-only 로 동시에 띄운다. 쓰기로 띄우면 모두의 첫 상태가 바뀐다 — --writable 거부.
+SHARED_AVDS="aingcheck-api36 aingcheck-api26"
 
 AVD=""; PORT=""; SEAL="$DEFAULT_SEAL"; SEALED=1; BOOT_TIMEOUT=120; STOP_TIMEOUT=30; OUT=""
+WRITABLE=0; FROM=""; TO=""
 TASK=":androidApp:connectedDebugAndroidTest"
 EXTRA=()
 # instrumented 의 기본값(gate-full.sh 가 인자 없이 부른다): api36 AVD · 갈래 포트 5560(5560+2k 의 k=0, W0-f 가 쓴 자리).
@@ -52,10 +73,33 @@ while [ $# -gt 0 ]; do
     --timeout) STOP_TIMEOUT="${2:?}"; shift 2 ;;
     --out) OUT="${2:?}"; shift 2 ;;
     --task) TASK="${2:?}"; shift 2 ;;
+    --writable) WRITABLE=1; shift ;;
+    --from) FROM="${2:?}"; shift 2 ;;
+    --to) TO="${2:?}"; shift 2 ;;
     --) shift; EXTRA=("$@"); break ;;
     *) die "모르는 인자: $1" ;;
   esac
 done
+
+valid_avd_name() { case "$1" in ''|*[!A-Za-z0-9._-]*|.*) return 1 ;; *) return 0 ;; esac; }
+is_shared_avd() { local a; for a in $SHARED_AVDS; do [ "$a" = "$1" ] && return 0; done; return 1; }
+
+# 포트가 필요 없는 명령.
+if [ "$cmd" = "avd-clone" ]; then
+  valid_avd_name "$FROM" || die "--from 이 AVD 이름이 아니다: '$FROM'"
+  valid_avd_name "$TO" || die "--to 가 AVD 이름이 아니다(영숫자·._- 만): '$TO'"
+  [ "$FROM" != "$TO" ] || die "--from 과 --to 가 같다"
+  [ -f "$AVD_HOME/$FROM.ini" ] && [ -d "$AVD_HOME/$FROM.avd" ] || die "원본 AVD 가 없다: $FROM"
+  [ ! -e "$AVD_HOME/$TO.ini" ] && [ ! -e "$AVD_HOME/$TO.avd" ] || die "대상 AVD 가 이미 있다: $TO (지우고 다시 만들려면 손으로 지운다)"
+  /bin/cp -c -R "$AVD_HOME/$FROM.avd" "$AVD_HOME/$TO.avd" || { rm -rf "$AVD_HOME/$TO.avd"; die "APFS 사본 실패: $FROM → $TO"; }
+  # 실행 중 표식은 원본의 것이다 — 사본에 남기면 에뮬레이터가 '이미 실행 중'으로 본다.
+  find "$AVD_HOME/$TO.avd" -maxdepth 1 \( -name '*.lock' -o -name 'bootcompleted.ini' -o -name 'emu-launch-params.txt' \) -exec rm -f {} + 
+  rm -rf "$AVD_HOME/$TO.avd/tmpAdbCmds"
+  /usr/bin/sed -e "s#^path=.*#path=$AVD_HOME/$TO.avd#" -e "s#^path\.rel=.*#path.rel=avd/$TO.avd#" "$AVD_HOME/$FROM.ini" > "$AVD_HOME/$TO.ini"
+  grep -qx "path=$AVD_HOME/$TO.avd" "$AVD_HOME/$TO.ini" || { rm -rf "$AVD_HOME/$TO.avd" "$AVD_HOME/$TO.ini"; die "$TO.ini 의 path 를 못 고쳤다"; }
+  echo "avd-clone from=$FROM to=$TO dir=$AVD_HOME/$TO.avd files=$(find "$AVD_HOME/$TO.avd" -type f | wc -l | tr -d ' ')"
+  exit 0
+fi
 
 [ -n "$PORT" ] || die "--port 가 필요하다(갈래별 5560+2k)"
 case "$PORT" in *[!0-9]*) die "포트는 숫자: $PORT" ;; esac
@@ -63,6 +107,7 @@ case "$PORT" in *[!0-9]*) die "포트는 숫자: $PORT" ;; esac
 
 SERIAL="emulator-$PORT"
 PIDFILE="$STATE/emu-$PORT.pid"     # 첫 줄: 띄운 PID(sandbox-exec 가 exec 한 emulator), 둘째 줄부터: 자식 PID. 끈 뒤에도 남겨 procs 로 다시 센다
+WRITABLE_MARK="$STATE/emu-$PORT.writable"   # --writable 로 띄웠다는 표식(stop 이 손님 sync 를 먼저 부른다)
 LOGFILE="$STATE/emu-$PORT.log"
 mkdir -p "$STATE"
 
@@ -106,13 +151,17 @@ case "$cmd" in
 start)
   [ -n "$AVD" ] || die "--avd 가 필요하다"
   [ -x "$EMU_BIN" ] || die "에뮬레이터가 없다: $EMU_BIN"
-  [ -f "$HOME/.android/avd/$AVD.ini" ] || die "AVD 가 없다: $AVD"
+  [ -f "$AVD_HOME/$AVD.ini" ] || die "AVD 가 없다: $AVD"
+  if [ "$WRITABLE" -eq 1 ] && is_shared_avd "$AVD"; then
+    die "공용 AVD($AVD)는 --writable 로 띄우지 않는다 — avd-clone 으로 갈래 전용 AVD 를 만들어 쓴다"
+  fi
   if [ -f "$PIDFILE" ] && [ "$(alive_count)" -gt 0 ]; then die "포트 $PORT 에 이미 띄운 에뮬레이터가 있다(PID $(head -1 "$PIDFILE"))"; fi
   if "$ADB" devices 2>/dev/null | awk '{print $1}' | grep -qx "$SERIAL"; then die "$SERIAL 를 이미 누가 쓰고 있다 — 다른 포트를 써라"; fi
   "$ADB" start-server >/dev/null 2>&1 || die "adb 서버를 못 띄웠다"
 
-  args=( -avd "$AVD" -port "$PORT" -no-window -no-audio -no-boot-anim -no-snapshot -read-only
+  args=( -avd "$AVD" -port "$PORT" -no-window -no-audio -no-boot-anim -no-snapshot
          -no-metrics -gpu swiftshader_indirect )
+  if [ "$WRITABLE" -eq 1 ]; then : > "$WRITABLE_MARK"; else args+=( -read-only ); rm -f "$WRITABLE_MARK"; fi
   [ ${#EXTRA[@]} -gt 0 ] && args+=( "${EXTRA[@]}" )
   launcher=()
   if [ "$SEALED" -eq 1 ]; then
@@ -126,7 +175,7 @@ start)
     ${launcher[@]+"${launcher[@]}"} "$EMU_BIN" "${args[@]}" </dev/null >>"$LOGFILE" 2>&1 &
   pid=$!
   echo "$pid" > "$PIDFILE"
-  log "띄움 avd=$AVD port=$PORT sealed=$SEALED pid=$pid log=$LOGFILE"
+  log "띄움 avd=$AVD port=$PORT sealed=$SEALED writable=$WRITABLE pid=$pid log=$LOGFILE"
 
   booted=0
   while :; do
@@ -150,11 +199,17 @@ start)
     echo "boot=timeout seconds=$((t1 - t0))"
     exit 1
   fi
-  echo "boot=ok seconds=$((t1 - t0)) serial=$SERIAL pid=$pid sealed=$SEALED"
+  echo "boot=ok seconds=$((t1 - t0)) serial=$SERIAL pid=$pid sealed=$SEALED writable=$WRITABLE"
   ;;
 
 stop)
-  if [ ! -f "$PIDFILE" ] || [ "$(alive_count)" -eq 0 ]; then echo "stopped alive=0 (띄운 것 없음)"; exit 0; fi
+  if [ ! -f "$PIDFILE" ] || [ "$(alive_count)" -eq 0 ]; then rm -f "$WRITABLE_MARK"; echo "stopped alive=0 (띄운 것 없음)"; exit 0; fi
+  if [ -f "$WRITABLE_MARK" ]; then
+    # 쓰기로 띄운 AVD: 손님 페이지 캐시를 가상 디스크로 내린 뒤 끈다(시한 20초 — 손님이 멎었어도 stop 은 끝난다).
+    /usr/bin/perl -e 'alarm shift; exec @ARGV or exit 127' 20 "$ADB" -s "$SERIAL" shell sync >/dev/null 2>&1
+    log "writable: 손님 sync rc=$?"
+    rm -f "$WRITABLE_MARK"
+  fi
   "$ADB" -s "$SERIAL" emu kill >/dev/null 2>&1 || true
   t0=$(date +%s)
   while [ "$(alive_count)" -gt 0 ] && [ $(( $(date +%s) - t0 )) -lt "$STOP_TIMEOUT" ]; do sleep 1; done

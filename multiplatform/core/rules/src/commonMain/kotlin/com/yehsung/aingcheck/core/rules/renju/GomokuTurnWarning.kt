@@ -22,6 +22,7 @@ object GomokuTurnWarning {
     /**
      * 이 판에서 경고가 **설 수 있는가** — 끝나지 않았고, 내 차례이고, 마감이 돈다(Swift `watchesMyClock` 의 판정식).
      * 판이 없으면 부르는 쪽이 false 로 접는다(Swift 는 `match == nil` 이면 false). [deadline] 은 마감 유무만 본다.
+     * 1:1 판은 상대 차례에도 마감이 돈다 — 그때 꺼지는 갈래(`turn == myColor`)는 골든 `renju/inputs` 의 turnWatches 전수 표가 잰다.
      */
     fun watchesMyClock(isFinished: Boolean, deadline: Double?, turn: GomokuColor?, myColor: GomokuColor): Boolean {
         if (isFinished || deadline == null || turn == null) return false

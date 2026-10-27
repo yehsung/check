@@ -1474,6 +1474,7 @@
     "white": "칸마다 백 judge 판정 글자('.' · L · W)."
   },
   "swiftSources": [
-    "Sources/CheckCore/GomokuRules.swift"
+    "Sources/CheckCore/GomokuRules.swift",
+    "Sources/CheckCore/GomokuAIEngine.swift"
   ]
 }

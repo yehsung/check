@@ -22040,6 +22040,7 @@
   "swiftSources": [
     "Sources/CheckCore/ChessRules.swift",
     "Sources/CheckCore/ChessFEN.swift",
-    "Sources/CheckCore/ChessNotation.swift"
+    "Sources/CheckCore/ChessNotation.swift",
+    "Sources/CheckCore/GomokuAIEngine.swift"
   ]
 }

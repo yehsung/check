@@ -19,8 +19,10 @@ import Testing
 struct GoldenExportGamesBoardAI {
     static let gomokuSources = ["Sources/CheckCore/GomokuAI.swift", "Sources/CheckCore/GomokuAIEngine.swift",
                                 "Sources/CheckCore/GomokuRules.swift"]
+    // GomokuAIEngine.swift: 체스 AI 도 GomokuAISplitMix64 로 Zobrist 키·동점 고르기를 만들고(ChessAIEngine.swift), 생성기의 무작위 걷기도 그 난수다.
     static let chessSources = ["Sources/CheckCore/ChessAIEngine.swift", "Sources/CheckCore/ChessRules.swift",
-                               "Sources/CheckCore/ChessFEN.swift", "Sources/CheckCore/ChessNotation.swift"]
+                               "Sources/CheckCore/ChessFEN.swift", "Sources/CheckCore/ChessNotation.swift",
+                               "Sources/CheckCore/GomokuAIEngine.swift"]
     static let budget: Duration = .seconds(600)
     static let puzzleSeed: UInt64 = 7
     static let chessSeed: UInt64 = 0xC0FF_EE11
@@ -121,6 +123,12 @@ struct GoldenExportGamesBoardAI {
             "zobrist": .string(zobrist.hex),
             "zobristHead": .array(GomokuAITables.zobrist.prefix(4).map { .hex64($0) }),
             "counts": .array([.int(GomokuAITables.blackShapes.count), .int(GomokuAITables.combos.values.count), .int(GomokuAITables.zobrist.count)]),
+            // 이름 붙은 탐색 상수. 이름 없는 예산(루트 VCF 30,000 · 상대 VCF 20,000 · 방어 확인 4,000 · 잎 120)은 budget-* 국면의 노드 수가 잰다.
+            "engine": [
+                "width": .int(GomokuAIEngine.width), "cellCount": .int(GomokuAIEngine.cellCount), "win": .int(GomokuAIEngine.win),
+                "infinity": .int(GomokuAIEngine.infinity), "maxPly": .int(GomokuAIEngine.maxPly), "ttBits": .int(GomokuAIEngine.ttBits),
+                "centralityWeight": .int(GomokuAIEngine.centralityWeight), "keyCount": .int(GomokuAITables.keyCount),
+            ],
         ])
 
         var positions: [(String, GomokuBoard, GomokuColor, Int, UInt64)] = []
@@ -154,6 +162,40 @@ struct GoldenExportGamesBoardAI {
                 color = color.opponent
             }
             positions.append((String(format: "random-%02d", index), board, color, 2, UInt64(index) &* 0x9E37_79B9 &+ 3))
+        }
+
+        // VCF 예산 국면 — 닫힌 3(O A A A _ _)을 흩어 놓아 4 로 미는 수순이 많지만 끝내 못 이기는 판(탐색 나무가 예산보다 크다).
+        // 예산이 바닥나는 칸에서 노드 수가 예산 숫자를 그대로 드러낸다(30,000 을 29,000 으로 바꾸면 chooseMove 노드가 1,000 줄어든다).
+        // 판은 Kotlin 탐색으로 찾은 글자를 박았고, 여기서 Swift 엔진으로 "예산이 정말 바닥난다"를 먼저 잰다(판이 공허해지면 빨강).
+        for (id, text, attacker) in Self.budgetBoards {
+            let board = try #require(GomokuBoard(serverString: text), "\(id)")
+            let fresh = { GomokuAIEngine(board: board, budget: Self.budget, isCancelled: { false }) }
+            switch id {
+            case "budget-root":
+                // 흰 차례 · 흰 VCF 가 30,000(루트 4단계)을 다 쓰고도 못 찾는다.
+                let engine = fresh()
+                #expect(!engine.hasVCF(attacker: attacker, depth: 16, budget: 30_000) && engine.nodes > 30_000, "\(id): 루트 VCF 예산이 안 바닥난다(\(engine.nodes))")
+            case "budget-opponent":
+                // 흰 차례 · 흑 VCF 가 20,000(5단계 상대 VCF)을 다 쓰고도 못 찾는다. 흰 VCF 는 바로 끝난다.
+                let engine = fresh()
+                #expect(!engine.hasVCF(attacker: attacker, depth: 16, budget: 20_000) && engine.nodes > 20_000, "\(id): 상대 VCF 예산이 안 바닥난다(\(engine.nodes))")
+            default:
+                // 흰 차례 · 흑 VCF 가 20,000 안에 있고, 흰 수 하나를 둔 뒤 다시 보는 방어 확인(4,000)이 바닥나는 칸이 있다.
+                let engine = fresh()
+                #expect(engine.hasVCF(attacker: attacker, depth: 16, budget: 20_000) && engine.nodes <= 20_000, "\(id): 상대 VCF 가 20,000 안에 없다")
+                var exhausted = 0
+                for index in 0..<GomokuBoard.cellCount {
+                    let point = GomokuPoint(x: index % 15, y: index / 15)!
+                    guard board[point] == nil else { continue }
+                    var after = board
+                    after[point] = .white
+                    let probe = GomokuAIEngine(board: after, budget: Self.budget, isCancelled: { false })
+                    _ = probe.hasVCF(attacker: attacker, depth: 16, budget: 4_000)
+                    if probe.nodes > 4_000 { exhausted += 1 }
+                }
+                #expect(exhausted > 0, "\(id): 방어 확인 예산(4,000)이 바닥나는 칸이 없다")
+            }
+            positions.append((id, board, .white, 1, Self.puzzleSeed))
         }
 
         var distinctMoves = Set<String>()
@@ -222,6 +264,8 @@ struct GoldenExportGamesBoardAI {
             spec: [
                 "tables": "줄 모양 표(흑 정확히 5 · 백 5 이상, 3^10 = 59049칸) · 네 방향 조합 표(4096칸 등급·점수) · Zobrist(625×2+1, SplitMix64 씨앗 0x6f6d6f6b75414921)를 FNV-1a 64 로 접은 값(칸 값 하나 = UInt64 하나, 점수는 Int64 비트). zobristHead 는 처음 넷.",
                 "choice": "GomokuAIEngine(board:budget:600초).chooseMove(side:maxDepth:rng: SplitMix64(seed)) — move(좌표 또는 null) · nodes(틱 수) · completedDepth. bestMove(같은 한도)와 같은 수다. eval0·eval1 은 새 엔진의 negamax(깊이 0·1, ±infinity, ply 0, 두는 쪽) — 정적 평가식 대조. 동점 고르기는 Swift randomElement(using:) = Int.random(in: 0..<n) = Lemire next(upperBound:).",
+                "engine": "tables 의 engine 칸 — 이름 붙은 탐색 상수(패딩 폭 25 · 칸 625 · 승 점수 · 무한 · 최대 반수 96 · TT 비트 17 · 중앙 가중치 2 · 줄 모양 키 3^10).",
+                "budget": "budget-root(흰 VCF 가 루트 예산 30,000 을 다 쓴다) · budget-opponent(흑 VCF 가 상대 예산 20,000 을 다 쓴다) · budget-defense(흑 VCF 는 20,000 안에 있고 방어 확인 4,000 이 바닥나는 수가 있다) — 흰 차례 · 깊이 1 · 씨앗 7. nodes 가 이름 없는 VCF 예산 숫자를 잰다.",
                 "shortcut": "GomokuAI.bestMove — 빈 판은 H8, 꽉 찬 판은 null, 흑이 둘 곳이 금수뿐이면 null.",
                 "board": "serverString(225자). 무작위 국면(random-*)은 생성기 전용 걷기라 Kotlin 은 글자에서 읽는다.",
             ],
@@ -523,6 +567,13 @@ struct GoldenExportGamesBoardAI {
     }
 
     // MARK: - 도우미
+
+    /// VCF 예산 국면(id, serverString, 예산을 쓰는 공격자 1=흑 · 2=흰). 닫힌 3 덩어리 8~9개를 흩어 놓은 판 — Kotlin 탐색(씨앗 SplitMix64)으로 찾았다.
+    static let budgetBoards: [(String, String, Int)] = [
+        ("budget-root", "..wwwb.....b..............w.b............w.w............w.w....wwwb......w...................wwwb............................b.............w....w........w....w....w...w....w.....w.......b......w..............b................", 2),
+        ("budget-opponent", "...........bbbw.....w...............b...........b...b...........b...b...b.......b......b...b....w.....b...b..........w...b..............w........b...............b.......b.......b.....b.........w...b.............w......bbbw...", 1),
+        ("budget-defense", "w......w.......b.....b........b....b.........b...b.....bbbw..............................w..........w..b...bbbw...b..b..........b..b....w.....b......w.b............b.b............b.b............b.....................bbbw.....", 1),
+    ]
 
     static func gomokuFixture() throws -> [String: Any] {
         let data = try Data(contentsOf: GoldenRepo.url("Tests/checkTests/Fixtures/gomoku-ai-puzzles.json"))

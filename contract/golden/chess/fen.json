@@ -9384,6 +9384,243 @@
       "id": "shape-033",
       "input": "0072 006e 0062 0071 006b 0062 006e 0072 002f 0070 0070 0070 0070 0031 0070 0070 0070 002f 0038 002f 0034 0070 0033 002f 0034 0050 0033 002f 0038 002f 0050 0050 0050 0050 0031 0050 0050 0050 002f 0052 004e 0042 0051 004b 0042 004e 0052 0020 0062 0020 004b 0051 006b 0071 0020 0065 0036 0020 0030 0020 0032",
       "parsed": false
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-00",
+      "inCheck": false,
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 0301 0077 0020 0301 004b 0051 006b 0071 0020 0301 002d 0020 0301 0030 0020 0301 0031",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "knownDivergence": "space+Extend(U+0301)",
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-01",
+      "inCheck": false,
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 0077 0020 004b 0051 006b 0071 0020 002d 0020 0030 0020 0031 0020 0301",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "knownDivergence": "trailing space+Extend(U+0301)",
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-02",
+      "inCheck": false,
+      "input": "0020 0301 0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 0077 0020 004b 0051 006b 0071 0020 002d 0020 0030 0020 0031",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "knownDivergence": "leading space+Extend(U+0301)",
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-03",
+      "inCheck": false,
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 200d 0077 0020 200d 004b 0051 006b 0071 0020 200d 002d 0020 200d 0030 0020 200d 0031",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "knownDivergence": "space+ZWJ(U+200D)",
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-04",
+      "inCheck": false,
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 00a0 0301 0077 00a0 0301 004b 0051 006b 0071 00a0 0301 002d 00a0 0301 0030 00a0 0301 0031",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "knownDivergence": "NBSP+Extend(U+0301)",
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-05",
+      "inCheck": false,
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 0903 0077 0020 0903 004b 0051 006b 0071 0020 0903 002d 0020 0903 0030 0020 0903 0031",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "knownDivergence": "space+SpacingMark(U+0903)",
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-06",
+      "inCheck": false,
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 fe0f 0077 0020 fe0f 004b 0051 006b 0071 0020 fe0f 002d 0020 fe0f 0030 0020 fe0f 0031",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "knownDivergence": "space+Extend(U+FE0F)",
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "id": "grapheme-07",
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0009 0301 0077 0009 0301 004b 0051 006b 0071 0009 0301 002d 0009 0301 0030 0009 0301 0031",
+      "parsed": false
+    },
+    {
+      "id": "grapheme-08",
+      "input": "0600 0020 0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 0077 0020 004b 0051 006b 0071 0020 002d 0020 0030 0020 0031",
+      "parsed": false
+    },
+    {
+      "id": "grapheme-09",
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0600 0020 0077 0020 004b 0051 006b 0071 0020 002d 0020 0030 0020 0031",
+      "parsed": false
+    },
+    {
+      "ascii": "0x41731b4a5be91fa5",
+      "boardFEN": "r3k2r/8/8/8/8/8/8/R3K2R",
+      "castling": "KQkq",
+      "enPassant": null,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "grapheme-10",
+      "inCheck": false,
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 000d 000a 0077 000d 000a 004b 0051 006b 0071 000d 000a 002d 000d 000a 0030 000d 000a 0031",
+      "insufficient": false,
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 26,
+      "legalEnPassant": false,
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "parsed": true,
+      "repetitionKey": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+      "side": "white"
+    },
+    {
+      "id": "grapheme-11",
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 0077 0301 0020 004b 0051 006b 0071 0020 002d 0020 0030 0020 0031",
+      "parsed": false
+    },
+    {
+      "id": "grapheme-12",
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0301 0020 0077 0020 004b 0051 006b 0071 0020 002d 0020 0030 0020 0031",
+      "parsed": false
+    },
+    {
+      "id": "grapheme-13",
+      "input": "0072 0033 006b 0032 0072 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0038 002f 0052 0033 004b 0032 0052 0020 0077 0020 004b 0051 006b 0071 0020 002d 0020 0030 0020 0031 0301",
+      "parsed": false
     }
   ],
   "equivalence": "bit",
@@ -9394,11 +9631,13 @@
   "spec": {
     "fields": "fen(정규 6칸) · boardFEN · side · castling(fenText) · enPassant(칸 또는 null) · halfmove · fullmove · repetitionKey(앙파상은 실제로 잡을 수 있을 때만) · inCheck(차례인 쪽) · legal(합법 수 개수) · outcome(반복 표 없이) · insufficient(hasInsufficientMaterial) · noMating{White,Black}(hasNoMatingMaterial) · legalEnPassant(hasLegalEnPassantCapture) · kings[백,흑](kingSquare) · ascii(asciiBoard 를 FNV-1a 64 로 접은 값 — UTF-8 바이트를 하나씩 add).",
     "input": "코드 포인트 16진 목록. 칸은 White_Space 스칼라로 가른다(빈 조각은 버린다), 4~6칸.",
+    "knownDivergence": "grapheme-* 중 이 칸이 있는 줄만 Kotlin 이 Swift 와 다르다(Swift 는 받고 Kotlin 은 거절) — 공백 스칼라 바로 뒤에 결합 글자(Extend·ZWJ·SpacingMark)가 붙은 FEN. Swift 는 확장 그래핌의 첫 스칼라로 공백을 보고 Kotlin 은 코드 포인트로 본다(유니코드 판에 기대는 그래핌 경계를 피한 선택). 갈리는 줄 집합이 정확히 이 목록이어야 한다.",
     "parsed": "ChessPosition(fen:) 이 받았나. 거절(null)이면 다른 칸이 없다.",
     "walk": "walk-* 는 표준·공표 국면에서 SplitMix64 무작위 합법 수로 걸어간 국면의 정규 FEN(생성기 전용 — Kotlin 은 글자에서 읽는다)."
   },
   "swiftSources": [
     "Sources/CheckCore/ChessRules.swift",
-    "Sources/CheckCore/ChessFEN.swift"
+    "Sources/CheckCore/ChessFEN.swift",
+    "Sources/CheckCore/GomokuAIEngine.swift"
   ]
 }

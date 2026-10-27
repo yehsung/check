@@ -18,6 +18,8 @@ struct GoldenExportGamesBoardChess {
     static let rules = "Sources/CheckCore/ChessRules.swift"
     static let fenSource = "Sources/CheckCore/ChessFEN.swift"
     static let notation = "Sources/CheckCore/ChessNotation.swift"
+    /// 무작위 걷기의 난수(GomokuAISplitMix64)가 사는 곳.
+    static let splitMix = "Sources/CheckCore/GomokuAIEngine.swift"
 
     // MARK: chess/perft
 
@@ -80,6 +82,7 @@ struct GoldenExportGamesBoardChess {
     @Test("chess/fen — FEN 입력 → 받았나 · 정규형 · 반복 키 · 판정 · 기물 판정(정규·걷기·공백 변형·거절)")
     func chessFen() throws {
         var inputs: [(String, String)] = []   // (id 머리, 입력)
+        var fenDivergence: [String: String] = [:]
         for (index, fen) in Self.perftFens.enumerated() { inputs.append(("perft-\(index + 1)", fen)) }
         for (index, fen) in Self.walkFens(walks: 8, plies: 36, seed: 0xFE_2026_1028).enumerated() {
             inputs.append((String(format: "walk-%03d", index), fen))
@@ -123,12 +126,22 @@ struct GoldenExportGamesBoardChess {
             "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e6 0 2",
         ]
         for (index, text) in spaced.enumerated() { inputs.append((String(format: "shape-%03d", index), text)) }
+        // 글자 경계 변형 — Swift 는 Character(확장 그래핌)를 돌며 **첫 스칼라**가 White_Space 인 글자에서 가르고, Kotlin 은 코드 포인트로 가른다.
+        // 공백 바로 뒤에 붙는 결합 글자(Extend · ZWJ · SpacingMark)는 Swift 에선 공백 묶음의 일부(구분자)이고 Kotlin 에선 다음 칸의 첫 글자다.
+        // 갈리는 줄은 knownDivergence 로 **정확히** 적는다(G §8-16 ① 의 잠금 꼴 — Kotlin 시험이 갈리는 줄 집합이 이 목록과 같아야 초록).
+        // Prepend 뒤 공백 · 제어 글자 뒤 결합 부호는 두 쪽 다 거절이라 같은 줄로 함께 싣는다(경계가 넓어지지 않았음을 잰다).
+        for (index, (text, divergence)) in Self.graphemeFens.enumerated() {
+            let id = String(format: "grapheme-%02d", index)
+            inputs.append((id, text))
+            if let divergence { fenDivergence[id] = divergence }
+        }
 
         var cases: [GoldenJSON] = []
         var accepted = 0
         var seenOutcome = Set<String>()
         for (id, text) in inputs {
             var item: [String: GoldenJSON] = ["id": .string(id), "input": .string(Self.cps(text))]
+            if let divergence = fenDivergence[id] { item["knownDivergence"] = .string(divergence) }
             if let position = ChessPosition(fen: text) {
                 accepted += 1
                 // 왕복: 정규 FEN 을 다시 읽으면 같은 국면이다.
@@ -141,17 +154,24 @@ struct GoldenExportGamesBoardChess {
             cases.append(.object(item))
         }
         #expect(accepted > 250 && accepted < inputs.count, "받은 \(accepted) / \(inputs.count)")
+        // 알려진 차이 줄은 Swift 가 받는 줄이다(Kotlin 은 거절) — 그 사실이 바뀌면 목록을 다시 본다.
+        for id in fenDivergence.keys {
+            let text = try #require(inputs.first { $0.0 == id }?.1)
+            #expect(ChessPosition(fen: text) != nil, "\(id): knownDivergence 줄인데 Swift 도 거절한다")
+        }
         #expect(seenOutcome.contains("stalemate") && seenOutcome.contains { $0.hasPrefix("checkmate") } && seenOutcome.contains("insufficientMaterial"),
                 "판정 종류가 모자란다: \(seenOutcome)")
         goldenEmit(GoldenFile(
             golden: "chess/fen",
             equivalence: .bit,
-            swiftSources: [Self.rules, Self.fenSource],
+            // walk-* 를 GomokuAISplitMix64(GomokuAIEngine.swift)로 걷는다 — 난수가 바뀌면 국면이 바뀐다.
+            swiftSources: [Self.rules, Self.fenSource, Self.splitMix],
             spec: [
                 "input": "코드 포인트 16진 목록. 칸은 White_Space 스칼라로 가른다(빈 조각은 버린다), 4~6칸.",
                 "parsed": "ChessPosition(fen:) 이 받았나. 거절(null)이면 다른 칸이 없다.",
                 "fields": "fen(정규 6칸) · boardFEN · side · castling(fenText) · enPassant(칸 또는 null) · halfmove · fullmove · repetitionKey(앙파상은 실제로 잡을 수 있을 때만) · inCheck(차례인 쪽) · legal(합법 수 개수) · outcome(반복 표 없이) · insufficient(hasInsufficientMaterial) · noMating{White,Black}(hasNoMatingMaterial) · legalEnPassant(hasLegalEnPassantCapture) · kings[백,흑](kingSquare) · ascii(asciiBoard 를 FNV-1a 64 로 접은 값 — UTF-8 바이트를 하나씩 add).",
                 "walk": "walk-* 는 표준·공표 국면에서 SplitMix64 무작위 합법 수로 걸어간 국면의 정규 FEN(생성기 전용 — Kotlin 은 글자에서 읽는다).",
+                "knownDivergence": "grapheme-* 중 이 칸이 있는 줄만 Kotlin 이 Swift 와 다르다(Swift 는 받고 Kotlin 은 거절) — 공백 스칼라 바로 뒤에 결합 글자(Extend·ZWJ·SpacingMark)가 붙은 FEN. Swift 는 확장 그래핌의 첫 스칼라로 공백을 보고 Kotlin 은 코드 포인트로 본다(유니코드 판에 기대는 그래핌 경계를 피한 선택). 갈리는 줄 집합이 정확히 이 목록이어야 한다.",
             ],
             cases: cases
         ))
@@ -202,7 +222,7 @@ struct GoldenExportGamesBoardChess {
         goldenEmit(GoldenFile(
             golden: "chess/moves",
             equivalence: .bit,
-            swiftSources: [Self.rules, Self.fenSource, Self.notation],
+            swiftSources: [Self.rules, Self.fenSource, Self.notation, Self.splitMix],
             spec: [
                 "moves": "ChessRules.legalMoves(in:) 의 **순서 그대로**(칸 a1→h8 · 방향 고정 순서 · 승격 Q R B N — AI·서버가 이 순서를 믿는다).",
                 "san": "ChessRules.san(for:in:) — 동형 중복 해소는 판에서 직접(파일 → 랭크 → 칸), 폰 잡기는 출발 파일, 승격 '=X', 체크 '+' · 메이트 '#'. 생성기가 move(san:) 왕복을 단언했다.",
@@ -247,6 +267,19 @@ struct GoldenExportGamesBoardChess {
             for input in inputs where seen.insert(input).inserted {
                 let move = ChessRules.move(san: input, in: position)
                 entries.append(.array([.string(Self.cps(input)), move.map { .string($0.uci) } ?? .null]))
+            }
+            cases.append(["id": .string("san-\(name)"), "kind": "san", "fen": .string(fen), "entries": .array(entries)])
+        }
+
+        // SAN 글자 경계 — Swift 는 글자(확장 그래핌)를 돌며 기호·공백 글자를 걷고, Kotlin 은 코드 포인트를 돈다. 공백(첫 스칼라) 뒤에 결합 글자가
+        // 붙은 묶음은 Swift 가 통째로 걷고 Kotlin 은 결합 글자를 남긴다. 갈리는 줄은 entries 의 셋째 칸(knownDivergence)에 적는다 — 정확한 잠금.
+        for (name, fen, rows) in Self.graphemeSans {
+            let position = try #require(ChessPosition(fen: fen), "\(name)")
+            var entries: [GoldenJSON] = []
+            for (input, divergence) in rows {
+                let move = ChessRules.move(san: input, in: position)
+                if divergence != nil { #expect(move != nil, "\(name) '\(input)': knownDivergence 줄인데 Swift 도 null 이다") }
+                entries.append(.array([.string(Self.cps(input)), move.map { .string($0.uci) } ?? .null, divergence.map { .string($0) } ?? .null]))
             }
             cases.append(["id": .string("san-\(name)"), "kind": "san", "fen": .string(fen), "entries": .array(entries)])
         }
@@ -301,7 +334,7 @@ struct GoldenExportGamesBoardChess {
             equivalence: .bit,
             swiftSources: [Self.rules, Self.fenSource, Self.notation],
             spec: [
-                "san": "entries = [입력 cps, ChessRules.move(san:in:) 의 UCI 또는 null]. 받는 흔들림: + # ! ? 기호 · '=' 생략 · 0-0 · e.p. · 공백(White_Space) · '-' · 과다 명시(출발 파일·랭크·칸, x 생략, 폰 장형). 모호(둘 이상)·불법이면 null.",
+                "san": "entries = [입력 cps, ChessRules.move(san:in:) 의 UCI 또는 null(, knownDivergence)]. 받는 흔들림: + # ! ? 기호 · '=' 생략 · 0-0 · e.p. · 공백(White_Space) · '-' · 과다 명시(출발 파일·랭크·칸, x 생략, 폰 장형). 모호(둘 이상)·불법이면 null. san-grapheme* 의 셋째 칸이 글자인 줄만 Kotlin 이 다르다(Swift 는 수, Kotlin 은 null — 공백 스칼라 뒤 결합 글자). 갈리는 줄 집합이 정확히 그 목록이어야 한다.",
                 "uci": "entries = [입력 cps, ChessMove(uci:) 의 정규 UCI 또는 null] — 4·5글자, 칸 정규형, 승격은 소문자 q·r·b·n 만.",
                 "line": "ChessRules.replay(uciLine:from:) 의 trail(시작 포함 정규 FEN) · sanLine · ledger(국면마다 ChessRepetitionLedger.record 뒤 count(of:) 와 outcome(position:repetitionCounts:)). 불법 수가 하나라도 있으면 trail·san·ledger 가 null.",
             ],
@@ -445,6 +478,49 @@ struct GoldenExportGamesBoardChess {
     }
 
     // MARK: - 도우미
+
+    /// FEN 글자 경계 변형(입력, 알려진 차이 사유 또는 nil). 사유가 있는 줄은 Swift 가 받고 Kotlin 이 거절한다.
+    static let graphemeFens: [(String, String?)] = {
+        let base = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+        return [
+            (base.replacingOccurrences(of: " ", with: " \u{0301}"), "space+Extend(U+0301)"),
+            (base + " \u{0301}", "trailing space+Extend(U+0301)"),
+            (" \u{0301}" + base, "leading space+Extend(U+0301)"),
+            (base.replacingOccurrences(of: " ", with: " \u{200D}"), "space+ZWJ(U+200D)"),
+            (base.replacingOccurrences(of: " ", with: "\u{00A0}\u{0301}"), "NBSP+Extend(U+0301)"),
+            (base.replacingOccurrences(of: " ", with: " \u{0903}"), "space+SpacingMark(U+0903)"),
+            (base.replacingOccurrences(of: " ", with: " \u{FE0F}"), "space+Extend(U+FE0F)"),
+            (base.replacingOccurrences(of: " ", with: "\t\u{0301}"), nil),
+            ("\u{0600} " + base, nil),
+            (base.replacingOccurrences(of: "R3K2R w", with: "R3K2R\u{0600} w"), nil),
+            (base.replacingOccurrences(of: " ", with: "\r\n"), nil),
+            (base.replacingOccurrences(of: " w ", with: " w\u{0301} "), nil),
+            (base.replacingOccurrences(of: "R3K2R w", with: "R3K2R\u{0301} w"), nil),
+            (base + "\u{0301}", nil),
+        ]
+    }()
+
+    /// SAN 글자 경계 변형(국면 이름, FEN, [(입력, 알려진 차이 사유 또는 nil)]). 사유가 있는 줄은 Swift 가 수를 찾고 Kotlin 은 null 이다.
+    static let graphemeSans: [(String, String, [(String, String?)])] = [
+        ("grapheme", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [
+            ("Nf3 \u{0301}", "space+Extend(U+0301)"),
+            (" \u{0301}Nf3", "leading space+Extend(U+0301)"),
+            ("e4\u{00A0}\u{0301}", "NBSP+Extend(U+0301)"),
+            ("e4 \u{200D}", "space+ZWJ(U+200D)"),
+            ("Nf3\u{0301}", nil),
+            ("Nf3+\u{0301}", nil),
+            ("Nf3\t\u{0301}", nil),
+            ("Nf3\u{0600} ", nil),
+            ("N\u{0600} f3", nil),
+            ("N\u{0301}f3", nil),
+            ("Nf3\r\n", nil),
+        ]),
+        ("grapheme-castling", "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", [
+            ("O-O \u{0903}", "space+SpacingMark(U+0903)"),
+            ("O-O\u{0301}", nil),
+            ("O-O-O\u{2028}", nil),
+        ]),
+    ]
 
     static var perftFens: [String] {
         guard let data = try? Data(contentsOf: GoldenRepo.url("Tests/checkTests/Fixtures/chess-perft.json")),

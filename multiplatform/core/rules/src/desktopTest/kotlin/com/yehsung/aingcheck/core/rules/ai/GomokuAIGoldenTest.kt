@@ -20,6 +20,7 @@ import com.yehsung.aingcheck.testkit.golden.string
 import com.yehsung.aingcheck.testkit.golden.stringValue
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -99,6 +100,7 @@ class GomokuAIGoldenTest {
     @Test
     fun tracesMatchSwiftBitForBit() {
         val golden = Golden.load("renju/ai-trace")
+        val budgets = HashSet<String>()
         var choices = 0
         var shortcuts = 0
         for (case in golden.cases) {
@@ -113,6 +115,12 @@ class GomokuAIGoldenTest {
                 val zobrist = GoldenFnv1a64().also { h -> GomokuAITables.zobrist.forEach { h.add(it.toULong()) } }
                 assertEquals(case.string("zobrist"), Golden.hex64Text(zobrist.value), "Zobrist")
                 assertEquals(case.array("zobristHead").map { Golden.hex64(it.stringValue()) }, GomokuAITables.zobrist.take(4).map { it.toULong() })
+                // 이름 붙은 탐색 상수(Swift static let). 이름 없는 VCF 예산은 budget-* 국면의 노드 수가 잰다.
+                val engine = case["engine"] as? JsonObject ?: fail(golden.failure(id, "engine 칸이 없다"))
+                val want = listOf("width", "cellCount", "win", "infinity", "maxPly", "ttBits", "centralityWeight", "keyCount").map { engine.int(it) }
+                val got = listOf(GomokuAIEngine.width, GomokuAIEngine.cellCount, GomokuAIEngine.win, GomokuAIEngine.infinity, GomokuAIEngine.maxPly,
+                    GomokuAIEngine.ttBits, GomokuAIEngine.centralityWeight, GomokuAITables.keyCount)
+                assertEquals(want, got, golden.failure(id, "탐색 상수 [폭, 칸, 승, 무한, 최대 반수, TT 비트, 중앙 가중치, 키 수]"))
                 continue
             }
             val start = GomokuBoard.fromServerString(case.string("board"))!!
@@ -137,8 +145,11 @@ class GomokuAIGoldenTest {
             assertFalse(engine.aborted, "$id: 시간 예산에 끊겼다")
             assertEquals(point, GomokuAI.bestMove(start, color, GomokuAISearchLimits(600.seconds, depth, seed)), golden.failure(id, "bestMove = chooseMove"))
             choices++
+            if (id.startsWith("budget-")) budgets.add(id)
         }
         assertTrue(choices > 60 && shortcuts == 6, "고른 수 $choices · 지름길 $shortcuts")
+        // VCF 예산 국면 셋(루트 30,000 · 상대 20,000 · 방어 확인 4,000)이 빠지면 예산 숫자를 아무것도 안 잰다.
+        assertEquals(setOf("budget-root", "budget-opponent", "budget-defense"), budgets, "VCF 예산 국면")
     }
 
     /** AI 가 금수를 묻는 판정기(GomokuRenjuProbe)는 GomokuRules.judge 와 같은 판정이어야 한다(V0332 renjuProbeAgreesWithRulesOnRandomPositions). */

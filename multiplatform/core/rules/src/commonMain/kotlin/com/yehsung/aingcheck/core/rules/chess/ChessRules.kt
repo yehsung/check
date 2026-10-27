@@ -519,7 +519,7 @@ data class ChessClock(var whiteSeconds: Double, var blackSeconds: Double, val in
     companion object {
         // INV-ChessRules-b65c9524 이식: 서버 `chess_initial_ms()` 와 같은 숫자여야 한다(600 × 1000 = 600000). 한쪽만 고치면 로비를 읽기 전의
         //   캡션·로봇 판 시계가 서버와 갈린다 — Swift `V0348ChessClockTenMinuteTests` 가 마이그레이션과 대조하고, Kotlin 은 골든
-        //   `chess/outcome` 의 clock.initialMs(Swift 값)와 대조한다(ChessOutcomeGoldenTest).
+        //   `chess/outcome` 의 clock.initialMs(Swift 값)와 대조한다(ChessGoldenTest.builtPositionsRepetitionAndClockMatchSwift).
         /** 기본 설정(사용자 확정): **10분** + 한 수 3초 가산. */
         const val initialSeconds: Double = 600.0
         const val incrementSeconds: Double = 3.0

@@ -671,6 +671,446 @@
       "remainingBits": "4004000000000000"
     },
     {
+      "deadline": false,
+      "finished": false,
+      "id": "watch-00",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": false,
+      "id": "watch-01",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": false,
+      "id": "watch-02",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "black",
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": false,
+      "id": "watch-03",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "black",
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": false,
+      "id": "watch-04",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "white",
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": false,
+      "id": "watch-05",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "white",
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": false,
+      "id": "watch-06",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": false,
+      "id": "watch-07",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": false,
+      "id": "watch-08",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "black",
+      "watches": true
+    },
+    {
+      "deadline": true,
+      "finished": false,
+      "id": "watch-09",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "black",
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": false,
+      "id": "watch-10",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "white",
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": false,
+      "id": "watch-11",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "white",
+      "watches": true
+    },
+    {
+      "deadline": false,
+      "finished": true,
+      "id": "watch-12",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": true,
+      "id": "watch-13",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": true,
+      "id": "watch-14",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "black",
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": true,
+      "id": "watch-15",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "black",
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": true,
+      "id": "watch-16",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "white",
+      "watches": false
+    },
+    {
+      "deadline": false,
+      "finished": true,
+      "id": "watch-17",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "white",
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": true,
+      "id": "watch-18",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": true,
+      "id": "watch-19",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": null,
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": true,
+      "id": "watch-20",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "black",
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": true,
+      "id": "watch-21",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "black",
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": true,
+      "id": "watch-22",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "black",
+      "turn": "white",
+      "watches": false
+    },
+    {
+      "deadline": true,
+      "finished": true,
+      "id": "watch-23",
+      "kind": "turnWatches",
+      "match": true,
+      "myColor": "white",
+      "turn": "white",
+      "watches": false
+    },
+    {
+      "id": "watch-none",
+      "kind": "turnWatches",
+      "match": false,
+      "watches": false
+    },
+    {
+      "id": "enum-end-reason",
+      "kind": "endReasonCases",
+      "rawValues": [
+        "five",
+        "timeout",
+        "resign",
+        "board_full",
+        "abandoned"
+      ]
+    },
+    {
+      "id": "enum-outcome",
+      "kind": "outcomeCases",
+      "names": [
+        "won",
+        "lost",
+        "draw"
+      ]
+    },
+    {
+      "id": "enum-tap-refusal",
+      "kind": "tapRefusalCases",
+      "rawValues": [
+        "not-your-turn",
+        "busy",
+        "occupied",
+        "finished",
+        "signed-out",
+        "no-match",
+        "forbidden"
+      ]
+    },
+    {
+      "endReason": "five",
+      "id": "raw-00",
+      "input": "0066 0069 0076 0065",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": "timeout",
+      "id": "raw-01",
+      "input": "0074 0069 006d 0065 006f 0075 0074",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": "resign",
+      "id": "raw-02",
+      "input": "0072 0065 0073 0069 0067 006e",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": "board_full",
+      "id": "raw-03",
+      "input": "0062 006f 0061 0072 0064 005f 0066 0075 006c 006c",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": "abandoned",
+      "id": "raw-04",
+      "input": "0061 0062 0061 006e 0064 006f 006e 0065 0064",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-05",
+      "input": "0062 006f 0061 0072 0064 0046 0075 006c 006c",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-06",
+      "input": "0062 006f 0061 0072 0064 002d 0066 0075 006c 006c",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-07",
+      "input": "0046 0069 0076 0065",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-08",
+      "input": "0020 0066 0069 0076 0065",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-09",
+      "input": "0066 0069 0076 0065 000a",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-10",
+      "input": "",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-11",
+      "input": "006e 006f 0074 002d 0079 006f 0075 0072 002d 0074 0075 0072 006e",
+      "kind": "enumRawValue",
+      "tapRefusal": "not-your-turn"
+    },
+    {
+      "endReason": null,
+      "id": "raw-12",
+      "input": "0062 0075 0073 0079",
+      "kind": "enumRawValue",
+      "tapRefusal": "busy"
+    },
+    {
+      "endReason": null,
+      "id": "raw-13",
+      "input": "006f 0063 0063 0075 0070 0069 0065 0064",
+      "kind": "enumRawValue",
+      "tapRefusal": "occupied"
+    },
+    {
+      "endReason": null,
+      "id": "raw-14",
+      "input": "0066 0069 006e 0069 0073 0068 0065 0064",
+      "kind": "enumRawValue",
+      "tapRefusal": "finished"
+    },
+    {
+      "endReason": null,
+      "id": "raw-15",
+      "input": "0073 0069 0067 006e 0065 0064 002d 006f 0075 0074",
+      "kind": "enumRawValue",
+      "tapRefusal": "signed-out"
+    },
+    {
+      "endReason": null,
+      "id": "raw-16",
+      "input": "006e 006f 002d 006d 0061 0074 0063 0068",
+      "kind": "enumRawValue",
+      "tapRefusal": "no-match"
+    },
+    {
+      "endReason": null,
+      "id": "raw-17",
+      "input": "0066 006f 0072 0062 0069 0064 0064 0065 006e",
+      "kind": "enumRawValue",
+      "tapRefusal": "forbidden"
+    },
+    {
+      "endReason": null,
+      "id": "raw-18",
+      "input": "006e 006f 0074 0059 006f 0075 0072 0054 0075 0072 006e",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-19",
+      "input": "0073 0069 0067 006e 0065 0064 005f 006f 0075 0074",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-20",
+      "input": "006e 006f 005f 006d 0061 0074 0063 0068",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-21",
+      "input": "0042 0055 0053 0059",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
+      "endReason": null,
+      "id": "raw-22",
+      "input": "0066 006f 0072 0062 0069 0064 0064 0065 006e 002d 006f 0076 0065 0072 006c 0069 006e 0065",
+      "kind": "enumRawValue",
+      "tapRefusal": null
+    },
+    {
       "cornerRatioBits": "3f9999999999999a",
       "depthRatioBits": "3f989374bc6a7efa",
       "id": "warning-constants",
@@ -695,15 +1135,21 @@
   "schema": 1,
   "spec": {
     "color": "GomokuColor(rawValue:) — 글자가 정확히 같을 때만.",
+    "endReasonCases": "GomokuEndReason 케이스 순서대로 rawValue(서버 어휘 — timeout 은 옛 어휘라 지우지 않는다).",
+    "enumRawValue": "GomokuEndReason(rawValue:) · GomokuTapRefusal(rawValue:) — 글자가 정확히 같을 때만(대소문자·공백·'_'↔'-' 정규화 없음).",
     "input": "글자 입력은 코드 포인트 16진 목록(공백 구분, 빈 글자는 \"\"). null 은 nil 입력.",
     "notation": "GomokuPoint(notation:) → x·y·notation(실패면 null). 정규형만 받는다 — 스칼라 둘·셋, 첫 스칼라 A…O, 나머지 ASCII 숫자, 0 채움 금지, 행 1…15.",
+    "outcomeCases": "GomokuOutcome 케이스 순서대로 이름.",
     "serverReason": "GomokuForbiddenReason(serverReason:) — 앞뒤 Foundation whitespacesAndNewlines(유니코드 White_Space + U+200B — 맥에서 전수로 잰 집합) 걷고 lowercased, 'forbidden-' 접두가 없으면 붙이고 '_' → '-', rawValue 로 읽는다. U+180E·U+FEFF 는 공백이 아니다.",
     "serverString": "GomokuBoard(serverString:) — UTF-8 바이트가 정확히 225개이고 전부 '.'·'b'·'w' 일 때만 valid, stoneCount 는 돌 수. valid 면 serverString 왕복이 같다.",
+    "tapRefusalCases": "GomokuTapRefusal.allCases 순서대로 rawValue(로그 어휘).",
     "turnWarning": "GomokuTurnWarning.isActive(remaining:) · intensity(remaining:) — null·NaN·±무한은 꺼짐(0), remaining ≤ 3 이면 켜짐, 세기 = 0.55 + 0.45 × (1 − min(1, max(0, r/3))) (Swift max/min: max(x,y) = y >= x ? y : x).",
-    "turnWarningConstants": "문턱·세기·그림 상수(Double 비트) · 겹 수 · 렌주 노드 예산(서버 gomoku_judge 와 같은 상수)."
+    "turnWarningConstants": "문턱·세기·그림 상수(Double 비트) · 겹 수 · 렌주 노드 예산(서버 gomoku_judge 와 같은 상수).",
+    "turnWatches": "GomokuTurnWarning.watchesMyClock(GomokuMatchState?) 전수 — finished × deadline(있음/없음) × turn(null·black·white) × myColor. 켜짐은 안 끝남 · 마감 있음 · turn == myColor 뿐. match=false 는 판 없음(nil) — 언제나 false(Kotlin 은 원시 인자 서명이라 부르는 스토어가 판 없음을 false 로 접는다)."
   },
   "swiftSources": [
     "Sources/CheckCore/GomokuRules.swift",
-    "Sources/CheckCore/GomokuTurnWarning.swift"
+    "Sources/CheckCore/GomokuTurnWarning.swift",
+    "Sources/CheckCore/GomokuStore.swift"
   ]
 }

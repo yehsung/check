@@ -4,6 +4,7 @@ package com.yehsung.aingcheck.core.rules.renju
 // 판 결과·끝난 사유·탭 거절 — Swift 에서는 스토어 파일(GomokuStore.swift, W2-d)에 선언돼 있지만 **AI 판 규칙(GomokuAIGame, C§3.2 A-5)이
 // 이 셋을 쓴다**. 의존 방향이 rules ← stores 한쪽뿐이라(C§3.1) 셋을 rules 에 두고, 스토어 갈래(W2-d)는 여기 것을 그대로 쓴다
 // (같은 이름을 stores 에 다시 만들지 않는다 — 두 벌이면 AI 판과 서버 판이 다른 열거를 들게 된다). 조정자 보고 거리.
+// 케이스 순서 · rawValue(서버·로그 어휘) · rawValue 읽기는 골든 `renju/inputs`(endReasonCases · outcomeCases · tapRefusalCases · enumRawValue)가 잰다.
 
 /** 판이 끝난 사유. [rawValue] 는 서버 어휘. */
 enum class GomokuEndReason(val rawValue: String) {

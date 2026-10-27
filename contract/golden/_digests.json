@@ -1,54 +1,58 @@
 {
   "goldens": {
     "chess/ai-puzzles": {
-      "file": "9b61ec83cf3c122209001ff4710703e2098d662b7a7548a40e95e10de1a77078",
+      "file": "c3c0867cc950c907d5f3ca6686532398b9d19ad71d21a7b13f0afd6eee2aabce",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "7e01266637b0289b633e8582c0d0ac5d935136777b4738f09df4c0343bf365a3"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
         "Sources/CheckCore/ChessAIEngine.swift": "fae1844943d02844a7cb38b2e4862fe038438f9a0206324c9064a858c5b73d7d",
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
         "Sources/CheckCore/ChessNotation.swift": "98f9e8fee9601762569556c20e4ad6a8b7c5a77eeca43fd26efc1805d02c9dbd",
-        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b"
+        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
+        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
       }
     },
     "chess/ai-trace": {
-      "file": "5fc1fc48fdf9333408883d8816b9762fd39862a8d4a2824f8ba9c4d90cbecd37",
+      "file": "85452cca2f406993d7059520a1764859ee90d329bceb1fd5c696e7ce1a0422c6",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "7e01266637b0289b633e8582c0d0ac5d935136777b4738f09df4c0343bf365a3"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
         "Sources/CheckCore/ChessAIEngine.swift": "fae1844943d02844a7cb38b2e4862fe038438f9a0206324c9064a858c5b73d7d",
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
         "Sources/CheckCore/ChessNotation.swift": "98f9e8fee9601762569556c20e4ad6a8b7c5a77eeca43fd26efc1805d02c9dbd",
-        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b"
+        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
+        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
       }
     },
     "chess/fen": {
-      "file": "082efe7a5eb7d57a99d4f96f88f4f78f05ef1c4b6cd282953852ec96665ec3fc",
+      "file": "0e6f88914d0eb1ee6a522ef76d60df2b296f9ac385a969d1f3833a91a2c9f60f",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "0207fd18e8893072e119e459124352f77483cff48f0fbb21f4021f08cabd0818"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "84665fe0309fa260f7bb8c1b833a81bd43822aa13b5bc5852d4dabfc30ad93a9"
       },
       "swiftSources": {
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
-        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b"
+        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
+        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
       }
     },
     "chess/moves": {
-      "file": "a2d331c8a8d61d7f16f92d652770de457bb7542e861eff7bb9b9874e77f7b2eb",
+      "file": "5c3a235a30176ae9336ba19faa07c781a82ccee2eb5f04481e393078cff7f41d",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "0207fd18e8893072e119e459124352f77483cff48f0fbb21f4021f08cabd0818"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "84665fe0309fa260f7bb8c1b833a81bd43822aa13b5bc5852d4dabfc30ad93a9"
       },
       "swiftSources": {
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
         "Sources/CheckCore/ChessNotation.swift": "98f9e8fee9601762569556c20e4ad6a8b7c5a77eeca43fd26efc1805d02c9dbd",
-        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b"
+        "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
+        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
       }
     },
     "chess/notation": {
-      "file": "36ff563a3757e792f2129220e93cb5337bdf83479f4f96082aabab1e43563ed0",
+      "file": "a410eac60f726bda2a473353ea95e417b4783d7a7bc7e0d3e60a40beff478c88",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "0207fd18e8893072e119e459124352f77483cff48f0fbb21f4021f08cabd0818"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "84665fe0309fa260f7bb8c1b833a81bd43822aa13b5bc5852d4dabfc30ad93a9"
       },
       "swiftSources": {
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
@@ -59,7 +63,7 @@
     "chess/outcome": {
       "file": "cbf69e7c53b2b08e3b62ccc578896a20198c061e2a421d5a5f5c495cd7152787",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "0207fd18e8893072e119e459124352f77483cff48f0fbb21f4021f08cabd0818"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "84665fe0309fa260f7bb8c1b833a81bd43822aa13b5bc5852d4dabfc30ad93a9"
       },
       "swiftSources": {
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
@@ -70,7 +74,7 @@
     "chess/perft": {
       "file": "9cdc497a9a17177b9010ac3452ea910a41199f993781ef3c96d590086285d4f7",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "0207fd18e8893072e119e459124352f77483cff48f0fbb21f4021f08cabd0818"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift": "84665fe0309fa260f7bb8c1b833a81bd43822aa13b5bc5852d4dabfc30ad93a9"
       },
       "swiftSources": {
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
@@ -91,7 +95,7 @@
     "renju/ai-game": {
       "file": "4f92c5bd230436ceba9aeec12be3931ce8ad86f43c5ad4c3e3ffbb2f149cc467",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "7e01266637b0289b633e8582c0d0ac5d935136777b4738f09df4c0343bf365a3"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuAIGame.swift": "cddd93556303d6cbb84ac0b41b3e40567c4fc26176a945f49e03527ef48813b6",
@@ -103,7 +107,7 @@
     "renju/ai-puzzles": {
       "file": "c7a1d76d6e8df99090128aeb523a7c4db5211021b0f5ec76c49d3861032c7d7f",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "7e01266637b0289b633e8582c0d0ac5d935136777b4738f09df4c0343bf365a3"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuAI.swift": "e5a02f8d83a04e1a8e83fe381d0367c8fcbfdb5db23ddf7b4f4ab0889101406b",
@@ -113,9 +117,9 @@
       }
     },
     "renju/ai-trace": {
-      "file": "8d8015a79c2b4c8f8806f31e49a034ccd510736ca1900710bf8b3a495824f791",
+      "file": "2156bcaf20b2c8abba78819cc52b0111f58c48f0fb7e7620ac392778804aa0a4",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "7e01266637b0289b633e8582c0d0ac5d935136777b4738f09df4c0343bf365a3"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuAI.swift": "e5a02f8d83a04e1a8e83fe381d0367c8fcbfdb5db23ddf7b4f4ab0889101406b",
@@ -126,7 +130,7 @@
     "renju/cases": {
       "file": "ccc797b2c8707139a79fe48ca093a854f0d9d43e2095644a08a6036101459f4c",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift": "ff16e837d86383cd50e524f43f31fc64ef61aefb77f21dc724dcf03058be5e74"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift": "3d144240b9b9bcc346bd5d6d75bff13fbe6d0d3ad8606dd04ed862d8d4143e43"
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6",
@@ -134,21 +138,23 @@
       }
     },
     "renju/forbidden-points": {
-      "file": "f048fb3d496ff3a95e75a2da6137c63aede9221c94af3cec94c776d65036319e",
+      "file": "a54942f0bef58705fe333fc8263494b383b959f33ce986378fafe9f21f1541c8",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift": "ff16e837d86383cd50e524f43f31fc64ef61aefb77f21dc724dcf03058be5e74"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift": "3d144240b9b9bcc346bd5d6d75bff13fbe6d0d3ad8606dd04ed862d8d4143e43"
       },
       "swiftSources": {
+        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6"
       }
     },
     "renju/inputs": {
-      "file": "6d03399c2a713b6e65a2431f3e7c4ee02128943458d104978161f2c25d02e3b3",
+      "file": "ef45748bba4e386baa1ae120bf161cbc46258527725aa8bbe018063e31e429f7",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift": "ff16e837d86383cd50e524f43f31fc64ef61aefb77f21dc724dcf03058be5e74"
+        "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift": "3d144240b9b9bcc346bd5d6d75bff13fbe6d0d3ad8606dd04ed862d8d4143e43"
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6",
+        "Sources/CheckCore/GomokuStore.swift": "1df7462115e2e6ed2143b6aad9f6b2b685fa74719ae244c1cdfbf9c6ebe9dc2d",
         "Sources/CheckCore/GomokuTurnWarning.swift": "0a1b881b92317b4a1fcac362ccf1e461dfa0a85076e532baa7b5900d952bc6f9"
       }
     },

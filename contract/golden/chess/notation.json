@@ -4606,6 +4606,90 @@
     {
       "entries": [
         [
+          "004e 0066 0033 0020 0301",
+          "g1f3",
+          "space+Extend(U+0301)"
+        ],
+        [
+          "0020 0301 004e 0066 0033",
+          "g1f3",
+          "leading space+Extend(U+0301)"
+        ],
+        [
+          "0065 0034 00a0 0301",
+          "e2e4",
+          "NBSP+Extend(U+0301)"
+        ],
+        [
+          "0065 0034 0020 200d",
+          "e2e4",
+          "space+ZWJ(U+200D)"
+        ],
+        [
+          "004e 0066 0033 0301",
+          null,
+          null
+        ],
+        [
+          "004e 0066 0033 002b 0301",
+          null,
+          null
+        ],
+        [
+          "004e 0066 0033 0009 0301",
+          null,
+          null
+        ],
+        [
+          "004e 0066 0033 0600 0020",
+          null,
+          null
+        ],
+        [
+          "004e 0600 0020 0066 0033",
+          null,
+          null
+        ],
+        [
+          "004e 0301 0066 0033",
+          null,
+          null
+        ],
+        [
+          "004e 0066 0033 000d 000a",
+          "g1f3",
+          null
+        ]
+      ],
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "id": "san-grapheme",
+      "kind": "san"
+    },
+    {
+      "entries": [
+        [
+          "004f 002d 004f 0020 0903",
+          "e1g1",
+          "space+SpacingMark(U+0903)"
+        ],
+        [
+          "004f 002d 004f 0301",
+          null,
+          null
+        ],
+        [
+          "004f 002d 004f 002d 004f 2028",
+          "e1c1",
+          null
+        ]
+      ],
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "id": "san-grapheme-castling",
+      "kind": "san"
+    },
+    {
+      "entries": [
+        [
           "0065 0032 0065 0034",
           "e2e4"
         ],
@@ -5064,7 +5148,7 @@
   "schema": 1,
   "spec": {
     "line": "ChessRules.replay(uciLine:from:) 의 trail(시작 포함 정규 FEN) · sanLine · ledger(국면마다 ChessRepetitionLedger.record 뒤 count(of:) 와 outcome(position:repetitionCounts:)). 불법 수가 하나라도 있으면 trail·san·ledger 가 null.",
-    "san": "entries = [입력 cps, ChessRules.move(san:in:) 의 UCI 또는 null]. 받는 흔들림: + # ! ? 기호 · '=' 생략 · 0-0 · e.p. · 공백(White_Space) · '-' · 과다 명시(출발 파일·랭크·칸, x 생략, 폰 장형). 모호(둘 이상)·불법이면 null.",
+    "san": "entries = [입력 cps, ChessRules.move(san:in:) 의 UCI 또는 null(, knownDivergence)]. 받는 흔들림: + # ! ? 기호 · '=' 생략 · 0-0 · e.p. · 공백(White_Space) · '-' · 과다 명시(출발 파일·랭크·칸, x 생략, 폰 장형). 모호(둘 이상)·불법이면 null. san-grapheme* 의 셋째 칸이 글자인 줄만 Kotlin 이 다르다(Swift 는 수, Kotlin 은 null — 공백 스칼라 뒤 결합 글자). 갈리는 줄 집합이 정확히 그 목록이어야 한다.",
     "uci": "entries = [입력 cps, ChessMove(uci:) 의 정규 UCI 또는 null] — 4·5글자, 칸 정규형, 승격은 소문자 q·r·b·n 만."
   },
   "swiftSources": [

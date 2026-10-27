@@ -30,13 +30,28 @@ import kotlin.test.fail
 /**
  * 체스 규칙이 Swift 와 비트로 같다(C§5.1 E8). 숫자가 틀리면 **엔진이 틀린 것이다** — 기대값을 고치지 말고 divide 로 갈린 첫 수를 좁힌다.
  *  · chess/perft    공표 여섯 + 잎 셋의 깊이별 노드 수 · divide(깊이 2)
- *  · chess/fen      FEN 받기·거절 · 정규형 왕복 · 반복 키 · 판정 · 기물 판정
+ *  · chess/fen      FEN 받기·거절 · 정규형 왕복 · 반복 키 · 판정 · 기물 판정 · 글자 경계 알려진 차이(정확한 목록 잠금)
  *  · chess/moves    합법 수 **생성 순서** · SAN · 효과 · 둔 뒤 FEN
  *  · chess/notation SAN·UCI 읽기 표 · 수순 재생 · 반복 장부
  *  · chess/outcome  손으로 놓은 국면(엔진 가드) · 반복 표 판정 · 시계(FIDE 6.9)
  */
 class ChessGoldenTest {
     private fun fail(golden: GoldenFile, case: JsonObject, detail: String): Nothing = fail(golden.failure(case.string("id"), detail))
+
+    private companion object {
+        /**
+         * Swift(확장 그래핌의 첫 스칼라로 공백을 본다)와 Kotlin(코드 포인트)이 갈리는 FEN — **정확히** 이 줄들(골든 knownDivergence 와도 같아야 한다).
+         * 공백 스칼라 바로 뒤에 결합 글자(Extend · ZWJ · SpacingMark)가 붙은 입력만이다. 늘거나 줄면 빨강 — 늘면 Kotlin 이 다른 입력에서도 갈린 것이고,
+         * 줄면 차이가 메워진 것이니 목록과 ChessFEN.kt 머리 주석을 같이 고친다(G §8-16 ① 의 잠금 꼴).
+         */
+        val knownFenDivergence = setOf("grapheme-00", "grapheme-01", "grapheme-02", "grapheme-03", "grapheme-04", "grapheme-05", "grapheme-06")
+
+        /** SAN 쪽 같은 차이(국면 case id → 입력). Swift 는 수를 찾고 Kotlin 은 null 이다. */
+        val knownSanDivergence = setOf(
+            "san-grapheme" to "Nf3 \u0301", "san-grapheme" to " \u0301Nf3", "san-grapheme" to "e4\u00A0\u0301", "san-grapheme" to "e4 \u200D",
+            "san-grapheme-castling" to "O-O \u0903",
+        )
+    }
 
     private fun outcomeLabel(outcome: ChessOutcome?): String? = when (outcome) {
         null -> null
@@ -50,6 +65,12 @@ class ChessGoldenTest {
     private fun timeoutLabel(ruling: ChessTimeoutRuling): String = when (ruling) {
         is ChessTimeoutRuling.Loss -> "loss:${ruling.flagged.rawValue}"
         ChessTimeoutRuling.DrawByInsufficientMaterial -> "draw"
+    }
+
+    /** BMP 글자 → 골든의 코드 포인트 16진 목록(소문자, 4자리, 공백 구분 — 생성기 cps 와 같은 꼴). 목록의 입력은 전부 BMP 다. */
+    private fun cpsOf(text: String): String {
+        require(text.none { it.isSurrogate() }) { "BMP 밖 글자는 이 도우미가 다루지 않는다: $text" }
+        return text.map { it.code.toString(16).padStart(4, '0') }.joinToString(" ")
     }
 
     private fun fnvText(text: String): String {
@@ -126,9 +147,18 @@ class ChessGoldenTest {
         val golden = Golden.load("chess/fen")
         var accepted = 0
         var rejected = 0
+        val diverged = HashSet<String>()
         for (case in golden.cases) {
             val input = cpsText(case.string("input"))
             val position = ChessPosition.fromFen(input)
+            val divergence = case.optString("knownDivergence")
+            if (divergence != null) {
+                // 알려진 차이 줄: Swift 는 받고 Kotlin 은 거절해야 한다. 같아지면(차이가 메워지면) 목록에서 빼야 하므로 빨강.
+                if (!case.bool("parsed")) fail(golden, case, "knownDivergence($divergence) 줄인데 Swift 도 거절했다 — 생성기 목록을 다시 본다")
+                if (position != null) fail(golden, case, "knownDivergence($divergence) 인데 Kotlin 이 받았다 — 차이가 메워졌으면 목록·ChessFEN.kt 주석을 고친다")
+                diverged.add(case.string("id"))
+                continue
+            }
             if (!case.bool("parsed")) {
                 if (position != null) fail(golden, case, "Swift 는 거절했는데 Kotlin 이 받았다: '$input' → ${position.fen}")
                 rejected++
@@ -141,6 +171,9 @@ class ChessGoldenTest {
             accepted++
         }
         assertTrue(accepted > 250 && rejected > 40, "받음 $accepted · 거절 $rejected — 두 갈래를 다 재야 한다")
+        assertEquals(knownFenDivergence, diverged, "FEN 글자 경계 알려진 차이 목록(골든 knownDivergence 와 Kotlin 목록이 정확히 같아야 한다)")
+        val graphemeRows = golden.cases.count { it.string("id").startsWith("grapheme-") }
+        assertTrue(graphemeRows > diverged.size, "같아야 하는 글자 경계 줄도 있어야 한다(경계가 넓어지지 않았음을 잰다): $graphemeRows")
     }
 
     // MARK: moves
@@ -184,6 +217,7 @@ class ChessGoldenTest {
     @Test
     fun sanUciReplayAndLedgerMatchSwift() {
         val golden = Golden.load("chess/notation")
+        val sanDiverged = HashSet<Pair<String, String>>()
         var san = 0
         var nulls = 0
         var lines = 0
@@ -196,6 +230,14 @@ class ChessGoldenTest {
                         val input = cpsText(row[0].optStringValue()!!)
                         val want = row[1].optStringValue()
                         val got = ChessRules.move(input, position)?.uci
+                        val divergence = if (row.size > 2) row[2].optStringValue() else null
+                        if (divergence != null) {
+                            // 알려진 차이 줄: Swift 는 수, Kotlin 은 null. 같아지면 목록에서 빼야 하므로 빨강.
+                            if (want == null) fail(golden, case, "SAN '$input': knownDivergence($divergence) 인데 Swift 도 null 이다")
+                            if (got != null) fail(golden, case, "SAN '$input': knownDivergence($divergence) 인데 Kotlin 이 $got 를 찾았다 — 차이가 메워졌으면 목록·ChessNotation.kt 주석을 고친다")
+                            sanDiverged.add(case.string("id") to row[0].optStringValue()!!)
+                            continue
+                        }
                         if (got != want) fail(golden, case, "SAN '$input': Swift $want · Kotlin $got")
                         san++
                         if (want == null) nulls++
@@ -230,6 +272,8 @@ class ChessGoldenTest {
             }
         }
         assertTrue(san > 300 && nulls > 30 && nulls < san, "SAN 표 $san 줄 · null $nulls — 받음과 거절을 다 재야 한다")
+        val expectedSan = knownSanDivergence.map { (id, text) -> id to cpsOf(text) }.toSet()
+        assertEquals(expectedSan, sanDiverged, "SAN 글자 경계 알려진 차이 목록(골든 knownDivergence 와 Kotlin 목록이 정확히 같아야 한다)")
         assertTrue(lines >= 7)
     }
 

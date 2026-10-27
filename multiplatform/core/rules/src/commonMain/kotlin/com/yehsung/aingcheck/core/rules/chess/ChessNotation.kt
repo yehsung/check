@@ -7,8 +7,10 @@ package com.yehsung.aingcheck.core.rules.chess
 // SAN 파싱은 생성에 기댄다: 합법 수 전부의 SAN(과 과다 명시형)을 만들어 **같은 것 하나**를 찾는다 — 파서를 따로 쓰면 "엔진이 만드는 SAN"과
 // "엔진이 읽는 SAN"이 두 규칙이 된다. 골든 `chess/moves`(합법 수 · SAN · 효과)와 `chess/notation`(SAN·UCI 읽기 표 · 수순 재생)이 잰다.
 //
-// ⚠️ 알려진 차이(SAN 정규화): Swift 는 글자(확장 그래핌)를 돌며 기호·공백 글자를 걷는다. 결합 부호가 기호·공백 바로 뒤에 붙은 입력
-//   (`"Nf3 ́"` 같은)은 Swift 가 그 묶음을 통째로 걷고 Kotlin 은 결합 부호만 남긴다 — 정규 SAN 에 없는 글자라 골든에 넣지 않았다.
+// ⚠️ 알려진 차이(SAN 정규화): Swift 는 글자(확장 그래핌)를 돌며 기호·공백 글자를 걷는다. 결합 글자가 **공백 스칼라** 바로 뒤에 붙은 입력
+//   (`"Nf3 ́"` 같은)은 Swift 가 그 묶음을 통째로 걷어 수를 찾고 Kotlin 은 결합 글자를 남겨 null 이다. 기호(`+` 등) 뒤 결합 부호는
+//   두 쪽 다 null 이라 같다. 골든 `chess/notation` 의 san-grapheme* 셋째 칸(knownDivergence)으로 **정확한 목록을 잠갔다**
+//   (ChessGoldenTest.knownSanDivergence — 늘거나 줄면 빨강).
 
 /** UCI 문자열. 승격은 소문자 한 글자(`e7e8q`). */
 val ChessMove.uci: String

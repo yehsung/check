@@ -12,9 +12,11 @@ package com.yehsung.aingcheck.core.rules.chess
 // 골든 `chess/fen`(Swift 가 받은·거절한 FEN 과 그 정규형·반복 키·판정)이 이 파서를 잰다.
 //
 // ⚠️ 알려진 차이(공백 가르기): Swift 는 글자(Character = 확장 그래핌)를 돌며 첫 스칼라가 White_Space 인 글자를 가른다.
-//   Kotlin 은 코드 포인트를 돈다. 둘이 갈리는 입력은 **공백 바로 뒤에 결합 부호가 붙은 FEN**(Swift 는 그 묶음을 통째 구분자로 삼는다)과
-//   Prepend 글자 바로 뒤의 공백뿐이다 — 정규 FEN 에는 없는 글자들이라 골든에 넣지 않았다(차이를 메우려면 유니코드 판에 기대는
-//   그래핌 경계가 필요하다 — §8-16 ② 가 피한 그 의존이다).
+//   Kotlin 은 코드 포인트를 돈다. 결과가 갈리는 입력은 **공백 스칼라 바로 뒤에 결합 글자(Extend · ZWJ · SpacingMark)가 붙은 FEN** 뿐이다
+//   (Swift 는 그 묶음을 통째 구분자로 삼아 받고, Kotlin 은 결합 글자를 다음 칸 첫 글자로 읽어 거절한다). Prepend 글자 뒤 공백 ·
+//   제어 글자 뒤 결합 부호는 경계는 달라도 두 쪽 다 거절이라 결과가 같다. 이 차이는 골든 `chess/fen` 의 grapheme-* 줄과
+//   `knownDivergence` 로 **정확한 목록을 잠갔다**(ChessGoldenTest.knownFenDivergence — 늘거나 줄면 빨강). 메우려면 유니코드 판에 기대는
+//   그래핌 경계가 필요하다(§8-16 ② 가 피한 그 의존). 서버·앱이 주고받는 FEN 은 ASCII 라 사용자 영향은 없다.
 
 /** Swift `Character.isWhitespace`(첫 스칼라의 유니코드 White_Space 속성) — 이 목록은 유니코드 판이 바뀌어도 고정이다. */
 internal fun isSwiftWhitespace(code: Int): Boolean = when (code) {

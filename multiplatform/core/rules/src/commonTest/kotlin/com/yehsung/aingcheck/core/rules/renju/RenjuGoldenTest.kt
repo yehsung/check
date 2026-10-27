@@ -16,7 +16,8 @@ import kotlin.test.fail
  * 렌주 판정이 Swift 와 비트로 같다(C§5.1 E7 — 판정과 **노드 수**). 노드 수가 같아야 서버 gomoku_judge 와 예산 초과 여부가 같다.
  *  · renju/cases            코퍼스 91건(입력 검증 · 판정 · 노드 수)
  *  · renju/forbidden-points 무작위 국면 칸마다(흑 판정·노드 · 백 판정 · 금수 표시 목록, 작은 예산 판 포함)
- *  · renju/inputs           좌표 · 색 · 서버 금수 사유 · 서버 판 문자열 · 차례 경고 표
+ *  · renju/inputs           좌표 · 색 · 서버 금수 사유 · 서버 판 문자열 · 차례 경고 표 · 차례 경고가 서는 판(watchesMyClock 전수) ·
+ *                           끝난 사유·결과·탭 거절 열거(케이스 순서 · rawValue · rawValue 읽기)
  */
 class RenjuGoldenTest {
     private fun mismatch(golden: GoldenFile, case: JsonObject, detail: String): Nothing = fail(golden.failure(case.string("id"), detail))
@@ -133,6 +134,9 @@ class RenjuGoldenTest {
     fun inputTablesMatchSwift() {
         val golden = Golden.load("renju/inputs")
         val kinds = HashMap<String, Int>()
+        var watchesRows = 0
+        var watchesNoMatch = 0
+        var watchesOn = 0
         for (case in golden.cases) {
             val kind = case.string("kind")
             kinds[kind] = (kinds[kind] ?: 0) + 1
@@ -178,12 +182,49 @@ class RenjuGoldenTest {
                     assertEquals(case.string("peakOpacityBits"), bitsOf(GomokuTurnWarning.peakOpacity))
                     assertEquals(case.int("nodeBudget"), GomokuRules.nodeBudget, "렌주 노드 예산 = 서버 gomoku_judge 상수")
                 }
+                "turnWatches" -> {
+                    val want = case.bool("watches")
+                    if (!case.bool("match")) {
+                        // 판 없음(Swift nil) — Kotlin 은 원시 인자 서명이라 부르는 스토어(W2-d)가 false 로 접는다. 그 계약 값이 false 임을 잰다.
+                        assertEquals(false, want, golden.failure(case.string("id"), "판 없음은 언제나 꺼짐"))
+                        watchesNoMatch++
+                        continue
+                    }
+                    val turn = case.optString("turn")?.let { GomokuColor.fromRawValue(it) ?: fail(golden.failure(case.string("id"), "turn")) }
+                    val myColor = GomokuColor.fromRawValue(case.string("myColor")) ?: fail(golden.failure(case.string("id"), "myColor"))
+                    val got = GomokuTurnWarning.watchesMyClock(
+                        isFinished = case.bool("finished"),
+                        deadline = if (case.bool("deadline")) 2.0 else null,
+                        turn = turn,
+                        myColor = myColor,
+                    )
+                    assertEquals(want, got, golden.failure(case.string("id"),
+                        "watchesMyClock(finished=${case.bool("finished")}, deadline=${case.bool("deadline")}, turn=$turn, my=$myColor)"))
+                    watchesRows++
+                    if (want) watchesOn++
+                }
+                "endReasonCases" -> assertEquals(case.array("rawValues").strings(), GomokuEndReason.entries.map { it.rawValue },
+                    golden.failure(case.string("id"), "끝난 사유 케이스 순서·rawValue(서버 어휘)"))
+                "outcomeCases" -> assertEquals(case.array("names").strings(), GomokuOutcome.entries.map { it.name },
+                    golden.failure(case.string("id"), "결과 케이스 순서"))
+                "tapRefusalCases" -> assertEquals(case.array("rawValues").strings(), GomokuTapRefusal.entries.map { it.rawValue },
+                    golden.failure(case.string("id"), "탭 거절 케이스 순서·rawValue(로그 어휘)"))
+                "enumRawValue" -> {
+                    val input = cpsText(case.string("input"))
+                    assertEquals(case.optString("endReason"), GomokuEndReason.fromRawValue(input)?.rawValue,
+                        golden.failure(case.string("id"), "GomokuEndReason(rawValue: '$input')"))
+                    assertEquals(case.optString("tapRefusal"), GomokuTapRefusal.fromRawValue(input)?.rawValue,
+                        golden.failure(case.string("id"), "GomokuTapRefusal(rawValue: '$input')"))
+                }
                 else -> fail(golden.failure(case.string("id"), "모르는 kind $kind"))
             }
         }
-        for (kind in listOf("notation", "color", "serverReason", "serverString", "turnWarning", "turnWarningConstants")) {
+        for (kind in listOf("notation", "color", "serverReason", "serverString", "turnWarning", "turnWarningConstants", "turnWatches",
+            "endReasonCases", "outcomeCases", "tapRefusalCases", "enumRawValue")) {
             assertTrue((kinds[kind] ?: 0) > 0, "표 '$kind' 가 비었다: $kinds")
         }
+        // 전수 표: 끝남 2 × 마감 2 × 차례 3 × 내 색 2 = 24줄 + 판 없음 1. 켜지는 줄은 (안 끝남 · 마감 있음 · 차례 = 내 색) 둘뿐.
+        assertEquals(listOf(24, 1, 2), listOf(watchesRows, watchesNoMatch, watchesOn), "watchesMyClock 표 모양")
     }
 
     /** 225칸 표기 왕복 · 서버 인덱스(y*15+x) — 골든 밖의 전수 성질. */

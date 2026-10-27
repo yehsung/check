@@ -13,7 +13,8 @@
         "Sources/CheckCore/ChessAIEngine.swift",
         "Sources/CheckCore/ChessRules.swift",
         "Sources/CheckCore/ChessFEN.swift",
-        "Sources/CheckCore/ChessNotation.swift"
+        "Sources/CheckCore/ChessNotation.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift"
       ]
     },
     {
@@ -27,11 +28,12 @@
         "Sources/CheckCore/ChessAIEngine.swift",
         "Sources/CheckCore/ChessRules.swift",
         "Sources/CheckCore/ChessFEN.swift",
-        "Sources/CheckCore/ChessNotation.swift"
+        "Sources/CheckCore/ChessNotation.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift"
       ]
     },
     {
-      "cases": 417,
+      "cases": 431,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
       "golden": "chess/fen",
@@ -39,7 +41,8 @@
       "platformSensitive": false,
       "swiftSources": [
         "Sources/CheckCore/ChessRules.swift",
-        "Sources/CheckCore/ChessFEN.swift"
+        "Sources/CheckCore/ChessFEN.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift"
       ]
     },
     {
@@ -52,11 +55,12 @@
       "swiftSources": [
         "Sources/CheckCore/ChessRules.swift",
         "Sources/CheckCore/ChessFEN.swift",
-        "Sources/CheckCore/ChessNotation.swift"
+        "Sources/CheckCore/ChessNotation.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift"
       ]
     },
     {
-      "cases": 17,
+      "cases": 19,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
       "golden": "chess/notation",
@@ -135,7 +139,7 @@
       ]
     },
     {
-      "cases": 70,
+      "cases": 73,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
       "golden": "renju/ai-trace",
@@ -167,11 +171,12 @@
       "path": "contract/golden/renju/forbidden-points.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/CheckCore/GomokuRules.swift"
+        "Sources/CheckCore/GomokuRules.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift"
       ]
     },
     {
-      "cases": 96,
+      "cases": 147,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift",
       "golden": "renju/inputs",
@@ -179,7 +184,8 @@
       "platformSensitive": false,
       "swiftSources": [
         "Sources/CheckCore/GomokuRules.swift",
-        "Sources/CheckCore/GomokuTurnWarning.swift"
+        "Sources/CheckCore/GomokuTurnWarning.swift",
+        "Sources/CheckCore/GomokuStore.swift"
       ]
     },
     {

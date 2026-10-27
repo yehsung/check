@@ -9,7 +9,8 @@ import Testing
 //  · renju/cases            코퍼스 91건(Tests/checkTests/Fixtures/renju-cases.json)의 입력 → Swift 판정 · 노드 수.
 //                           생성기가 코퍼스 기대값(expected · nodes)과 Swift 결과를 먼저 대조한다(골든이 틀린 Swift 를 옮겨 적지 않게).
 //  · renju/forbidden-points 무작위 국면(G1)의 빈칸마다 흑 판정·노드 수, 백 판정, `forbiddenPoints` 목록. 작은 예산 판 셋은 예산 초과 길.
-//  · renju/inputs           좌표 표기 · 색 rawValue · 서버 금수 사유 · 서버 판 문자열 · 차례 경고(문턱·세기 비트) 표.
+//  · renju/inputs           좌표 표기 · 색 rawValue · 서버 금수 사유 · 서버 판 문자열 · 차례 경고(문턱·세기 비트) 표 ·
+//                           차례 경고가 서는 판(watchesMyClock 전수) · 끝난 사유·결과·탭 거절 열거(GomokuStore.swift 의 rawValue 어휘).
 //
 // 글자 입력은 코드 포인트 16진 목록(`cps`)으로 싣는다(contract/README §2-2 — 전각·공백 글자가 편집기에서 바뀌어도 값이 안 변한다).
 
@@ -143,7 +144,8 @@ struct GoldenExportGamesBoardRenju {
         goldenEmit(GoldenFile(
             golden: "renju/forbidden-points",
             equivalence: .bit,
-            swiftSources: Self.sources,
+            // 판을 GomokuAISplitMix64(GomokuAIEngine.swift)로 만든다 — 난수가 바뀌면 판이 바뀐다.
+            swiftSources: Self.sources + ["Sources/CheckCore/GomokuAIEngine.swift"],
             spec: [
                 "board": "GomokuBoard.serverString(225자, 인덱스 = y*15 + x, '.'·'b'·'w'). 판은 생성기의 무작위 국면(SplitMix64 + Swift Int.random)이라 Kotlin 은 판을 다시 만들지 않고 이 글자에서 읽는다.",
                 "black": "칸마다 흑 judgeCounting(budget) 의 판정 글자: '.' 돌 있음 · L legal · W win · T forbidden-double-three · F forbidden-double-four · O forbidden-overline · B forbidden-budget.",
@@ -239,6 +241,73 @@ struct GoldenExportGamesBoardRenju {
                 "intensityBits": .bits(GomokuTurnWarning.intensity(remaining: remaining)),
             ])
         }
+        // 차례 경고가 **설 수 있는** 판 — watchesMyClock 전수(끝남 × 마감 × 차례 × 내 색) + 판 없음.
+        // AI 판은 AI 차례에 마감이 언제나 nil 이라 renju/ai-game 에 (안 끝남 · 마감 있음 · 상대 차례)가 한 번도 없다 — 1:1 판(상대 차례에도
+        // 마감이 돈다)의 그 갈래를 여기서 잰다(Swift V0351GomokuLowTimeGlowTests.turnWarningWatchesOnlyMyRunningClock 과 같은 갈래).
+        let watchNow = Date(timeIntervalSince1970: 1_800_000_000)
+        var watchIndex = 0
+        for finished in [false, true] {
+            for hasDeadline in [false, true] {
+                for turn in [nil, GomokuColor.black, GomokuColor.white] {
+                    for myColor in GomokuColor.allCases {
+                        let state = GomokuMatchState(
+                            id: "m", stake: 5, myColor: myColor, opponent: .gomokuAI, board: GomokuBoard(), lastMove: nil, moveCount: 0,
+                            turn: turn, deadline: hasDeadline ? watchNow.addingTimeInterval(2) : nil, isFinished: finished,
+                            outcome: nil, endReason: nil, rubyDelta: nil, blackPassed: false
+                        )
+                        cases.append([
+                            "id": .string(String(format: "watch-%02d", watchIndex)),
+                            "kind": "turnWatches",
+                            "match": true,
+                            "finished": .bool(finished),
+                            "deadline": .bool(hasDeadline),
+                            "turn": turn.map { .string($0.rawValue) } ?? .null,
+                            "myColor": .string(myColor.rawValue),
+                            "watches": .bool(GomokuTurnWarning.watchesMyClock(state)),
+                        ])
+                        watchIndex += 1
+                    }
+                }
+            }
+        }
+        cases.append(["id": "watch-none", "kind": "turnWatches", "match": false, "watches": .bool(GomokuTurnWarning.watchesMyClock(nil))])
+        let watching = cases.filter { $0["kind"] == .string("turnWatches") && $0["watches"] == .bool(true) }.count
+        #expect(watching == 2, "켜지는 판은 (안 끝남 · 마감 있음 · 차례 = 내 색) 둘뿐이어야 한다: \(watching)")
+
+        // 끝난 사유 · 결과 · 탭 거절 — 서버·로그 어휘(rawValue)와 케이스 순서. 셋 다 GomokuStore.swift 에 선언돼 있고 Kotlin 은 rules 의
+        // GomokuMatchTypes.kt 에 둔다(스토어 갈래가 그대로 가져다 쓴다). 목록이 손으로 적은 것이 아니게 전수 스위치로 순서를 잰다.
+        #expect(Self.endReasons.enumerated().allSatisfy { Self.endReasonOrdinal($0.element) == $0.offset }, "끝난 사유 목록이 전수 스위치와 다르다")
+        #expect(Self.outcomes.enumerated().allSatisfy { Self.outcomeOrdinal($0.element) == $0.offset }, "결과 목록이 전수 스위치와 다르다")
+        cases.append([
+            "id": "enum-end-reason",
+            "kind": "endReasonCases",
+            "rawValues": .array(Self.endReasons.map { .string($0.rawValue) }),
+        ])
+        cases.append([
+            "id": "enum-outcome",
+            "kind": "outcomeCases",
+            "names": .array(Self.outcomes.map { .string(String(describing: $0)) }),
+        ])
+        cases.append([
+            "id": "enum-tap-refusal",
+            "kind": "tapRefusalCases",
+            "rawValues": .array(GomokuTapRefusal.allCases.map { .string($0.rawValue) }),
+        ])
+        let rawInputs = [
+            "five", "timeout", "resign", "board_full", "abandoned", "boardFull", "board-full", "Five", " five", "five\n", "",
+            "not-your-turn", "busy", "occupied", "finished", "signed-out", "no-match", "forbidden", "notYourTurn", "signed_out",
+            "no_match", "BUSY", "forbidden-overline",
+        ]
+        for (index, text) in rawInputs.enumerated() {
+            cases.append([
+                "id": .string(String(format: "raw-%02d", index)),
+                "kind": "enumRawValue",
+                "input": .string(Self.cps(text)),
+                "endReason": GomokuEndReason(rawValue: text).map { .string($0.rawValue) } ?? .null,
+                "tapRefusal": GomokuTapRefusal(rawValue: text).map { .string($0.rawValue) } ?? .null,
+            ])
+        }
+
         cases.append([
             "id": "warning-constants",
             "kind": "turnWarningConstants",
@@ -256,7 +325,8 @@ struct GoldenExportGamesBoardRenju {
         goldenEmit(GoldenFile(
             golden: "renju/inputs",
             equivalence: .bit,
-            swiftSources: Self.sources + ["Sources/CheckCore/GomokuTurnWarning.swift"],
+            // GomokuStore.swift: 끝난 사유·결과·탭 거절 열거와 GomokuMatchState(watchesMyClock 의 입력)가 거기 있다.
+            swiftSources: Self.sources + ["Sources/CheckCore/GomokuTurnWarning.swift", "Sources/CheckCore/GomokuStore.swift"],
             spec: [
                 "input": "글자 입력은 코드 포인트 16진 목록(공백 구분, 빈 글자는 \"\"). null 은 nil 입력.",
                 "notation": "GomokuPoint(notation:) → x·y·notation(실패면 null). 정규형만 받는다 — 스칼라 둘·셋, 첫 스칼라 A…O, 나머지 ASCII 숫자, 0 채움 금지, 행 1…15.",
@@ -265,12 +335,39 @@ struct GoldenExportGamesBoardRenju {
                 "serverString": "GomokuBoard(serverString:) — UTF-8 바이트가 정확히 225개이고 전부 '.'·'b'·'w' 일 때만 valid, stoneCount 는 돌 수. valid 면 serverString 왕복이 같다.",
                 "turnWarning": "GomokuTurnWarning.isActive(remaining:) · intensity(remaining:) — null·NaN·±무한은 꺼짐(0), remaining ≤ 3 이면 켜짐, 세기 = 0.55 + 0.45 × (1 − min(1, max(0, r/3))) (Swift max/min: max(x,y) = y >= x ? y : x).",
                 "turnWarningConstants": "문턱·세기·그림 상수(Double 비트) · 겹 수 · 렌주 노드 예산(서버 gomoku_judge 와 같은 상수).",
+                "turnWatches": "GomokuTurnWarning.watchesMyClock(GomokuMatchState?) 전수 — finished × deadline(있음/없음) × turn(null·black·white) × myColor. 켜짐은 안 끝남 · 마감 있음 · turn == myColor 뿐. match=false 는 판 없음(nil) — 언제나 false(Kotlin 은 원시 인자 서명이라 부르는 스토어가 판 없음을 false 로 접는다).",
+                "endReasonCases": "GomokuEndReason 케이스 순서대로 rawValue(서버 어휘 — timeout 은 옛 어휘라 지우지 않는다).",
+                "outcomeCases": "GomokuOutcome 케이스 순서대로 이름.",
+                "tapRefusalCases": "GomokuTapRefusal.allCases 순서대로 rawValue(로그 어휘).",
+                "enumRawValue": "GomokuEndReason(rawValue:) · GomokuTapRefusal(rawValue:) — 글자가 정확히 같을 때만(대소문자·공백·'_'↔'-' 정규화 없음).",
             ],
             cases: cases
         ))
     }
 
     // MARK: - 도우미
+
+    /// 끝난 사유 전 케이스(선언 순서). Swift 열거가 CaseIterable 이 아니라 손으로 적는다 — [endReasonOrdinal] 의 전수 스위치가
+    /// 케이스가 늘면 컴파일을 깨서 이 목록을 고치게 한다.
+    static let endReasons: [GomokuEndReason] = [.five, .timeout, .resign, .boardFull, .abandoned]
+    static func endReasonOrdinal(_ reason: GomokuEndReason) -> Int {
+        switch reason {
+        case .five: return 0
+        case .timeout: return 1
+        case .resign: return 2
+        case .boardFull: return 3
+        case .abandoned: return 4
+        }
+    }
+
+    static let outcomes: [GomokuOutcome] = [.won, .lost, .draw]
+    static func outcomeOrdinal(_ outcome: GomokuOutcome) -> Int {
+        switch outcome {
+        case .won: return 0
+        case .lost: return 1
+        case .draw: return 2
+        }
+    }
 
     /// 코드 포인트 16진 목록(소문자, 4자리 이상, 공백 구분).
     static func cps(_ text: String) -> String {

@@ -1,0 +1,17 @@
+{
+  "_apns": {
+    "collapse_id": "work-check",
+    "expiration": 1792582670
+  },
+  "aps": {
+    "alert": {
+      "body": "10분 안에 앱을 열면 근무가 이어져요",
+      "title": "아직 근무 중이에요?"
+    },
+    "category": "WORK_CHECK",
+    "sound": "default",
+    "thread-id": "work-check"
+  },
+  "session_id": "0c0c0000-0000-4000-8000-00000000c503",
+  "type": "work_check"
+}

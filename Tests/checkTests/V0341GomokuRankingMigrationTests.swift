@@ -303,6 +303,49 @@ private let t41IntendedGomokuRewrites: [String: (why: String, required: [String]
         ["public.gomoku_watch(p_protocol, p_match_id, p_since_seq)", "public.match_watch_ping('gomoku', p_match_id)"],
         ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
     ),
+    // 2026-10-?? xplat 서버 ①(Android·Windows) M2 — 오목 판정의 폰 갈래를 **플랫폼별 최소 빌드**로 일반화했다(capable 2종 재정의 +
+    // 상수 4 · 분기 2 신설). 판정 함수는 불리언만 내고 전적을 **보고하지 않는다**(정본·M2 본문 모두 컷 술어·인라인 집계 0회 — 실측) → 컷을 못 지운다.
+    // required 는 덮어쓴 이유(분기 호출 · 최근성 창 · 맥 갈래 상수)와 새 상수의 도달 불가 첫 값을 잰다. forbidden 에 옛 ios 고정 갈래를 더한다.
+    "20261101110000_device_capable_platforms.sql:gomoku_capable": (
+        "xplat M2 — 폰 갈래 = gomoku_device_min_build(d.platform) · 맥 갈래·최근성 그대로",
+        ["public.gomoku_device_min_build(d.platform)", ">= public.gomoku_min_build()", "d.last_seen_at > now() - make_interval(days => public.gomoku_device_recent_days())"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261101110000_device_capable_platforms.sql:gomoku_chat_capable": (
+        "xplat M2 — 채팅 폰 갈래 = gomoku_chat_device_min_build(d.platform) · 맥 갈래·최근성 그대로",
+        ["public.gomoku_chat_device_min_build(d.platform)", ">= public.gomoku_chat_min_build()", "d.last_seen_at > now() - make_interval(days => public.gomoku_device_recent_days())"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261101110000_device_capable_platforms.sql:gomoku_android_min_build": (
+        "xplat M2 — 새 플랫폼 상수 gomoku_android_min_build 는 도달 불가로 시작(검증된 빌드로만 한 줄 파일이 내린다)",
+        ["select 2147483647"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261101110000_device_capable_platforms.sql:gomoku_windows_min_build": (
+        "xplat M2 — 새 플랫폼 상수 gomoku_windows_min_build 는 도달 불가로 시작(검증된 빌드로만 한 줄 파일이 내린다)",
+        ["select 2147483647"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261101110000_device_capable_platforms.sql:gomoku_chat_android_min_build": (
+        "xplat M2 — 새 플랫폼 상수 gomoku_chat_android_min_build 는 도달 불가로 시작(검증된 빌드로만 한 줄 파일이 내린다)",
+        ["select 2147483647"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261101110000_device_capable_platforms.sql:gomoku_chat_windows_min_build": (
+        "xplat M2 — 새 플랫폼 상수 gomoku_chat_windows_min_build 는 도달 불가로 시작(검증된 빌드로만 한 줄 파일이 내린다)",
+        ["select 2147483647"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261101110000_device_capable_platforms.sql:gomoku_device_min_build": (
+        "xplat M2 — 오목 플랫폼 분기(ios·android·windows · 모르는 값 NULL)",
+        ["when 'ios' then public.gomoku_ios_min_build()", "when 'android' then public.gomoku_android_min_build()", "when 'windows' then public.gomoku_windows_min_build()"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261101110000_device_capable_platforms.sql:gomoku_chat_device_min_build": (
+        "xplat M2 — 오목 채팅 플랫폼 분기(ios 는 gomoku_ios_min_build 그대로)",
+        ["when 'ios' then public.gomoku_ios_min_build()", "when 'android' then public.gomoku_chat_android_min_build()", "when 'windows' then public.gomoku_chat_windows_min_build()"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
 ]
 
 @Test

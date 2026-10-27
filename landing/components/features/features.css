@@ -1,0 +1,267 @@
+/* components/features/features.css — 핵심 기능 6장면(docs/v3/brief.md §4.4). 이 절 전용 — globals.css 는 건드리지 않는다.
+ *
+ * 이 저장소의 next.config turbopack '*.css' 규칙이 *.module.css 도 전역 CSS 로 만든다(클래스 해시 없음) → CSS 모듈 대신
+ *   이 파일을 전역으로 들이고 이름을 전부 fx- 로 시작한다(다른 절과 겹치지 않게). FeatureStage 가 import 한다.
+ *
+ * 두 배치를 같은 DOM 으로(하이드레이션 어긋남·CLS 0):
+ *   흐름(기본 — 태블릿·폰·감속 모션·낮은 창 < 760·JS 없음): 장면을 세로로 쌓는다. 제목 · 문장 · 유리 베젤(thick) 안 렌더(폭 맞춤, 통째).
+ *     ≥1024 폭이면 장면 안만 두 열(글 38% · 베젤 62%).
+ *     세그먼트·공용 무대는 숨긴다. 첫 페인트부터 모든 글이 보인다(opacity 0 없음).
+ *     .fx-root = flex 세로 · .fx-sticky/.fx-row = display:contents → 앵커(order 2i)가 각 장면(order 2i+1) 바로 앞에 선다.
+ *   고정 무대(html.js + ≥1024 폭 + ≥760 높이 + 감속 아님): .fx-root 높이 = 무대 높이 + 6 × --step. 안쪽 .fx-sticky 가 내비 아래에 붙고,
+ *     위 = regular 유리 세그먼트(목차 링크 6 + 굴절 물방울) · 아래 = 왼쪽 38% 글(장면 6개가 한 칸에 겹침) / 오른쪽 62% thick 유리 무대
+ *     (장면 6개의 렌더 구성이 한 칸에 겹침). 활성 장면만 보인다(크로스페이드 + 출렁). 앵커 6개는 각 장면 스크롤 구간의 한가운데.
+ * 유리 규칙(glass-api §7): 유리 판의 조상에 opacity·filter·mask 를 두지 않는다 — 페이드는 글(.fx-copy)·렌더 상자(.fx-bezel, 고정 무대에선
+ *   유리 없음)에만 건다. 공용 무대 유리(.fx-stage-glass)·세그먼트는 페이드하지 않는다. */
+
+/* ── 흐름 배치(기본) ───────────────────────────────────────────────────────────── */
+/* 절 = relative isolate overflow-clip(glass-api §7) — 국소 빛이 옆 절(특히 위 히어로)로 번지거나 가로 넘침을 만들지 않게.
+   clip 은 스크롤 컨테이너가 아니라 안쪽 sticky 무대가 그대로 붙는다(hidden 은 sticky 를 깬다 — 쓰지 말 것) */
+.fx-root {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  display: flex;
+  flex-direction: column;
+  padding: 56px 20px 40px;
+}
+.fx-anchor { display: block; width: 0; height: 0; overflow: hidden; }
+.fx-sticky, .fx-row { display: contents; }
+.fx-seg, .fx-stage-glass, .fx-pin-light { display: none; }
+
+.fx-scene { padding: 28px 0 36px; }             /* 폰: 장면 사이(베젤 아래 → 다음 제목) 64px */
+.fx-copy { max-width: 640px; }
+.fx-title { font-size: min(clamp(28px, 2.6vw, 40px), 7.2vw); }
+.fx-body { margin-top: 14px; }
+
+/* 유리 베젤(흐름): 유리 판은 렌더 뒤 형제 층(.fx-bezel-glass) — 렌더는 그 위에, 판의 테두리 링·광택은 렌더를 덮지 않는다 */
+.fx-bezel {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  justify-content: center;
+  margin-top: 26px;
+  padding: 14px;
+  container-type: inline-size;
+}
+.fx-bezel-glass { position: absolute; inset: 0; z-index: 0; --g-r: 26px; }
+
+/* 렌더 구성: 폭 = min(베젤 안 폭, 구성 최대 폭, 80svh 에 맞춘 폭) · 비율 = 구성 비율 → 안의 상자는 % 로 따라 줄어든다 */
+.fx-comp {
+  position: relative;
+  z-index: 1;
+  width: min(100cqw, calc(var(--cw) * 1px), calc(80svh * var(--cw) / var(--ch)));
+  aspect-ratio: var(--cw) / var(--ch);
+}
+.fx-item { position: absolute; left: var(--l); top: var(--t); width: var(--wp); height: var(--hp); }
+.fx-frame {
+  border-radius: 10px;
+  background: #1c1a26;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / .08), 0 26px 52px -20px rgb(4 2 14 / .85), 0 8px 18px -8px rgb(4 2 14 / .55);
+}
+.fx-img { display: block; width: 100%; height: 100%; max-width: none; border-radius: inherit; }
+/* 같은 자리의 교체 짝(메시지 읽음 판) — 고정 무대에서만 */
+.fx-swap { display: none; position: absolute; inset: 0; border-radius: inherit; }
+
+/* 아이폰 셸(components/ui/PhoneShell 과 같은 비율 — 화면 402:874 · 베젤 .035W · 화면 반경 .155W).
+   상자(.fx-item) = 크기 컨테이너 → 셸 치수는 cqw(셸 폭 기준)라 구성 배율을 그대로 따른다. 스틸에 없는 다이내믹 아일랜드는 CSS 로 */
+.fx-phone-item { container-type: inline-size; }
+.fx-shell {
+  position: absolute;
+  inset: 0;
+  padding: 3.271cqw;
+  border-radius: 17.757cqw;
+  background: #0a0a0c;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06), 0 0 0 1px rgb(255 255 255 / .1), 0 28px 56px -18px rgb(0 0 0 / .72),
+    0 8px 18px -8px rgb(0 0 0 / .5);
+}
+.fx-screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 14.486cqw; background: #000; isolation: isolate; }
+.fx-island {
+  position: absolute;
+  top: 2.617cqw;
+  left: 50%;
+  width: 29.439cqw;
+  height: 8.692cqw;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: #000;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .fx-root { padding: 56px 48px 48px; }          /* 태블릿: 히어로 → 첫 장면 · 장면 사이 빈칸을 줄였다(§9.4.9) — ≥1024 는 아래 블록이 덮는다 */
+  .fx-scene { padding: 40px 0 56px; }
+  .fx-body { margin-top: 18px; }
+  .fx-bezel { margin-top: 32px; padding: 24px; }
+  .fx-bezel-glass { --g-r: 30px; }
+}
+
+/* 넓은 흐름(≥1024 인데 고정 무대가 아닐 때 — 감속 모션·낮은 창·JS 없음): 장면은 여전히 세로로 쌓되, 장면 안은 고정 무대와 같은
+   두 열(왼쪽 38% 글 · 오른쪽 62% 유리 베젤)로 — 넓은 화면에서 베젤만 휑하게 길어지지 않게. 움직임 없음 */
+@media (min-width: 1024px) {
+  .fx-root { padding: 72px var(--bar-pad) 56px; }
+  .fx-scene {
+    display: grid;
+    grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
+    column-gap: clamp(28px, 3.4vw, 56px);
+    align-items: center;
+    padding: 28px 0;
+  }
+  .fx-copy { max-width: none; padding-left: clamp(8px, 2.6vw, 48px); }
+  .fx-body { margin-top: 20px; }
+  .fx-bezel { margin-top: 0; padding: clamp(22px, 2.4vw, 36px); }
+}
+
+/* 폰: 구성 대신 세로 묶음 — po 순서로 쌓고 폭 = min(100%, pw). 렌더는 통째 그대로.
+   두 칸 격자: 보통 항목은 한 줄을 다 쓰고(1 / -1), pair 항목(작은 판 둘)만 한 칸씩 나란히. phoneHide 항목은 생략 */
+@media (max-width: 767.98px) {
+  .fx-comp {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    justify-items: center;
+    gap: 14px;
+    width: 100%;
+    aspect-ratio: auto;
+  }
+  .fx-item { position: relative; left: auto; top: auto; grid-column: 1 / -1; width: min(100%, var(--pw)); height: auto; aspect-ratio: var(--ar); }
+  .fx-item[data-pair] { grid-column: auto; }
+  .fx-phone-hide { display: none; }
+}
+
+/* ── 세그먼트(목차) — regular 유리 + 굴절 물방울 ─────────────────────────────────── */
+.fx-seg { --g-r: 999px; position: relative; width: clamp(540px, 46vw, 672px); padding: 4px; }
+.fx-seg-list { position: relative; z-index: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.fx-seg-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1;
+  letter-spacing: -.01em;
+  color: var(--ink-2);
+  transition: color 200ms linear;
+  -webkit-tap-highlight-color: transparent;
+}
+.fx-seg-link:hover { color: var(--ink-1); }
+.fx-seg-link[aria-current] { color: var(--ink-1); }
+/* 물방울: 칸 하나 크기, 칸 사이를 translate 로 옮긴다(스프링). 움직이는 동안 가로로 늘었다 줄어드는 건 FeatureStage 의 WAAPI(scale).
+   글자 위에 얹혀(pointer-events 없음) 가장자리 렌즈가 지나가는 칸 글자를 휜다 — 가운데 서리는 거의 0(--g-blur .01px)이라
+   활성 칸 글자는 또렷하다. 굴절 못 켜는 환경 = 같은 채움·테두리·그림자의 맑은 알약 */
+.fx-drop {
+  --g-r: 999px;
+  --g-blur: .01px;
+  --g-a1: .15;
+  --g-a2: .06;
+  --g-shadow: 0 6px 18px -6px rgb(var(--violet-rgb) / .6), 0 2px 6px -2px rgb(4 2 14 / .5);
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  width: calc((100% - 8px) / 6);
+  height: 40px;
+  pointer-events: none;
+  translate: calc(var(--active, 0) * 100%) 0;
+  transition: translate 620ms var(--ease-spring);
+}
+
+/* ── 고정 무대(html.js + ≥1024 × ≥760 + 감속 아님) ───────────────────────────────── */
+@media (min-width: 1024px) and (min-height: 760px) and (prefers-reduced-motion: no-preference) {
+  html.js .fx-root {
+    --step: 64vh;                                  /* 장면 하나의 스크롤 길이 */
+    --stick-h: calc(100svh - var(--nav-h));
+    --tail: 88px;                                  /* 무대 유리(thick) 그림자가 아래로 ~110px 번진다 — 절 overflow-clip 경계에서 잘려
+                                                      설치 절 윗변에 보라 띠가 가로로 끊기지 않게 절 끝에 둔 자리(3단계 실측). 무대는 이 위에서 풀린다 */
+    display: block;
+    height: calc(var(--stick-h) + 6 * var(--step) + var(--tail));
+    padding: 0 0 var(--tail);
+  }
+  /* 앵커 = 장면 i 스크롤 구간 [i, i+1)·step 의 한가운데. scroll-padding(내비 + 24)을 되돌려 무대가 막 붙은 자리와 같은 높이로 */
+  html.js .fx-anchor {
+    position: absolute;
+    left: 0;
+    top: calc((var(--i) + .5) * var(--step));
+    width: 1px;
+    height: 1px;
+    scroll-margin-top: -24px;
+    pointer-events: none;
+  }
+  html.js .fx-sticky {
+    position: sticky;
+    top: var(--nav-h);
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    height: var(--stick-h);
+    padding: clamp(14px, 2.2svh, 22px) var(--bar-pad) clamp(18px, 3.4svh, 34px);
+  }
+  html.js .fx-pin-light { display: block; }
+  html.js .fx-seg { display: block; flex: none; align-self: center; }
+  html.js .fx-row {
+    position: relative;
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    margin-top: clamp(14px, 2.6svh, 26px);
+    grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
+    grid-template-rows: minmax(0, 1fr);
+    column-gap: clamp(28px, 3.4vw, 56px);
+  }
+  html.js .fx-scene { display: contents; padding: 0; }
+  html.js .fx-copy {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    max-width: none;
+    padding: 0 0 4svh clamp(8px, 2.6vw, 48px);
+  }
+  html.js .fx-title { font-size: clamp(28px, 2.6vw, 40px); }
+  html.js .fx-body { margin-top: 20px; }
+  html.js .fx-stage-glass { display: block; grid-column: 2; grid-row: 1; }
+  html.js .fx-bezel {
+    grid-column: 2;
+    grid-row: 1;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: clamp(22px, 2.4vw, 36px);
+    container-type: size;
+  }
+  html.js .fx-bezel-glass, html.js .fx-flow-light { display: none; }
+  html.js .fx-comp { width: min(100cqw, calc(var(--cw) * 1px), calc(100cqh * var(--cw) / var(--ch))); }
+  html.js .fx-swap { display: block; opacity: 0; transition: opacity 380ms var(--ease-out); }
+  html.js .fx-scene[data-read] .fx-swap { opacity: 1; }
+
+  /* 장면 전환: 나가는 장면은 빠르게 흐려지고(제자리), 들어오는 장면은 14px 아래에서 떠오르며 선명해진다.
+     렌더 구성은 들어올 때 한 번 출렁(가로·세로가 번갈아 아주 조금 — 액체 무대). 첫 렌더(data-live 전)에는 출렁이지 않는다 */
+  html.js .fx-copy {
+    opacity: 0;
+    translate: 0 14px;
+    pointer-events: none;
+    transition: opacity 200ms linear, translate 0s linear 200ms;
+  }
+  html.js .fx-scene[data-on] .fx-copy {
+    opacity: 1;
+    translate: 0 0;
+    pointer-events: auto;
+    transition: opacity 420ms var(--ease-out) 110ms, translate 640ms var(--ease-out) 110ms;
+  }
+  html.js .fx-bezel { opacity: 0; transition: opacity 240ms linear; }
+  html.js .fx-scene[data-on] .fx-bezel { opacity: 1; transition: opacity 460ms var(--ease-out) 60ms; }
+  html.js .fx-root[data-live] .fx-scene[data-on] .fx-comp { animation: fx-slosh 860ms var(--ease-out) 40ms both; }
+}
+
+@keyframes fx-slosh {
+  0% { scale: 1.032 .968; }
+  30% { scale: .99 1.012; }
+  56% { scale: 1.005 .995; }
+  80% { scale: .999 1.001; }
+  100% { scale: 1 1; }
+}

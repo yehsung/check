@@ -83,25 +83,32 @@ package final class MobileRouter {
     }
 }
 
-/// 탭 배지 합성(SPEC-ios §3: 메시지 = 안 읽은 수, 게임 = 받은 오목 신청 수). 값은 각 탭 스토어의 `badgeCount` 다.
+/// 탭 배지 합성(SPEC-ios §3: 메시지 = 안 읽은 수, 게임 = 받은 오목 신청 수, 나 = 받을 보상 수). 값은 각 탭 스토어가 센다.
 /// 앱 아이콘 배지(= 메시지 + 게임)는 푸시 코디네이터가 `appBadgeTotal` 을 읽어 `setBadgeCount` 한다.
 package struct MobileBadges: Equatable, Sendable {
     package var messages: Int
     package var games: Int
+    /// 나 탭 — 지금 받을 수 있는 보상 수(도전 미션 + 이번 주 근무 단계 · `MeStore.missionClaimableCount`).
+    /// 기본값이 0 인 이유: 이 값이 없던 때의 호출부(테스트 포함)가 그대로 컴파일되게.
+    package var missions: Int
 
-    package init(messages: Int, games: Int) {
+    package init(messages: Int, games: Int, missions: Int = 0) {
         self.messages = max(0, messages)
         self.games = max(0, games)
+        self.missions = max(0, missions)
     }
 
-    /// 탭 막대에 그릴 숫자. 0 이면 nil(배지 없음). 다른 탭은 배지가 없다.
+    /// 탭 막대에 그릴 숫자. 0 이면 nil(배지 없음). 지금 · 순위는 배지가 없다.
     package func badge(for tab: AingTab) -> Int? {
         switch tab {
         case .messages: return messages > 0 ? messages : nil
         case .games: return games > 0 ? games : nil
-        case .now, .rankings, .me: return nil
+        case .me: return missions > 0 ? missions : nil
+        case .now, .rankings: return nil
         }
     }
 
+    /// 앱 아이콘(홈 화면)의 빨간 숫자. **미션은 더하지 않는다**(v0.3.58) — 받을 보상은 사람을 홈 화면에서 부를 일이 아니고,
+    /// 더하면 앱을 안 열어도 아이콘에 숫자가 붙은 채로 남는다. 미션은 **탭 막대 배지**로만 말한다.
     package var appBadgeTotal: Int { messages + games }
 }

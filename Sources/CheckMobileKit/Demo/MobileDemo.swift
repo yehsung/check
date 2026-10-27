@@ -16,6 +16,12 @@ import Foundation
 /// games/gomoku/lobby|games/gomoku/match|me|me/shop|me/feedback|me/settings|login|update` (`AingRoute(path:)` 로 연다).
 /// AI 대국 장면 `games/gomoku/ai[/white|/thinking|/result|/pick]` 은 `AingRoute` 가 모르는 데모 전용 표기다 — 앱 모델이 오목 로비로
 /// 열고 오목 화면이 대본대로 판을 세운다(`MobileDemoGomokuAI` — AI 판은 서버에 닿지 않으므로 픽스처가 필요 없다).
+/// 상점 뽑기 시트 장면 `me/shop/odds`(확률표가 열린 채) · `me/shop/exchange`(조각 교환이 열린 채)도 `AingRoute` 가 모르는
+/// 데모 전용 표기다 — 값(`MobileDemoShopSheetRoute`)이 **라우트를 `me/shop` 으로 바꿔** 열고(장면도 `_me-shop`)
+/// 시트 이름만 `MeDemoHooks.gachaAction()` 에 내준다(깃발 `-AingCheckDemoMeGacha` 와 같은 자리로 온다).
+/// 도전 미션 · 주간 받기 장면 `me/missions[/claimable|/progress|/claimed|/fresh]` · `me/weekly[/done|/legacy]` 도
+/// `AingRoute` 가 모르는 데모 전용 표기다 — 값(`MobileDemoMissionsRoute`)이 **기존 장면 + 픽스처 바늘**로 풀고 나 탭을 연다
+/// (새 장면 폴더를 만들지 않는 까닭은 그 파일 머리말에 있다).
 /// `now/teamless` 는 **탭 라우트가 아니라 서버 상태 장면**이다(`update` 와 같은 갈래) — 소속 픽스처가 빈 배열이라 지금 탭이
 /// 무소속 합류 카드로 선다. `AingRoute` 로 열리지 않으므로 라우터는 기본 탭(지금)에 그대로 머문다.
 /// 로그인 아래 화면(w16 — 앱스토어 스크린샷): `signup`(코드 합류) · `signup/create`(팀 만들기) ·
@@ -56,11 +62,27 @@ package enum MobileDemo {
     /// 데모 조립. 데모가 아니면 nil.
     @MainActor
     package static func environment(arguments: [String]) -> MobileEnvironment? {
-        guard let route = launchRoute(arguments: arguments) else { return nil }
+        guard let requested = launchRoute(arguments: arguments) else { return nil }
+        // 상점 뽑기 시트 장면(`me/shop/odds` · `me/shop/exchange`)은 **라우트를 상점으로 바꿔** 푼다 — 그러면 아래 장면 이름도
+        // `me-shop` 으로 제대로 풀린다(바꾸지 않으면 장면이 `me-shop-odds` 가 되어 픽스처가 하나도 안 닿는다).
+        // 열어 둘 시트 이름은 `MeDemoHooks.gachaAction()` 이 같은 값에서 따로 읽는다(까닭은 그 값의 머리말에).
+        // 생일 선물 축하 시트 장면(`me/gift…`)도 **라우트를 나 탭으로 바꿔** 푼다(장면 `me` — 기존 장면만 쓴다). 열린 선물은 바늘로 고른다
+        // (아래 스텁 응답기 — 까닭은 `MobileDemoCakeGiftRoute` 머리말), 시트에 시킬 일은 `MeDemoHooks.cakeGiftAction()` 이 읽는다.
+        let cakeGift = MobileDemoCakeGiftRoute(demoRoute: requested)
+        let route = cakeGift?.openRoute ?? MobileDemoShopSheetRoute(demoRoute: requested)?.openRoute ?? requested
         let scenario = route.replacingOccurrences(of: "/", with: "-").lowercased()
         let index = MobileDemoFixtures.load()
-        MobileStubURLProtocol.register(host: host) { request in
-            index.response(for: request, scenario: scenario)
+        // 도전 미션 · 주간 받기 장면(`me/missions…` · `me/weekly…`)은 **기존 장면 + 픽스처 바늘**로 푼다.
+        // 새 장면 폴더를 만들지 않는 까닭과 바늘을 본문 꼬리에 붙이는 까닭은 `MobileDemoMissionsRoute` 머리말에 있다.
+        let missions = MobileDemoMissionsRoute(demoRoute: route)
+        // 선물 장면의 수령 기록 — 받은 뒤 요청은 받은 뒤 바늘로 고른다(받은 것만 보유 · 선물 없음 — `MobileDemoCakeGiftRoute` 머리말).
+        let giftLedger = MobileDemoCakeGiftRoute.Ledger()
+        MobileStubURLProtocol.register(host: host) { raw in
+            // 선물 장면이면 바늘(`demo-gift` · 받은 뒤 `demo-gift-got-…`)을 먼저 붙인다 — 그 뒤는 다른 장면과 같은 길이다.
+            let request = cakeGift.map { $0.rewrite(raw, ledger: giftLedger) } ?? raw
+            let response = index.response(for: missions?.rewrite(request) ?? request, scenario: missions?.scene ?? scenario)
+            if cakeGift != nil { giftLedger.record(raw, response: response) }
+            return response
         }
 
         let storage = AingSharedStorage.temporary(name: "demo")
@@ -97,7 +119,9 @@ package enum MobileDemo {
             realtimeTransport: nil,
             runsTimers: false,
             reloadWidgetTimelines: {},
-            demoRoute: route,
+            // 미션 · 주간 라우트는 `AingRoute` 가 모르는 글자다 — 앱에는 **나 탭**(`me`)을 넘긴다(안 넘기면
+            // `openDemoRouteIfNeeded` 가 돌아서서 기본 탭에 머물고 미션 절이 화면에 없다).
+            demoRoute: missions?.openRoute ?? route,
             appearanceDefaults: appearanceDefaults
         )
     }

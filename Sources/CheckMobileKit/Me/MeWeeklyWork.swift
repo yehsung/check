@@ -64,6 +64,11 @@ package enum WeeklyWorkRules {
     /// - 이번 주 받은 칸 중 `previous` 에 없던 것도 알린다. 단 `previous` 가 아예 없으면(설치 · 로그인 직후 첫 조회) 기준만 잡고
     ///   알리지 않는다 — 며칠 전에 받은 것을 방금 받은 것처럼 말하지 않는다. `previous` 가 지난주 것이면 이번 주 칸은 다 처음 본 것이다.
     /// - 같은 (주, 칸)은 한 번만 센다.
+    ///
+    /// ★ **v0.3.58 받기 서버에서는 '본 기록과 비교' 갈래를 보지 않는다**(`status.supportsClaim`). 그 서버에서 `claimed` 가 거짓 →
+    ///   참이 되는 길은 **사람이 [받기]를 누른 것**뿐이고(이 폰이면 받기 연출이 그 자리에서 말했고, 맥에서 눌렀으면 거기서 봤다),
+    ///   그걸 "N시간 채웠어요"로 또 말하면 같은 일을 두 번 알린다. `granted_now`(언제나 `[]` 다)는 그대로 둔다 — 서버가 다시
+    ///   자동 지급으로 돌아가는 날 이 갈래가 저절로 산다. 맥 `WeeklyWorkStatus.newlyGranted(since:)` 와 같은 판단이다.
     package static func newGrants(previous: WeeklyWorkSeen?, status: WeeklyWorkStatus) -> [WeeklyWorkStatus.Grant] {
         var result: [WeeklyWorkStatus.Grant] = []
         var keys = Set<String>()
@@ -73,7 +78,7 @@ package enum WeeklyWorkRules {
             result.append(grant)
         }
         status.grantedNow.forEach(add)
-        if let previous, let week = status.weekStart {
+        if !status.supportsClaim, let previous, let week = status.weekStart {
             let already = previous.weekStart == week ? previous.claimedHours : []
             for tier in status.tiers where tier.claimed && !already.contains(tier.hours) {
                 add(.init(hours: tier.hours, ruby: tier.ruby))

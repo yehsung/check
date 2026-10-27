@@ -15,6 +15,10 @@ package enum MeDestination: Hashable, Sendable {
     /// 잔디 상세(칸을 탭하면 그 날 실제 값). 연관값은 **처음 색으로 볼 축** — 누른 잔디의 축으로 연다.
     /// 딥링크(`AingRoute`)는 두지 않는다 — `.characters`·`.profile`·`.blocked` 처럼 push 만 하는 화면이다(URL 로 열 이유가 없다).
     case grass(ContributionAxis)
+    /// v1.0.13 「미션」 화면 — 「이번 주 근무」 카드 + 「도전 미션」 절. 루트에서 둘을 빼고 [미션] 줄 하나로 바꿨다
+    /// (사용자 지시 2026-10-23: "나 탭에 미션들 쭈루룩 다 나열하니까 칸이 너무 길어져"). 딥링크는 두지 않는다
+    /// (`.characters`·`.profile` 처럼 push 만 하는 화면이다 — 데모는 `-AingCheckDemoRoute me/missions` 로 연다).
+    case missions
 }
 
 /// 한 덩어리(머리·기록·상점…)의 불러오기 상태 — 순위 탭과 같은 뜻의 세 깃발 + 마지막 성공 시각.
@@ -22,9 +26,10 @@ package typealias MeLoadState = RankingsLoadState
 
 /// 나 탭 스토어(SPEC-ios §3.6) — 프로필 머리 · 루비 · 기록(회고·잔디·리듬) · 캐릭터(상점·고르기) · 프로필(사진·별명) · 제보 · 설정.
 ///
-/// 수명(기반 자리 API): `init(context:)` 네트워크 없음 · `appDidBecomeActive()` 탭이 보이면 낡은 것만 다시 읽는다 ·
-/// `appDidEnterBackground()` · `reset()` 계정에 묶인 값 전부 비움 · `badgeCount` = 안 본 제보 답장이 있으면 1(탭 막대는 기반이 아직
-/// 나 탭 배지를 그리지 않는다 — 나 탭 안의 제보 줄에 점으로 보인다).
+/// 수명(기반 자리 API): `init(context:)` 네트워크 없음 · `appDidBecomeActive()` 탭이 보이면 낡은 것만 다시 읽고, 탭이 안 보여도
+/// AI 리밋 · 주간 보상 · 도전 미션 셋은 읽는다(위젯 · 탭 막대 배지의 재료다) · `appDidEnterBackground()` ·
+/// `reset()` 계정에 묶인 값 전부 비움 · `badgeCount` = 안 본 제보 답장이 있으면 1(나 탭 **안**의 제보 줄에 점으로 보인다 —
+/// 탭 막대의 나 탭 배지는 이 값이 아니라 `missionClaimableCount`(받을 보상 수)다).
 ///
 /// 폰이 **하지 않는 것**(코드로 막혀 있다): 울트라 구매(상점은 캐릭터 가지만 — `buy_ultra` 경로 없음) · 지갑 동기화(`ultra_wallet_sync`) ·
 /// 집중 모드 PATCH(공개 설정 GET 에 딸려 오는 focus_mode 는 읽고 버린다) · 앱 빌드 PATCH · 팀 상태 반영(`applyFetchedTeamStatuses` 계열 —
@@ -86,6 +91,9 @@ package final class MeStore {
     /// 상점에서 마지막으로 누른 뽑기 전용 타일(황금 아잉이). 안내 줄(`shopBarDetail`)이 **읽을 때** 문장을 만든다 —
     /// 누를 때 만들어 두면 상점이 아직 안 읽힌 순간의 "뽑기로만"이 교환값(조각 20)을 안 뒤에도 남는다(시뮬레이터 실측).
     package internal(set) var shopGachaHintID: String?
+    /// 상점에서 마지막으로 누른 **생일 선물 전용** 잠긴 칸(케이크 아잉이 — v0.3.66). 고른 것(`shopSelection`)이 아니다 — 살 수 없다.
+    /// 아래 막대가 이 값으로 그 칸 이름과 얻는 길(`CakeGiftText.lockedHint`)만 말하고 사기 단추를 세우지 않는다.
+    package internal(set) var shopGiftHintID: String?
     package internal(set) var purchasingID: String?
     /// 상점 RPC(`shop_state`·`buy_character`)에 싣는 능력 번호의 **재료**: 이 번들에 초상이 있는 캐릭터 id.
     ///
@@ -129,6 +137,24 @@ package final class MeStore {
     /// 사용자 동작 한 번 = request_id 하나(결과를 모르는 실패 뒤 다시 누르면 같은 id — 서버가 처음 결과를 `replayed` 로 돌려준다).
     @ObservationIgnored package internal(set) var gachaRequestIDs = GachaRequestIDs()
 
+    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66 · 폰 1.0.14 — MeStoreCakeGift.swift)
+    /// 서버가 말한 **열린** 생일 선물(`character_gift_pending`). nil = 없음이거나 아직 모름 — 못 읽었으면 지난 값을 둔다.
+    /// 이 값이 있고 시트가 닫혀 있으면 나 탭에 '다시 열기' 줄이 선다(수령할 때까지).
+    package internal(set) var cakeGift: CharacterGiftOffer?
+    /// 떠 있는 축하 시트(nil = 닫힘). 탭 막대 위에서 띄운다(`MobileTabsView`).
+    package internal(set) var cakeGiftSheet: MeCakeGiftSheet?
+    /// 시트가 **실제로 화면에 서 있는가**(시트 뷰의 onAppear/onDisappear 가 적는다). 스토어가 시트를 세워도 다른 시트가 떠 있으면
+    /// SwiftUI 가 조용히 못 띄운다 — 탭 막대가 이 값으로 그 경우를 가려 닫은 것으로 친다(`MobileTabsView`).
+    package internal(set) var cakeGiftSheetOnScreen = false
+    /// 마지막으로 선물을 **물으러 떠난** 시각(10분 스로틀 — `cakeGiftCheckInterval`). 계정이 바뀌면 비운다.
+    @ObservationIgnored package internal(set) var cakeGiftCheckedAt: Date?
+    @ObservationIgnored var cakeGiftLoading = false
+    /// 이 실행에서 **실제로 화면에 선**(시트 뷰의 onAppear) 선물 id — **실행당 한 번**은 이 기록으로 센다. 스토어가 시트를 세웠어도
+    /// 화면에 못 섰으면(다른 시트 · 대국 화면) 쓰지 않은 것이다. 로그아웃(`reset`)에도 비우지 않는다(같은 실행에서 같은 선물을 두 번 띄우지 않는다).
+    @ObservationIgnored package internal(set) var cakeGiftAutoShownIDs: Set<String> = []
+    /// '다시 열기' 줄의 [고르기]가 서버에 다시 묻는 중(단추가 돈다 · 겹쳐 누르기 막기).
+    package internal(set) var cakeGiftReopening = false
+
     // MARK: 이번 주 근무 보상 (v0.3.55 · 폰 1.0.8(19) — MeStoreWeeklyWork.swift)
     /// 서버 `weekly_work_status()` 의 마지막 **그릴 만한** 응답(CheckCore 모델 — 맥과 한 벌). nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
     package internal(set) var weeklyWork: WeeklyWorkStatus?
@@ -141,6 +167,51 @@ package final class MeStore {
     package internal(set) var weeklyGrantSerial = 0
     /// 지금 알림을 사용자가 나 탭에서 봤다(떠날 때 걷는다). 안 본 알림은 남겨 두어 다음에 열 때 보이게 한다.
     @ObservationIgnored var weeklyGrantNoticeSeen = false
+
+    // MARK: 도전 미션 · 받기 (v0.3.58 서버 · 맥 0.3.58 — MeStoreAchievements.swift)
+    /// 서버 `achievements_status()` · `achievement_claim()` 의 마지막 응답(CheckCore 모델 — 맥과 한 벌).
+    /// nil = 아직 모른다(못 읽었으면 **지난 값을 그대로 둔다**). 여기에 넣는 자리는 `applyAchievementStatus` 하나이고,
+    /// 거기서 `merged(over:)` 를 거친다 — **받음은 되돌아가지 않는다**.
+    package internal(set) var achievements: AchievementStatus?
+    package internal(set) var achievementsState = MeLoadState()
+    /// 서버에 함수가 있다. 없으면(404 · PGRST202 — db push 전) 절을 접는다. 스로틀 간격 뒤 조회가 다시 묻는다(60초).
+    package internal(set) var achievementsAvailable = true
+    /// 떠 있는 받기(미션 키 · 전부 받기는 `MeStore.achievementClaimAllSlot`) — **같은 줄을 두 번 받지 않게** 하는 자리다.
+    package internal(set) var achievementClaimsInFlight: Set<String> = []
+    /// 마지막 받기가 실패한 키. 실패는 **그 줄 안**에서 말한다(`MeText.claimFailed`) — 절 위 안내줄에 띄우지 않는다
+    /// (맥이 검토에서 버린 방식: 안내줄은 줄을 밀고, 아래쪽 줄을 누른 사람에겐 스크롤 밖이라 안 보였다).
+    package internal(set) var achievementClaimFailedKeys: Set<String> = []
+    /// 이번 주 근무 받기가 떠 있다(두 번 눌러도 요청 하나) · 마지막 주간 받기가 실패했다(주간 줄 안에서 말한다).
+    package internal(set) var weeklyClaimInFlight = false
+    package internal(set) var weeklyClaimFailed = false
+
+    // MARK: 일일 미션 (v0.3.64 서버 20261023130000 · 맥 0.3.64 — MeStoreAchievements.swift)
+    /// 서버에 일일 미션 **받기**가 있다. `daily_mission_claim` 이 404 · PGRST202 로 돌아오면 false — **일일 절만** 접는다
+    /// (누적 · 주간은 그대로 그린다). 다음 응답에 `daily` 가 실려 오면 다시 true 다(한 마이그레이션이라 조회만 있는 서버는 없다).
+    package internal(set) var dailyMissionsAvailable = true
+    /// 떠 있는 **일일** 받기(미션 키 · 전부 받기는 `MeStore.achievementClaimAllSlot`). 누적(`achievementClaimsInFlight`)과
+    /// **따로 센다** — 한쪽이 떠 있다고 다른 쪽 버튼이 흐려지면 안 된다(인수인계 §5-8).
+    package internal(set) var dailyMissionClaimsInFlight: Set<String> = []
+    /// 마지막 **일일** 받기가 실패한 키. 누적(`achievementClaimFailedKeys`)과 따로 둔다 — 일일 실패가 누적 줄에 실패 문장을
+    /// 세우면 안 된다(그 반대도).
+    package internal(set) var dailyMissionClaimFailedKeys: Set<String> = []
+    /// 하루가 끝난 것을 적어 둔 리셋 시각(응답의 `daily.reset_at_ms`). nil = 아직 안 적었다.
+    /// 시계는 관찰 밖이라 판정만으로는 열린 화면이 다시 그려지지 않는다 — 이 **관찰 값**이 줄 · 배지를 다시 그린다(맥과 같은 장치).
+    /// 폰은 맥처럼 리셋 시각 타이머를 달지 않는다(새 타이머 금지): 적는 때는 **앱이 앞으로 돌아올 때** · 나 탭 루트를 새로 읽을 때 ·
+    /// 화면에 남은 어제 [받기]를 누른 순간, 셋이다.
+    package internal(set) var dailyMissionRolloverNoted: Int?
+    /// 서버 시계 − 이 폰 시계(밀리초 — 응답의 `server_now_ms` 로 잰다). 일일 줄의 날짜 넘김 판정에만 쓴다.
+    /// 관찰 밖이다 — 이 값이 바뀌어서 화면이 다시 그려지지는 않는다(다시 그리는 것은 위 `dailyMissionRolloverNoted`).
+    @ObservationIgnored var achievementsServerClockOffsetMs = 0
+    /// 판이 끝났는데 그때 미션 조회가 **떠 있었다** — 그 조회는 판이 서버에 남기 **전**에 떠났을 수 있어 그 옛 답에 합류하지 않고
+    /// 끝난 뒤 한 번 더 묻는다. 깃발 하나라 판이 몇 번 끝났든 +1건이다(인수인계 §5-3 · 맥 `achievementsRefetchAfterInFlight`).
+    @ObservationIgnored var achievementsRefetchAfterGame = false
+
+    /// 줄 자리(`MeClaimBurst.achievementTarget(series:)` · `MeClaimBurst.weeklyTarget`) → 받기 연출.
+    /// 화면이 아니라 스토어가 "방금 받았다"를 쥔다 — 줄은 계열이 다음 단계로 바뀌며 새로 그려지기 때문이다(맥과 같은 이유).
+    package internal(set) var missionClaimBursts: [String: MeClaimBurst] = [:]
+    /// 받기 연출이 설 때마다 오른다 — 화면이 이 값으로 성공 햅틱을 내고, 같은 줄을 또 받아도 연출을 처음부터 다시 튼다.
+    package internal(set) var missionClaimBurstSerial = 0
 
     // MARK: 프로필 편집
     package var displayNameDraft = ""
@@ -227,6 +298,22 @@ package final class MeStore {
         aiLimits.refreshIfStale()
         // 주간 보상도 탭이 안 보여도 받는다(앞에 올 때마다 · 60초 스로틀) — 정산 결과의 루비가 게임 탭·상점 알약에도 바로 선다.
         refreshWeeklyWorkIfStale()
+        // 도전 미션도 주간 보상과 **똑같이** 탭이 안 보여도 받는다(앞에 올 때마다 · 같은 60초 스로틀) — 이제 이 값이
+        // **탭 막대 배지**(받을 보상 수 = `missionClaimableCount`)라서다. "이미 아는 것만 다시 읽는다"로 걸어 두면
+        // `achievements` 는 메모리 값이라 **콜드 스타트엔 언제나 nil** 이고, 배지가 꼭 필요한 사람(나 탭에 아직 안 가 본
+        // 사람)에게만 영영 안 선다. 받기 전에 루비가 안 움직이는 것은 여전히 사실이지만, 이제 화면 밖에서 알아 둘 값이
+        // **배지 숫자**로 생겼다.
+        //
+        // v0.3.64 일일 미션: **폰은 백그라운드에서 0시를 넘겨 돌아오는 것이 기본**이다(맥은 열린 화면 뒤에 깨우개를 달지만 폰은
+        // 새 타이머를 달지 않는다). 돌아온 이 자리에서 넘김을 판정한다 — 넘겼으면 어제 [받기]를 그 자리에서 내리고(관찰 값) 스로틀을
+        // 건너뛰어 새 날의 사실을 묻는다. 아래 `refreshAchievementsIfStale()` 는 그때 '떠 있음'에 막혀 겹쳐 나가지 않는다.
+        refreshAchievementsIfDayRolledOver()
+        refreshAchievementsIfStale()
+        // 생일 선물(v0.3.66)도 탭과 무관하게 앞에 올 때마다 — 단 **10분에 한 번 이하**(`cakeGiftCheckInterval`). 열린 선물이면
+        // 축하 시트가 실행당 한 번 스스로 뜬다(어느 탭에 있든 — 시트는 탭 막대 위에서 띄운다). 대국·관전 화면 때문에 미뤄 둔
+        // 선물은 묻지 않고도 이미 안다 — 앞에 온 지금이 그 '다음 기회'다(`presentCakeGiftIfDue`).
+        presentCakeGiftIfDue()
+        refreshCakeGiftIfStale()
         guard isTabVisible else { return }
         refreshRootIfStale()
     }
@@ -259,6 +346,7 @@ package final class MeStore {
         shopSelection = nil
         shopNotice = nil
         shopGachaHintID = nil
+        shopGiftHintID = nil
         purchasingID = nil
         equippedServerID = nil
         equippedLoaded = false
@@ -278,6 +366,15 @@ package final class MeStore {
         exchangeNotice = nil
         isExchangeNoticeError = false
         gachaRequestIDs.reset()
+        // 생일 선물도 계정에 묶인다 — 안 비우면 다음 계정 나 탭에 앞 사람의 '다시 열기' 줄이 서고, 그 시트에서 앞 사람의 선물 id 로
+        // 수령을 부른다(서버는 not_found 로 막지만 화면이 거짓말을 한다). 스로틀 도장도 비워 새 계정은 곧바로 묻는다.
+        // 스스로 띄운 기록(`cakeGiftAutoShownIDs`)은 **실행** 단위라 그대로 둔다.
+        cakeGift = nil
+        cakeGiftSheet = nil
+        cakeGiftSheetOnScreen = false
+        cakeGiftCheckedAt = nil
+        cakeGiftLoading = false
+        cakeGiftReopening = false
         // 주간 보상도 계정에 묶인다 — 안 비우면 다음 계정 카드에 앞 사람의 근무 시간·받은 칸·'받았어요'가 선다.
         // 계정별 '본 칸' 저장값(defaults)은 키가 계정별이라 그대로 둔다.
         weeklyWork = nil
@@ -286,6 +383,25 @@ package final class MeStore {
         weeklyGrantNotice = nil
         weeklyGrantSerial = 0
         weeklyGrantNoticeSeen = false
+        // 도전 미션 · 받기도 계정에 묶인다 — 안 비우면 다음 계정 줄에 앞 사람의 달성과 [받기]가 서고(누르면 서버는 아무것도 안 준다),
+        // 떠 있던 받기 자리가 남아 새 계정의 첫 받기가 "이미 떠 있음"으로 막힌다.
+        achievements = nil
+        achievementsState = MeLoadState()
+        achievementsAvailable = true
+        achievementClaimsInFlight.removeAll()
+        achievementClaimFailedKeys.removeAll()
+        weeklyClaimInFlight = false
+        weeklyClaimFailed = false
+        // 일일 미션도 계정에 묶인다 — 안 비우면 다음 계정 줄에 앞 사람의 오늘 달성과 [받기]가 서고(누르면 서버는 아무것도 안 준다),
+        // 떠 있던 일일 받기 자리가 남아 새 계정의 첫 받기가 "이미 떠 있음"으로 막힌다. 넘김 표시 · 시계 차도 앞 계정의 응답에서 나왔다.
+        dailyMissionsAvailable = true
+        dailyMissionClaimsInFlight.removeAll()
+        dailyMissionClaimFailedKeys.removeAll()
+        dailyMissionRolloverNoted = nil
+        achievementsServerClockOffsetMs = 0
+        achievementsRefetchAfterGame = false
+        missionClaimBursts = [:]
+        missionClaimBurstSerial = 0
         displayNameDraft = ""
         isProfileVisible = false
         displayNameNotice = nil
@@ -345,6 +461,7 @@ package final class MeStore {
     package func tabDidDisappear() {
         isTabVisible = false
         weeklyTabDidDisappear()
+        missionsTabDidDisappear()
     }
 
     /// 딥링크(`aingcheck://me` · `me/shop` · `me/settings` · `feedback[/<id>]`). 라우터가 이미 경로를 비웠다 — 하위 화면을 한 칸 쌓는다.
@@ -375,6 +492,12 @@ package final class MeStore {
         if isStale(recordsState) { launch { [weak self] in await self?.loadRecords() } }
         launch { [weak self] in await self?.loadFeedbackReplyLatest() }
         refreshWeeklyWorkIfStale()
+        // 도전 미션 조회는 나 탭 루트 새로고침에 얹는다(여기 · 당겨서 새로고침 · 탭이 보이는 채로 앱이 앞에 올 때 — 셋 다 이
+        // 함수를 지난다). 탭이 **안** 보일 때도 주간 보상처럼 `appDidBecomeActive()` 가 따로 한 번 부른다(그 주석) —
+        // 탭 막대 배지가 이 값이다. **새 타이머는 없다** — 스로틀도 다른 덩어리와 같은 60초다.
+        // 일일 미션의 날 넘김도 여기서 한 번 판정한다(앱이 앞에 있는 채로 자정을 넘긴 뒤 나 탭을 열었을 때).
+        refreshAchievementsIfDayRolledOver()
+        refreshAchievementsIfStale()
         aiLimits.refreshIfStale()
     }
 
@@ -397,7 +520,8 @@ package final class MeStore {
         async let reply: Void = loadFeedbackReplyLatest()
         async let limits: Void = aiLimits.load()
         async let weekly: Void = loadWeeklyWork()
-        _ = await (header, shop, equipped, records, reply, limits, weekly)
+        async let missions: Void = loadAchievements()
+        _ = await (header, shop, equipped, records, reply, limits, weekly, missions)
     }
 
     // MARK: - 머리
@@ -470,6 +594,11 @@ package final class MeStore {
     nonisolated static let displayNameWriteKey = "write.displayName"
     nonisolated static let statusMessageWriteKey = "write.statusMessage"
     nonisolated static let avatarWriteKey = "write.avatar"
+    /// 받기 응답을 **옮긴** 횟수(v0.3.58). 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 조회는 받기 **전**의 서버를 말한다 —
+    /// 그대로 덮으면 방금 받은 줄에 [받기]가 다시 선다(누르면 서버는 아무것도 안 주는 거짓 버튼이다). 그때는 응답을 버린다:
+    /// 받기 응답이 이미 더 새 상태를 줬으니 다시 묻지 않아도 된다.
+    nonisolated static let achievementClaimWriteKey = "write.achievementClaim"
+    nonisolated static let weeklyClaimWriteKey = "write.weeklyClaim"
 
     /// 사용자가 이 칸을 서버에 **써서 성공한** 횟수. 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 응답의 이 칸은 옛 값이다.
     func writeStamp(_ key: String) -> Int {

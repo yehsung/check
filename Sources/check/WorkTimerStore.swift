@@ -308,6 +308,9 @@ final class WorkTimerStore {
             // 얹힌 주간 조회가 채운다(1분 창이 막는다 — `syncUltraWallet`). 홈 화면 재오픈은 묻지 않는다(왕복을 늘리지 않는다).
             // 미션 화면을 연 채 다시 열었으면 이 sync 가 도전 미션(v0.3.58)도 함께 묻는다(미션 화면의 `.panelOpen`).
             if isMissionPanelVisible || isUltraPanelVisible { syncUltraWallet(reason: .panelOpen) }
+            // 닫힌 동안 자정(KST)을 넘겼으면 그 사실을 적는다(v0.3.64) — 시계는 관찰 밖이라 이것이 없으면 다시 연 화면에 어제
+            // [받기] · 레일 배지가 남는다. 요청 0건(새 날의 사실은 다음 조회 박자가 가져온다).
+            noteDailyMissionRollover()
             // 개인 기록: 패널이 열려 있으면 재조회하고, 닫혀 있어도 아직 한 번도 못 받았으면 조용히 받아 온다
             // — 월요일 첫 팝오버의 지난주 회고 배너는 retro 가 계산돼 있어야 뜨기 때문이다(실행당 1회 수준).
             // 주가 바뀌었으면(insightsWeekKey 불일치) 반드시 다시 계산한다 — needsInsightsReload 참고.
@@ -650,6 +653,33 @@ final class WorkTimerStore {
     var miniGameBoardFailed = false
     /// 어제 1등(상품 표시). 순위 조회와 같은 자리에서 **독립 실패**로 받는다.
     var miniGameYesterdayWinner: MiniGameWinner?
+    /// 순위 열이 보여 주는 판 [오늘 | 역대](v0.3.67). **앱이 떠 있는 동안만** 기억한다 — 영속하지 않고, 로그아웃도 되돌리지
+    /// 않는다(계정이 아니라 이 앱 실행의 보기 선택이다). 어제 1등 카드·상금 안내는 오늘 판에만 있다.
+    var miniGameBoardScope: MiniGameBoardScope = .today
+    /// 지금 고른 게임의 **역대** 최고 순위(사람마다 한 줄 — `minigame_alltime_board`). 3플래그 규약은 오늘 순위와 같다.
+    /// 종류 전환·로그아웃에 비운다.
+    var miniGameAllTimeBoard: [MiniGameAllTimeEntry] = []
+    var miniGameAllTimeLoaded = false
+    var miniGameAllTimeLoading = false
+    var miniGameAllTimeFailed = false
+    /// 서버에 함수가 아직 없다(PGRST202 · 본문 없는 404 — 앱이 db push 보다 먼저 나간 창). **실패가 아니다** — [다시 시도]
+    /// 없이 "준비 중" 한 줄을 그린다(사용자가 고칠 수 없는 일에 실패 문구를 쓰지 않는다).
+    var miniGameAllTimeUnavailable = false
+    /// 지금 들고 있는 역대 표가 **어느 게임의 최신 응답인가.** nil 이면 다음에 [역대] 를 열 때 다시 받는다 —
+    /// 게임을 바꿨거나, [오늘] 을 보는 사이 그 게임 판이 기록돼 표가 낡았다(새 개인 최고가 들어갔을 수 있다).
+    /// 화면은 이 값을 그리지 않는다(관찰 대상 아님).
+    @ObservationIgnored var miniGameAllTimeFreshKind: MiniGameKind?
+    /// 역대 표가 **낡았다고 표시된 횟수**(v0.3.67 — 판 기록 · 게임 전환이 올린다). 받기를 시작할 때 이 값을 쥐고, 응답이 왔을 때
+    /// 그 사이 올랐으면 그 응답을 '최신'으로 표시하지 않는다 — 제출 **전에** 떠난 받기가 제출 **뒤에** 닿아 최신 표시를 다시
+    /// 세우면, [역대] 로 넘어가도 새 개인 최고가 빠진 표를 안 받는다(검토 지적 2026-10-27).
+    @ObservationIgnored var miniGameAllTimeInvalidation = 0
+    /// 역대 표 받기의 일련번호와, 마지막으로 **반영한** 받기의 번호. 늦게 닿은 옛 받기가 새 받기의 표를 덮지 않게 한다.
+    @ObservationIgnored var miniGameAllTimeFetchSerial = 0
+    @ObservationIgnored var miniGameAllTimeAppliedSerial = 0
+    /// **진행 중인 판의 장부**(v0.3.67) — 어느 게임의 판이 돌고 있고 지금 몇 점이며, 이미 기록했는가.
+    /// 판을 접는 자리(게임 칩 전환 · 창 닫기 · 로그아웃 · [그만두기])가 잎 뷰의 생사와 무관하게 그 점수를 **바로** 올린다
+    /// (`settleMiniGameLiveRound`). 잎 뷰가 늦게 `onFinished` 를 불러도 장부가 두 번 올리지 않는다.
+    @ObservationIgnored var miniGameLiveRound: MiniGameLiveRound?
     /// 내 미니게임 순위 공개 여부(profiles.minigame_public 미러). 끄면 순위표에서 빠지고 업로드도 건너뛴다.
     var miniGamePublic = true
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
@@ -869,6 +899,36 @@ final class WorkTimerStore {
     @ObservationIgnored var gachaRequestIDs = GachaRequestIDs()
     /// 뽑기 창을 띄우고 내리는 문(테스트 이음새 — 앱은 언제나 `.live`, 곧 `CheckGachaWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var gachaWindowHooks = GachaWindowHooks.live
+
+    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66) — 상태. 동작은 WorkTimerStoreCakeGift.swift
+
+    /// 서버가 말한 **열린** 생일 선물(`character_gift_pending`). nil = 없음(또는 아직 모름). 메뉴 팝오버의 '다시 열기' 카드가 이 값으로 선다 —
+    /// 받거나(`settlesGift`) 서버가 없다고 하면 내려간다.
+    var cakeGiftOffer: CharacterGiftOffer?
+    /// 축하 창이 지금 그리는 선물(창을 연 순간의 사본). 창이 떠 있는 동안 조회가 `cakeGiftOffer` 를 바꿔도 고르던 화면이 흔들리지 않게 나눈다.
+    /// 확인 단추는 **이 선물로** 받는다 — 조회가 선물을 내려도(응답을 잃은 수령이 커밋됐다 · 다른 기기에서 먼저 받았다) 서버의 결론
+    /// (`replayed` · `already_claimed`)이 받은 뒤 화면으로 데려간다(`canConfirmCakeGift`).
+    var cakeGiftPresented: CharacterGiftOffer?
+    /// 축하 창에서 고른 캐릭터(아직 받은 것이 아니다 — 확인 단추가 받는다).
+    var cakeGiftChoice: String?
+    /// 수령 왕복 중(확인 단추 잠금 — 같은 선택으로 다시 불러도 서버는 `replayed` 로 같은 답을 주지만, 연타는 막는다).
+    var cakeGiftClaiming = false
+    /// 받은 캐릭터 — 축하 창이 '받은 뒤 화면'([지금 입기] · [닫기])으로 넘어간다. nil 이면 고르기 화면.
+    var cakeGiftReceivedID: String?
+    /// 축하 창의 한 줄(실패 · 거절 — `CakeGiftText.notice`). nil 이면 비운다.
+    var cakeGiftNotice: String?
+    /// 서버가 **결론을 준** 선물 id(받았다 · 이미 받았다 · 내 선물이 아니거나 없다 — `CharacterGiftClaimOutcome.settlesGift`). 실행 단위다.
+    /// 두 자리가 읽는다: ① 같은 id 를 말하는 조회 응답은 수령 전에 떠난 낡은 것이라 버린다(받았는데 '다시 열기' 카드가 되살아나지 않게) ·
+    /// ② 축하 창의 확인 단추는 이 집합에 든 선물에만 잠긴다(다시 눌러도 같은 결론만 되풀이된다). 확인 단추가 읽으므로 관찰한다.
+    var cakeGiftSettledIDs: Set<String> = []
+    /// 마지막으로 선물을 **물어본** 시각(성공 여부 무관). 주기 새로고침의 10분 문이 이 값을 본다. 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftLastCheckAt: Date?
+    /// 조회가 떠 있다(겹쳐 쏘지 않는다). 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftChecking = false
+    /// 이 실행에서 스스로 띄운 선물 id(실행당 한 번 — 닫으면 다시 안 뜨고 '다시 열기' 카드가 남는다). 로그아웃해도 비우지 않는다(실행 단위다).
+    @ObservationIgnored var cakeGiftAutoShownIDs: Set<String> = []
+    /// 축하 창을 띄우고 내리는 문(테스트 이음새 — 앱은 `.live`, 곧 `CheckCakeGiftWindowController.shared`). 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
@@ -1312,6 +1372,21 @@ final class WorkTimerStore {
     var missionClaimBursts: [String: MissionClaimBurst] = [:]
     /// 연출 순번(같은 줄을 또 받으면 새 순번 → 뷰가 처음부터 다시 그린다). 화면이 읽지 않는다.
     @ObservationIgnored var missionClaimBurstSerial = 0
+    // ── 일일 미션(v0.3.64 · 응답의 최상위 `daily` · `daily_mission_claim`) — 반영 · 받기 · 배지는 WorkTimerStoreAchievements.swift.
+    /// 떠 있는 일일 받기(키 — 전부 받기는 `achievementClaimAllSlot`). 누적 미션 받기와 **따로** 센다(받는 함수가 다르다).
+    var dailyMissionClaimsInFlight: Set<String> = []
+    /// 마지막 받기가 실패한 일일 키(그 줄의 보조 문장 자리가 실패를 말한다 — 누적 줄과 같은 규약).
+    var dailyMissionClaimFailedKeys: Set<String> = []
+    /// 서버 시계 − 이 맥 시계(밀리초). 마지막 도전 미션 응답의 `server_now_ms` 로 잰다 — 일일 줄의 "하루가 끝났나"를 **서버 시각**으로
+    /// 판정하려고(이 맥의 시계가 틀려도 어제 [받기]를 세우지 않게). 화면이 직접 읽지 않는다(`estimatedServerNowMs()`).
+    @ObservationIgnored var achievementsServerClockOffsetMs = 0
+    /// 넘긴 것을 **적어 둔** 일일 리셋 시각(`reset_at_ms`). 관찰 대상이다 — 시계는 관찰 밖이라, 자정을 넘긴 사실을 여기 한 번 써야
+    /// 열린 화면의 [받기] · "받을 보상 N개" · 레일 배지가 그 자리에서 다시 그려진다(검토 지적 2026-10-22). 쓰는 곳은
+    /// `noteDailyMissionRollover()` 하나다(깨우개 · 팝오버 다시 열기 · 막힌 [받기]). 적은 넘김은 시계 차 추정이 흔들려도 되돌아가지 않는다.
+    var dailyMissionRolloverNoted: Int?
+    /// 게임 결과 조회가 떠 있는 조회에 막혔다 — 그 조회는 판이 서버에 남기 **전**에 떠났을 수 있으니, 끝나면 정확히 한 번 더 묻는다
+    /// (검토 지적 2026-10-22 · `GomokuStore` 의 stateAgain 과 같은 꼴 · 타이머 없음 · 최대 +1건). 화면이 읽지 않는다.
+    @ObservationIgnored var achievementsRefetchAfterInFlight = false
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     /// 공개 여부가 **확정**됐는가 — 서버 응답이 왔거나 **사용자가 직접 골랐거나**(setTokenUsagePublic 이 GET 전에 세운다:
@@ -1448,6 +1523,20 @@ final class WorkTimerStore {
     /// 상대별 낙관 읽음 — 읽음 처리를 보낸 순간 점을 바로 끄기 위한 기록. 서버 스냅샷이 이 기록보다 **나중에**
     /// 나간 요청이면 서버가 이긴다(`MessageUnreadRules`). 실패해도 되돌리지 않는다(다음 새로고침이 사실을 말한다).
     var messageOptimisticReads: [String: MessageOptimisticRead] = [:]
+
+    // ── 대화창 찌르기 기록(v0.3.65) — 로직은 `WorkTimerStoreMessagePokes.swift` ──
+    // 메시지 상태와 **따로** 든다: 찌르기가 `messageHistory` 에 섞이면 메시지 읽음 경계·메뉴바 점·말풍선 필터가 찌르기 id 를 메시지로 읽는다.
+    // 셋 다 계정에 묶인다 — clearPersistedSession 이 지운다.
+
+    /// 대화 기록의 찌르기 줄(시간순). 마지막 이력 응답의 찌르기 + 그 뒤 take_pokes 로 받아 바로 넣은 것.
+    var messagePokeLog: [MessagePokeLogEntry] = []
+    /// 찌르기 기록을 실어 온 마지막 이력의 일련번호와 서버 순서. **nil = 서버가 찌르기 기록을 모른다**(옛 서버로 접었다 · 아직 못 받았다) —
+    /// 그때는 찌르기 줄도 찌르기 안 읽음도 없다(지금처럼).
+    var messagePokeLogSnapshot: MessageHistoryReadSnapshot?
+    /// 마지막 이력 응답의 서버 시각 순위(행 id → 순위). 같은 초의 메시지·찌르기 선후다(`MessageConversationTimeline`).
+    var messagePokeChronology: [String: Int] = [:]
+    /// 상대별 찌르기 낙관 읽음(메시지의 `messageOptimisticReads` 와 같은 규칙).
+    var messagePokeOptimisticReads: [String: MessageOptimisticRead] = [:]
     /// 읽음 절의 비관찰 장부(일련번호 · 왕복 직렬화 · 스로틀). 한 덩어리로 들어 로그아웃에서 한 줄로 비운다
     /// (RealtimeRuntime 과 같은 이유 — 흩뿌리면 "하나를 안 지웠다"가 이 계층에서 가장 흔한 누수다).
     @ObservationIgnored var messageReadRuntime = MessageReadRuntime()
@@ -1890,6 +1979,11 @@ final class WorkTimerStore {
         gomoku.attach(host: self)
         chess.attach(host: self)
         tetris.attach(host: self)
+        // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
+        // 게임 이름은 일일 미션 키(`daily_<게임>`)의 꼬리다 — 그 줄을 이미 채웠으면 묻지 않는다.
+        gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "gomoku") }
+        chess.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "chess") }
+        tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         megaphone.attach(host: self)
     }
 
@@ -2914,6 +3008,8 @@ final class WorkTimerStore {
         loadShopState()
         // 확성기 카드의 가격(💎50)도 서버가 말한다 — 작성기를 열기 전부터 보이게 같이 읽는다(v0.3.51).
         prefetchMegaphoneInfo()
+        // 생일 선물(v0.3.66)도 상점 진입에 묻는다 — 잠긴 케이크 칸을 본 사람이 받을 선물이 있으면 축하 창 · 다시 열기 카드가 선다.
+        refreshCakeGift(reason: .shop)
     }
 
     /// 헤더 마스코트 버튼 액션. 캐릭터 선택 패널을 토글하고, 여는 순간 다른 패널을 전부 내린다.
@@ -3835,6 +3931,8 @@ extension WorkTimerStore {
     }
 
     func clearPersistedSession() {
+        // 진행 중인 미니게임 판은 **세션을 지우기 전에** 접어 올린다(v0.3.67) — 지운 뒤에는 인편을 그 계정의 키에 못 적는다.
+        settleMiniGameLiveRound()
         // 이 경로는 사용자가 누른 로그아웃(signOut)만이 아니라 토큰 만료 강제 로그아웃도 함께 탄다. 그래서
         // 세션을 지우기 전에 '지금까지의 소유 계정'을 남겨 둔다 — 미반영 근무 큐/진행 중 근무는 여기서 버리지
         // 않고(재로그인하면 그대로 재생돼야 한다), 다음 로그인이 다른 계정일 때 adoptWorkStateOwner 가 버린다.
@@ -3927,6 +4025,11 @@ extension WorkTimerStore {
         messageUnreadSummary = nil
         messageHistoryReadSnapshot = nil
         messageOptimisticReads = [:]
+        // 대화창 찌르기 기록(v0.3.65)도 계정에 묶인다 — 남기면 다음 계정의 목록 맨 위에 앞 사람을 찌른 사람이 뜬다.
+        messagePokeLog = []
+        messagePokeLogSnapshot = nil
+        messagePokeChronology = [:]
+        messagePokeOptimisticReads = [:]
         // 장부는 **통째로 새것**으로 바꾼다 — 앞 계정의 늦은 Task 는 옛 장부를 붙잡고 있으므로 새 장부의 직렬화·스로틀을
         // 건드릴 수 없다(세대 가드와 이중 안전).
         messageReadRuntime.cancelAll()
@@ -3999,6 +4102,12 @@ extension WorkTimerStore {
         missionClaimBursts = [:]
         achievementClaimFailedKeys = []
         weeklyClaimFailed = false
+        // 일일 미션 받기(v0.3.64)도 같은 이유로 내린다.
+        dailyMissionClaimsInFlight = []
+        dailyMissionClaimFailedKeys = []
+        achievementsServerClockOffsetMs = 0
+        dailyMissionRolloverNoted = nil
+        achievementsRefetchAfterInFlight = false
         // 갱신 조정자도 계정에 묶인다. 진행 중이던 갱신 결과가 새 세션에 적용되면 남의 토큰으로 근무를 기록한다.
         sessionRefreshCoordinator.invalidate()
         // 리얼타임 링도 함께 내린다. realtimeApply 가 소켓을 끊고 예약 타이머를 취소하며 realtimeState 를
@@ -4018,6 +4127,8 @@ extension WorkTimerStore {
         megaphone.reset()
         // 뽑기 정보·결과·요청 id 도 계정에 묶인다(v0.3.54).
         resetGachaState()
+        // 생일 선물(v0.3.66)도 계정에 묶인다 — 앞 사람의 선물 창 · 다시 열기 카드를 다음 사람이 보지 않게.
+        resetCakeGiftState()
         // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
         isEditingDisplayName = false
         displayNameDraft = ""
@@ -4062,6 +4173,13 @@ extension WorkTimerStore {
         miniGameBoardLoading = false
         miniGameBoardFailed = false
         miniGameYesterdayWinner = nil
+        // 역대 순위(v0.3.67)도 남의 행이라 계정에 묶인다. 보기 선택(miniGameBoardScope)은 앱 실행의 것이라 그대로 둔다.
+        miniGameAllTimeBoard = []
+        miniGameAllTimeLoaded = false
+        miniGameAllTimeLoading = false
+        miniGameAllTimeFailed = false
+        miniGameAllTimeUnavailable = false
+        miniGameAllTimeFreshKind = nil
         miniGamePublic = true
         miniGamePublicLoaded = false
         // 토큰은 **계정에 묶인다**(서버가 소유자를 대조한다). 남기면 다음 사람이 앞 사람 토큰으로
@@ -4149,6 +4267,7 @@ extension WorkTimerStore {
         tetris.reset()
         megaphone.reset()
         resetGachaState()
+        resetCakeGiftState()
         startedAt = nil
         accumulatedSeconds = 0
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())

@@ -50,8 +50,34 @@ package struct CharacterCatalog: Sendable {
         kind: .scene3D
     )
 
-    /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이). 번들이 비어도 이 셋은 늘 있다.
-    package static let builtIns: [CharacterManifest] = [builtInAing, builtInGoldAing, builtInRainbowAing]
+    /// 딸기 케이크 아잉이(v0.3.66)의 고정 id. 서버 CHECK·가격표(`gift_only = true`)·`character_gifts.options` 의 id 와 같다.
+    /// 매니페스트 파일로 못 싣는 이유는 금 · 무지개와 같다(밑줄 id · scene3D 는 초상을 못 가진다) — 그래서 코드에 박는다.
+    package static let cakeStrawberryAingID = "aing_cake_strawberry"
+
+    /// 초코 케이크 아잉이(v0.3.66)의 고정 id. 딸기와 같은 규칙.
+    package static let cakeChocoAingID = "aing_cake_choco"
+
+    /// 코드에 박힌 딸기 케이크 아잉이 — 아잉과 **같은 3D 메시**에 케이크 마감(`CharacterManifest.Finish.cakeStrawberry`)을 입힌 변형이다.
+    /// **생일 선물 전용**이다: 루비로도(서버 `gacha_only = true` 라 `buy_character` 가 `not_for_sale`), 뽑기로도(`gacha_pool` 에 없다),
+    /// 조각 교환으로도 못 얻고, 운영자가 지급한 선물(`character_gifts`)에서 받는 사람이 둘 중 하나를 골라 받는다(사용자 결정 2026-10-26).
+    package static let builtInCakeStrawberryAing = CharacterManifest(
+        id: cakeStrawberryAingID,
+        displayName: "딸기 케이크 아잉이",
+        kind: .scene3D
+    )
+
+    /// 코드에 박힌 초코 케이크 아잉이 — 딸기와 같은 급(생일 선물 전용), 마감만 `.cakeChoco` 다.
+    package static let builtInCakeChocoAing = CharacterManifest(
+        id: cakeChocoAingID,
+        displayName: "초코 케이크 아잉이",
+        kind: .scene3D
+    )
+
+    /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이).
+    /// 번들이 비어도 이 다섯은 늘 있다.
+    package static let builtIns: [CharacterManifest] = [
+        builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing,
+    ]
 
     /// 이 id 가 황금 아잉이인가. 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 `aing_gold` 다).
     package static func isGoldAing(_ id: String?) -> Bool {
@@ -73,6 +99,25 @@ package struct CharacterCatalog: Sendable {
     /// 희귀 내장 캐릭터의 표시 순서(교환 목록 맨 위 · 확률표가 순서를 안 줄 때) — 황금 먼저, 무지개 다음.
     package static let gachaOnlyBuiltInIDs: [String] = [goldAingID, rainbowAingID]
 
+    /// 이 id 가 케이크 아잉이(딸기 · 초코)인가. 금과 같은 규칙(정확히 그 두 id 만 — 공백 · 대소문자를 봐주지 않는다).
+    package static func isCakeAing(_ id: String?) -> Bool {
+        id == cakeStrawberryAingID || id == cakeChocoAingID
+    }
+
+    /// **생일 선물로만** 얻는 내장 캐릭터(딸기 · 초코 케이크 아잉이)인가 — 서버 `gift_only` 표식이 빠지거나 false 로 와도 루비 · 뽑기 ·
+    /// 조각으로는 못 얻는다(사용자 결정 2026-10-26 "뽑기로도 못뽑는걸로"). 상점 구매 가능(`ShopCharacterRow.isPurchasable`) · 잠긴 칸의
+    /// '생일 선물 전용' · 선물 선택지 거르기가 전부 이 한 곳을 묻는다.
+    ///
+    /// ★ `isGachaOnlyBuiltIn` 과 **겹치지 않는다**(케이크는 뽑기 전용이 아니다 — 뽑기 화면 · 확률표 · 교환 목록에 서지 않는다).
+    ///   서버는 not_for_sale 갈래를 타게 하려고 케이크 행에 `gacha_only = true` 도 싣지만, 클라의 '뽑기 전용' 판정은 그 표식을
+    ///   `gift_only` 보다 뒤에 본다(화면이 "뽑기나 조각 교환으로 얻을 수 있어요"라고 거짓말하지 않게).
+    package static func isGiftOnlyBuiltIn(_ id: String?) -> Bool {
+        isCakeAing(id)
+    }
+
+    /// 생일 선물 내장 캐릭터의 순서 — **딸기 먼저, 초코 다음**(표시 순서 · 선물 선택지의 순서가 같다).
+    package static let giftOnlyBuiltInIDs: [String] = [cakeStrawberryAingID, cakeChocoAingID]
+
     /// 카탈로그 한 칸 — 매니페스트와 그 에셋이 있는 폴더. 내장 아잉은 폴더가 없다(씬 파일은 종전 경로).
     package struct Entry: Sendable, Equatable {
         package let manifest: CharacterManifest
@@ -84,7 +129,7 @@ package struct CharacterCatalog: Sendable {
     /// 주어진 항목들로 카탈로그를 만든다. **아잉은 항상 들어가고 항상 이긴다** —
     /// 번들이 `aing` 매니페스트를 실어 보내도 3D 아잉을 덮어쓰지 못하게 한다(폴백 대상이 스프라이트가 되면
     /// "모르는 값 → 아잉" 안전망 자체가 스프라이트 파이프라인에 의존하게 된다).
-    /// 황금 아잉이(v0.3.54)·무지개 아잉이(v0.3.59)도 같은 규칙이다 — 내장 항목이 늘 이긴다.
+    /// 황금 아잉이(v0.3.54)·무지개 아잉이(v0.3.59)·케이크 아잉이 둘(v0.3.66)도 같은 규칙이다 — 내장 항목이 늘 이긴다.
     package init(entries: [Entry]) {
         var map: [String: Entry] = [:]
         let builtInIDs = Set(Self.builtIns.map(\.id))
@@ -110,8 +155,10 @@ package struct CharacterCatalog: Sendable {
         entries[id]
     }
 
-    /// 표시 순서: **아잉 먼저, 황금 아잉이 둘째, 무지개 아잉이 셋째, 나머지는 id 정렬**. 목록이 실행마다 흔들리지 않게 정렬을 여기 한 곳에 둔다.
-    /// (`aing_gold`·`aing_rainbow` 는 정렬로도 그 자리지만 — `_` 는 소문자보다 앞이다 — 그 우연에 기대지 않고 내장 순서로 박는다.)
+    /// 표시 순서: **아잉 먼저, 황금 아잉이 둘째, 무지개 아잉이 셋째, 딸기 · 초코 케이크 아잉이 넷째 · 다섯째, 나머지는 id 정렬**.
+    /// 목록이 실행마다 흔들리지 않게 정렬을 여기 한 곳에 둔다.
+    /// (`aing_gold`·`aing_rainbow` 는 정렬로도 그 자리지만 — `_` 는 소문자보다 앞이다 — 그 우연에 기대지 않고 내장 순서로 박는다.
+    ///  케이크 둘은 정렬로는 금보다 **앞**(`aing_cake_*` < `aing_gold`)이라 내장 순서가 아니면 자리가 틀린다.)
     package var allIDs: [String] {
         let builtInIDs = Self.builtIns.map(\.id)
         return builtInIDs + entries.keys.filter { !builtInIDs.contains($0) }.sorted()

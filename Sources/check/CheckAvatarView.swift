@@ -251,10 +251,33 @@ enum AppUserAvatarArt {
         // 얼굴이 18pt 로 작아진다(다른 캐릭터 19.4~23.3pt — V0336 얼굴 크기 계약 실측). 그래서 **몸 상자 + 둘레 8%** 로 잘라 다른
         // 캐릭터와 같은 눈금에 세운다 — 남는 빛은 몸 둘레 고리로 보이고, 자른 가장자리는 원이 가린다(`bodyFramed` 주석).
         // 무지개 아잉이(v0.3.59)의 초상도 같은 규약(같은 2D 몸 · 무지개 후광)이라 같이 자른다 — 희귀 마감 = 후광 구운 초상.
-        let haloBaked = CharacterManifest.Finish(characterID: characterID).isRare
-        let tight = haloBaked ? CharacterCardArt.bodyFramed(raw) : CharacterCardArt.tightened(raw)
+        // 케이크 아잉이(v0.3.66)의 초상은 같은 2D 몸(0.88배) 위에 **불투명 장식**(딸기 · 초 · 크림)을 얹었다 — 알파 상자로 조이면 장식까지 '몸'이라
+        // 얼굴이 작아진다. 그래서 몸 상자(폭 · 바닥 + 몸 비)에 둘레 8% 로 잘라 아잉 변형(금 · 무지개)과 같은 눈금에 세운다(`framing`).
+        let tight: CGImage
+        switch framing(characterID: characterID) {
+        case .tight: tight = CharacterCardArt.tightened(raw)
+        case .bodyFramed: tight = CharacterCardArt.bodyFramed(raw)
+        case .cakeBodyFramed: tight = CharacterCardArt.cakeBodyFramed(raw)
+        }
         cache[characterID] = tight
         return tight
+    }
+
+    /// 초상을 어떻게 조이는가.
+    enum Framing: Equatable, Sendable {
+        /// 알파 상자(보통 캐릭터 · 아잉).
+        case tight
+        /// 불투명 몸 상자 + 둘레 8% — 후광을 구운 희귀 마감(황금 · 무지개).
+        case bodyFramed
+        /// 몸 상자(폭 · 바닥 + 몸 비) + 둘레 8% — 머리 위에 불투명 장식이 선 케이크 둘.
+        case cakeBodyFramed
+    }
+
+    /// 이 캐릭터 초상의 조이기(순수 — 시험이 같은 판정으로 기대값을 만든다).
+    nonisolated static func framing(characterID: String) -> Framing {
+        let finish = CharacterManifest.Finish(characterID: characterID)
+        if finish.isCake { return .cakeBodyFramed }
+        return finish.isRare ? .bodyFramed : .tight
     }
 
     @MainActor private static var cache: [String: CGImage] = [:]

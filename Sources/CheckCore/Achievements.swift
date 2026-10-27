@@ -145,9 +145,13 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
     /// 정산 뒤 루비 잔량. nil = 안 알려 줬다(스토어는 nil 이면 잔량을 건드리지 않는다).
     package var rubyBalance: Int?
     package var serverNowMs: Int?
+    /// 일일 미션(v0.3.64 — 최상위 `daily`). **nil = 이 서버엔 일일 미션이 없다**(옛 서버 · 칸이 객체가 아님) — 화면은 일일 6줄만
+    /// 감추고 3시간 줄은 남긴다. 기존 칸(`missions` · `claimable_count` · `claimable_ruby`)은 그대로 **누적 미션만** 말한다.
+    package var daily: DailyMissionStatus?
 
     package init(launchAtMs: Int? = nil, missions: [Mission] = [], reportedClaimableCount: Int? = nil,
-                 reportedClaimableRuby: Int? = nil, claimedNow: [Claim] = [], rubyBalance: Int? = nil, serverNowMs: Int? = nil) {
+                 reportedClaimableRuby: Int? = nil, claimedNow: [Claim] = [], rubyBalance: Int? = nil, serverNowMs: Int? = nil,
+                 daily: DailyMissionStatus? = nil) {
         var seen = Set<String>()
         self.launchAtMs = launchAtMs
         self.missions = missions.filter { seen.insert($0.key).inserted }
@@ -156,11 +160,12 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
         self.claimedNow = claimedNow
         self.rubyBalance = rubyBalance
         self.serverNowMs = serverNowMs
+        self.daily = daily
     }
 
     /// 키는 서비스 디코더의 `.convertFromSnakeCase` 를 거친 **카멜**이다(`claimed_at_ms` → `claimedAtMs`).
     package enum CodingKeys: String, CodingKey {
-        case launchAtMs, missions, claimableCount, claimableRuby, claimedNow, rubyBalance, serverNowMs
+        case launchAtMs, missions, claimableCount, claimableRuby, claimedNow, rubyBalance, serverNowMs, daily
     }
 
     package init(from decoder: Decoder) throws {
@@ -172,7 +177,9 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
             reportedClaimableRuby: c.achievementLossyInt(forKey: .claimableRuby),
             claimedNow: (c.achievementLossyList(AchievementLossyClaim.self, forKey: .claimedNow) ?? []).compactMap(\.claim),
             rubyBalance: c.achievementLossyInt(forKey: .rubyBalance),
-            serverNowMs: c.achievementLossyInt(forKey: .serverNowMs)
+            serverNowMs: c.achievementLossyInt(forKey: .serverNowMs),
+            // 일일 칸 하나가 깨져도 누적 미션은 산다(칸이 객체가 아니면 nil = 일일 없음).
+            daily: c.achievementLossy(DailyMissionStatus.self, forKey: .daily)
         )
     }
 
@@ -218,12 +225,16 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
     /// 받기 두 건이 겹치면(줄 둘을 연달아 누름) 서버는 잠금으로 줄을 세우지만 답은 순서가 바뀌어 올 수 있다: 먼저 끝난 A 의 답이
     /// 나중에 오면 그 답엔 B 가 아직 안 받은 것으로 적혀 있다. 그대로 덮으면 방금 받은 B 의 줄에 [받기]가 다시 선다(누르면 서버는
     /// 아무것도 안 주고 `claimed_now: []` — 거짓 버튼이다). 서버에서 받음이 취소되는 길은 없다(계정 삭제는 세션째 바뀐다).
+    ///
+    /// v0.3.64: 일일 미션도 같은 규약이되 **같은 `kst_day` 안에서만**이다(`DailyMissionStatus.merged(over:)` — 어제 받은 줄이
+    /// 오늘 받음으로 남으면 오늘 [받기]가 사라진다).
     package func merged(over previous: AchievementStatus?) -> AchievementStatus {
         guard let previous else { return self }
+        var copy = self
+        copy.daily = daily?.merged(over: previous.daily)
         let claimedBefore = Dictionary(previous.missions.filter(\.claimed).map { ($0.key, $0) },
                                        uniquingKeysWith: { first, _ in first })
-        guard !claimedBefore.isEmpty else { return self }
-        var copy = self
+        guard !claimedBefore.isEmpty else { return copy }
         copy.missions = missions.map { mission in
             guard !mission.claimed, let before = claimedBefore[mission.key] else { return mission }
             return mission.markedClaimed(from: before)
@@ -359,7 +370,8 @@ private struct AchievementLossyClaim: Decodable {
 }
 
 /// 숫자면 정수로(소수는 버림). 문자열 숫자("23")도 받는다 — bigint 를 문자열로 내는 서버 설정이 있다.
-private struct AchievementLossyNumber: Decodable {
+/// v0.3.64: 일일 미션 디코드(`DailyMissions.swift`)도 같은 부품을 쓴다 — 그래서 파일 밖(모듈 안)으로 열었다.
+struct AchievementLossyNumber: Decodable {
     let value: Int?
 
     init(from decoder: Decoder) throws {
@@ -377,11 +389,11 @@ private struct AchievementLossyNumber: Decodable {
 }
 
 /// 어떤 값이든 받아 버리는 자리(목록에서 깨진 원소를 건너뛸 때 커서를 한 칸 옮기는 용도).
-private struct AchievementDiscard: Decodable {
+struct AchievementDiscard: Decodable {
     init(from decoder: Decoder) throws {}
 }
 
-private extension KeyedDecodingContainer {
+extension KeyedDecodingContainer {
     /// 키가 없거나 · null 이거나 · 모양이 틀리면 nil. **throw 하지 않는다.**
     func achievementLossy<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
         (try? decodeIfPresent(type, forKey: key)) ?? nil

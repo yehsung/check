@@ -1,0 +1,57 @@
+{
+  "__note" : [
+    "판 진행(경과 73초 · 가속 전). 닿는 길: games/tetris/match/playing.",
+    "재개가 **선다**: seq>0 · board 200글자 · start_at_ms 있음 · last_seen_ms(…499600) > start_at_ms(…427000). 코어가 이 판을 엔진에 그대로 올려 세우므로(TetrisDuelSession.init(seed:resumingFrom:)) 스틸에 빈 판이 아니라 **이 판**이 선다.",
+    "따라잡기는 0.4초뿐이다(서버 경과 73.0 − 보고 경과 72.6). last_seen_ms 를 server_now_ms 에서 멀리 떼면 그 차이만큼 엔진이 혼자 흘러(상한 30초) 스틸의 판이 이 글자판과 달라진다 — 계약 테스트가 그 차이를 센다.",
+    "누계는 서로 맞물린다: opponent.garbage_sent(5) = me.garbage_applied(5) · me.garbage_sent(4) = opponent.garbage_applied(4). 판에 보이는 방해 줄(G) 수는 받아들인 누계 − 대기(5−2=3 · 4−1=3)다.",
+    "공격 상한(tetris_attack_cap = 8 + 3×경과초 = 227)보다 훨씬 작다 — 서버가 자르지 않은 값이다.",
+    "경과가 120초 미만이라 가속 표시가 서지 않는다(D7) — 가속 장면은 speedup 이다. 이 둘이 **같은 판으로 보이면** 레벨 표시가 거짓이어도 아무도 모른다."
+  ],
+  "state" : {
+    "accepted_at_ms" : 1789621420000,
+    "end_reason" : null,
+    "finished_at_ms" : null,
+    "match_id" : "demo-tetris-playing",
+    "max_end_ms" : 1789621907000,
+    "me" : {
+      "avatar_url" : null,
+      "board" : "......................................................................................................................................TT.......TTT......LLJJJ....LLLJZZS..GGGG.GGGGGGGGG.GGGGGGGGGGGG.GG",
+      "character" : "fox",
+      "display_name" : "새벽",
+      "garbage_applied" : 5,
+      "garbage_sent" : 4,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "last_seen_ms" : 1789621499600,
+      "lines" : 12,
+      "pending" : 2,
+      "ready" : true,
+      "seq" : 74,
+      "topped_out" : false
+    },
+    "opponent" : {
+      "avatar_url" : null,
+      "board" : "............................................................................................................................................................OO...SSIIIIOO.GG.GGGGGGGGG.GGGGGGGGGGGGGGGG.",
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "garbage_applied" : 4,
+      "garbage_sent" : 5,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "last_seen_ms" : 1789621499400,
+      "lines" : 9,
+      "pending" : 1,
+      "ready" : true,
+      "seq" : 73,
+      "topped_out" : false
+    },
+    "ready_deadline_ms" : 1789621450000,
+    "result" : null,
+    "ruby_balance" : 37,
+    "seed" : 20260919,
+    "server_now_ms" : 1789621500000,
+    "stake" : 5,
+    "start_at_ms" : 1789621427000,
+    "status" : "active",
+    "winner" : null
+  },
+  "status" : "ok"
+}

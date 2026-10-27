@@ -175,6 +175,24 @@ extension TetrisDuelStore {
         duel?.rotate(clockwise: clockwise)
     }
 
+    /// 가로·세로 **한 칸**(폰 제스처·보이스오버). 굳힘이 없으므로 보고를 재촉하지 않는다 — 다음 하트비트(1초)나
+    /// 하드드롭이 싣는다. 보고 값은 전부 누계라 한 칸 이동이 따로 실릴 필요가 없다.
+    package func moveLeftOneCell() {
+        advanceToNow()
+        duel?.moveLeftOneCell()
+    }
+
+    package func moveRightOneCell() {
+        advanceToNow()
+        duel?.moveRightOneCell()
+    }
+
+    @discardableResult
+    package func softDropOneCell() -> Bool {
+        advanceToNow()
+        return duel?.softDropOneCell() ?? false
+    }
+
     package func hold() {
         advanceToNow()
         duel?.hold()

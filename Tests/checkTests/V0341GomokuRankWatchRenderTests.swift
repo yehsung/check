@@ -533,8 +533,8 @@ func rankRowsWinOverTheUnavailableFlagWhileTheColdWindowStillSaysSoon() throws {
 @MainActor
 @Test
 func stakeChipDropsTheRewardSuffixOnlyForSpectators() throws {
-    // v0.3.54: 이기면 순이익(판돈 5 − 수수료 1) = +4.
-    #expect(GomokuStakeChip.text(stake: 5, showsReward: true) == "5 · 이기면 +4")
+    // v0.3.64: 수수료가 없어져 이기면 순이익 = 판돈 = +5(v0.3.54~0.3.63 은 판돈 5 − 수수료 1 = +4).
+    #expect(GomokuStakeChip.text(stake: 5, showsReward: true) == "5 · 이기면 +5")
     #expect(GomokuStakeChip.text(stake: 5, showsReward: true).contains("이기면"), "대국 칩에서 순수익 접미사가 사라졌다")
     #expect(GomokuStakeChip.text(stake: 5, showsReward: false) == "5")
     #expect(!GomokuStakeChip.text(stake: 5, showsReward: false).contains("이기면"),
@@ -547,7 +547,7 @@ func stakeChipDropsTheRewardSuffixOnlyForSpectators() throws {
     // "이기면 +5" 가 통째로 사라져도 초록이다 — 위 단언들은 인자를 명시로 넘기고, 아래 소스 계약은 "대국 호출처가
     // 기본값을 쓴다"만 보므로 기본값 자체가 무엇인지는 아무도 안 묻는다(2026-10-01 뮤테이션 ⑥).
     #expect(GomokuStakeChip(stake: 5).showsReward, "칩의 기본값이 false 다 — 대국 화면에서 '이기면 +N' 이 사라진다")
-    #expect(GomokuStakeChip.text(stake: 5, showsReward: GomokuStakeChip(stake: 5).showsReward) == "5 · 이기면 +4",
+    #expect(GomokuStakeChip.text(stake: 5, showsReward: GomokuStakeChip(stake: 5).showsReward) == "5 · 이기면 +5",
             "기본값으로 그린 칩 글자가 대국 문장이 아니다")
     // 기준선이 달라야 이 테스트가 산다: 명시로 넘긴 false 는 기본값을 덮는다(관전 호출처가 쓰는 길).
     #expect(GomokuStakeChip(stake: 5, showsReward: false).showsReward == false, "관전 호출처가 넘긴 false 가 무시된다")

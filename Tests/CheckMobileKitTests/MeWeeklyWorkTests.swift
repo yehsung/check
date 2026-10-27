@@ -573,14 +573,23 @@ struct MeWeeklyWorkTests {
 
     // MARK: - 화면(iOS 전용 — 소스 계약 · 주석은 걷어내고 본다)
 
-    @Test("카드 소스: 무대 바로 다음 · 서버 값만(칸 숫자를 박지 않는다) · 햅틱은 지급 순번 · '+N 받음'은 기존 RubyGain · 규칙 한 줄")
+    @Test("카드 소스: **미션 화면** 첫 카드 · 루트엔 [미션] 줄 · 서버 값만(칸 숫자를 박지 않는다) · 햅틱은 지급 순번 · '+N 받음'은 기존 RubyGain · 규칙 한 줄")
     func cardSourceContract() throws {
+        // v1.0.13: 카드가 루트에서 **미션 화면**으로 갔다(사용자 지시 2026-10-23). 자리 단언은 지우지 않고 그 화면으로 옮긴다 —
+        // 미션 화면의 **첫** 카드(그 아래가 도전 미션 절)이고, 루트에서 그 자리를 잇는 것은 [미션] 줄 하나다.
+        let page = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeMissionsView.swift")
+        let weekly = try #require(page.range(of: "MeWeeklyWorkCard(store: store)"), "미션 화면에 주간 보상 카드가 없다")
+        let section = try #require(page.range(of: "MeAchievementsSection(store: store)"), "미션 화면에 도전 미션 절이 없다")
+        #expect(weekly.upperBound < section.lowerBound, "미션 화면 자리: 이번 주 근무 → 도전 미션")
+
         let home = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeTab.swift")
         let stage = try #require(home.range(of: "MeStageCard(store: store)"))
-        let weekly = try #require(home.range(of: "MeWeeklyWorkCard(store: store)"), "나 탭에 주간 보상 카드가 없다")
+        let row = try #require(home.range(of: "MeMissionsRow(store: store)"), "나 탭 루트에 [미션] 줄이 없다")
         let lastWeek = try #require(home.range(of: "MeRecordsCard(store: store)"))
-        #expect(stage.upperBound < weekly.lowerBound && weekly.upperBound < lastWeek.lowerBound,
-                "카드 자리: 무대(루비 칩) → 이번 주 근무 → 「지난주」")
+        #expect(stage.upperBound < row.lowerBound && row.upperBound < lastWeek.lowerBound,
+                "루트 자리: 무대(루비 칩) → [미션] 줄 → 「지난주」")
+        #expect(!home.contains("MeWeeklyWorkCard(store: store)"),
+                "주간 카드가 루트로 되돌아왔다 — 배지가 가리키는 곳이 루트와 미션 화면 둘로 갈린다")
 
         let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeWeeklyWorkViews.swift")
         #expect(card.contains("store.showsWeeklyWork"), "서버에 함수가 없어도 카드가 선다")

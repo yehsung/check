@@ -4,7 +4,8 @@ import CheckMobileShared
 import SwiftUI
 
 /// 나 탭 화면(SPEC-ios §3.6 · w15 재디자인). 루트: **무대**(착용 캐릭터 · 이름 · 팀 · 센터 · 큰 루비 칩 · 근무 상태 · [캐릭터 바꾸기][상점])
-/// → **이번 주 근무 보상**(v0.3.55) → **기록**(회고 한 줄 + 12주 근무 · AI 토큰 잔디가 스크롤 없이 한눈에 + 지난주 근무 리듬) → 프로필 · 제보 · 설정 그룹.
+/// → **[미션] 줄**(v1.0.13 — 「이번 주 근무」 카드와 「도전 미션」 절은 이 줄 뒤의 미션 화면으로 갔다) → **기록**(회고 한 줄 +
+/// 12주 근무 · AI 토큰 잔디가 스크롤 없이 한눈에 + 지난주 근무 리듬) → 프로필 · 제보 · 설정 그룹.
 /// 하위 화면은 `MeDestination` 을 `router.pathBinding(for: .me)` 에 쌓는다. 딥링크 `me` · `me/shop` · `me/settings` · `feedback[/<id>]`.
 struct MeTab: View {
     let store: MeStore
@@ -25,6 +26,9 @@ struct MeTab: View {
                     // 잔디 상세(칸 탭 → 그 날 실제 값). sheet 가 아니라 push 인 이유: 시트는 "돌아올 것이 전제인 짧은 확인·고르기"에 쓴다
                     // (차단 목록 · 할 일 · 오목 대국). 잔디 상세는 제목과 뒤로가 필요한 **읽기 화면**이다.
                     case .grass(let axis): MeGrassDetailView(store: store, initialAxis: axis)
+                    // v1.0.13 「미션」 — 루트에서 나간 「이번 주 근무」 카드 + 「도전 미션」 절이 사는 화면. 잔디 상세와 같은
+                    // 이유로 push 다(제목과 뒤로가 필요한 읽기 화면이고, 받기는 '짧은 확인'이 아니라 이 화면에서 계속 한다).
+                    case .missions: MeMissionsView(store: store)
                     }
                 }
         }
@@ -57,9 +61,21 @@ struct MeHomeView: View {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
                     MeStageCard(store: store)
                         .id(MeAnchor.header)
-                    // v0.3.55 「이번 주 근무」 보상 카드 — 루비 칩 바로 아래(루비가 어디서 오는지 옆에서 보인다). 범위는 '이번 주'라
-                    // 「지난주」 카드 **앞**이 맞다(지금 → 지난주 → 12주 순으로 넓어진다). 서버에 함수가 없으면 통째로 빠진다.
-                    MeWeeklyWorkCard(store: store)
+                    // v0.3.66 생일 선물 '다시 열기' 줄 — 축하 시트를 고르지 않고 닫았으면 **수령할 때까지** 무대 바로 아래에 선다
+                    // (열린 선물이 없거나 시트가 떠 있으면 아무것도 그리지 않는다).
+                    MeCakeGiftReopenRow(store: store)
+                    // ★ 1.0.13 「일일 미션」 절은 **여기 두지 않는다.** 한때 주간 카드 위에 뒀었는데, 같은 날
+                    //   사용자가 정반대를 지시했다: "폰에서 나 탭에 미션들 쭈루룩 다 나열하니까 칸이 너무 길어져.
+                    //   미션 창 버튼 두고 그거 누르면 미션 페이지 따로 있게 해줘." 루트에 미션 블록을 하나 더
+                    //   세우는 것은 그 지시를 **더 나쁘게** 만드는 일이다.
+                    //   자리는 [미션] 화면 안, 맥 0.3.64 와 같은 **일일 → 주간 → 누적** 순서다(두 기계가 같아야 한다).
+                    //   루트에는 [미션] 줄 하나만 남고, 받을 것이 있는지는 그 줄의 배지가 말한다
+                    //   (`missionClaimableCount` = 일일 + 누적 + 주간, 날을 넘긴 일일 줄은 뺀다).
+                    // v1.0.13 [미션] 줄 — 「이번 주 근무」 카드와 「도전 미션」 절(9줄 ≈ 672pt)이 여기서 루트를
+                    // 두 화면 넘게 늘이고 있었다(사용자 지시 2026-10-23). 둘은 미션 화면으로 갔고 여기 남은 것은
+                    // 줄 하나다. 자리는 그대로 루비 칩 바로 아래다 — "루비가 어디서 오는가"는 여전히 머리 옆에서 보인다.
+                    MeMissionsRow(store: store)
+                        .id(MeAnchor.missions)
                     // 카드 경계 = 시간 범위 하나. 무대 → 「지난주」(회고 + 근무 리듬) → 「최근 12주」(잔디 두 벌) → 메뉴 순으로
                     // 범위가 단조롭게 넓어진다. 예전에는 [회고 + 잔디] 뒤에 [리듬]이 따로 서서 지난주 → 12주 → 지난주로 튀었다
                     // (사용자 지적 0.3.31). 기록이 먼저, 메뉴 그룹이 마지막인 것은 그대로다(w15 검증 낮음 2).
@@ -101,7 +117,7 @@ struct MeHomeView: View {
 
 /// 루트 스크롤 앵커(데모 스크린샷이 아래 절을 찍을 때 쓴다).
 enum MeAnchor: String {
-    case header, records, tokenGrass, characters, menu, rhythm
+    case header, records, tokenGrass, characters, menu, rhythm, missions, dailyMissions
     /// v0.3.45 「AI 리밋」 카드. 이름은 데모 스크린샷 명령(`-AingCheckDemoMeAnchor aiLimits`)의 인자다 — 바꾸면
     /// 저장소 밖 스크린샷 스크립트가 깨진다(`MeDesignContractTests` 가 이름 목록을 되묻는다).
     case aiLimits
@@ -415,9 +431,13 @@ enum MeDemoHooks {
 
     /// 상점 뽑기 장면(`-AingCheckDemoMeGacha odds|exchange|pull|machine`) — 확률표·교환 시트를 열거나 · 한 번 뽑거나 · 캡슐 뽑기
     /// 기계 덮개를 연다(스크린샷용). 뽑기 응답은 데모 픽스처(`Demo/Fixtures/me/rpc.gacha_pull.json`)다 — 실제 서버에 닿지 않는다.
+    /// 라우트 `me/shop/odds` · `me/shop/exchange` 도 **같은 자리로** 온다(`MobileDemoShopSheetRoute` — 깃발과 라우트를
+    /// 손으로 맞추지 않게). 깃발이 있으면 깃발이 이긴다. 그 값은 `Demo/` 안 `#if DEBUG` 파일이라 Release 에는 이름이 없고,
+    /// 여기 쓰는 자리도 `#if DEBUG` 안이다(출시 게이트의 금지 심볼 `MobileDemo`).
     static func gachaAction() -> String? {
         #if DEBUG
-        return argument("-AingCheckDemoMeGacha")
+        if let flag = argument("-AingCheckDemoMeGacha") { return flag }
+        return argument("-AingCheckDemoRoute").flatMap { MobileDemoShopSheetRoute(demoRoute: $0)?.action }
         #else
         return nil
         #endif
@@ -433,7 +453,29 @@ enum MeDemoHooks {
         return action
     }
 
-    /// 루트 대신 열 하위 화면(`-AingCheckDemoMeScreen characters|profile|grass|grass-token`) — 라우트가 없는 화면을 찍을 때.
+    /// 생일 선물 축하 시트 장면(`me/gift/picked|received|dismissed` — `MobileDemoCakeGiftRoute`)이 시트에 시킬 일. Release 는 nil.
+    static func cakeGiftAction() -> String? {
+        #if DEBUG
+        return argument("-AingCheckDemoRoute").flatMap { MobileDemoCakeGiftRoute(demoRoute: $0)?.action }
+        #else
+        return nil
+        #endif
+    }
+
+    private static var cakeGiftActionTaken = false
+
+    /// `cakeGiftAction()` 을 **한 번만** 내준다 — 받은 뒤 시트를 닫았다 다시 열 때 또 고르거나 받지 않게.
+    static func takeCakeGiftAction() -> String? {
+        guard !cakeGiftActionTaken, let action = cakeGiftAction() else { return nil }
+        cakeGiftActionTaken = true
+        return action
+    }
+
+    /// 루트 대신 열 하위 화면(`-AingCheckDemoMeScreen characters|profile|grass|grass-token|missions`) — 라우트가 없는 화면을 찍을 때.
+    ///
+    /// 미션 화면은 깃발 **없이도** 열린다(1.0.13): 주간 카드·도전 미션 절이 루트에서 나갔으므로 `-AingCheckDemoRoute me/missions`
+    /// 만 넘긴 저장소 밖 스크린샷 명령이 루트를 찍으면 **빈 손**으로 돌아간다. 판정은 `MobileDemoMissionsRoute` 한 곳이다
+    /// (깃발 글자와 라우트 글자를 손으로 맞추지 않으려고 — 상점 시트 라우트와 같은 관용구).
     static func initialDestination() -> MeDestination? {
         #if DEBUG
         switch argument("-AingCheckDemoMeScreen") {
@@ -445,8 +487,15 @@ enum MeDemoHooks {
         // 잔디 상세는 딥링크가 없다 — 새 깃발을 만들지 않고 이미 있는 `-AingCheckDemoMeScreen` 관용을 쓴다.
         case "grass": return .grass(.work)
         case "grass-token": return .grass(.token)
-        default: return nil
+        case "missions": return .missions
+        default: break
         }
+        // 데모 라우트 `me/missions…` · `me/weekly…` 는 **미션 화면**을 연다(1.0.13 에 그 둘이 루트에서 나갔다).
+        // 깃발을 따로 주지 않아도 열려야 한다 — 저장소 밖 스크린샷 명령이 라우트만 넘긴다.
+        if let route = argument("-AingCheckDemoRoute"), MobileDemoMissionsRoute.opensMissionsPage(route: route) {
+            return .missions
+        }
+        return nil
         #else
         return nil
         #endif

@@ -42,23 +42,64 @@ enum RubyAsset {
     }
 
     static func resetCacheForTesting() { cached = nil }
+
+    /// 에셋을 못 읽을 때 대체 기호의 색 — 그림(`ruby.png`)의 자홍에 맞춘다(실측: 불투명 픽셀 평균 237,119,239 · 가장 흔한 칸
+    /// 240,96,240). 예전엔 강조색(파랑)이라 그 순간 "루비는 분홍"이 깨졌다(사용자 결정 2026-10-22 "루비 아이콘 통일" · 검토 지적).
+    static let fallbackColor = NSColor(srgbRed: 0.93, green: 0.38, blue: 0.93, alpha: 1)
+
+    private static var fallbackCached: CGImage??
+
+    /// 대체 그림 — SF 기호 `diamond.fill` 을 위 분홍으로 **구운** CGImage(한 번만 굽는다). 색이 그림에 박혀 있어 부르는 쪽의
+    /// `foregroundStyle` 이 덮지 못한다 — `Image(systemName:)` 은 템플릿이라 뽑기 기계 안내 줄에선 글자색으로 칠해졌다.
+    static var fallbackImage: CGImage? {
+        if let fallbackCached { return fallbackCached }
+        let made = bakeFallback()
+        fallbackCached = .some(made)
+        return made
+    }
+
+    /// 정사각 `pixels` 칸 가운데에 기호를 80% 크기로 그리고(예전 대체 기호의 글자 크기 비율) 그 모양 위에만 분홍을 덮는다(sourceAtop).
+    private static func bakeFallback(pixels: Int = 64) -> CGImage? {
+        guard let symbol = NSImage(systemSymbolName: "diamond.fill", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: CGFloat(pixels), weight: .bold)),
+              symbol.size.width > 0, symbol.size.height > 0,
+              let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        let side = CGFloat(pixels)
+        let scale = min(side / symbol.size.width, side / symbol.size.height) * 0.8
+        let width = symbol.size.width * scale, height = symbol.size.height * scale
+        let rect = NSRect(x: (side - width) / 2, y: (side - height) / 2, width: width, height: height)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        symbol.draw(in: rect)
+        fallbackColor.setFill()
+        rect.fill(using: .sourceAtop)
+        NSGraphicsContext.restoreGraphicsState()
+        return context.makeImage()
+    }
 }
 
-/// 루비 아이콘 한 장. 에셋이 없으면 SF Symbol 로 접는다 — 그림이 통째로 사라지면 "루비 3" 이 "3" 이 된다.
+/// 루비 아이콘 한 장. 에셋이 없으면 분홍으로 구운 SF Symbol 로 접는다(`RubyAsset.fallbackImage`) — 그림이 통째로 사라지면
+/// "루비 3" 이 "3" 이 된다.
 struct RubyIcon: View {
     var size: CGFloat = 13
+    /// 시험 전용 — 에셋을 못 읽은 경우를 **이 한 장만** 흉내 낸다(전역 깃발이 아니다 — 같은 프로세스의 다른 시험 그림을 건드리지 않게).
+    var simulatesMissingAsset = false
 
     var body: some View {
-        if let image = RubyAsset.image {
+        if let image = (simulatesMissingAsset ? nil : RubyAsset.image) ?? RubyAsset.fallbackImage {
             Image(decorative: image, scale: 1)
                 .resizable()
                 .interpolation(.high)
                 .scaledToFit()
                 .frame(width: size, height: size)
         } else {
+            // 굽기마저 실패한 경우(기호를 못 찾았다) — 분홍 기호를 그대로. 안쪽 `foregroundStyle` 이라 바깥 색이 못 덮는다.
             Image(systemName: "diamond.fill")
                 .font(.system(size: size * 0.8, weight: .bold))
-                .foregroundStyle(CheckTheme.accent)
+                .foregroundStyle(Color(nsColor: RubyAsset.fallbackColor))
                 .frame(width: size, height: size)
         }
     }
@@ -136,6 +177,13 @@ enum ShopText {
         case .ultra: return "울트라 찌르기 1개"
         case nil: return WorkTimerStore.pickSomethingNotice
         }
+    }
+
+    /// 하단 바에 [구매하기] 를 세우는가. 생일 선물 전용 잠긴 칸(케이크 아잉이 — v0.3.66)을 눌러 바가 **얻는 길**(`CakeGiftText.lockedHint`)을
+    /// 말하는 동안은 세우지 않는다 — 루비로 살 수 없는 것을 말하는 줄 옆에 흐린 [구매하기] 가 서면 "지금은 못 산다(루비가 모자라다)"로
+    /// 읽힌다(폰 검토의 흐린 '사기' 단추와 같은 결함). 그 자리는 안내가 두 줄로 쓴다. 그 밖(아무것도 안 고름 · 고름 · 다른 안내)은 그대로다.
+    static func barShowsBuyButton(selection: ShopSelection?, notice: String?) -> Bool {
+        !(selection == nil && notice == CakeGiftText.lockedHint)
     }
 
     /// 바의 둘째 줄. **언제나 문자열을 돌려준다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
@@ -317,25 +365,39 @@ struct CheckShopPanel: View {
         let price = store.shopSelectionPrice
         let busy = store.purchasingID != nil
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(ShopText.barTitle(selection: selection, catalog: catalog))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(selection == nil ? CheckTheme.secondaryText : CheckTheme.primaryText)
-                    .lineLimit(1)
-                // 둘째 줄은 **언제나 그려진다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
-                Text(ShopText.barDetail(notice: store.shopNotice, selection: selection,
-                                        price: price, balance: store.rubyBalance))
-                    .font(.caption2)
+            if ShopText.barShowsBuyButton(selection: selection, notice: store.shopNotice) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ShopText.barTitle(selection: selection, catalog: catalog))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(selection == nil ? CheckTheme.secondaryText : CheckTheme.primaryText)
+                        .lineLimit(1)
+                    // 둘째 줄은 **언제나 그려진다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
+                    Text(ShopText.barDetail(notice: store.shopNotice, selection: selection,
+                                            price: price, balance: store.rubyBalance))
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                if let price {
+                    RubyBalanceChip(balance: price)
+                }
+                BuyButton(title: busy ? "…" : "구매하기",
+                          enabled: store.canConfirmShopPurchase) {
+                    store.confirmShopPurchase()
+                }
+            } else {
+                // 생일 선물 전용 잠긴 칸을 눌렀다(v0.3.66) — 살 수 없으므로 [구매하기] · 값을 세우지 않고, 얻는 길만 두 줄로 말한다
+                // (한 줄이면 "루비나 뽑기로…" 에서 잘린다). 두 줄 caption2 는 바의 고정 높이 안에 든다 — 높이는 그대로다.
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 6)
-            if let price {
-                RubyBalanceChip(balance: price)
-            }
-            BuyButton(title: busy ? "…" : "구매하기",
-                      enabled: store.canConfirmShopPurchase) {
-                store.confirmShopPurchase()
+                Text(CakeGiftText.lockedHint)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity)
@@ -610,8 +672,13 @@ struct CheckShopPanel: View {
         // 루비로 안 파는 캐릭터(황금 아잉이 — v0.3.54 · 무지개 아잉이 — v0.3.59): 가격 대신 "뽑기 또는 조각 20개", 흐리게 하지 않는다
         // (살 수 없는 게 아니라 다른 길로 얻는다). 누르면 뽑기 패널이 열린다(`selectShopItem` 이 가른다). 문구는 금빛 · 무지개빛(희귀 강조) —
         // 서버 표식으로만 뽑기 전용인 캐릭터(희귀 아님)는 금빛 그대로다(v0.3.54 와 같다).
-        let gachaOnly = WorkTimerStore.isGachaOnly(entry.id, rows: store.shopCharacters)
-        let affordable = gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false)
+        // 생일 선물 전용(케이크 아잉이 — v0.3.66): 안 가진 사람에겐 **잠긴 칸**이다 — 가격 · 루비 아이콘 대신 자물쇠 + '생일 선물 전용', 흐리게.
+        // 누르면 고르지 않고 얻는 길을 말한다(`selectShopItem` → `CakeGiftText.lockedHint`). 가진 사람은 보통 보유 칸이다.
+        // 아래 줄의 갈래는 순수 판정 한 곳(`ShopCardLine.of`)이 정한다 — 시험이 같은 함수를 부른다.
+        let line = ShopCardLine.of(id: entry.id, owned: owned, rows: store.shopCharacters)
+        let gachaOnly = line == .gachaOnly
+        let giftLocked = line == .giftLocked
+        let affordable = !giftLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         let picked = store.shopSelection == .character(entry.id)
         Button {
@@ -628,7 +695,9 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                if gachaOnly {
+                if giftLocked {
+                    ShopGiftLockedCaption()
+                } else if gachaOnly {
                     // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
                     // 문구는 코어 한 벌(`GachaText.gachaOnlyPrice` — 확률표 금 줄 · 폰과 같은 글자): "뽑기 또는 조각 20개", 교환값을 모르면
                     // "뽑기 전용". 숫자는 서버 `shard_costs` 다. 가진 것은 다른 카드처럼 "보유".
@@ -676,8 +745,60 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .checkTooltip(owned ? "\(name) — 보유 중" : (gachaOnly ? "\(name) — \(GachaText.gachaOnlyHint)" : "\(name) 사기"))
-        .accessibilityLabel(owned ? "\(name) 보유 중" : (gachaOnly ? "\(name), \(GachaText.gachaOnlyHint)" : "\(name) 사기"))
+        .checkTooltip(line.tooltip(name: name, owned: owned))
+        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned))
+    }
+}
+
+/// 상점 캐릭터 카드 아래 줄의 갈래(순수 — 카드가 이 판정 하나로 그리고, 시험이 같은 함수를 부른다).
+enum ShopCardLine: Equatable, Sendable {
+    /// 생일 선물 전용 잠긴 칸(안 가진 케이크 아잉이 — v0.3.66): 자물쇠 + `CakeGiftText.lockedCaption`. 가격 · 루비 아이콘이 없다.
+    case giftLocked
+    /// 뽑기 전용(황금 · 무지개 아잉이 — 서버 표식 포함): "뽑기 또는 조각 20개" / 보유.
+    case gachaOnly
+    /// 루비 가격 / 보유. 가진 케이크도 여기다(보통 보유 칸).
+    case price
+
+    static func of(id: String, owned: Bool, rows: [ShopCharacterRow]) -> ShopCardLine {
+        if !owned, WorkTimerStore.isGiftOnly(id, rows: rows) { return .giftLocked }
+        if WorkTimerStore.isGachaOnly(id, rows: rows) { return .gachaOnly }
+        return .price
+    }
+
+    /// 말풍선 — 얻는 길을 말한다(잠긴 칸 · 뽑기 전용에 "사기"는 거짓이다).
+    func tooltip(name: String, owned: Bool) -> String {
+        if owned { return "\(name) — 보유 중" }
+        switch self {
+        case .giftLocked: return "\(name) — \(CakeGiftText.lockedHint)"
+        case .gachaOnly: return "\(name) — \(GachaText.gachaOnlyHint)"
+        case .price: return "\(name) 사기"
+        }
+    }
+
+    /// 읽기 이름.
+    func accessibilityLabel(name: String, owned: Bool) -> String {
+        if owned { return "\(name) 보유 중" }
+        switch self {
+        case .giftLocked: return "\(name) 잠김, \(CakeGiftText.lockedCaption) — \(CakeGiftText.lockedHint)"
+        case .gachaOnly: return "\(name), \(GachaText.gachaOnlyHint)"
+        case .price: return "\(name) 사기"
+        }
+    }
+}
+
+/// 상점 잠긴 칸(생일 선물 전용 — v0.3.66 케이크 아잉이)의 아래 줄: 자물쇠 + `CakeGiftText.lockedCaption`. 가격 · 사기 단추 자리를 대신한다.
+/// 카드 높이(112)는 그대로다(가격 줄 한 줄 자리에 든다).
+struct ShopGiftLockedCaption: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(CakeGiftText.lockedCaption)
+                .font(.caption2.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundStyle(CheckTheme.secondaryText)
     }
 }
 

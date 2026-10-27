@@ -1038,6 +1038,12 @@ struct V0343ChessStoreTests {
         let (store, host) = makeChessStore(
             "watch-stale", me: try csCaller("chess_watch__ok_active"),
             handler: { rpc, _, _ in
+                // 0.3.64 — `chess_watch_live`(관전 + 관전자 수)를 **모르는 옛 서버**다. 실서버의 404(PGRST202)로
+                //   답해 스토어가 옛 `chess_watch` 로 접게 한다 — 이 시험이 재는 것은 세대 규약이고 그 길은
+                //   접힌 뒤에도 같아야 한다(접힘 자체는 V0364 가 따로 잰다).
+                if rpc == "chess_watch_live" {
+                    return GomokuStubProtocol.Reply(status: 404, body: csPGRST202(rpc))
+                }
                 guard rpc == "chess_watch" else { return GomokuStubProtocol.Reply(body: #"{"status":"ok"}"#) }
                 return GomokuStubProtocol.Reply(status: 500, body: #"{"message":"boom"}"#, delay: 0.3)
             })
@@ -1067,6 +1073,9 @@ struct V0343ChessStoreTests {
         let (live, _) = makeChessStore(
             "watch-live", me: try csCaller("chess_watch__ok_active"),
             handler: { rpc, _, _ in
+                if rpc == "chess_watch_live" {      // 0.3.64 — 옛 서버(위와 같은 이유)
+                    return GomokuStubProtocol.Reply(status: 404, body: csPGRST202(rpc))
+                }
                 guard rpc == "chess_watch" else { return GomokuStubProtocol.Reply(body: #"{"status":"ok"}"#) }
                 return GomokuStubProtocol.Reply(status: 500, body: #"{"message":"boom"}"#)
             })

@@ -12,6 +12,10 @@
 #     읽기 경로(work_status_devices GET · focus_mode 조회 칸)와 실시간 소켓 keepalive(heartbeat · heartbeatAck — 근무 하트비트가 아니다)는
 #     폰도 쓰므로 여기서 보지 않는다. 근무 하트비트(맥 heartbeat(…) 메서드)는 아래 심볼 검사와 소스 계약 테스트가 본다.
 #  3. nm 심볼에 데모·스텁·맥 전용 메서드 이름이 0건이다.
+#     ★ 2026-10-19: 이 검사 하나만 믿지 마라. Swift 는 **낱말 치환**으로 망글링해서 `MobileDemoMissionsRoute` 가
+#       `0B17DemoMissionsRoute` 로 적힌다 — `MobileDemo` 라는 글자가 심볼에 아예 없다. 그래서 2번(strings · 리플렉션
+#       메타데이터)이 데모 격리의 **주된 증거**이고, 3번은 보조다. 치환된 꼴(`<길이>Demo…` · `<길이>Stub…`)도
+#       같이 센다 — 길이 숫자가 앞에 붙는 모양이라 평범한 영어 심볼과는 겹치지 않는다.
 #
 # ★ 2026-09-18: `join_team` · `create_team` · `/auth/v1/signup` 을 금지 목록에서 **뺐다**. 폰이 가입을 받게 됐기 때문이다
 #   (앱스토어 정식 출시 준비 — 폰에서 가입을 못 하면 스토어에서 받은 사람은 로그인 벽만 본다). 이 셋은 본인 계정에만 작용하고
@@ -19,6 +23,12 @@
 #   나머지 목록은 그대로다: 그것들은 부르는 순간 남의 데이터가 틀어진다.
 #  4. 앱을 열지 않고 도는 알림 액션(w10 에서 걷어냄 — MESSAGE 답장 · 읽음, GOMOKU_INVITE 거절)의 식별자 · 답장 실패 안내 알림 ·
 #     텍스트 입력 액션 클래스 참조가 0건이다(strings · nm). 이전 Release 바이너리(w4/int)에는 모두 있었다 — 되살아나면 여기서 잡힌다.
+#  5. **그 버전의 기능 문구가 앱 바이너리에 실제로 있다**(1.0.14 — 생일 선물 케이크 아잉이).
+#     ★ 이 표는 **릴리스마다 그 버전 것으로 옮긴다**(맥의 버전 고정 시험과 같은 관행). 안 옮기면
+#       게이트가 옛 기능만 재서, 새 기능이 문구 없이 나가도 초록이다. 1~4 가 "없어야 할 것이 없다" 를 재는 데 비해
+#     이것은 "있어야 할 것이 있다" 를 잰다. 왜 필요한가: 폰 뷰는 전부 `#if os(iOS)` 안이라 맥 `swift test` 가 한 줄도 보지 못하므로
+#     (저장소 메모 '폰 뷰는 맥 스위트가 못 본다') 문구 표(`TetrisPhoneText`)가 **아무 화면에도 안 붙은 채로** 초록일 수 있다.
+#     그러면 Swift 가 그 리터럴을 Release 에서 걷어 가고 기능이 글자 없이 나간다 — 이 검사가 그 구멍이다.
 set -euo pipefail
 
 APP="${1:?AingCheck.app 경로를 주세요}"
@@ -33,7 +43,7 @@ demo_json="$(find "$APP" -type f \( -name 'rpc.*.json' -o -name 'rest.*.json' -o
 [[ -z "$demo_json" ]] || report "픽스처 모양의 JSON 이 번들에 있다: $demo_json"
 
 STRINGS_PATTERN='take_pokes|work_tick|close_abandoned|ultra_wallet_sync|buy_ultra|poke_user|ultra_poke|away_sync|token_usage_device_monthly|token_usage_monthly|app_build|app_version|AingCheckDemo|demo\.aingcheck|forbidden on phone|MobileStub|MobileDemo|MESSAGE_REPLY|MESSAGE_READ|GOMOKU_DECLINE|aingcheck\.local\.|aingcheck_local'
-SYMBOL_PATTERN='MobileDemo|MobileStubURLProtocol|MobileForbiddenCalls|MobileKeychainProbe|takePokes|workTick|WorkTickGate|syncUltraWallet|updateAppVersion|closeAbandonedSessions|upsertStatusDevice|reportDeviceInput|sendUltraPoke|UNTextInputNotificationAction|postLocalNotice'
+SYMBOL_PATTERN='MobileDemo|[0-9]Demo[A-Z0-9]|[0-9]Stub[A-Z0-9]|MobileStubURLProtocol|MobileForbiddenCalls|MobileKeychainProbe|takePokes|workTick|WorkTickGate|syncUltraWallet|updateAppVersion|closeAbandonedSessions|upsertStatusDevice|reportDeviceInput|sendUltraPoke|UNTextInputNotificationAction|postLocalNotice'
 
 binaries=("$APP/AingCheck")
 for appex in "$APP"/PlugIns/*.appex; do
@@ -51,8 +61,128 @@ for bin in "${binaries[@]}"; do
   echo "checked $(basename "$bin") ($(stat -f %z "$bin") bytes)"
 done
 
+# ── 5. 기능 문구 (1.0.14 — 생일 선물 케이크 아잉이 · 1.0.13 바닥 한 줄 · 1.0.11 바닥 한 줄) ──────────────────────────
+#
+# 왜 `strings | grep` 이 아니라 python 바이트인가: `strings` 는 C 로케일의 '출력 가능한 글자' 만 잇는다 — 한글 바이트는
+# 그 집합에 없어서 잘려 나가고, `grep -a` 로도 안 잡힌다(저장소 메모 '산출물 검증엔 빌드 시각이 필요하다' 의 그 자리).
+# 그래서 UTF-8 바이트를 **그대로 세는** 길 하나만 믿는다.
+#
+# ★ **UTF-8 15바이트 이하 리터럴은 여기서 잴 수 없다**(2026-10-22 실측 — 이 게이트가 1.0.12 에서 거짓 빨강을 냈다).
+# Swift 의 작은 문자열 최적화는 15바이트까지를 `String` 안에 **즉치값으로** 접어 넣는다 — 그러면 최적화 빌드에
+# 그 바이트열이 **아예 없다**. 경계는 15/16 에서 깨끗하게 떨어진다(서로 접두사가 아닌 문자열로 재서 확인:
+# 6·12·14·15바이트 0회, 16·17바이트 1회). **언어 문제가 아니다** — ASCII `sticker-joy`(11바이트)도 0회다.
+# 이모티콘 전선 토큰 `[아잉:기쁨]` 이 정확히 15바이트여서 Release 0회 · Debug 2회가 나왔다.
+#
+# ⚠️ **경계를 잴 때 서로 포함되는 문자열을 쓰지 마라.** 처음엔 `0123456789abcde`(15)를 `0123456789abcdef`(16)과
+#    같이 넣었다가 "15바이트가 살아남았다" 는 **거짓 반례**를 얻었다 — 긴 쪽 하나가 짧은 쪽까지 '있다' 고 말한
+#    것이다. 아래 '짧은 낱말을 쓰지 않는 까닭' 과 **같은 함정**인데 그걸 재는 프로브에서 다시 밟았다.
+# 그 여섯 토큰은 대신 `Tests/CheckMobileKitTests/V1012StickerMobileTests.swift` 가 **값으로** 못 박는다 —
+# 바이트를 세는 것보다 그쪽이 본디 더 강한 검사다. 여기에는 **16바이트 이상**인 문구만 적어라.
+#
+# 왜 `판돈` · `기권` 같은 **짧은 낱말을 쓰지 않는가**: 바이너리에서 못 찾기 때문이 아니다(2026-10-21 실측 — 6바이트
+# `기권` 도 1회 잡힌다). 부분 글자라서 그 낱말을 품은 **모든 리터럴**이 함께 세어지고(`판돈을 고르세요` ·
+# `기권하면 판돈을 잃어요` · 규칙 본문 …) 화면이 문장 하나를 늘릴 때마다 수가 흔들린다. 그래서 **문구 표의 리터럴을
+# 통째로** 쓴다 — 아래 1.0.13 두 줄은 `Sources/CheckMobileKit/Me/MeText.swift` 의 값과 글자가 같다.
+#
+# ★ **1.0.13 에 잴 수 있는 문구가 둘뿐인 까닭.** 이 판이 더하는 문구는 셋인데 제목 `missionsPageTitle = "미션"` 은
+#   **6바이트**라 위의 15/16 경계에 걸린다 — Release 바이너리에 그 바이트열이 **아예 없다**. [받기] 버튼 글자
+#   `"받기"` 도 6바이트로 같다. 그 둘은 `Tests/CheckMobileKitTests/` 가 **값으로** 못 박는다(바이트를 세는 것보다
+#   본디 더 강한 검사다). 그래서 여기에는 16바이트 이상인 `missionsRowDetail`(34바이트) ·
+#   `missionsEmpty`(44바이트) 둘만 적는다.
+#
+# ★ **1.0.12 의 이모티콘 세 줄은 지웠다.** 게이트 표는 **그 판의 기능만** 잰다(그 검사는 1.0.12 게이트가 이미 했고,
+#   여섯 토큰은 `V1012StickerMobileTests.swift` 가 값으로 들고 있다). 바닥 한 줄은 그대로 1.0.11 것이다.
+#
+# ★ **1.0.14 — 생일 선물 케이크 아잉이**(맥 0.3.66 과 같은 문구 표 — CheckCore `CakeGiftText`). 16바이트 이상 넷을 잰다:
+#   생일 선물로 케이크 아잉이를 하나 골라 주세요.          body — 축하 시트 본문
+#   생일 선물이 도착했어요                              reopenTitle — 나 탭 '다시 열기' 줄
+#   생일 선물 전용                                    lockedCaption 19B — 상점 잠긴 칸
+#   생일에 선물로만 받을 수 있어요. 루비나 뽑기로는 …     lockedHint — 잠긴 칸을 골랐을 때의 안내 막대
+#   기대 수는 2026-10-26 **build 26 아카이브(디바이스 · Release)로 재서** 박았다 — 넷 다 1회.
+# ★ **1.0.13 줄은 하나만 바닥으로 남긴다**(`자정에 초기화 · 안 받으면 사라져요`). 1.0.14 는 출시된 1.0.13 소스(ios-1013-int)를
+#   main 에 **처음 합친** 판이라, 병합이 1.0.13 기능을 떨어뜨리면 여기서 잡혀야 한다. 나머지 1.0.13 세 줄은 지웠다
+#   (그 검사는 1.0.13 게이트가 이미 했다). 아래 '기대 수의 근거' 표는 1.0.13 때 것이다 — 남긴 두 바닥 줄의 근거로 읽어라.
+#
+# 기대 수의 근거(= 그 글자를 품은 문구 표의 리터럴 수):
+#   일일 · 이번 주 · 누적 미션          1  (missionsRowDetail 37B — 루트 [미션] 줄의 보조 글자. 1.0.13 에 글자가 바뀌었다:
+#                                         일일이 생기고 「도전 미션」이 「누적 미션」으로 개명됐다)
+#   자정에 초기화 · 안 받으면 사라져요    1  (dailyMissionsResetNote 49B — 일일 미션 절 머리의 안내. 1.0.13 신규)
+#   울트라 찔렀어요                    1  (CheckCore `MessagePokeLog` 의 기록 줄 동사 25B — 대화창 찌르기 기록. 1.0.13 신규)
+#   받을 수 있는 미션이 아직 없어요      1  (missionsEmpty 44B — 미션 화면이 세 묶음을 다 못 그릴 때. 맥 `MissionPanelCopy.emptyCaption` 과
+#                                         같은 문장이지만 그 값은 맥 앱 타깃 `Sources/check` 에 있어 폰 바이너리에 안 들어온다
+#                                         — 수가 겹치지 않는다. 폰이 링크하는 것은 CheckMobileKit → CheckCore 뿐이다)
+#   판 중에 앱을 나가면 져요            1  (1.0.11 leaveWarning — 앞 버전 것을 한 줄만 바닥으로 남긴다. 1.0.12 아카이브 실측값)
+#
+# ★ **1.0.13 의 기능 둘은 여기서 못 잰다** — 숨기지 말고 적어 둔다:
+#   · **관전자 수**: 눈 아이콘 + 숫자뿐이다(`GamesWatcherCount` — `eye.fill` 8B · 수는 `String(count)`).
+#     16바이트 이상 리터럴이 없다. `watchingPhrase`("N명이 보고 있어요")는 **폰에서 쓰는 자리가 없어** Release 에서
+#     걷힐 수 있으니 쓰면 거짓 빨강이 된다.
+#   · **테트리스 관전**: 로비 빈 상태 문구는 1.0.11 것을 **다시 쓴다**(새 글자가 아니라 있다고 해도 1.0.13 을 증명하지 못한다).
+#   둘은 `V1013*`·`GamesTetrisDuel*` 시험이 **값과 배선으로** 잰다. 게이트에 억지로 짧은 글자를 넣지 마라.
+#
+# ★ **1.0.12 의 이모티콘 세 줄은 지웠다.** 게이트 표는 **그 판의 기능만** 잰다(그 검사는 1.0.12 게이트가 이미 했고,
+#   여섯 토큰은 `V1012StickerMobileTests.swift` 가 값으로 들고 있다). 바닥 한 줄은 그대로 1.0.11 것이다.
+#
+# ※ 네 줄은 2026-10-23 **build 25 아카이브(디바이스 · Release)로 재서** 박았다 — 전부 1회다. **시뮬레이터 Release 는
+#   같은 글자를 2회로 센다**(구성이 다르다 — 실측) → 기대값은 반드시 아카이브로 재라. 아직 안 쟨 줄은 `None` 으로 두면
+#   된다(`None` = "0 이면 막고, 수는 알리기만 한다").
+# **0 이면 막고, 기대와 다르면 알리기만 한다.** 화면이 문장을 하나 늘리는 것은 정상이고(수가 오른다), 쓰이지 않는
+# 리터럴이 Release 에서 걷히는 것도 정상이다(수가 내린다). 막아야 하는 것은 **그 글자가 아예 없는** 바이너리다 —
+# 그건 문구 표가 화면에 안 붙었다는 뜻이고, 글자 없이 나간 기능은 사용자가 쓸 수 없다.
+app_bin="${binaries[0]}"
+if [[ -f "$app_bin" ]]; then
+  feature_report="$(python3 - "$app_bin" <<'PY'
+import sys
+
+# 횟수 `None` = **아직 안 쟀다**(아카이브로 확정한다). 0 이면 막고, 수는 알리기만 한다.
+want = [
+    # 1.0.14 — 생일 선물 케이크 아잉이 (CheckCore `CakeGiftText` 의 값과 글자가 같다)
+    ("생일 선물로 케이크 아잉이를 하나 골라 주세요.", 1),   # body — 축하 시트 본문
+    ("생일 선물이 도착했어요", 1),                         # reopenTitle — 나 탭 '다시 열기' 줄
+    ("생일 선물 전용", 1),                                 # lockedCaption — 상점 잠긴 칸
+    ("생일에 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요.", 1),  # lockedHint — 잠긴 칸 안내
+    # 1.0.13 — 바닥 한 줄(이 판이 1.0.13 출시 소스를 main 에 처음 합쳤다)
+    ("자정에 초기화 · 안 받으면 사라져요", 1),  # MeText.dailyMissionsResetNote — 일일 미션 절 머리
+    # 1.0.11 — 1:1 테트리스. 앞 버전 것을 **한 줄만** 바닥으로 남긴다(기능이 통째로 빠진 바이너리를 막는 그물).
+    ("판 중에 앱을 나가면 져요", 1),
+]
+
+# 서로 포함되는 쌍이 있으면 **긴 쪽 하나가 짧은 쪽까지 "있다"고 말한다**(2026-10-22 에 실제로 데였다).
+# 표를 고칠 때마다 여기서 막는다 — 사람이 눈으로 거르지 못한다.
+for _i, (_a, _) in enumerate(want):
+    for _j, (_b, _) in enumerate(want):
+        if _i != _j and _a in _b:
+            sys.exit(f"FAIL: 기능 문구가 서로 포함된다 — {_a!r} ⊂ {_b!r} (겹치지 않는 글자로 바꿔라)")
+
+data = open(sys.argv[1], "rb").read()
+missing = []
+lines = []
+for text, expected in want:
+    found = data.count(text.encode("utf-8"))
+    if expected is None:
+        mark = "  ← 기대 미측정(아카이브로 재서 확정한다)"
+    else:
+        mark = "" if found == expected else "  ← 기대 %d" % expected
+    lines.append("  %-36s %d회%s" % (text, found, mark))
+    if found == 0:
+        missing.append(text)
+print("\n".join(lines))
+if missing:
+    print("MISSING:" + " · ".join(missing))
+PY
+)"
+  echo "1.0.14 기능 문구(생일 선물 케이크 아잉이):"
+  echo "${feature_report%$'\n'MISSING:*}"
+  feature_found="$(printf '%s\n' "${feature_report%$'\n'MISSING:*}" | grep -c '회' || true)"
+  if [[ "$feature_report" == *$'\n'MISSING:* ]]; then
+    report "1.0.14 기능 문구가 앱 바이너리에 없다: ${feature_report##*$'\n'MISSING:}"
+  fi
+else
+  report "앱 바이너리가 없어 기능 문구를 세지 못했다: $app_bin"
+fi
+
 if [[ "$fail" -ne 0 ]]; then
   echo "Release 번들 계약 위반"
   exit 1
 fi
-echo "OK: 픽스처 0 · 금지 문자열 0 · 금지 심볼 0(뒤에서 도는 알림 액션 흔적 포함)"
+echo "OK: 픽스처 0 · 금지 문자열 0 · 금지 심볼 0(뒤에서 도는 알림 액션 흔적 포함) · 1.0.14 기능 문구 ${feature_found:-0}/${feature_found:-0} 전부 있음"

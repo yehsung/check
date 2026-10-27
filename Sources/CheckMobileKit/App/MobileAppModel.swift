@@ -21,6 +21,7 @@ public final class MobileAppModel {
     package let gomokuHost: MobileGomokuHost
     package let gomoku: GomokuStore
     package let chess: ChessStore
+    package let tetris: TetrisDuelStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -104,6 +105,26 @@ public final class MobileAppModel {
         // **"기본값이니 지워도 되겠지"로 지우지 마라.** 꺼짐은 맥 작업이 남긴 의도된 보호다(그리지도 않는 폰이
         // 순위를 1분마다 당기지 않게) — 폰이 그 화면을 갖는 지금은 폰도 자기 배선에서 켠다. 바로 위 오목 한 줄과 짝이다.
         chess.spectatorFeaturesEnabled = true
+        // 1:1 테트리스(0.3.60 서버·맥 · 폰은 1.0.11). 호스트는 **오목·체스와 같은 하나**다(루비 미러 한 칸).
+        let tetris = TetrisDuelStore(host: host)
+        tetris.clock = { clock.now() }
+        // 순위의 **주 스위치**. 기본이 꺼짐이라 이 한 줄이 없으면 `tetris_ranking` 이 **한 번도 안 나가고**
+        // 순위 탭은 영영 로딩 문구다 — 오목·체스의 바로 위 두 줄과 같은 못이고, 같은 까닭으로 지우지 마라
+        // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisDuelWiringTests.swift`
+        // (`GamesTetrisWiringTests` 는 **솔로** 테트리스 것이다 — 섞지 마라).
+        tetris.rankingEnabled = true
+        // 관전의 **주 스위치**(0.3.65 — 테트리스 관전은 이번에 생겼다). 기본이 꺼짐이라 이 한 줄이 없으면
+        // [관전] 칩이 뜨지도 않고 `tetris_watch` 가 **한 번도 안 나간다** — `startWatching`·`refreshWatch`·
+        // `pollWatch`·`spectatorWindowDidShow` 가 전부 `spectatorFeaturesEnabled` 를 먼저 본다
+        // (`canPollSpectatorFeatures`). 순위 스위치와 **따로** 두는 것이 코어 규약이다(순위 없이 관전만 여는 날).
+        // 바로 위 오목·체스 두 줄과 같은 못이고, 같은 까닭으로 "기본값이니 지워도 되겠지"로 지우지 마라
+        // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisWatchTests.swift`.
+        tetris.spectatorFeaturesEnabled = true
+        // 실시간 'tetris' 초인종을 받을 자리(오목 `realtime.gomoku` 바로 옆 · 같은 꼴). 이 한 줄이 없으면
+        // 러너의 `.tetrisSignal` 가지가 **nil 에 말을 걸어** 아무 일도 안 한다 — 초인종이 와도 폰은 자기 보고
+        // 왕복(1초)까지 방해 줄을 모르고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.
+        // 러너는 **약한 참조**로 들고 있고(수명은 앱 모델이 쥔다) 핸들러가 스스로 세션 가드를 한다.
+        realtime.tetris = tetris
         let links = MobileStoreLinks()
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let characters = AppUserCharacterStore(session: session, clock: env.clock)
@@ -116,6 +137,7 @@ public final class MobileAppModel {
             widgetSnapshots: writer,
             gomoku: gomoku,
             chess: chess,
+            tetris: tetris,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -132,6 +154,7 @@ public final class MobileAppModel {
         self.gomokuHost = host
         self.gomoku = gomoku
         self.chess = chess
+        self.tetris = tetris
         self.links = links
         self.appearance = appearance
         self.characters = characters
@@ -151,6 +174,15 @@ public final class MobileAppModel {
         links.me = me
         // 표가 바뀌면 위젯 근무 중 얼굴도 다시 쓴다(지금 탭이 위젯의 유일한 작성자 — 같은 값이면 쓰기 창구가 건너뛴다).
         characters.onDirectoryChange = { [weak now] in now?.writeWidgetSnapshot() }
+        // 일일 미션(v0.3.64) — **1:1 판이 끝난 것을 처음 보는 자리**가 여기다(코어 스토어가 `match` 가 끝으로 바뀐 그 자리에서
+        // 부른다 — `GomokuStore.matchJustFinished` 계열). 그 순간 미션 진행을 **한 번** 묻는다: 새 타이머도 새 주기 RPC 도 없고,
+        // 오늘 그 게임 줄을 이미 채웠으면 요청 0건이다(`MeStore.refreshAchievementsAfterGameResult`).
+        // 게임 이름은 **서버 `daily_mission_defs()` 의 game 값**이다 — 1:1 테트리스는 `tetris_duel`(솔로 `tetris` 가 아니다).
+        // 맥의 같은 세 줄은 `WorkTimerStore.wireGomoku` 에 있다. 빠지면 "판을 했는데 [받기]가 안 뜬다"가 되고,
+        // 뷰가 아니라 배선이라 **화면만 보는 테스트로는 안 잡힌다** — 못: `Tests/CheckMobileKitTests/MeDailyMissionStoreTests.swift`.
+        gomoku.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "gomoku") }
+        chess.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "chess") }
+        tetris.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }
@@ -161,9 +193,12 @@ public final class MobileAppModel {
     package var badges: MobileBadges { links.badges }
 
     /// 탭을 바꿨을 때(탭 막대). 캐릭터 한 표만 60초 스로틀로 다시 묻는다 — 탭 스토어의 갱신은 각 탭 화면이 스스로 한다.
+    /// 대국·관전 화면 때문에 미뤄 둔 생일 선물 축하 시트도 이때 띄운다(요청 없음 — 이미 아는 선물만, `MeStore.presentCakeGiftIfDue`).
+    /// 게임 탭으로 **들어갈** 때는 띄우지 않는다 — 그 탭의 대국 화면은 아직 안 섰을 뿐 곧 선다(덮으면 진다).
     package func tabDidChange() {
         guard session.isSignedIn else { return }
         characters.refreshIfStale()
+        if router.selectedTab != .games { me.presentCakeGiftIfDue() }
     }
 
     // MARK: - 시작 · scenePhase · URL
@@ -252,6 +287,11 @@ public final class MobileAppModel {
         // 체스도 같은 사슬에 넣는다 — 안 넣으면 다음 사람의 로비에 앞 사람의 판·신청·순위가 남는다.
         // `reset()` 은 배선 값(`spectatorFeaturesEnabled`·`clock`·`presentWindow`)을 건드리지 않는다(위 주 스위치 주석).
         chess.reset()
+        // 테트리스도 같은 사슬이다. 안 넣으면 다음 사람의 로비에 **앞 사람의 판·신청·순위·루비**가 남는다 —
+        // 테트리스는 거기에 하나가 더 붙는다: 판 구동기(`duel`)와 1초 보고 Task 가 살아 있어서, 로그아웃한
+        // 사람의 판에 **새 계정의 토큰으로** 보고가 계속 나간다. `reset()` 이 그 둘(`discardDuel`·세대)을 끊는다.
+        // `reset()` 은 배선 값(`rankingEnabled`·`clock`·`presentWindow`)을 건드리지 않는다(위 주 스위치 주석).
+        tetris.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()
@@ -297,6 +337,22 @@ public final class MobileAppModel {
         if let chess = Self.demoChessRoute(raw) {
             games.pendingDemoChessScreen = true
             games.demoChessRoute = chess
+            router.open(.games)
+            return
+        }
+        // 1:1 테트리스 장면(`games/tetris/lobby…` · `…/ranking` · `…/match/<장면>`)도 **`AingRoute` 에 가지가
+        // 없다** — 체스와 같은 꼴로 게임 탭만 열고 탭이 테트리스를 쌓는다(`GamesTab.applyDemoTetrisRoute`).
+        //
+        // ★★ **`games/tetris` 한 토막을 여기서 가로채면 안 된다.** 그 글자는 `AingRoute.parse` 의 `("games", 1)`
+        //   가지가 `.miniGame(.tetris)` 로 읽는 **솔로** 미니게임 딥링크다(v0.3.38 에 나갔다). 이 갈래가
+        //   `AingRoute` **앞**에 있으므로 그 한 토막을 받으면 솔로 테트리스 데모 라우트가 **조용히 사라진다** —
+        //   설계서 P1("솔로 테트리스는 한 글자도 건드리지 않는다")을 글자가 아니라 동작으로 어기는 일이다.
+        //   그래서 판정을 **여기서 다시 적지 않는다**: 꼬리를 푸는 자리는 `MobileDemoTetrisRoute(demoRoute:)`
+        //   하나이고(그 값이 `games/tetris/` 접두만 받는다 — 한 토막에 nil) 이 갈래는 **그 값이 섰는가만** 본다.
+        //   두 자리에서 판정하면 한쪽만 고쳐져 솔로 링크가 다시 사라진다.
+        if let tetris = MobileDemoTetrisRoute(demoRoute: raw) {
+            games.pendingDemoTetrisScreen = true
+            games.demoTetrisRoute = tetris
             router.open(.games)
             return
         }

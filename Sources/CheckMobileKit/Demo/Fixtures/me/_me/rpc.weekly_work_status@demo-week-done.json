@@ -1,0 +1,38 @@
+{
+  "__note": [
+    "weekly_work_status() — **완료**(62시간) · 세 단계 전부 받음. 닿는 길: -AingCheckDemoRoute me/weekly/done (장면 _me + 바늘 demo-week-done).",
+    "게이지는 가득이고 다음 목표가 없다(isComplete) · 받은 합은 장부가 말하는 270 이다. pending 은 비었다.",
+    "잔량 390 = 데모 시작 120 + 270."
+  ],
+  "week_start": "2026-09-14",
+  "next_week_start": "2026-09-21",
+  "worked_seconds": 223200,
+  "tiers": [
+    {
+      "hours": 20,
+      "ruby": 20,
+      "claimed": true,
+      "achieved": true,
+      "claimable": false
+    },
+    {
+      "hours": 40,
+      "ruby": 50,
+      "claimed": true,
+      "achieved": true,
+      "claimable": false
+    },
+    {
+      "hours": 60,
+      "ruby": 200,
+      "claimed": true,
+      "achieved": true,
+      "claimable": false
+    }
+  ],
+  "granted_now": [],
+  "ruby_balance": 390,
+  "server_now_ms": 1789621500000,
+  "pending": [],
+  "claimable_ruby": 0
+}

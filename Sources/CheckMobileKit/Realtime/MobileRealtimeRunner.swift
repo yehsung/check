@@ -23,10 +23,11 @@ package final class MobileRealtimeRegistration {
 /// 링(`RealtimeLink`)과 소켓(`LiveRealtimeTransport`)은 코어 것을 그대로 쓰고, effect 를 실행하는 층만 새로 쓴다.
 /// 맥 `WorkTimerStoreRealtime.run` 과 갈리는 곳은 넷이다:
 ///  1. `.catchUp`·`.drain` → **take_pokes 가 아니다.** 등록된 `onMessageActivity` 핸들러들을 1초 창에 모아 한 번 부른다
-///     (+ `.catchUp` 은 오목 `realtimeDidJoin`). take_pokes 는 원자 소비라 폰이 부르면 맥의 말풍선을 훔친다(R3) —
+///     (+ `.catchUp` 은 오목·테트리스 `realtimeDidJoin`). take_pokes 는 원자 소비라 폰이 부르면 맥의 말풍선을 훔친다(R3) —
 ///     그리고 iOS 에서는 서비스에 그 메서드가 **컴파일되지 않는다**(`SupabaseWorkServiceMacOnly.swift`).
 ///  2. `.messageReadSignal` → 등록된 `onMessageRead` 핸들러들(같은 1초 합치기).
-///  3. `.gomokuSignal` → `GomokuStore.handleSignal()`.
+///  3. `.gomokuSignal` → `GomokuStore.handleSignal()` · `.tetrisSignal` → `TetrisDuelStore.handleSignal()`(1.0.11).
+///     `.chessSignal` 은 **일부러 빈 가지**다 — 까닭 셋을 그 자리에 적었다(폰 체스는 1.0.6 에 나갔다).
 ///  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
 /// 토큰 갱신은 세션 스토어의 조정자를 지난다(`refreshForRealtime`) — 갱신 주체가 둘이 되지 않게.
 @MainActor
@@ -43,6 +44,8 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored private weak var session: MobileSessionStore?
     /// 오목 신호를 받을 스토어(앱 모델이 붙인다).
     @ObservationIgnored package weak var gomoku: GomokuStore?
+    /// 테트리스 대결 신호를 받을 스토어(앱 모델이 붙인다 — 오목 칸과 같은 꼴·같은 자리).
+    @ObservationIgnored package weak var tetris: TetrisDuelStore?
 
     /// 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 테스트는 크게 두고 `flushCoalescedSignals()` 를 직접 부른다.
     @ObservationIgnored package var coalesceSeconds: TimeInterval = 1
@@ -197,6 +200,10 @@ package final class MobileRealtimeRunner {
                 // 조인 직후 따라잡기: 소켓이 내려가 있던 동안의 신호는 재생되지 않는다 — 서버 표를 다시 읽는다(조회만).
                 requestMessageActivity()
                 gomoku?.realtimeDidJoin()
+                // 테트리스도 같은 자리다. 소켓이 내려가 있던 사이에 온 신청·수락·공격 누계는 재생되지 않으므로
+                // 조인 직후 로비를 한 번 긁는다(`catchUp` → `refreshLobby`, 그 응답이 가리키는 판까지).
+                // ★ 판 중에 소켓이 끊겼다 붙으면 그 사이의 방해 줄을 **보고 왕복이 알려 주기 전에** 받는다.
+                tetris?.realtimeDidJoin()
             case .drain:
                 // ★ take_pokes 가 아니다(R3). 새 메시지가 있다는 신호일 뿐 — 요약·이력 조회로 갚는다.
                 requestMessageActivity()
@@ -205,17 +212,38 @@ package final class MobileRealtimeRunner {
             case .gomokuSignal:
                 gomoku?.handleSignal()
             case .chessSignal:
-                // 폰에는 아직 체스 화면이 없다(DECISIONS A8 — 모바일 세션으로 넘겼다). **중요한 것은 이 가지가
-                // `.drain` 으로 떨어지지 않는 것**이다: 떨어지면 체스 초인종마다(블리츠 한 판 40수 = 왕복 80회)
-                // 폰이 소비할 것도 없는 `take_pokes` 를 한 번씩 더 부른다. 폰이 체스를 받으면 여기서 잇는다.
+                // ⚠️ **"폰에 체스 화면이 없다"는 낡은 말이었다** — 폰 체스는 1.0.6(build 16, 2026-10-13 제출)에 이미
+                // 나갔다. 그런데도 이 가지는 **일부러** 비어 있다. 셋을 적어 둔다.
+                //
+                // ① 왜 아직 `break` 인가: 폰 체스는 **받은함 RPC 가 없다**(`ChessStore` 머리말 ⑪) — 받은 신청·진행 중
+                //    판·전적이 전부 `chess_lobby` 의 `me` 로만 오고, 그 조회는 **허브·체스 화면에서만** 나간다
+                //    (`GamesStore.hubDidAppear`·`appDidBecomeActive` 의 `refreshLobbyIfStale`, 30초 스로틀).
+                //    그래서 이 신호를 소비할 주체를 **아직 정하지 않았다**: 여기서 `chess?.handleSignal()` 로 이으면
+                //    상대가 한 수 둘 때마다(블리츠 한 판 = 왕복 80회) 화면이 안 떠 있어도 조회가 나간다.
+                //    `GamesStore.badgeCount` 주석이 체스를 탭 배지에 안 싣는 근거와 **같은 근거**다(60초 TTL 짜리
+                //    숫자를 30초 스로틀로 갱신하는 꼴이 된다) — 둘은 한 짝으로 움직여야 한다.
+                // ② 그래서 지금 무슨 일이 벌어지는가: **초인종이 와도 폰은 다음 폴링까지 모른다.** 체스 화면이 떠
+                //    있으면 코어 폴링(1.0~1.5초)이 금방 갚고, 화면 밖이면 다음 허브 진입·active 복귀까지 모른다.
+                //    잃는 것은 신선도뿐이고 판은 서버 시계로 흐른다(체스는 자동 착수가 없다 — DECISIONS B4).
+                // ③ **`.drain` 으로 떨어뜨리면 안 되는 까닭**: `.drain` 은 "새 메시지가 있다"는 뜻이라 메시지 활동
+                //    핸들러(요약·이력 조회)를 깨운다. 체스 초인종이 그 갈래로 새면 **수마다** 메시지 조회가 한 번씩
+                //    더 나간다 — 폰이 소비할 것이 하나도 없는 조회다. 가지를 **따로 비워 두는 것**이 그 차단이다.
+                //    (이 파일 머리말의 `.drain` ≠ `take_pokes` 규약 R3 과 같은 자리.)
                 break
             case .tetrisSignal:
-                // 1:1 테트리스(맥 0.3.60)도 폰 화면은 다음 폰 버전(1.0.11)이다. 체스 가지와 같은 이유로 **비워 두되 따로 둔다** —
-                // drain 으로 떨어지면 테트리스 초인종(판 중 공격마다 울린다)마다 메시지 활동 조회가 한 번씩 더 나간다.
-                // **1.0.11 에서 반드시 여기서 `TetrisDuelStore.handleSignal()` 로 잇는다** — 체스처럼 break 로 두면
-                // 맥 대 폰 판에서 폰만 방해 줄을 하트비트(1초)까지 늦게 받는다. 그 전엔 서버 `tetris_ios_min_build()` 가
-                // 도달 불가 값이라 폰에는 신청이 오지 않는다(1.0.11 승인 뒤 한 줄 마이그레이션으로 내린다).
-                break
+                // 1:1 테트리스(서버·맥 0.3.60 · 폰 1.0.11). 체스 가지와 달리 **잇는다** — 까닭은 둘이다.
+                //  · 맥 대 폰 판에서 방해 줄이 늦는다: 서버는 공격 누계가 늘 때만 링을 울리는데(`tetris__ring`),
+                //    이 가지가 비면 폰은 자기 보고 왕복(1초)이 상태를 되돌려 줄 때까지 그 줄을 모른다. 상쇄는
+                //    '줄을 안 지운 다음 굳힘'에서 일어나므로 1초는 한 조각을 잘못 놓게 만든다.
+                //  · 구조가 맥과 같아야 한다: 맥은 `WorkTimerStoreRealtime` 이 같은 신호를 `handleSignal()` 로
+                //    흘린다. 한쪽만 다르면 "폰에서만 늦는다"는 신고가 들어올 때 볼 자리가 두 곳이 된다.
+                // `handleSignal()` 은 **직렬화된 재조회 한 번**이다(도는 중이면 뒤따르는 한 번으로 합친다 —
+                // `requestSync`), 판 중이면 그 판의 상태, 아니면 로비. 그래서 초인종이 몰려도 조회는 겹치지 않는다.
+                //
+                // ★ **`.drain` 으로 떨어뜨리면 안 되는 까닭**(가지를 따로 두는 값): 테트리스 초인종은 판 중
+                //   공격마다 울린다. `.drain` 으로 새면 그 울림마다 **메시지** 요약·이력 조회가 한 번씩 더 나간다 —
+                //   테트리스와 아무 상관 없는 조회다. 잇는 것과 따로 두는 것은 별개의 요구다.
+                tetris?.handleSignal()
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

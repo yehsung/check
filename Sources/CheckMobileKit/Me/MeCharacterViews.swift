@@ -1,6 +1,67 @@
-#if os(iOS)
 import CheckCore
 import CheckMobileShared
+
+// MARK: - 캐릭터 이름 · 타일 상태(플랫폼 무관 — macOS `swift test` 가 값으로 잰다)
+
+/// 타일 · 구매 막대 · 고르기 머리에 설 캐릭터 이름. 카드 표 → **코어 내장 이름**(아잉 · 황금 아잉이 · 무지개 아잉이) → id 차례다.
+///
+/// 왜 카드 표(`MeCharacterCards`)의 이름을 그대로 쓰지 않나: 그건 표에 없으면 **id 글자**를 돌려준다. 폰 카드 표에 무지개
+/// 아잉이가 아직 없으면 상점 타일·막대에 "aing_rainbow" 가 그려진다(실측 — 카드 그림은 다른 레인에서 온다).
+/// 서버가 준 **모르는** 캐릭터는 여전히 id 로 선다(`GachaRules.name` 의 마지막 갈래 — 이름을 지어내지 않는다는 관례 그대로).
+package enum MeCharacterName {
+    package static func display(_ id: String) -> String {
+        GachaRules.name(for: id, displayName: MeStore.gachaDisplayName)
+    }
+}
+
+/// 타일 상태 줄이 말하는 것. 뷰(`MeCharacterTile`)는 `MeCharacterTile.Status` 라는 이름으로 이 타입을 쓴다.
+///
+/// 왜 `#if os(iOS)` 바깥인가: 타일은 폰 뷰라 macOS 스위트가 한 줄도 못 본다(저장소 메모 '폰 뷰는 맥 스위트가 못 본다').
+/// "뽑기 전용 카드가 루비 값을 말하지 않는다" 는 **값으로** 잡혀야 하므로 상태 → 내용 판정을 여기 두고 뷰는 `content` 로만 가른다.
+package enum MeCharacterTileStatus: Equatable, Sendable {
+    case equipped
+    case owned
+    case price(Int, balance: Int?)
+    /// 뽑기·조각 교환으로만 얻는다(황금 · 무지개 아잉이) — 가격 대신 얻는 길("뽑기 · 조각 20"). 교환값은 서버 값(모르면 nil).
+    case gachaOnly(shardCost: Int?)
+    /// 생일 선물로만 얻는다(케이크 아잉이 둘 — v0.3.66) — **안 가진 사람의 잠긴 칸**. 가격 · 사기 단추 없이 "생일 선물 전용".
+    case giftOnly
+    case unknownPrice
+    case busy
+    case none
+
+    /// 상태 줄이 실제로 그리는 것.
+    package enum Content: Equatable, Sendable {
+        /// 보석 + 숫자(`RubyPrice`) — **루비로 사는 줄만** 이 값이다.
+        case ruby(price: Int, balance: Int?)
+        /// 글자 한 줄(`emphasized` = 착용 중 — 파랑 semibold).
+        case text(String, emphasized: Bool)
+        /// 반짝임 + 얻는 길("뽑기 · 조각 20") — 반짝임은 희귀 마감 빛깔(금빛 · 일곱 빛)이다.
+        case acquire(String)
+        /// 선물 기호 + 한 줄("생일 선물 전용") — 잠긴 칸이다. 루비 값도 반짝임도 없다(사는 줄도 뽑는 줄도 아니다).
+        /// 기호는 자물쇠가 아니다 — 상점 · 고르기는 자물쇠를 쓰지 않는다(w15 디자인 계약 `MeDesignContractTests`).
+        case locked(String)
+        case spinner
+    }
+
+    /// **뽑기 전용은 `.acquire` 다 — `.ruby` 가 아니다**: 서버가 금·무지개 행에 싣는 명목 가격(1000)은 사는 값이 아니라서
+    /// 화면이 말하면 거짓이 된다(`ShopCharacterRow.isPurchasable` 과 같은 규칙의 화면 쪽 짝). 생일 선물 전용(케이크 — 장식값 2000)도
+    /// 같은 까닭으로 `.locked` 다.
+    package var content: Content {
+        switch self {
+        case .equipped: return .text(MeText.equipped, emphasized: true)
+        case .owned: return .text(MeText.owned, emphasized: false)
+        case .price(let price, let balance): return .ruby(price: price, balance: balance)
+        case .gachaOnly(let shardCost): return .acquire(MeText.gachaTileStatus(shardCost: shardCost))
+        case .giftOnly: return .locked(CakeGiftText.lockedCaption)
+        case .unknownPrice: return .text("—", emphasized: false)
+        case .busy: return .spinner
+        case .none: return .text(" ", emphasized: false)
+        }
+    }
+}
+
+#if os(iOS)
 import SwiftUI
 
 // MARK: - 상점
@@ -10,7 +71,7 @@ import SwiftUI
 /// 보유 · 착용 표시는 고르기 화면과 같은 타일 부품(`MeCharacterTile`)이 그린다.
 ///
 /// v0.3.54(폰 1.0.8): 캐릭터 머리 **위**에 뽑기 카드(`MeGachaCard`)가 선다 — 서버가 `shop_state.gacha` 를 줄 때만. 확률표·조각 교환
-/// 시트와 캡슐 뽑기 기계 덮개는 이 화면(루트)이 띄운다. [뽑기] 와 뽑기 전용 타일(황금 아잉이)이 기계를 연다(타일은 사지 않고
+/// 시트와 캡슐 뽑기 기계 덮개는 이 화면(루트)이 띄운다. [뽑기] 와 뽑기 전용 타일(황금 · 무지개 아잉이)이 기계를 연다(타일은 사지 않고
 /// 얻는 길도 아래 막대에 말한다).
 struct MeShopView: View {
     let store: MeStore
@@ -51,7 +112,7 @@ struct MeShopView: View {
                     LazyVGrid(columns: MeCharacterTile.columns(dynamicTypeSize), spacing: 10) {
                         ForEach(ids, id: \.self) { id in
                             shopTile(id) {
-                                // 뽑기 전용(황금 아잉이) "뽑기 · 조각 20" → 기계를 연다(뽑기가 열린 서버일 때만 — 아니면 얻을 길이 없다).
+                                // 뽑기 전용(황금 · 무지개 아잉이) "뽑기 · 조각 20" → 기계를 연다(뽑기가 열린 서버일 때만 — 아니면 얻을 길이 없다).
                                 guard store.showsGacha, !store.isOwned(id), store.isGachaOnly(id) else { return }
                                 showsGachaMachine = true
                             }
@@ -121,7 +182,7 @@ struct MeShopView: View {
     }
 
     private var confirmTitle: String {
-        MeText.purchaseConfirmTitle(name: store.shopSelection.map(MeCharacterCards.displayName(for:)) ?? "")
+        MeText.purchaseConfirmTitle(name: store.shopSelection.map(MeCharacterName.display) ?? "")
     }
 
     /// 데모(DEBUG) 스크린샷: `-AingCheckDemoMeGacha odds|exchange|pull|machine` — 서버 뽑기 정보가 선 뒤 그 시트를 열거나 · 한 번
@@ -138,9 +199,10 @@ struct MeShopView: View {
 
     private func shopTile(_ id: String, onGachaOnly: @escaping () -> Void) -> some View {
         let owned = store.isOwned(id)
-        let picked = store.shopSelection == id
+        // 생일 선물 전용 잠긴 칸을 누르면 그 칸이 '고름' 틴트를 받는다 — 아래 막대가 그 칸의 이름과 얻는 길을 말한다(사지는 않는다).
+        let picked = store.shopSelection == id || store.shopGiftHintID == id
         let equipped = store.equippedLoaded && store.equippedCharacterID == id
-        let name = MeCharacterCards.displayName(for: id)
+        let name = MeCharacterName.display(id)
         let status: MeCharacterTile.Status
         if store.purchasingID == id {
             status = .busy
@@ -148,8 +210,11 @@ struct MeShopView: View {
             status = .equipped
         } else if owned {
             status = .owned
+        } else if store.isGiftOnly(id) {
+            // 생일 선물 전용(케이크 아잉이) — 잠긴 칸. 장식값(2000)도 사기 단추도 없다. 누르면 아래 막대가 얻는 길을 말한다.
+            status = .giftOnly
         } else if store.isGachaOnly(id) {
-            // 뽑기 전용(황금 아잉이) — 서버가 싣는 명목 가격(1000)을 보이지 않는다. 사는 줄이 아니다.
+            // 뽑기 전용(황금 · 무지개 아잉이) — 서버가 싣는 명목 가격(1000)을 보이지 않는다. 사는 줄이 아니다.
             status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
         } else if let price = store.price(of: id) {
             status = .price(price, balance: store.rubyBalance)
@@ -171,20 +236,24 @@ struct MeShopView: View {
 
     private var purchaseBar: some View {
         let selection = store.shopSelection
+        // 생일 선물 전용 잠긴 칸(케이크 아잉이)을 골랐으면 막대는 **그 칸의 이름 + 얻는 길**만 말한다 — 사기 단추를 세우지 않는다.
+        // 예전엔 고른 것이 없는 막대("살 것을 골라 주세요" + 흐린 '사기')가 그대로 남아 살 수 있는 것처럼 보였다(증거 shop-locked.png).
+        let giftHint = selection == nil ? store.shopGiftHintID : nil
+        let lead = selection ?? giftHint
         return VStack(spacing: 0) {
             Rectangle()
                 .fill(MobileTheme.separator)
                 .frame(height: MobileTheme.hairline)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: MobileTheme.space3) {
-                    barLead(selection: selection)
+                    barLead(selection: lead)
                     Spacer(minLength: MobileTheme.space2)
-                    buyButton(selection: selection)
+                    if giftHint == nil { buyButton(selection: selection) }
                 }
                 // 긴 안내(예: 황금 아잉이를 얻는 길)로 두 줄 모양이 되면 왼쪽에 붙인다 — 폭을 안 채우면 가운데로 떠 보인다(시뮬레이터 실측).
                 VStack(alignment: .leading, spacing: 10) {
-                    barLead(selection: selection)
-                    buyButton(selection: selection)
+                    barLead(selection: lead)
+                    if giftHint == nil { buyButton(selection: selection) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -200,7 +269,7 @@ struct MeShopView: View {
                 CharacterPortrait(id: selection, mood: .plain, size: 40)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(selection.map(MeCharacterCards.displayName(for:)) ?? MeText.pickSomething)
+                Text(selection.map(MeCharacterName.display) ?? MeText.pickSomething)
                     .font(.headline)
                     .foregroundStyle(selection == nil ? MobileTheme.label2 : MobileTheme.label)
                     .fixedSize(horizontal: false, vertical: true)
@@ -256,7 +325,7 @@ struct MeCharacterPreviewCard: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let name = MeCharacterCards.displayName(for: id)
+        let name = MeCharacterName.display(id)
         AingCard {
             // 설명 글은 줄바꿈하며 남은 폭을 쓰고 두 얼굴은 오른쪽에 제 크기로(시안 B) — 접근성 글자 크기에서만 얼굴을 아래 줄로.
             if typeSize.isAccessibilitySize {
@@ -382,7 +451,7 @@ struct MeCharacterPickerView: View {
 
     private func heroText(id: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(MeCharacterCards.displayName(for: id))
+            Text(MeCharacterName.display(id))
                 .font(MobileTheme.title(.title3))
                 .foregroundStyle(MobileTheme.label)
             Text(store.equippedLoaded ? MeText.equipped : (store.equippedLoadFailed ? MeText.equippedLoadFailed : MeText.loading))
@@ -400,7 +469,7 @@ struct MeCharacterPickerView: View {
     private func pickerTile(_ id: String) -> some View {
         let isOn = store.equippedLoaded && id == store.equippedCharacterID
         let unlocked = store.isUnlocked(id)
-        let name = MeCharacterCards.displayName(for: id)
+        let name = MeCharacterName.display(id)
         let status: MeCharacterTile.Status
         if store.savingCharacterID == id {
             status = .busy
@@ -408,6 +477,9 @@ struct MeCharacterPickerView: View {
             status = .equipped
         } else if store.isOwned(id) {
             status = .owned
+        } else if store.isGiftOnly(id) {
+            // 고르기에는 가진 사람에게만 서므로(`pickerIDs`) 거의 닿지 않는다 — 착용값이 소유보다 먼저 도착한 창의 안전망.
+            status = .giftOnly
         } else if store.isGachaOnly(id) {
             status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
         } else if let price = store.price(of: id) {
@@ -415,11 +487,16 @@ struct MeCharacterPickerView: View {
         } else {
             status = unlocked ? .none : .unknownPrice
         }
-        let lockedLabel = store.isGachaOnly(id)
-            ? "\(name), 잠김 — \(MeText.gachaAcquirePhrase(shardCost: store.gachaShardCost(of: id)))"
-            : "\(name), 잠김 — 상점에서 사기"
+        let lockedLabel: String
+        if store.isGiftOnly(id) {
+            lockedLabel = "\(name), 잠김 — \(CakeGiftText.lockedCaption)"
+        } else if store.isGachaOnly(id) {
+            lockedLabel = "\(name), 잠김 — \(MeText.gachaAcquirePhrase(shardCost: store.gachaShardCost(of: id)))"
+        } else {
+            lockedLabel = "\(name), 잠김 — 상점에서 사기"
+        }
         return Button {
-            // 안 가진 뽑기 전용(황금 아잉이) "뽑기 · 조각 20" → 기계를 연다(뽑기가 열린 서버일 때만 — 아니면 얻는 길을 말한다).
+            // 안 가진 뽑기 전용(황금 · 무지개 아잉이) "뽑기 · 조각 20" → 기계를 연다(뽑기가 열린 서버일 때만 — 아니면 얻는 길을 말한다).
             if store.showsGacha, !store.isOwned(id), store.isGachaOnly(id) {
                 showsGachaMachine = true
             } else {
@@ -447,16 +524,8 @@ struct MeCharacterPickerView: View {
 /// 그림은 **두 화면에서 똑같이** 원색으로 그린다. 고르기에서만 안 가진 캐릭터를 흐리게 그리던 것을 걷었다 — 같은 데이터가 화면마다
 /// 다르게 보였고(비평 5), 안 가진 것은 상태 줄의 `RubyPrice`(가격)가 두 화면에서 똑같이 말한다.
 struct MeCharacterTile: View {
-    enum Status: Equatable {
-        case equipped
-        case owned
-        case price(Int, balance: Int?)
-        /// 뽑기·조각 교환으로만 얻는다(황금 아잉이) — 가격 대신 얻는 길("뽑기 · 조각 20"). 교환값은 서버 값(모르면 nil).
-        case gachaOnly(shardCost: Int?)
-        case unknownPrice
-        case busy
-        case none
-    }
+    /// 상태는 플랫폼 무관한 자리에 있다(`MeCharacterTileStatus` — 맥 스위트가 값으로 잰다).
+    typealias Status = MeCharacterTileStatus
 
     /// 타일에 얹는 표시. 뜻이 다르면 모양도 다르다.
     enum Mark: Equatable {
@@ -471,6 +540,10 @@ struct MeCharacterTile: View {
     let name: String
     let status: Status
     let mark: Mark
+
+    /// 반짝임 기호 하나만 모드를 본다(라이트 무지개는 단색 — `MobileTheme.sparkle(_:in:)`). 다른 색은 전부 동적 `Color` 라
+    /// 모드를 묻지 않는다.
+    @Environment(\.colorScheme) private var colorScheme
 
     /// 두 화면 같은 순서: 가진 것 먼저(아잉 → 나머지는 받은 순서), 그다음 안 가진 것(받은 순서). 안정 정렬.
     static func ordered(_ ids: [String], isOwned: (String) -> Bool) -> [String] {
@@ -488,6 +561,7 @@ struct MeCharacterTile: View {
         case .owned: return "\(name), \(MeText.owned)"
         case .price(let price, let balance): return "\(name), \(RubyPriceRule.accessibilityText(price: price, isShort: RubyPriceRule.isShort(price: price, balance: balance)))"
         case .gachaOnly(let shardCost): return MeText.gachaTileAccessibility(name: name, shardCost: shardCost)
+        case .giftOnly: return "\(name), \(CakeGiftText.lockedCaption)"
         case .unknownPrice: return "\(name), 가격 모름"
         case .busy: return "\(name), \(MeText.loading)"
         case .none: return name
@@ -537,39 +611,47 @@ struct MeCharacterTile: View {
         .contentShape(shape)
     }
 
+    /// 상태 줄. **무엇을 말하는지는 `status.content`**(플랫폼 무관)가 정하고, 여기서는 칠하기만 한다 —
+    /// 뽑기 전용(황금 · 무지개)은 반짝임이 그 캐릭터의 희귀 빛깔이다.
+    ///
+    /// 빛깔은 **글자 갈래(`ink`)가 아니라 기호 갈래(`MobileTheme.sparkle(_:in:)`)**다(폰 1.0.10 색 고르기) — 짧은 기호에는
+    /// 그라데이션이 안 읽히고(라이트 무지개 = 단색 보라), 장식이라 글자 4.5:1 을 안 지킨다(라이트 금 = 메달 금 `#F5B700`).
+    /// 다크는 두 빛깔 다 1.0.9 값 그대로다. 서버가 표식만 준 평범한 id 면 금빛이다.
     @ViewBuilder
     private var statusLine: some View {
-        switch status {
-        case .equipped:
-            Text(MeText.equipped)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(MobileTheme.accent)
-        case .owned:
-            Text(MeText.owned)
-                .font(.footnote)
-                .foregroundStyle(MobileTheme.label2)
-        case .price(let price, let balance):
+        switch status.content {
+        case .ruby(let price, let balance):
             RubyPrice(price, balance: balance, gemSize: 17, style: .subheadline)
-        case .gachaOnly(let shardCost):
+        case .text(let text, let emphasized):
+            Text(text)
+                .font(emphasized ? .footnote.weight(.semibold) : .footnote)
+                .foregroundStyle(emphasized ? MobileTheme.accent : MobileTheme.label2)
+        case .acquire(let text):
             HStack(spacing: 3) {
                 Image(systemName: "sparkles")
                     .font(.caption2)
-                    .foregroundStyle(MobileTheme.gold)
+                    .foregroundStyle(MobileTheme.sparkle(CharacterManifest.Finish(characterID: id), in: colorScheme))
                     .accessibilityHidden(true)
-                Text(MeText.gachaTileStatus(shardCost: shardCost))
+                Text(text)
                     .font(.footnote)
                     .foregroundStyle(MobileTheme.label2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-        case .unknownPrice:
-            Text("—")
-                .font(.footnote)
-                .foregroundStyle(MobileTheme.label2)
-        case .busy:
+        case .locked(let text):
+            HStack(spacing: 3) {
+                Image(systemName: "gift.fill")
+                    .font(.caption2)
+                    .foregroundStyle(MobileTheme.label2)
+                    .accessibilityHidden(true)
+                Text(text)
+                    .font(.footnote)
+                    .foregroundStyle(MobileTheme.label2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+        case .spinner:
             ProgressView().controlSize(.small)
-        case .none:
-            Text(" ").font(.footnote)
         }
     }
 }

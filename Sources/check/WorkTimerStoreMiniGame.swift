@@ -76,6 +76,15 @@ struct MiniGamePendingSubmit: Codable, Equatable, Identifiable {
     func isExpired(at now: Date, ttl: TimeInterval) -> Bool { now >= deadline(ttl: ttl) }
 }
 
+/// 진행 중인 판 한 장의 장부(v0.3.67). 허브가 판 시작 · 점수 변화 · 판 끝을 적고, 판을 접는 자리가 읽는다.
+struct MiniGameLiveRound: Equatable {
+    let kind: MiniGameKind
+    /// 지금까지의 점수(잎 뷰가 바뀔 때마다 알린다).
+    var score: Int
+    /// 이 판의 점수를 이미 올렸다(판 끝 · 접기 중 먼저 온 쪽). 두 번 올리지 않는다.
+    var settled: Bool
+}
+
 /// 제출 결과 한 줄의 문장들. **사용자 말투 · 짧게.** 인편이 살아 있는 동안은 "못 올렸어요"가 아니다 — 아직 지지 않았다.
 enum MiniGameSubmitCopy {
     /// 인편이 살아 있다(네트워크 실패 · `too_fast` · 세대 밀림 · 토큰 대기). 곧 다시 보낸다.
@@ -174,6 +183,12 @@ extension WorkTimerStore {
         loadMiniGameBoard()
         // 창을 닫아 둔 사이에 죽은 점수가 있으면 **여기서 한 번 말하고 표식을 지운다**(아래 밀기가 문구를 덮기 전에).
         showMiniGameLostNoticeIfAny()
+        // [역대] 를 보던 채로 닫았다가 다시 열면 역대 표도 새로 받는다(오늘 순위의 '열림' 방아쇠와 같은 자리 — 다른 맥에서
+        // 세운 기록·남의 새 기록이 들어왔을 수 있다). [오늘] 이면 아무것도 안 나간다(역대는 처음 넘어갈 때 받는다).
+        if miniGameBoardScope == .allTime {
+            if !miniGameAllTimeLoaded { miniGameAllTimeLoading = true }
+            loadMiniGameAllTimeBoard()
+        }
         // 인편이 남아 있으면 **먼저 밀어낸다**(모든 게임의 것을). 선발급은 살아 있는 인편을 보면 스스로 비켜서므로
         // 여기서 풀어 두지 않으면 사람이 판을 시작할 때까지 토큰이 없다. 비워지는 순간 제출의 꼬리가 새 토큰을 받아 준다.
         retryMiniGamePendingSubmitIfAny()
@@ -200,6 +215,7 @@ extension WorkTimerStore {
     /// 이미 닫혀 있으면 아무것도 하지 않는다 — 헛되이 토큰을 올려 잎 뷰를 깨우지 않게.
     func closeMiniGamePanel() {
         guard isMiniGamePanelVisible else { return }
+        settleMiniGameLiveRound()
         isMiniGamePanelVisible = false
         miniGameInterruptToken += 1
         CheckMiniGameWindowController.shared.close()
@@ -242,7 +258,74 @@ extension WorkTimerStore {
     /// 채웠으므로 무효(`MiniGameHost.interruptToken` 주석). 스토어는 그 차이를 모른다.
     /// 창은 그대로 둔다(`isMiniGamePanelVisible` 을 안 내린다) — 그만둔 사람은 대개 다른 게임을 하려는 것이다.
     func abortMiniGameRound() {
+        settleMiniGameLiveRound()
         miniGameInterruptToken += 1
+    }
+
+    // MARK: 진행 중인 판의 장부 (v0.3.67)
+    //
+    // 검토 지적(2026-10-27): 정지 카드가 "지금 그만두면 … 기록돼요" 라고 약속하는데, 멈춰 둔 채 **다른 게임 칩**을 누르면 점수가
+    // 사라졌다(플래피 · 테트리스도 같다). `selectMiniGame` 이 interruptToken 을 올리고 종류를 바꾸면 그 갱신에서 잎 뷰가 통째로
+    // 빠져 자기 `onChange(of: interruptToken)` 를 영영 못 본다 — `interrupt()` 도 `onFinished` 도 안 불린다.
+    // 그래서 판을 접는 문(칩 전환 · 창 닫기 · 로그아웃 · [그만두기] · 정지 상한)은 **잎 뷰를 기다리지 않고** 장부의 점수를
+    // 그 자리에서 올린다. 잎 뷰가 살아 있어 늦게 `onFinished` 를 부르면 장부가 이미 올렸음을 알고 건너뛴다.
+    // 접었을 때 기록이 안 남는 게임(타이밍 바 — `quittingKeepsTheScore`)은 접어도 아무것도 안 올린다(그 판은 무효다).
+
+    /// 판이 시작됐다(허브의 `onPlayingChanged(true)`).
+    func beginMiniGameLiveRound(kind: MiniGameKind) {
+        miniGameLiveRound = MiniGameLiveRound(kind: kind, score: 0, settled: false)
+    }
+
+    /// 진행 중인 판의 점수가 바뀌었다(허브가 잎 뷰의 `onScoreChanged` 를 그대로 넘긴다).
+    func noteMiniGameLiveScore(kind: MiniGameKind, score: Int) {
+        guard var round = miniGameLiveRound, round.kind == kind, !round.settled else { return }
+        round.score = score
+        miniGameLiveRound = round
+    }
+
+    /// 잎 뷰가 판을 끝냈다(`onFinished`) — 장부가 아직 안 올렸으면 그 점수를 올린다. **허브의 onFinished 는 이 문 하나로 온다.**
+    /// 장부가 없으면(시작을 못 본 판 — 시험 · 옛 경로) 예전처럼 그대로 올린다.
+    func finishMiniGameLiveRound(kind: MiniGameKind, score: Int) {
+        if var round = miniGameLiveRound, round.kind == kind {
+            guard !round.settled else { return }
+            round.settled = true
+            round.score = score
+            miniGameLiveRound = round
+        }
+        recordMiniGameScore(kind: kind, score: score)
+    }
+
+    /// 판을 **접는 자리**(칩 전환 · 창 닫기 · 로그아웃 · [그만두기])에서 부른다. 돌던 판이 접어도 기록이 남는 게임이면
+    /// 장부의 점수를 지금 올리고, 아니면(타이밍 바) 접기만 한다. 이미 올렸거나 판이 없으면 아무 일도 없다(멱등).
+    func settleMiniGameLiveRound() {
+        guard var round = miniGameLiveRound, !round.settled else { return }
+        round.settled = true
+        miniGameLiveRound = round
+        guard CheckMiniGameWindowView.PauseState.quittingKeepsTheScore(round.kind) else { return }
+        recordMiniGameScore(kind: round.kind, score: round.score)
+    }
+
+    /// 판 도중 토큰 갈아 끼우기(v0.3.67 — 길건너처럼 끝이 정해지지 않은 판). 허브의 토큰 감시가 판이 도는 동안 30초마다 부른다.
+    ///
+    /// 들고 있는 그 게임의 토큰이 `roundTokenMidRunRefreshSeconds` 보다 늙었으면 새로 받는다(서버가 안 쓴 토큰을 갈아 끼우며
+    /// TTL 을 새로 센다 — `MiniGameKind.roundTokenMidRunRefreshSeconds` 주석). 아무것도 안 하는 자리:
+    ///  · 그 게임이 갈아 끼우지 않는 게임이다(nil) · 아직 젊다 · 이미 왕복 중이다.
+    ///  · **그 게임의 인편이 살아 있다** — 불변식(머리 주석): 새 토큰을 받는 순간 인편이 든 옛 토큰이 죽는다. 인편을 먼저 민다.
+    /// 들고 있는 토큰이 아예 없으면(판 시작 왕복이 실패했다) 받는다 — 그 판이 끝나기 전에 쥐어야 한다.
+    func keepMiniGameRoundTokenFresh(kind: MiniGameKind, now: Date = Date()) {
+        guard let limit = kind.roundTokenMidRunRefreshSeconds else { return }
+        guard session != nil, miniGamePublic else { return }
+        if hasMiniGamePendingSubmit(for: kind) {
+            retryMiniGamePendingSubmitIfAny()
+            return
+        }
+        guard miniGameRoundTokenInFlightKind != kind else { return }
+        if miniGameRoundToken != nil, miniGameRoundTokenKind == kind, let issued = miniGameRoundTokenAt,
+           now.timeIntervalSince(issued) < limit {
+            return
+        }
+        Self.miniGameLogger.notice("round token refreshed mid-run game=\(kind.rawValue, privacy: .public)")
+        requestMiniGameRoundToken(kind: kind)
     }
 
     /// 미니게임 창이 **키를 잃었다** — 진행 중인 판을 일시정지해 달라고 화면에 알린다(0.3.62).
@@ -263,6 +346,8 @@ extension WorkTimerStore {
     /// 게임 종류 전환. 진행 중인 판을 끝내고(토큰) 그 게임의 오늘 순위를 다시 받는다. 선택은 영속한다.
     func selectMiniGame(_ kind: MiniGameKind) {
         guard kind != miniGameKind else { return }
+        // 돌던(또는 멈춰 둔) 판을 **먼저** 접어 올린다 — 잎 뷰는 이 갱신에서 통째로 사라져 자기 `interruptToken` 을 못 본다.
+        settleMiniGameLiveRound()
         miniGameKind = kind
         defaults.set(kind.rawValue, forKey: Self.miniGameKindKey)
         miniGameInterruptToken += 1
@@ -285,6 +370,16 @@ extension WorkTimerStore {
         miniGameYesterdayWinner = nil
         miniGameBoardLoading = true
         loadMiniGameBoard()
+        // 역대 표도 같은 이유로 비운다(앞 게임의 역대 1등이 '이 게임 1등인 척' 보이면 안 된다). [역대] 를 보는 중이면
+        // 바뀐 게임의 역대를 곧바로 받고, [오늘] 이면 다음에 [역대] 로 넘어갈 때 받는다(freshKind = nil).
+        miniGameAllTimeBoard = []
+        miniGameAllTimeLoaded = false
+        miniGameAllTimeFailed = false
+        miniGameAllTimeUnavailable = false
+        miniGameAllTimeFreshKind = nil
+        miniGameAllTimeInvalidation &+= 1
+        miniGameAllTimeLoading = miniGameBoardScope == .allTime
+        if miniGameBoardScope == .allTime { loadMiniGameAllTimeBoard() }
     }
 
     // MARK: 최고기록 · 제출
@@ -545,7 +640,10 @@ extension WorkTimerStore {
             // 꼬리에서 다음 인편을 밀어야 하므로 깃발은 **여기서** 내린다(defer 는 꼬리 뒤에 돈다 — 그때는 이미 늦다).
             miniGameSubmittingKinds.remove(kind)
             var reloadsBoard = false
+            // 서버에 이 판이 남았다(v0.3.64 — 일일 미션이 세는 것은 제출된 판이다). 꼬리에서 도전 미션을 한 번 묻는다.
+            var recorded = false
             if response.status == "ok" || response.status == "token_used" {
+                recorded = true
                 // ★ `token_used` 는 **성공이다.** 서버는 제출이 성공한 순간 그 토큰에 used_at 을 찍고, 이미 쓴 토큰에는
                 //   `token_used` 를 돌려준다. 즉 이 응답을 받는 경우는 **응답만 유실된 첫 제출의 재시도**뿐이고,
                 //   그때 점수는 이미 올라가 있다. 이걸 거절로 그리면 올라간 점수를 "못 올렸어요"라고 말하는 거짓말이 된다(5번 갈래).
@@ -559,6 +657,11 @@ extension WorkTimerStore {
                 // 창이 열려 있으면 재조회한다(팝오버는 닫혀 있어도 된다 — 게임은 별도 창이다). **아래 선발급 뒤에** 한다 —
                 // 앞에 두면 두 왕복(순위·어제 1등)만큼 다음 판의 토큰이 늦어져 그 사이 시작한 짧은 판이 토큰 없이 끝난다.
                 reloadsBoard = isMiniGamePanelVisible && miniGameKind == kind
+                // 이 게임의 역대 표는 이제 낡았다(새 개인 최고가 들어갔을 수 있다). [역대] 를 보는 중이면 꼬리에서 바로 다시 받고,
+                // 아니면 다음에 [역대] 로 넘어갈 때 받는다 — 보지도 않는 표를 판마다 받지 않는다.
+                if miniGameAllTimeFreshKind == kind { miniGameAllTimeFreshKind = nil }
+                // 떠 있는 받기가 이 제출 **전**에 떠났을 수 있다 — 그 응답이 늦게 닿아 '최신'을 다시 세우지 못하게 한다.
+                miniGameAllTimeInvalidation &+= 1
             } else if Self.miniGameTerminalSubmitStatuses.contains(response.status) {
                 // ⚠️ `need_seconds`/`elapsed_seconds` 는 **화면에도 로그에도 쓰지 않는다** — "얼마나 더
                 //    기다리면 통과하는지"를 알려 주는 순간 그건 위조 보조 도구다. status 이름이면 진단에 충분하다.
@@ -604,7 +707,12 @@ extension WorkTimerStore {
             // (방금 쓴 토큰은 죽었다). 인편이 남아 있으면 선발급하지 않는다 — 그게 불변식이다. 이 꼬리는 방아쇠가 아니다(주석 위).
             retryMiniGamePendingSubmitIfAny(fromTrigger: false)
             if !hasMiniGamePendingSubmit(for: kind) { prefetchMiniGameRoundToken(kind: kind) }
+            // 일일 미션(v0.3.64) — 판 제출이 성공한 뒤 한 번(새 타이머 없이 이벤트로). 선발급 **뒤**에 둔다(다음 판 토큰이 먼저다).
+            // 오늘 이 게임 줄을 이미 채웠으면(받았든 안 받았든) 묻지 않는다 — 하루 첫 판만 나간다(검토 지적 2026-10-22).
+            if recorded { refreshAchievementsAfterGameResult(game: kind.rawValue) }
             if reloadsBoard { await performLoadMiniGameBoard() }
+            // 역대(v0.3.67) — [역대] 를 보는 중일 때만, 오늘 순위 **뒤에** 받는다(선발급·오늘 순위가 먼저다).
+            if reloadsBoard, miniGameBoardScope == .allTime { await performLoadMiniGameAllTimeBoard() }
         } catch {
             if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration else {
@@ -807,6 +915,84 @@ extension WorkTimerStore {
         guard generation == sessionGeneration, kind == miniGameKind else { return }
         if let winner, miniGameYesterdayWinner != winner { miniGameYesterdayWinner = winner }
         if winner == nil, miniGameYesterdayWinner != nil { miniGameYesterdayWinner = nil }
+    }
+
+    // MARK: 역대 순위 (v0.3.67)
+    //
+    // 사용자 결정(2026-10-27): "미니게임 멀티 아닌 3종 에서 역대 최고 점수 랭킹 볼 수 있는 창도 만들어줘."
+    // 순위 열 머리의 [오늘 | 역대] 가 이 절을 부른다. 받는 때는 넷뿐이다 — ① [역대] 로 넘어갈 때(그 게임 표가 최신이 아닐 때만)
+    // ② [역대] 를 보는 중에 게임을 바꿀 때 ③ [역대] 를 보는 중에 판이 기록됐을 때 ④ [역대] 를 보던 채로 창을 다시 열 때.
+    // 30초 루프에 얹지 않는다(오늘 순위와 같은 이유).
+
+    /// 순위 열의 [오늘 | 역대] 전환. 같은 쪽을 다시 누르면 아무 일도 없다.
+    /// [역대] 로 넘어갈 때 그 게임의 최신 표를 들고 있으면 **다시 받지 않는다**(오가며 누를 때마다 요청이 나가지 않게).
+    /// 실패한 채였으면 넘어갈 때 한 번 더 받는다 — 사용자가 다시 보러 온 것이 곧 재시도 의사다.
+    func selectMiniGameBoardScope(_ scope: MiniGameBoardScope) {
+        guard scope != miniGameBoardScope else { return }
+        miniGameBoardScope = scope
+        guard scope == .allTime else { return }
+        guard miniGameAllTimeFreshKind != miniGameKind || miniGameAllTimeFailed else { return }
+        // 첫 프레임부터 빈 자리에 "불러오는 중…"이 뜨게 한다(오늘 순위와 같은 규약 — 본문 자리에 엉뚱한 문구 금지).
+        if !miniGameAllTimeLoaded { miniGameAllTimeLoading = true }
+        loadMiniGameAllTimeBoard()
+    }
+
+    /// 역대 순위를 받는다(Task 발사). 위 네 방아쇠와 [다시 시도] 가 부른다.
+    func loadMiniGameAllTimeBoard() {
+        Task { @MainActor in await performLoadMiniGameAllTimeBoard() }
+    }
+
+    /// `minigame_alltime_board` 를 받아 반영한다. 응답이 오는 사이 게임을 바꿨거나 계정이 바뀌었으면 버린다(오늘 순위와 같은 가드).
+    ///
+    /// 실패는 셋으로 가른다.
+    ///  · 서버에 함수가 아직 없다(PGRST202 · 본문 없는 404) → **준비 중**(빈 표 + `miniGameAllTimeUnavailable`). 실패 문구도
+    ///    [다시 시도] 도 없다 — 앱이 db push 보다 먼저 나간 창이고, 두드려 봐야 같은 답이다(오류 고리를 만들지 않는다).
+    ///  · 그 밖(네트워크 · 5xx · 배열이 아닌 본문) → 실패. 이미 그린 표가 있으면 그대로 두고, 없을 때만 실패 문구 + [다시 시도].
+    ///  · 취소 → 아무것도 안 바꾼다.
+    func performLoadMiniGameAllTimeBoard() async {
+        guard session != nil else { return }
+        let kind = miniGameKind
+        let generation = sessionGeneration
+        // 떠날 때의 낡음 표시 횟수와 일련번호(v0.3.67 — `miniGameAllTimeInvalidation` 주석).
+        let invalidation = miniGameAllTimeInvalidation
+        miniGameAllTimeFetchSerial &+= 1
+        let serial = miniGameAllTimeFetchSerial
+        if !miniGameAllTimeLoading { miniGameAllTimeLoading = true }
+        if miniGameAllTimeFailed { miniGameAllTimeFailed = false }
+        defer { if kind == miniGameKind, miniGameAllTimeLoading { miniGameAllTimeLoading = false } }
+        do {
+            let entries = try await withSessionRetry { activeSession in
+                try await service.fetchMiniGameAllTimeBoard(accessToken: activeSession.accessToken, kind: kind)
+            }
+            guard generation == sessionGeneration, kind == miniGameKind else { return }
+            // 뒤에 떠난 받기가 이미 반영됐으면 이 (옛) 응답은 버린다 — 새 표를 옛 표로 덮지 않는다.
+            guard serial > miniGameAllTimeAppliedSerial else { return }
+            miniGameAllTimeAppliedSerial = serial
+            let sorted = entries.sortedForMiniGameAllTimeBoard()
+            if miniGameAllTimeBoard != sorted { miniGameAllTimeBoard = sorted }
+            if !miniGameAllTimeLoaded { miniGameAllTimeLoaded = true }
+            if miniGameAllTimeFailed { miniGameAllTimeFailed = false }
+            if miniGameAllTimeUnavailable { miniGameAllTimeUnavailable = false }
+            // 떠난 뒤에 낡음 표시가 있었으면(그 사이 판이 기록됐다) **최신으로 표시하지 않는다** — 다음에 [역대] 로 넘어가면 다시 받는다.
+            if invalidation == miniGameAllTimeInvalidation { miniGameAllTimeFreshKind = kind }
+            // 내 역대 행은 이 계정의 **진짜** 전체 기간 최고다 — 로컬 캐시("최고 N")가 그보다 작으면(다른 맥 · 재설치) 올린다.
+            if let me = session?.userID, let mine = sorted.first(where: { $0.userID == me }) {
+                raiseMiniGameBest(kind, to: mine.bestScore)
+            }
+        } catch {
+            if case .cancelled = classifyAuthError(error) { return }
+            guard generation == sessionGeneration, kind == miniGameKind else { return }
+            if let serviceError = error as? SupabaseWorkServiceError, BlockReportRules.isMissingFunction(serviceError) {
+                if !miniGameAllTimeBoard.isEmpty { miniGameAllTimeBoard = [] }
+                if !miniGameAllTimeUnavailable { miniGameAllTimeUnavailable = true }
+                if !miniGameAllTimeLoaded { miniGameAllTimeLoaded = true }
+                // 같은 게임으로 오가며 누를 때마다 404 를 다시 두드리지 않는다(판 기록 · 게임 전환 · 창 열기가 다시 묻는다).
+                miniGameAllTimeFreshKind = kind
+            } else {
+                Self.miniGameLogger.notice("alltime board fetch failed game=\(kind.rawValue, privacy: .public)")
+                if !miniGameAllTimeFailed { miniGameAllTimeFailed = true }
+            }
+        }
     }
 
     // MARK: 공개 설정

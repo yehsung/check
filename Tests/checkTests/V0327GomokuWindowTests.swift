@@ -480,7 +480,9 @@ func inviteBubbleTextAlwaysFitsTheCapsule() {
         for stake in [3, 5, 10] {
             let text = CheckOverlayController.gomokuInviteBubbleText(name: name, stake: stake)
             #expect(OverlayMessageBubble.fitsCapsule(text), "'\(text)' 가 두 줄 캡슐을 넘친다")
-            #expect(text.hasSuffix("\(stake)💎"), "'\(text)' 에서 판돈이 빠졌다")
+            // v0.3.64: 판돈은 "루비 N" 글자다(말풍선은 순수 문자열 — 파란 💎 를 버렸다, 사용자 "루비 아이콘 통일").
+            #expect(text.hasSuffix("루비 \(stake)"), "'\(text)' 에서 판돈이 빠졌다")
+            #expect(!text.contains("💎"), "'\(text)' 에 파란 💎 가 남았다")
             #expect(!OverlayMessageBubble.isArrival(text), "'\(text)' 가 메시지 도착 말풍선으로 읽힌다")
         }
     }

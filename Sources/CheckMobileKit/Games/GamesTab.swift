@@ -28,6 +28,8 @@ struct GamesTab: View {
                         .padding(.top, 12)
                     chessCard
                         .padding(.top, 12)
+                    tetrisDuelCard
+                        .padding(.top, 12)
                     todayRanks
                     liveMatches
                 }
@@ -46,6 +48,9 @@ struct GamesTab: View {
                 await store.context.gomoku.loadInbox()
                 // 체스는 받은함 RPC 가 없다 — 받은 신청·진행 판·전적이 전부 로비 응답에 실려 온다(`GamesStore.hubDidAppear`).
                 await store.chess.refreshLobby()
+                // 테트리스도 같다(P5) — 당겨서 새로고침이 카드의 "받은 신청" 칩을 **지금** 맞추는 유일한 길이다
+                // (허브 조회는 30초 스로틀이라 사용자가 당긴 것에 답하지 않는다).
+                await store.tetris.refreshLobby()
             }
             .navigationDestination(for: GamesDestination.self) { destination in
                 switch destination {
@@ -60,6 +65,14 @@ struct GamesTab: View {
                     //   `onDisappear` → `chessScreenDidDisappear()` → `stopWatching()` 이 관전을 내리고,
                     //   그러면 값이 또 바뀌어 같은 일이 되풀이된다. 실측에서 관전 화면이 **영영 안 떴다**.
                     GamesChessScreen(store: store)
+                case .tetrisDuel:
+                    // ★ 이 가지가 없으면 **iOS 빌드가 통째로 안 선다**(`switch must be exhaustive`) — 그런데
+                    //   맥 `swift build` 는 이 파일을 컴파일조차 하지 않는다(`#if os(iOS)`). 유일한 그물은
+                    //   `ios/scripts/build-sim.sh` 다(저장소 메모 '폰 뷰는 맥 스위트가 못 본다').
+                    // ★ 체스와 같은 까닭으로 **데모 닻을 여기 달지 않는다**: 이 클로저에서 읽는 값이 바뀌면
+                    //   목적지가 다시 세워져 화면이 헐리고 `tetrisScreenDidDisappear()` 가 돌아, 수락한 판이
+                    //   화면 없이 15초 침묵으로 진다(D5). 로비 탭 선택은 화면 안에서 쥔다.
+                    GamesTetrisDuelScreen(store: store)
                 }
             }
         }
@@ -68,12 +81,14 @@ struct GamesTab: View {
             store.hubDidAppear()
             consumeRoute()
             applyDemoChessRoute()
+            applyDemoTetrisRoute()
             applyDemoSeed()
         }
         // 라우트 계기에서도 꺼낸다 — 탭 막대가 이 탭을 **먼저** 마운트했으면 깃발이 서기 전에 onAppear 가 끝난다.
         .onChange(of: router.routeSerial) {
             consumeRoute()
             applyDemoChessRoute()
+            applyDemoTetrisRoute()
         }
     }
 
@@ -159,7 +174,7 @@ struct GamesTab: View {
         let record = gomoku.record.map { GomokuPhoneText.recordTitle + " " + GomokuPhoneText.record($0) }
         // 칩이 없을 때: 보낸 신청 대기·받은함 실패는 그 한 줄이 먼저, 아니면 전적(모르면 안내 한 줄).
         let detail: String? = blockedBy != nil
-            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text)
+            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .gomoku)
             : (chip != nil ? record : ((gomoku.outgoing != nil || gomoku.inboxLoadFailed) ? line : (record ?? line)))
         return Button {
             store.context.router.push(GamesDestination.gomoku, on: .games)
@@ -198,7 +213,7 @@ struct GamesTab: View {
         .disabled(blockedBy != nil)
         .accessibilityHint(blockedBy == nil
                            ? "오목 대결 화면을 열어요"
-                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text) ?? ""))
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .gomoku) ?? ""))
     }
 
     // MARK: 체스 카드
@@ -220,7 +235,7 @@ struct GamesTab: View {
             : (active ? GamesText.activeMatchChip : (incoming != nil ? ChessPhoneText.incomingChip : nil))
         let record = chess.record.map { ChessPhoneText.recordTitle + " " + ChessPhoneText.record($0) }
         let detail: String? = blockedBy != nil
-            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text)
+            ? ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .chess)
             : (chip != nil ? record : (chess.outgoing != nil ? ChessPhoneText.outgoingLine
                                                             : (record ?? ChessPhoneText.idleLine)))
         return Button {
@@ -260,7 +275,66 @@ struct GamesTab: View {
         .disabled(blockedBy != nil)
         .accessibilityHint(blockedBy == nil
                            ? ChessPhoneText.cardOpenHint
-                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text) ?? ""))
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .chess) ?? ""))
+    }
+
+    // MARK: 1:1 테트리스 카드
+
+    /// 1:1 테트리스 카드(설계서 P2) — 체스 카드 **바로 아래**, 모양도 **같다**(썸네일 60 · 제목 · 부제 ·
+    /// 칩 + 보조 한 줄 · 꺾쇠). 입구 하나로 로비·준비·판·결과·순위를 다 연다(화면이 단계를 갈아 끼운다 — P6).
+    ///
+    /// ★ 막는 방향은 **삼각이다**(P3): 오목·체스 판이 흐르면 이 카드가 막히고, 테트리스 판이 흐르면 위 두 카드가
+    ///   막힌다. 서버 `chess__busy` 는 셋을 함께 보지만 **오목 쪽 게이트는 남을 모르므로** 안 막은 입구로
+    ///   들어가면 흐르던 테트리스 판이 15초 침묵으로 **판돈째 진다**(서버 D5).
+    ///
+    /// ★ 칩과 보조 줄의 **서열은 `GamesTetrisDuelCard` 한 곳**이다(차단 > 진행 중 판 > 받은 신청 > 보낸 신청 >
+    ///   전적 > 기본 한 줄). 여기서 삼항으로 다시 고르면 서열이 두 벌이 되어 한쪽만 고쳐지고, 그 상태가
+    ///   **초록인 채로** 남는다 — 그 판정은 맥 스위트가 값으로 잰다(폰 뷰는 못 본다).
+    ///
+    /// ★ 막혔을 때 **두 자리를 다 그린다**(칩 = 왜 · 보조 줄 = 언제 풀리는지). 한 자리만 그리면 사용자가
+    ///   기다릴 끝을 모른다(폰엔 호버 툴팁이 없다).
+    private var tetrisDuelCard: some View {
+        let blockedBy = store.tetrisEntryBlock
+        let chip = GamesTetrisDuelCard.chip(store)
+        let detail = GamesTetrisDuelCard.detail(store)
+        return Button {
+            store.context.router.push(GamesDestination.tetrisDuel, on: .games)
+        } label: {
+            InsetGroup {
+                HStack(spacing: 14) {
+                    GamesTetrisDuelTabThumbnail()
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(TetrisPhoneText.title)
+                            .font(MobileTheme.rowTitle)
+                            .foregroundStyle(MobileTheme.label)
+                        Text(TetrisPhoneText.cardSubtitle)
+                            .font(MobileTheme.rowSubtitle)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) { gomokuChip(chip); gomokuDetail(detail) }
+                            VStack(alignment: .leading, spacing: 4) { gomokuChip(chip); gomokuDetail(detail) }
+                        }
+                        .padding(.top, 3)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label3)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MobileTheme.cardPadding)
+                .padding(.vertical, 14)
+            }
+            .opacity(blockedBy == nil ? 1 : 0.55)
+            .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+        .disabled(blockedBy != nil)
+        .accessibilityHint(blockedBy == nil
+                           ? TetrisPhoneText.cardOpenHint
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .tetris) ?? ""))
     }
 
     @ViewBuilder
@@ -352,6 +426,19 @@ struct GamesTab: View {
         store.context.router.push(GamesDestination.chess, on: .games)
     }
 
+    /// 데모 스크린샷 전용: 시작 라우트가 1:1 테트리스 장면(`games/tetris/…`)이면 테트리스를 쌓는다.
+    /// 깃발은 앱 모델이 세운다(`MobileAppModel.openDemoRouteIfNeeded`). `consume…` 이라 두 계기에서 불려도
+    /// **한 번만** 쌓는다.
+    ///
+    /// ★ **꼬리는 여기서 쓰지 않는다** — 쌓는 화면은 라우트 아홉이 다 같은 `.tetrisDuel` 하나다(설계서 P6:
+    ///   순위는 로비 안 탭이고 판은 같은 화면이 단계로 갈아 끼운다). 꼬리는 `store.demoTetrisRoute` 에 남아
+    ///   두 자리가 읽는다: 열 판은 `GamesStore.tetrisScreenDidAppear`(`openWindow(focusMatchID:)`), 로비 탭은
+    ///   `GamesTetrisDuelScreen.applyDemoTab`.
+    private func applyDemoTetrisRoute() {
+        guard store.consumePendingDemoTetrisScreen() else { return }
+        store.context.router.push(GamesDestination.tetrisDuel, on: .games)
+    }
+
     /// 데모 스크린샷 전용: 로비를 다녀온 상태(`visited`) — 허브 자체는 로비를 부르지 않는다(새 조회 없음).
     private func applyDemoSeed() {
         #if DEBUG
@@ -387,6 +474,8 @@ private struct GamesTileArt: View {
             case .timingBar: timing(geo.size)
             case .flappy: flappy(geo.size)
             case .tetris: tetris(geo.size)
+            // 길건너 아잉이(v0.3.67)는 폰 타일 목록(`phoneCases`)에 없어 여기 오지 않는다 — 망라 switch 를 지키는 빈 그림.
+            case .crossy: EmptyView()
             }
         }
         .accessibilityHidden(true)
@@ -529,6 +618,11 @@ private struct GamesGameIconSquare: View {
                         .frame(width: 10, height: 10)
                         .offset(y: 2)
                 }
+            case .crossy:
+                // 폰에 없음(`phoneCases`) — 기호 하나로 망라 switch 만 지킨다.
+                Image(systemName: kind.icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white)
             }
         }
         .frame(width: 30, height: 30)
@@ -541,6 +635,7 @@ private struct GamesGameIconSquare: View {
         case .timingBar: return [gamesHex(0x4B3274), gamesHex(0x8A4F74)]
         case .flappy: return [gamesHex(0x1F4A63), gamesHex(0x3C8A6C)]
         case .tetris: return [gamesHex(0x24204E), gamesHex(0x3A2A5E)]
+        case .crossy: return [gamesHex(0x2E5A2A), gamesHex(0x4F8A3C)]   // 폰에 없음(`phoneCases`)
         }
     }
 }
@@ -581,6 +676,57 @@ private struct GamesChessTabThumbnail: View {
     private static let dark = Color(red: 0.54, green: 0.38, blue: 0.27)
     private static let pieces: [(Int, Int, Color)] = [
         (3, 6, Color.white), (4, 4, Color.white), (4, 1, Color(white: 0.12)), (2, 3, Color(white: 0.12))
+    ]
+}
+
+/// 1:1 테트리스 썸네일 60pt — 오목 나무판·체스판 썸네일과 **같은 변·같은 둥글기**라 세 카드가 한 열로 선다.
+///
+/// 그림은 **우물 둘**이다(1:1 이라는 사실을 정지 그림 한 장으로 말하는 자리 — 솔로 타일은 우물 하나다).
+/// 조각 색·우물 잉크는 **판과 같은 표**(`TetrisPalette`)에서 온다 — 썸네일만 다른 색이면 열고 나서 다른
+/// 게임처럼 보인다. 솔로 테트리스 타일 그림(`GamesTileArt.tetris`)은 **한 글자도 건드리지 않았다**(설계서 P1).
+private struct GamesTetrisDuelTabThumbnail: View {
+    var side: CGFloat = 60
+
+    var body: some View {
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size)
+            let clip = Path(roundedRect: rect, cornerRadius: side * 0.2, style: .continuous)
+            context.fill(clip, with: .linearGradient(
+                Gradient(colors: [gamesHex(0x1D2148), gamesHex(0x3A2A5E)]),
+                startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)))
+            context.clip(to: clip)
+            let cell = size.width / 11
+            for (index, origin) in Self.wellOrigins.enumerated() {
+                let wellRect = CGRect(x: origin.x * size.width, y: origin.y * size.height,
+                                      width: cell * 4, height: cell * 7)
+                let well = Path(roundedRect: wellRect, cornerRadius: 2, style: .continuous)
+                context.fill(well, with: .color(TetrisPalette.wellColor.opacity(TetrisPalette.wellOpacity)))
+                context.stroke(well, with: .color(Color.white.opacity(0.18)), lineWidth: 0.5)
+                for block in Self.blocks[index] {
+                    let square = CGRect(x: wellRect.minX + CGFloat(block.x) * cell + 0.5,
+                                        y: wellRect.minY + CGFloat(block.y) * cell + 0.5,
+                                        width: cell - 1, height: cell - 1)
+                    // 방해 줄은 **회색**이다(판과 같은 토큰 — `TetrisDuelPalette.garbageColor`). 조각 색으로
+                    // 그리면 썸네일이 공격형이라는 사실을 못 말한다.
+                    let color = block.piece.map(TetrisPalette.color) ?? TetrisDuelPalette.garbageColor
+                    context.fill(Path(roundedRect: square, cornerRadius: 1, style: .continuous), with: .color(color))
+                }
+            }
+        }
+        .frame(width: side, height: side)
+        .accessibilityHidden(true)
+    }
+
+    /// 우물 둘의 왼쪽 위(변 비율) — 가운데를 비워 두 판이 마주 본다.
+    private static let wellOrigins: [(x: CGFloat, y: CGFloat)] = [(0.09, 0.14), (0.545, 0.14)]
+
+    /// 왼쪽은 떨어지는 I + 쌓인 두 줄, 오른쪽은 **회색 방해 줄**(nil)이 올라온 판 — 공격형이라는 사실(D2)을
+    /// 정지 그림 한 장으로 말하는 자리다.
+    private static let blocks: [[(x: Int, y: Int, piece: TetrisGame.Piece?)]] = [
+        [(0, 0, .i), (1, 0, .i), (2, 0, .i), (3, 0, .i),
+         (0, 5, .l), (1, 5, .o), (2, 5, .o), (0, 6, .l), (1, 6, .o), (2, 6, .o), (3, 6, .t)],
+        [(2, 3, .s), (3, 3, .s), (1, 4, .s), (2, 4, .s),
+         (0, 5, .z), (1, 5, .z), (2, 5, .t), (0, 6, nil), (1, 6, nil), (2, 6, nil), (3, 6, nil)]
     ]
 }
 

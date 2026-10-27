@@ -707,10 +707,11 @@ package nonisolated enum GachaRules {
         }
     }
 
-    /// 조각으로 **절대** 바꿀 수 없는 캐릭터인가 — 무료 기본(아잉) 하나. 서버 교환표에 실려 와도 막는다.
+    /// 조각으로 **절대** 바꿀 수 없는 캐릭터인가 — 무료 기본(아잉)과 생일 선물 전용(v0.3.66 케이크 아잉이 둘). 서버 교환표에 실려 와도 막는다.
     /// (황금 아잉이는 여기 없다 — AMENDMENT 1 로 교환표의 값만큼 조각을 내면 교환된다.)
+    /// 케이크는 사용자 결정("뽑기로도 못뽑는걸로" — 얻는 길은 운영자 지급뿐)이라 교환 목록 · 확률표 교환값 칸에 서지 않는다.
     package static func isNeverExchangeable(_ id: String) -> Bool {
-        id == CharacterCatalog.builtInAingID
+        id == CharacterCatalog.builtInAingID || CharacterCatalog.isGiftOnlyBuiltIn(id)
     }
 
     /// 이름 해석(호출부 → 내장(아잉 · 황금 · 무지개) → id).

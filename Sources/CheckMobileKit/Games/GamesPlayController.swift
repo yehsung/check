@@ -104,6 +104,9 @@ package final class GamesPlayController {
         case .timingBar: return timing.isPlaying
         case .flappy: return flappy.isPlaying
         case .tetris: return tetris.isPlaying
+        // 길건너 아잉이(v0.3.67)는 폰에 아직 없다 — `MiniGameKind.phoneCases` 가 거르므로 이 구동기가 crossy 로
+        // 만들어지는 일이 없다. 망라 switch 를 지키려고 '판 없음'으로 답한다(폰 판이 붙는 다음 판에 채운다).
+        case .crossy: return false
         }
     }
 
@@ -113,6 +116,7 @@ package final class GamesPlayController {
         case .timingBar: return timing.total
         case .flappy: return flappy.score
         case .tetris: return tetris.score
+        case .crossy: return 0          // 폰에 없음(위 isPlaying 주석)
         }
     }
 
@@ -143,6 +147,8 @@ package final class GamesPlayController {
                 tetris.action()
                 if tetris != before { tapSerial &+= 1 }
             }
+        case .crossy:
+            break                        // 폰에 없음(위 isPlaying 주석)
         }
         if isPlaying, !wasPlaying {
             reportedFinish = false
@@ -326,6 +332,8 @@ package final class GamesPlayController {
                 reportedFinish = true
                 onFinished?(tetris.score)
             }
+        case .crossy:
+            break                        // 폰에 없음(위 isPlaying 주석)
         }
     }
 
@@ -359,6 +367,8 @@ package final class GamesPlayController {
             // 테트리스도 같다(`interrupt()` 는 확정이다) — 버리려면 새 판으로 갈아 끼워야 한다.
             seedSource &+= 0x9E37_79B9
             tetris = TetrisGame(seed: seedSource)
+        case .crossy:
+            break                        // 폰에 없음(위 isPlaying 주석)
         }
         return true
     }
@@ -378,7 +388,7 @@ package final class GamesPlayController {
     package func endRound() -> EndOutcome {
         guard isPlaying else { return .none }
         switch kind {
-        case .timingBar, .flappy:
+        case .timingBar, .flappy, .crossy:
             return abandon() ? .abandoned : .none
         case .tetris:
             reportedFinish = true

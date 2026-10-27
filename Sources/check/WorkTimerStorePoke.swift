@@ -86,7 +86,9 @@ extension WorkTimerStore {
                 try await service.fetchPokeDirectory(accessToken: activeSession.accessToken)
             }
             guard generation == sessionGeneration else { return }
-            let entries = rows.toPokeDirectoryEntries().sortedForPokeDisplay()
+            // 저장 순서는 근무중 → 이름이다(맥 명부는 isWorking 과 함께 온다). 안 읽음 무리는 **화면이** body 마다 입힌다
+            // (`PokePanelOrder`) — 안 읽음은 이력 박자마다 바뀌는데, 그때마다 저장 순서를 다시 세우지 않는다.
+            let entries = rows.toPokeDirectoryEntries().sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true)
             if pokeDirectory != entries { pokeDirectory = entries }
             if !pokeDirectoryLoaded { pokeDirectoryLoaded = true }
             // 지난 쿨타임 엔트리 정리(만료분 제거). displayNow 가 아니라 지금 시각 기준으로 판정한다.
@@ -117,6 +119,8 @@ extension WorkTimerStore {
                 case .ok:
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(Self.pokeCooldownSeconds)
                     pokeNotice = nil
+                    // 그 사람과의 대화가 떠 있으면 방금 찌른 기록이 곧 보이게(v0.3.65).
+                    refreshConversationAfterPokeSent(to: userID)
                 case .cooldown(let retryAfterSeconds):
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(TimeInterval(retryAfterSeconds))
                 case .ultraUsedToday:
@@ -192,6 +196,8 @@ extension WorkTimerStore {
                     //     발화다. 울트라를 써도 todayDuration 은 1초도 안 움직이므로 두 발화는 겹치지
                     //     않는다 — 지금 이 지점이 없으면 방금 쓴 사람에게 즉시 지급할 경로가 없다.
                     syncUltraWallet(reason: .missionCandidate)
+                    // 그 사람과의 대화가 떠 있으면 방금 찌른 기록이 곧 보이게(v0.3.65).
+                    refreshConversationAfterPokeSent(to: userID)
                 case .ultraUsedToday:
                     // 상태 어휘는 서버가 확정한 7개 중 하나이고 이름만 옛것이다(ultra_used_today).
                     // 의미는 이제 "잔량 0"이다 — 팀 무제한이 폐지돼 팀원에게도 재화를 쓴다.
@@ -421,6 +427,9 @@ extension WorkTimerStore {
         // 근무 여부와 **무관**하다(근무 게이트가 없다). 신고는 폰에서 아무 때나 오고, 팝오버를 안 여는 운영자에게 그 사실을
         // 알릴 곳은 메뉴바 점뿐이다 — 여는 순간에만 물으면 점은 "이미 본 신고의 상기"밖에 못 한다(24시간 약속).
         refreshReportOpenCountIfDue(now: clock())
+        // 생일 선물(v0.3.66): 앞선 조회(시작 · 로그인 · 상점)로부터 10분이 지났을 때만 다시 묻는다(요청 0~1건 — 근무 게이트 없음:
+        // 선물은 근무와 무관하게 오고, 이 폴링이 로그인 중 상시 도는 유일한 박자다).
+        refreshCakeGiftIfDue(now: clock())
         // ★ 리얼타임 킬스위치. **폴링 경로를 지우지 않았다** — 리얼타임이 실제로 구독 중일 때만 쉰다.
         //   판정을 여기 한 줄에만 두는 것이 핵심이다(RealtimeState.isSubscribed 주석):
         //   두 곳에서 갈라 판정하면 "리얼타임은 반쯤 죽었는데 폴링도 안 도는" 완전한 침묵이 만들어진다.
@@ -593,6 +602,9 @@ extension WorkTimerStore {
             // v0.3.31 M4: 그 앞에 **보이는 대화에 곧바로 넣는다**(신선도와 무관) — 본문을 이미 들고 왔는데 이력 왕복을 기다리지 않는다.
             // 도착 새로고침도 말풍선 큐가 아니라 **소비한 메시지 행**을 기준으로 부른다(신선도가 큐를 비우면 갱신까지 건너뛰던 틈).
             receiveConsumedMessages(rows: rows, now: now)
+            // v0.3.65: 같은 응답의 찌르기(일반·울트라)는 대화 기록에 **곧바로** 넣는다 — 왕복 없이 목록 맨 위로 올라오고,
+            // 그 사람과의 대화가 떠 있으면 그 자리에 줄이 선다(말풍선 신선도와 무관 — 24시간 안이면 기록이다).
+            insertConsumedPokesIntoLog(rows: rows)
             // count 는 **소비된 행 전체 수**(신선도 필터 이전)다. 초인종 페이로드의 pending 과 견주면
             // 소비 경로가 새는지 보이는데, 필터 뒤 개수를 세면 '오래돼서 안 보여준 것'까지 유실로 오진한다.
             return .ok(count: rows.count)

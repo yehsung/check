@@ -314,6 +314,11 @@ private let laterRedefinitionsAllowed: [String: [String]] = [
     // 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 사라지지 않았는지를 본다.
     "20261014130000_phone_work.sql:poke_user": ["blocked_between", "public.same_visibility(", "public.phone_work__poke_unreachable(p_to)"],
     "20261014130000_phone_work.sql:ultra_poke_user": ["blocked_between", "public.same_visibility(", "public.phone_work__poke_unreachable(p_to)"],
+    // 2026-10-23 관전자 수가 로비를 다시 만든다 — "지금 대결 중" 카드 한 줄에 👁 N 을 띄우려고 `matches[]` 원소에
+    // `watchers` 한 칸을 더했다. 본문은 그 함수의 **직전 정본**(20260930120000 §4 — 전적을 gomoku__record(uid) 로 바꾼 판)을
+    // 그대로 옮기고 그 한 줄만 얹었고, 그 파일의 §1·§11 이 "직전 본문 + 이 치환" 을 바이트로 되묻는다.
+    // 측정: 덮어쓴 **이유**(match__watchers)와 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 사라지지 않았는지.
+    "20261023120000_match_watchers.sql:gomoku_lobby": ["blocked_between", "public.same_visibility(", "public.match__watchers('gomoku', g.id)"],
 ]
 
 @Test

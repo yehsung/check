@@ -462,21 +462,30 @@ enum V0356Fixture {
         #expect(try Self.png(Self.mission(notice: "3시간 채웠어요 — 루비 +3")) != base, "안내줄이 미션 화면에 안 그려졌다")
     }
 
-    @Test("미션 화면 — 줄 순서: 3시간 → 이번 주 → 안내줄(그림의 세로 위치 · 소스 순서)")
+    // v0.3.64: 세 묶음(일일 → 주간 → 누적). 안내줄("3시간 채웠어요 — 루비 +3")은 그 줄을 낸 3시간 줄 **바로 아래**(일일 묶음 안)로 옮겼다 —
+    // 주간 줄 아래에 두면 일일 6줄 밑으로 밀려 화면을 열 때 안 보인다(예전엔 "화면을 열면 처음부터 보인다"가 그 자리의 이유였다).
+    @Test("미션 화면 — 줄 순서: 일일 머리 → 3시간 → 안내줄 → 주간 머리 → 이번 주(그림의 세로 위치 · 소스 순서)")
     func missionPanelOrder() throws {
-        let both = try v0356Bitmap(CheckMenuView(store: Self.mission(weekly: V0356Fixture.weekly23h)))
-        let lapOnly = try v0356Bitmap(CheckMenuView(store: Self.mission()))
-        let withNotice = try v0356Bitmap(CheckMenuView(store: Self.mission(weekly: V0356Fixture.weekly23h,
-                                                                          notice: "이번 주 20시간 채웠어요 — 루비 +20")))
-        // 주간 줄을 더하면 갈리는 곳이 시작되는 높이 > 3시간 줄 자리(= 3시간 줄은 그대로 위에 있다).
-        let weeklyDiff = try #require(v0356DiffBox(lapOnly, both))
-        let noticeDiff = try #require(v0356DiffBox(both, withNotice))
-        #expect(noticeDiff.minY > weeklyDiff.minY + 40, "안내줄이 주간 줄 아래가 아니다(주간 \(weeklyDiff.minY) · 안내 \(noticeDiff.minY))")
+        // 같은 크기의 두 그림에서 **한 줄만** 바꿔 그 줄의 자리를 잰다(주간 묶음을 더하면 창 높이가 바뀌어 견줄 수 없다).
+        let weekly10h = V0355WeeklyStub.status(worked: 10 * 3_600, claimed: [false, false, false])
+        let base = try v0356Bitmap(CheckMenuView(store: Self.mission(weekly: V0356Fixture.weekly23h, notice: "3시간 채웠어요 — 루비 +3")))
+        let otherNotice = try v0356Bitmap(CheckMenuView(store: Self.mission(weekly: V0356Fixture.weekly23h, notice: "6시간 채웠어요 — 루비 +3")))
+        let otherWeekly = try v0356Bitmap(CheckMenuView(store: Self.mission(weekly: weekly10h, notice: "3시간 채웠어요 — 루비 +3")))
+        // 안내줄이 서는 높이(3시간 줄 아래) < 주간 줄이 서는 높이(= 주간 묶음은 안내줄 아래). 본문 열(x < 330)만 — 레일 배지는 뺀다.
+        let noticeDiff = try #require(v0356DiffBox(base, otherNotice), "안내줄이 안 그려졌다")
+        let weeklyDiff = try #require(v0356DiffBox(base, otherWeekly), "주간 묶음이 안 그려졌다")
+        print("[v0356] 순서 — 안내줄 y \(noticeDiff.minY) · 주간 묶음 y \(weeklyDiff.minY)")
+        #expect(weeklyDiff.minY > noticeDiff.minY + 12, "주간 묶음이 안내줄 아래가 아니다(안내 \(noticeDiff.minY) · 주간 \(weeklyDiff.minY))")
         // 소스로도 못 박는다 — 그림만으로는 "3시간 줄이 주간 줄 위"를 3시간 줄 내용 변화와 가를 수 없다.
         let panel = try v0356Body(try v0356Code("CheckMenuView.swift"), header: "private struct MissionPanel: View {")
-        let lap = try #require(panel.range(of: "ForEach(missions.prefix(1)) { MissionRowView(mission: $0) }"))
-        let week = try #require(panel.range(of: "if let weeklyRow { WeeklyWorkRowView(status: weeklyRow) }", range: lap.upperBound..<panel.endIndex))
-        #expect(lap.upperBound <= week.lowerBound)
+        let dailyHead = try #require(panel.range(of: "MissionGroupHeader(title: DailyMissionCopy.sectionTitle"))
+        let lap = try #require(panel.range(of: "ForEach(missions.prefix(1)) { MissionRowView(mission: $0) }", range: dailyHead.upperBound..<panel.endIndex))
+        let daily = try #require(panel.range(of: "ForEach(daily) { AchievementRowView(mission: $0.row, group: .daily(game: $0.game)) }",
+                                             range: lap.upperBound..<panel.endIndex))
+        let weekHead = try #require(panel.range(of: "MissionGroupHeader(title: WeeklyMissionCopy.sectionTitle)", range: daily.upperBound..<panel.endIndex))
+        let week = try #require(panel.range(of: "WeeklyWorkRowView(status: weeklyRow)", range: weekHead.upperBound..<panel.endIndex))
+        let cumulative = try #require(panel.range(of: "AchievementSectionView(state: achievementSection)", range: week.upperBound..<panel.endIndex))
+        #expect(lap.upperBound <= week.lowerBound && week.upperBound <= cumulative.lowerBound)
         // 거르는 자리가 뷰다(코어 rows(from:) 는 그대로 세 줄을 만든다 — 아래 단언이 그 사실을 함께 잰다).
         #expect(panel.contains("missions.filter { !Self.hiddenKinds.contains($0.kind) }"))
         #expect(MissionPanelHiddenKinds.value == [.dailyFloor, .arrivalStreak])
@@ -679,8 +688,10 @@ enum MissionPanelHiddenKinds {
         league.isLeaderboardVisible = true
         let tokens = v0356RenderStore()
         tokens.isTokenBoardVisible = true
+        // v0.3.64: "미션 2줄(3시간 + 주간)"은 묶음 머리 둘(일일 · 주간 — 28pt 씩)이 붙어 본문이 레일보다 길어졌다 — 그 화면은 아래
+        // `contentScreens` 에서 "본문이 정한다 · 빈 띠 없음"만 잰다.
         let screens = [("홈 0인", home0), ("홈 1인", home1), ("울트라", ultra), ("미션 1줄", mission),
-                       ("미션 불러오는 중", missionLoading), ("미션 2줄(3시간 + 주간)", missionTwo),
+                       ("미션 불러오는 중", missionLoading),
                        ("빈 순위판", league), ("빈 토큰판", tokens)]
         for (label, store) in screens {
             let bitmap = try v0356Bitmap(CheckMenuView(store: store))
@@ -696,6 +707,15 @@ enum MissionPanelHiddenKinds {
             #expect(runs.count >= 3, "\(label): 카드 구간 \(runs.count)개 — 자가 카드를 못 가른다")
             // 본문 카드 ↔ 푸터 틈 = VStack 간격 10 + 둥근 모서리 몫. 12 를 넘으면 빈 띠가 다시 생긴 것이다.
             #expect(gap >= 9 && gap <= 12, "\(label): 본문 카드와 푸터 사이 \(gap)pt — 남는 자리가 빈 띠로 남았다(카드가 받아야 한다)")
+        }
+        for (label, store) in [("미션 2줄(3시간 + 주간)", missionTwo)] {
+            let bitmap = try v0356Bitmap(CheckMenuView(store: store))
+            let height = CGFloat(bitmap.pixelsHigh) / 2
+            let runs = v0356CardRuns(bitmap)
+            let gap = runs.count >= 2 ? runs[runs.count - 1].top - runs[runs.count - 2].bottom : -1
+            print("[v0356] \(label): 창 \(height)pt(본문이 정한다) · 푸터 위 틈 \(gap)pt")
+            #expect(height > Self.railFloor && abs(v0356BodyInkBottom(bitmap) - (height - 12)) <= 1, "\(label): 푸터가 바닥에 안 붙었다")
+            #expect(gap >= 9 && gap <= 12, "\(label): 본문 카드와 푸터 사이 \(gap)pt — 빈 띠")
         }
         // 레일보다 긴 화면은 예전 그대로 본문이 정한다(팀원 수 비례 성장이 산다).
         let two = try Self.height(CheckMenuView(store: v0356RenderStore(members: 2)))
@@ -723,7 +743,9 @@ enum MissionPanelHiddenKinds {
         #expect(uh <= 700)
     }
 
-    @Test("미션 목록 상한 — 안내 · 배너가 없으면 5줄까지 펼치고, 넘치면 창이 안 자란다(주간 줄도 한 줄로 센다)")
+    // v0.3.64: 스크롤 창 상한은 그대로(5줄 = 312pt)이고, 묶음 머리(20 + 간격 8)가 **내용**에 더해진다 — 일일 머리는 언제나, 주간 머리는
+    // 주간 줄이 있을 때만. 그래서 "주간 = 한 줄"이 아니라 "주간 묶음 = 머리 28 + 줄 64 = 92pt"다.
+    @Test("미션 목록 상한 — 안내 · 배너가 없으면 상한(5줄 312pt)까지 펼치고, 넘치면 창이 안 자란다(묶음 머리 · 주간 묶음도 센다)")
     func missionListBudget() throws {
         func h(_ missions: Int, weekly: Bool, line: Int = #line) throws -> CGFloat {
             let store = v0356RenderStore(missions: [V0356Fixture.lap] + (0..<max(0, missions - 1)).map(V0356Fixture.future),
@@ -734,9 +756,11 @@ enum MissionPanelHiddenKinds {
         }
         let unit = try h(4, weekly: false) - h(3, weekly: false)
         #expect(unit == MissionPanelUnit.value, "한 줄 값이 \(unit)pt")
-        // 4줄 + 주간 = 5줄 → 펼친다(+1줄) · 5줄 + 주간 = 6줄 → 상한(5)이라 창이 안 자란다.
-        #expect(try h(4, weekly: true) == h(4, weekly: false) + unit, "넷째 줄 다음의 주간 줄이 펼쳐지지 않았다")
-        #expect(try h(5, weekly: true) == h(5, weekly: false), "상한을 넘었는데 창이 자랐다 — 주간 줄을 줄 수에 안 셌다")
+        // 일일 머리 + 3줄(212) + 주간 묶음(92) = 304 ≤ 312 → 펼친다(+92) · 일일 머리 + 4줄(276) + 주간 묶음 = 368 → 상한이라 +36 에서 멈춘다.
+        #expect(try h(3, weekly: true) == h(3, weekly: false) + 92, "주간 묶음(머리 + 줄)이 펼쳐지지 않았다")
+        #expect(try h(4, weekly: true) == h(4, weekly: false) + 36, "상한을 넘었는데 창이 자랐다 — 주간 묶음을 셈에 안 넣었다")
+        #expect(try h(5, weekly: true) == h(5, weekly: false), "상한을 넘었는데 창이 자랐다")
+        #expect(try h(5, weekly: false) == h(6, weekly: false), "상한(5줄) 위에서 창이 자랐다")
     }
 }
 

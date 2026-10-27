@@ -22,6 +22,8 @@ import Testing
 // MARK: - 마이그레이션 읽기
 
 private let reNewMigration = "20261014120000_ruby_economy_v2.sql"
+/// v0.3.64(2026-10-22 사용자 결정 "20 10 5 로 다시 해줘") — 상금 상수를 **마지막으로** 정의하는 파일. 상금 짝 상수는 이제 이 파일과 맞춘다.
+private let rePrizeMigration = "20261023131000_minigame_prize_20_10_5.sql"
 private let reShopMigration = "20260913170100_shop.sql"
 private let reRobotMigration = "20261005120000_character_roster_v3_robot.sql"
 
@@ -214,10 +216,10 @@ struct V0351RubyEconomyMigrationTests {
 
     // MARK: ① 상수 셋 — 가장 나중 정의가 새 값이고, 그 정의가 이 파일이다
 
-    @Test("상금 · 울트라 가격 · 가입 지급의 가장 나중 정의 = 이 파일의 새 값(첫 정의는 옛 값 — 기준선이 갈린다)")
+    @Test("울트라 가격 · 가입 지급의 가장 나중 정의 = 이 파일의 새 값(첫 정의는 옛 값 — 기준선이 갈린다)")
     func latestConstantsAreTheNewEconomy() throws {
+        // 상금(`ruby_prize_amounts`)은 v0.3.64 에 뒤 파일이 다시 정의했다 — 아래 `prizeHistoryEndsAt2010_5` 가 잰다.
         let expectations: [(name: String, first: [Int], latest: [Int])] = [
-            ("ruby_prize_amounts", [20, 10, 5], [10, 5, 3]),
             ("ultra_ruby_price", [3], [5]),
             ("ruby_welcome_grant", [30], [60]),
         ]
@@ -234,30 +236,52 @@ struct V0351RubyEconomyMigrationTests {
         }
     }
 
-    @Test("근무 3시간 랩 루비 3 은 그대로다(사용자 결정) — 이 파일은 그 상수를 다시 정의하지 않고, 맥 칩 \"💎 +3\" 과 짝이 맞는다")
+    @Test("상금의 역사: 이 파일은 10·5·3 · 가장 나중 정의는 v0.3.64 파일의 20·10·5(첫 정의 20·10·5 로 되돌아갔다)")
+    func prizeHistoryEndsAt2010_5() throws {
+        let definitions = try reConstantDefinitions("ruby_prize_amounts")
+        #expect(definitions.first?.value == [20, 10, 5], "첫 정의(2026-09-13)가 \(String(describing: definitions.first))")
+        let economy = try #require(definitions.first { $0.file == reNewMigration }, "\(reNewMigration) 이 상금을 정의하지 않는다")
+        #expect(economy.value == [10, 5, 3], "\(reNewMigration) 의 상금이 \(economy.value) 다(역사: 10·5·3)")
+        let latest = try #require(definitions.last)
+        #expect(latest.file == rePrizeMigration, "상금의 가장 나중 정의가 \(latest.file) 다(기대 \(rePrizeMigration))")
+        #expect(latest.value == [20, 10, 5], "가장 나중 상금이 \(latest.value) 다(사용자 결정 20·10·5)")
+        #expect(latest.value != economy.value, "기준선: 가장 나중 값이 0.3.51 값과 같다 — 이 단언은 아무것도 고르지 않는다")
+    }
+
+    @Test("근무 3시간 랩 루비 3 은 그대로다(사용자 결정) — 이 파일은 그 상수를 다시 정의하지 않고, 맥 칩(루비 그림 + \"+3\")과 짝이 맞는다")
     func lapGrantIsUntouched() throws {
         let definitions = try reConstantDefinitions("ruby_mission_grant")
         let latest = try #require(definitions.last, "ruby_mission_grant 정의가 체인에 없다")
         #expect(latest.value == [3])
         #expect(!definitions.contains { $0.file == reNewMigration }, "이 파일이 랩 지급을 다시 정의했다 — 사용자 결정은 '그대로'다")
-        #expect(MissionCopy.reward(.todayThreeHours) == "💎 +\(latest.value[0])",
+        // v0.3.64: 칩은 분홍 루비 그림(`RubyIcon`) + "+3" 이다 — 숫자는 `rubyReward` 가 든다.
+        #expect(MissionCopy.rubyReward(.todayThreeHours) == latest.value[0],
                 "맥 미션 칩이 서버 랩 지급(\(latest.value[0]))과 다른 숫자를 말한다")
+        #expect(MissionCopy.chip(MissionProgress(kind: .todayThreeHours, progress: 0.2, claimedToday: false, cappedToday: false,
+                                                 detail: "")) == .ruby(latest.value[0]))
     }
 
     // MARK: ② 상금 — 서버 · 맥 · 폰 두 벌이 같은 숫자를 말한다
 
-    @Test("상금 짝 상수 넷(서버 · 맥 · 폰 게임 탭 · 폰 순위 탭)이 같고 화면 문구가 그 숫자를 말한다")
+    @Test("상금 짝 상수(서버 가장 나중 정의 · 맥)가 같고 화면 문구가 그 숫자를 말한다 — v0.3.64 20·10·5")
     func prizePairsAgreeEverywhere() throws {
         let server = try #require(try reConstantDefinitions("ruby_prize_amounts").last).value
-        #expect(server == [10, 5, 3])
+        #expect(server == [20, 10, 5])
         #expect(CheckMiniGameWindowView.rubyPrizes == server, "맥 상수 \(CheckMiniGameWindowView.rubyPrizes) ≠ 서버 \(server)")
+        // 문구는 상수에서 **유도**된다 — 숫자를 다시 적은 문장이 생기면 여기서 갈린다.
+        #expect(CheckMiniGameWindowView.prizeCaption == "자정에 1·2·3등에게 루비 20·10·5")
+        #expect(CheckMiniGameWindowView.awardedChip == "루비 +20 받음")
+        #expect(CheckMiniGameWindowView.prizeQuorum == 5)
+    }
+
+    /// 폰 두 벌은 **모바일 갈래 몫**이다(v0.3.64 명세 — 맥 갈래는 폰 소스를 고치지 않는다). 그래서 따로 둔다: 폰이 20·10·5 로 따라올
+    /// 때까지 이 시험 하나만 빨갛고, 맥 짝(위)은 그와 무관하게 초록이다. 지우거나 느슨하게 하지 마라 — 넷이 갈리면 화면이 받지 않을 상금을 말한다.
+    @Test("폰 상금 짝 상수(게임 탭 · 순위 탭)도 서버 가장 나중 정의와 같다 — 모바일 갈래 몫")
+    func phonePrizePairsAgree() throws {
+        let server = try #require(try reConstantDefinitions("ruby_prize_amounts").last).value
         // 폰 두 벌은 이 타깃이 링크하지 않으므로 **소스**를 읽는다(주석 걷음).
         #expect(try reSwiftPrizes("Sources/CheckMobileKit/Games/GamesText.swift") == server, "폰 게임 탭 상수가 서버와 다르다")
         #expect(try reSwiftPrizes("Sources/CheckMobileKit/Rankings/RankingsText.swift") == server, "폰 순위 탭 상수가 서버와 다르다")
-        // 문구는 상수에서 **유도**된다 — 숫자를 다시 적은 문장이 생기면 여기서 갈린다.
-        #expect(CheckMiniGameWindowView.prizeCaption == "자정에 1·2·3등에게 루비 10·5·3")
-        #expect(CheckMiniGameWindowView.awardedChip == "루비 +10 받음")
-        #expect(CheckMiniGameWindowView.prizeQuorum == 5)
     }
 
     @Test("상금 칩(`ChampionRow(… awarded:)`)에 숫자를 직접 적은 자리가 소스 어디에도 없다 — DEBUG 견본까지 상수에서 읽는다")
@@ -322,10 +346,13 @@ struct V0351RubyEconomyMigrationTests {
         let gachaOnly = try reGachaOnlyIDs()
         // v0.3.59: 무지개 아잉이(20261020120000_gacha_rainbow.sql)도 뽑기 전용이다 — 그 파일이 이 트리에 들어오기 전에도(앱이 먼저 들어올 수 있다)
         //   무지개는 루비로 안 판다(설계 확정 · 카탈로그 내장). 그래서 명단은 금을 꼭 품고, 그 밖에는 무지개만 허락한다.
-        #expect(gachaOnly.contains("aing_gold") && gachaOnly.isSubset(of: ["aing_gold", "aing_rainbow"]),
-                "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow)]")
+        // v0.3.66: 케이크 둘(20261026120000_cake_aing_gift.sql)은 not_for_sale 갈래를 타려고 `gacha_only = true` 로 들어간다 — 생일 선물
+        //   전용이라 루비로 안 판다(카탈로그 내장 · `isGiftOnlyBuiltIn`). 명단에 있어도 되고, 유료 명단에서는 언제나 빠진다.
+        #expect(gachaOnly.contains("aing_gold")
+                && gachaOnly.isSubset(of: Set(["aing_gold", "aing_rainbow"] + CharacterCatalog.giftOnlyBuiltInIDs)),
+                "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow, 케이크 둘)]")
         let paid = Set(CheckMascotAssets.catalog.allIDs.filter {
-            $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isRainbowAing($0)
+            $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isRainbowAing($0) && !CharacterCatalog.isGiftOnlyBuiltIn($0)
         }).subtracting(gachaOnly)
         #expect(Set(newPrices.keys) == paid, "가격을 고친 캐릭터 \(newPrices.keys.sorted()) ≠ 번들의 유료 캐릭터 \(paid.sorted())")
     }

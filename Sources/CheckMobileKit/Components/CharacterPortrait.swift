@@ -66,8 +66,12 @@ package struct CharacterPortrait: View {
                     .blur(radius: size * 0.1)
                     .clipShape(Circle())
             }
-            // 그림: 원 안 88%, 아래쪽으로 조금(시안 background-size 88% · 50% 62%).
+            // 그림: 원 안 88%, 아래쪽으로 조금(시안 background-size 88% · 50% 62%). 케이크 아잉이는 머리 위 장식 때문에 줄여 그린
+            // 초상을 아바타 틀(`AingCharacterArt.avatarFraming`)로 되돌려 **얼굴 크기를 아잉 · 황금 · 무지개와 같게** 한다(장식은 원 위로 잘린다).
+            let framing = AingCharacterArt.avatarFraming(id: id)
             art(side: size * 0.88)
+                .scaleEffect(framing.scale)
+                .offset(y: size * 0.88 * framing.offsetY)
                 .offset(y: size * 0.05)
                 .clipShape(Circle())
         }

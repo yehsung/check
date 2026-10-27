@@ -1,6 +1,6 @@
 import Foundation
 
-// 1:1 테트리스 RPC 의 와이어 타입(요청·응답)과 서비스 호출 8개 — `/rest/v1/rpc/tetris_*` (v0.3.60).
+// 1:1 테트리스 RPC 의 와이어 타입(요청·응답)과 서비스 호출 10개 — `/rest/v1/rpc/tetris_*` (v0.3.60 · 관전 둘은 v0.3.64).
 // 계약의 정본은 설계서 §2.4·§2.5 이고, 서버 레인이 같은 계약으로 SQL(20261021120000_tetris_duel.sql)을 쓴다.
 // **키 이름을 바꾸지 마라** — 디코더가 snake_case → camelCase 로 접으므로 `garbage_sent` 는 `garbageSent` 다.
 //
@@ -157,13 +157,15 @@ package struct TetrisLobbyMe: Decodable, Equatable, Sendable {
     package var outgoing: TetrisInviteRow?
 }
 
-/// 로비 "지금 대결 중" 한 줄. 판 내용은 없다(관전은 이번 범위가 아니다 — D8). a/b 는 uuid 오름차순이다.
+/// 로비 "지금 대결 중" 한 줄. 판 내용은 없다(관전 화면이 `tetris_watch` 로 따로 읽는다). a/b 는 uuid 오름차순이다.
 package struct TetrisLobbyMatchRow: Decodable, Equatable, Sendable {
     package var id: String?
     package var a: TetrisPeerRow?
     package var b: TetrisPeerRow?
     package var stake: Int?
     package var startedAtMs: Double?
+    /// 지금 이 판을 보고 있는 사람 수(v0.3.64 — `match__watchers`). **옛 서버엔 없다 → nil → 0 으로 읽는다.**
+    package var watchers: Int?
 }
 
 /// tetris_lobby 응답.
@@ -223,6 +225,8 @@ package struct TetrisStatePayload: Decodable, Equatable, Sendable {
     package var winner: String?
     package var endReason: String?
     package var rubyBalance: Int?
+    /// 지금 **내 판**을 보고 있는 사람 수(v0.3.64 — 빌더 `tetris__state` 가 싣는다). 옛 서버엔 없다 → nil → 0.
+    package var watchers: Int?
 }
 
 /// 쓰기·조회 공용 응답(challenge · cancel · respond · report · state · resign).
@@ -245,6 +249,63 @@ package struct TetrisActionResponse: Decodable, Equatable, Sendable {
     package var matchStatus: String?
     package var rubyBalance: Int?
     package var serverNowMs: Double?
+}
+
+// MARK: - 관전 (v0.3.64)
+
+/// 관전 응답의 사람 한 칸(`a.user` · `b.user`). 대국자 전용 칸이 **하나도 없다** — 관전 봉투는 참가자가 불러도 같은 모양이다.
+/// `center` 는 서버가 싣지만 `TetrisDuelUser` 에 자리가 없어 지금은 읽기만 한다(계약 기록용).
+package struct TetrisWatchUserRow: Decodable, Equatable, Sendable {
+    package var id: String?
+    package var displayName: String?
+    package var avatarUrl: String?
+    package var character: String?
+    package var center: String?
+}
+
+/// 관전 응답의 `match`. **참가자 기준 값이 없다** — `my_*`·`ruby_balance`·`pending_for_me` 는 싣지 않는다.
+///
+/// ★ `result`/`reason` 은 **서버가 판을 닫았을 때만** 찬다. `status == "active"` 인데 시간이 다 돼 보여도
+///   여기서 결과를 지어내지 마라 — 그 판은 대국자의 다음 조회나 매분 cron(`tetris_settle_expired`)이 닫는다.
+package struct TetrisWatchMatchRow: Decodable, Equatable, Sendable {
+    package var id: String?
+    package var stake: Int?
+    package var startedMs: Double?
+    /// 'active' | 'finished'. 그 밖은 서버가 `not_found` 로 접는다.
+    package var status: String?
+    /// 'challenger_win' | 'opponent_win' | 'draw'. **a/b 는 uuid 순이라 이 값만으로 누가 이겼는지는 모른다**
+    /// (관전 봉투에 challenger 표시가 없다 — 지어내지 말고 그대로 들고 있어라).
+    package var result: String?
+    /// 이긴 사람의 uuid. 무승부·진행 중이면 null. **승자를 아는 길은 이 칸 하나뿐이다** —
+    /// `result` 로 역산하면 관전자에게 거짓말이 된다(위 주석). 서버 `chess`·`gomoku` 관전은 black_user/white_user
+    /// 가 있어 자리를 알지만 테트리스 봉투는 a/b 가 uuid 순이라 이 칸이 없으면 영영 모른다.
+    package var winner: String?
+    package var reason: String?
+    package var finishedMs: Double?
+}
+
+/// 관전 응답의 한 자리(`a` · `b`, **uuid 오름차순** — 색이 아니라 자리다).
+package struct TetrisWatchSideRow: Decodable, Equatable, Sendable {
+    package var user: TetrisWatchUserRow?
+    /// `tetris_players.board` 그대로(200글자 또는 null). **가공하지 않는다** — 그리는 쪽이 읽는다.
+    package var board: String?
+    package var lines: Int?
+    package var pending: Int?
+    package var garbageSent: Int?
+    package var toppedOut: Bool?
+    package var lastSeenMs: Double?
+}
+
+/// `tetris_watch` · `tetris_watch_live` 응답(명세 §1.6). 둘은 **같은 모양**이고 `watchers` 한 칸만 다르다 —
+/// `tetris_watch` 는 그 칸을 안 싣는다(nil → 0, 화면은 안 그린다).
+package struct TetrisWatchResponse: Decodable, Equatable, Sendable {
+    package let status: TetrisRPCStatus
+    package var serverNowMs: Double?
+    package var match: TetrisWatchMatchRow?
+    package var a: TetrisWatchSideRow?
+    package var b: TetrisWatchSideRow?
+    /// `tetris_watch_live` 만 싣는다. 없으면 0 으로 읽는다(옛 서버·접힌 길).
+    package var watchers: Int?
 }
 
 /// 순위표 한 줄. 순위는 **서버가 매긴 값**이고 배열 순서도 서버 것이다(재정렬 금지).
@@ -280,7 +341,7 @@ package struct TetrisRankingResponse: Decodable, Equatable, Sendable {
 
 // MARK: - 서비스 호출
 
-/// 테트리스 RPC 8개. 몸통은 공용 `duelRPC`(DuelRPC.swift) 하나다.
+/// 테트리스 RPC 10개. 몸통은 공용 `duelRPC`(DuelRPC.swift) 하나다.
 /// 교착 재시도는 **쓰기 전부 + 상태 조회**에 켠다(`tetris_state` 는 시간 판정 `tetris__due` 를 돌리고 지갑 잠금을 쥔다).
 /// 로비·순위는 읽기 전용이라 끈다.
 extension SupabaseWorkService {
@@ -334,5 +395,19 @@ extension SupabaseWorkService {
 
     package func tetrisRanking(accessToken: String) async throws -> TetrisRankingResponse {
         try await duelRPC("tetris_ranking", body: TetrisProtocolRequest(), accessToken: accessToken)
+    }
+
+    /// 관전 + 생존 신호(v0.3.64). 읽기 전용 `tetris_watch` 를 그대로 싣고 `watchers` 한 칸을 더한다.
+    /// **`tetris_state` 를 대신 부르지 마라** — 참가자 게이트에 걸려 관전자는 not_found 만 받는다.
+    /// 교착 재시도는 끈다(정산·잠금이 0건인 읽기 경로다 — ping 의 upsert 는 자기 한 행뿐이다).
+    package func tetrisWatchLive(accessToken: String, matchID: String) async throws -> TetrisWatchResponse {
+        try await duelRPC(
+            "tetris_watch_live", body: TetrisMatchRequest(pMatchId: matchID), accessToken: accessToken)
+    }
+
+    /// 관전(읽기 전용 · 관전자 수 없음). `tetris_watch_live` 가 아직 없는 서버로 한 번 접을 때 쓴다.
+    package func tetrisWatch(accessToken: String, matchID: String) async throws -> TetrisWatchResponse {
+        try await duelRPC(
+            "tetris_watch", body: TetrisMatchRequest(pMatchId: matchID), accessToken: accessToken)
     }
 }

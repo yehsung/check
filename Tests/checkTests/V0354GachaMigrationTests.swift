@@ -24,6 +24,14 @@ private let gcRubyV2 = "20261014120000_ruby_economy_v2.sql"
 /// 이 파일 뒤에 명단·shop_state 를 다시 정의하는 파일은 0.3.59 무지개 아잉이 하나뿐이다(명단 + aing_rainbow · shop_state 는 확률표만).
 /// 그 파일의 행동은 자기 §10 프로브와 하네스가 증명한다 — 여기서는 "뒤에서 다시 정의한 것이 그 파일뿐"만 잰다.
 private let gcRainbow = "20261020120000_gacha_rainbow.sql"
+/// 0.3.66 케이크 아잉이(생일 선물 전용)도 무지개 뒤에서 명단(+ 케이크 둘)·shop_state(행마다 gift_only)를 다시 정의한다. 그 파일의 행동도
+/// 자기 프로브와 하네스가 증명한다 — 여기서는 같은 결로 "뒤에서 다시 정의한 것이 허용된 파일뿐"만 잰다.
+private let gcCake = "20261026120000_cake_aing_gift.sql"
+/// 이 파일 뒤에서 명단 · shop_state · buy_character 를 다시 정의해도 되는 파일 → 그 파일의 명단이 v4 위에 더한 id.
+private let gcLaterRedefiners: [String: [String]] = [
+    gcRainbow: ["aing_rainbow"],
+    gcCake: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco"],
+]
 
 /// 사용자 확정표(2026-10-15 · 교환가는 같은 날 정정 AMENDMENT 1): (id, 확률, 조각 교환가). 일곱 모두 교환 가능 — 황금 20.
 /// 아잉(무료 기본)은 이 표에 없다(교환 불가).
@@ -161,18 +169,30 @@ private func gcPick(_ roll: Int, _ table: [(id: String, percent: Int)]) -> Strin
     return nil
 }
 
-/// 체인에서 `add constraint profiles_character_valid check (character is null or character in (…))` 의 마지막 정의 (파일, 명단).
-private func gcLatestRoster(through last: String? = nil) throws -> (file: String, ids: [String]) {
-    var latest: (String, [String])?
-    let names = try gcNames()
-    let end = last.flatMap { names.firstIndex(of: $0) }.map { $0 + 1 } ?? names.count
-    for file in names[..<end] {
+/// 체인에서 `add constraint profiles_character_valid check (character is null or character in (…))` 의 정의 전부 (파일, 명단) — 체인 순서.
+private func gcRosterDefinitions() throws -> [(file: String, ids: [String])] {
+    var found: [(file: String, ids: [String])] = []
+    for file in try gcNames() {
         let flat = gcSquash(gcStrip(try gcRaw(file)))
         for match in try gcMatches(#"add constraint profiles_character_valid check \(character is null or character in \(([^)]*)\)"#, in: flat) {
-            latest = (file, match[1].split(separator: ",").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "' ")) })
+            found.append((file, match[1].split(separator: ",").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "' ")) }))
         }
     }
-    guard let found = latest else { throw GCError("profiles_character_valid 명단을 못 찾았다") }
+    return found
+}
+
+/// 위 정의 중 마지막 (파일, 명단). `through` 를 주면 그 파일까지(그 파일이 체인에 없으면 throw — 체인 끝으로 접지 않는다).
+private func gcLatestRoster(through last: String? = nil) throws -> (file: String, ids: [String]) {
+    let names = try gcNames()
+    var end = names.count
+    if let last {
+        guard let index = names.firstIndex(of: last) else { throw GCError("\(last) 이 체인에 없다") }
+        end = index + 1
+    }
+    let upTo = Set(names[..<end])
+    guard let found = try gcRosterDefinitions().last(where: { upTo.contains($0.file) }) else {
+        throw GCError("profiles_character_valid 명단을 못 찾았다")
+    }
     return found
 }
 
@@ -276,12 +296,18 @@ struct V0354GachaMigrationTests {
         let mine = try gcLatestRoster(through: gcMigration)
         #expect(mine.file == gcMigration, "이 파일까지의 허용 명단 마지막 정의가 \(mine.file) 다")
         #expect(mine.ids.sorted() == v4, "명단이 \(mine.ids) 다")
-        // 뒤에서 명단을 다시 정의한 것은 0.3.59 무지개 파일뿐이고, 그 명단은 v4 + aing_rainbow 다.
-        let roster = try gcLatestRoster()
-        if roster.file != gcMigration {
-            #expect(roster.file == gcRainbow, "허용 명단의 마지막 정의가 \(roster.file) 다")
-            #expect(roster.ids.sorted() == (v4 + ["aing_rainbow"]).sorted(), "무지개 뒤 명단이 \(roster.ids) 다")
+        // 뒤에서 명단을 다시 정의한 것은 0.3.59 무지개 · 0.3.66 케이크 파일뿐이고, 각 명단은 v4 + 그 파일까지 더한 id 다
+        // (무지개 = v4 + aing_rainbow · 케이크 = 그 위 + 케이크 둘). 체인에 그 파일이 아직 없으면(운영 폴더 — db push 전) 잴 것이 없다.
+        let names = try gcNames()
+        let mineIndex = try #require(names.firstIndex(of: gcMigration))
+        let later = try gcRosterDefinitions().filter { (names.firstIndex(of: $0.file) ?? -1) > mineIndex }
+        for definition in later {
+            let adds = gcLaterRedefiners[definition.file]
+            #expect(adds != nil, "허용 명단을 이 파일 뒤에서 다시 정의한 파일이 \(definition.file) 다(허용: 0.3.59 무지개 · 0.3.66 케이크)")
+            #expect(definition.ids.sorted() == (v4 + (adds ?? [])).sorted(), "\(definition.file) 의 명단이 \(definition.ids) 다")
         }
+        let roster = try gcLatestRoster()
+        #expect(roster.file == (later.last?.file ?? gcMigration), "기준선: 마지막 정의가 \(roster.file) 다")
         // 결과로 잰다: 체인 전체의 가격표 id(시드 · 로봇 · 황금) = 명단 − 무료(아잉). 빠지면 그 id 가 price 0 으로 공짜가 된다.
         var priced = Set<String>()
         for file in try gcNames() {
@@ -318,8 +344,8 @@ struct V0354GachaMigrationTests {
             #expect(mineBody == expected, "\(fn) 의 새 본문이 정본 + 치환과 다르다")
             #expect(mineBody != canon, "기준선: 새 본문이 정본과 같다")
             let later = try gcDefiningFiles(fn).filter { (names.firstIndex(of: $0) ?? -1) > mine }
-            #expect(try gcDefiningFiles(fn).contains(gcMigration) && later.allSatisfy { $0 == gcRainbow },
-                    "\(fn) 을 이 파일 뒤에서 다시 정의한 파일이 \(later) 다(허용: 0.3.59 무지개)")
+            #expect(try gcDefiningFiles(fn).contains(gcMigration) && later.allSatisfy { gcLaterRedefiners[$0] != nil },
+                    "\(fn) 을 이 파일 뒤에서 다시 정의한 파일이 \(later) 다(허용: 0.3.59 무지개 · 0.3.66 케이크)")
             #expect(pre.contains(gcMD5(canon)), "\(fn): §1 의 정본 md5 가 정본 본문의 md5(\(gcMD5(canon)))가 아니다")
             #expect(post.contains(gcMD5(mineBody)), "\(fn): §8 의 새 본문 md5 가 실제 새 본문의 것이 아니다")
         }

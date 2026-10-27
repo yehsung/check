@@ -248,6 +248,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 로 로그인 자동 실행은 이미 켜져 있으니, 부팅 후 아이콘을 안 누르는 사용자에게는 "앱은 떠 있는데 근무가
         // 하나도 기록되지 않는" 상태가 하루 종일 지속된다.
         store.activateStoredSessionOnLaunch()
+        // 케이크 아잉이 장식 원본(v0.3.66)을 시작 뒤 한가할 때 **메인 밖에서** 미리 굽는다. 처음 굽기는 무겁다(딸기 release ~78ms) —
+        // 미리 안 구우면 케이크를 입은 사람의 첫 오버레이나, 케이크를 안 입은 사람이 울트라로 남의 케이크를 맞는 순간 메인이 그만큼 멎는다.
+        // 조건 없이 누구에게나 한 번이다(`CakeAingFinish.prewarmDecorTemplates` 주석).
+        CakeAingFinish.prewarmDecorTemplates(after: 5)
         // 맥 앱스토어 판(v0.3.51): 첫 실행 안내(로그인 시 자동 실행 · AI 기록 읽기 동의를 한 화면에서 — 한 번만)와
         // 다른 판(brew·DMG) 동시 실행 경고(한 번만). Developer ID 판에서는 `start()` 가 아무 창도 만들지 않는다.
         masOnboarding = MacAppStoreOnboardingController(store: store)
@@ -319,6 +323,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
         // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
         CheckGachaWindowController.shared.configure(store: store)
+        // 생일 축하 창(v0.3.66 — 케이크 아잉이 선물)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(열린 선물이 있으면 실행당 한 번
+        // 스스로 · 메뉴 팝오버의 '다시 열기' 카드). 로그아웃은 스토어가 닫는다(`resetCakeGiftState`).
+        CheckCakeGiftWindowController.shared.configure(store: store)
         // ★ **AI 리밋 창은 v0.3.46 에 사라졌다.** 카드가 팝오버 안으로 들어왔다(사용자 지시: "메인 화면
         //   자체에 다 뜨게끔") — 그리는 것은 `CheckAILimitsCard` 이고 배선할 창 수명이 없다. 여기에
         //   `CheckAILimitsWindowController` 를 다시 더하지 마라.
@@ -415,9 +422,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///   ④ `requestAttention` — 판이 막 시작됐는데 앱이 뒤에 있을 때 주의를 끈다.
     ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 테트리스를 아는 길**(받은 신청 · "대결이 시작됐어요" 말풍선).
     ///   ⑥ `onOpenTetrisDuel` — 그 말풍선을 눌렀을 때 그 판의 창.
+    ///   ⑦ `spectatorFeaturesEnabled`(v0.3.65) — **관전의 주 스위치**. 오목·체스와 같은 까닭으로 스토어 기본이 꺼짐이고,
+    ///      이 한 줄이 없으면 로비 줄에 [관전] 칩이 아예 안 서고 `tetris_watch` 요청도 **한 번도** 안 나간다
+    ///      (`rankingEnabled` 와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다).
     private func wireTetrisDuel() {
         let tetris = store.tetris
         tetris.rankingEnabled = true
+        tetris.spectatorFeaturesEnabled = true
         tetris.presentWindow = { CheckTetrisDuelWindowController.shared.show() }
         tetris.dismissWindow = { CheckTetrisDuelWindowController.shared.close() }
         tetris.requestAttention = {

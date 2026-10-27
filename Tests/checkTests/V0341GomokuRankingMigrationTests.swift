@@ -287,6 +287,22 @@ private let t41IntendedGomokuRewrites: [String: (why: String, required: [String]
          "'grant:gomoku:refund:' || p_match_id::text, v_stake, v_bal"],
         ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
     ),
+    // 2026-10-23 관전자 수(20261023120000): 대국자 본인 화면에도 👁 N 을 띄우려고 상태 봉투 최상위에 `watchers` 한 칸을
+    // 더했다. 상태 빌더는 전적을 보고하지 않으므로 컷을 못 지운다. required 는 덮어쓴 이유 한 줄과, 정본이 지키던
+    // 참가자 전용 칸(my_auto_streak — 이게 빠지면 관전 봉투와 대국 봉투가 같아져 버린 것이다)이다.
+    "20261023120000_match_watchers.sql:gomoku__state": (
+        "관전자 수 — 최상위 봉투에 watchers 한 칸(20261023120000 §10)",
+        ["public.match__watchers('gomoku', p_match_id)", "'my_auto_streak'"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
+    ),
+    // 같은 파일의 관전 껍데기. 읽기 전용 gomoku_watch 는 **한 글자도 안 바꾼다**(그 본문의 토큰 가드가 쓰기를 금지한다) —
+    // 대신 이 volatile 껍데기가 원본을 그대로 싣고 생존 신호(match_watch_ping)를 남긴 뒤 watchers 를 얹는다.
+    // required 가 그 둘을 다 재는 까닭: 한쪽만 남으면 "수는 세는데 판이 안 온다" 또는 "판은 오는데 아무도 등록 안 된다" 가 된다.
+    "20261023120000_match_watchers.sql:gomoku_watch_live": (
+        "관전 + 생존 신호 껍데기(20261023120000 §7)",
+        ["public.gomoku_watch(p_protocol, p_match_id, p_since_seq)", "public.match_watch_ping('gomoku', p_match_id)"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
+    ),
 ]
 
 @Test

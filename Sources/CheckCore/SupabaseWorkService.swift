@@ -833,6 +833,41 @@ package actor SupabaseWorkService {
         )
     }
 
+    /// 그 게임의 **역대** 최고 순위(v0.3.67). `minigame_alltime_board(p_game)` RPC — 사람마다 한 줄, 최대 50행.
+    /// 보이는 사람은 오늘 순위와 같다(공개 끈 사람은 본인에게만 · 숨김 격리). 정렬은 호출부가 다시 한다.
+    ///
+    /// - 함수가 아직 없는 서버(404 PGRST202 → `.databaseSchemaMissing`, 본문 없는 404 → `.invalidResponse(404)`)는
+    ///   **던진다** — 이 둘을 '준비 중' 으로 접는 것은 호출부 몫이다(`BlockReportRules.isMissingFunction`). 여기서 빈 배열로
+    ///   접으면 '아직 기록이 없어요' 와 구별이 안 된다.
+    /// - 원소 하나가 이상해도 배열 전체가 죽지 않는다 — user_id 나 best_score 가 없는 원소만 버린다(`MiniGameAllTimeBoardRow`).
+    ///   배열이 아닌 본문은 던진다.
+    package func fetchMiniGameAllTimeBoard(accessToken: String, kind: MiniGameKind) async throws -> [MiniGameAllTimeEntry] {
+        let data = try await send(
+            path: Self.miniGameAllTimeBoardPath,
+            method: "POST",
+            body: MiniGameAllTimeBoardRequest(pGame: kind.rawValue),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([MiniGameAllTimeBoardRow].self, from: data)
+        // 클로저 인자 이름이 `row` 가 아닌 이유는 캐릭터 표와 같다(소스 계약 테스트가 `return rows.map { row in` 을 센다).
+        return rows.compactMap { allTimeRow -> MiniGameAllTimeEntry? in
+            guard let userID = allTimeRow.userId, let score = allTimeRow.bestScore else { return nil }
+            return MiniGameAllTimeEntry(
+                userID: userID,
+                name: allTimeRow.displayName ?? "사용자",
+                avatarURL: allTimeRow.avatarUrl.flatMap { URL(string: $0) },
+                bestScore: score,
+                bestAt: allTimeRow.bestAt.flatMap { parseDate($0) },
+                day: allTimeRow.day,
+                // 서버값 → 화면 글자(모르는 값은 nil = 배지 없음). 이 판의 유일한 변환 지점.
+                center: CenterLabel.display(allTimeRow.center)
+            )
+        }
+    }
+
+    package nonisolated static let miniGameAllTimeBoardPath = "/rest/v1/rpc/minigame_alltime_board"
+
     /// 내 미니게임 순위 공개 여부(profiles.minigame_public). **별도 GET 인 이유는 별명 쿨타임 GET 과 같다** —
     /// 기존 설정 GET 의 select 에 끼우면 컬럼이 없는 서버(마이그레이션 전 창)에서 42703 으로 그 요청 전체가 죽는다.
     /// 컬럼/행이 없으면 nil(호출부가 공개 true 로 본다).
@@ -1675,6 +1710,20 @@ extension SupabaseWorkService {
     package func gomokuWatch(accessToken: String, matchID: String, sinceSeq: Int) async throws -> GomokuWatchResponse {
         try await gomokuRPC(
             "gomoku_watch",
+            body: GomokuWatchRequest(pMatchId: matchID, pSinceSeq: sinceSeq),
+            accessToken: accessToken
+        )
+    }
+
+    /// 관전 + 관전자 수(0.3.64). 서버가 읽기 전용 `gomoku_watch` 를 그대로 싣고 `watchers` 한 칸을 더한다 —
+    /// **요청 본문·응답 모양은 위와 같다**(키 하나가 늘 뿐이라 같은 디코더로 읽는다).
+    ///
+    /// 서버에 이 함수가 아직 없으면(앱이 db push 보다 먼저 나간 창) PGRST202 → `.databaseSchemaMissing` 으로
+    /// throw 한다. 접는 곳은 스토어다(`GomokuStoreWatch.watchFetch`) — 옛 `gomoku_watch` 로 한 번 돌아가고,
+    /// **관전 입구는 잠그지 않는다**(관전자 수가 없는 것과 관전을 못 하는 것은 다른 사실이다).
+    package func gomokuWatchLive(accessToken: String, matchID: String, sinceSeq: Int) async throws -> GomokuWatchResponse {
+        try await gomokuRPC(
+            "gomoku_watch_live",
             body: GomokuWatchRequest(pMatchId: matchID, pSinceSeq: sinceSeq),
             accessToken: accessToken
         )

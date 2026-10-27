@@ -173,6 +173,12 @@ private func mpStore(host: String, function: String = #function) -> WorkTimerSto
         host: host,
         path: "/rest/v1/rpc/message_history_with_reads"
     )
+    // v0.3.65: 그 앞에 찌르기 기록까지 싣는 `message_history_with_pokes` 를 먼저 묻는다 — 같은 이유로 없는 서버를 깐다.
+    MPStub.set(
+        .init(status: 404, body: #"{"code":"PGRST202","message":"Could not find the function public.message_history_with_pokes(p_hours, p_limit) in the schema cache"}"#),
+        host: host,
+        path: "/rest/v1/rpc/message_history_with_pokes"
+    )
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",

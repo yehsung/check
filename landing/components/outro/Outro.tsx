@@ -1,58 +1,68 @@
+import { BrewPill } from "@/components/glass/CommandPill";
+import { LocalLight } from "@/components/glass/LocalLight";
+import { heroCtaAriaLabel } from "@/components/hero/copy";
 import { AppStoreBadge } from "@/components/ui/AppStoreBadge";
-import { CopyButton } from "@/components/ui/CopyButton";
-import { Dome } from "@/components/ui/Dome";
 import { DownloadCTA } from "@/components/ui/DownloadCTA";
 import { Headline } from "@/components/ui/Headline";
-import { BREW } from "@/data/fixtures";
+import { glassButtonClass } from "@/components/glass/GlassButton";
+import { GlassFx } from "@/components/glass/GlassFx";
+import { LINKS, RELEASE_FALLBACK, type ReleaseInfo } from "@/data/fixtures";
 import { OutroStage } from "./OutroStage";
 import { OUTRO } from "./copy";
 
-// components/outro/Outro.tsx — 아웃트로(SPEC v2 §S8 · DECISIONS D3, 서버 컴포넌트). 레퍼런스 엔드카드 자리: 처음의 돔이 작게 돌아오고
-// (앱 아이콘 구성 = 링 + 아잉) 마지막 다운로드를 건넨다. 움직이는 부분(45% 진입 페이드 · 아잉 idle 2회)은 OutroStage(client).
-// - 바탕: 위 160px 동안 --bg-0 → --bg-outro 그라디언트, 그 아래 --bg-outro(푸터와 이어짐). 새 색 없음.
-// - 작은 돔 = globals .dome--small(d = min(60vw, 92svh, 860) · 꼭대기 14svh, phone 200vw · 10svh) — 구조물이라 늘 켜짐(GlowGate 대상 아님).
-//   돔·웅덩이는 절 밖으로 넘치므로 이 절이 position:relative + overflow:clip(가로 넘침 0). #moments 의 조상이 아니라 sticky 규칙과 무관.
-// - 아잉 폭: --aing-w 를 이 절 안에서만 다시 정한다(desk·tab clamp(184px, 24svh − 16px, 220px) · phone clamp(170px, 24svh, 220px)) —
-//   AingClip 폭과 globals .dome-pool(폭 × 1.6 · 높이 × .24)이 같은 값을 읽는다. 웅덩이 가운데 = 아잉 상자 아랫변(절 아래 − 16).
-// - 버튼 줄: Mac용 다운로드(iOS 에서는 그리지 않음 → 배지가 맨 앞, DECISIONS D9) · App Store 배지 48 · brew 명령 복사(secondary).
-//   배지는 사방 여백 = 높이/4(애플 규칙)가 <a> 패딩이라 줄 간격 12 = 눈에 보이는 간격 24. phone 은 세로 쌓기(폭 100%, ≤ 320).
-//   1440×900 세로: 돔 꼭대기 126 · H2 196–339 · 리드 359–391 · 버튼 줄 419–467 · 아잉 200×242(아래 여백 16) → 절 ≈ 725(min 80svh = 720).
-// - 말풍선·근무 라벨·꾸벅·'근무 종료' 버튼·다른 캐릭터·장식 없음. 아잉·돔·웅덩이는 aria-hidden.
+// components/outro/Outro.tsx — 아웃트로 #outro(docs/v3/brief.md §4.6 · §8, 서버 컴포넌트 — 움직이는 건 OutroStage 의 아잉뿐).
+// 엔드카드 구도(가운데 한 열): 작은 유리 받침 위 아잉 → H2 두 줄 → 한 줄 → 버튼 줄. 등장 연출 없음(첫 페인트에 글이 다 보인다).
+// - 빛: 페이지의 마무리 빛 — 오로라가 가장 진하게 모이는 곳. 절 국소 빛 다섯(보라 가장 넓게 · 오키드 · 인디고 둘 · 로즈 작은 점)
+//   + OutroStage 안의 아잉 뒤 오키드 · 받침 아래 보라. 아래쪽 빛은 절 끝 전에 잦아들게 두어 푸터(bg-deep) 경계가 끊겨 보이지 않는다.
+//   절 루트는 relative isolate overflow-clip(glass-api §7 — 빛이 옆 절로 번지거나 가로 넘침을 만들지 않게). 빛은 절 안에서 잦아들게 둔다.
+// - 버튼 줄은 두 벌을 SSR 하고 폭·플랫폼으로 하나만 보인다(히어로와 같은 규칙 — §9.4.4):
+//   ≥768 · iOS 아님(§8 순서): Mac용 다운로드(DownloadCTA) · brew 알약(복사 → 복사했어요) · App Store 배지.
+//   폰(< 768) · iOS 기기: App Store 배지가 먼저 · Mac용 다운로드(투명 유리 → 설치 절 — 폰에 DMG 는 쓸모없다) 한 줄.
+//   brew 알약은 폰에서 한 줄에 안 들어가 숨긴다(§9.4.3 — 설치 절 터미널이 보여 준다). 배지 사방 여백 = 높이/4(애플 규칙, <a> 패딩) —
+//   가로 줄에서는 위아래 여백만 줄 높이에서 뺀다.
+// - 아잉 폭 --aing-w 를 이 절에서 정한다: phone 132 · tab 156 · desk clamp(160, 22svh, 208).
+//   1440×900: 받침+아잉 ≈ 247 → H2 → 한 줄 → 버튼 줄 → 절 ≈ 680(그 아래 푸터까지 한 화면).
 
 const SECTION =
-  "relative flex min-h-[80svh] flex-col overflow-clip " +
-  "bg-[linear-gradient(var(--bg-0),var(--bg-outro)_160px)] " +
-  "[--aing-w:clamp(184px,calc(24svh_-_16px),220px)] phone:[--aing-w:clamp(170px,24svh,220px)]";
+  "relative isolate overflow-clip px-5 pb-16 pt-4 text-center tab:px-8 tab:pb-28 desk:px-8 desk:pb-32 desk:pt-6 " +
+  "[--aing-w:132px] tab:[--aing-w:156px] desk:[--aing-w:clamp(160px,22svh,208px)]";
 
-/** 웅덩이 가운데를 아잉 발(상자 아랫변 = 절 아래 − 16)에 둔다: bottom = 16 − 웅덩이 높이(--aing-w × .24)/2. */
-const POOL_BOTTOM = "calc(16px - var(--aing-w) * .12)";
-
-const FULL_ON_PHONE = "phone:w-full phone:max-w-[320px]";
-
-export function Outro() {
+export function Outro({ release }: { release?: ReleaseInfo } = {}) {
   return (
     <section id="outro" aria-labelledby="outro-h2" className={SECTION}>
-      {/* 10% 스파인의 끝(DECISIONS D27-2(c)): 바탕이 검게 가라앉는 위 160px 동안 사라진다 — desk 만 */}
-      <div aria-hidden="true" className="spine-ext spine-ext--end hidden desk:block" />
-      <Dome variant="small" pool={{ bottom: POOL_BOTTOM }} />
-      <OutroStage>
-        <Headline level={2} size="closing" lines={OUTRO.title} id="outro-h2" />
-        <p className="t-lead mx-auto mt-5 text-ink-2">{OUTRO.lead}</p>
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-3 phone:w-full phone:flex-col phone:gap-2">
-          <DownloadCTA placement="outro" size="l" tone="fill" className={FULL_ON_PHONE} />
-          {/* 가로 줄에서는 배지 위아래 여백(12 = 높이/4)을 줄 높이에서 뺀다 — 여백은 그대로 비어 있고(리드와 28 · 아잉 상자 위 27.7% 는 빈 칸)
-              버튼 줄이 48 로 와이어(419–467)와 같아진다. phone 세로 쌓기에서는 여백이 이웃 버튼과의 간격이라 그대로 둔다. */}
-          <AppStoreBadge height={48} placement="outro" className="tab:-my-3 desk:-my-3" />
-          {/* iOS 에서는 숨긴다 — 아이폰에서 맥 터미널 명령을 복사할 쓸모가 없다(DECISIONS D26-4, D9 의 iOS 규칙과 같은 결) */}
-          <CopyButton
-            text={BREW.install}
-            label={OUTRO.copyLabel}
-            ariaLabel={OUTRO.copyLabel}
-            variant="secondary"
-            className={`${FULL_ON_PHONE} [html[data-platform=ios]_&]:hidden`}
-          />
-        </div>
-      </OutroStage>
+      {/* 윗변(FAQ 아랫변)에서 잘리지 않게: 중심 ≥ 반높이(size × .22) + 8px. 아래로 넘친 끝은 bg-deep 잦아듦이 덮는다 */}
+      <LocalLight tone="violet" x="50%" y="max(50%, calc(min(330px, 37.4vw) + 8px))" size="min(1500px, 170vw)" aspect={0.44} strength={0.42} />
+      <LocalLight tone="orchid" x="82%" y="max(40%, calc(min(266px, 35vw) + 8px))" size="min(760px, 100vw)" strength={0.3} />
+      <LocalLight tone="indigo" x="14%" y="50%" size="min(980px, 130vw)" aspect={0.6} strength={0.32} />
+      <LocalLight tone="indigo" x="90%" y="62%" size="min(700px, 100vw)" aspect={0.6} strength={0.22} />
+      <LocalLight tone="rose" x="58%" y="20%" size={300} aspect={0.8} strength={0.16} className="phone:hidden" />
+      {/* 아래 끝은 푸터 바탕(bg-deep)으로 잦아든다 — 빛 위(같은 z, 뒤 순서)에 깔려 경계가 끊겨 보이지 않게 */}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -z-1 h-36 bg-linear-to-b from-transparent to-bg-deep" />
+
+      <OutroStage />
+
+      <Headline level={2} size="h2" lines={OUTRO.title} id="outro-h2" className="mt-7 tab:mt-8 desk:mt-9" />
+      <p className="t-lead mx-auto mt-5 max-w-[44em] text-balance">{OUTRO.lead}</p>
+
+      {/* ≥768 · iOS 아님 */}
+      <div className="mx-auto mt-8 hidden flex-row flex-wrap items-center justify-center gap-3 tab:flex desk:flex [html[data-platform=ios]_&]:hidden">
+        <DownloadCTA
+          placement="outro"
+          size="l"
+          label={OUTRO.cta}
+          ariaLabel={release ? heroCtaAriaLabel(release, RELEASE_FALLBACK) : undefined}
+        />
+        <BrewPill className="text-left" />
+        <AppStoreBadge height={48} placement="outro" className="self-center -my-3" />
+      </div>
+      {/* 폰 · iOS: 배지 먼저(히어로와 같은 순서) */}
+      <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3 tab:hidden desk:hidden [html[data-platform=ios]_&]:flex">
+        <AppStoreBadge height={48} placement="outro-phone" className="-m-3" />
+        <a href={LINKS.install} data-cta="outro-install" className={glassButtonClass("glass", "l", "ml-3 [--b-h:48px] [--b-px:22px]")}>
+          {OUTRO.cta}
+          <GlassFx specular />
+        </a>
+      </div>
     </section>
   );
 }

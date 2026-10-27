@@ -144,24 +144,50 @@ package enum ChessPhoneText {
     /// 왜 두 방향이 한 타입에 있는가: 서버는 `chess__busy`·`same_visibility` 로 **둘 다** 막는데, 폰은 탭 하나에
     /// 두 게임 입구를 같이 띄운다. 한 방향만 그리면 나머지 입구가 열린 것처럼 보이고, 거기서 신청을 보낸 사람은
     /// 서버 거절을 받는 동안 **진행 중인 판의 시계를 쓴다** — 맥에서 적대 검증이 P0 으로 잡은 자리다.
+    /// ★ **1.0.11 부터 셋이다**(테트리스가 들어왔다). 그래서 "반대쪽 게임"(`otherGame`, 이진 뒤집기)은 **지웠다** —
+    ///   셋에서는 반대쪽이 하나로 정해지지 않아, 오목을 두는 중에 막힌 테트리스 입구가 "체스를 신청할 수 있어요"
+    ///   라고 **틀린 안내**를 했다(그래도 테스트는 초록이었다 — 둘만 있을 때 참이던 식이라서).
+    ///   지금은 문구 함수가 **두는 판(playing)과 막힌 입구(blocked)를 둘 다** 받는다.
     package enum BusyGame: String, CaseIterable, Sendable {
-        case gomoku, chess
+        case gomoku, chess, tetris
 
-        /// 게임 이름("오목" · "체스").
-        package var gameName: String { self == .gomoku ? "오목" : "체스" }
-        /// 반대쪽 게임(막힌 입구의 주인).
-        package var otherGame: BusyGame { self == .gomoku ? .chess : .gomoku }
+        /// 게임 이름("오목" · "체스" · "1:1 테트리스").
+        package var gameName: String {
+            switch self {
+            case .gomoku: return "오목"
+            case .chess: return "체스"
+            case .tetris: return "1:1 테트리스"
+            }
+        }
+
+        /// 진행 중인 판을 가리키는 말("오목 판" · "체스 판" · "테트리스 대결"). 셋 다 받침으로 끝나므로 뒤에 "이" 를 붙인다.
+        package var matchNoun: String {
+            switch self {
+            case .gomoku: return "오목 판"
+            case .chess: return "체스 판"
+            case .tetris: return "테트리스 대결"
+            }
+        }
     }
 
-    /// 다른 판을 두는 중이라 입구가 막혔다 — "오목을 두는 중이에요" · "체스를 두는 중이에요".
+    /// 다른 판을 두는 중이라 입구가 막혔다 — "오목을 두는 중이에요" · "체스를 두는 중이에요" ·
+    /// "1:1 테트리스 대결 중이에요"(테트리스는 '둔다'고 하지 않는다).
     package static func busyTitle(_ playing: BusyGame) -> String {
-        "\(playing.gameName)\(objectParticle(playing.gameName)) 두는 중이에요"
+        switch playing {
+        case .gomoku, .chess:
+            return "\(playing.gameName)\(objectParticle(playing.gameName)) 두는 중이에요"
+        case .tetris:
+            return "\(playing.gameName) 대결 중이에요"
+        }
     }
 
     /// 그 아래 한 줄 — 언제 풀리는지 말한다(막힌 이유만 말하면 사용자가 기다릴 끝을 모른다).
-    package static func busyHint(_ playing: BusyGame) -> String {
-        let other = playing.otherGame.gameName
-        return "\(playing.gameName) 판이 끝나면 \(other)\(objectParticle(other)) 신청할 수 있어요"
+    ///
+    /// ★ `blocked` 가 **막힌 입구**다(지어내지 않는다). 게임이 셋이 된 뒤로는 두는 판만 알고는 이 문장을 쓸 수 없다 —
+    ///   오목을 두는 중에 막히는 입구가 체스·테트리스 **둘**이고, 각 카드는 자기 이름을 말해야 한다.
+    package static func busyHint(playing: BusyGame, blocked: BusyGame) -> String {
+        let name = blocked.gameName
+        return "\(playing.matchNoun)이 끝나면 \(name)\(objectParticle(name)) 신청할 수 있어요"
     }
 
     /// 1:1 입구(도전·수락)를 막는 사유 한 줄. 두는 판이 없으면 nil 이다.
@@ -175,8 +201,8 @@ package enum ChessPhoneText {
 
     /// 막힌 입구의 **둘째 줄**(언제 풀리는지). `entryBlock(playing:)` 과 **짝으로** 쓴다 — 머리만 그리면
     /// "지금은 못 눌러요" 로 끝나고 사용자가 기다릴 끝을 모른다(폰엔 호버 툴팁이 없다).
-    package static func entryBlockHint(playing: BusyGame?) -> String? {
-        playing.map(busyHint)
+    package static func entryBlockHint(playing: BusyGame?, blocked: BusyGame) -> String? {
+        playing.map { busyHint(playing: $0, blocked: blocked) }
     }
 
     /// 막힌 입구에 세우는 안내 **한 칸 두 줄**(제목 + 언제 풀리는지). 칩·보조 줄처럼 자리가 둘로 나뉘지 않는
@@ -188,9 +214,9 @@ package enum ChessPhoneText {
     ///   사용자는 **왜** 막혔는지만 알고 **언제** 풀리는지 모르게 됐다(폰엔 호버 툴팁이 없다).
     /// ★ **양방향이 같은 꼴이다** — `.gomoku`·`.chess` 가 같은 두 줄을 낸다(한쪽만 두 줄이면 다른 입구가 더
     ///   불친절하다).
-    package static func entryBlockNotice(playing: BusyGame?) -> String? {
+    package static func entryBlockNotice(playing: BusyGame?, blocked: BusyGame) -> String? {
         guard let playing else { return nil }
-        return busyTitle(playing) + "\n" + busyHint(playing)
+        return busyTitle(playing) + "\n" + busyHint(playing: playing, blocked: blocked)
     }
 
     /// 게임 탭 체스 카드의 보이스오버 힌트(막히지 않았을 때).
@@ -269,11 +295,11 @@ package enum ChessPhoneText {
     package static let stakeTitle = "판돈"
     /// 고를 수 있는 판돈 셋(3 · 5 · 10). 집합의 주인은 서버이고(`stakes`) 앱 값과 갈리면 진실은 거절한 쪽에 있다.
     package static let stakes = ChessStake.allCases.map(\.rawValue)
-    /// "5 · 이기면 +4" — v0.3.54 부터 꼬리 숫자는 **순이익**(판돈 − 수수료 10% 반올림, `DuelFee.winnerNet`)이다.
+    /// "5 · 이기면 +5" — 꼬리 숫자는 **순이익**(`DuelFee.winnerNet`)이다. v0.3.54~0.3.63 은 수수료 10% 를 뗀 +2/+4/+8, v0.3.64 부터 수수료 0 이라 +판돈.
     package static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
-    /// " · 이기면 +4"(판돈 5 의 줄 꼬리 — 순이익).
+    /// " · 이기면 +5"(판돈 5 의 줄 꼬리 — 순이익).
     package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
-    /// "이기면 +4" — 판돈 칸(타일) 아래 줄. 꼬리(`stakeGainSuffix`)와 달리 **앞 가운뎃점이 없다**.
+    /// "이기면 +5" — 판돈 칸(타일) 아래 줄. 꼬리(`stakeGainSuffix`)와 달리 **앞 가운뎃점이 없다**.
     package static func stakeGain(_ stake: Int) -> String { "이기면 +\(DuelFee.winnerNet(stake: stake))" }
     package static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     package static let stakePromptCaption = "판돈을 고르세요"
@@ -281,7 +307,7 @@ package enum ChessPhoneText {
     package static func challengeWithStake(_ stake: Int) -> String { "\(stake) 걸고 도전하기" }
     /// 루비가 모자라 못 고르는 판돈의 이유 한 줄. 정본은 앱의 다른 화면과 **같은 말**이다.
     package static let stakeShortfall = CheckCoreShared.shortfallNotice(need: nil, have: nil)
-    /// 판돈이 **언제** 빠지는지. 주어가 '수락' 이다 — 오목과 같은 문장(v0.3.54 수수료 한 마디 포함).
+    /// 판돈이 **언제** 빠지는지. 주어가 '수락' 이다 — 오목과 같은 문장(v0.3.64 에 수수료 한 마디를 뺐다).
     package static let stakeCaption = GomokuPhoneText.stakeCaption
     /// ★ 신청만 한 상태를 말하는 줄. "신청하면 빠져요" 로 적으면 **거짓**이다 — 신청은 0원도 움직이지 않고,
     /// 응답이 없으면 그대로 사라진다(루비 이동 없음). 이 문장과 그 테스트가 그 거짓말이 돌아오는 길을 막는다.
@@ -799,7 +825,10 @@ package struct ChessPhoneRuleLine: Identifiable, Equatable, Sendable {
                       + "\(ChessPhoneText.stakeNotHeldYet(ttlSeconds: inviteTtlSeconds))."),
             ChessPhoneRuleLine(
                 title: "한 사람 한 판",
-                detail: "체스를 두는 중에는 오목을, 오목을 두는 중에는 체스를 신청하거나 수락할 수 없어요.")
+                // ★ 게임이 셋이다(1.0.11 — 1:1 테트리스). 셋을 다 말해야 한다: 이름이 빠진 게임은
+                //   사용자가 "그건 되겠지" 하고 눌렀다가 서버 거절을 받는 동안 **두던 판의 시계를 쓴다**.
+                detail: "체스·오목·1:1 테트리스는 한 번에 한 판만 할 수 있어요. "
+                      + "한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.")
         ]
     }
 }

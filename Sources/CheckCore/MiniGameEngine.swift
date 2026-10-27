@@ -11,6 +11,9 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// v0.3.38. **맨 뒤에 더한다** — `allCases` 순서가 곧 맥 헤더 칩·폰 타일의 화면 순서라, 사이에 끼우면
     /// 기존 두 게임의 자리가 말없이 밀린다(사용자가 근육으로 외운 자리다).
     case tetris = "tetris"
+    /// v0.3.67 "길건너 아잉이". 테트리스와 같은 이유로 **맨 뒤**다(설계서 §1 — `allCases` 맨 뒤).
+    /// 폰에는 아직 없다(`phoneCases` 가 거른다 — 폰은 다음 판).
+    case crossy = "crossy"
 
     package var id: String { rawValue }
 
@@ -20,6 +23,7 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: "타이밍 바"
         case .flappy: "플래피 아잉"
         case .tetris: "테트리스"
+        case .crossy: "길건너 아잉이"
         }
     }
 
@@ -34,6 +38,11 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: "metronome.fill"
         case .flappy: "bird.fill"
         case .tetris: "square.grid.2x2.fill"
+        // 길건너 아잉이가 `figure.walk` 인 이유: 사람이 앞으로 걷는 실루엣이 "길을 건넌다"를 한 글자로 말하고,
+        // 다른 넷(메트로놈 · 새 · 2×2 격자 · 오목 3×3 격자)과 실루엣이 겹치지 않는다. macOS 11(2020) 에 들어온
+        // 이름이라 이 앱의 바닥(macOS 14)에서 실재한다 — 시험이 `NSImage(systemSymbolName:)` 로 확인한다.
+        // 일일 미션 줄 아이콘도 이 값이다(`DailyMissionCopy.icon(game:)` · 폰 `MeText.dailyMissionIcon`).
+        case .crossy: "figure.walk"
         }
     }
 
@@ -49,6 +58,8 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: 1000
         case .flappy: 999
         case .tetris: 100_000_000
+        // 서버 `minigame_score_cap('crossy')` 와 같은 값(설계서 §1). 엔진은 `CrossyGame.maxScore` 로 이 값을 그대로 읽는다.
+        case .crossy: 5000
         }
     }
 
@@ -60,10 +71,33 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     ///   · 테트리스: 시뮬 최장 판이 **8.7분**이다. 20분이면 여유가 30 − 20 − 8.7 = 1.3분뿐이라, 조금만 늘어져도
     ///     다 끝난 판이 통째로 `token_expired` 로 거절된다(클램프가 아니라 **거절**이다 — 그 판은 영영 못 올린다).
     ///     12분이면 여유가 30 − 12 − 8.7 = 9.3분이다.
+    ///   · 길건너 아잉이(v0.3.67): **2분.** 한 판에 끝이 정해져 있지 않다 — 난이도는 254 줄에서 멈추고 카메라가 혼자 가는
+    ///     빠르기는 0.18~0.45줄/초뿐이라, 잘하는 사람은 상한 5000 줄(2줄/초면 41분)까지 갈 수 있다. 처음에는 "플래피처럼
+    ///     몇 분 안에 끝난다"로 20분을 줬는데, 그러면 15분 묵은 토큰 + 15분 판 = 30분에서 `token_expired` 로 그 판이
+    ///     통째로 사라진다(검토 지적 2026-10-27). 판 시작에 거의 새 토큰을 쥐게 하고, 28분을 넘는 판은 판 도중에 토큰을
+    ///     갈아 끼운다(`roundTokenMidRunRefreshSeconds`). 2분이 0 이 아닌 이유: 창을 열 때 받아 둔 토큰을 첫 판이 그대로
+    ///     쓰게 — 판 시작에 받으면 즉사한 판의 왕복이 늦는다(플래피 2026-09-14 신고와 같은 이유).
     package var roundTokenReuseSeconds: TimeInterval {
         switch self {
         case .timingBar, .flappy: 20 * 60
         case .tetris: 12 * 60
+        case .crossy: 2 * 60
+        }
+    }
+
+    /// 판이 도는 **도중에** 토큰을 갈아 끼우는 나이(초). nil 이면 갈아 끼우지 않는다(한 판이 TTL 보다 한참 짧은 게임).
+    ///
+    /// 길건너 아잉이만 쓴다: 끝이 정해지지 않은 판이 서버 TTL(30분)을 넘기면 다 끝낸 판이 `token_expired` 로 거절된다.
+    /// 서버 `minigame_start_round` 는 안 쓴 토큰을 **갈아 끼우며 started_at 도 지금으로 되돌린다** — 그래서 판 도중에
+    /// 새로 받으면 TTL 이 새로 30분이고, 옛 토큰은 그 순간 죽는다(들고 있는 것은 언제나 마지막 하나다).
+    /// 대가: 서버 시간 하한(s × 0.09초)도 새 토큰부터 다시 잰다. 갈아 끼운 직후에 판이 끝나면 `too_fast` 가 오는데, 그건
+    /// 토큰을 소모하지 않는 **재시도 대상**이라 인편이 2 → 8 → 30초 간격으로 다시 보내 통과한다(상한 5000 이어도 450초 —
+    /// 새 TTL 30분 안이다). 20분인 이유: 판 시작 토큰이 길어야 2분 묵었으니 22분째에 갈아 끼우면 옛 토큰 TTL 까지 8분이
+    /// 남는다(감시는 30초마다 돈다 — `CheckMiniGameWindowView` 의 토큰 감시).
+    package var roundTokenMidRunRefreshSeconds: TimeInterval? {
+        switch self {
+        case .timingBar, .flappy, .tetris: nil
+        case .crossy: 20 * 60
         }
     }
 
@@ -73,6 +107,7 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         case .timingBar: "움직이는 마커가 밝은 구간에 들어올 때 멈춰 · 10라운드"
         case .flappy: "눌러서 점프 · 기둥 사이를 지나갈수록 +1"
         case .tetris: "줄을 채워 지워 · 쌓여서 꼭대기에 닿으면 끝"
+        case .crossy: "한 칸씩 뛰어 앞으로 · 차 · 강 · 기차를 피해"
         }
     }
 
@@ -85,6 +120,8 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         // 하단 스트립은 32pt 한 줄에 최고·순위와 자리를 나눠 갖는다(`.minimumScaleFactor(0.8)`) — 길면 줄어든다.
         // Z(반시계)·X(시계)·ESC(정지)는 여기 안 적는다: 화면이 받는 키 전부가 아니라 **처음 한 판에 필요한 것**만이다.
         case .tetris: "← → 이동 · ↑ 회전 · ↓ 소프트드롭 · 스페이스 하드드롭 · C 홀드"
+        // 방향키와 WASD 를 같이 받는다(자리로 — 한글 입력기에서도 같다). 클릭·스페이스는 앞으로 한 칸이다.
+        case .crossy: "↑↓←→ · WASD 로 뛰기 · 클릭·스페이스 앞으로"
         }
     }
 
@@ -96,7 +133,7 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// 소스 계약 테스트(V0338)가 이 두 파일 밖의 정적 호출을 빨갛게 만든다.
     package static let controlHint = "클릭 또는 스페이스"
 
-    /// 맥에서 고를 수 있는 게임 — 전부다. 맥 창은 셋을 다 그린다.
+    /// 맥에서 고를 수 있는 게임 — 전부다. 맥 창은 넷을 다 그린다.
     package static let macCases: [MiniGameKind] = allCases
 
     /// 폰에서 **보이는** 게임. 테트리스는 아직 목록에서 뺀다.
@@ -117,7 +154,14 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// **전부**를 알아야 한다. 폰에서 보이지 않는 것과 폰이 값을 모르는 것은 다르다 — 모르면 옛 저장값이 기본값으로
     /// 조용히 접히고, 그건 사용자가 고른 것을 잃는 일이다.
     /// (지금은 셋이 같지만 넷째 게임이 생기면 다시 갈린다 — 그때 이 자리가 다시 게이트가 된다.)
+    ///
+    /// **v0.3.67 — 넷째(`crossy`)가 생겨 다시 갈렸다.** 맥 먼저, 폰은 다음 판(사용자 결정 2026-10-27). 폰 허브 · 게임 탭 ·
+    /// 순위 칩 · 허브 요약이 전부 이 목록을 돌므로 여기서 빠지면 폰 어디에도 안 보인다. 플립 조건은 테트리스 때와 같다
+    /// (위 ①②③ — 서버 마이그레이션 실서버 확인 · `AingRoute.MiniGame` 확장 · 폰 화면·조작).
     package static let phoneCases: [MiniGameKind] = [.timingBar, .flappy, .tetris]
+
+    /// 폰에서 보이는 게임인가 — `phoneCases` 의 한 줄 판정(폰 화면이 낱낱의 kind 를 거를 때 쓰는 한 곳).
+    package var isPhoneSupported: Bool { Self.phoneCases.contains(self) }
 }
 
 /// 게임 논리 좌표계. 게임 규칙은 언제나 이 크기 안에서 계산하고, 뷰는 실제 캔버스 크기에 **비율 유지**로 맞춘다.
@@ -275,6 +319,12 @@ package struct MiniGameHost {
     package var onFinished: (Int) -> Void
     /// 진행 중 여부 변화(시작 → true, 종료/무효 → false). 허브가 스페이스 키 모니터·상태 표시·[일시정지] 버튼 노출에 쓴다.
     package var onPlayingChanged: (Bool) -> Void
+    /// 진행 중인 판의 점수가 바뀌었다(v0.3.67). 허브가 스토어의 **진행 중 판 장부**(`WorkTimerStore.miniGameLiveRound`)에
+    /// 적는다 — 판을 접는 자리(게임 칩 전환 · 창 닫기 · 로그아웃)가 잎 뷰의 생사와 무관하게 **그 점수를 바로 올리기** 위해서다.
+    /// 칩을 바꾸면 잎 뷰가 같은 갱신에서 통째로 사라져 `interruptToken` 의 onChange 가 영영 안 불렸다 — 정지 카드가 약속한
+    /// "지금 그만두면 … 기록돼요" 가 칩 전환에서 거짓이 되던 자리다(검토 지적 2026-10-27). 접었을 때 기록이 안 남는 게임
+    /// (타이밍 바)은 안 불러도 된다.
+    package var onScoreChanged: (Int) -> Void = { _ in }
 
     /// 렌더 테스트·프리뷰용 무해한 호스트.
     package static func inert(bestScore: Int = 0, reduceMotion: Bool = false, interruptToken: Int = 0,
@@ -286,7 +336,7 @@ package struct MiniGameHost {
     }
 
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
-    package init(bestScore: Int, reduceMotion: Bool, interruptToken: Int, isPaused: Bool = false, refreshHz: Int = MiniGameFrameRate.baselineFPS, onFinished: @escaping (Int) -> Void, onPlayingChanged: @escaping (Bool) -> Void) {
+    package init(bestScore: Int, reduceMotion: Bool, interruptToken: Int, isPaused: Bool = false, refreshHz: Int = MiniGameFrameRate.baselineFPS, onFinished: @escaping (Int) -> Void, onPlayingChanged: @escaping (Bool) -> Void, onScoreChanged: @escaping (Int) -> Void = { _ in }) {
         self.bestScore = bestScore
         self.reduceMotion = reduceMotion
         self.interruptToken = interruptToken
@@ -294,6 +344,7 @@ package struct MiniGameHost {
         self.refreshHz = refreshHz
         self.onFinished = onFinished
         self.onPlayingChanged = onPlayingChanged
+        self.onScoreChanged = onScoreChanged
     }
 }
 
@@ -322,6 +373,35 @@ package struct MiniGameInput: Equatable, Sendable {
     package var rotateCounterClockwiseCount: Int = 0
     /// 홀드(C)가 올 때마다 1 증가. 조각당 1회 제한은 **엔진**이 건다(화면이 세지 않는다).
     package var holdCount: Int = 0
+
+    // ── 길건너 아잉이(v0.3.67)만 읽는 칸들 ──────────────────────────────────────────────────
+    // 테트리스 때와 같은 원칙으로 **더하는 방향으로만** 넓혔다(기존 셋의 잎 뷰는 이 칸을 안 본다).
+    //
+    // 뛰기는 **누른 순서**가 뜻이다(↑ 다음 → 와 → 다음 ↑ 는 다른 길이다). 처음에는 방향마다 카운터를 따로 뒀는데,
+    // SwiftUI `onChange` 는 갱신 한 번에 **한 번만** 불린다 — 한 프레임에 두 번 오른 카운터는 한 번으로 접히고, 같은 프레임의
+    // ↑ · → 는 누른 순서가 아니라 **코드에 적힌 순서**로 처리됐다(검토 지적 2026-10-27). 그래서 누른 순서 그대로의 꼬리
+    // (`recentHops`)와 총 횟수(`hopCount`) 한 쌍으로 바꿨다 — 화면은 `hops(since: 옛 hopCount)` 로 그 사이 누른 것을 순서대로 받는다.
+
+    /// 뛰기 키가 눌린 총 횟수(늘기만 한다). 화면의 `onChange(of:)` 가 보는 값이다.
+    package var hopCount: Int = 0
+    /// 최근 뛰기 키들 — **누른 순서**, 길이는 `recentHopLimit` 까지(오래된 것부터 버린다).
+    package var recentHops: [CrossyGame.Direction] = []
+    /// 꼬리 길이. 한 프레임에 이보다 많이 눌릴 일은 없다(엔진은 어차피 한 칸만 줄 세운다 — 나머지는 엔진이 버린다).
+    package static let recentHopLimit = 8
+
+    /// 뛰기 한 번을 적는다(누른 순서 그대로).
+    package mutating func recordHop(_ direction: CrossyGame.Direction) {
+        hopCount &+= 1
+        recentHops.append(direction)
+        if recentHops.count > Self.recentHopLimit { recentHops.removeFirst(recentHops.count - Self.recentHopLimit) }
+    }
+
+    /// `oldCount` 이후에 눌린 뛰기들 — 누른 순서. 꼬리보다 많이 밀렸으면 꼬리만큼(가장 최근 것들)만 준다.
+    package func hops(since oldCount: Int) -> [CrossyGame.Direction] {
+        let missed = hopCount &- oldCount
+        guard missed > 0 else { return [] }
+        return Array(recentHops.suffix(min(missed, recentHops.count)))
+    }
 
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
     /// 새 인자는 전부 기본값이라 `MiniGameInput()` · `MiniGameInput(actionCount:)` 호출이 그대로 산다.

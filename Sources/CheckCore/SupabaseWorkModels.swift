@@ -1536,11 +1536,28 @@ extension [PokeDirectoryRow] {
 }
 
 extension [PokeDirectoryEntry] {
-    /// 근무중 먼저, 그 안에서 이름 오름차순. 서버 정렬과 동일 규약(클라 재정렬로 안정 표시).
-    package func sortedForPokeDisplay() -> [PokeDirectoryEntry] {
+    /// 콕찌르기 목록 순서(v0.3.65 — 사용자 결정 2026-10-23 원문: "1. 근무중이면서 메세지 아직 안읽은 사람, 2. 근무중 아니면서 메세지
+    /// 아직 안읽은 사람, 3. 근무중이면서 메세지 다 읽거나 없는사람, 4. 근무중 아니면서 메세지 다 읽거나 없는 사람").
+    ///
+    /// 키는 (안 읽음 → 근무중 → 이름 → id) 사전식이다. `unreadPeerIDs` 는 **메시지 안 읽음 ∪ 안 본 찌르기**다(사용자 결정 "찌르기도 친다" —
+    /// 합치는 자리는 부르는 쪽이다). 이름이 같은 두 사람은 id 로 깬다 — 안 깨면 새로고침마다 두 행이 자리를 바꾼다(`sorted` 는 안정 정렬이 아니다).
+    ///
+    /// `workKnown` 이 false 면 근무 축을 건너뛴다(안 읽음 → 이름 두 무리). 근무 여부를 아직 모르는 동안의 몫이다 — 맥은 명부가 isWorking 과
+    /// 함께 와서 늘 true 고, 폰이 쓴다(합의: pending 은 근무중으로 넘기고, 모름은 false).
+    ///
+    /// ★ **두 인자 모두 기본값을 주지 마라**(명세 §3.0). 기본값이 있으면 인자를 안 넘긴 호출부(폰 두 자리 · 스토어)가 조용히 옛 2단으로 남고
+    ///   시험은 초록이다. 기본값이 없어야 컴파일러가 부르는 자리를 하나씩 세워 무엇을 넘길지 정하게 한다.
+    package func sortedForPokeDisplay(unreadPeerIDs: Set<String>, workKnown: Bool) -> [PokeDirectoryEntry] {
         sorted { lhs, rhs in
-            if lhs.isWorking != rhs.isWorking { return lhs.isWorking }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            let lhsUnread = unreadPeerIDs.contains(lhs.userID)
+            let rhsUnread = unreadPeerIDs.contains(rhs.userID)
+            if lhsUnread != rhsUnread { return lhsUnread }
+            if workKnown, lhs.isWorking != rhs.isWorking { return lhs.isWorking }
+            switch lhs.name.localizedStandardCompare(rhs.name) {
+            case .orderedAscending: return true
+            case .orderedDescending: return false
+            case .orderedSame: return lhs.userID < rhs.userID
+            }
         }
     }
 }
@@ -1629,19 +1646,39 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     /// 뽑기로만 얻는 캐릭터인가(v0.3.54 황금 아잉이 · v0.3.59 무지개 아잉이). 참이면 `price` 는 명목값이라 **팔지 않는다**
     /// (서버 `buy_character` 가 `not_for_sale` 로 거절한다). 이 키를 모르는 옛 서버는 nil — "아니다"로 읽는다.
     package var gachaOnly: Bool?
+    /// 생일 선물로만 얻는 캐릭터인가(v0.3.66 케이크 아잉이 둘 — 서버 `shop_state` 의 `gift_only`). 참이면 `price` 는 장식값이라
+    /// **팔지 않는다**. 이 키를 모르는 옛 서버는 nil — "아니다"로 읽되, 케이크 id 는 표식과 무관하게 언제나 선물 전용이다
+    /// (`CharacterCatalog.isGiftOnlyBuiltIn`). 서버는 케이크 행에 `gacha_only = true` 도 함께 싣는다(not_for_sale 갈래를 타려고).
+    package var giftOnly: Bool?
 
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
-    package init(id: String, price: Int? = nil, owned: Bool? = nil, gachaOnly: Bool? = nil) {
+    package init(id: String, price: Int? = nil, owned: Bool? = nil, gachaOnly: Bool? = nil, giftOnly: Bool? = nil) {
         self.id = id
         self.price = price
         self.owned = owned
         self.gachaOnly = gachaOnly
+        self.giftOnly = giftOnly
     }
 
-    /// 상점에서 살 수 있는 줄인가 — 뽑기 전용이 아니고 값이 있을 때만. (보유 여부는 묻지 않는다 — 그건 화면의 다른 판정이다.)
+    /// 상점에서 살 수 있는 줄인가 — 뽑기 전용도 선물 전용도 아니고 값이 있을 때만. (보유 여부는 묻지 않는다 — 그건 화면의 다른 판정이다.)
     /// 황금·무지개 아잉이는 서버 표식과 무관하게 **언제나** 못 산다(사장님 결정 — 뽑기로만). 표식이 빠진 응답이 와도 팔리는 카드가 서지 않게.
+    /// 케이크 아잉이(v0.3.66)도 같다 — `gift_only` 가 빠지거나 false 로 와도 케이크 id 는 언제나 못 산다(생일 선물로만).
     package var isPurchasable: Bool {
-        gachaOnly != true && !CharacterCatalog.isGachaOnlyBuiltIn(id) && price != nil
+        gachaOnly != true && !CharacterCatalog.isGachaOnlyBuiltIn(id)
+            && giftOnly != true && !CharacterCatalog.isGiftOnlyBuiltIn(id)
+            && price != nil
+    }
+
+    /// 생일 선물 전용 줄인가(서버 표식 **또는** 케이크 id). 상점의 잠긴 칸 '생일 선물 전용'이 이 값으로 선다.
+    package var isGiftOnly: Bool {
+        giftOnly == true || CharacterCatalog.isGiftOnlyBuiltIn(id)
+    }
+
+    /// 뽑기 · 조각 교환으로 얻는 줄인가(화면의 '뽑기 전용' · "뽑기나 조각 교환으로 얻을 수 있어요"의 판정).
+    /// ★ 선물 전용이 **먼저 이긴다**: 서버는 케이크 행에 not_for_sale 갈래를 타려고 `gacha_only = true` 도 싣는데, 그 표식만 보면
+    ///   케이크가 '뽑기 전용'으로 읽혀 뽑기 창을 열거나 "뽑기나 조각 교환으로…"라고 거짓말한다(케이크는 뽑기에 없다).
+    package var isGachaOnly: Bool {
+        !isGiftOnly && (gachaOnly == true || CharacterCatalog.isGachaOnlyBuiltIn(id))
     }
 }
 
@@ -3095,6 +3132,157 @@ package enum MiniGameDayKey {
     }
 }
 
+// MARK: - 미니게임 역대 순위 (v0.3.67)
+//
+// 사용자 결정(2026-10-27): "미니게임 멀티 아닌 3종 에서 역대 최고 점수 랭킹 볼 수 있는 창도 만들어줘."
+// 맥 미니게임 창 순위 열에 [오늘 | 역대] 전환이 붙는다. 역대 = 지금 고른 혼자 하는 게임의 **사람마다 전체 기간 최고 한 줄**.
+// 서버는 `minigame_alltime_board(p_game)` 하나다(20261027120000) — 가시성(공개 끔 = 본인만 · 숨김 격리)·0점 제외·50행은
+// `minigame_board` 와 같은 술어다. 폰은 다음 버전이라 전선 모양·디코드·정렬·날짜 글자는 **여기(CheckCore)** 에 둔다.
+
+/// 순위 열이 보여 주는 판. 앱이 떠 있는 동안만 기억한다(영속하지 않는다).
+package enum MiniGameBoardScope: String, CaseIterable, Identifiable, Equatable, Sendable {
+    case today
+    case allTime
+
+    package var id: String { rawValue }
+
+    /// 전환 단추의 글자.
+    package var label: String {
+        switch self {
+        case .today: return "오늘"
+        case .allTime: return "역대"
+        }
+    }
+
+    /// 순위 열 머리 제목(보이스오버 이름도 이것이다 — 단추 글자 두 자만으로는 무엇을 고르는지 안 들린다).
+    package var boardTitle: String {
+        switch self {
+        case .today: return "오늘 순위"
+        case .allTime: return "역대 순위"
+        }
+    }
+}
+
+/// `minigame_alltime_board(p_game)` RPC 본문. 인자는 이것 하나이고 서버에 DEFAULT 가 없다 — 키를 빼면 PGRST202 다.
+package struct MiniGameAllTimeBoardRequest: Encodable {
+    package let pGame: String
+}
+
+/// `minigame_alltime_board` 응답 배열의 한 원소. **전부 옵셔널이고 칸마다 따로 읽는다** — 원소 하나가 이상해도(칸 없음·
+/// 타입 어긋남·객체가 아닌 원소) 배열 디코드가 통째로 throw 되지 않는다(`AppUserCharacterRow` 와 같은 관용).
+/// 쓸 수 없는 원소(user_id 나 best_score 가 없다)는 서비스가 버린다. 배열이 아닌 본문은 그대로 throw 한다(실패로 그린다).
+///
+/// 키는 `.convertFromSnakeCase` 뒤의 카멜 이름이다(`best_score` → `bestScore`). 서버 키 일곱 개는 마이그레이션 §3 ⑤ 가
+/// 실호출로 못 박는다: user_id · display_name · avatar_url · best_score · best_at · day · center.
+package struct MiniGameAllTimeBoardRow: Decodable, Equatable, Sendable {
+    package let userId: String?
+    package let displayName: String?
+    package let avatarUrl: String?
+    package let bestScore: Int?
+    /// 그 점수에 처음 닿은 날의 best_at(timestamptz 문자열 — 서비스가 parseDate 로 푼다).
+    package let bestAt: String?
+    /// 그 점수에 처음 닿은 KST 날짜 'YYYY-MM-DD'.
+    package let day: String?
+    /// 소속 센터 **서버값**(화면 글자로 바꾸는 것은 서비스 경계 한 번 — `CenterLabel.display`).
+    package let center: String?
+
+    package enum CodingKeys: String, CodingKey, CaseIterable {
+        case userId, displayName, avatarUrl, bestScore, bestAt, day, center
+    }
+
+    package init(
+        userId: String?, displayName: String?, avatarUrl: String?, bestScore: Int?,
+        bestAt: String?, day: String?, center: String?
+    ) {
+        self.userId = userId
+        self.displayName = displayName
+        self.avatarUrl = avatarUrl
+        self.bestScore = bestScore
+        self.bestAt = bestAt
+        self.day = day
+        self.center = center
+    }
+
+    package init(from decoder: any Decoder) throws {
+        guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+            self.init(userId: nil, displayName: nil, avatarUrl: nil, bestScore: nil, bestAt: nil, day: nil, center: nil)
+            return
+        }
+        func text(_ key: CodingKeys) -> String? {
+            guard let value = (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        // 점수는 정수로 온다(jsonb integer). 정수인 소수 표기(800.0)는 JSONDecoder 가 Int 로 받고, 그 밖(800.5 · 글자)은
+        // 그 원소만 버린다 — Double 로 한 번 더 읽는 폴백은 두지 않는다(뮤테이션 실측: 지워도 결과가 같은 죽은 갈래였다).
+        func score() -> Int? { (try? container.decodeIfPresent(Int.self, forKey: .bestScore)) ?? nil }
+        self.init(
+            userId: text(.userId),
+            displayName: (try? container.decodeIfPresent(String.self, forKey: .displayName)) ?? nil,
+            avatarUrl: text(.avatarUrl),
+            bestScore: score(),
+            bestAt: text(.bestAt),
+            day: text(.day),
+            center: text(.center)
+        )
+    }
+}
+
+/// 미니게임 역대 순위 한 행(표시용). 정렬 순서가 곧 순위다(등수는 뷰가 인덱스로 센다 — 오늘 순위와 같다).
+package struct MiniGameAllTimeEntry: Identifiable, Equatable, Sendable {
+    package let userID: String
+    package var name: String
+    package var avatarURL: URL?
+    /// 그 사람의 그 게임 역대 최고(하루 최고들의 최고).
+    package let bestScore: Int
+    /// 그 점수에 처음 닿은 시각(동률 타이브레이크 — 먼저 닿은 사람이 위). 모르면 nil(맨 뒤).
+    package let bestAt: Date?
+    /// 그 점수에 처음 닿은 KST 날짜 'YYYY-MM-DD'. 모르면 nil(날짜 글자 없음).
+    package let day: String?
+    /// 소속 센터의 **화면 글자**. nil 이면 배지 없음.
+    package var center: String? = nil
+
+    package var id: String { userID }
+
+    /// 행의 작은 날짜 글자("9/13"). 연도는 뺀다 — 기록은 2026-09-08 부터라 한 해 안이고, 314pt 열에서 연도는 이름 칸을 먹는다.
+    package var dayCaption: String? { Self.dayCaption(day) }
+
+    /// 오늘 순위 행과 **같은 행 뷰**로 그리기 위한 모양(맥 `MiniGameRankRow` 가 `MiniGameBoardEntry` 를 읽는다 — 행 뷰를
+    /// 두 벌로 두면 열 규격이 언젠가 갈린다). 판 수는 역대에 없다(0) — 행 뷰는 판 수를 그리지 않는다.
+    package var rankRowEntry: MiniGameBoardEntry {
+        MiniGameBoardEntry(
+            userID: userID, name: name, avatarURL: avatarURL, bestScore: bestScore, bestAt: bestAt, plays: 0, center: center)
+    }
+
+    /// 'YYYY-MM-DD' → "M/d"(앞자리 0 없음). 모양이 아니면 nil — **시계를 읽지 않는다**(뷰가 `Date()` 를 못 쓰는 계약).
+    package static func dayCaption(_ day: String?) -> String? {
+        guard let day else { return nil }
+        let parts = day.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
+              parts.allSatisfy({ $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }),
+              let month = Int(parts[1]), let date = Int(parts[2]),
+              (1...12).contains(month), (1...31).contains(date) else { return nil }
+        return "\(month)/\(date)"
+    }
+}
+
+extension Array where Element == MiniGameAllTimeEntry {
+    /// 서버 정렬을 믿지 않고 다시 세운다: 점수 내림차순 → 먼저 닿은 사람(best_at 오름차순, nil 은 뒤) → user_id.
+    /// 마지막 축이 이름이 아니라 user_id 인 이유: 서버(`… b.best_at asc, b.user_id`)와 같은 축이어야 같은 입력에서 같은 줄이 선다.
+    package func sortedForMiniGameAllTimeBoard() -> [MiniGameAllTimeEntry] {
+        sorted { lhs, rhs in
+            if lhs.bestScore != rhs.bestScore { return lhs.bestScore > rhs.bestScore }
+            switch (lhs.bestAt, rhs.bestAt) {
+            case let (l?, r?) where l != r: return l < r
+            case (nil, .some): return false
+            case (.some, nil): return true
+            default: break
+            }
+            return lhs.userID < rhs.userID
+        }
+    }
+}
+
 // MARK: - 제보(버그·요청) (v0.2.48)
 //
 // 사용자가 쓴 글을 나른다. **본문은 로그·에러 메시지·테스트 픽스처 어디에도 흘리지 않는다** — 여기 타입들이
@@ -3678,6 +3866,9 @@ package struct GomokuLobbyMatchRow: Decodable, Equatable, Sendable {
     package var stake: Int?
     /// 대국이 시작된 서버 시각(accepted_at). 경과는 앱이 잰다.
     package var startedMs: Double?
+    /// 0.3.64 — 지금 이 판을 보고 있는 관전자 수(`match__watchers`). **안 싣는 서버면 nil 이고 화면 값은 0 이다.**
+    /// 참가자는 세지 않는다(서버가 등록 자리에서 거른다) — 그래서 내 판 카드도 0 에서 시작한다.
+    package var watchers: Int?
 }
 
 /// gomoku_lobby 응답: { status, server_now_ms, stakes, turn_seconds, invite_ttl_seconds, me{…}, users[…], matches[…] }.
@@ -3774,6 +3965,9 @@ package struct GomokuStatePayload: Decodable, Equatable, Sendable {
     /// 0.3.28 — 내가 **연속으로** 자동 착수당한 횟수(직접 한 수라도 두면 0으로 돌아간다). 3이면 그 판을 잃는다.
     package var myAutoStreak: Int?
     package var opponentAutoStreak: Int?
+    /// 0.3.64 — **내 판**을 보고 있는 관전자 수(`gomoku__state` 가 싣는다 — state·move·respond 응답 전부).
+    /// 안 싣는 옛 서버면 nil 이고 화면 값은 0 이다.
+    package var watchers: Int?
 }
 
 /// gomoku_state 응답: { status, match{…}, moves[…], my_color, opponent{…}, ruby_balance, server_now_ms }.
@@ -3963,6 +4157,9 @@ package struct GomokuWatchResponse: Decodable, Equatable, Sendable {
     package var blackAutoStreak: Int?
     package var whiteAutoStreak: Int?
     package var autoAbandonStreak: Int?
+    /// 0.3.64 — 이 판을 같이 보고 있는 관전자 수. **`gomoku_watch_live` 만 싣는다** — 옛 `gomoku_watch` 로
+    /// 접힌 세션에서는 키가 없어 nil 이고, 스토어가 0 으로 읽는다(그 상태에서는 화면이 아무것도 그리지 않는다).
+    package var watchers: Int?
 }
 
 /// 대국 채팅 본문의 정규화·길이 판정. **MessageBody 의 정규화·눈금을 그대로 빌린다** — 상한(100)만 다르다.

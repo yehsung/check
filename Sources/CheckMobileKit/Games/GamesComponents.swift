@@ -1,3 +1,39 @@
+import Foundation
+
+// MARK: - 관전자 수 (0.3.65 / 폰 1.0.13) — 세 게임이 같은 한 벌을 쓴다
+
+/// 관전자 수 한 칸의 **순수 판정·문구**. 오목·체스·테트리스가 로비 줄·관전 화면·대국자 본인 화면에서 같은 것을 쓴다.
+///
+/// ── 왜 `#if os(iOS)` **밖**인가 ─────────────────────────────────────────────────────────────
+/// 폰 뷰는 맥 스위트가 한 줄도 못 본다(CheckMobileKit 의 절반이 `#if os(iOS)` — 저장소 메모 '폰 뷰는 맥 스위트가
+/// 못 본다'). 판정을 뷰 안 삼항으로 묻어 두면 "0 인데 그렸다"·"라벨이 숫자만 읽힌다"를 **값으로 잴 자리가 없다**.
+/// 그래서 그리는가(`shows`)·숫자(`text`)·보이스오버 라벨(`accessibilityLabel`)을 여기 세 함수로 떼어 두고,
+/// 뷰(`GamesWatcherBadge`)는 이 셋을 배치만 한다.
+///
+/// ── 규약(명세 §3 · 맥과 같다) ───────────────────────────────────────────────────────────────
+///  · 눈 아이콘(`eye.fill`) + 수. **0 이면 아무것도 그리지 않는다** — "0명이 보고 있어요" 는 썰렁하다.
+///  · 보이스오버는 **"관전자 N명"**. 숫자만 읽으면 뜻이 없다(판돈·수와 섞여 읽힌다).
+///  · 애니메이션 금지 — 2초 폴링마다 숫자가 튀면 눈에 거슬린다(값만 갈린다).
+///  · 서버가 아직 관전자 수를 모르는 창(`*_watch_live` 가 없어 접힌 길)에서는 코어가 0 을 주므로 **저절로** 안 그린다.
+///    화면이 `spectatorCountUnavailable` 을 따로 보지 않는 까닭이 이것이다(깃발을 두 곳에서 읽으면 한쪽이 언젠가 빠진다).
+enum GamesWatcherCount {
+    /// SF Symbol — 눈. 세 화면이 같은 기호를 쓴다(자리마다 다른 기호를 고르면 같은 값이 다른 것으로 읽힌다).
+    static let symbol = "eye.fill"
+
+    /// 이 수를 그리는가. ★ **0 이면 거짓**이고 음수(있을 수 없지만 서버가 흔들리면 온다)도 거짓이다.
+    static func shows(_ count: Int) -> Bool { count > 0 }
+
+    /// 눈 아이콘 옆 숫자(그리는 자리에서만 부른다).
+    static func text(_ count: Int) -> String { String(max(0, count)) }
+
+    /// 보이스오버 라벨 — "관전자 N명".
+    static func accessibilityLabel(_ count: Int) -> String { "관전자 \(max(0, count))명" }
+
+    /// 글자 문구가 필요한 자리("N명이 보고 있어요"). 지금 폰에서 쓰는 자리는 없고 맥과 **같은 말**을 남겨 둔다 —
+    /// 쓰게 되는 날 두 벌로 갈리지 않게.
+    static func watchingPhrase(_ count: Int) -> String { "\(max(0, count))명이 보고 있어요" }
+}
+
 #if os(iOS)
 import CheckCore
 import CheckMobileShared
@@ -5,6 +41,33 @@ import SwiftUI
 
 // 게임 탭 안에서만 쓰는 조각(w15 G — 시안 B 07·08·09). 공용 부품(Components)은 고치지 않는다 — 두 탭 이상이 같은 것을 만들면
 // 통합 때 승격한다(후보: `GamesNavTitle` · `GamesToolbarRubyPill` · `GamesStakeLine`).
+
+/// 관전자 수 한 칸(눈 + 수). **판정은 `GamesWatcherCount` 하나**이고 이 뷰는 배치만 한다.
+///
+/// ★ 그리는가를 **부르는 쪽이 또 묻지 않게** 이 뷰가 스스로 접는다(`shows` 가 거짓이면 `EmptyView`) — 로비 줄처럼
+///   슬롯이 비면 줄을 접는 자리에서는 부르는 쪽도 같은 술어를 보지만, 그 술어는 **같은 한 함수**다.
+struct GamesWatcherBadge: View {
+    let count: Int
+    /// 글꼴(자리마다 다르다 — 로비 줄은 부제 크기, 머리 띠 칩은 footnote).
+    var font: Font = MobileTheme.rowSubtitle
+    var tint: Color = MobileTheme.label2
+
+    var body: some View {
+        if GamesWatcherCount.shows(count) {
+            HStack(spacing: 3) {
+                Image(systemName: GamesWatcherCount.symbol)
+                Text(GamesWatcherCount.text(count))
+                    .monospacedDigit()
+            }
+            .font(font)
+            .foregroundStyle(tint)
+            .fixedSize()
+            // 숫자만 읽으면 뜻이 없다(판돈·경과와 섞인다) — 한 요소로 묶어 "관전자 N명" 을 읽는다.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(GamesWatcherCount.accessibilityLabel(count)))
+        }
+    }
+}
 
 /// 게임 탭 누름 영역의 최소 한 변(pt) — HIG 44×44. 수락·거절처럼 붙은 버튼이 작으면 잘못 눌러 판돈이 걸린다
 /// (games-verify: 기본 글자에서 수락 35pt · 빠른 문구 31pt 실측).
@@ -186,7 +249,7 @@ struct GamesLiveMatchRow: View {
                 // ★ 아래 '좁은 폭' 갈래와 조건이 겹칠 때는 **이 갈래가 이긴다**(먼저 본다). 그래도 둘이 싸우지 않는 이유는
                 //   조건을 갈라 둔 게 아니라 **결론을 하나로 둔** 것이다 — 두 갈래의 접힌 꼴이 같은 `stacked` 뷰다.
                 stacked
-            } else if hasWatchEntry {
+            } else if hasTrailing {
                 // 칩이 붙는 행만 폭을 재본다. **왜 틀렸었나**: [관전] 칩(52.0pt)이 붙으면서 판돈·경과 줄에 남는 폭이
                 // 142.5 → 78.5pt 로 줄었는데 그 줄이 필요한 폭은 128.4pt 다(320pt Display Zoom · 기본 글자 CoreText 실측 —
                 // 판돈 58.1 + " · 1분 35초째" 70.2). 판돈도 경과도 줄임표로 잘려 **관전 입구 옆에서 판돈을 못 읽었다.**
@@ -218,7 +281,7 @@ struct GamesLiveMatchRow: View {
             faces
             texts
             Spacer(minLength: 0)
-            watchEntry
+            trailing
         }
     }
 
@@ -229,16 +292,33 @@ struct GamesLiveMatchRow: View {
         VStack(alignment: .leading, spacing: 6) {
             faces
             texts
-            watchEntry
+            trailing
         }
     }
 
-    /// 칩 슬롯이 실제로 뷰를 그리는가. 위 폭 재보기와 아래 `watchEntry` 가 **이 하나**를 본다 — 조건을 두 곳에 적으면
-    /// 한쪽만 고쳐져 "빈 슬롯 때문에 줄을 접는" 꼴이 된다.
+    /// 칩 슬롯이 실제로 뷰를 그리는가.
     ///
     /// 주 스위치가 꺼진 배선에서는 칩 자체를 두지 않는다 — `startWatching` 이 `spectatorFeaturesEnabled` 를 먼저 보고 조용히
     /// 돌아서므로(`GomokuStoreWatch.swift:68`) 눌러도 아무 일도 없는 버튼이 된다.
     private var hasWatchEntry: Bool { showsWatch && gomoku.spectatorFeaturesEnabled }
+
+    /// 오른쪽 끝 슬롯이 **무엇이든** 그리는가 — [관전] 입구(위) 또는 관전자 수(0.3.65). 위 폭 재보기와 아래
+    /// `trailing` 이 **이 하나**를 본다 — 조건을 두 곳에 적으면 한쪽만 고쳐져 "빈 슬롯 때문에 줄을 접는" 꼴이 된다.
+    ///
+    /// ★ 관전자 수는 **주 스위치와 무관**하다: 그 값은 로비 응답이 실어 온 사실이고(`live.watchers`), 관전에
+    ///   들어갈 수 있는가와는 다른 축이다. 허브('지금 대결 중' 카드 · `showsWatch == false`)에서도 보인다.
+    private var hasTrailing: Bool { hasWatchEntry || GamesWatcherCount.shows(live.watchers) }
+
+    /// 오른쪽 끝 슬롯 한 덩이: 관전자 수 · [관전] 입구. 빈 슬롯은 아예 그리지 않는다(간격이 남는다).
+    @ViewBuilder
+    private var trailing: some View {
+        if hasTrailing {
+            HStack(spacing: 6) {
+                GamesWatcherBadge(count: live.watchers)
+                watchEntry
+            }
+        }
+    }
 
     private var faces: some View {
         HStack(spacing: 8) {

@@ -18,20 +18,26 @@ struct MeDesignContractTests {
         #expect(records.contains("MeRhythmSection"), "근무 리듬이 다시 별개 카드로 튀어나왔다(지난주 → 12주 → 지난주 배치가 되돌아온다)")
         let home = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeTab.swift")
         let stage = try #require(home.range(of: "MeStageCard(store: store)"))
+        // v1.0.13: 무대 **바로 다음**은 [미션] 줄이다 — 「이번 주 근무」 카드와 「도전 미션」 절(9줄 ≈ 672pt)이 여기 있다가
+        // 미션 화면으로 갔고(사용자 지시 2026-10-23), 남은 것은 줄 하나다. 자리는 그대로 루비 칩 바로 아래다.
+        let missionsRow = try #require(home.range(of: "MeMissionsRow(store: store)"), "루트에 [미션] 줄이 없다")
         let lastWeek = try #require(home.range(of: "MeRecordsCard(store: store)"))
         let grass = try #require(home.range(of: "MeGrassCard(store: store)"))
         // v0.3.45: 잔디 **뒤**에 「AI 리밋」 카드가 선다(잔디까지가 지난 기록 · 리밋은 지금 남은 한도 — 시제가 바뀐다).
         let aiLimits = try #require(home.range(of: "MeAILimitsCard(store: store)"))
         let menu = try #require(home.range(of: "MeMenuGroup(store: store)"))
-        #expect(stage.lowerBound < lastWeek.lowerBound && lastWeek.lowerBound < grass.lowerBound
+        #expect(stage.lowerBound < missionsRow.lowerBound && missionsRow.lowerBound < lastWeek.lowerBound
+                && lastWeek.lowerBound < grass.lowerBound
                 && grass.lowerBound < aiLimits.lowerBound && aiLimits.lowerBound < menu.lowerBound,
-                "첫 화면 순서: 무대 → 「지난주」(회고+리듬) → 「최근 12주」(잔디) → 「AI 리밋」 → 메뉴")
+                "첫 화면 순서: 무대 → [미션] 줄 → 「지난주」(회고+리듬) → 「최근 12주」(잔디) → 「AI 리밋」 → 메뉴")
         #expect(!home.contains("MeRhythmCard(store: store)"), "리듬이 루트에서 다시 별개 카드다")
         // 앵커 이름을 바꾸면 저장소 밖 데모 스크린샷 명령(-AingCheckDemoMeAnchor)이 깨진다.
         let anchors = try #require(home.range(of: "enum MeAnchor"))
         // 주석을 걷어낸 소스라 블록 길이는 선언 줄 + case 줄들만 센다(v0.3.45 에 일곱 번째가 늘어 200 → 260).
         let anchorBlock = home[anchors.lowerBound...].prefix(260)
-        for name in ["header", "records", "tokenGrass", "characters", "menu", "rhythm", "aiLimits"] {
+        // `missions` 는 v1.0.13 에 [미션] **줄**을 가리키게 됐다(절이 화면으로 나갔다) — 이름은 그대로 두는 것이 설계다
+        // (저장소 밖 스크린샷 명령 `-AingCheckDemoMeAnchor missions` 가 안 깨진다).
+        for name in ["header", "records", "tokenGrass", "characters", "menu", "rhythm", "missions", "aiLimits"] {
             #expect(anchorBlock.contains(name), "MeAnchor.\(name) 이 사라졌다")
         }
     }

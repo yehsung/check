@@ -128,7 +128,10 @@ struct V0354GoldShopProtocolTests {
         // v0.3.59: 번호는 누적이라 무지개 그림까지 실리면 3 이다(무지개의 기준선은 V0359RainbowShopProtocolTests). 이 시험은 금의 몫 —
         // "금 그림이 있으면 2 이상, 없으면 robot 까지" — 를 잰다.
         let rainbow = V0359RainbowShopProtocolTests.macRainbowArtInSourceTree
-        let expected = robot ? (gold ? (rainbow ? ShopWire.rainbowProtocol : ShopWire.goldProtocol) : ShopWire.robotProtocol)
+        // v0.3.66: 케이크 아잉이 둘의 초상까지 실리면 4 다(누적 — 케이크의 기준선은 V0366CakeCoreTests.macCakePortraitsInSourceTree).
+        let cakes = ShopWire.cakeCharacterIDs.allSatisfy(V0366CakeCoreTests.macCakePortraitsInSourceTree)
+        let expected = robot ? (gold ? (rainbow ? (cakes ? ShopWire.cakeProtocol : ShopWire.rainbowProtocol) : ShopWire.goldProtocol)
+                                     : ShopWire.robotProtocol)
                              : ShopWire.legacyProtocol
 
         let host = "v0354-gold-bundle-\(UUID().uuidString.prefix(8))".lowercased()

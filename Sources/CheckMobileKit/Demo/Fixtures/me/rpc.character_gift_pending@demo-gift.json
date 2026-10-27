@@ -1,0 +1,12 @@
+{
+  "status": "ok",
+  "gift": {
+    "id": "d0000000-0000-4000-8000-0000000c4e01",
+    "options": [
+      "aing_cake_strawberry",
+      "aing_cake_choco"
+    ],
+    "note": null,
+    "created_at": "2026-09-17T04:30:00.123456+00:00"
+  }
+}

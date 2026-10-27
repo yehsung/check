@@ -107,7 +107,7 @@ enum ChessText {
 
     static let stakeTitle = "판돈"
     static let stakeUnknown = "—"
-    /// 판돈 줄. 이기면 **순이익**(판돈 − 수수료 10%, `DuelFee.winnerNet` — v0.3.54) — 결과 카드의 루비 변화와 같은 숫자다.
+    /// 판돈 줄. 이기면 **순이익**(판돈 − 수수료, `DuelFee.winnerNet` — v0.3.54 · v0.3.64 부터 수수료 0) — 결과 카드의 루비 변화와 같은 숫자다.
     static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
     static func watchStakeLine(_ stake: Int) -> String { "\(stake)" }
     static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
@@ -1404,6 +1404,9 @@ private struct ChessLiveRow: View {
                             characterHint: live.b.characterID)
             Text(live.b.displayName).font(.caption2).lineLimit(1)
             Spacer(minLength: 4)
+            // 관전자 수(v0.3.65) — [관전] 칩 **옆**, 내 판 캡션 옆에도 같이 선다(내 판을 몇 명이 보는지가 궁금한 자리다).
+            // ★ 높이는 칩과 **같은 18** 이어야 한다. 더 크면 첫째 줄이 얼굴 높이를 넘겨 카드가 자란다.
+            WatcherCountChip(count: live.watchers, height: ChessWindowLayout.liveWatchChipHeight)
             if isMine {
                 Text(ChessText.myMatch)
                     .font(.caption2.weight(.bold))
@@ -1588,10 +1591,15 @@ private struct ChessStatusBox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(headline)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text(headline)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                // 내 판을 보고 있는 사람 수(v0.3.65 — `chess__state` 가 싣는다). 0 이면 아무것도 안 그린다.
+                WatcherCountChip(count: store.spectatorCount, height: 16)
+            }
             if let detail {
                 Text(detail)
                     .font(.caption2)
@@ -2086,10 +2094,15 @@ private struct ChessWatchStatusBox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(headline)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text(headline)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                // 나 말고 몇 명이 같이 보고 있는가(v0.3.65 — `chess_watch_live` 의 한 칸). 판돈 칩 바로 옆 줄이다.
+                WatcherCountChip(count: store.spectatorCount, height: 16)
+            }
             Text(detail)
                 .font(.caption2)
                 .foregroundStyle(CheckTheme.secondaryText)
@@ -2355,8 +2368,8 @@ enum ChessRulesOverlayLines {
         ("승격", "폰이 맨 끝 줄에 닿으면 퀸·룩·비숍·나이트 중 하나로 바꿉니다."),
         ("무승부", "둘 곳이 없는데 체크가 아니면(스테일메이트), 50수 동안 잡기·폰 이동이 없으면, 같은 국면이 세 번 나오면, 메이트할 기물이 없으면, 또는 두 사람이 합의하면 무승부입니다."),
         ("시간", "시간을 다 쓰면 집니다. 다만 상대에게 메이트할 기물이 없으면 무승부입니다."),
-        // v0.3.54 — 판돈 수수료를 이 창에서 말하는 곳은 이 한 줄이다(숫자는 판돈 줄 "이기면 +N" 이 순이익으로 말한다).
-        ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고(수수료 \(DuelFee.percent)% 빼고), 무승부면 건 판돈을 돌려받아요.")
+        // v0.3.64 — 판돈 수수료를 없앴다(사용자 결정 2026-10-22). 숫자는 판돈 줄 "이기면 +N"(= +판돈)이 말한다.
+        ("판돈", "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, 무승부면 건 판돈을 돌려받아요.")
     ]
 }
 
@@ -2411,6 +2424,51 @@ private struct ChessOverlayScrim<Content: View>: View {
 }
 
 // MARK: - 공용 조각
+
+/// 관전자 수가 쓰는 글자(순수 — 뷰에서 떼어 두어야 테스트가 **값으로** 되묻는다).
+/// 숫자만 읽히면 뜻이 없다 — 보이스오버는 언제나 "관전자 N명" 을 읽는다.
+enum WatcherCountText {
+    /// 접근성 라벨. **이 글자 하나가 세 게임·세 자리의 유일한 출처다.**
+    static func accessibility(_ count: Int) -> String { "관전자 \(count)명" }
+    /// 글자 문구가 필요한 자리(관전 화면의 상태 상자 등)가 쓰는 한 줄.
+    static func caption(_ count: Int) -> String { "\(count)명이 보고 있어요" }
+}
+
+/// 관전자 수 칩(v0.3.65 — **오목·체스·테트리스 세 게임이 같이 쓴다**). 눈 아이콘 + 수.
+///
+/// ★ **0 이면 아무것도 그리지 않는다.** "0명이 보고 있어요" 는 썰렁하고, 관전자 수를 모르는 창
+///   (서버에 `*_watch_live` 가 아직 없어 스토어가 수를 접은 세션)도 0 으로 와서 같은 길로 사라진다 —
+///   그래서 화면은 "모른다" 와 "아무도 안 본다" 를 **같게** 그린다(없는 숫자를 지어내지 않는다).
+/// ★ 애니메이션을 붙이지 마라 — 2초 폴링마다 숫자가 튀면 눈에 거슬린다. 값만 갈린다.
+/// ★ 높이는 **부르는 쪽이 못 박는다.** 로비 "지금 대결 중" 첫째 줄은 얼굴 높이 18 로 묶여 있어
+///   그보다 큰 칩을 넣으면 카드가 통째로 자란다(오목에서 20 으로 두자 53 → 55 가 됐다).
+struct WatcherCountChip: View {
+    let count: Int
+    /// 칩 높이. 로비 줄은 18, 상태 상자 안은 16~20.
+    var height: CGFloat = 18
+    /// 숫자 대신 "N명이 보고 있어요" 를 쓴다(자리가 넉넉한 곳).
+    var showsCaption: Bool = false
+    var tint: Color = CheckTheme.secondaryText
+
+    var body: some View {
+        if count > 0 {
+            HStack(spacing: 4) {
+                Image(systemName: "eye.fill")
+                    .font(.system(size: max(9, height * 0.52), weight: .semibold))
+                Text(showsCaption ? WatcherCountText.caption(count) : "\(count)")
+                    .font(.caption2.weight(.bold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .frame(height: height)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(WatcherCountText.accessibility(count))
+        }
+    }
+}
 
 /// 신청 만료까지 남은 초 — **잎 뷰**. 창이 안 보이면 멈춘다.
 struct ChessCountdownText: View {

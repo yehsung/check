@@ -652,19 +652,25 @@ enum V0354GachaStub {
 
 @MainActor
 @Suite struct V0354DuelFeeCopyTests {
-    @Test("판돈 줄은 순이익(+2/+4/+8) · 판돈 창·규칙 보기가 '수수료 10%' 를 한 번 말한다(오목·체스)")
+    // v0.3.64: 수수료를 없앴다(사용자 결정 2026-10-22 "멀티 미니게임 수수료 다시 제거해줘") — 이 스위트는 이제 **수수료가 없다는 것**을 잰다.
+    @Test("판돈 줄은 순이익(+3/+5/+10 = +판돈) · 판돈 창·규칙 보기(오목·체스·테트리스)에 '수수료' 글자가 없다")
     func feeCopyShowsTheNet() {
-        for (stake, net) in [(3, 2), (5, 4), (10, 8)] {
+        for (stake, net) in [(3, 3), (5, 5), (10, 10)] {
             #expect(GomokuText.stakeLine(stake) == "\(stake) · 이기면 +\(net)")
             #expect(ChessText.stakeLine(stake) == "\(stake) · 이기면 +\(net)")
+            #expect(TetrisDuelText.stakeLine(stake) == "\(stake) · 이기면 +\(net)")
             #expect(GomokuText.stakePromptChosen(stake).hasSuffix("+\(net)") && ChessText.stakePromptChosen(stake).hasSuffix("+\(net)"))
-            // 기준선: 수수료 전 문구(+판돈)와 갈린다.
-            #expect(GomokuText.stakeLine(stake) != "\(stake) · 이기면 +\(stake)")
+            // 기준선: 수수료 시절 문구(+2/+4/+8)와 갈린다.
+            #expect(GomokuText.stakeLine(stake) != "\(stake) · 이기면 +\(stake - (2 * stake + 5) / 10)")
         }
-        #expect(GomokuText.stakeCaption.components(separatedBy: "수수료 10%").count == 2)
-        #expect(GomokuRuleExample.ruleLines.joined().components(separatedBy: "수수료 10%").count == 2)
         let chessRules = ChessRulesOverlayLines.all.map(\.detail).joined()
-        #expect(chessRules.components(separatedBy: "수수료 10%").count == 2, "체스 규칙 보기가 수수료를 한 번 말하지 않는다")
+        let tetrisRules = TetrisDuelText.rules.map(\.detail).joined()
+        for (label, text) in [("오목 판돈 창", GomokuText.stakeCaption), ("오목 규칙", GomokuRuleExample.ruleLines.joined()),
+                              ("체스 규칙", chessRules), ("테트리스 규칙", tetrisRules)] {
+            #expect(!text.contains("수수료"), "\(label)이(가) 없어진 수수료를 말한다: \(text)")
+            #expect(!text.contains("%"), "\(label)에 비율이 남았다: \(text)")
+        }
+        #expect(GomokuText.stakeCaption.contains("판돈만큼 더") && chessRules.contains("판돈만큼 더") && tetrisRules.contains("판돈만큼 더"))
         #expect(!GomokuText.stakeCaption.contains("도박") && !GomokuText.stakeCaption.contains("베팅"))
     }
 

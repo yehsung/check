@@ -97,9 +97,10 @@ func tetrisScoreCapIsOneNumberInThreePlaces() throws {
 
 @Test("MiniGameKind: tetris 가 맨 뒤에 붙고 rawValue 는 서버 어휘 그대로 · 기존 둘의 자리와 값이 그대로다")
 func tetrisIsAppendedWithoutMovingTheOthers() {
-    #expect(MiniGameKind.allCases == [.timingBar, .flappy, .tetris],
+    // v0.3.67: 넷째 `crossy`(길건너 아잉이)가 **그 뒤에** 붙었다 — 앞 셋의 자리는 그대로다(V0367CrossyTests 가 넷째를 잰다).
+    #expect(MiniGameKind.allCases == [.timingBar, .flappy, .tetris, .crossy],
             "순서가 곧 화면 순서다 — 사이에 끼우면 기존 두 게임의 자리가 밀린다")
-    #expect(MiniGameKind.allCases.map(\.rawValue) == ["timing_bar", "flappy", "tetris"],
+    #expect(MiniGameKind.allCases.map(\.rawValue) == ["timing_bar", "flappy", "tetris", "crossy"],
             "rawValue 는 서버 표 game 칸의 값이다(저장된 선택 복원도 이 글자를 쓴다)")
     // 저장된 값 복원 — 폰에서 안 보이는 것과 값을 모르는 것은 다르다(모르면 옛 선택이 조용히 접힌다).
     #expect(MiniGameKind(rawValue: "tetris") == .tetris)

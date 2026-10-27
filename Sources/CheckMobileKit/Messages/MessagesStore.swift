@@ -47,6 +47,23 @@ package final class MessagesStore {
     /// 읽음을 모르는 옛 서버용 도장(대화를 본 순간). 서버가 읽음을 알면 쓰이지 않는다.
     package private(set) var legacyReadStamps: [String: Date] = [:]
 
+    // MARK: 찌르기 기록 (1.0.13 · 서버 `message_history_with_pokes`)
+
+    /// 창(24h) 안의 찌르기 기록 — 시간순(오래된 것 → 최신), 받은 것·보낸 것 모두. 옛 서버면 언제나 빈 배열이다.
+    ///
+    /// **메시지(`history`)와 섞지 않는다**: 메시지 읽음 경계·배지·말풍선 필터가 찌르기 id 를 메시지로 오인하는 길을
+    /// 타입으로 닫는다(코어 `MessagePokeLog.swift` 머리 ②).
+    package private(set) var pokeLog: [MessagePokeLogEntry] = []
+    /// 서버가 찌르기 기록을 아는가(`message_history_with_pokes` 성공). false 면 대화 줄·정렬이 찌르기를 쓰지 않는다.
+    package private(set) var pokeLogAvailable = false
+    /// 행 id → 서버 시각 순위(메시지·찌르기 공통). 같은 초의 선후는 이것만 안다 — 목록 미리보기와 대화 줄이 같은 표를 읽는다.
+    package private(set) var pokeChronology: [String: Int] = [:]
+    /// 찌르기 기록을 실어 온 마지막 응답의 사실(요청 번호 · 서버 순서). nil = 아직 없거나 서버가 모른다.
+    package private(set) var pokeSnapshot: MessageHistoryReadSnapshot?
+    /// 찌르기 낙관 읽음(상대별). 메시지와 **따로** 둔다 — 서버 경계가 다른 표(`poke_reads`)이고, 한 통에 담으면
+    /// 메시지 경계 id 가 찌르기 경계로 쓰이는 날이 온다.
+    package private(set) var optimisticPokeReads: [String: MessageOptimisticRead] = [:]
+
     // MARK: 사람 찾기
 
     package private(set) var directory: [PokeDirectoryEntry] = []
@@ -93,6 +110,11 @@ package final class MessagesStore {
     /// 보내기를 누른 뒤 서버 이력이 들고 올 때까지 대화 끝에 서는 자리 말풍선.
     package private(set) var pendingOutgoing: [MessagesPendingOutgoing] = []
     /// 상대별 전송 실패 안내(입력칸 위 한 줄). 성공은 문구를 세우지 않는다.
+    ///
+    /// ★ 설정자는 **이 파일 안으로 닫아 둔다.** 1.0.12 통합 때 한 번 열었다가 되돌렸다 — 이모티콘 그리드가
+    /// 왕복 중 안내를 세우려고 열었는데, 그리드는 **시트** 안에 있어서 입력줄의 이 한 줄이 시트에 **가려** 안
+    /// 보인다. 그래서 그 안내는 시트가 자기 `@State` 로 들고(`MessagesStickerSheet`), 이 문은 다시 닫혔다.
+    /// 쓰는 자리가 없는 접근 확대는 남겨 두지 않는다.
     package private(set) var sendNotices: [String: String] = [:]
     /// 전송 왕복 중인가. **한 번에 하나** — 순서가 곧 상대가 읽는 순서라 두 전송을 나란히 띄우지 않는다.
     package private(set) var isSending = false
@@ -155,6 +177,11 @@ package final class MessagesStore {
         summary = nil
         optimisticReads = [:]
         legacyReadStamps = [:]
+        pokeLog = []
+        pokeLogAvailable = false
+        pokeChronology = [:]
+        pokeSnapshot = nil
+        optimisticPokeReads = [:]
         directory = []
         directoryLoaded = false
         directoryLoading = false
@@ -225,6 +252,8 @@ package final class MessagesStore {
         MessageThreadBuilder.threads(from: visibleHistory, serverOrder: historySnapshot?.serverOrder)
     }
 
+    /// **안 읽은 메시지가 있는 상대**(줄 점 · 개수 배지 · 탭 배지의 재료). 찌르기는 여기 들어오지 않는다 — 정렬용 합친
+    /// 집합은 `sortUnreadPeerIDs` 다(인수인계 §6-4: 안 읽음이 찌르기뿐인 사람에게 "안 읽은 메시지"라고 말하지 않는다).
     package var unreadPeerIDs: Set<String> {
         MessageUnreadRules.unreadPeerIDs(
             history: visibleHistory,
@@ -232,6 +261,51 @@ package final class MessagesStore {
             summary: visibleSummary,
             optimistic: optimisticReads,
             legacyStamps: legacyReadStamps
+        )
+    }
+
+    /// 차단해 숨긴 상대를 걷어낸 찌르기 기록(이력·요약과 같은 관문 — 거르는 곳이 갈리면 목록에서 사라진 사람이 정렬만 올린다).
+    package var visiblePokeLog: [MessagePokeLogEntry] {
+        guard !hiddenBlockedPeerIDs.isEmpty else { return pokeLog }
+        return pokeLog.filter { !hiddenBlockedPeerIDs.contains($0.peerUserID) }
+    }
+
+    /// 한 사람과 오간 찌르기(시간순 — 대화 화면이 메시지 사이에 끼울 재료).
+    package func pokeLog(for peerID: String) -> [MessagePokeLogEntry] {
+        visiblePokeLog.filter { $0.peerUserID == peerID }
+    }
+
+    /// **안 본 찌르기가 있는 상대.** 서버 플래그에서 그 스냅샷이 모르는 낙관 읽음을 뺀다(메시지와 같은 규칙).
+    package var unreadPokePeerIDs: Set<String> {
+        guard let pokeSnapshot else { return [] }
+        return MessagePokeLogRules.unreadPeerIDs(
+            log: visiblePokeLog, snapshot: pokeSnapshot, optimistic: optimisticPokeReads
+        )
+    }
+
+    /// **정렬 전용** 안 읽음(메시지 ∪ 찌르기). 사용자 결정 2026-10-23 "안 본 찌르기도 안 읽음으로 친다".
+    /// ★ 배지·"안 읽은 메시지 N"·줄 개수에는 쓰지 마라 — 그 수는 메시지 전용이다.
+    package var sortUnreadPeerIDs: Set<String> {
+        MessagesSortRules.combinedUnreadPeerIDs(messages: unreadPeerIDs, pokes: unreadPokePeerIDs)
+    }
+
+    /// 대화 목록 줄들 — **4단 정렬**(① 근무중+안읽음 → ② 근무안함+안읽음 → ③ 근무중+다읽음 → ④ 근무안함+다읽음),
+    /// 같은 무리 안은 최근순. 근무 여부를 모르는 창에서는 근무 축을 쓰지 않는다(두 무리).
+    /// 찌르기만 있는 사람도 한 줄이 선다(사용자 결정 (가)).
+    package func threadItems(now: Date) -> [MessagesThreadItem] {
+        let board = presenceBoard(now: now)
+        return MessagesThreadListRules.rows(
+            threads: threads,
+            // ★ 차단 관문을 지난 기록만 쓴다(`visiblePokeLog`) — 날것 `pokeLog` 를 넘기면 목록에서 사라진 사람이
+            //   찌르기만으로 행을 세우고 정렬까지 올라간다(`MessagesStore` 주석: "차단한 사람의 얼굴을 눌러 대화가 다시 열린다").
+            pokes: visiblePokeLog,
+            chronology: pokeChronology,
+            messageUnreadPeerIDs: unreadPeerIDs,
+            pokeUnreadPeerIDs: unreadPokePeerIDs,
+            unreadCounts: unreadCountsByPeer,
+            workingPeerIDs: MessagesSortRules.workingPeerIDs(board),
+            workKnown: board.isKnown,
+            now: now
         )
     }
 
@@ -280,9 +354,10 @@ package final class MessagesStore {
         threads.first { $0.peerUserID == peerID }
     }
 
-    /// 대화 머리 이름: 이력(가장 최신 이름) → 사람 찾기 목록 → nil.
+    /// 대화 머리 이름: 이력(가장 최신 이름) → **찌르기 기록**(메시지가 하나도 없는 사람) → 사람 찾기 목록 → nil.
     package func peerName(for peerID: String) -> String? {
         if let thread = thread(for: peerID) { return thread.peerName }
+        if let poke = visiblePokeLog.last(where: { $0.peerUserID == peerID }) { return poke.peerName }
         return directory.first { $0.userID == peerID }?.name
     }
 
@@ -295,6 +370,7 @@ package final class MessagesStore {
 
     package func peerAvatarURL(for peerID: String) -> URL? {
         if let url = thread(for: peerID)?.peerAvatarURL { return url }
+        if let url = visiblePokeLog.last(where: { $0.peerUserID == peerID })?.peerAvatarURL { return url }
         return directory.first { $0.userID == peerID }?.avatarURL
     }
 
@@ -303,9 +379,12 @@ package final class MessagesStore {
         hiddenBlockedPeerIDs.contains(peerID)
     }
 
+    /// 대화 화면 줄(말풍선 · 날짜 · **찌르기 기록** · 보내는 중). 찌르기는 차단 관문을 지난 `pokeLog(for:)` 에서 온다.
     package func conversationItems(for peerID: String) -> [MessagesConversationItem] {
         MessagesConversationRules.items(
             messages: thread(for: peerID)?.messages ?? [],
+            pokes: pokeLog(for: peerID),
+            chronology: pokeChronology,
             pending: pendingOutgoing.filter { $0.peerUserID == peerID },
             receiptsAvailable: readReceiptsAvailable,
             now: context.clock.now()
@@ -332,7 +411,9 @@ package final class MessagesStore {
     /// 아직 옛 목록을 쥐고 있다 — 방금 차단한 사람이 "새 대화"에 그대로 서 있으면 차단이 안 된 것처럼 보인다.
     package func filteredDirectory(query: String) -> [PokeDirectoryEntry] {
         let visible = hiddenBlockedPeerIDs.isEmpty ? directory : directory.filter { !hiddenBlockedPeerIDs.contains($0.userID) }
-        return MessagesDirectoryRules.filter(visible, query: query)
+        // 정렬 입력은 **언제나 명시적으로** 넘긴다(코어 `sortedForPokeDisplay` 의 기본값에 기대지 않는다 —
+        // 0.3.65 에서 기본값이 빠지고 인자가 하나 더 붙는다).
+        return MessagesDirectoryRules.filter(visible, query: query, unreadPeerIDs: sortUnreadPeerIDs)
     }
 
     // MARK: - 화면 사건(탭 화면이 부른다)
@@ -401,16 +482,54 @@ package final class MessagesStore {
     ///
     /// 누르는 즉시 입력칸을 비우고 자리 말풍선을 세운다(메신저 감각). 서버가 거절하면 말풍선을 거두고, 그 사이 새로 친 글이 없으면
     /// 입력칸에 글을 되돌리고 문구를 세운다 — **보내지 못한 글은 사라지지 않는다**(맥: "실패해도 글은 남는다").
+    ///
+    /// 입력칸을 비우는 자리는 **여기 하나다**(`performSend` 가 아니다 — 이모티콘 입구는 초안을 읽지도 쓰지도 않는다).
     @discardableResult
     package func sendDraft(to peerID: String, isComposing: Bool) -> Bool {
         guard !isComposing, canSend(to: peerID) else { return false }
         guard case .ok(let body) = MessageBody.validate(draft(for: peerID)) else { return false }
+        drafts[peerID] = ""
+        return performSend(body: body, to: peerID, restoresDraftOnFailure: true)
+    }
+
+    /// 지금 아잉이 이모티콘을 보낼 수 있는가(1.0.12).
+    ///
+    /// **`canSend` 를 쓰지 않는 이유는 그 판정이 입력칸 글을 보기 때문이다**(`validate(draft) == .ok` — 빈 칸이면 거짓).
+    /// 이모티콘의 본문은 상수 토큰이라 빈 칸·200자 판정이 **언제나** 통과하므로 남는 조건은 셋뿐이고, 그 셋은
+    /// `canSend` 의 첫 줄과 **글자 그대로 같다**(순서까지 같게 적어 둔다). 근무 여부·집중 모드는 여기서도 보지 않는다
+    /// (v0.3.30 에 서버가 그 조건을 지웠다 — `sendDraft` 주석).
+    package func canSendSticker(to peerID: String) -> Bool {
+        isSignedIn && !peerID.isEmpty && !isSending
+    }
+
+    /// 아잉이 이모티콘 한 장을 보낸다(1.0.12 · 맥 0.3.62 의 폰 쪽 사본).
+    ///
+    /// **입력칸을 거치지 않는다** — `drafts[peerID]` 를 읽지도 쓰지도 않는다. 토큰을 초안에 넣고 `sendDraft` 를
+    /// 부르는 식으로 만들면 성공 분기의 `drafts[peerID] = ""` 가 사용자가 쓰던 글을 지우고, 실패 분기는 쓰던 글
+    /// 대신 **토큰**을 입력칸에 꽂는다(맥에서 실제로 났던 결함 둘).
+    ///
+    /// 나갔는가를 돌려준다 — 그리드는 이 값으로 접을지 정한다. 못 보냈는데 접으면 화면에 남는 신호가 "그리드가
+    /// 닫혔다" 하나뿐이라, 직전 전송의 안내를 보고 이모티콘도 간 줄 안다(맥 `sendSticker` 와 같은 규약).
+    @discardableResult
+    package func sendSticker(_ sticker: AingSticker, to peerID: String) -> Bool {
+        guard canSendSticker(to: peerID) else { return false }
+        return performSend(body: sticker.token, to: peerID, restoresDraftOnFailure: false)
+    }
+
+    /// 본문 하나를 보낸다 — 자리 말풍선 · 재시도 · 세대 가드 · 아홉 가지 실패 문구 · 성공 뒤 이력 재조회의 **공통 몸통**.
+    /// 입구는 둘뿐이다(`sendDraft` · `sendSticker`). **새 전송 길을 뚫지 마라** — 두 벌이 갈리면 갈린 쪽은 실패한 날에만 드러난다.
+    ///
+    /// - Parameter restoresDraftOnFailure: 서버가 거절했을 때 본문을 입력칸으로 되돌릴지. **초안 전송 `true` · 이모티콘 `false`.**
+    ///   두 값이 있는 이유는 맥에서 난 결함이다(v0.3.62): 이모티콘 전송이 입력칸을 공유하면 쓰던 글이 사라지거나
+    ///   `[아잉:기쁨]` 으로 덮였다. 가르는 기준은 글자가 아니라 **의도**다 — 보낸 본문과 입력칸 글자를 비교해서
+    ///   가르면, 왕복(0.2~1.5초) 중에 한 글자라도 이어 친 평범한 전송이 같이 깨진다.
+    @discardableResult
+    private func performSend(body: String, to peerID: String, restoresDraftOnFailure: Bool) -> Bool {
         let generation = context.generation
         let localID = UUID().uuidString.lowercased()
         pendingOutgoing.append(MessagesPendingOutgoing(
             id: localID, peerUserID: peerID, body: body, createdAt: context.clock.now(), state: .sending
         ))
-        drafts[peerID] = ""
         sendNotices[peerID] = nil
         isSending = true
         let service = context.service
@@ -447,7 +566,9 @@ package final class MessagesStore {
                 return
             }
             self.pendingOutgoing.removeAll { $0.id == localID }
-            if self.draft(for: peerID).isEmpty { self.drafts[peerID] = body }
+            // 되돌리는 쪽만 입력칸을 만진다(이모티콘은 거짓 — 위 `restoresDraftOnFailure` 주석).
+            // "비어 있을 때만"은 그대로다: 왕복 중에 새로 친 글을 실패한 옛 글이 덮으면 안 된다.
+            if restoresDraftOnFailure, self.draft(for: peerID).isEmpty { self.drafts[peerID] = body }
             if !cancelled, let notice { self.sendNotices[peerID] = notice }
             if refreshesDirectory { self.loadDirectory(force: true) }
         }
@@ -473,7 +594,13 @@ package final class MessagesStore {
                 }
                 guard generation == self.context.generation else { return }
                 self.directoryLoading = false
-                self.directory = rows.toPokeDirectoryEntries().sortedForPokeDisplay()
+                // ★ 저장 순서에는 **안 읽음 축을 넣지 않는다**(값은 명시적으로 적는다 — 기본값에 기대지 않는다).
+                //   이 배열은 60초 스로틀이 걸린 사람 **캐시**이고 화면이 직접 읽는 순서가 아니다(새 대화 시트는
+                //   `filteredDirectory` 를 지난다). 안 읽음은 메시지 한 통·찌르기 한 번마다 바뀌는데 이 배열은 RPC 를
+                //   다시 받을 때만 다시 정렬되므로, 여기 구운 안 읽음 순서는 받는 순간부터 낡는다.
+                //   진짜 정렬 자리는 `filteredDirectory` 하나이고, 거기서 **그 순간의** 합친 집합을 넘긴다.
+                //   `workKnown: true` — 명부 행은 `isWorking` 을 서버에서 직접 받는다(모르는 창이 없다).
+                self.directory = rows.toPokeDirectoryEntries().sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true)
                 self.directoryLoaded = true
                 self.directoryFailed = false
             } catch {
@@ -543,9 +670,10 @@ package final class MessagesStore {
             }
         }
         do {
-            let loaded = try await context.withMobileSessionRetry { session in
-                try await fetchHistoryPreferringReads(accessToken: session.accessToken)
+            let conversation = try await context.withMobileSessionRetry { session in
+                try await fetchConversationLoad(accessToken: session.accessToken)
             }
+            let loaded = conversation.history
             guard generation == context.generation else { return }
             // 더 나중에 띄운 조회가 이미 반영됐다 — 이 응답은 그보다 낡은 서버 상태다(새 줄·꺼진 1 을 되돌리면 안 된다).
             guard serial > runtime.lastAppliedHistorySerial else { return }
@@ -564,6 +692,7 @@ package final class MessagesStore {
                 if historySnapshot != nil { historySnapshot = nil }
                 if readReceiptsAvailable { readReceiptsAvailable = false }
             }
+            applyPokeLog(conversation, serial: serial)
             let reconciled = MessagesPendingRules.reconcile(
                 pending: pendingOutgoing, previousHistoryIDs: previousIDs, applied: sorted, appliedSerial: serial
             )
@@ -576,13 +705,55 @@ package final class MessagesStore {
             guard generation == context.generation else { return }
             if case .cancelled = AuthErrorRules.classify(error) { return }
             if case SupabaseWorkServiceError.databaseSchemaMissing = error {
-                // 두 이력 함수가 다 없는 서버 — 실패가 아니라 "받을 것이 없다". 빈 이력으로 조용히 접는다.
+                // 세 이력 함수가 다 없는 서버 — 실패가 아니라 "받을 것이 없다". 빈 이력으로 조용히 접는다.
                 if !historyLoaded { historyLoaded = true }
                 if readReceiptsAvailable { readReceiptsAvailable = false }
+                applyPokeLog(MessageConversationLoad(history: MessageHistoryLoad(entries: [], hasReadReceipts: false), pokes: nil), serial: serial)
                 runtime.historyStaleSerial = nil
             } else {
                 if !historyFailed { historyFailed = true }
             }
+        }
+    }
+
+    /// 새 이력(메시지 + 찌르기 기록)을 반영한다. `pokes == nil`(옛 서버로 접음)이면 찌르기 쪽을 **전부 비운다** —
+    /// 서버가 모르는 동안 옛 기록이 남아 있으면 정렬이 사라진 근거로 사람을 올리고, 대화 줄에 유령 찌르기가 남는다.
+    private func applyPokeLog(_ conversation: MessageConversationLoad, serial: Int) {
+        guard let pokes = conversation.pokes else {
+            if !pokeLog.isEmpty { pokeLog = [] }
+            if pokeLogAvailable { pokeLogAvailable = false }
+            if !pokeChronology.isEmpty { pokeChronology = [:] }
+            if pokeSnapshot != nil { pokeSnapshot = nil }
+            return
+        }
+        let sorted = MessagePokeLogRules.sorted(pokes, chronology: conversation.chronology)
+        if pokeLog != sorted { pokeLog = sorted }
+        if pokeChronology != conversation.chronology { pokeChronology = conversation.chronology }
+        // 찌르기 경계 비교는 **같은 표**(메시지·찌르기 공통 순위)로 한다 — 메시지 서버 순서에는 찌르기 id 가 없다.
+        let snapshot = MessageHistoryReadSnapshot(serial: serial, serverOrder: conversation.chronology)
+        if pokeSnapshot != snapshot { pokeSnapshot = snapshot }
+        if !pokeLogAvailable { pokeLogAvailable = true }
+    }
+
+    /// `message_history_with_pokes` → 없는 서버(404/PGRST202)면 **지금까지의 사슬 그대로**
+    /// (`message_history_with_reads` → `message_history`). 접힌 응답에는 찌르기 줄이 없을 뿐 대화는 그대로 돈다.
+    /// 폴백은 캐시하지 않는다(맥과 같은 판단 — 서버가 배포되는 순간 다음 조회부터 새 길로 간다).
+    private func fetchConversationLoad(accessToken: String) async throws -> MessageConversationLoad {
+        do {
+            let combined = try await context.service.fetchMessageHistoryWithPokes(
+                accessToken: accessToken,
+                hours: MessageNoticeText.historyHours,
+                limit: MessageNoticeText.historyLimit
+            )
+            return MessageConversationLoad(
+                history: MessageHistoryLoad(entries: combined.messages, hasReadReceipts: true),
+                pokes: combined.pokes,
+                chronology: combined.chronology
+            )
+        } catch let error as SupabaseWorkServiceError where Self.isMissingFunction(error) {
+            return MessageConversationLoad(
+                history: try await fetchHistoryPreferringReads(accessToken: accessToken), pokes: nil
+            )
         }
     }
 
@@ -637,54 +808,95 @@ package final class MessagesStore {
 
     // MARK: - 읽음
 
-    /// **읽음을 올리는 유일한 자리.** 앱 active · 그 대화 화면이 떠 있음 · 서버 기준 안 읽은 받은 말이 있음 — 셋이 다 맞을 때만.
+    /// **읽음을 올리는 유일한 자리.** 앱 active · 그 대화 화면이 떠 있음 · 서버 기준 안 본 것(메시지 **또는** 찌르기)이
+    /// 있음 — 셋이 다 맞을 때만. 두 갈래는 한 왕복(`mark_conversation_read`)으로 같이 올린다.
     package func evaluateReadMarking() {
-        guard isSignedIn, isAppActive,
-              let peer = openConversationPeerID,
-              let snapshot = historySnapshot,
-              let through = MessageUnreadRules.markTarget(
-                  peer: peer, history: visibleHistory, snapshot: snapshot, optimistic: optimisticReads[peer]
-              )
-        else { return }
-        markRead(peer: peer, through: through)
+        guard isSignedIn, isAppActive, let peer = openConversationPeerID else { return }
+        let through = historySnapshot.flatMap { snapshot in
+            MessageUnreadRules.markTarget(
+                peer: peer, history: visibleHistory, snapshot: snapshot, optimistic: optimisticReads[peer]
+            )
+        }
+        // ★ 찌르기 경계는 **화면에 보인 마지막 받은 찌르기 id** 다(인수인계 §6-3). 지금 시각으로 올리지 않는다 —
+        //   대화를 연 뒤 도착해 아직 안 그려진 찌르기까지 '봤다'가 되면 그 줄은 영영 안 읽음 표시를 못 받는다.
+        let pokeThrough = pokeSnapshot.flatMap { snapshot in
+            MessagePokeLogRules.markTarget(
+                peer: peer, log: visiblePokeLog, snapshot: snapshot, optimistic: optimisticPokeReads[peer]
+            )
+        }
+        guard through != nil || pokeThrough != nil else { return }
+        markRead(peer: peer, through: through, pokeThrough: pokeThrough)
     }
 
     /// 읽음 처리 1회. 상대별로 겹치지 않는다(날아가는 중이면 끝난 뒤 한 번 더 판정). 응답 전에 낙관 읽음으로 점·배지를 곧바로 끈다 —
     /// 실패해도 되돌리지 않고(정산만), 그보다 나중에 띄운 서버 조회가 사실을 말한다.
-    private func markRead(peer: String, through: String) {
+    private func markRead(peer: String, through: String?, pokeThrough: String?) {
         guard !runtime.markInFlight.contains(peer) else {
             runtime.markAgain.insert(peer)
             return
         }
         runtime.markInFlight.insert(peer)
-        let record = MessageOptimisticRead(throughID: through, recordedSerial: runtime.nextSerial())
-        if optimisticReads[peer] != record { optimisticReads[peer] = record }
+        if let through {
+            let record = MessageOptimisticRead(throughID: through, recordedSerial: runtime.nextSerial())
+            if optimisticReads[peer] != record { optimisticReads[peer] = record }
+        }
+        if let pokeThrough {
+            let record = MessageOptimisticRead(throughID: pokeThrough, recordedSerial: runtime.nextSerial())
+            if optimisticPokeReads[peer] != record { optimisticPokeReads[peer] = record }
+        }
         let generation = context.generation
         let service = context.service
         Task { @MainActor [weak self] in
             guard let self else { return }
             var succeeded = false
             do {
+                // 찌르기만 올릴 때는 `p_through_message` 를 **싣지 않는다**(코어 `MessageConversationReadMarkRequest` 가
+                // nil 칸의 키를 빼고 보낸다 · 인수인계 §2-2 "null 인 갈래는 움직이지 않는다"). 옛 `mark_messages_read` 와
+                // 달리 이 함수는 빈 경계를 "최신까지"로 읽지 않는다.
                 let response = try await self.context.withMobileSessionRetry { session in
-                    try await service.markMessagesRead(accessToken: session.accessToken, peerUserID: peer, throughMessageID: through)
+                    try await service.markConversationRead(
+                        accessToken: session.accessToken, peerUserID: peer,
+                        throughMessageID: through, throughPokeID: pokeThrough
+                    )
                 }
                 succeeded = response.isOK
+            } catch let error as SupabaseWorkServiceError where Self.isMissingFunction(error) {
+                // 옛 서버 — 찌르기를 모르니 메시지 갈래만 옛 함수로 접는다. 경계가 없으면 아무것도 올리지 않는다
+                // (옛 `mark_messages_read` 는 p_through 가 null 이면 **그 사람의 최신까지** 올린다).
+                if let through {
+                    do {
+                        let response = try await self.context.withMobileSessionRetry { session in
+                            try await service.markMessagesRead(
+                                accessToken: session.accessToken, peerUserID: peer, throughMessageID: through
+                            )
+                        }
+                        succeeded = response.isOK
+                    } catch {
+                        // 아래와 같다 — "이번엔 못 올렸다".
+                    }
+                }
             } catch {
-                // 취소·네트워크·함수 없음 — "이번엔 못 올렸다". 낙관 표시는 되돌리지 않는다.
+                // 취소·네트워크 — "이번엔 못 올렸다". 낙관 표시는 되돌리지 않는다.
             }
             guard generation == self.context.generation else { return }
             self.runtime.markInFlight.remove(peer)
-            self.settleOptimisticRead(peer: peer, through: through, succeeded: succeeded)
+            self.settleOptimisticRead(peer: peer, through: through, pokeThrough: pokeThrough, succeeded: succeeded)
             if succeeded { self.schedulePostMarkRefresh() }
             if self.runtime.markAgain.remove(peer) != nil { self.evaluateReadMarking() }
         }
     }
 
-    private func settleOptimisticRead(peer: String, through: String, succeeded: Bool) {
-        guard var record = optimisticReads[peer], record.throughID == through, record.settledSerial == nil else { return }
-        record.settledSerial = runtime.nextSerial()
-        record.failed = !succeeded
-        optimisticReads[peer] = record
+    private func settleOptimisticRead(peer: String, through: String?, pokeThrough: String?, succeeded: Bool) {
+        if let through, var record = optimisticReads[peer], record.throughID == through, record.settledSerial == nil {
+            record.settledSerial = runtime.nextSerial()
+            record.failed = !succeeded
+            optimisticReads[peer] = record
+        }
+        if let pokeThrough, var record = optimisticPokeReads[peer], record.throughID == pokeThrough, record.settledSerial == nil {
+            record.settledSerial = runtime.nextSerial()
+            record.failed = !succeeded
+            optimisticPokeReads[peer] = record
+        }
     }
 
     /// 읽음 성공 뒤 요약을 한 번 — 창 안에 다른 새로고침(메아리 신호 등)이 이미 떴으면 그것이 맡는다.

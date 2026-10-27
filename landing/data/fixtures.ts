@@ -31,6 +31,12 @@ export type AssetKey =
   // 아이폰·위젯
   | 'ios/now' | 'ios/messages' | 'ios/rankings-league' | 'ios/games' | 'ios/me-records'
   | 'ios/widget-todos-large' | 'ios/widget-todos-large-checked' | 'ios/widget-today-small'
+  | 'ios/conv-gureum-sent' | 'ios/conv-gureum-read'   // v3.1 메시지 장면(맥 패널과 같은 대화 — 안 읽음 1 → 읽음)
+  | 'ios/widget-limits-medium'                          // v3.1 아이폰 장면(AI 리밋 미디움 위젯, 728×340)
+  // v3.1 새 맥 렌더(docs/v3/brief.md §9.5 — scripts/build-assets.mjs --only=v31)
+  | 'ui/ai-limits-card'        // 1020×417 — 팝오버 속 AI 리밋 카드
+  | 'ui/chess-board'           // 700×700 — 1:1 체스 판만
+  | 'ui/tetris-duel'           // 1200×865 — 1:1 테트리스 두 사람 카드+판(사용자 지정 크롭 — brief §9.5)
   // 브랜드
   | 'brand/appstore-badge-ko-black' | 'brand/qr-appstore' | 'brand/icon-64' | 'brand/icon-256'
   // v2 새 키 11개(SPEC §6.3 · §9.2 — 크롭·리사이즈만, docs/v2/requests/assets.md 의 w·h)
@@ -76,6 +82,7 @@ export const LINKS = {
   support: 'https://yehsung.github.io/check/', privacy: 'https://yehsung.github.io/check/privacy',
   terms: 'https://yehsung.github.io/check/terms', github: 'https://github.com/yehsung/check',
   issues: 'https://github.com/yehsung/check/issues', licenses: '/licenses',
+  install: '/#install', // 폰(< 768)·iOS 의 'Mac용 다운로드'·메뉴바 [다운로드] — DMG 대신 설치 절로(docs/v3/brief.md §9.2 · §9.4)
 } as const;
 export const APP_STORE_ID = '6812768622';
 // upgrade: 앱의 [명령 복사]와 같은 문자열 — 탭이 낡았으면 `brew upgrade` 만으로는 '이미 최신'으로 끝난다(DECISIONS D18).
@@ -119,11 +126,21 @@ export const ALT: Partial<Record<AssetKey, string>> = {
   'ui/menubar-off': '메뉴바 라벨, 오프',
   // v2.1 장면의 통째 패널(brief-v21 §3) — 렌더를 읽은 서술(달 이름·센터 배지 글자 없이)
   'ui/popover-working': '근무 중 팝오버: 근무중 03:45, 이번 주 23시간 23분 / 40시간 58%, 아잉 데모팀 5명 근무중',
+  // v3 기능 장면 1(docs/v3/brief.md §4.4 — 메뉴바 라벨 00:00 과 짝)
+  'ui/popover-on': '근무 시작 직후 팝오버: 근무중 00:00, 이번 주 19시간 38분 / 40시간 49%, 아잉 데모팀 5명 근무중',
   'ui/token-month': '이번 달 AI 토큰 순위: 1위 구름빵, 2위 새벽, 3위 민트별, 4위 달토끼, 5위 호두과자, 6위 초코칩',
   'ui/league': '팀별 이번 주: 1위 파도 커피단 평균 36시간 40분, 2위 아잉 데모팀 34시간 20분, 3위 종이 공방 18시간 25분 외 2팀',
   'ui/message-unread': '구름빵과의 1:1 메시지. 보낸 메시지 "좋아요! 배포하고 1층에서요" 옆에 안 읽음 1',
   'ui/message-read': '구름빵과의 1:1 메시지. 구름빵이 읽어 1이 사라짐',
-  'ui/insights-popover': '내 기록: 지난주 42시간 50분 목표 달성, 지난주 근무 리듬 격자, 최근 12주 근무 잔디',
+  'ui/insights-popover': '내 기록: 지난주 42시간 50분 목표 달성, 지난주 요일·시간별 근무 잔디, 최근 12주 근무 잔디',
+  // v3.1 메시지 장면(docs/v3/brief.md §9.1) — 아이폰 셸 안 같은 대화
+  'ios/conv-gureum-sent': '아이폰 구름빵과의 1:1 메시지. 보낸 메시지 "좋아요! 배포하고 1층에서요" 옆에 안 읽음 1',
+  'ios/conv-gureum-read': '아이폰 구름빵과의 1:1 메시지. 구름빵이 읽어 1이 사라짐',
+  // v3.1 새 렌더(§9.1 · §9.5) — 화면에 보이는 사실 그대로(세 번째 리밋 줄은 앱 표시대로 안티그래비티)
+  'ui/ai-limits-card': 'AI 리밋 카드: 5시간·주간 사용률 Claude 42%·63%, Codex 18%·37%, 안티그래비티 9%·24%',
+  'ui/chess-board': '1:1 체스 대국 판. 마지막 수 흑 비숍 b3',
+  'ui/tetris-duel': '1:1 테트리스 대결 두 판: 새벽(나) 지운 줄 8·보낸 공격 3·들어올 줄 2, 달토끼 지운 줄 6·보낸 공격 4',
+  'ios/widget-limits-medium': '아이폰 AI 리밋 위젯: Claude 42%·63%, Codex 18%·37%, 안티그래비티 9%·24%, AI 토큰 오늘 6,123만·12주 81.5억',
   // 장식
   'char/aing-rest-poster': '',
   'char/aing-idle-poster': '',
@@ -143,15 +160,6 @@ export const TIMING = {
 
 /** 히어로 도착(SPEC §S1 · DECISIONS D2). 마감은 내비게이션 시작(performance.now() 0) 기준. */
 export const HERO = { arrivalDeadlineMs: 2500, idleLoops: 2, cometMs: 1000, bubbleMs: 5000 } as const;
-
-/** 트립틱 교체 문턱·시간(SPEC §S2). forward/back 은 lib/moments.ts 의 DEFAULT_THRESHOLDS 와 같은 값(테스트가 맞춰 본다). */
-export const MOMENTS_TIMING = {
-  forward: 0.55, back: 0.62,
-  exitMs: 267, enterMs: 333, enterDelayMs: 120, lightDelayMs: 450, lightMs: 900, firstLightMs: 1300,
-} as const;
-
-/** 기능 행 문턱·조립·바닥 빛 띠(SPEC §S4). */
-export const ROW_TIMING = { threshold: 0.68, totalMs: 1300, swapAtMs: 1500, band: [0.3, 0.7] } as const;
 
 // ─── 릴리스(PLAN §3.7). 서버 코드(lib/release.ts)가 다시 내보낸다 ─────────────────────────────
 export type ReleaseAsset = { name: 'aing-check.dmg' | 'aing-check.zip'; url: string; bytes: number; mb: string };

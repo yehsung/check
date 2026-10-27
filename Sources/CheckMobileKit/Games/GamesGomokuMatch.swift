@@ -81,6 +81,9 @@ struct GamesGomokuMatch: View {
                     } else {
                         GamesAIMatchLine()
                     }
+                    // 내 판을 보고 있는 사람 수(0.3.65 — 명세 §3 '대국자 본인 화면: 판돈 칩 줄에 같이').
+                    // 폰에서 판돈 칩이 서는 줄은 **내비 부제**다. 0 이면 서지 않으므로 AI 판에서도 모양이 그대로다.
+                    GamesWatcherBadge(count: gomoku.spectatorCount, font: .caption)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -364,7 +367,7 @@ struct GamesGomokuResult: View {
     private var delta: Int {
         if let rubyDelta = match.rubyDelta { return rubyDelta }
         switch match.outcome {
-        // v0.3.54: 승자 순이익 = 판돈 − 수수료(`DuelFee.winnerNet` — 서버 `duel_fee` 와 같은 식). 패배·무승부엔 수수료가 없다.
+        // 승자 순이익 = `DuelFee.winnerNet`(서버 `duel_fee` 와 같은 식 — v0.3.64 부터 0 이라 +판돈). 패배 −판돈 · 무승부 0.
         case .won?: return DuelFee.winnerNet(stake: match.stake)
         case .lost?: return -match.stake
         default: return 0

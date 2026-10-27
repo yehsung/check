@@ -13,10 +13,10 @@ export const FOOTER_LINKS = [
 
 export type FooterLinkId = (typeof FOOTER_LINKS)[number]["id"];
 
-// 내비 링크 셋(SPEC v2 §S0 · PLAN §3.6 · DECISIONS D12). 첫 페이지 내비(SiteNav)와 /licenses 내비(LicensesNav)가 같이 쓴다.
+// 내비 링크 셋(docs/v3/brief.md §8 — v2 SPEC §S0 · DECISIONS D12 에서). 첫 페이지 내비(SiteNav)와 /licenses 내비(LicensesNav)가 같이 쓴다.
 // 경로를 '/#…' 로 둬서 /licenses 에서도 첫 페이지의 앵커로 돌아간다.
 export const NAV_LINKS = [
   { href: "/#f-timer", label: "기능" },
   { href: "/#install", label: "설치" },
-  { href: "/#faq", label: "자주 묻는 것" },
+  { href: "/#faq", label: "자주 묻는 질문" },
 ] as const;

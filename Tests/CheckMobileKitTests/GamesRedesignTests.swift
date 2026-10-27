@@ -83,10 +83,10 @@ import Testing
     func turnHints() {
         #expect(GomokuPhoneText.myTurnHint(preview: GomokuPoint(notation: "I8")) == "I8 한 번 더 누르면 둬요")
         #expect(GomokuPhoneText.myTurnHint(preview: nil) == GomokuPhoneText.placeHint)
-        // v0.3.54: 꼬리는 순이익(판돈 − 수수료 10% 반올림) — 3/5/10 → +2/+4/+8. 기준선이 다르게 셋을 다 잰다.
-        #expect(GomokuPhoneText.stakeGainSuffix(5) == " · 이기면 +4")
-        #expect(GomokuPhoneText.stakeGainSuffix(3) == " · 이기면 +2")
-        #expect(GomokuPhoneText.stakeGainSuffix(10) == " · 이기면 +8")
+        // 꼬리는 순이익(`DuelFee.winnerNet`) — v0.3.64 에 수수료가 없어져 3/5/10 → +3/+5/+10(그 전 +2/+4/+8). 셋을 다 잰다.
+        #expect(GomokuPhoneText.stakeGainSuffix(5) == " · 이기면 +5")
+        #expect(GomokuPhoneText.stakeGainSuffix(3) == " · 이기면 +3")
+        #expect(GomokuPhoneText.stakeGainSuffix(10) == " · 이기면 +10")
         #expect(GomokuPhoneText.remainingPhrase(41.2) == "42초 남음")
         #expect(GomokuPhoneText.playerSubtitle(color: .white, isWorking: true) == "백 · 근무 중")
         #expect(GomokuPhoneText.myWaitingLine(color: .black) == "흑 · 상대 차례예요")

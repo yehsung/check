@@ -1,0 +1,99 @@
+{
+  "__note" : [
+    "순위(승점 = 승 − 패 · 0판 제외 · 최대 100행 — D11, 체스 chess_ranking 을 그대로 따른다). 닿는 길: games/tetris/ranking.",
+    "행의 id 키는 **id** 다(user_id 가 아니다 — TetrisRankRow). 행마다 rank·id·display_name·wins·losses·draws·points 가 다 차 있다.",
+    "정렬은 (승점 desc, 승 desc, 무 desc, id asc) 이고 rank 는 '나보다 **엄격히** 나은 행 수 + 1' 이다 — 새벽(나)과 구름빵이 (승점 2 · 6승 · 1무)로 **동률**이라 둘 다 4위이고 5위는 비어 있다. 동률이 없으면 rank 산식이 공짜로 통과한다.",
+    "0판인 보리차(구버전)와 모카빵(집중)은 **없다** — 로비 users[] 에는 있으므로 '0판 제외'가 '그 사람이 없다'와 다르다는 것이 선다.",
+    "record_since_ms 가 **null** 이다: tetris_record_epoch() 이 '-infinity' 라 전적 컷이 없다(체스는 2026-09-01 컷이 있어 숫자가 실린다). 코어는 0 이하·null 을 '컷 없음'으로 접는다(recordSince nil).",
+    "me 의 전적은 기본 로비 me(6승 4패 1무)와 같은 숫자여야 한다 — 같은 화면에 함께 뜬다."
+  ],
+  "me" : {
+    "draws" : 1,
+    "losses" : 4,
+    "points" : 2,
+    "rank" : 4,
+    "wins" : 6
+  },
+  "record_since_ms" : null,
+  "rows" : [
+    {
+      "avatar_url" : null,
+      "character" : "fox",
+      "display_name" : "달토끼",
+      "draws" : 2,
+      "id" : "d0000000-0000-4000-8000-0000000000b6",
+      "losses" : 4,
+      "points" : 10,
+      "rank" : 1,
+      "wins" : 14
+    },
+    {
+      "avatar_url" : null,
+      "character" : null,
+      "display_name" : "민트별",
+      "draws" : 1,
+      "id" : "d0000000-0000-4000-8000-0000000000b3",
+      "losses" : 3,
+      "points" : 6,
+      "rank" : 2,
+      "wins" : 9
+    },
+    {
+      "avatar_url" : null,
+      "character" : "shiba",
+      "display_name" : "호두과자",
+      "draws" : 0,
+      "id" : "d0000000-0000-4000-8000-0000000000b4",
+      "losses" : 4,
+      "points" : 3,
+      "rank" : 3,
+      "wins" : 7
+    },
+    {
+      "avatar_url" : null,
+      "character" : "fox",
+      "display_name" : "새벽",
+      "draws" : 1,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "losses" : 4,
+      "points" : 2,
+      "rank" : 4,
+      "wins" : 6
+    },
+    {
+      "avatar_url" : null,
+      "character" : "jellyfish",
+      "display_name" : "구름빵",
+      "draws" : 1,
+      "id" : "d0000000-0000-4000-8000-0000000000b1",
+      "losses" : 4,
+      "points" : 2,
+      "rank" : 4,
+      "wins" : 6
+    },
+    {
+      "avatar_url" : null,
+      "character" : "ghost",
+      "display_name" : "초코칩",
+      "draws" : 1,
+      "id" : "d0000000-0000-4000-8000-0000000000b2",
+      "losses" : 6,
+      "points" : -3,
+      "rank" : 6,
+      "wins" : 3
+    },
+    {
+      "avatar_url" : null,
+      "character" : "ghost",
+      "display_name" : "솜사탕",
+      "draws" : 0,
+      "id" : "d0000000-0000-4000-8000-0000000000b7",
+      "losses" : 5,
+      "points" : -4,
+      "rank" : 7,
+      "wins" : 1
+    }
+  ],
+  "server_now_ms" : 1789621500000,
+  "status" : "ok"
+}

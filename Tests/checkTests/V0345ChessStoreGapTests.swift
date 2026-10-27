@@ -53,6 +53,15 @@ private func sgSerialize(_ object: [String: Any]) -> String {
 private func sgHandler(_ map: [String: [String]]) -> GomokuStubProtocol.Handler {
     { rpc, _, index in
         guard let bodies = map[rpc], !bodies.isEmpty else {
+            // 0.3.64 — `*_watch_live`(관전 + 관전자 수)를 모르는 옛 서버다. 그 404 는 **"schema cache" 문구가
+            //   있어야** 공용 매핑이 `.databaseSchemaMissing` 으로 접고, 그래야 스토어가 옛 `chess_watch` 로
+            //   접어 이 파일이 재는 폴링·창 규칙이 그대로 돈다(짧은 본문은 그냥 404 라 접힘 갈래를 안 지난다).
+            if rpc.hasSuffix("_watch_live") {
+                return GomokuStubProtocol.Reply(
+                    status: 404,
+                    body: #"{"code":"PGRST202","message":"Could not find the function public."# + rpc
+                        + #" in the schema cache"}"#)
+            }
             return GomokuStubProtocol.Reply(status: 404, body: #"{"code":"PGRST202","message":"missing"}"#)
         }
         return GomokuStubProtocol.Reply(body: bodies[min(index, bodies.count - 1)])

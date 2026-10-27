@@ -1071,13 +1071,26 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
             #expect(!wiring.contains(banned), "도전 미션 배선에 \(banned) 이(가) 있다 — 새 타이머")
         }
         let files = ["WorkTimerStore.swift", "WorkTimerStorePoke.swift", "WorkTimerStoreWeeklyWork.swift", "CheckMenuView.swift",
-                     "WorkTimerStoreAuth.swift", "CheckAchievementRows.swift", "WorkTimerStoreAchievements.swift"]
+                     "WorkTimerStoreAuth.swift", "CheckAchievementRows.swift", "WorkTimerStoreAchievements.swift",
+                     "WorkTimerStoreMiniGame.swift"]
         let callers = try files.map { try v0358Code($0) }
         func count(_ needle: String) -> Int { callers.map { $0.components(separatedBy: needle).count - 1 }.reduce(0, +) }
-        #expect(count("refreshAchievements(") == 2, "refreshAchievements 를 부르는 자리가 지갑 sync 하나가 아니다(정의 1 + 호출 1)")
+        // v0.3.64: 박자가 하나 더 있다 — 게임 한 판이 서버에 남은 직후(`refreshAchievementsAfterGameResult` → `.gameResult`). 그 문은
+        // 이벤트 둘(미니게임 제출 성공 1 · 1:1 판 끝남 3 = 오목 · 체스 · 테트리스)에서만 열린다. 타이머는 여전히 없다.
+        // 검토 지적(2026-10-22) 뒤로 이벤트에 딸린 자리가 둘 더 있다 — 떠 있던 조회가 끝난 뒤의 '뒤따르는 한 번'(게임 결과 깃발) ·
+        // 자정을 넘겨 막힌 일일 [받기](사람이 누른 순간). 둘 다 사건 하나에 많아야 1건이다.
+        #expect(count("refreshAchievements(") == 5,
+                "refreshAchievements 를 부르는 자리가 정의 1 + 지갑 sync · 게임 결과 · 뒤따르는 한 번 · 막힌 일일 받기 가 아니다")
+        #expect(count("refreshAchievements(reason: .gameResult)") == 2 && count("refreshAchievements(reason: .missionPanel)") == 1,
+                "게임 결과 박자(문 1 + 뒤따르는 한 번 1) · 막힌 일일 받기(1) 자리가 바뀌었다")
+        #expect(count("refreshAchievementsAfterGameResult(game:") == 5,
+                "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 1:1 판 끝남 3 이 아니다")
         // 받기를 부르는 자리는 미션 화면의 맥락 하나뿐이다(스토어 어디서도 스스로 받지 않는다 — 자동 지급 금지).
         #expect(count("claimAchievement(key: $0)") == 1 && count("claimWeeklyWork()") == 2,
                 "받기를 부르는 자리가 화면 말고도 있다 — 정의 1 + 호출 1 이어야 한다")
+        // 일일 받기(v0.3.64)도 같다 — 화면의 맥락 하나뿐(자동 지급 금지).
+        #expect(count("claimDailyMission(key: $0)") == 1 && count("claimDailyMission(key:") == 2,
+                "일일 받기를 부르는 자리가 화면 말고도 있다 — 정의 1 + 호출 1 이어야 한다")
         let poke = try v0358Code("WorkTimerStorePoke.swift")
         let sync = try #require(poke.range(of: "func syncUltraWallet(reason: UltraSyncReason) {"))
         #expect(poke[sync.upperBound...].prefix(600).contains("refreshAchievements(reason: achievementsReason)"),
@@ -1244,7 +1257,8 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         let box = try #require(v0358DiffBox(progress, zero), "진행 숫자가 안 그려진다")
         #expect(box.maxX >= 250, "진행 숫자(오른쪽 셋째 줄)가 안 갈렸다: \(box)")
         let poke50 = try Self.mission("poke50")
-        #expect(AchievementCopy.reward(poke50) == "💎 +20" && AchievementCopy.count(poke50) == "23/50")
+        // v0.3.64: 칩 글자는 "+20" — 앞의 루비는 분홍 그림(`RubyIcon`)이다(파란 💎 글자를 버렸다).
+        #expect(AchievementCopy.reward(poke50) == "+20" && AchievementCopy.count(poke50) == "23/50")
     }
 
     @Test("받는 중(떠 있음) — 버튼이 흐려진다(같은 자리 · 그라데이션이 옅다)")

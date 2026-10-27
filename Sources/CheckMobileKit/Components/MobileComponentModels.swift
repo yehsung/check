@@ -445,7 +445,7 @@ package enum ProgressBarRule {
 // MARK: - 탭 막대
 
 /// 탭 막대를 숨기는 화면(시안 B: **목록 화면에만** 탭 막대 — 자체 하단 막대·몰입 화면은 숨긴다).
-/// 대화 · 오목 대국 · 체스 대국 · 상점 · 미니게임 플레이가 `.hidesTabBar(for:)`(iOS 층 `SheetChrome.swift`)를 쓴다.
+/// 대화 · 오목 대국 · 체스 대국 · 1:1 테트리스 판 · 상점 · 미니게임 플레이가 `.hidesTabBar(for:)`(iOS 층 `SheetChrome.swift`)를 쓴다.
 /// 규칙이 한 곳이어야 화면마다 갈리지 않는다 — 화면이 `toolbar(.hidden, for: .tabBar)` 를 직접 쓰면 안 된다(게임 폴더 계약).
 package enum TabBarPolicy {
     package enum Screen: String, CaseIterable, Sendable {
@@ -454,6 +454,10 @@ package enum TabBarPolicy {
         /// 체스 대국·결과 — 오목 대국과 같은 까닭(몰입 화면 + 자체 동작 줄). 체스는 **시계가 서버에서 흐르고
         /// 자동 착수가 없어**(DECISIONS B4) 탭을 잘못 눌러 빠져나가는 것이 곧 시간패 쪽으로 가는 길이다.
         case chessMatch
+        /// 1:1 테트리스 판·결과(1.0.11) — 체스·오목과 같은 몰입 화면이고 **까닭이 더 세다**: 테트리스는 판 시간이
+        /// 화면 프레임이 아니라 **단조 시계**로 흐른다(설계 D10). 탭을 잘못 눌러 빠져나가면 보이지 않는 채로
+        /// 조각이 계속 떨어져 돌아왔을 때 판이 끝나 있고, 그 판에는 루비가 걸려 있다.
+        case tetrisMatch
         case shop
         case miniGamePlay
         /// 잔디 상세 — 자체 하단 값 막대를 가진다(막대 둘이 쌓이면 엄지 사정권이 좁아진다).

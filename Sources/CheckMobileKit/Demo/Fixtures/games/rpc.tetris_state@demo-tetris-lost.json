@@ -1,0 +1,56 @@
+{
+  "__note" : [
+    "결과 카드(졌다 · 내가 꼭대기에 닿았다). 닿는 길: games/tetris/match/lost.",
+    "result 가 'challenger_win' 이고 winner 가 초코칩이다 — 나는 여기서도 신청받은 쪽(opponent)이다. 위 won 장면과 **result 글자가 갈린다**(opponent_win ↔ challenger_win)는 것이 이 짝의 일이다: 두 장면이 같은 글자면 '내 기준이 아니다'가 영원히 안 드러난다.",
+    "me.topped_out=true — 자기 패배 신고만 서버가 믿는다(D9). '상대가 탑아웃했다'는 주장은 받지 않는다.",
+    "루비: 42 − 10 = 32(건 판돈만 잃는다). 결과 카드 눈금은 −10 이다.",
+    "판돈 10 · 경과 151초라 가속이 걸린 뒤 끝난 판이다."
+  ],
+  "state" : {
+    "accepted_at_ms" : 1789621343000,
+    "end_reason" : "topout",
+    "finished_at_ms" : 1789621491000,
+    "match_id" : "demo-tetris-lost",
+    "max_end_ms" : 1789621829000,
+    "me" : {
+      "avatar_url" : null,
+      "board" : "..............J........JJ.......TJLL......TTTL.....OOILSS....OOIZSS...ZZZITTJ...IZZTTOJ...SSLLOOJ...SSLJJJI...GGGGGGGG.GGGGGGGGG.GG.GGGGGGGGG.GGGGGGGGGGGGGG.GGGGGGGGG.GGGGGGG.GGGGGGGGG.GGGGGGGGGGGGGG.",
+      "character" : "fox",
+      "display_name" : "새벽",
+      "garbage_applied" : 14,
+      "garbage_sent" : 9,
+      "id" : "d0000000-0000-4000-8000-000000000001",
+      "last_seen_ms" : 1789621490800,
+      "lines" : 19,
+      "pending" : 5,
+      "ready" : true,
+      "seq" : 150,
+      "topped_out" : true
+    },
+    "opponent" : {
+      "avatar_url" : null,
+      "board" : "..............................................................................................L........LL.......SLTT......SSTJJ....IIIJJO....ZZOOOO...GG.GGGGGGGGG.GGGGGGGGGGGGGG.GGGGGGGGG.GG.GGGGGGGGG",
+      "character" : "ghost",
+      "display_name" : "초코칩",
+      "garbage_applied" : 9,
+      "garbage_sent" : 14,
+      "id" : "d0000000-0000-4000-8000-0000000000b2",
+      "last_seen_ms" : 1789621490700,
+      "lines" : 23,
+      "pending" : 1,
+      "ready" : true,
+      "seq" : 149,
+      "topped_out" : false
+    },
+    "ready_deadline_ms" : 1789621373000,
+    "result" : "challenger_win",
+    "ruby_balance" : 32,
+    "seed" : 20260922,
+    "server_now_ms" : 1789621500000,
+    "stake" : 10,
+    "start_at_ms" : 1789621349000,
+    "status" : "finished",
+    "winner" : "d0000000-0000-4000-8000-0000000000b2"
+  },
+  "status" : "ok"
+}

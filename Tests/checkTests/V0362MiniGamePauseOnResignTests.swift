@@ -433,8 +433,9 @@ func thePanelWiresEscapeThroughThePureGate() throws {
 /// 때문이다. 둘이 갈리면 여기가 빨개진다.
 @Test("(f) 상한 범위 = 접었을 때 기록이 남는 게임. 엔진에서 재서 대조한다(이름표가 아니라 사실이다)")
 func thePauseLimitAppliesExactlyToGamesWhoseInterruptKeepsAScore() {
-    // 전제: 게임은 셋이다(넷째가 생기면 이 단언이 그 사람을 여기로 데려온다).
-    #expect(MiniGameKind.allCases.count == 3, "게임 수가 바뀌었다 — 상한 범위를 다시 보라")
+    // 전제: 게임은 넷이다(다섯째가 생기면 이 단언이 그 사람을 여기로 데려온다). v0.3.67 에 넷째(길건너)가 와서 실제로
+    // 이 단언이 발화했고, 아래 길건너 갈래를 엔진에서 재서 채웠다.
+    #expect(MiniGameKind.allCases.count == 4, "게임 수가 바뀌었다 — 상한 범위를 다시 보라")
 
     // ── 테트리스: `interrupt()` 가 `.result` 로 **결과를 확정**한다. 잎 뷰는 `.result` 로 들어간 그 전이에서
     //    `host.onFinished(점수)` 를 부르므로(아래 소스 계약), 접으면 기록이 남는다.
@@ -462,7 +463,15 @@ func thePauseLimitAppliesExactlyToGamesWhoseInterruptKeepsAScore() {
     #expect(timing.phase == .ready, "타이밍 바 invalidate 가 판을 안 비운다 — 아래 전제가 깨졌다")
     #expect(timing.total == 0, "타이밍 바를 끊었는데 점수가 남았다 — 그렇다면 상한을 걸어야 한다")
 
+    // ── 길건너 아잉이(v0.3.67): `interrupt()` 가 그 점수(간 가장 앞 줄)로 결과를 확정한다 — 플래피와 같다.
+    var crossy = CrossyGame(seed: 7)
+    crossy.action()
+    #expect(crossy.phase == .running, "전제: 길건너가 안 돌고 있다")
+    crossy.interrupt()
+    #expect(crossy.phase == .result, "길건너 interrupt 가 결과를 확정하지 않는다")
+
     // ── 범위는 위 사실의 사본이다.
+    #expect(Pause.quittingKeepsTheScore(.crossy), "길건너가 상한 밖이다 — 자동 정지 뒤 무기한 정지로 토큰이 TTL 을 넘긴다")
     #expect(Pause.quittingKeepsTheScore(.tetris), "테트리스가 상한 밖으로 나갔다 — 무기한 정지가 돌아온다")
     #expect(Pause.quittingKeepsTheScore(.flappy),
             "플래피가 상한 밖이다 — 자동 정지가 생긴 뒤로 무기한 정지로 남아 토큰이 TTL 을 넘긴다")

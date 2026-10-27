@@ -89,6 +89,22 @@ struct MeCharacterCardTests {
         let goldCrop = try #require(gold.cropping(to: goldBox))
         result.append(Source(id: CharacterCatalog.goldAingID, displayName: CharacterCatalog.builtInGoldAing.displayName,
                              pixelArt: false, crop: goldCrop))
+        // 무지개 아잉이(v0.3.59 맥 / 폰 1.0.10)는 **금과 같은 갈래**다 — 매니페스트·아틀라스가 없고 원천은 맥 초상 PNG 다.
+        // 파일 이름을 이 자리에 다시 적지 않는다(`RainbowAingArt` 가 유일한 출처 — 맥 번들·폰 초상·아트 스크립트가 같은 글자를 쓴다).
+        let rainbow = try loadImage(repoRoot.appendingPathComponent(
+            "Sources/check/Resources/\(RainbowAingArt.neutralPortraitResourceName).\(RainbowAingArt.resourceExtension)"))
+        let rainbowBox = try #require(alphaBounds(rainbow))
+        let rainbowCrop = try #require(rainbow.cropping(to: rainbowBox))
+        result.append(Source(id: CharacterCatalog.rainbowAingID, displayName: CharacterCatalog.builtInRainbowAing.displayName,
+                             pixelArt: false, crop: rainbowCrop))
+        // 케이크 아잉이 둘(v0.3.66 맥 / 폰 1.0.14 — 생일 선물 전용)도 금 · 무지개와 같은 갈래다: 매니페스트 · 아틀라스가 없고 원천은
+        // 맥 초상 PNG(`Resources/<id>-neutral.png`, 장식 포함)다. 이름은 코어 내장 항목 그대로, 순서는 내장 순서(딸기 → 초코).
+        for cake in [CharacterCatalog.builtInCakeStrawberryAing, CharacterCatalog.builtInCakeChocoAing] {
+            let image = try loadImage(repoRoot.appendingPathComponent("Sources/check/Resources/\(cake.id)-neutral.png"))
+            let box = try #require(alphaBounds(image))
+            let crop = try #require(image.cropping(to: box))
+            result.append(Source(id: cake.id, displayName: cake.displayName, pixelArt: false, crop: crop))
+        }
         let charactersDir = repoRoot.appendingPathComponent("Sources/check/Characters")
         let names = try FileManager.default.contentsOfDirectory(atPath: charactersDir.path).sorted()
         for name in names {
@@ -158,6 +174,19 @@ struct MeCharacterCardTests {
         #expect(MeCharacterCards.equippedID(fromServer: "aing_gold") == "aing_gold")
         #expect(MeCharacterCards.displayName(for: "aing_gold") == CharacterCatalog.builtInGoldAing.displayName)
         #expect(MeCharacterCards.displayName(for: "aing_gold") == "황금 아잉이")
+        // 무지개 아잉이(폰 1.0.10): 카드가 박혔으므로 접히지 않는다. 1.0.9 는 이 값을 몰라 아잉으로 접었다(그게 회귀의 모양이다).
+        #expect(MeCharacterCards.equippedID(fromServer: "aing_rainbow") == "aing_rainbow")
+        #expect(MeCharacterCards.equippedID(fromServer: " aing_rainbow ") == "aing_rainbow")
+        #expect(MeCharacterCards.displayName(for: "aing_rainbow") == CharacterCatalog.builtInRainbowAing.displayName)
+        #expect(MeCharacterCards.displayName(for: "aing_rainbow") == "무지개 아잉이")
+        // 케이크 아잉이 둘(폰 1.0.14): 카드가 박혔으므로 접히지 않는다 — 접히면 케이크를 받아 입은 사람의 나 탭 무대 · 고르기 머리가
+        // 아잉으로 선다(`equippedCharacterID` 가 이 접기를 지난다).
+        #expect(MeCharacterCards.equippedID(fromServer: "aing_cake_strawberry") == "aing_cake_strawberry")
+        #expect(MeCharacterCards.equippedID(fromServer: "aing_cake_choco") == "aing_cake_choco")
+        #expect(MeCharacterCards.displayName(for: "aing_cake_strawberry") == "딸기 케이크 아잉이")
+        #expect(MeCharacterCards.displayName(for: "aing_cake_choco") == "초코 케이크 아잉이")
+        // 순서: 내장 다섯이 코어 순서로 먼저(케이크는 정렬이면 금보다 앞이다 — 그 우연에 기대지 않는다).
+        #expect(Array(MeCharacterCards.knownIDs.prefix(5)) == CharacterCatalog.builtIns.map(\.id))
     }
 
     // MARK: 다시 굽기

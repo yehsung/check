@@ -18,9 +18,14 @@ extension CharacterManifest {
         /// 무지개 아잉이(v0.3.59) — 아잉 메시 + 다듬은 라벤더 밝기 맵(`RainbowAingArt.shadeResourceName`) + 몸 셰이더(높이로 무지개 색상) +
         /// 무지개 후광(`RainbowAingArt.haloResourceName`). 렌더러는 kind 가 아니라 이 값으로 가른다(금과 같은 이유).
         case rainbow
+        /// 딸기 케이크 아잉이(v0.3.66 생일 선물 전용) — 아잉 메시 + 몸 셰이더(물체 좌표) + 런타임 장식 노드(딸기 · 초 · 녹아내린 크림).
+        /// 렌더러는 kind 가 아니라 이 값으로 가른다(금과 같은 이유). **희귀가 아니다**(`isRare` 거짓 — 뽑기 화면에 나오지 않는다).
+        case cakeStrawberry
+        /// 초코 케이크 아잉이(v0.3.66 생일 선물 전용) — 딸기와 같은 구조, 칠과 장식만 초코다.
+        case cakeChoco
     }
 
-    /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개는 코드에 박힌 내장 항목뿐이다).
+    /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개·케이크는 코드에 박힌 내장 항목뿐이다).
     package var finish: Finish { Finish(characterID: id) }
 }
 
@@ -32,13 +37,32 @@ extension CharacterManifest.Finish {
             self = .gold
         } else if CharacterCatalog.isRainbowAing(characterID) {
             self = .rainbow
+        } else if characterID == CharacterCatalog.cakeStrawberryAingID {
+            self = .cakeStrawberry
+        } else if characterID == CharacterCatalog.cakeChocoAingID {
+            self = .cakeChoco
         } else {
             self = .standard
         }
     }
 
     /// 희귀(뽑기 전용 내장 — 황금 · 무지개)인가. 확률표 강조 · 결과 연출 · 교환 목록 맨 위가 이 값으로 갈린다.
-    package var isRare: Bool { self != .standard }
+    /// ★ 케이크(v0.3.66)는 **거짓**이다 — 생일 선물 전용이라 뽑기 화면 · 확률표 · 교환 목록 · 캡슐 기계에 서지 않는다.
+    ///   `self != .standard` 로 두면 마감이 늘 때마다 희귀가 저절로 넓어진다(그래서 열거한다).
+    package var isRare: Bool {
+        switch self {
+        case .gold, .rainbow: return true
+        case .standard, .cakeStrawberry, .cakeChoco: return false
+        }
+    }
+
+    /// 케이크 마감(딸기 · 초코)인가. 3D 렌더러가 케이크 장식을 붙일지 이 값으로 가른다.
+    package var isCake: Bool {
+        switch self {
+        case .cakeStrawberry, .cakeChoco: return true
+        case .standard, .gold, .rainbow: return false
+        }
+    }
 }
 
 /// 황금 아잉이 그림 파일의 이름과 "그릴 수 있다"의 판정. **파일 이름을 적는 곳은 여기 하나다** — 맥 번들 조회·폰 초상·

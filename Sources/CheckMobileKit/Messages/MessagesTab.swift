@@ -145,11 +145,12 @@ struct MessagesListView: View {
     @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
 
     var body: some View {
-        let threads = store.threads
-        let unread = store.unreadPeerIDs
-        let counts = store.unreadCountsByPeer
         let now = store.context.clock.now()
         let presence = store.presenceBoard(now: now)
+        // 1.0.13: 줄 세우기·정렬은 규칙 하나(`MessagesThreadListRules.rows` ← `store.threadItems`)다 —
+        // ① 근무중+안읽음 ② 근무안함+안읽음 ③ 근무중+다읽음 ④ 근무안함+다읽음, 같은 무리 안에서는 최근순.
+        // **찌르기만 있는 사람도 행이 선다**. 뷰는 값을 그대로 그린다(배지·시각·안 읽음을 다시 세지 않는다).
+        let rows = store.threadItems(now: now)
         let dividerLeading = MessagesThreadRow.dividerLeading(avatarSide: MobileAvatarScale.side(base: MessagesThreadRow.avatarBase, textScale: textScale))
         List {
             if #available(iOS 26.0, *) {
@@ -168,32 +169,25 @@ struct MessagesListView: View {
                 InlineNotice(text: notice, kind: store.blockNoticeIsError ? .error : .info)
                     .cardListPlainRow()
             }
-            if store.historyFailed, !threads.isEmpty {
+            if store.historyFailed, !rows.isEmpty {
                 InlineNotice(text: "새 메시지를 불러오지 못했어요. 당겨서 다시 시도해 주세요", kind: .error)
                     .cardListPlainRow()
             }
-            if threads.isEmpty {
+            if rows.isEmpty {
                 emptyContent
                     .cardListPlainRow()
             } else {
                 Section {
-                    ForEach(Array(threads.enumerated()), id: \.element.id) { offset, thread in
-                        let isUnread = unread.contains(thread.peerUserID)
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { offset, row in
                         Button {
-                            onOpen(thread.peerUserID)
+                            onOpen(row.peerUserID)
                         } label: {
-                            MessagesThreadRow(
-                                thread: thread,
-                                isUnread: isUnread,
-                                countBadge: MessagesListRules.countBadge(isUnread: isUnread, count: counts[thread.peerUserID]),
-                                presence: presence.peers[thread.peerUserID],
-                                now: now
-                            )
+                            MessagesThreadRow(row: row, presence: presence.peers[row.peerUserID])
                         }
                         .buttonStyle(.plain)
                         // 한 그룹 안의 줄(시안 B) — 시스템 절 모양을 쓰지 않는다. 구분선은 이름 글자 시작점부터.
                         .cardSegmentRow(
-                            .of(index: offset, count: threads.count),
+                            .of(index: offset, count: rows.count),
                             padding: EdgeInsets(top: 12, leading: MobileTheme.cardPadding, bottom: 12, trailing: MobileTheme.cardPadding),
                             dividerLeading: dividerLeading
                         )
@@ -283,7 +277,7 @@ private struct MessagesCompactLabelStyle: LabelStyle {
     }
 }
 
-/// 목록 한 줄(시안 B `.b-thread-row`).
+/// 목록 한 줄(시안 B `.b-thread-row`). 값은 전부 `MessagesThreadItem` 이 미리 정한다 — 이 뷰는 조건을 세지 않는다.
 struct MessagesThreadRow: View {
     static let avatarBase: CGFloat = 48
 
@@ -292,11 +286,8 @@ struct MessagesThreadRow: View {
         MobileTheme.cardPadding + avatarSide + 12
     }
 
-    let thread: MessageThread
-    let isUnread: Bool
-    let countBadge: String?
+    let row: MessagesThreadItem
     let presence: MessagesPeerPresence?
-    let now: Date
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -304,34 +295,31 @@ struct MessagesThreadRow: View {
     private var previewLines: Int { dynamicTypeSize.isAccessibilitySize ? 3 : 2 }
 
     var body: some View {
-        let last = thread.lastMessage
         HStack(alignment: .top, spacing: 12) {
             PersonAvatar(
-                name: thread.peerName,
+                name: row.peerName,
                 status: presence?.status,
-                url: thread.peerAvatarURL,
-                userID: thread.peerUserID,
+                url: row.peerAvatarURL,
+                userID: row.peerUserID,
                 size: Self.avatarBase
             )
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PersonName(thread.peerName, center: presence?.center, font: isUnread ? .callout.weight(.bold) : MobileTheme.rowTitle)
+                    PersonName(row.peerName, center: presence?.center, font: row.isUnread ? .callout.weight(.bold) : MobileTheme.rowTitle)
                     Spacer(minLength: 4)
-                    if let last {
-                        Text(MessagesListRules.timeText(last.createdAt, now: now))
-                            .font(isUnread ? .subheadline.weight(.semibold) : .subheadline)
-                            .monospacedDigit()
-                            .foregroundStyle(isUnread ? MobileTheme.accent : MobileTheme.label2)
-                            .fixedSize()
-                    }
+                    Text(row.timeText)
+                        .font(row.isUnread ? .subheadline.weight(.semibold) : .subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(row.isUnread ? MobileTheme.accent : MobileTheme.label2)
+                        .fixedSize()
                 }
                 HStack(alignment: .top, spacing: 8) {
-                    Text(last.map { MessagesListRules.preview($0.body) } ?? "")
+                    Text(row.previewText)
                         .font(.subheadline)
-                        .foregroundStyle(isUnread ? MobileTheme.label : MobileTheme.label2)
+                        .foregroundStyle(row.isUnread ? MobileTheme.label : MobileTheme.label2)
                         .lineLimit(previewLines)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if let countBadge {
+                    if let countBadge = row.countBadge {
                         MessagesCountBadge(text: countBadge)
                             .padding(.top, 1)
                     }
@@ -345,14 +333,7 @@ struct MessagesThreadRow: View {
     }
 
     private var accessibilityText: String {
-        var parts = [thread.peerName]
-        if let line = MessagesPresenceRules.headerLine(presence) { parts.append(line) }
-        if let countBadge { parts.append("안 읽은 메시지 \(countBadge)개") }
-        if let last = thread.lastMessage {
-            parts.append((last.isMine ? "나: " : "") + MessagesListRules.preview(last.body))
-            parts.append(MessagesListRules.timeText(last.createdAt, now: now))
-        }
-        return parts.joined(separator: ", ")
+        MessagesThreadListRules.accessibilityText(row: row, presenceLine: MessagesPresenceRules.headerLine(presence))
     }
 }
 

@@ -88,6 +88,25 @@ package enum AILimitWindow: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// 서버가 말한 **창 길이로** 창을 가린다. 이름(`primary_window` 같은 키)보다 **이쪽이 먼저다.**
+    ///
+    /// ★ 2026-10-23 실측으로 드러난 것: Codex 는 플랜에 따라 **주간 창 하나만** 보내는데 그 이름이
+    ///   `primary_window` 다(pro 16명·prolite 12명 전원). 이름만 믿고 넣으면 그 주간 값이 5시간 칸에 앉고
+    ///   주간 칸은 영영 빈다 — 운영에서 Codex 행 33개 중 31개가 그 꼴이었다. 리셋 시각이 자백했다:
+    ///   "5시간" 칸의 리셋이 110~168시간 뒤였다(5시간 창이 그럴 수는 없다. 168시간 = 정확히 7일).
+    ///   `plus` 는 창이 둘 다 와서 멀쩡했기 때문에 **제보 전까지 아무 시험도 안 물었다.**
+    ///
+    /// 두 창 어느 쪽과도 **2배 안으로** 안 맞으면 nil 이다 — 모르는 길이를 가까운 쪽에 억지로 끼워 넣으면
+    /// 넷째 창이 생기는 날 또 같은 종류의 거짓말을 한다. 부르는 쪽이 이름으로 접든 버리든 정한다.
+    package static func matching(lengthSeconds seconds: TimeInterval?) -> AILimitWindow? {
+        guard let seconds, seconds > 0 else { return nil }
+        return allCases
+            .map { ($0, max(seconds, $0.lengthSeconds) / min(seconds, $0.lengthSeconds)) }
+            .filter { $0.1 <= 2 }
+            .min { $0.1 < $1.1 }?
+            .0
+    }
+
     /// "5시간" / "주간". 카드의 창 라벨.
     package var displayName: String {
         switch self {

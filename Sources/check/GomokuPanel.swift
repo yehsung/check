@@ -96,9 +96,9 @@ enum GomokuText {
     static let challenge = "도전"
     static let stakeTitle = "판돈"
     /// 판돈 문구는 **순수익** 기준이다(수락 때 건 판돈을 빼고 이기면 판돈만큼 더 받는다) — 결과 카드의 +N 과 같은 눈금.
-    /// v0.3.54: 승자 상금(2×판돈)에서 수수료 10% 를 뗀다(`DuelFee`) — 이 창에서 수수료를 말하는 곳은 이 한 줄이다
-    /// (숫자는 바로 위 "이기면 +N" 이 순이익으로 말한다: 3/5/10 → +2/+4/+8).
-    static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요(수수료 \(DuelFee.percent)% 빼고)"
+    /// v0.3.64: 판돈 수수료를 없앴다(사용자 결정 2026-10-22 "멀티 미니게임 수수료 다시 제거해줘") — 이긴 사람은 2×판돈을 받는다.
+    /// 숫자는 바로 위 "이기면 +N" 이 순이익으로 말한다: 3/5/10 → +3/+5/+10.
+    static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요"
     /// 판돈 창(v0.3.29 — [도전]을 누르면 화면 가운데에 뜬다).
     static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     static let stakePromptCaption = "판돈을 고르세요"
@@ -166,7 +166,7 @@ enum GomokuText {
     }
 
     /// 대국 화면 판돈 줄. 이기면 **순이익**(판돈 − 수수료, `DuelFee.winnerNet`) — 결과 카드의 루비 변화와 같은 숫자를 말한다.
-    /// (v0.3.54 전에는 +판돈이었다. 서버 정산이 수수료를 떼므로 옛 숫자를 남기면 결과 카드·잔량과 1~2 루비씩 어긋난다.)
+    /// (v0.3.54~0.3.63 은 수수료를 뗀 +2/+4/+8 이었다. v0.3.64 에 수수료가 0 이 되어 다시 +판돈이다 — 식은 `DuelFee` 한 곳이다.)
     static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(DuelFee.winnerNet(stake: stake))" }
 
     /// 관전 화면 판돈 줄 — 걸린 루비만 말한다. "이기면 +N" 을 붙이면 주어가 없다: 관전자는 이겨도 한 푼도 얻지 못한다.
@@ -1579,11 +1579,16 @@ private struct GomokuMatchSide: View {
 
     private var statusBox: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(statusLine.text)
-                .font(.headline)
-                .foregroundStyle(statusLine.tint)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 6) {
+                Text(statusLine.text)
+                    .font(.headline)
+                    .foregroundStyle(statusLine.tint)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                // 내 판을 보고 있는 사람 수(v0.3.65 — `gomoku__state` 의 한 칸). 0 이면 아무것도 안 그린다.
+                WatcherCountChip(count: store.spectatorCount, height: 18)
+            }
             if match.blackPassed {
                 Text(GomokuText.blackPassed)
                     .font(.caption)
@@ -2502,6 +2507,8 @@ private struct GomokuLiveMatchCard: View {
                     .foregroundStyle(CheckTheme.secondaryText)
                 face(live.b)
                 Spacer(minLength: 4)
+                // 관전자 수(v0.3.65) — [관전] 칩 **옆**. 높이는 칩과 같은 18 이어야 카드가 53 을 유지한다(C18).
+                WatcherCountChip(count: live.watchers, height: GomokuWindowLayout.liveWatchChipHeight)
                 if isMine {
                     Text(GomokuText.myMatch)
                         .font(.caption2.weight(.bold))
@@ -2818,7 +2825,8 @@ private struct GomokuSpectateSide: View {
                 // 관전 칩은 접미사를 뗀다 — "이기면 +5" 는 대국자의 문장이다(관전자는 이겨도 얻는 것이 없다).
                 GomokuStakeChip(stake: watch.stake, showsReward: false)
                     .frame(width: GomokuWindowLayout.stakeChipWidth)
-                GomokuWatchStatusBox(watch: watch, lossStreak: store.autoAbandonStreak, isLive: store.isWindowVisible)
+                GomokuWatchStatusBox(watch: watch, lossStreak: store.autoAbandonStreak, isLive: store.isWindowVisible,
+                                     watchers: store.spectatorCount)
             }
             .fixedSize(horizontal: false, vertical: true)
 
@@ -2996,17 +3004,23 @@ private struct GomokuWatchStatusBox: View {
     /// 자동 착수 패배 임계(스토어 `autoAbandonStreak`) — 경고는 임계 − 1 에서만 뜬다.
     let lossStreak: Int
     let isLive: Bool
+    /// 나까지 포함해 이 판을 보고 있는 사람 수(v0.3.65 — `gomoku_watch_live` 의 한 칸). 0 이면 칩이 안 선다.
+    var watchers: Int = 0
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1, paused: !isLive || watch.isFinished || watch.deadline == nil)) { context in
             let kind = GomokuWatchStatusRule.kind(for: watch, now: context.date)
             let tint = Self.tint(kind)
             VStack(alignment: .leading, spacing: 4) {
-                Text(GomokuWatchStatusRule.text(for: watch, now: context.date))
-                    .font(.headline)
-                    .foregroundStyle(tint)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: 6) {
+                    Text(GomokuWatchStatusRule.text(for: watch, now: context.date))
+                        .font(.headline)
+                        .foregroundStyle(tint)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    WatcherCountChip(count: watchers, height: 18)
+                }
                 if let warning = GomokuWatchStatusRule.streakWarning(for: watch, lossStreak: lossStreak) {
                     Text(warning)
                         .font(.caption.weight(.bold))
@@ -3035,7 +3049,9 @@ private struct GomokuWatchStatusBox: View {
     }
 }
 
-/// 관전 안내 카드(남는 자리). "관전 중" · 수 · 경과 · 대국자 채팅은 보이지 않는다는 말 · 자동 착수 개수. 관전자 수는 없다(U4).
+/// 관전 안내 카드(남는 자리). "관전 중" · 수 · 경과 · 대국자 채팅은 보이지 않는다는 말 · 자동 착수 개수.
+/// ★ **관전자 수는 여기가 아니다**(v0.3.65). 그 숫자는 위 상태 상자의 `WatcherCountChip` 한 자리에만 선다 —
+///   두 자리에 그리면 폴링마다 같은 숫자가 두 번 튀고, 한쪽만 고치는 날이 온다.
 /// 경과는 잎(`GomokuElapsedText`)이 센다. 끝난 판은 경과를 멈춘 채 숨긴다(끝난 뒤 흐르는 시간은 아무 뜻도 없다).
 private struct GomokuWatchInfoCard: View {
     let watch: GomokuSpectateState
@@ -3194,7 +3210,7 @@ struct GomokuRuleExample: Identifiable, Equatable {
         "5목이 되는 수는 금수 모양이 함께 생겨도 흑의 승리예요. 4-3은 금수가 아니에요.",
         "한 수에 30초. 30초를 넘기면 무작위로 놓입니다 · 3번 연속이면 집니다.",
         "흑이 둘 곳이 없으면 차례가 백으로 넘어가고, 판이 가득 차면 무승부예요.",
-        "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고(수수료 \(DuelFee.percent)% 빼고), 무승부면 건 판돈을 돌려받아요.",
+        "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, 무승부면 건 판돈을 돌려받아요.",
         // 순위(0.3.41). 캡션 '승점 = 승 − 패' 만으로는 (1승 1패 1무) 가 (1승 1패 0무) 앞에 서는 이유를 못 읽는다 — 서버 정렬의
         // 뒤 두 축(승 desc → 무 desc)을 사용자 말로. **맨 끝에 둔다**: 앞 줄들은 테스트가 번호로 집는다.
         "순위는 승점(승 − 패)순이에요. 같은 승점이면 더 많이 이긴 쪽, 그다음엔 더 많이 둔 쪽이 위예요."

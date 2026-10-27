@@ -371,9 +371,11 @@ extension WorkTimerStore {
         if messageHistoryFailed { messageHistoryFailed = false }
         defer { if generation == sessionGeneration, messageHistoryLoading { messageHistoryLoading = false } }
         do {
-            let loaded = try await withSessionRetry { activeSession in
-                try await fetchMessageHistoryPreferringReads(accessToken: activeSession.accessToken)
+            // v0.3.65: 찌르기 기록까지 한 왕복으로 받는다(`message_history_with_pokes` — 없는 서버면 예전 두 단계로 접는다).
+            let conversation = try await withSessionRetry { activeSession in
+                try await fetchConversationHistory(accessToken: activeSession.accessToken)
             }
+            let loaded = conversation.history
             // 세대가 갈렸으면 이 응답은 앞 계정의 것이다 — 그대로 대입하면 새 계정 화면에 남의 대화가 그려진다.
             guard generation == sessionGeneration else { return }
             // 더 나중에 띄운 조회가 이미 반영됐다 — 이 응답은 그보다 낡은 서버 상태다(읽음 1 이 되살아나면 안 된다).
@@ -395,6 +397,8 @@ extension WorkTimerStore {
             )
             if messageHistory != sorted { messageHistory = sorted }
             applyMessageHistoryReadCapability(loaded, serial: serial)
+            // 찌르기 기록(v0.3.65)도 **같은 응답**으로 바꾼다 — 읽음 판정(아래 evaluate) 앞이어야 방금 온 찌르기가 경계에 든다.
+            applyMessagePokeLog(conversation, serial: serial)
             if !messageHistoryLoaded { messageHistoryLoaded = true }
             if messageHistoryFailed { messageHistoryFailed = false }
             // 새 이력이 왔다 — 지금 보이는 대화에 서버 기준 안 읽은 말이 있으면 읽음으로 올린다(새 메시지 도착 포함).
@@ -442,6 +446,8 @@ extension WorkTimerStore {
                 if !messageHistoryLoaded { messageHistoryLoaded = true }
                 // 두 함수가 다 없는 서버다 — 읽음도 모른다(1 을 그리지 않는다).
                 if messageReadReceiptsAvailable { messageReadReceiptsAvailable = false }
+                // 찌르기 기록도 모른다(v0.3.65 — 셋 다 없는 서버).
+                applyMessagePokeLog(MessageConversationLoad(history: MessageHistoryLoad(entries: [], hasReadReceipts: false), pokes: nil), serial: serial)
                 // 받을 이력이 없는 서버다 — 낡음 표시를 붙들고 있으면 열 때마다 헛조회한다.
                 // 이것은 실패가 아니라 "받을 것이 없다"는 답이라 아래 실패 가지의 우회 소진과 다르다: 소진은 같은 계기로 한 번 더
                 // 막을 뿐이고, 지우기는 표시 자체를 내린다(m-reverify R8 — 이 줄이 없으면 여닫을 때마다 헛조회 세 건).
@@ -842,57 +848,84 @@ extension WorkTimerStore {
     /// v0.3.31 M4: 옛 게이트는 `isMenuPresented` 한 칸이었다. 그 칸은 두 출처(팝오버 루트 onAppear·키 창 통지)의 마지막 쓰기라 **떠 있는
     /// 팝오버에서 false 로 남는 순서**가 있고(우리 다른 창이 활성화와 함께 키를 가져가도 팝오버는 안 닫힌다 — CheckWindowAnchor 의 실측 표),
     /// 그 동안 본 메시지가 읽음으로 안 올라가 대화를 닫으면 점이 됐다("이미 읽은 메시지에 점이 자꾸 생긴다").
+    ///
+    /// v0.3.65: **찌르기도 같은 자리에서** 올린다 — 대화를 열면 메시지와 찌르기가 둘 다 읽음이 된다(사용자 결정 "찌르기도 친다").
+    /// 찌르기 경계는 그 대화의 마지막 받은 찌르기(`MessagePokeLogRules.markTarget` — 화면에 보인 마지막 것)이고, 서버가 찌르기 기록을
+    /// 모르면(`messagePokeLogSnapshot == nil`) 없다 — 찌르기 경계가 없으면 나가는 호출은 옛 `mark_messages_read` 그대로다.
     func evaluateMessageReadMarking() {
-        guard session != nil, isMessageConversationSeen,
-              let peer = selectedMessagePeerID,
-              let snapshot = messageHistoryReadSnapshot,
-              let through = MessageUnreadRules.markTarget(
-                  peer: peer,
-                  history: messageHistory,
-                  snapshot: snapshot,
-                  optimistic: messageOptimisticReads[peer]
-              )
-        else { return }
-        markMessagesRead(peer: peer, throughMessageID: through)
+        guard session != nil, isMessageConversationSeen, let peer = selectedMessagePeerID else { return }
+        let messageThrough = messageHistoryReadSnapshot.flatMap { snapshot in
+            MessageUnreadRules.markTarget(
+                peer: peer,
+                history: messageHistory,
+                snapshot: snapshot,
+                optimistic: messageOptimisticReads[peer]
+            )
+        }
+        let pokeThrough = messagePokeLogSnapshot.flatMap { snapshot in
+            MessagePokeLogRules.markTarget(
+                peer: peer,
+                log: messagePokeLog,
+                snapshot: snapshot,
+                optimistic: messagePokeOptimisticReads[peer]
+            )
+        }
+        guard messageThrough != nil || pokeThrough != nil else { return }
+        markConversationRead(peer: peer, throughMessageID: messageThrough, throughPokeID: pokeThrough)
     }
 
-    /// 읽음 처리 1회. **상대별로 겹치지 않는다**(날아가는 중이면 끝난 뒤 한 번 더 판정한다).
+    /// 읽음 처리 1회(메시지 경계 · 찌르기 경계 — 둘 중 하나 이상). **상대별로 겹치지 않는다**(날아가는 중이면 끝난 뒤 한 번 더 판정한다).
     ///
     /// 응답 전에 낙관 읽음을 세워 점을 **곧바로** 끈다. 실패해도 되돌리지 않는다 — 그 기록은 "실패로 정산됨"이 되고,
-    /// 그보다 나중에 띄운 서버 조회(다음 새로고침)가 사실을 말한다(`MessageUnreadRules`). 성공하면 요약·이력을 한 번 다시 받아
-    /// 서버 판정으로 넘어간다.
-    func markMessagesRead(peer: String, throughMessageID through: String) {
-        guard session != nil, !peer.isEmpty, !through.isEmpty else { return }
+    /// 그보다 나중에 띄운 서버 조회(다음 새로고침)가 사실을 말한다(`MessageUnreadRules`). 메시지 경계를 올렸으면 요약·이력을 한 번 다시 받아
+    /// 서버 판정으로 넘어간다. **찌르기만 올렸으면 다시 받지 않는다** — 찌르기에는 요약도 읽음 신호도 없고(받은 사람만의 상태),
+    /// 정산된 낙관 읽음이 다음 이력까지 점을 끈 채 둔다(찌르기 한 번에 왕복 둘을 더 쓰지 않는다).
+    func markConversationRead(peer: String, throughMessageID through: String?, throughPokeID pokeThrough: String?) {
+        guard session != nil, !peer.isEmpty else { return }
+        let messageThrough = through.flatMap { $0.isEmpty ? nil : $0 }
+        let pokeThroughID = pokeThrough.flatMap { $0.isEmpty ? nil : $0 }
+        guard messageThrough != nil || pokeThroughID != nil else { return }
         let runtime = messageReadRuntime
         guard !runtime.markInFlight.contains(peer) else {
             runtime.markAgain.insert(peer)
             return
         }
         runtime.markInFlight.insert(peer)
-        let optimistic = MessageOptimisticRead(throughID: through, recordedSerial: runtime.nextSerial())
-        if messageOptimisticReads[peer] != optimistic { messageOptimisticReads[peer] = optimistic }
+        if let messageThrough {
+            let optimistic = MessageOptimisticRead(throughID: messageThrough, recordedSerial: runtime.nextSerial())
+            if messageOptimisticReads[peer] != optimistic { messageOptimisticReads[peer] = optimistic }
+        }
+        if let pokeThroughID {
+            let optimistic = MessageOptimisticRead(throughID: pokeThroughID, recordedSerial: runtime.nextSerial())
+            if messagePokeOptimisticReads[peer] != optimistic { messagePokeOptimisticReads[peer] = optimistic }
+        }
         let generation = sessionGeneration
         Task { @MainActor in
-            var succeeded = false
+            var outcome = ConversationReadMarkOutcome(messageMarked: false, pokeMarked: false)
             do {
-                let response = try await withSessionRetry { activeSession in
-                    try await service.markMessagesRead(
+                outcome = try await withSessionRetry { activeSession in
+                    try await performConversationReadMark(
                         accessToken: activeSession.accessToken,
-                        peerUserID: peer,
-                        throughMessageID: through
+                        peer: peer,
+                        throughMessageID: messageThrough,
+                        throughPokeID: pokeThroughID
                     )
                 }
-                succeeded = response.isOK
             } catch {
                 // 취소·네트워크·스키마 부재 — 전부 "이번엔 못 올렸다"다. 낙관 표시는 되돌리지 않는다(위 주석).
             }
             // 로그아웃·계정 전환 뒤 도착한 결과는 새 계정의 장부를 만지지 않는다(그쪽 장부는 이미 새것이다).
             guard generation == sessionGeneration else { return }
             runtime.markInFlight.remove(peer)
-            settleOptimisticRead(peer: peer, through: through, succeeded: succeeded)
+            if let messageThrough {
+                settleOptimisticRead(peer: peer, through: messageThrough, succeeded: outcome.messageMarked)
+            }
+            if let pokeThroughID {
+                settlePokeOptimisticRead(peer: peer, through: pokeThroughID, succeeded: outcome.pokeMarked)
+            }
             // 성공 뒤 새로고침은 **합치기 창**으로 간다(m-fix2): 서버가 읽은 사람 채널(= 이 맥)로 같은 경계의 'message_read' 를
             // 되돌려 보내므로(부록 B-1) 곧바로 쏘면 메아리가 한 번 더 부른다. 점은 낙관 읽음이 이미 껐다 — 1초 늦은 서버 확인은 안 보인다.
-            if succeeded { requestMessageActivityRefreshCoalesced() }
+            if messageThrough != nil, outcome.messageMarked { requestMessageActivityRefreshCoalesced() }
             if runtime.markAgain.remove(peer) != nil { evaluateMessageReadMarking() }
         }
     }
@@ -1111,8 +1144,32 @@ final class MessageReadRuntime {
     /// 그보다 **먼저 띄운** 이력 응답은 그 말을 모를 수 있으므로 판을 갈 때 이 말을 남기고, **나중에 띄운** 응답이 오면 서버가 이긴다.
     /// 같은 표가 서버가 아직 모르는 말끼리의 **같은 초 도착 순서**다(m4-fix · `sortedForMessageHistory(arrivalOrder:)`).
     var localArrivalSerials: [String: Int] = [:]
+    /// 대화 기록에 **즉시 넣은** 찌르기(v0.3.65 — take_pokes 소비분): 찌르기 id → 넣은 순간의 일련번호. 위 표와 같은 규칙이다
+    /// (그보다 먼저 띄운 이력 응답은 그 찌르기를 지우지 않고, 나중에 띄운 응답이 오면 서버가 이긴다 · 같은 초의 도착 순서표).
+    var pokeLocalArrivalSerials: [String: Int] = [:]
 
     nonisolated init() {}
+
+    /// `survivingLocalArrivals` 의 찌르기 짝(v0.3.65). 규칙은 글자 그대로 같다 — 타입만 다르다.
+    func survivingLocalPokeArrivals(
+        historySerial: Int,
+        current: [MessagePokeLogEntry],
+        server: [MessagePokeLogEntry]
+    ) -> [MessagePokeLogEntry] {
+        guard !pokeLocalArrivalSerials.isEmpty else { return [] }
+        let serverIDs = Set(server.map(\.id))
+        var keepIDs: Set<String> = []
+        for (id, inserted) in pokeLocalArrivalSerials {
+            if serverIDs.contains(id) || historySerial > inserted {
+                pokeLocalArrivalSerials[id] = nil
+            } else {
+                keepIDs.insert(id)
+            }
+        }
+        guard !keepIDs.isEmpty else { return [] }
+        var seen: Set<String> = []
+        return current.filter { keepIDs.contains($0.id) && seen.insert($0.id).inserted }
+    }
 
     /// 일련번호 `historySerial` 로 띄운 이력 응답(`server`)을 반영할 때 **남겨야 할 즉시 삽입분**을 고르고 장부를 정리한다.
     ///  · 응답에 같은 id 가 있으면 → 서버 행이 이긴다(장부에서 뺀다).

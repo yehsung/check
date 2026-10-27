@@ -175,7 +175,7 @@ package struct GamesChessMatchChrome: Equatable, Sendable {
         let delta: Int = {
             if let given = match.rubyDelta { return given }
             switch match.outcome {
-            // v0.3.54: 승자 순이익 = 판돈 − 수수료(`DuelFee.winnerNet`). 서버가 값을 주면 위에서 그 값이 이긴다.
+            // 승자 순이익 = `DuelFee.winnerNet`(v0.3.64 부터 수수료 0 → +판돈). 서버가 값을 주면 위에서 그 값이 이긴다.
             case .won?: return DuelFee.winnerNet(stake: match.stake)
             case .lost?: return -match.stake
             default: return 0
@@ -382,6 +382,9 @@ struct GamesChessMatchView: View {
                     } else {
                         Label(GamesChessText.robotButton, systemImage: "cpu")
                     }
+                    // 내 판을 보고 있는 사람 수(0.3.65 — 명세 §3 '대국자 본인 화면: 판돈 칩 줄에 같이').
+                    // 폰에서 판돈 칩이 서는 줄은 **내비 부제**다. 0 이면 서지 않으므로 로봇 판에서도 모양이 그대로다.
+                    GamesWatcherBadge(count: store.spectatorCount, font: .caption)
                 }
             }
         }

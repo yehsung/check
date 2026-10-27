@@ -108,6 +108,8 @@ extension GomokuStore {
     package func stopWatching() {
         resetWatchRuntime()
         if spectating != nil { spectating = nil }
+        // 보던 판이 내려갔다 — 남의 관전자 수가 로비·다음 판으로 따라가지 않게 여기서 0 으로 돌린다.
+        if spectatorCount != 0 { spectatorCount = 0 }
     }
 
     /// 세대 올림 + 장부 초기값. 진입·나가기 둘 다 여기를 지난다 — 앞 판의 in-flight 깃발이 남으면 새 판의 첫 조회가 "도는 중"으로 합쳐져 영영 안 나간다.
@@ -148,7 +150,7 @@ extension GomokuStore {
             // 전체 재요청 표시는 **요청을 띄울 때 본다**(내리는 것은 그것을 실어 온 응답이다) — gomoku_state 와 같은 규약.
             let since = runtime.watchWantsFull ? 0 : (spectating?.appliedSeq ?? 0)
             runtime.lastWatchRequestAt = clock()
-            let result = await perform({ try await $0.gomokuWatch(accessToken: $1, matchID: id, sinceSeq: since) })
+            let result = await watchFetch(matchID: id, sinceSeq: since)
             // 세대가 밀렸으면(나가기·판 전환·내 판·로그아웃) 장부는 그쪽이 이미 비웠다 — 여기서는 아무것도 건드리지 않는다.
             guard generation == runtime.watchGeneration, resetMark == resetGeneration else { return }
             switch result {
@@ -165,6 +167,28 @@ extension GomokuStore {
             guard generation == runtime.watchGeneration else { return }
         } while runtime.watchAgain && spectating != nil
         runtime.watchInFlight = false
+    }
+
+    /// 관전 한 번 — `gomoku_watch_live`(관전 + 관전자 수)를 먼저 부르고, 서버에 그 함수가 아직 없으면
+    /// 옛 `gomoku_watch` 로 **한 번 접어** 같은 바퀴 안에서 다시 부른다(응답 모양은 키 하나 차이뿐이다).
+    ///
+    /// 접힘은 이 로그인 동안 한 번만 판정한다(`spectatorCountUnavailable`) — PGRST202 는 "함수가 없다"는 직접 증거라
+    /// 폴링마다 404 를 한 번씩 더 쏠 이유가 없다.
+    /// ★ 이 실패는 `watchUnavailable`(관전 입구 잠금)도 `watchFailureStreak`(연결 끊김)도 **건드리지 않는다.**
+    ///   관전은 옛 길로 멀쩡히 돌고 있고 잃는 것은 숫자 한 칸뿐이다 — 두 사실을 한 깃발에 겸업시키면
+    ///   "관전자 수 함수가 없다"는 이유로 [관전] 칩이 통째로 잠긴다(C17 의 깃발 주석과 같은 사고다).
+    private func watchFetch(matchID: String, sinceSeq: Int) async -> Result<GomokuWatchResponse, any Error>? {
+        if !spectatorCountUnavailable {
+            let live = await perform({
+                try await $0.gomokuWatchLive(accessToken: $1, matchID: matchID, sinceSeq: sinceSeq)
+            })
+            // nil(세대 밀림·세션 없음)과 그 밖의 실패는 **그대로 돌려준다** — 5xx 한 번에 숫자를 영영 끄면 안 된다.
+            guard case .failure(let error)? = live,
+                  (error as? SupabaseWorkServiceError) == .databaseSchemaMissing else { return live }
+            Self.logger.notice("gomoku_watch_live missing — folding to gomoku_watch")
+            spectatorCountUnavailable = true
+        }
+        return await perform({ try await $0.gomokuWatch(accessToken: $1, matchID: matchID, sinceSeq: sinceSeq) })
     }
 
     /// 관전 응답을 화면 값으로 옮긴다. 관전 중이 아니거나 **다른 판** 응답이면 아무것도 바꾸지 않는다(C13 의 둘째 자물쇠).
@@ -188,6 +212,10 @@ extension GomokuStore {
                 return
             }
             let inMatch = status == "active"
+            // 나 말고 몇 명이 이 판을 보고 있는가(`gomoku_watch_live` 의 한 칸). 옛 길로 접힌 세션에는 키가 없어 0 이고,
+            // 그때 화면은 아무것도 그리지 않는다. **판이 아닌 응답(위 guard)에는 세우지 않는다.**
+            let watchers = max(0, response.watchers ?? 0)
+            if spectatorCount != watchers { spectatorCount = watchers }
             // 흑·백은 **여기서만** 선다(C15). 서버 행이 없으면(프로필 삭제 등) 씨앗 얼굴·로비 목록에서 id 로 빌리고, 그래도 없으면 앞 값.
             let black = peerUser(response.blackUser, working: true, capable: true, inMatch: inMatch)
                 ?? knownUser(id: row.black, in: current) ?? current.black

@@ -23,10 +23,19 @@ import SwiftUI
 //  · 동작 줄이기: 위치 · 크기 변화 없이 제자리에 섰다가 흐려지기만 하고, 줄 · 숫자는 애니메이션 없이 바로 바뀐다.
 //  · 실패: 그 줄의 보조 문장 자리가 "받지 못했어요 · 다시 눌러 주세요"(주황)로 바뀌고 [받기]는 그대로 선다. 안내줄로 띄우지 않는다
 //    (검토 지적 2026-10-19 — 안내줄은 절 위에 끼어 줄을 26pt 밀고, 아래 줄을 누른 사람에겐 스크롤 밖이라 안 보였다).
+//
+// ── v0.3.64 — 세 묶음 · 일일 미션 · 루비 아이콘 ──
+// 사용자 결정(2026-10-22): 미션 화면을 **일일 미션 → 주간 미션 → 누적 미션** 세 묶음으로("도전 미션"은 "누적 미션"으로 이름을 바꿨다).
+// 일일 미션 6줄(미니게임 3종 · 1:1 3종 하루 한 판 = 루비 5)은 이 파일의 줄(`AchievementRowView`)을 **그대로** 쓴다 — 묶음만
+// `MissionRowGroup.daily` 로 갈려 받기 함수 · 떠 있음 · 실패 · 연출 자리 · 아이콘이 일일 쪽을 본다. 묶음 머리는 셋 다 같은 모양
+// (`MissionGroupHeader` — 예전 "도전 미션" 소제목 그대로)이다.
+// 루비 그림(사용자: "실제 루비는 핑크색인데 지금 미션에 있는 루비 아이콘은 달라")은 전부 `RubyIcon` 이다 — 보상 칩도 "💎 +20" 글자가
+// 아니라 `RubyIcon` + "+20" 이다(`RubyRewardLabel`).
 
 /// 도전 미션 절의 문구 · 아이콘 규약(순수 — 값으로 검증한다).
 enum AchievementCopy {
-    static let sectionTitle = "도전 미션"
+    /// 누적 미션 묶음 머리(v0.3.64 에 "도전 미션"에서 이름을 바꿨다 — 사용자 결정 2026-10-22).
+    static let sectionTitle = "누적 미션"
     /// 받은 줄의 표시(진행 숫자 자리). 3시간 줄의 "받음" 칩과 같은 낱말이다(`MissionCopy.claimedChip`).
     static let claimedMark = MissionCopy.claimedChip
     /// 받기 버튼의 낱말 — 주간 줄도 같은 버튼이다.
@@ -37,9 +46,9 @@ enum AchievementCopy {
     /// 받기가 실패한 줄의 보조 문장(그 줄 안 — [받기]는 그대로 서 있다). 주간 줄도 같은 문장이다.
     static let claimFailedCaption = AchievementNoticeText.claimFailedRow
 
-    /// 보상 칩 — 3시간 줄("💎 +3") · 주간 줄("💎 +50")과 같은 루비 글리프. 0 이면 칩이 없다(nil).
+    /// 보상 칩의 글자 — "+20". 앞의 루비는 **그림**(`RubyIcon`)이다(v0.3.64 — 파란 💎 글자를 버렸다). 0 이면 칩이 없다(nil).
     static func reward(_ mission: AchievementStatus.Mission) -> String? {
-        mission.reward > 0 ? "💎 +\(mission.reward)" : nil
+        mission.reward > 0 ? "+\(mission.reward)" : nil
     }
 
     /// 진행 숫자("23/50"). 받은 줄은 이 자리에 `claimedMark` 를 그린다(연속 근무는 받은 뒤 지금 연속이 다시 낮을 수 있다 — 숫자는 거짓이 된다).
@@ -76,6 +85,39 @@ enum AchievementCopy {
     static let fallbackIcon = "star.fill"
 }
 
+/// 일일 미션 묶음의 문구 · 아이콘 규약(v0.3.64 — 순수). 줄의 제목 · 보상은 **서버 글자**다(이 파일에 "한 판 하기" · 5 를 적지 않는다).
+enum DailyMissionCopy {
+    static let sectionTitle = "일일 미션"
+    /// 머리 옆 짧은 안내 — 하루가 자정에 끝나고 **받지 않은 보상은 사라진다**(사용자 결정 2026-10-22). 한 줄을 넘지 않는다
+    /// (머리 줄 292pt 안에 제목 · 안내 · "받을 보상 N개"가 같이 선다 — 폭은 V0364 시험이 잰다).
+    static let resetNote = "자정에 초기화 · 안 받으면 사라져요"
+
+    /// 줄 아이콘 — 그 게임이 **다른 화면에서 이미 쓰는 기호**(미니게임 창의 종류 칩 `MiniGameKind.icon` · 1:1 입구 셋). 모르는 게임은 별.
+    @MainActor
+    static func icon(game: String) -> String {
+        if let kind = MiniGameKind(rawValue: game) { return kind.icon }
+        switch game {
+        case "gomoku": return MiniGameGomokuEntryButton.icon
+        case "chess": return ChessEntryIcon.resolved
+        case "tetris_duel": return TetrisDuelEntryIcon.resolved
+        default: return AchievementCopy.fallbackIcon
+        }
+    }
+}
+
+/// 주간 미션 묶음의 머리(v0.3.64). 줄은 예전 "이번 주 근무" 그대로다(`WeeklyWorkRowView`).
+enum WeeklyMissionCopy {
+    static let sectionTitle = "주간 미션"
+}
+
+/// 줄이 어느 묶음의 것인가(v0.3.64). 누적 미션 줄과 일일 미션 줄은 **같은 그림**이고, 받기 함수 · 떠 있음 · 실패 · 연출 자리 · 아이콘만
+/// 이 값으로 갈린다.
+enum MissionRowGroup: Equatable {
+    case achievement
+    /// 일일 미션 — 세는 게임(아이콘을 고른다).
+    case daily(game: String)
+}
+
 /// 레일 [미션] 칸의 숫자 배지 · 툴팁(순수). 받을 것이 없으면 배지가 없다(nil). 두 자리부터는 "9+"(칸 모서리를 넘지 않게).
 enum MissionRailBadge {
     static func text(count: Int) -> String? {
@@ -83,11 +125,42 @@ enum MissionRailBadge {
         return count > 9 ? "9+" : "\(count)"
     }
 
-    static let plainHelp = "미션 — 근무 3시간마다 · 이번 주 근무 · 도전 미션"
+    static let plainHelp = "미션 — 일일 · 주간 · 누적"
 
     /// 숫자는 색 · 모양으로만 말하지 않는다 — 툴팁(= 보이스오버)도 같은 수를 말한다.
     static func tooltipText(count: Int) -> String {
         count > 0 ? "미션 — 받을 보상 \(count)개" : plainHelp
+    }
+}
+
+/// 일일 미션의 자정(KST) 깨우개(v0.3.64 — 검토 지적 2026-10-22). 레일 [미션] 칸 뒤에 붙는 **보이지 않는 잎**이다.
+///
+/// 날짜 넘김 판정은 시계(관찰 밖)로 하므로, 팝오버를 연 채 자정을 넘기면 어제 [받기] · "받을 보상 N개" · 레일 배지가 다음 조회
+/// 박자까지 남았다(근무 밖이면 다시 열 때까지). 이 잎이 리셋 시각에 `TimelineView(.explicit)` 로 깨어나 스토어에 넘김을 **적고**
+/// (`noteDailyMissionRollover()`), 그 관찰 값을 읽은 화면 · 배지가 다시 그려진다. 뷰 일정이라 스토어 타이머 · 요청이 늘지 않고,
+/// 근무 밖이라 티커가 멎은 자정에도 깬다. 넘김을 적으면 `dailyMissionRolloverDate` 가 nil 이 되어 일정이 사라진다.
+///
+/// 리셋 시각 뒤 1초 · 5초에도 깬다 — 첫 깸이 시계 차 추정의 흔들림으로 리셋 직전에 닿아도 다음 깸이 적는다(적었으면 나머지는 헛깸이다).
+/// 왜 미션 화면 · 레일을 통째로 감싸지 않는가: `TimelineView` 의 내용은 클로저라 팝오버 뷰 트리 배선 시험(미러)이 그 안을 못 읽는다.
+struct DailyMissionRolloverWake: View {
+    let store: WorkTimerStore
+
+    /// 깨는 시각들(리셋 · +1초 · +5초). 리셋을 모르면 빈 목록.
+    static func wakeDates(rollover: Date?) -> [Date] {
+        guard let rollover else { return [] }
+        return [rollover, rollover.addingTimeInterval(1), rollover.addingTimeInterval(5)]
+    }
+
+    var body: some View {
+        let dates = Self.wakeDates(rollover: store.dailyMissionRolloverDate)
+        if !dates.isEmpty {
+            TimelineView(.explicit(dates)) { context in
+                Color.clear
+                    .onChange(of: context.date) { _ = store.noteDailyMissionRollover() }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 }
 
@@ -158,12 +231,40 @@ struct MissionClaimContext {
     /// 왜 필요한가(2026-10-19 실측): `ImageRenderer` 는 `onAppear` 의 `withAnimation` 을 끝값으로 건너뛰어 굽는다 — 연출이 언제나
     /// 불투명도 0 으로 찍혀, 줄이 동작 줄이기 값을 연출에 넘기는지 그림으로 잴 수 없었다(검토 지적: 넘기지 않게 바꿔도 초록).
     var frozenBurstProgress: Double? = nil
+    /// 일일 미션 받기(v0.3.64 — `daily_mission_claim`). 누적 받기와 함수가 달라 따로 받는다. 칸 순서가 뒤인 이유: 멤버별 초기화의
+    /// 인자 순서가 칸 순서라, 앞에 끼우면 기존 호출부(`MissionClaimContext(failedKeys:)` 따위)는 괜찮아도 읽는 순서가 갈린다.
+    var claimDaily: (String) -> Void = { _ in }
+    /// 떠 있는 일일 받기 · 마지막 일일 받기가 실패한 키(v0.3.64 — 누적 쪽과 따로 센다).
+    var dailyInFlightKeys: Set<String> = []
+    var dailyFailedKeys: Set<String> = []
 
     func isInFlight(_ key: String) -> Bool {
         inFlightKeys.contains(key) || inFlightKeys.contains(WorkTimerStore.achievementClaimAllSlot)
     }
 
     func hasFailed(_ key: String) -> Bool { failedKeys.contains(key) }
+
+    /// 묶음을 아는 판정(v0.3.64) — 줄이 부른다.
+    func isInFlight(_ key: String, group: MissionRowGroup) -> Bool {
+        switch group {
+        case .achievement: return isInFlight(key)
+        case .daily: return dailyInFlightKeys.contains(key) || dailyInFlightKeys.contains(WorkTimerStore.achievementClaimAllSlot)
+        }
+    }
+
+    func hasFailed(_ key: String, group: MissionRowGroup) -> Bool {
+        switch group {
+        case .achievement: return hasFailed(key)
+        case .daily: return dailyFailedKeys.contains(key)
+        }
+    }
+
+    func claim(_ key: String, group: MissionRowGroup) {
+        switch group {
+        case .achievement: claimAchievement(key)
+        case .daily: claimDaily(key)
+        }
+    }
 }
 
 private struct MissionClaimContextKey: EnvironmentKey {
@@ -385,9 +486,27 @@ struct MissionRubyBalance: View {
 /// private 가 아닌 이유: 렌더 테스트가 이 줄 하나만 그려 ✓ · [받기]를 픽셀로 잰다(주간 줄과 같은 이유).
 struct AchievementRowView: View {
     let mission: AchievementStatus.Mission
+    /// 어느 묶음의 줄인가(v0.3.64). 기본값은 누적 미션 — 예전 호출부(`AchievementRowView(mission:)`)는 그대로다.
+    var group: MissionRowGroup = .achievement
 
     @Environment(\.missionClaim) private var claim
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+
+    /// 줄 아이콘 — 누적은 키 앞부분으로, 일일은 세는 게임으로 고른다.
+    private var icon: String {
+        switch group {
+        case .achievement: return AchievementCopy.icon(mission.key)
+        case .daily(let game): return DailyMissionCopy.icon(game: game)
+        }
+    }
+
+    /// 받기 연출이 서는 자리 — 누적은 계열(단계가 올라도 같은 줄), 일일은 키.
+    private var burstTarget: String {
+        switch group {
+        case .achievement: return MissionClaimBurst.achievementTarget(series: mission.series)
+        case .daily: return MissionClaimBurst.dailyTarget(key: mission.key)
+        }
+    }
 
     var body: some View {
         let reduces = claim.reduceMotion ?? systemReduceMotion
@@ -397,9 +516,9 @@ struct AchievementRowView: View {
         let squeeze: CGFloat = state == .claimable ? 0.8 : 1
         // 받기가 실패했으면 보조 문장 자리에 실패 문장(검토 지적 2026-10-19) — 줄 높이 · 위치는 그대로라 아무것도 밀리지 않고,
         // 누른 그 줄에서 보인다. [받기]가 서 있을 때만이다(그 사이 다른 기기에서 받았으면 실패는 더 뜻이 없다).
-        let failed = state == .claimable && claim.hasFailed(mission.key)
+        let failed = state == .claimable && claim.hasFailed(mission.key, group: group)
         HStack(spacing: 10) {
-            Image(systemName: AchievementCopy.icon(mission.key))
+            Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 22)
@@ -412,8 +531,7 @@ struct AchievementRowView: View {
                         .minimumScaleFactor(squeeze)
                     Spacer(minLength: 4)
                     if state != .claimable, let reward = AchievementCopy.reward(mission) {
-                        Text(reward)
-                            .font(.caption2.weight(.bold))
+                        RubyRewardLabel(text: reward)
                             .foregroundStyle(tint)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -454,8 +572,8 @@ struct AchievementRowView: View {
                 }
             }
             if state == .claimable {
-                MissionClaimButton(amount: mission.reward, inFlight: claim.isInFlight(mission.key)) {
-                    claim.claimAchievement(mission.key)
+                MissionClaimButton(amount: mission.reward, inFlight: claim.isInFlight(mission.key, group: group)) {
+                    claim.claim(mission.key, group: group)
                 }
             }
         }
@@ -467,7 +585,7 @@ struct AchievementRowView: View {
             .stroke(state == .claimable ? CheckTheme.accent.opacity(0.55) : CheckTheme.border, lineWidth: 1))
         // 받기 연출은 줄(계열) 자리에 선다 — 콕 10 을 받아 이 줄이 콕 50 으로 바뀌어도 "+5"는 같은 자리에서 떠오른다.
         .overlay(alignment: .trailing) {
-            if let burst = claim.bursts[MissionClaimBurst.achievementTarget(series: mission.series)] {
+            if let burst = claim.bursts[burstTarget] {
                 MissionClaimBurstView(amount: burst.amount, reduceMotion: reduces)
                     .id(burst.serial)
                     .padding(.trailing, 12)
@@ -490,13 +608,81 @@ private struct AchievementRowAnimationKey: Equatable {
     }
 }
 
-/// 도전 미션 절의 높이 규약(순수 — 미션 화면의 스크롤 판정이 이 값으로 내용 높이를 센다).
+/// 루비 보상 글자 — **분홍 루비 그림**(`RubyIcon`) + "+20"(v0.3.64 — 상단 잔량 칩과 같은 그림). 색 · 바탕은 부르는 쪽이 칠한다
+/// (줄 칩 · 3시간 칩 · 주간 칩이 같은 부품이다). 글자는 caption2 굵게 — 예전 "💎 +20" 칩과 같은 크기라 줄 높이가 그대로다.
+struct RubyRewardLabel: View {
+    let text: String
+    var iconSize: CGFloat = 11
+    /// 앞에 붙는 그림(주간 완료 칩의 체크 같은). nil 이면 루비만.
+    var leadingSymbol: String? = nil
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let leadingSymbol {
+                Image(systemName: leadingSymbol).font(.system(size: 9, weight: .bold))
+            }
+            RubyIcon(size: iconSize)
+            Text(text)
+                .font(.caption2.weight(.bold))
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("루비 \(text)")
+    }
+}
+
+/// 미션 화면 묶음 머리(v0.3.64 — 일일 · 주간 · 누적 셋 다 같은 모양, 예전 "도전 미션" 소제목 그대로). 높이는 `MissionGroupLayout.headerHeight`.
+struct MissionGroupHeader: View {
+    let title: String
+    /// 제목 옆 짧은 안내(일일 묶음의 "자정에 초기화 …"). 한 줄을 넘지 않는다.
+    var note: String? = nil
+    /// 오른쪽 "받을 보상 N개"(0 이면 없음).
+    var pendingCount: Int = 0
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+                .fixedSize()
+            if let note {
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText.opacity(0.85))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            Spacer(minLength: 4)
+            if let hint = AchievementCopy.pendingHint(pendingCount) {
+                Text(hint)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(CheckTheme.accent)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: MissionGroupLayout.headerHeight - 6, alignment: .bottom)
+        .padding(.top, 6)
+    }
+}
+
+/// 묶음 머리의 높이 규약(순수 — 미션 화면의 스크롤 판정이 이 값으로 내용 높이를 센다).
+enum MissionGroupLayout {
+    /// 머리 줄 높이(글자 14 + 위 여백 6 — 위 줄들과 묶음을 가르는 틈). 예전 "도전 미션" 소제목과 같다.
+    static let headerHeight: CGFloat = 20
+}
+
+/// 누적 미션 절의 높이 규약(순수 — 미션 화면의 스크롤 판정이 이 값으로 내용 높이를 센다).
 enum AchievementSectionLayout {
     /// 줄 높이 · 간격은 미션 화면 줄과 같다(56 · 8 — `MissionPanel.rowHeight/rowSpacing` 와 짝).
     static let rowHeight: CGFloat = 56
     static let rowSpacing: CGFloat = 8
-    /// 소제목 줄 높이(글자 14 + 위 여백 6 — 위 줄들과 절을 가르는 틈).
-    static let headerHeight: CGFloat = 20
+    /// 소제목 줄 높이(글자 14 + 위 여백 6 — 위 줄들과 절을 가르는 틈). 세 묶음 머리가 같은 값이다(`MissionGroupLayout`).
+    static let headerHeight: CGFloat = MissionGroupLayout.headerHeight
 
     /// 절 전체 높이(앞 줄과의 간격 포함). 절이 없으면 0.
     static func height(_ state: AchievementSectionState) -> CGFloat {
@@ -506,30 +692,20 @@ enum AchievementSectionLayout {
     }
 }
 
-/// 도전 미션 절(소제목 + 줄들). 미션 화면의 스크롤 내용 맨 아래에 선다. 상태는 값으로만 받는다(렌더 테스트 친화) — 받기 동작은
-/// 환경값(`missionClaim`)으로 줄들에 내려간다.
+/// 누적 미션 절(묶음 머리 + 줄들 — v0.3.64 에 "도전 미션"에서 이름을 바꿨다). 미션 화면의 스크롤 내용 맨 아래에 선다. 상태는 값으로만
+/// 받는다(렌더 테스트 친화) — 받기 동작은 환경값(`missionClaim`)으로 줄들에 내려간다.
 struct AchievementSectionView: View {
     let state: AchievementSectionState
+
+    private var pendingCount: Int {
+        if case .loaded(_, let claimable) = state { return claimable }
+        return 0
+    }
 
     var body: some View {
         if state != .hidden {
             VStack(spacing: AchievementSectionLayout.rowSpacing) {
-                HStack(spacing: 6) {
-                    Text(AchievementCopy.sectionTitle)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    if case .loaded(_, let claimable) = state, let hint = AchievementCopy.pendingHint(claimable) {
-                        Text(hint)
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(CheckTheme.accent)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: AchievementSectionLayout.headerHeight - 6, alignment: .bottom)
-                .padding(.top, 6)
+                MissionGroupHeader(title: AchievementCopy.sectionTitle, pendingCount: pendingCount)
                 switch state {
                 case .hidden:
                     EmptyView()

@@ -110,6 +110,9 @@ struct AingWidgetPortrait: View {
             }
             art
                 .frame(width: size * 0.88, height: size * 0.88)
+                // 케이크 아잉이는 아바타 틀로 얼굴 크기를 다른 아잉 변형과 맞춘다(앱 `CharacterPortrait` 와 같은 규칙 — 장식은 원 위로 잘린다).
+                .scaleEffect(AingCharacterArt.avatarFraming(id: id).scale)
+                .offset(y: size * 0.88 * AingCharacterArt.avatarFraming(id: id).offsetY)
                 // 시안 background-position 50% 62%: 남는 12% 중 62% 만큼 위에서 내려온다.
                 .offset(y: size * 0.12 * 0.12)
         }
@@ -215,6 +218,9 @@ struct AingWidgetPersonFace: View {
                     .widgetAccentedRenderingMode(.desaturated)
                     .scaledToFit()
                     .frame(width: size * 0.88, height: size * 0.88)
+                    // 케이크 아잉이: 앱 `PersonCharacterFace` 와 같은 아바타 틀(얼굴 크기를 아잉 변형과 같게).
+                    .scaleEffect(AingCharacterArt.avatarFraming(id: characterID).scale)
+                    .offset(y: size * 0.88 * AingCharacterArt.avatarFraming(id: characterID).offsetY)
                     .offset(y: size * 0.05)
             }
             .frame(width: size, height: size)

@@ -35,6 +35,14 @@ import Testing
         let matchID: String?
         /// 끝까지 돌렸을 때 `chess.spectating?.id`.
         let watchingID: String?
+        /// 끝까지 돌렸을 때 `chess.incoming?.id` · `chess.outgoing?.id`(nil = 신청이 없어야 한다).
+        ///
+        /// ★ 이 두 칸은 **두 번째 왕복**으로 온다: 로비 `me` 는 신청 **id 만** 주고 상대·판돈·만료는 그 id 로
+        /// `chess_state` 를 한 번 더 불러야 안다(`ChessStore.applyLobbyInvites`). 그래서 지문을 뜨기 전에
+        /// 따로 기다려야 한다 — 자세한 까닭은 §2 의 기다림 자리에 적었다.
+        /// (`var` 인 까닭: 기본값을 가진 `let` 은 Swift 의 멤버와이즈 생성자에서 **빠진다** — 그러면 아래 표가 못 넘긴다.)
+        var inviteIn: String? = nil
+        var inviteOut: String? = nil
     }
 
     /// ★ 라우트 일곱 — 인수인계 표 그대로. 셋(`match/<id>`·`ranking…`·`watch/<id>`)이 **고치기 전에는 전부 로비**였다.
@@ -43,8 +51,10 @@ import Testing
               phase: .lobby, matchID: nil, watchingID: nil),
         .init(route: "games/chess/lobby", focus: nil, watch: nil, section: .top,
               phase: .lobby, matchID: nil, watchingID: nil),
+        // 신청 변형은 상태가 로비와 같고 **신청 둘**로만 갈린다(장면 `_games-chess-lobby-invites`).
         .init(route: "games/chess/lobby/invites", focus: nil, watch: nil, section: .top,
-              phase: .lobby, matchID: nil, watchingID: nil),
+              phase: .lobby, matchID: nil, watchingID: nil,
+              inviteIn: "demo-chess-invite-in", inviteOut: "demo-chess-invite-out"),
         // 꼬리 없는 `match` 는 **장면 폴더**가 판을 정한다(`_games-chess-match` 의 `me.active_match_id`).
         .init(route: "games/chess/match", focus: nil, watch: nil, section: .top,
               phase: .playing, matchID: "demo-chess-my-turn", watchingID: nil),
@@ -161,6 +171,24 @@ import Testing
                 let wantRank = row.route.hasSuffix("unlisted") ? 11 : 3
                 #expect(chess.ranking?.me?.rank == wantRank, "\(row.route): 내 순위 \(String(describing: chess.ranking?.me?.rank))")
             }
+
+            // ★ 신청 둘은 **두 번째 왕복**으로 온다 — 지문을 뜨기 전에 여기서 기다린다.
+            //   `hasLoadedLobby` 는 로비 응답을 **적용하기 시작할 때** 서고(`applyLobby` 머리), 신청 둘은
+            //   그 뒤 `applyLobbyInvites` 가 id 마다 `chess_state` 를 또 불러서야 선다. 그래서 위 로비
+            //   기다림은 이 두 칸을 **보장하지 못한다**: 한가할 때는 5ms 잠 한 번 안에 두 왕복이 다 끝나
+            //   우연히 초록이고, 전체 스위트(970건·메인 액터 포화)에서는 지문이 먼저 떠 `in=- out=-` 가 된다.
+            //   그러면 `lobby/invites` 지문이 꼬리 없는 로비와 **똑같아져** 가짓수가 8 → 7 로 떨어진다
+            //   (실측 2026-10-20: 전체 3회 중 2회 빨강, 그 스위트만 돌리면 늘 초록 — 경합이 결함 D6 의
+            //   그물을 뚫은 것이고 꼬리가 버려진 것이 아니다).
+            if let want = row.inviteIn {
+                #expect(await baseWaitUntil { chess.incoming?.id == want }, "\(row.route): 들어온 신청이 안 섰다")
+            }
+            if let want = row.inviteOut {
+                #expect(await baseWaitUntil { chess.outgoing?.id == want }, "\(row.route): 보낸 신청이 안 섰다")
+            }
+            // 두 칸을 지문에 넣기 **전에** 라우트마다 값으로 못을 박는다 — 가짓수만 세면 어느 줄이 어긋났는지 모른다.
+            #expect(chess.incoming?.id == row.inviteIn, "\(row.route): 들어온 신청 \(chess.incoming?.id ?? "-")")
+            #expect(chess.outgoing?.id == row.inviteOut, "\(row.route): 보낸 신청 \(chess.outgoing?.id ?? "-")")
 
             // 지문에 **순위 숫자를 넣지 않는다**: 순위 조회는 모든 로비 라우트에서 나가므로 도착 시점이
             // 라우트와 무관하게 흔들린다(그걸 지문에 넣으면 경합이 '화면이 갈렸다'로 둔갑한다 —

@@ -47,7 +47,8 @@ struct MeGachaMachineTests {
         // 돌려받은 때는 이미 다시 읽기까지 끝났다 — [한 번 더] 가 늦은 조회와 겹칠 틈이 없다.
         #expect(!store.isPulling && harness.requests(rpc: "shop_state").count == 2)
         let firstBody = try #require(harness.requests(rpc: "gacha_pull").last?.jsonBody)
-        #expect(Set(firstBody.keys) == ["p_protocol", "p_request_id"] && firstBody["p_protocol"] as? Int == 2)
+        // 1.0.14 번들은 4 를 싣는다(케이크 둘 초상까지 그릴 수 있다 — 번호는 누적이다).
+        #expect(Set(firstBody.keys) == ["p_protocol", "p_request_id"] && firstBody["p_protocol"] as? Int == ShopWire.cakeProtocol)
 
         // ② 중복(여우) — 칩이 0 → 1 로 오른다.
         harness.enqueue("gacha_pull", Fixture.pullOK("fox", duplicate: true, shards: 1, ruby: 100))

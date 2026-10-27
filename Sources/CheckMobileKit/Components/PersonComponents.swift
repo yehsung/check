@@ -80,12 +80,16 @@ package struct PersonCharacterFace: View {
 
     package var body: some View {
         let side = size * 0.88
+        // 케이크 아잉이는 아바타 틀로 얼굴 크기를 다른 아잉 변형과 맞춘다(`AingCharacterArt.avatarFraming` — 장식은 원 위로 잘린다).
+        let framing = AingCharacterArt.avatarFraming(id: id)
         ZStack {
             Circle().fill(MobileTheme.surface2)
             ArtImage(
                 MobileArt.character(id: id, expression: .neutral, pointSize: side, displayScale: displayScale),
                 size: CGSize(width: side, height: side)
             )
+            .scaleEffect(framing.scale)
+            .offset(y: side * framing.offsetY)
             .offset(y: size * 0.05)
         }
         .frame(width: size, height: size)

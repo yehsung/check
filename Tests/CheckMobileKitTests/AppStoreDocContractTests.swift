@@ -64,7 +64,9 @@ struct AppStoreDocContractTests {
         #expect(contests[1].contains("예") && !contests[1].contains("아니오") && !contests[1].contains("확인 필요"),
                 "애플의 경연 정의엔 실물 상품 조건이 없다 — 순위·보상을 두고 겨루면 경연이다: \(contests[1])")
         #expect(contests[1].contains("13+"), "매일 자정 상품은 '잦음' 이라 13+ 다: \(contests[1])")
-        #expect(contests[2].contains("\(prizes[0])·\(prizes[1])·\(prizes[2])"), "근거 칸의 상품 숫자가 코드와 다르다: \(contests[2])")
+        // "1·2·3등에게 루비 N·N·N" 의 **현재형 문장**으로 잰다 — 근거 칸은 지난 값(10·5·3 · 그 전 20·10·5)도 적으므로 숫자 셋만 찾으면
+        // 현재형을 옛 값으로 되돌려도 역사 쪽 글자에 걸려 초록이다(2026-10-22 에 상금이 20·10·5 로 돌아오며 생긴 구멍).
+        #expect(contests[2].contains("1·2·3등에게 루비 \(prizes[0])·\(prizes[1])·\(prizes[2])"), "근거 칸의 상품 숫자가 코드와 다르다: \(contests[2])")
         #expect(contests[2].contains("\(GamesMiniGameText.prizeQuorum)명"), "정족수(\(GamesMiniGameText.prizeQuorum)명)를 빠뜨렸다: \(contests[2])")
 
         let verdict = try #require(survey.split(separator: "\n").first { $0.hasPrefix("예상 결과 등급") }, "예상 등급 줄이 없다")
@@ -93,11 +95,191 @@ struct AppStoreDocContractTests {
         #expect(lootBox[2].contains(GachaText.oddsButton), "근거 칸이 확률을 보여 주는 자리(앱 버튼 '\(GachaText.oddsButton)')를 말하지 않는다")
         #expect(lootBox[2].contains(GachaText.title), "근거 칸이 앱의 뽑기 이름('\(GachaText.title)')을 쓰지 않는다")
         #expect(lootBox[2].contains("\(price) 루비"), "근거 칸의 1회 값이 데모 상점(\(price))과 다르다")
-        // 모의 도박 근거 칸도 1.0.8 수수료를 말한다(이긴 쪽이 '두 사람 몫' 전부를 받는다고 쓰면 거짓이다).
+        // 모의 도박 근거 칸은 승자가 실제로 받는 루비를 말한다 — 1.0.8~1.0.12 는 수수료 10% 를 뗀 5/9/18,
+        // 2026-10-22(서버 `20261023132000_duel_fee_off.sql`) 부터 수수료 없이 두 사람 몫 전부 6/10/20.
         let gambling = try Self.row(in: survey, containing: "모의 도박(Simulated Gambling)")
-        let payouts = [3, 5, 10].map { 2 * $0 - DuelFee.fee(stake: $0) }
-        #expect(payouts == [5, 9, 18], "전제: 손으로 적은 승자 수령표")
-        #expect(gambling[2].contains("수수료 10%") && gambling[2].contains("5/9/18"), "모의 도박 근거가 수수료 뒤 상금을 말하지 않는다")
+        let payouts = [3, 5, 10].map { DuelFee.winnerPayout(stake: $0) }
+        #expect(payouts == [6, 10, 20], "전제: 손으로 적은 승자 수령표(수수료 없음)")
+        #expect(gambling[2].contains("6/10/20") && gambling[2].contains("수수료 없이"), "모의 도박 근거가 지금 승자 수령을 말하지 않는다: \(gambling[2])")
+        // 옛 현재형 문장("두 사람 몫에서 수수료 … 를 뺀")이 남으면 안 된다 — 지난 값은 '그 전' 으로만 적는다.
+        #expect(!gambling[2].contains("두 사람 몫에서 수수료"), "모의 도박 근거가 아직 수수료를 지금 사실로 적는다: \(gambling[2])")
+    }
+
+    // MARK: 1.0.9 — 미션 절 이름(0.3.64 짝에서 「도전 미션」 → 「누적 미션」)
+
+    /// 메모는 다음 제출로 **승계**된다 — 심사원이 찾아갈 절 이름은 앱 글자 그대로(`MeText.missionsTitle`)여야 한다.
+    /// 옛 이름은 역사 괄호("titled 「…」 in 1.0.9–1.0.12")로만 남으므로, 낱말만 찾지 않고 **안내 문장 자리**의 「…」 를 잰다
+    /// (낱말만 찾으면 안내가 옛 이름으로 돌아가도 역사 괄호의 새 이름에 걸려 초록이다).
+    @Test("1.0.9: §0.1 나 줄 · §5.2 New in 1.0.9 블록 · §5.3 요약이 미션 절을 앱 글자 그대로(MeText.missionsTitle) 부른다")
+    func missionSectionIsNamedAsTheAppNamesIt() throws {
+        let title = MeText.missionsTitle
+        let doc = try Self.document("docs/appstore.md")
+
+        let scope = try Self.section(of: doc, heading: "### 0.1 실제 기능 범위")
+        let me = try Self.row(in: scope, containing: "| 나 |")
+        #expect(me[1].contains("→ \(title)("), "§0.1 나 줄의 절 순서가 앱의 미션 절 이름(\(title))을 쓰지 않는다")
+
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.9"), "§5.2 에 New in 1.0.9 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let end = rest.range(of: "**New in 1.0.10")?.lowerBound ?? rest.endIndex
+        let newIn109 = String(rest[..<end])
+        #expect(newIn109.contains("a new **「\(title)」"), "§5.2 1.0.9 블록이 절을 앱 이름(\(title))으로 소개하지 않는다")
+        #expect(newIn109.contains("scroll to 「\(title)」"), "§5.2 1.0.9 블록이 심사원을 화면에 없는 절 이름으로 보낸다")
+
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let line = try #require(korean.split(separator: "\n").first { $0.contains("1.0.9 부터 보상은") }, "§5.3 에 1.0.9 받기 요약 줄이 없다")
+        #expect(line.contains("나 탭 「\(title)」 절"), "§5.3 1.0.9 요약이 앱의 미션 절 이름(\(title))을 쓰지 않는다: \(line)")
+    }
+
+    // MARK: 1.0.11 — 1:1 테트리스
+
+    @Test("1.0.11: §0.1 게임 탭 줄 · §5.2 New in · §5.3 한글 요약 셋이 다 있고, 숫자가 코드 사실과 맞고, 도박 어휘가 없다")
+    func tetrisDuelIsDocumentedWithoutWageringLanguage() throws {
+        // 대조 — 코드 사실(이 전제가 사라지면 문서의 결론도 같이 고친다).
+        #expect([2, 3, 4].map { TetrisGame.attackLines(lines: $0) } == [1, 2, 4], "전제: 공격 표(D2)")
+        #expect(TetrisDuelStake.allCases.map(\.rawValue) == [3, 5, 10], "전제: 판돈 집합")
+        #expect(TetrisDuelSession.rampStartSeconds == 120, "전제: 2분 뒤 가속(D7)")
+
+        let doc = try Self.document("docs/appstore.md")
+
+        // ① §0.1 기능 범위 표의 게임 탭 줄 — 심사팀이 "앱에 무엇이 있나" 를 읽는 자리다.
+        let scope = try Self.section(of: doc, heading: "### 0.1 실제 기능 범위")
+        let games = try Self.row(in: scope, containing: "| 게임 |")
+        // 칸 넷: [탭 이름, 화면에 있는 것, 서버에 **쓰는** 것, 근거].
+        #expect(games[0] == "게임", "표 모양이 바뀌었다: \(games)")
+        #expect(games[1].contains("1:1 테트리스"), "게임 탭 줄이 1:1 테트리스를 말하지 않는다: \(games[1])")
+        #expect(games[1].contains("1.0.11"), "어느 버전에 들어왔는지가 없다")
+        #expect(games[2].contains("tetris_report"), "서버에 쓰는 것 칸에 판 보고가 없다: \(games[2])")
+
+        // ② §5.2 심사원용 영어 메모 — 1.0.11 블록.
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.11"), "§5.2 에 New in 1.0.11 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let end = rest.range(of: "**Screens that")?.lowerBound ?? rest.endIndex
+        let newIn1011 = String(rest[..<end])
+        #expect(newIn1011.contains("1:1 테트리스"), "앱 안 이름(한글)을 적어야 심사원이 화면에서 찾는다")
+        // 승자 수령은 코드(`DuelFee`)에서 읽는다 — 메모는 다음 제출로 **승계**되므로 1.0.11 블록도 지금 값을 말해야 한다
+        // (2026-10-22 수수료 0 이전엔 "minus a 10% fee" 였다. 그 문장이 남으면 심사원이 화면과 다른 정산을 읽는다).
+        let payouts = TetrisDuelStake.allCases.map { DuelFee.winnerPayout(stake: $0.rawValue) }
+        let payoutPhrase = "\(payouts[0]), \(payouts[1]) or \(payouts[2]) rubies"
+        for number in ["3, 5 or 10", payoutPhrase, "2 minutes", "15 seconds"] {
+            #expect(newIn1011.contains(number), "§5.2 1.0.11 블록에 \(number) 가 없다")
+        }
+        if DuelFee.percent == 0 {
+            #expect(!newIn1011.contains("% fee"), "수수료가 0 인데 §5.2 1.0.11 블록이 아직 수수료를 뗀다고 적는다")
+        } else {
+            #expect(newIn1011.contains("\(DuelFee.percent)% fee"), "§5.2 1.0.11 블록의 수수료가 코드(\(DuelFee.percent)%)와 다르다")
+        }
+        // 공격 표가 문서와 엔진에서 같은 숫자여야 한다(2→1 · 3→2 · 4→4).
+        #expect(newIn1011.contains("Clearing 2 lines at once drops 1 extra row"), "공격 표 첫 줄이 다르다")
+        #expect(newIn1011.contains("3 lines drops 2, and 4 lines drops 4"), "공격 표 둘째·셋째가 다르다")
+        // ★ 제출일에 서버 상수를 22 로 내렸다 — 메모는 심사원이 **할 수 있는 것**을 정확히 적는다(기기 둘 · 데모 계정 둘).
+        //   "못 한다"로 되돌아가면 거짓이 되므로 옛 문구가 남아 있는지도 같이 본다.
+        #expect(newIn1011.contains("Two demo accounts on two devices can play a real match"),
+                "메모가 두 계정·두 기기 대결 방법을 안 적는다")
+        #expect(!newIn1011.contains("not enabled in this build"), "상수를 내렸는데 메모가 아직 못 한다고 적는다")
+        // ★ 도박을 연상시키는 어휘와 제공자 이름을 쓰지 않는다(사용자 지시 · 루비는 앱 안 재화다).
+        for word in ["gambl", "wager", "bet ", "betting", "casino", "jackpot", "cash prize",
+                     "Supabase", "supabase", "Apple Pay"] {
+            #expect(!newIn1011.contains(word), "§5.2 1.0.11 블록에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ③ §5.3 한글 요약 — 내부 확인용이지만 **제출 전 결정**이 여기 적혀 있어야 한다.
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let line = try #require(korean.split(separator: "\n").first { $0.contains("1.0.11") },
+                                "§5.3 에 1.0.11 요약 줄이 없다")
+        #expect(line.contains("1:1 테트리스"))
+        #expect(korean.contains("tetris_ios_min_build"), "§5.3 이 폰 능력을 가르는 서버 상수와 그 값을 안 적는다")
+        // ★ 둘째 데모 계정은 ASC 칸에만 — 이 문서에 자격증명을 적는 쪽으로 되돌아가지 않게 결정을 박아 둔다.
+        #expect(korean.contains("ASC 심사 메모 칸에만"), "§5.3 이 둘째 계정 자격증명을 어디 적는지 안 적는다")
+        #expect(korean.contains("판 중에 앱을 나가면 져요"), "§5.3 이 P7 경고 한 줄을 안 적는다")
+        // 연령 설문의 답은 **바뀌지 않는다**(판돈·수수료가 오목·체스와 같은 값이다) — 그 결론을 적어야 다음 사람이
+        // §3 을 다시 손대지 않는다.
+        #expect(korean.contains("바뀌지 않는다"), "§5.3 이 연령 설문이 그대로라는 결론을 안 적는다")
+    }
+
+    // MARK: 1.0.12 — 아잉이 이모티콘
+
+    /// 문서가 말하는 **장수·토큰 글자·'통째 일치'·'쓰기 0'** 은 전부 코드에서 읽을 수 있는 사실이다. 그래서 글자만 보지 않고
+    /// 먼저 코드에서 읽어 맞춘다 — 토큰 한 글자가 바뀌거나 그림 한 장이 번들에서 빠지면 **심사 메모가 거짓이 되므로**
+    /// 그 순간 빨개져야 한다(1.0.11 블록 시험과 같은 수법).
+    @Test("1.0.12: §0.1 메시지 줄 · §5.2 New in · §5.3 요약 셋이 다 있고, 여섯 토큰·여섯 장·'통째 일치'·'서버 변경 0' 이 코드 사실과 맞고, 도박 어휘·자격증명이 없다")
+    func aingStickersAreDocumentedAsSixBundledPicturesNotUGC() throws {
+        // 대조 ① 여섯 종이고 토큰 문자열이 이것들이다(전선 계약 — 문서가 심사원에게 보여 주는 글자 그 자체다).
+        let stickers = AingSticker.allCases
+        #expect(stickers.count == 6, "전제: 여섯 종")
+        #expect(stickers.map(\.token) == ["[아잉:기쁨]", "[아잉:하트]", "[아잉:슬픔]", "[아잉:화남]", "[아잉:졸림]", "[아잉:놀람]"],
+                "전제: 여섯 토큰 글자")
+        // 대조 ② 그림 여섯 장이 **번들에 실렸다** — 문서의 "앱 번들 안 여섯 장 · 아무것도 내려받지 않는다"의 근거다.
+        for sticker in stickers {
+            #expect(AingStickerArt.url(sticker) != nil,
+                    "\(sticker.resourceName).png 이 번들에 없다 — 문서의 '번들 안 여섯 장'이 거짓이 된다")
+        }
+        // 대조 ③ 판정은 **통째 일치만**이고, 토큰은 기존 메시지 난간을 그대로 통과한다(= '새 쓰기 0' 의 근거).
+        #expect(AingSticker.parse(AingSticker.joy.token) == .joy)
+        #expect(AingSticker.parse("[아잉:기쁨] 안녕") == nil, "전제: 뒤에 글자가 붙으면 그냥 텍스트다")
+        #expect(AingSticker.parse("ㅋㅋ [아잉:기쁨]") == nil, "전제: 앞에 글자가 붙으면 그냥 텍스트다")
+        #expect(MessageBody.validate(AingSticker.joy.token) == .ok(AingSticker.joy.token),
+                "토큰이 send_message 의 본문 난간을 그대로 통과해야 '같은 RPC · 서버 변경 0' 이 참이다")
+
+        let doc = try Self.document("docs/appstore.md")
+
+        // ① §0.1 기능 범위 표의 메시지 줄 — 심사팀이 "앱에 무엇이 있나" 를 읽는 자리.
+        let scope = try Self.section(of: doc, heading: "### 0.1 실제 기능 범위")
+        let messages = try Self.row(in: scope, containing: "| 메시지 |")
+        #expect(messages[0] == "메시지", "표 모양이 바뀌었다: \(messages)")
+        #expect(messages[1].contains("아잉이 이모티콘"), "메시지 줄이 이모티콘을 말하지 않는다: \(messages[1])")
+        #expect(messages[1].contains("1.0.12"), "어느 버전에 들어왔는지가 없다")
+        #expect(messages[1].contains("통째로 같을 때만"), "부분 치환이 아니라는 사실이 빠졌다 — 심사 메모의 전제다")
+        #expect(messages[2].contains("send_message"), "쓰기 칸이 같은 RPC 를 말하지 않는다: \(messages[2])")
+        // 이모티콘 전용 서버 쓰기는 **코드에 없다** — 쓰기 칸에 적으면 그 자체가 거짓이다.
+        #expect(!messages[2].lowercased().contains("sticker") && !messages[2].contains("이모티콘 보내기"),
+                "이모티콘 전용 서버 쓰기는 없다: \(messages[2])")
+
+        // ② §5.2 심사원용 영어 메모 — 1.0.12 블록.
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.12"), "§5.2 에 New in 1.0.12 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let end = rest.range(of: "**Screens that")?.lowerBound ?? rest.endIndex
+        let newIn1012 = String(rest[..<end])
+        // 여섯 토큰이 **글자 그대로** 있다(심사원이 화면에서 찾는 글자 · 코드가 바뀌면 여기가 먼저 빨개진다).
+        for sticker in stickers {
+            #expect(newIn1012.contains(sticker.token), "§5.2 1.0.12 블록에 토큰 \(sticker.token) 이 없다")
+        }
+        #expect(newIn1012.contains("exactly six (\(stickers.count))"),
+                "메모가 말하는 장수가 코드(\(stickers.count))와 어긋난다")
+        #expect(newIn1012.contains("only when its whole body is exactly one of six tokens"),
+                "'통째로 같을 때만' 이 첫 문장에 없다 — 이게 심사 안전성의 근거다")
+        #expect(newIn1012.contains("same `send_message`"), "같은 RPC 로 글자만 간다는 사실이 없다")
+        #expect(newIn1012.contains("no server, network or data change"), "서버·전선 변경 0 이 없다")
+        #expect(newIn1012.contains("Guideline 1.2") && newIn1012.contains("no upload"),
+                "1.2 UGC 와 무관하다는 결론(업로드 경로 없음)이 없다")
+        #expect(newIn1012.contains("one device") && newIn1012.contains("cannot message yourself"),
+                "한 기기에서 확인하는 길과 '자기 자신에게는 못 보낸다' 는 제약이 없다")
+        // ★ 자격증명은 이 문서에 **절대** 적지 않는다(§5.3 결정 그대로) — 실제 값이 흘러드는 쪽을 막는다.
+        #expect(!newIn1012.contains("@") && !newIn1012.lowercased().contains("password"),
+                "1.0.12 블록에 계정 정보 꼴 글자가 있다 — 둘째 계정은 ASC 심사 메모 칸에만 적는다")
+        // ★ 도박 어휘·제공자 이름을 쓰지 않는다(1.0.11 블록 시험과 같은 목록).
+        for word in ["gambl", "wager", "bet ", "betting", "casino", "jackpot", "cash prize",
+                     "Supabase", "supabase", "Apple Pay"] {
+            #expect(!newIn1012.contains(word), "§5.2 1.0.12 블록에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ③ §5.3 한국어 요약 — 제출 전 결론이 여기 적혀 있어야 다음 사람이 §3·서버를 다시 손대지 않는다.
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let summaryStart = try #require(korean.range(of: "- 1.0.12 는"), "§5.3 에 1.0.12 요약 줄이 없다")
+        let summaryRest = korean[summaryStart.lowerBound...]
+        let summaryEnd = summaryRest.range(of: "\n- 1.0.7")?.lowerBound ?? summaryRest.endIndex
+        let summary1012 = String(summaryRest[..<summaryEnd])
+        #expect(summary1012.contains("아잉이 이모티콘"))
+        #expect(summary1012.contains("send_message"), "전선이 그대로라는 사실이 없다")
+        for conclusion in ["통째로 같을 때만", "서버 상수 없음", "db push 없음", "연령 설문 그대로",
+                           "1.2 UGC 조항과 무관", "ASC 심사 메모 칸에만"] {
+            #expect(summary1012.contains(conclusion), "§5.3 1.0.12 요약에 '\(conclusion)' 결론이 없다")
+        }
+        // 1.0.11 에서 박은 결정(둘째 계정 자격증명은 ASC 칸에만)을 **바꾸지 않았다**.
+        #expect(korean.contains("ASC 심사 메모 칸에만"))
     }
 
     // MARK: medium 2 — 처리방침의 오목 구멍

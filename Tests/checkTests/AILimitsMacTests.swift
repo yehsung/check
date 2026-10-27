@@ -391,6 +391,58 @@ struct AILimitsMacReaderTests {
         #expect(snapshot.window(.weekly)?.usedPercent == 12)
     }
 
+    /// ★★ **창은 이름이 아니라 `limit_window_seconds` 가 정한다.**
+    ///
+    /// 2026-10-23 사용자 제보로 드러났다: `pro`·`prolite` 플랜은 **주간 창 하나만** 보내는데 그 이름이
+    /// `primary_window` 다. 이름만 믿던 코드가 그 주간 값을 5시간 칸에 넣어, 운영의 Codex 행 33개 중
+    /// **31개가 "5시간"에 주간 값, 주간 칸은 빈** 상태였다(pro 16 · prolite 12 · free 3).
+    /// 리셋 시각이 자백했다 — "5시간" 칸의 리셋이 110~168시간 뒤였다(7일 = 168시간).
+    ///
+    /// 사용자가 보는 거짓: 주간을 다 쓴 사람이 "5시간 100%" 를 읽고 **몇 시간 뒤 풀린다고 믿는다**(실제는 닷새).
+    /// 그리고 주간 값은 하루 내내 거의 안 움직이니 "며칠째 그대로"로 보인다 — 제보 문구가 정확히 그것이었다.
+    ///
+    /// 옛 시험이 이걸 못 문 까닭: 픽스처가 전부 `plus`(창 둘 다 오고 이름·길이가 일치)였다.
+    /// 그래서 **이름과 길이가 어긋나는 모양**을 여기서 만든다.
+    @Test
+    func codexPutsTheWindowWhereItsLengthSaysNotWhereItsNameSays() throws {
+        /// pro 실측 모양: 창 하나뿐이고 이름은 primary 인데 길이는 **주간**이다.
+        func json(windowSeconds: Int) -> String {
+            """
+            {"plan_type":"pro","rate_limit":{"allowed":true,"limit_reached":false,
+            "primary_window":{"used_percent":77,"limit_window_seconds":\(windowSeconds),
+            "reset_after_seconds":398000,"reset_at":1791666011},"secondary_window":null}}
+            """
+        }
+        func parse(_ text: String) throws -> AILimitProviderSnapshot {
+            try AILimitCodexReader.parseUsage(
+                Data(text.utf8), observedAt: amNow, fallbackPlanLabel: nil, accountID: nil
+            ).get()
+        }
+
+        let weeklyLength = try parse(json(windowSeconds: 604_800))
+        #expect(weeklyLength.window(.weekly)?.usedPercent == 77,
+                "길이가 7일인데 이름이 primary 라는 이유로 5시간 칸에 넣었다")
+        #expect(weeklyLength.window(.fiveHour) == nil, "있지도 않은 5시간 창을 만들었다")
+
+        // ★ 기준선: **같은 이름 같은 숫자**인데 길이만 5시간이면 5시간 칸으로 가야 한다.
+        //   이게 없으면 "primary 를 늘 주간으로 넣기" 로 바꿔도 위 단언이 초록이다.
+        let fiveHourLength = try parse(json(windowSeconds: 18_000))
+        #expect(fiveHourLength.window(.fiveHour)?.usedPercent == 77)
+        #expect(fiveHourLength.window(.weekly) == nil)
+
+        // 길이가 없으면 이름으로 접는다(옛 서버·모르는 모양에서 값을 버리지 않는다).
+        let noLength = try parse("""
+        {"plan_type":"pro","rate_limit":{"primary_window":{"used_percent":77},"secondary_window":null}}
+        """)
+        #expect(noLength.window(.fiveHour)?.usedPercent == 77)
+
+        // 두 창 어느 쪽과도 2배 안으로 안 맞는 길이(하루)는 **억지로 끼워 넣지 않고** 이름으로 접는다.
+        #expect(AILimitWindow.matching(lengthSeconds: 86_400) == nil, "모르는 창을 가까운 쪽에 끼워 넣었다")
+        #expect(AILimitWindow.matching(lengthSeconds: 604_800) == .weekly)
+        #expect(AILimitWindow.matching(lengthSeconds: 18_000) == .fiveHour)
+        #expect(AILimitWindow.matching(lengthSeconds: nil) == nil)
+    }
+
     /// ★★ **401 이 와도 `auth.json` 에 쓰지 않는다.**
     ///
     /// 우리가 `refresh_token` 으로 갱신해 파일을 덮으면 실제 codex CLI 와 회전 경합이 되어 **사용자가
@@ -2339,12 +2391,13 @@ struct AILimitsMacCardContentTests {
         #expect(sources["CheckAILimitsRow.swift"]?.contains("자세히 ›") == false,
                 "누를 데가 없는 '자세히 ›' 가 남았다")
         // 독립 창 목록에서도 빠졌다(없는 창의 식별자가 남으면 "등록이 빠졌다"로 읽힌다).
-        // 다섯 = 오목 · 체스 · 설정 · 캐릭터 뽑기(v0.3.54) · 1:1 테트리스(v0.3.60).
+        // 여섯 = 오목 · 체스 · 설정 · 캐릭터 뽑기(v0.3.54) · 1:1 테트리스(v0.3.60) · 생일 축하(v0.3.66).
         #expect(MiniGameSpaceKey.standaloneWindowIDs == [CheckGomokuWindowController.frameAutosaveName,
                                                          CheckChessWindowController.frameAutosaveName,
                                                          CheckSettingsWindowController.frameAutosaveName,
                                                          CheckGachaWindowController.frameAutosaveName,
-                                                         CheckTetrisDuelWindowController.frameAutosaveName])
+                                                         CheckTetrisDuelWindowController.frameAutosaveName,
+                                                         CheckCakeGiftWindowController.frameAutosaveName])
         #expect(!MiniGameSpaceKey.standaloneWindowIDs.contains("check.aiLimitsWindow"))
         // 팝오버가 갱신을 당기는 길은 **남아 있다**(창의 `onOpen` 이 하던 일 — 그게 사라지면 팝오버를 열어도
         // 숫자가 안 갱신된다). 스토어의 5분 하한이 난사를 막는 것도 그대로다.

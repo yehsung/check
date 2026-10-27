@@ -235,6 +235,9 @@ struct GamesMiniGameScreen: View {
             GamesFlappyCanvas(game: controller.flappy, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
         case .tetris:
             GamesTetrisCanvas(game: controller.tetris, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
+        case .crossy:
+            // 길건너 아잉이(v0.3.67)는 폰에 아직 없다 — `phoneCases` 가 거르므로 이 화면이 crossy 로 열리지 않는다.
+            EmptyView()
         }
     }
 
@@ -252,6 +255,8 @@ struct GamesMiniGameScreen: View {
             let game = controller.tetris
             if game.phase == .ready { return GamesMiniGameText.startAction }
             return GamesMiniGameText.tetrisValue(score: game.score, level: game.scoreLevel, lines: game.lines)
+        case .crossy:
+            return GamesMiniGameText.startAction   // 폰에 없음(위 canvasContent 주석)
         }
     }
 

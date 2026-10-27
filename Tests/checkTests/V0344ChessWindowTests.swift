@@ -361,9 +361,9 @@ func spacePressedInTheChessWindowIsNeverTakenByTheMiniGame() {
     // 오목은 전부터 들어 있다(목록 자체가 비어 버리는 변경도 잡는다).
     #expect(MiniGameSpaceKey.yieldsToOtherWindow(gomoku, gameWindow: game))
     // v0.3.45 에 AI 리밋 창이 더해져 넷이었고, v0.3.46 에 그 창이 사라져 셋, v0.3.54 에 캐릭터 뽑기 창이 더해져 넷,
-    // v0.3.60 에 1:1 테트리스 창이 더해져 **다섯**이다(리밋 카드는 팝오버 안으로 들어왔다 — `CheckAILimitsRow.swift` 머리말).
-    // 팝오버는 이 목록의 것이 아니다(창이 아니다).
-    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 5,
+    // v0.3.60 에 1:1 테트리스 창이 더해져 다섯(리밋 카드는 팝오버 안으로 들어왔다 — `CheckAILimitsRow.swift` 머리말),
+    // v0.3.66 에 생일 축하 창이 더해져 **여섯**이다. 팝오버는 이 목록의 것이 아니다(창이 아니다).
+    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 6,
             "독립 창 목록이 \(MiniGameSpaceKey.standaloneWindowIDs) 다 — 창을 더했는데 등록을 안 했거나 그 반대다")
 }
 

@@ -8,8 +8,11 @@
  *   ui     1–42행  맥 렌더(@3x → @2x webp)·틱 띠·잔디·헤더·메뉴바 라벨·말풍선(@4x, SPEC v2 §9.3)
  *          + v2 크롭 V2_CROPS(SPEC v2 §9.2 — 조각·패널·근무 라벨·char/aing-rest-poster·메뉴바 아이콘)
  *   char   43–52행 캐릭터 알파 영상 두 벌(VP9 webm / HEVC mov) + 포스터. --seq 로 일부만(그때 --only 기본 = char,data)
- *   ios    53–60행 아이폰 화면·위젯
+ *   ios    53–60행 아이폰 화면·위젯 (+ v3.1 구름빵 대화 두 장)
  *   brand  61–64행 App Store 배지(복사)·QR(scripts/make-qr.py)·아이콘 webp·app/icon.png·app/apple-icon.png
+ *   v31    v3.1 새 렌더 4장(docs/v3/brief.md §9.1 · §9.5 — AI 리밋 카드 · 체스 판 · 1:1 테트리스 창 · 아이폰 AI 리밋 위젯).
+ *          원본은 promo 가 아니라 렌더 에이전트 출력(env V31_MAC · V31_IOS, 기본 = 세션 스크래치). 원본이 없으면 경고만 하고
+ *          이미 구운 파일을 그대로 둔다(기본 묶음 아님 — `--only=v31`).
  *   data   68–69행 data/generated/{assets,sequences,bubbles,grass}.json
  *   fonts  65–67행 = scripts/subset-fonts.mjs 를 부른다(기본 묶음 아님 — `npm run subset` 이 정식 입구). --from-spec 을 넘겨준다.
  * JSON 네 개는 어느 묶음을 돌렸든 끝에 디스크의 결과물에서 다시 쓴다(?v= 해시가 늘 파일과 맞게).
@@ -57,7 +60,7 @@ const BUDGET = 4.5e6; // 크롬 경로 페이지 전체(SPEC §8.1)
 // ─── 인자 ──────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const argVal = (k) => args.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3);
-const GROUPS = ["ui", "char", "ios", "brand", "data", "fonts"];
+const GROUPS = ["ui", "char", "ios", "brand", "data", "fonts", "v31"];
 const seqArg = argVal("seq")?.split(",").filter(Boolean) ?? null;
 const only = (argVal("only")?.split(",").filter(Boolean)) ?? (seqArg ? ["char", "data"] : ["ui", "char", "ios", "brand", "data"]);
 for (const g of only) if (!GROUPS.includes(g)) fail(`알 수 없는 묶음 --only=${g} (가능: ${GROUPS.join(",")})`);
@@ -191,6 +194,24 @@ const IOS = [
   [58, "ios/widget-todos-large.webp", "v4/ios/widgets/promo_todos-large_dark@3x.png", [728, 764], { quality: 85, alphaQuality: 100 }],
   [59, "ios/widget-todos-large-checked.webp", "v4/ios/widgets/promo_todos-large-checked_dark@3x.png", [728, 764], { quality: 85, alphaQuality: 100 }],
   [60, "ios/widget-today-small.webp", "v4/ios/widgets/promo_today-small_dark@3x.png", [340, 340], { quality: 85, alphaQuality: 100 }],
+  // v3.1(docs/v3/brief.md §9.1 f-message): 맥 1:1 메시지 패널과 같은 구름빵 대화(11:54–14:04). 보낸 직후 '1' → 읽음(고정 무대에서 맥 패널과 함께 교체)
+  ["v3.1", "ios/conv-gureum-sent.webp", "v4/ios/screens/conv-gureum_sent1_dark@3x.png", [600, 1304], { quality: 80, smartSubsample: true }],
+  ["v3.1", "ios/conv-gureum-read.webp", "v4/ios/screens/conv-gureum_read_dark@3x.png", [600, 1304], { quality: 80, smartSubsample: true }],
+];
+
+// ─── 표: v3.1 새 렌더(§9.5) — [출력, 원본(절대 경로), 리사이즈 폭 | null, 기대 [w,h], webp 옵션] ─────────────────
+// 맥 렌더는 @3x 불투명 다크(창 크롬 없음 — 랜딩이 frame 을 씌운다). 폭은 기존 관례대로: 판은 작은 판(오목 sm 700)과 같게,
+// 테트리스 두 판 크롭·위젯은 @3x → @2x. 리밋 카드는 1pt 보다 크게 보이는 주인공(1440 에서 ≥ 400 css)이라
+// @3x 그대로(1020 — DPR 2 에서도 흐리지 않게).
+const V31_MAC = process.env.V31_MAC ?? "/private/tmp/claude-501/-Users-yesung-check/2e0b98fb-2bf2-4358-9866-db6bfc6f2d59/scratchpad/agents/render-mac/out/";
+const V31_IOS = process.env.V31_IOS ?? "/private/tmp/claude-501/-Users-yesung-check/2e0b98fb-2bf2-4358-9866-db6bfc6f2d59/scratchpad/agents/render-ios/out/";
+const V31_CROP = process.env.V31_CROP ?? "/private/tmp/claude-501/-Users-yesung-check/2e0b98fb-2bf2-4358-9866-db6bfc6f2d59/scratchpad/crop/";
+const V31 = [
+  ["ui/ai-limits-card.webp", V31_MAC + "mac-ai-limits-card@3x.png", null, [1020, 417], R80],
+  ["ui/chess-board.webp", V31_MAC + "mac-chess-board@3x.png", 700, [700, 700], { quality: 78, alphaQuality: 90, smartSubsample: true }],
+  // 테트리스: 사용자 지정 크롭(brief §9.5 마지막 줄 — 두 사람 카드+판만, 원본 2700×1662 의 (38,330)–(1836,1626), 사방 22px 창 바탕) → @2x 폭
+  ["ui/tetris-duel.webp", V31_CROP + "mac-tetris-duel-boards@3x.png", 1200, [1200, 865], R80],
+  ["ios/widget-limits-medium.webp", V31_IOS + "ios-widget-limits-medium_dark@3x.png", 728, [728, 340], { quality: 85, alphaQuality: 100 }],
 ];
 
 // ─── 공용 ──────────────────────────────────────────────────────────────────────
@@ -476,6 +497,20 @@ async function buildIOS() {
   console.log("build-assets: ios 끝");
 }
 
+// ─── v31(v3.1 새 렌더) ─────────────────────────────────────────────────────────────
+async function buildV31() {
+  await pool(V31, 4, async ([rel, src, width, want, opts]) => {
+    if (!fs.existsSync(src)) {
+      warnings.push(`v31 원본 없음: ${src} — 이미 구운 public/assets/${rel} 를 그대로 둔다`);
+      return;
+    }
+    let p = sharp(src);
+    if (width) p = p.resize({ width, kernel: "lanczos3" });
+    await webp(rel, p, opts, want);
+  });
+  console.log("build-assets: v31 끝");
+}
+
 // ─── brand (61–64행) ────────────────────────────────────────────────────────────
 async function buildBrand() {
   // 61행 배지: 바이트 그대로
@@ -643,6 +678,7 @@ function expectedOutputs() {
     if (s.poster) a(`char/${s.name}-poster.webp`);
   }
   for (const [, rel] of IOS) a(rel);
+  for (const [rel] of V31) a(rel);
   for (const rel of ["brand/appstore-badge-ko-black.svg", "brand/qr-appstore.svg", "brand/icon-64.webp", "brand/icon-256.webp"]) a(rel);
   list.push("app/icon.png", "app/apple-icon.png");
   list.push("data/generated/assets.json", "data/generated/sequences.json", "data/generated/bubbles.json", "data/generated/grass.json");
@@ -746,6 +782,7 @@ async function main() {
   const charJob = only.includes("char") ? buildChar() : Promise.resolve();
   if (only.includes("ui")) await buildUI();
   if (only.includes("ios")) await buildIOS();
+  if (only.includes("v31")) await buildV31();
   if (only.includes("brand")) await buildBrand();
   if (only.includes("fonts")) buildFonts();
   await charJob;

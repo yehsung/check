@@ -158,7 +158,7 @@ package enum MobileThemePalette {
     /// 왕관 원(어제 1등) 기호 색.
     package static let crownInk = Pair(both: RGB(hex: 0x5A4100))
 
-    // MARK: 그라디언트 — 두 곳(+ 나무판 재질)만
+    // MARK: 그라디언트 — 두 곳(+ 나무판 재질 · 희귀 강조의 무지개)만
 
     /// '우리 팀' 게이지 전용(맥 gaugeGradient).
     package static let gaugeStops = [RGB(hex: 0x59E0A1), RGB(hex: 0x54ABFF)]
@@ -168,6 +168,41 @@ package enum MobileThemePalette {
     package static let woodStops = [RGB(hex: 0xE0BA7D), RGB(hex: 0xC99E61)]
     package static let brandNavy = RGB(hex: 0x1A1A2E)
     package static let brandLavender = RGB(hex: 0x9979E6)
+
+    // MARK: 희귀 강조 — 뽑기 전용 내장 둘(황금 v0.3.54 · 무지개 v0.3.59 · 폰 1.0.10)
+    //
+    // 쓰는 자리: 뽑기 결과 줄(받침 · 테두리) · 확률 시트의 이름·확률 글자 · 조각 교환 줄의 이름 · 뽑기 전용 타일의 반짝임.
+    // 판정은 3D 마감과 한 곳이다(`CharacterManifest.Finish(characterID:)`) — 색 객체는 iOS 층 `MobileTheme.rare(_:)` 가 만든다.
+
+    /// 금빛 **글자·기호**(희귀 강조 — 황금 아잉이 이름 · 뽑기 전용 반짝임). 메달 `gold` 는 원 바탕이라 흰 카드 위 1.8:1 이고,
+    /// 글자로 쓰면 라이트에서 안 보인다 — 라이트는 같은 색상(hue)에 밝기만 내려 카드·바탕 위 4.5:1 에 닿게 했다(0.58배).
+    /// 다크는 메달 금과 같은 값이다(어두운 판 위에서 이미 8:1 이상). 이름 규칙은 `label3` / `label3Text` 와 같다.
+    package static let goldText = Pair(light: RGB(0.55, 0.41, 0.00), dark: RGB(hex: 0xFFD24A))
+
+
+    /// 무지개 일곱 빛(빨 → 보 차례). **다크 값은 맥 `GachaPalette.rainbowColors` 숫자 그대로**다 — 희귀 강조는 두 플랫폼이
+    /// 한 벌이어야 하고(`MeRainbowViewTests` 가 맥 소스를 주석 걷고 글자로 대조한다), 그 일곱이 무지개 아잉이의 신원이다.
+    ///
+    /// **왜 금 메달처럼 `Pair` 로 가르나**(어느 모드에서나 같은 일곱으로 둘 수도 있었다): 맥 팝오버는 어두운 판 하나뿐이라
+    /// 그 일곱은 어두운 바탕용 **밝은 파스텔**이다. 폰은 라이트가 있고, 그대로 쓰면 확률 시트의 이름·확률 **글자**가 사실상
+    /// 안 보인다 — 흰 카드 위 파스텔 노랑 1.25:1 · 가장 진한 연보라도 2.39:1(실측). 그래서 라이트는 **색상(hue)과 채도비는
+    /// 그대로 두고**(세 채널을 같은 비율로 곱했다 — 0.48~0.66배) 밝기만 각 색이 카드·바탕·2차 상자 위 4.5:1 에 닿는 선까지
+    /// 내린 값이다. 일곱이라는 수와 빨 → 보 차례는 두 모드가 같다.
+    package static let rainbowStops: [Pair] = [
+        Pair(light: RGB(0.63, 0.35, 0.40), dark: RGB(1.00, 0.56, 0.64)),
+        Pair(light: RGB(0.56, 0.40, 0.25), dark: RGB(1.00, 0.72, 0.44)),
+        Pair(light: RGB(0.47, 0.43, 0.20), dark: RGB(1.00, 0.90, 0.43)),
+        Pair(light: RGB(0.29, 0.47, 0.31), dark: RGB(0.56, 0.90, 0.61)),
+        Pair(light: RGB(0.29, 0.45, 0.59), dark: RGB(0.49, 0.76, 1.00)),
+        Pair(light: RGB(0.43, 0.40, 0.66), dark: RGB(0.65, 0.61, 1.00)),
+        Pair(light: RGB(0.54, 0.36, 0.59), dark: RGB(0.91, 0.61, 1.00)),
+    ]
+
+    /// 맥과 대조하는 **정본 일곱**(= 다크 값 — 맥이 쓰는 그 숫자).
+    package static var rainbowSpectrum: [RGB] { rainbowStops.map(\.dark) }
+
+    /// 희귀 받침(결과 줄 바탕)의 세기 — 금 14% 와 같다.
+    package static let rareTintOpacity = 0.14
 
     // MARK: 이니셜 원 — 맥 해시 팔레트 6색의 틴트형(틴트 원 + 진한 글자)
 

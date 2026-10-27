@@ -347,7 +347,9 @@ import Testing
             #expect(ids.contains(Self.gold) == expected[server], "\(server): 고르기 목록 \(ids)")
             // 금 말고는 그대로다(번들 순서 · 아잉 먼저). 무지개(v0.3.59)는 이 픽스처의 어느 서버도 내지 않아(확률표 · 상점 목록에 없음 ·
             // 안 가짐) 같은 문에 걸려 빠진다 — 무지개 쪽 판정은 `V0359RainbowMacTests` 가 잰다.
-            let plain = { (id: String) in id != Self.gold && !CharacterCatalog.isRainbowAing(id) }
+            // 케이크(v0.3.66 생일 선물 전용)는 가진 사람에게만 선다 — 이 픽스처는 아무도 안 가졌다(`V0366CakeCoreTests`).
+            let plain = { (id: String) in id != Self.gold && !CharacterCatalog.isRainbowAing(id) && !CharacterCatalog.isGiftOnlyBuiltIn(id) }
+            #expect(!ids.contains { CharacterCatalog.isGiftOnlyBuiltIn($0) }, "\(server): 안 가진 케이크가 고르기에 섰다 \(ids)")
             #expect(ids.filter(plain) == CheckCharacter3DScene.catalog.allIDs.filter(plain), "\(server)")
             #expect(ids.contains(CharacterCatalog.rainbowAingID) == (server == .notLoaded), "\(server): 무지개 \(ids)")
         }
@@ -401,7 +403,8 @@ import Testing
         #expect(store.syncMessage.contains(GachaText.gachaOnlyHint), "되돌린 사실·얻는 길을 안 말했다: \(store.syncMessage)")
         // 기준선: 금이 아닌(루비로 파는) 캐릭터의 unknown_character 는 되돌리지 않는다(앱 번들과 서버 명단이 갈린 것 — 기존 계약).
         // 무지개(v0.3.59)는 금과 같은 쪽이다(`V0359RainbowMacTests`) — 기준선에서 뺀다.
-        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) })
+        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0)
+            && !CharacterCatalog.isGiftOnlyBuiltIn($0) })
         let (_, other) = await Self.push(fox, reply: #"{"status":"unknown_character","id":"x"}"#, label: "unknown-other")
         #expect(other.selectedID == fox)
     }
@@ -413,7 +416,8 @@ import Testing
         let notice = goldStore.syncMessage
         #expect(notice.contains(GachaText.gachaOnlyHint), "금 되돌림 안내 '\(notice)' — 얻는 길(뽑기·조각)을 안 말한다")
         #expect(!notice.contains("상점에서 살 수 있어요"), "금 되돌림 안내 '\(notice)' — 금은 상점에서 못 산다")
-        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) })
+        let fox = try #require(CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0)
+            && !CharacterCatalog.isGiftOnlyBuiltIn($0) })
         let (foxStore, _) = await Self.push(fox, reply: #"{"status":"not_owned","id":"x"}"#, label: "not-owned-fox")
         #expect(foxStore.syncMessage == WorkTimerStore.notOwnedRevertNotice)
     }

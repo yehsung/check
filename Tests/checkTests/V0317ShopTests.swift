@@ -191,7 +191,8 @@ struct V0317ShopTests {
         //   그래서 스토어에 `characterDefaults` 주입 지점을 두고 여기서는 격리 suite 만 쓴다.
         // 상점에서 **루비로 파는** 캐릭터로 잰다 — 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 되돌림 안내가 뽑기 문구다(`V0354GoldPickerGateTests`).
         let target = try #require(
-            CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0) },
+            CheckCharacter3DScene.catalog.allIDs.first { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGachaOnlyBuiltIn($0)
+            && !CharacterCatalog.isGiftOnlyBuiltIn($0) },
             "번들에 아잉 말고 캐릭터가 없다")
         let store = Self.stubStore(host: host)
         let defaults = store.characterDefaults
@@ -544,9 +545,11 @@ struct V0317ShopTests {
 
     // MARK: - 헬퍼
 
+    /// 상점 픽스처의 줄(아잉 제외 번들 전부). v0.3.66 케이크 둘(생일 선물 전용 내장)은 뺀다 — 서버는 그 행을 능력 번호 4 인 클라에게만
+    /// 보이고(이 빌드는 케이크를 못 그려 3 이다) 파는 줄도 아니다. 넣으면 '30 루비짜리 케이크' 가 상점 격자 · 높이 예산에 섞인다.
     @MainActor
     static var sprites: [String] {
-        CheckCharacter3DScene.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID }
+        CheckCharacter3DScene.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isGiftOnlyBuiltIn($0) }
     }
 
     /// **실제 서버 가격**(2026-10-14 `20261014120000_ruby_economy_v2.sql` — 그 전 30·30·50·50·70·100).

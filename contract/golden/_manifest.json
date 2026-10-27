@@ -148,7 +148,7 @@
       ]
     },
     {
-      "cases": 23,
+      "cases": 24,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift",
       "golden": "tetris/rules",
@@ -156,7 +156,8 @@
       "platformSensitive": false,
       "swiftSources": [
         "Sources/CheckCore/TetrisGame.swift",
-        "Sources/CheckCore/MiniGameEngine.swift"
+        "Sources/CheckCore/MiniGameEngine.swift",
+        "Sources/CheckCore/TetrisLayout.swift"
       ]
     },
     {

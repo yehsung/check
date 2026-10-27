@@ -123,6 +123,24 @@ class TetrisGoldenTest {
                     val order = TetrisGoldenSupport.pieces(TetrisGame.Piece.entries)
                     f.check(id, order == case.string("pieceOrder")) { "조각 순서(7-bag 입력): Kotlin $order" }
                 }
+                id == "layout" -> {
+                    val l = TetrisLayout
+                    val constants = listOf(
+                        l.logicalSize.width, l.logicalSize.height, l.cell, l.outerMargin, l.columnWidth, l.gutter, l.boardX, l.boardWidth,
+                        l.rightColumnX, l.bufferY, l.boardTopY, l.boardBottomY, l.bandY, l.bandHeight, l.textMinX, l.textMaxX, l.labelY,
+                        l.labelHeight, l.boxY, l.boxHeight, l.stageChipY, l.stageChipHeight, l.levelCaptionY, l.levelValueY,
+                        l.linesCaptionY, l.linesValueY, l.captionHeight, l.valueHeight, l.slotGap, l.miniCell,
+                    )
+                    fun same(got: List<Double>, key: String) = got.map { it.toRawBits() } == GoldenOps.bits(case.string(key)).map { it.toRawBits() }
+                    f.check(id, same(constants, "constantsBits")) { "배치 상수 Kotlin $constants" }
+                    f.check(id, same((0 until 5).map { l.slotY(it) }, "slotYBits")) { "slotY" }
+                    val rects = listOf(l.cellRect(20, 0), l.cellRect(39, 9), l.cellRect(19, 4), l.wellRect)
+                    f.check(id, same(rects.flatMap { listOf(it.x, it.y, it.width, it.height) }, "rectsBits")) { "사각형 Kotlin $rects" }
+                    val p = TetrisPalette
+                    val palette = mutableListOf(p.wellInk.r, p.wellInk.g, p.wellInk.b, p.wellOpacity, p.ghostOpacity, p.spentOpacity)
+                    for (piece in TetrisGame.Piece.entries) p.rgb.getValue(piece).let { palette += listOf(it.r, it.g, it.b) }
+                    f.check(id, same(palette, "paletteBits")) { "팔레트 Kotlin $palette" }
+                }
                 else -> f.fail(id, "Kotlin 시험이 모르는 case — 골든이 늘었으면 시험을 같이 넓힌다")
             }
         }

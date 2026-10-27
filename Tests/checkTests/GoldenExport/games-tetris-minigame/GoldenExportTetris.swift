@@ -97,10 +97,36 @@ struct GoldenExportTetris {
             "maxGarbageInsertPerLock": .int(TetrisGame.maxGarbageInsertPerLock), "maxLevelFloor": .int(TetrisGame.maxLevelFloor),
             "pieceOrder": .string(GoldenTetrisText.pieces(TetrisGame.Piece.allCases)),
         ])
+        // 배치·색 상수(TetrisLayout · TetrisPalette — Kotlin 은 상수만 옮긴다, C§3.2 A-1).
+        let layout: [Double] = [
+            TetrisLayout.logicalSize.width, TetrisLayout.logicalSize.height, TetrisLayout.cell, TetrisLayout.outerMargin,
+            TetrisLayout.columnWidth, TetrisLayout.gutter, TetrisLayout.boardX, TetrisLayout.boardWidth, TetrisLayout.rightColumnX,
+            TetrisLayout.bufferY, TetrisLayout.boardTopY, TetrisLayout.boardBottomY, TetrisLayout.bandY, TetrisLayout.bandHeight,
+            TetrisLayout.textMinX, TetrisLayout.textMaxX, TetrisLayout.labelY, TetrisLayout.labelHeight, TetrisLayout.boxY,
+            TetrisLayout.boxHeight, TetrisLayout.stageChipY, TetrisLayout.stageChipHeight, TetrisLayout.levelCaptionY,
+            TetrisLayout.levelValueY, TetrisLayout.linesCaptionY, TetrisLayout.linesValueY, TetrisLayout.captionHeight,
+            TetrisLayout.valueHeight, TetrisLayout.slotGap, TetrisLayout.miniCell,
+        ].map { Double($0) }
+        let rects = [TetrisLayout.cellRect(row: 20, column: 0), TetrisLayout.cellRect(row: 39, column: 9),
+                     TetrisLayout.cellRect(row: 19, column: 4), TetrisLayout.wellRect]
+        var palette: [Double] = [TetrisPalette.wellInk.r, TetrisPalette.wellInk.g, TetrisPalette.wellInk.b, TetrisPalette.wellOpacity,
+                                 TetrisPalette.ghostOpacity, TetrisPalette.spentOpacity]
+        for piece in TetrisGame.Piece.allCases {
+            let c = TetrisPalette.rgb[piece]!
+            palette += [c.r, c.g, c.b]
+        }
+        cases.append([
+            "id": "layout",
+            "spec": "TetrisLayout 상수 30개(logicalSize w·h · cell · outerMargin · columnWidth · gutter · boardX · boardWidth · rightColumnX · bufferY · boardTopY · boardBottomY · bandY · bandHeight · textMinX · textMaxX · labelY · labelHeight · boxY · boxHeight · stageChipY · stageChipHeight · levelCaptionY · levelValueY · linesCaptionY · linesValueY · captionHeight · valueHeight · slotGap · miniCell) · slotY(0…4) · cellRect(20,0)(39,9)(19,4) · wellRect([x,y,w,h]) · 팔레트(wellInk rgb · wellOpacity · ghostOpacity · spentOpacity · 조각 ijlostz 의 rgb)",
+            "constantsBits": GoldenCompact.bits(layout),
+            "slotYBits": GoldenCompact.bits((0..<5).map { Double(TetrisLayout.slotY($0)) }),
+            "rectsBits": GoldenCompact.bits(rects.flatMap { [Double($0.origin.x), Double($0.origin.y), Double($0.width), Double($0.height)] }),
+            "paletteBits": GoldenCompact.bits(palette),
+        ])
         goldenEmit(GoldenFile(
             golden: "tetris/rules",
             equivalence: .bit,
-            swiftSources: [Self.engine, Self.rngSource],
+            swiftSources: [Self.engine, Self.rngSource, "Sources/CheckCore/TetrisLayout.swift"],
             spec: [
                 "tables": "정수·불 표는 공백으로 이은 글자(불은 0/1 한 글자씩), 실수는 IEEE-754 비트 16진을 공백으로 이은 글자. from = 첫 입력값(1씩 오른다)",
                 "gravity": "gravitySecondsForStage 는 Darwin pow 의 비트다 — Kotlin 은 pow 를 부르지 않고 이 비트를 상수 표로 든다(G §8-14). 1 미만·20 초과 단계는 클램프",

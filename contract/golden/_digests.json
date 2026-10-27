@@ -81,7 +81,7 @@
     "tetris/bags": {
       "file": "c54de62a8cd56d6873480a1d390218458f57b9ce14988ee2dffef1276f5a0c7c",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "992ae3bb78d633e0e67e07578171dc576b44811acd2a014e644310a1e4b6445e"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -91,7 +91,7 @@
     "tetris/duel": {
       "file": "b06db46f0629c7c4cee1d6c07af30f4477acf28e1bf6b97474abd3554c43cca5",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "992ae3bb78d633e0e67e07578171dc576b44811acd2a014e644310a1e4b6445e"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -103,7 +103,7 @@
     "tetris/duel-rules": {
       "file": "9e6132ae1251d4a4e3bac3d45964e74f77df409eadefb2323d395e0007ae732f",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "992ae3bb78d633e0e67e07578171dc576b44811acd2a014e644310a1e4b6445e"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
       },
       "swiftSources": {
         "Sources/CheckCore/TetrisDuelBoard.swift": "99594e62723d91506f295d8a2ff788deff4afe0446d8b1b64ad79890ad5952d9",
@@ -114,7 +114,7 @@
     "tetris/garbage-holes": {
       "file": "ac638af19c89249147955188943552f3888c0c8274dc4d896592edd3662d1674",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "992ae3bb78d633e0e67e07578171dc576b44811acd2a014e644310a1e4b6445e"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
@@ -122,19 +122,20 @@
       }
     },
     "tetris/rules": {
-      "file": "069637e0c38af6db802486bd6db84eda153f2adf8cc82e15e06660253f30e8d6",
+      "file": "4951b8747644e10b9c74d6ab749387c503e8a4fa186f121f1648a1273e8a3581",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "992ae3bb78d633e0e67e07578171dc576b44811acd2a014e644310a1e4b6445e"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
-        "Sources/CheckCore/TetrisGame.swift": "37e5fa3d35131071b360f7a4203c070b8b8326db6072938b3efb5fbfc005071c"
+        "Sources/CheckCore/TetrisGame.swift": "37e5fa3d35131071b360f7a4203c070b8b8326db6072938b3efb5fbfc005071c",
+        "Sources/CheckCore/TetrisLayout.swift": "b314fee2ce75c633977e834d1286af1d05261e5b1c337649aaa55c14d9e37109"
       }
     },
     "tetris/scripted": {
       "file": "8980284fdebaa5538a988595c356a3c64768aae5a5d935dd7796de07545abf2f",
       "generator": {
-        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "992ae3bb78d633e0e67e07578171dc576b44811acd2a014e644310a1e4b6445e"
+        "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportTetris.swift": "ac51e373e78343c79600bf62c3dec66b3641a6c4c756f0a473e344a0e35409f2"
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",

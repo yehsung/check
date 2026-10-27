@@ -1,7 +1,187 @@
 {
-  "exportTests": 13,
+  "exportTests": 27,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
+    {
+      "cases": 23,
+      "equivalence": "set",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+      "golden": "chess/ai-puzzles",
+      "path": "contract/golden/chess/ai-puzzles.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/ChessAIEngine.swift",
+        "Sources/CheckCore/ChessRules.swift",
+        "Sources/CheckCore/ChessFEN.swift",
+        "Sources/CheckCore/ChessNotation.swift"
+      ]
+    },
+    {
+      "cases": 56,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+      "golden": "chess/ai-trace",
+      "path": "contract/golden/chess/ai-trace.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/ChessAIEngine.swift",
+        "Sources/CheckCore/ChessRules.swift",
+        "Sources/CheckCore/ChessFEN.swift",
+        "Sources/CheckCore/ChessNotation.swift"
+      ]
+    },
+    {
+      "cases": 417,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
+      "golden": "chess/fen",
+      "path": "contract/golden/chess/fen.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/ChessRules.swift",
+        "Sources/CheckCore/ChessFEN.swift"
+      ]
+    },
+    {
+      "cases": 80,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
+      "golden": "chess/moves",
+      "path": "contract/golden/chess/moves.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/ChessRules.swift",
+        "Sources/CheckCore/ChessFEN.swift",
+        "Sources/CheckCore/ChessNotation.swift"
+      ]
+    },
+    {
+      "cases": 17,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
+      "golden": "chess/notation",
+      "path": "contract/golden/chess/notation.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/ChessRules.swift",
+        "Sources/CheckCore/ChessFEN.swift",
+        "Sources/CheckCore/ChessNotation.swift"
+      ]
+    },
+    {
+      "cases": 29,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
+      "golden": "chess/outcome",
+      "path": "contract/golden/chess/outcome.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/ChessRules.swift",
+        "Sources/CheckCore/ChessFEN.swift",
+        "Sources/CheckCore/ChessNotation.swift"
+      ]
+    },
+    {
+      "cases": 10,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
+      "golden": "chess/perft",
+      "path": "contract/golden/chess/perft.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/ChessRules.swift",
+        "Sources/CheckCore/ChessFEN.swift",
+        "Sources/CheckCore/ChessNotation.swift",
+        "Tests/checkTests/Fixtures/chess-perft.json"
+      ]
+    },
+    {
+      "cases": 107,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardDuelFee.swift",
+      "golden": "duel-fee/fee",
+      "path": "contract/golden/duel-fee/fee.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/DuelFee.swift"
+      ]
+    },
+    {
+      "cases": 16,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+      "golden": "renju/ai-game",
+      "path": "contract/golden/renju/ai-game.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/GomokuAIGame.swift",
+        "Sources/CheckCore/GomokuRules.swift",
+        "Sources/CheckCore/GomokuStore.swift",
+        "Sources/CheckCore/GomokuTurnWarning.swift"
+      ]
+    },
+    {
+      "cases": 16,
+      "equivalence": "set",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+      "golden": "renju/ai-puzzles",
+      "path": "contract/golden/renju/ai-puzzles.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/GomokuAI.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift",
+        "Sources/CheckCore/GomokuRules.swift",
+        "Tests/checkTests/Fixtures/gomoku-ai-puzzles.json"
+      ]
+    },
+    {
+      "cases": 70,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+      "golden": "renju/ai-trace",
+      "path": "contract/golden/renju/ai-trace.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/GomokuAI.swift",
+        "Sources/CheckCore/GomokuAIEngine.swift",
+        "Sources/CheckCore/GomokuRules.swift"
+      ]
+    },
+    {
+      "cases": 91,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift",
+      "golden": "renju/cases",
+      "path": "contract/golden/renju/cases.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/GomokuRules.swift",
+        "Tests/checkTests/Fixtures/renju-cases.json"
+      ]
+    },
+    {
+      "cases": 68,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift",
+      "golden": "renju/forbidden-points",
+      "path": "contract/golden/renju/forbidden-points.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/GomokuRules.swift"
+      ]
+    },
+    {
+      "cases": 96,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift",
+      "golden": "renju/inputs",
+      "path": "contract/golden/renju/inputs.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/GomokuRules.swift",
+        "Sources/CheckCore/GomokuTurnWarning.swift"
+      ]
+    },
     {
       "cases": 12,
       "equivalence": "bit",

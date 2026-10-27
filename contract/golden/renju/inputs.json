@@ -1,0 +1,709 @@
+{
+  "cases": [
+    {
+      "id": "notation-00",
+      "input": "0048 0038",
+      "kind": "notation",
+      "notation": "H8",
+      "x": 7,
+      "y": 7
+    },
+    {
+      "id": "notation-01",
+      "input": "0041 0031",
+      "kind": "notation",
+      "notation": "A1",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "notation-02",
+      "input": "004f 0031 0035",
+      "kind": "notation",
+      "notation": "O15",
+      "x": 14,
+      "y": 14
+    },
+    {
+      "id": "notation-03",
+      "input": "004a 0031 0030",
+      "kind": "notation",
+      "notation": "J10",
+      "x": 9,
+      "y": 9
+    },
+    {
+      "id": "notation-04",
+      "input": "0041 0031 0035",
+      "kind": "notation",
+      "notation": "A15",
+      "x": 0,
+      "y": 14
+    },
+    {
+      "id": "notation-05",
+      "input": "004f 0031",
+      "kind": "notation",
+      "notation": "O1",
+      "x": 14,
+      "y": 0
+    },
+    {
+      "id": "notation-06",
+      "input": "0048 0031 0035",
+      "kind": "notation",
+      "notation": "H15",
+      "x": 7,
+      "y": 14
+    },
+    {
+      "id": "notation-07",
+      "input": "0049 0039",
+      "kind": "notation",
+      "notation": "I9",
+      "x": 8,
+      "y": 8
+    },
+    {
+      "id": "notation-08",
+      "input": "0042 0032",
+      "kind": "notation",
+      "notation": "B2",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "id": "notation-09",
+      "input": "004e 0031 0034",
+      "kind": "notation",
+      "notation": "N14",
+      "x": 13,
+      "y": 13
+    },
+    {
+      "id": "notation-10",
+      "input": "0068 0038",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-11",
+      "input": "0048 0030 0038",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-12",
+      "input": "0020 0048 0038",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-13",
+      "input": "0048 0038 0020",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-14",
+      "input": "0048 0038 000a",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-15",
+      "input": "0050 0038",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-16",
+      "input": "0048 0031 0036",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-17",
+      "input": "0048 0030",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-18",
+      "input": "0048",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-19",
+      "input": "",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-20",
+      "input": "0038 0048",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-21",
+      "input": "0048 ff11",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-22",
+      "input": "ff28 0038",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-23",
+      "input": "0048 0048 0038",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-24",
+      "input": "0048 0031 0030 0030",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-25",
+      "input": "0040 0031",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-26",
+      "input": "005b 0031",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-27",
+      "input": "0041 0030 0031",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-28",
+      "input": "0041 0031 0030",
+      "kind": "notation",
+      "notation": "A10",
+      "x": 0,
+      "y": 9
+    },
+    {
+      "id": "notation-29",
+      "input": "004f 0031 0036",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-30",
+      "input": "0041 0661",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-31",
+      "input": "0048 0038 0301",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-32",
+      "input": "0049 0300 0039",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "id": "notation-33",
+      "input": "1d400 0031",
+      "kind": "notation",
+      "notation": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "color": "black",
+      "id": "color-00",
+      "input": "0062 006c 0061 0063 006b",
+      "kind": "color"
+    },
+    {
+      "color": "white",
+      "id": "color-01",
+      "input": "0077 0068 0069 0074 0065",
+      "kind": "color"
+    },
+    {
+      "color": null,
+      "id": "color-02",
+      "input": "0042 006c 0061 0063 006b",
+      "kind": "color"
+    },
+    {
+      "color": null,
+      "id": "color-03",
+      "input": "0057 0048 0049 0054 0045",
+      "kind": "color"
+    },
+    {
+      "color": null,
+      "id": "color-04",
+      "input": "",
+      "kind": "color"
+    },
+    {
+      "color": null,
+      "id": "color-05",
+      "input": "0020 0062 006c 0061 0063 006b",
+      "kind": "color"
+    },
+    {
+      "color": null,
+      "id": "color-06",
+      "input": "0062 006c 0061 0063 006b 000a",
+      "kind": "color"
+    },
+    {
+      "id": "reason-00",
+      "input": null,
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-01",
+      "input": "",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-02",
+      "input": "0020 0020 0020",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-03",
+      "input": "0064 006f 0075 0062 006c 0065 002d 0074 0068 0072 0065 0065",
+      "kind": "serverReason",
+      "reason": "forbidden-double-three"
+    },
+    {
+      "id": "reason-04",
+      "input": "0066 006f 0072 0062 0069 0064 0064 0065 006e 002d 0064 006f 0075 0062 006c 0065 002d 0066 006f 0075 0072",
+      "kind": "serverReason",
+      "reason": "forbidden-double-four"
+    },
+    {
+      "id": "reason-05",
+      "input": "006f 0076 0065 0072 006c 0069 006e 0065",
+      "kind": "serverReason",
+      "reason": "forbidden-overline"
+    },
+    {
+      "id": "reason-06",
+      "input": "0062 0075 0064 0067 0065 0074",
+      "kind": "serverReason",
+      "reason": "forbidden-budget"
+    },
+    {
+      "id": "reason-07",
+      "input": "0064 006f 0075 0062 006c 0065 005f 0074 0068 0072 0065 0065",
+      "kind": "serverReason",
+      "reason": "forbidden-double-three"
+    },
+    {
+      "id": "reason-08",
+      "input": "0020 0042 0075 0064 0067 0065 0074 000a",
+      "kind": "serverReason",
+      "reason": "forbidden-budget"
+    },
+    {
+      "id": "reason-09",
+      "input": "0046 004f 0052 0042 0049 0044 0044 0045 004e 002d 004f 0056 0045 0052 004c 0049 004e 0045",
+      "kind": "serverReason",
+      "reason": "forbidden-overline"
+    },
+    {
+      "id": "reason-10",
+      "input": "0066 006f 0072 0062 0069 0064 0064 0065 006e 005f 0064 006f 0075 0062 006c 0065 005f 0074 0068 0072 0065 0065",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-11",
+      "input": "006e 006f 006e 0073 0065 006e 0073 0065",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-12",
+      "input": "0066 006f 0072 0062 0069 0064 0064 0065 006e 002d",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-13",
+      "input": "0066 006f 0072 0062 0069 0064 0064 0065 006e 002d 0066 006f 0072 0062 0069 0064 0064 0065 006e 002d 0062 0075 0064 0067 0065 0074",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-14",
+      "input": "3000 006f 0076 0065 0072 006c 0069 006e 0065 00a0",
+      "kind": "serverReason",
+      "reason": "forbidden-overline"
+    },
+    {
+      "id": "reason-15",
+      "input": "0009 0064 006f 0075 0062 006c 0065 002d 0066 006f 0075 0072 000d 000a",
+      "kind": "serverReason",
+      "reason": "forbidden-double-four"
+    },
+    {
+      "id": "reason-16",
+      "input": "0064 006f 0075 0062 006c 0065 0020 0074 0068 0072 0065 0065",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-17",
+      "input": "200b 0062 0075 0064 0067 0065 0074",
+      "kind": "serverReason",
+      "reason": "forbidden-budget"
+    },
+    {
+      "id": "reason-18",
+      "input": "180e 0062 0075 0064 0067 0065 0074",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-19",
+      "input": "feff 0062 0075 0064 0067 0065 0074",
+      "kind": "serverReason",
+      "reason": null
+    },
+    {
+      "id": "reason-20",
+      "input": "0062 0075 0064 0067 0065 0074 2028",
+      "kind": "serverReason",
+      "reason": "forbidden-budget"
+    },
+    {
+      "id": "reason-21",
+      "input": "1680 006f 0076 0065 0072 006c 0069 006e 0065 205f",
+      "kind": "serverReason",
+      "reason": "forbidden-overline"
+    },
+    {
+      "id": "board-00",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e",
+      "kind": "serverString",
+      "stoneCount": 0,
+      "valid": true
+    },
+    {
+      "id": "board-01",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e",
+      "kind": "serverString",
+      "stoneCount": null,
+      "valid": false
+    },
+    {
+      "id": "board-02",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 0042",
+      "kind": "serverString",
+      "stoneCount": null,
+      "valid": false
+    },
+    {
+      "id": "board-03",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 0077",
+      "kind": "serverString",
+      "stoneCount": 1,
+      "valid": true
+    },
+    {
+      "id": "board-04",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 0062",
+      "kind": "serverString",
+      "stoneCount": 1,
+      "valid": true
+    },
+    {
+      "id": "board-05",
+      "input": "002e 0077 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 0062 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 0062 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e",
+      "kind": "serverString",
+      "stoneCount": 3,
+      "valid": true
+    },
+    {
+      "id": "board-06",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 00e9",
+      "kind": "serverString",
+      "stoneCount": null,
+      "valid": false
+    },
+    {
+      "id": "board-07",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 00e9",
+      "kind": "serverString",
+      "stoneCount": null,
+      "valid": false
+    },
+    {
+      "id": "board-08",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 0078",
+      "kind": "serverString",
+      "stoneCount": null,
+      "valid": false
+    },
+    {
+      "id": "board-09",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e",
+      "kind": "serverString",
+      "stoneCount": null,
+      "valid": false
+    },
+    {
+      "id": "board-10",
+      "input": "002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 002e 0020",
+      "kind": "serverString",
+      "stoneCount": null,
+      "valid": false
+    },
+    {
+      "id": "board-11",
+      "input": "0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077 0077",
+      "kind": "serverString",
+      "stoneCount": 225,
+      "valid": true
+    },
+    {
+      "active": false,
+      "id": "warning-00",
+      "intensityBits": "0000000000000000",
+      "kind": "turnWarning",
+      "remainingBits": null
+    },
+    {
+      "active": false,
+      "id": "warning-01",
+      "intensityBits": "0000000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "7ff8000000000000"
+    },
+    {
+      "active": false,
+      "id": "warning-02",
+      "intensityBits": "0000000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "7ff0000000000000"
+    },
+    {
+      "active": false,
+      "id": "warning-03",
+      "intensityBits": "0000000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "fff0000000000000"
+    },
+    {
+      "active": true,
+      "id": "warning-04",
+      "intensityBits": "3fe199999999999a",
+      "kind": "turnWarning",
+      "remainingBits": "4008000000000000"
+    },
+    {
+      "active": false,
+      "id": "warning-05",
+      "intensityBits": "0000000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "4008000000000001"
+    },
+    {
+      "active": false,
+      "id": "warning-06",
+      "intensityBits": "0000000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "400800000d6bf94d"
+    },
+    {
+      "active": true,
+      "id": "warning-07",
+      "intensityBits": "3fe47ae147ae147c",
+      "kind": "turnWarning",
+      "remainingBits": "4003333333333333"
+    },
+    {
+      "active": true,
+      "id": "warning-08",
+      "intensityBits": "3fe8cccccccccccd",
+      "kind": "turnWarning",
+      "remainingBits": "3ff8000000000000"
+    },
+    {
+      "active": true,
+      "id": "warning-09",
+      "intensityBits": "3fef851eb851eb85",
+      "kind": "turnWarning",
+      "remainingBits": "3fb999999999999a"
+    },
+    {
+      "active": true,
+      "id": "warning-10",
+      "intensityBits": "3ff0000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "0000000000000000"
+    },
+    {
+      "active": true,
+      "id": "warning-11",
+      "intensityBits": "3ff0000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "8000000000000000"
+    },
+    {
+      "active": true,
+      "id": "warning-12",
+      "intensityBits": "3ff0000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "bff0000000000000"
+    },
+    {
+      "active": true,
+      "id": "warning-13",
+      "intensityBits": "3ff0000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "c08f400000000000"
+    },
+    {
+      "active": true,
+      "id": "warning-14",
+      "intensityBits": "3fe19999a1a72f2f",
+      "kind": "turnWarning",
+      "remainingBits": "4007fffff29406b3"
+    },
+    {
+      "active": true,
+      "id": "warning-15",
+      "intensityBits": "3fee666666666666",
+      "kind": "turnWarning",
+      "remainingBits": "3fd5555555555555"
+    },
+    {
+      "active": true,
+      "id": "warning-16",
+      "intensityBits": "3fefffe08aefb2ab",
+      "kind": "turnWarning",
+      "remainingBits": "3f1a36e2eb1c432d"
+    },
+    {
+      "active": true,
+      "id": "warning-17",
+      "intensityBits": "3ff0000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "01a56e1fc2f8f359"
+    },
+    {
+      "active": true,
+      "id": "warning-18",
+      "intensityBits": "3fe6666666666667",
+      "kind": "turnWarning",
+      "remainingBits": "4000000000000000"
+    },
+    {
+      "active": true,
+      "id": "warning-19",
+      "intensityBits": "3fe4000000000000",
+      "kind": "turnWarning",
+      "remainingBits": "4004000000000000"
+    },
+    {
+      "cornerRatioBits": "3f9999999999999a",
+      "depthRatioBits": "3f989374bc6a7efa",
+      "id": "warning-constants",
+      "kind": "turnWarningConstants",
+      "layerCount": 8,
+      "lowTimeSecondsBits": "4008000000000000",
+      "maximumIntensityBits": "3ff0000000000000",
+      "minimumIntensityBits": "3fe199999999999a",
+      "nodeBudget": 10000,
+      "peakOpacityBits": "3fe6666666666666",
+      "tintBits": [
+        "3feccccccccccccd",
+        "3faeb851eb851eb8",
+        "3fd3333333333333"
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift",
+  "golden": "renju/inputs",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "color": "GomokuColor(rawValue:) — 글자가 정확히 같을 때만.",
+    "input": "글자 입력은 코드 포인트 16진 목록(공백 구분, 빈 글자는 \"\"). null 은 nil 입력.",
+    "notation": "GomokuPoint(notation:) → x·y·notation(실패면 null). 정규형만 받는다 — 스칼라 둘·셋, 첫 스칼라 A…O, 나머지 ASCII 숫자, 0 채움 금지, 행 1…15.",
+    "serverReason": "GomokuForbiddenReason(serverReason:) — 앞뒤 Foundation whitespacesAndNewlines(유니코드 White_Space + U+200B — 맥에서 전수로 잰 집합) 걷고 lowercased, 'forbidden-' 접두가 없으면 붙이고 '_' → '-', rawValue 로 읽는다. U+180E·U+FEFF 는 공백이 아니다.",
+    "serverString": "GomokuBoard(serverString:) — UTF-8 바이트가 정확히 225개이고 전부 '.'·'b'·'w' 일 때만 valid, stoneCount 는 돌 수. valid 면 serverString 왕복이 같다.",
+    "turnWarning": "GomokuTurnWarning.isActive(remaining:) · intensity(remaining:) — null·NaN·±무한은 꺼짐(0), remaining ≤ 3 이면 켜짐, 세기 = 0.55 + 0.45 × (1 − min(1, max(0, r/3))) (Swift max/min: max(x,y) = y >= x ? y : x).",
+    "turnWarningConstants": "문턱·세기·그림 상수(Double 비트) · 겹 수 · 렌주 노드 예산(서버 gomoku_judge 와 같은 상수)."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/GomokuRules.swift",
+    "Sources/CheckCore/GomokuTurnWarning.swift"
+  ]
+}

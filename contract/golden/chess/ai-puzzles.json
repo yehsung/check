@@ -1,0 +1,432 @@
+{
+  "cases": [
+    {
+      "depth": 4,
+      "expect": [
+        "a1a8"
+      ],
+      "fen": "6k1/5ppp/8/8/8/8/8/R6K w - - 0 1",
+      "id": "mate1-0",
+      "label": "뒷줄 메이트 Ra8#",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "a1a8",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "f3f7"
+      ],
+      "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 4",
+      "id": "mate1-1",
+      "label": "스콜라 메이트 Qxf7#",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "f3f7",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "g5f7"
+      ],
+      "fen": "6rk/6pp/8/6N1/8/8/8/5K2 w - - 0 1",
+      "id": "mate1-2",
+      "label": "질식 메이트 Nf7#",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "g5f7",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "a1a8"
+      ],
+      "fen": "7k/8/6K1/8/8/8/8/R7 w - - 0 1",
+      "id": "mate1-3",
+      "label": "룩+왕 Ra8#",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "a1a8",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "a1h1"
+      ],
+      "fen": "7k/5K2/8/8/8/8/8/R7 w - - 0 1",
+      "id": "mate1-4",
+      "label": "룩+왕 Rh1#",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "a1h1",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "g1g8"
+      ],
+      "fen": "k7/8/1K6/8/8/8/8/6R1 w - - 0 1",
+      "id": "mate1-5",
+      "label": "느린 메이트도 많은 Rg8#",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "g1g8",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "a8a1"
+      ],
+      "fen": "r6k/8/8/8/8/8/5PPP/6K1 b - - 0 1",
+      "id": "mate1-6",
+      "label": "흑이 두는 뒷줄 메이트",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "a8a1",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "c2a2",
+        "c2b2",
+        "c2c1",
+        "c2d1"
+      ],
+      "fen": "8/8/8/8/8/1k6/2q5/K7 b - - 0 1",
+      "id": "mate1-7",
+      "label": "흑 퀸 메이트 넷 중 하나",
+      "mateInPlies": 1,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "c2c1",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 5,
+      "expect": [
+        "b1b7",
+        "c1c7"
+      ],
+      "fen": "7k/8/8/8/8/8/8/KQR5 w - - 0 1",
+      "id": "mate3-8",
+      "label": "퀸+룩 두 수 메이트",
+      "mateInPlies": 3,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "b1b7",
+      "swiftScore": 31997
+    },
+    {
+      "depth": 5,
+      "expect": [
+        "b8b2",
+        "c8c2"
+      ],
+      "fen": "kqr5/8/8/8/8/8/8/7K b - - 0 1",
+      "id": "mate3-9",
+      "label": "흑이 두는 퀸+룩 두 수 메이트",
+      "mateInPlies": 3,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "b8b2",
+      "swiftScore": 31997
+    },
+    {
+      "depth": 5,
+      "expect": [
+        "f3f7"
+      ],
+      "fen": "2bqkbn1/2pppp2/np2N3/r3P1p1/p2N2B1/5Q2/PPPPKPP1/RNB2r2 w - - 0 1",
+      "id": "mate3-10",
+      "label": "Qxf7 두 수 메이트",
+      "mateInPlies": 3,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "f3f7",
+      "swiftScore": 31997
+    },
+    {
+      "depth": 5,
+      "expect": [
+        "f6f7"
+      ],
+      "fen": "r5rk/5p1p/5R2/4Q3/8/8/7P/7K w - - 0 1",
+      "id": "mate3-11",
+      "label": "룩 희생 두 수 메이트",
+      "mateInPlies": 3,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "f6f7",
+      "swiftScore": 31997
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "f6e4"
+      ],
+      "fen": "r1bqk2r/pppp1ppp/2n2n2/2b5/2B1Q3/5N2/PPPP1PPP/RNB1K2R b KQkq - 0 1",
+      "id": "queen-12",
+      "label": "중반 Nxe4",
+      "mateInPlies": null,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "f6e4",
+      "swiftScore": 924
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "c6d4"
+      ],
+      "fen": "r1bqkbnr/pppp1ppp/2n5/8/3QP3/8/PPPP1PPP/RNB1KBNR b KQkq - 0 4",
+      "id": "queen-13",
+      "label": "중반 Nxd4",
+      "mateInPlies": null,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "c6d4",
+      "swiftScore": 815
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "e4d5"
+      ],
+      "fen": "4k3/8/8/3q4/4B3/8/8/4K3 w - - 0 1",
+      "id": "queen-14",
+      "label": "끝내기 Bxd5",
+      "mateInPlies": null,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "e4d5",
+      "swiftScore": 0
+    },
+    {
+      "depth": 4,
+      "expect": [
+        "e1d2"
+      ],
+      "fen": "4k3/8/8/8/8/8/3q4/2R1K3 w - - 0 1",
+      "id": "queen-15",
+      "label": "끝내기 Kxd2",
+      "mateInPlies": null,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "e1d2",
+      "swiftScore": 583
+    },
+    {
+      "depth": 1,
+      "expect": null,
+      "fen": "4k3/8/2p5/3p4/8/8/8/3QK3 w - - 0 1",
+      "id": "quiescence",
+      "label": "깊이 1 에서 지켜지는 폰을 퀸으로 잡지 않는다",
+      "mateInPlies": null,
+      "reject": [
+        "d1d5"
+      ],
+      "repetition": [],
+      "scoreAbove": 0,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "e1e2",
+      "swiftScore": 701
+    },
+    {
+      "depth": 5,
+      "expect": null,
+      "fen": "k7/8/1Q6/8/8/8/8/K7 w - - 0 1",
+      "id": "no-stalemate",
+      "label": "스테일메이트를 이기는 수로 착각하지 않는다",
+      "mateInPlies": null,
+      "reject": [
+        "a1a2",
+        "a1b1",
+        "a1b2",
+        "b6c7"
+      ],
+      "repetition": [],
+      "scoreAbove": 300,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "b6b5",
+      "swiftScore": 1063
+    },
+    {
+      "depth": 4,
+      "expect": null,
+      "fen": "7k/8/8/8/8/8/8/K1Q3R1 w - - 0 1",
+      "id": "avoid-threefold",
+      "label": "이기는 판을 3회 반복으로 흘려보내지 않는다",
+      "mateInPlies": null,
+      "reject": [
+        "g1g2"
+      ],
+      "repetition": [
+        [
+          "7k/8/8/8/8/8/6R1/K1Q5 b - -",
+          2
+        ]
+      ],
+      "scoreAbove": 300,
+      "scoreBelow": null,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "c1h6",
+      "swiftScore": 31999
+    },
+    {
+      "depth": 5,
+      "expect": [
+        "e1e2"
+      ],
+      "fen": "7k/8/8/8/8/3q4/8/K3R3 w - - 0 1",
+      "id": "take-threefold",
+      "label": "지는 판에서는 3회 반복(무승부)을 고른다",
+      "mateInPlies": null,
+      "reject": null,
+      "repetition": [
+        [
+          "7k/8/8/8/8/3q4/4R3/K7 b - -",
+          2
+        ]
+      ],
+      "scoreAbove": null,
+      "scoreBelow": null,
+      "scoreEquals": 0,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "e1e2",
+      "swiftScore": 0
+    },
+    {
+      "depth": 5,
+      "expect": null,
+      "fen": "7k/8/8/8/8/3q4/8/K3R3 w - - 0 1",
+      "id": "take-threefold-blind",
+      "label": "장부가 없으면 지는 점수",
+      "mateInPlies": null,
+      "reject": null,
+      "repetition": [],
+      "scoreAbove": null,
+      "scoreBelow": 0,
+      "scoreEquals": null,
+      "seed": "0x00000000c0ffee11",
+      "swiftMove": "e1c1",
+      "swiftScore": -412
+    },
+    {
+      "depth": 3,
+      "expectNone": true,
+      "fen": "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3",
+      "id": "mated",
+      "label": "둘 수가 없다 → null",
+      "repetition": [],
+      "seed": "0x00000000c0ffee11"
+    },
+    {
+      "depth": 3,
+      "expectNone": true,
+      "fen": "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+      "id": "stalemated",
+      "label": "둘 수가 없다 → null",
+      "repetition": [],
+      "seed": "0x00000000c0ffee11"
+    }
+  ],
+  "equivalence": "set",
+  "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift",
+  "golden": "chess/ai-puzzles",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "limits": "ChessAISearchLimits(timeBudget: 600초, maxDepth: depth, tieBreakSeed: seed). repetition 은 decide(repetitionCounts:) 에 넘기는 [반복 키, 횟수] 목록.",
+    "set": "Kotlin decide 의 수가 expect 안(있으면) · reject 밖(있으면). mateInPlies 가 있으면 결정의 mateInPlies 가 그 값. scoreAbove/scoreBelow/scoreEquals 는 점수(두는 쪽 시점 센티폰) 조건. expectNone 이면 결정이 null.",
+    "source": "과제는 Tests/checkTests/ChessAIEngineTests.swift(정답 집합은 그 파일이 ChessRules 전수 탐색으로 확인해 글자로 박았다). swiftMove·swiftScore 는 Swift 결과(참고 — 비트 대조는 chess/ai-trace)."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/ChessAIEngine.swift",
+    "Sources/CheckCore/ChessRules.swift",
+    "Sources/CheckCore/ChessFEN.swift",
+    "Sources/CheckCore/ChessNotation.swift"
+  ]
+}

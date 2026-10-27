@@ -1,0 +1,1693 @@
+{
+  "cases": [
+    {
+      "ascii": "0xb18bbe57c57bfda5",
+      "boardFEN": "8/8/8/8/8/8/8/8",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "8/8/8/8/8/8/8/8 w - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-empty",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": true,
+      "kind": "built",
+      "kings": [
+        null,
+        null
+      ],
+      "legal": 0,
+      "legalEnPassant": false,
+      "moves": [],
+      "noMatingBlack": true,
+      "noMatingWhite": true,
+      "outcome": null,
+      "perft1": 0,
+      "perft2": 0,
+      "pieces": [],
+      "reachable": true,
+      "repetitionKey": "8/8/8/8/8/8/8/8 w - -",
+      "side": "white",
+      "timeoutBlack": "draw",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x1ec348b75f4cd125",
+      "boardFEN": "4k3/8/8/8/8/8/8/4K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/4K3 w - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-kings-only",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": true,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 5,
+      "legalEnPassant": false,
+      "moves": [
+        "e1e2",
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": true,
+      "outcome": "insufficientMaterial",
+      "perft1": 5,
+      "perft2": 25,
+      "pieces": [
+        "e1K",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "4k3/8/8/8/8/8/8/4K3 w - -",
+      "side": "white",
+      "timeoutBlack": "draw",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x684c921a7cd00ebf",
+      "boardFEN": "4k3/8/8/8/8/8/8/3Q4",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/3Q4 w - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-white-king-missing",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        null,
+        "e8"
+      ],
+      "legal": 0,
+      "legalEnPassant": false,
+      "moves": [],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 0,
+      "perft2": 0,
+      "pieces": [
+        "d1Q",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "4k3/8/8/8/8/8/8/3Q4 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x2f81068976026c40",
+      "boardFEN": "4k3/8/8/8/8/8/8/K3K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/K3K3 w - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-two-white-kings",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": true,
+      "kind": "built",
+      "kings": [
+        "a1",
+        "e8"
+      ],
+      "legal": 0,
+      "legalEnPassant": false,
+      "moves": [],
+      "noMatingBlack": true,
+      "noMatingWhite": true,
+      "outcome": null,
+      "perft1": 0,
+      "perft2": 0,
+      "pieces": [
+        "a1K",
+        "e1K",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "4k3/8/8/8/8/8/8/K3K3 w - -",
+      "side": "white",
+      "timeoutBlack": "draw",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x092ccc69152560d9",
+      "boardFEN": "4k3/8/8/8/8/8/8/R3K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/R3K3 w - - -1 1",
+      "fullmove": 1,
+      "halfmove": -1,
+      "id": "built-halfmove-negative",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 0,
+      "legalEnPassant": false,
+      "moves": [],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 0,
+      "perft2": 0,
+      "pieces": [
+        "a1R",
+        "e1K",
+        "e8k"
+      ],
+      "reachable": false,
+      "repetitionKey": "4k3/8/8/8/8/8/8/R3K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x092ccc69152560d9",
+      "boardFEN": "4k3/8/8/8/8/8/8/R3K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/R3K3 w - - 1000000000 1",
+      "fullmove": 1,
+      "halfmove": 1000000000,
+      "id": "built-halfmove-max",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 15,
+      "legalEnPassant": false,
+      "moves": [
+        "a1a2",
+        "a1a3",
+        "a1a4",
+        "a1a5",
+        "a1a6",
+        "a1a7",
+        "a1a8",
+        "a1b1",
+        "a1c1",
+        "a1d1",
+        "e1e2",
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": "fiftyMoveRule",
+      "perft1": 15,
+      "perft2": 68,
+      "pieces": [
+        "a1R",
+        "e1K",
+        "e8k"
+      ],
+      "reachable": false,
+      "repetitionKey": "4k3/8/8/8/8/8/8/R3K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x092ccc69152560d9",
+      "boardFEN": "4k3/8/8/8/8/8/8/R3K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/R3K3 w - - 1000000001 1",
+      "fullmove": 1,
+      "halfmove": 1000000001,
+      "id": "built-halfmove-over",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 0,
+      "legalEnPassant": false,
+      "moves": [],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 0,
+      "perft2": 0,
+      "pieces": [
+        "a1R",
+        "e1K",
+        "e8k"
+      ],
+      "reachable": false,
+      "repetitionKey": "4k3/8/8/8/8/8/8/R3K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x092ccc69152560d9",
+      "boardFEN": "4k3/8/8/8/8/8/8/R3K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/R3K3 w - - 0 0",
+      "fullmove": 0,
+      "halfmove": 0,
+      "id": "built-fullmove-zero",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 0,
+      "legalEnPassant": false,
+      "moves": [],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 0,
+      "perft2": 0,
+      "pieces": [
+        "a1R",
+        "e1K",
+        "e8k"
+      ],
+      "reachable": false,
+      "repetitionKey": "4k3/8/8/8/8/8/8/R3K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x092ccc69152560d9",
+      "boardFEN": "4k3/8/8/8/8/8/8/R3K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/R3K3 b - - 99 1000000000",
+      "fullmove": 1000000000,
+      "halfmove": 99,
+      "id": "built-fullmove-max",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 5,
+      "legalEnPassant": false,
+      "moves": [
+        "e8f8",
+        "e8f7",
+        "e8e7",
+        "e8d7",
+        "e8d8"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 5,
+      "perft2": 75,
+      "pieces": [
+        "a1R",
+        "e1K",
+        "e8k"
+      ],
+      "reachable": false,
+      "repetitionKey": "4k3/8/8/8/8/8/8/R3K3 b - -",
+      "side": "black",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0xdb580f59a18e94bb",
+      "boardFEN": "4k3/8/8/3PN3/8/8/8/4K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": "e6",
+      "fen": "4k3/8/8/3PN3/8/8/8/4K3 w - e6 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-forged-ep",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 14,
+      "legalEnPassant": false,
+      "moves": [
+        "e1e2",
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2",
+        "d5d6",
+        "e5f7",
+        "e5g6",
+        "e5g4",
+        "e5f3",
+        "e5d3",
+        "e5c4",
+        "e5c6",
+        "e5d7"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 14,
+      "perft2": 51,
+      "pieces": [
+        "e1K",
+        "d5P",
+        "e5N",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "4k3/8/8/3PN3/8/8/8/4K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x5ceed515118d8dfb",
+      "boardFEN": "8/8/8/3Pk3/8/8/8/4K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": "e6",
+      "fen": "8/8/8/3Pk3/8/8/8/4K3 w - e6 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-forged-ep-king",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e5"
+      ],
+      "legal": 6,
+      "legalEnPassant": false,
+      "moves": [
+        "e1e2",
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2",
+        "d5d6"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 6,
+      "perft2": 43,
+      "pieces": [
+        "e1K",
+        "d5P",
+        "e5k"
+      ],
+      "reachable": true,
+      "repetitionKey": "8/8/8/3Pk3/8/8/8/4K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x1ec348b75f4cd125",
+      "boardFEN": "4k3/8/8/8/8/8/8/4K3",
+      "castling": "KQkq",
+      "castlingBits": 15,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-rights-without-rook",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": true,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 5,
+      "legalEnPassant": false,
+      "moves": [
+        "e1e2",
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": true,
+      "outcome": "insufficientMaterial",
+      "perft1": 5,
+      "perft2": 25,
+      "pieces": [
+        "e1K",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "4k3/8/8/8/8/8/8/4K3 w KQkq -",
+      "side": "white",
+      "timeoutBlack": "draw",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x1e726a51eedd69a5",
+      "boardFEN": "4k3/8/8/8/8/8/8/R4K1R",
+      "castling": "KQ",
+      "castlingBits": 3,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/8/R4K1R w KQ - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-rights-king-moved",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "f1",
+        "e8"
+      ],
+      "legal": 24,
+      "legalEnPassant": false,
+      "moves": [
+        "a1a2",
+        "a1a3",
+        "a1a4",
+        "a1a5",
+        "a1a6",
+        "a1a7",
+        "a1a8",
+        "a1b1",
+        "a1c1",
+        "a1d1",
+        "a1e1",
+        "f1f2",
+        "f1g2",
+        "f1g1",
+        "f1e1",
+        "f1e2",
+        "h1h2",
+        "h1h3",
+        "h1h4",
+        "h1h5",
+        "h1h6",
+        "h1h7",
+        "h1h8",
+        "h1g1"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 24,
+      "perft2": 107,
+      "pieces": [
+        "a1R",
+        "f1K",
+        "h1R",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "4k3/8/8/8/8/8/8/R4K1R w KQ -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0xc287ffe225e7fcba",
+      "boardFEN": "4k3/8/8/8/8/8/4Q3/4K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-king-capturable",
+      "inCheck": false,
+      "inCheckBlack": true,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 25,
+      "legalEnPassant": false,
+      "moves": [
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2",
+        "e2e3",
+        "e2e4",
+        "e2e5",
+        "e2e6",
+        "e2e7",
+        "e2f2",
+        "e2g2",
+        "e2h2",
+        "e2d2",
+        "e2c2",
+        "e2b2",
+        "e2a2",
+        "e2f3",
+        "e2g4",
+        "e2h5",
+        "e2f1",
+        "e2d3",
+        "e2c4",
+        "e2b5",
+        "e2a6",
+        "e2d1"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 25,
+      "perft2": 94,
+      "pieces": [
+        "e1K",
+        "e2Q",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "4k3/8/8/8/8/8/4Q3/4K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0x2fbb49575ec3bebb",
+      "boardFEN": "8/3k4/4P3/8/8/8/8/4K3",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "8/3k4/4P3/8/8/8/8/4K3 w - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-king-capturable-pawn",
+      "inCheck": false,
+      "inCheckBlack": true,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "d7"
+      ],
+      "legal": 6,
+      "legalEnPassant": false,
+      "moves": [
+        "e1e2",
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2",
+        "e6e7"
+      ],
+      "noMatingBlack": true,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 6,
+      "perft2": 47,
+      "pieces": [
+        "e1K",
+        "e6P",
+        "d7k"
+      ],
+      "reachable": true,
+      "repetitionKey": "8/3k4/4P3/8/8/8/8/4K3 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "draw"
+    },
+    {
+      "ascii": "0xa59104ea63ef50c5",
+      "boardFEN": "P3k3/8/8/8/8/8/8/4K2p",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "P3k3/8/8/8/8/8/8/4K2p w - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-pawn-last-rank",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 5,
+      "legalEnPassant": false,
+      "moves": [
+        "e1e2",
+        "e1f2",
+        "e1f1",
+        "e1d1",
+        "e1d2"
+      ],
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 5,
+      "perft2": 25,
+      "pieces": [
+        "e1K",
+        "h1p",
+        "a8P",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "P3k3/8/8/8/8/8/8/4K2p w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "loss:white"
+    },
+    {
+      "ascii": "0xa59104ea63ef50c5",
+      "boardFEN": "P3k3/8/8/8/8/8/8/4K2p",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "P3k3/8/8/8/8/8/8/4K2p b - - 0 1",
+      "fullmove": 1,
+      "halfmove": 0,
+      "id": "built-pawn-last-rank-black",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "e1",
+        "e8"
+      ],
+      "legal": 5,
+      "legalEnPassant": false,
+      "moves": [
+        "e8f8",
+        "e8f7",
+        "e8e7",
+        "e8d7",
+        "e8d8"
+      ],
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": null,
+      "perft1": 5,
+      "perft2": 25,
+      "pieces": [
+        "e1K",
+        "h1p",
+        "a8P",
+        "e8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "P3k3/8/8/8/8/8/8/4K2p b - -",
+      "side": "black",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "loss:white"
+    },
+    {
+      "ascii": "0x4593486b8c22de07",
+      "boardFEN": "R5k1/5ppp/8/8/8/8/8/6K1",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "R5k1/5ppp/8/8/8/8/8/6K1 b - - 100 60",
+      "fullmove": 60,
+      "halfmove": 100,
+      "id": "built-mate-at-100",
+      "inCheck": true,
+      "inCheckBlack": true,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "g1",
+        "g8"
+      ],
+      "legal": 0,
+      "legalEnPassant": false,
+      "moves": [],
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": "checkmate:white",
+      "perft1": 0,
+      "perft2": 0,
+      "pieces": [
+        "g1K",
+        "f7p",
+        "g7p",
+        "h7p",
+        "a8R",
+        "g8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "R5k1/5ppp/8/8/8/8/8/6K1 b - -",
+      "side": "black",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "loss:white"
+    },
+    {
+      "ascii": "0xff6f5789ca54dc87",
+      "boardFEN": "6k1/5ppp/8/8/8/8/8/R5K1",
+      "castling": "-",
+      "castlingBits": 0,
+      "enPassant": null,
+      "fen": "6k1/5ppp/8/8/8/8/8/R5K1 w - - 100 60",
+      "fullmove": 60,
+      "halfmove": 100,
+      "id": "built-fifty",
+      "inCheck": false,
+      "inCheckBlack": false,
+      "inCheckWhite": false,
+      "insufficient": false,
+      "kind": "built",
+      "kings": [
+        "g1",
+        "g8"
+      ],
+      "legal": 17,
+      "legalEnPassant": false,
+      "moves": [
+        "a1a2",
+        "a1a3",
+        "a1a4",
+        "a1a5",
+        "a1a6",
+        "a1a7",
+        "a1a8",
+        "a1b1",
+        "a1c1",
+        "a1d1",
+        "a1e1",
+        "a1f1",
+        "g1g2",
+        "g1h2",
+        "g1h1",
+        "g1f1",
+        "g1f2"
+      ],
+      "noMatingBlack": false,
+      "noMatingWhite": false,
+      "outcome": "fiftyMoveRule",
+      "perft1": 17,
+      "perft2": 128,
+      "pieces": [
+        "a1R",
+        "g1K",
+        "f7p",
+        "g7p",
+        "h7p",
+        "g8k"
+      ],
+      "reachable": true,
+      "repetitionKey": "6k1/5ppp/8/8/8/8/8/R5K1 w - -",
+      "side": "white",
+      "timeoutBlack": "loss:black",
+      "timeoutWhite": "loss:white"
+    },
+    {
+      "count": 2,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 7 40",
+      "id": "rep-2",
+      "kind": "repetition",
+      "outcome": null,
+      "outcomeOtherKey": null
+    },
+    {
+      "count": 3,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 7 40",
+      "id": "rep-3",
+      "kind": "repetition",
+      "outcome": "threefoldRepetition",
+      "outcomeOtherKey": null
+    },
+    {
+      "count": 3,
+      "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 100 90",
+      "id": "rep-3-fifty",
+      "kind": "repetition",
+      "outcome": "fiftyMoveRule",
+      "outcomeOtherKey": "fiftyMoveRule"
+    },
+    {
+      "count": 3,
+      "fen": "R5k1/5ppp/8/8/8/8/8/6K1 b - - 0 1",
+      "id": "rep-3-mate",
+      "kind": "repetition",
+      "outcome": "checkmate:white",
+      "outcomeOtherKey": "checkmate:white"
+    },
+    {
+      "count": 3,
+      "fen": "8/8/4k3/8/8/3K1B2/8/8 w - - 0 1",
+      "id": "rep-3-insufficient",
+      "kind": "repetition",
+      "outcome": "insufficientMaterial",
+      "outcomeOtherKey": "insufficientMaterial"
+    },
+    {
+      "count": 4,
+      "fen": "rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "id": "rep-4-ep",
+      "kind": "repetition",
+      "outcome": "threefoldRepetition",
+      "outcomeOtherKey": null
+    },
+    {
+      "blackBits": "4082c00000000000",
+      "id": "clock-default",
+      "incrementBits": "4008000000000000",
+      "kind": "clock",
+      "rows": [
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "0000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082d80000000000"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "8000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082d80000000000"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "3ff8000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082cc0000000000"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "403dffbe76c8b439",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4081e8020c49ba5e"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "403e000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4081e80000000000"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "403e000010c6f7a1",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4081e7ffff79c843"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "4082bffdf3b645a2",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4008020c49ba5e00"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "4082c00000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4008000000000000"
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "4082c000346dc5d6",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "bff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "7ff8000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "7ff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "fff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "3e112e0be826d695",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082d7ffffffdda4"
+        },
+        {
+          "blackBits": "4082c00000000000",
+          "color": "white",
+          "elapsedBits": "3fd3333333333334",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082d5999999999a"
+        },
+        {
+          "blackBits": "4082d80000000000",
+          "color": "black",
+          "elapsedBits": "0000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4082d80000000000",
+          "color": "black",
+          "elapsedBits": "8000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4082cc0000000000",
+          "color": "black",
+          "elapsedBits": "3ff8000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4081e8020c49ba5e",
+          "color": "black",
+          "elapsedBits": "403dffbe76c8b439",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4081e80000000000",
+          "color": "black",
+          "elapsedBits": "403e000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4081e7ffff79c843",
+          "color": "black",
+          "elapsedBits": "403e000010c6f7a1",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4008020c49ba5e00",
+          "color": "black",
+          "elapsedBits": "4082bffdf3b645a2",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4008000000000000",
+          "color": "black",
+          "elapsedBits": "4082c00000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "4082c000346dc5d6",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "bff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "7ff8000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "7ff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "fff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": "4082d7ffffffdda4",
+          "color": "black",
+          "elapsedBits": "3e112e0be826d695",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        },
+        {
+          "blackBits": "4082d5999999999a",
+          "color": "black",
+          "elapsedBits": "3fd3333333333334",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4082c00000000000"
+        }
+      ],
+      "whiteBits": "4082c00000000000"
+    },
+    {
+      "blackBits": "403e000000000000",
+      "id": "clock-short",
+      "incrementBits": "4008000000000000",
+      "kind": "clock",
+      "rows": [
+        {
+          "blackBits": "403e000000000000",
+          "color": "white",
+          "elapsedBits": "0000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4040800000000000"
+        },
+        {
+          "blackBits": "403e000000000000",
+          "color": "white",
+          "elapsedBits": "8000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4040800000000000"
+        },
+        {
+          "blackBits": "403e000000000000",
+          "color": "white",
+          "elapsedBits": "3ff8000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403f800000000000"
+        },
+        {
+          "blackBits": "403e000000000000",
+          "color": "white",
+          "elapsedBits": "403dffbe76c8b439",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4008020c49ba5e38"
+        },
+        {
+          "blackBits": "403e000000000000",
+          "color": "white",
+          "elapsedBits": "403e000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "4008000000000000"
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "403e000010c6f7a1",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "4082bffdf3b645a2",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "4082c00000000000",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "4082c000346dc5d6",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "bff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "7ff8000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "7ff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "fff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": "403e000000000000",
+          "color": "white",
+          "elapsedBits": "3e112e0be826d695",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "40407ffffffdda3e"
+        },
+        {
+          "blackBits": "403e000000000000",
+          "color": "white",
+          "elapsedBits": "3fd3333333333334",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "404059999999999a"
+        },
+        {
+          "blackBits": "4040800000000000",
+          "color": "black",
+          "elapsedBits": "0000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403e000000000000"
+        },
+        {
+          "blackBits": "4040800000000000",
+          "color": "black",
+          "elapsedBits": "8000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403e000000000000"
+        },
+        {
+          "blackBits": "403f800000000000",
+          "color": "black",
+          "elapsedBits": "3ff8000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403e000000000000"
+        },
+        {
+          "blackBits": "4008020c49ba5e38",
+          "color": "black",
+          "elapsedBits": "403dffbe76c8b439",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403e000000000000"
+        },
+        {
+          "blackBits": "4008000000000000",
+          "color": "black",
+          "elapsedBits": "403e000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403e000000000000"
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "403e000010c6f7a1",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "4082bffdf3b645a2",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "4082c00000000000",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "4082c000346dc5d6",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "bff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "7ff8000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "7ff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "fff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": "40407ffffffdda3e",
+          "color": "black",
+          "elapsedBits": "3e112e0be826d695",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403e000000000000"
+        },
+        {
+          "blackBits": "404059999999999a",
+          "color": "black",
+          "elapsedBits": "3fd3333333333334",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "403e000000000000"
+        }
+      ],
+      "whiteBits": "403e000000000000"
+    },
+    {
+      "blackBits": "3ff8000000000000",
+      "id": "clock-no-increment",
+      "incrementBits": "0000000000000000",
+      "kind": "clock",
+      "rows": [
+        {
+          "blackBits": "3ff8000000000000",
+          "color": "white",
+          "elapsedBits": "0000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff8000000000000"
+        },
+        {
+          "blackBits": "3ff8000000000000",
+          "color": "white",
+          "elapsedBits": "8000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff8000000000000"
+        },
+        {
+          "blackBits": "3ff8000000000000",
+          "color": "white",
+          "elapsedBits": "3ff8000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "0000000000000000"
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "403dffbe76c8b439",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "403e000000000000",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "403e000010c6f7a1",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "4082bffdf3b645a2",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "4082c00000000000",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "4082c000346dc5d6",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "bff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "7ff8000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "7ff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "white",
+          "elapsedBits": "fff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": "3ff8000000000000",
+          "color": "white",
+          "elapsedBits": "3e112e0be826d695",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff7ffffffbb47d0"
+        },
+        {
+          "blackBits": "3ff8000000000000",
+          "color": "white",
+          "elapsedBits": "3fd3333333333334",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff3333333333333"
+        },
+        {
+          "blackBits": "3ff8000000000000",
+          "color": "black",
+          "elapsedBits": "0000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff8000000000000"
+        },
+        {
+          "blackBits": "3ff8000000000000",
+          "color": "black",
+          "elapsedBits": "8000000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff8000000000000"
+        },
+        {
+          "blackBits": "0000000000000000",
+          "color": "black",
+          "elapsedBits": "3ff8000000000000",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff8000000000000"
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "403dffbe76c8b439",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "403e000000000000",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "403e000010c6f7a1",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "4082bffdf3b645a2",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "4082c00000000000",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "4082c000346dc5d6",
+          "hasFlagged": true,
+          "step": "flagged",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "bff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "7ff8000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "7ff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": null,
+          "color": "black",
+          "elapsedBits": "fff0000000000000",
+          "hasFlagged": null,
+          "step": "invalid",
+          "whiteBits": null
+        },
+        {
+          "blackBits": "3ff7ffffffbb47d0",
+          "color": "black",
+          "elapsedBits": "3e112e0be826d695",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff8000000000000"
+        },
+        {
+          "blackBits": "3ff3333333333333",
+          "color": "black",
+          "elapsedBits": "3fd3333333333334",
+          "hasFlagged": false,
+          "step": "ticked",
+          "whiteBits": "3ff8000000000000"
+        }
+      ],
+      "whiteBits": "3ff8000000000000"
+    },
+    {
+      "id": "clock-constants",
+      "incrementSecondsBits": "4008000000000000",
+      "initialMs": 600000,
+      "initialSecondsBits": "4082c00000000000",
+      "kind": "clockConstants",
+      "maxCountableCounter": 1000000000,
+      "maxFullmoveNumber": 10000
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardChess.swift",
+  "golden": "chess/outcome",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "built": "ChessPosition.empty 에 pieces('<칸><FEN 글자>')를 놓고 side · castlingBits(rawValue 비트 K=1 Q=2 k=4 q=8) · enPassant · halfmove · fullmove 를 그대로 넣은 국면(파서를 거치지 않는다). 칸은 summary 와 같다(perft1·perft2 는 깊이 1·2, timeout{White,Black} 은 그 색 깃발이 떨어졌을 때 timeoutRuling — loss:<깃발 색> 또는 draw).",
+    "clock": "ChessClock.afterMove(by:elapsed:) → ticked(가산 붙은 두 시계, Double 비트) · flagged · invalid(음수·NaN·무한, -0.0 은 0 이다) · hasFlagged(by:) — null 은 성립하지 않는 입력.",
+    "clockConstants": "초기 600초 · 가산 3초 · initialMs 600000(서버 chess_initial_ms() 와 같은 숫자) · FEN 수 번호 상한 · 엔진 카운터 상한.",
+    "repetition": "ChessRules.outcome(position:repetitionCounts:) — 표는 {repetitionKey: count}(outcome) 와 {fen: count}(outcomeOtherKey — 키가 다르면 반복으로 안 센다)."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/ChessRules.swift",
+    "Sources/CheckCore/ChessFEN.swift",
+    "Sources/CheckCore/ChessNotation.swift"
+  ]
+}

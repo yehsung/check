@@ -224,7 +224,7 @@
       ]
     },
     {
-      "cases": 60,
+      "cases": 62,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesMessages.swift",
       "golden": "text/megaphone",
@@ -270,7 +270,7 @@
       ]
     },
     {
-      "cases": 286,
+      "cases": 288,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesText.swift",
       "golden": "text/sanitize",

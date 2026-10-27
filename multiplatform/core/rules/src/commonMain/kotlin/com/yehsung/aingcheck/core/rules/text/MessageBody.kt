@@ -5,8 +5,9 @@ package com.yehsung.aingcheck.core.rules.text
  * 메시지 본문 사전 판정 결과(Swift `MessageBodyValidation`).
  *
  * 와이어 파일(SupabaseWorkModels)에 있던 **글자 규칙**이다(C§3.2 C-1 "와이어 파일에 있지만 규칙이다"). 보이는 글자 판정이
- * G §8-16 ② 의 번들 표에 기대므로 글자 규칙 자리(rules/text)에 둔다 — 와이어(W1-d)는 rules 를 부를 수 없으니(의존 rules → wire),
- * 와이어 쪽이 이 판정을 쓰려면 조정자가 이 묶음을 core/foundation/text 로 옮긴다(완료 보고 참고).
+ * G §8-16 ② 의 번들 표에 기대므로 글자 규칙 자리(rules/text)에 둔다 — 와이어(W1-d)는 rules 를 부를 수 없으니(의존 rules → wire)
+ * W1-d 는 글자 기초를 `WireTextRules` 이음새로 받는다. 병합 때 조정자 접기 패치(W1-c 5차 04)가 이 구현을 그 이음새에 꽂고, 한도 · 검사
+ * 순서는 와이어 판정 한 벌로 모은다(같은 규칙의 사본이 둘이 되지 않게).
  */
 sealed interface MessageBodyValidation {
     /** 실제로 보낼 문자열(정규화 완료). 원문이 아니라 **이 값**을 서버로 보내야 한다. */

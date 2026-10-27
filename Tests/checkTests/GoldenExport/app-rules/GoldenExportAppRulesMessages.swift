@@ -356,7 +356,9 @@ struct GoldenExportAppRulesMessages {
                           ["need": Self.i(need), "have": Self.i(have), "text": .string(MegaphoneText.shortfall(need: need, have: have))]
                       })])
         // 본문.
-        let bodies = Self.detailCorpus + ["📢 확성기", String(repeating: "가", count: 197), String(repeating: "가", count: 198), "  안녕  "]
+        let bodies = Self.detailCorpus + ["📢 확성기", String(repeating: "가", count: 197), String(repeating: "가", count: 198), "  안녕  ",
+                                          // 상한보다 긴 안 보이는 줄 — 빈 판정이 먼저(empty, tooLong 아님).
+                                          String(repeating: "\u{3164}", count: 199), String(repeating: "\u{200B}", count: 12)]
         for (index, body) in bodies.enumerated() {
             func v(_ result: MessageBodyValidation) -> GoldenJSON {
                 switch result {

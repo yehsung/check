@@ -312,6 +312,8 @@ struct GoldenExportAppRulesText {
         String(repeating: "가", count: 200), String(repeating: "가", count: 201), String(repeating: "👨‍👩‍👧‍👦", count: 29),
         String(repeating: " ", count: 41), String(repeating: "\u{3164}", count: 5) + "가", "e\u{0301}" + String(repeating: "a", count: 199),
         "a\u{0007}b", "\u{0007}", "\u{7F}", "탭\t탭", "줄\u{0B}줄", "줄\u{0C}줄",
+        // 상한보다 긴데 보이는 글자가 없는 줄(다듬기로 안 지워지는 채움 · 폭 0) — 빈 판정이 먼저라 tooLong 이 아니라 empty 여야 한다.
+        String(repeating: "\u{3164}", count: 201), String(repeating: "\u{200B}", count: 41),
     ]
 
     static func messageValidation(_ value: MessageBodyValidation) -> GoldenJSON {

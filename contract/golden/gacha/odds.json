@@ -1,0 +1,6113 @@
+{
+  "cases": [
+    {
+      "id": "info-0",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "404e000000000000"
+          },
+          {
+            "characterID": "aing_gold",
+            "percentBits": "4044000000000000"
+          }
+        ],
+        "price": 50,
+        "shardCosts": {
+          "aing_gold": 20,
+          "fox": 2
+        },
+        "shards": 3,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"price\":50,\"shards\":3,\"odds\":[{\"character_id\":\"fox\",\"percent\":60},{\"character_id\":\"aing_gold\",\"percent\":40}],\"shard_costs\":{\"fox\":2,\"aing_gold\":20}}"
+    },
+    {
+      "id": "info-1",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "404e000000000000"
+          },
+          {
+            "characterID": "aing_gold",
+            "percentBits": "4043ff5c28f5c28f"
+          }
+        ],
+        "price": 50,
+        "shardCosts": {
+          "fox": 2
+        },
+        "shards": 3,
+        "totalPercentBits": "4058ffae147ae148"
+      },
+      "json": "{\"price\":50,\"shards\":3,\"odds\":[{\"character_id\":\"fox\",\"percent\":60},{\"character_id\":\"aing_gold\",\"percent\":39.995}],\"shard_costs\":{\"fox\":2}}"
+    },
+    {
+      "id": "info-2",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "404e000000000000"
+          },
+          {
+            "characterID": "aing_gold",
+            "percentBits": "4043fd70a3d70a3d"
+          }
+        ],
+        "price": 50,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "4058feb851eb851e"
+      },
+      "json": "{\"price\":50,\"odds\":[{\"character_id\":\"fox\",\"percent\":60},{\"character_id\":\"aing_gold\",\"percent\":39.98}]}"
+    },
+    {
+      "id": "info-3",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": [
+          {
+            "characterID": "aing_gold",
+            "percentBits": "4044000000000000"
+          }
+        ],
+        "price": 50,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "4044000000000000"
+      },
+      "json": "{\"price\":50,\"odds\":[{\"character_id\":\"fox\",\"percent\":\"60\"},{\"character_id\":\"aing_gold\",\"percent\":40}]}"
+    },
+    {
+      "id": "info-4",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "404e000000000000"
+          },
+          {
+            "characterID": "robot",
+            "percentBits": "4044000000000000"
+          }
+        ],
+        "price": 50,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"price\":50,\"odds\":[{\"character_id\":\"fox\",\"percent\":60},{\"percent\":40}, 7, null, {\"character_id\":\"robot\",\"percent\":40}]}"
+    },
+    {
+      "id": "info-5",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": false,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "4059000000000000"
+          }
+        ],
+        "price": null,
+        "shardCosts": {
+          "robot": 4
+        },
+        "shards": null,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"price\":\"50\",\"shards\":\"3\",\"odds\":[{\"character_id\":\"fox\",\"percent\":100}],\"shard_costs\":{\"fox\":\"2\",\"robot\":4,\"aing_gold\":3.5,\"x\":null}}"
+    },
+    {
+      "id": "info-6",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "4004000000000000"
+          },
+          {
+            "characterID": "robot",
+            "percentBits": "4058600000000000"
+          }
+        ],
+        "price": 50,
+        "shardCosts": {
+          "robot": 4
+        },
+        "shards": 3,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"price\":50.0,\"shards\":3.0,\"odds\":[{\"character_id\":\"fox\",\"percent\":2.5},{\"character_id\":\"robot\",\"percent\":97.5}],\"shard_costs\":{\"robot\":4.0}}"
+    },
+    {
+      "id": "info-7",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": false,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "4059000000000000"
+          }
+        ],
+        "price": null,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"odds\":[{\"character_id\":\"fox\",\"percent\":100}]}"
+    },
+    {
+      "id": "info-8",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": [],
+        "price": 50,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "0000000000000000"
+      },
+      "json": "{\"price\":50,\"odds\":[]}"
+    },
+    {
+      "id": "info-9",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": null,
+        "price": 50,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "0000000000000000"
+      },
+      "json": "{\"price\":50,\"odds\":{}}"
+    },
+    {
+      "id": "info-10",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": null,
+        "price": 50,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "0000000000000000"
+      },
+      "json": "{\"price\":50}"
+    },
+    {
+      "id": "info-11",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": null,
+        "price": null,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "0000000000000000"
+      },
+      "json": "\"gacha off\""
+    },
+    {
+      "id": "info-12",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": null,
+        "price": null,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "0000000000000000"
+      },
+      "json": "[1,2]"
+    },
+    {
+      "id": "info-13",
+      "info": null,
+      "json": "null"
+    },
+    {
+      "id": "info-14",
+      "info": {
+        "hasCompleteOdds": false,
+        "isUsable": false,
+        "odds": null,
+        "price": null,
+        "shardCosts": null,
+        "shards": null,
+        "totalPercentBits": "0000000000000000"
+      },
+      "json": "{\"price\":null,\"shards\":null,\"odds\":null,\"shard_costs\":null}"
+    },
+    {
+      "id": "info-15",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "aing_rainbow",
+            "percentBits": "3ff05397829cbc15"
+          },
+          {
+            "characterID": "fox",
+            "percentBits": "4058beb1a1f58d10"
+          }
+        ],
+        "price": 50,
+        "shardCosts": {
+          "aing": 3,
+          "aing_cake_choco": 5,
+          "aing_rainbow": 0,
+          "fox": -1
+        },
+        "shards": -2,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"price\":50,\"shards\":-2,\"odds\":[{\"character_id\":\"aing_rainbow\",\"percent\":1.0204081632653061},{\"character_id\":\"fox\",\"percent\":98.9795918367347}],\"shard_costs\":{\"aing_rainbow\":0,\"fox\":-1,\"aing\":3,\"aing_cake_choco\":5}}"
+    },
+    {
+      "id": "info-16",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "fox",
+            "percentBits": "4059000000000000"
+          }
+        ],
+        "price": "int:9223372036854775807",
+        "shardCosts": null,
+        "shards": "int:9007199254740993",
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"price\":9223372036854775807,\"shards\":9007199254740993,\"odds\":[{\"character_id\":\"fox\",\"percent\":1e2}]}"
+    },
+    {
+      "id": "info-17",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "aing_gold",
+            "percentBits": "4008000000000000"
+          },
+          {
+            "characterID": "aing_rainbow",
+            "percentBits": "4000000000000000"
+          },
+          {
+            "characterID": "fox",
+            "percentBits": "4038000000000000"
+          },
+          {
+            "characterID": "squirrel",
+            "percentBits": "4038000000000000"
+          },
+          {
+            "characterID": "shiba",
+            "percentBits": "402c000000000000"
+          },
+          {
+            "characterID": "ghost",
+            "percentBits": "402c000000000000"
+          },
+          {
+            "characterID": "jellyfish",
+            "percentBits": "4026000000000000"
+          },
+          {
+            "characterID": "robot",
+            "percentBits": "4020000000000000"
+          }
+        ],
+        "price": 50,
+        "shardCosts": {
+          "aing_gold": 20,
+          "aing_rainbow": 20,
+          "fox": 2,
+          "ghost": 4,
+          "jellyfish": 5,
+          "robot": 8,
+          "shiba": 4,
+          "squirrel": 2
+        },
+        "shards": 23,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"odds\":[{\"character_id\":\"aing_gold\",\"percent\":3},{\"character_id\":\"aing_rainbow\",\"percent\":2},{\"character_id\":\"fox\",\"percent\":24},{\"character_id\":\"squirrel\",\"percent\":24},{\"character_id\":\"shiba\",\"percent\":14},{\"character_id\":\"ghost\",\"percent\":14},{\"character_id\":\"jellyfish\",\"percent\":11},{\"character_id\":\"robot\",\"percent\":8}],\"price\":50,\"shard_costs\":{\"aing_gold\":20,\"aing_rainbow\":20,\"fox\":2,\"ghost\":4,\"jellyfish\":5,\"robot\":8,\"shiba\":4,\"squirrel\":2},\"shards\":23}"
+    },
+    {
+      "id": "info-18",
+      "info": {
+        "hasCompleteOdds": true,
+        "isUsable": true,
+        "odds": [
+          {
+            "characterID": "aing_gold",
+            "percentBits": "4008000000000000"
+          },
+          {
+            "characterID": "aing_rainbow",
+            "percentBits": "4000000000000000"
+          },
+          {
+            "characterID": "fox",
+            "percentBits": "4038000000000000"
+          },
+          {
+            "characterID": "squirrel",
+            "percentBits": "4038000000000000"
+          },
+          {
+            "characterID": "shiba",
+            "percentBits": "402c000000000000"
+          },
+          {
+            "characterID": "ghost",
+            "percentBits": "402c000000000000"
+          },
+          {
+            "characterID": "jellyfish",
+            "percentBits": "4026000000000000"
+          },
+          {
+            "characterID": "robot",
+            "percentBits": "4020000000000000"
+          }
+        ],
+        "price": 50,
+        "shardCosts": {
+          "aing_gold": 20,
+          "aing_rainbow": 20,
+          "fox": 2,
+          "ghost": 4,
+          "jellyfish": 5,
+          "robot": 8,
+          "shiba": 4,
+          "squirrel": 2
+        },
+        "shards": 23,
+        "totalPercentBits": "4059000000000000"
+      },
+      "json": "{\"odds\":[{\"character_id\":\"aing_gold\",\"percent\":3},{\"character_id\":\"aing_rainbow\",\"percent\":2},{\"character_id\":\"fox\",\"percent\":24},{\"character_id\":\"squirrel\",\"percent\":24},{\"character_id\":\"shiba\",\"percent\":14},{\"character_id\":\"ghost\",\"percent\":14},{\"character_id\":\"jellyfish\",\"percent\":11},{\"character_id\":\"robot\",\"percent\":8}],\"price\":50,\"shard_costs\":{\"aing_gold\":20,\"aing_rainbow\":20,\"fox\":2,\"ghost\":4,\"jellyfish\":5,\"robot\":8,\"shiba\":4,\"squirrel\":2},\"shards\":23}"
+    },
+    {
+      "id": "percent-text",
+      "rows": [
+        {
+          "text": "0%",
+          "valueBits": "0000000000000000"
+        },
+        {
+          "text": "1%",
+          "valueBits": "3ff0000000000000"
+        },
+        {
+          "text": "2%",
+          "valueBits": "4000000000000000"
+        },
+        {
+          "text": "2.5%",
+          "valueBits": "4004000000000000"
+        },
+        {
+          "text": "3%",
+          "valueBits": "4008000000000000"
+        },
+        {
+          "text": "0.1%",
+          "valueBits": "3fa999999999999a"
+        },
+        {
+          "text": "0%",
+          "valueBits": "3fa9984a0e410b63"
+        },
+        {
+          "text": "0.2%",
+          "valueBits": "3fc3333333333333"
+        },
+        {
+          "text": "0.3%",
+          "valueBits": "3fd0000000000000"
+        },
+        {
+          "text": "0.4%",
+          "valueBits": "3fd6666666666666"
+        },
+        {
+          "text": "1%",
+          "valueBits": "3ff05397829cbc15"
+        },
+        {
+          "text": "99%",
+          "valueBits": "4058beb1a1f58d10"
+        },
+        {
+          "text": "100%",
+          "valueBits": "4058fccccccccccd"
+        },
+        {
+          "text": "100%",
+          "valueBits": "4059000000000000"
+        },
+        {
+          "text": "33.3%",
+          "valueBits": "4040aa9fbe76c8b4"
+        },
+        {
+          "text": "12.3%",
+          "valueBits": "4028800000000000"
+        },
+        {
+          "text": "12.4%",
+          "valueBits": "4028b33333333333"
+        },
+        {
+          "text": "1%",
+          "valueBits": "3fee666666666666"
+        },
+        {
+          "text": "-0.1%",
+          "valueBits": "bfa999999999999a"
+        },
+        {
+          "text": "-2.5%",
+          "valueBits": "c004000000000000"
+        },
+        {
+          "text": "50.1%",
+          "valueBits": "4049066666666666"
+        }
+      ]
+    },
+    {
+      "id": "pull-availability",
+      "rows": [
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 0,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 50,
+            "price": 50
+          },
+          "blockedReason": "루비 50개 더 필요해요",
+          "info": 0,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 1,
+            "price": 50
+          },
+          "blockedReason": "루비 1개 더 필요해요",
+          "info": 0,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 0,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 0,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 0,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 1,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 50,
+            "price": 50
+          },
+          "blockedReason": "루비 50개 더 필요해요",
+          "info": 1,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 1,
+            "price": 50
+          },
+          "blockedReason": "루비 1개 더 필요해요",
+          "info": 1,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 1,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 1,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 1,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 2,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 2,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 2,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 2,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 2,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 2,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 3,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 3,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 3,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 3,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 3,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 3,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 4,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 50,
+            "price": 50
+          },
+          "blockedReason": "루비 50개 더 필요해요",
+          "info": 4,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 1,
+            "price": 50
+          },
+          "blockedReason": "루비 1개 더 필요해요",
+          "info": 4,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 4,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 4,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 4,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 5,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 5,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 5,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 5,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 5,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 5,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 6,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 50,
+            "price": 50
+          },
+          "blockedReason": "루비 50개 더 필요해요",
+          "info": 6,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 1,
+            "price": 50
+          },
+          "blockedReason": "루비 1개 더 필요해요",
+          "info": 6,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 6,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 6,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 6,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 7,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 7,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 7,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 7,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 7,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 7,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 8,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 8,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 8,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 8,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 8,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 8,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 9,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 9,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 9,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 9,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 9,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 9,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 10,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 10,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 10,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 10,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 10,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 10,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 11,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 11,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 11,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 11,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 11,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 11,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 12,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 12,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 12,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 12,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 12,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 12,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 13,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 13,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 13,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 13,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 13,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 13,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 14,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 14,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 14,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 14,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 14,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unavailable"
+          },
+          "blockedReason": "지금은 뽑을 수 없어요",
+          "info": 14,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 15,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 50,
+            "price": 50
+          },
+          "blockedReason": "루비 50개 더 필요해요",
+          "info": 15,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 1,
+            "price": 50
+          },
+          "blockedReason": "루비 1개 더 필요해요",
+          "info": 15,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 15,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 15,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 15,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": "int:9223372036854775807"
+          },
+          "blockedReason": null,
+          "info": 16,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": "int:9223372036854775807",
+            "price": "int:9223372036854775807"
+          },
+          "blockedReason": "루비 9223372036854775807개 더 필요해요",
+          "info": 16,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": "int:9223372036854775758",
+            "price": "int:9223372036854775807"
+          },
+          "blockedReason": "루비 9223372036854775758개 더 필요해요",
+          "info": 16,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": "int:9223372036854775757",
+            "price": "int:9223372036854775807"
+          },
+          "blockedReason": "루비 9223372036854775757개 더 필요해요",
+          "info": 16,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": "int:9223372036854775756",
+            "price": "int:9223372036854775807"
+          },
+          "blockedReason": "루비 9223372036854775756개 더 필요해요",
+          "info": 16,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": "int:9223372036854774807",
+            "price": "int:9223372036854775807"
+          },
+          "blockedReason": "루비 9223372036854774807개 더 필요해요",
+          "info": 16,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 17,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 50,
+            "price": 50
+          },
+          "blockedReason": "루비 50개 더 필요해요",
+          "info": 17,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 1,
+            "price": 50
+          },
+          "blockedReason": "루비 1개 더 필요해요",
+          "info": 17,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 17,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 17,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 17,
+          "rubyBalance": 1000
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "unknownBalance",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 18,
+          "rubyBalance": null
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 50,
+            "price": 50
+          },
+          "blockedReason": "루비 50개 더 필요해요",
+          "info": 18,
+          "rubyBalance": 0
+        },
+        {
+          "availability": {
+            "canPull": false,
+            "kind": "short",
+            "missing": 1,
+            "price": 50
+          },
+          "blockedReason": "루비 1개 더 필요해요",
+          "info": 18,
+          "rubyBalance": 49
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 18,
+          "rubyBalance": 50
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 18,
+          "rubyBalance": 51
+        },
+        {
+          "availability": {
+            "canPull": true,
+            "kind": "ready",
+            "price": 50
+          },
+          "blockedReason": null,
+          "info": 18,
+          "rubyBalance": 1000
+        }
+      ]
+    },
+    {
+      "costTables": [
+        null,
+        {},
+        {
+          "aing": 1,
+          "aing_cake_choco": 5,
+          "aing_gold": 20,
+          "fox": 2,
+          "robot": 0,
+          "shiba": -3
+        }
+      ],
+      "id": "exchange-availability",
+      "rows": [
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": null,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 0,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 1,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 2,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 20,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 25,
+          "table": 0
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": null,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 0,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 1,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 2,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 20,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 25,
+          "table": 1
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "cost": 2,
+            "costValue": 2,
+            "kind": "unknownShards"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "cost": 2,
+            "costValue": 2,
+            "kind": "short",
+            "missing": 2
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "cost": 2,
+            "costValue": 2,
+            "kind": "short",
+            "missing": 1
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": true,
+            "cost": 2,
+            "costValue": 2,
+            "kind": "available"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": true,
+            "cost": 2,
+            "costValue": 2,
+            "kind": "available"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": true,
+            "cost": 2,
+            "costValue": 2,
+            "kind": "available"
+          },
+          "characterID": "fox",
+          "owned": false,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "fox",
+          "owned": true,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "cost": 20,
+            "costValue": 20,
+            "kind": "unknownShards"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "cost": 20,
+            "costValue": 20,
+            "kind": "short",
+            "missing": 20
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "cost": 20,
+            "costValue": 20,
+            "kind": "short",
+            "missing": 19
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "cost": 20,
+            "costValue": 20,
+            "kind": "short",
+            "missing": 18
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": true,
+            "cost": 20,
+            "costValue": 20,
+            "kind": "available"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": true,
+            "cost": 20,
+            "costValue": 20,
+            "kind": "available"
+          },
+          "characterID": "aing_gold",
+          "owned": false,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "owned"
+          },
+          "characterID": "aing_gold",
+          "owned": true,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": false,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing",
+          "owned": true,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": false,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "aing_cake_choco",
+          "owned": true,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": false,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "robot",
+          "owned": true,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": false,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "shiba",
+          "owned": true,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": false,
+          "shards": 25,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": null,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 0,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 1,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 2,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 20,
+          "table": 2
+        },
+        {
+          "availability": {
+            "canExchange": false,
+            "costValue": null,
+            "kind": "notExchangeable"
+          },
+          "characterID": "ghost",
+          "owned": true,
+          "shards": 25,
+          "table": 2
+        }
+      ]
+    },
+    {
+      "id": "odds-rows",
+      "names": {
+        "aing_gold": "",
+        "fox": "여우",
+        "robot": " 로봇 ",
+        "squirrel": "  "
+      },
+      "rows": [
+        {
+          "info": 0,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "404e000000000000",
+              "percentText": "60%",
+              "priceText": "60",
+              "shardCost": 2,
+              "shopPrice": 60
+            },
+            {
+              "characterID": "aing_gold",
+              "finish": "gold",
+              "isGachaOnly": true,
+              "isGold": true,
+              "isRainbow": false,
+              "name": "황금 아잉이",
+              "percentBits": "4044000000000000",
+              "percentText": "40%",
+              "priceText": "뽑기 또는 조각 20개",
+              "shardCost": 20,
+              "shopPrice": null
+            }
+          ]
+        },
+        {
+          "info": 1,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "404e000000000000",
+              "percentText": "60%",
+              "priceText": "60",
+              "shardCost": 2,
+              "shopPrice": 60
+            },
+            {
+              "characterID": "aing_gold",
+              "finish": "gold",
+              "isGachaOnly": true,
+              "isGold": true,
+              "isRainbow": false,
+              "name": "황금 아잉이",
+              "percentBits": "4043ff5c28f5c28f",
+              "percentText": "40%",
+              "priceText": "뽑기 전용",
+              "shardCost": null,
+              "shopPrice": null
+            }
+          ]
+        },
+        {
+          "info": 2,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "404e000000000000",
+              "percentText": "60%",
+              "priceText": "60",
+              "shardCost": null,
+              "shopPrice": 60
+            },
+            {
+              "characterID": "aing_gold",
+              "finish": "gold",
+              "isGachaOnly": true,
+              "isGold": true,
+              "isRainbow": false,
+              "name": "황금 아잉이",
+              "percentBits": "4043fd70a3d70a3d",
+              "percentText": "40%",
+              "priceText": "뽑기 전용",
+              "shardCost": null,
+              "shopPrice": null
+            }
+          ]
+        },
+        {
+          "info": 3,
+          "rows": [
+            {
+              "characterID": "aing_gold",
+              "finish": "gold",
+              "isGachaOnly": true,
+              "isGold": true,
+              "isRainbow": false,
+              "name": "황금 아잉이",
+              "percentBits": "4044000000000000",
+              "percentText": "40%",
+              "priceText": "뽑기 전용",
+              "shardCost": null,
+              "shopPrice": null
+            }
+          ]
+        },
+        {
+          "info": 4,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "404e000000000000",
+              "percentText": "60%",
+              "priceText": "60",
+              "shardCost": null,
+              "shopPrice": 60
+            },
+            {
+              "characterID": "robot",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "로봇",
+              "percentBits": "4044000000000000",
+              "percentText": "40%",
+              "priceText": "200",
+              "shardCost": null,
+              "shopPrice": 200
+            }
+          ]
+        },
+        {
+          "info": 5,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "4059000000000000",
+              "percentText": "100%",
+              "priceText": "60",
+              "shardCost": null,
+              "shopPrice": 60
+            }
+          ]
+        },
+        {
+          "info": 6,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "4004000000000000",
+              "percentText": "2.5%",
+              "priceText": "60",
+              "shardCost": null,
+              "shopPrice": 60
+            },
+            {
+              "characterID": "robot",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "로봇",
+              "percentBits": "4058600000000000",
+              "percentText": "97.5%",
+              "priceText": "200",
+              "shardCost": 4,
+              "shopPrice": 200
+            }
+          ]
+        },
+        {
+          "info": 7,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "4059000000000000",
+              "percentText": "100%",
+              "priceText": "60",
+              "shardCost": null,
+              "shopPrice": 60
+            }
+          ]
+        },
+        {
+          "info": 8,
+          "rows": []
+        },
+        {
+          "info": 9,
+          "rows": []
+        },
+        {
+          "info": 10,
+          "rows": []
+        },
+        {
+          "info": 11,
+          "rows": []
+        },
+        {
+          "info": 12,
+          "rows": []
+        },
+        {
+          "info": 14,
+          "rows": []
+        },
+        {
+          "info": 15,
+          "rows": [
+            {
+              "characterID": "aing_rainbow",
+              "finish": "rainbow",
+              "isGachaOnly": true,
+              "isGold": false,
+              "isRainbow": true,
+              "name": "무지개 아잉이",
+              "percentBits": "3ff05397829cbc15",
+              "percentText": "1%",
+              "priceText": "뽑기 전용",
+              "shardCost": null,
+              "shopPrice": null
+            },
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "4058beb1a1f58d10",
+              "percentText": "99%",
+              "priceText": "60",
+              "shardCost": null,
+              "shopPrice": 60
+            }
+          ]
+        },
+        {
+          "info": 16,
+          "rows": [
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "4059000000000000",
+              "percentText": "100%",
+              "priceText": "60",
+              "shardCost": null,
+              "shopPrice": 60
+            }
+          ]
+        },
+        {
+          "info": 17,
+          "rows": [
+            {
+              "characterID": "aing_gold",
+              "finish": "gold",
+              "isGachaOnly": true,
+              "isGold": true,
+              "isRainbow": false,
+              "name": "황금 아잉이",
+              "percentBits": "4008000000000000",
+              "percentText": "3%",
+              "priceText": "뽑기 또는 조각 20개",
+              "shardCost": 20,
+              "shopPrice": null
+            },
+            {
+              "characterID": "aing_rainbow",
+              "finish": "rainbow",
+              "isGachaOnly": true,
+              "isGold": false,
+              "isRainbow": true,
+              "name": "무지개 아잉이",
+              "percentBits": "4000000000000000",
+              "percentText": "2%",
+              "priceText": "뽑기 또는 조각 20개",
+              "shardCost": 20,
+              "shopPrice": null
+            },
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "4038000000000000",
+              "percentText": "24%",
+              "priceText": "60",
+              "shardCost": 2,
+              "shopPrice": 60
+            },
+            {
+              "characterID": "squirrel",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "squirrel",
+              "percentBits": "4038000000000000",
+              "percentText": "24%",
+              "priceText": "—",
+              "shardCost": 2,
+              "shopPrice": null
+            },
+            {
+              "characterID": "shiba",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "shiba",
+              "percentBits": "402c000000000000",
+              "percentText": "14%",
+              "priceText": "—",
+              "shardCost": 4,
+              "shopPrice": null
+            },
+            {
+              "characterID": "ghost",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "ghost",
+              "percentBits": "402c000000000000",
+              "percentText": "14%",
+              "priceText": "—",
+              "shardCost": 4,
+              "shopPrice": null
+            },
+            {
+              "characterID": "jellyfish",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "jellyfish",
+              "percentBits": "4026000000000000",
+              "percentText": "11%",
+              "priceText": "—",
+              "shardCost": 5,
+              "shopPrice": null
+            },
+            {
+              "characterID": "robot",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "로봇",
+              "percentBits": "4020000000000000",
+              "percentText": "8%",
+              "priceText": "200",
+              "shardCost": 8,
+              "shopPrice": 200
+            }
+          ]
+        },
+        {
+          "info": 18,
+          "rows": [
+            {
+              "characterID": "aing_gold",
+              "finish": "gold",
+              "isGachaOnly": true,
+              "isGold": true,
+              "isRainbow": false,
+              "name": "황금 아잉이",
+              "percentBits": "4008000000000000",
+              "percentText": "3%",
+              "priceText": "뽑기 또는 조각 20개",
+              "shardCost": 20,
+              "shopPrice": null
+            },
+            {
+              "characterID": "aing_rainbow",
+              "finish": "rainbow",
+              "isGachaOnly": true,
+              "isGold": false,
+              "isRainbow": true,
+              "name": "무지개 아잉이",
+              "percentBits": "4000000000000000",
+              "percentText": "2%",
+              "priceText": "뽑기 또는 조각 20개",
+              "shardCost": 20,
+              "shopPrice": null
+            },
+            {
+              "characterID": "fox",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "여우",
+              "percentBits": "4038000000000000",
+              "percentText": "24%",
+              "priceText": "60",
+              "shardCost": 2,
+              "shopPrice": 60
+            },
+            {
+              "characterID": "squirrel",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "squirrel",
+              "percentBits": "4038000000000000",
+              "percentText": "24%",
+              "priceText": "—",
+              "shardCost": 2,
+              "shopPrice": null
+            },
+            {
+              "characterID": "shiba",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "shiba",
+              "percentBits": "402c000000000000",
+              "percentText": "14%",
+              "priceText": "—",
+              "shardCost": 4,
+              "shopPrice": null
+            },
+            {
+              "characterID": "ghost",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "ghost",
+              "percentBits": "402c000000000000",
+              "percentText": "14%",
+              "priceText": "—",
+              "shardCost": 4,
+              "shopPrice": null
+            },
+            {
+              "characterID": "jellyfish",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "jellyfish",
+              "percentBits": "4026000000000000",
+              "percentText": "11%",
+              "priceText": "—",
+              "shardCost": 5,
+              "shopPrice": null
+            },
+            {
+              "characterID": "robot",
+              "finish": "standard",
+              "isGachaOnly": false,
+              "isGold": false,
+              "isRainbow": false,
+              "name": "로봇",
+              "percentBits": "4020000000000000",
+              "percentText": "8%",
+              "priceText": "200",
+              "shardCost": 8,
+              "shopPrice": 200
+            }
+          ]
+        }
+      ],
+      "shopRows": [
+        {
+          "gachaOnly": false,
+          "id": "fox",
+          "price": 60
+        },
+        {
+          "gachaOnly": null,
+          "id": "robot",
+          "price": 200
+        },
+        {
+          "gachaOnly": true,
+          "id": "aing_gold",
+          "price": 1000
+        },
+        {
+          "gachaOnly": null,
+          "id": "aing_rainbow",
+          "price": 1000
+        },
+        {
+          "gachaOnly": true,
+          "id": "aing_cake_choco",
+          "price": 2001
+        },
+        {
+          "gachaOnly": null,
+          "id": "squirrel",
+          "price": null
+        },
+        {
+          "gachaOnly": null,
+          "id": "fox",
+          "price": 1
+        }
+      ],
+      "shopRowsJSON": "[{\"id\":\"fox\",\"price\":60,\"owned\":true,\"gacha_only\":false},{\"id\":\"robot\",\"price\":200,\"gacha_only\":null},{\"id\":\"aing_gold\",\"price\":1000,\"gacha_only\":true},{\"id\":\"aing_rainbow\",\"price\":1000},{\"id\":\"aing_cake_choco\",\"price\":2001,\"gacha_only\":true,\"gift_only\":true},{\"id\":\"squirrel\"},{\"id\":\"fox\",\"price\":1}]"
+    },
+    {
+      "id": "exchange-rows",
+      "rows": [
+        {
+          "info": 0,
+          "owned": [],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "cost": 20,
+                "costValue": 20,
+                "kind": "short",
+                "missing": 17
+              },
+              "characterID": "aing_gold",
+              "name": "황금 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            }
+          ]
+        },
+        {
+          "info": 0,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "costValue": null,
+                "kind": "owned"
+              },
+              "characterID": "aing_gold",
+              "name": "황금 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": false,
+                "costValue": null,
+                "kind": "owned"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            }
+          ]
+        },
+        {
+          "info": 1,
+          "owned": [],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            }
+          ]
+        },
+        {
+          "info": 1,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "costValue": null,
+                "kind": "owned"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            }
+          ]
+        },
+        {
+          "info": 2,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 2,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 3,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 3,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 4,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 4,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 5,
+          "owned": [],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "unknownShards"
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        },
+        {
+          "info": 5,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "unknownShards"
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        },
+        {
+          "info": 6,
+          "owned": [],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "short",
+                "missing": 1
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        },
+        {
+          "info": 6,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "short",
+                "missing": 1
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        },
+        {
+          "info": 7,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 7,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 8,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 8,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 9,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 9,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 10,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 10,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 11,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 11,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 12,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 12,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 14,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 14,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 15,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 15,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 16,
+          "owned": [],
+          "rows": []
+        },
+        {
+          "info": 16,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": []
+        },
+        {
+          "info": 17,
+          "owned": [],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 20,
+                "costValue": 20,
+                "kind": "available"
+              },
+              "characterID": "aing_gold",
+              "name": "황금 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 20,
+                "costValue": 20,
+                "kind": "available"
+              },
+              "characterID": "aing_rainbow",
+              "name": "무지개 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "squirrel",
+              "name": "squirrel"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "shiba",
+              "name": "shiba"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "ghost",
+              "name": "ghost"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 5,
+                "costValue": 5,
+                "kind": "available"
+              },
+              "characterID": "jellyfish",
+              "name": "jellyfish"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 8,
+                "costValue": 8,
+                "kind": "available"
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        },
+        {
+          "info": 17,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "costValue": null,
+                "kind": "owned"
+              },
+              "characterID": "aing_gold",
+              "name": "황금 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 20,
+                "costValue": 20,
+                "kind": "available"
+              },
+              "characterID": "aing_rainbow",
+              "name": "무지개 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": false,
+                "costValue": null,
+                "kind": "owned"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "squirrel",
+              "name": "squirrel"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "shiba",
+              "name": "shiba"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "ghost",
+              "name": "ghost"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 5,
+                "costValue": 5,
+                "kind": "available"
+              },
+              "characterID": "jellyfish",
+              "name": "jellyfish"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 8,
+                "costValue": 8,
+                "kind": "available"
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        },
+        {
+          "info": 18,
+          "owned": [],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 20,
+                "costValue": 20,
+                "kind": "available"
+              },
+              "characterID": "aing_gold",
+              "name": "황금 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 20,
+                "costValue": 20,
+                "kind": "available"
+              },
+              "characterID": "aing_rainbow",
+              "name": "무지개 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "squirrel",
+              "name": "squirrel"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "shiba",
+              "name": "shiba"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "ghost",
+              "name": "ghost"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 5,
+                "costValue": 5,
+                "kind": "available"
+              },
+              "characterID": "jellyfish",
+              "name": "jellyfish"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 8,
+                "costValue": 8,
+                "kind": "available"
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        },
+        {
+          "info": 18,
+          "owned": [
+            "aing_gold",
+            "fox"
+          ],
+          "rows": [
+            {
+              "availability": {
+                "canExchange": false,
+                "costValue": null,
+                "kind": "owned"
+              },
+              "characterID": "aing_gold",
+              "name": "황금 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 20,
+                "costValue": 20,
+                "kind": "available"
+              },
+              "characterID": "aing_rainbow",
+              "name": "무지개 아잉이"
+            },
+            {
+              "availability": {
+                "canExchange": false,
+                "costValue": null,
+                "kind": "owned"
+              },
+              "characterID": "fox",
+              "name": "여우"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 2,
+                "costValue": 2,
+                "kind": "available"
+              },
+              "characterID": "squirrel",
+              "name": "squirrel"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "shiba",
+              "name": "shiba"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 4,
+                "costValue": 4,
+                "kind": "available"
+              },
+              "characterID": "ghost",
+              "name": "ghost"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 5,
+                "costValue": 5,
+                "kind": "available"
+              },
+              "characterID": "jellyfish",
+              "name": "jellyfish"
+            },
+            {
+              "availability": {
+                "canExchange": true,
+                "cost": 8,
+                "costValue": 8,
+                "kind": "available"
+              },
+              "characterID": "robot",
+              "name": "로봇"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pull-responses",
+      "rows": [
+        {
+          "json": "{\"status\": \"ok\", \"character_id\": \"aing_rainbow\", \"duplicate\": false, \"shards_gained\": 0, \"shards\": 23, \"ruby_balance\": 70, \"price\": 50, \"request_id\": \"d0000000-0000-4000-8000-00000000a001\", \"replayed\": false}\n",
+          "notice": null,
+          "outcome": {
+            "characterID": "aing_rainbow",
+            "detail": "새 캐릭터: 이름",
+            "headline": "무지개 아잉이!",
+            "isDuplicate": false,
+            "kind": "pulled",
+            "newlyOwnedID": "aing_rainbow",
+            "replayed": false,
+            "resultKind": "rainbow",
+            "rubyBalance": 70,
+            "shards": 23,
+            "shardsGained": 0
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"character_id\":\"fox\",\"duplicate\":true,\"shards\":4,\"ruby_balance\":10}",
+          "notice": null,
+          "outcome": {
+            "characterID": "fox",
+            "detail": null,
+            "headline": "이미 있는 이름 → 조각 +1",
+            "isDuplicate": true,
+            "kind": "pulled",
+            "newlyOwnedID": null,
+            "replayed": false,
+            "resultKind": "duplicate",
+            "rubyBalance": 10,
+            "shards": 4,
+            "shardsGained": 1
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"character_id\":\"fox\",\"duplicate\":false}",
+          "notice": null,
+          "outcome": {
+            "characterID": "fox",
+            "detail": null,
+            "headline": "새 캐릭터: 이름",
+            "isDuplicate": false,
+            "kind": "pulled",
+            "newlyOwnedID": "fox",
+            "replayed": false,
+            "resultKind": "newCharacter",
+            "rubyBalance": null,
+            "shards": null,
+            "shardsGained": 0
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"character_id\":\"aing_gold\",\"duplicate\":true,\"shards_gained\":1,\"replayed\":true}",
+          "notice": null,
+          "outcome": {
+            "characterID": "aing_gold",
+            "detail": "이미 있는 이름 → 조각 +1",
+            "headline": "황금 아잉이!",
+            "isDuplicate": true,
+            "kind": "pulled",
+            "newlyOwnedID": null,
+            "replayed": true,
+            "resultKind": "gold",
+            "rubyBalance": null,
+            "shards": null,
+            "shardsGained": 1
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"character_id\":\"aing_rainbow\"}",
+          "notice": null,
+          "outcome": {
+            "characterID": "aing_rainbow",
+            "detail": "새 캐릭터: 이름",
+            "headline": "무지개 아잉이!",
+            "isDuplicate": false,
+            "kind": "pulled",
+            "newlyOwnedID": "aing_rainbow",
+            "replayed": false,
+            "resultKind": "rainbow",
+            "rubyBalance": null,
+            "shards": null,
+            "shardsGained": 0
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"character_id\":\"\"}",
+          "notice": "뽑지 못했어요. 잠시 후 다시 시도해 주세요",
+          "outcome": {
+            "kind": "failed",
+            "status": "ok"
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\"}",
+          "notice": "뽑지 못했어요. 잠시 후 다시 시도해 주세요",
+          "outcome": {
+            "kind": "failed",
+            "status": "ok"
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"character_id\":\"fox\",\"duplicate\":\"yes\",\"shards_gained\":\"1\",\"shards\":2.5,\"ruby_balance\":\"7\"}",
+          "notice": null,
+          "outcome": {
+            "characterID": "fox",
+            "detail": null,
+            "headline": "새 캐릭터: 이름",
+            "isDuplicate": false,
+            "kind": "pulled",
+            "newlyOwnedID": "fox",
+            "replayed": false,
+            "resultKind": "newCharacter",
+            "rubyBalance": null,
+            "shards": null,
+            "shardsGained": 0
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"insufficient\",\"need\":50,\"have\":12}",
+          "notice": "루비 38개 더 필요해요",
+          "outcome": {
+            "have": 12,
+            "kind": "insufficient",
+            "need": 50
+          },
+          "status": "insufficient"
+        },
+        {
+          "json": "{\"status\":\"insufficient\"}",
+          "notice": "루비가 모자라요",
+          "outcome": {
+            "have": null,
+            "kind": "insufficient",
+            "need": null
+          },
+          "status": "insufficient"
+        },
+        {
+          "json": "{\"status\":\"needs_update\"}",
+          "notice": "앱을 업데이트하면 뽑을 수 있어요",
+          "outcome": {
+            "kind": "needsUpdate"
+          },
+          "status": "needs_update"
+        },
+        {
+          "json": "{\"status\":\"not_signed_in\"}",
+          "notice": "로그인하면 뽑을 수 있어요",
+          "outcome": {
+            "kind": "notSignedIn"
+          },
+          "status": "not_signed_in"
+        },
+        {
+          "json": "{\"status\":\"invalid\"}",
+          "notice": "뽑지 못했어요. 잠시 후 다시 시도해 주세요",
+          "outcome": {
+            "kind": "invalid"
+          },
+          "status": "invalid"
+        },
+        {
+          "json": "{\"status\":\"new_thing\"}",
+          "notice": "뽑지 못했어요. 잠시 후 다시 시도해 주세요",
+          "outcome": {
+            "kind": "failed",
+            "status": "new_thing"
+          },
+          "status": "new_thing"
+        },
+        {
+          "json": "{\"status\":7}",
+          "throws": true
+        },
+        {
+          "json": "{\"character_id\":\"fox\"}",
+          "throws": true
+        },
+        {
+          "json": "[]",
+          "throws": true
+        }
+      ]
+    },
+    {
+      "id": "exchange-responses",
+      "rows": [
+        {
+          "json": "{\"status\": \"ok\", \"character_id\": \"squirrel\", \"shards\": 21, \"cost\": 2, \"request_id\": \"d0000000-0000-4000-8000-00000000a002\", \"replayed\": false}\n",
+          "notice": "교환했어요: 여우",
+          "outcome": {
+            "characterID": "squirrel",
+            "cost": 2,
+            "kind": "exchanged",
+            "replayed": false,
+            "shards": 21
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\": \"ok\", \"character_id\": \"aing_rainbow\", \"shards\": 3, \"cost\": 20, \"request_id\": \"d0000000-0000-4000-8000-00000000a003\", \"replayed\": false}\n",
+          "notice": "교환했어요: 여우",
+          "outcome": {
+            "characterID": "aing_rainbow",
+            "cost": 20,
+            "kind": "exchanged",
+            "replayed": false,
+            "shards": 3
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"shards\":1,\"cost\":2}",
+          "notice": "교환했어요: 여우",
+          "outcome": {
+            "characterID": "fox",
+            "cost": 2,
+            "kind": "exchanged",
+            "replayed": false,
+            "shards": 1
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"ok\",\"character_id\":\"robot\",\"replayed\":true}",
+          "notice": "교환했어요: 여우",
+          "outcome": {
+            "characterID": "robot",
+            "cost": null,
+            "kind": "exchanged",
+            "replayed": true,
+            "shards": null
+          },
+          "status": "ok"
+        },
+        {
+          "json": "{\"status\":\"already_owned\"}",
+          "notice": "이미 갖고 있어요",
+          "outcome": {
+            "kind": "alreadyOwned"
+          },
+          "status": "already_owned"
+        },
+        {
+          "json": "{\"status\":\"not_exchangeable\"}",
+          "notice": "교환할 수 없는 캐릭터예요",
+          "outcome": {
+            "kind": "notExchangeable"
+          },
+          "status": "not_exchangeable"
+        },
+        {
+          "json": "{\"status\":\"insufficient_shards\",\"need\":20,\"have\":3}",
+          "notice": "조각 17개 더 필요해요",
+          "outcome": {
+            "have": 3,
+            "kind": "insufficientShards",
+            "need": 20
+          },
+          "status": "insufficient_shards"
+        },
+        {
+          "json": "{\"status\":\"insufficient_shards\",\"need\":3,\"have\":20}",
+          "notice": "조각이 모자라요",
+          "outcome": {
+            "have": 20,
+            "kind": "insufficientShards",
+            "need": 3
+          },
+          "status": "insufficient_shards"
+        },
+        {
+          "json": "{\"status\":\"insufficient_shards\"}",
+          "notice": "조각이 모자라요",
+          "outcome": {
+            "have": null,
+            "kind": "insufficientShards",
+            "need": null
+          },
+          "status": "insufficient_shards"
+        },
+        {
+          "json": "{\"status\":\"needs_update\"}",
+          "notice": "앱을 업데이트하면 교환할 수 있어요",
+          "outcome": {
+            "kind": "needsUpdate"
+          },
+          "status": "needs_update"
+        },
+        {
+          "json": "{\"status\":\"not_signed_in\"}",
+          "notice": "로그인하면 교환할 수 있어요",
+          "outcome": {
+            "kind": "notSignedIn"
+          },
+          "status": "not_signed_in"
+        },
+        {
+          "json": "{\"status\":\"invalid\"}",
+          "notice": "교환하지 못했어요. 잠시 후 다시 시도해 주세요",
+          "outcome": {
+            "kind": "failed",
+            "status": "invalid"
+          },
+          "status": "invalid"
+        },
+        {
+          "json": "{}",
+          "throws": true
+        }
+      ]
+    },
+    {
+      "exchange": "{\"p_character_id\":\"fox\",\"p_protocol\":3,\"p_request_id\":\"d0000000-0000-4000-8000-00000000a001\"}",
+      "id": "requests",
+      "pull": "{\"p_protocol\":4,\"p_request_id\":\"d0000000-0000-4000-8000-00000000a001\"}"
+    },
+    {
+      "id": "request-ids",
+      "steps": [
+        {
+          "exchange": {},
+          "id": "00000000-0000-4000-8000-000000000001",
+          "pull": "00000000-0000-4000-8000-000000000001",
+          "step": "pullID"
+        },
+        {
+          "exchange": {},
+          "id": "00000000-0000-4000-8000-000000000001",
+          "pull": "00000000-0000-4000-8000-000000000001",
+          "step": "pullID-held"
+        },
+        {
+          "exchange": {
+            "fox": "00000000-0000-4000-8000-000000000002"
+          },
+          "id": "00000000-0000-4000-8000-000000000002",
+          "pull": "00000000-0000-4000-8000-000000000001",
+          "step": "exchangeID fox"
+        },
+        {
+          "exchange": {
+            "fox": "00000000-0000-4000-8000-000000000002",
+            "robot": "00000000-0000-4000-8000-000000000003"
+          },
+          "id": "00000000-0000-4000-8000-000000000003",
+          "pull": "00000000-0000-4000-8000-000000000001",
+          "step": "exchangeID robot"
+        },
+        {
+          "exchange": {
+            "fox": "00000000-0000-4000-8000-000000000002",
+            "robot": "00000000-0000-4000-8000-000000000003"
+          },
+          "id": null,
+          "pull": "00000000-0000-4000-8000-000000000001",
+          "step": "settlePull other"
+        },
+        {
+          "exchange": {
+            "fox": "00000000-0000-4000-8000-000000000002",
+            "robot": "00000000-0000-4000-8000-000000000003"
+          },
+          "id": null,
+          "pull": null,
+          "step": "settlePull first"
+        },
+        {
+          "exchange": {
+            "fox": "00000000-0000-4000-8000-000000000002",
+            "robot": "00000000-0000-4000-8000-000000000003"
+          },
+          "id": "00000000-0000-4000-8000-000000000005",
+          "pull": "00000000-0000-4000-8000-000000000005",
+          "step": "pullID new"
+        },
+        {
+          "exchange": {
+            "fox": "00000000-0000-4000-8000-000000000002",
+            "robot": "00000000-0000-4000-8000-000000000003"
+          },
+          "id": null,
+          "pull": "00000000-0000-4000-8000-000000000005",
+          "step": "settleExchange fox-id for robot"
+        },
+        {
+          "exchange": {
+            "robot": "00000000-0000-4000-8000-000000000003"
+          },
+          "id": null,
+          "pull": "00000000-0000-4000-8000-000000000005",
+          "step": "settleExchange fox"
+        },
+        {
+          "exchange": {},
+          "id": null,
+          "pull": null,
+          "step": "reset"
+        }
+      ]
+    },
+    {
+      "alreadyOwned": "이미 갖고 있어요",
+      "connection": "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+      "exchangeButton": "교환",
+      "exchangeFailed": "교환하지 못했어요. 잠시 후 다시 시도해 주세요",
+      "exchangeTitle": "조각 교환",
+      "exchanged": "교환했어요: 여우",
+      "gachaOnly": "뽑기 전용",
+      "gachaOnlyHint": "뽑기나 조각 교환으로 얻을 수 있어요",
+      "gachaOnlyPrice0": "뽑기 전용",
+      "gachaOnlyPrice20": "뽑기 또는 조각 20개",
+      "gachaOnlyPriceNil": "뽑기 전용",
+      "goldHeadline": "황금 아잉이!",
+      "id": "texts",
+      "needsUpdate": "앱을 업데이트하면 뽑을 수 있어요",
+      "notExchangeable": "교환할 수 없는 캐릭터예요",
+      "notSignedIn": "로그인하면 뽑을 수 있어요",
+      "oddsButton": "확률 보기",
+      "oddsFootnote": "이미 있는 캐릭터가 나오면 조각 1개를 받아요 · 조각으로 캐릭터를 바꿀 수 있어요",
+      "oddsTitle": "뽑기 확률",
+      "owned": "보유",
+      "pullButton": "뽑기",
+      "pullButton50": "뽑기 · 50",
+      "pullFailed": "뽑지 못했어요. 잠시 후 다시 시도해 주세요",
+      "rainbowHeadline": "무지개 아잉이!",
+      "shardShortfall2": "조각 2개 더 필요해요",
+      "shards3": "조각 3개",
+      "shortfall": [
+        {
+          "have": null,
+          "need": null,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 12,
+          "need": 50,
+          "text": "루비 38개 더 필요해요"
+        },
+        {
+          "have": null,
+          "need": 50,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 3,
+          "need": null,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 10,
+          "need": 10,
+          "text": "루비가 모자라요"
+        }
+      ],
+      "title": "캐릭터 뽑기",
+      "unavailable": "지금은 뽑을 수 없어요",
+      "unknownValue": "—"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
+  "golden": "gacha/odds",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "info": "GachaInfo 디코드는 throw 하지 않는다 — 객체가 아니면 빈 정보, 칸이 틀리면 null, 깨진 확률 행 · 교환값만 버린다. totalPercent 비트 · hasCompleteOdds(|합-100| < 0.01) · isUsable(값 + 완전한 표)",
+    "percent": "정수면 소수점 없이 '5%', 아니면 한 자리 '2.5%' — (v*10).rounded()/10 은 0.5 에서 0 에서 먼 쪽(Swift .rounded())",
+    "requestIds": "동작 한 번 = id 하나 — 서버가 답했거나 함수가 없을 때만 버린다(settle). 교환은 캐릭터마다 칸이 따로",
+    "responses": "status 만 필수(없거나 글자가 아니면 throw — 같은 request_id 로 다시 묻는다). 나머지 칸은 모양이 틀리면 null",
+    "rows": "확률표 줄은 서버 순서 그대로. 금 · 무지개는 표식과 무관하게 뽑기 전용. 교환 목록은 금 → 무지개 → 확률표 순 → 나머지 id 순. 아잉 · 선물 전용은 교환 불가"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/Gacha.swift",
+    "Sources/CheckCore/CheckCoreShared.swift",
+    "Sources/CheckCore/CharacterKit/CharacterCatalog.swift",
+    "Sources/CheckCore/CharacterKit/GoldAing.swift"
+  ]
+}

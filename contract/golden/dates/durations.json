@@ -1,0 +1,346 @@
+{
+  "cases": [
+    {
+      "id": "durations",
+      "rows": [
+        {
+          "duration": "00:00",
+          "hoursMinutes": "0시간 00분",
+          "seconds": -5,
+          "titleDuration": "00:00",
+          "workGridTooltip": "근무 없음"
+        },
+        {
+          "duration": "00:00",
+          "hoursMinutes": "0시간 00분",
+          "seconds": 0,
+          "titleDuration": "00:00",
+          "workGridTooltip": "근무 없음"
+        },
+        {
+          "duration": "00:01",
+          "hoursMinutes": "0시간 00분",
+          "seconds": 1,
+          "titleDuration": "00:00",
+          "workGridTooltip": "0시간 00분"
+        },
+        {
+          "duration": "00:59",
+          "hoursMinutes": "0시간 00분",
+          "seconds": 59,
+          "titleDuration": "00:00",
+          "workGridTooltip": "0시간 00분"
+        },
+        {
+          "duration": "01:00",
+          "hoursMinutes": "0시간 01분",
+          "seconds": 60,
+          "titleDuration": "00:01",
+          "workGridTooltip": "0시간 01분"
+        },
+        {
+          "duration": "01:01",
+          "hoursMinutes": "0시간 01분",
+          "seconds": 61,
+          "titleDuration": "00:01",
+          "workGridTooltip": "0시간 01분"
+        },
+        {
+          "duration": "04:59",
+          "hoursMinutes": "0시간 04분",
+          "seconds": 299,
+          "titleDuration": "00:04",
+          "workGridTooltip": "0시간 04분"
+        },
+        {
+          "duration": "05:00",
+          "hoursMinutes": "0시간 05분",
+          "seconds": 300,
+          "titleDuration": "00:05",
+          "workGridTooltip": "0시간 05분"
+        },
+        {
+          "duration": "59:59",
+          "hoursMinutes": "0시간 59분",
+          "seconds": 3599,
+          "titleDuration": "00:59",
+          "workGridTooltip": "0시간 59분"
+        },
+        {
+          "duration": "01:00",
+          "hoursMinutes": "1시간 00분",
+          "seconds": 3600,
+          "titleDuration": "01:00",
+          "workGridTooltip": "1시간 00분"
+        },
+        {
+          "duration": "01:01",
+          "hoursMinutes": "1시간 01분",
+          "seconds": 3661,
+          "titleDuration": "01:01",
+          "workGridTooltip": "1시간 01분"
+        },
+        {
+          "duration": "01:23",
+          "hoursMinutes": "1시간 23분",
+          "seconds": 4980,
+          "titleDuration": "01:23",
+          "workGridTooltip": "1시간 23분"
+        },
+        {
+          "duration": "09:59",
+          "hoursMinutes": "9시간 59분",
+          "seconds": 35999,
+          "titleDuration": "09:59",
+          "workGridTooltip": "9시간 59분"
+        },
+        {
+          "duration": "10:00",
+          "hoursMinutes": "10시간 00분",
+          "seconds": 36000,
+          "titleDuration": "10:00",
+          "workGridTooltip": "10시간 00분"
+        },
+        {
+          "duration": "23:59",
+          "hoursMinutes": "23시간 59분",
+          "seconds": 86399,
+          "titleDuration": "23:59",
+          "workGridTooltip": "23시간 59분"
+        },
+        {
+          "duration": "24:00",
+          "hoursMinutes": "24시간 00분",
+          "seconds": 86400,
+          "titleDuration": "24:00",
+          "workGridTooltip": "24시간 00분"
+        },
+        {
+          "duration": "99:59",
+          "hoursMinutes": "99시간 59분",
+          "seconds": 359999,
+          "titleDuration": "99:59",
+          "workGridTooltip": "99시간 59분"
+        },
+        {
+          "duration": "100:00",
+          "hoursMinutes": "100시간 00분",
+          "seconds": 360000,
+          "titleDuration": "100:00",
+          "workGridTooltip": "100시간 00분"
+        },
+        {
+          "duration": "1000:00",
+          "hoursMinutes": "1000시간 00분",
+          "seconds": 3600000,
+          "titleDuration": "1000:00",
+          "workGridTooltip": "1000시간 00분"
+        }
+      ]
+    },
+    {
+      "id": "titles",
+      "maxLabelWidthBits": "4054800000000000",
+      "rows": [
+        {
+          "elapsed": 0,
+          "isWorking": true,
+          "localizedStatus": "근무중",
+          "pendingSync": false,
+          "status": "working",
+          "statusText": "근무중",
+          "symbol": "figure.run.circle.fill",
+          "title": "00:00"
+        },
+        {
+          "elapsed": 300,
+          "isWorking": true,
+          "localizedStatus": "근무중",
+          "pendingSync": false,
+          "status": "working",
+          "statusText": "근무중",
+          "symbol": "figure.run.circle.fill",
+          "title": "00:05"
+        },
+        {
+          "elapsed": 4980,
+          "isWorking": true,
+          "localizedStatus": "근무중",
+          "pendingSync": false,
+          "status": "working",
+          "statusText": "근무중",
+          "symbol": "figure.run.circle.fill",
+          "title": "01:23"
+        },
+        {
+          "elapsed": 0,
+          "isWorking": true,
+          "localizedStatus": "동기화 대기",
+          "pendingSync": true,
+          "status": "working",
+          "statusText": "근무중",
+          "symbol": "exclamationmark.icloud.fill",
+          "title": "대기"
+        },
+        {
+          "elapsed": 300,
+          "isWorking": true,
+          "localizedStatus": "동기화 대기",
+          "pendingSync": true,
+          "status": "working",
+          "statusText": "근무중",
+          "symbol": "exclamationmark.icloud.fill",
+          "title": "대기"
+        },
+        {
+          "elapsed": 4980,
+          "isWorking": true,
+          "localizedStatus": "동기화 대기",
+          "pendingSync": true,
+          "status": "working",
+          "statusText": "근무중",
+          "symbol": "exclamationmark.icloud.fill",
+          "title": "대기"
+        },
+        {
+          "elapsed": 0,
+          "isWorking": false,
+          "localizedStatus": "근무종료",
+          "pendingSync": false,
+          "status": "offWork",
+          "statusText": "근무종료",
+          "symbol": "pause.circle.fill",
+          "title": "오프"
+        },
+        {
+          "elapsed": 300,
+          "isWorking": false,
+          "localizedStatus": "근무종료",
+          "pendingSync": false,
+          "status": "offWork",
+          "statusText": "근무종료",
+          "symbol": "pause.circle.fill",
+          "title": "오프"
+        },
+        {
+          "elapsed": 4980,
+          "isWorking": false,
+          "localizedStatus": "근무종료",
+          "pendingSync": false,
+          "status": "offWork",
+          "statusText": "근무종료",
+          "symbol": "pause.circle.fill",
+          "title": "오프"
+        },
+        {
+          "elapsed": 0,
+          "isWorking": false,
+          "localizedStatus": "동기화 대기",
+          "pendingSync": true,
+          "status": "offWork",
+          "statusText": "근무종료",
+          "symbol": "exclamationmark.icloud.fill",
+          "title": "대기"
+        },
+        {
+          "elapsed": 300,
+          "isWorking": false,
+          "localizedStatus": "동기화 대기",
+          "pendingSync": true,
+          "status": "offWork",
+          "statusText": "근무종료",
+          "symbol": "exclamationmark.icloud.fill",
+          "title": "대기"
+        },
+        {
+          "elapsed": 4980,
+          "isWorking": false,
+          "localizedStatus": "동기화 대기",
+          "pendingSync": true,
+          "status": "offWork",
+          "statusText": "근무종료",
+          "symbol": "exclamationmark.icloud.fill",
+          "title": "대기"
+        }
+      ]
+    },
+    {
+      "id": "ages",
+      "referenceBits": "41daaadd3f000000",
+      "rows": [
+        {
+          "ageBits": "c03e000000000000",
+          "caption": "방금"
+        },
+        {
+          "ageBits": "0000000000000000",
+          "caption": "방금"
+        },
+        {
+          "ageBits": "3fe0000000000000",
+          "caption": "방금"
+        },
+        {
+          "ageBits": "404d800000000000",
+          "caption": "방금"
+        },
+        {
+          "ageBits": "404df33333333333",
+          "caption": "방금"
+        },
+        {
+          "ageBits": "404e000000000000",
+          "caption": "1분 전"
+        },
+        {
+          "ageBits": "405dc00000000000",
+          "caption": "1분 전"
+        },
+        {
+          "ageBits": "40ac1e0000000000",
+          "caption": "59분 전"
+        },
+        {
+          "ageBits": "40ac200000000000",
+          "caption": "1시간 전"
+        },
+        {
+          "ageBits": "40bc1f0000000000",
+          "caption": "1시간 전"
+        },
+        {
+          "ageBits": "40f517f000000000",
+          "caption": "23시간 전"
+        },
+        {
+          "ageBits": "40f5180000000000",
+          "caption": "1일 전"
+        },
+        {
+          "ageBits": "4105180000000000",
+          "caption": "2일 전"
+        },
+        {
+          "ageBits": "412a5e0000000000",
+          "caption": "10일 전"
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift",
+  "golden": "dates/durations",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "ages": "나이 문구(FeedbackText.ageText): 60초 미만 '방금' · 분 · 시간 · 일(정수 초 내림, 음수 0)",
+    "durations": "titleDuration = 언제나 HH:MM(초 내림) · duration = 1시간 미만 MM:SS 아니면 HH:MM · hoursMinutes = 'H시간 MM분' · 음수는 0",
+    "titles": "메뉴바 제목 — 동기화 대기가 먼저('대기'), 근무 중 HH:MM, 끝 '오프'. Windows 트레이 툴팁도 같은 글자(G §8-13)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/MenuBarStatusFormatter.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CheckWorkInsights.swift",
+    "Sources/CheckCore/AILimitFreshnessRule.swift"
+  ]
+}

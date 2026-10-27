@@ -1,0 +1,1815 @@
+{
+  "cases": [
+    {
+      "id": "fixture-_me/rpc.weekly_work_status.json",
+      "json": "{\n  \"__note\": [\n    \"weekly_work_status() — 받기 서버(20261019121000). 장면 _me · 라우트 `me`. 이번 주 23시간 12분(83520초 — 0.3.55 픽스처와 같은 값).\",\n    \"★ pending 은 **어느 주든** 받을 것 전부다: 지난주 40시간 50 + 이번 주 20시간 20 = 70. tiers 는 **이번 주**만 말한다 — 둘은 다른 자료다.\",\n    \"granted_now 는 받기 서버에서 **늘 빈 배열**이다(자동 지급이 없어졌다). 알림은 '방금 받았다'가 아니라 [받기] 버튼으로 바뀌었다.\",\n    \"tiers[20] 은 claimed=false · achieved=true · claimable=true — 옛 칸(claimed)의 뜻은 0.3.55 그대로라 구버전 앱도 이 응답을 읽는다.\",\n    \"게이지의 지금 퀘스트는 40시간이다(누적 83520초 < 144000초) · 받은 합(claimedTotal)은 0 이다.\"\n  ],\n  \"week_start\": \"2026-09-14\",\n  \"next_week_start\": \"2026-09-21\",\n  \"worked_seconds\": 83520,\n  \"tiers\": [\n    {\n      \"hours\": 20,\n      \"ruby\": 20,\n      \"claimed\": false,\n      \"achieved\": true,\n      \"claimable\": true\n    },\n    {\n      \"hours\": 40,\n      \"ruby\": 50,\n      \"claimed\": false,\n      \"achieved\": false,\n      \"claimable\": false\n    },\n    {\n      \"hours\": 60,\n      \"ruby\": 200,\n      \"claimed\": false,\n      \"achieved\": false,\n      \"claimable\": false\n    }\n  ],\n  \"granted_now\": [],\n  \"ruby_balance\": 120,\n  \"server_now_ms\": 1789621500000,\n  \"pending\": [\n    {\n      \"week_start\": \"2026-09-07\",\n      \"hours\": 40,\n      \"ruby\": 50\n    },\n    {\n      \"week_start\": \"2026-09-14\",\n      \"hours\": 20,\n      \"ruby\": 20\n    }\n  ],\n  \"claimable_ruby\": 70\n}\n",
+      "status": {
+        "claimableRuby": 70,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 83520,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "3fe28f5c28f5c28f",
+          "hasPassed": [
+            true,
+            false,
+            false
+          ],
+          "isComplete": false,
+          "questHours": 40,
+          "reward": 50
+        },
+        "grantedNow": [],
+        "hasClaimable": true,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-09-21",
+        "nextWeekStartDate": "41daabfd3c000000",
+        "pending": [
+          {
+            "hours": 40,
+            "ruby": 50,
+            "weekStart": "2026-09-07"
+          },
+          {
+            "hours": 20,
+            "ruby": 20,
+            "weekStart": "2026-09-14"
+          }
+        ],
+        "pendingCount": 2,
+        "pendingRuby": 70,
+        "rubyBalance": 120,
+        "serverNowMs": 1789621500000,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": true,
+            "claimable": true,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-09-14",
+        "workedSeconds": 83520
+      }
+    },
+    {
+      "id": "fixture-_me/rpc.weekly_work_status@demo-week-done.json",
+      "json": "{\n  \"__note\": [\n    \"weekly_work_status() — **완료**(62시간) · 세 단계 전부 받음. 닿는 길: -AingCheckDemoRoute me/weekly/done (장면 _me + 바늘 demo-week-done).\",\n    \"게이지는 가득이고 다음 목표가 없다(isComplete) · 받은 합은 장부가 말하는 270 이다. pending 은 비었다.\",\n    \"잔량 390 = 데모 시작 120 + 270.\"\n  ],\n  \"week_start\": \"2026-09-14\",\n  \"next_week_start\": \"2026-09-21\",\n  \"worked_seconds\": 223200,\n  \"tiers\": [\n    {\n      \"hours\": 20,\n      \"ruby\": 20,\n      \"claimed\": true,\n      \"achieved\": true,\n      \"claimable\": false\n    },\n    {\n      \"hours\": 40,\n      \"ruby\": 50,\n      \"claimed\": true,\n      \"achieved\": true,\n      \"claimable\": false\n    },\n    {\n      \"hours\": 60,\n      \"ruby\": 200,\n      \"claimed\": true,\n      \"achieved\": true,\n      \"claimable\": false\n    }\n  ],\n  \"granted_now\": [],\n  \"ruby_balance\": 390,\n  \"server_now_ms\": 1789621500000,\n  \"pending\": [],\n  \"claimable_ruby\": 0\n}\n",
+      "status": {
+        "claimableRuby": 0,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 223200,
+        "gauge": {
+          "claimedTotal": 270,
+          "fillBits": "3ff0000000000000",
+          "hasPassed": [
+            true,
+            true,
+            true
+          ],
+          "isComplete": true,
+          "questHours": 60,
+          "reward": 200
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-09-21",
+        "nextWeekStartDate": "41daabfd3c000000",
+        "pending": [],
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": 390,
+        "serverNowMs": 1789621500000,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": true,
+            "claimable": false,
+            "claimed": true,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": true,
+            "claimable": false,
+            "claimed": true,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": true,
+            "claimable": false,
+            "claimed": true,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-09-14",
+        "workedSeconds": 223200
+      }
+    },
+    {
+      "id": "fixture-_me/rpc.weekly_work_status@demo-week-legacy.json",
+      "json": "{\n  \"__note\": [\n    \"weekly_work_status() — **옛 서버(0.3.55~0.3.57)** 응답. 닿는 길: -AingCheckDemoRoute me/weekly/legacy (장면 _me + 바늘 demo-week-legacy).\",\n    \"pending · claimable_ruby · tiers[].achieved · tiers[].claimable 이 **아예 없다** → supportsClaim = false: [받기] 버튼을 세우면 안 되고,\",\n    \"지급은 cron 이 이미 했으므로 granted_now(이 호출이 넣은 행)로 '루비 50개를 받았어요'를 알린다 — 받기 서버에서는 이 길이 막힌다.\",\n    \"이번 주 42시간 · 20·40 단계를 받았고 60 단계는 아직이다. 잔량 190 = 120 + 20 + 50.\"\n  ],\n  \"week_start\": \"2026-09-14\",\n  \"next_week_start\": \"2026-09-21\",\n  \"worked_seconds\": 151200,\n  \"tiers\": [\n    {\n      \"hours\": 20,\n      \"ruby\": 20,\n      \"claimed\": true\n    },\n    {\n      \"hours\": 40,\n      \"ruby\": 50,\n      \"claimed\": true\n    },\n    {\n      \"hours\": 60,\n      \"ruby\": 200,\n      \"claimed\": false\n    }\n  ],\n  \"granted_now\": [\n    {\n      \"hours\": 40,\n      \"ruby\": 50\n    }\n  ],\n  \"ruby_balance\": 190,\n  \"server_now_ms\": 1789621500000\n}\n",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 151200,
+        "gauge": {
+          "claimedTotal": 70,
+          "fillBits": "3fe6666666666666",
+          "hasPassed": [
+            true,
+            true,
+            false
+          ],
+          "isComplete": false,
+          "questHours": 60,
+          "reward": 200
+        },
+        "grantedNow": [
+          {
+            "hours": 40,
+            "ruby": 50,
+            "weekStart": null
+          }
+        ],
+        "hasClaimable": false,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-09-21",
+        "nextWeekStartDate": "41daabfd3c000000",
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": 190,
+        "serverNowMs": 1789621500000,
+        "supportsClaim": false,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-09-14",
+        "workedSeconds": 151200
+      }
+    },
+    {
+      "id": "fixture-_me/rpc.weekly_work_claim.json",
+      "json": "{\n  \"__note\": [\n    \"weekly_work_claim(p_week_start = null, p_hours = null) — **받을 것 전부**(어느 주든). 응답은 상태와 같은 모양 + claimed_now.\",\n    \"claimed_now 는 이 호출이 장부에 넣은 두 건(지난주 40시간 50 · 이번 주 20시간 20 — order by week_start, hours) · 합 70 → 잔량 190.\",\n    \"받은 뒤 pending 은 비고 claimable_ruby 는 0 이다. tiers[20] 이 claimed=true · claimable=false 로 바뀐다.\",\n    \"granted_now 는 여기서도 **빈 배열**이다 — '받았다'는 claimed_now 하나로만 말한다.\"\n  ],\n  \"week_start\": \"2026-09-14\",\n  \"next_week_start\": \"2026-09-21\",\n  \"worked_seconds\": 83520,\n  \"tiers\": [\n    {\n      \"hours\": 20,\n      \"ruby\": 20,\n      \"claimed\": true,\n      \"achieved\": true,\n      \"claimable\": false\n    },\n    {\n      \"hours\": 40,\n      \"ruby\": 50,\n      \"claimed\": false,\n      \"achieved\": false,\n      \"claimable\": false\n    },\n    {\n      \"hours\": 60,\n      \"ruby\": 200,\n      \"claimed\": false,\n      \"achieved\": false,\n      \"claimable\": false\n    }\n  ],\n  \"granted_now\": [],\n  \"ruby_balance\": 190,\n  \"server_now_ms\": 1789621500000,\n  \"pending\": [],\n  \"claimable_ruby\": 0,\n  \"claimed_now\": [\n    {\n      \"week_start\": \"2026-09-07\",\n      \"hours\": 40,\n      \"ruby\": 50\n    },\n    {\n      \"week_start\": \"2026-09-14\",\n      \"hours\": 20,\n      \"ruby\": 20\n    }\n  ]\n}\n",
+      "status": {
+        "claimableRuby": 0,
+        "claimedNow": [
+          {
+            "hours": 40,
+            "ruby": 50,
+            "weekStart": "2026-09-07"
+          },
+          {
+            "hours": 20,
+            "ruby": 20,
+            "weekStart": "2026-09-14"
+          }
+        ],
+        "claimedNowRuby": 70,
+        "displayWorkedSeconds": 83520,
+        "gauge": {
+          "claimedTotal": 20,
+          "fillBits": "3fe28f5c28f5c28f",
+          "hasPassed": [
+            true,
+            false,
+            false
+          ],
+          "isComplete": false,
+          "questHours": 40,
+          "reward": 50
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-09-21",
+        "nextWeekStartDate": "41daabfd3c000000",
+        "pending": [],
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": 190,
+        "serverNowMs": 1789621500000,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": true,
+            "claimable": false,
+            "claimed": true,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-09-14",
+        "workedSeconds": 83520
+      }
+    },
+    {
+      "id": "fixture-_me-/rpc.weekly_work_status.json",
+      "json": "{\n  \"__note\": [\n    \"weekly_work_status() — 받기 서버 · **받을 것 없음**(장면 _me- · 라우트 `me/`). 이번 주 0초.\",\n    \"pending 이 **빈 배열**이다(nil 이 아니다) — 빈 배열은 '받을 것이 없다', 칸이 아예 없으면 '옛 서버'(supportsClaim 이 갈린다).\",\n    \"잔량 12 는 같은 장면의 rpc.shop_state.json 과 같은 값이다.\"\n  ],\n  \"week_start\": \"2026-09-14\",\n  \"next_week_start\": \"2026-09-21\",\n  \"worked_seconds\": 0,\n  \"tiers\": [\n    {\n      \"hours\": 20,\n      \"ruby\": 20,\n      \"claimed\": false,\n      \"achieved\": false,\n      \"claimable\": false\n    },\n    {\n      \"hours\": 40,\n      \"ruby\": 50,\n      \"claimed\": false,\n      \"achieved\": false,\n      \"claimable\": false\n    },\n    {\n      \"hours\": 60,\n      \"ruby\": 200,\n      \"claimed\": false,\n      \"achieved\": false,\n      \"claimable\": false\n    }\n  ],\n  \"granted_now\": [],\n  \"ruby_balance\": 12,\n  \"server_now_ms\": 1789621500000,\n  \"pending\": [],\n  \"claimable_ruby\": 0\n}\n",
+      "status": {
+        "claimableRuby": 0,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 0,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "0000000000000000",
+          "hasPassed": [
+            false,
+            false,
+            false
+          ],
+          "isComplete": false,
+          "questHours": 20,
+          "reward": 20
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-09-21",
+        "nextWeekStartDate": "41daabfd3c000000",
+        "pending": [],
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": 12,
+        "serverNowMs": 1789621500000,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-09-14",
+        "workedSeconds": 0
+      }
+    },
+    {
+      "id": "empty",
+      "json": "{}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 0,
+        "gauge": null,
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": false,
+        "nextWeekStart": null,
+        "nextWeekStartDate": null,
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": false,
+        "tiers": [],
+        "totalRuby": 0,
+        "weekStart": null,
+        "workedSeconds": null
+      }
+    },
+    {
+      "id": "lossy",
+      "json": "{\"week_start\":\"2026-10-26\",\"next_week_start\":\"2026-11-02\",\"worked_seconds\":83456.9,\"tiers\":[{\"hours\":40,\"ruby\":50,\"claimed\":true},{\"hours\":20,\"ruby\":20,\"claimed\":\"yes\"},{\"hours\":0,\"ruby\":5},{\"hours\":60},{\"hours\":60,\"ruby\":200},{\"hours\":40,\"ruby\":99},7,null],\"granted_now\":[{\"hours\":20,\"ruby\":20},{\"hours\":\"40\",\"ruby\":50},{\"ruby\":3}],\"ruby_balance\":\"12\",\"server_now_ms\":1792681200000.0}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 83456,
+        "gauge": {
+          "claimedTotal": 50,
+          "fillBits": "3fe28bb817aa706a",
+          "hasPassed": [
+            true,
+            false,
+            false
+          ],
+          "isComplete": false,
+          "questHours": 40,
+          "reward": 50
+        },
+        "grantedNow": [
+          {
+            "hours": 20,
+            "ruby": 20,
+            "weekStart": null
+          }
+        ],
+        "hasClaimable": false,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-11-02",
+        "nextWeekStartDate": "41dab9d4fc000000",
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": 1792681200000,
+        "supportsClaim": false,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-10-26",
+        "workedSeconds": 83456
+      }
+    },
+    {
+      "id": "claim-server",
+      "json": "{\"week_start\":\"2026-10-26\",\"next_week_start\":\"2026-11-02\",\"worked_seconds\":150000,\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":false,\"achieved\":true,\"claimable\":true},{\"hours\":40,\"ruby\":50,\"claimed\":false,\"achieved\":true,\"claimable\":true},{\"hours\":60,\"ruby\":200,\"claimed\":false,\"achieved\":false,\"claimable\":false}],\"granted_now\":[],\"pending\":[{\"week_start\":\"2026-10-19\",\"hours\":60,\"ruby\":200},{\"week_start\":\"2026-10-26\",\"hours\":20,\"ruby\":20},{\"hours\":40,\"ruby\":50},{\"hours\":0,\"ruby\":9},{\"week_start\":\"2026-10-26\",\"ruby\":3}],\"claimable_ruby\":270}",
+      "status": {
+        "claimableRuby": 270,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 150000,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "3fe638e38e38e38e",
+          "hasPassed": [
+            true,
+            true,
+            false
+          ],
+          "isComplete": false,
+          "questHours": 60,
+          "reward": 200
+        },
+        "grantedNow": [],
+        "hasClaimable": true,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-11-02",
+        "nextWeekStartDate": "41dab9d4fc000000",
+        "pending": [
+          {
+            "hours": 60,
+            "ruby": 200,
+            "weekStart": "2026-10-19"
+          },
+          {
+            "hours": 20,
+            "ruby": 20,
+            "weekStart": "2026-10-26"
+          },
+          {
+            "hours": 40,
+            "ruby": 50,
+            "weekStart": ""
+          }
+        ],
+        "pendingCount": 3,
+        "pendingRuby": 270,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": true,
+            "claimable": true,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": true,
+            "claimable": true,
+            "claimed": false,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": false,
+            "claimable": false,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-10-26",
+        "workedSeconds": 150000
+      }
+    },
+    {
+      "id": "claim-sum-only",
+      "json": "{\"worked_seconds\":10,\"tiers\":[{\"hours\":20,\"ruby\":20}],\"claimable_ruby\":-5}",
+      "status": {
+        "claimableRuby": 0,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 10,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "3f223456789abcdf",
+          "hasPassed": [
+            false
+          ],
+          "isComplete": false,
+          "questHours": 20,
+          "reward": 20
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": true,
+        "nextWeekStart": null,
+        "nextWeekStartDate": null,
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          }
+        ],
+        "totalRuby": 20,
+        "weekStart": null,
+        "workedSeconds": 10
+      }
+    },
+    {
+      "id": "claim-sum-no-list",
+      "json": "{\"worked_seconds\":10,\"tiers\":[{\"hours\":20,\"ruby\":20}],\"claimable_ruby\":70}",
+      "status": {
+        "claimableRuby": 70,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 10,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "3f223456789abcdf",
+          "hasPassed": [
+            false
+          ],
+          "isComplete": false,
+          "questHours": 20,
+          "reward": 20
+        },
+        "grantedNow": [],
+        "hasClaimable": true,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": true,
+        "nextWeekStart": null,
+        "nextWeekStartDate": null,
+        "pending": null,
+        "pendingCount": 1,
+        "pendingRuby": 70,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          }
+        ],
+        "totalRuby": 20,
+        "weekStart": null,
+        "workedSeconds": 10
+      }
+    },
+    {
+      "id": "pending-empty",
+      "json": "{\"worked_seconds\":10,\"tiers\":[{\"hours\":20,\"ruby\":20}],\"pending\":[]}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 10,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "3f223456789abcdf",
+          "hasPassed": [
+            false
+          ],
+          "isComplete": false,
+          "questHours": 20,
+          "reward": 20
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": true,
+        "nextWeekStart": null,
+        "nextWeekStartDate": null,
+        "pending": [],
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          }
+        ],
+        "totalRuby": 20,
+        "weekStart": null,
+        "workedSeconds": 10
+      }
+    },
+    {
+      "id": "claimed-now",
+      "json": "{\"worked_seconds\":72000,\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":true}],\"claimed_now\":[{\"week_start\":\"2026-10-19\",\"hours\":20,\"ruby\":20},{\"hours\":40,\"ruby\":-9},{\"hours\":60}],\"pending\":[]}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [
+          {
+            "hours": 20,
+            "ruby": 20,
+            "weekStart": "2026-10-19"
+          },
+          {
+            "hours": 40,
+            "ruby": -9,
+            "weekStart": null
+          }
+        ],
+        "claimedNowRuby": 20,
+        "displayWorkedSeconds": 72000,
+        "gauge": {
+          "claimedTotal": 20,
+          "fillBits": "3ff0000000000000",
+          "hasPassed": [
+            true
+          ],
+          "isComplete": true,
+          "questHours": 20,
+          "reward": 20
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": true,
+        "nextWeekStart": null,
+        "nextWeekStartDate": null,
+        "pending": [],
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": true,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          }
+        ],
+        "totalRuby": 20,
+        "weekStart": null,
+        "workedSeconds": 72000
+      }
+    },
+    {
+      "id": "complete",
+      "json": "{\"week_start\":\"2026-10-26\",\"next_week_start\":\"2026-11-02\",\"worked_seconds\":216000,\"tiers\":[{\"hours\":60,\"ruby\":200,\"claimed\":false},{\"hours\":20,\"ruby\":20,\"claimed\":true},{\"hours\":40,\"ruby\":50,\"claimed\":true}]}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 216000,
+        "gauge": {
+          "claimedTotal": 70,
+          "fillBits": "3ff0000000000000",
+          "hasPassed": [
+            true,
+            true,
+            true
+          ],
+          "isComplete": true,
+          "questHours": 60,
+          "reward": 200
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-11-02",
+        "nextWeekStartDate": "41dab9d4fc000000",
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": false,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        "totalRuby": 270,
+        "weekStart": "2026-10-26",
+        "workedSeconds": 216000
+      }
+    },
+    {
+      "id": "negative-worked",
+      "json": "{\"worked_seconds\":-100,\"tiers\":[{\"hours\":20,\"ruby\":-20,\"claimed\":true}]}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 0,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "0000000000000000",
+          "hasPassed": [
+            false
+          ],
+          "isComplete": false,
+          "questHours": 20,
+          "reward": 0
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": true,
+        "nextWeekStart": null,
+        "nextWeekStartDate": null,
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": false,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 20,
+            "ruby": -20,
+            "thresholdSeconds": 72000
+          }
+        ],
+        "totalRuby": 0,
+        "weekStart": null,
+        "workedSeconds": -100
+      }
+    },
+    {
+      "id": "lenient-days",
+      "json": "{\"week_start\":\"2026-10-x-26\",\"next_week_start\":\"2026-13-01\",\"worked_seconds\":1,\"tiers\":[{\"hours\":20,\"ruby\":20}]}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 1,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "3eed208a5a912e32",
+          "hasPassed": [
+            false
+          ],
+          "isComplete": false,
+          "questHours": 20,
+          "reward": 20
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          false,
+          true,
+          true
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-13-01",
+        "nextWeekStartDate": "41dacd9b7c000000",
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": false,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          }
+        ],
+        "totalRuby": 20,
+        "weekStart": "2026-10-x-26",
+        "workedSeconds": 1
+      }
+    },
+    {
+      "id": "bad-days",
+      "json": "{\"week_start\":\"2026/10/26\",\"next_week_start\":\"2026-11\",\"worked_seconds\":1,\"tiers\":[{\"hours\":20,\"ruby\":20}]}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 1,
+        "gauge": {
+          "claimedTotal": 0,
+          "fillBits": "3eed208a5a912e32",
+          "hasPassed": [
+            false
+          ],
+          "isComplete": false,
+          "questHours": 20,
+          "reward": 20
+        },
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": true,
+        "nextWeekStart": "2026-11",
+        "nextWeekStartDate": null,
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": false,
+        "tiers": [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          }
+        ],
+        "totalRuby": 20,
+        "weekStart": "2026/10/26",
+        "workedSeconds": 1
+      }
+    },
+    {
+      "id": "tiers-not-array",
+      "json": "{\"worked_seconds\":1,\"tiers\":{\"hours\":20}}",
+      "status": {
+        "claimableRuby": null,
+        "claimedNow": [],
+        "claimedNowRuby": 0,
+        "displayWorkedSeconds": 1,
+        "gauge": null,
+        "grantedNow": [],
+        "hasClaimable": false,
+        "hasEnded": [
+          null,
+          null,
+          null
+        ],
+        "isUsable": false,
+        "nextWeekStart": null,
+        "nextWeekStartDate": null,
+        "pending": null,
+        "pendingCount": 0,
+        "pendingRuby": 0,
+        "rubyBalance": null,
+        "serverNowMs": null,
+        "supportsClaim": false,
+        "tiers": [],
+        "totalRuby": 0,
+        "weekStart": null,
+        "workedSeconds": 1
+      }
+    },
+    {
+      "id": "not-object",
+      "json": "[1]",
+      "throws": true
+    },
+    {
+      "id": "gauge-table",
+      "rows": [
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "0000000000000000",
+            "hasPassed": [
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 0,
+          "workedSeconds": -5
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "0000000000000000",
+            "hasPassed": [
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 0,
+          "workedSeconds": 0
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3eed208a5a912e32",
+            "hasPassed": [
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 0,
+          "workedSeconds": 1
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3fefffe2df75a56f",
+            "hasPassed": [
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 0,
+          "workedSeconds": 71999
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3fe0000000000000",
+            "hasPassed": [
+              true,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 0,
+          "workedSeconds": 72000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3fe0000e90452d49",
+            "hasPassed": [
+              true,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 0,
+          "workedSeconds": 72001
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3fe638e38e38e38e",
+            "hasPassed": [
+              true,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 0,
+          "workedSeconds": 100000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3feffff16fbad2b7",
+            "hasPassed": [
+              true,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 0,
+          "workedSeconds": 143999
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3fe5555555555555",
+            "hasPassed": [
+              true,
+              true,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 60,
+            "reward": 200
+          },
+          "table": 0,
+          "workedSeconds": 144000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3feffff64a7c8c7a",
+            "hasPassed": [
+              true,
+              true,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 60,
+            "reward": 200
+          },
+          "table": 0,
+          "workedSeconds": 215999
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3ff0000000000000",
+            "hasPassed": [
+              true,
+              true,
+              true
+            ],
+            "isComplete": true,
+            "questHours": 60,
+            "reward": 200
+          },
+          "table": 0,
+          "workedSeconds": 216000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 0,
+            "fillBits": "3ff0000000000000",
+            "hasPassed": [
+              true,
+              true,
+              true
+            ],
+            "isComplete": true,
+            "questHours": 60,
+            "reward": 200
+          },
+          "table": 0,
+          "workedSeconds": 999999
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "0000000000000000",
+            "hasPassed": [
+              false,
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 1,
+          "workedSeconds": -5
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "0000000000000000",
+            "hasPassed": [
+              false,
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 1,
+          "workedSeconds": 0
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3eed208a5a912e32",
+            "hasPassed": [
+              false,
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 1,
+          "workedSeconds": 1
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3fefffe2df75a56f",
+            "hasPassed": [
+              false,
+              false,
+              false,
+              false
+            ],
+            "isComplete": false,
+            "questHours": 20,
+            "reward": 20
+          },
+          "table": 1,
+          "workedSeconds": 71999
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3fe0000000000000",
+            "hasPassed": [
+              false,
+              true,
+              false,
+              true
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 1,
+          "workedSeconds": 72000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3fe0000e90452d49",
+            "hasPassed": [
+              false,
+              true,
+              false,
+              true
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 1,
+          "workedSeconds": 72001
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3fe638e38e38e38e",
+            "hasPassed": [
+              false,
+              true,
+              false,
+              true
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 1,
+          "workedSeconds": 100000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3feffff16fbad2b7",
+            "hasPassed": [
+              false,
+              true,
+              false,
+              true
+            ],
+            "isComplete": false,
+            "questHours": 40,
+            "reward": 50
+          },
+          "table": 1,
+          "workedSeconds": 143999
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3fe5555555555555",
+            "hasPassed": [
+              true,
+              true,
+              false,
+              true
+            ],
+            "isComplete": false,
+            "questHours": 60,
+            "reward": 0
+          },
+          "table": 1,
+          "workedSeconds": 144000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3feffff64a7c8c7a",
+            "hasPassed": [
+              true,
+              true,
+              false,
+              true
+            ],
+            "isComplete": false,
+            "questHours": 60,
+            "reward": 0
+          },
+          "table": 1,
+          "workedSeconds": 215999
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3ff0000000000000",
+            "hasPassed": [
+              true,
+              true,
+              true,
+              true
+            ],
+            "isComplete": true,
+            "questHours": 60,
+            "reward": 0
+          },
+          "table": 1,
+          "workedSeconds": 216000
+        },
+        {
+          "gauge": {
+            "claimedTotal": 70,
+            "fillBits": "3ff0000000000000",
+            "hasPassed": [
+              true,
+              true,
+              true,
+              true
+            ],
+            "isComplete": true,
+            "questHours": 60,
+            "reward": 0
+          },
+          "table": 1,
+          "workedSeconds": 999999
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": -5
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 0
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 1
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 71999
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 72000
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 72001
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 100000
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 143999
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 144000
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 215999
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 216000
+        },
+        {
+          "gauge": null,
+          "table": 2,
+          "workedSeconds": 999999
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": -5
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 0
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 1
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 71999
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 72000
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 72001
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 100000
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 143999
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 144000
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 215999
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 216000
+        },
+        {
+          "gauge": null,
+          "table": 3,
+          "workedSeconds": 999999
+        }
+      ],
+      "tables": [
+        [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 60,
+            "ruby": 200,
+            "thresholdSeconds": 216000
+          }
+        ],
+        [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 40,
+            "ruby": 50,
+            "thresholdSeconds": 144000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 20,
+            "ruby": 20,
+            "thresholdSeconds": 72000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 60,
+            "ruby": -1,
+            "thresholdSeconds": 216000
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": false,
+            "hours": 20,
+            "ruby": 1,
+            "thresholdSeconds": 72000
+          }
+        ],
+        [
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": 0,
+            "ruby": 5,
+            "thresholdSeconds": 0
+          },
+          {
+            "achieved": null,
+            "claimable": null,
+            "claimed": true,
+            "hours": -3,
+            "ruby": 5,
+            "thresholdSeconds": -10800
+          }
+        ],
+        []
+      ]
+    },
+    {
+      "id": "week-ended",
+      "rows": [
+        {
+          "lastBits": "41daabfd2d000000",
+          "nowBits": "41daabfd2d000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd2d000000",
+          "nowBits": "41daabfd3bc00000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd2d000000",
+          "nowBits": "41daabfd3c000000",
+          "weekEnded": true
+        },
+        {
+          "lastBits": "41daabfd2d000000",
+          "nowBits": "41daabfd3c400000",
+          "weekEnded": true
+        },
+        {
+          "lastBits": "41daabfd2d000000",
+          "nowBits": "41daabfd4b000000",
+          "weekEnded": true
+        },
+        {
+          "lastBits": "41daabfd3bc00000",
+          "nowBits": "41daabfd2d000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3bc00000",
+          "nowBits": "41daabfd3bc00000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3bc00000",
+          "nowBits": "41daabfd3c000000",
+          "weekEnded": true
+        },
+        {
+          "lastBits": "41daabfd3bc00000",
+          "nowBits": "41daabfd3c400000",
+          "weekEnded": true
+        },
+        {
+          "lastBits": "41daabfd3bc00000",
+          "nowBits": "41daabfd4b000000",
+          "weekEnded": true
+        },
+        {
+          "lastBits": "41daabfd3c000000",
+          "nowBits": "41daabfd2d000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c000000",
+          "nowBits": "41daabfd3bc00000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c000000",
+          "nowBits": "41daabfd3c000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c000000",
+          "nowBits": "41daabfd3c400000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c000000",
+          "nowBits": "41daabfd4b000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c400000",
+          "nowBits": "41daabfd2d000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c400000",
+          "nowBits": "41daabfd3bc00000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c400000",
+          "nowBits": "41daabfd3c000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c400000",
+          "nowBits": "41daabfd3c400000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd3c400000",
+          "nowBits": "41daabfd4b000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd4b000000",
+          "nowBits": "41daabfd2d000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd4b000000",
+          "nowBits": "41daabfd3bc00000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd4b000000",
+          "nowBits": "41daabfd3c000000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd4b000000",
+          "nowBits": "41daabfd3c400000",
+          "weekEnded": false
+        },
+        {
+          "lastBits": "41daabfd4b000000",
+          "nowBits": "41daabfd4b000000",
+          "weekEnded": false
+        }
+      ],
+      "status": "fixture-_me/rpc.weekly_work_status.json"
+    },
+    {
+      "currentJSON": "{\"week_start\":\"2026-10-26\",\"worked_seconds\":72200,\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":true},{\"hours\":40,\"ruby\":50,\"claimed\":false}],\"granted_now\":[{\"hours\":20,\"ruby\":20,\"week_start\":\"2026-10-26\"},{\"hours\":60,\"ruby\":200,\"week_start\":\"2026-10-19\"},{\"hours\":60,\"ruby\":200,\"week_start\":\"2026-10-19\"},{\"hours\":10,\"ruby\":0}]}",
+      "id": "newly-cron-flip",
+      "previousJSON": "{\"week_start\":\"2026-10-26\",\"worked_seconds\":72100,\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":false},{\"hours\":40,\"ruby\":50,\"claimed\":false}]}",
+      "sinceNil": [
+        {
+          "hours": 20,
+          "ruby": 20,
+          "weekStart": null
+        },
+        {
+          "hours": 60,
+          "ruby": 200,
+          "weekStart": "2026-10-19"
+        }
+      ],
+      "sincePrevious": [
+        {
+          "hours": 20,
+          "ruby": 20,
+          "weekStart": null
+        },
+        {
+          "hours": 60,
+          "ruby": 200,
+          "weekStart": "2026-10-19"
+        }
+      ]
+    },
+    {
+      "currentJSON": "{\"week_start\":\"2026-10-26\",\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":true}]}",
+      "id": "newly-week-changed",
+      "previousJSON": "{\"week_start\":\"2026-10-19\",\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":false}]}",
+      "sinceNil": [],
+      "sincePrevious": []
+    },
+    {
+      "currentJSON": "{\"week_start\":\"2026-10-26\",\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":true}],\"pending\":[]}",
+      "id": "newly-claim-server",
+      "previousJSON": "{\"week_start\":\"2026-10-26\",\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":false}],\"pending\":[]}",
+      "sinceNil": [],
+      "sincePrevious": []
+    },
+    {
+      "currentJSON": "{\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":true}]}",
+      "id": "newly-no-previous-week",
+      "previousJSON": "{\"tiers\":[{\"hours\":20,\"ruby\":20,\"claimed\":false}]}",
+      "sinceNil": [],
+      "sincePrevious": []
+    },
+    {
+      "all": "{\"p_hours\":null,\"p_week_start\":null}",
+      "id": "requests",
+      "one": "{\"p_hours\":40,\"p_week_start\":\"2026-10-19\"}"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift",
+  "golden": "weekly/status",
+  "platformSensitive": true,
+  "schema": 1,
+  "spec": {
+    "claim": "v0.3.58 — pending 이나 claimable_ruby 가 있으면 받기 서버. pendingRuby = claimable_ruby(음수 → 0) 또는 pending 합, pendingCount = pending 수(없고 합만 양수면 1)",
+    "decode": "관대한 디코드 — 최상위가 객체가 아닐 때만 throw. 숫자 칸은 정수 또는 소수(0 쪽 버림, |v| < 9e15) — 글자 숫자는 받지 않는다(미션과 다르다). 깨진 단계 · 지급 행만 버린다. 단계는 시간 오름차순(같은 시간은 앞의 것)",
+    "gauge": "지금 퀘스트 = 누적초가 아직 못 넘은 첫 단계(시간 > 0 만, 오름차순·중복 제거). fill = 누적 ÷ 퀘스트 초(0…1). 마지막을 넘으면 완료. claimedTotal = 받은 단계 루비 합(음수 0)",
+    "newlyGranted": "granted_now(이번 주 행은 weekStart 를 비운다) ∪ (받기 서버가 아니고 같은 주면) claimed 거짓→참 단계. (주, 시간)당 한 번, 루비 > 0 만",
+    "platformSensitive": "true — KST 달력(tzdata)이 날짜를 정한다",
+    "weekEnd": "nextWeekStart → KST 0시(lenient 달력 — 숫자 아닌 조각은 버리고 셋이면 날짜). hasEnded = now ≥ 끝, weekEnded(last, now) = last < 끝 ≤ now"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/WeeklyWorkReward.swift"
+  ]
+}

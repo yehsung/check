@@ -1,0 +1,344 @@
+{
+  "cases": [
+    {
+      "characterId": "aing_cake_choco",
+      "id": "claim-0",
+      "notice": null,
+      "outcome": {
+        "characterID": "aing_cake_choco",
+        "kind": "received",
+        "replayed": false
+      },
+      "replayed": false,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "ok"
+    },
+    {
+      "characterId": "aing_cake_strawberry",
+      "id": "claim-1",
+      "notice": null,
+      "outcome": {
+        "characterID": "aing_cake_strawberry",
+        "kind": "received",
+        "replayed": true
+      },
+      "replayed": true,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "ok"
+    },
+    {
+      "characterId": null,
+      "id": "claim-2",
+      "notice": null,
+      "outcome": {
+        "characterID": "aing_cake_choco",
+        "kind": "received",
+        "replayed": false
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "ok"
+    },
+    {
+      "characterId": "",
+      "id": "claim-3",
+      "notice": null,
+      "outcome": {
+        "characterID": "aing_cake_choco",
+        "kind": "received",
+        "replayed": false
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "ok"
+    },
+    {
+      "characterId": "aing_cake_strawberry",
+      "id": "claim-4",
+      "notice": "딸기 케이크 아잉이를 받았어요!",
+      "outcome": {
+        "characterID": "aing_cake_strawberry",
+        "kind": "alreadyClaimed"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "already_claimed"
+    },
+    {
+      "characterId": null,
+      "id": "claim-5",
+      "notice": "이미 받은 선물이에요",
+      "outcome": {
+        "characterID": null,
+        "kind": "alreadyClaimed"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "already_claimed"
+    },
+    {
+      "characterId": "",
+      "id": "claim-6",
+      "notice": "이미 받은 선물이에요",
+      "outcome": {
+        "characterID": null,
+        "kind": "alreadyClaimed"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "already_claimed"
+    },
+    {
+      "characterId": null,
+      "id": "claim-7",
+      "notice": "앱을 업데이트하면 받을 수 있어요",
+      "outcome": {
+        "kind": "needsUpdate"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": false,
+      "status": "needs_update"
+    },
+    {
+      "characterId": null,
+      "id": "claim-8",
+      "notice": "선물을 찾지 못했어요",
+      "outcome": {
+        "kind": "notFound"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": true,
+      "status": "not_found"
+    },
+    {
+      "characterId": "fox",
+      "id": "claim-9",
+      "notice": "고를 수 없는 캐릭터예요",
+      "outcome": {
+        "kind": "invalidChoice"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": false,
+      "status": "invalid_choice"
+    },
+    {
+      "characterId": null,
+      "id": "claim-10",
+      "notice": "로그인하면 받을 수 있어요",
+      "outcome": {
+        "kind": "notSignedIn"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": false,
+      "status": "unauthorized"
+    },
+    {
+      "characterId": null,
+      "id": "claim-11",
+      "notice": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+      "outcome": {
+        "kind": "failed",
+        "status": "weird_new_status"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": false,
+      "status": "weird_new_status"
+    },
+    {
+      "characterId": null,
+      "id": "claim-12",
+      "notice": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+      "outcome": {
+        "kind": "failed",
+        "status": ""
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": false,
+      "status": ""
+    },
+    {
+      "characterId": "aing_cake_choco",
+      "id": "claim-13",
+      "notice": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+      "outcome": {
+        "kind": "failed",
+        "status": "OK"
+      },
+      "replayed": null,
+      "requestedID": "aing_cake_choco",
+      "settlesGift": false,
+      "status": "OK"
+    },
+    {
+      "alreadyClaimed": "이미 받은 선물이에요",
+      "body": "생일 선물로 케이크 아잉이를 하나 골라 주세요.",
+      "claimFailed": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+      "closeButton": "닫기",
+      "confirmButton": "이걸로 받을게요",
+      "id": "texts",
+      "invalidChoice": "고를 수 없는 캐릭터예요",
+      "lockedCaption": "생일 선물 전용",
+      "lockedHint": "생일에 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요.",
+      "needsUpdate": "앱을 업데이트하면 받을 수 있어요",
+      "notFound": "선물을 찾지 못했어요",
+      "notSignedIn": "로그인하면 받을 수 있어요",
+      "reopenButton": "고르기",
+      "reopenTitle": "생일 선물이 도착했어요",
+      "title": "생일 축하해요! 🎂",
+      "unavailable": "지금은 받을 수 없어요",
+      "wearNowButton": "지금 입기"
+    },
+    {
+      "id": "particles",
+      "rows": [
+        {
+          "particle": "를",
+          "received": "딸기 케이크 아잉이를 받았어요!",
+          "word": "딸기 케이크 아잉이"
+        },
+        {
+          "particle": "를",
+          "received": "초코 케이크 아잉이를 받았어요!",
+          "word": "초코 케이크 아잉이"
+        },
+        {
+          "particle": "를",
+          "received": "황금 아잉이를 받았어요!",
+          "word": "황금 아잉이"
+        },
+        {
+          "particle": "을",
+          "received": "곰을 받았어요!",
+          "word": "곰"
+        },
+        {
+          "particle": "을",
+          "received": "각을 받았어요!",
+          "word": "각"
+        },
+        {
+          "particle": "를",
+          "received": "가를 받았어요!",
+          "word": "가"
+        },
+        {
+          "particle": "을",
+          "received": "힣을 받았어요!",
+          "word": "힣"
+        },
+        {
+          "particle": "를",
+          "received": "aing를 받았어요!",
+          "word": "aing"
+        },
+        {
+          "particle": "를",
+          "received": "를 받았어요!",
+          "word": ""
+        },
+        {
+          "particle": "를",
+          "received": "  를 받았어요!",
+          "word": "  "
+        },
+        {
+          "particle": "를",
+          "received": "아잉이 를 받았어요!",
+          "word": "아잉이 "
+        },
+        {
+          "particle": "를",
+          "received": "케이크\n를 받았어요!",
+          "word": "케이크\n"
+        },
+        {
+          "particle": "를",
+          "received": "여우😀를 받았어요!",
+          "word": "여우😀"
+        },
+        {
+          "particle": "을",
+          "received": "닭을 받았어요!",
+          "word": "닭"
+        },
+        {
+          "particle": "를",
+          "received": "ㄱ를 받았어요!",
+          "word": "ㄱ"
+        },
+        {
+          "particle": "를",
+          "received": "123를 받았어요!",
+          "word": "123"
+        },
+        {
+          "particle": "를",
+          "received": "Kim를 받았어요!",
+          "word": "Kim"
+        },
+        {
+          "particle": "을",
+          "received": "뷁을 받았어요!",
+          "word": "뷁"
+        },
+        {
+          "particle": "을",
+          "received": "곰 을 받았어요!",
+          "word": "곰 "
+        },
+        {
+          "particle": "을",
+          "received": "닭\n을 받았어요!",
+          "word": "닭\n"
+        },
+        {
+          "particle": "을",
+          "received": "\t각\r\n을 받았어요!",
+          "word": "\t각\r\n"
+        },
+        {
+          "particle": "을",
+          "received": "곰　을 받았어요!",
+          "word": "곰　"
+        },
+        {
+          "particle": "을",
+          "received": "  힣  을 받았어요!",
+          "word": "  힣  "
+        },
+        {
+          "particle": "을",
+          "received": "곰 을 받았어요!",
+          "word": "곰 "
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
+  "golden": "gift/claim",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "lines": "CharacterGift.swift 의 W1-c 몫(164–217 수령 결과 · 269–326 문구). 전선 모양(요청 · 응답 · choosable)은 W1-d wire",
+    "outcome": "ok → received(서버 id 가 비면 보낸 id) · already_claimed → 받은 id(비면 null) · 대소문자 정확히 · 모르는 status → failed(원문)",
+    "particle": "마지막 스칼라(앞뒤 whitespacesAndNewlines trim 뒤)가 받침 있는 한글 음절이면 '을', 그 밖은 '를'",
+    "settlesGift": "받음 · 이미 받음 · 없음 → 선물 카드를 거둔다. 그 밖은 열린 채"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/CharacterGift.swift"
+  ]
+}

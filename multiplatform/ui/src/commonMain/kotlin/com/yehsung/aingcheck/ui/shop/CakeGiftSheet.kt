@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -68,6 +70,23 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 object CakeGiftTags {
     fun option(id: String) = "cakeGift.option.$id"
     const val CONFIRM = "cakeGift.confirm"
+    const val TITLE_TEXT = "cakeGift.title.text"
+    const val TITLE_GLYPH = "cakeGift.title.glyph"
+}
+
+/**
+ * 제목 끝의 그림 글자(rules 문구 "생일 축하해요! 🎂" 의 🎂)를 떼어 낸다 — (글자 부분, 그림 글자 또는 null).
+ * 그림 글자는 OS 글꼴(맥 Apple Color Emoji · Android Noto · Windows Segoe)로 그려져 폭이 기기마다 다르다. 한 줄에 섞으면
+ * 가운데 맞춤인 글자 부분이 그 폭만큼 옆으로 밀린다 — 그래서 그림 글자는 **고정 크기 칸**에 따로 둔다(글자 자리는 글꼴과 무관).
+ */
+internal object CakeGiftTitleParts {
+    fun split(title: String): Pair<String, String?> {
+        val i = title.lastIndexOf(' ')
+        if (i <= 0) return title to null
+        val tail = title.substring(i + 1)
+        val isGlyph = tail.isNotEmpty() && tail.all { it.isSurrogate() || it == '\u200D' || it == '\uFE0F' }
+        return if (isGlyph) title.substring(0, i) to tail else title to null
+    }
 }
 
 /**
@@ -201,8 +220,32 @@ private fun Received(id: String) {
 private fun Heading(title: String, body: String?) {
     val c = AingTheme.colors
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
-        Text(title, style = MeType.title2, color = c.label, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
+        MeCakeGiftTitle(title)
         if (body != null) Text(body, style = MeType.body, color = c.label2, textAlign = TextAlign.Center)
+    }
+}
+
+/** 제목 한 줄 — 글자 부분 + 끝 그림 글자의 고정 칸(글꼴마다 다른 그림 글자 폭이 글자 자리를 밀지 않게 — [CakeGiftTitleParts]). */
+@Composable
+internal fun MeCakeGiftTitle(title: String, modifier: Modifier = Modifier) {
+    val c = AingTheme.colors
+    val style = MeType.title2
+    val (text, glyph) = CakeGiftTitleParts.split(title)
+    Row(modifier.semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text, style = style, color = c.label, textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f, fill = false).testTag(CakeGiftTags.TITLE_TEXT),
+        )
+        if (glyph != null) {
+            val em = with(LocalDensity.current) { style.fontSize.toDp() }
+            // 칸: 글자 하나 반 폭(그림 글자는 대개 1.2em 안팎) · 앞 틈은 띄어쓰기 한 칸(0.3em). 그림은 칸 가운데 — 넘쳐도 자리는 안 바뀐다.
+            Box(
+                Modifier.padding(start = em * 0.3f).size(em * 1.5f).testTag(CakeGiftTags.TITLE_GLYPH),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(glyph, style = style, maxLines = 1, softWrap = false, modifier = Modifier.wrapContentSize(unbounded = true))
+            }
+        }
     }
 }
 

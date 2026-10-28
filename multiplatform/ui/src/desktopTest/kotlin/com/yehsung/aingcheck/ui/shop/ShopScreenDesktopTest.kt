@@ -7,14 +7,20 @@
 //  ④ 확률 보기 줄의 숫자는 서버 값이다(서버가 3 → 4 로 바꾸면 화면도 4)
 package com.yehsung.aingcheck.ui.shop
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.gachaOddsRows
 import com.yehsung.aingcheck.core.stores.me.selectCakeGiftOption
@@ -84,7 +90,42 @@ class ShopScreenDesktopTest {
         }
         // 기준선: 고른 칸 하나만 다르다(초코를 고름 ↔ 아직 안 고름). 고른 칸은 받침 전체가 파랑 틴트라 바뀐 픽셀이 화면의 1/10 을 넘는다(실측 17%) —
         // 이 장면만 상한을 1/4 로 둔다. 굵은 대조가 잡는지는 그대로 잰다.
-        W4cDesktopSnapshots.check("shop", "cake-gift-light", W, GIFT_H, scene("aing_cake_choco"), scene(null), maxChangedFraction = 0.25)
+        // 제목 끝 🎂 는 OS 그림 글꼴이라 기록 기계가 아닌 러너에서만 그 고정 칸을 굵은 대조에서 덮는다(W4cDesktopSnapshots 머리말).
+        val shown = scene("aing_cake_choco")
+        var glyph: DpRect? = null
+        runDesktopComposeUiTest(W, GIFT_H) {
+            setContent { shown() }
+            glyph = onNodeWithTag(CakeGiftTags.TITLE_GLYPH, useUnmergedTree = true).getBoundsInRoot()
+        }
+        W4cDesktopSnapshots.check(
+            "shop", "cake-gift-light", W, GIFT_H, shown, scene(null), maxChangedFraction = 0.25, platformGlyphs = listOf(requireNotNull(glyph)),
+        )
+    }
+
+    /** 그림 글자 폭이 기기마다 달라도 제목 글자 자리는 그대로다(그림 글자는 고정 칸 — 한 줄에 섞으면 가운데 맞춤이 그 폭만큼 밀린다). */
+    @Test
+    fun cakeTitleTextIgnoresGlyphWidth() {
+        assertEquals("생일 축하해요!" to "🎂", CakeGiftTitleParts.split(CakeGiftText.title))
+        assertEquals("딸기 케이크 아잉이를 받았어요!" to null, CakeGiftTitleParts.split(CakeGiftText.received("딸기 케이크 아잉이")))
+        fun bounds(title: String): Pair<DpRect, DpRect> {
+            var text: DpRect? = null
+            var glyph: DpRect? = null
+            runDesktopComposeUiTest(W, TITLE_H) {
+                setContent {
+                    W4cDesktopSnapshots.frame(false, W, TITLE_H) {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { MeCakeGiftTitle(title) }
+                    }()
+                }
+                text = onNodeWithTag(CakeGiftTags.TITLE_TEXT, useUnmergedTree = true).getBoundsInRoot()
+                glyph = onNodeWithTag(CakeGiftTags.TITLE_GLYPH, useUnmergedTree = true).getBoundsInRoot()
+            }
+            return requireNotNull(text) to requireNotNull(glyph)
+        }
+        val one = bounds(CakeGiftText.title)
+        val three = bounds(CakeGiftText.title + "🎂🎂") // 그림 글자가 세 배 넓은 기기 흉내
+        assertEquals(one.first, three.first, "그림 글자 폭이 바뀌니 제목 글자 자리가 움직였다 — 그림 글자가 고정 칸 밖에 있다")
+        assertEquals(one.second, three.second, "그림 글자 칸 크기가 그림 글자 폭을 따라 바뀌었다")
+        assertTrue(one.second.left >= one.first.right, "그림 글자 칸이 글자 오른쪽에 있지 않다")
     }
 
     // MARK: ② 확률 보기 줄은 [뽑기] 바로 위
@@ -167,6 +208,7 @@ class ShopScreenDesktopTest {
         const val ODDS_H = 780
         const val EXCHANGE_H = 760
         const val GIFT_H = 420
+        const val TITLE_H = 80
         // 픽스처 조각 바꾸기(줄바꿈 · 들여쓰기는 픽스처 원문 그대로).
         const val FOX_23 = "\"character_id\": \"fox\",\n        \"percent\": 23"
         const val FOX_25 = "\"character_id\": \"fox\",\n        \"percent\": 25"

@@ -2,7 +2,9 @@
 //
 // G §2-3 W4-c ① 기계 연출 프레임 스냅숏(데스크톱 배율 2). 감독을 손 시계로 몰아 세운 열두 순간(MachineFrames)을 그려 골든과 대조한다.
 // 기계 그림 다섯 장은 저장소 원본(Sources/CheckCore/Resources/GachaMachine)을 그대로 쓴다 — 앱은 ui Gradle Sync 패치(0001)가 같은 그림을 싣는다.
-// 음성 기준선: 같은 순간 · 루비 칩 숫자 한 자리만 다른 장면(120 → 121).
+// 음성 기준선: 같은 순간 · 루비 칩 숫자만 다른 장면(120 → 989 — 같은 폭에 세 자리가 다 바뀐다. 한 자리(121)는 CI 러너에서 굵은 대조
+// 칸 최대가 63~77 로 문턱 64 를 겨우 넘거나 못 넘었다(windows reveal-gold 63). 989 는 맥 실측 101~117). 「모자람」 장면만 값이 50 아래에
+// 머물러야 해서(뽑기 막힘이 그대로여야 한 군데다) 30 → 31 한 자리다(맥 102 · CI 99~101).
 package com.yehsung.aingcheck.ui.gacha.machine
 
 import androidx.compose.runtime.Composable
@@ -38,7 +40,8 @@ class GachaMachineFrameSnapshotDesktopTest {
         }
     }
 
-    private fun check(name: String) = W4cDesktopSnapshots.check("gacha", "machine-$name", W, H, scene(name, 120), scene(name, 121))
+    private fun check(name: String) =
+        W4cDesktopSnapshots.check("gacha", "machine-$name", W, H, scene(name, 120), scene(name, if (name == "short") 121 else 989))
 
     @Test fun artIsComplete() = assertTrue(machineArt().isComplete, "저장소 기계 그림 다섯 장 중 빠진 것이 있다(${GachaMachineArt.SOURCE_DIR})")
 

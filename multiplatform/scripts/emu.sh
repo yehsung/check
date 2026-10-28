@@ -6,8 +6,8 @@
 # 규칙(설계 G §2-2, A§4-3)
 #   - 언제나 -no-window -no-audio -no-boot-anim -no-snapshot. 스냅숏을 저장하지 않는다.
 #   - 기본은 -read-only(바뀐 것을 버린다 — 여러 갈래가 같은 AVD 를 동시에 쓴다). 예외는 --writable 하나다:
-#     갈래 전용 AVD(avd-clone 으로 만든 것)를 준비할 때만 쓰고, 공용 AVD(aingcheck-api36·aingcheck-api26)와
-#     준비가 끝나 보호 표식(.aingcheck-protected)을 단 AVD 에는 거부한다. 판정은 이름 글자가 아니라 에뮬레이터가 열 **폴더**로 한다
+#     갈래 전용 AVD(avd-clone 으로 만든 것)를 준비할 때만 쓰고, 공용 AVD(aingcheck-api36·aingcheck-api26·aingcheck-api36-ko — 7차 int-i 에서
+#     한국어 AVD 를 공용으로 올렸다)와 준비가 끝나 보호 표식(.aingcheck-protected)을 단 AVD 에는 거부한다. 판정은 이름 글자가 아니라 에뮬레이터가 열 **폴더**로 한다
 #     (맥 APFS 는 대소문자를 안 가려 'AINGCHECK-API36' 이 공용 폴더로 풀린다 · 다른 이름의 .ini 가 path= 로 공용 폴더를 가리킬 수 있다).
 #   - 포트는 갈래마다 고정(5560+2k). 기본값이 없다 — 남의 에뮬레이터와 겹치지 않게 반드시 적는다.
 #   - 기본은 망 봉인(sandbox-exec). 봉인 없이 띄우려면 --no-seal 을 적는다.
@@ -30,12 +30,27 @@
 #   emu.sh avd-protect --avd NAME  # 준비가 끝난 갈래 전용 AVD 폴더에 보호 표식을 단다 → 그 뒤 --writable 거부.
 #                                  #   공용 AVD(이름·폴더)에는 쓰지 않는다(종료 코드 2 — 이미 보호된다). 풀 때는 표식 파일을 손으로 지운다.
 #   emu.sh avd-prepare-ko --to NAME --port N [--from aingcheck-api36] [--boot-timeout 300]
-#                                  # E-U5 한국어 조합 AVD 를 처음부터 만든다(아래 '갈래 전용 AVD' 의 명령열 그대로): avd-clone → 봉인 없이 쓰기로
+#                                  # E-U5 한국어 조합 AVD 를 처음부터 만든다(아래 'Gboard 한국어 AVD' 의 명령열 그대로): avd-clone → 봉인 없이 쓰기로
 #                                  #   띄움 → Gboard 에 한국어·두벌식 추가 → 조합이 될 때까지 자료 받기 → 끔 → 봉인·읽기 전용으로 다시 띄워 '안녕'
 #                                  #   확인 → avd-protect. 망이 필요하다(Gboard 언어 자료). 계정 로그인 없음. 실패하면 만든 AVD 를 남겨 두고 1.
+#                                  #   NAME 이 공용 이름(aingcheck-api36-ko)이면 갈래 이름 NAME-prep 에서 다 준비한 뒤 avd-promote 로 올린다 —
+#                                  #   공용 AVD 가 이미 있으면 시작하지 않는다(종료 코드 2, 남이 띄워 쓰는 중일 수 있어 덮지 않는다).
+#   emu.sh avd-promote --from NAME --to SHARED
+#                                  # 준비가 끝나 보호 표식을 단 갈래 AVD(avd-clone 이 만든 <홈>/NAME.avd)를 공용 이름으로 옮긴다(폴더 이름 바꾸기 +
+#                                  #   .ini 의 path=·path.rel= 고침, 표식은 그대로). 거부(종료 코드 2): SHARED 가 공용 이름이 아니다 · 이미 있다 ·
+#                                  #   NAME 이 공용이거나 표식이 없다. avd-prepare-ko 가 공용 이름일 때 끝에 부른다.
+#   emu.sh ko-check --port N [--tries 3]
+#                                  # 띄워 둔 기기가 한국어 조합 준비 상태인지 잰다(설정은 바꾸지 않는다): 기본 IME = Gboard · 켜진 IME 에 두벌식 ·
+#                                  #   고른 subtype = 두벌식 · Gboard 설정 검색 칸에 adb input text dkssud → '안녕'. 넷 다 맞으면 0, 아니면 1.
+#                                  #   W3-a IME 재생 시험이 공용 aingcheck-api36-ko 를 봉인·-read-only 로 띄운 뒤 첫 단계로 부른다.
+#   emu.sh ui --port N --mode tap|wait|edit|attr:<속성> [--match 정규식] [--timeout 20]
+#                                  # uiautomator 덤프에서 글자(text·content-desc)가 정규식에 맞는 첫 노드를 누른다(tap)·기다린다(wait)·그 속성을
+#                                  #   찍는다(attr:selected 등) · edit 는 첫 EditText 의 글자를 찍는다(정규식 무시). 시한 안에 없으면 1(보이는 글자 15개를
+#                                  #   찍는다). 5차 W0-f ③ 스크래치의 E-U5 탐침 ui.py 를 옮긴 것 — avd-prepare-ko · ko-check 가 같은 함수를 쓴다.
 #   emu.sh self-test               # 가짜 SDK·가짜 HOME 으로 안전장치를 잰다(진짜 에뮬레이터·adb·~/.android 를 건드리지 않는다).
 #                                  #   --writable 거부(공용 이름·대소문자·별칭 .ini·보호 표식·ANDROID_AVD_HOME 쪽 별칭) · 기본 -read-only ·
-#                                  #   기본 봉인 · stop 의 sync 순서 · avd-clone 거부와 표식 정리 · avd-protect. 실패 사례 수만큼 빨강(종료 코드 1).
+#                                  #   기본 봉인 · stop 의 sync 순서 · avd-clone 거부와 표식 정리 · avd-protect · 공용 한국어 AVD 와 avd-promote ·
+#                                  #   ui·ko-check 인자. 실패 사례 수만큼 빨강(종료 코드 1).
 #   emu.sh stop    --port N [--timeout 30]
 #   emu.sh shot    --port N --out FILE.png
 #   emu.sh windows --port N        # 이 포트로 띄운 PID 나무(자손 포함 — qemu·netsimd)가 가진 창 수. 0 이 아니면 1, 살아 있는 자기 PID 가
@@ -56,11 +71,14 @@
 #                                  # --offline --no-daemon, ANDROID_SERIAL 로 이 기기만) → 결과 XML 로 시험 ≥1·건너뜀 0·실패 0 확인
 #                                  # → 언제나 끄기·남은 프로세스 0 확인. 종료 코드: Gradle 실패면 그 코드, 아니면 판정 실패 1, 정리 실패 1.
 #
-# 갈래 전용 AVD(W0-f 소유)
-#   aingcheck-api36-ko = aingcheck-api36 의 avd-clone + Gboard 두벌식 + 한국어 조합 자료(E-U5 후속, 2026-10-28). 보호 표식을 달았다.
-#     IME 재생 시험(W3-a)은 이 AVD 를 봉인·-read-only 로 띄워 쓴다(키 탭 ㅇㅏㄴㄴㅕㅇ·adb input text dkssud → '안녕',
-#     setComposingText). 준비 안 된 공용 AVD 는 봉인에서 낱자모 commitText 다. selected_input_method_subtype -1906255757(ko_KR 두벌식).
-#     다시 만들기(다른 맥 · 지워졌을 때): emu.sh avd-prepare-ko --to aingcheck-api36-ko --port <갈래 포트>. 하는 일:
+# Gboard 한국어 AVD(공용 — 5차 W0-f ③ 이 만들고 7차 int-i 가 공용으로 올렸다)
+#   aingcheck-api36-ko = aingcheck-api36 의 avd-clone + Gboard 두벌식 + 한국어 조합 자료(E-U5 후속, 2026-10-28). 보호 표식도 달려 있다.
+#     공용 AVD 다(SHARED_AVDS): 여러 갈래가 -read-only 로 동시에 띄우고, --writable · avd-clone --to · avd-protect 는 이름·폴더로 거부한다.
+#     IME 재생 시험(W3-a)은 이 AVD 를 봉인·-read-only 로 자기 포트에 띄워 쓴다: start --avd aingcheck-api36-ko --port <갈래 포트> →
+#     sealcheck → ko-check(준비 상태) → 시험(키 탭 ㅇㅏㄴㄴㅕㅇ·adb input text dkssud → '안녕', setComposingText) → stop.
+#     준비 안 된 공용 api36 은 봉인에서 낱자모 commitText 다. selected_input_method_subtype -1906255757(ko_KR 두벌식).
+#     다시 만들기(다른 맥 · 지워졌을 때 — 있는 공용 AVD 는 덮지 않는다): emu.sh avd-prepare-ko --to aingcheck-api36-ko --port <갈래 포트>.
+#     공용 이름이라 NAME = aingcheck-api36-ko-prep 에서 1~5 를 하고 6 에서 올린다. 하는 일:
 #       1. avd-clone --from aingcheck-api36 --to NAME
 #       2. start --avd NAME --no-seal --writable(망 필요 · 계정 없음)
 #       3. ime set …LatinIME → Gboard 설정(com.google.android.inputmethod.latin/com.google.android.apps.inputmethod.latin.preference.SettingsActivity)
@@ -71,7 +89,8 @@
 #          (EditText)에 adb input text dkssud 를 넣고 칸 글자를 읽어 '안녕' 이 될 때까지 15초 간격 최대 12번(자료를 받는 동안은
 #          dkssud·낱자모 — 실측 1~2번째에 '안녕')
 #       5. stop(손님 sync 먼저) → 봉인·-read-only 로 다시 띄워 sealcheck → 같은 확인('안녕') → stop → avd-protect --avd NAME
-#     다시 준비하려면 보호된 AVD 를 avd-clone 해 새 이름으로 준비한다(사본에는 보호 표식이 없다).
+#       6. avd-promote --from NAME --to aingcheck-api36-ko(공용 이름일 때만)
+#     다른 준비를 얹으려면 공용 AVD 를 avd-clone 해 갈래 이름으로 준비한다(사본에는 보호 표식이 없다).
 #
 # 바깥망 실험(W0-f ⑤ FCM 토큰 · 2026-10-28 · G §8-8 — 개발 Firebase 프로젝트에서만)
 #   봉인 게이트와 따로 돈다: start --no-seal(전용 netsim 발견 폴더라 자기 netsimd 의 Wi-Fi 로 나간다) · 기본 -read-only(토큰을 든
@@ -96,23 +115,26 @@ DEFAULT_SEAL="$SCRIPT_DIR/seal.sb"
 die() { echo "emu.sh: $*" >&2; exit 2; }
 log() { echo "emu.sh: $*" >&2; }
 
-cmd="${1:-}"; [ -n "$cmd" ] || die "명령이 없다 (start|stop|shot|windows|procs|sealcheck|instrumented|avd-clone|avd-protect|avd-prepare-ko|self-test)"; shift
+cmd="${1:-}"; [ -n "$cmd" ] || die "명령이 없다 (start|stop|shot|windows|procs|sealcheck|instrumented|avd-clone|avd-protect|avd-prepare-ko|avd-promote|ko-check|ui|self-test)"; shift
 
 SELF="$SCRIPT_DIR/$(basename "$0")"
 AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 # 공용 AVD: 여러 갈래·게이트가 -read-only 로 동시에 띄운다. 쓰기로 띄우면 모두의 첫 상태가 바뀐다 — --writable 거부.
-SHARED_AVDS="aingcheck-api36 aingcheck-api26"
-# 보호 표식: 준비가 끝난 갈래 전용 AVD(예: aingcheck-api36-ko) 폴더에 avd-protect 가 단다. 있으면 --writable 거부.
+# aingcheck-api36-ko(Gboard 한국어 조합 자료를 받아 둔 api36 — W3-a IME 재생 시험)도 공용이다(7차 int-i): 보호 표식이 지워져도 이름·폴더로 막힌다.
+SHARED_AVDS="aingcheck-api36 aingcheck-api26 aingcheck-api36-ko"
+# 보호 표식: 준비가 끝난 갈래 전용 AVD 폴더에 avd-protect 가 단다. 있으면 --writable 거부.
 PROTECT_MARK=".aingcheck-protected"
 
 AVD=""; PORT=""; SEAL="$DEFAULT_SEAL"; SEALED=1; BOOT_TIMEOUT=120; STOP_TIMEOUT=30; OUT=""
-WRITABLE=0; FROM=""; TO=""
+WRITABLE=0; FROM=""; TO=""; UI_MODE=""; UI_MATCH=""; KO_TRIES=3
 TASK=":androidApp:connectedDebugAndroidTest"
 EXTRA=()
 # instrumented 의 기본값(gate-full.sh 가 인자 없이 부른다): api36 AVD · 갈래 포트 5560(5560+2k 의 k=0, W0-f 가 쓴 자리).
 if [ "$cmd" = "instrumented" ]; then AVD="aingcheck-api36"; PORT="5560"; BOOT_TIMEOUT=180; fi
 # avd-prepare-ko 의 기본값: 원본 공용 api36 · 부팅 시한 300초(부하가 높을 때 api36 이 120초를 넘긴 실측).
 if [ "$cmd" = "avd-prepare-ko" ]; then FROM="aingcheck-api36"; BOOT_TIMEOUT=300; fi
+# ui 의 기본 시한 20초(--timeout 으로 바꾼다).
+if [ "$cmd" = "ui" ]; then STOP_TIMEOUT=20; fi
 while [ $# -gt 0 ]; do
   case "$1" in
     --avd) AVD="${2:?}"; shift 2 ;;
@@ -126,6 +148,9 @@ while [ $# -gt 0 ]; do
     --writable) WRITABLE=1; shift ;;
     --from) FROM="${2:?}"; shift 2 ;;
     --to) TO="${2:?}"; shift 2 ;;
+    --mode) UI_MODE="${2:?}"; shift 2 ;;
+    --match) UI_MATCH="${2:?}"; shift 2 ;;
+    --tries) KO_TRIES="${2:?}"; shift 2 ;;
     --) shift; EXTRA=("$@"); break ;;
     *) die "모르는 인자: $1" ;;
   esac
@@ -286,6 +311,9 @@ STUB
   mk_avd "$A" lane-ko; : > "$A/lane-ko.avd/$PROTECT_MARK"   # 준비가 끝나 보호 표식을 단 AVD
   mk_avd "$A2" only2                                   # ANDROID_AVD_HOME 쪽에만 있는 AVD
   mk_avd "$A2" alias2 "$A/aingcheck-api36.avd"         # ANDROID_AVD_HOME 쪽 별칭이 기본 홈의 공용 폴더를 가리킨다
+  mk_avd "$A" aingcheck-api36-ko                       # 공용 한국어 AVD(7차) — 보호 표식 없이도 이름·폴더로 막혀야 한다
+  mk_avd "$A2" stage-ko; : > "$A2/stage-ko.avd/$PROTECT_MARK"   # 공용으로 올릴 준비 끝난 갈래 AVD(공용 한국어가 없는 홈)
+  mk_avd "$A2" stage-raw                               # 표식 없는(준비 안 끝난) 갈래 AVD
   cp "$SELF" "$T/copy/emu.sh"                          # 옆에 seal.sb 가 없는 사본(기본 봉인 확인용)
 
   sub() { # 하위 실행 — 진짜 홈·SDK·AVD 폴더를 못 보게 덮는다. TMPDIR 은 '호출자 것'(에뮬레이터가 물려받으면 안 되는 값)으로.
@@ -308,7 +336,7 @@ STUB
   if [ -e "$A/AINGCHECK-API36.ini" ]; then casefold=1; else casefold=0; mk_avd "$A" AINGCHECK-API36; mk_avd "$A" Aingcheck-Api26; fi
 
   # W: --writable 거부 — 거부면 종료 코드 2 이고 에뮬레이터를 띄우지 않는다.
-  for ci in aingcheck-api36 aingcheck-api26 AINGCHECK-API36 Aingcheck-Api26 lane-alias lane-ko; do
+  for ci in aingcheck-api36 aingcheck-api26 AINGCHECK-API36 Aingcheck-Api26 lane-alias lane-ko aingcheck-api36-ko AINGCHECK-API36-KO; do
     fresh; sub "$SELF" start --avd "$ci" --port "$P" --no-seal --writable; rc=$?
     check "writable 거부 '$ci' 종료 코드" 2 "$rc"; check "writable 거부 '$ci' 안 띄움" none "$(launched)"; stopit
   done
@@ -330,7 +358,7 @@ STUB
     "$(grep -E 'shell sync|emu kill' "$T/stub/adb-log" 2>/dev/null | sed -e 's/.*shell sync.*/sync/' -e 's/.*emu kill.*/kill/' | tr '\n' ' ' | sed 's/ $//')"
   check "writable stop 뒤 표식 지움" 0 "$([ -f "$T/state/emu-$P.writable" ] && echo 1 || echo 0)"
   # R: 기본은 -read-only · 창 없음 · stop 에 sync 없음 · 에뮬레이터에 넘긴 ANDROID_AVD_HOME = 본 폴더.
-  for ci in aingcheck-api36 lane-ko; do
+  for ci in aingcheck-api36 lane-ko aingcheck-api36-ko; do
     fresh; sub "$SELF" start --avd "$ci" --port "$P" --no-seal; rc=$?
     check "기본 '$ci' 종료 코드" 0 "$rc"; check "기본 '$ci' 인자 -read-only" ro "$(launched)"
     check "기본 '$ci' -no-window" 1 "$(grep -c -- ' -no-window ' "$T/stub/emu-args" 2>/dev/null)"
@@ -379,6 +407,34 @@ STUB
     check "avd-protect 거부 '$ci'" 2 "$rc"
   done
   check "공용 폴더에 표식 없음" 0 "$(ls -A "$A/aingcheck-api36.avd" "$A/aingcheck-api26.avd" | grep -c -F "$PROTECT_MARK")"
+  # K: 공용 한국어 AVD(7차 int-i) — 이름으로 막는다(표식 없이도) · 준비를 끝내고 표식을 단 갈래 AVD 만 avd-promote 로 올린다 ·
+  #    있는 공용 AVD 는 덮지 않는다(avd-prepare-ko 도 시작하지 않는다).
+  sub2 "$SELF" avd-clone --from only2 --to aingcheck-api36-ko; check "avd-clone --to 공용 한국어 이름 거부" 2 "$?"
+  check "avd-clone 공용 한국어 이름 사본 안 만듦" 0 "$(ls -A "$A2" | grep -ci 'aingcheck-api36-ko')"
+  sub "$SELF" avd-protect --avd aingcheck-api36-ko; check "avd-protect 공용 한국어 거부" 2 "$?"
+  check "공용 한국어 폴더에 표식 안 씀" 0 "$(ls -A "$A/aingcheck-api36-ko.avd" | grep -c -F "$PROTECT_MARK")"
+  fresh; sub "$SELF" avd-prepare-ko --to aingcheck-api36-ko --port "$P"; rc=$?
+  check "avd-prepare-ko: 공용 AVD 가 이미 있으면 시작 안 함" "2 none 0" "$rc $(launched) $(ls -A "$A" | grep -c 'aingcheck-api36-ko-prep')"
+  sub2 "$SELF" avd-promote --from stage-raw --to aingcheck-api36-ko; rc=$?
+  check "avd-promote 표식 없는 원본 거부" "2 0" "$rc $(ls -A "$A2" | grep -c 'aingcheck-api36-ko')"
+  sub2 "$SELF" avd-promote --from stage-ko --to lane-z; check "avd-promote 공용 아닌 대상 거부" 2 "$?"
+  sub2 "$SELF" avd-promote --from alias2 --to aingcheck-api36-ko; check "avd-promote 공용 폴더를 가리키는 원본 거부" 2 "$?"
+  sub "$SELF" avd-promote --from lane-ko --to aingcheck-api36-ko; rc=$?
+  check "avd-promote 이미 있는 공용 AVD 거부(덮지 않음)" "2 1" "$rc $([ -d "$A/lane-ko.avd" ] && echo 1 || echo 0)"
+  sub2 "$SELF" avd-promote --from stage-ko --to aingcheck-api36-ko; rc=$?
+  check "avd-promote 종료 코드" 0 "$rc"
+  check "avd-promote path=" 1 "$(grep -cx "path=$A2/aingcheck-api36-ko.avd" "$A2/aingcheck-api36-ko.ini" 2>/dev/null)"
+  check "avd-promote 표식 그대로 · 원본 .ini·폴더 사라짐" "1 0 0" \
+    "$([ -e "$A2/aingcheck-api36-ko.avd/$PROTECT_MARK" ] && echo 1 || echo 0) $([ -e "$A2/stage-ko.ini" ] && echo 1 || echo 0) $([ -e "$A2/stage-ko.avd" ] && echo 1 || echo 0)"
+  fresh; sub2 "$SELF" start --avd aingcheck-api36-ko --port "$P" --no-seal --writable; rc=$?
+  check "올린 공용 AVD writable 거부" "2 none" "$rc $(launched)"; stopit
+  fresh; sub2 "$SELF" start --avd aingcheck-api36-ko --port "$P" --no-seal; rc=$?
+  check "올린 공용 AVD 기본 -read-only" "0 ro" "$rc $(launched)"; stopit
+  # ui · ko-check 인자와 '준비 안 된 기기는 1'(실기기 판정은 공용 aingcheck-api36-ko 봉인 실행 — 7차 int-i 실측 ko-check ready).
+  sub "$SELF" ui --port "$P" --mode bogus --match x; check "ui 모르는 --mode 거부" 2 "$?"
+  sub "$SELF" ui --port "$P" --mode tap; check "ui --match 없음 거부" 2 "$?"
+  sub "$SELF" ko-check --port "$P" --tries 0; check "ko-check --tries 0 거부" 2 "$?"
+  fresh; sub "$SELF" ko-check --port "$P" --tries 1; check "ko-check 준비 안 된 기기(가짜 adb 의 빈 설정) 1" 1 "$?"
 
   # N: 전용 netsim 발견 폴더(G §8-17 5) — 에뮬레이터는 호출자 TMPDIR 이 아니라 <상태>/netsim-<포트>/ 를 받는다(남의 netsim.ini 를
   #    못 보게). 그 폴더는 띄울 때마다 비우고(지난 실행 찌꺼기), 다 내려가면 지운다.
@@ -481,6 +537,25 @@ elif [ "$cmd" = "avd-protect" ]; then
   done < <(avd_dirs "$AVD")
   [ "$marked" -gt 0 ] || die "AVD 폴더를 못 찾았다: $AVD"
   exit 0
+elif [ "$cmd" = "avd-promote" ]; then
+  valid_avd_name "$FROM" || die "--from 이 AVD 이름이 아니다: '$FROM'"
+  valid_avd_name "$TO" || die "--to 가 AVD 이름이 아니다: '$TO'"
+  is_shared_name "$TO" || die "--to 가 공용 AVD 이름이 아니다($SHARED_AVDS) — 갈래 AVD 는 avd-clone 으로 만든다: $TO"
+  ! is_shared_name "$FROM" && ! resolves_to_shared "$FROM" || die "--from 이 공용 AVD 다: $FROM"
+  src="$AVD_HOME/$FROM.avd"
+  [ -f "$AVD_HOME/$FROM.ini" ] && [ -d "$src" ] || die "원본이 avd-clone 이 만든 갈래 AVD 가 아니다($AVD_HOME/$FROM.ini · $src)"
+  [ -e "$src/$PROTECT_MARK" ] || die "원본에 보호 표식이 없다 — 준비(avd-prepare-ko)를 끝내고 avd-protect 한 AVD 만 공용으로 올린다: $FROM"
+  ! avd_name_taken "$TO" && [ ! -e "$AVD_HOME/$TO.ini" ] && [ ! -e "$AVD_HOME/$TO.avd" ] \
+    || die "공용 AVD $TO 가 이미 있다 — 남이 띄워 쓰는 중일 수 있어 덮지 않는다(다시 만들려면 아무도 쓰지 않을 때 손으로 지운다)"
+  /bin/mv "$src" "$AVD_HOME/$TO.avd" || die "폴더를 못 옮겼다: $src → $AVD_HOME/$TO.avd"
+  # 실행 중 표식은 옮긴 폴더에 남기지 않는다(avd-clone 과 같다). 보호 표식은 그대로 둔다.
+  find "$AVD_HOME/$TO.avd" -maxdepth 1 \( -name '*.lock' -o -name 'bootcompleted.ini' -o -name 'emu-launch-params.txt' \) -exec rm -f {} +
+  rm -rf "$AVD_HOME/$TO.avd/tmpAdbCmds"
+  /usr/bin/sed -e "s#^path=.*#path=$AVD_HOME/$TO.avd#" -e "s#^path\.rel=.*#path.rel=avd/$TO.avd#" "$AVD_HOME/$FROM.ini" > "$AVD_HOME/$TO.ini"
+  grep -qx "path=$AVD_HOME/$TO.avd" "$AVD_HOME/$TO.ini" || die "$TO.ini 의 path 를 못 고쳤다(폴더는 $AVD_HOME/$TO.avd 로 옮겼다 — 손으로 고친다)"
+  rm -f "$AVD_HOME/$FROM.ini"
+  echo "avd-promote from=$FROM to=$TO dir=$AVD_HOME/$TO.avd protected=$([ -e "$AVD_HOME/$TO.avd/$PROTECT_MARK" ] && echo 1 || echo 0)"
+  exit 0
 elif [ "$cmd" = "avd-clone" ]; then
   valid_avd_name "$FROM" || die "--from 이 AVD 이름이 아니다: '$FROM'"
   valid_avd_name "$TO" || die "--to 가 AVD 이름이 아니다(영숫자·._- 만): '$TO'"
@@ -557,6 +632,90 @@ window_count() {
       else if (tolower($2) ~ /qemu-system|^emulator$/) foreign++
     }
     END { print own, foreign }'
+}
+
+# ---------- Gboard 한국어 도우미(avd-prepare-ko · ko-check · ui) ----------
+PY="$(command -v python3 || true)"
+GB_PKG="com.google.android.inputmethod.latin"
+GB_IME="$GB_PKG/com.android.inputmethod.latin.LatinIME"
+GB_SETTINGS="$GB_PKG/com.google.android.apps.inputmethod.latin.preference.SettingsActivity"
+KO_SUBTYPE="-1906255757"   # Gboard 한국어 두벌식(ko_KR)
+sh_adb() { "$ADB" -s "$SERIAL" "$@"; }
+# ui MODE 정규식 [시한초]: uiautomator 덤프에서 글자(text·content-desc)가 맞는 첫 노드를 찾는다.
+#   tap = 가운데를 누름 · wait = 있으면 0 · attr:<이름> = 그 속성 값을 냄 · edit = 첫 EditText 의 글자를 냄(정규식 무시).
+ui() {
+  "$PY" -I - "$ADB" "$SERIAL" "$@" <<'UIPY'
+import re, subprocess, sys, time
+import xml.etree.ElementTree as ET
+adb, serial, mode, pat = sys.argv[1:5]
+limit = float(sys.argv[5]) if len(sys.argv) > 5 else 20.0
+rx = re.compile(pat)
+def dump():
+    for _ in range(5):
+        subprocess.run([adb, "-s", serial, "shell", "uiautomator", "dump", "/data/local/tmp/emu-ui.xml"], capture_output=True, timeout=60)
+        raw = subprocess.run([adb, "-s", serial, "exec-out", "cat", "/data/local/tmp/emu-ui.xml"], capture_output=True, timeout=60).stdout.decode("utf-8", "replace")
+        if raw.lstrip().startswith("<?xml"):
+            return ET.fromstring(raw)
+        time.sleep(1)
+    return None
+t0 = time.time()
+while True:
+    root = dump()
+    hits = []
+    if root is not None:
+        for n in root.iter("node"):
+            if mode == "edit":
+                if n.get("class") == "android.widget.EditText":
+                    hits.append(n)
+            elif rx.search(n.get("text") or "") or rx.search(n.get("content-desc") or ""):
+                hits.append(n)
+    if hits:
+        n = hits[0]
+        if mode == "tap":
+            x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds", "")))
+            subprocess.run([adb, "-s", serial, "shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2)], check=True, timeout=60)
+            time.sleep(1.5)
+        elif mode.startswith("attr:"):
+            print(n.get(mode[5:], ""))
+        elif mode == "edit":
+            print(n.get("text", ""))
+        sys.exit(0)
+    if time.time() - t0 > limit:
+        seen = [] if root is None else [x for x in ((n.get("text") or n.get("content-desc") or "") for n in root.iter("node")) if x][:15]
+        print(f"emu.sh: 화면에 /{pat}/ 가 없다({limit:.0f}s, {mode}) — 보이는 글자: {seen}", file=sys.stderr)
+        sys.exit(1)
+    time.sleep(1)
+UIPY
+}
+# Gboard 설정을 열고 Languages 를 누른다. 부팅 직후에는 홈 화면이 뒤늦게 위로 올라와 설정을 덮는다(실측) — 최대 5번 다시 연다.
+# 인자 -S 면 Gboard(IME 프로세스)를 멈췄다 다시 띄운다 — 받은 자료를 새로 읽게.
+open_gb_languages() {
+  local i
+  for i in 1 2 3 4 5; do
+    sh_adb shell am start -W ${1:+"$1"} -n "$GB_SETTINGS" >/dev/null 2>&1
+    if ui tap '^Languages$' 20; then return 0; fi
+    log "Gboard 설정의 Languages 가 안 보인다($i) — 다시 연다"
+    sleep 5
+  done
+  return 1
+}
+# 지금 띄운 기기에서 Gboard 설정 → Languages → Add keyboard 의 검색 칸(EditText)에 dkssud 를 넣고 칸 글자를 낸다.
+ko_typed() {
+  open_gb_languages -S || return 1
+  ui tap '^Add keyboard$' 20 && ui tap '^Search (for a )?language$' 20 || return 1
+  sh_adb shell input text dkssud || return 1
+  sleep 3
+  ui edit . 10
+}
+ko_until_composed() { # 시도 수 · 사이 초
+  local i got
+  for i in $(seq 1 "$1"); do
+    got="$(ko_typed 2>/dev/null)"
+    log "한국어 조합 시도 $i: '$got'"
+    [ "$got" = "안녕" ] && return 0
+    sleep "$2"
+  done
+  return 1
 }
 
 case "$cmd" in
@@ -764,97 +923,24 @@ procs)
   ;;
 
 avd-prepare-ko)
-  # E-U5 한국어 조합 AVD 를 처음부터 만든다(머리말 '갈래 전용 AVD' 의 1~5). 실패하면 만든 AVD 를 남기고(사람이 볼 수 있게) 1.
+  # E-U5 한국어 조합 AVD 를 처음부터 만든다(머리말 'Gboard 한국어 AVD' 의 1~6). 실패하면 만든 AVD 를 남기고(사람이 볼 수 있게) 1.
   [ -n "$TO" ] || die "--to 가 필요하다(새 AVD 이름)"
-  PY="$(command -v python3 || true)"; [ -n "$PY" ] || die "uiautomator 화면을 읽을 python3 가 없다"
-  GB_PKG="com.google.android.inputmethod.latin"
-  GB_IME="$GB_PKG/com.android.inputmethod.latin.LatinIME"
-  GB_SETTINGS="$GB_PKG/com.google.android.apps.inputmethod.latin.preference.SettingsActivity"
-  KO_SUBTYPE="-1906255757"   # Gboard 한국어 두벌식(ko_KR)
-  sh_adb() { "$ADB" -s "$SERIAL" "$@"; }
-  # ui MODE 정규식 [시한초]: uiautomator 덤프에서 글자(text·content-desc)가 맞는 첫 노드를 찾는다.
-  #   tap = 가운데를 누름 · wait = 있으면 0 · attr:<이름> = 그 속성 값을 냄 · edit = 첫 EditText 의 글자를 냄(정규식 무시).
-  ui() {
-    "$PY" -I - "$ADB" "$SERIAL" "$@" <<'UIPY'
-import re, subprocess, sys, time
-import xml.etree.ElementTree as ET
-adb, serial, mode, pat = sys.argv[1:5]
-limit = float(sys.argv[5]) if len(sys.argv) > 5 else 20.0
-rx = re.compile(pat)
-def dump():
-    for _ in range(5):
-        subprocess.run([adb, "-s", serial, "shell", "uiautomator", "dump", "/data/local/tmp/emu-ui.xml"], capture_output=True, timeout=60)
-        raw = subprocess.run([adb, "-s", serial, "exec-out", "cat", "/data/local/tmp/emu-ui.xml"], capture_output=True, timeout=60).stdout.decode("utf-8", "replace")
-        if raw.lstrip().startswith("<?xml"):
-            return ET.fromstring(raw)
-        time.sleep(1)
-    return None
-t0 = time.time()
-while True:
-    root = dump()
-    hits = []
-    if root is not None:
-        for n in root.iter("node"):
-            if mode == "edit":
-                if n.get("class") == "android.widget.EditText":
-                    hits.append(n)
-            elif rx.search(n.get("text") or "") or rx.search(n.get("content-desc") or ""):
-                hits.append(n)
-    if hits:
-        n = hits[0]
-        if mode == "tap":
-            x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds", "")))
-            subprocess.run([adb, "-s", serial, "shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2)], check=True, timeout=60)
-            time.sleep(1.5)
-        elif mode.startswith("attr:"):
-            print(n.get(mode[5:], ""))
-        elif mode == "edit":
-            print(n.get("text", ""))
-        sys.exit(0)
-    if time.time() - t0 > limit:
-        seen = [] if root is None else [x for x in ((n.get("text") or n.get("content-desc") or "") for n in root.iter("node")) if x][:15]
-        print(f"emu.sh: 화면에 /{pat}/ 가 없다({limit:.0f}s, {mode}) — 보이는 글자: {seen}", file=sys.stderr)
-        sys.exit(1)
-    time.sleep(1)
-UIPY
-  }
-  # Gboard 설정을 열고 Languages 를 누른다. 부팅 직후에는 홈 화면이 뒤늦게 위로 올라와 설정을 덮는다(실측) — 최대 5번 다시 연다.
-  # 인자 -S 면 Gboard(IME 프로세스)를 멈췄다 다시 띄운다 — 받은 자료를 새로 읽게.
-  open_gb_languages() {
-    local i
-    for i in 1 2 3 4 5; do
-      sh_adb shell am start -W ${1:+"$1"} -n "$GB_SETTINGS" >/dev/null 2>&1
-      if ui tap '^Languages$' 20; then return 0; fi
-      log "Gboard 설정의 Languages 가 안 보인다($i) — 다시 연다"
-      sleep 5
-    done
-    return 1
-  }
-  # 지금 띄운 기기에서 Gboard 설정 → Languages → Add keyboard 의 검색 칸(EditText)에 dkssud 를 넣고 칸 글자를 낸다.
-  ko_typed() {
-    open_gb_languages -S || return 1
-    ui tap '^Add keyboard$' 20 && ui tap '^Search (for a )?language$' 20 || return 1
-    sh_adb shell input text dkssud || return 1
-    sleep 3
-    ui edit . 10
-  }
-  ko_until_composed() { # 시도 수 · 사이 초
-    local i got
-    for i in $(seq 1 "$1"); do
-      got="$(ko_typed 2>/dev/null)"
-      log "한국어 조합 시도 $i: '$got'"
-      [ "$got" = "안녕" ] && return 0
-      sleep "$2"
-    done
-    return 1
-  }
+  [ -n "$PY" ] || die "uiautomator 화면을 읽을 python3 가 없다"
+  # 공용 이름(aingcheck-api36-ko)이면 갈래 이름 <이름>-prep 에서 다 준비한 뒤 avd-promote 로 올린다 — 공용 이름은 --writable·avd-clone 이
+  # 거부하고, 남이 -read-only 로 띄워 쓰는 중일 수 있어 있는 공용 AVD 는 덮지 않는다(손으로 지운 뒤에만 다시 만든다).
+  PREP="$TO"
+  if is_shared_name "$TO"; then
+    ! avd_name_taken "$TO" && [ ! -e "$AVD_HOME/$TO.ini" ] && [ ! -e "$AVD_HOME/$TO.avd" ] \
+      || die "공용 AVD $TO 가 이미 있다 — 다시 만들려면 아무도 쓰지 않을 때 손으로 지운 뒤 부른다(덮지 않는다)"
+    PREP="$TO-prep"
+  fi
   started=0
   finish_prep() { [ "$started" -eq 1 ] && "$SELF" stop --port "$PORT" --timeout 30 >&2; started=0; }
   trap 'finish_prep; exit 130' INT TERM
-  "$SELF" avd-clone --from "$FROM" --to "$TO" || exit $?
+  "$SELF" avd-clone --from "$FROM" --to "$PREP" || exit $?
   # 1) 봉인 없이·쓰기로: Gboard 에 한국어·두벌식을 더하고 자료를 받는다.
   started=1
-  "$SELF" start --avd "$TO" --port "$PORT" --no-seal --writable --boot-timeout "$BOOT_TIMEOUT" || { log "띄우지 못했다(쓰기)"; finish_prep; exit 1; }
+  "$SELF" start --avd "$PREP" --port "$PORT" --no-seal --writable --boot-timeout "$BOOT_TIMEOUT" || { log "띄우지 못했다(쓰기)"; finish_prep; exit 1; }
   sh_adb shell ime enable "$GB_IME" >/dev/null 2>&1; sh_adb shell ime set "$GB_IME" >/dev/null 2>&1
   open_gb_languages || { log "Gboard 설정을 못 열었다"; finish_prep; exit 1; }
   if ui wait '^한국어$' 3 2>/dev/null; then
@@ -881,13 +967,43 @@ UIPY
   finish_prep
   # 2) 봉인·읽기 전용으로 다시: 받은 자료만으로 조합하는가.
   started=1
-  "$SELF" start --avd "$TO" --port "$PORT" --boot-timeout "$BOOT_TIMEOUT" || { log "띄우지 못했다(봉인)"; finish_prep; exit 1; }
+  "$SELF" start --avd "$PREP" --port "$PORT" --boot-timeout "$BOOT_TIMEOUT" || { log "띄우지 못했다(봉인)"; finish_prep; exit 1; }
   "$SELF" sealcheck --port "$PORT" || { log "봉인 확인 실패"; finish_prep; exit 1; }
   ko_until_composed 3 5 || { log "봉인 실행에서 '안녕' 이 안 나왔다"; finish_prep; exit 1; }
   finish_prep
   # 3) 보호 표식.
-  "$SELF" avd-protect --avd "$TO" || exit 1
+  "$SELF" avd-protect --avd "$PREP" || exit 1
+  # 4) 공용 이름이면 올린다(폴더 이름 바꾸기 · 표식 그대로).
+  if [ "$PREP" != "$TO" ]; then "$SELF" avd-promote --from "$PREP" --to "$TO" || exit 1; fi
   echo "avd-prepare-ko avd=$TO from=$FROM subtype=$KO_SUBTYPE sealed-compose=안녕 protected=1"
+  ;;
+
+ko-check)
+  # 띄워 둔 기기(보통 공용 aingcheck-api36-ko 를 봉인·-read-only 로)가 한국어 조합 준비 상태인지 잰다 — 설정은 바꾸지 않는다.
+  [ -n "$PY" ] || die "uiautomator 화면을 읽을 python3 가 없다"
+  case "$KO_TRIES" in ''|*[!0-9]*|0) die "--tries 는 1 이상 정수: '$KO_TRIES'" ;; esac
+  ime="$(sh_adb shell settings get secure default_input_method 2>/dev/null | tr -d '\r')"
+  enabled="$(sh_adb shell settings get secure enabled_input_methods 2>/dev/null | tr -d '\r')"
+  picked="$(sh_adb shell settings get secure selected_input_method_subtype 2>/dev/null | tr -d '\r')"
+  bad=()
+  [ "$ime" = "$GB_IME" ] || bad+=("ime")
+  case "$enabled" in *";$KO_SUBTYPE"*) ;; *) bad+=("subtype-enabled") ;; esac
+  [ "$picked" = "$KO_SUBTYPE" ] || bad+=("subtype-selected")
+  composed="-"
+  if [ ${#bad[@]} -eq 0 ]; then
+    if ko_until_composed "$KO_TRIES" 5; then composed="안녕"; else bad+=("compose"); fi
+  fi
+  echo "ko-check port=$PORT ime=${ime:-?} subtype=${picked:-?} compose=$composed verdict=$([ ${#bad[@]} -eq 0 ] && echo ready || echo "NOT-READY(${bad[*]})")"
+  [ ${#bad[@]} -eq 0 ]
+  ;;
+
+ui)
+  # 화면 글자로 찾아 누르기·기다리기·읽기(머리말 'ui'). 화면 갈래의 IME 재생 시험과 AVD 준비가 같은 함수를 쓴다.
+  [ -n "$PY" ] || die "uiautomator 화면을 읽을 python3 가 없다"
+  case "$UI_MODE" in tap|wait|edit|attr:?*) ;; *) die "--mode 는 tap|wait|edit|attr:<속성> 이다: '$UI_MODE'" ;; esac
+  [ -n "$UI_MATCH" ] || [ "$UI_MODE" = edit ] || die "--match <정규식> 이 필요하다(--mode $UI_MODE)"
+  case "$STOP_TIMEOUT" in ''|*[!0-9]*) die "--timeout 은 초(정수): '$STOP_TIMEOUT'" ;; esac
+  ui "$UI_MODE" "${UI_MATCH:-.}" "$STOP_TIMEOUT"
   ;;
 
 instrumented)

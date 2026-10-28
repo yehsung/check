@@ -21502,6 +21502,76 @@
       ]
     },
     {
+      "id": "plan-labels",
+      "maxLength": 32,
+      "rows": [
+        {
+          "label": null,
+          "normalized": null
+        },
+        {
+          "label": "",
+          "normalized": null
+        },
+        {
+          "label": "   ",
+          "normalized": null
+        },
+        {
+          "label": " \n\t",
+          "normalized": null
+        },
+        {
+          "label": "Max",
+          "normalized": "Max"
+        },
+        {
+          "label": " Max \n",
+          "normalized": "Max"
+        },
+        {
+          "label": "Pro 20x",
+          "normalized": "Pro 20x"
+        },
+        {
+          "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "normalized": null
+        },
+        {
+          "label": " bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\t",
+          "normalized": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "label": "👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦abcd",
+          "normalized": "👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦abcd"
+        },
+        {
+          "label": "👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦abcde",
+          "normalized": null
+        },
+        {
+          "label": "ábbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "normalized": null
+        },
+        {
+          "label": "ábbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "normalized": "ábbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "label": "​",
+          "normalized": null
+        },
+        {
+          "label": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+          "normalized": null
+        }
+      ]
+    },
+    {
       "combined": {
         "dev-a1b2": "Mac mini (A1B2)",
         "dev-c3d4": "Mac mini (C3D4)",
@@ -21750,11 +21820,13 @@
     "display": "AILimitFreshnessRule.display — 시계 앞섬 > 120초 · 리셋이 관측 앞 · 리셋이 창 길이 + 600 초과 → 알 수 없음. 리셋 주장(사용 > 0 이고 now ≥ 리셋 + 120) → 0% · 나이는 리셋부터. 등급 fresh ≤60 · recent ≤1800 · stale ≤86400 · ancient. stale·ancient 는 '이상'",
     "fingerprint": "SHA-256 앞 16 hex(앞뒤 공백 trim, 비면 null) — 서버로 가지 않는다",
     "matching": "AILimitWindow.matching — 두 창 길이와의 비(max/min) ≤ 2 인 것 중 가장 가까운 것, 아니면 null(이름보다 먼저 — 2026-10-23 실측)",
+    "planLabels": "AILimitPlanLabelContract.normalized — 앞뒤 공백·줄바꿈 trim, 비거나 유니코드 스칼라 maxLength(32) 초과면 null(자르지 않는다 · 그래핌 아님)",
     "values": "wholePercent = clamp 후 .rounded()(0.5 → 0 에서 먼 쪽), 0 초과면 최소 1, 100 미만이면 최대 99"
   },
   "swiftSources": [
     "Sources/CheckCore/AILimits.swift",
     "Sources/CheckCore/AILimitFreshnessRule.swift",
-    "Sources/CheckCore/SupabaseWorkModels.swift"
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/SupabaseWorkServiceAILimits.swift"
   ]
 }

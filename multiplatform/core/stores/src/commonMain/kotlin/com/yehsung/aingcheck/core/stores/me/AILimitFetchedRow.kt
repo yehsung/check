@@ -10,8 +10,9 @@ import com.yehsung.aingcheck.core.wire.models.AILimitServerRow
 
 /**
  * 파싱까지 끝난 내 AI 리밋 행(폰은 이 축에서 **읽기만** 한다). 스토어는 이 값만 본다 — 묶는 일(기기별 · 기기 안에서 제공자별)은 스토어가 한다.
- * 요청 · 행 디코드 · 행 거르기는 net `fetchMyAILimitRows`(W1-d), 이 파일은 Swift `fetchMyAILimits` 의 `compactMap` 몫(6차 c-fold 가 G5 골든
- * `fetchMyAILimits#data` 결과를 대조하려고 옮겼다 — 나 스토어 W2-c 는 이 함수를 부른다).
+ * 요청 · 행 디코드는 net `fetchMyAILimitRows`(W1-d — 거르지 않는다), **행 거르기와 값 정규화는 이 파일 한 자리**다(Swift `fetchMyAILimits` 의
+ * `compactMap` 하나). 6차 c-fold 가 G5 골든 `fetchMyAILimits#*` 결과를 대조하려고 옮겼다 — 앱(나 스토어 W2-c)은 core/stores
+ * `service.fetchMyAILimits` 를 부르고 이 타입을 다시 만들지 않는다.
  *
  * INV-MeAILimitsService-ff53660f 이식: `device_id`·`device_label` 을 **받는다** — 서버 PK 가 (user_id, device_id, provider)라 행이 이미 기기별이다.
  * 제공자당 최신 행 하나로 접으면 맥 A 에서 끈 제공자가 맥 B 의 행에 밀려 되살아나고, 두 맥의 값이 누구 것인지 말하지 못한다. 그래서 [deviceID] 에는

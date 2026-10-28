@@ -400,8 +400,10 @@ suspend fun SupabaseWorkService.fetchMyProfileCard(accessToken: String, userID: 
 }
 
 /**
- * 내 AI 리밋(ai_limits 읽기 — 폰은 쓰지 않는다). 관측 시각을 못 읽거나 기기 id 가 빈 행은 버린다. 값 정규화(날짜 · 라벨 `AILimit*Contract`)는
- * core/stores me `AILimitFetchedRow.fromRows` 가 한다(G5 골든 fetchMyAILimits#data 결과 — core/stores 의 G5 대조, 6차 c-fold).
+ * 내 AI 리밋(ai_limits 읽기 — 폰은 쓰지 않는다) — 요청과 행 디코드까지. **행을 거르지 않는다**: 관측 시각을 못 읽거나 기기 id 가 빈 행을
+ * 버리는 일과 값 정규화(날짜 · 라벨 `AILimit*Contract`)는 core/stores me `AILimitFetchedRow.fromRows` **한 자리**다(Swift `fetchMyAILimits` 의
+ * `compactMap` 하나 — 여기서도 거르면 그쪽 거름이 한 번도 돌지 않아 시험이 못 본다, 6차 c-fold 검증 지적). 앱은 core/stores
+ * `service.fetchMyAILimits` 를 부른다.
  */
 suspend fun SupabaseWorkService.fetchMyAILimitRows(accessToken: String, userID: String): List<AILimitServerRow> {
     // INV-MeAILimitsService-e8b002fa 이식: 이 select 는 device_label 칸이 있는 서버(20261008120000_ai_limits_devices)를 요구한다 — 없는 칸을 적으면
@@ -416,9 +418,7 @@ suspend fun SupabaseWorkService.fetchMyAILimitRows(accessToken: String, userID: 
         ),
         null, accessToken, null,
     )
-    return decode(ListSerializer(AILimitServerRow.serializer()), data).filter { row ->
-        parseDate(row.observedAt) != null && swiftTrim(row.deviceId ?: "").isNotEmpty()
-    }
+    return decode(ListSerializer(AILimitServerRow.serializer()), data)
 }
 
 /**

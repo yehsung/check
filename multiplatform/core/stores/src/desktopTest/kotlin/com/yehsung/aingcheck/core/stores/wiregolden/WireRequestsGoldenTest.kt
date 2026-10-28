@@ -1,19 +1,21 @@
 // 원본: 없음 — G5 요청 골든 대조(G §2-3 W1-d ①). 골든: Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift
 //       6차 c-fold(G §8-17 4): core/net 에서 core/stores 로 옮겼다 — net 과 rules 를 둘 다 보는 가장 낮은 모듈이라, 시험용 글자 규칙 근사 대신
-//       실제 RulesWireTextRules 를 꽂고 resultOtherLanes 14 case 의 결과도 rules·stores 타입으로 대조한다(빠지는 case 0).
+//       실제 RulesWireTextRules 를 꽂고 resultOtherLanes case 의 결과를 core/stores `service` 의 앱 함수로 대조한다(빠지는 case 0).
+//       그 case 들은 실제 응답(데모 픽스처 · 경계 본문)을 싣는다 — 응답이 `{}` 뿐이면 rules 디코드 · 합성이 틀려도 초록이다(c-fold 검증 지적).
 package com.yehsung.aingcheck.core.stores.wiregolden
 
 import com.yehsung.aingcheck.core.net.*
-import com.yehsung.aingcheck.core.rules.achievements.AchievementStatus
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
-import com.yehsung.aingcheck.core.rules.text.MegaphoneBody
-import com.yehsung.aingcheck.core.rules.text.MegaphoneInfoResponse
-import com.yehsung.aingcheck.core.rules.text.MegaphoneSendResponse
-import com.yehsung.aingcheck.core.rules.text.MessageBodyValidation
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
-import com.yehsung.aingcheck.core.rules.text.StatusMessageSaveOutcome
-import com.yehsung.aingcheck.core.rules.weekly.WeeklyWorkStatus
-import com.yehsung.aingcheck.core.stores.me.AILimitFetchedRow
+import com.yehsung.aingcheck.core.stores.service.achievementClaim
+import com.yehsung.aingcheck.core.stores.service.achievementsStatus
+import com.yehsung.aingcheck.core.stores.service.dailyMissionClaim
+import com.yehsung.aingcheck.core.stores.service.fetchMyAILimits
+import com.yehsung.aingcheck.core.stores.service.megaphoneInfo
+import com.yehsung.aingcheck.core.stores.service.sendMegaphone
+import com.yehsung.aingcheck.core.stores.service.setStatusMessageOutcome
+import com.yehsung.aingcheck.core.stores.service.weeklyWorkClaim
+import com.yehsung.aingcheck.core.stores.service.weeklyWorkStatus
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftURL
@@ -161,6 +163,11 @@ class GoldenRecorder(private val script: List<Pair<Int, String>>, private val ro
 }
 
 const val ACCESS = "golden-access-token"
+
+/** Swift `GoldenExportWireRequests.megaphoneBodies` 와 같은 본문(빈 · 상한+1 은 요청 없이 즉답, 나머지는 정규화한 글자로 RPC). */
+private val MEGAPHONE_BODIES = listOf(
+    " \n\u200B ", "가".repeat(199), "가".repeat(198), "  오늘 3시\r\n라운지에서  간식 나눠요\u0007 ", "다들", "다들",
+)
 const val ANON = "golden-anon-key"
 
 class WireRequestsGoldenTest {
@@ -173,40 +180,48 @@ class WireRequestsGoldenTest {
 
     /**
      * 결과 타입이 rules·stores 에 있는 case(골든 spec.resultOtherLanes — 받는 갈래 이름이 적혀 있다). Swift 서비스 함수 하나 =
-     * Kotlin 은 net 요청 + rules 디코드(앱 조립·스토어가 부르는 같은 합성). 이 집합이 spec.resultOtherLanes 와 **정확히** 같아야 한다.
+     * Kotlin core/stores `service` 의 **앱 함수**(net 요청 + rules 디코드 · 합성 — 스토어가 부르는 그 함수). 시험 안에서 따로 합성하지 않는다
+     * (그러면 앱이 다르게 합성해도 초록이다 — 6차 c-fold 검증 지적). 이 집합이 spec.resultOtherLanes 와 **정확히** 같아야 한다.
      */
     private val rulesComposed: Map<String, suspend (SupabaseWorkService) -> Any?> = linkedMapOf(
         // 상태메시지 저장 결과(Swift setStatusMessage → StatusMessageSaveOutcome): 함수 없음은 serverNotReady, 나머지는 응답 세 칸.
-        "setStatusMessage" to { s -> statusMessageOutcome(s.setStatusMessage(t, "집중 중")) },
-        "setStatusMessage(nil)" to { s -> statusMessageOutcome(s.setStatusMessage(t, null)) },
+        "setStatusMessage" to { s -> s.setStatusMessageOutcome(t, "집중 중") },
+        "setStatusMessage(nil)" to { s -> s.setStatusMessageOutcome(t, null) },
+        "setStatusMessage#outcomes" to { s -> (1..11).map { s.setStatusMessageOutcome(t, "집중 중") } },
         // 업적 · 일일 미션(AchievementStatus — 관대한 디코드, 최상위가 객체가 아닐 때만 throw).
-        "achievementsStatus" to { s -> AchievementStatus.decode(s.achievementsStatusRaw(t)) },
-        "achievementClaim" to { s -> AchievementStatus.decode(s.achievementClaimRaw(t, "poke10")) },
-        "achievementClaim(nil)" to { s -> AchievementStatus.decode(s.achievementClaimRaw(t, null)) },
-        "dailyMissionClaim" to { s -> AchievementStatus.decode(s.dailyMissionClaimRaw(t, "daily_gomoku")) },
-        "dailyMissionClaim(nil)" to { s -> AchievementStatus.decode(s.dailyMissionClaimRaw(t, null)) },
+        "achievementsStatus" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#data" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#lossy" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#notObject" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#missing" to { s -> s.achievementsStatus(t) },
+        "achievementClaim" to { s -> s.achievementClaim(t, "poke10") },
+        "achievementClaim#data" to { s -> s.achievementClaim(t, "poke10") },
+        "achievementClaim(nil)" to { s -> s.achievementClaim(t, null) },
+        "achievementClaim(nil)#data" to { s -> s.achievementClaim(t, null) },
+        "dailyMissionClaim" to { s -> s.dailyMissionClaim(t, "daily_gomoku") },
+        "dailyMissionClaim#data" to { s -> s.dailyMissionClaim(t, "daily_gomoku") },
+        "dailyMissionClaim(nil)" to { s -> s.dailyMissionClaim(t, null) },
         // 주간 근무 보상(WeeklyWorkStatus — 받기 응답도 같은 모양).
-        "weeklyWorkStatus" to { s -> WeeklyWorkStatus.decode(s.weeklyWorkStatusRaw(t)) },
-        "weeklyWorkClaim" to { s -> WeeklyWorkStatus.decode(s.weeklyWorkClaimRaw(t)) },
-        "weeklyWorkClaim(args)" to { s -> WeeklyWorkStatus.decode(s.weeklyWorkClaimRaw(t, "2026-09-14", 40)) },
+        "weeklyWorkStatus" to { s -> s.weeklyWorkStatus(t) },
+        "weeklyWorkStatus#data" to { s -> s.weeklyWorkStatus(t) },
+        "weeklyWorkStatus#lossy" to { s -> s.weeklyWorkStatus(t) },
+        "weeklyWorkClaim" to { s -> s.weeklyWorkClaim(t) },
+        "weeklyWorkClaim#data" to { s -> s.weeklyWorkClaim(t) },
+        "weeklyWorkClaim(args)" to { s -> s.weeklyWorkClaim(t, "2026-09-14", 40) },
         // 확성기(Swift sendMegaphone: 본문 사전 판정 → 정규화한 글자로 RPC → MegaphoneSendResponse · megaphoneInfo → MegaphoneInfoResponse).
-        "sendMegaphone" to { s -> sendMegaphone(s, "다들 화이팅", rid) },
-        "megaphoneInfo" to { s -> MegaphoneInfoResponse.decode(s.megaphoneInfoRaw(t)) },
-        // 내 AI 리밋(Swift fetchMyAILimits → [AILimitFetchedRow] — 라벨 정규화 AILimitDeviceLabelContract · AILimitPlanLabelContract).
-        "fetchMyAILimits" to { s -> AILimitFetchedRow.fromRows(s.fetchMyAILimitRows(t, u)) },
-        "fetchMyAILimits#data" to { s -> AILimitFetchedRow.fromRows(s.fetchMyAILimitRows(t, u)) },
+        "sendMegaphone" to { s -> s.sendMegaphone(t, "다들 화이팅", rid) },
+        "sendMegaphone#outcomes" to { s -> MEGAPHONE_BODIES.map { body -> s.sendMegaphone(t, body, rid) } },
+        "sendMegaphone#missing" to { s -> s.sendMegaphone(t, "다들 화이팅", rid) },
+        "sendMegaphone#badType" to { s -> s.sendMegaphone(t, "다들 화이팅", rid) },
+        "megaphoneInfo" to { s -> s.megaphoneInfo(t) },
+        "megaphoneInfo#data" to { s -> listOf(s.megaphoneInfo(t), s.megaphoneInfo(t)) },
+        "megaphoneInfo#badType" to { s -> s.megaphoneInfo(t) },
+        // 내 AI 리밋(Swift fetchMyAILimits → [AILimitFetchedRow] — 행 거르기 · 라벨 정규화 AILimitDeviceLabelContract · AILimitPlanLabelContract).
+        "fetchMyAILimits" to { s -> s.fetchMyAILimits(t, u) },
+        "fetchMyAILimits#data" to { s -> s.fetchMyAILimits(t, u) },
+        "fetchMyAILimits#filters" to { s -> s.fetchMyAILimits(t, u) },
+        "fetchMyAILimits#labels" to { s -> s.fetchMyAILimits(t, u) },
     )
-
-    private fun statusMessageOutcome(result: StatusMessageSaveResult): StatusMessageSaveOutcome = when (result) {
-        is StatusMessageSaveResult.Response -> StatusMessageSaveOutcome.from(result.response.status, result.response.statusMessage, result.response.maxLength)
-        StatusMessageSaveResult.ServerNotReady -> StatusMessageSaveOutcome.serverNotReady
-    }
-
-    private suspend fun sendMegaphone(s: SupabaseWorkService, body: String, requestID: String): MegaphoneSendResponse {
-        MegaphoneBody.localRefusal(body)?.let { return it }
-        val normalized = (MegaphoneBody.validate(body) as MessageBodyValidation.ok).value
-        return MegaphoneSendResponse.decode(s.sendMegaphoneRaw(t, normalized, requestID))
-    }
 
     /** Swift `GoldenExportWireRequests.calls` 와 같은 id · 같은 인자. 여기 없는 id 가 골든에 있으면 "미이식". */
     private val registry: Map<String, suspend (SupabaseWorkService) -> Any?> = rulesComposed + linkedMapOf(

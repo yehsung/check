@@ -26,6 +26,9 @@ class GraphemeArtLocksTest {
     }
     private val api26 = GraphemeArtLocks.forApi(26) as GraphemeArtLocks.Exact
 
+    /** 그래핌 조각 → 안쪽 경계(스칼라 자리, 0 과 끝은 뺀다). */
+    private fun boundaries(clusters: List<Int>): Set<Int> = clusters.runningFold(0) { a, c -> a + c }.drop(1).dropLast(1).toSet()
+
     /** 기기가 낼 값을 흉내 내는 분할기: 골든 입력 → [table] 에 있으면 그 값, 없으면 Swift 값. */
     private fun fake(table: Map<String, List<Int>>): (String) -> List<Int> {
         val byText = golden.cases.associate { TextGoldenChecks.text(it.string("cps")) to it.string("id") }
@@ -35,7 +38,9 @@ class GraphemeArtLocksTest {
     @Test
     fun measuredApisAreExactly26And36() {
         assertEquals(setOf(26, 36), GraphemeArtLocks.measuredApis, "잰 API 목록이 바뀌었다 — 잰 기록(포트 · 이미지 판)과 함께 고친다")
-        assertEquals(GraphemeArtLocks.GoldenListOnly, GraphemeArtLocks.forApi(36), "API 36 은 기존 InCB 2줄 허용 폭 그대로(G §8-17 2)")
+        assertEquals(GraphemeArtLocks.Exact(36, "Android 16 · ICU 76.1 · Unicode 16.0", emptyMap()), GraphemeArtLocks.forApi(36),
+            "API 36 은 갈림 0줄을 빈 목록으로 정확히 잠근다(실측 0줄 — 허용 폭이면 0→2줄이 초록이었다)")
+        assertTrue(GraphemeArtLocks.byApi.values.all { it is GraphemeArtLocks.Exact }, "잰 API 는 모두 정확한 목록이어야 한다(G §8-17 2 '늘거나 줄면 빨강')")
         assertEquals(null, GraphemeArtLocks.forApi(30), "재지 않은 API 에 목록이 있으면 안 된다")
     }
 
@@ -51,11 +56,20 @@ class GraphemeArtLocksTest {
             assertNotEquals(want, clusters, "$id: 잠금 값이 Swift 값과 같다(갈림이 아니다 — 목록이 낡았다)")
             assertEquals(cps.getValue(id).size, clusters.sum(), "$id: 조각의 스칼라 합이 입력과 다르다")
             val scalars = cps.getValue(id)
+            if (id in incb) {
+                assertEquals(incb.getValue(id), clusters, "$id: API 26 의 InCB 줄은 JDK 와 같은 옛 규칙 값이었다")
+                continue
+            }
+            // 경계 모양(기기 없이 잴 수 있는 값의 근거 — 6차 c-fold 검증 지적: 합 · 갈래 수만 보면 같은 합의 다른 값이 초록이었다).
+            // ICU 58 은 Swift 보다 **덜 붙인다**: Swift 경계는 전부 남고(더 쪼갤 뿐), 더 생긴 경계는 ① 피부색 수식자 바로 앞(GB10 의 E_Base 표가
+            // 유니코드 9) ② ZWJ 바로 뒤(GB11 이 Glue_After_Zwj 만)뿐이다. 줄마다 하나의 원인이다.
+            val extra = boundaries(clusters) - boundaries(want)
+            assertTrue(boundaries(clusters).containsAll(boundaries(want)), "$id: API 26 값 $clusters 이 Swift 경계 $want 를 지웠다(ICU 58 은 더 쪼갤 뿐이다)")
+            assertTrue(extra.isNotEmpty(), "$id: 더 생긴 경계가 없다")
             when {
-                id in incb -> assertEquals(incb.getValue(id), clusters, "$id: API 26 의 InCB 줄은 JDK 와 같은 옛 규칙 값이었다")
-                scalars.any { it in 0x1F3FB..0x1F3FF } -> modifier++
-                0x200D in scalars -> zwj++
-                else -> error("$id: 수식자 · ZWJ · InCB 어느 갈래도 아닌 갈림 — 실측 기록과 다르다")
+                extra.all { scalars[it] in 0x1F3FB..0x1F3FF } -> modifier++
+                extra.all { scalars[it - 1] == 0x200D } -> zwj++
+                else -> error("$id: API 26 값 $clusters 의 새 경계 $extra 가 수식자 앞도 ZWJ 뒤도 아니다(입력 ${cps.getValue(id).joinToString(" ") { it.toString(16) }}) — 실측 기록과 다르다")
             }
         }
         assertTrue(api26.lines.keys.containsAll(incb.keys), "API 26 은 InCB 2줄도 옛 규칙 값으로 갈렸다(실측)")
@@ -85,13 +99,16 @@ class GraphemeArtLocksTest {
     }
 
     @Test
-    fun api36KeepsTheTwoLineGoldenAllowance() {
+    fun api36ExactEmptyLockFailsOnAnyDivergence() {
         assertEquals(0, TextGoldenChecks.graphemes(golden, TextRuntime.ANDROID_ART, 36, fake(emptyMap())), "Swift 값만 내면 0줄")
         val legacy = golden.cases.filter { it["knownDivergence"] is JsonObject }.associate {
             it.string("id") to (it["knownDivergence"] as JsonObject).array("legacyClusters").map { c -> c.jsonPrimitive.int }
         }
-        assertEquals(2, TextGoldenChecks.graphemes(golden, TextRuntime.ANDROID_ART, 36, fake(legacy)), "InCB 2줄은 옛 규칙 값도 된다")
-        // API 26 의 수식자 갈림이 API 36 에 나타나면 빨강이다.
+        assertEquals(2, legacy.size)
+        // 늘어남: InCB 2줄이 옛 규칙 값으로 돌아오면(API 26·JDK 와 같은 값) 빨강 — 예전 허용 폭은 이것을 초록으로 넘겼다.
+        assertFailsWith<AssertionError> { TextGoldenChecks.graphemes(golden, TextRuntime.ANDROID_ART, 36, fake(legacy)) }
+        assertFailsWith<AssertionError> { TextGoldenChecks.graphemes(golden, TextRuntime.ANDROID_ART, 36, fake(legacy.entries.take(1).associate { it.key to it.value })) }
+        // API 26 의 수식자 갈림이 API 36 에 나타나도 빨강.
         assertFailsWith<AssertionError> { TextGoldenChecks.graphemes(golden, TextRuntime.ANDROID_ART, 36, fake(mapOf("g-200" to listOf(1, 1)))) }
     }
 }

@@ -18,7 +18,8 @@ import kotlin.test.fail
  *     (W1-c 날짜 파서에서 에뮬레이터 API 36 실측 — `0.١٢` 가 소수부로 잡혀 터졌다). 숫자는 `[0-9]`, 공백은 명시 집합으로 적는다.
  *  ② W1-c 패키지(gacha · weekly · achievements · insights · todo · text · character · ailimit · token · format)에서 `Character.getType` 에
  *     기대는 Char 판정(isDigit · isLetter · isLetterOrDigit · isWhitespace · 인자 없는 trim · digitToInt) 금지 — G §8-16 ②: JDK 21 = Unicode 15.0,
- *     ART 는 API 마다 다르다. 번들 표(TextScalars)나 ASCII 비교로 쓴다. foundation 의 날짜 파서 세 파일([FOUNDATION_DATE_PARSER])도 같다.
+ *     ART 는 API 마다 다르다. 번들 표(TextScalars)나 ASCII 비교로 쓴다. 날짜 파서 한 벌 — foundation 세 파일([FOUNDATION_DATE_PARSER])과
+ *     wire 입구([WIRE_DATE_ENTRY])도 같다(6차 c-fold 검증 지적으로 입구를 더했다).
  *
  * 주석은 걷고 본다(주석에 `\d` 를 설명으로 적는 것은 괜찮다 — 기억 source-contract-tests-need-comment-stripping).
  */
@@ -66,8 +67,10 @@ class PlatformUnicodeStructureTest {
             W1C_PACKAGES.any { "/com/yehsung/aingcheck/core/rules/$it/" in path }
         }
         assertTrue(w1c.size >= 30, "W1-c 패키지 소스가 너무 적다(${w1c.size})")
-        val parser = lowerModuleSources().filter { file -> FOUNDATION_DATE_PARSER.any { file.invariantSeparatorsPath.endsWith(it) } }
-        assertEquals(FOUNDATION_DATE_PARSER.size, parser.size, "foundation 날짜 파서 파일을 다 못 찾았다: ${parser.map { it.name }}")
+        // 날짜 파서 한 벌 = foundation 세 파일 + wire 의 입구(SwiftDate — Swift parseDate). 입구에 getType 판정이 끼면 파서를 모은 뜻이 없다.
+        val dateParser = FOUNDATION_DATE_PARSER + WIRE_DATE_ENTRY
+        val parser = lowerModuleSources().filter { file -> dateParser.any { file.invariantSeparatorsPath.endsWith(it) } }
+        assertEquals(dateParser.size, parser.size, "날짜 파서 파일을 다 못 찾았다: ${parser.map { it.name }}")
         val files = w1c + parser
         val offenders = ArrayList<String>()
         for (file in files) {

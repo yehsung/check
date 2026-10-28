@@ -11,7 +11,10 @@ package com.yehsung.aingcheck.core.rules.text
 object GraphemeArtLocks {
     sealed interface Lock
 
-    /** 골든 knownDivergence(InCB 2줄)만 허용 폭(Swift 값 또는 legacyClusters) — 나머지 줄은 Swift 값이어야 한다. */
+    /**
+     * 골든 knownDivergence(InCB 2줄)만 허용 폭(Swift 값 또는 legacyClusters) — 나머지 줄은 Swift 값이어야 한다. 잰 API 는 모두 [Exact] 라
+     * 지금 이 잠금을 쓰는 API 는 없다(재지 않은 기기를 임시로 받을 때의 꼴로 남긴다 — 쓰면 늘어남 하나를 놓친다).
+     */
     data object GoldenListOnly : Lock
 
     /** 이 API 에서 Swift 와 다른 줄 **전부**(id → 그 기기가 내는 그래핌마다 스칼라 수). 목록 밖은 Swift 값, 목록 안은 정확히 이 값. */
@@ -56,8 +59,16 @@ object GraphemeArtLocks {
         ),
     )
 
-    /** API 수준 → 잠금. API 36(Android 16 · ICU 76.1 · 유니코드 16.0)은 0줄 갈림(InCB 도 Swift 값)이라 기존 2줄 허용 폭 그대로. */
-    val byApi: Map<Int, Lock> = linkedMapOf(26 to API_26, 36 to GoldenListOnly)
+    /**
+     * API 36(Android 16 · ICU 76.1 · 유니코드 16.0 — `system-images/android-36/google_apis_playstore/arm64-v8a` r7, BE2A.250530.026.D1).
+     * 실측(2026-10-28 · 포트 5566 — W0-f ③ 측정기와 같은 0줄): Swift 와 갈리는 줄 **0**(InCB 2줄도 Swift 값). 그래서 빈 목록으로 **정확히** 잠근다 —
+     * 한 줄이라도 갈리면(기기 ICU 가 메인라인 갱신으로 바뀌는 등) 빨강이고, 그 기기에서 잰 값을 여기 더한다(G §8-17 2 '늘거나 줄면 빨강').
+     * 예전 [GoldenListOnly](InCB 2줄을 옛 값으로도 허용)는 0→2줄로 늘어도 초록이었다(6차 c-fold 검증 지적).
+     */
+    private val API_36 = Exact(api = 36, runtime = "Android 16 · ICU 76.1 · Unicode 16.0", lines = emptyMap())
+
+    /** API 수준 → 잠금. 재지 않은 API(27~35 · 실기기)는 목록이 없어 빨강이다. */
+    val byApi: Map<Int, Lock> = linkedMapOf(26 to API_26, 36 to API_36)
 
     val measuredApis: Set<Int> get() = byApi.keys
 

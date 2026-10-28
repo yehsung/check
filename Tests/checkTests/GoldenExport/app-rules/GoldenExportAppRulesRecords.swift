@@ -1,4 +1,4 @@
-// 원본: 없음(W1-c 골든 생성기 · 주간 · 날짜 · 기록 · 토큰 · 숫자 · AI 리밋 — Sources/CheckCore/{WeeklyWorkReward,CheckWorkInsights,MilestoneTracker,CheckTokenRowDisplay,CodexEffectiveRule,MenuBarStatusFormatter,AILimits,AILimitFreshnessRule}.swift 를 잰다)
+// 원본: 없음(W1-c 골든 생성기 · 주간 · 날짜 · 기록 · 토큰 · 숫자 · AI 리밋 — Sources/CheckCore/{WeeklyWorkReward,CheckWorkInsights,MilestoneTracker,CheckTokenRowDisplay,CodexEffectiveRule,MenuBarStatusFormatter,AILimits,AILimitFreshnessRule,SupabaseWorkServiceAILimits}.swift 를 잰다)
 import CheckGoldenSupport
 import Foundation
 import Testing
@@ -710,6 +710,16 @@ struct GoldenExportAppRulesRecords {
                                  String(repeating: "👨‍👩‍👧‍👦", count: 10) + "끝", "\u{200B}", "a\u{301}" + String(repeating: "b", count: 63)]
         cases.append(["id": "device-labels", "rows": .array(labels.map { ["label": Self.s($0), "normalized": Self.s(AILimitDeviceLabelContract.normalized($0))] }),
                       "maxScalars": .int(AILimitDeviceLabelContract.maxScalars)])
+        // 플랜 라벨(AILimitPlanLabelContract — 6차 c-fold 검증 지적: 폰이 읽는 쪽으로 옮긴 계약을 재는 골든이 없었다). 눈금은 **스칼라**
+        // (서버 char_length), 넘치면 **버린다**(자르지 않는다). 가족 이모지 = 7 스칼라 · 그래핌 1, a+U+0301 = 2 스칼라 · 그래핌 1.
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+        let planLabels: [String?] = [nil, "", "   ", " \n\t", "Max", " Max \n", "Pro 20x", String(repeating: "a", count: 32),
+                                     String(repeating: "a", count: 33), " " + String(repeating: "b", count: 32) + "\t",
+                                     String(repeating: family, count: 4) + "abcd", String(repeating: family, count: 4) + "abcde",
+                                     "a\u{301}" + String(repeating: "b", count: 31), "a\u{301}" + String(repeating: "b", count: 30),
+                                     "\u{200B}", String(repeating: "가", count: 40)]
+        cases.append(["id": "plan-labels", "rows": .array(planLabels.map { ["label": Self.s($0), "normalized": Self.s(AILimitPlanLabelContract.normalized($0))] }),
+                      "maxLength": .int(AILimitPlanLabelContract.maxLength)])
         let observations: [AILimitDeviceObservation] = [
             .init(deviceID: "dev-a1b2", label: "Mac mini", observedAt: base),
             .init(deviceID: "dev-c3d4", label: "Mac mini", observedAt: base.addingTimeInterval(60)),
@@ -753,7 +763,8 @@ struct GoldenExportAppRulesRecords {
         goldenEmit(GoldenFile(
             golden: "dates/ailimit",
             equivalence: .bit,
-            swiftSources: ["Sources/CheckCore/AILimits.swift", "Sources/CheckCore/AILimitFreshnessRule.swift", "Sources/CheckCore/SupabaseWorkModels.swift"],
+            swiftSources: ["Sources/CheckCore/AILimits.swift", "Sources/CheckCore/AILimitFreshnessRule.swift", "Sources/CheckCore/SupabaseWorkModels.swift",
+                           "Sources/CheckCore/SupabaseWorkServiceAILimits.swift"],
             platformSensitive: false,
             spec: [
                 "matching": "AILimitWindow.matching — 두 창 길이와의 비(max/min) ≤ 2 인 것 중 가장 가까운 것, 아니면 null(이름보다 먼저 — 2026-10-23 실측)",
@@ -761,6 +772,7 @@ struct GoldenExportAppRulesRecords {
                 "values": "wholePercent = clamp 후 .rounded()(0.5 → 0 에서 먼 쪽), 0 초과면 최소 1, 100 미만이면 최대 99",
                 "devices": "기기 접기 — 최근 순(관측 없음은 뒤, 동률은 id), 이름은 라벨 있는 가장 최근 행. 이름이 겹치면 꼬리(id 끝 4자 대문자)",
                 "fingerprint": "SHA-256 앞 16 hex(앞뒤 공백 trim, 비면 null) — 서버로 가지 않는다",
+                "planLabels": "AILimitPlanLabelContract.normalized — 앞뒤 공백·줄바꿈 trim, 비거나 유니코드 스칼라 maxLength(32) 초과면 null(자르지 않는다 · 그래핌 아님)",
             ],
             cases: cases
         ))

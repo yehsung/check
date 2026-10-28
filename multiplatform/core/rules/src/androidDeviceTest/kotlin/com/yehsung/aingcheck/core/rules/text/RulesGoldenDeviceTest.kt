@@ -43,6 +43,8 @@ class RulesGoldenDeviceTest {
         val differ = TextGoldenChecks.graphemes(golden, TextRuntime.ANDROID_ART, api)
         val lock = GraphemeArtLocks.forApi(api)
         note("text/graphemes differFromSwift=$differ lock=${if (lock is GraphemeArtLocks.Exact) "exact(${lock.lines.size})" else "goldenListOnly(InCB 2)"}")
+        // 잠금이 있는 API 는 모두 정확한 목록이어야 한다(허용 폭은 늘어남을 놓친다 — G §8-17 2).
+        assertEquals(true, lock is GraphemeArtLocks.Exact, "API $api 의 그래핌 잠금이 정확한 목록이 아니다($lock)")
     }
 
     @Test

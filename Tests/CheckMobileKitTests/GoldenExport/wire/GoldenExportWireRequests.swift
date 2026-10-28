@@ -477,7 +477,123 @@ struct GoldenExportWireRequests {
                 let third = try await s.fetchShopState(accessToken: t, protocolVersion: 4)
                 return [first, second, third]
             },
+            // ---- rules 결과 타입에 실제 응답(6차 c-fold 검증 지적 — 위 14 case 는 응답이 `{}` 라 rules 디코드 · 합성이 틀려도 초록이었다).
+            //      데모 픽스처(앱이 실제로 그리는 응답)와 경계 본문을 싣는다. Kotlin 은 core/stores `service` 의 앱 함수를 그대로 부른다 ----
+            WireCall(id: "setStatusMessage#outcomes", responses: Self.statusMessageOutcomes) { s, t in
+                var out: [StatusMessageSaveOutcome] = []
+                for _ in Self.statusMessageOutcomes { out.append(try await s.setStatusMessage(accessToken: t, text: "집중 중")) }
+                return out
+            },
+            WireCall(id: "achievementsStatus#data", responses: [Self.fixture("me/_me/rpc.achievements_status.json")]) { s, t in
+                try await s.achievementsStatus(accessToken: t)
+            },
+            WireCall(id: "achievementsStatus#lossy", responses: [.json(Self.achievementsLossy)]) { s, t in try await s.achievementsStatus(accessToken: t) },
+            WireCall(id: "achievementsStatus#notObject", responses: [.json(#"[{"key":"poke10"}]"#)]) { s, t in try await s.achievementsStatus(accessToken: t) },
+            WireCall(id: "achievementsStatus#missing", responses: [WireRequestRecorder.pgrst202]) { s, t in try await s.achievementsStatus(accessToken: t) },
+            WireCall(id: "achievementClaim#data", responses: [Self.fixture("me/_me/rpc.achievement_claim@poke10.json")]) { s, t in
+                try await s.achievementClaim(accessToken: t, key: "poke10")
+            },
+            WireCall(id: "achievementClaim(nil)#data", responses: [Self.fixture("me/_me/rpc.achievement_claim.json")]) { s, t in
+                try await s.achievementClaim(accessToken: t, key: nil)
+            },
+            WireCall(id: "dailyMissionClaim#data", responses: [Self.fixture("me/_me/rpc.daily_mission_claim@daily_gomoku.json")]) { s, t in
+                try await s.dailyMissionClaim(accessToken: t, key: "daily_gomoku")
+            },
+            WireCall(id: "weeklyWorkStatus#data", responses: [Self.fixture("me/_me/rpc.weekly_work_status.json")]) { s, t in
+                try await s.weeklyWorkStatus(accessToken: t)
+            },
+            WireCall(id: "weeklyWorkStatus#lossy", responses: [.json(Self.weeklyLossy)]) { s, t in try await s.weeklyWorkStatus(accessToken: t) },
+            WireCall(id: "weeklyWorkClaim#data", responses: [Self.fixture("me/_me/rpc.weekly_work_claim.json")]) { s, t in
+                try await s.weeklyWorkClaim(accessToken: t)
+            },
+            // 확성기: 빈 글 · 상한 초과는 요청 없이 즉답(대본을 쓰지 않는다), 나머지는 정규화한 글자로 RPC → 응답 디코드.
+            WireCall(id: "sendMegaphone#outcomes", responses: Self.megaphoneSendResponses) { s, t in
+                var out: [MegaphoneSendResponse] = []
+                for body in Self.megaphoneBodies { out.append(try await s.sendMegaphone(accessToken: t, body: body, requestID: "dd000000-0000-4000-8000-0000000000d4")) }
+                return out
+            },
+            WireCall(id: "sendMegaphone#missing", responses: [WireRequestRecorder.pgrst202]) { s, t in
+                try await s.sendMegaphone(accessToken: t, body: "다들 화이팅", requestID: "dd000000-0000-4000-8000-0000000000d4")
+            },
+            WireCall(id: "sendMegaphone#badType", responses: [.json(#"{"status":"ok","recipients":"12"}"#)]) { s, t in
+                try await s.sendMegaphone(accessToken: t, body: "다들 화이팅", requestID: "dd000000-0000-4000-8000-0000000000d4")
+            },
+            WireCall(id: "megaphoneInfo#data", responses: [Self.fixture("messages/rpc.megaphone_info.json"), .json(#"{"status":"off","enabled":false,"ruby_balance":3}"#)]) { s, t in
+                let first = try await s.megaphoneInfo(accessToken: t)
+                let second = try await s.megaphoneInfo(accessToken: t)
+                return [first, second]
+            },
+            WireCall(id: "megaphoneInfo#badType", responses: [.json(#"{"status":"ok","price":"50"}"#)]) { s, t in try await s.megaphoneInfo(accessToken: t) },
+            // 내 AI 리밋: 행 거르기(빈 · 공백 · 없는 device_id, 못 읽은 observed_at)와 서버 차례 보존, 라벨 계약 경계(플랜 = 스칼라 32 · 넘치면 버림,
+            // 기기 이름 = 스칼라 64 · 넘치면 그래핌 단위로 자름).
+            WireCall(id: "fetchMyAILimits#filters", responses: [.json(Self.aiLimitFilterRows)]) { s, t in try await s.fetchMyAILimits(accessToken: t, userID: u) },
+            WireCall(id: "fetchMyAILimits#labels", responses: [.json(Self.aiLimitLabelRows)]) { s, t in try await s.fetchMyAILimits(accessToken: t, userID: u) },
         ]
+    }
+
+    /// 데모 픽스처(앱 화면이 그리는 응답 원문 — `Sources/CheckMobileKit/Demo/Fixtures/<rel>`)를 응답 대본으로.
+    static func fixture(_ rel: String) -> MobileStubResponse {
+        let url = WireRepo.url("Sources/CheckMobileKit/Demo/Fixtures/" + rel)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { fatalError("픽스처 \(rel) 를 못 읽었다") }
+        return .json(text)
+    }
+
+    /// 상태메시지 저장 응답 → 결과 갈래 전부(Swift StatusMessageSaveOutcome(response:) · 함수 없음 둘).
+    static let statusMessageOutcomes: [MobileStubResponse] = [
+        .json(#"{"status":"ok","status_message":"  오후엔 리뷰\n몰아서 해요 📝 "}"#),
+        .json(#"{"status":"ok","status_message":" ​\n "}"#),
+        .json(#"{"status":"ok"}"#),
+        .json(#"{"status":"cleared","status_message":null}"#),
+        .json(#"{"status":"too_long","max_length":30}"#),
+        .json(#"{"status":"too_long"}"#),
+        .json(#"{"status":"not_text"}"#),
+        .json(#"{"status":"OK"}"#),
+        .json(#"{"status":"unauthorized","status_message":"x"}"#),
+        WireRequestRecorder.pgrst202,
+        .json("", status: 404),
+    ]
+
+    /// 확성기 본문: 빈(공백 · 폭 0) → 요청 없음 · 상한+1 → 요청 없음 · 상한 꼭 · 정규화가 필요한 글 · 짧은 글 둘.
+    static let megaphoneBodies: [String] = [
+        " \n\u{200B} ", String(repeating: "가", count: 199), String(repeating: "가", count: 198),
+        "  오늘 3시\r\n라운지에서  간식 나눠요\u{0007} ", "다들", "다들",
+    ]
+    /// 요청이 나가는 본문 넷의 응답(차례대로).
+    static let megaphoneSendResponses: [MobileStubResponse] = [
+        fixture("messages/rpc.send_megaphone.json"),
+        .json(#"{"status":"cooldown","retry_after_seconds":420,"cooldown_seconds":600}"#),
+        .json(#"{"status":"insufficient_ruby","need":50,"have":12,"ruby_balance":12}"#),
+        .json(#"{"status":"ok","duplicate":true,"megaphone_id":"d0000000-0000-4000-8000-0000000000e1","recipients":3,"price":50,"ruby_balance":0,"extra":[1]}"#),
+    ]
+
+    /// 업적 관대한 디코드(최상위만 객체면 산다): 글자 숫자 · 소수 · 키/제목 없는 줄 · 중복 키 · 깨진 원소 · 받음 칸 대신 시각 · 일일 칸 일부.
+    static let achievementsLossy = #"{"launch_at_ms":"1789398000000","missions":[{"key":"poke10","series":"poke","tier":"1","title":" 콕 10번 ","detail":"콕 10번 받기","reward":"5","target":10.9,"progress":"12","achieved":null,"claimed_at_ms":1789534800000,"sort":2},{"key":"","title":"키 없음"},{"key":"poke10","title":"중복","reward":99},{"title":"키 없음 2"},"broken",{"key":"todo3","series":"","title":"할 일 3개","target":0,"progress":-4,"reward":-3,"achieved_at_ms":"1789534800000","sort":"x"},{"key":"streak14","title":"  ","reward":30}],"claimable_count":"1","claimable_ruby":5.5,"ruby_balance":" 120 ","server_now_ms":1789621500000,"claimed_now":[{"key":"poke10","title":"콕 10번","reward":"5"},{"key":""},"x",{"key":"todo3"}],"daily":{"kst_day":"2026-09-17","reset_at_ms":"1789657200000","missions":[{"key":"daily_gomoku","game":"gomoku","title":"오목 한 판","reward":5,"target":1,"progress":1,"achieved":true,"claimed":false,"sort":1},{"key":"daily_x","title":""}]}}"#
+
+    /// 주간 근무 관대한 디코드: 소수 초 · 깨진 단계(글자 숫자 · 칸 없음) · 같은 시간 둘 · 받기 서버 칸 · 음수 합.
+    static let weeklyLossy = #"{"week_start":"2026-09-14","next_week_start":"2026-09-21","worked_seconds":72000.9,"tiers":[{"hours":40,"ruby":50,"claimed":false,"achieved":false,"claimable":false},{"hours":"20","ruby":20,"claimed":true},{"hours":20,"ruby":20,"claimed":true,"achieved":true,"claimable":false},"x",{"hours":60,"ruby":200}],"granted_now":[{"hours":20,"ruby":20,"week_start":"2026-09-07"},{"hours":"x","ruby":1}],"pending":[{"hours":40,"ruby":50,"week_start":"2026-09-07"},{"hours":60}],"claimable_ruby":-5,"ruby_balance":120.7,"claimed_now":[{"hours":40,"ruby":50,"week_start":"2026-09-07"}]}"#
+
+    /// AI 리밋 행 거르기: 빈 · 공백 · null · 없는 device_id 와 못 읽은 observed_at 은 버리고, 나머지는 **서버 차례 그대로**(정렬 안 함).
+    static let aiLimitFilterRows = #"[{"device_id":" \n ","provider":"claude","observed_at":"2026-09-17T05:00:00Z"},{"device_id":null,"provider":"codex","observed_at":"2026-09-17T05:00:00Z"},{"provider":"codex","observed_at":"2026-09-17T05:00:00Z"},{"device_id":"","provider":"codex","observed_at":"2026-09-17T05:00:00Z"},{"device_id":"mac-9","provider":"claude","observed_at":"bad"},{"device_id":"mac-9","provider":"claude","observed_at":"2026-09-17T04:00:00Z","five_hour_percent":3,"five_hour_resets_at":"bad","weekly_percent":99.5,"weekly_resets_at":"2026-09-20T00:00:00.25Z"},{"device_id":"\tmac-8\n","provider":"codex","observed_at":"2026-09-17T06:00:00Z","plan_label":"Plus"},{"device_id":"mac-7","provider":"antigravity","observed_at":"2026-09-17T14:30:00+09:00","five_hour_percent":0}]"#
+
+    /// AI 리밋 라벨 경계: 플랜(스칼라 32 — 넘치면 버림 · 그래핌이 아니다) · 기기 이름(스칼라 64 — 넘치면 그래핌 단위로 자름).
+    static var aiLimitLabelRows: String {
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+        let labels: [(device: String?, plan: String?)] = [
+            ("", ""), (" Mac mini ", "   "), (String(repeating: "가", count: 64), " Max \n"), (String(repeating: "가", count: 65), String(repeating: "a", count: 32)),
+            (String(repeating: family, count: 10) + "끝", String(repeating: "a", count: 33)), (nil, String(repeating: family, count: 4) + "abcd"),
+            ("  \n", String(repeating: family, count: 4) + "abcde"), ("a\u{301}" + String(repeating: "b", count: 63), "a\u{301}" + String(repeating: "b", count: 31)),
+            ("\u{200B}", "\u{200B}"), ("맥", nil),
+        ]
+        var rows: [WireJSON] = []
+        for (i, l) in labels.enumerated() {
+            var o: [(String, WireJSON)] = [("device_id", .string("mac-\(i)"))]
+            if let d = l.device { o.append(("device_label", .string(d))) }
+            o.append(("provider", .string(["claude", "codex", "antigravity"][i % 3])))
+            if let p = l.plan { o.append(("plan_label", .string(p))) }
+            o.append(("observed_at", .string("2026-09-17T05:0\(i):00Z")))
+            rows.append(.object(o))
+        }
+        return WireJSON.array(rows).text
     }
 
     // ---- 결과 대조용 대본 ----
@@ -514,6 +630,19 @@ struct GoldenExportWireRequests {
         "sendMegaphone": "W1-c(MegaphoneSendOutcome)", "megaphoneInfo": "W1-c(MegaphoneInfo)",
         "fetchMyAILimits": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
         "fetchMyAILimits#data": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
+        // 6차 c-fold: 실제 응답이 든 결과 case(Kotlin = core/stores service 의 앱 함수).
+        "setStatusMessage#outcomes": "W1-c(StatusMessageSaveOutcome — rules/text)",
+        "achievementsStatus#data": "W1-c(AchievementStatus)", "achievementsStatus#lossy": "W1-c(AchievementStatus)",
+        "achievementsStatus#notObject": "W1-c(AchievementStatus)", "achievementsStatus#missing": "W1-c(AchievementStatus)",
+        "achievementClaim#data": "W1-c(AchievementStatus)", "achievementClaim(nil)#data": "W1-c(AchievementStatus)",
+        "dailyMissionClaim#data": "W1-c(AchievementStatus)",
+        "weeklyWorkStatus#data": "W1-c(WeeklyWorkStatus)", "weeklyWorkStatus#lossy": "W1-c(WeeklyWorkStatus)",
+        "weeklyWorkClaim#data": "W1-c(WeeklyWorkClaim)",
+        "sendMegaphone#outcomes": "W1-c(MegaphoneSendOutcome)", "sendMegaphone#missing": "W1-c(MegaphoneSendOutcome)",
+        "sendMegaphone#badType": "W1-c(MegaphoneSendOutcome)",
+        "megaphoneInfo#data": "W1-c(MegaphoneInfo)", "megaphoneInfo#badType": "W1-c(MegaphoneInfo)",
+        "fetchMyAILimits#filters": "W2-c(MeAILimitsService — 행 거르기 한 자리 AILimitFetchedRow)",
+        "fetchMyAILimits#labels": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
     ]
 
     /// 갈래 밖 태그(**메서드 단위** — 이 골든의 case 가 아니다): H = 맥 전용 쓰기(데스크톱 근무·찌르기·울트라·토큰 업로드 — Windows

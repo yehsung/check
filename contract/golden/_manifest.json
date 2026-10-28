@@ -1,5 +1,5 @@
 {
-  "exportTests": 89,
+  "exportTests": 91,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -187,6 +187,22 @@
       "platformSensitive": false,
       "swiftSources": [
         "Sources/CheckCore/DuelFee.swift"
+      ]
+    },
+    {
+      "cases": 16,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/duel/GoldenExportDuel.swift",
+      "golden": "duel/resume",
+      "path": "contract/golden/duel/resume.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/TetrisDuelStore.swift",
+        "Sources/CheckCore/TetrisDuelStoreGame.swift",
+        "Sources/CheckCore/TetrisDuelSession.swift",
+        "Sources/CheckCore/TetrisDuelBoard.swift",
+        "Sources/CheckCore/TetrisGame.swift",
+        "Sources/CheckCore/TetrisWire.swift"
       ]
     },
     {
@@ -414,6 +430,18 @@
       "swiftSources": [
         "Sources/CheckCore/Achievements.swift",
         "Sources/CheckCore/DailyMissions.swift"
+      ]
+    },
+    {
+      "cases": 14,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/duel/GoldenExportPause.swift",
+      "golden": "pause/transitions",
+      "path": "contract/golden/pause/transitions.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/MiniGamePanel.swift",
+        "Sources/CheckCore/MiniGameEngine.swift"
       ]
     },
     {

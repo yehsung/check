@@ -67,31 +67,47 @@ class GomokuWireContractTest {
         assertTrue(!store.isBusy)
     }
 
+    /**
+     * 표 시험(검증 V01·V03 — 첫 판은 쓰기 셋·읽기 셋만 쟀다): 오목 쓰기 RPC **여덟 전부**는 교착 둘 중 정확히 한 번 더(2회), 읽기 **여섯 전부**는
+     * 다시 보내지 않는다(1회). 나머지 쓰기 셋(`gomoku_move` · `gomoku_chat_send` · `gomoku_leave`)은 위아래 시험이 같은 눈금으로 잰다.
+     * 표는 Swift 원본에서 손으로 옮겼다(SupabaseWorkService.swift:1601-1771 — `retriesDeadlockOnce: true` 인 자리).
+     */
     @Test
     fun deadlockRetryCoversEveryWriteRpcButNoRead() = runTest {
         val seedFacts = GomokuServerFacts(blackFirstSeed)
         val m1 = gomokuUser("m1")
+        val writes = listOf("gomoku_challenge", "gomoku_cancel", "gomoku_respond", "gomoku_resign", "gomoku_chat_mute")
+        val reads = listOf("gomoku_lobby", "gomoku_inbox", "gomoku_state", "gomoku_ranking", "gomoku_watch_live", "gomoku_watch")
         val (store, _, server) = rig(seedFacts.myID) {
-            for (rpc in listOf("gomoku_challenge", "gomoku_respond", "gomoku_resign", "gomoku_lobby", "gomoku_inbox", "gomoku_state")) {
-                queue(rpc, StubReply.deadlock, StubReply.deadlock)
-            }
+            for (rpc in writes + reads) queue(rpc, StubReply.deadlock, StubReply.deadlock)
         }
+        store.spectatorFeaturesEnabled = true
+        // 쓰기 — 각 문이 실제로 RPC 를 내는 자리에 세워 둔다(보낸 신청 · 판).
         store.challenge(gomokuUser("B"))
+        store.outgoing = GomokuInvite(m1, peerFor(gomokuUser("B")), 3, contractClock.addingTimeInterval(50.0))
+        store.cancelChallenge()
         store.respond(m1, accept = false)
         seed(store, blackFirstSeed)
+        store.setChatMuted(true)
+        settle()
         store.resign()
-        // 읽기 셋 — 실패하면 다음 계기가 다시 읽는다.
+        // 읽기 — 실패하면 다음 계기가 다시 읽는다.
         store.refreshLobby()
         store.loadInbox()
         store.refreshMatch(m1)
+        store.loadRanking()
+        // 관전 두 길: 관전자 수 길(`gomoku_watch_live`) → 옛 길(`gomoku_watch` — 이 로그인에서 접힌 뒤).
+        store.match = null
+        store.phase = GomokuPhase.lobby
+        store.startWatching(gomokuUser("m_watch"))
+        store.refreshWatch()
+        store.spectatorCountUnavailable = true
+        store.refreshWatch()
         settle()
-        assertEquals(2, server.count("gomoku_challenge"))
-        assertEquals(2, server.count("gomoku_respond"))
-        assertEquals(2, server.count("gomoku_resign"))
-        assertEquals(1, server.count("gomoku_lobby"), "읽기 전용 로비는 재시도하지 않는다")
-        assertEquals(1, server.count("gomoku_inbox"), "읽기 전용 받은함은 재시도하지 않는다")
-        assertEquals(1, server.count("gomoku_state"), "오목 판 조회는 재시도하지 않는다(Swift `gomokuState` 와 같다)")
-        assertTrue(store.lobbyLoadFailed && store.inboxLoadFailed)
+        for (rpc in writes) assertEquals(2, server.count(rpc), "$rpc 는 쓰기다 — 교착 뒤 정확히 한 번 더 보낸다")
+        for (rpc in reads) assertEquals(1, server.count(rpc), "$rpc 는 읽기다 — 교착을 다시 보내지 않는다(다음 계기가 다시 읽는다)")
+        assertTrue(store.lobbyLoadFailed && store.inboxLoadFailed && store.rankingLoadFailed)
+        assertNotNull(store.spectating, "교착 두 번(한도 3 아래)에 관전을 내렸다")
     }
 
     @Test

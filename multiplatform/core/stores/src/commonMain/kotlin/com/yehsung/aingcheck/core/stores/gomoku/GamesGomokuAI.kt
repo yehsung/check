@@ -1,7 +1,8 @@
-// 원본: Sources/CheckMobileKit/Games/GamesGomokuAI.swift:1-140(GamesGomokuAIThinker) @ 1b8260d
+// 원본: Sources/CheckMobileKit/Games/GamesGomokuAI.swift:1-140(GamesGomokuAIThinker) · :139-161(GomokuPhoneMatchChrome 의 판정 몫) @ 1b8260d
 package com.yehsung.aingcheck.core.stores.gomoku
 
 import com.yehsung.aingcheck.core.rules.ai.GomokuAI
+import com.yehsung.aingcheck.core.rules.ai.GomokuAIGame
 import com.yehsung.aingcheck.core.rules.ai.GomokuAISearchLimits
 import com.yehsung.aingcheck.core.rules.renju.GomokuBoard
 import com.yehsung.aingcheck.core.rules.renju.GomokuColor
@@ -24,8 +25,25 @@ import kotlin.time.Duration.Companion.milliseconds
 // (엔진의 `isCancelled`), 돌아오면 **처음부터 다시** 생각한다. 떠나서 끊긴 탐색의 결과는 **버린다**(덜 생각한 수를 두지 않는다).
 // 코어가 자기 작업을 취소하면(기권 뒤 새 판 · 1:1 판이 열림 · 로그아웃) 붙잡은 호출은 곧바로 풀린다 — 코어는 그 결과를 이미 버린다.
 //
-// 옮기지 않은 것: 같은 Swift 파일의 `GomokuPhoneMatchChrome`(대국·결과 화면의 판 종류별 글자 표). 그 표의 글자는 전부 W2-e 몫
-// `GomokuPhoneText`(GamesText.swift)에서 오므로 W2-e 병합 뒤 화면 갈래(W4-a)·조정자가 그 표 옆에 옮긴다(INV 표식 없음 — 보고 참조).
+// `GomokuPhoneMatchChrome`(대국·결과 화면의 판 종류별 표)은 **판정 몫만** 옮겼다(판 종류 가르기 · 판돈 줄 · 대화 서랍 — 글자와 무관). 같은 표의
+// 글자 몫(기권 확인 · 시계 줄 · 다시 두기 · 대기 줄 · 상대 부제 · 끝난 이유 · 상대 줄)은 전부 W2-e `GomokuPhoneText`(GamesText.swift)에서 오므로
+// W2-e 병합 뒤 이 타입에 더한다(INV 표식 없음 — 보고 참조).
+
+/**
+ * 대국·결과 화면이 **판 종류**(사람 · AI)에 따라 세우는 것(Swift `GomokuPhoneMatchChrome` 의 판정 몫). 뷰는 이 표만 읽는다.
+ * AI 판에서 서지 않는 것: 판돈 줄(내비 부제 · 결과 루비 변화 — 걸린 루비가 없다) · 대화 서랍(상대가 사람이 아니다 → 서랍 머리의 신고·차단 메뉴도
+ * 함께 없다). 맥 AI 판(`GomokuMatchSide.isAI` 갈래)과 같은 목록이다.
+ */
+data class GomokuPhoneMatchChrome(val isAI: Boolean) {
+    /** 판 id 머리말로 가른다(코어 서버 차단과 **같은 판정** — `GomokuAIGame.isAIMatchID`). */
+    constructor(match: GomokuMatchState) : this(GomokuAIGame.isAIMatchID(match.id))
+
+    /** 판돈 줄(내비 부제)과 결과 루비 변화. */
+    val showsStake: Boolean get() = !isAI
+
+    /** 대화 서랍(신고·차단 메뉴가 그 머리에 있다). */
+    val showsChatDrawer: Boolean get() = !isAI
+}
 
 /** 폰 AI 수 선택기. 코어 `GomokuStore.aiMoveChooser` 에 [chooser] 를 끼운다. 한 스레드(메인)에서만 부른다(Swift `@MainActor`). */
 class GamesGomokuAIThinker {

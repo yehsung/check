@@ -52,6 +52,9 @@ class SessionGomokuHost(
     private val realtime: () -> RealtimeState = { RealtimeState.Idle(IdleReason.disabled) },
     override val logger: Logger? = null,
 ) : GomokuStoreHost {
+    // 이 칸은 **병합 전 임시**다: W2-c 가 나 탭 쪽 루비 칸(`core/stores/me` `RubyBalanceMirror`)을 따로 두어 지금은 칸이 둘이다. W2-c 병합 때
+    // 이 호스트가 칸을 갖지 않고 그 미러를 빌리게 바꾼다(조정자 패치 `02-ruby-mirror-after-w2c.patch` — 생성자 `ruby:` 필수 · 통합 시험 동봉).
+
     /** 미러에 쓴 횟수(Swift `rubyWriteSerial` — 같은 값을 써도 센다. 늦은 응답의 ABA 를 횟수로 가린다). */
     var rubyWriteSerial: Long = 0
         private set

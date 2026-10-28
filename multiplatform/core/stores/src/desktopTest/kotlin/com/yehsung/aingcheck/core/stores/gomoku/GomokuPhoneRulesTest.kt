@@ -1,6 +1,7 @@
 // 원본: Tests/CheckMobileKitTests/GamesGomokuBoardTests.swift · GamesGomokuWatchTests.swift · GamesAIMatchTests.swift(순수 판정 몫) @ 1b8260d
 package com.yehsung.aingcheck.core.stores.gomoku
 
+import com.yehsung.aingcheck.core.rules.ai.GomokuAIGame
 import com.yehsung.aingcheck.core.rules.ai.GomokuAISearchLimits
 import com.yehsung.aingcheck.core.rules.renju.GomokuBoard
 import com.yehsung.aingcheck.core.rules.renju.GomokuColor
@@ -174,5 +175,25 @@ class GomokuPhoneRulesTest {
         assertEquals(2, thinker.searchesStarted)
         thinker.isStillNeeded = { _, _ -> false }
         assertNull(thinker.choose(GomokuBoard(), GomokuColor.black), "필요 없는 판에서 다시 생각했다")
+    }
+
+    /**
+     * 판 종류별 표(Swift `GomokuPhoneMatchChrome` 의 판정 몫 — GamesAIMatchTests "사람 판 화면 표는 그대로다" · "결과 뒤 다시 두기").
+     * 판 종류는 코어 서버 차단과 **같은 판정**(id 머리말 `ai-`) — 서버 판 id(uuid)는 사람 판이다. 글자 몫은 W2-e 병합 뒤.
+     */
+    @Test
+    fun matchChromeSplitsHumanAndAIMatchesByTheIDPrefix() {
+        val human = GomokuPhoneMatchChrome(isAI = false)
+        assertTrue(human.showsStake && human.showsChatDrawer, "사람 판에서 판돈 줄·대화 서랍이 빠졌다")
+        val server = GomokuAIGame.start(GomokuColor.black, now = 100.0, id = "3f2a8c1e-0000-4000-8000-000000000001").matchState()
+        assertFalse(GomokuPhoneMatchChrome(server).isAI, "uuid 판을 AI 판으로 읽었다")
+        val aiMatch = GomokuAIGame.start(GomokuColor.black, now = 100.0).matchState()
+        assertTrue(aiMatch.id.startsWith("ai-"))
+        val ai = GomokuPhoneMatchChrome(aiMatch)
+        assertTrue(ai.isAI)
+        assertFalse(ai.showsStake, "AI 판에 판돈 줄(걸린 루비가 없다)이 선다")
+        assertFalse(ai.showsChatDrawer, "AI 판에 대화 서랍(신고·차단 메뉴)이 선다")
+        // 서버 1:1 판(스토어가 실제로 세운 판)도 같은 판정이다.
+        assertFalse(GomokuPhoneMatchChrome(match(id = HAND_MATCH)).isAI)
     }
 }

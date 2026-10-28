@@ -63,7 +63,8 @@ class GomokuFlowContractTest {
             // 서버 시계와 기기 시계가 며칠 어긋나도(픽스처는 과거에 떴다) 기기 시각으로는 '지금 + (마감 − 서버 지금)'이다.
             val expected = contractClock.addingTimeInterval((deadlineMs - serverNowMs) / 1000)
             val actual = assertNotNull(match.deadline, "$label 마감")
-            val tolerance = GomokuStore.serverClockToleranceSeconds + 0.002
+            // 재측정 문턱 0.25초(손으로 적은 수 — 검증 V05: 구현 상수를 읽으면 문턱을 넓힌 만큼 이 단언도 느슨해져 초록이었다) + 반올림 2ms.
+            val tolerance = 0.25 + 0.002
             assertTrue(abs(actual.timeIntervalSince(expected)) < tolerance, "$label 마감 보정 ${actual.timeIntervalSince(expected)}초 어긋남")
             val remaining = store.remainingSeconds(contractClock) ?: -1.0
             assertTrue(remaining > 29 && remaining <= 30 + tolerance, "$label 남은 시간 $remaining 초")
@@ -362,6 +363,29 @@ class GomokuFlowContractTest {
         assertNull(rig.store.autoStreakWarning, "첫 번째부터 겁을 주지 않는다")
         assertEquals(GomokuNoticeText.autoPlaced, rig.store.notice)
         assertEquals(0, rig.server.count("gomoku_state"), "상태를 함께 실어 줬는데 또 물었다")
+    }
+
+    /**
+     * 서버 시계 재측정 문턱은 **0.25초**(검증 V05). 같은 순간을 말하는 두 응답의 server_now_ms 가 0.2초 흔들리면 오프셋을 그대로 두고(마감이
+     * 조회마다 흔들리지 않게), 0.3초 어긋나면 다시 재서 **다음 마감부터 새 오프셋으로** 보정한다. 문턱을 넓히면 셋째, 좁히면 둘째가 빨갛다.
+     */
+    @Test
+    fun serverClockIsRemeasuredOnlyBeyondAQuarterSecondAndDeadlinesFollow() = runTest {
+        val rig = rig(HAND_ME) {}
+        val store = rig.store
+        val baseMs = 1_700_000_000_000.0
+        val m1 = handMove(1, "black", 7, 7)
+        val m2 = handMove(2, "white", 8, 8)
+        val m3 = handMove(3, "black", 6, 6)
+        store.applyState(handPayload(handState(turn = "white", moveCount = 1, moves = listOf(m1), deadlineMs = baseMs + 30_000, serverNowMs = baseMs)))
+        assertEquals(30.0, assertNotNull(store.match?.deadline).timeIntervalSince(contractClock), 1e-6, "첫 응답의 오프셋은 그대로 받는다")
+        val first = store.serverClockOffset
+        store.applyState(handPayload(handState(turn = "black", moveCount = 2, moves = listOf(m1, m2), deadlineMs = baseMs + 60_000, serverNowMs = baseMs + 200)))
+        assertEquals(first, store.serverClockOffset, "0.2초 흔들림에 오프셋을 다시 잡았다")
+        assertEquals(60.0, assertNotNull(store.match?.deadline).timeIntervalSince(contractClock), 1e-6)
+        store.applyState(handPayload(handState(turn = "white", moveCount = 3, moves = listOf(m1, m2, m3), deadlineMs = baseMs + 90_000, serverNowMs = baseMs + 300)))
+        assertEquals(first + 0.3, store.serverClockOffset, 1e-6, "0.3초 어긋남을 다시 재지 않았다")
+        assertEquals(89.7, assertNotNull(store.match?.deadline).timeIntervalSince(contractClock), 1e-6, "다시 잰 오프셋으로 마감을 보정하지 않았다")
     }
 
     /** 픽스처(최상위 상태 묶음)를 스토어에 심는다. [mutate] 로 한 기기의 옛 화면을 흉내 낸다. */

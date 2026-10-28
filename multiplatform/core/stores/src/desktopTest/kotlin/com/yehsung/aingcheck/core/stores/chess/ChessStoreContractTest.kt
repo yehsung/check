@@ -83,7 +83,7 @@ class ChessStoreContractTest {
         if (match.str("status") == "active" && turnStarted != null && serverNow != null) {
             val expected = contractClock.addingTimeInterval((turnStarted - serverNow) / 1000)
             val actual = assertNotNull(state.clock.turnStartedAt, "$name 차례 시작 시각")
-            assertTrue(abs(actual.timeIntervalSince(expected)) < ChessStore.serverClockToleranceSeconds + 0.002, "$name 시계 보정")
+            assertTrue(abs(actual.timeIntervalSince(expected)) < 0.25 + 0.002, "$name 시계 보정")
         }
     }
 
@@ -167,6 +167,127 @@ class ChessStoreContractTest {
         store.refreshLobby()
         assertEquals(1, server.count("chess_lobby"), "읽기 전용 로비는 재시도하지 않는다")
         assertTrue(store.lobbyLoadFailed)
+    }
+
+    /**
+     * 표 시험(검증 V02·V03 — 첫 판은 move·resign·state·lobby 만 쟀다): 체스 쓰기 RPC **일곱 전부**와 `chess_state`(서버가 시간 판정을 돌리는
+     * 조회)는 교착 둘 중 정확히 한 번 더(2회), 읽기 **넷 전부**(lobby·ranking·watch_live·watch)는 다시 보내지 않는다(1회).
+     * 표는 Swift 원본에서 손으로 옮겼다(ChessWire.swift:373-501 — `retriesDeadlockOnce: true` 인 자리).
+     */
+    @Test
+    fun deadlockRetryTableCoversEveryChessRpc() = runTest {
+        val writes = listOf(
+            "chess_challenge", "chess_cancel", "chess_respond", "chess_move", "chess_resign", "chess_offer_draw", "chess_respond_draw",
+        )
+        val reads = listOf("chess_lobby", "chess_ranking", "chess_watch_live", "chess_watch")
+        val (store, _, server) = rig(playerA) {
+            queueFixtures("chess_state", CHESS_FIXTURES, "chess_state__ok_initial_my_turn")
+            for (rpc in writes + reads) queue(rpc, StubReply.deadlock, StubReply.deadlock)
+        }
+        store.spectatorFeaturesEnabled = true
+        store.challenge(playerB)
+        store.outgoing = ChessInvite(m1, ChessUser(playerB, "", null, null, true, true, false), 3, contractClock.addingTimeInterval(50.0))
+        store.cancelChallenge()
+        store.respond(m1, accept = false)
+        // 판 위의 쓰기 넷(내 차례 · 진행 중).
+        store.refreshMatch(m1)
+        assertEquals(true, store.match?.isMyTurn)
+        store.send(ChessMove.fromUci("e2e4")!!)
+        store.offerDraw()
+        store.respondDraw(accept = false)
+        store.resign()
+        // 판 조회는 쓰기 쪽 눈금이다 — 교착 둘이면 정확히 두 번.
+        server.queue("chess_state", StubReply.deadlock, StubReply.deadlock)
+        store.refreshMatch(m1)
+        // 읽기.
+        store.refreshLobby()
+        store.loadRanking()
+        store.match = null
+        store.phase = ChessPhase.lobby
+        store.startWatching(m1)
+        store.refreshWatch()
+        store.spectatorCountUnavailable = true
+        store.refreshWatch()
+        settle()
+        for (rpc in writes) assertEquals(2, server.count(rpc), "$rpc 는 쓰기다 — 교착 뒤 정확히 한 번 더 보낸다")
+        assertEquals(1 + 2, server.count("chess_state"), "판 조회(시간 판정)는 교착을 한 번 다시 보낸다")
+        for (rpc in reads) assertEquals(1, server.count(rpc), "$rpc 는 읽기다 — 교착을 다시 보내지 않는다")
+        assertTrue(store.lobbyLoadFailed && store.rankingLoadFailed)
+        assertNotNull(store.spectating, "교착 두 번(한도 3 아래)에 관전을 내렸다")
+    }
+
+    /** 관전 throw 실패 한도는 **3**(손으로 적은 수 — 검증 V11: 첫 판에는 체스 한도 시험이 없었다). 둘째까지는 씨앗 화면을 지킨다. */
+    @Test
+    fun watchThrowFailuresDropOnlyOnTheThirdInARow() = runTest {
+        val (store, _, server) = rig(users.str("C")!!) {
+            queue("chess_watch_live", StubReply.Offline, StubReply.Offline, StubReply.Offline)
+        }
+        store.spectatorFeaturesEnabled = true
+        store.startWatching(m1)
+        store.refreshWatch()
+        store.refreshWatch()
+        assertNotNull(store.spectating, "두 번의 흔들림에 관전을 내렸다(한도 3)")
+        assertNull(store.notice)
+        store.refreshWatch()
+        assertNull(store.spectating, "세 번 연속 실패에도 빈 판 관전이 돈다")
+        assertEquals(ChessNoticeText.checkConnection, store.notice)
+        assertEquals(3, server.count("chess_watch_live"))
+        assertFalse(store.spectatorCountUnavailable, "오프라인 한 번에 관전자 수를 영영 껐다")
+    }
+
+    /** 판을 실은 ok 한 번이 연속 실패를 끊는다 — 흔들림 둘 · ok · 흔들림 둘이면 관전은 남는다(한도는 **연속** 3). */
+    @Test
+    fun anOkWatchResetsTheFailureStreak() = runTest {
+        val ok = fixtureJSON(CHESS_FIXTURES, "chess_watch__ok_active").toString()
+        val (store, _, server) = rig(users.str("C")!!) {
+            queue("chess_watch_live", StubReply.Offline, StubReply.Offline, StubReply.Json(ok), StubReply.Offline, StubReply.Offline)
+        }
+        store.spectatorFeaturesEnabled = true
+        store.startWatching(m1)
+        repeat(5) { store.refreshWatch() }
+        assertEquals(5, server.count("chess_watch_live"))
+        assertNotNull(store.spectating, "ok 가 끊은 연속 실패를 이어 셌다")
+    }
+
+    /** 서버가 음수 관전자 수를 줘도 0 으로 접는다(검증 V10) — 기준선(양수)은 그대로 받는다. */
+    @Test
+    fun negativeWatcherCountsFoldToZero() = runTest {
+        val base = fixtureJSON(CHESS_FIXTURES, "chess_watch__ok_active")
+        val (store, _, _) = rig(users.str("C")!!) {
+            queue(
+                "chess_watch_live",
+                StubReply.Json(JsonObject(base + ("watchers" to JsonPrimitive(3))).toString()),
+                StubReply.Json(JsonObject(base + ("watchers" to JsonPrimitive(-1))).toString()),
+            )
+        }
+        store.spectatorFeaturesEnabled = true
+        store.startWatching(m1)
+        store.refreshWatch()
+        assertEquals(3L, store.spectatorCount)
+        store.refreshWatch()
+        assertEquals(0L, store.spectatorCount, "음수 관전자 수를 그대로 그렸다")
+        // 내 판의 관전자 수도 같은 접기를 지난다.
+        val (mine, _, _) = rig(playerA)
+        val state = fixtureJSON(CHESS_FIXTURES, "chess_state__ok_initial_my_turn")
+        mine.applyState(decodeJson(JsonObject((state - "state") + ("watchers" to JsonPrimitive(2))), ChessStatePayload.serializer()))
+        assertEquals(2L, mine.spectatorCount)
+        mine.applyState(decodeJson(JsonObject((state - "state") + ("watchers" to JsonPrimitive(-4))), ChessStatePayload.serializer()))
+        assertEquals(0L, mine.spectatorCount, "내 판의 음수 관전자 수를 그대로 그렸다")
+    }
+
+    /** 서버 시계 재측정 문턱은 **0.25초**(손으로 적은 수 — 검증 V05). 0.2초 흔들림은 무시하고 0.3초 어긋남은 다시 잰다. */
+    @Test
+    fun serverClockIsRemeasuredOnlyBeyondAQuarterSecond() = runTest {
+        val (store, _, _) = rig(playerA)
+        val baseMs = 1_700_000_000_000.0
+        store.noteServerNow(baseMs)
+        val first = store.serverClockOffset
+        assertEquals(baseMs / 1000 - contractClock.timeIntervalSince1970, first, 1e-6, "처음 잰 값은 그대로 받는다")
+        store.noteServerNow(baseMs + 200)
+        assertEquals(first, store.serverClockOffset, "0.2초 흔들림에 오프셋을 다시 잡았다(조회마다 마감이 흔들린다)")
+        store.noteServerNow(baseMs + 300)
+        assertEquals(first + 0.3, store.serverClockOffset, 1e-6, "0.3초 어긋남을 다시 재지 않았다")
+        assertEquals((baseMs + 60_000) / 1000 - (first + 0.3), store.deviceDate(baseMs + 60_000)!!.timeIntervalSince1970, 1e-6)
     }
 
     /** B 가 받은 신청 하나(`pending`) — 서버는 받은 신청을 로비 id 로만 말하고 상세는 `chess_state` 로 준다(⑪). */

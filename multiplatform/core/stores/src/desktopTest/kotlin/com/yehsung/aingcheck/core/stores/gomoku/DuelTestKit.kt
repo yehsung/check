@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -55,6 +56,9 @@ sealed interface StubReply {
     /** 전송 실패(오프라인). */
     data object Offline : StubReply
 
+    /** [reply] 를 [seconds] 초(가상 시간) 뒤에 돌려준다 — 늦게 도착한 응답(Swift `Reply(delay:)`). */
+    data class Delayed(val seconds: Double, val reply: StubReply) : StubReply
+
     companion object {
         /** PostgREST 교착(40P01) — 서버가 트랜잭션을 통째로 되돌린 실패. */
         val deadlock: StubReply = Json("""{"code":"40P01","message":"deadlock detected","details":null,"hint":null}""", 500)
@@ -72,6 +76,7 @@ data class StubCall(val rpc: String, val body: JsonObject)
 @OptIn(ExperimentalCoroutinesApi::class)
 class DuelStubServer(scope: TestScope) {
     private val queues = LinkedHashMap<String, ArrayDeque<StubReply>>()
+    private val handlers = LinkedHashMap<String, (JsonObject, Int) -> StubReply?>()
     private val recorded = mutableListOf<StubCall>()
     private val counters = HashMap<String, Int>()
 
@@ -79,6 +84,14 @@ class DuelStubServer(scope: TestScope) {
 
     fun queue(rpc: String, vararg replies: StubReply): DuelStubServer {
         queues.getOrPut(rpc) { ArrayDeque() }.addAll(replies)
+        return this
+    }
+
+    /**
+     * rpc 하나를 **본문과 호출 순번(0부터)**으로 답한다(Swift `GomokuStubProtocol.Handler`). 큐보다 먼저 본다 — null 이면 큐, 큐도 비면 500.
+     */
+    fun respondWith(rpc: String, handler: (body: JsonObject, index: Int) -> StubReply?): DuelStubServer {
+        handlers[rpc] = handler
         return this
     }
 
@@ -102,12 +115,19 @@ class DuelStubServer(scope: TestScope) {
                 recorded += StubCall(rpc, body)
                 val index = counters[rpc] ?: 0
                 counters[rpc] = index + 1
-                val reply = queues[rpc]?.removeFirstOrNull() ?: StubReply.Json("""{"message":"not scripted"}""", 500)
+                var reply = handlers[rpc]?.invoke(body, index)
+                    ?: queues[rpc]?.removeFirstOrNull()
+                    ?: StubReply.Json("""{"message":"not scripted"}""", 500)
+                while (reply is StubReply.Delayed) {
+                    delay((reply.seconds * 1000).toLong())
+                    reply = reply.reply
+                }
                 when (reply) {
                     StubReply.Offline -> throw IOException("offline")
                     is StubReply.Json -> respond(
                         reply.body, HttpStatusCode.fromValue(reply.status), headersOf(HttpHeaders.ContentType, "application/json"),
                     )
+                    is StubReply.Delayed -> error("unreachable")
                 }
             }
         },
@@ -225,3 +245,120 @@ fun peerFor(id: String): GomokuUser =
 
 /** 본문의 정수 칸(없으면 null). */
 fun JsonObject.intField(key: String): Long? = this[key]?.jsonPrimitive?.longOrNull
+
+// ======================================================================== 손으로 짠 오목 상태 묶음(Swift V0328 `statePayload` · V0350 `geState`)
+// 픽스처에 없는 모양(채팅 증분 · 음소거 뒤집힘 · 끝난 시각)을 재는 시험이 쓴다. 키는 **넣을 때만** 싣는다 — 안 실은 응답(그것을 모르는 서버)도
+// 그대로 디코드돼야 한다.
+
+const val HAND_ME: String = "00000000-0000-0000-0000-0000000000a1"
+const val HAND_RIVAL: String = "00000000-0000-0000-0000-0000000000b2"
+const val HAND_MATCH: String = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+const val HAND_OTHER_MATCH: String = "11112222-3333-4444-5555-666677778888"
+
+/** 서버 `chat[]` 한 줄. */
+fun handChat(seq: Long, body: String, mine: Boolean = false, kind: String = "text", createdMs: Double = 1_800_000_000_000.0): JsonObject =
+    JsonObject(
+        mapOf(
+            "seq" to JsonPrimitive(seq), "kind" to JsonPrimitive(kind), "body" to JsonPrimitive(body),
+            "mine" to JsonPrimitive(mine), "created_ms" to JsonPrimitive(createdMs),
+        ),
+    )
+
+/** 수 기록 한 줄(돌). */
+fun handMove(seq: Long, color: String, x: Int, y: Int): JsonObject = JsonObject(
+    mapOf("seq" to JsonPrimitive(seq), "color" to JsonPrimitive(color), "x" to JsonPrimitive(x), "y" to JsonPrimitive(y), "kind" to JsonPrimitive("stone")),
+)
+
+/** gomoku_state 의 ok 묶음. 나는 [HAND_ME], 상대는 [HAND_RIVAL]. 끝난 판은 기본 백 승 · 기권. */
+fun handState(
+    id: String = HAND_MATCH,
+    finished: Boolean = false,
+    myColor: String = "black",
+    turn: String? = "black",
+    result: String? = null,
+    moveCount: Int = 0,
+    moves: List<JsonObject> = emptyList(),
+    chat: List<JsonObject>? = null,
+    chatSeq: Long? = null,
+    myMuted: Boolean? = null,
+    opponentMuted: Boolean? = null,
+    chatCapable: Boolean? = null,
+    chatMaxLen: Long? = null,
+    finishedMs: Double? = null,
+    deadlineMs: Double? = null,
+    serverNowMs: Double? = null,
+): JsonObject {
+    fun nullable(value: Any?): JsonElement = when (value) {
+        null -> JsonNull
+        is String -> JsonPrimitive(value)
+        is Number -> JsonPrimitive(value)
+        else -> error("모르는 값")
+    }
+    val match = linkedMapOf<String, JsonElement>(
+        "id" to JsonPrimitive(id),
+        "status" to JsonPrimitive(if (finished) "finished" else "active"),
+        "stake" to JsonPrimitive(5),
+        "black" to JsonPrimitive(if (myColor == "black") HAND_ME else HAND_RIVAL),
+        "white" to JsonPrimitive(if (myColor == "black") HAND_RIVAL else HAND_ME),
+        "challenger" to JsonPrimitive(HAND_RIVAL),
+        "opponent" to JsonPrimitive(HAND_ME),
+        "move_count" to JsonPrimitive(moveCount),
+        "turn" to nullable(if (finished) null else turn),
+        "deadline_ms" to nullable(deadlineMs),
+        "result" to nullable(result ?: if (finished) "white_win" else null),
+        "end_reason" to nullable(if (finished) "resign" else null),
+        "winner" to JsonNull,
+        "invite_expires_ms" to JsonNull,
+        "finished_ms" to nullable(finishedMs),
+    )
+    val payload = linkedMapOf<String, JsonElement>(
+        "status" to JsonPrimitive("ok"),
+        "match" to JsonObject(match),
+        "moves" to kotlinx.serialization.json.JsonArray(moves),
+        "my_color" to JsonPrimitive(myColor),
+        "opponent" to JsonObject(
+            mapOf(
+                "user_id" to JsonPrimitive(HAND_RIVAL), "display_name" to JsonPrimitive("라이벌"),
+                "avatar_url" to JsonNull, "character" to JsonPrimitive("aing"),
+            ),
+        ),
+        "ruby_balance" to JsonNull,
+        "server_now_ms" to nullable(serverNowMs),
+    )
+    chat?.let { payload["chat"] = kotlinx.serialization.json.JsonArray(it) }
+    chatSeq?.let { payload["chat_seq"] = JsonPrimitive(it) }
+    myMuted?.let { payload["my_muted"] = JsonPrimitive(it) }
+    opponentMuted?.let { payload["opponent_muted"] = JsonPrimitive(it) }
+    chatCapable?.let { payload["chat_capable"] = JsonPrimitive(it) }
+    chatMaxLen?.let { payload["chat_max_len"] = JsonPrimitive(it) }
+    return JsonObject(payload)
+}
+
+/** 손으로 짠 묶음 → 앱의 실제 응답 모델. */
+fun handPayload(json: JsonObject): com.yehsung.aingcheck.core.wire.games.GomokuStatePayload =
+    decodeJson(json, com.yehsung.aingcheck.core.wire.games.GomokuStatePayload.serializer())
+
+/** 손으로 짠 묶음을 스텁 응답으로(늦게 오게 하려면 [delaySeconds]). */
+fun handReply(json: JsonObject, delaySeconds: Double = 0.0): StubReply {
+    val reply = StubReply.Json(json.toString())
+    return if (delaySeconds > 0) StubReply.Delayed(delaySeconds, reply) else reply
+}
+
+/** 아무 JSON 객체 → 스텁 응답. */
+fun jsonReply(vararg pairs: Pair<String, Any?>): StubReply = StubReply.Json(
+    JsonObject(
+        pairs.associate { (key, value) ->
+            key to when (value) {
+                null -> JsonNull
+                is String -> JsonPrimitive(value)
+                is Number -> JsonPrimitive(value)
+                is Boolean -> JsonPrimitive(value)
+                is JsonElement -> value
+                else -> error("모르는 값 $value")
+            }
+        },
+    ).toString(),
+)
+
+/** 요청 본문의 `p_since_chat_seq`. */
+fun JsonObject.sinceChat(): Long? = long("p_since_chat_seq")

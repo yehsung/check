@@ -4,6 +4,7 @@ package com.yehsung.aingcheck.core.stores.gomoku
 import com.yehsung.aingcheck.core.rules.renju.GomokuColor
 import com.yehsung.aingcheck.core.rules.renju.GomokuOutcome
 import com.yehsung.aingcheck.core.rules.renju.GomokuPoint
+import com.yehsung.aingcheck.core.wire.games.GomokuLobbyMatchRow
 import com.yehsung.aingcheck.core.wire.games.GomokuStatePayload
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -102,19 +103,99 @@ class GomokuWatchRankingAITest {
         assertFalse(store.watchUnavailable, "판이 없다는 것과 함수가 없다는 것을 겸업했다")
     }
 
+    /** 관전 throw 실패 한도는 **3**(손으로 적은 수 — 검증 V04: 첫 판은 구현 상수를 그대로 읽어 거울이었다). 둘째까지는 씨앗 화면을 지킨다. */
     @Test
-    fun watchThrowFailuresDropOnlyAfterTheLimit() = runTest {
+    fun watchThrowFailuresDropOnlyOnTheThirdInARow() = runTest {
         val (store, _, server) = rig {
             queue("gomoku_watch_live", StubReply.Offline, StubReply.Offline, StubReply.Offline)
         }
         store.startWatching(watchID)
-        repeat(GomokuStore.watchFailureLimit - 1) { store.refreshWatch() }
-        assertNotNull(store.spectating, "한두 번의 흔들림에 관전을 내렸다")
         store.refreshWatch()
-        assertNull(store.spectating, "빈 판 관전이 실패를 영영 돈다")
+        store.refreshWatch()
+        assertNotNull(store.spectating, "두 번의 흔들림에 관전을 내렸다(한도 3)")
+        assertNull(store.notice)
+        store.refreshWatch()
+        assertNull(store.spectating, "세 번 연속 실패에도 빈 판 관전이 돈다")
         assertEquals(GomokuNoticeText.checkConnection, store.notice)
-        assertEquals(GomokuStore.watchFailureLimit, server.count("gomoku_watch_live"))
+        assertEquals(3, server.count("gomoku_watch_live"))
         assertFalse(store.spectatorCountUnavailable, "5xx·오프라인 한 번에 관전자 수를 영영 껐다")
+    }
+
+    /** 서버가 음수 관전자 수를 줘도 0 으로 접는다(검증 V10) — 관전 · 내 판 · 로비 "지금 대결 중" 카드 세 자리. 기준선(양수)은 그대로 받는다. */
+    @Test
+    fun negativeWatcherCountsFoldToZeroEverywhere() = runTest {
+        val since0 = watchFacts("gomoku_watch__ok_since0")
+        val (store, _, _) = rig {
+            queue(
+                "gomoku_watch_live",
+                StubReply.Json(JsonObject(since0 + ("watchers" to JsonPrimitive(3))).toString()),
+                StubReply.Json(JsonObject(since0 + ("watchers" to JsonPrimitive(-1))).toString()),
+            )
+        }
+        store.startWatching(watchID)
+        store.refreshWatch()
+        assertEquals(3L, store.spectatorCount)
+        store.refreshWatch()
+        assertEquals(0L, store.spectatorCount, "관전 응답의 음수 관전자 수를 그대로 그렸다")
+        store.stopWatching()
+
+        val facts = GomokuServerFacts("flow_m1_k2_white_state_since2")
+        val (mine, _, _) = rig(me = facts.myID)
+        val state = JsonObject(fixtureJSON(GOMOKU_FIXTURES, "flow_m1_k2_white_state_since2") - "state")
+        mine.applyState(decodeJson(JsonObject(state + ("watchers" to JsonPrimitive(2))), GomokuStatePayload.serializer()))
+        assertEquals(2L, mine.spectatorCount)
+        mine.applyState(decodeJson(JsonObject(state + ("watchers" to JsonPrimitive(-5))), GomokuStatePayload.serializer()))
+        assertEquals(0L, mine.spectatorCount, "내 판의 음수 관전자 수를 그대로 그렸다")
+
+        val lobby = fixtureJSON(GOMOKU_FIXTURES, "gomoku_lobby__ok_matches")
+        val row = lobby["matches"]!!.jsonArray.first().jsonObject
+        val positive = decodeJson(JsonObject(row + ("watchers" to JsonPrimitive(7))), GomokuLobbyMatchRow.serializer())
+        val negative = decodeJson(JsonObject(row + ("watchers" to JsonPrimitive(-7))), GomokuLobbyMatchRow.serializer())
+        assertEquals(7L, assertNotNull(mine.liveMatch(positive)).watchers)
+        assertEquals(0L, assertNotNull(mine.liveMatch(negative)).watchers, "로비 카드의 음수 관전자 수를 그대로 그렸다")
+    }
+
+    /**
+     * INV-GomokuStoreWatch-b46c13fc(검증 V16): `watchUnavailable` 은 `startWatching` 을 문 앞에서 막으므로 자기가 자기를 못 연다 —
+     * 순위 주기(60초)가 한 번 풀어 준다. 59초에는 아직 잠겨 있고, 60초에 풀린 뒤 [관전] 이 실제로 다시 나간다.
+     */
+    @Test
+    fun theRankingCycleUnlocksTheWatchEntryOncePerMinute() = runTest {
+        val (store, _, server) = rig {
+            queue("gomoku_watch_live", StubReply.missingFunction("gomoku_watch_live"))
+            queue("gomoku_watch", StubReply.missingFunction("gomoku_watch"), StubReply.missingFunction("gomoku_watch"))
+            queueFixtures("gomoku_watch", GOMOKU_FIXTURES, "gomoku_watch__ok_since0")
+            queueFixtures("gomoku_ranking", GOMOKU_FIXTURES, "gomoku_ranking__ok", "gomoku_ranking__ok")
+        }
+        var now = contractClock
+        store.clock = { now }
+        store.startWatching(watchID)
+        store.refreshWatch()
+        assertTrue(store.watchUnavailable)
+        // 창이 보이는 로비 — 순위 주기가 돈다. 첫 바퀴(순위를 아직 안 읽었다)가 잠금을 푼다.
+        store.isWindowVisible = true
+        store.pollSpectatorFeatures(now)
+        assertEquals(1, server.count("gomoku_ranking"))
+        assertFalse(store.watchUnavailable, "순위 주기가 관전 잠금을 풀지 않았다 — 서버가 올라와도 로그아웃까지 잠긴다")
+        // 다시 눌렀다 — 아직 서버가 없다. 다시 잠긴다.
+        store.startWatching(watchID)
+        settle()
+        assertTrue(store.watchUnavailable)
+        assertEquals(2, server.count("gomoku_watch"))
+        now = contractClock.addingTimeInterval(59.0)
+        store.pollSpectatorFeatures(now)
+        assertTrue(store.watchUnavailable, "60초 주기보다 일찍 잠금을 풀었다")
+        assertEquals(1, server.count("gomoku_ranking"))
+        now = contractClock.addingTimeInterval(60.0)
+        store.pollSpectatorFeatures(now)
+        assertFalse(store.watchUnavailable)
+        assertEquals(2, server.count("gomoku_ranking"))
+        // 서버가 올라왔다 — 풀린 입구로 들어간 관전이 실제로 판을 받는다.
+        store.startWatching(watchID)
+        settle()
+        assertEquals(3, server.count("gomoku_watch"))
+        assertEquals(true, store.spectating?.hasServerState)
+        assertFalse(store.watchUnavailable)
     }
 
     @Test

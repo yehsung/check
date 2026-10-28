@@ -136,7 +136,7 @@
       ]
     },
     {
-      "cases": 12,
+      "cases": 13,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift",
       "golden": "dates/ailimit",
@@ -145,7 +145,8 @@
       "swiftSources": [
         "Sources/CheckCore/AILimits.swift",
         "Sources/CheckCore/AILimitFreshnessRule.swift",
-        "Sources/CheckCore/SupabaseWorkModels.swift"
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift"
       ]
     },
     {
@@ -967,7 +968,7 @@
       ]
     },
     {
-      "cases": 214,
+      "cases": 232,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift",
       "golden": "wire/requests",

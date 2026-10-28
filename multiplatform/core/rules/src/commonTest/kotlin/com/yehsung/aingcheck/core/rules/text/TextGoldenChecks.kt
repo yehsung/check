@@ -1,4 +1,5 @@
 // 원본: Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesText.swift(골든 생성기) @ 1b8260d
+//       6차 c-fold: 그래핌 ART 판정을 API 수준별 잠금([GraphemeArtLocks] — G §8-17 2 (a))으로 바꿨다.
 package com.yehsung.aingcheck.core.rules.text
 
 import com.yehsung.aingcheck.testkit.golden.GoldenFile
@@ -19,7 +20,8 @@ import kotlin.test.fail
  * 글자 골든 대조 몫(JVM 시험과 Android 계측이 같은 판정을 부른다 — G §8-16 · C§5.5). 골든을 읽는 자리(Golden.load · 자산)는 부르는 쪽이 정한다.
  *
  * [Runtime] 은 knownDivergence 의 허용 폭만 바꾼다: 그래핌 InCB 2줄은 데스크톱 JDK 21 이면 **옛 규칙 값이어야** 하고(JDK 가 고쳐지면 빨강 —
- * 목록을 다시 정한다), ART 는 기기 ICU 판에 따라 Swift 값 또는 옛 규칙 값이다(API 26·36 실측은 W0-f ③ · 이 갈래 완료 ② 가 기록한다).
+ * 목록을 다시 정한다). ART 는 기기 ICU 판이 API 마다 달라 **API 수준별 목록**([GraphemeArtLocks])으로 잠근다(G §8-17 2 (a) — minSdk 26 유지):
+ * API 26 은 Swift 와 갈리는 줄 전부를 정확한 값으로, API 36 은 골든 knownDivergence(InCB 2줄)만 허용 폭으로. 재지 않은 API 는 빨강이다.
  */
 enum class TextRuntime { DESKTOP_JDK, ANDROID_ART }
 
@@ -50,19 +52,56 @@ object TextGoldenChecks {
         return divergent
     }
 
-    /** text/graphemes — 그래핌 경계. knownDivergence(InCB 2줄)만 허용 폭이 있다. 돌려주는 값 = Swift 와 갈린 줄 수. */
-    fun graphemes(golden: GoldenFile, runtime: TextRuntime): Int {
+    /** 플랫폼 그래핌 → 그래핌마다 스칼라 수(골든 clusters 꼴). 시험은 가짜를 넣어 잠금 판정 자체를 잰다([GraphemeArtLocks] 자기 시험). */
+    val platformSegmenter: (String) -> List<Int> = { Graphemes.scalarCounts(it).toList() }
+
+    /** Swift 값과 다른 줄(id → 플랫폼이 낸 조각), 골든 차례. 기기에서 잴 때 근거 줄로 남긴다. */
+    fun graphemeDifferences(golden: GoldenFile, segment: (String) -> List<Int> = platformSegmenter): List<Pair<String, List<Int>>> =
+        golden.cases.mapNotNull { case ->
+            val got = segment(text(case.string("cps")))
+            val want = case.array("clusters").map { it.jsonPrimitive.int }
+            if (got != want) case.string("id") to got else null
+        }
+
+    /**
+     * text/graphemes — 그래핌 경계. 돌려주는 값 = Swift 와 갈린 줄 수.
+     *  - 데스크톱 JDK: knownDivergence(InCB 2줄)는 옛 규칙 값이어야 하고 나머지는 Swift 값.
+     *  - ART: [artApi] 의 잠금([GraphemeArtLocks.forApi]) — 없으면 빨강(재지 않은 API). [GraphemeArtLocks.GoldenListOnly] 면 InCB 2줄만
+     *    Swift 또는 옛 규칙 값, [GraphemeArtLocks.Exact] 면 Swift 와 갈리는 줄의 **집합과 값**이 목록과 정확히 같아야 한다(늘거나 줄면 빨강).
+     */
+    fun graphemes(golden: GoldenFile, runtime: TextRuntime, artApi: Int? = null, segment: (String) -> List<Int> = platformSegmenter): Int {
+        val lock: GraphemeArtLocks.Lock? = when (runtime) {
+            TextRuntime.DESKTOP_JDK -> null
+            TextRuntime.ANDROID_ART -> {
+                val api = artApi ?: fail("ART 그래핌 판정에는 API 수준이 있어야 한다")
+                GraphemeArtLocks.forApi(api)
+                    ?: fail("API $api 은 그래핌 갈림을 재지 않았다 — 이 기기에서 잰 목록을 GraphemeArtLocks 에 더한다(G §8-17 2 (a), 잰 API: ${GraphemeArtLocks.measuredApis})")
+            }
+        }
+        val exact = lock as? GraphemeArtLocks.Exact
         var listed = 0
         var differ = 0
+        val differIds = LinkedHashSet<String>()
         for (case in golden.cases) {
             val id = case.string("id")
             val input = text(case.string("cps"))
             val want = case.array("clusters").map { it.jsonPrimitive.int }
-            val got = Graphemes.scalarCounts(input).toList()
+            val got = segment(input)
             assertEquals(input.codePointCountCompat(), got.sum(), golden.failure(id, "그래핌 조각의 스칼라 합이 입력과 다르다"))
+            if (got != want) differIds += id
             val known = case["knownDivergence"] as? JsonObject
+            if (known != null) listed++
+            if (exact != null) {
+                val locked = exact.lines[id]
+                if (locked != null) {
+                    assertEquals(locked, got, golden.failure(id, "API ${exact.api} 잠금 값과 다르다(입력 ${case.string("cps")}) — 기기 ICU 가 바뀌었으면 목록을 다시 잰다"))
+                } else {
+                    assertEquals(want, got, golden.failure(id, "입력 ${case.string("cps")} 의 그래핌 경계 — API ${exact.api} 잠금 목록 밖에서 Swift 와 다르다"))
+                }
+                if (got != want) differ++
+                continue
+            }
             if (known != null) {
-                listed++
                 val legacy = known.array("legacyClusters").map { it.jsonPrimitive.int }
                 when (runtime) {
                     TextRuntime.DESKTOP_JDK -> assertEquals(legacy, got, golden.failure(id, "JDK 21 BreakIterator 는 InCB 전 규칙 값을 내야 한다 — 달라졌으면 knownDivergence 를 다시 정한다"))
@@ -72,9 +111,12 @@ object TextGoldenChecks {
                 continue
             }
             assertEquals(want, got, golden.failure(id, "입력 ${case.string("cps")} 의 그래핌 경계 — knownDivergence 밖에서 Swift 와 다르다"))
-            assertEquals(case.int("count"), Graphemes.count(input), golden.failure(id, "String.count"))
+            assertEquals(case.int("count"), got.size, golden.failure(id, "String.count"))
         }
         assertEquals(2, listed, "text/graphemes knownDivergence 는 정확히 2줄(InCB)이다(G §8-16 ③)")
+        if (exact != null) {
+            assertEquals(exact.lines.keys, differIds, "API ${exact.api} 에서 Swift 와 갈리는 줄이 잠금 목록과 다르다(늘거나 줄면 빨강 — G §8-17 2 (a))")
+        }
         return differ
     }
 

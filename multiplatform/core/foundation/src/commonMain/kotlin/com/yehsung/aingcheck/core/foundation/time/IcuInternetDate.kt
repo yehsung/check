@@ -1,12 +1,18 @@
-// 원본: Sources/CheckCore/CheckWorkInsights.swift:616-672(WorkInsightsDate 가 부르는 Foundation `ISO8601DateFormatter` — 속은 ICU SimpleDateFormat · TimeZoneFormat 파서) @ 1b8260d
-package com.yehsung.aingcheck.core.rules.insights
+// 원본: Sources/CheckCore/CheckWorkInsights.swift:616-672(WorkInsightsDate) · Sources/CheckCore/SupabaseWorkService.swift:9-17·338-341(parseDate) @ 1b8260d
+//       — 두 자리 모두 Foundation `ISO8601DateFormatter`(속은 ICU SimpleDateFormat · TimeZoneFormat 파서). 옛 자리: rules insights/IcuInternetDate.kt(W1-c)
+package com.yehsung.aingcheck.core.foundation.time
 
-import com.yehsung.aingcheck.core.rules.format.SwiftDate
-import com.yehsung.aingcheck.core.rules.text.TextScalars
+import com.yehsung.aingcheck.core.foundation.text.DecimalDigits
 
 /**
- * Apple `ISO8601DateFormatter` 의 `.withInternetDateTime`(+ `.withFractionalSeconds`) **파싱**을 손으로 옮긴 것(골든 dates/parse).
- * 정규식을 쓰지 않는다 — 숫자 판정은 번들 표(G §8-16 ②)로 하고, ART 의 ICU 정규식(`\d` 가 유니코드 전체)과 JDK 의 차이에 기대지 않는다.
+ * Apple `ISO8601DateFormatter` 의 `.withInternetDateTime`(+ `.withFractionalSeconds`) **파싱**을 손으로 옮긴 것 — 앱의 **날짜 파서 한 벌**
+ * (6차 조정자 접기 c-fold, G §8-17 4). 부르는 곳 둘이 같은 포매터 옵션을 쓴다:
+ *  - wire `SwiftISO8601.parse`(= Swift `SupabaseWorkService.parseDate` — 소수초 판 → 기본 판) · 골든 wire/rules `date-*` · `micros-*`
+ *  - rules `WorkInsightsDate.parse`(기본 판 → 소수초 판 → 소수부 도려내기 · 초 내림) · 골든 dates/parse
+ * 예전에는 wire 가 commonMain 정규식(`\d`)으로 따로 읽었다 — ART 의 java.util.regex 는 ICU 라 `\d` 가 Nd 전부를 받고 JDK 는 ASCII 만 받아
+ * 같은 응답을 기기마다 다르게 읽었다. 이제 둘 다 이 파일을 부른다(구조 시험 rules `PlatformUnicodeStructureTest` 가 foundation·wire·net 의
+ * 기기 소스에서도 `\d` 를 막는다).
+ * 정규식을 쓰지 않는다 — 숫자 판정은 Swift 범위 표의 Nd([DecimalDigits], G §8-16 ②)로 하고, ART 의 ICU 정규식과 JDK 의 차이에 기대지 않는다.
  *
  * 맥에서 잰 ICU 동작(2026-10-28 — 골든 dates/parse 의 timestamps 줄이 잠근다):
  *  - 꼴은 `yyyy-MM-dd'T'HH:mm:ss[.SSS]XXXXX`. 글자 `-` `T` `:` `.` 는 정확히 그 글자다(대소문자 · 다른 글자 불가).
@@ -23,7 +29,7 @@ import com.yehsung.aingcheck.core.rules.text.TextScalars
  * 모형 밖(골든에 넣지 않았다 — 서버 시각에 없는 꼴이고 ICU 가 자리마다 달리 받는다, 완료 보고에 실측 표):
  * 숫자 칸 · 시간대 앞 공백(White_Space)과 양방향 표시(U+200E 등), `-` `:` 앞 공백, 18자리 넘는 숫자, ASCII 밖 빼기표(U+2212 등).
  */
-internal object IcuInternetDate {
+object IcuInternetDate {
     private const val MAX_OFFSET_HOUR = 23
     private const val MAX_OFFSET_MINUTE = 59
     private const val MAX_OFFSET_SECOND = 59
@@ -31,7 +37,11 @@ internal object IcuInternetDate {
     private const val MILLIS_PER_MINUTE = 60_000
     private const val MILLIS_PER_SECOND = 1_000
 
-    /** 성공이면 Swift `Date.timeIntervalSince1970`(1970 기준 초 — 2001 기준 왕복 그대로), 실패면 null. 내림은 부르는 쪽이 한다. */
+    /**
+     * 성공이면 ICU UDate 를 CF 처럼 **1000 으로 한 번 나눈 값**(1970 기준 초, Swift `Date` 의 2001 기준 왕복 **전**), 실패면 null.
+     * 부르는 쪽이 자기 Date 꼴로 옮긴다(wire `SwiftDate(초)` · rules `SwiftDate.since1970(초)` — 둘 다 2001 기준으로 한 번 왕복한다).
+     * 내림은 부르는 쪽이 한다.
+     */
     fun parse(text: String, fractional: Boolean): Double? {
         val c = Cursor(text)
         val year = c.number() ?: return null
@@ -57,23 +67,19 @@ internal object IcuInternetDate {
         }
         val offsetMillis = zoneOffsetMillis(text, c.pos) ?: return null
         // ICU Calendar::computeTime — (날 × 86400000 + 하루 안 ms) − 시간대, 전부 double. CF 가 1000 으로 나눠 2001 기준으로 옮긴다.
-        val epochDay = KstCalendar.epochDayLenient(year.toLong(), month.toLong(), day.toLong())
+        val epochDay = FoundationGregorian.epochDayLenient(year.toLong(), month.toLong(), day.toLong())
         var millisInDay = hour.toDouble()
         millisInDay = millisInDay * 60 + minute
         millisInDay = millisInDay * 60 + second
         millisInDay = millisInDay * 1000 + millis
         val udate = (epochDay.toDouble() * 86_400_000.0 + millisInDay) - offsetMillis.toDouble()
-        return SwiftDate.since1970(udate / 1000.0)
+        return udate / 1000.0
     }
 
     // ---------- 숫자 ----------
 
-    /** Nd 스칼라의 10진 값(유니코드는 Nd 를 0…9 가 이어진 열 칸 묶음으로만 싣는다 — 번들 표의 구간 시작이 언제나 0). Nd 가 아니면 -1. */
-    internal fun decimalDigitValue(cp: Int): Int {
-        if (cp in 0x30..0x39) return cp - 0x30
-        if (TextScalars.generalCategory(cp) != "Nd") return -1
-        return (cp - TextScalars.rangeStartOf(cp)) % 10
-    }
+    /** Nd 스칼라의 10진 값([DecimalDigits] — Swift 범위 표). Nd 가 아니면 -1. */
+    private fun decimalDigitValue(cp: Int): Int = DecimalDigits.value(cp)
 
     private class Cursor(val text: String) {
         var pos = 0

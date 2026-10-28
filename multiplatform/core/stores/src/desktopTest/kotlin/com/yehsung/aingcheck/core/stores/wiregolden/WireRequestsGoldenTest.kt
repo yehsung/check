@@ -1,6 +1,21 @@
 // 원본: 없음 — G5 요청 골든 대조(G §2-3 W1-d ①). 골든: Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift
-package com.yehsung.aingcheck.core.net
+//       6차 c-fold(G §8-17 4): core/net 에서 core/stores 로 옮겼다 — net 과 rules 를 둘 다 보는 가장 낮은 모듈이라, 시험용 글자 규칙 근사 대신
+//       실제 RulesWireTextRules 를 꽂고 resultOtherLanes case 의 결과를 core/stores `service` 의 앱 함수로 대조한다(빠지는 case 0).
+//       그 case 들은 실제 응답(데모 픽스처 · 경계 본문)을 싣는다 — 응답이 `{}` 뿐이면 rules 디코드 · 합성이 틀려도 초록이다(c-fold 검증 지적).
+package com.yehsung.aingcheck.core.stores.wiregolden
 
+import com.yehsung.aingcheck.core.net.*
+import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
+import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
+import com.yehsung.aingcheck.core.stores.service.achievementClaim
+import com.yehsung.aingcheck.core.stores.service.achievementsStatus
+import com.yehsung.aingcheck.core.stores.service.dailyMissionClaim
+import com.yehsung.aingcheck.core.stores.service.fetchMyAILimits
+import com.yehsung.aingcheck.core.stores.service.megaphoneInfo
+import com.yehsung.aingcheck.core.stores.service.sendMegaphone
+import com.yehsung.aingcheck.core.stores.service.setStatusMessageOutcome
+import com.yehsung.aingcheck.core.stores.service.weeklyWorkClaim
+import com.yehsung.aingcheck.core.stores.service.weeklyWorkStatus
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftURL
@@ -8,7 +23,6 @@ import com.yehsung.aingcheck.core.wire.models.CharacterSyncFetchError
 import com.yehsung.aingcheck.testkit.dump.GoldenDump
 import com.yehsung.aingcheck.testkit.dump.GoldenScrub
 import kotlinx.serialization.SerializationException
-import com.yehsung.aingcheck.core.wire.WireTextRules
 import com.yehsung.aingcheck.core.wire.games.GomokuChatKind
 import com.yehsung.aingcheck.core.wire.games.TetrisReportRequest
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
@@ -18,7 +32,6 @@ import com.yehsung.aingcheck.core.wire.models.FeedbackStatus
 import com.yehsung.aingcheck.core.wire.models.PushPrefs
 import com.yehsung.aingcheck.core.wire.models.TodoSyncRequest
 import com.yehsung.aingcheck.core.wire.models.TodoSyncWireItem
-import com.yehsung.aingcheck.core.wire.models.swiftTrim
 import com.yehsung.aingcheck.testkit.golden.Golden
 import com.yehsung.aingcheck.testkit.golden.GoldenCanonical
 import com.yehsung.aingcheck.testkit.golden.array
@@ -33,6 +46,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.decodeURLQueryComponent
 import io.ktor.http.headersOf
+import io.ktor.client.request.get
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -40,7 +57,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
-import java.text.Normalizer
 import java.util.Base64
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
@@ -48,11 +64,17 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
-/** 시험용 글자 규칙(NFC · Swift 공백 집합 자르기 · 제어·공백 아닌 글자 하나라도 있으면 보인다). 실제 구현은 W1-c rules/text. */
-object GoldenTextRules : WireTextRules {
-    override fun sanitized(raw: String): String = swiftTrim(Normalizer.normalize(raw, Normalizer.Form.NFC))
-    override fun hasVisibleContent(text: String): Boolean = text.any { !it.isWhitespace() && !Character.isISOControl(it) }
-    override fun statusMessageSanitized(raw: String): String = sanitized(raw)
+/**
+ * Swift `GoldenMirror.dump(SupabaseWorkServiceError)` 와 같은 모양(core/net 시험 `ErrorsJwtGoldenTest.dumpError` 와 같은 꼴 — 시험 소스는
+ * 모듈을 건너 나눠 쓸 수 없어 여기 한 벌 둔다. 모양이 갈리면 G5 의 throws 결과가 빨개진다).
+ */
+private fun dumpError(e: SupabaseWorkServiceError): JsonElement = when (e) {
+    is SupabaseWorkServiceError.RateLimited -> JsonObject(
+        mapOf("\$case" to JsonPrimitive("rateLimited"), "\$value" to (e.retryAfterSeconds?.let { JsonPrimitive(it) } ?: JsonNull)),
+    )
+    is SupabaseWorkServiceError.AuthMessage -> JsonObject(mapOf("\$case" to JsonPrimitive("authMessage"), "\$value" to JsonPrimitive(e.text)))
+    is SupabaseWorkServiceError.InvalidResponse -> JsonObject(mapOf("\$case" to JsonPrimitive("invalidResponse"), "\$value" to JsonPrimitive(e.statusCode)))
+    else -> JsonPrimitive(e.caseName)
 }
 
 /** 동시에 떠나는 요청의 응답 고르기(Swift `WireRoute`): 경로가 같고, 쿼리 쌍이 있으면 디코드한 쿼리에 그 쌍이 있어야 한다. */
@@ -104,13 +126,15 @@ class GoldenRecorder(private val script: List<Pair<Int, String>>, private val ro
                 "body" to body,
             ),
         )
-        synchronized(this) { requests += recorded }
+        // ★ 처리기 람다의 this 는 요청마다 새 MockRequestHandleScope 다 — synchronized(this) 는 아무것도 막지 않아 동시 요청(팀 상태 4 GET)이
+        //   ArrayList 에 겹쳐 써서 요청을 잃거나 AIOOBE 를 냈다(Windows CI 실측 `fetchTeamStatuses#devicesFail`). 녹음기 자신으로 잠근다.
+        synchronized(this@GoldenRecorder) { requests += recorded }
         val (status, text) = if (routes.isNotEmpty()) {
             val decoded = query.map { (it as JsonArray).let { p -> (p[0] as JsonPrimitive).content to (p[1] as JsonPrimitive).content } }
             routes.firstOrNull { r -> r.path == request.url.encodedPath && (r.query == null || decoded.contains(r.query)) }
                 ?.let { it.status to it.body } ?: (200 to "{}")
         } else {
-            synchronized(this) { if (next < script.size) script[next++] else 200 to "{}" }
+            synchronized(this@GoldenRecorder) { if (next < script.size) script[next++] else 200 to "{}" }
         }
         respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
     }
@@ -139,6 +163,11 @@ class GoldenRecorder(private val script: List<Pair<Int, String>>, private val ro
 }
 
 const val ACCESS = "golden-access-token"
+
+/** Swift `GoldenExportWireRequests.megaphoneBodies` 와 같은 본문(빈 · 상한+1 은 요청 없이 즉답, 나머지는 정규화한 글자로 RPC). */
+private val MEGAPHONE_BODIES = listOf(
+    " \n\u200B ", "가".repeat(199), "가".repeat(198), "  오늘 3시\r\n라운지에서  간식 나눠요\u0007 ", "다들", "다들",
+)
 const val ANON = "golden-anon-key"
 
 class WireRequestsGoldenTest {
@@ -149,8 +178,53 @@ class WireRequestsGoldenTest {
     private val now = SwiftDate(1_789_621_500.0)
     private val t = ACCESS
 
+    /**
+     * 결과 타입이 rules·stores 에 있는 case(골든 spec.resultOtherLanes — 받는 갈래 이름이 적혀 있다). Swift 서비스 함수 하나 =
+     * Kotlin core/stores `service` 의 **앱 함수**(net 요청 + rules 디코드 · 합성 — 스토어가 부르는 그 함수). 시험 안에서 따로 합성하지 않는다
+     * (그러면 앱이 다르게 합성해도 초록이다 — 6차 c-fold 검증 지적). 이 집합이 spec.resultOtherLanes 와 **정확히** 같아야 한다.
+     */
+    private val rulesComposed: Map<String, suspend (SupabaseWorkService) -> Any?> = linkedMapOf(
+        // 상태메시지 저장 결과(Swift setStatusMessage → StatusMessageSaveOutcome): 함수 없음은 serverNotReady, 나머지는 응답 세 칸.
+        "setStatusMessage" to { s -> s.setStatusMessageOutcome(t, "집중 중") },
+        "setStatusMessage(nil)" to { s -> s.setStatusMessageOutcome(t, null) },
+        "setStatusMessage#outcomes" to { s -> (1..11).map { s.setStatusMessageOutcome(t, "집중 중") } },
+        // 업적 · 일일 미션(AchievementStatus — 관대한 디코드, 최상위가 객체가 아닐 때만 throw).
+        "achievementsStatus" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#data" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#lossy" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#notObject" to { s -> s.achievementsStatus(t) },
+        "achievementsStatus#missing" to { s -> s.achievementsStatus(t) },
+        "achievementClaim" to { s -> s.achievementClaim(t, "poke10") },
+        "achievementClaim#data" to { s -> s.achievementClaim(t, "poke10") },
+        "achievementClaim(nil)" to { s -> s.achievementClaim(t, null) },
+        "achievementClaim(nil)#data" to { s -> s.achievementClaim(t, null) },
+        "dailyMissionClaim" to { s -> s.dailyMissionClaim(t, "daily_gomoku") },
+        "dailyMissionClaim#data" to { s -> s.dailyMissionClaim(t, "daily_gomoku") },
+        "dailyMissionClaim(nil)" to { s -> s.dailyMissionClaim(t, null) },
+        // 주간 근무 보상(WeeklyWorkStatus — 받기 응답도 같은 모양).
+        "weeklyWorkStatus" to { s -> s.weeklyWorkStatus(t) },
+        "weeklyWorkStatus#data" to { s -> s.weeklyWorkStatus(t) },
+        "weeklyWorkStatus#lossy" to { s -> s.weeklyWorkStatus(t) },
+        "weeklyWorkClaim" to { s -> s.weeklyWorkClaim(t) },
+        "weeklyWorkClaim#data" to { s -> s.weeklyWorkClaim(t) },
+        "weeklyWorkClaim(args)" to { s -> s.weeklyWorkClaim(t, "2026-09-14", 40) },
+        // 확성기(Swift sendMegaphone: 본문 사전 판정 → 정규화한 글자로 RPC → MegaphoneSendResponse · megaphoneInfo → MegaphoneInfoResponse).
+        "sendMegaphone" to { s -> s.sendMegaphone(t, "다들 화이팅", rid) },
+        "sendMegaphone#outcomes" to { s -> MEGAPHONE_BODIES.map { body -> s.sendMegaphone(t, body, rid) } },
+        "sendMegaphone#missing" to { s -> s.sendMegaphone(t, "다들 화이팅", rid) },
+        "sendMegaphone#badType" to { s -> s.sendMegaphone(t, "다들 화이팅", rid) },
+        "megaphoneInfo" to { s -> s.megaphoneInfo(t) },
+        "megaphoneInfo#data" to { s -> listOf(s.megaphoneInfo(t), s.megaphoneInfo(t)) },
+        "megaphoneInfo#badType" to { s -> s.megaphoneInfo(t) },
+        // 내 AI 리밋(Swift fetchMyAILimits → [AILimitFetchedRow] — 행 거르기 · 라벨 정규화 AILimitDeviceLabelContract · AILimitPlanLabelContract).
+        "fetchMyAILimits" to { s -> s.fetchMyAILimits(t, u) },
+        "fetchMyAILimits#data" to { s -> s.fetchMyAILimits(t, u) },
+        "fetchMyAILimits#filters" to { s -> s.fetchMyAILimits(t, u) },
+        "fetchMyAILimits#labels" to { s -> s.fetchMyAILimits(t, u) },
+    )
+
     /** Swift `GoldenExportWireRequests.calls` 와 같은 id · 같은 인자. 여기 없는 id 가 골든에 있으면 "미이식". */
-    private val registry: Map<String, suspend (SupabaseWorkService) -> Any?> = linkedMapOf(
+    private val registry: Map<String, suspend (SupabaseWorkService) -> Any?> = rulesComposed + linkedMapOf(
         // ---- 인증 ----
         "signIn" to { s -> s.signIn("a@b.invalid", "pw-123456") },
         "signUp" to { s -> s.signUp("a@b.invalid", "pw-123456", "아잉") },
@@ -184,8 +258,6 @@ class WireRequestsGoldenTest {
         "updateMiniGamePublic" to { s -> s.updateMiniGamePublic(t, u, false) },
         "fetchMyCenter" to { s -> s.fetchMyCenter(t, u) },
         "fetchMyStatusMessage" to { s -> s.fetchMyStatusMessage(t, u) },
-        "setStatusMessage" to { s -> s.setStatusMessage(t, "집중 중") },
-        "setStatusMessage(nil)" to { s -> s.setStatusMessage(t, null) },
         "fetchTokenUsageSettings" to { s -> s.fetchTokenUsageSettings(t, u) },
         "updateTokenUsagePublic" to { s -> s.updateTokenUsagePublic(t, u, true) },
         "setDisplayName" to { s -> s.setDisplayName(t, "새이름") },
@@ -194,7 +266,6 @@ class WireRequestsGoldenTest {
         "setCharacter(nil)" to { s -> s.setCharacter(t, null) },
         "fetchEquippedCharacter" to { s -> s.fetchEquippedCharacter(t, u) },
         "fetchMyProfileCard" to { s -> s.fetchMyProfileCard(t, u) },
-        "fetchMyAILimits" to { s -> s.fetchMyAILimitRows(t, u) },
         // ---- 사진 ----
         "uploadAvatar" to { s -> s.uploadAvatar(t, u, "JPEG-BYTES".encodeToByteArray()) },
         "removeAvatar" to { s -> s.removeAvatar(t, u) },
@@ -262,17 +333,6 @@ class WireRequestsGoldenTest {
             val item = TodoSyncWireItem("0000000a-0000-4000-8000-00000000000a", "할 일", 1_726_500_000_000, 1_726_500_005_000, null, null, "20240917")
             s.todoSync(t, TodoSyncRequest(listOf(item), 1_726_400_000_000))
         },
-        // ---- W1-c 응답 타입(요청은 W1-d) ----
-        "achievementsStatus" to { s -> s.achievementsStatusRaw(t) },
-        "achievementClaim" to { s -> s.achievementClaimRaw(t, "poke10") },
-        "achievementClaim(nil)" to { s -> s.achievementClaimRaw(t, null) },
-        "dailyMissionClaim" to { s -> s.dailyMissionClaimRaw(t, "daily_gomoku") },
-        "dailyMissionClaim(nil)" to { s -> s.dailyMissionClaimRaw(t, null) },
-        "weeklyWorkStatus" to { s -> s.weeklyWorkStatusRaw(t) },
-        "weeklyWorkClaim" to { s -> s.weeklyWorkClaimRaw(t) },
-        "weeklyWorkClaim(args)" to { s -> s.weeklyWorkClaimRaw(t, "2026-09-14", 40) },
-        "sendMegaphone" to { s -> s.sendMegaphoneRaw(t, GoldenTextRules.sanitized("다들 화이팅"), rid) },
-        "megaphoneInfo" to { s -> s.megaphoneInfoRaw(t) },
         // ---- 기기 · 폰 근무 ----
         "fetchClientRelease" to { s -> s.fetchClientRelease("ios") },
         "registerDevice" to { s -> s.registerDevice(t, "ios", "11111111-2222-4333-8444-555555555555", 2_147_483_648, "1.0.14", "tok", "production") },
@@ -358,7 +418,6 @@ class WireRequestsGoldenTest {
         "fetchDisplayNameChangedAt#data" to { s -> s.fetchDisplayNameChangedAt(t, u) },
         "fetchEquippedCharacter#data" to { s -> s.fetchEquippedCharacter(t, u) },
         "fetchEquippedCharacter#noRow" to { s -> s.fetchEquippedCharacter(t, u) },
-        "fetchMyAILimits#data" to { s -> s.fetchMyAILimitRows(t, u) },
         "fetchAILimitMainDeviceID" to { s -> s.fetchAILimitMainDeviceID(t, u) },
         "fetchAILimitMainDeviceID#blank" to { s -> s.fetchAILimitMainDeviceID(t, u) },
         "fetchAILimitMainDeviceID#none" to { s -> s.fetchAILimitMainDeviceID(t, u) },
@@ -427,6 +486,7 @@ class WireRequestsGoldenTest {
             "throws" to when (e) {
                 is SupabaseWorkServiceError -> dumpError(e)
                 is SerializationException -> JsonPrimitive("\$decoding")
+                is SwiftDecodingError -> JsonPrimitive("\$decoding")   // rules 의 관대한 디코드가 던지는 Swift DecodingError
                 is CharacterSyncFetchError.NoProfileRow ->
                     JsonObject(mapOf("\$dump" to JsonPrimitive("noProfileRow"), "\$type" to JsonPrimitive("CharacterSyncFetchError")))
                 else -> JsonObject(mapOf("\$type" to JsonPrimitive(e::class.qualifiedName ?: "?"), "\$message" to JsonPrimitive(e.message ?: "")))
@@ -453,7 +513,7 @@ class WireRequestsGoldenTest {
         val client = HttpClient(recorder.engine) { SupabaseWorkService.clientConfig(this) }
         val service = SupabaseWorkService(
             projectURL = "https://golden.invalid", anonKey = ANON, client = client,
-            clock = { clockNow }, text = GoldenTextRules, newUUIDString = { "ABCDEF12-3456-4789-8ABC-DEF012345678" },
+            clock = { clockNow }, text = RulesWireTextRules, newUUIDString = { "ABCDEF12-3456-4789-8ABC-DEF012345678" },
         )
         val result = runBlocking {
             try {
@@ -476,10 +536,12 @@ class WireRequestsGoldenTest {
         val golden = Golden.load("wire/requests")
         val problems = mutableListOf<String>()
         val missing = mutableListOf<String>()
-        // 결과를 대조하지 않는 case 는 골든 spec 이 이름과 받을 갈래를 적은 것뿐이다(조용한 건너뛰기 금지 — 아래에서 집합이 같은지 본다).
+        // 결과는 **모든** case 를 대조한다(빠지는 case 0). spec.resultOtherLanes 는 결과 타입이 rules·stores 에 있는 case 의 이름표다 —
+        // 그 집합이 이 시험의 rules 합성(rulesComposed)과 정확히 같아야 한다(새 case 가 그 이름표로 오면 합성을 더할 때까지 빨강).
         val otherLaneResults = golden.spec.obj("resultOtherLanes").keys
         val skippedResults = mutableSetOf<String>()
         var comparedResults = 0
+        var comparedOtherLane = 0
         for (c in golden.cases) {
             val id = c.string("id")
             val call = registry[id]
@@ -501,11 +563,13 @@ class WireRequestsGoldenTest {
             val wantText = GoldenCanonical.text(want)
             val gotText = GoldenCanonical.text(JsonArray(got))
             if (wantText != gotText) problems += golden.failure(id, "요청이 다르다\n  Swift : $wantText\n  Kotlin: $gotText")
-            if (id in otherLaneResults) {
+            val wantResultElement = c["result"]
+            if (wantResultElement == null) {
                 skippedResults += id
             } else {
                 comparedResults++
-                val wantResult = GoldenCanonical.text(c["result"]!!)
+                if (id in otherLaneResults) comparedOtherLane++
+                val wantResult = GoldenCanonical.text(wantResultElement)
                 val gotResult = GoldenCanonical.text(recorded.result)
                 if (wantResult != gotResult) problems += golden.failure(id, "결과가 다르다\n  Swift : $wantResult\n  Kotlin: $gotResult")
             }
@@ -515,15 +579,37 @@ class WireRequestsGoldenTest {
         val wronglyPorted = registry.keys.map { it.substringBefore('(').substringBefore('#') }.filter { it in excluded.keys }
         println(
             "AINGCHECK-G5 cases=${golden.cases.size} ported=${golden.cases.size - missing.size} 미이식=${missing.size} excluded=${excluded.size} " +
-                "results=$comparedResults otherLane=${skippedResults.size} problems=${problems.size}",
+                "results=$comparedResults otherLaneCompared=$comparedOtherLane skipped=${skippedResults.size} text=RulesWireTextRules problems=${problems.size}",
         )
-        assertEquals(otherLaneResults, skippedResults + missing.filter { it in otherLaneResults }, "resultOtherLanes 가 골든 case 와 맞지 않는다")
-        assertTrue(comparedResults >= 180, "결과를 대조한 case 가 적다($comparedResults)")
+        assertEquals(otherLaneResults, rulesComposed.keys, "spec.resultOtherLanes 와 rules 합성 case 가 다르다")
+        assertEquals(otherLaneResults.size, comparedOtherLane, "resultOtherLanes case 가 결과 대조에서 빠졌다")
+        assertTrue(skippedResults.isEmpty(), "결과 칸이 없어 대조하지 못한 case: $skippedResults")
+        assertEquals(golden.cases.size, comparedResults + missing.size, "결과를 대조하지 않은 case 가 있다")
+        assertTrue(comparedResults >= 214, "결과를 대조한 case 가 적다($comparedResults)")
         assertTrue(missing.isEmpty(), "미이식 ${missing.size}: $missing")
         assertTrue(extra.isEmpty(), "골든에 없는 Kotlin id(오타?): $extra")
         assertTrue(wronglyPorted.isEmpty(), "H·I·admin 태그 이름이 W1-d 레지스트리에 있다: $wronglyPorted")
         assertTrue(golden.cases.size >= 140, "G5 case 가 적다(${golden.cases.size})")
         if (problems.isNotEmpty()) fail("G5 불일치 ${problems.size}건(처음 12):\n" + problems.take(12).joinToString("\n\n"))
+    }
+
+    /**
+     * 녹음기가 동시 요청을 하나도 잃지 않는다(팀 상태 4 GET 처럼 서비스가 요청을 병렬로 보낸다 — MockEngine 처리기는 IO 스레드에서 겹쳐 돈다).
+     * 처리기 안 `synchronized(this)` 는 요청마다 새 scope 를 잠가 아무것도 막지 않았다(Windows CI 의 fetchTeamStatuses#devicesFail AIOOBE).
+     */
+    @Test
+    fun recorderKeepsEveryConcurrentRequest() {
+        val n = 512
+        val recorder = GoldenRecorder(emptyList())
+        val client = HttpClient(recorder.engine)
+        try {
+            runBlocking { (0 until n).map { i -> async(Dispatchers.IO) { client.get("https://golden.invalid/r?i=$i") } }.awaitAll() }
+        } finally {
+            client.close()
+        }
+        val seen = recorder.requests.map { ((it["query"] as JsonArray)[0] as JsonArray)[1].let { v -> (v as JsonPrimitive).content } }
+        assertEquals(n, seen.size, "동시 요청 $n 개 중 ${seen.size} 개만 녹음했다")
+        assertEquals((0 until n).map { it.toString() }.toSet(), seen.toSet(), "녹음한 요청이 겹치거나 빠졌다")
     }
 
     /** 경계(G §2-3 W1-d ⑥): 2^31 넘는 정수는 정밀도 그대로, 상점 번호 0 이면 키 생략, p_since_ms 는 null 이어도 싣는다. */

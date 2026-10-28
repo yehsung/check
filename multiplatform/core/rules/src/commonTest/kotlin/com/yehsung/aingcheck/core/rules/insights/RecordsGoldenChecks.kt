@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.rules.ailimit.AILimitFingerprint
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitFreshness
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitFreshnessRule
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitMainDeviceRule
+import com.yehsung.aingcheck.core.rules.ailimit.AILimitPlanLabelContract
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitProvider
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitProviderSnapshot
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitScale
@@ -490,6 +491,15 @@ object RecordsGoldenChecks {
         for (row in labels.array("rows")) {
             val r = row.jsonObject
             assertJson(r["normalized"], s(AILimitDeviceLabelContract.normalized(strOf(r["label"]))), "label ${r["label"]}")
+        }
+        // 플랜 라벨(6차 c-fold — 폰이 읽는 쪽으로 옮긴 AILimitPlanLabelContract): 스칼라 눈금 · 넘치면 버림. 골든 행이 없으면 시험이 헛돈다.
+        val planLabels = golden.case("plan-labels")
+        assertEquals(planLabels.int("maxLength"), AILimitPlanLabelContract.maxLength)
+        val planRows = planLabels.array("rows")
+        assertTrue(planRows.size >= 10, "plan-labels 행이 적다(${planRows.size})")
+        for (row in planRows) {
+            val r = row.jsonObject
+            assertJson(r["normalized"], s(AILimitPlanLabelContract.normalized(strOf(r["label"]))), "plan label ${r["label"]}")
         }
         val devicesCase = golden.case("devices")
         val observations = devicesCase.array("observations").map { e ->

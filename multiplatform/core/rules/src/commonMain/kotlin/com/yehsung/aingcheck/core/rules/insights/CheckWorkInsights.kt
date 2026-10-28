@@ -1,7 +1,9 @@
 // 원본: Sources/CheckCore/CheckWorkInsights.swift @ 1b8260d (C§5.1 E11 — 히트맵·회고·잔디. TokenDailyMerge.localTotals 는 맥 로컬 스캐너 몫이라 W2-h(Windows 보류))
 package com.yehsung.aingcheck.core.rules.insights
 
+import com.yehsung.aingcheck.core.foundation.time.IcuInternetDate
 import com.yehsung.aingcheck.core.rules.format.MenuBarStatusFormatter
+import com.yehsung.aingcheck.core.rules.format.SwiftDate
 import com.yehsung.aingcheck.core.rules.format.TokenNumberFormatter
 import com.yehsung.aingcheck.core.rules.format.parseSwiftInt
 import com.yehsung.aingcheck.core.rules.token.CodexEffectiveRule
@@ -322,8 +324,9 @@ object WorkInsightsCalendar {
 /**
  * 서버 타임스탬프 파서(C§4 #30 — 골든 `dates/parse`). Apple `ISO8601DateFormatter`(.withInternetDateTime) → 소수초 판 → 소수부를
  * 도려내고(타임존이 없으면 Z) 다시. 결과는 언제나 **초 내림**(히트맵 조각마다 1초가 사라지지 않게).
- * 포매터가 받는 꼴(ICU 파서 — Nd 숫자 · 부분 일치 시간대 · GMT/UTC 꼴)은 [IcuInternetDate] 가 옮긴다. 정규식은 쓰지 않는다
- * (ART 의 java.util.regex 는 ICU 라 `\d` 가 Nd 전부를 받아 JDK 와 답이 갈린다 — 에뮬레이터 API 36 실측).
+ * 포매터가 받는 꼴(ICU 파서 — Nd 숫자 · 부분 일치 시간대 · GMT/UTC 꼴)은 foundation [IcuInternetDate] 가 옮긴다(앱의 날짜 파서 한 벌 —
+ * wire `SwiftISO8601` 도 같은 것을 부른다, c-fold). 정규식은 쓰지 않는다(ART 의 java.util.regex 는 ICU 라 `\d` 가 Nd 전부를 받아 JDK 와
+ * 답이 갈린다 — 에뮬레이터 API 36 실측).
  */
 object WorkInsightsDate {
     fun parse(value: String): Double? {
@@ -344,8 +347,8 @@ object WorkInsightsDate {
     }
 
     private fun parseRaw(value: String): Double? {
-        IcuInternetDate.parse(value, fractional = false)?.let { return it }
-        IcuInternetDate.parse(value, fractional = true)?.let { return it }
+        icu(value, fractional = false)?.let { return it }
+        icu(value, fractional = true)?.let { return it }
         val dot = value.indexOf('.')
         if (dot < 0) return null
         val rest = value.substring(dot + 1)
@@ -356,8 +359,11 @@ object WorkInsightsDate {
             consumed += cluster.length
         }
         val trimmed = value.substring(0, dot) + if (consumed < rest.length) rest.substring(consumed) else "Z"
-        return IcuInternetDate.parse(trimmed, fractional = false)
+        return icu(trimmed, fractional = false)
     }
+
+    /** foundation 파서(1970 기준 초 — 2001 기준 왕복 전) → Swift `Date.timeIntervalSince1970`(2001 기준 왕복 그대로). */
+    private fun icu(text: String, fractional: Boolean): Double? = IcuInternetDate.parse(text, fractional)?.let(SwiftDate::since1970)
 
     /** Swift `Character.isNumber`(첫 스칼라의 numericType != nil)을 번들 표의 범주 Nd · Nl · No 로(한자 수사 같은 Lo 숫자는 모형 밖). */
     private fun isNumberScalar(cp: Int): Boolean =

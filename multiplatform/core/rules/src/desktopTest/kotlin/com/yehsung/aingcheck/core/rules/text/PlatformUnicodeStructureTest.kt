@@ -1,36 +1,50 @@
-// 원본: 없음(W1-c 구조 시험 — ART 의 java.util.regex(ICU)가 `\d`·`\s`·`\w` 를 유니코드 전체로 받는 갈림 · G §8-16 ② `Character.getType` 금지)
+// 원본: 없음(W1-c 구조 시험 — ART 의 java.util.regex(ICU)가 `\d`·`\s`·`\w` 를 유니코드 전체로 받는 갈림 · G §8-16 ② `Character.getType` 금지 ·
+//       6차 c-fold: 날짜 파서를 foundation 한 자리로 모았으니 foundation·wire·net 기기 소스까지 잰다)
 package com.yehsung.aingcheck.core.rules.text
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
  * 데스크톱 JDK 시험만으로는 안 보이는 Android 갈림을 **소스 모양**으로 막는다.
  *
- *  ① core/rules 의 기기에서 도는 소스(commonMain · androidMain)의 문자열 리터럴에 정규식 축약 `\d \D \s \S \w \W \b \B` 금지.
+ *  ① core 바닥(rules · foundation · wire · net)의 기기에서 도는 소스(commonMain · androidMain)의 문자열 리터럴에 정규식 축약
+ *     `\d \D \s \S \w \W \b \B` 금지. foundation·wire·net 은 6차 c-fold 에서 더했다 — 날짜 파서가 foundation(`time/IcuInternetDate`)
+ *     한 자리로 모였고, wire `SwiftISO8601` 가 옛 정규식(`\d`)을 되살리면 여기서 빨개진다.
  *     JDK 의 java.util.regex 는 이것들을 ASCII 로 읽지만 ART 의 java.util.regex 는 ICU 라 Nd · White_Space · 유니코드 글자 전체를 받는다
  *     (W1-c 날짜 파서에서 에뮬레이터 API 36 실측 — `0.١٢` 가 소수부로 잡혀 터졌다). 숫자는 `[0-9]`, 공백은 명시 집합으로 적는다.
  *  ② W1-c 패키지(gacha · weekly · achievements · insights · todo · text · character · ailimit · token · format)에서 `Character.getType` 에
  *     기대는 Char 판정(isDigit · isLetter · isLetterOrDigit · isWhitespace · 인자 없는 trim · digitToInt) 금지 — G §8-16 ②: JDK 21 = Unicode 15.0,
- *     ART 는 API 마다 다르다. 번들 표(TextScalars)나 ASCII 비교로 쓴다.
+ *     ART 는 API 마다 다르다. 번들 표(TextScalars)나 ASCII 비교로 쓴다. 날짜 파서 한 벌 — foundation 세 파일([FOUNDATION_DATE_PARSER])과
+ *     wire 입구([WIRE_DATE_ENTRY])도 같다(6차 c-fold 검증 지적으로 입구를 더했다).
  *
  * 주석은 걷고 본다(주석에 `\d` 를 설명으로 적는 것은 괜찮다 — 기억 source-contract-tests-need-comment-stripping).
  */
 class PlatformUnicodeStructureTest {
     private val moduleDir: File = File(System.getProperty("user.dir"))
 
-    private fun mainSources(): List<File> {
-        val roots = listOf("src/commonMain/kotlin", "src/androidMain/kotlin").map { File(moduleDir, it) }
-        assertTrue(File(moduleDir, "src/commonMain/kotlin").isDirectory, "core/rules commonMain 을 못 찾았다(user.dir=$moduleDir)")
+    private fun mainSources(dir: File = moduleDir): List<File> {
+        val roots = listOf("src/commonMain/kotlin", "src/androidMain/kotlin").map { File(dir, it) }
+        assertTrue(File(dir, "src/commonMain/kotlin").isDirectory, "${dir.name} commonMain 을 못 찾았다(user.dir=$moduleDir)")
         return roots.filter { it.isDirectory }.flatMap { root -> root.walkTopDown().filter { it.isFile && it.name.endsWith(".kt") }.toList() }
     }
 
+    /** core/rules 옆 모듈(foundation · wire · net)의 기기 소스 — rules 가 기대는 바닥이고 날짜 파서가 여기 있다. */
+    private fun lowerModuleSources(): List<File> = LOWER_MODULES.flatMap { mainSources(File(moduleDir.parentFile, it)) }
+
     @Test
     fun noShorthandRegexClassesInDeviceSources() {
-        val files = mainSources()
-        assertTrue(files.size >= 40, "core/rules 기기 소스가 너무 적다(${files.size}) — 경로가 바뀌었으면 시험이 헛돈다")
+        val rules = mainSources()
+        assertTrue(rules.size >= 40, "core/rules 기기 소스가 너무 적다(${rules.size}) — 경로가 바뀌었으면 시험이 헛돈다")
+        val lower = lowerModuleSources()
+        val lowerPaths = lower.map { it.invariantSeparatorsPath }
+        for (must in FOUNDATION_DATE_PARSER + WIRE_DATE_ENTRY) {
+            assertTrue(lowerPaths.any { it.endsWith(must) }, "날짜 파서 자리 $must 를 못 찾았다 — 옮겼으면 이 목록부터 고친다(시험이 헛돈다)")
+        }
+        val files = rules + lower
         val offenders = ArrayList<String>()
         var literals = 0
         for (file in files) {
@@ -40,7 +54,7 @@ class PlatformUnicodeStructureTest {
                 escapes.find(literal.body)?.let { offenders += "${file.relativeTo(moduleDir)}:${literal.line}: ${it.value} in ${literal.body.take(80)}" }
             }
         }
-        println("AINGCHECK-W1C structure regex files=${files.size} literals=$literals offenders=${offenders.size}")
+        println("AINGCHECK-W1C structure regex files=${files.size}(rules ${rules.size} · foundation·wire·net ${lower.size}) literals=$literals offenders=${offenders.size}")
         if (offenders.isNotEmpty()) {
             fail("정규식 축약 클래스는 ART(ICU)에서 유니코드 전체를 받는다 — [0-9] · 명시 집합으로 적는다:\n" + offenders.joinToString("\n"))
         }
@@ -48,11 +62,16 @@ class PlatformUnicodeStructureTest {
 
     @Test
     fun noCharacterGetTypePredicatesInW1cPackages() {
-        val files = mainSources().filter { file ->
+        val w1c = mainSources().filter { file ->
             val path = file.invariantSeparatorsPath
             W1C_PACKAGES.any { "/com/yehsung/aingcheck/core/rules/$it/" in path }
         }
-        assertTrue(files.size >= 30, "W1-c 패키지 소스가 너무 적다(${files.size})")
+        assertTrue(w1c.size >= 30, "W1-c 패키지 소스가 너무 적다(${w1c.size})")
+        // 날짜 파서 한 벌 = foundation 세 파일 + wire 의 입구(SwiftDate — Swift parseDate). 입구에 getType 판정이 끼면 파서를 모은 뜻이 없다.
+        val dateParser = FOUNDATION_DATE_PARSER + WIRE_DATE_ENTRY
+        val parser = lowerModuleSources().filter { file -> dateParser.any { file.invariantSeparatorsPath.endsWith(it) } }
+        assertEquals(dateParser.size, parser.size, "날짜 파서 파일을 다 못 찾았다: ${parser.map { it.name }}")
+        val files = w1c + parser
         val offenders = ArrayList<String>()
         for (file in files) {
             val code = blankStrings(stripComments(file.readText()))
@@ -94,6 +113,19 @@ class PlatformUnicodeStructureTest {
 
     companion object {
         val W1C_PACKAGES = listOf("gacha", "weekly", "achievements", "insights", "todo", "text", "character", "ailimit", "token", "format")
+
+        /** core/rules 와 같은 판정을 받는 바닥 모듈(core/ 아래 이름). */
+        val LOWER_MODULES = listOf("foundation", "wire", "net")
+
+        /** 날짜 파서 한 벌(c-fold) — 숫자는 Swift 표의 Nd([DecimalDigits]), 달력은 Foundation 그레고리력. */
+        val FOUNDATION_DATE_PARSER = listOf(
+            "core/foundation/src/commonMain/kotlin/com/yehsung/aingcheck/core/foundation/time/IcuInternetDate.kt",
+            "core/foundation/src/commonMain/kotlin/com/yehsung/aingcheck/core/foundation/time/FoundationGregorian.kt",
+            "core/foundation/src/commonMain/kotlin/com/yehsung/aingcheck/core/foundation/text/DecimalDigits.kt",
+        )
+
+        /** wire 의 날짜 입구(Swift parseDate) — 옛 정규식이 살던 자리. */
+        val WIRE_DATE_ENTRY = listOf("core/wire/src/commonMain/kotlin/com/yehsung/aingcheck/core/wire/SwiftDate.kt")
 
         /** 원시 문자열(`"""…"""`) 안의 `\d` 꼴(앞 역슬래시가 짝수 개일 때만 — `\\d` 는 글자 역슬래시 + d). */
         private val RAW_SHORTHAND = Regex("""(?<!\\)(?:\\\\)*\\[dDsSwWbB]""")

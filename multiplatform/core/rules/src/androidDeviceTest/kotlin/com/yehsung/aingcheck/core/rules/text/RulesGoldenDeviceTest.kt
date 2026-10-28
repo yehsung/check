@@ -1,4 +1,4 @@
-// 원본: 없음(W1-c 완료 ② — platformSensitive 골든을 ART 에서 다시 돈다 · G §8-16 ①~③)
+// 원본: 없음(W1-c 완료 ② — platformSensitive 골든을 ART 에서 다시 돈다 · G §8-16 ①~③ · 6차 c-fold: 그래핌은 API 별 잠금 G §8-17 2 (a))
 package com.yehsung.aingcheck.core.rules.text
 
 import android.os.Build
@@ -9,7 +9,6 @@ import com.yehsung.aingcheck.testkit.golden.GoldenFile
 import com.yehsung.aingcheck.testkit.golden.string
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * W1-c 골든을 에뮬레이터(ART)에서 대조한다. 판정은 commonTest 의 `…GoldenChecks` 하나 — JVM 시험(desktopTest)과 같은 함수를 부른다.
@@ -36,9 +35,16 @@ class RulesGoldenDeviceTest {
 
     @Test
     fun graphemesUsePlatformBreakIteratorWithinLockedDivergences() {
-        val differ = TextGoldenChecks.graphemes(load("text/graphemes"), TextRuntime.ANDROID_ART)
-        note("text/graphemes differFromSwift=$differ (InCB 2줄 중)")
-        assertTrue(differ in 0..2, "InCB 밖에서 갈렸다")
+        val golden = load("text/graphemes")
+        val api = Build.VERSION.SDK_INT
+        // 근거 줄을 판정 **앞에** 남긴다 — 재지 않은 API 거나 목록이 어긋나도 이 기기가 낸 갈림 전부가 logcat 에 있다(목록을 다시 재는 재료).
+        val diffs = TextGoldenChecks.graphemeDifferences(golden)
+        note("text/graphemes measured differ=${diffs.size} lines=" + diffs.joinToString(";") { (id, clusters) -> "$id=${clusters.joinToString(",")}" })
+        val differ = TextGoldenChecks.graphemes(golden, TextRuntime.ANDROID_ART, api)
+        val lock = GraphemeArtLocks.forApi(api)
+        note("text/graphemes differFromSwift=$differ lock=${if (lock is GraphemeArtLocks.Exact) "exact(${lock.lines.size})" else "goldenListOnly(InCB 2)"}")
+        // 잠금이 있는 API 는 모두 정확한 목록이어야 한다(허용 폭은 늘어남을 놓친다 — G §8-17 2).
+        assertEquals(true, lock is GraphemeArtLocks.Exact, "API $api 의 그래핌 잠금이 정확한 목록이 아니다($lock)")
     }
 
     @Test

@@ -4,6 +4,7 @@ package com.yehsung.aingcheck.core.net
 import com.yehsung.aingcheck.core.net.realtime.RealtimeLinkConstants
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.WireTextRules
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -37,18 +38,29 @@ class NetContractsTest {
         val engine = MockEngine { request ->
             val bytes = (request.body as? OutgoingContent.ByteArrayContent)?.bytes()
             val timeout = request.getCapabilityOrNull(HttpTimeoutCapability)
-            synchronized(this) {
+            // 처리기 람다의 this 는 요청마다 새 MockRequestHandleScope 라 잠금이 되지 않는다 — 대본 객체 자신으로 잠근다.
+            synchronized(this@Scripted) {
                 bodies += bytes?.decodeToString() ?: ""
                 timeouts += Triple(timeout?.requestTimeoutMillis, timeout?.socketTimeoutMillis, timeout?.connectTimeoutMillis)
             }
-            val (status, text) = synchronized(this) { if (next < script.size) script[next++] else 200 to "{}" }
+            val (status, text) = synchronized(this@Scripted) { if (next < script.size) script[next++] else 200 to "{}" }
             respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
         }
     }
 
     private fun service(engine: MockEngine, clock: () -> SwiftDate): Pair<SupabaseWorkService, HttpClient> {
         val client = HttpClient(engine) { SupabaseWorkService.clientConfig(this) }
-        return SupabaseWorkService("https://golden.invalid", "k", client, clock, GoldenTextRules) { "ABCDEF12-0000-4000-8000-000000000000" } to client
+        return SupabaseWorkService("https://golden.invalid", "k", client, clock, UnusedTextRules) { "ABCDEF12-0000-4000-8000-000000000000" } to client
+    }
+
+    /**
+     * 이 시험들(전송 실패 · 상점 깃발 · 시간 제한 · 캐시)은 글자 규칙을 부르지 않는다 — 부르면 시끄럽게 실패한다(근사를 두지 않는다).
+     * 글자 규칙까지 재는 G5 골든 대조는 실제 구현(rules `RulesWireTextRules`)을 꽂고 core/stores 에서 돈다(6차 c-fold).
+     */
+    private object UnusedTextRules : WireTextRules {
+        override fun sanitized(raw: String): String = error("NetContractsTest 는 글자 규칙을 쓰지 않는다")
+        override fun hasVisibleContent(text: String): Boolean = error("NetContractsTest 는 글자 규칙을 쓰지 않는다")
+        override fun statusMessageSanitized(raw: String): String = error("NetContractsTest 는 글자 규칙을 쓰지 않는다")
     }
 
     private fun protocolOf(body: String): String? = (SwiftJson.parse(body) as JsonObject)["p_protocol"]?.toString()

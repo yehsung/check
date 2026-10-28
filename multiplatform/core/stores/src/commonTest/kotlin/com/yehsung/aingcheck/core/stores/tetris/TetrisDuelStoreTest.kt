@@ -245,6 +245,27 @@ class TetrisDuelStoreTest {
         assertFalse(h.tetris.watchUnavailable, "로비 주기에 한 번 풀어 준다")
     }
 
+    /**
+     * 겸업 금지의 다른 면: `tetris_watch_live` 가 없어 옛 길로 내려간 그 호출이 **일시 장애**(5xx)로 실패해도 입구는 잠그지 않는다 —
+     * 성공 응답이 잠금을 풀어 주는 길이 없으니, 여기서 잠그면 관전자 수 칸 하나 때문에 관전이 30초씩 막힌다.
+     */
+    @Test
+    fun aMissingCountFunctionNeverLocksTheWatchEvenWhenTheFallbackFails() = runTest {
+        val stub = Tetris()
+        stub.lobbyReply = lobby(incoming = false, matches = """[{"id":"live-1","a":{"id":"$PEER","display_name":"구름빵"},"b":{"id":"${StoreFixtures.OTHER}","display_name":"달토끼"},"stake":5,"started_at_ms":${NOW_MS - 30_000},"watchers":4}]""")
+        stub.watch = Reply.serverDown
+        val h = harness(enabled = false, stub = stub)
+        h.tetris.spectatorFeaturesEnabled = true
+        h.tetris.windowDidShow()
+        runCurrent()
+        h.tetris.startWatching("live-1")
+        runCurrent()
+        assertEquals(listOf("tetris_watch_live", "tetris_watch"), h.gameRpcs().filter { it.startsWith("tetris_watch") })
+        assertTrue(h.tetris.spectatorCountUnavailable, "관전자 수 칸은 접는다")
+        assertFalse(h.tetris.watchUnavailable, "관전 입구는 잠그지 않는다(5xx 는 '함수 없음'이 아니다)")
+        assertEquals(GamesTetrisWatchPlan.Entry.chip, GamesTetrisWatchPlan.entry(h.tetris, isMine = false))
+    }
+
     /** 로그아웃: 판·신청·순위·루비·관전이 남지 않는다 — 배선 값(순위·관전 주 스위치)은 그대로 둔다. */
     @Test
     fun resetForgetsTheAccountButKeepsTheWiring() = runTest {

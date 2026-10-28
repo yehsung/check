@@ -351,11 +351,14 @@ struct GoldenExportDuel {
                 // 모르는 status — 아무것도 바꾸지 않는다.
                 .apply(payload(id: "match-c", status: "paused"), receivedAt: 302),
                 // 끝남 → 같은 판의 진행 중 응답(끝나기 전에 읽힌 옛 스냅숏) — 무시.
+                // 진행 중 응답의 seq 는 **양쪽 다** 들고 있는 값 이상이다(나 10 ≥ 9 · 상대 3 ≥ 2) — seq 가드가 대신 막지 못하게 해야
+                // '끝난 판은 진행 중으로 되돌리지 않는다' 가드 하나만 잰다(상대 행을 빼면 상대 seq 0 < 2 로 seq 가드가 가려 버린다).
                 .apply(payload(id: "match-c", status: "finished", seed: 42, startAtMs: serverNowMs - 5000,
                                me: player(id: me, seq: 9, board: sample, ready: true),
                                extra: ["result": "draw", "end_reason": "disconnect", "winner": .null]), receivedAt: 303),
                 .apply(payload(id: "match-c", status: "active", seed: 42, startAtMs: serverNowMs - 5000,
-                               me: player(id: me, seq: 10, board: sample, ready: true)), receivedAt: 304),
+                               me: player(id: me, seq: 10, board: sample, ready: true),
+                               opponent: player(id: peer, seq: 3, board: empty, sent: 6, ready: true)), receivedAt: 304),
                 // 깨진 판 글자 + 판 시작 뒤 보고 — 새 판(깨진 판을 지어내지 않는다).
                 .apply(payload(id: "match-e", status: "active", seed: 7, startAtMs: serverNowMs - 9000,
                                me: player(id: me, seq: 4, board: String(sample.dropLast()), applied: 2, lastSeenMs: serverNowMs - 1000,

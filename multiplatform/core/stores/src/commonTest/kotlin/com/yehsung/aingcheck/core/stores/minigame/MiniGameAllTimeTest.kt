@@ -148,10 +148,11 @@ class MiniGameAllTimeTest {
         hub3.selectBoardScope(MiniGameBoardScope.allTime)
         runCurrent()
         hub3.loadAllTimeBoard()     // [다시 시도] — 뒤에 떠난 받기
-        advanceUntilIdle()
+        runCurrent()                 // advanceUntilIdle 이 아니다 — 막힌 첫 받기를 시간 초과로 끝내면 늦은 응답이 안 온다
         assertEquals(777L, hub3.myAllTimeBest(MiniGameKind.flappy))
         slow.complete(Unit)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(777L, hub3.myAllTimeBest(MiniGameKind.flappy), "늦게 닿은 옛 받기는 새 표를 덮지 않는다")
+        assertFalse(hub3.allTimeFailed, "옛 받기는 실패도 아니다(버렸을 뿐)")
     }
 }

@@ -78,6 +78,14 @@ class GamesPlayControllerTest {
         assertFalse(c.canvasDragEnded(MiniGameSize(1.0, 0.0), at(2.4)), "0.25초를 넘겨 뗀 것은 탭이 아니다")
         c.canvasDragChanged(start.copy(x = 12.0), MiniGameSize(9.0, 0.0), at(3.0))
         assertFalse(c.canvasDragEnded(MiniGameSize(9.0, 0.0), at(3.05)), "8pt 넘게 움직였으면 탭이 아니다(죽은 구간)")
+        // 탭 입구(`tap()` — 맥의 클릭·스페이스 자리)도 진행 중이면 시계 회전이다. `action()` 을 그대로 부르면 하드드롭이 된다.
+        val piece = c.tetris.active!!
+        val queue = c.tetris.next
+        c.tap()
+        assertEquals(piece.rotation.clockwise, c.tetris.active!!.rotation, "진행 중 탭 = 시계 회전")
+        assertEquals(piece.piece, c.tetris.active!!.piece, "같은 조각이다(굳어서 다음 조각이 나오지 않았다)")
+        assertEquals(queue, c.tetris.next, "다음 조각 줄이 그대로다")
+        assertEquals(0, c.hardDropSerial, "탭은 하드드롭이 아니다")
     }
 
     /** 취소된 끌기(끝이 안 옴)의 잠금·소비량이 다음 접촉으로 새지 않는다 — 시작점이 바뀌면 새 접촉이다(없는 입력을 만들지 않는다). */
@@ -155,11 +163,39 @@ class GamesPlayControllerTest {
         }
         assertEquals(1, scores.size, "그 점수로 확정된다")
         val flappy = GamesPlayController(MiniGameKind.flappy, 5u)
-        flappy.roundLimitSeconds = 1.0
+        flappy.roundLimitSeconds = 0.01
         flappy.tap()
         flappy.tick(at(0.0))
         flappy.tick(at(0.5))
-        assertTrue(flappy.isPlaying, "플래피에는 상한이 걸리지 않는다(테트리스만)")
+        assertTrue(flappy.isPlaying, "플래피에는 상한이 걸리지 않는다(테트리스만 — 0.01초 상한이 0.5초에도 안 건다)")
+    }
+
+    /**
+     * 상한 기준점은 **판마다** 새로 잡는다: 앞 판이 상한이 아니라 탑아웃으로 끝나 마감이 남아 있어도, 새 판의 첫 틱이 새 기준점을 잡는다
+     * (앞 판의 마감을 물려받으면 새 판이 첫 틱에 죽는다).
+     */
+    @Test
+    fun aNewRoundTakesAFreshDeadline() {
+        val c = GamesPlayController(MiniGameKind.tetris, 7u)
+        c.roundLimitSeconds = 60.0
+        c.tap()
+        var s = 0.0
+        c.tick(at(s))                               // 마감 = 60초
+        var steps = 0
+        while (c.tetris.phase !is TetrisGame.Phase.Result && steps < 20_000) {
+            s += 1.0 / 60
+            c.tick(at(s))
+            if (c.tetris.phase == TetrisGame.Phase.Running && c.tetris.active != null) c.hardDrop()
+            steps += 1
+        }
+        assertIs<TetrisGame.Phase.Result>(c.tetris.phase, "하드드롭만 반복하면 가운데로 탑아웃한다")
+        assertTrue(s < 60.0, "상한이 아니라 탑아웃으로 끝났다(s=$s)")
+        c.tap()                                     // 결과 카드의 탭 = 새 판
+        assertTrue(c.isPlaying)
+        c.tick(at(100.0))                           // 앞 판 마감(60초)을 지난 시각의 첫 틱
+        assertTrue(c.isPlaying, "새 판은 첫 틱에 새 기준점을 잡는다 — 앞 판 마감을 물려받으면 즉사")
+        c.abandon()
+        assertFalse(c.isPlaying)
     }
 
     /** 버튼: 반시계는 캔버스 탭과 **반대 방향** · 하드드롭은 굳히고 햅틱 serial 을 올린다 · 소진된 홀드는 조용하다. */

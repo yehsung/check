@@ -1,5 +1,5 @@
 // 원본: Tests/CheckMobileKitTests/GamesTetrisWiringTests.swift:451-864(인편 · too_fast · token_used · 밀려난 인편) ·
-//       GamesStoreScenarioTests.swift:134-220(토큰 선발급 · 늦은 응답) @ 1b8260d · 기억 minigame-round-token-race
+//       GamesStoreScenarioTests.swift:134-220(토큰 선발급 · 늦은 응답) · Tests/checkTests/V0339MiniGamePendingSubmitTests.swift:250-260(되보낼·못 올릴 status 는 겹치지 않는다) @ 1b8260d · 기억 minigame-round-token-race
 // G §2-3 W2-e ①: 라운드 토큰 경합 — **그 게임의 제출(인편)이 살아 있는 동안 그 게임의 `start_round` 는 나가지 않는다.**
 package com.yehsung.aingcheck.core.stores.minigame
 
@@ -215,18 +215,31 @@ class MiniGameRoundTokenRaceTest {
         val slow = CompletableDeferred<Unit>()
         stub.startGate = slow
         val (h, hub) = open(stub)
+        // advanceUntilIdle 이 아니다 — 그것은 요청 상한(30초)까지 시간을 당겨 막힌 첫 왕복을 시간 초과로 끝낸다(늦은 응답이 안 온다).
         hub.openScreen(MiniGameKind.flappy)
-        advanceUntilIdle()
+        runCurrent()
         assertNull(hub.roundToken, "첫 왕복이 아직 안 끝났다")
+        assertEquals(MiniGameKind.flappy, hub.roundTokenInFlightKind)
         // 판이 이미 끝났는데 토큰이 없다 — 강제로 새로 받는다(첫 왕복은 이번 판에 늦었다).
         hub.recordScore(MiniGameKind.flappy, 3)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(GamesMiniGameText.submitFailedConnection, hub.submitNotice)
         assertEquals("t2", hub.roundToken)
         slow.complete(Unit)
-        advanceUntilIdle()
+        runCurrent()
+        assertEquals(2, h.server.count("minigame_start_round"))
         assertEquals("t2", hub.roundToken, "늦게 온 t1 은 버린다")
         assertEquals(0, h.server.count("minigame_submit_score"), "토큰 없이 끝난 판은 제출하지 않는다")
+    }
+
+    /** 되보낼 status 와 영영 못 올릴 status 는 **겹칠 수 없다** — 겹치면 앞선 갈래가 뒤를 조용히 삼킨다(Swift 짝 시험 그대로). */
+    @Test
+    fun retryableAndTerminalStatusesNeverOverlap() {
+        assertEquals(emptySet(), GamesMiniGameHub.retryableSubmitStatuses intersect GamesMiniGameHub.terminalSubmitStatuses)
+        assertEquals(emptySet(), GamesMiniGameHub.retryableSubmitStatuses intersect GamesMiniGameHub.deadTokenStatuses)
+        assertTrue(GamesMiniGameHub.terminalSubmitStatuses.containsAll(GamesMiniGameHub.deadTokenStatuses), "죽은 토큰 거절은 인편도 지운다")
+        assertTrue("token_used" !in GamesMiniGameHub.terminalSubmitStatuses, "token_used 는 성공이다")
+        assertEquals(listOf(1.5, 4.0), GamesMiniGameHub.tooFastRetryDelaysSeconds, "눈먼 지연 두 번")
     }
 
     /** 호출자 쪽 거절(`unauthorized`·`no_profile`)도 인편을 지운다(안 지우면 앱을 켤 때마다 영원히 다시 보낸다) · 토큰이 죽은 거절은 문장을 가른다. */

@@ -88,13 +88,17 @@ Mission progress is not evaluated for isolated demo accounts, so the 미션 (Mis
 
 ## 3. 옮기지 않은 낡은 문장 (iOS 심사 노트 → Android)
 
-iOS 노트(`docs/appstore.md` §5.2)는 판마다 덧붙여 와서 지금 Android 에 맞지 않는 문장이 섞여 있다. 아래 목록은 검사기가 §2 의 두 지시문에서 **0건**인지 잰다(대소문자 무시).
+iOS 노트(`docs/appstore.md` §5.2)는 판마다 덧붙여 와서 지금 Android 에 맞지 않는 문장이 섞여 있다.
+
+- 아래 목록은 검사기가 **0건**인지 잰다(대소문자 무시).
+- 재는 곳은 콘솔에 옮길 여섯 칸 전부다: §2 의 두 지시문과 [store-listing.md](store-listing.md) 의 이름·간단한 설명·자세한 설명·출시 노트.
+- 한국어 금지 문구(`길건너`·`역대`·`아이폰`·`도전 미션`·`수수료` …)는 [store-listing.md](store-listing.md) §3.3 에 있다. 같은 목록 한 벌이 여섯 칸 모두에 걸린다.
 
 | 금지 문구 | 왜 낡았나 |
 |---|---|
 | `only possible in the Mac app` · `only in the Mac app` · `done in the Mac app` | 폰 근무 시작·종료는 iOS 1.0.7 부터 된다(`docs/appstore.md` §5.2 ★). Android 도 첫 판부터 된다 |
 | `two mini games` · `two quick mini games` | 미니게임은 셋이다(타이밍 바·플래피 아잉·테트리스) |
-| `iPhone` · `APNs` · `App Store` · `TestFlight` | 플랫폼이 다르다. Android 알림은 FCM 이다 |
+| `iPhone` · `iOS` · `APNs` · `App Store` · `TestFlight` | 플랫폼이 다르다. Android 알림은 FCM 이다 |
 | `Guideline` | 애플 심사 지침 번호(1.2 · 2.3.1 …)다. Play 정책 이름이 아니다 |
 | `New in 1.` | iOS 판별 변경 블록(1.0.9~1.0.13)이다. Android 첫 판에는 '새 기능' 블록이 없다 |
 | `phone_login` · `already achieved` · `turns achieved` | 숨김 데모 계정은 미션 판정을 받지 않는다(§1). iOS 1.0.13 노트의 "한 판 하면 일일 미션이 달성된다"는 숨김 계정에서는 사실이 아니다 |

@@ -396,15 +396,22 @@ SELF_TEST_CASES = [
     ("W0-e", "multiplatform/spikes/windows/build.gradle.kts", "ok"),
     ("W0-e", "multiplatform/scripts/vm/vm.sh", "ok"),
     ("W0-e", "multiplatform/build.gradle.kts", "reserved"),
-    ("W0-f", "multiplatform/scripts/emu.sh", "ok"),
-    ("W0-f", "multiplatform/scripts/gate-full.sh", "reserved"),
-    ("W5-a", "multiplatform/character/build.gradle.kts", "reserved"),
+    # W0-f · W5-a 는 6차 통합(xplat/int-h)에서 닫혔다 — 자기 자리였던 파일도 빨강, 후속(emu.sh · character)은 조정자 경유.
+    ("W0-f", "multiplatform/scripts/emu.sh", "closed"),
+    ("W0-f", "multiplatform/scripts/gate-full.sh", "closed"),
+    ("W5-a", "multiplatform/character/build.gradle.kts", "closed"),
+    ("W5-a", "multiplatform/character/src/commonMain/kotlin/com/yehsung/aingcheck/character/player/CharacterPlayer.kt", "closed"),
+    ("coordinator", "multiplatform/scripts/emu.sh", "ok"),
+    ("coordinator", "multiplatform/character/src/commonMain/kotlin/com/yehsung/aingcheck/character/player/CharacterPlayer.kt", "ok"),
+    ("W0-e", "multiplatform/scripts/gate-full.sh", "reserved"),
+    ("W5-c", "multiplatform/character/build.gradle.kts", "reserved"),
+    ("W5-c", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/screens/stage/Stage.kt", "ok"),
     ("W2-f", "multiplatform/feature/phone/build.gradle.kts", "reserved"),
     # 조정자 전용 예약(뼈대·HTTP 팩토리·도구 표)은 열린 갈래가 건드리면 빨강이다.
     ("W3-a", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/http/HttpEngineFactory.kt", "reserved"),
     ("W3-c1", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/http/HttpEngineFactory.kt", "reserved"),
     ("W4-c", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/scaffold/ScaffoldProbe.kt", "reserved"),
-    ("W2-e", "multiplatform/tools/lanes.yml", "reserved"),
+    ("W2-f", "multiplatform/tools/lanes.yml", "reserved"),
     # W1-e·W1-f·W1-g·W0-b 는 3차 통합(xplat/int-b)에서 닫혔다 — 자기 자리였던 파일도 빨강, 후속은 조정자 경유.
     ("W0-b", "multiplatform/tools/golden-digest.py", "closed"),
     ("W0-b", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt", "closed"),
@@ -433,13 +440,22 @@ SELF_TEST_CASES = [
     ("coordinator", "multiplatform/core/net/src/commonMain/kotlin/com/yehsung/aingcheck/core/net/Service.kt", "ok"),
     ("coordinator", "landing/app/delete-account/page.tsx", "ok"),
     ("coordinator", "docs/privacy.md", "ok"),
+    # W2-a · W2-b · W2-c · W2-d · W2-e 는 6차 통합(xplat/int-h)에서 닫혔다 — 자기 자리였던 파일도 빨강, 후속은 조정자 경유.
+    ("W2-e", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/tetris/TetrisStore.kt", "closed"),
+    ("W2-e", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/gomoku/GomokuStore.kt", "closed"),
+    ("W2-a", "contract/golden/_manifest.json", "closed"),
+    ("W2-a", "multiplatform/core/session/build.gradle.kts", "closed"),
+    ("W2-e", "contract/golden/_digests.json", "closed"),
+    ("coordinator", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/tetris/TetrisStore.kt", "ok"),
+    ("coordinator", "multiplatform/core/session/src/commonMain/kotlin/com/yehsung/aingcheck/core/session/SessionStore.kt", "ok"),
+    ("coordinator", "contract/golden/session/scenarios.json", "ok"),
     # 열린 갈래의 소유·남의 소유·생성물 예약(골든 갈래는 _manifest·_digests 를 다시 만들어 커밋한다 — lanes.yml reserved).
-    ("W2-e", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/tetris/TetrisStore.kt", "ok"),
-    ("W2-e", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/gomoku/GomokuStore.kt", "outside"),
-    ("W2-a", "contract/golden/_manifest.json", "ok"),
-    ("W2-a", "multiplatform/core/session/build.gradle.kts", "reserved"),
+    ("W2-f", "multiplatform/feature/phone/src/commonMain/kotlin/com/yehsung/aingcheck/feature/phone/router/PhoneRouter.kt", "ok"),
+    ("W2-f", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/gomoku/GomokuStore.kt", "outside"),
+    ("W2-f", "multiplatform/core/session/build.gradle.kts", "reserved"),
+    ("W2-g", "contract/golden/_manifest.json", "ok"),
     ("W3-a", "contract/golden/_manifest.json", "reserved"),  # 골든 없는 갈래는 여전히 못 쓴다
-    ("W2-e", "contract/golden/_digests.json", "ok"),
+    ("W2-h", "contract/golden/_digests.json", "ok"),
     ("W1-d", "multiplatform/core/net/src/commonMain/kotlin/com/yehsung/aingcheck/core/net/Service.kt", "closed"),
     ("W1-d", "multiplatform/core/net/build.gradle.kts", "closed"),
     # AndroidManifest.xml 은 W1-g 병합 뒤 조정자만(lanes.yml reserved). 남이 쓰면 예약 빨강, W1-g 는 닫힘 빨강.
@@ -449,8 +465,10 @@ SELF_TEST_CASES = [
     ("W3-a", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/nav/NavGraph.kt", "reserved"),
     ("W4-c", "multiplatform/ui/src/commonMain/composeResources/drawable/gacha.png", "reserved"),
     ("W3-b", "multiplatform/androidApp/src/main/res/xml/widget_info.xml", "reserved"),
-    ("W2-e", "contract/golden/pause/transitions.json", "ok"),
-    ("W2-e", "contract/golden/tetris/duel-resume.json", "outside"),
+    ("W2-e", "contract/golden/pause/transitions.json", "closed"),
+    ("W2-e", "contract/golden/tetris/duel-resume.json", "closed"),
+    ("W2-g", "contract/golden/desktop-work/sessions.json", "ok"),
+    ("W2-g", "contract/golden/token-usage/claude.json", "outside"),
     ("W3-a", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/screens/messages/MessagesScreen.kt", "ok"),
     ("W3-a", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/screens/me/MeScreen.kt", "outside"),
     ("coordinator", "multiplatform/version.properties", "ok"),
@@ -473,11 +491,16 @@ SELF_TEST_CASES = [
     ("W1-c", "contract/golden/gift/claim-outcome.json", "closed"),
     ("W1-d", "contract/golden/gift/claim-outcome.json", "closed"),
     ("coordinator", "contract/golden/crossy/scripted-A.json", "ok"),
-    ("W2-b", "contract/golden/messages/sort.json", "ok"),
-    ("W2-b", "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift", "ok"),
-    ("W2-b", "contract/golden/_manifest.json", "ok"),
-    ("W2-c", "contract/golden/_manifest.json", "reserved"),  # 골든 폴더가 없는 스토어 갈래는 여전히 못 쓴다
-    ("W2-d", "contract/golden/messages/sort.json", "outside"),
+    # (6차 통합 xplat/int-h 에서 W2-a~e 가 닫혀 아래 W2-* 사례는 closed 로 바뀌었다.)
+    ("W2-b", "contract/golden/messages/sort.json", "closed"),
+    ("W2-b", "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift", "closed"),
+    ("W2-b", "contract/golden/_manifest.json", "closed"),
+    ("W2-c", "contract/golden/_manifest.json", "closed"),
+    ("W2-d", "contract/golden/messages/sort.json", "closed"),
+    ("coordinator", "contract/golden/messages/sort.json", "ok"),
+    ("coordinator", "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift", "ok"),
+    ("W2-f", "contract/golden/_manifest.json", "reserved"),  # 골든 폴더가 없는 열린 갈래는 여전히 못 쓴다
+    ("W2-h", "contract/golden/messages/sort.json", "outside"),
     ("W1-d", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/dump/DecodeDump.kt", "closed"),
     ("W1-d", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt", "closed"),
     ("W1-d", "multiplatform/testkit/build.gradle.kts", "closed"),
@@ -502,13 +525,13 @@ def self_test(lanes_path: str) -> int:
         if got != expected:
             failures += 1
         print(f"  {mark} {lane:12s} {expected:9s}←{got:9s} {path} {why}")
-    # 가짜 diff 전체로 report 경로까지: 열린 W2-e 에 위반 셋(옛 경로·남의 소유·예약 빌드 파일)을 심으면 빨강 3.
-    # (W1-a 는 5차 통합 xplat/int-e 에서 닫혀 자기 자리도 빨강이라 열린 갈래로 옮겼다.)
-    fake = ["multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/tetris/T.kt",
+    # 가짜 diff 전체로 report 경로까지: 열린 W2-f 에 위반 셋(옛 경로·남의 소유·예약 빌드 파일)을 심으면 빨강 3.
+    # (W1-a 는 5차 통합 xplat/int-e, W2-e 는 6차 통합 xplat/int-h 에서 닫혀 자기 자리도 빨강이라 열린 갈래로 옮겼다.)
+    fake = ["multiplatform/feature/phone/src/commonMain/kotlin/com/yehsung/aingcheck/feature/phone/P.kt",
             "supabase/functions/push-send/index.ts",
             "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/gomoku/G.kt",
-            "multiplatform/core/stores/build.gradle.kts"]
-    bad = report(lanes, "W2-e", fake)
+            "multiplatform/feature/phone/build.gradle.kts"]
+    bad = report(lanes, "W2-f", fake)
     if bad != 3:
         failures += 1
         print(f"  BAD 가짜 diff 위반 수 {bad} ≠ 3")

@@ -40,7 +40,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yehsung.aingcheck.character.bake.BakeLibrary
 import com.yehsung.aingcheck.character.math.Vec2
 import com.yehsung.aingcheck.character.player.CharacterFrame
-import com.yehsung.aingcheck.character.player.CharacterFrames
 import com.yehsung.aingcheck.character.player.FramePacer
 import com.yehsung.aingcheck.character.render.quadCanvasOf
 import com.yehsung.aingcheck.core.stores.me.MeCharacterCards
@@ -119,6 +118,7 @@ fun AingStage(
         val f = finish ?: run { value = null; return@produceState }
         // 빌리기는 끊기지 않게(취소되면 빌린 수가 새어 저장소가 닫히지 않는다) — 페이지 디코드 · 데움은 배경에서.
         val s = withContext(NonCancellable + Dispatchers.Default) { assets.acquire(f) }
+            ?: run { value = null; return@produceState } // 메모리 부족 · 깨진 자산 — 초상으로 선다(실패 이유는 assets.failureReason)
         try {
             value = s
             awaitCancellation()
@@ -226,7 +226,7 @@ private fun StageLive(
         val now = clock.now()
         val outcome = synchronized(store.lock) {
             val frame = frameState.value ?: director.frame(now, p.viewportWidth, p.viewportHeight)
-            director.tap(point, frame, StagePolicy.TAP_MARGIN_POINTS * 2 * p.scale, { store.images }, now)
+            director.tap(point, frame, StagePolicy.TAP_MARGIN_POINTS * 2 * p.scale, store, now)
         }
         handle?.lastTap = outcome
         if (outcome == TapOutcome.hit) kick.trySend(Unit)
@@ -265,14 +265,12 @@ private fun StageLive(
 
 /**
  * 무대 프레임 한 장 그리기(앱 Canvas · 기기 시험이 같은 함수를 지난다): 틀 원점으로 옮기고 Compose 캔버스 → 원근 사각형 표면
- * (Android = HWUI `nativeCanvas`)으로 재생기 그리기(후광 → 몸 칸) 그대로. 스프라이트 아틀라스는 Android 묶음에 없다(null).
+ * (Android = HWUI `nativeCanvas`)에 재생기와 같은 그리기(후광 → 몸 칸 — [StageStore.draw]).
  */
 fun DrawScope.drawStageFrame(frame: CharacterFrame, originX: Double, originY: Double, store: StageStore) {
     translate(originX.toFloat(), originY.toFloat()) {
         drawIntoCanvas { c ->
-            synchronized(store.lock) {
-                CharacterFrames.draw(quadCanvasOf(c), frame, { store.images }, { null })
-            }
+            synchronized(store.lock) { store.draw(quadCanvasOf(c), frame) }
         }
     }
 }

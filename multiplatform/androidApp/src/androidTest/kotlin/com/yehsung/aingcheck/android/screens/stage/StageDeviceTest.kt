@@ -121,7 +121,7 @@ class StageDeviceTest {
             "blink" -> check(d.player.blink(now - 0.05)) { "깜빡임 거절" }
             "hit" -> {
                 val f0 = d.frame(t0, StageFraming.FRAME_WIDTH, StageFraming.FRAME_HEIGHT)
-                val outcome = d.tap(Vec2(137.5, 137.5), f0, StagePolicy.TAP_MARGIN_POINTS * 2, { store.images }, t0)
+                val outcome = d.tap(Vec2(137.5, 137.5), f0, StagePolicy.TAP_MARGIN_POINTS * 2, store, t0)
                 check(outcome == TapOutcome.hit) { "${g.id}: 탭이 hit 를 걸지 않았다($outcome)" }
             }
             "greeting" -> check(d.reveal(t0)) { "${g.id}: 공개가 인사를 걸지 않았다" }
@@ -231,7 +231,7 @@ class StageDeviceTest {
         val lines = ArrayList<String>()
         var worstIou = 1.0; var worstMean = 0.0; var minRatio = Double.MAX_VALUE
         for ((folder, entries) in chosen.groupBy { it.finishFolder }) {
-            val store = appAssets.acquire(library.finish(BakeLibrary.FOLDER_IDS.getValue(folder))!!)
+            val store = requireNotNull(appAssets.acquire(library.finish(BakeLibrary.FOLDER_IDS.getValue(folder))!!)) { "칸 굽기 실패: ${appAssets.failureReason}" }
             try {
                 for (g in entries) {
                     val v = verdict(g, label, render, store)

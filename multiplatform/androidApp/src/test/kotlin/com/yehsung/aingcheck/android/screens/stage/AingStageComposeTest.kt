@@ -29,7 +29,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yehsung.aingcheck.character.math.Vec2
-import com.yehsung.aingcheck.character.player.CharacterFrames
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.theme.AingTheme
@@ -155,7 +154,7 @@ class AingStageComposeTest {
         val p = handle.placement!!
         val f = handle.lastFrame!!
         val store = handle.store!!
-        fun hit(x: Double, y: Double) = synchronized(store.lock) { CharacterFrames.hitTest(f, Vec2(x, y), 0.0, { store.images }) }
+        fun hit(x: Double, y: Double) = synchronized(store.lock) { store.hitTest(f, Vec2(x, y), 0.0) }
         fun solid(x: Double, y: Double, want: Boolean) = listOf(-4.0, 0.0, 4.0).all { dx -> listOf(-4.0, 0.0, 4.0).all { dy -> hit(x + dx, y + dy) == want } }
         for (fy in 0 until 340 step 4) for (fx in 0 until 280 step 4) {
             val vx = fx * p.scale; val vy = fy * p.scale
@@ -290,7 +289,7 @@ class AingStageComposeTest {
         val files = StageBundleFiles.Files(StageBundleFiles.bundle())
         val st = StageAssets(files)
         val lib = st.libraryOrNull()!!
-        val store = st.acquire(lib.finish(CharacterCatalog.builtInAingID)!!)
+        val store = st.acquire(lib.finish(CharacterCatalog.builtInAingID)!!)!!
         try {
             val side = 264.0
             val p = StageFraming.place(18.0, 40.0, side)
@@ -321,11 +320,11 @@ class AingStageComposeTest {
     fun 저장소는_마감마다_하나_쓰지_않으면_마지막_하나만_남긴다() {
         val st = StageAssets(StageBundleFiles.Files(StageBundleFiles.bundle()))
         val lib = st.libraryOrNull()!!
-        val a = st.acquire(lib.finish(CharacterCatalog.builtInAingID)!!)
-        val a2 = st.acquire(lib.finish(CharacterCatalog.builtInAingID)!!)
+        val a = st.acquire(lib.finish(CharacterCatalog.builtInAingID)!!)!!
+        val a2 = st.acquire(lib.finish(CharacterCatalog.builtInAingID)!!)!!
         assertTrue(a === a2)
         assertEquals(mapOf(CharacterCatalog.builtInAingID to 2), st.heldStores())
-        val g = st.acquire(lib.finish(CharacterCatalog.goldAingID)!!)
+        val g = st.acquire(lib.finish(CharacterCatalog.goldAingID)!!)!!
         st.release(a); st.release(a2)
         assertEquals(mapOf(CharacterCatalog.builtInAingID to 0, CharacterCatalog.goldAingID to 1), st.heldStores())
         st.release(g)

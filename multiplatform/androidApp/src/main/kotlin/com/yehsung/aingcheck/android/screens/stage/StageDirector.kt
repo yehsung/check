@@ -8,7 +8,6 @@ import com.yehsung.aingcheck.character.math.Vec2
 import com.yehsung.aingcheck.character.player.CharacterFrame
 import com.yehsung.aingcheck.character.player.CharacterFrames
 import com.yehsung.aingcheck.character.player.CharacterPlayer
-import com.yehsung.aingcheck.character.render.BakeImageStore
 import kotlin.random.Random
 
 /** 무대 탭 결과(시험 · 접근성 · 호출부 진동). */
@@ -90,12 +89,13 @@ class StageDirector(
     }
 
     /**
-     * 탭. [point] = 뷰포트 픽셀(틀 원점 기준), [frame] = 지금 그린 프레임, [marginPx] = 12pt 를 이 뷰포트 픽셀로 바꾼 값.
+     * 탭. [point] = 뷰포트 픽셀(틀 원점 기준), [frame] = 지금 그린 프레임, [marginPx] = 12pt 를 이 뷰포트 픽셀로 바꾼 값,
+     * [store] = 그 마감의 칸 그림(몸 판정 — 호출부가 [StageStore.lock] 을 잡는다).
      * 맥 순서 그대로: 쿨다운 → 우선순위 → 재생.
      */
-    fun tap(point: Vec2, frame: CharacterFrame?, marginPx: Double, storeFor: (BakedFinish) -> BakeImageStore, now0: Double): TapOutcome {
+    fun tap(point: Vec2, frame: CharacterFrame?, marginPx: Double, store: StageStore, now0: Double): TapOutcome {
         val now = monotonic(now0)
-        if (frame == null || !CharacterFrames.hitTest(frame, point, marginPx, storeFor)) return TapOutcome.missed
+        if (frame == null || !store.hitTest(frame, point, marginPx)) return TapOutcome.missed
         if (now - lastHitAt < library.motion.engine.hitCooldownS) return TapOutcome.cooldown
         if (!admits(StagePolicy.TAP_REACTION, now)) return TapOutcome.busy
         if (!start(StagePolicy.TAP_REACTION, now)) return TapOutcome.noMotion

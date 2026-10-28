@@ -4,8 +4,6 @@ package com.yehsung.aingcheck.android.screens.stage
 import com.yehsung.aingcheck.character.bake.BakeLibrary
 import com.yehsung.aingcheck.character.math.Vec2
 import com.yehsung.aingcheck.character.player.CharacterFrame
-import com.yehsung.aingcheck.character.render.BakeImageStore
-import com.yehsung.aingcheck.character.render.PlatformRaster
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
 import org.junit.AfterClass
 import org.junit.Test
@@ -29,13 +27,13 @@ import kotlin.test.assertTrue
 @Config(sdk = [36])
 class StageDirectorTest {
     companion object {
-        private val files = StageBundleFiles.Files(StageBundleFiles.bundle())
-        private val library: BakeLibrary by lazy { BakeLibrary.load(files) }
-        private val stores = HashMap<String, BakeImageStore>()
-        fun store(id: String): BakeImageStore = stores.getOrPut(id) { BakeImageStore(library.finish(id)!!, files, PlatformRaster) }
+        private val assets = StageAssets(StageBundleFiles.Files(StageBundleFiles.bundle()))
+        private val library: BakeLibrary by lazy { assets.libraryOrNull()!! }
+        private val stores = HashMap<String, StageStore>()
+        fun store(id: String): StageStore = stores.getOrPut(id) { assets.acquire(library.finish(id)!!)!! }
 
         @JvmStatic @AfterClass
-        fun closeStores() { stores.values.forEach { it.close() }; stores.clear() }
+        fun closeStores() { stores.values.forEach { assets.release(it) }; stores.clear(); assets.trim() }
     }
 
     private val w = StageFraming.FRAME_WIDTH
@@ -46,7 +44,7 @@ class StageDirectorTest {
     private fun director(id: String = CharacterCatalog.builtInAingID, now: Double = 10.0, seed: Int = 7) =
         StageDirector(library, library.finish(id)!!, now, Random(seed))
 
-    private fun StageDirector.tapAt(p: Vec2, now: Double): TapOutcome = tap(p, frame(now, w, h), margin, { store(it.characterId) }, now)
+    private fun StageDirector.tapAt(p: Vec2, now: Double): TapOutcome = tap(p, frame(now, w, h), margin, store(finish.characterId), now)
 
     @Test
     fun 몸을_두드리면_hit_쿨다운_뒤에_다시() {

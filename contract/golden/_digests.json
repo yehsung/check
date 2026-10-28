@@ -402,6 +402,20 @@
         "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e"
       }
     },
+    "session/scenarios": {
+      "file": "f7d6c2dc924e20c746d388462c32edc55932ff66e9e8443aad8b81a6b898dd26",
+      "generator": {
+        "Tests/CheckMobileKitTests/GoldenExport/session/GoldenExportSession.swift": "f52fb1781bd6d22f1279f909ae1476db3ea54168ce5cdaf4dd623636df8155a4"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/AuthErrorRules.swift": "0995ed02ebb80a6d0190a2f704f11fe2c714451e2fd7750847cf7330f211a3c6",
+        "Sources/CheckCore/SessionRefreshCoordinator.swift": "4129a46988c702b23d2decc95d96cad460f411957ed2899fcf8d4f782ae8b9ab",
+        "Sources/CheckCore/TokenVault.swift": "afee2a1ed72bc764f893655d38c17d4f54d820343c2df3c90a8ebbe9ad22fc5c",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift": "c24739f374d8ee61fe992555caffc36d63785d16761d3a78267c2b52d3fb9e26",
+        "Sources/CheckMobileKit/Session/MobileSessionStore.swift": "fae652e33705a7d157ee69300c587e811be35553d167f7519351c693720ec057",
+        "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift": "2bb71cea4bea5186a581d4282eca62b2f8a3dfcf7d06a5a839e27859d5e71e84"
+      }
+    },
     "sort/collation-table": {
       "file": "46f2493d41700fbd90ab91a1948694c10425652e7e051a8f2f880968a9a2ba51",
       "generator": {

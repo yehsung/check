@@ -147,6 +147,25 @@ class SessionSignOutDeleteTest {
         assertEquals(0, h.server.count("/auth/v1/logout"))
     }
 
+    /** #7 "한 번": 갱신한 토큰으로도 401 이면 다시 갱신하지 않고 빚을 버린다(알릴 방법이 없다 — 같은 장부로 갱신을 되풀이하지 않는다). */
+    @Test
+    fun cleanupRefreshesAtMostOnce() = runTest {
+        var refreshes = 0
+        val h = signedIn { r ->
+            when {
+                r.rpcName == "unregister_device" -> jwtExpired
+                // 두 번째 갱신 요청이 오면(결함) 치명으로 끊어 무한 반복 대신 수로 드러나게 한다.
+                r.path == "/auth/v1/token" -> { refreshes += 1; if (refreshes == 1) auth("c1", "c1r") else SessionFixtures.invalidGrant }
+                else -> null
+            }
+        }
+        h.store.signOut()
+        advanceUntilIdle()
+        assertEquals(1, refreshes, "장부 갱신은 한 번")
+        assertEquals(2, h.server.count("/rest/v1/rpc/unregister_device"), "옛 토큰 한 번 + 갱신한 토큰 한 번")
+        assertFalse(h.store.hasPendingSignOutCleanup)
+    }
+
     /**
      * ⑥ 삭제 순서: 재인증(저장된 이메일 + 입력 비밀번호, password grant) → 사진 지우기(재인증 토큰) → delete_my_account(재인증 토큰)
      * → 로컬 정리(장부 **없이** — 서버 행은 cascade 로 사라졌다). 기기 해제·logout 요청 0.

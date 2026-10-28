@@ -169,11 +169,15 @@ class SessionRefreshTest {
         launch { h.store.signOut() }
         runCurrent()
         h.store.signIn("b@c.co", "pw2")
-        advanceUntilIdle()
+        // 가상 시간을 움직이지 않는다(runCurrent 만): advanceUntilIdle 이면 문이 닫힌 옛 갱신이 HttpTimeout(30초)에 죽어
+        // apply 까지 가지 못하고, 세대 가드를 빼도 이 시험이 초록이 된다(결함 심기 M2 실측).
+        runCurrent()
         assertEquals("user-2", h.store.userID)
+        assertEquals(0, h.store.refreshCoordinator.completedRefreshCount)
         gate.complete(Unit)
         assertEquals(RealtimeRefreshResult.Failed.Stale, realtime.await(), "옛 세대의 결과는 stale")
-        advanceUntilIdle()
+        assertEquals(1, h.store.refreshCoordinator.completedRefreshCount, "옛 갱신은 실제로 성공해 apply 까지 갔다 — 거기서 세대 가드가 막았다")
+        runCurrent()
         assertEquals("user2-access", h.store.session?.accessToken)
         assertEquals("user2-access", h.vaultAccess)
         assertEquals("user2-refresh", h.vaultRefresh)

@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ 1b8260d (초상 이름 `<id>-<표정>` · 192px · 케이크 둘 0.3.66)
+// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ 1b8260d (초상 이름 `<id>-<표정>` · 192px · 케이크 둘 0.3.66 · knownIDs = 번들에 실린 초상)
 // 원본: Sources/CheckMobileKit/Components/MobileArt.swift @ 862be0f (루비·무대 그림 창구)
 // 원본: Sources/CheckCore/AingSticker.swift @ 862be0f (이모티콘 그림 이름 `sticker-<rawValue>.png`)
 //
@@ -16,12 +16,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalDensity
+import com.yehsung.aingcheck.core.rules.gacha.ShopWire
+import com.yehsung.aingcheck.core.stores.me.DrawableCharacterSource
 import com.yehsung.aingcheck.ui.resources.Res
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.decodeToImageBitmap
 
 object CharacterArt {
-    /** 초상이 실린 캐릭터(아잉 가족 먼저, 나머지 이름순). 상점 능력 번호(K9)는 W1-c 가 이 그림 집합에서 파생한다. */
+    /**
+     * Gradle Sync 가 싣는 초상의 **원천 목록**(아잉 가족 먼저, 나머지 이름순 — Sync 규칙과 시험이 쓴다). 상점 능력 번호(K9)는 이 손 목록이
+     * 아니라 **실제로 실린 파일 목록**([PORTRAIT_INDEX_PATH] → [drawableCharacterIDs])에서 파생한다.
+     */
     val portraitIds: List<String> = listOf(
         "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco",
         "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
@@ -43,6 +48,23 @@ object CharacterArt {
 
     /** 이모티콘 그림(이름 = Swift `AingSticker.rawValue`, 예: "joy"). 전선 토큰·판정은 W1-c 글자 규칙 몫이다. */
     fun stickerPath(name: String): String = "files/stickers/sticker-$name.png"
+
+    /** Sync 가 실제로 실은 초상 파일 목록(한 줄에 `<id>-<표정>` — ui/build.gradle.kts `aingcheckSyncCharacterArt` 의 doLast 가 쓴다). */
+    const val PORTRAIT_INDEX_PATH = "files/characters/portraits.txt"
+
+    /**
+     * 이 빌드에 실린 초상 이름들(`<id>-<표정>`). 목록을 못 읽으면 빈 목록 — 그 호출의 번호는 0(옛 모양)으로 내려간다(보수적인 쪽으로 틀린다).
+     * 나 탭 스토어(`MeStore.drawableCharacterIDs`)는 빈 집합을 쥐지 않고 다음 호출에서 다시 읽는다 — 한 번의 읽기 실패가 실행 내내 뽑기·케이크
+     * 선물을 숨기지 않게(W2-c 6차 검증 지적). 읽어 낸 집합은 스토어가 실행 동안 쥔다(번들은 바뀌지 않는다).
+     */
+    suspend fun portraitResourceNames(): List<String> =
+        readBytesOrNull(PORTRAIT_INDEX_PATH)?.decodeToString()?.lines()?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+    /** K9: 초상 두 장(neutral · negative)이 **다** 실린 캐릭터 → 상점 능력 번호의 재료(W1-c `ShopWire.drawableCharacterIDs`). */
+    suspend fun drawableCharacterIDs(): Set<String> = ShopWire.drawableCharacterIDs(portraitResourceNames())
+
+    /** 나 탭 스토어(W2-c `MeStore`)에 꽂는 재료 — 조립(K11)이 넘긴다. */
+    val drawableCharacterSource: DrawableCharacterSource = DrawableCharacterSource { drawableCharacterIDs() }
 
     /** 리소스 바이트(없으면 null — 이 빌드에 그림이 빠졌다는 뜻이다). */
     @OptIn(ExperimentalResourceApi::class)

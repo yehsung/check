@@ -73,6 +73,17 @@ val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
         include("sticker-*.png")
         into("files/stickers")
     }
+    // K9(W2-c): 실제로 실린 초상 파일 목록 → files/characters/portraits.txt(한 줄에 `<id>-<표정>`). 상점 능력 번호는 손 목록이 아니라
+    // 이 목록(= APK·데스크톱 jar 에 들어간 그림)에서 파생한다 — 초상 한 장을 빼고 빌드하면 번호가 저절로 내려간다(ShopWire.drawableCharacterIDs).
+    doLast {
+        val characters = destinationDir.resolve("files/characters")
+        val portrait = Regex("^portrait-(.+)\\.png$")
+        val names = characters.listFiles().orEmpty().filter { it.isDirectory }.flatMap { dir ->
+            dir.listFiles().orEmpty().mapNotNull { f -> portrait.find(f.name)?.let { "${dir.name}-${it.groupValues[1]}" } }
+        }.sorted()
+        characters.mkdirs()
+        characters.resolve("portraits.txt").writeText(names.joinToString("\n", postfix = "\n"))
+    }
 }
 
 compose.resources {

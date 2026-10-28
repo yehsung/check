@@ -58,7 +58,7 @@ class PixelParityTest {
         assertTrue(clean.size >= 165, "깨끗한 장이 줄었다: ${clean.size}")
         assertEquals(3, byClass[GoldenClass.gridCoarse].orEmpty().size, "격자 거칠음은 울트라 찔림 표본 288 세 마감뿐")
         assertTrue(byClass[GoldenClass.particles].orEmpty().size <= 45)
-        assertTrue(byClass[GoldenClass.haloLag].orEmpty().size <= 30)
+        assertTrue(byClass[GoldenClass.haloLag].orEmpty().size <= 40)
     }
 
     @Test

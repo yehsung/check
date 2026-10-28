@@ -27,14 +27,17 @@ object ParityRules {
     /** 음성 대조: 틀린 칸(요 격자 두 칸 옆)의 몸 영역 오차가 맞는 칸의 이 배 이상이어야 한다. */
     const val NEGATIVE_MIN_RATIO = 1.25
 
+    /** 크기가 이만큼 넘게 1 에서 벗어나면 몸이 변형된 장(찌부 · 늘림)이다 — 강체(F §6: idle · 살랑 · 깜빡임 · 졸기 · 절 · 인사 · 롤)는 크기가 1 이다. */
+    const val DEFORMED_SCALE = 0.02
+
     /**
-     * T3 무리(F §6 표): 고른 칸의 무리로 가른다 — 스핀 행 → 스핀(10° × 4°), 찌부 · 늘림 정점(hit · 크기 편차 ≥ 0.1) → 찌부 · 늘림,
+     * T3 무리(F §6 표): 고른 칸의 무리로 가른다 — 스핀 행 → 스핀(10° × 4°), 몸이 변형된 장(hit · 크기 편차 > 2%) → 찌부 · 늘림,
      * 띠 행(3° 기울기 · 2/4° 요) → 띠 행 · 울트라, 쉬는 행(1°) → 강체.
      */
     fun band(g: Golden, cell: BakeCell): ParityBand {
         if (cell.group == BakeCell.Group.spin) return ParityBand.spin
         val scaleDev = (0 until 3).maxOf { abs(g.wrapper.column(it).length - 1.0) }
-        if (g.reaction == "hit" || scaleDev >= 0.1) return ParityBand.squashStretch
+        if (g.reaction == "hit" || scaleDev > DEFORMED_SCALE) return ParityBand.squashStretch
         return when (cell.group) {
             BakeCell.Group.band, BakeCell.Group.ultra -> ParityBand.bandUltra
             else -> ParityBand.rigid

@@ -1,0 +1,4871 @@
+{
+  "cases": [
+    {
+      "arrival": [
+        [
+          "p-00",
+          4
+        ],
+        [
+          "p-02",
+          0
+        ]
+      ],
+      "chronology": [
+        [
+          "m-00",
+          8
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "p-00",
+          5
+        ],
+        [
+          "p-01",
+          2
+        ],
+        [
+          "p-02",
+          7
+        ],
+        [
+          "p-03",
+          4
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000e",
+      "effectiveOrder": [
+        [
+          "m-00",
+          8
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "p-00",
+          5
+        ],
+        [
+          "p-01",
+          2
+        ],
+        [
+          "p-02",
+          7
+        ],
+        [
+          "p-03",
+          4
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-01",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "log-000",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-03",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "bolt.fill",
+          "text": "두리님이 울트라 찔렀어요 · 16:00"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "bob님이 콕 찔렀어요 · 16:00"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": "p-02",
+          "withoutRecord": "p-02"
+        }
+      ],
+      "nowBits": "41dab7c220000000",
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 0,
+          "settledSerial": null,
+          "throughID": "gone"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 2,
+          "settledSerial": null,
+          "throughID": "p-03"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 4,
+          "settledSerial": null,
+          "throughID": "p-00"
+        }
+      ],
+      "pending": [
+        {
+          "body": "[아잉:기쁨]",
+          "id": "local-0",
+          "state": "sending"
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c800000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c800000",
+          "id": "p-03",
+          "kind": "ultra",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c800000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/a0.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        }
+      ],
+      "receipts": true,
+      "snapshotSerial": 3,
+      "sorted": [
+        "p-00",
+        "p-01",
+        "p-03",
+        "p-02"
+      ],
+      "sortedMessages": [
+        "m-00",
+        "m-01"
+      ],
+      "texts": [
+        {
+          "id": "p-02",
+          "line": "bob님이 콕 찔렀어요 · 16:00",
+          "preview": "bob님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-03",
+          "line": "두리님이 울트라 찔렀어요 · 16:00",
+          "preview": "두리님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "이름10님이 울트라 찔렀어요 · 16:00",
+          "preview": "이름10님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "내가 콕 찔렀어요 · 16:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "arrival": [
+        [
+          "p-00",
+          1
+        ],
+        [
+          "p-01",
+          3
+        ],
+        [
+          "p-04",
+          4
+        ]
+      ],
+      "chronology": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "p-00",
+          6
+        ],
+        [
+          "p-01",
+          7
+        ],
+        [
+          "p-02",
+          0
+        ],
+        [
+          "p-03",
+          4
+        ],
+        [
+          "p-04",
+          3
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000b",
+      "effectiveOrder": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "p-00",
+          6
+        ],
+        [
+          "p-01",
+          7
+        ],
+        [
+          "p-02",
+          0
+        ],
+        [
+          "p-03",
+          4
+        ],
+        [
+          "p-04",
+          3
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-00",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "log-001",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "bolt.fill",
+          "text": "ＡＢＣ님이 울트라 찔렀어요 · 16:00"
+        },
+        {
+          "id": "poke-p-04",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "이름2님이 콕 찔렀어요 · 16:00"
+        },
+        {
+          "id": "day-2026-10-27",
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        },
+        {
+          "id": "pending-local-1",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "10월 25일"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "id": "p-04",
+          "kind": "poke",
+          "lineID": "poke-p-04"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": "p-04",
+          "withoutRecord": "p-04"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7dabc000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 2,
+          "settledSerial": 4,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 5,
+          "settledSerial": null,
+          "throughID": "gone"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 3,
+          "settledSerial": 0,
+          "throughID": "p-01"
+        }
+      ],
+      "pending": [
+        {
+          "body": "👍🏽 좋아",
+          "id": "local-0",
+          "state": 1
+        },
+        {
+          "body": "안녕\n  하세요",
+          "id": "local-1",
+          "state": "sending"
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c200000",
+          "id": "p-04",
+          "kind": "poke",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/p/b2.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-02",
+          "kind": "ultra",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9ca00000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/p/c1.png",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be8d000000",
+          "id": "p-03",
+          "kind": "ultra",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": false
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 5,
+      "sorted": [
+        "p-01",
+        "p-03",
+        "p-02",
+        "p-04",
+        "p-00"
+      ],
+      "sortedMessages": [
+        "m-00"
+      ],
+      "texts": [
+        {
+          "id": "p-04",
+          "line": "이름2님이 콕 찔렀어요 · 16:00",
+          "preview": "이름2님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "ＡＢＣ님이 울트라 찔렀어요 · 16:00",
+          "preview": "ＡＢＣ님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "Émile님이 울트라 찔렀어요 · 16:00",
+          "preview": "Émile님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "두리님이 울트라 찔렀어요 · 16:00",
+          "preview": "두리님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-03",
+          "line": "Ann님이 울트라 찔렀어요 · 15:59",
+          "preview": "Ann님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000b"
+      ]
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          4
+        ],
+        [
+          "m-03",
+          0
+        ],
+        [
+          "p-00",
+          3
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000c",
+      "effectiveOrder": [
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          4
+        ],
+        [
+          "m-03",
+          0
+        ],
+        [
+          "p-00",
+          3
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/a2.png",
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "안녕",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/d3.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-03",
+          "mine": true,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "id": "log-002",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-00",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "두리님이 콕 찔렀어요 · 16:00"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        },
+        {
+          "id": "pending-local-1",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7d030000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 3,
+          "settledSerial": 5,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 4,
+          "settledSerial": 2,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 0,
+          "settledSerial": 1,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 1,
+          "settledSerial": null,
+          "throughID": "p-00"
+        }
+      ],
+      "pending": [
+        {
+          "body": "줄1\r\n줄2",
+          "id": "local-0",
+          "state": 4
+        },
+        {
+          "body": " 공백  여러  칸 ",
+          "id": "local-1",
+          "state": 4
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": false
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 4,
+      "sorted": [
+        "p-00"
+      ],
+      "sortedMessages": [
+        "m-03",
+        "m-02",
+        "m-01",
+        "m-00"
+      ],
+      "texts": [
+        {
+          "id": "p-00",
+          "line": "두리님이 콕 찔렀어요 · 16:00",
+          "preview": "두리님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": []
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-01",
+          3
+        ],
+        [
+          "m-02",
+          2
+        ],
+        [
+          "m-03",
+          1
+        ],
+        [
+          "m-04",
+          5
+        ],
+        [
+          "p-00",
+          4
+        ],
+        [
+          "p-02",
+          0
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000e",
+      "effectiveOrder": [
+        [
+          "m-01",
+          3
+        ],
+        [
+          "m-02",
+          2
+        ],
+        [
+          "m-03",
+          1
+        ],
+        [
+          "m-04",
+          5
+        ],
+        [
+          "p-00",
+          4
+        ],
+        [
+          "p-01",
+          6
+        ],
+        [
+          "p-02",
+          0
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/d0.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7865c200000",
+          "id": "m-00",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/b2.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-02",
+          "mine": false,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7dabc200000",
+          "id": "m-04",
+          "mine": true,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/d3.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-03",
+          "mine": true,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-01",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "id": "log-003",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-00",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "bolt.fill",
+          "text": "고양님이 울트라 찔렀어요 · 16:00"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "bolt.fill",
+          "text": "내가 울트라 찔렀어요 · 16:00"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        },
+        {
+          "id": "pending-local-1",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "m-04",
+          "kind": "bubble"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7be9c000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 1,
+          "settledSerial": 3,
+          "throughID": "gone"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 5,
+          "settledSerial": null,
+          "throughID": "p-01"
+        }
+      ],
+      "pending": [
+        {
+          "body": "안녕",
+          "id": "local-0",
+          "state": "sending"
+        },
+        {
+          "body": "ㅋㅋㅋ",
+          "id": "local-1",
+          "state": "sending"
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/e0.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab76a3c000000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c200000",
+          "id": "p-02",
+          "kind": "ultra",
+          "mine": true,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 3,
+      "sorted": [
+        "p-01",
+        "p-00",
+        "p-02"
+      ],
+      "sortedMessages": [
+        "m-03",
+        "m-00",
+        "m-01",
+        "m-02",
+        "m-04"
+      ],
+      "texts": [
+        {
+          "id": "p-00",
+          "line": "고양님이 울트라 찔렀어요 · 16:00",
+          "preview": "고양님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "한결님이 콕 찔렀어요 · 16:00",
+          "preview": "한결님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "내가 울트라 찔렀어요 · 16:00",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        }
+      ],
+      "unreadPeerIDs": []
+    },
+    {
+      "arrival": [
+        [
+          "p-01",
+          3
+        ],
+        [
+          "p-04",
+          4
+        ],
+        [
+          "p-05",
+          0
+        ]
+      ],
+      "chronology": [
+        [
+          "m-01",
+          7
+        ],
+        [
+          "m-02",
+          5
+        ],
+        [
+          "m-03",
+          8
+        ],
+        [
+          "p-00",
+          3
+        ],
+        [
+          "p-02",
+          6
+        ],
+        [
+          "p-03",
+          1
+        ],
+        [
+          "p-04",
+          2
+        ],
+        [
+          "p-05",
+          0
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000d",
+      "effectiveOrder": [
+        [
+          "m-01",
+          7
+        ],
+        [
+          "m-02",
+          5
+        ],
+        [
+          "m-03",
+          8
+        ],
+        [
+          "p-00",
+          3
+        ],
+        [
+          "p-01",
+          9
+        ],
+        [
+          "p-02",
+          6
+        ],
+        [
+          "p-03",
+          1
+        ],
+        [
+          "p-04",
+          2
+        ],
+        [
+          "p-05",
+          0
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7b794000000",
+          "id": "m-03",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a2.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c0.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-04",
+          "mine": true,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "id": "log-004",
+      "items": [
+        {
+          "id": "day-2026-10-25",
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "poke-p-00",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "bolt.fill",
+          "text": "내가 울트라 찔렀어요 · 15:00"
+        },
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "hand.point.right.fill",
+          "text": "내가 콕 찔렀어요 · 15:00"
+        },
+        {
+          "id": "poke-p-01",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "hand.point.right.fill",
+          "text": "내가 콕 찔렀어요 · 15:59"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-04",
+          "kind": "poke",
+          "lineID": "poke-p-04"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "p-05",
+          "kind": "poke",
+          "lineID": "poke-p-05"
+        },
+        {
+          "id": "m-04",
+          "kind": "bubble"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": "p-05",
+          "withoutRecord": "p-05"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": "p-03",
+          "withoutRecord": "p-03"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7bb18000000",
+      "optimistic": [],
+      "pending": [],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab766b8000000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": true,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7b794000000",
+          "id": "p-03",
+          "kind": "poke",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be8d000000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7bb18000000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/a5.png",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-05",
+          "kind": "ultra",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/p/a4.png",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "p-04",
+          "kind": "poke",
+          "mine": true,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        }
+      ],
+      "receipts": true,
+      "snapshotSerial": 1,
+      "sorted": [
+        "p-00",
+        "p-03",
+        "p-04",
+        "p-02",
+        "p-01",
+        "p-05"
+      ],
+      "sortedMessages": [
+        "m-02",
+        "m-00",
+        "m-03",
+        "m-01",
+        "m-04"
+      ],
+      "texts": [
+        {
+          "id": "p-00",
+          "line": "내가 울트라 찔렀어요 · 15:00",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-03",
+          "line": "한결님이 콕 찔렀어요 · 14:00",
+          "preview": "한결님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "내가 콕 찔렀어요 · 15:59",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "내가 콕 찔렀어요 · 15:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-05",
+          "line": "고양님이 울트라 찔렀어요 · 00:00",
+          "preview": "고양님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-04",
+          "line": "내가 콕 찔렀어요 · 15:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b"
+      ]
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          8
+        ],
+        [
+          "m-03",
+          2
+        ],
+        [
+          "m-04",
+          9
+        ],
+        [
+          "p-00",
+          5
+        ],
+        [
+          "p-01",
+          7
+        ],
+        [
+          "p-02",
+          3
+        ],
+        [
+          "p-03",
+          0
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000d",
+      "effectiveOrder": [
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          8
+        ],
+        [
+          "m-03",
+          2
+        ],
+        [
+          "m-04",
+          9
+        ],
+        [
+          "p-00",
+          5
+        ],
+        [
+          "p-01",
+          7
+        ],
+        [
+          "p-02",
+          3
+        ],
+        [
+          "p-03",
+          0
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-01",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-00",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c3.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-03",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/e2.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c4.png",
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-04",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "log-005",
+      "items": [
+        {
+          "id": "day-2026-10-25",
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "poke-p-03",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "민트님이 콕 찔렀어요 · 15:00"
+        },
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        },
+        {
+          "id": "pending-local-1",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-04",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7c220000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 1,
+          "settledSerial": 3,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 0,
+          "settledSerial": 4,
+          "throughID": "p-02"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 1,
+          "settledSerial": 4,
+          "throughID": "p-03"
+        }
+      ],
+      "pending": [
+        {
+          "body": "👍🏽 좋아",
+          "id": "local-0",
+          "state": 1
+        },
+        {
+          "body": "끝 공백  ",
+          "id": "local-1",
+          "state": 3
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/d3.png",
+          "createdAtBits": "41dab766b8200000",
+          "id": "p-03",
+          "kind": "poke",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/e1.png",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": true,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c800000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab766b8200000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 2,
+      "sorted": [
+        "p-03",
+        "p-02",
+        "p-01",
+        "p-00"
+      ],
+      "sortedMessages": [
+        "m-02",
+        "m-00",
+        "m-01",
+        "m-04",
+        "m-03"
+      ],
+      "texts": [
+        {
+          "id": "p-03",
+          "line": "민트님이 콕 찔렀어요 · 15:00",
+          "preview": "민트님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "내가 울트라 찔렀어요 · 15:59",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "Ann님이 콕 찔렀어요 · 16:00",
+          "preview": "Ann님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "내가 콕 찔렀어요 · 15:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": []
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          4
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "m-03",
+          0
+        ],
+        [
+          "p-00",
+          7
+        ],
+        [
+          "p-01",
+          3
+        ],
+        [
+          "p-02",
+          10
+        ],
+        [
+          "p-03",
+          9
+        ],
+        [
+          "p-04",
+          8
+        ],
+        [
+          "p-05",
+          5
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000a",
+      "effectiveOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          4
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "m-03",
+          0
+        ],
+        [
+          "p-00",
+          7
+        ],
+        [
+          "p-01",
+          3
+        ],
+        [
+          "p-02",
+          10
+        ],
+        [
+          "p-03",
+          9
+        ],
+        [
+          "p-04",
+          8
+        ],
+        [
+          "p-05",
+          5
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/b2.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-02",
+          "mine": true,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/d0.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-00",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7be8d200000",
+          "id": "m-01",
+          "mine": true,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c3.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-03",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "log-006",
+      "items": [
+        {
+          "id": "day-2026-10-27",
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "poke-p-05",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "hand.point.right.fill",
+          "text": "내가 콕 찔렀어요 · 00:00"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-04",
+          "kind": "poke",
+          "lineID": "poke-p-04"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "p-05",
+          "kind": "poke",
+          "lineID": "poke-p-05"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": "p-02",
+          "withoutRecord": "p-02"
+        }
+      ],
+      "nowBits": "41dab7bb18000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 1,
+          "settledSerial": 0,
+          "throughID": "p-03"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 5,
+          "settledSerial": 5,
+          "throughID": "p-02"
+        }
+      ],
+      "pending": [],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7dabc200000",
+          "id": "p-05",
+          "kind": "poke",
+          "mine": true,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab76a3c200000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/b4.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-04",
+          "kind": "poke",
+          "mine": true,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/d3.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-03",
+          "kind": "ultra",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/e2.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/p/e0.png",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": true
+        }
+      ],
+      "receipts": true,
+      "snapshotSerial": 3,
+      "sorted": [
+        "p-01",
+        "p-04",
+        "p-03",
+        "p-02",
+        "p-00",
+        "p-05"
+      ],
+      "sortedMessages": [
+        "m-02",
+        "m-03",
+        "m-01",
+        "m-00"
+      ],
+      "texts": [
+        {
+          "id": "p-05",
+          "line": "내가 콕 찔렀어요 · 00:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "고양님이 콕 찔렀어요 · 16:00",
+          "preview": "고양님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-04",
+          "line": "내가 콕 찔렀어요 · 16:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-03",
+          "line": "내가 울트라 찔렀어요 · 16:00",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "이름10님이 콕 찔렀어요 · 16:00",
+          "preview": "이름10님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "ＡＢＣ님이 콕 찔렀어요 · 16:00",
+          "preview": "ＡＢＣ님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "arrival": [
+        [
+          "p-00",
+          0
+        ],
+        [
+          "p-01",
+          1
+        ],
+        [
+          "p-02",
+          1
+        ],
+        [
+          "p-04",
+          1
+        ]
+      ],
+      "chronology": [
+        [
+          "m-00",
+          5
+        ],
+        [
+          "p-00",
+          2
+        ],
+        [
+          "p-01",
+          3
+        ],
+        [
+          "p-02",
+          0
+        ],
+        [
+          "p-03",
+          4
+        ],
+        [
+          "p-04",
+          1
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000b",
+      "effectiveOrder": [
+        [
+          "m-00",
+          5
+        ],
+        [
+          "p-00",
+          2
+        ],
+        [
+          "p-01",
+          3
+        ],
+        [
+          "p-02",
+          0
+        ],
+        [
+          "p-03",
+          4
+        ],
+        [
+          "p-04",
+          1
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-01",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7865c200000",
+          "id": "m-00",
+          "mine": true,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "log-007",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-03",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "bolt.fill",
+          "text": "두리님이 울트라 찔렀어요 · 00:00"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        },
+        {
+          "id": "pending-local-1",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-04",
+          "kind": "poke",
+          "lineID": "poke-p-04"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": "p-03",
+          "withoutRecord": "p-03"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": "p-00",
+          "withoutRecord": "p-00"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7be9c000000",
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 0,
+          "settledSerial": 3,
+          "throughID": "p-04"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 5,
+          "settledSerial": 2,
+          "throughID": "p-01"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 2,
+          "settledSerial": 1,
+          "throughID": "p-00"
+        }
+      ],
+      "pending": [
+        {
+          "body": "ㅋㅋㅋ",
+          "id": "local-0",
+          "state": "sending"
+        },
+        {
+          "body": "줄1\r\n줄2",
+          "id": "local-1",
+          "state": 2
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7865c000000",
+          "id": "p-03",
+          "kind": "ultra",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/p/c0.png",
+          "createdAtBits": "41dab766b8000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be8d200000",
+          "id": "p-04",
+          "kind": "poke",
+          "mine": true,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab76a3c000000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/p/e1.png",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": true,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        }
+      ],
+      "receipts": true,
+      "snapshotSerial": 0,
+      "sorted": [
+        "p-00",
+        "p-02",
+        "p-03",
+        "p-04",
+        "p-01"
+      ],
+      "sortedMessages": [
+        "m-00",
+        "m-01"
+      ],
+      "texts": [
+        {
+          "id": "p-03",
+          "line": "두리님이 울트라 찔렀어요 · 00:00",
+          "preview": "두리님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "이름2님이 콕 찔렀어요 · 15:00",
+          "preview": "이름2님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-04",
+          "line": "내가 콕 찔렀어요 · 15:59",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "zed님이 콕 찔렀어요 · 16:00",
+          "preview": "zed님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "내가 울트라 찔렀어요 · 00:00",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c"
+      ]
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          7
+        ],
+        [
+          "m-02",
+          5
+        ],
+        [
+          "p-00",
+          0
+        ],
+        [
+          "p-01",
+          4
+        ],
+        [
+          "p-03",
+          3
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000e",
+      "effectiveOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          7
+        ],
+        [
+          "m-02",
+          5
+        ],
+        [
+          "p-00",
+          0
+        ],
+        [
+          "p-01",
+          4
+        ],
+        [
+          "p-02",
+          8
+        ],
+        [
+          "p-03",
+          3
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/c0.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/b2.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/a3.png",
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-03",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "log-008",
+      "items": [
+        {
+          "id": "day-2026-10-25",
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "bolt.fill",
+          "text": "zed님이 울트라 찔렀어요 · 16:00"
+        },
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": "p-03",
+          "withoutRecord": "p-03"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7bea3800000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 1,
+          "settledSerial": null,
+          "throughID": "p-01"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 5,
+          "settledSerial": null,
+          "throughID": "p-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 5,
+          "settledSerial": 2,
+          "throughID": "p-03"
+        }
+      ],
+      "pending": [
+        {
+          "body": " 공백  여러  칸 ",
+          "id": "local-0",
+          "state": 2
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab76a3c000000",
+          "id": "p-02",
+          "kind": "ultra",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c800000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/c3.png",
+          "createdAtBits": "41dab7b794000000",
+          "id": "p-03",
+          "kind": "poke",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/p/a0.png",
+          "createdAtBits": "41dab7be8d200000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": true,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        }
+      ],
+      "receipts": true,
+      "snapshotSerial": 3,
+      "sorted": [
+        "p-02",
+        "p-03",
+        "p-00",
+        "p-01"
+      ],
+      "sortedMessages": [
+        "m-00",
+        "m-03",
+        "m-02",
+        "m-01"
+      ],
+      "texts": [
+        {
+          "id": "p-02",
+          "line": "zed님이 울트라 찔렀어요 · 16:00",
+          "preview": "zed님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "아잉 데모님이 울트라 찔렀어요 · 16:00",
+          "preview": "아잉 데모님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-03",
+          "line": "한결님이 콕 찔렀어요 · 14:00",
+          "preview": "한결님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "내가 콕 찔렀어요 · 15:59",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000c"
+      ]
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          3
+        ],
+        [
+          "p-00",
+          5
+        ],
+        [
+          "p-01",
+          8
+        ],
+        [
+          "p-02",
+          0
+        ],
+        [
+          "p-03",
+          7
+        ],
+        [
+          "p-04",
+          4
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000a",
+      "effectiveOrder": [
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          3
+        ],
+        [
+          "p-00",
+          5
+        ],
+        [
+          "p-01",
+          8
+        ],
+        [
+          "p-02",
+          0
+        ],
+        [
+          "p-03",
+          7
+        ],
+        [
+          "p-04",
+          4
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7b794000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7b794200000",
+          "id": "m-02",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "log-009",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "clock": "14:00",
+          "id": "m-02",
+          "kind": "bubble",
+          "mine": false,
+          "showsTime": true,
+          "startsGroup": false,
+          "unreadOne": false
+        },
+        {
+          "id": "poke-p-03",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "고양님이 콕 찔렀어요 · 15:59"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-04",
+          "kind": "poke",
+          "lineID": "poke-p-04"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": "p-00",
+          "withoutRecord": "p-00"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7bea3800000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 4,
+          "settledSerial": null,
+          "throughID": "p-02"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 1,
+          "settledSerial": 5,
+          "throughID": "gone"
+        }
+      ],
+      "pending": [
+        {
+          "body": "탭\t글자",
+          "id": "local-0",
+          "state": "sending"
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/a3.png",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "p-03",
+          "kind": "poke",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7bb18000000",
+          "id": "p-04",
+          "kind": "poke",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c600000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7865c200000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c400000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": true
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 0,
+      "sorted": [
+        "p-02",
+        "p-04",
+        "p-03",
+        "p-00",
+        "p-01"
+      ],
+      "sortedMessages": [
+        "m-01",
+        "m-02",
+        "m-00"
+      ],
+      "texts": [
+        {
+          "id": "p-03",
+          "line": "고양님이 콕 찔렀어요 · 15:59",
+          "preview": "고양님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-04",
+          "line": "zed님이 콕 찔렀어요 · 15:00",
+          "preview": "zed님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "ann님이 콕 찔렀어요 · 16:00",
+          "preview": "ann님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "한결님이 콕 찔렀어요 · 00:00",
+          "preview": "한결님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "두리님이 콕 찔렀어요 · 16:00",
+          "preview": "두리님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000b"
+      ]
+    },
+    {
+      "arrival": [
+        [
+          "p-00",
+          1
+        ],
+        [
+          "p-01",
+          4
+        ]
+      ],
+      "chronology": [
+        [
+          "m-00",
+          5
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "m-03",
+          2
+        ],
+        [
+          "p-00",
+          0
+        ],
+        [
+          "p-02",
+          4
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000d",
+      "effectiveOrder": [
+        [
+          "m-00",
+          5
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "m-03",
+          2
+        ],
+        [
+          "p-00",
+          0
+        ],
+        [
+          "p-01",
+          6
+        ],
+        [
+          "p-02",
+          4
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/a4.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/e3.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-03",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab76a3c200000",
+          "id": "m-01",
+          "mine": true,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-00",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "id": "log-010",
+      "items": [
+        {
+          "id": "day-2026-10-25",
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "10월 25일"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "Émile님이 콕 찔렀어요 · 15:00"
+        },
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "clock": "16:00",
+          "id": "m-02",
+          "kind": "bubble",
+          "mine": false,
+          "showsTime": true,
+          "startsGroup": false,
+          "unreadOne": false
+        },
+        {
+          "id": "day-2026-10-27",
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "10월 25일"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "m-04",
+          "kind": "bubble"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": "p-02",
+          "withoutRecord": "p-02"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab812fc000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 1,
+          "settledSerial": 4,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 1,
+          "settledSerial": 3,
+          "throughID": "gone"
+        }
+      ],
+      "pending": [
+        {
+          "body": " 공백  여러  칸 ",
+          "id": "local-0",
+          "state": 0
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/d2.png",
+          "createdAtBits": "41dab766b8200000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/p/a0.png",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/b1.png",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": false
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 4,
+      "sorted": [
+        "p-02",
+        "p-01",
+        "p-00"
+      ],
+      "sortedMessages": [
+        "m-00",
+        "m-01",
+        "m-02",
+        "m-03",
+        "m-04"
+      ],
+      "texts": [
+        {
+          "id": "p-02",
+          "line": "Émile님이 콕 찔렀어요 · 15:00",
+          "preview": "Émile님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "고양님이 울트라 찔렀어요 · 16:00",
+          "preview": "고양님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "bob님이 울트라 찔렀어요 · 15:00",
+          "preview": "bob님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000d"
+      ]
+    },
+    {
+      "arrival": [
+        [
+          "p-01",
+          4
+        ],
+        [
+          "p-02",
+          4
+        ]
+      ],
+      "chronology": [
+        [
+          "m-00",
+          6
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "m-02",
+          2
+        ],
+        [
+          "p-00",
+          4
+        ],
+        [
+          "p-01",
+          1
+        ],
+        [
+          "p-03",
+          3
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000b",
+      "effectiveOrder": [
+        [
+          "m-00",
+          6
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "m-02",
+          2
+        ],
+        [
+          "p-00",
+          4
+        ],
+        [
+          "p-01",
+          1
+        ],
+        [
+          "p-02",
+          7
+        ],
+        [
+          "p-03",
+          3
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/d1.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-02",
+          "mine": true,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7865c200000",
+          "id": "m-00",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7865c200000",
+          "id": "m-03",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "id": "log-011",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-01",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "hand.point.right.fill",
+          "text": "내가 콕 찔렀어요 · 14:00"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "bolt.fill",
+          "text": "내가 울트라 찔렀어요 · 16:00"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": "p-03",
+          "withoutRecord": "p-03"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7bb18000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 4,
+          "settledSerial": null,
+          "throughID": "p-00"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 2,
+          "settledSerial": 0,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 3,
+          "settledSerial": 2,
+          "throughID": "p-00"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 4,
+          "settledSerial": null,
+          "throughID": "p-00"
+        }
+      ],
+      "pending": [],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c200000",
+          "id": "p-02",
+          "kind": "ultra",
+          "mine": true,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/a3.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-03",
+          "kind": "poke",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7b794200000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": true,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/b1.png",
+          "createdAtBits": "41dab7b794000000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": true,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 5,
+      "sorted": [
+        "p-01",
+        "p-00",
+        "p-03",
+        "p-02"
+      ],
+      "sortedMessages": [
+        "m-00",
+        "m-03",
+        "m-02",
+        "m-01"
+      ],
+      "texts": [
+        {
+          "id": "p-02",
+          "line": "내가 울트라 찔렀어요 · 16:00",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-03",
+          "line": "한결님이 콕 찔렀어요 · 16:00",
+          "preview": "한결님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "내가 콕 찔렀어요 · 14:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "내가 콕 찔렀어요 · 14:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": []
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-00",
+          3
+        ],
+        [
+          "m-01",
+          6
+        ],
+        [
+          "m-02",
+          0
+        ],
+        [
+          "m-03",
+          2
+        ],
+        [
+          "p-00",
+          4
+        ],
+        [
+          "p-01",
+          1
+        ],
+        [
+          "p-02",
+          5
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000e",
+      "effectiveOrder": [
+        [
+          "m-00",
+          3
+        ],
+        [
+          "m-01",
+          6
+        ],
+        [
+          "m-02",
+          0
+        ],
+        [
+          "m-03",
+          2
+        ],
+        [
+          "p-00",
+          4
+        ],
+        [
+          "p-01",
+          1
+        ],
+        [
+          "p-02",
+          5
+        ],
+        [
+          "p-03",
+          7
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-03",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/b1.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/d0.png",
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-00",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "id": "log-012",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-00",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "hand.point.right.fill",
+          "text": "내가 콕 찔렀어요 · 14:00"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "bolt.fill",
+          "text": "내가 울트라 찔렀어요 · 16:00"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "m-03",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-03",
+          "kind": "poke",
+          "lineID": "poke-p-03"
+        },
+        {
+          "id": "m-01",
+          "kind": "bubble"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "key": "2026-10-27",
+          "kind": "day",
+          "label": "10월 27일"
+        },
+        {
+          "id": "m-02",
+          "kind": "bubble"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": "p-03"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7bb18000000",
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 4,
+          "settledSerial": 3,
+          "throughID": "p-03"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 1,
+          "settledSerial": 3,
+          "throughID": "p-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 4,
+          "settledSerial": null,
+          "throughID": "p-02"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 5,
+          "settledSerial": 3,
+          "throughID": "p-02"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 4,
+          "settledSerial": 2,
+          "throughID": "gone"
+        }
+      ],
+      "pending": [
+        {
+          "body": "줄1\r\n줄2",
+          "id": "local-0",
+          "state": 1
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c800000",
+          "id": "p-02",
+          "kind": "ultra",
+          "mine": true,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/a3.png",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "p-03",
+          "kind": "ultra",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/e0.png",
+          "createdAtBits": "41dab7b794000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": true,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/a1.png",
+          "createdAtBits": "41dab7be9ca00000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": true
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 0,
+      "sorted": [
+        "p-00",
+        "p-03",
+        "p-02",
+        "p-01"
+      ],
+      "sortedMessages": [
+        "m-03",
+        "m-01",
+        "m-00",
+        "m-02"
+      ],
+      "texts": [
+        {
+          "id": "p-02",
+          "line": "내가 울트라 찔렀어요 · 16:00",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-03",
+          "line": "민트님이 울트라 찔렀어요 · 15:00",
+          "preview": "민트님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "내가 콕 찔렀어요 · 14:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "두리님이 콕 찔렀어요 · 16:00",
+          "preview": "두리님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": []
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "p-00",
+          0
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000c",
+      "effectiveOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "p-00",
+          0
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "log-013",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-00",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "ＡＢＣ님이 콕 찔렀어요 · 16:00"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": "p-00",
+          "withoutRecord": "p-00"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7bea3800000",
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 4,
+          "settledSerial": 0,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 3,
+          "settledSerial": 3,
+          "throughID": "gone"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 0,
+          "settledSerial": 5,
+          "throughID": "p-00"
+        }
+      ],
+      "pending": [
+        {
+          "body": "끝 공백  ",
+          "id": "local-0",
+          "state": 4
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c400000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": true
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 4,
+      "sorted": [
+        "p-00"
+      ],
+      "sortedMessages": [
+        "m-00"
+      ],
+      "texts": [
+        {
+          "id": "p-00",
+          "line": "ＡＢＣ님이 콕 찔렀어요 · 16:00",
+          "preview": "ＡＢＣ님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000c"
+      ]
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "p-00",
+          0
+        ],
+        [
+          "p-01",
+          2
+        ],
+        [
+          "p-02",
+          1
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000c",
+      "effectiveOrder": [
+        [
+          "p-00",
+          0
+        ],
+        [
+          "p-01",
+          2
+        ],
+        [
+          "p-02",
+          1
+        ]
+      ],
+      "entries": [],
+      "id": "log-014",
+      "items": [
+        {
+          "id": "day-2026-10-25",
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "10월 25일"
+        },
+        {
+          "id": "poke-p-01",
+          "kind": "poke",
+          "mine": false,
+          "symbol": "hand.point.right.fill",
+          "text": "아잉 데모님이 콕 찔렀어요 · 16:00"
+        },
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "poke-p-02",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "hand.point.right.fill",
+          "text": "내가 콕 찔렀어요 · 16:00"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-25",
+          "kind": "day",
+          "label": "10월 25일"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "어제"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "p-02",
+          "kind": "poke",
+          "lineID": "poke-p-02"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": "p-01",
+          "withoutRecord": "p-01"
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab812fc000000",
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 0,
+          "settledSerial": 4,
+          "throughID": "p-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 3,
+          "settledSerial": null,
+          "throughID": "p-01"
+        }
+      ],
+      "pending": [],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/c1.png",
+          "createdAtBits": "41dab76a3c200000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": true,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": null
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 1,
+      "sorted": [
+        "p-01",
+        "p-00",
+        "p-02"
+      ],
+      "sortedMessages": [],
+      "texts": [
+        {
+          "id": "p-01",
+          "line": "아잉 데모님이 콕 찔렀어요 · 16:00",
+          "preview": "아잉 데모님이 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-00",
+          "line": "zed님이 울트라 찔렀어요 · 16:00",
+          "preview": "zed님이 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        },
+        {
+          "id": "p-02",
+          "line": "내가 콕 찔렀어요 · 16:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        }
+      ],
+      "unreadPeerIDs": [
+        "00000000-0000-4000-8000-00000000000c"
+      ]
+    },
+    {
+      "arrival": [],
+      "chronology": [
+        [
+          "m-00",
+          0
+        ]
+      ],
+      "conversationPeer": "00000000-0000-4000-8000-00000000000c",
+      "effectiveOrder": [
+        [
+          "m-00",
+          0
+        ],
+        [
+          "p-00",
+          1
+        ],
+        [
+          "p-01",
+          2
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/d0.png",
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "log-015",
+      "items": [
+        {
+          "id": "day-2026-10-26",
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "poke-p-00",
+          "kind": "poke",
+          "mine": true,
+          "symbol": "hand.point.right.fill",
+          "text": "내가 콕 찔렀어요 · 14:00"
+        },
+        {
+          "id": "pending-local-0",
+          "kind": "pending"
+        },
+        {
+          "id": "pending-local-1",
+          "kind": "pending"
+        }
+      ],
+      "lines": [
+        {
+          "key": "2026-10-26",
+          "kind": "day",
+          "label": "오늘"
+        },
+        {
+          "id": "p-00",
+          "kind": "poke",
+          "lineID": "poke-p-00"
+        },
+        {
+          "id": "p-01",
+          "kind": "poke",
+          "lineID": "poke-p-01"
+        },
+        {
+          "id": "m-00",
+          "kind": "bubble"
+        }
+      ],
+      "markTargets": [
+        {
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "withRecord": null,
+          "withoutRecord": null
+        },
+        {
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "withRecord": null,
+          "withoutRecord": null
+        }
+      ],
+      "nowBits": "41dab7bea3800000",
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 3,
+          "settledSerial": 4,
+          "throughID": "p-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 3,
+          "settledSerial": 4,
+          "throughID": "p-00"
+        }
+      ],
+      "pending": [
+        {
+          "body": "끝 공백  ",
+          "id": "local-0",
+          "state": "sending"
+        },
+        {
+          "body": "안녕\n  하세요",
+          "id": "local-1",
+          "state": "sending"
+        }
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/c0.png",
+          "createdAtBits": "41dab7b794000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": true,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be8d000000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": true,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        }
+      ],
+      "receipts": false,
+      "snapshotSerial": 1,
+      "sorted": [
+        "p-00",
+        "p-01"
+      ],
+      "sortedMessages": [
+        "m-00"
+      ],
+      "texts": [
+        {
+          "id": "p-00",
+          "line": "내가 콕 찔렀어요 · 14:00",
+          "preview": "내가 콕 찔렀어요",
+          "symbol": "hand.point.right.fill"
+        },
+        {
+          "id": "p-01",
+          "line": "내가 울트라 찔렀어요 · 15:59",
+          "preview": "내가 울트라 찔렀어요",
+          "symbol": "bolt.fill"
+        }
+      ],
+      "unreadPeerIDs": []
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift",
+  "golden": "messages/poke-log",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "items": "MessagesConversationRules.items(messages: 그 사람 대화(threads(from:serverOrder: chronology)), pokes: 그 사람 찌르기, chronology, pending, receiptsAvailable, now) — pending createdAt = now",
+    "lines": "MessageConversationTimeline.lines(messages: entries.sortedForMessageHistory(serverOrder: chronology), pokes: sorted, chronology, now, calendar: KST)",
+    "platformSensitive": "false",
+    "rules": "MessagePokeLogRules.effectiveOrder · unreadPeerIDs(snapshot = (serial, chronology)) · markTarget(record 있음/없음) · sorted(chronology, arrivalOrder)",
+    "texts": "MessagePokeLogText.line(for:calendar: KST) · symbol · MessagesSortRules.pokePreview"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckMobileKit/Messages/MessagesRules.swift",
+    "Sources/CheckCore/MessageRules.swift"
+  ]
+}

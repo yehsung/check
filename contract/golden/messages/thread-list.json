@@ -1,0 +1,3152 @@
+{
+  "cases": [
+    {
+      "chronology": [
+        [
+          "p-00",
+          1
+        ],
+        [
+          "p-01",
+          0
+        ],
+        [
+          "p-02",
+          2
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          2
+        ]
+      ],
+      "entries": [],
+      "id": "rows-000",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c"
+      ],
+      "nowBits": "41dab812fc000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/e2.png",
+          "createdAtBits": "41dab7b794000000",
+          "id": "p-02",
+          "kind": "ultra",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be8d000000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": true,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c400000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "Émile, 안 읽은 메시지 1개, Émile님이 울트라 찔렀어요, 어제",
+          "a11yPresence": "Émile, 근무 중, 안 읽은 메시지 1개, Émile님이 울트라 찔렀어요, 어제",
+          "avatar": null,
+          "countBadge": "1",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c400000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "Émile님이 울트라 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "ＡＢＣ, 안 본 찌르기, ＡＢＣ님이 울트라 찔렀어요, 어제",
+          "a11yPresence": "ＡＢＣ, 근무 중, 안 본 찌르기, ＡＢＣ님이 울트라 찔렀어요, 어제",
+          "avatar": "https://example.invalid/p/e2.png",
+          "countBadge": null,
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7b794000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [
+            "p-02"
+          ],
+          "preview": "ＡＢＣ님이 울트라 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "가나, 내가 콕 찔렀어요, 어제",
+          "a11yPresence": "가나, 근무 중, 내가 콕 찔렀어요, 어제",
+          "avatar": null,
+          "countBadge": null,
+          "group": 2,
+          "isUnread": false,
+          "lastActivityBits": "41dab7be8d000000",
+          "lastIsMine": true,
+          "messageIDs": [],
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [
+            "p-01"
+          ],
+          "preview": "내가 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": null,
+      "workKnown": false,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a"
+      ]
+    },
+    {
+      "chronology": [],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000a",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          7
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          99
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "rows-001",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7d030000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "Ann, 안 본 찌르기, 탭 글자, 15:59",
+          "a11yPresence": "Ann, 근무 중, 안 본 찌르기, 탭 글자, 15:59",
+          "avatar": null,
+          "countBadge": null,
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be8d000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [],
+          "preview": "탭 글자",
+          "previewIsPoke": false,
+          "timeText": "15:59"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          0
+        ]
+      ],
+      "workKnown": false,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          0
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          99
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          7
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/b0.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/e2.png",
+          "body": "안녕",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-01",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "rows-002",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7bea3800000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "Ann, 안 읽은 메시지 2개, 줄1 줄2, 16:00",
+          "a11yPresence": "Ann, 근무 중, 안 읽은 메시지 2개, 줄1 줄2, 16:00",
+          "avatar": null,
+          "countBadge": "2",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c800000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00",
+            "m-01"
+          ],
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [],
+          "preview": "줄1 줄2",
+          "previewIsPoke": false,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "이름10, 안 읽은 메시지 1개, 안녕, 어제",
+          "a11yPresence": "이름10, 근무 중, 안 읽은 메시지 1개, 안녕, 어제",
+          "avatar": "https://example.invalid/a/e2.png",
+          "countBadge": "1",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab76a3c000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-02"
+          ],
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [],
+          "preview": "안녕",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          2
+        ]
+      ],
+      "workKnown": false,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "p-00",
+          0
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          2
+        ]
+      ],
+      "entries": [],
+      "id": "rows-003",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7bb18000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7865c000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": false
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "zed, 안 읽은 메시지 1개, zed님이 콕 찔렀어요, 00:00",
+          "a11yPresence": "zed, 근무 중, 안 읽은 메시지 1개, zed님이 콕 찔렀어요, 00:00",
+          "avatar": null,
+          "countBadge": "1",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7865c000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "zed님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "00:00"
+        }
+      ],
+      "serverOrder": [],
+      "workKnown": false,
+      "working": [
+        "00000000-0000-4000-8000-0000000000ff"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-01",
+          0
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "m-03",
+          2
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000a",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          1
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": "안녕",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c3.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-03",
+          "mine": false,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/e2.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-02",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-00",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "id": "rows-004",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab812fc000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "이름2, 안 읽은 메시지 1개, 줄1 줄2, 어제",
+          "a11yPresence": "이름2, 근무 중, 안 읽은 메시지 1개, 줄1 줄2, 어제",
+          "avatar": "https://example.invalid/a/e2.png",
+          "countBadge": "1",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c800000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-02"
+          ],
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [],
+          "preview": "줄1 줄2",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "고양, 안 읽은 메시지 1개, 안녕, 00:00",
+          "a11yPresence": "고양, 근무 중, 안 읽은 메시지 1개, 안녕, 00:00",
+          "avatar": "https://example.invalid/a/c1.png",
+          "countBadge": "1",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-03",
+            "m-01"
+          ],
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "안녕",
+          "previewIsPoke": false,
+          "timeText": "00:00"
+        },
+        {
+          "a11y": "두리, 나: 안녕 하세요, 어제",
+          "a11yPresence": "두리, 근무 중, 나: 안녕 하세요, 어제",
+          "avatar": null,
+          "countBadge": null,
+          "group": 3,
+          "isUnread": false,
+          "lastActivityBits": "41dab7be8d000000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [],
+          "preview": "안녕 하세요",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          0
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          3
+        ],
+        [
+          "m-03",
+          2
+        ]
+      ],
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-02",
+          0
+        ],
+        [
+          "m-03",
+          1
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          100
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          99
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          7
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab76a3c200000",
+          "id": "m-03",
+          "mine": true,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c4.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/d2.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-02",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/d0.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be8d200000",
+          "id": "m-00",
+          "mine": true,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/b1.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "id": "rows-005",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7c220000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000c"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "ann, 안 읽은 메시지 1개, 나: 안녕 하세요, 15:59",
+          "a11yPresence": "ann, 근무 중, 안 읽은 메시지 1개, 나: 안녕 하세요, 15:59",
+          "avatar": "https://example.invalid/a/d0.png",
+          "countBadge": "1",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be8d200000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-02",
+            "m-00"
+          ],
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [],
+          "preview": "안녕 하세요",
+          "previewIsPoke": false,
+          "timeText": "15:59"
+        },
+        {
+          "a11y": "두리, 안 읽은 메시지 99개, 줄1 줄2, 00:00",
+          "a11yPresence": "두리, 근무 중, 안 읽은 메시지 99개, 줄1 줄2, 00:00",
+          "avatar": "https://example.invalid/a/c4.png",
+          "countBadge": "99",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7865c000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-03",
+            "m-04"
+          ],
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "줄1 줄2",
+          "previewIsPoke": false,
+          "timeText": "00:00"
+        },
+        {
+          "a11y": "두리, 안 읽은 메시지 99+개, 공백 여러 칸, 어제",
+          "a11yPresence": "두리, 근무 중, 안 읽은 메시지 99+개, 공백 여러 칸, 어제",
+          "avatar": "https://example.invalid/a/b1.png",
+          "countBadge": "99+",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab766b8000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-01"
+          ],
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [],
+          "preview": "공백 여러 칸",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          4
+        ],
+        [
+          "m-02",
+          0
+        ],
+        [
+          "m-04",
+          3
+        ]
+      ],
+      "workKnown": false,
+      "working": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          8
+        ],
+        [
+          "m-03",
+          0
+        ],
+        [
+          "m-04",
+          10
+        ],
+        [
+          "m-05",
+          6
+        ],
+        [
+          "p-00",
+          7
+        ],
+        [
+          "p-01",
+          2
+        ],
+        [
+          "p-02",
+          11
+        ],
+        [
+          "p-03",
+          4
+        ],
+        [
+          "p-04",
+          5
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          100
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-03",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab76a3c200000",
+          "id": "m-02",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/e4.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/b1.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/e5.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-05",
+          "mine": true,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "rows-006",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7d030000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9ca00000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7865c000000",
+          "id": "p-04",
+          "kind": "poke",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-03",
+          "kind": "poke",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7865c200000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab766b8000000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "unread": null
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "bob, 안 본 찌르기, 민트님이 콕 찔렀어요, 10월 27일",
+          "a11yPresence": "bob, 근무 중, 안 본 찌르기, 민트님이 콕 찔렀어요, 10월 27일",
+          "avatar": "https://example.invalid/a/a0.png",
+          "countBadge": null,
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [
+            "p-03"
+          ],
+          "preview": "민트님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "10월 27일"
+        },
+        {
+          "a11y": "이름2, 안 본 찌르기, 끝 공백, 10월 27일",
+          "a11yPresence": "이름2, 근무 중, 안 본 찌르기, 끝 공백, 10월 27일",
+          "avatar": "https://example.invalid/a/b1.png",
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-03",
+            "m-01"
+          ],
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "끝 공백",
+          "previewIsPoke": false,
+          "timeText": "10월 27일"
+        },
+        {
+          "a11y": "Émile, 안 읽은 메시지 99+개, ＡＢＣ님이 콕 찔렀어요, 16:00",
+          "a11yPresence": "Émile, 근무 중, 안 읽은 메시지 99+개, ＡＢＣ님이 콕 찔렀어요, 16:00",
+          "avatar": "https://example.invalid/a/e4.png",
+          "countBadge": "99+",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9ca00000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-05",
+            "m-04"
+          ],
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [
+            "p-01"
+          ],
+          "preview": "ＡＢＣ님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "zed, 안 본 찌르기, zed님이 콕 찔렀어요, 00:00",
+          "a11yPresence": "zed, 근무 중, 안 본 찌르기, zed님이 콕 찔렀어요, 00:00",
+          "avatar": null,
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7865c000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [
+            "p-04"
+          ],
+          "preview": "zed님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "00:00"
+        },
+        {
+          "a11y": "고양, 끝 공백, 어제",
+          "a11yPresence": "고양, 근무 중, 끝 공백, 어제",
+          "avatar": null,
+          "countBadge": null,
+          "group": 2,
+          "isUnread": false,
+          "lastActivityBits": "41dab76a3c200000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-02"
+          ],
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "끝 공백",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "Ann, Ann님이 콕 찔렀어요, 어제",
+          "a11yPresence": "Ann, 근무 중, Ann님이 콕 찔렀어요, 어제",
+          "avatar": null,
+          "countBadge": null,
+          "group": 3,
+          "isUnread": false,
+          "lastActivityBits": "41dab766b8000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "pokeIDs": [
+            "p-02"
+          ],
+          "preview": "Ann님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": null,
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          4
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "p-01",
+          0
+        ],
+        [
+          "p-02",
+          2
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000a",
+          150
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          0
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/d2.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c600000",
+          "id": "m-00",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "rows-007",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b"
+      ],
+      "nowBits": "41dab7bb18000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/p/d0.png",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/a1.png",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": true
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "bob, 안 본 찌르기, ＡＢＣ님이 콕 찔렀어요, 10월 27일",
+          "a11yPresence": "bob, 근무 중, 안 본 찌르기, ＡＢＣ님이 콕 찔렀어요, 10월 27일",
+          "avatar": null,
+          "countBadge": null,
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [
+            "p-02"
+          ],
+          "preview": "ＡＢＣ님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "10월 27일"
+        },
+        {
+          "a11y": "Émile, 안 읽은 메시지 99+개, Émile님이 콕 찔렀어요, 어제",
+          "a11yPresence": "Émile, 근무 중, 안 읽은 메시지 99+개, Émile님이 콕 찔렀어요, 어제",
+          "avatar": "https://example.invalid/p/a1.png",
+          "countBadge": "99+",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab76a3c000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [
+            "p-01"
+          ],
+          "preview": "Émile님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "이름10, Ann님이 콕 찔렀어요, 16:00",
+          "a11yPresence": "이름10, 근무 중, Ann님이 콕 찔렀어요, 16:00",
+          "avatar": "https://example.invalid/a/d2.png",
+          "countBadge": null,
+          "group": 3,
+          "isUnread": false,
+          "lastActivityBits": "41dab7be9c400000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-02"
+          ],
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "Ann님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "한결, 전각 공백, 어제",
+          "a11yPresence": "한결, 근무 중, 전각 공백, 어제",
+          "avatar": "https://example.invalid/a/c1.png",
+          "countBadge": null,
+          "group": 3,
+          "isUnread": false,
+          "lastActivityBits": "41dab766b8000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-01"
+          ],
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "전각 공백",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": null,
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          0
+        ],
+        [
+          "m-01",
+          2
+        ],
+        [
+          "p-01",
+          5
+        ],
+        [
+          "p-02",
+          3
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          7
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          150
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/d1.png",
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-01",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/b0.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "id": "rows-008",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7be9c000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/b2.png",
+          "createdAtBits": "41dab76a3c200000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/d0.png",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": false
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "Ann, 안 읽은 메시지 7개, 안녕, 16:00",
+          "a11yPresence": "Ann, 근무 중, 안 읽은 메시지 7개, 안녕, 16:00",
+          "avatar": "https://example.invalid/a/d1.png",
+          "countBadge": "7",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c200000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-01"
+          ],
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "안녕",
+          "previewIsPoke": false,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "zed, 안 본 찌르기, 내가 콕 찔렀어요, 10월 27일",
+          "a11yPresence": "zed, 근무 중, 안 본 찌르기, 내가 콕 찔렀어요, 10월 27일",
+          "avatar": null,
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": true,
+          "messageIDs": [],
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "pokeIDs": [
+            "p-01"
+          ],
+          "preview": "내가 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "10월 27일"
+        },
+        {
+          "a11y": "ann, 안 읽은 메시지 1개, 탭 글자, 16:00",
+          "a11yPresence": "ann, 근무 중, 안 읽은 메시지 1개, 탭 글자, 16:00",
+          "avatar": "https://example.invalid/a/b0.png",
+          "countBadge": "1",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [
+            "p-02"
+          ],
+          "preview": "탭 글자",
+          "previewIsPoke": false,
+          "timeText": "16:00"
+        }
+      ],
+      "serverOrder": null,
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000d"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          4
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-03",
+          3
+        ],
+        [
+          "m-05",
+          0
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000a",
+          150
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          0
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          99
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          2
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-03",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-00",
+          "mine": true,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/e5.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-05",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a2.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a4.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "rows-009",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7d030000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "한결, 안 읽은 메시지 2개, 👍🏽 좋아, 15:59",
+          "a11yPresence": "한결, 근무 중, 안 읽은 메시지 2개, 👍🏽 좋아, 15:59",
+          "avatar": "https://example.invalid/a/e5.png",
+          "countBadge": "2",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be8d000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-05"
+          ],
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [],
+          "preview": "👍🏽 좋아",
+          "previewIsPoke": false,
+          "timeText": "15:59"
+        },
+        {
+          "a11y": "ＡＢＣ, 안 읽은 메시지 99+개, 나: 아잉이 하트, 16:00",
+          "a11yPresence": "ＡＢＣ, 근무 중, 안 읽은 메시지 99+개, 나: 아잉이 하트, 16:00",
+          "avatar": "https://example.invalid/a/a0.png",
+          "countBadge": "99+",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c800000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-03",
+            "m-04",
+            "m-02",
+            "m-00"
+          ],
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [],
+          "preview": "아잉이 하트",
+          "previewIsPoke": false,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "고양, 안 읽은 메시지 1개, 나: 공백 여러 칸, 15:00",
+          "a11yPresence": "고양, 근무 중, 안 읽은 메시지 1개, 나: 공백 여러 칸, 15:00",
+          "avatar": null,
+          "countBadge": "1",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7bb18000000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-01"
+          ],
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "공백 여러 칸",
+          "previewIsPoke": false,
+          "timeText": "15:00"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          3
+        ],
+        [
+          "m-02",
+          5
+        ],
+        [
+          "m-03",
+          1
+        ],
+        [
+          "m-04",
+          2
+        ],
+        [
+          "m-05",
+          4
+        ]
+      ],
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-02",
+          0
+        ],
+        [
+          "m-03",
+          1
+        ],
+        [
+          "p-00",
+          2
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000a",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          99
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/b2.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-02",
+          "mine": true,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c3.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-03",
+          "mine": true,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/e0.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/b1.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7b794000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "id": "rows-010",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d"
+      ],
+      "nowBits": "41dab7bea3800000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7bb18200000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": true,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "unread": null
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "ann, 안 본 찌르기, 탭 글자, 15:59",
+          "a11yPresence": "ann, 근무 중, 안 본 찌르기, 탭 글자, 15:59",
+          "avatar": "https://example.invalid/a/e0.png",
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be8d000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [],
+          "preview": "탭 글자",
+          "previewIsPoke": false,
+          "timeText": "15:59"
+        },
+        {
+          "a11y": "ann, 안 본 찌르기, 내가 콕 찔렀어요, 15:00",
+          "a11yPresence": "ann, 근무 중, 안 본 찌르기, 내가 콕 찔렀어요, 15:00",
+          "avatar": null,
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7bb18200000",
+          "lastIsMine": true,
+          "messageIDs": [],
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "내가 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "15:00"
+        },
+        {
+          "a11y": "고양, 안 읽은 메시지 2개, 나: 탭 글자, 어제",
+          "a11yPresence": "고양, 근무 중, 안 읽은 메시지 2개, 나: 탭 글자, 어제",
+          "avatar": "https://example.invalid/a/c3.png",
+          "countBadge": "2",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab766b8000000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-03"
+          ],
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "탭 글자",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "ann, 나: 안녕 하세요, 16:00",
+          "a11yPresence": "ann, 근무 중, 나: 안녕 하세요, 16:00",
+          "avatar": "https://example.invalid/a/b2.png",
+          "countBadge": null,
+          "group": 3,
+          "isUnread": false,
+          "lastActivityBits": "41dab7be9c400000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-01",
+            "m-02"
+          ],
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [],
+          "preview": "안녕 하세요",
+          "previewIsPoke": false,
+          "timeText": "16:00"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "m-03",
+          3
+        ]
+      ],
+      "workKnown": true,
+      "working": []
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          0
+        ],
+        [
+          "m-01",
+          1
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          7
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          150
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          100
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/a1.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-00",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "rows-011",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7bb18000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "고양, 안 본 찌르기, 👍🏽 좋아, 16:00",
+          "a11yPresence": "고양, 근무 중, 안 본 찌르기, 👍🏽 좋아, 16:00",
+          "avatar": "https://example.invalid/a/a1.png",
+          "countBadge": null,
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-01"
+          ],
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [],
+          "preview": "👍🏽 좋아",
+          "previewIsPoke": false,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "두리, 안 읽은 메시지 7개, 나: 끝 공백, 10월 27일",
+          "a11yPresence": "두리, 근무 중, 안 읽은 메시지 7개, 나: 끝 공백, 10월 27일",
+          "avatar": null,
+          "countBadge": "7",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [],
+          "preview": "끝 공백",
+          "previewIsPoke": false,
+          "timeText": "10월 27일"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "m-01",
+          0
+        ]
+      ],
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "p-00",
+          1
+        ],
+        [
+          "p-02",
+          0
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          0
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          100
+        ]
+      ],
+      "entries": [],
+      "id": "rows-012",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7bea3800000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/p/b1.png",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c200000",
+          "id": "p-03",
+          "kind": "poke",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "unread": null
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "이름2, 안 본 찌르기, 이름2님이 울트라 찔렀어요, 10월 27일",
+          "a11yPresence": "이름2, 근무 중, 안 본 찌르기, 이름2님이 울트라 찔렀어요, 10월 27일",
+          "avatar": "https://example.invalid/p/b1.png",
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [
+            "p-01"
+          ],
+          "preview": "이름2님이 울트라 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "10월 27일"
+        },
+        {
+          "a11y": "bob, 안 본 찌르기, bob님이 콕 찔렀어요, 16:00",
+          "a11yPresence": "bob, 근무 중, 안 본 찌르기, bob님이 콕 찔렀어요, 16:00",
+          "avatar": null,
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c200000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [
+            "p-02",
+            "p-03"
+          ],
+          "preview": "bob님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "Ann, 안 본 찌르기, Ann님이 울트라 찔렀어요, 16:00",
+          "a11yPresence": "Ann, 근무 중, 안 본 찌르기, Ann님이 울트라 찔렀어요, 16:00",
+          "avatar": null,
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "Ann님이 울트라 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "16:00"
+        }
+      ],
+      "serverOrder": null,
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          3
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          4
+        ],
+        [
+          "m-04",
+          0
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          99
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          99
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/d4.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-04",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/e0.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-03",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a5.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab76a3c200000",
+          "id": "m-05",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c2.png",
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "rows-013",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7dabc000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "ann, 안 읽은 메시지 2개, 나: é스페, 00:00",
+          "a11yPresence": "ann, 근무 중, 안 읽은 메시지 2개, 나: é스페, 00:00",
+          "avatar": "https://example.invalid/a/c1.png",
+          "countBadge": "2",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-02",
+            "m-01"
+          ],
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "é스페",
+          "previewIsPoke": false,
+          "timeText": "00:00"
+        },
+        {
+          "a11y": "아잉 데모, 안 읽은 메시지 99개, 나: 줄1 줄2, 어제",
+          "a11yPresence": "아잉 데모, 근무 중, 안 읽은 메시지 99개, 나: 줄1 줄2, 어제",
+          "avatar": null,
+          "countBadge": "99",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c800000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-00",
+            "m-03"
+          ],
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [],
+          "preview": "줄1 줄2",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "두리, 안 본 찌르기, 나: 공백 여러 칸, 10월 25일",
+          "a11yPresence": "두리, 근무 중, 안 본 찌르기, 나: 공백 여러 칸, 10월 25일",
+          "avatar": "https://example.invalid/a/a5.png",
+          "countBadge": null,
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab76a3c200000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-05"
+          ],
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [],
+          "preview": "공백 여러 칸",
+          "previewIsPoke": false,
+          "timeText": "10월 25일"
+        },
+        {
+          "a11y": "아잉 데모, 👍🏽 좋아, 어제",
+          "a11yPresence": "아잉 데모, 근무 중, 👍🏽 좋아, 어제",
+          "avatar": "https://example.invalid/a/d4.png",
+          "countBadge": null,
+          "group": 2,
+          "isUnread": false,
+          "lastActivityBits": "41dab7be9c200000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-04"
+          ],
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [],
+          "preview": "👍🏽 좋아",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-01",
+          3
+        ],
+        [
+          "m-03",
+          2
+        ],
+        [
+          "m-04",
+          4
+        ],
+        [
+          "m-05",
+          5
+        ]
+      ],
+      "workKnown": false,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-02",
+          1
+        ],
+        [
+          "m-03",
+          3
+        ],
+        [
+          "m-04",
+          0
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          7
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          99
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          1
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/a4.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7865c200000",
+          "id": "m-04",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a3.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7b794000000",
+          "id": "m-03",
+          "mine": true,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/b2.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "rows-014",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7be9c000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000c"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "가나, 안 읽은 메시지 7개, ㅋㅋㅋ, 16:00",
+          "a11yPresence": "가나, 근무 중, 안 읽은 메시지 7개, ㅋㅋㅋ, 16:00",
+          "avatar": null,
+          "countBadge": "7",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-01",
+            "m-00"
+          ],
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [],
+          "preview": "ㅋㅋㅋ",
+          "previewIsPoke": false,
+          "timeText": "16:00"
+        },
+        {
+          "a11y": "이름2, 👍🏽 좋아, 15:00",
+          "a11yPresence": "이름2, 근무 중, 👍🏽 좋아, 15:00",
+          "avatar": "https://example.invalid/a/b2.png",
+          "countBadge": null,
+          "group": 2,
+          "isUnread": false,
+          "lastActivityBits": "41dab7bb18000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-02"
+          ],
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [],
+          "preview": "👍🏽 좋아",
+          "previewIsPoke": false,
+          "timeText": "15:00"
+        },
+        {
+          "a11y": "Ann, 나: 👍🏽 좋아, 14:00",
+          "a11yPresence": "Ann, 근무 중, 나: 👍🏽 좋아, 14:00",
+          "avatar": "https://example.invalid/a/a3.png",
+          "countBadge": null,
+          "group": 3,
+          "isUnread": false,
+          "lastActivityBits": "41dab7b794000000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-04",
+            "m-03"
+          ],
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [],
+          "preview": "👍🏽 좋아",
+          "previewIsPoke": false,
+          "timeText": "14:00"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          4
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          2
+        ],
+        [
+          "m-03",
+          3
+        ],
+        [
+          "m-04",
+          0
+        ]
+      ],
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "m-01",
+          2
+        ],
+        [
+          "p-00",
+          0
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          99
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/e1.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "id": "rows-015",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000d"
+      ],
+      "nowBits": "41dab7be9c000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/e1.png",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "p-01",
+          "kind": "poke",
+          "mine": true,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/c0.png",
+          "createdAtBits": "41dab7b794000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": false
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "zed, 안 읽은 메시지 99개, 전각 공백, 15:59",
+          "a11yPresence": "zed, 근무 중, 안 읽은 메시지 99개, 전각 공백, 15:59",
+          "avatar": null,
+          "countBadge": "99",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be8d000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "pokeIDs": [],
+          "preview": "전각 공백",
+          "previewIsPoke": false,
+          "timeText": "15:59"
+        },
+        {
+          "a11y": "ＡＢＣ, 안 본 찌르기, ＡＢＣ님이 콕 찔렀어요, 14:00",
+          "a11yPresence": "ＡＢＣ, 근무 중, 안 본 찌르기, ＡＢＣ님이 콕 찔렀어요, 14:00",
+          "avatar": "https://example.invalid/p/c0.png",
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7b794000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "ＡＢＣ님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "14:00"
+        },
+        {
+          "a11y": "고양, 내가 콕 찔렀어요, 16:00",
+          "a11yPresence": "고양, 근무 중, 내가 콕 찔렀어요, 16:00",
+          "avatar": "https://example.invalid/a/e1.png",
+          "countBadge": null,
+          "group": 2,
+          "isUnread": false,
+          "lastActivityBits": "41dab7be9c000000",
+          "lastIsMine": true,
+          "messageIDs": [
+            "m-01"
+          ],
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [
+            "p-01"
+          ],
+          "preview": "내가 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "16:00"
+        }
+      ],
+      "serverOrder": null,
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          100
+        ]
+      ],
+      "entries": [],
+      "id": "rows-016",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7d030000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [],
+      "rows": [],
+      "serverOrder": null,
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "m-01",
+          3
+        ],
+        [
+          "m-02",
+          0
+        ],
+        [
+          "p-00",
+          1
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          99
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          2
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-01",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/c2.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "id": "rows-017",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "nowBits": "41dab7dabc000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [
+        {
+          "avatar": "https://example.invalid/p/c0.png",
+          "createdAtBits": "41dab7be8d200000",
+          "id": "p-00",
+          "kind": "ultra",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "unread": true
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "ＡＢＣ, 안 본 찌르기, 전각 공백, 00:00",
+          "a11yPresence": "ＡＢＣ, 근무 중, 안 본 찌르기, 전각 공백, 00:00",
+          "avatar": "https://example.invalid/a/a0.png",
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "pokeIDs": [],
+          "preview": "전각 공백",
+          "previewIsPoke": false,
+          "timeText": "00:00"
+        },
+        {
+          "a11y": "Ann, 안 읽은 메시지 2개, 아잉이 기쁨, 어제",
+          "a11yPresence": "Ann, 근무 중, 안 읽은 메시지 2개, 아잉이 기쁨, 어제",
+          "avatar": null,
+          "countBadge": "2",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c200000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-01"
+          ],
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [],
+          "preview": "아잉이 기쁨",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        },
+        {
+          "a11y": "이름10, 안 읽은 메시지 99개, 전각 공백, 어제",
+          "a11yPresence": "이름10, 근무 중, 안 읽은 메시지 99개, 전각 공백, 어제",
+          "avatar": "https://example.invalid/a/c2.png",
+          "countBadge": "99",
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7be9c000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-02"
+          ],
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "전각 공백",
+          "previewIsPoke": false,
+          "timeText": "어제"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "m-02",
+          2
+        ]
+      ],
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-0000000000ff"
+      ]
+    },
+    {
+      "chronology": [
+        [
+          "p-00",
+          1
+        ],
+        [
+          "p-01",
+          0
+        ],
+        [
+          "p-02",
+          3
+        ],
+        [
+          "p-03",
+          2
+        ]
+      ],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          99
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          2
+        ]
+      ],
+      "entries": [],
+      "id": "rows-018",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d"
+      ],
+      "nowBits": "41dab7be9c000000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-0000000000ff"
+      ],
+      "pokes": [
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-01",
+          "kind": "ultra",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/p/f0.png",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "p-00",
+          "kind": "poke",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9ca00000",
+          "id": "p-03",
+          "kind": "ultra",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "createdAtBits": "41dab7be9c200000",
+          "id": "p-02",
+          "kind": "poke",
+          "mine": true,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "unread": null
+        }
+      ],
+      "rows": [
+        {
+          "a11y": "한결, 안 본 찌르기, 한결님이 울트라 찔렀어요, 10월 27일",
+          "a11yPresence": "한결, 근무 중, 안 본 찌르기, 한결님이 울트라 찔렀어요, 10월 27일",
+          "avatar": null,
+          "countBadge": null,
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [
+            "p-03",
+            "p-01"
+          ],
+          "preview": "한결님이 울트라 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "10월 27일"
+        },
+        {
+          "a11y": "ＡＢＣ, 안 본 찌르기, ＡＢＣ님이 콕 찔렀어요, 10월 27일",
+          "a11yPresence": "ＡＢＣ, 근무 중, 안 본 찌르기, ＡＢＣ님이 콕 찔렀어요, 10월 27일",
+          "avatar": "https://example.invalid/p/f0.png",
+          "countBadge": null,
+          "group": 1,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [],
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-0000000000ff",
+          "pokeIDs": [
+            "p-00"
+          ],
+          "preview": "ＡＢＣ님이 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "10월 27일"
+        },
+        {
+          "a11y": "bob, 내가 콕 찔렀어요, 16:00",
+          "a11yPresence": "bob, 근무 중, 내가 콕 찔렀어요, 16:00",
+          "avatar": null,
+          "countBadge": null,
+          "group": 2,
+          "isUnread": false,
+          "lastActivityBits": "41dab7be9c200000",
+          "lastIsMine": true,
+          "messageIDs": [],
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "pokeIDs": [
+            "p-02"
+          ],
+          "preview": "내가 콕 찔렀어요",
+          "previewIsPoke": true,
+          "timeText": "16:00"
+        }
+      ],
+      "serverOrder": [],
+      "workKnown": true,
+      "working": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "chronology": [],
+      "counts": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          100
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          150
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "id": "rows-019",
+      "messageUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c"
+      ],
+      "nowBits": "41dab7bea3800000",
+      "pokeUnread": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "pokes": [],
+      "rows": [
+        {
+          "a11y": "아잉 데모, 안 읽은 메시지 99+개, 전각 공백, 10월 27일",
+          "a11yPresence": "아잉 데모, 근무 중, 안 읽은 메시지 99+개, 전각 공백, 10월 27일",
+          "avatar": null,
+          "countBadge": "99+",
+          "group": 0,
+          "isUnread": true,
+          "lastActivityBits": "41dab7dabc000000",
+          "lastIsMine": false,
+          "messageIDs": [
+            "m-00"
+          ],
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "pokeIDs": [],
+          "preview": "전각 공백",
+          "previewIsPoke": false,
+          "timeText": "10월 27일"
+        }
+      ],
+      "serverOrder": null,
+      "workKnown": false,
+      "working": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-0000000000ff"
+      ]
+    },
+    {
+      "id": "rank-table",
+      "ranks": [
+        {
+          "known": false,
+          "rank": 2,
+          "unread": false,
+          "working": false
+        },
+        {
+          "known": true,
+          "rank": 3,
+          "unread": false,
+          "working": false
+        },
+        {
+          "known": false,
+          "rank": 2,
+          "unread": false,
+          "working": true
+        },
+        {
+          "known": true,
+          "rank": 2,
+          "unread": false,
+          "working": true
+        },
+        {
+          "known": false,
+          "rank": 0,
+          "unread": true,
+          "working": false
+        },
+        {
+          "known": true,
+          "rank": 1,
+          "unread": true,
+          "working": false
+        },
+        {
+          "known": false,
+          "rank": 0,
+          "unread": true,
+          "working": true
+        },
+        {
+          "known": true,
+          "rank": 0,
+          "unread": true,
+          "working": true
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift",
+  "golden": "messages/thread-list",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "a11y": "MessagesThreadListRules.accessibilityText(row:presenceLine:) — presenceLine nil / \"근무 중\"",
+    "calendar": "MobileRelativeTime.kst(그레고리력 · Asia/Seoul)",
+    "platformSensitive": "false — 시각은 kotlinx-datetime 의 Asia/Seoul(고정 +9), 글자 접기는 번들 표",
+    "rows": "MessagesThreadListRules.rows(threads: MessageThreadBuilder.threads(from: entries, serverOrder:), pokes:, chronology:, messageUnreadPeerIDs:, pokeUnreadPeerIDs:, unreadCounts:, workingPeerIDs:, workKnown:, now:, calendar: KST)"
+  },
+  "swiftSources": [
+    "Sources/CheckMobileKit/Messages/MessagesRules.swift",
+    "Sources/CheckCore/MessagePokeLog.swift",
+    "Sources/CheckCore/MessageRules.swift"
+  ]
+}

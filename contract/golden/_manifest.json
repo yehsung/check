@@ -1,5 +1,5 @@
 {
-  "exportTests": 85,
+  "exportTests": 89,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -350,6 +350,57 @@
       "platformSensitive": false,
       "swiftSources": [
         "Sources/CheckCore/JWTClaims.swift"
+      ]
+    },
+    {
+      "cases": 52,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift",
+      "golden": "messages/poke-display-sort",
+      "path": "contract/golden/messages/poke-display-sort.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift"
+      ]
+    },
+    {
+      "cases": 16,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift",
+      "golden": "messages/poke-log",
+      "path": "contract/golden/messages/poke-log.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift",
+        "Sources/CheckCore/MessageRules.swift"
+      ]
+    },
+    {
+      "cases": 42,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift",
+      "golden": "messages/store-rules",
+      "path": "contract/golden/messages/store-rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift",
+        "Sources/CheckMobileKit/Messages/MessagesBlockRules.swift",
+        "Sources/CheckMobileKit/Components/MobileRelativeTime.swift"
+      ]
+    },
+    {
+      "cases": 21,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift",
+      "golden": "messages/thread-list",
+      "path": "contract/golden/messages/thread-list.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift",
+        "Sources/CheckCore/MessagePokeLog.swift",
+        "Sources/CheckCore/MessageRules.swift"
       ]
     },
     {

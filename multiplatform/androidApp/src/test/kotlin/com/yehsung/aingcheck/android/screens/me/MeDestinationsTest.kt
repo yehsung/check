@@ -30,4 +30,15 @@ class MeDestinationsTest {
         assertEquals(Dest.GrassDetail("token"), MeDestinations.dest(MeDestination.Grass(MeGrassAxis.token)))
         assertNull("미션 화면 목적지는 조립 몫(assembly.md)", MeDestinations.dest(MeDestination.Missions))
     }
+
+    /** 잔디 목적지 인자는 왕복한다(나 탭이 넣은 글자를 잔디 화면이 같은 축으로 푼다) · 모르는 글자는 근무로 연다. */
+    @Test
+    fun grassAxisArgRoundTripsAndFallsBackToWork() {
+        for (axis in MeGrassAxis.entries) {
+            val dest = MeDestinations.dest(MeDestination.Grass(axis)) as Dest.GrassDetail
+            assertEquals(axis, GrassAxisArg.parse(dest.axis))
+        }
+        assertEquals(MeGrassAxis.work, GrassAxisArg.parse("calories"))
+        assertEquals(MeGrassAxis.work, GrassAxisArg.parse(""))
+    }
 }

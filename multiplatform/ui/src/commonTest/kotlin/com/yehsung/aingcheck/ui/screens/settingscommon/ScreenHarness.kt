@@ -123,6 +123,13 @@ class DemoFixtures(paths: List<String>) {
             "me/_me/rpc.shop_state.json",
             "me/_me/rpc.weekly_work_status.json",
             "me/_me-settings/rest.profiles.get@select=minigame_public.json",
+            // 하위 화면(제보 · 프로필 · 캐릭터 고르기)이 부르는 것 — 나 탭 루트 새로고침은 부르지 않는다(루트 스냅숏과 무관).
+            "me/rpc.feedback_list.json",
+            "me/rpc.submit_feedback.json",
+            "me/rpc.set_character.json",
+            "me/rpc.set_status_message.json",
+            "me/rpc.set_display_name.json",
+            "me/rest.profiles.get@display_name_changed_at.json",
         )
     }
 }

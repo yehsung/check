@@ -97,10 +97,14 @@ fun SettingsRouteScreen(
         }
     }
 
+    // 바깥 매개변수를 다른 이름으로 잡는다 — 익명 객체 안의 같은 이름 호출은 읽는 사람에게 자기 멤버 호출(재귀)로 보인다.
+    // Kotlin 은 지역 이름(매개변수)을 먼저 풀어 실제로는 재귀가 아니다(결함 심기로 같은 이름으로 되돌려도 시험 초록 — 동치 확인). 읽기 쉬우라고 가른다.
+    val goBlockedPeople = openBlockedPeople
+    val goAccountDeletion = openAccountDeletion
     val actions = remember(store) {
         object : SettingsActions {
-            override fun openBlockedPeople() = openBlockedPeople()
-            override fun openAccountDeletion() = openAccountDeletion()
+            override fun openBlockedPeople() = goBlockedPeople()
+            override fun openAccountDeletion() = goAccountDeletion()
             override fun confirmSignOut() {
                 confirmingSignOut = true
             }

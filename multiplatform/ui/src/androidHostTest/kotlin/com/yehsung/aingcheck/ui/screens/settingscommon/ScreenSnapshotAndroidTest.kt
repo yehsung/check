@@ -130,6 +130,56 @@ class ScreenSnapshotAndroidTest {
         check("screens/settingscommon", "account-deletion-light", DELETION_H, scene(false, DELETION_H) { AccountDeletionScene(store, it) }, scene(false, DELETION_H) { AccountDeletionScene(typed, it) })
     }
 
+    // ---------------------------------------------------------------- 나 탭 하위 화면(잔디 상세 · 캐릭터 고르기 · 프로필 · 제보 · 차단한 사람)
+
+    /** 잔디 상세. 기준선 = 오늘 근무만 2시간 30분 → 2시간(칸 하나 · 막대 글자). */
+    @Test
+    fun grassDetailLight() {
+        val store = ScreenScenes.me(subScreens = true)
+        val shorter = ScreenScenes.me(subScreens = true, todayShorter = true)
+        check(
+            "screens/me", "me-grass-detail-light", GRASS_H,
+            scene(false, GRASS_H) { GrassDetailScene(store, com.yehsung.aingcheck.core.stores.me.MeGrassAxis.work, it) },
+            scene(false, GRASS_H) { GrassDetailScene(shorter, com.yehsung.aingcheck.core.stores.me.MeGrassAxis.work, it) },
+        )
+    }
+
+    /** 캐릭터 고르기. 기준선 = 루비 10. */
+    @Test
+    fun characterPickerDark() {
+        val store = ScreenScenes.me(subScreens = true)
+        val short = ScreenScenes.me(rubyOverride = 10, subScreens = true)
+        check("screens/me", "me-character-picker-dark", PICKER_H, scene(true, PICKER_H) { CharacterPickerScene(store, it) }, scene(true, PICKER_H) { CharacterPickerScene(short, it) })
+    }
+
+    /** 프로필. 기준선 = 별명 칸에 "새벽이". */
+    @Test
+    fun profileLight() {
+        val store = ScreenScenes.me(subScreens = true)
+        val typed = ScreenScenes.me(subScreens = true).also { it.displayNameDraft = "새벽이" }
+        check("screens/me", "me-profile-light", PROFILE_H, scene(false, PROFILE_H) { ProfileScene(store, it) }, scene(false, PROFILE_H) { ProfileScene(typed, it) })
+    }
+
+    /** 제보. 그릴 때마다 새 스토어(떠나면 새 답장을 '봤음'으로 적는다). 기준선 = 초안을 쓴 뒤. */
+    @Test
+    fun feedbackLight() {
+        val stores = ArrayDeque(List(3) { ScreenScenes.me(subScreens = true) })
+        val typed = ScreenScenes.me(subScreens = true).also { it.feedbackDraft = "위젯이 안 보여요" }
+        check(
+            "screens/me", "me-feedback-light", FEEDBACK_H,
+            scene(false, FEEDBACK_H) { FeedbackScene(androidx.compose.runtime.remember { stores.removeFirst() }, it) },
+            scene(false, FEEDBACK_H) { FeedbackScene(typed, it) },
+        )
+    }
+
+    /** 차단한 사람 두 명. 기준선 = 한 명. */
+    @Test
+    fun blockedPeopleDark() {
+        val two = ScreenScenes.blocked(2)
+        val one = ScreenScenes.blocked(1)
+        check("screens/settingscommon", "blocked-people-dark", BLOCKED_H, scene(true, BLOCKED_H) { BlockedPeopleScene(two, it) }, scene(true, BLOCKED_H) { BlockedPeopleScene(one, it) })
+    }
+
     @OptIn(ExperimentalTestApi::class)
     private fun render(content: @Composable () -> Unit): PixelImage {
         var out: PixelImage? = null
@@ -187,5 +237,10 @@ class ScreenSnapshotAndroidTest {
         const val SETTINGS_H = 1640
         const val DELETION_H = 580
         const val AI_H = 330
+        const val GRASS_H = 860
+        const val PICKER_H = 980
+        const val PROFILE_H = 940
+        const val FEEDBACK_H = 1000
+        const val BLOCKED_H = 300
     }
 }

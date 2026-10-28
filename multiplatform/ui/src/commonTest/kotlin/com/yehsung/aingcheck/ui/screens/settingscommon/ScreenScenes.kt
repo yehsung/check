@@ -18,7 +18,10 @@ import com.yehsung.aingcheck.core.stores.me.AILimitFetchedRow
 import com.yehsung.aingcheck.core.stores.me.MeStageMood
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.MeText
+import com.yehsung.aingcheck.core.stores.me.loadFeedback
 import com.yehsung.aingcheck.core.stores.me.loadSettings
+import com.yehsung.aingcheck.core.stores.me.loadStatusMessage
+import com.yehsung.aingcheck.core.stores.messages.loadBlocks
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -119,7 +122,10 @@ object ScreenScenes {
     }
 
     /** 나 탭 장면: 루트 새로고침을 끝낸 스토어(머리 · 상점 · 착용 · 기록 · 리밋 · 주간 · 미션). */
-    fun me(rubyOverride: Long? = null, settings: Boolean = false): MeStore {
+    /**
+     * @param todayShorter 음성 기준선: 오늘(9/17) 근무 한 건을 2시간 30분 → 2시간으로(잔디 칸 하나의 단계 · 막대 글자만 바뀐다).
+     */
+    fun me(rubyOverride: Long? = null, settings: Boolean = false, subScreens: Boolean = false, todayShorter: Boolean = false): MeStore {
         lateinit var store: MeStore
         runTest {
             val h = ScreenHarness(this, DemoFixtures(DemoFixtures.me), scenario = "me")
@@ -131,6 +137,10 @@ object ScreenScenes {
                         DemoFixture("me/_me-settings/rest.profiles.get@select=minigame_public.json").read()
                     // 데모 리밋 픽스처에는 device_id 가 없다(0.3.47 전 모양) — 기기 신원을 지어내지 않는 스토어가 줄을 다 버린다.
                     // 카드 줄이 서는 모양을 보려고 맥 한 대의 이름·id 를 덧붙인다(값은 픽스처 그대로).
+                    todayShorter && r.path == "/rest/v1/work_sessions" && r.query.any { it.first == "limit" } ->
+                        DemoFixture("me/rest.work_sessions.get@limit=5000.json").read()
+                            .replace("\"ended_at\": \"2026-09-17T03:30:00+00:00\",\n  \"duration_seconds\": 9000", "\"ended_at\": \"2026-09-17T03:00:00+00:00\",\n  \"duration_seconds\": 7200")
+                            .also { check(it.contains("2026-09-17T03:00:00")) { "오늘 근무 줄을 못 찾았다 — 픽스처가 바뀌었다" } }
                     r.path == "/rest/v1/ai_limits" -> DemoFixture("me/rest.ai_limits.get.json").read()
                         .replace("\"provider\":", "\"device_id\": \"mac-a-1111\", \"device_label\": \"예성의 MacBook Pro\", \"provider\":")
                     else -> null
@@ -145,7 +155,32 @@ object ScreenScenes {
                 store.loadSettings()
                 advanceUntilIdle()
             }
+            // 하위 화면(제보 · 프로필) 장면: 화면이 설 때 부르는 조회를 미리 끝낸다(그리기 때는 스토어 범위가 이미 닫혀 있다).
+            if (subScreens) {
+                store.loadFeedback()
+                store.loadStatusMessage()
+                advanceUntilIdle()
+            }
             if (rubyOverride != null) h.ruby.rubyBalance = rubyOverride
+        }
+        return store
+    }
+
+    /** 차단한 사람 장면: [count] 명(1 또는 2)을 돌려주는 list_blocks 로 채운 메시지 스토어. */
+    fun blocked(count: Int): com.yehsung.aingcheck.core.stores.messages.MessagesStore {
+        lateinit var store: com.yehsung.aingcheck.core.stores.messages.MessagesStore
+        runTest {
+            val rows = listOf(
+                """{"user_id":"d0000000-0000-4000-8000-0000000000b9","display_name":"민트","avatar_url":null,"created_at":"2026-09-16T03:00:00+00:00"}""",
+                """{"user_id":"d0000000-0000-4000-8000-0000000000c1","display_name":"노을","avatar_url":null,"created_at":"2026-09-10T03:00:00+00:00"}""",
+            ).take(count)
+            val h = ScreenHarness(this, DemoFixtures(DemoFixtures.me), scenario = "me")
+            h.override = { r -> if (r.path == "/rest/v1/rpc/list_blocks") rows.joinToString(",", "[", "]") else null }
+            h.signIn()
+            advanceUntilIdle()
+            store = com.yehsung.aingcheck.core.stores.messages.MessagesStore(h.context, h.storeScope, ScreenTestCollation)
+            store.loadBlocks(force = true)
+            advanceUntilIdle()
         }
         return store
     }
@@ -230,4 +265,32 @@ fun AILimitsTableScene(kind: String, modifier: Modifier) {
             )
         }
     }
+}
+
+@Composable
+fun GrassDetailScene(store: MeStore, axis: com.yehsung.aingcheck.core.stores.me.MeGrassAxis, modifier: Modifier) {
+    val scope = rememberCoroutineScope()
+    com.yehsung.aingcheck.ui.screens.me.GrassDetailScreen(store, axis, scope, modifier)
+}
+
+@Composable
+fun CharacterPickerScene(store: MeStore, modifier: Modifier) {
+    com.yehsung.aingcheck.ui.screens.me.CharacterPickerScreen(store, openShop = {}, openGachaMachine = {}, modifier = modifier, scrollable = false)
+}
+
+@Composable
+fun ProfileScene(store: MeStore, modifier: Modifier) {
+    val scope = rememberCoroutineScope()
+    com.yehsung.aingcheck.ui.screens.me.ProfileScreen(store, scope, onPickPhoto = {}, openCharacters = {}, modifier = modifier, scrollable = false)
+}
+
+@Composable
+fun FeedbackScene(store: MeStore, modifier: Modifier) {
+    val scope = rememberCoroutineScope()
+    com.yehsung.aingcheck.ui.screens.me.FeedbackScreen(store, scope, modifier)
+}
+
+@Composable
+fun BlockedPeopleScene(store: com.yehsung.aingcheck.core.stores.messages.MessagesStore, modifier: Modifier) {
+    BlockedPeopleScreen(store, modifier, scrollable = false)
 }

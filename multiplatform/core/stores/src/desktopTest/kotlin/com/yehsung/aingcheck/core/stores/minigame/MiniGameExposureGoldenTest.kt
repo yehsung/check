@@ -127,13 +127,16 @@ class MiniGameExposureGoldenTest {
      */
     @Test
     fun theConsumerScanCountsOnlyLiveTests() {
-        fun counted(src: String): List<String> = GoldenLoadScan.loads(StructureRules.stripComments(src)).filter { it.counted }.map { it.name }
+        // 견본 소스에는 `Golden.load(` 를 글자 그대로 적지 않는다 — testkit GoldenCoverageTest 가 게이트 시험 소스의 그 글자를 소비로 세어
+        // '목록 밖' 이름(x/…)으로 빨개진다. 견본은 `LOAD(` 로 적고 스캔 직전에 바꾼다.
+        fun counted(src: String): List<String> =
+            GoldenLoadScan.loads(StructureRules.stripComments(src.replace("LOAD(", "Golden" + ".load("))).filter { it.counted }.map { it.name }
         val live = """
             class A {
                 private val brace = "{ not a block"
                 @Test
                 fun a() {
-                    val g = Golden.load("x/live")
+                    val g = LOAD("x/live")
                 }
             }
         """.trimIndent()
@@ -149,7 +152,7 @@ class MiniGameExposureGoldenTest {
             class B {
                 @Test
                 fun b() = runTest {
-                    fun helper() = Golden.load("x/expr")
+                    fun helper() = LOAD("x/expr")
                     helper()
                 }
             }
@@ -157,7 +160,7 @@ class MiniGameExposureGoldenTest {
         assertEquals(listOf("x/expr"), counted(expressionBody), "식 몸통(= runTest { … }) · 안쪽 도우미 함수")
         val property = """
             class C {
-                private val golden = Golden.load("x/prop")
+                private val golden = LOAD("x/prop")
                 @Test
                 fun c() { golden.cases }
             }
@@ -166,10 +169,10 @@ class MiniGameExposureGoldenTest {
         assertEquals(emptyList(), counted(property.replace("@Test", "@Ignore @Test")), "켜진 @Test 가 하나도 없는 클래스의 칸")
         val nested = """
             class D {
-                @Test fun d() { Golden.load("x/outer") }
+                @Test fun d() { LOAD("x/outer") }
                 @Ignore
                 class Inner {
-                    @Test fun e() { Golden.load("x/inner") }
+                    @Test fun e() { LOAD("x/inner") }
                 }
             }
         """.trimIndent()

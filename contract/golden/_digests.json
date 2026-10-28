@@ -297,6 +297,49 @@
         "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696"
       }
     },
+    "messages/poke-display-sort": {
+      "file": "9577033da81036b8118f9292013f6d7440df3f2657ef7e391205c724381c2175",
+      "generator": {
+        "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift": "9d62e96a22367a44967721205ddbd596a352d466ac62d0ae671e68fa05f5206e"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "a0be4a564c68743478b707753f7b1ef02329e37c3ce8d0475452b968b5d03e11"
+      }
+    },
+    "messages/poke-log": {
+      "file": "1d7b00a1e731956f57a46d1fae1285ccf4b8e8af4b71db09d6c989be9e56efe0",
+      "generator": {
+        "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift": "9d62e96a22367a44967721205ddbd596a352d466ac62d0ae671e68fa05f5206e"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
+        "Sources/CheckCore/MessageRules.swift": "ba9d2295c390ef437a754d7bbcbc1fa3c2a4a7206c5d0863d5b3a6f327d8ac6c",
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "a0be4a564c68743478b707753f7b1ef02329e37c3ce8d0475452b968b5d03e11"
+      }
+    },
+    "messages/store-rules": {
+      "file": "b8d8c0156271e38f64aa5aae540acafaa742cc6b87acbdc69c25c6570a733555",
+      "generator": {
+        "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift": "9d62e96a22367a44967721205ddbd596a352d466ac62d0ae671e68fa05f5206e"
+      },
+      "swiftSources": {
+        "Sources/CheckMobileKit/Components/MobileRelativeTime.swift": "af2dd38d3c82d0e34652c9d0f5cfe26e99dab40541f03cf4981c4f4706deeb0c",
+        "Sources/CheckMobileKit/Messages/MessagesBlockRules.swift": "472948e8f3fb876762a13cbbac13c7b3aac85a70030a8a8f0acd9f176ce0108d",
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "a0be4a564c68743478b707753f7b1ef02329e37c3ce8d0475452b968b5d03e11"
+      }
+    },
+    "messages/thread-list": {
+      "file": "66066f8cbb64a7ef5027dfc75020088970a58d2d15043afc7d56b92d50de2287",
+      "generator": {
+        "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift": "9d62e96a22367a44967721205ddbd596a352d466ac62d0ae671e68fa05f5206e"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
+        "Sources/CheckCore/MessageRules.swift": "ba9d2295c390ef437a754d7bbcbc1fa3c2a4a7206c5d0863d5b3a6f327d8ac6c",
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "a0be4a564c68743478b707753f7b1ef02329e37c3ce8d0475452b968b5d03e11"
+      }
+    },
     "missions/achievements": {
       "file": "8ce2a2843481440453f8af0ae88c67b72a6c5b7e93fbdb746b2b9406face8f7c",
       "generator": {

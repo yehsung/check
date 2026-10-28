@@ -1,0 +1,3806 @@
+{
+  "cases": [
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000a",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          3
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          4
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c0.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "historySerial": 2,
+      "id": "badge-000",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9c600000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb18e00000",
+          "peer": "00000000-0000-4000-8000-00000000000c"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 2,
+          "settledSerial": 1,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 4,
+          "settledSerial": 3,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "m-01",
+          0
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000a"
+          },
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          },
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000c"
+          }
+        ],
+        "serial": 5
+      },
+      "unreadCount": 9
+    },
+    {
+      "countsByPeer": [],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/c2.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": true,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/d3.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-03",
+          "mine": true,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9ca00000",
+          "id": "m-01",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "é스페",
+          "createdAtBits": "41dab7be9ca00000",
+          "id": "m-00",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-04",
+          "mine": true,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": false,
+          "unread": null
+        }
+      ],
+      "historySerial": 5,
+      "id": "badge-001",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7bb17e00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7be9ca00000",
+          "peer": "00000000-0000-4000-8000-00000000000b"
+        },
+        {
+          "atBits": "41dab7bb18600000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        },
+        {
+          "atBits": "41dab7bb19200000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 5,
+          "settledSerial": 3,
+          "throughID": "m-03"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 4,
+          "settledSerial": 5,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 3,
+          "settledSerial": null,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          4
+        ],
+        [
+          "m-02",
+          3
+        ],
+        [
+          "m-03",
+          0
+        ],
+        [
+          "m-04",
+          1
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000a"
+          },
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000c"
+          },
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000d"
+          }
+        ],
+        "serial": 0
+      },
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [],
+      "entries": [],
+      "historySerial": 2,
+      "id": "badge-002",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9ce00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb18600000",
+          "peer": "00000000-0000-4000-8000-00000000000b"
+        },
+        {
+          "atBits": "41dab7be9c200000",
+          "peer": "00000000-0000-4000-8000-00000000000c"
+        },
+        {
+          "atBits": "41dab7be9be00000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 0,
+          "settledSerial": 4,
+          "throughID": "gone"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 3,
+          "settledSerial": 3,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [],
+      "summary": null,
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/c2.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7b794000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "historySerial": 4,
+      "id": "badge-003",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9c200000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb18a00000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        },
+        {
+          "atBits": "41dab7bb17e00000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 1,
+          "settledSerial": null,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 5,
+          "settledSerial": 4,
+          "throughID": "gone"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 0,
+          "settledSerial": 1,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 2,
+          "settledSerial": 3,
+          "throughID": "m-02"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "m-02",
+          1
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 1,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          },
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000c"
+          },
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000e"
+          }
+        ],
+        "serial": 3
+      },
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/b1.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-00",
+          "mine": true,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "historySerial": 0,
+      "id": "badge-004",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9d200000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb19200000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 2,
+          "settledSerial": 0,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 2,
+          "settledSerial": 0,
+          "throughID": "m-00"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "m-01",
+          0
+        ]
+      ],
+      "summary": null,
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-03",
+          "mine": true,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a1.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c2.png",
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "historySerial": 2,
+      "id": "badge-005",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9be00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb19200000",
+          "peer": "00000000-0000-4000-8000-00000000000b"
+        },
+        {
+          "atBits": "41dab7bb18a00000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        },
+        {
+          "atBits": "41dab7bb18600000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 4,
+          "settledSerial": 2,
+          "throughID": "m-00"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 5,
+          "settledSerial": 5,
+          "throughID": "m-01"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          3
+        ],
+        [
+          "m-03",
+          0
+        ]
+      ],
+      "summary": null,
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/b2.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/d1.png",
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7be8d000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-00",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/d3.png",
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-03",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": false,
+          "unread": null
+        }
+      ],
+      "historySerial": 5,
+      "id": "badge-006",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9ca00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7be9be00000",
+          "peer": "00000000-0000-4000-8000-00000000000c"
+        },
+        {
+          "atBits": "41dab7be9be00000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 2,
+          "settledSerial": 5,
+          "throughID": "m-00"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "m-01",
+          3
+        ],
+        [
+          "m-02",
+          2
+        ],
+        [
+          "m-03",
+          0
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000a"
+          },
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          }
+        ],
+        "serial": 1
+      },
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          1
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/d2.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7865c200000",
+          "id": "m-02",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/c0.png",
+          "body": "　전각　공백",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-00",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/b3.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-03",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/d1.png",
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a4.png",
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "historySerial": 4,
+      "id": "badge-007",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7bb18200000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        },
+        {
+          "atBits": "41dab7bb17e00000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 3,
+          "settledSerial": 4,
+          "throughID": "m-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 2,
+          "settledSerial": 2,
+          "throughID": "m-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 1,
+          "settledSerial": null,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "m-02",
+          4
+        ],
+        [
+          "m-03",
+          1
+        ],
+        [
+          "m-04",
+          3
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000a"
+          },
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000c"
+          }
+        ],
+        "serial": 1
+      },
+      "unreadCount": 1
+    },
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          1
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/e2.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "안녕",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-00",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7865c200000",
+          "id": "m-03",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/c1.png",
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "historySerial": 4,
+      "id": "badge-008",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7bb18e00000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 1,
+          "settledSerial": 1,
+          "throughID": "m-00"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 4,
+          "settledSerial": 5,
+          "throughID": "m-02"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          1
+        ],
+        [
+          "m-01",
+          2
+        ],
+        [
+          "m-02",
+          3
+        ],
+        [
+          "m-03",
+          4
+        ],
+        [
+          "m-04",
+          0
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 1,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          },
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000d"
+          }
+        ],
+        "serial": 2
+      },
+      "unreadCount": 1
+    },
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          1
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          3
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          2
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-00",
+          "mine": true,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "historySerial": 4,
+      "id": "badge-009",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7bb18a00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        }
+      ],
+      "optimistic": [],
+      "serverOrder": [
+        [
+          "m-00",
+          0
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 1,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          },
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000d"
+          },
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000e"
+          }
+        ],
+        "serial": 4
+      },
+      "unreadCount": 6
+    },
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          1
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          1
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000e",
+          2
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-03",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/e1.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "historySerial": null,
+      "id": "badge-010",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9c600000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb18600000",
+          "peer": "00000000-0000-4000-8000-00000000000b"
+        },
+        {
+          "atBits": "41dab7bb17e00000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 5,
+          "settledSerial": 3,
+          "throughID": "m-03"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 1,
+          "settledSerial": 3,
+          "throughID": "gone"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 1,
+          "settledSerial": null,
+          "throughID": "m-01"
+        },
+        {
+          "failed": true,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 5,
+          "settledSerial": 3,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          3
+        ],
+        [
+          "m-01",
+          0
+        ],
+        [
+          "m-02",
+          2
+        ],
+        [
+          "m-03",
+          1
+        ],
+        [
+          "m-04",
+          4
+        ]
+      ],
+      "summary": null,
+      "unreadCount": 4
+    },
+    {
+      "countsByPeer": [],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/b0.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "historySerial": 5,
+      "id": "badge-011",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7bb18e00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7be9c200000",
+          "peer": "00000000-0000-4000-8000-00000000000b"
+        },
+        {
+          "atBits": "41dab7bb18600000",
+          "peer": "00000000-0000-4000-8000-00000000000c"
+        },
+        {
+          "atBits": "41dab7bb18a00000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        },
+        {
+          "atBits": "41dab7be9ce00000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 4,
+          "settledSerial": 4,
+          "throughID": "m-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 1,
+          "settledSerial": null,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 2,
+          "settledSerial": 1,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          0
+        ],
+        [
+          "m-01",
+          1
+        ]
+      ],
+      "summary": null,
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          2
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          1
+        ]
+      ],
+      "entries": [],
+      "historySerial": null,
+      "id": "badge-012",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7bb18a00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb18a00000",
+          "peer": "00000000-0000-4000-8000-00000000000b"
+        },
+        {
+          "atBits": "41dab7bb18600000",
+          "peer": "00000000-0000-4000-8000-00000000000c"
+        },
+        {
+          "atBits": "41dab7bb19200000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 2,
+          "settledSerial": null,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [],
+      "summary": {
+        "peers": [
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000a"
+          },
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          },
+          {
+            "count": 1,
+            "peer": "00000000-0000-4000-8000-00000000000c"
+          }
+        ],
+        "serial": 3
+      },
+      "unreadCount": 3
+    },
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          3
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          3
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000d",
+          1
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "é스페",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/a1.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-01",
+          "mine": false,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "historySerial": null,
+      "id": "badge-013",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7bb17e00000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        },
+        {
+          "atBits": "41dab7bb17e00000",
+          "peer": "00000000-0000-4000-8000-00000000000e"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 1,
+          "settledSerial": 5,
+          "throughID": "m-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 0,
+          "settledSerial": 0,
+          "throughID": "m-01"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 4,
+          "settledSerial": null,
+          "throughID": "gone"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          0
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000a"
+          },
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          },
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000c"
+          },
+          {
+            "count": 1,
+            "peer": "00000000-0000-4000-8000-00000000000d"
+          },
+          {
+            "count": 2,
+            "peer": "00000000-0000-4000-8000-00000000000e"
+          }
+        ],
+        "serial": 4
+      },
+      "unreadCount": 7
+    },
+    {
+      "countsByPeer": [],
+      "entries": [
+        {
+          "avatar": null,
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab766b8200000",
+          "id": "m-00",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "historySerial": 5,
+      "id": "badge-014",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9ca00000",
+          "peer": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "atBits": "41dab7bb17e00000",
+          "peer": "00000000-0000-4000-8000-00000000000c"
+        },
+        {
+          "atBits": "41dab7bb18200000",
+          "peer": "00000000-0000-4000-8000-00000000000d"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "recordedSerial": 3,
+          "settledSerial": 4,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "recordedSerial": 2,
+          "settledSerial": null,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 5,
+          "settledSerial": null,
+          "throughID": "m-00"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "recordedSerial": 1,
+          "settledSerial": null,
+          "throughID": "m-00"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          0
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000d"
+          }
+        ],
+        "serial": 5
+      },
+      "unreadCount": 0
+    },
+    {
+      "countsByPeer": [
+        [
+          "00000000-0000-4000-8000-00000000000b",
+          3
+        ],
+        [
+          "00000000-0000-4000-8000-00000000000c",
+          3
+        ]
+      ],
+      "entries": [
+        {
+          "avatar": "https://example.invalid/a/b2.png",
+          "body": "안녕",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-02",
+          "mine": true,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/e1.png",
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7dabc000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "historySerial": 3,
+      "id": "badge-015",
+      "legacyStamps": [
+        {
+          "atBits": "41dab7be9be00000",
+          "peer": "00000000-0000-4000-8000-00000000000b"
+        }
+      ],
+      "optimistic": [
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "recordedSerial": 2,
+          "settledSerial": null,
+          "throughID": "m-02"
+        },
+        {
+          "failed": false,
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "recordedSerial": 5,
+          "settledSerial": 5,
+          "throughID": "m-02"
+        }
+      ],
+      "serverOrder": [
+        [
+          "m-00",
+          2
+        ],
+        [
+          "m-01",
+          1
+        ],
+        [
+          "m-02",
+          0
+        ]
+      ],
+      "summary": {
+        "peers": [
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000b"
+          },
+          {
+            "count": 3,
+            "peer": "00000000-0000-4000-8000-00000000000c"
+          },
+          {
+            "count": 4,
+            "peer": "00000000-0000-4000-8000-00000000000d"
+          }
+        ],
+        "serial": 3
+      },
+      "unreadCount": 6
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/d1.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab766b8000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "appliedSerial": 3,
+      "id": "pending-000",
+      "kept": [],
+      "pending": [
+        {
+          "body": "　전각　공백",
+          "createdAtBits": "41dab7bf31c00000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 0
+        }
+      ],
+      "previous": [
+        "m-01"
+      ]
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/c2.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a0.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-03",
+          "mine": true,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/e1.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "appliedSerial": 4,
+      "id": "pending-001",
+      "kept": [
+        "local-0"
+      ],
+      "pending": [
+        {
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7bded000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": "sending"
+        },
+        {
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7bf32400000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 3
+        }
+      ],
+      "previous": [
+        "m-02",
+        "m-03"
+      ]
+    },
+    {
+      "applied": [
+        {
+          "avatar": null,
+          "body": "é스페",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-02",
+          "mine": true,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/e0.png",
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-00",
+          "mine": true,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": false,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "appliedSerial": 1,
+      "id": "pending-002",
+      "kept": [
+        "local-0",
+        "local-1",
+        "local-2"
+      ],
+      "pending": [
+        {
+          "body": "안녕",
+          "createdAtBits": "41dab7bf31c00000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "state": "sending"
+        },
+        {
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "state": 4
+        },
+        {
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "local-2",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "state": "sending"
+        }
+      ],
+      "previous": [
+        "m-00"
+      ]
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/e0.png",
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be8d200000",
+          "id": "m-01",
+          "mine": true,
+          "name": "두리",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": false,
+          "unread": null
+        }
+      ],
+      "appliedSerial": 2,
+      "id": "pending-003",
+      "kept": [
+        "local-0"
+      ],
+      "pending": [
+        {
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7bf32400000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "state": "sending"
+        }
+      ],
+      "previous": []
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/e0.png",
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c200000",
+          "id": "m-00",
+          "mine": false,
+          "name": "아잉 데모",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c2.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be8d200000",
+          "id": "m-02",
+          "mine": false,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": null,
+          "body": "안녕",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-03",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7b794000000",
+          "id": "m-01",
+          "mine": true,
+          "name": "가나",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": false,
+          "unread": null
+        }
+      ],
+      "appliedSerial": 2,
+      "id": "pending-004",
+      "kept": [
+        "local-0",
+        "local-1"
+      ],
+      "pending": [
+        {
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": "sending"
+        },
+        {
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab7bee7000000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": "sending"
+        }
+      ],
+      "previous": [
+        "m-03"
+      ]
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/b1.png",
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "고양",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/d0.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-00",
+          "mine": true,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": true,
+          "unread": null
+        }
+      ],
+      "appliedSerial": 4,
+      "id": "pending-005",
+      "kept": [],
+      "pending": [
+        {
+          "body": "é스페",
+          "createdAtBits": "41dab7bded000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "state": 3
+        }
+      ],
+      "previous": []
+    },
+    {
+      "applied": [],
+      "appliedSerial": 5,
+      "id": "pending-006",
+      "kept": [],
+      "pending": [
+        {
+          "body": "[아잉:기쁨]",
+          "createdAtBits": "41dab7be06000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 0
+        }
+      ],
+      "previous": []
+    },
+    {
+      "applied": [],
+      "appliedSerial": 4,
+      "id": "pending-007",
+      "kept": [
+        "local-1",
+        "local-2"
+      ],
+      "pending": [
+        {
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7bf32400000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 2
+        },
+        {
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7bf32400000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "state": "sending"
+        },
+        {
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7bf31c00000",
+          "id": "local-2",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "state": "sending"
+        }
+      ],
+      "previous": []
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/c3.png",
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-03",
+          "mine": true,
+          "name": "민트",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": true,
+          "unread": null
+        },
+        {
+          "avatar": "https://example.invalid/a/a1.png",
+          "body": "줄1\r\n줄2",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "ＡＢＣ",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": "https://example.invalid/a/e2.png",
+          "body": "é스페",
+          "createdAtBits": "41dab766b8200000",
+          "id": "m-02",
+          "mine": false,
+          "name": "Émile",
+          "peer": "00000000-0000-4000-8000-00000000000e",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/b0.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "이름10",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        }
+      ],
+      "appliedSerial": 3,
+      "id": "pending-008",
+      "kept": [
+        "local-0",
+        "local-3"
+      ],
+      "pending": [
+        {
+          "body": "안녕\n  하세요",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": "sending"
+        },
+        {
+          "body": "é스페",
+          "createdAtBits": "41dab7bf32400000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "state": 1
+        },
+        {
+          "body": "👍🏽 좋아",
+          "createdAtBits": "41dab7bded000000",
+          "id": "local-2",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 0
+        },
+        {
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7bee7000000",
+          "id": "local-3",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "state": "sending"
+        }
+      ],
+      "previous": [
+        "m-03"
+      ]
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/a1.png",
+          "body": "ㅋㅋㅋ",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-01",
+          "mine": false,
+          "name": "이름2",
+          "peer": "00000000-0000-4000-8000-00000000000a",
+          "readByPeer": null,
+          "unread": null
+        },
+        {
+          "avatar": null,
+          "body": "é스페",
+          "createdAtBits": "41dab7865c000000",
+          "id": "m-03",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000b",
+          "readByPeer": null,
+          "unread": false
+        },
+        {
+          "avatar": "https://example.invalid/a/c0.png",
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab76a3c000000",
+          "id": "m-00",
+          "mine": false,
+          "name": "ann",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7b794000000",
+          "id": "m-02",
+          "mine": false,
+          "name": "Ann",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": true
+        },
+        {
+          "avatar": null,
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7bb18000000",
+          "id": "m-04",
+          "mine": false,
+          "name": "한결",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "appliedSerial": 0,
+      "id": "pending-009",
+      "kept": [
+        "local-0",
+        "local-1",
+        "local-2"
+      ],
+      "pending": [
+        {
+          "body": "[아잉:하트]",
+          "createdAtBits": "41dab7be06000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 3
+        },
+        {
+          "body": "끝 공백  ",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 4
+        },
+        {
+          "body": " 공백  여러  칸 ",
+          "createdAtBits": "41dab7bee7000000",
+          "id": "local-2",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "state": "sending"
+        }
+      ],
+      "previous": [
+        "m-01",
+        "m-04"
+      ]
+    },
+    {
+      "applied": [
+        {
+          "avatar": "https://example.invalid/a/d0.png",
+          "body": "é스페",
+          "createdAtBits": "41dab7be9c400000",
+          "id": "m-00",
+          "mine": false,
+          "name": "zed",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "readByPeer": null,
+          "unread": null
+        }
+      ],
+      "appliedSerial": 4,
+      "id": "pending-010",
+      "kept": [],
+      "pending": [
+        {
+          "body": "é스페",
+          "createdAtBits": "41dab7be9c000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "state": 2
+        },
+        {
+          "body": "é스페",
+          "createdAtBits": "41dab7bee7000000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000d",
+          "state": 3
+        }
+      ],
+      "previous": []
+    },
+    {
+      "applied": [
+        {
+          "avatar": null,
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7be9c800000",
+          "id": "m-00",
+          "mine": false,
+          "name": "bob",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "readByPeer": null,
+          "unread": true
+        }
+      ],
+      "appliedSerial": 3,
+      "id": "pending-011",
+      "kept": [
+        "local-0",
+        "local-1"
+      ],
+      "pending": [
+        {
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7bded000000",
+          "id": "local-0",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": "sending"
+        },
+        {
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7bee7000000",
+          "id": "local-1",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": "sending"
+        },
+        {
+          "body": "탭\t글자",
+          "createdAtBits": "41dab7bded000000",
+          "id": "local-2",
+          "peer": "00000000-0000-4000-8000-00000000000c",
+          "state": 2
+        }
+      ],
+      "previous": [
+        "m-00"
+      ]
+    },
+    {
+      "connectionNotice": "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+      "countBadges": [
+        {
+          "badge": null,
+          "count": null,
+          "unread": false
+        },
+        {
+          "badge": "1",
+          "count": null,
+          "unread": true
+        },
+        {
+          "badge": null,
+          "count": 0,
+          "unread": false
+        },
+        {
+          "badge": "1",
+          "count": 0,
+          "unread": true
+        },
+        {
+          "badge": null,
+          "count": 1,
+          "unread": false
+        },
+        {
+          "badge": "1",
+          "count": 1,
+          "unread": true
+        },
+        {
+          "badge": null,
+          "count": 5,
+          "unread": false
+        },
+        {
+          "badge": "5",
+          "count": 5,
+          "unread": true
+        },
+        {
+          "badge": null,
+          "count": 99,
+          "unread": false
+        },
+        {
+          "badge": "99",
+          "count": 99,
+          "unread": true
+        },
+        {
+          "badge": null,
+          "count": 100,
+          "unread": false
+        },
+        {
+          "badge": "99+",
+          "count": 100,
+          "unread": true
+        },
+        {
+          "badge": null,
+          "count": 250,
+          "unread": false
+        },
+        {
+          "badge": "99+",
+          "count": 250,
+          "unread": true
+        }
+      ],
+      "counters": [
+        {
+          "counter": null,
+          "draft": "",
+          "overflow": false
+        },
+        {
+          "counter": null,
+          "draft": "가",
+          "overflow": false
+        },
+        {
+          "counter": null,
+          "draft": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+          "overflow": false
+        },
+        {
+          "counter": "180/200",
+          "draft": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+          "overflow": false
+        },
+        {
+          "counter": "200/200",
+          "draft": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "overflow": false
+        },
+        {
+          "counter": "190/200",
+          "draft": "👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽👍🏽",
+          "overflow": false
+        },
+        {
+          "counter": "201/200",
+          "draft": "나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나",
+          "overflow": true
+        },
+        {
+          "counter": "185/200",
+          "draft": "  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "overflow": false
+        },
+        {
+          "counter": "181/200",
+          "draft": "éeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "overflow": false
+        }
+      ],
+      "empty": [
+        {
+          "failed": false,
+          "hint": null,
+          "loaded": false,
+          "retry": false,
+          "symbol": "hourglass",
+          "title": "불러오는 중…"
+        },
+        {
+          "failed": true,
+          "hint": "연결을 확인하고 다시 시도해 주세요",
+          "loaded": false,
+          "retry": true,
+          "symbol": "exclamationmark.triangle",
+          "title": "대화를 불러오지 못했어요"
+        },
+        {
+          "failed": false,
+          "hint": "아래에 먼저 한마디 남겨 보세요",
+          "loaded": true,
+          "retry": false,
+          "symbol": "bubble.left.and.bubble.right",
+          "title": "아직 주고받은 메시지가 없어요"
+        },
+        {
+          "failed": true,
+          "hint": "아래에 먼저 한마디 남겨 보세요",
+          "loaded": true,
+          "retry": false,
+          "symbol": "bubble.left.and.bubble.right",
+          "title": "아직 주고받은 메시지가 없어요"
+        }
+      ],
+      "headers": [
+        {
+          "a11y": "이름을 불러오지 못한 대화",
+          "avatarName": null,
+          "name": null,
+          "resolving": false,
+          "title": "대화"
+        },
+        {
+          "a11y": "대화 상대를 불러오는 중",
+          "avatarName": null,
+          "name": null,
+          "resolving": true,
+          "title": "대화"
+        },
+        {
+          "a11y": "이름을 불러오지 못한 대화",
+          "avatarName": null,
+          "name": "",
+          "resolving": false,
+          "title": "대화"
+        },
+        {
+          "a11y": "대화 상대를 불러오는 중",
+          "avatarName": null,
+          "name": "",
+          "resolving": true,
+          "title": "대화"
+        },
+        {
+          "a11y": "이름을 불러오지 못한 대화",
+          "avatarName": null,
+          "name": "  ",
+          "resolving": false,
+          "title": "대화"
+        },
+        {
+          "a11y": "대화 상대를 불러오는 중",
+          "avatarName": null,
+          "name": "  ",
+          "resolving": true,
+          "title": "대화"
+        },
+        {
+          "a11y": "한결",
+          "avatarName": "한결",
+          "name": "한결",
+          "resolving": false,
+          "title": "한결"
+        },
+        {
+          "a11y": "한결",
+          "avatarName": "한결",
+          "name": "한결",
+          "resolving": true,
+          "title": "한결"
+        },
+        {
+          "a11y": "민트",
+          "avatarName": "민트",
+          "name": " 민트 ",
+          "resolving": false,
+          "title": "민트"
+        },
+        {
+          "a11y": "민트",
+          "avatarName": "민트",
+          "name": " 민트 ",
+          "resolving": true,
+          "title": "민트"
+        },
+        {
+          "a11y": "이름을 불러오지 못한 대화",
+          "avatarName": null,
+          "name": "\n",
+          "resolving": false,
+          "title": "대화"
+        },
+        {
+          "a11y": "대화 상대를 불러오는 중",
+          "avatarName": null,
+          "name": "\n",
+          "resolving": true,
+          "title": "대화"
+        }
+      ],
+      "id": "text",
+      "notices": [
+        {
+          "max": null,
+          "notice": null,
+          "outcome": "ok"
+        },
+        {
+          "max": 40,
+          "notice": null,
+          "outcome": "ok"
+        },
+        {
+          "max": null,
+          "notice": "근무 중일 때만 메시지를 보낼 수 있어요",
+          "outcome": "notWorking"
+        },
+        {
+          "max": 40,
+          "notice": "근무 중일 때만 메시지를 보낼 수 있어요",
+          "outcome": "notWorking"
+        },
+        {
+          "max": null,
+          "notice": "자리비움 상태에는 보낼 수 없어요",
+          "outcome": "targetNotWorking"
+        },
+        {
+          "max": 40,
+          "notice": "자리비움 상태에는 보낼 수 없어요",
+          "outcome": "targetNotWorking"
+        },
+        {
+          "max": null,
+          "notice": "지금 집중 중이에요. 나중에 보내 주세요",
+          "outcome": "targetFocused"
+        },
+        {
+          "max": 40,
+          "notice": "지금 집중 중이에요. 나중에 보내 주세요",
+          "outcome": "targetFocused"
+        },
+        {
+          "max": null,
+          "notice": "메시지는 200자까지예요. 줄여서 보내 주세요",
+          "outcome": "tooLong"
+        },
+        {
+          "max": 40,
+          "notice": "메시지는 40자까지예요. 줄여서 보내 주세요",
+          "outcome": "tooLong"
+        },
+        {
+          "max": null,
+          "notice": "보낼 수 없는 글자가 섞여 있어요",
+          "outcome": "notText"
+        },
+        {
+          "max": 40,
+          "notice": "보낼 수 없는 글자가 섞여 있어요",
+          "outcome": "notText"
+        },
+        {
+          "max": null,
+          "notice": "지금은 메시지를 주고받을 수 없어요",
+          "outcome": "blackout"
+        },
+        {
+          "max": 40,
+          "notice": "지금은 메시지를 주고받을 수 없어요",
+          "outcome": "blackout"
+        },
+        {
+          "max": null,
+          "notice": "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요",
+          "outcome": "flood"
+        },
+        {
+          "max": 40,
+          "notice": "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요",
+          "outcome": "flood"
+        },
+        {
+          "max": null,
+          "notice": "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요",
+          "outcome": "invalid"
+        },
+        {
+          "max": 40,
+          "notice": "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요",
+          "outcome": "invalid"
+        }
+      ],
+      "previews": [
+        {
+          "body": "안녕",
+          "preview": "안녕"
+        },
+        {
+          "body": "안녕\n  하세요",
+          "preview": "안녕 하세요"
+        },
+        {
+          "body": " 공백  여러  칸 ",
+          "preview": "공백 여러 칸"
+        },
+        {
+          "body": "[아잉:기쁨]",
+          "preview": "아잉이 기쁨"
+        },
+        {
+          "body": "[아잉:하트]",
+          "preview": "아잉이 하트"
+        },
+        {
+          "body": "탭\t글자",
+          "preview": "탭 글자"
+        },
+        {
+          "body": "　전각　공백",
+          "preview": "전각 공백"
+        },
+        {
+          "body": "é스페",
+          "preview": "é스페"
+        },
+        {
+          "body": "👍🏽 좋아",
+          "preview": "👍🏽 좋아"
+        },
+        {
+          "body": "줄1\r\n줄2",
+          "preview": "줄1 줄2"
+        },
+        {
+          "body": "끝 공백  ",
+          "preview": "끝 공백"
+        },
+        {
+          "body": "ㅋㅋㅋ",
+          "preview": "ㅋㅋㅋ"
+        },
+        {
+          "body": "",
+          "preview": ""
+        },
+        {
+          "body": "   ",
+          "preview": ""
+        },
+        {
+          "body": "\n\n",
+          "preview": ""
+        },
+        {
+          "body": "a b",
+          "preview": "a b"
+        },
+        {
+          "body": "a b",
+          "preview": "a b"
+        },
+        {
+          "body": "[아잉:놀람] ",
+          "preview": "아잉이 놀람"
+        },
+        {
+          "body": " [아잉:졸림]",
+          "preview": "아잉이 졸림"
+        },
+        {
+          "body": "[아잉:없음]",
+          "preview": "[아잉:없음]"
+        }
+      ],
+      "subtitles": [
+        {
+          "count": 0,
+          "subtitle": null
+        },
+        {
+          "count": 1,
+          "subtitle": "안 읽은 메시지 1"
+        },
+        {
+          "count": 3,
+          "subtitle": "안 읽은 메시지 3"
+        },
+        {
+          "count": 120,
+          "subtitle": "안 읽은 메시지 120"
+        }
+      ]
+    },
+    {
+      "id": "times",
+      "times": [
+        {
+          "blockedAt": "어제 차단",
+          "dateBits": "41dab776be800000",
+          "nowBits": "41dab7cc6f000000",
+          "relative": "어제",
+          "text": "어제"
+        },
+        {
+          "blockedAt": "어제 차단",
+          "dateBits": "41dab75673400000",
+          "nowBits": "41dab7c322800000",
+          "relative": "어제",
+          "text": "어제"
+        },
+        {
+          "blockedAt": "13시간 전 차단",
+          "dateBits": "41dab7a965400000",
+          "nowBits": "41dab7d8d3800000",
+          "relative": "13시간 전",
+          "text": "09:57"
+        },
+        {
+          "blockedAt": "방금 차단",
+          "dateBits": "41dab7d225c00000",
+          "nowBits": "41dab7cf83800000",
+          "relative": "방금",
+          "text": "21:33"
+        },
+        {
+          "blockedAt": "어제 차단",
+          "dateBits": "41dab7411f900000",
+          "nowBits": "41dab7ce5b400000",
+          "relative": "어제",
+          "text": "어제"
+        },
+        {
+          "blockedAt": "20시간 전 차단",
+          "dateBits": "41dab78a4f000000",
+          "nowBits": "41dab7d349400000",
+          "relative": "20시간 전",
+          "text": "01:07"
+        },
+        {
+          "blockedAt": "방금 차단",
+          "dateBits": "41dab7cf81800000",
+          "nowBits": "41dab7c987c00000",
+          "relative": "방금",
+          "text": "20:48"
+        },
+        {
+          "blockedAt": "어제 차단",
+          "dateBits": "41dab766ef000000",
+          "nowBits": "41dab7cefd400000",
+          "relative": "어제",
+          "text": "어제"
+        },
+        {
+          "blockedAt": "방금 차단",
+          "dateBits": "41dab7d369400000",
+          "nowBits": "41dab7c3eec00000",
+          "relative": "방금",
+          "text": "21:55"
+        },
+        {
+          "blockedAt": "방금 차단",
+          "dateBits": "41dab7e140000000",
+          "nowBits": "41dab7caed800000",
+          "relative": "방금",
+          "text": "10월 27일"
+        },
+        {
+          "blockedAt": "어제 차단",
+          "dateBits": "41dab77dd0500000",
+          "nowBits": "41dab7d61c800000",
+          "relative": "어제",
+          "text": "어제"
+        },
+        {
+          "blockedAt": "5시간 전 차단",
+          "dateBits": "41dab7b3f7c00000",
+          "nowBits": "41dab7c7c4400000",
+          "relative": "5시간 전",
+          "text": "12:58"
+        },
+        {
+          "blockedAt": "15시간 전 차단",
+          "dateBits": "41dab791d8c00000",
+          "nowBits": "41dab7c98b400000",
+          "relative": "15시간 전",
+          "text": "03:16"
+        },
+        {
+          "blockedAt": "방금 차단",
+          "dateBits": "41dab7eeb5500000",
+          "nowBits": "41dab7cb98c00000",
+          "relative": "방금",
+          "text": "10월 27일"
+        },
+        {
+          "blockedAt": "방금 차단",
+          "dateBits": "41dab7d152400000",
+          "nowBits": "41dab7cceec00000",
+          "relative": "방금",
+          "text": "21:19"
+        },
+        {
+          "blockedAt": "방금 차단",
+          "dateBits": "41dab7c6d9000000",
+          "nowBits": "41dab7c47c000000",
+          "relative": "방금",
+          "text": "18:20"
+        }
+      ]
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/w/a.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "zed",
+          "status": "working"
+        },
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "고양",
+          "status": "working"
+        },
+        {
+          "avatar": "https://example.invalid/n/d.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "bob",
+          "status": "pending"
+        },
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "아잉 데모",
+          "status": "pending"
+        }
+      ],
+      "id": "presence-000",
+      "isKnown": true,
+      "me": null,
+      "messagesDirectory": [
+        {
+          "avatar": "https://example.invalid/d/a.png",
+          "center": "부산",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "이름2",
+          "status": "집중 중",
+          "working": false
+        },
+        {
+          "avatar": null,
+          "center": "제주",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "Émile",
+          "status": "🍀",
+          "working": false
+        },
+        {
+          "avatar": null,
+          "center": "부산",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "두리",
+          "status": "집중 중",
+          "working": true
+        }
+      ],
+      "nowDirectory": [
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "한결",
+          "status": "🍀",
+          "working": false
+        },
+        {
+          "avatar": "https://example.invalid/n/d.png",
+          "center": "seoul",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "한결",
+          "status": "집중 중",
+          "working": false
+        }
+      ],
+      "nowWorking": [
+        {
+          "avatar": "https://example.invalid/w/a.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "zed",
+          "stale": false
+        },
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "고양",
+          "stale": false
+        },
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "bob",
+          "stale": true
+        },
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "아잉 데모",
+          "stale": true
+        }
+      ],
+      "peers": [
+        {
+          "center": "nowhere",
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "working"
+        },
+        {
+          "center": "nowhere",
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "status": "working"
+        },
+        {
+          "center": "busan",
+          "headerLine": "연결 끊김 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "status": "pending"
+        },
+        {
+          "center": "busan",
+          "headerLine": "연결 끊김 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "status": "pending"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "text": "집중 중"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "text": "🍀"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "text": "집중 중"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "text": "집중 중"
+        }
+      ],
+      "teamIDs": [],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "zed",
+          "status": "working"
+        },
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "한결",
+          "status": "working"
+        }
+      ],
+      "id": "presence-001",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000b",
+      "messagesDirectory": [
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "한결",
+          "status": "회의\n중",
+          "working": true
+        }
+      ],
+      "nowDirectory": null,
+      "nowWorking": [
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "zed",
+          "stale": false
+        },
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "zed",
+          "stale": false
+        }
+      ],
+      "peers": [
+        {
+          "center": null,
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "working"
+        },
+        {
+          "center": null,
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "status": "working"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "text": "회의\n중"
+        }
+      ],
+      "teamIDs": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d"
+      ],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c"
+      ]
+    },
+    {
+      "boardWorking": [],
+      "id": "presence-002",
+      "isKnown": false,
+      "me": null,
+      "messagesDirectory": null,
+      "nowDirectory": null,
+      "nowWorking": [
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "name": "ＡＢＣ",
+          "stale": true
+        },
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "민트",
+          "stale": true
+        }
+      ],
+      "peers": [],
+      "statuses": [],
+      "teamIDs": [],
+      "workingPeerIDs": []
+    },
+    {
+      "boardWorking": [],
+      "id": "presence-003",
+      "isKnown": false,
+      "me": "00000000-0000-4000-8000-00000000000d",
+      "messagesDirectory": null,
+      "nowDirectory": null,
+      "nowWorking": [
+        {
+          "avatar": null,
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "이름2",
+          "stale": false
+        },
+        {
+          "avatar": null,
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "이름2",
+          "stale": false
+        }
+      ],
+      "peers": [],
+      "statuses": [],
+      "teamIDs": [],
+      "workingPeerIDs": []
+    },
+    {
+      "boardWorking": [],
+      "id": "presence-004",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000b",
+      "messagesDirectory": [
+        {
+          "avatar": null,
+          "center": "제주",
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "name": "두리",
+          "status": "집중 중",
+          "working": true
+        },
+        {
+          "avatar": null,
+          "center": "제주",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "두리",
+          "status": "집중 중",
+          "working": false
+        },
+        {
+          "avatar": "https://example.invalid/d/d.png",
+          "center": "부산",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "이름2",
+          "status": "집중 중",
+          "working": false
+        },
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "ＡＢＣ",
+          "status": null,
+          "working": false
+        }
+      ],
+      "nowDirectory": null,
+      "nowWorking": [],
+      "peers": [
+        {
+          "center": null,
+          "headerLine": "근무 안 함",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "status": "off"
+        },
+        {
+          "center": "busan",
+          "headerLine": "근무 안 함 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "status": "off"
+        },
+        {
+          "center": null,
+          "headerLine": "근무 안 함",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "status": "off"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "text": "집중 중"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "text": "집중 중"
+        }
+      ],
+      "teamIDs": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "workingPeerIDs": []
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/w/a.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "이름2",
+          "status": "working"
+        },
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "name": "이름2",
+          "status": "working"
+        }
+      ],
+      "id": "presence-005",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000d",
+      "messagesDirectory": null,
+      "nowDirectory": [
+        {
+          "avatar": "https://example.invalid/n/d.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "Ann",
+          "status": null,
+          "working": true
+        }
+      ],
+      "nowWorking": [
+        {
+          "avatar": "https://example.invalid/w/a.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "이름2",
+          "stale": false
+        },
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "name": "이름2",
+          "stale": false
+        }
+      ],
+      "peers": [
+        {
+          "center": "busan",
+          "headerLine": "근무 중 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "working"
+        },
+        {
+          "center": "busan",
+          "headerLine": "근무 중 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "status": "working"
+        }
+      ],
+      "statuses": [],
+      "teamIDs": [],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000b"
+      ]
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/n/d.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "한결",
+          "status": "working"
+        },
+        {
+          "avatar": "https://example.invalid/n/b.png",
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "name": "zed",
+          "status": "working"
+        }
+      ],
+      "id": "presence-006",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000e",
+      "messagesDirectory": [
+        {
+          "avatar": "https://example.invalid/d/a.png",
+          "center": "부산",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "두리",
+          "status": "  ",
+          "working": true
+        },
+        {
+          "avatar": "https://example.invalid/d/d.png",
+          "center": "부산",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "Émile",
+          "status": null,
+          "working": true
+        }
+      ],
+      "nowDirectory": [
+        {
+          "avatar": "https://example.invalid/n/a.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "zed",
+          "status": "🍀",
+          "working": false
+        },
+        {
+          "avatar": "https://example.invalid/n/b.png",
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "name": "zed",
+          "status": null,
+          "working": true
+        },
+        {
+          "avatar": "https://example.invalid/n/d.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "한결",
+          "status": null,
+          "working": true
+        },
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "ann",
+          "status": "집중 중",
+          "working": false
+        }
+      ],
+      "nowWorking": [],
+      "peers": [
+        {
+          "center": "busan",
+          "headerLine": "근무 안 함 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "off"
+        },
+        {
+          "center": null,
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000b",
+          "status": "working"
+        },
+        {
+          "center": "busan",
+          "headerLine": "근무 중 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "status": "working"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "text": "🍀"
+        }
+      ],
+      "teamIDs": [],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000d"
+      ]
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/w/a.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "bob",
+          "status": "working"
+        },
+        {
+          "avatar": "https://example.invalid/n/e.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "ann",
+          "status": "working"
+        }
+      ],
+      "id": "presence-007",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000d",
+      "messagesDirectory": [
+        {
+          "avatar": "https://example.invalid/d/a.png",
+          "center": "부산",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "Ann",
+          "status": "🍀",
+          "working": true
+        },
+        {
+          "avatar": "https://example.invalid/d/d.png",
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "ＡＢＣ",
+          "status": "회의\n중",
+          "working": true
+        }
+      ],
+      "nowDirectory": [
+        {
+          "avatar": "https://example.invalid/n/e.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "ann",
+          "status": "집중 중",
+          "working": true
+        }
+      ],
+      "nowWorking": [
+        {
+          "avatar": "https://example.invalid/w/a.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "bob",
+          "stale": false
+        },
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "ann",
+          "stale": false
+        }
+      ],
+      "peers": [
+        {
+          "center": "busan",
+          "headerLine": "근무 중 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "working"
+        },
+        {
+          "center": "nowhere",
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "status": "working"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "text": "🍀"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "text": "집중 중"
+        }
+      ],
+      "teamIDs": [
+        "00000000-0000-4000-8000-00000000000c"
+      ],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/d/e.png",
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "아잉 데모",
+          "status": "working"
+        }
+      ],
+      "id": "presence-008",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000c",
+      "messagesDirectory": [
+        {
+          "avatar": "https://example.invalid/d/a.png",
+          "center": "제주",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "아잉 데모",
+          "status": "🍀",
+          "working": false
+        },
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "민트",
+          "status": "🍀",
+          "working": false
+        },
+        {
+          "avatar": "https://example.invalid/d/e.png",
+          "center": "제주",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "아잉 데모",
+          "status": "회의\n중",
+          "working": true
+        }
+      ],
+      "nowDirectory": [
+        {
+          "avatar": null,
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "고양",
+          "status": "회의\n중",
+          "working": false
+        },
+        {
+          "avatar": "https://example.invalid/n/d.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "고양",
+          "status": "🍀",
+          "working": false
+        }
+      ],
+      "nowWorking": [
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "이름2",
+          "stale": false
+        }
+      ],
+      "peers": [
+        {
+          "center": null,
+          "headerLine": "근무 안 함",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "off"
+        },
+        {
+          "center": "busan",
+          "headerLine": "근무 안 함 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "status": "off"
+        },
+        {
+          "center": null,
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "status": "working"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "text": "🍀"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "text": "🍀"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "text": "회의\n중"
+        }
+      ],
+      "teamIDs": [
+        "00000000-0000-4000-8000-00000000000c"
+      ],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "boardWorking": [],
+      "id": "presence-009",
+      "isKnown": false,
+      "me": null,
+      "messagesDirectory": null,
+      "nowDirectory": null,
+      "nowWorking": [],
+      "peers": [],
+      "statuses": [],
+      "teamIDs": [],
+      "workingPeerIDs": []
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/n/a.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "Ann",
+          "status": "pending"
+        },
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "bob",
+          "status": "working"
+        },
+        {
+          "avatar": "https://example.invalid/n/e.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "이름10",
+          "status": "pending"
+        }
+      ],
+      "id": "presence-010",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000d",
+      "messagesDirectory": null,
+      "nowDirectory": [
+        {
+          "avatar": "https://example.invalid/n/a.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "이름10",
+          "status": "회의\n중",
+          "working": true
+        },
+        {
+          "avatar": null,
+          "center": "seoul",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "아잉 데모",
+          "status": "  ",
+          "working": true
+        },
+        {
+          "avatar": "https://example.invalid/n/d.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "ＡＢＣ",
+          "status": "🍀",
+          "working": false
+        },
+        {
+          "avatar": "https://example.invalid/n/e.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "Émile",
+          "status": "집중 중",
+          "working": true
+        }
+      ],
+      "nowWorking": [
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "Ann",
+          "stale": true
+        },
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "nowhere",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "bob",
+          "stale": false
+        },
+        {
+          "avatar": null,
+          "center": null,
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "이름10",
+          "stale": true
+        }
+      ],
+      "peers": [
+        {
+          "center": "busan",
+          "headerLine": "연결 끊김 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "pending"
+        },
+        {
+          "center": "nowhere",
+          "headerLine": "근무 중",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "status": "working"
+        },
+        {
+          "center": "nowhere",
+          "headerLine": "연결 끊김",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "status": "pending"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "text": "회의 중"
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "text": "집중 중"
+        }
+      ],
+      "teamIDs": [],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000e"
+      ]
+    },
+    {
+      "boardWorking": [
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "seoul",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "ann",
+          "status": "working"
+        },
+        {
+          "avatar": "https://example.invalid/d/d.png",
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "Ann",
+          "status": "pending"
+        },
+        {
+          "avatar": "https://example.invalid/d/a.png",
+          "center": "seoul",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "가나",
+          "status": "working"
+        }
+      ],
+      "id": "presence-011",
+      "isKnown": true,
+      "me": "00000000-0000-4000-8000-00000000000e",
+      "messagesDirectory": [
+        {
+          "avatar": "https://example.invalid/d/a.png",
+          "center": "서울",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "name": "가나",
+          "status": null,
+          "working": true
+        },
+        {
+          "avatar": "https://example.invalid/d/d.png",
+          "center": "제주",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "bob",
+          "status": "  ",
+          "working": false
+        },
+        {
+          "avatar": "https://example.invalid/d/e.png",
+          "center": "서울",
+          "id": "00000000-0000-4000-8000-00000000000e",
+          "name": "Ann",
+          "status": "  ",
+          "working": true
+        }
+      ],
+      "nowDirectory": null,
+      "nowWorking": [
+        {
+          "avatar": "https://example.invalid/w/c.png",
+          "center": "seoul",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "name": "ann",
+          "stale": false
+        },
+        {
+          "avatar": null,
+          "center": "busan",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "name": "Ann",
+          "stale": true
+        }
+      ],
+      "peers": [
+        {
+          "center": "seoul",
+          "headerLine": "근무 중 · 서울",
+          "id": "00000000-0000-4000-8000-00000000000a",
+          "status": "working"
+        },
+        {
+          "center": "seoul",
+          "headerLine": "근무 중 · 서울",
+          "id": "00000000-0000-4000-8000-00000000000c",
+          "status": "working"
+        },
+        {
+          "center": "busan",
+          "headerLine": "연결 끊김 · 부산",
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "status": "pending"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "00000000-0000-4000-8000-00000000000d",
+          "text": "  "
+        }
+      ],
+      "teamIDs": [
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d",
+        "00000000-0000-4000-8000-00000000000e"
+      ],
+      "workingPeerIDs": [
+        "00000000-0000-4000-8000-00000000000a",
+        "00000000-0000-4000-8000-00000000000c",
+        "00000000-0000-4000-8000-00000000000d"
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift",
+  "golden": "messages/store-rules",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "badge": "MessagesBadgeRules.unreadCount · unreadCountsByPeer(history, historySnapshot(serial, serverOrder), summary(serial, peers), optimistic, legacyStamps)",
+    "pending": "MessagesPendingRules.reconcile(pending:previousHistoryIDs:applied:appliedSerial:)",
+    "platformSensitive": "false",
+    "presence": "MessagesPresenceRules.board(nowWorking:teamMemberIDs:nowDirectory:messagesDirectory:me:) · headerLine · MessagesSortRules.workingPeerIDs",
+    "text": "MessagesListRules.preview · MessagesComposerRules.counterText/isOverflowing · countBadge · subtitle · MessagesSendRules.notice · header · emptyState",
+    "times": "MessagesListRules.timeText(_:now:) · MobileRelativeTime.text(for:now:) · BlockReportText.blockedAtLine(_:now:) — KST"
+  },
+  "swiftSources": [
+    "Sources/CheckMobileKit/Messages/MessagesRules.swift",
+    "Sources/CheckMobileKit/Messages/MessagesBlockRules.swift",
+    "Sources/CheckMobileKit/Components/MobileRelativeTime.swift"
+  ]
+}

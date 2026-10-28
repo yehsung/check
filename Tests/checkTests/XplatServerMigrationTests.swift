@@ -94,10 +94,9 @@ private enum Xp {
 
     static func has(_ m: String) -> Bool { stages.contains(m) }
 
-    /// 체인 기준 묶음의 문턱. 지금은 스테이징이 있을 때만 돈다(초안이 저장소 밖에 있다).
-    /// 서버 ① 커밋(M1~M3 을 supabase/migrations 로 옮기는 커밋)에서 swift-patches/0002 가 이 줄을
-    /// `stagingRequested || !baseDraftStages.isEmpty` 로 바꿔 상시로 켠다. 빠뜨리면 `xplat_스테이징_변수와_단계_문턱` 이 빨갛다.
-    static var chainEnabled: Bool { stagingRequested }
+    /// 체인 기준 묶음의 문턱. 서버 ① 커밋(swift-patches/0002)부터 상시로 켠다: 스테이징이 있거나 기본 체인에 초안이 들어왔으면 돈다.
+    /// 무엇을 재는지는 단계별 문턱(`stages` · `has`)이 정한다 — 서버 ① 뒤(M1~M3)에는 M4·M5 단언이 그 단계의 대조로 바뀐다.
+    static var chainEnabled: Bool { stagingRequested || !baseDraftStages.isEmpty }
 
     static func baseHasDraft(_ m: String) -> Bool {
         guard let base = try? baseMigrations(), let names = try? sqlFiles(base) else { return false }

@@ -1,4 +1,5 @@
 // 원본: Tests/CheckMobileKitTests/BaseSessionTests.swift:192-282·348-368 · BaseSessionHardeningTests.swift:319-358 @ 1b8260d
+// (갱신을 띄운 호출의 취소 갈래 두 시험은 원본 없음 — Swift Task.value 는 부른 쪽 취소에 돌아오지 않아 그 창이 없다. W2-a 6차 검증 지적.)
 // G §2-3 W2-a ②(동시 갱신 N → 요청 1) · ③(세대 가드) · ④(5xx·429 세션 유지) · C§4 #3·#4.
 package com.yehsung.aingcheck.core.session
 
@@ -130,6 +131,73 @@ class SessionRefreshTest {
         assertEquals(false, coordinator.hasInFlight, "끝나면 슬롯이 빈다")
         // 토큰이 없으면 요청 없이 sessionExpired.
         assertFailsWith<SupabaseWorkServiceError.SessionExpired> { coordinator.refresh(2, { null }, { error("부르면 안 된다") }, {}) }
+    }
+
+    /**
+     * ② 취소 갈래(Swift `try await task.value` 의미): 갱신을 **띄운** 호출이 취소돼도 갱신은 떠 있고 슬롯도 그 끝까지 남는다 —
+     * 같은 세대의 다음 호출은 합류한다(회전 전 r0 으로 두 번째 grant 금지). 갱신이 끝나면 슬롯이 비어, 그 뒤 호출은 회전된 r1 으로 새로 간다.
+     * 대조: 취소 없는 동시 호출은 [concurrentExpiredCallsShareOneRefresh] 가 잰다.
+     */
+    @Test
+    fun creatorCancellationKeepsTheSlotUntilTheRefreshEnds() = runTest {
+        val coordinator = SessionRefreshCoordinator(supervisorScope())
+        val gate = CompletableDeferred<Unit>()
+        var token = "r0"
+        val used = mutableListOf<String>()
+        val applied = mutableListOf<String>()
+        var n = 0
+        suspend fun refresh() = coordinator.refresh(
+            0, { token },
+            { t -> used += t; n += 1; val k = n; gate.await(); SupabaseSession("a$k", "r$k", "u") },
+            { s -> applied += s.accessToken; token = s.refreshToken!! },
+        )
+        val creator = launch { refresh() }
+        runCurrent()
+        assertEquals(listOf("r0"), used)
+        creator.cancel() // 화면을 떠났다(viewModelScope 취소)
+        runCurrent()
+        assertTrue(creator.isCancelled)
+        assertTrue(coordinator.hasInFlight, "띄운 호출이 취소돼도 갱신은 떠 있다 — 슬롯을 비우면 다음 호출이 r0 을 다시 쓴다")
+        val joiner = async { refresh() }
+        runCurrent()
+        assertEquals(listOf("r0"), used, "같은 세대의 다음 호출은 떠 있는 갱신에 합류한다")
+        gate.complete(Unit)
+        assertEquals("a1", joiner.await().accessToken)
+        assertEquals(listOf("a1"), applied, "apply 는 정확히 한 번(띄운 호출이 취소돼도 갱신 자신이 쓴다)")
+        assertEquals(1, coordinator.completedRefreshCount)
+        assertEquals(false, coordinator.hasInFlight, "갱신이 끝나면 슬롯이 빈다")
+        // 끝난 뒤의 호출은 끝난 갱신에 붙지 않고 회전된 토큰으로 새로 간다.
+        assertEquals("a2", refresh().accessToken)
+        assertEquals(listOf("r0", "r1"), used)
+    }
+
+    /**
+     * 같은 결함의 세션 스토어 경로: 화면 코루틴의 401 재시도가 갱신을 띄운 뒤 취소되고, 이어 실시간 강제 갱신이 온다 →
+     * grant 는 **하나**(r0), 실시간 쪽은 그 결과(access-1)를 받는다. 금고는 회전된 r1.
+     */
+    @Test
+    fun cancelledScreenRetryLeavesRealtimeRefreshJoinedToTheSameGrant() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var n = 0
+        val h = signedIn(
+            refresh = { n += 1; Reply.Gate(gate, auth("access-$n", "r$n")) },
+            invite = { r -> if (r.authorization == "Bearer access-0") jwtExpired else Reply.Json("""[{"invite_code":"X"}]""") },
+        )
+        val screen = launch { h.store.withSessionRetry { s -> h.store.service.fetchMyInviteCode(s.accessToken) } }
+        runCurrent()
+        assertEquals(1, h.server.count("/auth/v1/token"), "401 → 갱신 하나가 떴다")
+        screen.cancel()
+        runCurrent()
+        val realtime = async { h.store.refreshForRealtime() }
+        runCurrent()
+        gate.complete(Unit)
+        assertEquals(RealtimeRefreshResult.Refreshed("access-1"), realtime.await())
+        val grants = h.server.requests.filter { it.path == "/auth/v1/token" }.map { it.bodyText }
+        assertEquals(1, grants.size, "갱신 grant 는 하나여야 한다 — 실제: $grants")
+        assertTrue(grants.single().contains("\"r0\""))
+        assertEquals(1, h.store.refreshCoordinator.completedRefreshCount)
+        assertEquals("r1", h.vaultRefresh)
+        assertEquals(SessionPhase.SignedIn, h.store.phase)
     }
 
     /** 실패한 갱신 뒤에도 슬롯이 비어 다음 호출이 새로 갱신한다(성공·실패 두 갈래 모두 명시적으로 비운다 — INV af534e47). */

@@ -1,4 +1,5 @@
 // 원본: Tests/CheckMobileKitTests/BaseSessionTests.swift:283-346 · BaseSessionHardeningTests.swift:97-238 · MobileSessionStore.swift:238-354 @ 1b8260d
+// (재등록 짝 분기 · 장부 상한 두 시험은 원본 없음 — Swift 에도 시험이 없는 분기다. W2-a 6차 검증 지적 V13 짝 · V19.)
 // C§4 #6(scope=local) · #7(로그아웃 순서 · 401 이면 장부 refresh 로 한 번) · #35 + G §2-3 W2-a ⑥(삭제 순서 시나리오).
 package com.yehsung.aingcheck.core.session
 
@@ -7,11 +8,15 @@ import com.yehsung.aingcheck.core.session.SessionFixtures.jwtExpired
 import com.yehsung.aingcheck.core.session.SessionFixtures.membershipOK
 import com.yehsung.aingcheck.core.session.SessionFixtures.registerOK
 import com.yehsung.aingcheck.core.session.SessionFixtures.releaseOK
+import com.yehsung.aingcheck.core.session.signout.SignOutCleanup
 import com.yehsung.aingcheck.core.session.signout.SignOutCleanupLedger
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -164,6 +169,142 @@ class SessionSignOutDeleteTest {
         assertEquals(1, refreshes, "장부 갱신은 한 번")
         assertEquals(2, h.server.count("/rest/v1/rpc/unregister_device"), "옛 토큰 한 번 + 갱신한 토큰 한 번")
         assertFalse(h.store.hasPendingSignOutCleanup)
+    }
+
+    /**
+     * 빚이 남은 채 **같은 계정**으로 다시 로그인하면 새 세션의 기기 행을 지우지 않고 옛 세션만 logout?scope=local 한다
+     * (Swift BaseSessionHardeningTests.sameAccountReSignInKeepsTheNewDeviceRow). 대조: 다른 계정·로그아웃 상태의 빚은
+     * unregister_device 부터 간다([offlineSignOutIsSettledOnNextLaunch]).
+     */
+    @Test
+    fun sameAccountReSignInKeepsTheNewDeviceRow() = runTest {
+        var offline = false
+        val h = signedIn { r ->
+            when {
+                offline -> Reply.Offline
+                r.path == "/auth/v1/token" -> auth("second", "r-second", "user-1")
+                r.rpcName == "unregister_device" -> SessionFixtures.unregistered
+                r.path == "/auth/v1/logout" -> SessionFixtures.emptyObject
+                else -> null
+            }
+        }
+        offline = true
+        h.store.signOut()
+        advanceUntilIdle()
+        assertTrue(h.store.hasPendingSignOutCleanup)
+
+        offline = false
+        val before = h.server.requests.size
+        h.store.signIn("a@b.co", "pw")
+        assertEquals(SessionPhase.SignedIn, h.store.phase)
+        advanceUntilIdle()
+        val after = h.server.requests.drop(before)
+        assertEquals(0, after.count { it.rpcName == "unregister_device" }, "같은 계정의 새 기기 행을 지웠다: ${after.map { it.key }}")
+        assertEquals(listOf("Bearer access-0"), after.filter { it.path == "/auth/v1/logout" }.map { it.authorization }, "옛 세션만 끊는다")
+        assertEquals(listOf("Bearer second"), after.filter { it.rpcName == "register_device_fcm" }.map { it.authorization })
+        assertFalse(h.store.hasPendingSignOutCleanup)
+        assertEquals("second", h.vaultAccess, "빚 정리가 새 로그인의 금고를 건드렸다")
+        h.assertClean()
+    }
+
+    /**
+     * 위의 짝: unregister_device 가 **떠 있는 사이** 같은 계정으로 다시 로그인해 새 행을 올렸다면, 그 요청이 방금 새 행을 지운 것이다 →
+     * 정리가 등록을 다시 건다(이 설치의 마지막 기기 쓰기가 등록이어야 푸시가 온다). 원본 없음(Swift 분기 MobileSessionStore.swift:623 의 시험).
+     */
+    @Test
+    fun unregisterThatRacedSameAccountSignInRegistersAgain() = runTest {
+        val unregisterGate = CompletableDeferred<Unit>()
+        val h = signedIn { r ->
+            when {
+                r.path == "/auth/v1/token" -> auth("second", "r-second", "user-1")
+                r.rpcName == "unregister_device" -> Reply.Gate(unregisterGate, SessionFixtures.unregistered)
+                r.path == "/auth/v1/logout" -> SessionFixtures.emptyObject
+                else -> null
+            }
+        }
+        val before = h.server.requests.size
+        val signingOut = launch { h.store.signOut() }
+        runCurrent()
+        assertEquals(1, h.server.requests.drop(before).count { it.rpcName == "unregister_device" }, "옛 토큰의 해제가 떠 있다")
+        h.store.signIn("a@b.co", "pw")
+        runCurrent()
+        assertEquals(SessionPhase.SignedIn, h.store.phase)
+        assertEquals(
+            listOf("Bearer second"),
+            h.server.requests.drop(before).filter { it.rpcName == "register_device_fcm" }.map { it.authorization },
+            "해제가 떠 있는 동안 새 세션이 행을 올렸다(재현 조건)",
+        )
+        // 요청은 보낸 순서로 기록된다 — '해제가 끝난 뒤' 를 재려면 문을 열기 직전에 금을 긋는다.
+        val mark = h.server.requests.size
+        unregisterGate.complete(Unit)
+        signingOut.join()
+        advanceUntilIdle()
+        val afterRelease = h.server.requests.drop(mark)
+        assertEquals(
+            listOf("Bearer second"),
+            afterRelease.filter { it.rpcName == "register_device_fcm" }.map { it.authorization },
+            "해제가 새 행을 지운 뒤 다시 올리지 않았다: ${afterRelease.map { it.key }}",
+        )
+        assertEquals(0, afterRelease.count { it.rpcName == "unregister_device" }, "해제는 한 번뿐")
+        assertEquals(listOf("Bearer access-0"), h.server.requests.filter { it.path == "/auth/v1/logout" }.map { it.authorization })
+        assertFalse(h.store.hasPendingSignOutCleanup)
+        assertEquals("second", h.vaultAccess)
+        h.assertClean()
+    }
+
+    /**
+     * 장부 상한(Swift MobileSignOutCleanup.maxAgeSeconds 30일): 30일이 지난 빚은 실행 때 버리고(요청 0), 그 안의 빚은 갚는다.
+     * 기준선이 다른 입력이다 — 같은 장부에서 나이만 29일 · 31일로 다르다. 원본 없음(Swift 에도 시험이 없다 — 6차 검증 V19).
+     */
+    @Test
+    fun ledgerDropsDebtsOlderThanThirtyDays() = runTest {
+        val h = SessionHarness(this) { r ->
+            when {
+                r.rpcName == "client_release" -> releaseOK
+                r.rpcName == "unregister_device" -> SessionFixtures.unregistered
+                r.path == "/auth/v1/logout" -> SessionFixtures.emptyObject
+                else -> null
+            }
+        }
+        val now = h.now().timeIntervalSince1970
+        SignOutCleanupLedger.save(
+            listOf(
+                SignOutCleanup(id = "d31", userID = "user-old", accessToken = "a31", createdAt = now - 31 * 86_400.0),
+                SignOutCleanup(id = "d29", userID = "user-old", accessToken = "a29", createdAt = now - 29 * 86_400.0),
+            ),
+            h.vault,
+        )
+        h.store.launch()
+        advanceUntilIdle()
+        assertEquals(SessionPhase.SignedOut, h.store.phase)
+        assertEquals(
+            listOf("rpc/unregister_device Bearer a29", "/auth/v1/logout Bearer a29"),
+            h.server.requests.filter { it.rpcName != "client_release" }.map { "${it.rpcName?.let { n -> "rpc/$n" } ?: it.path} ${it.authorization}" },
+            "31일 된 빚은 요청 없이 버리고 29일 된 빚만 갚는다",
+        )
+        assertFalse(h.store.hasPendingSignOutCleanup)
+        h.assertClean()
+    }
+
+    /** 장부 상한(maxEntries 8): 오프라인 로그아웃이 쌓여 9번째 줄이 들어오면 **가장 오래된** 줄이 밀려난다(새 빚은 남는다). 원본 없음(V19 짝). */
+    @Test
+    fun ledgerKeepsTheNewestEightDebts() = runTest {
+        var offline = false
+        val h = signedIn { r -> if (offline) Reply.Offline else null }
+        offline = true
+        val now = h.now().timeIntervalSince1970
+        SignOutCleanupLedger.save(
+            (1..8).map { SignOutCleanup(id = "e$it", userID = "user-old", accessToken = "a$it", createdAt = now - (9 - it) * 60.0) },
+            h.vault,
+        )
+        h.store.signOut()
+        advanceUntilIdle()
+        assertEquals(
+            listOf("e2", "e3", "e4", "e5", "e6", "e7", "e8", "cleanup-1"),
+            SignOutCleanupLedger.load(h.vault).map { it.id },
+            "가장 오래된 e1 만 밀려나고 방금 로그아웃한 빚은 남는다",
+        )
+        assertEquals("access-0", SignOutCleanupLedger.load(h.vault).last().accessToken)
     }
 
     /**

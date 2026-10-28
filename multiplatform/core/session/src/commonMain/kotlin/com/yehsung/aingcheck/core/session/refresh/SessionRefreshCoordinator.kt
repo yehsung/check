@@ -18,7 +18,7 @@ import kotlinx.coroutines.async
  *
  * Kotlin 몫
  * - 합류할 갱신은 [scope] 에 띄운 [Deferred] 다(Swift 의 구조 밖 `Task` 자리) — 기다리던 호출이 취소돼도 갱신 자체는 끝까지 가고
- *   합류한 다른 호출이 그 결과를 받는다.
+ *   합류한 다른 호출이 그 결과를 받는다. 갱신을 **띄운** 호출이 취소돼도 슬롯은 갱신이 끝날 때까지 남는다([refresh] 의 catch).
  * - **한 디스패처 규약**(Swift `@MainActor` 자리): 이 객체와 [scope] 는 세션 스토어의 디스패처(앱 = 메인 하나, 시험 = runTest 한 줄)에서만
  *   움직인다. 슬롯 확인·생성 사이에 중단점이 없으므로 그 한 줄 위에서 원자적이다. 잠금을 두지 않는 것은 [invalidate] 가 로그아웃의
  *   **동기** 정리 순서(세대 올리기 → 조정자 끊기 → 로컬 비우기, C§4 #7) 한가운데에서 불리기 때문이다.
@@ -75,7 +75,12 @@ class SessionRefreshCoordinator(private val scope: CoroutineScope) {
             clearIfCurrent(task)
             return session
         } catch (error: Throwable) {
-            clearIfCurrent(task)
+            // 실패 갈래는 둘이다. 갱신 자체가 끝났으면(실패·취소) 지금 비운다. 그런데 **갱신을 띄운 이 호출만** 취소됐으면(화면 이탈 =
+            //   viewModelScope 취소) 갱신은 아직 떠 있다. Swift `try await task.value` 는 부른 쪽이 취소돼도 Task 가 끝날 때까지 돌아오지
+            //   않으므로 슬롯이 갱신 끝까지 남는다. 여기서 바로 비우면 같은 세대의 다음 호출(실시간 강제 갱신·다른 스토어의 401)이 아직 회전
+            //   전인 refresh token 으로 두 번째 grant 를 보낸다. 갱신 주체가 둘이 되는 것이다(C§4 #4 — 재사용 감지 → 강제 로그아웃).
+            //   그래서 그 갈래는 갱신이 **끝나는 순간에** 비운다(완료 고리는 [scope] 의 한 디스패처에서 돈다 — 위 규약).
+            if (task.isCompleted) clearIfCurrent(task) else task.invokeOnCompletion { clearIfCurrent(task) }
             throw error
         }
     }

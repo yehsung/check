@@ -1,4 +1,5 @@
 // 원본: Tests/CheckMobileKitTests/BasePasswordResetTests.swift · MobileSignUpStore.swift · MobileTeamJoinForm.swift · NowTeamJoin.swift @ 1b8260d
+//       + BaseSignUpTests.swift:159-187 · BasePasswordResetTests.swift:217-232 · BaseSignUpConfirmTests.swift:390-411 · NowTeamJoinTests.swift:182-211(늦은 응답)
 // C§4 #8(가입 응답에 세션이 없으면 "메일 보냄", identities [] 면 이미 있는 계정) · 팀 칸 한 벌 · 재설정 3단 · 쿨다운.
 package com.yehsung.aingcheck.core.session
 
@@ -15,7 +16,9 @@ import com.yehsung.aingcheck.core.session.signup.SignUpText
 import com.yehsung.aingcheck.core.session.team.TeamJoinStore
 import com.yehsung.aingcheck.core.wire.codePointCountCompat
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -240,6 +243,176 @@ class SignUpResetTeamTest {
         assertFalse(team.isSubmitting)
         assertEquals(1, h.server.count("/auth/v1/token"), "401 → 조정자 갱신 1회")
         assertTrue(h.server.requests.filter { it.rpcName == "join_team" }.all { it.bodyText.contains("ABC123") }, "코드는 정규화해 싣는다")
+    }
+
+    // ------------------------------------------------------------------ 늦은 응답 · 경합 가드(6차 검증 V20~V23)
+    // 늦은 응답은 문(Gate)으로 붙잡고 runCurrent 로만 움직인다 — advanceUntilIdle 이면 붙잡힌 요청이 HttpTimeout(30초)에 죽어
+    // 응답이 끝내 도착하지 않고, 가드를 지워도 초록이 된다(M2 실측과 같은 함정).
+
+    /** BaseSignUpTests.previewRaceKeepsLatest: 먼저 보낸 미리보기의 늦은 응답이 최신 결과를 덮지 않는다(마지막 요청 우선). */
+    @Test
+    fun previewRaceKeepsLatest() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val h = SessionHarness(this) { r ->
+            if (r.rpcName == "lookup_team_by_code") {
+                if (r.bodyText.contains("AAAA1111")) {
+                    Reply.Gate(gate, Reply.Json("""[{"team_id":"team-a","name":"A팀","weekly_goal_hours":40,"member_count":2}]"""))
+                } else {
+                    Reply.Json("""[{"team_id":"team-b","name":"B팀","weekly_goal_hours":50,"member_count":4}]""")
+                }
+            } else base(r)
+        }
+        val store = SignUpStore(h.store)
+        store.teamForm.teamCode.value = "AAAA1111"
+        val first = store.previewTeamCode()
+        runCurrent()
+        assertEquals(SignUpText.previewChecking, store.teamForm.joinPreviewMessage.value)
+        assertFalse(first.isCompleted, "A 응답은 문에 붙잡혀 있다")
+
+        store.teamForm.teamCode.value = "BBBB2222"
+        store.previewTeamCode().join()
+        assertEquals("B팀", store.teamForm.joinPreview.value?.name)
+        assertEquals("", store.teamForm.joinPreviewMessage.value)
+
+        gate.complete(Unit)
+        first.join()
+        assertEquals(2, h.server.count("/rest/v1/rpc/lookup_team_by_code"), "A 응답이 실제로 도착했다")
+        assertEquals("B팀", store.teamForm.joinPreview.value?.name, "늦게 온 A 응답이 최신 B 를 덮었다")
+        assertEquals("", store.teamForm.joinPreviewMessage.value)
+    }
+
+    /** BasePasswordResetTests.staleResponseIgnoredAfterCancel: 화면을 떠난(cancel) 뒤 도착한 발송 응답은 상태를 바꾸지 않는다. */
+    @Test
+    fun resetSendResponseAfterCancelChangesNothing() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val h = SessionHarness(this) { r -> if (r.path == "/auth/v1/recover") Reply.Gate(gate, SessionFixtures.emptyObject) else base(r) }
+        val reset = PasswordResetStore(h.store, "a@b.co", counter)
+        val request = launch { reset.requestCode() }
+        runCurrent()
+        assertEquals(PasswordResetStore.Phase.sending, reset.phase)
+        reset.cancel()
+        assertEquals(PasswordResetStore.Phase.enterEmail, reset.phase)
+        gate.complete(Unit)
+        request.join()
+        runCurrent()
+        assertEquals(1, h.server.count("/auth/v1/recover"), "발송 응답이 실제로 도착했다")
+        assertEquals(PasswordResetStore.Phase.enterEmail, reset.phase)
+        assertNull(reset.message)
+        assertEquals(0, reset.resendSeconds)
+    }
+
+    /**
+     * BaseSignUpConfirmTests.leavingScreenDropsPendingWorkNotTheAccount: 화면을 떠나도 계정은 미확인으로 남고(단계·주소 그대로)
+     * 카운트다운만 끊긴다 · 늦게 온 verify 응답이 사용자를 로그인시키지 않는다(팀 합류도 하지 않는다).
+     */
+    @Test
+    fun lateSignUpVerifyAfterLeavingDoesNotSignIn() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val h = SessionHarness(this) { r -> confirmRoutes(r, gate) }
+        val store = SignUpStore(h.store)
+        store.teamCode()
+        store.fill(email = "Member@Example.com")
+        store.submit()!!.join()
+        assertEquals(SignUpStore.Stage.ConfirmCode, store.stage)
+
+        val verifying = launch { store.verifyCode("123456") }
+        runCurrent()
+        assertEquals(1, h.server.count("/auth/v1/verify"))
+        store.cancelPendingWork()
+        assertEquals(SignUpStore.Stage.ConfirmCode, store.stage, "단계는 그대로")
+        assertEquals("member@example.com", store.confirmSentEmail)
+
+        gate.complete(Unit)
+        verifying.join()
+        runCurrent()
+        assertFalse(h.store.isSignedIn, "닫은 화면의 늦은 응답이 그 사람을 로그인시켰다")
+        assertNull(h.store.session)
+        assertNull(store.createdSession)
+        assertEquals(0, h.server.count("/rest/v1/rpc/join_team"))
+        assertNull(h.vaultAccess)
+    }
+
+    /** 같은 가드의 둘째 조건: verify 가 떠 있는 사이 **다른 로그인**이 들어왔으면 늦게 온 세션을 버린다(팀 합류 0 · 들어온 세션 그대로). 원본 없음. */
+    @Test
+    fun lateSignUpVerifyAfterAnotherSignInIsDropped() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val h = SessionHarness(this) { r -> confirmRoutes(r, gate) }
+        val store = SignUpStore(h.store)
+        store.teamCode()
+        store.fill(email = "Member@Example.com")
+        store.submit()!!.join()
+        val verifying = launch { store.verifyCode("123456") }
+        runCurrent()
+        h.store.signIn("other@b.co", "pw")
+        assertEquals("u-other", h.store.userID)
+        gate.complete(Unit)
+        verifying.join()
+        runCurrent()
+        assertEquals("u-other", h.store.userID)
+        assertEquals("other-access", h.vaultAccess)
+        assertNull(store.createdSession, "늦게 온 가입 세션을 쥐었다")
+        assertEquals(0, h.server.count("/rest/v1/rpc/join_team"), "버려야 할 세션으로 팀에 합류했다")
+    }
+
+    /**
+     * NowTeamJoinTests.doubleTapAndLateJoinAfterReset: 도는 중에 또 누르면 왕복이 겹치지 않고, 세대가 바뀐 뒤(reset) 도착한 **성공** 응답도
+     * 화면을 바꾸지 않는다(onTeamSettled 0). 둘째 판: reset 없이 로그아웃만 일어나도(계정 세대) 늦은 성공은 버린다.
+     * (NowTeamJoinTests:148 의 '늦은 소속 조회' 는 지금 탭 스토어의 새로고침 세대라 W2-b 몫이다.)
+     */
+    @Test
+    fun lateTeamJoinSuccessAfterResetOrSignOutIsDropped() = runTest {
+        for (variant in listOf("reset", "signOut")) {
+            val gate = CompletableDeferred<Unit>()
+            val h = SessionHarness(this) { r ->
+                when {
+                    r.rpcName == "join_team" -> Reply.Gate(gate, Reply.Json("""[{"team_id":"team-9","name":"구름팀","weekly_goal_hours":40}]"""))
+                    r.rpcName == "unregister_device" -> SessionFixtures.unregistered
+                    r.path == "/auth/v1/logout" -> SessionFixtures.emptyObject
+                    else -> base(r)
+                }
+            }
+            h.seed(access = "access-0", refresh = "r0")
+            h.store.launch()
+            advanceUntilIdle()
+            val team = TeamJoinStore(SessionContext(h.store))
+            var settled = 0
+            team.onTeamSettled = { settled += 1 }
+            team.form.teamCode.value = "abc-123"
+            team.form.previewTeamCode().join()
+            val task = team.submit()!!
+            runCurrent()
+            assertEquals(1, h.server.count("/rest/v1/rpc/join_team"), variant)
+            assertNull(team.submit(), "$variant: 도는 중에 또 눌러 왕복이 겹쳤다")
+            assertTrue(team.isSubmitting, variant)
+            when (variant) {
+                "reset" -> {
+                    team.reset()
+                    assertFalse(team.isSubmitting)
+                    assertEquals("", team.form.teamCode.value, "앞 사람이 친 코드가 남았다")
+                    assertNull(team.form.joinPreview.value)
+                }
+                else -> {
+                    launch { h.store.signOut() }
+                    runCurrent()
+                    assertEquals(1, h.store.generation)
+                }
+            }
+            gate.complete(Unit)
+            task.join()
+            runCurrent()
+            assertEquals(1, h.server.count("/rest/v1/rpc/join_team"), "$variant: 겹쳐 나간 합류가 있다")
+            assertEquals(0, settled, "$variant: 세대가 바뀐 뒤 도착한 합류 성공이 화면을 팀으로 바꿨다")
+            assertNull(team.notice, variant)
+        }
+    }
+
+    /** 가입 확인 서버: 세션 없는 가입(코드 화면) · verify 는 문 뒤 · 다른 계정의 비밀번호 로그인. */
+    private fun confirmRoutes(r: RecordedRequest, gate: CompletableDeferred<Unit>): Reply? = when {
+        r.path == "/auth/v1/signup" -> Reply.Json("""{"user":{"id":"u-new","identities":[{"id":"i1"}]}}""")
+        r.path == "/auth/v1/verify" -> Reply.Gate(gate, auth("verified-access", "verified-refresh", "u-new"))
+        r.path == "/auth/v1/token" -> auth("other-access", "other-refresh", "u-other")
+        r.rpcName == "join_team" -> Reply.Json("""[{"team_id":"team-9","name":"구름팀","weekly_goal_hours":40}]""")
+        else -> base(r)
     }
 
     private suspend fun SignUpStore.teamCode() {

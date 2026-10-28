@@ -1,11 +1,15 @@
 // 원본: Tests/CheckMobileKitTests/BaseSessionTests.swift:83-190 · BaseSessionHardeningTests.swift:360-400 @ 1b8260d
+// (가입·재설정 경로의 단일 실행 가드 시험은 원본 없음 — Swift 에는 가드가 없다. W2-a 6차 검증 지적 V08.)
 // G §2-3 W2-a ⑤(client_release 3초 상한 · unknown_platform·서버 준비 안 됨 통과) · ④ · ⑦(단일 실행 가드) · C§4 #34 · #40.
 package com.yehsung.aingcheck.core.session
 
+import com.yehsung.aingcheck.core.foundation.platform.GraphemeCounter
 import com.yehsung.aingcheck.core.session.SessionFixtures.auth
 import com.yehsung.aingcheck.core.session.SessionFixtures.membershipOK
 import com.yehsung.aingcheck.core.session.SessionFixtures.registerOK
 import com.yehsung.aingcheck.core.session.SessionFixtures.releaseOK
+import com.yehsung.aingcheck.core.session.reset.PasswordResetStore
+import com.yehsung.aingcheck.core.session.signup.SignUpStore
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -63,11 +67,17 @@ class SessionLaunchTest {
         assertEquals(listOf(SessionVaultKeys.signOutCleanup), h.vault.readKeys, "토큰 칸은 열지 않는다(장부만 — 못 한 로그아웃 정리)")
     }
 
-    /** ⑤: `unknown_platform`(서버 ① 전 Android) · 함수 없음(404 PGRST202) · 오프라인 · 500 은 막지 않는다. 대조: 최소 빌드와 같으면 통과. */
+    /**
+     * ⑤: `unknown_platform`(서버 ① 전 Android) · 함수 없음(404 PGRST202) · 오프라인 · 500 은 막지 않는다. 대조: 최소 빌드와 같으면 통과.
+     * `status` 가 `ok` 가 아니면 **min_build 가 실려 와도** 막지 않는다(막는 판정은 `ok` 응답에서만 — 입력 모양이 아니라 구현이 지킨다).
+     * 기준선: 같은 min_build 9 가 `ok` 로 오면 막는다([buildBelowServerMinimumStopsAtUpdateWithoutTouchingAuth]·[clientReleaseWaitsAtMostThreeSeconds]).
+     */
     @Test
     fun unknownPlatformAndServerNotReadyDoNotBlock() = runTest {
         val cases = listOf(
             "unknown_platform" to Reply.Json("""{"status":"unknown_platform"}"""),
+            "unknown_platform+min" to Reply.Json("""{"status":"unknown_platform","min_build":9,"latest_build":9}"""),
+            "invalid+min" to Reply.Json("""{"status":"invalid","platform":"android","min_build":9}"""),
             "pgrst202" to SessionFixtures.pgrst202,
             "offline" to Reply.Offline,
             "500" to Reply.Json("""{"message":"boom"}""", 500),
@@ -208,5 +218,55 @@ class SessionLaunchTest {
         assertEquals(1, ok.guard.acquires)
         ok.store.releaseInstance()
         assertEquals(1, ok.guard.releases)
+    }
+
+    /**
+     * ⑦ 의 셋째 문: 세션을 얻는 길은 로그인 말고도 가입·재설정이 있다(둘 다 [SessionStore.adoptSignedInSession] 으로 잇는다).
+     * 가드를 못 잡은 두 번째 실행에서는 그 길도 세션을 시작하지 않는다 — 금고 쓰기 0 · 기기 등록 0 · 단계 AnotherInstanceRunning.
+     * 대조: 가드를 잡으면 같은 재설정이 로그인 상태로 잇는다(SignUpResetTeamTest.passwordResetThreeStepsThenSignsIn).
+     */
+    @Test
+    fun signUpAndPasswordResetCannotAdoptWithoutSingleInstanceGuard() = runTest {
+        val h = SessionHarness(this, grants = false) { r ->
+            when {
+                r.path == "/auth/v1/recover" -> SessionFixtures.emptyObject
+                r.path == "/auth/v1/verify" -> auth("recovery-access", "recovery-refresh")
+                r.path == "/auth/v1/user" -> SessionFixtures.emptyObject
+                r.path == "/auth/v1/signup" -> auth("new-access", "new-refresh", "u-new")
+                r.rpcName == "lookup_team_by_code" ->
+                    Reply.Json("""[{"team_id":"team-9","name":"구름팀","weekly_goal_hours":40,"member_count":3}]""")
+                r.rpcName == "join_team" -> Reply.Json("""[{"team_id":"team-9","name":"구름팀","weekly_goal_hours":40}]""")
+                else -> signedInRoutes()(r)
+            }
+        }
+        h.store.launch()
+        assertEquals(SessionPhase.AnotherInstanceRunning, h.store.phase)
+
+        val reset = PasswordResetStore(h.store, "a@b.co", object : GraphemeCounter {
+            override fun count(text: String): Int = text.length
+        })
+        reset.requestCode()
+        reset.verifyCode("123456")
+        reset.submitNewPassword("longer1")
+        advanceUntilIdle()
+        assertEquals(1, h.server.count("/auth/v1/user"), "재설정 왕복은 끝까지 갔다(세션을 잇는 마지막 한 걸음만 막힌다)")
+
+        val signUp = SignUpStore(h.store)
+        signUp.teamForm.teamCode.value = "abc123"
+        signUp.teamForm.performPreviewTeamCode()
+        signUp.displayName.value = "구름"
+        signUp.email.value = "new@b.co"
+        signUp.password.value = "secret1"
+        signUp.center.value = "seoul"
+        signUp.submit()!!.join()
+        advanceUntilIdle()
+        assertEquals(1, h.server.count("/rest/v1/rpc/join_team"), "가입 왕복도 끝까지 갔다")
+
+        assertEquals(SessionPhase.AnotherInstanceRunning, h.store.phase)
+        assertNull(h.store.session)
+        assertEquals(0, h.vault.writes, "금고에 세션을 쓰지 않는다")
+        assertEquals(0, h.server.count("/rest/v1/rpc/register_device_fcm"), "기기 등록 0")
+        assertNull(h.store.storedEmail)
+        assertEquals(SessionText.anotherInstanceRunning, h.store.notice)
     }
 }

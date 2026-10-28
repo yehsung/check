@@ -71,6 +71,44 @@ class MeStoreLifecycleTest {
     }
 
     @Test
+    fun lateAnswersAfterSignOutAreDroppedByTheGenerationGuardEvenBeforeReset() = runTest {
+        // 세대는 로그아웃에서 오르고 reset() 은 앱 모델이 그 **뒤에** 부른다 — 그 사이에 도착한 응답은 세대 가드만 막는다(일은 아직 안 끊겼다).
+        val claimGate = CompletableDeferred<Unit>()
+        val dailyGate = CompletableDeferred<Unit>()
+        val weeklyGate = CompletableDeferred<Unit>()
+        val h = MeHarness(this) { r ->
+            when (r.rpcName) {
+                "achievements_status" -> MeReply.Json(status)
+                "achievement_claim" -> MeReply.Gate(claimGate, MeReply.Json(claimAll))
+                "daily_mission_claim" -> MeReply.Gate(dailyGate, MeReply.Json(MeFixtures.fixture("_me/rpc.daily_mission_claim.json")))
+                "weekly_work_status" -> MeReply.Json(MeFixtures.fixture("_me/rpc.weekly_work_status.json"))
+                "weekly_work_claim" -> MeReply.Gate(weeklyGate, MeReply.Json(MeFixtures.fixture("_me/rpc.weekly_work_claim.json")))
+                else -> null
+            }
+        }
+        h.signIn()
+        h.store.launch { h.store.loadAchievements() }
+        h.store.launch { h.store.loadWeeklyWork() }
+        runCurrent()
+        h.store.claimAllAchievements()
+        h.store.claimAllDailyMissions()
+        h.store.claimWeeklyWork()
+        runCurrent()
+        val before = h.store.achievements
+        val writes = h.ruby.rubyWriteSerial
+        h.sessionStore.signOut() // 세대가 오른다 — reset() 은 아직
+        claimGate.complete(Unit)
+        dailyGate.complete(Unit)
+        weeklyGate.complete(Unit)
+        runCurrent()
+        assertEquals(before, h.store.achievements, "앞 계정의 받기 응답이 화면에 옮겨지지 않는다")
+        assertEquals(writes, h.ruby.rubyWriteSerial, "앞 계정의 잔량을 미러에 쓰지 않는다")
+        assertTrue(h.store.missionClaimBursts.isEmpty(), "앞 계정의 받기 연출이 서지 않는다")
+        assertTrue(h.store.weeklyWork!!.hasClaimable, "주간 받기 응답도 옮기지 않는다")
+        h.assertClean()
+    }
+
+    @Test
     fun recordsKeepTheSharedCodexRatioCacheAcrossThrottleAndFailures() = runTest {
         var boardDown = false
         val daily = """[{"day":"2026-09-15","device_id":"mac-1","claude_total":100,"codex_total":10,"codex_utc_total":10,"codex_account":1000},

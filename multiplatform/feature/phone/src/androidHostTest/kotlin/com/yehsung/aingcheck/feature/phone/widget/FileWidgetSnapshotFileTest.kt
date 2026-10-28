@@ -28,7 +28,7 @@ class FileWidgetSnapshotFileTest {
         val snapshot = WidgetSnapshot(generatedAt = SwiftDate(1_789_621_500.0), characterID = "aing")
         file.writeAtomically(WidgetSnapshotCodec.encode(snapshot))
         assertTrue(target.isFile, "상위 폴더를 만들고 쓴다")
-        assertEquals(listOf(WidgetSnapshotWriter.FILE_NAME), target.parentFile.list()!!.toList(), "임시 파일을 남기지 않는다")
+        assertEquals(listOf(WidgetSnapshotWriter.FILE_NAME), target.parentFile!!.list()!!.toList(), "임시 파일을 남기지 않는다")
         assertEquals(snapshot, WidgetSnapshotCodec.decode(file.read()!!))
         // 덮어쓰기도 원자적이다(이름 바꾸기 — 반쯤 쓰인 파일이 보이지 않는다).
         val next = snapshot.copy(characterID = "fox")

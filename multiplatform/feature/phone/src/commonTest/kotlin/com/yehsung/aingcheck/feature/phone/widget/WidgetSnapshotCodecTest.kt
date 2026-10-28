@@ -97,8 +97,9 @@ class WidgetSnapshotCodecTest {
     @Test
     fun oldSnapshotWithoutStatusReadsWorkingFlagAndFlagWinsOverStatus() {
         val old = WidgetSnapshotCodec.decode("""{"version":1,"generatedAt":1000,"me":{"working":true,"todaySeconds":10,"weekSeconds":20,"goalHours":40}}""".encodeToByteArray())!!
-        assertNull(old.me!!.status)
-        assertEquals(WidgetSnapshot.WorkState.working, old.me!!.resolvedStatus)
+        val oldMe = assertNotNull(old.me)
+        assertNull(oldMe.status)
+        assertEquals(WidgetSnapshot.WorkState.working, oldMe.resolvedStatus)
         val contradicting = WidgetSnapshot.Me(false, null, 0, 0, 40, WidgetSnapshot.WorkState.disconnected)
         assertEquals(WidgetSnapshot.WorkState.off, contradicting.resolvedStatus, "근무 안 함인데 '연결 끊김'을 그리지 않는다")
         val unknown = WidgetSnapshotCodec.decode("""{"version":1,"generatedAt":1000,"me":{"working":true,"status":"onBreak"}}""".encodeToByteArray())!!

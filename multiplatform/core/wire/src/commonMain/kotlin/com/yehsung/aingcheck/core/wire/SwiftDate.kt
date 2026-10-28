@@ -3,6 +3,7 @@
 
 package com.yehsung.aingcheck.core.wire
 
+import com.yehsung.aingcheck.core.foundation.time.IcuInternetDate
 import kotlin.time.Instant
 
 /**
@@ -43,32 +44,16 @@ class SwiftDate private constructor(
 
 /**
  * Supabase timestamptz 글자 → [SwiftDate]. Swift `parseDate` 는 소수초 ISO8601 포매터를 먼저, 실패하면 기본 포매터로 읽는다
- * (`SupabaseWorkService.swift:338-341`). 두 포매터 모두 시간대(Z 또는 ±hh:mm)를 요구한다. Apple 포매터는 밀리초까지만 든다 —
- * 그래서 소수부를 밀리초로 자른다(넷째 자리부터 버림).
+ * (`SupabaseWorkService.swift:338-341`). 두 포매터의 파싱은 foundation [IcuInternetDate] 가 옮긴다 — 앱의 **날짜 파서 한 벌**
+ * (rules `WorkInsightsDate` 도 같은 것을 부른다, G §8-17 4 c-fold). 예전 이 자리의 정규식(`\d` · 두 자리 고정 · ±hh:mm)은
+ * ART(ICU 정규식 — Nd 전부)와 JDK(ASCII)에서 답이 갈렸고 Apple 의 관대함(Nd 숫자 · 한 자리 칸 · 24시 · 넘기는 날짜 · 분 없는 시간대)을
+ * 따르지 않았다. 남은 갈림은 골든 wire/rules 의 spec.dateKnownDivergence 가 정확히 잠근다.
  */
 object SwiftISO8601 {
-    private val pattern = Regex(
-        """^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-]\d{2}:?\d{2})$""",
-    )
-
     fun parse(text: String): SwiftDate? {
-        val m = pattern.matchEntire(text) ?: return null
-        val fraction = m.groupValues[7]
-        val base = text.substring(0, m.groups[6]!!.range.last + 1) + normalizeZone(m.groupValues[8])
-        val instant = try {
-            Instant.parse(base)
-        } catch (e: IllegalArgumentException) {
-            return null
-        }
-        val millis = if (fraction.isEmpty()) 0 else fraction.drop(1).padEnd(3, '0').take(3).toInt()
-        // Apple 포매터(ICU)는 1970 기준 ms(정수)를 1000 으로 한 번 나눈 뒤 2001 기준으로 옮긴다.
-        return SwiftDate.fromEpochMillis(instant.epochSeconds * 1000 + millis)
-    }
-
-    private fun normalizeZone(zone: String): String = when {
-        zone == "Z" -> "Z"
-        zone.length == 5 -> zone.substring(0, 3) + ":" + zone.substring(3)
-        else -> zone
+        // ICU UDate ÷ 1000(1970 기준 초) → Swift Date(2001 기준으로 한 번 왕복 — 생성자가 뺀다).
+        val seconds = IcuInternetDate.parse(text, fractional = true) ?: IcuInternetDate.parse(text, fractional = false) ?: return null
+        return SwiftDate(seconds)
     }
 
     /** Swift `ISO8601DateFormatter().string(from:)` — 초 단위 UTC `yyyy-MM-ddTHH:mm:ssZ`. */

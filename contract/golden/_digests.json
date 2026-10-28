@@ -161,7 +161,7 @@
     "errors/classify": {
       "file": "6ac3f8b41ac2159e3ee94ab632e36561bc982ddf80a14e6d1294c173eb345c83",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "fcc581f1e310a42cb79572a779a2f9fa963b1b3a4e2a2bfd6302515b71867ebf"
       },
       "swiftSources": {
         "Sources/CheckCore/AuthErrorRules.swift": "0995ed02ebb80a6d0190a2f704f11fe2c714451e2fd7750847cf7330f211a3c6",
@@ -290,7 +290,7 @@
     "jwt/expiry": {
       "file": "4a7322d4bcbe43c17efd6c0304fddaa0dec0798c73bf14d9d2a54fa2882f2554",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "fcc581f1e310a42cb79572a779a2f9fa963b1b3a4e2a2bfd6302515b71867ebf"
       },
       "swiftSources": {
         "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696"
@@ -820,7 +820,7 @@
     "wire/numbers": {
       "file": "d149e5eda87ff838666b60277d51fc2ec41ec9cda8f27a63523d86d3eaf04d80",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "fcc581f1e310a42cb79572a779a2f9fa963b1b3a4e2a2bfd6302515b71867ebf"
       },
       "swiftSources": {
         "Sources/CheckCore/SupabaseWorkService.swift": "12adc693c30b222d208b56f674345f63bc8736f476dc54acf390df4f66f3e404"
@@ -863,9 +863,9 @@
       }
     },
     "wire/rules": {
-      "file": "90168a41c97758177ca5ca9f82ed9d2df1e0fcb9bb764e17b7d3df1c32318b66",
+      "file": "9042324e68e7293985dee8159f1db725248f191e8aa5cfc1108ef9fa2dd4f98d",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "7a49c0b14d9785d60dfd3e65ae19bcb40456d8cff2eb4ff2fbf802759f81bceb"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRules.swift": "fcc581f1e310a42cb79572a779a2f9fa963b1b3a4e2a2bfd6302515b71867ebf"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",

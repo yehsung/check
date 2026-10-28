@@ -400,10 +400,12 @@ suspend fun SupabaseWorkService.fetchMyProfileCard(accessToken: String, userID: 
 }
 
 /**
- * 내 AI 리밋(ai_limits 읽기 — 폰은 쓰지 않는다). 관측 시각을 못 읽거나 기기 id 가 빈 행은 버린다. 라벨 정규화(`AILimit*Contract`)는
- * W2-c 가 행에 덧입힌다(I 갈래 계약 — Windows 보류).
+ * 내 AI 리밋(ai_limits 읽기 — 폰은 쓰지 않는다). 관측 시각을 못 읽거나 기기 id 가 빈 행은 버린다. 값 정규화(날짜 · 라벨 `AILimit*Contract`)는
+ * core/stores me `AILimitFetchedRow.fromRows` 가 한다(G5 골든 fetchMyAILimits#data 결과 — core/stores 의 G5 대조, 6차 c-fold).
  */
 suspend fun SupabaseWorkService.fetchMyAILimitRows(accessToken: String, userID: String): List<AILimitServerRow> {
+    // INV-MeAILimitsService-e8b002fa 이식: 이 select 는 device_label 칸이 있는 서버(20261008120000_ai_limits_devices)를 요구한다 — 없는 칸을 적으면
+    // PostgREST 가 400 으로 응답 전체를 거절해 리밋 카드가 통째로 빈다. 그 마이그레이션이 올라간 서버에서만 나가는 빌드라 그대로 적는다.
     val data = send(
         SupabaseWorkService.aiLimitsPath, "GET",
         listOf(

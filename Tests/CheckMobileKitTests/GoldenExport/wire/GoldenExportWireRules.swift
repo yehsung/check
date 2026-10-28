@@ -358,13 +358,12 @@ struct GoldenExportWireRules {
         "2026-09-17T05:05:00", "", "bad-date",
     ]
 
-    /// Kotlin `SwiftISO8601.parse` 가 **일부러** 따르지 않는 Apple 포매터의 관대함(서버 timestamptz 는 늘 ASCII · 두 자리 · ±hh:mm 이다).
+    /// Kotlin 날짜 파서(foundation `IcuInternetDate` — 6차 c-fold 로 wire `SwiftISO8601` 과 rules `WorkInsightsDate` 가 한 벌을 쓴다)가
+    /// 따르지 않는 Apple 포매터의 관대함. 예전 wire 정규식 시절의 갈림 10줄(Nd 숫자 · 한 자리 칸 · 24시 · 넘기는 날짜 · 분 없는 시간대 · 뒤 공백)은
+    /// ICU 동작 이식으로 Swift 와 같아졌다. 남은 것은 ICU 가 자리마다 달리 받는 '숫자 칸 앞 공백'(골든 dates/parse 도 모형 밖으로 둔 꼴)뿐이다.
     /// 이 목록이 늘거나 줄면 Kotlin 시험이 빨갛다 — 갈림을 고치거나 새로 생기면 이 목록부터 바꾼다.
     static let dateKnownDivergence: [String: String] = [
-        "２０２６-09-17T05:05:00Z": "전각 숫자", "2026-09-17T05:05:00.５Z": "전각 숫자(소수부)", "٢٠٢٦-09-17T05:05:00Z": "아랍-인도 숫자",
-        "२०२६-09-17T05:05:00Z": "데바나가리 숫자", "2026-09-17T05:05:00+09": "분 없는 시간대", "2026-02-30T00:00:00Z": "없는 날짜를 넘김",
-        "2026-09-17T24:00:00Z": "24시", "  2026-09-17T05:05:00Z": "앞 공백", "2026-09-17T05:05:00Z ": "뒤 공백",
-        "2026-9-17T05:05:00Z": "한 자리 월",
+        "  2026-09-17T05:05:00Z": "앞 공백(ICU 숫자 칸 앞 White_Space — IcuInternetDate 모형 밖)",
     ]
 
     static let todoResponses: [String] = [

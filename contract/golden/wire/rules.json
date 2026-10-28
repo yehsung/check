@@ -5806,54 +5806,9 @@
     "date": "SupabaseWorkService.parseDate(소수초 포매터 → 기본 포매터) → $date 비트 또는 null",
     "dateKnownDivergence": [
       {
-        "id": "date-9",
-        "reason": "전각 숫자",
-        "text": "２０２６-09-17T05:05:00Z"
-      },
-      {
-        "id": "date-10",
-        "reason": "전각 숫자(소수부)",
-        "text": "2026-09-17T05:05:00.５Z"
-      },
-      {
-        "id": "date-11",
-        "reason": "아랍-인도 숫자",
-        "text": "٢٠٢٦-09-17T05:05:00Z"
-      },
-      {
-        "id": "date-12",
-        "reason": "데바나가리 숫자",
-        "text": "२०२६-09-17T05:05:00Z"
-      },
-      {
-        "id": "date-14",
-        "reason": "분 없는 시간대",
-        "text": "2026-09-17T05:05:00+09"
-      },
-      {
-        "id": "date-18",
-        "reason": "없는 날짜를 넘김",
-        "text": "2026-02-30T00:00:00Z"
-      },
-      {
-        "id": "date-19",
-        "reason": "24시",
-        "text": "2026-09-17T24:00:00Z"
-      },
-      {
         "id": "date-24",
-        "reason": "앞 공백",
+        "reason": "앞 공백(ICU 숫자 칸 앞 White_Space — IcuInternetDate 모형 밖)",
         "text": "  2026-09-17T05:05:00Z"
-      },
-      {
-        "id": "date-25",
-        "reason": "뒤 공백",
-        "text": "2026-09-17T05:05:00Z "
-      },
-      {
-        "id": "date-26",
-        "reason": "한 자리 월",
-        "text": "2026-9-17T05:05:00Z"
       }
     ],
     "feedback": "FeedbackComposer(자소 = Swift Character) · FeedbackText 상수·함수. age = now(values) - secondsAgo",

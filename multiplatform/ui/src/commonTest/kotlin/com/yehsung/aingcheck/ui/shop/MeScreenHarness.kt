@@ -63,7 +63,8 @@ object MeScreenFixtures {
         "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
     )
 
-    fun fixture(path: String): String = RepoFiles.readText("$ME/$path")
+    /** 픽스처 글자(Windows 체크아웃의 CRLF 는 LF 로 접는다 — 장면 바꾸기 조각이 줄바꿈에 기댄다). */
+    fun fixture(path: String): String = RepoFiles.readText("$ME/$path").replace("\r\n", "\n")
 
     val shopState: String get() = fixture("_me/rpc.shop_state.json")
     val achievements: String get() = fixture("_me/rpc.achievements_status.json")

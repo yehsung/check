@@ -78,10 +78,13 @@ object CakeGiftTags {
 @Composable
 fun MeCakeGiftSheetHost(store: MeStore) {
     val sheet = store.cakeGiftSheet ?: return
-    val claiming = sheet.phase == MeCakeGiftSheet.Phase.Claiming
     ModalBottomSheet(
         onDismissRequest = { store.dismissCakeGiftSheet() },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { !claiming }),
+        // 상태 판정은 부를 때의 스토어 값으로(시트 상태는 처음 람다를 쥔다 — 그때의 '받는 중'을 굳히면 안 된다).
+        sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { store.cakeGiftSheet?.phase != MeCakeGiftSheet.Phase.Claiming },
+        ),
         containerColor = AingTheme.colors.surface,
     ) { MeCakeGiftSheetContent(store, sheet) }
 }

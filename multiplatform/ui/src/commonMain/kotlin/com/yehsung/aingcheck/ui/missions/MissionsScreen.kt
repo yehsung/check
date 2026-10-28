@@ -142,14 +142,18 @@ fun MeMissionsScreen(store: MeStore, onBack: (() -> Unit)?, modifier: Modifier =
     }
 }
 
-/** 받기 성공 햅틱 — 「미션」 화면 한 곳(missionClaimBurstSerial 이 오를 때 한 번). */
+/**
+ * 받기 성공 햅틱 — 「미션」 화면 한 곳(missionClaimBurstSerial 이 오를 때 한 번). 옛 서버의 주간 자동 지급(weeklyGrantSerial — '+N 받음' 칩)도
+ * 같은 자리에서 한 번 운다(iOS 주간 카드의 sensoryFeedback 짝 — 카드마다 달면 한 번 받고 두 번 운다).
+ */
 @Composable
 private fun MissionClaimHaptic(store: MeStore) {
     val haptics = LocalHapticFeedback.current
-    val last = remember { intArrayOf(store.missionClaimBurstSerial) }
-    LaunchedEffect(store.missionClaimBurstSerial) {
-        if (store.missionClaimBurstSerial > last[0]) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+    val last = remember { intArrayOf(store.missionClaimBurstSerial, store.weeklyGrantSerial) }
+    LaunchedEffect(store.missionClaimBurstSerial, store.weeklyGrantSerial) {
+        if (store.missionClaimBurstSerial > last[0] || store.weeklyGrantSerial > last[1]) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
         last[0] = store.missionClaimBurstSerial
+        last[1] = store.weeklyGrantSerial
     }
 }
 

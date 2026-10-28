@@ -1,0 +1,14 @@
+# 원본: 없음 — 출시 판 권한 허용 목록(E§9.8 · G §4-1 "권한 허용 목록, AD_ID 0"). release-android.sh 가 aapt2 dump badging 의
+# uses-permission 집합과 **정확히** 대조한다(넘쳐도 모자라도 빨강). 병합 매니페스트 시험(androidApp …/app/MergedManifestTest)과 같은 집합이어야
+# 한다 — release-android.sh self-test 가 두 목록이 같은지 잰다. 늘릴 때는 Data safety(E§9.5)·Play 권한 신고를 같이 본다.
+android.permission.INTERNET
+android.permission.ACCESS_NETWORK_STATE
+android.permission.POST_NOTIFICATIONS
+android.permission.VIBRATE
+# FCM(firebase-messaging)이 더한다.
+android.permission.WAKE_LOCK
+com.google.android.c2dm.permission.RECEIVE
+# WorkManager 가 더한다.
+android.permission.RECEIVE_BOOT_COMPLETED
+# androidx.core 의 서명 권한(동적 리시버 비공개).
+com.yehsung.aingcheck.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION

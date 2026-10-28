@@ -38,11 +38,12 @@ class NetContractsTest {
         val engine = MockEngine { request ->
             val bytes = (request.body as? OutgoingContent.ByteArrayContent)?.bytes()
             val timeout = request.getCapabilityOrNull(HttpTimeoutCapability)
-            synchronized(this) {
+            // 처리기 람다의 this 는 요청마다 새 MockRequestHandleScope 라 잠금이 되지 않는다 — 대본 객체 자신으로 잠근다.
+            synchronized(this@Scripted) {
                 bodies += bytes?.decodeToString() ?: ""
                 timeouts += Triple(timeout?.requestTimeoutMillis, timeout?.socketTimeoutMillis, timeout?.connectTimeoutMillis)
             }
-            val (status, text) = synchronized(this) { if (next < script.size) script[next++] else 200 to "{}" }
+            val (status, text) = synchronized(this@Scripted) { if (next < script.size) script[next++] else 200 to "{}" }
             respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
         }
     }

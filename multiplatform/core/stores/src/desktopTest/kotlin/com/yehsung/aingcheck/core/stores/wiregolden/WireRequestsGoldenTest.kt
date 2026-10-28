@@ -44,6 +44,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.decodeURLQueryComponent
 import io.ktor.http.headersOf
+import io.ktor.client.request.get
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -120,13 +124,15 @@ class GoldenRecorder(private val script: List<Pair<Int, String>>, private val ro
                 "body" to body,
             ),
         )
-        synchronized(this) { requests += recorded }
+        // ★ 처리기 람다의 this 는 요청마다 새 MockRequestHandleScope 다 — synchronized(this) 는 아무것도 막지 않아 동시 요청(팀 상태 4 GET)이
+        //   ArrayList 에 겹쳐 써서 요청을 잃거나 AIOOBE 를 냈다(Windows CI 실측 `fetchTeamStatuses#devicesFail`). 녹음기 자신으로 잠근다.
+        synchronized(this@GoldenRecorder) { requests += recorded }
         val (status, text) = if (routes.isNotEmpty()) {
             val decoded = query.map { (it as JsonArray).let { p -> (p[0] as JsonPrimitive).content to (p[1] as JsonPrimitive).content } }
             routes.firstOrNull { r -> r.path == request.url.encodedPath && (r.query == null || decoded.contains(r.query)) }
                 ?.let { it.status to it.body } ?: (200 to "{}")
         } else {
-            synchronized(this) { if (next < script.size) script[next++] else 200 to "{}" }
+            synchronized(this@GoldenRecorder) { if (next < script.size) script[next++] else 200 to "{}" }
         }
         respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
     }
@@ -570,6 +576,25 @@ class WireRequestsGoldenTest {
         assertTrue(wronglyPorted.isEmpty(), "H·I·admin 태그 이름이 W1-d 레지스트리에 있다: $wronglyPorted")
         assertTrue(golden.cases.size >= 140, "G5 case 가 적다(${golden.cases.size})")
         if (problems.isNotEmpty()) fail("G5 불일치 ${problems.size}건(처음 12):\n" + problems.take(12).joinToString("\n\n"))
+    }
+
+    /**
+     * 녹음기가 동시 요청을 하나도 잃지 않는다(팀 상태 4 GET 처럼 서비스가 요청을 병렬로 보낸다 — MockEngine 처리기는 IO 스레드에서 겹쳐 돈다).
+     * 처리기 안 `synchronized(this)` 는 요청마다 새 scope 를 잠가 아무것도 막지 않았다(Windows CI 의 fetchTeamStatuses#devicesFail AIOOBE).
+     */
+    @Test
+    fun recorderKeepsEveryConcurrentRequest() {
+        val n = 512
+        val recorder = GoldenRecorder(emptyList())
+        val client = HttpClient(recorder.engine)
+        try {
+            runBlocking { (0 until n).map { i -> async(Dispatchers.IO) { client.get("https://golden.invalid/r?i=$i") } }.awaitAll() }
+        } finally {
+            client.close()
+        }
+        val seen = recorder.requests.map { ((it["query"] as JsonArray)[0] as JsonArray)[1].let { v -> (v as JsonPrimitive).content } }
+        assertEquals(n, seen.size, "동시 요청 $n 개 중 ${seen.size} 개만 녹음했다")
+        assertEquals((0 until n).map { it.toString() }.toSet(), seen.toSet(), "녹음한 요청이 겹치거나 빠졌다")
     }
 
     /** 경계(G §2-3 W1-d ⑥): 2^31 넘는 정수는 정밀도 그대로, 상점 번호 0 이면 키 생략, p_since_ms 는 null 이어도 싣는다. */

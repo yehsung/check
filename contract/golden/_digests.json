@@ -158,6 +158,20 @@
         "Sources/CheckCore/DuelFee.swift": "3a86d30efe711f16ec1f9857e0a0e338480859094bb6c4b0492627efe91512d9"
       }
     },
+    "duel/resume": {
+      "file": "b74bae7d48581c9898ab7b4ae8e3d8229a30d84ff348d093e5ac381306725fe1",
+      "generator": {
+        "Tests/checkTests/GoldenExport/duel/GoldenExportDuel.swift": "5f69b1faaa9e3a172f4b67d5e2a5118d01e885068307c5b5a16d40a2e1b10cfc"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/TetrisDuelBoard.swift": "99594e62723d91506f295d8a2ff788deff4afe0446d8b1b64ad79890ad5952d9",
+        "Sources/CheckCore/TetrisDuelSession.swift": "3b0300c82e9c777a640dcbe5cab313fee9ea4f4a2790408d8065562f795b5cd8",
+        "Sources/CheckCore/TetrisDuelStore.swift": "d1af186a06a36b00f436e89d5b06068513923c6dc6f6b3164d9d92c0a0735c05",
+        "Sources/CheckCore/TetrisDuelStoreGame.swift": "2b4ede828b3aedfe0e6f609247d4d8301db1072eb596a7c6e440b266c551bc6d",
+        "Sources/CheckCore/TetrisGame.swift": "37e5fa3d35131071b360f7a4203c070b8b8326db6072938b3efb5fbfc005071c",
+        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935"
+      }
+    },
     "errors/classify": {
       "file": "6ac3f8b41ac2159e3ee94ab632e36561bc982ddf80a14e6d1294c173eb345c83",
       "generator": {
@@ -304,6 +318,16 @@
       "swiftSources": {
         "Sources/CheckCore/Achievements.swift": "ec7d18fc30b738157f331ba41e3afbe4e9f59e32ac0bf6c5622adddcdc8dda15",
         "Sources/CheckCore/DailyMissions.swift": "70668d28a2ea4513288689182454e08768461dd8863da4bebc873e2ee0e3b9ca"
+      }
+    },
+    "pause/transitions": {
+      "file": "725e00752a074fc27e89d5f6a18a2535fac6f6c95e5b0ff16fa232b1dd756739",
+      "generator": {
+        "Tests/checkTests/GoldenExport/duel/GoldenExportPause.swift": "7e8a2188e363202efc5aa74c03c2d40b5d7811417a3d5215b2970064e22dd125"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/MiniGameEngine.swift": "d08f193a55c0c86aa554c90443d4e67c02977d92289acdf4251f160589de303e",
+        "Sources/check/MiniGamePanel.swift": "860937efa9af4fd85ce049215a3dd156722c9877b5ab1073cb82c15bd3de1f2e"
       }
     },
     "realtime/frames": {

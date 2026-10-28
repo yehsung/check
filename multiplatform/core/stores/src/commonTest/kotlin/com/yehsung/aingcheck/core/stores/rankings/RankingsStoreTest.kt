@@ -234,12 +234,12 @@ class RankingsStoreTest {
         store.tabDidAppear()
         advanceUntilIdle()
         assertTrue(store.leagueState.hasFailed, "리그 503 은 실패 + 다시 시도")
-        assertEquals(RankingsText.leagueFailed, RankingsText.leagueEmpty(store.leagueState.hasLoaded, store.leagueState.isLoading, store.leagueState.hasFailed, 0))
+        assertEquals("리그를 불러오지 못했어요", RankingsText.leagueEmpty(store.leagueState.hasLoaded, store.leagueState.isLoading, store.leagueState.hasFailed, 0))
         store.select(RankingsBoard.minigame)
         advanceUntilIdle()
         assertTrue(store.miniGameState.hasLoaded)
         assertFalse(store.miniGameState.hasFailed, "함수 없음(PGRST202)은 실패가 아니라 '아직 없음'")
-        assertEquals(RankingsText.miniGameEmpty, RankingsText.miniGameEmptyText(store.miniGameState.hasLoaded, store.miniGameState.hasFailed))
+        assertEquals("아직 기록이 없어요 — 첫 기록의 주인공이 되세요", RankingsText.miniGameEmptyText(store.miniGameState.hasLoaded, store.miniGameState.hasFailed))
         h.assertClean()
     }
 }

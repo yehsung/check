@@ -38,6 +38,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.io.IOException
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -49,6 +50,9 @@ sealed interface Reply {
 
     /** 전송 실패(오프라인 · 끊김) — 서비스는 일시 오류(전송)로 접는다. */
     data object Offline : Reply
+
+    /** 요청이 취소로 끝났다(Swift URLError.cancelled -999 자리 — 앱 전환 때 OS 가 끊는 흔한 경로). 처분은 '취소'다. */
+    data object Cancelled : Reply
 
     /** 문이 열릴 때까지 기다렸다가 [then] 을 낸다(늦은 응답 · 겹침 재현). */
     class Gate(val gate: CompletableDeferred<Unit>, val then: Reply) : Reply
@@ -94,6 +98,7 @@ class StubServer(scope: TestScope, var route: (RecordedRequest) -> Reply?) {
                             reply = r.then
                         }
                         Reply.Offline -> throw IOException("offline")
+                        Reply.Cancelled -> throw kotlinx.coroutines.CancellationException("cancelled")
                         is Reply.Json -> return@addHandler respond(
                             r.body,
                             HttpStatusCode.fromValue(r.status),
@@ -133,11 +138,20 @@ class MemoryPrefs : KeyValueStore {
  * 스토어의 부모 스코프는 [storeScope] — 시험 디스패처 위의 전경 작업이다(`advanceUntilIdle` 이 스토어 작업을 기다린다).
  */
 @OptIn(ExperimentalCoroutinesApi::class, ExperimentalEncodingApi::class)
-class StoreHarness(val scope: TestScope, route: (RecordedRequest) -> Reply? = { null }) {
+class StoreHarness(
+    val scope: TestScope,
+    /** 시계의 출발점(Swift 시험의 `clockStart` — 기본은 데모 시각 2026-09-17 14:05 KST). */
+    clockStart: SwiftDate = SessionClock.demoInstant,
+    route: (RecordedRequest) -> Reply? = { null },
+) {
+    constructor(scope: TestScope, route: (RecordedRequest) -> Reply?) : this(scope, SessionClock.demoInstant, route)
+
+    /** 가상 시간을 밀지 않고 벽시계만 옮긴다(Swift `clock.advance` — 타이머·HTTP 시한을 깨우지 않는다). */
+    var clockShift: Double = 0.0
     /** 시험이 고르는 응답(없으면 로그인 기본 응답 — client_release · 기기 등록 · 소속). */
     var route: (RecordedRequest) -> Reply? = route
     val server = StubServer(scope) { r -> this.route(r) ?: launchDefaults(r) }
-    val clock = SessionClock { SwiftDate(SessionClock.demoInstant.timeIntervalSince1970 + scope.testScheduler.currentTime / 1000.0) }
+    val clock = SessionClock { SwiftDate(clockStart.timeIntervalSince1970 + clockShift + scope.testScheduler.currentTime / 1000.0) }
     private val storeJob = SupervisorJob()
     val storeScope: CoroutineScope = CoroutineScope(scope.coroutineContext.minusKey(Job) + storeJob)
     val vault = InMemoryTokenVault()
@@ -174,10 +188,20 @@ class StoreHarness(val scope: TestScope, route: (RecordedRequest) -> Reply? = { 
 
     fun now(): SwiftDate = clock.now()
 
+    private fun b64(text: String) = Base64.Default.encode(text.encodeToByteArray()).replace('+', '-').replace('/', '_').trimEnd('=')
+
+    /** 그 사용자의 1시간짜리 접근 토큰(JWT 모양 — 서명은 보지 않는다). */
+    fun jwt(userID: String, salt: String = ""): String {
+        val exp = (now().timeIntervalSince1970 + 3_600).toLong()
+        return "hdr." + b64("""{"sub":"$userID","exp":$exp,"salt":"$salt"}""") + ".sig"
+    }
+
+    /** `/auth/v1/token`(비밀번호 로그인 · 갱신) 응답. null 이면 경로 없음. */
+    var tokenReply: Reply? = null
+
     /** 지난 실행의 세션을 금고에 심고 복원한다(Swift 시험의 `signedInContext`). */
     suspend fun signIn(userID: String = ME) {
         val exp = (now().timeIntervalSince1970 + 3_600).toLong()
-        fun b64(text: String) = Base64.Default.encode(text.encodeToByteArray()).replace('+', '-').replace('/', '_').trimEnd('=')
         vault.write("hdr." + b64("""{"sub":"$userID","exp":$exp}""") + ".sig", SessionVaultKeys.accessToken)
         vault.write("r0", SessionVaultKeys.refreshToken)
         prefs.putString(SessionPrefsKeys.userID, userID)
@@ -186,6 +210,16 @@ class StoreHarness(val scope: TestScope, route: (RecordedRequest) -> Reply? = { 
         scope.advanceUntilIdle()
         assertEquals(SessionPhase.SignedIn, session.phase, "시험 조립: 로그인 복원이 끝나야 한다")
         mark = server.requests.size
+    }
+
+    /** 다른 사람이 비밀번호로 로그인한다(Swift `NowHarness.signIn(as:)` — 키체인 복원이 아니라 로그인 흐름, 세대가 바뀐다). */
+    suspend fun signInAs(userID: String, idle: Boolean = true) {
+        tokenReply = Reply.Json("""{"access_token":"${jwt(userID, "signin-$userID")}","refresh_token":"r-$userID","user":{"id":"$userID"}}""")
+        session.signIn("$userID@x.invalid", "pw")
+        // 다른 응답을 문에 붙잡아 둔 시험은 가상 시간을 밀지 않는다(밀면 붙잡힌 요청이 HTTP 시한에 걸린다).
+        if (idle) scope.advanceUntilIdle() else scope.runCurrent()
+        assertEquals(SessionPhase.SignedIn, session.phase, "시험 조립: 비밀번호 로그인이 끝나야 한다")
+        assertEquals(userID, session.userID)
     }
 
     /** 끝 단언 둘: 모르는 요청 0 · 폰 금지 호출 0(C§4 #13 — Android 스토어 시험 끝마다 violations == [] · G §2-3 W2-b ①). */
@@ -201,6 +235,7 @@ class StoreHarness(val scope: TestScope, route: (RecordedRequest) -> Reply? = { 
         // 로그아웃(시험이 세대를 바꿀 때): 기기 등록 해제 · local 범위 로그아웃.
         r.rpcName == "unregister_device" -> Reply.Json("""{"status":"ok","removed":true}""")
         r.path == "/auth/v1/logout" -> Reply.Json("{}")
+        r.path == "/auth/v1/token" -> tokenReply
         else -> null
     }
 

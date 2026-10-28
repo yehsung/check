@@ -39,7 +39,13 @@ class MessagesServer {
     var sendReply: Reply = Reply.Json("""{"status":"ok"}""")
     var directory = "[]"
     var blockReply: Reply = Reply.Json("{}")
+    var unblockReply: Reply = Reply.Json("{}")
+    var listBlocksReply: Reply = Reply.Json("[]")
+    var reportReply: Reply = Reply.Json("{}")
     var historyGate: CompletableDeferred<Unit>? = null
+
+    /** 요약 조회를 붙잡는 문(늦은 옛 요약 재현). 요청이 **들어온 순간**의 [summary] 를 싣고 기다린다. */
+    var summaryGate: CompletableDeferred<Unit>? = null
 
     fun received(id: String, peer: String, at: Long, unread: Boolean? = true, name: String = "상대", body: String = "안녕") {
         rows += Row(id, peer, name, body, at, mine = false, readByPeer = null, unread = unread, kind = "message")
@@ -87,7 +93,7 @@ class MessagesServer {
         return when (rpc) {
             "message_history_with_pokes" -> historyGate?.let { Reply.Gate(it, Reply.Json(withPokes())) } ?: Reply.Json(withPokes())
             "message_history_with_reads", "message_history" -> Reply.Json(withoutKind())
-            "message_unread_summary" -> Reply.Json(summary)
+            "message_unread_summary" -> summaryGate?.let { Reply.Gate(it, Reply.Json(summary)) } ?: Reply.Json(summary)
             "mark_conversation_read" -> {
                 val peer = field(r, "p_peer")!!
                 markRead(peer, field(r, "p_through_message"), pokes = false)
@@ -100,9 +106,10 @@ class MessagesServer {
             }
             "send_message" -> sendReply
             "app_user_directory" -> Reply.Json(directory)
-            "block_user", "unblock_user" -> blockReply
-            "list_blocks" -> Reply.Json("[]")
-            "report_content" -> Reply.Json("{}")
+            "block_user" -> blockReply
+            "unblock_user" -> unblockReply
+            "list_blocks" -> listBlocksReply
+            "report_content" -> reportReply
             else -> null
         }
     }
@@ -294,6 +301,35 @@ class MessagesStoreTest {
         h.assertClean()
     }
 
+    /**
+     * ③ 요약도 순서 번호로(검증 V08): 먼저 띄운 요약(옛 값 — 안 읽음 3)이 나중 요약(새 값 — 안 읽음 1)보다 늦게 와도 새 요약을 덮지 않는다.
+     * 기준선: 늦은 응답이 실제로 도착했다(요청 둘 · 가상 시간 그대로 = 시한이 아니라 늦은 응답).
+     */
+    @Test
+    fun lateOldSummaryCannotOverwriteNewerSummary() = runTest {
+        val (h, server, store) = make()
+        server.summary = """{"status":"ok","total":3,"peers":[{"peer_user_id":"peer-a","count":3,"last_epoch_ms":1}]}"""
+        val lateGate = CompletableDeferred<Unit>()
+        server.summaryGate = lateGate
+        val late = launch { store.performLoadSummary() }
+        runCurrent()
+        val startedAt = testScheduler.currentTime
+        server.summaryGate = null
+        server.summary = """{"status":"ok","total":1,"peers":[{"peer_user_id":"peer-b","count":1,"last_epoch_ms":2}]}"""
+        store.performLoadSummary()
+        val newer = store.summary!!
+        assertEquals(1L, newer.summary.total)
+        assertEquals(1, store.badgeCount)
+        lateGate.complete(Unit)
+        late.join()
+        assertEquals(startedAt, testScheduler.currentTime, "멈춘 요약이 시한에 걸렸다(늦은 응답을 재지 못했다)")
+        assertEquals(2, h.count("message_unread_summary"))
+        assertEquals(newer, store.summary, "늦게 온 옛 요약이 새 요약을 덮었다")
+        assertEquals(1, store.badgeCount, "늦은 옛 요약이 배지를 3 으로 되돌렸다")
+        assertEquals(mapOf(peerB to 1), store.unreadCountsByPeer)
+        h.assertClean()
+    }
+
     // ---------------------------------------------------------------- ④ 열린 대화는 곧바로 · 닫힌 대화는 낡음
 
     @Test
@@ -400,7 +436,7 @@ class MessagesStoreTest {
         assertTrue(store.sendSticker(AingSticker.joy, peerA))
         advanceUntilIdle()
         assertEquals("쓰던 글", store.draft(peerA))
-        assertEquals(MessagesSendRules.connectionNotice, store.sendNotices[peerA])
+        assertEquals("연결이 불안정해요. 잠시 후 다시 시도해 주세요", store.sendNotices[peerA])
         assertEquals(""""p_to":"peer-a","p_body":"[아잉:기쁨]"""", bodies(h, "send_message").last().removePrefix("{").removeSuffix("}"))
         h.assertClean()
     }

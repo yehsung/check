@@ -37,6 +37,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /** 골든 칸 읽기(널 허용 칸 · 쌍 배열). */
 internal object G {
@@ -113,6 +114,9 @@ class MessagesGoldenTest {
                 val sorted = entries.sortedForPokeDisplay(unreadPeerIDs = unread, workKnown = G.bool(c, "workKnown"), collation = NaturalKoNameCollation)
                 G.check(file, id, "sorted", G.strings(c, "sorted"), sorted.map { it.userID })
                 sorts += 1
+            } else if (!id.startsWith("directory-")) {
+                // 모르는 접두는 조용히 건너뛰지 않는다 — 생성기가 id 를 바꾸면 그 케이스를 아무도 대조하지 않게 된다(검증 V14).
+                fail("모르는 case id: $id (poke-display-sort 는 sort-* · directory-* 만)")
             } else {
                 for (r in c.array("results")) {
                     val result = r.jsonObject
@@ -143,6 +147,7 @@ class MessagesGoldenTest {
                 }
                 continue
             }
+            if (!id.startsWith("rows-")) fail("모르는 case id: $id (thread-list 는 rank-table · rows-* 만)")
             val entries = G.entries(c, "entries")
             val serverOrder = c["serverOrder"]?.takeIf { !it.isJsonNull() }?.let { G.pairs(it) }
             val threads = MessageThreadBuilder.threads(entries, serverOrder)
@@ -272,6 +277,7 @@ class MessagesGoldenTest {
     fun storeRulesMatchSwift() {
         val file = Golden.load("messages/store-rules")
         val seen = HashSet<String>()
+        var handled = 0
         for (c in file.cases) {
             val id = c.string("id")
             when {
@@ -321,8 +327,12 @@ class MessagesGoldenTest {
                     checkPresence(file, id, c)
                     seen += "presence"
                 }
+                // 모르는 접두는 조용히 건너뛰지 않는다 — 생성기가 id 를 바꾸면 그 케이스를 아무도 대조하지 않게 된다(검증 V14).
+                else -> fail("모르는 case id: $id (store-rules 는 badge-* · pending-* · text · times · presence-* 만)")
             }
+            handled += 1
         }
+        assertEquals(file.cases.size, handled, "대조하지 않은 케이스가 있다")
         assertEquals(setOf("badge", "pending", "text", "times", "presence"), seen.toSet(), "골든 갈래가 빠졌다")
     }
 

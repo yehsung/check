@@ -11,11 +11,18 @@ import com.yehsung.aingcheck.core.net.fetchPokeDirectory
 import com.yehsung.aingcheck.core.net.fetchTeamStatuses
 import com.yehsung.aingcheck.core.net.isMissingDeviceFunction
 import com.yehsung.aingcheck.core.net.setTeamWeeklyGoal
+import com.yehsung.aingcheck.core.rules.todo.TodoRules
 import com.yehsung.aingcheck.core.rules.text.StatusMessage
 import com.yehsung.aingcheck.core.session.SessionText
 import com.yehsung.aingcheck.core.session.context.SessionContext
 import com.yehsung.aingcheck.core.session.team.TeamJoinStore
 import com.yehsung.aingcheck.core.stores.messages.SwiftStrings
+import com.yehsung.aingcheck.core.stores.now.todo.TodoListStore
+import com.yehsung.aingcheck.core.stores.now.todo.TodoSync
+import com.yehsung.aingcheck.core.stores.now.todo.TodoSyncCancellable
+import com.yehsung.aingcheck.core.stores.now.todo.TodoSyncCoroutineScheduler
+import com.yehsung.aingcheck.core.stores.now.todo.TodoSyncReason
+import com.yehsung.aingcheck.core.stores.now.todo.TodoSyncScheduler
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.models.PokeDirectoryRow
@@ -26,7 +33,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -46,7 +52,9 @@ interface NowPhoneWorkLink {
 
 /**
  * 위젯 스냅숏 쓰기(Swift `writeWidgetSnapshot` · `touchWidgetSnapshot` — 쓰는 주체는 지금 탭 하나, 쓰기 창구는 W2-f 위젯 갈래).
- * 이 스토어는 **언제** 쓸지만 알린다. 무엇을 쓸지는 이 스토어의 값([NowStore.myCard] · [NowStore.workingPeople] …)에서 그쪽이 만든다.
+ * 이 스토어는 **언제** 쓸지만 알린다(로그아웃이면 부르지 않는다). 무엇을 쓸지는 이 스토어의 값([NowStore.myCard] · [NowStore.workingPeople] ·
+ * 할 일 미리보기 [NowStore.widgetTodoPreviewRows] — 지금 계정 파일이 아니면 null 이라 그 칸을 건드리지 않는다)에서 그쪽이 만든다.
+ * 위젯의 할 일 체크는 같은 파일([NowStore.todoStorage])을 [NowTodoFileAccess] 안에서 읽고-고치고-쓴다.
  */
 interface NowWidgetSink {
     /** 받은 값으로 스냅숏을 고친다. `deferWhileRefreshing` 이면 [NowStore.shouldDeferWidgetWrite] 가 참일 때 미룬다. */
@@ -54,24 +62,6 @@ interface NowWidgetSink {
 
     /** 성공한 새로고침 뒤 generatedAt 만 옮긴다(값이 같아 쓰기 창구가 파일을 건드리지 않은 경우 — now-verify R4). */
     fun touch(at: SwiftDate)
-}
-
-/**
- * 오늘 할 일 엔진(Swift 코어 `TodoListStore` · `TodoSync` — Android 엔진은 아직 없다. 규칙만 W1-c `core/rules/todo`).
- * 엔진이 들어오면 이 문으로 잇는다(Swift NowStore 가 엔진에 시키던 네 가지).
- */
-interface NowTodoLink {
-    /** active 진입: 계정 파일을 열고 동기화를 건다(같은 계정이면 파일을 다시 읽는다). */
-    fun activate(userID: String)
-
-    /** 탭이 보였다(`requestSync(.boardOpened)`). */
-    fun boardOpened()
-
-    /** background: 미룬 변경을 한 번 보내고 예약을 멈춘다. */
-    fun didEnterBackground()
-
-    /** 로그아웃: 앞 계정 목록을 메모리에서 내린다(파일은 지우지 않는다). */
-    fun reset()
 }
 
 /**
@@ -86,19 +76,25 @@ interface NowTodoLink {
  * - 다른 팀: `app_user_directory` 의 근무 여부·센터만.
  * - 주간 목표 쓰기: `set_team_weekly_goal`(팀 전체 1인당 목표 — 팀원 누구나).
  *
+ * - 할 일: 엔진 [TodoListStore] · [TodoSync](core/stores …/now/todo)를 [NowTodoStorage] 의 파일로(위젯 동작과 같은 파일 · 같은 조정 — [NowTodoFileAccess]).
+ *
  * 새로고침: active 진입 · 60초마다(active 동안, [runsPeriodicRefresh]) · 당겨서 · 탭 표시(30초 안에 받았으면 건너뜀). background 에서는 멈춘다.
  */
 class NowStore(
     val context: SessionContext,
     parentScope: CoroutineScope,
+    /** 할 일 파일 자리(조립이 앱 전용 폴더 · 파일 시스템을 넘긴다 — Swift `context.storage`). */
+    val todoStorage: NowTodoStorage,
     /** 60초 주기는 실시간 러너가 벽시계 타이머를 쓰는 조립(프로덕션)에서만 켠다(Swift `context.realtime.runsTimers`). */
     private val runsPeriodicRefresh: Boolean = false,
+    /** 타이머(60초 새로고침 · 5초 되돌리기 · 할 일 디바운스/주기). null = 이 스토어 스코프의 코루틴 타이머. 시험은 손으로 미는 것을 꽂는다. */
+    timers: TodoSyncScheduler? = null,
 ) {
     val scope: CoroutineScope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
+    private val timers: TodoSyncScheduler = timers ?: TodoSyncCoroutineScheduler(scope)
 
     var phoneWork: NowPhoneWorkLink? = null
     var widgetSink: NowWidgetSink? = null
-    var todo: NowTodoLink? = null
 
     // ---------------------------------------------------------------- 팀 · 사람
 
@@ -159,12 +155,36 @@ class NowStore(
     /** 무소속 카드의 팀 합류·만들기(가입 화면과 같은 왕복·가드·문구 — W2-a `TeamJoinStore`). */
     val teamJoin: TeamJoinStore = TeamJoinStore(context)
 
+    // ---------------------------------------------------------------- 할 일
+
+    /** 할 일 목록(파일 = `todos.<uid>.json`). 로그아웃이면 `todos.local.json` 을 가리키고 동기화하지 않는다. */
+    val todos: TodoListStore = TodoListStore(todoStorage.todoFilePath(null), todoStorage.files, clock = { context.clock.now().timeIntervalSince1970 })
+
+    /** 엔진의 예약을 background 동안 막는 타이머(Swift `todoScheduler`). */
+    val todoScheduler: NowPausableScheduler = NowPausableScheduler(this.timers)
+    val todoSync: TodoSync = TodoSync(
+        list = todos,
+        transport = NowTodoSyncTransport(context),
+        scheduler = todoScheduler,
+        scope = scope,
+        clock = { context.clock.now().timeIntervalSince1970 },
+    )
+
+    /** 눌러서 고치는 중인 줄(서버 병합 보호 대상). */
+    var editingTodoID: String? by mutableStateOf(null)
+        private set
+
+    /** "삭제됨 · 되돌리기" 토스트가 떠 있는 줄(5초, 보호 대상). */
+    var undoTodoID: String? by mutableStateOf(null)
+        private set
+
     // ---------------------------------------------------------------- 내부
 
     var refreshTask: Job? = null
         private set
     private var refreshRerun = false
-    private var refreshTimer: Job? = null
+    private var refreshTimer: TodoSyncCancellable? = null
+    private var undoTimer: TodoSyncCancellable? = null
 
     /** 목표를 저장할 때마다 +1. 그 전에 떠난 멤버십 조회가 옛 목표로 되돌리지 못하게 한다. */
     private var goalWriteSerial = 0
@@ -179,6 +199,10 @@ class NowStore(
         private set
 
     init {
+        todos.onLocalChange = { todoSync.noteLocalChange() }
+        todos.syncProtectedIDs = { protectedTodoIDs }
+        // 목록이 바뀔 때마다(사용자 · 동기화 병합 · 다시 읽기) 위젯 스냅숏을 고친다(Swift `observeTodos`).
+        todos.onItemsChanged = { writeWidget(deferWhileRefreshing = true) }
         teamJoin.onTeamSettled = { adoptSettledTeam() }
     }
 
@@ -206,10 +230,10 @@ class NowStore(
         val userID = context.sessionStore.userID
         if (!context.sessionStore.isSignedIn || userID == null) return
         isActive = true
+        todoScheduler.resume()
         // 새로고침을 먼저 띄운다 — 할 일 준비가 부르는 스냅샷 쓰기가 "응답을 기다리는 중"을 알아 낡은 팀 상태로 쓰지 않게.
         refresh()
-        todo?.activate(userID)
-        widgetSink?.write(deferWhileRefreshing = true)
+        prepareTodos(userID)
         armRefreshTimer()
         // 앱이 앞으로 왔다 = 폰 근무의 생존 신호(근무 중이 아니어도 보낸다 — 응답이 출처와 자리비움 안내를 알려 준다).
         phoneWork?.appDidBecomeActive()
@@ -219,7 +243,13 @@ class NowStore(
         isActive = false
         refreshTimer?.cancel()
         refreshTimer = null
-        todo?.didEnterBackground()
+        // 되돌리기 창은 닫는다(삭제는 이미 파일에 있다) — 돌아왔을 때 몇 시간 지난 토스트가 남지 않게.
+        closeUndoWindow()
+        // 고친 뒤 1.5초를 기다리던 변경은 지금 한 번 보낸다. 폰을 잠근 채 두면 다음 실행까지 맥에 닿지 않는다.
+        if (context.sessionStore.isSignedIn && todoSync.userID != null && todos.pendingIDs.isNotEmpty()) {
+            todoSync.requestSync(TodoSyncReason.edit)
+        }
+        todoScheduler.pause()
     }
 
     fun reset() {
@@ -244,7 +274,12 @@ class NowStore(
         isSavingGoal = false
         goalNotice = null
         resetPhoneWork()
-        todo?.reset()
+        editingTodoID = null
+        closeUndoWindow()
+        todoScheduler.resume()
+        // 앞 계정 목록을 메모리에 남기지 않는다. 파일은 지우지 않는다(아직 못 올린 변경 — 세션 스토어와 같은 관용).
+        val localPath = todoStorage.todoFilePath(null)
+        NowTodoFileAccess.coordinated(localPath) { todoSync.switchAccount(null, localPath) }
     }
 
     private fun resetPhoneWork() {
@@ -258,7 +293,7 @@ class NowStore(
     /** 탭이 화면에 나타났다(할 일 동기화 · 오래됐으면 새로고침). */
     fun tabDidAppear() {
         if (!isActive || !context.sessionStore.isSignedIn) return
-        todo?.boardOpened()
+        todoSync.requestSync(TodoSyncReason.boardOpened)
         val last = lastRefreshedAt
         if (last != null && context.clock.now().timeIntervalSince(last) < tabRefreshFreshSeconds) return
         if (refreshTask != null) return
@@ -286,8 +321,9 @@ class NowStore(
         job.start()
     }
 
-    /** 당겨서 새로고침(끝날 때까지 기다린다). */
+    /** 당겨서 새로고침(끝날 때까지 기다린다). 할 일도 한 번 맞춘다. */
     suspend fun refreshNow() {
+        if (context.sessionStore.isSignedIn && todoSync.userID != null) todoSync.requestSync(TodoSyncReason.periodic)
         refresh()
         refreshTask?.join()
     }
@@ -296,13 +332,13 @@ class NowStore(
         refreshTimer?.cancel()
         refreshTimer = null
         if (!runsPeriodicRefresh || !isActive) return
-        refreshTimer = scope.launch {
-            delay((refreshIntervalSeconds * 1000).toLong())
-            if (!isActive) return@launch
-            refresh()
-            // 앱을 켜 둔 채 오래 두어도 확인 알림이 오지 않게 — 폰이 연 근무일 때만(간격은 그쪽이 정한다).
-            if (phoneSession?.origin == NowWorkOrigin.phone) phoneWork?.periodicTick()
-            armRefreshTimer()
+        refreshTimer = timers.schedule(refreshIntervalSeconds) {
+            if (isActive) {
+                refresh()
+                // 앱을 켜 둔 채 오래 두어도 확인 알림이 오지 않게 — 폰이 연 근무일 때만(간격은 그쪽이 정한다).
+                if (phoneSession?.origin == NowWorkOrigin.phone) phoneWork?.periodicTick()
+                armRefreshTimer()
+            }
         }
     }
 
@@ -386,7 +422,7 @@ class NowStore(
         hasFinishedRefreshAttempt = true
         val finishedAt = context.clock.now()
         if (failures.isEmpty()) lastRefreshedAt = finishedAt
-        widgetSink?.write(deferWhileRefreshing = false)
+        writeWidget(deferWhileRefreshing = false)
         if (failures.isEmpty()) widgetSink?.touch(finishedAt)
     }
 
@@ -407,7 +443,7 @@ class NowStore(
                 if (generation != context.generation) return false
                 goalWriteSerial += 1
                 membership?.let { membership = it.copy(goalHours = saved.toInt()) }
-                widgetSink?.write(deferWhileRefreshing = true)
+                writeWidget(deferWhileRefreshing = true)
                 true
             } catch (error: Throwable) {
                 if (generation != context.generation) return false
@@ -526,7 +562,7 @@ class NowStore(
                     statusMessage = StatusMessage.display(row.statusMessage),
                 )
             }
-            .sortedWith { l, r -> if (l.name == r.name) SwiftStrings.compare(l.id, r.id) else SwiftStrings.compare(l.name, r.name) }
+            .sortedWith(::nameThenIDOrder)
         val seen = HashSet<String>()
         return (teammates + others).filter { seen.add(it.id) }
     }
@@ -538,12 +574,141 @@ class NowStore(
             l != null && r != null && l != r -> l.compareTo(r)
             l == null && r != null -> 1
             l != null && r == null -> -1
-            lhs.name == rhs.name -> SwiftStrings.compare(lhs.id, rhs.id)
-            else -> SwiftStrings.compare(lhs.name, rhs.name)
+            else -> nameThenIDOrder(lhs, rhs)
         }
     }
 
+    /**
+     * Swift `lhs.name == rhs.name ? lhs.id < rhs.id : lhs.name < rhs.name`. Swift String `==` 은 **정준 동치**다(NFC·NFD 만 다른 같은 이름도 같다)
+     * — Kotlin `==`(UTF-16 같음)로 가르면 그런 이름 둘이 이름 비교(0)로 빠져 입력 순서가 남는다. 같음 판정도 [SwiftStrings.compare] 로 한다.
+     */
+    private fun nameThenIDOrder(lhs: NowWorkingPerson, rhs: NowWorkingPerson): Int {
+        val byName = SwiftStrings.compare(lhs.name, rhs.name)
+        return if (byName == 0) SwiftStrings.compare(lhs.id, rhs.id) else byName
+    }
+
+    // ---------------------------------------------------------------- 할 일
+
+    /** 지금 계정 파일로 동기화 중인가(아니면 편집을 받지 않는다 — 로그아웃 파일에 적지 않게). */
+    val canEditTodos: Boolean
+        get() = context.sessionStore.isSignedIn && todoSync.userID != null && todoSync.userID == context.sessionStore.userID
+
+    /** 오늘 목록(`TodoRules.visible` 순서): 7일 넘게 이월된 미완료는 `old` 로 따로(맥 "오래된 항목"). */
+    fun todoRows(): NowTodoRows {
+        val key = todos.todayKey
+        val main = ArrayList<NowTodoRow>()
+        val old = ArrayList<NowTodoRow>()
+        for (item in TodoRules.visible(todos.items, key)) {
+            val days = TodoRules.carriedDays(item.originDayKey, key)
+            val row = NowTodoRow(item.id, item.title, item.isDone, TodoRules.carryBadge(days), days)
+            if (TodoRules.isOld(item, key)) old += row else main += row
+        }
+        return NowTodoRows(main, old)
+    }
+
+    val remainingTodoCount: Int
+        get() = TodoRules.visible(todos.items, todos.todayKey).count { !it.isDone }
+
+    fun addTodo(raw: String): Boolean {
+        if (!canEditTodos) return false
+        return NowTodoFileAccess.coordinated(todos.filePath) { todos.add(raw) != null }
+    }
+
+    fun toggleTodo(id: String) {
+        if (!canEditTodos) return
+        NowTodoFileAccess.coordinated(todos.filePath) { todos.toggleDone(id) }
+    }
+
+    fun beginEditing(id: String) {
+        if (!canEditTodos || todos.items.none { it.id == id && it.deletedAt == null }) return
+        editingTodoID = id
+        // 다른 줄을 고치다 넘어왔다면 그 줄의 보호는 끝났다(미룬 병합이 있으면 한 번 더 맞춘다).
+        todos.syncProtectionDidEnd()
+    }
+
+    /** 수정 확정. 빈 제목·상한 초과는 엔진이 무시한다(원래 문장이 남는다). 수정 모드는 어느 쪽이든 닫는다. */
+    fun commitEditing(id: String, title: String) {
+        if (editingTodoID != id) return
+        if (canEditTodos) NowTodoFileAccess.coordinated(todos.filePath) { todos.rename(id, title) }
+        editingTodoID = null
+        todos.syncProtectionDidEnd()
+    }
+
+    fun cancelEditing() {
+        if (editingTodoID == null) return
+        editingTodoID = null
+        todos.syncProtectionDidEnd()
+    }
+
+    /** 밀어서 삭제 → 곧바로 톰스톤(파일에 남는다) + 5초 되돌리기 토스트. */
+    fun deleteTodo(id: String) {
+        if (!canEditTodos || todos.items.none { it.id == id && it.deletedAt == null }) return
+        if (editingTodoID == id) editingTodoID = null
+        closeUndoWindow()
+        NowTodoFileAccess.coordinated(todos.filePath) { todos.delete(id) }
+        undoTodoID = id
+        undoTimer = timers.schedule(TodoRules.undoSeconds) {
+            if (undoTodoID == id) closeUndoWindow()
+        }
+    }
+
+    /** 토스트의 되돌리기. */
+    fun undoDelete() {
+        val id = undoTodoID ?: return
+        closeUndoWindow()
+        if (!canEditTodos) return
+        NowTodoFileAccess.coordinated(todos.filePath) { todos.undoDelete(id) }
+    }
+
+    fun dismissUndo() {
+        closeUndoWindow()
+    }
+
+    private fun closeUndoWindow() {
+        undoTimer?.cancel()
+        undoTimer = null
+        if (undoTodoID == null) return
+        undoTodoID = null
+        todos.syncProtectionDidEnd()
+    }
+
+    private val protectedTodoIDs: Set<String>
+        get() = setOfNotNull(editingTodoID, undoTodoID)
+
+    /** 계정 파일을 열고 동기화를 건다. 같은 계정이면 **파일을 다시 읽는다** — 앱이 뒤에 있는 동안 위젯이 체크했을 수 있다. */
+    private fun prepareTodos(userID: String) {
+        val path = todoStorage.todoFilePath(userID)
+        if (todoSync.userID != userID || todos.filePath != path) {
+            editingTodoID = null
+            closeUndoWindow()
+            NowTodoFileAccess.coordinated(path) { todoSync.switchAccount(userID, path) }
+        } else {
+            NowTodoFileAccess.coordinated(path) { todos.reload() }
+            val editing = editingTodoID
+            if (editing != null && todos.items.none { it.id == editing && it.deletedAt == null }) editingTodoID = null
+            todoSync.activate(userID, TodoSyncReason.wake)
+        }
+        writeWidget(deferWhileRefreshing = true)
+    }
+
+    /**
+     * 위젯 스냅숏의 할 일 미리보기 줄(Swift `widgetTodoPreviews` — 쓰기는 W2-f [NowWidgetSink]). **지금 계정 파일일 때만**(로그인 직후 active 전,
+     * 로그아웃 파일을 든 채면 null — 그 칸을 건드리지 않는다). 위젯은 3·6개만 그리지만 "외 N개"를 세려고 [widgetTodoLimit] 개까지 싣는다.
+     */
+    fun widgetTodoPreviewRows(): List<NowTodoRow>? {
+        val userID = context.sessionStore.userID ?: return null
+        if (todoSync.userID != userID) return null
+        val rows = todoRows()
+        return (rows.main + rows.old).take(widgetTodoLimit)
+    }
+
     // ---------------------------------------------------------------- 위젯 스냅숏 판정(쓰기는 W2-f)
+
+    /** 위젯 쓰기 창구를 부른다. 로그아웃이면 부르지 않는다 — 로그아웃 뒤 스냅숏을 다시 쓰면 위젯이 앞 계정을 그린다(Swift `writeWidgetSnapshot` 첫 가드). */
+    private fun writeWidget(deferWhileRefreshing: Boolean) {
+        if (!context.sessionStore.isSignedIn || context.sessionStore.userID == null) return
+        widgetSink?.write(deferWhileRefreshing)
+    }
 
     /**
      * 새로고침이 도는데 받아 둔 팀 상태가 끊김 임계(90초)보다 낡았으면 쓰지 않는다(Swift `writeWidgetSnapshot(deferWhileRefreshing:)` 의 첫 가드).

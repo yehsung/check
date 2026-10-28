@@ -521,9 +521,31 @@ object MessagesSortRules {
     }
 }
 
-// ---------------------------------------------------------------- 목록
+// ---------------------------------------------------------------- 목록 · 라우트
+
+/** 메시지 탭 내비게이션 경로의 원소(Swift `MessagesDestination` — 탭이 정한다, 라우터는 모른다). */
+sealed interface MessagesDestination {
+    data class conversation(val peerID: String) : MessagesDestination
+}
+
+/**
+ * 딥링크 중 메시지 탭 몫(Swift `AingRoute` 의 `.messages` · `.message(peerID:)` 두 갈래). 라우트 타입 `AingRoute` 는 앱 셸(W1-g
+ * androidApp …/routing)에 있어 스토어 층이 볼 수 없다 — 셸·메시지 화면(W3-a)이 `AingRoute.Messages → list`, `AingRoute.Message(p) → conversation(p)`,
+ * 그 밖의 라우트는 null 로 옮겨 [MessagesListRules.destinations] 를 부른다(순위 탭의 [com.yehsung.aingcheck.core.stores.rankings.RankingsBoard] 와 같은 처리).
+ */
+sealed interface MessagesRouteTarget {
+    data object list : MessagesRouteTarget
+    data class conversation(val peerID: String) : MessagesRouteTarget
+}
 
 object MessagesListRules {
+    /** 딥링크 → 메시지 탭 경로(Swift `destinations(for:)`). 메시지 탭 라우트가 아니면(null) null. 목록은 빈 경로(목록 맨 위). */
+    fun destinations(route: MessagesRouteTarget?): List<MessagesDestination>? = when (route) {
+        null -> null
+        MessagesRouteTarget.list -> emptyList()
+        is MessagesRouteTarget.conversation -> listOf(MessagesDestination.conversation(route.peerID))
+    }
+
     /**
      * 목록 한 줄 미리보기: 줄바꿈·연속 공백을 한 칸으로 접는다. 아잉이 이모티콘을 **먼저** 거친다(목록은 그림을 못 그린다).
      */

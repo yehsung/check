@@ -36,6 +36,8 @@ class NowStoreTest {
             """[{"user_id":"$me","started_at":"2026-09-16T23:00:00Z","ended_at":"2026-09-17T01:00:00Z"}]""",
         )
         r.path == "/rest/v1/work_status_devices" -> Reply.Json("[]")
+        // active 진입이 할 일을 한 번 맞춘다(빈 목록 · 받기만).
+        r.rpcName == "todo_sync" -> Reply.Json("""{"status":"ok","items":[],"watermark_ms":1789621500000,"rejected":[],"full":true}""")
         r.rpcName == "app_user_directory" -> Reply.Json(
             """[{"user_id":"other-1","display_name":"다른팀","avatar_url":null,"is_working":true,"message_capable":true,"center":"busan","status_message":"집중"},""" +
                 """{"user_id":"mate-1","display_name":"민트","avatar_url":null,"is_working":true,"message_capable":true,"center":"seoul"}]""",
@@ -46,7 +48,7 @@ class NowStoreTest {
     private suspend fun TestScope.make(route: (RecordedRequest) -> Reply? = ::teamRoutes): Pair<StoreHarness, NowStore> {
         val h = StoreHarness(this, route)
         h.signIn()
-        return h to NowStore(h.context, h.storeScope)
+        return h to NowStore(h.context, h.storeScope, NowTodoStorage("/mem/now", InMemoryTodoFileSystem()), timers = ManualScheduler())
     }
 
     @Test
@@ -61,7 +63,7 @@ class NowStoreTest {
         assertFalse(card.isStale)
         // 오늘: 끝난 세션 08:00~10:00 KST(2시간 — 전부 오늘) + 진행 13:00~14:05(65분).
         assertEquals(2 * 3600 + 65 * 60, card.todaySeconds)
-        assertEquals(NowText.working, card.stateText, "출처를 모르면(폰 RPC 응답 전) '근무 중'으로만")
+        assertEquals("근무 중", card.stateText, "출처를 모르면(폰 RPC 응답 전) '근무 중'으로만")
         val people = store.workingPeople(h.now())
         assertEquals(listOf("mate-1", "other-1"), people.map { it.id }, "우리 팀 먼저(나 제외), 그다음 다른 팀")
         assertTrue(people[0].isStale, "신호 5분 전 팀원은 끊김")
@@ -145,7 +147,7 @@ class NowStoreTest {
         store.appDidBecomeActive()
         advanceUntilIdle()
         assertEquals(NowLoadState.failed, store.teamLoadState)
-        assertEquals(NowText.networkFailed, store.notice)
+        assertEquals("연결을 확인하고 다시 시도해 주세요", store.notice)
         assertNull(store.myCard(h.now()))
         h.assertClean()
     }

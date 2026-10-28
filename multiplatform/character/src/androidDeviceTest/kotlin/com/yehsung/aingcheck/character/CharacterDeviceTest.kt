@@ -37,6 +37,7 @@ import kotlin.test.assertTrue
  * T7: 골든 20장(깨끗한 장 — 세 마감 · 네 무리 · 감은 눈 포함)을 기기에서 디코드(BitmapFactory, inPremultiplied=false → premultiplied Bitmap 에
  * copyPixelsFromBuffer, G §8-12)하고 두 길로 그려 T3 와 **같은 규칙**([ParityRules])으로 판정한다:
  *  ① 소프트웨어 Canvas(Bitmap) ② HWUI(RenderNode → HardwareRenderer → ImageReader, 화면 창 없음 — 앱 미리보기가 실제로 타는 GPU 길).
+ * T7-L: Android 기본 묶음이 **실제로 싣는 L 단**(쉬는 행 57칸 · 감은 눈 패치)을 280×340 몸 크기로 그려 쉬는 행 골든 부분집합과 같은 규칙으로 맞댄다.
  * F-1(Android): 체커보드 원근 그리기를 두 길로 해 순수 Kotlin CPU 워프 기준과 맞댄다.
  * 자원은 시험 APK 의 Java 자원(aing-bake/ · 후광 PNG — 조정자 패치의 androidDeviceTest 자원 뿌리).
  */
@@ -105,9 +106,9 @@ class CharacterDeviceTest {
     private val goldens by lazy { GoldenSet.parse(ApkFiles.read("golden/golden.json")!!.decodeToString()) }
     private val library by lazy { BakeLibrary.load(ApkFiles) }
 
-    private fun run(raster: RasterFactory, label: String) {
-        val chosen = goldens.entries.filter { it.index in T7_SUBSET }
-        assertEquals(20, chosen.size)
+    private fun run(raster: RasterFactory, label: String, tier: String = "S", subset: Set<Int> = GoldenReplay.T7_SUBSET) {
+        val chosen = goldens.entries.filter { it.index in subset }
+        assertEquals(subset.size, chosen.size)
         val problems = ArrayList<String>()
         var worstIou = 1.0; var worstMean = 0.0; var minRatio = Double.MAX_VALUE
         for ((folder, entries) in chosen.groupBy { it.finishFolder }) {
@@ -116,7 +117,8 @@ class CharacterDeviceTest {
             try {
                 for (g in entries) {
                     val golden = PlatformRaster.decodeRaw(ApkFiles.read("golden/${g.file}")!!).asPremultiplied()
-                    val v = GoldenReplay.verdict(library, raster, store, g, golden)
+                    val v = GoldenReplay.verdict(library, raster, store, g, golden, tier)
+                    if (v.tier != tier) problems += "${g.id}: $tier 단이 아니라 ${v.tier} 단으로 그렸다"
                     if (v.cls != GoldenClass.clean) problems += "${g.id}: 부분집합은 깨끗한 장이어야 한다(${v.cls})"
                     problems += v.problems().map { "${g.id} [${v.band}] $it" }
                     worstIou = minOf(worstIou, v.composite.iou); worstMean = maxOf(worstMean, v.composite.mean); minRatio = minOf(minRatio, v.negativeRatio)
@@ -126,7 +128,7 @@ class CharacterDeviceTest {
                 store.close()
             }
         }
-        note("$label 20장 최저 IoU=${"%.4f".format(worstIou)} 최대 평균=${"%.2f".format(worstMean)} 음성 대조 최소 비=${"%.2f".format(minRatio)} 문제=${problems.size}")
+        note("$label ${chosen.size}장 최저 IoU=${"%.4f".format(worstIou)} 최대 평균=${"%.2f".format(worstMean)} 음성 대조 최소 비=${"%.2f".format(minRatio)} 문제=${problems.size}")
         assertTrue(problems.isEmpty(), "T7($label) 실패 ${problems.size}건:\n" + problems.joinToString("\n"))
     }
 
@@ -135,6 +137,12 @@ class CharacterDeviceTest {
 
     @Test
     fun T7_HWUI_20장() = run(HwuiRaster(), "hwui")
+
+    @Test
+    fun T7_L단_소프트웨어_Canvas() = run(PlatformRaster, "L-software", "L", GoldenReplay.T7_L_SUBSET)
+
+    @Test
+    fun T7_L단_HWUI() = run(HwuiRaster(), "L-hwui", "L", GoldenReplay.T7_L_SUBSET)
 
     private fun checker(): RgbaImage {
         val n = 64
@@ -181,10 +189,5 @@ class CharacterDeviceTest {
         val affine = Homography.fromQuads(corners, listOf(quad[0], quad[1], Vec2(quad[1].x + quad[3].x - quad[0].x, quad[1].y + quad[3].y - quad[0].y), quad[3]))!!
         val wrong = ImageMetrics.diff(drawChecker(PlatformRaster, affine), cpu)
         assertTrue(wrong.iou < 0.98 || wrong.mean > 8.0, "아핀 그리기가 문턱 안이다 $wrong")
-    }
-
-    companion object {
-        /** T3 부분집합 20장(골든 번호): 아잉 12(네 무리 · 감은 눈 2) · 황금 5 · 무지개 3 — 전부 [GoldenClass.clean]. */
-        val T7_SUBSET = setOf(0, 6, 12, 18, 27, 30, 36, 54, 60, 66, 72, 78, 86, 92, 134, 152, 158, 166, 214, 232)
     }
 }

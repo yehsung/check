@@ -11,8 +11,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T4: 골든 160장(금 · 무지개)의 후광 칸 · 판 네 꼭짓점을 맥 순수 함수 결과(golden `halo.quadPx`)와 맞댄다 — 꼭짓점 ≤ 0.5px.
- * (SceneKit 이 실제로 세운 판과의 차이 `sceneKitQuadMaxDiffPx` 는 맥 제약의 지연이라 T3 갈래 [haloLag] 로 따로 다룬다.)
+ * T4: 골든 160장(금 · 무지개)의 후광 칸 · 판 네 꼭짓점.
+ *  ① 맥 순수 함수 결과(golden `halo.quadPx` — 굽기가 Swift `haloPose · haloCell · haloCellTransform` 으로 낸 값)와 꼭짓점 ≤ 0.5px.
+ *  ② F §6 T4 원문 기준(SceneKit 칸 노드 **presentation** 투영): 골든이 적은 `sceneKitQuadMaxDiffPx`(= 순수 함수 판과 presentation 판의
+ *     최대 꼭짓점 차) 로 삼각부등식 구간 [sk − d, sk + d] 을 낸다(d = ① 의 Kotlin ↔ 순수 함수 차). presentation 이 순수 함수와 같은 장은
+ *     Kotlin 도 0.5px 안이어야 하고, 넘는 장(맥 제약이 이징 액션 중 옛 부모 사슬을 보는 지연 — `GoldAingFinish.swift` ⚠ 알려진 한계)은
+ *     **장 수 · 리액션 · 칸 어긋남을 잠근다**. 지연을 재현하지 않는 것은 설계 판단 대기(보고)다 — 늘거나 줄면 빨갛다.
  */
 class HaloPlacementTest {
     private val lib = RepoBake.library
@@ -33,6 +37,40 @@ class HaloPlacementTest {
         }
         assertTrue(bad.isEmpty(), "T4 실패 ${bad.size}건:\n" + bad.take(20).joinToString("\n"))
         println("T4: 160장 최악 꼭짓점 ${"%.4f".format(worst)}px")
+    }
+
+    @Test
+    fun T4_SceneKit_presentation_대비_지연_장을_잠근다() {
+        val halos = RepoBake.goldens.entries.filter { it.haloQuad != null }
+        val matches = ArrayList<String>(); val lagged = ArrayList<Pair<String, String>>()
+        val bad = ArrayList<String>()
+        var worstMatch = 0.0
+        for (g in halos) {
+            val halo = GoldenReplay.plan(lib, g).halo!!
+            val d = halo.quad.indices.maxOf { hypot(halo.quad[it].x - g.haloQuad!![it].x, halo.quad[it].y - g.haloQuad!![it].y) }
+            val sk = g.haloSceneKitMaxDiffPx ?: run { bad += "${g.id}: sceneKitQuadMaxDiffPx 없음"; continue }
+            val lo = sk - d; val hi = sk + d
+            when {
+                hi <= 0.5 -> { matches += g.id; worstMatch = maxOf(worstMatch, hi) }
+                lo > 0.5 -> lagged += g.id to g.reaction
+                else -> bad += "${g.id}: presentation 대비 [${"%.4f".format(lo)}, ${"%.4f".format(hi)}]px 가 0.5px 를 걸친다"
+            }
+            if (g.haloSceneKitCell != g.haloCell && lo <= 0.5) bad += "${g.id}: SceneKit 칸 ${g.haloSceneKitCell} ≠ 순수 함수 칸 ${g.haloCell} 인데 판이 0.5px 안"
+        }
+        assertTrue(bad.isEmpty(), bad.joinToString("\n"))
+        val reactions = lagged.map { it.second }.toSortedSet()
+        val over2 = halos.count { (it.haloSceneKitMaxDiffPx ?: 0.0) > 2.0 }
+        val cellMismatch = halos.count { it.haloSceneKitCell != it.haloCell }
+        println("T4(presentation): 0.5px 안 ${matches.size}장(최악 ${"%.4f".format(worstMatch)}px) · 맥 지연 ${lagged.size}장(> 2px $over2 · 칸 어긋남 $cellMismatch) · 리액션 $reactions")
+        assertEquals(112, matches.size, "presentation 과 0.5px 안인 장")
+        assertEquals(48, lagged.size, "맥 후광 지연 장(늘면 재생기 · 골든이 어긋났다, 줄면 맥이 고쳐졌다 — 잠금을 다시 본다)")
+        assertEquals(
+            mapOf("goalAchieved" to 12, "hit" to 12, "poked" to 12, "ultraPoked" to 12),
+            lagged.groupingBy { it.second }.eachCount().toSortedMap(),
+            "지연은 이징 액션 리액션 넷에서만, 리액션마다 장 수 그대로",
+        )
+        assertEquals(37, over2, "2px 넘는 지연 장(T3 haloLag 갈래의 원천)")
+        assertEquals(3, cellMismatch, "SceneKit 이 다른 칸을 켠 장(모두 지연 장 — 위 bad 가 잰다)")
     }
 
     @Test

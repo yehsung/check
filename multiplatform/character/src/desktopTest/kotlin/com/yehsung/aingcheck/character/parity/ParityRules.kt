@@ -24,21 +24,28 @@ enum class GoldenClass { clean, particles, haloLag, gridCoarse }
 object ParityRules {
     const val HALO_LAG_PX = 2.0
     const val YELLOW_EVIDENCE_PX = 100
-    /** 음성 대조: 틀린 칸(요 격자 두 칸 옆)의 몸 영역 오차가 맞는 칸의 이 배 이상이어야 한다. */
+    /**
+     * 음성 대조(장마다): 틀린 칸(요 격자 두 칸 옆)의 몸 영역 오차가 맞는 칸의 이 배 이상이어야 한다.
+     * F §6 원문("틀린 칸이 **문턱**을 넘어야 한다")은 모든 장에서 성립하지 않는다(후광 마감 · 쉬는 행 1° 격자 — 설계 이탈, 조정자 판단 대기).
+     * 그래서 문턱과의 묶음은 시험 쪽에서 따로 잠근다: 무리별 "틀린 칸이 F 문턱을 넘은 장 수" 하한과 무리 분포(PixelParityTest) —
+     * 문턱이 헐거워지거나 장이 느슨한 무리로 옮겨 가면 그 수가 줄어 빨개진다.
+     */
     const val NEGATIVE_MIN_RATIO = 1.25
 
     /** 크기가 이만큼 넘게 1 에서 벗어나면 몸이 변형된 장(찌부 · 늘림)이다 — 강체(F §6: idle · 살랑 · 깜빡임 · 졸기 · 절 · 인사 · 롤)는 크기가 1 이다. */
     const val DEFORMED_SCALE = 0.02
 
     /**
-     * T3 무리(F §6 표): 고른 칸의 무리로 가른다 — 스핀 행 → 스핀(10° × 4°), 몸이 변형된 장(hit · 크기 편차 > 2%) → 찌부 · 늘림,
+     * T3 무리(F §6 표): **골든의 Swift 참조 칸**(`referenceCell`, S 단)의 무리와 골든 녹화 world 로 가른다 — 재생기가 고른 칸이나 재생기 출력으로
+     * 가르지 않는다(칸 고르기 결함이 스스로 느슨한 무리를 고르지 못하게). 스핀 행 → 스핀(10° × 4°), 몸이 변형된 장(hit · 크기 편차 > 2%) → 찌부 · 늘림,
      * 띠 행(3° 기울기 · 2/4° 요) → 띠 행 · 울트라, 쉬는 행(1°) → 강체.
      */
-    fun band(g: Golden, cell: BakeCell): ParityBand {
-        if (cell.group == BakeCell.Group.spin) return ParityBand.spin
+    fun band(g: Golden, reference: BakeCell): ParityBand {
+        require(reference.id == g.referenceCellId) { "무리는 골든 참조 칸으로 가른다: ${reference.id} ≠ ${g.referenceCellId}" }
+        if (reference.group == BakeCell.Group.spin) return ParityBand.spin
         val scaleDev = (0 until 3).maxOf { abs(g.wrapper.column(it).length - 1.0) }
         if (g.reaction == "hit" || scaleDev > DEFORMED_SCALE) return ParityBand.squashStretch
-        return when (cell.group) {
+        return when (reference.group) {
             BakeCell.Group.band, BakeCell.Group.ultra -> ParityBand.bandUltra
             else -> ParityBand.rigid
         }
@@ -102,6 +109,8 @@ object ParityRules {
         val golden: Golden,
         val cls: GoldenClass,
         val band: ParityBand,
+        /** 그린 단(S · L). */
+        val tier: String,
         val cellId: String,
         val composite: ImageDiff,
         val bodyMean: Double,

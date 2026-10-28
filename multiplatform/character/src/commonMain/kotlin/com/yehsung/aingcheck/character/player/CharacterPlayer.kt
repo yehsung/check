@@ -1,4 +1,4 @@
-// 원본: Sources/check/CheckOverlayReactions.swift @ 1b8260d (ReactionEngine 이 노드에 하던 일 — resetPose · runReaction · setDragFacing · applySpriteFacing · stopSleeping · reconcileAfterResume) — 설계 F §5.2 경계 API
+// 원본: Sources/check/CheckOverlayReactions.swift @ 1b8260d (ReactionEngine 이 노드에 하던 일 — resetPose · runReaction · blink · setDragFacing · applySpriteFacing · wakeQuietly · beginWake · stopSleeping · reconcileAfterResume) — 설계 F §5.2 경계 API
 package com.yehsung.aingcheck.character.player
 
 import com.yehsung.aingcheck.character.bake.BakeLibrary
@@ -53,7 +53,22 @@ class CharacterPlayer(
         data object Idle : Wrapper
         data class Playing(val reaction: String, val track: MotionTrack, val startScene: Double, val startWall: Double, val wallDuration: Double, val holdsEnd: Boolean) : Wrapper
         data class Holding(val pose: PoseSample) : Wrapper
-        data class ToIdentity(val fromEuler: Vec3, val fromPosition: Vec3, val fromScale: Vec3, val startScene: Double, val seconds: Double, val curve: MotionCurve, val bounce: MotionTrack?) : Wrapper
+
+        /**
+         * 현재 자세 → 단위(깨기). [wallDuration] 은 맥 상태 만료(벽시계): 화들짝은 `activeUntil = now + ReactionKind.wake.duration`,
+         * 조용한 기상은 상태가 없어(`wakeQuietly` 는 activeKind 를 두지 않는다) 0 — 재개 정리에서 남은 보간을 언제나 걷는다.
+         */
+        data class ToIdentity(
+            val fromEuler: Vec3,
+            val fromPosition: Vec3,
+            val fromScale: Vec3,
+            val startScene: Double,
+            val seconds: Double,
+            val curve: MotionCurve,
+            val bounce: MotionTrack?,
+            val startWall: Double,
+            val wallDuration: Double,
+        ) : Wrapper
     }
 
     private var wrapper: Wrapper = Wrapper.Idle
@@ -80,10 +95,25 @@ class CharacterPlayer(
         private set
     private var lastWalkAt = Double.NEGATIVE_INFINITY
 
-    var eyesClosed: Boolean = false
-        private set
+    /** 엔진이 [setEyesClosed] 로 쥔 감은 눈(졸기 · 깜빡임과 따로). */
+    private var heldClosed = false
+
+    /** 깜빡임이 끝나는 벽시계 시각(맥 `blinkTask` 의 0.12s). */
+    private var blinkEndsAt = Double.NEGATIVE_INFINITY
+
     var sleeping: Boolean = false
         private set
+
+    /**
+     * 시각과 무관한 감은 눈: 졸기 · [setEyesClosed]. 깜빡임은 끝나는 시각이 있어 [eyesClosedAt] 이 본다 — **그리기는 [eyesClosedAt]**.
+     */
+    val eyesClosed: Boolean get() = sleeping || heldClosed
+
+    /** 이 시각에 깜빡이는 중인가. */
+    fun isBlinking(now: Double): Boolean = now < blinkEndsAt
+
+    /** 이 시각 그릴 눈(졸기 · [setEyesClosed] · 깜빡임). 스프라이트는 그리기가 무시한다(전용 프레임이 없다). */
+    fun eyesClosedAt(now: Double): Boolean = eyesClosed || isBlinking(now)
 
     val isSuspended: Boolean get() = suspended
 
@@ -141,33 +171,80 @@ class CharacterPlayer(
         applyFacing(now)
     }
 
-    /** 졸기 진입: drowsySink 트랙(끝 자세를 쥔다) + 감은 눈. */
+    /**
+     * 졸기 진입: drowsySink 트랙(끝 자세를 쥔다) + 감은 눈. 깜빡이던 중이면 그 깜빡임을 버린다 — 졸기가 눈의 주인이다
+     * (맥 blink: "깜빡이는 사이 잠들었으면 눈을 뜨지 않는다"). 깨면 눈을 바로 뜬다(맥 endSleep → restoreEyes).
+     */
     fun beginSleep(now: Double): Boolean {
         if (!play(DROWSY, now)) return false
         sleeping = true
-        eyesClosed = true
+        blinkEndsAt = Double.NEGATIVE_INFINITY
         return true
     }
 
-    /** 깨기 — **현재 자세에서 출발**해 단위로(화들짝은 되튀기까지). 눈을 뜬다. */
+    /**
+     * 깨기 — **현재 자세에서 출발**해 단위로(화들짝은 되튀기까지). 눈을 뜬다.
+     * 정지 중 조용한 기상은 보간하지 않고 단위로 세운다(맥 `wakeQuietly`: 정지 중 건 액션은 재개 순간 뒤늦게 재생된다 — 잠금 화면 뒤에서 깬 잠은 스냅).
+     * 화들짝은 정지 중에도 건다(맥 `beginWake` 는 정지를 보지 않는다) — 재개 때 벽시계로 만료됐으면 [setSuspended] 가 걷는다.
+     */
     fun wake(kind: WakeKind, now: Double): Boolean {
         val name = if (kind == WakeKind.startled) WAKE else QUIET_RISE
         val spec = library.motion.reaction(name) ?: return false
         val seconds = spec.toIdentitySeconds ?: return false
         val curve = spec.toIdentityCurve ?: return false
+        if (kind == WakeKind.quiet && suspended) {
+            wrapper = Wrapper.Idle
+            endSleep()
+            return true
+        }
         val from = wrapperPose(now)
         val bounce = if (kind == WakeKind.startled) spec.track?.let(::trackFor) else null
-        wrapper = Wrapper.ToIdentity(SceneKitEuler.fromQuat(from.rotation), from.position, from.scale, sceneTime(now), seconds, curve, bounce)
+        val wallDuration = if (kind == WakeKind.startled) spec.durationS ?: (seconds + (bounce?.durationS ?: 0.0)) else 0.0
+        wrapper = Wrapper.ToIdentity(SceneKitEuler.fromQuat(from.rotation), from.position, from.scale, sceneTime(now), seconds, curve, bounce, now, wallDuration)
         endSleep()
         return true
     }
 
+    /** 잠 상태만 푼다: 눈을 뜬다(엔진이 쥔 감은 눈 · 깜빡임까지 — 맥 endSleep → restoreEyes). */
     private fun endSleep() {
-        if (sleeping) { sleeping = false; eyesClosed = false }
+        if (sleeping) {
+            sleeping = false
+            heldClosed = false
+            blinkEndsAt = Double.NEGATIVE_INFINITY
+        }
     }
 
-    /** 감은 눈(깜빡임 0.12s · 졸기). 스프라이트는 깜빡이지 않는다 — 값만 들고 그리기가 무시한다. */
-    fun setEyesClosed(closed: Boolean) { eyesClosed = closed }
+    /**
+     * 엔진이 눈을 직접 감기거나 뜬다. **졸기 중엔 무시한다** — 졸기가 눈의 주인이다(맥: 자는 눈과 깜빡임이 같은 자산이라 졸기 중 눈을 뜨면 안 된다).
+     * 스프라이트는 값만 들고 그리기가 무시한다(전용 프레임이 없다). 깜빡임은 [blink] 가 0.12s 를 쥔다.
+     */
+    fun setEyesClosed(closed: Boolean) {
+        if (sleeping) return
+        heldClosed = closed
+    }
+
+    /**
+     * 눈 한 번 깜빡이기(맥 `ReactionEngine.blink`, 0.12s = motion.json `engine.blinkSeconds`). 가드 넷 — 하나라도 걸리면 false 이고 아무것도 바꾸지 않는다:
+     *  ① 스프라이트는 깜빡이지 않는다(전용 프레임이 없다 — 막지 않으면 fps 만 오른다)
+     *  ② 정지 중엔 물러난다(아무도 못 본다)
+     *  ③ 자는 중엔 이미 눈이 감겼다(깜빡이면 오히려 눈을 뜬다)
+     *  ④ 리액션 상태(벽시계 만료 전)엔 그 연출이 표정을 쓴다 — idle 일 때만
+     * 깜빡이는 사이 잠들면 눈을 다시 뜨지 않는다([beginSleep] 이 깜빡임을 버린다).
+     */
+    fun blink(now: Double): Boolean {
+        if (character is ResolvedCharacter.Sprite) return false
+        if (suspended || sleeping) return false
+        if (reactionStateActive(now)) return false
+        blinkEndsAt = now + library.motion.engine.blinkSeconds
+        return true
+    }
+
+    /** 맥 `state != .idle` 의 재생기 쪽 판정: 리액션 상태가 벽시계로 아직 만료되지 않았다(끝 자세를 쥔 졸기는 [sleeping] 이 따로 본다). */
+    private fun reactionStateActive(now: Double): Boolean = when (val w = wrapper) {
+        is Wrapper.Playing -> !w.holdsEnd && now - w.startWall < w.wallDuration
+        is Wrapper.ToIdentity -> now - w.startWall < w.wallDuration
+        else -> false
+    }
 
     // ---------------------------------------------------------------- 방향
 
@@ -209,20 +286,30 @@ class CharacterPlayer(
     // ---------------------------------------------------------------- 정지
 
     /**
-     * 화면 슬립 · 잠금 · 창 숨김. 정지 동안 장면 시계가 멈춘다. 재개 순간 정지 중 **벽시계로** 만료된 리액션은 잔여를 걷어 낸다
-     * (맥 reconcileAfterResume — 안 걷으면 재개 첫 프레임에 옛 모션이 뒤늦게 튄다). 자는 중(끝 자세를 쥔 졸기)은 건드리지 않는다.
+     * 화면 슬립 · 잠금 · 창 숨김. 정지 동안 장면 시계가 멈춘다. 재개 순간 정지 중 **벽시계로** 만료된 리액션은 잔여 모션을 걷어 단위로 세운다
+     * (맥 reconcileAfterResume — 안 걷으면 재개 첫 프레임에 옛 모션이 뒤늦게 튄다): 리액션 재생 · 화들짝 깨기(되튀기 포함) · 조용한 기상(상태가 없어 언제나).
+     * 아직 만료 전이면 이어서 재생하고(0.x초 잔여), 자는 중(끝 자세를 쥔 졸기)은 건드리지 않는다.
+     *
+     * **입자 · 💤 는 호출부 계약이다**: 맥은 같은 정리에서 색종이 · 스파크 · 흡수 방출구도 걷는다(만료됐고 자는 중이 아니면 모션이 남지 않았어도).
+     * 재생기는 입자를 쥐지 않으므로([ParticleBurst] 는 호출부가 들고 그린다) 재개 때 엔진 상태가 만료됐고 [sleeping] 이 아니면 호출부가 버스트를 버린다.
+     * @return 재개하면서 남은 모션을 걷었으면 true(호출부가 같은 순간 입자를 버리는 신호로 쓸 수 있다). 정지로 들어갈 때는 언제나 false.
      */
-    fun setSuspended(value: Boolean, now: Double) {
-        if (value == suspended) return
+    fun setSuspended(value: Boolean, now: Double): Boolean {
+        if (value == suspended) return false
         if (value) {
             frozenScene = sceneTime(now)
             suspended = true
-        } else {
-            wallBase = now
-            suspended = false
-            val w = wrapper
-            if (w is Wrapper.Playing && !w.holdsEnd && now - w.startWall >= w.wallDuration) wrapper = Wrapper.Idle
+            return false
         }
+        wallBase = now
+        suspended = false
+        val expired = when (val w = wrapper) {
+            is Wrapper.Playing -> !w.holdsEnd && now - w.startWall >= w.wallDuration
+            is Wrapper.ToIdentity -> now - w.startWall >= w.wallDuration
+            else -> false
+        }
+        if (expired) wrapper = Wrapper.Idle
+        return expired
     }
 
     // ---------------------------------------------------------------- 자세
@@ -290,8 +377,8 @@ class CharacterPlayer(
     /** 노드 사슬 world. */
     fun chain(now: Double): NodeChain = NodeChain.of(wrapperPose(now), facingDegrees(), library.motion.idle, idleTime(now))
 
-    /** 맥 기준 activeFPS(30) 를 쓸 때인가 — 리액션 재생 + 0.1s, 깜빡임, 걷기. */
-    fun isActive(now: Double, blinking: Boolean = eyesClosed && !sleeping): Boolean =
+    /** 맥 기준 activeFPS(30) 를 쓸 때인가 — 리액션 재생 + 0.1s, 깜빡임(엔진이 쥔 감은 눈 포함 — 졸기는 아니다), 걷기. */
+    fun isActive(now: Double, blinking: Boolean = isBlinking(now) || (heldClosed && !sleeping)): Boolean =
         FramePacer.isActive(sceneTime(now), reactionEndsAt(), library.motion.engine.fpsResetAfterS, blinking, walking)
 
     companion object {

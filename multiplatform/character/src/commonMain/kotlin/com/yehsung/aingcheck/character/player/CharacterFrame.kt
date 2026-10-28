@@ -56,7 +56,7 @@ object CharacterFrames {
                 val tier = tierName?.let { finish.bake.tier(it)?.takeIf { t -> finish.cells(t.name) != null } }
                     ?: ImpostorRenderer.chooseTier(finish, REFERENCE_BODY_PX * viewportHeight / REFERENCE_VIEWPORT_HEIGHT)
                     ?: return null
-                val f = ImpostorRenderer.plan(player.library, finish, tier, chain.character, player.eyesClosed, viewportWidth, viewportHeight)
+                val f = ImpostorRenderer.plan(player.library, finish, tier, chain.character, player.eyesClosedAt(now), viewportWidth, viewportHeight)
                     ?: return null
                 CharacterFrame.Impostor(f)
             }

@@ -42,6 +42,66 @@ class MotionAndCellParityTest {
         println("T1: 240장 × 3노드, 최악 각 ${"%.2e".format(worst)}°")
     }
 
+    /** 이웃 두 표본 사이 자세(구현과 독립): 위치 · 크기 = (1−f)·a + f·b, 회전 = 짧은 호 이등분을 거듭한 slerp(f ∈ {¼, ½, ¾}). */
+    private fun between(a: PoseSample, b: PoseSample, f: Double): PoseSample {
+        val qb = if (a.rotation.dot(b.rotation) < 0) -b.rotation else b.rotation
+        fun mid(p: Quat, q: Quat) = Quat(p.x + q.x, p.y + q.y, p.z + q.z, p.w + q.w).normalized()
+        val half = mid(a.rotation, qb)
+        val rot = when (f) {
+            0.5 -> half
+            0.25 -> mid(a.rotation, half)
+            0.75 -> mid(half, qb)
+            else -> error("f = ¼ · ½ · ¾ 만")
+        }
+        fun lerp(p: Vec3, q: Vec3) = Vec3(p.x * (1 - f) + q.x * f, p.y * (1 - f) + q.y * f, p.z * (1 - f) + q.z * f)
+        return PoseSample(lerp(a.scale, b.scale), rot, lerp(a.position, b.position))
+    }
+
+    private fun closeEnough(mine: PoseSample, expected: PoseSample): String? {
+        val dp = (mine.position - expected.position).length
+        val ds = (mine.scale - expected.scale).length
+        val da = Quat.angleBetween(mine.rotation, expected.rotation)
+        // 위치 · 크기는 같은 식이라 1e-9, 회전은 짧은 각에서 쓰는 정규화 선형 보간과 참 slerp 의 차(θ³ 차수, 표본 간 ≤ 2.7°)까지 1e-5 rad.
+        return if (dp > 1e-9 || ds > 1e-9 || da > 1e-5) "위치 ${"%.2e".format(dp)} · 크기 ${"%.2e".format(ds)} · 각 ${"%.2e".format(da)}rad" else null
+    }
+
+    @Test
+    fun T1_표본_사이_시각은_이웃_두_표본의_보간이다() {
+        // 골든(T1 · T3)은 표본 격자 시각(k/480)만 묻는다. 기기는 vsync 시각에 그리므로 언제나 표본 사이를 탄다 — 그 보간을 따로 잰다.
+        val bad = ArrayList<String>()
+        var checked = 0
+        for (name in lib.motion.tracks.keys.sorted()) {
+            val track = lib.track(name) ?: continue
+            for (k in 0 until track.count - 1) {
+                val a = track.sampleAt(k); val b = track.sampleAt(k + 1)
+                for (f in doubleArrayOf(0.25, 0.5, 0.75)) {
+                    val why = closeEnough(track.sample((k + f) / track.sampleHz), between(a, b, f))
+                    if (why != null && bad.size < 20) bad += "$name k=$k f=$f: $why"
+                    checked++
+                }
+            }
+        }
+        assertTrue(checked > 30_000, "잰 시각 $checked")
+        assertTrue(bad.isEmpty(), "트랙 보간 어긋남:\n" + bad.joinToString("\n"))
+
+        // 공개 API 로: play 한 뒤 반 표본 어긋난 벽시계 시각의 wrapper 자세(위치는 extent 배).
+        val extent = lib.motion.extent
+        for (reaction in listOf("hit", "poked", "greeting", "goalAchieved", "drowsy")) {
+            val p = CharacterPlayer(lib, initialCharacterId = CharacterCatalog.builtInAingID)
+            val t0 = 2.0
+            assertTrue(p.play(reaction, t0))
+            val track = lib.track(lib.motion.reaction(reaction)!!.track!!)!!
+            val scale = if (track.positionUnits == "extent") extent else 1.0
+            for (k in 0 until track.count - 1) {
+                val e = between(track.sampleAt(k), track.sampleAt(k + 1), 0.5)
+                val expected = PoseSample(e.scale, e.rotation, e.position * scale)
+                val why = closeEnough(p.wrapperPose(t0 + (k + 0.5) / track.sampleHz), expected)
+                if (why != null && bad.size < 20) bad += "$reaction(재생기) k=$k: $why"
+            }
+        }
+        assertTrue(bad.isEmpty(), "재생기 보간 어긋남:\n" + bad.joinToString("\n"))
+    }
+
     @Test
     fun T2_칸_고르기가_Swift_참조와_같다() {
         val bad = ArrayList<String>()

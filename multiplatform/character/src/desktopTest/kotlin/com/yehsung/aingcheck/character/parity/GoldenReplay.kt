@@ -1,6 +1,7 @@
 // 원본: Tests/checkTests/AingBakeSuite.swift @ 1b8260d (renderGolden — 같은 엔진 · 같은 시각 순서를 재생기 API 로 다시 밟는다)
 package com.yehsung.aingcheck.character.parity
 
+import com.yehsung.aingcheck.character.bake.BakeCell
 import com.yehsung.aingcheck.character.bake.BakeLibrary
 import com.yehsung.aingcheck.character.bake.BakedFinish
 import com.yehsung.aingcheck.character.math.Mat4
@@ -27,6 +28,15 @@ import kotlin.math.floor
  */
 object GoldenReplay {
     const val HZ = 480
+
+    /** T7 부분집합(골든 번호, 기기 S 단): 아잉 12(네 무리 · 감은 눈 2) · 황금 5 · 무지개 3 — 전부 [GoldenClass.clean](데스크톱 T3 가 잰다). */
+    val T7_SUBSET: Set<Int> = setOf(0, 6, 12, 18, 27, 30, 36, 54, 60, 66, 72, 78, 86, 92, 134, 152, 158, 166, 214, 232)
+
+    /**
+     * T7-L 부분집합(골든 번호, 기기 L 단 — Android 기본 묶음이 싣는 단): 참조 칸이 쉬는 행인 깨끗한 장 14 — 세 마감 · 강체(idle · 깨기 · 조용한 기상) ·
+     * 찌부(hit · 울트라 충전 1.22배) · 감은 눈(졸기 · 깜빡임). 다시 구운 골든(조정자 패치 02)에서도 깨끗하다(입자 창 밖). 데스크톱 T3-L 이 같은 판정을 잰다.
+     */
+    val T7_L_SUBSET: Set<Int> = setOf(3, 51, 54, 72, 78, 84, 133, 143, 152, 158, 163, 214, 231, 232)
 
     class Replayed(val player: CharacterPlayer, val now: Double) {
         val chain: NodeChain get() = player.chain(now)
@@ -61,11 +71,23 @@ object GoldenReplay {
     /** Swift `.rounded()`(0.5 는 0 에서 먼 쪽). */
     fun roundHalfAway(x: Double): Int = if (x >= 0) floor(x + 0.5).toInt() else -floor(-x + 0.5).toInt()
 
-    /** 이 골든의 S 단 프레임(280×340). */
-    fun plan(library: BakeLibrary, g: Golden, body: Mat4 = replay(library, g).chain.character): ImpostorFrame {
+    /**
+     * 이 골든의 프레임(280×340). [tierName] 기본은 골든과 같은 S 단, "L" 이면 Android 기본 묶음이 싣는 L 단을 **같은 280×340 몸 크기로** 그린다
+     * (L 은 쉬는 행 57칸뿐 — 쉬는 행 골든만 맞댄다).
+     */
+    fun plan(library: BakeLibrary, g: Golden, body: Mat4 = replay(library, g).chain.character, tierName: String = "S"): ImpostorFrame {
         val finish = library.finish(BakeLibrary.FOLDER_IDS.getValue(g.finishFolder)) ?: error("마감 없음 ${g.finishFolder}")
-        val tier = finish.bake.tier("S") ?: error("S 단 없음")
+        val tier = finish.bake.tier(tierName) ?: error("$tierName 단 없음")
         return ImpostorRenderer.plan(library, finish, tier, body, g.eyesClosed, 280.0, 340.0) ?: error("정합 실패 ${g.id}")
+    }
+
+    /**
+     * 골든이 적은 Swift 참조 칸(S 단, 골든 쪽 사실 — `referenceCell`). 판정 무리는 이 칸으로 가른다: 재생기가 고른 칸으로 가르면
+     * 칸 고르기 결함이 무리를 바꿔 스스로 문턱을 고른다(T2 가 둘이 같음을 따로 잰다).
+     */
+    fun referenceCell(library: BakeLibrary, g: Golden): BakeCell {
+        val finish = library.finish(BakeLibrary.FOLDER_IDS.getValue(g.finishFolder)) ?: error("마감 없음 ${g.finishFolder}")
+        return finish.cells("S")?.cell(g.referenceCellId) ?: error("참조 칸 ${g.referenceCellId} 이 S 단에 없다")
     }
 
     /** 프레임 → 래스터(투명 바탕). */
@@ -87,9 +109,9 @@ object GoldenReplay {
      * 음성 대조로 같은 자세에 요 격자 두 칸 옆 칸을 넣어 같은 판을 다시 잰다.
      * @param golden 골든 바이트를 곱하지 않고 디코드해 프리멀티로 읽은 것.
      */
-    fun verdict(library: BakeLibrary, raster: RasterFactory, store: BakeImageStore, g: Golden, golden: RgbaImage): ParityRules.Verdict {
+    fun verdict(library: BakeLibrary, raster: RasterFactory, store: BakeImageStore, g: Golden, golden: RgbaImage, tierName: String = "S"): ParityRules.Verdict {
         val body = replay(library, g).chain.character
-        val frame = plan(library, g, body)
+        val frame = plan(library, g, body, tierName)
         val ours = render(raster, frame, store)
         val oursBody = render(raster, frame, store, drawHalo = false)
         val wrong = wrongCell(frame.finish, frame)
@@ -102,7 +124,8 @@ object GoldenReplay {
         return ParityRules.Verdict(
             golden = g,
             cls = ParityRules.classify(g, golden),
-            band = ParityRules.band(g, frame.placement.cell),
+            band = ParityRules.band(g, referenceCell(library, g)),
+            tier = frame.tier.name,
             cellId = frame.placement.cell.id,
             composite = diff(ours, golden),
             bodyMean = ParityRules.bodyRegionMean(ours, golden, oursBody),
@@ -115,7 +138,7 @@ object GoldenReplay {
     /**
      * 음성 대조용 "틀린 칸"(F §6 시험 규율): 같은 기울기 줄에서 요가 **격자 두 칸 옆**인 칸. 줄 끝이면 반대쪽.
      */
-    fun wrongCell(finish: BakedFinish, frame: ImpostorFrame): com.yehsung.aingcheck.character.bake.BakeCell {
+    fun wrongCell(finish: BakedFinish, frame: ImpostorFrame): BakeCell {
         val cells = finish.cells(frame.tier.name)!!.cells.filter { it.group == frame.placement.cell.group && it.tiltDeg == frame.placement.cell.tiltDeg && (!frame.closedEyes || it.closedPatch != null) }
             .sortedBy { it.yawDeg }
         val i = cells.indexOfFirst { it.id == frame.placement.cell.id }

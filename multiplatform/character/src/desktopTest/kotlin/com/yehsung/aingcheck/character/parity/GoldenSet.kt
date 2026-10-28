@@ -37,6 +37,8 @@ data class Golden(
     val haloCell: Int?,
     val haloQuad: List<Vec2>?,
     val haloSceneKitMaxDiffPx: Double?,
+    /** SceneKit 이 실제로 켠 후광 칸(presentation). 맥 순수 함수 칸 [haloCell] 과 다르면 지연된 장이다. */
+    val haloSceneKitCell: Int?,
 )
 
 class GoldenSet(val viewportWidth: Int, val viewportHeight: Int, val entries: List<Golden>) {
@@ -70,6 +72,7 @@ class GoldenSet(val viewportWidth: Int, val viewportHeight: Int, val entries: Li
                     haloCell = halo?.get("cell")?.jsonPrimitive?.int,
                     haloQuad = halo?.get("quadPx")?.jsonArray?.map { p -> p.jsonArray.let { Vec2(it[0].jsonPrimitive.double, it[1].jsonPrimitive.double) } },
                     haloSceneKitMaxDiffPx = halo?.get("sceneKitQuadMaxDiffPx")?.jsonPrimitive?.double,
+                    haloSceneKitCell = halo?.get("sceneKitCell")?.jsonPrimitive?.int,
                 )
             }
             return GoldenSet(vp[0].jsonPrimitive.int, vp[1].jsonPrimitive.int, entries)

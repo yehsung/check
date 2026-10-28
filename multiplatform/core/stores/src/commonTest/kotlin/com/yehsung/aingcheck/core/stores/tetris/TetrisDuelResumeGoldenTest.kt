@@ -254,6 +254,40 @@ class TetrisDuelResumeGoldenTest {
         }
     }
 
+    /**
+     * 유지 가드 둘(검증 지적 V02·V03 — `startAt ?: base.startAt` · `meReady || base.meReady`): 시작 시각을 받은 뒤 온 늦은 응답의 빈칸
+     * (start_at_ms 없음 · me.ready=false)이 앞 값을 지우지 못한다. 골든 flow-countdown 에 그 단계가 있어야 하고(생성기가 빠뜨리면 빨강),
+     * Kotlin 재생이 시작 시각·준비를 그대로 든다. 기준선(다른 입력): 같은 단계에 새 start_at_ms 를 실으면 시작 시각이 그 값으로 바뀐다.
+     */
+    @Test
+    fun lateBlankFieldsDoNotEraseStartAtOrReady() = runTest {
+        val case = golden.cases.first { it.string("id") == "flow-countdown" }
+        val steps = case.array("steps").map { it as JsonObject }
+        fun JsonObject.isApply() = string("op") == "apply"
+        val withStart = steps.indexOfFirst { it.isApply() && it.obj("payload")["start_at_ms"] != null }
+        val late = steps.indices.firstOrNull { i ->
+            val step = steps[i]
+            i > withStart && step.isApply() && step.obj("payload").let { p ->
+                p["start_at_ms"] == null && p.string("status") == "active" && p.obj("me")["ready"] == JsonPrimitive(false)
+            }
+        }
+        assertTrue(withStart >= 0 && late != null, "flow-countdown 에 '시작 시각 뒤 빈칸 응답' 단계가 없다 — 유지 가드 둘을 아무도 안 잰다")
+        val actual = replay("flow-countdown(유지)", JsonArray(steps.take(late + 1)))
+        fun match(i: Int) = actual[i].obj("state").obj("match")
+        assertEquals(JsonPrimitive("applied"), actual[late]["apply"], "seq 가드가 가린 단계면 유지 가드를 못 잰다")
+        assertTrue(match(withStart)["startAtBits"] !is JsonNull, "전제: 시작 시각을 받았다")
+        assertEquals(match(withStart)["startAtBits"], match(late)["startAtBits"], "늦은 응답의 null 이 시작 시각을 지웠다")
+        assertEquals(JsonPrimitive(false), match(0)["meReady"], "기준선: 준비 전에는 false 다")
+        assertEquals(JsonPrimitive(true), match(late)["meReady"], "늦은 응답의 ready=false 가 준비를 되돌렸다")
+
+        val payload = steps[late].obj("payload")
+        val moved = payload["server_now_ms"]!!.jsonPrimitive.long + 9_000
+        val altered = JsonObject(steps[late] + ("payload" to JsonObject(payload + ("start_at_ms" to JsonPrimitive(moved)))))
+        val baseline = replay("flow-countdown(기준선)", JsonArray(steps.take(late) + altered))
+        assertTrue(baseline[late].obj("state").obj("match")["startAtBits"] != match(withStart)["startAtBits"],
+            "기준선: 새 start_at_ms 를 실은 응답은 시작 시각을 바꿔야 한다(칸이 살아 있다)")
+    }
+
     /** 대조(기준선이 다른 입력): 재개 흐름의 첫 apply 에서 내 행의 last_seen 을 시작 시각으로 바꾸면 새 판이 서고 덤프가 갈린다. */
     @Test
     fun theFirstApplyReallyResumesFromTheServerRow() = runTest {

@@ -1660,6 +1660,84 @@
           }
         },
         {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": "4069800000000000",
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "countdown",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
           "state": {
             "activeMatchID": "match-b",
             "dismissed": [],
@@ -2527,6 +2605,30 @@
         {
           "nowBits": "4069400000000000",
           "op": "tick"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-b",
+            "me": {
+              "board": "........................................................................................................................................................................................................",
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621500200,
+              "ready": false,
+              "seq": 1
+            },
+            "opponent": {
+              "display_name": "달토끼",
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "ready": true,
+              "seq": 0
+            },
+            "seed": 1234567,
+            "server_now_ms": 1789621500400,
+            "stake": 3,
+            "status": "active"
+          },
+          "receivedAtBits": "4069466666666666"
         },
         {
           "key": "left",

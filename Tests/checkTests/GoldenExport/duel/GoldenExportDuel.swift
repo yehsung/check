@@ -9,6 +9,7 @@ import Testing
 // 대결 재개 골든(스토어 몫). W1-a `tetris/duel` 은 **세션**(TetrisDuelSession) 대본이고, 이 골든은 그 위의 **스토어 깔때기**를 잰다:
 //   · `resumePoint(me:startAtMs:)` — 서버의 내 행에서 재개 출발점을 고르는 순수 판정(표).
 //   · `applyState` 흐름 — 같은 판을 처음 보는 프로세스가 서버 행에서 판을 다시 세우는가(재개) / 새 판으로 여는가, 늦은 응답 가드 넷,
+//     늦은 응답의 빈칸(시작 시각 null · 준비 false)이 앞 값을 지우지 못하는 유지 가드 둘,
 //     서버 seq 따라잡기, 상대 공격 누계 차분, 끝남·접기, 그리고 그 사이 `tick`·입력 문이 판을 어떻게 미는가.
 // 스토어는 호스트 없이(host == nil) 돈다 — 네트워크를 한 건도 내지 않는다(perform 이 nil). 그래서 내 user id 를 모르고, 승자 칸이 있으면
 // 결과는 언제나 `lost` 다(스토어 규칙 그대로 — 무승부는 result 글자로 가른다). 시계는 둘 다 주입한다: 벽시계 고정 · 단조 시계는 단계가 준다.
@@ -301,6 +302,8 @@ struct GoldenExportDuel {
         let readyMe = player(id: me, seq: 0, board: nil, ready: false)
         let readyPeer = player(id: peer, seq: 0, board: nil, ready: true, name: "달토끼")
         let readyMe2 = player(id: me, seq: 1, board: empty, lastSeenMs: serverNowMs - 200, ready: true)
+        // 시작 시각을 싣기 전에 읽힌 늦은 스냅숏(같은 판 · seq 는 든 값 이상 · start_at_ms 없음 · me.ready=false).
+        let lateMe = player(id: me, seq: 1, board: empty, lastSeenMs: serverNowMs - 200, ready: false)
         return [
             ("flow-resume", [
                 .apply(payload(status: "active", startAtMs: start, me: resumeMe, opponent: resumePeer,
@@ -327,6 +330,10 @@ struct GoldenExportDuel {
                 .apply(payload(id: "match-b", status: "active", stake: 3, seed: 1_234_567, startAtMs: countdownStart,
                                me: readyMe2, opponent: readyPeer), receivedAt: 201),
                 .tick(202),
+                // 유지 가드 둘: 늦은 응답의 빈칸(start_at_ms 없음 · me.ready=false)이 앞 값을 지우지 못한다 — seq 가드는 통과하는
+                // 응답이라(나 1 ≥ 1 · 상대 0 ≥ 0) 이 단계는 '시작 시각은 한 번 정해지면 사라지지 않는다'·'준비는 되돌지 않는다'만 잰다.
+                .apply(payload(id: "match-b", status: "active", stake: 3, seed: 1_234_567, me: lateMe, opponent: readyPeer),
+                       receivedAt: 202.2),
                 .input("left", at: 202.5),
                 .tick(204.05),
                 .input("moveRightOne", at: 204.1),

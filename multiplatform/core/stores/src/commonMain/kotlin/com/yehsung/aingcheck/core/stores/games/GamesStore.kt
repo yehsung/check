@@ -245,17 +245,38 @@ class GamesStore(val context: GamesContext) {
     val rubyBalance: Int? get() = context.sharedRubyBalance ?: context.tetris.rubyBalance
 
     /**
-     * 테트리스 로비의 상대 고르기 목록 — 메시지 탭에서 차단한 사람을 걷어낸 것. 코어 `visibleUsers` 는 스토어가 쥔 `hiddenPeerIDs` 까지
+     * 오목 로비의 **상대 고르기 목록** — 메시지 탭에서 차단해 숨긴 사람을 걷어낸 것. 화면이 읽는 자리는 여기 하나다.
+     *
+     * 차단 확인 시트가 "사람 찾기와 오목 신청에서 서로 보이지 않아요" 라고 약속하는데, 코어 `users` 는 서버 로비 응답 그대로라 방금 차단한
+     * 사람이 [도전] 버튼과 함께 그대로 서 있었다 — 사용자가 방금 읽은 세 줄 중 한 줄이 눈앞에서 거짓이 된다(메시지 탭 `filteredDirectory` 와
+     * 같은 근거 · 같은 방식). **거르는 것은 화면이 읽는 이 자리뿐**이다: 코어 목록은 서버가 답한 그대로 둬야 차단이 실패했을 때 그대로 돌아온다.
+     * 서버도 로비 응답에서 서로 차단한 사람을 빼 줘야 **반대쪽**에서도 사라진다(`gomoku_lobby`).
+     *
+     * [gomoku] 는 오목 스토어(W2-d — [GamesLobbyRoster] 를 구현한다). 게임 탭 스토어는 그 사용자 타입을 모르므로 화면이 넘긴다.
+     */
+    fun <U> gomokuLobbyUsers(gomoku: GamesLobbyRoster<U>): List<U> = hidingBlockedPeers(gomoku.lobbyUsers, gomoku::lobbyUserID)
+
+    /**
+     * 체스 로비의 **상대 고르기 목록** — 같은 근거·같은 방식(위 오목 주석). 코어 `visibleUsers` 는 스토어가 쥔 `hiddenPeerIDs`(폰은 안
+     * 채운다)까지 거른 값이고, 거기에 메시지 탭의 차단 목록을 한 번 더 겹친다. **정렬은 하지 않는다** — 코어 `applyLobby` 가 서버와 같은
+     * 규칙(근무 중·가능 → 대국 중 → …)으로 이미 맞춰 뒀고, 화면이 다시 정렬하면 두 규칙이 갈린다.
+     */
+    fun <U> chessLobbyUsers(chess: GamesLobbyRoster<U>): List<U> = hidingBlockedPeers(chess.lobbyUsers, chess::lobbyUserID)
+
+    /**
+     * 테트리스 로비의 상대 고르기 목록 — 같은 근거·같은 방식(위 두 주석). 코어 `visibleUsers` 는 스토어가 쥔 `hiddenPeerIDs` 까지
      * 거른 값이고, 거기에 메시지 탭의 차단 목록을 한 번 더 겹친다. **정렬은 하지 않는다**(코어 `applyLobby` 가 서버와 같은 규칙으로 이미
-     * 맞춰 뒀다 — 화면이 다시 정렬하면 두 규칙이 갈린다). (오목·체스 목록은 그 사용자 타입을 가진 W2-d 쪽 문이 같은 방식으로 거른다.)
+     * 맞춰 뒀다 — 화면이 다시 정렬하면 두 규칙이 갈린다).
      */
     val tetrisLobbyUsers: List<TetrisDuelUser>
-        get() {
-            val hidden = context.hiddenBlockedPeerIDs
-            val users = context.tetris.visibleUsers
-            if (hidden.isEmpty()) return users
-            return users.filter { it.id !in hidden }
-        }
+        get() = hidingBlockedPeers(context.tetris.visibleUsers) { it.id }
+
+    /** 세 로비가 같은 규칙으로 거른다: 메시지 탭 차단 목록이 비면 코어 목록 그대로(같은 순서), 아니면 그 사람만 뺀다. */
+    private fun <U> hidingBlockedPeers(users: List<U>, id: (U) -> String): List<U> {
+        val hidden = context.hiddenBlockedPeerIDs
+        if (hidden.isEmpty()) return users
+        return users.filter { id(it) !in hidden }
+    }
 
     // MARK: 한 사람 한 판 (B8 — 세 방향)
 

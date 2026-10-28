@@ -10,8 +10,9 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
  * 그래서 엔진 물리·시간 하한이 Swift 와 같다는 대조(W1-a 골든)가 **이 빌드에서 초록**인 게임만 화면에 세운다.
  *
  * 깃발 = 증거 골든 목록([evidenceGoldens]). 한 게임은 그 게임의 **모든** 증거 골든이
- *  ① `contract/golden/_manifest.json` 에 있고 ② 게이트가 돌리는 Kotlin 시험이 그 이름을 `Golden.load` 로 대조할 때만 켜진다.
- * ①② 는 `MiniGameExposureGoldenTest`(core/stores desktopTest)가 잰다 — 그 시험과 증거 골든의 대조 시험(W1-a)이 같은 게이트에서
+ *  ① `contract/golden/_manifest.json` 에 있고 ② 게이트가 돌리는 **켜진** Kotlin 시험(`@Test` 이고 함수·클래스에 `@Ignore`·`@Disabled` 가
+ *  없다)이 그 이름을 `Golden.load` 로 대조할 때만 켜진다. ③ 증거 목록은 그 게임 골든 폴더 전부(1:1 대결 `duel*` 빼고)로 잠겨 있어 줄일 수 없다.
+ * ①②③ 은 `MiniGameExposureGoldenTest`(core/stores desktopTest)가 잰다 — 그 시험과 증거 골든의 대조 시험(W1-a)이 같은 게이트에서
  * 돌므로 "깃발이 켜진 빌드 = 그 골든이 초록인 빌드" 다(빨간 골든이면 게이트가 빌드를 막는다). 골든이 하나라도 빠지면 그 게임은
  * 여기서 빠지고 허브·게임 탭이 그 게임을 열지 않는다.
  *

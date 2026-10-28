@@ -58,6 +58,23 @@ interface GamesGomokuLink : GamesBoardGameLink {
 }
 
 /**
+ * 오목·체스 로비의 **상대 목록** 문 — 오목·체스 스토어(W2-d)가 자기 사용자 타입 [U](`GomokuUser`·`ChessUser`)로 구현한다.
+ * 게임 탭 스토어는 그 타입을 모르므로(병렬 갈래) 목록과 id 꺼내기만 받는다. 차단 거르기는 [GamesStore.gomokuLobbyUsers]·
+ * [GamesStore.chessLobbyUsers] 한 자리에서 한다(Swift `GamesStore.gomokuLobbyUsers`·`chessLobbyUsers` — 화면이 읽는 자리도 거기 하나다).
+ *
+ * 무엇을 내주는가(Swift 가 읽는 칸 그대로):
+ *  · 오목 — 코어 `users`(서버 로비 응답 그대로. 폰은 코어 `hiddenPeerIDs` 를 채우지 않는다 — GomokuStore.swift:787).
+ *  · 체스 — 코어 `visibleUsers`(스토어가 쥔 `hiddenPeerIDs` 까지 거른 값).
+ * 둘 다 **서버와 같은 규칙으로 이미 정렬된** 순서다 — 받는 쪽이 다시 정렬하지 않는다.
+ */
+interface GamesLobbyRoster<U> {
+    val lobbyUsers: List<U>
+
+    /** 그 사람의 user id(소문자 — 메시지 탭 차단 목록 [GamesContext.hiddenBlockedPeerIDs] 와 같은 표기). */
+    fun lobbyUserID(user: U): String
+}
+
+/**
  * 게임 탭 라우터 문(Swift `context.router` 중 게임 탭이 쓰는 조각 — 탭 고르기 · 쌓인 화면 비우기 · 쌓기). 폰 문맥(W2-f)이 구현한다.
  * Swift `router.open(.gomokuMatch(matchID: nil))` 도 같은 세 조각이라 한 문([present])으로 모았다.
  */

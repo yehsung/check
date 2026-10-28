@@ -159,9 +159,9 @@
       }
     },
     "duel/resume": {
-      "file": "a67f3740a4dda16a918ccfcd0de146f05c52ce47a15656069a9a370331e66720",
+      "file": "60bf760151a656db05f9267ec1540f165cbb8d621181458dd4e5473b165902bb",
       "generator": {
-        "Tests/checkTests/GoldenExport/duel/GoldenExportDuel.swift": "2fa1c4a8da6443004253c3a6061d3ac51ef3784c0608a2a9068242bc671c2ea6"
+        "Tests/checkTests/GoldenExport/duel/GoldenExportDuel.swift": "be536e2f8e5d533143f205ea6f7d13fe60ce13286e5ed1599718a2b011044069"
       },
       "swiftSources": {
         "Sources/CheckCore/TetrisDuelBoard.swift": "99594e62723d91506f295d8a2ff788deff4afe0446d8b1b64ad79890ad5952d9",

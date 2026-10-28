@@ -2,11 +2,13 @@
 //       GamesTetrisLobbyTests.swift:76-117 @ 1b8260d (판돈 대결 빌드 깃발 시험은 원본 없음 — G §8-17 #1 의 Android 몫)
 package com.yehsung.aingcheck.core.stores.tetris
 
+import com.yehsung.aingcheck.core.rules.duel.DuelFee
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.games.Reply
 import com.yehsung.aingcheck.core.stores.games.StoreFixtures
 import com.yehsung.aingcheck.core.stores.games.StoreHarness
+import com.yehsung.aingcheck.core.wire.games.TetrisStatePayload
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -15,6 +17,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -41,6 +44,13 @@ class TetrisDuelStoreTest {
             """{"match_id":"$id","status":"${if (finished) "finished" else "active"}","stake":5,"seed":77,"server_now_ms":$NOW_MS""" +
                 (startAtMs?.let { ""","start_at_ms":$it""" } ?: "") +
                 ""","me":{"id":"$ME","seq":$mySeq,"ready":false},"opponent":{"id":"$PEER","display_name":"구름빵","seq":$opponentSeq,"ready":true}}"""
+
+        /** 끝난 판 상태(승자 칸 · result 글자 · 판돈). [winner] 가 null 이면 승자 칸이 없다(무승부). */
+        fun finishedState(id: String = "inv-1", stake: Int, winner: String?, result: String): String =
+            """{"match_id":"$id","status":"finished","stake":$stake,"seed":77,"server_now_ms":$NOW_MS,"result":"$result",""" +
+                (winner?.let { """"winner":"$it",""" } ?: "") +
+                """"end_reason":"${if (winner == null) "time_cap" else "topout"}",""" +
+                """"me":{"id":"$ME","seq":4,"ready":true},"opponent":{"id":"$PEER","display_name":"구름빵","seq":5,"ready":true}}"""
 
         fun action(status: String = "ok", state: String? = null, extra: String = ""): Reply =
             Reply.Json("""{"status":"$status"${state?.let { ""","state":$it""" } ?: ""}$extra,"server_now_ms":$NOW_MS}""")
@@ -264,6 +274,35 @@ class TetrisDuelStoreTest {
         assertTrue(h.tetris.spectatorCountUnavailable, "관전자 수 칸은 접는다")
         assertFalse(h.tetris.watchUnavailable, "관전 입구는 잠그지 않는다(5xx 는 '함수 없음'이 아니다)")
         assertEquals(GamesTetrisWatchPlan.Entry.chip, GamesTetrisWatchPlan.entry(h.tetris, isMine = false))
+    }
+
+    /**
+     * 판 결과의 승패·루비(Swift V0360TetrisDuelStoreTests `rubyDeltaFollowsDuelFee` · `unknownStatus…` 의 끝 줄): 승 = 승자 칸이 **내 id**
+     * (대소문자를 접는다 — 서버 uuid 표기와 세션 표기가 달라도 같은 사람이다) · 패 = 승자가 상대 · 무 = result 'draw'. 판돈 3·5·10 모두
+     * 승 +순이익(DuelFee) · 패 −판돈 · 무 0. 골든 duel/resume 은 호스트가 없어(내 id 모름) '이겼다' 갈래를 못 잰다 — 로그인 하네스로 잰다.
+     * 틀리면 이긴 사람에게 '졌어요'와 −판돈이 그려진다. 기준선(다른 입력): 같은 판에 승자만 상대로 바꾸면 패다.
+     */
+    @Test
+    fun theOutcomeAndRubyFollowTheWinnerID() = runTest {
+        val json = Json { ignoreUnknownKeys = true }
+        for (stake in listOf(3, 5, 10)) {
+            val cases = listOf(
+                Triple(ME.uppercase(), "opponent_win", TetrisDuelOutcome.won to DuelFee.winnerNet(stake)),
+                Triple(PEER.uppercase(), "challenger_win", TetrisDuelOutcome.lost to -stake),
+                Triple(null, "draw", TetrisDuelOutcome.draw to 0),
+            )
+            for ((winner, result, want) in cases) {
+                val h = harness(enabled = true)
+                assertTrue(winner == null || winner != winner.lowercase(), "전제: 승자 칸은 세션 id 와 대소문자가 다르다")
+                h.tetris.applyState(json.decodeFromString(TetrisStatePayload.serializer(), finishedState(stake = stake, winner = winner, result = result)), 0.0)
+                val match = assertNotNull(h.tetris.match, "stake $stake $result")
+                assertTrue(match.isFinished)
+                assertEquals(want.first, match.outcome, "stake $stake $result")
+                assertEquals(want.second, match.rubyDelta, "stake $stake $result")
+                assertEquals(TetrisDuelPhase.finished, h.tetris.phase)
+            }
+        }
+        assertEquals(10, DuelFee.winnerNet(10), "v0.3.64 수수료 0 — 판돈 10 승리 = +10")
     }
 
     /** 로그아웃: 판·신청·순위·루비·관전이 남지 않는다 — 배선 값(순위·관전 주 스위치)은 그대로 둔다. */

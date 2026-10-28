@@ -1,3 +1,4 @@
+<!-- 원본: 없음 (계약 폴더 안내 — Swift 짝 없음) -->
 # contract/ — Swift ↔ Kotlin 계약 (K1)
 
 맥·iOS 의 Swift 가 **기준 구현**이고, Android·Windows 의 Kotlin 이 따라간다(판정 권위는 서버). 그 사이를 이 폴더가 잇는다.
@@ -230,3 +231,19 @@ Pkg.Revision 7(BE2A.250530.026.D1). **27~35 와 실기기는 재지 않았다** 
 | JVM(JDK 21.0.10 aarch64) | `bbffba8122dea31866f77ae558d74a8c4065aaf030be6ea464b8fd2838ef715f` |
 | ART API 26 | `38c2f326e8e54d860ce69318b54633764d98ff7e5ca1e5527bc85279c707053d` |
 | ART API 36 | `936582a472b73c397e9e2e1478c1e5a99343d11fcb49021f1861d73d6fa9c656` |
+
+### 6-2. FCM 토큰 실측(W0-f ⑤ — B§9-1 · B§9-4 · E-U6) — **2026-10-28 스냅숏**(바깥망 · 개발 Firebase `aingcheck-dev` · 게이트가 다시 재지 않는다)
+
+계약 골든이 아니라 **서버 CHECK 판정 근거**다. Play 이미지 에뮬레이터(창 없음 · `-read-only` · 봉인 없음)에서 Google 계정 로그인 없이, 재설치·`pm clear` 로 매번 새로 받았다.
+토큰 원문은 기기 밖으로 내지 않았다(기기 안에서 길이·글자·정규식 일치만 계산). 측정기 원문·판정 조건·결함 심기·다시 재는 법은 [`measurements/w0f-fcm/`](measurements/w0f-fcm/README.md).
+
+| 판 | GMS | 토큰 | 길이 | 모양 · 글자 |
+|---|---|---|---|---|
+| API 35 Play(Pkg.Revision 9, `AE3A.240806.036`) | 24.23.35 | 20 | 142 | `<FID 22자>:APA91b<113자>`, `[A-Za-z0-9_:-]` 만(0x2D..0x7A), 대·소문자 섞임 |
+| API 36 Play(Pkg.Revision 7, `BE2A.250530.026.D1`) | 25.08.34 → 26.41.31(부팅 안에서 저절로) | 35 | 142 | 같음 |
+
+- 서버 세 꼴 — M1 CHECK `fcm_token ~ '^[!-~]+$' and char_length between 32 and 4096` · `register_device_fcm`(`btrim` 뒤 같은 꼴) · push-send `/^[!-~]{32,4096}$/` — 이 **55/55 를 받는다. 바꿀 것 없다.**
+  `btrim` 이 걷는 글자 0. 소문자로 바꾸면 모든 토큰이 달라진다 → M4 의 FCM 비우기에 `lower(` 금지가 맞다. 재설치·데이터 지우기마다 새 토큰(10/10 서로 다름).
+- 채널 없는 알림: 앱이 아직 안 만든 채널로 게시하면 **조용히 버려진다**(채널도 안 생긴다 · 만든 뒤엔 보인다) → data-only(K7) 앱은 게시 전에 채널 다섯을 만든다.
+  SDK `notification` 메시지가 없는 채널을 가리키면 `fcm_fallback_notification_channel`("Miscellaneous")로 보인다(쓰지 않는 길).
+- 재지 않은 것: 실제 발송 왕복(개발 프로젝트 서비스 계정 키 없음) · 실기기 · API 26~34.

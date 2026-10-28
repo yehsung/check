@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 원본: 없음 (W0-f ⑤ FCM 토큰 탐침) -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application android:label="w0f5" android:allowBackup="false">
+        <!-- E§6.6: 로그인 전 토큰 생성 방지 — getToken 을 부를 때만 만든다 -->
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+    </application>
+    <instrumentation
+        android:name="com.yehsung.aingcheck.w0f5.FcmProbe"
+        android:targetPackage="com.yehsung.aingcheck"
+        android:label="w0f5" />
+</manifest>

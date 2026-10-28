@@ -77,6 +77,9 @@ Play 정의(https://support.google.com/googleplay/android-developer/answer/10787
 | 2 | **팀 코드** | `teams.invite_code` | 서버가 만든 값이다. 사용자가 입력하는 것은 합류 때뿐이다 | 신고하지 않는다(사용자 데이터가 아니라 팀 식별자) |
 | 3 | **'이름' 항목 해석** | 위 표 둘째 줄 | Play 가 '이름'을 실명으로만 정의하면 별명을 '기타 정보'로 옮긴다 | 양식의 항목 설명을 읽고 정한다(E 의 미확인 그대로) |
 
+- #1 을 고르면 §2 표에 행을 더하고, 설계 E §9.5 와 검사기 기대값(`_check/check_listing.py` 의 `E_DATA_SAFETY`)을 **같은 커밋에서** 고친다.
+  - 문서만 고치면 검사기가 빨갛다. 의도한 동작이다.
+
 ## 4. 처리방침과 대조 (main `4cf98bf` 의 `docs/privacy.md`)
 
 Data safety 답과 처리방침 문장이 어긋나면 Play 가 둘 중 하나를 거짓으로 본다. 그래서 줄마다 맞췄다.

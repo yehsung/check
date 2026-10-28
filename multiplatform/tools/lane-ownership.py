@@ -18,7 +18,7 @@
   --resolve-branch xplat/w1-a                      브랜치 이름 → 갈래(CI 가 쓴다). xplat/main·xplat/w<N>-int·xplat/int-<x>·xplat/c-<x> → coordinator,
                                                    xplat/w<N>-<x>[숫자] → 그 갈래. xplat/ 인데 갈래로 안 풀리면 종료 2(빨강).
                                                    xplat/ 밖 브랜치(main 등)는 빈 줄 · 종료 0(갈래 소유 검사 대상 아님)
-  --validate                                       lanes.yml 문법·글롭·패키지 표만 확인
+  --validate                                       lanes.yml 문법·글롭·패키지 표 · 열린 갈래끼리 소유 겹침 0(겹치면 종료 1)
   --self-test                                      위반을 심은 가짜 diff 로 빨강을 확인(자기 시험)
 
 lanes.yml 은 YAML 부분집합이다(이 파일의 parse_yaml 이 읽는다). 바깥 패키지(PyYAML)에 기대지 않는다(-I 실행).
@@ -286,6 +286,37 @@ class Lanes:
             return "ok", ""
         return "outside", "이 갈래 owns 밖"
 
+    def open_lanes(self):
+        """닫히지 않은 갈래(조정자 빼고) — 한 웨이브에서 같이 도는 갈래들이다."""
+        return [n for n in self.lanes if n != "coordinator" and n not in self.closed]
+
+    def owns_samples(self, lane: str):
+        """owns 글롭마다 표본 경로 [(글롭, 경로)]: {pkg:…} 를 풀고 {a,b} 를 펼친 뒤 ** · * 를 한 마디(aingcheck-sample)로 채운다."""
+        out = []
+        for glob in self.lanes[lane].get("owns") or []:
+            for g in expand_braces(self._substitute(glob)):
+                out.append((glob, g.replace("**", "aingcheck-sample").replace("*", "aingcheck-sample").replace("?", "x")))
+        return out
+
+    def open_overlaps(self):
+        """열린 갈래끼리 소유가 겹치는 곳 [(갈래, 다른 갈래, 표본 경로, 글롭)] — 7차부터 한 웨이브에 9갈래가 같이 돈다(G §8-18 8).
+        한 갈래 owns 글롭의 표본 경로를 다른 열린 갈래도 쓸 수 있으면(judge 가 둘 다 ok) 겹침이다. 예약이 두 갈래 모두에게 연
+        생성물(contract/golden/{_manifest,_digests}.json — 골든 갈래끼리 다시 만들어 커밋한다, G §2-5)은 겹침이 아니다.
+        표본 판정이라 서로 비껴 겹치는 두 글롭(a/*/c/** 와 a/b/*/**)은 못 잡는다 — 새 글롭은 하위 패키지 이름으로 적는다."""
+        found = []
+        opened = self.open_lanes()
+        for lane in opened:
+            for glob, path in self.owns_samples(lane):
+                if self.judge(lane, path)[0] != "ok":
+                    continue
+                for other in opened:
+                    if other == lane or self.judge(other, path)[0] != "ok":
+                        continue
+                    if any(self._match(comp, path) and {lane, other} <= allowed for _, comp, allowed in self.reserved):
+                        continue
+                    found.append((lane, other, path, glob))
+        return found
+
 
 BRANCH_LANE = re.compile(r"xplat/w(\d+)-([a-z])(\d*)")
 # 통합 브랜치(조정자 대리): xplat/main · 웨이브 통합 xplat/w<N>-int · 묶음 통합 xplat/int-<소문자로 시작하는 이름>(3차 묶음부터) ·
@@ -505,6 +536,25 @@ SELF_TEST_CASES = [
     ("W1-d", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt", "closed"),
     ("W1-d", "multiplatform/testkit/build.gradle.kts", "closed"),
     ("coordinator", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/dump/DecodeDump.kt", "ok"),
+    # 7차 기준선(xplat/int-i, G §8-18 8): 화면 갈래는 내비게이션 배선 없이 화면까지 — 조립(K11: AppContainer · Application.onCreate 의
+    # 채널 다섯 · appConfig.duelsEnabled · NavGraph)은 조정자 예약이다. 7차 갈래 자리와 남의 자리.
+    ("W3-a", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/app/AppContainer.kt", "reserved"),
+    ("W2-f", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/app/AingApplication.kt", "reserved"),
+    ("W3-b", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/app/AndroidAppConfig.kt", "reserved"),
+    ("W4-b", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/push/NotificationChannels.kt", "reserved"),
+    ("W4-a", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/nav/NavGraph.kt", "reserved"),
+    ("coordinator", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/app/AppContainer.kt", "ok"),
+    ("coordinator", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/push/NotificationChannels.kt", "ok"),
+    ("W3-b", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/widget/NowWidget.kt", "ok"),
+    ("W4-a", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/games/gomoku/GomokuBoard.kt", "ok"),
+    ("W4-a", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/screens/games/tetris/TetrisRoute.kt", "outside"),
+    ("W4-b", "multiplatform/androidApp/src/main/kotlin/com/yehsung/aingcheck/android/screens/games/hub/GamesHub.kt", "ok"),
+    ("W4-c", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/missions/MissionsScreen.kt", "ok"),
+    ("W4-c", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/screens/me/MeScreen.kt", "outside"),
+    ("W6-a", "multiplatform/scripts/release-android.sh", "ok"),
+    ("W6-a", "multiplatform/androidApp/build.gradle.kts", "reserved"),
+    ("W6-c", "docs/android/listing-ko.md", "ok"),
+    ("W6-c", "docs/privacy.md", "outside"),
 ]
 
 # 기준선 병합 몫 가르기(--upstream) 사례: (경로, upstream 이 바꿈, 머리가 upstream 과 다름, 기대: 뺌|남김).
@@ -572,7 +622,21 @@ def self_test(lanes_path: str) -> int:
         if got != expected:
             failures += 1
         print(f"  {mark} 브랜치 {branch:16s} → {getattr(got, '__name__', got)}")
-    print(f"self-test: 사례 {len(SELF_TEST_CASES) + 1 + len(UPSTREAM_CASES) + 1 + len(branch_cases)} · 실패 {failures}")
+    # 열린 갈래끼리 소유 겹침(--validate 가 잰다): 지금 표는 0 이고, 열린 W3-a 에 W3-b 자리(ui screens/me)를 심으면 그 겹침이 잡힌다.
+    clean = lanes.open_overlaps()
+    mark = "ok " if not clean else "BAD"
+    if clean:
+        failures += 1
+    print(f"  {mark} 열린 갈래 {len(lanes.open_lanes())} 소유 겹침 0←{len(clean)} {clean[:3]}")
+    with open(lanes_path, encoding="utf-8") as f:
+        data = parse_yaml(f.read())
+    data["lanes"]["W3-a"]["owns"] = list(data["lanes"]["W3-a"]["owns"]) + ["multiplatform/ui/src/*/kotlin/{pkg:ui}/screens/me/**"]
+    planted = [(a, b) for a, b, _, _ in Lanes(data).open_overlaps()]
+    mark = "ok " if ("W3-a", "W3-b") in planted and ("W3-b", "W3-a") in planted else "BAD"
+    if mark == "BAD":
+        failures += 1
+    print(f"  {mark} 심은 겹침(W3-a 에 ui screens/me) 잡힘 {sorted(set(planted))}")
+    print(f"self-test: 사례 {len(SELF_TEST_CASES) + 1 + len(UPSTREAM_CASES) + 1 + len(branch_cases) + 2} · 실패 {failures}")
     return 1 if failures else 0
 
 
@@ -594,8 +658,12 @@ def main(argv) -> int:
             return self_test(args.lanes)
         lanes = load_lanes(args.lanes)
         if args.validate:
-            print(f"lanes.yml 확인: 갈래 {len(lanes.lanes)} · 예약 {len(lanes.reserved)} · 옛 경로 {len(lanes.forbidden)} · 닫힘 {len(lanes.closed)}")
-            return 0
+            overlaps = lanes.open_overlaps()
+            for lane, other, path, glob in overlaps:
+                print(f"  ✗ [overlap] {lane} 의 '{glob}' 표본 {path} 를 {other} 도 쓴다", file=sys.stderr)
+            print(f"lanes.yml 확인: 갈래 {len(lanes.lanes)} · 예약 {len(lanes.reserved)} · 옛 경로 {len(lanes.forbidden)} · 닫힘 {len(lanes.closed)}"
+                  f" · 열린 갈래 {len(lanes.open_lanes())} · 소유 겹침 {len(overlaps)}")
+            return 1 if overlaps else 0
         if args.resolve_branch is not None:
             try:
                 lane = resolve_branch(lanes, args.resolve_branch)

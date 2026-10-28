@@ -1,5 +1,5 @@
 {
-  "exportTests": 84,
+  "exportTests": 85,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -477,6 +477,22 @@
       "swiftSources": [
         "Sources/CheckCore/MiniGameEngine.swift",
         "Sources/CheckCore/GomokuAIEngine.swift"
+      ]
+    },
+    {
+      "cases": 6,
+      "equivalence": "discrete",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/session/GoldenExportSession.swift",
+      "golden": "session/scenarios",
+      "path": "contract/golden/session/scenarios.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckMobileKit/Session/MobileSessionStore.swift",
+        "Sources/CheckCore/SessionRefreshCoordinator.swift",
+        "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
+        "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+        "Sources/CheckCore/TokenVault.swift",
+        "Sources/CheckCore/AuthErrorRules.swift"
       ]
     },
     {

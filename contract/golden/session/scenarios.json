@@ -1,0 +1,483 @@
+{
+  "cases": [
+    {
+      "end": {
+        "access": null,
+        "email": null,
+        "generation": 1,
+        "inviteCode": "ABC123",
+        "ledger": 0,
+        "notice": null,
+        "phase": "signedOut",
+        "refresh": null,
+        "refreshCalls": 2,
+        "teamName": null,
+        "teamNameBeforeSignOut": "테스트팀"
+      },
+      "id": "launch-refresh-401-retry-signout",
+      "requests": [
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "p_platform": "<PLATFORM>"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/client_release",
+          "query": []
+        },
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "refresh_token": "refresh-1"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "refresh_token"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "refresh_token": "refresh-old"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "refresh_token"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer <FRESH1>",
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.user-1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer <FRESH1>",
+          "body": {
+            "p_app_build": 1,
+            "p_app_version": "0.1.0",
+            "p_installation_id": "11111111-2222-4333-8444-555555555555"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/<device-registration>",
+          "query": []
+        },
+        {
+          "authorization": "Bearer <FRESH1>",
+          "body": {},
+          "method": "POST",
+          "path": "/rest/v1/rpc/my_team_invite_code",
+          "query": []
+        },
+        {
+          "authorization": "Bearer <FRESH2>",
+          "body": null,
+          "method": "POST",
+          "path": "/auth/v1/logout",
+          "query": [
+            [
+              "scope",
+              "local"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer <FRESH2>",
+          "body": {
+            "p_installation_id": "11111111-2222-4333-8444-555555555555"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/unregister_device",
+          "query": []
+        },
+        {
+          "authorization": "Bearer <FRESH2>",
+          "body": {},
+          "method": "POST",
+          "path": "/rest/v1/rpc/my_team_invite_code",
+          "query": []
+        }
+      ]
+    },
+    {
+      "end": {
+        "access": null,
+        "email": "a@b.co",
+        "generation": 1,
+        "ledger": 0,
+        "notice": "다시 로그인 필요",
+        "phase": "signedOut",
+        "refresh": null,
+        "refreshCalls": 1,
+        "teamName": null
+      },
+      "id": "launch-refresh-fatal",
+      "requests": [
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "p_platform": "<PLATFORM>"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/client_release",
+          "query": []
+        },
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "refresh_token": "refresh-old"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "refresh_token"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "end": {
+        "access": "<OLD>",
+        "email": "a@b.co",
+        "generation": 0,
+        "ledger": 0,
+        "notice": null,
+        "phase": "signedIn",
+        "refresh": "refresh-old",
+        "refreshCalls": 1,
+        "teamName": "테스트팀"
+      },
+      "id": "launch-refresh-transient",
+      "requests": [
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "p_platform": "<PLATFORM>"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/client_release",
+          "query": []
+        },
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "refresh_token": "refresh-old"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "refresh_token"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer <OLD>",
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.user-1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer <OLD>",
+          "body": {
+            "p_app_build": 1,
+            "p_app_version": "0.1.0",
+            "p_installation_id": "11111111-2222-4333-8444-555555555555"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/<device-registration>",
+          "query": []
+        }
+      ]
+    },
+    {
+      "end": {
+        "access": null,
+        "email": null,
+        "generation": 1,
+        "ledger": 0,
+        "notice": null,
+        "phase": "signedOut",
+        "refresh": null,
+        "refreshCalls": 1,
+        "teamName": null
+      },
+      "id": "signout-expired-access-ledger-refresh",
+      "requests": [
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "p_platform": "<PLATFORM>"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/client_release",
+          "query": []
+        },
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "refresh_token": "r0"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "refresh_token"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer access-0",
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.user-1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer access-0",
+          "body": {
+            "p_app_build": 1,
+            "p_app_version": "0.1.0",
+            "p_installation_id": "11111111-2222-4333-8444-555555555555"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/<device-registration>",
+          "query": []
+        },
+        {
+          "authorization": "Bearer access-0",
+          "body": {
+            "p_installation_id": "11111111-2222-4333-8444-555555555555"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/unregister_device",
+          "query": []
+        },
+        {
+          "authorization": "Bearer cleanup-access",
+          "body": null,
+          "method": "POST",
+          "path": "/auth/v1/logout",
+          "query": [
+            [
+              "scope",
+              "local"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer cleanup-access",
+          "body": {
+            "p_installation_id": "11111111-2222-4333-8444-555555555555"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/unregister_device",
+          "query": []
+        }
+      ]
+    },
+    {
+      "end": {
+        "access": null,
+        "deleted": true,
+        "email": null,
+        "generation": 1,
+        "ledger": 0,
+        "notice": null,
+        "phase": "signedOut",
+        "refresh": null,
+        "refreshCalls": 0,
+        "teamName": null
+      },
+      "id": "delete-account-order",
+      "requests": [
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "email": "a@b.co",
+            "password": "pw"
+          },
+          "method": "POST",
+          "path": "/auth/v1/token",
+          "query": [
+            [
+              "grant_type",
+              "password"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "p_platform": "<PLATFORM>"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/client_release",
+          "query": []
+        },
+        {
+          "authorization": "Bearer access-0",
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/memberships",
+          "query": [
+            [
+              "select",
+              "team_id,role,teams(name,weekly_goal_hours)"
+            ],
+            [
+              "user_id",
+              "eq.user-1"
+            ],
+            [
+              "order",
+              "joined_at.asc,team_id.asc"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        },
+        {
+          "authorization": "Bearer access-0",
+          "body": {
+            "p_app_build": 1,
+            "p_app_version": "0.1.0",
+            "p_installation_id": "11111111-2222-4333-8444-555555555555"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/<device-registration>",
+          "query": []
+        },
+        {
+          "authorization": "Bearer reauth-access",
+          "body": null,
+          "method": "DELETE",
+          "path": "/storage/v1/object/avatars/user-1.jpg",
+          "query": []
+        },
+        {
+          "authorization": "Bearer reauth-access",
+          "body": {},
+          "method": "POST",
+          "path": "/rest/v1/rpc/delete_my_account",
+          "query": []
+        }
+      ]
+    },
+    {
+      "end": {
+        "access": "access-0",
+        "email": "a@b.co",
+        "generation": 0,
+        "latestBuild": 7,
+        "ledger": 0,
+        "notice": null,
+        "phase": "needsUpdate:5",
+        "refresh": "r0",
+        "refreshCalls": 0,
+        "teamName": null
+      },
+      "id": "launch-below-min-build",
+      "requests": [
+        {
+          "authorization": "Bearer <ANON>",
+          "body": {
+            "p_platform": "<PLATFORM>"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/client_release",
+          "query": []
+        }
+      ]
+    }
+  ],
+  "equivalence": "discrete",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/session/GoldenExportSession.swift",
+  "golden": "session/scenarios",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "app": "build 1 · version 0.1.0 · 설치 id 11111111-2222-4333-8444-555555555555 · 푸시 토큰 없음 · client_release 상한 없음",
+    "clock": "2026-09-17 14:05:00 KST(1789621500) 에 멈춘 시계 — 조정자 갱신 조건(만료 60초 전)만 시각을 본다",
+    "end": "phase(launching|needsUpdate:N|signedOut|signedIn) · generation · access/refresh(금고, 자리표시) · email(저장된 이메일) · notice · teamName · ledger(정리 장부 줄 수) · refreshCalls(grant_type=refresh_token 수) + 시나리오별 칸",
+    "normalization": "iOS register_device(본문 p_platform 제거) ≡ Android register_device_fcm(K5) → path /rest/v1/rpc/<device-registration>. client_release 본문 p_platform → <PLATFORM>. 토큰 → <ANON> · <OLD>(만료 20초 전 JWT) · <FRESH1>(+3600) · <FRESH2>(+7200). 호스트 → golden.invalid",
+    "request": "method · path · query([이름, 값] 디코드 쌍, 순서대로) · authorization(토큰은 자리표시) · body(정규 JSON, 본문 없으면 null)",
+    "shape": "case 하나 = 시나리오 한 판. requests = 받은 요청을 정규화해 정규 글자 순서로 정렬한 모음(순서 없는 비교 — C-X9). end = 끝 상태."
+  },
+  "swiftSources": [
+    "Sources/CheckMobileKit/Session/MobileSessionStore.swift",
+    "Sources/CheckCore/SessionRefreshCoordinator.swift",
+    "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
+    "Sources/CheckMobileKit/Session/MobileDeviceService.swift",
+    "Sources/CheckCore/TokenVault.swift",
+    "Sources/CheckCore/AuthErrorRules.swift"
+  ]
+}

@@ -5,6 +5,7 @@ import com.yehsung.aingcheck.core.foundation.identity.ClientIdentity
 import com.yehsung.aingcheck.core.foundation.identity.ClientPlatform
 import com.yehsung.aingcheck.core.rules.achievements.AchievementStatus
 import com.yehsung.aingcheck.core.rules.achievements.DailyMissionStatus
+import com.yehsung.aingcheck.core.rules.ailimit.AILimitPlanLabelContract
 import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
 import com.yehsung.aingcheck.core.rules.weekly.WeeklyWorkStatus
 import com.yehsung.aingcheck.core.session.app.AppInfo

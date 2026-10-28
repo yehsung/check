@@ -75,10 +75,11 @@ class PixelParityTest {
         assertEquals(GoldenReplay.T7_SUBSET.size, t7.size)
         assertTrue(t7.all { it.cls == GoldenClass.clean }, "T7 부분집합에 깨끗하지 않은 장: ${t7.filter { it.cls != GoldenClass.clean }.map { it.golden.id }}")
 
-        // 면제가 조용히 늘지 않게 잠근다: 입자 오염은 굽기 결함(조정자 패치로 다시 구우면 0), 후광 지연 · 격자 거칠음은 맥 쪽 한계.
-        assertTrue(clean.size >= 165, "깨끗한 장이 줄었다: ${clean.size}")
+        // 면제가 조용히 늘지 않게 잠근다. 입자 오염은 다시 구운 골든(AingBakeSuite 가 방출구를 첫 틱 전에 걷는다)에서 0 이다 —
+        // 후광 지연 · 격자 거칠음은 맥 쪽 한계(GoldAingFinish ⚠ · 굽기 F-9)라 남는다.
+        assertTrue(clean.size >= 200, "깨끗한 장이 줄었다: ${clean.size}")
         assertEquals(3, byClass[GoldenClass.gridCoarse].orEmpty().size, "격자 거칠음은 울트라 찔림 표본 288 세 마감뿐")
-        assertTrue(byClass[GoldenClass.particles].orEmpty().size <= 45)
+        assertEquals(0, byClass[GoldenClass.particles].orEmpty().size, "골든에 입자가 다시 찍혔다 — 굽기 스위트 renderGolden 을 본다")
         assertTrue(byClass[GoldenClass.haloLag].orEmpty().size <= 40)
 
         // 퇴행 상한: F 문턱은 넉넉해 그리기 품질이 조금 무너져도(예: 몸 칸 nearest 필터) 통과한다 — 깨끗한 장 전체 평균 오차가 실측보다 0.05 넘게 오르면 빨강.
@@ -128,19 +129,19 @@ class PixelParityTest {
     }
 
     /**
-     * 잠금 값(실측 — ebb5565 의 골든, 맥 · ubuntu · windows-x64 · windows-arm64 같은 수치). 무리 분포는 골든 사실만으로 정하므로 다시 구워도 같다.
-     * 깨끗한 장 · 음성 대조 하한은 입자 오염 42장을 뺀 값이다 — 조정자 패치 02(다시 구운 골든) 를 얹으면 패치 03 이 함께 올린다.
+     * 잠금 값(실측 — 다시 구운 골든, 조정자 패치 02 위). 무리 분포는 골든 사실만으로 정하므로 다시 구워도 같다.
+     * 깨끗한 장 · 음성 대조 하한 · 평균 오차 상한은 입자 오염이 0 이 된 골든 240장(T3) · 쉬는 행 93장(T3-L) 기준이다.
      */
     private object Locks {
         val BAND_DISTRIBUTION = mapOf(ParityBand.rigid to 69, ParityBand.bandUltra to 72, ParityBand.squashStretch to 49, ParityBand.spin to 50)
-        val CLEAN_MIN = mapOf(ParityBand.rigid to 54, ParityBand.bandUltra to 63, ParityBand.squashStretch to 26, ParityBand.spin to 24)
-        val NEGATIVE_EXCEEDS_MIN = mapOf(ParityBand.rigid to 42, ParityBand.bandUltra to 58, ParityBand.squashStretch to 21, ParityBand.spin to 32)
+        val CLEAN_MIN = mapOf(ParityBand.rigid to 69, ParityBand.bandUltra to 72, ParityBand.squashStretch to 30, ParityBand.spin to 31)
+        val NEGATIVE_EXCEEDS_MIN = mapOf(ParityBand.rigid to 55, ParityBand.bandUltra to 67, ParityBand.squashStretch to 24, ParityBand.spin to 40)
         const val L_REST_GOLDENS = 93
-        const val L_CLEAN_MIN = 74
-        const val L_NEGATIVE_EXCEEDS_MIN = 39
+        const val L_CLEAN_MIN = 92
+        const val L_NEGATIVE_EXCEEDS_MIN = 51
         /** 깨끗한 장 평균 오차(합집합 RGBA 평균)의 평균 상한 = 실측 + 0.05. */
-        const val CLEAN_MEAN_AVG_MAX = 2.445
-        const val L_CLEAN_MEAN_AVG_MAX = 1.725
+        const val CLEAN_MEAN_AVG_MAX = 2.480
+        const val L_CLEAN_MEAN_AVG_MAX = 1.715
     }
 
     @Test

@@ -2181,6 +2181,9 @@ final class Baker {
         default:
             guard let kind = reaction.kind else { throw BakeError("골든 \(reaction.name): 종류 없음") }
             #expect(engine.request(kind))
+            // 골든은 파티클을 끄고 굽는다: 방출구(색종이 · 스파크 · 흡수)를 **첫 시계 틱 전에** 걷는다. 렌더 직전에만 걷으면 그사이 SceneKit 이
+            // 이미 낳은 입자가 노드 없이 남아(시뮬 dt 가 틱마다 잘려 수명이 안 닳는다) 그 리액션과 다음 리액션 골든에 찍힌다(W5-a T3 실측: 42장).
+            rig.removeTransientNodes()
             closed = kind == .drowsy
         }
         for k in 0...step { rig.tick(start + Double(k) / Double(hz)) }

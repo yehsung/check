@@ -64,6 +64,7 @@ val syncRobolectricJars = tasks.register<Sync>("aingcheckSyncRobolectricJars") {
 val includeSlow = providers.gradleProperty("aingcheck.includeSlow").map { it.toBoolean() }.orElse(false)
 val launcher21 = extensions.getByType<JavaToolchainService>().launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) }
 val mpRoot = rootProject.layout.projectDirectory.asFile
+val contractGoldenDir = java.io.File(mpRoot.parentFile, "contract/golden")
 val prodUrlForScan = providers.gradleProperty("aingcheck.prod.supabaseUrl").orElse("")
 
 tasks.withType<Test>().configureEach {
@@ -121,6 +122,10 @@ tasks.withType<Test>().configureEach {
     )
     // 시험 결과에 영향을 주는 바깥 변수(봉인 표식)는 입력으로 잡아 캐시가 봉인 여부를 섞지 않게 한다.
     inputs.property("aingcheckNetworkSealed", System.getenv("AINGCHECK_NETWORK_SEALED") ?: "")
+    // 계약 골든(contract/golden)은 시험이 실행 중에 aingcheck.repoRoot 로 읽는다(Golden.load) — 선언하지 않으면 Gradle 이 모르는
+    // 입력이다(G §8-18 9). 선언된 입력으로 두어 골든만 바뀐 실행이 옛 결과를 재쓰지 않게 한다. 실측(7차 int-i): 아래 upToDateWhen 을
+    // 뺀 사본에서 골든 값 한 글자만 바꾸면 이 선언 없이는 UP-TO-DATE(캐시 키 그대로, 옛 초록), 있으면 다시 돌아 빨강이다.
+    inputs.dir(contractGoldenDir).withPropertyName("aingcheckContractGolden").withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.upToDateWhen { false }
 
     doFirst {

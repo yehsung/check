@@ -54,7 +54,7 @@
 | `spec` | 사람이 읽는 규칙 설명(식·접기 규칙·인코딩). Kotlin 은 이것을 보고 구현하지, 값을 읽지 않는다 |
 | `cases` | 비지 않은 배열. 원소는 객체이고 **글자 `id` 가 있다(파일 안에서 겹치지 않는다)** — 실패 문구가 case 를 가리킨다 |
 
-크기 예산(C§5.3): 파일 하나 2 MB 이하(작성기가 막는다), 계약 골든 합계 10 MB 이하(스크립트가 막는다).
+크기 예산(C§5.3): 파일 하나 2 MB 이하(작성기가 막는다), 계약 골든 합계 12 MiB(12,582,912 B) 이하(G §8-18 6 — 10 MiB 에서 올림. 값은 `multiplatform/tools/golden-digest.py` 의 `TOTAL_BUDGET` 한 곳이고, `scripts/golden-export.sh` 의 assemble 이 막고 `golden-digest.py --self-test` 가 경계를 잰다).
 
 ### 2-1. 정규 바이트
 

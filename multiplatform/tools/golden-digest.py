@@ -54,7 +54,8 @@ STRIP_RULE = ("swift_source.strip_comments v1 — 주석·빈 줄·줄 끝 공�
               "골든 파일(file)은 줄 끝 CRLF 를 LF 로 접은 바이트의 sha256")
 MANIFEST = f"{CONTRACT_DIR}/_manifest.json"
 DIGESTS = f"{CONTRACT_DIR}/_digests.json"
-TOTAL_BUDGET = 10 * 1024 * 1024
+# 계약 골든 합계 예산 — 이 한 곳(G §8-18 6: 10 MiB → 12 MiB = 12,582,912 B). assemble(golden-export.sh)이 막고 --self-test 가 경계를 잰다.
+TOTAL_BUDGET = 12 * 1024 * 1024
 RERUN = "맥에서 scripts/golden-export.sh 를 돌려라(엔진이 바뀌었으면 CHECK_GOLDEN_WRITE=1 로 다시 쓰고 Kotlin 을 따라 고친다)"
 
 
@@ -433,13 +434,48 @@ def self_test() -> int:
             shutil.rmtree(tmp, ignore_errors=True)
     else:
         failures.append(f"{MANIFEST}·{DIGESTS} 가 없어 저장소 사본 시험을 못 했다")
+    # 5) 계약 골든 합계 예산(G §8-18 6 — 12 MiB = 12,582,912 B). 예산은 TOTAL_BUDGET 한 곳이고 assemble(golden-export.sh)만 잰다 —
+    #    가짜 영수증 한 장(크기만 다른 골든 하나)으로 그 경계를 잰다. 기준선(다른 입력): 옛 예산 10 MiB 를 1 B 넘는 크기는 통과해야 한다.
+    budget_cases = [(10 * 1024 * 1024 + 1, 0), (12_582_912, 0), (12_582_913, 1)]
+    for size, want in budget_cases:
+        rc, budget_problem = assemble_budget_probe(size)
+        if rc != want or budget_problem != bool(want):
+            failures.append(f"계약 골든 합계 {size} B: assemble 종료 코드 {rc}(기대 {want}) · 예산 문구 {budget_problem} — 예산 12,582,912 B 경계가 어긋났다")
     if failures:
         print("golden-digest --self-test: 실패", file=sys.stderr)
         for f_ in failures:
             print(f"  - {f_}", file=sys.stderr)
         return 1
-    print(f"golden-digest --self-test: 통과(주석 걷기 4 · 정규 JSON 1 · 글자판 2 · 사본 --check {checks} · 생성 시험 이름 판정 6)")
+    print(f"golden-digest --self-test: 통과(주석 걷기 4 · 정규 JSON 1 · 글자판 2 · 사본 --check {checks} · 생성 시험 이름 판정 6 · "
+          f"예산 경계 {len(budget_cases)})")
     return 0
+
+
+def assemble_budget_probe(size: int) -> tuple[int, bool]:
+    """임시 저장소에 크기 size 바이트 계약 골든 하나와 그 영수증을 두고 assemble(쓰기 모드)을 돌린다 → (종료 코드, 예산 문구가 나왔나)."""
+    tmp = tempfile.mkdtemp(prefix="golden-digest-budget-")
+    try:
+        rel = f"{CONTRACT_DIR}/budget/probe.json"
+        os.makedirs(os.path.join(tmp, os.path.dirname(rel)))
+        with open(os.path.join(tmp, rel), "wb") as f:
+            f.write(b" " * size)
+        receipts = os.path.join(tmp, "run", "receipts")
+        os.makedirs(receipts)
+        receipt = {"status": "written", "path": rel, "root": "contract", "golden": "budget/probe",
+                   "generator": "Tests/checkTests/GoldenExport/budget/GoldenExportBudget.swift", "swiftSources": [],
+                   "platformSensitive": False, "equivalence": "bit", "cases": 1}
+        with open(os.path.join(receipts, "0.json"), "w", encoding="utf-8") as f:
+            json.dump(receipt, f)
+        out, err = io.StringIO(), io.StringIO()
+        old_out, old_err = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = out, err
+        try:
+            rc = cmd_assemble(tmp, os.path.join(tmp, "run"), "write", 1)
+        finally:
+            sys.stdout, sys.stderr = old_out, old_err
+        return rc, "예산" in err.getvalue()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def utf8_stdio(streams=None) -> None:

@@ -12,6 +12,7 @@ import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.session.app.AppInfo
 import com.yehsung.aingcheck.core.session.app.SessionClock
 import com.yehsung.aingcheck.core.session.context.SessionContext
+import com.yehsung.aingcheck.core.stores.me.RubyBalanceCell
 import com.yehsung.aingcheck.core.wire.SupabaseSession
 import com.yehsung.aingcheck.core.wire.games.GomokuStatePayload
 import com.yehsung.aingcheck.testkit.vault.InMemoryTokenVault
@@ -179,7 +180,7 @@ class GomokuDuelsFlagTest {
             parentScope = storeScope(),
         )
         sessionStore.adoptSignedInSession(SupabaseSession("access-token", "refresh-token", gomokuUser("C")), "c@test.invalid")
-        val host = SessionGomokuHost(SessionContext(sessionStore, appConfig))
+        val host = SessionGomokuHost(SessionContext(sessionStore, appConfig), ruby = RubyBalanceCell())
         val store = GomokuStore(storeScope(), host)
         return Triple(store, server, sessionStore)
     }

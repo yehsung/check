@@ -4,7 +4,13 @@
 #
 #   multiplatform/scripts/gate-full.sh
 #
-# 기기 계측: multiplatform/scripts/emu.sh instrumented(api36 AVD · 포트 5560 · 봉인 기본 → 계측 시험 → 끄기, 종료 코드 전달).
+# 기기 계측: multiplatform/scripts/emu.sh instrumented(봉인 기본 → 계측 시험 → 끄기, 종료 코드 전달). 세 단계를 차례로 다 돈다:
+#   ① androidApp(api36 · :androidApp:connectedDebugAndroidTest — emu.sh 기본값)
+#   ② core/rules 골든을 ART 에서(api26 · :core:rules:connectedAndroidDeviceTest) ③ 같은 시험을 api36 에서.
+#   ②③ 은 G §8-17 2 (a) 의 API 별 그래핌 잠금(GraphemeArtLocks)의 **값**을 재는 유일한 자리다 — JVM 은 경계 모양만 재고 CI 는 기기를
+#   돌지 않는다(6차 c-fold 검증 지적: 손으로 돌리던 단계라 잠금 표를 잘못 적어도 모든 게이트가 초록이었다). NFC · 범위 표 · 날짜 · 자연 정렬도 같이 돈다.
+#   포트는 emu.sh 기본(5560 — 통합 자리). 갈래가 자기 포트로 돌리려면 AINGCHECK_GATE_EMU_PORT=<포트>(세 단계 모두 그 포트).
+#   한 단계가 빨개도 나머지를 돌고, 처음 빨간 단계의 종료 코드로 끝낸다(단계마다 device[이름]-exit 줄).
 #   emu.sh 가 없으면 실패한다 — 조용히 건너뛰지 않는다.
 #   일부러 빼려면 AINGCHECK_ALLOW_NO_DEVICE=1. 그때는 **언제나** "기기 계측 빠짐"을 찍는다(이 실행은 기기 몫을 재지 않았다).
 # Swift 골든 비교(맥에서만, G §4-1 "Swift 쪽" · contract/README.md §3): scripts/golden-export.sh 비교 모드를 먼저 돈다.
@@ -56,9 +62,24 @@ if [[ "$skip_device" -eq 1 ]]; then
   echo "gate-full: 기기 계측 빠짐 — JVM·조립 몫만 초록이다" >&2
   exit 0
 fi
-set +e
-"$HERE/emu.sh" instrumented
-device_rc=$?
-set -e
+port_args=()
+if [[ -n "${AINGCHECK_GATE_EMU_PORT:-}" ]]; then
+  [[ "$AINGCHECK_GATE_EMU_PORT" =~ ^[0-9]+$ ]] || { echo "gate-full: AINGCHECK_GATE_EMU_PORT 는 숫자다('$AINGCHECK_GATE_EMU_PORT')" >&2; exit 2; }
+  port_args=(--port "$AINGCHECK_GATE_EMU_PORT")
+fi
+device_rc=0
+run_device() { # 단계 이름 · emu.sh instrumented 인자…
+  local name="$1"; shift
+  local rc
+  set +e
+  "$HERE/emu.sh" instrumented "${port_args[@]+"${port_args[@]}"}" "$@"
+  rc=$?
+  set -e
+  echo "gate-full: device[$name]-exit=$rc"
+  if [[ $rc -ne 0 && $device_rc -eq 0 ]]; then device_rc=$rc; fi
+}
+run_device androidApp-api36
+run_device rules-api26 --avd aingcheck-api26 --task :core:rules:connectedAndroidDeviceTest
+run_device rules-api36 --avd aingcheck-api36 --task :core:rules:connectedAndroidDeviceTest
 echo "gate-full: device-exit=$device_rc"
 exit "$device_rc"

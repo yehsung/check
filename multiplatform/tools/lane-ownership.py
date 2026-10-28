@@ -15,7 +15,7 @@
                                                    바뀐 경로 가운데 머리의 내용이 upstream 과 바이트까지 같은 것만 뺀다(그 경로는 main 의
                                                    변경이지 이 브랜치의 변경이 아니다). main 이 안 바꾼 경로를 main 판으로 되돌리면 그대로
                                                    센다(xplat 변경을 몰래 되돌리는 것은 빨강). xplat/main 이 main 을 따라잡았으면 뺄 것이 0.
-  --resolve-branch xplat/w1-a                      브랜치 이름 → 갈래(CI 가 쓴다). xplat/main·xplat/w<N>-int·xplat/int-<x> → coordinator,
+  --resolve-branch xplat/w1-a                      브랜치 이름 → 갈래(CI 가 쓴다). xplat/main·xplat/w<N>-int·xplat/int-<x>·xplat/c-<x> → coordinator,
                                                    xplat/w<N>-<x>[숫자] → 그 갈래. xplat/ 인데 갈래로 안 풀리면 종료 2(빨강).
                                                    xplat/ 밖 브랜치(main 등)는 빈 줄 · 종료 0(갈래 소유 검사 대상 아님)
   --validate                                       lanes.yml 문법·글롭·패키지 표만 확인
@@ -288,8 +288,9 @@ class Lanes:
 
 
 BRANCH_LANE = re.compile(r"xplat/w(\d+)-([a-z])(\d*)")
-# 통합 브랜치(조정자 대리): xplat/main · 웨이브 통합 xplat/w<N>-int · 묶음 통합 xplat/int-<소문자로 시작하는 이름>(3차 묶음부터).
-INTEGRATION_BRANCH = re.compile(r"xplat/(?:main|w\d+-int|int-[a-z][a-z0-9]*)")
+# 통합 브랜치(조정자 대리): xplat/main · 웨이브 통합 xplat/w<N>-int · 묶음 통합 xplat/int-<소문자로 시작하는 이름>(3차 묶음부터) ·
+# 조정자 갈래 xplat/c-<소문자로 시작하는 이름>(6차 접기 xplat/c-fold — G §8-17 4, 소유 검사는 --lane coordinator 와 같다).
+INTEGRATION_BRANCH = re.compile(r"xplat/(?:main|w\d+-int|int-[a-z][a-z0-9]*|c-[a-z][a-z0-9]*)")
 
 
 def resolve_branch(lanes: Lanes, branch: str):
@@ -309,7 +310,7 @@ def resolve_branch(lanes: Lanes, branch: str):
         if m.group(3) and base in lanes.lanes:
             return base
         raise ValueError(f"{branch}: lanes.yml 에 갈래 {lane} 가 없다")
-    raise ValueError(f"{branch}: 갈래로 풀리지 않는 xplat/ 브랜치(xplat/w<N>-<갈래> · xplat/w<N>-int · xplat/int-<x> · xplat/main 만)")
+    raise ValueError(f"{branch}: 갈래로 풀리지 않는 xplat/ 브랜치(xplat/w<N>-<갈래> · xplat/w<N>-int · xplat/int-<x> · xplat/c-<x> · xplat/main 만)")
 
 
 def load_lanes(path: str) -> Lanes:
@@ -536,6 +537,8 @@ def self_test(lanes_path: str) -> int:
         ("xplat/w0-f3", "W0-f"), ("xplat/w1-c2", "W1-c"), ("xplat/w3-c9", ValueError), ("xplat/w0-f3-x", ValueError),
         ("xplat/int-a", "coordinator"), ("xplat/int-b2", "coordinator"),
         ("xplat/int", ValueError), ("xplat/int-", ValueError), ("xplat/int-A", ValueError), ("xplat/int-a-fix", ValueError),
+        ("xplat/c-fold", "coordinator"), ("xplat/c-fold2", "coordinator"),
+        ("xplat/c", ValueError), ("xplat/c-", ValueError), ("xplat/c-Fold", ValueError), ("xplat/c-fold-x", ValueError), ("xplat/c-1", ValueError),
     ]
     for branch, expected in branch_cases:
         try:

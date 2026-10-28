@@ -279,6 +279,147 @@ class MeMissionClaimTest {
     }
 
     @Test
+    fun statusFetchThatLeftBeforeADailyClaimIsDroppedWhenItArrivesAfter() = runTest {
+        // Swift MeDailyMissionStoreTests.staleFetchAfterDailyClaimIsDropped — 일일 받기도 누적 받기와 **같은 도장**을 찍는다. 받기 응답에는 서버가
+        // 받기 전에 돌린 정산으로 체스 줄이 **새로 열려** 있다. 받기 전에 떠난 조회(체스 미달성)가 그 뒤에 와서 덮으면 받은 오목 줄은 merged 가
+        // 지키지만 **방금 열린 체스 [받기]가 사라진다** — 그 자리는 이 도장만 막는다.
+        val dailySettled = edit(dailyGomoku) { top ->
+            val daily = top.getValue("daily").jsonObject.toMutableMap()
+            daily["missions"] = JsonArray(daily.getValue("missions").jsonArray.map { m ->
+                val o = m.jsonObject
+                if (o.getValue("key").jsonPrimitive.content != "daily_chess") m
+                else JsonObject(o + mapOf("achieved" to JsonPrimitive(true), "progress" to JsonPrimitive(1)))
+            })
+            top["daily"] = JsonObject(daily)
+        }
+        val gate = CompletableDeferred<Unit>()
+        var statusCalls = 0
+        val h = MeHarness(this) { r ->
+            when (r.rpcName) {
+                "achievements_status" -> { statusCalls += 1; if (statusCalls == 1) MeReply.Json(status) else MeReply.Gate(gate, MeReply.Json(status)) }
+                "daily_mission_claim" -> MeReply.Json(dailySettled)
+                "shop_state" -> MeReply.Json(shop(125))
+                else -> null
+            }
+        }
+        h.signIn()
+        h.store.launch { h.store.loadAchievements() }
+        runCurrent()
+        assertEquals(listOf("daily_timing_bar", "daily_gomoku"), h.store.dailyMissionRows!!.filter { it.row.isClaimable }.map { it.key })
+
+        h.store.retryAchievements() // 받기 전에 떠난다(문에서 멈춘다)
+        runCurrent()
+        h.store.claimDailyMission("daily_gomoku")
+        runCurrent()
+        assertEquals(listOf("daily_timing_bar", "daily_chess"), h.store.dailyMissionRows!!.filter { it.row.isClaimable }.map { it.key },
+            "받기 응답: 오목은 받았고 체스가 새로 열렸다")
+        assertEquals(125L, h.ruby.rubyBalance)
+        gate.complete(Unit) // 받기 전의 서버를 말하는 답이 이제 온다
+        runCurrent()
+
+        val rows = h.store.dailyMissionRows!!
+        assertTrue(rows.first { it.key == "daily_gomoku" }.row.claimed, "받은 줄에 [받기]가 되살아나지 않는다")
+        assertTrue(rows.first { it.key == "daily_chess" }.row.isClaimable, "받기 전 조회가 방금 열린 일일 [받기]를 거두지 않는다")
+        assertEquals(2, h.store.dailyMissionClaimableCount)
+        assertEquals(125L, h.ruby.rubyBalance, "받기 전 조회의 잔량(120)으로 되돌리지 않는다")
+        assertEquals(5L, h.store.dailyClaimBurst("daily_gomoku")?.amount)
+        assertEquals(0, h.server.count("shop_state"), "잔량을 옮겼으니 상점을 다시 읽을 까닭이 없다")
+        assertEquals(2, statusCalls)
+        h.assertClean()
+    }
+
+    @Test
+    fun aDoubleTapIsOneRequestAndClaimAllInFlightHoldsSingleClaims() = runTest {
+        // Swift MeAchievementClaimTests.doubleTapSendsOneRequest — 같은 키는 한 번에 하나 · 전부 받기가 떠 있으면 낱개 줄도 기다린다(같은 행을 두
+        // 요청이 함께 잡지 않게). 그런데 누적 전부 받기는 **일일** 버튼을 막지 않는다(떠 있음도 두 벌 — MeDailyMissionStoreTests:391).
+        val single = CompletableDeferred<Unit>()
+        val all = CompletableDeferred<Unit>()
+        val h = MeHarness(this) { r ->
+            when (r.rpcName) {
+                "achievements_status" -> MeReply.Json(status)
+                "achievement_claim" -> if (bodyKey(r.bodyText) == "\"todo3\"") MeReply.Gate(single, MeReply.Json(claimTodo3)) else MeReply.Gate(all, MeReply.Json(claimAll))
+                "daily_mission_claim" -> MeReply.Json(dailyGomoku)
+                "shop_state" -> MeReply.Json(shop(200))
+                else -> null
+            }
+        }
+        h.signIn()
+        h.store.launch { h.store.loadAchievements() }
+        runCurrent()
+
+        h.store.claimAchievement("todo3")
+        runCurrent()
+        assertTrue(h.store.isClaimingAchievement("todo3"))
+        h.store.claimAchievement("todo3") // 연타
+        runCurrent()
+        single.complete(Unit)
+        runCurrent()
+        assertEquals(1, h.server.count("achievement_claim"), "연타로 요청이 두 번 나갔다(두 번 지급 시도)")
+        assertEquals(1, h.store.missionClaimBurstSerial)
+
+        h.store.claimAllAchievements()
+        runCurrent()
+        assertTrue(h.store.isClaimingAchievement("poke10"), "전부 받기가 떠 있는데 낱개 버튼이 살아 있다")
+        assertFalse(h.store.isClaimingDailyMission("daily_gomoku"), "누적 전부 받기가 일일 버튼까지 흐렸다")
+        h.store.claimAchievement("poke10") // 막힌다
+        h.store.claimDailyMission("daily_gomoku") // 막히지 않는다
+        runCurrent()
+        all.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("\"todo3\"", "null"), h.server.bodies("achievement_claim").map(::bodyKey), "전부 받기 중에 낱개가 또 나갔다")
+        assertEquals(1, h.server.count("daily_mission_claim"), "누적 전부 받기가 떠 있다고 일일 받기가 막혔다")
+        assertEquals(0, h.store.achievementClaimableCount)
+        assertEquals(emptySet(), h.store.achievementClaimsInFlight)
+        h.assertClean()
+    }
+
+    @Test
+    fun dailyClaimAllInFlightHoldsDailySinglesButNotTheCumulativeButton() = runTest {
+        // Swift MeDailyMissionStoreTests.inFlightIsCountedApartFromCumulative — 연타는 요청 하나 · 일일 전부 받기가 떠 있으면 일일 낱개도 기다린다 —
+        // 그런데 **누적 버튼은 그대로 살아 있다**.
+        val single = CompletableDeferred<Unit>()
+        val all = CompletableDeferred<Unit>()
+        val h = MeHarness(this) { r ->
+            when (r.rpcName) {
+                "achievements_status" -> MeReply.Json(status)
+                "daily_mission_claim" -> if (bodyKey(r.bodyText) == "\"daily_gomoku\"") MeReply.Gate(single, MeReply.Json(dailyGomoku))
+                    else MeReply.Gate(all, MeReply.Json(MeFixtures.fixture("_me/rpc.daily_mission_claim.json")))
+                "achievement_claim" -> MeReply.Json(claimTodo3)
+                "shop_state" -> MeReply.Json(shop(150))
+                else -> null
+            }
+        }
+        h.signIn()
+        h.store.launch { h.store.loadAchievements() }
+        runCurrent()
+
+        h.store.claimDailyMission("daily_gomoku")
+        runCurrent()
+        assertTrue(h.store.isClaimingDailyMission("daily_gomoku"))
+        assertFalse(h.store.isClaimingAchievement("todo3"), "일일 받기가 누적 버튼을 흐렸다")
+        h.store.claimDailyMission("daily_gomoku") // 연타
+        runCurrent()
+        single.complete(Unit)
+        runCurrent()
+        assertEquals(1, h.server.count("daily_mission_claim"), "연타로 요청이 두 번 나갔다(두 번 지급 시도)")
+
+        h.store.claimAllDailyMissions()
+        runCurrent()
+        assertTrue(h.store.isClaimingDailyMission("daily_timing_bar"), "일일 전부 받기가 떠 있는데 낱개 버튼이 살아 있다")
+        assertFalse(h.store.isClaimingAchievement("todo3"), "일일 전부 받기가 누적 버튼까지 흐렸다")
+        h.store.claimDailyMission("daily_timing_bar") // 막힌다
+        h.store.claimAchievement("todo3") // 막히지 않는다
+        runCurrent()
+        all.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("\"daily_gomoku\"", "null"), h.server.bodies("daily_mission_claim").map(::bodyKey), "전부 받기 중에 일일 낱개가 또 나갔다")
+        assertEquals(1, h.server.count("achievement_claim"), "일일 받기가 떠 있다고 누적 받기가 막혔다")
+        assertEquals(0, h.store.dailyMissionClaimableCount)
+        assertEquals(emptySet(), h.store.dailyMissionClaimsInFlight)
+        h.assertClean()
+    }
+
+    @Test
     fun rolledOverDayBlocksYesterdaysClaimAndAsksForTheNewDay() = runTest {
         val h = MeHarness(this) { r ->
             when (r.rpcName) {

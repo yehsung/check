@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Me/MeAILimitsStore.swift · Sources/CheckMobileShared/AILimitSurfaceRules.swift:28-42(AILimitGhostRow) · Sources/CheckMobileShared/WidgetSnapshot.swift:226-280(AILimitPanel · AILimitRow — 값 모양만) @ 1b8260d
+// 원본: Sources/CheckMobileKit/Me/MeAILimitsStore.swift · Sources/CheckMobileShared/AILimitSurfaceRules.swift:28-42(AILimitGhostRow) · Sources/CheckMobileShared/WidgetSnapshot.swift:176-211 · 224-273(AILimitRow · AILimitPanel — 값 모양만, 디코더 init(from:) 은 위젯 갈래 W2-f) @ 1b8260d
 package com.yehsung.aingcheck.core.stores.me
 
 import androidx.compose.runtime.getValue
@@ -95,7 +95,14 @@ data class AILimitDeviceDisplayGroup(val device: AILimitDevice, val nameParts: A
     val name: String get() = nameParts.combined
 }
 
-/** 위젯 패널에 싣는 제공자 한 줄(Swift `WidgetSnapshot.AILimitRow` — 날것 값과 절대 시각만; 하한·나이·투영은 위젯이 자기 칸 시각으로). */
+/**
+ * 위젯 패널에 싣는 제공자 한 줄(Swift `WidgetSnapshot.AILimitRow` — 날것 값과 절대 시각만; 하한·나이·투영은 위젯이 자기 칸 시각으로).
+ * INV-WidgetSnapshot-af897ec6 이식: 담는 것은 **절대 시각**뿐이다(resetsAt · observedAt) — "남은 초"처럼 매초 바뀌는 수를 실으면 위젯 쓰기(W2-f)의
+ *   중복 제거(같은 값이면 파일·새로고침을 건드리지 않는다)가 무력해져 60초마다 파일을 다시 쓰고 위젯 예산을 태운다. 남은 시간은 위젯이 투영한다.
+ * INV-WidgetSnapshot-c1b06494 이식: [provider] 는 **문자열**(서버 칸 값)이다 — 위젯 확장은 이 값 모양만 받고, 열거값으로 접는 것은 읽는 쪽이며
+ *   **모르는 값은 버린다**(지어내 claude 로 접으면 남의 사용률이 내 Claude 줄에 그려진다). 이 스토어는 AILimitProvider 로 이미 거른 줄만
+ *   rawValue 로 싣는다. 읽는 쪽(W2-f 위젯)의 버리기는 그 갈래가 따로 지킨다.
+ */
 data class MeAILimitWidgetRow(
     val provider: String,
     val fiveHourPercent: Double?,
@@ -107,13 +114,27 @@ data class MeAILimitWidgetRow(
 
 /** 지금 탭에 넘길 위젯 모양(Swift `WidgetSnapshot.AILimitPanel`). 직렬화 · 파일 쓰기는 위젯 갈래(W2-f)가 한다. */
 data class MeAILimitWidgetPanel(
-    /** 보일 제공자들 — **맥 한 대의 것**(메인 맥). 비어 있으면 위젯은 "앱을 열면 채워져요". */
+    /**
+     * 보일 제공자들 — **맥 한 대의 것**(메인 맥). 비어 있으면 위젯은 "앱을 열면 채워져요".
+     * INV-WidgetSnapshot-ec94c89f 이식: v0.3.47 부터 이 목록은 **맥 한 대의 것**이다(메인 맥 — 폰이 골라 싣는다). "제공자당 가장 최신 행"으로
+     *   섞으면 맥 A 에서 끈 제공자가 맥 B 의 더 새로운 행에 밀려 **되살아난다**(근거: [AILimitsStore.widgetPanel] 이 메인 맥 묶음에서만 만든다).
+     */
     val providers: List<MeAILimitWidgetRow>,
-    /** 이 목록이 어느 맥의 것인가. null = 맥이 한 대뿐(이름을 적지 않는다). 겹침 꼬리까지 붙은 합친 글자. */
+    /**
+     * 이 목록이 어느 맥의 것인가. null = 맥이 한 대뿐(이름을 적지 않는다). 겹침 꼬리까지 붙은 합친 글자.
+     * INV-WidgetSnapshot-9401d735 이식: 이름은 **폰이 정한다**(AILimitDeviceRoster 의 displayNameParts) — 같은 이름이 둘이면 꼬리가 붙은 값이
+     *   이미 들어 있다. 위젯은 받은 글자를 그대로 적는다(가르는 규칙이 두 벌이면 폰 카드와 위젯이 같은 맥을 다른 이름으로 부른다).
+     * INV-WidgetSnapshot-281daaa3 이식: 이 칸은 **합친 한 글자**(`Mac mini (A1B2)`)다 — 소리(보이스오버)와 옛 위젯이 읽는 값이라 그대로 둔다.
+     *   그리는 쪽은 꼬리를 따로 세워야 하므로 꼬리만 [deviceNameTail] 에 한 번 더 싣는다.
+     */
     val deviceName: String? = null,
     /** 이름에 붙은 겹침 꼬리(괄호 없이). 위젯이 꼬리를 말줄임에 내주지 않게 따로 싣는다. */
     val deviceNameTail: String? = null,
-    /** 오늘(KST) 쓴 AI 토큰 — **계정 전체**(합산 유지). null = 모른다(0 은 거짓이다). */
+    /**
+     * 오늘(KST) 쓴 AI 토큰 — **계정 전체**(합산 유지). null = 모른다(0 은 거짓이다).
+     * INV-WidgetSnapshot-24b9211f 이식: 토큰은 **합산 유지**다(2026-10-08 사용자 결정) — 리밋만 메인 맥을 따른다. 그래서 이 칸은 [deviceName] 이
+     *   가리키는 맥의 것이 아니라 **계정 전체**의 수다(순위표와 같은 장부 — [AILimitsStore.phoneTokenTotals]).
+     */
     val todayTokens: Long? = null,
     /** 최근 12주 합. */
     val recentTokens: Long? = null,

@@ -141,7 +141,8 @@ class MeStore(
      *   내려 준다 — 그림이 없는 빌드는 모르는 id 를 아잉으로 접어 "아잉을 또 파네"가 되고, 사면 루비만 빠진다. 그래서 번들에 실제로
      *   실린 초상([DrawableCharacterSource] — Android 는 APK 초상 파일 목록)이 답이다. 초상이 들어오는 날 번호가 저절로 오른다.
      *
-     * 시험 이음새: 가짜 명단을 꽂아 `loadShop`·`confirmPurchase` 의 진짜 경로를 양쪽 분기로 돌린다. 한 번 읽으면 실행 동안 같다(번들은 바뀌지 않는다).
+     * 시험 이음새: 가짜 명단을 꽂아 `loadShop`·`confirmPurchase` 의 진짜 경로를 양쪽 분기로 돌린다. 한 번 읽으면 실행 동안 같다(번들은 바뀌지 않는다)
+     * — 빈 집합(읽기 실패)만은 쥐지 않고 다음 호출에서 다시 읽는다([drawableCharacterIDs]).
      */
     var drawableCharacters: DrawableCharacterSource = drawableCharacters
         set(value) {
@@ -687,11 +688,15 @@ class MeStore(
     /** 스토어의 일로 띄운다(Swift `launch` — `reset()` 이 끊는다). */
     internal fun launch(body: suspend () -> Unit): Job = scope.launch { body() }
 
-    /** 상점 능력 번호(K9 — [drawableCharacters] 에서 파생, 한 번 읽으면 실행 동안 같다). */
+    /**
+     * 상점 능력 번호(K9 — [drawableCharacters] 에서 파생). 읽은 집합은 실행 동안 같다(번들은 바뀌지 않는다) — 단 **빈 집합은 쥐지 않는다**.
+     * Android 는 APK 안 초상 목록 파일을 읽는데, 그 읽기가 한 번 실패하면 빈 집합(번호 0 — 뽑기·케이크 선물이 숨는다)이 온다. Swift 는 번들
+     * 목록이 정적이라 이런 실패가 없으니, 일시적 실패를 실행 내내 굳히지 않게 다음 호출에서 다시 읽는다(초상이 하나도 없는 번들은 없다).
+     */
     internal suspend fun drawableCharacterIDs(): Set<String> {
         resolvedDrawable?.let { return it }
         val ids = drawableCharacters.drawableCharacterIDs()
-        resolvedDrawable = ids
+        if (ids.isNotEmpty()) resolvedDrawable = ids
         return ids
     }
 

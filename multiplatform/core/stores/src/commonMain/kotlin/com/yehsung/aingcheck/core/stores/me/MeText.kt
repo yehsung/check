@@ -683,6 +683,13 @@ object MeText {
 
     const val pushPrefsUnknown = "알림 종류 설정을 아직 못 읽었어요 — 잠시 뒤 다시 열어 주세요"
     const val openSystemSettings = "설정 앱에서 켜기"
+
+    /**
+     * 화면 모드 절의 머리만 여기 둔다. 나머지 — Swift `MeText.swift:850-866`(appearanceWidgetNote · appearanceTitle 시스템/라이트/다크 ·
+     * appearanceSymbol)와 `MeStoreSettings.swift:164-172`(appearanceMode · selectAppearance — 기기 설정, reset 이 안 건드리고 서버 요청 없음) —
+     * 는 ui 의 `AingAppearanceMode` 에 기대므로(의존 방향 ui → core:stores) **W3-b(설정 화면)가 ui 쪽에 옮긴다**. 위젯 안내의 "아이폰 설정"은
+     * Android 글자로 다시 정한다.
+     */
     const val appearanceSection = "화면 모드"
     const val teamSection = "팀"
     const val inviteCodeTitle = "팀 코드"

@@ -67,6 +67,27 @@ class MeCakeGiftShopTest {
         }
     }
 
+    @Test
+    fun aFailedFirstReadOfTheDrawableSetIsNotHeldForTheRestOfTheRun() = runTest {
+        // Android 는 APK 안 초상 목록 파일을 읽는다 — 그 읽기가 한 번 실패하면 빈 집합(번호 0)이 온다. 그것을 쥐면 그 실행 내내 뽑기·케이크 선물이
+        // 숨는다(Swift 번들 목록은 정적이라 이 실패가 없다). 빈 집합은 다음 호출에서 다시 읽고, 읽은 집합은 쥔다(번들은 바뀌지 않는다).
+        var reads = 0
+        val h = MeHarness(this) { r -> if (r.rpcName == "shop_state") MeReply.Json(shop()) else null }
+        h.store.drawableCharacters = DrawableCharacterSource {
+            reads += 1
+            if (reads == 1) emptySet() else MeFixtures.allPortraits
+        }
+        h.signIn()
+        repeat(3) {
+            h.store.launch { h.store.loadShop() }
+            advanceUntilIdle()
+        }
+        assertEquals(listOf(null, 4L, 4L), h.server.bodies("shop_state").map(::protocolOf),
+            "한 번 실패한 읽기(빈 집합 → 키 생략)가 실행 내내 굳지 않는다")
+        assertEquals(2, reads, "읽어 낸 집합은 쥔다 — 빈 집합만 다시 읽는다")
+        h.assertClean()
+    }
+
     // 케이크 선물 고르기
 
     @Test

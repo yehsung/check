@@ -120,6 +120,14 @@ class ScreenSnapshotDesktopTest {
         )
     }
 
+    /** 알림 설명 시트(종 든 아잉 · 종류 다섯 · 아래 막대). 기준선 = 권한 창이 떠 있는 동안(두 단추가 잠긴다). */
+    @Test
+    fun notificationPrimerLight() = check(
+        "screens/settingscommon", "notification-primer-light", PRIMER_H,
+        scene(false, PRIMER_H) { NotificationPrimerScene(PrimerFixture.content(), requesting = false, it) },
+        scene(false, PRIMER_H) { NotificationPrimerScene(PrimerFixture.content(), requesting = true, it) },
+    )
+
     @Test fun rankingsLeagueLight() = rankingsLeague(false)
     @Test fun rankingsLeagueDark() = rankingsLeague(true)
     @Test fun meHomeLight() = meHome(false)
@@ -176,5 +184,6 @@ class ScreenSnapshotDesktopTest {
         const val PROFILE_H = 940
         const val FEEDBACK_H = 1000
         const val BLOCKED_H = 300
+        const val PRIMER_H = 820
     }
 }

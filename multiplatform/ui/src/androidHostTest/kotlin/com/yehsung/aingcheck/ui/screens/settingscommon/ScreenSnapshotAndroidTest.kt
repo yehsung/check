@@ -180,6 +180,14 @@ class ScreenSnapshotAndroidTest {
         check("screens/settingscommon", "blocked-people-dark", BLOCKED_H, scene(true, BLOCKED_H) { BlockedPeopleScene(two, it) }, scene(true, BLOCKED_H) { BlockedPeopleScene(one, it) })
     }
 
+    /** 알림 설명 시트(다크). 기준선 = 권한 창이 떠 있는 동안. */
+    @Test
+    fun notificationPrimerDark() = check(
+        "screens/settingscommon", "notification-primer-dark", PRIMER_H,
+        scene(true, PRIMER_H) { NotificationPrimerScene(PrimerFixture.content(), requesting = false, it) },
+        scene(true, PRIMER_H) { NotificationPrimerScene(PrimerFixture.content(), requesting = true, it) },
+    )
+
     @OptIn(ExperimentalTestApi::class)
     private fun render(content: @Composable () -> Unit): PixelImage {
         var out: PixelImage? = null
@@ -242,5 +250,6 @@ class ScreenSnapshotAndroidTest {
         const val PROFILE_H = 940
         const val FEEDBACK_H = 1000
         const val BLOCKED_H = 300
+        const val PRIMER_H = 820
     }
 }

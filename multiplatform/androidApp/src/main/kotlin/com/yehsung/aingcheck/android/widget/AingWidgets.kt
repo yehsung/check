@@ -229,7 +229,7 @@ private fun Head(title: String, active: Boolean) {
 @Composable
 private fun SignedOutContent(hint: String?) {
     Column(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalAlignment = Alignment.Start) {
-        Text(AingWidgetDefaults.signedOut, style = style(15, FontWeight.Bold), maxLines = 2)
+        Text(AingWidgetText.signedOut, style = style(15, FontWeight.Bold), maxLines = 2)
         if (hint != null) {
             Spacer(GlanceModifier.height(4.dp))
             Text(hint, style = style(12, color = WidgetInk.secondary), maxLines = 2)
@@ -250,11 +250,11 @@ private fun WorkingNowContent(face: WorkingNowFace) {
 @Composable
 private fun WorkingSmall(face: WorkingNowFace.People) {
     Column(GlanceModifier.fillMaxSize()) {
-        Head(AingWidgetDefaults.workingTitle, face.total > 0)
+        Head(AingWidgetText.workingTitle, face.total > 0)
         Spacer(GlanceModifier.height(6.dp))
-        Text(AingWidgetDefaults.people(face.total), style = style(34, FontWeight.Bold), maxLines = 1)
+        Text(AingWidgetText.people(face.total), style = style(34, FontWeight.Bold), maxLines = 1)
         if (face.total == 0) {
-            Text(AingWidgetDefaults.workingEmpty, style = style(12, color = WidgetInk.secondary), maxLines = 2)
+            Text(AingWidgetText.workingEmpty, style = style(12, color = WidgetInk.secondary), maxLines = 2)
         } else {
             Spacer(GlanceModifier.height(6.dp))
             Text(face.namesLine, style = style(13, FontWeight.Medium), maxLines = 1)
@@ -271,11 +271,11 @@ private fun WorkingSmall(face: WorkingNowFace.People) {
 private fun WorkingMedium(face: WorkingNowFace.People) {
     Row(GlanceModifier.fillMaxSize()) {
         Column(GlanceModifier.width(84.dp)) {
-            Head(AingWidgetDefaults.workingShortTitle, face.total > 0)
+            Head(AingWidgetText.workingShortTitle, face.total > 0)
             Spacer(GlanceModifier.height(6.dp))
-            Text(AingWidgetDefaults.people(face.total), style = style(34, FontWeight.Bold), maxLines = 1)
-            if (face.teammateCount > 0) Text(AingWidgetDefaults.teammates(face.teammateCount), style = style(12, color = WidgetInk.secondary), maxLines = 1)
-            if (face.otherCount > 0) Text(AingWidgetDefaults.otherTeams(face.otherCount), style = style(12, color = WidgetInk.secondary), maxLines = 1)
+            Text(AingWidgetText.people(face.total), style = style(34, FontWeight.Bold), maxLines = 1)
+            if (face.teammateCount > 0) Text(AingWidgetText.teammates(face.teammateCount), style = style(12, color = WidgetInk.secondary), maxLines = 1)
+            if (face.otherCount > 0) Text(AingWidgetText.otherTeams(face.otherCount), style = style(12, color = WidgetInk.secondary), maxLines = 1)
             Spacer(GlanceModifier.defaultWeight())
             Text(face.ago, style = style(11, color = WidgetInk.secondary), maxLines = 1)
         }
@@ -284,8 +284,8 @@ private fun WorkingMedium(face: WorkingNowFace.People) {
         Spacer(GlanceModifier.width(14.dp))
         if (face.total == 0) {
             Column(GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
-                Text(AingWidgetDefaults.workingEmptyTitle, style = style(14, FontWeight.Bold), maxLines = 1)
-                Text(AingWidgetDefaults.workingEmptyHint, style = style(12, color = WidgetInk.secondary), maxLines = 2)
+                Text(AingWidgetText.workingEmptyTitle, style = style(14, FontWeight.Bold), maxLines = 1)
+                Text(AingWidgetText.workingEmptyHint, style = style(12, color = WidgetInk.secondary), maxLines = 2)
             }
         } else {
             WorkingGrid(face.shown, GlanceModifier.defaultWeight())
@@ -367,17 +367,17 @@ private fun TodosContent(face: TodosFace) {
             val large = AingWidgetSizes.isLarge(LocalSize.current)
             if (face.rows.isEmpty()) {
                 Column(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (large) AingWidgetDefaults.todoEmptyLarge else AingWidgetDefaults.todoEmpty, style = style(15, FontWeight.Bold), maxLines = 2)
-                    if (!large) Text(AingWidgetDefaults.todoEmptyHint, style = style(12, color = WidgetInk.secondary), maxLines = 1)
+                    Text(if (large) AingWidgetText.todoEmptyLarge else AingWidgetText.todoEmpty, style = style(15, FontWeight.Bold), maxLines = 2)
+                    if (!large) Text(AingWidgetText.todoEmptyHint, style = style(12, color = WidgetInk.secondary), maxLines = 1)
                 }
             } else {
                 Column(GlanceModifier.fillMaxSize()) {
                     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(GlanceModifier.defaultWeight()) {
-                            Text(AingWidgetDefaults.todoTitle, style = style(if (large) 17 else 15, FontWeight.Bold), maxLines = 1)
+                            Text(AingWidgetText.todoTitle, style = style(if (large) 17 else 15, FontWeight.Bold), maxLines = 1)
                             if (large) Text(face.largeSubtitle, style = style(12, color = WidgetInk.secondary), maxLines = 1)
                         }
-                        Text(if (large) AingWidgetDefaults.todoRemaining(face.remaining) else face.mediumTrailing, style = style(12, color = WidgetInk.secondary), maxLines = 1)
+                        Text(if (large) AingWidgetText.todoRemaining(face.remaining) else face.mediumTrailing, style = style(12, color = WidgetInk.secondary), maxLines = 1)
                     }
                     Spacer(GlanceModifier.height(4.dp))
                     val limit = if (large) TodoRowLimits.LARGE else TodoRowLimits.MEDIUM
@@ -386,7 +386,7 @@ private fun TodosContent(face: TodosFace) {
                         Spacer(GlanceModifier.defaultWeight())
                         Row(GlanceModifier.fillMaxWidth()) {
                             Text(face.largeFooter, style = style(11, color = WidgetInk.secondary), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-                            Text("+ ${AingWidgetDefaults.todoAddInApp}", style = style(11, FontWeight.Medium, WidgetInk.accent), maxLines = 1)
+                            Text("+ ${AingWidgetText.todoAddInApp}", style = style(11, FontWeight.Medium, WidgetInk.accent), maxLines = 1)
                         }
                     }
                 }
@@ -433,7 +433,7 @@ object TodoRowLimits {
     const val LARGE_HEIGHT = 46
 
     /** 줄 하나의 소리: 할 일 제목 + 무엇을 하는 단추인지(완료로 표시 · 완료 취소). */
-    fun spoken(row: TodoRowFace): String = "${row.title}, ${if (row.isCompleted) AingWidgetDefaults.todoMarkUndone else AingWidgetDefaults.todoMarkDone}"
+    fun spoken(row: TodoRowFace): String = "${row.title}, ${if (row.isCompleted) AingWidgetText.todoMarkUndone else AingWidgetText.todoMarkDone}"
 }
 
 // ---------------------------------------------------------------- AI 리밋
@@ -443,26 +443,45 @@ private fun AILimitsContent(face: AILimitsFace) {
     when (face) {
         is AILimitsFace.SignedOut -> SignedOutContent(face.hint)
         is AILimitsFace.Message -> Column(GlanceModifier.fillMaxSize()) {
-            Text(AingWidgetDefaults.limitsTitle, style = style(13, FontWeight.Bold), maxLines = 1)
+            Text(AingWidgetText.limitsTitle, style = style(13, FontWeight.Bold), maxLines = 1)
             Spacer(GlanceModifier.defaultWeight())
             Text(face.text, style = style(13, color = WidgetInk.secondary), maxLines = 3)
             Spacer(GlanceModifier.defaultWeight())
         }
         is AILimitsFace.Limits -> Column(GlanceModifier.fillMaxSize()) {
+            // 머리 줄(Swift AingWidgetLimitsHeaderLine): [AI 리밋] [· 이름 (꼬리)] ……… [관측 나이]. 나이는 줄지 않는다(낡음을 알리는 글자).
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(AingWidgetDefaults.limitsTitle, style = style(13, FontWeight.Bold), maxLines = 1)
-                if (face.deviceName != null) {
+                Text(AingWidgetText.limitsTitle, style = style(13, FontWeight.Bold), maxLines = 1)
+                val device = LimitsHeaderLine.deviceText(face.deviceName, face.deviceTail)
+                if (device != null) {
                     Spacer(GlanceModifier.width(4.dp))
-                    Text(face.deviceName, style = style(12, color = WidgetInk.secondary), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                    Text(
+                        device,
+                        style = style(11, color = WidgetInk.secondary),
+                        maxLines = 1,
+                        modifier = GlanceModifier.defaultWeight().semantics { contentDescription = face.deviceSpoken ?: device },
+                    )
                 } else {
                     Spacer(GlanceModifier.defaultWeight())
                 }
-                Text(AingWidgetDefaults.limitsFiveHour, style = style(11, FontWeight.Medium, WidgetInk.accent), maxLines = 1)
-                Spacer(GlanceModifier.width(10.dp))
-                Text(AingWidgetDefaults.limitsWeekly, style = style(11, FontWeight.Medium, WidgetInk.aiToken), maxLines = 1)
+                if (face.ago != null) {
+                    Spacer(GlanceModifier.width(6.dp))
+                    Text(face.ago, style = style(11, color = WidgetInk.secondary), maxLines = 1)
+                }
             }
             Spacer(GlanceModifier.height(6.dp))
-            face.rows.take(3).forEach { row ->
+            // 열 머리(한 번만 — 칸의 자리가 창을 말한다). 값 칸과 같은 폭으로 오른쪽 끝을 맞춘다.
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(GlanceModifier.defaultWeight())
+                Box(GlanceModifier.width(62.dp), contentAlignment = Alignment.CenterEnd) {
+                    Text(AingWidgetText.limitsFiveHour, style = style(11, FontWeight.Medium, WidgetInk.accent), maxLines = 1)
+                }
+                Spacer(GlanceModifier.width(10.dp))
+                Box(GlanceModifier.width(62.dp), contentAlignment = Alignment.CenterEnd) {
+                    Text(AingWidgetText.limitsWeekly, style = style(11, FontWeight.Medium, WidgetInk.aiToken), maxLines = 1)
+                }
+            }
+            face.rows.take(AingWidgetLayout.LIMIT_ROWS_MEDIUM).forEach { row ->
                 Row(GlanceModifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(row.providerName, style = style(13, FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.defaultWeight())
                     LimitValue(row.fiveHourText, row.fiveHourPercent)
@@ -471,16 +490,30 @@ private fun AILimitsContent(face: AILimitsFace) {
                 }
             }
             Spacer(GlanceModifier.defaultWeight())
-            if (face.tokenToday != null || face.ago != null) {
-                Row(GlanceModifier.fillMaxWidth()) {
-                    Text(
-                        listOfNotNull(face.tokenToday?.let { "${AingWidgetDefaults.limitsTokenToday} $it" }, face.tokenRecent?.let { "${AingWidgetDefaults.limitsTokenRecent} $it" }).joinToString(" · "),
-                        style = style(11, color = WidgetInk.secondary), maxLines = 1, modifier = GlanceModifier.defaultWeight(),
-                    )
-                    Text(face.ago ?: "", style = style(11, color = WidgetInk.secondary), maxLines = 1)
-                }
+            // 토큰 줄(계정 전체 합 — 리밋과 다른 축). 모르면 줄을 만들지 않는다(0 은 "안 썼다"는 거짓이다).
+            if (face.tokenToday != null) {
+                Text(
+                    listOfNotNull("${AingWidgetText.limitsTokenToday} ${face.tokenToday}", face.tokenRecent?.let { "${AingWidgetText.limitsTokenRecent} $it" }).joinToString(" · "),
+                    style = style(11, color = WidgetInk.secondary),
+                    maxLines = 1,
+                )
             }
         }
+    }
+}
+
+/**
+ * 리밋 머리의 맥 이름 한 줄. RemoteViews 에는 "이름은 줄이고 꼬리는 지킨다"(Swift layoutPriority · fixedSize)를 말할 수단이 없어 **글자 단계에서**
+ * 지킨다: 이름이 [MAX_NAME] 글자(코드 포인트)를 넘으면 그 안에서 말줄임하고 꼬리를 그 뒤에 붙인다 — 두 쌍둥이를 가르는 꼬리가 말줄임에 먹히지 않는다.
+ */
+object LimitsHeaderLine {
+    const val MAX_NAME = 16
+
+    fun deviceText(name: String?, tail: String?): String? {
+        val visible = name ?: return null
+        val points = visible.codePoints().toArray()
+        val clipped = if (points.size <= MAX_NAME) visible else String(points, 0, MAX_NAME - 1) + "…"
+        return if (tail != null) "$clipped $tail" else clipped
     }
 }
 

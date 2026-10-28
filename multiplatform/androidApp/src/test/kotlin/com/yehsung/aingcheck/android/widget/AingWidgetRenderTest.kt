@@ -66,6 +66,7 @@ class AingWidgetRenderTest {
     @After
     fun reset() {
         AingWidgetRuntime.faces = AingWidgetFaces.SignedOut
+        AingWidgetRuntime.nowMillis = { System.currentTimeMillis() }
     }
 
     private fun render(widget: GlanceAppWidget, size: DpSize, name: String): View = runBlocking {
@@ -96,11 +97,11 @@ class AingWidgetRenderTest {
         AingWidgetRuntime.faces = AingWidgetFaces.SignedOut
         val view = render(WorkingNowWidget(), AingWidgetSizes.small, "working-now-signed-out")
         val t = texts(view)
-        assertTrue(t.toString(), t.contains(AingWidgetDefaults.signedOut))
-        assertTrue(t.toString(), t.contains(AingWidgetDefaults.signedOutWorkingHint))
-        assertTrue(texts(render(TodosWidget(), AingWidgetSizes.medium, "todos-signed-out")).contains(AingWidgetDefaults.signedOutTodoHint))
-        assertTrue(texts(render(AILimitsWidget(), AingWidgetSizes.medium, "ai-limits-signed-out")).contains(AingWidgetDefaults.limitsSignedOutHint))
-        assertTrue(texts(render(MyTodayWidget(), AingWidgetSizes.small, "my-today-signed-out")).contains(AingWidgetDefaults.signedOut))
+        assertTrue(t.toString(), t.contains(AingWidgetText.signedOut))
+        assertTrue(t.toString(), t.contains(AingWidgetText.signedOutWorkingHint))
+        assertTrue(texts(render(TodosWidget(), AingWidgetSizes.medium, "todos-signed-out")).contains(AingWidgetText.signedOutTodoHint))
+        assertTrue(texts(render(AILimitsWidget(), AingWidgetSizes.medium, "ai-limits-signed-out")).contains(AingWidgetText.limitsSignedOutHint))
+        assertTrue(texts(render(MyTodayWidget(), AingWidgetSizes.small, "my-today-signed-out")).contains(AingWidgetText.signedOut))
     }
 
     @Test
@@ -119,6 +120,63 @@ class AingWidgetRenderTest {
         val limits = texts(render(AILimitsWidget(), AingWidgetSizes.medium, "ai-limits"))
         assertTrue(limits.toString(), limits.containsAll(listOf("AI 리밋", "5시간", "주간", "Claude", "27%", "94%", "없음")))
         assertFalse("맥이 한 대면 기기 이름 꼬리를 만들지 않는다", limits.any { it.startsWith("·") })
+    }
+
+    /**
+     * 스냅숏 → 값 계산(AingWidgetModel) → 얼굴 → Glance 까지 한 줄로(Swift AingWidgetSamples 장면 · 데모 시각 고정). 이름이 겹친 맥은 머리에
+     * 이름과 꼬리가 따로 선다. 기준선(다른 입력): 같은 장면을 로그아웃(스냅숏 없음)으로 그리면 그 값이 하나도 서지 않는다.
+     */
+    @Test
+    fun snapshotModelRendersEndToEnd() {
+        val now = com.yehsung.aingcheck.core.session.app.SessionClock.demoInstant
+        fun at(offset: Double) = now.addingTimeInterval(offset)
+        val input = AingWidgetInput(
+            generatedAt = at(-120.0),
+            me = AingWidgetInput.Me(true, at(-13_620.0), 18_480, 89_280, 40, AingWidgetInput.WorkState.working),
+            working = listOf(
+                AingWidgetInput.Person("민트", "seoul", true, at(-15_000.0), "shiba"),
+                AingWidgetInput.Person("보리", "busan", true, at(-10_320.0), "aing"),
+                AingWidgetInput.Person("라임", "seoul", true, at(-5_700.0), "jellyfish"),
+                AingWidgetInput.Person("모래", "seoul", false, null, "ghost"),
+                AingWidgetInput.Person("코랄", "busan", false, null, "squirrel"),
+                AingWidgetInput.Person("하늘", null, false, null),
+            ),
+            todosPreview = listOf(
+                AingWidgetInput.Todo("5A0F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C11", "디자인 리뷰 피드백 반영하기", false, 0),
+                AingWidgetInput.Todo("6B1F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C12", "주간 회고 초안 쓰기", false, 1),
+                AingWidgetInput.Todo("7C2F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C13", "팀 회의 안건 정리", false, 3),
+                AingWidgetInput.Todo("8D3F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C14", "점심 전에 PR 올리기", true, 0),
+                AingWidgetInput.Todo("9E4F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C15", "온보딩 문서 링크 모으기", false, 9),
+            ),
+            characterID = "fox",
+            aiLimits = com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetPanel(
+                providers = listOf(
+                    com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetRow("claude", 27.0, at(9_300.0), 60.0, at(450_000.0), at(-120.0)),
+                    com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetRow("codex", 0.0, null, 56.0, at(352_000.0), at(-300.0)),
+                    com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetRow("antigravity", null, null, 8.0, at(540_000.0), at(-600.0)),
+                ),
+                deviceName = "Mac mini (A1B2)",
+                deviceNameTail = "A1B2",
+                todayTokens = 12_345_678,
+                recentTokens = 19_658_964_272,
+            ),
+        )
+        AingWidgetRuntime.nowMillis = { (now.timeIntervalSince1970 * 1000).toLong() }
+        AingWidgetRuntime.faces = AingWidgetSnapshotFaces { input }
+        val small = texts(render(WorkingNowWidget(), AingWidgetSizes.small, "snapshot-working-now-small"))
+        assertTrue(small.toString(), small.containsAll(listOf("6명", "민트 · 보리 · 라임", "우리 팀 3 · 외 3명", "2분 전")))
+        val medium = texts(render(WorkingNowWidget(), AingWidgetSizes.medium, "snapshot-working-now-medium"))
+        assertTrue(medium.toString(), medium.containsAll(listOf("우리 팀 3", "다른 팀 3", "4:10", "부산")))
+        val today = texts(render(MyTodayWidget(), AingWidgetSizes.small, "snapshot-my-today"))
+        assertTrue(today.toString(), today.containsAll(listOf("근무 중", "5:10:00", "이번 주 24.8/40시간", "62%")))
+        val todos = texts(render(TodosWidget(), AingWidgetSizes.large, "snapshot-todos-large"))
+        assertTrue(todos.toString(), todos.containsAll(listOf("9월 17일 목 · 5개 중 1개 완료", "어제", "3일 전", "9일 전", "2분 전")))
+        val limits = texts(render(AILimitsWidget(), AingWidgetSizes.medium, "snapshot-ai-limits"))
+        assertTrue(limits.toString(), limits.containsAll(listOf("· Mac mini (A1B2)", "10분 전", "Claude", "27%", "0%", "56%", "없음", "8%")))
+
+        AingWidgetRuntime.faces = AingWidgetSnapshotFaces { null }
+        val signedOut = texts(render(WorkingNowWidget(), AingWidgetSizes.medium, "snapshot-working-now-signed-out"))
+        assertFalse("로그아웃인데 스냅숏 값을 그렸다: $signedOut", signedOut.any { it == "민트" || it == "6명" })
     }
 
     /** 사람 칸 배치(열 먼저 · 6칸 상한)와 할 일 줄 소리. */

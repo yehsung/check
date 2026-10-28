@@ -294,3 +294,27 @@ fun FeedbackScene(store: MeStore, modifier: Modifier) {
 fun BlockedPeopleScene(store: com.yehsung.aingcheck.core.stores.messages.MessagesStore, modifier: Modifier) {
     BlockedPeopleScreen(store, modifier, scrollable = false)
 }
+
+/** 설명 시트 장면 내용(시험 픽스처 — iOS PushText · PushKind 와 같은 글자. 화면 상수는 조립이 W2-f 에서 넘긴다). */
+object PrimerFixture {
+    fun content(withChess: Boolean = true) = NotificationPrimerContent(
+        title = "알림을 켜 둘까요?",
+        body = "앱을 닫아 두어도 이런 소식을 바로 알려 드려요.",
+        macNote = "맥에서 근무 중이고 방금 입력이 있었다면 메시지·오목 신청 알림은 폰에 보내지 않아요.",
+        settingsNote = "종류별로 끄는 것은 나 탭 설정에서 할 수 있어요.",
+        allow = "알림 켜기",
+        later = "나중에",
+        kinds = listOfNotNull(
+            NotificationPrimerContent.Kind("message", "메시지", "누가 나에게 메시지를 보내면"),
+            NotificationPrimerContent.Kind("gomoku_invite", "오목 신청", "누가 오목 대결을 신청하면"),
+            if (withChess) NotificationPrimerContent.Kind("chess_invite", "체스 신청", "누가 체스 대결을 신청하면") else null,
+            NotificationPrimerContent.Kind("feedback_reply", "제보 답장", "보낸 제보에 답장이 오면"),
+            NotificationPrimerContent.Kind("work_check", "근무 확인", "폰으로 연 근무를 오래 확인하지 않으면"),
+        ),
+    )
+}
+
+@Composable
+fun NotificationPrimerScene(content: NotificationPrimerContent, requesting: Boolean, modifier: Modifier) {
+    NotificationPrimerSheet(content, isRequesting = requesting, onAllow = {}, onLater = {}, modifier = modifier)
+}

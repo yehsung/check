@@ -176,7 +176,7 @@ fun GrassDetailScreen(store: MeStore, initialAxis: MeGrassAxis, scope: Coroutine
     var selectedWindow by rememberSaveable { mutableStateOf(work.weekStart) }
     // 낡은 선택 가드: 주가 넘어가면 같은 (주, 요일)이 다른 날을 가리킨다 — 창이 바뀌면 오늘로 다시 고른다(저장 상태로 복원된 같은 창은 그대로).
     LaunchedEffect(work.weekStart, work.days) {
-        if (selectedWindow == work.weekStart && selWeek >= 0) return@LaunchedEffect
+        if (selectedWindow == work.weekStart && selWeek in 0 until work.weeks) return@LaunchedEffect
         val latest = GrassDetailRules.latest(work.weeks, work.days)
         selWeek = latest?.week ?: -1
         selDay = latest?.weekday ?: -1
@@ -236,7 +236,8 @@ fun GrassDetailScreen(store: MeStore, initialAxis: MeGrassAxis, scope: Coroutine
                 AingIcon(AppIcon.ChevronLeft, contentDescription = MeText.grassStepBack, tint = if (back != null) colors.accent else colors.label3)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (selection != null && phase == MeRecordsPhase.Ready && work.weekStart.isFinite()) {
+                // 저장 상태로 돌아온 칸이 지금 창 밖이면(창이 줄었다) 값을 말하지 않는다 — 다음 프레임에 오늘로 다시 고른다.
+                if (selection != null && phase == MeRecordsPhase.Ready && work.weekStart.isFinite() && selection.week < work.weeks && selection.week < work.seconds.size) {
                     Text(MeText.grassDetailDate(SwiftDate(work.weekStart), selection.week, selection.weekday), style = MaterialTheme.typography.labelMedium, color = colors.label2)
                     // 값 줄은 구절 단위로 접는다(근무 · AI 토큰) — 글자 단위로 접으면 "토/큰"처럼 낱말이 갈린다.
                     val parts = GrassDetailRules.valueParts(work.seconds[selection.week][selection.weekday], if (tokenUsable) token.tokens[selection.week][selection.weekday] else 0L, tokenUsable)

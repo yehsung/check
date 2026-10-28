@@ -73,6 +73,13 @@
 #       5. stop(손님 sync 먼저) → 봉인·-read-only 로 다시 띄워 sealcheck → 같은 확인('안녕') → stop → avd-protect --avd NAME
 #     다시 준비하려면 보호된 AVD 를 avd-clone 해 새 이름으로 준비한다(사본에는 보호 표식이 없다).
 #
+# 바깥망 실험(W0-f ⑤ FCM 토큰 · 2026-10-28 · G §8-8 — 개발 Firebase 프로젝트에서만)
+#   봉인 게이트와 따로 돈다: start --no-seal(전용 netsim 발견 폴더라 자기 netsimd 의 Wi-Fi 로 나간다) · 기본 -read-only(토큰을 든
+#   앱·GMS 자료는 끄면 버려진다) · 갈래 포트. 계정 로그인은 하지 않는다(dumpsys account 의 'Accounts: 0' 을 앞뒤로 본다).
+#   API 36 = 공용 aingcheck-api36(Play 이미지). API 35 Play 는 공용 AVD 가 없어 갈래 스크래치에 AVD 를 만들고(aingcheck-api36 의
+#   config.ini 에서 image.sysdir.1·target 만 바꾼 사본) ANDROID_AVD_HOME=<스크래치>/avd 로 띄운다(판정·실행이 같은 폴더를 본다).
+#   측정기·결과·다시 재는 법은 contract/measurements/w0f-fcm/README.md(조정자 패치). 토큰 원문은 기기 밖으로 내지 않는다.
+#
 # 환경
 #   ANDROID_SDK_ROOT / ANDROID_HOME (없으면 ~/Library/Android/sdk)
 #   ANDROID_AVD_HOME (없으면 ~/.android/avd) — 판정·사본·보호가 이 폴더를 보고, 에뮬레이터에도 같은 값을 넘긴다

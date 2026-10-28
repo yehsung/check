@@ -1,3 +1,4 @@
+// 원본: 없음 — Android 조립 지점(K11). W2-a 패치 0001: 앱 구성 계약 appConfig.
 // Android 조립 지점(K11 — 셸 몫). 플랫폼 서비스를 프로세스에 하나씩 만든다. 위젯 콜백이 콜드 스타트한 프로세스도
 // 같은 Application 을 지나므로 같은 싱글턴을 쓴다(E§5.2 "프로세스 안 조정자 하나만 갱신").
 // 세션·스토어(W2)는 이 그릇에 조정자가 이어 붙인다. 벽시계는 조립 지점에서만 만든다(구조 시험 R2).
@@ -24,6 +25,7 @@ import com.yehsung.aingcheck.core.foundation.platform.MonotonicClock
 import com.yehsung.aingcheck.core.foundation.platform.RunningTests
 import com.yehsung.aingcheck.core.foundation.platform.SingleInstanceGuard
 import com.yehsung.aingcheck.core.foundation.platform.TokenVault
+import com.yehsung.aingcheck.core.session.app.AppConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
@@ -38,6 +40,12 @@ class AppContainer(
 ) {
     /** K4: (android, versionCode, versionName) — version.properties 한 곳에서 온다. */
     val clientIdentity: ClientIdentity = ClientIdentity.fromGenerated(BuildIdentity.PLATFORM, BuildIdentity.BUILD, BuildIdentity.VERSION)
+
+    /**
+     * 앱 구성 계약(W2-a `AppConfig` · G §8-17 #1). 판돈 대결 진입 깃발의 원천은 BuildConfig 하나다 — 조정자가 세션 문맥을 조립할 때
+     * `SessionContext(sessionStore, appConfig)` 로 넘기고, 스토어(W2-d·W2-e)는 그 문맥으로만 읽는다.
+     */
+    val appConfig: AppConfig = AndroidAppConfig.fromBuildConfig()
 
     val logger: Logger = LogcatLogger()
     val keyValueStore: KeyValueStore = SharedPreferencesKeyValueStore(app)

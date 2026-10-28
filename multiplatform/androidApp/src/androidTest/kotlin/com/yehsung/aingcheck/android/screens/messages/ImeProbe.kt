@@ -15,6 +15,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.PlatformTextInputInterceptor
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.serialization.Serializable
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -95,20 +96,31 @@ class RecordingInputConnection(target: InputConnection, private val conn: Int, p
     }
 }
 
-/** [content] 안의 입력칸이 여는 InputConnection 을 감싼다. */
+/**
+ * [content] 안의 입력칸이 여는 InputConnection 을 감싼다.
+ * - [forwardToPlatform] = true(녹화): 기기 키보드에 그대로 넘기고, 키보드가 부르는 것을 적는다.
+ * - false(재생): 기기 키보드를 **붙이지 않는다** — 입력 세션이 서면 이 탐침이 연결을 하나 만들어 쥐고(키보드 대신) 기다린다. 기기에 깔린 키보드가
+ *   재생 중에 끼어들지 않게 한다(공용 api36 의 Gboard 영문은 남이 만든 조합을 보는 대로 finishComposingText 로 확정해 버린다 — 실측).
+ */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun ImeProbe(recorder: ImeRecorder, content: @Composable () -> Unit) {
-    val interceptor = remember(recorder) {
+fun ImeProbe(recorder: ImeRecorder, forwardToPlatform: Boolean = true, content: @Composable () -> Unit) {
+    val interceptor = remember(recorder, forwardToPlatform) {
         PlatformTextInputInterceptor { request, nextHandler ->
-            nextHandler.startInputMethod(object : PlatformTextInputMethodRequest {
-                override fun createInputConnection(outAttributes: EditorInfo): InputConnection {
-                    val base = request.createInputConnection(outAttributes)
-                    val wrapped = RecordingInputConnection(base, recorder.connections.size, recorder::add)
-                    recorder.connections += wrapped
-                    return wrapped
-                }
-            })
+            if (forwardToPlatform) {
+                nextHandler.startInputMethod(object : PlatformTextInputMethodRequest {
+                    override fun createInputConnection(outAttributes: EditorInfo): InputConnection {
+                        val base = request.createInputConnection(outAttributes)
+                        val wrapped = RecordingInputConnection(base, recorder.connections.size, recorder::add)
+                        recorder.connections += wrapped
+                        return wrapped
+                    }
+                })
+            } else {
+                val base = request.createInputConnection(EditorInfo())
+                recorder.connections += RecordingInputConnection(base, recorder.connections.size, recorder::add)
+                awaitCancellation()
+            }
         }
     }
     InterceptPlatformTextInput(interceptor, content)

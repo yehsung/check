@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -227,9 +228,9 @@ private fun PersonRowCard(person: PokeDirectoryEntry, index: Int, count: Int, on
                     contentDescription = label
                     role = Role.Button
                     onClick { onSelect(person.userID); true }
+                    testTag = MessagesTags.person(person.userID)
                 }
-                .padding(horizontal = AingDimens.cardPadding, vertical = 6.dp)
-                .testTag(MessagesTags.person(person.userID)),
+                .padding(horizontal = AingDimens.cardPadding, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

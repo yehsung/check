@@ -63,16 +63,12 @@ class ImeReplayDeviceTest {
         compose.onNodeWithTag(MessagesTags.COMPOSER_FIELD).fetchSemanticsNode().config.getOrElseNullable(SemanticsProperties.EditableText) { null }?.text
             ?: error("입력칸 글을 못 읽었다")
 
-    /** 녹화의 연결 번호 [recorded] 에 맞는 지금의 연결(입력을 다시 시작했으면 새 연결이 올 때까지 잠깐 기다린다). */
-    private fun connectionFor(recorded: Int, offset: Int): InputConnection {
-        val wanted = recorded + offset
-        val until = System.currentTimeMillis() + 3_000
-        while (recorder.connections.size <= wanted && System.currentTimeMillis() < until) {
-            compose.waitForIdle()
-            Thread.sleep(50)
-        }
-        return recorder.connections.getOrNull(wanted) ?: recorder.current ?: error("입력 연결이 없다")
-    }
+    /**
+     * 재생은 키보드를 붙이지 않은 입력 세션 하나에 건다(ImeProbe forwardToPlatform = false) — 녹화의 연결 번호는 기기 키보드가 입력을 다시 시작한
+     * 자취라(보내기 뒤 새 연결) 재생에서는 지금 세션의 연결 하나가 받는다. 세션이 바뀌었으면(칸이 다시 초점을 얻었다) 마지막 연결이다.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun connectionFor(recorded: Int, offset: Int): InputConnection = recorder.current ?: error("입력 연결이 없다")
 
     private fun replay(calls: List<ImeCall>, offset: Int) {
         for (call in calls) {
@@ -91,7 +87,7 @@ class ImeReplayDeviceTest {
         compose.setContent {
             AingTheme(dark = false) {
                 CompositionLocalProvider(LocalScreenTicking provides false) {
-                    ImeProbe(recorder) { ConversationScreen(app.messages, StubPeople.HANGYEOL, onBack = {}) }
+                    ImeProbe(recorder, forwardToPlatform = false) { ConversationScreen(app.messages, StubPeople.HANGYEOL, onBack = {}) }
                 }
             }
         }

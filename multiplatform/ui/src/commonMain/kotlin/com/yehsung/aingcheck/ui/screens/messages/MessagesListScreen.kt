@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -242,9 +243,10 @@ fun MessagesThreadRow(row: MessagesThreadItem, presence: MessagesPeerPresence?, 
                 contentDescription = description
                 role = Role.Button
                 onClick { onClick(); true }
+                // 표식은 이 블록 안에 둔다 — 안쪽(뒤)에 단 testTag 는 clearAndSetSemantics 가 지운다(계측 시험이 잡은 결함).
+                testTag = MessagesTags.threadRow(row.peerUserID)
             }
-            .padding(horizontal = AingDimens.cardPadding, vertical = 12.dp)
-            .testTag(MessagesTags.threadRow(row.peerUserID)),
+            .padding(horizontal = AingDimens.cardPadding, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         PersonAvatar(row.peerName, row.peerUserID, row.peerAvatarURL, THREAD_AVATAR, status = presence?.status)

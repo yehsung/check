@@ -67,6 +67,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -425,7 +426,7 @@ private fun BubbleRow(line: MessagesBubbleLine, stickerArt: StickerArtState, onR
         if (onReport != null) add(CustomAccessibilityAction(BlockReportText.reportMessageAction) { onReport(); true })
     }
     Row(
-        modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = description; customActions = actions }.testTag(MessagesTags.bubble(entry.id)),
+        modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = description; customActions = actions; testTag = MessagesTags.bubble(entry.id) },
         horizontalArrangement = if (entry.isMine) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom,
     ) {
@@ -514,7 +515,7 @@ private fun PendingBubbleRow(item: MessagesPendingOutgoing, stickerArt: StickerA
     val sending = item.state == MessagesPendingOutgoing.State.sending
     val label = "나: ${AingStickerText.preview(item.body)}, " + if (sending) ConversationText.sending else ConversationText.sent
     Row(
-        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = label }.testTag(MessagesTags.pending(item.id)),
+        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = label; testTag = MessagesTags.pending(item.id) },
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
         verticalAlignment = Alignment.Bottom,
     ) {

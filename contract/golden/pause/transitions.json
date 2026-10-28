@@ -1,0 +1,277 @@
+{
+  "cases": [
+    {
+      "id": "none-idle",
+      "isPlaying": false,
+      "reads": {
+        "countdown": null,
+        "isFrozen": false,
+        "showsCard": false
+      },
+      "resigningKey": null,
+      "state": "none",
+      "steppedDown": "none",
+      "toggled": "none"
+    },
+    {
+      "id": "none-playing",
+      "isPlaying": true,
+      "reads": {
+        "countdown": null,
+        "isFrozen": false,
+        "showsCard": false
+      },
+      "resigningKey": "paused",
+      "state": "none",
+      "steppedDown": "none",
+      "toggled": "paused"
+    },
+    {
+      "id": "paused-idle",
+      "isPlaying": false,
+      "reads": {
+        "countdown": null,
+        "isFrozen": true,
+        "showsCard": true
+      },
+      "resigningKey": null,
+      "state": "paused",
+      "steppedDown": "paused",
+      "toggled": "resuming-3"
+    },
+    {
+      "id": "paused-playing",
+      "isPlaying": true,
+      "reads": {
+        "countdown": null,
+        "isFrozen": true,
+        "showsCard": true
+      },
+      "resigningKey": null,
+      "state": "paused",
+      "steppedDown": "paused",
+      "toggled": "resuming-3"
+    },
+    {
+      "id": "resuming-1-idle",
+      "isPlaying": false,
+      "reads": {
+        "countdown": 1,
+        "isFrozen": true,
+        "showsCard": false
+      },
+      "resigningKey": null,
+      "state": "resuming-1",
+      "steppedDown": "none",
+      "toggled": "paused"
+    },
+    {
+      "id": "resuming-1-playing",
+      "isPlaying": true,
+      "reads": {
+        "countdown": 1,
+        "isFrozen": true,
+        "showsCard": false
+      },
+      "resigningKey": "paused",
+      "state": "resuming-1",
+      "steppedDown": "none",
+      "toggled": "paused"
+    },
+    {
+      "id": "resuming-2-idle",
+      "isPlaying": false,
+      "reads": {
+        "countdown": 2,
+        "isFrozen": true,
+        "showsCard": false
+      },
+      "resigningKey": null,
+      "state": "resuming-2",
+      "steppedDown": "resuming-1",
+      "toggled": "paused"
+    },
+    {
+      "id": "resuming-2-playing",
+      "isPlaying": true,
+      "reads": {
+        "countdown": 2,
+        "isFrozen": true,
+        "showsCard": false
+      },
+      "resigningKey": "paused",
+      "state": "resuming-2",
+      "steppedDown": "resuming-1",
+      "toggled": "paused"
+    },
+    {
+      "id": "resuming-3-idle",
+      "isPlaying": false,
+      "reads": {
+        "countdown": 3,
+        "isFrozen": true,
+        "showsCard": false
+      },
+      "resigningKey": null,
+      "state": "resuming-3",
+      "steppedDown": "resuming-2",
+      "toggled": "paused"
+    },
+    {
+      "id": "resuming-3-playing",
+      "isPlaying": true,
+      "reads": {
+        "countdown": 3,
+        "isFrozen": true,
+        "showsCard": false
+      },
+      "resigningKey": "paused",
+      "state": "resuming-3",
+      "steppedDown": "resuming-2",
+      "toggled": "paused"
+    },
+    {
+      "id": "quitting-keeps-the-score",
+      "kinds": [
+        {
+          "keeps": false,
+          "kind": "timing_bar"
+        },
+        {
+          "keeps": true,
+          "kind": "flappy"
+        },
+        {
+          "keeps": true,
+          "kind": "tetris"
+        },
+        {
+          "keeps": true,
+          "kind": "crossy"
+        }
+      ]
+    },
+    {
+      "countdownStart": 3,
+      "id": "constants",
+      "pauseLimitSeconds": 300
+    },
+    {
+      "events": [
+        "resign",
+        "play",
+        "resign",
+        "resign",
+        "toggle",
+        "step",
+        "resign",
+        "toggle",
+        "step",
+        "step",
+        "step",
+        "step",
+        "toggle",
+        "toggle",
+        "step",
+        "stop",
+        "toggle",
+        "resign",
+        "play",
+        "toggle",
+        "step",
+        "toggle",
+        "toggle",
+        "step"
+      ],
+      "id": "walk-a",
+      "trail": [
+        "none",
+        "none",
+        "paused",
+        "paused",
+        "resuming-3",
+        "resuming-2",
+        "paused",
+        "resuming-3",
+        "resuming-2",
+        "resuming-1",
+        "none",
+        "none",
+        "paused",
+        "resuming-3",
+        "resuming-2",
+        "resuming-2",
+        "paused",
+        "paused",
+        "paused",
+        "resuming-3",
+        "resuming-2",
+        "paused",
+        "resuming-3",
+        "resuming-2"
+      ]
+    },
+    {
+      "events": [
+        "play",
+        "toggle",
+        "toggle",
+        "step",
+        "step",
+        "resign",
+        "toggle",
+        "stop",
+        "step",
+        "step",
+        "step",
+        "toggle",
+        "play",
+        "resign",
+        "step",
+        "toggle",
+        "step",
+        "step",
+        "step",
+        "step"
+      ],
+      "id": "walk-b",
+      "trail": [
+        "none",
+        "paused",
+        "resuming-3",
+        "resuming-2",
+        "resuming-1",
+        "paused",
+        "resuming-3",
+        "resuming-3",
+        "resuming-2",
+        "resuming-1",
+        "none",
+        "none",
+        "none",
+        "paused",
+        "paused",
+        "resuming-3",
+        "resuming-2",
+        "resuming-1",
+        "none",
+        "none"
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/duel/GoldenExportPause.swift",
+  "golden": "pause/transitions",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "quitting-keeps-the-score": "PauseState.quittingKeepsTheScore(kind) — MiniGameKind.allCases 순서",
+    "row": "toggled(isPlaying:) · resigningKey(isPlaying:)(null = 그대로 둔다) · steppedDown() · 읽기(isFrozen · showsCard · countdown)",
+    "state": "CheckMiniGameWindowView.PauseState — none · paused · resuming(n)(이름 'resuming-n')",
+    "walk-*": "사건 열: toggle·resign·step 은 지금 진행 여부로, play·stop 은 진행 여부를 바꾼다. resign 이 null 이면 상태 유지. trail = 사건마다 뒤 상태"
+  },
+  "swiftSources": [
+    "Sources/check/MiniGamePanel.swift",
+    "Sources/CheckCore/MiniGameEngine.swift"
+  ]
+}

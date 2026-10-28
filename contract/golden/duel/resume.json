@@ -1,0 +1,3566 @@
+{
+  "cases": [
+    {
+      "id": "resume-ok",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "garbage_applied": 4,
+        "garbage_sent": 7,
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621035250,
+        "lines": 9,
+        "pending": 2,
+        "seq": 12
+      },
+      "point": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "elapsedBits": "4041a00000000000",
+        "garbageApplied": 4,
+        "garbageSent": 7,
+        "lines": 9,
+        "pending": 2,
+        "seq": 12
+      },
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-ok-defaults",
+      "me": {
+        "board": "........................................................................................................................................................................................................",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621000001,
+        "seq": 1
+      },
+      "point": {
+        "board": "........................................................................................................................................................................................................",
+        "elapsedBits": "3f50624dd2f1a9fc",
+        "garbageApplied": 0,
+        "garbageSent": 0,
+        "lines": 0,
+        "pending": 0,
+        "seq": 1
+      },
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-no-row",
+      "me": null,
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-seq-zero",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621005000,
+        "seq": 0
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-seq-missing",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621005000
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-board-missing",
+      "me": {
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621005000,
+        "seq": 3
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-board-short",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZ",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621005000,
+        "seq": 3
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-board-bad-letter",
+      "me": {
+        "board": "x.......................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621005000,
+        "seq": 3
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-start-missing",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621005000,
+        "seq": 3
+      },
+      "point": null,
+      "startAtMs": null
+    },
+    {
+      "id": "resume-last-seen-missing",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "seq": 3
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-last-seen-equal",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621000000,
+        "seq": 3
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-last-seen-before",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789620999999,
+        "seq": 3
+      },
+      "point": null,
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "resume-negative-counts",
+      "me": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "garbage_applied": -2,
+        "garbage_sent": -1,
+        "id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "last_seen_ms": 1789621000999,
+        "lines": -3,
+        "pending": -4,
+        "seq": 2
+      },
+      "point": {
+        "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+        "elapsedBits": "3feff7ced916872b",
+        "garbageApplied": -2,
+        "garbageSent": -1,
+        "lines": -3,
+        "pending": -4,
+        "seq": 2
+      },
+      "startAtMs": 1789621000000
+    },
+    {
+      "id": "flow-resume",
+      "results": [
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 7,
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 9,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "slzoj",
+              "pendingGarbage": [
+                2,
+                5
+              ],
+              "phase": {
+                "kind": "are",
+                "remainingBits": "3fb999999999999a"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 12,
+              "simulatedBits": "4041800000000000",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 12,
+            "heldOpponentSeq": 20,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 9,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 3,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 7,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 9,
+            "opponentLastSeenAtBits": "41daaadd3ed99999",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 3
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "s",
+                "rotation": 0,
+                "row": 33
+              },
+              "attackSentTotal": 7,
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "4015fffffffffff6",
+              "finished": false,
+              "garbageApplied": 9,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "lzoji",
+              "pendingGarbage": [
+                2,
+                5
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 12,
+              "simulatedBits": "40443fffffffffd4",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 12,
+            "heldOpponentSeq": 20,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 9,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 3,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 7,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 9,
+            "opponentLastSeenAtBits": "41daaadd3ed99999",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 3
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 7,
+              "board": "................................................................SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "401666666666665c",
+              "finished": false,
+              "garbageApplied": 9,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "lzoji",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "are",
+                "remainingBits": "3fb999999999999a"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 12,
+              "simulatedBits": "40444ccccccccca0",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 12,
+            "heldOpponentSeq": 20,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 9,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 3,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 9,
+            "opponentLastSeenAtBits": "41daaadd3ed99999",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 3
+          }
+        },
+        {
+          "apply": "ignored",
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 7,
+              "board": "................................................................SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "401666666666665c",
+              "finished": false,
+              "garbageApplied": 9,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "lzoji",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "are",
+                "remainingBits": "3fb999999999999a"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 12,
+              "simulatedBits": "40444ccccccccca0",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 12,
+            "heldOpponentSeq": 20,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 9,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 3,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 9,
+            "opponentLastSeenAtBits": "41daaadd3ed99999",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 3
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 7,
+              "board": "................................................................SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "401666666666665c",
+              "finished": false,
+              "garbageApplied": 12,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "lzoji",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "are",
+                "remainingBits": "3fb999999999999a"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 14,
+              "simulatedBits": "40444ccccccccca0",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 12,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 5,
+                "pending": 1,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 21
+              },
+              "attackSentTotal": 7,
+              "board": "................................................................SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "401bfffffffffff1",
+              "finished": false,
+              "garbageApplied": 12,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "zojit",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 14,
+              "simulatedBits": "4044ffffffffffc8",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 12,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 5,
+                "pending": 1,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 1,
+                "row": 21
+              },
+              "attackSentTotal": 7,
+              "board": "................................................................SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "401c666666666657",
+              "finished": false,
+              "garbageApplied": 12,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "zojit",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 14,
+              "simulatedBits": "40450ccccccccc94",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 12,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 5,
+                "pending": 1,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 2,
+                "piece": "l",
+                "rotation": 1,
+                "row": 22
+              },
+              "attackSentTotal": 7,
+              "board": "................................................................SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "401cccccccccccbd",
+              "finished": false,
+              "garbageApplied": 12,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "zojit",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 14,
+              "simulatedBits": "4045199999999960",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 12,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 5,
+                "pending": 1,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-a",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "z",
+                "rotation": 0,
+                "row": 18
+              },
+              "attackSentTotal": 7,
+              "board": "...L.........L.........LL.........SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "40207ffffffffff8",
+              "finished": false,
+              "garbageApplied": 12,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "ojits",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 14,
+              "simulatedBits": "40459fffffffffbe",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-a",
+              "isFinished": false,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 12,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 5,
+                "pending": 1,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": null,
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": null,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "z",
+                "rotation": 0,
+                "row": 18
+              },
+              "attackSentTotal": 7,
+              "board": "...L.........L.........LL.........SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "40207ffffffffff8",
+              "finished": true,
+              "garbageApplied": 12,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "ojits",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 14,
+              "simulatedBits": "40459fffffffffbe",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": "topout",
+              "finishedAtBits": "41daaadd3f800000",
+              "id": "match-a",
+              "isFinished": true,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 12,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 5,
+                "pending": 1,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": "lost",
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": -5,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "finished",
+            "rubyBalance": 120,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 2
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "z",
+                "rotation": 0,
+                "row": 18
+              },
+              "attackSentTotal": 7,
+              "board": "...L.........L.........LL.........SS.......SS.......IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZIGGGG.GGGGGGGGG.GGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGGGGGGGG.GGGGGGGGG.GGGGGGGGG.GGGGGG",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "40207ffffffffff8",
+              "finished": true,
+              "garbageApplied": 12,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 9,
+              "next": "ojits",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 7,
+              "score": 0,
+              "seed": 77,
+              "seq": 14,
+              "simulatedBits": "40459fffffffffbe",
+              "startAtBits": "404e000000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-a",
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": {
+              "acceptedAtBits": "41daaadd32800000",
+              "endReason": "topout",
+              "finishedAtBits": "41daaadd3f800000",
+              "id": "match-a",
+              "isFinished": true,
+              "maxEndBits": "41daaaddad000000",
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 12,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../T........./GGGGG.GGGG/SSZZ.IIIIJ",
+                "hasBoard": true,
+                "lines": 5,
+                "pending": 1,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "구름빵",
+              "outcome": "lost",
+              "readyDeadlineBits": "41daaadd3a000000",
+              "rubyDelta": -5,
+              "seed": 77,
+              "stake": 5,
+              "startAtBits": "41daaadd35000000"
+            },
+            "myStats": {
+              "attackSent": 7,
+              "levelFloor": 1,
+              "lines": 9,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "finished",
+            "rubyBalance": 120,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 2
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [
+              "match-a"
+            ],
+            "duel": null,
+            "duelMatchID": null,
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": null,
+            "myStats": null,
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "lobby",
+            "rubyBalance": 120,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "ignored",
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [
+              "match-a"
+            ],
+            "duel": null,
+            "duelMatchID": null,
+            "heldMySeq": 14,
+            "heldOpponentSeq": 22,
+            "match": null,
+            "myStats": null,
+            "notice": null,
+            "opponentAttackTotal": 12,
+            "opponentLastSeenAtBits": "41daaadd3f400000",
+            "phase": "lobby",
+            "rubyBalance": 120,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        }
+      ],
+      "steps": [
+        {
+          "op": "apply",
+          "payload": {
+            "accepted_at_ms": 1789621450400,
+            "match_id": "match-a",
+            "max_end_ms": 1789621940400,
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "garbage_applied": 4,
+              "garbage_sent": 7,
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621495400,
+              "lines": 9,
+              "pending": 2,
+              "ready": true,
+              "seq": 12
+            },
+            "opponent": {
+              "board": "..........................................................................................................................................................................T.........GGGGG.GGGGSSZZ.IIIIJ",
+              "display_name": "구름빵",
+              "garbage_applied": 1,
+              "garbage_sent": 9,
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "last_seen_ms": 1789621499800,
+              "lines": 3,
+              "pending": 0,
+              "ready": true,
+              "seq": 20
+            },
+            "ready_deadline_ms": 1789621480400,
+            "seed": 77,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621460400,
+            "status": "active",
+            "watchers": 3
+          },
+          "receivedAtBits": "4059000000000000"
+        },
+        {
+          "nowBits": "4059200000000000",
+          "op": "tick"
+        },
+        {
+          "key": "hardDrop",
+          "op": "input",
+          "uptimeBits": "4059266666666666"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-a",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "garbage_applied": 4,
+              "garbage_sent": 7,
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621495400,
+              "lines": 9,
+              "pending": 2,
+              "ready": true,
+              "seq": 12
+            },
+            "opponent": {
+              "board": "........................................................................................................................................................................................................",
+              "display_name": "구름빵",
+              "garbage_applied": 1,
+              "garbage_sent": 8,
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "last_seen_ms": 1789621498800,
+              "lines": 2,
+              "pending": 0,
+              "ready": true,
+              "seq": 19
+            },
+            "seed": 77,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621460400,
+            "status": "active"
+          },
+          "receivedAtBits": "40592ccccccccccd"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-a",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "garbage_applied": 9,
+              "garbage_sent": 7,
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621501400,
+              "lines": 10,
+              "pending": 0,
+              "ready": true,
+              "seq": 14
+            },
+            "opponent": {
+              "board": "..........................................................................................................................................................................T.........GGGGG.GGGGSSZZ.IIIIJ",
+              "display_name": "구름빵",
+              "garbage_applied": 1,
+              "garbage_sent": 12,
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "last_seen_ms": 1789621501400,
+              "lines": 5,
+              "pending": 1,
+              "ready": true,
+              "seq": 22
+            },
+            "seed": 77,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621460400,
+            "status": "active"
+          },
+          "receivedAtBits": "4059400000000000"
+        },
+        {
+          "nowBits": "4059800000000000",
+          "op": "tick"
+        },
+        {
+          "key": "rotateCW",
+          "op": "input",
+          "uptimeBits": "4059866666666666"
+        },
+        {
+          "key": "moveLeftOne",
+          "op": "input",
+          "uptimeBits": "40598ccccccccccd"
+        },
+        {
+          "nowBits": "4059d00000000000",
+          "op": "tick"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "end_reason": "topout",
+            "finished_at_ms": 1789621502400,
+            "match_id": "match-a",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "garbage_applied": 9,
+              "garbage_sent": 7,
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621501400,
+              "lines": 10,
+              "pending": 0,
+              "ready": true,
+              "seq": 14
+            },
+            "opponent": {
+              "board": "..........................................................................................................................................................................T.........GGGGG.GGGGSSZZ.IIIIJ",
+              "display_name": "구름빵",
+              "garbage_applied": 1,
+              "garbage_sent": 12,
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "last_seen_ms": 1789621501400,
+              "lines": 5,
+              "pending": 1,
+              "ready": true,
+              "seq": 22
+            },
+            "result": "opponent_win",
+            "ruby_balance": 120,
+            "seed": 77,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621460400,
+            "status": "finished",
+            "watchers": 2,
+            "winner": "BBBBBBBB-0000-4000-8000-000000000002"
+          },
+          "receivedAtBits": "405a000000000000"
+        },
+        {
+          "nowBits": "405a400000000000",
+          "op": "tick"
+        },
+        {
+          "op": "close"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "end_reason": "topout",
+            "finished_at_ms": 1789621502400,
+            "match_id": "match-a",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "garbage_applied": 9,
+              "garbage_sent": 7,
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621501400,
+              "lines": 10,
+              "pending": 0,
+              "ready": true,
+              "seq": 14
+            },
+            "opponent": {
+              "board": "..........................................................................................................................................................................T.........GGGGG.GGGGSSZZ.IIIIJ",
+              "display_name": "구름빵",
+              "garbage_applied": 1,
+              "garbage_sent": 12,
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "last_seen_ms": 1789621501400,
+              "lines": 5,
+              "pending": 1,
+              "ready": true,
+              "seq": 22
+            },
+            "result": "opponent_win",
+            "ruby_balance": 120,
+            "seed": 77,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621460400,
+            "status": "finished",
+            "watchers": 2,
+            "winner": "BBBBBBBB-0000-4000-8000-000000000002"
+          },
+          "receivedAtBits": "405a800000000000"
+        }
+      ]
+    },
+    {
+      "id": "flow-countdown",
+      "results": [
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 0,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": null,
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 0,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": false,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": null
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "ready",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 0,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": null,
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 0,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": false,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": null
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "ready",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": "4069800000000000",
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "countdown",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": "4069800000000000",
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "countdown",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": "4069800000000000",
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "countdown",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": "4069800000000000",
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "countdown",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "t",
+                "rotation": 0,
+                "row": 18
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fa999999999999a",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "ilsoz",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fa999999999999a",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 4,
+                "piece": "t",
+                "rotation": 0,
+                "row": 18
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fb9999999999800",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "ilsoz",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fb9999999999800",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 4,
+                "piece": "t",
+                "rotation": 3,
+                "row": 18
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fc9999999999800",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "ilsoz",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fc9999999999800",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "i",
+                "rotation": 0,
+                "row": 18
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fd3333333333266",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "t",
+              "holdUsed": true,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "lsozj",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fd3333333333266",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "i",
+                "rotation": 0,
+                "row": 19
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fd99999999998cc",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "t",
+              "holdUsed": true,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "lsozj",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 1,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fd99999999998cc",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 4,
+                "piece": "i",
+                "rotation": 0,
+                "row": 19
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fdfffffffffff32",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "t",
+              "holdUsed": true,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "lsozj",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 1,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fdfffffffffff32",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "..................................................................................................................................................................................................IIII..",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fe33333333332cd",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "t",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "lsozj",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "are",
+                "remainingBits": "3fb999999999999a"
+              },
+              "reportedAttackSent": 0,
+              "score": 39,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fe33333333332cd",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-b",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 21
+              },
+              "attackSentTotal": 0,
+              "board": "..................................................................................................................................................................................................IIII..",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fffffffffffffd2",
+              "finished": false,
+              "garbageApplied": 0,
+              "held": "t",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "sozjz",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 39,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fffffffffffffd2",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 21
+              },
+              "attackSentTotal": 0,
+              "board": "..................................................................................................................................................................................................IIII..",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "3fffffffffffffd2",
+              "finished": true,
+              "garbageApplied": 0,
+              "held": "t",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "sozjz",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 39,
+              "seed": 1234567,
+              "seq": 1,
+              "simulatedBits": "3fffffffffffffd2",
+              "startAtBits": "4069800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-b",
+            "heldMySeq": 1,
+            "heldOpponentSeq": 0,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": "time_cap",
+              "finishedAtBits": null,
+              "id": "match-b",
+              "isFinished": true,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 0,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "달토끼",
+              "outcome": "draw",
+              "readyDeadlineBits": null,
+              "rubyDelta": 0,
+              "seed": 1234567,
+              "stake": 3,
+              "startAtBits": "41daaadd3fc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 0,
+            "opponentLastSeenAtBits": null,
+            "phase": "finished",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        }
+      ],
+      "steps": [
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-b",
+            "me": {
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "ready": false,
+              "seq": 0
+            },
+            "opponent": {
+              "display_name": "달토끼",
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "ready": true,
+              "seq": 0
+            },
+            "seed": 1234567,
+            "server_now_ms": 1789621500400,
+            "stake": 3,
+            "status": "active"
+          },
+          "receivedAtBits": "4069000000000000"
+        },
+        {
+          "nowBits": "4069100000000000",
+          "op": "tick"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-b",
+            "me": {
+              "board": "........................................................................................................................................................................................................",
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621500200,
+              "ready": true,
+              "seq": 1
+            },
+            "opponent": {
+              "display_name": "달토끼",
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "ready": true,
+              "seq": 0
+            },
+            "seed": 1234567,
+            "server_now_ms": 1789621500400,
+            "stake": 3,
+            "start_at_ms": 1789621503400,
+            "status": "active"
+          },
+          "receivedAtBits": "4069200000000000"
+        },
+        {
+          "nowBits": "4069400000000000",
+          "op": "tick"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-b",
+            "me": {
+              "board": "........................................................................................................................................................................................................",
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621500200,
+              "ready": false,
+              "seq": 1
+            },
+            "opponent": {
+              "display_name": "달토끼",
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "ready": true,
+              "seq": 0
+            },
+            "seed": 1234567,
+            "server_now_ms": 1789621500400,
+            "stake": 3,
+            "status": "active"
+          },
+          "receivedAtBits": "4069466666666666"
+        },
+        {
+          "key": "left",
+          "op": "input",
+          "uptimeBits": "4069500000000000"
+        },
+        {
+          "nowBits": "406981999999999a",
+          "op": "tick"
+        },
+        {
+          "key": "moveRightOne",
+          "op": "input",
+          "uptimeBits": "4069833333333333"
+        },
+        {
+          "key": "rotateCCW",
+          "op": "input",
+          "uptimeBits": "4069866666666666"
+        },
+        {
+          "key": "hold",
+          "op": "input",
+          "uptimeBits": "406989999999999a"
+        },
+        {
+          "key": "softDropOne",
+          "op": "input",
+          "uptimeBits": "40698ccccccccccd"
+        },
+        {
+          "key": "right",
+          "op": "input",
+          "uptimeBits": "4069900000000000"
+        },
+        {
+          "key": "hardDrop",
+          "op": "input",
+          "uptimeBits": "4069933333333333"
+        },
+        {
+          "nowBits": "4069c00000000000",
+          "op": "tick"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "end_reason": "time_cap",
+            "match_id": "match-b",
+            "me": {
+              "board": "........................................................................................................................................................................................................",
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621500200,
+              "ready": true,
+              "seq": 1
+            },
+            "opponent": {
+              "display_name": "달토끼",
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "ready": true,
+              "seq": 0
+            },
+            "result": "draw",
+            "seed": 1234567,
+            "server_now_ms": 1789621500400,
+            "stake": 3,
+            "start_at_ms": 1789621503400,
+            "status": "finished"
+          },
+          "receivedAtBits": "4069e00000000000"
+        }
+      ]
+    },
+    {
+      "id": "flow-resume-rejected",
+      "results": [
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-c",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 3,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 42,
+              "seq": 5,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": "4072700000000000",
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-c",
+            "heldMySeq": 5,
+            "heldOpponentSeq": 2,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-c",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 6,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": true,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 42,
+              "stake": 5,
+              "startAtBits": "41daaadd3dc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 6,
+            "opponentLastSeenAtBits": null,
+            "phase": "countdown",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-c",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 34
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "4017fffffffffff4",
+              "finished": false,
+              "garbageApplied": 6,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "szioj",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 42,
+              "seq": 5,
+              "simulatedBits": "4017fffffffffff1",
+              "startAtBits": "4072700000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-c",
+            "heldMySeq": 5,
+            "heldOpponentSeq": 2,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-c",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 6,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": true,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 42,
+              "stake": 5,
+              "startAtBits": "41daaadd3dc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 6,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "ignored",
+          "state": {
+            "activeMatchID": "match-c",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 34
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "4017fffffffffff4",
+              "finished": false,
+              "garbageApplied": 6,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "szioj",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 42,
+              "seq": 5,
+              "simulatedBits": "4017fffffffffff1",
+              "startAtBits": "4072700000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-c",
+            "heldMySeq": 5,
+            "heldOpponentSeq": 2,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-c",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 6,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": true,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 42,
+              "stake": 5,
+              "startAtBits": "41daaadd3dc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 6,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "ignored",
+          "state": {
+            "activeMatchID": "match-c",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 34
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "4017fffffffffff4",
+              "finished": false,
+              "garbageApplied": 6,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "szioj",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 42,
+              "seq": 5,
+              "simulatedBits": "4017fffffffffff1",
+              "startAtBits": "4072700000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-c",
+            "heldMySeq": 5,
+            "heldOpponentSeq": 2,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-c",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 6,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": true,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 42,
+              "stake": 5,
+              "startAtBits": "41daaadd3dc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 6,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 34
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "4017fffffffffff4",
+              "finished": true,
+              "garbageApplied": 6,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "szioj",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 42,
+              "seq": 5,
+              "simulatedBits": "4017fffffffffff1",
+              "startAtBits": "4072700000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-c",
+            "heldMySeq": 9,
+            "heldOpponentSeq": 2,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": "disconnect",
+              "finishedAtBits": null,
+              "id": "match-c",
+              "isFinished": true,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 6,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": true,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "",
+              "outcome": "draw",
+              "readyDeadlineBits": null,
+              "rubyDelta": 0,
+              "seed": 42,
+              "stake": 5,
+              "startAtBits": "41daaadd3dc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 6,
+            "opponentLastSeenAtBits": null,
+            "phase": "finished",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "ignored",
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "l",
+                "rotation": 0,
+                "row": 34
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "4017fffffffffff4",
+              "finished": true,
+              "garbageApplied": 6,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "szioj",
+              "pendingGarbage": [
+                3
+              ],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 42,
+              "seq": 5,
+              "simulatedBits": "4017fffffffffff1",
+              "startAtBits": "4072700000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-c",
+            "heldMySeq": 9,
+            "heldOpponentSeq": 2,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": "disconnect",
+              "finishedAtBits": null,
+              "id": "match-c",
+              "isFinished": true,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 6,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": true,
+                "lines": 0,
+                "pending": 0,
+                "ready": true,
+                "toppedOut": false
+              },
+              "opponentID": "bbbbbbbb-0000-4000-8000-000000000002",
+              "opponentName": "",
+              "outcome": "draw",
+              "readyDeadlineBits": null,
+              "rubyDelta": 0,
+              "seed": 42,
+              "stake": 5,
+              "startAtBits": "41daaadd3dc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 3,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 6,
+            "opponentLastSeenAtBits": null,
+            "phase": "finished",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": "match-e",
+            "dismissed": [],
+            "duel": {
+              "active": null,
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................................",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "0000000000000000",
+              "finished": false,
+              "garbageApplied": 2,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": false,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "ready"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 7,
+              "seq": 4,
+              "simulatedBits": "0000000000000000",
+              "startAtBits": "4072800000000000",
+              "started": false,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-e",
+            "heldMySeq": 4,
+            "heldOpponentSeq": 1,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-e",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 1,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": false,
+                "toppedOut": false
+              },
+              "opponentID": "cccccccc-0000-4000-8000-000000000003",
+              "opponentName": "",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 7,
+              "stake": 5,
+              "startAtBits": "41daaadd3cc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 1,
+            "opponentLastSeenAtBits": null,
+            "phase": "countdown",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "state": {
+            "activeMatchID": "match-e",
+            "dismissed": [],
+            "duel": {
+              "active": {
+                "column": 3,
+                "piece": "z",
+                "rotation": 0,
+                "row": 24
+              },
+              "attackSentTotal": 0,
+              "board": "........................................................................................................................................................................................T........TTT....",
+              "droppedSecondsBits": "0000000000000000",
+              "elapsedBits": "4024000000000001",
+              "finished": false,
+              "garbageApplied": 2,
+              "held": "-",
+              "holdUsed": false,
+              "isLive": true,
+              "lastReportAtBits": null,
+              "levelFloor": 1,
+              "lines": 0,
+              "next": "sojil",
+              "pendingGarbage": [],
+              "phase": {
+                "kind": "running"
+              },
+              "reportedAttackSent": 0,
+              "score": 0,
+              "seed": 7,
+              "seq": 4,
+              "simulatedBits": "4023ffffffffffff",
+              "startAtBits": "4072800000000000",
+              "started": true,
+              "toppedOut": false
+            },
+            "duelMatchID": "match-e",
+            "heldMySeq": 4,
+            "heldOpponentSeq": 1,
+            "match": {
+              "acceptedAtBits": null,
+              "endReason": null,
+              "finishedAtBits": null,
+              "id": "match-e",
+              "isFinished": false,
+              "maxEndBits": null,
+              "meReady": true,
+              "opponentBoard": {
+                "attackSent": 1,
+                "cells": "........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../........../..........",
+                "hasBoard": false,
+                "lines": 0,
+                "pending": 0,
+                "ready": false,
+                "toppedOut": false
+              },
+              "opponentID": "cccccccc-0000-4000-8000-000000000003",
+              "opponentName": "",
+              "outcome": null,
+              "readyDeadlineBits": null,
+              "rubyDelta": null,
+              "seed": 7,
+              "stake": 5,
+              "startAtBits": "41daaadd3cc00000"
+            },
+            "myStats": {
+              "attackSent": 0,
+              "levelFloor": 1,
+              "lines": 0,
+              "pendingGarbage": 0,
+              "toppedOut": false
+            },
+            "notice": null,
+            "opponentAttackTotal": 1,
+            "opponentLastSeenAtBits": null,
+            "phase": "playing",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        },
+        {
+          "apply": "applied",
+          "state": {
+            "activeMatchID": null,
+            "dismissed": [],
+            "duel": null,
+            "duelMatchID": null,
+            "heldMySeq": 4,
+            "heldOpponentSeq": 1,
+            "match": null,
+            "myStats": null,
+            "notice": null,
+            "opponentAttackTotal": 1,
+            "opponentLastSeenAtBits": null,
+            "phase": "lobby",
+            "rubyBalance": null,
+            "serverClockOffsetBits": "3fd9999a00000000",
+            "spectatorCount": 0
+          }
+        }
+      ],
+      "steps": [
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-c",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "garbage_applied": 3,
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621495400,
+              "ready": true,
+              "seq": 5
+            },
+            "opponent": {
+              "board": "........................................................................................................................................................................................................",
+              "garbage_sent": 6,
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "ready": true,
+              "seq": 2
+            },
+            "seed": 42,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621495400,
+            "status": "active"
+          },
+          "receivedAtBits": "4072c00000000000"
+        },
+        {
+          "nowBits": "4072d00000000000",
+          "op": "tick"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-d",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621500400,
+              "ready": true,
+              "seq": 3
+            },
+            "seed": 9,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621499400,
+            "status": "active"
+          },
+          "receivedAtBits": "4072d80000000000"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-c",
+            "seed": 77,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "status": "paused"
+          },
+          "receivedAtBits": "4072e00000000000"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "end_reason": "disconnect",
+            "match_id": "match-c",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "ready": true,
+              "seq": 9
+            },
+            "result": "draw",
+            "seed": 42,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621495400,
+            "status": "finished",
+            "winner": null
+          },
+          "receivedAtBits": "4072f00000000000"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-c",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZI",
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "ready": true,
+              "seq": 10
+            },
+            "opponent": {
+              "board": "........................................................................................................................................................................................................",
+              "garbage_sent": 6,
+              "id": "bbbbbbbb-0000-4000-8000-000000000002",
+              "ready": true,
+              "seq": 3
+            },
+            "seed": 42,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621495400,
+            "status": "active"
+          },
+          "receivedAtBits": "4073000000000000"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-e",
+            "me": {
+              "board": "........................................................................................................................................................IJLOSTZ.G.GGGGGGGGZZ.TTTOO.IGGGG.GGGGGLJLJ.SSZZ",
+              "garbage_applied": 2,
+              "id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "last_seen_ms": 1789621499400,
+              "ready": true,
+              "seq": 4
+            },
+            "opponent": {
+              "board": "X.......................................................................................................................................................................................................",
+              "garbage_sent": 1,
+              "id": "cccccccc-0000-4000-8000-000000000003",
+              "seq": 1
+            },
+            "seed": 7,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "start_at_ms": 1789621491400,
+            "status": "active"
+          },
+          "receivedAtBits": "4073100000000000"
+        },
+        {
+          "nowBits": "4073200000000000",
+          "op": "tick"
+        },
+        {
+          "op": "apply",
+          "payload": {
+            "match_id": "match-e",
+            "seed": 77,
+            "server_now_ms": 1789621500400,
+            "stake": 5,
+            "status": "declined"
+          },
+          "receivedAtBits": "4073300000000000"
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/duel/GoldenExportDuel.swift",
+  "golden": "duel/resume",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "dump": "phase · notice · match(…, opponentBoard.cells 20행 '/') · myStats · duel(세션 칸 + 엔진 판 TetrisDuelBoard.encode · active · next 5 · …) · 장부(heldMySeq …)",
+    "outcome": "host 가 없어 내 user id 를 모른다 → 승자 칸이 있으면 lost(스토어 규칙), result 'draw' 면 draw",
+    "payload": "TetrisStatePayload 를 snake_case JSON 으로 싣는다(JSONDecoder convertFromSnakeCase · Kotlin @SerialName)",
+    "results": "단계마다 { apply?: applied|ignored, state: dump }",
+    "resume-*": "TetrisDuelStore.resumePoint(me:startAtMs:) — 판 시작 뒤 보고만 재개 출발점(null = 새 판)",
+    "steps": "apply(payload, receivedAt) → applyState · tick(now) → tick(now:) · input(key, at) → 입력 문(left/right = 누름+뗌) · close → windowDidClose()",
+    "store": "TetrisDuelStore(host: nil) — 네트워크 0. clock = wallBase 고정, uptime = 단계가 준 시각, 판 루프·폴링은 재운다",
+    "wallBase": "41daaadd3f000000"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/TetrisDuelStore.swift",
+    "Sources/CheckCore/TetrisDuelStoreGame.swift",
+    "Sources/CheckCore/TetrisDuelSession.swift",
+    "Sources/CheckCore/TetrisDuelBoard.swift",
+    "Sources/CheckCore/TetrisGame.swift",
+    "Sources/CheckCore/TetrisWire.swift"
+  ]
+}

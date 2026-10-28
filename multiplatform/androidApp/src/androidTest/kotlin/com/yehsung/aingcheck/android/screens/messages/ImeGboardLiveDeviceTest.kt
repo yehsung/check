@@ -8,6 +8,7 @@ package com.yehsung.aingcheck.android.screens.messages
 
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -74,8 +75,8 @@ class ImeGboardLiveDeviceTest {
 
     /** 칸 글이 [expected] 가 될 때까지(Gboard 는 글쇠를 비동기로 조합한다). 시한 안에 안 되면 지금 글을 돌려준다. */
     private fun awaitField(expected: String, timeout: Long = 10_000): String {
-        val until = System.currentTimeMillis() + timeout
-        while (System.currentTimeMillis() < until) {
+        val until = SystemClock.uptimeMillis() + timeout
+        while (SystemClock.uptimeMillis() < until) {
             compose.waitForIdle()
             if (field() == expected) return expected
             Thread.sleep(150)

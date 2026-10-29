@@ -1585,7 +1585,7 @@ struct V0367CrossyServerContractTests {
 
 // MARK: - 0.3.67 체인지로그 (내용만)
 //
-// 버전 고정과 "맨 위 섹션" 단언은 0.3.68 에서 `V0368RummyReleaseTests` 로 넘겼다(관행 — 그 릴리스의 시험 파일이 든다).
+// 버전 고정과 "맨 위 섹션" 단언은 0.3.69 에서 `V0369RummyReleaseTests` 로 넘겼다(관행 — 그 릴리스의 시험 파일이 든다).
 // 여기는 0.3.67 섹션의 **내용**만 남는다.
 @Test("CHANGELOG 0.3.67(길건너 아잉이 · 역대 순위 · 접힌 판 점수 · 4줄 이하 · 배너 폭 안)")
 func v0367VersionAndChangelog() throws {

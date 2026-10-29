@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import CheckCore
 
-// v0.3.68 — 아잉 큐브(rummy) 클라 코어(`RummyWire` · `RummyStore`) 계약. **모양이 아니라 결과를 잰다.**
+// v0.3.69 — 아잉 큐브(rummy) 클라 코어(`RummyWire` · `RummyStore`) 계약. **모양이 아니라 결과를 잰다.**
 //
 // 서버는 스텁이다(`GomokuStubProtocol` — 호스트별 스크립트). 응답 JSON 은 설계서 §3.5·§3.7 모양을 손으로 옮긴 것이고,
 // S 갈래의 실서버 출력(`Fixtures/rummy/server/*.json`, 통합 때 복사)도 디코드 시험에 들어간다. 실서버 왕복(정규화·시간 판정)은
@@ -265,9 +265,9 @@ private func rkPlayInitialMeld(_ store: RummyStore) {
 
 // MARK: - 시험
 
-@Suite("v0.3.68 아잉 큐브 — 와이어 · 스토어", .serialized)
+@Suite("v0.3.69 아잉 큐브 — 와이어 · 스토어", .serialized)
 @MainActor
-struct V0368RummyStoreTests {
+struct V0369RummyStoreTests {
     // MARK: 와이어
 
     @Test("와이어: RPC 12개의 요청 본문 키 집합이 서버 인자 이름과 같고 p_protocol=1·uuid 소문자·p_table 은 면 배열의 배열")
@@ -306,7 +306,7 @@ struct V0368RummyStoreTests {
             "rummy_ranking": ["p_protocol"],
         ]
         #expect(Set(expected.keys) == Set(RummyWire.RPC.all))
-        // 표만 맞추면 표와 서버가 같이 틀릴 수 있다 — 실제 마이그레이션의 인자 이름과도 잰다(V0368RummyWireContractTests 의 파서).
+        // 표만 맞추면 표와 서버가 같이 틀릴 수 있다 — 실제 마이그레이션의 인자 이름과도 잰다(V0369RummyWireContractTests 의 파서).
         let sql = try rwcMigrationSQL()
         for (rpc, keys) in expected {
             let calls = rkCalls(host, rpc)

@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CheckCore
 
-// v0.3.68 아잉 큐브(rummy) — 규칙 판정과 차례 작업 상태 편집기.
+// v0.3.69 아잉 큐브(rummy) — 규칙 판정과 차례 작업 상태 편집기.
 //
 // 기대값의 집은 `Fixtures/rummy/cases.json`(research 의 코퍼스를 그대로 복사, meld 74 · turn 64 · score 16) 과
 // 설계서 §2.1 P01~P10 표다. 서버 마이그레이션의 코퍼스 프로브도 같은 두 곳을 옮긴다 — 여기서 숫자를 따로 지어 적지 마라.
@@ -122,7 +122,7 @@ private let payoutCases: [PayoutCase] = [
 
 // MARK: - 시험
 
-@Suite struct V0368RummyRulesTests {
+@Suite struct V0369RummyRulesTests {
     @Test func corpusHasAll154Cases() throws {
         let corpus = try rummyCorpus()
         #expect(corpus.meld.count == 74)

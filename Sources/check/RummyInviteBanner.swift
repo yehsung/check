@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import CheckCore
 
-// 아잉 큐브(v0.3.68) — **창 밖에서 초대를 아는 세 표면**(메뉴바 점 · 팝오버 배너 · 캐릭터 말풍선)의 문구와 배너.
+// 아잉 큐브(v0.3.69) — **창 밖에서 초대를 아는 세 표면**(메뉴바 점 · 팝오버 배너 · 캐릭터 말풍선)의 문구와 배너.
 //
 // 창(`CheckRummyWindowController`)과 판 화면(`RummyPanel`)은 다른 갈래 몫이라 이 파일은 그 둘을 모른다 —
 // 스토어의 공개 표면(`RummyStore.incomingInvites` · `join` · `decline` · `openWindow`)만 읽는다.
@@ -59,7 +59,7 @@ enum RummyEntryIcon {
     }
 }
 
-/// 팝오버의 **받은 아잉 큐브 초대 배너**(v0.3.68). 테트리스 배너(`TetrisDuelInviteBanner`)와 모양·높이(92)가 같다 —
+/// 팝오버의 **받은 아잉 큐브 초대 배너**(v0.3.69). 테트리스 배너(`TetrisDuelInviteBanner`)와 모양·높이(92)가 같다 —
 /// 다른 것은 문구와 남은 초가 없다는 것뿐이다(방 TTL 이 10분이라 초를 세지 않는다 — 만료는 스토어가 목록에서 걷는다).
 ///
 /// ★ 이 배너가 없으면 초대를 받은 사람이 팝오버에서 볼 곳이 없다 — 창을 여는 길은 미니게임 머리글 하나뿐이고

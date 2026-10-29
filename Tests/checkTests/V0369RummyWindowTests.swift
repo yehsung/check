@@ -4,7 +4,7 @@ import Testing
 @testable import check
 @testable import CheckCore
 
-// v0.3.68 아잉 큐브 **맥 창** — 레이아웃 항등식 · 끌기 기하(순수) · 창 수명.
+// v0.3.69 아잉 큐브 **맥 창** — 레이아웃 항등식 · 끌기 기하(순수) · 창 수명.
 //
 // 창은 테트리스 창(v0.3.60) 수명 규약을 그대로 쓴다. 여기서 못 박는 것은 **아잉 큐브에서만 틀릴 수 있는 것**들이다:
 //   · 고정 1240×700 안에 판(다섯 줄)·랙(두 줄 × 22장)·버튼 열이 넘치지 않고 맞물린다(항등식).
@@ -17,7 +17,7 @@ import Testing
 // MARK: - 레이아웃 산식(순수)
 
 @MainActor
-struct V0368RummyWindowLayoutTests {
+struct V0369RummyWindowLayoutTests {
 @Test("아잉 큐브 창 크기 항등식 — 1240×700 고정 · 로비 두 열 · 판 세로 예산 · 랙 줄 폭")
 func theRummyWindowLayoutAddsUp() {
     // 없으면: 한 칸 숫자를 바꾼 것이 창을 몇 pt 넘치게 해 아래 버튼 줄이 잘리거나, 로비 두 열이 안쪽 폭과 어긋난다.
@@ -54,7 +54,7 @@ func theRummyWindowLayoutAddsUp() {
 // MARK: - 끌기 기하(순수)
 
 @Suite("아잉 큐브 끌기 기하(순수)")
-struct V0368RummyWindowGeometryTests {
+struct V0369RummyWindowGeometryTests {
     let width = RummyWindowLayout.boardContentWidth
 
     @Test("판 흐름 — 세트는 왼쪽부터 놓이고 폭을 넘으면 다음 줄로 · 새 세트 자리는 마지막 세트 뒤")
@@ -180,7 +180,7 @@ private func rwMoveOffscreen(_ controller: CheckRummyWindowController) {
 
 @MainActor
 @Suite(.serialized)
-struct V0368RummyWindowLifecycleTests {
+struct V0369RummyWindowLifecycleTests {
     @Test
     func theWindowIdentityMatchesTheContract() {
         // 없으면: 자동저장 이름이 다른 창과 겹쳐 자리 저장이 조용히 죽거나, 창이 늘어나 끌던 자리가 흔들리거나,

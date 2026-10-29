@@ -40,7 +40,7 @@ struct CheckMenuView: View {
     var previewChessInvite: ChessInvite? = nil
     /// 스냅샷 전용: 받은 **테트리스** 신청 배너(v0.3.60)를 강제로 그린다. 앱에서는 store.tetris.visibleIncoming 로만 결정.
     var previewTetrisInvite: TetrisDuelInvite? = nil
-    /// 스냅샷 전용: 받은 **아잉 큐브** 초대 배너(v0.3.68)를 강제로 그린다. 앱에서는 store.rummy.incomingInvites 로만 결정.
+    /// 스냅샷 전용: 받은 **아잉 큐브** 초대 배너(v0.3.69)를 강제로 그린다. 앱에서는 store.rummy.incomingInvites 로만 결정.
     var previewRummyInvite: RummyRoom? = nil
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
@@ -77,7 +77,7 @@ struct CheckMenuView: View {
         /// 받은 **테트리스** 대결 신청(v0.3.60). 체스 신청과 같은 급함(TTL 60초 · 판돈 루비)이라 체스 바로 뒤다 —
         /// 둘이 동시에 오면 먼저 선 쪽이 이기고 테트리스는 다음 팝오버로 밀린다(신청은 서버에 남아 창 로비에서 다시 보인다).
         case tetrisInvite
-        /// 받은 **아잉 큐브** 초대(v0.3.68). 사람(방장)이 기다리는 요청이지만 방 TTL 이 10분이라 60초짜리 1:1 신청보다
+        /// 받은 **아잉 큐브** 초대(v0.3.69). 사람(방장)이 기다리는 요청이지만 방 TTL 이 10분이라 60초짜리 1:1 신청보다
         /// 덜 급하다 — 테트리스 바로 뒤다(밀려도 초대는 서버에 남아 큐브 창 로비에서 다시 보인다).
         case rummyInvite
         /// 지난주 회고 안내(주 1회).
@@ -114,7 +114,7 @@ struct CheckMenuView: View {
     static let chessInviteBannerHeight: CGFloat = 92
     /// 받은 테트리스 신청 배너(v0.3.60). `TetrisDuelInviteBanner` 는 체스 배너와 **같은 모양**이라 높이도 같다.
     static let tetrisInviteBannerHeight: CGFloat = 92
-    /// 받은 아잉 큐브 초대 배너(v0.3.68). `RummyInviteBanner` 는 테트리스 배너와 **같은 모양**이라 높이도 같다.
+    /// 받은 아잉 큐브 초대 배너(v0.3.69). `RummyInviteBanner` 는 테트리스 배너와 **같은 모양**이라 높이도 같다.
     static let rummyInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
@@ -616,7 +616,7 @@ struct CheckMenuView: View {
                     chessInviteBanner
                     // 받은 테트리스 신청도 **같은 자리**(v0.3.60 — 체스와 같은 사정).
                     tetrisInviteBanner
-                    // 받은 아잉 큐브 초대도 **같은 자리**(v0.3.68 — 테트리스와 같은 사정).
+                    // 받은 아잉 큐브 초대도 **같은 자리**(v0.3.69 — 테트리스와 같은 사정).
                     rummyInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
@@ -1280,7 +1280,7 @@ struct MenuBarStatusLabel: View {
     /// 받은 **테트리스** 신청이 있다(v0.3.60). 체스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다.
     var hasTetrisInvite: Bool = false
 
-    /// 받은 **아잉 큐브** 초대가 있다(v0.3.68). 테트리스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다.
+    /// 받은 **아잉 큐브** 초대가 있다(v0.3.69). 테트리스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다.
     var hasRummyInvite: Bool = false
 
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
@@ -1419,7 +1419,7 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var chessInvite: Bool = false
     /// 받은 테트리스 신청이 있다(v0.3.60). 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var tetrisInvite: Bool = false
-    /// 받은 아잉 큐브 초대가 있다(v0.3.68). 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    /// 받은 아잉 큐브 초대가 있다(v0.3.69). 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var rummyInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"

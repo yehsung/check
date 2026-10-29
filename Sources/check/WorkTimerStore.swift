@@ -352,7 +352,7 @@ final class WorkTimerStore {
             // 1:1 테트리스 받은 신청도 같은 자리에서 본다(v0.3.60). 폴링이 창이 보일 때만 도는 것도 체스와 같아서, 창을 안 연
             // 사람에게는 이 한 줄과 소켓 신호가 신청을 아는 전부다.
             tetris.refreshLobbyIfStale()
-            // 아잉 큐브 받은 초대도 같은 자리에서 본다(v0.3.68) — 폴링이 창이 보일 때만 도는 것도 같아서, 창을 안 연 사람에게는
+            // 아잉 큐브 받은 초대도 같은 자리에서 본다(v0.3.69) — 폴링이 창이 보일 때만 도는 것도 같아서, 창을 안 연 사람에게는
             // 이 한 줄과 소켓 신호가 초대를 아는 전부다(공개 방 목록도 이 한 번으로 신선해진다).
             rummy.refreshLobbyIfStale()
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
@@ -1260,7 +1260,7 @@ final class WorkTimerStore {
     /// 판(엔진)도 이 스토어가 들고 단조 시계로 흘린다 — 창을 가리거나 최소화해도 판은 멈추지 않는다(설계 D10).
     let tetris: TetrisDuelStore
 
-    /// 아잉 큐브(2~4인) 스토어(v0.3.68). 오목·체스·테트리스와 **같은 호스트 프로토콜**을 요구한다(`RummyStoreHost = GomokuStoreHost`).
+    /// 아잉 큐브(2~4인) 스토어(v0.3.69). 오목·체스·테트리스와 **같은 호스트 프로토콜**을 요구한다(`RummyStoreHost = GomokuStoreHost`).
     /// 턴제라 판은 서버 상태 스냅숏 그대로다 — 이 스토어는 차례 중 작업 판(편집기)만 로컬로 든다.
     let rummy: RummyStore
 
@@ -1606,7 +1606,7 @@ final class WorkTimerStore {
             if chess.hiddenPeerIDs != blockHiddenPeerIDs { chess.hiddenPeerIDs = blockHiddenPeerIDs }
             // 테트리스도 같은 관계다(v0.3.60) — 차단한 사람이 로비·받은 신청·배너에 남지 않게.
             if tetris.hiddenPeerIDs != blockHiddenPeerIDs { tetris.hiddenPeerIDs = blockHiddenPeerIDs }
-            // 아잉 큐브도 같은 관계다(v0.3.68) — 차단한 사람이 로비·공개 방·받은 초대·배너에 남지 않게. 스토어는 UUID 로 받는다
+            // 아잉 큐브도 같은 관계다(v0.3.69) — 차단한 사람이 로비·공개 방·받은 초대·배너에 남지 않게. 스토어는 UUID 로 받는다
             // (같음 가드는 스토어 안에 있다).
             rummy.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
         }
@@ -1929,7 +1929,7 @@ final class WorkTimerStore {
         self.chess = ChessStore()
         // 테트리스도 같다(v0.3.60) — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.tetris = TetrisDuelStore()
-        // 아잉 큐브도 같다(v0.3.68) — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        // 아잉 큐브도 같다(v0.3.69) — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.rummy = RummyStore()
         // 확성기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.megaphone = MegaphoneStore()
@@ -4137,7 +4137,7 @@ extension WorkTimerStore {
         // 테트리스도 같은 이유로 내린다(v0.3.60). 빠뜨리면 다음 사람이 앞 계정의 판·신청을 보고, 앞 계정의 판 루프가
         // 새 세션의 토큰으로 보고를 낸다(세대가 막지만 판 자체가 남는다).
         tetris.reset()
-        // 아잉 큐브도 같은 이유로 내린다(v0.3.68). 빠뜨리면 다음 사람이 앞 계정의 방·판·초대를 본다.
+        // 아잉 큐브도 같은 이유로 내린다(v0.3.69). 빠뜨리면 다음 사람이 앞 계정의 방·판·초대를 본다.
         rummy.reset()
         // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()

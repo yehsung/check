@@ -100,7 +100,7 @@ enum DailyMissionCopy {
         case "gomoku": return MiniGameGomokuEntryButton.icon
         case "chess": return ChessEntryIcon.resolved
         case "tetris_duel": return TetrisDuelEntryIcon.resolved
-        // v0.3.68 일일 미션 여덟째 줄(daily_rummy) — 미니게임 창 머리글의 [큐브] 입구와 같은 기호.
+        // v0.3.69 일일 미션 여덟째 줄(daily_rummy) — 미니게임 창 머리글의 [큐브] 입구와 같은 기호.
         case "rummy": return RummyEntryIcon.resolved
         default: return AchievementCopy.fallbackIcon
         }

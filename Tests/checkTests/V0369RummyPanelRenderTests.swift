@@ -5,7 +5,7 @@ import Testing
 @testable import check
 @testable import CheckCore
 
-// v0.3.68 아잉 큐브 **화면** 렌더 — 타일 그림 · 로비(방 없음 · 방장 방 · 초대 받음) · 내 차례(무효 세트 포함 · 끌기 거절) ·
+// v0.3.69 아잉 큐브 **화면** 렌더 — 타일 그림 · 로비(방 없음 · 방장 방 · 초대 받음) · 내 차례(무효 세트 포함 · 끌기 거절) ·
 // 남의 차례 작업 판 · 결과 · 규칙.
 //
 // 전부 ImageRenderer(scale 2)로 그리고 `CHECK_SNAPSHOT_DIR/stills/rummy-*.png` 에 남긴다(사람이 직접 열어 본다 —
@@ -259,7 +259,7 @@ private func rpRedRing(_ bitmap: NSBitmapImageRep, _ frame: CGRect) -> Int {
 
 @MainActor
 @Suite(.serialized)
-struct V0368RummyPanelRenderTests {
+struct V0369RummyPanelRenderTests {
     @Test("타일 그림 — 네 색 숫자 잉크 · 표식 · 크림-라벤더 몸체 · 조커는 아잉이 얼굴 + 네 색 점")
     func tilesDrawOurPalette() throws {
         // 없으면: 색 하나가 다른 색으로 그려지거나(팔레트 오타), 조커가 빈 타일로 나오거나(자산 못 읽음), 몸체가 어두워

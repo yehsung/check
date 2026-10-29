@@ -119,7 +119,7 @@ package enum RealtimeLinkConstants {
     /// 서버가 하트비트마다 울리지 않는 것이 그 누수를 묶는 장치다 — 설계 D3.)
     package static let tetrisBroadcastEvent = "tetris"
 
-    /// 아잉 큐브(2~4인) 신호의 브로드캐스트 이벤트 이름(v0.3.68). 서버 `rummy__ring` 의
+    /// 아잉 큐브(2~4인) 신호의 브로드캐스트 이벤트 이름(v0.3.69). 서버 `rummy__ring` 의
     /// `realtime.send(…, 'rummy', poke_topic(…), true)` 와 **문자 그대로 같다**.
     ///
     /// 테트리스 가지와 **같은 이유로** 따로 둔다: 이 이름이 없으면 아잉 큐브 초인종(초대·참가·시작·작업 판·확정·정산)이
@@ -506,7 +506,7 @@ package struct RealtimeLink: Equatable, Sendable {
             // 테트리스(v0.3.60)는 오목 줄 **앞**에 선다 — 순서에 뜻이 있어서가 아니라 오목·체스 가지와 drain 기본값이 한 문장으로
             // 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다. 이 줄이 없으면 테트리스 초인종이 아래
             // 기본값으로 떨어져 **울릴 때마다 take_pokes 가 한 번씩 더** 나가고 소켓은 테트리스 상태를 한 번도 당기지 않는다.
-            // 아잉 큐브(v0.3.68)도 테트리스와 같은 까닭으로 오목 줄 **앞**에 선다 — 테트리스 줄보다도 앞인 까닭은 테트리스·오목 두 줄이
+            // 아잉 큐브(v0.3.69)도 테트리스와 같은 까닭으로 오목 줄 **앞**에 선다 — 테트리스 줄보다도 앞인 까닭은 테트리스·오목 두 줄이
             // 한 문장으로 붙어 있어야 하는 소스 계약(V0360TetrisDuelRealtimeTests)이다. 이 줄이 없으면 작업 판 초인종이
             // 끌기마다 아래 기본값으로 떨어져 take_pokes 가 한 번씩 더 나가고 소켓은 아잉 큐브 상태를 한 번도 당기지 않는다.
             if event == RealtimeLinkConstants.rummyBroadcastEvent { return [.rummySignal] }

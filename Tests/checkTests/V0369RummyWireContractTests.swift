@@ -3,7 +3,7 @@ import Testing
 @testable import check
 @testable import CheckCore
 
-// v0.3.68 아잉 큐브 — **서버 계약 합류** 시험(통합 갈래).
+// v0.3.69 아잉 큐브 — **서버 계약 합류** 시험(통합 갈래).
 //
 // 두 가지를 잰다.
 // ① 실서버 출력 픽스처(`Fixtures/rummy/server/*.json`, S 갈래가 하네스에서 실제 RPC 를 불러 뜬 43장)가 전부 디코드되고,
@@ -61,8 +61,8 @@ private func rwcDecode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
 private func rwcFaces(_ any: Any?) -> [String]? { any as? [String] }
 private func rwcInt(_ any: Any?) -> Int? { (any as? NSNumber)?.intValue }
 
-@Suite("v0.3.68 아잉 큐브 — 서버 계약 합류(픽스처 · 인자 이름)")
-struct V0368RummyWireContractTests {
+@Suite("v0.3.69 아잉 큐브 — 서버 계약 합류(픽스처 · 인자 이름)")
+struct V0369RummyWireContractTests {
     private func fixtures() throws -> [(name: String, data: Data, object: [String: Any])] {
         let files = try FileManager.default.contentsOfDirectory(at: rwcFixtureFolder, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }

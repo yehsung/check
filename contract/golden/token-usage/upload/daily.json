@@ -1,0 +1,229 @@
+{
+  "cases": [
+    {
+      "account": {
+        "buckets": {
+          "2026-07-01": 99,
+          "2026-09-15": 50,
+          "2026-10-02": 0,
+          "2026-10-03": -1
+        }
+      },
+      "changedDays": [
+        "2026-09-15",
+        "2026-10-02",
+        "2026-10-03"
+      ],
+      "id": "window-mixed",
+      "lastUploaded": {
+        "2026-08-30": {
+          "antigravity": null,
+          "claude": 1,
+          "codex": null,
+          "codexAccount": null,
+          "codexUTC": null
+        },
+        "2026-09-15": {
+          "antigravity": null,
+          "claude": 20,
+          "codex": null,
+          "codexAccount": 49,
+          "codexUTC": null
+        },
+        "2026-10-01": {
+          "antigravity": null,
+          "claude": 30,
+          "codex": 7,
+          "codexAccount": null,
+          "codexUTC": 6
+        }
+      },
+      "rows": [
+        {
+          "claude_total": 20,
+          "codex_account": 50,
+          "day": "2026-09-15",
+          "device_id": "win:dev-1",
+          "user_id": "u-1"
+        },
+        {
+          "claude_total": 0,
+          "codex_account": 0,
+          "codex_total": 0,
+          "codex_utc_total": 0,
+          "day": "2026-10-02",
+          "device_id": "win:dev-1",
+          "user_id": "u-1"
+        },
+        {
+          "antigravity_total": 4,
+          "claude_total": 0,
+          "codex_account": 0,
+          "codex_total": 9,
+          "codex_utc_total": 8,
+          "day": "2026-10-03",
+          "device_id": "win:dev-1",
+          "user_id": "u-1"
+        }
+      ],
+      "usage": {
+        "antigravityDaily": {
+          "2026-09-20": 2,
+          "2026-10-03": 4
+        },
+        "claudeCompleteFrom": "2026-09-01",
+        "claudeDaily": {
+          "2026-08-05": 5,
+          "2026-08-20": 10,
+          "2026-09-15": 20,
+          "2026-10-01": 30,
+          "2026-10-04": -3
+        },
+        "claudeInput": 100,
+        "codexDaily": {
+          "2026-10-01": 7,
+          "2026-10-03": 9
+        },
+        "codexDailyUTC": {
+          "2026-09-30": 3,
+          "2026-10-01": 6,
+          "2026-10-03": 8
+        },
+        "month": "2026-10",
+        "windowStart": "2026-08-10"
+      },
+      "values": {
+        "2026-09-15": {
+          "antigravity": null,
+          "claude": 20,
+          "codex": null,
+          "codexAccount": 50,
+          "codexUTC": null
+        },
+        "2026-10-01": {
+          "antigravity": null,
+          "claude": 30,
+          "codex": 7,
+          "codexAccount": null,
+          "codexUTC": 6
+        },
+        "2026-10-02": {
+          "antigravity": null,
+          "claude": 0,
+          "codex": 0,
+          "codexAccount": 0,
+          "codexUTC": 0
+        },
+        "2026-10-03": {
+          "antigravity": 4,
+          "claude": 0,
+          "codex": 9,
+          "codexAccount": 0,
+          "codexUTC": 8
+        }
+      }
+    },
+    {
+      "account": null,
+      "changedDays": [
+        "2026-10-02"
+      ],
+      "id": "old-snapshot",
+      "lastUploaded": {},
+      "rows": [
+        {
+          "claude_total": 11,
+          "codex_total": 3,
+          "day": "2026-10-02",
+          "device_id": "win:dev-1",
+          "user_id": "u-1"
+        }
+      ],
+      "usage": {
+        "claudeDaily": {
+          "2026-09-28": 5,
+          "2026-10-02": 11
+        },
+        "codexDaily": {
+          "2026-10-02": 3
+        },
+        "month": "2026-10"
+      },
+      "values": {
+        "2026-10-02": {
+          "antigravity": null,
+          "claude": 11,
+          "codex": 3,
+          "codexAccount": null,
+          "codexUTC": null
+        }
+      }
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-08-01": 5,
+          "2026-10-05": 1234
+        }
+      },
+      "changedDays": [
+        "2026-10-05"
+      ],
+      "id": "account-only",
+      "lastUploaded": {},
+      "rows": [
+        {
+          "claude_total": 0,
+          "codex_account": 1234,
+          "codex_total": 0,
+          "codex_utc_total": 0,
+          "day": "2026-10-05",
+          "device_id": "win:dev-1",
+          "user_id": "u-1"
+        }
+      ],
+      "usage": {
+        "month": "2026-10",
+        "windowStart": "2026-08-07"
+      },
+      "values": {
+        "2026-10-05": {
+          "antigravity": null,
+          "claude": 0,
+          "codex": 0,
+          "codexAccount": 1234,
+          "codexUTC": 0
+        }
+      }
+    },
+    {
+      "account": null,
+      "changedDays": [],
+      "id": "empty-usage",
+      "lastUploaded": {},
+      "rows": [],
+      "usage": {
+        "month": "2026-10"
+      },
+      "values": {}
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+  "golden": "token-usage/upload/daily",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "account": "CodexAccountUsage 는 buckets 만 값에 든다(fetchedAt·lifetime 은 일별 값과 무관).",
+    "changedDays": "changedDays(current:lastUploaded:) — 장부와 다른 날, 오름차순.",
+    "rows": "rows(userID: \"u-1\", deviceID: \"win:dev-1\", days: changedDays, values:) 를 convertToSnakeCase 로 인코드(nil 키 없음).",
+    "values": "TokenUsageDailyUpload.values(usage:account:) — 창(windowStartDay) 안 날짜별 값. null = 모른다(본문 키 생략)."
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStoreSync.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+    "Sources/CheckCore/CheckCodexAccountUsage.swift"
+  ]
+}

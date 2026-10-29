@@ -1,0 +1,304 @@
+{
+  "cases": [
+    {
+      "buckets": {
+        "2026-10-01": 105,
+        "2026-10-29": 7
+      },
+      "confirms": true,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-ok-buckets",
+      "kind": "parse",
+      "lifetimeTokens": 555000,
+      "lines": [
+        "{\"id\":1,\"result\":{\"userAgent\":\"x\"}}",
+        "{\"method\":\"remoteControl/status/changed\",\"params\":{}}",
+        "{\"id\":2,\"result\":{\"summary\":{\"lifetimeTokens\":555000},\"dailyUsageBuckets\":[{\"startDate\":\"2026-10-01\",\"tokens\":100},{\"startDate\":\"2026-10-01T09:00:00Z\",\"tokens\":5},{\"startDate\":\"2026-10-29\",\"tokens\":7.9},{\"startDate\":\"2026-08-01\",\"tokens\":3},{\"startDate\":\"short\",\"tokens\":1},{\"startDate\":\"2026-10-02\"},{\"tokens\":4}]}}"
+      ],
+      "status": 1
+    },
+    {
+      "buckets": {},
+      "confirms": true,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-ok-nulls",
+      "kind": "parse",
+      "lifetimeTokens": null,
+      "lines": [
+        "{\"id\":2,\"result\":{\"summary\":{\"lifetimeTokens\":null},\"dailyUsageBuckets\":null}}"
+      ],
+      "status": 1
+    },
+    {
+      "buckets": {},
+      "confirms": true,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-ok-id-double",
+      "kind": "parse",
+      "lifetimeTokens": null,
+      "lines": [
+        "{\"id\":2.0,\"result\":{}}"
+      ],
+      "status": 1
+    },
+    {
+      "confirms": false,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-id-string-ignored",
+      "kind": "parse",
+      "lines": [
+        "{\"id\":\"2\",\"result\":{}}"
+      ],
+      "reason": "id 2 응답 줄 없음",
+      "status": 5
+    },
+    {
+      "confirms": true,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-auth-error",
+      "kind": "parse",
+      "lines": [
+        "{\"id\":2,\"error\":{\"code\":-32000,\"message\":\"Not AUTHenticated: login required\"}}"
+      ],
+      "reason": "Not AUTHenticated: login required",
+      "status": 3
+    },
+    {
+      "confirms": false,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-other-error",
+      "kind": "parse",
+      "lines": [
+        "{\"id\":2,\"error\":{\"code\":-32601,\"message\":\"method not found\"}}"
+      ],
+      "reason": "method not found",
+      "status": 5
+    },
+    {
+      "confirms": false,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-result-missing",
+      "kind": "parse",
+      "lines": [
+        "{\"id\":2}"
+      ],
+      "reason": "result 없음",
+      "status": 5
+    },
+    {
+      "confirms": false,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-no-response",
+      "kind": "parse",
+      "lines": [
+        "{\"id\":1,\"result\":{}}",
+        "not json",
+        ""
+      ],
+      "reason": "id 2 응답 줄 없음",
+      "status": 5
+    },
+    {
+      "buckets": {},
+      "confirms": true,
+      "fetchedAtEpoch": 1793322123,
+      "id": "parse-garbled-then-ok",
+      "kind": "parse",
+      "lifetimeTokens": 1,
+      "lines": [
+        "{\"id\":2,\"res",
+        "  {\"id\":2,\"result\":{\"summary\":{\"lifetimeTokens\":1}}}  "
+      ],
+      "status": 1
+    },
+    {
+      "appVersion": "1",
+      "id": "request-lines-plain",
+      "kind": "requestLines",
+      "lines": [
+        "{\"method\":\"initialize\",\"id\":1,\"params\":{\"clientInfo\":{\"name\":\"aing-check\",\"title\":\"aing-check\",\"version\":\"1\"}}}",
+        "{\"method\":\"initialized\",\"params\":{}}",
+        "{\"method\":\"account/usage/read\",\"id\":2}"
+      ]
+    },
+    {
+      "appVersion": "1.0.\"1\"",
+      "id": "request-lines-quoted",
+      "kind": "requestLines",
+      "lines": [
+        "{\"method\":\"initialize\",\"id\":1,\"params\":{\"clientInfo\":{\"name\":\"aing-check\",\"title\":\"aing-check\",\"version\":\"1.0.1\"}}}",
+        "{\"method\":\"initialized\",\"params\":{}}",
+        "{\"method\":\"account/usage/read\",\"id\":2}"
+      ]
+    },
+    {
+      "account": null,
+      "accountStatus": null,
+      "id": "account-key-none",
+      "key": null,
+      "kind": "accountKey",
+      "month": "2026-10"
+    },
+    {
+      "account": null,
+      "accountStatus": 3,
+      "id": "account-key-status-only",
+      "key": "-|-|3",
+      "kind": "accountKey",
+      "month": "2026-10"
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "accountStatus": 1,
+      "id": "account-key-account-ok",
+      "key": "300|987654|1",
+      "kind": "accountKey",
+      "month": "2026-10"
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "accountStatus": null,
+      "id": "account-key-account-nostatus",
+      "key": "300|987654|-",
+      "kind": "accountKey",
+      "month": "2026-10"
+    },
+    {
+      "account": {
+        "buckets": {},
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": null
+      },
+      "accountStatus": 5,
+      "id": "account-key-lifetime-nil",
+      "key": "0|-|5",
+      "kind": "accountKey",
+      "month": "2026-10"
+    },
+    {
+      "build": 1,
+      "id": "stamp-kst-before-midnight",
+      "kind": "stamp",
+      "nowEpoch": 1793285999,
+      "stamp": "1:2026-10-29"
+    },
+    {
+      "build": 1,
+      "id": "stamp-kst-midnight",
+      "kind": "stamp",
+      "nowEpoch": 1793286000,
+      "stamp": "1:2026-10-30"
+    },
+    {
+      "build": 1,
+      "id": "stamp-utc-evening",
+      "kind": "stamp",
+      "nowEpoch": 1793376000,
+      "stamp": "1:2026-10-31"
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "id": "month-2026-10",
+      "kind": "month",
+      "latestBucketDate": "2026-10-29",
+      "month": "2026-10",
+      "monthTotal": 300
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "id": "month-2026-09",
+      "kind": "month",
+      "latestBucketDate": "2026-09-29",
+      "month": "2026-09",
+      "monthTotal": 11
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "id": "month-2026-11",
+      "kind": "month",
+      "latestBucketDate": null,
+      "month": "2026-11",
+      "monthTotal": 0
+    },
+    {
+      "account": {
+        "buckets": {
+          "2025-12-31": 5,
+          "2026-08-20": 1,
+          "2026-08-21": 2,
+          "2026-08-22": 3,
+          "2026-10-30": 4
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 1
+      },
+      "id": "pruned-70d",
+      "kind": "pruned",
+      "result": {
+        "2026-08-21": 2,
+        "2026-08-22": 3,
+        "2026-10-30": 4
+      }
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+  "golden": "token-usage/upload/account",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "accountKey": "WorkTimerStore.accountUploadKey(account:month:status:) — 월간 변경 게이트의 계정 키.",
+    "month": "CodexAccountUsage.monthTotal · latestBucketDate(in:) — 버킷은 UTC 일자.",
+    "parse": "CodexAccountUsageProbe.parse(lines:fetchedAt:) — status 1 = 성공(그때 lifetimeTokens·buckets), 그 밖은 실패 상태 원시값과 reason. confirms = confirmsToolchain.",
+    "pruned": "pruned() — fetchedAt − 70일(UTC 일자) 이전 버킷을 버린다.",
+    "requestLines": "requestLines(appVersion:) — JSONL 3줄(따옴표는 지운다).",
+    "stamp": "WorkTimerStore.codexDiagnosticsStamp(build:now:) — \"<빌드>:<KST 날짜>\"."
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStoreSync.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+    "Sources/CheckCore/CheckCodexAccountUsage.swift"
+  ]
+}

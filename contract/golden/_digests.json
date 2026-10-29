@@ -722,6 +722,58 @@
         "Tests/checkTests/Fixtures/todo-rpc/_manifest.json": "dd985dcb27324c7b6a6fc202d8f3bcbef459d5147824987ba967f59460f2e67f"
       }
     },
+    "token-usage/upload/account": {
+      "file": "36a544e805f2b5717d856e2f3e54838c6c03cb02494e7747650e886d88ddf4ef",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+      }
+    },
+    "token-usage/upload/daily": {
+      "file": "f1ef802f105af28d260c5fd7daa831a1952c0f46ad0f67f3fd14ddeec74f3689",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+      }
+    },
+    "token-usage/upload/diagnostics": {
+      "file": "82dcc85018770476ffeb0c2b0afe91c4b5d72af775288a88aea19fff9d42aafd",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+      }
+    },
+    "token-usage/upload/requests": {
+      "file": "02b722164db111e97008c01327494ddb0999bec619c468ac604c9b05edd4b80f",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+      }
+    },
     "weekly/status": {
       "file": "d023fdc5a90d301fe581dc187989ad9a08b952de89cc55058bf9a8d87e4e99c4",
       "generator": {

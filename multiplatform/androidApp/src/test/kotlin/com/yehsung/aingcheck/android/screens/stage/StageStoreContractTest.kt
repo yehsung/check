@@ -87,7 +87,7 @@ class StageStoreContractTest {
                     assertEquals(TapOutcome.hit, d.tap(Vec2(137.5, 137.5), d.frame(13.0, 280.0, 340.0), 24.0, store, 13.0))
                     frames += "hit-peak" to d.frame(13.08, 280.0, 340.0)!!
                     frames += "hit-end" to d.frame(13.4, 280.0, 340.0)!!
-                    check(d.reveal(14.0)); frames += "greeting" to d.frame(14.3, 280.0, 340.0)!!
+                    check(d.reveal(14.0)); frames += "reveal-spin" to d.frame(14.3, 280.0, 340.0)!!
                 }
                 var opaqueHits = 0
                 for ((label, frame) in frames) {
@@ -126,10 +126,16 @@ class StageStoreContractTest {
             val d = StageDirector(library, finish, 0.0, Random(3))
             val surface = PlatformRaster.newSurface(280, 340)
             var t = 0.0
-            while (t < 30.0) { // 30초: 살랑 두 바퀴 · 깜빡임 · hit · 인사
+            var spinCells = 0
+            while (t < 30.0) { // 30초: 살랑 두 바퀴 · 깜빡임 · hit · 공개 한 바퀴
                 d.tick(t)
                 if (t in 5.0..5.05) d.tap(Vec2(137.5, 137.5), d.frame(t, 280.0, 340.0), 24.0, store, t)
-                if (t in 9.0..9.05) d.reveal(t)
+                if (t in 9.0..9.05) {
+                    // AingStage 와 같은 순서: 한 바퀴의 S 스핀 칸을 먼저 데운다(스핀 페이지마다 한 번 — 4 · 5). 그리는 동안엔 페이지를 풀지 않는다.
+                    assertTrue(store.prewarmSpin(d.spinPrewarmCells()))
+                    spinCells = d.spinPrewarmCells().size
+                    d.reveal(t)
+                }
                 surface.clear()
                 store.draw(surface, d.frame(t, 280.0, 340.0)!!)
                 store.hitTest(d.frame(t, 280.0, 340.0)!!, Vec2(137.5, 137.5), 24.0)
@@ -137,8 +143,8 @@ class StageStoreContractTest {
             }
             surface.close()
             println("AINGCHECK-W5C-STORE 데운 칸 $warmed · 30초 뒤 칸 ${store.cellCount} · 페이지 디코드 ${store.pageDecodes}")
-            assertEquals(2, store.pageDecodes, "무대 리액션이 데운 칸 밖으로 나가 페이지를 다시 풀었다")
-            assertEquals(warmed, store.cellCount)
+            assertEquals(2 + 2, store.pageDecodes, "무대 리액션이 데운 칸 밖으로 나가 페이지를 다시 풀었다(쉬는 행 · 패치 + 스핀 페이지 둘)")
+            assertEquals(warmed + spinCells, store.cellCount)
             assertTrue(d.hits == 1 && d.reveals == 1)
         } finally {
             assets.release(store); assets.trim()

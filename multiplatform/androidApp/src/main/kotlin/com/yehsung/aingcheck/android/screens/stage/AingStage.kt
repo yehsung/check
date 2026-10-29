@@ -93,7 +93,7 @@ class StageHandle {
  * 같은 크기**(그림 + 6 × 그림 + 12, 발밑 빛 그대로)라 무대를 그리던 화면이 칸(slot) 하나로 바꿔 끼운다(assembly.md).
  *  - 구운 아잉이(아잉 · 황금 · 무지개, 케이크 둘은 아잉으로 접힘)는 부유 · 살랑 · 깜빡임으로 살아 있고, 몸을 두드리면 hit.
  *  - 스프라이트 6종 · 모르는 id 와 자산을 아직(또는 끝내) 못 읽은 동안은 iOS 와 같은 초상 무대다.
- *  - [revealKey] 가 새 값이 될 때마다 한 번 공개 반응(인사 — [StagePolicy.REVEAL_REACTION]). 같은 값은 화면을 다시 열어도 다시 하지 않는다.
+ *  - [revealKey] 가 새 값이 될 때마다 한 번 공개 반응(한 바퀴 — [StagePolicy.REVEAL_REACTION] · S 스핀 칸을 먼저 데운다). 같은 값은 화면을 다시 열어도 다시 하지 않는다.
  *  - 화면에서 사라지면(ON_PAUSE) 장면 시계를 멈추고 그리기를 쉰다(맥 렌더 정지와 같은 규칙).
  */
 @Composable
@@ -215,6 +215,8 @@ private fun StageLive(
     var playedReveal by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(director, revealToken) {
         if (revealToken != null && revealToken != playedReveal) {
+            // 한 바퀴의 S 스핀 칸을 배경에서 먼저 굽는다(그리는 주 스레드에서 페이지를 풀지 않게). 메모리가 모자라면 스핀 없이 돈다.
+            if (!withContext(Dispatchers.Default) { store.prewarmSpin(director.spinPrewarmCells()) }) director.spinEnabled = false
             director.reveal(clock.now())
             playedReveal = revealToken
             kick.trySend(Unit)

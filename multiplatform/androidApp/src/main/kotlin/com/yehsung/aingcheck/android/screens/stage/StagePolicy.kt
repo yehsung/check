@@ -1,4 +1,4 @@
-// 원본: 없음 (iOS 는 초상만 — 결정 #2 '살아 있는 아잉이 미리보기 하나'(G §5-3 · §8-12) · F §8 B · §8-17 #7 케이크 접기. Swift 짝이 없는 Android 전용 규칙)
+// 원본: 없음 (iOS 는 초상만 — 결정 #2 '살아 있는 아잉이 미리보기 하나'(G §5-3 · §8-12) · F §8 B · §8-17 #7 케이크 접기 · §8-19 #6② 공개 한 바퀴. Swift 짝이 없는 Android 전용 규칙)
 package com.yehsung.aingcheck.android.screens.stage
 
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
@@ -24,11 +24,20 @@ object StagePolicy {
     const val TAP_REACTION = "hit"
 
     /**
-     * 뽑기 결과 공개 뒤 한 번 하는 반응. 결정 #2 의 문구는 '한 바퀴(한 번 돌기)'지만 Android 기본 묶음(config.json bundles.androidDefault)은
-     * L 단 쉬는 행(몸 요 −49…+49° · 기울기 13° 57칸)과 hit · greeting 트랙뿐이라 몸이 등을 보이는 칸이 없다 — 스핀을 그리면 앞모습이
-     * 그대로 미끄러진다. 묶음 안에서 되는 인사(z ±10° 까딱)로 대신하고 설계 충돌로 보고한다(스핀 칸을 실으면 S 단 스핀 페이지 3마감 +2.2MB).
+     * 뽑기 결과 공개 뒤 한 번 하는 반응 = **한 바퀴**(사용자 결정 G §8-19 #6② — 첫 판부터). 맥에서 몸이 y 360° 도는 리액션은
+     * 근무 시작(commuteStart — 폴짝 + y 360°, 0.6s · 우선 3)뿐이다(goalAchieved 는 720°). 등이 보이는 각은 Android 기본 묶음
+     * (config.json bundles.androidDefault)에 함께 실은 **S 단 스핀 행**(요 10° × 기울기 4° · 세 마감 × 페이지 셋 + cells-S)으로 그린다 — [StageSpin].
      */
-    const val REVEAL_REACTION = "greeting"
+    const val REVEAL_REACTION = "commuteStart"
+
+    /** 무대가 평소 그리는 단(L 쉬는 행). 재생기 단 고르기를 쓰지 않는다 — cells-S 가 실려 있어 작은 틀에선 S 를 고르는데 S 쉬는 행 페이지는 없다. */
+    const val STAGE_TIER = "L"
+
+    /** 한 바퀴의 등 쪽 칸을 고르는 단(S 스핀 행만 실린다). */
+    const val SPIN_TIER = "S"
+
+    /** 데움이 굽는 L 쉬는 행 칸의 |요| 한계(살랑 ±8° · hit · 한 바퀴 앞뒤가 닿는 정면 근처). 한 바퀴 동안 L 은 이 칸만 쓴다. */
+    const val PREWARM_YAW_DEG = 9
 
     /** 깜빡임 간격(초) — 맥 `CheckOverlayController.blinkIntervalRange`(3…7). */
     val BLINK_INTERVAL_S: ClosedFloatingPointRange<Double> = 3.0..7.0

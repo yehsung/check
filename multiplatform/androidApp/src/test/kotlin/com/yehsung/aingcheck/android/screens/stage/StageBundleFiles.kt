@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import java.io.File
 import java.nio.file.FileSystems
 
@@ -20,7 +21,8 @@ object StageBundleFiles {
     val configFile: File = File(mpRoot, "scripts/bake-aing/config.json")
 
     /** 묶음: 굽기 뿌리 상대 경로 → 파일, 후광 이름 → 파일. */
-    class Bundle(val bakeFiles: Map<String, File>, val haloFiles: Map<String, File>) {
+    /** [budget] = 설정의 크기 예산(바이트 — 한 곳: config.json bundles.<이름>.budget). */
+    class Bundle(val bakeFiles: Map<String, File>, val haloFiles: Map<String, File>, val budget: Long? = null) {
         val totalBytes: Long get() = bakeFiles.values.sumOf { it.length() } + haloFiles.values.sumOf { it.length() }
         fun bytesWhere(pred: (String) -> Boolean): Long = bakeFiles.filterKeys(pred).values.sumOf { it.length() }
     }
@@ -40,7 +42,7 @@ object StageBundleFiles {
             val m = fs.getPathMatcher("glob:${f.name}")
             f.parentFile.listFiles().orEmpty().filter { it.isFile && m.matches(fs.getPath(it.name)) }.sortedBy { it.name }.forEach { halos[it.name] = it }
         }
-        return Bundle(bake, halos)
+        return Bundle(bake, halos, cfg["budget"]?.jsonPrimitive?.long)
     }
 
     /** 묶음만 보이는 [BakeFiles](없는 파일은 null — APK 자산과 같다). */

@@ -56,6 +56,11 @@ android {
         buildConfig = true
     }
     defaultConfig {
+        // 무대 묶음 예산 — 정의는 한 곳(scripts/bake-aing/config.json bundles.androidDefault.budget). 기기 시험이 설치된 APK 를 이 값으로 잰다.
+        buildConfigField(
+            "int", "STAGE_BUNDLE_BUDGET",
+            (((groovy.json.JsonSlurper().parse(rootDir.resolve("scripts/bake-aing/config.json")) as Map<*, *>)["bundles"] as Map<*, *>)["androidDefault"] as Map<*, *>)["budget"].toString(),
+        )
         buildConfigField("boolean", "DUELS_ENABLED", "false")
         buildConfigField("String", "RELEASE_STAMP", "\"\"")
     }
@@ -92,7 +97,7 @@ android {
 // W5-c 살아 있는 미리보기(결정 #2 · G §8-12 · F §8 B): 구운 아잉이 **Android 기본 묶음**을 앱 자산으로 싣는다(git 사본 0).
 // 고르는 규칙은 굽기 설정 한 곳 — scripts/bake-aing/config.json `bundles.androidDefault`(assets = 굽기 뿌리 기준 글롭, repo = 저장소 뿌리 기준 글롭) —
 // 을 그대로 읽는다: 굽기 파일은 assets/aing-bake/<굽기 상대 경로>, 후광 원본 PNG 는 assets/aing-bake/halo/<이름>.
-// 예산(L 단 ≤ 4MB · 묶음 ≤ 4.5MB)은 시험이 잰다(screens/stage StageBundleTest · 기기 StageDeviceTest 가 설치된 APK 를 읽는다).
+// 예산(L 단 ≤ 4MB · 묶음 ≤ config.json budget — 8차 spin: S 스핀 행을 더해 6.9MB)은 시험이 잰다(screens/stage StageBundleTest · 기기 StageDeviceTest 가 설치된 APK 를 읽는다).
 // 기기 시험(T7 부분집합 · 맥 렌더 비교 PNG): 맥 골든(golden.json + 무대 리액션 넷)을 시험 APK Java 자원으로, 판정 규칙은 character 의 parity/ 한 벌을 소스로.
 abstract class AingcheckStageBakeFiles : DefaultTask() {
     @get:InputFiles
@@ -128,10 +133,10 @@ val stageBakeAssets = tasks.register<AingcheckStageBakeFiles>("aingcheckStageBak
     outputDir.set(layout.buildDirectory.dir("generated/aingcheck/stageBake/assets"))
 }
 val stageDeviceTestGoldens = tasks.register<AingcheckStageBakeFiles>("aingcheckStageDeviceTestGoldens") {
-    description = "기기 시험이 맞댈 맥 골든(무대 리액션 idle · blink · hit · greeting)과 판정 무리를 가르는 S 칸 표를 시험 APK 자원 폴더로 모은다(W5-c)."
+    description = "기기 시험이 맞댈 맥 골든(무대 리액션 idle · blink · hit · 공개 한 바퀴 commuteStart)과 판정 무리를 가르는 S 칸 표를 시험 APK 자원 폴더로 모은다(W5-c)."
     bakeFiles.from(
         fileTree(stageBakeRoot) {
-            include("golden/golden.json", "golden/*-idle-*.webp", "golden/*-blink-*.webp", "golden/*-hit-*.webp", "golden/*-greeting-*.webp", "*/cells-S.json")
+            include("golden/golden.json", "golden/*-idle-*.webp", "golden/*-blink-*.webp", "golden/*-hit-*.webp", "golden/*-commuteStart-*.webp", "*/cells-S.json")
         },
     )
     outputDir.set(layout.buildDirectory.dir("generated/aingcheck/stageBake/androidTestResources"))

@@ -78,9 +78,15 @@ class StageStore internal constructor(
 
     private fun key(cell: BakeCell, closed: Boolean) = if (closed) "${cell.id}#closed" else cell.id
 
-    private fun put(key: String, rgba: RgbaImage) {
+    private var closed = false
+
+    private fun art(key: String, rgba: RgbaImage): StageCellArt {
         val mask = SpriteAlphaMask.of(rgba) ?: error("칸 마스크를 못 굽는다: $key")
-        cells[key] = StageCellArt(raster.imageFromPremultiplied(rgba), mask)
+        return StageCellArt(raster.imageFromPremultiplied(rgba), mask)
+    }
+
+    private fun put(key: String, rgba: RgbaImage) {
+        cells[key] = art(key, rgba)
     }
 
     /**
@@ -99,7 +105,7 @@ class StageStore internal constructor(
         try {
             for (cell in missing.sortedBy { it.page }) {
                 val rgba = restPhase.cellRgba(cell, closedEyes = false)
-                open[cell.id] = rgba
+                if (cell.closedPatch != null) open[cell.id] = rgba // 감은 눈을 덮을 칸만 쥔다(스핀 칸은 패치가 없다)
                 if (key(cell, false) !in cells) put(key(cell, false), rgba)
             }
             pageDecodes += restPhase.pageDecodes
@@ -127,11 +133,39 @@ class StageStore internal constructor(
      * 데움: 무대가 실제로 쓰는 칸(살랑 ±8° · hit · 인사가 닿는 정면 근처 |요| ≤ 9°)의 뜬 눈 · 감은 눈과 정면 후광. 그 밖의 칸이 필요하면
      * 그때 [cellArt] 가 페이지를 다시 푼다(무대에서는 생기지 않는다 — 돌아보지 않는다).
      */
-    fun prewarm(yawLimitDeg: Int = 9): Int = synchronized(lock) {
+    fun prewarm(yawLimitDeg: Int = StagePolicy.PREWARM_YAW_DEG): Int = synchronized(lock) {
         val all = finish.cells(tierName)?.cells ?: return 0
         val made = bake(all.filter { abs(it.yawDeg) <= yawLimitDeg })
         if (finish.bake.halo != null) for (i in listOf(0, 1, 35)) halos.haloImage(i)
         made
+    }
+
+    /**
+     * 한 바퀴 데움(공개 반응 직전 · 배경 스레드): [spinCells]([StageDirector.spinPrewarmCells] — S 스핀 칸)의 뜬 눈 그림을 굽는다. 페이지는 한 번에
+     * 하나만 쥐고(임시 저장소 pageCapacity 1) 다음 페이지 전에 놓는다 — 48MB 힙 API 26 규칙 그대로. 디코드는 [lock] 밖에서 해 그리기(주 스레드)를
+     * 막지 않고, 다 구운 칸만 잠금 안에서 넣는다. 메모리가 모자라면 false(무대는 스핀 없이 돈다 — 호출부가 [StageDirector.spinEnabled] 를 끈다).
+     */
+    fun prewarmSpin(spinCells: List<BakeCell>): Boolean {
+        val missing = synchronized(lock) {
+            if (closed) return false
+            spinCells.filter { key(it, false) !in cells }
+        }
+        if (missing.isEmpty()) return true
+        val made = ArrayList<Pair<String, StageCellArt>>(missing.size)
+        val phase = BakeImageStore(finish, files, raster, pageCapacity = 1, cellCapacity = 1)
+        try {
+            for (cell in missing.sortedBy { it.page }) made += key(cell, false) to art(cell.id, phase.cellRgba(cell, closedEyes = false))
+        } catch (e: OutOfMemoryError) {
+            made.forEach { it.second.image.close() }
+            return false
+        } finally {
+            phase.close()
+        }
+        return synchronized(lock) {
+            pageDecodes += phase.pageDecodes
+            for ((k, a) in made) if (closed || k in cells) a.image.close() else cells[k] = a
+            !closed
+        }
     }
 
     /** 칸 그림(없으면 그 칸만 굽는다). 감은 눈인데 패치가 없는 칸은 뜬 눈(재생기 cellImage 와 같은 규칙). */
@@ -164,6 +198,7 @@ class StageStore internal constructor(
     }
 
     fun close() {
+        closed = true
         cells.values.forEach { it.image.close() }
         cells.clear()
         halos.close()

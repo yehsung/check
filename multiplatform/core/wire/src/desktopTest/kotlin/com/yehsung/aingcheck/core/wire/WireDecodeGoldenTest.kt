@@ -2,6 +2,7 @@
 package com.yehsung.aingcheck.core.wire
 
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
+import com.yehsung.aingcheck.core.wire.models.ClientReleaseResponse
 import com.yehsung.aingcheck.testkit.dump.GoldenDump
 import com.yehsung.aingcheck.testkit.dump.GoldenDumpDiff
 import com.yehsung.aingcheck.testkit.dump.GoldenScrub
@@ -27,9 +28,20 @@ class WireDecodeGoldenTest {
             when (v) {
                 is SwiftDate -> GoldenDump.date(v.timeIntervalSince1970)
                 is SwiftURL -> JsonObject(mapOf("\$url" to JsonPrimitive(v.absoluteString)))
+                is ClientReleaseResponse -> swiftShape(v)
                 else -> null
             }
         })
+
+        /**
+         * Swift `ClientReleaseResponse` 에 없는 Kotlin 칸(서버 20261101100000 이 더 주는 셋 — 모델 주석). Swift 덤프와 맞출 때 **이 셋만** 뺀다.
+         * 칸 이름은 속성 참조라 이름을 바꾸면 컴파일이 깨진다. 세 칸의 디코드 자체는 `ClientReleaseResponseDecodeTest` 가 잰다.
+         */
+        val clientReleaseKotlinOnly: Set<String> = setOf(
+            ClientReleaseResponse::latestVersion.name, ClientReleaseResponse::downloadUrl.name, ClientReleaseResponse::updatedAt.name,
+        )
+
+        fun swiftShape(v: ClientReleaseResponse): JsonElement = JsonObject((GoldenDump().dump(v) as JsonObject) - clientReleaseKotlinOnly)
 
         /** 디코드 + 정규 덤프. 던지면 null(Swift `try?` 와 같은 자리). */
         fun dumpOrNull(type: String, element: JsonElement): JsonElement? {

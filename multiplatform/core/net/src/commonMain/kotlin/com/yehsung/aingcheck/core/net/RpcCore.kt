@@ -709,6 +709,21 @@ suspend fun SupabaseWorkService.appCurrentNotice(): com.yehsung.aingcheck.core.w
     return swiftTry { decode(com.yehsung.aingcheck.core.wire.models.AppNotice.serializer(), data) }
 }
 
+/**
+ * 플랫폼별 공지(`app_current_notice_for(p_platform)` — 마이그레이션 20261101120000). 응답 모양과 null 규칙은 [appCurrentNotice] 와 같다:
+ * 서비스 오류(비2xx)면 null, 디코드 실패(공지 없음 = `{}` 포함)도 null, 전송 오류만 던진다.
+ * Swift 에는 없는 함수다(맥은 [appCurrentNotice] = 'mac' 만 부른다) — Windows·Android 가 부른다. 요청 모양은 Kotlin 시험이 잠근다.
+ */
+suspend fun SupabaseWorkService.appCurrentNoticeFor(platform: String): com.yehsung.aingcheck.core.wire.models.AppNotice? {
+    val body = kotlinx.serialization.json.JsonObject(mapOf("p_platform" to kotlinx.serialization.json.JsonPrimitive(platform)))
+    val data = try {
+        send("/rest/v1/rpc/app_current_notice_for", "POST", emptyList(), encode(body), null, null)
+    } catch (e: SupabaseWorkServiceError) {
+        return null
+    }
+    return swiftTry { decode(com.yehsung.aingcheck.core.wire.models.AppNotice.serializer(), data) }
+}
+
 // ======================================================================== 제보(INV-SupabaseWorkService-35ad0a8f 이식: 본문은 사용자가 쓴 글 — 로그 금지)
 
 suspend fun SupabaseWorkService.submitFeedback(accessToken: String, kind: FeedbackKind, body: String, appVersion: String, osVersion: String): String? {

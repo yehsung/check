@@ -20,6 +20,7 @@ import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.models.CharacterSyncFetchError
+import com.yehsung.aingcheck.core.wire.models.ClientReleaseResponse
 import com.yehsung.aingcheck.testkit.dump.GoldenDump
 import com.yehsung.aingcheck.testkit.dump.GoldenScrub
 import kotlinx.serialization.SerializationException
@@ -470,6 +471,11 @@ class WireRequestsGoldenTest {
         when (v) {
             is SwiftDate -> GoldenDump.date(v.timeIntervalSince1970)
             is SwiftURL -> JsonObject(mapOf("\$url" to JsonPrimitive(v.absoluteString)))
+            // Swift 에 없는 Kotlin 칸 셋(latest_version·download_url·updated_at — 모델 주석)만 빼고 Swift 덤프와 맞춘다(fetchClientRelease).
+            is ClientReleaseResponse -> JsonObject(
+                (GoldenDump().dump(v) as JsonObject) -
+                    setOf(ClientReleaseResponse::latestVersion.name, ClientReleaseResponse::downloadUrl.name, ClientReleaseResponse::updatedAt.name),
+            )
             else -> null
         }
     })

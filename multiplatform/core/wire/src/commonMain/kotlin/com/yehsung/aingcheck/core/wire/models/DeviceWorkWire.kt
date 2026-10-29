@@ -20,6 +20,12 @@ import kotlinx.serialization.json.JsonPrimitive
 
 // ---------------------------------------------------------------- 기기 등록 · 릴리스(폰)
 
+/**
+ * `client_release(p_platform)` 응답. 앞 다섯 칸은 Swift `ClientReleaseResponse` 그대로다.
+ * 뒤 세 칸(`latest_version`·`download_url`·`updated_at`)은 서버가 마이그레이션 20261101100000 부터 더 주는 칸으로 **Kotlin 에만** 있다
+ * (Swift 에 없어 Swift 골든 덤프와 맞출 때는 뺀다 — 디코드 골든·요청 골든 시험). 옛 서버(세 칸 없음)면 null 이다.
+ * 시각은 이 파일의 다른 서버 시각 칸(`started_at`·`ended_at`)처럼 원문 문자열로 둔다.
+ */
 @Serializable
 data class ClientReleaseResponse(
     @SerialName("status") val status: String? = null,
@@ -27,6 +33,9 @@ data class ClientReleaseResponse(
     @SerialName("min_build") val minBuild: Long? = null,
     @SerialName("latest_build") val latestBuild: Long? = null,
     @SerialName("notes") val notes: String? = null,
+    @SerialName("latest_version") val latestVersion: String? = null,
+    @SerialName("download_url") val downloadUrl: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
 )
 
 /** Swift `PushPrefs` — 읽을 때 칸마다 lossy, 없으면 **true**(알림은 기본 켬). 쓸 때는 셋 다 싣는다. */

@@ -415,7 +415,9 @@ def exec_gradle_cases(ctx):
     fake = os.path.join(ctx.root, "fake-gradlew")
     dump = os.path.join(ctx.root, "gradle-dump.txt")
     with open(fake, "w") as f:
-        f.write('#!/bin/sh\n{ echo "ARGV:$*"; env | grep "^ORG_GRADLE_PROJECT_" | sort; } > "$DUMP"\n')
+        # 가짜 gradlew 의 머리는 dash(Linux 의 /bin/sh 와 같은 셸 — 점 이름 환경 변수를 버린다). exec-gradle 이 bash 로 부르지 않으면
+        # 맥에서도 G2·G4·G4b 가 빨갛다(7차 CI 탐침: 진짜 gradlew '#!/bin/sh' 가 Linux 에서 운영 값·판돈 깃발을 잃는 길).
+        f.write(('#!/bin/dash' if os.path.exists("/bin/dash") else '#!/bin/sh') + '\n{ echo "ARGV:$*"; env | grep "^ORG_GRADLE_PROJECT_" | sort; } > "$DUMP"\n')
     os.chmod(fake, 0o755)
     rc, out = ctx.tool_run("exec-gradle", "--values", vals_path, "--", fake, ":androidApp:bundleRelease",
                            env={"DUMP": dump, "ORG_GRADLE_PROJECT_aingcheck.prod.supabaseUrl": "https://stale.example"})

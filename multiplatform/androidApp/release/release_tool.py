@@ -48,6 +48,8 @@ GS_JSON = "google-services" + ".json"
 FORBIDDEN_ENTRY_SUFFIXES = (GS_JSON, "." + "jks", "." + "keystore", ".p12", ".pem", ".p8", "service-account" + ".json")
 # 출시 판에서 빠져야 하는 클래스(진열장 — G §8-13·§8-14: release 제외는 W6-a). R8 이 지웠는지 mapping 으로 잰다.
 SHOWCASE_PREFIXES = ("com.yehsung.aingcheck.ui.components.AingGallery",)
+# exec-gradle 이 gradlew 를 부르는 셸(아래 cmd_exec_gradle — dash 는 점 이름 환경 변수를 버린다).
+BASH = "/bin/bash"
 # 진열장 **전용** 문자열 리터럴(ui/.../components/AingGallery.kt 에만 있다 — 자기 시험 SC1 이 원문에서 잰다). 진열장 함수가 다른 클래스에
 # 인라인되면 mapping 의 클래스 머리 줄로는 안 보이므로, 산출물 dex 문자열 표에 이 글자가 0 인지 함께 잰다(검증 지적 r8.showcaseRemoved).
 SHOWCASE_LITERALS = ("섹션 제목 20 bold", "행 이름 16 semibold · 부제 13", "3단 글자 label3Text — 끝난 할 일", "보조 글자 label2 — 오늘 3시간 12분 근무")
@@ -422,6 +424,10 @@ def cmd_exec_gradle(a):
     argv = a.argv[1:] if a.argv and a.argv[0] == "--" else a.argv
     if not argv:
         raise Refuse("exec-gradle: 실행할 명령이 없다")
+    # gradlew 는 '#!/bin/sh' 다. Linux 의 /bin/sh(dash)는 이름에 점이 있는 환경 변수(ORG_GRADLE_PROJECT_aingcheck.*)를 자식(java)에게
+    # 넘기지 않고 버린다 — 맥의 /bin/sh 는 bash 라 넘긴다(W6-a 7차 CI 탐침: Linux jvm-gate 에서만 G2·G4·G4b 가 빨갰다).
+    # 그래서 명령(셸 스크립트)을 언제나 bash 로 부른다. bash 는 그런 이름을 셸 변수로는 안 받아도 자식 환경에는 그대로 넘긴다.
+    argv = [BASH, *argv]
     sys.stdout.flush()
     os.execve(argv[0], argv, env)
 

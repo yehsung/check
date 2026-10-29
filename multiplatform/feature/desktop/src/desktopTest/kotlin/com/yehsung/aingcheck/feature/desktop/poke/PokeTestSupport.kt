@@ -26,10 +26,16 @@ internal fun pokeService(router: MockRouter, clock: () -> SwiftDate = { T0 }): S
 internal class FakeSessionHost(override val service: SupabaseWorkService) : SessionHost {
     var current: SupabaseSession? = SupabaseSession("token-1", "refresh-1", "me")
     var generation: Int = 1
+    /** 서버 호출이 (성공이든 실패든) 끝나 응답이 호출부로 돌아가기 **직전**에 한 번 — 응답 도중 로그아웃·재로그인을 흉내 낸다. */
+    var onOperationEnd: (() -> Unit)? = null
     override val session: SupabaseSession? get() = current
     override val sessionGeneration: Int get() = generation
     override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T =
-        operation(current ?: throw IllegalStateException("세션 없음"))
+        try {
+            operation(current ?: throw IllegalStateException("세션 없음"))
+        } finally {
+            onOperationEnd?.invoke()
+        }
 }
 
 internal class FakeSubscription(var subscribed: Boolean = false) : RealtimeSubscription {

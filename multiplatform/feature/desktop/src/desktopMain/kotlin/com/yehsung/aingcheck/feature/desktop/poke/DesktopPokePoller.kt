@@ -7,6 +7,7 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.feature.desktop.socialapi.PokeConsumeGate
 import com.yehsung.aingcheck.feature.desktop.socialapi.PokeDrainer
 import com.yehsung.aingcheck.feature.desktop.socialapi.RealtimeSubscription
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -52,7 +53,7 @@ class DesktopPokePoller(
                 while (isActive) {
                     delay((pollIntervalSecondsNow * 1000).toLong())
                     if (!isActive) return@launch
-                    tick(clock())
+                    pokeBeatStep { tick(clock()) }
                 }
             }
         }
@@ -69,15 +70,16 @@ class DesktopPokePoller(
     /**
      * 폴링 1회분(P10). 세션이 없으면 요청 0건으로 빠진다. 순서: 메시지 만료 → 마지막 표시 만료 → 집중 만료 → 지갑 periodic →
      * 다른 갈래 훅 → 마지막에 게이트·take_pokes. 로컬 만료가 근무 게이트 **앞**인 것이 핵심이다(비근무 구간이 큐가 가장 오래 밀리는 구간).
+     * 칸마다 [pokeBeatStep] 으로 따로 감싼다 — 한 칸이 던져도 남은 칸(특히 take_pokes)과 다음 박자는 돈다.
      */
     suspend fun tick(now: SwiftDate) {
         if (host.session == null) return
-        bubbles.expireStale(now)
-        bubbles.expireLastShown(now)
-        hooks.focusExpiry(now)
-        hooks.walletPeriodic(now)
-        for (hook in hooks.others) hook(now)
-        if (!pollingIsPausedByRealtime) takePokesIfWorking(now)
+        pokeBeatStep { bubbles.expireStale(now) }
+        pokeBeatStep { bubbles.expireLastShown(now) }
+        pokeBeatStep { hooks.focusExpiry(now) }
+        pokeBeatStep { hooks.walletPeriodic(now) }
+        for (hook in hooks.others) pokeBeatStep { hook(now) }
+        if (!pollingIsPausedByRealtime) pokeBeatStep { takePokesIfWorking(now) }
     }
 
     /** Swift `takePokesIfWorking` — 게이트 하나(P4)를 지나면 drain 몸을 직접 부른다. */
@@ -85,5 +87,21 @@ class DesktopPokePoller(
         val d = drainer ?: return
         if (!gate.mayConsume(now)) return
         d.drainOnce()
+    }
+}
+
+/**
+ * 박자 한 칸. 취소만 다시 던지고 그 밖의 실패는 이 칸에서 끝낸다 — 다음 칸과 다음 박자는 돈다.
+ * Swift 의 박자 함수(localExpiryTick 과 그 안의 훅)는 throws 가 아니라 폴링 루프가 끊길 수 없다(WorkTimerStorePoke.swift 378-386).
+ * Kotlin suspend 람다는 던질 수 있어, 감싸지 않으면 한 번에 루프가 영구히 멈추고 조립 스코프가 SupervisorJob 이 아니면 앱 스코프까지
+ * 취소한다 — ⚠️ "이 앱의 최악 실패 모드는 침묵이다"(449). 신고 점은 옮기지 않는다(W-3 #14 — Windows 1차 false).
+ */
+private inline fun pokeBeatStep(step: () -> Unit) {
+    try {
+        step()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (swallowed: Throwable) {
+        // 삼킨다: 이 칸은 다음 박자(15/60초 뒤)에 다시 돈다.
     }
 }

@@ -10,14 +10,21 @@ import com.yehsung.aingcheck.feature.desktop.socialapi.PokeDrainer
 import com.yehsung.aingcheck.feature.desktop.socialapi.QueuedBubbleMessage
 import com.yehsung.aingcheck.feature.desktop.work.PokeFactsSource
 import com.yehsung.aingcheck.testkit.mock.MockRouter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -123,17 +130,17 @@ class PokeBeatOrderTest {
         bubbles.consumeCurrent()
         bubbles.append(listOf(QueuedBubbleMessage("stale", "a", "x", T0.addingTimeInterval(-301.0))))
         val hooks = PokeBeatHooks(
+            // 훅 안에서 단언하지 않는다 — 박자 칸은 던진 것을 삼킨다(아래 PokeBeatSurvivesThrowTest). 본 것을 기록해 밖에서 잰다.
             focusExpiry = {
-                log += "focus"
-                assertNull(bubbles.current, "메시지 만료가 집중 만료보다 앞")
-                assertNull(bubbles.lastShown.value, "마지막 표시 만료가 집중 만료보다 앞")
+                log += "focus(current=${bubbles.current?.id},lastShown=${bubbles.lastShown.value?.id})"
             },
             walletPeriodic = { log += "wallet" },
             others = listOf({ _ -> log += "weekly" }, { _ -> log += "cake" }),
         )
         val host = FakeSessionHost(pokeService(MockRouter()))
         DesktopPokePoller(host, { T0 }, open, CountingDrainer(log), FakeSubscription(), bubbles, hooks).tick(T0)
-        assertEquals(listOf("focus", "wallet", "weekly", "cake", "take"), log)
+        assertEquals(listOf("focus(current=null,lastShown=null)", "wallet", "weekly", "cake", "take"), log,
+            "메시지 만료·마지막 표시 만료가 집중 만료보다 앞")
     }
 
     @Test
@@ -220,5 +227,65 @@ class PokeSinkRequiredTest {
     fun noOpConsumedSinkCountsZero() {
         assertEquals(0, NoOpConsumedRowsSink.insertConsumedPokes(listOf(row("p", 1, "normal"))))
         NoOpConsumedRowsSink.receiveConsumedMessages(listOf(row("m", 1, "message", "x")), SwiftDate(0.0))
+    }
+}
+
+/**
+ * 박자 한 칸이 던져도 루프와 다음 칸이 산다. Swift 의 박자 함수(localExpiryTick 과 그 안의 만료·지갑·주간 훅)는 throws 가 아니라
+ * 루프가 끊길 수 없다(WorkTimerStorePoke.swift 378-386) — ⚠️ "이 앱의 최악 실패 모드는 침묵이다"(449).
+ * Kotlin suspend 람다는 던질 수 있어 한 번이면 폴링이 영구히 멈췄다(반박 검증 탐침: hookCalls=1 drains=0).
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class PokeBeatSurvivesThrowTest {
+    private val host = FakeSessionHost(pokeService(MockRouter()))
+
+    /** 반박 검증 탐침 그대로: 지갑 periodic 이 첫 호출에서만 던진다 · SupervisorJob 스코프 · 가상 45초. */
+    @Test
+    fun hookThrowingOnceDoesNotStopTheLoop() = runTest {
+        var hookCalls = 0
+        val escaped = mutableListOf<Throwable>()
+        val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, e -> escaped += e })
+        val drainer = CountingDrainer()
+        val hooks = PokeBeatHooks(walletPeriodic = {
+            hookCalls++
+            if (hookCalls == 1) throw IllegalStateException("합성: 지갑 첫 박자 실패")
+        })
+        DesktopPokePoller(host, { T0 }, { true }, drainer, FakeSubscription(), DesktopMessageBubbleQueue(), hooks).start(scope)
+        advanceTimeBy(45_001)
+        val seen = "hookCalls=$hookCalls drains=${drainer.drains} escaped=${escaped.size}"
+        scope.cancel()
+        // 칸마다 따로 감싼다 — 첫 박자에서 지갑이 던져도 그 박자의 take_pokes 는 나간다(Swift 는 박자마다 모든 칸이 돈다).
+        assertEquals("hookCalls=3 drains=3 escaped=0", seen)
+    }
+
+    /** 칸마다 따로: 집중·지갑·다른 훅·게이트·drain 어느 것이 던져도 그 박자의 남은 칸은 돈다(P10 순서 그대로). */
+    @Test
+    fun eachStepFailsAlone() = runBlocking {
+        val log = mutableListOf<String>()
+        fun boom(name: String): suspend (SwiftDate) -> Unit = { log += name; throw IllegalStateException("합성: $name") }
+        val hooks = PokeBeatHooks(focusExpiry = boom("focus"), walletPeriodic = boom("wallet"), others = listOf(boom("weekly"), { _ -> log += "cake" }))
+        val throwingDrainer = object : PokeDrainer {
+            override suspend fun drainOnce(): DrainOutcome {
+                log += "take"
+                throw IllegalStateException("합성: drain")
+            }
+            override fun requestDrain() {}
+            override fun flushOnUserStop(isTerminating: Boolean): Job? = null
+        }
+        val poller = DesktopPokePoller(host, { T0 }, { true }, throwingDrainer, FakeSubscription(), DesktopMessageBubbleQueue(), hooks)
+        poller.tick(T0)
+        poller.tick(T0)
+        assertEquals(List(2) { listOf("focus", "wallet", "weekly", "cake", "take") }.flatten(), log)
+        // 게이트가 던져도 박자는 끝난다(다음 박자가 온다).
+        DesktopPokePoller(host, { T0 }, { throw IllegalStateException("합성: gate") }, CountingDrainer(), FakeSubscription(), DesktopMessageBubbleQueue()).tick(T0)
+    }
+
+    /** 삼키는 것은 실패뿐 — 취소(로그아웃 stop·앱 종료)는 그대로 올라간다. */
+    @Test
+    fun cancellationStillPropagates() = runBlocking {
+        val hooks = PokeBeatHooks(focusExpiry = { throw CancellationException("합성: 취소") })
+        val poller = DesktopPokePoller(host, { T0 }, { true }, CountingDrainer(), FakeSubscription(), DesktopMessageBubbleQueue(), hooks)
+        assertFailsWith<CancellationException> { poller.tick(T0) }
+        Unit
     }
 }

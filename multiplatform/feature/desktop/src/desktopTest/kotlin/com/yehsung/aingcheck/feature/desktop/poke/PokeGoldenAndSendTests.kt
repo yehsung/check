@@ -150,6 +150,8 @@ class PokeSendEffectsTest {
         assertEquals(PokeNoticeChange.Set("울트라 찌르기 발사!"), PokeSendEffects.of(true, r("""{"status":"ok"}"""), null).notice, "P3 모르면 지어내지 않는다")
         val ultraOk = PokeSendEffects.of(true, r("""{"status":"ok","ultra_balance":1}"""), 4)
         assertEquals(1L, ultraOk.ultraBalance)
+        // P3 ★ 안내 잔량은 서버값이 먼저(Swift `ultraSentNotice(balance: response.ultraBalanceForDisplay ?? ultraBalance)`) — 직전 4 가 아니라 1.
+        assertEquals(PokeNoticeChange.Set("울트라 발사! 남은 울트라 1개"), ultraOk.notice, "P3 서버 잔량 1 이 직전 잔량 4 를 이긴다")
         assertEquals(60.0, ultraOk.cooldownSeconds, "울트라 ok 도 쿨타임 60 미러")
         assertTrue(ultraOk.walletMissionCandidate && ultraOk.refreshConversation)
         val normalOk = PokeSendEffects.of(false, r("""{"status":"ok"}"""), null)
@@ -169,7 +171,8 @@ class PokeSendEffectsTest {
         val balances = mutableListOf<Long>()
         val hooks = object : PokeSendHooks {
             override fun applyUltraBalance(balance: Long) { balances += balance }
-            override val currentUltraBalance: Long? get() = 0
+            // 직전 잔량(5)을 서버값(0)과 다르게 둔다 — 안내가 어느 쪽에서 왔는지 갈린다(P3 서버 먼저).
+            override val currentUltraBalance: Long? get() = 5
         }
         var open = false
         val sender = DesktopPokeSender(host, this, { T0 }, { open }, { wallet += it }, hooks)
@@ -195,6 +198,67 @@ class PokeSendEffectsTest {
         sender.sendPoke("peer")!!.join()
         assertEquals(DesktopPokeRules.NETWORK_NOTICE, sender.notice.value)
         assertEquals(1, DesktopPokeRules.cooldownRemaining(T0.addingTimeInterval(0.2), T0), "올림")
+    }
+
+    /** 바깥에 닿은 일을 한 줄로 — 세대 가드 시험이 '아무것도 안 닿음'과 '다 닿음'을 같은 눈금으로 잰다. */
+    private class Touches : PokeSendHooks {
+        val balances = mutableListOf<Long>()
+        val refreshed = mutableListOf<String>()
+        var reloads = 0
+        val wallet = mutableListOf<UltraSyncReason>()
+        override fun applyUltraBalance(balance: Long) { balances += balance }
+        override fun refreshConversationAfterPokeSent(peerUserID: String) { refreshed += peerUserID }
+        override fun reloadDirectory() { reloads++ }
+        override val currentUltraBalance: Long? get() = 5
+        fun line(sender: DesktopPokeSender, vararg peers: String): String =
+            "notice=${sender.notice.value} cooldown=${peers.map { sender.cooldownRemaining(it, T0) }} balances=$balances " +
+                "wallet=$wallet refreshed=$refreshed reloads=$reloads"
+    }
+
+    /**
+     * 발신 세대 가드 · 성공 경로(Swift sendPoke·sendUltraPoke `guard generation == sessionGeneration else { return }` — 응답 뒤).
+     * 응답 도중 로그아웃·재로그인이면 옛 응답은 새 계정의 안내·쿨타임·울트라 잔량·지갑 sync·대화·디렉터리 어디에도 닿지 않는다.
+     */
+    @Test
+    fun successResponseAfterRelogInTouchesNothing() = runBlocking {
+        val router = MockRouter()
+            .rpc("ultra_poke_user", StubResponse.Json("""{"status":"ok","ultra_balance":2}"""), StubResponse.Json("""{"status":"ok","ultra_balance":2}"""))
+            .rpc("poke_user", StubResponse.Json("""{"status":"target_not_working"}"""), StubResponse.Json("""{"status":"target_not_working"}"""))
+        val host = FakeSessionHost(pokeService(router))
+        val touches = Touches()
+        val sender = DesktopPokeSender(host, this, { T0 }, { true }, { touches.wallet += it }, touches)
+        host.onOperationEnd = { host.generation++ }
+        sender.sendUltraPoke("peer-u")!!.join()
+        sender.sendPoke("peer-n")!!.join()
+        assertEquals(2, router.requests.size, "요청은 나갔다 — 막힌 건 응답의 착지")
+        assertEquals("notice=null cooldown=[0, 0] balances=[] wallet=[] refreshed=[] reloads=0", touches.line(sender, "peer-u", "peer-n"),
+            "세대가 바뀐 뒤 도착한 성공 응답은 아무 데도 닿지 않는다")
+        // 대조: 같은 응답, 세대 그대로 → 다 닿는다(위 줄이 '원래 아무 효과 없는 응답' 탓이 아님을 보인다).
+        host.onOperationEnd = null
+        sender.sendUltraPoke("peer-u")!!.join()
+        sender.sendPoke("peer-n")!!.join()
+        assertEquals(
+            "notice=${DesktopPokeRules.TARGET_NOT_WORKING_NOTICE} cooldown=[60, 0] balances=[2] wallet=[MissionCandidate] refreshed=[peer-u] reloads=1",
+            touches.line(sender, "peer-u", "peer-n"),
+        )
+        router.assertAllRouted()
+    }
+
+    /** 발신 세대 가드 · 실패 경로(Swift `catch { … guard generation == sessionGeneration else { return } }`) — 새 계정에 옛 네트워크 안내 없음. */
+    @Test
+    fun failureAfterRelogInLeavesNoNotice() = runBlocking {
+        for (ultra in listOf(false, true)) {
+            val rpc = if (ultra) "ultra_poke_user" else "poke_user"
+            val router = MockRouter().rpc(rpc, StubResponse.TransportFailure(), StubResponse.TransportFailure())
+            val host = FakeSessionHost(pokeService(router)).apply { onOperationEnd = { generation++ } }
+            val sender = DesktopPokeSender(host, this, { T0 }, { true }, { })
+            val send = { if (ultra) sender.sendUltraPoke("peer") else sender.sendPoke("peer") }
+            send()!!.join()
+            assertNull(sender.notice.value, "ultra=$ultra: 세대가 바뀐 뒤 실패는 안내를 띄우지 않는다")
+            host.onOperationEnd = null
+            send()!!.join()
+            assertEquals(DesktopPokeRules.NETWORK_NOTICE, sender.notice.value, "ultra=$ultra 대조: 세대 그대로면 네트워크 안내")
+        }
     }
 }
 

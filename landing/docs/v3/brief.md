@@ -165,9 +165,9 @@ H3 26–30px · 본문 17–18px/1.6(ink-2) · 작은 글 14px. 숫자(타이머
 쓰지 말 것: 판돈·베팅·내기 표현, 제공자 로고, 앱에 없는 상태(폰에서 근무 시작, 폰 체스, 가짜 시스템 알림·가짜 데스크톱 아이콘), 통계 주장.
 제목이 길어졌다(줄당 최대 12자 안팎) → 두 줄을 지키도록 크기를 맞춘다: 히어로 H1 clamp(40px, 4.4vw, 64px), 기능 제목 clamp(28px, 2.6vw, 40px), 설치·아웃트로 H2 clamp(32px, 3.6vw, 52px). 한 줄이 넘치면 글자를 줄이지 말고 크기를 줄인다.
 
-메타
-- title: `아잉체크: Mac 메뉴바 근무 타이머`
-- description: `근무 타이머부터 AI 리밋·토큰 확인, 1:1 메시지, 미니게임까지 맥 메뉴바에서 무료로 써요.`
+메타(2026-10-30 개정 — §10 SEO. 정본 상수는 lib/seo.ts)
+- title: `아잉체크(aing-check): Mac 메뉴바 근무 타이머`
+- description: `아잉체크는 맥 메뉴바에서 켜는 무료 근무 타이머예요. 근무 시작을 클릭하면 팀원이 근무 중인 걸 보고, Claude Code·Codex·Gemini 리밋과 AI 토큰 사용량 순위, 12주 치 잔디도 봐요.`
 
 내비(유리 메뉴바): `아잉체크` · `기능` · `설치` · `자주 묻는 질문` · 버튼 `다운로드` · 상태 항목 `03:45`
 
@@ -269,3 +269,34 @@ OG 이미지(app/opengraph-image.png)와 alt(app/opengraph-image.alt.txt)는 새
   - f-games 네 개: 기존 `ui/minigame`(플래피 창) + 기존 `ui/gomoku-board-sm`(오목 판) + **`mac-chess-board@3x.png`(1944×1944, 판만 — 판돈 없음)** + **`mac-tetris-duel@3x.png`(2700×1662, 두 판이 다 보이는 전체 창 — '1:1 멀티'가 읽히려면 상대 판이 있어야 한다)**. 테트리스 전체 창엔 작은 `판돈 5 · 이기면 +4` 칩과 루비 37 이 남는다 — 앱 실제 화면이고 FAQ 가 루비는 살 수도 바꿀 수도 없다고 말하므로 허용(가리거나 자르지 않는다). 체스 전체 창(`mac-chess-duel`)·테트리스 판만(`mac-tetris-board`)은 쓰지 않는다.
   - 세 번째 리밋 줄은 안티그래비티 마크(앱 그대로).
 - **(사용자 지시 10-22 22:00) 테트리스는 두 사람 판만 남게 잘라 쓴다** — "이정도로 들어가게 잘라내"(스크린샷: 내 카드+판 · 상대 카드+판, 위 제목·판돈·루비 줄과 오른쪽 대결 중·조작·기권 열 제외). 통째 렌더 규칙의 **사용자 지정 예외**다. 잘라 낸 원본: `scratchpad/crop/mac-tetris-duel-boards@3x.png`(1798×1296, 원본 2700×1662 에서 상자 (38,330)–(1836,1626), 사방 여백 22px = 창 바탕).
+
+## 10. SEO (2026-10-30)
+사용자 원문: "이거 랜딩페이지 아잉체크 라고 검색하면 나올 수 있게끔 SEO 세팅들좀 해줘." 기준선(2026-10-30): 웹 검색 '아잉체크' 결과 0건. 운영 주소는 그대로 https://aing-check.vercel.app.
+자세한 설정·검증 코드 넣는 법·측정 계획은 `docs/v3/seo.md`. 정본 상수·생성 함수는 `lib/seo.ts`, 계약 시험은 `lib/seo.test.ts`.
+
+### 10.1 문구(글자 그대로)
+- title · og:title · twitter:title: `아잉체크(aing-check): Mac 메뉴바 근무 타이머`
+- description · og/twitter description: `아잉체크는 맥 메뉴바에서 켜는 무료 근무 타이머예요. 근무 시작을 클릭하면 팀원이 근무 중인 걸 보고, Claude Code·Codex·Gemini 리밋과 AI 토큰 사용량 순위, 12주 치 잔디도 봐요.`
+- llms.txt 요약(`> ` 줄): `아잉체크는 맥 메뉴바에서 켜는 무료 근무 타이머로, 팀원이 근무 중인 걸 보고 Claude Code·Codex·Gemini 리밋과 AI 토큰 사용량 순위, 12주 치 잔디도 봐요.`
+- applicationName `아잉체크`. /licenses · /delete-account 는 자기 제목을 그대로 쓴다.
+
+### 10.2 원칙
+- 구조화 데이터·llms.txt 는 **화면에 보이는 사실**(또는 화면의 링크·버전)만 싣는다. 별점(aggregateRating)·리뷰·지어낸 숫자·숨긴 글·클로킹 0.
+- 문장은 화면과 같은 상수(FEATURE_COPY · FAQ_ITEMS · INSTALL_COPY · HERO_COPY · LINKS · BREW · FOOTER_LINKS)에서만 만든다 — 화면 문구를 고치면 LD·llms.txt 도 따라간다.
+- 메타·LD·llms.txt 글자는 서브셋 글꼴로 그리지 않으므로 lib/ 에 둔다(check-glyphs 대상 밖).
+
+### 10.3 첫 페이지 JSON-LD(@graph 하나 — FAQPage 는 FAQ 절이 따로 그대로)
+- WebSite `#website`: name `아잉체크` · alternateName `aing-check`(푸터 `아잉체크(aing-check)`) · inLanguage ko-KR.
+- Organization `#organization`: logo `/assets/brand/icon-256.webp`(256×256) · sameAs GitHub 저장소 · App Store(둘 다 화면 링크).
+- SoftwareApplication `#mac-app`: operatingSystem `macOS 14 이상` · BusinessApplication · 무료(Offer 0 KRW) · softwareVersion·fileSize = 설치 카드 값(installChoice) — **GitHub 에서 받았을 때만**(release.source `github`. 폴백 상수면 뺀다 — 낡은 버전을 ISR 이 1시간 굳히지 않게) · downloadUrl = GitHub 최신 DMG · featureList = 기능 제목 6개 · image = OG 그림 · screenshot = 첫 화면 근무 중 팝오버 그림(화면의 `<img src>` 그대로).
+- MobileApplication `#ios-app`: operatingSystem `iOS 18 이상` · 무료 · installUrl/downloadUrl = App Store.
+
+### 10.4 robots · sitemap · llms.txt · IndexNow · 검증 코드
+- robots 메타: googlebot `max-image-preview:large, max-snippet:-1, max-video-preview:-1` 만. index·follow 는 기본값이라 적지 않는다(루트 레이아웃 메타가 404 에도 붙어 Next 의 `noindex` 옆에 `index, follow` 가 찍혔다 — 2026-10-30 검증 지적).
+- robots.txt: 그룹마다 `Disallow: /api/` 한 줄(DMG 302 · JSON — 긁을 내용 없음), `Allow` 줄은 쓰지 않는다(막지 않은 곳은 원래 허용 — Next 가 Allow 를 먼저 찍어 첫 줄 우선 파서가 /api/ 까지 허용하던 것을 없앴다). `*` 와 Yeti · Bingbot · Googlebot · GPTBot · OAI-SearchBot · ChatGPT-User · ClaudeBot · Claude-SearchBot · Claude-User · PerplexityBot · Perplexity-User · Google-Extended · Applebot-Extended 를 이름으로 적어 같은 규칙으로 정책을 분명히 한다.
+- sitemap.xml: `/` · `/licenses` · `/delete-account`(url = canonical). lastmod 은 정직하게 — 첫 페이지 2026-10-30 과 최신 릴리스 날 중 늦은 날, licenses 2026-10-12(git log), delete-account 2026-10-28. 1시간 ISR.
+- `/llms.txt`(llmstxt.org 꼴): `# 아잉체크 (aing-check)` · `> 요약` · 제목 없는 본문(폰 히어로 메타 한 줄 · **설치** · **기능** 6 · **자주 묻는 질문** 5 — 굵은 이름표는 내비 이름) · `## 링크`(파일 목록 8개, 절대 주소)뿐. 버전·크기·릴리스 날은 GitHub 에서 받았을 때만. 화면에 없는 문장·이름표는 쓰지 않는다('이 문서에 대해' 절 · '핵심 정보' · '최신 Mac 버전' · '홈' 은 검증 지적으로 뺐다). 1시간 ISR(text/plain; charset=utf-8).
+- IndexNow: 키 파일 `public/<INDEXNOW_KEY>.txt`. `npm run indexnow` 는 배포 뒤 사람이 돌린다(빌드에 안 건다) — 라이브 sitemap 을 api.indexnow.org · searchadvisor.naver.com 에 보낸다. `--dry-run` 은 보낼 JSON 만.
+- 검색 콘솔 소유 확인: Vercel 환경 변수 `GOOGLE_SITE_VERIFICATION` · `NAVER_SITE_VERIFICATION` · `BING_SITE_VERIFICATION`(Production) → 다시 배포. 비어 있으면 메타를 내지 않는다. 값은 메타 태그 content 값(태그째·따옴표째 붙여도 꺼낸다 — DNS TXT 값은 다른 값이라 안 된다).
+- 실서버 스모크: `npm run seo:smoke -- --base <주소>` — title·description·LD 둘·소유 확인 메타·404 robots·robots.txt·sitemap·llms.txt 머리·키 파일을 실제 응답으로 잰다(빌드에 안 건다).
+- 다시 재기: 2026-11-13(site: 조회 · '아잉체크'·'aing-check' 순위 · 콘솔 노출/클릭 · AI 답변 인용) — docs/v3/seo.md.

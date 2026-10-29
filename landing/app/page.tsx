@@ -1,6 +1,9 @@
 import { preload } from 'react-dom';
-import { asset } from '@/data/fixtures';
-import { getRelease } from '@/lib/release';
+import { LINKS, asset } from '@/data/fixtures';
+import { installChoice } from '@/data/install-copy';
+import { getRelease, RELEASE_FALLBACK } from '@/lib/release';
+import { homeJsonLd } from '@/lib/seo';
+import { jsonLdHtml } from '@/components/faq/jsonld';
 import { SiteNav } from '@/components/site/SiteNav';
 import { Hero } from '@/components/hero/Hero';
 import { Scenes } from '@/components/features/Scenes';
@@ -17,6 +20,14 @@ export default async function Page() {
   const popover = asset('ui/popover-working');
   if (popover) preload(popover.src, { as: 'image', fetchPriority: 'high' });
   const release = await getRelease();
+  // 검색용 구조화 데이터(docs/v3/brief.md §10): 버전·크기는 설치 카드와 같은 installChoice 값 — GitHub 에서 받았을 때만(폴백 상수는 낡을 수 있다).
+  // screenshot = 첫 화면의 근무 중 팝오버 그림(화면에 보이는 앱 화면). FAQPage 는 Faq 절이 따로 낸다.
+  const ld = homeJsonLd({
+    links: LINKS,
+    choice: installChoice(release, RELEASE_FALLBACK),
+    live: release.source === 'github',
+    screenshot: popover?.src,
+  });
   return (<>
     <SiteNav />
     <main id="main">
@@ -28,5 +39,6 @@ export default async function Page() {
     </main>
     <SiteFooter />
     <LiveAnnouncer />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(ld) }} />
   </>);
 }

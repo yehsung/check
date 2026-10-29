@@ -12,7 +12,9 @@
     "test:unit": "node --experimental-strip-types --test \"lib/**/*.test.ts\" \"components/**/*.test.ts\"",
     "assets": "node scripts/build-assets.mjs",
     "subset": "node scripts/subset-fonts.mjs",
-    "qr": "python3 scripts/make-qr.py"
+    "qr": "python3 scripts/make-qr.py",
+    "indexnow": "node scripts/indexnow.mjs",
+    "seo:smoke": "node --experimental-strip-types scripts/seo-smoke.mjs"
   },
   "dependencies": {
     "next": "16.4.3",

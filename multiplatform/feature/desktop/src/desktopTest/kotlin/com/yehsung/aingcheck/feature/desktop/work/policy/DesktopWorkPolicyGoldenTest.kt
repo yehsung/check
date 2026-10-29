@@ -310,6 +310,33 @@ class DesktopWorkPolicyGoldenTest {
         assertNull(disk.snapshot()[SleepCloseMarkerStore.KEY])
     }
 
+    // ⑲ 마커 정정 (b) 재실행 갈래의 소유 관문 — Swift WorkTimerStoreSync.swift:2167 `if startedAt == nil, isOwnedByThisMac(marker.sessionID)`.
+    // 마커는 있고 로컬 근무도 없지만 그 세션 id 를 이 기기가 더는 소유하지 않으면(다른 기기가 같은 id 를 재개했다)
+    // 정정 Stop(reason=sleep)을 서버로 내보내면 안 된다. Swift 처럼 마커도 지우지 않는다(소유가 돌아오면 그때 1회).
+    @Test
+    fun marker_branch_b_needs_this_device_ownership_19() {
+        val disk = InMemoryDesktopKeyValueStore()
+        SleepPolicy(InMemoryDesktopWorkState(working(lastInput = at(1000.0))), RecordingAutoClose(), SleepCloseMarkerStore(disk))
+            .handleSleep(at(2000.0))
+        val planted = disk.snapshot()[SleepCloseMarkerStore.KEY]
+        assertNotNull(planted, "마커는 디스크에 남는다")
+        val queue = FakeQueue()
+        val close = RecordingAutoClose()
+        val asked = ArrayList<String>()
+        val fix = SleepCloseCorrection(SleepCloseMarkerStore(disk), close, queue, newItemId = { "item-2" })
+        val r = fix.onOwnStatusOffWork(DesktopWorkSnapshot(), isOwnedByThisDevice = { asked += it; false }, ownerUserId = "user-a")
+        assertEquals(SleepCorrection.None, r, "내 소유 아님 → 정정 없음")
+        assertEquals(listOf(SID), asked, "소유는 마커의 세션 id 로 묻는다")
+        assertTrue(queue.items.value.isEmpty(), "남의 세션엔 정정 Stop 이 큐에 실리지 않는다")
+        assertTrue(close.calls.isEmpty())
+        assertEquals(planted, disk.snapshot()[SleepCloseMarkerStore.KEY], "소유 아님 → 마커를 지우지 않는다(Swift 와 같음)")
+        // 짝: 위 None 이 마커를 소모하지 않았으므로 소유가 맞는 다음 호출이 정정을 1회 싣는다.
+        val again = fix.onOwnStatusOffWork(DesktopWorkSnapshot(), isOwnedByThisDevice = { it == SID }, ownerUserId = "user-a")
+        assertEquals(SID, (again as SleepCorrection.Enqueued).item.sessionId)
+        assertEquals(1, queue.items.value.size)
+        assertNull(disk.snapshot()[SleepCloseMarkerStore.KEY])
+    }
+
     @Test
     fun marker_branch_a_closes_locally_and_adopted_never_plants() {
         val disk = InMemoryDesktopKeyValueStore()

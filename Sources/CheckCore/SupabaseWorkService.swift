@@ -1110,7 +1110,17 @@ package actor SupabaseWorkService {
     ///
     /// **문자 종류는 여기서 판정하지 않는다.** 이모지 거부(옛 `.unsupportedCharacters`)는 3글자 시절의
     /// 규칙이었고, 지금 그 판정을 클라가 한 벌 더 가지면 서버의 `not_text` 집합과 갈리는 순간이 곧 버그다.
-    package func sendMessage(accessToken: String, to userID: String, body: String) async throws -> PokeSendResponse {
+    ///
+    /// `clientMessageID` 는 **전송 멱등 키**다(20261102200000). 같은 키로 두 번 보내면 서버는 행을 하나만 두고
+    /// 두 번째에 그 행을 `duplicate: true` 로 돌려준다 — 응답을 잃은 전송을 **같은 키로** 다시 보내도 말이 두 번
+    /// 가지 않는다. 키를 만들고 언제 재사용할지는 스토어가 정한다(같은 키 = 같은 한 번의 전송 의도).
+    /// nil 이면 옛 두 키 모양 그대로 나간다(`SendMessageRequest` 주석).
+    package func sendMessage(
+        accessToken: String,
+        to userID: String,
+        body: String,
+        clientMessageID: String? = nil
+    ) async throws -> PokeSendResponse {
         switch MessageBody.validate(body) {
         case .empty:
             return PokeSendResponse(status: "invalid")
@@ -1119,13 +1129,27 @@ package actor SupabaseWorkService {
             // 로컬이냐 서버냐에 따라 다른 숫자를 말한다(문구를 만드는 자리는 한 곳이어야 한다).
             return PokeSendResponse(status: "too_long", maxLength: maxLength)
         case .ok(let normalized):
-            let data = try await send(
-                path: "/rest/v1/rpc/send_message",
-                method: "POST",
-                body: SendMessageRequest(pTo: userID, pBody: normalized),
-                accessToken: accessToken,
-                prefer: nil
-            )
+            func post(_ key: String?) async throws -> Data {
+                try await send(
+                    path: "/rest/v1/rpc/send_message",
+                    method: "POST",
+                    body: SendMessageRequest(pTo: userID, pBody: normalized, pClientMessageId: key),
+                    accessToken: accessToken,
+                    prefer: nil
+                )
+            }
+            let data: Data
+            if let clientMessageID {
+                do {
+                    data = try await post(clientMessageID)
+                } catch let error as SupabaseWorkServiceError where BlockReportRules.isMissingFunction(error) {
+                    // 3인자 서명이 없는 서버(배포 창·되돌림) — **한 번만** 옛 모양으로 되묻는다. 404 는 함수를 못 찾아
+                    // 아무것도 실행되지 않았다는 뜻이라 재호출이 두 번째 말을 만들지 않는다(sendShopRPC 와 같은 근거).
+                    data = try await post(nil)
+                }
+            } else {
+                data = try await post(nil)
+            }
             return try decoder.decode(PokeSendResponse.self, from: data)
         }
     }

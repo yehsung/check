@@ -566,8 +566,19 @@ UPSTREAM_CASES = [
 ]
 
 
+def _self_test_data(lanes_path: str) -> dict:
+    """사례가 심는 갈래를 열린 채로 둔 표(사본). 사례는 판정 규칙(소유 · 예약 · 옛 경로 · 남의 소유)을 재는 것이라 그 갈래가
+    통합에서 닫혀도(7차 int-j: W2-f · W3-a · W3-b · W4-a · W4-b · W4-c · W5-c · W6-a · W6-c) 같은 판정을 기대한다 — 닫힘 판정은
+    'closed' 를 기대하는 사례(W0-a)가 따로 잰다. 저장소의 lanes.yml 은 바꾸지 않는다."""
+    with open(lanes_path, encoding="utf-8") as f:
+        data = parse_yaml(f.read())
+    planted = {lane for lane, _, expected in SELF_TEST_CASES if expected != "closed"} | {"W2-f", "W3-a", "W3-b"}
+    data["closed"] = [n for n in data.get("closed", []) if n not in planted]
+    return data
+
+
 def self_test(lanes_path: str) -> int:
-    lanes = load_lanes(lanes_path)
+    lanes = Lanes(_self_test_data(lanes_path))
     failures = 0
     for lane, path, expected in SELF_TEST_CASES:
         got, why = lanes.judge(lane, path)
@@ -628,8 +639,7 @@ def self_test(lanes_path: str) -> int:
     if clean:
         failures += 1
     print(f"  {mark} 열린 갈래 {len(lanes.open_lanes())} 소유 겹침 0←{len(clean)} {clean[:3]}")
-    with open(lanes_path, encoding="utf-8") as f:
-        data = parse_yaml(f.read())
+    data = _self_test_data(lanes_path)
     data["lanes"]["W3-a"]["owns"] = list(data["lanes"]["W3-a"]["owns"]) + ["multiplatform/ui/src/*/kotlin/{pkg:ui}/screens/me/**"]
     planted = [(a, b) for a, b, _, _ in Lanes(data).open_overlaps()]
     mark = "ok " if ("W3-a", "W3-b") in planted and ("W3-b", "W3-a") in planted else "BAD"

@@ -224,8 +224,9 @@ private fun rememberMeTabFace(app: AppScreens): MeTabFace {
         nowCard = p.now.myCard(p.environment.clock.now()),
         snapshotMood = snapshot?.rankingsMood(),
     )
-    val art = rememberPortrait(face.characterID ?: DEFAULT_CHARACTER, face.mood.expression)
-    return MeTabFace(art, face.mood)
+    val id = face.characterID ?: DEFAULT_CHARACTER
+    val art = rememberPortrait(id, face.mood.expression)
+    return MeTabFace(art, face.mood, id)
 }
 
 private const val DEFAULT_CHARACTER = "aing"

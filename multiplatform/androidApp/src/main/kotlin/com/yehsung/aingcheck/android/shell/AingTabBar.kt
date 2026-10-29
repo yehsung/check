@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.android.routing.AingTab
 import com.yehsung.aingcheck.core.stores.now.NowMyCard
 import com.yehsung.aingcheck.ui.components.CharacterMood
+import com.yehsung.aingcheck.ui.components.AvatarFraming
 import com.yehsung.aingcheck.ui.components.CharacterTabIcon
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
@@ -72,8 +73,11 @@ object ShellTabIcons {
     fun icon(tab: AingTab): AppIcon = requireNotNull(SfSymbols.toAppIcon[systemImage(tab)]) { "SF ${systemImage(tab)} 대응 없음" }
 }
 
-/** '나' 탭 얼굴(착용 캐릭터 초상 + 표정). [art] 가 null 이면 사람 기호로 접는다(iOS meLabel). */
-data class MeTabFace(val art: ImageBitmap?, val mood: CharacterMood)
+/**
+ * '나' 탭 얼굴(착용 캐릭터 초상 + 표정). [art] 가 null 이면 사람 기호로 접는다(iOS meLabel).
+ * [characterID] 는 아바타 틀([AvatarFraming.of] — 케이크 둘만 몸을 아잉 크기로 되돌린다, iOS CharacterTabIcon)을 고르는 데만 쓴다. null = 아잉.
+ */
+data class MeTabFace(val art: ImageBitmap?, val mood: CharacterMood, val characterID: String? = null)
 
 /**
  * '나' 탭 얼굴 규칙(iOS NowStore.displayedCharacterID · displayedMood). **새 서버 호출 없음**.
@@ -184,7 +188,7 @@ private fun AingTabItem(
         Box(Modifier.size(ShellTabMetrics.iconBox).testTag(ShellTabTags.icon(tab)), contentAlignment = Alignment.Center) {
             // 기호는 읽지 않는다 — 탭 이름(아래 글자)이 이 칸의 이름이다(얼굴 초상의 "내 캐릭터, 근무 중"도 탭 이름을 덮지 않게).
             if (face != null) {
-                CharacterTabIcon(face.art, face.mood, Modifier.clearAndSetSemantics {})
+                CharacterTabIcon(face.art, face.mood, Modifier.clearAndSetSemantics {}, framing = AvatarFraming.of(face.characterID))
             } else {
                 AingIcon(ShellTabIcons.icon(tab), contentDescription = null, size = ShellTabMetrics.symbolSize, tint = tint)
             }

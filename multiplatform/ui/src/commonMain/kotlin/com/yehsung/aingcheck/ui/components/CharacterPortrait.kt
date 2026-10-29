@@ -188,7 +188,7 @@ private fun PortraitBadgeView(badge: PortraitBadge, portraitSize: Dp, gapColor: 
  * 이 부품은 Icon 이 아니라 직접 그린다(틴트 없음 — iOS `.alwaysOriginal`). 링 2 · 틈 1.5 · 그림 88% 아래로 5%.
  */
 @Composable
-fun CharacterTabIcon(art: ImageBitmap?, mood: CharacterMood, modifier: Modifier = Modifier) {
+fun CharacterTabIcon(art: ImageBitmap?, mood: CharacterMood, modifier: Modifier = Modifier, framing: AvatarFraming = AvatarFraming.Identity) {
     val colors = AingTheme.colors
     Canvas(modifier.size(TAB_ICON_SIDE.dp).semantics { contentDescription = portraitDescription(mood) }) {
         val side = size.minDimension
@@ -198,9 +198,11 @@ fun CharacterTabIcon(art: ImageBitmap?, mood: CharacterMood, modifier: Modifier 
         val innerR = side / 2f - inset
         val center = Offset(size.width / 2f, size.height / 2f)
         drawCircle(mood.backing(colors), radius = innerR, center = center)
-        val artSide = innerR * 2f * 0.88f
+        // 케이크 아잉이는 아바타 틀로 얼굴 크기를 다른 아잉 변형과 맞춘다(iOS CharacterTabIcon — 장식은 원 위로 잘린다).
+        val base = innerR * 2f * 0.88f
+        val artSide = base * framing.scale
         clipPath(Path().apply { addOval(androidx.compose.ui.geometry.Rect(center, innerR)) }) {
-            drawArt(art, Offset(center.x - artSide / 2f, center.y - artSide / 2f + innerR * 2f * 0.05f), Size(artSide, artSide))
+            drawArt(art, Offset(center.x - artSide / 2f, center.y - artSide / 2f + innerR * 2f * 0.05f + base * framing.offsetY), Size(artSide, artSide))
         }
         val ring = mood.ring ?: return@Canvas
         drawCircle(ring.dotColor(colors), radius = side / 2f - ringW / 2f, center = center, style = Stroke(width = ringW))
@@ -209,3 +211,30 @@ fun CharacterTabIcon(art: ImageBitmap?, mood: CharacterMood, modifier: Modifier 
 
 /** 탭 아이콘 한 변(dp). */
 const val TAB_ICON_SIDE = 26f
+
+/**
+ * 원형 아바타 안에서 초상을 얼마나 키우고(가운데 기준 [scale]) 어디로 옮길지([offsetY] — 그림 한 변(88% 기준)에 대한 비율, 음수 = 위로).
+ * 원본: Sources/CheckMobileShared/AingCharacterArt.swift (AvatarFraming · avatarFraming(id:)).
+ * **케이크 둘만** identity 가 아니다: 머리 위 장식이 캔버스에 들어가게 아잉 몸을 0.88 배로 줄여 내려 그렸으므로 그 줄임을 되돌려 몸을 아잉 자리로 올린다.
+ * 모르는 id · null · 공백은 아잉으로 접히므로 identity(iOS resolvedID 와 같은 접기 — 앞뒤 공백은 걷는다).
+ */
+data class AvatarFraming(val scale: Float, val offsetY: Float) {
+    companion object {
+        val Identity = AvatarFraming(1f, 0f)
+
+        /** 케이크 초상의 몸 배치(192px 캔버스) — iOS cakePortraitBodyScale · cakePortraitBodyTop · portraitPixelSize. */
+        const val CAKE_BODY_SCALE = 0.88
+        const val CAKE_BODY_TOP = 28.0
+        const val PORTRAIT_PIXEL_SIZE = 192.0
+        private val CAKE_IDS = setOf("aing_cake_strawberry", "aing_cake_choco")
+
+        fun of(id: String?): AvatarFraming {
+            if (id?.trim() !in CAKE_IDS) return Identity
+            val s = CAKE_BODY_SCALE
+            val side = PORTRAIT_PIXEL_SIZE
+            // 가운데 기준으로 1/s 배 키우면 케이크 Y 는 side/2 + (Y − side/2)/s 에 선다. 아잉 자리 (Y − top)/s 와의 차가 이동량이다.
+            val shift = (side / 2 - CAKE_BODY_TOP) / s - side / 2
+            return AvatarFraming((1 / s).toFloat(), (shift / side).toFloat())
+        }
+    }
+}

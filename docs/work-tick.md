@@ -137,7 +137,7 @@ uuid 는 소문자로 내려온다(Swift `UUID().uuidString` 은 대문자 — �
 | 401/403 `42501` | anon 호출 / EXECUTE 회수(서버측 킬스위치) / RLS 위반(남의 팀에 하트비트) | 42501 은 "서버가 껐다"로 보고 끄고 폴백. 401 은 기존 `withSessionRetry` 의 토큰 갱신 경로 |
 | 400 `22023` | `p_heartbeat=true` 인데 `p_team_id=null` | 클라 버그. 폴백 + 진단 로그 |
 | 400 `23514/23503` 등 | 제약 위반(정상 경로엔 없다) | 폴백(기존 경로가 같은 오류를 내면 그쪽 규약대로) |
-| 502·503·504 · 500+`57014`/`PGRST000~003`/`53xxx`/`08xxx`/`57P0x` · 도달 불가 URLError | 과부하·도달 불가(2026-10-29 PGRST003·504·57014) | **펼치지 않는다**: 팀 조회·away 요청 0, 백오프 30·60·120·120초×지터. 근무 중이고 마지막 성공 하트비트가 120초보다 오래됐을 때만 레거시 하트비트 1번(4.5) |
+| 502·503·504 · 520~524(Cloudflare) · 408·429 · 500+`57014`/`PGRST000~003`/`53xxx`/`08xxx`/`57P0x` · 도달 불가 URLError | 과부하·도달 불가(2026-10-29 PGRST003·504·57014) | **펼치지 않는다**: 팀 조회·away 요청 0, 백오프 30·60·120·120초×지터. 근무 중이고 마지막 성공 하트비트와 마지막 하트비트 시도가 둘 다 120초보다 오래됐을 때만 레거시 하트비트 1번(4.5) |
 | 그 밖의 5xx·네트워크 오류 | 일시 실패 | 이 틱은 폴백으로 즉시 수행. **연속 3회 실패면 15분 폴백**(폭주 방지 — 2026-10-30 전엔 1시간) |
 
 ---
@@ -179,7 +179,8 @@ static let workTickEnabled = true
 **구현(2026-10-30 안정화)**: 위 Bool 대신 `SupabaseWorkService.workTickGate`(`WorkTickGate`, 맥 전용)의
 `availability(now:)` 가 넷으로 답한다 — `.available` / `.disabled`(a: 이 실행 동안 끔) / `.suspended`(c: 15분 정지, 기존 경로) /
 `.backingOff(until:)`(b: 과부하 백오프 — **기존 경로도 내지 않는다**). 백오프 지터는 `jitter` 주입(테스트 고정), 시계는 스토어 `clock`.
-마지막 성공 하트비트 시각은 `WorkTimerStore.lastHeartbeatSucceededAt`(p_heartbeat=true 인 work_tick 성공 · 레거시 하트비트·입력 보고 성공).
+마지막 성공 하트비트 시각은 `WorkTimerStore.lastHeartbeatSucceededAt`(p_heartbeat=true 인 work_tick 성공 · 레거시 하트비트·입력 보고 성공),
+마지막 시도 시각은 `lastHeartbeatAttemptAt`(레거시 하트비트·입력 보고를 낸 순간 — 실패도 센다). 둘 다 로그아웃이 지운다.
 서버측 킬스위치는 `revoke execute on function public.work_tick(…) from authenticated` 한 줄이다(클라는 42501 → 폴백).
 
 ### 4.2 서비스 층 — 요청/응답 타입(`SupabaseWorkModels.swift`)
@@ -240,7 +241,8 @@ workTickEnabled && workTickAvailable ? work_tick 1회
   403/42501       → 〃(서버가 껐다)
   v != 1          → 〃(계약 협상 실패)
   과부하·도달 불가(b) → 펼치지 않는다: 팀 조회·away 요청 0, away 는 "모른다"(정책 nil — 자동 마감 정지, 스로틀·세대·계정 가드 그대로)
-                   근무 중 && 마지막 성공 하트비트 > 120초 전 → sendHeartbeatIfWorking() 한 번만
+                   근무 중 && 마지막 성공 하트비트 > 120초 전 && 마지막 하트비트 시도 > 120초 전 → sendHeartbeatIfWorking() 한 번만
+                   (시도로도 묶어 장애가 이어져도 120~150초에 한 번 — 성공만 보면 120초 뒤 매 틱 2건이 나갔다)
                    백오프 min(30·2^(k−1),120)초 × 0.8~1.2 — 그동안 work_tick 0, 끝난 첫 틱의 work_tick 1건이 회복 확인
                    (b) 는 (c) 의 정지 카운터에 세지도 지우지도 않는다. 성공하면 모든 카운터를 지운다
   기타/5xx(c)     → 기존 3함수로 즉시 수행; 연속 3회면 15분 동안 기존 경로

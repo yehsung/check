@@ -1021,7 +1021,8 @@ package struct ProfileAppVersionUpdateRequest: Encodable {
 /// 뒤의 실행 단위 스위치다. 실패는 셋으로 가른다(계약 문서 4.5 — 2026-10-30 안정화):
 ///  (a) 계약 실패 — 404/PGRST202(함수 없음·모르는 키) · 403/42501(실행권 회수) · `v != 1` · 디코드 실패 → **이 실행 동안 끈다**.
 ///      그 틱은 호출부가 기존 경로로 즉시 재수행한다.
-///  (b) 과부하·도달 불가 — 502·503·504, 500 + 과부하 코드(`isOverloadCode`), 도달 불가 URLError(`isOverload(_:URLError)`)
+///  (b) 과부하·도달 불가 — 502·503·504 · 520~524(Cloudflare 원점 오류·시간 초과) · 408·429, 500 + 과부하 코드(`isOverloadCode`),
+///      도달 불가 URLError(`isOverload(_:URLError)`)
 ///      → **기존 경로로 펼치지 않고** 백오프한다(`recordOverloadFailure`). 2026-10-29 18:54 장애에서 실패 틱마다 하트비트 2 +
 ///      팀 GET 4 + away 1 로 펼친 요청이 504 더미에 섞였다 — 과부하인 서버에 사용자당 요청을 1건에서 7건으로 늘리는 쪽이었다.
 ///      (b) 는 아래 (c) 의 정지 카운터에 세지도 지우지도 않는다(성공만 지운다).
@@ -1145,13 +1146,22 @@ package final class WorkTickGate: @unchecked Sendable {
 
     // MARK: 실패 분류 (b)
 
-    /// (b) 과부하·도달 불가인가. 502·503·504 는 코드와 무관하게, 500 은 PostgREST 코드가 과부하 계열일 때만.
+    /// (b) 과부하·도달 불가인가. 502·503·504·520~524 는 코드와 무관하게, 500 은 PostgREST 코드가 과부하 계열일 때만.
+    /// 408(요청 시간 초과)·429(속도 제한)는 서비스 층이 `.rejected` 로 던지지만 "지금 더 보내지 마라" 는 뜻이라 (b) 다 —
+    /// (c) 로 두면 그 틱이 기존 경로 7건으로 펼쳐져 제한을 건 쪽에 요청을 더 얹는다.
+    /// 520~524 는 Cloudflare 가 원점(Supabase)에 닿지 못했거나 응답을 못 받은 상태다(522·524 = 연결·응답 시간 초과).
     /// 그 밖의 `WorkTickFailure` 는 (a) 또는 (c) 다(호출부가 가른다).
     package static func isOverload(_ failure: WorkTickFailure) -> Bool {
-        guard case .serverError(let status, let code) = failure else { return false }
-        if status == 502 || status == 503 || status == 504 { return true }
-        guard status == 500, let code else { return false }
-        return isOverloadCode(code)
+        switch failure {
+        case .serverError(let status, let code):
+            if status == 502 || status == 503 || status == 504 || (520...524).contains(status) { return true }
+            guard status == 500, let code else { return false }
+            return isOverloadCode(code)
+        case .rejected(let status, _):
+            return status == 408 || status == 429
+        default:
+            return false
+        }
     }
 
     /// 500 본문의 과부하 코드: 57014(statement timeout) · PGRST000~003(연결 풀·스키마 캐시 — 2026-10-29 의 PGRST003) ·

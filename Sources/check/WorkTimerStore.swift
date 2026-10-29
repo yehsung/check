@@ -444,6 +444,9 @@ final class WorkTimerStore {
     /// (sendHeartbeatIfWorking 의 상태 upsert·입력 보고) 성공. work_tick 과부하 중 레거시 하트비트를 한 건 보낼지 가르는
     /// 유일한 근거다(WorkTimerStoreSync `overloadHeartbeatMaxGapSeconds`). 관찰 대상 아님.
     @ObservationIgnored var lastHeartbeatSucceededAt: Date = .distantPast
+    /// 마지막으로 레거시 하트비트(상태 upsert·입력 보고)를 **시도한** 시각(주입 시계) — 성공·실패 모두. 과부하 중 구조
+    /// 하트비트를 120초에 한 번으로 묶는 두 번째 근거다(성공만 보면 실패가 이어지는 동안 매 틱 나간다). 관찰 대상 아님.
+    @ObservationIgnored var lastHeartbeatAttemptAt: Date = .distantPast
 
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
 
@@ -3371,6 +3374,8 @@ final class WorkTimerStore {
                     // 느린 유휴 주기(기본 300s=슬라이스×10)를 10슬라이스로 쪼갠다. 유휴→근무 전이가 다음 본문까지
                     // 최대 5분 넘게 지연돼 하트비트 신선도(90초)를 어기던 결함을 막는다: 매 슬라이스 후 fast 로
                     // 바뀌었으면 즉시 본문으로 넘어간다(슬라이스 wakeup 은 플래그 확인뿐이라 유휴 비용은 무시 가능).
+                    // (예외: work_tick 과부하 백오프 중엔 하트비트가 최대 약 120~150초 간격 — 요청을 늘리지 않으려는 의도다,
+                    //  WorkTimerStoreSync `overloadHeartbeatMaxGapSeconds`. 스캐빈저 10분보다 한참 안쪽.)
                     for _ in 0..<10 {
                         try? await Task.sleep(for: .seconds(slice), tolerance: tolerance)
                         if Task.isCancelled { return }

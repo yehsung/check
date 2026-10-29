@@ -8,8 +8,9 @@ import Testing
 // 2026-10-29 18:54 KST 장애(PGRST003·504·57014)에서 work_tick 이 실패한 틱마다 기존 경로(하트비트 2 + 팀 GET 4 + away 1)로
 // 즉시 재수행해 과부하인 서버에 사용자당 요청을 늘렸고, 3회 뒤엔 1시간 동안 그 경로에 묶였다. 실패를 셋으로 가른다:
 //  (a) 계약 실패(404·403·v≠1·디코드) → 이 실행 동안 끔(변경 없음)
-//  (b) 과부하·도달 불가(502·503·504 · 500+57014/PGRST000~003/53xxx/08xxx/57P0x · 도달 불가 URLError)
-//      → 펼치지 않는다 · 백오프 30·60·120·120초 × 지터 · 근무 중이고 마지막 성공 하트비트가 120초보다 오래됐을 때만 레거시 하트비트 1번
+//  (b) 과부하·도달 불가(502·503·504 · 520~524 · 408·429 · 500+57014/PGRST000~003/53xxx/08xxx/57P0x · 도달 불가 URLError)
+//      → 펼치지 않는다 · 백오프 30·60·120·120초 × 지터 · 근무 중이고 마지막 성공 하트비트와 마지막 시도가 둘 다 120초보다
+//        오래됐을 때만 레거시 하트비트 1번(검증 단계 K1·K2 — 실패한 시도도 시도로 센다)
 //      · away 는 "모른다" 로 접는다 · (c) 의 정지 카운터에 세지 않는다
 //  (c) 그 밖의 일시 실패 → 지금처럼 그 틱을 기존 경로로 재수행, 연속 3회면 15분(옛 60분) 정지
 // 단언은 **요청 수**로 한다(경로·메서드별 전수 기록). 이 파일 전용 스크립트 프로토콜은 음수 상태를 URLError 로 실패시킨다.
@@ -253,12 +254,14 @@ private func ovRunTick(_ store: WorkTimerStore) async {
         #expect(service.workTickGate.snapshot.fallbackCount == 0)
     }
 
-    /// 레거시 하트비트가 **실패**하면 성공 시각이 그대로라 다음 틱(백오프 중)이 다시 한 번 보낸다 — 여전히 팀 조회 없이.
-    @Test func aFailedOverloadHeartbeatIsRetriedOnTheNextTickWithoutTeamReads() async {
+    /// K1 — 구조 하트비트는 **시도**로도 묶인다: 실패한 시도도 시도로 세어, 장애가 이어지는 동안 120초에 한 번만 나간다.
+    /// (성공만 보던 판은 120초 뒤부터 매 틱 상태 + 기기 주장 2건을 내 평시 work_tick 보다 요청이 늘었다.)
+    @Test func aFailedOverloadHeartbeatIsRetriedOnlyAfter120SecondsFromTheLastAttempt() async {
         let host = "worktick-overload-heartbeat-fails"
         OvScriptedURLProtocol.script(host: host, path: ovWorkTickPath, responses: [ov504])
         OvScriptedURLProtocol.script(host: host, path: ovWorkStatusesPath, method: "POST", responses: [ov504])
-        let clock = OvClock(ovT0.addingTimeInterval(600))
+        let start = ovT0.addingTimeInterval(600)
+        let clock = OvClock(start)
         let (store, service) = ovMakeStore(host: host, suite: "heartbeat-fails", clock: clock)
         defer { ovCancelTasks(store) }
         ovBeginOwnedWork(store, at: ovT0)
@@ -267,12 +270,64 @@ private func ovRunTick(_ store: WorkTimerStore) async {
         await ovRunTick(store)
         #expect(ovCounts(host: host) == OvCounts(tick: 1, heartbeat: 1, deviceWrite: 1), "\(ovCounts(host: host))")
         #expect(store.lastHeartbeatSucceededAt == .distantPast, "실패한 하트비트는 성공 시각을 찍지 않는다")
+        #expect(store.lastHeartbeatAttemptAt == start, "실패해도 시도 시각은 찍는다")
 
-        clock.now = clock.now.addingTimeInterval(15)   // 백오프(30초) 안
-        let mark = ovMark(host)
-        await ovRunTick(store)
-        #expect(ovCounts(host: host, since: mark) == OvCounts(heartbeat: 1, deviceWrite: 1), "\(ovCounts(host: host, since: mark))")
-        #expect(service.workTickGate.snapshot.consecutiveOverloadFailures == 1, "백오프 중 틱은 work_tick 을 시도하지 않는다")
+        // (시각, 그 틱의 기대 요청) — 백오프 30·60·120 과 시도 120초 규칙이 겹친다. 성공은 한 번도 없다.
+        let steps: [(at: TimeInterval, expected: OvCounts)] = [
+            (15, OvCounts()),                                        // 백오프 안 · 시도 15초 전 → 0
+            (30, OvCounts(tick: 1)),                                 // 백오프 끝 → 회복 확인 1건, 시도 30초 전 → 하트비트 없음
+            (60, OvCounts()),                                        // 백오프(60초) 안
+            (90, OvCounts(tick: 1)),                                 // 회복 확인 1건 · 시도 90초 전
+            (120, OvCounts()),                                       // 시도 정확히 120초 전 → "보다 오래" 가 아니다
+            (150, OvCounts(heartbeat: 1, deviceWrite: 1)),           // 시도 150초 전 → 한 번 더(팀 조회 없이)
+            (180, OvCounts()),
+            (210, OvCounts(tick: 1)),                                // 백오프(120초) 끝 · 시도 60초 전
+            (240, OvCounts()), (270, OvCounts()),                    // 시도 90·120초 전
+            (300, OvCounts(heartbeat: 1, deviceWrite: 1)),
+        ]
+        for step in steps {
+            clock.now = start.addingTimeInterval(step.at)
+            let mark = ovMark(host)
+            await ovRunTick(store)
+            #expect(ovCounts(host: host, since: mark) == step.expected, "t+\(step.at): \(ovCounts(host: host, since: mark))")
+        }
+        // 5분 동안 레거시 하트비트 시도 3번(0·150·300초) — 30초 틱마다였다면 9번이다.
+        #expect(ovCounts(host: host).heartbeat == 3, "\(ovCounts(host: host))")
+        #expect(service.workTickGate.snapshot.fallbackCount == 0)
+        #expect(service.workTickGate.snapshot.consecutiveTransientFailures == 0)
+    }
+
+    /// 반박 초점 — 구조 하트비트는 `sendHeartbeatIfWorking` 의 게이트를 그대로 탄다: 흡수 맥·확인 전 세션은 공유 행
+    /// (work_statuses POST = 세션 생존신호)을 **한 건도** 쓰지 않고 자기 기기 행의 입력 보고만 한다(유령 하트비트 금지).
+    @Test func overloadRescueNeverSendsAGhostHeartbeatFromAdoptedOrUnconfirmedMacs() async {
+        for adopted in [true, false] {
+            let host = "worktick-overload-ghost-\(adopted ? "adopted" : "unconfirmed")"
+            OvScriptedURLProtocol.script(host: host, path: ovWorkTickPath, responses: [ov504])
+            let clock = OvClock(ovT0.addingTimeInterval(600))
+            let (store, service) = ovMakeStore(host: host, suite: "ghost-\(adopted)", clock: clock)
+            defer { ovCancelTasks(store) }
+            store.start(now: ovT0)
+            store.pendingItems = []
+            store.syncTask?.cancel()
+            store.pokePollTask?.cancel()
+            if adopted { store.adoptedRemoteSession = true }
+            #expect(store.confirmedSessionID == nil || adopted, "확인 도장 없이 시작 — 확인 전 세션")
+            store.awayServerSupported = true
+            store.inputSessionUsable = { true }
+            store.meaningfulIdleSeconds = { 5 }
+            let mark = ovMark(host)
+
+            await ovRunTick(store)
+            let first = ovCounts(host: host, since: mark)
+            #expect(first == OvCounts(tick: 1, deviceWrite: 1), "\(adopted ? "흡수" : "확인 전") 맥: 입력 보고만, 상태 하트비트 0: \(first)")
+            #expect(service.workTickGate.snapshot.consecutiveOverloadFailures == 1)
+
+            // 백오프 중 다음 틱: 입력 보고가 방금 성공했으니(성공 = 시도) 아무것도 내지 않는다.
+            clock.now = clock.now.addingTimeInterval(15)
+            let mark2 = ovMark(host)
+            await ovRunTick(store)
+            #expect(ovCounts(host: host, since: mark2) == OvCounts(), "\(ovCounts(host: host, since: mark2))")
+        }
     }
 
     // MARK: ③ 연속 504 → 30·60·120·120초 백오프, 백오프 중 work_tick 0, 회복하면 카운터 0
@@ -378,6 +433,28 @@ private func ovRunTick(_ store: WorkTimerStore) async {
         #expect(service.workTickGate.snapshot.consecutiveTransientFailures == 0)
     }
 
+    /// K2 — 429(속도 제한)·408 은 서비스 층이 `.rejected` 로, 522(Cloudflare 원점 연결 시간 초과)는 `.serverError` 로 던진다.
+    /// 어느 쪽이든 그 틱은 work_tick 1건뿐이고(펼침 금지) 백오프가 선다.
+    @Test func rateLimitAndCloudflareOriginTimeoutAreOverloadOnTheStorePath() async {
+        for (status, body) in [(429, #"{"message":"Too Many Requests"}"#), (408, ""), (522, "<html>origin timeout</html>")] {
+            let host = "worktick-overload-k2-\(status)"
+            OvScriptedURLProtocol.script(host: host, path: ovWorkTickPath, status: status, body: body)
+            let clock = OvClock(ovT0.addingTimeInterval(600))
+            let (store, service) = ovMakeStore(host: host, suite: "k2-\(status)", clock: clock)
+            defer { ovCancelTasks(store) }
+            ovBeginOwnedWork(store, at: ovT0)
+            store.lastHeartbeatSucceededAt = clock.now.addingTimeInterval(-10)   // 신선한 하트비트 — 구조 하트비트 없음
+
+            await ovRunTick(store)
+            #expect(ovCounts(host: host) == OvCounts(tick: 1), "HTTP \(status): \(ovCounts(host: host))")
+            let gate = service.workTickGate.snapshot
+            #expect(gate.consecutiveOverloadFailures == 1, "HTTP \(status)")
+            #expect(gate.lastOverloadReason?.hasPrefix("HTTP \(status)") == true, "\(gate.lastOverloadReason ?? "nil")")
+            #expect(gate.consecutiveTransientFailures == 0, "HTTP \(status) 는 (c) 카운터에 세지 않는다")
+            #expect(gate.fallbackCount == 0)
+        }
+    }
+
     /// 과부하 코드가 아닌 500 은 (c) — 지금 규칙 그대로 그 틱을 기존 경로로 재수행한다(하트비트 유실 창 금지).
     @Test func server500WithAnotherCodeIsTransientAndFallsBackWithinTheTick() async {
         let host = "worktick-overload-500-other"
@@ -411,9 +488,20 @@ private func ovRunTick(_ store: WorkTimerStore) async {
             #expect(!WorkTickGate.isOverload(.serverError(status: 500, code: code)), "500 \(code ?? "nil")")
         }
         #expect(!WorkTickGate.isOverload(.serverError(status: 501, code: "57014")))
-        #expect(!WorkTickGate.isOverload(.serverError(status: 520, code: nil)))
+        // K2 — Cloudflare 원점 오류·시간 초과(520~524)와 408·429 도 (b). 그 바깥 이웃은 (c).
+        for status in 520...524 {
+            #expect(WorkTickGate.isOverload(.serverError(status: status, code: nil)), "\(status)")
+        }
+        for status in [505, 519, 525, 530] {
+            #expect(!WorkTickGate.isOverload(.serverError(status: status, code: nil)), "\(status)")
+        }
+        #expect(WorkTickGate.isOverload(.rejected(status: 429, code: nil)))
+        #expect(WorkTickGate.isOverload(.rejected(status: 408, code: nil)))
+        #expect(WorkTickGate.isOverload(.rejected(status: 429, code: "XX000")), "429 는 코드와 무관")
         #expect(!WorkTickGate.isOverload(.rejected(status: 400, code: "57014")))
-        #expect(!WorkTickGate.isOverload(.rejected(status: 429, code: nil)))
+        #expect(!WorkTickGate.isOverload(.rejected(status: 409, code: nil)))
+        #expect(!WorkTickGate.isOverload(.rejected(status: 400, code: "22023")))
+        #expect(!WorkTickGate.isOverload(.rejected(status: -1, code: nil)))
         #expect(!WorkTickGate.isOverload(.functionMissing(code: "PGRST202")))
         #expect(!WorkTickGate.isOverload(.forbidden(code: "42501")))
         #expect(!WorkTickGate.isOverload(.undecodable))
@@ -544,6 +632,51 @@ private func ovRunTick(_ store: WorkTimerStore) async {
         #expect(ovCounts(host: host, since: mark) == OvCounts(), "\(ovCounts(host: host, since: mark))")
         #expect(store.awayPolicy == nil)
         #expect(service.workTickGate.snapshot.consecutiveOverloadFailures == 1)
+    }
+
+    /// 반박 초점 — `.overloaded` 핸드오프는 `.fromTick` 과 같은 가드를 지난다: 다른 계정·옛 세대의 핸드오프는 정책을 건드리지
+    /// 않고, 세션이 없으면 통째로 비운다.
+    @Test func overloadedHandoffKeepsTheAccountAndGenerationGuards() async {
+        let host = "worktick-overload-handoff-guards"
+        let clock = OvClock(ovT0.addingTimeInterval(600))
+        let (store, _) = ovMakeStore(host: host, suite: "handoff-guards", clock: clock)
+        defer { ovCancelTasks(store) }
+        ovBeginOwnedWork(store, at: ovT0)
+        let policy = AwayPolicy(closeThresholdSeconds: 600, serverNow: nil)
+
+        store.awayPolicy = policy
+        await store.finishWorkTick(.overloaded(ownerUserID: "someone-else", generation: store.sessionGeneration))
+        #expect(store.awayPolicy == policy, "다른 계정의 핸드오프는 접지 않는다")
+
+        await store.finishWorkTick(.overloaded(ownerUserID: ovUserID, generation: store.sessionGeneration - 1))
+        #expect(store.awayPolicy == policy, "옛 세대의 핸드오프는 접지 않는다")
+
+        await store.finishWorkTick(.overloaded(ownerUserID: ovUserID, generation: store.sessionGeneration))
+        #expect(store.awayPolicy == nil, "같은 계정·세대면 \"모른다\" 로 접는다")
+        #expect(ovCounts(host: host) == OvCounts(), "핸드오프는 요청을 내지 않는다: \(ovCounts(host: host))")
+    }
+
+    /// 반박 초점 — 백오프 중 로그아웃: 하트비트 성공·시도 시각(계정에 묶인 값)은 지워지고, 그 사이 늦게 끝난 틱은 핸드오프를 버린다.
+    @Test func signOutDuringBackoffClearsTheHeartbeatStamps() async {
+        let host = "worktick-overload-signout"
+        OvScriptedURLProtocol.script(host: host, path: ovWorkTickPath, responses: [(200, ovTickJSON()), ov504])
+        let clock = OvClock(ovT0.addingTimeInterval(600))
+        let (store, service) = ovMakeStore(host: host, suite: "signout", clock: clock)
+        defer { ovCancelTasks(store) }
+        ovBeginOwnedWork(store, at: ovT0)
+        await ovRunTick(store)
+        clock.now = clock.now.addingTimeInterval(30)
+        await ovRunTick(store)
+        #expect(service.workTickGate.snapshot.consecutiveOverloadFailures == 1)
+        #expect(store.lastHeartbeatSucceededAt != .distantPast)
+
+        store.signOut(notifyServer: false)
+        #expect(store.lastHeartbeatSucceededAt == .distantPast)
+        #expect(store.lastHeartbeatAttemptAt == .distantPast)
+        let mark = ovMark(host)
+        let handoff = await store.workTickIfPossible()
+        if case .fallback = handoff {} else { Issue.record("세션이 없으면 기존 경로(통합 대상 아님) — \(handoff)") }
+        #expect(ovCounts(host: host, since: mark).heartbeat == 0, "로그아웃 뒤엔 하트비트가 없다")
     }
 
     // MARK: 팝오버 즉시 새로고침도 같은 게이트

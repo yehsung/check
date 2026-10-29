@@ -211,18 +211,22 @@ extension WorkTimerStore {
         }
     }
 
-    /// 과부하 중 하트비트 간격 상한(초). 근무 중 (b) 틱에서 마지막 성공 하트비트가 이보다 오래됐을 때만 레거시 하트비트를
-    /// 한 번 보낸다. 서버 스캐빈저(`close_abandoned_work_sessions`)의 10분 공백 마감보다 한참 안쪽이라, 서버가 일부 요청만
-    /// 받아 주는 동안에도 살아 있는 근무가 방치로 닫히지 않는다.
+    /// 과부하 중 하트비트 간격 상한(초). 근무 중 (b) 틱에서 마지막 성공 하트비트 **와 마지막 시도**가 둘 다 이보다 오래됐을 때만
+    /// 레거시 하트비트를 한 번 보낸다. 서버 스캐빈저(`close_abandoned_work_sessions`)의 10분 공백 마감보다 한참 안쪽이라,
+    /// 서버가 일부 요청만 받아 주는 동안에도 살아 있는 근무가 방치로 닫히지 않는다. 틱이 30초라 실제 간격은 120~150초다.
     static let overloadHeartbeatMaxGapSeconds: TimeInterval = 120
 
     /// (b) 과부하·도달 불가 틱(실패 직후 또는 백오프 중)의 전부: 팀 조회(refreshTeamStatus)·away 요청을 **내지 않는다**.
-    /// 근무 중(`startedAt != nil`)이고 마지막 성공 하트비트가 120초보다 오래됐을 때만 `sendHeartbeatIfWorking()` 한 번 —
-    /// 세션 소유·흡수 맥·`confirmedSessionID` 게이트는 그 함수 안의 것을 그대로 탄다(유령 하트비트 방지 그대로).
+    /// 근무 중(`startedAt != nil`)이고 마지막 성공 하트비트·마지막 하트비트 시도가 둘 다 120초보다 오래됐을 때만
+    /// `sendHeartbeatIfWorking()` 한 번 — 세션 소유·흡수 맥·`confirmedSessionID` 게이트는 그 함수 안의 것을 그대로 탄다
+    /// (유령 하트비트 방지 그대로). 시도로도 묶는 이유: 성공만 보면 장애가 이어지는 동안 120초 뒤부터 **매 틱**(30초)
+    /// 상태 + 기기 주장 2건이 나가, 평시 work_tick(30초에 1건)보다 요청이 늘어난다(실패한 시도도 시도로 센다).
     /// away 는 `.overloaded` 로 넘겨 `finishWorkTick` 이 같은 가드로 "모른다" 접기를 한다.
     private func holdTickDuringOverload(ownerUserID: String, generation: Int) async -> WorkTickAwayHandoff {
+        let now = clock()
         if startedAt != nil,
-           clock().timeIntervalSince(lastHeartbeatSucceededAt) > Self.overloadHeartbeatMaxGapSeconds {
+           now.timeIntervalSince(lastHeartbeatSucceededAt) > Self.overloadHeartbeatMaxGapSeconds,
+           now.timeIntervalSince(lastHeartbeatAttemptAt) > Self.overloadHeartbeatMaxGapSeconds {
             await sendHeartbeatIfWorking()
         }
         guard generation == sessionGeneration else { return .skipped }
@@ -344,6 +348,7 @@ extension WorkTimerStore {
             now: wall
         )
         let gate = service.workTickGate
+        let generation = sessionGeneration
         do {
             let response = try await withSessionRetry { activeSession in
                 try await service.workTick(accessToken: activeSession.accessToken, request: request)
@@ -352,7 +357,8 @@ extension WorkTimerStore {
             if let raw = response.serverNow { serverNow = await service.parseDate(raw) }
             gate.recordSuccess(serverNow: serverNow, localNow: Date())
             // 하트비트를 실은 틱의 성공 = 서버가 그 하트비트를 썼다(하트비트가 실패하면 RPC 전체가 실패한다 — 위 doc).
-            if heartbeat { lastHeartbeatSucceededAt = clock() }
+            // 세대가 바뀌었으면(로그아웃·재로그인 중 늦게 온 응답) 옛 계정의 성공을 새 계정의 시각에 찍지 않는다.
+            if heartbeat, generation == sessionGeneration { lastHeartbeatSucceededAt = clock() }
             let members = await service.assembleTeamStatuses(
                 rows: response.statuses ?? [],
                 active: response.sessionsActive ?? [],
@@ -374,14 +380,20 @@ extension WorkTimerStore {
                 gate.disable(reason: "응답 해석 실패", at: now)
             case .serverError(let status, let code):
                 let reason = "HTTP \(status)\(code.map { " \($0)" } ?? "")"
-                // 502·503·504 와 500 + 과부하 코드는 (b) — 백오프만 세우고 펼치지 않는다. 그 밖의 500 은 (c).
+                // 502·503·504·520~524 와 500 + 과부하 코드는 (b) — 백오프만 세우고 펼치지 않는다. 그 밖의 500 은 (c).
                 if WorkTickGate.isOverload(failure) {
                     gate.recordOverloadFailure(reason: reason, at: now)
                     return .overloaded
                 }
                 gate.recordTransientFailure(reason: reason, at: now)
             case .rejected(let status, let code):
-                gate.recordTransientFailure(reason: "HTTP \(status)\(code.map { " \($0)" } ?? "")", at: now)
+                let reason = "HTTP \(status)\(code.map { " \($0)" } ?? "")"
+                // 408·429 는 "지금 더 보내지 마라" — (b) 로 백오프한다(WorkTickGate.isOverload). 그 밖의 거절은 (c).
+                if WorkTickGate.isOverload(failure) {
+                    gate.recordOverloadFailure(reason: reason, at: now)
+                    return .overloaded
+                }
+                gate.recordTransientFailure(reason: reason, at: now)
             }
             return .failed
         } catch {
@@ -1202,6 +1214,8 @@ extension WorkTimerStore {
             return
         }
         let generation = sessionGeneration
+        // 시도 시각 — 성공·실패와 무관하게 센다(과부하 중 구조 하트비트를 120초에 한 번으로 묶는 근거, holdTickDuringOverload).
+        lastHeartbeatAttemptAt = clock()
         do {
             try await withSessionRetry { activeSession in
                 try await service.heartbeat(
@@ -1213,7 +1227,7 @@ extension WorkTimerStore {
                 )
             }
             // 성공 시각 — work_tick 과부하 중 "하트비트 한 건" 을 보낼지의 근거(holdTickDuringOverload).
-            lastHeartbeatSucceededAt = clock()
+            if generation == sessionGeneration { lastHeartbeatSucceededAt = clock() }
         } catch {
             // 하트비트 실패는 조용히 무시하고 다음 주기에 재시도한다(표시 문구를 흔들지 않는다).
             guard generation == sessionGeneration else { return }
@@ -1258,6 +1272,7 @@ extension WorkTimerStore {
         // 흩어진다. 이 함수의 실패가 이미 안전한 쪽(그 사람이 면제될 뿐)이라고 적어 둔 그 결말과 같다.
         guard hasDeviceIdentity else { return }
         let generation = sessionGeneration
+        lastHeartbeatAttemptAt = clock()
         do {
             try await withSessionRetry { activeSession in
                 try await service.reportDeviceInput(
@@ -1270,7 +1285,7 @@ extension WorkTimerStore {
             }
             // 흡수·미확인 맥에선 이 입력 보고가 곧 이 맥의 "하트비트" 다(work_tick 도 같은 처지에선 입력만 싣는다) —
             // 과부하 중 120초 규칙이 같은 근거로 돈다. 세션 생존신호(last_seen_at)는 아니므로 스캐빈저와는 무관하다.
-            lastHeartbeatSucceededAt = clock()
+            if generation == sessionGeneration { lastHeartbeatSucceededAt = clock() }
         } catch {
             guard generation == sessionGeneration else { return }
         }

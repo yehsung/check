@@ -1,0 +1,1822 @@
+{
+  "cases": [
+    {
+      "after": {
+        "balance": 4,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [],
+        "missionsLoaded": false,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": true
+      },
+      "decodeError": false,
+      "id": "invalid",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"invalid\"}"
+    },
+    {
+      "after": {
+        "balance": 4,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [],
+        "missionsLoaded": false,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": true
+      },
+      "decodeError": false,
+      "id": "invalid-with-junk",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"invalid\",\"balance\":\"x\"}"
+    },
+    {
+      "after": {
+        "balance": null,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": null,
+        "missions": [],
+        "missionsLoaded": false,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "unknown-status",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"maintenance\",\"balance\":9,\"day\":\"2026-10-30\"}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "ok-minimal",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\"}"
+    },
+    {
+      "decodeError": true,
+      "id": "ok-missing-balance",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"day\":\"2026-10-30\"}"
+    },
+    {
+      "decodeError": true,
+      "id": "ok-missing-day",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2}"
+    },
+    {
+      "decodeError": true,
+      "id": "ok-balance-string",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":\"2\",\"day\":\"2026-10-30\"}"
+    },
+    {
+      "after": {
+        "balance": 0,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": null,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "negative-balance",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":-3,\"day\":\"2026-10-30\"}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 2시간 50분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3fac71c71c71c71c"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "cap-kept-when-absent",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":600,\"claimed\":false,\"granted_now\":false}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 2147483647,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": null,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "cap-int4-max",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"balance_cap\":2147483647}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "cap-null",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"balance_cap\":null}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": true,
+        "missionNotice": null,
+        "missionTargetSeconds": null,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": true
+      },
+      "decodeError": false,
+      "id": "unlimited-true",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"unlimited\":true}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "unlimited-false",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"unlimited\":false}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "unlimited-null",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"unlimited\":null}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "unlimited-absent",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\"}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 1시간 30분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3fe0000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "today-half",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":5400,\"claimed\":false,\"granted_now\":false,\"laps_settled\":0,\"laps_granted\":0,\"worked_seconds\":5400}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 1,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": "3시간 채웠어요 — 루비 +3",
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "오늘 1개 · 다음까지 2시간 50분",
+            "kind": "work3h",
+            "laps": 1,
+            "pending": false,
+            "progress": "3fac71c71c71c71c"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "granted-lap1",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":600,\"claimed\":false,\"granted_now\":true,\"laps_settled\":1,\"laps_granted\":1,\"worked_seconds\":11400}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 1,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": "3시간 채웠어요 — 루비 +6 (오늘 2번)",
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "오늘 2개 · 다음까지 2시간 50분",
+            "kind": "work3h",
+            "laps": 2,
+            "pending": false,
+            "progress": "3fac71c71c71c71c"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "granted-lap2",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":600,\"claimed\":false,\"granted_now\":true,\"laps_settled\":2,\"laps_granted\":2}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 1,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": "3시간 채웠어요 — 루비 +9 (오늘 3번)",
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "오늘 3개 · 다음까지 2시간 59분",
+            "kind": "work3h",
+            "laps": 3,
+            "pending": false,
+            "progress": "3f76c16c16c16c17"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "granted-lap3-yesterday1",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":60,\"claimed\":false,\"granted_now\":true,\"laps_granted\":3},{\"key\":\"work3h\",\"kst_day\":\"2026-10-29\",\"target_seconds\":10800,\"progress_seconds\":9000,\"claimed\":false,\"granted_now\":true,\"laps_granted\":1}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 1,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": "3시간 채웠어요 — 루비 +3",
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 2시간 59분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3f76c16c16c16c17"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "granted-yesterday-only",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":60,\"claimed\":false,\"granted_now\":false},{\"key\":\"work3h\",\"kst_day\":\"2026-10-29\",\"target_seconds\":10800,\"progress_seconds\":9000,\"claimed\":false,\"granted_now\":true,\"laps_granted\":1}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 1,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": "3시간 채웠어요 — 루비 +3",
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": true,
+            "detail": "다음 하나까지 0분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3ff0000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "granted-old-server-no-laps",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":10800,\"claimed\":true,\"granted_now\":true}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": true,
+            "detail": "다음 하나까지 0분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3ff0000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "claimed-not-granted",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":10800,\"claimed\":true,\"granted_now\":false}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 1,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": "3시간 채웠어요 — 루비 +6 (오늘 2번)",
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "오늘 2개 · 다음까지 2시간 50분",
+            "kind": "work3h",
+            "laps": 2,
+            "pending": false,
+            "progress": "3fac71c71c71c71c"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "ruby-mission-grant-ignored",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":600,\"claimed\":false,\"granted_now\":true,\"laps_granted\":2}],\"ruby_mission_grant\":5,\"ruby_balance\":40}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 1,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": "3시간 채웠어요 — 루비 +12 (오늘 4번)",
+        "missionTargetSeconds": null,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "unknown-key-granted",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"future_mission\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":0,\"claimed\":false,\"granted_now\":true,\"laps_granted\":4}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 0분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3ff0000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "target-zero-today",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":0,\"progress_seconds\":30,\"claimed\":false,\"granted_now\":false}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 58분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3fe071c71c71c71c"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "target-from-other-day",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-29\",\"target_seconds\":7200,\"progress_seconds\":7000,\"claimed\":false,\"granted_now\":false}],\"worked_seconds_closed\":3000,\"worked_seconds_open\":700}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": null,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 1시간 58분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3fd5ed097b425ed1"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "no-missions-worked",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"worked_seconds_closed\":3000,\"worked_seconds_open\":700}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": 5,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 7200,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "missions-null",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":null}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "오늘 1개 · 다음까지 0분",
+            "kind": "work3h",
+            "laps": 1,
+            "pending": false,
+            "progress": "3ff0000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "progress-over-target",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":12000,\"claimed\":false,\"granted_now\":false,\"laps_granted\":1}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 2시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3fd5555555555555"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "remaining-exact-hours",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":3600,\"claimed\":false,\"granted_now\":false}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 0분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3fefd33f5617839a"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "remaining-under-minute",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":10741,\"claimed\":false,\"granted_now\":false}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": true,
+            "claimed": false,
+            "detail": "오늘 1개 · 다음까지 0분",
+            "kind": "work3h",
+            "laps": 1,
+            "pending": true,
+            "progress": "3ff0000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "pending-capped",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":10800,\"claimed\":false,\"granted_now\":false,\"capped\":true,\"pending\":true,\"laps_granted\":1}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "pending-yesterday-ignored",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-29\",\"target_seconds\":10800,\"progress_seconds\":10800,\"claimed\":false,\"granted_now\":false,\"pending\":true}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": null,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 3시간",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "0000000000000000"
+          },
+          {
+            "capped": false,
+            "claimed": true,
+            "detail": "잔량 0이면 2개로",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": true,
+            "detail": "5일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 5,
+        "streakIncludesToday": true,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "floor-and-streak",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"daily_floor\":2,\"floor_applied\":true,\"streak_days\":5,\"streak_includes_today\":true,\"measured_at\":1793000000}"
+    },
+    {
+      "decodeError": true,
+      "id": "row-laps-string",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":0,\"claimed\":false,\"granted_now\":true,\"laps_granted\":\"2\"}]}"
+    },
+    {
+      "decodeError": true,
+      "id": "row-missing-granted",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":0,\"claimed\":false}]}"
+    },
+    {
+      "after": {
+        "balance": 2,
+        "cap": null,
+        "charged": 0,
+        "failed": false,
+        "isUnlimited": false,
+        "missionNotice": null,
+        "missionTargetSeconds": 10800,
+        "missions": [
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "다음 하나까지 1시간 53분",
+            "kind": "work3h",
+            "laps": 0,
+            "pending": false,
+            "progress": "3fd7b425ed097b42"
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "매일 자동 충전",
+            "kind": "dailyFloor",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          },
+          {
+            "capped": false,
+            "claimed": false,
+            "detail": "0일 연속",
+            "kind": "arrivalStreak",
+            "laps": 0,
+            "pending": false,
+            "progress": null
+          }
+        ],
+        "missionsLoaded": true,
+        "rubyMissionGrant": null,
+        "streakDays": 0,
+        "streakIncludesToday": false,
+        "unlimited": false
+      },
+      "decodeError": false,
+      "id": "row-worked-fallback",
+      "prior": {
+        "balance": null,
+        "cap": null,
+        "failed": false,
+        "missionTargetSeconds": null,
+        "unlimited": false
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"missions\":[{\"key\":\"work3h\",\"kst_day\":\"2026-10-30\",\"target_seconds\":10800,\"progress_seconds\":4000,\"claimed\":false,\"granted_now\":false}]}"
+    },
+    {
+      "decodeError": true,
+      "id": "streak-string",
+      "prior": {
+        "balance": 4,
+        "cap": 5,
+        "failed": true,
+        "missionTargetSeconds": 7200,
+        "unlimited": true
+      },
+      "response": "{\"status\":\"ok\",\"balance\":2,\"day\":\"2026-10-30\",\"streak_days\":\"5\"}"
+    },
+    {
+      "defaultTargetSeconds": 10800,
+      "hoursText": [
+        {
+          "seconds": -5,
+          "text": "0분"
+        },
+        {
+          "seconds": 0,
+          "text": "0분"
+        },
+        {
+          "seconds": 59,
+          "text": "0분"
+        },
+        {
+          "seconds": 60,
+          "text": "1분"
+        },
+        {
+          "seconds": 3599,
+          "text": "59분"
+        },
+        {
+          "seconds": 3600,
+          "text": "1시간"
+        },
+        {
+          "seconds": 3660,
+          "text": "1시간 1분"
+        },
+        {
+          "seconds": 7140,
+          "text": "1시간 59분"
+        },
+        {
+          "seconds": 7200,
+          "text": "2시간"
+        },
+        {
+          "seconds": 10800,
+          "text": "3시간"
+        },
+        {
+          "seconds": 36000,
+          "text": "10시간"
+        },
+        {
+          "seconds": 86399,
+          "text": "23시간 59분"
+        }
+      ],
+      "id": "constants",
+      "throttleSecondsBits": "4072c00000000000"
+    }
+  ],
+  "equivalence": "discrete",
+  "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+  "golden": "desktop-ultra/wallet-apply",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "after": "applyUltraWallet 뒤 값. progress 는 Double 비트. charged = onRewardTrigger(.ultraCharged) 횟수(★U3 granted_now 가 유일한 트리거)",
+    "prior": "applyUltraWallet 전에 store 에 넣은 값(잔량·상한·무제한·실패·3시간 목표)",
+    "response": "ultra_wallet_sync 응답 원문(snake). service.decoder(convertFromSnakeCase)로 디코드 — 실패면 decodeError=true(이때 앱은 잔량을 지우지 않고 failed 만 세운다, U2)",
+    "rubyMissionGrant": "⚠️ Swift CodingKeys 에 ruby_mission_grant 가 없어 언제나 null — 안내 금액은 3 으로 접힌다(ruby-mission-grant-ignored)"
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStorePoke.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift"
+  ]
+}

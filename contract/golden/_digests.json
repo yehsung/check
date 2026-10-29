@@ -150,6 +150,36 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
+    "desktop-ultra/focus-stage": {
+      "file": "c7b41fe55316084e151c422cbbacacc3a07bdd5dabb1c04a535634628781b938",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
+      },
+      "swiftSources": {
+        "Sources/check/WorkTimerStorePoke.swift": "62948627e9a45f7e8f17eceb1c70d0600489f2b6d41b6c9a3c9f0d6f662abc18"
+      }
+    },
+    "desktop-ultra/requests": {
+      "file": "aedc7f7c25d42933cf12e8026234dc7ba23c2c7a490ed5b62cb1fcf37a52cbd0",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckCoreShared.swift": "0d5ec08c13082a3b143375ee2f2297b801ece54c0226642e396ff895153913a6",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75"
+      }
+    },
+    "desktop-ultra/wallet-apply": {
+      "file": "c49fc291343f5830e2b3fcf32a1e01622b0d30132949c43c8cbe59e8a44af0b7",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/check/WorkTimerStorePoke.swift": "62948627e9a45f7e8f17eceb1c70d0600489f2b6d41b6c9a3c9f0d6f662abc18"
+      }
+    },
     "duel-fee/fee": {
       "file": "481256ab041f96314be76b958171097adbf5a0443790ad94197927599c585dfd",
       "generator": {

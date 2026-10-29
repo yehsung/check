@@ -1,5 +1,5 @@
 {
-  "exportTests": 91,
+  "exportTests": 94,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -176,6 +176,42 @@
         "Sources/CheckCore/MilestoneTracker.swift",
         "Sources/CheckCore/SupabaseWorkModels.swift",
         "Sources/CheckCore/CheckTodoModel.swift"
+      ]
+    },
+    {
+      "cases": 13,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/focus-stage",
+      "path": "contract/golden/desktop-ultra/focus-stage.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift"
+      ]
+    },
+    {
+      "cases": 15,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/requests",
+      "path": "contract/golden/desktop-ultra/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CheckCoreShared.swift"
+      ]
+    },
+    {
+      "cases": 39,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/wallet-apply",
+      "path": "contract/golden/desktop-ultra/wallet-apply.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
       ]
     },
     {

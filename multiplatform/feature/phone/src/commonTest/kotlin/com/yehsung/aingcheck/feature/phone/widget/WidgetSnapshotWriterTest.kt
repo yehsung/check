@@ -1,4 +1,4 @@
-// 원본: Tests/CheckMobileKitTests/WidgetSnapshotWriterTests.swift(같은 값 건너뛰기 · 30초 스로틀 · 뒤늦은 새로고침 · clear) ·
+// 원본: Tests/CheckMobileKitTests/BaseWidgetSnapshotTests.swift:161-186(같은 값 건너뛰기 · 30초 스로틀 · 뒤늦은 새로고침 · clear) ·
 //       Sources/CheckMobileKit/App/WidgetSnapshotWriter.swift @ 3bd04bd
 // G §2-3 W2-f ③: 위젯 스냅숏은 30초 스로틀 — 새로고침 횟수를 가상 시간으로 센다.
 package com.yehsung.aingcheck.feature.phone.widget

@@ -340,7 +340,7 @@ class PhoneWorkController(
         /** 계정별 '자리비움 마감 안내를 이미 보였다' 키 머리(Swift `aing.now.phoneWorkIdleAck.<uid>`). */
         const val IDLE_ACK_PREFIX: String = "aing.now.phoneWorkIdleAck."
 
-        /** 응답 세션 → 내 열린 세션 값. id 가 없으면 null. 모르는 origin 은 **mac** 으로 접는다(옛 iOS 와 같은 규칙 — §8-1, §8-7 W2-f). */
+        /** 응답 세션 → 내 열린 세션 값. id 가 없으면 null. 출처는 [originOf](아는 값은 그대로 · 모르는 값은 **mac** — §8-1, §8-7 W2-f). */
         fun phoneSession(info: PhoneWorkSessionInfo, response: PhoneWorkResponse): NowPhoneSession? {
             val id = info.id?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
             return NowPhoneSession(
@@ -352,14 +352,15 @@ class PhoneWorkController(
         }
 
         /**
-         * 서버 origin 글자 → 출처. `phone` 만 폰이고 나머지(`mac` · **`windows`** · 모르는 값 · 없음)는 전부 **mac** 이다 — 이 폰이 연 근무가 아니라는
-         * 뜻("맥에서 연 근무예요 · 여기서 끝낼 수도 있어요")이다. 새 출처를 만들지 않는다(§8-1 D:675 · §8-7 W2-f: Windows 가 `'windows'` 를 실어도
-         * 옛 iOS 가 `.mac` 으로 접는 것과 같은 판정).
+         * 서버 origin 글자 → 출처(Swift `NowWorkOrigin(rawValue:) ?? .unknown` → `.unknown` 이면 `.mac` 과 같은 판정). **이 빌드가 아는 출처**
+         * ([NowWorkOrigin] 의 값 — 우리 센티넬 `unknown` 은 빼고)는 그 출처로, 그 밖(모르는 값 · 없음 · 대소문자가 다른 글자 · 우리 센티넬
+         * 글자 `"unknown"`)은 전부 **mac** 으로 접는다 — 이 폰이 연 근무가 아니라는 뜻이다.
+         *
+         * §8-1 D:675 · §8-7 W2-f: 서버(M3)는 Windows 가 연 근무에 `'windows'` 를 싣는다. Android `NowWorkOrigin` 에 windows 갈래를 더하면(코어 W2-b
+         * 몫 — 조정자 패치 0003) 이 함수는 손대지 않고 그 갈래로 읽는다. 갈래가 없는 빌드(옛 iOS 와 같다)는 mac 으로 접는다.
          */
-        fun originOf(raw: String?): NowWorkOrigin = when (raw) {
-            NowWorkOrigin.phone.rawValue -> NowWorkOrigin.phone
-            else -> NowWorkOrigin.mac
-        }
+        fun originOf(raw: String?): NowWorkOrigin =
+            NowWorkOrigin.entries.firstOrNull { it != NowWorkOrigin.unknown && it.rawValue == raw } ?: NowWorkOrigin.mac
 
         /** 서버 timestamptz 글자(소수초 있음·없음 둘 다 — Swift `parseServerDate`). */
         fun parseServerDate(value: String): SwiftDate? = SwiftISO8601.parse(value)

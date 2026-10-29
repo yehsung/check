@@ -1,5 +1,5 @@
 // 원본: Sources/CheckMobileKit/App/WidgetSnapshotWriter.swift · Sources/CheckMobileShared/WidgetSnapshot.swift:353-362(WidgetSnapshotCodec.write·remove) ·
-//       Sources/CheckMobileKit/Now/NowStore.swift:806-815(touchWidgetSnapshot 의 파일 몫) @ 3bd04bd
+//       Sources/CheckMobileKit/Now/NowStore.swift:806-815(touchWidgetSnapshot 의 파일 몫) · Sources/CheckWidgetsKit/WidgetTodoToggle.swift:77-89(patchSnapshot) @ 3bd04bd
 package com.yehsung.aingcheck.feature.phone.widget
 
 import com.yehsung.aingcheck.core.session.app.SessionClock
@@ -115,6 +115,36 @@ class WidgetSnapshotWriter(
         writeCount += 1
         reloadCount += 1
         reloadTimelines()
+        return true
+    }
+
+    /**
+     * 위젯 할 일 체크가 스냅숏의 **그 줄 체크 표시만** 바꾼다(Swift `WidgetTodoToggle.patchSnapshot` — 순서·generatedAt 은 그대로, 앱이 다음에 새로
+     * 쓴다). generatedAt 을 옮기지 않는 까닭: 근무 중 me 누적은 generatedAt 기준이라 옮기면 그 사이 시간이 빠진다([touchGeneratedAt] 와 같은 근거).
+     * 위젯 새로고침은 부르지 않는다(체크를 부른 위젯 쪽이 스스로 다시 그린다 — Swift 인텐트와 같다). 돌려주는 값 = 바꿨는가.
+     * 부르는 자리는 [NowWidgetSnapshotSink.patchTodo] 하나다(단일 작성자 — 소스 계약 시험).
+     */
+    fun patchTodoPreview(id: String, isCompleted: Boolean): Boolean {
+        val snapshot = file.read()?.let(WidgetSnapshotCodec::decode) ?: return false
+        val key = id.lowercase()
+        var changed = false
+        val rows = snapshot.todosPreview.map { row ->
+            if (row.id.lowercase() == key && row.isCompleted != isCompleted) {
+                changed = true
+                row.copy(isCompleted = isCompleted)
+            } else {
+                row
+            }
+        }
+        if (!changed) return false
+        val patched = snapshot.copy(todosPreview = rows)
+        try {
+            file.writeAtomically(WidgetSnapshotCodec.encode(patched))
+        } catch (error: Exception) {
+            return false
+        }
+        writeCount += 1
+        current = patched
         return true
     }
 

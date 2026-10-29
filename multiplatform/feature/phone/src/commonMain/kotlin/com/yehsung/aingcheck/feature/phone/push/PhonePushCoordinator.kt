@@ -41,7 +41,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  *    (W2-a K5 — `register_device` 를 따로 부르지 않는다). **받을 수 없으면**(권한 꺼짐) 토큰 없이 넘긴다 → 세션이 `unregister_device` 뒤 토큰
  *    없이 다시 등록한다(K5: 토큰을 빼고 보내면 서버가 옛 토큰을 **유지**하므로 그것만으로는 푸시가 멈추지 않는다 — §8-1 대체 표).
  * 3. **도착**([didReceive]): 해당 스토어를 새로고침하고, 지금 보고 있는 대화의 메시지 · 앱이 앞일 때의 근무 확인이면 숨김으로 답한다.
- * 4. **응답**([handleResponse]): 탭 → 라우트 · 수락 → 오목/체스 respond(accept) 후 대국 열기. 실행 복원이 끝날 때까지 기다린다.
+ * 4. **응답**([handleResponse]): 탭 → 라우트 · 수락 → 오목/체스 respond(accept) 후 대국 열기. 실행 복원이 끝날 때까지 기다린다. 화면을 여는 길은
+ *    전부 딥링크 대상 해석([PhoneContext.openRoute] — 탭 스토어 규칙)이다. 라우터를 바로 부르지 않는다(소스 계약 시험이 잰다).
  * 5. **앱 배지** = 메시지 안 읽은 수 + 받은 오목 신청 수. **모르면 적지 않는다**(push-verify 발견 2).
  * 6. **알림 설정 공개 API**(나 탭 설정 화면): [authorization] · [prefs] · [knowsPrefs] · [isEnabled] · [isSavingPrefs] · [prefsNotice] ·
  *    [setPreference] · [enableNotifications] · [refreshAuthorization] · [openSystemSettings]. 저장은 직렬이다.
@@ -625,7 +626,9 @@ class PhonePushCoordinator(
             }
         }
         // 탭 · 모르는 액션 · 카테고리와 맞지 않는 수락: 버리지 않고 그 화면을 연다. 배지는 앱이 앞으로 올 때 활성화의 서버 확인이 맡는다.
-        context.router.open(content.target)
+        // 여는 길은 **딥링크 대상 해석 한 문**이다(Swift 는 router.open 이 탭의 consumePendingRoute → routeStep · MeStore.open 을 지났다):
+        // 체스·테트리스 판 중 오목 신청 · 오목·테트리스 판 중 체스 신청 → 게임 탭 첫 화면, 제보 답장 → 그 제보에 초점.
+        context.openRoute(content.target)
         refreshStores(content)
     }
 
@@ -637,42 +640,54 @@ class PhonePushCoordinator(
         return session.isSignedIn
     }
 
-    /** 오목 신청 수락 — 코어 오목 스토어로(루비·판 상태·받은 신청 목록이 한 곳에서 바뀐다). 판이 열렸으면 대국으로, 못 열렸으면 그 신청으로. */
+    /**
+     * 오목 신청 수락 — 코어 오목 스토어로(루비·판 상태·받은 신청 목록이 한 곳에서 바뀐다). 판이 열렸으면 대국으로, 못 열렸으면 그 신청으로.
+     * 여는 길은 전부 [PhoneContext.openRoute](딥링크 대상 해석 — 게임 탭 `routeStep`)를 지난다.
+     *
+     * 한 사람 한 판(B8 — 세 방향): 체스·테트리스 판이 흐르는 동안([com.yehsung.aingcheck.core.stores.games.GamesStore.gomokuEntryBlock])에는
+     * **수락 RPC 를 내지 않는다**. 서버의 오목 쪽 게이트는 테트리스를 모른다 — 여기서 수락하면 흐르던 테트리스 판이 15초 침묵으로 판돈째 진다(D5).
+     * GamesStore 가 로비 카드·딥링크에 거는 바로 그 가드다(알림 [수락]도 같은 입구다). 그때는 그 링크를 대상 해석에 넘긴다 → 게임 탭 첫 화면.
+     */
     private suspend fun acceptGomokuInvite(matchID: String) {
         val gomoku = context.gomoku
         val generation = context.generation
+        val invite = PhoneRouteTarget.Games(GamesRouteRequest.GomokuInvite(matchID))
         // 다른 오목 요청이 떠 있으면 스토어가 겹친 요청을 조용히 버린다 — 잠깐 기다린다.
         waitUntilIdle { gomoku.isBusy }
         if (generation != context.generation) return
-        if (gomoku.isBusy) {
-            context.router.open(PhoneRouteTarget.Games(GamesRouteRequest.GomokuInvite(matchID)))
+        if (gomoku.isBusy || context.links.games?.gomokuEntryBlock != null) {
+            context.openRoute(invite)
             return
         }
         gomoku.respond(matchID, accept = true)
         if (generation != context.generation) return
         if (gomoku.match?.id?.lowercase() == matchID) {
-            context.router.open(PhoneRouteTarget.Games(GamesRouteRequest.GomokuMatch(matchID)))
+            context.openRoute(PhoneRouteTarget.Games(GamesRouteRequest.GomokuMatch(matchID)))
         } else {
-            context.router.open(PhoneRouteTarget.Games(GamesRouteRequest.GomokuInvite(matchID)))
+            context.openRoute(invite)
         }
     }
 
-    /** 체스 신청 수락(Android 몫 — 오목과 같은 꼴). */
+    /**
+     * 체스 신청 수락(Android 몫 — 오목과 같은 꼴). 오목·테트리스 판이 흐르는 동안([com.yehsung.aingcheck.core.stores.games.GamesStore.chessEntryBlock])
+     * 에는 수락 RPC 를 내지 않고 대상 해석에 넘긴다(→ 게임 탭 첫 화면 — 한 사람 한 판).
+     */
     private suspend fun acceptChessInvite(matchID: String) {
         val chess = context.chess
         val generation = context.generation
+        val invite = PhoneRouteTarget.ChessInvite(matchID)
         waitUntilIdle { chess.isBusy }
         if (generation != context.generation) return
-        if (chess.isBusy) {
-            context.router.open(PhoneRouteTarget.ChessInvite(matchID))
+        if (chess.isBusy || context.links.games?.chessEntryBlock != null) {
+            context.openRoute(invite)
             return
         }
         chess.respond(matchID, accept = true)
         if (generation != context.generation) return
         if (chess.match?.id?.lowercase() == matchID) {
-            context.router.open(PhoneRouteTarget.ChessMatch(matchID))
+            context.openRoute(PhoneRouteTarget.ChessMatch(matchID))
         } else {
-            context.router.open(PhoneRouteTarget.ChessInvite(matchID))
+            context.openRoute(invite)
         }
     }
 

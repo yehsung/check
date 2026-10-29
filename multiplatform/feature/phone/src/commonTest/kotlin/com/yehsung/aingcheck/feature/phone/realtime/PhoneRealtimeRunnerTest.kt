@@ -1,4 +1,5 @@
-// 원본: Tests/CheckMobileKitTests/MobileRealtimeRunnerTests.swift(drain ≠ take_pokes · 합치기 · 체스 빈 가지 · 테트리스 신호 · 수명) ·
+// 원본: Tests/CheckMobileKitTests/BaseRealtimeRunnerTests.swift(drain ≠ take_pokes · 합치기 · 체스 빈 가지 · 테트리스 신호 · 수명) ·
+//       GamesTetrisDuelWiringTests.swift:296(joiningTheSocketCatchesUpTheLobby — 조인 따라잡기) ·
 //       Sources/CheckMobileKit/Realtime/MobileRealtimeRunner.swift @ 3bd04bd
 // G §2-3 W2-f ②: drain 은 메시지 조회이고 take_pokes 는 0 — 진짜 메시지 스토어(W2-b)를 조립(PhoneAppModel)째 붙여 **스텁이 받은 요청**으로 잰다.
 package com.yehsung.aingcheck.feature.phone.realtime
@@ -143,6 +144,33 @@ class PhoneRealtimeRunnerTest {
         val connects = transport.calls.count { it == "connect" }
         h.app.realtime.appDidBecomeActive()
         assertEquals(connects, transport.calls.count { it == "connect" }, "로그아웃이면 다시 열지 않는다")
+    }
+
+    /**
+     * INV-MobileRealtimeRunner-b94b3ac4 · Swift GamesTetrisDuelWiringTests:296(joiningTheSocketCatchesUpTheLobby): 조인 따라잡기(`.catchUp`)는
+     * 테트리스 로비와 오목 받은함을 **한 번씩** 긁는다 — 소켓이 내려가 있던 사이의 신청·수락·방해 줄은 재생되지 않는다. 기준선(다른 입력):
+     * 러너의 두 칸을 뗀 조립은 같은 조인에 0건 — 위 1건이 러너 배선 때문임을 가른다.
+     */
+    @Test
+    fun joiningCatchesUpTheTetrisLobbyAndGomokuInboxOnceEach() = runTest {
+        fun TestScope.joinAndCount(detach: Boolean): Pair<Int, Int> {
+            val (h, transport) = rig()
+            if (detach) {
+                h.app.realtime.tetris = null
+                h.app.realtime.gomoku = null
+            }
+            h.app.realtime.appDidBecomeActive()
+            transport.emit(RealtimeTransportEvent.Opened)
+            advanceUntilIdle()
+            h.markRequests()
+            transport.emit(RealtimeTransportEvent.Joined)
+            advanceUntilIdle()
+            assertTrue(RealtimeEffect.CatchUp in h.app.realtime.effectLog, "조인이 따라잡기 effect 를 안 냈다")
+            assertEquals(1, summaries(h), "메시지 따라잡기는 러너 칸과 무관하게 한 번")
+            return h.count("tetris_lobby") to h.count("gomoku_inbox")
+        }
+        assertEquals(1 to 1, joinAndCount(detach = false), "조인 한 번에 (테트리스 로비, 오목 받은함)")
+        assertEquals(0 to 0, joinAndCount(detach = true), "기준선이 안 갈린다 — 러너 칸과 무관하게 조회가 나가면 위 1건은 배선을 재지 않는다")
     }
 
     @Test

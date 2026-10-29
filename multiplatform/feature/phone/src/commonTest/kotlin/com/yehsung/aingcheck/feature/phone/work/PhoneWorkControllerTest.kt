@@ -317,21 +317,49 @@ class PhoneWorkControllerTest {
         assertTrue(h.app.ruby.rubyBalance != 99L, "늦은 지갑 값도 버린다")
     }
 
+    /**
+     * §8-1 D:675 · §8-7 W2-f · B:471: 출처는 Swift `NowWorkOrigin(rawValue:) ?? .unknown → .mac` 과 같은 판정이다 — **이 빌드가 아는 출처는 그대로**,
+     * 모르는 값만 mac. 서버(M3)가 Windows 근무에 싣는 `'windows'` 는 코어 [NowWorkOrigin] 에 windows 갈래가 서면(조정자 패치 0003) 그 갈래로
+     * 읽혀야 한다 — 그래서 '아는 출처 전부가 제 글자로 돌아온다'를 열거 전체로 잰다(갈래가 늘면 이 시험이 그 갈래까지 잰다).
+     */
     @Test
-    fun originFoldsEverythingButPhoneToMac() {
-        // §8-1 D:675 · §8-7 W2-f: Windows 가 'windows' 를 실어도 새 출처를 만들지 않고 mac 으로 접는다(옛 iOS 와 같은 판정).
+    fun knownOriginsRoundTripAndUnknownOnesFoldToMac() {
+        val known = NowWorkOrigin.entries.filter { it != NowWorkOrigin.unknown }
+        assertTrue(NowWorkOrigin.phone in known && NowWorkOrigin.mac in known, "대조: 열거가 비지 않았다")
+        for (origin in known) assertEquals(origin, PhoneWorkController.originOf(origin.rawValue), "${origin.rawValue} 를 제 출처로 읽지 않았다")
         assertEquals(NowWorkOrigin.phone, PhoneWorkController.originOf("phone"))
         assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf("mac"))
-        assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf("windows"))
-        assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf("unknown"))
+        // 모르는 값 · 없음 · 대소문자가 다른 글자 · 우리 센티넬 글자는 전부 mac(이 폰이 연 근무가 아니다).
+        assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf("linux"))
         assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf(null))
+        assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf(""))
         assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf("Phone"), "대소문자를 접지 않는다(Swift rawValue 그대로)")
+        assertEquals(NowWorkOrigin.mac, PhoneWorkController.originOf(NowWorkOrigin.unknown.rawValue), "센티넬 'unknown' 이 출처로 새지 않는다")
         val response = PhoneWorkResponse(status = "ok", checkAt = "2026-09-17T07:35:00.250Z")
         assertNull(PhoneWorkController.phoneSession(PhoneWorkSessionInfo(id = ""), response), "빈 id 는 세션이 아니다")
-        val parsed = PhoneWorkController.phoneSession(PhoneWorkSessionInfo(id = "AB", origin = "windows"), response)!!
+        val parsed = PhoneWorkController.phoneSession(PhoneWorkSessionInfo(id = "AB", origin = "linux"), response)!!
         assertEquals("ab", parsed.id)
         assertEquals(NowWorkOrigin.mac, parsed.origin)
         assertEquals(1_789_630_500.25, parsed.checkAt!!.timeIntervalSince1970, "소수초 timestamptz 를 읽는다")
+        val windows = PhoneWorkController.phoneSession(PhoneWorkSessionInfo(id = "W1", origin = "windows"), response)!!
+        assertEquals(PhoneWorkController.originOf("windows"), windows.origin, "세션 값도 같은 판정(한 자리)")
+    }
+
+    /** 생존 신호가 카드가 모르는 근무(다른 기기가 방금 열었다)를 알리면 카드를 다시 읽는다. 기준선(다른 입력): 아는 근무면 다시 읽지 않는다. */
+    @Test
+    fun touchReportingAnUnknownSessionRereadsTheCard() = runTest {
+        fun TestScope.cardReadsAfterTouch(sessionID: String): Int {
+            val server = PhoneWorkServer()
+            server.touch = Reply.Json("""{"status":"ok","session":{"id":"$sessionID","started_at":"2026-09-17T01:20:00Z","origin":"mac"},"check_after_seconds":9000}""")
+            val h = rig(server)
+            h.app.work.appDidBecomeActive()
+            advanceUntilIdle()
+            assertEquals(1, h.count("work_phone_touch"))
+            assertEquals(sessionID.lowercase(), h.app.now.phoneSession?.id)
+            return h.appRequests.count { it.path == "/rest/v1/work_statuses" }
+        }
+        assertEquals(0, cardReadsAfterTouch("S-OPEN"), "기준선: 카드가 아는 근무면 다시 읽지 않는다")
+        assertEquals(1, cardReadsAfterTouch("S-OTHER"), "카드가 모르는 근무를 알렸는데 카드를 다시 읽지 않았다")
     }
 
     private companion object {

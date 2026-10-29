@@ -1,4 +1,4 @@
-// 원본: Tests/CheckMobileKitTests/WidgetSnapshotTests.swift · WidgetAILimitsTests.swift(생 JSON 호환 · 관대한 디코드 · 더하기만) ·
+// 원본: Tests/CheckMobileKitTests/BaseWidgetSnapshotTests.swift:21-159 · WidgetAILimitsTests.swift(생 JSON 호환 · 관대한 디코드 · 더하기만) ·
 //       Sources/CheckMobileShared/WidgetSnapshot.swift @ 3bd04bd
 // 디코더 INV 셋(0f12bb0d · 99e06a6c · f5226477 — "이 줄을 빼먹으면 컴파일은 통과하고 영원히 nil")은 **생 JSON** 으로만 잡힌다:
 // 값 왕복 시험은 인코더·디코더가 같이 빠져도 초록이다. 그래서 Swift 가 쓴 꼴의 글자를 직접 읽는다.

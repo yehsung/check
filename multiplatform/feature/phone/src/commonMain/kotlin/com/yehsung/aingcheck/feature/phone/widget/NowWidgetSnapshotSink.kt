@@ -1,5 +1,6 @@
 // 원본: Sources/CheckMobileKit/Now/NowStore.swift:694-823(knownEquippedCharacterID · widgetNoTeamMe · widgetWorkState · writeWidgetSnapshot ·
-//       touchWidgetSnapshot · widgetTodoPreviews) · Sources/CheckMobileKit/Now/NowStoreAILimits.swift @ 3bd04bd
+//       touchWidgetSnapshot · widgetTodoPreviews) · Sources/CheckMobileKit/Now/NowStoreAILimits.swift ·
+//       Sources/CheckWidgetsKit/WidgetTodoToggle.swift:77-89(patchSnapshot — 위젯 체크의 스냅숏 몫) @ 3bd04bd
 package com.yehsung.aingcheck.feature.phone.widget
 
 import com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetPanel
@@ -12,7 +13,8 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
  * 지금 탭이 위젯 스냅숏을 쓰는 자리(W2-b [NowWidgetSink] 의 구현 — Swift `NowStore.writeWidgetSnapshot` · `touchWidgetSnapshot` ·
  * `noteAILimitPanel`). 지금 탭 스토어는 **언제** 쓸지만 알리고(로그아웃이면 부르지 않는다), 무엇을 쓸지는 여기서 그 스토어의 값으로 만든다.
  *
- * **쓰는 주체는 이것 하나다** — 나 탭(AI 리밋)·캐릭터 표도 값만 넘기고 쓰기는 이 자리를 지난다([noteAILimitPanel] · [writeAfterDirectoryChange]).
+ * **쓰는 주체는 이것 하나다** — 나 탭(AI 리밋)·캐릭터 표·위젯 할 일 체크도 값만 넘기고 쓰기는 이 자리를 지난다([noteAILimitPanel] ·
+ * [writeAfterDirectoryChange] · [patchTodo]). 소스 계약 시험(PhoneSourceContractTest)이 쓰기 창구를 부르는 파일을 이 하나로 잠근다.
  *
  * @param equippedCharacterID 나 탭이 **아는** 착용 캐릭터 id(Swift `knownEquippedCharacterID` — 나 탭이 착용값을 받기 전이면 null 이라 지난 값을 지킨다).
  * @param characterFor 근무 중인 사람 얼굴의 캐릭터(Swift `context.characters.directory.characterID(for:)` — 모르면 null → 이니셜).
@@ -97,6 +99,15 @@ class NowWidgetSnapshotSink(
     fun noteAILimitPanel(panel: MeAILimitWidgetPanel) {
         if (!now.context.sessionStore.isSignedIn) return
         writer.update { it.copy(aiLimits = panel) }
+    }
+
+    /**
+     * 위젯 할 일 체크(W3-b `WidgetSnapshotTodoPatcher` 의 구현 — 조립이 꽂는다)가 스냅숏의 그 줄 체크 표시만 바꾼다. 로그아웃이면 아무것도 하지
+     * 않는다(지운 파일을 다시 만들지 않게). 위젯 콜백 스레드에서 오면 조립이 앱 디스패처로 옮겨 부른다(쓰기 창구는 한 디스패처 — 머리말).
+     */
+    fun patchTodo(id: String, isCompleted: Boolean): Boolean {
+        if (!now.context.sessionStore.isSignedIn) return false
+        return writer.patchTodoPreview(id, isCompleted)
     }
 
     /** 캐릭터 표가 바뀌었다 — 근무 중 얼굴을 다시 쓴다(Swift `characters.onDirectoryChange = { now?.writeWidgetSnapshot() }`). */

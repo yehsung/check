@@ -203,6 +203,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         links.me = me
         links.work = work
         links.widgetSink = widgetSink
+        // 딥링크 대상 해석 한 문 — 푸시 조정자(알림 탭 · [수락] 뒤 열기)가 라우터를 바로 부르지 않고 이 규칙을 지난다(W2-f 검증 7차 지적).
+        links.routeResolver = { target -> openRoute(target) }
         now.phoneWork = work
         now.widgetSink = widgetSink
         messages.nowStore = now
@@ -290,7 +292,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
 
     /**
      * **딥링크 대상 해석** — 대상을 그 탭 스토어의 규칙으로 걸러 라우터에 쌓는다(Swift 는 탭이 `consumePendingRoute` 로 꺼내 이 일을 했다. Android 는
-     * 셸이 탭별 백스택을 쥐므로 여는 순간 한 번에 정한다).
+     * 셸이 탭별 백스택을 쥐므로 여는 순간 한 번에 정한다). 딥링크·위젯([handleOpenRoute]) · 알림 탭·[수락]([PhonePushCoordinator] —
+     * [PhoneStoreLinks.routeResolver] 로 이 함수에 닿는다)이 모두 이 한 문을 지난다.
      * - 게임(오목 셋 · 미니게임): W2-e `GamesStore.routeStep` — 체스·테트리스 판이 흐르는 동안 온 오목 링크와 이 빌드에 보이지 않는 미니게임
      *   (길건너 — §8-18 #7)은 게임 탭 첫 화면에 세운다. 오목 화면이 이미 떠 있으면 대상 판을 코어에 바로 넘긴다.
      *   INV-MobileAppModel-14155396 이식: (딥링크 몫) `games/tetris` 한 토막은 **솔로** 테트리스 미니게임 링크다 — 1:1 테트리스로 가로채면 이미

@@ -1,4 +1,5 @@
-// 원본: Tests/CheckMobileKitTests/GamesStoreTests.swift(창 문 · 차단 거르기 · AI 선택기 허락 · 탭 배지) ·
+// 원본: Tests/CheckMobileKitTests/GamesStoreScenarioTests.swift(창 문 · 탭 배지) · GamesAIMatchTests.swift(AI 선택기 허락) ·
+//       MessagesBlockReportTests.swift(차단 집합) ·
 //       Sources/CheckMobileKit/App/MobileContext.swift · Games/GamesStore.swift:153-180 @ 3bd04bd
 // 6차 int-h 미결 [착수 W2-f] ③: W2-e 문(GamesRouter · GamesBoardGameLink · GamesGomokuLink · GamesLobbyRoster · GamesContext)의 폰 구현을
 // 진짜 오목·체스·테트리스·메시지 스토어로 잰다.
@@ -99,17 +100,32 @@ class PhoneGamesContextTest {
         assertFalse(thinker.isAllowed, "화면을 떠나면 끊는다")
     }
 
+    /** 받은 오목 신청 하나(만료 2026-09-17 14:15 KST — 시험 시계 14:05 기준 10분 뒤). */
+    private val inbox = """{"status":"ok","incoming":[{"match_id":"m-1","challenger":{"user_id":"u-9","display_name":"솜사탕","capable":true},"stake":3,"invite_expires_ms":1789622100000}]}"""
+
+    /*
+     * 깃발 켬·꺼짐을 **따로** 잰다(W2-f 검증 7차 지적: 한 runTest 에 두 사본을 두면 앞 사본의 만료 타이머가 가상 시간을 600초 밀어, 꺼진 쪽은
+     * 신청이 이미 만료된 뒤에 재 — 깃발과 무관하게 0 이었다). 꺼진 쪽은 신청이 **살아 있는지 먼저** 단언한다.
+     */
     @Test
-    fun gomokuInviteCountFeedsTheGamesBadgeOnlyWhenDuelsAreEnabled() = runTest {
-        val inbox = """{"status":"ok","incoming":[{"match_id":"m-1","challenger":{"user_id":"u-9","display_name":"솜사탕","capable":true},"stake":3,"invite_expires_ms":1789622100000}]}"""
+    fun gomokuInviteCountFeedsTheGamesBadgeWhenDuelsAreEnabled() = runTest {
         val open = rig(AppConfig(duelsEnabled = true))
         open.app.gomoku.applyInbox(SwiftJson.decode(GomokuInboxResponse.serializer(), inbox))
+        assertEquals(1, open.app.gomoku.visibleIncoming.size)
         assertEquals(1, open.app.gamesContext.gomoku.pendingIncomingInviteCount)
         assertEquals(1, open.app.badges.games)
         assertEquals(1, open.app.badges.appBadgeTotal)
-        // 깃발이 꺼진 빌드(§8-17 #1)는 받은 신청으로 배지·점이 서지 않는다(코어가 비운다 — 수락할 수 없는 신청).
+    }
+
+    @Test
+    fun lockedBuildKeepsTheLiveInviteOutOfTheGamesBadge() = runTest {
+        // 깃발이 꺼진 빌드(§8-17 #1)는 받은 신청으로 배지·점이 서지 않는다(수락할 수 없는 신청 — 코어가 배너·점 목록을 비운다).
         val locked = rig()
         locked.app.gomoku.applyInbox(SwiftJson.decode(GomokuInboxResponse.serializer(), inbox))
-        assertEquals(0, locked.app.badges.games)
+        assertEquals(1, locked.app.gomoku.visibleIncoming.size, "전제: 꺼진 쪽에도 신청은 살아 있다(만료 전) — 그래야 깃발을 잰다")
+        assertTrue(locked.now().timeIntervalSince1970 < 1_789_622_100.0, "전제: 시험 시계가 만료 전")
+        assertEquals(0, locked.app.gamesContext.gomoku.pendingIncomingInviteCount)
+        assertEquals(0, locked.app.badges.games, "깃발이 꺼진 빌드의 게임 탭 배지가 받은 신청을 셌다")
+        assertEquals(0, locked.app.badges.appBadgeTotal)
     }
 }

@@ -1,5 +1,5 @@
 // 원본: 없음 — 폰 로직 시험 조립(core/stores 시험의 StoreHarness·StubServer 를 본떴다 — 그 파일은 다른 모듈의 시험 소스라 볼 수 없다).
-// Swift 짝: Tests/CheckMobileKitTests/MobileTestSupport.swift · PushCoordinatorTests 의 RecordingPushSystem @ 3bd04bd
+// Swift 짝: Tests/CheckMobileKitTests/BaseTestSupport.swift(BaseTestClock · BaseFakeTransport) · PushTestSupport.swift(PushFakeSystem · PushHarness) @ 3bd04bd
 package com.yehsung.aingcheck.feature.phone
 
 import com.yehsung.aingcheck.core.foundation.identity.ClientIdentity
@@ -237,6 +237,8 @@ class PhoneHarness(
     val transport: FakeTransport? = null,
     val widgetFile: MemoryWidgetFile = MemoryWidgetFile(),
     appConfig: AppConfig = AppConfig(),
+    /** 번들에 초상이 실린 캐릭터(상점 번호 — 케이크 선물은 번호 4 이상에서만 묻는다). */
+    drawableCharacters: List<String> = listOf("aing"),
     route: (RecordedRequest) -> Reply? = { null },
 ) {
     /** 시험이 고르는 응답(없으면 로그인 기본 응답). */
@@ -276,8 +278,8 @@ class PhoneHarness(
         reloadWidgetTimelines = { widgetReloads += 1 },
         todoStorage = NowTodoStorage("/mem/aing", todoFiles),
         collation = NaturalKoNameCollation,
-        drawableCharacters = DrawableCharacterSource.of(listOf("aing")),
-        knownCharacterIDs = listOf("aing"),
+        drawableCharacters = DrawableCharacterSource.of(drawableCharacters),
+        knownCharacterIDs = drawableCharacters,
     )
     val app = PhoneAppModel(env)
     private var mark = 0

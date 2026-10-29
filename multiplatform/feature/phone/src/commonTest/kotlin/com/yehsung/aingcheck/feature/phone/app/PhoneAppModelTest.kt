@@ -1,16 +1,22 @@
-// 원본: Tests/CheckMobileKitTests/MobileAppModelTests.swift · GamesGomokuSpectateWiringTests · GamesChessWiringTests · GamesTetrisDuelWiringTests ·
-//       MeDailyMissionStoreTests(판 끝 배선) · MobileRouterTests(배지 합성) @ 3bd04bd
+// 원본: Tests/CheckMobileKitTests/BaseAppModelTests.swift · GamesGomokuSpectateWiringTests.swift · GamesChessWiringTests.swift ·
+//       GamesTetrisDuelWiringTests.swift · MeDailyMissionStoreTests.swift(판 끝 배선) · BaseRouterTests.swift:99-107(배지 합성) ·
+//       MeCakeGiftTests.swift(탭 이동의 케이크 시트) @ 3bd04bd
 // 6차 int-h 미결 [착수 W2-f] ①: links 의 테트리스 자리 · badges = messages+games+missions · appBadgeTotal = messages+games.
 package com.yehsung.aingcheck.feature.phone.app
 
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.session.SessionPhase
+import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.games.GamesRouteRequest
 import com.yehsung.aingcheck.core.stores.me.MeDestination
 import com.yehsung.aingcheck.core.stores.me.MeRoute
+import com.yehsung.aingcheck.core.stores.me.dismissCakeGiftSheet
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStake
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.games.ChessLobbyResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuLobbyResponse
+import com.yehsung.aingcheck.core.wire.games.TetrisLobbyResponse
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import com.yehsung.aingcheck.feature.phone.MemoryWidgetFile
 import com.yehsung.aingcheck.feature.phone.PhoneHarness
@@ -21,8 +27,11 @@ import com.yehsung.aingcheck.feature.phone.routing.PhoneRouteTarget
 import com.yehsung.aingcheck.feature.phone.routing.PhoneTab
 import com.yehsung.aingcheck.feature.phone.widget.WidgetSnapshot
 import com.yehsung.aingcheck.feature.phone.widget.WidgetSnapshotCodec
+import com.yehsung.aingcheck.testkit.fixtures.RepoFiles
 import com.yehsung.aingcheck.testkit.golden.Golden
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -34,6 +43,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -217,6 +227,82 @@ class PhoneAppModelTest {
         assertTrue(app.games.hasLiveGomokuMatch)
         app.openRoute(PhoneRouteTarget.ChessInvite("c-1"))
         assertEquals(listOf<PhoneNavRequest>(PhoneNavRequest.Open(PhoneRouteTarget.Games(GamesRouteRequest.Games))), app.router.drainRequests())
+    }
+
+    /** 체스·테트리스 판과 로비가 로그아웃 사슬에서 비워진다(W2-f 검증 7차 V4·V4b — 같은 사슬의 오목은 따로 잰다). */
+    @Test
+    fun signOutChainResetsChessAndTetrisToo() = runTest {
+        val h = PhoneHarness(this, appConfig = AppConfig(duelsEnabled = true)) { r ->
+            val name = r.rpcName ?: return@PhoneHarness null
+            if (name.startsWith("chess_") || name.startsWith("tetris_")) Reply.Offline else null
+        }
+        h.signIn()
+        val app = h.app
+        val chessUser = """{"user_id":"u-1","display_name":"솜사탕","capable":true}"""
+        val tetrisUser = """{"id":"u-1","display_name":"솜사탕","capable":true,"is_working":true}"""
+        app.chess.applyLobby(SwiftJson.decode(ChessLobbyResponse.serializer(), """{"status":"ok","users":[$chessUser],"me":{"active_match_id":"C-1"}}"""))
+        app.tetris.applyLobby(SwiftJson.decode(TetrisLobbyResponse.serializer(), """{"status":"ok","users":[$tetrisUser],"me":{"active_match_id":"T-1"}}"""))
+        advanceUntilIdle()
+        assertEquals("c-1", app.chess.activeMatchID?.lowercase(), "전제: 체스 판 id 를 든다")
+        assertEquals("t-1", app.tetris.activeMatchID?.lowercase(), "전제: 테트리스 판 id 를 든다")
+        assertTrue(app.chess.users.isNotEmpty(), "전제: 체스 로비에 사람이 있다")
+        assertTrue(app.tetris.users.isNotEmpty(), "전제: 테트리스 로비에 사람이 있다")
+        app.session.signOut()
+        advanceUntilIdle()
+        assertNull(app.chess.activeMatchID, "다음 사람의 로비에 앞 사람의 체스 판이 남는다")
+        assertEquals(emptyList(), app.chess.users)
+        assertNull(app.tetris.activeMatchID, "로그아웃한 사람의 테트리스 판이 남는다(새 계정 토큰으로 보고가 나간다)")
+        assertEquals(emptyList(), app.tetris.users)
+        assertFalse(app.games.hasLiveChessMatch || app.games.hasLiveTetrisMatch, "다음 계정의 입구가 앞 사람 판에 막힌다")
+    }
+
+    /** §8-17 #1: 테트리스 대결의 판돈 깃발이 폰 조립(PhoneTetrisHost)을 거쳐 스토어에 닿는다 — 꺼진 빌드는 신청 RPC 0, 켠 빌드(기준선)는 1. */
+    @Test
+    fun tetrisDuelFlagReachesTheStoreThroughTheAssembly() = runTest {
+        fun TestScope.challengeCount(appConfig: AppConfig): Pair<Boolean, Int> {
+            val h = PhoneHarness(this, appConfig = appConfig) { r ->
+                when (r.rpcName) {
+                    "tetris_challenge" -> Reply.Json("""{"status":"busy"}""")
+                    "tetris_lobby", "tetris_state" -> Reply.Offline
+                    else -> null
+                }
+            }
+            h.signIn()
+            launch { h.app.tetris.challenge("u-9", TetrisDuelStake.three) }
+            advanceUntilIdle()
+            return h.app.tetris.duelsEnabled to h.count("tetris_challenge")
+        }
+        assertEquals(false to 0, challengeCount(AppConfig()), "깃발이 꺼진 빌드가 테트리스 판돈 신청을 냈다")
+        assertEquals(true to 1, challengeCount(AppConfig(duelsEnabled = true)), "기준선: 켠 빌드는 신청 한 건")
+    }
+
+    /**
+     * 탭을 옮길 때 생일 선물 시트를 띄운다 — 단, **게임 탭으로 들어갈 때는 띄우지 않는다**(그 탭의 대국 화면이 곧 선다 · 30초 수·15초 침묵이 걸린
+     * 판을 시트가 덮으면 진다). 기준선(다른 입력): 나 탭으로 옮기면 띄운다.
+     */
+    @Test
+    fun cakeGiftSheetRisesOnTabChangeExceptIntoTheGamesTab() = runTest {
+        val pending = RepoFiles.readText("Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-gift.json")
+        val portraits = listOf(
+            "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco",
+            "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
+        )
+        val h = PhoneHarness(this, drawableCharacters = portraits) { r -> if (r.rpcName == "character_gift_pending") Reply.Json(pending) else null }
+        h.signIn()
+        val app = h.app
+        app.me.appDidBecomeActive()
+        advanceUntilIdle()
+        assertEquals(1, h.count("character_gift_pending"), "전제: 앞으로 올 때 선물을 묻는다(케이크를 그리는 빌드)")
+        assertNotNull(app.me.cakeGiftSheet, "전제: 열린 선물이 스스로 선다")
+        // 화면에 서기 전에 닫혔다(띄운 것으로 세지 않는다) — 다음 기회에 다시 선다.
+        app.me.dismissCakeGiftSheet()
+        assertNull(app.me.cakeGiftSheet)
+        app.tabDidChange(PhoneTab.games)
+        advanceUntilIdle()
+        assertNull(app.me.cakeGiftSheet, "게임 탭으로 들어갈 때 케이크 시트를 띄웠다")
+        app.tabDidChange(PhoneTab.me)
+        advanceUntilIdle()
+        assertNotNull(app.me.cakeGiftSheet, "다른 탭으로 옮기면 띄운다")
     }
 
     @Test

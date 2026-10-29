@@ -30,6 +30,7 @@ import com.yehsung.aingcheck.core.wire.SupabaseSession
 import com.yehsung.aingcheck.feature.phone.push.PhonePushCoordinator
 import com.yehsung.aingcheck.feature.phone.realtime.PhoneRealtimeRunner
 import com.yehsung.aingcheck.feature.phone.routing.PhoneBadges
+import com.yehsung.aingcheck.feature.phone.routing.PhoneRouteTarget
 import com.yehsung.aingcheck.feature.phone.routing.PhoneRouter
 import com.yehsung.aingcheck.feature.phone.routing.PhoneTab
 import com.yehsung.aingcheck.feature.phone.widget.NowWidgetSnapshotSink
@@ -55,6 +56,13 @@ class PhoneStoreLinks {
     /** 위젯 스냅숏을 쓰는 유일한 자리(지금 탭 몫). */
     var widgetSink: NowWidgetSnapshotSink? = null
 
+    /**
+     * **딥링크 대상 해석** 한 문(앱 모델의 `PhoneAppModel.openRoute` — 탭 스토어 규칙: 게임 탭 `routeStep`·체스 입구 막기·제보 초점·순위 판).
+     * Swift 는 `router.open` 이 탭의 `consumePendingRoute` 를 지나 그 규칙을 탔다. Android 는 셸이 탭 백스택을 쥐어 라우터가 규칙을 모르므로,
+     * 화면을 여는 쪽(푸시 조정자)은 라우터를 바로 부르지 않고 이 문을 지난다(W2-f 검증 7차 지적 — 알림 탭·[수락] 대체 길이 규칙을 건너뛰었다).
+     */
+    var routeResolver: ((PhoneRouteTarget) -> Unit)? = null
+
     /** 탭 배지 합성(메시지 · 게임 · 나 = 받을 보상). 앱 아이콘 배지는 메시지 + 게임만이다([PhoneBadges.appBadgeTotal]). */
     val badges: PhoneBadges
         get() = PhoneBadges(
@@ -73,7 +81,7 @@ class PhoneStoreLinks {
  * 게임 탭 스토어가 기대는 문맥(W2-e `GamesContext`)은 [PhoneGamesContext] 가 이 문맥으로 구현한다(이름이 같은 칸 `gomoku` 의 타입이 달라 따로 둔다).
  *
  * 쓰는 법(Swift 머리말 그대로): 서버 호출은 세션 가드 → 세대 캡처 → `withSessionRetry { s -> service.…(s.accessToken) }` → 세대 가드.
- * 시각은 [clock] 만. 딥링크·화면 이동은 [router]. 실시간은 [onMessageActivity] · [onMessageRead](1초 합치기).
+ * 시각은 [clock] 만. 딥링크로 화면을 여는 것은 [openRoute](탭 스토어 규칙을 지난다), 스토어가 내는 이동 요청은 [router]. 실시간은 [onMessageActivity] · [onMessageRead](1초 합치기).
  */
 class PhoneContext(
     override val sessionStore: SessionStore,
@@ -110,6 +118,14 @@ class PhoneContext(
     /** 판이 서버에 남은 직후 일일 미션 재조회(Swift `context.links.me?.refreshAchievementsAfterGameResult`). 고리가 없으면 아무 일도 안 한다. */
     override fun refreshAchievementsAfterGameResult(game: String) {
         links.me?.refreshAchievementsAfterGameResult(game)
+    }
+
+    /**
+     * 대상을 탭 스토어 규칙으로 걸러 연다([PhoneStoreLinks.routeResolver]). 고리가 비면(앱 모델 밖 문맥) **아무것도 열지 않는다** — 규칙을 건너뛴
+     * 열기(`router.open` 직행)로 떨어지지 않게.
+     */
+    fun openRoute(target: PhoneRouteTarget) {
+        links.routeResolver?.invoke(target)
     }
 
     /** 새 메시지 신호(`.drain`) · 조인 따라잡기(`.catchUp`) 핸들러. */

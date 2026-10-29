@@ -5,6 +5,7 @@
 #  - golden-digest : 조건 없이 매 푸시·PR(§8-10). 스크립트(W0-b)가 아직 없으면 자리표시로 통과한다.
 #  - lane-tools    : lanes.yml 확인 + lane-ownership 자기 시험 + 브랜치의 갈래 소유 검사.
 #                    xplat/ 브랜치가 갈래(xplat/w<N>-<x>)·통합(xplat/w<N>-int·xplat/main → 조정자)으로 안 풀리면 빨강.
+#                    docs/android Play 제출 초안 검사도 여기서 돈다(W6-c — 확률 숫자 0 · 콘솔 여섯 칸 낡은 문장 0 · E §9.3·9.5 글자 일치, 수 초).
 #  - jvm-gate      : ubuntu, sudo unshare -n 봉인 아래 빠른 게이트 + 봉인 없는 카나리아 빨강 대조(A-X15). changes 경로 필터로만 거른다.
 #                    경로 필터의 Sources/ 는 통째다(W1-e): ui 시험이 Swift 원문(SF 기호 대응·팔레트 대조)과 맥 그림(Gradle Sync)을 읽는다.
 #  - windows-x64   : windows-latest, java.exe 아웃바운드 차단 방화벽 봉인 아래 데스크톱 시험 + 대조(A-X16). changes 경로 필터로만 거른다.
@@ -123,6 +124,15 @@ jobs:
         run: |
           python3 -I multiplatform/tools/lane-ownership.py --validate
           python3 -I multiplatform/tools/lane-ownership.py --self-test
+      - name: docs/android 제출 초안 검사(W6-c) · 자기 시험(규칙마다 결함을 심은 사본이 그 규칙으로 빨강)
+        run: |
+          if [ -f docs/android/_check/check_listing.py ]; then
+            set -euo pipefail
+            python3 -I docs/android/_check/check_listing.py
+            python3 -I docs/android/_check/check_listing.py --self-test
+          else
+            echo "::notice::docs/android/_check/check_listing.py 가 아직 없다 — W6-c 병합 전(자리표시 통과)"
+          fi
       - name: 이 브랜치 갈래의 소유 검사(xplat/w1-a → W1-a · xplat/w0-int → 조정자 · 못 풀면 빨강)
         env:
           # PR 이면 머리 브랜치 이름과 머리 커밋(병합 커밋이 아니라 — main 쪽 변경이 섞이지 않게).

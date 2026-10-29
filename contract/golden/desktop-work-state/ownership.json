@@ -1,0 +1,370 @@
+{
+  "cases": [
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 1,
+        "items": [
+          {
+            "duration": null,
+            "endedAt": null,
+            "op": "start",
+            "owner": "00000000-0000-0000-0000-000000000002",
+            "reason": null,
+            "sessionID": "$start",
+            "sessionStartedAt": 0
+          }
+        ],
+        "lastAutoClose": null,
+        "ownedIDStored": "$start",
+        "ownedStrengthStored": "strong",
+        "ownsStrongly": true,
+        "sessionID": "$start",
+        "sessionIDIsLowercase": true,
+        "startedAt": 0,
+        "working": true
+      },
+      "id": "start"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 2,
+        "items": [
+          {
+            "duration": 5400,
+            "endedAt": 5400,
+            "op": "stop",
+            "owner": "00000000-0000-0000-0000-000000000002",
+            "reason": null,
+            "sessionID": "$start",
+            "sessionStartedAt": 0
+          }
+        ],
+        "lastAutoClose": null,
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": "$start",
+        "sessionIDIsLowercase": true,
+        "startedAt": null,
+        "working": false
+      },
+      "id": "start-stop"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": "a0000000-0000-4000-8000-000000000001",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": "a0000000-0000-4000-8000-000000000001",
+        "ownedStrengthStored": "strong",
+        "ownsStrongly": true,
+        "sessionID": "a0000000-0000-4000-8000-000000000001",
+        "sessionIDIsLowercase": true,
+        "startedAt": -10800,
+        "working": true
+      },
+      "id": "restart-uppercase-rescue"
+    },
+    {
+      "dump": {
+        "adopted": true,
+        "confirmedSessionID": "b0000000-0000-4000-8000-000000000002",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": "b0000000-0000-4000-8000-000000000002",
+        "sessionIDIsLowercase": true,
+        "startedAt": -600,
+        "working": true
+      },
+      "id": "adopt-foreign"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 1,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": "$start",
+        "ownedStrengthStored": "strong",
+        "ownsStrongly": true,
+        "sessionID": "$start",
+        "sessionIDIsLowercase": true,
+        "startedAt": 0,
+        "working": true
+      },
+      "id": "late-response-dropped"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 2,
+        "items": [
+          {
+            "duration": 3000,
+            "endedAt": 3000,
+            "op": "stop",
+            "owner": "00000000-0000-0000-0000-000000000002",
+            "reason": "sleep",
+            "sessionID": "$start",
+            "sessionStartedAt": 0
+          }
+        ],
+        "lastAutoClose": {
+          "endedAt": 3000,
+          "reason": "sleep",
+          "seconds": 3000
+        },
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": null,
+        "sessionIDIsLowercase": true,
+        "startedAt": null,
+        "working": false
+      },
+      "id": "server-closed-a-live"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 0,
+        "items": [
+          {
+            "duration": 3600,
+            "endedAt": -3600,
+            "op": "stop",
+            "owner": "00000000-0000-0000-0000-000000000002",
+            "reason": "sleep",
+            "sessionID": "a0000000-0000-4000-8000-000000000001",
+            "sessionStartedAt": -7200
+          }
+        ],
+        "lastAutoClose": null,
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": null,
+        "sessionIDIsLowercase": true,
+        "startedAt": null,
+        "working": false
+      },
+      "id": "server-closed-b-relaunch"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 1,
+        "items": [],
+        "lastAutoClose": {
+          "endedAt": 2900,
+          "reason": "abandoned",
+          "seconds": 2900
+        },
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": null,
+        "sessionIDIsLowercase": true,
+        "startedAt": null,
+        "working": false
+      },
+      "id": "remote-abandoned"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 1,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": null,
+        "sessionIDIsLowercase": true,
+        "startedAt": null,
+        "working": false
+      },
+      "id": "remote-ended-elsewhere"
+    },
+    {
+      "dump": {
+        "adopted": true,
+        "confirmedSessionID": "b0000000-0000-4000-8000-000000000002",
+        "generationDelta": 1,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": "$start",
+        "ownedStrengthStored": "strong",
+        "ownsStrongly": false,
+        "sessionID": "b0000000-0000-4000-8000-000000000002",
+        "sessionIDIsLowercase": true,
+        "startedAt": 60,
+        "working": true
+      },
+      "id": "stamp-c-then-adopt"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": null,
+        "generationDelta": 2,
+        "items": [
+          {
+            "duration": 1800,
+            "endedAt": 1800,
+            "op": "stop",
+            "owner": "00000000-0000-0000-0000-000000000002",
+            "reason": "sleep",
+            "sessionID": "$start",
+            "sessionStartedAt": 0
+          }
+        ],
+        "lastAutoClose": {
+          "endedAt": 1800,
+          "reason": "sleep",
+          "seconds": 1800
+        },
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": "$start",
+        "sessionIDIsLowercase": true,
+        "startedAt": null,
+        "working": false
+      },
+      "id": "auto-close-sleep"
+    },
+    {
+      "dump": {
+        "adopted": true,
+        "confirmedSessionID": "b0000000-0000-4000-8000-000000000002",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": "b0000000-0000-4000-8000-000000000002",
+        "sessionIDIsLowercase": true,
+        "startedAt": -600,
+        "working": true
+      },
+      "id": "auto-close-adopted-noop"
+    },
+    {
+      "dump": {
+        "adopted": true,
+        "confirmedSessionID": "a0000000-0000-4000-8000-000000000001",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": "a0000000-0000-4000-8000-000000000001",
+        "sessionIDIsLowercase": true,
+        "startedAt": -3600,
+        "working": true
+      },
+      "id": "yield-weak-win-vs-weak-mac"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": "a0000000-0000-4000-8000-000000000001",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": "a0000000-0000-4000-8000-000000000001",
+        "ownedStrengthStored": "weak",
+        "ownsStrongly": false,
+        "sessionID": "a0000000-0000-4000-8000-000000000001",
+        "sessionIDIsLowercase": true,
+        "startedAt": -3600,
+        "working": true
+      },
+      "id": "yield-weak-mac-vs-weak-win"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": "a0000000-0000-4000-8000-000000000001",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": "a0000000-0000-4000-8000-000000000001",
+        "ownedStrengthStored": "strong",
+        "ownsStrongly": true,
+        "sessionID": "a0000000-0000-4000-8000-000000000001",
+        "sessionIDIsLowercase": true,
+        "startedAt": -3600,
+        "working": true
+      },
+      "id": "yield-strong-win-vs-weak-mac"
+    },
+    {
+      "dump": {
+        "adopted": true,
+        "confirmedSessionID": "a0000000-0000-4000-8000-000000000001",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": null,
+        "ownedStrengthStored": null,
+        "ownsStrongly": false,
+        "sessionID": "a0000000-0000-4000-8000-000000000001",
+        "sessionIDIsLowercase": true,
+        "startedAt": -3600,
+        "working": true
+      },
+      "id": "yield-weak-win-vs-strong-mac"
+    },
+    {
+      "dump": {
+        "adopted": false,
+        "confirmedSessionID": "a0000000-0000-4000-8000-000000000001",
+        "generationDelta": 0,
+        "items": [],
+        "lastAutoClose": null,
+        "ownedIDStored": "a0000000-0000-4000-8000-000000000001",
+        "ownedStrengthStored": "strong",
+        "ownsStrongly": true,
+        "sessionID": "a0000000-0000-4000-8000-000000000001",
+        "sessionIDIsLowercase": true,
+        "startedAt": -3600,
+        "working": true
+      },
+      "id": "yield-strong-mac-vs-strong-win"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift",
+  "golden": "desktop-work-state/ownership",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "clock": "T0 = 1789621500(1970 기준 초, 2026-09-17 14:05 KST). 시각은 T0 기준 초 오프셋(Int 절삭)",
+    "dump": "working · startedAt · sessionID(정규화) · confirmedSessionID · adopted · ownsStrongly · ownedIDStored(원문) · ownedStrengthStored · generationDelta · items(큐) · lastAutoClose",
+    "session-id": "start() 가 만든 무작위 id 는 \"$start\" — 소문자 여부는 sessionIDIsLowercase",
+    "yield-*": "기기 [device] 가 S 를 강도 [own] 으로 소유 · 남의 기기 행이 빈 관측 → 첫 관측 → 전진. ⑯ 동급이면 claim < mine 일 때 물러난다"
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStore.swift",
+    "Sources/check/WorkTimerStoreSync.swift"
+  ]
+}

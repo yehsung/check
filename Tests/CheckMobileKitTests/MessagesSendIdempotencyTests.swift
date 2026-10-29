@@ -13,6 +13,7 @@ import Testing
 /// ① 키 = 자리 말풍선 id(소문자 uuid) — 한 벌. ② 서버가 키를 안다는 증거(ok 의 message_id)를 본 뒤의 모호한 실패는 **같은 키로 한 번** 다시.
 /// ③ 증거가 없으면 지금처럼 실패(재시도 0 — 옛 서버면 두 통이 된다). ④ 답을 못 받은 전송을 10분 기억해 같은 상대·같은 본문 재전송에 같은 키.
 /// ⑤ 이모티콘은 재시도 경로에서도 입력칸을 안 만진다. ⑥ 재시도 잠 동안 로그아웃하면 두 번째 요청이 안 나간다.
+/// (반박 보강) ⑥' 재시도 왕복 중 로그아웃 · ⑦ duplicate 응답 뒤 한 통 · ⑧ 재시도 중 새 입력 보존 · ⑨ message_id 없는 ok 가 깃발을 내린다 · 분류 가장자리.
 @MainActor
 @Suite(.serialized) struct MessagesSendIdempotencyTests {
     static let peerA = "peer-a"
@@ -354,6 +355,160 @@ import Testing
         let leaked = !h.store.drafts.isEmpty || !h.store.sendNotices.isEmpty || !h.store.pendingOutgoing.isEmpty
             || !h.store.unconfirmedSends.isEmpty || h.store.serverKnowsSendKey
         #expect(!leaked, "앞 계정 상태가 다음 계정에 섰다: \(h.store.drafts) \(h.store.sendNotices) \(h.store.unconfirmedSends)")
+        h.expectNoForbiddenCalls()
+    }
+}
+
+// MARK: - 반박 검증 보강(2026-10-30) — 분류 가장자리 · 재시도 왕복 중 로그아웃 · duplicate 응답 · 재시도 중 새 입력 · 되돌린 서버
+//
+// ⑥ 은 잠 동안의 로그아웃만 잰다 — 재시도 왕복 **뒤** 세대 가드는 ⑥' 가, 분류 가장자리(취소·401 갱신 실패·4xx·디코드)는 순수 시험이 문다.
+
+extension MessagesSendIdempotencyTests {
+    /// 모호/확정 분류의 가장자리(순수). 재시도 문은 이 판정 하나라, 여기서 새면 확정 실패를 되치거나(장애 때 요청이 는다)
+    /// 취소한 왕복을 되살린다.
+    @Test("분류: 답을 못 받은 실패만 모호하다 — 취소·401(토큰 갱신 실패 뒤 원래 오류)·429·4xx·23505·디코드 실패는 확정")
+    func ambiguousFailureClassificationEdges() {
+        for code: URLError.Code in [.timedOut, .networkConnectionLost, .cannotConnectToHost, .notConnectedToInternet] {
+            #expect(MessagesSendRules.isAmbiguousFailure(URLError(code)), "\(code) 를 확정으로 봤다")
+        }
+        for status in [500, 502, 503, 504] {
+            #expect(MessagesSendRules.isAmbiguousFailure(SupabaseWorkServiceError.invalidResponse(status)), "\(status) 를 확정으로 봤다")
+        }
+        let definite: [any Error] = [
+            URLError(.cancelled), CancellationError(),
+            // 401 → 갱신 실패면 `withMobileSessionRetry` 가 **원래 오류**(.sessionExpired)를 던진다 — 서버가 답을 준 것이다.
+            SupabaseWorkServiceError.sessionExpired,
+            SupabaseWorkServiceError.rateLimited(retryAfterSeconds: nil),
+            SupabaseWorkServiceError.invalidResponse(400), SupabaseWorkServiceError.invalidResponse(404),
+            SupabaseWorkServiceError.invalidResponse(409), SupabaseWorkServiceError.invalidResponse(-1),
+            SupabaseWorkServiceError.sessionAlreadyOpen,
+            DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "200 인데 본문을 못 읽음")),
+        ]
+        for error in definite {
+            #expect(!MessagesSendRules.isAmbiguousFailure(error), "\(error) 를 모호하다고 봐 되친다")
+        }
+    }
+
+    @Test("⑥' 재시도 요청(두 번째)이 떠 있는 동안 로그아웃 — 그 늦은 504 가 다음 계정의 입력칸·문구·말풍선·기억·깃발에 안 선다")
+    func logoutDuringRetryRoundTripDoesNotLeak() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        let gate = BaseGate()
+        let retry = h.store.sendRetryDelaySeconds
+        h.store.sleep = { seconds in
+            guard seconds == retry else {
+                try? await Task.sleep(for: .seconds(seconds))
+                return
+            }
+            await gate.wait()
+        }
+        await Self.primeKeyEvidence(h)
+        let before = h.count("send_message")
+        h.server.setSend(Self.gatewayTimeout)
+        h.store.setDraft("앞 계정의 글", for: Self.peerA)
+        #expect(h.store.sendDraft(to: Self.peerA, isComposing: false))
+        #expect(await baseWaitUntil { gate.arrivals == 1 }, "504 뒤 재시도 잠에 들지 않았다")
+        // 첫 요청은 이미 돌아왔다 — 이제부터 오는 send_message(재시도)를 붙잡는다.
+        let hold = BaseHold.rpc("send_message", host: h.host)
+        gate.open()
+        #expect(await hold.waitHeld(), "재시도 요청이 떠나지 않았다")
+        #expect(h.store.isSending, "재시도 왕복이 로그아웃 전에 끝나 아래 단언이 공허하다")
+        await h.switchAccount()
+        #expect(await hold.releaseAndWaitDelivered())
+        await h.barrier()
+        await baseYield()
+        #expect(h.count("send_message") - before == 2)
+        let leaked = !h.store.drafts.isEmpty || !h.store.sendNotices.isEmpty || !h.store.pendingOutgoing.isEmpty
+            || !h.store.unconfirmedSends.isEmpty || h.store.serverKnowsSendKey || h.store.isSending
+        #expect(!leaked, "앞 계정 상태가 다음 계정에 섰다: \(h.store.drafts) \(h.store.sendNotices) \(h.store.unconfirmedSends)")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("⑦ 답을 못 받은 말이 실은 저장됐고 이력에도 이미 섰을 때 — 같은 키 재전송의 duplicate 응답 뒤 그 말은 한 번만 보이고 자리 말풍선이 안 남는다")
+    func duplicateResponseLeavesExactlyOneMessage() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        _ = Self.instantRetrySleep(h)
+        // 서버는 저장했는데 답이 끊겼다(증거 없음 → 재시도 없이 실패 · 글 되돌림 · 키 기억).
+        h.server.setSend(.networkFailure(.networkConnectionLost))
+        let k1 = await Self.sendDraft(h, "저장된 말", to: Self.peerA)
+        #expect(h.store.draft(for: Self.peerA) == "저장된 말")
+        h.server.appendRow(.sent("m1", to: Self.peerA, body: "저장된 말", at: 60))
+        // 그 사이 이력이 한 번 돌아 행이 이미 화면에 있다 — 다음 이력엔 "처음 나타난" 행이 없는 가장 까다로운 쪽.
+        _ = h.store.requestActivityRefresh(includeHistory: true)
+        await h.settle()
+        #expect(h.store.thread(for: Self.peerA)?.messages.map(\.id) == ["m1"])
+
+        h.server.setSend(.json(#"{"status":"ok","body":"저장된 말","ring":"duplicate","message_id":"m1","created_at":"2026-09-17T04:57:40.000Z","duplicate":true}"#))
+        #expect(h.store.sendDraft(to: Self.peerA, isComposing: false))
+        #expect(await baseWaitUntil { !h.store.isSending })
+        await h.settle()
+        #expect(Self.wireKeys(h).last == k1, "되돌아온 글의 재전송이 새 키를 만들었다 — 서버가 두 통으로 둔다")
+        #expect(h.store.pendingOutgoing.isEmpty, "duplicate 응답 뒤 자리 말풍선이 남았다: \(h.store.pendingOutgoing)")
+        #expect(h.store.thread(for: Self.peerA)?.messages.map(\.id) == ["m1"])
+        #expect(h.store.sendNotices[Self.peerA] == nil)
+        #expect(h.store.draft(for: Self.peerA).isEmpty)
+        #expect(h.store.unconfirmedSends.isEmpty)
+        #expect(h.store.serverKnowsSendKey, "duplicate 응답도 키를 안다는 증거다")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("⑧ 재시도 잠 동안 같은 대화에 새 말을 보내려 하면 — 글·이모티콘 모두 막히고 새로 친 글은 입력칸에 남으며, 재시도까지 실패해도 옛 글이 덮지 않는다")
+    func newInputDuringRetryIsKept() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        let gate = BaseGate()
+        let retry = h.store.sendRetryDelaySeconds
+        h.store.sleep = { seconds in
+            guard seconds == retry else {
+                try? await Task.sleep(for: .seconds(seconds))
+                return
+            }
+            await gate.wait()
+        }
+        await Self.primeKeyEvidence(h)
+        let before = h.count("send_message")
+        Self.script(h, [Self.gatewayTimeout, Self.gatewayTimeout])
+        h.store.setDraft("옛 글", for: Self.peerA)
+        #expect(h.store.sendDraft(to: Self.peerA, isComposing: false))
+        let bubble = h.store.pendingOutgoing.last?.id
+        #expect(await baseWaitUntil { gate.arrivals == 1 })
+        h.store.setDraft("새로 친 글", for: Self.peerA)
+        #expect(!h.store.canSend(to: Self.peerA))
+        #expect(!h.store.sendDraft(to: Self.peerA, isComposing: false), "재시도 중에 두 번째 전송이 떴다")
+        #expect(!h.store.sendSticker(.joy, to: Self.peerA), "재시도 중에 이모티콘이 떴다")
+        #expect(h.store.draft(for: Self.peerA) == "새로 친 글", "막힌 전송이 새로 친 글을 지웠다")
+        gate.open()
+        #expect(await baseWaitUntil { !h.store.isSending })
+        await h.settle()
+        #expect(h.count("send_message") - before == 2)
+        #expect(h.store.draft(for: Self.peerA) == "새로 친 글", "실패한 옛 글이 새로 친 글을 덮었다")
+        #expect(h.store.sendNotices[Self.peerA] == MessagesSendRules.connectionNotice)
+        #expect(h.store.pendingOutgoing.isEmpty)
+        #expect(h.store.unconfirmedSends.map(\.key) == [bubble].compactMap { $0 })
+        #expect(h.store.unconfirmedSends.first?.body == "옛 글")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("⑨ 되돌린 서버(키를 모름) — 증거 뒤라도 message_id 없는 ok 를 보면 깃발을 내리고, 다음 모호한 실패는 재시도하지 않는다")
+    func okWithoutMessageIDLowersTheFlag() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        let slept = Self.instantRetrySleep(h)
+        await Self.primeKeyEvidence(h)
+        h.server.setSend(.json(#"{"status":"ok","body":"x","ring":"sent"}"#))
+        await Self.sendDraft(h, "되돌린 뒤 첫 말", to: Self.peerA)
+        #expect(!h.store.serverKnowsSendKey, "키를 모르는 판의 ok 뒤에도 깃발이 섰다 — 재시도가 두 통을 만든다")
+        let before = h.count("send_message")
+        h.server.setSend(Self.gatewayTimeout)
+        await Self.sendDraft(h, "되돌린 뒤 둘째 말", to: Self.peerA)
+        #expect(h.count("send_message") - before == 1, "키를 모르는 판에서 재시도했다")
+        #expect(slept.get().isEmpty)
+        // 확정 거절(status)은 증거를 바꾸지 않는다 — 서버 판은 ok 로만 잰다.
+        await Self.primeKeyEvidence(h)
+        h.server.setSend(.json(#"{"status":"target_focused"}"#))
+        await Self.sendDraft(h, "거절", to: Self.peerA)
+        #expect(h.store.serverKnowsSendKey, "거절 status 가 깃발을 내렸다")
         h.expectNoForbiddenCalls()
     }
 }

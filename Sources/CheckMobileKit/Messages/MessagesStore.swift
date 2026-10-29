@@ -534,6 +534,7 @@ package final class MessagesStore {
     /// ⓑ 왕복이 모호하게 실패하면(`MessagesSendRules.isAmbiguousFailure` — 답을 못 받음) `sendRetryDelaySeconds` 뒤
     ///    **같은 키로 한 번만** 다시 보낸다. 단 이 실행에서 서버가 키를 안다는 증거(`serverKnowsSendKey`)를 본 뒤에만 —
     ///    키를 모르는 옛 서버면 코어가 옛 모양으로 되묻고, 그때 재시도는 **두 통**이 된다. 증거가 없으면 지금처럼 실패로 끝낸다.
+    ///    증거는 마지막 ok 가 정한다 — message_id 없는 ok(되돌린 서버)를 보면 깃발을 내린다.
     /// ⓒ 답을 못 받고 끝난 전송은 (상대 · 본문 · 키 · 시각)을 기억했다가(`unconfirmedSends`) 창 안에 같은 상대에게 같은 본문을
     ///    다시 보내면 새 키 대신 그 키를 쓴다. 서버가 확정 답(ok · 거절 status)을 준 전송은 기억하지 않는다 —
     ///    같은 말을 일부러 두 번 보내는 것은 정상 사용이다.
@@ -584,7 +585,9 @@ package final class MessagesStore {
                 notice = MessagesSendRules.notice(for: outcome, maxLength: response.maxLength)
                 succeeded = outcome == .ok
                 refreshesDirectory = outcome == .targetNotWorking
-                if succeeded, response.messageId != nil { self.runtime.serverKnowsSendKey = true }
+                // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다(서버 되돌림 · 코어가 옛 모양으로 되물었다).
+                // 한 번 선 깃발을 그대로 두면 되돌린 서버에서 재시도가 두 통을 만든다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
+                if succeeded { self.runtime.serverKnowsSendKey = response.messageId != nil }
                 // 확정 답 — 이 키·이 (상대, 본문)의 기억을 지운다(성공이면 다음 같은 말은 새 말이고, 거절이면 저장된 것이 없다).
                 self.runtime.unconfirmedSends.removeAll {
                     $0.key == localID || ($0.peerUserID == peerID && $0.body == body)
@@ -1037,8 +1040,9 @@ private final class MessagesRuntime {
     var postMarkWindowTask: Task<Void, Never>?
     var postMarkPendingSerial = 0
     var shownConversations: [(token: UUID, peerID: String)] = []
-    /// 이 실행에서 서버가 전송 멱등 키를 안다는 증거를 봤는가 — `ok` 응답에 `message_id` 가 한 번이라도 실렸으면 참.
-    /// 응답 유실 재시도(`performSend` ⓑ)의 문이다. 로그아웃이 장부째 바꾸므로 다음 계정은 거짓에서 시작한다.
+    /// 이 실행에서 서버가 전송 멱등 키를 안다는 증거를 봤는가 — **마지막** `ok` 응답에 `message_id` 가 실렸으면 참
+    /// (그 뒤 message_id 없는 ok 를 보면 다시 거짓 — 서버를 되돌린 판). 응답 유실 재시도(`performSend` ⓑ)의 문이다.
+    /// 로그아웃이 장부째 바꾸므로 다음 계정은 거짓에서 시작한다.
     var serverKnowsSendKey = false
     /// 답을 못 받고 끝난 전송들(`performSend` ⓒ · 오래된 것 → 최신).
     var unconfirmedSends: [MessagesUnconfirmedSend] = []

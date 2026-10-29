@@ -91,7 +91,9 @@ class RealtimeDoorsSourceTest {
         val others = SourceText.realtimeSources().filter { it.name != "DesktopRealtimeRunner.kt" }
             .filter { SourceText.count(SourceText.stripComments(it.readText()), "link.apply(") > 0 }
         assertTrue(others.isEmpty(), "러너 밖에서 링을 움직인다: ${others.map { it.name }}")
-        assertTrue(!runner.contains("Clock.System") && !runner.contains("currentTimeMillis"), "러너가 벽시계를 직접 읽는다(시계는 주입)")
+        // 벽시계 문형은 둘로 쪼개 적는다 — 붙여 쓰면 이 시험 소스 자체가 구조 규칙 R2(조립 지점 밖 벽시계)에 걸린다.
+        val wallClock = "Clock." + "System"
+        assertTrue(!runner.contains(wallClock) && !runner.contains("currentTimeMillis"), "러너가 벽시계를 직접 읽는다(시계는 주입)")
     }
 
     @Test

@@ -377,6 +377,9 @@ enum MiniGameSpaceKey {
     /// (전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 그 단추를 스페이스로 누를 때 게임이 삼킨다.
     /// v0.3.60: 1:1 테트리스 창이 더해져 **다섯**이다. 그 창의 스페이스는 **하드드롭**이라, 등록이 빠지면 미니게임 창을 띄워 둔 채
     /// 대결 창에서 누른 스페이스를 미니게임 모니터가 먼저 삼킨다 — 루비가 걸린 판에서 조각이 안 떨어진다.
+    /// v0.3.69: 아잉 큐브 창이 더해져 **일곱**이다. 판은 끌기라 키가 적지만 [완료]·[뽑기]·[되돌리기]·확인 대화상자가
+    /// 키보드로도 눌린다(전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 [완료]를
+    /// 스페이스로 누를 때 게임이 삼킨다 — 60초 차례에서 그 한 번이 시간 초과 벌칙이 된다.
     /// v0.3.66: 생일 축하 창이 더해져 **여섯**이다. 글을 받지 않지만 두 초상 · [이걸로 받을게요] · [지금 입기] 가 키보드로도 눌린다(뽑기 창과 같은 이유).
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
@@ -384,7 +387,8 @@ enum MiniGameSpaceKey {
          CheckSettingsWindowController.frameAutosaveName,
          CheckGachaWindowController.frameAutosaveName,
          CheckTetrisDuelWindowController.frameAutosaveName,
-         CheckCakeGiftWindowController.frameAutosaveName]
+         CheckCakeGiftWindowController.frameAutosaveName,
+         CheckRummyWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -759,7 +763,8 @@ struct CheckMiniGameWindowView: View {
             onPause: { togglePause() },
             onGomoku: { store.openGomokuFromMiniGame() },
             onChess: { store.openChessFromMiniGame() },
-            onTetrisDuel: { store.openTetrisDuelFromMiniGame() }
+            onTetrisDuel: { store.openTetrisDuelFromMiniGame() },
+            onRummy: { store.openRummyFromMiniGame() }
         )
     }
 
@@ -1431,6 +1436,8 @@ struct MiniGameGameHeader: View {
     let onChess: () -> Void
     /// [1:1 테트리스] 입구(v0.3.60). **기본값이 있는 채로 맨 끝** — 머리글을 부르는 기존 호출부(테스트 여섯 곳)가 그대로 산다.
     var onTetrisDuel: () -> Void = {}
+    /// [아잉 큐브] 입구(v0.3.69). 테트리스 입구와 같은 이유로 **기본값이 있는 채로 맨 끝**이다(기존 호출부 보호).
+    var onRummy: () -> Void = {}
 
     /// 종류 칩끼리의 간격(v0.3.67 — 넷째 칩 "길건너 아잉이"가 들어오며 344pt 예산을 다시 쟀다).
     ///
@@ -1487,10 +1494,13 @@ struct MiniGameGameHeader: View {
                 //   말하는 묶음 캡슐 하나(`MiniGameDuelEntryGroup`)로 접었다: [1:1 | 오목 | 체스 | 테트리스]. 이름은 셋 다 남는다
                 //   (아이콘 전용으로 접지 않은 이유는 위와 같다) — 반복되던 "1:1 " 접두와 아이콘 셋만 빠진다.
                 //   각 문은 여전히 **자기 버튼**이고(말풍선 · 보이스오버 이름 · 탭이 따로) 묶음은 그리기만 바꾼다(환경값).
+                // ★ v0.3.69 — 넷째 문 [큐브](아잉 큐브 · 2~4인)가 들어오며 머리 "1:1" 을 뗐다(예산 · 뜻 — `MiniGameDuelEntryGroup` 주석).
                 MiniGameDuelEntryGroup {
                     MiniGameGomokuEntryButton { onGomoku() }
                     MiniGameChessEntryButton { onChess() }
                     MiniGameTetrisDuelEntryButton { onTetrisDuel() }
+                    // v0.3.69 — 아잉 큐브(2~4인)도 같은 묶음의 문이다(다른 넓은 창으로 가는 대결 문이라는 뜻이 같다).
+                    MiniGameRummyEntryButton { onRummy() }
                 }
             }
         }
@@ -1634,6 +1644,26 @@ struct MiniGameTetrisDuelEntryButton: View {
     }
 }
 
+/// 헤더의 [아잉 큐브] 입구(v0.3.69). 오목·체스·테트리스 입구와 **같은 부품**이다. 2~4인 게임이라 이름에 "1:1" 이 없다.
+/// 렌더 테스트가 단독으로 잰다(internal).
+struct MiniGameRummyEntryButton: View {
+    static let title = RummyInviteText.gameName
+    static let segmentTitle = RummyInviteText.entrySegmentTitle
+    static let help = "2~4인 아잉 큐브 창을 열어요"
+
+    var showsTitle: Bool = true
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        MiniGameEntryCapsule(title: Self.title, icon: RummyEntryIcon.resolved, help: Self.help,
+                             segmentTitle: Self.segmentTitle,
+                             showsTitle: showsTitle, hovering: hovering, action: action)
+            .onHover { hovering = $0 }
+    }
+}
+
 /// 묶음 안에서는 입구가 **조각(세그먼트)** 으로 그려진다는 표시(환경값). 입구 버튼의 호출 모양은 그대로 둔 채
 /// 그리기만 바꾸려고 둔 문이다 — 버튼마다 인자를 하나씩 더하면 세 입구의 호출부가 갈린다.
 private struct MiniGameDuelEntryCompactKey: EnvironmentKey {
@@ -1652,20 +1682,20 @@ extension EnvironmentValues {
 /// 왜 묶음인가: 문이 셋이 되자 이름 단 캡슐 셋이 344pt 를 넘었다(머리글 실측은 V0338 의 헤더 시험이 출력한다).
 /// "1:1 오목 · 1:1 체스 · 1:1 테트리스" 에서 겹치는 것은 "1:1 " 과 캡슐 테두리뿐이라, 그것을 한 번만 그리면 이름 셋이
 /// 그대로 들어간다. 색은 입구와 같은 초록이다(뜻: "다른 창으로 가는 1:1 대결 문").
+///
+/// ★ v0.3.69 — 넷째 문(아잉 큐브 · 2~4인)이 들어오며 **머리 "1:1" 을 뗐다.** 두 가지 까닭이다.
+///   ① 344pt 예산: 문 넷 묶음 머리글이 길건너 아잉이를 고른 채 **369pt** 였다(V0367CrossyTests.headerFitsWithFourChips 실측).
+///      머리 글자(≈28pt)를 떼고 조각 좌우 여백을 6 → 4 로 줄여 예산 안에 넣었다 — 숫자는 그 시험과 V0338 헤더 시험이 지킨다.
+///   ② 뜻: 아잉 큐브는 1:1 이 아니다. 묶음의 뜻("다른 넓은 창으로 가는 대결 문")은 초록 캡슐 자체가 말하고, 각 문의 전체 이름
+///      ("1:1 오목" · "아잉 큐브" …)은 말풍선과 보이스오버 이름에 그대로 남는다(조각은 짧은 이름만 그린다).
 struct MiniGameDuelEntryGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         HStack(spacing: 0) {
-            Text("1:1")
-                .font(.caption2.weight(.heavy))
-                .foregroundStyle(CheckTheme.working.opacity(0.75))
-                .padding(.leading, 9)
-                .padding(.trailing, 3)
-                .accessibilityHidden(true)
             content
         }
-        .padding(.trailing, 3)
+        .padding(.horizontal, 3)
         .frame(height: 26)
         .background(Capsule().fill(CheckTheme.working.opacity(0.14)))
         .overlay(Capsule().stroke(CheckTheme.working.opacity(0.45), lineWidth: 1))
@@ -1702,7 +1732,7 @@ private struct MiniGameEntryCapsule: View {
             Text(segmentTitle)
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(CheckTheme.working)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 4)
                 .frame(height: 20)
                 .background(Capsule().fill(CheckTheme.working.opacity(hovering ? 0.24 : 0)))
                 .contentShape(Capsule())

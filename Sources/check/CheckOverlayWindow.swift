@@ -246,6 +246,17 @@ final class CheckOverlayController {
     private(set) var pendingTetrisAttention: TetrisDuelAttention?
     private var tetrisAttentionTask: Task<Void, Never>?
     private(set) var shownTetrisAttention: (text: String, matchID: String)?
+    /// 아잉 큐브(v0.3.69)의 같은 네 칸. 테트리스와 형제이고 규약이 글자 그대로 같다 — 다른 것은 문구와 여는 창, 그리고
+    /// 초대가 1인 신청이 아니라 **방**(`RummyRoom`)이고 알림 문구를 스토어가 짓는다(`onAttention: (String)`)는 것이다.
+    /// 판은 차례 60초라 창을 닫아 둔 사람에게 "내 차례" 말풍선이 없으면 시간 초과 벌칙이 쌓여 기권한다(3회 연속).
+    private(set) var rummyInviteQueue: [RummyRoom] = []
+    private var rummyDrainTask: Task<Void, Never>?
+    private(set) var shownRummyInvite: (text: String, matchID: UUID)?
+    /// 아잉 큐브 말풍선을 눌렀을 때 열 곳(인자 = 방·판 id, 모르면 nil). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
+    var onOpenRummy: ((UUID?) -> Void)?
+    private(set) var pendingRummyAttention: String?
+    private var rummyAttentionTask: Task<Void, Never>?
+    private(set) var shownRummyAttention: (text: String, matchID: UUID?)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -831,6 +842,8 @@ final class CheckOverlayController {
         if let rect = chessInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 테트리스 말풍선(v0.3.60)도 같은 이유로 몸체로 쳐 준다.
         if let rect = tetrisInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
+        // 아잉 큐브 말풍선(v0.3.69)도 같은 이유로 몸체로 쳐 준다.
+        if let rect = rummyInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
@@ -966,6 +979,10 @@ final class CheckOverlayController {
         }
         if let rect = tetrisInviteBubbleScreenRect(), rect.contains(location), let matchID = tetrisBubbleMatchID() {
             onOpenTetrisDuel?(matchID)
+            return
+        }
+        if let rect = rummyInviteBubbleScreenRect(), rect.contains(location), let target = rummyBubbleTarget() {
+            onOpenRummy?(target.matchID)
             return
         }
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
@@ -1689,6 +1706,134 @@ final class CheckOverlayController {
                 await tick(Self.messageBubbleTickSeconds)
             }
             self?.tetrisAttentionTask = nil
+        }
+    }
+
+    // MARK: - 아잉 큐브 말풍선 (v0.3.69 — 테트리스 네 묶음의 형제)
+    //
+    // ★ 아잉 큐브 폴링도 창이 보일 때만 돌고 창을 여는 길은 미니게임 머리글 하나뿐이다. 초대는 방 TTL(10분) 안에서만 살고
+    //   이번 버전은 푸시가 없다(설계 §0) — 이 말풍선 · 팝오버 배너 · 메뉴바 점이 초대를 아는 세 표면이다.
+
+    /// 아잉 큐브 초대 말풍선 문구(순수). 문구 정본은 `RummyInviteText` 한 곳이다(배너와 같은 말).
+    nonisolated static func rummyInviteBubbleText(name: String?, stake: Int) -> String {
+        RummyInviteText.bubbleText(name: name, stake: stake)
+    }
+
+    /// 새 받은 초대를 큐에 넣고 펌프를 돌린다(같은 방 id 는 한 번만). `RummyStore.onInviteArrived` 가 부른다.
+    func enqueueRummyInvite(_ room: RummyRoom) {
+        guard !rummyInviteQueue.contains(where: { $0.id == room.id }) else { return }
+        rummyInviteQueue.append(room)
+        drainRummyInvitesIfNeeded()
+    }
+
+    /// 큐를 비운다(로그아웃·계정 전환).
+    func clearRummyInvites() {
+        rummyInviteQueue.removeAll()
+        shownRummyInvite = nil
+        pendingRummyAttention = nil
+        shownRummyAttention = nil
+    }
+
+    /// 큐 맨 앞 초대 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
+    /// 살아 있음은 스토어가 화면에 보이는 받은 초대 전부(`incomingInvites` — 차단·만료를 이미 걷은 목록)로 판정한다.
+    @discardableResult
+    func showNextRummyInviteBubble(now: Date = Date()) -> Bool {
+        let alive = Set(store.rummy.incomingInvites.map(\.id))
+        let nowMs = now.timeIntervalSince1970 * 1000
+        rummyInviteQueue.removeAll { room in
+            !alive.contains(room.id) || (room.expiresAtMs.map { $0 <= nowMs } ?? false)
+        }
+        guard let room = rummyInviteQueue.first else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.rummyInviteBubbleText(name: room.host?.displayName, stake: room.stake ?? 0)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownRummyInvite = (text, room.id)
+        rummyInviteQueue.removeFirst()
+        return true
+    }
+
+    func drainRummyInvitesIfNeeded() {
+        guard rummyDrainTask == nil, !rummyInviteQueue.isEmpty else { return }
+        let tick = messageBubbleSleep
+        rummyDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, !self.rummyInviteQueue.isEmpty else { break }
+                self.showNextRummyInviteBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.rummyDrainTask = nil
+        }
+    }
+
+    /// 헤드리스 검증 지점: 아잉 큐브 초대 펌프가 돌고 있는가.
+    var isDrainingRummyInvites: Bool { rummyDrainTask != nil }
+
+    /// 지금 **누를 수 있는** 아잉 큐브 말풍선(초대·내 차례)의 화면 사각형(아니면 nil).
+    func rummyInviteBubbleScreenRect() -> NSRect? {
+        guard rummyBubbleTarget() != nil else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 누를 수 있는 아잉 큐브 말풍선이 열 곳. `matchID` 가 nil 이면 창만 연다(내 차례 알림이 판 id 를 모를 때).
+    struct RummyBubbleTarget: Equatable {
+        let matchID: UUID?
+    }
+
+    /// 지금 떠 있는 아잉 큐브 말풍선이 열 방·판. 문구와 id 를 **함께** 본다(같은 문구의 다른 말풍선을 누르지 않게).
+    func rummyBubbleTarget() -> RummyBubbleTarget? {
+        guard onOpenRummy != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownRummyAttention, shown.text == text { return RummyBubbleTarget(matchID: shown.matchID) }
+        if let shown = shownRummyInvite, shown.text == text { return RummyBubbleTarget(matchID: shown.matchID) }
+        return nil
+    }
+
+    /// 내 차례 알림을 넣고 펌프를 돌린다. `RummyStore.onAttention` 이 부른다(문구는 스토어가 짓는다 — 설계 §5
+    /// "아잉 큐브 — 내 차례예요"). 같은 알림이 다시 오면 마지막 것 하나만 남는다(차례는 한 번에 하나다).
+    func enqueueRummyAttention(_ text: String) {
+        pendingRummyAttention = text
+        drainRummyAttentionIfNeeded()
+    }
+
+    @discardableResult
+    func showPendingRummyAttentionBubble() -> Bool {
+        guard let text = pendingRummyAttention else { return false }
+        guard Self.rummyAttentionIsCurrent(in: store.rummy) else {
+            pendingRummyAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownRummyAttention = (text, store.rummy.match?.id)
+        pendingRummyAttention = nil
+        return true
+    }
+
+    /// 알림이 아직 사실인가(순수 판정 — 스토어 공개 표면만 읽는다). 판이 끝났거나 로비로 돌아갔으면 거짓이다.
+    /// 창이 보이는지는 스토어가 알림을 낼 때 이미 걸렀다(설계 §5 "창이 안 보이면").
+    static func rummyAttentionIsCurrent(in rummy: RummyStore) -> Bool {
+        rummy.phase == .playing && rummy.match != nil
+    }
+
+    func drainRummyAttentionIfNeeded() {
+        guard rummyAttentionTask == nil, pendingRummyAttention != nil else { return }
+        let tick = messageBubbleSleep
+        rummyAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingRummyAttention != nil else { break }
+                self.showPendingRummyAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.rummyAttentionTask = nil
         }
     }
 

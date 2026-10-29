@@ -247,6 +247,12 @@ extension WorkTimerStore {
         closeMiniGamePanel()
     }
 
+    /// 미니게임 창 머리글의 **아잉 큐브** 입구(v0.3.69). 위와 같은 규약이다 — 큐브 창을 **먼저** 띄우고 이 창은 나중에 내린다.
+    func openRummyFromMiniGame() {
+        rummy.openWindow(focusMatchID: nil)
+        closeMiniGamePanel()
+    }
+
     /// 진행 중인 판을 **사용자 의사로** 접는다(정지 카드의 [그만두기] — v0.2.48).
     ///
     /// 하는 일은 `miniGameInterruptToken += 1` 하나뿐이다. 그런데도 새 메서드를 낸 이유: 지금까지 이 토큰을

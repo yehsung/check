@@ -245,7 +245,7 @@ package final class MobileRealtimeRunner {
                 //   테트리스와 아무 상관 없는 조회다. 잇는 것과 따로 두는 것은 별개의 요구다.
                 tetris?.handleSignal()
             case .rummySignal:
-                // 아잉 큐브(맥 0.3.69). 폰 판에서 잇는다 — 지금 폰은 서버 능력 협상으로 막혀 있어(rummy_capable)
+                // 아잉 큐브(맥 0.3.68). 폰 판에서 잇는다 — 지금 폰은 서버 능력 협상으로 막혀 있어(rummy_capable)
                 // 초대·참가가 안 오므로 비워 둔다. ★ `.drain` 으로 떨어뜨리면 안 되는 까닭은 체스 가지와 같다:
                 // 같은 계정의 맥이 판을 하는 동안 작업 판 초인종이 끌기마다 울리고, 새면 그때마다 메시지 조회가 한 번씩 더 나간다.
                 break

@@ -3,7 +3,7 @@ import Testing
 @testable import check
 @testable import CheckCore
 
-// v0.3.69 — 아잉 큐브 **공용 접점 배선**(설계 §5 · map-mac §3 의 접점 1~19, #20 버전은 통합 몫).
+// v0.3.68 — 아잉 큐브 **공용 접점 배선**(설계 §5 · map-mac §3 의 접점 1~19, #20 버전은 통합 몫).
 // 스토어·창은 다른 갈래가 채우므로 여기서는 "그 문이 공용 파일에 꽂혀 있는가"만 잰다. 링은 순수 동작으로, 나머지는
 // 소스 계약(주석 걷기 → 공백 접기 → 글자 그대로)으로 — V0360TetrisDuelRealtimeTests 작법 그대로다.
 //

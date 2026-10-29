@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import CheckCore
 
-// MARK: - 아잉 큐브 창 (v0.3.69)
+// MARK: - 아잉 큐브 창 (v0.3.68)
 //
 // 계약은 설계서 §5: 테트리스 창(`CheckTetrisDuelWindow.swift`) 계약 그대로 — 지연 생성 · 멱등 show · 닫아도 파괴 안 함 ·
 // 고정 크기 **1240×700**(오목·체스와 같은 13" 상한) · .darkAqua · `CheckPanelVisibility.panelAlpha`(테스트 알파 0) ·

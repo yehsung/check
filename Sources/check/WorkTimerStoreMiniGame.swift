@@ -247,7 +247,7 @@ extension WorkTimerStore {
         closeMiniGamePanel()
     }
 
-    /// 미니게임 창 머리글의 **아잉 큐브** 입구(v0.3.69). 위와 같은 규약이다 — 큐브 창을 **먼저** 띄우고 이 창은 나중에 내린다.
+    /// 미니게임 창 머리글의 **아잉 큐브** 입구(v0.3.68). 위와 같은 규약이다 — 큐브 창을 **먼저** 띄우고 이 창은 나중에 내린다.
     func openRummyFromMiniGame() {
         rummy.openWindow(focusMatchID: nil)
         closeMiniGamePanel()

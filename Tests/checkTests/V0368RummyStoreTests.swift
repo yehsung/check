@@ -5,15 +5,16 @@ import Testing
 // v0.3.68 — 아잉 큐브(rummy) 클라 코어(`RummyWire` · `RummyStore`) 계약. **모양이 아니라 결과를 잰다.**
 //
 // 서버는 스텁이다(`GomokuStubProtocol` — 호스트별 스크립트). 응답 JSON 은 설계서 §3.5·§3.7 모양을 손으로 옮긴 것이고,
-// S 갈래가 `rummy/server/fixtures/*.json`(실서버 출력)을 내면 그것도 디코드 시험에 들어간다. 실서버 왕복(정규화·시간 판정)은
+// S 갈래의 실서버 출력(`Fixtures/rummy/server/*.json`, 통합 때 복사)도 디코드 시험에 들어간다. 실서버 왕복(정규화·시간 판정)은
 // 하네스·두 계정 e2e 몫이다.
 //
 // 호스트는 이 파일의 작은 `RKHost` 다(스토어가 실제로 읽는 멤버만 — `GomokuStoreHost`). 벽시계는 주입이고, 폴링 루프는
 // 3,600초로 재우고 `pollTick(at:)` · `checkDeadline(at:)` 을 직접 밟는다(결정적). 마감 깨우기는 끈다.
 // 작업 상태 디바운스만 실제 시간(0.05초)이다 — 디바운스·합치기 자체가 시험 대상이라서.
 //
-// **편집기(RummyTurnEditor)의 끌기·판정은 R 갈래 몫이다.** 그것에 기대는 시험은 `.enabled(if: rkEditorReady)` 로 묶었다 —
-// 편집기 자리표시(끌기 늘 false)에서는 건너뛰고, 규칙이 합쳐지면(통합) 돈다.
+// **편집기(RummyTurnEditor)의 끌기·판정은 R 갈래 몫이다.** 갈래 작업 중에는 그것에 기대는 시험을 `.enabled(if: rkEditorReady)` 로
+// 묶었다가, 통합(rummy-r 합류)에서 풀었다 — 이제는 진짜 판정으로 **늘** 돈다. 편집기가 다시 자리표시로 퇴행하면 건너뛰는 대신
+// `editorIsReal` 이 빨개진다(건너뜀이 초록으로 보이는 함정을 막는다).
 //
 // 각 시험의 첫 줄 주석은 **"없으면 어떤 결함이 초록으로 통과하는가"** 다(관례).
 
@@ -305,11 +306,14 @@ struct V0368RummyStoreTests {
             "rummy_ranking": ["p_protocol"],
         ]
         #expect(Set(expected.keys) == Set(RummyWire.RPC.all))
+        // 표만 맞추면 표와 서버가 같이 틀릴 수 있다 — 실제 마이그레이션의 인자 이름과도 잰다(V0368RummyWireContractTests 의 파서).
+        let sql = try rwcMigrationSQL()
         for (rpc, keys) in expected {
             let calls = rkCalls(host, rpc)
             #expect(calls.count == 1, "\(rpc) 호출 수")
             guard let body = calls.first else { continue }
             #expect(Set(body.keys) == keys, "\(rpc) 본문 키")
+            #expect(Set(body.keys) == (try rwcSQLArguments(rpc, in: sql)), "\(rpc) 본문 키 ≠ \(rwcMigrationName) 인자 이름")
             #expect(body["p_protocol"] as? Int == 1, "\(rpc) p_protocol")
             if let matchID = body["p_match_id"] as? String { #expect(matchID == rkID(rkMatch)) }
         }
@@ -319,6 +323,22 @@ struct V0368RummyStoreTests {
         #expect(rkCalls(host, "rummy_invite").first?["p_user"] as? String == rkID(rkB))
         #expect(rkCalls(host, "rummy_draft").first?["p_table"] as? [[String]] == [["A1", "A2", "A3"], ["J", "B4", "C4"]])
         #expect(rkCalls(host, "rummy_play").first?["p_expected_seq"] as? Int == 7)
+    }
+
+    @Test("편집기: 통합 뒤 편집기는 진짜다(끌기가 된다) — 아래 편집기 기대 시험들이 건너뛰지 않고 판정으로 돈다")
+    func editorIsReal() {
+        // 없으면: 편집기가 자리표시(끌기 늘 false)로 돌아가도 그에 기대는 분기가 조용히 빈 값으로 돌아 초록이 된다.
+        #expect(rkEditorReady)
+        var editor = RummyTurnEditor(table: [], rack: rkFaces(["A10", "A11", "A12", "B2"]), initialDone: false)
+        let tiles = editor.rack
+        let first = editor.move(tiles[0].id, to: .newMeld)
+        let second = editor.move(tiles[1].id, to: .meld(0, index: nil))
+        #expect(first && second)
+        #expect(editor.reason != .ok, "두 장 세트는 낼 수 없다")
+        let third = editor.move(tiles[2].id, to: .meld(0, index: nil))
+        #expect(third)
+        #expect(editor.reason == .ok, "A10·A11·A12 = 33점 ≥ 30 — 진짜 판정이면 ok")
+        #expect(editor.initialPoints == 33)
     }
 
     @Test("와이어: §3.5 로비·§3.7 state·순위를 그대로 읽고, 모르는 글자는 .unknown, 빠진 키는 nil 이다")
@@ -394,12 +414,11 @@ struct V0368RummyStoreTests {
         #expect(ranking.me?.rank == nil)
     }
 
-    @Test("와이어: 서버 갈래 픽스처(rummy/server/fixtures — 실서버 출력)가 전부 디코드되고, 스토어가 그 state 를 옳게 읽는다")
+    @Test("와이어: 서버 갈래 픽스처(Fixtures/rummy/server — 실서버 출력)가 전부 디코드되고, 스토어가 그 state 를 옳게 읽는다")
     func decodesServerFixturesIfPresent() throws {
         // 없으면: 실서버 출력이 손 픽스처와 다르게 생겼는데(키 이름·중첩·null 자리) 스텁 시험만 초록인 결함이 남는다.
         let candidates = [
-            URL(fileURLWithPath: "/Users/yesung/.claude/projects/-Users-yesung-check/rummy/server/fixtures"),
-            URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/rummy-rpc"),
+            URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/rummy/server"),
         ]
         // 파일 하나가 응답 하나이거나, `_all.json` 처럼 {이름: 응답} 묶음이다.
         var entries: [(name: String, data: Data)] = []
@@ -435,7 +454,7 @@ struct V0368RummyStoreTests {
             #expect(status != nil, "디코드 실패: \(name)")
             #expect(status != .unknown, "모르는 status: \(name)")
         }
-        guard !entries.isEmpty else { return }   // S 갈래 산출 전이면 여기까지.
+        #expect(entries.count == 43, "서버 픽스처 \(entries.count)장(기대 43 — 통합 때 저장소로 복사했다)")
 
         // 스토어가 실서버 state 를 옳게 읽는가(호스트 없는 스토어 — 내 자리는 my_seat_no 로 찾는다).
         if let mine = states["state_active_my_turn"]?.state {
@@ -666,7 +685,7 @@ struct V0368RummyStoreTests {
         #expect(store.phase == .playing)
     }
 
-    @Test("편집기: seq 가 바뀌어도 랙 배치를 면 순서로 보존하고 새 타일은 끝에 붙는다", .enabled(if: rkEditorReady))
+    @Test("편집기: seq 가 바뀌어도 랙 배치를 면 순서로 보존하고 새 타일은 끝에 붙는다")
     func rackArrangementSurvivesSeqChange() throws {
         // 없으면: 차례가 돌 때마다 내가 정리한 랙이 서버 순서로 흐트러지는 결함이 초록이 된다.
         let (store, _, _, _) = rkMake("rack-order", script: RKScript())
@@ -749,7 +768,7 @@ struct V0368RummyStoreTests {
         #expect(!store.isMyTurn)
     }
 
-    @Test("작업 전송: 끌기마다 250ms 디바운스로 합치고, 비행 중 바뀐 것은 끝난 뒤 최신 것 한 번", .enabled(if: rkEditorReady))
+    @Test("작업 전송: 끌기마다 250ms 디바운스로 합치고, 비행 중 바뀐 것은 끝난 뒤 최신 것 한 번")
     func draftDebouncesMovesAndSendsLatestAfterFlight() async throws {
         // 없으면: 끌기 한 번마다 요청이 나가거나(폭주), 비행 중 마지막 끌기를 잃어 서버가 옛 판으로 시간 초과 판정하는 결함이 초록이 된다.
         let script = RKScript()
@@ -807,7 +826,7 @@ struct V0368RummyStoreTests {
         #expect(store.notice == nil)
     }
 
-    @Test("완료: 편집기가 이미 거절을 아는 판(내 타일 0장)은 보내지 않고 이유만 띄운다", .enabled(if: rkEditorReady))
+    @Test("완료: 편집기가 이미 거절을 아는 판(내 타일 0장)은 보내지 않고 이유만 띄운다")
     func submitBlockedLocallyWhenEditorRejects() async throws {
         // 없으면: [완료] 연타가 서버 거절만 쌓는(또는 버튼 잠금이 풀리지 않는) 결함이 초록이 된다.
         let script = RKScript()

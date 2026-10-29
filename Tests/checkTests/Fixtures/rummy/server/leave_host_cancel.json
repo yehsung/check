@@ -1,0 +1,30 @@
+{
+  "state": {
+    "consecutive_passes": 0,
+    "draft": null,
+    "end_reason": null,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "grace_ms": 2000,
+    "host_id": "d0000000-0000-4000-8000-000000000006",
+    "id": "4461fe1c-ef12-4877-8e9c-cca2bcee673f",
+    "is_public": false,
+    "last_event": null,
+    "max_seats": 4,
+    "my_initial_done": false,
+    "my_rack": null,
+    "my_seat_no": null,
+    "pool_count": 0,
+    "seat_count": null,
+    "seats": [],
+    "seq": 0,
+    "server_now_ms": 1793301840891,
+    "stake": 3,
+    "status": "cancelled",
+    "table": [],
+    "turn_deadline_ms": null,
+    "turn_seat_no": null,
+    "turn_started_ms": null
+  },
+  "status": "ok"
+}

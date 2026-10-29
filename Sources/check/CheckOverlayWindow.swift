@@ -246,7 +246,7 @@ final class CheckOverlayController {
     private(set) var pendingTetrisAttention: TetrisDuelAttention?
     private var tetrisAttentionTask: Task<Void, Never>?
     private(set) var shownTetrisAttention: (text: String, matchID: String)?
-    /// 아잉 큐브(v0.3.69)의 같은 네 칸. 테트리스와 형제이고 규약이 글자 그대로 같다 — 다른 것은 문구와 여는 창, 그리고
+    /// 아잉 큐브(v0.3.68)의 같은 네 칸. 테트리스와 형제이고 규약이 글자 그대로 같다 — 다른 것은 문구와 여는 창, 그리고
     /// 초대가 1인 신청이 아니라 **방**(`RummyRoom`)이고 알림 문구를 스토어가 짓는다(`onAttention: (String)`)는 것이다.
     /// 판은 차례 60초라 창을 닫아 둔 사람에게 "내 차례" 말풍선이 없으면 시간 초과 벌칙이 쌓여 기권한다(3회 연속).
     private(set) var rummyInviteQueue: [RummyRoom] = []
@@ -842,7 +842,7 @@ final class CheckOverlayController {
         if let rect = chessInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 테트리스 말풍선(v0.3.60)도 같은 이유로 몸체로 쳐 준다.
         if let rect = tetrisInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
-        // 아잉 큐브 말풍선(v0.3.69)도 같은 이유로 몸체로 쳐 준다.
+        // 아잉 큐브 말풍선(v0.3.68)도 같은 이유로 몸체로 쳐 준다.
         if let rect = rummyInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
@@ -1709,7 +1709,7 @@ final class CheckOverlayController {
         }
     }
 
-    // MARK: - 아잉 큐브 말풍선 (v0.3.69 — 테트리스 네 묶음의 형제)
+    // MARK: - 아잉 큐브 말풍선 (v0.3.68 — 테트리스 네 묶음의 형제)
     //
     // ★ 아잉 큐브 폴링도 창이 보일 때만 돌고 창을 여는 길은 미니게임 머리글 하나뿐이다. 초대는 방 TTL(10분) 안에서만 살고
     //   이번 버전은 푸시가 없다(설계 §0) — 이 말풍선 · 팝오버 배너 · 메뉴바 점이 초대를 아는 세 표면이다.

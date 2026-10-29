@@ -5,7 +5,7 @@ import Testing
 @testable import check
 @testable import CheckCore
 
-// v0.3.69 아잉 큐브 **화면** 렌더 — 타일 그림 · 로비(방 없음 · 방장 방 · 초대 받음) · 내 차례(무효 세트 포함 · 끌기 거절) ·
+// v0.3.68 아잉 큐브 **화면** 렌더 — 타일 그림 · 로비(방 없음 · 방장 방 · 초대 받음) · 내 차례(무효 세트 포함 · 끌기 거절) ·
 // 남의 차례 작업 판 · 결과 · 규칙.
 //
 // 전부 ImageRenderer(scale 2)로 그리고 `CHECK_SNAPSHOT_DIR/stills/rummy-*.png` 에 남긴다(사람이 직접 열어 본다 —

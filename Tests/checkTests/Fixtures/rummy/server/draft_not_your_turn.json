@@ -1,0 +1,121 @@
+{
+  "state": {
+    "consecutive_passes": 0,
+    "draft": {
+      "at_ms": 1793301840033,
+      "draft_seq": 1,
+      "table": [
+        [
+          "A10",
+          "A11",
+          "A12"
+        ]
+      ]
+    },
+    "end_reason": null,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "grace_ms": 2000,
+    "host_id": "d0000000-0000-4000-8000-000000000001",
+    "id": "64f20ed0-e913-4fb3-a50a-a94f4aad4419",
+    "is_public": true,
+    "last_event": {
+      "at_ms": 1793301840016,
+      "count": 4,
+      "kind": "start",
+      "seat_no": 1
+    },
+    "max_seats": 4,
+    "my_initial_done": false,
+    "my_rack": [
+      "C1",
+      "C2",
+      "C5",
+      "D7",
+      "D8",
+      "B11"
+    ],
+    "my_seat_no": 1,
+    "pool_count": 20,
+    "seat_count": 4,
+    "seats": [
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험01",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 7,
+        "seat_no": 0,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "d0000000-0000-4000-8000-000000000001"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험02",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 6,
+        "seat_no": 1,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "d0000000-0000-4000-8000-000000000002"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험08",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 6,
+        "seat_no": 2,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "d0000000-0000-4000-8000-000000000008"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험04",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 6,
+        "seat_no": 3,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "d0000000-0000-4000-8000-000000000004"
+      }
+    ],
+    "seq": 1,
+    "server_now_ms": 1793301840036,
+    "stake": 5,
+    "status": "active",
+    "table": [],
+    "turn_deadline_ms": 1793301900024,
+    "turn_seat_no": 0,
+    "turn_started_ms": 1793301840024
+  },
+  "status": "not_your_turn"
+}

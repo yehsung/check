@@ -75,7 +75,7 @@ struct CheckApp: App {
             // v0.3.60: 받은 **테트리스** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 머리글 하나뿐이고
             // 테트리스 폴링은 창이 보일 때만 돈다). 만료는 스토어 타이머가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
             hasTetrisInvite: appDelegate.store.tetris.visibleIncoming != nil,
-            // v0.3.69: 받은 **아잉 큐브** 초대도 같은 점(테트리스와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.
+            // v0.3.68: 받은 **아잉 큐브** 초대도 같은 점(테트리스와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.
             hasRummyInvite: appDelegate.store.rummy.hasIncomingInvite
         )
     }
@@ -168,7 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireChess()
         // 1:1 테트리스(v0.3.60) — 체스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireTetrisDuel()
-        // 아잉 큐브(v0.3.69) — 테트리스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        // 아잉 큐브(v0.3.68) — 테트리스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireRummy()
         // 전역 단축키도 **오버레이 컨트롤러를 만든 뒤에** 잇는다 — 단축키로 시작한 근무도 알약으로 시작한 근무와 똑같이
         // 캐릭터가 나와야 하는데, 그 표시 전환이 위에서 배선된다.
@@ -324,7 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
         }, safety: store)
-        // 아잉 큐브 창(v0.3.69)도 같은 자리에서 배선한다 — 테트리스 창의 형제다(키를 잃거나 닫혀도 판을 끝내지 않는다).
+        // 아잉 큐브 창(v0.3.68)도 같은 자리에서 배선한다 — 테트리스 창의 형제다(키를 잃거나 닫혀도 판을 끝내지 않는다).
         CheckRummyWindowController.shared.configure(store: store.rummy, me: { [weak self] in
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
@@ -458,7 +458,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }.start()
     }
 
-    /// 아잉 큐브(v0.3.69)의 문들을 잇는다(실행당 1회). 테트리스와 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
+    /// 아잉 큐브(v0.3.68)의 문들을 잇는다(실행당 1회). 테트리스와 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
     /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 시험(V0368RummyWiringTests)이 줄마다 되묻는다.
     ///   ① `rankingEnabled` — 순위의 **주 스위치**(스토어는 폰과 공용이라 기본이 꺼짐). 없으면 순위 탭은 영영 로딩이다.
     ///   ② `presentWindow` — `openWindow(focusMatchID:)` 와 판 시작이 창을 띄우는 유일한 문. 없으면 방장이 시작해도

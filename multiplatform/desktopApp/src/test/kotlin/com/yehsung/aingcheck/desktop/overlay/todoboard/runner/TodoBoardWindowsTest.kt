@@ -1,5 +1,8 @@
 // 원본: Tests/checkTests/CheckTodoBoardWindowTests.swift:121-176(패널이 키를 받고 화면 공유에서 빠진다) @ ef9fab11 · overlay.md §5 b3 러너 몫
 // Windows 러너에서만. 시험 JVM 은 java.awt.headless=true 라 창은 **자식 JVM**(headless=false)이 만들고 값만 찍는다.
+// Swift 원본 규약(CheckTodoBoardWindow.swift @ ef9fab11):
+//   ★1 :489 프라이버시 방어선 — 보드 본문은 업무 정보라 화면 공유·녹화에 실리면 안 된다(맥 sharingType .none ↔ WDA_EXCLUDEFROMCAPTURE 0x11).
+//   ⚠️3 :585 맥 고착 감시자는 CGWindowList 가 orderOut 된 창을 계속 '화면에 있다'고 답해 눈이 멀었다 — 여기는 IsWindowVisible 을 직접 잰다(visible/hidden).
 package com.yehsung.aingcheck.desktop.overlay.todoboard.runner
 
 import com.sun.jna.Native
@@ -42,7 +45,7 @@ class TodoBoardWindowsTest {
         assertEquals("true", v["visible"])
         assertEquals("true", v["hidden"], "hide 뒤엔 안 보인다(파괴하지 않음)")
         val affinityError = v.getValue("affinityError").toInt()
-        if (affinityError == 0) {
+        if (affinityError == 0) { // ★1
             assertEquals(BoardWin32.WDA_EXCLUDEFROMCAPTURE, Integer.decode(v.getValue("affinity")), "화면 공유에서 뺀다")
         } else {
             // W-3 #10: 러너에 DWM 합성이 없으면 오류 코드만 남기고 VM 묶음으로 넘긴다.

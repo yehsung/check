@@ -147,6 +147,8 @@ class TodoBoardViewTest {
     private fun luminance(argb: Int): Double = 0.2126 * ((argb shr 16) and 0xFF) + 0.7152 * ((argb shr 8) and 0xFF) + 0.0722 * (argb and 0xFF)
 
     @Test
+    // ★2 CheckTodoBoardWindow.swift:495 — 맥 보드는 어두운 외관 고정(재질이 시스템 외관을 따라가 밝은 테마에서 흰 글자 대비가 무너져서).
+    //    Windows 1차엔 재질(블러·틴트)이 없어 테마 토큰을 따른다(overlay.md §5 밝음·어둠). 외양 갈래(W-3 #9)가 재질을 넣을 때 다시 정한다.
     fun boardSnapshotsInLightAndDarkAtOneAndTwoX() {
         val out = File(DesktopSnapshots.mpRoot, "desktopApp/build/aingcheck-snapshots/todoboard").apply { mkdirs() }
         val surfaceLum = HashMap<Boolean, Double>()

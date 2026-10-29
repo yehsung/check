@@ -258,8 +258,96 @@ class DesktopWorkStateScenarioTest {
         assertEquals(id, r.store.confirmedSessionId, "(c) 는 열린 행이 있을 때만 지운다")
         r.apply(working(SESSION_X, at(60), at(90)))
         assertTrue(r.store.adoptedRemoteSession)
+        // 이 장면에선 흡수가 (b) 로 다시 찍어 (c) 의 지움이 가려진다 — (c) 만 무는 시험은 아래 rule15c_..._withoutAdoption.
         assertEquals(SESSION_X, r.store.confirmedSessionId, "(c) 로 지우고 흡수가 (b) 로 다시 찍는다")
         assertNull(r.store.planWorkTick()!!.sessionId, "흡수 세션은 tick 에 세션 id 0")
+    }
+
+    /**
+     * ★⑮(c) 도장 규칙(Swift WorkTimerStoreSync.swift:1992-1995 · V0345ConfirmedSessionGateTests 열린행이_다르면_도장을_지운다):
+     * 열린 행 id 가 도장과 **다르면** 즉시 지운다. 흡수가 (b) 로 다시 찍지 않는 장면이어야 (c) 만 보인다 —
+     * 상태표만 먼저 온 찢어진 읽기(currentSessionStartedAt=null)라 재흡수(Sync:2172)가 없다. 지우지 않으면 tick·하트비트가
+     * 서버가 이미 다른 행으로 넘어간 옛 id 를 계속 방송한다(2026-10-09 아이맥 4시간 사건).
+     */
+    @Test
+    fun rule15c_stampClearedWhenOpenRowDiffers_withoutAdoption() {
+        val r = WorkStateRig(deviceId = WIN_DEVICE)
+        r.input = at(-5)
+        r.store.start()
+        r.queue.drain()
+        val id = r.store.currentSessionId!!
+        r.store.setConfirmedServerSessionId(id)
+        assertEquals(id, r.store.planWorkTick()!!.sessionId, "전제: 도장이 있으면 tick 이 내 세션 id 를 싣는다")
+        r.apply(working(SESSION_X, at(60), at(90)).copy(currentSessionStartedAt = null))
+        assertFalse(r.store.adoptedRemoteSession, "시작 시각 없는 열린 행으로는 재흡수하지 않는다(Sync:2172)")
+        assertEquals(id, r.store.currentSessionId, "로컬 세션은 그대로")
+        assertTrue(r.store.snapshot.value.isWorking)
+        assertNull(r.store.confirmedSessionId, "★(c) 다른 열린 행 → 도장 즉시 지움")
+        val tick = r.store.planWorkTick()!!
+        assertNull(tick.sessionId, "⑬ 도장이 지워졌으니 tick 은 세션 id 를 싣지 않는다")
+        assertFalse(tick.openedSession)
+        assertEquals(
+            HeartbeatPlan.DeviceInputOnly(TEAM, WIN_DEVICE, T0),
+            r.store.planHeartbeat(awayServerSupported = true),
+            "하트비트도 세션 행 없이 입력만(②′)",
+        )
+    }
+
+    /**
+     * ⑯ 상대편 입력: tick·하트비트의 opened_session 은 **지금의 강한 소유**다(Swift WorkTimerStoreSync.swift:107-110
+     * workTick `openedSession = ownsCurrentSessionStrongly` · :1158-1160 upsertStatusDevice). 약하게 소유하면서 true 를 보내면
+     * 맥 yieldsToClaim(Sync:2415)이 사실 아닌 강한 주장에 물러난다. 강한 소유(start)만 보던 rule13·heartbeatPlan_branches 의 짝 —
+     * 약한 소유 셋(재시작 구제 weak · 백스톱 되찾기 · 약한 재개) 모두 확인 갈래를 타면서 false 여야 한다.
+     */
+    @Test
+    fun rule16_weakOwnershipSendsOpenedSessionFalse_tickAndHeartbeat() = runBlocking {
+        fun assertClaim(r: WorkStateRig, sessionId: String, strong: Boolean, label: String) {
+            assertFalse(r.store.adoptedRemoteSession, "$label: 전제 — 흡수가 아니라 소유")
+            assertEquals(strong, r.store.ownsCurrentSessionStrongly, "$label: 전제 — 소유 강도")
+            assertEquals(sessionId, r.store.confirmedSessionId, "$label: 전제 — 확인된 내 세션(tick 확인 갈래)")
+            val tick = r.store.planWorkTick()!!
+            assertEquals(sessionId, tick.sessionId, "$label: ⑬ 확인 갈래라 세션 id 를 싣는다")
+            assertEquals(strong, tick.openedSession, "$label: tick opened_session = 강한 소유")
+            val beat = r.store.planHeartbeat(awayServerSupported = true) as HeartbeatPlan.Beat
+            assertEquals(sessionId, beat.device?.sessionId, "$label: 하트비트 기기 행")
+            assertEquals(strong, beat.device?.openedSession, "$label: 하트비트 opened_session = 강한 소유")
+        }
+
+        // 1) 재시작 구제 — 영속된 약한 소유(세탁 금지) + 열린 행의 도장 (b)
+        val rescue = WorkStateRig(deviceId = WIN_DEVICE)
+        rescue.input = at(-5)
+        rescue.own(SESSION_S, SessionClaimStrength.WEAK)
+        rescue.apply(working(SESSION_S, at(-600), at(-20)))
+        assertClaim(rescue, SESSION_S, strong = false, label = "재시작 구제 weak")
+
+        // 대조: 같은 구제라도 강하게 영속돼 있으면 true — 단언이 상수 false 를 통과시키지 않게.
+        val strongRescue = WorkStateRig(deviceId = WIN_DEVICE)
+        strongRescue.input = at(-5)
+        strongRescue.own(SESSION_S, SessionClaimStrength.STRONG)
+        strongRescue.apply(working(SESSION_S, at(-600), at(-20)))
+        assertClaim(strongRescue, SESSION_S, strong = true, label = "재시작 구제 strong")
+
+        // 2) 백스톱 되찾기 — 흡수 세션 정체 3회·5분 → 약하게 되찾는다(도장은 흡수 때 (b) 로 찍힌 X)
+        val backstop = WorkStateRig(deviceId = WIN_DEVICE)
+        val seen = at(-400)
+        backstop.apply(working(SESSION_X, at(-3_600), seen))
+        listOf(0, 60, 120, 300).forEach { t ->
+            backstop.now = at(t)
+            backstop.input = at(t - 1)
+            backstop.apply(working(SESSION_X, at(-3_600), seen))
+        }
+        assertClaim(backstop, SESSION_X, strong = false, label = "백스톱 되찾기")
+
+        // 3) 약한 재개 — 약한 소유 세션을 자동 마감 → 30분 안 재개는 마감 때 강도(weak) 그대로. 도장은 wq (a) 를 흉내 낸다.
+        rescue.store.closeOwnedSessionLocally(T0, AutoCloseReason.AWAY, "자리 비움")
+        rescue.queue.drain()
+        rescue.reopen = WorkReopenCall { _, _ -> }
+        rescue.now = at(60)
+        rescue.input = at(59)
+        rescue.store.performResumeRecentlyClosed()
+        assertTrue(rescue.store.snapshot.value.isWorking, "재개됨")
+        rescue.store.setConfirmedServerSessionId(SESSION_S)
+        assertClaim(rescue, SESSION_S, strong = false, label = "약한 재개")
     }
 
     @Test

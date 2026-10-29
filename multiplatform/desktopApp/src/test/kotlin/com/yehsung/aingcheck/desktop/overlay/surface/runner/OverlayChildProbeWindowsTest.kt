@@ -43,10 +43,11 @@ class OverlayChildProbeWindowsTest {
         val y = 240
         try {
             OverlayRunnerKit.BackWindow(thread, "$tag.Back", x, y, OverlayRunnerKit.W, OverlayRunnerKit.H).use { back ->
-                assertTrue(surface.present(OverlayRunnerKit.halfOpaque(), x, y).ok)
+                val (sx, sy) = OverlayRunnerKit.requireSpot(back)
+                assertTrue(surface.present(OverlayRunnerKit.halfOpaque(), sx, sy).ok)
                 Thread.sleep(200)
                 val before = User32.INSTANCE.GetForegroundWindow()
-                OverlayRunnerKit.clickAt(x + OverlayRunnerKit.W - 40, y + 170)
+                OverlayRunnerKit.clickAt(sx + OverlayRunnerKit.W - 40, sy + 170)
                 val down = assertNotNull(events.poll(3, TimeUnit.SECONDS), "불투명 픽셀 클릭을 오버레이가 못 받았다")
                 assertEquals(PointerKind.DOWN to HitTarget.Body, down)
                 var up = assertNotNull(events.poll(3, TimeUnit.SECONDS), "놓기를 못 받았다")
@@ -57,7 +58,7 @@ class OverlayChildProbeWindowsTest {
                 assertTrue(after?.pointer != surface.hwnd.pointer, "오버레이가 전경이 됐다")
 
                 val backBefore = back.clicks.get()
-                OverlayRunnerKit.clickAt(x + 40, y + 170)
+                OverlayRunnerKit.clickAt(sx + 40, sy + 170)
                 RunnerSupport.waitUntil(3_000, "투명 픽셀 클릭이 뒤 창에 간다") { back.clicks.get() > backBefore }
                 assertEquals(null, events.poll(300, TimeUnit.MILLISECONDS), "투명 픽셀 클릭이 오버레이로 왔다")
             }

@@ -56,10 +56,11 @@ class OverlayWindowSmokeWindowsTest {
     @Test
     fun transparentPixelsFallThroughToTheWindowBehindOpaquePixelsHitTheOverlay() {
         OverlayRunnerKit.BackWindow(thread, "$tag.Back", x, y, OverlayRunnerKit.W, OverlayRunnerKit.H).use { back ->
-            assertTrue(surface.present(OverlayRunnerKit.halfOpaque(), x, y).ok)
+            val (sx, sy) = OverlayRunnerKit.requireSpot(back)
+            assertTrue(surface.present(OverlayRunnerKit.halfOpaque(), sx, sy).ok)
             Thread.sleep(150)
-            val clear = OverlayRunnerKit.windowFromPoint(x + 40, y + 170)
-            val solid = OverlayRunnerKit.windowFromPoint(x + OverlayRunnerKit.W - 40, y + 170)
+            val clear = OverlayRunnerKit.windowFromPoint(sx + 40, sy + 170)
+            val solid = OverlayRunnerKit.windowFromPoint(sx + OverlayRunnerKit.W - 40, sy + 170)
             assertTrue(OverlayRunnerKit.same(clear, back.hwnd), "투명 픽셀 → 뒤 창이어야 한다: ${OverlayRunnerKit.className(clear)}")
             assertTrue(OverlayRunnerKit.same(solid, surface.hwnd), "불투명 픽셀 → 오버레이여야 한다: ${OverlayRunnerKit.className(solid)}")
         }
@@ -68,20 +69,21 @@ class OverlayWindowSmokeWindowsTest {
     @Test
     fun ultraDimWindowLetsClicksThrough() {
         OverlayRunnerKit.BackWindow(thread, "$tag.Back", x, y, OverlayRunnerKit.W, OverlayRunnerKit.H).use { back ->
-            assertTrue(surface.present(OverlayRunnerKit.halfOpaque(), x, y).ok)
-            surface.showUltraDim(ScreenRectPx(x - 60, y - 60, OverlayRunnerKit.W + 120, OverlayRunnerKit.H + 120), alpha = 140)
+            val (sx, sy) = OverlayRunnerKit.requireSpot(back)
+            assertTrue(surface.present(OverlayRunnerKit.halfOpaque(), sx, sy).ok)
+            surface.showUltraDim(ScreenRectPx(sx - 30, sy - 30, OverlayRunnerKit.W + 60, OverlayRunnerKit.H + 60), alpha = 140)
             Thread.sleep(150)
             val dim = surface.dimHwnd!!
             val dimEx = com.yehsung.aingcheck.desktop.overlay.win32.OverlayWindowClass.exStyle(dim)
             assertTrue(dimEx and OverlayWin32.WS_EX_TRANSPARENT != 0 && dimEx and OverlayWin32.WS_EX_LAYERED != 0, "흐림 창 스타일 0x${Integer.toHexString(dimEx)}")
             // 흐림 창만 덮은 자리(뒤 창 밖) — 흐림 창이 잡히면 안 된다.
-            val edge = OverlayRunnerKit.windowFromPoint(x - 30, y - 30)
+            val edge = OverlayRunnerKit.windowFromPoint(sx - 15, sy - 15)
             assertTrue(!OverlayRunnerKit.same(edge, dim), "흐림 창이 클릭을 먹었다")
             // 캐릭터 투명 픽셀 + 흐림 창 아래 = 뒤 창.
-            val clear = OverlayRunnerKit.windowFromPoint(x + 40, y + 170)
+            val clear = OverlayRunnerKit.windowFromPoint(sx + 40, sy + 170)
             assertTrue(OverlayRunnerKit.same(clear, back.hwnd), "흐림 창 너머 뒤 창이어야 한다: ${OverlayRunnerKit.className(clear)}")
             // 캐릭터 불투명 픽셀은 흐림 창 위의 오버레이.
-            val solid = OverlayRunnerKit.windowFromPoint(x + OverlayRunnerKit.W - 40, y + 170)
+            val solid = OverlayRunnerKit.windowFromPoint(sx + OverlayRunnerKit.W - 40, sy + 170)
             assertTrue(OverlayRunnerKit.same(solid, surface.hwnd), "오버레이가 흐림 창 위에 있어야 한다: ${OverlayRunnerKit.className(solid)}")
             surface.hideUltraDim()
         }

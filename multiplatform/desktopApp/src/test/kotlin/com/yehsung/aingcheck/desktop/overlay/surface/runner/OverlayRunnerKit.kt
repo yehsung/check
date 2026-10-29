@@ -61,9 +61,47 @@ object OverlayRunnerKit {
             }.also { OverlayWindowClass.showNoActivate(it) }
         }
 
+        fun moveTo(x: Int, y: Int) = thread.call { _ ->
+            User32.INSTANCE.SetWindowPos(hwnd, OverlayWin32.HWND_TOPMOST, x, y, 0, 0, OverlayWin32.SWP_NOSIZE or OverlayWin32.SWP_NOACTIVATE)
+        }
+
         override fun close() {
             thread.call { _ -> cls.destroy(hwnd); cls.close() }
         }
+    }
+
+    /** 자리 찾기 결과 — [spot] 이 null 이면 [coveredBy] 가 화면을 덮은 남의 창 클래스들. */
+    data class Spot(val spot: Pair<Int, Int>?, val coveredBy: Set<String>)
+
+    /**
+     * 우리 맨 위 창이 실제로 맨 위인 자리를 찾는다 — **오버레이 판정과 무관한 기준**(보통 창인 [back] 만 띄워 두 점이 back 으로
+     * 잡히는지)으로 고른다. windows-11-arm 러너는 셸 CoreWindow(맨 위 띠보다 높은 몰입형 띠 — UIAccess 없는 앱은 못 넘는다)가
+     * 화면 가운데를 덮고 있었다(run 40961988421). 어디도 없으면 null — 시험은 그 클래스를 남기고 VM 묶음으로 넘긴다.
+     */
+    fun findSpotWhereWeAreOnTop(back: BackWindow, margin: Int = 40): Spot {
+        val sw = User32.INSTANCE.GetSystemMetrics(0) // SM_CXSCREEN
+        val sh = User32.INSTANCE.GetSystemMetrics(1) // SM_CYSCREEN
+        val covered = LinkedHashSet<String>()
+        val xs = (margin..maxOf(margin, sw - W - margin) step 120).toList()
+        val ys = (margin..maxOf(margin, sh - H - margin) step 120).toList()
+        for (y in ys) for (x in xs) {
+            back.moveTo(x, y)
+            Thread.sleep(60)
+            val a = windowFromPoint(x + 40, y + 170)
+            val b = windowFromPoint(x + W - 40, y + 170)
+            if (same(a, back.hwnd) && same(b, back.hwnd)) return Spot(x to y, covered)
+            if (!same(a, back.hwnd)) covered += className(a)
+            if (!same(b, back.hwnd)) covered += className(b)
+        }
+        return Spot(null, covered)
+    }
+
+    /** 자리를 찾고, 없으면 덮은 클래스를 남기고 건너뛴다(판정은 VM 묶음). */
+    fun requireSpot(back: BackWindow): Pair<Int, Int> {
+        val s = findSpotWhereWeAreOnTop(back)
+        println("OVERLAY_SPOT ${s.spot} coveredBy=${s.coveredBy}")
+        org.junit.jupiter.api.Assumptions.assumeTrue(s.spot != null, "화면 전체가 남의 몰입형 창(${s.coveredBy})에 덮였다 — VM 묶음")
+        return s.spot!!
     }
 
     /** 커서를 옮기고 왼쪽 단추를 누르고 뗀다(입력 주입 — CI·시험 VM 에서만 부른다). */

@@ -61,6 +61,7 @@ import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.games.minigame.canvasFont
 
 /** 숫자 글자(고정폭 숫자 — iOS `.monospacedDigit()`). */
 const val TNUM: String = "tnum"
@@ -274,7 +275,7 @@ fun PersonAvatar(name: String, colorSeed: String, size: Dp, modifier: Modifier =
         Box(Modifier.size(size).background(tint, CircleShape), contentAlignment = Alignment.Center) {
             Text(
                 name.trim().firstOrNull()?.toString() ?: "?",
-                style = TextStyle(fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold),
+                style = TextStyle(fontFamily = canvasFont(), fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold),
                 color = ink,
             )
         }

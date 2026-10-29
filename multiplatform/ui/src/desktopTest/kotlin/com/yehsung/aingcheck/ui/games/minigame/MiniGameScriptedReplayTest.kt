@@ -42,6 +42,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlin.time.Duration.Companion.minutes
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -191,7 +192,7 @@ class MiniGameScriptedReplayTest {
     }
 
     @Test
-    fun timingBarScriptedRoundsSubmitTheGoldenTotalThroughTheUiLoop() = runTest {
+    fun timingBarScriptedRoundsSubmitTheGoldenTotalThroughTheUiLoop() = runTest(timeout = REPLAY_TIMEOUT) {
         val (route, bodyKeys, headerNames) = goldenSubmitShape()
         for (id in listOf("B")) {
             val case = timingCase(id)
@@ -217,7 +218,7 @@ class MiniGameScriptedReplayTest {
     }
 
     @Test
-    fun theStartLatencyIsAtMostThreeRenders() = runTest {
+    fun theStartLatencyIsAtMostThreeRenders() = runTest(timeout = REPLAY_TIMEOUT) {
         // 시작 탭 → 엔진 첫 걸음까지 렌더 수(오프스크린 장면 실측 3: 효과 기동 · 기준 프레임 · 첫 걸음). 이 수가 늘면 탭한 뒤 판이 눈에 띄게
         // 늦게 움직인다(60Hz 에서 렌더 한 장 = 16.7ms). 판의 공정성과는 무관하다 — 판 시계는 기준 프레임에서 시작한다.
         val case = timingCase("A")
@@ -255,7 +256,7 @@ class MiniGameScriptedReplayTest {
     }
 
     @Test
-    fun aDroppedTapChangesTheRoundScores() = runTest {
+    fun aDroppedTapChangesTheRoundScores() = runTest(timeout = REPLAY_TIMEOUT) {
         // 음성 기준선(기억 comparison-baseline-must-differ): 같은 대본에서 판정 누름 하나만 빼면 라운드 점수 열이 골든과 달라야 한다 —
         // 위 대조가 손가락 입력을 실제로 본다는 증거다.
         val case = timingCase("B")
@@ -280,7 +281,7 @@ class MiniGameScriptedReplayTest {
     }
 
     @Test
-    fun flappyScriptedRunsReachTheGoldenScoreThroughTheUiLoop() = runTest {
+    fun flappyScriptedRunsReachTheGoldenScoreThroughTheUiLoop() = runTest(timeout = REPLAY_TIMEOUT) {
         // 플래피 대본은 진행 중에 끝난다(제출 없음 — 폰에서 끝나지 않은 플래피 판은 기록하지 않는다). UI 루프가 낸 판 상태(점수 · 날갯짓 수)를
         // Swift 엔진 골든의 final 과 대조한다. A·D 는 dt 가 클램프 아래라 뺀다(머리말) · E(고정 시작판)는 시작판을 화면이 만들 수 없어 뺀다.
         for (id in listOf("B", "C")) {
@@ -333,3 +334,6 @@ class MiniGameScriptedReplayTest {
         const val MAX_TAIL_FRAMES = 600
     }
 }
+
+/** UI 루프 재생 한 판의 상한 — ImageComposeScene CPU 렌더라 CI 러너에서 맥의 6배(ubuntu 76초 · windows 41초 · 맥 12초, 7차 CI 실측). */
+private val REPLAY_TIMEOUT = 6.minutes

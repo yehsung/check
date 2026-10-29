@@ -17,7 +17,7 @@ class TetrisClearVerdictContractTest {
 
     /** `static func verdict(` 부터 들여쓰기 4칸 닫는 중괄호까지. */
     private fun verdictBody(path: String): String {
-        val text = File(repo, path).readText()
+        val text = File(repo, path).readText().replace("\r\n", "\n") // Windows 러너는 CRLF 로 꺼낸다(autocrlf)
         val start = text.indexOf("static func verdict(")
         check(start >= 0) { "$path 에 verdict 함수가 없다 — 옮겼으면 이 시험의 자리도 옮긴다" }
         val end = text.indexOf("\n    }\n", start)

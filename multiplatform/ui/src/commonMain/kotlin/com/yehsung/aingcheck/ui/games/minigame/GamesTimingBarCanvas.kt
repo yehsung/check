@@ -311,13 +311,13 @@ private fun TimingBarOverlay(game: TimingBarGame, bestScore: Long, stage: MiniGa
         ) {
             Text(
                 "라운드 ${max(1, game.round)}/${TimingBarGame.roundCount}",
-                style = TextStyle(fontSize = canvasSp(11 * scale), fontWeight = FontWeight.SemiBold, color = GamesCanvasColors.primaryText.copy(alpha = 0.86f), shadow = shadow),
+                style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(11 * scale), fontWeight = FontWeight.SemiBold, color = GamesCanvasColors.primaryText.copy(alpha = 0.86f), shadow = shadow),
             )
             GamesStageChip(stage, scale = scale)
             Spacer(Modifier.weight(1f))
             Text(
                 game.total.toString(),
-                style = TextStyle(fontSize = canvasSp(25 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = GamesCanvasColors.primaryText, shadow = shadow),
+                style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(25 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = GamesCanvasColors.primaryText, shadow = shadow),
             )
         }
         if (game.isPlaying && game.combo >= 2) {
@@ -332,7 +332,7 @@ private fun TimingBarOverlay(game: TimingBarGame, bestScore: Long, stage: MiniGa
                 horizontalArrangement = Arrangement.spacedBy((3 * scale).dp),
             ) {
                 AingIcon(AppIcon.LocalFireDepartmentFill, contentDescription = null, size = (10 * scale).dp, tint = paint.glow)
-                Text("콤보 x${game.combo}", style = TextStyle(fontSize = canvasSp(11 * scale), fontWeight = FontWeight.ExtraBold, color = paint.glow))
+                Text("콤보 x${game.combo}", style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(11 * scale), fontWeight = FontWeight.ExtraBold, color = paint.glow))
             }
         }
         val result = game.phase as? TimingBarGame.Phase.RoundResult

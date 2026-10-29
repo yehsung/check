@@ -5,6 +5,7 @@
 //  · 필터(blur) 금지 · 안 멈추는 반복 애니메이션 금지 · 프레임 간격 리터럴(1/60) 금지 · 키보드 흉내(setLeftHeld…) 금지 · 정적 조작 안내(controlHint) 금지
 //  · 캔버스 글자는 **배율을 곱한 값**으로만(canvasSp(기준값 * scale)) — 기준값 8·9 금지(iOS 캡션 하한 10)
 //  · 테트리스 판은 painter 한 벌(drawBoard) · 배경은 하늘만(terrain = false) · 무대는 advance 로 고른다
+//  · 이 갈래의 `TextStyle(` 은 전부 테마 글꼴(canvasFont())로 시작한다 — 비우면 OS 기본 글꼴로 떨어져 러너마다 글자가 갈린다
 //  · 프레임 루프는 **한 곳**(MiniGameFrameLoop 의 withFrameNanos) — 다른 파일이 프레임 시계를 따로 돌리지 않는다
 package com.yehsung.aingcheck.ui.games.minigame
 
@@ -37,6 +38,21 @@ class MiniGameCanvasSourceContractTest {
             val text = code(file)
             for (word in forbidden) assertTrue(word !in text, "$file: 금지 문자열 '$word'")
         }
+    }
+
+    @Test
+    fun everyTextStyleStartsWithTheThemeFont() {
+        val style = Regex("""(?<![A-Za-z.])TextStyle\(""")
+        val themed = Regex("""^\s*fontFamily = canvasFont\(\)""")
+        var seen = 0
+        gamesMain.walkTopDown().filter { it.isFile && it.extension == "kt" && (it.path.contains("/minigame/") || it.path.contains("/tetris/") || it.path.contains("\\minigame\\") || it.path.contains("\\tetris\\")) }.forEach { f ->
+            val text = SwiftStyleComments.strip(f.readText()).lines().filterNot { it.trimStart().startsWith("import ") }.joinToString("\n")
+            for (m in style.findAll(text)) {
+                seen++
+                assertTrue(themed.containsMatchIn(text.substring(m.range.last + 1)), "${f.name}: TextStyle( 이 테마 글꼴 없이 시작한다 — OS 기본 글꼴로 떨어진다(canvasFont())")
+            }
+        }
+        assertTrue(seen >= 17, "TextStyle( 을 $seen 개만 봤다 — 시험이 소스를 못 읽는다")
     }
 
     @Test

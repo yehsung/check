@@ -43,6 +43,7 @@ import com.yehsung.aingcheck.ui.games.minigame.PlaceInLogical
 import com.yehsung.aingcheck.ui.games.minigame.TABULAR_NUMBERS
 import com.yehsung.aingcheck.ui.games.minigame.canvasSp
 import com.yehsung.aingcheck.ui.games.minigame.canvasTextShadow
+import com.yehsung.aingcheck.ui.games.minigame.canvasFont
 
 /** 내 판 한 장(painter `duel = true`) + 글자 겹. 솔로 캔버스와 같은 서명 꼴 — **값만** 받는다. [frame] 은 프레임 루프가 올리는 번호(다시 그릴 신호). */
 @Composable
@@ -65,10 +66,10 @@ fun GamesTetrisDuelCanvas(game: TetrisGame, reduceMotion: Boolean, modifier: Mod
             // 하단 밴드: 왼쪽 **보낸 공격**(누계) · 오른쪽 **들어올 줄**(미터와 같은 빨강 — 우물 왼쪽 막대가 무엇인지 글자로 한 번 말한다).
             PlaceInLogical(t, MiniGameRect(TetrisLayout.textMinX, TetrisLayout.bandY, TetrisLayout.textMaxX - TetrisLayout.textMinX, TetrisLayout.bandHeight)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((4 * scale).dp)) {
-                    Text(TetrisPhoneText.attackTitle, style = TextStyle(fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, color = GamesCanvasColors.secondaryText, shadow = canvasTextShadow()))
+                    Text(TetrisPhoneText.attackTitle, style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, color = GamesCanvasColors.secondaryText, shadow = canvasTextShadow()))
                     Text(
                         game.attackSentTotal.toString(),
-                        style = TextStyle(fontSize = canvasSp(14 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = GamesCanvasColors.working, shadow = canvasTextShadow()),
+                        style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(14 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = GamesCanvasColors.working, shadow = canvasTextShadow()),
                     )
                     Spacer(Modifier.weight(1f))
                     if (game.pendingGarbageLines > 0) CanvasChip(TetrisPhoneText.incomingLines(game.pendingGarbageLines), TetrisDuelPalette.meterColor, scale, borderAlpha = 0.5f)

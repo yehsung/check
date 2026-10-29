@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +61,14 @@ const val TABULAR_NUMBERS: String = "tnum"
 
 /** 캔버스 글자 그림자(Swift `.shadow(color: .black.opacity(0.5), radius: 3, y: 1)` 의 꼴). */
 fun canvasTextShadow(alpha: Float = 0.5f, blur: Float = 6f, dy: Float = 2f): Shadow = Shadow(Color.Black.copy(alpha = alpha), Offset(0f, dy), blur)
+
+/**
+ * 캔버스 글자의 글꼴 — 테마 글꼴(Pretendard) 하나. `TextStyle(...)` 을 새로 만들면 fontFamily 가 비어 **OS 기본 글꼴**로 떨어진다
+ * (맥 SF · Linux DejaVu · Windows Segoe · Android Roboto — CI 실측: 비기록 러너에서 캔버스 칸 최대차 101~171, 허브는 32~43).
+ * 그래서 이 갈래의 `TextStyle(` 은 전부 이 글꼴로 시작한다(MiniGameCanvasSourceContractTest 가 잰다).
+ */
+@Composable
+fun canvasFont(): FontFamily? = MaterialTheme.typography.bodyMedium.fontFamily
 
 /**
  * 자식을 부모 안 한 점([x],[y] — 픽셀)에 **가운데로** 앉힌다(SwiftUI `.position(x:y:)`). 부모는 꽉 찬 상자여야 한다.
@@ -118,6 +128,7 @@ fun GamesOverlayCard(
         Text(
             title,
             style = TextStyle(
+                fontFamily = canvasFont(),
                 fontSize = canvasSp((if (titleIsScore) 30 else 17) * scale),
                 fontWeight = if (titleIsScore) FontWeight.ExtraBold else FontWeight.SemiBold,
                 fontFeatureSettings = TABULAR_NUMBERS,
@@ -129,6 +140,7 @@ fun GamesOverlayCard(
         Text(
             subtitle,
             style = TextStyle(
+                fontFamily = canvasFont(),
                 fontSize = canvasSp((if (subtitleIsHighlighted) 13 else 12) * scale),
                 fontWeight = if (subtitleIsHighlighted) FontWeight.Bold else FontWeight.Normal,
                 fontFeatureSettings = TABULAR_NUMBERS,
@@ -142,7 +154,7 @@ fun GamesOverlayCard(
             horizontalArrangement = Arrangement.spacedBy((4 * scale).dp),
         ) {
             AingIcon(AppIcon.TouchAppFill, contentDescription = null, size = (14 * scale).dp, tint = tint)
-            Text(action, style = TextStyle(fontSize = canvasSp(13 * scale), fontWeight = FontWeight.SemiBold, color = tint))
+            Text(action, style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(13 * scale), fontWeight = FontWeight.SemiBold, color = tint))
         }
     }
 }
@@ -157,7 +169,7 @@ fun GamesStageChip(stage: MiniGameStage, modifier: Modifier = Modifier, scale: F
             .background(glow.copy(alpha = 0.16f), CircleShape)
             .border(1.dp, glow.copy(alpha = 0.40f), CircleShape)
             .padding(horizontal = (6 * scale).dp, vertical = (2 * scale).dp),
-        style = TextStyle(fontSize = canvasSp(10 * scale), fontWeight = FontWeight.SemiBold, color = glow),
+        style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(10 * scale), fontWeight = FontWeight.SemiBold, color = glow),
         maxLines = 1,
     )
 }
@@ -196,9 +208,9 @@ fun GamesScorePop(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        Text(text, style = TextStyle(fontSize = canvasSp(19 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = tint, shadow = shadow))
+        Text(text, style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(19 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = tint, shadow = shadow))
         if (caption != null) {
-            Text(caption, style = TextStyle(fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, color = tint, shadow = shadow))
+            Text(caption, style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, color = tint, shadow = shadow))
         }
     }
 }

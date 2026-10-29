@@ -72,7 +72,7 @@ internal fun CanvasChip(text: String, tint: Color, scale: Float, borderAlpha: Fl
             .background(tint.copy(alpha = 0.18f), CircleShape)
             .border(1.dp, tint.copy(alpha = borderAlpha), CircleShape)
             .padding(horizontal = (5 * scale).dp, vertical = (1 * scale).dp),
-        style = TextStyle(fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, fontFeatureSettings = TABULAR_NUMBERS, color = tint),
+        style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, fontFeatureSettings = TABULAR_NUMBERS, color = tint),
         maxLines = 1,
     )
 }
@@ -80,7 +80,7 @@ internal fun CanvasChip(text: String, tint: Color, scale: Float, borderAlpha: Fl
 /** '홀드'·'다음' 라벨(곱하기 전 기준값 10 — iOS 캡션 하한). */
 @Composable
 internal fun CanvasLabel(text: String, scale: Float) {
-    Text(text, style = TextStyle(fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, color = GamesCanvasColors.secondaryText, shadow = canvasTextShadow()))
+    Text(text, style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(10 * scale), fontWeight = FontWeight.Bold, color = GamesCanvasColors.secondaryText, shadow = canvasTextShadow()))
 }
 
 /** 레벨·줄 값 한 줄(자기설명형). 평문 숫자다 — 자리수 구분을 붙이지 않는다(이 창의 표기 규약). */
@@ -90,6 +90,7 @@ internal fun CanvasStatValue(t: MiniGameProjection, valueY: Double, text: String
         Text(
             text,
             style = TextStyle(
+                fontFamily = canvasFont(),
                 fontSize = canvasSp(14 * t.scaleDp), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS,
                 color = GamesCanvasColors.primaryText, shadow = canvasTextShadow(),
             ),
@@ -121,7 +122,7 @@ fun GamesTetrisCanvas(game: TetrisGame, bestScore: Long, reduceMotion: Boolean, 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((5 * scale).dp)) {
                     Text(
                         game.score.toString(),
-                        style = TextStyle(fontSize = canvasSp(14 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = GamesCanvasColors.primaryText, shadow = canvasTextShadow()),
+                        style = TextStyle(fontFamily = canvasFont(), fontSize = canvasSp(14 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS, color = GamesCanvasColors.primaryText, shadow = canvasTextShadow()),
                         maxLines = 1,
                     )
                     Spacer(Modifier.weight(1f))

@@ -84,6 +84,7 @@ fun GamesFlappyCanvas(game: FlappyGame, bestScore: Long, reduceMotion: Boolean, 
                     game.score.toString(),
                     modifier = Modifier.centeredAt(t.x(FlappyGame.width / 2), t.y(FlappyFX.scoreY)),
                     style = TextStyle(
+                        fontFamily = canvasFont(),
                         fontSize = canvasSp(26 * scale), fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TABULAR_NUMBERS,
                         color = GamesCanvasColors.primaryText, shadow = canvasTextShadow(0.55f, 4f, 2f),
                     ),

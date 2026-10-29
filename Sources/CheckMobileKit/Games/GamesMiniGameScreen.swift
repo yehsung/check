@@ -311,19 +311,28 @@ struct GamesMiniGameScreen: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
-    // MARK: 오늘 순위
+    // MARK: 순위 — [오늘 | 역대] (맥 0.3.67 → 폰 1.0.15)
 
+    /// 순위 절. 머리에 **[오늘 | 역대] 전환**이 붙는다(`GamesBoardScopePicker` · 상태는 허브 하나 — `hub.boardScope`).
+    ///
+    /// 두 판이 **같은 행 뷰**를 쓴다(`GamesRankRow` — [역대] 만 점수 앞에 작은 날짜 "9/13" 하나가 붙는다).
+    /// 행 뷰를 두 벌로 두면 열 규격이 언젠가 갈린다 — 맥도 `MiniGameAllTimeEntry.rankRowEntry` 로 같은 선택을 했다.
+    ///
+    /// **[오늘] 에만 있는 것 둘**: 어제 1등 카드 · 상금·정족수 줄(상금은 오늘 판의 것이다 — 맥 `showsChampionCard` ·
+    /// `prizeFooter` 와 같은 조건). [역대] 바닥은 규칙·날짜 두 줄이다.
+    ///
+    /// 정족수 줄이 **머리에서 바닥으로 내려갔다**: 머리 오른쪽 자리는 이제 전환 하나가 쓴다(맥 머리도 인원 칩 + 전환이고
+    /// 정족수는 바닥이다). 좁은 폰 머리에 전환과 정족수를 함께 몰면 제목이 꺾인다.
     @ViewBuilder
     private var rankings: some View {
         let state = hub.boards[kind] ?? GamesMiniGameBoard()
         let myID = store.context.session.session?.userID.lowercased()
-        // 정족수 줄은 사람 수를 알 때만 — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
-        SectionHeader(GamesMiniGameText.rankTitle,
-                      trailing: state.knowsPlayerCount ? .text(GamesMiniGameText.quorumCaption(players: state.entries.count)) : .none,
-                      padded: true)
-            .padding(.top, -18)
+        let showsAllTime = hub.boardScope == .allTime
+        SectionHeaderBar(hub.boardScope.boardTitle, topPadding: 4) {
+            GamesBoardScopePicker(selected: hub.boardScope) { scope in hub.selectBoardScope(scope) }
+        }
         // 어제 1등은 **자기 그룹**(순위 탭과 같은 공용 `ChampionRow`) — '오늘 순위' 첫 행처럼 읽히지 않게 떼어 둔다(시안 B 06).
-        if let winner = state.yesterdayWinner {
+        if !showsAllTime, let winner = state.yesterdayWinner {
             ChampionRow(
                 caption: GamesMiniGameText.yesterdayChampion,
                 name: winner.name,
@@ -334,34 +343,90 @@ struct GamesMiniGameScreen: View {
             .padding(.bottom, 12)
         }
         InsetGroup {
-            if state.entries.isEmpty {
-                GroupRow(divider: .none) {
-                    switch state.placeholder {
-                    case .failed:
-                        LoadFailureRow(GamesMiniGameText.failedCaption, isRetrying: state.loading) {
-                            Task { await hub.loadBoard(kind, withWinner: true) }
-                        }
-                    case .loading:
-                        LoadingRow(GamesMiniGameText.loadingCaption)
-                    case .empty, .rows:
-                        Text(GamesMiniGameText.emptyBoard)
-                            .font(.subheadline)
-                            .foregroundStyle(MobileTheme.label2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+            if showsAllTime {
+                allTimeRows(state, myID: myID)
             } else {
-                ForEach(Array(state.entries.enumerated()), id: \.element.userID) { index, entry in
-                    GamesRankRow(store: store, rank: index + 1, entry: entry, isMe: entry.userID == myID,
-                                 isLast: index == state.entries.count - 1)
+                todayRows(state, myID: myID)
+            }
+        }
+        rankFooter(state, showsAllTime: showsAllTime)
+    }
+
+    @ViewBuilder
+    private func todayRows(_ state: GamesMiniGameBoard, myID: String?) -> some View {
+        if state.entries.isEmpty {
+            GroupRow(divider: .none) {
+                switch state.placeholder {
+                case .failed:
+                    LoadFailureRow(GamesMiniGameText.failedCaption, isRetrying: state.loading) {
+                        Task { await hub.loadBoard(kind, withWinner: true) }
+                    }
+                case .loading:
+                    LoadingRow(GamesMiniGameText.loadingCaption)
+                case .empty, .rows:
+                    Text(GamesMiniGameText.emptyBoard)
+                        .font(.subheadline)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            ForEach(Array(state.entries.enumerated()), id: \.element.userID) { index, entry in
+                GamesRankRow(store: store, rank: index + 1, entry: entry, isMe: entry.userID == myID,
+                             isLast: index == state.entries.count - 1)
+            }
+        }
+    }
+
+    /// [역대] 줄. 빈 자리의 **문구와 [다시 시도] 여부는 허브의 판정 하나**에서 온다(`allTimeEmptyText` ·
+    /// `allTimeShowsRetry`) — 넷째 상태(준비 중)까지 가르는 그 표가 뷰 안 삼항으로 흩어지면 macOS 스위트가 못 잰다.
+    @ViewBuilder
+    private func allTimeRows(_ state: GamesMiniGameBoard, myID: String?) -> some View {
+        if state.allTime.isEmpty {
+            GroupRow(divider: .none) {
+                if state.allTimeShowsRetry {
+                    LoadFailureRow(state.allTimeEmptyText, isRetrying: state.allTimeLoading) {
+                        hub.loadAllTimeBoard(kind)
+                    }
+                } else if !state.allTimeLoaded {
+                    // 아직 못 받았다(받는 중이거나 막 떠났다) — 문구는 위 판정이 "불러오는 중…"으로 준다.
+                    LoadingRow(state.allTimeEmptyText)
+                } else {
+                    // 받았고 비었다, 또는 **준비 중**(서버에 함수가 없는 창) — 둘 다 [다시 시도] 가 없다.
+                    Text(state.allTimeEmptyText)
+                        .font(.subheadline)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            ForEach(Array(state.allTime.enumerated()), id: \.element.userID) { index, entry in
+                GamesRankRow(store: store, rank: index + 1, entry: entry.rankRowEntry, isMe: entry.userID == myID,
+                             isLast: index == state.allTime.count - 1, dateCaption: entry.dayCaption)
+            }
+        }
+    }
+
+    /// 바닥 안내. [오늘] 은 상금 + 정족수, [역대] 는 규칙 + 날짜다(맥 `prizeFooter` · `allTimeFooter` 와 같은 글자).
+    /// 정족수 줄은 **사람 수를 알 때만** — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
+    private func rankFooter(_ state: GamesMiniGameBoard, showsAllTime: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if showsAllTime {
+                Text(GamesMiniGameText.allTimeRuleCaption)
+                Text(GamesMiniGameText.allTimeDayCaption)
+            } else {
+                Text(GamesMiniGameText.prizeCaption)
+                if state.knowsPlayerCount {
+                    Text(GamesMiniGameText.quorumCaption(players: state.entries.count)).monospacedDigit()
                 }
             }
         }
-        Text(GamesMiniGameText.prizeCaption)
-            .font(MobileTheme.rowSubtitle)
-            .foregroundStyle(MobileTheme.label2)
-            .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-            .padding(.top, MobileTheme.space2)
+        .font(MobileTheme.rowSubtitle)
+        .foregroundStyle(MobileTheme.label2)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+        .padding(.top, MobileTheme.space2)
     }
 
     // MARK: 데모
@@ -382,15 +447,21 @@ struct GamesMiniGameScreen: View {
     }
 }
 
-/// 오늘 순위 한 줄 — **순위 탭과 같은 공용 부품**(통합 때 승격: `RankRow`·`RankRowBody`·`RankRowFace`·`PersonName`).
+/// 순위 한 줄 — **순위 탭과 같은 공용 부품**(통합 때 승격: `RankRow`·`RankRowBody`·`RankRowFace`·`PersonName`).
 /// 인셋 그룹 안 48pt: 등수 원 · 얼굴(내 행은 착용 캐릭터 초상) · 이름(+ 센터 · '나') · 점수. 구분선 시작점·큰 글자 접힘·
 /// 내 행 강조가 두 탭에서 같아진다(비평 4 "같은 데이터 다른 부품").
+///
+/// **[오늘] 과 [역대] 가 이 한 벌을 나눠 쓴다**(맥 `MiniGameRankRow` 와 같은 선택 — 행 뷰를 두 벌로 두면 열 규격이
+/// 언젠가 갈린다). 역대 줄은 `MiniGameAllTimeEntry.rankRowEntry` 로 같은 모양이 되고, 다른 것은 날짜 하나뿐이다.
 private struct GamesRankRow: View {
     let store: GamesStore
     let rank: Int
     let entry: MiniGameBoardEntry
     let isMe: Bool
     let isLast: Bool
+    /// [역대] 줄의 작은 날짜("9/13" — 그 점수를 **처음 낸 날**). [오늘] 판은 nil 이다(그 판은 전부 오늘이다).
+    /// 글자는 코어가 만든다(`MiniGameAllTimeEntry.dayCaption` — 연도 없음 · 시계를 읽지 않는다).
+    var dateCaption: String? = nil
 
     private let metrics = RankRowScaledMetrics()
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -423,12 +494,23 @@ private struct GamesRankRow: View {
         PersonName(entry.name, center: CenterLabel.serverValue(forDisplay: entry.center), isMe: isMe, onTint: true)
     }
 
+    /// 점수(+ [역대] 날짜). 날짜는 점수 **앞**이고 한 단 흐리다 — 맥과 같은 자리·같은 무게다.
+    /// 둘을 한 묶음으로 두는 이유: 큰 글자에서 이름 줄과 점수가 위아래로 접힐 때 날짜가 점수에서 떨어지면
+    /// "9/13" 이 이름의 일부처럼 읽힌다.
     private var score: some View {
-        Text(GamesMiniGameText.score(entry.bestScore))
-            .font(MobileTheme.number(.callout, weight: .semibold))
-            .monospacedDigit()
-            .foregroundStyle(MobileTheme.label)
-            .fixedSize()
+        HStack(spacing: 6) {
+            if let dateCaption {
+                Text(dateCaption)
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(MobileTheme.label3Text)
+            }
+            Text(GamesMiniGameText.score(entry.bestScore))
+                .font(MobileTheme.number(.callout, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label)
+        }
+        .fixedSize()
     }
 }
 

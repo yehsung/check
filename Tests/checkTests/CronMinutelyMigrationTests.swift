@@ -122,6 +122,11 @@ struct CronMinutelyMigrationTests {
         // 지우기 전 대조(운영 job 이 바뀌었으면 조용히 옛 command 로 되돌리지 않고 멈춘다) · 사후 단언(옛 이름 0 · minutely 1).
         #expect(flat.contains("가 단계 command(%)와 다르다"))
         #expect(flat.contains("의 주기가 매분이 아니다(%)"))
+        // 운영에서 꺼 둔 job 은 옮기지 않고 멈춘다(옮기면 켜진 단계로 매분 다시 돈다) · minutely 실행 역할이 소유자 권한을 가진다.
+        #expect(flat.contains("select jobid, jobname, schedule, command, active from cron.job where jobname = any ($1) order by jobid"))
+        #expect(flat.contains("if not r.active then raise exception"))
+        #expect(flat.contains("where not pg_has_role(v_role, o.owner, 'usage');"),
+                "minutely 실행 역할의 소유자 권한을 되묻지 않는다 — 다른 역할로 등록되면 매분 42501 로 일곱 일이 멈춘다")
         #expect(flat.contains("단독 매분 job 이 남았다(%)"))
         #expect(flat.contains("minutely job 이 %개다(기대 1)"))
     }
@@ -139,6 +144,9 @@ struct CronMinutelyMigrationTests {
         // 등록표를 먼저 배열로 읽는다(루프 중 COMMIT 과 커서가 엉키지 않게).
         #expect(flat.contains("array_agg(s.command order by s.position, s.step)"))
         #expect(flat.contains("from public.cron_minutely_steps s where s.enabled;"))
+        // 세 배열의 정렬이 같아야 한다 — 이름 배열만 다르게 정렬하면 runs·failures 가 엉뚱한 단계 이름에 적힌다(반박 검증 뮤테이션 MM 이 살았다).
+        #expect(flat.contains("select array_agg(s.step order by s.position, s.step), array_agg(s.command order by s.position, s.step), array_agg(s.timeout_ms order by s.position, s.step) into v_steps, v_cmds, v_timeouts from public.cron_minutely_steps s where s.enabled;"),
+                "step · command · timeout_ms 배열이 같은 (position, step) 순서가 아니다")
         // 단계: 시간 제한 → 실행(예외 블록) → 기록 → COMMIT(블록 밖).
         let exec = try #require(flat.range(of: "begin execute v_cmds[v_i]; exception when query_canceled then"),
                                 "단계 실행이 query_canceled 를 따로 잡는 예외 블록이 아니다(when others 는 57014 를 안 잡는다)")
@@ -146,13 +154,24 @@ struct CronMinutelyMigrationTests {
         #expect(!flat[exec.lowerBound..<blockEnd.lowerBound].contains("commit"), "예외 블록 안에 COMMIT 이 있다 — 서브트랜잭션 안이라 죽는다")
         let loopEnd = try #require(flat[blockEnd.upperBound...].range(of: "end loop;"))
         #expect(flat[blockEnd.upperBound..<loopEnd.lowerBound].contains("commit;"), "단계 기록 뒤 COMMIT 이 없다 — 뒤 단계가 터지면 앞 정산도 되돌아간다")
+        // 실패를 세야 끝의 예외가 난다 — 빼면 단계가 매분 터져도 cron.job_run_details 가 초록이다(반박 검증 뮤테이션 MD 가 살았다).
+        #expect(flat[blockEnd.upperBound..<loopEnd.lowerBound].contains("if not v_ok then insert into public.cron_step_failures"))
+        #expect(flat[blockEnd.upperBound..<loopEnd.lowerBound].contains("v_failed := v_failed + 1; end if;"),
+                "단계 실패를 세지 않는다 — job 이 실패로 안 남는다")
         #expect(flat.contains("perform set_config('statement_timeout', v_timeout::text, true);"))
         #expect(flat.contains("perform set_config('lock_timeout', v_timeout::text, true);"),
                 "단계별 lock_timeout 이 없다 — CALL 안에서 실효가 있는 시간 제한은 이것뿐이다(하네스 ④-a/b)")
         // 예산 40초 · 시작 전 확인 · SKIP 기록 · 끝에서 예외(앞 단계는 커밋됨) · 7일 청소.
         #expect(flat.contains("v_budget_ms int := 40000;"))
-        #expect(flat.contains("if extract(epoch from clock_timestamp() - v_job_t0) * 1000 >= v_budget_ms then"))
-        #expect(flat.contains("'skip'"), "예산 초과 건너뜀을 sqlstate 'SKIP' 으로 남기지 않는다")
+        let budget = try #require(flat.range(of: "if extract(epoch from clock_timestamp() - v_job_t0) * 1000 >= v_budget_ms then"))
+        #expect(budget.upperBound <= exec.lowerBound, "예산 확인이 단계 실행 뒤에 있다 — 넘긴 뒤에도 한 단계를 더 돈다")
+        // 건너뜀 갈래는 기록 → 세기 → COMMIT → continue 로 끝나야 한다. continue 를 빼면 SKIP 을 적고도 그 단계를 그대로 돌려
+        // 예산이 무력해진다(반박 검증 뮤테이션 MB 가 살았다).
+        let budgetEnd = try #require(flat[budget.upperBound...].range(of: "end if;"))
+        let skipBranch = flat[budget.upperBound..<budgetEnd.upperBound]
+        #expect(skipBranch.contains("'skip'"), "예산 초과 건너뜀을 sqlstate 'SKIP' 으로 남기지 않는다")
+        #expect(skipBranch.hasSuffix("v_skipped := v_skipped + 1; commit; continue; end if;"),
+                "건너뜀 갈래가 세기 · COMMIT · continue 로 끝나지 않는다 — 건너뛴다고 적고 그 단계를 돈다")
         #expect(flat.contains("delete from public.cron_step_failures f where f.failed_at < now() - interval '7 days';"))
         let raise = try #require(flat.range(of: "if v_failed > 0 or v_skipped > 0 then raise exception"))
         #expect(raise.lowerBound > loopEnd.upperBound, "실패 예외가 루프 안에 있다 — 뒤 단계가 안 돈다")

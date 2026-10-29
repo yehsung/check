@@ -33,17 +33,6 @@ object DesktopSnapshots {
         return Image.makeFromEncoded(file.readBytes()).toComposeImageBitmap()
     }
 
-    fun galleryArt(): GalleryArt {
-        val stagePath = if (CharacterStageMetrics.prefersStageArt("fox", CharacterExpression.Neutral, 120f, DENSITY))
-            "Sources/CheckMobileKit/Resources/Art/stage-fox-neutral.png" else "Sources/check/Characters/fox/portrait-neutral.png"
-        return GalleryArt(
-            portraitNeutral = repoImage("Sources/check/Characters/fox/portrait-neutral.png"),
-            portraitNegative = repoImage("Sources/check/Characters/fox/portrait-negative.png"),
-            stage = repoImage(stagePath),
-            ruby = repoImage("Sources/CheckMobileKit/Resources/Art/${RubyGlyph.assetName(24f, DENSITY)}.png"),
-        )
-    }
-
     /** 새 장면을 만들어 [frames] 번 그리고 마지막 장을 돌려준다(리소스 글꼴이 늦게 오면 다음 장에 반영된다). */
     @OptIn(ExperimentalComposeUiApi::class)
     fun render(widthDp: Int, heightDp: Int, frames: Int = 3, content: @Composable () -> Unit): PixelImage {

@@ -63,6 +63,8 @@ kotlin {
             // W1-d G6 디코드 덤프기(C§5.2 · G §8-14): 칸을 **선언 타입**으로 읽는다 — JDK 리플렉션은 무부호·널 표기를 못 본다
             // (MirrorDumpProbeTest). 판은 version.ref = "kotlin"(2.4.21)으로 컴파일러와 한 벌. 시험 classpath 전용(앱 산출물 0).
             api(libs.kotlin.reflect)
+            // 공용 패치 7: 데스크톱 스냅숏 하네스(…/ui/components/DesktopSnapshots — ImageComposeScene·Skia)를 ui·desktopApp 시험이 같이 쓴다.
+            implementation(libs.compose.ui)
         }
         getByName("androidMain").dependencies {
             api(libs.kotlin.test.junit)

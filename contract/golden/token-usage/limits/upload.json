@@ -1,0 +1,868 @@
+{
+  "cases": [
+    {
+      "bundle": [
+        {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab94f64000000",
+              "usedPercentBits": "403b000000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41daba4900000000",
+              "usedPercentBits": "404ec00000000000",
+              "window": "weekly"
+            }
+          ]
+        },
+        {
+          "accountFingerprint": "0123456789abcdef",
+          "planLabel": "plus",
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c700000",
+              "resetsAtBits": null,
+              "usedPercentBits": "4044000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      ],
+      "clearedAtBits": "41dab93d85000000",
+      "clearedProviders": [],
+      "deviceID": "win:5f1c0de0aa11b22c",
+      "deviceLabel": "  DESKTOP-SYNTH1 \n",
+      "encoded": [
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": []
+        },
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "weekly_resets_at"
+          ]
+        }
+      ],
+      "fingerprint": "claude|27.000|1793408400|61.500|1793664000|max|-|1992655;codex|-|-|40.000|-|plus|0123456789abcdef|1992655",
+      "id": "rows-values-two-providers",
+      "kind": "rows",
+      "rows": [
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "DESKTOP-SYNTH1",
+          "five_hour_percent": "403b000000000000",
+          "five_hour_resets_at": "2026-10-31T01:00:00Z",
+          "observed_at": "2026-10-30T19:53:20Z",
+          "plan_label": "max",
+          "provider": "claude",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": "404ec00000000000",
+          "weekly_resets_at": "2026-11-03T00:00:00Z"
+        },
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "DESKTOP-SYNTH1",
+          "five_hour_percent": null,
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:53:21Z",
+          "plan_label": "plus",
+          "provider": "codex",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": "4044000000000000",
+          "weekly_resets_at": null
+        }
+      ],
+      "userID": "00000000-0000-4000-8000-00000000a11e"
+    },
+    {
+      "bundle": [
+        {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c000000",
+              "resetsAtBits": null,
+              "usedPercentBits": "4014000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      ],
+      "clearedAtBits": "41dab93d8539999a",
+      "clearedProviders": [
+        "codex"
+      ],
+      "deviceID": "win:5f1c0de0aa11b22c",
+      "deviceLabel": null,
+      "encoded": [
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "device_label",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        },
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        }
+      ],
+      "fingerprint": "claude|5.000|-|-|-|-|-|1992655",
+      "id": "rows-clear-codex-keep-claude",
+      "kind": "rows",
+      "rows": [
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": null,
+          "five_hour_percent": "4014000000000000",
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:53:20Z",
+          "plan_label": null,
+          "provider": "claude",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        },
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": null,
+          "five_hour_percent": null,
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:55:00Z",
+          "plan_label": null,
+          "provider": "codex",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        }
+      ],
+      "userID": "00000000-0000-4000-8000-00000000a11e"
+    },
+    {
+      "bundle": [
+        {
+          "accountFingerprint": null,
+          "planLabel": "pro",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c000000",
+              "resetsAtBits": "41dab94730200000",
+              "usedPercentBits": "4014000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      ],
+      "clearedAtBits": "41dab93d85000000",
+      "clearedProviders": [
+        "claude",
+        "codex",
+        "codex",
+        "antigravity"
+      ],
+      "deviceID": "win:5f1c0de0aa11b22c",
+      "deviceLabel": "PC",
+      "encoded": [
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        },
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        },
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        }
+      ],
+      "fingerprint": "claude|5.000|1793400000|-|-|pro|-|1992655",
+      "id": "rows-clear-dedupe",
+      "kind": "rows",
+      "rows": [
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "PC",
+          "five_hour_percent": "4014000000000000",
+          "five_hour_resets_at": "2026-10-30T22:40:00Z",
+          "observed_at": "2026-10-30T19:53:20Z",
+          "plan_label": "pro",
+          "provider": "claude",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        },
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "PC",
+          "five_hour_percent": null,
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:55:00Z",
+          "plan_label": null,
+          "provider": "codex",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        },
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "PC",
+          "five_hour_percent": null,
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:55:00Z",
+          "plan_label": null,
+          "provider": "antigravity",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        }
+      ],
+      "userID": "00000000-0000-4000-8000-00000000a11e"
+    },
+    {
+      "bundle": [],
+      "clearedAtBits": "41dab93d9e000000",
+      "clearedProviders": [
+        "codex",
+        "claude"
+      ],
+      "deviceID": "win:5f1c0de0aa11b22c",
+      "deviceLabel": "PC",
+      "encoded": [
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        },
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        }
+      ],
+      "fingerprint": "",
+      "id": "rows-clear-only",
+      "kind": "rows",
+      "rows": [
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "PC",
+          "five_hour_percent": null,
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:56:40Z",
+          "plan_label": null,
+          "provider": "codex",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        },
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "PC",
+          "five_hour_percent": null,
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:56:40Z",
+          "plan_label": null,
+          "provider": "claude",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        }
+      ],
+      "userID": "00000000-0000-4000-8000-00000000a11e"
+    },
+    {
+      "bundle": [
+        {
+          "accountFingerprint": null,
+          "planLabel": "ppppppppppppppppppppppppppppppppp",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c000000",
+              "resetsAtBits": "41dab94f64000000",
+              "usedPercentBits": "40590000006b5fca",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c000000",
+              "resetsAtBits": null,
+              "usedPercentBits": "c000000000000000",
+              "window": "weekly"
+            }
+          ]
+        },
+        {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c000000",
+              "resetsAtBits": null,
+              "usedPercentBits": "7ff8000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      ],
+      "clearedAtBits": "41dab93d6c000000",
+      "clearedProviders": [],
+      "deviceID": "win:5f1c0de0aa11b22c",
+      "deviceLabel": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+      "encoded": [
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "plan_label",
+            "weekly_resets_at"
+          ]
+        },
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        }
+      ],
+      "fingerprint": "claude|100.000|1793408400|-2.000|-|ppppppppppppppppppppppppppppppppp|-|1992655;codex|nan|-|-|-|-|-|1992655",
+      "id": "rows-clamp-and-nan",
+      "kind": "rows",
+      "rows": [
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+          "five_hour_percent": "4059000000000000",
+          "five_hour_resets_at": "2026-10-31T01:00:00Z",
+          "observed_at": "2026-10-30T19:53:20Z",
+          "plan_label": null,
+          "provider": "claude",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": "0000000000000000",
+          "weekly_resets_at": null
+        },
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+          "five_hour_percent": null,
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:53:20Z",
+          "plan_label": null,
+          "provider": "codex",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        }
+      ],
+      "userID": "00000000-0000-4000-8000-00000000a11e"
+    },
+    {
+      "bundle": [
+        {
+          "accountFingerprint": null,
+          "planLabel": "plus",
+          "provider": "codex",
+          "windows": []
+        }
+      ],
+      "clearedAtBits": "41dab93d6c000000",
+      "clearedProviders": [],
+      "deviceID": "win:5f1c0de0aa11b22c",
+      "deviceLabel": "PC",
+      "encoded": [],
+      "fingerprint": "",
+      "id": "rows-unlinked-and-empty",
+      "kind": "rows",
+      "rows": [],
+      "userID": "00000000-0000-4000-8000-00000000a11e"
+    },
+    {
+      "bundle": [
+        {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c3fef9e",
+              "resetsAtBits": null,
+              "usedPercentBits": "0000000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      ],
+      "clearedAtBits": "41dab93d6c000000",
+      "clearedProviders": [],
+      "deviceID": "win:5f1c0de0aa11b22c",
+      "deviceLabel": " \t ",
+      "encoded": [
+        {
+          "keys": [
+            "device_id",
+            "device_label",
+            "five_hour_percent",
+            "five_hour_resets_at",
+            "observed_at",
+            "plan_label",
+            "provider",
+            "user_id",
+            "weekly_percent",
+            "weekly_resets_at"
+          ],
+          "nullKeys": [
+            "device_label",
+            "five_hour_resets_at",
+            "plan_label",
+            "weekly_percent",
+            "weekly_resets_at"
+          ]
+        }
+      ],
+      "fingerprint": "codex|0.000|-|-|-|-|-|1992655",
+      "id": "rows-blank-label",
+      "kind": "rows",
+      "rows": [
+        {
+          "device_id": "win:5f1c0de0aa11b22c",
+          "device_label": null,
+          "five_hour_percent": "0000000000000000",
+          "five_hour_resets_at": null,
+          "observed_at": "2026-10-30T19:53:20Z",
+          "plan_label": null,
+          "provider": "codex",
+          "user_id": "00000000-0000-4000-8000-00000000a11e",
+          "weekly_percent": null,
+          "weekly_resets_at": null
+        }
+      ],
+      "userID": "00000000-0000-4000-8000-00000000a11e"
+    },
+    {
+      "id": "prefs-0",
+      "keys": [
+        "main_device_id",
+        "user_id"
+      ],
+      "kind": "prefs",
+      "mainDeviceID": null,
+      "nullKeys": [
+        "main_device_id"
+      ],
+      "raw": null
+    },
+    {
+      "id": "prefs-1",
+      "keys": [
+        "main_device_id",
+        "user_id"
+      ],
+      "kind": "prefs",
+      "mainDeviceID": "win:abc",
+      "nullKeys": [],
+      "raw": "win:abc"
+    },
+    {
+      "id": "prefs-2",
+      "keys": [
+        "main_device_id",
+        "user_id"
+      ],
+      "kind": "prefs",
+      "mainDeviceID": "win:abc",
+      "nullKeys": [],
+      "raw": "  win:abc \n"
+    },
+    {
+      "id": "prefs-3",
+      "keys": [
+        "main_device_id",
+        "user_id"
+      ],
+      "kind": "prefs",
+      "mainDeviceID": null,
+      "nullKeys": [
+        "main_device_id"
+      ],
+      "raw": ""
+    },
+    {
+      "id": "prefs-4",
+      "keys": [
+        "main_device_id",
+        "user_id"
+      ],
+      "kind": "prefs",
+      "mainDeviceID": null,
+      "nullKeys": [
+        "main_device_id"
+      ],
+      "raw": "   "
+    },
+    {
+      "id": "prefs-5",
+      "keys": [
+        "main_device_id",
+        "user_id"
+      ],
+      "kind": "prefs",
+      "mainDeviceID": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "nullKeys": [],
+      "raw": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "id": "prefs-6",
+      "keys": [
+        "main_device_id",
+        "user_id"
+      ],
+      "kind": "prefs",
+      "mainDeviceID": null,
+      "nullKeys": [
+        "main_device_id"
+      ],
+      "raw": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "id": "percent-text-0",
+      "kind": "percentText",
+      "text": "0.000",
+      "valueBits": "0000000000000000"
+    },
+    {
+      "id": "percent-text-1",
+      "kind": "percentText",
+      "text": "12.346",
+      "valueBits": "4028b0f27bb2fec5"
+    },
+    {
+      "id": "percent-text-2",
+      "kind": "percentText",
+      "text": "0.062",
+      "valueBits": "3fb0000000000000"
+    },
+    {
+      "id": "percent-text-3",
+      "kind": "percentText",
+      "text": "0.001",
+      "valueBits": "3f40624dd2f1a9fc"
+    },
+    {
+      "id": "percent-text-4",
+      "kind": "percentText",
+      "text": "0.002",
+      "valueBits": "3f589374bc6a7efa"
+    },
+    {
+      "id": "percent-text-5",
+      "kind": "percentText",
+      "text": "-0.000",
+      "valueBits": "bf1a36e2eb1c432d"
+    },
+    {
+      "id": "percent-text-6",
+      "kind": "percentText",
+      "text": "100.000",
+      "valueBits": "4059000000000000"
+    },
+    {
+      "id": "percent-text-7",
+      "kind": "percentText",
+      "text": "99.999",
+      "valueBits": "4058fff7ced91687"
+    },
+    {
+      "id": "percent-text-8",
+      "kind": "percentText",
+      "text": "33.333",
+      "valueBits": "4040aaaaaa631579"
+    },
+    {
+      "id": "percent-0",
+      "kind": "percent",
+      "outBits": "0000000000000000",
+      "valueBits": "bff0000000000000"
+    },
+    {
+      "id": "percent-1",
+      "kind": "percent",
+      "outBits": "0000000000000000",
+      "valueBits": "0000000000000000"
+    },
+    {
+      "id": "percent-2",
+      "kind": "percent",
+      "outBits": "4049400000000000",
+      "valueBits": "4049400000000000"
+    },
+    {
+      "id": "percent-3",
+      "kind": "percent",
+      "outBits": "4059000000000000",
+      "valueBits": "4059000000000000"
+    },
+    {
+      "id": "percent-4",
+      "kind": "percent",
+      "outBits": "4059000000000000",
+      "valueBits": "40590000006b5fca"
+    },
+    {
+      "id": "percent-5",
+      "kind": "percent",
+      "outBits": null,
+      "valueBits": "7ff0000000000000"
+    },
+    {
+      "id": "percent-6",
+      "kind": "percent",
+      "outBits": null,
+      "valueBits": "fff0000000000000"
+    },
+    {
+      "id": "percent-7",
+      "kind": "percent",
+      "outBits": null,
+      "valueBits": "7ff8000000000000"
+    },
+    {
+      "bucket": 0,
+      "id": "bucket-0",
+      "kind": "bucket",
+      "secondsBits": "0000000000000000"
+    },
+    {
+      "bucket": 0,
+      "id": "bucket-1",
+      "kind": "bucket",
+      "secondsBits": "408c1ffdf3b645a2"
+    },
+    {
+      "bucket": 1,
+      "id": "bucket-2",
+      "kind": "bucket",
+      "secondsBits": "408c200000000000"
+    },
+    {
+      "bucket": 1992655,
+      "id": "bucket-3",
+      "kind": "bucket",
+      "secondsBits": "41dab93d6c100000"
+    },
+    {
+      "bucket": -1,
+      "id": "bucket-4",
+      "kind": "bucket",
+      "secondsBits": "bfe0000000000000"
+    },
+    {
+      "bucket": -2,
+      "id": "bucket-5",
+      "kind": "bucket",
+      "secondsBits": "c08c240000000000"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
+  "golden": "token-usage/limits/upload",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "deviceId": "Windows 기기 id 는 win:… (합성). account_fingerprint 는 본문에 없다.",
+    "method": "POST",
+    "onConflict": "user_id,device_id,provider",
+    "path": "/rest/v1/ai_limits",
+    "prefer": "resolution=merge-duplicates,return=minimal",
+    "prefsOnConflict": "user_id",
+    "prefsPath": "/rest/v1/ai_limits_prefs",
+    "rowKeys": [
+      "user_id",
+      "device_id",
+      "device_label",
+      "provider",
+      "five_hour_percent",
+      "five_hour_resets_at",
+      "weekly_percent",
+      "weekly_resets_at",
+      "plan_label",
+      "observed_at"
+    ]
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
+    "Sources/check/WorkTimerStoreAILimits.swift"
+  ]
+}

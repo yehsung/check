@@ -1,0 +1,1715 @@
+{
+  "cases": [
+    {
+      "id": "claude-credentials-valid",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"synthetic-oat-token\",\"refreshToken\":\"synthetic-ort-token\",\"expiresAt\":1793404800000,\"scopes\":[\"user:inference\"],\"subscriptionType\":\"max\"}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "synthetic-oat-token",
+          "expiresAtBits": "41dab94be0000000",
+          "planLabel": "max"
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-no-expiry",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"tok-a\",\"subscriptionType\":\"pro\"}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "tok-a",
+          "expiresAtBits": null,
+          "planLabel": "pro"
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-empty-token",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"\",\"expiresAt\":1793404800000}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "err": {
+          "failure": "notLoggedIn",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-number-token",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":123}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "err": {
+          "failure": "notLoggedIn",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-missing-oauth",
+      "input": "{\"other\":{}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-oauth-not-object",
+      "input": "{\"claudeAiOauth\":\"x\"}",
+      "kind": "claudeCredentials",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-not-json",
+      "input": "not json",
+      "kind": "claudeCredentials",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-top-array",
+      "input": "[]",
+      "kind": "claudeCredentials",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-expires-fraction-ms",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"tok-b\",\"expiresAt\":1793404800123}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "tok-b",
+          "expiresAtBits": "41dab94be007df3b",
+          "planLabel": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-expires-string",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"tok-c\",\"expiresAt\":\"1793404800000\"}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "tok-c",
+          "expiresAtBits": null,
+          "planLabel": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-expires-bool",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"tok-d\",\"expiresAt\":true}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "tok-d",
+          "expiresAtBits": "3f50628000000000",
+          "planLabel": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-plan-too-long",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"tok-e\",\"subscriptionType\":\"0123456789012345678901234567890123456789\"}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "tok-e",
+          "expiresAtBits": null,
+          "planLabel": null
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-plan-whitespace",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"tok-f\",\"subscriptionType\":\"  max \\n\"}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "tok-f",
+          "expiresAtBits": null,
+          "planLabel": "max"
+        }
+      }
+    },
+    {
+      "id": "claude-credentials-plan-empty",
+      "input": "{\"claudeAiOauth\":{\"accessToken\":\"tok-g\",\"subscriptionType\":\"   \"}}",
+      "kind": "claudeCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "tok-g",
+          "expiresAtBits": null,
+          "planLabel": null
+        }
+      }
+    },
+    {
+      "id": "claude-usage-both-windows-noplan",
+      "input": "{\"five_hour\":{\"utilization\":27.0,\"resets_at\":\"2026-10-30T05:00:00.123456+00:00\"},\"seven_day\":{\"utilization\":61.5,\"resets_at\":\"2026-11-02T00:00:00Z\"},\"iguana_necktie\":{\"utilization\":99,\"limit_dollars\":250}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9091407df3b",
+              "source": "local",
+              "usedPercentBits": "403b000000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9f4a0000000",
+              "source": "local",
+              "usedPercentBits": "404ec00000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-both-windows-max",
+      "input": "{\"five_hour\":{\"utilization\":27.0,\"resets_at\":\"2026-10-30T05:00:00.123456+00:00\"},\"seven_day\":{\"utilization\":61.5,\"resets_at\":\"2026-11-02T00:00:00Z\"},\"iguana_necktie\":{\"utilization\":99,\"limit_dollars\":250}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9091407df3b",
+              "source": "local",
+              "usedPercentBits": "403b000000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9f4a0000000",
+              "source": "local",
+              "usedPercentBits": "404ec00000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-zero-five-hour-noplan",
+      "input": "{\"five_hour\":{\"utilization\":0,\"resets_at\":\"2026-10-30T05:00:00Z\"},\"seven_day\":{\"utilization\":12,\"resets_at\":\"2026-11-02T00:00:00.5Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "0000000000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9f4a0200000",
+              "source": "local",
+              "usedPercentBits": "4028000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-zero-five-hour-max",
+      "input": "{\"five_hour\":{\"utilization\":0,\"resets_at\":\"2026-10-30T05:00:00Z\"},\"seven_day\":{\"utilization\":12,\"resets_at\":\"2026-11-02T00:00:00.5Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "0000000000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9f4a0200000",
+              "source": "local",
+              "usedPercentBits": "4028000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-weekly-only-noplan",
+      "input": "{\"five_hour\":null,\"seven_day\":{\"utilization\":3.25,\"resets_at\":\"2026-11-02T00:00:00Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9f4a0000000",
+              "source": "local",
+              "usedPercentBits": "400a000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-weekly-only-max",
+      "input": "{\"five_hour\":null,\"seven_day\":{\"utilization\":3.25,\"resets_at\":\"2026-11-02T00:00:00Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab9f4a0000000",
+              "source": "local",
+              "usedPercentBits": "400a000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-both-null-noplan",
+      "input": "{\"five_hour\":null,\"seven_day\":null}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-both-null-max",
+      "input": "{\"five_hour\":null,\"seven_day\":null}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-utilization-string-noplan",
+      "input": "{\"five_hour\":{\"utilization\":\"27\",\"resets_at\":\"2026-10-30T05:00:00Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-utilization-string-max",
+      "input": "{\"five_hour\":{\"utilization\":\"27\",\"resets_at\":\"2026-10-30T05:00:00Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-reset-unparseable-noplan",
+      "input": "{\"five_hour\":{\"utilization\":44,\"resets_at\":\"soon\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "4046000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-reset-unparseable-max",
+      "input": "{\"five_hour\":{\"utilization\":44,\"resets_at\":\"soon\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "4046000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-is-active-false-noplan",
+      "input": "{\"five_hour\":{\"utilization\":27,\"resets_at\":\"2026-10-30T05:00:00Z\",\"is_active\":false},\"limits\":[{\"is_active\":false}]}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab90914000000",
+              "source": "local",
+              "usedPercentBits": "403b000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-is-active-false-max",
+      "input": "{\"five_hour\":{\"utilization\":27,\"resets_at\":\"2026-10-30T05:00:00Z\",\"is_active\":false},\"limits\":[{\"is_active\":false}]}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab90914000000",
+              "source": "local",
+              "usedPercentBits": "403b000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-over-and-negative-noplan",
+      "input": "{\"five_hour\":{\"utilization\":100.5,\"resets_at\":\"2026-10-30T05:00:00Z\"},\"seven_day\":{\"utilization\":-3,\"resets_at\":\"2026-11-02T00:00:00Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab90914000000",
+              "source": "local",
+              "usedPercentBits": "4059200000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "c008000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-over-and-negative-max",
+      "input": "{\"five_hour\":{\"utilization\":100.5,\"resets_at\":\"2026-10-30T05:00:00Z\"},\"seven_day\":{\"utilization\":-3,\"resets_at\":\"2026-11-02T00:00:00Z\"}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab90914000000",
+              "source": "local",
+              "usedPercentBits": "4059200000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "c008000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-not-json-noplan",
+      "input": "{",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-not-json-max",
+      "input": "{",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "claude-usage-reset-null-noplan",
+      "input": "{\"seven_day\":{\"utilization\":8,\"resets_at\":null}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "4020000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": null
+    },
+    {
+      "id": "claude-usage-reset-null-max",
+      "input": "{\"seven_day\":{\"utilization\":8,\"resets_at\":null}}",
+      "kind": "claudeUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "max",
+          "provider": "claude",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "4020000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      },
+      "planLabel": "max"
+    },
+    {
+      "id": "codex-credentials-file-account-wins",
+      "input": "{\"tokens\":{\"access_token\":\"eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3OTQwMDAwMDAsImNoYXRncHRfcGxhbl90eXBlIjoicGx1cyIsImNoYXRncHRfYWNjb3VudF9pZCI6ImFjY3QtY2xhaW0ifQ.c2lnbmF0dXJl\",\"account_id\":\"acct-file\",\"refresh_token\":\"rt-SYNTHETIC\"}}",
+      "kind": "codexCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3OTQwMDAwMDAsImNoYXRncHRfcGxhbl90eXBlIjoicGx1cyIsImNoYXRncHRfYWNjb3VudF9pZCI6ImFjY3QtY2xhaW0ifQ.c2lnbmF0dXJl",
+          "accountID": "acct-file",
+          "expiresAtBits": "41dabb9120000000",
+          "planLabel": "plus"
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-claim-account",
+      "input": "{\"tokens\":{\"access_token\":\"eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3OTQwMDAwMDAsImNoYXRncHRfcGxhbl90eXBlIjoicGx1cyIsImNoYXRncHRfYWNjb3VudF9pZCI6ImFjY3QtY2xhaW0ifQ.c2lnbmF0dXJl\",\"account_id\":\"\"}}",
+      "kind": "codexCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3OTQwMDAwMDAsImNoYXRncHRfcGxhbl90eXBlIjoicGx1cyIsImNoYXRncHRfYWNjb3VudF9pZCI6ImFjY3QtY2xhaW0ifQ.c2lnbmF0dXJl",
+          "accountID": "acct-claim",
+          "expiresAtBits": "41dabb9120000000",
+          "planLabel": "plus"
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-nested-claims",
+      "input": "{\"tokens\":{\"access_token\":\"eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3OTQwMDAwMDAuNSwiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS9hdXRoIjp7ImNoYXRncHRfcGxhbl90eXBlIjoicHJvIiwiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1uZXN0ZWQifX0.c2lnbmF0dXJl\"}}",
+      "kind": "codexCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3OTQwMDAwMDAuNSwiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS9hdXRoIjp7ImNoYXRncHRfcGxhbl90eXBlIjoicHJvIiwiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdC1uZXN0ZWQifX0.c2lnbmF0dXJl",
+          "accountID": "acct-nested",
+          "expiresAtBits": "41dabb9120200000",
+          "planLabel": "pro"
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-no-exp",
+      "input": "{\"tokens\":{\"access_token\":\"eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJjaGF0Z3B0X3BsYW5fdHlwZSI6InRlYW0ifQ.c2lnbmF0dXJl\"}}",
+      "kind": "codexCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJjaGF0Z3B0X3BsYW5fdHlwZSI6InRlYW0ifQ.c2lnbmF0dXJl",
+          "accountID": null,
+          "expiresAtBits": null,
+          "planLabel": "team"
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-opaque-token",
+      "input": "{\"tokens\":{\"access_token\":\"opaque\"}}",
+      "kind": "codexCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "opaque",
+          "accountID": null,
+          "expiresAtBits": null,
+          "planLabel": null
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-bad-payload",
+      "input": "{\"tokens\":{\"access_token\":\"a.@@@.c\"}}",
+      "kind": "codexCredentials",
+      "output": {
+        "ok": {
+          "accessToken": "a.@@@.c",
+          "accountID": null,
+          "expiresAtBits": null,
+          "planLabel": null
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-empty-token",
+      "input": "{\"tokens\":{\"access_token\":\"\"}}",
+      "kind": "codexCredentials",
+      "output": {
+        "err": {
+          "failure": "notLoggedIn",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-no-tokens",
+      "input": "{\"OPENAI_API_KEY\":\"synthetic-api-key\"}",
+      "kind": "codexCredentials",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-tokens-null",
+      "input": "{\"OPENAI_API_KEY\":null,\"tokens\":null}",
+      "kind": "codexCredentials",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "id": "codex-credentials-not-json",
+      "input": "nope",
+      "kind": "codexCredentials",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "accountID": "acct-1",
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-two-windows",
+      "input": "{\"plan_type\":\"plus\",\"rate_limit\":{\"primary_window\":{\"used_percent\":12.5,\"limit_window_seconds\":18000,\"reset_after_seconds\":9000,\"reset_at\":1793399000},\"secondary_window\":{\"used_percent\":40,\"limit_window_seconds\":604800,\"reset_after_seconds\":300000,\"reset_at\":1793690000}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": "ba36a4edd92d37c6",
+          "planLabel": "plus",
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab94636000000",
+              "source": "local",
+              "usedPercentBits": "4029000000000000",
+              "window": "five_hour"
+            },
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41daba6264000000",
+              "source": "local",
+              "usedPercentBits": "4044000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": "plus",
+      "id": "codex-usage-zero-used",
+      "input": "{\"rate_limit\":{\"primary_window\":{\"used_percent\":0,\"limit_window_seconds\":18000,\"reset_after_seconds\":18000,\"reset_at\":1793408000}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "plus",
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "0000000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-projected-window",
+      "input": "{\"rate_limit\":{\"primary_window\":{\"used_percent\":5,\"limit_window_seconds\":18000,\"reset_after_seconds\":18000.4,\"reset_at\":1793408000}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": null,
+              "source": "local",
+              "usedPercentBits": "4014000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "accountID": "acct-2",
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-weekly-as-primary",
+      "input": "{\"plan_type\":\"pro\",\"rate_limit\":{\"primary_window\":{\"used_percent\":33,\"limit_window_seconds\":604800,\"reset_after_seconds\":100000,\"reset_at\":1793490000},\"secondary_window\":null}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": "e19576827aa4259c",
+          "planLabel": "pro",
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab99f14000000",
+              "source": "local",
+              "usedPercentBits": "4040800000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-both-null",
+      "input": "{\"rate_limit\":{\"primary_window\":null,\"secondary_window\":null}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "noPlan",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-no-rate-limit",
+      "input": "{\"plan_type\":\"plus\"}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "malformed",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": "plus",
+      "id": "codex-usage-unknown-length",
+      "input": "{\"rate_limit\":{\"primary_window\":{\"used_percent\":7,\"limit_window_seconds\":86400,\"reset_after_seconds\":100,\"reset_at\":1793390100}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "plus",
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab93d85000000",
+              "source": "local",
+              "usedPercentBits": "401c000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-two-weekly",
+      "input": "{\"rate_limit\":{\"primary_window\":{\"used_percent\":10,\"limit_window_seconds\":604800,\"reset_at\":1793600000},\"secondary_window\":{\"used_percent\":20,\"limit_window_seconds\":604800,\"reset_at\":1793700000}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41daba6c28000000",
+              "source": "local",
+              "usedPercentBits": "4034000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-fraction-reset",
+      "input": "{\"rate_limit\":{\"primary_window\":{\"used_percent\":1.5,\"limit_window_seconds\":18000,\"reset_after_seconds\":60,\"reset_at\":1793390060.5}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": null,
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41dab93d7b200000",
+              "source": "local",
+              "usedPercentBits": "3ff8000000000000",
+              "window": "five_hour"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": null,
+      "id": "codex-usage-used-string",
+      "input": "{\"rate_limit\":{\"primary_window\":{\"used_percent\":\"9\",\"limit_window_seconds\":18000}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "err": {
+          "failure": "noPlan",
+          "retryAfterBits": null
+        }
+      }
+    },
+    {
+      "accountID": null,
+      "fallbackPlanLabel": "fallback",
+      "id": "codex-usage-plan-blank",
+      "input": "{\"plan_type\":\" \",\"rate_limit\":{\"secondary_window\":{\"used_percent\":2,\"reset_at\":1793700000}}}",
+      "kind": "codexUsage",
+      "observedAtBits": "41dab93d6c100000",
+      "output": {
+        "ok": {
+          "accountFingerprint": null,
+          "planLabel": "fallback",
+          "provider": "codex",
+          "windows": [
+            {
+              "observedAtBits": "41dab93d6c100000",
+              "resetsAtBits": "41daba6c28000000",
+              "source": "local",
+              "usedPercentBits": "4000000000000000",
+              "window": "weekly"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "reset-trust-0",
+      "kind": "resetTrust",
+      "resetAfterBits": null,
+      "trusts": false,
+      "usedPercentBits": "0000000000000000",
+      "windowSecondsBits": null
+    },
+    {
+      "id": "reset-trust-1",
+      "kind": "resetTrust",
+      "resetAfterBits": null,
+      "trusts": false,
+      "usedPercentBits": "bff0000000000000",
+      "windowSecondsBits": null
+    },
+    {
+      "id": "reset-trust-2",
+      "kind": "resetTrust",
+      "resetAfterBits": null,
+      "trusts": true,
+      "usedPercentBits": "3f847ae147ae147b",
+      "windowSecondsBits": null
+    },
+    {
+      "id": "reset-trust-3",
+      "kind": "resetTrust",
+      "resetAfterBits": "40d1940000000000",
+      "trusts": false,
+      "usedPercentBits": "4049000000000000",
+      "windowSecondsBits": "40d1940000000000"
+    },
+    {
+      "id": "reset-trust-4",
+      "kind": "resetTrust",
+      "resetAfterBits": "40d194399999999a",
+      "trusts": false,
+      "usedPercentBits": "4049000000000000",
+      "windowSecondsBits": "40d1940000000000"
+    },
+    {
+      "id": "reset-trust-5",
+      "kind": "resetTrust",
+      "resetAfterBits": "40d1944000000000",
+      "trusts": true,
+      "usedPercentBits": "4049000000000000",
+      "windowSecondsBits": "40d1940000000000"
+    },
+    {
+      "id": "reset-trust-6",
+      "kind": "resetTrust",
+      "resetAfterBits": "40d193c666666666",
+      "trusts": false,
+      "usedPercentBits": "4049000000000000",
+      "windowSecondsBits": "40d1940000000000"
+    },
+    {
+      "id": "reset-trust-7",
+      "kind": "resetTrust",
+      "resetAfterBits": "4059000000000000",
+      "trusts": true,
+      "usedPercentBits": "4049000000000000",
+      "windowSecondsBits": "0000000000000000"
+    },
+    {
+      "id": "reset-trust-8",
+      "kind": "resetTrust",
+      "resetAfterBits": null,
+      "trusts": true,
+      "usedPercentBits": "4049000000000000",
+      "windowSecondsBits": "40d1940000000000"
+    },
+    {
+      "id": "reset-trust-9",
+      "kind": "resetTrust",
+      "resetAfterBits": "4059000000000000",
+      "trusts": true,
+      "usedPercentBits": "4049000000000000",
+      "windowSecondsBits": null
+    },
+    {
+      "id": "reset-trust-10",
+      "kind": "resetTrust",
+      "resetAfterBits": "4122750000000000",
+      "trusts": false,
+      "usedPercentBits": "4059000000000000",
+      "windowSecondsBits": "4122750000000000"
+    },
+    {
+      "id": "date-0",
+      "kind": "date",
+      "outBits": null,
+      "raw": null
+    },
+    {
+      "id": "date-1",
+      "kind": "date",
+      "outBits": null,
+      "raw": ""
+    },
+    {
+      "id": "date-2",
+      "kind": "date",
+      "outBits": "41dab90914000000",
+      "raw": "2026-10-30T05:00:00Z"
+    },
+    {
+      "id": "date-3",
+      "kind": "date",
+      "outBits": "41dab9091407df3b",
+      "raw": "2026-10-30T05:00:00.123Z"
+    },
+    {
+      "id": "date-4",
+      "kind": "date",
+      "outBits": "41dab9091407df3b",
+      "raw": "2026-10-30T05:00:00.123456+00:00"
+    },
+    {
+      "id": "date-5",
+      "kind": "date",
+      "outBits": "41dab90914000000",
+      "raw": "2026-10-30T14:00:00+09:00"
+    },
+    {
+      "id": "date-6",
+      "kind": "date",
+      "outBits": null,
+      "raw": "2026-10-30 05:00:00Z"
+    },
+    {
+      "id": "date-7",
+      "kind": "date",
+      "outBits": null,
+      "raw": "soon"
+    },
+    {
+      "id": "date-8",
+      "kind": "date",
+      "outBits": "41dab90914200000",
+      "raw": "2026-10-30T05:00:00.5Z"
+    },
+    {
+      "id": "http-200-none",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": null,
+      "status": 200
+    },
+    {
+      "id": "http-200-300.0",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": "4072c00000000000",
+      "status": 200
+    },
+    {
+      "id": "http-200-12.5",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": "4029000000000000",
+      "status": 200
+    },
+    {
+      "id": "http-204-none",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": null,
+      "status": 204
+    },
+    {
+      "id": "http-204-300.0",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": "4072c00000000000",
+      "status": 204
+    },
+    {
+      "id": "http-204-12.5",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": "4029000000000000",
+      "status": 204
+    },
+    {
+      "id": "http-299-none",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": null,
+      "status": 299
+    },
+    {
+      "id": "http-299-300.0",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": "4072c00000000000",
+      "status": 299
+    },
+    {
+      "id": "http-299-12.5",
+      "kind": "httpFailure",
+      "output": null,
+      "retryAfterBits": "4029000000000000",
+      "status": 299
+    },
+    {
+      "id": "http-300-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 300
+    },
+    {
+      "id": "http-300-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 300
+    },
+    {
+      "id": "http-300-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 300
+    },
+    {
+      "id": "http-400-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 400
+    },
+    {
+      "id": "http-400-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 400
+    },
+    {
+      "id": "http-400-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 400
+    },
+    {
+      "id": "http-401-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "unauthorized",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 401
+    },
+    {
+      "id": "http-401-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "unauthorized",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 401
+    },
+    {
+      "id": "http-401-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "unauthorized",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 401
+    },
+    {
+      "id": "http-403-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "unauthorized",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 403
+    },
+    {
+      "id": "http-403-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "unauthorized",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 403
+    },
+    {
+      "id": "http-403-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "unauthorized",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 403
+    },
+    {
+      "id": "http-404-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 404
+    },
+    {
+      "id": "http-404-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 404
+    },
+    {
+      "id": "http-404-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 404
+    },
+    {
+      "id": "http-429-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "rateLimited",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 429
+    },
+    {
+      "id": "http-429-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "rateLimited",
+        "retryAfterBits": "4072c00000000000"
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 429
+    },
+    {
+      "id": "http-429-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "rateLimited",
+        "retryAfterBits": "4029000000000000"
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 429
+    },
+    {
+      "id": "http-500-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 500
+    },
+    {
+      "id": "http-500-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 500
+    },
+    {
+      "id": "http-500-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 500
+    },
+    {
+      "id": "http-503-none",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": null,
+      "status": 503
+    },
+    {
+      "id": "http-503-300.0",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4072c00000000000",
+      "status": 503
+    },
+    {
+      "id": "http-503-12.5",
+      "kind": "httpFailure",
+      "output": {
+        "failure": "network",
+        "retryAfterBits": null
+      },
+      "retryAfterBits": "4029000000000000",
+      "status": 503
+    },
+    {
+      "id": "retry-after-0",
+      "kind": "retryAfterHeader",
+      "outBits": "4072c00000000000",
+      "raw": "300"
+    },
+    {
+      "id": "retry-after-1",
+      "kind": "retryAfterHeader",
+      "outBits": "405e200000000000",
+      "raw": "120.5"
+    },
+    {
+      "id": "retry-after-2",
+      "kind": "retryAfterHeader",
+      "outBits": null,
+      "raw": " 300"
+    },
+    {
+      "id": "retry-after-3",
+      "kind": "retryAfterHeader",
+      "outBits": null,
+      "raw": "abc"
+    },
+    {
+      "id": "retry-after-4",
+      "kind": "retryAfterHeader",
+      "outBits": "4059000000000000",
+      "raw": "1e2"
+    },
+    {
+      "id": "retry-after-5",
+      "kind": "retryAfterHeader",
+      "outBits": null,
+      "raw": ""
+    },
+    {
+      "id": "retry-after-6",
+      "kind": "retryAfterHeader",
+      "outBits": null,
+      "raw": "Wed, 21 Oct 2026 07:28:00 GMT"
+    },
+    {
+      "id": "retry-after-7",
+      "kind": "retryAfterHeader",
+      "outBits": "c014000000000000",
+      "raw": "-5"
+    },
+    {
+      "id": "retry-after-8",
+      "kind": "retryAfterHeader",
+      "outBits": "401c000000000000",
+      "raw": "+7"
+    },
+    {
+      "id": "retry-after-9",
+      "kind": "retryAfterHeader",
+      "outBits": "3fe0000000000000",
+      "raw": ".5"
+    },
+    {
+      "id": "retry-after-10",
+      "kind": "retryAfterHeader",
+      "outBits": "4014000000000000",
+      "raw": "5."
+    },
+    {
+      "failure": "notInstalled",
+      "hidesProvider": true,
+      "id": "failure-notInstalled-claude",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "claude"
+    },
+    {
+      "failure": "notInstalled",
+      "hidesProvider": true,
+      "id": "failure-notInstalled-codex",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "codex"
+    },
+    {
+      "failure": "notInstalled",
+      "hidesProvider": true,
+      "id": "failure-notInstalled-antigravity",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "antigravity"
+    },
+    {
+      "failure": "notLoggedIn",
+      "hidesProvider": true,
+      "id": "failure-notLoggedIn-claude",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "claude"
+    },
+    {
+      "failure": "notLoggedIn",
+      "hidesProvider": true,
+      "id": "failure-notLoggedIn-codex",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "codex"
+    },
+    {
+      "failure": "notLoggedIn",
+      "hidesProvider": true,
+      "id": "failure-notLoggedIn-antigravity",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "antigravity"
+    },
+    {
+      "failure": "blocked",
+      "hidesProvider": true,
+      "id": "failure-blocked-claude",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "claude"
+    },
+    {
+      "failure": "blocked",
+      "hidesProvider": true,
+      "id": "failure-blocked-codex",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "codex"
+    },
+    {
+      "failure": "blocked",
+      "hidesProvider": true,
+      "id": "failure-blocked-antigravity",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "antigravity"
+    },
+    {
+      "failure": "expired",
+      "hidesProvider": false,
+      "id": "failure-expired-claude",
+      "kind": "failureTable",
+      "noticeText": "클로드 코드를 한 번 실행해 주세요",
+      "provider": "claude"
+    },
+    {
+      "failure": "expired",
+      "hidesProvider": false,
+      "id": "failure-expired-codex",
+      "kind": "failureTable",
+      "noticeText": "코덱스를 한 번 실행해 주세요",
+      "provider": "codex"
+    },
+    {
+      "failure": "expired",
+      "hidesProvider": false,
+      "id": "failure-expired-antigravity",
+      "kind": "failureTable",
+      "noticeText": "안티그래비티를 한 번 실행해 주세요",
+      "provider": "antigravity"
+    },
+    {
+      "failure": "unauthorized",
+      "hidesProvider": false,
+      "id": "failure-unauthorized-claude",
+      "kind": "failureTable",
+      "noticeText": "클로드 코드를 한 번 실행해 주세요",
+      "provider": "claude"
+    },
+    {
+      "failure": "unauthorized",
+      "hidesProvider": false,
+      "id": "failure-unauthorized-codex",
+      "kind": "failureTable",
+      "noticeText": "코덱스를 한 번 실행해 주세요",
+      "provider": "codex"
+    },
+    {
+      "failure": "unauthorized",
+      "hidesProvider": false,
+      "id": "failure-unauthorized-antigravity",
+      "kind": "failureTable",
+      "noticeText": "안티그래비티를 한 번 실행해 주세요",
+      "provider": "antigravity"
+    },
+    {
+      "failure": "rateLimited",
+      "hidesProvider": false,
+      "id": "failure-rateLimited-claude",
+      "kind": "failureTable",
+      "noticeText": "잠시 뒤 다시",
+      "provider": "claude"
+    },
+    {
+      "failure": "rateLimited",
+      "hidesProvider": false,
+      "id": "failure-rateLimited-codex",
+      "kind": "failureTable",
+      "noticeText": "잠시 뒤 다시",
+      "provider": "codex"
+    },
+    {
+      "failure": "rateLimited",
+      "hidesProvider": false,
+      "id": "failure-rateLimited-antigravity",
+      "kind": "failureTable",
+      "noticeText": "잠시 뒤 다시",
+      "provider": "antigravity"
+    },
+    {
+      "failure": "network",
+      "hidesProvider": false,
+      "id": "failure-network-claude",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "claude"
+    },
+    {
+      "failure": "network",
+      "hidesProvider": false,
+      "id": "failure-network-codex",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "codex"
+    },
+    {
+      "failure": "network",
+      "hidesProvider": false,
+      "id": "failure-network-antigravity",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "antigravity"
+    },
+    {
+      "failure": "malformed",
+      "hidesProvider": false,
+      "id": "failure-malformed-claude",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "claude"
+    },
+    {
+      "failure": "malformed",
+      "hidesProvider": false,
+      "id": "failure-malformed-codex",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "codex"
+    },
+    {
+      "failure": "malformed",
+      "hidesProvider": false,
+      "id": "failure-malformed-antigravity",
+      "kind": "failureTable",
+      "noticeText": null,
+      "provider": "antigravity"
+    },
+    {
+      "failure": "noPlan",
+      "hidesProvider": false,
+      "id": "failure-noPlan-claude",
+      "kind": "failureTable",
+      "noticeText": "구독 리밋 없음",
+      "provider": "claude"
+    },
+    {
+      "failure": "noPlan",
+      "hidesProvider": false,
+      "id": "failure-noPlan-codex",
+      "kind": "failureTable",
+      "noticeText": "구독 리밋 없음",
+      "provider": "codex"
+    },
+    {
+      "failure": "noPlan",
+      "hidesProvider": false,
+      "id": "failure-noPlan-antigravity",
+      "kind": "failureTable",
+      "noticeText": "구독 리밋 없음",
+      "provider": "antigravity"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
+  "golden": "token-usage/limits/readers",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "claudeBetaHeader": "oauth-2025-04-20",
+    "claudeUsageURL": "https://api.anthropic.com/api/oauth/usage",
+    "codexUsageURL": "https://chatgpt.com/backend-api/wham/usage",
+    "doubles": "…Bits = IEEE754 16진. 시각은 timeIntervalSince1970.",
+    "timeoutBits": "402e000000000000",
+    "userAgent": "check/1.2.3 (ai-limits)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/AILimitReaders.swift",
+    "Sources/CheckCore/JWTClaims.swift"
+  ]
+}

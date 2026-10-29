@@ -1,5 +1,5 @@
 {
-  "exportTests": 91,
+  "exportTests": 93,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -856,6 +856,30 @@
         "Sources/CheckCore/TodoSync.swift",
         "Sources/CheckCore/CheckTodoModel.swift",
         "Tests/checkTests/Fixtures/todo-rpc/_manifest.json"
+      ]
+    },
+    {
+      "cases": 146,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
+      "golden": "token-usage/limits/readers",
+      "path": "contract/golden/token-usage/limits/readers.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/AILimitReaders.swift",
+        "Sources/CheckCore/JWTClaims.swift"
+      ]
+    },
+    {
+      "cases": 37,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
+      "golden": "token-usage/limits/upload",
+      "path": "contract/golden/token-usage/limits/upload.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
+        "Sources/check/WorkTimerStoreAILimits.swift"
       ]
     },
     {

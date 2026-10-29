@@ -10,6 +10,9 @@
 package com.yehsung.aingcheck.desktop.platform.windows.tray
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.RasterImage
+import com.yehsung.aingcheck.core.rules.format.MenuBarStatusFormatter
+import com.yehsung.aingcheck.core.rules.format.WorkStatus
+import com.yehsung.aingcheck.core.rules.format.WorkStatusSnapshot
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
@@ -31,6 +34,16 @@ sealed interface TrayIconStatus {
             isWorking -> Working(elapsedSeconds)
             else -> Off
         }
+
+        /**
+         * 핀 조정 ⑩: 트레이가 읽는 근무 값은 core/rules `WorkStatusSnapshot` 그대로(조립 지점이 DesktopWorkSnapshot 에서 옮긴다).
+         * 아이콘 숫자는 Int 초면 충분하다(68년) — 넘치면 Int 최대로 접는다.
+         */
+        fun of(snapshot: WorkStatusSnapshot): TrayIconStatus = of(
+            isWorking = snapshot.isWorking,
+            elapsedSeconds = snapshot.elapsedSeconds.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
+            pendingSync = snapshot.pendingSync,
+        )
     }
 }
 
@@ -51,21 +64,17 @@ object TrayTooltip {
     /**
      * NIF_SHOWTIP 기본 툴팁(127자 상한). 분은 아이콘에 없으므로 툴팁이 시:분을 말한다(D§4-2).
      * 상태 글자는 맥 `WorkStatusSnapshot.localizedStatus`(Sources/CheckCore/MenuBarStatusFormatter.swift) **그대로** —
-     * "근무중"·"근무종료"·"동기화 대기"(띄어쓰기까지, G §8-13). 시험이 맥 소스의 글자와 대조한다.
+     * "근무중"·"근무종료"·"동기화 대기"(띄어쓰기까지, G §8-13). 글자도 시:분도 core/rules 이식본에 맡긴다(W1-f2: 판정 두 벌 제거) —
+     * 시험이 맥 소스의 글자와 대조한다.
      */
     fun text(status: TrayIconStatus): String = when (status) {
-        TrayIconStatus.Pending -> "아잉체크 · 동기화 대기"
-        TrayIconStatus.Off -> "아잉체크 · 근무종료"
-        is TrayIconStatus.Working -> "아잉체크 · 근무중 ${hhmm(status.elapsedSeconds)}"
+        TrayIconStatus.Pending -> "아잉체크 · ${WorkStatusSnapshot(WorkStatus.offWork, 0, pendingSync = true).localizedStatus}"
+        TrayIconStatus.Off -> "아잉체크 · ${WorkStatus.offWork.localizedStatus}"
+        is TrayIconStatus.Working -> "아잉체크 · ${WorkStatus.working.localizedStatus} ${hhmm(status.elapsedSeconds)}"
     }
 
-    /** 맥 titleDuration 그대로: 항상 HH:MM, 초는 내림, 음수는 0. */
-    fun hhmm(seconds: Int): String {
-        val s = max(0, seconds)
-        val h = s / 3600
-        val m = (s % 3600) / 60
-        return "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
-    }
+    /** 맥 titleDuration 그대로(항상 HH:MM, 초 내림, 음수 0) — core/rules `MenuBarStatusFormatter.titleDuration` 위임, 계산 없음. */
+    fun hhmm(seconds: Int): String = MenuBarStatusFormatter.titleDuration(seconds.toLong())
 }
 
 object TrayIconRenderer {

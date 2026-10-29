@@ -26,6 +26,23 @@ object TrayCallbackDecoder {
         return TrayEvent(click, iconId, x, y, keyboard)
     }
 
+    /**
+     * 같은 콜백 메시지로 오는 풍선 사건(NIN_BALLOONSHOW·HIDE·TIMEOUT·USERCLICK)을 푼다. 클릭 사건([decode])과 겹치지 않는다 —
+     * 풍선 클릭이 트레이 클릭(플라이아웃 열기)으로 새면 대화가 아니라 홈이 열린다. wParam(좌표)은 풍선 사건에서 쓰지 않는다.
+     */
+    fun decodeBalloon(lParam: Long): BalloonEvent? {
+        val event = (lParam and 0xFFFF).toInt()
+        val iconId = ((lParam ushr 16) and 0xFFFF).toInt()
+        val kind = when (event) {
+            TrayBalloonWin32.NIN_BALLOONSHOW -> BalloonEventKind.SHOWN
+            TrayBalloonWin32.NIN_BALLOONHIDE -> BalloonEventKind.HIDDEN
+            TrayBalloonWin32.NIN_BALLOONTIMEOUT -> BalloonEventKind.TIMED_OUT
+            TrayBalloonWin32.NIN_BALLOONUSERCLICK -> BalloonEventKind.USER_CLICKED
+            else -> return null
+        }
+        return BalloonEvent(kind, iconId)
+    }
+
     /** 시험·재현용: [decode] 의 역. */
     fun encode(event: Int, iconId: Int, x: Int, y: Int): Pair<Long, Long> {
         val w = ((y.toLong() and 0xFFFF) shl 16) or (x.toLong() and 0xFFFF)

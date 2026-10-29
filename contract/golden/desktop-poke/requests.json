@@ -1,0 +1,104 @@
+{
+  "cases": [
+    {
+      "id": "poke-user",
+      "requests": [
+        {
+          "body": "{\"p_to\":\"user-1\"}",
+          "method": "POST",
+          "path": "/rest/v1/rpc/poke_user"
+        }
+      ],
+      "result": "ok",
+      "script": [
+        {
+          "body": "{\"status\":\"ok\"}",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "id": "ultra-poke-user",
+      "requests": [
+        {
+          "body": "{\"p_to\":\"user-2\"}",
+          "method": "POST",
+          "path": "/rest/v1/rpc/ultra_poke_user"
+        }
+      ],
+      "result": "ok",
+      "script": [
+        {
+          "body": "{\"status\":\"ok\",\"ultra_balance\":2}",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "id": "take-pokes",
+      "requests": [
+        {
+          "body": "{\"p_message_capable\":true}",
+          "method": "POST",
+          "path": "/rest/v1/rpc/take_pokes"
+        }
+      ],
+      "result": "rows:1",
+      "script": [
+        {
+          "body": "[{\"id\":\"p-1\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1790000000,\"kind\":\"normal\"}]",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "id": "take-pokes-fallback-then-new-shape",
+      "requests": [
+        {
+          "body": "{\"p_message_capable\":true}",
+          "method": "POST",
+          "path": "/rest/v1/rpc/take_pokes"
+        },
+        {
+          "body": "{}",
+          "method": "POST",
+          "path": "/rest/v1/rpc/take_pokes"
+        },
+        {
+          "body": "{\"p_message_capable\":true}",
+          "method": "POST",
+          "path": "/rest/v1/rpc/take_pokes"
+        }
+      ],
+      "result": "rows:1,0",
+      "script": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.take_pokes in the schema cache\"}",
+          "status": 404
+        },
+        {
+          "body": "[{\"id\":\"p-1\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1790000000,\"kind\":\"normal\"}]",
+          "status": 200
+        },
+        {
+          "body": "[]",
+          "status": 200
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+  "golden": "desktop-poke/requests",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "bodies": "본문 바이트 그대로(JSONEncoder convertToSnakeCase) — poke_user·ultra_poke_user 는 {p_to}, take_pokes 는 언제나 {p_message_capable:true}",
+    "fallback": "P12: PGRST202(404) 이면 같은 경로에 {} 로 한 번 더 · 그 판정을 캐시하지 않는다(다음 호출은 다시 새 모양)",
+    "result": "응답 status 또는 디코드한 행 수(시나리오 확인용)"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift"
+  ]
+}

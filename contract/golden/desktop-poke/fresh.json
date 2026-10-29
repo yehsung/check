@@ -1,0 +1,138 @@
+{
+  "cases": [
+    {
+      "id": "boundaries",
+      "messages": [
+        {
+          "body": "밥?",
+          "createdAt": 1789999990,
+          "fromAvatarURL": null,
+          "fromName": "보낸이",
+          "fromUserID": "peer-1",
+          "id": "m-in-pokes"
+        }
+      ],
+      "now": 1790000000,
+      "pokes": [
+        {
+          "createdAt": 1790000000,
+          "fromCharacterID": "aing_gold",
+          "fromName": "보낸이",
+          "id": "p-age0",
+          "kind": "normal"
+        },
+        {
+          "createdAt": 1789996400,
+          "fromCharacterID": null,
+          "fromName": "보낸이",
+          "id": "p-age3600",
+          "kind": "normal"
+        },
+        {
+          "createdAt": 1789999880,
+          "fromCharacterID": "robot",
+          "fromName": "보낸이",
+          "id": "u-age120",
+          "kind": "ultra"
+        },
+        {
+          "createdAt": 1789999879,
+          "fromCharacterID": null,
+          "fromName": "보낸이",
+          "id": "u-age121",
+          "kind": "normal"
+        },
+        {
+          "createdAt": 1789999990,
+          "fromCharacterID": null,
+          "fromName": "보낸이",
+          "id": "k-nil",
+          "kind": "normal"
+        },
+        {
+          "createdAt": 1789999990,
+          "fromCharacterID": null,
+          "fromName": "보낸이",
+          "id": "k-unknown",
+          "kind": "normal"
+        },
+        {
+          "createdAt": 1790000030,
+          "fromCharacterID": null,
+          "fromName": "",
+          "id": "p-future",
+          "kind": "normal"
+        }
+      ],
+      "rowsJSON": "[{\"id\":\"p-age0\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1790000000,\"kind\":\"normal\",\"from_character\":\"aing_gold\"},{\"id\":\"p-age3600\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789996400,\"kind\":\"normal\"},{\"id\":\"p-age3601\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789996399,\"kind\":\"normal\"},{\"id\":\"u-age120\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999880,\"kind\":\"ultra\",\"from_character\":\"robot\"},{\"id\":\"u-age121\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999879,\"kind\":\"ultra\"},{\"id\":\"u-age3601\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789996399,\"kind\":\"ultra\"},{\"id\":\"k-nil\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999990},{\"id\":\"k-unknown\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999990,\"kind\":\"zap\"},{\"id\":\"m-in-pokes\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999990,\"kind\":\"message\",\"body\":\" 밥?\\n\"},{\"id\":\"p-future\",\"from_user\":\"peer-1\",\"from_display_name\":\"\",\"created_epoch\":1790000030,\"kind\":\"normal\"}]"
+    },
+    {
+      "id": "messages",
+      "messages": [
+        {
+          "body": "a",
+          "createdAt": 1789999700,
+          "fromAvatarURL": null,
+          "fromName": "보낸이",
+          "fromUserID": "peer-a",
+          "id": "m-age300"
+        },
+        {
+          "body": "점심",
+          "createdAt": 1789999900,
+          "fromAvatarURL": "https://example.invalid/a.png",
+          "fromName": "보낸이",
+          "fromUserID": "peer-b",
+          "id": "m-age100"
+        },
+        {
+          "body": "하",
+          "createdAt": 1789999995,
+          "fromAvatarURL": null,
+          "fromName": "보낸이",
+          "fromUserID": "peer-1",
+          "id": "m-nfd"
+        }
+      ],
+      "now": 1790000000,
+      "pokes": [
+        {
+          "createdAt": 1789999950,
+          "fromCharacterID": null,
+          "fromName": "보낸이",
+          "id": "p-normal",
+          "kind": "normal"
+        },
+        {
+          "createdAt": 1789999950,
+          "fromCharacterID": null,
+          "fromName": "보낸이",
+          "id": "u-ultra",
+          "kind": "ultra"
+        }
+      ],
+      "rowsJSON": "[{\"id\":\"m-age300\",\"from_user\":\"peer-a\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999700,\"kind\":\"message\",\"body\":\"a\"},{\"id\":\"m-age301\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999699,\"kind\":\"message\",\"body\":\"늦음\"},{\"id\":\"m-blank\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999980,\"kind\":\"message\",\"body\":\"  \\n \"},{\"id\":\"m-nil\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999980,\"kind\":\"message\"},{\"id\":\"m-nfd\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999995,\"kind\":\"message\",\"body\":\"\\u1112\\u1161 \"},{\"id\":\"m-age100\",\"from_user\":\"peer-b\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999900,\"kind\":\"message\",\"body\":\" 점심 \",\"from_avatar_url\":\"https://example.invalid/a.png\"},{\"id\":\"p-normal\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999950,\"kind\":\"normal\"},{\"id\":\"u-ultra\",\"from_user\":\"peer-1\",\"from_display_name\":\"보낸이\",\"created_epoch\":1789999950,\"kind\":\"ultra\"}]"
+    },
+    {
+      "id": "empty",
+      "messages": [],
+      "now": 1790000000,
+      "pokes": [],
+      "rowsJSON": "[]"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+  "golden": "desktop-poke/fresh",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "messages": "P13: message 행만 · 본문 MessageBody.sanitized 뒤 비면 버린다 · 나이 ≤ 300 · createdAt 오름차순",
+    "pokes": "P9: message 행은 빠진다 · 나이 ≤ 3600 만 · ultra 는 나이 > 120 이면 normal 로 강등(버리지 않는다) · kind nil·모르는 값은 normal · 순서는 행 순서",
+    "time": "createdAt 은 1970 기준 정수 초 · now 도 같다"
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStorePoke.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift"
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "exportTests": 91,
+  "exportTests": 94,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -176,6 +176,42 @@
         "Sources/CheckCore/MilestoneTracker.swift",
         "Sources/CheckCore/SupabaseWorkModels.swift",
         "Sources/CheckCore/CheckTodoModel.swift"
+      ]
+    },
+    {
+      "cases": 3,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/fresh",
+      "path": "contract/golden/desktop-poke/fresh.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
+      ]
+    },
+    {
+      "cases": 4,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/requests",
+      "path": "contract/golden/desktop-poke/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
+      ]
+    },
+    {
+      "cases": 3,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/send-notice",
+      "path": "contract/golden/desktop-poke/send-notice.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
       ]
     },
     {

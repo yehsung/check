@@ -150,6 +150,36 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
+    "desktop-poke/fresh": {
+      "file": "5c692722574c6f1997b231f70d4db577b7257edced8f3577af27b1ff6283ac25",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "feb0424f4318945a2751bf0136362d362e01efc8832204e48c18b37826b7a4cd"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/check/WorkTimerStorePoke.swift": "62948627e9a45f7e8f17eceb1c70d0600489f2b6d41b6c9a3c9f0d6f662abc18"
+      }
+    },
+    "desktop-poke/requests": {
+      "file": "96b03065ea330d8860d4c9aa976a9dadb99f3f518c00248c1f004580634c5527",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "feb0424f4318945a2751bf0136362d362e01efc8832204e48c18b37826b7a4cd"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75"
+      }
+    },
+    "desktop-poke/send-notice": {
+      "file": "36ada8eab2e6073b03431c8b265b8fb24649f06fa2b4da76fb813cd515d8dd47",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "feb0424f4318945a2751bf0136362d362e01efc8832204e48c18b37826b7a4cd"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/check/WorkTimerStorePoke.swift": "62948627e9a45f7e8f17eceb1c70d0600489f2b6d41b6c9a3c9f0d6f662abc18"
+      }
+    },
     "duel-fee/fee": {
       "file": "481256ab041f96314be76b958171097adbf5a0443790ad94197927599c585dfd",
       "generator": {

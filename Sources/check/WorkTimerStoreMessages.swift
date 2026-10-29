@@ -638,7 +638,7 @@ extension WorkTimerStore {
                 // **서버가 본문을 정규화하고 시각을 정하기 때문**이다(내가 만든 가짜 행과 다음 갱신의 진짜 행이 다르면
                 // 말풍선이 순간 두 개로 보이거나 순서가 튄다). 이제 서버가 ok 에 **저장한 행의 id 와 시각**을 실어 주므로
                 // 그 행을 그 자리에 세운다(2026-10-30 안정화 — 이력 왕복 하나를 기다리지 않는다). id 가 서버 것이라 다음 이력의
-                // 진짜 행과 **같은 줄**이고(둘이 되지 않는다), 시각도 서버 것이다. 키가 없는 옛 서버 응답이면 nil → 예전 그대로.
+                // 진짜 행과 **같은 줄**이고(둘이 되지 않는다), 시각과 본문도 서버 것이다. 키가 없는 옛 서버 응답이면 nil → 예전 그대로.
                 if let entry = confirmedSentMessageEntry(response, to: userID, sentBody: body, createdAt: confirmedAt) {
                     insertConfirmedSentMessage(entry)
                 }
@@ -750,9 +750,10 @@ extension WorkTimerStore {
     /// · 시각은 서버 created_at 을 **이력 행과 같은 눈금(초, 반올림)**으로 둔다. 이력은 `created_epoch`
     ///   (`extract(epoch …)::bigint` — 반올림)로 시각을 세우므로, 소수초를 남기면 다음 이력의 같은 행과 시각이 달라
     ///   같은 초의 다른 말과 자리가 한 번 튄다.
-    /// · 본문은 **보낸 정규화 본문**(`MessageBody.validate` 가 전선에 실은 값)이다. 서버는 ok 에 저장 본문(`body`)도 싣지만
-    ///   공용 응답 모델(`PokeSendResponse` — 이 작업이 바꾸지 않는 계약)이 그 키를 읽지 않는다. 서버만 하는 접기
-    ///   (CRLF → LF · 빈 줄 셋 이상 → 둘 · 가장자리 ZWSP/BOM)가 걸리는 글은 곧바로 따라오는 이력이 **같은 id 로** 갈아 끼운다.
+    /// · 본문은 **서버가 ok 에 실어 준 저장 본문**(`response.body`)이 정본이다 — 서버만 하는 접기(CRLF → LF · 빈 줄 셋 이상 → 둘 ·
+    ///   가장자리 ZWSP/BOM)가 걸린 글을 클라 본문으로 세우면, 곧바로 따라오는 이력이 같은 id 로 갈아 끼울 때 글자가 한 번 바뀐다.
+    ///   그 키가 없는 응답이면 **보낸 정규화 본문**(`MessageBody.validate` 가 전선에 실은 값)으로 접는다. 어느 쪽이든 이력 행과
+    ///   같은 옮김 규칙(`sanitized` · 빈 본문 버림)을 지난다.
     /// · 이름·아바타는 이미 아는 값(그 사람과의 이력 → 콕찌르기 목록)에서 채운다. 대화 묶음은 **가장 최근 행**의 이름을 쓰므로
     ///   여기서 지어낸 "사용자"가 들어가면 머리 이름이 한 왕복 동안 바뀐다. 모르면 이력 행 규칙 그대로("사용자", 아바타 없음).
     /// · 읽음(1): 서버가 읽음을 알면 false(방금 보냈다 — 아직 안 읽었다), 모르면 nil(옛 서버 — 1 을 그리지 않는 이력 규칙).
@@ -764,8 +765,9 @@ extension WorkTimerStore {
         createdAt: Date?
     ) -> MessageHistoryEntry? {
         guard let id = response.messageId, !id.isEmpty, let createdAt else { return nil }
-        guard case .ok(let normalized) = MessageBody.validate(sentBody) else { return nil }
-        let body = MessageBody.sanitized(normalized)
+        let wireBody: String? = if case .ok(let normalized) = MessageBody.validate(sentBody) { normalized } else { nil }
+        guard let stored = response.body ?? wireBody else { return nil }
+        let body = MessageBody.sanitized(stored)
         guard MessageBody.hasVisibleContent(body) else { return nil }
         let identity = knownMessagePeerIdentity(peer)
         return MessageHistoryEntry(

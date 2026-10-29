@@ -1802,6 +1802,10 @@ package struct PokeSendResponse: Decodable, Equatable {
     /// 같은 `p_client_message_id` 가 이미 저장돼 있어 **새로 넣지 않고** 그 행을 돌려줬다(재전송 · 응답 유실 뒤 재시도).
     /// nil 은 false 와 같다. 화면은 이 값으로 아무것도 바꾸지 않는다 — 진단용이다(`ring` 도 이 경우 `"duplicate"`).
     package var duplicate: Bool?
+    /// send_message `ok` 에 서버가 실어 주는 **저장된 본문**(서버 정규화 뒤 — CRLF → LF · 빈 줄 셋 이상 → 둘 · 가장자리 ZWSP/BOM 등).
+    /// 맥은 이 값으로 방금 보낸 말풍선을 그 자리에 세운다 — 클라 정규화 본문으로 세우면 서버만 하는 접기가 걸린 글은 다음 이력이
+    /// 같은 id 로 갈아 끼울 때 글자가 한 번 바뀐다. nil = 이 키를 안 싣는 응답(찌르기·로컬 즉답) — 부르는 쪽이 보낸 본문으로 접는다.
+    package var body: String?
 
     package enum CodingKeys: String, CodingKey {
         case status
@@ -1814,6 +1818,7 @@ package struct PokeSendResponse: Decodable, Equatable {
         case messageId
         case createdAt
         case duplicate
+        case body
     }
 
     package init(
@@ -1826,7 +1831,8 @@ package struct PokeSendResponse: Decodable, Equatable {
         maxLength: Int? = nil,
         messageId: String? = nil,
         createdAt: String? = nil,
-        duplicate: Bool? = nil
+        duplicate: Bool? = nil,
+        body: String? = nil
     ) {
         self.status = status
         self.retryAfterSeconds = retryAfterSeconds
@@ -1838,6 +1844,7 @@ package struct PokeSendResponse: Decodable, Equatable {
         self.messageId = messageId
         self.createdAt = createdAt
         self.duplicate = duplicate
+        self.body = body
     }
 
     package init(from decoder: Decoder) throws {
@@ -1857,6 +1864,8 @@ package struct PokeSendResponse: Decodable, Equatable {
         messageId = try container.decodeIfPresent(String.self, forKey: .messageId)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         duplicate = try container.decodeIfPresent(Bool.self, forKey: .duplicate)
+        // ★ 그리고 한 번 더 — 저장 본문(2026-10-30 안정화). CodingKey 만 있고 이 줄이 없으면 말풍선은 늘 클라 본문으로 선다.
+        body = try container.decodeIfPresent(String.self, forKey: .body)
     }
 
     /// 스토어가 `ultraRemainingToday` 에 **그대로 대입할** 값(음수 방어만 한다). 상한 클램프를 여기서 하지 않는 이유는

@@ -143,3 +143,25 @@ func sendMessageDecodesServerRowConfirmationThroughJSON() async throws {
     #expect(old.createdAt == nil)
     #expect(old.duplicate == nil)
 }
+
+/// ④ 서버가 ok 에 싣는 **저장 본문**(`body`)도 JSON 을 통과해 읽힌다(2026-10-30 안정화 K1) — 맥이 방금 보낸 말풍선을 이 값으로
+/// 세운다. 커스텀 init(from:) 이라 CodingKey 만 있고 decodeIfPresent 줄이 없으면 값은 영원히 nil 이고, 그러면 서버만 하는 접기
+/// (CRLF → LF · 빈 줄 셋 → 둘)가 걸린 글은 다음 이력이 같은 id 로 갈아 끼울 때 글자가 한 번 바뀐다.
+@Test
+func sendMessageDecodesStoredBodyThroughJSON() async throws {
+    let host = "msg-idem-body"
+    MessageIdempotencyURLProtocol.prepare(
+        host: host,
+        okJSON: #"{"status":"ok","body":"가\n\n나","ring":"sent","message_id":"7f1c2d3e-0000-4000-8000-000000000002","created_at":"2026-10-30T02:36:27.435997+00:00"}"#
+    )
+    let response = try await idempotencyService(host: host)
+        .sendMessage(accessToken: "t", to: "peer", body: "가\n\n\n나", clientMessageID: "c4")
+    #expect(response.body == "가\n\n나", "서버 저장 본문이 디코드되지 않았다 — CodingKey 만 있고 decodeIfPresent 줄이 빠졌다")
+
+    // 키가 없는 응답(찌르기 · 로컬 즉답)은 nil(= 모름)이다 — 부르는 쪽이 보낸 본문으로 접는다.
+    MessageIdempotencyURLProtocol.prepare(host: "msg-idem-body-none", okJSON: #"{"status":"ok","ring":"sent"}"#)
+    let bare = try await idempotencyService(host: "msg-idem-body-none")
+        .sendMessage(accessToken: "t", to: "peer", body: "가나다", clientMessageID: "c5")
+    #expect(bare.body == nil)
+    #expect(PokeSendResponse(status: "ok").body == nil)
+}

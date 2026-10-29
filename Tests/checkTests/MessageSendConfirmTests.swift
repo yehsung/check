@@ -528,4 +528,100 @@ struct MessageSendConfirmTests {
         late.open()
         await messageReadWait { messageReadIdle(store) }
     }
+
+    // MARK: 반박 검증 보강(2026-10-30) — 서버 저장 본문 · 이미 선 행 · 왕복 중 로그아웃
+
+    /// K1: 서버만 하는 접기(빈 줄 셋 → 둘)가 걸린 글은 **서버가 ok 에 실은 저장 본문**으로 선다 — 클라 본문으로 세우면
+    /// 다음 이력이 같은 id 로 갈아 끼울 때 글자가 한 번 바뀐다.
+    @Test(.gomokuDefaultsCleanup)
+    func 즉시_말풍선은_서버가_저장한_본문으로_선다() async {
+        let late = MessageReadStubGate()
+        let stored = "가\n\n나"
+        let (store, host) = makeMessageReadStore("msc-body") { call, index in
+            switch call.rpc {
+            case "message_history_with_reads":
+                guard index >= 1 else { return Fx.historyReply([]) }
+                return Fx.historyReply([Fx.readsRow(id: "s1", peer: Fx.peerA, isMine: true, body: stored, epoch: Int(mscRoundedDate(offset: 30).timeIntervalSince1970), readByPeer: false)], gate: late)
+            case "message_unread_summary": return Fx.summaryReply([])
+            case "send_message": return mscOK(id: "s1", body: stored)
+            default: return nil
+            }
+        }
+        await mscOpenConversation(store)
+        store.sendMessage(to: Fx.peerA, body: "가\n\n\n나")
+        await messageReadWait { MessageReadStubProtocol.count(host: host, rpc: "message_history_with_reads") == 2 && !store.isSendingMessage }
+        #expect(store.messageHistory.map(\.body) == [stored], "즉시 말풍선이 서버 저장 본문이 아니다 — 다음 이력에서 글자가 바뀐다")
+        late.open()
+        await messageReadWait { messageReadIdle(store) }
+        #expect(store.messageHistory.map(\.body) == [stored])
+        #expect(store.messageHistory.count == 1)
+    }
+
+    /// 왕복 중에 띄운 이력이 **먼저** 그 행을 실어 왔다(또는 재전송의 duplicate 가 이미 선 행을 돌려줬다) — ok 가 와도 한 줄이다.
+    @Test(.gomokuDefaultsCleanup)
+    func 이미_선_행에_ok_가_와도_한_줄이다() async {
+        let sendGate = MessageReadStubGate()
+        let late = MessageReadStubGate()
+        let (store, host) = makeMessageReadStore("msc-dup") { call, index in
+            let s1 = Fx.readsRow(id: "s1", peer: Fx.peerA, isMine: true, body: "안녕", epoch: Int(mscRoundedDate(offset: 30).timeIntervalSince1970), readByPeer: false)
+            switch call.rpc {
+            case "message_history_with_reads":
+                switch index {
+                case 0: return Fx.historyReply([])
+                case 1: return Fx.historyReply([s1])              // 왕복 중에 띄웠다 — 서버는 이미 저장했다
+                default: return Fx.historyReply([s1], gate: late)  // ok 뒤에 따라오는 조회(붙잡아 둔다)
+                }
+            case "message_unread_summary": return Fx.summaryReply([])
+            case "send_message":
+                var reply = mscOK(id: "s1", duplicate: true)
+                reply.gate = sendGate
+                return reply
+            default: return nil
+            }
+        }
+        await mscOpenConversation(store)
+        store.sendMessage(to: Fx.peerA, body: "안녕")
+        await messageReadWait { mscSendCalls(host).count == 1 }
+        await store.performLoadMessageHistory()
+        #expect(store.messageHistory.map(\.id) == ["s1"], "전제: 왕복 중에 띄운 이력이 그 행을 먼저 세웠다")
+
+        sendGate.open()
+        await messageReadWait { MessageReadStubProtocol.count(host: host, rpc: "message_history_with_reads") == 3 && !store.isSendingMessage }
+        #expect(store.messageHistory.filter { $0.id == "s1" }.count == 1, "이미 선 행에 ok 가 오자 말풍선이 두 개가 됐다")
+        #expect(store.messageReadRuntime.confirmedSentRows.isEmpty, "넣지 않은 줄을 장부에 적었다")
+        late.open()
+        await messageReadWait { messageReadIdle(store) }
+        #expect(store.messageHistory.map(\.id) == ["s1"])
+    }
+
+    /// 전송 왕복 중에 로그아웃하고 다른 계정으로 들어왔다 — 앞 계정의 ok 가 늦게 와도 새 계정의 이력·장부·깃발·문구에 서지 않는다.
+    @Test(.gomokuDefaultsCleanup)
+    func 전송_왕복_중_로그아웃하면_앞_계정의_말이_새_계정에_서지_않는다() async {
+        let sendGate = MessageReadStubGate()
+        let (store, host) = makeMessageReadStore("msc-gen") { call, _ in
+            switch call.rpc {
+            case "message_history_with_reads": return Fx.historyReply([])
+            case "message_unread_summary": return Fx.summaryReply([])
+            case "send_message":
+                var reply = mscOK(id: "s1")
+                reply.gate = sendGate
+                return reply
+            default: return nil
+            }
+        }
+        await mscOpenConversation(store)
+        store.sendMessage(to: Fx.peerA, body: "안녕")
+        await messageReadWait { mscSendCalls(host).count == 1 }
+
+        store.clearPersistedSession()
+        store.session = SupabaseSession(accessToken: "access-token-2", refreshToken: nil, userID: mscPeerC)
+        let historyCalls = MessageReadStubProtocol.count(host: host, rpc: "message_history_with_reads")
+        sendGate.open()
+        await messageReadWait(0.5) { !store.messageHistory.isEmpty }
+        #expect(store.messageHistory.isEmpty, "앞 계정의 말이 새 계정 이력에 섰다")
+        #expect(store.messageReadRuntime.confirmedSentRows.isEmpty, "앞 계정의 줄이 새 계정 장부에 남았다")
+        #expect(!store.messageReadRuntime.sendLedger.serverConfirmsRows, "앞 계정의 응답이 새 계정의 재시도 깃발을 세웠다")
+        #expect(store.messageNotice != WorkTimerStore.messageSentNotice, "앞 계정의 결과 문구가 새 계정 화면에 섰다")
+        #expect(MessageReadStubProtocol.count(host: host, rpc: "message_history_with_reads") == historyCalls)
+    }
 }

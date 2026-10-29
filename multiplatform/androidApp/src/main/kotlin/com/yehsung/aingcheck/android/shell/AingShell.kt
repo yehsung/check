@@ -13,6 +13,9 @@ import com.yehsung.aingcheck.android.screens.session.LaunchEntry
 import com.yehsung.aingcheck.android.screens.session.UpdateRequiredEntry
 import com.yehsung.aingcheck.android.screens.shop.CakeGiftSheetRoute
 import com.yehsung.aingcheck.android.screens.stage.AingStage
+import com.yehsung.aingcheck.android.screens.stage.StageAssets
+import com.yehsung.aingcheck.android.screens.stage.StageClock
+import com.yehsung.aingcheck.android.screens.stage.StageHandle
 import com.yehsung.aingcheck.android.widget.rankingsMood
 import com.yehsung.aingcheck.ui.screens.session.kit.rememberPortrait
 import com.yehsung.aingcheck.core.session.SessionPhase
@@ -31,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -154,7 +158,7 @@ private fun AssembledShell(
         LocalScreenArt provides app.screenArt,
         LocalAppUserCharacters provides phone.characters.directory,
         // W5-c 살아 있는 미리보기(고르기 머리 · 선물 받은 뒤 그림 — W4-c §5).
-        LocalLiveCharacterPreview provides LiveCharacterPreview { id, size, m, serial -> AingStage(id, null, m, artSize = size, revealKey = serial) },
+        LocalLiveCharacterPreview provides shellLivePreview(),
     ) {
         when (phase) {
             ShellPhase.LAUNCHING -> LaunchEntry()
@@ -211,6 +215,17 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
     // 생일 선물 고르기 창 — 어느 탭에 있든 뜬다(W4-c §4, 스토어가 대국 · 관전 중엔 스스로 안 띄운다).
     CakeGiftSheetRoute(phone.me)
 }
+
+/**
+ * 셸이 꽂는 살아 있는 미리보기(W5-c — 고르기 머리 · 케이크 시트 · 뽑기 공개 자리). **공개 번호 0 = 아직 공개 없음 → 열쇠 없음**:
+ * 0 을 열쇠로 넘기면 고르기 머리 · 케이크 시트(둘 다 revealSerial 기본 0)가 처음 열릴 때마다 한 바퀴 돈다. iOS 는 그 두 자리가 정지 초상
+ * (MeCakeGiftViews `CharacterPortrait(framed: false)`)이라 열 때 돌지 않는다. 1 이상(뽑기 결과)만 새 값마다 한 바퀴.
+ * [assets] · [clock] · [handle] 은 시험이 넘긴다(AingStageComposeTest).
+ */
+internal fun shellLivePreview(assets: StageAssets? = null, clock: StageClock = StageClock.System, handle: StageHandle? = null): LiveCharacterPreview =
+    LiveCharacterPreview { id, size, m, serial ->
+        AingStage(id, null, m, artSize = size, revealKey = serial.takeIf { it > 0 }, assets = assets ?: StageAssets.of(LocalContext.current), clock = clock, handle = handle)
+    }
 
 /** '나' 탭 얼굴(iOS meLabel — CharacterTabIcon(displayedCharacterID, displayedMood)). 그림을 아직 못 읽었으면 art = null → 사람 기호. */
 @Composable

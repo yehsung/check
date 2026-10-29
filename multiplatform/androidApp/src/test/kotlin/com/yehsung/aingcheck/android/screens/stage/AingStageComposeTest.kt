@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
@@ -24,11 +25,13 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yehsung.aingcheck.character.math.Vec2
+import com.yehsung.aingcheck.android.shell.shellLivePreview
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.theme.AingTheme
@@ -233,6 +236,28 @@ class AingStageComposeTest {
         key = 2
         awaitReveals(handle, 1)
         assertEquals(1, handle.director!!.reveals)
+    }
+
+    /**
+     * 셸 미리보기(shellLivePreview — 고르기 머리 · 케이크 시트 · 뽑기 공개 자리)는 공개 번호 0 에 돌지 않는다(iOS 는 그 두 자리가 정지 초상).
+     * 1 이상은 새 값마다 한 바퀴. 0 을 열쇠로 되돌리면(8b 이전 배선) 첫 단언이 빨개진다 — 스핀 칸을 먼저 데워 두어 0 의 공개가 기다림 안에 걸리게 한다.
+     */
+    @Test
+    fun 셸_미리보기는_공개_번호_0_에_돌지_않는다() {
+        compose.mainClock.autoAdvance = false
+        var serial by mutableStateOf(0)
+        val handle = StageHandle()
+        val preview = shellLivePreview(assets = assets, clock = clock, handle = handle)
+        compose.setContent { AingTheme(dark = true) { preview.Draw(CharacterCatalog.goldAingID, 92.dp, Modifier, serial) } }
+        awaitLive(handle)
+        assertTrue(handle.store!!.prewarmSpin(handle.director!!.spinPrewarmCells()), "스핀 칸 데움 실패 — 공개가 걸릴 수 없어 이 시험이 늘 초록이 된다")
+        runCatching { compose.waitUntil(5_000) { compose.mainClock.advanceTimeByFrame(); (handle.director?.reveals ?: 0) > 0 } }
+        frames(200)
+        assertEquals(0, handle.director!!.reveals, "공개 번호 0(고르기 머리 · 케이크 시트 첫 열기)에 한 바퀴 돌았다")
+        serial = 1
+        awaitReveals(handle, 1)
+        assertEquals(1, handle.director!!.reveals)
+        assertEquals(StagePolicy.REVEAL_REACTION, handle.director!!.player.activeReaction)
     }
 
     @Test

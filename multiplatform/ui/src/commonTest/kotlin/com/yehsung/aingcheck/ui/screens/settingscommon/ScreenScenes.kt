@@ -124,8 +124,12 @@ object ScreenScenes {
     /** 나 탭 장면: 루트 새로고침을 끝낸 스토어(머리 · 상점 · 착용 · 기록 · 리밋 · 주간 · 미션). */
     /**
      * @param todayShorter 음성 기준선: 오늘(9/17) 근무 한 건을 2시간 30분 → 2시간으로(잔디 칸 하나의 단계 · 막대 글자만 바뀐다).
+     * @param statusGlyph 상태메시지 픽스처의 그림 글자(📝)를 이 글자로(서버값 · 초안이 같이 바뀌어 [저장] 상태 · 글자 수는 그대로) — 프로필 스냅숏이
+     *   OS 그림 글자 칸을 찾는 탐침(ScreenSnapshotDesktopTest.profileLight).
      */
-    fun me(rubyOverride: Long? = null, settings: Boolean = false, subScreens: Boolean = false, todayShorter: Boolean = false): MeStore {
+    fun me(
+        rubyOverride: Long? = null, settings: Boolean = false, subScreens: Boolean = false, todayShorter: Boolean = false, statusGlyph: String? = null,
+    ): MeStore {
         lateinit var store: MeStore
         runTest {
             val h = ScreenHarness(this, DemoFixtures(DemoFixtures.me), scenario = "me")
@@ -137,8 +141,14 @@ object ScreenScenes {
                         DemoFixture("me/_me-settings/rest.profiles.get@select=minigame_public.json").read()
                     // 데모 리밋 픽스처에는 device_id 가 없다(0.3.47 전 모양) — 기기 신원을 지어내지 않는 스토어가 줄을 다 버린다.
                     // 카드 줄이 서는 모양을 보려고 맥 한 대의 이름·id 를 덧붙인다(값은 픽스처 그대로).
+                    statusGlyph != null && r.path == "/rest/v1/profiles" && r.query.any { it.second.contains("status_message") } ->
+                        DemoFixture("me/rest.profiles.get@select=status_message.json").read()
+                            .also { check(it.contains("📝")) { "상태메시지 그림 글자를 못 찾았다 — 픽스처가 바뀌었다" } }
+                            .replace("📝", statusGlyph)
+                    // 줄 끝을 LF 로 접고 바꾼다: Windows 러너의 체크아웃은 core.autocrlf 로 픽스처가 CRLF 라 "\n" 을 낀 바늘이 빗나간다
+                    // (7차 CI — 바꾸기 실패 → 이 응답이 던져져 잔디가 통째로 비어 음성 기준선이 화면 절반 이상 달랐다).
                     todayShorter && r.path == "/rest/v1/work_sessions" && r.query.any { it.first == "limit" } ->
-                        DemoFixture("me/rest.work_sessions.get@limit=5000.json").read()
+                        DemoFixture("me/rest.work_sessions.get@limit=5000.json").read().replace("\r\n", "\n")
                             .replace("\"ended_at\": \"2026-09-17T03:30:00+00:00\",\n  \"duration_seconds\": 9000", "\"ended_at\": \"2026-09-17T03:00:00+00:00\",\n  \"duration_seconds\": 7200")
                             .also { check(it.contains("2026-09-17T03:00:00")) { "오늘 근무 줄을 못 찾았다 — 픽스처가 바뀌었다" } }
                     r.path == "/rest/v1/ai_limits" -> DemoFixture("me/rest.ai_limits.get.json").read()

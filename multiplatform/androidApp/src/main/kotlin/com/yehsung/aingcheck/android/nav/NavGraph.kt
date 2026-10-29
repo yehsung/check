@@ -26,6 +26,7 @@ import com.yehsung.aingcheck.android.screens.me.MeDestinations
 import com.yehsung.aingcheck.android.screens.me.MeHomeRouteScreen
 import com.yehsung.aingcheck.android.screens.me.ProfileRouteScreen
 import com.yehsung.aingcheck.android.screens.rankings.RankingsRouteScreen
+import com.yehsung.aingcheck.android.widget.rankingsMood
 import com.yehsung.aingcheck.android.screens.settings.BlockedPeopleRouteScreen
 import com.yehsung.aingcheck.android.screens.settings.NotificationPrimerRouteScreen
 import com.yehsung.aingcheck.android.screens.settings.SettingsRouteScreen
@@ -222,12 +223,13 @@ private fun NavGraphBuilder.rankingsGraph(app: AppScreens) =
     navigation<Dest.RankingsGraph>(startDestination = Dest.RankingsHome()) {
         composable<Dest.RankingsHome> {
             val p = app.phone
+            val snapshot = p.widgets.current
             val me = RankingsScreenRules.myFace(
                 meEquippedLoaded = p.me.equippedLoaded,
                 meEquippedCharacterID = p.me.equippedServerID,
-                snapshotCharacterID = null,
+                snapshotCharacterID = snapshot?.characterID,
                 nowCard = p.now.myCard(p.environment.clock.now()),
-                snapshotMood = null,
+                snapshotMood = snapshot?.rankingsMood(),
             )
             RankingsRouteScreen(store = p.rankings, boardArg = it.toRoute<Dest.RankingsHome>().board, me = me)
         }

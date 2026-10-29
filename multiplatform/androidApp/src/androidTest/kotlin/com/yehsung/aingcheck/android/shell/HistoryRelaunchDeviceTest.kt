@@ -12,9 +12,11 @@ import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.AingRoute
 import com.yehsung.aingcheck.android.routing.RouteIntents
 import com.yehsung.aingcheck.android.routing.RouteRequest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.UUID
@@ -22,6 +24,21 @@ import java.util.UUID
 @RunWith(AndroidJUnit4::class)
 class HistoryRelaunchDeviceTest {
     private val app get() = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as AingApplication
+
+    /**
+     * 이 시험은 셸(수락 증표 · 기록 표시)만 잰다 — Robolectric 셸 시험(ShellNavigationTest)과 같이 자리표시 셸을 고른다.
+     * 조립 셸은 시험 프로세스에서 세션을 시작하지 않아(AingApplication: runningTests 면 phone.start 안 함 — 망 0) 실행 중 단계에 머물고
+     * 탭 · 화면을 열지 않는다. 같은 프로세스의 다음 시험(AppLaunchDeviceTest)이 조립 셸을 재므로 끝나면 되돌린다.
+     */
+    @Before
+    fun placeholderShell() {
+        app.container.usePlaceholderShell()
+    }
+
+    @After
+    fun assembledShellAgain() {
+        app.container.usePlaceholderShell(on = false)
+    }
 
     private fun waitFor(timeoutMs: Long = 10_000, condition: () -> Boolean): Boolean {
         val end = SystemClock.uptimeMillis() + timeoutMs

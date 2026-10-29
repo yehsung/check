@@ -83,7 +83,9 @@ aab_signer() {
   local f="$1" sha out
   sha="$(keytool -J-Duser.language=en -printcert -rfc -jarfile "$f" 2>/dev/null | tool cert-sha256 2>/dev/null || true)"
   out="$(jarsigner -J-Duser.language=en -verify "$f" 2>&1 || true)"
-  if printf '%s\n' "$out" | grep -qx 'jar verified.'; then echo "${sha:-none} 0"; else echo "${sha:-none} 1"; fi
+  # 파이프(printf | grep -q)로 재지 않는다: AGP 가 서명한 AAB 는 출력이 수백 KB(JarInputStream 불일치 목록)라 grep -q 가 둘째 줄에서
+  # 먼저 닫으면 printf 가 SIGPIPE(141) → pipefail 이 판정을 1 로 뒤집는다(7차 dryrun 'sign.aab rc=1' 의 원인 — 서명은 정상이었다).
+  if grep -qx 'jar verified.' <<<"$out"; then echo "${sha:-none} 0"; else echo "${sha:-none} 1"; fi
 }
 
 cmd="${1:-}"

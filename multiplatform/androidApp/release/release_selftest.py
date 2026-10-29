@@ -504,6 +504,20 @@ def verify_cases(ctx, keyA, keyB):
         parts = out.strip().split()
         return (parts[-2], parts[-1]) if rc == 0 and len(parts) >= 2 else ("none", "1")
 
+    # R47: jarsigner 출력이 파이프 버퍼(64 KiB)보다 긴 서명된 AAB(AGP 판은 JarInputStream 불일치 목록으로 수백 KB) — 'jar verified.' 를
+    # 읽어 0 이어야 한다(7차 dryrun 에서 printf | grep -q 가 SIGPIPE·pipefail 로 1 을 냈다). 짝: 같은 길이에 그 줄이 없으면 1.
+    long_aab = make_archive(ctx, "long-out.aab", dex_dry, kind="aab", sign_key=(pathA, pwA))
+    for label, verdict_line, want in (("R47 긴 jarsigner 출력(서명됨) → 0", "jar verified.", "0"), ("R47b 긴 jarsigner 출력(판정 줄 없음) → 1", "jar is unsigned.", "1")):
+        fake_dir = os.path.join(ctx.root, "fake-jarsigner-" + want)
+        os.makedirs(fake_dir, exist_ok=True)
+        with open(os.path.join(fake_dir, "jarsigner"), "w") as f:
+            f.write("#!/bin/sh\necho\necho '" + verdict_line + "'\ni=0\nwhile [ $i -lt 3000 ]; do echo \"- Entry base/assets/x$i.webp is signed in JarFile but is not signed in JarInputStream\"; i=$((i+1)); done\n")
+        os.chmod(os.path.join(fake_dir, "jarsigner"), 0o755)
+        rc, out = ctx.bash("aab-signer", long_aab, env={"PATH": fake_dir + os.pathsep + ctx.env.get("PATH", "")})
+        parts = out.strip().split()
+        got = parts[-1] if rc == 0 and parts else "?"
+        ctx.case(label, got == want and parts[-2] == certA, f"rc={rc} 판정={got} 기대 {want} 지문={parts[-2] if len(parts) >= 2 else '?'}")
+
     apks_ok = os.path.join(ctx.root, "apksigner-ok.txt")
     with open(apks_ok, "w") as f:
         f.write(f"Signer #1 certificate DN: CN=w6a selftest A\nSigner #1 certificate SHA-256 digest: {certA}\n")

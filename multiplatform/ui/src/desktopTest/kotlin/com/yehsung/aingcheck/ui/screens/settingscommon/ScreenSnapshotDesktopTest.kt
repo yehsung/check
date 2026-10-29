@@ -13,6 +13,7 @@ import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.wire.models.PushPrefs
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.components.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.PixelImage
 import com.yehsung.aingcheck.ui.components.SnapshotCompare
 import com.yehsung.aingcheck.ui.components.SnapshotPolicy
 import com.yehsung.aingcheck.ui.screens.rankings.RankingsMyFace
@@ -89,13 +90,20 @@ class ScreenSnapshotDesktopTest {
         scene(false, PICKER_H) { CharacterPickerScene(subShort, it) },
     )
 
-    /** 프로필(착용 캐릭터 얼굴 · 별명 · 상태메시지 · 착용 캐릭터 줄). 기준선 = 별명 칸에 "새벽이"(글자 수 · [저장]이 켜진다). */
+    /**
+     * 프로필(착용 캐릭터 얼굴 · 별명 · 상태메시지 · 착용 캐릭터 줄). 기준선 = 별명 칸에 "새벽이"(글자 수 · [저장]이 켜진다).
+     * 상태메시지 픽스처 끝의 📝 는 OS 글꼴로 그려진다(맥 Apple Color Emoji · Windows Segoe UI Emoji — 7차 CI windows 칸 최대 141) →
+     * 그 칸만 OS 그림 글자 칸으로 덮는다(W4cDesktopSnapshots 머리말과 같은 규칙 · 칸은 이 러너에서 그 글자만 바꾼 장면과의 차이로 찾는다).
+     */
     @Test
     fun profileLight() = check(
         "screens/me", "me-profile-light", PROFILE_H,
         scene(false, PROFILE_H) { ProfileScene(sub, it) },
         scene(false, PROFILE_H) { ProfileScene(subTyped, it) },
+        glyphProbe = scene(false, PROFILE_H) { ProfileScene(subNoGlyph, it) },
     )
+    // 탐침도 그림 글자(📌)다 — 한글로 바꾸면 줄의 글꼴 대체가 사라져 줄 높이 · 기준선이 움직이고 차이가 줄 전체(1% 넘음)로 번진다(맥 실측).
+    private val subNoGlyph by lazy { ScreenScenes.me(subScreens = true, statusGlyph = "📌") }
 
     /** 제보(쓰기 카드 · 내가 보낸 제보 세 줄 · 답장). 기준선 = 초안을 쓴 뒤(글자 수 · [보내기]가 켜진다). */
     @Test
@@ -137,7 +145,14 @@ class ScreenSnapshotDesktopTest {
 
     private fun theme(dark: Boolean) = if (dark) "dark" else "light"
 
-    private fun check(group: String, name: String, heightDp: Int, scene: @Composable () -> Unit, other: @Composable () -> Unit) {
+    /**
+     * [glyphProbe] — 장면에서 OS 그림 글자 하나만 다른 그림 글자로 바꾼 장면. 둘의 차이 상자([GLYPH_PAD]px 넓힘)가 그림 글자 칸이다. 기록 기계가 아닌
+     * 러너의 굵은 대조에서만 그 칸을 골든 픽셀로 덮는다(맥은 언제나 통째 픽셀 그대로). 칸은 화면의 1% 이하여야 한다.
+     */
+    private fun check(
+        group: String, name: String, heightDp: Int, scene: @Composable () -> Unit, other: @Composable () -> Unit,
+        glyphProbe: (@Composable () -> Unit)? = null,
+    ) {
         val renders = List(3) { DesktopSnapshots.render(width, heightDp, content = scene) }
         val out = DesktopSnapshots.outDir()
         for (i in 1..2) {
@@ -158,8 +173,16 @@ class ScreenSnapshotDesktopTest {
         val expected = DesktopSnapshots.readPng(golden)
         val exact = SnapshotPolicy.isRecordingHost(System.getProperty("os.name"), System.getProperty("os.arch"))
         val diff = SnapshotCompare.diff(expected, actual)
-        val coarse = SnapshotCompare.coarse(expected, actual)
-        println("AINGCHECK-SNAPSHOT desktop $name mode=${if (exact) "exact" else "coarse"} ${actual.width}x${actual.height} diff=$diff coarse=$coarse")
+        val glyph = glyphProbe?.let { probe ->
+            val box = requireNotNull(glyphBox(actual, DesktopSnapshots.render(width, heightDp, content = probe))) {
+                "$name: 그림 글자 칸을 못 찾았다 — 글자만 바꾼 장면이 같은 픽셀"
+            }
+            assertTrue((box[2] - box[0] + 1) * (box[3] - box[1] + 1) <= actual.argb.size / 100, "$name: 그림 글자 칸이 화면의 1% 를 넘는다(${box.toList()})")
+            box
+        }
+        val coarse = SnapshotCompare.coarse(expected, if (exact || glyph == null) actual else actual.withRegionFrom(expected, glyph))
+        val maskNote = glyph?.let { " glyphMask=${it.toList()}${if (exact) "(unused)" else ""}" } ?: ""
+        println("AINGCHECK-SNAPSHOT desktop $name mode=${if (exact) "exact" else "coarse"} ${actual.width}x${actual.height} diff=$diff coarse=$coarse$maskNote")
         if (!(if (exact) diff.identical else coarse.withinTolerance)) {
             DesktopSnapshots.writePng(actual, File(out, "$name-actual.png"))
             SnapshotCompare.diffImage(expected, actual)?.let { DesktopSnapshots.writePng(it, File(out, "$name-diff.png")) }
@@ -175,7 +198,35 @@ class ScreenSnapshotDesktopTest {
         assertFalse(negativeCoarse.withinTolerance, "$name: 굵은 대조가 다른 입력을 못 잡는다($negativeCoarse)")
     }
 
+    /** [actual] 과 [probe] 가 다른 픽셀의 상자(왼 · 위 · 오른 · 아래, 양끝 포함)를 [GLYPH_PAD]px 넓힌 것. 같으면 null. */
+    private fun glyphBox(actual: PixelImage, probe: PixelImage): IntArray? {
+        assertEquals(actual.width to actual.height, probe.width to probe.height)
+        var l = Int.MAX_VALUE
+        var t = Int.MAX_VALUE
+        var r = -1
+        var b = -1
+        for (y in 0 until actual.height) for (x in 0 until actual.width) {
+            if (actual.argb[y * actual.width + x] != probe.argb[y * actual.width + x]) {
+                l = minOf(l, x); t = minOf(t, y); r = maxOf(r, x); b = maxOf(b, y)
+            }
+        }
+        if (r < 0) return null
+        return intArrayOf(
+            (l - GLYPH_PAD).coerceAtLeast(0), (t - GLYPH_PAD).coerceAtLeast(0),
+            (r + GLYPH_PAD).coerceAtMost(actual.width - 1), (b + GLYPH_PAD).coerceAtMost(actual.height - 1),
+        )
+    }
+
+    /** [box] 안 픽셀만 [source] 것으로 바꾼 사본. */
+    private fun PixelImage.withRegionFrom(source: PixelImage, box: IntArray): PixelImage {
+        val out = argb.copyOf()
+        for (y in box[1]..box[3]) for (x in box[0]..box[2]) out[y * width + x] = source.argb[y * width + x]
+        return PixelImage(width, height, out)
+    }
+
     companion object {
+        /** 그림 글자 칸 여유(px) — OS 마다 그림 글자 상자가 조금 다르다(맥 글자 상자 몫 · 가장자리 번짐). */
+        const val GLYPH_PAD = 6
         const val RANKINGS_H = 660
         const val ME_H = 1400
         const val SETTINGS_H = 1640

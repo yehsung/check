@@ -15,7 +15,13 @@ import com.yehsung.aingcheck.android.nav.AppScreens
 import com.yehsung.aingcheck.android.push.AndroidPushSystem
 import com.yehsung.aingcheck.android.screens.account.DefaultAndroidAccountCleanup
 import com.yehsung.aingcheck.android.shell.ShellPhases
+import com.yehsung.aingcheck.android.widget.AingWidgetRuntime
+import com.yehsung.aingcheck.android.widget.AingWidgetSnapshotFaces
 import com.yehsung.aingcheck.android.widget.AingWidgetUpdater
+import com.yehsung.aingcheck.android.widget.AndroidWidgetSharedData
+import com.yehsung.aingcheck.android.widget.WidgetSnapshotTodoPatcher
+import com.yehsung.aingcheck.android.widget.WidgetTodoToggle
+import com.yehsung.aingcheck.android.widget.toAingWidgetInput
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
 import com.yehsung.aingcheck.core.net.realtime.KtorRealtimeTransport
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
@@ -28,6 +34,7 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.feature.phone.app.PhoneAppModel
 import com.yehsung.aingcheck.feature.phone.app.PhoneEnvironment
 import com.yehsung.aingcheck.feature.phone.widget.FileWidgetSnapshotFile
+import com.yehsung.aingcheck.feature.phone.widget.WidgetSnapshotCodec
 import com.yehsung.aingcheck.feature.phone.widget.WidgetSnapshotWriter
 import com.yehsung.aingcheck.ui.components.CharacterArt
 import com.yehsung.aingcheck.ui.screens.session.kit.AvatarPhotoLoader
@@ -159,7 +166,7 @@ class AppContainer(
                     HttpEngineFactory.ktorClient(KtorRealtimeTransport.clientConfig), mainScope, runningTests, System.getenv(),
                 ),
                 runsTimers = !runningTests.isRunningTests,
-                widgetFile = FileWidgetSnapshotFile(File(app.filesDir, WidgetSnapshotWriter.FILE_NAME)),
+                widgetFile = widgetFile,
                 reloadWidgetTimelines = { mainScope.launch { AingWidgetUpdater.updateAll(app) } },
                 todoStorage = todoStorage,
                 collation = NaturalKoNameCollation,
@@ -167,6 +174,34 @@ class AppContainer(
                 knownCharacterIDs = CharacterArt.portraitIds,
                 logger = logger,
             ),
+        )
+    }
+
+    /** 위젯 스냅숏 파일 하나(W2-f 쓰기 창구가 쓰고 위젯 얼굴이 읽는다 — 같은 프로세스 · 같은 파일). */
+    val widgetFile: FileWidgetSnapshotFile by lazy { FileWidgetSnapshotFile(File(app.filesDir, WidgetSnapshotWriter.FILE_NAME)) }
+
+    /**
+     * 위젯 런타임 배선(K11 — AingWidgetFaces.kt 머리말). 얼굴 = 그릴 때마다 스냅숏 파일을 읽어 [toAingWidgetInput](없거나 못 읽으면 로그아웃 얼굴 —
+     * 로그아웃은 쓰기 창구가 파일을 지운다). 체크 = WidgetTodoToggle(앱과 같은 설정 · 금고 · 할 일 폴더 · 서버 문, 토큰 갱신 없음).
+     * 체크 본문은 메인에서 돈다 — 스냅숏 줄 고치기([NowWidgetSnapshotSink.patchTodo])와 할 일 파일 편집이 앱 스토어와 같은 줄기를 탄다
+     * (서버 요청은 멈춤 지점이라 메인을 막지 않는다). 앱 프로세스 시작 때 한 번(AingApplication.startPhone — 시험 프로세스는 안 부른다).
+     */
+    fun installWidgetRuntime() {
+        AingWidgetRuntime.faces = AingWidgetSnapshotFaces { widgetFile.read()?.let(WidgetSnapshotCodec::decode)?.toAingWidgetInput() }
+        AingWidgetRuntime.toggleTodo = { id ->
+            withContext(Dispatchers.Main) {
+                WidgetTodoToggle.run(id, widgetShared, { wallClock.now().timeIntervalSince1970 }, WidgetTodoToggle.serviceSync(service))
+            }
+        }
+    }
+
+    /** 위젯 체크가 앱과 나눠 보는 창구(첫 체크 때 만든다 — 금고 · 서버 문을 앱 시작에 미리 열지 않는다). */
+    private val widgetShared: AndroidWidgetSharedData by lazy {
+        AndroidWidgetSharedData(
+            prefs = keyValueStore,
+            vault = tokenVault,
+            storage = todoStorage,
+            snapshot = WidgetSnapshotTodoPatcher { id, done -> phone.widgetSink.patchTodo(id, done) },
         )
     }
 
@@ -190,11 +225,12 @@ class AppContainer(
     private var placeholderShell = false
 
     /**
-     * 셸 시험(ShellNavigationTest · ShellTabColorsTest)이 화면 없이 탭 · 딥링크 · 수락 증표만 재려고 고르는 자리표시 셸.
-     * Activity 를 띄우기 **전에** 부른다. 단계는 탭으로 고정되고, 수락은 [pendingInviteAccept] 에 적힌다.
+     * 셸 시험(ShellNavigationTest · ShellTabColorsTest · 기기 HistoryRelaunchDeviceTest)이 화면 없이 탭 · 딥링크 · 수락 증표만 재려고 고르는
+     * 자리표시 셸. Activity 를 띄우기 **전에** 부른다. 단계는 탭으로 고정되고, 수락은 [pendingInviteAccept] 에 적힌다.
+     * [on] = false 는 되돌리기다 — 기기 시험은 한 프로세스에서 이어 돌아 다음 시험(AppLaunchDeviceTest — 조립 셸을 잰다)이 이 값을 물려받는다.
      */
-    fun usePlaceholderShell() {
-        placeholderShell = true
+    fun usePlaceholderShell(on: Boolean = true) {
+        placeholderShell = on
     }
 
     /** 셸이 그릴 화면 한 벌. 자리표시 셸이면 null. */

@@ -36,6 +36,7 @@ class AingApplication : Application() {
     /** 수명(ON_START/ON_STOP 만 — E§5.1) · 푸시 다리(패치 0001) · client_release → 세션 복원(한 번). */
     private fun startPhone(c: AppContainer) {
         val phone = c.phone
+        c.installWidgetRuntime()
         c.lifecycle.addListener { foreground -> if (foreground) phone.sceneDidBecomeActive() else phone.sceneDidEnterBackground() }
         c.pushSystem.onToken = phone.push::didReceivePushToken
         c.pushSystem.onTokenFailure = phone.push::didFailToRegister

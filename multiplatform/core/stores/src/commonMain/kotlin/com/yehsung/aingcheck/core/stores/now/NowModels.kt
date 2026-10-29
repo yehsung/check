@@ -23,6 +23,7 @@ object NowText {
 
     const val workingOnMac = "맥에서 근무 중"
     const val workingOnPhone = "폰에서 근무 중"
+    const val workingOnWindows = "윈도우에서 근무 중"
     const val working = "근무 중"
     const val notWorking = "근무 안 함"
     fun sessionSince(time: String): String = "이번 세션 ${time}부터"
@@ -86,6 +87,7 @@ object NowText {
     const val workStopConfirmTitle = "근무를 끝낼까요?"
     fun workStopConfirmMessage(origin: NowWorkOrigin): String = when (origin) {
         NowWorkOrigin.mac -> "맥에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
+        NowWorkOrigin.windows -> "윈도우에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
         NowWorkOrigin.phone, NowWorkOrigin.unknown -> "지금까지의 시간은 그대로 기록돼요."
     }
     const val workStarted = "근무를 시작했어요"
@@ -106,9 +108,13 @@ object NowText {
         if (time == null) "앱을 오래 열지 않아 근무를 끝냈어요" else "앱을 오래 열지 않아 ${time}에 근무를 끝냈어요"
 }
 
-/** 내 열린 근무를 어디서 열었는가(서버 `work_phone_*` 응답의 origin). 팀 상태 GET 에는 이 칸이 없다. */
+/**
+ * 내 열린 근무를 어디서 열었는가(서버 `work_phone_*` 응답의 origin). 팀 상태 GET 에는 이 칸이 없다.
+ * `windows` — 서버(B M3 ③)가 Windows 앱이 연 근무에 싣는 값(G §8-1 D:675 · §8-7 W2-f, 조정자 패치 W2-f 0003). 옛 iOS 는 모르는 값을
+ * `.mac` 으로 접지만 Android 는 제 갈래로 읽는다. 이 빌드가 모르는 값은 W2-f `PhoneWorkController.originOf` 가 mac 으로 접는다.
+ */
 enum class NowWorkOrigin(val rawValue: String) {
-    phone("phone"), mac("mac"),
+    phone("phone"), mac("mac"), windows("windows"),
 
     /** 아직 모른다(생존 신호 응답 전) — "근무 중"으로만 말한다. */
     unknown("unknown"),
@@ -144,6 +150,7 @@ data class NowMyCard(
             return when (origin) {
                 NowWorkOrigin.phone -> NowText.workingOnPhone
                 NowWorkOrigin.mac -> NowText.workingOnMac
+                NowWorkOrigin.windows -> NowText.workingOnWindows
                 NowWorkOrigin.unknown -> NowText.working
             }
         }

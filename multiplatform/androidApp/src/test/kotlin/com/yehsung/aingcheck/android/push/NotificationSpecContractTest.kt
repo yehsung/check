@@ -22,7 +22,23 @@ class NotificationSpecContractTest {
         return (d as PushDecision.Post).spec
     }
 
-    private fun decideFor(kind: String, viewing: AingRoute?) = NotificationSpecs.decide(data(kind), viewing)
+    private fun decideFor(kind: String, viewing: AingRoute?, duelsEnabled: Boolean = true) = NotificationSpecs.decide(data(kind), viewing, duelsEnabled)
+
+    /**
+     * §8-17 #1(W2-f 검증 7차 지적): 판돈 깃발이 꺼진 빌드는 신청 알림에 [수락]을 달지 않는다 — 본문 탭만 남는다. 기준선(다른 입력): 켠 빌드는
+     * 단추 하나(아래 두 시험의 기대 사양). 깃발을 넘기지 않은 호출(기본값)도 꺼짐이다.
+     */
+    @Test
+    fun lockedBuildPostsInvitesWithoutAccept() {
+        for (kind in listOf("gomoku_invite", "chess_invite")) {
+            val locked = (decideFor(kind, null, duelsEnabled = false) as PushDecision.Post).spec
+            assertEquals("$kind 꺼진 빌드에 [수락]", emptyList<NotificationActionSpec>(), locked.actions)
+            assertEquals(locked, (NotificationSpecs.decide(data(kind), null) as PushDecision.Post).spec)
+            val open = (decideFor(kind, null, duelsEnabled = true) as PushDecision.Post).spec
+            assertEquals("기준선: 켠 빌드는 [수락] 하나", 1, open.actions.size)
+            assertEquals("단추 말고는 같은 알림이다", open.copy(actions = emptyList()), locked)
+        }
+    }
 
     @Test
     fun contractFolderHasExactlyTheFiveKinds() {

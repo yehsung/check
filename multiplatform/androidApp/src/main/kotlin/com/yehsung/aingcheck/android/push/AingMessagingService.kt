@@ -16,7 +16,7 @@ class AingMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val c = container
-        val decision = NotificationSpecs.decide(message.data, viewing = c.visibleRoute.viewing())
+        val decision = NotificationSpecs.decide(message.data, viewing = c.visibleRoute.viewing(), duelsEnabled = c.appConfig.duelsEnabled)
         when (decision) {
             is PushDecision.Post -> {
                 val posted = c.notificationPoster.post(decision.spec)

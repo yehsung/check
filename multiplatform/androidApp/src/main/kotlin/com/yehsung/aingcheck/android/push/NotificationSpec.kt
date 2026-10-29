@@ -55,8 +55,10 @@ object NotificationSpecs {
 
     /**
      * [data] = RemoteMessage.data. [viewing] = 앱이 앞일 때 보고 있는 라우트(뒤면 null).
+     * [duelsEnabled] = 이 빌드의 판돈 대결 깃발(`AppConfig.duelsEnabled`). 꺼진 빌드(§8-17 #1 — 신청·수락 진입은 켜진 빌드에서만 보인다)는
+     * 신청 알림에 [수락] 단추를 달지 않는다 — 본문 탭(신청 화면 열기)만 남는다. 기본값은 꺼짐(안전한 쪽 — 깃발을 잊은 호출이 진입을 열지 않게).
      */
-    fun decide(data: Map<String, String>, viewing: AingRoute?): PushDecision {
+    fun decide(data: Map<String, String>, viewing: AingRoute?, duelsEnabled: Boolean = false): PushDecision {
         val rawType = data["type"]?.trim()?.lowercase() ?: return PushDecision.Drop("type 없음")
         val channel = AingChannel.fromId(rawType) ?: return PushDecision.Drop("모르는 type '$rawType'")
         val title = data["title"]?.takeIf { it.isNotBlank() } ?: channel.title
@@ -70,11 +72,11 @@ object NotificationSpecs {
             }
             AingChannel.GOMOKU_INVITE -> {
                 val match = safeId(data["match_id"]) ?: return PushDecision.Drop("gomoku_invite 에 match_id 가 없거나 모양이 틀렸다")
-                invite(channel, title, body, tag = "gomoku-$match", route = AingRoute.GomokuInvite(match))
+                invite(channel, title, body, tag = "gomoku-$match", route = AingRoute.GomokuInvite(match), duelsEnabled)
             }
             AingChannel.CHESS_INVITE -> {
                 val match = safeId(data["match_id"]) ?: return PushDecision.Drop("chess_invite 에 match_id 가 없거나 모양이 틀렸다")
-                invite(channel, title, body, tag = "chess-$match", route = AingRoute.ChessInvite(match))
+                invite(channel, title, body, tag = "chess-$match", route = AingRoute.ChessInvite(match), duelsEnabled)
             }
             AingChannel.FEEDBACK_REPLY -> {
                 // report_id 가 없으면 제보 목록으로 연다(Swift 와 같다). 모양이 틀린 id 도 목록으로 접는다.
@@ -101,12 +103,16 @@ object NotificationSpecs {
         refresh = channel,
     )
 
-    private fun invite(channel: AingChannel, title: String, body: String, tag: String, route: AingRoute): PushDecision =
+    private fun invite(channel: AingChannel, title: String, body: String, tag: String, route: AingRoute, duelsEnabled: Boolean): PushDecision =
         PushDecision.Post(
             NotificationSpec(
                 channel, title, body, tag, group = null,
                 tap = RouteRequest(route),
-                actions = listOf(NotificationActionSpec(ACCEPT_ACTION_ID, ACCEPT_ACTION_TITLE, RouteRequest(route, accept = true))),
+                actions = if (duelsEnabled) {
+                    listOf(NotificationActionSpec(ACCEPT_ACTION_ID, ACCEPT_ACTION_TITLE, RouteRequest(route, accept = true)))
+                } else {
+                    emptyList()
+                },
                 category = CATEGORY_SOCIAL,
             ),
             refresh = channel,

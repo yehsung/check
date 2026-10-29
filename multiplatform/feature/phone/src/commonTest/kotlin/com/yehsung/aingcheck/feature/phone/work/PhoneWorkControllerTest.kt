@@ -343,6 +343,9 @@ class PhoneWorkControllerTest {
         assertEquals(1_789_630_500.25, parsed.checkAt!!.timeIntervalSince1970, "소수초 timestamptz 를 읽는다")
         val windows = PhoneWorkController.phoneSession(PhoneWorkSessionInfo(id = "W1", origin = "windows"), response)!!
         assertEquals(PhoneWorkController.originOf("windows"), windows.origin, "세션 값도 같은 판정(한 자리)")
+        // 조정자 패치 0003(코어 windows 갈래)과 함께: Windows 가 연 근무는 windows 로 읽는다 — 맥으로 접으면 '맥에서 연 근무'로 보인다.
+        assertEquals(NowWorkOrigin.windows, windows.origin, "Windows 가 연 근무를 맥으로 접었다(§8-1 D:675 · §8-7 W2-f)")
+        assertEquals(NowWorkOrigin.windows, PhoneWorkController.originOf("windows"))
     }
 
     /** 생존 신호가 카드가 모르는 근무(다른 기기가 방금 열었다)를 알리면 카드를 다시 읽는다. 기준선(다른 입력): 아는 근무면 다시 읽지 않는다. */

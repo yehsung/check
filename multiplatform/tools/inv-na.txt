@@ -5,3 +5,5 @@ INV-AingSticker-630f7c45 해당 없음: SwiftUI Image(decorative:) 에 붙인 ac
 INV-AingSticker-2828fac0 해당 없음: NSLock 은 재귀가 아니라 캐시 잠금 안에서 번들 탐색기(다른 잠금)를 부르는 규약 — Kotlin 규칙 층에는 그림 캐시·잠금이 없다(그림 읽기는 Compose 리소스 로더, W3-a)
 INV-RainbowAing-cb063b85 해당 없음: 무지개 몸을 띠 색 피부 맵으로 굽지 않고 셰이더가 물체 좌표 높이로 칠하는 이유(aing.scn UV 섬 공유) — Android·Windows 는 3D 를 런타임에 칠하지 않고 맥이 구운 스프라이트를 쓴다(G §8-12 · F)
 INV-RainbowAing-aee950b3 해당 없음: OKLCh 정지점 배열을 아트 스크립트와 글자까지 맞추는 규약 — 맥 셰이더·아트 스크립트 사이 규약이고 Kotlin 은 그 결과 그림(초상)만 받는다
+INV-MobileAppModel-7e4649be 해당 없음: iOS DEBUG 데모 라우트(`games/chess/…` 꼬리를 MobileDemoChessRoute 로 풀어 장면 고르기)의 규약 — Android 앱 모델(W2-f PhoneAppModel)에는 데모 라우트 표기가 없다(stub 변형은 픽스처 응답만 바꾼다). 딥링크 대상 해석은 RouteTargets · PhoneAppModel.openRoute
+INV-MobileAppModel-9a4234a7 해당 없음: iOS `#if DEBUG` 출시 게이트(Release 바이너리에서 데모 타입 이름이 사라져야 한다) — Android 에는 그 데모 갈래가 없다(릴리스 assets 에 Fixtures 0 은 W1-g 구조 시험이 잰다)

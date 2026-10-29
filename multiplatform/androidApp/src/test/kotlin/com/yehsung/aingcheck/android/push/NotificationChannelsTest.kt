@@ -44,7 +44,7 @@ class NotificationChannelsTest {
     fun postedInviteOpensRouteAndAcceptCarriesProof() {
         shadowOf(manager).setNotificationsEnabled(true)
         val route = AingRoute.GomokuInvite("m1")
-        val spec = (NotificationSpecs.decide(mapOf("type" to "gomoku_invite", "match_id" to "m1", "title" to "오목 신청", "body" to "b"), null) as PushDecision.Post).spec
+        val spec = (NotificationSpecs.decide(mapOf("type" to "gomoku_invite", "match_id" to "m1", "title" to "오목 신청", "body" to "b"), null, duelsEnabled = true) as PushDecision.Post).spec
         assertTrue(app.container.notificationPoster.post(spec))
         val posted = shadowOf(manager).allNotifications.single()
         assertEquals("gomoku_invite", posted.channelId)

@@ -46,12 +46,13 @@ kotlin {
 //     (케이크 둘은 0.3.66 생일 선물 전용 — 상점 번호 4(K9 · ShopProtocol.cakeProtocol)는 두 장이 그림 집합에 다 있어야 선다. 5차 int-d)
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-*-neutral}.png → files/art/…
 //   Sources/CheckCore/Resources/Stickers/sticker-*.png(0.3.62 아잉이 이모티콘, G §8-2) → files/stickers/…
+//   Sources/CheckCore/Resources/GachaMachine/gacha_*.png(0.3.54 캡슐 뽑기 기계 다섯 장, W4-c) → files/gacha/…
 // 아틀라스(atlas.png)는 싣지 않는다(살아 있는 캐릭터는 구운 자산 — W0-d·W5).
 val repoDir = rootDir.parentFile
 val aingFamily = listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco")
 val composeResourcesSynced = layout.buildDirectory.dir("generated/aingcheck/composeResources/commonMain")
 val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
-    description = "맥 원본 캐릭터·루비·이모티콘 그림과 ui 리소스를 Compose 리소스 폴더 하나로 모은다(git 사본 0, A-X18)."
+    description = "맥 원본 캐릭터·루비·이모티콘·뽑기 기계 그림과 ui 리소스를 Compose 리소스 폴더 하나로 모은다(git 사본 0, A-X18)."
     into(composeResourcesSynced)
     from("src/commonMain/composeResources")
     from(repoDir.resolve("Sources/check/Characters")) {
@@ -73,6 +74,11 @@ val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
     from(repoDir.resolve("Sources/CheckCore/Resources/Stickers")) {
         include("sticker-*.png")
         into("files/stickers")
+    }
+    // 0.3.54 캡슐 뽑기 기계 그림 다섯 장(W4-c 패치 0001 — 맥 뽑기 창 · 폰 덮개와 같은 그림 `.bundled`). 빠지면 기계가 벡터로 그린다.
+    from(repoDir.resolve("Sources/CheckCore/Resources/GachaMachine")) {
+        include("gacha_*.png")
+        into("files/gacha")
     }
     // K9(W2-c): 실제로 실린 초상 파일 목록 → files/characters/portraits.txt(한 줄에 `<id>-<표정>`). 상점 능력 번호는 손 목록이 아니라
     // 이 목록(= APK·데스크톱 jar 에 들어간 그림)에서 파생한다 — 초상 한 장을 빼고 빌드하면 번호가 저절로 내려간다(ShopWire.drawableCharacterIDs).

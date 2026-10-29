@@ -482,6 +482,8 @@ private func tmEntriesRow(showsTitle: Bool) -> some View {
         MiniGameGomokuEntryButton(showsTitle: showsTitle) {}
         MiniGameChessEntryButton(showsTitle: showsTitle) {}
         MiniGameTetrisDuelEntryButton(showsTitle: showsTitle) {}
+        // v0.3.69 — 아잉 큐브 입구가 넷째 문이다(지금 머리글이 그리는 묶음과 같은 문 수로 대조한다).
+        MiniGameRummyEntryButton(showsTitle: showsTitle) {}
     }
 }
 
@@ -492,6 +494,7 @@ private func tmEntriesGroup() -> some View {
         MiniGameGomokuEntryButton {}
         MiniGameChessEntryButton {}
         MiniGameTetrisDuelEntryButton {}
+        MiniGameRummyEntryButton {}
     }
 }
 

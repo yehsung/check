@@ -74,7 +74,9 @@ struct CheckApp: App {
             hasChessInvite: appDelegate.store.chess.visibleIncoming != nil,
             // v0.3.60: 받은 **테트리스** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 머리글 하나뿐이고
             // 테트리스 폴링은 창이 보일 때만 돈다). 만료는 스토어 타이머가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
-            hasTetrisInvite: appDelegate.store.tetris.visibleIncoming != nil
+            hasTetrisInvite: appDelegate.store.tetris.visibleIncoming != nil,
+            // v0.3.69: 받은 **아잉 큐브** 초대도 같은 점(테트리스와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.
+            hasRummyInvite: appDelegate.store.rummy.hasIncomingInvite
         )
     }
 }
@@ -166,6 +168,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireChess()
         // 1:1 테트리스(v0.3.60) — 체스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireTetrisDuel()
+        // 아잉 큐브(v0.3.69) — 테트리스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        wireRummy()
         // 전역 단축키도 **오버레이 컨트롤러를 만든 뒤에** 잇는다 — 단축키로 시작한 근무도 알약으로 시작한 근무와 똑같이
         // 캐릭터가 나와야 하는데, 그 표시 전환이 위에서 배선된다.
         // ★ 진짜 Carbon 등록기는 **여기서만** 만든다. 테스트 프로세스가 실제 전역 키를 잡으면 스위트를 도는 동안
@@ -320,6 +324,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
         }, safety: store)
+        // 아잉 큐브 창(v0.3.69)도 같은 자리에서 배선한다 — 테트리스 창의 형제다(키를 잃거나 닫혀도 판을 끝내지 않는다).
+        CheckRummyWindowController.shared.configure(store: store.rummy, me: { [weak self] in
+            guard let self else { return ChessPlayerFace.fallback }
+            return ChessPlayerFace.me(from: self.store)
+        }, safety: store)
         // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
         // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
         CheckGachaWindowController.shared.configure(store: store)
@@ -447,6 +456,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             CheckTetrisDuelWindowController.shared.close()
             self?.overlayController?.clearTetrisInvites()
         }.start()
+    }
+
+    /// 아잉 큐브(v0.3.69)의 문들을 잇는다(실행당 1회). 테트리스와 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 시험(V0368RummyWiringTests)이 줄마다 되묻는다.
+    ///   ① `rankingEnabled` — 순위의 **주 스위치**(스토어는 폰과 공용이라 기본이 꺼짐). 없으면 순위 탭은 영영 로딩이다.
+    ///   ② `presentWindow` — `openWindow(focusMatchID:)` 와 판 시작이 창을 띄우는 유일한 문. 없으면 방장이 시작해도
+    ///      참가자 화면에 아무것도 안 뜨고, 첫 차례 60초가 그대로 흘러 시간 초과 벌칙을 받는다.
+    ///   ③ `dismissWindow` — 로그아웃·계정 전환의 `reset()` 이 부르는 닫기 문(아래 감시자와 겹쳐도 멱등이다).
+    ///   ④ `requestAttention` — 내 차례인데 앱이 뒤에 있을 때 독 주의(테트리스 판 시작과 같은 길).
+    ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 아잉 큐브를 아는 길**(받은 초대 · "내 차례예요" 말풍선).
+    ///   ⑥ `onOpenRummy` — 그 말풍선을 눌렀을 때 그 방·판의 창.
+    /// `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다 — 오목·체스·테트리스와 같은 자리다.
+    private func wireRummy() {
+        let rummy = store.rummy
+        rummy.rankingEnabled = true
+        rummy.presentWindow = { CheckRummyWindowController.shared.show() }
+        rummy.dismissWindow = { Self.closeRummyWindow() }
+        rummy.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        rummy.onInviteArrived = { [weak self] room in
+            self?.overlayController?.enqueueRummyInvite(room)
+        }
+        rummy.onAttention = { [weak self] text in
+            self?.overlayController?.enqueueRummyAttention(text)
+        }
+        overlayController?.onOpenRummy = { [weak self] matchID in
+            self?.store.rummy.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            Self.closeRummyWindow()
+            self?.overlayController?.clearRummyInvites()
+        }.start()
+    }
+
+    /// 아잉 큐브 창을 닫는다(멱등 — 창이 아직 없으면 아무것도 안 한다). 창 컨트롤러의 공개 표면은 `configure`·`show` 뿐이라
+    /// (설계 §5 — 창 수명은 창 갈래 몫) 창 식별자(`frameAutosaveName`)로 찾아 표준 닫기를 보낸다. 닫기 통지(`windowWillClose`)는
+    /// 창 컨트롤러가 받아 스토어에 '안 보임'을 알린다 — 빨간 점과 같은 길이다.
+    static func closeRummyWindow() {
+        let id = CheckRummyWindowController.frameAutosaveName
+        for window in NSApp.windows where window.frameAutosaveName == id && window.isVisible {
+            window.close()
+        }
     }
 
     /// 설정 창을 여는 표준 AppKit 액션. `NSApp.sendAction(#selector(...), to: nil, from: nil)` 로

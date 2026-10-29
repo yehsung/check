@@ -153,6 +153,7 @@ jobs:
           $j = Get-Content -Raw (Join-Path $neg 'install-check.json') | ConvertFrom-Json
           "음성 대조: exit=$code ok=$($j.ok) failed=$($j.failed -join ',')"
           if ($code -eq 0 -or $j.ok -or ($j.failed -notcontains 'gitSha')) { throw '틀린 gitSha 영수증이 통과했다' }
+          exit 0  # 기대한 빨강(install-check exit 1)이 $LASTEXITCODE 로 남아 단계를 빨갛게 하지 않도록(run 40939437692)
       - name: 레이아웃 zip(W6-b2 가 맥에서 다시 싸는 기준)
         if: always()
         run: |

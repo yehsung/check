@@ -569,8 +569,9 @@ def verify_cases(ctx, keyA, keyB):
     verify("R10 targetSdk 35", plan_prod, vals_prod, dex_prod, badging_text=badging(target="35"), want_fail=["badging.targetSdk"])
     verify("R11 minSdk 24", plan_prod, vals_prod, dex_prod, badging_text=badging(minsdk="24"), want_fail=["badging.minSdk"])
     verify("R12 런처 아이콘 없음", plan_prod, vals_prod, dex_prod, badging_text=badging(icon=""), want_fail=["badging.icon"])
+    # R13: 아이콘을 넘기던 길(--allow-no-icon)을 없앴다 — 옛 계획 파일에 allowNoIcon 이 남아 있어도 아이콘 없음은 빨강이다.
     p_icon, v_icon, _ = plan("prod", True, allowNoIcon=True)
-    verify("R13 아이콘 없음 + --allow-no-icon → 초록", p_icon, v_icon, dex_prod, badging_text=badging(icon=""))
+    verify("R13 옛 계획의 allowNoIcon 도 아이콘 없음을 넘기지 못한다", p_icon, v_icon, dex_prod, badging_text=badging(icon=""), want_fail=["badging.icon"])
     verify("R14 자산에 비밀 표식", plan_prod, vals_prod, dex_prod, aab_extra={"base/assets/x.txt": ("a " + ROLE_SECRET + " b").encode()}, want_fail=["aab.forbiddenMarkers"])
     verify("R15 Fixtures 자산", plan_prod, vals_prod, dex_prod, apk_extra={"assets/Fixtures/now.json": b"{}"}, want_fail=["apk.fixtures"])
     verify("R16 google-services 파일이 실림", plan_prod, vals_prod, dex_prod, aab_extra={"base/root/" + GS_NAME: b"{}"}, want_fail=["aab.forbiddenEntries"])

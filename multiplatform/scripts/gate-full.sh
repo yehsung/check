@@ -61,7 +61,7 @@ AINGCHECK_GATE_KIND=full "$HERE/gate-fast.sh" "$@"
 # 만들고(sandbox-exec 봉인 · --offline · 그 자리에서 만든 버리는 키) 산출물 판정(badging 패키지·판 번호·targetSdk·권한 = 허용 목록 ·
 # AD_ID 0 · AAB·APK dex 의 빌드 도장·판돈 깃발·.invalid 기준선 · 비밀 표식·키 파일·Fixtures 0 · 서명 지문 · .so 허용 목록·16 KB ·
 # 진열장 클래스·문자열 0 · 크기 예산)을 한다.
-# 런처 아이콘이 아직 없어 아이콘 판정은 --allow-no-icon 으로 넘긴다 — 그 사실을 **언제나** 찍는다(아이콘이 들어오면 이 인자를 뺀다).
+# 런처 아이콘 판정(badging.icon)도 넘기지 않는다 — 8b 에서 적응형 아이콘이 들어와 --allow-no-icon 을 없앴다.
 # 맥에서만 돈다: 봉인(sandbox-exec)을 거는 곳이 맥이다. Linux(mp-nightly gate-full-linux)는 이 단계 밖이 봉인 밖이라 R8 빌드를 하지 않고
 # **언제나** 'release-dryrun=not-run(linux)'를 찍는다(K12 — 봉인 밖 Gradle 금지. 출시 판은 맥 몫, E§11).
 MP_DIR="$(cd "$HERE/.." && pwd)"
@@ -73,11 +73,11 @@ if [[ "$(uname -s)" == Darwin ]]; then
   rm -rf "$rel_out"
   mkdir -p "$MP_DIR/build/gate"
   set +e
-  "$HERE/release-android.sh" dryrun --allow-dirty --allow-no-icon --out "$rel_out" > "$MP_DIR/build/gate/release-dryrun.log" 2>&1
+  "$HERE/release-android.sh" dryrun --allow-dirty --out "$rel_out" > "$MP_DIR/build/gate/release-dryrun.log" 2>&1
   rel_rc=$?
   set -e
   grep -E '^release-android: (FAIL|verify checks=|dryrun ok)' "$MP_DIR/build/gate/release-dryrun.log" | sed 's/^/gate-full: /' || true
-  echo "gate-full: release-dryrun-exit=$rel_rc · 아이콘 판정 빠짐(--allow-no-icon) · log=$MP_DIR/build/gate/release-dryrun.log"
+  echo "gate-full: release-dryrun-exit=$rel_rc · log=$MP_DIR/build/gate/release-dryrun.log"
 else
   echo "gate-full: release-dryrun=not-run($(uname -s) — 출시 R8 판·스모크는 맥 몫: 이 OS 에서는 봉인 밖 R8 빌드를 하지 않는다)"
 fi

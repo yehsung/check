@@ -3,11 +3,11 @@
 #
 # 사용
 #   release-android.sh build  --prod-config FILE [--google-services FILE] [--keystore PATH] [--keychain-item NAME] [--key-alias upload]
-#                             [--duels on|off] [--out DIR] [--allow-dirty] [--allow-no-icon] [--new-upload-key] [--plan-only]
+#                             [--duels on|off] [--out DIR] [--allow-dirty] [--new-upload-key] [--plan-only]
 #       운영 판: R8 AAB(bundleRelease) + 같은 번들의 보편 APK(packageReleaseUniversalApk, = bundletool --mode=universal) →
 #       판정(verify) → 영수증 JSON → 판 장부(androidApp/release/versions.tsv)에 한 줄. Gradle·서명은 맥에서만(봉인 sandbox-exec 아래 --offline).
 #       --plan-only 는 입력 판정·계획까지만 한다(Gradle·서명 없음) — 어느 OS 에서나 돈다(자기 시험이 Linux CI 에서도 이 길을 잰다).
-#   release-android.sh dryrun [--duels on|off] [--out DIR] [--allow-dirty] [--allow-no-icon] [--plan-only]
+#   release-android.sh dryrun [--duels on|off] [--out DIR] [--allow-dirty] [--plan-only]
 #       같은 길을 운영 값 없이(.invalid) · 그 자리에서 만든 버리는 키로. 장부에 적지 않는다. 출시 전 리허설·게이트 몫.
 #       Gradle 은 봉인 아래에서만 돈다: 맥은 스스로 sandbox-exec 를 건다. 다른 OS 는 바깥에서 건 봉인(AINGCHECK_NETWORK_SEALED=1)이
 #       없으면 거부한다(K12 — 봉인 밖 R8 빌드 금지. gate-full 은 Linux 에서 dryrun 을 'not-run(linux)'로 찍고 건너뛴다).
@@ -188,7 +188,6 @@ while [[ $# -gt 0 ]]; do
     --duels) DUELS="${2:?}"; shift 2 ;;
     --out) OUT="${2:?}"; shift 2 ;;
     --allow-dirty) pre_flags+=(--allow-dirty); shift ;;
-    --allow-no-icon) pre_flags+=(--allow-no-icon); shift ;;
     --new-upload-key) pre_flags+=(--new-upload-key); shift ;;
     --plan-only) PLAN_ONLY=1; shift ;;
     *) die "모르는 인자: $1" ;;

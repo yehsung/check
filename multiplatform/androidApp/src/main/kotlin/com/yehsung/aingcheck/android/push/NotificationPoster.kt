@@ -11,6 +11,8 @@ import android.app.PendingIntent
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import com.yehsung.aingcheck.android.R
 import com.yehsung.aingcheck.android.routing.RouteIntents
 import com.yehsung.aingcheck.android.routing.RouteRequest
 
@@ -26,8 +28,9 @@ class NotificationPoster(
         if (!manager.areNotificationsEnabled()) return false
         val proof = if (spec.actions.any { it.request.accept }) acceptProof() else null
         val builder = NotificationCompat.Builder(context, spec.channel.id)
-            // 앱 전용 알림 아이콘은 디자인 시스템(W1-e)·조정자 자원 몫이다. 그때까지 시스템 아이콘(흰 실루엣)을 쓴다.
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            // 앱 알림 아이콘 = 아잉이 실루엣(흰 단색 · 눈 구멍) + accent 색(알림 머리의 아이콘 · 앱 이름 색).
+            .setSmallIcon(SMALL_ICON)
+            .setColor(ContextCompat.getColor(context, ACCENT_COLOR))
             .setContentTitle(spec.title)
             .setContentText(spec.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(spec.body))
@@ -50,7 +53,8 @@ class NotificationPoster(
     @SuppressLint("MissingPermission")
     private fun postGroupSummary(manager: NotificationManagerCompat, spec: NotificationSpec, group: String) {
         val summary = NotificationCompat.Builder(context, spec.channel.id)
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setSmallIcon(SMALL_ICON)
+            .setColor(ContextCompat.getColor(context, ACCENT_COLOR))
             .setContentTitle(spec.channel.title)
             .setGroup(group)
             .setGroupSummary(true)
@@ -71,6 +75,12 @@ class NotificationPoster(
     companion object {
         /** 알림은 태그로 가른다(같은 태그 = 교체). id 는 하나로 둔다. */
         const val NOTIFICATION_ID = 1
+
+        /** 상태 표시줄 · 알림 머리 아이콘(res/drawable/ic_stat_aing.xml — 시스템은 알파만 본다). FCM 기본 알림 아이콘도 같은 그림(매니페스트). */
+        val SMALL_ICON: Int = R.drawable.ic_stat_aing
+
+        /** 알림 강조색 = AingPalette.accent(라이트 #1864CF · 다크 values-night). */
+        val ACCENT_COLOR: Int = R.color.aing_notification_accent
 
         /** 태그·버튼마다 다른 요청 번호(같으면 FLAG_UPDATE_CURRENT 가 다른 알림의 extra 를 덮는다). */
         fun requestCode(tag: String, slot: Int): Int = tag.hashCode() * 31 + slot

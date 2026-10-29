@@ -4,9 +4,6 @@
 // 라우트(딥링크·알림)는 로그인 전이면 기다렸다가 탭 단계가 되면 연다(iOS "실행 복원 중이면 끝날 때까지 기다린다").
 package com.yehsung.aingcheck.android.shell
 
-import androidx.compose.foundation.background
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.runtime.CompositionLocalProvider
 import com.yehsung.aingcheck.android.nav.AppScreens
 import com.yehsung.aingcheck.android.nav.Dest
@@ -16,20 +13,15 @@ import com.yehsung.aingcheck.android.screens.session.LaunchEntry
 import com.yehsung.aingcheck.android.screens.session.UpdateRequiredEntry
 import com.yehsung.aingcheck.android.screens.shop.CakeGiftSheetRoute
 import com.yehsung.aingcheck.android.screens.stage.AingStage
+import com.yehsung.aingcheck.android.widget.rankingsMood
+import com.yehsung.aingcheck.ui.screens.session.kit.rememberPortrait
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalScreenArt
 import com.yehsung.aingcheck.ui.shop.LiveCharacterPreview
 import com.yehsung.aingcheck.ui.shop.LocalLiveCharacterPreview
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,8 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -52,7 +42,6 @@ import com.yehsung.aingcheck.android.nav.ShellNavigator
 import com.yehsung.aingcheck.android.nav.ShellTabBarRules
 import com.yehsung.aingcheck.android.nav.TabsNavHost
 import com.yehsung.aingcheck.android.routing.AingRoute
-import com.yehsung.aingcheck.android.routing.AingTab
 import com.yehsung.aingcheck.android.routing.RouteRequest
 import com.yehsung.aingcheck.android.screens.session.LaunchPlaceholder
 import com.yehsung.aingcheck.android.screens.session.UpdateRequiredPlaceholder
@@ -117,22 +106,13 @@ fun AingShell(
             }
             Scaffold(
                 bottomBar = {
-                    NavigationBar(modifier = Modifier.testTag("tab-bar")) {
-                        AingTab.entries.forEach { tab ->
-                            val graph = RoutePlans.graphOf(tab)
-                            val selected = destination?.hierarchy?.any { it.hasRoute(graph::class) } == true
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = { navigator.selectTab(tab) },
-                                // 탭 기호(Material Symbols 대응표)는 W1-e 몫 — 그때까지 점 하나. 색은 NavigationBarItem 이 내려 주는 기호 색
-                                // (선택 = onSecondaryContainer = iOS tabSelected 파랑 · 안 선택 = onSurfaceVariant 회색). 파랑은 '선택'만 뜻한다(G §8-15) —
-                                // primary 로 칠하면 안 고른 탭 다섯 개에도 파란 점이 찍힌다(ShellTabColorsTest).
-                                icon = { Box(Modifier.size(10.dp).background(LocalContentColor.current, CircleShape)) },
-                                label = { Text(tab.title) },
-                                modifier = Modifier.testTag("tab:${tab.name.lowercase()}"),
-                            )
-                        }
-                    }
+                    // 자리표시 셸에는 나 탭 얼굴 원천(앱 모델)이 없다 — 사람 기호로 접는다. 배지도 없다.
+                    AingTabBar(
+                        selected = { tab -> destination?.hierarchy?.any { it.hasRoute(RoutePlans.graphOf(tab)::class) } == true },
+                        badge = { 0 },
+                        meFace = null,
+                        onSelect = { tab -> navigator.selectTab(tab) },
+                    )
                 },
             ) { padding ->
                 TabsNavHost(navController, Modifier.padding(padding))
@@ -214,27 +194,15 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
     Scaffold(
         bottomBar = {
             if (!hideTabBar) {
-                NavigationBar(modifier = Modifier.testTag("tab-bar")) {
-                    AingTab.entries.forEach { tab ->
-                        val graph = RoutePlans.graphOf(tab)
-                        val selected = destination?.hierarchy?.any { it.hasRoute(graph::class) } == true
-                        val badge = phone.badges.badge(RouteTargets.tab(tab)) ?: 0
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                navigator.selectTab(tab)
-                                phone.tabDidChange(RouteTargets.tab(tab))
-                            },
-                            icon = {
-                                BadgedBox(badge = { if (badge > 0) Badge(Modifier.testTag("tab-badge:${tab.name.lowercase()}")) { Text("$badge") } }) {
-                                    Box(Modifier.size(10.dp).background(LocalContentColor.current, CircleShape))
-                                }
-                            },
-                            label = { Text(tab.title) },
-                            modifier = Modifier.testTag("tab:${tab.name.lowercase()}"),
-                        )
-                    }
-                }
+                AingTabBar(
+                    selected = { tab -> destination?.hierarchy?.any { it.hasRoute(RoutePlans.graphOf(tab)::class) } == true },
+                    badge = { tab -> phone.badges.badge(RouteTargets.tab(tab)) ?: 0 },
+                    meFace = rememberMeTabFace(app),
+                    onSelect = { tab ->
+                        navigator.selectTab(tab)
+                        phone.tabDidChange(RouteTargets.tab(tab))
+                    },
+                )
             }
         },
     ) { padding ->
@@ -243,3 +211,21 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
     // 생일 선물 고르기 창 — 어느 탭에 있든 뜬다(W4-c §4, 스토어가 대국 · 관전 중엔 스스로 안 띄운다).
     CakeGiftSheetRoute(phone.me)
 }
+
+/** '나' 탭 얼굴(iOS meLabel — CharacterTabIcon(displayedCharacterID, displayedMood)). 그림을 아직 못 읽었으면 art = null → 사람 기호. */
+@Composable
+private fun rememberMeTabFace(app: AppScreens): MeTabFace {
+    val p = app.phone
+    val snapshot = p.widgets.current
+    val face = ShellTabFace.of(
+        equippedLoaded = p.me.equippedLoaded,
+        equippedCharacterID = p.me.equippedServerID,
+        snapshotCharacterID = snapshot?.characterID,
+        nowCard = p.now.myCard(p.environment.clock.now()),
+        snapshotMood = snapshot?.rankingsMood(),
+    )
+    val art = rememberPortrait(face.characterID ?: DEFAULT_CHARACTER, face.mood.expression)
+    return MeTabFace(art, face.mood)
+}
+
+private const val DEFAULT_CHARACTER = "aing"

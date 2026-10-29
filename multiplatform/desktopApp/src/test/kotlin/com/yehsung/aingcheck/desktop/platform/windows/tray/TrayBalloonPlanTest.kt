@@ -15,6 +15,7 @@ class TrayBalloonPlanTest {
     fun win32ValuesMatchTheHeaders() {
         assertEquals(0x00000010, TrayBalloonWin32.NIF_INFO)
         assertEquals(0x00000040, TrayBalloonWin32.NIF_REALTIME)
+        assertEquals(0x00000000, TrayBalloonWin32.NIIF_NONE)
         assertEquals(0x00000004, TrayBalloonWin32.NIIF_USER)
         assertEquals(0x00000080, TrayBalloonWin32.NIIF_RESPECT_QUIET_TIME)
         assertEquals(0x402, TrayBalloonWin32.NIN_BALLOONSHOW)
@@ -27,19 +28,19 @@ class TrayBalloonPlanTest {
         assertEquals(255, TrayBalloonWin32.MAX_BODY_CHARS)
     }
 
-    /** 4종 × 조용한 시간 2 = 8칸 전수. 기대 비트는 손으로 적는다(0x10 = NIF_INFO, 0x40 = NIF_REALTIME, 0x04 = NIIF_USER, 0x80 = 조용한 시간). */
+    /** 4종 × 조용한 시간 2 = 8칸 전수. 기대 비트는 손으로 적는다(0x10 = NIF_INFO, 0x40 = NIF_REALTIME, 0x00 = NIIF_NONE, 0x80 = 조용한 시간). */
     @Test
     fun flagTableAllKindsTimesQuietTime() {
         val expected = mapOf(
-            (NotifyKind.MESSAGE to false) to (0x50 to 0x04),
-            (NotifyKind.MESSAGE to true) to (0x50 to 0x84),
-            (NotifyKind.POKE to false) to (0x50 to 0x04),
-            (NotifyKind.POKE to true) to (0x50 to 0x84),
-            (NotifyKind.DUEL_INVITE to false) to (0x50 to 0x04),
-            (NotifyKind.DUEL_INVITE to true) to (0x50 to 0x84),
+            (NotifyKind.MESSAGE to false) to (0x50 to 0x00),
+            (NotifyKind.MESSAGE to true) to (0x50 to 0x80),
+            (NotifyKind.POKE to false) to (0x50 to 0x00),
+            (NotifyKind.POKE to true) to (0x50 to 0x80),
+            (NotifyKind.DUEL_INVITE to false) to (0x50 to 0x00),
+            (NotifyKind.DUEL_INVITE to true) to (0x50 to 0x80),
             // 새 버전 안내만 실시간이 아니다(늦게 떠도 참).
-            (NotifyKind.UPDATE to false) to (0x10 to 0x04),
-            (NotifyKind.UPDATE to true) to (0x10 to 0x84),
+            (NotifyKind.UPDATE to false) to (0x10 to 0x00),
+            (NotifyKind.UPDATE to true) to (0x10 to 0x80),
         )
         assertEquals(NotifyKind.entries.size * 2, expected.size, "새 NotifyKind 가 표에 없다")
         for ((key, flags) in expected) {

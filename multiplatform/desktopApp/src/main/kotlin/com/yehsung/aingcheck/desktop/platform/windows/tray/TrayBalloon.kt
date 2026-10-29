@@ -16,6 +16,7 @@ object TrayBalloonWin32 {
     const val NIF_INFO = 0x10
     const val NIF_REALTIME = 0x40
 
+    const val NIIF_NONE = 0x00
     const val NIIF_USER = 0x04
     const val NIIF_RESPECT_QUIET_TIME = 0x80
 
@@ -47,13 +48,15 @@ object BalloonPlanner {
     /**
      * 본문이 비면 null(띄우지 않음): NIM_MODIFY 에 NIF_INFO + 빈 szInfo 는 **떠 있는 풍선을 지우라**는 뜻이다(문서) —
      * 빈 알림을 보내면 사용자에게는 아무 일도 없고 앞 풍선만 사라진다.
-     * 아이콘은 NIIF_USER(hBalloonIcon = 지금 트레이 아이콘) — Windows 10/11 은 풍선을 토스트로 바꿔 그리며 앱 아이콘을 쓴다.
+     * 아이콘은 NIIF_NONE(hBalloonIcon 없음) — Windows 10/11 은 풍선을 토스트로 바꿔 그리며 트레이 아이콘을 쓴다.
+     * NIIF_USER 는 쓰지 않는다: hBalloonIcon 이 SM_CXSMICON 과 다른 크기면 셸이 NIM_MODIFY 를 FALSE·1462(ERROR_INCORRECT_SIZE)로
+     * 거절한다(러너 2종 실측, mp-ci run 40960010244 — 24px 아이콘 · 100% 배율 16px). 배율이 바뀐 직후 트레이 아이콘이 그 상태다.
      */
     fun plan(title: String, body: String, kind: NotifyKind, respectQuietTime: Boolean): BalloonPlan? {
         if (body.isBlank()) return null
         var flags = TrayBalloonWin32.NIF_INFO
         if (isRealtime(kind)) flags = flags or TrayBalloonWin32.NIF_REALTIME
-        var info = TrayBalloonWin32.NIIF_USER
+        var info = TrayBalloonWin32.NIIF_NONE
         if (respectQuietTime) info = info or TrayBalloonWin32.NIIF_RESPECT_QUIET_TIME
         return BalloonPlan(flags, info, title, body)
     }

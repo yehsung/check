@@ -5,9 +5,12 @@
 package com.yehsung.aingcheck.desktop.platform.windows.tray
 
 import com.sun.jna.Memory
+import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
+import com.yehsung.aingcheck.desktop.platform.windows.jna.NOTIFYICONDATAW
+import com.yehsung.aingcheck.desktop.platform.windows.jna.Shell32X
 import com.yehsung.aingcheck.desktop.platform.windows.jna.User32X
 import com.yehsung.aingcheck.desktop.platform.windows.jna.Win32
 import com.yehsung.aingcheck.desktop.platform.windows.msg.Win32MessageThread
@@ -53,12 +56,12 @@ class TrayBalloonWindowsTest {
                 assertEquals(true, st.lastBalloonOk)
                 assertEquals(1, st.balloonCalls)
                 assertEquals(0x10 or 0x40, st.lastBalloonFlags, "메시지는 NIF_INFO|NIF_REALTIME")
-                assertEquals(0x04, st.lastBalloonInfoFlags)
+                assertEquals(0x00, st.lastBalloonInfoFlags, "NIIF_NONE(NIIF_USER 는 크기 검사로 1462)")
 
                 // 조용한 시간 존중(NIIF_RESPECT_QUIET_TIME): 새 사용자 첫 1시간 동안 셸이 무엇을 돌려주는지는 러너마다 다를 수 있다 — 기록만.
                 val quiet = tray.showBalloon("아잉체크 시험", "조용한 시간 존중", NotifyKind.UPDATE, respectQuietTime = true)
                 println("AINGCHECK-BALLOON quiet=$quiet flags=0x${Integer.toHexString(tray.status().lastBalloonInfoFlags)}")
-                assertEquals(0x84, tray.status().lastBalloonInfoFlags)
+                assertEquals(0x80, tray.status().lastBalloonInfoFlags)
                 assertEquals(0x10, tray.status().lastBalloonFlags, "새 버전 안내는 실시간이 아니다")
 
                 // 풍선 뒤 분 갱신: 아이콘 구조체에 NIF_INFO 가 없어야 같은 풍선이 분마다 다시 뜨지 않는다.
@@ -83,6 +86,50 @@ class TrayBalloonWindowsTest {
 
                 tray.remove()
                 assertFalse(tray.showBalloon("아잉체크", "삭제 뒤", NotifyKind.MESSAGE, respectQuietTime = false))
+            }
+        }
+    }
+
+    /**
+     * 실측 기록(단언 없음 — W0-e 탐침과 같은 성격): 풍선 비트 조합마다 셸의 BOOL·GetLastError. NIIF_USER 를 버린 근거(1462)와
+     * NIF_REALTIME 이 러너에서 거절되는지를 시험 결과 XML(system-out)에 남긴다. 아이콘 크기는 SM_CXSMICON 과 맞춘 것·어긋난 것 둘.
+     */
+    @Test
+    fun recordShellAnswersForBalloonFlagCombinations() {
+        Win32MessageThread.start(RunnerSupport.unique("AingCheck.Test.BalloonRec")).use { thread ->
+            WindowsTrayHost(thread, iconId = iconId, retryWindowMillis = 20_000, themeReader = { TaskbarTheme.DARK }).use { tray ->
+                tray.show(icon(), "aing-check 풍선 실측")
+                RunnerSupport.waitUntil(20_000, "NIM_ADD") { tray.status().added }
+                val small = User32.INSTANCE.GetSystemMetrics(User32.SM_CXSMICON)
+                val iconSmall = IconFactory.create(TrayIconRenderer.render(TrayIconSpec(TrayIconStatus.Off, false, TaskbarTheme.DARK, small)))
+                val iconOther = IconFactory.create(TrayIconRenderer.render(TrayIconSpec(TrayIconStatus.Off, false, TaskbarTheme.DARK, small + 8)))
+                try {
+                    val combos = listOf(
+                        Triple(0x10, 0x00, null), Triple(0x50, 0x00, null), Triple(0x10, 0x80, null), Triple(0x50, 0x80, null),
+                        Triple(0x10, 0x04, iconSmall), Triple(0x10, 0x04, iconOther),
+                    )
+                    for ((flags, info, balloonIcon) in combos) {
+                        val (ok, err) = thread.call { hwnd ->
+                            val b = NOTIFYICONDATAW()
+                            b.cbSize = b.size()
+                            b.hWnd = hwnd
+                            b.uID = iconId
+                            b.uFlags = flags
+                            b.dwInfoFlags = info
+                            b.hBalloonIcon = balloonIcon
+                            "아잉체크 실측".toCharArray().copyInto(b.szInfoTitle)
+                            "조합 0x${Integer.toHexString(flags)}/0x${Integer.toHexString(info)}".toCharArray().copyInto(b.szInfo)
+                            Native.setLastError(0)
+                            val r = Shell32X.INSTANCE.Shell_NotifyIconW(Win32.NIM_MODIFY, b)
+                            r to Native.getLastError()
+                        }
+                        val size = when (balloonIcon) { null -> "-"; iconSmall -> "$small"; else -> "${small + 8}" }
+                        println("AINGCHECK-BALLOON-REC uFlags=0x${Integer.toHexString(flags)} info=0x${Integer.toHexString(info)} icon=$size ok=$ok err=$err")
+                    }
+                } finally {
+                    User32.INSTANCE.DestroyIcon(iconSmall)
+                    User32.INSTANCE.DestroyIcon(iconOther)
+                }
             }
         }
     }

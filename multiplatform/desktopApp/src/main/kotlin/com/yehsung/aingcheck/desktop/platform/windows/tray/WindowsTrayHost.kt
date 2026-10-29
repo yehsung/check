@@ -204,7 +204,6 @@ class WindowsTrayHost(
             b.uID = iconId
             b.uFlags = plan.uFlags
             b.dwInfoFlags = plan.dwInfoFlags
-            b.hBalloonIcon = hIcon
             val t = NOTIFYICONDATAW.clipUtf16(plan.title, TrayBalloonWin32.MAX_TITLE_CHARS)
             val m = NOTIFYICONDATAW.clipUtf16(plan.body, TrayBalloonWin32.MAX_BODY_CHARS)
             t.toCharArray().copyInto(b.szInfoTitle)

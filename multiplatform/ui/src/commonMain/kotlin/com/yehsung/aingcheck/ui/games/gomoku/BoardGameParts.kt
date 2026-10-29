@@ -58,13 +58,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yehsung.aingcheck.core.rules.text.BlockReportPlatform
+import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.games.GamesWatcherCount
 import com.yehsung.aingcheck.ui.components.CharacterExpression
 import com.yehsung.aingcheck.ui.components.CharacterMood
@@ -191,13 +195,15 @@ fun BoardRow(
     }
 }
 
-/** 절 머리(Swift `SectionHeader(padded: true)`): 제목 + 오른쪽 회색 글 또는 글자 단추. */
+/** 절 머리(Swift `SectionHeader(padded: true)`): 제목 + 오른쪽 회색 글 또는 글자 단추. [actionHint] 는 글자 단추의 보이스오버 힌트(누름 이름표). */
 @Composable
 fun BoardSectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     trailing: String? = null,
     action: Pair<String, () -> Unit>? = null,
+    actionHint: String? = null,
+    actionTag: String? = null,
 ) {
     val colors = AingTheme.colors
     Row(
@@ -213,7 +219,8 @@ fun BoardSectionHeader(
                 action.first,
                 style = BoardText.subheadline().copy(fontWeight = FontWeight.SemiBold),
                 color = colors.accent,
-                modifier = Modifier.clickable(onClick = action.second).padding(horizontal = 4.dp, vertical = 4.dp),
+                modifier = Modifier.clickable(onClickLabel = actionHint, onClick = action.second).padding(horizontal = 4.dp, vertical = 4.dp)
+                    .let { if (actionTag != null) it.testTag(actionTag) else it },
             )
         }
     }
@@ -272,6 +279,8 @@ enum class BoardButtonKind { Filled, Tinted, Gray, Destructive, Plain }
 
 /**
  * 단추(Swift `AingButton`). 채운 단추는 화면당 하나라는 iOS 규약을 따른다(수락·신청·다시 신청). 누름 영역은 44 이상([AingDimens.minimumTarget]).
+ * [hint] 는 Swift `.accessibilityHint` 자리 — Android 에서는 누름 동작의 이름표(TalkBack "두 번 탭하여 ○○")로 싣는다. 바깥 semantics 가 안쪽
+ * clickable 의 이름 없는 누름을 덮는다(같은 노드의 같은 열쇠는 바깥이 이긴다 — 시험 `…HintsReachTheClickLabel` 이 잰다).
  */
 @Composable
 fun BoardButton(
@@ -283,6 +292,7 @@ fun BoardButton(
     small: Boolean = false,
     icon: AppIcon? = null,
     testTag: String? = null,
+    hint: String? = null,
     onClick: () -> Unit,
 ) {
     val colors = AingTheme.colors
@@ -297,6 +307,7 @@ fun BoardButton(
         .heightIn(min = AingDimens.minimumTarget)
         .let { if (fillsWidth) it.fillMaxWidth() else it }
         .let { if (testTag != null) it.testTag(testTag) else it }
+        .let { if (hint != null && enabled) it.semantics { onClick(label = hint) { onClick(); true } } else it }
     Button(
         onClick = onClick,
         enabled = enabled,
@@ -560,5 +571,133 @@ fun BoxScope.BoardConfirmOverlay(
         Spacer(Modifier.height(4.dp))
         BoardButton(confirmTitle, kind = BoardButtonKind.Destructive, fillsWidth = true, testTag = "$testTag-confirm", onClick = onConfirm)
         BoardButton(cancelTitle, kind = BoardButtonKind.Gray, fillsWidth = true, testTag = "$testTag-cancel", onClick = onCancel)
+    }
+}
+
+/**
+ * 바깥 부품(메시지 탭의 신고·차단 시트 — 조립이 넣는다)을 **화면 안 덮개**로 띄우는 틀: 어두운 막 + 아래쪽 카드. 머리(✕)는 들어오는 시트가 제 것을 든다.
+ * 목적지(Dest.ReportSheet 등)로 밀지 않는 까닭은 [BoardSheetOverlay] 와 같다 — 대국 화면이 컴포지션에서 빠지면 폴링·관전이 죽는다(E§4.4 · G ②).
+ * [onDismiss] 가 null 이면 막을 눌러도 닫지 않는다(보내는 중인 신고를 막 누름 하나로 버리지 않게 — 닫기는 시트의 ✕ 하나).
+ */
+@Composable
+fun BoxScope.BoardSheetFrame(onDismiss: (() -> Unit)?, testTag: String, content: @Composable () -> Unit) {
+    val colors = AingTheme.colors
+    Box(
+        Modifier.matchParentSize().background(colors.label.copy(alpha = 0.32f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss?.invoke() },
+    )
+    Box(
+        Modifier.align(Alignment.BottomCenter).fillMaxWidth().widthIn(max = 640.dp)
+            .background(colors.surface, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+            .testTag(testTag),
+    ) { content() }
+}
+
+/**
+ * 차단 확인(Swift `MessagesBlockConfirmSheet` — 메시지 탭과 **같은 문구**): 무엇이 막히는지 세 줄 → 무엇이 안 막히는지 한 줄 → 되돌릴 수 있다는 한 줄 → [차단하기].
+ * 문구는 한 벌(`BlockReportText` · 폰 판)에서만 온다. 차단을 부르는 곳은 이 확인의 [onConfirm] 하나다 — 확인 없는 차단은 만들지 않는다(차단은 상대에게
+ * 알리지 않는 조용한 동작이라 잘못 눌러도 알아챌 신호가 없다). 메시지 탭 시트(W3-a `MessagesBlockConfirmSheet`)가 서면 조립이
+ * [BoardGameSafety.blockConfirmSheet] 로 그것을 넣는다 — 이것은 그 자리의 기본값이다(assembly.md).
+ */
+@Composable
+fun BoardBlockConfirmSheet(peerName: String, onConfirm: () -> Unit, onClose: () -> Unit) {
+    val colors = AingTheme.colors
+    val items = BlockReportText.blockConfirmItems(BlockReportPlatform.phone)
+    Column(Modifier.fillMaxWidth().padding(bottom = AingDimens.space3)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(AingDimens.minimumTarget).clickable(onClick = onClose).semantics { contentDescription = "닫기" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(32.dp).background(colors.fill, CircleShape), contentAlignment = Alignment.Center) {
+                    AingIcon(AppIcon.Close, contentDescription = null, size = 18.dp, tint = colors.label)
+                }
+            }
+            Text(BlockReportText.blockAction, style = BoardText.headline(), color = colors.label, textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f).semantics { heading() })
+            Spacer(Modifier.size(AingDimens.minimumTarget))
+        }
+        Column(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin), verticalArrangement = Arrangement.spacedBy(AingDimens.rowSpacing)) {
+            Text(BlockReportText.blockConfirmTitle(peerName), style = BoardText.headline(), color = colors.label,
+                modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin).semantics { heading() })
+            BoardGroup(Modifier.background(colors.background, RoundedCornerShape(AingDimens.groupRadius)).semantics(mergeDescendants = true) {
+                contentDescription = "차단하면: " + items.joinToString(", ")
+            }) {
+                items.forEachIndexed { index, item ->
+                    BoardRow(divider = index != items.size - 1, dividerInset = AingDimens.cardPadding + 24.dp + AingDimens.space3) {
+                        AingIcon(AppIcon.Block, contentDescription = null, size = 22.dp, tint = colors.danger)
+                        Text(item, style = BoardText.subheadline(), color = colors.label, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+            Text(BlockReportText.blockConfirmScopeNote, style = BoardText.rowSubtitle(), color = colors.label2,
+                modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin))
+            Text(BlockReportText.blockConfirmUndoNote(BlockReportPlatform.phone), style = BoardText.rowSubtitle(), color = colors.label2,
+                modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin))
+            BoardButton(BlockReportText.blockConfirm, Modifier.padding(top = 4.dp), kind = BoardButtonKind.Destructive, fillsWidth = true,
+                testTag = BoardSafetyTags.blockConfirm, onClick = onConfirm)
+        }
+    }
+}
+
+/** 대국 채팅 신고·차단 덮개의 표지(시험·조립이 잡는다). */
+object BoardSafetyTags {
+    const val menu = "gomoku-chat-safety"
+    const val menuReport = "gomoku-chat-report"
+    const val menuBlock = "gomoku-chat-block"
+    const val blockSheet = "board-block-sheet"
+    const val blockConfirm = "board-block-confirm"
+    const val reportSheet = "board-report-sheet"
+}
+
+/**
+ * 같은 게임 화면이 **겹쳐 조성되는** 동안의 셈(Android 몫 — iOS 는 내비 스택이 같은 화면을 둘 세우지 않는다).
+ * 알림·딥링크로 같은 목적지가 한 번 더 쌓이면 새 화면이 나타난 **뒤에** 옛 화면이 내려간다(내비 전환은 둘을 함께 조성했다가 옛것을 뺀다).
+ * 화면 수명 훅(`gomokuScreenDidAppear`·`DidDisappear`)은 불리언이라 옛 화면의 내려감이 새 화면의 창 표시·폴링을 끈다 — 그래서 **마지막 하나가
+ * 내려갈 때만** 내려감 훅과 탭 막대 되돌림을 부른다. 열쇠는 게임 탭 스토어(조립에 한 벌) + 게임 이름. 조성 효과는 메인 스레드 하나에서만 돈다.
+ */
+internal object BoardScreenPresence {
+    private val counts = HashMap<Pair<Any, String>, Int>()
+
+    /** 하나 늘린다. */
+    fun enter(owner: Any, game: String) {
+        val key = owner to game
+        counts[key] = (counts[key] ?: 0) + 1
+    }
+
+    /** 하나 줄인다. 마지막 하나였으면 true(내려감 훅을 불러야 한다). */
+    fun leave(owner: Any, game: String): Boolean {
+        val key = owner to game
+        val left = (counts[key] ?: 0) - 1
+        return if (left <= 0) { counts.remove(key); true } else { counts[key] = left; false }
+    }
+}
+
+/**
+ * 햅틱 계기(Swift `.sensoryFeedback(_, trigger:)` 의 Android 판). Swift 는 **값이 바뀔 때만** 울린다(나타날 때는 안 울린다) — 같은 규칙으로
+ * 처음 본 값은 변화로 세지 않는다.
+ *  - [moved]: 같은 판에서 수 번호가 바뀌었다(오목 판 캔버스 `trigger: match.moveCount` — 대국 단계에서만).
+ *  - [ended]: 같은 판이 '안 끝남 → 끝남'으로 바뀌었다(체스 대국 `trigger: match.isFinished`). 오목 결과는 Swift 가 `trigger: match.id` 라 결과 화면이 선
+ *    순간에는 울리지 않는다 — Android 는 체스와 같은 '보는 동안 끝났다' 한 계기로 맞춘다(이김 = 확인 · 그 밖 = 거절 — Swift `.success`·`.warning`).
+ */
+internal class BoardMatchFeedback {
+    private var moveMatchID: String? = null
+    private var lastMoveCount: Int? = null
+    private var endMatchID: String? = null
+    private var lastFinished: Boolean? = null
+
+    fun moved(matchID: String?, moveCount: Int?, playing: Boolean): Boolean {
+        val changed = playing && matchID != null && matchID == moveMatchID && lastMoveCount != null && moveCount != lastMoveCount
+        moveMatchID = matchID
+        lastMoveCount = moveCount
+        return changed
+    }
+
+    fun ended(matchID: String?, isFinished: Boolean?): Boolean {
+        val changed = matchID != null && matchID == endMatchID && lastFinished == false && isFinished == true
+        endMatchID = matchID
+        lastFinished = isFinished
+        return changed
     }
 }

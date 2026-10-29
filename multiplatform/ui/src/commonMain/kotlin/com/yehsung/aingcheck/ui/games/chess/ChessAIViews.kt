@@ -202,7 +202,8 @@ internal fun ChessRobotEntry(chess: ChessStore, onOpen: () -> Unit) {
     val colors = AingTheme.colors
     val chrome = ChessRobotChrome.of(chess)
     val opens = chrome.canStart || chess.isAIMatch
-    BoardGroup(Modifier.testTag(ChessScreenTags.robotEntry).let { if (opens) it.clickable(onClick = onOpen) else it }.semantics(mergeDescendants = true) {}) {
+    // Swift `.accessibilityHint(robotNoRecord)` — 기록이 남지 않는 연습이라는 사실을 누름 이름표로.
+    BoardGroup(Modifier.testTag(ChessScreenTags.robotEntry).let { if (opens) it.clickable(onClickLabel = ChessPhoneText.robotNoRecord, onClick = onOpen) else it }.semantics(mergeDescendants = true) {}) {
         BoardRow(minHeight = AingDimens.rowHeightTwoLine) {
             BoardPortrait(ChessUser.chessAI.characterID, CharacterMood.Plain, 36.dp, stoneIsBlack = null, modifier = Modifier.alpha(if (opens) 1f else 0.5f))
             Column(Modifier.weight(1f)) {
@@ -253,7 +254,7 @@ private fun RobotColorPick(chess: ChessStore, chrome: ChessRobotChrome) {
             for (color in listOf(ChessColor.white, ChessColor.black)) {
                 Column(
                     Modifier.weight(1f).defaultMinSize(minHeight = 96.dp).background(colors.surface, RoundedCornerShape(AingDimens.tileRadius))
-                        .clickable(enabled = chrome.canStart) { chess.startAIMatch(color) }.padding(vertical = 14.dp, horizontal = 8.dp)
+                        .clickable(enabled = chrome.canStart, onClickLabel = ChessPhoneText.robotNoRecord) { chess.startAIMatch(color) }.padding(vertical = 14.dp, horizontal = 8.dp)
                         .testTag("chess-robot-${color.rawValue}"),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {

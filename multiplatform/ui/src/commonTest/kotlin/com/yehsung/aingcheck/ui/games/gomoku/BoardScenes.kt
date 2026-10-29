@@ -103,6 +103,21 @@ object BoardScenes {
         }
     }
 
+    /**
+     * 오목 판돈 시트 장면(§8-17 깃발 켜짐 · [도전]을 누른 직후) — 아무것도 안 골라진 채, 잔액 [ruby](기본 7 — 10 칸이 흐리다).
+     * 기준선은 잔액 하나만 바꾼다(100 — 세 칸 다 선다). 시트 상태는 장면 밖 한 벌(다시 그려도 같은 대상).
+     */
+    fun gomokuStakeSheet(ruby: Int = 7): BoardScene {
+        val rig = BoardGameRig(me = null)
+        seedGomokuLobby(rig, ruby)
+        rig.host.rubyBalance = ruby.toLong()
+        val state = GomokuScreenState().also { it.stakeTarget = gomokuUsers[0] }
+        return BoardScene("games/gomoku", "gomoku-stake-sheet-light", WIDTH, 900) { wrap ->
+            androidx.compose.runtime.remember { state.stakeTarget = gomokuUsers[0]; 0 }
+            wrap(false) { GomokuScreen(rig.games, rig.gomoku, BoardGameMe.unknown, onLeave = {}, modifier = Modifier.size(WIDTH.dp, 900.dp), state = state) }
+        }
+    }
+
     // MARK: 체스
 
     val chessUsers = listOf(

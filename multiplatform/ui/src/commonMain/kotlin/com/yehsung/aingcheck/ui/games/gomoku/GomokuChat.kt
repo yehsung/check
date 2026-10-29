@@ -5,9 +5,9 @@
 //  · 펼침: 대화 전체(높이 상한) · 빠른 문구 · 상태 줄 · 입력칸(100자, 80자부터 카운터).
 // 맥 `GomokuChatCard` 와 같은 규칙: 음소거는 서버가 아는 판 상태라 상대에게도 표시된다 · 실패한 말은 초안에 남는다 · 채팅 왕복은 착수·기권을 잠그지 않는다.
 //
-// 신고·차단(애플 심사 지침 1.2 · Play UGC 정책): 이 서랍은 자유 입력 100자를 주고받는 UGC 면이라 머리 ⋯ 에 [신고하기]·[차단하기]를 둔다. 시트는 메시지 탭과
-// **같은 것**을 쓴다 — 조립이 넣는 [BoardGameSafety](메시지 스토어 문)가 없으면 메뉴를 세우지 않는다. 차단 뒤에는 이 판의 채팅을 끈다(판은 그대로 —
-// 판돈이 걸려 있다).
+// 신고·차단(애플 심사 지침 1.2 · Play UGC 정책): 이 서랍은 자유 입력 100자를 주고받는 UGC 면이라 머리 ⋯ 에 [신고하기]·[차단하기]를 둔다. 메뉴는 **시트만
+// 연다**(Swift `safetyMenu` — 차단도 확인 시트를 지난다, 확인 없는 차단은 없다). 시트는 메시지 탭과 같은 것을 화면 루트가 **화면 안 덮개**로 띄운다
+// (GomokuScreen — 조립이 넣는 [BoardGameSafety] 의 시트 칸). 문이 없으면 메뉴를 세우지 않는다. 차단 뒤에는 이 판의 채팅을 끈다(판은 그대로 — 판돈).
 package com.yehsung.aingcheck.ui.games.gomoku
 
 import androidx.compose.foundation.background
@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.games.GomokuPhoneText
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuChatMessage
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuNoticeText
@@ -86,7 +87,12 @@ internal fun GomokuChatDrawer(gomoku: GomokuStore, opponent: GomokuUser, safety:
             }
             Spacer(Modifier.weight(1f))
             Row(
-                Modifier.heightIn(min = AingDimens.minimumTarget).clickable(enabled = !gomoku.isSendingChat) { gomoku.setChatMuted(!gomoku.isMuted) },
+                Modifier.heightIn(min = AingDimens.minimumTarget)
+                    // Swift `.accessibilityHint` — 끄면 상대에게도 표시된다는 사실을 누르기 전에 말한다.
+                    .clickable(enabled = !gomoku.isSendingChat, onClickLabel = if (gomoku.isMuted) GomokuChatText.unmuteHint else GomokuChatText.muteHint) {
+                        gomoku.setChatMuted(!gomoku.isMuted)
+                    }
+                    .testTag(GomokuChatText.muteTag),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 AingIcon(if (gomoku.isMuted) AppIcon.Notifications else AppIcon.NotificationsOff, contentDescription = null, size = 16.dp, tint = colors.accent)
@@ -94,15 +100,22 @@ internal fun GomokuChatDrawer(gomoku: GomokuStore, opponent: GomokuUser, safety:
             }
             if (safety != null && opponent.id.isNotEmpty()) {
                 Box {
-                    BarIcon(AppIcon.MoreHoriz, GomokuPhoneText.moreMenu, "gomoku-chat-safety") { menuOpen = true }
+                    BarIcon(AppIcon.MoreHoriz, BlockReportText.menuAccessibilityLabel, BoardSafetyTags.menu) { menuOpen = true }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         // 신고 대상은 **사람**이다(대국 채팅 줄은 1:1 메시지와 다른 표라 그 id 로는 운영자가 못 찾는다).
-                        DropdownMenuItem(text = { Text("신고하기") }, onClick = { menuOpen = false; safety.report(opponent.id, opponentName) })
-                        DropdownMenuItem(text = { Text("차단하기", color = colors.danger) }, onClick = {
-                            menuOpen = false
-                            safety.block(opponent.id)
-                            if (!gomoku.isMuted) gomoku.setChatMuted(true)
-                        })
+                        DropdownMenuItem(
+                            text = { Text(BlockReportText.reportAction) },
+                            leadingIcon = { AingIcon(AppIcon.Feedback, contentDescription = null, size = 20.dp) },
+                            modifier = Modifier.testTag(BoardSafetyTags.menuReport),
+                            onClick = { menuOpen = false; state.reportTarget = BoardReportTarget(opponent.id, opponentName) },
+                        )
+                        // 차단은 여기서 나가지 않는다 — 확인 덮개만 연다(화면 루트).
+                        DropdownMenuItem(
+                            text = { Text(BlockReportText.blockAction, color = colors.danger) },
+                            leadingIcon = { AingIcon(AppIcon.Block, contentDescription = null, size = 20.dp, tint = colors.danger) },
+                            modifier = Modifier.testTag(BoardSafetyTags.menuBlock),
+                            onClick = { menuOpen = false; state.blockTarget = BoardReportTarget(opponent.id, opponentName) },
+                        )
                     }
                 }
             }
@@ -164,6 +177,18 @@ internal fun GomokuChatDrawer(gomoku: GomokuStore, opponent: GomokuUser, safety:
             Spacer(Modifier.width(1.dp).heightIn(min = 8.dp))
         }
     }
+}
+
+/** 차단(확인을 지난 뒤) · '신고하면서 차단' 뒤 이 판의 채팅을 끈다(Swift `muteAfterBlock`) — 차단은 다음 조회부터 듣지만 이 판의 말은 계속 오므로. */
+internal fun GomokuStore.muteChatAfterBlock() {
+    if (!isMuted) setChatMuted(true)
+}
+
+/** 서랍 문구 중 Swift 가 그 자리에 적어 둔 것(GamesGomokuChat.swift:176 의 힌트) · 시험 표지. */
+internal object GomokuChatText {
+    const val muteHint: String = "상대 말을 꺼요 · 상대에게도 표시돼요"
+    const val unmuteHint: String = "상대 말을 다시 받아요"
+    const val muteTag: String = "gomoku-chat-mute"
 }
 
 @Composable

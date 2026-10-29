@@ -14,7 +14,8 @@
 //   Android 는 관전 여부를 **목적지 쪽에서 읽지 않는다**: 목적지(androidApp ChessDestination)는 섹션 인자만 넘기고 관전 상태는 이 화면 안에서만 읽는다.
 // INV-GamesChessScreen-719627c6 이식: 데모 라우트 꼬리는 DEBUG 전용 값이다 — Android 는 데모 경로 자체가 없어(C§3.2) 출시물에 데모 타입 이름이 0 이다.
 //
-// 판돈 대결 진입(§8-17 #1): 깃발이 꺼지면 [도전]을 숨기고 받은 신청은 스토어가 접은 한 줄로 선다. 로봇 판·관전·순위·무승부 왕복은 그대로다.
+// 판돈 대결 진입(§8-17 #1): 깃발이 꺼지면 [도전]과 "신청하고 받을 수 있어요" 캡션을 숨기고, 받은 신청은 카드 통째([거절]·[수락])가 스토어의 접힌
+// 한 줄로 선다. 판돈 시트의 보내기 문(`GamesChessStakeSend.sendable`)도 깃발을 본다. 로봇 판·관전·순위·무승부 왕복은 그대로다.
 package com.yehsung.aingcheck.ui.games.chess
 
 import androidx.compose.foundation.background
@@ -31,7 +32,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,14 +43,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.stores.chess.ChessInvite
+import com.yehsung.aingcheck.core.stores.chess.ChessMatchOutcome
 import com.yehsung.aingcheck.core.stores.chess.ChessPhase
 import com.yehsung.aingcheck.core.stores.chess.ChessPhoneText
 import com.yehsung.aingcheck.core.stores.chess.ChessStore
@@ -70,6 +77,8 @@ import com.yehsung.aingcheck.ui.games.gomoku.BoardGameMe
 import com.yehsung.aingcheck.ui.games.gomoku.BoardGroup
 import com.yehsung.aingcheck.ui.games.gomoku.BoardLoadFailure
 import com.yehsung.aingcheck.ui.games.gomoku.BoardLoading
+import com.yehsung.aingcheck.ui.games.gomoku.BoardMatchFeedback
+import com.yehsung.aingcheck.ui.games.gomoku.BoardScreenPresence
 import com.yehsung.aingcheck.ui.games.gomoku.BoardNotice
 import com.yehsung.aingcheck.ui.games.gomoku.BoardPersonName
 import com.yehsung.aingcheck.ui.games.gomoku.BoardRow
@@ -87,6 +96,7 @@ import kotlinx.coroutines.launch
 object ChessScreenTags {
     const val screen = "chess-screen"
     const val lobby = "chess-lobby"
+    const val lobbyRefresh = "chess-lobby-refresh"
     const val match = "chess-match"
     const val board = "chess-board"
     const val watchBoard = "chess-watch-board"
@@ -131,6 +141,17 @@ class ChessScreenState {
     val watchFlight: ChessFlightTracker = ChessFlightTracker()
     /** 애니메이션 다시 그리기 펌프(주인은 상태가 아니다 — 거둘 때 이 칸을 올린다). */
     var flightVersion: Int by mutableStateOf(0)
+
+    /**
+     * 두 판의 날던 수를 거둔다(INV-ChessStore-635cb077 · 221d2393 — 창 숨김 · 가림 순간).
+     * 화면 루트가 관찰 가능한 숨김·가림 신호의 **전환 순간**에 부른다([ChessScreen] — 재조성을 기다리지 않는다).
+     */
+    fun clearFlights() {
+        if (matchFlight.flight == null && watchFlight.flight == null) return
+        matchFlight.clear()
+        watchFlight.clear()
+        flightVersion += 1
+    }
 
     fun hasOverlay(chess: ChessStore): Boolean =
         stakeTarget != null || acceptNeedsRobotConfirm != null || confirmsResign || confirmingLeave || chess.isRulesVisible || chess.promotion != null
@@ -213,11 +234,23 @@ fun ChessScreen(
 ) {
     val colors = AingTheme.colors
     DisposableEffect(games) {
+        // 같은 목적지가 겹쳐 쌓여도 마지막 하나가 내려갈 때만 창을 내린다(오목과 같은 셈 — BoardScreenPresence).
+        BoardScreenPresence.enter(games, "chess")
         games.chessScreenDidAppear()
         onDispose {
-            games.chessScreenDidDisappear()
-            onTabBarHidden(false)
+            if (BoardScreenPresence.leave(games, "chess")) {
+                games.chessScreenDidDisappear()
+                onTabBarHidden(false)
+            }
         }
+    }
+    // INV-ChessStore-635cb077 · 221d2393(화면 몫): 창이 숨거나 **가려지는 순간** 날던 수를 거둔다. 코어 `isWindowOccluded` 는 관찰 상태가 아니라(W2-d)
+    //   가림만 바뀌면 재조성이 안 일어난다 — 폰의 가림은 게임 탭 스토어의 `appDidEnterBackground` 한 문에서만 서므로(`isAppActive` 를 내리고 같은 호출에서
+    //   가린다) 관찰 상태 둘(`chess.isWindowVisible` · `games.isAppActive`)의 전환을 snapshotFlow 로 받는다. 배경에서는 프레임 시계가 멈춰 재조성이
+    //   안 돌지만 이 수집은 메인 디스패처에서 돈다(돌아온 순간 끝나던 수의 토막이 다시 미끄러지지 않는다).
+    LaunchedEffect(games, chess, state) {
+        snapshotFlow { !chess.isWindowVisible || !games.isAppActive }
+            .collect { hidden -> if (hidden) state.clearFlights() }
     }
     // 1:1 대국·결과와 로봇 판 화면(iOS fullScreenCover)은 탭 막대를 숨긴다(ChessTabBarPolicy — 셸이 그린다, assembly.md).
     val hidesTabBar = ChessTabBarPolicy.hidesTabBar(chess.match != null && !chess.isAIMatch && chess.phase != ChessPhase.lobby) || state.robotScreenOpen
@@ -225,6 +258,16 @@ fun ChessScreen(
     LaunchedEffect(chess.match?.id) {
         state.observeMatch(chess.match?.id)
         state.shownAt = chess.clock()
+    }
+    // 햅틱(Swift 대국 화면 `.sensoryFeedback(won ? .success : .warning, trigger: match.isFinished)`) — 1:1 판이 보는 동안 끝나면 한 번.
+    val haptics = LocalHapticFeedback.current
+    val feedback = remember { BoardMatchFeedback() }
+    val humanMatchID = chess.match?.takeIf { !chess.isAIMatch }?.id
+    val humanFinished = chess.match?.takeIf { !chess.isAIMatch }?.isFinished
+    LaunchedEffect(humanMatchID, humanFinished) {
+        if (feedback.ended(humanMatchID, humanFinished)) {
+            haptics.performHapticFeedback(if (chess.match?.outcome == ChessMatchOutcome.won) HapticFeedbackType.Confirm else HapticFeedbackType.Reject)
+        }
     }
     Box(modifier.fillMaxSize().background(colors.background).testTag(ChessScreenTags.screen)) {
         Column(Modifier.fillMaxSize()) {
@@ -309,8 +352,21 @@ private fun ChessTopBar(chess: ChessStore, onBack: () -> Unit) {
 
 // MARK: - 로비
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChessLobby(games: GamesStore, chess: ChessStore, roster: GamesLobbyRoster<ChessUser>, state: ChessScreenState) {
+    // 당겨서 새로고침(Swift `.refreshable { await chess.refreshLobby() }` — 체스는 받은함 RPC 가 없어 로비 한 번).
+    var refreshing by remember { mutableStateOf(false) }
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            chess.scope.launch {
+                try { chess.refreshLobby() } finally { refreshing = false }
+            }
+        },
+        modifier = Modifier.fillMaxSize().testTag(ChessScreenTags.lobbyRefresh),
+    ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val viewportHeight = maxHeight
     val columnWidth = maxWidth - AingDimens.sideMargin * 2
@@ -340,6 +396,7 @@ internal fun ChessLobby(games: GamesStore, chess: ChessStore, roster: GamesLobby
         // 관전("지금 대결 중" 목록 + 관전 판)과 순위는 제자리 절이다.
         ChessWatchSection(chess, state, viewportHeight, columnWidth)
         ChessRankingSection(chess, state)
+    }
     }
     }
 }
@@ -446,7 +503,8 @@ private fun ChessOpponents(games: GamesStore, chess: ChessStore, roster: GamesLo
                     if (!chess.duelsLocked) {
                         val enabled = GamesChessChallengeGate.isEnabled(user.isCapable, user.inMatch, facts, games.chessEntryBlock, duelsEnabled = !chess.duelsLocked)
                         if (enabled) {
-                            BoardButton(ChessPhoneText.challenge, kind = BoardButtonKind.Tinted, small = true, testTag = ChessScreenTags.challenge(user.id)) { onChallenge(user) }
+                            BoardButton(ChessPhoneText.challenge, kind = BoardButtonKind.Tinted, small = true, testTag = ChessScreenTags.challenge(user.id),
+                                hint = ChessPhoneText.challengeHint(user.displayName)) { onChallenge(user) }
                         } else {
                             BoardButton(lines.buttonTitle, kind = BoardButtonKind.Gray, small = true, enabled = false, testTag = ChessScreenTags.challenge(user.id)) {}
                         }
@@ -455,7 +513,8 @@ private fun ChessOpponents(games: GamesStore, chess: ChessStore, roster: GamesLo
             }
         }
     }
-    BoardCaption(ChessPhoneText.lobbyCaption)
+    // 깃발이 꺼진 빌드엔 신청 입구가 없다 — "신청하고 받을 수 있어요"도 세우지 않는다.
+    if (!chess.duelsLocked) BoardCaption(ChessPhoneText.lobbyCaption)
 }
 
 /** Android 몫 문구(뒤로가기 확인 — E:56). 폰 */

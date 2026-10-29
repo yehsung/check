@@ -24,8 +24,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -54,8 +60,26 @@ import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GomokuLobby(games: GamesStore, gomoku: GomokuStore, roster: GamesLobbyRoster<GomokuUser>, state: GomokuScreenState) {
+    // 당겨서 새로고침(Swift `.refreshable { refreshLobby(); loadInbox() }`) — 두 조회를 차례로 기다린 뒤 회전자를 내린다.
+    var refreshing by remember { mutableStateOf(false) }
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            gomoku.scope.launch {
+                try {
+                    gomoku.refreshLobby()
+                    gomoku.loadInbox()
+                } finally {
+                    refreshing = false
+                }
+            }
+        },
+        modifier = Modifier.fillMaxSize().testTag(GomokuScreenTags.lobbyRefresh),
+    ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag(GomokuScreenTags.lobby)
             .padding(horizontal = AingDimens.sideMargin).padding(top = AingDimens.space2, bottom = AingDimens.space6),
@@ -78,6 +102,7 @@ internal fun GomokuLobby(games: GamesStore, gomoku: GomokuStore, roster: GamesLo
         GomokuLiveSection(gomoku)
         // 순위표는 맨 아래(로비엔 절이 다섯 — 위에 두면 관전 입구 "지금 대결 중"이 스크롤 밖으로 묻힌다).
         GomokuRankingSection(gomoku, state)
+    }
     }
 }
 
@@ -183,7 +208,8 @@ internal fun GomokuInviteCard(gomoku: GomokuStore, invite: GomokuInvite, showsCo
 internal fun GomokuAIEntryCard(gomoku: GomokuStore, onPlay: () -> Unit) {
     val colors = AingTheme.colors
     val enabled = gomoku.canStartAIMatch
-    BoardGroup(Modifier.testTag(GomokuScreenTags.aiEntry).let { if (enabled) it.clickable(onClick = onPlay) else it }) {
+    // Swift `.accessibilityHint(aiPromptCaption)` — 누르면 무엇이 열리는지(돌 색 고르기)를 누름 이름표로.
+    BoardGroup(Modifier.testTag(GomokuScreenTags.aiEntry).let { if (enabled) it.clickable(onClickLabel = GomokuPhoneText.aiPromptCaption, onClick = onPlay) else it }) {
         BoardRow(minHeight = 56.dp) {
             GomokuAIPortrait(36.dp, Modifier.alpha(if (enabled) 1f else 0.5f))
             Column(Modifier.weight(1f)) {
@@ -218,7 +244,8 @@ internal fun GomokuOpponentsSection(games: GamesStore, gomoku: GomokuStore, rost
             }
         }
     }
-    BoardCaption(GomokuPhoneText.lobbyCaption)
+    // "근무 중이 아니어도 신청하고 받을 수 있어요" — 깃발이 꺼진 빌드엔 신청 입구가 없으니 이 줄도 세우지 않는다(없는 동작을 말하지 않는다).
+    if (!gomoku.duelsLocked) BoardCaption(GomokuPhoneText.lobbyCaption)
 }
 
 /**
@@ -236,7 +263,8 @@ private fun GomokuOpponentRow(gomoku: GomokuStore, user: GomokuUser, isLast: Boo
         }
         if (!gomoku.duelsLocked) {
             if (GomokuPhoneChallengeGate.isEnabled(user, gomoku)) {
-                BoardButton(GomokuPhoneText.challenge, kind = BoardButtonKind.Tinted, small = true, testTag = GomokuScreenTags.challenge(user.id)) { onChallenge(user) }
+                BoardButton(GomokuPhoneText.challenge, kind = BoardButtonKind.Tinted, small = true, testTag = GomokuScreenTags.challenge(user.id),
+                    hint = GomokuScreenText.challengeHint(user.displayName)) { onChallenge(user) }
             } else {
                 BoardButton(if (user.inMatch) GomokuPhoneText.inMatchButton else GomokuPhoneText.challenge, kind = BoardButtonKind.Gray, small = true, enabled = false,
                     testTag = GomokuScreenTags.challenge(user.id)) {}
@@ -323,7 +351,7 @@ private fun GomokuWatchEntry(gomoku: GomokuStore, live: GomokuLiveMatch) {
             GomokuScreenText.watchSoonCaption, style = BoardText.rowSubtitle(), color = colors.label2,
             modifier = Modifier.semantics { contentDescription = GomokuNoticeText.watchUnavailable },
         )
-        else -> BoardButton(GomokuScreenText.watchChip, kind = BoardButtonKind.Tinted, small = true, testTag = GomokuScreenTags.watch(live.id)) {
+        else -> BoardButton(GomokuScreenText.watchChip, kind = BoardButtonKind.Tinted, small = true, testTag = GomokuScreenTags.watch(live.id), hint = GomokuScreenText.watchChipHint) {
             gomoku.startWatching(live.id)
         }
     }

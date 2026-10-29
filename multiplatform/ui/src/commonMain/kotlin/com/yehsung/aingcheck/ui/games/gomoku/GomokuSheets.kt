@@ -204,7 +204,8 @@ internal fun BoxScope.GomokuAIColorSheet(gomoku: GomokuStore, onClose: () -> Uni
                 Column(
                     Modifier.weight(1f).defaultMinSize(minHeight = 96.dp)
                         .background(colors.surface, RoundedCornerShape(AingDimens.tileRadius))
-                        .clickable(enabled = enabled) { onClose(); gomoku.startAIMatch(color) }
+                        // Swift `.accessibilityHint(aiNoRecord)` — 기록이 남지 않는 연습이라는 사실을 누르기 전에.
+                        .clickable(enabled = enabled, onClickLabel = GomokuPhoneText.aiNoRecord) { onClose(); gomoku.startAIMatch(color) }
                         .padding(vertical = 14.dp, horizontal = 8.dp)
                         .testTag("gomoku-ai-${color.rawValue}"),
                     horizontalAlignment = Alignment.CenterHorizontally,

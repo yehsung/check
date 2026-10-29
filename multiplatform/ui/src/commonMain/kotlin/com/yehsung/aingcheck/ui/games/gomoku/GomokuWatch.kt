@@ -118,6 +118,7 @@ internal fun GomokuWatchView(games: GamesStore, gomoku: GomokuStore, watch: Gomo
             BoardButton(
                 GomokuPhoneWatchText.leaveWatch, Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 10.dp),
                 kind = BoardButtonKind.Tinted, fillsWidth = true, icon = AppIcon.Undo, testTag = GomokuScreenTags.leaveWatch,
+                hint = GomokuPhoneWatchText.leaveWatchHint,
             ) { gomoku.leaveWatch() }
         }
     }

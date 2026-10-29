@@ -85,7 +85,8 @@ internal fun BoxScope.ChessPromotionSheet(chess: ChessStore, prompt: ChessPromot
                 pair.forEach { kind ->
                     Column(
                         Modifier.weight(1f).defaultMinSize(minHeight = 104.dp).background(colors.surface, RoundedCornerShape(AingDimens.tileRadius))
-                            .clickable(enabled = !chess.isBusy) { chess.scope.launch { chess.choosePromotion(kind) } }
+                            // Swift `.accessibilityHint(promotionTitle)`.
+                            .clickable(enabled = !chess.isBusy, onClickLabel = ChessPhoneText.promotionTitle) { chess.scope.launch { chess.choosePromotion(kind) } }
                             .padding(vertical = 12.dp).testTag("chess-promote-${kind.rawValue}")
                             .semantics(mergeDescendants = true) { contentDescription = ChessPhoneText.pieceName(kind) },
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),

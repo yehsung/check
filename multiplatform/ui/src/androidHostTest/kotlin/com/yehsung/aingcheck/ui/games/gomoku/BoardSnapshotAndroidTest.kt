@@ -45,6 +45,8 @@ class BoardSnapshotAndroidTest {
     @Test fun gomokuLobbyDuelsOn() { check(BoardScenes.gomokuLobby(true), BoardScenes.gomokuLobby(true, ruby = 107)) }
     @Test fun chessLobbyDuelsOff() { check(BoardScenes.chessLobby(false), BoardScenes.chessLobby(false, ruby = 107)) }
     @Test fun chessLobbyDuelsOn() { check(BoardScenes.chessLobby(true), BoardScenes.chessLobby(true, ruby = 107)) }
+    /** 판돈 시트(§8-17 신청 쪽 — 잔액 7 이면 10 칸이 흐리다 · 기준선은 잔액 100). */
+    @Test fun gomokuStakeSheet() { check(BoardScenes.gomokuStakeSheet(), BoardScenes.gomokuStakeSheet(ruby = 100)) }
 
     /** 깃발 꺼짐과 켜짐 두 장은 서로 달라야 한다(같으면 깃발이 화면에 닿지 않는다). */
     @Test

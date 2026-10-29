@@ -227,4 +227,7 @@ object GomokuScreenText {
     const val leaveConfirmMessage: String = "나가도 대국은 계속 흘러요. 한 수 30초가 지나면 자동으로 놓이고, 세 번 놓치면 져요."
     const val leaveConfirm: String = "나가기"
     const val leaveCancel: String = "계속 두기"
+
+    /** [도전] 단추의 보이스오버 힌트(Swift GamesGomokuScreen.swift:417 이 그 자리에 적은 문장 — 체스 짝은 `ChessPhoneText.challengeHint`). */
+    fun challengeHint(name: String): String = "${name}님에게 판돈을 골라 신청해요"
 }

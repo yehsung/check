@@ -117,7 +117,7 @@ private fun ChessLiveRow(chess: ChessStore, live: ChessLiveMatch, isLast: Boolea
                         GamesChessWatchPlan.Entry.myMatch -> Text(ChessPhoneText.myMatch, style = BoardText.rowSubtitle(), color = colors.label2)
                         GamesChessWatchPlan.Entry.soon -> Text(ChessPhoneText.watchSoonCaption, style = BoardText.rowSubtitle(), color = colors.label2,
                             modifier = Modifier.semantics { contentDescription = ChessNoticeText.unavailable })
-                        GamesChessWatchPlan.Entry.chip -> BoardButton(ChessPhoneText.watch, kind = BoardButtonKind.Tinted, small = true, testTag = ChessScreenTags.watch(live.id)) {
+                        GamesChessWatchPlan.Entry.chip -> BoardButton(ChessPhoneText.watch, kind = BoardButtonKind.Tinted, small = true, testTag = ChessScreenTags.watch(live.id), hint = ChessPhoneText.watchChipHint) {
                             chess.startWatching(live.id)
                         }
                     }
@@ -136,7 +136,8 @@ private fun ChessWatchPanel(chess: ChessStore, watch: ChessSpectateState, state:
     val colors = AingTheme.colors
     Column(Modifier.fillMaxWidth().testTag("chess-watch"), verticalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
         // [나가기]는 **머리**에 — 문은 하나다(`leaveWatch()` 는 관전을 내리고 로비·순위를 다시 읽는다).
-        BoardSectionHeader(ChessPhoneText.watchTitle, action = ChessPhoneText.leaveWatch to { chess.leaveWatch() })
+        BoardSectionHeader(ChessPhoneText.watchTitle, action = ChessPhoneText.leaveWatch to { chess.leaveWatch() }, actionHint = ChessPhoneText.leaveWatchHint,
+            actionTag = ChessScreenTags.leaveWatch)
         if (watch.hasServerState || watch.faces.isNotEmpty()) {
             WatchPlayerRow(chess, watch, ChessColor.black, 0)
             WatchBoard(chess, watch, state, viewportHeight, columnWidth)

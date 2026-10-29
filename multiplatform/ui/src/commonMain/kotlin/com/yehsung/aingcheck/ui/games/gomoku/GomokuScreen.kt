@@ -7,8 +7,9 @@
 // 수명: 나타나면 `GamesStore.gomokuScreenDidAppear`(로비·인박스·진행 판 + 폴링), 사라지면 `gomokuScreenDidDisappear`. 화면 꺼짐 방지는 이 화면이
 // 쓰지 않는다 — 주인은 `GamesStore`(판이 도는 동안은 화면을 떠나도 유지, 끝나면 푼다 — Android 조립이 FLAG_KEEP_SCREEN_ON 싱크를 단다).
 //
-// 판돈 대결 진입(§8-17 #1): `appConfig.duelsEnabled` 가 꺼진 빌드는 [도전] · 받은 신청 카드의 [수락] · 결과의 [같은 판돈으로 다시 신청]을
-// **숨긴다**(스토어 `duelsLocked` 한 문 — 스토어도 짝으로 RPC 를 막는다). AI 대국 · 관전 · 순위는 그대로다.
+// 판돈 대결 진입(§8-17 #1): `appConfig.duelsEnabled` 가 꺼진 빌드는 [도전] · 결과의 [같은 판돈으로 다시 신청] · 로비의 "신청하고 받을 수 있어요"
+// 캡션을 **숨기고**, 받은 신청은 카드 통째([거절]·[수락] 둘 다)가 스토어의 접힌 한 줄(`incomingFoldedNotice`)로 바뀐다(스토어 `duelsLocked` 한 문 —
+// 스토어도 짝으로 신청·수락 RPC 를 막는다). AI 대국 · 관전 · 순위는 그대로다.
 //
 // Android 몫(iOS 에 없는 것): 뒤로가기 계획([GomokuBackPlan]) — 덮개 닫기 → (사람과의 판이 흐르면) "대국은 계속 흘러요" 확인 → (관전 중이면) 관전 나가기 →
 // 화면 떠나기(E:56 · G §2-3 W4-a ③).
@@ -25,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -36,12 +39,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.renju.GomokuForbiddenReason
+import com.yehsung.aingcheck.core.rules.renju.GomokuOutcome
 import com.yehsung.aingcheck.core.stores.games.GamesLobbyRoster
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.games.GomokuPhoneText
@@ -62,6 +68,7 @@ import kotlinx.coroutines.launch
 object GomokuScreenTags {
     const val screen = "gomoku-screen"
     const val lobby = "gomoku-lobby"
+    const val lobbyRefresh = "gomoku-lobby-refresh"
     const val match = "gomoku-match"
     const val result = "gomoku-result"
     const val watch = "gomoku-watch"
@@ -69,6 +76,7 @@ object GomokuScreenTags {
     const val back = "gomoku-back"
     const val rules = "gomoku-rules"
     const val more = "gomoku-more"
+    const val resign = "gomoku-resign"
     const val stakeSheet = "gomoku-stake-sheet"
     const val rulesSheet = "gomoku-rules-sheet"
     const val aiSheet = "gomoku-ai-sheet"
@@ -103,13 +111,17 @@ class GomokuScreenState {
     var confirmingLeave: Boolean by mutableStateOf(false)
     var chatExpanded: Boolean by mutableStateOf(false)
     var focusedForbidden: GomokuForbiddenReason? by mutableStateOf(null)
+    /** 대국 채팅 ⋯ [신고하기] — 신고 시트(조립이 넣는 메시지 탭 시트)를 화면 안 덮개로 띄운 대상. */
+    var reportTarget: BoardReportTarget? by mutableStateOf(null)
+    /** 대국 채팅 ⋯ [차단하기] — 차단 확인 덮개의 대상. **차단은 확인을 지나야만 나간다**(Swift `showsBlockConfirm`). */
+    var blockTarget: BoardReportTarget? by mutableStateOf(null)
     var previewVersion: Int by mutableStateOf(0)
     val preview: GomokuTapPreview = GomokuTapPreview()
     val forbiddenMemo: GomokuForbiddenMemo = GomokuForbiddenMemo()
     /** 이 판이 나타난 시각 — [기권] 누름 가드의 기준(GomokuPhoneResignGuard). */
     var shownAt: SwiftDate? = null
 
-    val hasOverlay: Boolean get() = stakeTarget != null || showsAIPicker || showsResignConfirm || confirmingLeave
+    val hasOverlay: Boolean get() = stakeTarget != null || showsAIPicker || showsResignConfirm || confirmingLeave || reportTarget != null || blockTarget != null
 
     private var observedMatch = false
     private var lastMatchID: String? = null
@@ -130,12 +142,17 @@ class GomokuScreenState {
         showsResignConfirm = false
         showsAIPicker = false
         focusedForbidden = null
+        // 신고·차단 대상은 그 판의 상대다 — 판이 갈리면 대상도 갈린다(Swift: 서랍과 함께 그 시트가 내려간다).
+        reportTarget = null
+        blockTarget = null
         preview.clear()
     }
 
     fun closeOverlay() {
         when {
             confirmingLeave -> confirmingLeave = false
+            blockTarget != null -> blockTarget = null
+            reportTarget != null -> reportTarget = null
             showsResignConfirm -> showsResignConfirm = false
             stakeTarget != null -> stakeTarget = null
             showsAIPicker -> showsAIPicker = false
@@ -202,10 +219,14 @@ fun GomokuScreen(
 ) {
     val colors = AingTheme.colors
     DisposableEffect(games) {
+        // 같은 목적지가 겹쳐 쌓이면(알림·딥링크) 새 화면이 선 뒤에 옛 화면이 내려간다 — 마지막 하나가 내려갈 때만 창을 내린다([BoardScreenPresence]).
+        BoardScreenPresence.enter(games, "gomoku")
         games.gomokuScreenDidAppear()
         onDispose {
-            games.gomokuScreenDidDisappear()
-            onTabBarHidden(false)
+            if (BoardScreenPresence.leave(games, "gomoku")) {
+                games.gomokuScreenDidDisappear()
+                onTabBarHidden(false)
+            }
         }
     }
     // 대국·결과는 탭 막대를 숨긴다(Swift `.hidesTabBar(for: .gomokuMatch)` — 몰입 화면 + 대화 서랍). 로비·관전은 보인다. 셸이 그린다(assembly.md).
@@ -215,6 +236,21 @@ fun GomokuScreen(
     LaunchedEffect(matchID) {
         state.observeMatch(matchID)
         state.shownAt = gomoku.clock()
+    }
+    // 수가 바뀌면 금수 초점을 지운다(Swift `onChange(of: match.moveCount)`) — 시간 초과 자동 착수·상대 수가 와도 빨간 금수 줄이 1순위로 남아
+    // '상대 차례'·'내 차례' 줄을 가리지 않게.
+    val moveCount = gomoku.match?.moveCount
+    LaunchedEffect(moveCount) { state.focusedForbidden = null }
+    // 햅틱(Swift `sensoryFeedback`): 보는 동안 수가 놓이면 착수 한 번(대국 단계만 — 판 캔버스가 선 자리) · 보는 동안 판이 끝나면 이김/그 밖.
+    val haptics = LocalHapticFeedback.current
+    val feedback = remember { BoardMatchFeedback() }
+    val isFinished = gomoku.match?.isFinished
+    LaunchedEffect(matchID, moveCount, isFinished) {
+        val current = gomoku.match
+        val moved = feedback.moved(matchID, moveCount, playing = gomoku.phase == GomokuPhase.playing)
+        val ended = feedback.ended(matchID, isFinished)
+        if (ended) haptics.performHapticFeedback(if (current?.outcome == GomokuOutcome.won) HapticFeedbackType.Confirm else HapticFeedbackType.Reject)
+        else if (moved) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
     }
     Box(modifier.fillMaxSize().background(colors.background).testTag(GomokuScreenTags.screen)) {
         Column(Modifier.fillMaxSize()) {
@@ -250,6 +286,36 @@ fun GomokuScreen(
                     onCancel = { state.showsResignConfirm = false },
                     testTag = GomokuScreenTags.resignConfirm,
                 )
+            }
+        }
+        // 대국 채팅 ⋯ 의 신고·차단(Swift `GamesGomokuChatDrawer` 의 두 시트) — **화면 안 덮개**다. 목적지(Dest.ReportSheet · Dest.BlockConfirm)로 밀면
+        // 대국 화면이 컴포지션에서 빠져 폴링·관전이 죽는다(E§4.4 · G ②). 차단은 확인을 지나야만 나가고, 뒤에는 이 판의 채팅을 끈다(판은 그대로 — 판돈).
+        if (safety != null) {
+            state.blockTarget?.let { target ->
+                BoardSheetFrame(onDismiss = { state.blockTarget = null }, testTag = BoardSafetyTags.blockSheet) {
+                    safety.blockConfirmSheet(
+                        target.peerName,
+                        {
+                            state.blockTarget = null
+                            safety.block(target.peerID)
+                            gomoku.muteChatAfterBlock()
+                        },
+                        { state.blockTarget = null },
+                    )
+                }
+            }
+            state.reportTarget?.let { target ->
+                BoardSheetFrame(onDismiss = null, testTag = BoardSafetyTags.reportSheet) {
+                    safety.reportSheet(
+                        target,
+                        { blocked ->
+                            state.reportTarget = null
+                            // '신고하면서 차단'은 서버가 이미 차단했다 — 화면도 같은 순간에 상대 말을 덮는다(Swift `onSent(blocked)` → muteAfterBlock).
+                            if (blocked) gomoku.muteChatAfterBlock()
+                        },
+                        { state.reportTarget = null },
+                    )
+                }
             }
         }
         if (state.confirmingLeave) {
@@ -302,10 +368,23 @@ private fun GomokuTopBar(gomoku: GomokuStore, state: GomokuScreenState, onBack: 
         }
         BarIcon(AppIcon.MenuBook, GomokuPhoneText.rulesTitle, GomokuScreenTags.rules) { gomoku.isRulesVisible = true }
         if (gomoku.phase == GomokuPhase.playing && match != null) {
-            val enabled = !match.isFinished && !gomoku.isBusy
-            BarIcon(AppIcon.Flag, GomokuPhoneText.resign, GomokuScreenTags.more, enabled = enabled) {
-                // [기권]을 화면이 뜬 직후에는 받지 않는다(로비 [수락] 두 번 누름의 둘째가 떨어지는 경로 — GomokuPhoneResignGuard).
-                if (com.yehsung.aingcheck.core.stores.gomoku.GomokuPhoneResignGuard.acceptsTap(state.shownAt, gomoku.clock())) state.showsResignConfirm = true
+            // Swift: 머리 오른쪽 ⋯ 메뉴 안의 [기권](위험 동작을 머리에 바로 두지 않는다). 메뉴는 늘 열리고, 항목만 끝난 판·처리 중에 흐려진다.
+            var menuOpen by remember { mutableStateOf(false) }
+            Box {
+                BarIcon(AppIcon.MoreHoriz, GomokuPhoneText.moreMenu, GomokuScreenTags.more) { menuOpen = true }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(GomokuPhoneText.resign, color = if (!match.isFinished && !gomoku.isBusy) colors.danger else colors.label3Text) },
+                        leadingIcon = { AingIcon(AppIcon.Flag, contentDescription = null, size = 20.dp, tint = if (!match.isFinished && !gomoku.isBusy) colors.danger else colors.label3Text) },
+                        enabled = !match.isFinished && !gomoku.isBusy,
+                        modifier = Modifier.testTag(GomokuScreenTags.resign),
+                        onClick = {
+                            menuOpen = false
+                            // [기권]을 화면이 뜬 직후에는 받지 않는다(로비 [수락] 두 번 누름의 둘째가 떨어지는 경로 — GomokuPhoneResignGuard).
+                            if (com.yehsung.aingcheck.core.stores.gomoku.GomokuPhoneResignGuard.acceptsTap(state.shownAt, gomoku.clock())) state.showsResignConfirm = true
+                        },
+                    )
+                }
             }
         } else {
             Spacer(Modifier.size(AingDimens.minimumTarget))
@@ -326,8 +405,20 @@ internal fun BarIcon(icon: AppIcon, label: String, tag: String, enabled: Boolean
     }
 }
 
-/** 대국 채팅 서랍의 신고·차단 문(메시지 탭 스토어 — 조립이 넣는다). 없으면 ⋯ 메뉴를 세우지 않는다(Swift `messages == nil`). */
+/** 신고·차단 대상 — **사람**이다(대국 채팅 줄은 1:1 메시지와 다른 표라 그 id 로는 운영자가 못 찾는다 — 메시지 id 를 싣지 않는다). */
+data class BoardReportTarget(val peerID: String, val peerName: String)
+
+/**
+ * 대국 채팅 서랍의 신고·차단 문(메시지 탭 스토어·시트 — 조립이 넣는다). 없으면 ⋯ 메뉴를 세우지 않는다(Swift `messages == nil`).
+ * 두 시트는 **화면 안 덮개**로 그린다 — 조립은 목적지로 밀지 않고 시트 컴포저블을 이 칸에 넣는다(assembly.md).
+ *  - [block]: 확인을 지난 차단만 부른다(메시지 스토어 block). 화면이 확인 덮개를 먼저 띄운다.
+ *  - [reportSheet]: 메시지 탭과 같은 신고 시트(W3-a `MessagesReportSheet(store, MessagesReportTarget(peerID, peerName), onSent, onClose)`).
+ *    `onSent(blocked)` — '신고하면서 차단'이었으면 true(화면이 이 판의 채팅을 끈다).
+ *  - [blockConfirmSheet]: 차단 확인 시트(기본은 같은 문구의 [BoardBlockConfirmSheet] — W3-a `MessagesBlockConfirmSheet` 를 넣으면 세 입구가 한 시트를 쓴다).
+ */
 class BoardGameSafety(
-    val report: (peerID: String, peerName: String) -> Unit,
     val block: (peerID: String) -> Unit,
+    val reportSheet: @Composable (target: BoardReportTarget, onSent: (blocked: Boolean) -> Unit, onClose: () -> Unit) -> Unit,
+    val blockConfirmSheet: @Composable (peerName: String, onConfirm: () -> Unit, onClose: () -> Unit) -> Unit =
+        { peerName, onConfirm, onClose -> BoardBlockConfirmSheet(peerName, onConfirm, onClose) },
 )

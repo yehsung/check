@@ -199,8 +199,12 @@ struct V0369RummyWireContractTests {
             #expect(seats.allSatisfy { ($0.state == .done) == ($0.finalScore != nil) }, "\(name): 점수 자리")
             // 루비·등수도 공용 순수 함수(§2.1)와 같은 답이다 — 서버 rummy_payouts ↔ RummyRules.payouts.
             let bySeat = seats.sorted { ($0.seatNo ?? 0) < ($1.seatNo ?? 0) }
+            // 분배 입력 점수는 화면 점수가 아니라 §2.1 0번(막힘 끝 공동 최소 집단 ⌊P/m⌋)이다 — 서버 rummy__settle 과 같은 길.
+            let done = bySeat.filter { $0.state == .done }
+            let payoutScore = Dictionary(uniqueKeysWithValues: zip(done.map { $0.seatNo ?? 0 },
+                                                                   RummyRules.payoutScores(racks: done.map { $0.finalRack ?? [] })))
             let expected = RummyRules.payouts(seatCount: count, stake: stake, seats: bySeat.map {
-                RummyPayoutSeat(active: $0.state == .done, score: $0.finalScore ?? 0, tiles: $0.finalRack?.count ?? 0,
+                RummyPayoutSeat(active: $0.state == .done, score: payoutScore[$0.seatNo ?? 0] ?? 0, tiles: $0.finalRack?.count ?? 0,
                                 seat: $0.seatNo ?? 0, forfeitOrder: $0.forfeitOrder)
             })
             #expect(bySeat.map { $0.payout ?? -1 } == expected.payouts, "\(name): payouts")

@@ -216,6 +216,32 @@ private let payoutCases: [PayoutCase] = [
         }
     }
 
+    @Test func settlementP11CoWinnersShareRubyAndRank() {
+        // 설계서 §2.1 0번 · P11(V1-01): 막힘 끝 최소 집단은 분배 점수를 ⌊P/m⌋ 로 같게 — 화면 점수의 나머지 1점이
+        // 묶음을 가르면 같은 값 두 사람이 15/5 · 1위/2위로 갈린다(서버 tests/f_fix2.sql F1 과 같은 값).
+        func settle(_ racks: [[RummyFace]], stake: Int) -> (scores: [Int], payouts: [Int], ranks: [Int], winners: [Int]) {
+            let final = RummyRules.finalScores(racks: racks)
+            let paid = RummyRules.payoutScores(racks: racks)
+            let got = RummyRules.payouts(seatCount: racks.count, stake: stake, seats: racks.indices.map {
+                RummyPayoutSeat(active: true, score: paid[$0], tiles: racks[$0].count, seat: $0, forfeitOrder: nil)
+            })
+            return (final.scores, got.payouts, got.ranks, final.winners)
+        }
+        let p11 = settle([fs("A2"), fs("B2"), fs("C5"), fs("D6")], stake: 5)
+        #expect(p11.scores == [4, 3, -3, -4], "화면 점수는 R-24 그대로")
+        #expect(RummyRules.payoutScores(racks: [fs("A2"), fs("B2"), fs("C5"), fs("D6")]) == [3, 3, -3, -4])
+        #expect(p11.payouts == [10, 10, 0, 0])
+        #expect(p11.ranks == [1, 1, 3, 4])
+        #expect(p11.winners == [0, 1])
+        // 장수가 다른 최소 집단(F1b): 점수 [2,3,−5] · 승자 s1 만 · 상금은 한 묶음 [7,8,0](나머지는 장수 적은 쪽) · 등수 [1,1,3]
+        let b = settle([fs("A1 B1"), fs("C2"), fs("D7")], stake: 5)
+        #expect(b.scores == [2, 3, -5] && b.winners == [1])
+        #expect(b.payouts == [7, 8, 0] && b.ranks == [1, 1, 3])
+        // 빈 랙 끝(R-22)·혼자 남음은 그대로.
+        #expect(RummyRules.payoutScores(racks: [fs("A2"), [], fs("B3")]) == RummyRules.finalScores(racks: [fs("A2"), [], fs("B3")]).scores)
+        #expect(RummyRules.payoutScores(racks: [fs("A2 B2")]) == [0])
+    }
+
     @Test func displayOrderPutsJokerInItsRunSlot() throws {
         #expect(RummyRules.displayOrder(fs("A5 A6 J")) == fs("A5 A6 J"))      // J = A7
         #expect(RummyRules.displayOrder(fs("J A5 A6")) == fs("A5 A6 J"))      // 왼쪽에 놓아도 A7(R-07 주의)

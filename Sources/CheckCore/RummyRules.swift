@@ -280,6 +280,21 @@ package enum RummyRules {
         return (scores, winners)
     }
 
+    /// §2.1 0번: 정산이 `payouts` 에 넘기는 점수(서버 `rummy__settle` 과 같다). `racks` 는 끝까지 남은 자리 순.
+    /// `finalScores` 그대로이되, 막힘 끝(빈 랙 없음)의 최소 집단 T(m ≥ 2)는 모두 ⌊P/m⌋ 로 같게 넘긴다 —
+    /// 화면 점수의 나머지 1점이 §2.1 묶음을 갈라 값이 같은 공동 최소 집단이 다른 상금·등수를 받지 않게(설계서 P11).
+    package static func payoutScores(racks: [[RummyFace]]) -> [Int] {
+        var scores = finalScores(racks: racks).scores
+        guard !racks.isEmpty, !racks.contains(where: \.isEmpty) else { return scores }
+        let values = racks.map(rackValue)
+        let lowest = values.min()!
+        let tied = racks.indices.filter { values[$0] == lowest }
+        guard tied.count >= 2 else { return scores }
+        let pot = values.reduce(0) { $0 + ($1 - lowest) }
+        for seat in tied { scores[seat] = pot / tied.count }
+        return scores
+    }
+
     /// 등수 상금표(× 판돈, 설계서 §2.1 ①). 2인 [2,0] · 3인 [2,1,0] · 4인 [3,1,0,0].
     package static func prizeTable(seatCount: Int) -> [Int] {
         switch seatCount {

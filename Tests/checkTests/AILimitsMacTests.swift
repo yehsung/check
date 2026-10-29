@@ -2028,7 +2028,9 @@ struct AILimitsMacWidthTests {
         #expect(try bytes(AILimitMacPalette.weeklyHeader) == (0xA7, 0x96, 0xE8))
         #expect(try bytes(AILimitMacPalette.emptyTrack) == (0x30, 0x34, 0x3B))
         #expect(try bytes(AILimitMacPalette.separator) == (0x2C, 0x30, 0x37))
-        #expect(try bytes(AILimitMacPalette.absentText) == (0x59, 0x5E, 0x67))
+        // 2026-10-30 승인: `없음` 글자를 승인된 3단 글자 토큰(`label3Text`)의 합성값으로 올렸다
+        // (`#595E67` 카드 위 2.06:1 → `#9798A4` 4.70:1). 아래 `theAbsentGlyphIsLegible…` 이 그 비율을 잰다.
+        #expect(try bytes(AILimitMacPalette.absentText) == (0x97, 0x98, 0xA4))
         #expect(try bytes(AILimitMacPalette.absentTrack) == (0x22, 0x26, 0x2C))
         // 열마다 **다른** 색이고, 머리 글자는 바보다 밝다(작은 글자가 바와 같은 명도면 배경에 묻힌다).
         #expect(AILimitMacPalette.barColor(.fiveHour) != AILimitMacPalette.barColor(.weekly),
@@ -2046,17 +2048,103 @@ struct AILimitsMacWidthTests {
         #expect(absent.0 + absent.1 + absent.2 < empty.0 + empty.1 + empty.2)
     }
 
+    /// ★ `없음` 글자가 **읽힌다** — 그러나 숫자보다는 조용하다 (2026-10-30 승인 계약 ②).
+    ///
+    /// 전에는 카드 위 **2.06:1** 이었다. 어떤 글자에도 모자란 값이고, 운영 코덱스 사용자 40명 중 38명
+    /// (`pro`·`prolite`·`free` — 주간 창 하나만 오는 요금제)이 5시간 칸에서 **영구히** 이 글자를 본다.
+    ///
+    /// ★ 상한을 절대값(`< 4.5`)이 아니라 **상대값**으로 둔다. 원래 뜻은 "값이 아니라 '값이 없다는 사실'이라
+    ///   숫자보다 조용하다"이고, 그 뜻은 숫자와의 비교로 지켜야 한다 — 절대값 상한은 **읽히는 것을 금지**한다.
+    @Test
+    func theAbsentGlyphIsLegibleYetQuieterThanTheNumber() throws {
+        /// 카드 바탕(`CheckTheme.panel`) 위에 합성한 sRGB 성분(불투명도 있는 색도 받는다 —
+        /// `primaryText` 는 흰색 0.94 다). 픽셀이 아니라 **정의값**으로 재는 자리라 합성도 손으로 한다.
+        func onPanel(_ color: Color) throws -> (Double, Double, Double) {
+            let backdrop = try #require(NSColor(CheckTheme.panel).usingColorSpace(.sRGB))
+            let ink = try #require(NSColor(color).usingColorSpace(.sRGB))
+            let a = Double(ink.alphaComponent)
+            func mix(_ u: CGFloat, _ o: CGFloat) -> Double { Double(u) + (Double(o) - Double(u)) * a }
+            return (mix(backdrop.redComponent, ink.redComponent),
+                    mix(backdrop.greenComponent, ink.greenComponent),
+                    mix(backdrop.blueComponent, ink.blueComponent))
+        }
+        func luminance(_ c: (Double, Double, Double)) -> Double {
+            func channel(_ v: Double) -> Double {
+                v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * channel(c.0) + 0.7152 * channel(c.1) + 0.0722 * channel(c.2)
+        }
+        func contrastOnPanel(_ color: Color) throws -> Double {
+            let ink = luminance(try onPanel(color)), back = luminance(try onPanel(CheckTheme.panel))
+            return (max(ink, back) + 0.05) / (min(ink, back) + 0.05)
+        }
+
+        // ① `없음` 글자: 승인본이 적은 **4.70:1**. 소수 둘째 자리까지 박는다(느슨한 하한만 두면
+        //    `#595E67` 로 되돌아가는 변경이 "4.5 는 넘었다"는 말로 통과할 수 없게).
+        let absent = try contrastOnPanel(AILimitMacPalette.absentText)
+        #expect(absent > 4.6 && absent < 4.8, "`없음` 글자 대비 \(absent):1 — 승인본은 4.70:1")
+
+        // ② 그래도 **숫자보다는 조용하다**(원래 위계 — 상대 상한).
+        let number = try contrastOnPanel(AILimitUsageTint.color(for: 12))
+        #expect(number > 11, "전제: 숫자 글자는 12:1 대가 맞다(\(number):1)")
+        #expect(absent < number, "`없음` 이 숫자만큼 커졌다 — 값이 아니라 '값이 없다는 사실'이다")
+
+        // ③ 위험·주의 단계 숫자도 `없음` 보다 눈에 띈다(그 줄에서 가장 먼저 읽혀야 하는 것이 그 둘이다).
+        for percent in [75.0, 95.0] {
+            let staged = try contrastOnPanel(AILimitUsageTint.color(for: percent))
+            #expect(staged > absent, "\(percent)% 숫자(\(staged):1)가 `없음`(\(absent):1)보다 조용하다")
+        }
+        // ④ 기준선: 트랙은 글자가 아니다 — 해치 잉크도 글자보다 조용하다(무늬가 값으로 읽히지 않게).
+        let hatch = try contrastOnPanel(AILimitAbsentHatch.ink)
+        #expect(hatch < absent, "해치 잉크(\(hatch):1)가 글자(\(absent):1)만큼 또렷하다")
+    }
+
     /// 리셋 시각 캡션은 `오후 6:59` 꼴이다(초 이하를 쓰지 않는다 — 요청 시각의 잔여 분수가 섞여 온다).
+    ///
+    /// ★ 2026-10-30: 시그니처에 `now:` 가 더해졌다(승인 계약 ⑤ — 하루를 넘는 리셋은 날짜를 앞세운다).
+    ///   이 단언의 몫은 **같은 날 리셋**이라 `now` 를 한 시간 전으로 고정한다 — 그러면 24시간 안쪽이라
+    ///   `오전`/`오후` 로 시작하는 원래 꼴이 그대로 선다. 먼 리셋은 아래 `…CarriesTheDate` 가 잰다.
     @Test
     func resetTimeCaptionHasNoSeconds() {
         let seoul = TimeZone(identifier: "Asia/Seoul")!
-        // 2026-10-06T19:00:00Z = KST 2026-10-07 04:00.
+        // 2026-10-06T19:00:00Z = KST 2026-10-07 04:00. 지금은 그 한 시간 전.
+        let resetsAt = Date(timeIntervalSince1970: 1_791_313_200)
         let text = AILimitResetTimeText.text(
-            Date(timeIntervalSince1970: 1_791_313_200), timeZone: seoul
+            resetsAt, now: resetsAt.addingTimeInterval(-3_600), timeZone: seoul
         )
         #expect(text.contains(":"))
         #expect(text.split(separator: ":").count == 2, "\(text) 에 초가 들어 있다")
         #expect(text.hasPrefix("오전") || text.hasPrefix("오후"), "\(text) 가 한국어 꼴이 아니다")
+    }
+
+    /// ★★ **하루를 넘는 리셋은 날짜를 앞세운다** — 안쪽은 안 쓴다 (2026-10-30 승인 계약 ⑤).
+    ///
+    /// 결함: 11월 4일 리셋을 `오후 4:14` 로 적어 **5일 뒤를 오늘 오후**로 말했다. 주간 창의 리셋은 **언제나**
+    /// 이 갈래라(그리고 `pro`·`prolite`·`free` 는 주간 창 하나뿐이라) 그 요금제 38명 전원이 본다.
+    /// 사용자는 "몇 시간만 기다리면 풀린다"로 읽고 그 거짓에 작업 계획을 맞춘다.
+    ///
+    /// 글자를 **박아서** 잰다. "안쪽과 다르다"로 끝내면 둘 다 날짜를 붙이는 변경도 초록이다.
+    @Test
+    func aResetMoreThanADayAwayCarriesTheDate() {
+        let seoul = TimeZone(identifier: "Asia/Seoul")!
+        // 2026-10-30T07:14:00Z = KST 10/30 16:14. 거기서 5일 뒤 = KST 11/4 16:14(승인본의 예시).
+        let now = Date(timeIntervalSince1970: 1_793_344_440)
+        func text(_ offset: TimeInterval) -> String {
+            AILimitResetTimeText.text(now.addingTimeInterval(offset), now: now, timeZone: seoul)
+        }
+        // ① 먼 리셋(주간 창의 평소 모습): `M/d a h:mm`.
+        #expect(text(5 * 86_400) == "11/4 오후 4:14", "먼 리셋: \(text(5 * 86_400))")
+        // ② 24시간 **안쪽**은 지금처럼 시각만 — 날짜를 붙이지 않는다(가까운 리셋에 날짜는 소음이다).
+        #expect(text(3_600) == "오후 5:14", "가까운 리셋: \(text(3_600))")
+        #expect(!text(3_600).contains("/"), "24시간 안쪽에 날짜가 붙었다: \(text(3_600))")
+        // ③ 경계: `24시간 안쪽`은 24시간을 **포함**하고, 1초만 넘으면 날짜가 선다.
+        #expect(!text(86_400).contains("/"), "24시간 정각에 날짜가 붙었다: \(text(86_400))")
+        #expect(text(86_401).contains("/"), "24시간 + 1초에 날짜가 없다: \(text(86_401))")
+        #expect(text(86_401).hasPrefix("10/31"), "다음 날 리셋: \(text(86_401))")
+        // ④ 초는 **양쪽에서** 안 쓴다(원래 계약 — 잔여 분수가 섞여 와 같은 경계가 호출마다 달라 보인다).
+        for offset in [3_600.0, 5 * 86_400.0] {
+            #expect(text(offset).split(separator: ":").count == 2, "초가 들어 있다: \(text(offset))")
+        }
     }
 }
 
@@ -2186,8 +2274,14 @@ struct AILimitsMacCardContentTests {
         let absent = try #require(AILimitCardModel.all(store: store(weeklyOnly, at: amNow), now: amNow).first)
         #expect(absent.display(.fiveHour) == nil)
         #expect(absent.tooltipText.contains("5시간 없음"), "툴팁: \(absent.tooltipText)")
-        #expect(!absent.tooltipText.contains(AILimitFreshnessRule.unknownValueText),
-                "없는 창을 '읽기 실패'로 말한다: \(absent.tooltipText)")
+        // ★ 2026-10-30: `—` 글자 자체로 재지 않는다 — 승인 계약 ④ 가 없는 칸 줄을
+        //   `5시간 없음 — 지금 요금제는…` 으로 만들면서 그 문자가 **잇는 글자**로 들어왔다(승인본의 글자다).
+        //   재야 하는 것은 처음부터 "그 창의 **값**이 읽기 실패 글자인가"였다 — 그래서 창 라벨을 붙여 잰다
+        //   (같은 파일의 `aProviderWeCannotReadSays…` 가 2026-10-07 에 밟은 교훈과 같은 자리).
+        for window in AILimitWindow.allCases {
+            #expect(!absent.tooltipText.contains("\(window.displayName) \(AILimitFreshnessRule.unknownValueText)"),
+                    "없는 창을 '읽기 실패'로 말한다: \(absent.tooltipText)")
+        }
 
         // ② 창은 **있는데** 판정이 불가하다(관측 시각이 유예를 넘겨 미래) → 두 칸이 `—` 다.
         let skewed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
@@ -2221,6 +2315,82 @@ struct AILimitsMacCardContentTests {
             caption: bothStore.summary(now: observed).captionText
         )
         #expect(bothSummary == "5시간 88% · 주간 60%\n방금", "조합 툴팁: \(bothSummary)")
+    }
+
+    /// ★★ **왜 없는지를 말한다** — `prolite` + 주간 전용 코덱스 줄의 툴팁 (2026-10-30 승인 계약 ④).
+    ///
+    /// 결함: 그 칸은 `없음` 이라고 **맞게** 적으면서 **왜인지는 아무 데서도** 말하지 않았다. 코덱스는
+    /// 요금제에 따라 창을 하나만 보낸다 — `pro`·`prolite`·`free` 는 주간 하나뿐이고 운영 코덱스 사용자
+    /// 40명 중 **38명**이 그 요금제라, 그들의 5시간 칸은 영구히 `없음` 이다. 설명 없는 `없음` 은 고장으로 읽힌다.
+    ///
+    /// 칸이 아니라 **툴팁에서 한 번만** 말하는 까닭: 숫자 칸은 52pt 고정이고(최악 50.96pt) `없음` 말고 들어갈
+    /// 자리가 없으며, 칸마다 세우면 38명이 줄마다 같은 문장을 읽는다.
+    ///
+    /// ★ 상수가 있다로 끝내지 않는다 — **모델을 실제로 만들어 `tooltipText` 를 재고** 줄을 글자로 박는다.
+    @Test
+    func theTooltipSaysWhyTheFiveHourWindowIsAbsent() throws {
+        // 주간 창 하나만 오는 요금제(실측 모양 — `primary_window` 로 주간이 혼자 온다).
+        let weeklyOnlyPlan = AILimitReadOutcome(results: [.codex: .success(AILimitProviderSnapshot(
+            provider: .codex,
+            windows: [AILimitWindowSnapshot(window: .weekly, usedPercent: 5,
+                                            resetsAt: amNow.addingTimeInterval(5 * 86_400),
+                                            observedAt: amNow.addingTimeInterval(-120), source: .local)],
+            planLabel: "prolite"
+        ))])
+        let card = try #require(AILimitCardModel.all(store: store(weeklyOnlyPlan, at: amNow), now: amNow).first)
+        #expect(card.isAbsent(.fiveHour), "전제: 5시간 창이 없다")
+        #expect(card.display(.weekly)?.valueText == "5%", "전제: 주간 5% 는 읽혔다")
+
+        let lines = card.tooltipText.split(separator: "\n").map(String.init)
+        #expect(lines.first == "Codex prolite", "툴팁 머리: \(lines)")
+        // ① 없는 칸 줄이 **이유까지** 말한다(승인본의 글자 그대로 — 사이는 `—` 하나).
+        #expect(lines.count > 1 && lines[1] == "5시간 없음 — 지금 요금제는 주간 한도만 알려 줘요",
+                "없는 칸 줄: \(lines)")
+        #expect(card.tooltipText.contains(AILimitCardModel.absentReasonText(present: [.weekly])))
+        // ② 주간 줄은 날짜까지 적는다(주간 리셋은 언제나 하루를 넘는다 — 계약 ⑤).
+        let weeklyLine = try #require(lines.last { $0.hasPrefix("주간 ") }, "주간 줄이 없다: \(lines)")
+        #expect(weeklyLine.contains("/"), "주간 리셋에 날짜가 없다 — 5일 뒤를 오늘로 말한다: \(weeklyLine)")
+        #expect(weeklyLine.contains("리셋"))
+        // ③ ★ **진단 어휘를 쓰지 않는다**(2026-09-22 결정). '요금제'는 사용자 어휘다.
+        for jargon in ["primary_window", "plan_type", "window", "파서", "300분", "10080"] {
+            #expect(!card.tooltipText.contains(jargon), "진단 어휘 \"\(jargon)\": \(card.tooltipText)")
+        }
+        #expect(AILimitWindow.allCases.allSatisfy {
+            AILimitCardModel.absentReasonText(present: [$0]).contains("요금제")
+        })
+
+        // ④ ★ 아무 창도 **못 읽은** 줄에는 이 이유를 붙이지 않는다 — 그 줄의 사실은 "그 창이 없다"가
+        //    아니라 "지금 못 읽었다"다. 붙이면 못 읽은 사람에게 요금제 탓을 한다.
+        let expired = try #require(AILimitCardModel.all(
+            store: store(AILimitReadOutcome(results: [.codex: .failure(AILimitReadError(.expired))]), at: amNow),
+            now: amNow
+        ).first)
+        #expect(expired.saysNothingButNotice, "전제: 읽은 창이 하나도 없는 줄이다")
+        #expect(!expired.tooltipText.contains("요금제"),
+                "못 읽은 줄에 요금제 이유를 붙였다: \(expired.tooltipText)")
+
+        // ⑤ 기준선: 두 창이 다 온 줄에는 이유 줄이 **없다**(38명 말고 나머지에게 소음이 되지 않게).
+        let both = try #require(AILimitCardModel.all(store: store(claudeAt88, at: observed), now: observed).first)
+        #expect(!both.tooltipText.contains("요금제"),
+                "두 창이 다 있는 줄에 이유를 붙였다: \(both.tooltipText)")
+
+        // ⑥ ★ **주간이 빈** 줄은 거꾸로 말한다. 이유를 상수로 박았던 첫 판은 여기서 "주간 없음 — 지금 요금제는
+        //    주간 한도만 알려 줘요" 라는 **자기모순**을 냈다(레인 단언·합류 단언 모두 5시간이 빈 쪽만 쟀다).
+        //    그런 계정이 실제로 있다 — 코덱스 크레딧 사용자 실측, 운영에 5시간 값·주간 null 인 살아 있는 행.
+        let fiveHourOnly = AILimitReadOutcome(results: [.codex: .success(AILimitProviderSnapshot(
+            provider: .codex,
+            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 12,
+                                            resetsAt: amNow.addingTimeInterval(3_600),
+                                            observedAt: amNow.addingTimeInterval(-120), source: .local)],
+            planLabel: "free"
+        ))])
+        let reversed = try #require(AILimitCardModel.all(store: store(fiveHourOnly, at: amNow), now: amNow).first)
+        #expect(reversed.isAbsent(.weekly) && !reversed.isAbsent(.fiveHour), "전제: 주간만 비었다")
+        let reversedLines = reversed.tooltipText.split(separator: "\n").map(String.init)
+        #expect(reversedLines.contains("주간 없음 — 지금 요금제는 5시간 한도만 알려 줘요"),
+                "주간이 빈 줄의 이유: \(reversedLines)")
+        #expect(!reversed.tooltipText.contains("주간 한도만"),
+                "주간이 빈 줄이 '주간 한도만 알려 준다'고 말한다 — 자기모순: \(reversed.tooltipText)")
     }
 
     /// 읽은 창이 하나도 없는 제공자(만료만 아는)는 숫자를 **지어내지 않고** 할 일을 한 줄로 말한다.
@@ -2310,7 +2480,9 @@ struct AILimitsMacCardContentTests {
         let card = try #require(AILimitCardModel.all(store: store(aged, at: amNow), now: amNow).first)
         #expect(card.display(.fiveHour)?.valueText == "27% 이상", "전제: 그 숫자는 하한이다")
         let reset = try #require(card.resetTexts[.fiveHour], "리셋 시각을 통째로 버렸다")
-        #expect(reset == "\(AILimitResetTimeText.text(amNow.addingTimeInterval(3_600))) 리셋")
+        // `now:` 는 기본값이 없다(승인 계약 ⑤) — 호출부가 명시해야 "지금을 안 넘긴 자리"가 컴파일에 드러난다.
+        #expect(reset == "\(AILimitResetTimeText.text(amNow.addingTimeInterval(3_600), now: amNow)) 리셋")
+        #expect(!reset.contains("/"), "한 시간 뒤 리셋에 날짜가 붙었다: \(reset)")
         let lines = card.tooltipText.split(separator: "\n").map(String.init)
         #expect(lines.first == "Claude max", "툴팁 머리에 이름·요금제가 없다: \(lines)")
         #expect(lines.contains("5시간 27% 이상 · 3시간 전 · \(reset)"), "툴팁: \(card.tooltipText)")
@@ -2487,7 +2659,25 @@ struct AILimitsMacCardRenderTests {
         ("없는칸트랙", AILimitMacPalette.absentTrack),
         ("구분선", AILimitMacPalette.separator),
         ("카드배경", CheckTheme.panel),
+        // 2026-10-30: 없는 칸 트랙에 **사선 해치**가 깔린다(승인 계약 ③). 기준은 선이 트랙 위에 얹힌 **합성색**이다.
+        ("해치선", hatchOnAbsentTrack),
     ]
+
+    /// 해치 선이 없는 칸 트랙 위에 얹힌 색 — 승인된 세 값(`absentTrack` · `absentText` · 45%)으로 직접 섞는다.
+    ///
+    /// ★ 기준 띠는 **불투명**으로 구워야 한다. 반투명 색을 띠에 그대로 깔면 띠의 바탕(카드가 아니다)과 섞여
+    ///   화면에서 나오는 색과 다른 값이 기준이 된다 — 그러면 "가장 가까운 색" 판정이 엉뚱한 데를 가리킨다.
+    private static let hatchOnAbsentTrack: Color = {
+        func srgb(_ color: Color) -> NSColor { NSColor(color).usingColorSpace(.sRGB) ?? .black }
+        let under = srgb(AILimitMacPalette.absentTrack), over = srgb(AILimitMacPalette.absentText)
+        let alpha = CGFloat(AILimitAbsentHatch.absentHatchOpacity)
+        func mix(_ u: CGFloat, _ o: CGFloat) -> Double { Double(u + (o - u) * alpha) }
+        return Color(.sRGB,
+                     red: mix(under.redComponent, over.redComponent),
+                     green: mix(under.greenComponent, over.greenComponent),
+                     blue: mix(under.blueComponent, over.blueComponent),
+                     opacity: 1)
+    }()
 
     /// 후보 띠를 굽고 각 칸 복판을 읽어 표로 만든다.
     private func renderedReference() throws -> [(String, (Int, Int, Int))] {
@@ -2555,12 +2745,53 @@ struct AILimitsMacCardRenderTests {
         #expect(try at(fiveHourBarX + b.barWidth - 4, claudeY) == "빈트랙", "5시간 바가 82% 인데 끝까지 찼다")
         #expect(try at(weeklyBarX + b.barWidth - 4, claudeY) == "빈트랙")
 
-        // ③ Codex 줄: 5시간 창이 **없다** → 더 어두운 트랙만(채움 없음). 주간 12% 는 앞쪽만 찬다.
+        // ③ Codex 줄: 5시간 창이 **없다** → 더 어두운 트랙 + **사선 해치**(채움 없음). 주간 12% 는 앞쪽만 찬다.
+        //
+        // ★ 2026-10-30: 여기는 한 점을 `없는칸트랙` 으로 재던 자리였다. 승인 계약 ③ 이 그 트랙에 해치를
+        //   깔면서 **그 칸의 픽셀이 두 색으로 갈렸다** — 한 점으로는 "어느 점을 집었나"가 답을 가른다
+        //   (4pt 간격이라 집은 점이 선 위면 빨개지고 틈이면 해치가 통째로 빠져도 초록이다).
+        //   그래서 트랙을 **훑어서** 세 가지를 박는다: ⓐ 틈은 여전히 없는 칸 트랙이고(빈 트랙보다 어둡다)
+        //   ⓑ 선은 합성색까지 올라가고 ⓒ 선이 덮는 비율이 4pt 간격 1pt 선의 몫이다. 느슨해진 게 아니라
+        //   같은 자리에서 **재는 사실이 하나에서 셋으로 늘었다**.
         let codexY = rowCenterY(1)
-        #expect(try at(fiveHourBarX + 20, codexY) == "없는칸트랙",
-                "없는 5시간 칸에 채움이나 보통 트랙을 그렸다 — '0% 라 비었다'로 읽힌다")
+        func sum(_ c: (Int, Int, Int)) -> Int { c.0 + c.1 + c.2 }
+        func refSum(_ name: String) throws -> Int {
+            sum(try #require(reference.first { $0.0 == name }?.1, "기준 띠에 \(name) 이 없다"))
+        }
+        let trackSum = try refSum("없는칸트랙"), hatchSum = try refSum("해치선")
+        let emptySum = try refSum("빈트랙")
+        #expect(hatchSum > trackSum + 40, "해치가 트랙과 구워진 값으로 안 갈린다(\(trackSum) → \(hatchSum))")
+        // 트랙 가운데 50pt 를 1/3pt(= 픽셀) 눈금으로 훑는다. 캡슐 양 끝은 피한다 — 거기선 클립이 먹는다.
+        var scan: [Int] = []
+        for pixel in 0..<150 {
+            scan.append(sum(try rgb(bitmap, x: fiveHourBarX + 10 + CGFloat(pixel) / 3, y: codexY)))
+        }
+        let darkest = try #require(scan.min()), brightest = try #require(scan.max())
+        // ⓐ 가장 어두운 자리는 **없는 칸 트랙 그대로**다(해치가 트랙을 통째로 덮지 않았다).
+        #expect(abs(darkest - trackSum) <= 6, "없는 칸 트랙이 \(darkest) 로 구워졌다 — 기준은 \(trackSum)")
+        #expect(darkest < emptySum - 20,
+                "없는 칸 트랙이 빈 트랙(\(emptySum))만큼 밝다 — '0% 라 비었다'로 읽힌다")
+        // ⓑ 가장 밝은 자리는 해치 합성색까지 올라간다(선이 실제로 그려졌고 45% 가 1pt 안에서 다 나온다).
+        #expect(Double(brightest) >= Double(trackSum) + Double(hatchSum - trackSum) * 0.7,
+                "해치 선이 \(brightest) 까지만 올라간다 — 기준 \(hatchSum), 트랙 \(trackSum)")
+        // ⓒ 선이 덮는 비율: 4pt 간격 1pt 선이면 가로로 1/3 안팎이다(절반을 넘으면 '어두운 바'로 읽힌다).
+        let covered = Double(scan.filter { $0 >= (trackSum + hatchSum) / 2 }.count) / Double(scan.count)
+        #expect(covered > 0.15 && covered < 0.55, "해치 커버리지 \(covered) — 4pt 간격 1pt 선이 아니다")
+        // 주간 칸(값이 있다)은 그대로다.
         #expect(try at(weeklyBarX + 3, codexY) == "주간바", "주간 12% 가 안 보인다")
         #expect(try at(weeklyBarX + b.barWidth - 4, codexY) == "빈트랙")
+
+        // ③-2 ★ **값이 있는 칸에는 해치가 없다 — 0% 도 값이다.** 같은 자로 채움 **밖**의 빈 트랙을 훑는다:
+        //   거기에 무늬가 생기면 "그 창이 없다"와 "하나도 안 썼다"가 같은 그림이 되고, 이 무늬의 유일한 일이
+        //   없어진다. (Claude 5시간은 82% → 56.6pt 까지 찬다 · Codex 주간은 12% → 8.3pt.)
+        for (label, baseX, baseY) in [("Claude 5시간", fiveHourBarX + 58, claudeY),
+                                      ("Codex 주간", weeklyBarX + 20, codexY)] {
+            var flat: [Int] = []
+            for pixel in 0..<24 { flat.append(sum(try rgb(bitmap, x: baseX + CGFloat(pixel) / 3, y: baseY))) }
+            let high = try #require(flat.max()), low = try #require(flat.min())
+            #expect(high - low <= 6, "\(label) 빈 트랙에 무늬가 있다(진폭 \(high - low)): \(flat)")
+            #expect(abs(high - emptySum) <= 6, "\(label) 빈 트랙이 \(high) 다 — 기준 \(emptySum)")
+        }
 
         // ④ 안티그래비티 줄(만료): 바가 **하나도 없다** — 두 칸을 '없음' 으로 비우지 않고 안내 한 줄을 말한다.
         let agY = rowCenterY(2)

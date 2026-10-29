@@ -7,7 +7,7 @@
 하위 명령
   finalize   --plan <굽기 출력> --assets <자산 폴더> --repo <저장소>   인코딩 · 매니페스트 · lock.json
   check-lock --repo <저장소>                                           CI(aing-bake-lock): 입력 해시 · 출력 해시가 lock 과 같은가
-  sizes      --assets <자산 폴더> --repo <저장소>                      크기 예산(config.json bundles — Windows ≤ 20MB · Android 기본 ≤ 4.5MB)
+  sizes      --assets <자산 폴더> --repo <저장소>                      크기 예산(config.json bundles — Windows ≤ 20MB · Android 기본 ≤ 6.9MB)
   compare    <lock A> <lock B>                                         두 lock 의 raw · outputs 다이제스트 대조
   probe-compare <probe.json> <lock.json>                               F-10 탐침 대조 — 같음 · 다름 · 잠금에 없음을 따로 센다
   outside-snapshot --repo <저장소>                                     소유 경로 밖 더러운 파일의 (상태, 경로, sha256) — bake.sh 가 전후를 비교
@@ -125,8 +125,19 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+# config.json 가운데 굽기가 읽지 않는 포장 정책(앱에 무엇을 싣나 · 크기 예산). Swift 굽기도 finalize 도 안 본다 — 묶음만 바꿀 때 다시 굽지 않게
+# 입력 다이제스트에서 뺀다(8차 spin: Android 기본 묶음에 S 스핀 행을 더함). 정책을 읽는 쪽은 sizes · androidApp 조립 · 묶음 시험이다.
+PACKAGING_KEYS = ("bundles",)
+
+
 def input_digest(repo, rel):
     path = os.path.join(repo, rel)
+    if rel == CONFIG_REL:
+        with open(path, encoding="utf-8") as f:
+            config = json.load(f)
+        for key in PACKAGING_KEYS:
+            config.pop(key, None)
+        return sha256_bytes(json.dumps(config, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
     if rel.endswith(".swift"):
         with open(path, encoding="utf-8") as f:
             return sha256_bytes(strip_swift_comments(f.read()).encode("utf-8"))

@@ -218,16 +218,18 @@
       ]
     },
     "androidDefault": {
-      "budget": 4500000,
+      "budget": 6900000,
       "assets": [
         "*/L-*.webp",
+        "*/S-spin-*.webp",
         "*/manifest.json",
         "*/cells-L.json",
+        "*/cells-S.json",
         "*/legacy.webp",
         "camera.json",
         "motion.json",
         "tracks/hit.f32",
-        "tracks/greeting.f32"
+        "tracks/commuteStart.f32"
       ],
       "repo": [
         "Sources/check/Resources/aing_gold-halo*.png",

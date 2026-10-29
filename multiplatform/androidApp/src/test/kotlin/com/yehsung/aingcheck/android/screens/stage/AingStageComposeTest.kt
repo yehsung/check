@@ -68,6 +68,15 @@ class AingStageComposeTest {
         }
     }
 
+    /** 공개는 한 바퀴의 S 스핀 칸을 배경에서 데운 뒤에 걸린다(AingStage) — 진짜 시간으로 기다린다. */
+    private fun awaitReveals(handle: StageHandle, n: Int) {
+        compose.waitForIdle()
+        compose.waitUntil(60_000) {
+            compose.mainClock.advanceTimeByFrame()
+            (handle.director?.reveals ?: 0) >= n
+        }
+    }
+
     private fun frames(ms: Long) {
         var left = ms
         while (left > 0) { compose.mainClock.advanceTimeByFrame(); left -= 16 }
@@ -205,7 +214,7 @@ class AingStageComposeTest {
         frames(100)
         assertEquals(0, handle.director!!.reveals)
         key = 1
-        frames(50)
+        awaitReveals(handle, 1)
         assertEquals(1, handle.director!!.reveals)
         assertEquals(StagePolicy.REVEAL_REACTION, handle.director!!.player.activeReaction)
         mood = CharacterMood.Off // 다른 상태가 바뀌어도(다시 그림) 같은 열쇠는 다시 하지 않는다
@@ -222,7 +231,7 @@ class AingStageComposeTest {
         assertTrue(handle.director !== before, "복원 뒤 새 감독이어야 한다")
         assertEquals(0, handle.director!!.reveals, "복원 뒤 같은 열쇠(1)로 공개를 되풀이했다")
         key = 2
-        frames(50)
+        awaitReveals(handle, 1)
         assertEquals(1, handle.director!!.reveals)
     }
 

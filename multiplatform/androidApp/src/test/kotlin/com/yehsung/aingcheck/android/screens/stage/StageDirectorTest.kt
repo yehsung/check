@@ -19,7 +19,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * 무대 감독(탭 → hit · 공개 → 인사 · 깜빡임 · fps · 정지). 몸 판정은 진짜 칸 알파(L 단 페이지를 Robolectric 네이티브 BitmapFactory 로 디코드)로 잰다.
+ * 무대 감독(탭 → hit · 공개 → 한 바퀴 · 깜빡임 · fps · 정지). 몸 판정은 진짜 칸 알파(L 단 페이지를 Robolectric 네이티브 BitmapFactory 로 디코드)로 잰다.
  * 틀은 맥 오버레이 280×340(골든과 같은 구도) 그대로.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -95,24 +95,26 @@ class StageDirectorTest {
     }
 
     @Test
-    fun 공개는_인사_한_번_바쁘면_미뤘다가_건다() {
+    fun 공개는_한_바퀴_한_번_바쁘면_미뤘다가_건다() {
         val d = director()
         assertTrue(d.reveal(20.0))
+        assertEquals("commuteStart", StagePolicy.REVEAL_REACTION, "공개 = 한 바퀴(맥 y 360° 리액션) — G §8-19 #6②")
         assertEquals(StagePolicy.REVEAL_REACTION, d.player.activeReaction)
-        // 인사(우선 1) 중 탭(우선 3)은 끼어든다 — 맥 request 규칙.
-        assertEquals(TapOutcome.hit, d.tapAt(bodyCenter, 20.3))
+        // 한 바퀴(우선 3) 중 탭(우선 3)은 끼어들지 못한다 — 맥 request 규칙(같은 우선순위는 거절). 끝나면(0.6s) 받는다.
+        assertEquals(TapOutcome.busy, d.tapAt(bodyCenter, 20.02))
+        assertEquals(TapOutcome.hit, d.tapAt(bodyCenter, 20.65))
         // hit 중 공개: 맥이라면 버리지만 무대는 미룬다.
-        assertFalse(d.reveal(20.4))
+        assertFalse(d.reveal(20.7))
         assertTrue(d.hasPendingReveal)
-        assertFalse(d.tick(20.8), "hit 상태(0.6s) 안")
+        assertFalse(d.tick(21.2), "hit 상태(0.6s) 안")
         assertEquals(StagePolicy.TAP_REACTION, d.activeReaction)
-        assertTrue(d.tick(20.91), "hit 상태가 끝난 첫 틱에 건다")
+        assertTrue(d.tick(21.26), "hit 상태가 끝난 첫 틱에 건다")
         assertEquals(StagePolicy.REVEAL_REACTION, d.player.activeReaction)
         assertFalse(d.hasPendingReveal)
         assertEquals(2, d.reveals)
-        // 인사 중 두 번째 공개(같은 우선순위) → 미뤘다가 인사가 끝나면 한 번 더.
-        assertFalse(d.reveal(21.0))
-        assertTrue(d.tick(21.92))
+        // 한 바퀴 중 두 번째 공개(같은 우선순위) → 미뤘다가 끝나면 한 번 더.
+        assertFalse(d.reveal(21.4))
+        assertTrue(d.tick(21.87))
         assertEquals(3, d.reveals)
     }
 

@@ -51,8 +51,10 @@ multiplatform/scripts/bake-aing/bake.sh --check    # 임시 폴더에 다시 구
 | 묶음 | 정의 | 예산 |
 |---|---|---|
 | `windows` | S·U 칸 · 메타 · legacy · 글리프 · 트랙 + 후광 원본 PNG | 20,000,000 B |
-| `androidDefault` | L 쉬는 행 · L 감은 눈 패치 · 메타 · legacy · 트랙 2개 + 후광 원본 PNG | 4,500,000 B (G §8-12) |
+| `androidDefault` | L 쉬는 행 · L 감은 눈 패치 · **S 스핀 행(페이지 셋 + cells-S — 공개 한 바퀴, G §8-19 #6②)** · 메타 · legacy · 트랙 2개(hit · commuteStart) + 후광 원본 PNG | 6,900,000 B (실측 ≈ 6.70MB + 여유, G §8-20 #5) |
 | `goldenTestOnly` | 골든 240장 + golden.json — 앱에 싣지 않는다 | 없음 |
+
+`bundles` 는 굽기가 읽지 않는 포장 정책이라 입력 다이제스트(lock.json `inputs`)에서 빠진다(`bake.py` `PACKAGING_KEYS`) — 묶음 · 예산만 바꾸면 다시 굽지 않는다.
 
 ## 잠금 (CI `mp-bake`)
 

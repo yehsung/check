@@ -2,6 +2,7 @@
 // 원본: Sources/check/CheckOverlayWindow.swift @ 3bd04bd (startBlinkScheduler — 표시 중 3~7초마다 engine.blink())
 package com.yehsung.aingcheck.android.screens.stage
 
+import com.yehsung.aingcheck.character.bake.BakeCell
 import com.yehsung.aingcheck.character.bake.BakeLibrary
 import com.yehsung.aingcheck.character.bake.BakedFinish
 import com.yehsung.aingcheck.character.math.Vec2
@@ -28,7 +29,7 @@ enum class TapOutcome {
  * 살아 있는 미리보기 한 칸의 연출 감독(시계를 읽지 않는다 — 모든 호출이 단조 `now` 초를 받는다).
  * 재생기(W5-a [CharacterPlayer])가 노드 일을, 이 감독이 맥 `ReactionEngine` 가운데 무대가 쓰는 몫을 쥔다:
  *  - 탭 → 몸 판정(F §5.3: 투영 상자 + 여백 → 칸 알파 > 32) → hit. 쿨다운 0.6s, 살아 있는 리액션보다 우선순위가 높을 때만(인사 1 < hit 3).
- *  - 공개 → 인사 한 번([StagePolicy.REVEAL_REACTION]). 맥은 바쁘면 버리지만 무대의 공개 반응은 잃으면 안 되는 단 한 번이라
+ *  - 공개 → 한 바퀴 한 번([StagePolicy.REVEAL_REACTION] — 등 쪽은 [StageSpin] 의 S 스핀 칸). 맥은 바쁘면 버리지만 무대의 공개 반응은 잃으면 안 되는 단 한 번이라
  *    바쁘면 **미뤄 두었다가** 리액션이 끝난 첫 틱에 건다(맥과 다른 점 — 의도).
  *  - 깜빡임: 3~7초 무작위 간격으로 `player.blink` (재생기가 리액션 · 정지 · 스프라이트를 거른다).
  */
@@ -140,9 +141,24 @@ class StageDirector(
     /** 다음 깜빡임 시각(시험). */
     val nextBlinkTime: Double get() = nextBlinkAt
 
-    /** 지금 그릴 프레임(뷰포트 = 틀 × 배율). 칸은 몸 px 로 고른다 — Android 묶음은 L 단뿐이라 언제나 L. */
-    fun frame(now0: Double, viewportWidth: Double, viewportHeight: Double): CharacterFrame? =
-        CharacterFrames.compute(player, monotonic(now0), viewportWidth, viewportHeight)
+    private val spin = StageSpin(library, finish)
+
+    /** 한 바퀴에 S 스핀 칸을 쓴다. 스핀 데움이 메모리 부족으로 실패하면 호출부가 끈다(그러면 L 쉬는 행만으로 돈다 — 앞모습이 미끄러진다). */
+    var spinEnabled: Boolean = true
+
+    /** 한 바퀴가 고를 수 있는 S 스핀 칸(데움 대상 — [StageStore.prewarmSpin]). */
+    fun spinPrewarmCells(): List<BakeCell> = spin.prewarmCells
+
+    /**
+     * 지금 그릴 프레임(뷰포트 = 틀 × 배율). 평소엔 L 단([StagePolicy.STAGE_TIER]) 고정. 한 바퀴(공개 반응) 동안만 데운 L 칸과 S 스핀 칸 가운데
+     * 시선에 더 가까운 칸([StageSpin.plan]).
+     */
+    fun frame(now0: Double, viewportWidth: Double, viewportHeight: Double): CharacterFrame? {
+        val now = monotonic(now0)
+        val base = CharacterFrames.compute(player, now, viewportWidth, viewportHeight, tierName = StagePolicy.STAGE_TIER)
+        if (!spinEnabled || player.activeReaction != StagePolicy.REVEAL_REACTION || base !is CharacterFrame.Impostor) return base
+        return spin.plan(player.chain(now).character, viewportWidth, viewportHeight)?.let { CharacterFrame.Impostor(it) } ?: base
+    }
 
     /** 맥 fps 정책(F §5.4): 리액션 + 0.1s · 깜빡임 동안 활성 30, 나머지 유휴 6. */
     fun targetFps(now0: Double): Double {

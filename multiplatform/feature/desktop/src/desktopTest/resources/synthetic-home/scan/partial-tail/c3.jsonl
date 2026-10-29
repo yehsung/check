@@ -1,0 +1,1 @@
+{"parentUuid":null,"isSidechain":false,"type":"assistant","message":{"id":"p3","type":"message","role":"assistant","model":"claude-synthetic","content":[{"type":"text","text":"합성 본문"}],"usage":{"input_tokens":30,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_

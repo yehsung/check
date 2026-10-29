@@ -1,5 +1,5 @@
 {
-  "exportTests": 91,
+  "exportTests": 92,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -856,6 +856,17 @@
         "Sources/CheckCore/TodoSync.swift",
         "Sources/CheckCore/CheckTodoModel.swift",
         "Tests/checkTests/Fixtures/todo-rpc/_manifest.json"
+      ]
+    },
+    {
+      "cases": 14,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenScan.swift",
+      "golden": "token-usage/scan/scanner",
+      "path": "contract/golden/token-usage/scan/scanner.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/CheckTokenUsage.swift"
       ]
     },
     {

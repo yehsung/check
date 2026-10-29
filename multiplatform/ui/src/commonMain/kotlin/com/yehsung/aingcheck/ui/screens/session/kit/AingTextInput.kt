@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.editableText
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import com.yehsung.aingcheck.ui.theme.AingTheme
@@ -34,6 +36,28 @@ val TextFieldState.isComposing: Boolean get() = composition != null
 
 /** 자리표시를 그릴지: 글이 비었고 조합 중이 아닐 때만(iOS `draft.isEmpty && !isComposing`). */
 fun placeholderVisible(text: CharSequence, composing: Boolean): Boolean = text.isEmpty() && !composing
+
+/** 비밀번호 칸 가림 글자(BasicSecureTextField · PasswordVisualTransformation 의 기본 가림과 같은 '•'). */
+const val SECURE_MASK_CHAR: Char = '\u2022'
+
+/**
+ * 비밀번호 칸이 접근성 트리에 내보낼 글: 코드포인트마다 '•' 하나(서로게이트 짝은 한 글자로 센다).
+ *
+ * BasicSecureTextField 는 가림을 화면 그림(visualText)에만 하고 접근성 EditableText 에는 평문을 싣는다(Compose 1.12.1 실측 —
+ * TextFieldDecoratorModifierNode.applySemantics 가 outputText 를 쓴다). 그래서 uiautomator dump · 접근성 서비스가 평문을 읽었다
+ * (8차 e2e). 계정 삭제 칸(PasswordVisualTransformation)은 이미 '••••' 를 내보낸다 — 같은 꼴로 맞춘다.
+ * 길이를 코드포인트 수와 같게 둬 커서·선택 범위(TextSelectionRange)가 가린 글 안에 그대로 든다.
+ */
+fun secureAccessibilityText(text: CharSequence): String {
+    var count = 0
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        i += if (c.isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()) 2 else 1
+        count++
+    }
+    return SECURE_MASK_CHAR.toString().repeat(count)
+}
 
 /**
  * 한 줄 · 여러 줄 입력칸. 자리표시는 3단 회색 글자(파랑이면 미리 채운 값처럼 읽힌다).
@@ -65,7 +89,10 @@ fun AingTextInput(
         if (secure) {
             BasicSecureTextField(
                 state = state,
-                modifier = fieldModifier,
+                // 바깥(머리) 수식자의 semantics 가 안쪽 장식 노드의 EditableText 를 덮는다(같은 노드 · 머리가 나중에 적용).
+                // 덮는 건 EditableText 하나 — 비밀번호 표시(password)는 장식 노드가 그대로 달고, 자동 완성이 읽는
+                // InputText 는 건드리지 않는다(비밀번호 관리자 저장이 가린 글을 받으면 안 된다). 화면 가림 동작은 그대로다.
+                modifier = fieldModifier.semantics { editableText = AnnotatedString(secureAccessibilityText(state.text)) },
                 enabled = enabled,
                 textStyle = textStyle,
                 keyboardOptions = keyboardOptions,

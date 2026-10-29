@@ -11,6 +11,7 @@ package com.yehsung.aingcheck.android.shell
 
 import android.content.Intent
 import android.Manifest
+import android.annotation.SuppressLint
 import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
 import com.yehsung.aingcheck.android.routing.RouteTargets
@@ -99,6 +100,9 @@ class MainActivity : ComponentActivity() {
 
     /** 알림 권한 창(API 33+). 등록은 STARTED 전(필드 초기화)이어야 한다. */
     private var pendingPermission: CancellableContinuation<Boolean>? = null
+    // lint InvalidFragmentVersionForActivityResult 는 FragmentActivity 의 옛 onRequestPermissionsResult 결함 경고다. 이 Activity 는
+    // ComponentActivity(Fragment 없음)라 해당 없다 — 옛 fragment 는 Firebase 의존이 끌고 온 전이 의존일 뿐이다.
+    @SuppressLint("InvalidFragmentVersionForActivityResult")
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         pendingPermission?.takeIf { it.isActive }?.resume(granted)
         pendingPermission = null

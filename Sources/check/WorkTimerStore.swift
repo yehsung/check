@@ -443,6 +443,13 @@ final class WorkTimerStore {
     /// 마지막으로 팀 상태(work_statuses 4 GET)를 **성공적으로** 받은 시각 — 팝오버 재오픈 15초 스로틀(Q10)의 근거.
     /// v0.2.38 δ 가 이 파일을 못 고쳐 Sync 확장의 약참조 측면 표로 심었던 값을 저장 프로퍼티로 이관했다. 관찰 대상 아님.
     @ObservationIgnored var lastTeamStatusAt: Date = .distantPast
+    /// 마지막으로 **성공한** 하트비트 시각(주입 시계) — p_heartbeat=true 인 work_tick 성공, 또는 레거시 하트비트
+    /// (sendHeartbeatIfWorking 의 상태 upsert·입력 보고) 성공. work_tick 과부하 중 레거시 하트비트를 한 건 보낼지 가르는
+    /// 유일한 근거다(WorkTimerStoreSync `overloadHeartbeatMaxGapSeconds`). 관찰 대상 아님.
+    @ObservationIgnored var lastHeartbeatSucceededAt: Date = .distantPast
+    /// 마지막으로 레거시 하트비트(상태 upsert·입력 보고)를 **시도한** 시각(주입 시계) — 성공·실패 모두. 과부하 중 구조
+    /// 하트비트를 120초에 한 번으로 묶는 두 번째 근거다(성공만 보면 실패가 이어지는 동안 매 틱 나간다). 관찰 대상 아님.
+    @ObservationIgnored var lastHeartbeatAttemptAt: Date = .distantPast
 
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
 
@@ -583,6 +590,8 @@ final class WorkTimerStore {
     var myTokenRow: TokenRowServerValue?
     /// 마지막 내 행 조회 시각(300초 스로틀 기준). 관찰 대상 아님.
     @ObservationIgnored var lastMyTokenRowFetchAt: Date = .distantPast
+    /// 지금 떠 있는 `token_usage_board` 조회(stab-l6) — 같은 달·같은 세대 조회는 이 응답에 붙는다(`fetchTokenBoardCoalesced`). 관찰 대상 아님.
+    @ObservationIgnored var tokenBoardFetchInFlight: TokenBoardFetchInFlight?
     /// 직전 월간 업로드가 **실제로 서버에 닿았는가**. 업로드 결정 로직(주입 오버로드)은 이 플래그만 세우고,
     /// 왕복은 얇은 래퍼가 한다 — 그래야 주입 오버로드를 직접 부르는 기존 테스트에 새 네트워크 호출이 생기지 않는다.
     /// 관찰 대상 아님.
@@ -1550,6 +1559,11 @@ final class WorkTimerStore {
     /// 메시지 활동 합치기 창의 잠(주입, v0.3.30 m-fix2 · 부록 B-2). `wakeGateSleep` 과 같은 규약 — 프로덕션은 실제 수면이고
     /// (`messageReadSignalCoalesceSeconds` 초), 테스트는 짧게 줄이거나 문으로 갈아 끼워 창이 닫히는 순간을 **정한다**.
     @ObservationIgnored var messageReadSignalSleep: @Sendable (TimeInterval) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
+    /// 메시지 응답 유실 재시도 앞의 잠(주입, 2026-10-30 안정화). 위와 같은 규약 — 프로덕션은 실제 수면
+    /// (`messageSendRetryDelaySeconds` 초), 테스트는 문으로 갈아 끼워 재시도가 나가는 순간을 정한다.
+    @ObservationIgnored var messageSendRetrySleep: @Sendable (TimeInterval) async -> Void = {
         try? await Task.sleep(for: .seconds($0))
     }
     /// 지금 화면에 서 있는 **대화 뷰들**의 표식(v0.3.31 M4). `CheckMessageView` 가 나타날 때 넣고 사라질 때 뺀다.
@@ -3381,6 +3395,8 @@ final class WorkTimerStore {
                     // 느린 유휴 주기(기본 300s=슬라이스×10)를 10슬라이스로 쪼갠다. 유휴→근무 전이가 다음 본문까지
                     // 최대 5분 넘게 지연돼 하트비트 신선도(90초)를 어기던 결함을 막는다: 매 슬라이스 후 fast 로
                     // 바뀌었으면 즉시 본문으로 넘어간다(슬라이스 wakeup 은 플래그 확인뿐이라 유휴 비용은 무시 가능).
+                    // (예외: work_tick 과부하 백오프 중엔 하트비트가 최대 약 120~150초 간격 — 요청을 늘리지 않으려는 의도다,
+                    //  WorkTimerStoreSync `overloadHeartbeatMaxGapSeconds`. 스캐빈저 10분보다 한참 안쪽.)
                     for _ in 0..<10 {
                         try? await Task.sleep(for: .seconds(slice), tolerance: tolerance)
                         if Task.isCancelled { return }

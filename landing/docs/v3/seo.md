@@ -36,6 +36,10 @@
 
 비어 있는 변수는 메타를 내지 않는다(키도 없음) — 셋 중 하나만 넣어도 된다.
 
+**현재 상태(2026-10-30):** 구글은 HTML 태그로 확인됨(`GOOGLE_SITE_VERIFICATION`) · 빙은 'Google Search Console 에서 가져오기'로 추가(메타 불필요) ·
+네이버는 `NAVER_SITE_VERIFICATION` 메타에 더해 HTML 파일 `public/navered243ff5c6d2f989a048e172c7489e63.html` 도 둔다 —
+서치어드바이저 소유확인 화면의 기본 선택이 'HTML 파일 업로드'라, 태그만 있으면 404 로 실패한다. 이 파일과 env 값은 지우지 않는다(지우면 확인이 풀린다).
+
 ## 3. IndexNow 보내기(배포 뒤)
 
 ```sh

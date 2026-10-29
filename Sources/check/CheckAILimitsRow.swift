@@ -59,8 +59,22 @@ enum AILimitMacPalette {
     static let emptyTrack = Color(aiLimitHex: 0x30_34_3B)
     /// 제공자 사이 구분선 `#2C3037`.
     static let separator = Color(aiLimitHex: 0x2C_30_37)
-    /// 그 창이 **없는** 칸의 글자 `#595E67`(값이 아니라 '없다'는 사실이라 가장 조용하다).
-    static let absentText = Color(aiLimitHex: 0x59_5E_67)
+    /// 그 창이 **없는** 칸의 글자 `#9798A4` — 카드 위 **4.70:1**.
+    ///
+    /// ## 왜 올렸나 (2026-10-30 사용자 승인)
+    /// 승인된 3단 글자 토큰(`label3Text` — 주석: "3단 **글자** … 카드·바탕 위 4.5:1")을 이 카드 바탕에
+    /// 합성한 값이다. 새 회색을 발명한 것이 아니라 **이미 승인된 위계의 '읽히는 가장 조용한 글자'** 를
+    /// 그 자리에 옮겨 놓은 것이다(카드 4.70 · 위젯 5.26 · 맥 5.24:1).
+    ///
+    /// 전에는 `#595E67` 로 카드 위 **2.06:1** 이었다 — 어떤 글자에도 모자란 값이고(같은 줄의 숫자는
+    /// 12.32:1), 운영 코덱스 사용자 40명 중 **38명**(`pro`·`prolite`·`free` — 주간 창 하나만 오는 요금제)이
+    /// 5시간 칸에서 **영구히** 이 글자를 본다. 그 38명에게 안 읽히는 글자는 '조용함'이 아니라 빈 칸이다.
+    ///
+    /// ★ 그래도 숫자보다는 조용하다(4.70 < 12.32) — '값이 아니라 값이 없다는 사실'이라는 위계는 그대로다.
+    /// ★ 공용 모듈(`AILimitColumnPalette.absentText` 의 다크)과 **같은 수**여야 한다. 맥 앱 타깃은
+    ///   `CheckMobileShared` 를 링크하지 않아 한쪽만 고치면 세 화면이 다른 색으로 그린다 —
+    ///   소스 계약 시험이 이 16진수를 맥 소스에서 grep 해 되묻는다.
+    static let absentText = Color(aiLimitHex: 0x97_98_A4)
     /// 그 창이 **없는** 칸의 트랙 `#22262C` — 빈 트랙보다 어둡다. 같은 밝기면 "0% 라 비었다"로 읽힌다.
     static let absentTrack = Color(aiLimitHex: 0x22_26_2C)
 
@@ -92,6 +106,49 @@ extension Color {
             blue: Double(hex & 0xFF) / 255,
             opacity: 1
         )
+    }
+}
+
+// MARK: - 없는 칸의 '색이 아닌' 단서 — 사선 해치
+
+/// 그 창이 **없는** 칸의 트랙에 깔리는 사선 해치(2026-10-30 승인 계약 ③).
+///
+/// ## 왜 색 말고 무늬인가
+/// `없음` 글자와 더 어두운 트랙(`absentTrack`)만으로는 **색을 버리는 표면**에서 0% 바와 갈리지 않는다
+/// (위젯 틴트 모드 · 색맹 · 흑백). 무늬는 색 채널이 사라져도 남는 단서라, 같은 사실을 말하는 셋째 길이다
+/// (이 카드가 짝 단서를 셋 두는 것과 같은 원칙 — 파일 머리말).
+///
+/// ## ★ 세 화면이 **같은 수**를 쓴다 — 그래서 이름을 줄이지 마라
+/// 폰·위젯은 `Sources/CheckMobileShared/AILimitColumnStyle.swift` 에 **같은 이름**의 상수를 따로 두고
+/// (맥 앱 타깃은 그 모듈을 링크하지 않는다), 갈리지 않는지는 소스 계약 시험이 **이 세 수를 맥 소스에서
+/// grep** 해 되묻는다. `spacing`·`lineWidth` 로 줄이면 그 grep 이 못 찾는다.
+///
+/// ## ★ 값이 **있는** 칸에는 절대 그리지 않는다 — **0% 도 값이다**
+/// 0% 칸에 해치를 깔면 "하나도 안 썼다"가 "그 창이 없다"로 읽힌다. 그 둘을 가르는 것이 이 무늬의 유일한
+/// 일이라, 거기서 틀리면 무늬가 없는 편이 낫다.
+enum AILimitAbsentHatch {
+    /// 선 간격 4pt(x 축 눈금 — 선과 선 사이).
+    static let absentHatchSpacing = 4.0
+    /// 선 굵기 1pt.
+    static let absentHatchLineWidth = 1.0
+    /// 선 색의 불투명도 — `absentText` 의 45%. 트랙 위에서 **보이되** 바 채움으로는 읽히지 않는 세기다.
+    static let absentHatchOpacity = 0.45
+
+    /// 선 색 = 그 칸 **글자와 같은 잉크**의 45%. 다른 색을 쓰면 무늬가 '또 다른 값'으로 읽힌다.
+    static var ink: Color { AILimitMacPalette.absentText.opacity(absentHatchOpacity) }
+
+    /// 45° 선들(왼쪽 아래 → 오른쪽 위 · SwiftUI 좌표계는 y 가 아래로 자란다).
+    ///
+    /// `Canvas` 가 주는 `size` 만으로 그린다 — `GeometryReader` 가 필요 없고 위젯의 단일 렌더에서도 안전하다.
+    /// 시작을 `-size.height` 로 미는 까닭: 왼쪽 끝 선이 바 **위쪽**에서 잘려 들어와야 왼쪽 모서리에도
+    /// 무늬가 닿는다(0 에서 시작하면 왼쪽 아래 삼각형이 빈다).
+    static func path(in size: CGSize) -> Path {
+        var path = Path()
+        for x in stride(from: -size.height, through: size.width, by: CGFloat(absentHatchSpacing)) {
+            path.move(to: CGPoint(x: x, y: size.height))
+            path.addLine(to: CGPoint(x: x + size.height, y: 0))
+        }
+        return path
     }
 }
 
@@ -150,11 +207,27 @@ struct AILimitBar: View {
     let tint: Color
     /// 빈 트랙 색. 창이 **없는** 칸은 더 어두운 트랙을 받는다(`AILimitMacPalette.absentTrack`).
     var track: Color = AILimitMacPalette.emptyTrack
+    /// 그 창이 **없는** 칸인가. 참이면 트랙에 사선 해치를 깐다(색을 버리는 표면에서도 0% 와 갈리게).
+    ///
+    /// ★ `percent == nil` 로 가르면 **안 된다** — 판정 불가(`—`)도 nil 이다. 그 칸은 창이 **있고** 값만
+    ///   못 읽은 것이라 해치를 깔면 "그 창이 없다"는 거짓이 된다. 그래서 깃발을 따로 받는다.
+    /// ★ **기본값을 주지 않는다**(폰 `MeAILimitBar.isAbsent` 와 같은 근거): 기본값이 있으면 새 호출부가
+    ///   조용히 '값이 있는 칸'으로 떨어져 없는 칸의 해치가 사라지고, 그걸 잡는 그물이 없다.
+    let hatched: Bool
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(track)
+                if hatched {
+                    // 트랙 **캡슐 안쪽으로 클립**한다 — 네모로 삐져 나오면 바 모양이 둘이 된다.
+                    Canvas { ctx, size in
+                        ctx.stroke(AILimitAbsentHatch.path(in: size),
+                                   with: .color(AILimitAbsentHatch.ink),
+                                   lineWidth: CGFloat(AILimitAbsentHatch.absentHatchLineWidth))
+                    }
+                    .clipShape(Capsule())
+                }
                 if let percent {
                     Capsule()
                         .fill(tint.opacity(floorOnly ? 0.55 : 1))
@@ -322,6 +395,26 @@ struct AILimitCardModel: Equatable, Identifiable {
     /// 창이 없는 칸의 글자. **`—` 를 쓰지 않는다** — 그 글자는 규칙이 '판정 불가(못 읽었다)'로 못 박았다.
     static let absentValueText = "없음"
 
+    /// 그 창이 **왜** 없는지. 2026-10-30 승인 계약 ④ — 이유는 **칸이 아니라 툴팁에서 한 번만** 말한다.
+    ///
+    /// ## 왜 칸이 아닌가
+    /// 숫자 칸은 52pt 고정이고 최악 문구가 50.96pt 다(`AILimitRowWidthBudget.valueWidth`) — `없음` 말고
+    /// 더 들어갈 자리가 없다. 그리고 칸마다 이유를 세우면 운영 코덱스 사용자 38명이 **줄마다** 같은
+    /// 문장을 읽는다. 그래서 줄 툴팁의 없는 칸 줄에 한 번 붙는다.
+    ///
+    /// ★ **진단 어휘를 쓰지 않는다**: 창 이름(`primary_window`)·창 길이·`plan_type`·파서·초 같은 말은
+    ///   사용자 툴팁의 것이 아니다(2026-09-22 결정 · `AILimits.swift` 규약). '요금제'는 사용자 어휘다.
+    ///
+    /// ## ★ 이유는 **있는 창**에서 끌어낸다 — 없는 창이 어느 쪽이든 맞게
+    /// 승인본 문구는 "지금 요금제는 **주간** 한도만 알려 줘요"였고, 38명이 보는 쪽(5시간이 빈 칸)에는 그
+    /// 글자 그대로 나간다. 그런데 문구를 상수로 박으면 **주간이 빈** 줄에서 "주간 없음 — 지금 요금제는 주간
+    /// 한도만 알려 줘요" 라는 **자기모순**이 된다 — 그리고 그런 계정이 실제로 있다(코덱스 크레딧 사용자 실측 ·
+    /// 운영에 5시간 값·주간 null 인 살아 있는 행). 없는 칸이 하나면 남은 칸이 그 계정이 받는 한도라,
+    /// 그 이름을 적으면 어느 쪽이든 참이다.
+    static func absentReasonText(present: [AILimitWindow]) -> String {
+        "지금 요금제는 \(present.map(\.displayName).joined(separator: "·")) 한도만 알려 줘요"
+    }
+
     /// '판정 불가' 캡션은 **규칙에서 가져온다**. 여기에 "알 수 없음"을 다시 적으면 문구가 두 벌이 되고,
     /// 한쪽만 고쳐지는 날 화면과 규칙이 다른 말을 한다.
     static let unknownCaption = AILimitFreshnessRule.captionText(
@@ -345,8 +438,13 @@ struct AILimitCardModel: Equatable, Identifiable {
                 if let reset = resetTexts[window] { parts.append(reset) }
                 lines.append(parts.joined(separator: " · "))
             } else if !windows.isEmpty {
-                // 읽은 창이 하나라도 있으면 **없는 칸도 말해 준다** — 화면의 `없음` 과 같은 글자로.
-                lines.append("\(window.displayName) \(Self.absentValueText)")
+                // 읽은 창이 하나라도 있으면 **없는 칸도 말해 준다** — 화면의 `없음` 과 같은 글자로,
+                // 그리고 **왜 없는지**까지(승인 계약 ④). 읽은 창이 하나도 없는 줄에는 붙이지 않는다 —
+                // 그 줄의 사실은 "그 창이 없다"가 아니라 "지금 못 읽었다"다(아래 `windows.isEmpty` 갈래).
+                let present = AILimitWindow.allCases
+                    .sorted { $0.sortOrder < $1.sortOrder }
+                    .filter { !isAbsent($0) }
+                lines.append("\(window.displayName) \(Self.absentValueText) — \(Self.absentReasonText(present: present))")
             }
         }
         if windows.isEmpty { lines.append(Self.unknownCaption) }
@@ -386,20 +484,37 @@ struct AILimitCardModel: Equatable, Identifiable {
         guard !display.freshness.isResetClaim, let resetsAt = display.resetsAt else { return nil }
         // 유예 안쪽에서 리셋이 막 지난 동안(값은 아직 하한이 맞다) **지난 시각을 미래처럼 적지 않는다.**
         guard resetsAt > now else { return nil }
-        return "\(AILimitResetTimeText.text(resetsAt)) 리셋"
+        return "\(AILimitResetTimeText.text(resetsAt, now: now)) 리셋"
     }
 }
 
-/// 리셋 시각을 `오후 6:59` 로 적는다(KST 기준 기기 시간대).
+/// 리셋 시각을 `오후 6:59` 로 적고, **하루를 넘으면 날짜를 앞세운다**(`11/4 오후 4:14`). 기기 시간대 기준.
 ///
-/// 초 이하를 쓰지 않는 이유: Claude 의 `resets_at` 에는 요청 시각의 잔여 분수(`…00.434051`)가 섞여 온다 —
-/// 초를 적으면 같은 경계가 호출마다 다르게 보인다.
+/// ## 왜 날짜가 필요한가 (2026-10-30 승인 계약 ⑤)
+/// 주간 창의 리셋은 **언제나** 하루를 넘는다(`pro`·`prolite`·`free` 는 주간 창 하나뿐이라 전원이 이 갈래를
+/// 본다). 그 시각을 `오후 4:14` 로만 적으면 **5일 뒤를 오늘 오후**로 말한다 — 사용자는 "몇 시간만 기다리면
+/// 풀린다"로 읽고 작업 계획을 거기에 맞춘다. 거짓이 비싼 자리다.
+///
+/// ## 초 이하를 쓰지 않는다 (원래 계약 — 양쪽 다)
+/// Claude 의 `resets_at` 에는 요청 시각의 잔여 분수(`…00.434051`)가 섞여 온다. 초를 적으면 같은 경계가
+/// 호출마다 다르게 보인다. 날짜가 붙는 쪽도 **분까지**다.
 enum AILimitResetTimeText {
-    static func text(_ date: Date, locale: Locale = Locale(identifier: "ko_KR"), timeZone: TimeZone = .current) -> String {
+    /// 날짜를 앞세우는 문턱. `오후 4:14` 가 "오늘"로 읽히는 것이 거짓이 되는 경계다.
+    static let dateThreshold: TimeInterval = 86_400
+
+    /// `now` 에 **기본값을 주지 않는다**(승인 계약 ⑤).
+    ///
+    /// 기준 시각이 기본 인자면 이 저장소가 이미 밟은 함정으로 곧장 돌아간다: 기본 인자는 **딱 한 번**
+    /// 평가되고, 그 `now` 가 얼어붙으면 날짜가 붙을 자리에 안 붙는다(`CheckAILimitsCard.clock` 주석의
+    /// v0.3.45 P0 와 같은 모양). 기본값이 없으면 "지금을 안 넘긴 자리"가 **컴파일에서** 드러난다.
+    static func text(_ date: Date, now: Date,
+                     locale: Locale = Locale(identifier: "ko_KR"),
+                     timeZone: TimeZone = .current) -> String {
         let formatter = DateFormatter()
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateFormat = "a h:mm"
+        // 24시간 **안쪽**이면 시각만(지금처럼), 넘으면 `M/d` 를 앞세운다. 초는 어느 쪽에도 없다.
+        formatter.dateFormat = date.timeIntervalSince(now) > dateThreshold ? "M/d a h:mm" : "a h:mm"
         return formatter.string(from: date)
     }
 }
@@ -570,7 +685,10 @@ struct AILimitProviderRow: View {
                 floorOnly: display?.floorOnly ?? false,
                 height: AILimitRowWidthBudget.barHeight,
                 tint: AILimitMacPalette.barColor(window),
-                track: display == nil ? AILimitMacPalette.absentTrack : AILimitMacPalette.emptyTrack
+                track: display == nil ? AILimitMacPalette.absentTrack : AILimitMacPalette.emptyTrack,
+                // ★ 해치는 **창이 없는** 칸만 받는다. 판정 불가(`—`)도 `percent` 는 nil 이지만 그 칸은
+                //   창이 있으므로 보통 트랙 그대로다 — 가르는 것은 `display == nil` 이다.
+                hatched: display == nil
             )
             .frame(width: AILimitRowWidthBudget.barWidth)
             Text(display?.valueText ?? AILimitCardModel.absentValueText)

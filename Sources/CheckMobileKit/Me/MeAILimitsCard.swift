@@ -403,8 +403,12 @@ private struct MeAILimitRow: View {
     /// 한 칸 = 바 + 숫자. 세 모양이 있다:
     ///  ① 값이 있다 → 트랙 + 채움(열 색, 하한이면 흐리게) + `27%` / `27% 이상` / `0%`
     ///  ② 창은 있는데 판정 불가(기기 시계 어긋남) → 트랙만 + `—`(코어 규칙의 글자)
-    ///  ③ **그 창이 없다** → 더 어두운 트랙만 + `없음`
+    ///  ③ **그 창이 없다** → 더 조용한 트랙 + **사선 해치** + `없음`
     /// ②와 ③을 같은 글자로 그리지 않는 이유는 파일 머리말 ⑤에 있다.
+    ///
+    /// ★ ③의 판정은 `display == nil` **하나**다(트랙·해치·글자가 같은 한 가지를 본다). `percent == nil` 로
+    ///   가르면 ②(판정 불가)가 함께 해치를 받고, `percent == 0` 으로 가르면 **0% 칸이** 해치를 받는다 —
+    ///   0% 는 "안 썼다"는 값이고 "그 창이 없다"와 다른 말이다.
     private func cell(_ window: AILimitWindow) -> some View {
         let display = row.display(window)
         return HStack(spacing: MeAILimitCardBudget.barValueGap) {
@@ -412,7 +416,8 @@ private struct MeAILimitRow: View {
                 percent: display?.percent,
                 floorOnly: display?.floorOnly ?? false,
                 tint: MeAILimitColumnColor.bar(window),
-                track: display == nil ? MeAILimitColumnColor.absentTrack : MeAILimitColumnColor.emptyTrack
+                track: display == nil ? MeAILimitColumnColor.absentTrack : MeAILimitColumnColor.emptyTrack,
+                isAbsent: display == nil
             )
             .frame(maxWidth: .infinity)
             valueText(display)
@@ -460,7 +465,8 @@ private struct MeAILimitRow: View {
                         percent: display?.percent,
                         floorOnly: display?.floorOnly ?? false,
                         tint: MeAILimitColumnColor.bar(window),
-                        track: display == nil ? MeAILimitColumnColor.absentTrack : MeAILimitColumnColor.emptyTrack
+                        track: display == nil ? MeAILimitColumnColor.absentTrack : MeAILimitColumnColor.emptyTrack,
+                        isAbsent: display == nil
                     )
                 }
             }
@@ -478,6 +484,10 @@ private struct MeAILimitRow: View {
 /// ★ 하한("27% 이상")은 채움을 **흐리게** 그린다. 수단은 색이 아니라 **불투명도**다(`AILimitFloorFill` —
 ///   위젯 틴트·투명 모드는 색을 통째로 버리고 알파만 남긴다. 세 화면이 같은 수를 쓴다).
 ///
+/// ★ 창이 **없는** 칸은 트랙에 **45° 사선 해치**를 받는다(2026-10-30 승인). 트랙 색만으로 가르면 색을 버리는
+///   표면·색각 이상·흑백 스크린샷에서 0% 바와 같은 모양이고, 그러면 '값이 없다'는 사실의 단서가 `없음` 글자
+///   하나로 줄어든다.
+///
 /// 왜 공용 `ProgressBar` 를 안 쓰나: 그 부품은 채움 색을 `Style` 열거값에서 고르고 트랙이 한 가지다.
 /// 이 카드는 칸마다 **열 색**과 **두 종류의 트랙**(빈 칸 / 창이 없는 칸)이 필요하다. 공용 부품에 그 입력을
 /// 더하면 리밋과 무관한 다섯 자리의 렌더가 같이 흔들린다.
@@ -487,12 +497,18 @@ struct MeAILimitBar: View {
     let floorOnly: Bool
     let tint: Color
     let track: Color
+    /// 그 창이 **아예 없다**(= 트랙에 사선 해치). 판정 불가(`percent == nil`)와 **다른 사실**이라
+    /// `percent` 로 가르지 않는다. **기본값을 주지 않는다** — 새 호출부가 조용히 "값이 있는 칸"으로 떨어지면
+    /// 해치가 사라진 것을 아무 그물도 못 잡는다(호출부가 명시하게 해서 컴파일에서 드러나게 한다).
+    let isAbsent: Bool
     var height: CGFloat = MeAILimitCardBudget.barHeight
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(track)
+                // ★ 값이 **있는** 칸(0% 포함)에는 그리지 않는다 — 0% 는 "안 썼다"는 값이다.
+                if isAbsent { absentHatch }
                 if percent != nil {
                     Capsule()
                         .fill(tint)
@@ -503,6 +519,28 @@ struct MeAILimitBar: View {
             }
         }
         .frame(height: height)
+        .accessibilityHidden(true)
+    }
+
+    /// 없는 칸 트랙의 45° 사선 해치(왼쪽 아래 → 오른쪽 위). 수 셋은 전부 공유 상수다
+    /// (`AILimitColumnPalette.absentHatchSpacing` · `…LineWidth` · `…Opacity`) — 위젯·맥이 같은 그림을 그린다.
+    ///
+    /// `Canvas` 는 `size` 를 받으므로 `GeometryReader` 가 더 필요하지 않고, 위젯의 **단일 렌더**에서도 같은
+    /// 코드가 돈다. 왼쪽 밖(`-size.height`)에서 시작해야 캡슐 왼쪽 끝도 선을 받는다.
+    private var absentHatch: some View {
+        Canvas { context, size in
+            var path = Path()
+            var x = -size.height
+            while x < size.width {
+                path.move(to: CGPoint(x: x, y: size.height))
+                path.addLine(to: CGPoint(x: x + size.height, y: 0))
+                x += CGFloat(AILimitColumnPalette.absentHatchSpacing)
+            }
+            context.stroke(path, with: .color(MeAILimitColumnColor.absentHatch),
+                           lineWidth: CGFloat(AILimitColumnPalette.absentHatchLineWidth))
+        }
+        // 트랙 캡슐 안쪽으로 클립 — 삐져나간 사선은 칸 경계를 흐려 두 열의 자리 단서를 깎는다.
+        .clipShape(Capsule())
         .accessibilityHidden(true)
     }
 }
@@ -518,6 +556,10 @@ enum MeAILimitColumnColor {
     static let emptyTrack = color(AILimitColumnPalette.emptyTrack)
     static let absentTrack = color(AILimitColumnPalette.absentTrack)
     static let absentText = color(AILimitColumnPalette.absentText)
+    /// 없는 칸 트랙의 사선 색 = `absentText` 를 공유 불투명도로 흐린 값. **새 색을 만들지 않는다** —
+    /// 해치는 같은 사실(`없음`)의 두 번째 단서이므로 그 글자와 같은 잉크여야 한다.
+    static let absentHatch = color(AILimitColumnPalette.absentText)
+        .opacity(AILimitColumnPalette.absentHatchOpacity)
 
     /// 제공자 사이 구분선. ★ **여기만 공유 팔레트를 쓰지 않는다** — 그 값(`#2C3037`)은 맥 팝오버·위젯 바탕
     /// (어두운 `#232633`)에서 고른 것이라, 한 단 밝은 폰 카드 바탕(`surface` 다크 `#2B2E3D`) 위에서는

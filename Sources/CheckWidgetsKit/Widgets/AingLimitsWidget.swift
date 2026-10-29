@@ -284,8 +284,11 @@ struct AingAILimitsContent: View {
     /// 한 칸 = 바 + 숫자. 세 모양이 있다:
     ///  ① 값이 있다 → 트랙 + 채움(열 색, 하한이면 흐리게) + `27%` / `27% 이상` / `0%`
     ///  ② 창은 있는데 판정 불가(기기 시계 어긋남) → 트랙만 + `—`(코어 규칙의 글자)
-    ///  ③ **그 창이 없다** → 더 조용한 트랙만 + `없음`
+    ///  ③ **그 창이 없다** → 더 조용한 트랙 + **사선 해치** + `없음`
     /// ②와 ③을 같은 글자로 그리지 않는 이유는 파일 머리말 ⑤에 있다.
+    ///
+    /// ★ ③의 판정은 `display == nil` **하나**다(트랙·해치·글자가 같은 한 가지를 본다). `percent` 로 가르면
+    ///   ②가 함께 해치를 받고, 0% 칸은 값이 **있는** 칸이라 해치를 받지 않는다.
     private func cell(_ row: AingWidgetLimitRow, _ window: AILimitWindow, barHeight: Double) -> some View {
         let display = row.display(window)
         return HStack(spacing: AingWidgetLimitsMediumBudget.barValueGap) {
@@ -373,6 +376,10 @@ struct AingAILimitsContent: View {
 /// `percent` 가 nil 이면(판정 불가 · 창 없음) **트랙만** 그린다 — 0% 로 그리면 "하나도 안 썼다"는 거짓이다.
 /// 하한("27% 이상")은 채움을 **흐리게** 그린다(수단은 색이 아니라 불투명도 — 틴트·투명은 색을 통째로 버린다).
 ///
+/// ★ 창이 **없는** 칸은 트랙에 **45° 사선 해치**를 받는다(2026-10-30 승인 · 폰 카드·맥과 같은 세 수).
+///   위젯에서 특히 중요하다: `.accented`(틴트·투명)는 색을 통째로 버리므로 두 트랙의 색 차가 **사라지고**,
+///   그 모드에서 없는 칸과 0% 칸을 가르는 것은 해치의 **기하**와 알파뿐이다.
+///
 /// 왜 공용 `AingWidgetBar` 를 안 쓰나: 그 부품은 채움이 두 색(달성 초록 / 강조 파랑) 가운데 하나고 트랙이
 /// 한 가지다. 이 칸은 **열 색**과 **두 종류의 트랙**(빈 칸 / 창이 없는 칸)이 필요하고, 좁은 바(26~44pt)라
 /// 최소 채움 산식도 다르다. 공용 부품에 그 입력을 더하면 리밋과 무관한 다른 세 위젯의 막대가 같이 흔들린다.
@@ -390,6 +397,8 @@ struct AingWidgetLimitBar: View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(AingWidgetLimitColors.track(isAbsent: isAbsent, mode: renderingMode))
+                // ★ 값이 **있는** 칸(0% 포함)에는 그리지 않는다 — 0% 는 "안 썼다"는 값이다.
+                if isAbsent { absentHatch }
                 if percent != nil {
                     Capsule()
                         .fill(AingWidgetLimitColors.bar(window, mode: renderingMode))
@@ -401,6 +410,30 @@ struct AingWidgetLimitBar: View {
             }
         }
         .frame(height: height)
+        .accessibilityHidden(true)
+    }
+
+    /// 없는 칸 트랙의 45° 사선 해치(왼쪽 아래 → 오른쪽 위). 수 셋은 전부 공유 상수다
+    /// (`AILimitColumnPalette.absentHatchSpacing` · `…LineWidth` · `…Opacity`) — 폰 카드·맥이 같은 그림이다.
+    ///
+    /// `Canvas` 는 `size` 를 받으므로 `GeometryReader` 가 더 필요하지 않다 — 위젯은 **단일 렌더**라 자리 계산이
+    /// 한 번에 끝나야 하고, 선을 뷰 여럿으로 쌓으면 좁은 칸(26pt)에서 칸마다 열 개가 넘는 뷰가 생긴다.
+    /// ★ `widgetAccentable()` 을 **걸지 않는다**: 틴트에서 채움과 같은 잉크가 되면 해치가 '찬 바'로 읽힌다.
+    private var absentHatch: some View {
+        Canvas { context, size in
+            var path = Path()
+            // 왼쪽 밖에서 시작해야 캡슐 왼쪽 끝도 선을 받는다.
+            var x = -size.height
+            while x < size.width {
+                path.move(to: CGPoint(x: x, y: size.height))
+                path.addLine(to: CGPoint(x: x + size.height, y: 0))
+                x += CGFloat(AILimitColumnPalette.absentHatchSpacing)
+            }
+            context.stroke(path, with: .color(AingWidgetLimitColors.absentHatch(mode: renderingMode)),
+                           lineWidth: CGFloat(AILimitColumnPalette.absentHatchLineWidth))
+        }
+        // 트랙 캡슐 안쪽으로 클립 — 삐져나간 사선은 칸 경계를 흐려 두 열의 자리 단서를 깎는다.
+        .clipShape(Capsule())
         .accessibilityHidden(true)
     }
 }
@@ -439,6 +472,15 @@ enum AingWidgetLimitColors {
 
     static func separator(mode: WidgetRenderingMode) -> Color {
         mode == .accented ? AingWidgetInk(mode).separator : color(AILimitColumnPalette.separator)
+    }
+
+    /// 없는 칸 트랙의 **사선 색**. 원색에서는 `absentText` 를 공유 불투명도로 흐린 값(= `없음` 글자와 같은 잉크)이고,
+    /// 틴트·투명에서는 색이 없으므로 **흰색 + 같은 불투명도**다. 어느 쪽이든 트랙보다 진하다 —
+    /// 틴트 트랙은 흰 `Accented.track`(0.35) × 0.5 = 0.175 라 해치(0.45)가 그 위에서 보인다.
+    static func absentHatch(mode: WidgetRenderingMode) -> Color {
+        mode == .accented
+            ? .white.opacity(AILimitColumnPalette.absentHatchOpacity)
+            : color(AILimitColumnPalette.absentText).opacity(AILimitColumnPalette.absentHatchOpacity)
     }
 
     /// 숫자 글자. **사용량 단계는 이 글자가 말한다**(바는 열 색을 쥐었다 — `AILimitUsageStage` 머리말).

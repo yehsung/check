@@ -5,6 +5,9 @@
 아래의 요청·응답 모양은 전부 **이 맥에서 실제로 호출해 받은 것**이다(2026-10-07). 추측으로 적힌 줄은 없고,
 미확인인 것은 "미확인"이라고 적어 뒀다.
 
+**나중 실측으로 고친 자리**(초안이 단정했다가 틀린 것들): §2 코덱스의 창 이름(2026-10-23 · 2026-10-30) ·
+§6 리밋 위젯 크기 · §8 설정 스위치. 같은 종류를 또 만나면 **코드를 읽고 이 문서를 고쳐라.**
+
 **한 줄 요약**: 맥만 세 도구의 로그인 자격증명을 읽어 **그 도구 자신의 서버**에 사용률을 묻고,
 얻은 **퍼센트와 리셋 시각만** 아잉체크 서버에 올린다. 폰과 위젯은 그 숫자를 읽기만 한다.
 
@@ -107,19 +110,48 @@ ChatGPT-Account-Id: <tokens.account_id>
 
 ```
 plan_type: "<플랜 라벨>"
-rate_limit.primary_window:   { used_percent: <0…100>, limit_window_seconds: 18000,  reset_after_seconds: <초>, reset_at: <epoch 초> }
-rate_limit.secondary_window: { used_percent: <0…100>, limit_window_seconds: 604800, reset_after_seconds: <초>, reset_at: <epoch 초> }
+rate_limit.primary_window:   { used_percent: <0…100>, limit_window_seconds: <초>, reset_after_seconds: <초>, reset_at: <epoch 초> }
+rate_limit.secondary_window: { used_percent: <0…100>, limit_window_seconds: <초>, reset_after_seconds: <초>, reset_at: <epoch 초> }
 credits: { has_credits: <Bool>, unlimited: <Bool>, balance: "<문자열>" }
 ```
 
-- `primary_window` = 5시간, `secondary_window` = 주간. `used_percent` 는 **쓴 비율**(뒤집지 않는다).
-  `reset_at` 은 **epoch 초**. `balance` 는 숫자가 아니라 **문자열**이다.
+- `used_percent` 는 **쓴 비율**(뒤집지 않는다). `reset_at` 은 **epoch 초**. `balance` 는 숫자가 아니라 **문자열**이다.
 - 두 창 모두 null 일 수 있다(플랜 없음·크레딧 사용자) — 그 창은 **없는 것으로** 다룬다.
 - ★★ **`used_percent == 0` 이면 `reset_at` 은 가짜다.** 두 번 호출 사이에 684초 움직였고 그 값은 경과 시간과
   정확히 같았다 — 서버가 `now + limit_window_seconds` 를 넣어 준다. 판별식:
   `used_percent == 0 || reset_after_seconds == limit_window_seconds` → **`resetsAt` 을 nil 로 접고 리셋 시각을
   띄우지 않는다.** 안 그러면 0% 인데 리셋 시각이 분마다 바뀌는 UI 가 나온다.
 - 소비 중인 주간 창의 `reset_at` 은 두 호출에서 **똑같았다** — 진짜 고정 경계다.
+
+### ★★ 창 이름은 창 종류가 아니다 — 길이로 가린다 (2026-10-23 수리 · 2026-10-30 재실측)
+
+초안은 이 자리에 **`primary_window` = 5시간, `secondary_window` = 주간** 이라고 단정해 뒀다. **틀렸다.**
+코덱스는 **요금제에 따라 창을 하나만 보내고**, 그 하나가 `primary_window` 라는 이름으로 온다.
+
+| 요금제 | 오는 창 | `limit_window_seconds` |
+|---|---|---|
+| `plus` | 둘 다 | primary `18000`(300분) · secondary `604800`(10080분) |
+| `pro` · `prolite` · `free` | `primary_window` **하나** | `604800`(= **주간**) · `secondary_window` 는 `null` |
+
+2026-10-30 라이브 실측: `plan_type: "prolite"` · `primary_window.limit_window_seconds: 604800` ·
+`secondary_window: null`. 그리고 **운영 코덱스 사용자 40명 중 38명(≈95%)이 "주간 하나" 요금제다** —
+이쪽이 예외가 아니라 **다수**다(집계 2026-10-30 · `docs/plan/ai-limit-absent-cell-contract.md`).
+
+- 그래서 창은 **이름이 아니라 길이로** 가린다: `AILimitWindow.matching(lengthSeconds:)` 가
+  `limit_window_seconds` 를 두 창 길이와 재서 **2배 안쪽**으로 가장 가까운 쪽을 돌려준다. 어느 창과도
+  2배 안으로 안 맞으면 **nil** 이고, 그때만 부르는 쪽이 **이름으로 폴백**한다
+  (`primary_window`→5시간 · `secondary_window`→주간 — `AILimitReaders.swift`).
+- 모르는 길이를 가까운 쪽에 억지로 끼워 넣지 않는 까닭: 넷째 창이 생기는 날 또 같은 종류의 거짓말을 한다.
+- 이름만 믿었을 때 생긴 일(10-23 제보): 주간 값이 5시간 칸에 앉고 주간 칸이 영영 비어, 운영 Codex 행
+  33개 중 **31개**가 그 꼴이었다. 리셋 시각이 자백했다 — "5시간" 칸의 리셋이 110~168시간 뒤였다
+  (168시간 = 정확히 7일). `plus` 는 창이 둘 다 와서 멀쩡했기 때문에 **제보 전까지 아무 시험도 안 물었다.**
+- ★ 실측 범위: 응답을 직접 본 것은 `plus`(창 둘) 와 `prolite`(주간 하나)다. `pro` 는 운영 행의 모양
+  (5시간 칸 리셋이 7일 뒤)으로 같은 꼴임을 알았고, `free` 는 승인된 계약이 같은 묶음으로 적지만
+  **응답 실측은 미확인**이다.
+- ★ 화면 쪽 결과: 38명의 **5시간 칸은 영구히 비어 있다.** 앱은 그 자리를 `없음` 으로 그리고,
+  그 칸의 글자 색·사선 해치·"왜 없는지" 툴팁·하루를 넘는 리셋의 날짜 형식은
+  **`docs/plan/ai-limit-absent-cell-contract.md`** 가 정본이다(2026-10-30 사용자 승인 · 맥·폰·위젯 공통).
+  `없음` 글자와 트랙 색은 그 문서가 **바꾸지 말라고 못 박은** 값이다.
 
 **레이트리밋**: 6회 연속 호출 전부 200. Claude 보다 훨씬 관대하다. 그래도 5분 주기로 보수적으로 둔다.
 
@@ -267,9 +299,14 @@ Claude(`utilization`)·Codex(`used_percent`) 와 **부호가 반대다.** 한 �
             ├─ 맥: 팝오버 한 줄 요약 + 별도 창의 제공자 카드 (5시간 크게 + 주간 얇은 줄, 둘 다)
             └─ 폰 앱: '나' 탭 카드 (리밋 + 기존 토큰 사용량 함께)
                  └─ App Group 스냅샷
-                      └─ 전용 "AI 리밋" 위젯 (small / medium / large)
+                      └─ 전용 "AI 리밋" 위젯 (미디움 한 칸뿐)
 ```
 
+- ★ **「AI 리밋」 위젯은 미디움 하나다** — `Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift` 의
+  `.supportedFamilies([.systemMedium])`. 스몰·라지는 2026-10-06 사용자 지시로 **지웠다**: 스몰은 칸에 열이
+  하나뿐이라 승인된 "5시간·주간 **두 열 나란히**" 문법을 못 세우고(어느 제공자의 어느 창인지를 숫자보다 먼저
+  말해야 한다), 라지는 미디움과 **같은 세 줄**을 띄워 놓아 아래가 비었다. 그 파일에는 크기 분기가 한 줄도
+  없으니 크기를 늘리려면 문법을 새로 정해야 한다. (다른 위젯들은 크기 묶음이 다르다 — 이 줄은 리밋 위젯만 센다.)
 - ★ **위젯은 네트워크를 쓰지 않는다** — App Group 스냅샷만 읽는다. 폰 앱이 갱신할 때 스냅샷을 같이 쓴다.
 - ★ `WidgetSnapshot.version` 을 **올리지 말고 옵셔널 필드로만 더한다.** 올리면 구버전 위젯이 스냅샷을
   못 읽어 빈 위젯이 된다.
@@ -299,7 +336,18 @@ Claude(`utilization`)·Codex(`used_percent`) 와 **부호가 반대다.** 한 �
 | 429 | 직전 값 유지 + `잠시 뒤 다시`, `retry-after` 까지 재호출 금지 |
 | 플랜 없음(크레딧 사용자) | `구독 리밋 없음` 으로 접고 토큰 사용량만 보여 준다 |
 
-설정 토글·알림은 **없다**(자동 감지, 미연동은 숨김).
+미연동은 **자동으로 숨긴다**(사용자가 고를 일이 없다). 하지만 초안이 적은 "설정 토글은 **없다**" 는 **틀렸다** —
+**보기 스위치가 있다**: 마스터 하나 + 제공자별 하나(`AILimitVisibility` · 맥 설정 창의 `AILimitVisibilitySettingsRows`).
+
+- 마스터 줄은 `AI 사용량 리밋 보기` 다. 끄면 **읽기·업로드·타이머가 통째로 멈춘다**.
+- 제공자 스위치는 마스터와 **독립**이다(마스터가 꺼진 동안에도 미리 바꿔 둘 수 있다). 연동 안 된 도구는 줄이 없다.
+- ★ **끄는 것은 서버 행까지 비운다.** `AILimitStore.apply(visibility:)` 가 "끄기 **전에** 올라가던 제공자 −
+  끈 **뒤에** 올라갈 제공자" 차집합을 비우기 대기열에 넣고, 업로더가 그 제공자의 값 칸을 **비우는 행으로 덮는다**.
+  그래서 맥에서만 가려지는 것이 아니라 **폰·위젯에서도 사라진다**. 다시 켠 제공자는 대기열에서 **뺀다** —
+  같은 PK 의 값 행과 비우는 행이 한 본문에 섞이면 upsert 가 21000 으로 **본문 전체**를 거절한다.
+- ★ 꺼진 제공자의 rawValue 는 **모르는 값도 버리지 않고 보존한다**. 신버전에서 끈 제공자를 구버전이 저장하며
+  지워 버리면, 다시 올라갈 때 그 제공자가 아무 말 없이 켜진다(열거값 확장 함정의 쌍둥이).
+- **알림은 없다.** 90% 를 넘겨도 아무것도 띄우지 않는다 — 리밋이 높은 것은 고장이 아니고, 숫자 색이 말한다.
 
 ## 9. 제공자 아이콘
 

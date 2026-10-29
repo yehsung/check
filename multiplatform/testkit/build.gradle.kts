@@ -64,7 +64,9 @@ kotlin {
             // (MirrorDumpProbeTest). 판은 version.ref = "kotlin"(2.4.21)으로 컴파일러와 한 벌. 시험 classpath 전용(앱 산출물 0).
             api(libs.kotlin.reflect)
             // 공용 패치 7: 데스크톱 스냅숏 하네스(…/ui/components/DesktopSnapshots — ImageComposeScene·Skia)를 ui·desktopApp 시험이 같이 쓴다.
-            implementation(libs.compose.ui)
+            // compileOnly: 실행 때 compose.ui 는 쓰는 쪽(ui·desktopApp) 시험 classpath 가 준다. implementation 이면 testkit 을 쓰는
+            // 모든 core·feature 모듈 desktopTest 에 compose.ui(→ jbr-api 1.5.0)가 번져 봉인·오프라인 게이트가 해석에서 빨개진다(int-w1 실측).
+            compileOnly(libs.compose.ui)
         }
         getByName("androidMain").dependencies {
             api(libs.kotlin.test.junit)

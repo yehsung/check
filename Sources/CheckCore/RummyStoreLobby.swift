@@ -6,25 +6,34 @@ import Foundation
 extension RummyStore {
     // MARK: - 로비
 
+    /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(합치기 — `refreshMatch` 의 `stateAgain` 과 같은 꼴).
+    /// 앞 조회는 그 뒤에 생긴 초대를 모르므로, 그 사이 온 초인종을 버리면 배너·말풍선이 다음 계기까지 안 뜬다.
     package func refreshLobby() async {
-        guard host?.session != nil, !lobbyInFlight else { return }
+        guard host?.session != nil else { return }
+        if lobbyInFlight {
+            lobbyAgain = true
+            return
+        }
         lobbyInFlight = true
         let generation = resetGeneration
         defer { if generation == resetGeneration { lobbyInFlight = false } }
-        lastLobbyRequestAt = clock()
-        let revision = matchRevision
-        guard let result = await perform({ try await $0.rummyLobby(accessToken: $1) }) else { return }
-        switch result {
-        case .success(let response):
-            await applyLobby(response, revision: revision)
-        case .failure(let error):
-            if isSchemaMissing(error) {
-                Self.logger.notice("lobby unavailable — rummy functions missing on server")
-                noteServerMissing()
-            } else {
-                Self.logger.notice("lobby request failed")
+        repeat {
+            lobbyAgain = false
+            lastLobbyRequestAt = clock()
+            let revision = matchRevision
+            guard let result = await perform({ try await $0.rummyLobby(accessToken: $1) }) else { return }
+            switch result {
+            case .success(let response):
+                await applyLobby(response, revision: revision)
+            case .failure(let error):
+                if isSchemaMissing(error) {
+                    Self.logger.notice("lobby unavailable — rummy functions missing on server")
+                    noteServerMissing()
+                } else {
+                    Self.logger.notice("lobby request failed")
+                }
             }
-        }
+        } while lobbyAgain && generation == resetGeneration
     }
 
     /// 로비 응답을 옮긴다. `revision` 은 그 요청을 낼 때의 `matchRevision` 이다(nil = 지금 것).
@@ -57,10 +66,11 @@ extension RummyStore {
         activeMatchID = mine
         if let mine {
             guard !dismissedMatchIDs.contains(mine) else { return }
-            if match?.id != mine || match?.status == .finished {
+            // 같은 id 면 신호·폴링·따라잡기가 이미 그 판을 읽는다 — 단, 모르는 status 로 든 판은 여기서도 다시 읽는다.
+            if match?.id != mine || match?.status == .finished || match?.status == .unknown {
                 await refreshMatch(id: mine)
             }
-        } else if let current = match, current.status == .forming || current.status == .active,
+        } else if let current = match, Self.isUnsettled(current.status),
                   (revision ?? matchRevision) == matchRevision {
             // 서버는 내 방·판이 없다고 한다 — 그 판을 직접 읽어 사정(닫힘·끝남·기권)을 안다. 지우지 않는다.
             await refreshMatch(id: current.id)
@@ -351,6 +361,7 @@ extension RummyStore {
         if match != nil { match = nil }
         if editor != nil { editor = nil }
         editorKey = nil
+        editorSeq = nil
         lastSentDraft = nil
         cancelDraft()
         deadlineTask?.cancel()

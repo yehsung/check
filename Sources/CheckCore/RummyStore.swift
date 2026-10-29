@@ -28,8 +28,13 @@ import OSLog
 //  ⑨ **작업 상태 전송**(R-19). 내 차례에 끌기가 끝날 때마다 250ms 디바운스 → `rummy_draft`. 한 번에 하나만 비행하고,
 //     비행 중에 바뀐 것은 끝난 뒤 **최신 것 한 번**. 서버는 마지막 것만 두고 시간 초과 때 그 판을 판정한다 —
 //     그래서 차례 중간에 편집기를 새로 세우면(앱 재실행) 서버 작업 판을 내 화면(시작 판)으로 다시 맞춘다.
-//  ⑩ **편집기 수명.** seq 가 바뀌면 새 판·랙으로 다시 세우되 랙 배치는 면 순서로 넘긴다. seq 가 같으면 **덮지 않는다**
-//     (내 작업 보존 — 내 draft 의 메아리·남의 폴링 응답이 작업을 지우지 않게).
+//     `p_expected_seq` 는 편집기가 선 seq 가 아니라 **지금 든 판의 seq** 다(같은 차례에 남의 기권으로 seq 가 오른다).
+//     같은 차례에 stale 을 받으면 새 seq 로 한 번 더 보낸다. [완료]·뽑기가 확정되지 않으면(실패·거절·stale) 걷었던
+//     디바운스를 다시 건다 — 서버 작업 판이 내 화면에 머물게.
+//  ⑩ **편집기 수명.** **차례**(`RummyEditorKey` = 판 · 차례 자리 · `turn_started_ms`)가 바뀌면 새 판·랙으로 다시 세우되
+//     랙 배치는 면 순서로 넘긴다. 같은 차례면 **덮지 않는다**(내 작업 보존 — 내 draft 의 메아리·남의 폴링 응답, 그리고
+//     남의 기권이 seq 만 올린 state 가 작업을 지우지 않게). 같은 차례인데 확정 판·내 랙이 달라졌을 때만 다시 세운다.
+//     '내 차례' 알림·마감 깨우기도 같은 차례 정체성으로 가른다(`turnIdentity`).
 
 // MARK: - 호스트
 
@@ -161,6 +166,8 @@ package final class RummyStore {
     @ObservationIgnored var stateInFlight = false
     @ObservationIgnored var stateAgain = false
     @ObservationIgnored var lobbyInFlight = false
+    /// 로비 조회가 도는 중에 또 불렸다 — 끝난 뒤 **한 번 더** 읽는다(그 사이 온 초인종을 버리지 않게).
+    @ObservationIgnored var lobbyAgain = false
     @ObservationIgnored var rankingInFlight = false
 
     /// 차단 거울을 거치기 전의 로비 응답.
@@ -179,8 +186,10 @@ package final class RummyStore {
     @ObservationIgnored package internal(set) var dismissedMatchIDs: Set<UUID> = []
 
     // 편집기 · 작업 상태 전송(RummyStoreGame.swift).
-    /// 지금 편집기가 선 판·seq. seq 가 바뀌면 편집기를 다시 세운다.
+    /// 지금 편집기가 선 차례(판 · 차례 자리 · 차례 시작 시각). 차례가 바뀌면 편집기를 다시 세운다.
     @ObservationIgnored package internal(set) var editorKey: RummyEditorKey?
+    /// 편집기가 마지막으로 맞춘 판 seq(같은 차례에 남의 기권으로 오를 수 있다).
+    @ObservationIgnored package internal(set) var editorSeq: Int?
     /// 서버가 들고 있다고 믿는 작업 판(마지막으로 보낸 것, 새 차례면 시작 판). 같으면 다시 보내지 않는다.
     @ObservationIgnored package internal(set) var lastSentDraft: [[RummyFace]]?
     @ObservationIgnored package internal(set) var draftDebounceTask: Task<Void, Never>?
@@ -257,7 +266,7 @@ package final class RummyStore {
             lastLobbyRequestAt = now
             Task { [weak self] in await self?.refreshLobby() }
         }
-        if let match, match.status == .forming || match.status == .active,
+        if let match, Self.isUnsettled(match.status),
            now.timeIntervalSince(lastStateRequestAt) >= Self.reloadDedupeSeconds {
             lastStateRequestAt = now
             let id = match.id
@@ -301,16 +310,26 @@ package final class RummyStore {
 
     /// 신호 한 번의 조회: 방·판에 있으면 그 state(참가·시작·차례·작업 판·정산), 아니면 로비(초대 · 내 방·판 id).
     package func syncOnce() async {
-        if let match, match.status == .forming || match.status == .active {
+        if let match, Self.isUnsettled(match.status) {
             await refreshMatch(id: match.id)
         } else {
             await refreshLobby()
         }
     }
 
-    /// 조인 직후·깨어남의 따라잡기: 로비 한 번(+ 그 응답이 가리키는 방·판).
+    /// 조인 직후·깨어남의 따라잡기: 들고 있는 방·판(끝나지 않은 것)을 먼저 다시 읽고, 로비 한 번(+ 그 응답이 가리키는 다른 방·판).
+    /// 로비는 들고 있는 것과 **같은 id** 면 다시 읽지 않으므로(`applyLobby`), 잠든 사이 방이 판으로 시작된 것은 여기서 안다.
     package func catchUp() async {
+        if let match, Self.isUnsettled(match.status) {
+            await refreshMatch(id: match.id)
+        }
         await refreshLobby()
+    }
+
+    /// 아직 끝나지 않은 판 status(끝남·취소·만료가 아님) — 신호·폴링·따라잡기가 그 판을 다시 읽는 조건.
+    /// 모르는 값(`unknown` — 서버가 나중에 늘릴 값)도 다시 읽는다. 들고만 있고 안 읽으면 그 판에 굳는다.
+    package nonisolated static func isUnsettled(_ status: RummyMatchStatus?) -> Bool {
+        status != .finished && status != .cancelled && status != .expired
     }
 
     /// 실시간 조인 성공 직후.
@@ -365,7 +384,7 @@ package final class RummyStore {
     ///  · 로비·방 화면이면 30초마다 로비(사람 목록·초대) · 순위는 60초(주 스위치)
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
-        if let match, match.status == .forming || match.status == .active,
+        if let match, Self.isUnsettled(match.status),
            now.timeIntervalSince(lastStateRequestAt) >= Self.matchPollSeconds {
             await refreshMatch(id: match.id)
         }
@@ -397,6 +416,7 @@ package final class RummyStore {
         stateInFlightID = nil
         pendingStateID = nil
         lobbyInFlight = false
+        lobbyAgain = false
         rankingInFlight = false
         cancelDraft()
         draftFlushTask = nil
@@ -428,6 +448,7 @@ package final class RummyStore {
         finishAnnouncedIDs = []
         dismissedMatchIDs = []
         editorKey = nil
+        editorSeq = nil
         lastSentDraft = nil
         requestTicket = 0
         appliedTicket = 0
@@ -547,8 +568,29 @@ package final class RummyStore {
     }
 }
 
-/// 편집기가 선 자리(판 · 확정 seq).
+/// 편집기가 선 **차례**(판 · 차례 자리 · 차례 시작 시각). `turn_started_ms` 는 차례가 넘어갈 때(advance)마다 바뀌고
+/// 남의 기권(seq+1)에는 안 바뀐다 — seq 로 가르면 남이 기권할 때마다 내 차례 작업이 지워진다.
 package struct RummyEditorKey: Equatable, Hashable, Sendable {
     package let matchID: UUID
-    package let seq: Int
+    package let turnSeatNo: Int?
+    package let turnStartedMs: Double?
+    /// `turn_started_ms` 가 없는 옛 모양·미리보기에서만 seq 로 차례를 가른다(있으면 nil).
+    package let fallbackSeq: Int?
+
+    package init(matchID: UUID, turnSeatNo: Int?, turnStartedMs: Double?, seq: Int?) {
+        self.matchID = matchID
+        self.turnSeatNo = turnSeatNo
+        self.turnStartedMs = turnStartedMs
+        fallbackSeq = turnStartedMs == nil ? (seq ?? 0) : nil
+    }
+
+    package init(_ state: RummyMatchState) {
+        self.init(matchID: state.id, turnSeatNo: state.turnSeatNo, turnStartedMs: state.turnStartedMs, seq: state.seq)
+    }
+
+    /// 알림·마감 깨우기 키에 쓰는 글자("<판>#<차례 자리>#<차례 시작>").
+    package var text: String {
+        let started = turnStartedMs.map { String(Int64($0)) } ?? "s\(fallbackSeq ?? 0)"
+        return "\(matchID.uuidString.lowercased())#\(turnSeatNo.map(String.init) ?? "-")#\(started)"
+    }
 }

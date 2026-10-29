@@ -115,7 +115,7 @@ private struct RummyPeopleColumn: View {
             .tetrisDuelCard(padding: 12)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(RummyText.peopleCaption)
+                Text(RummyText.peopleCaption(inRoom: inRoom, amHost: scene.amHost))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)

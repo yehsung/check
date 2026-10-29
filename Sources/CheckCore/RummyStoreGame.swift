@@ -161,8 +161,8 @@ extension RummyStore {
 
     // MARK: - 편집기
 
-    /// 편집기를 state 에 맞춘다(머리말 ⑩): 판이 active 이고 내가 playing 이면 seq 마다 다시 세우고(랙 배치 보존),
-    /// seq 가 같으면 그대로 둔다(작업 보존). 아니면 내린다.
+    /// 편집기를 state 에 맞춘다(머리말 ⑩): 판이 active 이고 내가 playing 이면 **차례**가 바뀔 때마다 다시 세우고(랙 배치 보존),
+    /// 같은 차례면 그대로 둔다(작업 보존 — 남의 기권으로 seq 만 오른 state 도). 아니면 내린다.
     func reconcileEditor(with state: RummyMatchState) {
         let seat = mySeat(in: state)
         guard state.status == .active, let rack = state.myRack,
@@ -173,14 +173,23 @@ extension RummyStore {
             cancelDraft()
             return
         }
-        let key = RummyEditorKey(matchID: state.id, seq: state.seq ?? 0)
-        if editor != nil, editorKey == key { return }
-        let order = editorKey?.matchID == state.id ? editor?.rackFaces : nil
+        let key = RummyEditorKey(state)
+        let seq = state.seq ?? 0
         let table = state.table ?? []
+        if let current = editor, editorKey == key {
+            // 같은 차례. seq 가 그대로면 메아리·폴링이고, 올랐으면 남의 기권이다(차례·마감·작업 판은 그대로) —
+            // 확정 판·내 랙이 그대로인 한 작업을 덮지 않는다.
+            if editorSeq == seq || current.standsOn(table: table, rack: rack) {
+                editorSeq = seq
+                return
+            }
+        }
+        let order = editorKey?.matchID == state.id ? editor?.rackFaces : nil
         let fresh = RummyTurnEditor(
             table: table, rack: rack, initialDone: state.myInitialDone ?? false, rackOrder: order)
         editor = fresh
         editorKey = key
+        editorSeq = seq
         cancelDraft()
         draftRetryCount = 0
         // 서버가 들고 있는 작업 판. 새 차례면 null(= 시작 판)이다.
@@ -207,7 +216,8 @@ extension RummyStore {
         }
         guard state.status == .active else { return }
         let myTurn = Self.isMyTurn(state, me: myUserID)
-        let turnKey = "\(id.uuidString.lowercased())#\(state.seq ?? 0)"
+        // 같은 차례(남의 기권으로 seq 만 올랐다)에 알림을 또 울리지 않게 차례 정체성으로 가른다.
+        let turnKey = RummyEditorKey(state).text
         let windowShown = isWindowVisible && !isWindowOccluded
         if !startAnnouncedIDs.contains(id) {
             // 판으로 **처음** 넘어갔다 — 창을 띄우고 주의를 끈다(테트리스 noteMatchStarted 와 같은 길).
@@ -298,7 +308,8 @@ extension RummyStore {
         }
     }
 
-    /// 완료·뽑기 응답. 거절에도 state 가 실려 오면 그대로 맞춘다(같은 seq 면 편집기는 남는다 — 고쳐서 다시 낼 수 있게).
+    /// 완료·뽑기 응답. 거절에도 state 가 실려 오면 그대로 맞춘다(같은 차례면 편집기는 남는다 — 고쳐서 다시 낼 수 있게).
+    /// 확정되지 않았으면(거절·stale·실패) 걷었던 작업 상태 전송을 다시 건다 — 서버 작업 판이 내 화면에 머물게(R-19).
     func handleTurnResult(
         _ result: Result<RummyActionResponse, any Error>, matchID: UUID, ticket: Int, action: RummyNoticeText.Action
     ) {
@@ -308,21 +319,45 @@ extension RummyStore {
             switch response.status {
             case .ok:
                 setNotice(nil)
+                if let state = response.state { applyState(state, ticket: ticket) }
+                return
             case .rejected:
                 let reason = response.reason ?? .unknown
                 setNotice(RummyNoticeText.reason(reason, initialPoints: editor?.initialPoints)
                           ?? RummyNoticeText.tryAgain)
+            case .stale, .notYourTurn:
+                // stale 은 "판이 바뀌었다" 일 뿐이다 — 실린 state 를 먼저 맞추고, 그래도 내 차례면 차례를 잃었다고 말하지 않는다.
+                Self.logger.notice(
+                    "\(action.rawValue, privacy: .public) refused status=\(response.status.rawValue, privacy: .public)")
+                if let state = response.state {
+                    applyState(state, ticket: ticket)
+                    noteTurnRefusal()
+                } else {
+                    Task { [weak self] in
+                        await self?.refreshMatch(id: matchID)
+                        self?.noteTurnRefusal()
+                    }
+                }
+                scheduleDraft()
+                return
             default:
                 noteRefusal(response, action: action)
             }
             if let state = response.state {
                 applyState(state, ticket: ticket)
-            } else if response.status != .ok {
+            } else {
                 Task { [weak self] in await self?.refreshMatch(id: matchID) }
             }
         case .failure(let error):
             noteActionFailure(error)
         }
+        // 내 차례가 아니면(넘어갔다) `scheduleDraft` 가 스스로 거른다.
+        scheduleDraft()
+    }
+
+    /// 완료·뽑기의 stale·not_your_turn 한 줄 — 맞춘 state 에서 여전히 내 차례면 "판이 바뀌었어요", 아니면 "차례가 넘어갔어요".
+    func noteTurnRefusal() {
+        setNotice(isMyTurn ? RummyNoticeText.tableChanged : RummyNoticeText.turnPassed)
     }
 
     // MARK: - 작업 상태 전송(머리말 ⑨)
@@ -355,7 +390,8 @@ extension RummyStore {
         draftInFlight = true
         lastSentDraft = table
         let matchID = current.id
-        let seq = key.seq
+        // 편집기가 선 seq 가 아니라 지금 든 판의 seq — 같은 차례에 남의 기권으로 오를 수 있다.
+        let seq = current.seq ?? 0
         let generation = resetGeneration
         draftFlushTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -366,7 +402,7 @@ extension RummyStore {
             guard generation == self.resetGeneration else { return }
             self.draftInFlight = false
             let sameTurn = self.editorKey == key
-            var retry = false
+            var retryAfter: TimeInterval?
             switch result {
             case .success(let response)?:
                 self.noteServerNow(response.serverNowMs)
@@ -374,31 +410,35 @@ extension RummyStore {
                 case .ok:
                     self.draftRetryCount = 0
                 case .stale, .notYourTurn, .notActive:
-                    // 차례가 이미 넘어갔다 — 실려 온 state 로 맞춘다(편집기는 새 seq 로 다시 선다).
+                    // 실려 온 state 로 맞춘다 — 차례가 넘어갔으면 편집기는 새 차례로 다시 선다.
                     if let state = response.state {
                         self.applyState(state, ticket: ticket)
                     } else {
                         await self.refreshMatch(id: matchID)
+                    }
+                    // 같은 차례인데 seq 만 올랐다(남의 기권) — 서버가 이 판을 버렸으니 새 seq 로 한 번 더 보낸다.
+                    if self.editorKey == key, self.isMyTurn, (self.match?.seq ?? 0) != seq {
+                        retryAfter = self.draftDebounceSeconds
                     }
                 case .malformed:
                     if sameTurn { self.setNotice(RummyNoticeText.reason(.malformed, initialPoints: nil)) }
                 case .unsupportedClient:
                     self.noteUpdateRequired()
                 default:
-                    retry = sameTurn
+                    if sameTurn { retryAfter = Self.draftRetrySeconds }
                 }
             case .failure(let error)?:
                 if self.isSchemaMissing(error) { self.noteServerMissing() }
-                retry = sameTurn
+                if sameTurn { retryAfter = Self.draftRetrySeconds }
             case nil:
-                retry = sameTurn
+                if sameTurn { retryAfter = Self.draftRetrySeconds }
             }
-            if retry, self.editorKey == key {
+            if let retryAfter, self.editorKey == key {
                 // 서버가 이 판을 못 받았다 — 다음 보내기가 같은 판이라고 건너뛰지 않게 기억을 지운다.
                 self.lastSentDraft = nil
                 if !self.draftDirty, self.draftRetryCount < Self.draftRetryLimit {
                     self.draftRetryCount += 1
-                    self.scheduleDraft(after: Self.draftRetrySeconds)
+                    self.scheduleDraft(after: retryAfter)
                 }
             }
             if self.draftDirty, self.editorKey == key {
@@ -425,7 +465,7 @@ extension RummyStore {
               let deadline = deviceDate(serverMs: current.turnDeadlineMs) else { return }
         let grace = (current.graceMs.map { $0 / 1000 }) ?? Self.defaultGraceSeconds
         guard now >= deadline.addingTimeInterval(grace + Self.deadlineSlackSeconds) else { return }
-        let key = "\(current.id.uuidString.lowercased())#\(current.seq ?? 0)"
+        let key = RummyEditorKey(current).text
         if deadlineFetchKey == key {
             guard deadlineFetchCount < Self.deadlineRetryLimit,
                   now.timeIntervalSince(lastDeadlineFetchAt) >= Self.deadlineRetrySeconds else { return }
@@ -437,7 +477,7 @@ extension RummyStore {
         lastDeadlineFetchAt = now
         await refreshMatch(id: current.id)
         // 여전히 같은 차례(서버가 아직 안 따라잡았다) — 한 번 더 깨운다.
-        if let after = match, "\(after.id.uuidString.lowercased())#\(after.seq ?? 0)" == key {
+        if let after = match, RummyEditorKey(after).text == key {
             deadlineWakeKey = nil
             scheduleDeadlineWake()
         }
@@ -454,7 +494,7 @@ extension RummyStore {
             }
             return
         }
-        let wakeKey = "\(current.id.uuidString.lowercased())#\(current.seq ?? 0)#\(current.turnDeadlineMs ?? 0)"
+        let wakeKey = "\(RummyEditorKey(current).text)#\(current.turnDeadlineMs ?? 0)"
         guard deadlineWakeKey != wakeKey else { return }
         deadlineWakeKey = wakeKey
         deadlineTask?.cancel()

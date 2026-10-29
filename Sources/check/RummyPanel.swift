@@ -16,7 +16,8 @@ import CheckCore
 // 스토어는 서버 권위라 상태를 밖에서 못 넣는다(`private(set)`). 렌더 시험은 `previewLobby`·`previewMatch`·`previewEditor`·
 // `previewNow` 를 넘겨 그 값으로 그린다(테트리스 `previewXxx` 와 같은 방식). 앱은 전부 nil 이다.
 
-/// 화면 고정 글자 — 판정·서버 응답 문구는 여기 두지 않는다(스토어 `notice`).
+/// 화면 고정 글자 — 서버 응답 문구는 여기 두지 않는다(스토어 `notice`). 판정 이유 한 줄은 설계서 §4.3 표
+/// (`RummyNoticeText.reason`)를 그대로 빌려 쓴다(`myTurnStatus`).
 enum RummyText {
     static let title = "아잉 큐브"
     static let subtitle = "2~4명이 숫자 타일로 묶음을 만들어 랙을 먼저 비우는 게임"
@@ -27,7 +28,9 @@ enum RummyText {
     static let rankTab = "순위"
     static let publicRoomsTitle = "공개 방"
     static let noPublicRooms = "지금 열린 공개 방이 없어요"
-    static let peopleCaption = "방장이 되면 여기서 사람을 골라 초대해요"
+    static let peopleCaptionNoRoom = "방장이 되면 여기서 사람을 골라 초대해요"
+    static let peopleCaptionHost = "초대할 사람을 골라요"
+    static let peopleCaptionGuest = "방장만 초대할 수 있어요"
     static let emptyUsers = "함께할 사람이 아직 없어요"
     static let loadingUsers = "사람 목록을 불러오는 중…"
     static let join = "참가"
@@ -99,6 +102,27 @@ enum RummyText {
     static func turnOf(_ name: String) -> String { "\(name)님 차례예요" }
 
     static func initialProgress(_ points: Int) -> String { "첫 등록 \(points)/30점" }
+
+    /// 로비 사람 목록 머리 — 방이 없으면 방장이 되는 법, 내가 방장이면 고르라는 말, 남의 방이면 못 한다는 말.
+    static func peopleCaption(inRoom: Bool, amHost: Bool) -> String {
+        guard inRoom else { return peopleCaptionNoRoom }
+        return amHost ? peopleCaptionHost : peopleCaptionGuest
+    }
+
+    /// 내 차례 상태 줄(알림 `notice` 가 없을 때). 첫 등록 전에는 진행 점수(판 묶음을 건드렸으면 그 이유),
+    /// 첫 등록 뒤 판을 바꿨는데 [완료]가 꺼져 있으면 꺼진 이유(§4.3 표), 아니면 끌어 놓으라는 말.
+    static func myTurnStatus(_ editor: RummyTurnEditor) -> String {
+        let reason = editor.reason
+        if !editor.initialDone {
+            if reason == .initialTableTouched, let why = RummyNoticeText.reason(reason, initialPoints: nil) { return why }
+            return initialProgress(editor.initialPoints)
+        }
+        if reason != .ok, editor.isChanged,
+           let why = RummyNoticeText.reason(reason, initialPoints: editor.initialPoints) {
+            return why
+        }
+        return myTurn
+    }
 
     static func seconds(_ value: Int) -> String { "\(value)초" }
 

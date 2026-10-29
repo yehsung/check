@@ -21,6 +21,8 @@ package nonisolated enum RummyNoticeText {
     /// 시작 검사에서 **내가** 빠졌다.
     package static let droppedFromRoom = "루비가 모자라거나 다른 게임 중이라 방에서 빠졌어요"
     package static let turnPassed = "차례가 이미 넘어갔어요"
+    /// 완료·뽑기가 stale 인데 차례는 아직 내 것이다(남의 기권 등으로 판의 seq 가 올랐다 — 시간은 남아 있다).
+    package static let tableChanged = "판이 바뀌었어요. 확인하고 다시 눌러 주세요"
     package static let finishedMatch = "이미 끝난 판이에요"
     /// 말풍선 — 창이 안 보일 때 내 차례가 왔다(설계서 §5).
     package static let myTurnAttention = "아잉 큐브 — 내 차례예요"
@@ -77,7 +79,13 @@ package nonisolated enum RummyNoticeText {
         case .alreadyInvited: return "이미 초대한 사람이에요"
         case .notInvited: return "초대받지 않은 방이에요"
         case .notFound: return action == .play || action == .draw ? finishedMatch : roomClosed
-        case .notYourTurn, .stale: return turnPassed
+        case .notYourTurn: return turnPassed
+        case .stale:
+            // 차례 동작의 stale 만 "차례가 넘어갔다" 쪽이다. 시작의 stale 은 지갑 키 경합(30_room.sql) — 다시 시도.
+            switch action {
+            case .play, .draw, .draft: return turnPassed
+            default: return tryAgain
+            }
         case .notActive: return finishedMatch
         case .malformed: return reason(.malformed, initialPoints: nil) ?? tryAgain
         case .invalid:

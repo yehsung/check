@@ -197,7 +197,8 @@ private func rkState(
     _ status: String = "active", id: UUID = rkMatch, seq: Int = 1, turnSeat: Int? = 0, mySeat: Int? = 0,
     myRack: [String]? = rkRack, table: [[String]] = [], draft: [String: Any]? = nil,
     seats: [[String: Any]]? = nil, nowMs: Double = rkNowMs, deadlineMs: Double? = nil,
-    expiresMs: Double? = nil, endReason: String? = nil, host: UUID = rkMe, poolCount: Int = 78
+    expiresMs: Double? = nil, endReason: String? = nil, host: UUID = rkMe, poolCount: Int = 78,
+    turnStartedMs: Double? = nil
 ) -> [String: Any] {
     let defaultSeats: [[String: Any]] = status == "forming"
         ? [rkSeat(0, rkMe, "나", state: "joined", rackCount: 0)]
@@ -210,7 +211,7 @@ private func rkState(
         "seats": seats ?? defaultSeats, "my_seat_no": rkOpt(mySeat),
         "my_rack": rkOpt(active ? myRack : nil), "my_initial_done": false,
         "table": table, "pool_count": poolCount,
-        "turn_seat_no": rkOpt(active ? turnSeat : nil), "turn_started_ms": rkOpt(active ? nowMs : nil),
+        "turn_seat_no": rkOpt(active ? turnSeat : nil), "turn_started_ms": rkOpt(active ? (turnStartedMs ?? nowMs) : nil),
         "turn_deadline_ms": rkOpt(active ? (deadlineMs ?? nowMs + 60_000) : nil), "grace_ms": 2000,
         "draft": rkOpt(draft), "consecutive_passes": 0,
         "last_event": active ? (["kind": "start", "seat_no": 0, "count": 14, "at_ms": nowMs] as [String: Any]) as Any
@@ -550,7 +551,8 @@ struct V0369RummyStoreTests {
         #expect(store.phase == .playing)
         #expect(store.isMyTurn)
         #expect(store.editor?.rackFaces == rkFaces(rkRack))
-        #expect(store.editorKey == RummyEditorKey(matchID: rkMatch, seq: 1))
+        #expect(store.editorKey?.matchID == rkMatch && store.editorKey?.turnSeatNo == 0)
+        #expect(store.editorSeq == 1)
         #expect(tally.presents == 1)
         #expect(tally.attentionRequests == 1)
         #expect(tally.attentions == [RummyNoticeText.myTurnAttention])
@@ -568,7 +570,7 @@ struct V0369RummyStoreTests {
         #expect(play["p_table"] as? [[String]] == played)
         #expect(store.match?.seq == 2)
         #expect(!store.isMyTurn)
-        #expect(store.editorKey?.seq == 2)
+        #expect(store.editorSeq == 2)
         #expect(Set(store.editor?.rackFaces ?? []) == Set(rkFaces(restRack)))
         #expect(store.otherDraft == nil)
 
@@ -671,10 +673,10 @@ struct V0369RummyStoreTests {
         let echo: [String: Any] = ["table": [["A1"]], "draft_seq": 1, "at_ms": rkNowMs]
         store.applyState(try state(rkState(seq: 1, myRack: ["D9"], draft: echo)))
         #expect(store.editor?.rackFaces == rkFaces(["A1", "A2", "A3"]))
-        #expect(store.editorKey?.seq == 1)
+        #expect(store.editorSeq == 1)
         // seq 가 바뀌었다 — 새 랙으로.
         store.applyState(try state(rkState(seq: 2, turnSeat: 1, myRack: ["A1", "A2", "A3", "C4"])))
-        #expect(store.editorKey?.seq == 2)
+        #expect(store.editorSeq == 2)
         #expect(Set(store.editor?.rackFaces ?? []) == Set(rkFaces(["A1", "A2", "A3", "C4"])))
         // 기권한 자리 — 편집기 없음, 내 차례도 아님.
         let forfeited = [rkSeat(0, rkMe, "나", state: "forfeit", rackCount: 0, forfeitOrder: 1),
@@ -764,7 +766,7 @@ struct V0369RummyStoreTests {
         await rkSettleDraft(store)
         #expect(rkCount(host, "rummy_draft") == 1)
         #expect(store.match?.seq == 7)
-        #expect(store.editorKey?.seq == 7)
+        #expect(store.editorSeq == 7)
         #expect(!store.isMyTurn)
     }
 
@@ -815,7 +817,7 @@ struct V0369RummyStoreTests {
         #expect(rkCount(host, "rummy_play") == 1)
         #expect(store.notice == "맞지 않는 묶음이 있어요.")
         #expect(store.editor == working)
-        #expect(store.editorKey?.seq == 5)
+        #expect(store.editorSeq == 5)
 
         script.enqueue("rummy_draw", rkEnvelope(state: rkState(seq: 6, turnSeat: 1, myRack: rkRack + ["C13"])))
         store.drawTile()
@@ -873,16 +875,18 @@ struct V0369RummyStoreTests {
         func state(_ object: [String: Any]) throws -> RummyMatchState {
             try #require(try rkDecode(RummyActionResponse.self, rkEnvelope(state: object)).state)
         }
+        // 차례가 넘어갈 때마다 서버는 turn_started_ms 를 새로 찍는다(차례 정체성 = 판 · 차례 자리 · 차례 시작 시각).
         store.isWindowVisible = true
         store.applyState(try state(rkState(seq: 1, turnSeat: 1)))
         #expect(tally.presents == 1)
         #expect(tally.attentions.isEmpty)
-        store.applyState(try state(rkState(seq: 2, turnSeat: 0)))   // 창이 보이는 내 차례 — 말풍선 없음
+        store.applyState(try state(rkState(seq: 2, turnSeat: 0, nowMs: rkNowMs + 1_000)))   // 창이 보이는 내 차례 — 말풍선 없음
         #expect(tally.attentions.isEmpty)
         store.isWindowVisible = false
-        store.applyState(try state(rkState(seq: 3, turnSeat: 1)))
-        store.applyState(try state(rkState(seq: 4, turnSeat: 0)))
-        store.applyState(try state(rkState(seq: 4, turnSeat: 0, draft: ["table": [] as [Any], "draft_seq": 1])))
+        store.applyState(try state(rkState(seq: 3, turnSeat: 1, nowMs: rkNowMs + 2_000)))
+        store.applyState(try state(rkState(seq: 4, turnSeat: 0, nowMs: rkNowMs + 3_000)))
+        store.applyState(try state(rkState(seq: 4, turnSeat: 0, draft: ["table": [] as [Any], "draft_seq": 1],
+                                           nowMs: rkNowMs + 3_000)))
         #expect(tally.attentions == [RummyNoticeText.myTurnAttention])
         #expect(tally.attentionRequests == 1)
         #expect(tally.presents == 1)
@@ -952,10 +956,12 @@ struct V0369RummyStoreTests {
         let other = try rkDecode(RummyActionResponse.self, rkEnvelope(state: rkState(seq: 1, turnSeat: 1)))
         store.applyState(try #require(other.state))
         /// 서버 시계도 같이 흐른다(응답의 server_now_ms = 그 순간).
+        /// 같은 차례면 turn_started_ms 는 그대로다(server_now 만 흐른다). 새 차례는 마감 − 60초에 시작했다.
         func check(_ seconds: TimeInterval, seq: Int = 1, turnSeat: Int = 1, deadlineMs: Double = rkNowMs + 60_000) async {
             clock.wall = rkWall0.addingTimeInterval(seconds)
             script.stand("rummy_state", rkEnvelope(state: rkState(
-                seq: seq, turnSeat: turnSeat, nowMs: rkNowMs + seconds * 1000, deadlineMs: deadlineMs)))
+                seq: seq, turnSeat: turnSeat, nowMs: rkNowMs + seconds * 1000, deadlineMs: deadlineMs,
+                turnStartedMs: deadlineMs - 60_000)))
             await store.checkDeadline(at: clock.wall)
         }
         await check(62.4)

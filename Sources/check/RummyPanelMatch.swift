@@ -450,13 +450,13 @@ struct RummyMatchView: View {
         .padding(.horizontal, 4)
     }
 
-    /// 상태 줄 글자 — 서버·판정 문구는 스토어 `notice`, 첫 등록 진행은 `editor.initialPoints`, 색은 `editor.canSubmit`.
+    /// 상태 줄 글자 — 서버·판정 문구는 스토어 `notice`, 내 차례 글자는 `RummyText.myTurnStatus`(첫 등록 진행 ·
+    /// [완료]가 꺼진 이유), 색은 `editor.canSubmit`.
     private var statusText: (text: String, tint: Color) {
         if let notice = scene.notice { return (notice, CheckTheme.pending) }
         if isMyTurn, let editor {
             let tint = editor.canSubmit ? CheckTheme.working : CheckTheme.primaryText
-            if !editor.initialDone { return (RummyText.initialProgress(editor.initialPoints), tint) }
-            return (RummyText.myTurn, tint)
+            return (RummyText.myTurnStatus(editor), tint)
         }
         if let name = scene.turnSeat?.displayName { return (RummyText.turnOf(name), CheckTheme.secondaryText) }
         return ("", CheckTheme.secondaryText)

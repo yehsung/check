@@ -195,6 +195,16 @@ package struct RummyTurnEditor: Equatable, Sendable {
     }
 
     /// !sameTable(작업 판, 시작 판) — 세트 안 순서만 바꿨거나 쪼갰다 되돌린 것은 "안 바뀜"(R-19·R-09).
+    /// 이 편집기가 그 확정 판·랙에서 시작했는가(판은 K 비교, 랙은 순서 무관). 같은 차례에 seq 만 오른 state 가 와도
+    /// 이것이 참이면 편집기를 덮지 않는다.
+    package func standsOn(table: [[RummyFace]], rack: [RummyFace]) -> Bool {
+        guard RummyRules.sameTable(table, startTable), rack.count == startRack.count else { return false }
+        var counts: [RummyFace: Int] = [:]
+        for face in startRack { counts[face, default: 0] += 1 }
+        for face in rack { counts[face, default: 0] -= 1 }
+        return counts.values.allSatisfy { $0 == 0 }
+    }
+
     package var isChanged: Bool {
         !RummyRules.sameTable(submissionTable, startTable)
     }

@@ -5,7 +5,8 @@ import CheckCore
 
 // MARK: - 길건너 아잉이 (v0.3.67) — 잎 뷰
 //
-// 미니게임 넷째. 규칙은 `CrossyGame`(코어 순수 값 — 폰이 다음 판에 그대로 쓴다)에, 3D 판은 `CrossyScene`
+// 미니게임 넷째. 규칙은 `CrossyGame`(코어 순수 값)에, 3D 판은 `CrossyScene`(**코어** —
+// Sources/CheckCore/CrossyScene.swift, 폰 1.0.15 에서 옮겼다), 아잉이 모델 다리는 `CrossyMacAing`
 // (MiniGameCrossyScene.swift)에, 이 파일에는 **틀**만 있다 — 프레임 루프 · 입력 · 점수 글자 · 시작/결과 카드.
 // 허브(미니게임 창)는 `MiniGameHost` 와 `MiniGameInput` 만 건네고 이 뷰는 그 둘 말고는 아무것도 읽지 않는다
 // (플래피 · 타이밍 바 · 테트리스와 **같은 계약** — MiniGame.swift 머리 주석).
@@ -32,7 +33,8 @@ struct CrossyGameView: View {
     @State private var lastTick: Date?
     /// 3D 판(노드 풀 포함). 뷰가 사는 동안 하나다 — 새 판은 같은 씬에서 줄만 갈아 끼운다.
     /// `@StateObject` 라 **처음 한 번만** 만든다(`CrossyScene` 머리 주석 — `@State` 면 다시 지을 때마다 모델을 다시 읽는다).
-    @StateObject private var scene = CrossyScene()
+    /// `.mac()` 이 맥의 아잉이 모델 다리를 끼운다(`CrossyMacAing`) — 로더는 코어에서 **필수 인자**다.
+    @StateObject private var scene = CrossyScene.mac()
 
     init(host: MiniGameHost, input: MiniGameInput, initialGame: CrossyGame? = nil) {
         self.host = host
@@ -145,12 +147,9 @@ struct CrossyHUD: View {
     }
 
     /// 결과 카드 가운데 줄 — 무엇에 끝났는가 + 최고(또는 신기록).
+    /// **글자는 코어 한 벌**(`CrossyResultText`)이다 — 폰 1.0.15 의 결과 카드가 같은 문장을 쓴다(두 벌로 적으면 갈린다).
     static func resultSubtitle(score: Int, best: Int, cause: CrossyGame.DeathCause?) -> String {
-        let reason = cause?.caption
-        if score > best {
-            return reason.map { "신기록! · " + $0 } ?? "신기록!"
-        }
-        return (reason.map { $0 + " · " } ?? "") + "최고 " + String(best)
+        CrossyResultText.subtitle(score: score, best: best, cause: cause)
     }
 
     @ViewBuilder

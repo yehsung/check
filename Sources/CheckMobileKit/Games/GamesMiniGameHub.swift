@@ -40,8 +40,8 @@ package struct GamesMiniGameBoard: Equatable {
 /// 6. `minigame_public == false` 면 토큰도 제출도 없다(설정 문구가 약속한 "올라가지도 않아요").
 ///
 /// 폰 규칙: 앱이 background 로 가거나 화면을 떠나면 판을 **끝낸다**(`endRound()`). 무엇을 하는지는 게임마다 다르다 —
-/// 타이밍 바·플래피는 예전처럼 기록 없이 버리고, **테트리스는 여기까지의 점수로 확정해 제출한다**(까닭은
-/// `GamesPlayController.endRound()` 주석: 폰에서 background 는 비용 0.05초짜리 무한 일시정지다).
+/// 타이밍 바·플래피는 예전처럼 기록 없이 버리고, **테트리스·길건너는 여기까지의 점수로 확정해 제출한다**(까닭은
+/// `GamesPlayController.endRound()` 주석: 폰에서 background 는 비용 0.03~0.05초짜리 무한 일시정지다).
 /// 로그아웃(`reset`)과 화면 경합 정리(`openScreen`)는 **`abandon()` 그대로**다 — 셋의 의도가 다르다.
 ///
 /// 제출 인편(`pendingSubmit`): 제출이 **네트워크로** 실패하면 (게임, 점수, 토큰)을 들고 있다가 앱이 다시 active 가 될 때
@@ -185,7 +185,7 @@ package final class GamesMiniGameHub {
         }
     }
 
-    /// 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스는 여기까지의 점수로 확정 제출).
+    /// 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스·길건너는 여기까지의 점수로 확정 제출).
     /// 토큰은 들고 있는다(재사용 나이 안에 다시 열면 그대로 쓴다).
     ///
     /// 안내 한 줄은 세우지 않는다 — 이 화면은 지금 사라지는 중이고, 다시 열면 `openScreen` 이 어차피 비운다.
@@ -197,7 +197,7 @@ package final class GamesMiniGameHub {
     }
 
     /// 앱이 background 로 간다 — 판은 끝. 기존 두 게임은 제출하지 않고(SPEC-ios §3.5),
-    /// **테트리스는 여기까지의 점수로 확정 제출한다**(`GamesPlayController.endRound()`).
+    /// **테트리스·길건너는 여기까지의 점수로 확정 제출한다**(`GamesPlayController.endRound()`).
     package func appDidEnterBackground() {
         guard let controller else { return }
         switch controller.endRound() {
@@ -302,6 +302,8 @@ package final class GamesMiniGameHub {
     package func beginRound(kind: MiniGameKind) {
         // 판 벽시계 상한은 **가드보다 먼저** 건다: 순위 공정성 장치라 공개 여부·로그인과 무관하다.
         // 기존 두 게임은 nil(판이 스스로 끝나거나 자동잠금이 상한이다 — `GamesStore.wantsIdleTimerDisabled`).
+        // **길건너도 nil 이다**(폰 1.0.15 D4): `CrossyGame.idleLimit` 9초가 가만히 있는 판을 이미 죽이므로
+        // 벽시계 상한이 할 일이 없다(테트리스는 조각을 세워 두고 생각하는 무입력 구간이 있어 필요했다).
         //
         // ⚠️ **길이를 건넨다(절대 시각이 아니다).** 마감을 재는 축은 구동기의 `tick(at:)` 하나뿐인데 그 `now` 는
         //    `TimelineView` 가 주는 실제 벽시계다 — 여기서 `context.clock.now()` 로 찍으면 두 축이 섞여

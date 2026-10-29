@@ -117,15 +117,14 @@ package enum GamesMiniGameText {
     package static let submitTokenDead = "이번 판은 순위에 못 올렸어요 — 다음 판부터 다시 올라가요"
 
     /// 앱이 background 로 가서 판을 끝냈다(폰 전용 — SPEC-ios §3.5). **게임마다 말이 다르다**:
-    /// 기존 두 게임은 점수를 버리고, 테트리스는 여기까지의 점수를 **확정해 올린다**(`GamesPlayController.endRound()`).
-    /// 테트리스에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다 — 점수는 이미 나갔다.
+    /// 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를 **확정해 올린다**(`GamesPlayController.endRound()`).
+    /// 그 둘에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다 — 점수는 이미 나갔다.
     package static func endedInBackground(_ kind: MiniGameKind) -> String {
         switch kind {
         case .timingBar, .flappy: return "앱을 나가서 이번 판은 기록하지 않았어요"
-        case .tetris: return "앱을 나가서 이번 판을 여기까지 기록했어요"
-        // 길건너 아잉이(v0.3.67)는 폰에 아직 없다(`phoneCases`) — 망라 switch 를 지키는 자리다. 폰 판이 붙으면 그 판의
-        // `endRound` 의미론(확정인가 버림인가)에 맞춰 다시 적는다.
-        case .crossy: return "앱을 나가서 이번 판은 기록하지 않았어요"
+        // 길건너도 확정 쪽이다(폰 1.0.15 D4 — 차·기차가 움직이는 게임이라 background 를 무한 일시정지로 두면
+        // 마음대로 멈출 수 있는 게임이 된다). 그래서 테트리스와 **같은 문장**이다.
+        case .tetris, .crossy: return "앱을 나가서 이번 판을 여기까지 기록했어요"
         }
     }
     /// 공개를 끈 사람(맥 설정 문구 "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요." 와 같은 뜻).
@@ -147,7 +146,12 @@ package enum GamesMiniGameText {
         // 반시계다) 그 사실을 말하는 자리가 시작 카드뿐이라, 빼면 아무도 시계 회전을 못 찾는다.
         // 홀드·즉시 내리기는 글자가 붙은 진짜 버튼이라 여기서는 어디에 있는지만 가리킨다.
         case .tetris: return kind.howToPlay + "\n끌어서 이동 · 탭해서 회전 · 버튼으로 홀드·즉시 내리기"
-        case .crossy: return kind.howToPlay   // 폰에 없음(위 endedInBackground 주석)
+        // 길건너도 두 줄이다. 규칙 줄은 코어 한 벌, 조작 줄만 폰 것이다.
+        //
+        // ⚠️ **"쓸어서"와 "탭하면 앞으로"가 둘 다 있어야 한다.** 맥은 방향키 넷이라 한 줄로 끝나지만 폰은 조작이
+        // 둘로 갈린다(쓸기 = 그 방향 한 칸 · 탭 = 앞으로 한 칸). 그 사실을 말하는 자리가 시작 카드뿐이라,
+        // 하나만 적으면 쓸기를 모르는 사람은 뒤·좌·우로 갈 길을 영영 못 찾는다.
+        case .crossy: return kind.howToPlay + "\n쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸"
         }
     }
 
@@ -176,7 +180,10 @@ package enum GamesMiniGameText {
         switch kind {
         case .timingBar, .flappy: return "\(kind.title) 게임 화면 — 탭해서 조작"
         case .tetris: return "\(kind.title) 게임 화면 — 탭해서 회전 · 이동은 액션으로"
-        case .crossy: return "\(kind.title) 게임 화면"   // 폰에 없음(위 endedInBackground 주석)
+        // 길건너는 테트리스와 달리 **직접 조작 트레잇을 그대로 둔다**(`allowsDirectInteraction` — 두 게임과 같은 쪽).
+        // 쓸기·탭이 곧 게임이고 겨냥할 작은 과녁이 없기 때문이다. 그래서 보이스오버 방향 액션을 따로 내지 않고
+        // 라벨이 조작 둘을 그대로 말한다.
+        case .crossy: return "\(kind.title) 게임 화면 — 탭해서 앞으로 · 쓸어서 그 방향으로"
         }
     }
 

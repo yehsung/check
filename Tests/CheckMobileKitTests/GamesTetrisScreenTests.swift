@@ -221,17 +221,19 @@ import Testing
 
         let screen = try IntegrationContractTests.code(Self.screenPath)
         // 래치가 **판을 실제로 켰을 때만** 표시한다. 조건 없이 표시하면 진행 중이던 판의 탭까지 삼켜 회전이 사라진다.
+        // 폰 1.0.15: 게이트가 `kind == .tetris` 에서 **코어 한 곳**(`MiniGameKind.usesCanvasDragTracker` → 화면의
+        // `usesDragTracker`)으로 옮겼고, 길건너가 같은 배선을 쓴다. 재는 성질은 그대로다.
         #expect(screen.contains(
-            "if kind == .tetris, !wasPlaying, controller.isPlaying { swallowsTetrisDragEnd = value.startLocation }"))
+            "if usesDragTracker, !wasPlaying, controller.isPlaying { swallowsCanvasDragEnd = value.startLocation }"))
         // 불리언이 아니라 **시작점**이다: `onEnded` 는 늘 오지 않는다(시스템 제스처·전화 수신으로 취소되면 안 온다).
         // 참인 채로 남으면 그다음 **멀쩡한 탭**의 회전이 대신 삼켜진다.
-        #expect(screen.contains("@State private var swallowsTetrisDragEnd: CGPoint?"))
-        #expect(screen.contains("guard swallowsTetrisDragEnd != value.startLocation else {"))
-        #expect(!screen.contains("swallowsTetrisDragEnd = true") && !screen.contains("swallowsTetrisDragEnd: Bool"))
+        #expect(screen.contains("@State private var swallowsCanvasDragEnd: CGPoint?"))
+        #expect(screen.contains("guard swallowsCanvasDragEnd != value.startLocation else {"))
+        #expect(!screen.contains("swallowsCanvasDragEnd = true") && !screen.contains("swallowsCanvasDragEnd: Bool"))
         // 갈래는 `kind` 가 아니라 **'진행 중인가'** 다 — 시작 화면에서는 테트리스도 래치가 판을 켠다
         // (트래커로만 받으면 tapMaxDuration 0.25초를 넘겨 천천히 뗀 사람에게 시작이 안 되고, 그건 '고장'으로 읽힌다).
-        #expect(screen.contains("if kind == .tetris, controller.isPlaying {"))
-        #expect(!screen.contains("if kind == .tetris {\n                    controller.canvasDragChanged"),
+        #expect(screen.contains("if usesDragTracker, controller.isPlaying {"))
+        #expect(!screen.contains("if usesDragTracker {\n                    controller.canvasDragChanged"),
                 "시작 화면에서도 트래커로 받는다 — 천천히 뗀 사람에게 판이 안 켜진다")
     }
 
@@ -249,25 +251,25 @@ import Testing
 
         let screen = try IntegrationContractTests.code(Self.screenPath)
         // 트래커로 넘기는 접촉의 **시작점**을 들고 있어야 '이 손가락이 끌던 판이 끝났다'를 알아본다.
-        #expect(screen.contains("@State private var tetrisPlayContact: CGPoint?"),
+        #expect(screen.contains("@State private var trackedPlayContact: CGPoint?"),
                 "지금 조작 중인 접촉을 기억하지 않는다 — 판이 끝난 손가락을 알아볼 방법이 없다")
-        #expect(screen.contains("tetrisPlayContact = value.startLocation"), "트래커로 넘기면서 접촉을 기록하지 않는다")
-        #expect(screen.contains("if kind == .tetris, !controller.isPlaying, tetrisPlayContact == value.startLocation {"),
+        #expect(screen.contains("trackedPlayContact = value.startLocation"), "트래커로 넘기면서 접촉을 기록하지 않는다")
+        #expect(screen.contains("if usesDragTracker, !controller.isPlaying, trackedPlayContact == value.startLocation {"),
                 "판이 끝난 그 접촉을 소진하지 않는다 — 같은 손가락의 다음 onChanged 가 시작 래치를 때린다")
 
         // 소진 표시는 **시작 래치보다 앞**이어야 한다. 뒤에 있으면 이미 새 판이 켜진 뒤라 아무것도 막지 못한다.
         let changed = try #require(screen.components(separatedBy: ".onChanged { value in").dropFirst().first,
                                    "캔버스 제스처의 onChanged 를 못 찾았다 — 이 검사가 빈 문자열을 보고 있다")
         let head = try #require(changed.components(separatedBy: ".onEnded").first)
-        let consume = try #require(head.range(of: "tetrisPlayContact == value.startLocation"))
+        let consume = try #require(head.range(of: "trackedPlayContact == value.startLocation"))
         let latch = try #require(head.range(of: "controller.tap()"))
         #expect(consume.lowerBound < latch.lowerBound, "소진 표시가 시작 래치 뒤에 있다 — 이미 새 판이 켜진 뒤다")
 
         // B5(같은 뿌리): 시작 래치가 켠 접촉은 `onEnded`(회전)뿐 아니라 **`onChanged`(이동·소프트드롭)도** 삼킨다.
         // 뗌만 삼키면 그 탭이 한 칸 폭 이상 흔들릴 때 새 판 첫 조각이 곧장 옆으로 간다.
-        #expect(head.contains("swallowsTetrisDragEnd == value.startLocation { return }"),
+        #expect(head.contains("swallowsCanvasDragEnd == value.startLocation { return }"),
                 "래치가 켠 끌기의 **이동**을 안 삼킨다 — 뗌만 삼키면 B5 가 그대로 남는다")
-        let swallow = try #require(head.range(of: "swallowsTetrisDragEnd == value.startLocation"))
+        let swallow = try #require(head.range(of: "swallowsCanvasDragEnd == value.startLocation"))
         #expect(swallow.lowerBound < consume.lowerBound, "다 쓴 접촉 검사가 다른 갈래 뒤에 있다")
     }
 

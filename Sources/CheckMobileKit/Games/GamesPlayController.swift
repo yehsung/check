@@ -3,9 +3,10 @@ import CoreGraphics
 import Foundation
 import Observation
 
-/// 미니게임 한 판을 **돌리는** 것(엔진 구동). 규칙은 코어 `TimingBarGame`·`FlappyGame`·`TetrisGame` 이고, 이 타입은 맥 게임 잎 뷰
-/// (`TimingBarGameView`·`FlappyGameView`·`TetrisGameView`)가 `@State` 로 하던 일 — 탭 → 전이, 프레임 시각 → `step(dt:)`,
-/// 시작·끝 알림 — 을 뷰 밖으로 꺼냈다. 그래서 macOS `swift test` 가 "탭 입력 → 상태 전이"를 화면 없이 구동한다.
+/// 미니게임 한 판을 **돌리는** 것(엔진 구동). 규칙은 코어 `TimingBarGame`·`FlappyGame`·`TetrisGame`·`CrossyGame` 이고,
+/// 이 타입은 맥 게임 잎 뷰(`TimingBarGameView`·`FlappyGameView`·`TetrisGameView`·`CrossyGameView`)가 `@State` 로 하던
+/// 일 — 탭 → 전이, 프레임 시각 → `step(dt:)`, 시작·끝 알림 — 을 뷰 밖으로 꺼냈다. 그래서 macOS `swift test` 가
+/// "탭 입력 → 상태 전이"를 화면 없이 구동한다.
 ///
 /// 지키는 것(맥과 같다)
 /// - **물리는 논리 좌표·시간 기준이다.** 화면 크기·주사율은 이 타입에 들어오지 않는다(등비 확대는 뷰의 일, dt 는 실제 경과).
@@ -18,16 +19,16 @@ import Observation
 /// - 폰 전용 출구가 **둘**이다. 뜻이 다르므로 함수도 둘이다:
 ///   · `abandon()` — 판을 **기록 없이 버린다**(로그아웃 · 화면 경합 정리). 알리지 않으므로 제출도 없다.
 ///   · `endRound()` — 판을 **끝낸다**(뒤로가기 · 앱이 background 로 감). 타이밍 바·플래피는 버리는 것과 같고,
-///     **테트리스만 그 자리에서 점수를 확정해 알린다**(까닭은 `endRound()` 주석 — 폰에서 background 는 비용이
-///     0.05초뿐인 무한 일시정지라 살려 두면 순위표가 통째로 흔들린다).
+///     **테트리스·길건너는 그 자리에서 점수를 확정해 알린다**(까닭은 `endRound()` 주석 — 폰에서 background 는 비용이
+///     0.03~0.05초뿐인 무한 일시정지라 살려 두면 순위표가 통째로 흔들린다).
 ///
-/// 폰 테트리스 입력(끌기·탭)의 **판정도 여기 있다**(`canvasDragChanged`·`canvasDragEnded`). 트래커를 뷰 `@State` 에
-/// 두지 않은 이유가 셋이다:
+/// 폰 테트리스·길건너 입력(끌기·쓸기·탭)의 **판정도 여기 있다**(`canvasDragChanged`·`canvasDragEnded`).
+/// 트래커를 뷰 `@State` 에 두지 않은 이유가 셋이다:
 /// ① `DragGesture.Value` 에는 **시작 시각이 없다**(`time`·`location`·`startLocation`·`translation`·`velocity`·
 ///    `predictedEnd*` 뿐) — 탭 판정의 elapsed 를 내려면 누군가 첫 `time` 을 기억해야 한다.
 /// ② 트래커는 값 타입이고 `drag(...)` 이 소비량을 쓴다 — 뷰 `@State` 에 두면 **터치 이벤트마다 body 가 재평가된다**(120Hz).
-/// ③ 이 파일과 `GamesTetrisGesture.swift` 에는 `#if os(iOS)` 가 **없다** — 여기 두면 macOS `swift test` 가
-///    손가락 좌표부터 조각 위치까지 화면 없이 구동한다.
+/// ③ 이 파일과 `GamesTetrisGesture.swift`·`GamesCrossyGesture.swift` 에는 `#if os(iOS)` 가 **없다** — 여기 두면
+///    macOS `swift test` 가 손가락 좌표부터 조각 위치·아잉이 칸까지 화면 없이 구동한다.
 @MainActor
 @Observable
 package final class GamesPlayController {
@@ -37,7 +38,7 @@ package final class GamesPlayController {
         case none
         /// 기록 없이 끝냈다(타이밍 바·플래피). 알리지 않았으므로 제출도 없다.
         case abandoned
-        /// 그 점수로 **확정**했다(테트리스). `onFinished` 는 이 함수 안에서 이미 불렸다.
+        /// 그 점수로 **확정**했다(테트리스 · 길건너). `onFinished` 는 이 함수 안에서 이미 불렸다.
         case confirmed(Int)
     }
 
@@ -45,6 +46,7 @@ package final class GamesPlayController {
     package private(set) var timing: TimingBarGame
     package private(set) var flappy: FlappyGame
     package private(set) var tetris: TetrisGame
+    package private(set) var crossy: CrossyGame
     /// 탭이 판에 먹혔을 때마다 +1(가벼운 햅틱의 방아쇠). **판이 실제로 바뀌었을 때만** 올린다 —
     /// 소진된 홀드·못 도는 회전은 조용해야 한다.
     package private(set) var tapSerial = 0
@@ -80,11 +82,15 @@ package final class GamesPlayController {
     @ObservationIgnored private var reportedFinish = false
     @ObservationIgnored private var seedSource: UInt64
 
-    // MARK: 테트리스 제스처(폰 전용 · 화면 없이 구동된다)
+    // MARK: 캔버스 제스처(폰 전용 · 화면 없이 구동된다)
 
     @ObservationIgnored private var gesture = TetrisGestureTracker(
         thresholds: TetrisGestureThresholds(cellWidth: TetrisLayout.cell))
+    /// 길건너 트래커. 테트리스 것과 **따로** 두는 까닭은 규약이 다르기 때문이다 — 저쪽은 누적 소비량으로 여러 칸,
+    /// 이쪽은 한 접촉 = 한 칸이고 떼기를 기다리지 않는다(`CrossyGestureTracker` 머리 주석).
+    @ObservationIgnored private var crossyGesture = CrossyGestureTracker()
     /// 지금 따라가는 접촉의 시작점·첫 프레임 시각. 시작점이 바뀌면 새 접촉이다(`onEnded` 는 늘 오지 않는다).
+    /// 두 게임이 **같은 칸**을 쓴다 — 구동기 하나는 게임 하나를 돌리므로 섞일 일이 없다.
     @ObservationIgnored private var gestureStartLocation: CGPoint?
     @ObservationIgnored private var gestureStartedAt: Date?
 
@@ -94,6 +100,7 @@ package final class GamesPlayController {
         timing = TimingBarGame(seed: seed)
         flappy = FlappyGame(seed: seed)
         tetris = TetrisGame(seed: seed)
+        crossy = CrossyGame(seed: seed)
     }
 
     // MARK: 읽기
@@ -104,9 +111,9 @@ package final class GamesPlayController {
         case .timingBar: return timing.isPlaying
         case .flappy: return flappy.isPlaying
         case .tetris: return tetris.isPlaying
-        // 길건너 아잉이(v0.3.67)는 폰에 아직 없다 — `MiniGameKind.phoneCases` 가 거르므로 이 구동기가 crossy 로
-        // 만들어지는 일이 없다. 망라 switch 를 지키려고 '판 없음'으로 답한다(폰 판이 붙는 다음 판에 채운다).
-        case .crossy: return false
+        // 길건너는 죽음 연출(`.over`)까지 '돌고 있다'다 — 차·통나무가 계속 흘러야 화면이 안 얼어 보인다
+        // (`CrossyGame.isPlaying` 이 그렇게 쓰여 있다). 그래서 프레임 루프도 그때까지 돈다.
+        case .crossy: return crossy.isPlaying
         }
     }
 
@@ -116,7 +123,7 @@ package final class GamesPlayController {
         case .timingBar: return timing.total
         case .flappy: return flappy.score
         case .tetris: return tetris.score
-        case .crossy: return 0          // 폰에 없음(위 isPlaying 주석)
+        case .crossy: return crossy.score
         }
     }
 
@@ -148,7 +155,15 @@ package final class GamesPlayController {
                 if tetris != before { tapSerial &+= 1 }
             }
         case .crossy:
-            break                        // 폰에 없음(위 isPlaying 주석)
+            // 길건너는 탭의 뜻이 둘이다(설계 D3): 진행 중이면 **앞으로 한 칸**(맥의 마우스 다운과 같은 뜻),
+            // 시작 전·결과면 `action()`(새 판 + 그 판의 첫 한 칸). 죽음 연출 중엔 엔진이 양쪽 다 무시한다.
+            let before = crossy
+            if crossy.isPlaying {
+                crossy.input(.forward)
+            } else {
+                crossy.action()
+            }
+            if crossy != before { tapSerial &+= 1 }
         }
         if isPlaying, !wasPlaying {
             reportedFinish = false
@@ -171,6 +186,20 @@ package final class GamesPlayController {
         let before = tetris.active
         tetris.rotate(clockwise: clockwise)
         if tetris.active != before { tapSerial &+= 1 }
+    }
+
+    /// 길건너 방향 한 칸(캔버스 쓸기). 막힌 칸이면 엔진이 제자리 통통으로 받는다 — 화면이 미리 거르지 않는다.
+    ///
+    /// ⚠️ **진행 중일 때만**이다. 시작 전 보드에서도 `input(_:)` 은 엔진이 새 판을 여는데, 이 길은 `tap()` 의
+    ///    뒷정리(라운드 토큰 요청 · 틱 기준점 · 트래커 비우기)를 하나도 안 지난다 — 쓸기로 켜진 판이 토큰 없이
+    ///    돌면 **점수가 조용히 사라진다.** 시작 전 첫 접촉은 화면의 시작 래치가 `tap()` 으로 받는다.
+    ///
+    /// 죽음 연출(`.over`) 중에는 엔진이 스스로 무시한다 — 여기서 또 거르지 않는다.
+    package func hopCrossy(_ direction: CrossyGame.Direction) {
+        guard kind == .crossy, crossy.isPlaying else { return }
+        let before = crossy
+        crossy.input(direction)
+        if crossy != before { tapSerial &+= 1 }
     }
 
     /// 홀드(조각당 1회). 소진됐으면 엔진이 no-op 이고 **serial 도 안 올린다** — 눌러도 조용하다.
@@ -246,7 +275,7 @@ package final class GamesPlayController {
         }
     }
 
-    // MARK: 테트리스 제스처
+    // MARK: 캔버스 끌기 판정(테트리스 걸음 · 길건너 쓸기)
 
     /// 화면 배율이 정해졌다(또는 바뀌었다) — 한 칸 문턱은 **화면 셀 폭**이다(논리 13 × 배율).
     package func updateCellWidth(_ width: CGFloat) {
@@ -256,30 +285,51 @@ package final class GamesPlayController {
     /// `DragGesture.onChanged` — 시작점부터의 누적 이동을 그대로 넘기면 새로 생긴 걸음이 엔진에 먹는다.
     /// 시각(`value.time`)은 **탭 판정용**이다: 첫 프레임의 시각을 기억해 뒀다가 `canvasDragEnded` 에서 elapsed 를 낸다.
     package func canvasDragChanged(startLocation: CGPoint, translation: CGSize, at time: Date) {
-        guard kind == .tetris else { return }
+        guard kind.usesCanvasDragTracker else { return }
         if gestureStartLocation != startLocation {
             gestureStartLocation = startLocation
             gestureStartedAt = time
         }
-        for step in gesture.drag(startLocation: startLocation, translation: translation) { feed(step) }
+        switch kind {
+        case .tetris:
+            for step in gesture.drag(startLocation: startLocation, translation: translation) { feed(step) }
+        case .crossy:
+            // 쓸기는 **떼기를 기다리지 않는다**(설계 D3) — 문턱을 넘는 그 순간 방향 하나가 엔진에 들어간다.
+            // 엔진이 뛰는 중 입력을 한 칸만 줄 세우므로 화면이 미리 거를 것은 없다(그건 규칙이다).
+            guard let direction = crossyGesture.drag(startLocation: startLocation, translation: translation) else { return }
+            hopCrossy(direction)
+        case .timingBar, .flappy:
+            return
+        }
     }
 
-    /// `DragGesture.onEnded` — 탭(8pt 미만 · 0.25초 안)이면 **시계 회전**이다.
-    /// - Returns: 이 끌기가 탭이었는가(회전을 시도했는가).
+    /// `DragGesture.onEnded` — 탭(8pt 미만 · 0.25초 안)이면 **테트리스는 시계 회전, 길건너는 앞으로 한 칸**이다
+    /// (길건너의 '시작 전·결과면 새 판'은 화면의 시작 래치가 `tap()` 으로 받는다 — 이 길은 진행 중에만 온다).
+    /// - Returns: 이 끌기가 탭이었는가(그 동작을 시도했는가).
     @discardableResult
     package func canvasDragEnded(translation: CGSize, at time: Date) -> Bool {
-        guard kind == .tetris else { return false }
+        guard kind.usesCanvasDragTracker else { return false }
         let elapsed = gestureStartedAt.map { max(0, time.timeIntervalSince($0)) } ?? 0
         gestureStartLocation = nil
         gestureStartedAt = nil
-        guard gesture.end(translation: translation, elapsed: elapsed) else { return false }
-        rotate(clockwise: true)
-        return true
+        switch kind {
+        case .tetris:
+            guard gesture.end(translation: translation, elapsed: elapsed) else { return false }
+            rotate(clockwise: true)
+            return true
+        case .crossy:
+            guard crossyGesture.end(translation: translation, elapsed: elapsed) else { return false }
+            tap()
+            return true
+        case .timingBar, .flappy:
+            return false
+        }
     }
 
     /// 새 판·출구에서 트래커를 비운다. 안 비우면 앞 끌기의 축 잠금·소비량이 다음 판으로 샌다.
     private func resetGesture() {
         _ = gesture.end(translation: .zero, elapsed: 0)
+        _ = crossyGesture.end(translation: .zero, elapsed: 0)
         gestureStartLocation = nil
         gestureStartedAt = nil
     }
@@ -333,7 +383,14 @@ package final class GamesPlayController {
                 onFinished?(tetris.score)
             }
         case .crossy:
-            break                        // 폰에 없음(위 isPlaying 주석)
+            // 게임오버 햅틱은 running → over 전이에서(플래피와 같은 자리), 확정은 `.result` 로 들어간 순간이다.
+            let wasRunning = crossy.phase == .running
+            crossy.step(dt: dt)
+            if wasRunning, case .over = crossy.phase { gameOverSerial &+= 1 }
+            if crossy.phase == .result, !reportedFinish {
+                reportedFinish = true
+                onFinished?(crossy.score)
+            }
         }
     }
 
@@ -368,18 +425,25 @@ package final class GamesPlayController {
             seedSource &+= 0x9E37_79B9
             tetris = TetrisGame(seed: seedSource)
         case .crossy:
-            break                        // 폰에 없음(위 isPlaying 주석)
+            // 길건너도 같다 — `CrossyGame.interrupt()` 는 **그 점수로 결과를 확정**한다(그래서 버릴 때 쓰면 안 된다).
+            seedSource &+= 0x9E37_79B9
+            crossy = CrossyGame(seed: seedSource)
         }
         return true
     }
 
     /// 판을 **끝낸다**(화면을 떠남 · 앱이 background 로 감). 기존 두 게임은 `abandon()` 과 같고,
-    /// **테트리스는 그 자리에서 점수를 확정해 알린다.**
+    /// **테트리스·길건너는 그 자리에서 점수를 확정해 알린다.**
     ///
-    /// ⚠️ 왜 테트리스만 다른가: 폰에서 background 는 지금 **비용 0 의 무한 일시정지**다. 복귀 첫 프레임의 dt 는
-    /// `maxStep`(테트리스 1/20)으로 잘리므로 몇 분을 나가 있어도 판이 잃는 것은 0.05초(L1 에서 0.141칸 —
-    /// 한 칸도 안 내려간다)뿐이다. 맥은 스크림 + 3-2-1 + 5분 상한으로 그 구멍을 막았지만 폰에는 스크림조차 없고
-    /// 앱 전환기 스냅숏에 판이 그대로 남는다. 그래서 나가는 순간 **여기까지의 점수로 확정**한다.
+    /// ⚠️ 왜 그 둘만 다른가: 폰에서 background 는 지금 **비용 0 의 무한 일시정지**다. 복귀 첫 프레임의 dt 는
+    /// `maxStep`(테트리스 1/20 · 길건너 1/30)으로 잘리므로 몇 분을 나가 있어도 판이 잃는 것은 0.05초(L1 에서
+    /// 0.141칸 — 한 칸도 안 내려간다) · 0.033초뿐이다. 맥은 스크림 + 3-2-1 + 5분 상한으로 그 구멍을 막았지만 폰에는
+    /// 스크림조차 없고 앱 전환기 스냅숏에 판이 그대로 남는다. 그래서 나가는 순간 **여기까지의 점수로 확정**한다.
+    ///
+    /// 길건너는 그 구멍이 더 넓다: 차·기차가 **움직이는** 게임이라 살려 두면 아무 때나 멈출 수 있는 게임이 된다
+    /// (0.033초면 가장 빠른 기차도 0.8칸을 못 간다). 맥도 같은 쪽이다 — 맥 허브는 접힐 때 진행 중 점수를 정산하고
+    /// (`host.onScoreChanged` → `settleMiniGameLiveRound`), 정지 카드가 "지금까지의 점수가 기록돼요"를 약속한다.
+    /// **벽시계 상한(`roundLimitSeconds`)은 주지 않는다** — 길건너는 `idleLimit` 9초가 가만히 있는 판을 이미 죽인다.
     ///
     /// ⚠️ `interrupt()` 뒤에는 **tick 이 다시 오지 않는다**: phase 가 `.result` → `isPlaying` false →
     /// `TimelineView(paused:)` 가 멈춘다. 맥은 `.onChange(of: game.phase)` 가 알리지만 폰 구동기에는 그 관찰자가
@@ -388,7 +452,7 @@ package final class GamesPlayController {
     package func endRound() -> EndOutcome {
         guard isPlaying else { return .none }
         switch kind {
-        case .timingBar, .flappy, .crossy:
+        case .timingBar, .flappy:
             return abandon() ? .abandoned : .none
         case .tetris:
             reportedFinish = true
@@ -401,15 +465,27 @@ package final class GamesPlayController {
             let score = tetris.score
             onFinished?(score)
             return .confirmed(score)
+        case .crossy:
+            reportedFinish = true
+            lastTick = nil
+            roundLimitSeconds = nil
+            roundDeadline = nil
+            resetGesture()
+            crossy.interrupt()
+            let score = crossy.score
+            onFinished?(score)
+            return .confirmed(score)
         }
     }
 
     #if DEBUG
     /// 테스트·데모 전용: 임의 상태에서 시작한다.
-    package func replaceForTesting(timing: TimingBarGame? = nil, flappy: FlappyGame? = nil, tetris: TetrisGame? = nil) {
+    package func replaceForTesting(timing: TimingBarGame? = nil, flappy: FlappyGame? = nil, tetris: TetrisGame? = nil,
+                                   crossy: CrossyGame? = nil) {
         if let timing { self.timing = timing }
         if let flappy { self.flappy = flappy }
         if let tetris { self.tetris = tetris }
+        if let crossy { self.crossy = crossy }
         lastTick = nil
         reportedFinish = !isPlaying
     }

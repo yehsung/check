@@ -33,6 +33,10 @@ enum CheckCoreSourceLayout {
         // v0.3.38 폰 단계: 배치(TetrisLayout)·조각 색(TetrisPalette)을 코어로 뗐다 — 폰 캔버스가 **같은 표**를 쓴다.
         // 맥에 남은 것은 잎 뷰(TetrisGameView)와 굳은 키 그물(TetrisKeyWatchdog)뿐이다.
         "MiniGameTetris.swift": ["Sources/check/MiniGameTetris.swift", "Sources/CheckCore/TetrisLayout.swift"],
+        // 폰 1.0.15: SceneKit 판(CrossyScene · CrossyRowNode · CrossyPalette)을 코어로 **옮겼다** — 맥과 폰이 한 벌을 쓴다.
+        // 맥에 남은 것은 아잉이 모델 다리(CrossyMacAing)뿐이다. 뷰 다리(CrossySceneView · CrossyHUD)는 쪼개지 않은
+        // 다른 파일(MiniGameCrossy.swift)이라 이 표에 없다.
+        "MiniGameCrossyScene.swift": ["Sources/check/MiniGameCrossyScene.swift", "Sources/CheckCore/CrossyScene.swift"],
         "CheckTokenUsage.swift": ["Sources/CheckCore/CheckTokenUsage.swift", "Sources/check/CheckTokenUsageRow.swift"],
         "CheckOverlayWindow.swift": ["Sources/check/CheckOverlayWindow.swift", "Sources/CheckCore/CheckPanelVisibility.swift"],
         "CheckOverlayReactions.swift": ["Sources/check/CheckOverlayReactions.swift", "Sources/CheckCore/MilestoneTracker.swift"],

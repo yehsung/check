@@ -12,7 +12,7 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// 기존 두 게임의 자리가 말없이 밀린다(사용자가 근육으로 외운 자리다).
     case tetris = "tetris"
     /// v0.3.67 "길건너 아잉이". 테트리스와 같은 이유로 **맨 뒤**다(설계서 §1 — `allCases` 맨 뒤).
-    /// 폰에는 아직 없다(`phoneCases` 가 거른다 — 폰은 다음 판).
+    /// 폰은 1.0.15 에 열렸다(`phoneCases`).
     case crossy = "crossy"
 
     package var id: String { rawValue }
@@ -158,10 +158,30 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// **v0.3.67 — 넷째(`crossy`)가 생겨 다시 갈렸다.** 맥 먼저, 폰은 다음 판(사용자 결정 2026-10-27). 폰 허브 · 게임 탭 ·
     /// 순위 칩 · 허브 요약이 전부 이 목록을 돌므로 여기서 빠지면 폰 어디에도 안 보인다. 플립 조건은 테트리스 때와 같다
     /// (위 ①②③ — 서버 마이그레이션 실서버 확인 · `AingRoute.MiniGame` 확장 · 폰 화면·조작).
-    package static let phoneCases: [MiniGameKind] = [.timingBar, .flappy, .tetris]
+    ///
+    /// **폰 1.0.15 — 길건너를 열었다.** ①은 0.3.67 이 나가기 전에 끝났다(서버 `20261027130000_minigame_crossy.sql`
+    /// 운영 적용 2026-10-27 06:48 KST — 맥 0.3.67 이 그 서버로 점수를 올리고 있으므로 폰이 새로 확인할 것이 없다).
+    /// ②·③은 이 판이 같이 냈다(`AingRoute.MiniGame.crossy` · `GamesCrossyCanvas` · `CrossyGestureTracker` ·
+    /// `GamesPlayController` 의 여섯 갈래).
+    package static let phoneCases: [MiniGameKind] = [.timingBar, .flappy, .tetris, .crossy]
 
     /// 폰에서 보이는 게임인가 — `phoneCases` 의 한 줄 판정(폰 화면이 낱낱의 kind 를 거를 때 쓰는 한 곳).
     package var isPhoneSupported: Bool { Self.phoneCases.contains(self) }
+
+    /// 폰 캔버스에서 **끌기 트래커**로 입력을 받는가(= 누르는 순간의 '한 번의 행동' 래치로는 표현이 안 되는 게임).
+    ///
+    /// 둘이다. 뜻은 다르지만 화면이 거는 배선은 **같은 모양**이다(진행 중이면 `canvasDragChanged`/`canvasDragEnded`,
+    /// 시작 전이면 래치가 `tap()` 으로 판을 켠다):
+    /// · 테트리스 — 한 번의 끌기가 여러 칸을 만들고 행동도 셋이다(좌·우·소프트드롭).
+    /// · 길건너 — 쓸기 방향 넷이 있고, 떼기를 기다리면 늦다(한 칸이 0.12초인 연타 게임이다).
+    /// 이 판정을 화면·구동기 두 곳에 손으로 적지 않는다 — 한 곳만 넓히는 날 조용히 갈린다(예전 `kind == .tetris` 가
+    /// 화면에 여섯 자리, 구동기에 세 자리 있었다).
+    package var usesCanvasDragTracker: Bool {
+        switch self {
+        case .timingBar, .flappy: false
+        case .tetris, .crossy: true
+        }
+    }
 }
 
 /// 게임 논리 좌표계. 게임 규칙은 언제나 이 크기 안에서 계산하고, 뷰는 실제 캔버스 크기에 **비율 유지**로 맞춘다.

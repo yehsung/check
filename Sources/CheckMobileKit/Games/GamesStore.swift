@@ -714,6 +714,8 @@ package final class GamesStore {
         // (`TimingBarGame.isPlaying`). 그래서 판을 켜 둔 채 자리를 뜨면 화면이 **영원히** 켜져 있다. 자동잠금이 그
         // 유일한 상한이었고, 여기에 타이밍 바를 넣으면 그 상한이 사라진다. 플래피(새가 떨어져 끝난다)와 테트리스
         // (쌓여서 탑아웃한다)는 방치해도 엔진이 판을 끝내므로 안전하다. 새 게임을 더할 때 이 성질을 확인할 것.
+        //   · 길건너(폰 1.0.15): **확인했다 — 안전하다.** 가만히 두면 `CrossyGame.idleLimit` 9초에 "놓쳤어요"로 끝난다
+        //     (카메라가 혼자 앞으로 가서 아잉이를 화면 아래로 밀어낸다). 그래서 타이밍 바 쪽이 아니라 이쪽이다.
         if let controller = miniGames.controller, controller.isPlaying, controller.kind != .timingBar { return true }
         // 체스: 오목과 **같은 규칙**이다. 1:1 판은 서버 시계가 흐르므로 어느 화면에 있든 켜고(10분 시계에
         // 자동잠금이 닿으면 한 수도 못 두고 시간패한다), 로봇 판은 체스 화면이 보일 때만 켠다
@@ -802,6 +804,7 @@ package final class GamesStore {
             case .timing: kind = .timingBar
             case .flappy: kind = .flappy
             case .tetris: kind = .tetris
+            case .crossy: kind = .crossy
             }
             return .push(.miniGame(kind))
         case .gomokuLobby, .gomokuMatch(matchID: nil):

@@ -180,9 +180,10 @@ func staticControlHintStaysInsideTheTwoLeafViews() throws {
 @Test("macCases 는 전부 · phoneCases 는 둘과 별개로 산다 — allCases 는 저장·복원용으로 남는다")
 func platformCaseListsAreSplit() {
     #expect(MiniGameKind.macCases == MiniGameKind.allCases)
-    // 2026-09-23 노출 플립으로 폰도 셋이 됐다(서버 마이그레이션 확인 뒤). **지금 둘이 같다고 해서 합치지 마라** —
-    // 이 목록이 갈려 있는 것 자체가 장치다: 넷째 게임은 맥에 먼저 들어오고 폰 조작이 붙을 때까지 여기서 막힌다.
-    #expect(MiniGameKind.phoneCases == [.timingBar, .flappy, .tetris])
+    // 2026-09-23 노출 플립으로 폰도 셋이 됐고, 폰 1.0.15 에서 길건너까지 넷이 됐다(그 사이 0.3.67~0.3.68 동안
+    // 넷째는 맥에만 있었다). **지금 둘이 같다고 해서 합치지 마라** — 이 목록이 갈려 있는 것 자체가 장치다:
+    // 다섯째 게임도 맥에 먼저 들어오고 폰 조작이 붙을 때까지 여기서 막힌다.
+    #expect(MiniGameKind.phoneCases == [.timingBar, .flappy, .tetris, .crossy])
     #expect(Set(MiniGameKind.phoneCases).isSubset(of: Set(MiniGameKind.allCases)))
     // 딥링크(`AingRoute.MiniGame`)를 같이 넓혔는지는 **여기서 못 잰다** — `checkTests` 는 `check`·`CheckCore` 만
     // 의존하고 `AingRoute` 는 `CheckMobileShared` 에 있다(Package.swift). 그 짝은 폰 타깃이 잰다:

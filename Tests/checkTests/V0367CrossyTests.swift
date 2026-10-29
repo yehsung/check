@@ -594,7 +594,7 @@ private func cgBlock(after anchor: String, in source: String) -> String? {
 @Suite("v0.3.67 길건너 아잉이 — 종류 · 키 · 패널")
 struct V0367CrossyWiringTests {
     @MainActor
-    @Test("MiniGameKind.crossy: 맨 뒤 · rawValue 'crossy' · '길건너 아잉이' · 실재하는 아이콘 · 상한 5000 · 토큰 재사용 = 플래피 · 폰에는 없다")
+    @Test("MiniGameKind.crossy: 맨 뒤 · rawValue 'crossy' · '길건너 아잉이' · 실재하는 아이콘 · 상한 5000 · 토큰 재사용 = 플래피 · 폰에도 있다(1.0.15)")
     func kindContract() {
         #expect(MiniGameKind.allCases.last == .crossy, "맨 뒤가 아니다 — 헤더 칩 · 폰 타일 자리가 밀린다")
         #expect(MiniGameKind.allCases.map(\.rawValue) == ["timing_bar", "flappy", "tetris", "crossy"])
@@ -616,7 +616,8 @@ struct V0367CrossyWiringTests {
         }
         #expect(MiniGameKind.flappy.roundTokenReuseSeconds == 20 * 60 && MiniGameKind.tetris.roundTokenReuseSeconds == 12 * 60)
         #expect(MiniGameKind.macCases.contains(.crossy))
-        #expect(!MiniGameKind.phoneCases.contains(.crossy) && !MiniGameKind.crossy.isPhoneSupported, "폰에 길건너가 보인다")
+        // 폰 1.0.15 에서 열렸다(0.3.67~0.3.68 동안은 맥 전용이었다 — 그 짝은 `V1015CrossyPhoneTests` 가 잰다).
+        #expect(MiniGameKind.phoneCases.contains(.crossy) && MiniGameKind.crossy.isPhoneSupported, "폰에서 길건너가 다시 막혔다")
         #expect(MiniGameKind.tetris.isPhoneSupported && MiniGameKind.flappy.isPhoneSupported)
         for key in ["↑", "↓", "←", "→", "WASD", "스페이스"] {
             #expect(MiniGameKind.crossy.controlHint.contains(key), "조작 안내에 \(key) 가 없다")
@@ -721,7 +722,8 @@ struct V0367CrossyWiringTests {
         #expect(leaf.contains("if new == .result, old != .result { host.onFinished(game.score) }"))
         #expect(leaf.contains("host.onPlayingChanged(playing)"), "판 시작이 허브에 안 알려진다 — 라운드 토큰을 못 받는다")
         // 3D 판은 처음 한 번만 만든다 — `@State` 면 허브가 잎 뷰를 다시 지을 때마다(정지 · 판 시작) 아잉이 모델을 다시 읽는다.
-        #expect(leaf.contains("@StateObject private var scene = CrossyScene()"), "3D 판을 @StateObject 로 안 쥔다")
+        // `.mac()` 이어야 한다(폰 1.0.15 D2) — 앱과 시험이 **같은 로더**를 지나야 증거 PNG 가 앱을 찍는다.
+        #expect(leaf.contains("@StateObject private var scene = CrossyScene.mac()"), "3D 판을 @StateObject 로(그리고 맥 다리로) 안 쥔다")
         // 뛰기는 한 갱신에 여럿이어도 누른 순서대로 다 넣는다(방향별 카운터 + onChange 한 번 = 접힘).
         #expect(leaf.contains("for direction in input.hops(since: old) { act { $0.input(direction) } }"),
                 "뛰기 입력을 순서대로 다 안 꺼낸다(마지막 하나만 · 방향별 하나만 쓰면 접힌다)")
@@ -1246,7 +1248,7 @@ private func cgDeathScene(_ cause: CG.DeathCause, after: Double = 0.30) -> CG {
 struct V0367CrossyRenderTests {
     @Test("증거: 시작 · 중간 · 뛰는 중 · 죽음 다섯을 오프스크린으로 찍는다 — 판마다 그림이 다르고 비어 있지 않다")
     func evidenceFrames() throws {
-        let scene = CrossyScene()
+        let scene = CrossyScene.mac()
         #expect(scene.loadedModel, "aing.scn 을 못 읽었다 — 보라 공으로 그렸다")
         var shots: [(String, CGImage)] = []
 
@@ -1263,7 +1265,7 @@ struct V0367CrossyRenderTests {
         // 다음 착지 전 가운데(뛰는 모습)를 피하려고 서 있는 순간까지 조금 더.
         for _ in 0..<30 where mid.hop != nil && mid.phase == .running { mid.step(dt: 1.0 / 120) }
         #expect(mid.phase == .running && mid.score >= 5, "중간 장면 봇이 \(mid.score)줄에서 \(mid.death?.cause.rawValue ?? "?")")
-        let midScene = CrossyScene()
+        let midScene = CrossyScene.mac()
         _ = try cgSnapshot(midScene, mid)                 // 카메라 가로 따라가기가 자리 잡게 한 번 먼저
         let midShot = try cgSnapshot(midScene, mid)
         cgSave(try cgComposite(midShot, game: mid, best: 30), "crossy-mid")
@@ -1273,21 +1275,21 @@ struct V0367CrossyRenderTests {
         var hop = cgGame(lanes: [cgRoad(2, direction: 1, speed: 2, cars: [1]), cgRiver(4, logs: [(x: 2, length: 3)])])
         hop.input(.forward)
         cgRun(&hop, seconds: CG.hopSeconds / 2)
-        let hopShot = try cgSnapshot(CrossyScene(), hop)
+        let hopShot = try cgSnapshot(CrossyScene.mac(), hop)
         cgSave(try cgComposite(hopShot, game: hop, best: 0), "crossy-hop")
         shots.append(("hop", hopShot))
 
         for cause in CG.DeathCause.allCases {
             let game = cgDeathScene(cause)
             #expect(game.death?.cause == cause, "\(cause) 장면이 \(game.death?.cause.rawValue ?? "죽지 않음") 으로 끝났다")
-            let shot = try cgSnapshot(CrossyScene(), game)
+            let shot = try cgSnapshot(CrossyScene.mac(), game)
             cgSave(try cgComposite(shot, game: game, best: 9), "crossy-death-\(cause.rawValue)")
             shots.append((cause.rawValue, shot))
             // 결과 카드까지(연출이 끝난 뒤).
             var result = game
             cgRun(&result, seconds: CG.deathHold, dt: 1.0 / 60)
             if cause == .train || cause == .car {
-                let card = try cgSnapshot(CrossyScene(), result)
+                let card = try cgSnapshot(CrossyScene.mac(), result)
                 cgSave(try cgComposite(card, game: result, best: 9), "crossy-result-\(cause.rawValue)")
             }
         }
@@ -1324,7 +1326,7 @@ struct V0367CrossyRenderTests {
         func scene(countdown: Double, run: Double) throws -> CGImage {
             var game = cgGame(lanes: [cgRail(1, direction: 1, countdown: countdown), cgGrass(2, blocked: [2])])
             cgRun(&game, seconds: run)
-            return try cgSnapshot(CrossyScene(), game)
+            return try cgSnapshot(CrossyScene.mac(), game)
         }
         let warnOn = try scene(countdown: 0.8, run: 0.05)      // 경고 · 켜진 박자(0~0.15초)
         let warnOff = try scene(countdown: 0.8, run: 0.20)     // 경고 · 꺼진 박자(0.15~0.30초)
@@ -1339,7 +1341,7 @@ struct V0367CrossyRenderTests {
     @Test("아잉이 화면 크기: 시안(약 35pt)보다 크게 — 52~60pt 언저리 · 가로 가운데 · 화면 아래쪽")
     func aingIsBiggerThanTheDraft() throws {
         let game = CG(seed: 77)
-        let scene = CrossyScene()
+        let scene = CrossyScene.mac()
         // 몸만 잰다 — 발밑 그림자는 두 장 다 숨긴다(그림자까지 재면 아래로 늘어난 상자가 된다).
         scene.setShadowHiddenForTesting(true)
         let with = try cgSnapshot(scene, game)
@@ -1358,7 +1360,7 @@ struct V0367CrossyRenderTests {
 
     @Test("노드 풀: 생존 봇이 오래 가도 줄 노드는 화면 줄 수만큼만 만들고 그 뒤는 재활용한다 · 차 · 통나무 · 나무도")
     func nodePoolsRecycle() throws {
-        let scene = CrossyScene()
+        let scene = CrossyScene.mac()
         var game = CG(seed: 4242)
         game.action()
         var frames = 0
@@ -1397,7 +1399,7 @@ struct V0367CrossyRenderTests {
 
     @Test("그림자 맵 ≤ 2048 · 각진 그림자(표본 1) · 아잉이는 판 그림자를 드리우지 않는다 · 카메라는 정사영")
     func shadowAndCameraBudget() throws {
-        let scene = CrossyScene()
+        let scene = CrossyScene.mac()
         let sun = try #require(scene.sunForTesting)
         #expect(sun.castsShadow && sun.shadowMapSize.width <= 2048 && sun.shadowMapSize.height <= 2048)
         #expect(sun.shadowSampleCount == 1)
@@ -1416,7 +1418,7 @@ struct V0367CrossyRenderTests {
 
     @Test("프레임 비용: 판 한 걸음 + 노드 옮기기 평균이 프레임 예산(16.7ms)의 작은 몫이다")
     func frameCostIsSmall() throws {
-        let scene = CrossyScene()
+        let scene = CrossyScene.mac()
         var game = CG(seed: 99)
         game.action()
         for _ in 0..<120 where game.phase == .running { cgBotStep(&game); scene.apply(game, reduceMotion: false) }
@@ -1437,7 +1439,7 @@ struct V0367CrossyRenderTests {
     func prewarmCoversEveryShape() throws {
         let palette = CrossyPalette.shared
         palette.resetForTesting()
-        let scene = CrossyScene()
+        let scene = CrossyScene.mac()
         let prepared = palette.shapeCount
         // 줄 4종 × 홀짝 × 안/밖(16) + 무늬 6 + 물건 4 + 차/트럭 10 + 통나무 3 + 기차 · 기둥 · 등 둘 · 그림자 · 고리(6)
         #expect(prepared >= 45, "미리 만든 모양이 \(prepared)개뿐이다")
@@ -1464,7 +1466,7 @@ struct V0367CrossyRenderTests {
         weak var released: CrossyScene?
         let scnView = CrossySCNView(frame: NSRect(x: 0, y: 0, width: 344, height: 356))
         do {
-            let scene = CrossyScene()
+            let scene = CrossyScene.mac()
             released = scene
             scnView.scene = scene.scene
             scnView.crossyScene = scene

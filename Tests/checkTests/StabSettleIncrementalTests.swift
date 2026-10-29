@@ -107,7 +107,33 @@ struct StabSettleIncrementalTests {
         }
         #expect(cands.contains("from public.pokes "), "찌르기 흔적(pokes.created_at)이 없다")
         #expect(cands.contains("join public.memberships mm on mm.team_id = mj.team_id"), "팀 합류의 받는 쪽(멤버 전원)을 안 본다")
-        #expect(cands.contains("(values (g.challenger), (g.opponent))"), "끝난 판의 두 사람을 다 안 본다")
+        for game in ["gomoku_matches", "chess_matches"] {
+            #expect(cands.contains("from public.\(game) g cross join lateral (values (g.challenger), (g.opponent)) u(uid)"),
+                    "\(game): 끝난 판의 두 사람을 다 안 본다")
+        }
+    }
+
+    @Test("full 갈래는 옛 후보식 전부다 — p_full 이 후보를 넓히지 않으면 흔적 없는 변화가 15분이 아니라 영영 안 잡힌다")
+    func fullBranchCoversOldCandidates() throws {
+        // 반박 검증(2026-10-30): 주간 후보의 `p_full or` 를 지운 뮤테이션이 마이그레이션 §4 와 이 파일을 다 통과했다
+        // (하네스 재생 DB 에 근무 세션이 없어 §4 의 데이터 대조가 빈다). 그래서 모양을 글자로도 묶는다.
+        let weekly = siSquash(try #require(try siLastDefinition("weekly_work__settle_candidates")).body)
+        #expect(weekly.contains("where s.started_at >= w.from_ts - interval '7 days' and s.started_at < p_now "
+                                + "and (s.ended_at is null or s.ended_at >= w.from_ts)"),
+                "주간 base 가 옛 weekly_work_settle_all 후보식과 다르다")
+        #expect(weekly.contains("where p_full or b.user_id in (select r.user_id from recent r)"),
+                "주간 후보가 p_full 일 때 base 전부를 돌려주지 않는다")
+        let ach = siSquash(try #require(try siLastDefinition("achievements__settle_candidates")).body)
+        #expect(ach.contains("where p.is_hidden is not true and exists (select 1 from public.achievement_defs() d "
+                             + "where not exists (select 1 from public.achievement_progress ap where ap.user_id = p.id and ap.key = d.key))"),
+                "업적 base 가 옛 achievements_settle_all 후보식과 다르다")
+        #expect(ach.contains("and (p_full or p.id in (select r.user_id from recent r))"),
+                "업적 후보가 p_full 일 때 base 전부를 돌려주지 않는다")
+        // 배포 때의 데이터 대조(§4(4))는 두 함수 다 있어야 한다 — 운영 데이터에서는 이것이 마지막 그물이다.
+        let mig = siSquash(siStripComments(try String(contentsOf: try siMigrationsDirectory().appendingPathComponent(siMigration),
+                                                       encoding: .utf8)))
+        #expect(mig.contains("업적 전수 후보가 옛 후보식과"), "§4(4) 업적 full 대조가 없다")
+        #expect(mig.contains("주간 전수 후보가 옛 후보식과"), "§4(4) 주간 full 대조가 없다")
     }
 
     @Test("주간 측정이 읽는 표는 work_sessions · work_statuses 뿐이고 둘 다 흔적 후보에 있다")

@@ -30,7 +30,12 @@ jobs:
   selftest:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      build_time: ${{ steps.stamp.outputs.build_time }}
     steps:
+      - name: 빌드 시각 한 번(두 아키텍처가 같은 값 — bundle_plan 이 buildTime 이 다르면 거부한다, run 40941086007)
+        id: stamp
+        run: echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -56,6 +61,8 @@ jobs:
             wack: auto
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 75
+    env:
+      BUILD_TIME: ${{ needs.selftest.outputs.build_time }}
     defaults:
       run:
         shell: pwsh
@@ -117,12 +124,12 @@ jobs:
           }
           Write-Output '::error::python 3 이 없다 — actions/setup-python 을 SHA 로 고정해 더할 것'
           exit 1
-      - name: 경로 · 빌드 시각(호출마다 같은 값)
+      - name: 경로 · 빌드 시각 확인(selftest 잡이 한 번 정한 값을 두 아키텍처가 같이 쓴다)
         run: |
+          if ($env:BUILD_TIME -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') { throw "BUILD_TIME 형식 밖: '$env:BUILD_TIME'" }
           $root = Join-Path $env:RUNNER_TEMP 'rw'
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           "RW=$root" >> $env:GITHUB_ENV
-          "BUILD_TIME=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))" >> $env:GITHUB_ENV
       - name: createDistributable(운영 속성 없음 — ProdConfig 는 .invalid)
         shell: bash
         working-directory: multiplatform

@@ -245,7 +245,9 @@ object NowWorkLines {
         return when (origin) {
             NowWorkOrigin.phone -> listOf(NowText.phoneWorkCaption(checkAfterSeconds))
             NowWorkOrigin.mac -> listOf(NowText.macWorkCaption)
-            NowWorkOrigin.unknown -> emptyList()
+            // int-j(W2-f 패치 0003 의 windows 갈래): iOS 에는 짝이 없고 문구도 정하지 않았다 — 상태 글자('윈도우에서 근무 중')만 보이고
+            //   안내 줄은 비운다(맥 문구로 접지 않는다). Windows 앱은 보류(§8-16)라 지금 서버가 이 값을 싣는 일은 없다.
+            NowWorkOrigin.windows, NowWorkOrigin.unknown -> emptyList()
         }
     }
 

@@ -101,7 +101,10 @@ class MiniGameCanvasSourceContractTest {
 
     @Test
     fun theFrameClockRunsInOnePlace() {
+        // 범위는 미니게임·테트리스 폴더(위 글꼴 시험과 같은 자리). 체스 판(W4-a ChessBoardCanvas)은 말 비행 애니메이션 동안만 제 프레임을 센다
+        //   (INV-GamesChessBoardCanvas-8161a594 — 비행 없으면 한 틱도 안 돎) — 미니게임 시계와 다른 규약이라 이 단언 밖이다(int-j 병합 때 좁힘).
         val owners = gamesMain.walkTopDown().filter { it.isFile && it.name.endsWith(".kt") }
+            .filter { it.path.contains("/minigame/") || it.path.contains("/tetris/") || it.path.contains("\\minigame\\") || it.path.contains("\\tetris\\") }
             .filter { "withFrameNanos" in SwiftStyleComments.strip(it.readText()) }
             .map { it.relativeTo(gamesMain).invariantSeparatorsPath }.toList()
         assertEquals(listOf("minigame/MiniGameFrameLoop.kt"), owners, "프레임 시계(withFrameNanos)는 MiniGameFrameLoop 한 곳에서만 돈다")

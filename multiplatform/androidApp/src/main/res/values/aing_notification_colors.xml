@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 알림 강조색 = AingPalette.accent 라이트(#1864CF). 다크는 values-night. NotificationAccentTest 가 팔레트와 맞대 본다. -->
+<resources>
+    <color name="aing_notification_accent">#FF1864CF</color>
+</resources>

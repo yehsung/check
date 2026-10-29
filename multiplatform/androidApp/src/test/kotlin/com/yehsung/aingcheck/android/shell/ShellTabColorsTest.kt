@@ -1,7 +1,7 @@
 // 원본: Sources/CheckMobileKit/Theme/MobileThemePalette.swift @ 862be0f (tabSelected · label2 숫자 — 탭 막대는 고른 탭만 tabSelected 로 칠한다)
 //
 // 셸 탭 막대 색(G §8-15 — 파랑은 '선택'을 뜻한다). 실제 MainActivity 를 띄워(테마를 감싸는 자리까지) 탭마다 픽셀을 센다:
-//  ① 고른 탭(시작 탭 '지금')의 기호(onSecondaryContainer)와 이름(secondary) = iOS tabSelected(라이트 #1864CF · 다크 #7DC0FF)
+//  ① 고른 탭(시작 탭 '지금')의 기호와 이름(secondary) = iOS tabSelected(라이트 #1864CF · 다크 #7DC0FF)
 //  ② 안 고른 탭 넷에는 유채색 픽셀이 없고 기호는 회색(onSurfaceVariant = iOS label2 를 카드 위에 겹친 값 — 라이트 #6F6F74 · 다크 #A6A8B3)
 //  ③ 막대 어디에도 보라(브랜드 보라·AI 토큰 보라·M3 기준 보라 — 색상각 245~330°)가 없다
 // 기대값은 Swift 숫자를 손으로 옮긴 리터럴이다. 셸 화면 모드는 지금 OS 설정(System)이라 라이트·다크를 Robolectric 한정자(night)로 가른다.
@@ -57,7 +57,7 @@ class ShellTabColorsTest {
             println("AINGCHECK-SHELL-TABS $mode bar=${bar.all.size}px purple=$purple")
             assertEquals("$mode 탭 막대에 보라 픽셀이 있다", 0, purple)
             for (tab in AingTab.entries) {
-                // M3 NavigationBarItem 은 기호(받침 알약 안)를 위 절반에, 이름을 아래 절반에 둔다 — 기호와 이름을 따로 센다
+                // 탭 칸(AingTabBar)은 기호를 위 절반에, 이름을 아래 절반에 둔다 — 기호와 이름을 따로 센다
                 // (이름 글자도 고른 탭이면 파랑이라 합쳐 세면 기호 색이 틀려도 넘어간다).
                 val item = capture(tag(tab))
                 val colored = item.all.count { chroma(it) > COLORED_CHROMA }
@@ -66,11 +66,11 @@ class ShellTabColorsTest {
                 val labelSelected = item.bottom.count { it == selectedInk }
                 println("AINGCHECK-SHELL-TABS $mode ${tab.name} px=${item.all.size} colored=$colored icon(selectedInk=$iconSelected unselectedInk=$iconGray) label(selectedInk=$labelSelected)")
                 if (tab == start) {
-                    assertTrue("$mode 고른 탭(${tab.title})의 기호가 tabSelected #${hex(selectedInk)} 가 아니다($iconSelected px)", iconSelected >= MIN_DOT_PIXELS)
+                    assertTrue("$mode 고른 탭(${tab.title})의 기호가 tabSelected #${hex(selectedInk)} 가 아니다($iconSelected px)", iconSelected >= MIN_SYMBOL_PIXELS)
                     assertTrue("$mode 고른 탭(${tab.title})의 이름이 tabSelected #${hex(selectedInk)} 가 아니다($labelSelected px)", labelSelected >= MIN_LABEL_PIXELS)
                 } else {
                     assertEquals("$mode 안 고른 탭(${tab.title})에 유채색 픽셀이 있다 — 파랑은 '선택'만 뜻한다", 0, colored)
-                    assertTrue("$mode 안 고른 탭(${tab.title})의 기호가 회색 #${hex(unselectedInk)} 가 아니다($iconGray px)", iconGray >= MIN_DOT_PIXELS)
+                    assertTrue("$mode 안 고른 탭(${tab.title})의 기호가 회색 #${hex(unselectedInk)} 가 아니다($iconGray px)", iconGray >= MIN_SYMBOL_PIXELS)
                 }
             }
         }
@@ -113,11 +113,14 @@ class ShellTabColorsTest {
     private fun hex(argb: Int) = (argb.toLong() and 0xFFFFFF).toString(16).uppercase().padStart(6, '0')
 
     private companion object {
-        /** 무채색 경계: 막대 면(다크 #2F3144 = 21)·알약(다크 #303C52 = 34)·회색 기호(#A6A8B3 = 13)는 아래, 파랑·보라 기호(130~183)는 위. */
+        /** 무채색 경계: 막대 면(다크 #2F3144 = 21)·회색 기호(#A6A8B3 = 13)는 아래, 파랑·보라 기호(130~183)는 위. */
         const val COLORED_CHROMA = 48
 
-        /** 기호 점 10dp × xhdpi = 지름 20px(≈314px). 가장자리(앤티에일리어싱)를 뺀 안쪽 실측 268px — 그 아래로 넉넉히. */
-        const val MIN_DOT_PIXELS = 200
+        /**
+         * 24dp 채움 기호(Material Symbols)의 위 절반 잉크 — 실측 최소 544px('나' 사람 기호), 최대 1010px('지금' 시계).
+         * 예전 자리표시 점(10dp — 안쪽 268px)은 못 넘는다(8b shell: 점으로 되돌리면 빨강).
+         */
+        const val MIN_SYMBOL_PIXELS = 400
 
         /** 고른 탭 이름('지금') 글자 가운데 잉크 그대로인 픽셀(실측 약 180px). */
         const val MIN_LABEL_PIXELS = 60

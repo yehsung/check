@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 갤러리 이름·설명(W3-b 조정자 패치 0001 — iOS AingWidgetText.*GalleryName/Description 과 같은 글자. 시험 AingWidgetKindTest 가 Kotlin 표와 iOS 원문을 대조한다). -->
+<resources>
+    <string name="aing_widget_working_now_name">지금 근무 중</string>
+    <string name="aing_widget_working_now_description">지금 근무 중인 사람을 우리 팀부터 보여 줘요.</string>
+    <string name="aing_widget_my_today_name">내 오늘</string>
+    <string name="aing_widget_my_today_description">내 캐릭터와 오늘 누적, 이번 주 목표를 보여 줘요.</string>
+    <string name="aing_widget_todos_name">오늘 할 일</string>
+    <string name="aing_widget_todos_description">체크하면 앱을 열지 않아도 완료로 표시돼요.</string>
+    <string name="aing_widget_ai_limits_name">AI 리밋</string>
+    <string name="aing_widget_ai_limits_description">클로드·코덱스·안티그래비티의 5시간·주간 사용률을 보여 줘요.</string>
+</resources>

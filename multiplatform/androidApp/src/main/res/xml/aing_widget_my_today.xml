@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 정보(W3-b 조정자 패치 0001 · E§7.1). 수신자 MyTodayWidgetReceiver 가 가리킨다 — 이름(res/xml/aing_widget_my_today)은 AingWidgetKind.providerInfoName 과 같다.
+     그리는 값은 앱이 쓴 스냅숏뿐이라 주기 갱신을 두지 않는다(updatePeriodMillis=0 — 앱이 updateAll 로 다시 그린다). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/aing_widget_my_today_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:resizeMode="none"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

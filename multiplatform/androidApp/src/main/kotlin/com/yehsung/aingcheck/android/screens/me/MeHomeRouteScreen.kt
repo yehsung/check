@@ -44,7 +44,7 @@ object MeDestinations {
         MeDestination.Settings -> Dest.Settings
         MeDestination.Blocked -> Dest.BlockedPeople
         is MeDestination.Grass -> Dest.GrassDetail(destination.axis.name)
-        // v1.0.13 「미션」 화면(W4-c ui/missions)은 Dest 에 자리가 없다 — 조립이 Dest.Missions 를 더하고 여기를 잇는다(assembly.md).
-        MeDestination.Missions -> null
+        // v1.0.13 「미션」 화면(W4-c ui/missions) — 7차 조립(K11)이 Dest.Missions 를 더해 이었다.
+        MeDestination.Missions -> Dest.Missions
     }
 }

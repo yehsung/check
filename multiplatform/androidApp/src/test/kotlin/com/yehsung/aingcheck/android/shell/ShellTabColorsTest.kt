@@ -30,6 +30,15 @@ class ShellTabColorsTest {
     @get:Rule
     val compose = createEmptyComposeRule()
 
+    /** 이 시험은 셸(탭 · 딥링크 · 수락 증표)만 잰다 — 조립 화면 대신 자리표시 셸(K11 뒤 단계를 주입한다, W2-f §1). */
+    @org.junit.Before
+    fun placeholderShell() {
+        val container = androidx.test.core.app.ApplicationProvider.getApplicationContext<com.yehsung.aingcheck.android.app.AingApplication>().container
+        container.usePlaceholderShell()
+        // 화면 모드 저장값의 기본은 다크다(W3-b 패치 0002 — iOS 와 같다). 이 시험은 OS 라이트·다크(qualifier)마다 탭 색을 재므로 '시스템'을 고른다.
+        container.appearance.select(com.yehsung.aingcheck.ui.theme.AingAppearanceMode.System)
+    }
+
     @Test
     @Config(qualifiers = "+notnight")
     fun lightTabBarPaintsOnlyTheSelectedTabBlue() = check("라이트", selectedInk = 0xFF1864CF.toInt(), unselectedInk = 0xFF6F6F74.toInt())

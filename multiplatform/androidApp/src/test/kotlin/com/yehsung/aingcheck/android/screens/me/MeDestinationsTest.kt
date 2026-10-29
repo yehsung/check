@@ -10,7 +10,6 @@ import com.yehsung.aingcheck.android.routing.AingRoute
 import com.yehsung.aingcheck.core.stores.me.MeDestination
 import com.yehsung.aingcheck.core.stores.me.MeGrassAxis
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MeDestinationsTest {
@@ -22,13 +21,14 @@ class MeDestinationsTest {
     }
 
     @Test
-    fun everyDestinationHasAPlaceExceptMissions() {
+    fun everyDestinationHasAPlace() {
         assertEquals(Dest.CharacterPicker, MeDestinations.dest(MeDestination.Characters))
         assertEquals(Dest.Profile, MeDestinations.dest(MeDestination.Profile))
         assertEquals(Dest.BlockedPeople, MeDestinations.dest(MeDestination.Blocked))
         assertEquals(Dest.GrassDetail("work"), MeDestinations.dest(MeDestination.Grass(MeGrassAxis.work)))
         assertEquals(Dest.GrassDetail("token"), MeDestinations.dest(MeDestination.Grass(MeGrassAxis.token)))
-        assertNull("미션 화면 목적지는 조립 몫(assembly.md)", MeDestinations.dest(MeDestination.Missions))
+        // 7차 조립(K11): 미션 화면 목적지 — 나 탭 「미션」 줄이 여기로 간다(W4-c MissionsRoute).
+        assertEquals(Dest.Missions, MeDestinations.dest(MeDestination.Missions))
     }
 
     /** 잔디 목적지 인자는 왕복한다(나 탭이 넣은 글자를 잔디 화면이 같은 축으로 푼다) · 모르는 글자는 근무로 연다. */

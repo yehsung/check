@@ -34,6 +34,12 @@ class ShellNavigationTest {
 
     private val app get() = ApplicationProvider.getApplicationContext<AingApplication>()
 
+    /** 이 시험은 셸(탭 · 딥링크 · 수락 증표)만 잰다 — 조립 화면 대신 자리표시 셸(K11 뒤 단계를 주입한다, W2-f §1). */
+    @org.junit.Before
+    fun placeholderShell() {
+        androidx.test.core.app.ApplicationProvider.getApplicationContext<com.yehsung.aingcheck.android.app.AingApplication>().container.usePlaceholderShell()
+    }
+
     private fun deepLink(url: String) = Intent(Intent.ACTION_VIEW, Uri.parse(url), app, MainActivity::class.java)
 
     @Test

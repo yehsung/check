@@ -37,6 +37,12 @@ class AingMessagingServiceTest {
     val compose = createEmptyComposeRule()
 
     private val app get() = ApplicationProvider.getApplicationContext<AingApplication>()
+
+    /** 셸은 자리표시(탭 · 딥링크 · 보이는 라우트만 — 조립 화면 없이, W2-f §1 "단계를 주입"). */
+    @org.junit.Before
+    fun placeholderShell() {
+        app.container.usePlaceholderShell()
+    }
     private val manager get() = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     private fun messageFrom(peer: String): RemoteMessage =

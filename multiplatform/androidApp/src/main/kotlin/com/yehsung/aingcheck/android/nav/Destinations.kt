@@ -65,6 +65,8 @@ object Dest {
     @Serializable data object AccountDeletion
     /** 잔디 상세(축: work·tokens …). */
     @Serializable data class GrassDetail(val axis: String)
+    /** 미션(iOS MeDestination.missions — 딥링크 없음, 7차 조립 K11 · W4-c MissionsRoute). */
+    @Serializable data object Missions
 
     // ---- 공통 ----
     @Serializable data object NotificationPrimerSheet

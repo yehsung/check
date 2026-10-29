@@ -121,4 +121,33 @@ class MergedManifestTest {
         assertEquals("false", service.a("exported"))
         assertTrue(service.children("action").any { it.a("name") == "com.google.firebase.MESSAGING_EVENT" })
     }
+    private val widgetStrings: Map<String, String> by lazy {
+        val root = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File("src/main/res/values/aing_widget_strings.xml")).documentElement
+        root.children("string").associate { it.getAttribute("name") to it.textContent }
+    }
+
+    /** W3-b 위젯 4종(조정자 패치 0001): kind 표의 수신자가 다 선언됐고(exported · APPWIDGET_UPDATE) 각자 제 위젯 정보 XML 을 가리킨다. */
+    @Test
+    fun widgetReceiversMatchTheKindTable() {
+        for (kind in com.yehsung.aingcheck.android.widget.AingWidgetKind.entries) {
+            val receiver = component("receiver", kind.receiverClassName)
+            assertEquals("${kind.kind} 수신자가 시스템 갱신을 못 받는다", "true", receiver.a("exported"))
+            assertTrue(receiver.children("action").any { it.a("name") == "android.appwidget.action.APPWIDGET_UPDATE" })
+            val meta = receiver.children("meta-data").single { it.a("name") == "android.appwidget.provider" }
+            assertEquals("@xml/${kind.providerInfoName}", meta.a("resource"))
+            val info = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }.newDocumentBuilder()
+                .parse(File("src/main/res/xml/${kind.providerInfoName}.xml")).documentElement
+            assertEquals("appwidget-provider", info.tagName)
+            assertEquals("@layout/glance_default_loading_layout", info.a("initialLayout"))
+            assertEquals("0", info.a("updatePeriodMillis"))
+            // 갤러리 글자 = kind 표 글자(= iOS 원문 — AingWidgetKindTest).
+            val key = kind.providerInfoName
+            assertEquals(kind.galleryName, widgetStrings["${key}_name"])
+            assertEquals(kind.galleryDescription, widgetStrings["${key}_description"])
+            assertEquals("@string/${key}_description", info.a("description"))
+            assertEquals("@string/${key}_name", receiver.a("label"))
+        }
+        val widgetReceivers = application.children("receiver").filter { r -> r.children("meta-data").any { it.a("name") == "android.appwidget.provider" } }
+        assertEquals("위젯 수신자는 넷뿐이다", 4, widgetReceivers.size)
+    }
 }

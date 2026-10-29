@@ -63,6 +63,54 @@
             </intent-filter>
         </service>
 
+
+        <!-- 위젯 4종(W3-b 조정자 패치 0001 · E§7.1). 수신자 클래스 이름은 홈 화면이 기억하는 이름이다(iOS kind 자리 — AingWidgetKind 표가 고정한다).
+             시스템 APPWIDGET_UPDATE 를 받아야 해서 exported=true 다(앱 위젯 공급자는 언제나 그렇다). -->
+        <receiver
+            android:name=".widget.WorkingNowWidgetReceiver"
+            android:exported="true"
+            android:label="@string/aing_widget_working_now_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aing_widget_working_now" />
+        </receiver>
+        <receiver
+            android:name=".widget.MyTodayWidgetReceiver"
+            android:exported="true"
+            android:label="@string/aing_widget_my_today_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aing_widget_my_today" />
+        </receiver>
+        <receiver
+            android:name=".widget.TodosWidgetReceiver"
+            android:exported="true"
+            android:label="@string/aing_widget_todos_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aing_widget_todos" />
+        </receiver>
+        <receiver
+            android:name=".widget.AILimitsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/aing_widget_ai_limits_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aing_widget_ai_limits" />
+        </receiver>
+
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
             android:value="false" />

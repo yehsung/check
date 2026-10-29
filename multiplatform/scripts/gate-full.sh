@@ -57,10 +57,35 @@ fi
 # JVM·조립 몫은 gate-fast.sh 가 봉인 아래에서 한다(KIND=full 이면 slow·lint·assembleRelease·jar 를 더한다).
 AINGCHECK_GATE_KIND=full "$HERE/gate-fast.sh" "$@"
 
+# 출시 판(R8) 점검(§4-1 "릴리스(R8) 스모크" · W6-a 패치 03): 운영 값 없는 dryrun. 출시 스크립트가 R8 AAB + 같은 번들의 보편 APK 를
+# 만들고(sandbox-exec 봉인 · --offline · 그 자리에서 만든 버리는 키) 산출물 판정(badging 패키지·판 번호·targetSdk·권한 = 허용 목록 ·
+# AD_ID 0 · AAB·APK dex 의 빌드 도장·판돈 깃발·.invalid 기준선 · 비밀 표식·키 파일·Fixtures 0 · 서명 지문 · .so 허용 목록·16 KB ·
+# 진열장 클래스·문자열 0 · 크기 예산)을 한다.
+# 런처 아이콘이 아직 없어 아이콘 판정은 --allow-no-icon 으로 넘긴다 — 그 사실을 **언제나** 찍는다(아이콘이 들어오면 이 인자를 뺀다).
+# 맥에서만 돈다: 봉인(sandbox-exec)을 거는 곳이 맥이다. Linux(mp-nightly gate-full-linux)는 이 단계 밖이 봉인 밖이라 R8 빌드를 하지 않고
+# **언제나** 'release-dryrun=not-run(linux)'를 찍는다(K12 — 봉인 밖 Gradle 금지. 출시 판은 맥 몫, E§11).
+MP_DIR="$(cd "$HERE/.." && pwd)"
+rel_out="$MP_DIR/build/gate/release-dryrun"
+rel_rc=0
+rel_ran=0
+if [[ "$(uname -s)" == Darwin ]]; then
+  rel_ran=1
+  rm -rf "$rel_out"
+  mkdir -p "$MP_DIR/build/gate"
+  set +e
+  "$HERE/release-android.sh" dryrun --allow-dirty --allow-no-icon --out "$rel_out" > "$MP_DIR/build/gate/release-dryrun.log" 2>&1
+  rel_rc=$?
+  set -e
+  grep -E '^release-android: (FAIL|verify checks=|dryrun ok)' "$MP_DIR/build/gate/release-dryrun.log" | sed 's/^/gate-full: /' || true
+  echo "gate-full: release-dryrun-exit=$rel_rc · 아이콘 판정 빠짐(--allow-no-icon) · log=$MP_DIR/build/gate/release-dryrun.log"
+else
+  echo "gate-full: release-dryrun=not-run($(uname -s) — 출시 R8 판·스모크는 맥 몫: 이 OS 에서는 봉인 밖 R8 빌드를 하지 않는다)"
+fi
+
 # 기기 계측(봉인은 emu.sh 가 건다 — A-X7 결과에 따른다). 에뮬레이터 수명은 emu.sh 가 쥔다.
 if [[ "$skip_device" -eq 1 ]]; then
-  echo "gate-full: 기기 계측 빠짐 — JVM·조립 몫만 초록이다" >&2
-  exit 0
+  echo "gate-full: 기기 계측 빠짐 — JVM·조립·출시 판정 몫만 잰다(R8 판 기기 스모크도 빠짐)" >&2
+  exit "$rel_rc"
 fi
 port_args=()
 if [[ -n "${AINGCHECK_GATE_EMU_PORT:-}" ]]; then
@@ -81,5 +106,45 @@ run_device() { # 단계 이름 · emu.sh instrumented 인자…
 run_device androidApp-api36
 run_device rules-api26 --avd aingcheck-api26 --task :core:rules:connectedAndroidDeviceTest
 run_device rules-api36 --avd aingcheck-api36 --task :core:rules:connectedAndroidDeviceTest
+# R8 판 기기 스모크(W6-a 패치 03): 위 dryrun 의 보편 APK 를 봉인 에뮬레이터에 깔고 띄운다 — 6초 뒤 살아 있음 · FATAL 0 ·
+# 조립 지점 로그(variant=RELEASE firebase=SKIP_NO_CONFIG) · 셸 onCreate · 깔린 versionCode = 영수증의 판 번호 ·
+# 깔린 base.apk 의 SHA-256 = 이번 dryrun APK(installedApk — 판 번호가 늘 같은 dryrun 에서 "이번 빌드"를 가르는 것은 이것이다). 포트는 위 단계와 같다.
+if [[ $rel_ran -eq 0 ]]; then
+  smoke_rc=0
+  echo "gate-full: device[release-smoke]=not-run($(uname -s) — 출시 dryrun 이 돌지 않았다)"
+elif [[ $rel_rc -eq 0 ]]; then
+  rel_apk="$(ls "$rel_out"/*-universal.apk 2>/dev/null | head -n 1)"
+  rel_vc="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["versionCode"])' "$rel_out/receipt.json" 2>/dev/null || true)"
+  set +e
+  if [[ -n "$rel_apk" && "$rel_vc" =~ ^[0-9]+$ ]]; then
+    "$HERE/release-android.sh" smoke --apk "$rel_apk" --port "${AINGCHECK_GATE_EMU_PORT:-5560}" --expect-firebase SKIP_NO_CONFIG --version-code "$rel_vc"
+    smoke_rc=$?
+  else
+    echo "gate-full: R8 판 기기 스모크 못 함 — dryrun 산출물·영수증이 없다(apk='$rel_apk' versionCode='$rel_vc')" >&2
+    smoke_rc=1
+  fi
+  set -e
+else
+  smoke_rc=1
+  echo "gate-full: R8 판 기기 스모크 못 함 — dryrun 이 빨갛다(exit $rel_rc)" >&2
+fi
+echo "gate-full: device[release-smoke]-exit=$smoke_rc"
+if [[ $smoke_rc -ne 0 && $device_rc -eq 0 ]]; then device_rc=$smoke_rc; fi
+# 시험 dex 운영 주소 0(§4-1): 계측이 만든 debug APK 와 시험 APK 의 dex 에 운영 프로젝트 주소 문형이 없고 assets Fixtures 가 없다.
+for test_apk in "$MP_DIR/androidApp/build/outputs/apk/debug/androidApp-debug.apk" \
+                "$MP_DIR/androidApp/build/outputs/apk/androidTest/debug/androidApp-debug-androidTest.apk"; do
+  if [[ ! -f "$test_apk" ]]; then
+    echo "gate-full: 시험 APK 가 없다(계측이 만들지 않았다): $test_apk" >&2
+    if [[ $device_rc -eq 0 ]]; then device_rc=1; fi
+    continue
+  fi
+  set +e
+  bash "$HERE/apk-content-check.sh" "$test_apk" | sed 's/^/gate-full: /'
+  tc_rc=${PIPESTATUS[0]}
+  set -e
+  echo "gate-full: test-dex[$(basename "$test_apk")]-exit=$tc_rc"
+  if [[ $tc_rc -ne 0 && $device_rc -eq 0 ]]; then device_rc=$tc_rc; fi
+done
+if [[ $rel_rc -ne 0 && $device_rc -eq 0 ]]; then device_rc=$rel_rc; fi
 echo "gate-full: device-exit=$device_rc"
 exit "$device_rc"

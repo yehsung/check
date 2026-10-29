@@ -110,6 +110,24 @@ else
   echo "gate-$KIND: emu.sh self-test 안 돎(Windows — emu.sh 는 맥·Linux 도구)"
 fi
 
+# 출시 도구 자기 시험(W6-a 패치 02 — release-android.sh · androidApp/release): 가짜 입력으로 입력 거부(운영 값 여섯·업로드 키·판 번호 단조·
+# 더러운 트리) · Gradle 넘김(값은 환경 변수로만) · 산출물 판정(javac+d8 로 만든 진짜 dex 의 BuildConfig 도장·판돈 깃발 · 권한 · 비밀 표식 ·
+# 서명 지문 · 진열장 · 크기 예산 · OS 가드 · 판돈 이중 확인) · 장부 · smoke 판정 · 권한 목록 = MergedManifestTest 를 잰다.
+# Gradle·에뮬레이터·망·키체인을 쓰지 않는다(키체인은 가짜 security). 맥·Linux 둘 다 돈다 — 입력 판정·계획(--plan-only)은 OS 를 가리지 않고,
+# Gradle·서명 단계의 OS 가드는 가짜 uname 으로 잰다(W6-a 7차 수정: 가드가 계획 앞에 있어 Linux CI 에서 32건이 빨갰다).
+# JDK(keytool·jarsigner·javac)와 Android build-tools 의 d8 이 있어야 한다(없으면 빨강 — 건너뛰지 않는다). Windows 에서는 돌지 않는다(그 줄을 찍는다).
+rel_rc=0
+rel_status="not-run(windows)"
+if [[ "$OS" != windows ]]; then
+  rel_log="$MP/build/gate/release-self-test.log"
+  mkdir -p "$MP/build/gate"
+  /bin/bash "$HERE/release-android.sh" self-test > "$rel_log" 2>&1 || rel_rc=$?
+  rel_status="exit=$rel_rc"
+  grep -E '^self-test: (FAIL|cases=)' "$rel_log" | sed "s/^/gate-$KIND: release-android /" || true
+else
+  echo "gate-$KIND: release-android.sh self-test 안 돎(Windows — 출시는 맥 몫)"
+fi
+
 # 시험 JVM 이 봉인 프로세스의 자손인지(SealAncestryTest). Windows 의 bash PID 는 Windows PID 가 아니라 뺀다.
 if [[ "$OS" != windows ]]; then export AINGCHECK_GATE_PID="$$"; fi
 
@@ -176,10 +194,11 @@ prefs_after="absent"
 if [[ -e "$prefs_plist" ]]; then prefs_after="$(stat -f '%m' "$prefs_plist" 2>/dev/null || echo present)"; fi
 
 status=0
-echo "gate-$KIND: os=$OS gradle-exit=$rc golden-digest-exit=$golden_rc emu-self-test=$emu_status elapsed=${elapsed}s canary=$canary_status"
+echo "gate-$KIND: os=$OS gradle-exit=$rc golden-digest-exit=$golden_rc emu-self-test=$emu_status release-self-test=$rel_status elapsed=${elapsed}s canary=$canary_status"
 if [[ $rc -ne 0 ]]; then status=1; fi
 if [[ $golden_rc -ne 0 ]]; then echo "gate-$KIND: golden-digest --check 빨강(exit $golden_rc)" >&2; status=1; fi
 if [[ $emu_rc -ne 0 ]]; then echo "gate-$KIND: emu.sh self-test 빨강(exit $emu_rc) — $MP/build/gate/emu-self-test.log" >&2; status=1; fi
+if [[ $rel_rc -ne 0 ]]; then echo "gate-$KIND: release-android.sh self-test 빨강(exit $rel_rc) — $MP/build/gate/release-self-test.log" >&2; status=1; fi
 if [[ "$canary_status" != "ran" ]]; then echo "gate-$KIND: NetworkCanaryTest 가 초록으로 돌지 않았다($canary_status)" >&2; status=1; fi
 if [[ -n "$new_home" ]]; then echo "gate-$KIND: 시험이 \$HOME 에 새 항목을 남겼다: $new_home" >&2; status=1; fi
 if [[ "$prefs_before" != "$prefs_after" ]]; then echo "gate-$KIND: java.util.prefs plist 가 바뀌었다($prefs_before → $prefs_after)" >&2; status=1; fi

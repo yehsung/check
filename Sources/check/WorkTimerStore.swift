@@ -440,6 +440,10 @@ final class WorkTimerStore {
     /// 마지막으로 팀 상태(work_statuses 4 GET)를 **성공적으로** 받은 시각 — 팝오버 재오픈 15초 스로틀(Q10)의 근거.
     /// v0.2.38 δ 가 이 파일을 못 고쳐 Sync 확장의 약참조 측면 표로 심었던 값을 저장 프로퍼티로 이관했다. 관찰 대상 아님.
     @ObservationIgnored var lastTeamStatusAt: Date = .distantPast
+    /// 마지막으로 **성공한** 하트비트 시각(주입 시계) — p_heartbeat=true 인 work_tick 성공, 또는 레거시 하트비트
+    /// (sendHeartbeatIfWorking 의 상태 upsert·입력 보고) 성공. work_tick 과부하 중 레거시 하트비트를 한 건 보낼지 가르는
+    /// 유일한 근거다(WorkTimerStoreSync `overloadHeartbeatMaxGapSeconds`). 관찰 대상 아님.
+    @ObservationIgnored var lastHeartbeatSucceededAt: Date = .distantPast
 
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
 

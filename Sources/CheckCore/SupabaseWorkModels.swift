@@ -3004,8 +3004,9 @@ package enum WorkTickFailure: Error, Equatable, Sendable {
     case contractMismatch(version: Int?)
     /// 2xx 인데 `WorkTickResponse` 로 읽히지 않는다.
     case undecodable
-    /// 5xx / 무료플랜 일시정지.
-    case serverError(status: Int)
+    /// 5xx / 무료플랜 일시정지. `code` 는 PostgREST 본문의 SQLSTATE/PGRST 코드(없으면 nil) — 500 + 57014·PGRST003 같은
+    /// 과부하 코드를 그 밖의 500 과 가르는 데 쓴다(2026-10-30 안정화, 판정은 맥 전용 게이트).
+    case serverError(status: Int, code: String?)
     /// 그 밖의 비 2xx(400 22023 클라 버그, 23514 제약 위반 등). `code` 는 PostgREST 본문의 SQLSTATE/PGRST 코드.
     case rejected(status: Int, code: String?)
 }

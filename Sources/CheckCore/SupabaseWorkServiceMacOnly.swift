@@ -415,7 +415,7 @@ extension SupabaseWorkService {
     /// (`WorkTickRequest` 주석), 응답 조각은 기존 디코더로 읽는다(`WorkTickResponse`).
     ///
     /// **공용 `send` 를 쓰지 않고 직접 보내는 이유**: 폴백 규칙이 상태코드·PostgREST 코드로 갈리는데
-    /// (404/PGRST202 → 끔, 403/42501 → 끔, 5xx → 연속 3회면 1시간), 공용 매핑은 403 을 `.authMessage(영문)` 로
+    /// (404/PGRST202 → 끔, 403/42501 → 끔, 과부하 5xx → 백오프, 그 밖 → 연속 3회면 15분), 공용 매핑은 403 을 `.authMessage(영문)` 로
     /// 접어 상태코드를 잃는다. 헤더 구성은 `send` 와 같다(apikey / Bearer / Accept / Content-Type).
     /// 401 만은 `.sessionExpired` 로 던져 `withSessionRetry` 의 토큰 갱신·재시도를 그대로 탄다.
     /// 인코더의 convertToSnakeCase 가 `pTeamId → p_team_id` 를 만든다(다른 RPC 본문과 같은 규약).
@@ -447,7 +447,8 @@ extension SupabaseWorkService {
         case 403:
             throw WorkTickFailure.forbidden(code: code)
         case 500...:
-            throw WorkTickFailure.serverError(status: http.statusCode)
+            // 코드를 싣는다 — 500 이면서 57014(문장 타임아웃)·PGRST000~003(연결 풀)이면 과부하(b)로 가른다(WorkTickGate.isOverload).
+            throw WorkTickFailure.serverError(status: http.statusCode, code: code)
         default:
             // 코드가 상태보다 정확한 경우(프록시가 상태를 바꿔 준 300/406 등)도 같은 문으로 접는다.
             if code == "PGRST202" { throw WorkTickFailure.functionMissing(code: code) }
@@ -1017,17 +1018,39 @@ package struct ProfileAppVersionUpdateRequest: Encodable {
 // MARK: - work_tick 가용성 게이트 (v0.2.38 S3 / docs/work-tick.md 4.1·4.5)
 
 /// `work_tick` 을 **이 실행 동안** 쓸 수 있는가와, 왜 못 쓰는가. 컴파일 상수 킬스위치(`WorkTimerStore.workTickEnabled`)
-/// 뒤의 실행 단위 스위치다. 규칙은 계약 문서 4.5 그대로다:
-///  · 404/PGRST202(함수 없음·모르는 키) · 403/42501(실행권 회수) · `v != 1` · 디코드 실패 → **이 실행 동안 끈다**
-///  · 5xx·그 밖의 실패 → 연속 3회면 **1시간** 폴백 후 재시도(지속 오류 시 "실패 1 + 폴백 7" 폭주의 상한)
-/// 어느 쪽이든 그 틱은 호출부가 기존 경로로 즉시 재수행한다 — 하트비트 유실 창을 만들지 않는 것이 규칙의 전부다.
+/// 뒤의 실행 단위 스위치다. 실패는 셋으로 가른다(계약 문서 4.5 — 2026-10-30 안정화):
+///  (a) 계약 실패 — 404/PGRST202(함수 없음·모르는 키) · 403/42501(실행권 회수) · `v != 1` · 디코드 실패 → **이 실행 동안 끈다**.
+///      그 틱은 호출부가 기존 경로로 즉시 재수행한다.
+///  (b) 과부하·도달 불가 — 502·503·504, 500 + 과부하 코드(`isOverloadCode`), 도달 불가 URLError(`isOverload(_:URLError)`)
+///      → **기존 경로로 펼치지 않고** 백오프한다(`recordOverloadFailure`). 2026-10-29 18:54 장애에서 실패 틱마다 하트비트 2 +
+///      팀 GET 4 + away 1 로 펼친 요청이 504 더미에 섞였다 — 과부하인 서버에 사용자당 요청을 1건에서 7건으로 늘리는 쪽이었다.
+///      (b) 는 아래 (c) 의 정지 카운터에 세지도 지우지도 않는다(성공만 지운다).
+///  (c) 그 밖의 일시 실패(400 등 거절, 그 밖의 500, 그 밖의 네트워크 오류) → 그 틱은 기존 경로로 즉시 재수행,
+///      연속 3회면 **15분** 폴백(옛 1시간 — 서버가 1분 만에 회복해도 1시간 동안 요청 여러 건짜리 경로에 묶였다).
 ///
 /// 폴백 사유는 `syncMessage` 가 아니라 여기(진단 문자열)에 남긴다. 사용자에게 "동기화 실패" 를 보일 상황이 아니라
 /// 이득만 사라진 상태이기 때문이다. NSLock 으로 보호하는 `@unchecked Sendable` — 액터 밖(메인 액터)에서 동기로 읽는다.
 package final class WorkTickGate: @unchecked Sendable {
-    /// 연속 일시 실패 상한. 도달하면 `suspensionSeconds` 동안 폴백.
+    /// (c) 연속 일시 실패 상한. 도달하면 `suspensionSeconds` 동안 폴백.
     package static let transientFailureLimit = 3
-    package static let suspensionSeconds: TimeInterval = 60 * 60
+    package static let suspensionSeconds: TimeInterval = 15 * 60
+    /// (b) 백오프: k 번째 연속 과부하 실패 뒤 `min(30·2^(k−1), 120)초 × 지터(0.8~1.2)`. 상한 120초는 서버 스캐빈저
+    /// (`close_abandoned_work_sessions` — 하트비트 10분 공백이면 방치 마감)보다 한참 안쪽이라, 회복 확인이 늦어 근무가
+    /// 닫히는 일이 없다. 지터는 같은 순간 실패한 맥들이 같은 순간 되돌아와 회복 직후 서버를 다시 덮치지 않게 흩는다.
+    package static let overloadBackoffBaseSeconds: TimeInterval = 30
+    package static let overloadBackoffMaxSeconds: TimeInterval = 120
+    package static let overloadJitterRange: ClosedRange<Double> = 0.8...1.2
+
+    /// 이번 틱에 work_tick 을 시도해도 되는가. `.backingOff` 는 "기존 경로로 펼치지도 않는다" 는 점에서 `.suspended` 와 다르다.
+    package enum Availability: Equatable, Sendable {
+        case available
+        /// (a) 이 실행 동안 끔 — 기존 경로.
+        case disabled
+        /// (c) 15분 정지 — 기존 경로.
+        case suspended
+        /// (b) 과부하 백오프 — work_tick 도 기존 경로도 내지 않는다(하트비트 규칙은 호출부).
+        case backingOff(until: Date)
+    }
 
     private let lock = NSLock()
     private var disabledReason: String?
@@ -1035,21 +1058,42 @@ package final class WorkTickGate: @unchecked Sendable {
     private var consecutiveTransientFailures = 0
     private var suspendedUntil: Date?
     private var lastTransientReason: String?
+    private var consecutiveOverloadFailures = 0
+    private var backoffUntil: Date?
+    private var lastOverloadReason: String?
     private var successCount = 0
     private var fallbackCount = 0
     /// server_now − 로컬 시계(초). 양수면 서버가 앞선다. 판정에는 쓰지 않는다(계측 전용).
     private var lastClockSkewSeconds: TimeInterval?
+    private var jitterSource: @Sendable () -> Double = { Double.random(in: WorkTickGate.overloadJitterRange) }
 
-    /// 지금 work_tick 을 시도해도 되는가. 1시간 정지는 `now` 가 지나면 스스로 풀린다(카운터도 새로 센다).
-    package func isAvailable(now: Date) -> Bool {
+    package init() {}
+
+    /// 백오프 지터 공급원(기본 0.8~1.2 균등). 테스트가 고정값으로 갈아 끼운다 — 시계는 스토어의 `clock` 이 이미 주입이다.
+    /// 범위 밖 값은 `overloadJitterRange` 로 눌러 쓴다(주입 실수로 백오프가 0 이나 무한이 되지 않게).
+    package var jitter: @Sendable () -> Double {
+        get { lock.lock(); defer { lock.unlock() }; return jitterSource }
+        set { lock.lock(); defer { lock.unlock() }; jitterSource = newValue }
+    }
+
+    /// 지금 work_tick 을 시도할 수 있는가와, 못 하면 어느 쪽으로 가는가. 15분 정지는 `now` 가 지나면 스스로 풀린다
+    /// (카운터도 새로 센다). 백오프는 만료돼도 연속 과부하 수를 지우지 않는다 — 회복 확인 1건이 또 실패하면 다음 칸이
+    /// 더 길어야 하기 때문이다(성공만 지운다).
+    package func availability(now: Date) -> Availability {
         lock.lock(); defer { lock.unlock() }
-        if disabledReason != nil { return false }
+        if disabledReason != nil { return .disabled }
         if let until = suspendedUntil {
-            if now < until { return false }
+            if now < until { return .suspended }
             suspendedUntil = nil
             consecutiveTransientFailures = 0
         }
-        return true
+        if let until = backoffUntil, now < until { return .backingOff(until: until) }
+        return .available
+    }
+
+    /// `availability(now:) == .available` 의 줄임.
+    package func isAvailable(now: Date) -> Bool {
+        availability(now: now) == .available
     }
 
     /// 이 실행 동안 끈다(함수 없음·실행권 회수·계약 불일치·디코드 실패).
@@ -1060,7 +1104,7 @@ package final class WorkTickGate: @unchecked Sendable {
         disabledAt = now
     }
 
-    /// 일시 실패 1회(5xx·네트워크·그 밖의 4xx). 연속 3회면 1시간 정지.
+    /// (c) 일시 실패 1회(과부하가 아닌 5xx·그 밖의 4xx·그 밖의 네트워크 오류). 연속 3회면 15분 정지.
     package func recordTransientFailure(reason: String, at now: Date) {
         lock.lock(); defer { lock.unlock() }
         lastTransientReason = reason
@@ -1070,12 +1114,26 @@ package final class WorkTickGate: @unchecked Sendable {
         }
     }
 
-    /// 성공 1회. 연속 실패 장부를 지우고 시계 차를 계측한다.
+    /// (b) 과부하·도달 불가 1회. 백오프를 다음 칸으로 늘린다(30·60·120·120…초 × 지터). (c) 의 정지 카운터는 건드리지 않는다.
+    package func recordOverloadFailure(reason: String, at now: Date) {
+        lock.lock(); defer { lock.unlock() }
+        lastOverloadReason = reason
+        consecutiveOverloadFailures += 1
+        let doublings = Double(min(consecutiveOverloadFailures - 1, 8))
+        let base = min(Self.overloadBackoffBaseSeconds * pow(2, doublings), Self.overloadBackoffMaxSeconds)
+        let factor = min(max(jitterSource(), Self.overloadJitterRange.lowerBound), Self.overloadJitterRange.upperBound)
+        backoffUntil = now.addingTimeInterval(base * factor)
+    }
+
+    /// 성공 1회. 연속 실패 장부((b)·(c) 모두)를 지우고 시계 차를 계측한다.
     package func recordSuccess(serverNow: Date?, localNow: Date) {
         lock.lock(); defer { lock.unlock() }
         successCount += 1
         consecutiveTransientFailures = 0
         lastTransientReason = nil
+        consecutiveOverloadFailures = 0
+        backoffUntil = nil
+        lastOverloadReason = nil
         if let serverNow { lastClockSkewSeconds = serverNow.timeIntervalSince(localNow) }
     }
 
@@ -1083,6 +1141,37 @@ package final class WorkTickGate: @unchecked Sendable {
     package func recordFallback() {
         lock.lock(); defer { lock.unlock() }
         fallbackCount += 1
+    }
+
+    // MARK: 실패 분류 (b)
+
+    /// (b) 과부하·도달 불가인가. 502·503·504 는 코드와 무관하게, 500 은 PostgREST 코드가 과부하 계열일 때만.
+    /// 그 밖의 `WorkTickFailure` 는 (a) 또는 (c) 다(호출부가 가른다).
+    package static func isOverload(_ failure: WorkTickFailure) -> Bool {
+        guard case .serverError(let status, let code) = failure else { return false }
+        if status == 502 || status == 503 || status == 504 { return true }
+        guard status == 500, let code else { return false }
+        return isOverloadCode(code)
+    }
+
+    /// 500 본문의 과부하 코드: 57014(statement timeout) · PGRST000~003(연결 풀·스키마 캐시 — 2026-10-29 의 PGRST003) ·
+    /// 53xxx(자원 부족) · 08xxx(연결 예외) · 57P0x(관리자 종료·재시작 중).
+    package static func isOverloadCode(_ code: String) -> Bool {
+        if code == "57014" { return true }
+        if code == "PGRST000" || code == "PGRST001" || code == "PGRST002" || code == "PGRST003" { return true }
+        guard code.count == 5 else { return false }
+        return code.hasPrefix("53") || code.hasPrefix("08") || code.hasPrefix("57P0")
+    }
+
+    /// 서버에 닿지 못한 URLError(시간 초과·연결 실패·연결 끊김·DNS·오프라인·TLS). 취소(.cancelled)는 여기 오기 전에 걸러진다.
+    package static func isOverload(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .cannotConnectToHost, .networkConnectionLost, .cannotFindHost,
+             .dnsLookupFailed, .notConnectedToInternet, .secureConnectionFailed:
+            return true
+        default:
+            return false
+        }
     }
 
     /// 상태 스냅샷(테스트·진단용).
@@ -1094,6 +1183,9 @@ package final class WorkTickGate: @unchecked Sendable {
             consecutiveTransientFailures: consecutiveTransientFailures,
             suspendedUntil: suspendedUntil,
             lastTransientReason: lastTransientReason,
+            consecutiveOverloadFailures: consecutiveOverloadFailures,
+            backoffUntil: backoffUntil,
+            lastOverloadReason: lastOverloadReason,
             successCount: successCount,
             fallbackCount: fallbackCount,
             lastClockSkewSeconds: lastClockSkewSeconds
@@ -1106,6 +1198,9 @@ package final class WorkTickGate: @unchecked Sendable {
         package let consecutiveTransientFailures: Int
         package let suspendedUntil: Date?
         package let lastTransientReason: String?
+        package let consecutiveOverloadFailures: Int
+        package let backoffUntil: Date?
+        package let lastOverloadReason: String?
         package let successCount: Int
         package let fallbackCount: Int
         package let lastClockSkewSeconds: TimeInterval?
@@ -1119,10 +1214,15 @@ package final class WorkTickGate: @unchecked Sendable {
             parts.append("폴백 고정(\(reason))")
             if let at = s.disabledAt { parts.append("\(CheckCoreShared.realtimeDiagnosticsTime.string(from: at)) 부터") }
         } else if let until = s.suspendedUntil, now < until {
-            parts.append("1시간 폴백(\(s.lastTransientReason ?? "연속 실패"))")
+            parts.append("15분 폴백(\(s.lastTransientReason ?? "연속 실패"))")
             parts.append("\(CheckCoreShared.realtimeDiagnosticsTime.string(from: until)) 까지")
         } else {
             parts.append("work_tick 사용")
+            if let until = s.backoffUntil, now < until {
+                parts.append("과부하 대기(\(s.lastOverloadReason ?? "연속 실패")) \(CheckCoreShared.realtimeDiagnosticsTime.string(from: until)) 까지")
+            } else if s.consecutiveOverloadFailures > 0, let reason = s.lastOverloadReason {
+                parts.append("과부하 연속 \(s.consecutiveOverloadFailures)회(\(reason))")
+            }
             if s.consecutiveTransientFailures > 0, let reason = s.lastTransientReason {
                 parts.append("연속 실패 \(s.consecutiveTransientFailures)회(\(reason))")
             }

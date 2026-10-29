@@ -83,13 +83,22 @@ extension WorkTimerStore {
         case fromTick(away: AwaySyncResponse?, ownerUserID: String, generation: Int)
         /// 폴백 — `finishWorkTick` 이 기존 `refreshAwayStateIfNeeded()` 를 그대로 부른다(요청도 그쪽이 낸다).
         case fallback
+        /// 과부하·도달 불가(게이트 (b) — 실패 직후 또는 백오프 중). away 요청을 내지 않고, `.fromTick` 과 **같은 가드**
+        /// (세션 없음 → 비움 / 비근무 120초 스로틀 / 스탬프 → 세대·계정)를 지난 뒤 "조각이 비어 왔다" 와 같은 "모른다" 로 접는다.
+        /// 정책이 비면 자동 마감이 멈춘다 — 옛 경로에서 away_sync 가 네트워크 실패했을 때와 같은 뜻이다.
+        case overloaded(ownerUserID: String, generation: Int)
         /// 취소·세대 변화 — 아무것도 더 하지 않는다(기존 경로도 이 경우 조용히 빠져나갔다).
         case skipped
     }
 
     /// 30초 폴링 본문의 `sendHeartbeatIfWorking → refreshTeamStatus` 자리(+ away 조각 수령). 가용하면 work_tick 1건,
-    /// 아니면 **그 두 함수를 같은 순서로** 부른다. 실패한 틱은 반드시 폴백으로 즉시 재수행한다(하트비트 유실 창 금지 —
-    /// 서버는 하트비트 실패 시 전체를 실패시키므로 실패 응답 = 쓰기 0건이 보장되어 재수행이 안전하다).
+    /// 아니면 **그 두 함수를 같은 순서로** 부른다. 계약·일시 실패((a)·(c))한 틱은 반드시 폴백으로 즉시 재수행한다
+    /// (하트비트 유실 창 금지 — 서버는 하트비트 실패 시 전체를 실패시키므로 실패 응답 = 쓰기 0건이 보장되어 재수행이 안전하다).
+    ///
+    /// **과부하·도달 불가((b) — 2026-10-30 안정화)는 펼치지 않는다.** 2026-10-29 장애에서 504 를 받은 틱마다 하트비트 2 +
+    /// 팀 GET 4 + away 1 로 재수행해 과부하인 서버에 사용자당 요청을 늘렸다. (b) 틱과 백오프 중 틱은 팀 조회·away 요청을
+    /// 내지 않고(`holdTickDuringOverload`), 근무 중이며 마지막 성공 하트비트가 120초보다 오래됐을 때만 레거시 하트비트
+    /// 한 번으로 세션 생존만 지킨다(서버 스캐빈저는 10분 공백에 마감한다). 백오프가 끝난 첫 틱의 work_tick 1건이 회복 확인이다.
     ///
     /// 무소속(`currentTeamID == nil`)은 통합 대상이 아니다: 기존 경로가 팀 GET 을 내지 않아 합칠 것이 없고
     /// (away_sync 만 120초 스로틀로), work_tick 으로 바꾸면 그 사용자에게 요청이 오히려 늘어난다. 기존 함수로 보낸다.
@@ -99,12 +108,20 @@ extension WorkTimerStore {
             await refreshTeamStatus()
             return .fallback
         }
-        guard service.workTickGate.isAvailable(now: clock()) else {
-            // 이 실행 동안 꺼졌거나(404/403/계약) 1시간 정지 중 — 기존 경로 그대로(진단 카운터만 올린다).
+        switch service.workTickGate.availability(now: clock()) {
+        case .available:
+            break
+        case .disabled, .suspended:
+            // 이 실행 동안 꺼졌거나(404/403/계약) 15분 정지 중 — 기존 경로 그대로(진단 카운터만 올린다).
             service.workTickGate.recordFallback()
             await sendHeartbeatIfWorking()
             await refreshTeamStatus()
             return .fallback
+        case .backingOff:
+            // 과부하 백오프 중 — work_tick 도 기존 경로도 내지 않는다. 입력 관측은 매 틱 그대로 전진시킨다
+            // (work_tick 경로가 틱 첫머리에서 하던 일 — 요청이 아니라 로컬 값이다).
+            advanceMeaningfulInput(now: clock())
+            return await holdTickDuringOverload(ownerUserID: session.userID, generation: sessionGeneration)
         }
 
         let now = clock()
@@ -180,6 +197,10 @@ extension WorkTimerStore {
             await sendHeartbeatIfWorking()
             await refreshTeamStatus()
             return .fallback
+        case .overloaded:
+            // 과부하·도달 불가 — 기존 경로로 펼치지 않는다(위 doc). 메타 스탬프는 같은 이유로 되돌린다.
+            if includeMeta, lastTeamMetaRefreshAt == now { lastTeamMetaRefreshAt = metaStampBefore }
+            return await holdTickDuringOverload(ownerUserID: ownerUserID, generation: generation)
         case .success(let response, let members):
             await applyFetchedTeamStatuses(members, generation: generation, writeGeneration: writeGeneration)
             guard generation == sessionGeneration else { return .skipped }
@@ -190,49 +211,86 @@ extension WorkTimerStore {
         }
     }
 
+    /// 과부하 중 하트비트 간격 상한(초). 근무 중 (b) 틱에서 마지막 성공 하트비트가 이보다 오래됐을 때만 레거시 하트비트를
+    /// 한 번 보낸다. 서버 스캐빈저(`close_abandoned_work_sessions`)의 10분 공백 마감보다 한참 안쪽이라, 서버가 일부 요청만
+    /// 받아 주는 동안에도 살아 있는 근무가 방치로 닫히지 않는다.
+    static let overloadHeartbeatMaxGapSeconds: TimeInterval = 120
+
+    /// (b) 과부하·도달 불가 틱(실패 직후 또는 백오프 중)의 전부: 팀 조회(refreshTeamStatus)·away 요청을 **내지 않는다**.
+    /// 근무 중(`startedAt != nil`)이고 마지막 성공 하트비트가 120초보다 오래됐을 때만 `sendHeartbeatIfWorking()` 한 번 —
+    /// 세션 소유·흡수 맥·`confirmedSessionID` 게이트는 그 함수 안의 것을 그대로 탄다(유령 하트비트 방지 그대로).
+    /// away 는 `.overloaded` 로 넘겨 `finishWorkTick` 이 같은 가드로 "모른다" 접기를 한다.
+    private func holdTickDuringOverload(ownerUserID: String, generation: Int) async -> WorkTickAwayHandoff {
+        if startedAt != nil,
+           clock().timeIntervalSince(lastHeartbeatSucceededAt) > Self.overloadHeartbeatMaxGapSeconds {
+            await sendHeartbeatIfWorking()
+        }
+        guard generation == sessionGeneration else { return .skipped }
+        return .overloaded(ownerUserID: ownerUserID, generation: generation)
+    }
+
     /// 폴링 본문에서 되맞춤 뒤에 부른다: RPC 로 받은 away 조각을 **기존 refreshAwayStateIfNeeded 와 같은 가드**로
     /// 반영하거나(세션 없음 → 비움 / 비근무 120초 스로틀 안 → 무시 / 스탬프 → 세대·계정 확인 → applyAwaySync),
     /// 폴백이면 그 함수를 그대로 부른다. 스로틀 판정의 `startedAt` 은 이 시점(팀 상태 반영 **뒤**) 값이다 — 기존과 같다.
     /// 비근무 스로틀을 유지하는 이유: work_tick 은 조각을 매 틱 실어 오지만, "비근무에선 2분에 한 번만 판정 재료를
     /// 갱신한다" 는 클라의 반영 의미까지 바꾸지 않기 위해서다(요청 수와 무관한 의미 축).
     func finishWorkTick(_ handoff: WorkTickAwayHandoff) async {
+        let away: AwaySyncResponse?
+        let ownerUserID: String
+        let generation: Int
         switch handoff {
         case .skipped:
             return
         case .fallback:
             await refreshAwayStateIfNeeded()
-        case .fromTick(let away, let ownerUserID, let generation):
-            let now = clock()
-            guard let session else {
-                clearAwayState()
-                return
-            }
-            if startedAt == nil, now.timeIntervalSince(lastAwaySyncAt) < Self.awaySyncIdleThrottleSeconds {
-                return
-            }
-            lastAwaySyncAt = now
-            guard generation == sessionGeneration, session.userID == ownerUserID else { return }
-            if let away {
-                applyAwaySync(await service.awaySync(from: away))
-            } else {
-                // 조각이 비어 왔다 — 기존 네트워크 실패와 같은 "모른다" 로 접는다(정책을 비워 마감을 멈춘다).
-                awayPolicy = nil
-                awayOpenSession = nil
-            }
+            return
+        case .fromTick(let piece, let owner, let captured):
+            away = piece
+            ownerUserID = owner
+            generation = captured
+        case .overloaded(let owner, let captured):
+            // 과부하 — 조각이 없는 것과 같다(아래 else 갈래). 가드는 `.fromTick` 과 한 벌이다.
+            away = nil
+            ownerUserID = owner
+            generation = captured
+        }
+        let now = clock()
+        guard let session else {
+            clearAwayState()
+            return
+        }
+        if startedAt == nil, now.timeIntervalSince(lastAwaySyncAt) < Self.awaySyncIdleThrottleSeconds {
+            return
+        }
+        lastAwaySyncAt = now
+        guard generation == sessionGeneration, session.userID == ownerUserID else { return }
+        if let away {
+            applyAwaySync(await service.awaySync(from: away))
+        } else {
+            // 조각이 비어 왔다(또는 과부하로 못 받았다) — 기존 네트워크 실패와 같은 "모른다" 로 접는다(정책을 비워 마감을 멈춘다).
+            awayPolicy = nil
+            awayOpenSession = nil
         }
     }
 
     /// 팝오버 즉시 새로고침(activateStoredSession fast path, 15초 신선도 스로틀 뒤)의 팀 상태 1회.
     /// 가용하면 `p_heartbeat=false` 의 work_tick 1건(쓰기 0 — 지금도 refreshTeamStatus 는 하트비트를 안 보낸다),
     /// 아니면 기존 `refreshTeamStatus()`. away/meta 조각은 **반영하지 않는다** — 기존 fast path 도 팀 상태만 받았다.
+    /// 과부하 게이트도 폴링과 한 벌이다: 백오프 중이면 네트워크를 내지 않고, (b) 실패면 `refreshTeamStatus()` 로 펼치지 않는다
+    /// (팝오버를 여닫는 손이 과부하인 서버에 팀 GET 4건씩을 얹지 않게). 화면은 마지막으로 받은 팀 상태 그대로다.
     func refreshTeamStatusOnDemand() async {
         guard Self.workTickEnabled, session != nil, let teamID = currentTeamID else {
             await refreshTeamStatus()
             return
         }
-        guard service.workTickGate.isAvailable(now: clock()) else {
+        switch service.workTickGate.availability(now: clock()) {
+        case .available:
+            break
+        case .disabled, .suspended:
             service.workTickGate.recordFallback()
             await refreshTeamStatus()
+            return
+        case .backingOff:
             return
         }
         let generation = sessionGeneration
@@ -242,7 +300,7 @@ extension WorkTimerStore {
             openedSession: false, lastInputAt: nil, includeMeta: false
         )
         switch outcome {
-        case .cancelled:
+        case .cancelled, .overloaded:
             return
         case .failed:
             service.workTickGate.recordFallback()
@@ -255,13 +313,16 @@ extension WorkTimerStore {
     /// work_tick 한 번의 결과. 성공이면 팀 조각을 `assembleTeamStatuses` 로 조립해 함께 돌려준다(4 GET 경로와 같은 함수).
     enum WorkTickCallOutcome {
         case success(WorkTickResponse, members: [TeamMemberStatus])
+        /// 계약 실패(a)·그 밖의 일시 실패(c) — 호출부가 기존 경로로 즉시 재수행한다.
         case failed
+        /// 과부하·도달 불가(b) — 게이트가 백오프를 세웠다. 호출부는 기존 경로로 펼치지 않는다.
+        case overloaded
         case cancelled
     }
 
-    /// 요청 조립·발사·실패 분류(게이트 갱신)까지. 상태 반영은 호출자가 한다.
+    /// 요청 조립·발사·실패 분류(게이트 갱신)까지. 상태 반영은 호출자가 한다(성공 하트비트 시각 기록만 여기서 한다).
     /// `p_seen_at`/`p_since`/조립 `now` 는 **벽시계**(기존 upsertStatus 의 `Date()`·fetchTeamStatuses 의 `now: Date()`
-    /// 그대로)이고, 게이트의 시각만 주입 시계(clock)다 — 1시간 정지의 만료를 테스트가 시계 전진으로 재현한다.
+    /// 그대로)이고, 게이트의 시각만 주입 시계(clock)다 — 15분 정지·백오프의 만료를 테스트가 시계 전진으로 재현한다.
     private func performWorkTick(
         teamID: String,
         heartbeat: Bool,
@@ -290,6 +351,8 @@ extension WorkTimerStore {
             var serverNow: Date?
             if let raw = response.serverNow { serverNow = await service.parseDate(raw) }
             gate.recordSuccess(serverNow: serverNow, localNow: Date())
+            // 하트비트를 실은 틱의 성공 = 서버가 그 하트비트를 썼다(하트비트가 실패하면 RPC 전체가 실패한다 — 위 doc).
+            if heartbeat { lastHeartbeatSucceededAt = clock() }
             let members = await service.assembleTeamStatuses(
                 rows: response.statuses ?? [],
                 active: response.sessionsActive ?? [],
@@ -309,16 +372,27 @@ extension WorkTimerStore {
                 gate.disable(reason: "계약 v=\(version.map { String($0) } ?? "없음")", at: now)
             case .undecodable:
                 gate.disable(reason: "응답 해석 실패", at: now)
-            case .serverError(let status):
-                gate.recordTransientFailure(reason: "HTTP \(status)", at: now)
+            case .serverError(let status, let code):
+                let reason = "HTTP \(status)\(code.map { " \($0)" } ?? "")"
+                // 502·503·504 와 500 + 과부하 코드는 (b) — 백오프만 세우고 펼치지 않는다. 그 밖의 500 은 (c).
+                if WorkTickGate.isOverload(failure) {
+                    gate.recordOverloadFailure(reason: reason, at: now)
+                    return .overloaded
+                }
+                gate.recordTransientFailure(reason: reason, at: now)
             case .rejected(let status, let code):
                 gate.recordTransientFailure(reason: "HTTP \(status)\(code.map { " \($0)" } ?? "")", at: now)
             }
             return .failed
         } catch {
-            // 취소는 실패로 세지 않는다(팝오버 빨리 닫기·루프 취소). 그 밖(네트워크·토큰 갱신 실패)은 일시 실패다 —
+            // 취소는 실패로 세지 않는다(팝오버 빨리 닫기·루프 취소). 서버에 닿지 못한 URLError(시간 초과·연결 실패·오프라인 등)는
+            // (b) 과부하·도달 불가 — 펼쳐도 같은 벽에 7번 부딪힐 뿐이다. 그 밖(그 밖의 URLError·토큰 갱신 실패)은 (c) 일시 실패다 —
             // 폴백 경로가 같은 오류를 만나 기존 문구 규약대로 알린다.
             if case .cancelled = classifyAuthError(error) { return .cancelled }
+            if let urlError = error as? URLError, WorkTickGate.isOverload(urlError) {
+                gate.recordOverloadFailure(reason: "URLError \(urlError.code.rawValue)", at: clock())
+                return .overloaded
+            }
             gate.recordTransientFailure(reason: (error as? URLError).map { "URLError \($0.code.rawValue)" } ?? "\(type(of: error))", at: clock())
             return .failed
         }
@@ -1138,6 +1212,8 @@ extension WorkTimerStore {
                     lastInputAt: awayServerSupported ? observedInput : nil
                 )
             }
+            // 성공 시각 — work_tick 과부하 중 "하트비트 한 건" 을 보낼지의 근거(holdTickDuringOverload).
+            lastHeartbeatSucceededAt = clock()
         } catch {
             // 하트비트 실패는 조용히 무시하고 다음 주기에 재시도한다(표시 문구를 흔들지 않는다).
             guard generation == sessionGeneration else { return }
@@ -1192,6 +1268,9 @@ extension WorkTimerStore {
                     lastInputAt: lastInputAt
                 )
             }
+            // 흡수·미확인 맥에선 이 입력 보고가 곧 이 맥의 "하트비트" 다(work_tick 도 같은 처지에선 입력만 싣는다) —
+            // 과부하 중 120초 규칙이 같은 근거로 돈다. 세션 생존신호(last_seen_at)는 아니므로 스캐빈저와는 무관하다.
+            lastHeartbeatSucceededAt = clock()
         } catch {
             guard generation == sessionGeneration else { return }
         }

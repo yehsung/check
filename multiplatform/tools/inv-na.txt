@@ -7,3 +7,10 @@ INV-RainbowAing-cb063b85 해당 없음: 무지개 몸을 띠 색 피부 맵으�
 INV-RainbowAing-aee950b3 해당 없음: OKLCh 정지점 배열을 아트 스크립트와 글자까지 맞추는 규약 — 맥 셰이더·아트 스크립트 사이 규약이고 Kotlin 은 그 결과 그림(초상)만 받는다
 INV-MobileAppModel-7e4649be 해당 없음: iOS DEBUG 데모 라우트(`games/chess/…` 꼬리를 MobileDemoChessRoute 로 풀어 장면 고르기)의 규약 — Android 앱 모델(W2-f PhoneAppModel)에는 데모 라우트 표기가 없다(stub 변형은 픽스처 응답만 바꾼다). 딥링크 대상 해석은 RouteTargets · PhoneAppModel.openRoute
 INV-MobileAppModel-9a4234a7 해당 없음: iOS `#if DEBUG` 출시 게이트(Release 바이너리에서 데모 타입 이름이 사라져야 한다) — Android 에는 그 데모 갈래가 없다(릴리스 assets 에 Fixtures 0 은 W1-g 구조 시험이 잰다)
+INV-GamesTab-0dff8350 해당 없음: iOS 데모 스크린샷 라우트(-AingCheckDemoRoute games/chess/…)의 체스 절 닻 자리 — Android·Windows 이식에는 데모 라우트·데모 시드가 없다(W4-b: 게임 탭 경로는 GamesRoutes.destination 하나, 체스 화면은 W4-a)
+INV-GamesTab-2f5ed4e8 해당 없음: 데모 스크린샷 전용 applyDemoChessRoute 의 '꼬리를 여기서 쓰지 않는다' — 데모 라우트 없음(W4-b). 실 딥링크의 체스 꼬리는 W4-a 화면 몫
+INV-GamesTab-0bd5a351 해당 없음: 데모 스크린샷 전용 applyDemoTetrisRoute 의 '꼬리를 여기서 쓰지 않는다' — 데모 라우트 없음(W4-b). 1:1 테트리스 쌓기는 Dest.TetrisDuel 하나(GamesRoutes.destination)
+INV-GamesTab-7ed4c1fa 해당 없음: #if DEBUG 데모 체스 절 닻(defaultScrollAnchor(.bottom)) — 데모 라우트 없음, Release 에서도 원래 아무것도 하지 않는 닻(W4-b)
+INV-GamesTab-39c8fead 해당 없음: #if DEBUG 데모 체스 절 닻을 관전 중 놓는 규약 — 데모 라우트 없음(W4-b)
+INV-GamesTab-b28f3ba4 해당 없음: SwiftUI defaultScrollAnchor 를 if/else 갈래로 가르면 신원이 바뀌어 나무가 헐린다는 데모 닻 규약 — 데모 라우트 없음, Compose 에는 이 닻이 없다(W4-b)
+INV-GamesTab-47744479 해당 없음: #if DEBUG 데모 관전 절 끌어올리기(task(id:)) 의 갈래 금지 — 데모 라우트 없음(W4-b)

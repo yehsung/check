@@ -66,7 +66,8 @@ val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
         }
     }
     from(repoDir.resolve("Sources/CheckMobileKit/Resources/Art")) {
-        include("ruby.png", "ruby-48.png", "ruby-96.png", "stage-*-neutral.png")
+        // aing-side.png: 플래피 아잉 옆모습(W4-b — 미니게임 캐릭터는 아잉 고정, MiniGameArt.FLAPPY_SIDE_PATH). 없으면 캔버스가 초록 원으로 폴백한다.
+        include("ruby.png", "ruby-48.png", "ruby-96.png", "stage-*-neutral.png", "aing-side.png")
         into("files/art")
     }
     from(repoDir.resolve("Sources/CheckCore/Resources/Stickers")) {

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 @testable import CheckCore
@@ -250,5 +251,52 @@ struct MessageIdempotencyMigrationTests {
         let lines = code.split(separator: "\n").map { idemSquash(String($0)).lowercased() }
         #expect(!lines.contains("begin;") && !lines.contains("commit;") && !lines.contains("rollback;"),
                 "최상위 begin/commit 이 있다 — CLI 가 파일을 트랜잭션으로 감싼다")
+    }
+
+    // 반박 검증(2026-10-30): 아래 두 가드는 체인 재생 · 위 시험이 못 물었다 — 조회에서 m.from_user = uid 를 빼거나
+    // 경합 패자 갈래를 끈 뮤테이션이 PG17 체인 exit=0 · 이 스위트 7/7 로 살아남았다.
+    @Test("⑥ 키 조회 두 자리는 보낸이로 묶이고 · 경합 패자는 초인종 전에 duplicate 로 끝난다")
+    func 멱등_조회는_보낸이로_묶이고_경합_패자는_초인종_전에_끝난다() throws {
+        let code = idemStripLineComments(try idemMigrationRaw())
+        let body = idemSquash(try #require(idemSendMessageDefinition(in: code)).body).lowercased()
+        // 받는이는 select_own 으로 보낸이 행의 키를 읽는다 — 묶음이 빠지면 남의 키로 남의 행을 판정에 쓴다.
+        let bound = "where m.from_user = uid and m.client_message_id = p_client_message_id;"
+        #expect(body.components(separatedBy: bound).count - 1 == 2, "키 조회 두 자리(게이트 · 경합 재조회)가 보낸이로 묶이지 않았다")
+        #expect(body.components(separatedBy: "client_message_id = p_client_message_id").count - 1 == 2,
+                "보낸이로 안 묶인 키 조회가 더 있다")
+        let insert = try #require(body.range(of: "do nothing returning id, created_at into v_msg_id, v_msg_at;"))
+        let loser = try #require(body.range(of: "if v_msg_id is null then", range: insert.upperBound..<body.endIndex),
+                                 "insert 뒤 경합 패자 갈래가 없다 — 같은 키 동시 재시도가 message_id 없는 ok 와 초인종 두 번이 된다")
+        let reread = try #require(body.range(of: bound, range: loser.upperBound..<body.endIndex), "경합 패자가 저장된 행을 다시 읽지 않는다")
+        let duplicate = try #require(body.range(of: "'ring','duplicate'", range: reread.upperBound..<body.endIndex))
+        let ring = try #require(body.range(of: "ring := public.poke_ring(p_to);"))
+        #expect(duplicate.upperBound <= ring.lowerBound, "경합 패자의 duplicate 가 초인종 뒤다 — 이긴 쪽과 두 번 운다")
+    }
+
+    @Test("재적용 핀 — §0 · §4 의 본문 md5 가 이 파일 본문과 같고 · 3인자가 있으면 그 본문을 되묻는다")
+    func 재적용_핀은_이_파일_본문의_md5다() throws {
+        let raw = try idemMigrationRaw()
+        let header = try #require(raw.range(of: "create or replace function public.send_message(p_to uuid, p_body text, p_client_message_id uuid default null)"))
+        let open = try #require(raw.range(of: "as $function$", range: header.upperBound..<raw.endIndex))
+        let close = try #require(raw.range(of: "$function$", range: open.upperBound..<raw.endIndex))
+        // pg_proc.prosrc 는 달러 인용 사이 바이트 그대로다(운영 md5 75c46943 도 같은 방식으로 맞았다).
+        let digest = Insecure.MD5.hash(data: Data(raw[open.upperBound..<close.lowerBound].utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        let code = idemStripLineComments(raw)
+        #expect(code.components(separatedBy: "'\(digest)'").count - 1 == 2,
+                "§0 재적용 핀 · §4 되묻기가 본문 md5 \(digest) 와 다르다 — 본문을 고쳤으면 두 핀을 같이 고쳐라")
+        let flat = idemSquash(code).lowercased()
+        #expect(flat.contains("if v_new is not null then select md5(p.prosrc) into v_md5 from pg_proc p where p.oid = v_new; if v_md5 is distinct from v_self_md5 then"),
+                "재적용(3인자 있음) 때 본문을 되묻지 않는다 — 뒤 파일이 고친 본문을 create or replace 가 조용히 되돌린다")
+    }
+
+    @Test("프로브 건수 상수 = 실제 단언 수(남의 키 ⑨ 포함)")
+    func 프로브_건수와_단언_수가_같다() throws {
+        let flat = idemSquash(idemStripLineComments(try idemMigrationRaw()))
+        let marker = try #require(flat.range(of: "v_expect constant int := "))
+        let declared = Int(flat[marker.upperBound...].prefix { $0.isNumber })
+        let increments = flat.components(separatedBy: "probes := probes + 1;").count - 1
+        #expect(declared == increments, "v_expect(\(String(describing: declared)))와 단언 수(\(increments))가 다르다")
+        #expect(flat.contains("v_res := public.send_message(v_c, 'B 가 A 의 키로', v_k1);"), "남이 같은 키를 쓰는 프로브(⑨)가 없다")
     }
 }

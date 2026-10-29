@@ -188,3 +188,57 @@ func stabL6NewSessionGenerationDoesNotJoinOldFlight() async throws {
     _ = await (old.value, fresh.value)
     #expect(stabBoardRequests(host) == 2, "세대가 바뀌었는데 옛 조회에 붙었다(실제 \(stabBoardRequests(host))건)")
 }
+
+/// 기준선 ③: force 가 자리를 넘겨받은 뒤 **옛 조회가 먼저 끝나도** 새 자리를 지우지 않는다(`id` 표식).
+/// 지우면 force 조회가 아직 떠 있는데 뒤에 오는 루프·재오픈이 다시 겹쳐 쏜다 — 합치기가 force 한 번에 풀린다.
+/// 뮤테이션: `fetchTokenBoardCoalesced` 의 defer 에서 `id` 비교를 빼면(늘 비우면) 뒤 조회가 1건 더 나가 빨갛다.
+@MainActor
+@Test
+func stabL6OlderFlightFinishingFirstKeepsTheForcedSlot() async throws {
+    let host = "stab-l6-slot-id"
+    MyTokenRowURLProtocol.configure(host: host, boardJSON: stabBoardJSON(), boardDelay: 0.3)
+    let store = stabStore(host: host)
+    defer { stabCancelTasks(store) }
+
+    let board = Task { @MainActor in await store.performLoadTokenBoard() }
+    await stabWaitUntil { stabBoardRequests(host) == 1 }
+    let first = store.tokenBoardFetchInFlight?.id
+    #expect(first != nil, "전제: 옛 조회가 자리를 세웠다")
+    // force 조회는 응답을 오래 늦춘다 — 옛 조회(0.3s)가 **먼저** 끝나는 모양을 확정한다. configure 가 기록을 비우므로 아래 건수는 그 뒤의 것이다.
+    MyTokenRowURLProtocol.configure(host: host, boardJSON: stabBoardJSON(), boardDelay: 1.5)
+    let forced = Task { @MainActor in await store.loadMyTokenRowIfDue(force: true) }
+    await stabWaitUntil { store.tokenBoardFetchInFlight.map { $0.id != first } ?? false }
+    let forcedID = store.tokenBoardFetchInFlight?.id
+    await stabWaitUntil { stabBoardRequests(host) == 1 }
+    await board.value
+    #expect(store.tokenBoardFetchInFlight?.id == forcedID, "옛 조회가 끝나며 force 조회의 자리를 지웠다")
+    let later = Task { @MainActor in await store.performLoadTokenBoard() }
+    _ = await (forced.value, later.value)
+    #expect(stabBoardRequests(host) == 1, "뒤의 보드 조회는 떠 있는 force 조회에 붙어야 한다(실제 \(stabBoardRequests(host))건)")
+    #expect(store.tokenBoardFetchInFlight == nil)
+}
+
+/// 기다리던 쪽이 취소되면 응답이 와도 반영하지 않고 조용히 빠진다(옛 '취소 → 조용히' 갈래). 공유 조회는 끊지 않는다 —
+/// 같이 기다린 내 행 경로는 그 응답을 그대로 받는다.
+/// 뮤테이션: 합류 갈래의 `Task.checkCancellation()` 을 빼면 취소된 순위판 조회가 표를 채워 빨갛다.
+@MainActor
+@Test
+func stabL6CancelledJoinerStaysQuietWhileTheSharedFetchCompletes() async throws {
+    let host = "stab-l6-cancel"
+    MyTokenRowURLProtocol.configure(host: host, boardJSON: stabBoardJSON(), boardDelay: 0.4)
+    let store = stabStore(host: host)
+    defer { stabCancelTasks(store) }
+    #expect(!store.isTokenBoardVisible, "전제: 순위판이 닫혀 있어야 내 행 경로가 스스로 쏜다")
+
+    let mine = Task { @MainActor in await store.loadMyTokenRowIfDue() }
+    await stabWaitUntil { store.tokenBoardFetchInFlight != nil }
+    let joiner = Task { @MainActor in await store.performLoadTokenBoard() }
+    await stabWaitUntil { store.tokenBoardLoading }
+    joiner.cancel()
+    _ = await (mine.value, joiner.value)
+
+    #expect(stabBoardRequests(host) == 1)
+    #expect(store.tokenBoard.isEmpty && !store.tokenBoardLoaded, "취소된 합류자가 응답을 표에 반영했다")
+    #expect(!store.tokenBoardFailed, "취소는 실패 표시가 아니다")
+    #expect(store.myTokenRow?.total == 21, "공유 조회는 끊기지 않고 내 행 경로가 응답을 받는다")
+}

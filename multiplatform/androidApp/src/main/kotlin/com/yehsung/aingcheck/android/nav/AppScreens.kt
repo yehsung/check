@@ -14,6 +14,7 @@ import com.yehsung.aingcheck.android.screens.me.MeDestinations
 import com.yehsung.aingcheck.android.screens.now.NowWorkActions
 import com.yehsung.aingcheck.android.screens.session.W3aScreenDeps
 import com.yehsung.aingcheck.android.screens.settings.NotificationPrimerPort
+import com.yehsung.aingcheck.android.screens.settings.PushPrefsSaves
 import com.yehsung.aingcheck.android.screens.settings.PushSettingsPort
 import com.yehsung.aingcheck.android.screens.settings.SessionPushSettingsPort
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
@@ -62,6 +63,9 @@ class AppScreens(
 
     /** 설정 화면의 서버 선호값 문(세션 스토어의 기기 등록 응답 · savePushPrefs — 푸시 조정자와 같은 원천). */
     val pushSettings: PushSettingsPort = SessionPushSettingsPort(phone.session)
+
+    /** 알림 종류 저장 줄 — 세션 자리에서 돈다(설정 화면을 떠나도 저장이 끝나 세션 값이 서버를 따른다 — iOS 비구조 Task 와 같다). */
+    val pushPrefsSaves: PushPrefsSaves = PushPrefsSaves(pushSettings, phone.session.scope)
 
     /** 알림 권한 설명 시트(글자는 W2-f 한 벌). */
     val primerContent: NotificationPrimerContent = NotificationPrimerContent(

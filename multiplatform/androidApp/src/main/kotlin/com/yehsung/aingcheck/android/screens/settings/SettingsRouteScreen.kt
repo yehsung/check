@@ -16,7 +16,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,14 +47,15 @@ object NotificationAskRecord {
 }
 
 /**
- * @param push 서버 선호값 문(기본 SessionPushSettingsPort — 조립이 W2-f 푸시 조정자로 바꿔 끼운다).
+ * @param push 알림 종류 저장 줄(화면보다 오래 산다 — 조립이 세션 자리에 하나 만든다. 문은 기본 SessionPushSettingsPort ·
+ *   조립이 W2-f 푸시 조정자로 바꿔 끼운다). 화면 자리(rememberCoroutineScope)에서 돌리면 설정을 떠날 때 저장이 취소된다(8차 검증).
  * @param prefs 비밀 아닌 설정 저장소(권한을 물었는지 기록).
  */
 @Composable
 fun SettingsRouteScreen(
     store: MeStore,
     appearance: AppearanceStore,
-    push: PushSettingsPort,
+    push: PushPrefsSaves,
     prefs: KeyValueStore,
     openBlockedPeople: () -> Unit,
     openAccountDeletion: () -> Unit,
@@ -71,8 +71,7 @@ fun SettingsRouteScreen(
     val model = remember(store, push) {
         AndroidNotificationSettings(
             context = context,
-            port = push,
-            scope = scope,
+            saves = push,
             launchPermissionRequest = {
                 NotificationAskRecord.markAsked(prefs)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -81,8 +80,6 @@ fun SettingsRouteScreen(
         )
     }
     notifications = model
-    // 서버 선호값(기기 등록·저장 응답)을 화면이 보는 상태로 비춘다 — StateFlow 를 그리기에서 바로 읽으면 바뀜을 모른다(7차 로컬 앱 e2e 결함).
-    LaunchedEffect(model) { model.observeServerPrefs() }
 
     // 보일 때마다(설정 앱에서 돌아옴 포함) 권한·채널을 다시 읽는다 — Swift `scenePhase == .active → refreshAuthorization`.
     val lifecycle = LocalLifecycleOwner.current.lifecycle

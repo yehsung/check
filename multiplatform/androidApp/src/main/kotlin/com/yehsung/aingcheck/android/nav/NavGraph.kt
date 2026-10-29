@@ -330,7 +330,7 @@ private fun NavGraphBuilder.meGraph(app: AppScreens, nav: NavHostController, ope
             SettingsRouteScreen(
                 store = p.me,
                 appearance = app.appearance,
-                push = app.pushSettings,
+                push = app.pushPrefsSaves,
                 prefs = app.prefs,
                 openBlockedPeople = { open(Dest.BlockedPeople) },
                 openAccountDeletion = { open(Dest.AccountDeletion) },

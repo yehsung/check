@@ -20,10 +20,13 @@ import com.yehsung.aingcheck.android.push.NotificationChannels
 import com.yehsung.aingcheck.core.wire.models.PushPrefs
 import com.yehsung.aingcheck.ui.screens.settingscommon.NotificationPermission
 import com.yehsung.aingcheck.ui.screens.settingscommon.NotificationTwoLayer
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -44,6 +47,12 @@ class NotificationTwoLayerAndroidTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
     private val manager get() = context.getSystemService(NotificationManager::class.java)
 
+    /**
+     * 저장 줄의 자리: 시험 스케줄러를 같이 쓰되 시험의 자식은 아니다 — 줄은 서버값을 끝없이 지켜보므로(앱에선 세션 자리) runTest 가 기다리면 안 끝난다.
+     * backgroundScope 는 advanceUntilIdle 이 돌리지 않아 쓰지 않는다.
+     */
+    private fun TestScope.savesOf(port: PushSettingsPort) = PushPrefsSaves(port, CoroutineScope(StandardTestDispatcher(testScheduler)))
+
     private class RecordingPort(initial: PushPrefs?) : PushSettingsPort {
         val saved = mutableListOf<PushPrefs>()
         private val flow = MutableStateFlow(initial)
@@ -61,6 +70,9 @@ class NotificationTwoLayerAndroidTest {
         val replies = Channel<Boolean>(Channel.UNLIMITED)
         var inFlight = 0
         var maxInFlight = 0
+        /** 세션 세대(로그아웃이면 시험이 올린다). */
+        var gen = 0
+        override val generation: Int get() = gen
         private val flow = MutableStateFlow<PushPrefs?>(initial)
         override val prefs: StateFlow<PushPrefs?> get() = flow
         override suspend fun save(prefs: PushPrefs): PushPrefs? {
@@ -108,7 +120,7 @@ class NotificationTwoLayerAndroidTest {
         blockMessageChannelBySystem()
         val port = RecordingPort(PushPrefs(message = true, gomokuInvite = true, feedbackReply = true))
         val opened = mutableListOf<android.content.Intent>()
-        val model = AndroidNotificationSettings(context, port, this, launchPermissionRequest = {}, everAsked = { true }, startActivity = { opened += it })
+        val model = AndroidNotificationSettings(context, savesOf(port), launchPermissionRequest = {}, everAsked = { true }, startActivity = { opened += it })
         model.refreshSystemState()
         assertEquals(NotificationPermission.Granted, model.permission)
         assertEquals(setOf("message"), model.blockedChannels)
@@ -142,7 +154,7 @@ class NotificationTwoLayerAndroidTest {
         NotificationChannels.ensure(context)
         val allOn = PushPrefs(message = true, gomokuInvite = true, feedbackReply = true)
         val port = GatedPort(allOn)
-        val model = AndroidNotificationSettings(context, port, this, launchPermissionRequest = {}, everAsked = { true }, startActivity = {})
+        val model = AndroidNotificationSettings(context, savesOf(port), launchPermissionRequest = {}, everAsked = { true }, startActivity = {})
         model.refreshSystemState()
         val kinds = NotificationTwoLayer.androidKinds.associateBy { it.raw }
 
@@ -180,6 +192,17 @@ class NotificationTwoLayerAndroidTest {
         assertEquals("④ 실패면 마지막 서버값으로 되돌린다", latest, model.prefs)
         assertEquals(SettingsText.pushSaveFailed, model.prefsNotice)
         assertFalse(model.isSavingPrefs)
+
+        // ⑤ 저장 중 로그아웃(세대가 바뀜): 저장 줄이 화면보다 오래 살아 끝까지 가지만, 그 실패는 안내하지 않는다(Swift `.cancelled`) —
+        //    다음 계정의 설정 화면에 앞 계정의 "저장하지 못했어요" 가 남지 않는다.
+        model.setEnabled(kinds.getValue("feedback_reply"), false)
+        runCurrent()
+        port.gen += 1
+        port.replies.send(false)
+        advanceUntilIdle()
+        assertNull("⑤ 세대가 바뀐 저장은 실패 안내를 띄우지 않는다", model.prefsNotice)
+        assertFalse(model.isSavingPrefs)
+        assertEquals(latest, model.prefs)
     }
 
     @Test
@@ -189,7 +212,7 @@ class NotificationTwoLayerAndroidTest {
         val port = RecordingPort(PushPrefs())
         var asked = 0
         val opened = mutableListOf<android.content.Intent>()
-        val model = AndroidNotificationSettings(context, port, this, launchPermissionRequest = { asked += 1 }, everAsked = { false }, startActivity = { opened += it })
+        val model = AndroidNotificationSettings(context, savesOf(port), launchPermissionRequest = { asked += 1 }, everAsked = { false }, startActivity = { opened += it })
         model.refreshSystemState()
         assertEquals(NotificationPermission.NotDetermined, model.permission)
         model.setEnabled(NotificationTwoLayer.androidKinds.first(), false)

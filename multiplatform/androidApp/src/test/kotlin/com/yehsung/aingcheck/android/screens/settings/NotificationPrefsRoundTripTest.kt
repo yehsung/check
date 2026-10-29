@@ -44,11 +44,14 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
+import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -63,6 +66,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -88,6 +92,17 @@ class NotificationPrefsRoundTripTest {
     private val serverRow = Collections.synchronizedMap(linkedMapOf("message" to true, "gomoku_invite" to true, "feedback_reply" to true, "chess_invite" to true))
     private val sentMessage = Collections.synchronizedList(mutableListOf<Boolean?>())
 
+    /** 서버가 행을 바꾼 **뒤** 응답을 붙드는 문(null = 바로 응답). 왕복 중에 화면을 떠나는 경우를 만든다. */
+    @Volatile private var replyGate: CompletableDeferred<Unit>? = null
+
+    /** 다음 set_push_prefs 한 번은 기기 행이 없다(`{"status":"not_found"}` — 첫 등록이 실패했거나 아직 안 끝남). */
+    @Volatile private var notFoundOnce = false
+    private val registrations = AtomicInteger(0)
+    private val saveCalls = AtomicInteger(0)
+
+    /** 저장 줄은 화면이 아니라 세션 자리에서 돈다(AppScreens.pushPrefsSaves = PushPrefsSaves(문, phone.session.scope)). */
+    private fun saves(session: SessionStore) = PushPrefsSaves(SessionPushSettingsPort(session), session.scope)
+
     private fun rowJson(): String = synchronized(serverRow) { JsonObject(serverRow.mapValues { JsonPrimitive(it.value) }).toString() }
 
     private fun session(): SessionStore {
@@ -96,16 +111,23 @@ class NotificationPrefsRoundTripTest {
             val body = (request.body as? OutgoingContent.ByteArrayContent)?.bytes()?.decodeToString() ?: ""
             fun json(text: String, status: Int = 200) = respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
             when (path) {
-                "/rest/v1/rpc/register_device_fcm" -> json("""{"status":"ok","device_id":"d","push_prefs":${rowJson()}}""")
+                "/rest/v1/rpc/register_device_fcm" -> registrations.incrementAndGet().let { json("""{"status":"ok","device_id":"d","push_prefs":${rowJson()}}""") }
                 "/rest/v1/rpc/set_push_prefs" -> {
-                    // 서버 정본(20261005160000 set_push_prefs): 아는 키의 boolean 만 `push_prefs || patch` 로 병합, 행 전체를 돌려준다.
-                    val patch = Json.parseToJsonElement(body).jsonObject.getValue("p_prefs").jsonObject
-                    sentMessage += (patch["message"] as? JsonPrimitive)?.booleanOrNull
-                    for ((key, value) in patch) {
-                        val flag = (value as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: continue
-                        if (key in serverRow) serverRow[key] = flag
+                    saveCalls.incrementAndGet()
+                    if (notFoundOnce) {
+                        notFoundOnce = false
+                        json("""{"status":"not_found"}""")
+                    } else {
+                        // 서버 정본(20261005160000 set_push_prefs): 아는 키의 boolean 만 `push_prefs || patch` 로 병합, 행 전체를 돌려준다.
+                        val patch = Json.parseToJsonElement(body).jsonObject.getValue("p_prefs").jsonObject
+                        sentMessage += (patch["message"] as? JsonPrimitive)?.booleanOrNull
+                        for ((key, value) in patch) {
+                            val flag = (value as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: continue
+                            if (key in serverRow) serverRow[key] = flag
+                        }
+                        replyGate?.await()
+                        json("""{"status":"ok","push_prefs":${rowJson()}}""")
                     }
-                    json("""{"status":"ok","push_prefs":${rowJson()}}""")
                 }
                 "/rest/v1/memberships" -> json("[]")
                 else -> json("{}", 404)
@@ -144,9 +166,10 @@ class NotificationPrefsRoundTripTest {
         session.adoptSignedInSession(SupabaseSession("access", "refresh", me), "rankme@example.invalid")
         val store = MeStore(MeContext(session), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), DrawableCharacterSource.of(setOf("aing")))
         val prefs = Prefs()
+        val pushSaves = saves(session)
         compose.setContent {
             AingTheme(dark = false) {
-                SettingsRouteScreen(store, AppearanceStore(prefs), SessionPushSettingsPort(session), prefs, openBlockedPeople = {}, openAccountDeletion = {})
+                SettingsRouteScreen(store, AppearanceStore(prefs), pushSaves, prefs, openBlockedPeople = {}, openAccountDeletion = {})
             }
         }
         val messageSwitch = hasAnyAncestor(hasTestTag(NotificationTags.row("message"))) and isToggleable()
@@ -155,14 +178,14 @@ class NotificationPrefsRoundTripTest {
 
         // 1회 탭: 서버 행이 꺼지면 화면 스위치도 꺼져 있어야 한다.
         compose.onNode(messageSwitch).performClick()
-        compose.waitUntil(5_000) { sentMessage.size == 1 && session.pushPrefs?.message == false }
+        compose.waitUntil(5_000) { sentMessage.size == 1 && session.pushPrefs?.message == false && !pushSaves.isSaving }
         compose.waitForIdle()
         assertEquals(false, serverRow["message"])
         compose.onNode(messageSwitch).assertIsOff()
 
         // 다시 탭: 꺼진 스위치를 켜면 서버 행이 다시 켜진다(같은 false 를 또 보내지 않는다).
         compose.onNode(messageSwitch).performClick()
-        compose.waitUntil(5_000) { sentMessage.size == 2 && session.pushPrefs?.message == true }
+        compose.waitUntil(5_000) { sentMessage.size == 2 && session.pushPrefs?.message == true && !pushSaves.isSaving }
         compose.waitForIdle()
         assertEquals("두 번째 탭은 켬을 보낸다", listOf<Boolean?>(false, true), sentMessage.toList())
         assertEquals(true, serverRow["message"])
@@ -184,7 +207,7 @@ class NotificationPrefsRoundTripTest {
         val prefs = Prefs()
         compose.setContent {
             AingTheme(dark = false) {
-                SettingsRouteScreen(store, AppearanceStore(prefs), port, prefs, openBlockedPeople = {}, openAccountDeletion = {})
+                SettingsRouteScreen(store, AppearanceStore(prefs), PushPrefsSaves(port, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)), prefs, openBlockedPeople = {}, openAccountDeletion = {})
             }
         }
         val messageSwitch = hasAnyAncestor(hasTestTag(NotificationTags.row("message"))) and isToggleable()
@@ -194,5 +217,69 @@ class NotificationPrefsRoundTripTest {
         flow.value = PushPrefs(message = false, gomokuInvite = true, feedbackReply = true)
         compose.waitForIdle()
         compose.onNode(messageSwitch).assertIsEnabled().assertIsOff()
+    }
+
+    /**
+     * 8차 검증 탐침: 요청이 서버에 닿아 행이 바뀐 **뒤** 응답 전에 설정을 떠나도 저장이 끝나 세션이 서버를 따른다(iOS 저장은 비구조 Task).
+     * 화면 수명(rememberCoroutineScope)에서 돌리면 저장이 취소돼 세션이 옛값(켬)에 남고, 다시 들어오면 화면 켜짐 · 서버 꺼짐 —
+     * 포그라운드 등록 스로틀(1시간)이 그 어긋남을 붙든다. 저장 중에 다시 들어오면 누른 값(꺼짐)이 보인다(Swift desiredPrefs).
+     */
+    @Test
+    fun leavingSettingsMidSaveStillLandsOnTheSession() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        NotificationChannels.ensure(app)
+        val session = session()
+        session.adoptSignedInSession(SupabaseSession("access", "refresh", me), "rankme@example.invalid")
+        val store = MeStore(MeContext(session), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), DrawableCharacterSource.of(setOf("aing")))
+        val prefs = Prefs()
+        val pushSaves = saves(session)
+        val shown = mutableStateOf(true)
+        compose.setContent {
+            AingTheme(dark = false) {
+                if (shown.value) SettingsRouteScreen(store, AppearanceStore(prefs), pushSaves, prefs, openBlockedPeople = {}, openAccountDeletion = {})
+            }
+        }
+        val messageSwitch = hasAnyAncestor(hasTestTag(NotificationTags.row("message"))) and isToggleable()
+        compose.waitUntil(5_000) { session.pushPrefs != null }
+        compose.onNode(messageSwitch).performScrollTo().assertIsOn()
+
+        val gate = CompletableDeferred<Unit>()
+        replyGate = gate
+        compose.onNode(messageSwitch).performClick()
+        compose.waitUntil(5_000) { serverRow["message"] == false }
+        shown.value = false // 응답 전에 뒤로 간다.
+        compose.waitForIdle()
+
+        // 저장 중에 다시 들어오면 누른 값이 보인다.
+        shown.value = true
+        compose.waitForIdle()
+        compose.onNode(messageSwitch).performScrollTo().assertIsOff()
+        shown.value = false
+        compose.waitForIdle()
+
+        gate.complete(Unit)
+        val landed = runCatching { compose.waitUntil(3_000) { session.pushPrefs?.message == false && !pushSaves.isSaving } }.isSuccess
+        assertEquals("화면을 떠난 저장도 끝나 세션이 서버 행을 따른다(server.message=${serverRow["message"]})", true, landed)
+        shown.value = true
+        compose.waitForIdle()
+        assertEquals(listOf<Boolean?>(false), sentMessage.toList())
+        compose.onNode(messageSwitch).performScrollTo().assertIsOff()
+    }
+
+    /** iOS PushCoordinator.savePrefsOnce: 기기 행이 없으면(not_found) 등록을 끝까지 기다린 뒤 한 번 더 보낸다 — 바로 실패 안내가 아니다. */
+    @Test
+    fun notFoundWaitsForRegistrationThenSavesOnceMore() = runBlocking {
+        val session = session()
+        session.adoptSignedInSession(SupabaseSession("access", "refresh", me), "rankme@example.invalid")
+        compose.waitUntil(5_000) { session.pushPrefs != null && session.pendingDeviceRegistration == null }
+        val registeredBefore = registrations.get()
+        notFoundOnce = true
+        val saved = SessionPushSettingsPort(session).save(PushPrefs(message = false, gomokuInvite = true, feedbackReply = true))
+        assertEquals("not_found 뒤 등록 한 번", registeredBefore + 1, registrations.get())
+        assertEquals("저장은 두 번(not_found · 다시)", 2, saveCalls.get())
+        assertEquals(false, saved?.message)
+        assertEquals(false, serverRow["message"])
+        assertEquals(false, session.pushPrefs?.message)
     }
 }

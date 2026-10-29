@@ -27,10 +27,10 @@ import com.yehsung.aingcheck.ui.screens.settingscommon.NotificationPermission
 import com.yehsung.aingcheck.ui.screens.settingscommon.NotificationSettingsModel
 import com.yehsung.aingcheck.ui.screens.settingscommon.NotificationTwoLayer
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * 서버 선호값의 문(첫 겹). iOS 는 "알림 설정의 유일한 구현은 푸시 코디네이터"다 — Android 의 그 자리는 W2-f(feature/phone push)다. W2-f 병합 전이라
@@ -88,7 +88,13 @@ object NotificationSettingsIntents {
 
 /**
  * 알림 절 모델(Android). 권한 요청 자체(ActivityResult)는 껍데기가 [requestPermission] 콜백으로 넘긴다 — 결과가 오면 [onPermissionResult].
- * 저장은 **직렬**(iOS 코디네이터 규약 — 연타가 순서를 뒤집지 않게): 앞 저장이 끝난 값 위에 다음 한 칸을 고친다.
+ * 저장 규약은 iOS PushCoordinator.setPreference 와 같다:
+ *  - **낙관적**: 누른 값([desiredPrefs])을 곧바로 그린다. 다음 누름도 그 값 위에 한 칸을 고친다.
+ *  - **직렬 + 최신 값 한 번 더**: 도는 저장이 있으면 누른 값을 쌓아 두고, 끝난 뒤 최신 값으로 한 번 더 보낸다(요청이 겹치지 않는다).
+ *    [isSavingPrefs] 는 보낼 것이 모두 끝났을 때만 내린다.
+ *  - **끝나면 서버값**: 다 끝나면 누른 값을 걷고 서버가 돌려준 값을 그린다 — 실패면 마지막 서버값으로 되돌아가고 안내 한 줄.
+ * ⚠️ 서버값은 [serverPrefs](스냅숏 상태)로 비춰 그린다. StateFlow.value 를 그리기에서 바로 읽으면 Compose 가 바뀜을 모른다 —
+ *   7차 로컬 앱 e2e 결함(서버는 message=false 인데 스위치는 켜짐에 머물러 다시 눌러도 false 만 보냈다)의 원인이 그것이었다.
  */
 class AndroidNotificationSettings(
     private val context: Context,
@@ -109,9 +115,23 @@ class AndroidNotificationSettings(
         private set
     override var prefsNotice: String? by mutableStateOf(null)
         private set
-    override val prefs: PushPrefs? get() = port.prefs.value
 
-    private val saving = Mutex()
+    /** 서버가 마지막으로 알려 준 값의 거울(Compose 가 관찰한다). [observeServerPrefs] 가 붙들고, 저장이 끝날 때도 다시 읽는다. */
+    private var serverPrefs: PushPrefs? by mutableStateOf(port.prefs.value)
+
+    /** 사용자가 마지막으로 누른 값(저장이 끝날 때까지 화면이 이 값을 그린다 — Swift desiredPrefs). */
+    private var desiredPrefs: PushPrefs? by mutableStateOf(null)
+
+    /** 지금 그릴 값: 저장 중이면 누른 값, 아니면 서버값(모르면 null — 토글을 잠근다). */
+    override val prefs: PushPrefs? get() = desiredPrefs ?: serverPrefs
+
+    private var saveJob: Job? = null
+    private var saveAgain = false
+
+    /** 서버값 거울을 붙든다 — 껍데기가 화면이 떠 있는 동안 LaunchedEffect 로 부른다(기기 등록 응답이 늦게 와도 토글이 풀린다). */
+    suspend fun observeServerPrefs() {
+        port.prefs.collect { serverPrefs = it }
+    }
 
     /** 화면이 다시 보일 때(ON_RESUME)마다 — 설정 앱에서 알림·채널을 바꾸고 돌아오면 바로 반영한다. */
     fun refreshSystemState() {
@@ -122,22 +142,41 @@ class AndroidNotificationSettings(
     override fun setEnabled(kind: NotificationKind, enabled: Boolean) {
         val key = kind.prefsKey ?: return
         if (!permission.allowsDelivery) return
-        scope.launch {
-            saving.withLock {
-                val base = port.prefs.value ?: return@withLock
-                val next = NotificationTwoLayer.withValue(base, key, enabled) ?: return@withLock
-                isSavingPrefs = true
-                prefsNotice = null
-                val saved = try {
-                    port.save(next)
+        // 서버값을 모르면 보내지 않는다(Swift knowsPrefs) — 세 칸을 통째로 보내므로 모르는 칸을 기본값으로 채우면 꺼 둔 알림을 되살린다.
+        val base = prefs ?: return
+        desiredPrefs = NotificationTwoLayer.withValue(base, key, enabled) ?: return
+        isSavingPrefs = true
+        prefsNotice = null
+        if (saveJob != null) {
+            saveAgain = true
+            return
+        }
+        // LAZY: 자리를 먼저 잡고 시작한다 — 즉시 실행 디스패처에서 저장이 끝난 뒤에 자리를 잡으면 다음 누름이 영영 쌓이기만 한다.
+        val job = scope.launch(start = CoroutineStart.LAZY) { runSaves() }
+        saveJob = job
+        job.start()
+    }
+
+    private suspend fun runSaves() {
+        var saved: PushPrefs? = null
+        try {
+            do {
+                saveAgain = false
+                val target = desiredPrefs ?: break
+                saved = try {
+                    port.save(target)
                 } catch (error: Throwable) {
                     if (error is kotlinx.coroutines.CancellationException) throw error
                     null
                 }
-                isSavingPrefs = false
-                if (saved == null) prefsNotice = SettingsText.pushSaveFailed
-            }
+            } while (saveAgain)
+        } finally {
+            saveJob = null
+            serverPrefs = port.prefs.value
+            desiredPrefs = null
+            isSavingPrefs = false
         }
+        if (saved == null) prefsNotice = SettingsText.pushSaveFailed
     }
 
     override fun requestPermission() {

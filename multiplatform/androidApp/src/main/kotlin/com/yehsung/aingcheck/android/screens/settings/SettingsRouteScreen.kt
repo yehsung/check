@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,6 +81,8 @@ fun SettingsRouteScreen(
         )
     }
     notifications = model
+    // 서버 선호값(기기 등록·저장 응답)을 화면이 보는 상태로 비춘다 — StateFlow 를 그리기에서 바로 읽으면 바뀜을 모른다(7차 로컬 앱 e2e 결함).
+    LaunchedEffect(model) { model.observeServerPrefs() }
 
     // 보일 때마다(설정 앱에서 돌아옴 포함) 권한·채널을 다시 읽는다 — Swift `scenePhase == .active → refreshAuthorization`.
     val lifecycle = LocalLifecycleOwner.current.lifecycle

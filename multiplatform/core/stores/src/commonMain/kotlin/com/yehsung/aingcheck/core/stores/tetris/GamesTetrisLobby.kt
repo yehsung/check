@@ -118,7 +118,7 @@ object GamesTetrisDuelChallengeGate {
  *   **요청 0건**을 재야 하고, 화면은 JVM 시험이 못 본다. 특히 **아무것도 안 고른 채**(null)가 null 로 떨어지는 것이 설계 결정이다.
  */
 object GamesTetrisDuelStakeSend {
-    fun sendable(selected: TetrisDuelStake?, store: TetrisDuelStore, balance: Int?, blockedBy: GamesBusyGame?): TetrisDuelStake? {
+    fun sendable(selected: TetrisDuelStake?, store: TetrisDuelStore, balance: Long?, blockedBy: GamesBusyGame?): TetrisDuelStake? {
         if (selected == null || !store.duelsEnabled) return null
         if (!GamesTetrisStakeSelection.affordable(selected, balance)) return null
         if (store.isBusy || blockedBy != null) return null
@@ -143,7 +143,7 @@ object GamesTetrisStakeSelection {
     fun toggled(current: TetrisDuelStake?, tapped: TetrisDuelStake): TetrisDuelStake? = if (current == tapped) null else tapped
 
     /** 이 판돈을 걸 수 있는가. **잔액을 모르면(null) 막지 않는다** — 서버가 거절하면 그때 안내한다. */
-    fun affordable(stake: TetrisDuelStake, balance: Int?): Boolean = balance == null || balance >= stake.rawValue
+    fun affordable(stake: TetrisDuelStake, balance: Long?): Boolean = balance == null || balance >= stake.rawValue
 }
 
 /** 이 기기가 지금 대결을 할 수 없다(코어 `availability`) — 로비 대신 세울 안내. **문구는 코어 것**이다(맥과 같은 말이어야 한다). */

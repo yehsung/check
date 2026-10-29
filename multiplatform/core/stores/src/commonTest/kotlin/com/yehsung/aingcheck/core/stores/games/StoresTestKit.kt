@@ -195,7 +195,7 @@ class TestTetrisHost(private val store: SessionStore, override val appConfig: Ap
     override val session: SupabaseSession? get() = store.session
     override val sessionGeneration: Int get() = store.sessionGeneration
     override val service: SupabaseWorkService get() = store.service
-    override var rubyBalance: Int? = null
+    override var rubyBalance: Long? = null
     override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T = store.withSessionRetry(operation)
 }
 
@@ -274,7 +274,7 @@ class StoreHarness(
     val router = FakeRouter()
     val achievementRefreshes = mutableListOf<String>()
     var hiddenBlocked: Set<String> = emptySet()
-    var sharedRuby: Int? = null
+    var sharedRuby: Long? = null
 
     val context: GamesContext = object : GamesContext {
         override val sessionStore: SessionStore get() = this@StoreHarness.sessionStore
@@ -287,7 +287,7 @@ class StoreHarness(
         override val chess: GamesBoardGameLink get() = this@StoreHarness.chess
         override val router: GamesRouter get() = this@StoreHarness.router
         override val hiddenBlockedPeerIDs: Set<String> get() = hiddenBlocked
-        override val sharedRubyBalance: Int? get() = sharedRuby
+        override val sharedRubyBalance: Long? get() = sharedRuby
     }
 
     init {

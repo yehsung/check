@@ -167,15 +167,14 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
 }
 
 /**
- * 테트리스 스토어의 호스트(Swift `MobileGomokuHost` 의 테트리스 몫 — Kotlin 은 W2-e 가 루비 칸을 `Int?` 로 두어 오목 호스트(`Long?`)와 한 객체로
- * 구현할 수 없다). **칸은 빌린다** — 같은 [RubyBalanceMirror] 를 읽고 쓴다(§8-18 #4: 루비 칸 타입은 Long 하나, 테트리스 Int? 는 8차 접기).
- * Long → Int 는 Int 범위로 자른다(잔액이 21억을 넘을 일은 없지만 넘으면 조용히 감기지 않게).
+ * 테트리스 스토어의 호스트(Swift `MobileGomokuHost` 의 테트리스 몫). **칸은 빌린다** — 같은 [RubyBalanceMirror] 를 읽고 쓴다.
+ * 루비 칸 타입은 Long 하나(G §8-18 #4 · 8차 fold 에서 테트리스 `Int?` 를 접었다) — 자르지도 감지도 않고 그대로 건넨다.
  */
 class PhoneTetrisHost(private val context: SessionContext, private val ruby: RubyBalanceMirror) : TetrisDuelStoreHost {
-    override var rubyBalance: Int?
-        get() = ruby.rubyBalance?.let { it.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt() }
+    override var rubyBalance: Long?
+        get() = ruby.rubyBalance
         set(value) {
-            ruby.rubyBalance = value?.toLong()
+            ruby.rubyBalance = value
         }
     override val appConfig: AppConfig get() = context.appConfig
     override val session: SupabaseSession? get() = context.sessionStore.session

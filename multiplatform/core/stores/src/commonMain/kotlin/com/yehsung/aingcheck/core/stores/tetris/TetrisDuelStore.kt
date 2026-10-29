@@ -258,7 +258,7 @@ class TetrisDuelStore(
     var isWindowVisible: Boolean by mutableStateOf(false)
 
     /** 서버 응답으로만 갱신(host 에도 반영). */
-    var rubyBalance: Int? by mutableStateOf(null)
+    var rubyBalance: Long? by mutableStateOf(null)
     var lobbyLoadFailed: Boolean by mutableStateOf(false)
     var hasLoadedLobby: Boolean by mutableStateOf(false)
 
@@ -573,7 +573,7 @@ class TetrisDuelStore(
             if (users != mapped) users = mapped
         }
         response.me?.let { me ->
-            applyRuby(me.rubyBalance?.clampedInt())
+            applyRuby(me.rubyBalance)
             val fresh = TetrisDuelRecord(
                 wins = me.wins?.clampedInt() ?: 0, losses = me.losses?.clampedInt() ?: 0, draws = me.draws?.clampedInt() ?: 0,
             )
@@ -708,7 +708,7 @@ class TetrisDuelStore(
     fun applyState(payload: TetrisStatePayload, receivedAt: Double? = null): StateApplyOutcome {
         val id = payload.matchId?.lowercase()?.takeIf { it.isNotEmpty() } ?: return StateApplyOutcome.ignored
         noteServerNow(payload.serverNowMs)
-        applyRuby(payload.rubyBalance?.clampedInt())
+        applyRuby(payload.rubyBalance)
         val status = payload.status ?: ""
         when (status) {
             "pending" -> {
@@ -864,8 +864,8 @@ class TetrisDuelStore(
                 is DuelCall.Success -> {
                     val response = result.value
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance?.clampedInt())
-                    setNotice(TetrisDuelNoticeText.challenge(response.status, response.need?.clampedInt(), response.have?.clampedInt()))
+                    applyRuby(response.rubyBalance)
+                    setNotice(TetrisDuelNoticeText.challenge(response.status, response.need, response.have))
                     if (response.status != TetrisRPCStatus.ok) logNotice("challenge refused status=${response.status.rawValue}")
                     when (response.status) {
                         TetrisRPCStatus.ok -> {
@@ -907,7 +907,7 @@ class TetrisDuelStore(
                 is DuelCall.Success -> {
                     val response = result.value
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance?.clampedInt())
+                    applyRuby(response.rubyBalance)
                     setNotice(TetrisDuelNoticeText.cancel(response.status))
                     when (response.status) {
                         TetrisRPCStatus.ok, TetrisRPCStatus.notFound, TetrisRPCStatus.notPending, TetrisRPCStatus.expired -> {
@@ -946,8 +946,8 @@ class TetrisDuelStore(
                     val response = result.value
                     val receivedAt = uptime()
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance?.clampedInt())
-                    setNotice(TetrisDuelNoticeText.respond(accept, response.status, response.side, response.need?.clampedInt(), response.have?.clampedInt()))
+                    applyRuby(response.rubyBalance)
+                    setNotice(TetrisDuelNoticeText.respond(accept, response.status, response.side, response.need, response.have))
                     if (response.status != TetrisRPCStatus.ok) logNotice("respond refused status=${response.status.rawValue}")
                     when (response.status) {
                         TetrisRPCStatus.ok -> {
@@ -992,7 +992,7 @@ class TetrisDuelStore(
                     val response = result.value
                     val receivedAt = uptime()
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance?.clampedInt())
+                    applyRuby(response.rubyBalance)
                     setNotice(TetrisDuelNoticeText.resign(response.status))
                     if (response.status == TetrisRPCStatus.unsupportedClient) noteUpdateRequired()
                     val state = response.state
@@ -1266,7 +1266,7 @@ class TetrisDuelStore(
         if (notice != text) notice = text
     }
 
-    internal fun applyRuby(value: Int?) {
+    internal fun applyRuby(value: Long?) {
         if (value == null) return
         if (rubyBalance != value) rubyBalance = value
         val host = host ?: return

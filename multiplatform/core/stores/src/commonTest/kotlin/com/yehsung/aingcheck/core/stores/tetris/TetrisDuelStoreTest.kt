@@ -32,8 +32,8 @@ class TetrisDuelStoreTest {
         val PEER = StoreFixtures.PEER
         val ME = StoreFixtures.USER
 
-        fun lobby(incoming: Boolean = true, outgoing: String? = null, activeMatch: String? = null, matches: String = "[]"): Reply = Reply.Json(
-            """{"status":"ok","server_now_ms":$NOW_MS,"me":{"ruby_balance":100,"wins":2,"losses":1,"draws":0""" +
+        fun lobby(incoming: Boolean = true, outgoing: String? = null, activeMatch: String? = null, matches: String = "[]", ruby: Long = 100): Reply = Reply.Json(
+            """{"status":"ok","server_now_ms":$NOW_MS,"me":{"ruby_balance":$ruby,"wins":2,"losses":1,"draws":0""" +
                 (activeMatch?.let { ""","active_match_id":"$it"""" } ?: "") +
                 ""","incoming":[${if (incoming) """{"match_id":"inv-1","from":{"id":"$PEER","display_name":"구름빵"},"stake":5,"expires_at_ms":${NOW_MS + 60_000}}""" else ""}]""" +
                 (outgoing?.let { ""","outgoing":{"match_id":"$it","to":{"id":"$PEER","display_name":"구름빵"},"stake":3,"expires_at_ms":${NOW_MS + 60_000}}""" } ?: "") +
@@ -303,6 +303,17 @@ class TetrisDuelStoreTest {
             }
         }
         assertEquals(10, DuelFee.winnerNet(10), "v0.3.64 수수료 0 — 판돈 10 승리 = +10")
+    }
+
+    /** 루비 칸 타입은 Long 하나(G §8-18 #4 · 8차 fold): Int 범위를 넘는 잔액도 와이어 → 스토어 → 호스트 칸 → 판돈 판정까지 자르지 않는다. */
+    @Test
+    fun rubyBalanceBeyondIntRangeIsNotClamped() = runTest {
+        val big = 5_000_000_000L
+        val h = harness(enabled = true, stub = Tetris().apply { lobbyReply = lobby(ruby = big) })
+        assertEquals(big, h.tetris.rubyBalance, "로비 me.ruby_balance 가 Int 범위를 넘어도 그대로")
+        assertEquals(big, h.tetrisHost.rubyBalance, "호스트(공유 루비 칸)에도 같은 값")
+        assertTrue(GamesTetrisStakeSelection.affordable(TetrisDuelStake.ten, big), "큰 잔액이 음수로 감겨 판돈을 막지 않는다")
+        assertFalse(GamesTetrisStakeSelection.affordable(TetrisDuelStake.ten, 9L))
     }
 
     /** 로그아웃: 판·신청·순위·루비·관전이 남지 않는다 — 배선 값(순위·관전 주 스위치)은 그대로 둔다. */

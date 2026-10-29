@@ -99,7 +99,7 @@ object MeCharacterTileRules {
     fun accessibilityText(name: String, status: MeCharacterTileStatus): String = when (status) {
         MeCharacterTileStatus.Equipped -> "$name, ${MeText.equipped}"
         MeCharacterTileStatus.Owned -> "$name, ${MeText.owned}"
-        is MeCharacterTileStatus.Price -> "$name, ${RubyPriceRule.accessibilityText(status.price.toInt(), RubyPriceRule.isShort(status.price.toInt(), status.balance?.toInt()))}"
+        is MeCharacterTileStatus.Price -> "$name, ${RubyPriceRule.accessibilityText(status.price.toLong(), RubyPriceRule.isShort(status.price.toLong(), status.balance))}"
         is MeCharacterTileStatus.GachaOnly -> MeText.gachaTileAccessibility(name, status.shardCost)
         MeCharacterTileStatus.GiftOnly -> "$name, ${CakeGiftText.lockedCaption}"
         MeCharacterTileStatus.UnknownPrice -> "$name, 가격 모름"
@@ -157,7 +157,7 @@ private fun StatusLine(id: String, status: MeCharacterTileStatus) {
     val c = AingTheme.colors
     when (val content = status.content) {
         is MeCharacterTileStatus.Content.Ruby ->
-            RubyPrice(content.price.toInt(), RubyPriceRule.isShort(content.price.toInt(), content.balance?.toInt()), rememberRuby(17f), gemSize = 17.dp, fontSize = 15f)
+            RubyPrice(content.price.toLong(), RubyPriceRule.isShort(content.price.toLong(), content.balance), rememberRuby(17f), gemSize = 17.dp, fontSize = 15f)
         is MeCharacterTileStatus.Content.Text -> Text(
             content.text,
             style = if (content.emphasized) MeType.footnote.copy(fontWeight = FontWeight.SemiBold) else MeType.footnote,

@@ -132,7 +132,7 @@ class DestinationTestRig(me: String?) {
         override val session: SupabaseSession? get() = host.session
         override val sessionGeneration: Int get() = host.sessionGeneration
         override val service: SupabaseWorkService get() = this@DestinationTestRig.service
-        override var rubyBalance: Int? = null
+        override var rubyBalance: Long? = null
         override val appConfig: AppConfig get() = this@DestinationTestRig.appConfig
         override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T = host.withSessionRetry(operation)
     }
@@ -151,7 +151,7 @@ class DestinationTestRig(me: String?) {
             override fun present(destination: GamesDestination) { presented += destination }
         }
         override val hiddenBlockedPeerIDs: Set<String> get() = emptySet()
-        override val sharedRubyBalance: Int? get() = 100
+        override val sharedRubyBalance: Long? get() = 100
     }
     val games = GamesStore(context)
 }

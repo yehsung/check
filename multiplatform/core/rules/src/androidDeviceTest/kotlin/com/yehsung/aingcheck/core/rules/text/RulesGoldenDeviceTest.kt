@@ -4,6 +4,8 @@ package com.yehsung.aingcheck.core.rules.text
 import android.os.Build
 import com.yehsung.aingcheck.core.rules.insights.RecordsGoldenChecks
 import com.yehsung.aingcheck.core.rules.todo.TodoGoldenChecks
+import com.yehsung.aingcheck.core.wire.json.SwiftKeys
+import com.yehsung.aingcheck.core.wire.text.WireScalars
 import com.yehsung.aingcheck.testkit.golden.Golden
 import com.yehsung.aingcheck.testkit.golden.GoldenFile
 import com.yehsung.aingcheck.testkit.golden.string
@@ -63,6 +65,22 @@ class RulesGoldenDeviceTest {
             }
         }
         note("text/scalar-classes probes=$probes ranges=${TextScalars.ranges().size}")
+    }
+
+    /** W1-d 번들(8차 fold, G §8-20 #3) — 와이어 글자 판정 표가 ART 에서도 Swift 표와 구간 하나까지 같고, 판정 몇 개가 JDK 가 아니라 표를 따른다. */
+    @Test
+    fun wireScalarTableBundleMatchesSwiftOnArt() {
+        val golden = load("wire/scalar-props")
+        val want = golden.cases.sortedBy { it.string("id") }.joinToString(",") { it.string("ranges") }
+        val got = WireScalars.ranges().joinToString(",") { (lo, hi, bits) ->
+            lo.toString(16).padStart(4, '0') + "-" + hi.toString(16).padStart(4, '0') + ":" + bits
+        }
+        assertEquals(want, got, "W1-d 번들 범위 표가 Swift 표와 다르다(ART)")
+        assertEquals(listOf(true, false, true), listOf(WireScalars.isWhitespace(0x85), WireScalars.isWhitespace(0x1C), WireScalars.isWhitespace(0xA0)))
+        assertEquals("my_url_property", SwiftKeys.toSnakeCase("myURLProperty"))
+        assertEquals("ab_\uD801\uDC28_\uD801\uDC28c", SwiftKeys.toSnakeCase("ab\uD801\uDC00\uD801\uDC00c"))
+        assertEquals("url2X", SwiftKeys.fromSnakeCase("url_2x"))
+        note("wire/scalar-props ranges=${WireScalars.ranges().size} digest=${got.hashCode()}")
     }
 
     @Test

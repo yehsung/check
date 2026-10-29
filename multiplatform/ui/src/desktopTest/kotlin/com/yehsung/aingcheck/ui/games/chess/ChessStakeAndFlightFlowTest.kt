@@ -53,7 +53,7 @@ class ChessStakeAndFlightFlowTest {
     private fun lobbyRig(duelsEnabled: Boolean, ruby: Int): BoardGameRig =
         BoardGameRig(me = playerA, duelsEnabled = duelsEnabled) { queueFixtures("chess_challenge", CHESS_FIXTURES, "chess_challenge__ok") }.also {
             ChessScreenFlowTest.seedChessLobby(it)
-            it.sharedRuby = ruby
+            it.sharedRuby = ruby.toLong()
             it.host.rubyBalance = ruby.toLong()
         }
 

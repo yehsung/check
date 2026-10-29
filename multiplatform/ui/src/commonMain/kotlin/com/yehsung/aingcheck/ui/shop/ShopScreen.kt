@@ -119,7 +119,7 @@ fun MeShopScreen(
             TopAppBar(
                 title = { Text(MeText.shopTitle, style = MeType.headline, color = c.label) },
                 navigationIcon = { if (onBack != null) BackButton(onBack) },
-                actions = { RubyBalanceChip(store.rubyBalance?.toInt(), rememberRuby(22f), Modifier.padding(end = AingDimens.space2), style = RubyChipStyle.Toolbar) },
+                actions = { RubyBalanceChip(store.rubyBalance, rememberRuby(22f), Modifier.padding(end = AingDimens.space2), style = RubyChipStyle.Toolbar) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = c.background),
             )
         },

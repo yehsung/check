@@ -124,7 +124,7 @@ private fun PriceCell(row: GachaOddsRow) {
     val c = AingTheme.colors
     val price = row.shopPrice
     if (price != null) {
-        RubyPrice(price.toInt(), isShort = false, art = rememberRuby(14f), gemSize = 14.dp, fontSize = 13f)
+        RubyPrice(price.toLong(), isShort = false, art = rememberRuby(14f), gemSize = 14.dp, fontSize = 13f)
     } else {
         // 희귀 줄(금 · 무지개)은 "뽑기 또는 조각 20개"처럼 길 수 있다 — 두 줄까지 접고 오른쪽에 붙인다(글자를 줄여 숨기지 않는다).
         Text(row.priceText, style = MeType.footnote, color = c.label2, textAlign = TextAlign.End, maxLines = 2)

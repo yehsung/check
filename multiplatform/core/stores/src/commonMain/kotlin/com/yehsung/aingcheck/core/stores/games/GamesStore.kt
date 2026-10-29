@@ -242,7 +242,7 @@ class GamesStore(val context: GamesContext) {
     val badgeCount: Int get() = context.gomoku.pendingIncomingInviteCount
 
     /** 게임 탭이 보여 주는 루비 잔액 — **공유 미러**를 먼저 읽는다(나 탭 상점 구매가 미러만 적는다). 미러를 모르면 테트리스 코어 값. */
-    val rubyBalance: Int? get() = context.sharedRubyBalance ?: context.tetris.rubyBalance
+    val rubyBalance: Long? get() = context.sharedRubyBalance ?: context.tetris.rubyBalance
 
     /**
      * 오목 로비의 **상대 고르기 목록** — 메시지 탭에서 차단해 숨긴 사람을 걷어낸 것. 화면이 읽는 자리는 여기 하나다.
@@ -682,7 +682,7 @@ object GamesChessChallengeGate {
  *   (들어오는 다른 경로가 생기면 버튼 단언은 못 잡는다), 화면은 JVM 시험이 못 본다.
  */
 object GamesChessStakeSend {
-    fun sendable(selected: Int?, store: GamesChessGateFacts, balance: Int?, blockedBy: GamesBusyGame?, duelsEnabled: Boolean): Int? {
+    fun sendable(selected: Int?, store: GamesChessGateFacts, balance: Long?, blockedBy: GamesBusyGame?, duelsEnabled: Boolean): Int? {
         if (selected == null || !duelsEnabled) return null
         if (!GamesChessStakeSelection.affordable(selected, balance)) return null
         if (store.isBusy || blockedBy != null) return null
@@ -697,5 +697,5 @@ object GamesChessStakeSelection {
     fun toggled(current: Int?, tapped: Int): Int? = if (current == tapped) null else tapped
 
     /** 이 판돈을 걸 수 있는가. **잔액을 모르면(null) 막지 않는다**(맥 0.3.29 규칙 — 서버가 거절하면 그때 안내한다). */
-    fun affordable(stake: Int, balance: Int?): Boolean = balance == null || balance >= stake
+    fun affordable(stake: Int, balance: Long?): Boolean = balance == null || balance >= stake
 }

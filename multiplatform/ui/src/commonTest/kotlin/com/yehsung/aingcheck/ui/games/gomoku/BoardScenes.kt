@@ -49,7 +49,7 @@ object BoardScenes {
     /** 오목 로비 장면(세션 없는 호스트 — 화면 열기가 조회를 안 낸다). [ruby] 는 공유 루비 미러(기준선은 이 숫자 하나만 바꾼다). */
     fun seedGomokuLobby(rig: BoardGameRig, ruby: Int = 100) {
         val g = rig.gomoku
-        rig.sharedRuby = ruby
+        rig.sharedRuby = ruby.toLong()
         g.users = gomokuUsers
         g.hasLoadedLobby = true
         g.hasLoadedInbox = true
@@ -130,7 +130,7 @@ object BoardScenes {
 
     fun seedChessLobby(rig: BoardGameRig, ruby: Int = 100) {
         val c = rig.chess
-        rig.sharedRuby = ruby
+        rig.sharedRuby = ruby.toLong()
         c.users = chessUsers
         c.hasLoadedLobby = true
         c.record = ChessRecord(4, 1, 2)

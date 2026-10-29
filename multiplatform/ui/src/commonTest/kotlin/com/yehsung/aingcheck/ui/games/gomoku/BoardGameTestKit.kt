@@ -202,7 +202,7 @@ class BoardGameRig(
         override val session: SupabaseSession? get() = host.session
         override val sessionGeneration: Int get() = host.sessionGeneration
         override val service: SupabaseWorkService get() = this@BoardGameRig.service
-        override var rubyBalance: Int? = null
+        override var rubyBalance: Long? = null
         override val appConfig: AppConfig get() = this@BoardGameRig.appConfig
         override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T = host.withSessionRetry(operation)
     }
@@ -215,7 +215,7 @@ class BoardGameRig(
     val router = RecordingRouter()
     /** 메시지 탭 차단 목록(앱에서는 메시지 스토어의 관찰 상태 — 바꾸면 화면이 다시 그린다). */
     var hiddenBlocked: Set<String> by mutableStateOf(emptySet())
-    var sharedRuby: Int? = 100
+    var sharedRuby: Long? = 100
 
     val context: GamesContext = object : GamesContext {
         override val sessionStore: SessionStore get() = this@BoardGameRig.sessionStore
@@ -228,7 +228,7 @@ class BoardGameRig(
         override val chess: GamesBoardGameLink get() = chessLink
         override val router: GamesRouter get() = this@BoardGameRig.router
         override val hiddenBlockedPeerIDs: Set<String> get() = hiddenBlocked
-        override val sharedRubyBalance: Int? get() = sharedRuby
+        override val sharedRubyBalance: Long? get() = sharedRuby
     }
     val games = GamesStore(context)
 

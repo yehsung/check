@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/SupabaseWorkService.swift:92-1315·1323-1592(인증·팀·프로필·미니게임·상점·메시지·제보) · SupabaseWorkServiceSignUp.swift · SupabaseWorkServiceSignUpOTP.swift @ 1b8260d
 package com.yehsung.aingcheck.core.net
 
+import com.yehsung.aingcheck.core.wire.text.WireScalars
 import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.core.wire.EmptyBody
@@ -195,8 +196,12 @@ suspend fun SupabaseWorkService.updatePassword(accessToken: String, newPassword:
 
 // ======================================================================== 팀
 
-/** 초대 코드 정규화: 대문자, 공백·하이픈 제거. */
-fun normalizeInviteCode(code: String): String = code.uppercase().filter { !it.isWhitespace() && it != '-' }
+/**
+ * 초대 코드 정규화: 대문자, 공백·하이픈 제거(Swift `code.uppercased().filter { !$0.isWhitespace && $0 != "-" }`).
+ * 공백 판정은 Swift 가 낸 번들 표([WireScalars.isWhitespace] — `Char.isWhitespace` 는 getType 이라 JDK·ART 판마다 갈린다, G §8-20 #3).
+ */
+fun normalizeInviteCode(code: String): String =
+    WireScalars.filterScalars(code.uppercase()) { cp -> !WireScalars.isWhitespace(cp) && cp != '-'.code }
 
 suspend fun SupabaseWorkService.lookupTeamByCode(code: String): TeamJoinPreview? {
     val data = send("/rest/v1/rpc/lookup_team_by_code", "POST", emptyList(), encode(InviteCodeRequest.serializer(), InviteCodeRequest(normalizeInviteCode(code))), null, null)

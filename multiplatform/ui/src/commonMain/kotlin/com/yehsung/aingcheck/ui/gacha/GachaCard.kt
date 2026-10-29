@@ -79,7 +79,7 @@ fun MeGachaCard(store: MeStore, onPull: () -> Unit, onOdds: () -> Unit, onExchan
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
             Text(GachaText.title, style = MeType.headline, color = c.label, modifier = Modifier.weight(1f).semantics { heading() })
             val balance = store.rubyBalance
-            RubyPrice(price.toInt(), RubyPriceRule.isShort(price.toInt(), balance?.toInt()), rememberRuby(17f), gemSize = 17.dp, fontSize = 15f)
+            RubyPrice(price.toLong(), RubyPriceRule.isShort(price.toLong(), balance?.toLong()), rememberRuby(17f), gemSize = 17.dp, fontSize = 15f)
         }
         Text(MeText.gachaLede(price), style = MeType.footnote, color = c.label2)
         store.lastGachaResult?.let { MeGachaLastResultRow(it, store.gachaName(it.characterID)) }

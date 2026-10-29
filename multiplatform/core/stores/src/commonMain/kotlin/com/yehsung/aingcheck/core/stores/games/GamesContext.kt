@@ -97,5 +97,5 @@ interface GamesContext : GamesMiniGameContext {
     val hiddenBlockedPeerIDs: Set<String>
 
     /** 루비 **공유 미러**(Swift `context.gomokuHost.rubyBalance`) — 오목·체스·테트리스·상점이 한 칸에 쓴다. 모르면 null. */
-    val sharedRubyBalance: Int?
+    val sharedRubyBalance: Long?
 }

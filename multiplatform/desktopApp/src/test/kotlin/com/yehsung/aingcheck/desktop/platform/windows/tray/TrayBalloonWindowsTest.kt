@@ -70,7 +70,7 @@ class TrayBalloonWindowsTest {
                 assertEquals(true, after.lastModifyOk, "풍선 뒤 아이콘 갱신 실패: $after")
                 assertEquals(WindowsTrayHost.ICON_FLAGS, after.lastIconFlags)
                 assertEquals(0, after.lastIconFlags and (0x10 or 0x40), "아이콘 갱신에 풍선 비트: $after")
-                assertEquals(3, after.balloonCalls, "아이콘 갱신이 풍선 호출로 세어졌다")
+                assertEquals(2, after.balloonCalls, "아이콘 갱신이 풍선 호출로 세어졌다") // 메시지 1 + 새 버전 1
 
                 // 긴 글자는 szInfoTitle[64]·szInfo[256] 안으로 — 서로게이트 쌍을 반으로 가르지 않는다.
                 assertTrue(tray.showBalloon("가".repeat(100), "😀".repeat(200), NotifyKind.POKE, respectQuietTime = false))
@@ -82,7 +82,7 @@ class TrayBalloonWindowsTest {
 
                 // 빈 본문은 '풍선 지우기' 명령이라 보내지 않는다.
                 assertFalse(tray.showBalloon("제목", " ", NotifyKind.MESSAGE, respectQuietTime = false))
-                assertEquals(4, tray.status().balloonCalls)
+                assertEquals(3, tray.status().balloonCalls, "빈 본문이 셸까지 갔다") // + 긴 글자 1, 빈 본문 0
 
                 tray.remove()
                 assertFalse(tray.showBalloon("아잉체크", "삭제 뒤", NotifyKind.MESSAGE, respectQuietTime = false))

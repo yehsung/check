@@ -635,9 +635,7 @@ extension WorkTimerStore {
         // 이미 켜 둔 표시라 건드리지 않는다 — 연달아 ‹ 를 눌러도 "불러오는 중…"이 끊기지 않는다.
         defer { if month == tokenBoardMonth, tokenBoardLoading { tokenBoardLoading = false } }
         do {
-            let rows = try await withSessionRetry { activeSession in
-                try await service.fetchTokenBoard(accessToken: activeSession.accessToken, month: month)
-            }
+            let rows = try await fetchTokenBoardCoalesced(month: month)
             guard generation == sessionGeneration else { return }
             // 응답이 오는 사이 ‹ › 로 달을 옮겼으면 이 응답은 낡은 달의 것이라 버린다(월 이동 스냅백 방지).
             guard month == tokenBoardMonth else { return }
@@ -668,6 +666,42 @@ extension WorkTimerStore {
         }
     }
 
+    /// `token_usage_board` 의 **유일한 발사 지점**(stab-l6, 2026-10-30). 같은 달·같은 세션 세대의 조회가 이미 떠 있으면
+    /// 새로 쏘지 않고 그 응답(또는 그 실패)을 함께 받는다.
+    ///
+    /// 왜: 이 RPC 는 무겁고(운영 평균 200ms · 최대 5.8s, 2026-10-29 장애의 첫 SQL 시간 초과 자리) 느린 동안 PostgREST 연결 하나를
+    /// 쥔다. 그런데 순위판 30초 루프(`refreshTokenBoardIfVisible`) · 팝오버 재오픈 킥(`setMenuPresented` → `loadTokenBoard`) ·
+    /// 열기 토글 · [다시 시도] · 팝오버 내 행(`loadMyTokenRowIfDue`)이 서로를 모른 채 같은 달을 쏴서, 서버가 느려질수록
+    /// 겹친 요청이 쌓였다(응답 8초 동안 재오픈 세 번 = 같은 질의 네 벌). 합쳐도 각 호출자의 사후 처리(달·세대 가드, 내 행 채집)는
+    /// 저마다 그대로 돈다 — 합치는 것은 **네트워크 왕복만**이다.
+    ///
+    /// - 열쇠는 (달, `sessionGeneration`). 계정이 바뀌면 옛 세션의 응답에 붙지 않는다.
+    /// - 자리는 조회 Task 가 끝나는 그 순간 스스로 비운다 — 끝난 응답을 다음 주기가 재사용하지 않는다(캐시가 아니다).
+    /// - 기다리던 쪽이 취소됐으면 응답이 와도 `CancellationError` 로 빠진다(원래의 '취소 → 조용히' 갈래 그대로).
+    ///   공유 조회 자체는 끊지 않는다 — 같이 기다리는 다른 호출자의 응답까지 날리지 않으려는 것이다.
+    /// - `joinInFlight == false` 는 붙지 않고 새로 쏜 뒤 자리를 넘겨받는다(업로드 직후 force — 떠 있던 조회엔 방금 값이 없다).
+    func fetchTokenBoardCoalesced(month: String, joinInFlight: Bool = true) async throws -> [TokenBoardRow] {
+        let generation = sessionGeneration
+        if joinInFlight, let inFlight = tokenBoardFetchInFlight, inFlight.month == month, inFlight.generation == generation {
+            let rows = try await inFlight.task.value
+            try Task.checkCancellation()
+            return rows
+        }
+        let id = UUID()
+        let task = Task { @MainActor [weak self] () throws -> [TokenBoardRow] in
+            guard let self else { throw CancellationError() }
+            defer { if self.tokenBoardFetchInFlight?.id == id { self.tokenBoardFetchInFlight = nil } }
+            return try await self.withSessionRetry { activeSession in
+                try await self.service.fetchTokenBoard(accessToken: activeSession.accessToken, month: month)
+            }
+        }
+        // 메인 액터 위라 위 Task 본문은 아래 await 전에는 시작하지 않는다 — 자리를 먼저 세워도 경합이 없다.
+        tokenBoardFetchInFlight = TokenBoardFetchInFlight(month: month, generation: generation, id: id, task: task)
+        let rows = try await task.value
+        try Task.checkCancellation()
+        return rows
+    }
+
     /// 팝오버 토큰 행이 쓸 **내 행 하나**를 받는다(v0.3.36).
     ///
     /// 같은 `token_usage_board` RPC 를 **언제나 현재 달로** 부르고 내 행만 남긴 뒤 나머지는 버린다.
@@ -695,9 +729,9 @@ extension WorkTimerStore {
         // 먼저 찍어 재진입·난사를 막는다(업로드 스탬프와 같은 관용구).
         lastMyTokenRowFetchAt = now
         do {
-            let rows = try await withSessionRetry { activeSession in
-                try await service.fetchTokenBoard(accessToken: activeSession.accessToken, month: month)
-            }
+            // force(업로드가 방금 닿음)는 떠 있는 조회에 붙지 않는다 — 그 조회는 업로드 **전에** 나간 것이라 방금 올린 값이 없다.
+            // 대신 새 조회가 자리를 넘겨받아, 뒤에 오는 순위판 루프·재오픈이 그 최신 응답에 붙는다.
+            let rows = try await fetchTokenBoardCoalesced(month: month, joinInFlight: !force)
             guard generation == sessionGeneration, month == TokenUsageMonthKey.current() else { return }
             applyMyTokenRowOutcome(TokenRowDisplayRule.outcomeForMyRow(
                 entries: rows.toTokenBoardEntries(), userID: userID, month: month, fetchedAt: now
@@ -2609,4 +2643,13 @@ enum TokenUsageDailyUpload {
             )
         }
     }
+}
+
+/// 떠 있는 `token_usage_board` 조회 한 건(stab-l6). `id` 는 끝난 Task 가 **자기 자리만** 비우게 하는 표식이다 —
+/// force 조회가 자리를 넘겨받은 뒤 늦게 끝난 옛 조회가 새 자리를 지우면, 그 뒤 호출자가 다시 겹쳐 쏜다.
+struct TokenBoardFetchInFlight {
+    let month: String
+    let generation: Int
+    let id: UUID
+    let task: Task<[TokenBoardRow], Error>
 }

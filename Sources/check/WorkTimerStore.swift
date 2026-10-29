@@ -587,6 +587,8 @@ final class WorkTimerStore {
     var myTokenRow: TokenRowServerValue?
     /// 마지막 내 행 조회 시각(300초 스로틀 기준). 관찰 대상 아님.
     @ObservationIgnored var lastMyTokenRowFetchAt: Date = .distantPast
+    /// 지금 떠 있는 `token_usage_board` 조회(stab-l6) — 같은 달·같은 세대 조회는 이 응답에 붙는다(`fetchTokenBoardCoalesced`). 관찰 대상 아님.
+    @ObservationIgnored var tokenBoardFetchInFlight: TokenBoardFetchInFlight?
     /// 직전 월간 업로드가 **실제로 서버에 닿았는가**. 업로드 결정 로직(주입 오버로드)은 이 플래그만 세우고,
     /// 왕복은 얇은 래퍼가 한다 — 그래야 주입 오버로드를 직접 부르는 기존 테스트에 새 네트워크 호출이 생기지 않는다.
     /// 관찰 대상 아님.

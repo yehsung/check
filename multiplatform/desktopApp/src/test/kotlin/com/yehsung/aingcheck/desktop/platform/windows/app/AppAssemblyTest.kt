@@ -24,13 +24,20 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.TrayHost
 import com.yehsung.aingcheck.desktop.AppGraph
 import com.yehsung.aingcheck.desktop.DesktopPlatform
 import com.yehsung.aingcheck.desktop.LaunchOptions
+import com.yehsung.aingcheck.desktop.SelfCheck
 import com.yehsung.aingcheck.desktop.platform.windows.HostOs
 import com.yehsung.aingcheck.desktop.platform.windows.jna.JnaBootstrap
 import com.yehsung.aingcheck.desktop.platform.windows.login.StartupApproved
 import com.yehsung.aingcheck.desktop.platform.windows.tray.TaskbarTheme
 import com.yehsung.aingcheck.desktop.platform.windows.tray.TaskbarThemeProbe
 import com.yehsung.aingcheck.testkit.vault.InMemoryTokenVault
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -84,6 +91,13 @@ class AppAssemblyTest {
         assertEquals(LaunchOptions(autostart = true, selfcheck = false, unknown = emptyList()), LaunchOptions.parse(arrayOf("--autostart")))
         assertEquals(LaunchOptions(autostart = false, selfcheck = true, unknown = listOf("--x")), LaunchOptions.parse(arrayOf("--selfcheck", "--x")))
         assertEquals(LaunchOptions(autostart = false, selfcheck = false, unknown = emptyList()), LaunchOptions.parse(emptyArray()))
+        // package.md P2: --selfcheck=<path> 는 selfcheck + 파일 출력. 빈 경로는 모르는 인자(파일 없이 켜지 않는다).
+        assertEquals(
+            LaunchOptions(autostart = true, selfcheck = true, selfcheckOut = "C:\\work\\out.json", unknown = emptyList()),
+            LaunchOptions.parse(arrayOf("--autostart", "--selfcheck=C:\\work\\out.json")),
+        )
+        assertEquals(LaunchOptions(autostart = false, selfcheck = false, unknown = listOf("--selfcheck=")), LaunchOptions.parse(arrayOf("--selfcheck=")))
+        assertEquals(LaunchOptions(autostart = false, selfcheck = false, unknown = listOf("--selfcheckx")), LaunchOptions.parse(arrayOf("--selfcheckx")))
     }
 
     @Test
@@ -124,5 +138,39 @@ class AppAssemblyTest {
         assertEquals(TaskbarTheme.LIGHT, TaskbarThemeProbe.fromRegistryValue(1))
         assertEquals(TaskbarTheme.DARK, TaskbarThemeProbe.fromRegistryValue(0))
         assertEquals(TaskbarTheme.DARK, TaskbarThemeProbe.fromRegistryValue(null))
+    }
+
+    @Test
+    fun selfCheckBuildFieldsWithoutReleaseProperties() {
+        // package.md P2: 기존 키에 buildTime·gitSha·prodHost·prodKeySha8·flags 를 더한다. 시험 빌드는 출시 속성이 없다.
+        val fields = SelfCheck.buildFields()
+        assertEquals(listOf("buildTime", "gitSha", "prodHost", "prodKeySha8", "flags"), fields.keys.toList())
+        assertEquals("dev", fields["buildTime"]!!.jsonPrimitive.content)
+        assertEquals("unknown", fields["gitSha"]!!.jsonPrimitive.content)
+        assertEquals("aingcheck.invalid", fields["prodHost"]!!.jsonPrimitive.content)
+        assertEquals("", fields["prodKeySha8"]!!.jsonPrimitive.content, "키가 비면 지문도 빈 값(sha256(\"\") 을 싣지 않는다)")
+        val flags = fields["flags"]!!.jsonObject.mapValues { it.value.jsonPrimitive.boolean }
+        assertEquals(
+            mapOf("duels" to false, "poke" to false, "ultra" to false, "chatToast" to false, "forkSafe" to false,
+                "tokenUpload" to false, "adoptedPokeConsume" to false, "spectator" to true),
+            flags,
+        )
+        // 운영 지문: 키 자체가 아니라 sha256 앞 8자(NIST "abc" 벡터).
+        assertEquals("ba7816bf", SelfCheck.keySha8("abc"))
+        assertEquals("prod.aingcheck.invalid", SelfCheck.prodHost("https://prod.aingcheck.invalid:8443/rest"))
+        assertEquals("", SelfCheck.prodHost("not a url"))
+    }
+
+    @Test
+    fun selfCheckWritesSameLineAsUtf8File() {
+        val dir = Files.createTempDirectory("aingcheck-selfcheck")
+        try {
+            val out = dir.resolve("nested/sc.json")
+            val report = buildJsonObject { put("dataDir", "C:\\Users\\아잉\\AppData") }
+            SelfCheck.write(report, out.toString())
+            assertEquals(report.toString() + "\n", String(Files.readAllBytes(out), Charsets.UTF_8))
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
     }
 }

@@ -9,6 +9,7 @@ package com.yehsung.aingcheck.desktop
 
 import com.sun.jna.platform.win32.User32
 import com.yehsung.aingcheck.desktop.generated.BuildIdentity
+import com.yehsung.aingcheck.desktop.generated.ProdConfig
 import com.yehsung.aingcheck.desktop.platform.windows.HostOs
 import com.yehsung.aingcheck.desktop.platform.windows.WindowsPlatform
 import com.yehsung.aingcheck.desktop.platform.windows.env.WindowsEnvironment
@@ -24,28 +25,44 @@ import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayIconRenderer
 import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayIconSpec
 import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayIconStatus
 import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayTooltip
+import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.net.URI
+import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import javax.swing.SwingUtilities
 import kotlin.system.exitProcess
 import kotlin.time.Clock
 
-data class LaunchOptions(val autostart: Boolean, val selfcheck: Boolean, val unknown: List<String>) {
+data class LaunchOptions(val autostart: Boolean, val selfcheck: Boolean, val selfcheckOut: String? = null, val unknown: List<String>) {
     companion object {
         const val AUTOSTART = "--autostart"
         const val SELFCHECK = "--selfcheck"
+        /** `--selfcheck=<path>`: 같은 한 줄을 그 파일에 UTF-8 로도 쓴다(GUI 서브시스템 런처는 stdout 이 없다 — package.md §4-4). */
+        const val SELFCHECK_TO = "$SELFCHECK="
 
         fun parse(args: Array<String>): LaunchOptions {
-            val known = setOf(AUTOSTART, SELFCHECK)
-            return LaunchOptions(
-                autostart = AUTOSTART in args,
-                selfcheck = SELFCHECK in args,
-                unknown = args.filter { it !in known },
-            )
+            var autostart = false
+            var selfcheck = false
+            var out: String? = null
+            val unknown = mutableListOf<String>()
+            for (arg in args) {
+                when {
+                    arg == AUTOSTART -> autostart = true
+                    arg == SELFCHECK -> selfcheck = true
+                    arg.startsWith(SELFCHECK_TO) && arg.length > SELFCHECK_TO.length -> {
+                        selfcheck = true
+                        out = arg.substring(SELFCHECK_TO.length)
+                    }
+                    else -> unknown += arg
+                }
+            }
+            return LaunchOptions(autostart = autostart, selfcheck = selfcheck, selfcheckOut = out, unknown = unknown)
         }
     }
 }
@@ -72,7 +89,48 @@ object SelfCheck {
             put("codexHomeSource", env.codexHome().source.name)
             put("jnaBootLibraryPath", jnaApplied["jna.boot.library.path"])
             put("jnaNoUnpack", System.getProperty("jna.nounpack"))
+            for ((key, value) in buildFields()) put(key, value)
         }
+    }
+
+    /**
+     * OS 를 읽지 않는 몫(package.md P2 — 맥 JVM 시험이 잰다): buildTime·gitSha(영수증 대조) · prodHost·prodKeySha8(운영 지문 —
+     * 키 자체는 싣지 않고 sha256 앞 8자만, 키가 비면 "") · flags(DesktopAppConfig.fromBuild() 그대로).
+     */
+    fun buildFields(): JsonObject = buildJsonObject {
+        put("buildTime", BuildIdentity.BUILD_TIME)
+        put("gitSha", BuildIdentity.GIT_SHA)
+        put("prodHost", prodHost(ProdConfig.SUPABASE_URL))
+        put("prodKeySha8", keySha8(ProdConfig.SUPABASE_ANON_KEY))
+        val flags = DesktopAppConfig.fromBuild()
+        put(
+            "flags",
+            buildJsonObject {
+                put("duels", flags.duels)
+                put("poke", flags.poke)
+                put("ultra", flags.ultra)
+                put("chatToast", flags.chatToast)
+                put("forkSafe", flags.forkSafe)
+                put("tokenUpload", flags.tokenUpload)
+                put("adoptedPokeConsume", flags.adoptedPokeConsume)
+                put("spectator", flags.spectator)
+            },
+        )
+    }
+
+    fun prodHost(url: String): String = runCatching { URI(url).host }.getOrNull().orEmpty()
+
+    fun keySha8(key: String): String {
+        if (key.isEmpty()) return ""
+        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }.take(8)
+    }
+
+    /** stdout 과 같은 한 줄 + 줄바꿈을 UTF-8 로(부모 폴더가 없으면 만든다). */
+    fun write(report: JsonObject, out: String) {
+        val path = Path.of(out)
+        path.toAbsolutePath().parent?.let { Files.createDirectories(it) }
+        Files.writeString(path, report.toString() + "\n", Charsets.UTF_8)
     }
 }
 
@@ -84,7 +142,9 @@ fun main(args: Array<String>) {
         exitProcess(2)
     }
     if (options.selfcheck) {
-        println(SelfCheck.report(jnaApplied))
+        val report = SelfCheck.report(jnaApplied)
+        println(report)
+        options.selfcheckOut?.let { SelfCheck.write(report, it) }
         exitProcess(0)
     }
     val guard = WindowsSingleInstanceGuard()

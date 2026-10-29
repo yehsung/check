@@ -1,3 +1,4 @@
+// 원본: 없음 — 셸 라우트 계획(Android 판. iOS 는 탭별 NavigationStack 이 라우터 경로를 쌓는다 — W3-a 패치 01 로 메시지 탭 경로를 코어 규칙에 잇는다).
 // 라우트 ↔ 목적지(순수 — JVM 시험이 닿는다). 탭마다 자기 백스택(iOS 탭별 NavigationStack, E§3): 라우트를 열면
 // 그 탭으로 가서 탭 뿌리 위에 자식 목적지를 쌓는다. 빠짐없는 when — 라우트를 더하면 여기가 컴파일로 막는다(E§3 규약).
 package com.yehsung.aingcheck.android.nav
@@ -6,6 +7,7 @@ import com.yehsung.aingcheck.android.routing.AingMiniGame
 import com.yehsung.aingcheck.android.routing.AingRoute
 import com.yehsung.aingcheck.android.routing.AingTab
 import com.yehsung.aingcheck.android.routing.RankingsBoard
+import com.yehsung.aingcheck.android.screens.messages.MessagesRouting
 
 /** 라우트 하나를 여는 방법: [tab] 으로 가서 뿌리를 [root] 로 두고 [children] 을 차례로 쌓는다. */
 data class RoutePlan(val tab: AingTab, val root: Any, val children: List<Any>) {
@@ -33,8 +35,9 @@ object RoutePlans {
 
     fun plan(route: AingRoute): RoutePlan = when (route) {
         AingRoute.Now -> RoutePlan(AingTab.NOW, Dest.NowHome, emptyList())
-        AingRoute.Messages -> RoutePlan(AingTab.MESSAGES, Dest.MessagesList, emptyList())
-        is AingRoute.Message -> RoutePlan(AingTab.MESSAGES, Dest.MessagesList, listOf(Dest.Conversation(route.peerId)))
+        // 메시지 탭 경로는 코어 규칙 한 곳(MessagesListRules.destinations — W3-a MessagesRouting 이 셸 라우트를 옮겨 묻는다)이 정한다.
+        AingRoute.Messages, is AingRoute.Message ->
+            RoutePlan(AingTab.MESSAGES, Dest.MessagesList, requireNotNull(MessagesRouting.children(route)) { "메시지 탭 라우트인데 경로가 없다: $route" })
         is AingRoute.Rankings -> RoutePlan(AingTab.RANKINGS, Dest.RankingsHome(route.board.raw), emptyList())
         AingRoute.Games -> RoutePlan(AingTab.GAMES, Dest.GamesHome, emptyList())
         is AingRoute.MiniGame -> games(Dest.MiniGame(route.game.raw))

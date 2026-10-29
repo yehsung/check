@@ -150,6 +150,36 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
+    "desktop-work-policy/constants": {
+      "file": "697936af475bf4beeee477ffe0203d9ad076ec8d6e08fa0bb42084debc920c55",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift": "54a07039f84940fadb365e38808e82469177ffcaa835c92626204f867d70cf30"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
+        "Sources/check/CheckWorkNudge.swift": "3b0e7931f58481d5d22651f64fd6405821e963b896c8124c59f960d0c31e6a4b",
+        "Sources/check/WorkTimerStore.swift": "63d5c5965bfd95c02b6209b33788e9bd36e6dcf2ac8041528b1d85cc37231b2c"
+      }
+    },
+    "desktop-work-policy/laps": {
+      "file": "a34886d7ddb7d819cfecf484c1ea6db9e85130080f4bed281dc268de6d7b28b1",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift": "54a07039f84940fadb365e38808e82469177ffcaa835c92626204f867d70cf30"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
+        "Sources/check/WorkTimerStore.swift": "63d5c5965bfd95c02b6209b33788e9bd36e6dcf2ac8041528b1d85cc37231b2c"
+      }
+    },
+    "desktop-work-policy/nudge": {
+      "file": "faff0de533c06592c4dabef6aa89f143a75c5d42f3d42a6624fb795dc58a76e7",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift": "54a07039f84940fadb365e38808e82469177ffcaa835c92626204f867d70cf30"
+      },
+      "swiftSources": {
+        "Sources/check/CheckWorkNudge.swift": "3b0e7931f58481d5d22651f64fd6405821e963b896c8124c59f960d0c31e6a4b"
+      }
+    },
     "duel-fee/fee": {
       "file": "481256ab041f96314be76b958171097adbf5a0443790ad94197927599c585dfd",
       "generator": {

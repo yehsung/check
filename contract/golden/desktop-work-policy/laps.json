@@ -1,0 +1,117 @@
+{
+  "cases": [
+    {
+      "id": "lap-key/-1",
+      "key": "hour3",
+      "lap": -1
+    },
+    {
+      "id": "lap-key/0",
+      "key": "hour3",
+      "lap": 0
+    },
+    {
+      "id": "lap-key/1",
+      "key": "hour3",
+      "lap": 1
+    },
+    {
+      "id": "lap-key/2",
+      "key": "hour3.lap2",
+      "lap": 2
+    },
+    {
+      "id": "lap-key/3",
+      "key": "hour3.lap3",
+      "lap": 3
+    },
+    {
+      "id": "lap-key/4",
+      "key": "hour3.lap4",
+      "lap": 4
+    },
+    {
+      "id": "lap-key/10",
+      "key": "hour3.lap10",
+      "lap": 10
+    },
+    {
+      "epochSeconds": 1790000000,
+      "id": "day-key/1790000000",
+      "key": "20260921"
+    },
+    {
+      "epochSeconds": 1790002740,
+      "id": "day-key/1790002740",
+      "key": "20260921"
+    },
+    {
+      "epochSeconds": 1790002799,
+      "id": "day-key/1790002799",
+      "key": "20260921"
+    },
+    {
+      "epochSeconds": 1790002800,
+      "id": "day-key/1790002800",
+      "key": "20260922"
+    },
+    {
+      "epochSeconds": 1790002801,
+      "id": "day-key/1790002801",
+      "key": "20260922"
+    },
+    {
+      "epochSeconds": 1709218799,
+      "id": "day-key/1709218799",
+      "key": "20240229"
+    },
+    {
+      "epochSeconds": 1709218800,
+      "id": "day-key/1709218800",
+      "key": "20240301"
+    },
+    {
+      "epochSeconds": 1798729199,
+      "id": "day-key/1798729199",
+      "key": "20261231"
+    },
+    {
+      "epochSeconds": 1798729200,
+      "id": "day-key/1798729200",
+      "key": "20270101"
+    },
+    {
+      "epochSeconds": 0,
+      "id": "day-key/0",
+      "key": "19700101"
+    },
+    {
+      "id": "marker/with-input",
+      "json": "{\"lastInputAt\":811695800,\"sessionID\":\"6f1c2a9e-0000-4000-8000-00000000abcd\",\"sessionStartedAt\":811692800,\"sleepBeganAt\":811696400}",
+      "lastInputAtMs": 3000000,
+      "sessionStartedAtMs": 0,
+      "sleepBeganAtMs": 3600000
+    },
+    {
+      "id": "marker/no-input",
+      "json": "{\"sessionID\":\"6f1c2a9e-0000-4000-8000-00000000abcd\",\"sessionStartedAt\":811692800,\"sleepBeganAt\":811700000}",
+      "lastInputAtMs": null,
+      "sessionStartedAtMs": 0,
+      "sleepBeganAtMs": 7200000
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+  "golden": "desktop-work-policy/laps",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "day-key": "MilestoneTracker.dayKey — KST yyyyMMdd",
+    "lap-key": "㉕ 랩 1 이하 = hour3(옛 키 연속성), 2부터 hour3.lap<n> — 랩마다 다른 키",
+    "marker": "PendingSleepClose JSONEncoder(sortedKeys) — Date 는 기준일(2001) 초 Double, lastInputAt 은 nil 이면 키가 없다. 시각은 t0 기준 ms 로도 적는다"
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStore.swift",
+    "Sources/CheckCore/MilestoneTracker.swift"
+  ]
+}

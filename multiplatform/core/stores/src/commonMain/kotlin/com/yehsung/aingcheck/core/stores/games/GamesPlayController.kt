@@ -241,6 +241,33 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     fun moveLeftOneCell() = feed(TetrisGestureStep.moveLeft)
     fun moveRightOneCell() = feed(TetrisGestureStep.moveRight)
 
+    /**
+     * 키보드 누름/뗌(데스크톱 — 맥 `MiniGameTetris.syncHeldKeys` 와 같은 엔진 문). 테트리스일 때 엔진의 같은 이름에 넘기고, 다른 게임은 아무 일 없다.
+     * 대결 쪽(`TetrisDuelSession.setLeftHeld` — 스토어 `TetrisDuelStore.setLeftHeld` 가 감싼다)과 같은 규칙이다:
+     * **누름은 판이 살아 있을 때만**(진행 중이고 게임오버 전 — 시작 전·게임오버·결과 카드에서는 버린다), **뗌은 언제나** 받는다(멱등 — 눌린 채 남지 않게).
+     * 판을 켜는 것은 여전히 [tap] 이다(누름이 판을 켜지 않는다). DAS·ARR 자동 반복은 엔진이 [tick] 안에서 돈다 —
+     * 그래서 멈춤(틱 없음) 동안은 움직이지 않고, 멈춤·창 숨김·포커스 상실 때는 화면 쪽이 [releaseAllKeys] 를 부른다.
+     */
+    fun setLeftHeld(held: Boolean) = feedHeld(held) { it.setLeftHeld(held) }
+    fun setRightHeld(held: Boolean) = feedHeld(held) { it.setRightHeld(held) }
+    fun setSoftDropHeld(held: Boolean) = feedHeld(held) { it.setSoftDropHeld(held) }
+
+    /** 눌린 키를 모두 놓는다(멱등). 판 상태와 상관없이 받는다(뗌과 같다). 테트리스가 아니면 아무 일 없다. */
+    fun releaseAllKeys() {
+        if (kind != MiniGameKind.tetris) return
+        val next = tetris.copy()
+        next.releaseAllKeys()
+        tetris = next
+    }
+
+    private inline fun feedHeld(held: Boolean, apply: (TetrisGame) -> Unit) {
+        if (kind != MiniGameKind.tetris) return
+        if (held && !(tetris.isPlaying && !tetris.isGameOver)) return
+        val next = tetris.copy()
+        apply(next)
+        tetris = next
+    }
+
     /** 세로 한 칸(엔진 `softDropOneCell` — 한 칸 · 1점 · 접지 리셋 예산 안 씀 · 중력 되감기). */
     fun softDropOneCell() = feed(TetrisGestureStep.softDrop)
 

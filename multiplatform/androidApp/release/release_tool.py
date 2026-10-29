@@ -48,6 +48,14 @@ GS_JSON = "google-services" + ".json"
 FORBIDDEN_ENTRY_SUFFIXES = (GS_JSON, "." + "jks", "." + "keystore", ".p12", ".pem", ".p8", "service-account" + ".json")
 # 출시 판에서 빠져야 하는 클래스(진열장 — G §8-13·§8-14: release 제외는 W6-a). R8 이 지웠는지 mapping 으로 잰다.
 SHOWCASE_PREFIXES = ("com.yehsung.aingcheck.ui.components.AingGallery",)
+# 진열장 **전용** 문자열 리터럴(ui/.../components/AingGallery.kt 에만 있다 — 자기 시험 SC1 이 원문에서 잰다). 진열장 함수가 다른 클래스에
+# 인라인되면 mapping 의 클래스 머리 줄로는 안 보이므로, 산출물 dex 문자열 표에 이 글자가 0 인지 함께 잰다(검증 지적 r8.showcaseRemoved).
+SHOWCASE_LITERALS = ("섹션 제목 20 bold", "행 이름 16 semibold · 부제 13", "3단 글자 label3Text — 끝난 할 일", "보조 글자 label2 — 오늘 3시간 12분 근무")
+# 크기 예산 키(androidApp/release/budget.properties — 바이트). 넘으면 verify 빨강.
+BUDGET_KEYS = ("aabMaxBytes", "apkMaxBytes", "fontMaxBytes")
+# 업로드 키 기본 자리(G §2-3 W6-a 행). 다른 자리·환경 변수 비밀번호는 경고(영수증 warnings).
+KEY_PLACES = ("secrets-dir", "other", "throwaway")
+PASSWORD_SOURCES = ("keychain", "env", "throwaway")
 
 FIREBASE_SHAPES = {
     "firebaseAppId": re.compile(r"^1:[0-9]{3,20}:android:[0-9a-f]{6,40}$"),
@@ -306,6 +314,18 @@ def cmd_preflight(a):
         raise Refuse(f"versionName '{vn}' 모양이 틀렸다(숫자.숫자… 32자 이하 — client_publish_release_v2 latest_version)")
     if a.duels not in ("on", "off"):
         raise Refuse(f"--duels 는 on 또는 off 다('{a.duels}')")
+    # 판돈 이중 확인(G §8-17 #1 · 검증 지적): 커밋된 androidDuelsFromBuild 와 출시 인자가 맞아야 한다. 출시 인자 하나로는 켜지지 않는다.
+    dfb_raw = vp.get("androidDuelsFromBuild")
+    dfb = None
+    if dfb_raw is not None:
+        if not re.fullmatch(r"[0-9]{1,7}", dfb_raw) or not (1 <= int(dfb_raw) <= VERSION_CODE_MAX):
+            raise Refuse(f"version.properties 의 androidDuelsFromBuild '{dfb_raw}' 는 1..{VERSION_CODE_MAX} 정수여야 한다")
+        dfb = int(dfb_raw)
+    if a.duels == "on" and (dfb is None or vc < dfb):
+        raise Refuse("--duels on 은 커밋된 version.properties 의 androidDuelsFromBuild=N(판돈 e2e 를 통과한 빌드)이 있고 versionCode ≥ N 일 때만 받는다"
+                     f"(지금 androidDuelsFromBuild={dfb_raw or '없음'} · versionCode={vc})")
+    if a.duels == "off" and dfb is not None and vc >= dfb:
+        raise Refuse(f"커밋된 androidDuelsFromBuild={dfb} 가 이 판(versionCode={vc})부터 판돈을 켠다 — --duels on 을 주거나, 끄려면 그 줄을 고쳐 커밋한다")
     if not re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", a.build_time):
         raise Refuse("빌드 시각 모양이 틀렸다")
     if not re.fullmatch(r"[0-9a-f]{40}", a.git_sha):
@@ -344,6 +364,15 @@ def cmd_preflight(a):
         if last_cert != a.upload_cert_sha256 and not a.new_upload_key:
             raise Refuse("업로드 키 인증서가 장부의 직전 판과 다르다(다른 키로 서명하면 Play 가 거부한다). 키를 재설정했으면 --new-upload-key")
 
+    if a.mode == "prod" and (a.key_place not in KEY_PLACES[:2] or a.password_source not in PASSWORD_SOURCES[:2]):
+        raise Refuse("운영 판의 업로드 키 자리·비밀번호 출처가 없다(--key-place secrets-dir|other · --password-source keychain|env)")
+    warnings = []
+    if a.mode == "prod" and a.key_place == "other":
+        warnings.append("key-outside-secrets-dir: 업로드 키 파일이 ~/.aing-check-secrets/android/ 밖에 있다(G §2-3 W6-a 행)")
+    if a.mode == "prod" and a.password_source == "env":
+        warnings.append("password-from-env: 업로드 키 비밀번호가 키체인이 아니라 환경 변수에서 왔다(G §2-3 W6-a 행 · A§6-1)")
+    for w in warnings:
+        print(f"release-android: 경고 — {w}", file=sys.stderr)
     duels = 1 if a.duels == "on" else 0
     stamp = f"aingcheck-release;build={vc};version={vn};time={a.build_time};sha={sha};duels={duels}"
     plan = {
@@ -352,6 +381,9 @@ def cmd_preflight(a):
         "supabaseHost": (values["supabaseUrl"][len("https://"):] if a.mode == "prod" else "aingcheck.invalid"),
         "firebase": a.mode == "prod",
         "allowNoIcon": bool(a.allow_no_icon),
+        "duelsFromBuild": dfb,
+        "inputs": {"keyPlace": a.key_place, "passwordSource": a.password_source},
+        "warnings": warnings,
     }
     gradle_props = {
         "aingcheck.release.buildTime": a.build_time,
@@ -364,7 +396,11 @@ def cmd_preflight(a):
     # 계획의 비교값 중 비밀이 아닌 것만 계획에 남긴다. 값 파일은 0600 으로 만든다(umask 와 상관없이).
     fd = os.open(a.values_out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump({"gradleProperties": gradle_props, "expect": {k: values.get(k, "") for k in ("supabaseUrl", "firebaseAppId", "firebaseProjectId", "firebaseSenderId")}}, f)
+        expect = {k: values.get(k, "") for k in ("supabaseUrl", "firebaseAppId", "firebaseProjectId", "firebaseSenderId")}
+        # 비밀은 아니지만 계획·영수증에 싣지 않는 두 값은 SHA-256 으로만 대조한다(dex 에 실린 것이 이 구성의 값인가).
+        for k in ("supabaseAnonKey", "firebaseApiKey"):
+            expect[k + "Sha256"] = hashlib.sha256(values[k].encode("utf-8")).hexdigest() if values.get(k) else ""
+        json.dump({"gradleProperties": gradle_props, "expect": expect}, f)
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(plan, f, ensure_ascii=False, indent=1)
     print(f"release-android: 계획 mode={a.mode} versionCode={vc} versionName={vn} time={a.build_time} sha={sha} duels={a.duels}")
@@ -409,6 +445,15 @@ def cmd_cert_sha256(a):
     return 0
 
 
+def cmd_file_sha256(a):
+    h = hashlib.sha256()
+    with open(a.path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    print(h.hexdigest())
+    return 0
+
+
 def apksigner_sha256(text):
     m = re.findall(r"^Signer #1 certificate SHA-256 digest: ([0-9a-f]{64})$", text, re.M)
     return m[0] if len(m) == 1 else ""
@@ -445,7 +490,7 @@ def read_allowlist(path):
 
 def scan_archive(path, mode):
     """압축 안 내용물: 금지 표식·금지 파일·Fixtures 자산·.invalid 개수·dex 개수. 표식 값은 싣지 않고 자리만."""
-    res = {"entries": 0, "dex": 0, "markers": [], "forbiddenEntries": [], "fixtures": [], "invalidHits": 0, "mapping": None}
+    res = {"entries": 0, "dex": 0, "markers": [], "forbiddenEntries": [], "fixtures": [], "invalidHits": 0, "mapping": None, "showcase": []}
     with zipfile.ZipFile(path) as z:
         for info in z.infolist():
             n = info.filename
@@ -462,10 +507,34 @@ def scan_archive(path, mode):
             if re.search(r"(^|/)classes\d*\.dex$", n):
                 res["dex"] += 1
                 res["invalidHits"] += data.count(b"aingcheck.invalid")
+                # dex 문자열은 MUTF-8 — 기본 다국어 평면 글자(한글·· —)는 UTF-8 과 같은 바이트다.
+                res["showcase"] += [lit for lit in SHOWCASE_LITERALS if lit.encode("utf-8") in data and lit not in res["showcase"]]
             if n.endswith("com.android.tools.build.obfuscation/proguard.map"):
                 res["mapping"] = data.decode("utf-8", errors="replace")
     res["markers"] = sorted(set(res["markers"]))
     return res
+
+
+def _sha256_text(v):
+    return hashlib.sha256(v.encode("utf-8")).hexdigest() if isinstance(v, str) and v else ""
+
+
+def read_budget(path):
+    """budget.properties → ({키: 바이트}, None) 또는 (None, 이유). 키는 BUDGET_KEYS 정확히, 값은 양의 정수."""
+    if not path or not os.path.exists(path):
+        return None, f"파일이 없다: {path}"
+    try:
+        props = read_properties(path)
+    except Refuse as e:
+        return None, str(e)
+    if sorted(props) != sorted(BUDGET_KEYS):
+        return None, f"키가 {sorted(BUDGET_KEYS)} 정확히가 아니다: {sorted(props)}"
+    out = {}
+    for k, v in props.items():
+        if not re.fullmatch(r"[1-9][0-9]{0,11}", v):
+            return None, f"{k}={v!r} 는 양의 정수(바이트)가 아니다"
+        out[k] = int(v)
+    return out, None
 
 
 def cmd_verify(a):
@@ -499,28 +568,41 @@ def cmd_verify(a):
     icon_ok = bool(b["icon"])
     check("badging.icon", icon_ok or plan.get("allowNoIcon"), f"icon='{b['icon'] or ''}'" + ("" if icon_ok else (" (--allow-no-icon 로 넘김)" if plan.get("allowNoIcon") else " — 런처 아이콘이 없다")))
 
-    # ② dex 정적 값(R8 뒤 산출물 — AAB 가 있으면 AAB, 아니면 APK)
+    # ② dex 정적 값(R8 뒤 산출물 — AAB 가 있으면 AAB, 아니면 APK). 빌드 도장·판돈 깃발은 실제로 깔리는 보편 APK 의 dex 에서도 잰다.
     target = a.aab or a.apk
-    where, bc = find_static(target, BUILD_CONFIG)
-    stamp = bc.get("RELEASE_STAMP", (None, None))[1] if bc else None
-    duels = bc.get("DUELS_ENABLED", (None, None))[1] if bc else None
-    check("dex.releaseStamp", stamp == plan["stamp"], f"{where}: RELEASE_STAMP={stamp!r} 기대 {plan['stamp']!r}")
-    check("dex.duelsEnabled", bc is not None and "DUELS_ENABLED" in bc and duels is plan["duelsEnabled"], f"DUELS_ENABLED={duels} 기대 {plan['duelsEnabled']}")
+
+    def stamp_checks(prefix, path):
+        where, bc = find_static(path, BUILD_CONFIG)
+        stamp = bc.get("RELEASE_STAMP", (None, None))[1] if bc else None
+        duels = bc.get("DUELS_ENABLED", (None, None))[1] if bc else None
+        check(prefix + "releaseStamp", stamp == plan["stamp"], f"{os.path.basename(path)}:{where}: RELEASE_STAMP={stamp!r} 기대 {plan['stamp']!r}")
+        check(prefix + "duelsEnabled", bc is not None and "DUELS_ENABLED" in bc and duels is plan["duelsEnabled"],
+              f"{os.path.basename(path)}: DUELS_ENABLED={duels} 기대 {plan['duelsEnabled']}")
+
+    stamp_checks("dex.", target)
+    if a.aab:
+        stamp_checks("dex.apk.", a.apk)
     _, bi = find_static(target, BUILD_IDENTITY)
     bi_vals = {k: v[1] for k, v in (bi or {}).items()}
     check("dex.buildIdentity", bi_vals.get("PLATFORM") == "android" and bi_vals.get("BUILD") == str(plan["versionCode"]) and bi_vals.get("VERSION") == plan["versionName"],
           f"BuildIdentity={bi_vals} 기대 android/{plan['versionCode']}/{plan['versionName']}")
     _, pc = find_static(target, PROD_CONFIG)
     pc_vals = {k: v[1] for k, v in (pc or {}).items()}
+    fb_fields = (("FIREBASE_APP_ID", "firebaseAppId"), ("FIREBASE_PROJECT_ID", "firebaseProjectId"), ("FIREBASE_SENDER_ID", "firebaseSenderId"))
     if plan["mode"] == "prod":
         url_ok = pc_vals.get("SUPABASE_URL") == expect.get("supabaseUrl") and expect.get("supabaseUrl", "").startswith("https://")
         check("dex.prodConfig.url", url_ok, f"SUPABASE_URL 호스트={str(pc_vals.get('SUPABASE_URL'))[len('https://'):] or None} 기대 {plan['supabaseHost']}")
-        fb_ok = all(pc_vals.get(k) == expect.get(e) for k, e in (("FIREBASE_APP_ID", "firebaseAppId"), ("FIREBASE_PROJECT_ID", "firebaseProjectId"), ("FIREBASE_SENDER_ID", "firebaseSenderId")))
-        check("dex.prodConfig.firebase", fb_ok and bool(pc_vals.get("FIREBASE_API_KEY")), "Firebase 넷이 운영 구성과 같다(값은 싣지 않는다)")
-        check("dex.prodConfig.anonKey", bool(pc_vals.get("SUPABASE_ANON_KEY")), "anon 키가 실렸다(값은 싣지 않는다)")
+        ids_same = [k for k, e in fb_fields if pc_vals.get(k) == expect.get(e) and expect.get(e)]
+        api_same = bool(expect.get("firebaseApiKeySha256")) and _sha256_text(pc_vals.get("FIREBASE_API_KEY")) == expect.get("firebaseApiKeySha256")
+        check("dex.prodConfig.firebase", len(ids_same) == len(fb_fields) and api_same,
+              f"운영 구성과 같은 칸={ids_same} · API 키 SHA-256 같음={api_same}(값은 싣지 않는다)")
+        anon_same = bool(expect.get("supabaseAnonKeySha256")) and _sha256_text(pc_vals.get("SUPABASE_ANON_KEY")) == expect.get("supabaseAnonKeySha256")
+        check("dex.prodConfig.anonKey", anon_same, f"anon 키 SHA-256 이 운영 구성과 같음={anon_same}(값은 싣지 않는다)")
     else:
         check("dex.prodConfig.url", pc_vals.get("SUPABASE_URL") == INVALID_URL, f"SUPABASE_URL={pc_vals.get('SUPABASE_URL')} 기대 {INVALID_URL}(dryrun)")
-        check("dex.prodConfig.firebase", pc_vals.get("FIREBASE_APP_ID") == "" and pc_vals.get("SUPABASE_ANON_KEY") == "", "Firebase·anon 빈 값(dryrun)")
+        fb_empty = [k for k in ("FIREBASE_APP_ID", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID", "FIREBASE_API_KEY") if pc_vals.get(k) == ""]
+        check("dex.prodConfig.firebase", len(fb_empty) == 4, f"Firebase 넷 빈 값(dryrun) — 빈 칸 {len(fb_empty)}/4")
+        check("dex.prodConfig.anonKey", pc_vals.get("SUPABASE_ANON_KEY") == "", "anon 빈 값(dryrun)" + ("" if pc_vals.get("SUPABASE_ANON_KEY") == "" else " — 값이 실렸다·클래스 없음"))
 
     # ③ 내용물(AAB·APK 둘 다)
     mapping_text = None
@@ -532,6 +614,7 @@ def cmd_verify(a):
         check(f"{label}.forbiddenMarkers", not s["markers"], f"비밀 표식이 든 항목={s['markers'][:10]}")
         check(f"{label}.forbiddenEntries", not s["forbiddenEntries"], f"금지 파일={s['forbiddenEntries'][:10]}")
         check(f"{label}.fixtures", not s["fixtures"], f"assets Fixtures={s['fixtures'][:10]}")
+        check(f"{label}.showcaseStrings", not s["showcase"], f"dex 에 진열장 전용 문자열={s['showcase']}" if s["showcase"] else "진열장 전용 문자열 0")
         if plan["mode"] == "prod":
             check(f"{label}.noInvalidHost", s["invalidHits"] == 0, f"dex 의 aingcheck.invalid={s['invalidHits']}(운영 판은 0)")
         else:
@@ -570,6 +653,16 @@ def cmd_verify(a):
             with zipfile.ZipFile(path) as z:
                 fonts = [i for i in z.infolist() if i.filename.lower().endswith((".otf", ".ttf"))]
                 sizes[label]["fonts"] = {"files": len(fonts), "bytes": sum(i.file_size for i in fonts), "compressed": sum(i.compress_size for i in fonts)}
+    # ⑥ 크기 예산(G §8-14 Pretendard — 넘으면 빨강. 값은 budget.properties, 바꿀 때는 이유를 그 파일에 적는다)
+    budget, berr = read_budget(a.budget)
+    if budget is None:
+        check("budget.file", False, f"크기 예산 파일을 못 읽었다 — {berr}")
+    else:
+        if "aab" in sizes:
+            check("budget.aabBytes", sizes["aab"]["bytes"] <= budget["aabMaxBytes"], f"AAB {sizes['aab']['bytes']:,}B ≤ {budget['aabMaxBytes']:,}B")
+        check("budget.apkBytes", sizes["apk"]["bytes"] <= budget["apkMaxBytes"], f"보편 APK {sizes['apk']['bytes']:,}B ≤ {budget['apkMaxBytes']:,}B")
+        font_bytes = max(v["fonts"]["bytes"] for v in sizes.values())
+        check("budget.fontBytes", font_bytes <= budget["fontMaxBytes"], f"글꼴(.otf·.ttf) {font_bytes:,}B ≤ {budget['fontMaxBytes']:,}B")
     failed = [c for c in checks if not c["ok"]]
     receipt = dict(plan)
     receipt.update({"checks": checks, "failed": len(failed), "artifacts": sizes, "ok": not failed})
@@ -619,7 +712,7 @@ def cmd_publish_sql(a):
 # ============================================================================ smoke 판정(에뮬레이터에서 모은 글자 → 초록·빨강)
 
 def judge_smoke(texts, expect_firebase=None, want_vc=None, shot_rc=0):
-    """texts: seal·install·start·pid·logcat·dumpsys·windows 글자. 돌려주는 것: [(이름, 초록?, 근거)]."""
+    """texts: seal·install·apkhash·start·pid·logcat·dumpsys·windows 글자. 돌려주는 것: [(이름, 초록?, 근거)]."""
     out = []
     lines = texts.get("logcat", "").replace("\r", "").splitlines()
     seal = (texts.get("seal", "").strip().splitlines() or [""])[-1]
@@ -641,6 +734,9 @@ def judge_smoke(texts, expect_firebase=None, want_vc=None, shot_rc=0):
     out.append(("shellOnCreate", bool(shell), shell[-1] if shell else "AingShell onCreate 줄 없음"))
     crash = [l for l in lines if "FATAL EXCEPTION" in l or re.search(r"Process: com\.yehsung\.aingcheck\b", l)]
     out.append(("noCrash", not crash, crash[0] if crash else "FATAL 0"))
+    hashes = dict(re.findall(r"^(local|device)=(\S+)", texts.get("apkhash", ""), re.M))
+    same = bool(re.fullmatch(r"[0-9a-f]{64}", hashes.get("local", ""))) and hashes.get("local") == hashes.get("device")
+    out.append(("installedApk", same, f"깔린 base.apk SHA-256 = 이번 APK: {same} (device={hashes.get('device', '없음')[:12]} local={hashes.get('local', '없음')[:12]})"))
     if want_vc is not None:
         m = re.search(r"versionCode=([0-9]+)", texts.get("dumpsys", ""))
         out.append(("installedVersionCode", bool(m) and m.group(1) == str(want_vc), f"깔린 versionCode={m.group(1) if m else None} 기대 {want_vc}"))
@@ -652,7 +748,7 @@ def judge_smoke(texts, expect_firebase=None, want_vc=None, shot_rc=0):
 
 def cmd_smoke_judge(a):
     texts = {}
-    for k in ("seal", "install", "start", "pid", "logcat", "dumpsys", "windows"):
+    for k in ("seal", "install", "apkhash", "start", "pid", "logcat", "dumpsys", "windows"):
         p = os.path.join(a.dir, k + ".txt")
         texts[k] = open(p, encoding="utf-8", errors="replace").read() if os.path.exists(p) else ""
     res = judge_smoke(texts, a.expect_firebase, a.want_version_code, a.shot_rc)
@@ -688,12 +784,16 @@ def main(argv):
     s.add_argument("--allow-no-icon", action="store_true")
     s.add_argument("--upload-cert-sha256", default="")
     s.add_argument("--new-upload-key", action="store_true")
+    s.add_argument("--key-place", choices=list(KEY_PLACES), default="throwaway")
+    s.add_argument("--password-source", choices=list(PASSWORD_SOURCES), default="throwaway")
     s.add_argument("--out", required=True)
     s.add_argument("--values-out", required=True)
     s = sub.add_parser("exec-gradle")
     s.add_argument("--values", required=True)
     s.add_argument("argv", nargs=argparse.REMAINDER)
     sub.add_parser("cert-sha256")
+    s = sub.add_parser("file-sha256")
+    s.add_argument("path")
     s = sub.add_parser("verify")
     s.add_argument("--plan", required=True)
     s.add_argument("--values-expect")
@@ -707,6 +807,7 @@ def main(argv):
     s.add_argument("--apksigner-out")
     s.add_argument("--apksigner-rc", type=int, default=1)
     s.add_argument("--native-rc", type=int, default=1)
+    s.add_argument("--budget", required=True)
     s.add_argument("--out", required=True)
     s = sub.add_parser("ledger-append")
     s.add_argument("--receipt", required=True)
@@ -734,7 +835,7 @@ def main(argv):
             import release_selftest  # noqa: E402 — 같은 폴더(자기 시험은 따로 둔다)
             return release_selftest.run(a.script, os.path.abspath(__file__))
         return {
-            "preflight": cmd_preflight, "exec-gradle": cmd_exec_gradle, "cert-sha256": cmd_cert_sha256, "verify": cmd_verify,
+            "preflight": cmd_preflight, "exec-gradle": cmd_exec_gradle, "cert-sha256": cmd_cert_sha256, "file-sha256": cmd_file_sha256, "verify": cmd_verify,
             "ledger-append": cmd_ledger_append, "publish-sql": cmd_publish_sql, "dex-fields": cmd_dex_fields, "smoke-judge": cmd_smoke_judge,
         }[a.cmd](a)
     except Refuse as e:

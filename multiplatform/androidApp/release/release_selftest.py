@@ -33,8 +33,8 @@ def b64url(obj):
     return base64.urlsafe_b64encode(json.dumps(obj).encode()).decode().rstrip("=")
 
 
-def fake_jwt(role):
-    return b64url({"alg": "HS256", "typ": "JWT"}) + "." + b64url({"iss": "supabase", "ref": "w6a-selftest", "role": role}) + ".c2lnLW5vdC1yZWFs"
+def fake_jwt(role, ref="w6a-selftest"):
+    return b64url({"alg": "HS256", "typ": "JWT"}) + "." + b64url({"iss": "supabase", "ref": ref, "role": role}) + ".c2lnLW5vdC1yZWFs"
 
 
 class Ctx:
@@ -49,6 +49,23 @@ class Ctx:
         env = {k: v for k, v in os.environ.items()
                if not k.startswith(("AINGCHECK_UPLOAD_", "ORG_GRADLE_PROJECT_", "AINGCHECK_RELEASE_"))}
         env.update(HOME=self.home, TMPDIR=self.tmp, AINGCHECK_RELEASE_SELFTEST="1", LC_ALL="C.UTF-8" if sys.platform != "darwin" else "en_US.UTF-8")
+        env.pop("AINGCHECK_NETWORK_SEALED", None)  # 바깥 게이트의 봉인 표지가 OS 가드 사례(U3)를 가리지 않게
+        # 가짜 security 를 언제나 건다 — 기본 키체인 항목(aingcheck-android-upload) 길이 진짜 키체인에 닿지 않게(사용자 비밀 읽기 금지).
+        # good → $FAKE_PW_GOOD · 기본 항목 → $FAKE_PW_DEFAULT(없으면 44) · wrong → 틀린 비밀번호 · 그 밖 → 44(항목 없음).
+        self.security = os.path.join(root, "fake-security")
+        with open(self.security, "w") as f:
+            f.write('#!/bin/sh\n[ "$1" = find-generic-password ] && [ "$2" = -s ] && [ "$4" = -w ] || exit 9\n'
+                    'case "$3" in good) printf "%s\\n" "$FAKE_PW_GOOD";; wrong) echo wrong-password;;\n'
+                    '  aingcheck-android-upload) [ -n "$FAKE_PW_DEFAULT" ] || exit 44; printf "%s\\n" "$FAKE_PW_DEFAULT";;\n'
+                    '  *) exit 44;; esac\n')
+        os.chmod(self.security, 0o755)
+        env["AINGCHECK_RELEASE_SECURITY_BIN"] = self.security
+        # 가짜 uname(-s → Linux): OS 가드 사례(U*)만 PATH 앞에 둔다.
+        self.linux_bin = os.path.join(root, "linux-bin")
+        os.makedirs(self.linux_bin)
+        with open(os.path.join(self.linux_bin, "uname"), "w") as f:
+            f.write('#!/bin/sh\necho Linux\n')
+        os.chmod(os.path.join(self.linux_bin, "uname"), 0o755)
         self.env = env
 
     # ---- 기록
@@ -113,13 +130,15 @@ def make_key(ctx, name, password):
     return path, p.stdout.strip(), keytool_sha
 
 
-def make_repo(ctx, ledger_rows=(), version_code=VC, extra_dirty=None):
+def make_repo(ctx, ledger_rows=(), version_code=VC, extra_dirty=None, duels_from=None):
     repo = tempfile.mkdtemp(prefix="repo.", dir=ctx.root)
     mp = os.path.join(repo, "multiplatform")
     rel = os.path.join(mp, "androidApp", "release")
     os.makedirs(rel)
     with open(os.path.join(mp, "version.properties"), "w") as f:
         f.write(f"androidVersionCode={version_code}\nandroidVersionName={VN}\n")
+        if duels_from is not None:
+            f.write(f"androidDuelsFromBuild={duels_from}\n")
     with open(os.path.join(rel, "versions.tsv"), "w") as f:
         f.write("# 장부\n")
         for r in ledger_rows:
@@ -150,8 +169,8 @@ def good_prod_values():
             "firebaseProjectId": PROJECT_ID, "firebaseSenderId": SENDER_ID, "firebaseApiKey": API_KEY}
 
 
-def make_dex(ctx, name, duels, stamp, prod, leak=False, with_build_config=True):
-    """javac + d8 로 진짜 dex 를 만든다(BuildConfig · ProdConfig · BuildIdentity · 선택 Leak)."""
+def make_dex(ctx, name, duels, stamp, prod, leak=False, with_build_config=True, identity=(VC, VN), extra_string=None):
+    """javac + d8 로 진짜 dex 를 만든다(BuildConfig · ProdConfig · BuildIdentity · 선택 Leak · 선택 Showcase 문자열)."""
     src = os.path.join(ctx.root, "java-" + name)
     out = os.path.join(ctx.root, "classes-" + name)
     dexdir = os.path.join(ctx.root, "dex-" + name)
@@ -174,8 +193,13 @@ def make_dex(ctx, name, duels, stamp, prod, leak=False, with_build_config=True):
                   + "".join(f"  public static final String {k} = {q(v)};\n" for k, v in fields.items()) + "}\n"))
     files.append(("com/yehsung/aingcheck/android/generated/BuildIdentity.java",
                   "package com.yehsung.aingcheck.android.generated;\npublic final class BuildIdentity {\n"
-                  f'  public static final String BUILD = "{VC}";\n  public static final String PLATFORM = "android";\n'
-                  f'  public static final String VERSION = "{VN}";\n}}\n'))
+                  f'  public static final String BUILD = "{identity[0]}";\n  public static final String PLATFORM = "android";\n'
+                  f'  public static final String VERSION = "{identity[1]}";\n}}\n'))
+    if extra_string is not None:
+        # 진열장 함수가 다른 클래스에 인라인된 꼴: 클래스 이름은 진열장이 아니고 문자열만 남는다.
+        files.append(("com/yehsung/aingcheck/android/generated/Inlined.java",
+                      "package com.yehsung.aingcheck.android.generated;\npublic final class Inlined {\n"
+                      f"  public static String t() {{ return {q(extra_string)}; }}\n}}\n"))
     if leak:
         files.append(("com/yehsung/aingcheck/android/generated/Leak.java",
                       "package com.yehsung.aingcheck.android.generated;\npublic final class Leak {\n"
@@ -183,10 +207,10 @@ def make_dex(ctx, name, duels, stamp, prod, leak=False, with_build_config=True):
     paths = []
     for rel, text in files:
         p = os.path.join(src, rel)
-        with open(p, "w") as f:
+        with open(p, "w", encoding="utf-8") as f:
             f.write(text)
         paths.append(p)
-    rc, o = ctx.run(["javac", "--release", "17", "-d", out] + paths)
+    rc, o = ctx.run(["javac", "-encoding", "UTF-8", "--release", "17", "-d", out] + paths)
     if rc != 0:
         raise RuntimeError("javac: " + o[-400:])
     classes = []
@@ -203,7 +227,8 @@ def make_archive(ctx, name, dex, kind="aab", extra=None, mapping=True, sign_key=
     p = os.path.join(ctx.root, name)
     base = "base/" if kind == "aab" else ""
     with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr(base + ("dex/classes.dex" if kind == "aab" else "classes.dex"), dex)
+        if dex is not None:
+            z.writestr(base + ("dex/classes.dex" if kind == "aab" else "classes.dex"), dex)
         z.writestr(base + ("manifest/AndroidManifest.xml" if kind == "aab" else "AndroidManifest.xml"), b"<manifest/>")
         z.writestr(base + "assets/composeResources/font/pretendard_regular.otf", b"OTTO" + b"\x00" * 64)
         if kind == "aab" and mapping:
@@ -219,13 +244,14 @@ def make_archive(ctx, name, dex, kind="aab", extra=None, mapping=True, sign_key=
     return p
 
 
-def badging(perms=None, package="com.yehsung.aingcheck", vc=VC, vn=VN, target="36", minsdk="26", icon="res/mipmap/ic_launcher.png"):
+def badging(perms=None, package="com.yehsung.aingcheck", vc=VC, vn=VN, target="36", minsdk="26", icon="res/mipmap/ic_launcher.png",
+            launcher="com.yehsung.aingcheck.android.shell.MainActivity"):
     perms = PERMS if perms is None else perms
     lines = [f"package: name='{package}' versionCode='{vc}' versionName='{vn}' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'",
              f"minSdkVersion:'{minsdk}'", f"targetSdkVersion:'{target}'"]
     lines += [f"uses-permission: name='{p}'" for p in perms]
     lines += ["application-label:'아잉체크'", f"application: label='아잉체크' icon='{icon}'",
-              "launchable-activity: name='com.yehsung.aingcheck.android.shell.MainActivity'  label='' icon=''",
+              f"launchable-activity: name='{launcher}'  label='' icon=''",
               "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'"]
     return "\n".join(lines) + "\n"
 
@@ -290,22 +316,56 @@ def preflight_cases(ctx, keyA, keyB):
     with open(gsbad, "w") as f:
         json.dump(gs, f)
     expect("P9 다른 패키지의 google-services → 거부", build("--prod-config", sb_only, "--google-services", gsbad), 2, "정확히 하나가 아니다")
-    # 업로드 키
-    expect("S1 키 경로 없음 → 거부", build("--prod-config", good, env={"AINGCHECK_UPLOAD_KEYSTORE": None}), 2, "업로드 키 경로가 없다")
-    expect("S2 비밀번호 없음 → 거부", build("--prod-config", good, env={"AINGCHECK_UPLOAD_STORE_PASSWORD": None}), 2, "비밀번호가 없다")
-    sec = os.path.join(ctx.root, "fake-security")
-    with open(sec, "w") as f:
-        f.write('#!/bin/sh\n[ "$1" = find-generic-password ] && [ "$2" = -s ] && [ "$4" = -w ] || exit 9\n'
-                'case "$3" in good) printf "%s\\n" "$FAKE_PW_GOOD";; wrong) echo wrong-password;; *) exit 44;; esac\n')
-    os.chmod(sec, 0o755)
-    sec_env = {"AINGCHECK_RELEASE_SECURITY_BIN": sec, "FAKE_PW_GOOD": pwA, "AINGCHECK_UPLOAD_STORE_PASSWORD": None}
+    # 업로드 키 — 기본 자리(G §2-3 W6-a 행): 키 ~/.aing-check-secrets/android/upload.p12 · 비밀번호 키체인 항목 aingcheck-android-upload.
+    # HOME 은 가짜 폴더다(Ctx). 키체인은 가짜 security 다(Ctx — 진짜 키체인에 닿지 않는다).
+    expect("S1 키 경로 없음 → 기본 자리(가짜 HOME)에도 없음 → 거부", build("--prod-config", good, env={"AINGCHECK_UPLOAD_KEYSTORE": None}), 2,
+           "업로드 키 파일이 없다: " + os.path.join(ctx.home, ".aing-check-secrets", "android", "upload.p12"))
+    expect("S2 비밀번호 없음 → 기본 키체인 항목(없음) → 거부", build("--prod-config", good, env={"AINGCHECK_UPLOAD_STORE_PASSWORD": None}), 2,
+           "키체인 항목 'aingcheck-android-upload' 을 못 읽었다")
+    sec_env = {"FAKE_PW_GOOD": pwA, "AINGCHECK_UPLOAD_STORE_PASSWORD": None}
     # 키체인 쪽도 맞는 비밀번호를 내게 둔다 — 두 곳 거부가 없으면 통과해 버리는 입력이어야 거부를 잰다.
-    expect("S3 비밀번호가 두 곳 → 거부", build("--prod-config", good, "--keychain-item", "good", env={"AINGCHECK_RELEASE_SECURITY_BIN": sec, "FAKE_PW_GOOD": pwA}), 2, "거부 — 비밀번호가 두 곳")
+    expect("S3 비밀번호가 두 곳 → 거부", build("--prod-config", good, "--keychain-item", "good", env={"FAKE_PW_GOOD": pwA}), 2, "거부 — 비밀번호가 두 곳")
     expect("S4 키체인 항목 → 통과·같은 인증서", build("--prod-config", good, "--keychain-item", "good", env=sec_env), 0, f"uploadCert={certA}")
     expect("S5 키체인 비밀번호가 틀림 → 거부", build("--prod-config", good, "--keychain-item", "wrong", env=sec_env), 2, "못 열었다")
     expect("S6 키체인 항목 없음 → 거부", build("--prod-config", good, "--keychain-item", "missing", env=sec_env), 2, "못 읽었다")
     expect("S7 별칭이 틀림 → 거부", build("--prod-config", good, "--key-alias", "nope"), 2, "못 열었다")
+    # 기본 자리에 키를 두고(가짜 HOME) 기본 키체인 항목이 비밀번호를 내면 인자 없이 통과 · 경고 0 · 영수증 입력 칸이 그 자리다.
+    sec_dir = os.path.join(ctx.home, ".aing-check-secrets", "android")
+    os.makedirs(sec_dir)
+    shutil.copy(pathA, os.path.join(sec_dir, "upload.p12"))
+    out_def = os.path.join(ctx.root, "plan-default-place")
+    os.makedirs(out_def)
+    expect("S8 기본 자리 키 + 기본 키체인 항목 → 통과", build("--prod-config", good, "--out", out_def,
+           env={"AINGCHECK_UPLOAD_KEYSTORE": None, "AINGCHECK_UPLOAD_STORE_PASSWORD": None, "FAKE_PW_DEFAULT": pwA}), 0, f"uploadCert={certA}")
+    pd_ = _load_json(os.path.join(out_def, "plan.json"))
+    ctx.case("S8b 기본 자리는 경고 0 · inputs=secrets-dir/keychain", pd_.get("warnings") == [] and pd_.get("inputs") == {"keyPlace": "secrets-dir", "passwordSource": "keychain"},
+             f"warnings={pd_.get('warnings')} inputs={pd_.get('inputs')}")
+    out_env = os.path.join(ctx.root, "plan-env-place")
+    os.makedirs(out_env)
+    expect("S9 자리 밖 키 + 환경 변수 비밀번호 → 통과(경고)", build("--prod-config", good, "--out", out_env), 0, "경고 — password-from-env")
+    pe_ = _load_json(os.path.join(out_env, "plan.json"))
+    ctx.case("S9b 경고 둘이 계획(→ 영수증)에 남는다", [w.split(":")[0] for w in pe_.get("warnings", [])] == ["key-outside-secrets-dir", "password-from-env"]
+             and pe_.get("inputs") == {"keyPlace": "other", "passwordSource": "env"}, f"warnings={pe_.get('warnings')} inputs={pe_.get('inputs')}")
+    # 운영 판 계획은 키 자리·출처 없이 만들지 않는다(셸이 언제나 넘긴다 — 도구를 따로 불러 영수증 입력 칸을 비우지 못하게).
+    rc_w0, out_w0 = ctx.tool_run("preflight", "--mode", "prod", "--version-properties", os.path.join(mp, "version.properties"), "--ledger",
+                                 os.path.join(ctx.root, "none.tsv"), "--prod-config", good, "--build-time", TIME, "--git-sha", SHA, "--git-dirty", "0",
+                                 "--upload-cert-sha256", certA, "--out", os.path.join(ctx.root, "plan-w0.json"), "--values-out", os.path.join(ctx.root, "vals-w0.json"))
+    ctx.case("W0 운영 계획에 키 자리·출처가 없으면 거부", rc_w0 == 2 and "키 자리" in out_w0, f"rc={rc_w0} {out_w0.strip()[-160:]}")
     expect("A1 --duels 값이 틀림 → 거부", build("--prod-config", good, "--duels", "maybe"), 2, "on 또는 off")
+    # OS 가드(검증 지적: Darwin 가드가 --plan-only 앞에 있어 Linux CI 에서 계획 사례 32건이 빨갰다).
+    # 가짜 uname(-s → Linux)을 PATH 앞에 둔다. 계획까지는 어느 OS 에서나, Gradle·서명은 맥에서만·봉인 아래에서만.
+    lin = {"PATH": ctx.linux_bin + os.pathsep + ctx.env.get("PATH", "")}
+    expect("U1 Linux + 운영 계획(plan-only) → 통과", build("--prod-config", good, env=lin), 0, "plan-only mode=prod")
+    expect("U2 Linux + 운영 build → 거부(맥에서만)", ctx.bash("build", "--prod-config", good, env=dict(envA, **lin)), 2, "이 맥에서만 만든다")
+    expect("U3 Linux + dryrun(봉인 표지 없음) → 거부", ctx.bash("dryrun", env={"AINGCHECK_RELEASE_MP": mp, **lin}), 2, "봉인 밖에서 Gradle 을 돌리지 않는다")
+    expect("U4 Linux + dryrun 계획(plan-only) → 통과", ctx.bash("dryrun", "--plan-only", env={"AINGCHECK_RELEASE_MP": mp, **lin}), 0, "plan-only mode=dryrun")
+    # 판돈 이중 확인(검증 지적: 출시 인자 하나로 켜졌다): 커밋된 androidDuelsFromBuild 와 --duels 가 맞아야 한다.
+    expect("DU1 --duels on · androidDuelsFromBuild 없음 → 거부", build("--prod-config", good, "--duels", "on"), 2, "androidDuelsFromBuild=N")
+    expect("DU2 --duels on · androidDuelsFromBuild=이번 판 → 통과", build("--prod-config", good, "--duels", "on", mp_dir=make_repo(ctx, duels_from=VC)), 0, "plan-only mode=prod")
+    expect("DU3 --duels on · androidDuelsFromBuild 가 다음 판 → 거부", build("--prod-config", good, "--duels", "on", mp_dir=make_repo(ctx, duels_from=VC + 1)), 2, "versionCode ≥ N")
+    expect("DU4 --duels off · androidDuelsFromBuild ≤ 이번 판 → 거부", build("--prod-config", good, mp_dir=make_repo(ctx, duels_from=VC - 2)), 2, "판돈을 켠다")
+    expect("DU5 --duels off · androidDuelsFromBuild 가 다음 판 → 통과", build("--prod-config", good, mp_dir=make_repo(ctx, duels_from=VC + 1)), 0, "plan-only mode=prod")
+    expect("DU6 androidDuelsFromBuild 가 정수가 아님 → 거부", build("--prod-config", good, mp_dir=make_repo(ctx, duels_from="7a")), 2, "정수여야")
     # 작업 트리
     mp_dirty = make_repo(ctx, extra_dirty="stray.txt")
     expect("T1 더러운 트리 → 거부", build("--prod-config", good, mp_dir=mp_dirty), 2, "깨끗하지 않다")
@@ -345,9 +405,10 @@ def preflight_cases(ctx, keyA, keyB):
 
 def exec_gradle_cases(ctx):
     vals_path = os.path.join(ctx.root, "values-exec.json")
-    rc, out = ctx.tool_run("preflight", "--mode", "prod", "--version-properties", os.path.join(make_repo(ctx), "version.properties"),
+    rc, out = ctx.tool_run("preflight", "--mode", "prod", "--version-properties", os.path.join(make_repo(ctx, duels_from=VC), "version.properties"),
                            "--ledger", os.path.join(ctx.root, "none.tsv"), "--prod-config", write_props(ctx, "exec.properties", good_prod_values()),
                            "--duels", "on", "--build-time", TIME, "--git-sha", SHA, "--git-dirty", "0", "--upload-cert-sha256", "a" * 64,
+                           "--key-place", "secrets-dir", "--password-source", "keychain",
                            "--out", os.path.join(ctx.root, "plan-exec.json"), "--values-out", vals_path)
     mode = stat.S_IMODE(os.stat(vals_path).st_mode) if os.path.exists(vals_path) else -1
     ctx.case("G1 값 파일은 0600", rc == 0 and mode == 0o600, f"rc={rc} mode={oct(mode)}")
@@ -380,21 +441,30 @@ def exec_gradle_cases(ctx):
     ctx.case("G5 값 파일을 읽자마자 지운다", rc == 0 and not os.path.exists(vals_path), f"rc={rc} exists={os.path.exists(vals_path)}")
 
 
+def _rt():
+    """판정기 모듈(같은 폴더). 진열장 전용 문자열 목록은 판정기의 것을 쓴다 — 목록이 원문과 맞는지는 SC1 이 따로 잰다."""
+    import release_tool  # noqa: E402
+    return release_tool
+
+
 def verify_cases(ctx, keyA, keyB):
+    SHOWCASE_SAMPLE = _rt().SHOWCASE_LITERALS[0]
     pathA, certA, pwA = keyA
     pathB, certB, pwB = keyB
     perms_file = os.path.join(ctx.real_mp, "androidApp", "release", "permissions.txt")
+    real_budget = os.path.join(ctx.real_mp, "androidApp", "release", "budget.properties")
     prod = good_prod_values()
 
     def plan(mode, duels, **over):
-        repo_mp = make_repo(ctx)
+        # 판돈을 켠 운영 계획은 커밋된 androidDuelsFromBuild 가 있어야 한다(preflight 이중 확인).
+        repo_mp = make_repo(ctx, duels_from=VC if duels else None)
         out = os.path.join(ctx.root, f"plan-{mode}-{len(ctx.results)}.json")
         vals = os.path.join(ctx.root, f"vals-{mode}-{len(ctx.results)}.json")
         args = ["preflight", "--mode", mode, "--version-properties", os.path.join(repo_mp, "version.properties"), "--ledger", os.path.join(ctx.root, "none.tsv"),
                 "--duels", "on" if duels else "off", "--build-time", TIME, "--git-sha", SHA, "--git-dirty", "0", "--upload-cert-sha256", certA,
                 "--out", out, "--values-out", vals]
         if mode == "prod":
-            args += ["--prod-config", write_props(ctx, f"v-{len(ctx.results)}.properties", prod)]
+            args += ["--prod-config", write_props(ctx, f"v-{len(ctx.results)}.properties", prod), "--key-place", "secrets-dir", "--password-source", "keychain"]
         rc, o = ctx.tool_run(*args)
         if rc != 0:
             raise RuntimeError("preflight: " + o)
@@ -405,10 +475,27 @@ def verify_cases(ctx, keyA, keyB):
 
     plan_dry, vals_dry, pd = plan("dryrun", False)
     plan_prod, vals_prod, pp = plan("prod", True)
+    other_time = pp["stamp"].replace(TIME, "20261028T010204Z")
     dex_dry = make_dex(ctx, "dry", False, pd["stamp"], None)
     dex_prod = make_dex(ctx, "prod", True, pp["stamp"], prod)
     dex_nobc = make_dex(ctx, "nobc", True, pp["stamp"], prod, with_build_config=False)
     dex_leak = make_dex(ctx, "leak", True, pp["stamp"], prod, leak=True)
+    # 운영 dex 에 개발 Firebase(다른 프로젝트 — 앱 id·sender 는 서로 맞다) · API 키만 다름 · anon 빈 값 · 다른 anon 키 · 판 신원 다름
+    dev_fb = dict(prod, firebaseAppId="1:555555555555:android:fedcba9876543210", firebaseProjectId="w6a-dev", firebaseSenderId="555555555555")
+    dex_devfb = make_dex(ctx, "devfb", True, pp["stamp"], dev_fb)
+    dex_apikey = make_dex(ctx, "apikey", True, pp["stamp"], dict(prod, firebaseApiKey="w6aOtherProjectApiKey_987654"))
+    dex_noanon = make_dex(ctx, "noanon", True, pp["stamp"], dict(prod, supabaseAnonKey=""))
+    dex_otheranon = make_dex(ctx, "otheranon", True, pp["stamp"], dict(prod, supabaseAnonKey=fake_jwt("anon", ref="w6a-devproj")))
+    dex_ident = make_dex(ctx, "ident", True, pp["stamp"], prod, identity=(VC + 1, VN))
+    # dryrun dex 에 운영 값이 섞인 꼴(Firebase 넷 · anon)
+    fb_only = {k: prod[k] for k in ("firebaseAppId", "firebaseProjectId", "firebaseSenderId", "firebaseApiKey")}
+    dex_dry_fb = make_dex(ctx, "dryfb", False, pd["stamp"], fb_only)
+    dex_dry_anon = make_dex(ctx, "dryanon", False, pd["stamp"], {"supabaseAnonKey": prod["supabaseAnonKey"]})
+    # 보편 APK 만 다른 판(AAB 는 이번 판): 도장의 빌드 시각 · 판돈 깃발
+    dex_apk_time = make_dex(ctx, "apktime", True, other_time, prod)
+    dex_apk_duels = make_dex(ctx, "apkduels", False, pp["stamp"], prod)
+    # 진열장 함수가 다른 클래스에 인라인된 꼴(mapping 의 클래스 머리 줄은 깨끗하다)
+    dex_showcase = make_dex(ctx, "showcase", True, pp["stamp"], prod, extra_string=SHOWCASE_SAMPLE)
 
     def signer(aab):
         rc, out = ctx.bash("aab-signer", aab)
@@ -422,35 +509,42 @@ def verify_cases(ctx, keyA, keyB):
     with open(apks_b, "w") as f:
         f.write(f"Signer #1 certificate DN: CN=w6a selftest B\nSigner #1 certificate SHA-256 digest: {certB}\n")
 
+    def budget_file(name, aab=10 ** 9, apk=10 ** 9, font=10 ** 9, drop=None):
+        lines = [f"aabMaxBytes={aab}", f"apkMaxBytes={apk}", f"fontMaxBytes={font}"]
+        return _write(ctx, name, "# 시험 예산\n" + "\n".join(l for l in lines if not (drop and l.startswith(drop))) + "\n")
+
     def verify(name, plan_path, vals_path, dex, want_fail=(), badging_text=None, aab_extra=None, apk_extra=None, mapping=True,
-               sign=(None,), apksigner=None, apksigner_rc=0, native_rc=0, aab=True):
+               sign=(None,), apksigner=None, apksigner_rc=0, native_rc=0, aab=True, apk_dex="same", aab_dex="same", budget=None):
+        """want_fail 은 빨간 판정 이름의 **정확한** 집합이다(그 판정만 빨개야 초록 — 다른 판정이 함께 빨개지거나 빠지면 FAIL)."""
         bpath = os.path.join(ctx.root, f"badging-{len(ctx.results)}.txt")
         with open(bpath, "w") as f:
             f.write(badging_text if badging_text is not None else badging())
         key = (pathA, pwA) if sign == (None,) else sign
         args = ["verify", "--plan", plan_path, "--values-expect", vals_path, "--badging", bpath, "--permissions", perms_file,
                 "--apksigner-out", apksigner or apks_ok, "--apksigner-rc", str(apksigner_rc), "--native-rc", str(native_rc),
-                "--out", os.path.join(ctx.root, f"receipt-{len(ctx.results)}.json")]
-        apk = make_archive(ctx, f"u-{len(ctx.results)}.apk", dex, kind="apk", extra=apk_extra)
+                "--budget", budget or real_budget, "--out", os.path.join(ctx.root, f"receipt-{len(ctx.results)}.json")]
+        apk = make_archive(ctx, f"u-{len(ctx.results)}.apk", dex if apk_dex == "same" else apk_dex, kind="apk", extra=apk_extra)
         args += ["--apk", apk]
         if aab:
-            a = make_archive(ctx, f"b-{len(ctx.results)}.aab", dex, kind="aab", extra=aab_extra, mapping=mapping, sign_key=key)
+            a = make_archive(ctx, f"b-{len(ctx.results)}.aab", dex if aab_dex == "same" else aab_dex, kind="aab", extra=aab_extra, mapping=mapping, sign_key=key)
             sha, jrc = signer(a)
             args += ["--aab", a, "--aab-cert-sha256", sha, "--aab-jarsigner-rc", jrc]
         rc, out = ctx.tool_run(*args)
         failed = sorted(set(re.findall(r"^release-android: FAIL (\S+)", out, re.M)))
         want_rc = 1 if want_fail else 0
-        ok = rc == want_rc and set(want_fail) <= set(failed) and (want_fail or not failed)
-        ctx.case(name, ok, f"rc={rc} 빨강={failed} 기대 {sorted(want_fail)}")
+        ok = rc == want_rc and failed == sorted(set(want_fail))
+        ctx.case(name, ok, f"rc={rc} 빨강={failed} 기대 {sorted(set(want_fail))}")
         return out
 
+    stamp2 = ["dex.releaseStamp", "dex.apk.releaseStamp"]
+    duels2 = ["dex.duelsEnabled", "dex.apk.duelsEnabled"]
     verify("R0 dryrun 판 → 초록", plan_dry, vals_dry, dex_dry)
     verify("R1 운영 판 → 초록", plan_prod, vals_prod, dex_prod)
-    p_time, v_time, _ = plan("prod", True, stamp=pp["stamp"].replace(TIME, "20261028T010204Z"))
-    verify("R2 도장의 빌드 시각이 다름(낡은 산출물)", p_time, v_time, dex_prod, want_fail=["dex.releaseStamp"])
+    p_time, v_time, _ = plan("prod", True, stamp=other_time)
+    verify("R2 도장의 빌드 시각이 다름(낡은 산출물)", p_time, v_time, dex_prod, want_fail=stamp2)
     p_off, v_off, _ = plan("prod", True, duelsEnabled=False)
-    verify("R3 판돈 깃발이 요청과 다름", p_off, v_off, dex_prod, want_fail=["dex.duelsEnabled"])
-    verify("R4 BuildConfig 를 R8 이 지움(keep 빠짐)", plan_prod, vals_prod, dex_nobc, want_fail=["dex.releaseStamp", "dex.duelsEnabled"])
+    verify("R3 판돈 깃발이 요청과 다름", p_off, v_off, dex_prod, want_fail=duels2)
+    verify("R4 BuildConfig 를 R8 이 지움(keep 빠짐)", plan_prod, vals_prod, dex_nobc, want_fail=stamp2 + duels2)
     verify("R5 권한 넘침(CAMERA)", plan_prod, vals_prod, dex_prod, badging_text=badging(PERMS + ["android.permission.CAMERA"]), want_fail=["badging.permissions"])
     verify("R6 AD_ID 권한", plan_prod, vals_prod, dex_prod, badging_text=badging(PERMS + ["com.google.android.gms.permission.AD_ID"]), want_fail=["badging.noAdId", "badging.permissions"])
     verify("R7 권한 모자람(WAKE_LOCK)", plan_prod, vals_prod, dex_prod, badging_text=badging([p for p in PERMS if not p.endswith("WAKE_LOCK")]), want_fail=["badging.permissions"])
@@ -466,10 +560,12 @@ def verify_cases(ctx, keyA, keyB):
     verify("R16 google-services 파일이 실림", plan_prod, vals_prod, dex_prod, aab_extra={"base/root/" + GS_NAME: b"{}"}, want_fail=["aab.forbiddenEntries"])
     verify("R17 키 파일이 실림", plan_prod, vals_prod, dex_prod, apk_extra={"assets/upload." + "jks": b"x"}, want_fail=["apk.forbiddenEntries"])
     verify("R18 운영 판 dex 에 .invalid", plan_prod, vals_prod, dex_leak, want_fail=["aab.noInvalidHost", "apk.noInvalidHost"])
-    vals_other = os.path.join(ctx.root, "vals-other.json")
-    json.dump({"expect": {"supabaseUrl": "https://other.example", "firebaseAppId": APP_ID, "firebaseProjectId": PROJECT_ID, "firebaseSenderId": SENDER_ID}}, open(vals_other, "w"))
+    # 운영 주소만 구성과 다른 기대값(anon·API 키 SHA-256 은 그대로) — 주소 판정만 빨개야 한다.
+    other_expect = dict(_load_json(vals_prod).get("expect", {}), supabaseUrl="https://other.example")
+    vals_other = _write(ctx, "vals-other.json", json.dumps({"expect": other_expect}))
     verify("R19 운영 주소가 구성과 다름", plan_prod, vals_other, dex_prod, want_fail=["dex.prodConfig.url"])
-    verify("R20 dryrun 계획 + 운영 dex", plan_dry, vals_dry, dex_prod, want_fail=["dex.prodConfig.url", "aab.invalidBaseline", "dex.releaseStamp"])
+    verify("R20 dryrun 계획 + 운영 dex", plan_dry, vals_dry, dex_prod,
+           want_fail=stamp2 + duels2 + ["dex.prodConfig.url", "dex.prodConfig.firebase", "dex.prodConfig.anonKey", "aab.invalidBaseline", "apk.invalidBaseline"])
     verify("R21 AAB 를 다른 키(B)로 서명", plan_prod, vals_prod, dex_prod, sign=(pathB, pwB), want_fail=["sign.aab"])
     verify("R22 서명 없는 AAB", plan_prod, vals_prod, dex_prod, sign=None, want_fail=["sign.aab"])
     verify("R23 APK 서명자가 다름", plan_prod, vals_prod, dex_prod, apksigner=apks_b, want_fail=["sign.apk"])
@@ -478,6 +574,39 @@ def verify_cases(ctx, keyA, keyB):
     verify("R26 진열장이 출시 판에 남음", plan_prod, vals_prod, dex_prod,
            mapping="com.yehsung.aingcheck.ui.components.AingGalleryKt -> a.b.c:\n    void AingGallery() -> a\n", want_fail=["r8.showcaseRemoved"])
     verify("R27 R8 mapping 없음(minify 꺼짐)", plan_prod, vals_prod, dex_prod, mapping=False, want_fail=["r8.mapping"])
+    # 검증 지적: 언제나 초록으로 바꿔도 아무 사례도 빨개지지 않던 판정 9개 — 판정마다 그것만 빨개지는 입력.
+    verify("R28 운영 dex 에 개발 Firebase(다른 프로젝트)", plan_prod, vals_prod, dex_devfb, want_fail=["dex.prodConfig.firebase"])
+    verify("R29 운영 dex 의 Firebase API 키만 다름", plan_prod, vals_prod, dex_apikey, want_fail=["dex.prodConfig.firebase"])
+    verify("R30 운영 dex 의 anon 키가 빔", plan_prod, vals_prod, dex_noanon, want_fail=["dex.prodConfig.anonKey"])
+    verify("R31 운영 dex 의 anon 키가 다른 프로젝트 키", plan_prod, vals_prod, dex_otheranon, want_fail=["dex.prodConfig.anonKey"])
+    verify("R32 BuildIdentity BUILD 가 다름", plan_prod, vals_prod, dex_ident, want_fail=["dex.buildIdentity"])
+    verify("R33 badging 런처가 다름", plan_prod, vals_prod, dex_prod, badging_text=badging(launcher="com.yehsung.aingcheck.android.debug.ProbeActivity"), want_fail=["badging.launcher"])
+    verify("R34 badging versionName 이 다름", plan_prod, vals_prod, dex_prod, badging_text=badging(vn="1.2.4"), want_fail=["badging.versionName"])
+    verify("R35 보편 APK 에 dex 가 없음", plan_prod, vals_prod, dex_prod, apk_dex=None, want_fail=["apk.dexPresent", "dex.apk.releaseStamp", "dex.apk.duelsEnabled"])
+    verify("R36 AAB 에 dex 가 없음", plan_prod, vals_prod, dex_prod, aab_dex=None,
+           want_fail=["aab.dexPresent", "dex.releaseStamp", "dex.duelsEnabled", "dex.buildIdentity", "dex.prodConfig.url", "dex.prodConfig.firebase", "dex.prodConfig.anonKey"])
+    verify("R37 dryrun dex 에 Firebase 값", plan_dry, vals_dry, dex_dry_fb, want_fail=["dex.prodConfig.firebase"])
+    verify("R38 dryrun dex 에 anon 키", plan_dry, vals_dry, dex_dry_anon, want_fail=["dex.prodConfig.anonKey"])
+    # 검증 지적: 실제로 깔리는 보편 APK 의 dex 도장·깃발도 계획과 대조한다.
+    verify("R39 보편 APK 의 도장이 다름(AAB 는 이번 판)", plan_prod, vals_prod, dex_prod, apk_dex=dex_apk_time, want_fail=["dex.apk.releaseStamp"])
+    verify("R40 보편 APK 의 판돈 깃발이 다름", plan_prod, vals_prod, dex_prod, apk_dex=dex_apk_duels, want_fail=["dex.apk.duelsEnabled"])
+    # 검증 지적: 진열장이 인라인되면 mapping 머리 줄로는 안 보인다 — dex 문자열 표로 잰다.
+    verify("R41 진열장 전용 문자열이 dex 에 남음(mapping 깨끗)", plan_prod, vals_prod, dex_showcase, want_fail=["aab.showcaseStrings", "apk.showcaseStrings"])
+    # 크기 예산(검증 지적 G §8-14): 시험 고정물은 작으니 예산을 고정물보다 작게 둔 파일로 잰다.
+    verify("R42 AAB 크기 예산 넘침", plan_prod, vals_prod, dex_prod, budget=budget_file("budget-aab.properties", aab=100), want_fail=["budget.aabBytes"])
+    verify("R43 보편 APK 크기 예산 넘침", plan_prod, vals_prod, dex_prod, budget=budget_file("budget-apk.properties", apk=100), want_fail=["budget.apkBytes"])
+    verify("R44 글꼴 예산 넘침", plan_prod, vals_prod, dex_prod, budget=budget_file("budget-font.properties", font=50), want_fail=["budget.fontBytes"])
+    verify("R45 예산 파일 없음", plan_prod, vals_prod, dex_prod, budget=os.path.join(ctx.root, "no-budget.properties"), want_fail=["budget.file"])
+    verify("R46 예산 파일 키 모자람", plan_prod, vals_prod, dex_prod, budget=budget_file("budget-drop.properties", drop="fontMaxBytes"), want_fail=["budget.file"])
+    # 경고는 계획에서 영수증으로 그대로 간다(조정자가 영수증만 보고도 자리 이탈을 안다).
+    rec_w = os.path.join(ctx.root, "receipt-warn.json")
+    p_warn, v_warn, _ = plan("prod", True, warnings=["password-from-env: 시험"], inputs={"keyPlace": "secrets-dir", "passwordSource": "env"})
+    ctx.tool_run("verify", "--plan", p_warn, "--values-expect", v_warn, "--badging", _write(ctx, "b-warn.txt", badging()), "--permissions", perms_file,
+                 "--apk", make_archive(ctx, "warn.apk", dex_prod, kind="apk"), "--apksigner-out", apks_ok, "--apksigner-rc", "0", "--native-rc", "0",
+                 "--budget", real_budget, "--out", rec_w)
+    rw = _load_json(rec_w)
+    ctx.case("W1 영수증에 계획의 경고·입력 칸이 실린다", rw.get("warnings") == ["password-from-env: 시험"] and rw.get("inputs", {}).get("passwordSource") == "env",
+             f"warnings={rw.get('warnings')} inputs={rw.get('inputs')}")
 
     # 장부·서버 채널
     rec_ok = os.path.join(ctx.root, "receipt-ledger.json")
@@ -485,7 +614,7 @@ def verify_cases(ctx, keyA, keyB):
                          "--permissions", perms_file, "--apk", make_archive(ctx, "led.apk", dex_prod, kind="apk"),
                          "--aab", (aab_led := make_archive(ctx, "led.aab", dex_prod, sign_key=(pathA, pwA))),
                          "--aab-cert-sha256", signer(aab_led)[0], "--aab-jarsigner-rc", "0", "--apksigner-out", apks_ok, "--apksigner-rc", "0",
-                         "--native-rc", "0", "--out", rec_ok)
+                         "--native-rc", "0", "--budget", real_budget, "--out", rec_ok)
     ledger = _write(ctx, "ledger.tsv", "# 장부\n")
     rc1, _ = ctx.tool_run("ledger-append", "--receipt", rec_ok, "--ledger", ledger)
     rows = [l for l in open(ledger, encoding="utf-8").read().splitlines() if l and not l.startswith("#")]
@@ -503,6 +632,14 @@ def verify_cases(ctx, keyA, keyB):
     ctx.case("Q2 min_build 가 이번 판보다 크면 거부", rc5 == 2, f"rc={rc5}")
     rc6, _ = ctx.bash("publish-sql", "--receipt", rec_bad, "--min-build", "1")
     ctx.case("Q3 빨간 영수증은 거부", rc6 == 2, f"rc={rc6}")
+
+
+def _load_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 def _write(ctx, name, text):
@@ -523,10 +660,12 @@ def smoke_cases(ctx):
                   "I/AingShell( 4231): onCreate restored=false task=8 action=null instance=1\r\n"
                   "I/AingShell( 4231): route accept=null history=false proof=false opened=false\r\n",
         "dumpsys": "Packages:\n  Package [com.yehsung.aingcheck] (abc):\n    versionCode=7 minSdk=26 targetSdk=36\n",
+        "apkhash": "local=" + "ab" * 32 + "\ndevice=" + "ab" * 32 + "\n",
         "windows": "windows_own=0 windows_foreign_emulator=9(판정 밖 — 남의 PID) pids=[1 2] source=cgwindowlist\n",
     }
 
     def judge(name, texts, want_rc, fb="INITIALIZE", vc=7, shot_rc=0, want_fail=None):
+        """want_fail 은 빨간 판정 이름 하나 — 그것 **만** 빨개야 초록이다."""
         d = tempfile.mkdtemp(prefix="smoke.", dir=ctx.root)
         for k, v in texts.items():
             with open(os.path.join(d, k + ".txt"), "w", encoding="utf-8") as f:
@@ -536,7 +675,7 @@ def smoke_cases(ctx):
             args += ["--expect-firebase", fb]
         rc, out = ctx.tool_run(*args)
         failed = re.findall(r"smoke FAIL (\S+)", out)
-        ok = rc == want_rc and (want_fail is None or want_fail in failed)
+        ok = rc == want_rc and failed == ([] if want_fail is None else [want_fail])
         ctx.case(name, ok, f"rc={rc} 빨강={failed}")
 
     judge("M0 smoke 판정 — 실측 로그 모양 → 초록", good, 0)
@@ -549,6 +688,11 @@ def smoke_cases(ctx):
     judge("M7 깔린 versionCode 가 다름", good, 1, vc=8, want_fail="installedVersionCode")
     judge("M8 release 표식 없음(debug 판)", dict(good, logcat=good["logcat"].replace("variant=RELEASE", "variant=DEBUG")), 1, want_fail="variantRelease")
     judge("M9 설치 실패", dict(good, install="Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]\n"), 1, want_fail="install")
+    # 검증 지적: 언제나 초록으로 바꿔도 잡히지 않던 amStart·screenshot, 그리고 "이번 빌드가 깔렸나"(installedApk).
+    judge("M10 깔린 base.apk 가 이번 APK 와 다름", dict(good, apkhash="local=" + "ab" * 32 + "\ndevice=" + "cd" * 32 + "\n"), 1, want_fail="installedApk")
+    judge("M11 깔린 base.apk 를 못 받음", dict(good, apkhash="local=" + "ab" * 32 + "\ndevice=none path=없음\n"), 1, want_fail="installedApk")
+    judge("M12 am start 실패", dict(good, start="Starting: Intent { cmp=com.yehsung.aingcheck/.android.shell.MainActivity }\r\nStatus: error\r\n"), 1, want_fail="amStart")
+    judge("M13 스크린숏 실패", good, 1, shot_rc=1, want_fail="screenshot")
 
 
 def manifest_test_permissions(path):
@@ -565,6 +709,37 @@ def permissions_cases(ctx):
     ctx.case("C1 출시 권한 목록 = 병합 매니페스트 시험의 목록", theirs is not None and ours == theirs and len(ours) == 8,
              f"넘침={sorted(ours - (theirs or set()))} 모자람={sorted((theirs or set()) - ours)}")
     ctx.case("C2 대조기 기준선 — 하나 더한 목록은 다르다", theirs is not None and (ours | {"android.permission.CAMERA"}) != theirs, "")
+
+
+def showcase_literal_homes(real_mp, literal):
+    """그 문자열 리터럴("…")이 든 main 소스 파일들(시험·빌드 폴더 제외)."""
+    homes = []
+    needle = '"' + literal + '"'
+    for d, dirs, files in os.walk(real_mp):
+        dirs[:] = [x for x in dirs if x not in ("build", ".gradle", ".kotlin") and not x.lower().endswith("test")]
+        parts = d.replace(os.sep, "/").split("/")
+        if "src" not in parts:
+            continue
+        src_set = parts[parts.index("src") + 1] if parts.index("src") + 1 < len(parts) else ""
+        if not (src_set == "main" or src_set.endswith("Main")):
+            continue
+        for fn in files:
+            if fn.endswith(".kt"):
+                p = os.path.join(d, fn)
+                with open(p, encoding="utf-8", errors="replace") as f:
+                    if needle in f.read():
+                        homes.append(os.path.relpath(p, real_mp).replace(os.sep, "/"))
+    return sorted(homes)
+
+
+def showcase_cases(ctx):
+    gallery = "ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/components/AingGallery.kt"
+    lits = _rt().SHOWCASE_LITERALS
+    bad = {lit: showcase_literal_homes(ctx.real_mp, lit) for lit in lits}
+    bad = {k: v for k, v in bad.items() if v != [gallery]}
+    ctx.case("SC1 진열장 전용 문자열은 진열장 원문에만 있다(판정기 목록 = 원문)", len(lits) >= 3 and not bad, f"어긋남={bad}")
+    # 기준선(다른 입력): 앱 셸이 쓰는 문자열은 진열장 전용이 아니라고 가려낸다.
+    ctx.case("SC2 대조기 기준선 — 진열장 밖 문자열은 집이 다르다", showcase_literal_homes(ctx.real_mp, "근무 중") != [gallery], "")
 
 
 def run(script, tool):
@@ -589,6 +764,7 @@ def run(script, tool):
         verify_cases(ctx, keyA, keyB)
         smoke_cases(ctx)
         permissions_cases(ctx)
+        showcase_cases(ctx)
     except Exception as e:  # 고정물 실패도 빨강이다(건너뛰지 않는다)
         ctx.case("고정물", False, f"{type(e).__name__}: {e}")
     finally:
@@ -603,4 +779,4 @@ def run(script, tool):
 
 
 keyA_keytool = (None,)
-EXPECTED_MIN_CASES = 90
+EXPECTED_MIN_CASES = 131

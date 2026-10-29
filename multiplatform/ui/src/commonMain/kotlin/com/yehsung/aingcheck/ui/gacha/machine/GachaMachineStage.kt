@@ -69,6 +69,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
+import com.yehsung.aingcheck.core.rules.character.CharacterManifest
+import com.yehsung.aingcheck.ui.components.CharacterStageMetrics
+import com.yehsung.aingcheck.ui.shop.LocalLiveCharacterPreview
+import com.yehsung.aingcheck.ui.shop.MeLiveOrPortrait
 import com.yehsung.aingcheck.ui.theme.AingTextPaint
 import kotlin.math.PI
 import kotlin.math.max
@@ -82,6 +87,13 @@ fun interface GachaRevealPortrait {
     /** [id] 의 그림(없으면 null — 그 자리를 비운다). */
     fun image(id: String): ImageBitmap?
 }
+
+/**
+ * 공개 자리에 살아 있는 미리보기([LocalLiveCharacterPreview] — Android 무대)를 쓰는 캐릭터 = 구운 3D 아잉이(아잉 · 황금 · 무지개 · 케이크 둘은
+ * 무대가 아잉으로 접는다). 스프라이트(여우 …) · 모르는 id 는 지금처럼 초상 캔버스. 동작 줄이기도 초상(iOS 와 같은 정지 그림).
+ */
+fun gachaRevealUsesLive(characterId: String): Boolean =
+    CharacterCatalog.builtIns.any { it.id == characterId && it.kind == CharacterManifest.Kind.scene3D }
 
 /** 무대 한 장. [now] 는 감독 시계와 같은 축(초). */
 @Composable
@@ -97,7 +109,7 @@ fun GachaMachineStage(
 ) {
     val ph = d.phase(now)
     val still = d.reduced || env.reduceMotion
-    val f = StageFrame(d, env, theme, sprites, now, ph, still, portrait)
+    val f = StageFrame(d, env, theme, sprites, now, ph, still, portrait, hasLive = LocalLiveCharacterPreview.current != null)
     Box(
         modifier
             .requiredSize(GLayout.size.width.dp, GLayout.size.height.dp)
@@ -122,6 +134,11 @@ fun GachaMachineStage(
             Canvas(Modifier.fillMaxSize()) { design { f.drawSpotlight(this); f.drawGoldDim(this) } }
             Canvas(Modifier.fillMaxSize()) { design { f.drawCapsule(this) } }
             Canvas(Modifier.fillMaxSize()) { design { f.drawReveal(this); f.drawOutgoing(this) } }
+            f.warmId?.let { WarmLive(it) }
+            if (f.liveId != null) {
+                RevealLive(f)
+                Canvas(Modifier.fillMaxSize()) { design { f.drawShardsOverLive(this) } }
+            }
             TextLayer(f)
             Chips(f)
             Buttons(f)
@@ -144,6 +161,41 @@ private fun Modifier.centerAt(x: Float, y: Float): Modifier = layout { measurabl
     }
 }
 
+/**
+ * 공개 자리의 살아 있는 미리보기(W5-c · 사용자 결정 "첫 판부터 한 바퀴"): 구운 3D 아잉이는 초상 대신 무대가 그리고, 결과마다 오르는
+ * [GachaMachineDirector.revealSerial] 로 한 바퀴 돈다. 자리 · 배율 · 불투명도는 초상 캔버스와 같은 [StageFrame.characterPose](타이밍 그대로).
+ * 무대 칸(그림 + 6 × 그림 + 12, 그림 바닥 여백 [CharacterStageMetrics.artBottomPadding])의 그림 가운데를 초상 가운데에 맞춘다.
+ */
+@Composable
+private fun RevealLive(f: StageFrame) {
+    val id = f.liveId ?: return
+    val r = f.d.result ?: return
+    val rt = f.revealT ?: return
+    val p = f.characterPose(r, rt)
+    val boxH = p.size + 12f
+    val artCenterFromTop = boxH - CharacterStageMetrics.artBottomPadding.value - p.size / 2
+    Box(
+        Modifier
+            .centerAt(p.center.x, p.center.y + (boxH / 2 - artCenterFromTop))
+            .graphicsLayer {
+                scaleX = p.scale
+                scaleY = p.scale
+                alpha = p.opacity
+                transformOrigin = TransformOrigin(0.5f, artCenterFromTop / boxH)
+            },
+    ) { MeLiveOrPortrait(id, p.size.dp, revealSerial = f.d.revealSerial) }
+}
+
+/**
+ * 공개 전 데움: 결과가 온 뒤 공개까지(1~2초) 같은 캐릭터의 살아 있는 미리보기를 무대 구석에 1dp · 투명으로 세워 둔다. 무대 자산 읽기 · 칸 굽기
+ * (기기에 따라 수백 ms~수 초)가 공개 순간의 빈 자리로 보이지 않게 — 무대 저장소는 캐릭터마다 하나라 공개 자리가 그것을 이어 쓴다.
+ * 번호 0 이라도 숨은 자리의 반응은 보이지 않는다(한 바퀴 칸도 이때 데워진다).
+ */
+@Composable
+private fun WarmLive(id: String) {
+    Box(Modifier.centerAt(0f, 0f).graphicsLayer { alpha = 0f }) { MeLiveOrPortrait(id, 1.dp, revealSerial = 0) }
+}
+
 @Composable
 private fun designSp(points: Float): TextUnit = with(LocalDensity.current) { points.dp.toSp() }
 
@@ -161,6 +213,7 @@ private class StageFrame(
     val ph: GPhase,
     val still: Boolean,
     val portrait: GachaRevealPortrait,
+    hasLive: Boolean,
 ) {
     /** 기계가 뒤로 물러난 정도(움직임 — smooth). */
     val recede: Double = when (ph) {
@@ -179,6 +232,12 @@ private class StageFrame(
     }
 
     val revealT: Double? = (ph as? GPhase.Reveal)?.t
+
+    /** 공개 자리를 살아 있는 미리보기가 그리는가(그 캐릭터 id) — 그러면 캔버스는 초상을 그리지 않는다. */
+    val liveId: String? = d.result?.characterID?.takeIf { hasLive && revealT != null && !still && gachaRevealUsesLive(it) }
+
+    /** 결과는 왔고 아직 공개 전(떨어짐 · 톡톡 · 모음) — 그 캐릭터의 무대를 미리 세워 둘 id. */
+    val warmId: String? = d.result?.characterID?.takeIf { hasLive && revealT == null && !still && gachaRevealUsesLive(it) }
 
     /** 희귀 캡슐(황금 · 무지개)이 지금 보이는가 — 반전(tease)이면 둘째 톡부터. */
     val rareShown: Boolean = d.isRare && (!d.tease || d.tapTimes.size >= 2 || d.burstTime != null)
@@ -493,7 +552,13 @@ private class StageFrame(
         drawLightBurst(rt, rare, GLayout.stageCenter, gold || theme.raysOnDark, burstSpin(r, rt))
         drawCapsuleHalves(this, r, rt)
         drawCharacter(this, r, rt)
-        if (r.kind == GachaRevealKind.Duplicate) drawShardFlight(this, rt)
+        if (r.kind == GachaRevealKind.Duplicate && liveId == null) drawShardFlight(this, rt)
+    }
+
+    /** 살아 있는 미리보기 위로 날아가는 조각(초상일 때와 같은 겹 순서 — 캐릭터 위). */
+    fun drawShardsOverLive(s: DrawScope) = with(s) {
+        val rt = revealT ?: return@with
+        if (d.result?.kind == GachaRevealKind.Duplicate) drawShardFlight(this, rt)
     }
 
     /** 빛줄기 회전 각: 처음엔 돌다가 잔잔한 움직임이 잦아드는 동안 같이 멈춘다(각속도 × 봉투의 적분 — 튀지 않는다). */
@@ -523,9 +588,11 @@ private class StageFrame(
         half(false, center.x + 125 * rt * k, center.y + 30 * rt * k + 0.5 * g * rt * rt, 170 * rt * k)
     }
 
-    private fun drawCharacter(s: DrawScope, r: GachaRevealOutcome, rt: Double) = with(s) {
-        val rare = GRare.of(r.kind)
-        val gold = rare != null
+    /** 공개 캐릭터 한 장의 자리 · 배율 · 불투명도(초상 캔버스와 살아 있는 미리보기가 같이 쓴다). */
+    class CharacterPose(val center: Offset, val scale: Float, val opacity: Float, val size: Float, val cond: Double)
+
+    fun characterPose(r: GachaRevealOutcome, rt: Double): CharacterPose {
+        val gold = GRare.of(r.kind) != null
         val delay = if (gold) 0.08 else 0.02
         val s0 = if (gold) 0.3 else 0.25
         val sp = GMath.spring(rt - delay, if (gold) 0.42 else 0.40, if (gold) 1.6 else 2.3)
@@ -535,19 +602,32 @@ private class StageFrame(
         val bob = -4 * sin(2 * PI * 0.45 * (rt - 0.8)) * GMath.smooth(0.7, 1.3, rt) * d.ambient(now)
         val cond = if (r.kind == GachaRevealKind.Duplicate) GMath.smooth(GTiming.dupCondense0, GTiming.dupCondense1, rt) else 0.0
         val condFade = if (r.kind == GachaRevealKind.Duplicate) GachaFade.rise(GTiming.dupCondense0, GTiming.dupCondense1, rt) else 0.0
-        val size = portraitSize(gold)
-        val img = portrait.image(r.characterID) ?: return@with
         val c = Offset(GLayout.stageCenter.x, (GLayout.stageCenter.y + 26 * (1 - rise) + bob).toFloat())
         val sc = (scale * (1 - 0.12 * cond)).toFloat()
+        val opacity = GachaFade.f(GachaFade.rise(delay, delay + 0.08, rt) * GMath.lerp(1.0, 0.2, condFade))
+        return CharacterPose(c, sc, opacity, portraitSize(gold), cond)
+    }
+
+    private fun drawCharacter(s: DrawScope, r: GachaRevealOutcome, rt: Double) = with(s) {
+        val rare = GRare.of(r.kind)
+        val gold = rare != null
+        val delay = if (gold) 0.08 else 0.02
+        val p = characterPose(r, rt)
+        val img = if (liveId != null) null else portrait.image(r.characterID) ?: return@with
+        val c = p.center
+        val sc = p.scale
+        val size = p.size
         // 희귀는 그 빛깔 빛무리(원문 그림자의 자리 — 흐림 대신 방사형)
         val glow = rare?.primary ?: GPalette.hex(0x5B3FB8)
         val glowA = (if (gold) 0.5 else 0.25) * GachaFade.rise(delay, delay + 0.08, rt)
         drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = GachaFade.f(glowA * 0.6)), glow.copy(alpha = 0f)), center = c, radius = size * 0.55f * sc), size * 0.55f * sc, c)
+        // 살아 있는 미리보기가 그리는 캐릭터는 여기서 그리지 않는다(빛무리만 — 그 위에 [RevealLive]).
+        if (img == null) return@with
         withTransform({ scale(sc, sc, c) }) {
             drawImageIn(
                 img, rectCentered(c, size),
-                alpha = GachaFade.f(GachaFade.rise(delay, delay + 0.08, rt) * GMath.lerp(1.0, 0.2, condFade)),
-                colorFilter = saturationBrightnessFilter((1 - cond).toFloat(), (0.5 * sin(PI * min(1.0, cond * 1.15))).toFloat()),
+                alpha = p.opacity,
+                colorFilter = saturationBrightnessFilter((1 - p.cond).toFloat(), (0.5 * sin(PI * min(1.0, p.cond * 1.15))).toFloat()),
             )
         }
     }

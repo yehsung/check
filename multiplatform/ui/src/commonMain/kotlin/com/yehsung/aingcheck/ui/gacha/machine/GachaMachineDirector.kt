@@ -316,6 +316,9 @@ class GachaMachineDirector(
     // 뽑기
     var commitTime by mutableStateOf<Double?>(null)
     var result by mutableStateOf<GachaRevealOutcome?>(null)
+    /** 결과가 올 때마다 1 오르는 공개 번호(공개 자리의 살아 있는 미리보기가 새 값마다 한 바퀴 돈다 — `MeLiveOrPortrait(revealSerial)`). */
+    var revealSerial: Int = 0
+        private set
     var dropStart by mutableStateOf<Double?>(null)
     private var skipWhenReady = false
     var tease by mutableStateOf(false)
@@ -801,6 +804,7 @@ class GachaMachineDirector(
 
     fun arrive(r: GachaRevealOutcome, now: Double) {
         result = r
+        revealSerial++
         arrivedAt = now
         val teaseChance = env?.teaseChance ?: 0.0
         tease = !reduced && r.kind.isRare && random() < teaseChance

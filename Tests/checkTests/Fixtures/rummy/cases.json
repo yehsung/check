@@ -1,0 +1,3353 @@
+{
+ "meld": [
+  {
+   "id": "M001",
+   "tiles": [
+    "A3",
+    "A4",
+    "A5"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 12,
+   "note": "가장 기본적인 3장 런"
+  },
+  {
+   "id": "M002",
+   "tiles": [
+    "B1",
+    "B2",
+    "B3"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 6,
+   "note": "1은 가장 낮은 끝으로만 쓴다"
+  },
+  {
+   "id": "M003",
+   "tiles": [
+    "C11",
+    "C12",
+    "C13"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 36,
+   "note": "13은 가장 높은 끝"
+  },
+  {
+   "id": "M004",
+   "tiles": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7",
+    "D8",
+    "D9",
+    "D10",
+    "D11",
+    "D12",
+    "D13"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 91,
+   "note": "최대 길이 13장 런"
+  },
+  {
+   "id": "M005",
+   "tiles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A10",
+    "A11",
+    "A12",
+    "A13",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "14장 — 런은 13장이 상한"
+  },
+  {
+   "id": "M006",
+   "tiles": [
+    "A12",
+    "A13",
+    "A1"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "13 다음 1 순환 금지"
+  },
+  {
+   "id": "M007",
+   "tiles": [
+    "A13",
+    "A1",
+    "A2"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "13-1-2 순환 금지"
+  },
+  {
+   "id": "M008",
+   "tiles": [
+    "A3",
+    "A4"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "2장 — 세트는 3장 이상"
+  },
+  {
+   "id": "M009",
+   "tiles": [
+    "A7"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "낱장"
+  },
+  {
+   "id": "M010",
+   "tiles": [],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "빈 세트(판정 함수는 무효, 차례 판정에선 malformed)"
+  },
+  {
+   "id": "M011",
+   "tiles": [
+    "A7",
+    "B7",
+    "C7"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 21,
+   "note": "3장 그룹"
+  },
+  {
+   "id": "M012",
+   "tiles": [
+    "A7",
+    "B7",
+    "C7",
+    "D7"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 28,
+   "note": "4장 그룹(최대)"
+  },
+  {
+   "id": "M013",
+   "tiles": [
+    "A7",
+    "B7",
+    "C7",
+    "D7",
+    "A7"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "5장 그룹 — 그룹은 4장 상한·색 중복"
+  },
+  {
+   "id": "M014",
+   "tiles": [
+    "A7",
+    "A7",
+    "B7"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "그룹 안 같은 색 중복"
+  },
+  {
+   "id": "M015",
+   "tiles": [
+    "A7",
+    "A7",
+    "A7"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "같은 색 그룹 — 그룹도 런도 아님"
+  },
+  {
+   "id": "M016",
+   "tiles": [
+    "A7",
+    "B7"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "2장 그룹"
+  },
+  {
+   "id": "M017",
+   "tiles": [
+    "A3",
+    "B4",
+    "C5"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "색이 다른 연속 숫자"
+  },
+  {
+   "id": "M018",
+   "tiles": [
+    "A3",
+    "A5",
+    "A6"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "빈 칸 있는 런(조커 없음)"
+  },
+  {
+   "id": "M019",
+   "tiles": [
+    "A3",
+    "A4",
+    "A4",
+    "A5"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "런 안 같은 숫자 중복"
+  },
+  {
+   "id": "M020",
+   "tiles": [
+    "A3",
+    "A4",
+    "B5"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "런 끝에 다른 색"
+  },
+  {
+   "id": "M021",
+   "tiles": [
+    "A5",
+    "B5",
+    "C6"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "그룹에 다른 숫자"
+  },
+  {
+   "id": "M022",
+   "tiles": [
+    "A1",
+    "B1",
+    "C1"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 3,
+   "note": "1 그룹"
+  },
+  {
+   "id": "M023",
+   "tiles": [
+    "A13",
+    "B13",
+    "C13",
+    "D13"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 52,
+   "note": "13 그룹 4장"
+  },
+  {
+   "id": "M024",
+   "tiles": [
+    "A5",
+    "A6",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 18,
+   "note": "조커 끝자리 모호 — 최대 해석 J=A7"
+  },
+  {
+   "id": "M025",
+   "tiles": [
+    "J",
+    "A5",
+    "A6"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 18,
+   "note": "위와 같은 다중집합 — 세트 안 순서 무의미, J=A7(A4 아님)"
+  },
+  {
+   "id": "M026",
+   "tiles": [
+    "A5",
+    "J",
+    "A7"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 18,
+   "note": "조커가 안쪽 빈칸 J=A6 — 모호하지 않음"
+  },
+  {
+   "id": "M027",
+   "tiles": [
+    "J",
+    "A2",
+    "A3"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 9,
+   "note": "왼쪽에 놓아도 J=A4(최대), A1 이면 6"
+  },
+  {
+   "id": "M028",
+   "tiles": [
+    "A1",
+    "A2",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 6,
+   "note": "1 아래가 없어 J=A3 하나뿐"
+  },
+  {
+   "id": "M029",
+   "tiles": [
+    "A12",
+    "A13",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 36,
+   "note": "13 위가 없어 J=A11 하나뿐"
+  },
+  {
+   "id": "M030",
+   "tiles": [
+    "J",
+    "A13",
+    "A12"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 36,
+   "note": "순서 바꿔도 같음 J=A11"
+  },
+  {
+   "id": "M031",
+   "tiles": [
+    "A7",
+    "B7",
+    "J"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 21,
+   "note": "3장 그룹 속 조커 — 빠진 색 C·D 중 하나, 값 7"
+  },
+  {
+   "id": "M032",
+   "tiles": [
+    "A7",
+    "B7",
+    "C7",
+    "J"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 28,
+   "note": "4장 그룹 속 조커 = D7"
+  },
+  {
+   "id": "M033",
+   "tiles": [
+    "A7",
+    "B7",
+    "C7",
+    "D7",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "네 색 다 찬 그룹에 조커 — 5장"
+  },
+  {
+   "id": "M034",
+   "tiles": [
+    "A7",
+    "A7",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "같은 면 2장 + 조커 — 그룹(색 중복)도 런(숫자 중복)도 아님"
+  },
+  {
+   "id": "M035",
+   "tiles": [
+    "A5",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 18,
+   "note": "조커 2장 모호: 그룹 15 vs 런 5-6-7 18 → 런"
+  },
+  {
+   "id": "M036",
+   "tiles": [
+    "A1",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 6,
+   "note": "그룹 3 vs 런 1-2-3 6 → 런"
+  },
+  {
+   "id": "M037",
+   "tiles": [
+    "A11",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 36,
+   "note": "그룹 33 vs 런 11-12-13 36 → 런"
+  },
+  {
+   "id": "M038",
+   "tiles": [
+    "A12",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 36,
+   "note": "그룹 36 = 런 11-12-13 36 동점 → group 으로 표기"
+  },
+  {
+   "id": "M039",
+   "tiles": [
+    "A13",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 39,
+   "note": "그룹 39 vs 런 11-12-13 36 → 그룹"
+  },
+  {
+   "id": "M040",
+   "tiles": [
+    "A9",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 30,
+   "note": "그룹 27 vs 런 9-10-11 30 → 런"
+  },
+  {
+   "id": "M041",
+   "tiles": [
+    "A5",
+    "B5",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 20,
+   "note": "조커 2장 든 4장 그룹(C5·D5)"
+  },
+  {
+   "id": "M042",
+   "tiles": [
+    "A5",
+    "J",
+    "A7",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 26,
+   "note": "안쪽 A6 + 위쪽 A8 → 5~8"
+  },
+  {
+   "id": "M043",
+   "tiles": [
+    "A3",
+    "J",
+    "J",
+    "A6"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 18,
+   "note": "안쪽 빈칸 둘을 조커 2장이 채움"
+  },
+  {
+   "id": "M044",
+   "tiles": [
+    "A5",
+    "J",
+    "J",
+    "A9"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "빈칸 3개(6·7·8)에 조커 2장 — 모자람"
+  },
+  {
+   "id": "M045",
+   "tiles": [
+    "J",
+    "J",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "숫자 타일 없는 세트 — 무효(조커는 2장뿐이라 실전 도달 불가)"
+  },
+  {
+   "id": "M046",
+   "tiles": [
+    "J",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "조커만 2장"
+  },
+  {
+   "id": "M047",
+   "tiles": [
+    "J",
+    "J",
+    "A3",
+    "A4"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 18,
+   "note": "조커 2장이 위로 → 3~6"
+  },
+  {
+   "id": "M048",
+   "tiles": [
+    "A12",
+    "A13",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 46,
+   "note": "위가 막혀 조커가 아래로 → 10~13"
+  },
+  {
+   "id": "M049",
+   "tiles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A10",
+    "A11",
+    "A12",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 91,
+   "note": "13장 런, J=A13"
+  },
+  {
+   "id": "M050",
+   "tiles": [
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A10",
+    "A11",
+    "A12",
+    "A13",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 91,
+   "note": "13장 런, J=A1(위가 막힘)"
+  },
+  {
+   "id": "M051",
+   "tiles": [
+    "A1",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A10",
+    "A11",
+    "A12",
+    "A13",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 91,
+   "note": "13장 런, J=A2(안쪽)"
+  },
+  {
+   "id": "M052",
+   "tiles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A10",
+    "A11",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 91,
+   "note": "13장 런, 조커 2장 = A12·A13"
+  },
+  {
+   "id": "M053",
+   "tiles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A10",
+    "A11",
+    "A12",
+    "J",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "14장 — 조커로도 13 넘을 수 없음"
+  },
+  {
+   "id": "M054",
+   "tiles": [
+    "A13",
+    "J",
+    "A1"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "조커를 끼워도 13-1 순환 불가(1~13 폭 13 > 3)"
+  },
+  {
+   "id": "M055",
+   "tiles": [
+    "A12",
+    "A13",
+    "J",
+    "A1"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "조커 끼운 순환 시도"
+  },
+  {
+   "id": "M056",
+   "tiles": [
+    "A7",
+    "B7",
+    "J",
+    "C8"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "숫자도 색도 섞임"
+  },
+  {
+   "id": "M057",
+   "tiles": [
+    "A5",
+    "B6",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "조커가 있어도 숫자·색이 둘 다 다르면 무효"
+  },
+  {
+   "id": "M058",
+   "tiles": [
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 35,
+   "note": "5장 런"
+  },
+  {
+   "id": "M059",
+   "tiles": [
+    "D10",
+    "D11",
+    "D12",
+    "D13"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 46,
+   "note": "4장 런 끝까지"
+  },
+  {
+   "id": "M060",
+   "tiles": [
+    "B4",
+    "C4",
+    "D4",
+    "A4"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 16,
+   "note": "그룹 안 순서 무관"
+  },
+  {
+   "id": "M061",
+   "tiles": [
+    "A5",
+    "A6",
+    "A7",
+    "B8"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "런 끝에 다른 색"
+  },
+  {
+   "id": "M062",
+   "tiles": [
+    "A10",
+    "A11",
+    "A12",
+    "A13",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 55,
+   "note": "위가 막혀 J=A9"
+  },
+  {
+   "id": "M063",
+   "tiles": [
+    "A1",
+    "J",
+    "A3"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 6,
+   "note": "J=A2(안쪽)"
+  },
+  {
+   "id": "M064",
+   "tiles": [
+    "A2",
+    "A4",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 9,
+   "note": "J=A3(안쪽)"
+  },
+  {
+   "id": "M065",
+   "tiles": [
+    "A1",
+    "A13",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "1과 13 사이 순환 금지"
+  },
+  {
+   "id": "M066",
+   "tiles": [
+    "A5",
+    "B5",
+    "C5",
+    "D5",
+    "J",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "6장 그룹"
+  },
+  {
+   "id": "M067",
+   "tiles": [
+    "B9",
+    "C9",
+    "J"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 27,
+   "note": "그룹 속 조커 9"
+  },
+  {
+   "id": "M068",
+   "tiles": [
+    "B9",
+    "B10",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 30,
+   "note": "J=B11 — 최대 해석"
+  },
+  {
+   "id": "M069",
+   "tiles": [
+    "J",
+    "A7",
+    "B7"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 21,
+   "note": "조커가 맨 앞이어도 그룹"
+  },
+  {
+   "id": "M070",
+   "tiles": [
+    "J",
+    "A13",
+    "B13",
+    "C13"
+   ],
+   "valid": true,
+   "kind": "group",
+   "points": 52,
+   "note": "조커 = D13"
+  },
+  {
+   "id": "M071",
+   "tiles": [
+    "A6",
+    "A7",
+    "A8",
+    "J",
+    "J"
+   ],
+   "valid": true,
+   "kind": "run",
+   "points": 40,
+   "note": "조커 2장이 위로 → 6~10"
+  },
+  {
+   "id": "M072",
+   "tiles": [
+    "A3",
+    "A4",
+    "A5",
+    "A5",
+    "A6",
+    "A7"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "긴 런 안 중복"
+  },
+  {
+   "id": "M073",
+   "tiles": [
+    "A9",
+    "B9",
+    "C9",
+    "D9",
+    "A10"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "그룹 + 다른 숫자 1장"
+  },
+  {
+   "id": "M074",
+   "tiles": [
+    "A5",
+    "J",
+    "J",
+    "J"
+   ],
+   "valid": false,
+   "kind": null,
+   "points": null,
+   "note": "조커 3장 — R-06 한 세트 조커 2장 상한(실전 도달 불가, 세트 판정 단독 계약)"
+  }
+ ],
+ "turn": [
+  {
+   "id": "T001",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "B10",
+    "C10",
+    "D10",
+    "A9"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ],
+    [
+     "B10",
+     "C10",
+     "D10"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "첫 등록 정확히 30점, 판 기존 세트는 그대로"
+  },
+  {
+   "id": "T002",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "B5",
+    "C5",
+    "D5",
+    "D9"
+   ],
+   "tableAfter": [
+    [
+     "A2",
+     "A3",
+     "A4",
+     "A5"
+    ],
+    [
+     "B5",
+     "C5",
+     "D5"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_under_30",
+   "note": "14+15=29점"
+  },
+  {
+   "id": "T003",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "D4",
+    "D5",
+    "D6",
+    "D7",
+    "A3",
+    "B3",
+    "C3",
+    "B12"
+   ],
+   "tableAfter": [
+    [
+     "D4",
+     "D5",
+     "D6",
+     "D7"
+    ],
+    [
+     "A3",
+     "B3",
+     "C3"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "22+9=31점"
+  },
+  {
+   "id": "T004",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A10",
+    "B10",
+    "J",
+    "C2"
+   ],
+   "tableAfter": [
+    [
+     "A10",
+     "B10",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "조커가 10으로 계산 → 30점"
+  },
+  {
+   "id": "T005",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "C9",
+    "C10",
+    "J",
+    "A1"
+   ],
+   "tableAfter": [
+    [
+     "J",
+     "C9",
+     "C10"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "조커를 왼쪽에 놓아도 최대 해석 J=C11 → 30점(C8 이면 27)"
+  },
+  {
+   "id": "T006",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "J",
+    "A1",
+    "A2",
+    "B13"
+   ],
+   "tableAfter": [
+    [
+     "J",
+     "A1",
+     "A2"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_under_30",
+   "note": "1-2-3 = 6점"
+  },
+  {
+   "id": "T007",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "J",
+    "J",
+    "D13",
+    "A1"
+   ],
+   "tableAfter": [
+    [
+     "J",
+     "J",
+     "D13"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "조커 2장 그룹 13×3=39점"
+  },
+  {
+   "id": "T008",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A9",
+    "J",
+    "J",
+    "B1"
+   ],
+   "tableAfter": [
+    [
+     "A9",
+     "J",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "조커 2장 모호 → 런 9-10-11 = 30점(그룹이면 27)"
+  },
+  {
+   "id": "T009",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A8",
+    "J",
+    "J",
+    "B1"
+   ],
+   "tableAfter": [
+    [
+     "A8",
+     "J",
+     "J"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_under_30",
+   "note": "런 8-9-10 = 27, 그룹 24 → 최대 27"
+  },
+  {
+   "id": "T010",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A1",
+    "A2",
+    "A3",
+    "B8",
+    "C8",
+    "D8"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ],
+    [
+     "B8",
+     "C8",
+     "D8"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "세트 둘 합산 6+24=30"
+  },
+  {
+   "id": "T011",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A4",
+    "B10",
+    "C10",
+    "D10"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4"
+    ],
+    [
+     "B10",
+     "C10",
+     "D10"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_table_touched",
+   "note": "첫 등록 차례에 판 세트에 덧붙이기 금지"
+  },
+  {
+   "id": "T012",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A11",
+     "B11",
+     "C11",
+     "D11"
+    ]
+   ],
+   "rackBefore": [
+    "A12",
+    "A13",
+    "B1"
+   ],
+   "tableAfter": [
+    [
+     "B11",
+     "C11",
+     "D11"
+    ],
+    [
+     "A11",
+     "A12",
+     "A13"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_table_touched",
+   "note": "판 타일(A11)을 빌린 첫 등록 금지"
+  },
+  {
+   "id": "T013",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A7",
+    "B9",
+    "C9",
+    "D9"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "B9",
+     "C9",
+     "D9",
+     "J"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_table_touched",
+   "note": "첫 등록 전(겸 첫 등록 차례) 조커 되찾기 금지"
+  },
+  {
+   "id": "T014",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A7",
+    "B10",
+    "C10",
+    "D10"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "B10",
+     "C10",
+     "D10"
+    ]
+   ],
+   "valid": false,
+   "reason": "joker_not_reused",
+   "note": "판 조커를 랙으로 가져감"
+  },
+  {
+   "id": "T015",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A10",
+    "B10",
+    "C10",
+    "D1",
+    "D2"
+   ],
+   "tableAfter": [
+    [
+     "A10",
+     "B10",
+     "C10"
+    ],
+    [
+     "D1",
+     "D2"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "30점은 넘지만 2장짜리 낱 세트가 남음"
+  },
+  {
+   "id": "T016",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A10",
+    "B10"
+   ],
+   "tableAfter": [
+    [
+     "A10",
+     "B10",
+     "C10"
+    ]
+   ],
+   "valid": false,
+   "reason": "tile_not_owned",
+   "note": "C10 이 랙에 없음"
+  },
+  {
+   "id": "T017",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "B10",
+    "C10",
+    "D10"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "valid": false,
+   "reason": "no_tile_played",
+   "note": "아무것도 안 냄 — 뽑기로 처리해야 함"
+  },
+  {
+   "id": "T018",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ],
+    [
+     "B5",
+     "C5",
+     "D5"
+    ]
+   ],
+   "rackBefore": [
+    "A11",
+    "B11",
+    "C11",
+    "D2"
+   ],
+   "tableAfter": [
+    [
+     "C11",
+     "A11",
+     "B11"
+    ],
+    [
+     "D5",
+     "B5",
+     "C5"
+    ],
+    [
+     "A3",
+     "A1",
+     "A2"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "판 세트 순서·세트 안 순서가 바뀌어도 같은 세트 → 조작 아님, 33점"
+  },
+  {
+   "id": "T019",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A1",
+    "A2",
+    "A3",
+    "B9",
+    "C9",
+    "D9"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ],
+    [
+     "A3",
+     "A2",
+     "A1"
+    ],
+    [
+     "B9",
+     "C9",
+     "D9"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "판 세트와 같은 면의 새 세트(사본 2벌) — 6+27=33"
+  },
+  {
+   "id": "T020",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A4",
+    "B5",
+    "C5",
+    "D5"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4"
+    ],
+    [
+     "B5",
+     "C5",
+     "D5"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_table_touched",
+   "note": "조작과 30 미만이 겹치면 판정 순서상 initial_table_touched"
+  },
+  {
+   "id": "T021",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A10",
+    "A11",
+    "A12",
+    "B1",
+    "C1",
+    "D1"
+   ],
+   "tableAfter": [
+    [
+     "A10",
+     "A11",
+     "A12"
+    ],
+    [
+     "B1",
+     "C1",
+     "D1"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "첫 등록으로 랙을 다 비움 → 즉시 승리(R-20)"
+  },
+  {
+   "id": "T022",
+   "initialDone": false,
+   "tableBefore": [],
+   "rackBefore": [
+    "A12",
+    "A13",
+    "A1",
+    "B10",
+    "C10",
+    "D10"
+   ],
+   "tableAfter": [
+    [
+     "A12",
+     "A13",
+     "A1"
+    ],
+    [
+     "B10",
+     "C10",
+     "D10"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "13-1 순환 세트"
+  },
+  {
+   "id": "T023",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ],
+    [
+     "A4",
+     "A5",
+     "A6"
+    ]
+   ],
+   "rackBefore": [
+    "B10",
+    "C10",
+    "D10"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4",
+     "A5",
+     "A6"
+    ],
+    [
+     "B10",
+     "C10",
+     "D10"
+    ]
+   ],
+   "valid": false,
+   "reason": "initial_table_touched",
+   "note": "판 타일 다중집합은 같아도 세트 둘을 합친 것은 조작"
+  },
+  {
+   "id": "T024",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A4",
+    "B9"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "덧붙이기"
+  },
+  {
+   "id": "T025",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A5",
+    "B9"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A5"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "빈칸 생긴 런"
+  },
+  {
+   "id": "T026",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4",
+     "A5",
+     "A6"
+    ]
+   ],
+   "rackBefore": [
+    "B9"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ],
+    [
+     "A4",
+     "A5",
+     "A6"
+    ]
+   ],
+   "valid": false,
+   "reason": "no_tile_played",
+   "note": "판만 재배열하고 랙 타일 0장"
+  },
+  {
+   "id": "T027",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "B9",
+    "C9"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "valid": false,
+   "reason": "no_tile_played",
+   "note": "판 그대로 확정 — 내기 차례로 인정 안 함"
+  },
+  {
+   "id": "T028",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "B3",
+     "B4",
+     "B5",
+     "B6",
+     "B7"
+    ]
+   ],
+   "rackBefore": [
+    "B5",
+    "A1"
+   ],
+   "tableAfter": [
+    [
+     "B3",
+     "B4",
+     "B5"
+    ],
+    [
+     "B5",
+     "B6",
+     "B7"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "런 쪼개고 같은 숫자 끼우기"
+  },
+  {
+   "id": "T029",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A8",
+     "B8",
+     "C8",
+     "D8"
+    ]
+   ],
+   "rackBefore": [
+    "D9",
+    "D10"
+   ],
+   "tableAfter": [
+    [
+     "A8",
+     "B8",
+     "C8"
+    ],
+    [
+     "D8",
+     "D9",
+     "D10"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "4장 그룹에서 1장 빼 새 런"
+  },
+  {
+   "id": "T030",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A8",
+     "B8",
+     "C8",
+     "D8"
+    ]
+   ],
+   "rackBefore": [
+    "A1",
+    "A2",
+    "A3"
+   ],
+   "tableAfter": [
+    [
+     "A8",
+     "B8",
+     "C8"
+    ],
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "valid": false,
+   "reason": "table_tile_removed",
+   "note": "D8 이 판에서 사라짐(랙으로 회수)"
+  },
+  {
+   "id": "T031",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A7",
+    "B9",
+    "C9"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "B9",
+     "C9",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "랙 타일로 조커 되찾아 새 세트"
+  },
+  {
+   "id": "T032",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ],
+    [
+     "D7",
+     "C7",
+     "B7",
+     "A7"
+    ]
+   ],
+   "rackBefore": [
+    "B9",
+    "C9"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "D7",
+     "C7",
+     "B7"
+    ],
+    [
+     "B9",
+     "C9",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "판 타일(4장 그룹의 A7)로 조커 되찾기 — 랙만 허용하는 판본이면 무효"
+  },
+  {
+   "id": "T033",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A7"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ]
+   ],
+   "valid": false,
+   "reason": "joker_not_reused",
+   "note": "되찾은 조커를 랙에 둠"
+  },
+  {
+   "id": "T034",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A7"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "J"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "되찾은 조커를 낱장으로 둠"
+  },
+  {
+   "id": "T035",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ],
+    [
+     "B3",
+     "B4",
+     "B5"
+    ]
+   ],
+   "rackBefore": [
+    "A7"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "B3",
+     "B4",
+     "B5",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "되찾은 조커를 기존 세트에 붙임 — \"새 세트\" 요구 판본이면 무효"
+  },
+  {
+   "id": "T036",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A9",
+     "B9",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "C9",
+    "D1",
+    "D2"
+   ],
+   "tableAfter": [
+    [
+     "A9",
+     "B9",
+     "C9"
+    ],
+    [
+     "D1",
+     "D2",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "3장 그룹 조커를 빠진 두 색 중 하나로 교체"
+  },
+  {
+   "id": "T037",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A9",
+     "B9",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A9",
+    "D1",
+    "D2"
+   ],
+   "tableAfter": [
+    [
+     "A9",
+     "B9",
+     "A9"
+    ],
+    [
+     "D1",
+     "D2",
+     "J"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "이미 있는 색으로 교체 → 그룹 색 중복"
+  },
+  {
+   "id": "T038",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A9",
+     "B9",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "C8",
+    "D1",
+    "D2"
+   ],
+   "tableAfter": [
+    [
+     "A9",
+     "B9",
+     "C8"
+    ],
+    [
+     "D1",
+     "D2",
+     "J"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "다른 숫자로 교체"
+  },
+  {
+   "id": "T039",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A9",
+     "B9",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "C9",
+    "D9",
+    "A1",
+    "A2"
+   ],
+   "tableAfter": [
+    [
+     "A9",
+     "B9",
+     "C9",
+     "D9"
+    ],
+    [
+     "A1",
+     "A2",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "빠진 두 색 모두로 교체해도 됨"
+  },
+  {
+   "id": "T040",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A4",
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "B1",
+    "B2"
+   ],
+   "tableAfter": [
+    [
+     "A4",
+     "A5",
+     "A6"
+    ],
+    [
+     "B1",
+     "B2",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "4장 런 끝 조커를 교체 없이 떼어 씀 — 남은 런 유효(차례 끝 판 유효 원칙)"
+  },
+  {
+   "id": "T041",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A4",
+     "A5",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A3"
+   ],
+   "tableAfter": [
+    [
+     "A3",
+     "A4",
+     "A5",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "조커 든 세트에 덧붙이기, 조커 값은 다시 해석(J=A6)"
+  },
+  {
+   "id": "T042",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A7"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "A7 을 붙이면 조커는 A8 로 다시 해석 — 랙 비움 승리"
+  },
+  {
+   "id": "T043",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "B10",
+     "B11",
+     "B12"
+    ]
+   ],
+   "rackBefore": [
+    "A1"
+   ],
+   "tableAfter": [
+    [
+     "B10",
+     "B11",
+     "B12",
+     "B13"
+    ]
+   ],
+   "valid": false,
+   "reason": "tile_not_owned",
+   "note": "B13 이 랙에 없음"
+  },
+  {
+   "id": "T044",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A4",
+    "B4",
+    "C4"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4"
+    ],
+    [
+     "A4",
+     "B4",
+     "C4"
+    ]
+   ],
+   "valid": false,
+   "reason": "tile_not_owned",
+   "note": "A4 가 랙에 1장인데 2장 냄"
+  },
+  {
+   "id": "T045",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A3",
+     "A4",
+     "A5"
+    ],
+    [
+     "B3",
+     "B4",
+     "B5"
+    ],
+    [
+     "C3",
+     "C4",
+     "C5"
+    ]
+   ],
+   "rackBefore": [
+    "D3",
+    "D4",
+    "D5"
+   ],
+   "tableAfter": [
+    [
+     "A3",
+     "B3",
+     "C3",
+     "D3"
+    ],
+    [
+     "A4",
+     "B4",
+     "C4",
+     "D4"
+    ],
+    [
+     "A5",
+     "B5",
+     "C5",
+     "D5"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "런 셋을 그룹 셋으로 다중 재배열 — 랙 비움 승리"
+  },
+  {
+   "id": "T046",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A7",
+     "A8",
+     "A9"
+    ]
+   ],
+   "rackBefore": [
+    "A10"
+   ],
+   "tableAfter": [
+    [
+     "A7",
+     "A8",
+     "A9",
+     "A10"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "마지막 타일로 랙 비움 → 즉시 승리"
+  },
+  {
+   "id": "T047",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A11",
+     "A12",
+     "A13"
+    ]
+   ],
+   "rackBefore": [
+    "A1",
+    "B5"
+   ],
+   "tableAfter": [
+    [
+     "A11",
+     "A12",
+     "A13",
+     "A1"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "13 뒤에 1"
+  },
+  {
+   "id": "T048",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4",
+     "A5",
+     "A6",
+     "A7",
+     "A8",
+     "A9",
+     "A10",
+     "A11",
+     "A12",
+     "A13"
+    ]
+   ],
+   "rackBefore": [
+    "J",
+    "B1"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4",
+     "A5",
+     "A6",
+     "A7",
+     "A8",
+     "A9",
+     "A10",
+     "A11",
+     "A12",
+     "A13",
+     "J"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "14장 런"
+  },
+  {
+   "id": "T049",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A7",
+     "B7",
+     "C7",
+     "D7"
+    ]
+   ],
+   "rackBefore": [
+    "A7",
+    "B1"
+   ],
+   "tableAfter": [
+    [
+     "A7",
+     "B7",
+     "C7",
+     "D7",
+     "A7"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "그룹 5번째 타일"
+  },
+  {
+   "id": "T050",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ],
+    [
+     "B7",
+     "C7",
+     "D7"
+    ]
+   ],
+   "rackBefore": [
+    "A4",
+    "A7"
+   ],
+   "tableAfter": [
+    [
+     "C7",
+     "A7",
+     "D7",
+     "B7"
+    ],
+    [
+     "A4",
+     "A3",
+     "A2",
+     "A1"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "세트 순서·세트 안 순서 섞여도 판정 같음"
+  },
+  {
+   "id": "T051",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ],
+    [
+     "C8",
+     "C9",
+     "C10",
+     "C11",
+     "C12"
+    ]
+   ],
+   "rackBefore": [
+    "A7"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "C8",
+     "C9",
+     "C10"
+    ],
+    [
+     "C11",
+     "C12",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "마지막 랙 타일로 조커 되찾고 판 타일과 새 세트 → 랙 비움 승리. \"랙 2장 동반\" 판본이면 무효"
+  },
+  {
+   "id": "T052",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "J",
+     "A7"
+    ],
+    [
+     "B9",
+     "B10",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A6",
+    "B11",
+    "C1",
+    "C2"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "B9",
+     "B10",
+     "B11"
+    ],
+    [
+     "C1",
+     "C2",
+     "J",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "조커 2장 동시 되찾아 한 세트에"
+  },
+  {
+   "id": "T053",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A4"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A14"
+    ]
+   ],
+   "valid": false,
+   "reason": "malformed",
+   "note": "없는 숫자 14"
+  },
+  {
+   "id": "T054",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A4"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4"
+    ],
+    []
+   ],
+   "valid": false,
+   "reason": "malformed",
+   "note": "빈 세트"
+  },
+  {
+   "id": "T055",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "E4"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "E4"
+    ]
+   ],
+   "valid": false,
+   "reason": "malformed",
+   "note": "없는 색 E"
+  },
+  {
+   "id": "T056",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A8",
+     "B8",
+     "C8",
+     "D8"
+    ]
+   ],
+   "rackBefore": [
+    "A1",
+    "A2"
+   ],
+   "tableAfter": [
+    [
+     "A8",
+     "B8",
+     "C8"
+    ],
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "valid": false,
+   "reason": "table_tile_removed",
+   "note": "판 유출과 미보유가 겹치면 판정 순서상 table_tile_removed"
+  },
+  {
+   "id": "T057",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ],
+    [
+     "B2",
+     "B3",
+     "B4"
+    ]
+   ],
+   "rackBefore": [
+    "A7",
+    "B5"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "B2",
+     "B3",
+     "B4",
+     "B5"
+    ]
+   ],
+   "valid": false,
+   "reason": "joker_not_reused",
+   "note": "다른 타일도 냈지만 되찾은 조커가 판에 없음"
+  },
+  {
+   "id": "T058",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "A3"
+   ],
+   "tableAfter": [
+    [
+     "A3",
+     "A5",
+     "A6",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "조커 값이 떠다님: 판에서 A7 이던 J 가 A4 가 됨. 위치 고정 규칙이면 무효(R-07, HK 조커 예시 2)"
+  },
+  {
+   "id": "T059",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A7",
+     "J",
+     "J"
+    ]
+   ],
+   "rackBefore": [
+    "B7"
+   ],
+   "tableAfter": [
+    [
+     "A7",
+     "B7",
+     "J",
+     "J"
+    ]
+   ],
+   "valid": true,
+   "reason": "ok",
+   "note": "런 7~9 이던 A7 J J 가 B7 을 받아 그룹으로 바뀜. 위치 고정 규칙이면 무효(R-07)"
+  },
+  {
+   "id": "T060",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A8",
+     "B8",
+     "C8",
+     "D8"
+    ]
+   ],
+   "rackBefore": [
+    "A1"
+   ],
+   "tableAfter": [
+    [
+     "A8",
+     "B8",
+     "C8"
+    ],
+    []
+   ],
+   "valid": false,
+   "reason": "malformed",
+   "note": "순서 경계 0↔1: 빈 세트와 판 유출이 겹치면 malformed"
+  },
+  {
+   "id": "T061",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A8",
+     "B8",
+     "C8",
+     "D8"
+    ]
+   ],
+   "rackBefore": [
+    "A1"
+   ],
+   "tableAfter": [
+    [
+     "A8",
+     "B8",
+     "C8"
+    ]
+   ],
+   "valid": false,
+   "reason": "table_tile_removed",
+   "note": "순서 경계 1↔3: 낸 타일 0장과 판 유출이 겹치면 table_tile_removed"
+  },
+  {
+   "id": "T062",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A5",
+     "A6",
+     "J"
+    ],
+    [
+     "B1",
+     "B2",
+     "B3",
+     "B4"
+    ]
+   ],
+   "rackBefore": [
+    "A7"
+   ],
+   "tableAfter": [
+    [
+     "A5",
+     "A6",
+     "A7"
+    ],
+    [
+     "B1",
+     "B2",
+     "B3"
+    ]
+   ],
+   "valid": false,
+   "reason": "joker_not_reused",
+   "note": "1단계 안 J↔숫자: 조커와 숫자 타일이 함께 유출되면 joker_not_reused"
+  },
+  {
+   "id": "T063",
+   "initialDone": true,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4",
+     "A5",
+     "A6"
+    ]
+   ],
+   "rackBefore": [
+    "B9"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2"
+    ],
+    [
+     "A3",
+     "A4",
+     "A5",
+     "A6"
+    ]
+   ],
+   "valid": false,
+   "reason": "no_tile_played",
+   "note": "순서 경계 3↔4: 낸 타일 0장과 무효 세트가 겹치면 no_tile_played"
+  },
+  {
+   "id": "T064",
+   "initialDone": false,
+   "tableBefore": [
+    [
+     "A1",
+     "A2",
+     "A3"
+    ]
+   ],
+   "rackBefore": [
+    "A4",
+    "B10",
+    "C10",
+    "D10",
+    "D1"
+   ],
+   "tableAfter": [
+    [
+     "A1",
+     "A2",
+     "A3",
+     "A4"
+    ],
+    [
+     "B10",
+     "C10",
+     "D10"
+    ],
+    [
+     "D1"
+    ]
+   ],
+   "valid": false,
+   "reason": "invalid_meld",
+   "note": "순서 경계 4↔5a: 낱장 무효와 첫 등록 판 조작이 겹치면 invalid_meld"
+  }
+ ],
+ "score": [
+  {
+   "id": "S001",
+   "racks": {
+    "p1": [],
+    "p2": [
+     "A5",
+     "J"
+    ],
+    "p3": [
+     "C13"
+    ]
+   },
+   "poolEmpty": false,
+   "expected": {
+    "p1": 48,
+    "p2": -35,
+    "p3": -13
+   },
+   "winners": [
+    "p1"
+   ],
+   "note": "랙 비움 승리, 조커 30"
+  },
+  {
+   "id": "S002",
+   "racks": {
+    "p1": [],
+    "p2": [
+     "A1"
+    ]
+   },
+   "poolEmpty": false,
+   "expected": {
+    "p1": 1,
+    "p2": -1
+   },
+   "winners": [
+    "p1"
+   ],
+   "note": "2인 최소"
+  },
+  {
+   "id": "S003",
+   "racks": {
+    "p1": [
+     "B4"
+    ],
+    "p2": [
+     "A1",
+     "B2",
+     "C3"
+    ],
+    "p3": [],
+    "p4": [
+     "D13",
+     "D12"
+    ]
+   },
+   "poolEmpty": false,
+   "expected": {
+    "p1": -4,
+    "p2": -6,
+    "p3": 35,
+    "p4": -25
+   },
+   "winners": [
+    "p3"
+   ],
+   "note": "4인, 승자가 p1 이 아닐 때"
+  },
+  {
+   "id": "S004",
+   "racks": {
+    "p1": [],
+    "p2": [
+     "J",
+     "J",
+     "A1"
+    ],
+    "p3": [
+     "A2"
+    ],
+    "p4": [
+     "B3"
+    ]
+   },
+   "poolEmpty": false,
+   "expected": {
+    "p1": 66,
+    "p2": -61,
+    "p3": -2,
+    "p4": -3
+   },
+   "winners": [
+    "p1"
+   ],
+   "note": "조커 2장 남은 패자 60+1"
+  },
+  {
+   "id": "S005",
+   "racks": {
+    "p1": [
+     "A5"
+    ],
+    "p2": [
+     "B10"
+    ],
+    "p3": [
+     "C7",
+     "C8"
+    ],
+    "p4": [
+     "D9",
+     "D11"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 30,
+    "p2": -5,
+    "p3": -10,
+    "p4": -15
+   },
+   "winners": [
+    "p1"
+   ],
+   "note": "더미 소진 막힘 — 승자 합을 뺀 차액 정산"
+  },
+  {
+   "id": "S006",
+   "racks": {
+    "p1": [
+     "J"
+    ],
+    "p2": [
+     "A13",
+     "B13",
+     "C13"
+    ],
+    "p3": [
+     "A1"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": -29,
+    "p2": -38,
+    "p3": 67
+   },
+   "winners": [
+    "p3"
+   ],
+   "note": "막힘, 조커 30 이 랙 합에 들어감"
+  },
+  {
+   "id": "S007",
+   "racks": {
+    "p1": [
+     "A10"
+    ],
+    "p2": [
+     "A4",
+     "B6"
+    ],
+    "p3": [
+     "C12"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 1,
+    "p2": 1,
+    "p3": -2
+   },
+   "winners": [
+    "p1"
+   ],
+   "note": "합 동점(10) → 점수 2 는 p1·p2 가 1씩 나눔, 승자는 장수 적은 p1(HK 예시 2)"
+  },
+  {
+   "id": "S008",
+   "racks": {
+    "p1": [
+     "A10"
+    ],
+    "p2": [
+     "B10"
+    ],
+    "p3": [
+     "C13",
+     "D13"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 8,
+    "p2": 8,
+    "p3": -16
+   },
+   "winners": [
+    "p1",
+    "p2"
+   ],
+   "note": "합·장수 모두 동점 → 공동 승자 균등 분배"
+  },
+  {
+   "id": "S009",
+   "racks": {
+    "p1": [
+     "A10"
+    ],
+    "p2": [
+     "B10"
+    ],
+    "p3": [
+     "C11"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 1,
+    "p2": 0,
+    "p3": -1
+   },
+   "winners": [
+    "p1",
+    "p2"
+   ],
+   "note": "공동 승자 분배 나머지 1점은 자리 순서(p1 먼저)"
+  },
+  {
+   "id": "S010",
+   "racks": {
+    "p1": [
+     "A5"
+    ],
+    "p2": [
+     "B5"
+    ],
+    "p3": [
+     "C5"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 0,
+    "p2": 0,
+    "p3": 0
+   },
+   "winners": [
+    "p1",
+    "p2",
+    "p3"
+   ],
+   "note": "전원 동점 → 전원 공동 승자 0점"
+  },
+  {
+   "id": "S011",
+   "racks": {
+    "p1": [],
+    "p2": [
+     "A3"
+    ],
+    "p3": [
+     "B4"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 7,
+    "p2": -3,
+    "p3": -4
+   },
+   "winners": [
+    "p1"
+   ],
+   "note": "더미가 빈 뒤 랙을 비운 경우 — 일반 정산"
+  },
+  {
+   "id": "S012",
+   "racks": {
+    "p1": [
+     "J",
+     "A1"
+    ],
+    "p2": [
+     "B2",
+     "B3",
+     "B4",
+     "B5",
+     "B6",
+     "B7"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": -4,
+    "p2": 4
+   },
+   "winners": [
+    "p2"
+   ],
+   "note": "2인 막힘 — 장수가 많아도 합이 작으면 승"
+  },
+  {
+   "id": "S013",
+   "racks": {
+    "p1": [],
+    "p2": [
+     "A1",
+     "A2",
+     "A13",
+     "B13",
+     "C9",
+     "D9",
+     "B5",
+     "C5",
+     "D6",
+     "A7",
+     "B8",
+     "C11",
+     "D12",
+     "A4",
+     "B1",
+     "C2"
+    ]
+   },
+   "poolEmpty": false,
+   "expected": {
+    "p1": 108,
+    "p2": -108
+   },
+   "winners": [
+    "p1"
+   ],
+   "note": "첫 등록 못 한 패자도 랙 합만 — 미등록 벌점 100 없음"
+  },
+  {
+   "id": "S014",
+   "racks": {
+    "p1": [
+     "A3",
+     "B3"
+    ],
+    "p2": [
+     "C6"
+    ],
+    "p3": [
+     "D6"
+    ],
+    "p4": [
+     "J"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 8,
+    "p2": 8,
+    "p3": 8,
+    "p4": -24
+   },
+   "winners": [
+    "p2",
+    "p3"
+   ],
+   "note": "합 6 셋이 24 를 8씩 나눔, 승자는 장수 1장인 p2·p3(2장인 p1 도 점수는 받음)"
+  },
+  {
+   "id": "S015",
+   "racks": {
+    "p1": [
+     "J",
+     "J"
+    ],
+    "p2": [
+     "A13"
+    ],
+    "p3": [
+     "B12",
+     "C1"
+    ],
+    "p4": [
+     "D13"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": -47,
+    "p2": 16,
+    "p3": 15,
+    "p4": 16
+   },
+   "winners": [
+    "p2",
+    "p4"
+   ],
+   "note": "합 13 셋이 47 을 15씩 나누고 나머지 2점은 장수 적은 p2·p4(자리 순서), 승자 p2·p4"
+  },
+  {
+   "id": "S016",
+   "racks": {
+    "p1": [
+     "A1",
+     "A2",
+     "A5"
+    ],
+    "p2": [
+     "B8"
+    ],
+    "p3": [
+     "C10",
+     "D10"
+    ],
+    "p4": [
+     "A3",
+     "B4",
+     "C5",
+     "D6"
+    ]
+   },
+   "poolEmpty": true,
+   "expected": {
+    "p1": 11,
+    "p2": 11,
+    "p3": -12,
+    "p4": -10
+   },
+   "winners": [
+    "p2"
+   ],
+   "note": "HK 2026 Example 2 그대로: 8(3장)·8(1장)·20·18 → +11·+11·−12·−10, 승자는 장수 1장인 p2"
+  }
+ ]
+}

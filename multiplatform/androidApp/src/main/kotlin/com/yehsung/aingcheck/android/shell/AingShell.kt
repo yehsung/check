@@ -12,7 +12,6 @@ import com.yehsung.aingcheck.android.nav.AppScreens
 import com.yehsung.aingcheck.android.nav.Dest
 import com.yehsung.aingcheck.android.nav.NavRequests
 import com.yehsung.aingcheck.android.routing.RouteTargets
-import com.yehsung.aingcheck.android.screens.games.hub.GamesTabBarPolicy
 import com.yehsung.aingcheck.android.screens.session.LaunchEntry
 import com.yehsung.aingcheck.android.screens.session.UpdateRequiredEntry
 import com.yehsung.aingcheck.android.screens.shop.CakeGiftSheetRoute
@@ -50,6 +49,7 @@ import com.yehsung.aingcheck.android.nav.CurrentDest
 import com.yehsung.aingcheck.android.nav.RoutePlans
 import com.yehsung.aingcheck.android.nav.SessionNavHost
 import com.yehsung.aingcheck.android.nav.ShellNavigator
+import com.yehsung.aingcheck.android.nav.ShellTabBarRules
 import com.yehsung.aingcheck.android.nav.TabsNavHost
 import com.yehsung.aingcheck.android.routing.AingRoute
 import com.yehsung.aingcheck.android.routing.AingTab
@@ -207,12 +207,10 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
         if (primer && !showing) navController.navigate(Dest.NotificationPrimerSheet)
         if (!primer && showing) navController.popBackStack()
     }
-    val current = entry?.let { CurrentDest.of(it) }
-    // 탭 막대 숨김: 대국 · 결과(W4-a 화면이 알린다) · 미니게임 · 1:1 판(W4-b) · 상점 · 뽑기 기계(W4-c — 구매 막대 · 전체 화면).
-    val hideTabBar = screenHidesTabBar ||
-        GamesTabBarPolicy.hidesTabBar(current, phone.games) ||
-        destination?.hasRoute(Dest.Shop::class) == true ||
-        destination?.hasRoute(Dest.GachaMachine::class) == true
+    // 탭 막대 숨김 표는 한 자리(ShellTabBarRules — iOS TabBarPolicy 화면 전부 + 뽑기 기계). 오목·체스 판은 화면이 알리고(W4-a),
+    // 그 알림은 위에 대화상자가 떠도 살아 있게 표 밖에서도 한 번 더 본다.
+    val play = ShellTabBarRules.Play(tetrisMatch = phone.games.tetris.match != null, boardScreenHides = screenHidesTabBar)
+    val hideTabBar = screenHidesTabBar || ShellTabBarRules.hidesTabBar(destination, play)
     Scaffold(
         bottomBar = {
             if (!hideTabBar) {

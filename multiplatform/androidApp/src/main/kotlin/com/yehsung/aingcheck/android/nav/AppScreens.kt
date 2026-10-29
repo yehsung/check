@@ -17,8 +17,10 @@ import com.yehsung.aingcheck.android.screens.settings.NotificationPrimerPort
 import com.yehsung.aingcheck.android.screens.settings.PushPrefsSaves
 import com.yehsung.aingcheck.android.screens.settings.PushSettingsPort
 import com.yehsung.aingcheck.android.screens.settings.SessionPushSettingsPort
+import com.yehsung.aingcheck.android.widget.rankingsMood
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
 import com.yehsung.aingcheck.core.stores.games.GamesDestination
+import com.yehsung.aingcheck.core.stores.now.NowMyCard
 import com.yehsung.aingcheck.core.stores.now.NowWorkOrigin
 import com.yehsung.aingcheck.feature.phone.app.PhoneAppModel
 import com.yehsung.aingcheck.feature.phone.push.PhonePushAuthorization
@@ -89,10 +91,49 @@ class AppScreens(
         if (card.isWorking) (if (card.isStale) CharacterMood.Lost else CharacterMood.Working) else CharacterMood.Off
     }
 
-    /** 대국 화면의 내 얼굴(W4-a §4). 로그인 전이면 모름. */
-    fun boardGameMe(): BoardGameMe =
-        if (!phone.session.isSignedIn) BoardGameMe.unknown
-        else BoardGameMe(name = phone.me.displayName, characterID = phone.me.equippedServerID, mood = myMood() ?: CharacterMood.Off)
+    /** 대국 화면의 내 얼굴(W4-a §4 · 대국 · 결과 · 판 머리). 로그인 전이면 모름. 출처 규칙은 [BoardGameMeRule](iOS `GamesMeIdentity.current`). */
+    fun boardGameMe(): BoardGameMe {
+        if (!phone.session.isSignedIn) return BoardGameMe.unknown
+        val snapshot = phone.widgets.current
+        return BoardGameMeRule.of(
+            meName = phone.me.displayName,
+            teamStatusName = phone.now.myStatus?.name,
+            meEquippedLoaded = phone.me.equippedLoaded,
+            meEquippedCharacterID = phone.me.equippedServerID,
+            snapshotCharacterID = snapshot?.characterID,
+            nowCard = phone.now.myCard(phone.environment.clock.now()),
+            snapshotMood = snapshot?.rankingsMood(),
+        )
+    }
+}
+
+/**
+ * 대국 화면 '나' 얼굴의 출처(원본: Sources/CheckMobileKit/Games/GamesComponents.swift:86-107 `GamesMeIdentity.current` @ 3bd04bd).
+ *  · 캐릭터: 나 탭이 착용을 읽었으면 그 값, 아니면 위젯 스냅숏의 지난 값.
+ *  · 표정: 지금 탭 내 카드(근무 중 → 신호가 끊겼으면 연결 끊김) → 카드가 없으면 스냅숏 상태 → 둘 다 모르면 **표정 없음(plain)** —
+ *    모르는 것을 '근무 안 함'으로 말하지 않는다(7차 전 Android 는 카드가 없으면 늘 근무 안 함이었다).
+ *  · 이름: 나 탭 이름 → 없으면 팀 상태의 내 이름(앞뒤 공백을 걷고 비면 모름).
+ * '연결 끊김'은 카드가 끊겼다고 할 때만 나온다 — 그 판정(팀 상태를 받은 시각에 last_seen_at 나이 > 90초)은 iOS 와 같은 NowStore.myCard 다.
+ */
+object BoardGameMeRule {
+    fun of(
+        meName: String?,
+        teamStatusName: String?,
+        meEquippedLoaded: Boolean,
+        meEquippedCharacterID: String?,
+        snapshotCharacterID: String?,
+        nowCard: NowMyCard?,
+        snapshotMood: CharacterMood?,
+    ): BoardGameMe {
+        val characterID = if (meEquippedLoaded) meEquippedCharacterID else snapshotCharacterID
+        val mood = when {
+            nowCard != null -> if (nowCard.isWorking) (if (nowCard.isStale) CharacterMood.Lost else CharacterMood.Working) else CharacterMood.Off
+            snapshotMood != null -> snapshotMood
+            else -> CharacterMood.Plain
+        }
+        val name = (meName ?: teamStatusName)?.trim()?.takeIf { it.isNotEmpty() }
+        return BoardGameMe(name = name, characterID = characterID, mood = mood)
+    }
 }
 
 /** 지금 탭 근무 버튼 문(W2-f PhoneWorkController 를 그대로 옮긴다 — 화면은 판정을 다시 적지 않는다). */

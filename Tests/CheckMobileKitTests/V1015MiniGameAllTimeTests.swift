@@ -357,7 +357,8 @@ import AppKit
     @Test("일일 미션 rummy 아이콘: 별이 아니고 · 겹치지 말아야 할 일곱과 다르고 · 실재하는 이름이다")
     func rummyMissionIcon() {
         let rummy = MeText.dailyMissionIcon(game: "rummy")
-        #expect(rummy == "square.stack.3d.up.fill")
+        // 맥 `DailyMissionCopy.icon(game: "rummy")` 과 **같은 기호**다(게임 이름이 아잉 큐브 — 두 기기가 한 그림).
+        #expect(rummy == "cube.fill")
         #expect(rummy != MeText.missionFallbackIcon, "기본 별로 떨어졌다")
         // 겹치지 말아야 할 일곱: `MiniGameKind(rawValue:)` 가 먼저 걸러 코어 아이콘으로 가는 미니게임 넷 + 1:1 셋.
         let others = MiniGameKind.allCases.map(\.icon) + ["gomoku", "chess", "tetris_duel"].map { MeText.dailyMissionIcon(game: $0) }

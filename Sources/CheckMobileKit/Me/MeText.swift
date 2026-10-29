@@ -501,16 +501,18 @@ package enum MeText {
             // '아잉 큐브'(2~4인 숫자 타일 러미). **내부 식별자는 `rummy` 다** — 화면 이름만 아잉 큐브이고 `aing_cube`
             // 라는 글자는 코드·서버 어디에도 없다(`aing-cube-decisions`).
             //
-            // 기호가 `square.stack.3d.up.fill` 인 까닭 둘.
-            // ① **실루엣이 앞 일곱과 안 겹친다.** 이 표의 셋(오목 3×3 격자 · 체스 체커보드 · 1:1 테트리스 반 네모)과,
+            // 기호가 `cube.fill` 인 까닭 셋.
+            // ① **맥과 같은 기호여야 한다.** 맥 `DailyMissionCopy.icon(game:)` 이 이 값이고, 게임 이름이 아잉 **큐브**라
+            //    미니게임 머리글 입구 · 초대 배너 · 미션 줄이 한 기호로 이어진다. 같은 줄이 두 기기에서 다른 그림이면
+            //    사용자는 그 둘을 다른 미션으로 읽는다(기호를 고르는 기준은 모양 취향이 아니라 **한 벌인가**다).
+            // ② **실루엣이 앞 일곱과 안 겹친다.** 이 표의 셋(오목 3×3 격자 · 체스 체커보드 · 1:1 테트리스 반 네모)과,
             //    그 앞에서 `MiniGameKind(rawValue:)` 가 먼저 걸러 코어 아이콘으로 가는 미니게임 넷(메트로놈 · 새 ·
-            //    2×2 격자 · 걷는 사람) — 비스듬히 쌓인 타일 더미는 그 일곱 중 어느 것과도 다르다. 타일을 쌓아 내는
-            //    게임이라 뜻도 맞는다.
-            // ② **실재를 확인했다.** SF Symbols 1(2019 — macOS 10.15 · iOS 13.0)에 들어온 이름이라 이 앱의 바닥
+            //    2×2 격자 · 걷는 사람) — 채워진 정육면체는 그 일곱 중 어느 것과도 다르다.
+            // ③ **실재를 확인했다.** SF Symbols 1(2019 — macOS 10.15 · iOS 13.0)에 들어온 이름이라 이 앱의 바닥
             //    (macOS 14 · iOS 17)에서 산다. 근거는 CoreGlyphs `name_availability.plist` 의 도입 연도이고,
             //    시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다 — **없는 이름은 런타임에 경고 없이 빈 칸**
             //    이 된다(그 함정은 `MiniGameKind.icon` 주석에 있다).
-            ("rummy", "square.stack.3d.up.fill"),
+            ("rummy", "cube.fill"),
         ]
         return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
     }

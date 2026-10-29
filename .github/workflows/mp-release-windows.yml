@@ -1,0 +1,240 @@
+# 아잉체크 Windows 포장 CI(W6-b1, package.md §5) — 키 없이(.invalid) MSIX 를 만들고 WACK·설치·selfcheck 로 "이번 빌드"임을 증명한다.
+# 운영 판은 맥이 desktopApp jar 하나만 바꿔 끼워 다시 싼다(W6-b2, 길 (나)). 그래서 이 워크플로에는 비밀값이 하나도 없다
+# (release_win_selftest 가 비밀 참조 0 · permissions contents: read 하나를 잰다). 서명 키는 러너에서 그때 만들고 지운다.
+#  - selftest : 규칙 모듈 release_win.py 자가 시험(맥 JVM 몫과 같은 명령).
+#  - pack     : x64(windows-latest)·arm64(windows-11-arm)에서 createDistributable(운영 속성 없음) → release-windows.ps1 pack
+#               → install-check(dev 서명) → 러너 음성 대조(틀린 gitSha 영수증이면 ok=false). x64 는 WACK 필수, arm64 는 available=false 기록.
+#  - bundle   : 두 아키텍처의 서명 안 한 .msix 를 makeappx bundle → x64 에 bundle 설치 → 같은 install-check.
+# 산출물(W6-b2 가 gh run download 로 받는다): windows-<arch>-msix(서명 안 한 msix · 영수증 · pack/WACK/설치 JSON) · windows-<arch>-layout(레이아웃 zip)
+#   · windows-bundle(msixbundle). dev 서명본·인증서는 올리지 않는다.
+# 트리거: xplat/** 푸시 중 포장 경로를 건드린 것 + 수동 실행(수동 실행은 이 파일이 기본 브랜치에 있어야 버튼이 생긴다).
+name: mp-release-windows
+
+on:
+  push:
+    branches: ["xplat/**"]
+    paths:
+      - "multiplatform/desktopApp/packaging/**"
+      - "multiplatform/scripts/release-windows.ps1"
+      - ".github/workflows/mp-release-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mp-release-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: release_win 자가 시험
+        run: python3 -I multiplatform/desktopApp/packaging/release_win_selftest.py
+
+  pack:
+    name: pack (${{ matrix.arch }})
+    needs: selftest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+            jdk: temurin
+            jdkArch: x64
+            wack: require
+          - runner: windows-11-arm
+            arch: arm64
+            jdk: microsoft
+            jdkArch: aarch64
+            wack: auto
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: (arm64 준비) OOBE 개인정보 화면 걷기 · OneDrive 동기화 앱 끄기(mp-ci.yml windows-arm64 와 같은 걷기, G §8-12)
+        if: matrix.arch == 'arm64'
+        run: |
+          $re = 'CloudExperienceHost|WWAHost|UserOOBEBroker|PrivacyExperience'
+          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' | Out-Null
+          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name DisablePrivacyExperience -Value 1 -Type DWord
+          New-Item -Force -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' | Out-Null
+          Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' -Name DisableFileSyncNGSC -Value 1 -Type DWord
+          Get-Process | Where-Object { $_.ProcessName -match $re } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process | Where-Object { $_.ProcessName -match '^OneDrive' } | Stop-Process -Force -ErrorAction SilentlyContinue
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: ${{ matrix.jdk }}
+          java-version: '21'
+          architecture: ${{ matrix.jdkArch }}
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: (x64) Android SDK 플랫폼(설정 단계가 compileSdk 37 을 찾는다 — mp-ci.yml windows-x64 와 같다)
+        if: matrix.arch == 'x64'
+        shell: bash
+        run: |
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --install "platforms;android-37.0" > /dev/null
+          ls "$ANDROID_HOME/platforms"
+      - name: (arm64) Android SDK 도구(이 이미지엔 SDK 가 없다 — cmdline-tools 22.0 · 15859902 sha1 고정)
+        if: matrix.arch == 'arm64'
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'android-sdk'
+          $zip = Join-Path $env:RUNNER_TEMP 'cmdline-tools.zip'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://dl.google.com/android/repository/commandlinetools-win-15859902_latest.zip' -OutFile $zip
+          $h = (Get-FileHash -Algorithm SHA1 $zip).Hash.ToLowerInvariant()
+          if ($h -ne 'b9862337a13e2809a5159dc3a08d058091bd59f6') { throw "cmdline-tools sha1 불일치: $h" }
+          $stage = Join-Path $env:RUNNER_TEMP 'cmdline-stage'
+          Expand-Archive -Path $zip -DestinationPath $stage -Force
+          New-Item -ItemType Directory -Force -Path (Join-Path $root 'cmdline-tools') | Out-Null
+          Move-Item (Join-Path $stage 'cmdline-tools') (Join-Path $root 'cmdline-tools\latest')
+          "ANDROID_HOME=$root" >> $env:GITHUB_ENV
+          "ANDROID_SDK_ROOT=$root" >> $env:GITHUB_ENV
+      - name: (arm64) Android SDK 플랫폼 설치(깔린 자리에 package.xml 이 없으면 빨강)
+        if: matrix.arch == 'arm64'
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/sdkmanager.log"
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --sdk_root="$ANDROID_HOME" --install "platforms;android-37.0" > "$log" 2>&1 \
+            || { tail -40 "$log"; exit 1; }
+          if [ ! -f "$ANDROID_HOME/platforms/android-37.0/package.xml" ]; then
+            tail -40 "$log"; echo "::error::platforms;android-37.0 이 $ANDROID_HOME 에 깔리지 않았다"; exit 1
+          fi
+      - name: 파이썬 확인(release_win.py 를 부른다)
+        run: |
+          foreach ($c in @('python', 'python3')) {
+            $cmd = Get-Command $c -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cmd) { & $cmd.Source -I -c 'import sys; print(sys.version)'; if ($LASTEXITCODE -eq 0) { exit 0 } }
+          }
+          Write-Output '::error::python 3 이 없다 — actions/setup-python 을 SHA 로 고정해 더할 것'
+          exit 1
+      - name: 경로 · 빌드 시각(호출마다 같은 값)
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'rw'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          "RW=$root" >> $env:GITHUB_ENV
+          "BUILD_TIME=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))" >> $env:GITHUB_ENV
+      - name: createDistributable(운영 속성 없음 — ProdConfig 는 .invalid)
+        shell: bash
+        working-directory: multiplatform
+        run: ./gradlew --no-daemon :desktopApp:createDistributable "-Paingcheck.buildTime=$BUILD_TIME" "-Paingcheck.gitSha=$GITHUB_SHA"
+      - name: pack(레이아웃 · makeappx · dev 서명 · WACK · 영수증)
+        run: |
+          $app = (Resolve-Path 'multiplatform/desktopApp/build/compose/binaries/main/app/AingCheck').Path
+          pwsh -NoProfile -File multiplatform/scripts/release-windows.ps1 pack -AppImage $app -Arch '${{ matrix.arch }}' -Identity dev `
+            -Out (Join-Path $env:RW 'pack') -Wack '${{ matrix.wack }}' -GitSha $env:GITHUB_SHA -BuildTime $env:BUILD_TIME
+          exit $LASTEXITCODE
+      - name: install-check(dev 서명 msix — 설치 · 별칭 selfcheck · 대조 · 제거)
+        run: |
+          $pkg = Get-ChildItem (Join-Path $env:RW 'pack') -Filter '*.dev-signed.msix' | Select-Object -First 1
+          $rcpt = Get-ChildItem (Join-Path $env:RW 'pack') -Filter '*.receipt.json' | Select-Object -First 1
+          pwsh -NoProfile -File multiplatform/scripts/release-windows.ps1 install-check -Package $pkg.FullName -Expect $rcpt.FullName -Out (Join-Path $env:RW 'install')
+          exit $LASTEXITCODE
+      - name: 러너 음성 대조 — 틀린 gitSha 영수증이면 install-check 가 ok=false 여야 한다
+        run: |
+          $pkg = Get-ChildItem (Join-Path $env:RW 'pack') -Filter '*.dev-signed.msix' | Select-Object -First 1
+          $rcpt = Get-ChildItem (Join-Path $env:RW 'pack') -Filter '*.receipt.json' | Select-Object -First 1
+          $neg = Join-Path $env:RW 'negative'
+          New-Item -ItemType Directory -Force -Path $neg | Out-Null
+          $bad = Join-Path $neg 'tampered-expect.json'
+          python -I multiplatform/desktopApp/packaging/release_win.py tamper-receipt --in $rcpt.FullName --out $bad
+          if ($LASTEXITCODE -ne 0) { throw 'tamper-receipt 실패' }
+          pwsh -NoProfile -File multiplatform/scripts/release-windows.ps1 install-check -Package $pkg.FullName -Expect $bad -Out $neg
+          $code = $LASTEXITCODE
+          $j = Get-Content -Raw (Join-Path $neg 'install-check.json') | ConvertFrom-Json
+          "음성 대조: exit=$code ok=$($j.ok) failed=$($j.failed -join ',')"
+          if ($code -eq 0 -or $j.ok -or ($j.failed -notcontains 'gitSha')) { throw '틀린 gitSha 영수증이 통과했다' }
+      - name: 레이아웃 zip(W6-b2 가 맥에서 다시 싸는 기준)
+        if: always()
+        run: |
+          $layout = Join-Path $env:RW 'pack\layout'
+          if (Test-Path $layout) {
+            $up = Join-Path $env:RW 'layout-zip'
+            New-Item -ItemType Directory -Force -Path $up | Out-Null
+            $v = (Get-Content -Raw (Join-Path $env:RW 'pack\pack.json') | ConvertFrom-Json).windowsVersion
+            Compress-Archive -Path (Join-Path $layout '*') -DestinationPath (Join-Path $up "AingCheck_${v}_${{ matrix.arch }}.layout.zip")
+          }
+      - name: 요약
+        if: always()
+        run: |
+          $p = Join-Path $env:RW 'pack\pack.json'; $i = Join-Path $env:RW 'install\install-check.json'
+          $pj = if (Test-Path $p) { Get-Content -Raw $p | ConvertFrom-Json } else { $null }
+          $ij = if (Test-Path $i) { Get-Content -Raw $i | ConvertFrom-Json } else { $null }
+          @(
+            "### pack (${{ matrix.arch }})",
+            "- pack ok: $($pj.ok) · msixVersion $($pj.msixVersion) · error: $($pj.error)",
+            "- WACK: available=$($pj.wack.available) overall=$($pj.wack.overall) failed=$($pj.wack.failed -join ',') optionalFailed=$($pj.wack.optionalFailed -join ',')",
+            "- install-check ok: $($ij.ok) · failed: $($ij.failed -join ',')"
+          ) -join "`n" >> $env:GITHUB_STEP_SUMMARY
+      - name: 산출물 — 서명 안 한 msix · 영수증 · JSON · 로그
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-${{ matrix.arch }}-msix
+          path: |
+            ${{ runner.temp }}/rw/pack/*.msix
+            ${{ runner.temp }}/rw/pack/*.json
+            ${{ runner.temp }}/rw/pack/*.log
+            ${{ runner.temp }}/rw/pack/*.xml
+            ${{ runner.temp }}/rw/install/*.json
+            ${{ runner.temp }}/rw/negative/*.json
+            !${{ runner.temp }}/rw/**/*.dev-signed.*
+          if-no-files-found: error
+          retention-days: 14
+      - name: 산출물 — 레이아웃 zip
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-${{ matrix.arch }}-layout
+          path: ${{ runner.temp }}/rw/layout-zip/*.zip
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 14
+
+  bundle:
+    needs: pack
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: windows-*-msix
+          path: ${{ runner.temp }}/rw/in
+      - name: bundle(makeappx bundle · dev 서명)
+        run: |
+          pwsh -NoProfile -File multiplatform/scripts/release-windows.ps1 bundle -In (Join-Path $env:RUNNER_TEMP 'rw\in') -Out (Join-Path $env:RUNNER_TEMP 'rw\bundle')
+          exit $LASTEXITCODE
+      - name: install-check(x64 에 bundle 설치 — x64 영수증과 대조)
+        run: |
+          $pkg = Get-ChildItem (Join-Path $env:RUNNER_TEMP 'rw\bundle') -Filter '*.dev-signed.msixbundle' | Select-Object -First 1
+          $rcpt = Get-ChildItem (Join-Path $env:RUNNER_TEMP 'rw\in') -Recurse -Filter '*_x64.receipt.json' | Select-Object -First 1
+          pwsh -NoProfile -File multiplatform/scripts/release-windows.ps1 install-check -Package $pkg.FullName -Expect $rcpt.FullName -Out (Join-Path $env:RUNNER_TEMP 'rw\bundle-install')
+          exit $LASTEXITCODE
+      - name: 산출물 — msixbundle · JSON
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-bundle
+          path: |
+            ${{ runner.temp }}/rw/bundle/*.msixbundle
+            ${{ runner.temp }}/rw/bundle/*.json
+            ${{ runner.temp }}/rw/bundle/*.log
+            ${{ runner.temp }}/rw/bundle-install/*.json
+            !${{ runner.temp }}/rw/**/*.dev-signed.*
+          if-no-files-found: error
+          retention-days: 14

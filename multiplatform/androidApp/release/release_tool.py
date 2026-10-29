@@ -382,7 +382,6 @@ def cmd_preflight(a):
         "duelsEnabled": duels == 1, "stamp": stamp, "uploadCertSha256": a.upload_cert_sha256, "targetSdk": TARGET_SDK, "minSdk": MIN_SDK,
         "supabaseHost": (values["supabaseUrl"][len("https://"):] if a.mode == "prod" else "aingcheck.invalid"),
         "firebase": a.mode == "prod",
-        "allowNoIcon": bool(a.allow_no_icon),
         "duelsFromBuild": dfb,
         "inputs": {"keyPlace": a.key_place, "passwordSource": a.password_source},
         "warnings": warnings,
@@ -572,7 +571,8 @@ def cmd_verify(a):
     check("badging.noAdId", not any(p.endswith(".AD_ID") for p in perms), "AD_ID 권한 0(E§9.5)")
     check("badging.launcher", b["launcher"] == LAUNCHER, f"launchable={b['launcher']}")
     icon_ok = bool(b["icon"])
-    check("badging.icon", icon_ok or plan.get("allowNoIcon"), f"icon='{b['icon'] or ''}'" + ("" if icon_ok else (" (--allow-no-icon 로 넘김)" if plan.get("allowNoIcon") else " — 런처 아이콘이 없다")))
+    # 넘기는 길(--allow-no-icon · 계획의 allowNoIcon)은 없앴다 — 8b 에서 적응형 런처 아이콘(mipmap-anydpi/ic_launcher)이 들어왔다.
+    check("badging.icon", icon_ok, f"icon='{b['icon'] or ''}'" + ("" if icon_ok else " — 런처 아이콘이 없다"))
 
     # ② dex 정적 값(R8 뒤 산출물 — AAB 가 있으면 AAB, 아니면 APK). 빌드 도장·판돈 깃발은 실제로 깔리는 보편 APK 의 dex 에서도 잰다.
     target = a.aab or a.apk
@@ -787,7 +787,6 @@ def main(argv):
     s.add_argument("--git-sha", required=True)
     s.add_argument("--git-dirty", choices=["0", "1"], required=True)
     s.add_argument("--allow-dirty", action="store_true")
-    s.add_argument("--allow-no-icon", action="store_true")
     s.add_argument("--upload-cert-sha256", default="")
     s.add_argument("--new-upload-key", action="store_true")
     s.add_argument("--key-place", choices=list(KEY_PLACES), default="throwaway")

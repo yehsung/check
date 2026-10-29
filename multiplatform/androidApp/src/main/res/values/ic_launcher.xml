@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 런처 아이콘 배경(적응형 아이콘 배경 층). 원본 iOS 아이콘(ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png)
+     가장자리 중간점 색 — 전경 webp 의 녹인 가장자리가 이 색으로 이어진다. -->
+<resources>
+    <color name="ic_launcher_background">#121024</color>
+</resources>

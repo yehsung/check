@@ -245,7 +245,7 @@ self_test() {
 printf 'ARGS %s AVD_HOME=%s\n' "$*" "${ANDROID_AVD_HOME:-}" >> "$STUBDIR/emu-args"
 printf '%s\n' "${TMPDIR:-}" >> "$STUBDIR/emu-tmpdir"
 if [ -n "${TMPDIR:-}" ] && [ -e "${TMPDIR%/}/netsim.ini" ]; then echo stale >> "$STUBDIR/netsim-seen"; else echo clean >> "$STUBDIR/netsim-seen"; fi
-/bin/sleep 60 </dev/null >/dev/null 2>&1 &
+"$(dirname "$0")/netsimd" 60 </dev/null >/dev/null 2>&1 &
 echo $! > "$STUBDIR/child.pid"
 if [ "$(cat "$STUBDIR/netsim-mode" 2>/dev/null)" = foreign ]; then
   echo "INFO         | Successfully initialized netsim WiFi"
@@ -254,8 +254,12 @@ elif [ -n "${TMPDIR:-}" ]; then
 fi
 echo $$ >> "$STUBDIR/launches"
 echo $$ > "$STUBDIR/cur.pid"
-exec /bin/sleep 60
+exec "$(dirname "$0")/qemu-system-st" 60
 STUB
+  # 가짜 에뮬레이터·netsimd 의 프로세스 이름이 진짜와 같은 계열이 되게 /bin/sleep 을 그 이름의 심볼릭 링크로 부른다
+  # (복사본은 맥이 서명 때문에 죽인다 — 실측 rc=137). emu.sh 는 pid 파일의 PID 를 이 계열일 때만 자기 것으로 본다.
+  # 이름은 이름 잘림(맥 16자 · Linux 15자) 안에 들게 짧게 — pgrep -x 로 정확히 잰다.
+  ln -s /bin/sleep "$T/sdk/emulator/qemu-system-st"; ln -s /bin/sleep "$T/sdk/emulator/netsimd"
   # 가짜 adb: 부른 것을 적는다. 부팅은 곧바로 끝났다고 답하고, emu kill 은 가짜 에뮬레이터(와 자식)를 끈다.
   # 손님 탐침(sealcheck 의 ': aingcheck-probe-*' 표식)은 $STUBDIR/net 의 장면대로 답한다:
   #   sealed(기본) · leak-tcp · leak-dns · dns-timeout · validated · partial · nonai · wifidown · nowlan · nobase
@@ -268,7 +272,8 @@ nai() { # 인터페이스 · 전송 · 능력 — 실기기 dumpsys connectivity
 }
 case "$*" in
   devices*) echo "List of devices attached" ;;
-  *"getprop sys.boot_completed"*) [ -f "$STUBDIR/cur.pid" ] && echo 1 ;;   # 가짜 에뮬레이터가 돈 뒤에야 '부팅 끝' 
+  *"getprop sys.boot_completed"*)   # 가짜 에뮬레이터가 exec 를 마쳐 qemu 이름이 된 뒤에야 '부팅 끝'(그 전엔 bash — 자기 것으로 안 센다)
+    [ -f "$STUBDIR/cur.pid" ] && case " $(pgrep -x qemu-system-st 2>/dev/null | tr '\n' ' ') " in *" $(cat "$STUBDIR/cur.pid") "*) echo 1 ;; esac ;;
   *"emu kill"*) for f in child.pid cur.pid; do [ -f "$STUBDIR/$f" ] && kill "$(cat "$STUBDIR/$f")" 2>/dev/null; rm -f "$STUBDIR/$f"; done ;;
   *"shell echo pong"*) echo pong ;;
   *aingcheck-probe-wlan-link*) [ "$net" = nowlan ] || echo wlan0 ;;
@@ -495,17 +500,31 @@ STUB
   check "sealcheck 남의 netsimd 에 붙음" "1 LEAK-OR-UNMEASURED(netsim)" "$(sc sealed)"
   stopit; rm -f "$T/stub/netsim-mode"
 
+  # S: 낡은 pid 파일 — 적힌 PID 가 살아 있어도 에뮬레이터 계열(emulator·qemu-system·netsimd)이 아니면 남이 다시 쓴 PID 다(8차 fold 사건).
+  #    procs·stop 이 그 PID 를 자기 것으로 세지 않고, stop 은 TERM·KILL 을 보내지 않으며, pid 파일은 낡은 것으로 지운다.
+  local decoy
+  /bin/sleep 60 </dev/null >/dev/null 2>&1 & decoy=$!
+  printf '%s\n' "$decoy" > "$T/state/emu-$P.pid"
+  sub "$SELF" procs --port "$P"; check "낡은 pid(남의 PID): procs 가 0 으로 센다" 0 "$?"
+  printf '%s\n' "$decoy" > "$T/state/emu-$P.pid"
+  sub "$SELF" stop --port "$P" --timeout 2; rc=$?
+  check "낡은 pid(남의 PID): stop 종료 코드 0 · 남의 프로세스 산다 · pid 파일 지움" "0 alive gone" \
+    "$rc $(kill -0 "$decoy" 2>/dev/null && echo alive || echo dead) $([ -f "$T/state/emu-$P.pid" ] && echo kept || echo gone)"
+  kill -KILL "$decoy" 2>/dev/null; wait "$decoy" 2>/dev/null
+
   # 끝: 가짜 에뮬레이터가 살아 있지 않아야 한다 — 마지막으로 띄운 것(cur.pid 는 emu kill 이 지운다)과 emu.sh procs 로 센다.
+  # 이름 확인은 pgrep -x(봉인 안에서 ps 는 막혀 이름이 비었다 — 예전 'sleep' 비교는 봉인 안에서 언제나 '없음'으로 읽혔다).
+  named() { case " $(pgrep -x "$2" 2>/dev/null | tr '\n' ' ') " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
   local alive=0 p
   if [ -f "$T/stub/cur.pid" ]; then
     p="$(cat "$T/stub/cur.pid")"
-    if kill -0 "$p" 2>/dev/null && [ "$(ps -o comm= -p "$p" 2>/dev/null | sed 's#.*/##')" = sleep ]; then alive=1; kill -KILL "$p" 2>/dev/null; fi
+    if kill -0 "$p" 2>/dev/null && named "$p" qemu-system-st; then alive=1; kill -KILL "$p" 2>/dev/null; fi
   fi
   check "남은 가짜 에뮬레이터 0(cur.pid)" 0 "$alive"
   alive=0
   if [ -f "$T/stub/child.pid" ]; then
     p="$(cat "$T/stub/child.pid")"
-    if kill -0 "$p" 2>/dev/null && [ "$(ps -o comm= -p "$p" 2>/dev/null | sed 's#.*/##')" = sleep ]; then alive=1; kill -KILL "$p" 2>/dev/null; fi
+    if kill -0 "$p" 2>/dev/null && named "$p" netsimd; then alive=1; kill -KILL "$p" 2>/dev/null; fi
   fi
   check "남은 가짜 netsimd 0(child.pid)" 0 "$alive"
   sub "$SELF" procs --port "$P"; check "emu.sh procs 0" 0 "$?"
@@ -591,11 +610,40 @@ LOGFILE="$STATE/emu-$PORT.log"
 NETSIM_DIR="$STATE/netsim-$PORT"
 mkdir -p "$STATE"
 
+# 에뮬레이터 계열 프로세스인가: 프로세스 이름이 emulator* · qemu-system* · netsimd*. 실측(8b, 맥 API 36): pid 파일 첫 줄 =
+# qemu-system-aarch64-headless(emulator 가 exec), 둘째 줄 = netsimd. 이름은 pgrep -x 로 잰다 — ps 는 setuid 라 봉인(sandbox-exec,
+# gate-* 가 거는 것) 안에서 실행이 막혀(Operation not permitted) 이름이 비고, 그러면 우리 에뮬레이터도 남의 것으로 읽힌다(8b 실측).
+# pgrep 이름은 맥 16자 · Linux 15자에서 잘린다('qemu-system-aar') — 앞머리 정규식이라 상관없다.
+EMU_COMM_RE='emulator.*|qemu-system.*|netsimd.*'
+is_emu_proc() {
+  case " $(pgrep -x "$EMU_COMM_RE" 2>/dev/null | tr '\n' ' ') " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
+# 낡은 pid 파일 거두기. kill -0 만 믿으면, 에뮬레이터가 죽은 뒤 그 PID 를 다시 받은 남의 프로세스(와 그 나무)에 stop 이 TERM·KILL 을
+# 보낸다(8차 fold 갈래 사건). 적힌 PID 중 살아 있는 것이 모두 에뮬레이터 계열이 아니면 그 파일은 낡았다 — 지우고 넘어간다.
+# (우리 것이 하나라도 살아 있으면 파일은 두고, tree_pids 가 계열 아닌 줄만 건너뛴다.)
+if [ -f "$PIDFILE" ]; then
+  own=0; foreign=""
+  for p in $(cat "$PIDFILE"); do
+    kill -0 "$p" 2>/dev/null || continue
+    if is_emu_proc "$p"; then own=$((own + 1)); else foreign="$foreign $p"; fi
+  done
+  if [ "$own" -eq 0 ] && [ -n "$foreign" ]; then
+    log "낡은 pid 파일 — 살아 있는 PID[${foreign# }]가 에뮬레이터 계열이 아니다(남이 다시 쓴 PID). 건드리지 않고 파일을 지운다: $PIDFILE"
+    rm -f "$PIDFILE"
+  fi
+  unset own foreign p
+fi
+
 # 이 포트로 띄운 PID 와 그 자손(재귀), 그리고 적어 둔 자식 중 살아 있는 것을 낸다(중복 있음).
+# pid 파일에 적힌 PID 는 에뮬레이터 계열일 때만 뿌리로 삼는다(위 '낡은 pid 파일' — 다시 쓰인 PID 의 나무를 자기 것으로 세지 않는다).
 tree_pids() {
   [ -f "$PIDFILE" ] || return 0
   local queue p c
-  queue=( $(cat "$PIDFILE") )
+  queue=()
+  for p in $(cat "$PIDFILE"); do
+    if kill -0 "$p" 2>/dev/null && is_emu_proc "$p"; then queue+=( "$p" ); fi
+  done
   while [ ${#queue[@]} -gt 0 ]; do
     p="${queue[0]}"; queue=( "${queue[@]:1}" )
     [ -n "$p" ] || continue

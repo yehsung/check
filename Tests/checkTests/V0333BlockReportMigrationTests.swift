@@ -323,7 +323,7 @@ private let laterRedefinitionsAllowed: [String: [String]] = [
     // 서명이 바뀐다(옛 2인자를 남기면 PGRST203). 본문은 운영 정본(= 이 파일 §4)을 그대로 옮기고 맨 앞 멱등 조회 · insert 의
     // on conflict · ok 응답 두 칸만 더했다(그 파일의 §4 가 운영 정본 줄 전부를 같은 순서로 되묻는다).
     // 측정: 덮어쓴 **이유**(on conflict 추론 대상)와 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 사라지지 않았는지.
-    "20261102200000_message_idempotency.sql:send_message": [
+    "20261101131000_message_idempotency.sql:send_message": [
         "blocked_between", "public.same_visibility(",
         "on conflict (from_user, client_message_id) where client_message_id is not null do nothing",
     ],

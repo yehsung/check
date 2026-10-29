@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CheckCore
 
-// 서버 안정화(2026-10-30 · 레인 l2s) — send_message 멱등 키 마이그레이션(20261102200000)의 **소스 계약**.
+// 서버 안정화(2026-10-30 · 레인 l2s) — send_message 멱등 키 마이그레이션(20261101131000)의 **소스 계약**.
 //
 // 흐름(같은 키 두 번 = 행 1 · duplicate · 동시 경합 = 행 1 · 이름 인자 2개 = 옛 모양 ok)은 그 파일의 §5 프로브와
 // 재생 하네스가 실제 DB 로 잰다. 여기서는 그 증거의 **전제**가 뒷날 조용히 사라지지 않게 글자로 못 박는다:
@@ -16,7 +16,7 @@ import Testing
 // 하우스 규칙: `--` 줄 주석을 걷어내고 본다(안 걷어내면 설명을 지워야만 초록이 되는 테스트가 된다).
 // `supabase/` 는 .gitignore 라 워크트리에 없을 수 있다 — 조상을 훑어 올라가며 찾고, `CHECK_MIGRATIONS_DIR` 로 덮어쓸 수 있다.
 
-private let idemMigrationName = "20261102200000_message_idempotency.sql"
+private let idemMigrationName = "20261101131000_message_idempotency.sql"
 
 private struct IdemContractError: Error, CustomStringConvertible {
     let message: String
@@ -105,7 +105,7 @@ private func idemSentKeys(_ body: SendMessageRequest) throws -> Set<String> {
     return Set(object.keys)
 }
 
-@Suite("send_message 멱등 키 마이그레이션(20261102200000) 소스 계약")
+@Suite("send_message 멱등 키 마이그레이션(20261101131000) 소스 계약")
 struct MessageIdempotencyMigrationTests {
 
     @Test("① 최종 정의는 이 파일의 3인자 — 앱이 빼는 키는 기본값 null")

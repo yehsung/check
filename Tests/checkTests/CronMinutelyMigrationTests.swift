@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 // 서버 안정화(2026-10-30 · l4-cron) — 매분 cron 7개를 job 하나(minutely)로 묶는 마이그레이션
-// (`20261102210000_cron_minutely.sql`)의 **소스 계약**.
+// (`20261101132000_cron_minutely.sql`)의 **소스 계약**.
 //
 // 행동(단계 7개가 다 돈다 · 한 단계 실패는 그 단계만 · 앞 단계는 커밋돼 남는다 · 예산 초과면 뒤 단계 SKIP · lock_timeout 단계별 실효 ·
 // 클라 역할 call/select 거절 · rummy-settle 이전 · 운영 job 이 바뀌었으면 배포 중단)은 로컬 하네스(replay-harness-v2, CRON_SHIM 1·0)의
@@ -16,7 +16,7 @@ private struct CronMinutelyError: Error, CustomStringConvertible {
     var description: String { message }
 }
 
-private let cmMigrationName = "20261102210000_cron_minutely.sql"
+private let cmMigrationName = "20261101132000_cron_minutely.sql"
 
 /// 묶인 매분 job 이름 → 운영 command(2026-10-30 운영 cron.job 읽기와 글자까지 같다).
 private let cmMovedJobs: [(name: String, command: String, position: Int)] = [

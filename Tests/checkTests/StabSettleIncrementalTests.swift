@@ -2,14 +2,14 @@ import Foundation
 import Testing
 
 // 서버 안정화 l5(2026-10-30) — 주간 근무 보상 · 도전 미션 매분 정산을 "움직인 사람만 + 15분 전수" 로 바꾼 계약.
-// 마이그레이션 20261102220000_settle_incremental.sql. 등가(옛 · 새 지급 행 집합)는 재생 하네스 타임라인이 증명했고,
+// 마이그레이션 20261101133000_settle_incremental.sql. 등가(옛 · 새 지급 행 집합)는 재생 하네스 타임라인이 증명했고,
 // 이 파일은 **나중에 깨지기 쉬운 것**만 소스로 지킨다:
 //   · 두 *_settle_all 의 마지막 정의가 흔적 후보 · 15분 전수 · 자물쇠 · 사람별 예외 격리를 그대로 갖는다.
 //   · 업적 판정(achievements__eval 의 마지막 정의)과 주간 측정이 읽는 표가 전부 흔적 후보에 있다 — 새 계열이 새 표를 읽으면
 //     후보에 흔적을 더하라는 신호다(안 더하면 그 계열은 최악 15분 늦고, 15분 안에 사라지는 상태는 놓친다).
 // 주석은 걷어내고 잰다(설명을 지워야만 초록이 되는 시험이 되지 않게 — 하우스 규칙).
 
-private let siMigration = "20261102220000_settle_incremental.sql"
+private let siMigration = "20261101133000_settle_incremental.sql"
 
 private func siMigrationsDirectory() throws -> URL {
     if let override = ProcessInfo.processInfo.environment["CHECK_MIGRATIONS_DIR"], !override.isEmpty {

@@ -105,6 +105,18 @@
       "caller": "postgres",
       "end": "rollback"
     },
+    "send_message__duplicate": {
+      "call": "send_message(B, 같은 본문, 같은 키 …e1) — 같은 트랜잭션에서 한 번 더",
+      "caller": "A",
+      "end": "rollback",
+      "generator": "_generate_keyed.sh.txt (통합 체인 145 파일 · PG17 · 2026-10-30)"
+    },
+    "send_message__ok_keyed": {
+      "call": "send_message(B, '  키 있는 첫 글\\r\\n둘째 줄  ', 키 …e1) — 3인자 첫 전송",
+      "caller": "A",
+      "end": "rollback",
+      "generator": "_generate_keyed.sh.txt (통합 체인 145 파일 · PG17 · 2026-10-30)"
+    },
     "send_message__ok_not_working": {
       "call": "send_message(B, '  근무 안 해도 보내져요  ')",
       "caller": "A",

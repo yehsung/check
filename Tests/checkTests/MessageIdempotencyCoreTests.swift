@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import CheckCore
 
-// send_message 전송 멱등 키(20261102200000)의 CheckCore 계약.
+// send_message 전송 멱등 키(20261101131000)의 CheckCore 계약.
 //  ① 키가 있으면 `p_client_message_id` 로 나가고, 없으면 키 자체가 빠진다(옛 서버에 옛 모양 그대로).
 //  ② 3인자 서명이 없는 서버(404 PGRST202)에는 **한 번만** 옛 모양으로 되묻는다.
 //  ③ 응답의 message_id · created_at · duplicate 는 **JSON 을 실제로 통과시켜** 읽힌다 —
@@ -164,4 +164,37 @@ func sendMessageDecodesStoredBodyThroughJSON() async throws {
         .sendMessage(accessToken: "t", to: "peer", body: "가나다", clientMessageID: "c5")
     #expect(bare.body == nil)
     #expect(PokeSendResponse(status: "ok").body == nil)
+}
+
+/// ⑤ **실제 서버 출력**(골든 `Fixtures/message-rpc/send_message__ok_keyed` · `__duplicate`, 통합 체인 하네스에서 떠 낸 값 —
+/// `_generate_keyed.sh.txt`)이 공용 모델을 그대로 지난다. 위 ①~④ 는 손으로 쓴 JSON 이라 서버가 키 이름·모양을 바꾸면 못 잡는다.
+/// 같은 키 두 번 = 같은 id · 같은 시각 · 둘째만 duplicate. 본문은 서버가 접은 값(가장자리 공백 · CRLF → LF)이다.
+@Test
+func sendMessageDecodesRealServerKeyedFixtures() async throws {
+    let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/message-rpc", isDirectory: true)
+    func fixture(_ name: String) throws -> String {
+        String(decoding: try Data(contentsOf: directory.appendingPathComponent("\(name).json")), as: UTF8.self)
+    }
+
+    MessageIdempotencyURLProtocol.prepare(host: "msg-idem-golden-first", okJSON: try fixture("send_message__ok_keyed"))
+    let first = try await idempotencyService(host: "msg-idem-golden-first")
+        .sendMessage(accessToken: "t", to: "peer", body: "  키 있는 첫 글\r\n둘째 줄  ", clientMessageID: "00000000-0000-4000-8000-0000000000e1")
+    MessageIdempotencyURLProtocol.prepare(host: "msg-idem-golden-dup", okJSON: try fixture("send_message__duplicate"))
+    let again = try await idempotencyService(host: "msg-idem-golden-dup")
+        .sendMessage(accessToken: "t", to: "peer", body: "  키 있는 첫 글\r\n둘째 줄  ", clientMessageID: "00000000-0000-4000-8000-0000000000e1")
+
+    #expect(MessageSendOutcome(response: first) == .ok)
+    #expect(MessageSendOutcome(response: again) == .ok)
+    let id = try #require(first.messageId, "서버 ok 에 message_id 가 없다")
+    #expect(UUID(uuidString: id) != nil)
+    #expect(first.createdAt != nil)
+    #expect(first.duplicate == nil)
+    #expect(first.ring == "sent")
+    #expect(first.body == "키 있는 첫 글\n둘째 줄")
+    #expect(again.messageId == id)
+    #expect(again.createdAt == first.createdAt)
+    #expect(again.duplicate == true)
+    #expect(again.ring == "duplicate")
+    #expect(again.body == first.body)
 }

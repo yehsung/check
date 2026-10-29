@@ -1794,7 +1794,7 @@ package struct PokeSendResponse: Decodable, Equatable {
     /// **화면 문구는 이 값이 있으면 이 값을 쓴다** — 클라 상수(MessageBody.maxLength)와 서버가 갈리는 날,
     /// 사용자가 보는 숫자는 실제로 거절한 쪽의 것이어야 한다(그래야 "200자인데 왜 안 가지"가 안 생긴다).
     package var maxLength: Int?
-    /// send_message `ok` 에 서버가 실어 주는 저장된 행의 id(20261102200000 부터). nil = 키 없는 옛 서버·찌르기 응답.
+    /// send_message `ok` 에 서버가 실어 주는 저장된 행의 id(20261101131000 부터). nil = 키 없는 옛 서버·찌르기 응답.
     /// 이 값이 있으면 이력 재조회를 기다리지 않고 **서버 행 그대로** 말풍선을 세울 수 있다.
     package var messageId: String?
     /// 그 행의 서버 `created_at`(ISO 8601 문자열 그대로 — 해석은 서비스의 parseDate 가 한다). nil = 옛 서버.
@@ -1860,7 +1860,7 @@ package struct PokeSendResponse: Decodable, Equatable {
         ring = try container.decodeIfPresent(String.self, forKey: .ring)
         // ★ 이 줄을 빼고 CodingKey 만 더하면 값은 **영원히 nil** 이다(바로 위 네 줄과 같은 함정).
         maxLength = try container.decodeIfPresent(Int.self, forKey: .maxLength)
-        // ★ 같은 함정이 세 번 더 — send_message 의 서버 행 확정 키(20261102200000).
+        // ★ 같은 함정이 세 번 더 — send_message 의 서버 행 확정 키(20261101131000).
         messageId = try container.decodeIfPresent(String.self, forKey: .messageId)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         duplicate = try container.decodeIfPresent(Bool.self, forKey: .duplicate)
@@ -2397,7 +2397,7 @@ package enum DrainOutcome: Equatable, Sendable {
 /// (아래 sendMessage 주석 참고).
 ///
 /// `pClientMessageId` 는 **nil 이면 키 자체가 빠진다**(합성 Encodable 은 Optional 을 encodeIfPresent 로 쓴다).
-/// 그래야 이 인자를 모르는 서버(20261102200000 적용 전)에 옛 두 키 모양 그대로 나간다 — 모르는 키를 실으면
+/// 그래야 이 인자를 모르는 서버(20261101131000 적용 전)에 옛 두 키 모양 그대로 나간다 — 모르는 키를 실으면
 /// PostgREST 가 후보 함수를 못 찾아 PGRST202 로 전송이 통째로 죽는다.
 package struct SendMessageRequest: Encodable {
     package let pTo: String

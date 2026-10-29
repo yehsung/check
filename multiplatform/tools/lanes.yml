@@ -68,6 +68,14 @@
 #   - 계약 골든 예산 12 MiB(golden-digest.py TOTAL_BUDGET · §8-18 6) · build-logic 시험 작업의 선언 입력 contract/golden(§8-18 9) ·
 #     Gboard 한국어 AVD aingcheck-api36-ko 를 emu.sh 공용 AVD(SHARED_AVDS — 읽기 전용만)로(W3-a IME 재생 시험이 쓴다).
 #
+# 7차 병합(xplat/int-j, 2026-10-29, G §8-18 8)에서 정리한 것:
+#   - W2-f · W3-a · W3-b · W4-a · W4-b · W4-c · W5-c · W6-a · W6-c 아홉 갈래를 --no-ff 로 병합하고 닫았다. 그 자리(androidApp 폰 다리 ·
+#     ui/screens · ui/games · ui/shop·gacha · 무대 · 출시 스크립트 · docs/android)는 이제 조정자 경유다.
+#   - 조정자 패치 가운데 K11 조립 지점(NavGraph.kt · AndroidManifest.xml·res/xml · AppContainer.kt·MainActivity) 셋(W3-a 02 · W3-b 0001·0002)은
+#     얹지 않았다 — 다음 조립 갈래가 xplat-r7/int-j/assembly-all.md 대로 얹는다.
+#   - W2-f 가 넘긴 AILimit 그리기 규약 INV 7건(AILimitColumnStyle 6 · AILimitSurfaceRules 1)은 W3-b 몫이었다(W2-f assembly.md §5 ID 목록).
+#     W3-b 가 닫혔으므로 남은 커버리지는 조정자 몫이다.
+#
 # 문법(이 파일이 쓰는 YAML 부분집합 — 도구가 직접 읽는다):
 #   매핑(키: 값 / 키: 아래 들여쓰기), 블록 목록("- 값"), 흐름 목록([a, b]), 따옴표 문자열, # 주석.
 # 경로 글롭: 저장소 뿌리 기준. "**" = 0개 이상 경로 마디, "*" = 한 마디 안, "{a,b}" = 고르기.
@@ -78,7 +86,7 @@
 version: 1
 
 # 닫힌 갈래: 그 이름으로 오는 변경은 경로와 상관없이 빨강이다(후속 수정은 조정자 경유).
-closed: [W0-a, W0-c, W0-d, W1-e, W1-f, W1-g, W0-b, W1-a, W1-b, W1-c, W1-d, W2-i, W0-f, W5-a, W2-a, W2-b, W2-c, W2-d, W2-e]
+closed: [W0-a, W0-c, W0-d, W1-e, W1-f, W1-g, W0-b, W1-a, W1-b, W1-c, W1-d, W2-i, W0-f, W5-a, W2-a, W2-b, W2-c, W2-d, W2-e, W2-f, W3-a, W3-b, W4-a, W4-b, W4-c, W5-c, W6-a, W6-c]
 
 # 모듈 → Kotlin 패키지 폴더(A§2-2: 뿌리 com.yehsung.aingcheck, 모듈과 1:1. 앱은 android·desktop).
 package_root:

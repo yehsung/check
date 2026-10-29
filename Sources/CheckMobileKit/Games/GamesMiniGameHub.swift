@@ -3,7 +3,8 @@ import Foundation
 import Observation
 import OSLog
 
-/// 한 게임의 오늘 순위 칸.
+/// 한 게임의 순위 칸 — **오늘과 역대 두 판**이 함께 산다(머리의 [오늘 | 역대] 전환이 고르는 것은 보기이고,
+/// 표는 게임마다 이 한 칸에 모인다). 이름이 `board` 인 자리는 그대로 두었다 — 오늘 순위 쪽 호출부가 많다.
 package struct GamesMiniGameBoard: Equatable {
     package var entries: [MiniGameBoardEntry] = []
     package var yesterdayWinner: MiniGameWinner?
@@ -11,6 +12,18 @@ package struct GamesMiniGameBoard: Equatable {
     package var loaded = false
     package var loading = false
     package var failed = false
+
+    // MARK: 역대 순위 (맥 0.3.67 → 폰 1.0.15)
+    //
+    // 그 게임의 **역대** 최고(사람마다 한 줄 — `minigame_alltime_board`). [역대] 를 **고를 때 처음** 받는다:
+    // 오늘 순위처럼 미리 받지 않는다(안 보는 사람에게 호출이 가면 안 된다 — 설계서 ②).
+    // 3플래그 규약은 위 오늘 순위와 같고, 넷째 깃발 `allTimeUnavailable` 이 하나 더 있다 —
+    // 서버에 함수가 아직 없는 창은 **실패가 아니다**(맥 `miniGameAllTimeUnavailable` 과 같은 판정).
+    package var allTime: [MiniGameAllTimeEntry] = []
+    package var allTimeLoaded = false
+    package var allTimeLoading = false
+    package var allTimeFailed = false
+    package var allTimeUnavailable = false
 
     package init() {}
 
@@ -24,6 +37,20 @@ package struct GamesMiniGameBoard: Equatable {
     /// 빈 순위 자리를 무엇으로 채우는가(공용 규칙 — 순위 탭 미니게임 판과 같다).
     package var placeholder: MobileLoadKnowledge.Placeholder {
         MobileLoadKnowledge.placeholder(hasRows: !entries.isEmpty, hasLoaded: loaded, lastFailed: failed)
+    }
+
+    /// [역대] 빈 자리에 **[다시 시도] 를 다는가** — 한 번도 못 받았고 마지막 조회가 실패했을 때만
+    /// (맥 `MiniGamePanel` 의 `store.miniGameAllTimeFailed, !store.miniGameAllTimeLoaded` 와 같은 조건).
+    ///
+    /// 공용 `MobileLoadKnowledge.placeholder` 를 쓰지 않는 이유: 이 판에는 **넷째 상태**가 있다(준비 중 — 서버에 함수가
+    /// 아직 없는 창). 그 상태는 `allTimeLoaded = true` · 줄 0 으로 들어와 공용 규칙에서는 `.empty` 지만 문구는
+    /// "아직 기록이 없어요"가 아니라 "준비 중"이어야 한다. 문구와 버튼을 **한 조건에서** 내지 않으면 "준비 중" 옆에
+    /// [다시 시도] 가 붙어 같은 404 를 영원히 두드리게 된다(맥이 그 고리를 일부러 막았다).
+    package var allTimeShowsRetry: Bool { allTimeFailed && !allTimeLoaded }
+
+    /// [역대] 빈 자리 문구(맥 `allTimeEmptyText` 와 같은 순서 — 실패 → 준비 중 → 불러오는 중 → 아직 없음).
+    package var allTimeEmptyText: String {
+        GamesMiniGameText.allTimeEmpty(failed: allTimeFailed, loaded: allTimeLoaded, unavailable: allTimeUnavailable)
     }
 }
 
@@ -119,6 +146,13 @@ package final class GamesMiniGameHub {
     /// 열린 화면의 엔진 구동기. 화면마다 새로 만든다.
     package private(set) var controller: GamesPlayController?
     package private(set) var boards: [MiniGameKind: GamesMiniGameBoard] = [:]
+    /// 순위 머리가 보여 주는 판 [오늘 | 역대](맥 0.3.67 → 폰 1.0.15). **허브 하나의 상태다** — 게임마다 기억하지 않는다
+    /// (맥 `WorkTimerStore.miniGameBoardScope` 와 같다). 앱이 떠 있는 동안만 기억하고 영속하지 않으며,
+    /// **로그아웃도 되돌리지 않는다**: 계정이 아니라 이 실행의 보기 선택이다(`reset()` 의 그 자리 주석).
+    ///
+    /// 이 전환이 서는 자리는 **[게임] 탭 미니게임 화면 하나**다(사용자 결정 2026-10-30). [순위] 탭 미니게임 판은
+    /// store·RPC·빈 칸 문구가 따로라 손대지 않는다 — 거길 같이 넓히면 반쯤 시험된 화면이 둘 생긴다.
+    package private(set) var boardScope: MiniGameBoardScope = .today
     /// 내 순위 공개 여부(profiles.minigame_public). 이번 로그인에서 아직 모르면 공개로 본다(맥과 같다 — 컬럼 없는 서버).
     /// 한 번 안 값은 조회 실패로 바뀌지 않는다(`refreshPublic`).
     package private(set) var isPublic = true
@@ -147,6 +181,21 @@ package final class GamesMiniGameHub {
     @ObservationIgnored private var lastSummaryAt: Date = .distantPast
     /// 엔진 시드 — 화면을 열 때마다 달라야 같은 판이 반복되지 않는다(데모 고정 시계에서도).
     @ObservationIgnored private var seedCounter: UInt64 = 0
+
+    // MARK: 역대 순위 신선도(관찰 대상 아님 — 화면은 이 값을 그리지 않는다)
+
+    /// 지금 들고 있는 역대 표가 **어느 게임의 최신 응답인가.** nil 이거나 다른 게임이면 다음에 [역대] 를 고를 때 다시 받는다 —
+    /// 게임을 바꿨거나, [오늘] 을 보는 사이 그 게임 판이 기록돼 표가 낡았다(새 개인 최고가 들어갔을 수 있다).
+    /// 게임마다 한 칸이 아닌 이유는 맥과 같다: 전환을 들고 있는 미니게임 화면은 **한 번에 한 장**이다.
+    @ObservationIgnored package private(set) var allTimeFreshKind: MiniGameKind?
+    /// 역대 표가 **낡았다고 표시된 횟수**(판이 서버에 남을 때 오른다). 받기를 시작할 때 이 값을 쥐고, 응답이 왔을 때 그 사이
+    /// 올랐으면 그 응답을 '최신'으로 **표시하지 않는다** — 제출 **전에** 떠난 받기가 제출 **뒤에** 닿아 최신 표시를 다시
+    /// 세우면, [역대] 로 넘어가도 새 개인 최고가 빠진 표를 안 받는다(맥 검토 지적 2026-10-27 · `bc9a64c` 6번).
+    @ObservationIgnored package private(set) var allTimeInvalidation = 0
+    /// 역대 받기의 일련번호와, 마지막으로 **반영한** 받기의 번호. 늦게 닿은 옛 받기가 새 표를 덮지 않게 한다 —
+    /// 사람이 전환을 누른 받기와 판이 끝나 다시 받는 받기가 겹칠 때 **늦게 온 쪽이 이기던** 결함(같은 커밋).
+    @ObservationIgnored package private(set) var allTimeFetchSerial = 0
+    @ObservationIgnored package private(set) var allTimeAppliedSerial = 0
 
     package init(context: MobileContext) {
         self.context = context
@@ -182,6 +231,18 @@ package final class GamesMiniGameHub {
             self.retryPendingSubmitIfAny()
             self.prefetchRoundToken(kind: kind)
             await self.loadBoard(kind, withWinner: true)
+            // [역대] 를 보던 채로 화면을 다시 열었다(또는 다른 게임으로 넘어왔다) — 그 게임의 역대도 받는다.
+            // [오늘] 이면 **아무것도 안 나간다**(역대는 처음 넘어갈 때 받는다). 오늘 순위 **뒤에** 두는 이유는
+            // 머리 줄·정족수가 오늘 표를 먼저 쓰기 때문이다(맥도 선발급·오늘 순위가 먼저다).
+            //
+            // ★ **이미 그 게임의 받기가 떠 있으면 얹지 않는다**(`allTimeLoading`). 이 꼬리는 `loaded` 가 선 **뒤에**
+            //   돌아서(순위를 넣고 어제 1등을 await 한 다음이다), 화면을 여는 동안 사람이 [역대] 를 누르면
+            //   전환과 이 꼬리가 **같은 표를 받으러 둘이 나간다**(실측: 일련번호가 1 이 아니라 3 까지 갔다).
+            //   여기만 비켜선다 — 이 자리의 뜻은 "표가 있게 하자"이고, 판이 끝났을 때의 재조회는 "내 표가 낡았다"라
+            //   떠 있는 받기가 있어도 **반드시** 나가야 한다(그 둘이 겹칠 때 새 쪽이 이기는 것이 일련번호 가드의 몫이다).
+            if self.boardScope == .allTime, self.boards[kind]?.allTimeLoading != true {
+                await self.performLoadAllTimeBoard(kind)
+            }
         }
     }
 
@@ -227,6 +288,10 @@ package final class GamesMiniGameHub {
         controller = nil
         activeKind = nil
         boards = [:]
+        // 역대 표도 남의 행이라 계정에 묶인다(`boards` 가 통째로 비었다). 신선도 표식만 따로 되돌린다.
+        // **보기 선택(`boardScope`)은 그대로 둔다** — 계정이 아니라 이 앱 실행의 것이다(맥과 같은 선택).
+        allTimeFreshKind = nil
+        allTimeInvalidation &+= 1
         isPublic = true
         submitNotice = nil
         exitNoticeIsSticky = false
@@ -417,6 +482,9 @@ package final class GamesMiniGameHub {
                     return
                 }
                 if let best = response.bestScore { self.raiseLocalBest(superseded.kind, to: best) }
+                // 밀려난 판도 서버에 남았다 — 그 게임의 역대 표는 낡았다. **다시 받지는 않는다**: 이 시점의 주인은 새 판이고,
+                // 그 판의 제출 꼬리가 [역대] 를 보는 중이면 어차피 받아 온다(아니면 다음 전환이 받는다).
+                self.noteAllTimeStale(superseded.kind)
                 await self.loadBoard(superseded.kind, withWinner: false)
             } catch {
                 Self.logger.notice("superseded submit failed (network) game=\(superseded.kind.rawValue, privacy: .public)")
@@ -452,6 +520,9 @@ package final class GamesMiniGameHub {
             if response.status == "ok" || response.status == "token_used" {
                 if let best = response.bestScore { raiseLocalBest(kind, to: best) }
                 clearPendingSubmit(token: token)
+                // 이 게임의 역대 표는 이제 낡았다(새 개인 최고가 들어갔을 수 있다) — 아래에서 바로 다시 받거나,
+                // [오늘] 을 보는 중이면 다음에 [역대] 로 넘어갈 때 받는다(보지도 않는 표를 판마다 받지 않는다).
+                noteAllTimeStale(kind)
                 // 출구에서 세운 안내("앱을 나가서 …")는 제출과 무관한 사실이라 지우지 않는다.
                 if !exitNoticeIsSticky { submitNotice = nil }
                 // 일일 미션(v0.3.64) — 판이 서버에 남은 직후 **한 번** 묻는다(새 타이머 없이 이벤트로).
@@ -461,6 +532,8 @@ package final class GamesMiniGameHub {
                 context.links.me?.refreshAchievementsAfterGameResult(game: kind.rawValue)
                 // 순위 재조회는 **화면을 떠난 뒤에도** 한다(activeKind 로 막으면 뒤로가기로 끝낸 판이 반영되지 않는다).
                 await loadBoard(kind, withWinner: false)
+                // 역대는 **[역대] 를 보는 중일 때만**, 오늘 순위 뒤에 받는다(맥 `reloadsBoard, miniGameBoardScope == .allTime` 와 같은 자리).
+                if boardScope == .allTime { await performLoadAllTimeBoard(kind) }
             } else if Self.retryableSubmitStatuses.contains(response.status) {
                 // 아직 하한을 못 넘겼다 — 토큰이 살아 있으니 **인편을 남기고** 눈먼 지연 뒤 같은 토큰으로 다시 보낸다.
                 // ★ 여기서 `prefetchRoundToken` 으로 내려가지 않는다. 새 토큰 요청은 서버가 (사용자, 게임) 행을
@@ -565,6 +638,116 @@ package final class GamesMiniGameHub {
             roundToken = nil
             roundTokenKind = nil
             roundTokenAt = nil
+        }
+    }
+
+    // MARK: 역대 순위 (맥 0.3.67 → 폰 1.0.15)
+    //
+    // 받는 때는 **넷뿐**이다 — ① [역대] 로 넘어갈 때(그 게임 표가 최신이 아닐 때만) ② [역대] 를 보는 중에 화면을 열 때
+    // (게임을 바꿨거나 다시 들어왔다) ③ [역대] 를 보는 중에 판이 서버에 남았을 때 ④ [다시 시도].
+    // 60초 요약 루프(`refreshSummariesIfStale`)에는 **얹지 않는다** — 안 보는 사람에게 호출이 가면 안 된다(설계서 ②).
+
+    /// 순위 머리의 [오늘 | 역대] 전환. 같은 쪽을 다시 누르면 아무 일도 없다.
+    ///
+    /// [역대] 로 넘어갈 때 그 게임의 **최신 표를 들고 있으면 다시 받지 않는다**(오가며 누를 때마다 요청이 나가지 않게).
+    /// 실패한 채였으면 한 번 더 받는다 — 사용자가 다시 보러 온 것이 곧 재시도 의사다(맥 `selectMiniGameBoardScope` 그대로).
+    /// 화면이 열려 있지 않으면 받지 않는다(`activeKind` 가 nil) — 이 전환은 그 화면 머리에만 있다.
+    package func selectBoardScope(_ scope: MiniGameBoardScope) {
+        guard scope != boardScope else { return }
+        boardScope = scope
+        guard scope == .allTime, let kind = activeKind else { return }
+        guard allTimeFreshKind != kind || boards[kind]?.allTimeFailed == true else { return }
+        loadAllTimeBoard(kind)
+    }
+
+    /// 역대 순위를 받는다(Task 발사). 위 네 방아쇠가 부른다.
+    package func loadAllTimeBoard(_ kind: MiniGameKind) {
+        Task { [weak self] in await self?.performLoadAllTimeBoard(kind) }
+    }
+
+    /// 그 게임의 역대 표가 **낡았다**고 표시한다(판이 서버에 남은 직후). 부르는 자리는 둘 — 제출 성공, 밀려난 제출 성공.
+    private func noteAllTimeStale(_ kind: MiniGameKind) {
+        if allTimeFreshKind == kind { allTimeFreshKind = nil }
+        // 떠 있는 받기가 이 제출 **전**에 떠났을 수 있다 — 그 응답이 늦게 닿아 '최신'을 다시 세우지 못하게 한다.
+        allTimeInvalidation &+= 1
+    }
+
+    /// `minigame_alltime_board` 를 받아 그 게임 칸에 반영한다.
+    ///
+    /// **버리는 자리가 넷**이다 — 하나라도 빠지면 옛 표가 새 표를 덮거나 낡은 표가 '최신'으로 굳는다.
+    ///  ① 계정이 바뀌었다(`context.generation`) ② 로그아웃·치명 만료로 허브가 비워졌다(`resetGeneration`)
+    ///  ③ 내 뒤에 떠난 받기가 **이미 반영됐다**(`allTimeAppliedSerial`) — 사람이 전환을 누른 받기와 판이 끝나 다시 받는
+    ///     받기가 겹칠 때 늦게 온 쪽이 이기던 결함(맥 검토 2026-10-27 · `bc9a64c` 6번).
+    ///  ④ 떠난 뒤 표가 낡았다고 표시됐다(`allTimeInvalidation`) — 그 응답은 **반영하되 '최신'으로는 표시하지 않는다.**
+    ///
+    /// 맥의 `kind == miniGameKind` 가드가 여기 없는 이유: 폰은 표를 **게임마다** 들고 있어 이 함수가 `boards[kind]` 한 칸에만
+    /// 쓴다 — 맥에서 그 가드가 막던 "남의 게임 순위가 뜬다"는 여기서 구조적으로 못 일어난다(③ 이 그 몫을 받는다).
+    ///
+    /// 실패는 셋으로 가른다(맥과 같다).
+    ///  · 함수가 아직 없는 서버(PGRST202 · 본문 없는 404) → **준비 중**(빈 표 + `allTimeUnavailable` · [다시 시도] 없음).
+    ///  · 그 밖(네트워크 · 5xx · 배열이 아닌 본문) → 실패. 이미 그린 줄이 있으면 그대로 두고, 없을 때만 실패 행이 선다.
+    ///  · 취소 → 아무것도 안 바꾼다.
+    package func performLoadAllTimeBoard(_ kind: MiniGameKind) async {
+        guard context.session.isSignedIn else { return }
+        let sessionGeneration = context.generation
+        let generation = resetGeneration
+        let service = context.service
+        // 떠날 때의 낡음 표시 횟수와 일련번호(위 ③ ④).
+        let invalidation = allTimeInvalidation
+        allTimeFetchSerial &+= 1
+        let serial = allTimeFetchSerial
+        var state = boards[kind] ?? GamesMiniGameBoard()
+        if !state.allTimeLoading {
+            state.allTimeLoading = true
+            state.allTimeFailed = false
+            boards[kind] = state
+        }
+        defer {
+            // 내 뒤에 떠난 받기가 있으면 '불러오는 중'의 주인은 그쪽이다 — 그 깃발을 내려 주지 않는다.
+            // 비워진 허브(로그아웃)에는 한 글자도 쓰지 않는다 — 여기서 쓰면 비운 `boards` 에 칸이 되살아난다.
+            if generation == resetGeneration, serial == allTimeFetchSerial, boards[kind]?.allTimeLoading == true {
+                boards[kind]?.allTimeLoading = false
+            }
+        }
+        do {
+            let entries = try await context.withMobileSessionRetry { session in
+                try await service.fetchMiniGameAllTimeBoard(accessToken: session.accessToken, kind: kind)
+            }
+            guard sessionGeneration == context.generation, generation == resetGeneration else { return }
+            guard serial > allTimeAppliedSerial else { return }
+            allTimeAppliedSerial = serial
+            // 서버 정렬을 믿지 않고 다시 세운다(점수 ↓ → 먼저 닿은 사람 → user_id — 코어 한 벌).
+            let sorted = entries.sortedForMiniGameAllTimeBoard()
+            var next = boards[kind] ?? GamesMiniGameBoard()
+            next.allTime = sorted
+            next.allTimeLoaded = true
+            next.allTimeLoading = false
+            next.allTimeFailed = false
+            next.allTimeUnavailable = false
+            if boards[kind] != next { boards[kind] = next }
+            if invalidation == allTimeInvalidation { allTimeFreshKind = kind }
+            // 내 역대 행은 이 계정의 **진짜** 전체 기간 최고다 — 로컬 캐시가 그보다 작으면(다른 기기 · 재설치) 올린다.
+            if let me = myUserID, let mine = sorted.first(where: { $0.userID == me }) {
+                raiseLocalBest(kind, to: mine.bestScore)
+            }
+        } catch {
+            if case .cancelled = AuthErrorRules.classify(error) { return }
+            guard sessionGeneration == context.generation, generation == resetGeneration else { return }
+            var next = boards[kind] ?? GamesMiniGameBoard()
+            next.allTimeLoading = false
+            if let serviceError = error as? SupabaseWorkServiceError, BlockReportRules.isMissingFunction(serviceError) {
+                // 앱이 db push 보다 먼저 나간 창: 실패가 아니라 '아직 표가 없다'. 빈 표 + "준비 중" 한 줄.
+                next.allTime = []
+                next.allTimeUnavailable = true
+                next.allTimeLoaded = true
+                boards[kind] = next
+                // 같은 게임으로 오가며 누를 때마다 404 를 다시 두드리지 않는다(판 기록 · 화면 열기가 다시 묻는다).
+                allTimeFreshKind = kind
+            } else {
+                Self.logger.notice("alltime board fetch failed game=\(kind.rawValue, privacy: .public)")
+                next.allTimeFailed = true
+                boards[kind] = next
+            }
         }
     }
 

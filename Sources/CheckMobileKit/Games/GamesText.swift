@@ -83,6 +83,9 @@ package enum GamesText {
 
 /// 미니게임 허브 문구(맥 `MiniGamePanel` · `WorkTimerStoreMiniGame` 과 같은 말).
 package enum GamesMiniGameText {
+    /// [오늘] 판의 머리 제목. 글자의 정본은 코어 `MiniGameBoardScope.today.boardTitle` 이고(소스 계약이 그 값과 묶는다),
+    /// 미니게임 화면은 전환 때문에 그 열거값을 **직접** 읽는다(`hub.boardScope.boardTitle`) — 여기는 같은 값의 별명으로
+    /// 남겨 둔다(순위 탭 글자 `RankingsText.miniGameRankTitle` 과 짝을 맞추는 자리이기도 하다).
     package static let rankTitle = "오늘 순위"
     /// 자정 상품(루비). 서버 `ruby_prize_amounts()` 와 짝인 상수(맥 `MiniGamePanel.rubyPrizes` · 같은 탭 `RankingsText.rubyPrizes`).
     /// 2026-10-14(1.0.7 · 서버 20261014120000) 20·10·5 → 10·5·3, 2026-10-22(맥 0.3.64 · 서버 20261023131000) 사용자 결정
@@ -98,6 +101,38 @@ package enum GamesMiniGameText {
     package static let awardedChip = "루비 +\(rubyPrizes[0]) 받음"
     package static let yesterdayChampion = "어제 1등"
     package static let noRankToday = "오늘 기록 없음"
+
+    // MARK: 역대 순위 [오늘 | 역대] (맥 0.3.67 → 폰 1.0.15)
+    //
+    // 글자는 **맥 네 줄을 그대로** 옮긴 것이다 — 같은 기능이 두 말을 하면 안 된다(설계서 ②). 출처는
+    // `Sources/check/MiniGamePanel.swift` 의 642(규칙) · 643(날짜) · 644(실패) · 646(준비 중) 줄이고,
+    // `MeTextParityTests` 꼴 소스 계약이 맥 코드에 그 문장이 아직 있는지 되묻는다.
+    // 머리 제목("오늘 순위" · "역대 순위")은 **코어 한 벌**(`MiniGameBoardScope.boardTitle`)이라 여기 베끼지 않는다 —
+    // 맥 `MiniGamePanel.allTimeRankTitle` 도 그 값을 가리킨다.
+    //
+    // ⚠️ [순위] 탭(`RankingsText.miniGameRankTitle`)은 **이 전환과 무관하다**(사용자 결정 2026-10-30: 전환은 [게임] 탭에만).
+    //    그쪽 글자를 이 값으로 바꾸지 마라 — store·RPC·빈 칸 문구 행렬이 따로다.
+    package static let allTimeRankTitle = MiniGameBoardScope.allTime.boardTitle
+    /// [역대] 바닥 두 줄: 무엇이 올라가는가 + 날짜가 무엇인가. **상금 이야기는 없다** — 상금은 오늘 판의 것이다.
+    package static let allTimeRuleCaption = "사람마다 가장 높은 점수 하나만 올라가요"
+    package static let allTimeDayCaption = "날짜는 그 점수를 처음 낸 날이에요"
+    package static let allTimeFailedCaption = "역대 순위를 불러오지 못했어요"
+    /// 서버에 함수가 아직 없다(PGRST202 · 본문 없는 404 — 앱이 db push 보다 먼저 나간 창). **실패가 아니라서**
+    /// [다시 시도] 를 달지 않는다: 사용자가 고칠 수 없는 일이고 두드려 봐야 같은 답이다(맥과 같은 판정).
+    package static let allTimeUnavailableCaption = "역대 순위는 준비 중이에요 — 곧 열려요"
+
+    /// [역대] 빈 목록 문구. 맥 `MiniGamePanel.allTimeEmptyText` 와 **같은 순서로** 가른다:
+    /// 실패(한 번도 못 받았다) → 준비 중 → 불러오는 중 → 아직 없음.
+    ///
+    /// **순서가 곧 뜻이다.** 준비 중을 먼저 보면 마이그레이션 전 창에서 네트워크 실패까지 "곧 열려요"로 덮이고,
+    /// 불러오는 중을 먼저 보면 이미 받은 빈 표가 영원히 "불러오는 중…"으로 보인다.
+    /// 뷰 안 삼항이 아니라 여기 있는 이유는 `GamesWatcherCount` 와 같다 — `#if os(iOS)` 뷰는 macOS 스위트가 한 줄도 못 본다.
+    package static func allTimeEmpty(failed: Bool, loaded: Bool, unavailable: Bool) -> String {
+        if failed, !loaded { return allTimeFailedCaption }
+        if unavailable { return allTimeUnavailableCaption }
+        if !loaded { return loadingCaption }
+        return emptyBoard
+    }
 
     /// 제출 실패(토큰 없음·네트워크) — 맥 `recordMiniGameScore` 와 같은 문장.
     package static let submitFailedConnection = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"

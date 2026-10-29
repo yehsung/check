@@ -137,7 +137,8 @@ uuid 는 소문자로 내려온다(Swift `UUID().uuidString` 은 대문자 — �
 | 401/403 `42501` | anon 호출 / EXECUTE 회수(서버측 킬스위치) / RLS 위반(남의 팀에 하트비트) | 42501 은 "서버가 껐다"로 보고 끄고 폴백. 401 은 기존 `withSessionRetry` 의 토큰 갱신 경로 |
 | 400 `22023` | `p_heartbeat=true` 인데 `p_team_id=null` | 클라 버그. 폴백 + 진단 로그 |
 | 400 `23514/23503` 등 | 제약 위반(정상 경로엔 없다) | 폴백(기존 경로가 같은 오류를 내면 그쪽 규약대로) |
-| 5xx / 타임아웃 | 무료플랜 일시정지·네트워크 | 기존 하트비트 실패와 같다: 조용히 다음 틱. **연속 3회 실패면 1시간 폴백**(폭주 방지) |
+| 502·503·504 · 520~524(Cloudflare) · 408·429 · 500+`57014`/`PGRST000~003`/`53xxx`/`08xxx`/`57P0x` · 도달 불가 URLError | 과부하·도달 불가(2026-10-29 PGRST003·504·57014) | **펼치지 않는다**: 팀 조회·away 요청 0, 백오프 30·60·120·120초×지터. 근무 중이고 마지막 성공 하트비트와 마지막 하트비트 시도가 둘 다 120초보다 오래됐을 때만 레거시 하트비트 1번(4.5) |
+| 그 밖의 5xx·네트워크 오류 | 일시 실패 | 이 틱은 폴백으로 즉시 수행. **연속 3회 실패면 15분 폴백**(폭주 방지 — 2026-10-30 전엔 1시간) |
 
 ---
 
@@ -175,6 +176,11 @@ static let workTickEnabled = true
 // 실행 단위 가용성. 404/PGRST202·403/42501·v≠1 → false 로 내리고 이 실행 동안 폴백. 연속 5xx 3회 → 1시간 뒤 재시도.
 @ObservationIgnored var workTickAvailable = true
 ```
+**구현(2026-10-30 안정화)**: 위 Bool 대신 `SupabaseWorkService.workTickGate`(`WorkTickGate`, 맥 전용)의
+`availability(now:)` 가 넷으로 답한다 — `.available` / `.disabled`(a: 이 실행 동안 끔) / `.suspended`(c: 15분 정지, 기존 경로) /
+`.backingOff(until:)`(b: 과부하 백오프 — **기존 경로도 내지 않는다**). 백오프 지터는 `jitter` 주입(테스트 고정), 시계는 스토어 `clock`.
+마지막 성공 하트비트 시각은 `WorkTimerStore.lastHeartbeatSucceededAt`(p_heartbeat=true 인 work_tick 성공 · 레거시 하트비트·입력 보고 성공),
+마지막 시도 시각은 `lastHeartbeatAttemptAt`(레거시 하트비트·입력 보고를 낸 순간 — 실패도 센다). 둘 다 로그아웃이 지운다.
 서버측 킬스위치는 `revoke execute on function public.work_tick(…) from authenticated` 한 줄이다(클라는 42501 → 폴백).
 
 ### 4.2 서비스 층 — 요청/응답 타입(`SupabaseWorkModels.swift`)
@@ -234,10 +240,19 @@ workTickEnabled && workTickAvailable ? work_tick 1회
   404/PGRST202    → workTickAvailable=false; **이 틱을 기존 3함수로 즉시 수행**
   403/42501       → 〃(서버가 껐다)
   v != 1          → 〃(계약 협상 실패)
-  기타/5xx        → 기존 3함수로 즉시 수행; 연속 3회면 1시간 동안 기존 경로
+  과부하·도달 불가(b) → 펼치지 않는다: 팀 조회·away 요청 0, away 는 "모른다"(정책 nil — 자동 마감 정지, 스로틀·세대·계정 가드 그대로)
+                   근무 중 && 마지막 성공 하트비트 > 120초 전 && 마지막 하트비트 시도 > 120초 전 → sendHeartbeatIfWorking() 한 번만
+                   (시도로도 묶어 장애가 이어져도 120~150초에 한 번 — 성공만 보면 120초 뒤 매 틱 2건이 나갔다)
+                   백오프 min(30·2^(k−1),120)초 × 0.8~1.2 — 그동안 work_tick 0, 끝난 첫 틱의 work_tick 1건이 회복 확인
+                   (b) 는 (c) 의 정지 카운터에 세지도 지우지도 않는다. 성공하면 모든 카운터를 지운다
+  기타/5xx(c)     → 기존 3함수로 즉시 수행; 연속 3회면 15분 동안 기존 경로
+백오프 중         → (b) 와 같다(work_tick 도 기존 3함수도 없음 — 하트비트 120초 규칙만)
 그 외             → 기존 3함수(sendHeartbeatIfWorking / refreshTeamStatus / refreshAwayStateIfNeeded)
 ```
-기존 3함수는 **삭제하지 않는다**(폴백 + 구서버 대응). 하트비트 유실 창을 만들지 않는 것이 이 규칙의 전부다.
+기존 3함수는 **삭제하지 않는다**(폴백 + 구서버 대응). (a)·(c) 에선 하트비트 유실 창을 만들지 않는 것이 규칙의 전부다.
+(b) 는 반대로 **요청을 늘리지 않는 것**이 규칙이다 — 2026-10-29 장애에서 실패 틱마다 7건으로 펼친 요청이 504 더미에 섞였다.
+120초는 서버 스캐빈저(`close_abandoned_work_sessions`, 하트비트 10분 공백 → 방치 마감)보다 한참 안쪽이다.
+팝오버 즉시 새로고침(`refreshTeamStatusOnDemand`)도 같은 게이트다: 백오프 중엔 요청 0, (b) 실패는 refreshTeamStatus 로 펼치지 않는다.
 
 ### 4.6 테스트에서 못 잡는 것(스텁 한계 — 반드시 두 대 프로브)
 `URLProtocolStub` 은 보낸 키 집합을 해석하지 않는다. **키 이름 오타(예 `p_session`)는 단위 테스트에선 초록이고 실서버에선 매 틱 404 → 조용한 폴백**이다. 단위 테스트엔 최소한 "보낸 JSON 의 키 집합 == 2.1 의 집합" 소스 계약 테스트를 두고, 실증은 6절로 한다.

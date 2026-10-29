@@ -119,7 +119,7 @@ extension WorkTimerStore {
         MessageThreadBuilder.threads(
             from: messageHistory,
             serverOrder: messageHistoryReadSnapshot?.serverOrder,
-            arrivalOrder: messageReadRuntime.localArrivalSerials
+            arrivalOrder: messageReadRuntime.localArrivalOrder
         )
     }
 
@@ -389,11 +389,17 @@ extension WorkTimerStore {
             let kept = messageReadRuntime.survivingLocalArrivals(
                 historySerial: serial, current: messageHistory, server: loaded.entries
             )
+            // 전송 성공 응답으로 세운 내 말(2026-10-30 안정화)도 같은 자리에서 판정한다. 규칙이 도착분보다 **길다**:
+            // 그 id 를 실은 응답이 (세운 뒤에 띄운 것으로) 올 때까지, 또는 60초까지 남긴다(`survivingConfirmedSentRows`).
+            // 전송 **전에** 띄운 이력이 늦게 와 이 판을 갈아도 방금 보낸 말풍선이 사라졌다 다시 나타나지 않는다.
+            let keptSent = messageReadRuntime.survivingConfirmedSentRows(
+                historySerial: serial, current: messageHistory, server: loaded.entries, now: clock()
+            )
             // 같은 초의 동률은 서버 순서로 깬다(F7). 읽음 칸이 없는 옛 서버는 id 로(예전 그대로).
             // 남긴 즉시 삽입분은 서버가 모르는 말이라 그 뒤에 **도착 순서**로 선다(m4-fix — 위 정리 뒤라 표에는 남긴 것만 있다).
-            let sorted = (loaded.entries + kept).sortedForMessageHistory(
+            let sorted = (loaded.entries + kept + keptSent).sortedForMessageHistory(
                 serverOrder: loaded.hasReadReceipts ? loaded.serverOrder : nil,
-                arrivalOrder: messageReadRuntime.localArrivalSerials
+                arrivalOrder: messageReadRuntime.localArrivalOrder
             )
             if messageHistory != sorted { messageHistory = sorted }
             applyMessageHistoryReadCapability(loaded, serial: serial)
@@ -594,61 +600,219 @@ extension WorkTimerStore {
         guard !isSendingMessage else { return }
         isSendingMessage = true
         let generation = sessionGeneration
+        // 전송 멱등 키(2026-10-30 안정화) — **이 한 번의 전송 의도**의 이름이다. 서버의 답을 못 받은 같은 말을 같은 사람에게
+        // 10분 안에 다시 보내면 그때의 키를 다시 쓴다(`MessageSendLedger.key`): 앞 전송이 이미 저장됐어도 서버가 한 통으로 접는다.
+        // 확정 답을 받은 말은 기억하지 않으므로 같은 말을 일부러 두 번 보내는 것은 두 통이다(정상 사용).
+        let clientMessageID = messageReadRuntime.sendLedger.key(peer: userID, body: body, now: clock())
         Task { @MainActor in
             // 세대가 바뀐 뒤(로그아웃/재로그인)의 잠금 해제는 새 세션의 잠금을 푸는 짓이 된다 —
             // 그쪽은 clearPersistedSession 이 이미 false 로 되돌려 놓았다.
+            // 응답 유실 재시도(`deliverMessage`)가 자는 1.5초 동안에도 잠금은 그대로다 — 그 사이 두 번째 전송이 끼면 키가 둘이 된다.
             defer { if generation == sessionGeneration { isSendingMessage = false } }
-            do {
-                let response = try await withSessionRetry { activeSession in
-                    try await service.sendMessage(accessToken: activeSession.accessToken, to: userID, body: body)
+            // nil = 실패 문구·모호 기억까지 그 안에서 끝냈다(또는 취소·세대 변경).
+            guard let response = await deliverMessage(
+                to: userID, body: body, clientMessageID: clientMessageID, generation: generation
+            ) else { return }
+            // 서버 행의 시각(ISO 8601 그대로)은 서비스의 parseDate 로 읽는다. actor 왕복이라 **세대 가드 앞에서** 끝낸다 —
+            // 가드 뒤에 await 을 두면 그 사이 로그아웃이 끼어 앞 계정의 말이 새 계정 이력에 선다.
+            let confirmedAt: Date? = if let raw = response.createdAt { await service.parseDate(raw) } else { nil }
+            guard generation == sessionGeneration else { return }
+            // 서버가 답했다(ok 든 거절 status 든) — 이 키의 일은 끝났다. 같은 말을 또 보내면 그건 새 전송이다.
+            messageReadRuntime.sendLedger.settle(key: clientMessageID)
+            switch MessageSendOutcome(response: response) {
+            case .ok:
+                messageNotice = Self.messageSentNotice
+                // 보낸 값을 비운다 — 남아 있으면 다음 Enter 에 같은 말이 또 나간다.
+                // **비우는 자리는 여기 하나뿐이다**: 창을 닫아도, 실패해도 글은 남는다.
+                //
+                // ★ **초안에서 나온 전송만** 비운다(v0.3.62 — 위 `clearsDraftOnSuccess` 주석).
+                //   아잉이 이모티콘은 입력칸을 거치지 않고 상수 토큰으로 나가는데(`sendSticker`),
+                //   조건이 "상대가 같다" 하나면 이모티콘 한 장이 **사용자가 쓰던 글을 지운다**
+                //   — 왕복이 끝난 뒤라 되돌릴 수도 없다. 상대 비교는 그대로 남는다(왕복 중에 다른
+                //   대화로 옮겨 갔으면 그쪽 입력칸을 비울 이유가 없다).
+                if clearsDraftOnSuccess, selectedMessagePeerID == userID { messageDraft = "" }
+                // 이 서버는 키로 중복을 거른다는 증거다(키를 모르는 옛 서버는 message_id 를 안 싣는다) — 이 실행에서
+                // 처음 본 뒤로 응답 유실 재시도가 열린다(`deliverMessage`). 로그아웃이 장부째 바꿔 지운다.
+                if response.messageId != nil { messageReadRuntime.sendLedger.serverConfirmsRows = true }
+                // 방금 보낸 말이 그 자리에서 대화에 나타나야 "메신저"다. 예전엔 낙관 삽입 대신 이력을 다시 받기만 했다 —
+                // **서버가 본문을 정규화하고 시각을 정하기 때문**이다(내가 만든 가짜 행과 다음 갱신의 진짜 행이 다르면
+                // 말풍선이 순간 두 개로 보이거나 순서가 튄다). 이제 서버가 ok 에 **저장한 행의 id 와 시각**을 실어 주므로
+                // 그 행을 그 자리에 세운다(2026-10-30 안정화 — 이력 왕복 하나를 기다리지 않는다). id 가 서버 것이라 다음 이력의
+                // 진짜 행과 **같은 줄**이고(둘이 되지 않는다), 시각과 본문도 서버 것이다. 키가 없는 옛 서버 응답이면 nil → 예전 그대로.
+                if let entry = confirmedSentMessageEntry(response, to: userID, sentBody: body, createdAt: confirmedAt) {
+                    insertConfirmedSentMessage(entry)
                 }
-                guard generation == sessionGeneration else { return }
-                switch MessageSendOutcome(response: response) {
-                case .ok:
-                    messageNotice = Self.messageSentNotice
-                    // 보낸 값을 비운다 — 남아 있으면 다음 Enter 에 같은 말이 또 나간다.
-                    // **비우는 자리는 여기 하나뿐이다**: 창을 닫아도, 실패해도 글은 남는다.
-                    //
-                    // ★ **초안에서 나온 전송만** 비운다(v0.3.62 — 위 `clearsDraftOnSuccess` 주석).
-                    //   아잉이 이모티콘은 입력칸을 거치지 않고 상수 토큰으로 나가는데(`sendSticker`),
-                    //   조건이 "상대가 같다" 하나면 이모티콘 한 장이 **사용자가 쓰던 글을 지운다**
-                    //   — 왕복이 끝난 뒤라 되돌릴 수도 없다. 상대 비교는 그대로 남는다(왕복 중에 다른
-                    //   대화로 옮겨 갔으면 그쪽 입력칸을 비울 이유가 없다).
-                    if clearsDraftOnSuccess, selectedMessagePeerID == userID { messageDraft = "" }
-                    // 방금 보낸 말이 그 자리에서 대화에 나타나야 "메신저"다. 낙관 삽입 대신 이력을 다시 받는 이유는
-                    // **서버가 본문을 정규화하고 시각을 정하기 때문**이다 — 내가 만든 가짜 행과 다음 갱신의 진짜 행이
-                    // 다르면 말풍선이 순간 두 개로 보이거나 순서가 튄다(그 어긋남은 사용자에게 설명할 길이 없다).
-                    loadMessageHistory()
-                case .notWorking:
-                    messageNotice = Self.messageNotWorkingNotice
-                case .targetNotWorking:
-                    // 대상 자리비움. 디렉토리의 '근무중' 배지가 낡았다는 뜻이므로 즉시 재조회한다 — 안 그러면
-                    // 화면은 계속 "근무중"이라 말하는데 전송만 거절돼, 사용자는 왜 안 되는지 알 방법이 없다
-                    // (sendPoke/sendUltraPoke 의 같은 분기와 같은 처리다).
-                    messageNotice = Self.messageTargetNotWorkingNotice
-                    loadPokeDirectory()
-                case .targetFocused:
-                    messageNotice = Self.messageTargetFocusedNotice
-                case .tooLong:
-                    // 서버가 숫자를 알려 줬으면 그 숫자를 말한다(클라 상수와 갈리는 날 진실은 거절한 쪽에 있다).
-                    messageNotice = Self.messageTooLongNotice(maxLength: response.maxLength)
-                case .notText:
-                    messageNotice = Self.messageNotTextNotice
-                case .blackout:
-                    messageNotice = Self.messageBlackoutNotice
-                case .flood, .invalid:
-                    // ★ flood 를 여기 접어 두는 것이 계약이다(머리 주석 ③). 남은 초를 세거나 버튼을 잠그면
-                    //   그건 이름만 다른 쿨타임이고, 사장님이 없애라고 한 바로 그것이다.
-                    messageNotice = Self.messageInvalidNotice
+                // 이력은 그대로 다시 받는다 — 읽음(1)·같은 초 서버 순서·상대 이름을 서버 판으로 맞춘다.
+                loadMessageHistory()
+            case .notWorking:
+                messageNotice = Self.messageNotWorkingNotice
+            case .targetNotWorking:
+                // 대상 자리비움. 디렉토리의 '근무중' 배지가 낡았다는 뜻이므로 즉시 재조회한다 — 안 그러면
+                // 화면은 계속 "근무중"이라 말하는데 전송만 거절돼, 사용자는 왜 안 되는지 알 방법이 없다
+                // (sendPoke/sendUltraPoke 의 같은 분기와 같은 처리다).
+                messageNotice = Self.messageTargetNotWorkingNotice
+                loadPokeDirectory()
+            case .targetFocused:
+                messageNotice = Self.messageTargetFocusedNotice
+            case .tooLong:
+                // 서버가 숫자를 알려 줬으면 그 숫자를 말한다(클라 상수와 갈리는 날 진실은 거절한 쪽에 있다).
+                messageNotice = Self.messageTooLongNotice(maxLength: response.maxLength)
+            case .notText:
+                messageNotice = Self.messageNotTextNotice
+            case .blackout:
+                messageNotice = Self.messageBlackoutNotice
+            case .flood, .invalid:
+                // ★ flood 를 여기 접어 두는 것이 계약이다(머리 주석 ③). 남은 초를 세거나 버튼을 잠그면
+                //   그건 이름만 다른 쿨타임이고, 사장님이 없애라고 한 바로 그것이다.
+                messageNotice = Self.messageInvalidNotice
+            }
+        }
+    }
+
+    /// 응답 유실 재시도 앞의 대기(초). 서버가 막 넘어진 순간을 한 박자 비켜 가되, 사용자가 "안 갔나" 하고 다시 누르기 전이다.
+    nonisolated static let messageSendRetryDelaySeconds: TimeInterval = 1.5
+
+    /// 한 번의 전송 의도를 서버에 건넨다(2026-10-30 안정화). 돌려주는 값은 **서버의 답**이고, nil 이면 실패 처리(문구 ·
+    /// 모호 기억)를 여기서 이미 끝냈거나 취소·세대 변경으로 조용히 접었다.
+    ///
+    /// **응답 유실 재시도는 한 번이다.** 서버의 답을 못 받은 실패(`isAmbiguousMessageSendFailure`)면 1.5초 뒤 **같은 키로**
+    /// 한 번만 다시 보낸다. 장애 중에 요청을 불리지 않도록 그 이상은 없다 — 남은 몫은 사용자의 [보내기]이고, 그때도 같은 키다(장부).
+    /// ★ 재시도는 서버가 키로 중복을 걸러 줄 때만 안전하다. 키를 모르는 옛 서버(공용 서비스가 옛 두 인자 모양으로 되묻는다)에
+    ///   다시 보내면 **두 통**이 된다. 그래서 이 실행에서 ok 응답에 message_id 를 한 번이라도 본 뒤(`serverConfirmsRows`)에만 한다 —
+    ///   그 전에는 예전 그대로 한 번 실패로 끝난다.
+    private func deliverMessage(
+        to userID: String,
+        body: String,
+        clientMessageID: String,
+        generation: Int
+    ) async -> PokeSendResponse? {
+        var retried = false
+        var answerMissed = false
+        while true {
+            do {
+                return try await withSessionRetry { activeSession in
+                    try await service.sendMessage(
+                        accessToken: activeSession.accessToken, to: userID, body: body, clientMessageID: clientMessageID
+                    )
                 }
             } catch {
-                if case .cancelled = classifyAuthError(error) { return }
-                guard generation == sessionGeneration else { return }
+                if case .cancelled = classifyAuthError(error) { return nil }
+                guard generation == sessionGeneration else { return nil }
+                let ambiguous = Self.isAmbiguousMessageSendFailure(error)
+                if ambiguous { answerMissed = true }
+                if ambiguous, !retried, messageReadRuntime.sendLedger.serverConfirmsRows {
+                    retried = true
+                    await messageSendRetrySleep(Self.messageSendRetryDelaySeconds)
+                    // 자는 동안 로그아웃했으면 앞 계정의 말을 새 계정 토큰으로 보내게 된다 — 다시 잰다.
+                    guard generation == sessionGeneration else { return nil }
+                    continue
+                }
+                // 한 번이라도 답을 못 받았으면 그 말은 **저장됐을 수 있다** — 키를 기억해 두면 사용자의 다시 보내기가 같은 키로 나가
+                // 서버가 한 통으로 접는다. 재시도가 확정 실패(4xx 등)로 끝나도 앞 시도의 몫이 남으므로 기억한다.
+                if answerMissed {
+                    messageReadRuntime.sendLedger.rememberUnanswered(
+                        peer: userID, body: body, key: clientMessageID, at: clock()
+                    )
+                }
                 // 마이그레이션 미적용 서버(404/PGRST202)도 여기로 떨어진다 — 메시지만 조용히 못 쓰고
                 // 찌르기/울트라는 그대로 산다.
                 messageNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
+                return nil
             }
         }
+    }
+
+    /// "서버의 답을 못 받았다" — 보낸 말이 **저장됐는지 모르는** 실패의 판정(2026-10-30 안정화).
+    ///
+    /// · 5xx(공용 매핑이 `.invalidResponse(≥500)` 으로 접는다): 504 는 게이트웨이가 기다리다 포기한 것이라 DB 는 저장했을 수 있다.
+    /// · 연결이 끊기거나 시간이 지난 URLError: 요청이 서버에 닿았는지 모른다. 닿지 않은 것이 확실한 갈래(연결 못 함 · 주소 못 찾음 ·
+    ///   오프라인)도 넣는다 — 같은 키로 다시 보내는 것은 그쪽에서도 해가 없고, 가르려 들면 판정이 플랫폼마다 갈린다.
+    /// · **확정 답은 넣지 않는다**: 4xx·429(서버가 거절했다 — 저장 안 됨) · 401(withSessionRetry 가 이미 갱신해 다시 보냈다) ·
+    ///   디코드 실패(답은 받았다). 취소는 부르는 쪽이 먼저 걸러 조용히 접는다.
+    nonisolated static func isAmbiguousMessageSendFailure(_ error: Error) -> Bool {
+        if let serviceError = error as? SupabaseWorkServiceError {
+            if case .invalidResponse(let status) = serviceError { return status >= 500 }
+            return false
+        }
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .timedOut, .networkConnectionLost, .cannotConnectToHost, .notConnectedToInternet,
+             .cannotFindHost, .dnsLookupFailed, .badServerResponse, .secureConnectionFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// send_message `ok` 가 실어 준 **서버 행 확정**(message_id · created_at) → 내 말 한 줄(2026-10-30 안정화).
+    /// 둘 중 하나라도 없거나 시각을 못 읽으면 nil — 옛 서버다(이력 재조회로만 선다, 예전 그대로).
+    ///
+    /// · 시각은 서버 created_at 을 **이력 행과 같은 눈금(초, 반올림)**으로 둔다. 이력은 `created_epoch`
+    ///   (`extract(epoch …)::bigint` — 반올림)로 시각을 세우므로, 소수초를 남기면 다음 이력의 같은 행과 시각이 달라
+    ///   같은 초의 다른 말과 자리가 한 번 튄다.
+    /// · 본문은 **서버가 ok 에 실어 준 저장 본문**(`response.body`)이 정본이다 — 서버만 하는 접기(CRLF → LF · 빈 줄 셋 이상 → 둘 ·
+    ///   가장자리 ZWSP/BOM)가 걸린 글을 클라 본문으로 세우면, 곧바로 따라오는 이력이 같은 id 로 갈아 끼울 때 글자가 한 번 바뀐다.
+    ///   그 키가 없는 응답이면 **보낸 정규화 본문**(`MessageBody.validate` 가 전선에 실은 값)으로 접는다. 어느 쪽이든 이력 행과
+    ///   같은 옮김 규칙(`sanitized` · 빈 본문 버림)을 지난다.
+    /// · 이름·아바타는 이미 아는 값(그 사람과의 이력 → 콕찌르기 목록)에서 채운다. 대화 묶음은 **가장 최근 행**의 이름을 쓰므로
+    ///   여기서 지어낸 "사용자"가 들어가면 머리 이름이 한 왕복 동안 바뀐다. 모르면 이력 행 규칙 그대로("사용자", 아바타 없음).
+    /// · 읽음(1): 서버가 읽음을 알면 false(방금 보냈다 — 아직 안 읽었다), 모르면 nil(옛 서버 — 1 을 그리지 않는 이력 규칙).
+    ///   내 말이라 `isUnread` 는 언제나 nil 이다 — 안 읽음 집합·목록 순서를 움직이지 않는다.
+    func confirmedSentMessageEntry(
+        _ response: PokeSendResponse,
+        to peer: String,
+        sentBody: String,
+        createdAt: Date?
+    ) -> MessageHistoryEntry? {
+        guard let id = response.messageId, !id.isEmpty, let createdAt else { return nil }
+        let wireBody: String? = if case .ok(let normalized) = MessageBody.validate(sentBody) { normalized } else { nil }
+        guard let stored = response.body ?? wireBody else { return nil }
+        let body = MessageBody.sanitized(stored)
+        guard MessageBody.hasVisibleContent(body) else { return nil }
+        let identity = knownMessagePeerIdentity(peer)
+        return MessageHistoryEntry(
+            id: id,
+            peerUserID: peer,
+            peerName: identity.name,
+            peerAvatarURL: identity.avatarURL,
+            body: body,
+            createdAt: Date(timeIntervalSince1970: createdAt.timeIntervalSince1970.rounded()),
+            isMine: true,
+            readByPeer: messageReadReceiptsAvailable ? false : nil,
+            isUnread: nil
+        )
+    }
+
+    /// 그 사람의 이름·아바타 중 **이미 아는 값**(이력의 가장 최근 행 → 콕찌르기 목록 → 이력 행 폴백).
+    private func knownMessagePeerIdentity(_ peer: String) -> (name: String, avatarURL: URL?) {
+        if let latest = messageHistory.last(where: { $0.peerUserID == peer }) {
+            return (latest.peerName, latest.peerAvatarURL)
+        }
+        if let entry = pokeDirectory.first(where: { $0.userID == peer }), !entry.name.isEmpty {
+            return (entry.name, entry.avatarURL)
+        }
+        return ("사용자", nil)
+    }
+
+    /// 서버가 확정한 내 말을 **지금** 이력에 넣는다(2026-10-30 안정화). 반환값은 넣었는가.
+    ///
+    /// · id 가 이미 있으면 넣지 않는다 — 서버 행이 이긴다(중복 재전송의 `duplicate` 응답이 같은 id 를 돌려줘도 한 줄이다).
+    /// · 넣은 id 는 장부에 (넣은 순간의 일련번호, 넣은 시각)으로 적는다 — **전송 전에 띄운 이력 응답이 나중에 도착해** 이 줄 없는
+    ///   목록으로 판을 갈아도 말풍선이 사라지지 않게(`survivingConfirmedSentRows`), 그리고 같은 초 동률의 도착 순서표로.
+    /// · 정렬은 이력 응답·즉시 삽입과 **같은 규칙**(`sortedForMessageHistory`, 같은 두 표)이다.
+    /// · 읽음 판정은 돌지 않는다 — 내 말은 안 읽음이 아니라 올릴 경계가 없다.
+    @discardableResult
+    func insertConfirmedSentMessage(_ entry: MessageHistoryEntry) -> Bool {
+        guard !messageHistory.contains(where: { $0.id == entry.id }) else { return false }
+        messageReadRuntime.confirmedSentRows[entry.id] = MessageReadRuntime.ConfirmedSentRow(
+            serial: messageReadRuntime.nextSerial(), insertedAt: clock()
+        )
+        let merged = (messageHistory + [entry]).sortedForMessageHistory(
+            serverOrder: messageHistoryReadSnapshot?.serverOrder,
+            arrivalOrder: messageReadRuntime.localArrivalOrder
+        )
+        if messageHistory != merged { messageHistory = merged }
+        return true
     }
 }
 
@@ -1074,7 +1238,7 @@ extension WorkTimerStore {
         for entry in additions { messageReadRuntime.localArrivalSerials[entry.id] = messageReadRuntime.nextSerial() }
         let merged = (messageHistory + additions).sortedForMessageHistory(
             serverOrder: messageHistoryReadSnapshot?.serverOrder,
-            arrivalOrder: messageReadRuntime.localArrivalSerials
+            arrivalOrder: messageReadRuntime.localArrivalOrder
         )
         if messageHistory != merged { messageHistory = merged }
         evaluateMessageReadMarking()
@@ -1147,8 +1311,60 @@ final class MessageReadRuntime {
     /// 대화 기록에 **즉시 넣은** 찌르기(v0.3.65 — take_pokes 소비분): 찌르기 id → 넣은 순간의 일련번호. 위 표와 같은 규칙이다
     /// (그보다 먼저 띄운 이력 응답은 그 찌르기를 지우지 않고, 나중에 띄운 응답이 오면 서버가 이긴다 · 같은 초의 도착 순서표).
     var pokeLocalArrivalSerials: [String: Int] = [:]
+    /// 전송 성공 응답의 **서버 행 확정**으로 세운 내 말(2026-10-30 안정화): 메시지 id → (세운 순간의 일련번호, 세운 시각).
+    /// 도착분(`localArrivalSerials`)과 표를 나누는 이유는 남기는 규칙이 다르기 때문이다 — `survivingConfirmedSentRows`.
+    var confirmedSentRows: [String: ConfirmedSentRow] = [:]
+    /// 전송 멱등 키 장부(2026-10-30 안정화). 계정에 묶인다 — 로그아웃이 이 장부를 통째로 바꿔 깃발·기억을 함께 지운다.
+    var sendLedger = MessageSendLedger()
+
+    struct ConfirmedSentRow: Equatable {
+        let serial: Int
+        let insertedAt: Date
+    }
+
+    /// 서버 행 확정으로 세운 내 말을 남기는 상한(초). 그동안 그 id 를 실은 이력이 안 오면(보관 창 밖 · 서버에서 사라짐) 서버가 이긴다.
+    nonisolated static let confirmedSentRetentionSeconds: TimeInterval = 60
 
     nonisolated init() {}
+
+    /// 서버가 아직 모르는 줄들의 같은 초 **도착 순서표**: 즉시 삽입한 도착분 ∪ 서버 행 확정으로 세운 내 말(한 일련번호 눈금).
+    /// 이력을 세울 때·즉시 삽입할 때·대화 묶음을 만들 때 **이 표 하나**를 넘긴다 — 한 자리만 다른 표를 보면 화면 순서와
+    /// 읽음 경계 판정의 자리 순서가 갈린다(`messageThreads` 주석).
+    var localArrivalOrder: [String: Int] {
+        guard !confirmedSentRows.isEmpty else { return localArrivalSerials }
+        var order = localArrivalSerials
+        for (id, row) in confirmedSentRows where order[id] == nil { order[id] = row.serial }
+        return order
+    }
+
+    /// 일련번호 `historySerial` 로 띄운 이력 응답(`server`)을 반영할 때 **남겨야 할 내 말**(서버 행 확정분)을 고르고 장부를 정리한다.
+    ///  · 세운 **뒤에** 띄운 응답이 그 id 를 실었으면 → 서버 행이 이긴다(장부에서 뺀다). 그 뒤의 응답은 번호 가드상 이보다 나중 것뿐이다.
+    ///  · 세운 **앞에** 띄운 응답이 그 id 를 실었으면 → 그 줄은 서버 행으로 선다(남기지 않는다 — 한 줄). 장부는 남긴다.
+    ///  · 응답에 없으면 → 남긴다. 전송 전에 띄운 조회는 그 말을 모르고, 뒤에 띄운 조회도 복제 지연·늦은 커밋이면 모를 수 있다.
+    ///  · 세운 지 60초가 지났으면 → 서버가 답할 시간을 충분히 줬다. 장부에서 빼고, 응답에 없으면 남기지 않는다(서버가 이긴다).
+    /// 남기는 줄은 **지금 이력에 있는 그 줄**이다(도착분과 같은 규칙 — 다른 자리가 걷어 낸 줄을 되살리지 않는다).
+    func survivingConfirmedSentRows(
+        historySerial: Int,
+        current: [MessageHistoryEntry],
+        server: [MessageHistoryEntry],
+        now: Date
+    ) -> [MessageHistoryEntry] {
+        guard !confirmedSentRows.isEmpty else { return [] }
+        let serverIDs = Set(server.map(\.id))
+        var keepIDs: Set<String> = []
+        for (id, row) in confirmedSentRows {
+            let known = serverIDs.contains(id)
+            let expired = now.timeIntervalSince(row.insertedAt) >= Self.confirmedSentRetentionSeconds
+            if (known && historySerial > row.serial) || expired {
+                confirmedSentRows[id] = nil
+            } else if !known {
+                keepIDs.insert(id)
+            }
+        }
+        guard !keepIDs.isEmpty else { return [] }
+        var seen: Set<String> = []
+        return current.filter { keepIDs.contains($0.id) && seen.insert($0.id).inserted }
+    }
 
     /// `survivingLocalArrivals` 의 찌르기 짝(v0.3.65). 규칙은 글자 그대로 같다 — 타입만 다르다.
     func survivingLocalPokeArrivals(
@@ -1248,3 +1464,65 @@ final class MessageReadRuntime {
 }
 
 // D-base: 순수 규칙(읽음 값 타입 · `MessageUnreadRules` · 정렬 · `MessageThreadBuilder`)과 안내 문장은 코어 `MessageRules.swift` 로 옮겼다.
+
+/// 전송 멱등 키 장부(2026-10-30 안정화 — 순수 값). `MessageReadRuntime.sendLedger` 로 들고, 로그아웃이 장부째 바꾼다.
+///
+/// 서버(`send_message(p_to, p_body, p_client_message_id)`)는 같은 (보낸이, 키)를 두 번 받으면 행을 하나만 두고 그 행을
+/// `duplicate` 로 돌려준다. 그래서 키는 **"같은 한 번의 전송 의도"**의 이름이어야 한다 — 이 장부가 그 경계를 정한다:
+///  · 전송마다 새 키(UUID 소문자).
+///  · 단, **서버의 답을 못 받은** 전송(저장됐는지 모른다)은 (상대, 본문, 키, 시각)을 기억하고, 10분 안에 **같은 상대에게
+///    같은 본문**을 보내면 그 키를 다시 쓴다 — 사용자의 "다시 보내기"가 두 통이 되지 않는다.
+///  · 서버가 확정 답(ok · 거절 status)을 준 전송은 기억하지 않는다 — 같은 말을 일부러 두 번 보내는 것은 정상 사용이다.
+///  · 본문 비교는 **전선에 실리는 값**(`MessageBody.validate` 의 정규화 본문)으로 한다. 다른 글에 같은 키를 실으면 서버는 앞 글을
+///    돌려주고 새 글은 조용히 사라진다 — 그래서 한 글자라도 다르면 새 키다.
+/// `serverConfirmsRows` 는 "이 서버는 키로 중복을 거른다"의 증거(이 실행에서 ok 응답에 message_id 를 본 적이 있다)다.
+/// 응답 유실 **자동** 재시도만 이 깃발을 본다 — 수동 재전송의 키 재사용은 옛 서버에서도 해가 없다(옛 서버는 키를 버린다).
+struct MessageSendLedger: Equatable {
+    struct Unanswered: Equatable {
+        let peer: String
+        let body: String
+        let key: String
+        let at: Date
+    }
+
+    /// 답을 못 받은 전송의 키를 다시 쓰는 창(초). 서버는 메시지를 24시간 두므로 그 안쪽이고, 이보다 늦게 같은 말을 보내면 새 말로 본다.
+    static let reuseWindowSeconds: TimeInterval = 600
+    /// 기억하는 개수 상한(장애가 길어도 장부가 자라지 않게 — 오래된 것부터 버린다).
+    static let capacity = 16
+
+    private(set) var unanswered: [Unanswered] = []
+    var serverConfirmsRows = false
+
+    init() {}
+
+    /// 이번 전송의 키. 10분 안에 답을 못 받은 같은 (상대, 본문)이 있으면 그 키, 아니면 새 키.
+    mutating func key(peer: String, body: String, now: Date) -> String {
+        prune(now: now)
+        let wire = Self.wireBody(body)
+        if let hit = unanswered.last(where: { $0.peer == peer && $0.body == wire }) { return hit.key }
+        return UUID().uuidString.lowercased()
+    }
+
+    /// 답을 못 받았다 — 이 키를 기억한다. 같은 키가 이미 있으면 **처음 시각**을 지킨다(창은 첫 실패에서 잰다).
+    mutating func rememberUnanswered(peer: String, body: String, key: String, at: Date) {
+        prune(now: at)
+        guard !unanswered.contains(where: { $0.key == key }) else { return }
+        unanswered.append(Unanswered(peer: peer, body: Self.wireBody(body), key: key, at: at))
+        if unanswered.count > Self.capacity { unanswered.removeFirst(unanswered.count - Self.capacity) }
+    }
+
+    /// 서버가 이 키에 답했다(ok · 거절) — 잊는다.
+    mutating func settle(key: String) {
+        unanswered.removeAll { $0.key == key }
+    }
+
+    private mutating func prune(now: Date) {
+        unanswered.removeAll { now.timeIntervalSince($0.at) >= Self.reuseWindowSeconds }
+    }
+
+    /// 전선에 실리는 본문(공용 서비스가 보내는 바로 그 값). 보낼 수 없는 본문(빈 글·초과)은 네트워크를 안 타므로 원문 그대로 둔다.
+    static func wireBody(_ body: String) -> String {
+        if case .ok(let normalized) = MessageBody.validate(body) { return normalized }
+        return body
+    }
+}

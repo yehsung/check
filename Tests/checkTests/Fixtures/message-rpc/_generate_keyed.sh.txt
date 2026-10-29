@@ -1,0 +1,23 @@
+#!/bin/bash
+# 서버 안정화(2026-10-30) — send_message 멱등 키 응답 골든 픽스처 2개. 통합 체인(145 파일, PG17) 하네스에서
+# harness.login 으로 A 를 흉내 내 **실제 함수 출력 그대로** 떨군다(직렬화는 _generate.sh.txt 와 같이 jsonb::text).
+# 운영에는 닿지 않는다(lib.sh 가 127.0.0.1:$HARNESS_PORT 로 못 박는다). 사용: gen_keyed.sh OUT_DIR
+set -euo pipefail
+R=/Users/yesung/.claude/projects/-Users-yesung-check/stab-1030
+HARNESS=$R/integ/tools/replay-harness-v2
+OUT="$1"; mkdir -p "$OUT"
+export HARNESS_PORT=55470 HARNESS_PGBIN=/opt/homebrew/opt/postgresql@17/bin MIG_DIR=$R/integ/wt/supabase/migrations CRON_SHIM=1
+. "$HARNESS/lib.sh"
+A=267a3495-643c-40cc-b1a7-14967166eae1; B=3e240c02-8972-478e-a674-014f498a641b
+K=00000000-0000-4000-8000-0000000000e1
+KEEP_CLUSTER=1 bash "$HARNESS/replay_all.sh" >/dev/null
+trap 'cluster_stop' EXIT
+"$PGBIN/psql" -X -q -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f "$HARNESS/harness_helpers.sql" >/dev/null
+{ printf '\\o /dev/null\nset role postgres;\nbegin;\n'; cat <<SQL; printf 'rollback;\n'; } | "$PGBIN/psql" -X -q -At -v ON_ERROR_STOP=1 -U migrator -d postgres
+select harness.login('$A'::uuid) \g /dev/null
+select public.send_message('$B'::uuid, E'  키 있는 첫 글\r\n둘째 줄  ', '$K'::uuid)::text \g '$OUT/send_message__ok_keyed.json'
+select public.send_message('$B'::uuid, E'  키 있는 첫 글\r\n둘째 줄  ', '$K'::uuid)::text \g '$OUT/send_message__duplicate.json'
+select harness.expect((select count(*) from public.messages where from_user = '$A' and client_message_id = '$K') = 1, '같은 키 행 하나');
+SQL
+for f in "$OUT"/send_message__ok_keyed.json "$OUT"/send_message__duplicate.json; do perl -pi -e 'chomp if eof' "$f"; done
+cat "$OUT"/send_message__ok_keyed.json; echo; cat "$OUT"/send_message__duplicate.json; echo

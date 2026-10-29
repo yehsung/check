@@ -17,8 +17,8 @@ published: false
 | 파일 | 콘솔 자리 | 내용 |
 |---|---|---|
 | [store-listing.md](store-listing.md) | 성장 → 스토어 등록정보 · 스토어 설정 | 앱 이름, 간단한 설명(80자), 자세한 설명(4000자), 출시 노트, 카테고리, 연락처, 그래픽 자산 계획 |
-| [data-safety.md](data-safety.md) | 앱 콘텐츠 → 데이터 보안 | 수집 항목 표(E §9.5 와 같은 답) + 서버 표·칸 근거 + 처리방침 대조 |
-| [content-rating.md](content-rating.md) | 앱 콘텐츠 → 콘텐츠 등급(IARC) | 설문 답(E §9.3 과 같은 답) + 모의 도박 위험 |
+| [data-safety.md](data-safety.md) | 앱 콘텐츠 → 데이터 보안 | 수집 항목 표(E §9.5 + 소속 센터 1행, G §8-19 #3) + 서버 표·칸 근거 + 처리방침 대조 |
+| [content-rating.md](content-rating.md) | 앱 콘텐츠 → 콘텐츠 등급(IARC) | 설문 답(E §9.3 + 모의 도박 '아니오' 사용자 결정, G §8-19 #6①) + 알린 위험 |
 | [app-access.md](app-access.md) | 앱 콘텐츠 → 앱 액세스 | 데모 계정 **자리**(자격증명 없음) + 영어 심사 지시문 |
 | [app-content.md](app-content.md) | 앱 콘텐츠의 나머지 · 출시 설정 | 처리방침 URL, 계정 삭제 URL, 광고 없음, 광고 ID, 대상 연령, 기타 선언, 사전 출시 보고서, 관리형 게시 |
 
@@ -49,10 +49,8 @@ published: false
 1. 처리방침 URL 이 열리는지 확인한다 → [app-content.md](app-content.md) §1
 2. 웹 계정 삭제 URL 이 실제로 열리는지 확인한다(죽은 링크도 위반 — E §9.9 (d)) → [app-content.md](app-content.md) §2
 3. 데이터 보안 → [data-safety.md](data-safety.md)
-   - **[data-safety.md](data-safety.md) §3 #1(소속 센터) 결정 전에는 제출하지 않는다.**
-   - 센터는 가입 필수이고 모든 사용자에게 보이는데, 지금 표(= E §9.5)에는 없다. 이대로 내면 덜 신고한 것이 된다(E §9.9 계정 경고 위험).
-   - 결정하면 E §9.5 · 이 문서 §2 · 검사기 `E_DATA_SAFETY` 를 같은 커밋에서 고친다.
-4. 콘텐츠 등급(모의 도박 '예')
+   - 소속 센터는 '개인 정보 › 기타 정보' 행으로 신고한다(G §8-19 #3 — §2 표에 반영, 검사기 `G_DATA_SAFETY_ADDS`).
+4. 콘텐츠 등급(모의 도박 '아니오' — 사용자 결정 2026-10-30, 아이폰과 같게. G §8-19 #6①)
    - 제출 전에 지역별 결과(특히 GRAC)를 본다.
    - 자세한 것은 [content-rating.md](content-rating.md).
 5. 앱 액세스 → [app-access.md](app-access.md)

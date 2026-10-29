@@ -22,6 +22,9 @@ G §2-3 W6-c 완료 기준을 글자로 잰다.
 ★ 기대값(E_DATA_SAFETY · E_IARC)은 구현을 거울처럼 옮긴 것이 아니라 설계 E §9.5·§9.3 표의 원문 글자다(--e-source 로 잰다).
   답을 바꾸려면 설계(E)를 먼저 고치고 여기 기대값을 같은 커밋에서 고친다 — 문서만 고치면 이 검사가 빨갛다(의도한 동작).
   E 원문에서 문서가 일부러 뺀 글자는 E_IARC_EDITS 에만 적는다(이유와 함께). 그 밖의 차이는 전부 빨강이다.
+  G 결정이 E 보다 앞선 답(판정이 바뀐 것)은 G_IARC_DECISIONS · G_DATA_SAFETY_ADDS 에만 적는다(결정 절·날짜와 함께).
+  E 표는 원문 그대로 두고(--e-source 는 원문과 잰다) 문서 기대값에만 얹는다. E 가 같은 결정으로 고쳐지면 --e-source 가
+  빨개진다 → 그 줄을 E_IARC·E_DATA_SAFETY 로 접고 G_* 에서 지운다(self-test 가 이미 E 에 있는 G 줄을 빨갛게 잡는다).
 ★ 규칙마다 결함 표본을 규칙 바로 옆에 둔다. self-test 는 (가) 규칙 이름 목록이 SELF_TEST_PINS 와 같은지,
   (나) 표본을 문서에 심은 사본이 **그 규칙 이름으로** 빨개지는지 잰다. 규칙 하나를 지우면 (가)가, 규칙 하나를 망가뜨리면
   (나)가 빨갛다. 규칙을 더하거나 빼는 일은 규칙과 SELF_TEST_PINS 를 같은 커밋에서 고치는 일이다.
@@ -161,6 +164,9 @@ STALE_RULES = [
     ("all-time", r"all-time", "역대 순위는 Android 첫 판에 넣지 않는다(G §8-18 #7)", "all-time ranking"),
     ("all-time-ko", r"역대", "역대 순위는 Android 첫 판에 넣지 않는다(G §8-18 #7)", "오늘·역대 순위"),
     ("challenge-mission", r"도전\s*미션", "iOS 1.0.13 에서 「누적 미션」으로 바뀐 옛 이름이다", "「도전 미션」"),
+    ("gambling-declared", r"declared as simulated gambling|simulated gambling[^.]{0,40}\bdeclared\b|모의\s*도박[^.]{0,20}신고",
+     "콘텐츠 등급 '모의 도박'은 '아니오'로 낸다(G §8-19 #6① 사용자 결정 2026-10-30)",
+     "This is declared as simulated gambling in the content rating questionnaire."),
 ]
 STALE_RES = [(i, re.compile(p, re.I), why, sample) for i, p, why, sample in STALE_RULES]
 
@@ -178,7 +184,6 @@ REQUIRED_PHRASES = {
         "cannot be bought",
         "Report",
         "Block",
-        "simulated gambling",
         "Show odds",
         "isolated",
     ],
@@ -215,9 +220,21 @@ E_IARC = [
     ("무제한 웹 접근", "아니오"),
 ]
 # E 원문에서 문서가 일부러 뺀 글자: 항목 → (뺀 글자, 이유). 답(판정)은 바꾸지 않는 것만 여기 둔다.
-E_IARC_EDITS = {
-    "모의 도박": (", 수수료 10%", "2026-10-22 duel_fee_off 로 대결 수수료가 없어졌다 — 답 '예'는 그대로, 확률·비율 숫자 0 규칙(①)과도 맞는다"),
+# (모의 도박 답 끝 ', 수수료 10%' 를 빼던 줄은 아래 G 결정 답이 답 전체를 갈아 끼우면서 쓸 데가 없어져 지웠다 —
+#  결정 답에도 수수료 마디는 없다. 2026-10-22 duel_fee_off.)
+E_IARC_EDITS = {}
+
+# ③' G 결정이 E 원문보다 앞선 답. E 표(위)는 원문 그대로 두고 문서 기대값에만 얹는다(머리 주석 ★ 셋째).
+# 항목 → (문서 답 칸 글자, 결정 근거).
+G_IARC_DECISIONS = {
+    "모의 도박": ("**아니오(사용자 결정 · 아이폰과 같게)** — 루비(판매·환금 없음)로 오목·체스·테트리스 판돈 3/5/10",
+              "G §8-19 #6① 사용자 결정(2026-10-30 0시, 되묻지 말 것): Play 콘텐츠 등급 '모의 도박' = '아니오'(아이폰과 같게)"),
 }
+# (이 E 항목 바로 뒤에 넣는다, 더할 행(E 열 넷: 항목 · 수집 · 필수/선택 · 목적), 결정 근거).
+G_DATA_SAFETY_ADDS = [
+    ("개인 정보 › 사용자 ID", ("개인 정보 › 기타 정보", "예(소속 센터)", "필수", "앱 기능"),
+     "G §8-19 #3(2026-10-30 0시): 소속 센터 profiles.center 는 가입 필수·모두에게 보이는 값이라 신고한다"),
+]
 
 
 def _norm(cell):
@@ -229,13 +246,25 @@ def _plain(cell):
 
 
 def iarc_expected():
-    """E 원문 답에 E_IARC_EDITS 를 적용한 기대 답(정규화)."""
+    """E 원문 답에 G 결정(답 전체 교체) 또는 E_IARC_EDITS(글자 빼기)를 적용한 기대 답(정규화)."""
     out = []
     for item, answer in E_IARC:
-        edit = E_IARC_EDITS.get(item)
-        if edit is not None:
-            answer = answer.replace(edit[0], "", 1)
+        if item in G_IARC_DECISIONS:
+            answer = G_IARC_DECISIONS[item][0]
+        else:
+            edit = E_IARC_EDITS.get(item)
+            if edit is not None:
+                answer = answer.replace(edit[0], "", 1)
         out.append((item, _norm(answer)))
+    return out
+
+
+def data_safety_expected():
+    """E §9.5 원문 행에 G 결정 행을 끼운 기대 행. 끼울 자리(앞 항목)가 E 에 없으면 맨 끝에 붙인다(self-test 가 잡는다)."""
+    out = list(E_DATA_SAFETY)
+    for anchor, row, _ in G_DATA_SAFETY_ADDS:
+        idx = [i for i, r in enumerate(out) if r[0] == anchor]
+        out.insert(idx[0] + 1 if len(idx) == 1 else len(out), row)
     return out
 
 
@@ -339,14 +368,15 @@ def check(docs):
                 fails.append(("data-safety", "cells", "data-safety.md §2: 칸이 모자란 행이 있다"))
             got = [(_plain(r[0]), _plain(r[1]), _plain(r[3]), _plain(r[4]), _plain(r[2])) for r in rows if len(r) >= 5]
             have = [g[:4] for g in got]
-            if have != E_DATA_SAFETY:
+            want_ds = data_safety_expected()
+            if have != want_ds:
                 before = len(fails)
-                for miss in [w for w in E_DATA_SAFETY if w not in have]:
-                    fails.append(("data-safety", "rows", "E §9.5 와 다름 — 없거나 바뀐 행: %s" % " | ".join(miss)))
-                for extra in [h for h in have if h not in E_DATA_SAFETY]:
-                    fails.append(("data-safety", "rows", "E §9.5 에 없는 행: %s" % " | ".join(extra)))
+                for miss in [w for w in want_ds if w not in have]:
+                    fails.append(("data-safety", "rows", "E §9.5(+G 결정)와 다름 — 없거나 바뀐 행: %s" % " | ".join(miss)))
+                for extra in [h for h in have if h not in want_ds]:
+                    fails.append(("data-safety", "rows", "E §9.5(+G 결정)에 없는 행: %s" % " | ".join(extra)))
                 if len(fails) == before:
-                    fails.append(("data-safety", "rows", "E §9.5 와 행 순서나 개수가 다르다"))
+                    fails.append(("data-safety", "rows", "E §9.5(+G 결정)와 행 순서나 개수가 다르다"))
             for g in got:
                 if g[4] not in ("아니오", "—"):
                     fails.append(("data-safety", "share",
@@ -392,7 +422,10 @@ def check_e_source(text):
         if got != want:
             for g, w in zip(got + [None] * len(want), want + [None] * len(got)):
                 if g != w:
-                    fails.append(("e-source", "iarc", "E §9.3: E=%s · 검사기=%s" % (g, w)))
+                    hint = ""
+                    if w is not None and w[0] in G_IARC_DECISIONS:
+                        hint = " — E 가 G 결정으로 고쳐졌으면 E_IARC 로 접고 G_IARC_DECISIONS 에서 지운다"
+                    fails.append(("e-source", "iarc", "E §9.3: E=%s · 검사기=%s%s" % (g, w, hint)))
                     break
     return fails
 
@@ -409,7 +442,7 @@ SELF_TEST_PINS = {
               "two-games-ko",
               "iphone", "ios", "apns", "app-store", "testflight", "guideline", "new-in", "phone-login",
               "already-achieved", "turns-achieved", "cred-template", "fee-en", "fee-ko", "crossy", "crossy-ko",
-              "all-time", "all-time-ko", "challenge-mission"],
+              "all-time", "all-time-ko", "challenge-mission", "gambling-declared"],
     "required": [
         ("full_description", "aing-check.vercel.app/delete-account"),
         ("full_description", "현금으로 사거나 바꿀 수 없"),
@@ -422,7 +455,6 @@ SELF_TEST_PINS = {
         ("review_notes_long", "cannot be bought"),
         ("review_notes_long", "Report"),
         ("review_notes_long", "Block"),
-        ("review_notes_long", "simulated gambling"),
         ("review_notes_long", "Show odds"),
         ("review_notes_long", "isolated"),
     ],
@@ -446,7 +478,11 @@ TABLE_MUTATIONS = [
     ("ds-purpose", "data-safety.md", "| 개인 정보 › 사용자 ID | 예 | 아니오 | 필수 | 계정 관리 |",
      "| 개인 정보 › 사용자 ID | 예 | 아니오 | 필수 | 앱 기능 |", ("data-safety", "rows")),
     ("ds-extra-row", "data-safety.md", "| 보안: 전송 중 암호화 |",
-     "| 개인 정보 › 기타 정보 | 예 | 아니오 | 필수 | 앱 기능 | 소속 센터 |\n| 보안: 전송 중 암호화 |", ("data-safety", "rows")),
+     "| 개인 정보 › 주소 | 예 | 아니오 | 필수 | 앱 기능 | 주소 |\n| 보안: 전송 중 암호화 |", ("data-safety", "rows")),
+    ("ds-center-required", "data-safety.md", "| 개인 정보 › 기타 정보 | 예(소속 센터) | 아니오 | 필수 |",
+     "| 개인 정보 › 기타 정보 | 예(소속 센터) | 아니오 | 선택 |", ("data-safety", "rows")),
+    ("ds-center-collect", "data-safety.md", "| 개인 정보 › 기타 정보 | 예(소속 센터) | 아니오 |", "| 개인 정보 › 기타 정보 | 아니오 | 아니오 |",
+     ("data-safety", "rows")),
     ("ds-share", "data-safety.md", "| 메시지 › 기타 인앱 메시지 | 예 | 아니오 |", "| 메시지 › 기타 인앱 메시지 | 예 | 예 |", ("data-safety", "share")),
     ("ds-section", "data-safety.md", "## 2. 항목별 답", "## 둘. 항목별 답", ("data-safety", "section")),
     ("iarc-drop-row", "content-rating.md", "| 위치 공유 | 아니오 | 위치 코드·권한 없음 |\n", "", ("iarc", "names")),
@@ -456,6 +492,7 @@ TABLE_MUTATIONS = [
 ROW_MUTATIONS = [
     ("ds-drop-row", "data-safety.md", "| 보안: 삭제 요청 수단 |", "drop", ("data-safety", "rows")),
     ("ds-swap-rows", "data-safety.md", "| 보안: 삭제 요청 수단 |", "swap-up", ("data-safety", "rows")),
+    ("ds-drop-center", "data-safety.md", "| 개인 정보 › 기타 정보 |", "drop", ("data-safety", "rows")),
 ]
 # IARC 항목마다 뜻을 뒤집은 답(문서 §2 표의 둘째 칸을 통째로 바꾼다).
 IARC_FLIPS = [
@@ -463,7 +500,8 @@ IARC_FLIPS = [
     ("앱 범주", '게임이 아닌 "기타(생산성·커뮤니케이션)"가 아니라 게임'),
     ("폭력·공포·성적·언어·약물·저속한 유머", "만화 폭력"),
     ("실제 도박", "예"),
-    ("모의 도박", "**아니오** — 루비(판매·환금 없음)로 오목·체스·테트리스 판돈 3/5/10"),
+    ("모의 도박", "**예(추천)** — 루비(판매·환금 없음)로 오목·체스·테트리스 판돈 3/5/10"),   # 결정 전 옛 답으로 되돌림
+    ("모의 도박", "**예** — 루비(판매·환금 없음)로 오목·체스·테트리스 판돈 3/5/10"),
     ("사용자 상호작용(메시지·채팅·UGC)", "아니오"),
     ("위치 공유", "예"),
     ("디지털 상품 구매", "예"),
@@ -606,6 +644,18 @@ def self_test():
         problems.append("콘솔 칸 목록이 고정 목록과 다르다: %s" % FIELDS_BY_FILE)
     if REQUIRED_FILES != SELF_TEST_FILES:
         problems.append("필수 파일 목록이 고정 목록과 다르다: %s" % REQUIRED_FILES)
+    # G 결정 줄: 얹을 자리가 E 원문에 있어야 하고, 이미 E 에 접힌 줄은 남기지 않는다(머리 주석 ★ 셋째).
+    e_iarc = dict(E_IARC)
+    for item, (answer, _) in G_IARC_DECISIONS.items():
+        if item not in e_iarc:
+            problems.append("G_IARC_DECISIONS '%s' 가 E §9.3 항목에 없다" % item)
+        elif _norm(e_iarc[item]) == _norm(answer):
+            problems.append("G_IARC_DECISIONS '%s' 는 이미 E 원문과 같다 — E_IARC 로 접고 지운다" % item)
+    for anchor, row, _ in G_DATA_SAFETY_ADDS:
+        if [r[0] for r in E_DATA_SAFETY].count(anchor) != 1:
+            problems.append("G_DATA_SAFETY_ADDS 의 자리 '%s' 가 E §9.5 에 한 번 있지 않다" % anchor)
+        if any(r[0] == row[0] for r in E_DATA_SAFETY):
+            problems.append("G_DATA_SAFETY_ADDS '%s' 는 이미 E §9.5 에 있다 — 접고 지운다" % row[0])
 
     muts = _build_mutations()
     with tempfile.TemporaryDirectory(prefix="w6c-listing-") as tmp:

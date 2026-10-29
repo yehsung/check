@@ -70,7 +70,7 @@ Notifications
 After the first sign-in the app explains notifications, then Android 13 and later show the system permission prompt. This is the only permission the app asks for. Notifications are sent for a new 1:1 message, a Gomoku or Chess challenge, a reply to a bug report, and a work check when a work session started on the phone has not been confirmed for a while.
 
 Rubies, 1:1 matches and the character draw
-Rubies are earned only by working and by playing mini games. They cannot be bought with money, cashed out, or sent to another user. In 게임 (Games), open 1:1 Gomoku, Chess or Tetris, pick the other demo account, choose a stake of 3, 5 or 10 rubies and send a challenge. When it is accepted both players put in the stake; the winner receives both stakes and a draw returns them. This is declared as simulated gambling in the content rating questionnaire. In 나 (Me), the shop has a character draw that costs rubies only and gives a cosmetic character; its odds are shown in the app right on the draw card (확률 보기, "Show odds").
+Rubies are earned only by working and by playing mini games. They cannot be bought with money, cashed out, or sent to another user. In 게임 (Games), open 1:1 Gomoku, Chess or Tetris, pick the other demo account, choose a stake of 3, 5 or 10 rubies and send a challenge. When it is accepted both players put in the stake; the winner receives both stakes and a draw returns them. In 나 (Me), the shop has a character draw that costs rubies only and gives a cosmetic character; its odds are shown in the app right on the draw card (확률 보기, "Show odds").
 
 Reporting and blocking (user-generated content)
 In a 1:1 conversation, tap ··· in the top right for 신고하기 (Report) and 차단하기 (Block); long-press a received message to report only that message. The Gomoku match chat drawer has the same ··· menu. Blocked people are listed under 나 (Me) → 설정 (Settings) → 차단한 사람 (Blocked people), where a block can be lifted. Reports are reviewed within 24 hours.
@@ -113,5 +113,5 @@ iOS 노트(`docs/appstore.md` §5.2)는 판마다 덧붙여 와서 지금 Androi
 
 - 데모 계정은 iOS 숨김 심사 계정 A·B 를 재사용한다. 안내 두 세트, 자격증명은 콘솔에만 넣는다.
 - 로그인은 비밀번호 한 번이다. 2단계 인증이 없고 만료도 없다.
-- 지시문이 다루는 것: 앱 소개, 데모 계정 격리, 알림(권한 하나), 루비·대결·뽑기(모의 도박 신고 사실 포함), 신고·차단, 계정 삭제(앱·웹), 빈 화면 안내.
+- 지시문이 다루는 것: 앱 소개, 데모 계정 격리, 알림(권한 하나), 루비·대결·뽑기(판돈 사실은 그대로 적고 등급 신고 내용은 말하지 않는다 — 모의 도박 '아니오', [content-rating.md](content-rating.md)), 신고·차단, 계정 삭제(앱·웹), 빈 화면 안내.
 - 대결 시연은 서버 ⑤ 뒤에만 된다. 미션 [받기]는 숨김 계정이라 안 보인다.

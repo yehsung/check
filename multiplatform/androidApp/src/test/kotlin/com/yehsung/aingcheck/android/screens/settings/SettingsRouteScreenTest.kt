@@ -105,7 +105,7 @@ class SettingsRouteScreenTest {
         var deletion = 0
         compose.setContent {
             AingTheme(dark = false) {
-                SettingsRouteScreen(meStore(), appearance, port, prefs, openBlockedPeople = { blocked += 1 }, openAccountDeletion = { deletion += 1 })
+                SettingsRouteScreen(meStore(), appearance, PushPrefsSaves(port, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)), prefs, openBlockedPeople = { blocked += 1 }, openAccountDeletion = { deletion += 1 })
             }
         }
         compose.onNodeWithText(BlockReportText.blockedListTitle).performScrollTo().performClick()

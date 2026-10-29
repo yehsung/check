@@ -13,7 +13,6 @@ import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.wire.models.PushPrefs
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.components.DesktopSnapshots
-import com.yehsung.aingcheck.ui.components.PixelImage
 import com.yehsung.aingcheck.ui.components.SnapshotCompare
 import com.yehsung.aingcheck.ui.components.SnapshotPolicy
 import com.yehsung.aingcheck.ui.screens.rankings.RankingsMyFace
@@ -92,21 +91,18 @@ class ScreenSnapshotDesktopTest {
 
     /**
      * 프로필(착용 캐릭터 얼굴 · 별명 · 상태메시지 · 착용 캐릭터 줄). 기준선 = 별명 칸에 "새벽이"(글자 수 · [저장]이 켜진다).
-     * 상태메시지 픽스처 끝의 📝 는 OS 글꼴로 그려진다(맥 Apple Color Emoji · Windows Segoe UI Emoji — 7차 CI windows 칸 최대 141) →
-     * 그 칸만 OS 그림 글자 칸으로 덮는다(W4cDesktopSnapshots 머리말과 같은 규칙 · 칸은 이 러너에서 그 글자만 바꾼 장면과의 차이로 찾는다).
+     * 상태메시지는 픽스처 끝의 그림 글자(📝)를 뺀 값이다: 그림 글자는 OS 글꼴로 그려지고(맥 Apple Color Emoji · Windows Segoe UI Emoji)
+     * 그 글꼴의 줄 높이 · 기준선이 줄 전체를 옮긴다(7차 CI windows — 그림 글자 칸 최대 141, 칸을 덮어도 같은 줄 글자가 3px 내려 69).
+     * 줄 하나(화면의 1.2%)는 W4c 의 그림 글자 칸 덮기(1% 이하)로 못 덮으니 입력에서 OS 글꼴 의존을 뺀다 — 그림 글자 렌더는 우리 코드가 아니다.
      */
     @Test
     fun profileLight() = check(
         "screens/me", "me-profile-light", PROFILE_H,
-        scene(false, PROFILE_H) { ProfileScene(sub, it) },
-        scene(false, PROFILE_H) { ProfileScene(subTyped, it) },
-        glyphProbe = scene(false, PROFILE_H) { ProfileScene(subNoGlyph, it) },
-        // 맥(골든 기록 기계)에서 잰 그림 글자 칸. Windows 는 앞 글자 폭이 달라 그림 글자가 6px 오른쪽 · 3px 아래에 선다(7차 CI 실측
-        // [416, 1145, 461, 1190]) — 그래서 비맥은 이 러너의 칸과 골든의 칸을 합쳐 덮는다. 골든을 다시 기록하면 맥 시험이 이 값을 맞추라고 빨개진다.
-        goldenGlyphBox = intArrayOf(410, 1142, 455, 1187),
+        scene(false, PROFILE_H) { ProfileScene(subProfile, it) },
+        scene(false, PROFILE_H) { ProfileScene(subProfileTyped, it) },
     )
-    // 탐침도 그림 글자(📌)다 — 한글로 바꾸면 줄의 글꼴 대체가 사라져 줄 높이 · 기준선이 움직이고 차이가 줄 전체(1% 넘음)로 번진다(맥 실측).
-    private val subNoGlyph by lazy { ScreenScenes.me(subScreens = true, statusGlyph = "📌") }
+    private val subProfile by lazy { ScreenScenes.me(subScreens = true, statusGlyph = "") }
+    private val subProfileTyped by lazy { ScreenScenes.me(subScreens = true, statusGlyph = "").also { it.displayNameDraft = "새벽이" } }
 
     /** 제보(쓰기 카드 · 내가 보낸 제보 세 줄 · 답장). 기준선 = 초안을 쓴 뒤(글자 수 · [보내기]가 켜진다). */
     @Test
@@ -148,16 +144,7 @@ class ScreenSnapshotDesktopTest {
 
     private fun theme(dark: Boolean) = if (dark) "dark" else "light"
 
-    /**
-     * [glyphProbe] — 장면에서 OS 그림 글자 하나만 다른 그림 글자로 바꾼 장면. 둘의 차이 상자([GLYPH_PAD]px 넓힘)가 이 러너의 그림 글자 칸이다.
-     * [goldenGlyphBox] — 골든 기록 때(맥) 같은 방법으로 잰 칸(맥에서는 이 값과 같아야 한다). 기록 기계가 아닌 러너의 굵은 대조에서만 두 칸을 합친
-     * 상자를 골든 픽셀로 덮는다(맥은 언제나 통째 픽셀 그대로). 상자는 화면의 1% 이하여야 한다.
-     */
-    private fun check(
-        group: String, name: String, heightDp: Int, scene: @Composable () -> Unit, other: @Composable () -> Unit,
-        glyphProbe: (@Composable () -> Unit)? = null,
-        goldenGlyphBox: IntArray? = null,
-    ) {
+    private fun check(group: String, name: String, heightDp: Int, scene: @Composable () -> Unit, other: @Composable () -> Unit) {
         val renders = List(3) { DesktopSnapshots.render(width, heightDp, content = scene) }
         val out = DesktopSnapshots.outDir()
         for (i in 1..2) {
@@ -178,19 +165,8 @@ class ScreenSnapshotDesktopTest {
         val expected = DesktopSnapshots.readPng(golden)
         val exact = SnapshotPolicy.isRecordingHost(System.getProperty("os.name"), System.getProperty("os.arch"))
         val diff = SnapshotCompare.diff(expected, actual)
-        val glyph = glyphProbe?.let { probe ->
-            val local = requireNotNull(glyphBox(actual, DesktopSnapshots.render(width, heightDp, content = probe))) {
-                "$name: 그림 글자 칸을 못 찾았다 — 글자만 바꾼 장면이 같은 픽셀"
-            }
-            val golden = requireNotNull(goldenGlyphBox) { "$name: 골든의 그림 글자 칸(goldenGlyphBox)이 없다" }
-            if (exact) assertEquals(golden.toList(), local.toList(), "$name: 그림 글자 칸이 골든 기록 때와 다르다 — 골든을 다시 기록했으면 goldenGlyphBox 를 이 값으로")
-            val box = intArrayOf(minOf(local[0], golden[0]), minOf(local[1], golden[1]), maxOf(local[2], golden[2]), maxOf(local[3], golden[3]))
-            assertTrue((box[2] - box[0] + 1) * (box[3] - box[1] + 1) <= actual.argb.size / 100, "$name: 그림 글자 칸이 화면의 1% 를 넘는다(${box.toList()})")
-            box
-        }
-        val coarse = SnapshotCompare.coarse(expected, if (exact || glyph == null) actual else actual.withRegionFrom(expected, glyph))
-        val maskNote = glyph?.let { " glyphMask=${it.toList()}${if (exact) "(unused)" else ""}" } ?: ""
-        println("AINGCHECK-SNAPSHOT desktop $name mode=${if (exact) "exact" else "coarse"} ${actual.width}x${actual.height} diff=$diff coarse=$coarse$maskNote")
+        val coarse = SnapshotCompare.coarse(expected, actual)
+        println("AINGCHECK-SNAPSHOT desktop $name mode=${if (exact) "exact" else "coarse"} ${actual.width}x${actual.height} diff=$diff coarse=$coarse")
         if (!(if (exact) diff.identical else coarse.withinTolerance)) {
             DesktopSnapshots.writePng(actual, File(out, "$name-actual.png"))
             SnapshotCompare.diffImage(expected, actual)?.let { DesktopSnapshots.writePng(it, File(out, "$name-diff.png")) }
@@ -206,35 +182,7 @@ class ScreenSnapshotDesktopTest {
         assertFalse(negativeCoarse.withinTolerance, "$name: 굵은 대조가 다른 입력을 못 잡는다($negativeCoarse)")
     }
 
-    /** [actual] 과 [probe] 가 다른 픽셀의 상자(왼 · 위 · 오른 · 아래, 양끝 포함)를 [GLYPH_PAD]px 넓힌 것. 같으면 null. */
-    private fun glyphBox(actual: PixelImage, probe: PixelImage): IntArray? {
-        assertEquals(actual.width to actual.height, probe.width to probe.height)
-        var l = Int.MAX_VALUE
-        var t = Int.MAX_VALUE
-        var r = -1
-        var b = -1
-        for (y in 0 until actual.height) for (x in 0 until actual.width) {
-            if (actual.argb[y * actual.width + x] != probe.argb[y * actual.width + x]) {
-                l = minOf(l, x); t = minOf(t, y); r = maxOf(r, x); b = maxOf(b, y)
-            }
-        }
-        if (r < 0) return null
-        return intArrayOf(
-            (l - GLYPH_PAD).coerceAtLeast(0), (t - GLYPH_PAD).coerceAtLeast(0),
-            (r + GLYPH_PAD).coerceAtMost(actual.width - 1), (b + GLYPH_PAD).coerceAtMost(actual.height - 1),
-        )
-    }
-
-    /** [box] 안 픽셀만 [source] 것으로 바꾼 사본. */
-    private fun PixelImage.withRegionFrom(source: PixelImage, box: IntArray): PixelImage {
-        val out = argb.copyOf()
-        for (y in box[1]..box[3]) for (x in box[0]..box[2]) out[y * width + x] = source.argb[y * width + x]
-        return PixelImage(width, height, out)
-    }
-
     companion object {
-        /** 그림 글자 칸 여유(px) — OS 마다 그림 글자 상자가 조금 다르다(맥 글자 상자 몫 · 가장자리 번짐). */
-        const val GLYPH_PAD = 6
         const val RANKINGS_H = 660
         const val ME_H = 1400
         const val SETTINGS_H = 1640

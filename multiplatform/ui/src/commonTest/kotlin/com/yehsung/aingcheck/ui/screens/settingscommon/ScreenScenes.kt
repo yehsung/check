@@ -124,8 +124,8 @@ object ScreenScenes {
     /** 나 탭 장면: 루트 새로고침을 끝낸 스토어(머리 · 상점 · 착용 · 기록 · 리밋 · 주간 · 미션). */
     /**
      * @param todayShorter 음성 기준선: 오늘(9/17) 근무 한 건을 2시간 30분 → 2시간으로(잔디 칸 하나의 단계 · 막대 글자만 바뀐다).
-     * @param statusGlyph 상태메시지 픽스처의 그림 글자(📝)를 이 글자로(서버값 · 초안이 같이 바뀌어 [저장] 상태 · 글자 수는 그대로) — 프로필 스냅숏이
-     *   OS 그림 글자 칸을 찾는 탐침(ScreenSnapshotDesktopTest.profileLight).
+     * @param statusGlyph 상태메시지 픽스처의 그림 글자(📝)를 이 글자로(서버값 · 초안이 같이 바뀐다) — 데스크톱 프로필 스냅숏은 "" 로 OS 그림 글자
+     *   의존을 뺀다(ScreenSnapshotDesktopTest.profileLight 머리말).
      */
     fun me(
         rubyOverride: Long? = null, settings: Boolean = false, subScreens: Boolean = false, todayShorter: Boolean = false, statusGlyph: String? = null,

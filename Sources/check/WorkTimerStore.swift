@@ -1552,6 +1552,11 @@ final class WorkTimerStore {
     @ObservationIgnored var messageReadSignalSleep: @Sendable (TimeInterval) async -> Void = {
         try? await Task.sleep(for: .seconds($0))
     }
+    /// 메시지 응답 유실 재시도 앞의 잠(주입, 2026-10-30 안정화). 위와 같은 규약 — 프로덕션은 실제 수면
+    /// (`messageSendRetryDelaySeconds` 초), 테스트는 문으로 갈아 끼워 재시도가 나가는 순간을 정한다.
+    @ObservationIgnored var messageSendRetrySleep: @Sendable (TimeInterval) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
     /// 지금 화면에 서 있는 **대화 뷰들**의 표식(v0.3.31 M4). `CheckMessageView` 가 나타날 때 넣고 사라질 때 뺀다.
     ///
     /// Bool 한 칸이 아니라 집합인 이유: 뷰 정체성이 바뀌는 순간(패널을 다시 세우는 조합) SwiftUI 는 **새 뷰의 나타남과 옛 뷰의

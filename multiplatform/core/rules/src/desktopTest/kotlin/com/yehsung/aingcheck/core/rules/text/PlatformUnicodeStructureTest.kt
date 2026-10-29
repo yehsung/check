@@ -85,6 +85,30 @@ class PlatformUnicodeStructureTest {
         }
     }
 
+    /**
+     * W1-d(와이어·통신) 기기 소스에도 getType 판정이 없다 — 8차 fold(G §8-20 #3): 글자 판정은 Swift 표 번들 `WireScalars` 로 한다.
+     * 대소문자 판정(`isUpperCase` · `isLowerCase` · `isTitleCase`)과 `Character.getType` 직접 호출도 같은 갈림이라 함께 잡는다.
+     */
+    @Test
+    fun noCharacterGetTypePredicatesInW1dWireAndNet() {
+        val files = W1D_MODULES.flatMap { mainSources(File(moduleDir.parentFile, it)) }
+        assertTrue(files.size >= 30, "W1-d 기기 소스가 너무 적다(${files.size}) — 경로가 바뀌었으면 시험이 헛돈다")
+        val table = files.filter { it.invariantSeparatorsPath.endsWith(W1D_TABLE) }
+        assertEquals(1, table.size, "W1-d 번들 해석 자리 $W1D_TABLE 를 못 찾았다")
+        val offenders = ArrayList<String>()
+        for (file in files) {
+            val code = blankStrings(stripComments(file.readText()))
+            for ((index, line) in code.lines().withIndex()) {
+                W1D_PREDICATES.find(line)
+                    ?.let { offenders += "${file.relativeTo(moduleDir)}:${index + 1}: ${it.value.trim()}" }
+            }
+        }
+        println("AINGCHECK-W1D structure getType files=${files.size} offenders=${offenders.size}")
+        if (offenders.isNotEmpty()) {
+            fail("W1-d 글자 판정은 JDK · ART 판마다 답이 다르다(G §8-20 #3) — WireScalars 번들 표로 쓴다:\n" + offenders.joinToString("\n"))
+        }
+    }
+
     /** 걸러 내는 규칙 자체가 살아 있는지(항상 참인 단언이 되지 않게) — 심은 줄은 잡고, 주석 · 명시 집합 · 글자 리터럴은 놓는다. */
     @Test
     fun scannerCatchesPlantedLinesAndIgnoresComments() {
@@ -116,6 +140,19 @@ class PlatformUnicodeStructureTest {
 
         /** core/rules 와 같은 판정을 받는 바닥 모듈(core/ 아래 이름). */
         val LOWER_MODULES = listOf("foundation", "wire", "net")
+
+        /** W1-d 모듈(8차 fold) · 번들 해석 자리. */
+        val W1D_MODULES = listOf("wire", "net")
+        const val W1D_TABLE = "core/wire/src/commonMain/kotlin/com/yehsung/aingcheck/core/wire/text/WireScalars.kt"
+
+        /**
+         * W1-d 판정 금지 목록 = [GET_TYPE_PREDICATES] + 대소문자 판정 · `Character.getType` 직접 호출.
+         * 번들 해석(`WireScalars.isWhitespace(…)` 같은 받는 쪽이 WireScalars 인 호출)은 놓는다.
+         */
+        private val W1D_PREDICATES = Regex(
+            """(?<!WireScalars)\.(isDigit|isLetter|isLetterOrDigit|isWhitespace|digitToInt|digitToIntOrNull)\(|\.trim(Start|End)?\(\)""" +
+                """|\.(isUpperCase|isLowerCase|isTitleCase)\(|Character\.getType\(""",
+        )
 
         /** 날짜 파서 한 벌(c-fold) — 숫자는 Swift 표의 Nd([DecimalDigits]), 달력은 Foundation 그레고리력. */
         val FOUNDATION_DATE_PARSER = listOf(

@@ -1,6 +1,7 @@
 // 원본: Sources/CheckCore/RealtimeTransport.swift:46-186(RealtimeFeature · RealtimeFrame) @ 1b8260d
 package com.yehsung.aingcheck.core.net.realtime
 
+import com.yehsung.aingcheck.core.wire.text.WireScalars
 import io.ktor.http.URLBuilder
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
@@ -118,7 +119,8 @@ object RealtimeFeature {
     const val environmentName = "CHECK_REALTIME"
 
     fun isEnabled(stored: Boolean?, environment: Map<String, String>): Boolean {
-        val raw = environment[environmentName]?.trim()
+        // Swift `trimmingCharacters(in: .whitespaces)` — 인자 없는 trim 은 줄바꿈까지 걷고 getType 이다(G §8-20 #3).
+        val raw = environment[environmentName]?.let(WireScalars::trimSwiftWhitespaces)
         if (!raw.isNullOrEmpty()) return raw == "1" || raw.lowercase() == "true" || raw.lowercase() == "yes"
         return stored ?: true
     }

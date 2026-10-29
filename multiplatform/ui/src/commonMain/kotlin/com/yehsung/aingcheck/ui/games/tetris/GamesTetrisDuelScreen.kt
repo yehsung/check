@@ -580,7 +580,7 @@ private fun StakeOption(stake: TetrisDuelStake, isSelected: Boolean, affordable:
         contentAlignment = Alignment.Center,
     ) {
         Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            RubyPrice(stake.rawValue, isShort = !affordable, art = rememberRubyArt(20f), gemSize = 20.dp, fontSize = 20f)
+            RubyPrice(stake.rawValue.toLong(), isShort = !affordable, art = rememberRubyArt(20f), gemSize = 20.dp, fontSize = 20f)
             Text(
                 TetrisPhoneText.stakeGain(stake.rawValue), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal, fontFeatureSettings = TNUM),
                 color = if (affordable) colors.label2 else colors.label3Text,

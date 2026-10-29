@@ -215,7 +215,7 @@ fun ComponentsGallery(art: GalleryArt, modifier: Modifier = Modifier, variant: G
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("여우", style = type.headlineMedium, color = colors.label)
                     Text("아잉 팀 · 센터", style = type.bodyMedium, color = colors.label2)
-                    RubyBalanceChip(variant.rubyCount, art.ruby, style = RubyChipStyle.Large)
+                    RubyBalanceChip(variant.rubyCount.toLong(), art.ruby, style = RubyChipStyle.Large)
                     Text("근무 중 · 여우 착용 중", style = type.bodySmall, color = colors.working)
                 }
             }
@@ -223,7 +223,7 @@ fun ComponentsGallery(art: GalleryArt, modifier: Modifier = Modifier, variant: G
         GalleryCard {
             Text("루비", style = type.titleSmall, color = colors.label)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                RubyBalanceChip(variant.rubyCount, art.ruby)
+                RubyBalanceChip(variant.rubyCount.toLong(), art.ruby)
                 RubyBalanceChip(null, art.ruby)
                 RubyBalanceChip(1250, art.ruby, style = RubyChipStyle.Glass)
             }

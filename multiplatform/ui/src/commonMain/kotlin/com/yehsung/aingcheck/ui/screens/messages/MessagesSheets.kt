@@ -278,7 +278,7 @@ fun MessagesMegaphoneSheet(store: MessagesStore, rubyBalance: Long?, onClose: ()
             SheetHeader(MegaphoneText.badgeTitle, onClose)
             if (rubyBalance != null) {
                 Box(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)) {
-                    RubyBalanceChip(rubyBalance.toInt(), ruby, style = RubyChipStyle.Toolbar)
+                    RubyBalanceChip(rubyBalance, ruby, style = RubyChipStyle.Toolbar)
                 }
             }
         }

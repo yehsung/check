@@ -959,6 +959,16 @@
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift": "0b142e721ce26eacf95187026ccd28ebf314c5e60c7962ae886c388ec1e957f6"
       }
+    },
+    "wire/scalar-props": {
+      "file": "b29816da404d2ee12322a3442ae6d6905baa1c8182291da0bf4b6e36c22fa47a",
+      "generator": {
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireScalars.swift": "4bfa00646e20d726ffd8e1d8d99f02394e8b078f82bb3854d8354e22f5f4f96d"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/RealtimeTransport.swift": "747976ab2c637aa63c8e21b80d2549d743ff7445b02a8b7fb94a3d665259b625",
+        "Sources/CheckCore/SupabaseWorkService.swift": "12adc693c30b222d208b56f674345f63bc8736f476dc54acf390df4f66f3e404"
+      }
     }
   },
   "schema": 1,

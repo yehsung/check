@@ -169,7 +169,7 @@ object CharacterPickerRules {
         MeCharacterTileStatus.Owned -> "$name, ${MeText.owned}"
         is MeCharacterTileStatus.Price -> {
             val p = status.price.toInt()
-            "$name, ${RubyPriceRule.accessibilityText(p, RubyPriceRule.isShort(p, status.balance?.toInt()))}"
+            "$name, ${RubyPriceRule.accessibilityText(p.toLong(), RubyPriceRule.isShort(p.toLong(), status.balance))}"
         }
         is MeCharacterTileStatus.GachaOnly -> MeText.gachaTileAccessibility(name, status.shardCost)
         MeCharacterTileStatus.GiftOnly -> "$name, ${CakeGiftText.lockedCaption}"
@@ -382,7 +382,7 @@ private fun TileStatusLine(id: String, status: MeCharacterTileStatus) {
     when (val content = status.content) {
         is MeCharacterTileStatus.Content.Ruby -> {
             val price = content.price.toInt()
-            RubyPrice(price, RubyPriceRule.isShort(price, content.balance?.toInt()), LocalScreenArt.current.ruby(17f), gemSize = 17.dp)
+            RubyPrice(price.toLong(), RubyPriceRule.isShort(price.toLong(), content.balance), LocalScreenArt.current.ruby(17f), gemSize = 17.dp)
         }
         is MeCharacterTileStatus.Content.Text -> Text(
             content.text,

@@ -70,12 +70,12 @@ class PhoneAppModelTest {
         assertSame(app.context.tetris, app.tetris)
         listOf(app.links.now, app.links.messages, app.links.rankings, app.links.games, app.links.me, app.links.push, app.links.work, app.links.widgetSink)
             .forEach { assertNotNull(it, "스토어 고리가 비었다") }
-        // 루비 칸은 하나다 — 테트리스 호스트(Int?) · 게임 탭(Int?) · 확성기(Long?) · 나 탭이 같은 칸을 본다.
+        // 루비 칸은 하나다(타입도 Long 하나 — G §8-18 #4) — 테트리스 호스트 · 게임 탭 · 확성기 · 나 탭이 같은 칸을 본다.
         app.ruby.rubyBalance = 42
-        assertEquals(42, app.gamesContext.sharedRubyBalance)
+        assertEquals(42L, app.gamesContext.sharedRubyBalance)
         assertEquals(42L, app.context.ruby.rubyBalance)
         app.ruby.rubyBalance = 5_000_000_000
-        assertEquals(Int.MAX_VALUE, app.gamesContext.sharedRubyBalance, "Int 범위로 잘라 넘긴다(감기지 않게)")
+        assertEquals(5_000_000_000L, app.gamesContext.sharedRubyBalance, "Int 범위를 넘어도 자르지 않는다(8차 fold — 칸은 Long 하나)")
     }
 
     @Test

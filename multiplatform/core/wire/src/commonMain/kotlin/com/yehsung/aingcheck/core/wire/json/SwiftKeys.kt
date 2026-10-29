@@ -2,6 +2,8 @@
 // 키 변환 규칙의 정답 표: multiplatform/testkit/src/desktopTest/resources/golden/w0b-probe/decoder.json(keys-decoded · keys-encoded, C-X3 실측)
 package com.yehsung.aingcheck.core.wire.json
 
+import com.yehsung.aingcheck.core.wire.text.WireScalars
+
 /**
  * Swift `JSONDecoder.KeyDecodingStrategy.convertFromSnakeCase` · `JSONEncoder.KeyEncodingStrategy.convertToSnakeCase` 의 Kotlin 꼴.
  *
@@ -10,6 +12,9 @@ package com.yehsung.aingcheck.core.wire.json
  * 들어온 키와 우리 SerialName 을 **둘 다** [fromSnakeCase] 로 접어 견준다(Swift 와 같은 칸을 고른다).
  *
  * `capitalized` 는 ICU 단어 제목 대문자다 — 첫 **대소문자 있는** 글자만 올린다(`url_2x` → `url2X`, 실측).
+ *
+ * 글자 판정(대문자·소문자·글자)은 `Char.isUpperCase` 같은 `Character.getType` 판정이 아니라 Swift 가 낸 번들 표([WireScalars])로 한다
+ * (G §8-20 #3 · §8-16 ② — 8차 fold). 판정 단위는 스칼라 하나라 대리쌍을 반으로 가르지 않는다.
  */
 object SwiftKeys {
     fun fromSnakeCase(key: String): String {
@@ -33,9 +38,13 @@ object SwiftKeys {
     /** Foundation `capitalized`(ICU 제목 대문자): 단어의 첫 '대소문자 있는' 글자를 올리고 나머지는 내린다. */
     private fun capitalized(word: String): String {
         val lower = word.lowercase()
-        val index = lower.indexOfFirst { it.isLetter() && (it.isLowerCase() || it.isUpperCase()) }
-        if (index < 0) return lower
-        return lower.substring(0, index) + lower[index].titlecase() + lower.substring(index + 1)
+        val index = lower.indices.firstOrNull { i ->
+            val cp = WireScalars.scalarAt(lower, i)
+            WireScalars.isLetter(cp) && (WireScalars.isLowercase(cp) || WireScalars.isUppercase(cp))
+        } ?: return lower
+        val width = WireScalars.scalarWidth(lower, index)
+        val head = if (width == 1) lower[index].titlecase() else lower.substring(index, index + width).uppercase()
+        return lower.substring(0, index) + head + lower.substring(index + width)
     }
 
     /** `convertToSnakeCase`: 대문자 경계를 단어로 자른다. 대문자 덩어리(`URL`)는 소문자 앞 글자까지 한 단어. */
@@ -43,25 +52,25 @@ object SwiftKeys {
         if (key.isEmpty()) return key
         val words = mutableListOf<IntRange>()
         var wordStart = 0
-        var searchStart = 1
+        var searchStart = WireScalars.scalarWidth(key, 0)
         val end = key.length
         while (true) {
-            val upper = (searchStart until end).firstOrNull { key[it].isUpperCase() } ?: break
+            val upper = (searchStart until end).firstOrNull { WireScalars.isUppercase(WireScalars.scalarAt(key, it)) } ?: break
             words += wordStart until upper
-            val lowerIdx = (upper until end).firstOrNull { key[it].isLowerCase() }
+            val lowerIdx = (upper until end).firstOrNull { WireScalars.isLowercase(WireScalars.scalarAt(key, it)) }
             if (lowerIdx == null) {
                 wordStart = upper
                 searchStart = end
                 break
             }
-            if (lowerIdx == upper + 1) {
+            if (lowerIdx == upper + WireScalars.scalarWidth(key, upper)) {
                 wordStart = upper
             } else {
-                val beforeLower = lowerIdx - 1
+                val beforeLower = lowerIdx - (if (WireScalars.scalarAt(key, lowerIdx - 1) < 0) 2 else 1)
                 words += upper until beforeLower
                 wordStart = beforeLower
             }
-            searchStart = lowerIdx + 1
+            searchStart = lowerIdx + WireScalars.scalarWidth(key, lowerIdx)
             if (searchStart > end) break
         }
         words += wordStart until end

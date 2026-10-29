@@ -151,7 +151,7 @@ internal fun BoxScope.ChessRulesSheet(initialMs: Long, incrementMs: Long, invite
 internal fun BoxScope.ChessStakeSheet(games: GamesStore, chess: ChessStore, target: ChessUser, onClose: () -> Unit) {
     val colors = AingTheme.colors
     var selected by remember(target.id) { mutableStateOf<ChessStake?>(null) }
-    val balance: Int? = games.rubyBalance
+    val balance: Long? = games.rubyBalance
     val facts = remember(chess) { ChessGateFacts(chess) }
     val sendable = GamesChessStakeSend.sendable(selected?.rawValue?.toInt(), facts, balance, games.chessEntryBlock, duelsEnabled = !chess.duelsLocked)
     BoardSheetOverlay(ChessPhoneText.stakeTitle, onDismiss = onClose, subtitle = ChessPhoneText.stakePromptTitle(target.displayName), testTag = ChessScreenTags.stakeSheet) {

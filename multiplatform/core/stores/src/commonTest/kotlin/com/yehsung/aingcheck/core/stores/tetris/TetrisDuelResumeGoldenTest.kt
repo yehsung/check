@@ -43,6 +43,7 @@ class TetrisDuelResumeGoldenTest {
     private fun date(d: SwiftDate?): JsonElement = d?.let { bits(it.timeIntervalSince1970) } ?: JsonNull
     private fun str(s: String?): JsonElement = s?.let(::JsonPrimitive) ?: JsonNull
     private fun int(i: Int?): JsonElement = i?.let(::JsonPrimitive) ?: JsonNull
+    private fun long(i: Long?): JsonElement = i?.let(::JsonPrimitive) ?: JsonNull
     private fun obj(vararg pairs: Pair<String, JsonElement>): JsonObject = JsonObject(mapOf(*pairs))
 
     private fun cellsText(cells: List<List<TetrisDuelCell>>): String = cells.joinToString("/") { row ->
@@ -74,7 +75,7 @@ class TetrisDuelResumeGoldenTest {
             "opponentAttackTotal" to JsonPrimitive(store.opponentAttackTotal),
             "opponentLastSeenAtBits" to date(store.opponentLastSeenAt),
             "activeMatchID" to str(store.activeMatchID),
-            "rubyBalance" to int(store.rubyBalance),
+            "rubyBalance" to long(store.rubyBalance),
             "serverClockOffsetBits" to bits(store.serverClockOffset),
             "duelMatchID" to str(store.duelMatchID),
             "dismissed" to JsonArray(store.dismissedMatchIDs.sorted().map(::JsonPrimitive)),

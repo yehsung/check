@@ -41,10 +41,10 @@ class PhoneGamesContext(private val phone: PhoneContext, override val gomoku: Ph
     override val hiddenBlockedPeerIDs: Set<String> get() = phone.links.messages?.hiddenBlockedPeerIDs ?: emptySet()
 
     /**
-     * 루비 **공유 미러**(Swift `context.gomokuHost.rubyBalance`). W2-e 는 `Int?` 로 읽는다 — 칸은 Long 하나(§8-18 #4)라 Int 범위로 잘라 넘긴다.
+     * 루비 **공유 미러**(Swift `context.gomokuHost.rubyBalance`). 칸은 Long 하나(G §8-18 #4) — 자르지 않고 그대로 넘긴다.
      */
-    override val sharedRubyBalance: Int?
-        get() = phone.ruby.rubyBalance?.let { it.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt() }
+    override val sharedRubyBalance: Long?
+        get() = phone.ruby.rubyBalance
 
     override fun refreshAchievementsAfterGameResult(game: String) = phone.refreshAchievementsAfterGameResult(game)
 }

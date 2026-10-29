@@ -21,7 +21,7 @@ import com.yehsung.aingcheck.core.wire.games.TetrisRPCStatus
  */
 interface TetrisDuelStoreHost : SessionHost {
     /** 루비 미러(서버 응답으로만 바뀐다 — 오목·체스·상점과 한 칸). */
-    var rubyBalance: Int?
+    var rubyBalance: Long?
 
     /** 앱 구성(빌드 깃발). 스토어는 이 자리로만 읽는다(W2-a `SessionContext.appConfig` 와 같은 값). */
     val appConfig: AppConfig
@@ -224,7 +224,7 @@ data class TetrisDuelRankingBoard(
 
 /** 모자란 루비 문구(Swift `CheckCoreShared.shortfallNotice` — 맥 스토어·오목·체스·테트리스가 같은 문장을 쓴다). */
 object DuelShortfallText {
-    fun shortfallNotice(need: Int?, have: Int?): String {
+    fun shortfallNotice(need: Long?, have: Long?): String {
         if (need == null || have == null || need <= have) return "루비가 모자라요"
         return "루비 ${need - have}개 더 필요해요"
     }
@@ -252,7 +252,7 @@ object TetrisDuelNoticeText {
     const val watchGone: String = "지금은 볼 수 없는 판이에요"
 
     /** 신청 결과. 근무 조건은 없다(D1) — 클라가 근무를 보고 미리 막는 선게이트를 만들지 마라. */
-    fun challenge(status: TetrisRPCStatus, need: Int? = null, have: Int? = null): String = when (status) {
+    fun challenge(status: TetrisRPCStatus, need: Long? = null, have: Long? = null): String = when (status) {
         TetrisRPCStatus.ok -> "신청을 보냈어요"
         TetrisRPCStatus.invalid -> "신청할 수 없는 상대예요"
         TetrisRPCStatus.blackout -> "지금은 조용한 기간이라 신청할 수 없어요"
@@ -272,7 +272,7 @@ object TetrisDuelNoticeText {
     }
 
     /** 수락·거절 결과. **수락 성공은 판이 곧바로 열리므로 말하지 않는다**(null). */
-    fun respond(accept: Boolean, status: TetrisRPCStatus, side: String? = null, need: Int? = null, have: Int? = null): String? =
+    fun respond(accept: Boolean, status: TetrisRPCStatus, side: String? = null, need: Long? = null, have: Long? = null): String? =
         when (status) {
             TetrisRPCStatus.ok -> if (accept) null else "신청을 거절했어요"
             TetrisRPCStatus.notFound, TetrisRPCStatus.notPending -> finishedInvite

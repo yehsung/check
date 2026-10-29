@@ -194,7 +194,7 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
         override val session: SupabaseSession? get() = sessionStore.session
         override val sessionGeneration: Int get() = sessionStore.sessionGeneration
         override val service: SupabaseWorkService get() = sessionStore.service
-        override var rubyBalance: Int? = null
+        override var rubyBalance: Long? = null
         override val appConfig: AppConfig = appConfig
         override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T = sessionStore.withSessionRetry(operation)
     }
@@ -219,7 +219,7 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
             override fun present(destination: GamesDestination) { presented += destination }
         }
         override val hiddenBlockedPeerIDs: Set<String> = emptySet()
-        override val sharedRubyBalance: Int? = null
+        override val sharedRubyBalance: Long? = null
     }
 
     init {

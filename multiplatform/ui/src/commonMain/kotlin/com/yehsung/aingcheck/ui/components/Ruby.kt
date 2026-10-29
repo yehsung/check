@@ -61,13 +61,13 @@ object RubyGlyph {
 
 object RubyPriceRule {
     /** 잔량이 가격보다 모자라면 흐리게. 잔량을 모르면(null) 모자라다고 하지 않는다(맥 0.3.29 규칙). */
-    fun isShort(price: Int, balance: Int?): Boolean = balance != null && balance < price
+    fun isShort(price: Long, balance: Long?): Boolean = balance != null && balance < price
 
-    fun accessibilityText(price: Int, isShort: Boolean): String = if (isShort) "루비 ${price}개, 모자라요" else "루비 ${price}개"
+    fun accessibilityText(price: Long, isShort: Boolean): String = if (isShort) "루비 ${price}개, 모자라요" else "루비 ${price}개"
 
-    fun balanceText(count: Int?): String = count?.toString() ?: "–"
+    fun balanceText(count: Long?): String = count?.toString() ?: "–"
 
-    fun balanceAccessibility(count: Int?): String = count?.let { "루비 ${it}개" } ?: "루비 잔액 모름"
+    fun balanceAccessibility(count: Long?): String = count?.let { "루비 ${it}개" } ?: "루비 잔액 모름"
 }
 
 /** 보석 하나. [art] 는 크기에 맞는 그림(RubyGlyph.assetName — CharacterArt.ruby 가 고른다). */
@@ -100,7 +100,7 @@ enum class RubyChipStyle(val gem: Dp, val height: Dp, val fontSize: Float, val w
 /** 루비 잔량 칩. null 은 "–"(모른다 — 0 으로 지어내지 않는다). [onClick] 이 있으면 누름 영역 44 이상. */
 @Composable
 fun RubyBalanceChip(
-    count: Int?,
+    count: Long?,
     art: ImageBitmap?,
     modifier: Modifier = Modifier,
     style: RubyChipStyle = RubyChipStyle.Small,
@@ -138,7 +138,7 @@ fun RubyBalanceChip(
 
 /** 가격: 맨 보석 + 숫자. 모자라면 글자 label3Text + 보석 50%(자물쇠 없음). */
 @Composable
-fun RubyPrice(price: Int, isShort: Boolean, art: ImageBitmap?, modifier: Modifier = Modifier, gemSize: Dp = 17.dp, fontSize: Float = 15f) {
+fun RubyPrice(price: Long, isShort: Boolean, art: ImageBitmap?, modifier: Modifier = Modifier, gemSize: Dp = 17.dp, fontSize: Float = 15f) {
     val colors = AingTheme.colors
     Row(
         modifier.clearAndSetSemantics { contentDescription = RubyPriceRule.accessibilityText(price, isShort) },

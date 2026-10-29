@@ -185,7 +185,7 @@ private fun MeStageIdentity(store: MeStore, mood: CharacterMood?, open: (MeDesti
             CenterBadge(store.centerServerValue)
         }
         RubyBalanceChip(
-            count = store.rubyBalance?.toInt(),
+            count = store.rubyBalance,
             art = LocalScreenArt.current.ruby(RubyChipStyle.Large.gem.value),
             style = RubyChipStyle.Large,
             onClick = { open(MeDestination.Shop) },

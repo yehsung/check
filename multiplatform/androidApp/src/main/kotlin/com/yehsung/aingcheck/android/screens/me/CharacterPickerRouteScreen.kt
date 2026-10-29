@@ -6,9 +6,18 @@ package com.yehsung.aingcheck.android.screens.me
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.yehsung.aingcheck.core.stores.me.MeStore
+import com.yehsung.aingcheck.ui.screens.me.CharacterPickerHero
 import com.yehsung.aingcheck.ui.screens.me.CharacterPickerScreen
+import com.yehsung.aingcheck.ui.screens.me.MeStageContent
 
 @Composable
-fun CharacterPickerRouteScreen(store: MeStore, openShop: () -> Unit, openGachaMachine: () -> Unit, modifier: Modifier = Modifier) {
-    CharacterPickerScreen(store, openShop, openGachaMachine, modifier)
+fun CharacterPickerRouteScreen(
+    store: MeStore,
+    openShop: () -> Unit,
+    openGachaMachine: () -> Unit,
+    modifier: Modifier = Modifier,
+    hero: MeStageContent = CharacterPickerHero.Static,
+) {
+    // 머리 그림 자리(칸 100×104 · 그림 92)는 W5-c 살아 있는 미리보기가 채운다 — 조립: hero = { spec, m -> AingStage(spec.characterId, null, m, artSize = spec.artSize) }.
+    CharacterPickerScreen(store, openShop, openGachaMachine, modifier, hero = hero)
 }

@@ -1,4 +1,4 @@
-// 원본: 없음 — W3-b 화면 스냅숏(폰 = Android xhdpi 배율 2 · 360dp × 밝음·어두움). 데모 픽스처로 채운 진짜 스토어를 그린다(①).
+// 원본: 없음 — W3-b 화면 스냅숏(폰 = Android xhdpi 배율 2 · 360dp × 밝음·어두움 · sw600dp = 600dp). 데모 픽스처로 채운 진짜 스토어를 그린다(①).
 //
 // 골든: ui/snapshots/screens/{rankings,me,settingscommon}/android/<장면>.png. 진열장 시험(GallerySnapshotAndroidTest)과 같은 세 가지를 잰다:
 //  ① 새로 세 번 그려도 같다 ② 골든과 같다(기록 기계 = 픽셀 그대로, 다른 러너 = 굵은 대조) ③ 같은 크기에 한 군데만 다른 장면은 다르다.
@@ -49,8 +49,8 @@ class ScreenSnapshotAndroidTest {
     private val foxOff = RankingsMyFace("fox", CharacterMood.Off)
     private val notifications = FixedNotificationSettings(NotificationPermission.Granted, PushPrefs(message = true, gomokuInvite = true, feedbackReply = false), setOf("chess_invite"))
 
-    private fun scene(dark: Boolean, height: Int, content: @Composable (Modifier) -> Unit): @Composable () -> Unit = {
-        ScreenScene(dark, art, Modifier.size(width.dp, height.dp), content)
+    private fun scene(dark: Boolean, height: Int, w: Int = width, content: @Composable (Modifier) -> Unit): @Composable () -> Unit = {
+        ScreenScene(dark, art, Modifier.size(w.dp, height.dp), content)
     }
 
     private fun theme(dark: Boolean) = if (dark) "dark" else "light"
@@ -130,6 +130,45 @@ class ScreenSnapshotAndroidTest {
         check("screens/settingscommon", "account-deletion-light", DELETION_H, scene(false, DELETION_H) { AccountDeletionScene(store, it) }, scene(false, DELETION_H) { AccountDeletionScene(typed, it) })
     }
 
+    // ---------------------------------------------------------------- sw600dp(폴드 안쪽 · 태블릿)
+    // API 36 은 sw600dp 이상에서 세로 고정을 무시한다(E §1.3) — 순위 · 나 · 설정이 600dp 폭에서도 한 단으로 선다(칸 겹침 · 잘림 없음).
+
+    @Test
+    @Config(qualifiers = "sw600dp-w600dp-h2000dp-xhdpi")
+    fun rankingsLeagueTabletLight() {
+        val store = ScreenScenes.rankings(RankingsBoard.league)
+        val other = ScreenScenes.rankings(RankingsBoard.league, oneMinuteMore = true)
+        check(
+            "screens/rankings", "rankings-league-sw600dp-light", RANKINGS_H,
+            scene(false, RANKINGS_H, TABLET_W) { RankingsScene(store, fox, it) }, scene(false, RANKINGS_H, TABLET_W) { RankingsScene(other, fox, it) },
+            widthDp = TABLET_W,
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "sw600dp-w600dp-h2000dp-xhdpi")
+    fun meHomeTabletDark() {
+        val store = ScreenScenes.me()
+        val other = ScreenScenes.me(rubyOverride = (store.rubyBalance ?: 0) + 1)
+        check(
+            "screens/me", "me-home-sw600dp-dark", ME_H,
+            scene(true, ME_H, TABLET_W) { MeHomeScene(store, MeStageMood.working, it) }, scene(true, ME_H, TABLET_W) { MeHomeScene(other, MeStageMood.working, it) },
+            widthDp = TABLET_W,
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "sw600dp-w600dp-h2000dp-xhdpi")
+    fun settingsTabletLight() {
+        val store = ScreenScenes.me(settings = true)
+        check(
+            "screens/settingscommon", "settings-sw600dp-light", SETTINGS_H,
+            scene(false, SETTINGS_H, TABLET_W) { SettingsScene(store, AingAppearanceMode.Dark, notifications, it) },
+            scene(false, SETTINGS_H, TABLET_W) { SettingsScene(store, AingAppearanceMode.Light, notifications, it) },
+            widthDp = TABLET_W,
+        )
+    }
+
     // ---------------------------------------------------------------- 나 탭 하위 화면(잔디 상세 · 캐릭터 고르기 · 프로필 · 제보 · 차단한 사람)
 
     /** 잔디 상세. 기준선 = 오늘 근무만 2시간 30분 → 2시간(칸 하나 · 막대 글자). */
@@ -199,7 +238,7 @@ class ScreenSnapshotAndroidTest {
         return requireNotNull(out)
     }
 
-    private fun check(group: String, name: String, heightDp: Int, scene: @Composable () -> Unit, other: @Composable () -> Unit, maxBaselineRatio: Int = 4) {
+    private fun check(group: String, name: String, heightDp: Int, scene: @Composable () -> Unit, other: @Composable () -> Unit, maxBaselineRatio: Int = 4, widthDp: Int = width) {
         val renders = List(3) { render(scene) }
         val out = AndroidSnapshots.outDir()
         for (i in 1..2) {
@@ -210,7 +249,7 @@ class ScreenSnapshotAndroidTest {
             }
         }
         val actual = renders[0]
-        assertEquals("$name: 크기", (width * 2) to (heightDp * 2), actual.width to actual.height)
+        assertEquals("$name: 크기", (widthDp * 2) to (heightDp * 2), actual.width to actual.height)
         assertTrue("$name: 색이 ${actual.distinctColors()}개뿐 — 장면이 그려지지 않았다", actual.distinctColors() >= 64)
         val golden = AndroidSnapshots.golden(group, name)
         if (AndroidSnapshots.recording()) {
@@ -240,6 +279,7 @@ class ScreenSnapshotAndroidTest {
 
     private companion object {
         const val TAG = "aingcheck-screen"
+        const val TABLET_W = 600
         const val RANKINGS_H = 660
         const val ME_H = 1400
         const val SETTINGS_H = 1640

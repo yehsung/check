@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.character.CharacterManifest
@@ -88,6 +89,33 @@ object CharacterPickerTags {
     fun tile(id: String) = "picker-tile:$id"
     const val SHOP = "picker-go-shop"
     const val HERO = "picker-hero"
+    const val HERO_SLOT = "picker-hero-slot"
+}
+
+/**
+ * 고르기 머리 그림 **자리**(W3-b ↔ W5-c — 나 탭 [MeStageSpec] 과 같은 꼴). iOS `heroArt` = 칸 100×104 · 그림 92 · 발밑 타원 92×20.
+ * 칸 크기는 화면이 정해 `modifier` 에 먼저 건다 — W5-c 살아 있는 미리보기(`artSize = 92`)가 들어와도 옆 글자 배치는 그대로다.
+ */
+object CharacterPickerHero {
+    val artSize: Dp = 92.dp
+    val slotWidth: Dp = 100.dp
+    val slotHeight: Dp = 104.dp
+
+    fun spec(characterId: String): MeStageSpec = MeStageSpec(characterId = characterId, mood = null, artSize = artSize)
+
+    /** 정지 머리 그림(타원 발밑 + 초상 92 · 아래 8). */
+    val Static: MeStageContent = { spec, modifier ->
+        val colors = AingTheme.colors
+        Box(modifier, contentAlignment = Alignment.BottomCenter) {
+            Box(
+                Modifier.size(spec.artSize, 20.dp).background(
+                    Brush.radialGradient(listOf(colors.accent.copy(alpha = 0.22f), colors.accent.copy(alpha = 0f))),
+                    RoundedCornerShape(percent = 50),
+                ),
+            )
+            MeCharacterArt(spec.characterId, spec.artSize.value.toInt(), Modifier.padding(bottom = 8.dp))
+        }
+    }
 }
 
 /** 타일에 얹는 표시(뜻이 다르면 모양도 다르다). */
@@ -168,6 +196,7 @@ object CharacterPickerRules {
 /**
  * @param openShop [상점 가기](W4-c 상점 화면).
  * @param openGachaMachine 안 가진 뽑기 전용 타일 → 뽑기 기계(W4-c). 조립 전에는 아무것도 안 해도 된다(고르기가 대신 얻는 길을 말하지 않는다 — 보고).
+ * @param hero 머리 그림 자리(기본 정지 초상 — W5-c 가 살아 있는 미리보기로 바꾼다, [CharacterPickerHero]).
  */
 @Composable
 fun CharacterPickerScreen(
@@ -176,6 +205,7 @@ fun CharacterPickerScreen(
     openGachaMachine: () -> Unit,
     modifier: Modifier = Modifier,
     scrollable: Boolean = true,
+    hero: MeStageContent = CharacterPickerHero.Static,
 ) {
     val colors = AingTheme.colors
     DisposableEffect(store) {
@@ -189,7 +219,7 @@ fun CharacterPickerScreen(
         modifier.fillMaxWidth().background(colors.background).then(scroll).padding(horizontal = AingDimens.sideMargin, vertical = AingDimens.rowSpacing),
         verticalArrangement = Arrangement.spacedBy(AingDimens.rowSpacing),
     ) {
-        PickerHero(store)
+        PickerHero(store, hero)
         store.characterNotice?.let { InlineNotice(it, if (store.isCharacterNoticeError) NoticeKind.Warning else NoticeKind.Info) }
         SectionTitle(MeText.charactersTitle, Modifier.padding(top = AingDimens.space1)) {
             Text(MeText.ownedCount(ids.count { store.isOwned(it) }, ids.size), style = MaterialTheme.typography.bodyMedium, color = colors.label2)
@@ -212,21 +242,16 @@ fun CharacterPickerScreen(
 }
 
 @Composable
-private fun PickerHero(store: MeStore) {
+private fun PickerHero(store: MeStore, hero: MeStageContent) {
     val colors = AingTheme.colors
     val id = store.equippedCharacterID
     val (statusText, kind) = CharacterPickerRules.heroStatus(store.equippedLoaded, store.equippedLoadFailed)
     AingCard(Modifier.testTag(CharacterPickerTags.HERO)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
-            Box(Modifier.size(100.dp, 104.dp).clearAndSetSemantics {}, contentAlignment = Alignment.BottomCenter) {
-                Box(
-                    Modifier.size(92.dp, 20.dp).background(
-                        Brush.radialGradient(listOf(colors.accent.copy(alpha = 0.22f), colors.accent.copy(alpha = 0f))),
-                        RoundedCornerShape(percent = 50),
-                    ),
-                )
-                MeCharacterArt(id, 92, Modifier.padding(bottom = 8.dp))
-            }
+            hero(
+                CharacterPickerHero.spec(id),
+                Modifier.size(CharacterPickerHero.slotWidth, CharacterPickerHero.slotHeight).testTag(CharacterPickerTags.HERO_SLOT).clearAndSetSemantics {},
+            )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(MeCharacterName.display(id), style = MaterialTheme.typography.titleLarge, color = colors.label)
                 Text(

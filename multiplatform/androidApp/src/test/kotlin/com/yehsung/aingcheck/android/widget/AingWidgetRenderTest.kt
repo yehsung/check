@@ -63,10 +63,13 @@ class AingWidgetRenderTest {
         )
     }
 
+    /** 시험 전 런타임 시계(조립 기본값) — 시험이 바꾼 뒤 그대로 되돌린다(시험이 벽시계를 새로 만들지 않는다 · 구조 규칙 R2). */
+    private val assembledNow = AingWidgetRuntime.nowMillis
+
     @After
     fun reset() {
         AingWidgetRuntime.faces = AingWidgetFaces.SignedOut
-        AingWidgetRuntime.nowMillis = { System.currentTimeMillis() }
+        AingWidgetRuntime.nowMillis = assembledNow
     }
 
     private fun render(widget: GlanceAppWidget, size: DpSize, name: String): View = runBlocking {

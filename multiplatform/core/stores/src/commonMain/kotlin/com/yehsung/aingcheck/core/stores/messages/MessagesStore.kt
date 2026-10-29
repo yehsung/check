@@ -31,10 +31,15 @@ import com.yehsung.aingcheck.core.session.context.SessionContext
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.models.BlockedUser
+import com.yehsung.aingcheck.core.wire.models.MessageHistoryEntry
 import com.yehsung.aingcheck.core.wire.models.MessagePokeLogEntry
+import com.yehsung.aingcheck.core.wire.models.MessagePokeLogKind
 import com.yehsung.aingcheck.core.wire.models.MessageSendOutcome
 import com.yehsung.aingcheck.core.wire.models.PokeDirectoryEntry
+import com.yehsung.aingcheck.core.wire.models.PokeKind
+import com.yehsung.aingcheck.core.wire.models.TakenPokeRow
 import com.yehsung.aingcheck.core.wire.models.sortedForPokeDisplay
 import com.yehsung.aingcheck.core.wire.models.toPokeDirectoryEntries
 import kotlinx.coroutines.CoroutineScope
@@ -69,6 +74,9 @@ interface MessagesRouterLink {
  *    그래도 모든 이력 응답은 **띄운 순서 번호**로 거른다 — 먼저 띄운 늦은 응답이 나중 응답이 그린 새 줄을 지우지 않는다(맥 M4 원칙).
  * ④ **열린 대화는 신호 뒤 곧바로 이력을 받는다**(스로틀 없음). 닫힌 대화는 요약만 받고 이력은 "낡음"으로 적어 다음에 화면이 서는 순간 받는다.
  * ⑤ 세대 가드: 로그아웃 뒤 도착한 응답은 다음 계정의 대화·점·경계·입력칸을 건드리지 않는다.
+ * ⑥ (데스크톱, Windows 공용 패치 3) take_pokes 를 **부르는 쪽은 데스크톱 찌르기 갈래**다. 이 스토어는 그 갈래가 소비해 넘긴 행을 받아
+ *    기록에 곧바로 넣는 문만 연다([insertConsumedPokes] · [receiveConsumedMessages] · [refreshConversationAfterPokeSent]) — ① 은 그대로다.
+ *    폰은 이 문을 부르지 않는다(즉시 삽입 장부가 비어 있으면 이력 반영은 예전과 글자 그대로 같다).
  *
  * 실행 규약(Swift `@MainActor`): 공개 함수는 한 디스패처(앱 = 메인, 시험 = runTest)에서 부른다. 띄우는 작업은 [scope] 에서 돈다.
  * 노출(K8): Swift 이름 그대로의 값(`mutableStateOf` — Compose 가 읽는 순간 구독한다).
@@ -680,7 +688,13 @@ class MessagesStore(
             owner.lastAppliedHistorySerial = serial
             owner.historyStaleSerial?.let { staleSince -> if (serial > staleSince) owner.historyStaleSerial = null }
             val previousIDs = history.map { it.id }.toSet()
-            val sorted = loaded.entries.sortedForMessageHistory(if (loaded.hasReadReceipts) loaded.serverOrder else null)
+            // 즉시 삽입(맥 v0.3.31 M4 — 데스크톱만 넣는다)한 도착분 중 **이 조회보다 나중에 넣은 것**은 남긴다. 장부가 비면(폰) 빈 목록 · 빈 표라
+            // 예전 정렬과 글자 그대로 같다. 남긴 것은 서버가 모르는 말이라 같은 초 안에서 그 뒤에 **도착 순서**로 선다(m4-fix).
+            val kept = owner.survivingLocalArrivals(serial, history, loaded.entries)
+            val sorted = (loaded.entries + kept).sortedForMessageHistory(
+                if (loaded.hasReadReceipts) loaded.serverOrder else null,
+                owner.localArrivalSerials,
+            )
             if (history != sorted) history = sorted
             if (loaded.hasReadReceipts) {
                 val snapshot = MessageHistoryReadSnapshot(serial, loaded.serverOrder)
@@ -728,9 +742,13 @@ class MessagesStore(
             if (pokeLogAvailable) pokeLogAvailable = false
             if (pokeChronology.isNotEmpty()) pokeChronology = emptyMap()
             if (pokeSnapshot != null) pokeSnapshot = null
+            runtime.pokeLocalArrivalSerials.clear()
             return
         }
-        val sorted = MessagePokeLogRules.sorted(pokes, conversation.chronology)
+        // 즉시 넣은 찌르기(데스크톱 take_pokes 소비분) 중 이 조회보다 나중에 넣은 것은 남긴다(Swift applyMessagePokeLog 와 같은 규칙).
+        // 장부가 비면(폰) 빈 목록 · 빈 표라 예전 정렬과 같다.
+        val kept = runtime.survivingLocalPokeArrivals(serial, pokeLog, pokes)
+        val sorted = MessagePokeLogRules.sorted(pokes + kept, conversation.chronology, runtime.pokeLocalArrivalSerials)
         if (pokeLog != sorted) pokeLog = sorted
         if (pokeChronology != conversation.chronology) pokeChronology = conversation.chronology
         // 찌르기 경계 비교는 **같은 표**(메시지·찌르기 공통 순위)로 한다 — 메시지 서버 순서에는 찌르기 id 가 없다.
@@ -888,6 +906,102 @@ class MessagesStore(
         }
     }
 
+    // ---------------------------------------------------------------- take_pokes 소비분(데스크톱 — Windows 공용 패치 3)
+
+    /**
+     * take_pokes 가 **소비한** 행 중 찌르기(일반 · 울트라)를 기록에 곧바로 넣는다(데스크톱 drain 이 부른다). 반환값은 넣은 개수.
+     * 원본: Sources/check/WorkTimerStoreMessagePokes.swift `insertConsumedPokesIntoLog(rows:)`(106-150).
+     *
+     *  · 서버가 찌르기 기록을 모르면([pokeSnapshot] 이 null) 넣지 않는다 — 넣으면 다음 이력에서 사라지는 줄이 된다.
+     *  · 종류는 이력 디코더와 같은 규칙([MessagePokeLogKind.of])으로 가른다 — 'message' · 모르는 값은 건너뛴다. kind 가 없는 행은 옛 서버의
+     *    일반 찌르기다. ([PokeKind.of] 는 말풍선을 위해 모르는 값을 일반으로 접는다 — 그 규칙을 쓰면 미래 종류가 점을 단 채 맨 위에 머문다.)
+     *  · 빈 id · 빈 보낸이 · 이미 있는 id · 차단으로 걷어낸 사람([hiddenBlockedPeerIDs]) · 보관 창(24시간) 밖은 넣지 않는다.
+     *  · 받은 것이므로 안 읽음이다. 넣은 줄마다 도착 번호를 하나씩(행 순서 = 서버 created_at 순서) 적는다 — 그보다 먼저 띄운 이력 응답이
+     *    지우지 않게(`survivingLocalPokeArrivals`), 그리고 같은 초 동률의 도착 순서표로. 넣은 뒤 곧바로 읽음 판정을 돈다.
+     */
+    fun insertConsumedPokes(rows: List<TakenPokeRow>): Int {
+        if (pokeSnapshot == null || rows.isEmpty()) return 0
+        val horizon = context.clock.now().addingTimeInterval(-MessageNoticeText.historyHours.toDouble() * 3600.0)
+        val known = pokeLog.mapTo(HashSet()) { it.id }
+        val additions = ArrayList<MessagePokeLogEntry>()
+        for (row in rows) {
+            val kind = MessagePokeLogKind.of(row.kind ?: "normal") ?: continue
+            if (row.id.isEmpty() || row.fromUser.isEmpty() || row.id in known || row.fromUser in hiddenBlockedPeerIDs) continue
+            val createdAt = SwiftDate(row.createdEpoch.toDouble())
+            if (createdAt < horizon) continue
+            known += row.id
+            additions += MessagePokeLogEntry(
+                id = row.id,
+                peerUserID = row.fromUser,
+                peerName = row.fromDisplayName.ifEmpty { "사용자" },
+                peerAvatarURL = SwiftURL.parse(row.fromAvatarUrl),
+                createdAt = createdAt,
+                isMine = false,
+                kind = kind,
+                isUnread = true,
+            )
+        }
+        if (additions.isEmpty()) return 0
+        val owner = runtime
+        for (entry in additions) owner.pokeLocalArrivalSerials[entry.id] = owner.nextSerial()
+        val merged = MessagePokeLogRules.sorted(pokeLog + additions, pokeChronology, owner.pokeLocalArrivalSerials)
+        if (pokeLog != merged) pokeLog = merged
+        evaluateReadMarking()
+        return additions.size
+    }
+
+    /**
+     * take_pokes 가 **소비한** 행에서 메시지를 받아들인다(데스크톱 drain 이 부르는 유일한 문 — 맥 v0.3.31 M4 즉시 삽입).
+     * 원본: Sources/check/WorkTimerStoreMessages.swift `receiveConsumedMessages(rows:now:)`(1022).
+     *
+     *  1. 보이는 대화의 상대가 보낸 행을 **곧바로** 그 대화에 넣는다([insertConsumedMessagesIntoVisibleConversation]) — 신선도와 무관.
+     *  2. (맥의 말풍선 큐 — 신선한 것 중 [MessageUnreadRules.isAlreadyRead] 가 아닌 것만 — 는 데스크톱 찌르기 갈래 P13 의 몫이다. [now] 는 그
+     *     갈래와 같은 자리를 지키려고 받는다. 1 을 **먼저** 불러야 보고 있는 대화에서 읽음이 오른 말을 그 필터가 거른다.)
+     *  3. 소비한 메시지 행이 **하나라도** 있으면 도착 새로고침 1회([requestActivityRefresh] — 요약 + 화면이 보이면 이력).
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun receiveConsumedMessages(rows: List<TakenPokeRow>, now: SwiftDate) {
+        val consumed = consumedMessageEntries(rows, receiptsKnown = readReceiptsAvailable)
+        insertConsumedMessagesIntoVisibleConversation(consumed)
+        if (consumed.isEmpty()) return
+        requestActivityRefresh()
+    }
+
+    /**
+     * 보이는 대화의 상대가 보낸 것만 **지금** 이력에 넣는다. 반환값은 넣은 개수(Swift `insertConsumedMessagesIntoVisibleConversation`).
+     *  · 다른 사람의 말 · 닫힌 대화는 넣지 않는다(도착 새로고침의 요약이 점으로 알린다).
+     *  · 이미 있는 id 는 건드리지 않는다(서버 행이 이긴다). 정렬은 이력 응답과 같은 규칙, 넣은 줄마다 도착 번호 하나씩(m4-fix).
+     *  · "보이는 대화"는 맥 `mayBeOnScreen`(긍정 신호 하나면 참)의 짝 — 로그인 + 대화 화면 표식([openConversationPeerID]). 읽음은
+     *    [evaluateReadMarking] 이 따로 active 를 본다(맥 `isSeen`).
+     */
+    fun insertConsumedMessagesIntoVisibleConversation(entries: List<MessageEntry>): Int {
+        if (entries.isEmpty() || !isSignedIn) return 0
+        val peer = openConversationPeerID ?: return 0
+        val known = history.mapTo(HashSet()) { it.id }
+        val additions = ArrayList<MessageEntry>()
+        for (entry in entries) {
+            if (entry.peerUserID != peer || entry.id in known) continue
+            known += entry.id
+            additions += entry
+        }
+        if (additions.isEmpty()) return 0
+        val owner = runtime
+        for (entry in additions) owner.localArrivalSerials[entry.id] = owner.nextSerial()
+        val merged = (history + additions).sortedForMessageHistory(historySnapshot?.serverOrder, owner.localArrivalSerials)
+        if (history != merged) history = merged
+        evaluateReadMarking()
+        return additions.size
+    }
+
+    /**
+     * 찌르기를 보냈다(데스크톱 `sendPoke` · `sendUltraPoke` 의 성공 갈래). 그 사람과의 대화가 **떠 있을 때만** 이력을 한 번 받는다 —
+     * 보낸 행의 id 는 응답에 없어서 바로 넣을 수 없다. 원본: WorkTimerStoreMessagePokes.swift `refreshConversationAfterPokeSent(to:)`(151-155).
+     */
+    fun refreshConversationAfterPokeSent(peerID: String): Job? {
+        if (!isSignedIn || peerID.isEmpty() || openConversationPeerID != peerID) return null
+        return scope.launch { performLoadHistory() }
+    }
+
     // ---------------------------------------------------------------- 실시간 핸들러(폰 실시간 러너가 부른다)
 
     fun realtimeMessageActivity() {
@@ -917,8 +1031,34 @@ class MessagesStore(
     val pendingPostMarkTask: Job? get() = runtime.postMarkWindowTask
     val isMarkingRead: Boolean get() = runtime.markInFlight.isNotEmpty()
     val isHistoryStale: Boolean get() = runtime.historyStale
+    /** 즉시 삽입 장부(메시지 · 찌르기)에 남은 줄 수 — 서버가 답하면 0 으로 돌아온다(Swift `localArrivalSerials.isEmpty`). */
+    val pendingLocalArrivalCount: Int get() = runtime.localArrivalSerials.size
+    val pendingLocalPokeArrivalCount: Int get() = runtime.pokeLocalArrivalSerials.size
 
     companion object {
+        /**
+         * 소비한 메시지 행 → 대화 한 줄(순수, Swift `consumedMessageEntries`). 옮김 규칙은 이력 행과 같다(본문 정규화 · 보이는 글자 없음 버림 ·
+         * 빈 id · 보낸이 없음 버림 · 이름 폴백). 받은 말이므로 `isUnread` 는 서버가 읽음을 알면 true, 모르면 null(옛 서버 — 도장 규칙).
+         */
+        fun consumedMessageEntries(rows: List<TakenPokeRow>, receiptsKnown: Boolean): List<MessageEntry> = rows.mapNotNull { row ->
+            if (PokeKind.of(row.kind) != PokeKind.message || row.id.isEmpty() || row.fromUser.isEmpty()) return@mapNotNull null
+            val body = MessageBody.sanitized(row.body ?: "")
+            if (!MessageBody.hasVisibleContent(body)) return@mapNotNull null
+            MessageEntry(
+                MessageHistoryEntry(
+                    id = row.id,
+                    peerUserID = row.fromUser,
+                    peerName = row.fromDisplayName.ifEmpty { "사용자" },
+                    peerAvatarURL = SwiftURL.parse(row.fromAvatarUrl),
+                    body = body,
+                    createdAt = SwiftDate(row.createdEpoch.toDouble()),
+                    isMine = false,
+                    readByPeer = null,
+                    isUnread = if (receiptsKnown) true else null,
+                ),
+            )
+        }
+
         /** "이 서버에는 그 함수가 없다"(맥 `isMissingMessageReadFunction` 과 같은 판정). 401/403·5xx·네트워크는 넣지 않는다. */
         fun isMissingFunction(error: SupabaseWorkServiceError): Boolean = when (error) {
             SupabaseWorkServiceError.DatabaseSchemaMissing -> true
@@ -959,6 +1099,49 @@ private class MessagesRuntime {
     fun nextSerial(): Int {
         serial += 1
         return serial
+    }
+
+    /**
+     * 보이는 대화에 **즉시 삽입한** 도착분(맥 v0.3.31 M4): 메시지 id → 넣은 순간의 일련번호(한 줄에 하나 — take_pokes 행 순서대로 커진다).
+     * 그보다 먼저 띄운 이력 응답은 그 말을 모를 수 있으므로 남기고, 나중에 띄운 응답이 오면 서버가 이긴다. 같은 초 도착 순서표이기도 하다.
+     */
+    val localArrivalSerials: MutableMap<String, Int> = LinkedHashMap()
+
+    /** 기록에 **즉시 넣은** 찌르기(v0.3.65 — take_pokes 소비분). 위 표와 같은 규칙이다. */
+    val pokeLocalArrivalSerials: MutableMap<String, Int> = LinkedHashMap()
+
+    /**
+     * 일련번호 [historySerial] 로 띄운 이력 응답([server])을 반영할 때 **남겨야 할 즉시 삽입분**을 고르고 장부를 정리한다(Swift
+     * `survivingLocalArrivals`): 응답에 같은 id 가 있거나 응답이 삽입보다 나중에 띄운 것이면 장부에서 빼고, 먼저 띄운 것이면 지금 줄을 남긴다.
+     */
+    fun survivingLocalArrivals(historySerial: Int, current: List<MessageEntry>, server: List<MessageEntry>): List<MessageEntry> =
+        surviving(localArrivalSerials, historySerial, current, server.mapTo(HashSet()) { it.id }) { it.id }
+
+    /** [survivingLocalArrivals] 의 찌르기 짝(규칙은 글자 그대로 같다 — 타입만 다르다). */
+    fun survivingLocalPokeArrivals(
+        historySerial: Int,
+        current: List<MessagePokeLogEntry>,
+        server: List<MessagePokeLogEntry>,
+    ): List<MessagePokeLogEntry> =
+        surviving(pokeLocalArrivalSerials, historySerial, current, server.mapTo(HashSet()) { it.id }) { it.id }
+
+    private inline fun <T> surviving(
+        ledger: MutableMap<String, Int>,
+        historySerial: Int,
+        current: List<T>,
+        serverIDs: Set<String>,
+        id: (T) -> String,
+    ): List<T> {
+        if (ledger.isEmpty()) return emptyList()
+        val keepIDs = HashSet<String>()
+        val iterator = ledger.entries.iterator()
+        while (iterator.hasNext()) {
+            val (entryID, inserted) = iterator.next()
+            if (entryID in serverIDs || historySerial > inserted) iterator.remove() else keepIDs += entryID
+        }
+        if (keepIDs.isEmpty()) return emptyList()
+        val seen = HashSet<String>()
+        return current.filter { keepIDs.contains(id(it)) && seen.add(id(it)) }
     }
 
     fun cancelAll() {

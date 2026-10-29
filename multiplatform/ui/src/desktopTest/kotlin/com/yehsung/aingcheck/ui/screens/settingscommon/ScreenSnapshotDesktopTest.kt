@@ -101,6 +101,9 @@ class ScreenSnapshotDesktopTest {
         scene(false, PROFILE_H) { ProfileScene(sub, it) },
         scene(false, PROFILE_H) { ProfileScene(subTyped, it) },
         glyphProbe = scene(false, PROFILE_H) { ProfileScene(subNoGlyph, it) },
+        // 맥(골든 기록 기계)에서 잰 그림 글자 칸. Windows 는 앞 글자 폭이 달라 그림 글자가 6px 오른쪽 · 3px 아래에 선다(7차 CI 실측
+        // [416, 1145, 461, 1190]) — 그래서 비맥은 이 러너의 칸과 골든의 칸을 합쳐 덮는다. 골든을 다시 기록하면 맥 시험이 이 값을 맞추라고 빨개진다.
+        goldenGlyphBox = intArrayOf(410, 1142, 455, 1187),
     )
     // 탐침도 그림 글자(📌)다 — 한글로 바꾸면 줄의 글꼴 대체가 사라져 줄 높이 · 기준선이 움직이고 차이가 줄 전체(1% 넘음)로 번진다(맥 실측).
     private val subNoGlyph by lazy { ScreenScenes.me(subScreens = true, statusGlyph = "📌") }
@@ -146,12 +149,14 @@ class ScreenSnapshotDesktopTest {
     private fun theme(dark: Boolean) = if (dark) "dark" else "light"
 
     /**
-     * [glyphProbe] — 장면에서 OS 그림 글자 하나만 다른 그림 글자로 바꾼 장면. 둘의 차이 상자([GLYPH_PAD]px 넓힘)가 그림 글자 칸이다. 기록 기계가 아닌
-     * 러너의 굵은 대조에서만 그 칸을 골든 픽셀로 덮는다(맥은 언제나 통째 픽셀 그대로). 칸은 화면의 1% 이하여야 한다.
+     * [glyphProbe] — 장면에서 OS 그림 글자 하나만 다른 그림 글자로 바꾼 장면. 둘의 차이 상자([GLYPH_PAD]px 넓힘)가 이 러너의 그림 글자 칸이다.
+     * [goldenGlyphBox] — 골든 기록 때(맥) 같은 방법으로 잰 칸(맥에서는 이 값과 같아야 한다). 기록 기계가 아닌 러너의 굵은 대조에서만 두 칸을 합친
+     * 상자를 골든 픽셀로 덮는다(맥은 언제나 통째 픽셀 그대로). 상자는 화면의 1% 이하여야 한다.
      */
     private fun check(
         group: String, name: String, heightDp: Int, scene: @Composable () -> Unit, other: @Composable () -> Unit,
         glyphProbe: (@Composable () -> Unit)? = null,
+        goldenGlyphBox: IntArray? = null,
     ) {
         val renders = List(3) { DesktopSnapshots.render(width, heightDp, content = scene) }
         val out = DesktopSnapshots.outDir()
@@ -174,9 +179,12 @@ class ScreenSnapshotDesktopTest {
         val exact = SnapshotPolicy.isRecordingHost(System.getProperty("os.name"), System.getProperty("os.arch"))
         val diff = SnapshotCompare.diff(expected, actual)
         val glyph = glyphProbe?.let { probe ->
-            val box = requireNotNull(glyphBox(actual, DesktopSnapshots.render(width, heightDp, content = probe))) {
+            val local = requireNotNull(glyphBox(actual, DesktopSnapshots.render(width, heightDp, content = probe))) {
                 "$name: 그림 글자 칸을 못 찾았다 — 글자만 바꾼 장면이 같은 픽셀"
             }
+            val golden = requireNotNull(goldenGlyphBox) { "$name: 골든의 그림 글자 칸(goldenGlyphBox)이 없다" }
+            if (exact) assertEquals(golden.toList(), local.toList(), "$name: 그림 글자 칸이 골든 기록 때와 다르다 — 골든을 다시 기록했으면 goldenGlyphBox 를 이 값으로")
+            val box = intArrayOf(minOf(local[0], golden[0]), minOf(local[1], golden[1]), maxOf(local[2], golden[2]), maxOf(local[3], golden[3]))
             assertTrue((box[2] - box[0] + 1) * (box[3] - box[1] + 1) <= actual.argb.size / 100, "$name: 그림 글자 칸이 화면의 1% 를 넘는다(${box.toList()})")
             box
         }

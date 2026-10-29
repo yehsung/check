@@ -808,6 +808,12 @@ stop)
   fi
   n="$(alive_count)"
   [ "$n" -ne 0 ] || rm -rf "$NETSIM_DIR"   # 자기 netsimd 까지 내려갔으면 전용 발견 폴더도 거둔다
+  # adb 서버가 꺼진 에뮬레이터를 목록에서 내릴 때까지 기다린다(최대 10초). 곧바로 같은 포트로 다시 띄우는 다음 단계(gate-full 기기
+  # 단계 넷)가 offline 잔상을 '남이 쓰는 포트'로 읽고 거부하지 않게 — 7차 닫기 실측: stop 1초 뒤 start 가 세 번 거부됐다.
+  if [ "$n" -eq 0 ]; then
+    t2=$(date +%s)
+    while "$ADB" devices 2>/dev/null | awk '{print $1}' | grep -qx "$SERIAL" && [ $(( $(date +%s) - t2 )) -lt 10 ]; do sleep 1; done
+  fi
   echo "stopped alive=$n seconds=$(( $(date +%s) - t0 ))"
   [ "$n" -eq 0 ]
   ;;

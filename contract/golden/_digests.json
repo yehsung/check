@@ -150,6 +150,17 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
+    "desktop-work/requests": {
+      "file": "c1fdc271214555edc08b0c4ffe05effe79d7ca7f9acf9c390dbdff0f51015f83",
+      "generator": {
+        "Tests/CheckMobileKitTests/GoldenExport/desktop-work/GoldenExportDesktopWorkRequests.swift": "7f7452db1c9a81b8dc220fbc0ac16cc1b9dbc662dbc7379815b98a23a5755ee1"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkHTTP.swift": "867512bfd55689c87800000591bdb7d298c7c9c9a1b51b5febedd1d18d3319e6",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75"
+      }
+    },
     "duel-fee/fee": {
       "file": "481256ab041f96314be76b958171097adbf5a0443790ad94197927599c585dfd",
       "generator": {

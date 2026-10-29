@@ -1,5 +1,5 @@
 {
-  "exportTests": 91,
+  "exportTests": 92,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -176,6 +176,19 @@
         "Sources/CheckCore/MilestoneTracker.swift",
         "Sources/CheckCore/SupabaseWorkModels.swift",
         "Sources/CheckCore/CheckTodoModel.swift"
+      ]
+    },
+    {
+      "cases": 46,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/desktop-work/GoldenExportDesktopWorkRequests.swift",
+      "golden": "desktop-work/requests",
+      "path": "contract/golden/desktop-work/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/SupabaseWorkHTTP.swift"
       ]
     },
     {

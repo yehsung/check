@@ -1,0 +1,2774 @@
+{
+  "cases": [
+    {
+      "id": "startWork#rows",
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=representation"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"AB000000-0000-4000-8000-0000000000F6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "ab000000-0000-4000-8000-0000000000f6"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "startWork#zeroRows",
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=representation"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "startWork#undecodable",
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=representation"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "not json",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "startWork#23505",
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=representation"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+          "status": 409
+        }
+      ],
+      "result": {
+        "throws": "sessionAlreadyOpen"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#manual",
+      "requests": [
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "last_seen_at": "<WALL>",
+            "status": "off_work",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"ab000000-0000-4000-8000-0000000000f6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":\"2026-09-17T05:04:00Z\",\"duration_seconds\":3540}]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#autoReason",
+      "requests": [
+        {
+          "body": {
+            "auto_closed_at": "<WALL>",
+            "auto_closed_reason": "away",
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "last_seen_at": "<WALL>",
+            "status": "off_work",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"ab000000-0000-4000-8000-0000000000f6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":\"2026-09-17T05:04:00Z\",\"duration_seconds\":3540}]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#reasonColumnMissing",
+      "requests": [
+        {
+          "body": {
+            "auto_closed_at": "<WALL>",
+            "auto_closed_reason": "long_session",
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "last_seen_at": "<WALL>",
+            "status": "off_work",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST204\",\"message\":\"Could not find the 'auto_closed_reason' column of 'work_sessions' in the schema cache\"}",
+          "status": 400
+        },
+        {
+          "body": "[{\"id\":\"ab000000-0000-4000-8000-0000000000f6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":\"2026-09-17T05:04:00Z\",\"duration_seconds\":3540}]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#zeroRowsFallback",
+      "requests": [
+        {
+          "body": {
+            "duration_seconds": 0,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 0,
+            "ended_at": "2026-09-17T05:04:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "last_seen_at": "<WALL>",
+            "status": "off_work",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#zeroRowsSleepCorrect",
+      "requests": [
+        {
+          "body": {
+            "auto_closed_at": "<WALL>",
+            "auto_closed_reason": "sleep",
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "auto_closed_at": "<WALL>",
+            "auto_closed_reason": "sleep",
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "auto_closed_at": "<WALL>",
+            "auto_closed_reason": "sleep",
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "gt.2026-09-17T05:04:00Z"
+            ],
+            [
+              "auto_closed_reason",
+              "eq.abandoned"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "auto_closed_at": "<WALL>",
+            "auto_closed_reason": "sleep"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=minimal"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "not.is.null"
+            ],
+            [
+              "auto_closed_reason",
+              "eq.abandoned"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "last_seen_at": "<WALL>",
+            "status": "off_work",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#zeroRowsOtherOpen",
+      "requests": [
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "[{\"id\":\"CD000000-0000-4000-8000-0000000000C7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T05:00:00Z\",\"ended_at\":null}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#zeroRowsOpenLookupFails",
+      "requests": [
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "last_seen_at": "<WALL>",
+            "status": "off_work",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        },
+        {
+          "body": "{\"message\":\"boom\"}",
+          "status": 500
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "stopWork#noSharedStatus",
+      "requests": [
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "heartbeat#input",
+      "requests": [
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_input_at": "2026-09-17T05:04:30Z",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "heartbeat#noInput",
+      "requests": [
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "heartbeat#inputColumnMissing",
+      "requests": [
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_input_at": "2026-09-17T05:04:30Z",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST204\",\"message\":\"Could not find the 'auto_closed_reason' column of 'work_sessions' in the schema cache\"}",
+          "status": 400
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "upsertStatusDevice#opened",
+      "requests": [
+        {
+          "body": {
+            "device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "last_input_at": "2026-09-17T05:04:30Z",
+            "last_seen_at": "<WALL>",
+            "opened_session": true,
+            "session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id,device_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "upsertStatusDevice#weak",
+      "requests": [
+        {
+          "body": {
+            "device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "last_seen_at": "<WALL>",
+            "opened_session": false,
+            "session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id,device_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "upsertStatusDevice#inputColumnMissing",
+      "requests": [
+        {
+          "body": {
+            "device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "last_input_at": "2026-09-17T05:04:30Z",
+            "last_seen_at": "<WALL>",
+            "opened_session": true,
+            "session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id,device_id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "last_seen_at": "<WALL>",
+            "opened_session": true,
+            "session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id,device_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{}",
+          "status": 400
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reportDeviceInput",
+      "requests": [
+        {
+          "body": {
+            "device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "last_input_at": "2026-09-17T05:04:30Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_status_devices",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id,device_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "closeAbandonedSessions#int",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/close_abandoned_work_sessions",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": " 3\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": 3
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "closeAbandonedSessions#empty",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/close_abandoned_work_sessions",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": 0
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "awaySync#ok",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/away_sync",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"ok\",\"server_now\":\"2026-09-17T05:05:00.250Z\",\"close_threshold_seconds\":1800,\"backstop_seconds\":3600,\"freeze_seconds\":600,\"open_session\":{\"id\":\"AB000000-0000-4000-8000-0000000000F6\",\"team_id\":\"ee000000-0000-4000-8000-0000000000e5\",\"started_at\":\"2026-09-17T04:05:00Z\",\"last_input_at\":\"2026-09-17T04:30:00Z\",\"close_eligible\":true,\"close_due_at\":\"2026-09-17T05:00:00Z\"}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "isOK": true,
+          "openSession": {
+            "closeEligible": true,
+            "lastInputAt": {
+              "$date": "41daaadb32000000"
+            },
+            "sessionID": "AB000000-0000-4000-8000-0000000000F6",
+            "startedAt": {
+              "$date": "41daaad9bb000000"
+            }
+          },
+          "policy": {
+            "closeThresholdSeconds": {
+              "$f64": "409c200000000000"
+            },
+            "serverNow": {
+              "$date": "41daaadd3f100000"
+            }
+          }
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "awaySync#thresholdZero",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/away_sync",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"ok\",\"server_now\":\"2026-09-17T05:05:00Z\",\"close_threshold_seconds\":0,\"open_session\":{\"id\":\"x-1\",\"close_eligible\":true}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "isOK": true,
+          "openSession": {
+            "closeEligible": true,
+            "lastInputAt": null,
+            "sessionID": "x-1",
+            "startedAt": null
+          },
+          "policy": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "awaySync#eligibleMissing",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/away_sync",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"paused\",\"close_threshold_seconds\":900,\"open_session\":{\"id\":\"x-2\",\"started_at\":\"bad\"}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "isOK": false,
+          "openSession": {
+            "closeEligible": false,
+            "lastInputAt": null,
+            "sessionID": "x-2",
+            "startedAt": null
+          },
+          "policy": {
+            "closeThresholdSeconds": {
+              "$f64": "408c200000000000"
+            },
+            "serverNow": null
+          }
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "awaySync#unavailable",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/away_sync",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {},
+          "$type": "AwaySyncUnavailable"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "awaySync#garbage",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/away_sync",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[1]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {},
+          "$type": "AwaySyncUnavailable"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "makeWorkTickRequest#owner",
+      "requests": [],
+      "responses": [],
+      "result": {
+        "ok": {
+          "pDeviceId": "win:0f000000-0000-4000-8000-0000000000a7",
+          "pHeartbeat": true,
+          "pIncludeMeta": false,
+          "pLastInputAt": "2026-09-17T05:04:30Z",
+          "pOpenedSession": true,
+          "pSeenAt": "2026-09-17T05:05:00Z",
+          "pSessionId": "ab000000-0000-4000-8000-0000000000f6",
+          "pSince": "2026-09-13T15:00:00Z",
+          "pTeamId": "ee000000-0000-4000-8000-0000000000e5"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "makeWorkTickRequest#adopted",
+      "requests": [],
+      "responses": [],
+      "result": {
+        "ok": {
+          "pDeviceId": "win:0f000000-0000-4000-8000-0000000000a7",
+          "pHeartbeat": false,
+          "pIncludeMeta": false,
+          "pLastInputAt": "2026-09-17T05:04:30Z",
+          "pOpenedSession": false,
+          "pSeenAt": "2026-09-17T05:05:00Z",
+          "pSessionId": null,
+          "pSince": "2026-09-13T15:00:00Z",
+          "pTeamId": "ee000000-0000-4000-8000-0000000000e5"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "makeWorkTickRequest#unconfirmed",
+      "requests": [],
+      "responses": [],
+      "result": {
+        "ok": {
+          "pDeviceId": null,
+          "pHeartbeat": false,
+          "pIncludeMeta": true,
+          "pLastInputAt": "2026-09-17T05:04:30Z",
+          "pOpenedSession": false,
+          "pSeenAt": "2026-09-17T05:05:00Z",
+          "pSessionId": null,
+          "pSince": "2026-09-13T15:00:00Z",
+          "pTeamId": "ee000000-0000-4000-8000-0000000000e5"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "makeWorkTickRequest#none",
+      "requests": [],
+      "responses": [],
+      "result": {
+        "ok": {
+          "pDeviceId": null,
+          "pHeartbeat": false,
+          "pIncludeMeta": false,
+          "pLastInputAt": null,
+          "pOpenedSession": false,
+          "pSeenAt": "2026-09-17T05:05:00Z",
+          "pSessionId": null,
+          "pSince": "2026-09-13T15:00:00Z",
+          "pTeamId": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#ok",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"v\":1,\"server_now\":\"2026-09-17T05:05:01Z\",\"team_id\":\"ee000000-0000-4000-8000-0000000000e5\",\"heartbeat\":{\"mode\":\"owner\",\"status\":\"working\",\"active_session_id\":\"ab000000-0000-4000-8000-0000000000f6\",\"last_seen_at\":\"2026-09-17T05:05:00Z\",\"device\":true},\"statuses\":[{\"user_id\":\"u-1\",\"status\":\"working\",\"active_session_id\":\"S-1\"}],\"sessions_active\":[{\"id\":\"S-1\",\"user_id\":\"u-1\",\"started_at\":\"2026-09-17T04:00:00Z\"}],\"sessions_weekly\":[],\"sessions_since\":\"2026-09-13T15:00:00Z\",\"devices\":[{\"user_id\":\"u-1\",\"device_id\":\"win:x\",\"session_id\":\"S-1\",\"opened_session\":true}],\"away\":{\"status\":\"ok\",\"close_threshold_seconds\":1800},\"meta\":{\"memberships\":[],\"invite_code\":[{\"invite_code\":\"ABC123\"}]}}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "away": {
+            "backstopSeconds": null,
+            "closeThresholdSeconds": 1800,
+            "freezeSeconds": null,
+            "openSession": null,
+            "serverNow": null,
+            "status": "ok"
+          },
+          "devices": [
+            {
+              "deviceId": "win:x",
+              "lastSeenAt": null,
+              "openedSession": true,
+              "sessionId": "S-1",
+              "userId": "u-1"
+            }
+          ],
+          "heartbeat": {
+            "activeSessionId": "ab000000-0000-4000-8000-0000000000f6",
+            "device": true,
+            "lastSeenAt": "2026-09-17T05:05:00Z",
+            "mode": "owner",
+            "status": "working"
+          },
+          "meta": {
+            "inviteCode": [
+              {
+                "inviteCode": "ABC123"
+              }
+            ],
+            "memberships": []
+          },
+          "serverNow": "2026-09-17T05:05:01Z",
+          "sessionsActive": [
+            {
+              "durationSeconds": null,
+              "endedAt": null,
+              "id": "S-1",
+              "startedAt": "2026-09-17T04:00:00Z",
+              "userId": "u-1"
+            }
+          ],
+          "sessionsSince": "2026-09-13T15:00:00Z",
+          "sessionsWeekly": [],
+          "statuses": [
+            {
+              "activeSessionId": "S-1",
+              "lastSeenAt": null,
+              "profiles": null,
+              "status": "working",
+              "updatedAt": null,
+              "userId": "u-1"
+            }
+          ],
+          "teamId": "ee000000-0000-4000-8000-0000000000e5",
+          "v": 1
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#401",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{}",
+          "status": 401
+        }
+      ],
+      "result": {
+        "throws": "sessionExpired"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#404",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function\"}",
+          "status": 404
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {
+            "$case": "functionMissing",
+            "$value": "PGRST202"
+          },
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#PGRST202",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\"}",
+          "status": 400
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {
+            "$case": "functionMissing",
+            "$value": "PGRST202"
+          },
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#403",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"42501\"}",
+          "status": 403
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {
+            "$case": "forbidden",
+            "$value": "42501"
+          },
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#42501",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"42501\"}",
+          "status": 400
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {
+            "$case": "forbidden",
+            "$value": "42501"
+          },
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#503",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "upstream",
+          "status": 503
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {
+            "$case": "serverError",
+            "$value": 503
+          },
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#409",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"P0001\"}",
+          "status": 409
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {
+            "$case": "rejected",
+            "$value": {
+              "code": "P0001",
+              "status": 409
+            }
+          },
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#v2",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"v\":2}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {
+            "$case": "contractMismatch",
+            "$value": 2
+          },
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "workTick#garbage",
+      "requests": [
+        {
+          "body": {
+            "p_device_id": "win:0f000000-0000-4000-8000-0000000000a7",
+            "p_heartbeat": true,
+            "p_include_meta": false,
+            "p_last_input_at": null,
+            "p_opened_session": false,
+            "p_seen_at": "2026-09-17T05:05:00Z",
+            "p_session_id": null,
+            "p_since": "2026-09-13T15:00:00Z",
+            "p_team_id": "ee000000-0000-4000-8000-0000000000e5"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/work_tick",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "<html>",
+          "status": 200
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": "undecodable",
+          "$type": "WorkTickFailure"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reopenSession#rows",
+      "requests": [
+        {
+          "body": {
+            "auto_closed_at": null,
+            "auto_closed_reason": null,
+            "duration_seconds": null,
+            "ended_at": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"AB000000-0000-4000-8000-0000000000F6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "ab000000-0000-4000-8000-0000000000f6"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reopenSession#zero",
+      "requests": [
+        {
+          "body": {
+            "auto_closed_at": null,
+            "auto_closed_reason": null,
+            "duration_seconds": null,
+            "ended_at": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": null
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reopenSession#reasonColumnMissing",
+      "requests": [
+        {
+          "body": {
+            "auto_closed_at": null,
+            "auto_closed_reason": null,
+            "duration_seconds": null,
+            "ended_at": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": null,
+            "ended_at": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "return=representation"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST204\",\"message\":\"Could not find the 'auto_closed_reason' column of 'work_sessions' in the schema cache\"}",
+          "status": 400
+        },
+        {
+          "body": "[{\"id\":\"AB000000-0000-4000-8000-0000000000F6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+          "status": 200
+        },
+        {
+          "body": "{}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": "ab000000-0000-4000-8000-0000000000f6"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "openSessionIDs",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"AB000000-0000-4000-8000-0000000000F6\",\"user_id\":\"u\",\"started_at\":\"x\"},{\"id\":null,\"user_id\":\"u\",\"started_at\":\"y\"}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          "ab000000-0000-4000-8000-0000000000f6"
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyOverlappingSessions",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"id\":\"CD000000-0000-4000-8000-0000000000C7\",\"user_id\":\"u\",\"started_at\":\"2026-09-17T05:00:00Z\",\"ended_at\":null},{\"id\":\"x\",\"user_id\":\"u\",\"started_at\":\"2026-09-17T03:00:00Z\",\"ended_at\":\"2026-09-17T04:30:00Z\",\"duration_seconds\":5400}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "durationSeconds": null,
+            "endedAt": null,
+            "id": "CD000000-0000-4000-8000-0000000000C7",
+            "startedAt": "2026-09-17T05:00:00Z",
+            "userId": "u"
+          },
+          {
+            "durationSeconds": 5400,
+            "endedAt": "2026-09-17T04:30:00Z",
+            "id": "x",
+            "startedAt": "2026-09-17T03:00:00Z",
+            "userId": "u"
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "insertClosedSession",
+      "requests": [
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json",
+            "prefer": "resolution=ignore-duplicates,return=minimal"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": "$void"
+      },
+      "routes": [],
+      "unordered": false
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/CheckMobileKitTests/GoldenExport/desktop-work/GoldenExportDesktopWorkRequests.swift",
+  "golden": "desktop-work/requests",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "names": [
+      "startWork",
+      "stopWork",
+      "heartbeat",
+      "upsertStatusDevice",
+      "reportDeviceInput",
+      "closeAbandonedSessions",
+      "awaySync",
+      "makeWorkTickRequest",
+      "workTick",
+      "reopenSession",
+      "openSessionIDs",
+      "fetchMyOverlappingSessions",
+      "insertClosedSession"
+    ],
+    "request": "W1-d G5 와 같다(wire/requests spec.request) — 단 본문의 wallClockKeys 값(글자)은 \"<WALL>\"",
+    "result": "W1-d G5 와 같다(wire/requests spec.result). WorkTickFailure·AwaySyncUnavailable 은 {\"$type\", \"$dump\"}",
+    "values": {
+      "accessToken": "<ACCESS>",
+      "anonKey": "<ANON>",
+      "deviceID": "win:0f000000-0000-4000-8000-0000000000a7",
+      "endedAtSince1970": 1789621440,
+      "host": "golden.invalid",
+      "lastInputAtSince1970": 1789621470,
+      "nowSince1970": 1789621500,
+      "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+      "startedAtSince1970": 1789617900,
+      "teamID": "ee000000-0000-4000-8000-0000000000e5",
+      "userID": "aa000000-0000-4000-8000-0000000000a1"
+    },
+    "wallClockKeys": [
+      "auto_closed_at",
+      "last_seen_at",
+      "updated_at"
+    ]
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/SupabaseWorkHTTP.swift"
+  ]
+}

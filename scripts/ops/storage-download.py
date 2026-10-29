@@ -12,10 +12,22 @@ service_role 키는 .env.local 에서 프로세스 안에서만 읽는다. 객�
 import argparse
 import json
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+
+def _tls_context():
+    """python.org 빌드 파이썬은 시스템 인증서를 안 읽어 CERTIFICATE_VERIFY_FAILED 로 죽는다 — 빈 저장소면 macOS 묶음으로 채운다."""
+    ctx = ssl.create_default_context()
+    if not ctx.cert_store_stats().get("x509_ca") and os.path.exists("/etc/ssl/cert.pem"):
+        ctx.load_verify_locations("/etc/ssl/cert.pem")
+    return ctx
+
+
+TLS = _tls_context()
+
 
 PROJECT_REF = "xfnhfjvubetkdnfkfljg"
 BASE = "https://%s.supabase.co/storage/v1" % PROJECT_REF
@@ -44,7 +56,7 @@ class Client(object):
         req.add_header("Authorization", "Bearer " + self._key)
         if data is not None:
             req.add_header("Content-Type", "application/json")
-        return urllib.request.urlopen(req, timeout=60)
+        return urllib.request.urlopen(req, timeout=60, context=TLS)
 
     def json(self, method, path, body=None):
         with self._req(method, path, body) as r:

@@ -34,11 +34,23 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+
+def _tls_context():
+    """python.org 빌드 파이썬은 시스템 인증서를 안 읽어 CERTIFICATE_VERIFY_FAILED 로 죽는다 — 빈 저장소면 macOS 묶음으로 채운다."""
+    ctx = ssl.create_default_context()
+    if not ctx.cert_store_stats().get("x509_ca") and os.path.exists("/etc/ssl/cert.pem"):
+        ctx.load_verify_locations("/etc/ssl/cert.pem")
+    return ctx
+
+
+TLS = _tls_context()
+
 
 PROJECT_REF = "xfnhfjvubetkdnfkfljg"
 METRICS_URL = "https://%s.supabase.co/customer/v1/privileged/metrics" % PROJECT_REF
@@ -215,7 +227,7 @@ def fetch_metrics():
     req.add_header("Authorization", "Basic " + base64.b64encode(("service_role:" + key).encode()).decode())
     del key
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=30, context=TLS) as r:
             body = r.read().decode("utf-8", "replace")
     except Exception as e:  # noqa: BLE001 — 실패 종류만 남긴다
         return {"ok": False, "error": safe_error(e)}
@@ -236,7 +248,7 @@ def logs_query(sql, start, end, token=None):
     req.add_header("Accept", "application/json")
     del token
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=60, context=TLS) as r:
             data = json.loads(r.read().decode("utf-8", "replace"))
     except Exception as e:  # noqa: BLE001
         return None, safe_error(e)

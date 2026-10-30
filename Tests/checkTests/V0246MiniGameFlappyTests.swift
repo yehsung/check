@@ -10,7 +10,8 @@ import Testing
 // 판은 논리 292×302 다(창 캔버스 344×356 과 같은 비율 — 위아래 레터박스 없이 꽉 찬다).
 // 물리 상수는 그 세로 길이에 맞춘 값이다: 중력 1360 · 점프 −317 · 낙하 574 · 히트박스 24 · 스프라이트 34.
 // 난이도 곡선: 속도 130→230(3/점, 34점 상한) · 틈 132→96(3/점, 12점 하한) · 간격 150→115(2/점, 18점 하한).
-// 15점부터는 20% 확률로 '틈이 한 번 확 튀는' 기둥이 섞인다(지연 0.45~1.10초 뒤 58pt, 0.12초 easeOut, 색 신호 없음).
+// 15점부터는 30% 확률로 '틈이 한 번 확 튀는' 기둥이 섞인다(지연 0.45~1.10초 뒤 58pt, 0.12초 easeOut).
+// 튀는 기둥은 튀기를 마칠 때까지 붉은 예고를 띤다(2026-10-30 사용자 번복 — 처음엔 색 신호가 없었다).
 //
 // 2026-09-08 실기 지적 두 가지가 이 숫자들의 이유다 — (1) 292×200 을 344×356 에 비율 유지로 그리니 위아래가
 // 60pt 씩 비어 기둥이 떠 보였다, (2) 상승 곡선이 약해 계속 쉬웠다.
@@ -234,6 +235,62 @@ func aPipeArmsItsJumpOnlyOnceItEntersTheScreen() {
     #expect(abs(armed - (entered.elapsed + 0.7)) < 1e-9, "조준 시각이 \(armed)")
     entered.step(dt: 1.0 / 60.0)
     #expect(entered.pipes[0].shiftAt == armed, "조준은 한 번만 — 매 프레임 미뤄지면 영영 안 튄다")
+}
+
+// MARK: - 튀는 기둥 붉은 예고 (2026-10-30 사용자 번복)
+//
+// 원문: "플래피 아잉에서 움직이게 될 벽돌은 살짝 붉은 빛 표시하면서 미리 움직일거라고 예고하게끔 추가하자."
+// 2026-09-08 의 "움직이는 기둥 뭔지 알려 주지 말자"를 뒤집었다. 세기는 코어 `Pipe.warningLevel(at:)` 하나다.
+
+@Test
+func onlyShiftingPipesCarryTheRedWarningUntilTheyHaveJumped() {
+    #expect(pipe(x: 100).warningLevel(at: 5) == 0, "고정 기둥은 예고가 없다")
+    // 조준 전(화면 밖)에도 1 — 들어오는 첫 프레임부터 붉다.
+    #expect(jumpPipe(x: W + 40).warningLevel(at: 0) == 1)
+    let armed = jumpPipe(x: 200, delay: 0.7, at: 1.0)
+    #expect(armed.warningLevel(at: 0.5) == 1, "튀기 전엔 1")
+    #expect(armed.warningLevel(at: 1.0 + FlappyGame.shiftDuration / 2) == 1, "튀는 도중에도 1")
+    #expect(armed.warningLevel(at: 1.0 + FlappyGame.shiftDuration) == 1, "다 튄 순간까지 1")
+    let mid = armed.warningLevel(at: 1.0 + FlappyGame.shiftDuration + FlappyGame.warningFade / 2)
+    #expect(abs(mid - 0.5) < 1e-9, "빠지는 것은 선형이다(이징 없음) — 중간이 \(mid)")
+    #expect(armed.warningLevel(at: 1.0 + FlappyGame.shiftDuration + FlappyGame.warningFade) == 0)
+    #expect(armed.warningLevel(at: 60) == 0, "다 빠진 뒤 다시 켜지지 않는다")
+}
+
+@Test
+func aJumpPipeArmedByTheBoardIsWarnedUntilItSettles() throws {
+    // 판 시계(step)가 조준한 기둥으로: 화면에 들어온 그 프레임에 예고가 1 이고, 튀기를 마친 뒤 warningFade 가
+    // 지나면 0 이다. 옆의 고정 기둥은 내내 0.
+    var game = running(bird: .init(x: birdX, y: H / 2, vy: 0),
+                       pipes: [jumpPipe(x: W + 0.5, gap: 132, delay: 0.7), pipe(x: W + 190), pipe(x: W + 340)],
+                       score: 20)
+    game.step(dt: 1.0 / 60.0)
+    let entered = game.pipes[0]
+    let armed = try #require(entered.shiftAt)
+    #expect(entered.warningLevel(at: game.elapsed) == 1, "들어온 프레임에 예고가 없다")
+    #expect(game.pipes[1].warningLevel(at: game.elapsed) == 0, "고정 기둥에 예고가 묻었다")
+    #expect(entered.warningLevel(at: armed - 0.01) == 1, "튀기 직전에 예고가 빠졌다")
+    #expect(entered.warningLevel(at: armed + FlappyGame.shiftDuration + FlappyGame.warningFade + 0.01) == 0,
+            "다 튀고 빠질 시간이 지났는데 예고가 남았다")
+}
+
+@Test
+func macAndPhoneDrawTheSameRedWarning() throws {
+    let root = CheckCoreSourceLayout.repoRoot
+    let phone = swiftCodeStrippingComments(try String(contentsOf: root.appendingPathComponent(
+        "Sources/CheckMobileKit/Games/GamesFlappyCanvas.swift"), encoding: .utf8))
+    let mac = swiftCodeStrippingComments(try CheckCoreSourceLayout.joinedSplitSource("MiniGameFlappy.swift"))
+    for (name, code) in [("맥", mac), ("폰", phone)] {
+        #expect(code.contains("pipe.warningLevel(at: game.elapsed)"), "\(name) 그림이 예고 세기를 안 읽는다")
+        #expect(code.contains("FlappyShiftWarning.tint.opacity(FlappyShiftWarning.fillOpacity * warning)"),
+                "\(name) 본체 덧칠이 한 벌 값을 안 쓴다")
+        #expect(code.contains("FlappyShiftWarning.tint.opacity(FlappyShiftWarning.strokeOpacity * warning)"),
+                "\(name) 붉은 외곽선이 한 벌 값을 안 쓴다")
+        // 예고는 덧칠이다 — 0 일 때 한 획도 더 긋지 않아야 고정 기둥이 예전과 픽셀 단위로 같다.
+        #expect(code.contains("if warning > 0 {"), "\(name) 예고가 0 일 때도 그린다")
+    }
+    // "살짝": 덧칠 상한이 기둥을 빨간 기둥으로 바꾸지 않는다.
+    #expect(FlappyShiftWarning.fillOpacity > 0 && FlappyShiftWarning.fillOpacity <= 0.4)
 }
 
 @Test
@@ -819,8 +876,9 @@ struct V0246MiniGameFlappyRenderTests {
 
     @Test
     func jumpedPipeLooksExactlyLikeAFixedOne() throws {
-        // 왼쪽은 고정 기둥, 오른쪽은 이미 튄 기둥(조준 0.5초 + 보간 0.12초 → elapsed 1.0 이면 다 튀었다).
-        // 사용자 결정 2026-09-08: 색으로 미리 알려 주지 않는다 — 두 기둥의 픽셀 서명이 같아야 한다.
+        // 왼쪽은 고정 기둥, 오른쪽은 이미 튄 기둥(조준 0.5초 + 보간 0.12초 + 예고 빠짐 0.35초 → elapsed 1.0 이면
+        // 다 튀었고 붉은 예고도 다 빠졌다). 예고(2026-10-30)는 **튀기 전**의 신호라, 다 튄 기둥은 여전히 고정 기둥과
+        // 픽셀 서명이 같아야 한다 — 튄 뒤까지 다르게 보이면 "이미 지나간 위험"이 화면에 남는다.
         let fixed = pipe(x: 60, centerY: 151, gap: 132)
         let jumped = jumpPipe(x: 200, centerY: 151, gap: 132, at: 0.5)
         let game = FlappyGame(seed: 3, bird: .init(x: birdX, y: 151, vy: 0),
@@ -866,6 +924,27 @@ struct V0246MiniGameFlappyRenderTests {
         let plainBitmap = try renderBitmap(view(plain))
         #expect(firstPixelDifference(bitmap, plainBitmap) == nil,
                 "튄 기둥이 고정 기둥과 다르게 그려진다 — \(firstPixelDifference(bitmap, plainBitmap) ?? "")")
+    }
+
+    @Test
+    func aPipeAboutToJumpGlowsRedOnEveryStage() throws {
+        // 2026-10-30 사용자 번복: 튀기 전 기둥은 "살짝 붉은 빛". 무대 다섯(점수 0·6·13·22·34)에서 같은 y 의
+        // 고정 기둥보다 **빨강이 뚜렷이 오르고**, 초록·파랑보다 더 오른다(= 밝아진 게 아니라 붉어졌다).
+        for score in [0, 6, 13, 22, 34] {
+            let warned = jumpPipe(x: 200, centerY: 151, gap: 132, at: 5.0)   // 조준됐고 아직 안 튀었다
+            #expect(warned.warningLevel(at: 1.0) == 1)
+            let game = FlappyGame(seed: 3, bird: .init(x: birdX, y: 151, vy: 0),
+                                  pipes: [pipe(x: 60, centerY: 151, gap: 132), warned, pipe(x: 460)],
+                                  score: score, phase: .running, elapsed: 1.0)
+            let bitmap = try renderBitmap(view(game))
+            savePNG(bitmap, "flappy-warning-\(score).png")
+            let fixed = try #require(pixel(bitmap, x: 60 + FlappyGame.pipeWidth / 2, y: 40))
+            let warnedColor = try #require(pixel(bitmap, x: 200 + FlappyGame.pipeWidth / 2, y: 40))
+            let dr = warnedColor[0] - fixed[0], dg = warnedColor[1] - fixed[1], db = warnedColor[2] - fixed[2]
+            print("[flappy-warning] score \(score): 고정 \(fixed) · 예고 \(warnedColor) · Δ(\(dr),\(dg),\(db))")
+            #expect(dr >= 20, "score \(score): 빨강이 안 올랐다 — 고정 \(fixed) · 예고 \(warnedColor)")
+            #expect(dr > dg && dr > db, "score \(score): 붉어진 게 아니라 밝아졌다 — Δ(\(dr),\(dg),\(db))")
+        }
     }
 
     @Test
@@ -1726,11 +1805,11 @@ func flappySourceKeepsTheLeafViewContract() throws {
     #expect(code.contains("MiniGameCanvas.transform(in:"))
     #expect(code.contains("logicalSize: FlappyGame.logicalSize"))
     #expect(code.contains("MiniGameOverlayCard("))
-    // 갑자기 튀는 틈: 한 방(왕복 없음) · 화면에 들어와야 조준 · 색 신호 없음.
+    // 갑자기 튀는 틈: 한 방(왕복 없음) · 화면에 들어와야 조준 · 신호는 붉은 예고 한 벌(2026-10-30).
     #expect(code.contains("shiftJump"))
     #expect(code.contains("shiftAt"))
     #expect(code.contains("shiftDuration"))
-    #expect(!code.contains("CheckTheme.pending"), "튀는 기둥을 색으로 표시하지 않는다(2026-09-08 결정)")
+    #expect(!code.contains("CheckTheme.pending"), "튀는 기둥의 색은 FlappyShiftWarning 한 벌이다 — 테마 색을 따로 끌어오지 마라")
     // 입력은 허브가 넘긴다 — 잎 뷰에 제스처가 없다.
     #expect(!code.contains(".gesture(") && !code.contains("onTapGesture"))
 
@@ -1821,14 +1900,15 @@ func flappySourceKeepsTheLeafViewContract() throws {
     #expect(canvasZ.lowerBound < spriteZ.lowerBound,
             "파편 캔버스가 스프라이트 위로 올라갔다 — 점이 얼굴을 덮는다")
 
-    // ★ 그리기 함수 안에는 튀는 기둥 분기가 한 글자도 없다 — 색·모양으로 미리 알려 주지 않기로 한
-    //   결정(2026-09-08)은 "그림이 shift* 를 읽지 않는다"로만 지켜진다.
+    // ★ 그리기 함수는 튐 상태를 **직접** 읽지 않는다 — 붉은 예고(2026-10-30 사용자 번복)의 켜고 끄기는 코어
+    //   `warningLevel(at:)` 한 곳이 정한다. 그림이 shift* 를 읽기 시작하면 맥과 폰의 예고 시점이 갈린다.
     let drawStart = try #require(code.range(of: "private func draw(_ context: inout GraphicsContext"))
     let drawEnd = try #require(code.range(of: "private static let scorePopX"))
     let drawing = String(code[drawStart.lowerBound..<drawEnd.lowerBound])
     for forbidden in ["isShifting", "shiftDelay", "shiftAt", "shiftOffset"] {
-        #expect(!drawing.contains(forbidden), "그리기가 \(forbidden) 를 읽으면 튀는 기둥이 눈에 띈다")
+        #expect(!drawing.contains(forbidden), "그리기가 \(forbidden) 를 직접 읽는다 — warningLevel(at:) 만 봐라")
     }
+    #expect(drawing.contains("pipe.warningLevel(at: game.elapsed)"), "튀는 기둥 예고를 그리지 않는다")
     #expect(drawing.contains("MiniGameBackdrop.draw("), "배경을 그리는 자리가 draw 안이 맞는지")
 }
 

@@ -484,9 +484,9 @@ SELF_TEST_CASES = [
     ("W2-f", "multiplatform/feature/phone/src/commonMain/kotlin/com/yehsung/aingcheck/feature/phone/router/PhoneRouter.kt", "ok"),
     ("W2-f", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/gomoku/GomokuStore.kt", "outside"),
     ("W2-f", "multiplatform/core/session/build.gradle.kts", "reserved"),
-    ("W2-g1", "contract/golden/_manifest.json", "ok"),
+    ("W2-g1", "contract/golden/_manifest.json", "reserved"),  # 윈도우 3차 int-w1: 닫혀 생성물 예약에서 빠졌다(심어도 못 쓴다)
     ("W3-a", "contract/golden/_manifest.json", "reserved"),  # 골든 없는 갈래는 여전히 못 쓴다
-    ("W2-h1", "contract/golden/_digests.json", "ok"),
+    ("W2-h1", "contract/golden/_digests.json", "reserved"),
     ("W1-d", "multiplatform/core/net/src/commonMain/kotlin/com/yehsung/aingcheck/core/net/Service.kt", "closed"),
     ("W1-d", "multiplatform/core/net/build.gradle.kts", "closed"),
     # AndroidManifest.xml 은 W1-g 병합 뒤 조정자만(lanes.yml reserved). 남이 쓰면 예약 빨강, W1-g 는 닫힘 빨강.
@@ -560,7 +560,7 @@ SELF_TEST_CASES = [
     ("W2-g5", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/work/state/WorkStateMachine.kt", "ok"),
     ("W2-g5", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/work/queue/WorkQueueImpl.kt", "outside"),
     ("W2-g2", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/socialapi/DesktopSocialContracts.kt", "reserved"),
-    ("W2-g2", "contract/golden/_digests.json", "ok"),
+    ("W2-g2", "contract/golden/_digests.json", "reserved"),
     ("W2-g3", "contract/golden/_digests.json", "reserved"),  # 골든 없는 하위 갈래
     ("W2-h3", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/tokens/TokenContracts.kt", "reserved"),
     ("W2-h3", "multiplatform/feature/desktop/src/desktopMain/kotlin/com/yehsung/aingcheck/feature/desktop/DesktopAiHomes.kt", "reserved"),
@@ -599,6 +599,10 @@ def _self_test_data(lanes_path: str) -> dict:
         data = parse_yaml(f.read())
     planted = {lane for lane, _, expected in SELF_TEST_CASES if expected != "closed"} | {"W2-f", "W3-a", "W3-b"}
     data["closed"] = [n for n in data.get("closed", []) if n not in planted]
+    # 심은(다시 연) 옛 갈래의 자리를 이어받은 열린 갈래(윈도우 3차: W4-g ← W4-b·W4-e · W5-b4 ← W5-b2)는 사본에서 닫는다 —
+    # 실제 표에서는 옛 갈래가 닫혀 겹침이 아니다(--validate 가 실제 표의 겹침을 따로 잰다). 심은 갈래끼리 겹침은 그대로 잡힌다.
+    heirs = {b if a in planted else a for a, b, _, _ in Lanes(data).open_overlaps() if (a in planted) != (b in planted)}
+    data["closed"] += sorted(heirs)
     return data
 
 

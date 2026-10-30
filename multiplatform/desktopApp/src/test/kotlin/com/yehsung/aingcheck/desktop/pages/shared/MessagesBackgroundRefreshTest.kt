@@ -8,6 +8,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.mutableIntStateOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -24,7 +25,8 @@ class MessagesBackgroundRefreshTest {
         val signedIn = MutableStateFlow(false)
         var refreshes = 0
         var resets = 0
-        val job = MessagesBackgroundRefresh(signedIn, refresh = { refreshes++ }, onSignedOut = { resets++ }).start(backgroundScope)
+        val job = MessagesBackgroundRefresh(signedIn.map { if (it) "u-a" else null }, refresh = { refreshes++ }, onSignedOut = { resets++ })
+            .start(backgroundScope)
         runCurrent()
         advanceTimeBy(300_000)
         assertEquals(0, refreshes, "로그아웃 상태엔 0회")
@@ -50,13 +52,39 @@ class MessagesBackgroundRefreshTest {
         job.cancel()
     }
 
+    /** int-w4b ③: 단계는 그대로 사용자만 바뀌는 A → B 직행 — reset 1회가 **먼저**, 그 뒤 B 의 요약 1회가 곧바로(60초를 기다리지 않는다). */
+    @Test
+    fun `A → B 직행 — reset 뒤 곧바로 B 의 요약 1회 · 주기는 B 기준으로 다시`() = runTest {
+        val account = MutableStateFlow<String?>("u-a")
+        val log = mutableListOf<String>()
+        val job = MessagesBackgroundRefresh(account, refresh = { log += "refresh" }, onSignedOut = { log += "reset" }).start(backgroundScope)
+        runCurrent()
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertEquals(listOf("refresh"), log, "A 로그인 직후 1회")
+        account.value = "u-b"
+        runCurrent()
+        assertEquals(listOf("refresh", "reset", "refresh"), log, "직행: 앞 사람 reset → B 요약, 이 순서로 곧바로")
+        advanceTimeBy(59_999)
+        runCurrent()
+        assertEquals(3, log.size, "B 의 다음 요약은 B 기준 60초")
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(4, log.size)
+        account.value = "u-b"
+        runCurrent()
+        assertEquals(4, log.size, "같은 사람이면 아무 일 없다")
+        job.cancel()
+    }
+
     @Test
     fun `진짜 메시지 스토어 — 닫힌 플라이아웃에서도 요약이 나간다`() = runTest {
         val h = SharedTestHarness(this, answer = SharedTestHarness.withTeam)
         h.signIn()
         advanceUntilIdle()
         h.paths.clear()
-        MessagesBackgroundRefresh(h.host.signedInFlow(), refresh = { h.messages.requestActivityRefresh() }).start(backgroundScope)
+        MessagesBackgroundRefresh(h.host.signedInFlow().map { if (it) "u-a" else null }, refresh = { h.messages.requestActivityRefresh() })
+            .start(backgroundScope)
         runCurrent()
         advanceTimeBy(1_000)
         runCurrent()

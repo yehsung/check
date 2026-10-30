@@ -294,6 +294,68 @@ jobs:
             multiplatform/**/build/tripwire/*.txt
           if-no-files-found: error
           retention-days: 7
+      - name: 앱 자기 점검(--selfcheck=<path> headless — 빌드 신원·경로·신원 출처 칸, 비밀 0)
+        # int-w3 os-work(W-14 #8): 게이트가 만든 :desktopApp 빌드를 compose run(JavaExec)으로 띄워 Main 의 --selfcheck 갈래만 돈다 —
+        # 창·트레이·단일 실행 가드 전에 진단 한 줄을 파일로 쓰고 exit 0(GUI 런처는 stdout 이 없어 파일로 받는다, package.md §4-4).
+        # 방화벽 봉인 안(--offline)이다: 자기 점검은 망을 쓰지 않는다. 칸은 허용 목록으로만 — 새 칸이 생기면 여기서 빨강(비밀 검토 뒤 더한다).
+        if: steps.sealed.outcome == 'success'
+        env:
+          SELFCHECK_EXPECT_ARCH: amd64
+        run: |
+          out="$(cygpath -m "$RUNNER_TEMP")/aingcheck-selfcheck.json"
+          log="$RUNNER_TEMP/aingcheck-selfcheck-run.log"
+          rm -f "$out"
+          (cd multiplatform && ./gradlew --offline --no-daemon -q :desktopApp:run --args="--selfcheck=$out") > "$log" 2>&1 \
+            || { tail -60 "$log"; echo "::error::--selfcheck 실행 실패"; exit 1; }
+          [ -s "$out" ] || { tail -60 "$log"; echo "::error::--selfcheck 가 $out 를 쓰지 않았다"; exit 1; }
+          PY="$(command -v python3 || command -v python)"
+          "$PY" -I - "$out" <<'PY'
+          import json, os, re, sys
+          raw = open(sys.argv[1], encoding="utf-8").read()
+          lines = [l for l in raw.splitlines() if l.strip()]
+          errs = []
+          if len(lines) != 1:
+              errs.append(f"한 줄이어야 한다: {len(lines)}줄")
+          d = json.loads(lines[0]) if lines else {}
+          allowed = {"platform", "build", "version", "osName", "osArch", "javaVersion", "packageFamilyName", "packageQueryCode",
+                     "dataDir", "installationIdOrigin", "installationId", "codexHomeSource", "jnaBootLibraryPath", "jnaNoUnpack",
+                     "buildTime", "gitSha", "prodHost", "prodKeySha8", "flags"}
+          if set(d) - allowed:
+              errs.append(f"허용 목록 밖 칸(비밀 검토 뒤 더할 것): {sorted(set(d) - allowed)}")
+          if allowed - set(d):
+              errs.append(f"빠진 칸: {sorted(allowed - set(d))}")
+          def text(k):
+              v = d.get(k)
+              return v if isinstance(v, str) else ""
+          if d.get("platform") != "windows":
+              errs.append(f"platform={d.get('platform')!r}")
+          if not (isinstance(d.get("build"), int) and d["build"] > 0):
+              errs.append(f"build={d.get('build')!r}")
+          for k in ("version", "buildTime", "gitSha", "codexHomeSource", "javaVersion"):
+              if not text(k):
+                  errs.append(f"{k} 비었음")
+          if not text("osName").startswith("Windows"):
+              errs.append(f"osName={d.get('osName')!r}")
+          if d.get("osArch") != os.environ["SELFCHECK_EXPECT_ARCH"]:
+              errs.append(f"osArch={d.get('osArch')!r} (기대 {os.environ['SELFCHECK_EXPECT_ARCH']})")
+          if not (re.match(r"^[A-Za-z]:\\", text("dataDir")) and re.search(r"\\aing-check$", text("dataDir"))):
+              errs.append(f"dataDir={d.get('dataDir')!r} (드라이브 절대 경로 …\\aing-check 여야)")
+          if d.get("installationIdOrigin") not in ("MACHINE_DERIVED", "FALLBACK_FILE"):
+              errs.append(f"installationIdOrigin={d.get('installationIdOrigin')!r} (UNAVAILABLE = 기기 없는 근무 행)")
+          if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", text("installationId")):
+              errs.append(f"installationId 꼴이 소문자 uuid 가 아니다: {d.get('installationId')!r}")
+          if not re.fullmatch(r"(|[0-9a-f]{8})", text("prodKeySha8")) or d.get("prodKeySha8") is None:
+              errs.append(f"prodKeySha8={d.get('prodKeySha8')!r} (빈 값 또는 sha256 앞 8자만)")
+          if not (isinstance(d.get("flags"), dict) and all(isinstance(v, bool) for v in d["flags"].values())):
+              errs.append(f"flags={d.get('flags')!r}")
+          secret = re.compile(r"eyJ[A-Za-z0-9_-]{8,}|sb_(secret|publishable)_|service_role|refresh_token|access_token|apikey|-----BEGIN", re.I)
+          if secret.search(raw):
+              errs.append("비밀 문형이 실렸다: " + secret.search(raw).group(0)[:12] + "…")
+          print(lines[0] if lines else "(빈 파일)")
+          for e in errs:
+              print(f"::error::selfcheck {e}")
+          sys.exit(1 if errs else 0)
+          PY
       - name: 방화벽 봉인 풀기
         if: always()
         shell: pwsh
@@ -426,6 +488,68 @@ jobs:
             multiplatform/**/build/tripwire/*.txt
           if-no-files-found: error
           retention-days: 7
+      - name: 앱 자기 점검(--selfcheck=<path> headless — 빌드 신원·경로·신원 출처 칸, 비밀 0)
+        # int-w3 os-work(W-14 #8): 게이트가 만든 :desktopApp 빌드를 compose run(JavaExec)으로 띄워 Main 의 --selfcheck 갈래만 돈다 —
+        # 창·트레이·단일 실행 가드 전에 진단 한 줄을 파일로 쓰고 exit 0(GUI 런처는 stdout 이 없어 파일로 받는다, package.md §4-4).
+        # 방화벽 봉인 안(--offline)이다: 자기 점검은 망을 쓰지 않는다. 칸은 허용 목록으로만 — 새 칸이 생기면 여기서 빨강(비밀 검토 뒤 더한다).
+        if: steps.sealed.outcome == 'success'
+        env:
+          SELFCHECK_EXPECT_ARCH: aarch64
+        run: |
+          out="$(cygpath -m "$RUNNER_TEMP")/aingcheck-selfcheck.json"
+          log="$RUNNER_TEMP/aingcheck-selfcheck-run.log"
+          rm -f "$out"
+          (cd multiplatform && ./gradlew --offline --no-daemon -q :desktopApp:run --args="--selfcheck=$out") > "$log" 2>&1 \
+            || { tail -60 "$log"; echo "::error::--selfcheck 실행 실패"; exit 1; }
+          [ -s "$out" ] || { tail -60 "$log"; echo "::error::--selfcheck 가 $out 를 쓰지 않았다"; exit 1; }
+          PY="$(command -v python3 || command -v python)"
+          "$PY" -I - "$out" <<'PY'
+          import json, os, re, sys
+          raw = open(sys.argv[1], encoding="utf-8").read()
+          lines = [l for l in raw.splitlines() if l.strip()]
+          errs = []
+          if len(lines) != 1:
+              errs.append(f"한 줄이어야 한다: {len(lines)}줄")
+          d = json.loads(lines[0]) if lines else {}
+          allowed = {"platform", "build", "version", "osName", "osArch", "javaVersion", "packageFamilyName", "packageQueryCode",
+                     "dataDir", "installationIdOrigin", "installationId", "codexHomeSource", "jnaBootLibraryPath", "jnaNoUnpack",
+                     "buildTime", "gitSha", "prodHost", "prodKeySha8", "flags"}
+          if set(d) - allowed:
+              errs.append(f"허용 목록 밖 칸(비밀 검토 뒤 더할 것): {sorted(set(d) - allowed)}")
+          if allowed - set(d):
+              errs.append(f"빠진 칸: {sorted(allowed - set(d))}")
+          def text(k):
+              v = d.get(k)
+              return v if isinstance(v, str) else ""
+          if d.get("platform") != "windows":
+              errs.append(f"platform={d.get('platform')!r}")
+          if not (isinstance(d.get("build"), int) and d["build"] > 0):
+              errs.append(f"build={d.get('build')!r}")
+          for k in ("version", "buildTime", "gitSha", "codexHomeSource", "javaVersion"):
+              if not text(k):
+                  errs.append(f"{k} 비었음")
+          if not text("osName").startswith("Windows"):
+              errs.append(f"osName={d.get('osName')!r}")
+          if d.get("osArch") != os.environ["SELFCHECK_EXPECT_ARCH"]:
+              errs.append(f"osArch={d.get('osArch')!r} (기대 {os.environ['SELFCHECK_EXPECT_ARCH']})")
+          if not (re.match(r"^[A-Za-z]:\\", text("dataDir")) and re.search(r"\\aing-check$", text("dataDir"))):
+              errs.append(f"dataDir={d.get('dataDir')!r} (드라이브 절대 경로 …\\aing-check 여야)")
+          if d.get("installationIdOrigin") not in ("MACHINE_DERIVED", "FALLBACK_FILE"):
+              errs.append(f"installationIdOrigin={d.get('installationIdOrigin')!r} (UNAVAILABLE = 기기 없는 근무 행)")
+          if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", text("installationId")):
+              errs.append(f"installationId 꼴이 소문자 uuid 가 아니다: {d.get('installationId')!r}")
+          if not re.fullmatch(r"(|[0-9a-f]{8})", text("prodKeySha8")) or d.get("prodKeySha8") is None:
+              errs.append(f"prodKeySha8={d.get('prodKeySha8')!r} (빈 값 또는 sha256 앞 8자만)")
+          if not (isinstance(d.get("flags"), dict) and all(isinstance(v, bool) for v in d["flags"].values())):
+              errs.append(f"flags={d.get('flags')!r}")
+          secret = re.compile(r"eyJ[A-Za-z0-9_-]{8,}|sb_(secret|publishable)_|service_role|refresh_token|access_token|apikey|-----BEGIN", re.I)
+          if secret.search(raw):
+              errs.append("비밀 문형이 실렸다: " + secret.search(raw).group(0)[:12] + "…")
+          print(lines[0] if lines else "(빈 파일)")
+          for e in errs:
+              print(f"::error::selfcheck {e}")
+          sys.exit(1 if errs else 0)
+          PY
       - name: 방화벽 봉인 풀기
         if: always()
         shell: pwsh

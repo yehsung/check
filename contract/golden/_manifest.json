@@ -179,39 +179,39 @@
       ]
     },
     {
-      "cases": 24,
+      "cases": 3,
       "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
-      "golden": "desktop-work-policy/constants",
-      "path": "contract/golden/desktop-work-policy/constants.json",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/fresh",
+      "path": "contract/golden/desktop-poke/fresh.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/check/WorkTimerStore.swift",
-        "Sources/check/CheckWorkNudge.swift",
-        "Sources/CheckCore/MilestoneTracker.swift"
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
       ]
     },
     {
-      "cases": 19,
+      "cases": 4,
       "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
-      "golden": "desktop-work-policy/laps",
-      "path": "contract/golden/desktop-work-policy/laps.json",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/requests",
+      "path": "contract/golden/desktop-poke/requests.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/check/WorkTimerStore.swift",
-        "Sources/CheckCore/MilestoneTracker.swift"
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
       ]
     },
     {
-      "cases": 11,
+      "cases": 3,
       "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
-      "golden": "desktop-work-policy/nudge",
-      "path": "contract/golden/desktop-work-policy/nudge.json",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/send-notice",
+      "path": "contract/golden/desktop-poke/send-notice.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/check/CheckWorkNudge.swift"
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
       ]
     },
     {

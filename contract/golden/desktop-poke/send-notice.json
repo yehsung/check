@@ -1,0 +1,142 @@
+{
+  "cases": [
+    {
+      "id": "ultra-sent",
+      "rows": [
+        {
+          "balance": null,
+          "notice": "울트라 찌르기 발사!"
+        },
+        {
+          "balance": -1,
+          "notice": "울트라 발사! 이제 0개예요"
+        },
+        {
+          "balance": 0,
+          "notice": "울트라 발사! 이제 0개예요"
+        },
+        {
+          "balance": 1,
+          "notice": "울트라 발사! 남은 울트라 1개"
+        },
+        {
+          "balance": 2,
+          "notice": "울트라 발사! 남은 울트라 2개"
+        },
+        {
+          "balance": 99,
+          "notice": "울트라 발사! 남은 울트라 99개"
+        }
+      ]
+    },
+    {
+      "adoptedPokeConsumerInputWindowSeconds": 900,
+      "id": "constants",
+      "messageDisplayFreshnessSeconds": 300,
+      "messageQueueLimit": 20,
+      "pokeCooldownSeconds": 60,
+      "pokeDisplayFreshnessSeconds": 3600,
+      "pokePollIntervalSeconds": 15,
+      "pokePollIntervalSecondsWhileSubscribed": 60,
+      "pollingKeepsRunningAlongsideRealtime": true,
+      "targetFocusedNotice": "지금 집중 중이에요. 나중에 찔러 주세요",
+      "targetOnPhoneNotice": "폰으로 근무 중이에요. 맥으로 돌아오면 찔러 주세요",
+      "ultraDisplayFreshnessSeconds": 120,
+      "ultraEmptyNotice": "울트라가 없어요 — 상점에서 루비로 살 수 있어요"
+    },
+    {
+      "id": "outcomes",
+      "rows": [
+        {
+          "outcome": "ok",
+          "response": "{\"status\":\"ok\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "ok",
+          "response": "{\"status\":\"ok\",\"ultra_balance\":3}",
+          "ultraBalanceForDisplay": 3
+        },
+        {
+          "outcome": "ok",
+          "response": "{\"status\":\"ok\",\"ultra_remaining\":-2}",
+          "ultraBalanceForDisplay": 0
+        },
+        {
+          "outcome": "ok",
+          "response": "{\"status\":\"ok\",\"ultra_balance\":0,\"ultra_remaining\":5}",
+          "ultraBalanceForDisplay": 0
+        },
+        {
+          "outcome": "cooldown:42",
+          "response": "{\"status\":\"cooldown\",\"retry_after_seconds\":42}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "cooldown:60",
+          "response": "{\"status\":\"cooldown\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "cooldown:1",
+          "response": "{\"status\":\"cooldown\",\"retry_after_seconds\":0}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "notWorking",
+          "response": "{\"status\":\"not_working\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "targetNotWorking",
+          "response": "{\"status\":\"target_not_working\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "targetFocused",
+          "response": "{\"status\":\"target_focused\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "targetOnPhone",
+          "response": "{\"status\":\"target_on_phone\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "ultraUsedToday:3600",
+          "response": "{\"status\":\"ultra_used_today\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "ultraUsedToday:120",
+          "response": "{\"status\":\"ultra_used_today\",\"reset_after_seconds\":120,\"ultra_balance\":0}",
+          "ultraBalanceForDisplay": 0
+        },
+        {
+          "outcome": "invalid",
+          "response": "{\"status\":\"invalid\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "invalid",
+          "response": "{\"status\":\"weird\"}",
+          "ultraBalanceForDisplay": null
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+  "golden": "desktop-poke/send-notice",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "constants": "P11 폴링 15/60 · 신선도 3600/120/300 · 쿨타임 60 · 흡수 입력 창 900(서버 600 보다 넓다) · 큐 상한 20 · 폴링은 링과 함께 돈다",
+    "outcomes": "발사 응답 원문 → PokeSendOutcome(cooldown 은 max(1, ?? 60) · ultra_used_today 는 max(1, ?? 3600)) · ultraBalanceForDisplay(ultra_balance ?? ultra_remaining, 음수는 0)",
+    "ultra-sent": "P3: 잔량을 모르면(nil) 숫자를 지어내지 않는다 · 0 이하는 '이제 0개예요'"
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStorePoke.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift"
+  ]
+}

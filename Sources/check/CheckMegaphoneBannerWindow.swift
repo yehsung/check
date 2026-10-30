@@ -156,8 +156,8 @@ struct MegaphoneBannerView: View {
         }
         .frame(width: presentation.width, alignment: .top)
         .clipped()
-        .appUserAvatarCharacters(from: store)
         .checkTooltipLayer()
+        .appUserAvatarCharacters(from: store)
         .environment(\.colorScheme, .dark)
     }
 

@@ -501,13 +501,14 @@ package struct RealtimeLink: Equatable, Sendable {
             // 경계가 **실제로 커질 때만** 보내는 이유다. 이 줄을 오목 줄 **앞**에 두는 것은 순서에 뜻이 있어서가 아니라
             // 오목 가지와 drain 기본값이 한 문장으로 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다.
             if event == RealtimeLinkConstants.messageReadBroadcastEvent { return [.messageReadSignal] }
+            // 확성기(2026-10-30)는 테트리스 줄 **앞**에 선다 — 같은 이유다(테트리스·오목·체스 가지와 drain 기본값이 한 문장으로
+            // 붙어 있어야 하는 소스 계약 V0327 · V0360). 이 줄이 없으면 확성기 신호가 아래 기본값으로 떨어져 배너는 안 뜨고
+            // take_pokes 만 한 번 더 나간다.
+            if event == RealtimeLinkConstants.megaphoneBroadcastEvent { return [.megaphoneSignal] }
             // 테트리스(v0.3.60)는 오목 줄 **앞**에 선다 — 순서에 뜻이 있어서가 아니라 오목·체스 가지와 drain 기본값이 한 문장으로
             // 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다. 이 줄이 없으면 테트리스 초인종이 아래
             // 기본값으로 떨어져 **울릴 때마다 take_pokes 가 한 번씩 더** 나가고 소켓은 테트리스 상태를 한 번도 당기지 않는다.
             if event == RealtimeLinkConstants.tetrisBroadcastEvent { return [.tetrisSignal] }
-            // 확성기(2026-10-30)도 오목 줄 **앞**에 선다 — 테트리스와 같은 이유(오목·체스 가지와 drain 기본값이 한 문장으로 붙어 있어야
-            // 하는 소스 계약). 이 줄이 없으면 확성기 신호가 아래 기본값으로 떨어져 배너는 안 뜨고 take_pokes 만 한 번 더 나간다.
-            if event == RealtimeLinkConstants.megaphoneBroadcastEvent { return [.megaphoneSignal] }
             if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] }
             // 체스(v0.3.44)도 같은 자리에 선다. 이 줄이 없으면 체스 초인종이 아래 기본값으로 떨어져
             // **수마다 take_pokes 가 한 번씩 더** 나가고(블리츠 한 판 40수 = 왕복 80회) 소켓은 체스 상태를

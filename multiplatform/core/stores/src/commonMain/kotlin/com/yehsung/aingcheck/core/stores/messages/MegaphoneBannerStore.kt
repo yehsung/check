@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/MegaphoneBannerStore.swift @ a6791165(b056075b) — 확성기 배너 스토어(맥·폰 한 벌 — 계약 docs/plan/megaphone-banner-contract.md C2 · C3)
+// 원본: Sources/CheckCore/MegaphoneBannerStore.swift @ a3d59e74(a3d59e74) — 확성기 배너 스토어(맥·폰 한 벌 — 계약 docs/plan/megaphone-banner-contract.md C2 · C3)
 //
 // [MegaphoneStore] 와 같은 결: 세션 호스트([SessionHost] — 폰 조립은 PhoneMegaphoneHost)를 빌려 RPC 를 부른다.
 // 화면(폰 위 배너)은 [current] 하나만 그린다. 이 파일이 지키는 것:
@@ -9,7 +9,7 @@
 //    `refresh(verifying)` 를 한 번 기다린 뒤 다시 거른다. 그 refresh 뒤에도 모르면(위조 DM · 연결 실패) 메시지로 보인다.
 // ③ **안 읽음 요약과 필터는 함께 움직인다.** 필터가 켜져 있으면 확성기 줄을 안 세는 `message_unread_summary_v2` 를, 아니면 옛 함수를
 //    쓴다. v2 가 없으면(PGRST202 · 404) 옛 함수로 내리고 **필터도 끈다** — 줄만 숨기고 옛 요약이 그 줄을 세면 배지가 영영 안 꺼진다.
-// ④ **한 번에 하나 · 8초 · 쉬고 0.4초.** 타이머는 주입([clock] · [schedule])이라 시험이 8초를 기다리지 않는다. 지난 타이머는
+// ④ **한 번에 하나 · 5초 · 쉬고 0.4초.** 타이머는 주입([clock] · [schedule])이라 시험이 5초를 기다리지 않는다. 지난 타이머는
 //    timerToken 으로 버린다(취소 대신 세대).
 // ⑤ **본 것 기록**: 계정별 키로 최근 100개 megaphoneID 를 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다.
 //    (기기 사이에는 나누지 않는다.) [reset] 은 메모리 캐시만 비운다(기록은 계정 키에 남는다).
@@ -67,7 +67,7 @@ class MegaphoneBannerStore(
     var host: SessionHost? = host
         private set
 
-    /** 타이머(8초 · 0.4초 · 멈춤 뒤 다시 세기). */
+    /** 타이머(5초 · 0.4초 · 멈춤 뒤 다시 세기). */
     var schedule: MegaphoneBannerSchedule = schedule ?: { after, fire ->
         this.scope.launch {
             delay((maxOf(0.0, after) * 1000).toLong())
@@ -78,10 +78,33 @@ class MegaphoneBannerStore(
     /** 지금 배너를 미뤄야 하는가(폰: 시트·대결 화면·미니게임 판). 바뀌면 [deferralChanged] 를 부른다. */
     var isBannerDeferred: () -> Boolean = { false }
 
+    /**
+     * 필터가 켜지거나 꺼질 때([capability] 가 바뀔 때) 부른다 — 소유자가 안 읽음 요약 함수 짝(v1/v2)을 다시 맞춘다.
+     * refresh 를 **어느 길로** 불렀든(첫 판정 · 실시간 · 푸시 · 판정 보류) 한 곳에서 잡는다. 없으면 첫 판정이 네트워크로 실패한 뒤
+     * 실시간·푸시의 refresh 가 필터를 켜도 옛 요약이 숨긴 확성기 줄을 세어 배지가 남는다(2026-10-30 안드로이드 이식 검증에서 발견).
+     */
+    var onCapabilityChange: (() -> Unit)? = null
+
+    /**
+     * 저절로 닫기를 붙드는가 — 화면 읽기가 켜져 있으면 참(안드로이드 `AccessibilityManager.isTouchExplorationEnabled` — TalkBack ·
+     * Swift 는 맥 `NSWorkspace.isVoiceOverEnabled` · 폰 `UIAccessibility.isVoiceOverRunning`). 본문은 최대 198자라 읽어 주는 데
+     * 5초를 훌쩍 넘고, "누르고 있으면 멈춤"은 화면 읽기 사용자의 조작이 아니다 — 참이면 [닫기]로만 닫힌다(2026-10-31 모바일 세션 지적).
+     * 켬·끔이 바뀌면 소유자가 [autoDismissHoldChanged] 를 부른다.
+     */
+    var holdsAutoDismiss: () -> Boolean = { false }
+
     // ---------------------------------------------------------------- 상태(화면이 읽는다)
 
-    var capability: Capability by mutableStateOf(Capability.unknown)
-        private set
+    private var capabilityState: Capability by mutableStateOf(Capability.unknown)
+
+    /** 필터 판정. 값이 **바뀔 때만** [onCapabilityChange] 를 한 번 부른다(Swift `didSet` 과 같은 자리 — 쓴 뒤에). */
+    var capability: Capability
+        get() = capabilityState
+        private set(value) {
+            val old = capabilityState
+            capabilityState = value
+            if (value != old) onCapabilityChange?.invoke()
+        }
 
     /** 메시지함에서 뺄 줄의 id — `megaphone_inbox` 가 돌려준 것만(한 세션 동안 늘기만 한다). */
     var knownMessageIDs: Set<String> by mutableStateOf(emptySet())
@@ -291,7 +314,7 @@ class MegaphoneBannerStore(
         pump()
     }
 
-    /** 지금 배너를 닫는다([닫기] · [답장] · 위로 쓸기 · 8초). 다음 장은 0.4초 뒤. */
+    /** 지금 배너를 닫는다([닫기] · 위로 쓸기 · 5초). 다음 장은 0.4초 뒤. */
     fun dismissCurrent() {
         if (current == null) return
         current = null
@@ -323,6 +346,12 @@ class MegaphoneBannerStore(
         if (current == null || !isTimerPaused) return
         isTimerPaused = false
         startTimer(maxOf(pausedRemaining, MegaphoneBannerRules.resumeMinimum))
+    }
+
+    /** [holdsAutoDismiss] 가 바뀌었다(화면 읽기 켬·끔). 붙들기 시작이면 걸린 타이머를 버리고, 풀렸으면 떠 있는 배너를 처음부터 다시 센다. */
+    fun autoDismissHoldChanged() {
+        if (current == null || isTimerPaused) return
+        startTimer(MegaphoneBannerRules.displaySeconds)
     }
 
     /** [isBannerDeferred] 가 바뀌었다. 미루기 시작이면 떠 있던 배너를 줄 맨 앞으로 되돌리고, 풀렸으면 **신선한 것만** 띄운다. */
@@ -441,6 +470,11 @@ class MegaphoneBannerStore(
 
     private fun startTimer(delaySeconds: Double) {
         timerToken += 1
+        // 화면 읽기: 저절로 닫지 않는다 — 걸린 타이머는 위 한 줄(세대)로 이미 버렸다. [닫기]([dismissCurrent])로만 닫힌다.
+        if (holdsAutoDismiss()) {
+            currentDeadline = null
+            return
+        }
         val token = timerToken
         currentDeadline = clock().addingTimeInterval(delaySeconds)
         schedule(delaySeconds) {

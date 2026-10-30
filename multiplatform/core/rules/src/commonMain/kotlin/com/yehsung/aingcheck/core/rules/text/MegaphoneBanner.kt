@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/MegaphoneBanner.swift @ a6791165(b056075b) — 확성기 배너 도메인 · 표시 규칙 숫자 · megaphone_inbox 한 줄 디코드
+// 원본: Sources/CheckCore/MegaphoneBanner.swift @ f3360b47(f3360b47) — 확성기 배너 도메인 · 표시 규칙 숫자 · megaphone_inbox 한 줄 디코드
 // 계약: docs/plan/megaphone-banner-contract.md C1 · C2(2026-10-30 사용자 결정 — 메시지 한 줄 대신 화면 위에 크게)
 //
 // 서버는 지금처럼 받는 사람마다 `messages` 한 줄(`megaphone_id` 채움, 본문 앞 `📢 `)을 넣는다 — 옛 앱은 그대로 메시지로 받는다.
@@ -33,9 +33,6 @@ data class MegaphoneBanner(
     val isOwn: Boolean = false,
 ) {
     val id: String get() = megaphoneID
-
-    /** [답장] 을 보일 수 있는가 — 상대를 알고, 내가 보낸 것이 아닐 때. */
-    val canReply: Boolean get() = !isOwn && !senderID.isNullOrEmpty()
 
     /** 같은 확성기의 더 나은 정보(inbox 가 푸시 자리값을 맞출 때)를 얹는다. 새 쪽에 값이 있으면 새 쪽이 이긴다. [isOwn] 은 처음 값을 지킨다. */
     fun merged(newer: MegaphoneBanner): MegaphoneBanner = MegaphoneBanner(
@@ -78,7 +75,7 @@ object MegaphoneBannerRules {
     const val pushWindow: Double = 24 * 3_600.0
 
     /** 한 장이 떠 있는 시간. */
-    const val displaySeconds: Double = 8.0
+    const val displaySeconds: Double = 5.0
 
     /** 닫힌 뒤 다음 장까지 쉬는 시간. */
     const val gap: Double = 0.4

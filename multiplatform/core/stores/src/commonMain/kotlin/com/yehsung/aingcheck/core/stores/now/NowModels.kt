@@ -75,7 +75,7 @@ object NowText {
     const val otherTeams = "다른 팀"
     const val workingEmpty = "지금 근무 중인 사람이 없어요"
     fun peopleCount(count: Int): String = "${count}명"
-    const val workingFooter = "근무는 맥이나 이 탭 맨 위 버튼으로 시작하고 끝내요"
+    const val workingFooter = "근무는 맥·PC나 이 탭 맨 위 버튼으로 시작하고 끝내요"
     const val workingFooterMacOnly = "근무 시작과 종료는 맥 앱에서 해요"
     fun staleLastSeen(relative: String?): String = if (relative == null) connectionLost else "$connectionLost · 마지막 확인 $relative"
     fun talkTo(name: String): String = "${name}에게 말 걸기"

@@ -1,18 +1,18 @@
-// 원본: Tests/CheckMobileKitTests/MegaphoneBannerPhoneTests.swift · MegaphoneBannerPhoneViewTests.swift(판정 · 배선 몫) @ a6791165
+// 원본: Tests/CheckMobileKitTests/MegaphoneBannerPhoneTests.swift · MegaphoneBannerPhoneViewTests.swift(판정 · 배선 몫) @ f3360b47
 // 폰 배선: 메시지함 필터가 visibleHistory 한 자리에서 배지까지 · 옛 서버 기준선 · v2 없음 · 접두 경합 · 푸시 앞/뒤/눌러 들어옴 · 실시간 'megaphone' ·
-// 보낸 뒤 내 배너 · 로그아웃 · 미룸 규칙/배선 · [답장]. 진짜 조립(PhoneAppModel)을 붙여 **스텁이 받은 요청**으로 잰다.
+// 보낸 뒤 내 배너 · 로그아웃 · 미룸 규칙/배선 · 코어 상수 5초 뒤 스스로 닫힘 · 늦게 켜진 필터의 요약 v2 다시 받기.
+// 진짜 조립(PhoneAppModel)을 붙여 **스텁이 받은 요청**으로 잰다. 카드 단추([닫기] 하나)는 androidApp MegaphoneBannerCardTest 가 잰다.
 package com.yehsung.aingcheck.feature.phone.messages
 
 import com.yehsung.aingcheck.core.net.realtime.RealtimeLinkConstants
 import com.yehsung.aingcheck.core.net.realtime.RealtimeTransportEvent
-import com.yehsung.aingcheck.core.rules.text.MegaphoneBanner
+import com.yehsung.aingcheck.core.rules.text.MegaphoneBannerRules
 import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.feature.phone.FakeTransport
 import com.yehsung.aingcheck.feature.phone.PhoneHarness
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import com.yehsung.aingcheck.feature.phone.Reply
 import com.yehsung.aingcheck.feature.phone.app.isMegaphoneBannerDeferred
-import com.yehsung.aingcheck.feature.phone.app.replyToMegaphoneBanner
 import com.yehsung.aingcheck.feature.phone.app.syncMegaphoneBannerDeferral
 import com.yehsung.aingcheck.feature.phone.push.PhonePushAction
 import com.yehsung.aingcheck.feature.phone.push.PhonePushContent
@@ -46,15 +46,19 @@ class MegaphoneBannerPhoneTest {
 
     /**
      * [inbox] = megaphone_inbox 응답(null = 함수 없음 · 옛 서버). 이력은 확성기 줄(m-mega) · 위조 접두 DM(m-fake) · 평범한 줄(m-plain).
-     * v1 요약은 셋 다 세고(3), v2 는 확성기 줄을 뺀다(2).
+     * v1 요약은 셋 다 세고(3), v2 는 확성기 줄을 뺀다(2). [inboxReply] 를 주면 그것이 [inbox] 를 이긴다(연결 실패 재현).
      */
-    private fun TestScope.rig(inbox: (PhoneHarness) -> String? = { h -> "[" + item(h, "m-mega", "g-1", 30.0) + "]" }, v2: Boolean = true): Rig {
+    private fun TestScope.rig(
+        inbox: (PhoneHarness) -> String? = { h -> "[" + item(h, "m-mega", "g-1", 30.0) + "]" },
+        v2: Boolean = true,
+        inboxReply: ((PhoneHarness) -> Reply)? = null,
+    ): Rig {
         val transport = FakeTransport()
         lateinit var h: PhoneHarness
         h = PhoneHarness(this, transport = transport) { r: RecordedRequest ->
             val t = h.now().timeIntervalSince1970
             when (r.rpcName) {
-                "megaphone_inbox" -> inbox(h)?.let { Reply.Json(it) } ?: Reply.missingFunction
+                "megaphone_inbox" -> inboxReply?.invoke(h) ?: inbox(h)?.let { Reply.Json(it) } ?: Reply.missingFunction
                 "message_unread_summary" -> Reply.Json("""{"status":"ok","total":3,"peers":[{"peer_user_id":"$peer","unread":3}]}""")
                 "message_unread_summary_v2" -> if (v2) Reply.Json("""{"status":"ok","total":2,"peers":[{"peer_user_id":"$peer","unread":2}]}""") else Reply.missingFunction
                 "message_history_with_pokes" -> Reply.missingFunction
@@ -69,7 +73,7 @@ class MegaphoneBannerPhoneTest {
             }
         }
         h.signIn()
-        // 타이머는 시험이 잰다 — advanceUntilIdle 이 8초 표시를 지나쳐 배너를 닫지 않게 손으로 돌리지 않는 타이머를 꽂는다.
+        // 타이머는 시험이 잰다 — advanceUntilIdle 이 5초 표시를 지나쳐 배너를 닫지 않게 손으로 돌리지 않는 타이머를 꽂는다.
         h.app.megaphoneBanner.schedule = { _, _ -> }
         return Rig(h, transport)
     }
@@ -119,7 +123,9 @@ class MegaphoneBannerPhoneTest {
         val r = rig(v2 = false)
         activateAndLoad(r)
         loadHistory(r)
-        assertEquals(1, r.h.count("message_unread_summary"), "v2 404 뒤 옛 요약으로 안 내려갔다")
+        // 한 번이 아니라 '한 번 이상': v2 404 가 필터를 끄는 순간(capability 바뀜) onCapabilityChange 가 메시지함의 요약 짝을 다시 맞추며
+        // 옛 요약을 한 번 더 부를 수 있다(Swift f3360b47 의 같은 시험도 >= 1 로 잰다). 결과(줄이 보임 · 배지 3)는 아래가 잰다.
+        assertTrue(r.h.count("message_unread_summary") >= 1, "v2 404 뒤 옛 요약으로 안 내려갔다")
         assertTrue("m-mega" in r.h.app.messages.visibleHistory.map { it.id }, "v2 가 없는데 줄만 숨겼다 — 배지가 고착된다")
         assertEquals(3, r.h.app.messages.badgeCount)
     }
@@ -277,24 +283,49 @@ class MegaphoneBannerPhoneTest {
         assertTrue(r.banner.current != null, "시트가 닫혔는데 안 떴다")
     }
 
+    // 없으면: 폰 배너가 코어 상수 말고 제 숫자를 세거나, [닫기]를 안 누르면 계속 떠 있는 결함이 초록(Swift 8e83aa35 autoDismissUsesCoreConstant).
     @Test
-    fun replyRoute() = runTest {
+    fun autoDismissUsesCoreDisplaySeconds() = runTest {
         val r = rig()
-        r.banner.presentFromPush("g-5", senderName = "보낸이", body = "같이 해요", senderID = peer.uppercase())
-        val banner = r.banner.current!!
-        r.h.app.replyToMegaphoneBanner(banner)
-        assertEquals(PhoneRouteTarget.Message(peer), r.h.app.router.lastOpenedTarget, "[답장]이 그 사람 1:1 대화를 안 열었다")
-        assertEquals("보낸이", r.h.app.messages.peerName(peer), "빈 대화 머리에 이름을 안 넘겼다")
-        assertNull(r.banner.current, "[답장] 뒤 배너가 남았다")
-        // 기준선: 내 배너는 닫기만.
-        r.banner.dismissCurrent()
-        advanceTimeBy(1_000)
-        r.banner.presentOwn("내 말", senderName = "나")
-        advanceTimeBy(1_000)
-        val own = r.banner.current ?: r.banner.queue.first()
-        val serial = r.h.app.router.requestSerial
-        r.h.app.replyToMegaphoneBanner(own)
-        assertEquals(serial, r.h.app.router.requestSerial, "내 배너의 [답장]이 대화를 열었다")
-        assertNull(MegaphoneBannerPhoneRules.replyRoute(MegaphoneBanner(null, "x", "../bad", "n", null, "b", r.h.now())), "모양이 틀린 id 로 라우트를 만들었다")
+        val delays = mutableListOf<Double>()
+        val fires = mutableListOf<() -> Unit>()
+        r.banner.schedule = { after, fire -> delays += after; fires += fire }
+        r.banner.presentFromPush("g-5", senderName = "보낸이", body = "📢 곧 올라가요", senderID = peer)
+        assertEquals("g-5", r.banner.current?.megaphoneID)
+        // 폰 배너의 보여 주는 시간은 맥과 한 벌인 코어 상수다(2026-10-30 사용자 결정 — 5초).
+        assertEquals(5.0, MegaphoneBannerRules.displaySeconds)
+        assertEquals(listOf(MegaphoneBannerRules.displaySeconds), delays, "폰 배너가 코어 상수 말고 다른 시간을 센다")
+        assertTrue(r.banner.current != null, "기준선: 시간이 오기 전에 배너가 사라졌다")
+        fires.first()()
+        assertNull(r.banner.current, "[닫기]를 안 누르면 배너가 계속 떠 있다")
+    }
+
+    // 2026-10-30 안드로이드 이식 검증에서 찾은 결함(Swift f3360b47 filterTurningOnLaterRefetchesSummaryAsV2): 첫 판정 실패 → 옛 요약
+    // (확성기 줄도 셈) → 실시간 refresh 가 필터를 켜도 메시지함이 그 사실을 몰라 숨긴 줄을 센 배지가 다음 활동 새로고침까지 남았다.
+    // 코어 `onCapabilityChange` 한 곳(조립이 messages.megaphoneFilterDidSettle 로 잇는다)에서 잡는다.
+    @Test
+    fun filterTurningOnLaterRefetchesSummaryAsV2() = runTest {
+        var inboxDown = true
+        val r = rig(inboxReply = { h -> if (inboxDown) Reply.Offline else Reply.Json("[" + item(h, "m-mega", "g-1", 30.0) + "]") })
+        activateAndLoad(r)
+        assertTrue(r.banner.capability == MegaphoneBannerStore.Capability.unknown && r.banner.lastRefreshFailed, "전제: 첫 판정 실패")
+        assertTrue(r.h.count("message_unread_summary") >= 1, "기준선: 판정을 모르는 동안은 옛 요약")
+        assertEquals(0, r.h.count("message_unread_summary_v2"), "기준선: 아직 v2 를 부를 까닭이 없다")
+        assertEquals(3L, r.h.app.messages.summary?.summary?.total, "기준선: 옛 요약은 확성기 줄도 센다")
+        r.h.app.realtime.coalesceSeconds = 1.0
+        r.h.app.realtime.appDidBecomeActive()
+        r.transport.emit(RealtimeTransportEvent.Opened)
+        r.transport.emit(RealtimeTransportEvent.Joined)
+        advanceUntilIdle()
+        assertEquals(0, r.h.count("message_unread_summary_v2"), "기준선: 연결이 붙어도 필터를 모르면 v2 가 아니다")
+
+        inboxDown = false
+        r.transport.emit(RealtimeTransportEvent.Broadcast(RealtimeLinkConstants.megaphoneBroadcastEvent))
+        advanceTimeBy(1_001)
+        runCurrent()
+        advanceUntilIdle()
+        assertEquals(MegaphoneBannerStore.Capability.available, r.banner.capability, "실시간 refresh 가 필터를 안 켰다")
+        assertTrue(r.h.count("message_unread_summary_v2") >= 1, "필터가 켜졌는데 요약을 v2 로 다시 받지 않았다(배지 고착)")
+        assertEquals(2L, r.h.app.messages.summary?.summary?.total, "배지 재료(요약)가 확성기 줄을 센 옛 값에 남았다")
     }
 }

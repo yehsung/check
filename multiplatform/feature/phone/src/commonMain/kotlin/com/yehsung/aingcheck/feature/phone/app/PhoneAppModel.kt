@@ -219,6 +219,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 메시지 스토어에 이 한 줄이 없으면 확성기 줄이 메시지로 남고 요약은 옛 함수다(배너와 메시지함에 두 번 보인다).
         messages.megaphoneBanner = megaphoneBanner
         megaphoneBanner.isBannerDeferred = { isMegaphoneBannerDeferred }
+        // 필터가 켜지거나 꺼지면 메시지함이 요약 함수 짝을 다시 맞춘다 — refresh 가 실시간·푸시 어느 길로 왔든(Swift f3360b47).
+        megaphoneBanner.onCapabilityChange = { messages.megaphoneFilterDidSettle() }
         realtime.megaphone = { scope.launch { megaphoneBanner.refresh() } }
         messages.megaphone.onSent = { body, megaphoneID ->
             megaphoneBanner.presentOwn(body, me.displayName.orEmpty(), me.avatarURL?.absoluteString, megaphoneID)

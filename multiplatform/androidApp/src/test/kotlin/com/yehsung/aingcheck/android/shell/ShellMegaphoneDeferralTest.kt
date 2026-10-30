@@ -1,7 +1,7 @@
 // 원본: Sources/CheckMobileKit/Messages/MegaphoneBannerPhoneRules.swift MegaphoneBannerModalProbe.isModalPresented @ a6791165(57810a8e)
 // 확성기 배너 미룸 · 화면 안 시트·대화상자. 진짜 AlertDialog(액티비티 위 별도 창)를 띄우는 if 갈래가 ModalPresenceMark 로 알리면 셸의 판정
 // (ShellMegaphoneDeferral.modalProbe — AingShell 이 쓰는 그 함수)이 참이 되고, 떠 있던 배너가 줄로 돌아간다. 닫으면 다시 뜬다.
-// 배너 스토어는 진짜(세션 없음 — 푸시로 안 확성기만), 타이머는 걸지 않는다(8초가 흐르지 않게).
+// 배너 스토어는 진짜(세션 없음 — 푸시로 안 확성기만), 타이머는 걸지 않는다(보여 주는 시간이 흐르지 않게).
 package com.yehsung.aingcheck.android.shell
 
 import androidx.compose.material3.AlertDialog
@@ -55,7 +55,7 @@ class ShellMegaphoneDeferralTest {
         shows = true
         compose.waitForIdle()
         assertEquals(1, modals.depth)
-        assertNull("화면 안 시트가 떴는데 배너가 그 밑에서 8초를 쓴다", store.current)
+        assertNull("화면 안 시트가 떴는데 배너가 그 밑에서 보여 주는 시간을 쓴다", store.current)
         assertEquals("떠 있던 배너가 줄 맨 앞으로 돌아가지 않았다", listOf("mp-1"), store.queue.map { it.megaphoneID })
 
         shows = false

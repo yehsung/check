@@ -1,14 +1,18 @@
-// 원본: Sources/CheckMobileKit/Messages/MegaphoneBannerOverlay.swift @ a6791165(57810a8e) — 확성기 배너 · 위에서 내려오는 카드
+// 원본: Sources/CheckMobileKit/Messages/MegaphoneBannerOverlay.swift @ a3d59e74(a3d59e74) — 확성기 배너 · 위에서 내려오는 카드
 // 계약: docs/plan/megaphone-banner-contract.md — 폰 배너
 //
 // - 자리: 셸(SignedInTabs)의 탭 화면 위 한 곳. **상태바 아래**(statusBarsPadding — 상태바·카메라 구멍을 덮지 않는다) · 좌우 16dp.
-// - 모양: 둥근 카드(아바타 · 닉네임 · 📢 · 본문 4줄 · [답장] [닫기]). 내 배너는 [답장] 이 없다.
+// - 모양: 둥근 카드(아바타 · 닉네임 · 📢 · 본문 4줄 · [닫기]). 단추는 [닫기] 하나뿐이다(2026-10-30 사용자 결정 — [답장]을 걷었다).
 // - 손: **카드에만** 손짓을 단다 — 카드 밖 터치는 그대로 아래 화면으로 지나간다(게임 캔버스 제스처를 먹지 않는다).
-//   누르고 있는 동안 멈춘다(pauseTimer) · 위로 쓸면 닫힌다(판정은 MegaphoneBannerPhoneRules) · 아니면 다시 센다(resumeTimer).
+//   누르고 있는 동안 보여 주는 시간(코어 MegaphoneBannerRules.displaySeconds — 5초) 타이머가 멈추고(pauseTimer), 놓으면 다시 센다(resumeTimer).
+//   위로 쓸거나(판정은 MegaphoneBannerPhoneRules) [닫기]를 누르면 닫힌다. 아무것도 안 하면 그 시간 뒤 스스로 올라간다.
+//   ★ 화면 읽기(TalkBack — AccessibilityManager.isTouchExplorationEnabled)가 켜져 있으면 저절로 올리지 않는다(코어 holdsAutoDismiss —
+//   5초 안에 본문을 다 못 듣는다). [닫기]로만 닫힌다. 켬·끔은 TouchExplorationStateChangeListener 로 다시 판단한다(DisposableEffect 로 걸고 푼다).
 // - 동작: 0.25초 내려오기 / 0.2초 올라가기(이동만 — 불투명도는 건드리지 않는다). 시스템 '애니메이션 삭제'면 Compose 가 길이를 0 으로 접는다.
-// 판정(미룸 · [답장] 라우트 · 쓸기 문턱)은 feature/phone 에 있다 — 이 파일은 그리기와 손짓만 한다.
+// 판정(미룸 · 쓸기 문턱)은 feature/phone 에 있다 — 이 파일은 그리기와 손짓만 한다.
 package com.yehsung.aingcheck.android.shell
 
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
@@ -31,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -62,16 +68,16 @@ import kotlin.math.roundToInt
 /** 시험이 찾는 이름표. */
 object MegaphoneBannerTags {
     const val CARD = "megaphoneBanner.card"
-    const val REPLY = "megaphoneBanner.reply"
     const val CLOSE = "megaphoneBanner.close"
 }
 
 /** 좌우 여백(iOS MobileTheme.sideMargin 과 같은 16). */
 private val SIDE_MARGIN = 16.dp
 
-/** 확성기 배너 한 장 — [store] 의 current 를 그린다. [onReply] 는 조립의 replyToMegaphoneBanner(대화 열기 + 닫기). */
+/** 확성기 배너 한 장 — [store] 의 current 를 그린다. [닫기]는 스토어를 바로 부른다. */
 @Composable
-fun MegaphoneBannerOverlay(store: MegaphoneBannerStore, onReply: (MegaphoneBanner) -> Unit, modifier: Modifier = Modifier) {
+fun MegaphoneBannerOverlay(store: MegaphoneBannerStore, modifier: Modifier = Modifier) {
+    ScreenReaderHold(store)
     val banner = store.current
     // 나가는 동안에도 그 카드를 그린다(current 는 이미 null).
     var shown by remember { mutableStateOf<MegaphoneBanner?>(null) }
@@ -83,12 +89,35 @@ fun MegaphoneBannerOverlay(store: MegaphoneBannerStore, onReply: (MegaphoneBanne
         enter = slideInVertically(tween(250)) { height -> -(height + clearance) },
         exit = slideOutVertically(tween(200)) { height -> -(height + clearance) },
     ) {
-        shown?.let { BannerCard(it, store, onReply) }
+        shown?.let { BannerCard(it, store) }
+    }
+}
+
+/**
+ * 화면 읽기가 켜져 있으면 배너를 저절로 닫지 않는다(Swift a3d59e74 — 폰 `UIAccessibility.isVoiceOverRunning` + 상태 알림 자리).
+ * 앱 문맥의 AccessibilityManager 를 읽는다(스토어가 액티비티보다 오래 산다 — 액티비티를 붙들지 않게). 걸 때 값이 처음 가정(꺼짐)과
+ * 다르면 한 번 다시 판단한다 — 오버레이가 그려지기 전에 뜬 배너(앱을 연 직후의 푸시)에도 붙듦이 닿게.
+ */
+@Composable
+private fun ScreenReaderHold(store: MegaphoneBannerStore) {
+    val appContext = LocalContext.current.applicationContext
+    DisposableEffect(store, appContext) {
+        val manager = appContext.getSystemService(AccessibilityManager::class.java)
+        if (manager == null) {
+            onDispose {}
+        } else {
+            val before = store.holdsAutoDismiss()
+            store.holdsAutoDismiss = { manager.isTouchExplorationEnabled }
+            if (store.holdsAutoDismiss() != before) store.autoDismissHoldChanged()
+            val listener = AccessibilityManager.TouchExplorationStateChangeListener { store.autoDismissHoldChanged() }
+            manager.addTouchExplorationStateChangeListener(listener)
+            onDispose { manager.removeTouchExplorationStateChangeListener(listener) }
+        }
     }
 }
 
 @Composable
-private fun BannerCard(banner: MegaphoneBanner, store: MegaphoneBannerStore, onReply: (MegaphoneBanner) -> Unit) {
+private fun BannerCard(banner: MegaphoneBanner, store: MegaphoneBannerStore) {
     val density = LocalDensity.current
     var drag by remember(banner.megaphoneID) { mutableFloatStateOf(0f) }
     val colors = AingTheme.colors
@@ -160,11 +189,6 @@ private fun BannerCard(banner: MegaphoneBanner, store: MegaphoneBannerStore, onR
                 overflow = TextOverflow.Ellipsis,
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                if (banner.canReply) {
-                    TextButton(onClick = { onReply(banner) }, modifier = Modifier.testTag(MegaphoneBannerTags.REPLY)) {
-                        Text(MegaphoneBannerPhoneText.reply, color = colors.accent)
-                    }
-                }
                 TextButton(onClick = { store.dismissCurrent() }, modifier = Modifier.testTag(MegaphoneBannerTags.CLOSE)) {
                     Text(MegaphoneBannerPhoneText.close, color = colors.label2)
                 }

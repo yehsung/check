@@ -161,7 +161,7 @@ class DesktopWorkQueue(
     }
 
     /** Swift `adoptWorkStateOwner` 의 큐 몫 — 그 사용자 것이 아닌 항목(소유자 null 포함)을 걷는다. */
-    fun retainOwnedBy(userId: String) = mutate { list -> list.filter { it.ownerUserId == userId } }
+    override fun retainOwner(userId: String) = mutate { list -> list.filter { it.ownerUserId == userId } }
 
     /** finishWorkBeforeQuit: 체인 끝과 상한 중 먼저 오는 쪽. 진 쪽(체인)은 취소하지 않는다. */
     override suspend fun awaitIdle(timeoutMillis: Long) {
@@ -179,7 +179,7 @@ class DesktopWorkQueue(
             val item = state.value.firstOrNull() ?: break
             try {
                 perform(item)
-                // ⑪ 세대 가드보다 먼저 뺀다. 계정이 바뀌었으면 retainOwnedBy 가 이미 걷어 first 가 달라 no-op.
+                // ⑪ 세대 가드보다 먼저 뺀다. 계정이 바뀌었으면 retainOwner 가 이미 걷어 first 가 달라 no-op.
                 mutate { list -> if (list.firstOrNull()?.id == item.id) list.drop(1) else list }
                 if (generation != session.sessionGeneration) return
             } catch (e: CancellationException) {

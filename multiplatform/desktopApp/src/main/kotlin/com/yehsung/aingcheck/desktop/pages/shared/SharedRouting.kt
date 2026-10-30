@@ -13,6 +13,8 @@ package com.yehsung.aingcheck.desktop.pages.shared
 
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.SessionProfile
+import com.yehsung.aingcheck.core.stores.me.MeDestination
+import com.yehsung.aingcheck.core.stores.me.MeGrassAxis
 import com.yehsung.aingcheck.desktop.shellapi.Entry
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
@@ -30,6 +32,8 @@ sealed interface SharedPage {
     data class Conversation(val peerId: String, val from: Entry) : SharedPage
     data class Rankings(val board: String) : SharedPage
     data object Records : SharedPage
+    /** 잔디 상세(폰 MeDestination.Grass 짝 — 공용 GrassDetailScreen). */
+    data class Grass(val axis: MeGrassAxis) : SharedPage
     data object Missions : SharedPage
     data object Settings : SharedPage
     data object Profile : SharedPage
@@ -43,7 +47,7 @@ sealed interface SharedPage {
 
 /** 수명(tabDidAppear/Disappear) 비교 열쇠 — 같은 열쇠면 같은 페이지로 본다(판만 바뀐 순위·상대만 바뀐 대화는 재진입이 아니다). */
 enum class SharedPageKey {
-    LAUNCHING, NEEDS_UPDATE, SIGNED_OUT, ANOTHER_INSTANCE, TEAMLESS, MESSAGES, CONVERSATION, RANKINGS, RECORDS, MISSIONS,
+    LAUNCHING, NEEDS_UPDATE, SIGNED_OUT, ANOTHER_INSTANCE, TEAMLESS, MESSAGES, CONVERSATION, RANKINGS, RECORDS, GRASS, MISSIONS,
     SETTINGS, PROFILE, CHARACTERS, FEEDBACK, BLOCKED, ACCOUNT_DELETION, PENDING,
 }
 
@@ -57,7 +61,7 @@ object SharedRouter {
         FlyoutRoute.PokeList -> config.poke
         FlyoutRoute.Ultra -> config.ultra
         FlyoutRoute.Home, FlyoutRoute.Messages, is FlyoutRoute.Conversation, is FlyoutRoute.Rankings, FlyoutRoute.Records,
-        FlyoutRoute.Missions, FlyoutRoute.Settings, FlyoutRoute.Profile, FlyoutRoute.Characters, FlyoutRoute.Feedback,
+        is FlyoutRoute.Grass, FlyoutRoute.Missions, FlyoutRoute.Settings, FlyoutRoute.Profile, FlyoutRoute.Characters, FlyoutRoute.Feedback,
         FlyoutRoute.Blocked, FlyoutRoute.AccountDeletion, FlyoutRoute.PinToTaskbar, FlyoutRoute.Shop, FlyoutRoute.AiTokens,
         FlyoutRoute.AiLimits, FlyoutRoute.Devices, FlyoutRoute.DesktopSettings -> true
     }
@@ -97,6 +101,7 @@ object SharedRouter {
         is FlyoutRoute.Conversation -> SharedPage.Conversation(route.peerId, route.from)
         is FlyoutRoute.Rankings -> SharedPage.Rankings(route.board)
         FlyoutRoute.Records -> SharedPage.Records
+        is FlyoutRoute.Grass -> SharedPage.Grass(grassAxisOf(route.axis))
         FlyoutRoute.Missions -> SharedPage.Missions
         FlyoutRoute.Settings -> SharedPage.Settings
         FlyoutRoute.Profile -> SharedPage.Profile
@@ -106,6 +111,21 @@ object SharedRouter {
         FlyoutRoute.AccountDeletion -> SharedPage.AccountDeletion
         FlyoutRoute.Home, FlyoutRoute.PinToTaskbar, FlyoutRoute.Shop, FlyoutRoute.PokeList, FlyoutRoute.Ultra,
         FlyoutRoute.AiTokens, FlyoutRoute.AiLimits, FlyoutRoute.Devices, FlyoutRoute.DesktopSettings -> SharedPage.Pending(route)
+    }
+
+    /** 라우트의 축 문자열 → 축. 모르는 값(옛 저장·오타)은 근무 잔디. */
+    fun grassAxisOf(raw: String): MeGrassAxis = MeGrassAxis.entries.firstOrNull { it.name == raw } ?: MeGrassAxis.work
+
+    /** 나(내 기록) 하위 화면 → 플라이아웃 라우트. 빠짐없는 when(else 금지) — 잔디 상세는 W-6 #3 의 FlyoutRoute.Grass. */
+    fun routeOf(destination: MeDestination): FlyoutRoute = when (destination) {
+        MeDestination.Shop -> FlyoutRoute.Shop
+        MeDestination.Characters -> FlyoutRoute.Characters
+        MeDestination.Profile -> FlyoutRoute.Profile
+        MeDestination.Feedback -> FlyoutRoute.Feedback
+        MeDestination.Settings -> FlyoutRoute.Settings
+        MeDestination.Blocked -> FlyoutRoute.Blocked
+        is MeDestination.Grass -> FlyoutRoute.Grass(destination.axis.name)
+        MeDestination.Missions -> FlyoutRoute.Missions
     }
 
     fun keyOf(page: SharedPage): SharedPageKey = when (page) {
@@ -118,6 +138,7 @@ object SharedRouter {
         is SharedPage.Conversation -> SharedPageKey.CONVERSATION
         is SharedPage.Rankings -> SharedPageKey.RANKINGS
         SharedPage.Records -> SharedPageKey.RECORDS
+        is SharedPage.Grass -> SharedPageKey.GRASS
         SharedPage.Missions -> SharedPageKey.MISSIONS
         SharedPage.Settings -> SharedPageKey.SETTINGS
         SharedPage.Profile -> SharedPageKey.PROFILE

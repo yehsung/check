@@ -11,6 +11,7 @@ import java.io.File
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * §8-5: 데스크톱 운영 구성은 Gradle 속성 → 생성 소스 한 파일(ProdConfig.kt). 시험·CI 빌드는 속성을 주지 않으므로 `.invalid` 다.
@@ -57,5 +58,25 @@ class GeneratedConfigTest {
         // fromBuild() 는 생성 상수를 그대로 옮긴다 = 핀의 기본값과 같다. AppConfig 는 그 값에서만 나온다.
         assertEquals(DesktopAppConfig(), DesktopAppConfig.fromBuild())
         assertEquals(false, DesktopAppConfig.fromBuild().toAppConfig().duelsEnabled)
+    }
+
+    /**
+     * W-6 #5(W6-b2): 생성 상수는 `@JvmField val` — 쓰는 클래스가 값을 품지 않고 generated 필드를 읽는다. `const val` 로 돌아가면
+     * 운영 값이 SelfCheck·AppGraph 같은 generated/ 밖 클래스에 인라인되어 다시 싸기(repack.sh)의 jar 교체 허용 목록(generated/)이 깨진다.
+     */
+    @Test
+    fun generatedConstantsAreReadNotInlinedOutsideGeneratedPackage() {
+        val root = File(ProdConfig::class.java.protectionDomain.codeSource.location.toURI())
+        val genDir = "com/yehsung/aingcheck/desktop/generated/"
+        val outside = root.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".class") && !it.relativeTo(root).invariantSeparatorsPath.startsWith(genDir) }
+            .associate { it.relativeTo(root).invariantSeparatorsPath to it.readBytes().toString(Charsets.ISO_8859_1) }
+        assertTrue(outside.size > 50, "앱 main 클래스 디렉터리를 못 찾았다: $root (${outside.size})")
+        val inlined = outside.filterValues { it.contains(ProdConfig.SUPABASE_URL) }.keys
+        assertEquals(emptySet(), inlined, "운영 주소 값이 generated/ 밖 클래스에 인라인됐다(const val 회귀)")
+        for (obj in listOf("ProdConfig", "BuildIdentity", "DesktopFlags")) {
+            val readers = outside.filterValues { it.contains(genDir + obj) }.keys
+            assertTrue(readers.isNotEmpty(), "$obj 를 필드로 읽는 클래스가 없다 — 값이 인라인됐다(const val 회귀)")
+        }
     }
 }

@@ -4,6 +4,8 @@
 // autoreleasepool(맥 전용)은 해당 없음. 포크 규칙은 W2-h1 tokens/scan 의 같은 규칙 사본 — h1 이 공개하면 병합 때 그것을 부른다.
 package com.yehsung.aingcheck.feature.desktop.tokens.diag
 
+import com.yehsung.aingcheck.feature.desktop.tokens.scan.CodexForkRule
+import com.yehsung.aingcheck.feature.desktop.tokens.scan.CodexForkTracker
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -109,7 +111,7 @@ object CodexUsageDiagnosticsScanner {
         private var monthContribLegacy = 0L
         private var lastCumulativeInMonth = 0L
         private var touched = false
-        private var fork = DiagForkTracker(startedAtZero = true, deadlineMicros = 0)
+        private var fork = CodexForkTracker(startedAtZero = true, deadlineMicros = 0)
         private var forkCopyMonth = 0L
 
         var appTotal = 0L; private set
@@ -142,7 +144,7 @@ object CodexUsageDiagnosticsScanner {
             monthContribLegacy = 0
             lastCumulativeInMonth = 0
             touched = false
-            fork = DiagForkTracker(startedAtZero = true, deadlineMicros = 0)
+            fork = CodexForkTracker(startedAtZero = true, deadlineMicros = 0)
             forkCopyMonth = 0
         }
 
@@ -166,7 +168,7 @@ object CodexUsageDiagnosticsScanner {
             val line = bytes.decodeToString()
             if (line.contains("session_meta")) {
                 val meta = parseObject(line)
-                if (meta != null && DiagForkRule.isSessionMeta(meta)) {
+                if (meta != null && CodexForkRule.isSessionMeta(meta)) {
                     fork.observeSessionMeta(meta)
                     return
                 }
@@ -313,67 +315,5 @@ object CodexUsageDiagnosticsScanner {
         val hour = num(b, 11, 2); val minute = num(b, 14, 2); val second = num(b, 17, 2)
         if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month) || hour > 23 || minute > 59 || second > 60) return null
         return epochDays(year, month, day) * 86_400 + hour * 3_600L + minute * 60L + second
-    }
-}
-
-/** Swift `CodexForkRule`(CheckTokenUsage.swift:670-740) 사본 — 자기 session_meta + 5초 안 이벤트는 부모에서 복사된 이력이다. */
-internal object DiagForkRule {
-    const val COPY_WINDOW_MICROS: Long = 5_000_000
-
-    fun isSessionMeta(obj: JsonObject): Boolean = CodexUsageDiagnosticsScanner.stringField(obj["type"]) == "session_meta"
-
-    fun hasForkMarker(obj: JsonObject): Boolean {
-        val payload = obj["payload"] as? JsonObject ?: return false
-        return listOf("forked_from_id", "parent_thread_id").any { !CodexUsageDiagnosticsScanner.stringField(payload[it]).isNullOrEmpty() }
-    }
-
-    fun timestampMicros(s: String): Long? {
-        val b = s.encodeToByteArray()
-        if (b.size < 19) return null
-        for (i in intArrayOf(0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18)) if (b[i] < 48 || b[i] > 57) return null
-        fun num(start: Int, len: Int): Int { var v = 0; for (k in start until start + len) v = v * 10 + (b[k] - 48); return v }
-        val year = num(0, 4); val month = num(5, 2); val day = num(8, 2)
-        val hour = num(11, 2); val minute = num(14, 2); val second = num(17, 2)
-        if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 60) return null
-        var micros = (CodexUsageDiagnosticsScanner.epochDays(year, month, day) * 86_400 + hour * 3_600L + minute * 60L + second) * 1_000_000
-        if (b.size > 20 && b[19] == 46.toByte()) {
-            var frac = 0L
-            var digits = 0
-            var i = 20
-            while (i < b.size && digits < 6 && b[i] >= 48 && b[i] <= 57) {
-                frac = frac * 10 + (b[i] - 48)
-                digits += 1
-                i += 1
-            }
-            while (digits < 6) { frac *= 10; digits += 1 }
-            micros += frac
-        }
-        return micros
-    }
-}
-
-/** Swift `CodexForkTracker`(CheckTokenUsage.swift:742-812) 사본. */
-internal class DiagForkTracker(private val startedAtZero: Boolean, deadlineMicros: Long) {
-    var deadlineMicros: Long = deadlineMicros
-        private set
-    private var ownMetaSeen = false
-    private var ownMetaMicros: Long? = null
-
-    fun observeSessionMeta(obj: JsonObject) {
-        val lineMicros = CodexUsageDiagnosticsScanner.stringField(obj["timestamp"])?.let { DiagForkRule.timestampMicros(it) }
-        if (startedAtZero && !ownMetaSeen) {
-            ownMetaSeen = true
-            ownMetaMicros = lineMicros
-            if (DiagForkRule.hasForkMarker(obj) && lineMicros != null) deadlineMicros = lineMicros + DiagForkRule.COPY_WINDOW_MICROS
-            return
-        }
-        val t0 = ownMetaMicros ?: lineMicros
-        if (deadlineMicros == 0L && t0 != null) deadlineMicros = t0 + DiagForkRule.COPY_WINDOW_MICROS
-    }
-
-    fun isCopy(eventTimestamp: String): Boolean {
-        if (deadlineMicros <= 0) return false
-        val micros = DiagForkRule.timestampMicros(eventTimestamp) ?: return false
-        return micros <= deadlineMicros
     }
 }

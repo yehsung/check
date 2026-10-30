@@ -202,14 +202,7 @@ object TokenUsageIncrementalScanner {
     }
 
     /** UTC 일별 보존 하한 = 그 KST 월 1일의 전날("2026-10" → "2026-09-30"). 형식이 아니면 "". */
-    fun utcRetainFromKey(monthString: String): String {
-        val parts = monthString.split('-')
-        if (parts.size != 2) return ""
-        val y = parts[0].toIntOrNull() ?: return ""
-        val m = parts[1].toIntOrNull() ?: return ""
-        if (m !in 1..12) return ""
-        return dayString(LocalDate.of(y, m, 1).minusDays(1))
-    }
+    fun utcRetainFromKey(monthString: String): String = TokenMonthKeys.utcRetainFromKey(monthString) // 한 구현(업로드 본문과 공용)
 
     // ── Claude ─────────────────────────────────────────────────────────────────────────
 

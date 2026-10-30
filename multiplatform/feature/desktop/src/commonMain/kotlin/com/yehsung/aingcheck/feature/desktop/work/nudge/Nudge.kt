@@ -13,7 +13,6 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.work.DesktopWorkState
 import com.yehsung.aingcheck.feature.desktop.work.WorkEvent
-import com.yehsung.aingcheck.feature.desktop.work.WorkEventSink
 import com.yehsung.aingcheck.feature.desktop.work.WorkStartOrigin
 import com.yehsung.aingcheck.feature.desktop.work.policy.RecentAutoCloseResume
 import com.yehsung.aingcheck.feature.desktop.work.policy.TerminationFlag
@@ -209,18 +208,18 @@ class NudgeAutoStarter(
     private val suppression: AutoStartSuppression,
     private val autoWorkStartEnabled: () -> Boolean,
     private val startWork: (WorkStartOrigin) -> Unit,
-    private val resumeRecentlyClosed: () -> Unit,
+    /** 받는 쪽은 ws `resumeRecentlyClosed(origin)` — 넛지 재개도 ws 가 [WorkEvent.NudgeStarted] 를 낸다(W-6 #2, Swift 는 재개·시작 둘 다 8초 말풍선). */
+    private val resumeRecentlyClosed: (WorkStartOrigin) -> Unit,
     private val clock: () -> SwiftDate,
-    private val events: WorkEventSink = WorkEventSink.NONE,
 ) {
     val isEligible: Boolean
         get() = isSignedIn() && hasTeam() && !state.snapshot.value.isWorking && !suppression.isSuppressed && autoWorkStartEnabled()
 
     fun fire(): NudgeAction {
         if (!isEligible) return NudgeAction.NONE
-        events.onWorkEvent(WorkEvent.NudgeStarted)
+        // W-6 #2: NudgeStarted 는 ws 만 낸다(실제로 시작·재개됐을 때) — 여기서 내면 오버레이에 두 번 온다.
         if (RecentAutoCloseResume.canResume(state.snapshot.value, clock())) {
-            resumeRecentlyClosed()
+            resumeRecentlyClosed(WorkStartOrigin.NUDGE)
             return NudgeAction.RESUMED
         }
         startWork(WorkStartOrigin.NUDGE)

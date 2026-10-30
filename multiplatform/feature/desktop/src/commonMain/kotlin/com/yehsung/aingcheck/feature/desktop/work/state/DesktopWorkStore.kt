@@ -151,10 +151,10 @@ class DesktopWorkStore(
         if (startedAt != null) stop() else start()
     }
 
-    override fun start() = start(WorkStartOrigin.MANUAL, clock())
+    override fun start(origin: WorkStartOrigin) = start(origin, clock())
 
-    /** 넛지 자동 시작은 [WorkStartOrigin.NUDGE] 로 부른다 — 실제로 시작됐을 때만 [WorkEvent.NudgeStarted] 를 낸다. */
-    fun start(origin: WorkStartOrigin, now: SwiftDate = clock()) {
+    /** 넛지 자동 시작은 [WorkStartOrigin.NUDGE] 로 부른다 — 실제로 시작됐을 때만 [WorkEvent.NudgeStarted] 를 낸다(W-6 #2: 이 사건은 ws 만 낸다). */
+    fun start(origin: WorkStartOrigin, now: SwiftDate) {
         if (startedAt != null) return
         policy.clearAutoStartSuppression()
         workStateWriteGeneration += 1 // ⑱
@@ -251,18 +251,21 @@ class DesktopWorkStore(
         return gap >= 0 && gap <= WorkStateConstants.RECENT_AUTO_CLOSE_RESUME_WINDOW_SECONDS
     }
 
-    override fun resumeRecentlyClosed() {
+    override fun resumeRecentlyClosed() = resumeRecentlyClosed(WorkStartOrigin.RESUME)
+
+    /** 넛지 재개는 [WorkStartOrigin.NUDGE] — reopen 이 성공해 되살아날 때만 [WorkEvent.NudgeStarted] 를 스냅숏보다 먼저 낸다(W-6 #2). */
+    fun resumeRecentlyClosed(origin: WorkStartOrigin) {
         if (!canResumeRecentlyClosed()) {
             clearRecentAutoCloseResume()
             publish()
             return
         }
         val launcher = scope ?: return
-        launcher.launch { performResumeRecentlyClosed() }
+        launcher.launch { performResumeRecentlyClosed(origin) }
     }
 
     /** Swift performResumeRecentlyClosedSession — 서버 reopen 성공 뒤에만 되살린다. 강도는 마감 때 기록한 그대로. */
-    suspend fun performResumeRecentlyClosed() {
+    suspend fun performResumeRecentlyClosed(origin: WorkStartOrigin = WorkStartOrigin.RESUME) {
         val sessionId = WorkSessionIds.canonical(recentSessionId) ?: return
         val restoredStart = recentStartedAt ?: return
         if (!canResumeRecentlyClosed()) {
@@ -300,6 +303,8 @@ class DesktopWorkStore(
         policy.onSessionAnchored(restoredStart, resetSleepBegan = false, clearSleepMarker = false)
         clearRecentAutoCloseResume()
         syncMessage = WorkStateConstants.RESUMED_MESSAGE
+        // 오버레이 I-8: 사건이 isWorking=true 스냅숏보다 먼저 와야 8초 문구가 출근 말풍선에 걸린다.
+        if (origin == WorkStartOrigin.NUDGE) events.onWorkEvent(WorkEvent.NudgeStarted)
         publish()
     }
 

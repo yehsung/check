@@ -18,6 +18,8 @@ sealed interface FlyoutRoute {
     /** board = RankingsBoard.raw. */
     data class Rankings(val board: String) : FlyoutRoute
     data object Records : FlyoutRoute
+    /** 내 기록의 잔디 상세(W-6 #3). axis = MeGrassAxis.name("work"·"token") — 모르는 값은 c0 이 work 로 읽는다. */
+    data class Grass(val axis: String) : FlyoutRoute
     data object Missions : FlyoutRoute
     data object Settings : FlyoutRoute
     data object Profile : FlyoutRoute
@@ -46,10 +48,11 @@ object FlyoutRoutes {
             else -> FlyoutRoute.Conversation(senderId, from)
         }
 
-    /** Home 은 뒤가 없다. 목록에서 온 대화 → Messages, OVERLAY·NOTIFICATION 에서 온 대화 → Home, 나머지 → Home. */
+    /** Home 은 뒤가 없다. 목록에서 온 대화 → Messages, OVERLAY·NOTIFICATION 에서 온 대화 → Home, 잔디 상세 → 내 기록, 나머지 → Home. */
     fun backOf(route: FlyoutRoute): FlyoutRoute? = when (route) {
         FlyoutRoute.Home -> null
         is FlyoutRoute.Conversation -> if (route.from == Entry.MESSAGES) FlyoutRoute.Messages else FlyoutRoute.Home
+        is FlyoutRoute.Grass -> FlyoutRoute.Records
         else -> FlyoutRoute.Home
     }
 }

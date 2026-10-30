@@ -14,3 +14,17 @@ INV-GamesTab-7ed4c1fa 해당 없음: #if DEBUG 데모 체스 절 닻(defaultScro
 INV-GamesTab-39c8fead 해당 없음: #if DEBUG 데모 체스 절 닻을 관전 중 놓는 규약 — 데모 라우트 없음(W4-b)
 INV-GamesTab-b28f3ba4 해당 없음: SwiftUI defaultScrollAnchor 를 if/else 갈래로 가르면 신원이 바뀌어 나무가 헐린다는 데모 닻 규약 — 데모 라우트 없음, Compose 에는 이 닻이 없다(W4-b)
 INV-GamesTab-47744479 해당 없음: #if DEBUG 데모 관전 절 끌어올리기(task(id:)) 의 갈래 금지 — 데모 라우트 없음(W4-b)
+INV-CheckTokenUsage-dac986c0 해당 없음: 안티그래비티 눈먼 스캔 — Windows 는 안티그래비티 집계 0(D-E27 전)
+INV-CheckTokenUsage-9ef451c2 해당 없음: autoreleasepool(resourceValues) — Foundation 전용, JVM 은 GC
+INV-CheckTokenUsage-3b90eec9 해당 없음: autoreleasepool(FileHandle.read 청크) — Foundation 전용
+INV-AILimitReaders-e31bb68a 해당 없음: 맥 앱스토어 판 전용
+INV-AILimitStore-0071c62d 해당 없음: @ObservationIgnored — Observation 프레임워크 전용
+INV-AILimitStore-e2934bb8 해당 없음: UserDefaults inert 스위트 경로 — 맥 전용
+INV-AILimitStore-7e632f8d 해당 없음: 안티그래비티 로그인 필요 — Windows 제공자 집합에 없음(W-3 #11)
+INV-AILimitStore-49b8483a 해당 없음: 안티그래비티 60초 — Windows 제공자 집합에 없음(W-3 #11)
+INV-CheckCodexAccountUsage-bf9ee093 해당 없음: 맥 앱스토어 판(CHECK_MAS) 전용 셸 조회·컴파일 제외
+INV-CheckCodexAccountUsage-3cc6f858 해당 없음: 맥 앱스토어 판(CHECK_MAS) 전용 셸 조회·컴파일 제외
+INV-CheckCodexAccountUsage-d5864085 해당 없음: 맥 앱스토어 판(CHECK_MAS) 전용 셸 조회·컴파일 제외
+INV-CheckCodexAccountUsage-362c52b6 해당 없음: 맥 앱스토어 판(CHECK_MAS) 전용 셸 조회·컴파일 제외
+INV-CheckCodexAccountUsage-d5663056 해당 없음: 맥 앱스토어 판(CHECK_MAS) 전용 셸 조회·컴파일 제외
+INV-CheckTokenUsageDiagnostics-508c0592 해당 없음: autoreleasepool(맥 전용)

@@ -2,10 +2,10 @@
 // 가 비우는 계정 묶음 상태의 데스크톱 짝을 **실제 조립 그래프**(AppGraph.assemble + MockEngine `.invalid`)로 잰다:
 //   A 로그인 → A 의 상태를 채운다 → (로그아웃 | A → B 직행 전환) → B 의 화면 상태에 A 의 것이 0 · 전환 뒤 A 토큰 요청 0 · 계정 묶음 창은 닫힌다.
 // 맥 줄(main @ af712521):
-//   메시지 초안 4115 · 차단/신고 clearBlockReportState 4135 · 확성기 작성 megaphone.reset 4224 — 데스크톱 MessagesStore.reset
-//   리그 표·보던 주 4053-4060 · 토큰 공개 4152 · 미니게임 순위 행 4270-4283 — RankingsStore.reset
-//   별명·캐릭터·뽑기 resetGachaState 4228 · 케이크 resetCakeGiftState 4230 · 회고 배너 4337 · 제보 초안 4314 — MeStore.reset
-//   미니게임 토큰 4288-4295 · 공개 4283 · 제출 안내 4305 — GamesStore.reset(miniGames.reset)
+//   메시지 초안 4115 · 차단/신고 clearBlockReportState 4134 · 확성기 작성 megaphone.reset 4224 — 데스크톱 MessagesStore.reset
+//   리그 표·보던 주 4054-4060 · 토큰 공개 4141 · 미니게임 순위 행 4270-4283 — RankingsStore.reset
+//   별명·캐릭터·뽑기 resetGachaState 4228 · 케이크 resetCakeGiftState 4230 · 회고 배너 4328 · 제보 초안 4314 — MeStore.reset
+//   미니게임 토큰 4286-4293 · 공개 4283 · 제출 안내 4305 — GamesStore.reset(miniGames.reset)
 //   미니게임 창 close() 4268(★ v0.2.48: 깃발만 내리면 빈 창이 남는다 — 4237-4250) — GamesWiring closeAll(오목·체스·테트리스·뽑기·케이크)
 // 일부러 남기는 것(맥과 같게): 미니게임 보기 선택(miniGameBoardScope — "앱 실행의 것" 4277).
 // 망은 MockEngine(`.invalid`)뿐 · 픽스처는 합성.
@@ -144,7 +144,7 @@ private class BoundaryRig(test: TestScope) {
                     p.endsWith("/rpc/character_gift_pending") && user == Accounts.A ->
                         respond("""{"status":"ok","gift":{"id":"gift-of-a","options":["aing_cake_strawberry","aing_cake_choco"]}}""", HttpStatusCode.OK, json)
                     p.endsWith("/rpc/character_gift_pending") -> respond("""{"status":"none"}""", HttpStatusCode.OK, json)
-                    // 미니게임 판 토큰(서버가 소유자를 대조한다 — 맥 4288). A 의 것만 합성.
+                    // 미니게임 판 토큰(서버가 소유자를 대조한다 — 맥 4286). A 의 것만 합성.
                     p.endsWith("/rpc/minigame_start_round") && user == Accounts.A ->
                         respond("""{"status":"ok","token":"round-of-a","expires_at":"2099-01-01T00:00:00Z"}""", HttpStatusCode.OK, json)
                     p.endsWith("/rpc/take_pokes") -> respond("[]", HttpStatusCode.OK, json)
@@ -218,7 +218,7 @@ class AccountBoundaryTest {
         app.messages.setDraft("A 가 쓰다 만 말", Accounts.PEER)
         app.messages.megaphone.open()
         app.messages.megaphone.setDraft("A 의 확성기 글")
-        // 순위(맥 4053-4060 리그 표·보던 주 · 4152 토큰 공개).
+        // 순위(맥 4054-4060 리그 표·보던 주 · 4141 토큰 공개).
         app.rankings.loadLeague()
         runCurrent()
         rig.currentWeekKey = app.rankings.leagueWeekKey
@@ -230,7 +230,7 @@ class AccountBoundaryTest {
         runCurrent()
         app.me.feedbackDraft = "A 가 쓰던 제보"
         app.me.displayNameDraft = "A 의 새 별명"
-        // 미니게임(맥 4288-4295 판 토큰) — 보기 선택은 앱 실행의 것(4277 — 남긴다).
+        // 미니게임(맥 4286-4293 판 토큰) — 보기 선택은 앱 실행의 것(4277 — 남긴다).
         val mini = app.gamesStore.miniGames
         mini.prefetchRoundToken(MiniGameKind.timingBar)
         runCurrent()

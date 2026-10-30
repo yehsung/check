@@ -133,16 +133,21 @@ struct RummyReactionOverlay: View {
         if let fixedNow {
             layer(at: fixedNow)
         } else {
+            // expiryTick 을 읽어 두면 그 값이 바뀔 때 body 가 다시 계산돼 `live`(시계 멈춤)가 새로 정해진다.
+            let _ = expiryTick
             let live = !Self.visible(bubbles, at: Date()).isEmpty
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !live)) { context in
                 layer(at: context.date)
             }
             // 마지막 말풍선이 끝나면 한 번 다시 그려 시계를 멈춘다(빈 덮개가 30fps 로 돌지 않게).
+            // ★ 0.3.69 결함(10-31 실측 CPU 120%): `.id(expiryTick)` 으로 덮개를 통째로 새로 만들면 도는 task 가 취소되고,
+            //   취소된 task 가 `try?` 로 CancellationError 를 삼킨 채 expiryTick 을 또 올려 다시 새로 만드는 고리가 쉬지 않고 돌았다.
+            //   그래서 ① 정체성을 바꾸지 않는다(`.id` 없음) ② 취소되면 아무것도 안 한다 ③ 보일 말풍선이 없으면 자지도 않는다.
             .task(id: bubbles.last?.id) {
-                try? await Task.sleep(for: .seconds(Self.lifetime + 0.1))
+                guard live else { return }
+                do { try await Task.sleep(for: .seconds(Self.lifetime + 0.1)) } catch { return }
                 expiryTick &+= 1
             }
-            .id(expiryTick)
         }
     }
 

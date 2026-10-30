@@ -8,7 +8,7 @@ import UIKit
 // 확성기 배너 · 폰 화면 규칙(계약 docs/plan/megaphone-banner-contract.md — 폰 배너).
 //
 // 뷰(`MegaphoneBannerOverlay`, iOS 전용)는 맥 스위트가 컴파일하지 않는다 — 판정은 전부 여기 두어 맥 스위트가 잰다:
-// 위로 쓸기 판정 · 끌림 오프셋 · 미룸 집계 · 미룸 다시 맞추기 · [답장] 라우트.
+// 위로 쓸기 판정 · 끌림 오프셋 · 미룸 집계 · 미룸 다시 맞추기. 단추는 [닫기] 하나뿐이다([답장]은 2026-10-30 걷었다).
 
 /// 배너 화면 판정(순수 함수).
 package enum MegaphoneBannerPhoneRules {
@@ -61,28 +61,10 @@ package enum MegaphoneBannerPhoneRules {
         guard currentID != nil || queueCount > 0 else { return nil }
         return "\(currentID ?? "-")#\(queueCount)"
     }
-
-    /// [답장]이 여는 곳 — 상대를 알고 내가 보낸 것이 아닐 때만 1:1 대화.
-    package static func replyRoute(for banner: MegaphoneBanner) -> AingRoute? {
-        guard banner.canReply, let raw = banner.senderID, let peerID = PushPayload.safeID(raw) else { return nil }
-        return .message(peerID: peerID)
-    }
-}
-
-/// [답장]이 대화 화면에 넘기는 이름·아바타 — 확성기 줄이 메시지함에서 빠져 대화가 비어 있어도 머리가 빈 칸이 아니게.
-package struct MegaphoneReplyPeerHint: Equatable, Sendable {
-    package var name: String?
-    package var avatarURL: URL?
-
-    package init(name: String?, avatarURL: URL?) {
-        self.name = name
-        self.avatarURL = avatarURL
-    }
 }
 
 /// 배너에 보이는 글자.
 package enum MegaphoneBannerPhoneText {
-    package static let reply = "답장"
     package static let close = "닫기"
 
     package static func accessibilityLabel(name: String, body: String) -> String {

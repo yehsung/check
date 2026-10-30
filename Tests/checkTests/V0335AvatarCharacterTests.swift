@@ -538,8 +538,9 @@ private func avFetches(_ host: String) -> Int {
         #expect(sources["RummyPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
         #expect(sources["CheckRummyWindow.swift"]?.contains("RummyPanel(store: rummy, me: me, safety: safety)") == true)
         #expect(sources["CheckApp.swift"]?.contains("CheckRummyWindowController.shared.configure(store: store.rummy, me:") == true)
-        // 확성기 배너 창(2026-10-30)도 같은 짝이다 — 빠지면 보낸 사람 얼굴이 이니셜로 떨어진다.
-        #expect(sources["CheckMegaphoneBannerWindow.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
+        // 확성기 배너 창(2026-10-30)도 표를 건다 — 빠지면 보낸 사람 얼굴이 이니셜로 떨어진다. 말풍선이 없는 창이라([닫기] 만)
+        // 레이어 짝은 없다(V0325 레이어 목록에서도 빠져 있다).
+        #expect(sources["CheckMegaphoneBannerWindow.swift"]?.contains(".clipped() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["CheckMenuView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["CheckSettingsView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["MiniGamePanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)

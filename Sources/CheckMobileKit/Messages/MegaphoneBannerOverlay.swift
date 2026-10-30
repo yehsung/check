@@ -7,7 +7,9 @@ import SwiftUI
 /// - 자리: `MobileTabsView` 의 `TabView` 에 `.overlay(alignment: .top)` 로 붙는다. 세이프에어리어 아래에 놓인다 — 이 화면은
 ///   `ignoresSafeArea` 를 쓰지 않는다(상태바·다이내믹 아일랜드를 덮지 않는다). 좌우 여백 `MobileTheme.sideMargin`.
 /// - 손: **카드만** 손을 받는다. 바깥은 빈 자리라 터치가 그대로 아래 화면(게임 캔버스 포함)으로 간다 — 화면 가득한 틀·바탕을 두지 마라.
-///   누르고 있는 동안 8초 타이머가 멈추고(`pauseTimer`), 놓으면 다시 센다(`resumeTimer`). 위로 쓸면 닫힌다.
+///   누르고 있는 동안 보여 주는 시간(코어 `MegaphoneBannerRules.displaySeconds` — 5초) 타이머가 멈추고(`pauseTimer`),
+///   놓으면 다시 센다(`resumeTimer`). 위로 쓸거나 [닫기]를 누르면 닫힌다. 아무것도 안 하면 그 시간 뒤 스스로 올라간다.
+/// - 단추: [닫기] 하나뿐이다(2026-10-30 사용자 결정 — [답장]을 걷었다).
 /// - 움직임: 위에서 미끄러져 내려오고 올라가며 나간다(이동만 — 불투명도는 이징하지 않는다). 동작 줄이기면 페이드만.
 /// - 미룸: 시트·풀스크린 커버 · 대결 화면 · 미니게임 판(`MobileAppModel.isMegaphoneBannerDeferred`). 시트는 SwiftUI 가 알려 주지 않으므로
 ///   떠 있거나 기다리는 배너가 있을 때만 1초마다 다시 본다.
@@ -25,7 +27,6 @@ struct MegaphoneBannerOverlay: View {
                 MegaphoneBannerInteractiveCard(
                     banner: banner,
                     store: store,
-                    onReply: { model.replyToMegaphoneBanner(banner) },
                     onClose: { store.dismissCurrent() }
                 )
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
@@ -63,13 +64,12 @@ struct MegaphoneBannerOverlay: View {
 private struct MegaphoneBannerInteractiveCard: View {
     let banner: MegaphoneBanner
     let store: MegaphoneBannerStore
-    let onReply: () -> Void
     let onClose: () -> Void
     @State private var dragOffset: CGFloat = 0
     @State private var isPressing = false
 
     var body: some View {
-        MegaphoneBannerCard(banner: banner, onReply: onReply, onClose: onClose)
+        MegaphoneBannerCard(banner: banner, onClose: onClose)
             .contentShape(RoundedRectangle(cornerRadius: MegaphoneBannerPhoneRules.cornerRadius, style: .continuous))
             .simultaneousGesture(pressAndSwipe)
             .offset(y: dragOffset)
@@ -102,10 +102,9 @@ private struct MegaphoneBannerInteractiveCard: View {
     }
 }
 
-/// 카드 모양: 유리 둥근 카드 · 아바타 · 닉네임 · 📢 · 본문(최대 4줄) · [답장] [닫기].
+/// 카드 모양: 유리 둥근 카드 · 아바타 · 닉네임 · 📢 · 본문(최대 4줄) · [닫기].
 private struct MegaphoneBannerCard: View {
     let banner: MegaphoneBanner
-    let onReply: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -130,9 +129,6 @@ private struct MegaphoneBannerCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
-                if banner.canReply {
-                    AingButton(MegaphoneBannerPhoneText.reply, kind: .tinted, size: .md) { onReply() }
-                }
                 AingButton(MegaphoneBannerPhoneText.close, kind: .gray, size: .md) { onClose() }
             }
         }

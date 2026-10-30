@@ -10,7 +10,7 @@ import Testing
 // 컨트롤러의 바깥 문(팝오버 · 마우스 · 화면 목록)은 가짜로 갈아 끼운다 — **진짜 팝오버 단추를 누르지 않는다.**
 // 시험마다 비교 기준선을 둔다: 같은 자리에서 값 하나만 바꾸면 결과가 갈린다는 것을 함께 보인다.
 
-/// 배너 스토어의 시계 · 타이머(8초를 기다리지 않는다 — 걸린 타이머를 시험이 손으로 부른다).
+/// 배너 스토어의 시계 · 타이머(5초를 기다리지 않는다 — 걸린 타이머를 시험이 손으로 부른다).
 @MainActor
 private final class MbpTimers {
     var now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -20,7 +20,6 @@ private final class MbpTimers {
 /// 컨트롤러의 바깥 문.
 @MainActor
 private final class MbpWorld {
-    var popovers = 0
     var mouse = CGPoint(x: 100, y: 100)
     var screens: [MegaphoneBannerLayout.Screen] = [
         .init(frame: CGRect(x: 0, y: 0, width: 1_440, height: 900), visibleFrame: CGRect(x: 0, y: 0, width: 1_440, height: 875)),
@@ -28,7 +27,6 @@ private final class MbpWorld {
     ]
     var hooks: MegaphoneBannerWindowController.Hooks {
         MegaphoneBannerWindowController.Hooks(
-            presentPopover: { [unowned self] in self.popovers += 1 },
             mouseLocation: { [unowned self] in self.mouse },
             screens: { [unowned self] in self.screens },
             reduceMotion: { false },
@@ -109,7 +107,7 @@ struct MegaphoneBannerPanelTests {
         // 시험 실행: 알파 0 · 창 서버엔 클릭 통과 · 앱이 의도한 값은 '클릭 받음'(단추가 있는 창이다).
         #expect(panel.alphaValue == 0 && CheckPanelVisibility.productionAlpha == 1, "시험 실행인데 배너 알파가 0 이 아니다")
         #expect(panel.windowServerIgnoresMouseEvents, "시험 패널이 진짜 클릭을 먹는다")
-        #expect(!panel.ignoresMouseEvents, "앱이 의도한 값이 클릭 통과다 — [답장] [닫기] 가 안 눌린다")
+        #expect(!panel.ignoresMouseEvents, "앱이 의도한 값이 클릭 통과다 — [닫기] 가 안 눌린다")
     }
 
     // MARK: 자리
@@ -168,7 +166,7 @@ struct MegaphoneBannerPanelTests {
 
     // MARK: 호버
 
-    @Test("호버: 들어오면 8초 타이머가 멈추고, 떠나면 남은 시간과 3초 중 긴 쪽으로 다시 센다(남은 2초 → 3초 · 남은 7초 → 7초)")
+    @Test("호버: 들어오면 5초 타이머가 멈추고, 떠나면 남은 시간과 3초 중 긴 쪽으로 다시 센다(남은 2초 → 3초 · 남은 4초 → 4초)")
     func hoverPausesAndResumes() async throws {
         let timers = MbpTimers()
         let store = mbpStore("hover", timers: timers)
@@ -182,14 +180,14 @@ struct MegaphoneBannerPanelTests {
         let options = try #require(hover.hoverTrackingArea?.options, "추적 영역이 없다")
         #expect(options.contains(.activeAlways) && options.contains(.mouseEnteredAndExited),
                 "추적 영역이 키 아닌 패널에서 안 온다(.activeAlways 없음)")
-        #expect(timers.scheduled.last?.after == MegaphoneBannerRules.displaySeconds, "전제: 8초 타이머")
+        #expect(timers.scheduled.last?.after == MegaphoneBannerRules.displaySeconds, "전제: 5초 타이머")
         let firstTimer = try #require(timers.scheduled.last?.fire)
 
-        timers.now += 6
+        timers.now += 3
         hover.onHoverChanged?(true)                       // 마우스가 들어왔다(추적 영역이 부르는 문)
         #expect(store.megaphoneBanner.isTimerPaused)
-        firstTimer()                                       // 8초가 지났다 — 멈춰 있으니 안 닫힌다
-        #expect(store.megaphoneBanner.current != nil, "호버 중인데 8초 타이머가 배너를 닫았다")
+        firstTimer()                                       // 5초가 지났다 — 멈춰 있으니 안 닫힌다
+        #expect(store.megaphoneBanner.current != nil, "호버 중인데 5초 타이머가 배너를 닫았다")
         timers.now += 100
         hover.onHoverChanged?(false)
         #expect(!store.megaphoneBanner.isTimerPaused)
@@ -198,7 +196,7 @@ struct MegaphoneBannerPanelTests {
         #expect(store.megaphoneBanner.current == nil, "다시 센 타이머가 배너를 안 닫았다")
         #expect(await mbpWait { !controller.isOpen })
 
-        // 기준선: 1초 만에 올렸다 떠나면 남은 7초 그대로(3초 하한이 남은 시간을 줄이지 않는다).
+        // 기준선: 1초 만에 올렸다 떠나면 남은 4초 그대로(3초 하한이 남은 시간을 줄이지 않는다).
         timers.scheduled.last?.fire()                      // 쉬는 0.4초
         store.megaphoneBanner.presentOwn(body: "둘째 배너", senderName: "나")
         #expect(await mbpWait { controller.isOpen && controller.presentation.banner?.body == "둘째 배너" })
@@ -206,50 +204,39 @@ struct MegaphoneBannerPanelTests {
         hover.onHoverChanged?(true)
         timers.now += 50
         hover.onHoverChanged?(false)
-        #expect(timers.scheduled.last?.after == 7, "남은 7초가 \(String(describing: timers.scheduled.last?.after))초로 바뀌었다")
+        #expect(timers.scheduled.last?.after == 4, "남은 4초가 \(String(describing: timers.scheduled.last?.after))초로 바뀌었다")
     }
 
-    // MARK: [답장]
+    // MARK: [닫기]만
 
-    @Test("[답장]: 보낸 사람과의 대화(.overlay)를 이름과 함께 열고 팝오버를 한 번 띄운 뒤 배너를 닫는다 — 내 배너는 [답장] 이 없다")
-    func replyOpensConversationWithName() async throws {
+    @Test("[닫기]만(2026-10-30 사용자 결정): 남이 보낸 배너에도 단추는 [닫기] 하나 · 누르면 닫힌다 · 아무것도 안 하면 5초")
+    func closeIsTheOnlyButton() async throws {
+        #expect(MegaphoneBannerRules.displaySeconds == 5, "보여 주는 시간이 5초가 아니다")
         let timers = MbpTimers()
-        let store = mbpStore("reply", timers: timers)
+        let store = mbpStore("close-only", timers: timers)
         let world = MbpWorld()
         let controller = MegaphoneBannerWindowController(store: store, hooks: world.hooks)
         controller.start()
         defer { controller.stop() }
-        store.megaphoneBanner.presentFromPush(megaphoneID: "mp-r", senderName: "확성기님", body: "📢 라운지에 간식 있어요",
-                                              senderID: "peer-r")
+        store.megaphoneBanner.presentFromPush(megaphoneID: "mp-c", senderName: "확성기님", body: "📢 라운지에 간식 있어요",
+                                              senderID: "peer-c")
         #expect(await mbpWait { controller.isOpen })
-        #expect(controller.presentation.banner?.canReply == true)
-
-        // 기준선: 힌트 없이 같은 사람의 대화를 열면 제목이 빈다(확성기 줄은 메시지함에서 빠지니 이름을 찾을 곳이 없다).
-        let bare = mbpStore("reply-bare", timers: MbpTimers())
-        bare.openMessagePanel(peer: "peer-r", from: .overlay)
-        #expect(bare.selectedMessagePeerName == nil, "전제: 힌트 없이는 이름이 없다")
-
-        controller.reply()
-        #expect(world.popovers == 1, "팝오버를 \(world.popovers)번 띄웠다")
-        #expect(store.isMessagePanelVisible && store.selectedMessagePeerID == "peer-r")
-        #expect(store.messagePanelOrigin == .overlay, "[뒤로]가 홈이 아니다")
-        #expect(store.selectedMessagePeerName == "확성기님", "대화 제목이 비었다")
-        #expect(store.megaphoneBanner.current == nil, "[답장] 뒤에도 배너가 남았다")
+        #expect(timers.scheduled.last?.after == 5, "남이 보낸 배너가 5초 타이머로 안 걸렸다")
+        controller.close()
+        #expect(store.megaphoneBanner.current == nil, "[닫기] 뒤에도 배너가 남았다")
+        #expect(!store.isMessagePanelVisible, "[닫기] 가 대화를 열었다")
         #expect(await mbpWait { !controller.isOpen })
 
-        // 내 배너: [답장] 이 없다 — 눌러도(이론상) 팝오버도 대화도 없다.
-        timers.scheduled.last?.fire()                      // 쉬는 0.4초
-        store.megaphoneBanner.presentOwn(body: "내 확성기", senderName: "나")
-        #expect(await mbpWait { controller.isOpen && controller.presentation.banner?.isOwn == true })
-        #expect(controller.presentation.banner?.canReply == false)
-        controller.reply()
-        #expect(world.popovers == 1 && store.megaphoneBanner.current?.isOwn == true)
-        // [닫기]
-        controller.close()
-        #expect(store.megaphoneBanner.current == nil)
-        // 로그아웃이 이름 힌트를 비운다.
-        store.resetMegaphoneBanner()
-        #expect(store.messagePeerHint == nil)
+        // 카드 소스: 단추는 [닫기] 하나이고 답장 문이 어디에도 없다(주석은 걷고 잰다).
+        let window = try mbpSource("Sources/check/CheckMegaphoneBannerWindow.swift")
+        let view = try #require(mbpBody(window, after: "struct MegaphoneBannerView: View"))
+        #expect(view.components(separatedBy: "bannerButton(\"").count - 1 == 1, "카드 단추가 하나가 아니다")
+        #expect(view.contains("bannerButton(\"닫기\", action: onClose)"), "기준선: [닫기] 단추를 못 찾았다")
+        for word in ["답장", "onReply", "reply()", "openMegaphoneReply", "canReply"] {
+            #expect(!window.contains(word), "배너 창에 답장 흔적('\(word)')이 남았다")
+        }
+        let banner = try mbpSource("Sources/check/WorkTimerStoreMegaphoneBanner.swift")
+        #expect(!banner.contains("openMegaphoneReply") && !banner.contains("MessagePeerHint"), "답장 배선이 남았다")
     }
 
     // MARK: 미룸
@@ -323,7 +310,7 @@ struct MegaphoneBannerPanelTests {
 
     // MARK: 소스 계약(주석을 걷고 잰다)
 
-    @Test("배선: AppDelegate 가 오버레이 컨트롤러를 만든 뒤 배너 컨트롤러를 세워 start 한다 · 진짜 문은 팝오버 · 동작 줄이기를 읽는다")
+    @Test("배선: AppDelegate 가 오버레이 컨트롤러를 만든 뒤 배너 컨트롤러를 세워 start 한다 · 동작 줄이기를 읽는다")
     func wiringSourceContract() throws {
         let app = try mbpSource("Sources/check/CheckApp.swift")
         let launch = try #require(mbpBody(app, after: "func applicationDidFinishLaunching"), "시작 함수를 못 찾았다")
@@ -336,15 +323,16 @@ struct MegaphoneBannerPanelTests {
 
         let window = try mbpSource("Sources/check/CheckMegaphoneBannerWindow.swift")
         let live = try #require(mbpBody(window, after: "static var live: Hooks"))
-        #expect(live.contains("WindowTopAnchor.presentMenuPopover()"), "진짜 [답장] 문이 팝오버를 안 띄운다")
+        #expect(!live.contains("presentMenuPopover"), "[답장] 이 빠졌는데 배너가 팝오버를 띄우는 문을 들고 있다")
         #expect(live.contains("accessibilityDisplayShouldReduceMotion"), "동작 줄이기를 안 읽는다")
         #expect(live.contains("NSEvent.mouseLocation") && live.contains("visibleFrame"), "마우스 화면 · 보이는 틀을 안 읽는다")
         let view = try #require(mbpBody(window, after: "struct MegaphoneBannerView: View"))
-        #expect(view.contains(".checkTooltipLayer()"), "배너 루트에 말풍선 레이어가 없다")
+        // 말풍선이 없는 창이라 레이어를 걸지 않는다 · 보낸 사람 얼굴은 캐릭터 표가 그린다.
+        #expect(!view.contains(".checkTooltipLayer()") && view.contains(".appUserAvatarCharacters(from: store)"), "배너 루트 짝이 어긋났다")
         #expect(view.contains(".lineLimit(MegaphoneBannerLayout.bodyLineLimit)") && MegaphoneBannerLayout.bodyLineLimit == 4)
         let ensure = try #require(mbpBody(window, after: "private func ensurePanel()"))
-        #expect(ensure.contains("self?.reply()") && ensure.contains("self?.close()") && ensure.contains("self?.hoverChanged(inside)"),
-                "카드의 [답장] · [닫기] · 호버가 컨트롤러 문에 안 닿는다")
+        #expect(ensure.contains("self?.close()") && ensure.contains("self?.hoverChanged(inside)"),
+                "카드의 [닫기] · 호버가 컨트롤러 문에 안 닿는다")
         // 기준선: 판 장부가 바뀌는 자리에서 미룸을 알린다(관찰 밖 값).
         let store = try mbpSource("Sources/check/WorkTimerStore.swift")
         let ledger = try #require(mbpBody(store, after: "var miniGameLiveRound: MiniGameLiveRound?"))

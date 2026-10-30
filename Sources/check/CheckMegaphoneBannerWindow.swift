@@ -5,7 +5,7 @@ import CheckCore
 
 // MARK: - 확성기 배너 창 (2026-10-30 · 계약 docs/plan/megaphone-banner-contract.md "맥 배너")
 //
-// 받은 확성기를 **마우스가 있는 화면 위쪽 가운데**, 메뉴바 아래 12pt 에 한 장씩 띄운다. 판정(한 번에 하나 · 8초 · 쉬고 0.4초 ·
+// 받은 확성기를 **마우스가 있는 화면 위쪽 가운데**, 메뉴바 아래 12pt 에 한 장씩 띄운다. 판정(한 번에 하나 · 5초 · 쉬고 0.4초 ·
 // 호버 멈춤의 "남은 시간과 3초 중 긴 쪽" · 미룸)은 전부 코어 `MegaphoneBannerStore` 에 있고, 이 파일은 그 `current` 를 그리기만 한다.
 //
 // ① 창: `CheckMousePanel` 하위 — 키를 안 잡는다(대결 중 키보드를 훔치지 않는다) · 모든 스페이스 · 전체화면 보조 · 캐릭터 패널(.floating)
@@ -14,7 +14,8 @@ import CheckCore
 //    나온다). 닫을 때는 0.2초 올라간다. **불투명도는 미끄러짐에 쓰지 않는다** — 이징으로 불투명도를 깎으면 밀려나기 전에 사라진다.
 //    동작 줄이기가 켜져 있으면 미끄러짐 없이 페이드만.
 // ③ 호버: `NSTrackingArea`(.activeAlways — 키가 아닌 패널에서도 온다, 캐릭터 패널 방식). 들어오면 멈추고, 떠나면 다시 센다.
-// ④ [답장]: 보낸 사람과의 1:1 대화(`openMegaphoneReply` — 이름·아바타를 함께 넘겨 빈 대화 제목을 막는다) → 팝오버 → 배너 닫기.
+// ④ 단추는 [닫기] 하나다(2026-10-30 사용자 결정 — [답장] 은 뺐다: "닫기 버튼만 냅두고. 5초 지나면 자동으로 다시 올라가게").
+//    말풍선이 없으니 루트에 `.checkTooltipLayer()` 도 걸지 않는다(캐릭터 표는 보낸 사람 얼굴에 필요해 남는다).
 
 /// 배너 자리 계산(순수 함수 — 시험이 화면 없이 잰다).
 enum MegaphoneBannerLayout {
@@ -142,7 +143,6 @@ final class MegaphoneBannerPresentation {
 struct MegaphoneBannerView: View {
     let presentation: MegaphoneBannerPresentation
     let store: WorkTimerStore?
-    let onReply: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -156,7 +156,6 @@ struct MegaphoneBannerView: View {
         }
         .frame(width: presentation.width, alignment: .top)
         .clipped()
-        .checkTooltipLayer()
         .appUserAvatarCharacters(from: store)
         .environment(\.colorScheme, .dark)
     }
@@ -195,11 +194,7 @@ struct MegaphoneBannerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
-                    if banner.canReply {
-                        bannerButton("답장", prominent: true, action: onReply)
-                            .checkTooltip("1:1 대화로 답장해요")
-                    }
-                    bannerButton("닫기", prominent: false, action: onClose)
+                    bannerButton("닫기", action: onClose)
                 }
             }
         }
@@ -214,14 +209,14 @@ struct MegaphoneBannerView: View {
         )
     }
 
-    private func bannerButton(_ title: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+    private func bannerButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(prominent ? Color.white : CheckTheme.primaryText)
+                .foregroundStyle(CheckTheme.primaryText)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
-                .background(Capsule().fill(prominent ? CheckTheme.accent : CheckTheme.trackFill))
+                .background(Capsule().fill(CheckTheme.trackFill))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -235,7 +230,6 @@ struct MegaphoneBannerView: View {
 final class MegaphoneBannerWindowController {
     /// 바깥 세계로 나가는 문(시험은 가짜로 갈아 끼운다 — 진짜 팝오버 단추를 누르지 않는다).
     struct Hooks {
-        var presentPopover: @MainActor () -> Void
         var mouseLocation: @MainActor () -> CGPoint
         var screens: @MainActor () -> [MegaphoneBannerLayout.Screen]
         var reduceMotion: @MainActor () -> Bool
@@ -244,7 +238,6 @@ final class MegaphoneBannerWindowController {
 
         static var live: Hooks {
             Hooks(
-                presentPopover: { _ = WindowTopAnchor.presentMenuPopover() },
                 mouseLocation: { NSEvent.mouseLocation },
                 screens: { NSScreen.screens.map { MegaphoneBannerLayout.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame) } },
                 reduceMotion: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion },
@@ -317,13 +310,6 @@ final class MegaphoneBannerWindowController {
     }
 
     // MARK: 단추 · 호버
-
-    /// [답장] — 보낸 사람과의 대화를 열고(이름·아바타 함께) 팝오버를 띄운 뒤 배너를 닫는다.
-    func reply() {
-        guard let banner = store.megaphoneBanner.current, store.openMegaphoneReply(banner) else { return }
-        hooks.presentPopover()
-        store.megaphoneBanner.dismissCurrent()
-    }
 
     /// [닫기].
     func close() {
@@ -418,7 +404,7 @@ final class MegaphoneBannerWindowController {
         probe.banner = banner
         probe.width = width
         probe.isShown = true
-        let view = NSHostingView(rootView: MegaphoneBannerView(presentation: probe, store: nil, onReply: {}, onClose: {}))
+        let view = NSHostingView(rootView: MegaphoneBannerView(presentation: probe, store: nil, onClose: {}))
         let total = view.fittingSize.height
         return max(60, (total - MegaphoneBannerLayout.topGap).rounded(.up))
     }
@@ -431,7 +417,6 @@ final class MegaphoneBannerWindowController {
         hover.onHoverChanged = { [weak self] inside in self?.hoverChanged(inside) }
         let hosting = MegaphoneBannerHostingView(rootView: MegaphoneBannerView(
             presentation: presentation, store: store,
-            onReply: { [weak self] in self?.reply() },
             onClose: { [weak self] in self?.close() }
         ))
         // 고유 크기만 알린다 — 최소·최대 크기 제약을 걸면 창 틀(자리 계산이 정한다)과 다툰다.

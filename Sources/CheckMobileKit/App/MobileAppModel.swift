@@ -188,6 +188,8 @@ public final class MobileAppModel {
         links.megaphoneBanner = megaphoneBanner
         // 배너 미룸(계약 — 폰 배너): 시트·대결 화면·미니게임 판. 바뀌는 순간은 배너 오버레이가 `syncMegaphoneBannerDeferral()` 로 알린다.
         megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
+        // 필터가 켜지거나 꺼지면 메시지함이 요약 함수 짝을 다시 맞춘다 — refresh 가 실시간·푸시 어느 길로 왔든.
+        megaphoneBanner.onCapabilityChange = { [weak messages] in messages?.megaphoneFilterDidSettle() }
         // 표가 바뀌면 위젯 근무 중 얼굴도 다시 쓴다(지금 탭이 위젯의 유일한 작성자 — 같은 값이면 쓰기 창구가 건너뛴다).
         characters.onDirectoryChange = { [weak now] in now?.writeWidgetSnapshot() }
         // 일일 미션(v0.3.64) — **1:1 판이 끝난 것을 처음 보는 자리**가 여기다(코어 스토어가 `match` 가 끝으로 바뀐 그 자리에서

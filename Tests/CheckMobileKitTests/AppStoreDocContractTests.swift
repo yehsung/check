@@ -1,4 +1,5 @@
 import CheckCore
+import CheckMobileShared
 import Foundation
 import Testing
 @testable import CheckMobileKit
@@ -33,6 +34,16 @@ struct AppStoreDocContractTests {
         let line = try #require(section.split(separator: "\n").first { $0.contains(needle) }, "표 행을 못 찾았다: \(needle)")
         let cells = line.split(separator: "|", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
         return Array(cells.dropFirst().dropLast())
+    }
+
+    /// `ios/project.yml` 의 빌드 설정 한 칸(`MARKETING_VERSION` 같은 정의 줄 — `$(...)` 참조 줄이 아니다).
+    /// xcodegen 이 이 두 칸을 Info.plist 의 `CFBundleShortVersionString`·`CFBundleVersion` 으로 그대로 넣는다.
+    static func projectSetting(_ key: String) throws -> String {
+        let yml = try document("ios/project.yml")
+        let line = try #require(yml.split(separator: "\n").first { $0.contains("\(key):") },
+                                "ios/project.yml 에 \(key) 정의 줄이 없다")
+        let value = line.split(separator: ":", maxSplits: 1).dropFirst().joined()
+        return value.trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
     }
 
     static func lobbyStakes() throws -> [Int] {
@@ -301,5 +312,175 @@ struct AppStoreDocContractTests {
             && ["판돈", "채팅"].allSatisfy { risk5[4].contains($0) }
         #expect(described || tracked,
                 "라벨은 오목 채팅·판돈을 신고하는데 처리방침엔 항목이 없고(5.1.1(i)) 개정 목록도 그 구멍을 모른다")
+    }
+
+    // MARK: 1.0.15 — 길건너 아잉이 폰 노출 · 미니게임 역대 순위 [오늘 | 역대]
+
+    /// 이 판의 문서가 말하는 것은 **전부 코드에서 읽을 수 있는 사실**이다: 폰 미니게임이 넷이다 · 게임 이름 ·
+    /// 딥링크 꼬리 · 조작 두 줄 · 자정 상품 셋과 정족수 · 가만히 있으면 끝나는 초 · 역대 순위 제목과 그 규칙 한 줄 ·
+    /// 「순위」 탭은 오늘 하나다 · 제출 버전. 그래서 글자를 베끼지 않고 **먼저 코드에서 읽어 맞춘다** —
+    /// 어느 하나가 움직이면 심사 메모가 거짓이 되므로 그 순간 빨개져야 한다(1.0.11·1.0.12 블록 시험과 같은 수법).
+    ///
+    /// ⚠️ §5.2 의 1.0.15 블록은 1.0.11·1.0.12 시험이 잘라 보는 구간("**New in 1.0.1x" ~ "**Screens that") **안**에 들어간다 —
+    /// 그 두 시험의 금지 낱말 목록(gambl·wager·"bet "·betting·casino·jackpot·cash prize·Supabase·Apple Pay ·
+    /// "@" · password · "% fee")이 이 블록에도 그대로 걸린다. 여기서 한 번 더 세는 것은 **블록 하나만** 보고 빨개지게
+    /// 하려는 것이다(합쳐 보면 어느 판 블록이 더럽혀졌는지 모른다).
+    @Test("1.0.15: §0 버전 칸 · §0.1 게임 줄 · §5.2 New in · §5.3 요약이 코드 사실(phoneCases 넷 · crossy.title · 상품 20·10·5 · allTime.boardTitle)과 맞고, 판돈 없는 혼자 게임이라고 말하고, 도박 어휘·자격증명이 없다")
+    func crossyAndAllTimeBoardAreDocumentedAsSinglePlayerWithoutWagering() throws {
+        // ── 대조: 이 계약의 전제가 되는 코드 사실(사라지면 문서와 함께 이 시험을 고친다) ──
+        // ① 폰 목록에 길건너가 들어왔다 — 문서가 "폰에 있다" 고 말하는 근거 그 자체다.
+        #expect(MiniGameKind.phoneCases.contains(.crossy), "전제: 폰 목록에 길건너가 있다(이게 1.0.15 의 몸통이다)")
+        #expect(MiniGameKind.crossy.isPhoneSupported, "전제: 한 줄 판정도 같은 답을 준다")
+        #expect(MiniGameKind.crossy.title == "길건너 아잉이", "전제: 앱 글자(문서가 이 이름으로 심사원을 보낸다)")
+        // ② 혼자 하는 게임 셋과 **같은** 자정 상품이다(새 판돈·새 재화가 없다 = 연령 설문이 그대로인 근거).
+        let prizes = GamesMiniGameText.rubyPrizes
+        #expect(prizes == [20, 10, 5], "전제: 자정 상품 셋 — 문서의 숫자와 함께 맞춰라: \(prizes)")
+        // ③ 역대 순위 글자는 코어 한 벌이다(맥·폰이 같은 말을 한다).
+        #expect(MiniGameBoardScope.allTime.boardTitle == "역대 순위", "전제: 역대 순위 제목")
+        #expect(RankingsText.miniGameRankTitle == MiniGameBoardScope.today.boardTitle,
+                "전제: 「순위」 탭은 오늘 하나다 — 전환은 「게임」 탭에만 붙는다(사용자 결정 2026-10-30)")
+        // ④ 가만히 있으면 끝난다 — 심사원이 한 판을 끝내는 길 하나다.
+        #expect(CrossyGame.idleLimit == 9, "전제: 멈춰 있으면 끝나는 초")
+
+        let scopeChips = "[\(MiniGameBoardScope.today.label) | \(MiniGameBoardScope.allTime.label)]"
+        let deepLink = "\(AingRoute.scheme)://games/\(AingRoute.MiniGame.crossy.rawValue)"
+        // 조작 두 줄의 아랫줄이 폰 것이다(`kind.howToPlay` + 줄바꿈 + 폰 조작) — 문서는 그 줄을 그대로 적는다.
+        let controlLine = try #require(GamesMiniGameText.howToPlay(.crossy).split(separator: "\n").last.map { String($0) },
+                                       "전제: 길건너 시작 카드가 조작 줄을 가진다")
+        #expect(controlLine.contains("쓸어서") && controlLine.contains("탭하면"), "전제: 폰 조작 줄이 쓸기·탭 둘을 말한다")
+
+        let doc = try Self.document("docs/appstore.md")
+
+        // ── ⓞ §0 요약표의 버전 칸 — 제출 자료가 **어느 판을 내는지** 틀리면 그 아래 전부가 흔들린다.
+        //    값은 손으로 적지 않고 `ios/project.yml` 에서 읽는다(xcodegen 이 Info.plist 에 그대로 넣는 두 칸).
+        let marketingVersion = try Self.projectSetting("MARKETING_VERSION")
+        let buildNumber = try Self.projectSetting("CURRENT_PROJECT_VERSION")
+        let facts = try Self.section(of: doc, heading: "## 0. 앱 사실 요약")
+        let versionRow = try Self.row(in: facts, containing: "| 버전 · 빌드 |")
+        #expect(versionRow[1] == "`\(marketingVersion)` · `\(buildNumber)`",
+                "§0 버전 칸이 ios/project.yml(\(marketingVersion) · \(buildNumber))과 다르다: \(versionRow[1])")
+
+        // ── ① §0.1 기능 범위 표의 게임 줄 — 심사팀이 "앱에 무엇이 있나" 를 읽는 자리.
+        let scope = try Self.section(of: doc, heading: "### 0.1 실제 기능 범위")
+        let games = try Self.row(in: scope, containing: "| 게임 |")
+        #expect(games[0] == "게임", "표 모양이 바뀌었다: \(games)")
+        // 미니게임 수를 **낱말로** 잰다 — `phoneCases` 가 늘면 "넷" 이 거짓이 되고 여기가 먼저 빨개진다.
+        let countWords = [2: "둘", 3: "셋", 4: "넷", 5: "다섯"]
+        let countWord = try #require(countWords[MiniGameKind.phoneCases.count],
+                                     "폰 미니게임이 \(MiniGameKind.phoneCases.count) 개다 — 낱말 표를 넓혀라")
+        #expect(games[1].contains("미니게임 \(countWord)("),
+                "게임 줄이 폰 미니게임 수(\(MiniGameKind.phoneCases.count) = \(countWord))를 말하지 않는다: \(games[1])")
+        for kind in MiniGameKind.phoneCases {
+            #expect(games[1].contains(kind.title), "게임 줄에 폰 미니게임 '\(kind.title)' 이 없다")
+        }
+        #expect(games[1].contains("1.0.15"), "길건너·역대가 어느 판에 들어왔는지가 없다")
+        // ★ 표 칸 안에는 세로줄(`|`)을 **못 쓴다**: 마크다운이 그 자리에서 칸을 나누고 `row(in:)` 도 같은 글자로 쪼개므로
+        //   `[오늘 | 역대]` 를 그대로 적으면 칸이 넷에서 다섯이 되고 **1.0.11 시험이 보는 칸 번호까지 밀린다**
+        //   (쓰기 칸이 `tetris_report` 를 잃는다). 그래서 이 줄에서는 칩을 따로 적고, 묶는 것은 **칩 글자**다.
+        #expect(games.count == 4, "게임 줄의 칸이 넷이 아니다 — 칸 안에 '|' 를 쓰면 뒤 칸 번호가 다 밀린다: \(games)")
+        for chip in MiniGameBoardScope.allCases {
+            #expect(games[1].contains("[\(chip.label)]"), "게임 줄에 순위 머리 칩 '[\(chip.label)]' 이 없다: \(games[1])")
+        }
+        #expect(games[1].contains(MiniGameBoardScope.allTime.boardTitle), "게임 줄이 역대 순위를 앱 제목으로 부르지 않는다")
+        // 판돈이 **없는** 게임이라는 사실 — 1:1 셋과 가르는 자리다(§3 모의 도박 칸이 이 사실에 기대고 있다).
+        #expect(games[1].contains("판돈이 없다"), "게임 줄이 길건너에 판돈이 없다는 사실을 말하지 않는다: \(games[1])")
+        // 서버에 **쓰는** 것 칸: 길건너는 새 쓰기가 없고 역대 순위는 읽기 전용이다. 쓰기로 적으면 그 자체가 거짓이다.
+        #expect(games[2].contains("새 쓰기 0"), "쓰기 칸이 1.0.15 에 새 쓰기가 없다는 사실을 말하지 않는다: \(games[2])")
+        #expect(games[2].contains("minigame_alltime_board") && games[2].contains("읽기만"),
+                "쓰기 칸이 역대 순위가 읽기 전용임을 말하지 않는다: \(games[2])")
+
+        // 「순위」 탭 줄은 **건드리지 않았다** — 거긴 오늘 하나다(전환을 두 곳에 적으면 2.3.1 "설명과 다른 앱" 자리).
+        let rankings = try Self.row(in: scope, containing: "| 순위 |")
+        #expect(rankings[1].contains("미니게임(\(MiniGameBoardScope.today.label))"),
+                "순위 줄이 '미니게임(오늘)' 을 말하지 않는다: \(rankings[1])")
+        #expect(!rankings[1].contains(MiniGameBoardScope.allTime.label),
+                "순위 탭엔 역대가 없다 — 줄에 적으면 심사원이 그 탭에서 찾다가 못 찾는다: \(rankings[1])")
+
+        // ── ② §5.2 심사원용 영어 메모 — 1.0.15 블록.
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.15"), "§5.2 에 New in 1.0.15 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let end = rest.range(of: "**Screens that")?.lowerBound ?? rest.endIndex
+        let newIn1015 = String(rest[..<end])
+        // 앱 안 이름(한글)을 적어야 심사원이 화면에서 찾는다.
+        #expect(newIn1015.contains(MiniGameKind.crossy.title), "§5.2 1.0.15 블록에 앱 글자 '\(MiniGameKind.crossy.title)' 이 없다")
+        // 심사원이 **어떻게 그 화면에 닿는지** — 탭 길과 딥링크 둘.
+        #expect(newIn1015.contains("Games tab"), "메모가 심사원을 어느 탭으로 보내는지 안 적는다")
+        #expect(newIn1015.contains(deepLink), "메모가 딥링크(\(deepLink))를 안 적는다")
+        // 조작은 둘로 갈린다(쓸기 = 그 방향 한 칸 · 탭 = 앞으로 한 칸). 하나만 적으면 쓸기를 모르는 심사원은
+        // 뒤·좌·우로 갈 길을 못 찾는다 — 그 금지가 `GamesMiniGameText.howToPlay` 주석에 있다.
+        #expect(newIn1015.contains("Swipe") && newIn1015.contains("hops one square forward"),
+                "메모가 조작 둘(쓸기·탭)을 안 적는다")
+        #expect(newIn1015.contains("stands still for \(Int(CrossyGame.idleLimit)) seconds"),
+                "메모가 판이 저절로 끝나는 \(Int(CrossyGame.idleLimit))초를 안 적는다 — 심사원이 한 판을 못 끝낸다")
+        // 혼자 하는 게임이고 **아무것도 걸지 않는다** · 상품·정족수는 미니게임 셋과 같은 값이다.
+        #expect(newIn1015.contains("played alone") && newIn1015.contains("no entry cost"),
+                "§5.2 1.0.15 블록이 판돈 없는 혼자 게임이라는 사실을 안 적는다 — 1:1 셋과 가르는 자리다")
+        #expect(newIn1015.contains("\(prizes[0]), \(prizes[1]) and \(prizes[2]) in-app rubies"),
+                "§5.2 1.0.15 블록의 자정 상품이 코드(\(prizes))와 다르다")
+        #expect(newIn1015.contains("a minimum of \(GamesMiniGameText.prizeQuorum) participants"),
+                "정족수(\(GamesMiniGameText.prizeQuorum)명)를 빠뜨렸다")
+        // 루비가 현금화 불가이고 앱 안 결제가 없다 — 판마다 되풀이하는 결론(1.0.11 블록과 같은 문장).
+        #expect(newIn1015.contains("cannot be bought with money or cashed out"), "루비 환금 불가가 없다")
+        #expect(newIn1015.contains("no in-app purchases"), "앱 안 결제 없음이 없다")
+        // 역대 순위: 앱 제목 그대로 · 사람마다 한 줄 · 읽기 전용 · 「순위」 탭은 그대로.
+        #expect(newIn1015.contains(scopeChips), "§5.2 1.0.15 블록이 전환 칩(\(scopeChips))을 안 적는다")
+        #expect(newIn1015.contains(MiniGameBoardScope.allTime.boardTitle),
+                "§5.2 1.0.15 블록이 역대 순위를 앱 제목('\(MiniGameBoardScope.allTime.boardTitle)')으로 부르지 않는다")
+        #expect(newIn1015.contains("one row per person"), "역대가 사람마다 한 줄이라는 규칙이 없다")
+        #expect(newIn1015.contains("read-only"), "역대가 읽기 전용이라는 사실이 없다")
+        #expect(newIn1015.contains("unchanged — it still shows today only"),
+                "메모가 「순위」 탭은 그대로라고 말하지 않는다 — 심사원이 거기서 역대를 찾는다")
+        // 연령 설문 답이 **앞 판과 같다**는 결론.
+        #expect(newIn1015.contains("age-rating answers in this submission are")
+                && newIn1015.contains("the same as the previous version's"),
+                "§5.2 1.0.15 블록이 연령 설문이 그대로라는 결론을 안 적는다(1.0.11 블록과 같은 맺음)")
+        // ★ 자격증명은 이 문서에 **절대** 적지 않는다(1.0.11 결정 그대로).
+        #expect(!newIn1015.contains("@") && !newIn1015.lowercased().contains("password"),
+                "1.0.15 블록에 계정 정보 꼴 글자가 있다 — 자격증명은 ASC 심사 메모 칸에만 적는다")
+        // ★ 도박 어휘·제공자 이름을 쓰지 않는다(1.0.11·1.0.12 블록 시험과 같은 목록).
+        for word in ["gambl", "wager", "bet ", "betting", "casino", "jackpot", "cash prize",
+                     "Supabase", "supabase", "Apple Pay"] {
+            #expect(!newIn1015.contains(word), "§5.2 1.0.15 블록에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ── ③ §5.3 한국어 요약 — 제출 전 결론이 여기 적혀 있어야 다음 사람이 §3·서버·설명문을 다시 손대지 않는다.
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let summaryStart = try #require(korean.range(of: "- 1.0.15 는"), "§5.3 에 1.0.15 요약 줄이 없다")
+        let summaryRest = korean[summaryStart.lowerBound...]
+        let summaryEnd = summaryRest.range(of: "\n- 1.0.7")?.lowerBound ?? summaryRest.endIndex
+        let summary1015 = String(summaryRest[..<summaryEnd])
+        #expect(summary1015.contains(MiniGameKind.crossy.title), "§5.3 1.0.15 요약이 앱 글자를 쓰지 않는다")
+        #expect(summary1015.contains(deepLink), "§5.3 1.0.15 요약이 같이 넓힌 딥링크를 안 적는다")
+        #expect(summary1015.contains(controlLine), "§5.3 1.0.15 요약의 조작 줄이 앱 글자('\(controlLine)')와 다르다")
+        #expect(summary1015.contains("판돈이 없다"), "§5.3 1.0.15 요약이 판돈 없는 혼자 게임이라는 사실을 안 적는다")
+        #expect(summary1015.contains("루비 \(prizes[0])·\(prizes[1])·\(prizes[2])"),
+                "§5.3 1.0.15 요약의 자정 상품이 코드(\(prizes))와 다르다")
+        #expect(summary1015.contains("\(GamesMiniGameText.prizeQuorum)명"), "정족수를 빠뜨렸다")
+        // 연령 설문이 **바뀌지 않는다**는 결론(이 판의 핵심 결론 — 없으면 다음 사람이 §3 을 다시 손댄다).
+        #expect(summary1015.contains("바뀌지 않는다"), "§5.3 1.0.15 요약이 연령 설문이 그대로라는 결론을 안 적는다")
+        // 역대 규칙 한 줄은 **맥 글자 그대로**다(같은 기능이 두 말을 하면 안 된다).
+        #expect(summary1015.contains(GamesMiniGameText.allTimeRuleCaption),
+                "§5.3 1.0.15 요약의 역대 규칙이 앱 글자('\(GamesMiniGameText.allTimeRuleCaption)')와 다르다")
+        #expect(summary1015.contains(RankingsText.miniGameRankTitle) && summary1015.contains("「게임」 탭에만"),
+                "§5.3 이 전환이 「게임」 탭에만 붙는다는 결정과 「순위」 탭 글자를 안 적는다")
+        // AI 리밋 캡션은 앱 문장의 **일부**여야 한다(문장을 새로 쓰면 화면과 다른 말이 된다).
+        let aiSentence = "요금제에 따라 창이 하나만 올 수 있어요."
+        #expect(MeText.aiLimitsCaption.contains(aiSentence), "전제: AI 리밋 캡션의 둘째 문장")
+        #expect(summary1015.contains(aiSentence), "§5.3 1.0.15 요약이 AI 리밋 캡션에 더한 문장을 안 적는다")
+        // 일일 미션 아이콘 한 줄 — 기호도 내부 식별자도 코드에서 읽는다.
+        #expect(summary1015.contains("`\(MeText.dailyMissionIcon(game: "rummy"))`"),
+                "§5.3 1.0.15 요약의 아잉 큐브 아이콘이 코드(\(MeText.dailyMissionIcon(game: "rummy")))와 다르다")
+        #expect(summary1015.contains("`rummy`"), "§5.3 이 내부 식별자가 rummy 라는 사실을 안 적는다")
+        for conclusion in ["서버 변경 0", "마이그레이션 0", "새 RPC 0", "ASC 심사 메모 칸에만", "p_client_message_id"] {
+            #expect(summary1015.contains(conclusion), "§5.3 1.0.15 요약에 '\(conclusion)' 결론이 없다")
+        }
+        // ★ 자격증명·도박 어휘 0건(한글 쪽 목록).
+        #expect(!summary1015.contains("@") && !summary1015.lowercased().contains("password")
+                && !summary1015.contains("비밀번호"),
+                "§5.3 1.0.15 요약에 계정 정보 꼴 글자가 있다")
+        for word in ["도박", "베팅", "gambl", "bet "] {
+            #expect(!summary1015.contains(word), "§5.3 1.0.15 요약에 금지 낱말 '\(word)' 가 있다")
+        }
     }
 }

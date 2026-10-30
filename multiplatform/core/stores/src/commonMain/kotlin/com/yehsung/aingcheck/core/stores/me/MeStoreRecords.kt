@@ -209,6 +209,9 @@ internal fun MeStore.discardRecords() {
     tokenGrid = TokenDailyGrid.empty
     recordsState.hasLoaded = false
     recordsState.loadedAt = null
+    // 배너도 내린다(맥 discardInsightsIfWeekRolledOver, WorkTimerStoreInsights.swift 194-196) — 보여 줄 회고가 없다.
+    // 이번 주 키는 소비하지 않는다: 재계산이 성공하면 evaluateRetroBanner 가 새 회고로 다시 판정한다.
+    showsRetroBanner = false
 }
 
 /** 기록 계산 입력(메인 밖으로 넘긴다 — 전부 불변 값). */

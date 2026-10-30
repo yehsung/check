@@ -8,7 +8,9 @@ import Observation
 //   · `send_megaphone(p_body, p_request_id)` 가 받는 사람마다 **평범한 1:1 메시지 한 줄**을 넣는다(본문 앞에 서버가 `📢 `).
 //     그래서 받는 쪽 화면은 아무것도 새로 그리지 않는다 — 옛 앱(0.3.50 · 1.0.6)도 말풍선·대화·점·푸시로 그대로 받는다.
 //   · 보내는 쪽 이력에서는 그 줄들이 빠진다(서버 message_history 가 거른다 — 대화 목록에 받는 사람 수만큼 스레드가 안 생긴다).
-//   · `megaphone_info()` 가 작성 화면의 한 줄("지금 보내면 N명에게 가요")과 가격·쿨타임·잔량을 준다.
+//   · `megaphone_info()` 가 작성 화면의 한 줄("지금 보내면 N명의 화면에 떠요")과 가격·쿨타임·잔량을 준다.
+//   · 2026-10-30 확성기 배너: 받는 쪽은 메시지 대신 화면 위 배너로 본다(`MegaphoneBanner.swift` · `MegaphoneBannerStore.swift`).
+//     앱 전체에 한 번에 하나 — 누가 보내면 그 뒤 5분은 아무도 못 보낸다(info 의 global_* 키 · 전송 cooldown 의 scope).
 //
 // ── 이 파일이 지키는 것 ──
 // ① **이중 과금이 원리적으로 없다.** 작성 한 번마다 request_id 를 **하나** 만들고(`pendingRequestID`), 전송 중에는 두 번째 요청을
@@ -44,10 +46,17 @@ package struct MegaphoneInfoResponse: Decodable, Equatable, Sendable {
     package var recipients: Int?
     package var maxLength: Int?
     package var rubyBalance: Int?
+    /// 확성기 배너(2026-10-30) — 앱 전체에 한 번에 하나: 누가 보내면 그 뒤 이만큼은 아무도 못 보낸다(서버 300). 옛 서버엔 없다.
+    package var globalCooldownSeconds: Int?
+    /// 앱 전체 대기의 남은 초. `cooldownRemainingSeconds` 는 이미 **사람당·전체 중 긴 쪽**이다(옛 앱이 그대로 맞는 시간을 말하게).
+    package var globalCooldownRemainingSeconds: Int?
+    /// 지금 막는 쪽: `"self"`(사람당) · `"global"`(앱 전체) · nil(안 막힘 · 옛 서버).
+    package var cooldownScope: String?
 
     package init(status: String? = "ok", enabled: Bool? = true, price: Int? = nil, cooldownSeconds: Int? = nil,
                  cooldownRemainingSeconds: Int? = nil, recipients: Int? = nil, maxLength: Int? = nil,
-                 rubyBalance: Int? = nil) {
+                 rubyBalance: Int? = nil, globalCooldownSeconds: Int? = nil,
+                 globalCooldownRemainingSeconds: Int? = nil, cooldownScope: String? = nil) {
         self.status = status
         self.enabled = enabled
         self.price = price
@@ -56,6 +65,9 @@ package struct MegaphoneInfoResponse: Decodable, Equatable, Sendable {
         self.recipients = recipients
         self.maxLength = maxLength
         self.rubyBalance = rubyBalance
+        self.globalCooldownSeconds = globalCooldownSeconds
+        self.globalCooldownRemainingSeconds = globalCooldownRemainingSeconds
+        self.cooldownScope = cooldownScope
     }
 }
 
@@ -73,10 +85,13 @@ package struct MegaphoneSendResponse: Decodable, Equatable, Sendable {
     package var maxLength: Int?
     package var retryAfterSeconds: Int?
     package var cooldownSeconds: Int?
+    /// cooldown 응답이 어느 쪽에 막혔는가: `"self"`(사람당) · `"global"`(앱 전체). 옛 서버엔 없다(= 사람당).
+    package var scope: String?
 
     package init(status: String, megaphoneId: String? = nil, recipients: Int? = nil, price: Int? = nil,
                  rubyBalance: Int? = nil, duplicate: Bool? = nil, need: Int? = nil, have: Int? = nil,
-                 maxLength: Int? = nil, retryAfterSeconds: Int? = nil, cooldownSeconds: Int? = nil) {
+                 maxLength: Int? = nil, retryAfterSeconds: Int? = nil, cooldownSeconds: Int? = nil,
+                 scope: String? = nil) {
         self.status = status
         self.megaphoneId = megaphoneId
         self.recipients = recipients
@@ -88,6 +103,20 @@ package struct MegaphoneSendResponse: Decodable, Equatable, Sendable {
         self.maxLength = maxLength
         self.retryAfterSeconds = retryAfterSeconds
         self.cooldownSeconds = cooldownSeconds
+        self.scope = scope
+    }
+}
+
+/// 확성기 대기가 누구 몫인가. 서버 어휘 `'self'` 는 Swift 의 `.self` 와 겹쳐 `.personal` 로 옮긴다.
+package enum MegaphoneCooldownScope: Equatable, Sendable {
+    /// 사람당(보낸 사람 본인 10분).
+    case personal
+    /// 앱 전체(누가 보내면 그 뒤 5분은 아무도).
+    case global
+
+    /// 서버 문자열 → 값. 모르는 값·nil 은 사람당(옛 서버가 말하던 유일한 대기다).
+    package init(serverValue: String?) {
+        self = serverValue == "global" ? .global : .personal
     }
 }
 
@@ -96,7 +125,7 @@ package enum MegaphoneSendOutcome: Equatable, Sendable {
     /// 보냈다(또는 같은 요청을 이미 보냈다 — duplicate). 받는 사람 수는 서버가 센 값.
     case sent(recipients: Int, duplicate: Bool)
     case insufficient(need: Int?, have: Int?)
-    case cooldown(retryAfterSeconds: Int?)
+    case cooldown(retryAfterSeconds: Int?, scope: MegaphoneCooldownScope = .personal)
     case noRecipients
     case empty
     case tooLong(maxLength: Int?)
@@ -114,7 +143,8 @@ package enum MegaphoneSendOutcome: Equatable, Sendable {
         switch response.status {
         case "ok":            self = .sent(recipients: response.recipients ?? 0, duplicate: response.duplicate ?? false)
         case "insufficient":  self = .insufficient(need: response.need, have: response.have)
-        case "cooldown":      self = .cooldown(retryAfterSeconds: response.retryAfterSeconds)
+        case "cooldown":      self = .cooldown(retryAfterSeconds: response.retryAfterSeconds,
+                                               scope: MegaphoneCooldownScope(serverValue: response.scope))
         case "no_recipients": self = .noRecipients
         case "empty":         self = .empty
         case "too_long":      self = .tooLong(maxLength: response.maxLength)
@@ -163,7 +193,7 @@ package enum MegaphoneText {
     package static let icon = "\u{1F4E2}"
     /// 상점 카드·버튼 제목("📢 확성기").
     package static var badgeTitle: String { "\(icon) \(title)" }
-    package static let explainer = "앱을 쓰는 모두에게 메시지로 가요 · 집중 중인 사람은 빼요"
+    package static let explainer = "앱 사용자 모두의 화면에 크게 떠요 · 집중 중인 사람은 빼요"
     package static let placeholder = "모두에게 할 말을 적어 주세요"
     package static let sendButton = "보내기"
     package static let cancelButton = "취소"
@@ -177,6 +207,17 @@ package enum MegaphoneText {
         "\(cooldownMinutes(seconds: seconds))분 뒤에 다시 보낼 수 있어요"
     }
     package static func cooldownMinutes(seconds: Int) -> Int { max(1, (max(0, seconds) + 59) / 60) }
+    /// 앱 전체 대기(누가 보내면 그 뒤 5분). 분 단위 올림.
+    package static func globalCooldown(seconds: Int) -> String {
+        "다음 확성기까지 \(cooldownMinutes(seconds: seconds))분"
+    }
+    /// 작성 화면·거절 한 줄의 대기 문구. 사람당·앱 전체 중 **더 긴 쪽**을 말하고, 같으면 앱 전체 문구다. 둘 다 0 이하면 nil.
+    /// `remaining` 은 지금 막는 전체 남은 초(= 둘 중 긴 쪽 — 서버 `cooldown_remaining_seconds` 와 같은 뜻), `globalRemaining` 은 그중 앱 전체 몫.
+    package static func cooldownLine(remaining: Int, globalRemaining: Int) -> String? {
+        let total = max(remaining, globalRemaining)
+        guard total > 0 else { return nil }
+        return globalRemaining >= total ? globalCooldown(seconds: total) : cooldown(seconds: total)
+    }
     package static let noRecipients = "받을 사람이 없어요"
     package static let unavailable = "지금은 보낼 수 없어요"
     package static let empty = "보낼 말을 적어 주세요"
@@ -191,7 +232,7 @@ package enum MegaphoneText {
     package static let infoFailed = "받을 사람 수를 못 읽었어요"
 
     /// 작성 화면의 한 줄.
-    package static func reach(recipients: Int) -> String { "지금 보내면 \(recipients)명에게 가요" }
+    package static func reach(recipients: Int) -> String { "지금 보내면 \(recipients)명의 화면에 떠요" }
     /// 확인 단계의 질문.
     package static func confirm(price: Int, recipients: Int) -> String { "루비 \(price)개로 \(recipients)명에게 보낼까요?" }
     /// 카운터("12/198").
@@ -251,20 +292,41 @@ package struct MegaphoneInfo: Equatable, Sendable {
     package var maxLength: Int
     package var cooldownSeconds: Int
     package var cooldownEndsAt: Date?
+    /// 앱 전체 대기의 설계값(서버가 말해 준 값 · 모르면 nil).
+    package var globalCooldownSeconds: Int?
+    /// 앱 전체 대기가 끝나는 시각(없으면 nil). `cooldownEndsAt` 과 둘 중 늦은 쪽까지 막힌다.
+    package var globalCooldownEndsAt: Date?
 
-    package init(enabled: Bool, price: Int, recipients: Int, maxLength: Int, cooldownSeconds: Int, cooldownEndsAt: Date?) {
+    package init(enabled: Bool, price: Int, recipients: Int, maxLength: Int, cooldownSeconds: Int, cooldownEndsAt: Date?,
+                 globalCooldownSeconds: Int? = nil, globalCooldownEndsAt: Date? = nil) {
         self.enabled = enabled
         self.price = price
         self.recipients = recipients
         self.maxLength = maxLength
         self.cooldownSeconds = cooldownSeconds
         self.cooldownEndsAt = cooldownEndsAt
+        self.globalCooldownSeconds = globalCooldownSeconds
+        self.globalCooldownEndsAt = globalCooldownEndsAt
     }
 
-    /// 지금 남은 쿨타임(초, 올림). 없으면 0.
+    /// 지금 남은 대기(초, 올림) — 사람당·앱 전체 중 긴 쪽. 없으면 0.
     package func cooldownRemaining(now: Date) -> Int {
-        guard let cooldownEndsAt else { return 0 }
-        let left = cooldownEndsAt.timeIntervalSince(now)
+        max(Self.secondsLeft(until: cooldownEndsAt, now: now), globalCooldownRemaining(now: now))
+    }
+
+    /// 그중 앱 전체 몫(초, 올림). 없으면 0.
+    package func globalCooldownRemaining(now: Date) -> Int {
+        Self.secondsLeft(until: globalCooldownEndsAt, now: now)
+    }
+
+    /// 지금 막혀 있으면 그 한 줄(더 긴 쪽 · 같으면 앱 전체 문구), 아니면 nil.
+    package func cooldownLine(now: Date) -> String? {
+        MegaphoneText.cooldownLine(remaining: cooldownRemaining(now: now), globalRemaining: globalCooldownRemaining(now: now))
+    }
+
+    private static func secondsLeft(until end: Date?, now: Date) -> Int {
+        guard let end else { return 0 }
+        let left = end.timeIntervalSince(now)
         return left > 0 ? Int(left.rounded(.up)) : 0
     }
 }
@@ -340,8 +402,7 @@ package final class MegaphoneStore {
             return MegaphoneText.loadingInfo
         }
         if !info.enabled { return MegaphoneText.unavailable }
-        let left = info.cooldownRemaining(now: now)
-        if left > 0 { return MegaphoneText.cooldown(seconds: left) }
+        if let waiting = info.cooldownLine(now: now) { return waiting }
         if info.recipients <= 0 { return MegaphoneText.noRecipients }
         return MegaphoneText.reach(recipients: info.recipients)
     }
@@ -394,8 +455,7 @@ package final class MegaphoneStore {
             return
         }
         if !info.enabled { setNotice(MegaphoneText.unavailable, error: true); return }
-        let left = info.cooldownRemaining(now: clock())
-        if left > 0 { setNotice(MegaphoneText.cooldown(seconds: left), error: true); return }
+        if let waiting = info.cooldownLine(now: clock()) { setNotice(waiting, error: true); return }
         if info.recipients <= 0 { setNotice(MegaphoneText.noRecipients, error: true); return }
         if let have = host?.rubyBalance, have < info.price {
             setNotice(MegaphoneText.shortfall(need: info.price, have: have), error: true)
@@ -464,19 +524,27 @@ package final class MegaphoneStore {
             draft = ""
             setNotice(duplicate ? MegaphoneText.alreadySent(recipients: recipients) : MegaphoneText.sent(recipients: recipients))
             if var known = info {
-                if !duplicate { known.cooldownEndsAt = now.addingTimeInterval(TimeInterval(known.cooldownSeconds)) }
+                if !duplicate {
+                    known.cooldownEndsAt = now.addingTimeInterval(TimeInterval(known.cooldownSeconds))
+                    if let global = known.globalCooldownSeconds, global > 0 {
+                        known.globalCooldownEndsAt = now.addingTimeInterval(TimeInterval(global))
+                    }
+                }
                 info = known
             }
             loadInfo()
         case .insufficient(let need, let have):
             setNotice(MegaphoneText.shortfall(need: need, have: have), error: true)
-        case .cooldown(let seconds):
-            let left = max(1, seconds ?? info?.cooldownSeconds ?? Self.defaultCooldownSeconds)
+        case .cooldown(let seconds, let scope):
+            let fallback = scope == .global ? info?.globalCooldownSeconds : info?.cooldownSeconds
+            let left = max(1, seconds ?? fallback ?? Self.defaultCooldownSeconds)
+            let ends = now.addingTimeInterval(TimeInterval(left))
             if var known = info {
-                known.cooldownEndsAt = now.addingTimeInterval(TimeInterval(left))
+                if scope == .global { known.globalCooldownEndsAt = ends } else { known.cooldownEndsAt = ends }
                 info = known
             }
-            setNotice(MegaphoneText.cooldown(seconds: left), error: true)
+            setNotice(scope == .global ? MegaphoneText.globalCooldown(seconds: left) : MegaphoneText.cooldown(seconds: left),
+                      error: true)
         case .noRecipients:
             if var known = info { known.recipients = 0; info = known }
             setNotice(MegaphoneText.noRecipients, error: true)
@@ -541,13 +609,18 @@ package final class MegaphoneStore {
         }
         let cooldown = response.cooldownSeconds ?? Self.defaultCooldownSeconds
         let left = max(0, response.cooldownRemainingSeconds ?? 0)
+        // 앱 전체 몫: 새 키가 있으면 그 값, 없고 scope 만 'global' 이면 남은 시간 전부가 앱 전체 몫이다(옛 서버는 둘 다 없다 = 0).
+        let globalLeft = max(0, response.globalCooldownRemainingSeconds ?? (response.cooldownScope == "global" ? left : 0))
+        let now = clock()
         info = MegaphoneInfo(
             enabled: response.enabled ?? true,
             price: price,
             recipients: max(0, recipients),
             maxLength: response.maxLength ?? MegaphoneBody.maxLength,
             cooldownSeconds: cooldown,
-            cooldownEndsAt: left > 0 ? clock().addingTimeInterval(TimeInterval(left)) : nil
+            cooldownEndsAt: left > 0 ? now.addingTimeInterval(TimeInterval(left)) : nil,
+            globalCooldownSeconds: response.globalCooldownSeconds,
+            globalCooldownEndsAt: globalLeft > 0 ? now.addingTimeInterval(TimeInterval(globalLeft)) : nil
         )
         infoFailed = false
         serverUnavailable = false

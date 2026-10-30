@@ -198,7 +198,7 @@ private let missingFunction = #"{"code":"PGRST202","message":"Could not find the
         #expect(MegaphoneText.shortfall(need: 50, have: 20) == "루비 30개 더 필요해요")
         #expect(MegaphoneText.shortfall(need: 50, have: 20) == CheckCoreShared.shortfallNotice(need: 50, have: 20))
         #expect(MegaphoneText.sent(recipients: 46) == "보냈어요 · 46명에게")
-        #expect(MegaphoneText.reach(recipients: 46) == "지금 보내면 46명에게 가요")
+        #expect(MegaphoneText.reach(recipients: 46) == "지금 보내면 46명의 화면에 떠요")
         #expect(MegaphoneText.confirm(price: 50, recipients: 46) == "루비 50개로 46명에게 보낼까요?")
         #expect(MegaphoneText.noRecipients == "받을 사람이 없어요")
         #expect(MegaphoneText.unavailable == "지금은 보낼 수 없어요")

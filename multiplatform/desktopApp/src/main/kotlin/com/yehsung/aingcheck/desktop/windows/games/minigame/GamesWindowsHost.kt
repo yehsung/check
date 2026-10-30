@@ -73,7 +73,16 @@ sealed interface MiniGameWindowRoute {
  *  · EndRound → 허브 `closeScreen`(진행 중인 판을 끝낸다 — ③ 닫기 = 판 끝, CheckMiniGameWindow.swift:247. 기록 게임(테트리스·플래피 — quittingKeepsTheScore)은 여기까지 점수로 제출)
  *  · ReadRefreshRate → 창이 선 **뒤** 그 화면 주사율을 다시 읽는다(②·⑤ CheckMiniGameWindow.swift:225-232·276)
  */
-class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz: () -> Int = { DEFAULT_HZ }) {
+class MiniGameWindowState(
+    private val hub: GamesMiniGameHub,
+    /**
+     * 창이 게임 화면으로 여는 게임. 기본은 폰 노출([MiniGameExposure.visible] — 길건너 없음)이고, 조립이 허브 쪽 공용 패치
+     * (GamesMiniGameHub.visibleKinds = desktopVisible)와 **같이** [DesktopMiniGameExposure.visible] 를 건넨다 — 허브가 길건너를 열지 않는 빌드에서
+     * 창만 길건너로 가면 빈 판이 선다.
+     */
+    private val visibleKinds: List<MiniGameKind> = MiniGameExposure.visible,
+    private val probeHz: () -> Int = { DEFAULT_HZ },
+) {
     var route: MiniGameWindowRoute by mutableStateOf(MiniGameWindowRoute.Hub)
         private set
     var windowFocused: Boolean by mutableStateOf(true)
@@ -98,7 +107,7 @@ class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz
     }
 
     /**
-     * 창을 연다. [kind] 가 있으면 그 게임으로 — 노출 목록 밖(길건너 — W-3 #1)이면 허브에 남는다.
+     * 창을 연다. [kind] 가 있으면 그 게임으로 — 창의 노출 목록([visibleKinds] — 데스크톱 조립은 길건너 포함, W-9 #6) 밖이면 허브에 남는다.
      * [kind] 없는 열기(플라이아웃 게임 레일 · 두 번째 실행)는 **멱등**이다 — 판 도중이면 그 판을 그대로 둔다(맥 show() 는 창만 앞으로,
      * CheckMiniGameWindow.swift:213-235 · 레일은 kind 없이 openMiniGameWindow(), CheckMenuView.swift:976-978). 허브로 돌리면 화면 수명의
      * closeScreen 이 판을 끝낸다(테트리스는 그 점수로 확정 제출, 플래피는 버림).
@@ -108,7 +117,7 @@ class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz
         val current = route
         if (kind == null && current is MiniGameWindowRoute.Game) return
         val target = kind ?: (current as? MiniGameWindowRoute.Closed)?.last
-        route = if (target != null && MiniGameExposure.isVisible(target)) MiniGameWindowRoute.Game(target) else MiniGameWindowRoute.Hub
+        route = if (target != null && target in visibleKinds) MiniGameWindowRoute.Game(target) else MiniGameWindowRoute.Hub
     }
 
     /** 게임 화면의 뒤로 → 허브(화면이 사라지며 허브 `closeScreen` 이 판을 끝낸다 — ui GamesMiniGameScreen 의 화면 수명). */
@@ -159,7 +168,7 @@ class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz
     companion object {
         const val DEFAULT_HZ = 60
 
-        /** 접어도(창 닫기) 기록이 남는 게임(맥 MiniGamePanel.swift:567-570 PauseState.quittingKeepsTheScore — 길건너는 Windows 에서 숨김). */
+        /** 접어도(창 닫기) 기록이 남는 게임(맥 MiniGamePanel.swift:567-570 PauseState.quittingKeepsTheScore — 길건너는 데스크톱에서 구동, W-9 #6). */
         fun quittingKeepsTheScore(kind: MiniGameKind): Boolean = when (kind) {
             MiniGameKind.tetris, MiniGameKind.flappy, MiniGameKind.crossy -> true
             MiniGameKind.timingBar -> false
@@ -254,4 +263,18 @@ class GamesWindowsHost(
     companion object {
         val OWN_KINDS: List<GameWindowKind> = listOf(GameWindowKind.MiniGame, GameWindowKind.Gomoku, GameWindowKind.Chess, GameWindowKind.TetrisDuel)
     }
+}
+
+/**
+ * 데스크톱(Windows) 미니게임 창에 보이는 게임 — 폰 노출([MiniGameExposure.visible] — 폰 목록 ∩ 증거 골든) + **길건너 아잉이**(W-9 #6:
+ * 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다). 길건너도 같은 증거 규칙이다 — 증거 골든 목록이 비면 빠진다. 순서는 `MiniGameKind.entries`.
+ * 허브 칸·허브 openScreen 이 같은 목록을 쓰게 하는 배선은 공용 패치(core/stores MiniGameExposure.desktopVisible · GamesMiniGameHub.visibleKinds ·
+ * ui GamesHubScreen kinds)다 — 그 전까지 허브 openScreen 이 길건너를 거르므로 이 목록은 창 라우트만 연다.
+ */
+object DesktopMiniGameExposure {
+    val visible: List<MiniGameKind> = MiniGameKind.entries.filter { kind ->
+        MiniGameExposure.isVisible(kind) || (kind == MiniGameKind.crossy && !MiniGameExposure.evidenceGoldens[kind].isNullOrEmpty())
+    }
+
+    fun isVisible(kind: MiniGameKind): Boolean = kind in visible
 }

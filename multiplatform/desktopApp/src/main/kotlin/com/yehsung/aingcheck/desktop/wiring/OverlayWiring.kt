@@ -37,6 +37,7 @@ import com.yehsung.aingcheck.desktop.overlay.engine.CharacterSink
 import com.yehsung.aingcheck.desktop.overlay.engine.ClickAction
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttention
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelFacts
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelFactsSource
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelInvite
 import com.yehsung.aingcheck.desktop.overlay.engine.HitTarget
@@ -57,6 +58,9 @@ import com.yehsung.aingcheck.desktop.pages.desktopsettings.TodoBoardSetting
 import com.yehsung.aingcheck.desktop.platform.windows.display.DisplayChangeSource
 import com.yehsung.aingcheck.desktop.shell.notify.ShellNotice
 import com.yehsung.aingcheck.desktop.shellapi.DesktopUpdateState
+import com.yehsung.aingcheck.desktop.shellapi.Entry
+import com.yehsung.aingcheck.desktop.shellapi.FlyoutNavigator
+import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoutes
 import com.yehsung.aingcheck.desktop.shellapi.NotifyKind
 import com.yehsung.aingcheck.desktop.shellapi.OverlayAvailability
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
@@ -155,6 +159,12 @@ data class OverlayWiringDeps(
     val updateVersions: Flow<String> = emptyFlow(),
     /** 화면 구성 바뀜(Windows = `Win32DisplayChangeSource.on(platform.messageThread)`). null 이면 다음 시작 때만 자리를 다시 잡는다. */
     val displayChanges: DisplayChangeSource? = null,
+    /**
+     * 대결 사실 실시간 공급(조립 = [OverlayDuelFacts.from] — 오목·체스·테트리스 스토어의 받은 신청·창 보임·지금 판). 맥 말풍선 펌프는
+     * 띄우기 직전 스토어를 읽어 판 창을 연 뒤·판이 끝난 뒤의 대기 차례 말풍선을 버린다(CheckOverlayWindow.swift:1375·1393).
+     * None 이면 엔진은 알림 자신을 사실로 쓴다(시험·스토어 없는 조립).
+     */
+    val duelFacts: DuelFactsSource = DuelFactsSource.None,
 )
 
 /**
@@ -207,6 +217,18 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
             }
         }
 
+        /**
+         * 메시지 도착 말풍선을 눌렀다 → 플라이아웃의 메시지(맥 CheckApp.swift:192-199 `onOpenMessages`): 보낸이를 알면 그 사람 대화
+         * (`openMessagePanel(peer:from: .overlay)` — 뒤로 = 홈), 모르면(옛 행·빈 id — WorkTimerStoreMessages.swift:266-271 `arrivalBubbleSenderID`
+         * 가 빈 문자열도 nil 로 접는다) 대화 패널이 아니라 콕찌르기 목록(`openPokeListToPickAPeer` — 콕 깃발이 꺼진 빌드는 메시지 목록),
+         * 그리고 팝오버를 연다(`presentMenuPopover` = [FlyoutNavigator.open]). 다른 클릭은 무시.
+         */
+        fun openMessages(outcome: PointerOutcome, nav: FlyoutNavigator, pokeEnabled: Boolean) {
+            val click = outcome.click as? ClickAction.OpenMessages ?: return
+            val sender = click.senderId?.takeIf { it.isNotEmpty() }
+            nav.open(FlyoutRoutes.forMessageArrival(sender, pokeEnabled, Entry.OVERLAY))
+        }
+
         /** 게임 화면의 '나'(GamesDeps.boardMe) — 표정은 맥 CheckMascotAssets.mood(for:)(:73-75): 근무 중 Working, 아니면 Off. */
         fun boardMe(name: String?, characterId: String?, isWorking: Boolean): BoardGameMe =
             BoardGameMe(name, characterId, if (isWorking) CharacterMood.Working else CharacterMood.Off)
@@ -228,7 +250,7 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
      */
     val bubbles: DesktopMessageBubbleQueue = DesktopMessageBubbleQueue()
 
-    val director: OverlayDirector = OverlayDirector(deps.sink, deps.measure, bubbles, deps.board, deps.random)
+    val director: OverlayDirector = OverlayDirector(deps.sink, deps.measure, bubbles, deps.board, deps.random, deps.duelFacts)
     private val placements = OverlayPlacementStore(deps.keyValueStore)
 
     private val commands = Channel<(Double) -> Unit>(Channel.UNLIMITED)

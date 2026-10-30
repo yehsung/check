@@ -68,6 +68,7 @@ import com.yehsung.aingcheck.desktop.wiring.FlyoutWindowPort
 import com.yehsung.aingcheck.desktop.wiring.GameWindowFactory
 import com.yehsung.aingcheck.desktop.wiring.GamesDeps
 import com.yehsung.aingcheck.desktop.wiring.GamesWiring
+import com.yehsung.aingcheck.desktop.wiring.OverlayDuelFacts
 import com.yehsung.aingcheck.desktop.wiring.OverlayPresenter
 import com.yehsung.aingcheck.desktop.wiring.OverlayWiring
 import com.yehsung.aingcheck.desktop.wiring.OverlayWiringDeps
@@ -415,11 +416,13 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
     )
 
     /**
-     * 오버레이 포인터 결과 한 문: 대결 말풍선(신청·차례)을 누르면 그 판 창(맥 CheckApp.swift:370·407·443 onOpen… → store.openWindow(focusMatchID:))
-     * 뒤 바깥 seam. 게임 배선([lateGames])은 오버레이 뒤에 지어진다 — 누를 때 읽는다.
+     * 오버레이 포인터 결과 한 문: 대결 말풍선(신청·차례)을 누르면 그 판 창(맥 CheckApp.swift:370·407·443 onOpen… → store.openWindow(focusMatchID:)),
+     * 메시지 도착 말풍선을 누르면 플라이아웃의 그 사람 대화(보낸이 모르면 콕 목록 — 맥 CheckApp.swift:192-199 onOpenMessages)
+     * 뒤 바깥 seam. 게임 배선([lateGames])·껍데기([shell])는 오버레이 뒤에 지어진다 — 누를 때 읽는다(클릭은 start 뒤에만 온다).
      */
     internal val overlayPointerOutcome: (PointerOutcome) -> Unit = { o ->
         OverlayWiring.openDuel(o, lateGames?.handle?.windows ?: com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows.None)
+        OverlayWiring.openMessages(o, shell.handle.nav, graph.desktopConfig.poke)
         seams.onOverlayPointer(o)
     }
 
@@ -447,6 +450,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             selfUserId = { sessionStore.session?.userID },
             updateVersions = OverlayWiring.updateVersions(flow { emitAll(shell.handle.updateChecker.state) }),
             displayChanges = seams.displayChanges,
+            // 대결 말풍선은 띄우기 직전 스토어 사실(받은 신청·창 보임·지금 판)을 읽는다 — 창을 연 뒤·판이 끝난 뒤 대기 차례 말풍선 0(맥 :1393).
+            duelFacts = OverlayDuelFacts.from(gomoku, chess, tetris),
         ),
         // 실물 표면이 있으면 sink·presenter·board 를 표면 것으로 바꾼다(seams 값은 Windows 밖 대체값).
         overlaySurfaces,

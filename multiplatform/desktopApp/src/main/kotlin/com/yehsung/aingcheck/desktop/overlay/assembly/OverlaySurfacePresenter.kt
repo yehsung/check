@@ -120,12 +120,25 @@ class OverlaySurfacePresenter(
             if (shown) { port.hide(); shown = false }
             return
         }
+        syncClickThrough(clickThroughFor(view))
         if (view.renderSuspended) return
         val frame = frameDip ?: return
         val scale = port.dpiScale()
         val px = OverlayFramePlacement.toPx(frame, scale)
         val composed = composer.compose(view, px.width, px.height, scale, now)
         if (port.present(composed, px.x, px.y)) shown = true
+    }
+
+    companion object {
+        /**
+         * 창 전체 클릭 통과인가. 울트라 덮개(맥 :817-822 — 격발 중 몸 판정 거짓) 그리고 **근무 중이 아닌 표시**(엿보기·작별 인사):
+         * 맥은 `shouldBeVisible` 이 거짓이면 클릭 통과 문을 열지 않는다(CheckOverlayWindow.swift:729 updateHitThrough 가드 ·
+         * :2224 패널 기본 ignoresMouseEvents=true · :720 숨김 때 되돌림) — 엿보기 캐릭터·말풍선 위 클릭은 아래 창으로 간다.
+         * handleClick(:954)도 같은 가드라 엿보기 중 대결·도착 말풍선 클릭은 아무것도 열지 않는다(엔진 OverlayDirector.handleClick 와 같다).
+         * 알파 판정만 두면 엿보기 그림 위 클릭을 우리 창이 삼킨다(아무 일도 없이 아래 앱도 못 받음) — 그래서 여기서 통과시킨다.
+         */
+        fun clickThroughFor(view: OverlayView): Boolean =
+            view.frame is FrameIntent.UltraCover || view.mode == OverlayMode.Peek || view.mode == OverlayMode.Farewell
     }
 
     /** 끌기(엔진이 조인 새 왼쪽 위, DIP) — 내용은 두고 자리만. 자리 저장은 OverlayWiring 이 한다. */
@@ -138,15 +151,16 @@ class OverlaySurfacePresenter(
         port.moveTo(px.x, px.y)
     }
 
+    private fun syncClickThrough(through: Boolean) {
+        if (through == clickThrough) return
+        port.setClickThrough(through)
+        clickThrough = through
+    }
+
     private fun apply(intent: FrameIntent) {
         val monitors = port.monitors()
         feedback?.onMonitors(monitors)
         val rect = OverlayFramePlacement.resolve(intent, frameDip, savedPlacement(), monitors)
-        val through = intent is FrameIntent.UltraCover
-        if (through != clickThrough) {
-            port.setClickThrough(through)
-            clickThrough = through
-        }
         frameDip = rect
         feedback?.onSurfaceFrame(rect)
         appliedSeq = intent.seq

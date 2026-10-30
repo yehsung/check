@@ -22,6 +22,8 @@ class OverlayDirector(
     private val inbox: MessageBubbleInbox = MessageBubbleInbox.Empty,
     private val board: BoardHost = BoardHost.None,
     private val random: Random = Random.Default,
+    /** 대결 사실 실시간 공급(맥 :1297·:1393 — 스토어를 띄우기 직전에 읽는다). None 이면 lane 의 자기 사실. */
+    private val duelFacts: DuelFactsSource = DuelFactsSource.None,
 ) : OverlayInputs {
 
     enum class EngineState { IDLE, PLAYING, SLEEPING }
@@ -535,7 +537,7 @@ class OverlayDirector(
     /** 규약 10 — 만료·살아 있지 않은 신청은 거른 뒤, 못 띄우면 큐에 남긴다. */
     fun showNextInvite(game: DuelGame, now: Double): Boolean {
         val lane = duels.getValue(game)
-        val alive = lane.facts.aliveInviteIds
+        val alive = factsFor(game, lane).aliveInviteIds
         lane.invites.removeAll { it.expiresAt <= now || it.id !in alive }
         val invite = lane.invites.firstOrNull() ?: return false
         if (ultraActive || bubbleActive(now)) return false
@@ -552,7 +554,7 @@ class OverlayDirector(
     fun showPendingAttention(game: DuelGame, now: Double): Boolean {
         val lane = duels.getValue(game)
         val attention = lane.pendingAttention ?: return false
-        if (!attentionIsCurrent(attention, lane.facts)) { lane.pendingAttention = null; return false }
+        if (!attentionIsCurrent(attention, factsFor(game, lane))) { lane.pendingAttention = null; return false }
         if (ultraActive || bubbleActive(now)) return false
         if (state(now) == EngineState.PLAYING) return false
         val text = BubbleForm.duelAttentionText(attention, measure)
@@ -563,6 +565,9 @@ class OverlayDirector(
         lane.pendingAttention = null
         return true
     }
+
+    /** 띄우기 직전 사실 — 공급자가 있으면 스토어 지금 값(맥 :1297 `store.gomoku.incoming` · :1394 `gomoku.isWindowVisible`·`match`), 없으면 lane 의 사실. */
+    private fun factsFor(game: DuelGame, lane: DuelLane): DuelFacts = duelFacts.facts(game) ?: lane.facts
 
     /** 맥 gomokuAttentionIsCurrent(:1393) — 창이 닫혀 있고 같은 판·안 끝남·내 차례·같은 수. 테트리스는 차례가 없다. */
     private fun attentionIsCurrent(a: DuelAttention, facts: DuelFacts): Boolean {

@@ -9,6 +9,12 @@
 // int-w2(W5-b4 notes): 화면 쪽 한 벌([OverlaySurfaces] — 구운 재생기·레이어드 창·할 일 보드 외양)을 생성자에서 받아 sink·presenter·board 를 갈아 끼우고
 // 엔진·포인터를 묶는다(종료 때 [stop] 이 엔진을 내린 **뒤** 창을 닫는다). 받은 메시지 말풍선 큐([bubbles])는 이 배선이 만들어 소셜에 넘긴다
 // (W-3 #6 — 같은 사건은 한 표면만). 계정 전환([OverlayWiringDeps.accountIds]) · 설정 할 일 보드([OverlayWiringDeps.todoBoard]) 를 스스로 본다.
+//
+// int-w3(W-14 #4): ① 셸 알림 → 말풍선 문([shellBubble] — 보였으면 true, 그때 셸은 풍선을 띄우지 않는다) ② 공급 자리 셋 — 팀 소식
+// ([OverlayWiringDeps.teamStatuses], 맥 WorkTimerStoreSync.swift:362-367 detectTeamReactions → "○○님 출근!") · 새 버전
+// ([OverlayWiringDeps.updateVersions], 맥 CheckApp.swift:214 onNewVersionAvailable → showUpdateBubbleIfNeeded) · 대결 신청
+// ([onDuelInvite], 맥 CheckApp.swift:359·401·437 onInviteArrived → enqueue…Invite) ③ 화면 바뀜([OverlayWiringDeps.displayChanges] →
+// [onDisplayChanged] — 모니터를 다시 읽어 자리를 조인다).
 package com.yehsung.aingcheck.desktop.wiring
 
 import com.yehsung.aingcheck.core.foundation.platform.MonotonicClock
@@ -18,6 +24,8 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.Registration
 import com.yehsung.aingcheck.core.foundation.platform.desktop.SessionEvent
 import com.yehsung.aingcheck.core.foundation.platform.desktop.SessionEvents
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.models.TeamMemberStatus
+import com.yehsung.aingcheck.core.wire.models.WorkStatus
 import com.yehsung.aingcheck.desktop.overlay.engine.BoardHost
 import com.yehsung.aingcheck.desktop.overlay.engine.BubbleTextMeasure
 import com.yehsung.aingcheck.desktop.overlay.engine.CharacterSink
@@ -40,7 +48,13 @@ import com.yehsung.aingcheck.desktop.overlay.surface.OverlaySurfaceListener
 import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardAppearance
 import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardController
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.TodoBoardSetting
+import com.yehsung.aingcheck.desktop.platform.windows.display.DisplayChangeSource
+import com.yehsung.aingcheck.desktop.shell.notify.ShellNotice
+import com.yehsung.aingcheck.desktop.shellapi.DesktopUpdateState
+import com.yehsung.aingcheck.desktop.shellapi.NotifyKind
 import com.yehsung.aingcheck.desktop.shellapi.OverlayAvailability
+import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
+import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.poke.DesktopMessageBubbleQueue
@@ -57,12 +71,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.games.gomoku.BoardGameMe
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 import kotlin.time.Clock
 
@@ -119,6 +136,20 @@ data class OverlayWiringDeps(
     val onPointerOutcome: (PointerOutcome) -> Unit = {},
     val random: Random = Random.Default,
     val tickMillis: Long = OverlayWiring.DEFAULT_TICK_MILLIS,
+    /**
+     * 팀 목록(`work.teamStatuses`). 값이 올 때마다 엔진 onTeam — 출근 전이(offWork→working)만 "○○님 출근!"(첫 값은 시드만 · 자기 제외 ·
+     * 멤버당 10분 — 맥 TeammateGreetingDetector, CheckOverlayReactions.swift:133-165 · 부르는 자리 WorkTimerStoreSync.swift:362-367).
+     */
+    val teamStatuses: Flow<List<TeamMemberStatus>> = emptyFlow(),
+    /** 내 user id(`{ sessionStore.session?.userID }`) — 인사에서 나를 뺀다. */
+    val selfUserId: () -> String? = { null },
+    /**
+     * 새 버전(`OverlayWiring.updateVersions(shell.handle.updateChecker.state)`). 받은 순간 말풍선을 시도하고(맥 CheckApp.swift:214),
+     * 못 띄우면 졸기 주기가 버전당 1회를 챙긴다(맥 :206-207 · CheckOverlayWindow.swift:1062). 스토어 판(업데이트를 스토어가 하는 빌드)은 비운다(맥 :212 `#if !CHECK_MAS`).
+     */
+    val updateVersions: Flow<String> = emptyFlow(),
+    /** 화면 구성 바뀜(Windows = `Win32DisplayChangeSource.on(platform.messageThread)`). null 이면 다음 시작 때만 자리를 다시 잡는다. */
+    val displayChanges: DisplayChangeSource? = null,
 )
 
 /**
@@ -146,6 +177,29 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
                 last = serial
             }
         }
+
+        /** 셸 글만 온 말풍선(구조 신청 없이 온 대결 신청 알림)을 기다려 주는 시간(초) — 맥 대결 신청 TTL 60초와 같다. */
+        const val NOTICE_TTL_S = 60.0
+
+        /** 팀 목록 → 엔진 입력. 맥 감지기는 status(offWork/working)만 본다(presence 의 낡음 판정은 인사에 쓰지 않는다 — CheckOverlayReactions.swift:146-160). */
+        fun teamPresence(members: List<TeamMemberStatus>): List<TeamPresence> =
+            members.map { TeamPresence(it.id, it.name, it.status == WorkStatus.working) }
+
+        /** 업데이트 상태 → 새 버전 이름(새 빌드가 있을 때만, 같은 버전 되풀이는 한 번). */
+        fun updateVersions(states: Flow<DesktopUpdateState>): Flow<String> =
+            states.mapNotNull { s -> s.latestVersion?.takeIf { s.updateAvailable && it.isNotBlank() } }.distinctUntilChanged()
+
+        /** 셸이 같은 신청에 싣는 글(DuelInviteNotice.body — 맥 :1268·:1424·:1565 문장) — 구조 신청과 셸 알림을 짝짓는 열쇠. */
+        fun duelNoticeBody(game: DuelGame, peerName: String, stake: Int): String =
+            DuelInviteNotice(
+                when (game) {
+                    DuelGame.GOMOKU -> GameWindowKind.Gomoku
+                    DuelGame.CHESS -> GameWindowKind.Chess
+                    DuelGame.TETRIS -> GameWindowKind.TetrisDuel
+                },
+                peerName,
+                stake.toLong(),
+            ).body
 
         /** 게임 화면의 '나'(GamesDeps.boardMe) — 표정은 맥 CheckMascotAssets.mood(for:)(:73-75): 근무 중 Working, 아니면 Off. */
         fun boardMe(name: String?, characterId: String?, isWorking: Boolean): BoardGameMe =
@@ -187,6 +241,14 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
         private set
 
     private var surfacesClosed = false
+    @Volatile private var stopped = false
+    /** 구조 신청(onDuelInvite)이 이미 엔진 큐에 넣은 신청의 셸 글 → 만료(벽시계 초). 셸 문이 같은 글을 받으면 두 번 띄우지 않는다. */
+    private val claimedDuelNotices = ConcurrentHashMap<String, Double>()
+    /** 셸 글만 온 말풍선 대기열(엔진 실행기에서만 만진다). */
+    private val pendingNotices = ArrayDeque<PendingNotice>()
+    @Volatile private var latestUpdateVersion: String? = null
+
+    private class PendingNotice(val text: String, val expiresAt: Double)
     private var appearanceListener: (() -> Unit)? = null
     @Volatile private var applyingBoardSetting = false
 
@@ -213,15 +275,49 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
     /** 계정 전환·로그아웃 — 인사 기억·대결 큐를 비우고 보드를 새 계정으로. */
     fun onAccountChanged() = post { _ ->
         director.onSignedOut()
+        pendingNotices.clear()
+        claimedDuelNotices.clear()
         (deps.board as? TodoBoardController)?.resetForAccountSwitch()
     }
 
     /** 설정의 할 일 켜짐이 바뀌었다(W5-b3 P3). */
     fun onBoardEnabledChanged() = post { _ -> (deps.board as? TodoBoardController)?.enabledDidChange() }
 
-    /** WM_DISPLAYCHANGE·배율 변경(W5-b4 notes). */
-    fun onDisplayChanged() {
-        surfaces?.onDisplayChanged()
+    /**
+     * WM_DISPLAYCHANGE·배율·작업 영역 변경(W5-b4 notes). 메시지 스레드에서 와도 엔진 실행기에서 적용한다 — 발표자가 다음 그림 전에
+     * 모니터를 다시 읽고 자리를 조인 뒤 엔진에 onMonitors 를 되먹인다(그리기와 같은 줄이라 섞이지 않는다).
+     */
+    fun onDisplayChanged() = post { _ -> surfaces?.onDisplayChanged() }
+
+    /** 셸 알림 문(ShellDeps.bubble). [showShellNotice] 그대로. */
+    val shellBubble: (ShellNotice) -> Boolean = { showShellNotice(it) }
+
+    /**
+     * 셸 알림 하나를 말풍선으로 받을까(W-14 #4 · W-3 #6 — 같은 사건은 한 표면만: 말풍선 > 토스트 > 점). true = 오버레이가 맡았다
+     * (지금 띄웠거나, 맥처럼 못 띄우면 큐가 기다린다) → 셸은 풍선을 띄우지 않는다. false = 셸이 토스트로.
+     * - 캐릭터를 끈 사용자(overlayEnabled=false)·stop 뒤 → false(그때만 토스트 — W-3 #6).
+     * - DUEL_INVITE: duels 깃발 꺼짐 → false(W-3 #7). 구조 신청([onDuelInvite])이 같은 글로 이미 들어왔으면 true(그 큐가 띄운다 —
+     *   누르면 그 판). 아니면 글 그대로 말풍선 대기열에 넣고 true(60초 안에 띄운다).
+     * - POKE: poke 깃발이 켜졌을 때만 — 받은 찌르기는 receivedPokeSink 길(엔진 onPokes)이 띄운다.
+     * - MESSAGE: 같은 인스턴스 [bubbles] 큐에 있을 때만(소셜이 쌓고 엔진이 띄운다 — 규약 10).
+     * - UPDATE: 새 버전 공급이 버전을 알려 줬을 때만(엔진이 버전당 1회 — 맥은 업데이트를 토스트로 알리지 않는다).
+     */
+    fun showShellNotice(notice: ShellNotice): Boolean {
+        if (stopped || !deps.overlayEnabled.value) return false
+        return when (notice.kind) {
+            NotifyKind.DUEL_INVITE -> {
+                if (!deps.desktopConfig.duels) return false
+                val claimedUntil = claimedDuelNotices.remove(notice.body)
+                if (claimedUntil == null || claimedUntil <= wallSeconds()) {
+                    val text = notice.body
+                    post { now -> pendingNotices.addLast(PendingNotice(text, now + NOTICE_TTL_S)) }
+                }
+                true
+            }
+            NotifyKind.POKE -> deps.desktopConfig.poke
+            NotifyKind.MESSAGE -> bubbles.current != null
+            NotifyKind.UPDATE -> latestUpdateVersion != null
+        }
     }
 
     /** 게임 화면의 '나' — 지금 근무 스냅숏으로 표정을 정한다(GamesDeps.boardMe = { overlay.boardMe(me.displayName, me.equippedServerID) }). */
@@ -231,7 +327,10 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
     /** 대결 신청 도착. duels=false 면 안내 0(W-3 #7). [expiresAt] 은 벽시계 — 단조 초로 바꿔 넣는다. */
     fun onDuelInvite(game: DuelGame, id: String, peerName: String, stake: Int, expiresAt: SwiftDate) {
         if (!deps.desktopConfig.duels) return
-        val remaining = expiresAt.timeIntervalSince1970 - wallSeconds()
+        val wall = wallSeconds()
+        val remaining = expiresAt.timeIntervalSince1970 - wall
+        claimedDuelNotices.entries.removeIf { it.value <= wall }
+        claimedDuelNotices[duelNoticeBody(game, peerName, stake)] = expiresAt.timeIntervalSince1970
         post { now -> director.enqueueDuelInvite(DuelInvite(game, id, peerName, stake, now + remaining), now) }
     }
 
@@ -264,6 +363,7 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
                 post { now -> director.onRenderSuspend(RenderSuspendReason.SCREENS_ASLEEP, e == PowerEvent.SLEEP, now) }
             }
         }
+        deps.displayChanges?.let { d -> registrations += d.addListener { onDisplayChanged() } }
         deps.session?.let { s ->
             registrations += s.addListener { e ->
                 val (reason, suspended) = when (e) {
@@ -282,6 +382,19 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
                     .collect { (working, enabled, origin) -> post { now -> director.onWorking(working, enabled, now, origin) } }
             }
             launch { bubbles.queue.collect { post { now -> director.onMessagesChanged(now) } } }
+            launch {
+                deps.teamStatuses.collect { members ->
+                    val presence = teamPresence(members)
+                    val self = deps.selfUserId()
+                    post { now -> director.onTeam(presence, self, now) }
+                }
+            }
+            launch {
+                deps.updateVersions.collect { version ->
+                    latestUpdateVersion = version
+                    post { now -> director.onUpdateAvailable(version, now) }
+                }
+            }
             launch { deps.weeklyRubyGrants.collect { ruby -> post { now -> director.onReward(ReactionKind.RubyReward(ruby.toInt()), now) } } }
             launch {
                 var known: String? = null
@@ -323,6 +436,7 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
 
     /** 종료 훅 한 자리(W5-b4: overlay.stop → surfaces.close → tray.remove). 엔진·구독을 먼저 내리고 창은 그 **뒤**에 닫는다 — 다시 start 하지 않는다. */
     fun stop() {
+        stopped = true
         registrations.forEach { runCatching { it.close() } }
         registrations.clear()
         appearanceListener?.let { runCatching { it() } }
@@ -348,8 +462,16 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
             director.reconcileStaleRenderSuspension(deps.consoleSessionUsable(), now)
         }
         director.tick(now)
+        pumpNotices(now)
         deps.presenter.present(director.view(now), now)
         framesPresented += 1
+    }
+
+    /** 셸 글 말풍선 — 만료는 버리고, 맨 앞을 띄울 수 있을 때 띄운다(못 띄우면 다음 틱). */
+    private fun pumpNotices(now: Double) {
+        while (pendingNotices.isNotEmpty() && pendingNotices.first().expiresAt <= now) pendingNotices.removeFirst()
+        val head = pendingNotices.firstOrNull() ?: return
+        if (director.showNoticeBubble(head.text, now)) pendingNotices.removeFirst()
     }
 
     private fun afterCommand(now: Double) {

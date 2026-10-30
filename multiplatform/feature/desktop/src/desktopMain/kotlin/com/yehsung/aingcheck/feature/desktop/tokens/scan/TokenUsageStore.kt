@@ -29,7 +29,8 @@ class TokenUsageStore(
     private val keyValueStore: DesktopKeyValueStore,
     /** 캐시 파일 기준 경로(…/token-usage-cache.json). null 이면 메모리에만(시험). */
     private val cacheBase: Path?,
-    private val clock: () -> SwiftDate = { SwiftDate(System.currentTimeMillis() / 1000.0) },
+    /** 벽시계는 조립 지점(desktopApp main)이 준다 — 구조 규칙 R2(조립 밖 벽시계 금지). */
+    private val clock: () -> SwiftDate,
     private val isScanPermitted: () -> Boolean = { true },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {

@@ -12,8 +12,12 @@ import os
 // 번갈아 돌리고, 전역 단축키 하나에 근무가 두 번 토글되고, 한 계정이 두 프로세스로 1:1 대결에 들어갈 수 있다.
 //
 //  · 판정(`SingleInstanceGuard.decide`)은 순수 함수다. 남을 자격 순서: **설치된 자리 > 읽기 전용·임시 자리**(DMG · App Translocation —
-//    업데이트 실행기와 같은 규칙 `UpdateRunner.isReadOnlyLocation`), 그다음 **먼저 뜬 쪽**, 같으면 **pid 가 작은 쪽**. 실행 시각을
-//    모르는 프로세스가 하나라도 있으면 pid 로만 줄 세운다. 양쪽이 같은 목록으로 같은 규칙을 쓰니 동시에 떠도 정확히 하나가 남는다.
+//    업데이트 실행기와 같은 규칙 `UpdateRunner.isReadOnlyLocation`), 그다음 **더 새 빌드**(`CFBundleVersion` 정수), 그다음 **먼저 뜬
+//    쪽**, 같으면 **pid 가 작은 쪽**. 실행 시각을 모르는 프로세스가 하나라도 있으면 시각 대신 pid 로 줄 세운다. 양쪽이 같은 목록으로 같은
+//    규칙을 쓰니 동시에 떠도 정확히 하나가 남는다.
+//  · 더 새 빌드가 앞서는 까닭(2026-10-30 사용자 결정): 정식판이 켜진 채 시험판(더 새 빌드)을 띄우면 **시험판이 남고 정식판이 정리돼야**
+//    한다. 먼저 뜬 쪽만 보면 시험판이 뜨자마자 꺼진다. 나중에 뜬 내가 더 새 빌드면 옛 빌드를 교체(`.replace`)한다 — 0.3.68 이하는 이
+//    장치가 없지만 SIGTERM 을 평소 종료로 받으니 새 빌드 쪽 판정만으로 정리된다. 빌드가 같으면(정식판 둘) 예전처럼 먼저 뜬 쪽이다.
 //  · 결정은 **델리게이트가 만들어지는 순간**이다(`SingleInstanceState.live()` — 물러남 판정과 같은 때). 메뉴바 아이콘이 첫 렌더부터
 //    이 값을 읽는다. 아이콘은 **양보·교체를 기다리는 동안에만** 빠지고, 남기로 정해지면 들어간다 — 아이콘 없이 도는 프로세스를
 //    남기지 않는다(판정문 A).
@@ -46,6 +50,8 @@ enum SingleInstanceGuard {
         /// 번들 자리(심링크를 걷은 곳 — `/Volumes/Macintosh HD/…` 는 `/…` 로 읽힌다).
         var bundlePath: String
         var isTerminated: Bool
+        /// 빌드 번호(`CFBundleVersion`). 읽지 못하면 nil — 그러면 빌드로 가르지 않는다(실행 시각으로 내려간다).
+        var build: Int? = nil
     }
 
     enum Decision: Equatable, Sendable {
@@ -53,7 +59,7 @@ enum SingleInstanceGuard {
         case proceed
         /// 먼저 남을 자격이 있는 프로세스가 있다 — 그쪽 팝오버를 열고 나는 끝난다.
         case deferTo(pid_t)
-        /// 읽기 전용·임시 자리의 사본이 떠 있고 나는 설치된 자리다 — 그쪽을 끝내고 내가 남는다.
+        /// 내가 남을 자격이 앞서는데 읽기 전용·임시 자리의 사본이나 더 옛 빌드가 떠 있다 — 그쪽을 끝내고 내가 남는다.
         case replace(pid_t)
     }
 
@@ -108,20 +114,43 @@ enum SingleInstanceGuard {
         guard let winner = ordered.first, winner.pid == me.pid else {
             return .deferTo(ordered[0].pid)
         }
-        // 내가 남을 자격이 가장 앞이다. 읽기 전용 자리 사본이 떠 있으면 그쪽을 끝낸다(가장 앞선 것부터 — 나머지는 다음 회차).
-        if let temporary = ordered.first(where: { $0.pid != me.pid && isTemporaryLocation($0.bundlePath) }) {
-            return .replace(temporary.pid)
+        // 내가 남을 자격이 가장 앞이다. 읽기 전용 자리 사본이나 더 옛 빌드가 떠 있으면 그쪽을 끝낸다(가장 앞선 것부터 — 나머지는
+        // 다음 회차). 같은 빌드의 설치본은 끝내지 않는다 — 동시에 뜬 경우라 그쪽이 같은 규칙으로 스스로 양보한다.
+        if let target = ordered.first(where: {
+            $0.pid != me.pid && (isTemporaryLocation($0.bundlePath) || isOlderBuild($0, than: me))
+        }) {
+            return .replace(target.pid)
         }
         return .proceed
     }
 
-    /// `a` 가 `b` 보다 남을 자격이 앞서는가 — 설치된 자리 > 임시 자리, 그다음 먼저 뜬 쪽, 같으면 pid 가 작은 쪽.
+    /// `a` 가 `b` 보다 남을 자격이 앞서는가 — 설치된 자리 > 임시 자리, 그다음 더 새 빌드, 그다음 먼저 뜬 쪽, 같으면 pid 가 작은 쪽.
     static func precedes(_ a: Instance, _ b: Instance, byPIDOnly: Bool) -> Bool {
         let aTemporary = isTemporaryLocation(a.bundlePath)
         let bTemporary = isTemporaryLocation(b.bundlePath)
         if aTemporary != bTemporary { return !aTemporary }
+        if let aBuild = a.build, let bBuild = b.build, aBuild != bBuild { return aBuild > bBuild }
         if !byPIDOnly, let aDate = a.launchDate, let bDate = b.launchDate, aDate != bDate { return aDate < bDate }
         return a.pid < b.pid
+    }
+
+    /// `instance` 가 `me` 보다 옛 빌드인가 — 둘 다 빌드를 알 때만 참이다.
+    static func isOlderBuild(_ instance: Instance, than me: Instance) -> Bool {
+        guard let theirs = instance.build, let mine = me.build else { return false }
+        return theirs < mine
+    }
+
+    /// `CFBundleVersion` 값을 정수로. 정수가 아니면(빈 값 · `1.2` 같은 모양) nil — 빌드로 가르지 않는다.
+    static func buildNumber(_ value: Any?) -> Int? {
+        guard let text = value as? String else { return nil }
+        return Int(text.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// 다른 실행의 빌드 번호 — 그 번들의 `Info.plist` 를 디스크에서 바로 읽는다(`Bundle(url:)` 은 프로세스 안에 캐시된다).
+    static func bundleBuild(at bundleURL: URL) -> Int? {
+        let plist = bundleURL.appendingPathComponent("Contents/Info.plist")
+        guard let info = NSDictionary(contentsOf: plist) else { return nil }
+        return buildNumber(info["CFBundleVersion"])
     }
 
     // MARK: 실제 실행의 사실
@@ -141,7 +170,9 @@ enum SingleInstanceGuard {
             pid: current.processIdentifier,
             launchDate: current.launchDate,
             bundlePath: resolvedPath(Bundle.main.bundleURL),
-            isTerminated: false
+            isTerminated: false,
+            // 나는 디스크가 아니라 **실행 중인 판**의 값 — 같은 자리가 새 판으로 덮였어도 지금 도는 빌드다.
+            build: buildNumber(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion"))
         )
         guard let identifier = Bundle.main.bundleIdentifier else { return Snapshot(me: me, others: []) }
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: identifier).map { app in
@@ -149,7 +180,8 @@ enum SingleInstanceGuard {
                 pid: app.processIdentifier,
                 launchDate: app.launchDate,
                 bundlePath: app.bundleURL.map(resolvedPath) ?? "",
-                isTerminated: app.isTerminated
+                isTerminated: app.isTerminated,
+                build: app.bundleURL.flatMap(bundleBuild(at:))
             )
         }
         return Snapshot(me: me, others: others)

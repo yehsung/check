@@ -11,7 +11,8 @@ import Testing
 // 자동으로 로그인 되는 것도 아님)". LaunchServices 는 사본 경로로 실행을 합쳐서, DMG 안 사본과 `/Applications` 사본(또는 `open -n`)은
 // 프로세스 둘이 된다. 이 스위트가 재는 것:
 //  ① 판정(`SingleInstanceGuard.decide`) — 갈래마다: 먼저 뜬 쪽에 양보 · 동시 실행에서 정확히 하나 · 물러남 재실행 인자 · 끝난 프로세스만 ·
-//     탈출구 · 읽기 전용 자리 사본 교체 · 내가 읽기 전용 자리면 양보 · 실행 시각을 모르면 pid 순.
+//     탈출구 · 읽기 전용 자리 사본 교체 · 내가 읽기 전용 자리면 양보 · 실행 시각을 모르면 pid 순 · 더 새 빌드(시험판)가 남고 옛 빌드를
+//     교체(2026-10-30 사용자 결정) · 빌드가 같거나 모르면 먼저 뜬 쪽 · 자리 규칙이 빌드보다 먼저.
 //  ② 실제 실행의 조립(`SingleInstanceState.live`)을 가짜 프로세스 목록으로 **그대로** 부른다 — 테스트 프로세스는 언제나 남는다.
 //  ③ 상태와 실행(`resolve`) — 가짜 효과로: 기다리는 동안만 아이콘이 빠지고 남으면 들어간다(판정문 A) · 상대가 끝나면 남는다(B) ·
 //     교체를 거절하면 양보로 떨어진다(C) · 종료가 시작된 실행은 답하지 않는다(B) · 다시 열기는 남은 뒤 유예가 지나야 연다.
@@ -136,6 +137,64 @@ struct SingleInstanceGuardTests {
         let unknown = sigInstance(60, at: nil)
         #expect(sigDecide(me: early, others: [unknown]) == .deferTo(60))
         #expect(sigDecide(me: unknown, others: [early]) == .proceed)
+    }
+
+    @Test func 정식판이_켜진_채_더_새_빌드의_시험판을_띄우면_시험판이_남고_정식판을_끝낸다() {
+        // 2026-10-30 맥 미니 실측 그대로: `/Applications` 0.3.68(121, 13:47) + 워크트리 dist 시험판 0.3.69(122, 14:30).
+        let installed = sigInstance(89695, at: 0, path: "/Applications/aing-check.app", build: 121)
+        let trial = sigInstance(91115, at: 2580, path: "/Users/u/check/.claude/worktrees/v-rummy-try/dist/aing-check.app", build: 122)
+        #expect(sigDecide(me: trial, others: [installed, trial]) == .replace(89695))
+        // 비교 기준선: 빌드를 모르면 예전 규칙(먼저 뜬 쪽)이라 시험판이 뜨자마자 양보해 꺼진다 — 빌드 칸이 결과를 가른다.
+        var unknownTrial = trial; unknownTrial.build = nil
+        #expect(sigDecide(me: unknownTrial, others: [installed, unknownTrial]) == .deferTo(89695))
+        // 같은 그림을 정식판 쪽에서 봐도 시험판이 남는다(양쪽이 같은 하나를 고른다 — 0.3.69 이후 정식판끼리).
+        #expect(sigDecide(me: installed, others: [installed, trial]) == .deferTo(91115))
+    }
+
+    @Test func 옛_빌드를_나중에_띄우면_떠_있는_새_빌드에_양보한다() {
+        let newer = sigInstance(100, at: 0, path: "/Users/u/dev/aing-check.app", build: 122)
+        let older = sigInstance(200, at: 5, path: "/Applications/aing-check.app", build: 121)
+        #expect(sigDecide(me: older, others: [newer, older]) == .deferTo(100))
+        #expect(sigDecide(me: newer, others: [newer, older]) == .replace(200))
+    }
+
+    @Test func 빌드가_같거나_한쪽을_모르면_먼저_뜬_쪽이다() {
+        let first = sigInstance(100, at: 0, path: "/Applications/aing-check.app", build: 122)
+        let second = sigInstance(200, at: 5, path: "/Users/u/Applications/aing-check.app", build: 122)
+        #expect(sigDecide(me: second, others: [first]) == .deferTo(100))
+        // 같은 빌드의 설치본은 교체 대상이 아니다 — 동시에 뜬 경우라 그쪽이 스스로 양보한다.
+        #expect(sigDecide(me: first, others: [second]) == .proceed)
+        let unknown = sigInstance(100, at: 0, path: "/Applications/aing-check.app", build: nil)
+        let newerLate = sigInstance(200, at: 5, path: "/Users/u/Applications/aing-check.app", build: 130)
+        #expect(sigDecide(me: newerLate, others: [unknown]) == .deferTo(100))
+        #expect(sigDecide(me: unknown, others: [newerLate]) == .proceed)
+    }
+
+    @Test func 읽기_전용_자리는_더_새_빌드여도_설치본에_진다() {
+        // 새 DMG 를 받아 창 안에서 바로 연 경우 — DMG 사본이 남으면 업데이트가 막히고 디스크 이미지를 꺼낼 수 없다(자리 규칙이 먼저).
+        let installed = sigInstance(100, at: 0, path: "/Applications/aing-check.app", build: 121)
+        let dmg = sigInstance(200, at: 5, path: "/Volumes/aing-check/aing-check.app", build: 122)
+        #expect(sigDecide(me: dmg, others: [installed]) == .deferTo(100))
+        #expect(sigDecide(me: installed, others: [dmg]) == .replace(200))
+    }
+
+    @Test func 빌드_번호는_Info_plist_의_정수만_읽는다() throws {
+        #expect(SingleInstanceGuard.buildNumber("122") == 122)
+        #expect(SingleInstanceGuard.buildNumber(" 7 ") == 7)
+        #expect(SingleInstanceGuard.buildNumber("1.2") == nil)
+        #expect(SingleInstanceGuard.buildNumber("") == nil)
+        #expect(SingleInstanceGuard.buildNumber(122) == nil, "plist 의 CFBundleVersion 은 문자열이다")
+        #expect(SingleInstanceGuard.buildNumber(nil) == nil)
+        // 디스크의 번들 — 다른 실행의 빌드는 그 번들의 Info.plist 에서 읽는다.
+        let bundle = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sig-build-\(UUID().uuidString)/aing-check.app")
+        let contents = bundle.appendingPathComponent("Contents")
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: bundle.deletingLastPathComponent()) }
+        #expect(SingleInstanceGuard.bundleBuild(at: bundle) == nil, "Info.plist 가 없으면 nil")
+        let info: NSDictionary = ["CFBundleVersion": "122", "CFBundleShortVersionString": "0.3.69"]
+        try info.write(to: contents.appendingPathComponent("Info.plist"))
+        #expect(SingleInstanceGuard.bundleBuild(at: bundle) == 122)
     }
 
     @Test func 읽기_전용_자리_판정은_업데이트_실행기와_같은_규칙이다() {
@@ -535,12 +594,13 @@ struct SingleInstanceGuardTests {
 // MARK: - 도우미
 
 private func sigInstance(_ pid: pid_t, at seconds: Double?, path: String = "/Applications/aing-check.app",
-                         terminated: Bool = false) -> SingleInstanceGuard.Instance {
+                         terminated: Bool = false, build: Int? = nil) -> SingleInstanceGuard.Instance {
     SingleInstanceGuard.Instance(
         pid: pid,
         launchDate: seconds.map { Date(timeIntervalSinceReferenceDate: 800_000_000 + $0) },
         bundlePath: path,
-        isTerminated: terminated
+        isTerminated: terminated,
+        build: build
     )
 }
 

@@ -73,10 +73,10 @@ struct CheckApp: App {
             hasGomokuInvite: !appDelegate.store.gomoku.pendingIncomingInvites.isEmpty,
             // v0.3.34: 운영자에게 미해결 신고가 있으면 같은 점. 건수는 서버가 운영자에게만 준다(판정은 여기서 하지 않는다).
             hasOpenReports: appDelegate.store.reportOpenCount > 0,
-            // v0.3.44: 받은 **체스** 신청도 같은 점. 체스 창을 여는 길은 미니게임 머리글 하나뿐이고 체스 폴링은
+            // v0.3.44: 받은 **체스** 신청도 같은 점. 체스 창을 여는 길은 미니게임 창의 문(v0.3.69 부터 사이드바) 하나뿐이고 체스 폴링은
             // 창이 보일 때만 돌아서, 창을 안 연 사람에게 이 점은 신청을 아는 세 표면(점·팝오버 배너·말풍선) 중 하나다.
             hasChessInvite: appDelegate.store.chess.visibleIncoming != nil,
-            // v0.3.60: 받은 **테트리스** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 머리글 하나뿐이고
+            // v0.3.60: 받은 **테트리스** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고
             // 테트리스 폴링은 창이 보일 때만 돈다). 만료는 스토어 타이머가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
             hasTetrisInvite: appDelegate.store.tetris.visibleIncoming != nil,
             // v0.3.69: 받은 **아잉 큐브** 초대도 같은 점(테트리스와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.

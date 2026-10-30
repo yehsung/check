@@ -221,12 +221,12 @@ extension WorkTimerStore {
         CheckMiniGameWindowController.shared.close()
     }
 
-    /// 미니게임 창 머리글의 **1:1 오목** 입구. 오목 창을 띄우고 **이 창은 내린다**(0.3.50 · 2026-10-13 사용자 요청 —
+    /// 미니게임 창 사이드바의 **1:1 오목** 문(v0.3.69 전에는 머리글 입구). 오목 창을 띄우고 **이 창은 내린다**(0.3.50 · 2026-10-13 사용자 요청 —
     /// 로비 창이 뜬 뒤에도 미니게임 창이 남아 창 둘이 떠 있는 것이 지저분했다).
     ///
     /// 순서는 **여는 것이 먼저**다 — 대결 창이 키를 가져간 뒤에 이 창을 내린다(`openMiniGameWindow` 가 창 먼저 ·
     /// 팝오버 나중으로 정한 것과 같은 순서다).
-    /// 이 문은 판이 도는 중에는 화면에 없다(같은 자리를 [일시정지] 가 쓴다) — 정지해 둔 판이 있었다면 여기서 끝난다
+    /// 이 문은 판이 도는 중에는 잠겨 있다(v0.3.69 사이드바 — 그 전에는 같은 자리를 [일시정지] 가 썼다) — 정지해 둔 판이 있었다면 여기서 끝난다
     /// (`closeMiniGamePanel()` 이 interruptToken 을 올린다). 0.3.62 전에는 대결 창이 키를 가져가는 순간
     /// `windowDidResignKey` 가 이미 판을 끝냈으니 결과가 같았지만, 지금 키 상실은 **멈추기만** 한다 —
     /// 그래서 여기서 판이 끝나는 이유는 이제 **창 닫힘** 하나다.
@@ -235,19 +235,19 @@ extension WorkTimerStore {
         closeMiniGamePanel()
     }
 
-    /// 미니게임 창 머리글의 **1:1 체스** 입구. 위와 같은 규약이다.
+    /// 미니게임 창 사이드바의 **1:1 체스** 문. 위와 같은 규약이다.
     func openChessFromMiniGame() {
         chess.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
     }
 
-    /// 미니게임 창 머리글의 **1:1 테트리스** 입구(v0.3.60). 위와 같은 규약이다 — 대결 창을 **먼저** 띄우고 이 창은 나중에 내린다.
+    /// 미니게임 창 사이드바의 **1:1 테트리스** 문(v0.3.60). 위와 같은 규약이다 — 대결 창을 **먼저** 띄우고 이 창은 나중에 내린다.
     func openTetrisDuelFromMiniGame() {
         tetris.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
     }
 
-    /// 미니게임 창 머리글의 **아잉 큐브** 입구(v0.3.69). 위와 같은 규약이다 — 큐브 창을 **먼저** 띄우고 이 창은 나중에 내린다.
+    /// 미니게임 창 사이드바의 **아잉 큐브** 문(v0.3.69). 위와 같은 규약이다 — 큐브 창을 **먼저** 띄우고 이 창은 나중에 내린다.
     func openRummyFromMiniGame() {
         rummy.openWindow(focusMatchID: nil)
         closeMiniGamePanel()

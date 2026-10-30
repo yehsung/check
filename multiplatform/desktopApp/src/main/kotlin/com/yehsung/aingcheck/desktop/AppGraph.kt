@@ -598,6 +598,15 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         pokeDirectoryReload = { pages.pokeListPage?.model?.directory?.load() }
         // 로그아웃·계정 전환: 콕 디렉터리 비우기(c3 notes) + 울트라 고른 것 풀기(W-14 #5).
         social.addSignedOutListener { pages.onSignedOut() }
+        // 1:1 게임도 계정에 묶인 상태다(맥 WorkTimerStore.swift:4120-4126 로그아웃 · :4265-4267 adoptWorkStateOwner ·
+        // 폰 PhoneAppModel.kt sessionDidSignOut). 계정 전환(A → B 직행)도 SocialWiring 이 onSignedOut → onSignedIn 으로
+        // 펼치므로 이 한 곳이다. 남기면 다음 사람이 앞 사람의 판·신청을 보고, 앞 사람의 판 구동기가 새 세션의 토큰으로 보고를 낸다.
+        // '이 기기가 연 판' 기록은 사용자별 키라 reset 이 건드리지 않는다. 따로 건다 — 앞 리스너가 던져도 판은 내린다.
+        social.addSignedOutListener {
+            gomoku.reset()
+            chess.reset()
+            tetris.reset()
+        }
     }
 
     /** 트레이·메뉴가 읽는 근무 값(조정 ⑩ — DesktopWorkSnapshot 을 값으로 옮긴다, 판정 없음). 근무 중이면 30초마다 경과를 새로 적는다. */

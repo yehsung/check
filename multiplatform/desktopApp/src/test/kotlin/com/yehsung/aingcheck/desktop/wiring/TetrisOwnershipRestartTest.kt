@@ -7,6 +7,8 @@
 //   2) 앱을 닫거나(정상 종료: kv close) 강제 종료(닫지 않음 — 묶음 창 60초 안) → 같은 폴더로 둘째 그래프 → 같은 사람 로그인
 //      → my_device 없는 옛 판 상태(tetris_state)를 받는다 → 이 기기가 두는 판(playingElsewhere=false · 구동기 생성).
 //   ★ 기준선: 기록 없는 새 폴더로 선 그래프(같은 사람 · 같은 응답)는 안 둔다 — 위 '둔다' 가 기록 덕이지 기본값이 아니다.
+//   3) 계정 전환(A → B)·로그아웃: 앱을 실제처럼 start 하고 A 가 판을 세운 뒤 바꾸면 판·구동기·오목/체스 상태가 내려간다
+//      (맥 Sources/check/WorkTimerStore.swift:4120-4126 · :4265-4267 의 gomoku/chess/tetris.reset() — 데스크톱 AppGraph 의 로그아웃 리스너).
 // 망은 MockEngine(`.invalid`)뿐 · 픽스처는 합성.
 @file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
 
@@ -29,6 +31,7 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.RasterImage
 import com.yehsung.aingcheck.core.foundation.platform.desktop.Registration
 import com.yehsung.aingcheck.core.foundation.platform.desktop.TrayClick
 import com.yehsung.aingcheck.core.foundation.platform.desktop.TrayHost
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelPhase
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.ownsMatch
 import com.yehsung.aingcheck.core.wire.SupabaseSession
@@ -60,9 +63,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
@@ -111,6 +116,8 @@ private class OwnershipPlatform : DesktopPlatform {
 private object OldServer {
     const val MATCH = "7e7e0000-0000-4000-8000-0000000000b1"
     const val PEER = "d0000000-0000-4000-8000-0000000000ee"
+    /** 계정 전환 뒤 같은 기기에 들어오는 다음 사람(합성). */
+    const val NEXT_USER = "b0000000-0000-4000-8000-0000000000bb"
     val nowMs: Long get() = WiringTestRig.BASE_MS
 
     fun state(): String =
@@ -123,6 +130,8 @@ private object OldServer {
 /** 앱 한 벌(같은 kv 를 받는다). [close] = 배선 범위만 걷는다 — kv 를 닫을지(정상 종료)는 시험이 정한다. */
 private class OwnershipRig(val test: TestScope, val kv: FileDesktopKeyValueStore) {
     val requests = mutableListOf<String>()
+    /** B 의 토큰으로 나간 요청 경로(계정 전환 시험이 본다). */
+    val nextUserPaths = mutableListOf<String>()
     val hosts = mutableSetOf<String>()
     val uncaught = mutableListOf<Throwable>()
     private val engine = MockEngine(
@@ -133,7 +142,16 @@ private class OwnershipRig(val test: TestScope, val kv: FileDesktopKeyValueStore
                 val p = request.url.encodedPath
                 requests += p
                 val json = headersOf(HttpHeaders.ContentType, "application/json")
+                // 다음 사람(B)의 서버 몫엔 판이 없다 — B 세션에 판이 보이면 그건 앞 사람(A)의 것이 남은 것이다.
+                val nextUser = request.headers[HttpHeaders.Authorization].orEmpty().contains(OldServer.NEXT_USER)
+                if (nextUser) nextUserPaths += p
                 when {
+                    nextUser && p.contains("/rpc/tetris_") ->
+                        respond(
+                            """{"status":"ok","server_now_ms":${OldServer.nowMs},"me":{"ruby_balance":5,"wins":0,"losses":0,"draws":0,""" +
+                                """"active_match_id":null,"incoming":[]},"users":[],"matches":[]}""",
+                            HttpStatusCode.OK, json,
+                        )
                     p.endsWith("/rpc/tetris_respond") ->
                         respond("""{"status":"ok","accepted":true,"state":${OldServer.state()},"server_now_ms":${OldServer.nowMs}}""", HttpStatusCode.OK, json)
                     p.endsWith("/rpc/tetris_state") ->
@@ -317,6 +335,87 @@ class TetrisOwnershipRestartTest {
         assertTrue(kv.isImmediate(TetrisDuelStore.ownedMatchesKey("Other-User")), "다른 사용자 기록 키도 즉시 쓰기여야 한다")
         for (near in listOf("tetris.duel.ownedMatches", "tetris.duel.ownedMatchesBackup", "tetris.duel.ownedMatch.x", "tetris.duel.hold", "tetris.lobby")) {
             assertFalse(kv.isImmediate(near), "머리가 비슷한 다른 키를 즉시 쓰기로 잡았다: $near")
+        }
+    }
+
+    /**
+     * 계정에 묶인 게임 상태 중 남은 것(맥 WorkTimerStore.swift:4120-4126 로그아웃 · :4265-4267 adoptWorkStateOwner 가
+     * gomoku/chess/tetris.reset() 으로 내리는 것 — 폰 PhoneAppModel.kt sessionDidSignOut 도 같다).
+     */
+    private fun leftovers(rig: OwnershipRig): List<String> = buildList {
+        val t = rig.tetris
+        if (t.match != null) add("tetris.match=${t.match?.id}")
+        if (t.duel != null) add("tetris.duel(구동기)")
+        if (t.phase != TetrisDuelPhase.lobby) add("tetris.phase=${t.phase}")
+        if (rig.app.gomoku.notice != null) add("gomoku.notice")
+        if (rig.app.chess.notice != null) add("chess.notice")
+    }
+
+    /**
+     * 실제 앱처럼 시작(AppWirings.start — social 이 로그인 변화를 보고 onSignedOut 사슬을 낸다) → A 로그인 → A 가 판을 세우고
+     * (수락 → 구동기) 오목·체스에도 A 의 안내가 떠 있다.
+     */
+    private suspend fun TestScope.startedWithASeated(): Pair<OwnershipRig, FileDesktopKeyValueStore> {
+        val kv = appKv(newDir())
+        kv.putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, false)
+        kv.putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, false)
+        val rig = OwnershipRig(this, kv)
+        rig.app.start()
+        runCurrent()
+        rig.signIn()
+        runCurrent()
+        seatA(rig)
+        return rig to kv
+    }
+
+    private suspend fun TestScope.seatA(rig: OwnershipRig) {
+        accept(rig)
+        rig.app.gomoku.notice = "A 의 오목 안내"
+        rig.app.chess.notice = "A 의 체스 안내"
+        assertEquals(5, leftovers(rig).size, "전제: A 의 판·구동기·단계·오목·체스가 다 서 있다 — ${leftovers(rig)}")
+    }
+
+    /**
+     * 계정 전환(A → B 직행): 앞 사람의 판·구동기·오목/체스 상태를 내린다. 남기면 A 의 판이 B 세션에서 '이 기기가 두는 판'으로
+     * 남고 그 판 루프가 B 의 토큰으로 보고를 낸다(맥 :4122-4123 주석). 영속 기록('이 기기가 연 판')은 사용자별 키라 A 몫으로 남는다.
+     */
+    @Test
+    fun accountSwitchDropsThePreviousPersonsGames() = runTest {
+        val (rig, kv) = startedWithASeated()
+        try {
+            rig.app.sessionStore.adoptSignedInSession(
+                SupabaseSession("tok-${OldServer.NEXT_USER}", "ref-${OldServer.NEXT_USER}", OldServer.NEXT_USER),
+                "next@aing.example",
+            )
+            advanceTimeBy(5_000)
+            runCurrent()
+            assertEquals(OldServer.NEXT_USER, rig.app.sessionStore.session?.userID, "전제: B 로 바뀌었다")
+            val left = leftovers(rig)
+            assertTrue(left.isEmpty(), "계정 전환 뒤 앞 사람(A)의 것이 B 에게 남았다: $left")
+            assertFalse(rig.tetris.ownsMatch(OldServer.MATCH), "B 가 A 의 '이 기기가 연 판' 기록을 가졌다")
+            assertTrue(kv.getString(key)?.contains("\"${OldServer.MATCH}\"") == true, "A 의 영속 기록(사용자별 키)이 지워졌다 — reset 이 기록까지 걷었다")
+            assertTrue(rig.uncaught.isEmpty(), "잡히지 않은 예외: ${rig.uncaught}")
+        } finally {
+            rig.tetris.reset()
+            rig.close()
+        }
+    }
+
+    /** 로그아웃: 같은 사슬 — 판·구동기·오목/체스 상태를 내린다(맥 WorkTimerStore.swift:4120-4126). */
+    @Test
+    fun signOutDropsTheGames() = runTest {
+        val (rig, _) = startedWithASeated()
+        try {
+            rig.scope.launch { rig.app.sessionStore.signOut() }
+            advanceTimeBy(5_000)
+            runCurrent()
+            assertNull(rig.app.sessionStore.session, "전제: 로그아웃했다")
+            val left = leftovers(rig)
+            assertTrue(left.isEmpty(), "로그아웃 뒤 앞 사람의 것이 남았다: $left")
+            assertTrue(rig.uncaught.isEmpty(), "잡히지 않은 예외: ${rig.uncaught}")
+        } finally {
+            rig.tetris.reset()
+            rig.close()
         }
     }
 }

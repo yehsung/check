@@ -26,6 +26,9 @@ import Foundation
 //  ② 빈 곳에 놓기(`.newMeldAt`)·묶음 옮기기(`moveSet`)가 다른 묶음 끝 가까이면 이어질 때 그 끝에 합친다(대상 제자리).
 //  ③ 묶음 위에 놓기(`.meld`)는 슬롯보다 알맞은 정렬 자리가 먼저(없으면 슬롯 — 위 자리 규약), 앞에 꽂히면 왼쪽으로 늘어난다.
 //  화면은 `previewDrop` · `previewMoveSet` 으로 놓기 전에 계획(붙기 · 꽂기 · 새 자리)을 묻는다.
+//
+// ── 0.3.70 받침대 — `.rackSlot` 이 타일 사이면 **끼우고 오른쪽을 민다**(빈칸이면 옛 그대로, 넘치면 다음 줄로 흘림 —
+//    `RummyRackLayout.insert`). 화면 미리보기는 `rackLayoutAfterDrop`(= 실제). 랙 묶음 표시는 `rackMelds`(RummyRackMelds.swift).
 
 /// 끌기용 타일 한 장. `id` 는 이 편집기 안에서만 뜻이 있는 로컬 번호다(와이어엔 면 문자열만 간다 — 설계서 §1).
 package struct RummyTile: Identifiable, Hashable, Sendable {
@@ -384,9 +387,8 @@ package struct RummyTurnEditor: Equatable, Sendable {
         case .rack(nil):
             rackLayout.set(tileIDs, at: rackLayout.endSlot(tiles: tileIDs.count))
         case .rackSlot(let wanted):
-            let slot = rackLayout.isFree(wanted, tiles: tileIDs.count)
-                ? wanted : rackLayout.nearestFree(to: wanted, tiles: tileIDs.count)
-            rackLayout.set(tileIDs, at: slot)
+            // 0.3.70: 빈칸이면 그 자리, 타일 사이면 끼우고 오른쪽을 민다(`RummyRackLayout.insert`).
+            rackLayout.insert(tileIDs, at: wanted)
         }
 
         melds = pieces.map(\.tiles)

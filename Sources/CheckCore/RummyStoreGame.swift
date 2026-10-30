@@ -179,6 +179,7 @@ extension RummyStore {
         guard state.status == .active, let rack = state.myRack,
               seat?.state == nil || seat?.state == .playing else {
             if editor != nil { editor = nil }
+            if rackSortMode != nil { rackSortMode = nil }
             editorKey = nil
             lastSentDraft = nil
             cancelDraft()
@@ -199,9 +200,17 @@ extension RummyStore {
         let previous = editorKey?.matchID == state.id ? editor : nil
         let order = previous?.rackFaces
         let entries = previous?.restoredRackEntries ?? loadRackEntries(matchID: state.id)
-        let fresh = RummyTurnEditor(
+        var fresh = RummyTurnEditor(
             table: table, rack: rack, initialDone: state.myInitialDone ?? false, rackOrder: order,
             tableLayout: state.tableLayout, rackEntries: entries)
+        var drawn = previous.map { Self.drawnTiles(previous: $0, fresh: fresh, entries: entries ?? []) } ?? []
+        if previous == nil {
+            if rackSortMode != nil { rackSortMode = nil }
+        } else if let mode = rackSortMode, !drawn.isEmpty {
+            // 0.3.70(감사 #10): 정렬한 뒤 손대지 않았으면 뽑은 타일을 그 정렬 자리에 끼운다(단위 사이 반 칸 그대로).
+            fresh.sortRack(mode)
+            drawn = drawn.map { RummyDrawnTile(tileID: $0.tileID, face: $0.face, slot: fresh.rackLayout.slot(of: $0.tileID) ?? $0.slot) }
+        }
         editor = fresh
         editorKey = key
         editorSeq = seq
@@ -211,7 +220,7 @@ extension RummyStore {
         lastSentDraft = state.draft?.table ?? table
         lastSentLayout = state.draft?.table != nil ? state.draft?.layout : state.tableLayout
         saveRack()
-        if let previous { noteDrawn(previous: previous, fresh: fresh, entries: entries ?? []) }
+        if !drawn.isEmpty { noteDrawn(drawn) }
         // 차례 중간에 편집기를 새로 세웠는데(앱 재실행) 서버 작업 판이 내 화면과 다르면 맞춘다 — 시간 초과 때 서버는
         // 그 작업 판을 판정한다(R-19). 내 화면에 없는 판이 나 대신 내지지 않게 한다.
         // 비교는 K(다중집합) — 서버가 판정하는 기준과 같고, 편집기가 세트 안 순서를 표시 순서로 바꿔도 헛보내지 않는다.
@@ -274,6 +283,8 @@ extension RummyStore {
         }
         guard working.moveBlock(tileIDs, to: target) else { return }
         if editor != working { editor = working }
+        // 받침대를 손으로 정리했다 — 정렬이 풀린다(판으로 내는 것은 정렬을 안 깬다: 못 내면 그 자리로 돌아온다).
+        if Self.isRackTarget(target), rackSortMode != nil { rackSortMode = nil }
         saveRack()
         guard myTurn else { return }
         setNotice(nil)
@@ -302,6 +313,7 @@ extension RummyStore {
         guard var working = editor else { return }
         working.sortRack(mode)
         if editor != working { editor = working }
+        if rackSortMode != mode { rackSortMode = mode }
         saveRack()
     }
 

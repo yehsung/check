@@ -125,6 +125,9 @@ package final class RummyStore {
     package internal(set) var match: RummyMatchState?
     /// 판이 active 이고 내가 playing 일 때. 내 차례가 아니면 랙 정렬만 쓰인다.
     package internal(set) var editor: RummyTurnEditor?
+    /// 0.3.70: 마지막 정렬(777 · 789)이 아직 살아 있나 — 정렬한 뒤 받침대를 손으로 옮기지 않았으면 그 정렬. 뽑은 타일을 이 정렬
+    /// 자리에 끼운다(`reconcileEditor`). 받침대로 놓는 끌기(`.rack`·`.rackSlot`)가 끄고, 판이 바뀌면 지운다. 화면 정렬 버튼의 '선택됨'.
+    package internal(set) var rackSortMode: RummyRackSort?
     package var isMyTurn: Bool { Self.isMyTurn(match, me: myUserID) }
     /// 남의 차례면 그 사람 작업 판(없으면 nil → `match.table`).
     package var otherDraft: [[RummyFace]]? {
@@ -520,6 +523,7 @@ package final class RummyStore {
         seenReactionKeys = []
         if !reactionFeed.isEmpty { reactionFeed = [] }
         if lastDraw != nil { lastDraw = nil }
+        if rackSortMode != nil { rackSortMode = nil }
         if phase != .lobby { phase = .lobby }
         if availability != .available { availability = .available }
         if lobby != nil { lobby = nil }

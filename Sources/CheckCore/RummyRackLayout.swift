@@ -139,6 +139,114 @@ package struct RummyRackLayout: Equatable, Sendable {
         slots[tileID] = nil
     }
 
+    // MARK: - 0.3.70 끼워 넣기 · 덩어리
+
+    /// 끼워 넣기(0.3.70 — 감사 #2). `tileIDs` 를 `wanted` 부터 나란히 놓는다(이미 있던 자리는 먼저 뺀다).
+    ///  · `wanted` 가 비었으면 **그대로**(옛 규칙 — 빈칸에 놓기).
+    ///  · 아니면 그 줄의 타일 사이에 **끼운다**: 왼쪽 끝이 `wanted` 보다 앞인 타일은 제자리, 나머지는 오른쪽으로 민다.
+    ///    놓은 블록이 왼쪽 이웃에 닿거나 겹치면 그 바로 뒤에 붙인다(그 이웃 덩어리에 붙는다).
+    ///    미는 타일은 **필요한 만큼만** 밀고 덩어리 모양을 지킨다: 딱 붙은 타일은 붙은 채, 빈칸은 반 칸까지 줄어들되 0 은 안 된다
+    ///    (다른 덩어리끼리 붙어 버리지 않게). 블록이 왼쪽 덩어리에 붙었는데 오른쪽 이웃이 원래 다른 덩어리였으면 그 사이에도 반 칸을 둔다.
+    ///  · 줄 끝을 넘치면 넘친 **덩어리**를 다음 줄 맨 앞에 끼워 흘린다(`settle`) — 덩어리가 한 줄보다 길거나 줄의 첫 덩어리면
+    ///    넘친 타일부터. 다음 줄도 같은 규칙으로 밀리고, 마지막 줄을 넘치면 새 줄이 열린다.
+    /// 타일을 잃거나 겹치지 않는다(시험 `V0370RummyRackTests`).
+    package mutating func insert(_ tileIDs: [Int], at wanted: RummyRackSlot) {
+        guard !tileIDs.isEmpty else { return }
+        for id in tileIDs { slots[id] = nil }
+        let span = tileIDs.count * Self.tileSpan
+        let row = max(0, wanted.row)
+        let start0 = min(max(0, wanted.halfCol), max(0, Self.halfColumnsPerRow - span))
+        let first = RummyRackSlot(row: row, halfCol: start0)
+        if isFree(first, tiles: tileIDs.count) {
+            set(tileIDs, at: first)
+            return
+        }
+        let line = items(inRow: row)
+        let split = line.firstIndex { $0.col >= start0 } ?? line.count
+        let left = Array(line[..<split]), right = Array(line[split...])
+        var start = start0
+        var joinedLeft = false
+        if let a = left.last, start0 <= a.col + Self.tileSpan {
+            start = a.col + Self.tileSpan
+            joinedLeft = true
+        }
+        var placed = left
+        for (offset, id) in tileIDs.enumerated() { placed.append((id, start + offset * Self.tileSpan)) }
+        var end = start + span
+        for (index, tile) in right.enumerated() {
+            let gap: Int
+            if index == 0 {
+                let separate = left.last.map { $0.col + Self.tileSpan < tile.col } ?? false
+                gap = joinedLeft && separate ? 1 : 0
+            } else {
+                gap = min(1, tile.col - (right[index - 1].col + Self.tileSpan))
+            }
+            let col = max(tile.col, end + gap)
+            placed.append((tile.id, col))
+            end = col + Self.tileSpan
+        }
+        settle(placed, row: row)
+    }
+
+    /// 같은 줄에서 딱 붙은(빈칸 없는) 덩어리들 — 화면 순, 덩어리 안은 왼쪽부터. 랙 묶음 표시(감사 #3)가 쓴다.
+    package var chunks: [[Int]] {
+        var result: [[Int]] = []
+        var previous: RummyRackSlot?
+        for id in readingOrder {
+            guard let slot = slots[id] else { continue }
+            if let previous, previous.row == slot.row, previous.halfCol + Self.tileSpan == slot.halfCol {
+                result[result.count - 1].append(id)
+            } else {
+                result.append([id])
+            }
+            previous = slot
+        }
+        return result
+    }
+
+    /// 한 줄의 타일(왼쪽부터).
+    private func items(inRow row: Int) -> [(id: Int, col: Int)] {
+        slots.filter { $0.value.row == row }
+            .sorted { ($0.value.halfCol, $0.key) < ($1.value.halfCol, $1.key) }
+            .map { ($0.key, $0.value.halfCol) }
+    }
+
+    /// 한 줄 몫(왼쪽부터 · 겹침 없음)을 `row` 에 앉힌다. 줄 끝을 넘으면 넘친 덩어리(한 줄보다 짧고 줄의 첫 덩어리가 아니면 통째로,
+    /// 아니면 넘친 타일부터)를 다음 줄 맨 앞에 끼우고 그 줄 타일을 민다(첫 타일과는 반 칸 — 다른 덩어리). 줄마다 한 장 이상 남으니 끝난다.
+    private mutating func settle(_ placed: [(id: Int, col: Int)], row: Int) {
+        guard let over = placed.firstIndex(where: { $0.col + Self.tileSpan > Self.halfColumnsPerRow }) else {
+            for item in placed { slots[item.id] = RummyRackSlot(row: row, halfCol: item.col) }
+            return
+        }
+        func touches(_ i: Int) -> Bool { placed[i - 1].col + Self.tileSpan == placed[i].col }
+        var head = over
+        while head > 0, touches(head) { head -= 1 }
+        var tail = over
+        while tail + 1 < placed.count, touches(tail + 1) { tail += 1 }
+        let chunkSpan = placed[tail].col + Self.tileSpan - placed[head].col
+        let cut = head > 0 && chunkSpan <= Self.halfColumnsPerRow ? head : max(over, 1)
+        for item in placed[..<min(cut, placed.count)] { slots[item.id] = RummyRackSlot(row: row, halfCol: item.col) }
+        guard cut < placed.count else { return }
+        var flowing: [(id: Int, col: Int)] = []
+        for i in cut..<placed.count {
+            let col = i == cut ? 0
+                : flowing[flowing.count - 1].col + Self.tileSpan + min(1, placed[i].col - (placed[i - 1].col + Self.tileSpan))
+            flowing.append((placed[i].id, col))
+        }
+        let moving = Set(flowing.map(\.id))
+        let next = row + 1
+        let existing = items(inRow: next).filter { !moving.contains($0.id) }
+        var line = flowing
+        var end = (flowing.last?.col ?? 0) + Self.tileSpan
+        for (index, tile) in existing.enumerated() {
+            let gap = index == 0 ? 1 : min(1, tile.col - (existing[index - 1].col + Self.tileSpan))
+            let col = max(tile.col, end + gap)
+            line.append((tile.id, col))
+            end = col + Self.tileSpan
+        }
+        settle(line, row: next)
+    }
+
     /// 빈칸 없이 순서대로(줄이 차면 다음 줄). 옛 선형 자리 API(`.rack(index:)`)와 처음 받은 랙이 쓴다.
     package static func packed(_ tileIDs: [Int]) -> RummyRackLayout {
         grouped(tileIDs.map { [$0] }, gap: 0)

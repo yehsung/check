@@ -349,6 +349,12 @@ package enum TetrisPhoneText {
     /// 기권 확인 시트 제목(본문은 `resignWarning` · 버튼은 `confirmResign`/`keepPlaying`).
     package static let resignConfirmTitle = "기권할까요?"
 
+    /// 한 판 한 기기(0.3.69) — 같은 계정의 다른 기기가 두는 판의 덮개 카드(제목은 코어 `TetrisDuelNoticeText.otherDevice`).
+    /// 맥 `TetrisDuelText` 의 같은 자리와 **같은 말**이다. 기다리라는 말(`waitingAction`)을 여기에 두지 않는다 — 이 폰이
+    /// 기다릴 것이 없다.
+    package static let otherDeviceSubtitle = "신청하거나 수락한 기기에서만 둘 수 있어요"
+    package static let otherDeviceAction = "그 기기에서 이어 가세요"
+
     // MARK: - 관전 (0.3.65 — 테트리스 관전은 이번에 생겼다)
 
     /// 로비 "지금 대결 중" 행의 [관전] 알약. 낱말은 오목·체스와 **같다**(같은 일을 하는 버튼이 게임마다

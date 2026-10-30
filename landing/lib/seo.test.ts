@@ -7,7 +7,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { FEATURE_COPY } from '../components/features/copy.ts';
 import { jsonLdHtml } from '../components/faq/jsonld.ts';
 import { FAQ_ITEMS } from '../data/faq-items.ts';
-import { INSTALL_COPY, metaParts } from '../data/install-copy.ts';
+import { ANDROID_COPY, INSTALL_COPY, metaParts } from '../data/install-copy.ts';
 import {
   ALT_NAME,
   CONTENT_UPDATED,
@@ -20,6 +20,8 @@ import {
   ROBOTS_META,
   TITLE,
   absUrl,
+  androidLine,
+  androidHelpLines,
   homeJsonLd,
   kstDate,
   laterDate,
@@ -63,6 +65,9 @@ const LINKS: SeoLinks = {
   support: fixtureLink('support'),
   licenses: fixtureLink('licenses'),
   install: fixtureLink('install'),
+  androidGroup: fixtureLink('androidGroup'),
+  androidTesting: fixtureLink('androidTesting'),
+  androidStore: fixtureLink('androidStore'),
 };
 const BREW_INSTALL = (/export const BREW = \{\s*install:\s*'([^']+)'/.exec(FIXTURES) ?? [])[1] as string;
 /** site-links.ts FOOTER_LINKS · NAV_LINKS(이름 정본)를 소스에서. */
@@ -377,6 +382,43 @@ test('llms.txt: 설치 = brew 명령 · DMG(설치 카드 메타 줄 그대로) 
   const noDate = llms(null);
   assert.ok(noDate.includes(`\n- [GitHub 릴리스](${LINKS.releases}): v0.3.67\n`));
   assert.ok(!/\d{4}-\d{2}-\d{2}/.test(noDate));
+});
+
+test('llms.txt: 설치 묶음에 안드로이드(베타) 한 줄 — 카드 한 줄 · 세 단계 이름·주소(화면 순서) · 같은 계정 경고, ANDROID_COPY 에서 조립(§12)', () => {
+  const t = llms();
+  const want =
+    '- Android(베타): 구글 계정만 있으면 세 단계로 설치까지 끝나요. ' +
+    '1) [구글 그룹 가입](https://groups.google.com/g/aingcheck-android-beta) ' +
+    '2) [웹에서 테스터 되기](https://play.google.com/apps/testing/com.yehsung.aingcheck) ' +
+    '3) [Play 스토어에서 설치](https://play.google.com/store/apps/details?id=com.yehsung.aingcheck) — ' +
+    "폰의 Play 스토어와 같은 구글 계정으로 가입해요. 다르면 3단계에서 '찾을 수 없음'이 떠요.";
+  assert.equal(androidLine(LINKS), want);
+  // 아래 들여 쓴 문제 해결(§12.6 — 카드의 접는 <details> 글자 그대로 · 화면 순서)
+  const help = [
+    '  - 3단계에서 앱이 안 보이나요?',
+    '    - Play 스토어 앱 오른쪽 위 프로필 사진에서 그룹에 가입한 계정으로 바꿔요.',
+    "    - 2단계에서 '테스터 되기'까지 클릭했는지 확인해요.",
+    '    - 등록 반영까지 몇 분 걸릴 수 있어요. 잠시 뒤 다시 열어요.',
+  ];
+  assert.deepEqual(androidHelpLines(), help);
+  assert.deepEqual(androidHelpLines(), [`  - ${ANDROID_COPY.helpTitle}`, ...ANDROID_COPY.helpItems.map((x) => `    - ${x}`)], 'ANDROID_COPY 에서 조립');
+  // 설치 묶음 안 — iPhone 줄 다음 · (문제 해결) · GitHub 릴리스 줄 앞
+  assert.ok(
+    t.includes(`\n- iPhone: [App Store](${LINKS.appStore}) — iOS 18 이상 · 무료\n${want}\n${help.join('\n')}\n- [GitHub 릴리스](${LINKS.releases})`),
+    '설치 묶음 자리',
+  );
+  const install = t.slice(t.indexOf('**설치**'), t.indexOf('**기능**'));
+  assert.equal(install.split('\n').filter((l) => l.startsWith('- Android')).length, 1, '한 줄');
+  // 조립: 글자는 ANDROID_COPY 그대로(새 문장 0)
+  assert.ok(want.includes(ANDROID_COPY.line) && want.includes(ANDROID_COPY.warn));
+  for (const st of ANDROID_COPY.steps) assert.ok(want.includes(`[${st.name}](${LINKS[st.link]})`), st.name);
+  // 폴백 릴리스여도 그대로(버전과 무관)
+  assert.ok(llms(null, DMG, false).includes(`\n${want}\n`));
+  // 비공개 테스트: 안드로이드 MobileApplication LD 는 싣지 않는다(스토어 페이지가 테스터에게만 보인다)
+  const graph = homeJsonLd({ links: LINKS, choice: DMG, live: true, siteUrl: SITE })['@graph'] as { '@type': string; '@id': string }[];
+  assert.deepEqual(graph.map((g) => g['@type']), ['WebSite', 'Organization', 'SoftwareApplication', 'MobileApplication']);
+  assert.ok(!JSON.stringify(graph).includes('play.google.com'), 'LD 에 Play 주소 0');
+  assert.ok(!JSON.stringify(graph).includes('Android'), 'LD 에 Android 0');
 });
 
 test('llms.txt: 폴백 릴리스(live=false)면 버전·크기·날을 싣지 않는다', () => {

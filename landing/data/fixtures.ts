@@ -38,7 +38,7 @@ export type AssetKey =
   | 'ui/chess-board'           // 700×700 — 1:1 체스 판만
   | 'ui/tetris-duel'           // 1200×865 — 1:1 테트리스 두 사람 카드+판(사용자 지정 크롭 — brief §9.5)
   // 브랜드
-  | 'brand/appstore-badge-ko-black' | 'brand/qr-appstore' | 'brand/icon-64' | 'brand/icon-256'
+  | 'brand/appstore-badge-ko-black' | 'brand/qr-appstore' | 'brand/qr-android-beta' | 'brand/icon-64' | 'brand/icon-256'
   // v2 새 키 11개(SPEC §6.3 · §9.2 — 크롭·리사이즈만, docs/v2/requests/assets.md 의 w·h)
   | 'ui/header-on-lg'          // 1264×428
   | 'ui/menubar-0000-lg'       // 463×132
@@ -83,6 +83,12 @@ export const LINKS = {
   terms: 'https://yehsung.github.io/check/terms', github: 'https://github.com/yehsung/check',
   issues: 'https://github.com/yehsung/check/issues', licenses: '/licenses',
   install: '/#install', // 폰(< 768)·iOS 의 'Mac용 다운로드'·메뉴바 [다운로드] — DMG 대신 설치 절로(docs/v3/brief.md §9.2 · §9.4)
+  // 안드로이드 베타(Play 비공개 테스트 — docs/v3/brief.md §12). 이 순서로만: 구글 그룹 가입 → 웹에서 테스터 되기 → Play 스토어 설치
+  // (스토어 페이지는 1·2 를 마친 계정에서만 보인다). 화면 단계 순서는 ANDROID_COPY.steps(data/install-copy.ts)가 이 키로 가리킨다.
+  androidGroup: 'https://groups.google.com/g/aingcheck-android-beta',
+  androidTesting: 'https://play.google.com/apps/testing/com.yehsung.aingcheck',
+  androidStore: 'https://play.google.com/store/apps/details?id=com.yehsung.aingcheck',
+  android: '/#android', // 설치 절 안드로이드 카드(폰 첫 화면 '안드로이드 베타 받기' · 선택 창 칩 · 데스크톱 QR)
 } as const;
 export const APP_STORE_ID = '6812768622';
 // upgrade: 앱의 [명령 복사]와 같은 문자열 — 탭이 낡았으면 `brew upgrade` 만으로는 '이미 최신'으로 끝난다(DECISIONS D18).

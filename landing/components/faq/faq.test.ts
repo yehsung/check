@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { FAQ_ITEMS, faqId, faqJsonLd } from "../../data/faq-items.ts";
+import { ANDROID_COPY } from "../../data/install-copy.ts";
 import { FAQ_TITLE } from "./copy.ts";
 import { jsonLdHtml } from "./jsonld.ts";
 
@@ -46,6 +47,22 @@ test("FAQ 5문항이 §8 의 1–5번과 글자까지 같다(순서 포함)", ()
     assert.equal(it.q, brief[i].q, `${i + 1}번 질문`);
     assert.equal(it.a, brief[i].a, `${i + 1}번 답`);
   });
+});
+
+test("2번 답 맨 끝 = 안드로이드 베타 한 문장(§12 · ANDROID_COPY.faqTail) — 앞 문장은 그대로 · JSON-LD 도 따라간다", () => {
+  const a = FAQ_ITEMS[1].a;
+  assert.equal(FAQ_ITEMS[1].q, "어떤 기기와 OS에서 쓸 수 있나요?");
+  assert.equal(ANDROID_COPY.faqTail, "안드로이드에서도 베타로 쓸 수 있어요.");
+  assert.ok(a.endsWith(` ${ANDROID_COPY.faqTail}`), "맨 끝에 공백 하나 + 문장");
+  assert.equal(
+    a,
+    "macOS 14 이상 맥이면 Apple Silicon·Intel 모두 돼요. 아이폰은 iOS 18 이상이에요. 근무 시작·종료는 맥에서 하고, 아이폰에선 현황·메시지·할 일·게임을 써요. 안드로이드에서도 베타로 쓸 수 있어요.",
+  );
+  assert.equal(a.split(ANDROID_COPY.faqTail).length, 2, "한 번만");
+  // 다른 문항에는 안드로이드 문장이 없다 · 최소 OS 버전을 지어내지 않는다
+  FAQ_ITEMS.forEach((it, i) => i !== 1 && assert.ok(!it.a.includes("안드로이드"), `${i + 1}번`));
+  assert.ok(!/안드로이드 ?\d|Android ?\d/.test(a), "안드로이드 버전 숫자 0");
+  assert.equal(faqJsonLd().mainEntity[1].acceptedAnswer.text, a);
 });
 
 test("제목 = §8 H2 「자주 묻는 질문」 한 줄 · 내비 링크 이름과 같다", () => {

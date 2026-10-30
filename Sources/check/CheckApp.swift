@@ -26,8 +26,12 @@ struct CheckApp: App {
         //   곧바로 내려간다(2026-10-15 실측 — 읽기 클로저 안의 관찰 값도 추적된다). 앱스토어 판은 위 갈래다(이 판정이 없다).
         //   쓰기는 **사용자가 ⌘-끌기로 아이콘을 뺀 것**뿐이다. 이 갈래의 상태 항목은 빼낼 수 있는데 빼도 앱이 안 끝나서(위 갈래는
         //   빼면 끝난다 — 실측), 그대로 두면 아이콘 없는 앱이 남는다. 그래서 위 갈래와 같은 결과(종료)를 낸다.
-        MenuBarExtra(isInserted: Binding(get: { appDelegate.retirement.menuBarInserted }, set: { inserted in
-            guard appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }
+        // ★ 하나만 실행(v0.3.69): 같은 앱이 이미 떠 있으면 판정을 실행에 옮기는 동안(양보·교체 대기) 아이콘을 넣지 않는다 — 이 실행이
+        //   남게 되면(상대가 마침 끝났다 · 읽기 전용 자리 사본을 끝냈다) 그때 들어간다(`SingleInstanceState.menuBarInserted`).
+        //   양보로 끝나는 실행은 끝까지 아이콘이 없다. 이 값도 델리게이트가 만들어지는 순간 정해진다(물러남과 같은 까닭).
+        //   쓰기도 같이 거른다 — 아이콘을 빼 둔 대기 중에 온 쓰기는 사용자가 뺀 것이 아니다(그 실행은 판정대로 남거나 끝난다).
+        MenuBarExtra(isInserted: Binding(get: { appDelegate.retirement.menuBarInserted && appDelegate.singleInstance.menuBarInserted }, set: { inserted in
+            guard appDelegate.singleInstance.menuBarInserted, appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }
             DispatchQueue.main.async { NSApp.terminate(nil) }
         })) {
             menuContent
@@ -125,6 +129,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 앱스토어 판이 설치된 맥에서 이 판이 물러나는가(v0.3.53). **델리게이트가 만들어지는 순간** 정한다 — 메뉴바 아이콘
     /// (`CheckApp.body` 의 `isInserted`)이 첫 렌더부터 이 값을 읽어야 해서 `applicationDidFinishLaunching` 까지 기다릴 수 없다.
     let retirement = AppStoreRetirementState.live()
+    /// 같은 앱(`kingcheck`)이 이미 떠 있는가(v0.3.69 — 하나만 실행). 물러남과 같은 까닭으로 **델리게이트가 만들어지는 순간** 정한다
+    /// (메뉴바 아이콘이 첫 렌더부터 읽는다). 판정은 `SingleInstanceGuard.decide`, 실행에 옮기는 것은 `applicationDidFinishLaunching` 이다.
+    ///
+    /// 스토어(`store`)는 이보다 **먼저** 만들어진다(선언 순서). 그 init 의 부수 효과는 남는 실행을 해치지 않는다 —
+    ///  · 저장 세션·기기 식별자는 읽기만 한다(기기 식별자는 없을 때만 만든다 — 남는 실행이 이미 만들었다). 옛 평문 토큰 이행은 멱등이다.
+    ///  · 토큰 행 캐시(`myTokenRowKey`)는 이번 달 · 저장 세션 계정의 것이 아닐 때만 지운다. 저장 세션은 남는 실행이 쓴 그대로라
+    ///    지워지는 것은 남는 실행의 다음 실행도 버릴 값이고, 남는 실행은 메모리의 값을 계속 쓰다가 다음 조회에 다시 적는다.
+    ///  · 자동 시작 억제 재무장은 마지막 생존 스탬프가 1시간 넘게 낡았을 때만이다 — 억제 중인 남는 실행은 매 tick 스탬프를 찍는다.
+    ///  · 서버를 치는 것(세션 활성화 · 단축키 · 폴링)은 init 에 없다 — 전부 `applicationDidFinishLaunching` 의 배선이고, 그 앞에서 멈춘다.
+    ///    예외는 init 이 단 깨어남 관찰과 앱 활성화다 — 기다리는 동안 스토어의 대기 표식(`awaitingAnotherInstance`)과 활성화 훅이 막는다.
+    /// 거꾸로 **이 실행이 남게 되면**(상대가 마침 끝났다 · 교체했다) init 이 읽은 저장 상태는 상대가 끝나기 전 것이다 — 상대가 끝나며
+    /// 넣은 퇴근 항목 · 돌린 토큰을 놓치지 않게 시작을 잇기 전에 다시 읽는다(`resumeAfterAnotherInstance`).
+    let singleInstance = SingleInstanceState.live()
     /// 물러남 창(물러남 모드에서만). 창 델리게이트라 앱 수명 동안 붙든다.
     private var retireWindow: AppStoreRetireWindowController?
     /// 실행 중에 앱스토어 판이 켜지는지 보는 감시자(물러나지 않은 실행에서만). 앱 수명 동안 붙든다.
@@ -139,6 +156,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //   로그아웃·시스템 종료의 SIGTERM 도 같은 길로 들어와 근무가 마무리된다.
         GracefulTerminationSignal.install()
         #if !CHECK_MAS
+        // ★ 하나만 실행(v0.3.69) — 같은 앱이 이미 떠 있으면 여기서 멈춘다. 아래 배선(물러남 창 · 오버레이 · 단축키 · 로그인 항목 ·
+        //   세션 활성화 …)을 **하나도** 하지 않고 판정만 실행에 옮긴다: 양보면 먼저 뜬 쪽 팝오버를 열어 달라 알리고 끝나며, 교체면
+        //   읽기 전용 자리 사본을 끝낸다. 그러다 이 실행이 남게 되면(상대가 마침 종료 중이었다 · 교체가 끝났다) 이 함수를 **처음부터
+        //   다시** 탄다 — 그때는 대기가 아니라서 그대로 아래로 내려간다(신호 설치는 멱등이다). SIGTERM 마무리보다는 뒤여야 한다
+        //   (기다리는 동안 온 SIGTERM 도 평소 종료로 받아 곧바로 끝난다 — `applicationShouldTerminate`). 소스 계약이 이 순서를 되묻는다.
+        if singleInstance.isPending {
+            resolveAnotherInstance(then: { [weak self] in self?.applicationDidFinishLaunching(notification) })
+            return
+        }
+        // 남는 실행은 나중에 뜬 사본의 "팝오버를 열어 달라"를 받는다(물러남 모드에서도 듣되 그때는 답하지 않는다).
+        listenForAnotherLaunch()
         // ★ 물러남(v0.3.53) — 같은 맥에 **설치된 앱스토어 판**이 있으면 여기서 멈춘다. 아래 배선(오버레이 · 할 일 · 오목/체스 ·
         //   단축키 · 업데이트/공지 감시 · 로그인 항목 · 세션 활성화 · 첫 실행 안내)을 **하나도** 하지 않고 물러남 창 하나만 띄운다.
         //   그래서 이 갈래는 그 어느 배선보다 앞이어야 한다(뒤에 두면 세션이 살아난 뒤에 멈춘다 — V0353 이 순서를 되묻는다).
@@ -148,6 +176,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // 물러나지 않은 실행은 실행 중에 앱스토어 판이 켜지는지 본다(켜지면 근무를 마무리하고 물러남 모드로 다시 뜬다).
         startWatchingForAppStoreEdition()
+        // DMG·임시 자리에서 켜졌으면 응용 프로그램 폴더로 옮기기를 묻는다(v0.3.69 — `MoveToApplications` 머리 주석). 남기로 정해진
+        // 뒤 · 물러남이 아닐 때만 여기 온다. 묻는 것은 런루프 다음 바퀴다 — 모달이 아래 배선을 붙잡지 않게.
+        offerMoveToApplicationsIfNeeded()
         #endif
         // 오버레이 컨트롤러를 **먼저** 만든다. 바로 아래 실행 킥이 서버에 열려 있던 세션을 흡수해 곧장 근무중으로
         // 복구할 수 있는데, 그 순간 표시 전환과 리액션/찔림 싱크(store.onReactionTrigger / onPokesReceived)가
@@ -533,12 +564,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if !CHECK_MAS
         // 물러난 실행(v0.3.53)은 물러남 창을 띄우며 앱이 활성화된다 — 그때 인편을 밀면 서버에 점수가 간다.
         guard !store.retiredForAppStoreEdition else { return }
+        // 하나만 실행(v0.3.69): 두 번째 사본은 실행되며 활성화된다. 그 실행이 저장 세션으로 인편을 밀면 남는 실행과 같은 갱신 토큰을
+        // 돌려 쓰게 된다(재사용으로 읽히면 둘 다 로그아웃) — 남기로 정해지기 전에는 서버를 치지 않는다.
+        guard singleInstance.hasProceeded else { return }
         #endif
         store.retryMiniGamePendingSubmitIfAny()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         #if !CHECK_MAS
+        // 하나만 실행(v0.3.69): 종료가 시작되면 다른 사본의 "팝오버를 열어 달라"에 더는 답하지 않는다(그 사본은 내가 끝나는 것을 보고 남는다).
+        // 남지 않은 실행(양보·교체를 기다리던 실행)은 세션을 살린 적이 없다 — 곧바로 끝낸다. 평소 종료를 타면 저장 세션으로
+        // 남는 실행이 하고 있는 근무를 이 실행이 닫는다.
+        singleInstance.beginTerminating()
+        if singleInstance.terminatesImmediately { return .terminateNow }
         // 물러난 실행(v0.3.53)은 퇴근 동기화를 하지 않는다 — 실행 시점 물러남은 세션을 살린 적이 없고, 실행 중 물러남은
         // 근무를 이미 마무리한 뒤에 이 표식을 세운다(`retireMidRun`).
         if store.retiredForAppStoreEdition { return .terminateNow }
@@ -568,6 +607,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if !CHECK_MAS
+    // MARK: 하나만 실행 (v0.3.69 — 같은 앱이 이미 떠 있다)
+
+    /// 첫 판정(`singleInstance.launchDecision`)을 실행에 옮긴다. 남게 되면 저장 상태를 다시 읽고 `continueLaunching`(시작 처리를
+    /// 처음부터 다시)을 부르며, 양보로 끝나면 이 실행을 끝낸다(`applicationShouldTerminate` 가 곧바로 받아들인다 — 마무리할 것이 없다).
+    /// 기다리는 동안은 스토어도 대기 표식을 든다 — 덮개를 여닫아도 깨어남 처리가 서버를 치지 않는다.
+    private func resolveAnotherInstance(then continueLaunching: @escaping @MainActor () -> Void) {
+        let state = singleInstance
+        let store = store
+        store.awaitingAnotherInstance = true
+        Task { @MainActor in
+            if await state.resolve(effects: .live()) {
+                store.resumeAfterAnotherInstance()
+                continueLaunching()
+            } else {
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
+    /// DMG·임시 자리에서 돌면 옮기기를 묻는다. 테스트 프로세스는 묻지 않는다(모달이 스위트를 멈춘다).
+    private func offerMoveToApplicationsIfNeeded() {
+        guard !CheckPanelVisibility.isRunningTests else { return }
+        let plan = MoveToApplications.currentPlan()
+        guard plan != .none else { return }
+        let bundleURL = Bundle.main.bundleURL
+        Task { @MainActor in
+            await MoveToApplications.run(plan: plan, bundleURL: bundleURL, effects: .live)
+        }
+    }
+
+    /// 나중에 뜬 사본이 보내는 "팝오버를 열어 달라"를 듣는다(대상이 이 pid 일 때만). 메뉴바 앱은 늘 비활성이라 분산 알림이 보류된다 —
+    /// 보내는 쪽의 `deliverImmediately: true` 와 받는 쪽의 `.deliverImmediately` 가 짝이다.
+    private func listenForAnotherLaunch() {
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(anotherLaunchAskedToPresent(_:)),
+            name: SingleInstanceGuard.presentRequestNotification,
+            object: SingleInstanceGuard.notificationObject(for: ProcessInfo.processInfo.processIdentifier),
+            suspensionBehavior: .deliverImmediately
+        )
+    }
+
+    @objc private func anotherLaunchAskedToPresent(_ notification: Notification) {
+        presentForAnotherLaunch()
+    }
+
+    /// 같은 사본을 다시 열었다(Finder 더블클릭 · `open`). 예전에는 구현이 없어 **화면에 아무 변화가 없었고** — Dock 아이콘도 창도
+    /// 없는 메뉴바 앱이라 — 사용자는 "안 열렸다"고 읽고 다른 사본(DMG 안 · 다운로드 폴더)을 또 열었다. 이제 팝오버를 연다.
+    /// 단 남은 지 `SingleInstanceGuard.reopenGraceSeconds` 안이면 열지 않는다 — brew 원클릭 끝의 `open -a` 가 cask 가 이미 띄운 새 판에
+    /// 다시 열기로 닿는다(팝오버가 키보드를 가져가므로, 업데이트를 눌러 두고 다른 일을 하던 사람의 입력을 뺏는다).
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if singleInstance.acceptsReopen(now: Date()) { presentForAnotherLaunch() }
+        return false
+    }
+
+    /// 다른 실행(또는 다시 열기)이 이 앱을 찾았다 — 팝오버를 연다. 종료 중이면 답하지 않는다(판정문 B — 곧 사라질 팝오버를 띄우지
+    /// 않는다. 나중에 뜬 사본은 내가 끝나는 것을 보고 스스로 남는다). 물러난 실행은 아이콘이 없다(물러남 창이 이미 떠 있다).
+    private func presentForAnotherLaunch() {
+        guard singleInstance.isServing, !store.retiredForAppStoreEdition else { return }
+        WindowTopAnchor.presentMenuPopover()
+    }
+
     // MARK: 물러남 (v0.3.53 — 같은 맥에 설치된 앱스토어 판이 있다)
 
     /// 실행 시점 물러남(B). 스토어 게이트를 세우고(저장 세션 활성화 · 근무 시작 · AI 기록 읽기·업로드 · 깨어남이 전부 no-op)

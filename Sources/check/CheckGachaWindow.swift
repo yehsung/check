@@ -25,6 +25,8 @@ import CheckCore
 //     폰 전체 화면도 덮개를 내렸다 올리면 새 기계다 — 같은 수명이다.
 //   · **외관은 시스템을 따른다**(다른 창들은 `.darkAqua` 고정). 기계는 밝은·어두운 테마를 둘 다 가졌고(S1), 사용자가 써 본 시안
 //     앱도 시스템 외관을 따랐다. 앱 테마(`CheckTheme` — 어두운 판 전용)를 쓰는 조각이 이 창엔 없다(확률 보기 판은 제 색을 고른다).
+//   · **사용자가 닫으면 팝오버로 돌아간다**(v0.3.69 — 기계의 [닫기] · 빨간 점). 열 때 팝오버를 닫았으므로 창만 내리면 화면에 아무것도
+//     안 남는다(0.3.68 제보 "닫기 누르면 앱이 꺼집니다"). 로그아웃 · 뽑기 거둠의 `close()` 는 돌아가지 않는다(`closeFromUser` 주석).
 //   · **테스트 실행에서는 사용자 화면에 아무것도 안 뜬다**: 알파 0(`CheckPanelVisibility`) + 모든 화면 밖(x = -30000) + 클릭 통과 +
 //     키를 가져가지 않는다(`makeKeyAndOrderFront`·`NSApp.activate` 를 안 부른다). 사용자 지시 2026-10-16 "테스트중인 창 내 화면에
 //     안뜨게 해줘" — 알파 0 창도 그 자리 클릭을 먹은 사고가 있었다(`CheckMousePanel` 주석).
@@ -366,6 +368,10 @@ final class CheckGachaWindowController: NSObject, NSWindowDelegate {
 
     let stuckWindowCheckSeconds: Double
 
+    /// 사용자가 창을 닫은 뒤 메뉴 팝오버로 돌아가는 문(v0.3.69). 팝오버는 상점 · 뽑기 패널(또는 캐릭터 고르기) 상태를 그대로 쥐고 있어
+    /// 다시 열면 온 자리다 — 폰의 X 도 상점으로 돌아간다. 시험이 갈아 끼운다(실제 문은 앱을 활성화하고 상태바 버튼을 누른다).
+    var returnToPopover: @MainActor () -> Void = { _ = WindowTopAnchor.returnToMenuPopover() }
+
     init(stuckWindowCheckSeconds: Double = CheckGachaWindowController.stuckWindowCheckSeconds) {
         self.stuckWindowCheckSeconds = stuckWindowCheckSeconds
         super.init()
@@ -392,7 +398,8 @@ final class CheckGachaWindowController: NSObject, NSWindowDelegate {
         if let windowStorage { return windowStorage }
         guard let wiring else { return nil }
         let created = Self.makeWindow()
-        let hosting = NSHostingView(rootView: wiring.content(wiring.store, state, { [weak self] in self?.close() }))
+        // 기계의 [닫기] 는 사용자가 닫는 것이다 — 팝오버로 돌아간다(`closeFromUser`).
+        let hosting = NSHostingView(rootView: wiring.content(wiring.store, state, { [weak self] in self?.closeFromUser() }))
         hosting.autoresizingMask = [.width, .height]
         created.contentView = hosting
         created.delegate = self
@@ -464,6 +471,8 @@ final class CheckGachaWindowController: NSObject, NSWindowDelegate {
     }
 
     /// 뽑기 창을 내린다(멱등). 창은 남는다. 떠 있는 뽑기 왕복은 끊지 않는다 — 서버 일은 스토어 몫이고, 결과는 스토어에 옮겨진다.
+    /// **팝오버로 돌아가지 않는다** — 로그아웃 · 계정 전환(`resetGachaState`) · 서버가 뽑기를 거둠(`applyShopState`)이 이 문을 부르는데,
+    /// 그때 팝오버가 저절로 튀어나오면 안 된다. 사용자가 닫는 길은 `closeFromUser()` · 빨간 점(`windowWillClose`)이다.
     func close() {
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
@@ -472,13 +481,25 @@ final class CheckGachaWindowController: NSObject, NSWindowDelegate {
         state.showsOdds = false
     }
 
-    /// 사용자가 빨간 점을 눌렀다.
+    /// 기계의 [닫기] — 창을 내리고 팝오버로 돌아간다. **열려 있었을 때만** 돌아간다: 돌아가는 문은 디바운스를 안 보므로
+    /// (`WindowTopAnchor.returnToMenuPopover` 주석) 겹친 클릭이 두 번 부르면 두 번째가 방금 연 팝오버를 도로 닫는다.
+    func closeFromUser() {
+        let wasOpen = state.isOpen
+        close()
+        if wasOpen { returnToPopover() }
+    }
+
+    /// 사용자가 빨간 점(· ⌘W)을 눌렀다 — 기계의 [닫기] 와 같이 팝오버로 돌아간다(폰은 X 가 늘 있고 상점으로 돌아간다 · 뽑기 전엔
+    /// [닫기] 가 없어 이 길이 유일한 출구다). 이 알림은 **사용자 닫기에서만** 온다: 우리 `close()` 는 `orderOut` 이라 알림이 없고,
+    /// 창을 버리는 두 길(`rebuildStuckWindow` · `discardWindowForTesting`)은 `close()` 전에 위임을 끊는다.
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
+        let wasOpen = state.isOpen
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         state.isOpen = false
         state.showsOdds = false
+        if wasOpen { returnToPopover() }
     }
 
     func windowDidMiniaturize(_ notification: Notification) {

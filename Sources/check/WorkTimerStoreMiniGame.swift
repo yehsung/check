@@ -571,6 +571,11 @@ extension WorkTimerStore {
     /// - Parameter fromTrigger: 바깥 방아쇠(기본)면 모르는 status 로 붙든 인편(`heldUntilTrigger`)을 푼다. 제출·토큰 응답의
     ///   **꼬리**에서 부를 때는 false — 그 꼬리가 방아쇠로 치면 모르는 status 응답이 곧 다음 제출을 부르는 고리가 된다(두드리기).
     func retryMiniGamePendingSubmitIfAny(fromTrigger: Bool = true) {
+        #if !CHECK_MAS
+        // 다른 실행에 양보·교체를 기다리는 실행(v0.3.69)은 인편을 읽지도 밀지도 않는다 — 인편은 남는 실행의 것이고, 저장 세션으로
+        // 보내면 갱신 토큰을 나눠 돌린다(`awaitingAnotherInstance`). 남게 되면 다음 방아쇠가 민다.
+        guard !awaitingAnotherInstance else { return }
+        #endif
         loadMiniGamePendingSubmitsIfNeeded()
         dropExpiredMiniGamePendingSubmits()
         if fromTrigger {

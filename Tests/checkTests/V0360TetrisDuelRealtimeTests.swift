@@ -129,6 +129,21 @@ func theTetrisSignalRefetchesTetrisAndNeverConsumesPokes() async {
     store.gomoku.reset()
 }
 
+// MARK: - 맥 소유 배선: 한 판 한 기기 기록(v0.3.69)
+
+/// 없으면: '이 기기가 연 판' 기록(TetrisDuelStore 머리말 ⑩)이 프로세스 안에만 살아, 판 중에 앱을 다시 켠 맥이
+/// 옛 서버(my_device 없음)에서 자기 판을 못 알아보고 보고를 멈춘다 — 15초 침묵 패. 스토어 시험은 defaults 를 직접 넣어 초록이다.
+@MainActor
+@Test
+func theMacOwnerKeepsTetrisOwnershipInItsOwnDefaults() {
+    let defaults = CheckTestScratch.defaults()
+    let store = WorkTimerStore(environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"], defaults: defaults,
+                               workspaceNotifications: nil)
+    #expect(store.tetris.defaults === defaults, "맥이 테트리스 기록을 자기 defaults 에 안 둔다")
+    // ★ 기준선: 배선 없이 만든 스토어는 기록 자리가 비어 있다(위 같음이 우연이 아니다).
+    #expect(TetrisDuelStore().defaults == nil)
+}
+
 // MARK: - 맥 소유 배선(소스 계약 — 문이 옵셔널이 아니라 '빠져도 초록' 인 자리들)
 
 /// 없으면: 소유자가 `reset()` 을 빠뜨리면 다음 사람이 앞 계정의 판을 보고, 차단 거울을 빠뜨리면 차단한 사람의 신청이

@@ -25,11 +25,15 @@ struct CakeGiftWindowHooks {
     var close: @MainActor () -> Void
     /// 창이 지금 떠 있는가(자동 띄우기가 이미 뜬 창을 다시 앞으로 끌지 않게).
     var isOpen: @MainActor () -> Bool
+    /// 사용자가 닫은 창에서 메뉴 팝오버로 돌아간다(v0.3.69 — `WindowTopAnchor.returnToMenuPopover`). 시험이 갈아 끼운다(실제 문은 앱을
+    /// 활성화하고 상태바 버튼을 누른다). 기본값을 두지 않는다 — 대역이 빠뜨리면 시험이 실제 문을 누른다.
+    var returnToPopover: @MainActor () -> Void
 
     @MainActor static var live: CakeGiftWindowHooks {
         CakeGiftWindowHooks(show: { CheckCakeGiftWindowController.shared.show(activating: $0) },
                             close: { CheckCakeGiftWindowController.shared.close() },
-                            isOpen: { CheckCakeGiftWindowController.shared.isOpen })
+                            isOpen: { CheckCakeGiftWindowController.shared.isOpen },
+                            returnToPopover: { _ = WindowTopAnchor.returnToMenuPopover() })
     }
 }
 
@@ -123,6 +127,8 @@ extension WorkTimerStore {
         // 이미 떠 있으면(다시 열기로 연 창) 끌어오지 않는다.
         guard !cakeGiftWindowHooks.isOpen() else { return }
         // 스스로 띄울 때는 키를 잡지 않는다(`CakeGiftWindowHooks.show` 주석 — 대결 · 다른 앱의 키를 가로채지 않게).
+        // 팝오버에서 온 것이 아니므로 닫아도 팝오버로 돌아가지 않는다.
+        cakeGiftReturnsToPopover = false
         presentCakeGiftWindow(offer, activating: false)
     }
 
@@ -130,9 +136,11 @@ extension WorkTimerStore {
 
     /// '다시 열기' 카드의 [고르기]. 열린 선물이 없으면 아무것도 안 한다. 팝오버 안의 버튼이 부르므로 **창 먼저, 팝오버 나중**에 닫는다
     /// (뽑기 창과 같은 순서 — `openGachaWindow` 주석).
+    /// 닫으면 팝오버로 돌아간다(`cakeGiftReturnsToPopover` — v0.3.69, 뽑기 창과 같은 이유).
     func openCakeGiftWindow() {
         guard let offer = cakeGiftOffer else { return }
         presentCakeGiftWindow(offer, activating: true)
+        cakeGiftReturnsToPopover = true
         WindowTopAnchor.dismissMenuPopover()
     }
 
@@ -250,13 +258,15 @@ extension WorkTimerStore {
         closeCakeGiftWindow()
     }
 
-    /// 창의 [닫기] · 빨간 점. 고르지 않고 닫아도 선물은 남는다(`cakeGiftOffer` — '다시 열기' 카드).
+    /// 창의 [닫기] · [지금 입기]. 고르지 않고 닫아도 선물은 남는다(`cakeGiftOffer` — '다시 열기' 카드).
     func closeCakeGiftWindow() {
         cakeGiftWindowHooks.close()
         cakeGiftDidClose()
     }
 
-    /// 창이 닫혔다(사용자가 빨간 점을 눌렀든 우리가 닫았든). 받은 뒤 화면이었으면 다음에 열 때 고르기 화면부터다.
+    /// 사용자가 창을 닫았다([닫기] · [지금 입기] → `closeCakeGiftWindow`, 빨간 점 → 컨트롤러의 `windowWillClose`). 받은 뒤 화면이었으면
+    /// 다음에 열 때 고르기 화면부터다. 팝오버의 [고르기] 로 연 창이면 팝오버로 돌아간다(v0.3.69) — **한 번만**: 돌아가는 문은 디바운스를
+    /// 안 보므로 두 번 부르면 방금 연 팝오버가 도로 닫힌다. 로그아웃(`resetCakeGiftState`)은 이 길을 안 지난다(팝오버가 튀어나오지 않게).
     func cakeGiftDidClose() {
         cakeGiftNotice = nil
         if cakeGiftReceivedID != nil {
@@ -264,11 +274,16 @@ extension WorkTimerStore {
             cakeGiftPresented = nil
             cakeGiftChoice = nil
         }
+        if cakeGiftReturnsToPopover {
+            cakeGiftReturnsToPopover = false
+            cakeGiftWindowHooks.returnToPopover()
+        }
     }
 
     /// 로그아웃 · 계정 전환 — 앞 계정의 선물을 다음 사람이 보지도 받지도 않게. 창도 내린다. 실행당 한 번 기록은 남긴다(실행 단위).
     func resetCakeGiftState() {
         cakeGiftWindowHooks.close()
+        cakeGiftReturnsToPopover = false
         cakeGiftOffer = nil
         cakeGiftPresented = nil
         cakeGiftChoice = nil

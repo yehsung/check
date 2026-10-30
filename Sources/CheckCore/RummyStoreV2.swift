@@ -85,7 +85,10 @@ extension RummyStore {
     func updateHeartbeat() {
         let holding = host?.session != nil && (phase == .room || phase == .playing)
             && match.map { isEngaged($0.id) } == true
-        setHoldingMatch(holding)
+        // App Nap 은 내 자리가 아직 판에 있을 때만 막는다 — 기권(forfeit)·끝(done)한 뒤 남의 판을 지켜보는 동안은 보낼 마감이 없다
+        // (쥐면 판이 끝날 때까지 배터리만 먹는다). 하트비트는 그대로 둔다(서버가 joined·playing 자리만 갱신한다).
+        let seatState = match.flatMap { mySeat(in: $0) }?.state
+        setHoldingMatch(holding && seatState != .forfeit && seatState != .done)
         let wanted: UUID? = heartbeatEnabled && holding ? match?.id : nil
         guard wanted != heartbeatMatchID else { return }
         heartbeatTask?.cancel()
@@ -293,10 +296,19 @@ extension RummyStore {
     // MARK: - 한 계정 기기 여럿(머리말 ⑮ · 설계서 v2 §6)
 
     package nonisolated static let engagedDefaultsKey = "rummy.engaged.v2"
+    /// 장부 주인(계정 id). 강제 로그아웃(토큰 만료 — 이탈 없음)으로 남은 앞 계정의 판 id 가, 같은 판의 상대 계정이 이 맥에 들어왔을 때
+    /// 맞아 버리지 않게 한다(판 id 는 같은 판의 모든 자리에 같다).
+    package nonisolated static let engagedOwnerDefaultsKey = "rummy.engaged.v2.owner"
 
-    /// 이 기기가 이 판에 손댄 적이 있는가(create·join·start·draft·play·draw·react 를 보냈다).
+    /// 이 기기가 이 판에 손댄 적이 있는가(create·join·start·draft·play·draw·react 를 보냈다). **지금 계정의 장부일 때만.**
     package func isEngaged(_ matchID: UUID) -> Bool {
-        engagedMatchIDs.contains(matchID)
+        engagedMatchIDs.contains(matchID) && engagedLedgerIsMine
+    }
+
+    /// 장부 주인이 지금 계정인가. 주인을 모르거나(세션 전에 적었다) 세션이 없으면 믿는다(세션 없는 문은 따로 막혀 있다).
+    var engagedLedgerIsMine: Bool {
+        guard let owner = engagedOwnerUserID, let me = myUserID else { return true }
+        return owner == me
     }
 
     /// 들고 있는 판이 이 기기가 손댄 판인가 — 맥의 창 닫기·종료·로그아웃·업데이트 판단이 읽는다.
@@ -306,11 +318,21 @@ extension RummyStore {
 
     /// 판에 쓰기를 **보내기 직전에** 부른다. 처음이면 장부에 적고(저장소가 있으면 남긴다) 하트비트·App Nap 을 다시 맞춘다.
     package func markEngaged(_ matchID: UUID) {
-        guard !engagedMatchIDs.contains(matchID) else { return }
-        engagedMatchIDs.append(matchID)
-        if engagedMatchIDs.count > Self.engagedLimit {
-            engagedMatchIDs.removeFirst(engagedMatchIDs.count - Self.engagedLimit)
+        var changed = false
+        if let me = myUserID, engagedOwnerUserID != me {
+            // 다른 계정의 장부(강제 로그아웃으로 남았다) — 버리고 이 계정 것으로 연다. 주인을 몰랐으면 지금 계정으로 적는다.
+            if engagedOwnerUserID != nil { engagedMatchIDs = [] }
+            engagedOwnerUserID = me
+            changed = true
         }
+        if !engagedMatchIDs.contains(matchID) {
+            engagedMatchIDs.append(matchID)
+            if engagedMatchIDs.count > Self.engagedLimit {
+                engagedMatchIDs.removeFirst(engagedMatchIDs.count - Self.engagedLimit)
+            }
+            changed = true
+        }
+        guard changed else { return }
         saveEngaged()
         updateHeartbeat()
     }
@@ -332,12 +354,21 @@ extension RummyStore {
 
     func saveEngaged() {
         engagedDefaults?.set(engagedMatchIDs.map { $0.uuidString.lowercased() }, forKey: Self.engagedDefaultsKey)
+        engagedDefaults?.set(engagedOwnerUserID, forKey: Self.engagedOwnerDefaultsKey)
     }
 
     /// 저장소를 꽂은 순간 저장된 목록을 앞에 합친다(앱을 다시 켜도 쥐던 판의 하트비트·이탈이 이어진다).
+    /// 저장된 주인이 메모리 장부의 주인과 다르면 저장된 것은 남의 장부라 합치지 않는다.
     func loadEngaged() {
-        guard let stored = engagedDefaults?.stringArray(forKey: Self.engagedDefaultsKey) else { return }
+        guard let defaults = engagedDefaults,
+              let stored = defaults.stringArray(forKey: Self.engagedDefaultsKey) else { return }
+        let storedOwner = defaults.string(forKey: Self.engagedOwnerDefaultsKey)
         var merged = stored.compactMap(UUID.init(uuidString:))
+        if let current = engagedOwnerUserID {
+            if let storedOwner, storedOwner != current { merged = [] }
+        } else {
+            engagedOwnerUserID = storedOwner
+        }
         for id in engagedMatchIDs where !merged.contains(id) { merged.append(id) }
         if merged.count > Self.engagedLimit { merged.removeFirst(merged.count - Self.engagedLimit) }
         engagedMatchIDs = merged

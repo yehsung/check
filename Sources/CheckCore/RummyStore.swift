@@ -50,6 +50,9 @@ import OSLog
 //     `engagedMatchIDs` = 이 기기에서 create·join·start·draft·play·draw·react 중 하나라도 **보낸** 판(`engagedDefaults`
 //     에 남아 앱을 다시 켜도 이어진다 · 판이 끝나거나 접히면 지운다). 놀던 맥을 끄거나 로그아웃해도 다른 맥의 판이
 //     기권되지 않는다. App Nap 활동(`onHoldingMatchChange`)도 같은 조건(engaged 판이 room·playing)이다.
+//     장부는 **계정에 묶인다**(`engagedOwnerUserID`) — 같은 판의 상대 계정이 이 맥에 들어와도 앞 계정의 장부로 engaged 가 아니다.
+//     **스스로 보내는 작업 판도 engaged 판에서만**: 차례 중간에 편집기를 새로 세울 때 서버 작업 판을 되돌리는 것(`reconcileEditor`)은
+//     놀던 맥에선 하지 않는다 — 그 작업 판은 다른 맥이 지금 만드는 것이고, 보내는 순간 놀던 맥이 engaged 가 된다.
 //     **알고 둔 빈틈:** 같은 판을 맥 A 에서 시작해 맥 B 에서 이어 하다 A 를 끄면(로그아웃하면) A 도 engaged 라 기권된다 —
 //     A 가 '이제 B 가 쥐었다' 를 알 길이 없다(서버가 기기를 가르지 않는다). 드문 경우라 받아들인다.
 //  ⑯ **루비 잔액은 스토어가 마지막으로 안 값**(`rubyBalance` — 로비 `me.ruby_balance` · 거절 응답의 `ruby_balance`).
@@ -206,6 +209,9 @@ package final class RummyStore {
     }
     /// 이 기기에서 create·join·start·draft·play·draw·react 를 **보낸** 판(오래된 것이 앞, 최대 `engagedLimit`).
     @ObservationIgnored package internal(set) var engagedMatchIDs: [UUID] = []
+    /// `engagedMatchIDs` 의 주인(그 판들에 손댄 계정 id, 소문자). nil = 세션 전에 적었다(믿는다). 다른 계정이 들어오면 그 장부는
+    /// 남의 것이라 쓰지 않고, 그 계정이 처음 손댈 때 비운다(근무 큐 `adoptWorkStateOwner` 와 같은 원칙 — 같은 계정이면 이어받는다).
+    @ObservationIgnored package internal(set) var engagedOwnerUserID: String?
     /// 이 기기가 지금 판을 쥐고 있다(engaged 판이 room·playing · 세션 있음). 맥이 App Nap 을 막는 활동을 쥐고 놓는다.
     @ObservationIgnored package internal(set) var isHoldingMatch = false
     /// `isHoldingMatch` 가 바뀔 때마다 한 번(true = 쥐어라, false = 놓아라). 맥 전용 배선(`RummyActivityHold`)이 꽂는다.
@@ -504,8 +510,9 @@ package final class RummyStore {
         heartbeatTask?.cancel()
         heartbeatTask = nil
         heartbeatMatchID = nil
-        // 로그아웃·계정 전환: App Nap 활동을 놓는다. `engagedMatchIDs` 는 남긴다 — 판 id 는 사람마다 달라 다음 사람에겐
-        // 아무 뜻이 없고, 같은 사람이 다시 들어오면(토큰 만료 강제 로그아웃) 쥐던 판의 하트비트가 이어져야 한다.
+        // 로그아웃·계정 전환: App Nap 활동을 놓는다. `engagedMatchIDs` 는 남긴다 — 같은 사람이 다시 들어오면(토큰 만료 강제
+        // 로그아웃) 쥐던 판의 하트비트가 이어져야 한다. 다른 계정에겐 `engagedOwnerUserID` 가 막는다(같은 판의 상대 계정이면
+        // 판 id 가 같다 — 주인 없이 남기면 그 계정이 손대지 않은 판을 이 맥이 기권시킨다).
         setHoldingMatch(false)
         lastSentLayout = nil
         lastReactionSentAt = .distantPast

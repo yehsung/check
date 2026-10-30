@@ -588,3 +588,99 @@ struct V0369RummyV2EngagedTests {
         #expect(below * 4 < header, "머리글 밖이 크게 달라졌다(머리글 \(header) · 아래 \(below))")
     }
 }
+
+// MARK: - 적대 검증(rummy-v2-fixverify) — 놀던 기기가 스스로 engaged 가 되는 길 · 계정이 바뀐 장부
+
+@Suite("v0.3.69 아잉 큐브 2판 후속 적대 검증 — 놀던 기기는 스스로 손대지 않는다 · 장부는 계정에 묶인다", .serialized)
+@MainActor
+struct V0369RummyV2FixVerifyTests {
+    @Test("놀던 기기가 차례 중간 state(다른 맥의 작업 판)를 처음 읽어도 rummy_draft 0회 · engaged 안 됨 — 손댄 기기(앱 재실행)는 예전처럼 맞춘다")
+    func idleDeviceDoesNotRevertOtherDevicesDraft() async throws {
+        // 없으면: 놀던 맥이 판을 처음 읽는 순간(초인종·깨어남·앱 실행) 차례 중간 서버 작업 판을 '내 화면과 다르다' 며 시작 판으로
+        // 되돌려 보내(다른 맥의 작업을 지우고) 스스로 engaged 가 되어, 그 맥을 끄거나 로그아웃하면 다른 맥의 판이 기권되는 결함이 초록이 된다.
+        var midTurn = egState()
+        midTurn["draft"] = ["table": [["A1", "A2", "A3", "A4"]], "layout": [[0, 0]], "draft_seq": 3, "at_ms": egNowMs]
+        let script = EGScript()
+        script.stand("rummy_draft", egEnvelope())
+        script.stand("rummy_heartbeat", egEnvelope())
+        script.stand("rummy_leave", egEnvelope())
+        script.stand("rummy_state", egEnvelope(state: midTurn))
+        let (idle, _, idleHost) = egMake("fv-idle-draft", script: script, engaged: false)
+        await idle.refreshMatch(id: egMatch)
+        #expect(idle.phase == .playing && idle.isMyTurn && idle.editor != nil)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(egCount(idleHost, "rummy_draft") == 0, "놀던 기기가 다른 맥의 작업 판을 되돌려 보냈다")
+        #expect(!idle.isEngaged(egMatch), "놀던 기기가 스스로 engaged 가 됐다")
+        #expect(!RummyExitPolicy.needsExitLeave(idle))
+        #expect(await idle.leaveForExit(reason: .appQuit))
+        #expect(egCount(idleHost, "rummy_leave") == 0 && egCount(idleHost, "rummy_heartbeat") == 0)
+
+        // 비교 기준선: 이 판에 손댄 기기(앱 재실행 — 저장소에서 이어받았다)는 화면에 없는 작업 판을 예전처럼 되돌린다.
+        let (owner, _, ownerHost) = egMake("fv-owner-draft", script: script, engaged: true)
+        await owner.refreshMatch(id: egMatch)
+        await egWait { egCount(ownerHost, "rummy_draft") >= 1 }
+        #expect(egCount(ownerHost, "rummy_draft") == 1, "손댄 기기가 화면에 없는 작업 판을 맞추지 않는다")
+    }
+
+    @Test("계정이 바뀌면 앞 계정의 engaged 장부를 쓰지 않는다 — 같은 판의 상대 계정으로 들어와도 rummy_leave·하트비트 0회, 같은 계정은 이어진다")
+    func engagedLedgerIsBoundToAccount() async throws {
+        // 없으면: 강제 로그아웃(토큰 만료 — 이탈 없음)으로 남은 앞 계정의 engaged 판 id 가, 같은 판의 상대 계정이 이 맥에 들어오면
+        // 그대로 맞아 이 맥을 끄거나 로그아웃할 때 손대지 않은 판이 기권되는 결함이 초록이 된다.
+        let defaults = CheckTestScratch.defaults("engaged-owner")
+        var asB = egState()
+        asB["my_seat_no"] = 1
+        let script = EGScript()
+        script.stand("rummy_heartbeat", egEnvelope())
+        script.stand("rummy_leave", egEnvelope())
+        script.stand("rummy_state", egEnvelope(state: asB))
+        let sessionA = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: egID(egMe))
+        let sessionB = SupabaseSession(accessToken: "access-token-b", refreshToken: nil, userID: egID(egB))
+        let (store, owner, host) = egMake("fv-account", script: script, engaged: false)
+        store.engagedDefaults = defaults
+        store.markEngaged(egMatch)                 // A 가 이 맥에서 둔 판
+        store.reset()                              // 강제 로그아웃(이탈 없음) — 장부는 남는다(같은 사람 재로그인용)
+        owner.session = sessionB                   // 같은 판의 상대 B 가 이 맥에 들어온다
+        await store.refreshMatch(id: egMatch)
+        #expect(store.phase == .playing && store.match?.id == egMatch)
+        #expect(!store.isEngaged(egMatch), "B 가 A 의 장부로 engaged 다")
+        #expect(!RummyExitPolicy.needsExitLeave(store))
+        #expect(store.heartbeatMatchID == nil && !store.isHoldingMatch)
+        #expect(await store.leaveForExit(reason: .signOut))
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(egCount(host, "rummy_leave") == 0 && egCount(host, "rummy_heartbeat") == 0, "B 의 판에 이탈·하트비트가 갔다")
+        // 앱 재실행으로 저장소를 이어받아도 B 에겐 아니다.
+        let (relaunched, owner2, _) = egMake("fv-account-relaunch", script: script, engaged: false)
+        owner2.session = sessionB
+        relaunched.engagedDefaults = defaults
+        #expect(!relaunched.isEngaged(egMatch))
+        // 같은 계정(A)이 다시 들어오면 이어진다(토큰 만료 강제 로그아웃 뒤 재로그인 — 수리 보고의 의도).
+        let (sameA, _, _) = egMake("fv-account-same", script: script, engaged: false)
+        sameA.engagedDefaults = defaults
+        #expect(sameA.isEngaged(egMatch))
+        // B 가 이 맥에서 손대면 장부는 B 의 것으로 새로 열린다(A 의 판 id 는 버린다).
+        let other = UUID()
+        relaunched.markEngaged(other)
+        #expect(relaunched.engagedMatchIDs == [other] && relaunched.isEngaged(other))
+    }
+
+    @Test("App Nap — 내 자리가 기권한 뒤 남의 판을 지켜보는 동안은 놓는다(판이 끝날 때까지 쥐지 않는다)")
+    func appNapReleasesWhenMySeatForfeits() async throws {
+        // 없으면: 시간 초과로 기권된 뒤 판이 끝날 때까지(남은 사람들이 둘 동안) App Nap 을 막는 활동이 남아 배터리를 먹는 결함이 초록이 된다.
+        var begun = 0, ended = 0
+        let hold = RummyActivityHold(begin: { _ in begun += 1; return NSObject() }, end: { _ in ended += 1 })
+        let script = EGScript()
+        script.stand("rummy_heartbeat", egEnvelope())
+        let (store, _, _) = egMake("fv-nap-forfeit", script: script, engaged: true)
+        store.onHoldingMatchChange = { hold.set($0) }
+        store.applyState(try egDecode(egState(turnSeat: 1)))
+        #expect(begun == 1 && hold.isHolding)
+        var spectating = egState(seq: 2, turnSeat: 1)
+        var seats = spectating["seats"] as! [[String: Any]]
+        seats[0]["state"] = "forfeit"
+        spectating["seats"] = seats
+        store.applyState(try egDecode(spectating))
+        #expect(store.phase == .playing && store.match?.id == egMatch, "기권한 자리는 관전으로 판을 든다")
+        #expect(ended == 1 && !hold.isHolding && !store.isHoldingMatch, "기권한 뒤에도 App Nap 활동을 쥐었다")
+        #expect(!RummyExitPolicy.needsExitLeave(store))
+    }
+}

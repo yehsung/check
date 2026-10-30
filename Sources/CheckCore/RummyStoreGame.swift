@@ -215,7 +215,9 @@ extension RummyStore {
         // 차례 중간에 편집기를 새로 세웠는데(앱 재실행) 서버 작업 판이 내 화면과 다르면 맞춘다 — 시간 초과 때 서버는
         // 그 작업 판을 판정한다(R-19). 내 화면에 없는 판이 나 대신 내지지 않게 한다.
         // 비교는 K(다중집합) — 서버가 판정하는 기준과 같고, 편집기가 세트 안 순서를 표시 순서로 바꿔도 헛보내지 않는다.
-        if Self.isMyTurn(state, me: myUserID), let serverDraft = state.draft?.table,
+        // **이 기기가 손댄 판에서만**(머리말 ⑮). 놀던 맥이 판을 처음 읽은 순간(초인종·깨어남·앱 실행) 보이는 작업 판은 같은 계정의
+        // 다른 맥이 지금 만드는 것이다 — 되돌려 보내면 그 작업을 지우고, 보내는 순간 이 맥이 engaged 가 되어 이 맥을 끄면 판이 기권된다.
+        if Self.isMyTurn(state, me: myUserID), isEngaged(state.id), let serverDraft = state.draft?.table,
            !RummyRules.sameTable(serverDraft, fresh.submissionTable) {
             scheduleDraft()
         }

@@ -737,6 +737,9 @@ struct V0369RummyStoreTests {
         let script = RKScript()
         script.stand("rummy_draft", rkJSON(["status": "ok", "draft_seq": 3]))
         let (store, _, host, _) = rkMake("draft-resync", script: script)
+        // 앱을 다시 켠 **이 판을 하던 기기**(engaged 장부가 저장소에서 이어졌다 — 설계서 v2 §6). 놀던 기기는 되돌리지 않는다
+        // (V0369RummyV2FixVerifyTests.idleDeviceDoesNotRevertOtherDevicesDraft).
+        store.markEngaged(rkMatch)
         let stale: [String: Any] = ["table": [["A1", "A2", "A3"]], "draft_seq": 2, "at_ms": rkNowMs]
         let mine = try rkDecode(RummyActionResponse.self, rkEnvelope(state: rkState(seq: 6, draft: stale)))
         store.applyState(try #require(mine.state))
@@ -761,6 +764,7 @@ struct V0369RummyStoreTests {
         let script = RKScript()
         script.enqueue("rummy_draft", rkEnvelope("stale", state: rkState(seq: 7, turnSeat: 1)), delay: 0.3)
         let (store, _, host, _) = rkMake("draft-flight", script: script)
+        store.markEngaged(rkMatch)   // 판을 하던 기기(앱 재실행) — 위 시험과 같은 전제(§6)
         let stale: [String: Any] = ["table": [["A1", "A2", "A3"]], "draft_seq": 2, "at_ms": rkNowMs]
         let mine = try rkDecode(RummyActionResponse.self, rkEnvelope(state: rkState(seq: 6, draft: stale)))
         store.applyState(try #require(mine.state))

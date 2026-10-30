@@ -28,7 +28,8 @@ class FileDesktopKeyValueStoreImmediateTest {
     @Test
     fun 앱_자리는_근무_큐_키를_즉시_쓰기로_연다() {
         val kv = FileDesktopKeyValueStore.inDataDir(dir.toString(), debounceMillis = 60_000).also { opened += it }
-        assertEquals(setOf(DesktopWorkQueue.pendingWorkQueueKey), kv.immediateKeys)
+        assertEquals(FileDesktopKeyValueStore.WORK_IMMEDIATE_KEYS, kv.immediateKeys)
+        assertTrue(DesktopWorkQueue.pendingWorkQueueKey in kv.immediateKeys)
         kv.putString(DesktopWorkQueue.pendingWorkQueueKey, """[{"op":"start"}]""")
         assertEquals("""[{"op":"start"}]""", onDisk(kv.file)[DesktopWorkQueue.pendingWorkQueueKey], "묶음 창(60초)을 기다리지 않는다")
         assertFalse(kv.isDirty)

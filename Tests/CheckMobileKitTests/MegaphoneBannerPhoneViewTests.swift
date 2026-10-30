@@ -7,13 +7,20 @@ import Testing
 // MARK: - 확성기 배너 · 폰 뷰(계약 docs/plan/megaphone-banner-contract.md — 폰 배너)
 //
 // 뷰(`MegaphoneBannerOverlay`)는 iOS 전용이라 맥 스위트가 컴파일하지 않는다. 그래서 둘로 잰다:
-// ① 주석을 걷은 소스에서 **부르는 자리**(오버레이가 붙는 곳 · 손짓이 부르는 함수 · [답장]이 부르는 함수),
+// ① 주석을 걷은 소스에서 **부르는 자리**(오버레이가 붙는 곳 · 손짓이 부르는 함수 · 카드의 단추는 [닫기] 하나),
 // ② 그 자리가 부르는 순수 판정·앱 모델 배선을 실제로 돌려서. 시험마다 결과를 가르는 기준선을 하나씩 둔다.
 
 /// 시트 탐지기를 바꿔 끼우는 스위치.
 @MainActor
 final class MegaphoneModalSwitch {
     var on = false
+}
+
+/// 배너 타이머를 붙잡아 두는 곳(기다리지 않고 시간·발사를 손으로 잰다).
+@MainActor
+final class MegaphoneTimerLog {
+    var delays: [TimeInterval] = []
+    var fires: [@MainActor @Sendable () -> Void] = []
 }
 
 @MainActor
@@ -142,7 +149,7 @@ final class MegaphoneModalSwitch {
         modal.on = true
         #expect(h.model.isMegaphoneBannerDeferred)
         h.model.syncMegaphoneBannerDeferral()
-        #expect(store.current == nil, "시트 밑에 깔린 배너가 그대로 8초를 흘린다")
+        #expect(store.current == nil, "시트 밑에 깔린 배너가 보여 주는 시간을 그대로 흘린다")
         #expect(store.queue.map(\.megaphoneID) == ["mgA"])
         // 스토어가 띄우기 전에 앱 모델의 미룸을 묻는다(init 배선).
         store.presentFromPush(megaphoneID: "mgB", senderName: "확성기님", body: "📢 둘", senderID: MegaphoneBannerPhoneTests.peerMega)
@@ -163,43 +170,70 @@ final class MegaphoneModalSwitch {
         #expect(app.contains("megaphoneBanner.isBannerDeferred={[weakself]inself?.isMegaphoneBannerDeferred??false}"))
     }
 
-    // MARK: [답장]
+    // MARK: 단추 — [닫기] 하나
 
-    @Test("[답장]: 보낸 사람 1:1 대화를 열고 이름을 넘기고 닫는다 · 기준선: 내 배너는 닫기만")
-    func replyRoute() async throws {
+    nonisolated static let rulesPath = "Sources/CheckMobileKit/Messages/MegaphoneBannerPhoneRules.swift"
+    nonisolated static let messagesStorePath = "Sources/CheckMobileKit/Messages/MessagesStore.swift"
+
+    @Test("카드 단추는 [닫기] 하나: 주석 걷은 소스에 답장·reply 없음 · 단추 하나가 닫기를 부른다 · 기준선: 닫기 단추는 있다")
+    func cardHasOnlyCloseButton() throws {
+        let overlay = Self.squashed(try IntegrationContractTests.code(Self.overlayPath))
+        // 기준선: 같은 소스에서 [닫기] 단추와 그 배선은 찾힌다 — 아래 '없다'가 빈 파일·잘못 읽은 경로로 초록이 되지 않게.
+        #expect(overlay.contains("AingButton(MegaphoneBannerPhoneText.close,kind:.gray,size:.md){onClose()}"), "카드에 [닫기]가 없다")
+        #expect(overlay.contains("onClose:{store.dismissCurrent()}"), "[닫기]가 배너를 안 닫는다")
+        #expect(overlay.components(separatedBy: "AingButton(").count - 1 == 1, "카드 단추가 [닫기] 하나가 아니다")
+        for word in ["reply", "답장", "canReply"] {
+            #expect(overlay.range(of: word, options: .caseInsensitive) == nil, "배너 카드에 [답장]이 남았다: \(word)")
+        }
+        // 배선도 걷었다: 앱 모델 · 화면 규칙(라우트 · 문구) · 메시지함 이름·아바타 힌트.
+        let model = Self.squashed(try IntegrationContractTests.code(Self.modelPath))
+        let rules = Self.squashed(try IntegrationContractTests.code(Self.rulesPath))
+        #expect(model.contains("store.deferralChanged()"), "기준선: 앱 모델 배선 파일을 못 읽었다")
+        #expect(rules.contains("packagestaticletclose=\"닫기\""), "기준선: 화면 규칙 문구를 못 읽었다")
+        for (name, code) in [("앱 모델", model), ("화면 규칙", rules)] {
+            for word in ["reply", "답장"] {
+                #expect(code.range(of: word, options: .caseInsensitive) == nil, "\(name)에 [답장] 배선이 남았다: \(word)")
+            }
+        }
+        let store = try IntegrationContractTests.code(Self.messagesStorePath)
+        for symbol in ["replyPeerHints", "MegaphoneReplyPeerHint", "rememberPeerHint"] {
+            #expect(!store.contains(symbol), "메시지함에 [답장] 힌트가 남았다: \(symbol)")
+        }
+        let leftovers = try IntegrationContractTests.files(
+            containing: ["replyToMegaphoneBanner", "MegaphoneReplyPeerHint", "rememberPeerHint", "MegaphoneBannerPhoneText.reply", "onReply"],
+            under: "Sources/CheckMobileKit"
+        )
+        #expect(leftovers.isEmpty, "[답장] 배선이 남은 파일: \(leftovers)")
+        #expect(MegaphoneBannerPhoneText.close == "닫기")
+    }
+
+    @Test("아무것도 안 누르면 코어 상수(displaySeconds) 뒤 스스로 닫힌다 · 기준선: 시간이 오기 전엔 떠 있다 · 카드는 제 시간을 안 센다")
+    func autoDismissUsesCoreConstant() async throws {
         let h = await MessagesHarness.make { server in
             server.override("megaphone_inbox") { _ in .json("[]") }
         }
         defer { h.tearDown() }
         await MegaphoneBannerPhoneTests.settleBanner(h)
         let store = h.model.megaphoneBanner
-        let router = h.model.router
+        let timers = MegaphoneTimerLog()
+        store.schedule = { after, fire in timers.delays.append(after); timers.fires.append(fire) }
 
-        let own = MegaphoneBanner(messageID: nil, megaphoneID: "mgOwn", senderID: "me", senderName: "나", senderAvatarURL: nil,
-                                  body: "내 글", createdAt: Date(), isOwn: true)
-        #expect(MegaphoneBannerPhoneRules.replyRoute(for: own) == nil)
-        let before = router.lastOpenedRoute
-        h.model.replyToMegaphoneBanner(own)
-        #expect(router.lastOpenedRoute == before, "내 배너 [답장]이 대화를 열었다")
-
-        let peer = "P-Reply"
-        #expect(h.model.messages.peerName(for: "p-reply") == nil, "기준선: 이력에 이 사람이 이미 있다")
-        store.presentFromPush(megaphoneID: "mgR", senderName: "확성기님", body: "📢 답장해 줘", senderID: peer)
-        let banner = try #require(store.current)
-        #expect(MegaphoneBannerPhoneRules.replyRoute(for: banner) == .message(peerID: "p-reply"))
-        h.model.replyToMegaphoneBanner(banner)
-        #expect(router.lastOpenedRoute == .message(peerID: "p-reply"))
-        #expect(router.selectedTab == .messages)
-        #expect(store.current == nil, "[답장] 뒤 배너가 남았다")
-        #expect(h.model.messages.peerName(for: "p-reply") == "확성기님", "빈 대화 머리에 이름이 안 넘어갔다")
-        h.model.messages.reset()
-        #expect(h.model.messages.peerName(for: "p-reply") == nil, "로그아웃 뒤에도 이름이 남는다")
+        store.presentFromPush(megaphoneID: "mgT", senderName: "확성기님", body: "📢 곧 올라가요", senderID: MegaphoneBannerPhoneTests.peerMega)
+        #expect(store.current?.megaphoneID == "mgT")
+        // 폰 배너의 보여 주는 시간은 맥과 한 벌인 코어 상수다(숫자를 폰에 박지 않는다).
+        #expect(timers.delays == [MegaphoneBannerRules.displaySeconds], "폰 배너가 코어 상수 말고 다른 시간을 센다: \(timers.delays)")
+        #expect(store.current != nil, "기준선: 시간이 오기 전에 배너가 사라졌다")
+        let fire = try #require(timers.fires.first)
+        fire()
+        #expect(store.current == nil, "[닫기]를 안 누르면 배너가 계속 떠 있다")
         await h.settle()
 
         let overlay = Self.squashed(try IntegrationContractTests.code(Self.overlayPath))
-        #expect(overlay.contains("onReply:{model.replyToMegaphoneBanner(banner)}"))
-        #expect(overlay.contains("ifbanner.canReply{AingButton(MegaphoneBannerPhoneText.reply"))
-        let model = Self.squashed(try IntegrationContractTests.code(Self.modelPath))
-        #expect(model.contains("context.router.open(route)}megaphoneBanner.dismissCurrent()"))
+        for clock in ["displaySeconds", "Timer.", "asyncAfter"] {
+            #expect(!overlay.contains(clock), "카드가 제 시간을 센다: \(clock)")
+        }
+        // 기준선: 오버레이의 잠은 미룸 다시 보기(1초 고리) 하나뿐이다.
+        #expect(overlay.components(separatedBy: "Task.sleep(").count - 1 == 1)
+        #expect(overlay.contains("Task.sleep(for:.seconds(MegaphoneBannerPhoneRules.deferralPollSeconds))"))
     }
 }

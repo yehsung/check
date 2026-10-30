@@ -119,16 +119,19 @@ enum TetrisWireJSON {
     }
 
     /// §2.5 상태 한 벌을 **`state` 봉투에 담아** 돌려준다(펼치지 않는다 — 와이어 계약).
+    /// `myDevice` 기본 'this' = 이 폰이 두는 판(서버 20261103124000 의 my_device — 코어 머리말 ⑩). nil 이면 키를 안 싣는다(옛 서버).
     static func stateEnvelope(nowMs: Int, id: String = TetrisWireHarness.matchID, status: String = "active",
                               startAtMs: Int? = nil, meReady: Bool = false, opponentSent: Int = 0,
-                              result: String? = nil, winner: String? = nil, endReason: String? = nil) -> String {
+                              result: String? = nil, winner: String? = nil, endReason: String? = nil,
+                              myDevice: String? = "this") -> String {
         let start = startAtMs.map { "\($0)" } ?? "null"
         let maxEnd = startAtMs.map { "\($0 + 480_000)" } ?? "null"
         let finished = status == "finished" ? "\(nowMs)" : "null"
         let resultValue = result.map { "\"\($0)\"" } ?? "null"
         let winnerValue = winner.map { "\"\($0)\"" } ?? "null"
         let reasonValue = endReason.map { "\"\($0)\"" } ?? "null"
-        let state = #"{"match_id":"\#(id)","status":"\#(status)","stake":5,"seed":4242,"server_now_ms":\#(nowMs),"accepted_at_ms":\#(nowMs - 2_000),"start_at_ms":\#(start),"ready_deadline_ms":\#(nowMs + 28_000),"max_end_ms":\#(maxEnd),"finished_at_ms":\#(finished),"me":\#(player(TetrisWireHarness.userID, "나", ready: meReady)),"opponent":\#(player(rivalID, "테트라이벌", ready: true, seq: 3, sent: opponentSent)),"result":\#(resultValue),"winner":\#(winnerValue),"end_reason":\#(reasonValue),"ruby_balance":97}"#
+        let device = myDevice.map { #","my_device":"\#($0)""# } ?? ""
+        let state = #"{"match_id":"\#(id)","status":"\#(status)","stake":5,"seed":4242,"server_now_ms":\#(nowMs),"accepted_at_ms":\#(nowMs - 2_000),"start_at_ms":\#(start),"ready_deadline_ms":\#(nowMs + 28_000),"max_end_ms":\#(maxEnd),"finished_at_ms":\#(finished),"me":\#(player(TetrisWireHarness.userID, "나", ready: meReady)),"opponent":\#(player(rivalID, "테트라이벌", ready: true, seq: 3, sent: opponentSent)),"result":\#(resultValue),"winner":\#(winnerValue),"end_reason":\#(reasonValue),"ruby_balance":97\#(device)}"#
         return #"{"status":"ok","state":\#(state)}"#
     }
 
@@ -788,6 +791,48 @@ enum TetrisWireJSON {
         #expect(bare.model.router.path(for: .games).isEmpty,
                 "기준선이 안 갈린다 — 문과 무관하게 경로가 쌓이면 위 초록은 배선을 재지 않는다")
         await bare.tearDown()
+    }
+
+    // MARK: - 9. 한 판 한 기기 (0.3.69 — 코어 머리말 ⑩)
+
+    @Test("다른 기기가 두는 판의 시작은 폰 화면을 열지 않는다(판·보고 0 · 안내 한 줄) — 같은 상태에 my_device this 면 연다 · 기록은 앱 저장소")
+    func aMatchPlayedOnAnotherDeviceDoesNotOpenThePhoneScreen() async throws {
+        // 없으면: 맥에서 수락한 판의 초인종을 받은 폰이 게임 탭으로 건너뛰어 대결 화면을 쌓고(보이는 화면은 곧바로 준비를 낸다)
+        // 입력 없는 폰의 판이 맥의 판을 덮는다 — 2026-10-30 맥 두 대 사고의 폰 판.
+        let harness = TetrisWireHarness(label: "tetris-other-device")
+        serve(harness)
+        await harness.signIn()
+        // 기록은 앱 저장소(App Group defaults — `storage.defaults` 는 부를 때마다 새 인스턴스라 같은 스위트에 떨어지는지로 잰다).
+        harness.tetris.noteOwnsMatch("m-tetris-owned")
+        let owned = harness.storage.defaults.dictionary(
+            forKey: TetrisDuelStore.ownedMatchesKey(userID: TetrisWireHarness.userID))
+        #expect(owned?.keys.contains("m-tetris-owned") == true,
+                "'이 폰이 연 판' 기록이 앱 저장소에 안 떨어진다 — 판 중에 다시 켜면 자기 판을 못 알아본다")
+        let router = harness.model.router
+        router.selectedTab = .me
+        router.popToRoot(.games)
+        let other = try #require(Self.decodeState(TetrisWireJSON.stateEnvelope(nowMs: harness.serverNowMs,
+                                                                               myDevice: "other")))
+        harness.tetris.applyState(other)
+        #expect(router.selectedTab == .me && router.path(for: .games).isEmpty, "다른 기기의 판이 폰 화면을 열었다")
+        #expect(harness.tetris.duel == nil && harness.tetris.playingElsewhere)
+        #expect(harness.tetris.notice == TetrisDuelNoticeText.otherDevice)
+        await harness.barrier()
+        #expect(harness.count("tetris_report") == 0, "다른 기기의 판에 폰이 보고를 냈다")
+        await harness.tearDown()
+
+        // ★ 기준선: 같은 판 · 같은 손짓에 서버가 'this' 라 하면 화면이 열린다(막은 것이 판정 덕인지 길이 끊긴 덕인지 가린다).
+        let mine = TetrisWireHarness(label: "tetris-this-device")
+        serve(mine)
+        await mine.signIn()
+        mine.model.router.selectedTab = .me
+        mine.model.router.popToRoot(.games)
+        let this = try #require(Self.decodeState(TetrisWireJSON.stateEnvelope(nowMs: mine.serverNowMs)))
+        mine.tetris.applyState(this)
+        #expect(mine.model.router.selectedTab == .games && mine.model.router.path(for: .games).count == 1,
+                "기준선이 안 갈린다 — 이 폰의 판도 화면을 못 연다")
+        #expect(mine.tetris.duel != nil && !mine.tetris.playingElsewhere)
+        await mine.tearDown()
     }
 
     @Test("목적지가 실제로 테트리스 대결이다 — 쌓는 자리가 `GamesDestination.tetrisDuel` 인지 글자로 못 박는다")

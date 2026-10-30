@@ -1993,6 +1993,9 @@ final class WorkTimerStore {
         gomoku.attach(host: self)
         chess.attach(host: self)
         tetris.attach(host: self)
+        // v0.3.69: '이 기기가 연 판' 기록(한 판 한 기기 — TetrisDuelStore 머리말 ⑩)을 이 앱의 defaults 에 둔다. 빠지면 기록이
+        // 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 옛 서버(my_device 없음)에서 자기 판을 못 알아보고 침묵 패를 한다.
+        tetris.defaults = defaults
         // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
         // 게임 이름은 일일 미션 키(`daily_<게임>`)의 꼬리다 — 그 줄을 이미 채웠으면 묻지 않는다.
         gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "gomoku") }

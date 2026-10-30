@@ -108,6 +108,9 @@ public final class MobileAppModel {
         // 1:1 테트리스(0.3.60 서버·맥 · 폰은 1.0.11). 호스트는 **오목·체스와 같은 하나**다(루비 미러 한 칸).
         let tetris = TetrisDuelStore(host: host)
         tetris.clock = { clock.now() }
+        // 한 판 한 기기(0.3.69 — 코어 머리말 ⑩): '이 기기가 연 판' 기록을 둘 곳. 빠지면 기록이 프로세스 안에만 살아, 판 중에
+        // 앱을 다시 켠 폰이 옛 서버(my_device 없음)에서 자기 판을 못 알아본다.
+        tetris.defaults = env.storage.defaults
         // 순위의 **주 스위치**. 기본이 꺼짐이라 이 한 줄이 없으면 `tetris_ranking` 이 **한 번도 안 나가고**
         // 순위 탭은 영영 로딩 문구다 — 오목·체스의 바로 위 두 줄과 같은 못이고, 같은 까닭으로 지우지 마라
         // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisDuelWiringTests.swift`

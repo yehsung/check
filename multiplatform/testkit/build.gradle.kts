@@ -54,6 +54,10 @@ kotlin {
             api(libs.ktor.client.mock)
             // Compose 컴파일러 플러그인은 main 컴파일에도 런타임을 요구한다(스냅숏 도우미 자리).
             implementation(libs.compose.runtime)
+            // 공용 패치 13: ui·desktopApp 화면 시험 조립(ScreenHarness·MeScreenHarness·UiGamesHarness·보드 게임 스텁 — FQN 그대로)과
+            // G5 녹음기(GoldenRecorder)가 진짜 스토어·서비스를 짓는다. compileOnly(공용 패치 7 관례): 실행 때 core 는 쓰는 쪽 시험 classpath 가
+            // 준다 — implementation 이면 core 시험마다 자기 main 을 testkit 너머로 한 벌 더 받는다. testkit → ui main 의존은 두지 않는다.
+            compileOnly(project(":core:stores"))
         }
         getByName("desktopMain").dependencies {
             api(libs.kotlin.test.junit5)

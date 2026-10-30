@@ -32,6 +32,7 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.Registration
 import com.yehsung.aingcheck.core.foundation.platform.desktop.TrayClick
 import com.yehsung.aingcheck.core.foundation.platform.desktop.TrayHost
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelPhase
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStake
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.ownsMatch
 import com.yehsung.aingcheck.core.wire.SupabaseSession
@@ -115,6 +116,8 @@ private class OwnershipPlatform : DesktopPlatform {
 /** 옛 서버(my_device 를 싣지 않는다) — 수락은 판을 active 로, 상태는 그 판을 그대로 돌려준다. */
 private object OldServer {
     const val MATCH = "7e7e0000-0000-4000-8000-0000000000b1"
+    /** 이 기기가 신청(tetris_challenge ok)한 판(합성). */
+    const val CHALLENGED = "7e7e0000-0000-4000-8000-0000000000c2"
     const val PEER = "d0000000-0000-4000-8000-0000000000ee"
     /** 계정 전환 뒤 같은 기기에 들어오는 다음 사람(합성). */
     const val NEXT_USER = "b0000000-0000-4000-8000-0000000000bb"
@@ -150,6 +153,12 @@ private class OwnershipRig(val test: TestScope, val kv: FileDesktopKeyValueStore
                         respond(
                             """{"status":"ok","server_now_ms":${OldServer.nowMs},"me":{"ruby_balance":5,"wins":0,"losses":0,"draws":0,""" +
                                 """"active_match_id":null,"incoming":[]},"users":[],"matches":[]}""",
+                            HttpStatusCode.OK, json,
+                        )
+                    p.endsWith("/rpc/tetris_challenge") ->
+                        respond(
+                            """{"status":"ok","match_id":"${OldServer.CHALLENGED}","expires_at_ms":${OldServer.nowMs + 60_000},""" +
+                                """"server_now_ms":${OldServer.nowMs},"ruby_balance":94}""",
                             HttpStatusCode.OK, json,
                         )
                     p.endsWith("/rpc/tetris_respond") ->
@@ -321,6 +330,34 @@ class TetrisOwnershipRestartTest {
         again.tetris.reset()
         again.close()
         strangerDoesNotPlay()
+    }
+
+    /**
+     * 신청 ok 경로(맥 Sources/CheckCore/TetrisDuelStore.swift:1092 `noteOwnsMatch(id)` — 이 기기가 신청을 보냈다 → 수락되면 이 기기가 둔다)도
+     * 강제 종료(kv 를 닫지 않는다)에 살아남는다. 수락 경로만 재면 신청한 쪽 기기는 다시 켠 뒤 자기 판을 '다른 기기 판'으로 읽는다.
+     */
+    @Test
+    fun challengedMatchSurvivesAForceKillInsideTheDebounceWindow() = runTest {
+        val dir = newDir()
+        val (first, kv) = firstRunAccepts(dir)
+        try {
+            first.tetris.challenge(OldServer.PEER, TetrisDuelStake.three)
+            runCurrent()
+            assertTrue(first.requests.any { it.endsWith("/rpc/tetris_challenge") }, "전제: 신청이 나갔다")
+            assertTrue(first.tetris.ownsMatch(OldServer.CHALLENGED), "신청 ok 가 '이 기기가 연 판' 기록을 안 남겼다")
+            assertTrue(onDisk(kv)[key]?.contains("\"${OldServer.CHALLENGED}\"") == true, "신청 직후 디스크에 기록이 없다 — 강제 종료면 잃는다")
+        } finally {
+            first.tetris.reset()
+            first.close()
+        }
+        // kv 를 닫지 않고(flush 없음) 같은 파일로 새 실행.
+        val again = OwnershipRig(this, appKv(dir))
+        again.signIn()
+        runCurrent()
+        assertTrue(again.tetris.ownsMatch(OldServer.CHALLENGED), "강제 종료 뒤 다시 켠 앱이 자기가 신청한 판을 모른다")
+        assertTrue(first.uncaught.isEmpty() && again.uncaught.isEmpty(), "잡히지 않은 예외: ${first.uncaught + again.uncaught}")
+        again.tetris.reset()
+        again.close()
     }
 
     /**

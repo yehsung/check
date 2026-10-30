@@ -607,6 +607,20 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             chess.reset()
             tetris.reset()
         }
+        // 나머지 계정 묶음 스토어(맥 WorkTimerStore.swift clearPersistedSession 4028-4350 · adoptWorkStateOwner 4356-4375 · 폰 PhoneAppModel.kt
+        // sessionDidSignOut 과 같은 사슬·같은 순서). 없던 때 잰 것(AccountBoundaryTest): 로그아웃·A → B 둘 다 앞 사람의 리그 줄·보던 주·토큰 공개
+        // (맥 4054-4060·4141) · 케이크 선물(4230 resetCakeGiftState) · 제보·별명 초안(4314·4233) · 미니게임 판 토큰(4286 — 서버가 소유자를
+        // 대조해 다음 사람 제출이 조용히 거절된다) · 게임 탭 화면 깃발 · 루비 미러가 남았다. 메시지(초안·확성기 글 — 4115·4224)는 로그아웃은
+        // MessagesBackgroundRefresh 가 비우지만 단계가 SignedIn 에 머무는 A → B 직행에선 안 비워져 여기서도 부른다(멱등).
+        // 뽑기(resetGachaState 4228 — 앞 사람의 request_id)·도전 미션·주간 보상·회고 배너도 me.reset 이 함께 내린다.
+        // 계정 묶음 창(게임·뽑기·케이크)은 GamesWiring 이 계정이 바뀌면 closeAll 로 **닫는다**(맥 4237-4250 — 깃발만 내리지 않는다).
+        social.addSignedOutListener {
+            ruby.rubyBalance = null
+            messages.reset()
+            rankings.reset()
+            gamesStore.reset()
+            me.reset()
+        }
     }
 
     /** 트레이·메뉴가 읽는 근무 값(조정 ⑩ — DesktopWorkSnapshot 을 값으로 옮긴다, 판정 없음). 근무 중이면 30초마다 경과를 새로 적는다. */

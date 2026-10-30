@@ -14,8 +14,10 @@ import Testing
 //     탈출구 · 읽기 전용 자리 사본 교체 · 내가 읽기 전용 자리면 양보 · 실행 시각을 모르면 pid 순.
 //  ② 실제 실행의 조립(`SingleInstanceState.live`)을 가짜 프로세스 목록으로 **그대로** 부른다 — 테스트 프로세스는 언제나 남는다.
 //  ③ 상태와 실행(`resolve`) — 가짜 효과로: 기다리는 동안만 아이콘이 빠지고 남으면 들어간다(판정문 A) · 상대가 끝나면 남는다(B) ·
-//     교체를 거절하면 양보로 떨어진다(C) · 종료가 시작된 실행은 답하지 않는다(B).
+//     교체를 거절하면 양보로 떨어진다(C) · 종료가 시작된 실행은 답하지 않는다(B) · 다시 열기는 남은 뒤 유예가 지나야 연다.
 //  ④ 소스 계약(주석을 걷고) — 대기 갈래가 SIGTERM 설치 뒤 · 모든 배선 앞 · 아이콘 조건 · `deliverImmediately: true` · 다시 열기 · 종료 훅.
+//  ⑤ 스토어(진짜 `WorkTimerStore` — 서버 호출 수 · 저장본으로) — 기다리는 동안 깨어남·인편이 서버를 치지 않는다 · 기다리다 남으면
+//     상대가 끝나며 남긴 큐·토큰을 다시 읽는다.
 
 @Suite("하나만 실행 (v0.3.69)")
 @MainActor
@@ -79,6 +81,22 @@ struct SingleInstanceGuardTests {
         #expect(sigDecide(me: me, others: [older], allowsMultiple: true) == .proceed)
         #expect(sigDecide(me: me, others: [older], isRunningTests: true) == .proceed)
         #expect(SingleInstanceGuard.allowMultipleKey == "check.allowMultipleInstances")
+    }
+
+    @Test func 탈출구를_켠_실행은_없는_것으로_치고_양보도_교체도_하지_않는다() {
+        let me = sigInstance(400, at: 9, path: "/Applications/aing-check.app")
+        let local = sigInstance(300, at: 0, path: "/Users/dev/check/dist/aing-check.app")
+        let tag = SingleInstanceGuard.exemptionTag(local)
+        #expect(tag == "300|/Users/dev/check/dist/aing-check.app")
+        #expect(sigDecide(me: me, others: [local, me]) == .deferTo(300), "대조군이 헛돈다 — 먼저 뜬 로컬 빌드에 원래 양보한다")
+        #expect(sigDecide(me: me, others: [local, me], exempt: [tag]) == .proceed,
+                "탈출구를 켠 로컬 빌드에 설치본이 양보해 조용히 꺼진다")
+        // 읽기 전용 자리에서 탈출구로 띄운 실행도 끝내지 않는다.
+        let dmgDev = sigInstance(301, at: 0, path: "/Volumes/aing-check/aing-check.app")
+        #expect(sigDecide(me: me, others: [dmgDev], exempt: [SingleInstanceGuard.exemptionTag(dmgDev)]) == .proceed)
+        // 같은 pid 를 다시 받은 다른 자리의 실행은 가리지 않는다(남은 줄이 설치본을 숨기지 않는다).
+        let reused = sigInstance(300, at: 0, path: "/Users/u/Applications/aing-check.app")
+        #expect(sigDecide(me: me, others: [reused], exempt: [tag]) == .deferTo(300))
     }
 
     @Test func 읽기_전용_자리의_사본이_떠_있고_내가_설치된_자리면_그쪽을_끝낸다() {
@@ -176,12 +194,41 @@ struct SingleInstanceGuardTests {
             arguments: ["check", AppStoreEditionRetirement.appStoreEditionArgument, "/Applications/AingCheck.app"],
             defaults: defaults, isRunningTests: false, snapshot: { older })
         #expect(relaunch.hasProceeded)
-        // 탈출구 키는 표준 저장소에서 읽힌다 — 켜져 있으면 목록을 묻지도 않는다.
+        // 탈출구 키는 표준 저장소에서 읽힌다 — 켜져 있으면 판정 없이 남고, 자기를 탈출구 목록에 적는다(그래서 목록을 한 번 본다).
         defaults.set(true, forKey: SingleInstanceGuard.allowMultipleKey)
         asked = 0
         let escaped = SingleInstanceState.live(arguments: ["check"], defaults: defaults, isRunningTests: false,
                                                snapshot: { asked += 1; return older })
-        #expect(escaped.hasProceeded && asked == 0)
+        #expect(escaped.hasProceeded && asked == 1)
+        #expect(defaults.stringArray(forKey: SingleInstanceGuard.exemptInstancesKey) == ["200|/Applications/aing-check.app"])
+    }
+
+    @Test func 탈출구로_띄운_로컬_빌드_뒤에_설치본이_다시_떠도_그쪽에_양보하지_않는다() {
+        // 같은 저장소(번들 ID kingcheck)를 쓰는 두 실행. 로컬 빌드는 탈출구를 인자 영역으로만 켠다 — 설치본에는 그 키가 없다.
+        let shared = CheckTestScratch.defaults()
+        let local = sigInstance(300, at: 0, path: "/Users/dev/check/dist/aing-check.app")
+        let installed = sigInstance(400, at: 9, path: "/Applications/aing-check.app")
+        let both = SingleInstanceGuard.Snapshot(me: installed, others: [local, installed])
+        // 지난 실행이 남긴 줄 — 지금 떠 있지 않은 것은 로컬 빌드가 뜰 때 걷힌다.
+        shared.set(["999|/Users/dev/check/dist/aing-check.app"], forKey: SingleInstanceGuard.exemptInstancesKey)
+        shared.set(true, forKey: SingleInstanceGuard.allowMultipleKey)
+        let localState = SingleInstanceState.live(arguments: ["check"], defaults: shared, isRunningTests: false,
+                                                  snapshot: { SingleInstanceGuard.Snapshot(me: local, others: [local]) })
+        #expect(localState.hasProceeded)
+        #expect(shared.stringArray(forKey: SingleInstanceGuard.exemptInstancesKey) == ["300|/Users/dev/check/dist/aing-check.app"])
+        // 설치본이 다시 뜬다(brew 재실행 · 로그인 · 다시 열기) — 탈출구 키는 로컬 빌드의 인자 영역에만 있었다.
+        shared.removeObject(forKey: SingleInstanceGuard.allowMultipleKey)
+        let installedState = SingleInstanceState.live(arguments: ["check"], defaults: shared, isRunningTests: false,
+                                                      snapshot: { both })
+        #expect(installedState.hasProceeded && installedState.menuBarInserted,
+                "설치본이 탈출구를 켠 로컬 빌드에 양보해 조용히 꺼진다: \(installedState.launchDecision)")
+        // 기다린 상대가 사라진 뒤의 다시 판정(`redecide` 가 부르는 함수)도 같은 목록을 읽는다.
+        #expect(SingleInstanceGuard.currentDecision(arguments: ["check"], defaults: shared, isRunningTests: false,
+                                                    snapshot: { both }) == .proceed)
+        // 대조군: 목록이 없으면 같은 그림에서 로컬 빌드에 양보한다(이 시험이 헛돌지 않는다).
+        let bare = SingleInstanceState.live(arguments: ["check"], defaults: CheckTestScratch.defaults("bare"),
+                                            isRunningTests: false, snapshot: { both })
+        #expect(bare.launchDecision == .deferTo(300))
     }
 
     // MARK: ③ 상태와 실행
@@ -262,6 +309,28 @@ struct SingleInstanceGuardTests {
         #expect(probe.presents.count == SingleInstanceGuard.maxRounds)
     }
 
+    @Test func 다시_열기는_남은_뒤_유예가_지나야_팝오버를_연다() async throws {
+        let launched = Date()
+        let state = SingleInstanceState(launchDecision: .proceed, now: launched)
+        #expect(state.isServing)
+        #expect(!state.acceptsReopen(now: launched.addingTimeInterval(2)),
+                "brew 원클릭 끝의 open -a(이미 떠 있는 새 판에 온다)가 팝오버를 열어 키보드를 뺏는다")
+        #expect(state.acceptsReopen(now: launched.addingTimeInterval(SingleInstanceGuard.reopenGraceSeconds)))
+        state.beginTerminating()
+        #expect(!state.acceptsReopen(now: launched.addingTimeInterval(600)), "끝나는 실행이 다시 열기에 팝오버를 연다")
+        // 기다리는 실행은 다시 열기에 답하지 않고, 기다리다 남으면 그 시각부터 유예를 센다.
+        let waiting = SingleInstanceState(launchDecision: .deferTo(100))
+        #expect(!waiting.acceptsReopen(now: Date().addingTimeInterval(600)))
+        let probe = SIGEffectsProbe()
+        probe.alive[100] = 1
+        #expect(await waiting.resolve(effects: probe.effects))
+        let resolvedAt = try #require(waiting.proceededAt)
+        #expect(!waiting.acceptsReopen(now: resolvedAt.addingTimeInterval(1)))
+        #expect(waiting.acceptsReopen(now: resolvedAt.addingTimeInterval(SingleInstanceGuard.reopenGraceSeconds)))
+        // 사람이 막 띄운 앱을 또 여는 창은 짧아야 한다(그 사이 다시 열기는 아무 일도 안 한다).
+        #expect(SingleInstanceGuard.reopenGraceSeconds >= 10 && SingleInstanceGuard.reopenGraceSeconds <= 30)
+    }
+
     @Test func 종료가_시작된_실행은_다른_사본에_답하지_않는다() {
         let state = SingleInstanceState(launchDecision: .proceed)
         #expect(state.isServing)
@@ -298,8 +367,8 @@ struct SingleInstanceGuardTests {
         let delegate = try #require(sigBlock(after: "final class AppDelegate: NSObject, NSApplicationDelegate", in: app))
         #expect(delegate.contains("let singleInstance = SingleInstanceState.live()"))
         let resolve = try #require(sigBlock(after: "private func resolveAnotherInstance(then continueLaunching: @escaping @MainActor () -> Void)", in: app))
-        #expect(resolve.contains("if await state.resolve(effects: .live()) { continueLaunching() } else { NSApp.terminate(nil) }"),
-                "판정 결과가 시작 이어 가기 · 종료로 이어지지 않는다: \(resolve)")
+        #expect(resolve.contains("let store = store store.awaitingAnotherInstance = true Task { @MainActor in if await state.resolve(effects: .live()) { store.resumeAfterAnotherInstance() continueLaunching() } else { NSApp.terminate(nil) } }"),
+                "기다리는 동안 스토어 대기 표식 · 남으면 저장 상태 다시 읽기 → 시작 이어 가기 · 양보면 종료로 이어지지 않는다: \(resolve)")
     }
 
     @Test func 메뉴바_아이콘_삽입은_하나만_실행_상태에도_묶여_있다() throws {
@@ -310,6 +379,9 @@ struct SingleInstanceGuardTests {
         #expect(inserted.allSatisfy {
             $0.contains("get: { appDelegate.retirement.menuBarInserted && appDelegate.singleInstance.menuBarInserted }")
         }, "아이콘 삽입이 하나만 실행 상태를 읽지 않는다 — 양보할 실행에도 아이콘이 선다: \(inserted)")
+        // 쓰기(사용자가 ⌘-끌기로 뺐다 → 종료)도 남기로 정해진 실행에서만 판단한다.
+        #expect(sigCollapsed(raw).contains("set: { inserted in guard appDelegate.singleInstance.menuBarInserted, appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }"),
+                "아이콘을 빼 둔 대기 중의 쓰기를 사용자가 뺀 것으로 읽는다")
         // 상태의 아이콘 조건은 '남기로 정해졌다' 하나다(기다리는 동안만 빠진다).
         let helper = sigCollapsed(try sigSource("SingleInstanceGuard.swift"))
         #expect(helper.contains("var menuBarInserted: Bool { hasProceeded }"))
@@ -326,8 +398,10 @@ struct SingleInstanceGuardTests {
         let yield = try #require(request.range(of: "NSApp.yieldActivation(to: target)"), "활성화를 넘기지 않는다")
         let post = try #require(request.range(of: "postNotificationName("))
         #expect(yield.upperBound <= post.lowerBound)
-        #expect(helper.contains("requestQuit: { pid in _ = NSRunningApplication(processIdentifier: pid)?.terminate() }"),
-                "교체가 평소 종료가 아니다(강제 종료면 근무 마무리가 돌지 않는다)")
+        #expect(helper.contains("requestQuit: { pid in guard let target = NSRunningApplication(processIdentifier: pid), !target.isTerminated, target.bundleIdentifier == Bundle.main.bundleIdentifier else { return } _ = kill(pid, SIGTERM) }"),
+                "교체가 SIGTERM(0.3.49 부터 평소 종료 · 근무 마무리)이 아니거나 보내기 전에 같은 앱인지 보지 않는다")
+        #expect(!helper.contains(".terminate()"),
+                "종료 Apple Event 로 교체한다 — 공증 판(hardened runtime · 자동화 자격 없음)에서 막히면 DMG 사본이 남고 설치본이 꺼진다")
         let app = sigCollapsed(try sigSource("CheckApp.swift"))
         let listen = try #require(sigBlock(after: "private func listenForAnotherLaunch()", in: app))
         #expect(listen.contains("name: SingleInstanceGuard.presentRequestNotification"))
@@ -338,7 +412,8 @@ struct SingleInstanceGuardTests {
         #expect(handler == "{ presentForAnotherLaunch() }")
         let reopen = try #require(sigBlock(after: "func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool", in: app),
                                   "다시 열기 처리가 없다 — 같은 사본을 다시 열면 화면에 아무 변화가 없다")
-        #expect(reopen == "{ presentForAnotherLaunch() return false }")
+        #expect(reopen == "{ if singleInstance.acceptsReopen(now: Date()) { presentForAnotherLaunch() } return false }",
+                "다시 열기가 유예 없이 팝오버를 연다 — brew 원클릭 끝의 open -a 가 키보드를 뺏는다: \(reopen)")
         let present = try #require(sigBlock(after: "private func presentForAnotherLaunch()", in: app))
         let serving = try #require(present.range(of: "guard singleInstance.isServing, !store.retiredForAppStoreEdition else { return }"),
                                    "종료 중인 실행도 팝오버를 연다")
@@ -361,19 +436,99 @@ struct SingleInstanceGuardTests {
         #expect(gate.upperBound <= retry.lowerBound)
     }
 
+    @Test func 깨어남_처리는_대기_표식을_서버로_가는_어느_가지보다_먼저_본다() throws {
+        // ⑤ 의 행동 시험은 깨어남 → 인편 경로로 재서 인편 쪽 게이트만으로도 초록이다 — 깨어남의 다른 가지(재연결 · 집중 모드 만료
+        // PATCH)까지 막는지는 자리로 잰다.
+        let store = sigCollapsed(try sigSource("WorkTimerStore.swift"))
+        let wake = try #require(sigBlock(after: "func handleWake(at date: Date = Date())", in: store))
+        let gate = try #require(wake.range(of: "guard !awaitingAnotherInstance else { return }"), "기다리는 실행이 깨어나며 서버를 친다")
+        for branch in ["beginWakeGate()", "realtimeApply(.didWake, at: date)", "retryMiniGamePendingSubmitIfAny()",
+                       "evaluateFocusStageExpiry(now: clock())"] {
+            let site = try #require(wake.range(of: branch), "깨어남에 [\(branch)] 가 없다")
+            #expect(gate.upperBound <= site.lowerBound, "[\(branch)] 가 대기 표식보다 먼저다")
+        }
+        let miniGame = sigCollapsed(try sigSource("WorkTimerStoreMiniGame.swift"))
+        let retry = try #require(sigBlock(after: "func retryMiniGamePendingSubmitIfAny(fromTrigger: Bool = true)", in: miniGame))
+        #expect(retry.hasPrefix("{ #if !CHECK_MAS guard !awaitingAnotherInstance else { return } #endif loadMiniGamePendingSubmitsIfNeeded()"),
+                "기다리는 실행이 남는 실행의 인편을 읽어 민다: \(retry.prefix(120))")
+    }
+
+    // MARK: ⑤ 스토어
+
+    @Test func 기다리는_실행의_스토어는_깨어나도_인편을_밀지_않고_남으면_민다() async throws {
+        let userID = "00000000-0000-0000-0000-000000000002"
+        let pending = MiniGamePendingSubmit(id: UUID(), kind: .flappy, score: 7, token: "tok-sig-wake",
+                                            tokenIssuedAt: Date(), recordedAt: Date(), attempts: 0)
+        let host = "sig-wake-awaiting"
+        let store = sigSignedInStore(host: host)
+        defer { sigStop(store) }
+        try #require(store.session?.userID == userID)
+        store.defaults.set(try JSONEncoder().encode([pending]), forKey: WorkTimerStore.miniGamePendingKey(userID: userID))
+        store.awaitingAnotherInstance = true
+        store.handleWake(at: Date())                 // 덮개를 여닫았다
+        store.retryMiniGamePendingSubmitIfAny()      // 그 밖의 방아쇠
+        await sigSettle { false }
+        #expect(URLProtocolStub.requests(forHost: host).isEmpty,
+                "기다리는 실행이 저장 세션으로 서버를 쳤다 — 남는 실행과 갱신 토큰을 나눠 돌린다")
+
+        // 남기로 정해지면 같은 스토어 · 같은 인편이 실제로 나간다(대조군 — 이 시험이 헛돌지 않는다).
+        store.resumeAfterAnotherInstance()
+        #expect(!store.awaitingAnotherInstance)
+        store.handleWake(at: Date())
+        await sigSettle { URLProtocolStub.requests(forHost: host).contains { $0.url?.path == "/rest/v1/rpc/minigame_submit_score" } }
+        #expect(URLProtocolStub.requests(forHost: host).contains { $0.url?.path == "/rest/v1/rpc/minigame_submit_score" },
+                "대조군이 헛돈다 — 남은 실행의 깨어남이 인편을 안 밀었다")
+    }
+
+    @Test func 기다리다_남은_실행은_상대가_끝나며_남긴_큐와_토큰을_다시_읽는다() throws {
+        let userID = "00000000-0000-0000-0000-000000000002"
+        let store = sigSignedInStore(host: "sig-resume")
+        defer { sigStop(store) }
+        try #require(store.session?.refreshToken == "old-refresh-token")
+        store.awaitingAnotherInstance = true
+        // 이 실행의 init **뒤에** 상대가 끝났다 — 근무를 마무리하며(오프라인) 퇴근 항목을 큐에 넣고, 마무리 왕복에서 토큰을 돌렸다.
+        let othersStop = PendingWorkItem(id: UUID(), operation: .stop(durationSeconds: 3_600), sessionID: UUID().uuidString.lowercased(),
+                                         sessionStartedAt: Date().addingTimeInterval(-3_600), endedAt: Date(), ownerUserID: userID)
+        store.defaults.set(try JSONEncoder().encode([othersStop]), forKey: WorkTimerStore.pendingWorkQueueKey)
+        store.tokenVault.write("rotated-access-token", key: WorkTimerStore.accessTokenKey)
+        store.tokenVault.write("rotated-refresh-token", key: WorkTimerStore.refreshTokenKey)
+
+        store.resumeAfterAnotherInstance()
+        #expect(!store.awaitingAnotherInstance)
+        #expect(store.session?.refreshToken == "rotated-refresh-token", "낡은 갱신 토큰으로 시작한다 — 재사용으로 읽혀 로그아웃된다")
+        #expect(store.session?.accessToken == "rotated-access-token" && store.session?.userID == userID)
+        #expect(store.workStateOwnerUserID == userID)
+        #expect(store.pendingItems == [othersStop])
+        // 이 실행의 다음 변경(큐는 바뀔 때마다 통째로 저장한다)이 와도 상대의 퇴근 항목이 남는다.
+        let mine = PendingWorkItem(id: UUID(), operation: .start, sessionID: UUID().uuidString.lowercased(),
+                                   sessionStartedAt: Date(), endedAt: nil, ownerUserID: userID)
+        store.pendingItems.append(mine)
+        #expect(WorkTimerStore.restoredPendingWorkQueue(from: store.defaults) == [othersStop, mine])
+
+        // 대조군: 다시 읽지 않은 스토어는 같은 순서에서 상대의 퇴근 항목을 덮어 지운다(이 시험이 헛돌지 않는다).
+        let control = sigSignedInStore(host: "sig-resume-control")
+        defer { sigStop(control) }
+        control.defaults.set(try JSONEncoder().encode([othersStop]), forKey: WorkTimerStore.pendingWorkQueueKey)
+        control.pendingItems.append(mine)
+        #expect(WorkTimerStore.restoredPendingWorkQueue(from: control.defaults) == [mine])
+    }
+
     @Test func 하나만_실행은_전부_앱스토어_판_울타리_안에_있다() throws {
         let needles = ["singleInstance", "SingleInstance", "listenForAnotherLaunch", "anotherLaunchAskedToPresent",
-                       "presentForAnotherLaunch", "resolveAnotherInstance", "applicationShouldHandleReopen"]
+                       "presentForAnotherLaunch", "resolveAnotherInstance", "applicationShouldHandleReopen",
+                       "awaitingAnotherInstance", "resumeAfterAnotherInstance"]
         var hits = 0
-        for name in ["CheckApp.swift", "SingleInstanceGuard.swift"] {
+        var storeHits = 0
+        for name in ["CheckApp.swift", "SingleInstanceGuard.swift", "WorkTimerStore.swift", "WorkTimerStoreMiniGame.swift"] {
             let source = try sigSource(name)
             let excluded = V0351IfConfig.linesExcludedUnderMAS(source)
             for (index, line) in source.components(separatedBy: "\n").enumerated() where needles.contains(where: line.contains) {
                 hits += 1
+                if name.hasPrefix("WorkTimerStore") { storeHits += 1 }
                 #expect(excluded.contains(index), "앱스토어 판에서도 컴파일되는 하나만 실행 코드: \(name):\(index + 1) \(line)")
             }
         }
-        #expect(hits >= 15, "검사가 헛돈다(\(hits)곳)")
+        #expect(hits >= 15 && storeHits >= 4, "검사가 헛돈다(\(hits)곳 · 스토어 \(storeHits)곳)")
     }
 }
 
@@ -390,9 +545,41 @@ private func sigInstance(_ pid: pid_t, at seconds: Double?, path: String = "/App
 }
 
 private func sigDecide(me: SingleInstanceGuard.Instance, others: [SingleInstanceGuard.Instance], arguments: [String] = ["check"],
-                       allowsMultiple: Bool = false, isRunningTests: Bool = false) -> SingleInstanceGuard.Decision {
+                       allowsMultiple: Bool = false, isRunningTests: Bool = false,
+                       exempt: Set<String> = []) -> SingleInstanceGuard.Decision {
     SingleInstanceGuard.decide(me: me, others: others, arguments: arguments, allowsMultiple: allowsMultiple,
-                               isRunningTests: isRunningTests)
+                               isRunningTests: isRunningTests, exempt: exempt)
+}
+
+/// 저장 세션이 있는 스토어(토큰이 저장소에 있다 — `resumeAfterAnotherInstance` 가 다시 읽는 자리). 서버는 스텁이다.
+@MainActor
+private func sigSignedInStore(host: String, function: String = #function) -> WorkTimerStore {
+    let defaults = CheckTestScratch.defaults(host, function: function)
+    defaults.set("old-access-token", forKey: WorkTimerStore.accessTokenKey)
+    defaults.set("old-refresh-token", forKey: WorkTimerStore.refreshTokenKey)
+    defaults.set("00000000-0000-0000-0000-000000000002", forKey: WorkTimerStore.userIDKey)
+    return WorkTimerStore(
+        service: SupabaseWorkService(projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key",
+                                     session: URLSession(configuration: .stubbed)),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: defaults,
+        workspaceNotifications: nil
+    )
+}
+
+@MainActor
+private func sigStop(_ store: WorkTimerStore) {
+    store.tickerTask?.cancel()
+    store.refreshTask?.cancel()
+    store.pokePollTask?.cancel()
+}
+
+@MainActor
+private func sigSettle(_ done: () -> Bool) async {
+    for _ in 0..<50 {
+        if done() { return }
+        try? await Task.sleep(for: .milliseconds(20))
+    }
 }
 
 /// `withObservationTracking(onChange:)` 이 @Sendable 클로저라 지역 변수를 못 쓴다. 발화는 대입 스레드(메인)에서 동기적으로

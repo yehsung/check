@@ -29,8 +29,9 @@ struct CheckApp: App {
         // ★ 하나만 실행(v0.3.69): 같은 앱이 이미 떠 있으면 판정을 실행에 옮기는 동안(양보·교체 대기) 아이콘을 넣지 않는다 — 이 실행이
         //   남게 되면(상대가 마침 끝났다 · 읽기 전용 자리 사본을 끝냈다) 그때 들어간다(`SingleInstanceState.menuBarInserted`).
         //   양보로 끝나는 실행은 끝까지 아이콘이 없다. 이 값도 델리게이트가 만들어지는 순간 정해진다(물러남과 같은 까닭).
+        //   쓰기도 같이 거른다 — 아이콘을 빼 둔 대기 중에 온 쓰기는 사용자가 뺀 것이 아니다(그 실행은 판정대로 남거나 끝난다).
         MenuBarExtra(isInserted: Binding(get: { appDelegate.retirement.menuBarInserted && appDelegate.singleInstance.menuBarInserted }, set: { inserted in
-            guard appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }
+            guard appDelegate.singleInstance.menuBarInserted, appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }
             DispatchQueue.main.async { NSApp.terminate(nil) }
         })) {
             menuContent
@@ -135,6 +136,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///    지워지는 것은 남는 실행의 다음 실행도 버릴 값이고, 남는 실행은 메모리의 값을 계속 쓰다가 다음 조회에 다시 적는다.
     ///  · 자동 시작 억제 재무장은 마지막 생존 스탬프가 1시간 넘게 낡았을 때만이다 — 억제 중인 남는 실행은 매 tick 스탬프를 찍는다.
     ///  · 서버를 치는 것(세션 활성화 · 단축키 · 폴링)은 init 에 없다 — 전부 `applicationDidFinishLaunching` 의 배선이고, 그 앞에서 멈춘다.
+    ///    예외는 init 이 단 깨어남 관찰과 앱 활성화다 — 기다리는 동안 스토어의 대기 표식(`awaitingAnotherInstance`)과 활성화 훅이 막는다.
+    /// 거꾸로 **이 실행이 남게 되면**(상대가 마침 끝났다 · 교체했다) init 이 읽은 저장 상태는 상대가 끝나기 전 것이다 — 상대가 끝나며
+    /// 넣은 퇴근 항목 · 돌린 토큰을 놓치지 않게 시작을 잇기 전에 다시 읽는다(`resumeAfterAnotherInstance`).
     let singleInstance = SingleInstanceState.live()
     /// 물러남 창(물러남 모드에서만). 창 델리게이트라 앱 수명 동안 붙든다.
     private var retireWindow: AppStoreRetireWindowController?
@@ -522,12 +526,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if !CHECK_MAS
     // MARK: 하나만 실행 (v0.3.69 — 같은 앱이 이미 떠 있다)
 
-    /// 첫 판정(`singleInstance.launchDecision`)을 실행에 옮긴다. 남게 되면 `continueLaunching`(시작 처리를 처음부터 다시)을 부르고,
-    /// 양보로 끝나면 이 실행을 끝낸다(`applicationShouldTerminate` 가 곧바로 받아들인다 — 마무리할 것이 없다).
+    /// 첫 판정(`singleInstance.launchDecision`)을 실행에 옮긴다. 남게 되면 저장 상태를 다시 읽고 `continueLaunching`(시작 처리를
+    /// 처음부터 다시)을 부르며, 양보로 끝나면 이 실행을 끝낸다(`applicationShouldTerminate` 가 곧바로 받아들인다 — 마무리할 것이 없다).
+    /// 기다리는 동안은 스토어도 대기 표식을 든다 — 덮개를 여닫아도 깨어남 처리가 서버를 치지 않는다.
     private func resolveAnotherInstance(then continueLaunching: @escaping @MainActor () -> Void) {
         let state = singleInstance
+        let store = store
+        store.awaitingAnotherInstance = true
         Task { @MainActor in
             if await state.resolve(effects: .live()) {
+                store.resumeAfterAnotherInstance()
                 continueLaunching()
             } else {
                 NSApp.terminate(nil)
@@ -553,8 +561,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 같은 사본을 다시 열었다(Finder 더블클릭 · `open`). 예전에는 구현이 없어 **화면에 아무 변화가 없었고** — Dock 아이콘도 창도
     /// 없는 메뉴바 앱이라 — 사용자는 "안 열렸다"고 읽고 다른 사본(DMG 안 · 다운로드 폴더)을 또 열었다. 이제 팝오버를 연다.
+    /// 단 남은 지 `SingleInstanceGuard.reopenGraceSeconds` 안이면 열지 않는다 — brew 원클릭 끝의 `open -a` 가 cask 가 이미 띄운 새 판에
+    /// 다시 열기로 닿는다(팝오버가 키보드를 가져가므로, 업데이트를 눌러 두고 다른 일을 하던 사람의 입력을 뺏는다).
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        presentForAnotherLaunch()
+        if singleInstance.acceptsReopen(now: Date()) { presentForAnotherLaunch() }
         return false
     }
 

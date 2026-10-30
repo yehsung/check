@@ -1068,6 +1068,32 @@ final class WorkTimerStore {
     /// `retiredForAppStoreEdition` 을 앞당기지 않는 이유: 그 값은 AI 기록 읽기·업로드(`aiToolDataAllowed`)까지 꺼서
     /// 마무리 경로의 마지막 업로드를 막는다.
     @ObservationIgnored var retiringForAppStoreEdition = false
+    /// 같은 앱의 다른 실행에 양보·교체를 **기다리는 중**이다(v0.3.69 — 하나만 실행 · `SingleInstanceState`). 참이면 깨어남 처리와
+    /// 미니게임 인편이 아무것도 하지 않는다. 기다리는 실행은 배선 전이라 서버로 가는 길이 둘뿐이다 — init 이 단 깨어남 관찰과 앱 활성화
+    /// (활성화는 앱 쪽이 막는다). 둘 다 저장 세션을 쓰므로, 덮개를 여닫는 사이 이 실행이 갱신 토큰을 돌리면 남는 실행이 재사용으로
+    /// 읽혀 로그아웃된다. 물러남 표식을 빌리지 않는다 — 그 값은 '끝까지 아무것도 안 한다'(AI 기록까지 끈다)라 남게 되는 실행에서
+    /// 되돌릴 자리가 없다. 남기로 정해지면 `resumeAfterAnotherInstance()` 가 내린다.
+    @ObservationIgnored var awaitingAnotherInstance = false
+
+    /// 기다리던 실행이 남게 됐다(v0.3.69 — 상대가 마침 끝났다 · 읽기 전용 자리 사본을 끝냈다). 대기 표식을 내리고 저장 세션 · 근무 큐 ·
+    /// 기기 식별자를 **다시 읽는다** — init 은 상대가 끝나기 **전에** 읽었다. 상대는 끝나며 근무를 마무리해(최대 3초) 큐에 퇴근 항목을
+    /// 넣거나(오프라인) 토큰을 돌렸을 수 있다. 다시 읽지 않으면 메모리의 낡은 큐가 다음 변경 때 저장본을 통째로 덮어 그 항목이 사라지고
+    /// (`pendingItems` 는 바뀔 때마다 통째로 저장한다), 낡은 갱신 토큰은 재사용으로 읽혀 로그아웃된다. 처음 실행끼리 겹쳤으면 기기
+    /// 식별자도 디스크에 남은 쪽이 아닐 수 있다. 서버는 치지 않는다 — 시작 처리(세션 활성화)가 곧 이어진다.
+    func resumeAfterAnotherInstance() {
+        awaitingAnotherInstance = false
+        deviceID = Self.resolveDeviceID(defaults: defaults) ?? ""
+        let restoredSession = Self.restoredSession(from: defaults, vault: tokenVault)
+        let wasSignedIn = session != nil
+        session = restoredSession
+        workStateOwnerUserID = restoredSession?.userID
+        pendingItems = Self.restoredPendingWorkQueue(from: defaults)
+        // 사람이 바뀌었으면(상대에서 다른 계정으로 로그인) 손에 든 토큰 행은 남의 숫자다 — init 의 복원 규칙과 같다.
+        if let row = myTokenRow, row.userID != restoredSession?.userID { myTokenRow = nil }
+        if hasAnonKey, wasSignedIn != (restoredSession != nil) {
+            syncMessage = restoredSession == nil ? "로그인 필요" : "동기화됨"
+        }
+    }
     #endif
 
     /// 앱스토어 판의 **AI 도구 기록 읽기 동의**(설정 스위치가 그리는 값 — `AIToolDataConsent.key` 의 화면 사본).
@@ -2281,6 +2307,8 @@ final class WorkTimerStore {
         #if !CHECK_MAS
         // 물러난 실행(v0.3.53)은 깨어나도 아무것도 하지 않는다 — 재연결·미니게임 인편·집중 모드 만료 PATCH 가 전부 서버를 친다.
         guard !retiredForAppStoreEdition else { return }
+        // 다른 실행에 양보·교체를 기다리는 실행(v0.3.69)도 같다 — 저장 세션으로 서버를 치면 남는 실행과 갱신 토큰을 나눠 돌린다.
+        guard !awaitingAnotherInstance else { return }
         #endif
         // ⚠️ **맨 앞이다.** 아래로는 조기 리턴 가지가 셋(sleepBeganAt nil / 유예 이내 / 흡수 세션)이라
         //    뒤에 붙이면 실제 경로 대부분에서 재연결이 안 돈다 = 뚜껑을 열어도 찌르기가 영영 안 온다.

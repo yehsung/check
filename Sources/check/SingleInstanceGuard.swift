@@ -20,10 +20,18 @@ import os
 //  · 양보(`.deferTo`): 먼저 뜬 쪽에 "팝오버를 열어 달라" 분산 알림을 보내고(`deliverImmediately: true` — 메뉴바 앱은 늘 비활성이라
 //    없으면 보류된다) 그 프로세스가 끝나는지 잠깐 본다. 끝나면(마침 종료 중이었다) 내가 남는다(판정문 B — 0개가 되지 않게). 살아 있으면
 //    나는 아무것도 하지 않고 끝난다.
-//  · 교체(`.replace`): 읽기 전용 자리의 사본에 종료를 요청하고 기다린 뒤 내가 남는다. 거절하면 양보로 떨어진다(판정문 C).
-//    DMG 안 사본이 남으면 업데이트가 막히고 디스크 이미지를 꺼낼 수 없고 재부팅하면 사라진다.
+//  · 교체(`.replace`): 읽기 전용 자리의 사본에 **SIGTERM** 으로 평소 종료를 요청하고 기다린 뒤 내가 남는다. 거절하면 양보로
+//    떨어진다(판정문 C). DMG 안 사본이 남으면 업데이트가 막히고 디스크 이미지를 꺼낼 수 없고 재부팅하면 사라진다.
+//    `NSRunningApplication.terminate()`(종료 Apple Event)를 쓰지 않는 까닭은 `GracefulTerminationSignal` 주석과 같다 — 공증 판은
+//    hardened runtime 에 자동화 자격이 없어 이벤트가 막히거나 권한 프롬프트가 뜬다. 막히면 판정문 C 가 거꾸로 돈다(DMG 사본이 남고
+//    설치본이 11초 뒤 꺼진다). 0.3.49 부터 모든 판이 SIGTERM 을 평소 종료(근무 마무리 포함)로 받는다.
 //  · 예외: 개발자 탈출구(`check.allowMultipleInstances` — 로컬 빌드도 번들 ID 가 `kingcheck` 이다), 테스트 프로세스, 앱스토어 판
-//    물러남의 자기 재실행(`--check-retire-app-store-edition` — 옛 인스턴스가 곧 끝난다).
+//    물러남의 자기 재실행(`--check-retire-app-store-edition` — 옛 인스턴스가 곧 끝난다). 탈출구를 켠 실행은 자기를 저장소에 적고
+//    (`exemptInstancesKey` — `pid|번들 자리`) 다른 실행은 판정에서 그쪽을 뺀다. 안 그러면 탈출구가 한쪽으로만 듣는다 — 로컬 빌드 뒤에
+//    설치된 앱이 다시 뜨면(brew 재실행 · 로그인 · 다시 열기) 로컬 빌드에 양보해 조용히 꺼진다.
+//  · 다시 열기(`applicationShouldHandleReopen`)는 남기로 정해진 뒤 `reopenGraceSeconds` 가 지나야 팝오버를 연다. brew 원클릭은 cask 가
+//    새 판을 백그라운드로 띄운(`open -g`) 직후 스크립트 끝의 `open -a` 로 한 번 더 연다 — 그 다시 열기가 업데이트 몇 분 뒤 다른 일을
+//    하던 사람의 키보드를 뺏으면 안 된다(로그인 항목 + 창 복원도 같은 모양일 수 있다).
 //
 // ★ 앱스토어 판에서는 컴파일되지 않는다(물러남과 같은 울타리 — 그 판의 바이너리는 바꾸지 않는다).
 #if !CHECK_MAS
@@ -51,6 +59,11 @@ enum SingleInstanceGuard {
 
     /// 개발자 탈출구 — 참이면 판정하지 않는다(UI 없음 · `defaults write kingcheck check.allowMultipleInstances -bool true`).
     static let allowMultipleKey = "check.allowMultipleInstances"
+    /// 탈출구를 켜고 도는 실행들(`exemptionTag` — `pid|번들 자리`). 다른 실행은 판정에서 이들을 뺀다(양보도 교체도 하지 않는다).
+    /// 로컬 빌드는 탈출구를 인자 영역으로만 켜서(`scripts/run-local.sh`) 설치된 앱은 그 사실을 이 목록으로만 안다.
+    static let exemptInstancesKey = "check.singleInstance.exemptInstances"
+    /// 남기로 정해진 뒤 이 시간 안의 다시 열기는 팝오버를 열지 않는다 — brew 원클릭 끝의 `open -a`(cask 가 이미 다시 띄운 앱에 온다).
+    static let reopenGraceSeconds: Double = 15
     /// 나중에 뜬 사본이 남는 쪽에 "팝오버를 열어 달라"고 보내는 분산 알림. 대상은 `object`(pid 문자열)로 고른다.
     static let presentRequestNotification = Notification.Name("kingcheck.singleInstance.presentPopover")
     /// 양보하며 기다리는 시간. 남는 쪽이 마침 종료 중이면(근무 마무리 상한 3초) 그 사이에 끝난다 — 여유 2초.
@@ -74,18 +87,20 @@ enum SingleInstanceGuard {
     }
 
     /// 판정. `others` 에 나 자신이 섞여 있어도 된다(실행 중 앱 목록에는 내가 들어 있다 — pid 로 거른다).
+    /// `exempt` 는 탈출구를 켜고 도는 실행의 꼬리표(`exemptionTag`)다 — 그 실행은 없는 것으로 친다.
     static func decide(
         me: Instance,
         others: [Instance],
         arguments: [String],
         allowsMultiple: Bool,
-        isRunningTests: Bool
+        isRunningTests: Bool,
+        exempt: Set<String> = []
     ) -> Decision {
         // 테스트 프로세스는 판정하지 않는다 — 스위트가 스스로 끝나면 안 된다.
         if allowsMultiple || isRunningTests { return .proceed }
         // 앱스토어 판 물러남의 자기 재실행(`createsNewApplicationInstance`) — 옛 인스턴스가 곧 끝난다.
         if arguments.contains(AppStoreEditionRetirement.appStoreEditionArgument) { return .proceed }
-        let live = others.filter { !$0.isTerminated && $0.pid != me.pid }
+        let live = others.filter { !$0.isTerminated && $0.pid != me.pid && !exempt.contains(exemptionTag($0)) }
         guard !live.isEmpty else { return .proceed }
         let everyone = [me] + live
         let byPIDOnly = everyone.contains { $0.launchDate == nil }
@@ -144,7 +159,8 @@ enum SingleInstanceGuard {
         url.resolvingSymlinksInPath().path
     }
 
-    /// 실제 실행의 판정 — 탈출구 키 · 테스트 프로세스면 프로세스 목록을 **묻지도 않는다**.
+    /// 실제 실행의 판정 — 테스트 프로세스면 프로세스 목록을 **묻지도** 저장소에 적지도 않는다. 탈출구를 켠 실행은 판정 없이 남되
+    /// 자기를 탈출구 목록에 적는다(다른 실행이 이쪽에 양보하지 않게).
     @MainActor
     static func currentDecision(
         arguments: [String],
@@ -152,11 +168,29 @@ enum SingleInstanceGuard {
         isRunningTests: Bool,
         snapshot: @MainActor () -> Snapshot
     ) -> Decision {
-        let allowsMultiple = defaults.bool(forKey: allowMultipleKey)
-        guard !allowsMultiple, !isRunningTests else { return .proceed }
+        guard !isRunningTests else { return .proceed }
         let facts = snapshot()
-        return decide(me: facts.me, others: facts.others, arguments: arguments, allowsMultiple: allowsMultiple,
-                      isRunningTests: isRunningTests)
+        if defaults.bool(forKey: allowMultipleKey) {
+            recordExemption(facts, defaults: defaults)
+            return .proceed
+        }
+        let exempt = Set(defaults.stringArray(forKey: exemptInstancesKey) ?? [])
+        return decide(me: facts.me, others: facts.others, arguments: arguments, allowsMultiple: false,
+                      isRunningTests: false, exempt: exempt)
+    }
+
+    /// 탈출구 목록의 꼬리표. pid 만 쓰면 탈출구 실행이 비정상 종료로 남긴 줄이 같은 pid 를 다시 받은 설치본을 가린다 — 번들 자리까지
+    /// 같아야 맞으니 남은 줄은 같은 자리의 로컬 빌드에만 닿는다(그 실행끼리는 어차피 판정이 없어도 된다).
+    static func exemptionTag(_ instance: Instance) -> String {
+        "\(instance.pid)|\(instance.bundlePath)"
+    }
+
+    /// 탈출구를 켠 이 실행을 목록에 적는다. 지금 떠 있지 않은 줄은 이때 걷는다(목록이 실행마다 자라지 않게).
+    static func recordExemption(_ facts: Snapshot, defaults: UserDefaults) {
+        let mine = exemptionTag(facts.me)
+        let live = Set(facts.others.filter { !$0.isTerminated }.map(exemptionTag))
+        let kept = (defaults.stringArray(forKey: exemptInstancesKey) ?? []).filter { live.contains($0) && $0 != mine }
+        defaults.set(kept + [mine], forKey: exemptInstancesKey)
     }
 }
 
@@ -166,7 +200,7 @@ enum SingleInstanceGuard {
 struct SingleInstanceEffects {
     /// 그 프로세스에 "팝오버를 열어 달라"고 알린다.
     var requestPresent: @MainActor (pid_t) -> Void
-    /// 그 프로세스에 종료를 요청한다(평소 종료 — 근무 중이면 그쪽이 마무리한다).
+    /// 그 프로세스에 종료를 요청한다(SIGTERM — 0.3.49 부터 평소 종료로 받는다. 근무 중이면 그쪽이 마무리한다).
     var requestQuit: @MainActor (pid_t) -> Void
     /// 그 프로세스가 아직 살아 있는가.
     var isRunning: @MainActor (pid_t) -> Bool
@@ -193,7 +227,11 @@ struct SingleInstanceEffects {
                 )
             },
             requestQuit: { pid in
-                _ = NSRunningApplication(processIdentifier: pid)?.terminate()
+                // 종료 Apple Event(`NSRunningApplication.terminate()`)가 아니라 신호다 — 머리 주석 · `GracefulTerminationSignal` 주석.
+                // 보내기 직전에 그 pid 가 아직 같은 앱인지 본다(판정과 이 줄 사이에 끝나 pid 가 다른 프로세스로 넘어갔으면 보내지 않는다).
+                guard let target = NSRunningApplication(processIdentifier: pid), !target.isTerminated,
+                      target.bundleIdentifier == Bundle.main.bundleIdentifier else { return }
+                _ = kill(pid, SIGTERM)
             },
             isRunning: { pid in
                 guard let app = NSRunningApplication(processIdentifier: pid) else { return false }
@@ -231,10 +269,13 @@ final class SingleInstanceState {
     private(set) var phase: Phase
     /// 종료가 시작됐다 — 다른 사본의 "팝오버를 열어 달라"에 더는 답하지 않는다(판정문 B).
     private(set) var isTerminating = false
+    /// 남기로 정해진 시각(다시 열기 유예의 기준). 기다리는 동안은 nil.
+    @ObservationIgnored private(set) var proceededAt: Date?
 
-    init(launchDecision: SingleInstanceGuard.Decision) {
+    init(launchDecision: SingleInstanceGuard.Decision, now: Date = Date()) {
         self.launchDecision = launchDecision
         self.phase = launchDecision == .proceed ? .proceeding : .pending(launchDecision)
+        self.proceededAt = launchDecision == .proceed ? now : nil
     }
 
     /// 실제 실행의 판정(실행 인자 · 표준 UserDefaults · 테스트 프로세스 여부 · LaunchServices). 테스트는 `snapshot` 에 가짜를 넣어
@@ -273,6 +314,13 @@ final class SingleInstanceState {
     /// 다른 사본의 "팝오버를 열어 달라"·다시 열기에 답하는가.
     var isServing: Bool { hasProceeded && !isTerminating }
 
+    /// 다시 열기(같은 사본을 또 열었다)에 팝오버를 여는가 — 답하는 중이고, 남은 지 `reopenGraceSeconds` 가 지났을 때만.
+    /// 다른 사본의 알림(`isServing`)에는 유예가 없다 — 그쪽은 사람이 방금 연 것이다.
+    func acceptsReopen(now: Date) -> Bool {
+        guard isServing, let proceededAt else { return false }
+        return now.timeIntervalSince(proceededAt) >= SingleInstanceGuard.reopenGraceSeconds
+    }
+
     /// 종료가 시작됐다(`applicationShouldTerminate`).
     func beginTerminating() {
         isTerminating = true
@@ -286,6 +334,7 @@ final class SingleInstanceState {
             switch decision {
             case .proceed:
                 phase = .proceeding
+                proceededAt = Date()
                 return true
             case .replace(let pid):
                 phase = .pending(decision)
@@ -305,6 +354,7 @@ final class SingleInstanceState {
         }
         // 기다린 상대가 매번 사라졌다 — 남는다(0개가 되는 것보다 2개가 낫다).
         phase = .proceeding
+        proceededAt = Date()
         return true
     }
 

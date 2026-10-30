@@ -114,6 +114,8 @@ package final class MobileStoreLinks {
     package weak var games: GamesStore?
     package weak var me: MeStore?
     package weak var push: PushCoordinator?
+    /// 확성기 배너(계약 docs/plan/megaphone-banner-contract.md — 폰). 메시지함 필터(`MessagesStore.visibleHistory`)·푸시·실시간이 이 하나를 본다.
+    package weak var megaphoneBanner: MegaphoneBannerStore?
 
     package init() {}
 

@@ -31,7 +31,7 @@
 --   저장 세션(내 자리)   지금 세션     결과
 --   있음                 있음 · 같다   그대로 진행
 --   있음                 있음 · 다르다 {status:'other_device', state} — **아무것도 쓰지 않고 정산하지 않는다**
---   없음                 있음          진행 + 그 호출이 자리를 잡는다(보고는 아래 단조 가드를 지난 뒤에만)
+--   없음                 있음          진행 + 그 호출이 자리를 잡는다(보고는 단조 가드를 지나고 seq 가 앞선 — 실제로 쓰는 — 보고만)
 --   (무엇이든)           없음          옛 동작(잠그지 않는다 — 세션을 못 싣는 토큰 · service_role)
 --   단조 가드(보고만): p_seq 가 저장 seq 보다 큰데 p_lines < 저장 lines 이거나 p_garbage_sent < 저장 garbage_sent 이면
 --   other_device. 한 기기의 누계는 줄지 않고(TetrisGame) 재개는 서버 값에서 잇는다(TetrisDuelSession resumingFrom).
@@ -55,7 +55,8 @@
 -- ── 남는 위험(알고 받는다) ───────────────────────────────────────────────────────────────────
 --   · 판 중에 같은 기기에서 다시 로그인하면 세션이 바뀌어 그 판은 'other' 다 → 보고가 막혀 침묵 패. (판은 최대 8분.)
 --   · 같은 맥의 두 프로세스는 같은 키체인 세션을 쓴다 → 세션으로는 못 가른다. 단조 가드가 첫 줄을 지운 뒤부터만 막는다.
---   · 이 파일 전에 수락된 진행 중 판은 기록이 없다 → 적용 뒤 가드를 지난 첫 보고가 자리를 잡는다(최대 8분짜리 창).
+--   · 이 파일 전에 수락된 진행 중 판은 기록이 없다 → 적용 뒤 가드를 지나 실제로 쓰는 첫 보고가 자리를 잡는다(최대 8분짜리 창).
+--     첫 줄을 지우기 전이면 입력 없는 옛 기기의 보고도 가드를 지난다 — 그 창에서는 먼저 쓴 쪽이 잡는다.
 --
 -- ── 함정(이 저장소에서 데인 것) ───────────────────────────────────────────────────────────
 --   · 서명을 바꾸지 않는다(바꾸면 옛 서명 drop + ACL · COMMENT 재부여 — PGRST203). 인자는 전부 DEFAULT(새 도구 둘 포함).
@@ -81,7 +82,8 @@
 -- ── 뒤 파일이 이 다섯을 다시 정의할 때 ────────────────────────────────────────────────────────
 --   출발점은 이 파일의 본문이다(TetrisOneWriterMigrationTests 가 "정본 + 치환표 = 이 파일 본문" 을 바이트로 되묻는다).
 --   지킬 것: 보고 · 기권의 tetris__device 검사가 tetris__due · 사람 행 쓰기 · tetris__settle 보다 앞 · 단조 가드가
---   ready_at 쓰기보다 앞이고 seq 비교(p_seq > me.seq)를 품는다 · 잡기(tetris__claim)는 가드 뒤 · 상태의 my_device.
+--   ready_at 쓰기보다 앞이고 seq 비교(p_seq > me.seq)를 품는다 · 잡기(tetris__claim)는 가드 뒤이고 보고에서는 seq 가 앞선
+--   보고에만(늦은 보고 = stale 은 잡지 않는다) · 상태의 my_device.
 -- ══════════════════════════════════════════════════════════════════════════════════════════
 
 
@@ -120,7 +122,7 @@ select t.sig, t.canon_md5, t.self_md5, md5(p.prosrc), pg_temp.tow_attrs(p.oid)
     ('public.tetris__state(uuid,uuid)',                                                 '640c937fb037ef55788dcaa546859d6a', '57d06d9c9436ad280d64b8801ac7f2d0'),
     ('public.tetris_challenge(integer,uuid,integer)',                                   '279093b471a03430a72f13073038c815', 'f5dc04eee9f829bcf01ec810b82d3402'),
     ('public.tetris_respond(integer,uuid,boolean)',                                     '0e64b4be06bc695b186be191a3e3ace4', '973e4bd501aae8bec4d2ab31aa966950'),
-    ('public.tetris_report(integer,uuid,integer,text,integer,integer,integer,integer,boolean)', '846dde8a13f5d4fa30dfc3bdbb41da62', 'e5e6fe82755c34b16fef2ef45925e643'),
+    ('public.tetris_report(integer,uuid,integer,text,integer,integer,integer,integer,boolean)', '846dde8a13f5d4fa30dfc3bdbb41da62', '5dd80282ca3faabad41bd3fbd789065c'),
     ('public.tetris_resign(integer,uuid)',                                              '4643316b7cfbed99457ecf2709153974', '713bddce334a3c29cfe0387063ad3677')
   ) as t(sig, canon_md5, self_md5)
   left join pg_proc p on p.oid = to_regprocedure(t.sig);
@@ -188,7 +190,7 @@ alter table public.tetris_matches add column if not exists challenger_session uu
 alter table public.tetris_matches add column if not exists opponent_session uuid null;
 comment on column public.tetris_matches.challenger_session is
   '신청을 낸 기기의 로그인 세션(auth.jwt()->>''session_id''). 이 자리의 보고·기권은 이 세션만 쓴다(20261103124000 — '
-  '한 판 한 기기). null = 기록 없음(이 파일 전 판 · 세션 없는 토큰) → 가드를 지난 첫 보고가 잡는다.';
+  '한 판 한 기기). null = 기록 없음(이 파일 전 판 · 세션 없는 토큰) → 가드를 지나 실제로 쓰는 첫 보고가 잡는다.';
 comment on column public.tetris_matches.opponent_session is
   '수락한 기기의 로그인 세션. challenger_session 과 같은 규칙(20261103124000 — 한 판 한 기기).';
 
@@ -668,8 +670,10 @@ begin
      and (coalesce(p_lines, me.lines) < me.lines or coalesce(p_garbage_sent, me.garbage_sent) < me.garbage_sent) then
     return jsonb_build_object('status', 'other_device', 'state', public.tetris__state(m.id, uid));
   end if;
-  -- 세션 기록이 없던 판(이 파일 전에 수락된 판)은 거른 뒤의 이 보고가 자리를 잡는다. 세션 없는 토큰이면 아무것도 안 한다.
-  if v_dev is null then
+  -- 세션 기록이 없던 판(이 파일 전에 수락된 판)은 거른 뒤 **실제로 쓸** 보고(seq 가 앞선 것)만 자리를 잡는다 — 늦게 온
+  --     옛 보고는 ④ 에서 stale 로 끝나므로 잡으면 안 된다(다른 기기의 늦은 보고가 자리를 가로채면 진짜 기기가 막혀 침묵 패).
+  --     세션 없는 토큰이면 아무것도 안 한다.
+  if v_dev is null and p_seq > me.seq then
     perform public.tetris__claim(m.id, uid);
   end if;
 
@@ -892,6 +896,7 @@ begin
   v_probes := v_probes + 1;
 
   -- (4) 순서 계약: 보고 · 기권의 기기 검사가 시간 판정 · 사람 행 쓰기 · 정산보다 앞, 단조 가드는 준비 쓰기보다 앞, 잡기는 가드 뒤
+  --     (보고의 잡기는 seq 가 앞선 보고에만)
   foreach v_tok in array array['public.tetris_report(integer,uuid,integer,text,integer,integer,integer,integer,boolean)',
                                'public.tetris_resign(integer,uuid)'] loop
     select p.prosrc into v_src from pg_proc p where p.oid = to_regprocedure(v_tok);
@@ -917,6 +922,9 @@ begin
   if strpos(v_src, 'update public.tetris_players pl set ready_at') < v_pos
      or strpos(v_src, 'perform public.tetris__claim(m.id, uid);') < v_pos then
     raise exception '(4) tetris_report 의 준비 쓰기 · 자리 잡기가 단조 가드보다 앞이다. 배포 중단';
+  end if;
+  if strpos(v_src, 'if v_dev is null and p_seq > me.seq then') = 0 then
+    raise exception '(4) tetris_report 의 자리 잡기가 seq 비교 없이 걸려 있다 — 다른 기기의 늦은(stale) 보고가 자리를 가로챈다. 배포 중단';
   end if;
   select p.prosrc into v_src from pg_proc p where p.oid = to_regprocedure('public.tetris__state(uuid,uuid)');
   if strpos(v_src, '''my_device'', public.tetris__device(p_match_id, p_uid)') = 0 then
@@ -1208,7 +1216,8 @@ begin
     probes := probes + 1;
 
     --------------------------------------------------------------------------------------------
-    -- ⑪ 기록 없는 판(이 파일 전에 수락된 판): 가드에 걸린 보고는 자리를 못 잡고, 지난 보고가 잡는다 → 그 뒤 다른 기기는 막힌다
+    -- ⑪ 기록 없는 판(이 파일 전에 수락된 판): 늦게 온 보고 · 가드에 걸린 보고는 자리를 못 잡고, 지난 보고가 잡는다
+    --    → 그 뒤 다른 기기는 막힌다
     --------------------------------------------------------------------------------------------
     mid2 := gen_random_uuid();
     insert into public.tetris_matches (id, challenger, opponent, stake, status, seed, created_at, invite_expires_at,
@@ -1219,6 +1228,15 @@ begin
     insert into public.tetris_players (match_id, user_id, ready_at, seq, lines, last_seen_at)
     values (mid2, a, clock_timestamp() - interval '10 seconds', 4, 3, clock_timestamp()),
            (mid2, b, clock_timestamp() - interval '10 seconds', 4, 0, clock_timestamp());
+    -- 다른 기기(sa2)의 늦은 보고: seq 가 저장값과 같고 줄이 뒤로 — 가드는 seq 비교로 넘기고 ④ 가 stale 로 받는다.
+    -- 이 보고가 자리를 잡으면 진짜 기기(sa1)의 다음 보고가 other_device 로 막혀 침묵 패가 된다(리뷰 지적 그대로).
+    v := pg_temp.tow_report(a, sa2, mid2, 4, 0, 0, true);
+    if v ->> 'status' is distinct from 'stale'
+       or (select challenger_session from public.tetris_matches where id = mid2) is not null
+       or (select lines from public.tetris_players where match_id = mid2 and user_id = a) is distinct from 3
+       or (select status from public.tetris_matches where id = mid2) <> 'active' then
+      raise exception '⑪ 늦게 온 다른 기기 보고가 % (기대 stale · 자리 안 잡음 · 줄 3 그대로 · 판 active)', v;
+    end if;
     v := pg_temp.tow_report(a, sa2, mid2, 5, 0, 0, true);
     if v ->> 'status' is distinct from 'other_device'
        or (select challenger_session from public.tetris_matches where id = mid2) is not null

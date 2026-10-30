@@ -134,13 +134,18 @@ package struct GamesTetrisDuelChrome: Equatable, Sendable {
     package let result: Result?
     /// 안내 한 줄(코어 `notice` — 신청·기권 응답 문구). 없으면 nil.
     package let notice: String?
+    /// 같은 계정의 **다른 기기**가 두는 판이다(코어 `playingElsewhere` · 0.3.69 한 판 한 기기). 이 폰에는 구동기가 없어
+    /// 단계가 `.waiting` 에 머문다 — 그래서 덮개가 "상대를 기다리는 중 · 앱을 켜 둔 채" 대신 그 사실을 말하고,
+    /// "판 중에 앱을 나가면 져요" 를 걸지 않는다(이 폰이 나가도 아무도 지지 않는다). 끝난 판에서는 거짓이다.
+    package let playingElsewhere: Bool
 
     /// - Parameters:
     ///   - match: 서버가 말한 판.
     ///   - phase: 코어 흐름.
     ///   - myStats: 내 판 숫자(조각이 굳을 때만 바뀐다). 판 구동기가 없으면 nil.
+    ///   - playingElsewhere: 코어 `playingElsewhere`(다른 기기가 두는 판).
     package init(match: TetrisDuelMatchState, phase: TetrisDuelPhase, myStats: TetrisDuelMyStats?,
-                 notice: String?, connectionTrouble: Bool) {
+                 notice: String?, connectionTrouble: Bool, playingElsewhere: Bool = false) {
         let finished = match.isFinished || phase == .finished
         let stage: Stage
         switch phase {
@@ -156,7 +161,9 @@ package struct GamesTetrisDuelChrome: Equatable, Sendable {
         toppedOut = myStats?.toppedOut ?? false
         // ★ 입력은 **판이 흐르는 동안만**이다. 탑아웃한 판은 서버 응답을 기다리는 중이고 조각이 없다.
         acceptsInput = stage == .playing && !(myStats?.toppedOut ?? false)
-        showsLeaveWarning = stage != .finished
+        let elsewhere = playingElsewhere && stage != .finished
+        self.playingElsewhere = elsewhere
+        showsLeaveWarning = stage != .finished && !elsewhere
         let floor = myStats?.levelFloor ?? 1
         showsSpeedUp = floor > 1 && stage != .finished
         speedLevel = floor
@@ -168,7 +175,8 @@ package struct GamesTetrisDuelChrome: Equatable, Sendable {
         opponentToppedOut = match.opponentBoard.toppedOut
         canResign = stage != .finished
         result = finished ? Self.result(match) : nil
-        self.notice = notice
+        // 덮개 카드 제목이 이미 그 안내다 — 같은 줄을 판 밑에 두 번 쓰지 않는다(맥 `detail` 과 같은 규칙).
+        self.notice = elsewhere && notice == TetrisDuelNoticeText.otherDevice ? nil : notice
     }
 
     /// 끝난 판 한 장(순수). 사유는 **코어 표**이고 루비는 서버 값 우선이다(계약 ⑦).
@@ -353,7 +361,8 @@ struct GamesTetrisDuelMatchView: View {
             matchBody(match: match,
                       chrome: GamesTetrisDuelChrome(match: match, phase: tetris.phase, myStats: tetris.myStats,
                                                     notice: tetris.notice,
-                                                    connectionTrouble: tetris.connectionTrouble))
+                                                    connectionTrouble: tetris.connectionTrouble,
+                                                    playingElsewhere: tetris.playingElsewhere))
                 // 탭 막대를 숨긴다(체스·오목 판과 같은 수단 · `TabBarPolicy.tetrisMatch`). 까닭이 더 세다:
                 // 판 시간이 단조 시계로 흐르므로(D10) 탭을 잘못 눌러 나가면 **안 보이는 채로 조각이 계속
                 // 떨어진다** — 판돈이 걸린 판이다. 작은 화면(SE)에서는 그 49pt 가 판 폭으로 돌아온다.
@@ -647,6 +656,13 @@ struct GamesTetrisDuelMatchView: View {
     @ViewBuilder
     private func overlay(_ chrome: GamesTetrisDuelChrome) -> some View {
         switch chrome.stage {
+        case .waiting where chrome.playingElsewhere:
+            // 같은 계정의 다른 기기가 두는 판 — 이 폰에는 판이 없다(코어가 구동기를 안 만든다). 기다리라는 말 대신 사실을
+            // 말한다(맥 대결 창의 같은 갈래와 같은 카드 · 색도 같은 `CheckTheme.accent` — 카드 기본값).
+            GamesOverlayCard(title: TetrisDuelNoticeText.otherDevice,
+                             subtitle: TetrisPhoneText.otherDeviceSubtitle,
+                             action: TetrisPhoneText.otherDeviceAction,
+                             icon: "macbook.and.iphone", scale: 0.9)
         case .waiting:
             // 남은 초는 **잎**이 센다(계약 ③) — 카드 한 장만 매초 다시 그려진다.
             GamesTetrisDuelWaitLeaf(store: tetris) { seconds in

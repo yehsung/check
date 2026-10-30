@@ -835,6 +835,45 @@ enum TetrisWireJSON {
         await mine.tearDown()
     }
 
+    @Test("다른 기기가 두는 판을 폰에서 열면 기다림 대신 그 사실 · '나가면 져요' 없음 · 화면 꺼짐 방지 없음 — 같은 판에 this 면 셋 다 선다")
+    func aMatchPlayedOnAnotherDeviceShowsTheFactNotTheWaitingCard() async throws {
+        // 없으면: 판을 두지 않는 폰이 `.ready` 에 머물러 "상대를 기다리는 중 · 앱을 켜 둔 채 기다려 주세요" 카드와
+        // "판 중에 앱을 나가면 져요" 를 띄우고(둘 다 이 폰에는 거짓이다), 남의 기기 판이 끝날 때까지 최대 8분 화면을 켜 둔다.
+        // 화면 표는 뷰가 만드는 그대로 **실제 스토어 값**으로 세운다(뷰 몸통은 `#if os(iOS)` 라 맥 스위트가 못 본다 —
+        // 그 자리는 `GamesTetrisDuelMatchTests` 의 소스 계약이 잇는다).
+        func chrome(_ tetris: TetrisDuelStore) throws -> GamesTetrisDuelChrome {
+            GamesTetrisDuelChrome(match: try #require(tetris.match), phase: tetris.phase, myStats: tetris.myStats,
+                                  notice: tetris.notice, connectionTrouble: tetris.connectionTrouble,
+                                  playingElsewhere: tetris.playingElsewhere)
+        }
+        let harness = TetrisWireHarness(label: "tetris-other-device-screen")
+        serve(harness)
+        await harness.signIn()
+        let other = try #require(Self.decodeState(TetrisWireJSON.stateEnvelope(nowMs: harness.serverNowMs,
+                                                                               myDevice: "other")))
+        harness.tetris.applyState(other)
+        #expect(harness.tetris.phase == .ready && harness.tetris.playingElsewhere)
+        let elsewhere = try chrome(harness.tetris)
+        #expect(elsewhere.stage == .waiting && elsewhere.playingElsewhere, "덮개가 기다림 갈래를 탄다")
+        #expect(!elsewhere.showsLeaveWarning, "판을 두지 않는 폰에 '판 중에 앱을 나가면 져요' 가 선다")
+        #expect(!elsewhere.acceptsInput)
+        #expect(elsewhere.notice == nil, "덮개 제목과 같은 안내가 판 밑에 한 번 더 선다")
+        #expect(!harness.games.wantsIdleTimerDisabled, "남의 기기 판인데 이 폰 화면을 켜 둔다")
+        await harness.tearDown()
+
+        // ★ 기준선: 같은 판에 서버가 'this' 라 하면 기다림 카드 · 경고 · 화면 꺼짐 방지가 그대로 선다.
+        let mine = TetrisWireHarness(label: "tetris-this-device-screen")
+        serve(mine)
+        await mine.signIn()
+        let this = try #require(Self.decodeState(TetrisWireJSON.stateEnvelope(nowMs: mine.serverNowMs)))
+        mine.tetris.applyState(this)
+        let playing = try chrome(mine.tetris)
+        #expect(playing.stage == .waiting && !playing.playingElsewhere)
+        #expect(playing.showsLeaveWarning, "기준선이 안 갈린다 — 이 폰의 판에서도 경고가 사라졌다")
+        #expect(mine.games.wantsIdleTimerDisabled, "기준선이 안 갈린다 — 이 폰의 판에서도 화면이 꺼질 수 있다")
+        await mine.tearDown()
+    }
+
     @Test("목적지가 실제로 테트리스 대결이다 — 쌓는 자리가 `GamesDestination.tetrisDuel` 인지 글자로 못 박는다")
     func theDoorPushesTheTetrisDestination() throws {
         // `NavigationPath` 는 원소를 되읽을 수 없어(Codable 이 아니다) 위 테스트는 **건수**만 잰다.

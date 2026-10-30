@@ -190,8 +190,10 @@ private let towPatches: [(name: String, canon: String, patches: [TOWPatch])] = [
                     "     and (coalesce(p_lines, me.lines) < me.lines or coalesce(p_garbage_sent, me.garbage_sent) < me.garbage_sent) then",
                     "    return jsonb_build_object('status', 'other_device', 'state', public.tetris__state(m.id, uid));",
                     "  end if;",
-                    "  -- 세션 기록이 없던 판(이 파일 전에 수락된 판)은 거른 뒤의 이 보고가 자리를 잡는다. 세션 없는 토큰이면 아무것도 안 한다.",
-                    "  if v_dev is null then",
+                    "  -- 세션 기록이 없던 판(이 파일 전에 수락된 판)은 거른 뒤 **실제로 쓸** 보고(seq 가 앞선 것)만 자리를 잡는다 — 늦게 온",
+                    "  --     옛 보고는 ④ 에서 stale 로 끝나므로 잡으면 안 된다(다른 기기의 늦은 보고가 자리를 가로채면 진짜 기기가 막혀 침묵 패).",
+                    "  --     세션 없는 토큰이면 아무것도 안 한다.",
+                    "  if v_dev is null and p_seq > me.seq then",
                     "    perform public.tetris__claim(m.id, uid);",
                     "  end if;")),
     ]),
@@ -331,8 +333,10 @@ struct TetrisOneWriterMigrationTests {
                 }
             }
             #expect(towCount(body, "public.tetris__claim(m.id, uid)") == 1)
-            #expect(body.contains("if v_dev is null then perform public.tetris__claim(m.id, uid); end if;"),
-                    "\(name): 자리 잡기가 '기록 없음' 에만 걸려 있지 않다")
+            // 보고는 실제로 쓸(seq 가 앞선) 보고만 잡는다 — 늦게 온 보고(④ stale)가 잡으면 다른 기기가 자리를 가로챈다(리뷰 ①).
+            let claimGate = name == "tetris_report" ? "if v_dev is null and p_seq > me.seq then" : "if v_dev is null then"
+            #expect(body.contains("\(claimGate) perform public.tetris__claim(m.id, uid); end if;"),
+                    "\(name): 자리 잡기가 '\(claimGate)' 에만 걸려 있지 않다")
         }
     }
 
@@ -477,6 +481,11 @@ struct TetrisOneWriterMigrationTests {
         #expect(sql.contains("elsif r.md5 = r.canon_md5 then") && sql.contains("elsif r.md5 = r.self_md5 then"))
         #expect(sql.contains("if not (v_first = 5 or v_again = 5) then"), "섞인 상태(일부만 손댄 서버)를 안 멈춘다")
         #expect(sql.contains("v_expected  constant int := 12;"), "프로브 기대 건수가 12 가 아니다")
+        // 늦은 보고가 기록 없는 자리를 잡지 않는다는 계약을 적용 시점에도 되묻는다(§5 (4) 토큰 · §6 ⑪ 첫 걸음 — 리뷰 ①).
+        #expect(sql.contains("if strpos(v_src, 'if v_dev is null and p_seq > me.seq then') = 0 then"),
+                "§5 (4) 가 보고의 자리 잡기에 걸린 seq 비교를 안 묻는다")
+        #expect(towFlat(sql).contains("v := pg_temp.tow_report(a, sa2, mid2, 4, 0, 0, true); if v ->> 'status' is distinct from 'stale' or (select challenger_session from public.tetris_matches where id = mid2) is not null"),
+                "§6 ⑪ 이 '다른 기기의 늦은 보고 = stale · 자리 안 잡음' 을 실호출로 안 잰다")
         #expect(sql.contains("raise exception 'TETRIS_ONE_WRITER_PROBE_ROLLBACK';"), "센티널 롤백이 없다 — 프로브 행이 운영에 남는다")
         #expect(sql.contains("if sqlerrm = 'TETRIS_ONE_WRITER_PROBE_ROLLBACK' then"))
         #expect(sql.contains("notify pgrst, 'reload schema';"))

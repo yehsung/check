@@ -44,6 +44,16 @@ import OSLog
 //  ⑬ **반응**은 꾸밈이라 내 말풍선을 바로 띄우고(같은 반응이 state 로 돌아오면 한 번 삼킨다), 남의 것은 state 의
 //     `reactions` 에서 처음 보는 것만 낸다. **뽑기**는 다음 편집기의 랙에서 새로 생긴 면을 찾아 `onTileDrawn` 으로 알린다.
 //  ⑭ **받침대 자리는 판마다 로컬 저장**(`rackDefaults`, 판 id 키) — 판이 끝나거나 접히면 지운다.
+//  ⑮ **한 계정 기기 여럿**(설계서 v2 §6). `rummy__ring` 은 그 사람의 모든 기기를 울리고, 놀던 맥도 로비
+//     `me.active_match_id` 로 판을 읽어 phase 가 playing 이 된다. 그래서 **기기가 스스로 보내는 쓰기**(하트비트 ·
+//     `leaveForExit`/`leaveRoomForExit` — 창 닫기·앱 종료·로그아웃·업데이트)는 이 기기가 그 판에 손댄 적이 있을 때만 한다:
+//     `engagedMatchIDs` = 이 기기에서 create·join·start·draft·play·draw·react 중 하나라도 **보낸** 판(`engagedDefaults`
+//     에 남아 앱을 다시 켜도 이어진다 · 판이 끝나거나 접히면 지운다). 놀던 맥을 끄거나 로그아웃해도 다른 맥의 판이
+//     기권되지 않는다. App Nap 활동(`onHoldingMatchChange`)도 같은 조건(engaged 판이 room·playing)이다.
+//     **알고 둔 빈틈:** 같은 판을 맥 A 에서 시작해 맥 B 에서 이어 하다 A 를 끄면(로그아웃하면) A 도 engaged 라 기권된다 —
+//     A 가 '이제 B 가 쥐었다' 를 알 길이 없다(서버가 기기를 가르지 않는다). 드문 경우라 받아들인다.
+//  ⑯ **루비 잔액은 스토어가 마지막으로 안 값**(`rubyBalance` — 로비 `me.ruby_balance` · 거절 응답의 `ruby_balance`).
+//     판 state 에는 잔액이 없어서, 판돈 차감(시작)과 정산(끝)을 **처음 본** 순간 로비를 한 번 다시 읽어 맞춘다.
 
 // MARK: - 호스트
 
@@ -92,6 +102,8 @@ package final class RummyStore {
     package nonisolated static let reactionCooldownSeconds: TimeInterval = 2
     /// v2 `reactionFeed` 상한.
     package nonisolated static let reactionFeedLimit = 12
+    /// v2 §6 `engagedMatchIDs` 상한(못 지운 것이 쌓이지 않게 — 오래된 것부터 버린다).
+    package nonisolated static let engagedLimit = 16
     /// v2 내 반응의 메아리를 기다리는 창(초) — 서버 state 는 최근 10초만 싣는다.
     package nonisolated static let reactionEchoSeconds: TimeInterval = 10
 
@@ -118,6 +130,8 @@ package final class RummyStore {
     }
     /// 사용자 문구(`RummyNoticeText` 한 곳).
     package internal(set) var notice: String?
+    /// 마지막으로 안 내 루비 잔액(머리말 ⑯). nil = 아직 모름(화면은 "—"). 판 중에도 그대로 남는다.
+    package internal(set) var rubyBalance: Int?
     /// 요청 비행 중(버튼 잠금). 작업 상태 전송·폴링은 세우지 않는다 — 사용자가 누른 동작만.
     package internal(set) var isWorking: Bool = false
     package internal(set) var ranking: RummyRanking?
@@ -185,6 +199,17 @@ package final class RummyStore {
     @ObservationIgnored var seenReactionKeys: Set<String> = []
     @ObservationIgnored var reactionSerial = 0
     @ObservationIgnored var drawSerial = 0
+    /// 이 기기가 손댄 판 저장소(머리말 ⑮). **nil 이면 메모리에만 둔다**(기본 — 시험이 Preferences 를 더럽히지 않게).
+    /// 맥 배선이 `.standard` 를 꽂는다. 꽂는 순간 저장된 목록을 읽어 합친다.
+    @ObservationIgnored package var engagedDefaults: UserDefaults? {
+        didSet { loadEngaged() }
+    }
+    /// 이 기기에서 create·join·start·draft·play·draw·react 를 **보낸** 판(오래된 것이 앞, 최대 `engagedLimit`).
+    @ObservationIgnored package internal(set) var engagedMatchIDs: [UUID] = []
+    /// 이 기기가 지금 판을 쥐고 있다(engaged 판이 room·playing · 세션 있음). 맥이 App Nap 을 막는 활동을 쥐고 놓는다.
+    @ObservationIgnored package internal(set) var isHoldingMatch = false
+    /// `isHoldingMatch` 가 바뀔 때마다 한 번(true = 쥐어라, false = 놓아라). 맥 전용 배선(`RummyActivityHold`)이 꽂는다.
+    @ObservationIgnored package var onHoldingMatchChange: (@MainActor (Bool) -> Void)?
 
     // MARK: 내부 장부 (관찰 대상 아님)
 
@@ -479,6 +504,9 @@ package final class RummyStore {
         heartbeatTask?.cancel()
         heartbeatTask = nil
         heartbeatMatchID = nil
+        // 로그아웃·계정 전환: App Nap 활동을 놓는다. `engagedMatchIDs` 는 남긴다 — 판 id 는 사람마다 달라 다음 사람에겐
+        // 아무 뜻이 없고, 같은 사람이 다시 들어오면(토큰 만료 강제 로그아웃) 쥐던 판의 하트비트가 이어져야 한다.
+        setHoldingMatch(false)
         lastSentLayout = nil
         lastReactionSentAt = .distantPast
         pendingOwnReactions = []
@@ -491,6 +519,7 @@ package final class RummyStore {
         if match != nil { match = nil }
         if editor != nil { editor = nil }
         if notice != nil { notice = nil }
+        if rubyBalance != nil { rubyBalance = nil }
         if isWorking { isWorking = false }
         if ranking != nil { ranking = nil }
         if selectedStake != 3 { selectedStake = 3 }
@@ -612,8 +641,11 @@ package final class RummyStore {
         if notice != text { notice = text }
     }
 
+    /// 서버가 말한 내 잔액을 스토어(판 화면 머리글)와 호스트 거울(메뉴·상점) 둘 다에 둔다.
     func applyRuby(_ value: Int?) {
-        guard let value, let host, host.rubyBalance != value else { return }
+        guard let value else { return }
+        if rubyBalance != value { rubyBalance = value }
+        guard let host, host.rubyBalance != value else { return }
         host.rubyBalance = value
     }
 

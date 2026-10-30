@@ -492,6 +492,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 2판(§2.3): 받침대 자리는 판마다 이 맥에 남긴다 — 앱을 다시 켜도 내가 놓은 자리 그대로(판이 끝나면 코어가 지운다).
         // 시험은 앱 델리게이트를 거치지 않아 Preferences 를 더럽히지 않는다(코어 기본은 nil = 저장 안 함).
         rummy.rackDefaults = .standard
+        // 2판 §6: 이 맥이 손댄 판(create·join·start·draft·play·draw·react 를 보낸 판)만 하트비트·이탈을 보낸다 —
+        // 같은 계정의 놀던 맥을 끄거나 로그아웃해도 다른 맥의 판이 기권되지 않게. 앱을 다시 켜도 이어지도록 이 맥에 남긴다.
+        rummy.engagedDefaults = .standard
+        // 2판 §6 후속: 이 맥이 쥔 판 동안 App Nap 을 막는다(창이 가려져도 하트비트 10초가 밀리지 않게). 놓기는 코어가 알린다.
+        let rummyActivity = RummyActivityHold()
+        rummy.onHoldingMatchChange = { holding in rummyActivity.set(holding) }
         // 2판(§1.2) 하트비트는 코어가 판·방 동안 10초마다 스스로 보낸다(창과 무관). 앱 수명에 잇는 것은 하나 —
         // 잠에서 깨면 다음 10초를 기다리지 않고 **바로 한 번** 보낸다(잠든 사이 쌓인 공백을 90초 끊김 판정 전에 메운다).
         _ = NSWorkspace.shared.notificationCenter.addObserver(

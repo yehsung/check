@@ -96,6 +96,7 @@ extension RummyStore {
 
         // 닫힌 방(취소·만료) — 들고 있던 방이면 내리고 한 줄.
         if state.status == .cancelled || state.status == .expired {
+            forgetEngaged(id)
             if match?.id == id {
                 appliedTicket = max(appliedTicket, ticket)
                 clearMatch()
@@ -106,6 +107,7 @@ extension RummyStore {
         }
         // 내 자리가 아닌 state(초대만 받은 방 · 시작 검사에서 빠진 방 · 시작 때 declined 로 접힌 자리)는 들지 않는다.
         guard isParticipant(state) else {
+            forgetEngaged(id)
             if match?.id == id {
                 appliedTicket = max(appliedTicket, ticket)
                 let dropped = mySeat(in: state)?.state == .dropped
@@ -120,9 +122,16 @@ extension RummyStore {
         if previous != state { match = state }
         reconcileEditor(with: state)
         noteReactions(in: state)
-        if state.status == .finished { forgetRack(matchID: id) }
+        if state.status == .finished {
+            forgetRack(matchID: id)
+            forgetEngaged(id)
+        }
         refreshPhase()
+        // 판돈 차감(시작)·정산(끝)을 **처음** 본다 — 판 state 엔 잔액이 없어 로비로 맞춘다(머리말 ⑯). 알림과 같은 장부로 가른다.
+        let rubyMoved = state.status == .finished ? !finishAnnouncedIDs.contains(id)
+            : state.status == .active && !startAnnouncedIDs.contains(id)
         announce(previous: previous, state: state)
+        if rubyMoved { refreshRubyAfterSettlement() }
         scheduleDeadlineWake()
         return .applied
     }
@@ -311,6 +320,7 @@ extension RummyStore {
         draftDebounceTask = nil
         runAction { store in
             let ticket = store.issueTicket()
+            store.markEngaged(matchID)
             guard let result = await store.perform({
                 try await $0.rummyPlay(accessToken: $1, matchID: matchID, expectedSeq: seq, table: table, layout: layout)
             }) else { return }
@@ -327,6 +337,7 @@ extension RummyStore {
         draftDebounceTask = nil
         runAction { store in
             let ticket = store.issueTicket()
+            store.markEngaged(matchID)
             guard let result = await store.perform({
                 try await $0.rummyDraw(accessToken: $1, matchID: matchID, expectedSeq: seq)
             }) else { return }
@@ -421,6 +432,7 @@ extension RummyStore {
         // 편집기가 선 seq 가 아니라 지금 든 판의 seq — 같은 차례에 남의 기권으로 오를 수 있다.
         let seq = current.seq ?? 0
         let generation = resetGeneration
+        markEngaged(matchID)
         draftFlushTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let ticket = self.issueTicket()

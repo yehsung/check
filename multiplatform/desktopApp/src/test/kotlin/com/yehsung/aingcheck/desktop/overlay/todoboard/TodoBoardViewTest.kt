@@ -179,7 +179,9 @@ class TodoBoardViewTest {
     @Test
     fun todoBoardSourcesUseThemeTokensOnly() {
         val dir = File(DesktopSnapshots.mpRoot, "desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/overlay/todoboard")
-        val files = dir.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        // TodoBoardAppearance.kt 는 맥 재질 실측 상수(CheckTodoBoardAppearance.swift TodoBoardTint :16-58)의 정본 한 벌 — 대비 계산과 그리기가
+        // 같은 숫자를 쓰도록 비토큰 색을 그 파일 하나에만 둔다(뷰에 리터럴이 새지 않는지는 이 시험이 계속 잰다).
+        val files = dir.walkTopDown().filter { it.isFile && it.extension == "kt" && it.name != "TodoBoardAppearance.kt" }.toList()
         assertTrue(files.size >= 5, "보드 소스를 못 찾았다: $dir")
         val hits = files.flatMap { f ->
             f.readLines().mapIndexedNotNull { i, line ->

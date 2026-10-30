@@ -113,6 +113,18 @@ class WindowsOverlaySurface(
     val isShown: Boolean get() = shown
 
     /**
+     * 창 전체 클릭 통과(WS_EX_TRANSPARENT) — 울트라 동안(맥 :817-822 몸 판정 거짓 → ignoresMouseEvents). 끄면 다시 알파가 판정이다.
+     * 바꾼 뒤의 GWL_EXSTYLE 을 돌려준다.
+     */
+    fun setClickThrough(enabled: Boolean): Int = thread.call { _ ->
+        val cur = OverlayWindowClass.exStyle(hwnd)
+        val next = if (enabled) cur or OverlayWin32.WS_EX_TRANSPARENT else cur and OverlayWin32.WS_EX_TRANSPARENT.inv()
+        if (next != cur) User32.INSTANCE.SetWindowLong(hwnd, OverlayWin32.GWL_EXSTYLE, next)
+        if (enabled && dragging) dragging = false
+        OverlayWindowClass.exStyle(hwnd)
+    }
+
+    /**
      * 울트라 흐림 창(D §9-4) — [bounds](모니터 전체)를 상수 알파 [alpha] 로 덮고 클릭은 늘 통과시킨다.
      * 캐릭터 창은 그 위로 다시 올린다.
      */

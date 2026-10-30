@@ -24,6 +24,10 @@ object TodoBoardStrings {
     const val MARK_UNDONE = "완료 취소"
     const val DELETE_ITEM = "삭제"
     const val EDIT_TITLE = "할 일 수정"
+    /** 헤더 조절 버튼(맥 opacityToggle — '투명도'가 아니라 '진하기', :43). 맥 ⌥ 는 Windows Alt. */
+    const val OPACITY_TOGGLE = "배경 진하기 · Alt + 스크롤로도 조절"
+    /** 슬라이더 접근성 이름(맥 opacityLabel :46). */
+    const val OPACITY_LABEL = "보드 배경 진하기"
 
     fun oldSection(count: Int): String = "오래된 항목 ($count)"
 

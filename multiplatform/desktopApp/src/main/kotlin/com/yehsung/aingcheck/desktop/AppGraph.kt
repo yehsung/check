@@ -334,6 +334,13 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
     val gomoku = GomokuStore(scope, SessionGomokuHost(sessionContext, ruby))
     val chess = ChessStore(scope, SessionGomokuHost(sessionContext, ruby))
     val tetris = TetrisDuelStore(DesktopTetrisHost(sessionContext, ruby), scope, clock = { sessionClock.now() }, collation = NaturalKoNameCollation)
+
+    init {
+        // '이 기기가 연 판' 기록(vc3 한 판 한 기기 — 사용자별 키 tetris.duel.ownedMatches.<id>)을 앱 kv 에 둔다: 다시 켠 앱이 옛 서버
+        // (my_device 없음)에서도 자기 판을 알아본다. 맥 TetrisDuelStore.swift:607-610(앱 배선이 넣는다 · nil 이면 프로세스 안에만).
+        // Windows kv 는 이 키 머리를 즉시 쓰기로 연다(FileDesktopKeyValueStore.WORK_IMMEDIATE_KEY_PREFIXES).
+        tetris.defaults = prefs
+    }
     /** 게임 탭 라우터(플라이아웃 게임 쪽이 갈아 끼운다). 기본은 아무것도 안 한다. */
     var gamesRouter: GamesRouter = object : GamesRouter {
         override fun present(destination: GamesDestination) = Unit

@@ -18,6 +18,7 @@
 // 비밀(토큰)은 여기 두지 않는다 — TokenVault(DPAPI) 몫(DesktopKeyValueStore 계약).
 package com.yehsung.aingcheck.desktop.platform.windows.store
 
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsKeys
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.work.queue.DesktopWorkQueue
@@ -48,13 +49,26 @@ class FileDesktopKeyValueStore internal constructor(
     private val log: (String) -> Unit,
     /** put 즉시 디스크에 쓰는 키(W-13 #2 근무 큐 · W-14 #6 소유 세션 id·강도 · AI 기록 동의). 나머지는 [debounceMillis] 묶음. */
     val immediateKeys: Set<String>,
+    /**
+     * put 즉시 디스크에 쓰는 **키 머리**(사용자별 키 — 이름 끝에 사용자 id 가 붙어 [immediateKeys] 의 고정 글자로는 못 고른다).
+     * 테트리스 '이 기기가 연 판' 기록(vc3 · TetrisDuelStore.ownedMatchesKey) — 맥 TetrisDuelStoreGame.swift:406 은 수락·신청 ok
+     * 자리에서 UserDefaults.set(cfprefsd 가 지킨다)이라 판을 연 직후 강제 종료돼도 남는다.
+     */
+    val immediateKeyPrefixes: Set<String> = emptySet(),
 ) : DesktopKeyValueStore, AutoCloseable {
 
     internal constructor(file: Path, debounceMillis: Long, commit: (tmp: Path, target: Path) -> Unit, log: (String) -> Unit) :
         this(file, debounceMillis, commit, log, emptySet())
 
-    constructor(file: Path, debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS, immediateKeys: Set<String> = emptySet()) :
-        this(file, debounceMillis, ::atomicReplace, { System.err.println("aingcheck-kv: $it") }, immediateKeys)
+    constructor(
+        file: Path,
+        debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
+        immediateKeys: Set<String> = emptySet(),
+        immediateKeyPrefixes: Set<String> = emptySet(),
+    ) : this(file, debounceMillis, ::atomicReplace, { System.err.println("aingcheck-kv: $it") }, immediateKeys, immediateKeyPrefixes)
+
+    /** 이 키는 put 자리에서 바로 쓴다([immediateKeys] 글자 그대로 · [immediateKeyPrefixes] 머리). */
+    fun isImmediate(key: String): Boolean = key in immediateKeys || immediateKeyPrefixes.any { key.startsWith(it) }
 
     /** 시작할 때 무엇을 읽었나(진단·시험). */
     enum class LoadOutcome {
@@ -170,7 +184,7 @@ class FileDesktopKeyValueStore internal constructor(
             if (value == null) values.remove(key) else values[key] = value
             generation += 1
         }
-        if (key in immediateKeys) {
+        if (isImmediate(key)) {
             // 근무 큐: 묶음 창을 기다리지 않는다. 같은 스냅숏에 그때까지의 다른 변경도 실린다(잃는 것 없음). 막히면 예약으로 다시.
             if (!flush()) scheduleAfter(RETRY_MILLIS)
             return
@@ -282,12 +296,20 @@ class FileDesktopKeyValueStore internal constructor(
             DesktopSettingsKeys.AI_TOOL_DATA_CONSENT,
         )
 
+        /**
+         * 즉시 쓰기 키 머리: 테트리스 '이 기기가 연 판'(사용자별 `tetris.duel.ownedMatches.<id>` — 옛 서버(my_device 없음)에서 판을 연 직후
+         * 강제 종료되면 다음 실행이 자기 판을 '다른 기기 판'으로 읽어 준비·보고를 안 내고 no_show/침묵 패로 접힌다. 맥 TetrisDuelStoreGame.swift:406
+         * UserDefaults.set · TetrisDuelStore.swift:1092(신청 ok)·1170(수락 ok)). 머리는 소비자 함수에서 뽑는다(글자를 두 벌 적지 않는다).
+         */
+        val WORK_IMMEDIATE_KEY_PREFIXES: Set<String> = setOf(TetrisDuelStore.ownedMatchesKey(""))
+
         /** 앱 자리: [dataDir](WindowsAppPaths.dataDir — 패키지 안이면 이미 LocalCache 경로)/prefs.json. 근무 큐·소유 세션은 즉시 쓰기. */
         fun inDataDir(
             dataDir: String,
             debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
             immediateKeys: Set<String> = WORK_IMMEDIATE_KEYS,
-        ): FileDesktopKeyValueStore = FileDesktopKeyValueStore(Path.of(dataDir, FILE_NAME), debounceMillis, immediateKeys)
+            immediateKeyPrefixes: Set<String> = WORK_IMMEDIATE_KEY_PREFIXES,
+        ): FileDesktopKeyValueStore = FileDesktopKeyValueStore(Path.of(dataDir, FILE_NAME), debounceMillis, immediateKeys, immediateKeyPrefixes)
 
         internal fun atomicReplace(tmp: Path, target: Path) {
             try {

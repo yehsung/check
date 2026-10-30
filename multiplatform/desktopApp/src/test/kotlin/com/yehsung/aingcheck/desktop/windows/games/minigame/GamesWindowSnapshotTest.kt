@@ -24,6 +24,7 @@ import com.yehsung.aingcheck.desktop.windows.games.minigame.GameWindowScenes.Boa
 import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.BoardGameRig
 import com.yehsung.aingcheck.ui.games.minigame.UiGamesHarness
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelWindowContent
+import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisOtherDeviceFixture
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelWindowDoors
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelWindowState
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
@@ -100,11 +101,24 @@ class GamesWindowSnapshotTest {
         return Scene { TetrisDuelWindowContent(store, state, myUserID = null, meName = null, dark = dark, reduceMotion = true, onBack = {}) }
     }
 
+    /**
+     * vc3 한 판 한 기기(check 개발 부탁 ②): 같은 계정의 다른 기기가 두는 판 — 판 위 덮개가 '다른 기기에서 대결 중이에요' 카드(맥
+     * TetrisDuelPanel.swift:1088-1093). 음성 기준선은 상대 이름 한 군데만 다른 같은 장면('this' 는 판·머리 줄이 통째 달라 '한 군데' 가
+     * 아니다 — 카드 있고 없음은 TetrisOtherDeviceCardTest 가 실제 창 트리에서 잰다).
+     */
+    private fun duelOtherDevice(dark: Boolean, peerName: String = "라이벌"): Scene {
+        val store = gamesStore(com.yehsung.aingcheck.core.session.app.AppConfig(duelsEnabled = true))
+        store.tetris.applyState(TetrisOtherDeviceFixture.state("other", started = false, peerName = peerName), receivedAt = 1_000.0)
+        val state = TetrisDuelWindowState(TetrisDuelWindowDoors(store.tetris))
+        return Scene { TetrisDuelWindowContent(store, state, myUserID = TetrisOtherDeviceFixture.ME, meName = null, dark = dark, reduceMotion = true, onBack = {}) }
+    }
+
     @Test fun hubWindow() = matrix("minigame", "hub", { hub(it) }, hub(false, chessIncoming = true))
     @Test fun tetrisSoloWindow() = matrix("minigame", "tetris-playing", { tetrisSolo(it) }, tetrisSolo(false, drops = 0))
     @Test fun gomokuLobbyWindow() = matrix("gomoku", "lobby", { gomokuLobby(it) }, gomokuLobby(false, oneLessUser = true))
     @Test fun chessLobbyWindow() = matrix("chess", "lobby", { chessLobby(it) }, chessLobby(false, oneLessUser = true))
     @Test fun tetrisDuelLobbyWindow() = matrix("tetris", "duel-lobby", { duelLobby(it) }, duelLobby(false, com.yehsung.aingcheck.core.session.app.AppConfig(duelsEnabled = true)))
+    @Test fun tetrisDuelOtherDeviceWindow() = matrix("tetris", "duel-other-device", { duelOtherDevice(it) }, duelOtherDevice(false, peerName = "다른라이벌"))
 
     /** 배율 100·150 × 밝음·어두움. 음성 기준선은 100%·밝음 한 장과 견준다. */
     private fun matrix(area: String, name: String, scene: (Boolean) -> Scene, baseline: Scene) {

@@ -1023,7 +1023,7 @@ struct CheckMenuSideRail: View {
             CheckMenuRailButton(
                 icon: "gamecontroller.fill",
                 label: "미니게임",
-                help: "미니게임 — 타이밍 바 · 플래피 아잉",
+                help: "미니게임 — 혼자 하기 4종 · 같이 하기 4종",
                 isActive: store.isMiniGamePanelVisible
             ) {
                 store.openMiniGameWindow()

@@ -936,6 +936,9 @@ final class WorkTimerStore {
     @ObservationIgnored var cakeGiftChecking = false
     /// 이 실행에서 스스로 띄운 선물 id(실행당 한 번 — 닫으면 다시 안 뜨고 '다시 열기' 카드가 남는다). 로그아웃해도 비우지 않는다(실행 단위다).
     @ObservationIgnored var cakeGiftAutoShownIDs: Set<String> = []
+    /// 지금 떠 있는 축하 창을 메뉴 팝오버의 [고르기] 로 열었는가(v0.3.69). 참이면 사용자가 창을 닫을 때 팝오버로 돌아간다 — 열 때 팝오버를
+    /// 닫았으므로(`openCakeGiftWindow`) 안 돌아가면 화면에 아무것도 안 남는다. 스스로 띄운 창은 거짓(사용자가 팝오버에서 온 것이 아니다).
+    @ObservationIgnored var cakeGiftReturnsToPopover = false
     /// 축하 창을 띄우고 내리는 문(테스트 이음새 — 앱은 `.live`, 곧 `CheckCakeGiftWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
 

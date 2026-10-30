@@ -361,8 +361,9 @@ extension WindowTopAnchor {
         return decision
     }
 
-    /// 팝오버를 **여는** 문(v0.2.50). 캐릭터 머리 위 '메시지 도착' 말풍선을 누른 경우가 유일한 호출부다 —
+    /// 팝오버를 **여는** 문(v0.2.50). 캐릭터 머리 위 '메시지 도착' 말풍선을 누른 경우가 처음 호출부다 —
     /// 메시지가 별도 창에서 팝오버 하위 패널로 내려오면서, 그 클릭이 갈 곳이 팝오버 **안**이 됐다.
+    /// 둘째 호출부는 사용자가 닫은 창에서 팝오버로 돌아가는 문(`returnToMenuPopover` — v0.3.69)이고, 그것도 클릭 처리 안에서 불린다.
     ///
     /// **닫는 문과 같은 버튼·같은 판단이다.** 누르는 수단이 `NSStatusBarButton.performClick` 하나뿐이고
     /// 그것은 토글이라, 여는 일과 닫는 일의 차이는 "지금 떠 있는가"를 어느 쪽으로 읽느냐 하나다 —
@@ -374,7 +375,7 @@ extension WindowTopAnchor {
     ///    틀리게 짰다: 패널 상태는 이 호출과 무관하게 이미 세워져 있으므로, 팝오버가 안 떠도 사용자가 다음에
     ///    아이콘을 누르면 그 대화가 그 자리에 있다.
     @discardableResult
-    static func presentMenuPopover(now: Date = Date()) -> MenuPopoverPresentation {
+    static func presentMenuPopover(now: Date = Date(), honoringDebounce: Bool = true) -> MenuPopoverPresentation {
         // ★ **판단보다 먼저 앱을 활성화한다.** 아래 함수 주석에 실측이 있다. 판단 뒤로 미루면
         //   `.alreadySettled`(말풍선을 눌렀는데 팝오버가 이미 떠 있는 경우)에서 활성화가 건너뛰어져,
         //   그 사용자는 **떠 있는 팝오버에 한글을 못 치는 상태**로 남는다 — 증상 ①이 가장 자주 나는 모양이고,
@@ -385,13 +386,27 @@ extension WindowTopAnchor {
             intent: .present,
             presented: isMenuPopoverPresented(),
             hasStatusItem: button != nil,
-            lastClickAt: lastToggleClickAt,
+            lastClickAt: honoringDebounce ? lastToggleClickAt : nil,
             now: now
         )
         guard decision == .click else { return MenuPopoverPresentation(decision) }
         lastToggleClickAt = now
         button?.performClick(nil)
         return .presented
+    }
+
+    /// 사용자가 **닫은 창에서 팝오버로 돌아가는** 문(v0.3.69 — 뽑기 창 · 생일 축하 창). 0.3.68 제보: "캐릭터 뽑기 하고 결과 확인한 후에
+    /// 닫기 누르면 이전 화면으로 가지는 게 아니라 앱이 꺼집니다". 그 창들은 열 때 팝오버를 일부러 닫으므로(위 `dismissMenuPopover`)
+    /// 창만 내리면 화면에 아무것도 안 남는다(LSUIElement — 독 아이콘도 없다). 팝오버는 패널 상태를 그대로 쥐고 있어 다시 열면 온 자리다.
+    ///
+    /// **여는 문 그대로이되 디바운스를 보지 않는다.** 디바운스는 '한 동작 안의 두 호출'이 토글을 되돌리는 것을 막는 방어선인데,
+    /// 이 문을 부르는 것은 창을 연 클릭과 **다른 동작**(창 안의 클릭)이다. 그런데 창을 연 동작이 팝오버를 닫으며 시각을 남기므로
+    /// 0.6초 안에 닫으면(안 보이는 동안 공개가 끝난 판을 다시 열면 [닫기] 가 곧바로 서 있다 · 잘못 열고 곧바로 빨간 점) 여는 문은
+    /// `.debounced` 로 조용히 삼키고 사용자는 다시 빈 화면을 본다. '이미 떠 있으면 안 누른다'(`.alreadySettled`)는 그대로 지킨다.
+    /// ⚠️ 디바운스가 없으니 **창이 닫힐 때 한 번만** 불러야 한다(부르는 쪽이 '열려 있었는가'로 거른다) — 두 번 누르면 도로 닫힌다.
+    @discardableResult
+    static func returnToMenuPopover(now: Date = Date()) -> MenuPopoverPresentation {
+        presentMenuPopover(now: now, honoringDebounce: false)
     }
 
     /// 팝오버를 **프로그램으로** 열 때 앱을 활성 상태로 만든다. 증상 ①(한글 자음·모음 분리)의 원인 자리다.
@@ -558,5 +573,10 @@ extension WindowTopAnchor {
     /// 앞 테스트가 눌러 둔 시각이 다음 테스트를 `.debounced` 로 만들기 때문이다.
     static func resetDismissDebounceForTesting() {
         lastToggleClickAt = nil
+    }
+
+    /// 방금 누른 것처럼 래치에 시각을 적는다. **테스트 전용** — 헤드리스에는 누를 상태 아이템이 없어 래치가 저절로 안 선다.
+    static func markToggleClickForTesting(at date: Date) {
+        lastToggleClickAt = date
     }
 }

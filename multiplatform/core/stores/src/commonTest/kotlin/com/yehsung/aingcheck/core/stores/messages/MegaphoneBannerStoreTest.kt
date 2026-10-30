@@ -1,6 +1,7 @@
-// 원본: Tests/checkTests/MegaphoneBannerStoreTests.swift @ a6791165(b056075b) — 확성기 배너 코어: 필터 술어 세 갈래 · inbox 404 · 신선도 10분 ·
-// 푸시 진입 24시간 · 본 것 기록 · 한 번에 하나 8초 · 멈춤 · 미룸 · 접두 경합 · 요약 v2 폴백 · 본인 배너 · reset · 전선 · 작성 문구
-// 진짜 세션 스토어(StoreHarness)를 붙여 **스텁이 받은 요청**으로 잰다. 타이머는 손으로 돌린다(8초를 기다리지 않는다).
+// 원본: Tests/checkTests/MegaphoneBannerStoreTests.swift @ f3360b47(f3360b47) — 확성기 배너 코어: 필터 술어 세 갈래 · inbox 404 · 신선도 10분 ·
+// 푸시 진입 24시간 · 본 것 기록 · 한 번에 하나 5초 · 멈춤 · 미룸 · 접두 경합 · 요약 v2 폴백 · 본인 배너 · reset · 전선 · 작성 문구 ·
+// 필터 바뀜 알림(onCapabilityChange)
+// 진짜 세션 스토어(StoreHarness)를 붙여 **스텁이 받은 요청**으로 잰다. 타이머는 손으로 돌린다(5초를 기다리지 않는다).
 package com.yehsung.aingcheck.core.stores.messages
 
 import com.yehsung.aingcheck.core.rules.text.MegaphoneBanner
@@ -84,6 +85,24 @@ class MegaphoneBannerStoreTest {
         assertEquals(MegaphoneBannerStore.UNREAD_SUMMARY_V1, r.store.unreadSummaryFunction)
     }
 
+    // 없으면: 첫 판정이 실패한 뒤 실시간·푸시 refresh 가 필터를 켜도 소유자(메시지함)가 몰라 옛 요약을 쓰는 결함이 초록(Swift f3360b47).
+    @Test
+    fun capabilityChangeNotifiesOnlyWhenValueChanges() = runTest {
+        var missing = false
+        val r = rig(inbox = { t -> if (missing) Reply.missingFunction else Reply.Json("[" + inboxRow("msg-1", "mg-1", 30.0, t.now) + "]") })
+        val seen = mutableListOf<MegaphoneBannerStore.Capability>()
+        r.store.onCapabilityChange = { seen += r.store.capability }
+        r.store.refresh()
+        assertEquals(listOf(MegaphoneBannerStore.Capability.available), seen, "모름 → 켜짐에서 한 번 부르지 않았다(쓴 뒤 값으로)")
+        r.store.refresh()
+        assertEquals(1, seen.size, "기준선: 같은 값(켜짐 → 켜짐)이면 부르지 않는다")
+        missing = true
+        r.store.refresh()
+        assertEquals(MegaphoneBannerStore.Capability.unavailable, seen.last(), "켜짐 → 꺼짐에서 부르지 않았다")
+        r.store.reset()
+        assertEquals(listOf(MegaphoneBannerStore.Capability.available, MegaphoneBannerStore.Capability.unavailable, MegaphoneBannerStore.Capability.unknown), seen)
+    }
+
     @Test
     fun inboxMissingTurnsFilterOff() = runTest {
         val r = rig(inbox = { Reply.missingFunction })
@@ -132,16 +151,18 @@ class MegaphoneBannerStoreTest {
         assertNull(r.h.prefs.getString(MegaphoneBannerRules.seenKey("someone-else")))
     }
 
+    // 2026-10-30 사용자 결정으로 8초 → 5초("너무 오래 떠있으면 안좋을듯").
     @Test
-    fun oneAtATimeEightSeconds() = runTest {
+    fun oneAtATimeFiveSeconds() = runTest {
         val r = rig(inbox = { t -> Reply.Json("[" + inboxRow("m-2", "g-2", 5.0, t.now) + "," + inboxRow("m-1", "g-1", 50.0, t.now) + "]") })
         r.store.refresh()
         assertEquals("g-1", r.store.current?.megaphoneID, "오래된 것부터가 아니다")
         assertEquals(listOf("g-2"), r.store.queue.map { it.megaphoneID }, "한 번에 하나가 아니다")
-        r.timers.advance(7.9)
-        assertEquals("g-1", r.store.current?.megaphoneID, "8초 전에 닫혔다")
+        assertEquals(5.0, MegaphoneBannerRules.displaySeconds)
+        r.timers.advance(4.9)
+        assertEquals("g-1", r.store.current?.megaphoneID, "기준선: 5초 전에 닫혔다")
         r.timers.advance(0.2)
-        assertNull(r.store.current, "8초가 지났는데 떠 있다")
+        assertNull(r.store.current, "5초가 지났는데 떠 있다")
         r.timers.advance(0.2)
         assertNull(r.store.current, "쉬는 0.4초 전에 다음 장이 떴다")
         r.timers.advance(0.2)
@@ -152,7 +173,7 @@ class MegaphoneBannerStoreTest {
     fun pauseAndResume() = runTest {
         val r = rig(inbox = { t -> Reply.Json("[" + inboxRow("m-1", "g-1", 5.0, t.now) + "]") })
         r.store.refresh()
-        r.timers.advance(7.0)
+        r.timers.advance(4.0)
         r.store.pauseTimer()
         assertTrue(r.store.isTimerPaused)
         r.timers.advance(30.0)
@@ -232,7 +253,6 @@ class MegaphoneBannerStoreTest {
         assertEquals("g-1", r.store.current?.megaphoneID, "떠 있던 것을 밀어냈다")
         assertEquals("g-own", r.store.queue.first().megaphoneID, "줄 맨 앞이 아니다")
         assertTrue(r.store.queue.first().isOwn)
-        assertFalse(r.store.queue.first().canReply, "내 배너에 [답장]")
         assertEquals("내가 보낸 말", r.store.queue.first().body)
         r.store.dismissCurrent()
         r.timers.advance(0.5)

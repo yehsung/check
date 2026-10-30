@@ -1,10 +1,7 @@
-// 원본: Sources/CheckMobileKit/Messages/MegaphoneBannerPhoneRules.swift · App/MobileAppModel+MegaphoneBanner.swift @ a6791165(57810a8e)
+// 원본: Sources/CheckMobileKit/Messages/MegaphoneBannerPhoneRules.swift · App/MobileAppModel+MegaphoneBanner.swift @ f3360b47(8e83aa35)
 // 확성기 배너 · 폰 화면 규칙(계약 docs/plan/megaphone-banner-contract.md — 폰 배너). 뷰(androidApp MegaphoneBannerOverlay)는 그리기·손짓만 하고,
-// 판정은 전부 여기 둔다 — 위로 쓸기 판정 · 끌림 오프셋 · 미룸 집계 · 미룸 다시 맞추기 · [답장] 라우트.
+// 판정은 전부 여기 둔다 — 위로 쓸기 판정 · 끌림 오프셋 · 미룸 집계 · 미룸 다시 맞추기. 단추는 [닫기] 하나뿐이다([답장]은 2026-10-30 걷었다).
 package com.yehsung.aingcheck.feature.phone.messages
-
-import com.yehsung.aingcheck.core.rules.text.MegaphoneBanner
-import com.yehsung.aingcheck.feature.phone.routing.PhoneRouteTarget
 
 /** 배너 화면 판정(순수 함수). 길이는 dp. */
 object MegaphoneBannerPhoneRules {
@@ -53,26 +50,10 @@ object MegaphoneBannerPhoneRules {
     /** 다시 보기 고리의 열쇠. 떠 있는 것도 기다리는 것도 없으면 null(고리를 돌리지 않는다). */
     fun deferralPollKey(currentID: String?, queueCount: Int): String? =
         if (currentID == null && queueCount <= 0) null else "${currentID ?: "-"}#$queueCount"
-
-    /** [답장]이 여는 곳 — 상대를 알고 내가 보낸 것이 아닐 때만 1:1 대화. */
-    fun replyRoute(banner: MegaphoneBanner): PhoneRouteTarget.Message? {
-        if (!banner.canReply) return null
-        val peerID = safeID(banner.senderID) ?: return null
-        return PhoneRouteTarget.Message(peerID)
-    }
-
-    /** Swift `PushPayload.safeID`: 다듬고, 1~64자 영문·숫자·`-`·`_` 이면 소문자로(라우트 id 규칙). */
-    fun safeID(raw: String?): String? {
-        val trimmed = raw?.trim() ?: return null
-        if (trimmed.isEmpty() || trimmed.length > 64) return null
-        if (!trimmed.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_' }) return null
-        return trimmed.lowercase()
-    }
 }
 
 /** 배너에 보이는 글자. */
 object MegaphoneBannerPhoneText {
-    const val reply = "답장"
     const val close = "닫기"
     fun accessibilityLabel(name: String, body: String): String = "${name}님의 확성기, $body"
     const val accessibilityHint = "위로 쓸면 닫혀요. 누르고 있으면 멈춰요."

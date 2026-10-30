@@ -38,7 +38,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.yehsung.aingcheck.feature.phone.app.replyToMegaphoneBanner
 import com.yehsung.aingcheck.ui.components.LocalModalPresence
 import com.yehsung.aingcheck.ui.components.ModalPresence
 import com.yehsung.aingcheck.feature.phone.app.syncMegaphoneBannerDeferral
@@ -243,7 +242,7 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
         TabsNavHost(navController, Modifier.padding(bars), app = app, onTabBarHidden = { screenHidesTabBar = it })
     }
     // 확성기 배너 — 어느 탭이든 위에서 내려온다(iOS TabView .overlay(alignment: .top)). 카드만 손을 받는다.
-    MegaphoneBannerOverlay(banner, onReply = { phone.replyToMegaphoneBanner(it) }, modifier = Modifier.align(Alignment.TopCenter))
+    MegaphoneBannerOverlay(banner, modifier = Modifier.align(Alignment.TopCenter))
     }
     // 생일 선물 고르기 창 — 어느 탭에 있든 뜬다(W4-c §4, 스토어가 대국 · 관전 중엔 스스로 안 띄운다).
     CakeGiftSheetRoute(phone.me)

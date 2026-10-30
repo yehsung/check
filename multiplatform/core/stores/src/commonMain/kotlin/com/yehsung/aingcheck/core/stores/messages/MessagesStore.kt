@@ -109,10 +109,6 @@ class MessagesStore(
      */
     var megaphoneBanner: MegaphoneBannerStore? = null
 
-    /** 확성기 [답장]이 넘긴 이름·아바타(사람 id → 값). 대화 머리의 마지막 기댈 곳 — 확성기 줄이 빠져 대화가 비어 있어도 빈 칸이 아니게. */
-    var replyPeerHints: Map<String, MegaphoneReplyPeerHint> by mutableStateOf(emptyMap())
-        private set
-
     // ---------------------------------------------------------------- 이력 · 읽음
 
     /** 이력(오래된 것 → 최신, 같은 초는 서버 순서). 모든 대화가 이 한 배열에서 묶인다([threads]). */
@@ -327,7 +323,6 @@ class MessagesStore(
         isSending = false
         // 확성기 글·요청 id·정보도 계정에 묶인다 — 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
-        replyPeerHints = emptyMap()
         router?.visibleConversationPeerID = null
     }
 
@@ -474,13 +469,7 @@ class MessagesStore(
     fun peerName(peerID: String): String? {
         thread(peerID)?.let { return it.peerName }
         visiblePokeLog.lastOrNull { it.peerUserID == peerID }?.let { return it.peerName }
-        return directory.firstOrNull { it.userID == peerID }?.name ?: replyPeerHints[peerID]?.name
-    }
-
-    /** 확성기 [답장]이 여는 대화의 이름·아바타를 적어 둔다([peerName]·[peerAvatarURL] 의 마지막 기댈 곳). */
-    fun rememberPeerHint(peerID: String, name: String?, avatarURL: String?) {
-        if (name == null && avatarURL == null) return
-        replyPeerHints = replyPeerHints + (peerID to MegaphoneReplyPeerHint(name, avatarURL))
+        return directory.firstOrNull { it.userID == peerID }?.name
     }
 
     /** 대화 머리. "받는 중" = 이력·사람 찾기 중 하나라도 날아가는 중이거나, 이력이 아직 한 번도 끝나지 않았다(실패도 아님). */
@@ -492,7 +481,7 @@ class MessagesStore(
     fun peerAvatarURL(peerID: String): String? {
         thread(peerID)?.peerAvatarURL?.let { return it }
         visiblePokeLog.lastOrNull { it.peerUserID == peerID }?.peerAvatarURL?.let { return it.absoluteString }
-        return directory.firstOrNull { it.userID == peerID }?.avatarURL?.absoluteString ?: replyPeerHints[peerID]?.avatarURL
+        return directory.firstOrNull { it.userID == peerID }?.avatarURL?.absoluteString
     }
 
     fun isHiddenByBlock(peerID: String): Boolean = peerID in hiddenBlockedPeerIDs
@@ -929,8 +918,10 @@ class MessagesStore(
     /**
      * 배너 판정이 바뀌었을 수 있다 — 요약 함수 짝을 맞추고(옛 함수로 받은 요약 뒤에 필터가 켜졌으면 다시 받는다),
      * 보류에서 풀린 줄이 떠 있는 대화에 있으면 읽음을 올린다.
+     * 첫 판정·판정 보류 뒤 말고도, 배너 스토어의 `onCapabilityChange`(필터가 켜지거나 꺼질 때 — 실시간·푸시 refresh 포함)에서
+     * 조립이 부른다(원본 MessagesStore.swift @ f3360b47).
      */
-    private fun megaphoneFilterDidSettle() {
+    fun megaphoneFilterDidSettle() {
         if (!isSignedIn) return
         val used = runtime.lastSummaryFunction
         val banner = megaphoneBanner

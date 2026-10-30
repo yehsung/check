@@ -1,4 +1,5 @@
-// W-13 #4 — 맥 WorkTimerStore.swift:3654-3656 canToggleWorkByShortcut = canSync && isSignedIn && !isTeamless 의 진리표.
+// W-13 #4 · W-14 #7 — 맥 WorkTimerStore.swift @ db93317f:3654-3656 canToggleWorkByShortcut = canSync && isSignedIn && !isTeamless ·
+// :1896-1898 isTeamless = isSignedIn && currentTeamID == nil 의 진리표.
 package com.yehsung.aingcheck.desktop.pages.work
 
 import com.yehsung.aingcheck.core.session.SessionPhase
@@ -26,5 +27,35 @@ class WorkShortcutGateTest {
         assertFalse(WorkShortcutGate.canToggle(SessionPhase.Launching, team, canSync = true))
         assertFalse(WorkShortcutGate.canToggle(SessionPhase.SignedIn, null, canSync = true))
         assertFalse(WorkShortcutGate.canToggle(SessionPhase.SignedIn, team, canSync = false))
+    }
+
+    /** 맥 식을 글자 그대로 옮긴 기준(teamID 는 currentTeamID). 게이트가 이것과 한 칸이라도 다르면 빨강. */
+    private fun macFormula(canSync: Boolean, session: Boolean, currentTeamID: String?): Boolean {
+        val isSignedIn = session
+        val isTeamless = isSignedIn && currentTeamID == null
+        return canSync && isSignedIn && !isTeamless
+    }
+
+    @Test
+    fun `맥 식과 같은 진리표 — 로그인·소속 id·canSync 전 조합`() {
+        for (signedIn in listOf(false, true)) for (team in listOf(null, "t1")) for (sync in listOf(false, true)) {
+            assertEquals(macFormula(sync, signedIn, team), WorkShortcutGate.canToggle(signedIn, team, sync), "로그인=$signedIn 팀=$team canSync=$sync")
+            assertEquals(signedIn && team == null, WorkShortcutGate.isTeamless(signedIn, team))
+        }
+        // 로그아웃은 무소속이 아니다(맥 isTeamless 는 로그인일 때만 참 — 팀 코드 패널 판정).
+        assertFalse(WorkShortcutGate.isTeamless(isSignedIn = false, teamID = null))
+    }
+
+    @Test
+    fun `소속 미확정(오프라인 부팅) — 맥처럼 거절, 소속 응답이 오면 허용`() {
+        // SessionStore.enterSignedIn 직후·refreshProfile 실패: teamID 없는 프로필(맥 currentTeamID nil · membershipConfirmed false).
+        val unconfirmed = SessionProfile("u1", "a@b.c")
+        assertEquals(macFormula(canSync = true, session = true, currentTeamID = null), WorkShortcutGate.canToggle(SessionPhase.SignedIn, unconfirmed, canSync = true))
+        assertFalse(WorkShortcutGate.canToggle(SessionPhase.SignedIn, unconfirmed, canSync = true), "맥은 미확정 동안 삑 — 큐 드레인도 팀 없이 throw")
+        val confirmed = unconfirmed.copy(teamID = "t1")
+        assertTrue(WorkShortcutGate.canToggle(SessionPhase.SignedIn, confirmed, canSync = true))
+        // 음성 대조: 단계가 SignedIn 이 아니면(업데이트 필요·다른 실행) 팀이 있어도 거절 — 홈 알약이 안 그려지는 단계(짝).
+        assertFalse(WorkShortcutGate.canToggle(SessionPhase.NeedsUpdate(99), confirmed, canSync = true))
+        assertFalse(WorkShortcutGate.canToggle(SessionPhase.AnotherInstanceRunning, confirmed, canSync = true))
     }
 }

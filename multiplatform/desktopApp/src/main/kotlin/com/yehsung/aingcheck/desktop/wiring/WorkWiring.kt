@@ -90,7 +90,8 @@ data class WorkDeps(
     val sessionStore: SessionStore,
     val kv: DesktopKeyValueStore,
     val clock: Clock,
-    val deviceId: String?,
+    /** 조립 때 한 번 읽은 기기 id(옛 꼴). [deviceIdSource] 가 있으면 쓰지 않는다. */
+    val deviceId: String? = null,
     val idle: IdleSource,
     val power: PowerEvents,
     val session: SessionEvents,
@@ -123,6 +124,18 @@ data class WorkDeps(
      * 근무 중엔 슬라이스마다, 비근무엔 [WorkWiring.IDLE_TICK_SLICES] 슬라이스(300초)마다 — 근무로 바뀌면 다음 슬라이스에 바로.
      */
     val tickSliceMillis: Long = (WorkPolicyConstants.HEARTBEAT_INTERVAL_SECONDS * 1000).toLong(),
+    /**
+     * 기기 id 공급자(W-14 #7 — AppGraph `{ graph.deviceId }`, 토큰 배선 TokensWiringDeps.deviceId 와 같은 꼴). 설치 id 읽기는 실패를
+     * 캐시하지 않으므로(WindowsInstallationIdentity.resolve) 조립 순간의 한 번 실패로 이 실행 내내 기기 없는 근무 행이 되지 않게
+     * [WorkWiring.DEVICE_ID_ATTEMPTS] 번까지 다시 묻는다. null 이면 [deviceId].
+     */
+    val deviceIdSource: (() -> String?)? = null,
+    /**
+     * 근무가 끝났다(수동 종료·자동 마감 — 종료 시퀀스 제외) → 종료 기록이 큐에서 서버에 닿은 뒤 주간 보상을 한 번 묻는다(맥
+     * refreshWeeklyWorkAfterWorkEnded, WorkTimerStore.swift:2217-2221·2611-2615 → WorkTimerStoreWeeklyWork.swift:80-86). 1분 창에 막히면
+     * 빚으로 남겨 정책 박자가 갚는다(맥 refreshWeeklyWorkIfOwed, :65-71). AppGraph `{ me.weeklyWorkDidChange() }`. 기본은 아무것도 안 함.
+     */
+    val onWorkEndedWeekly: () -> Unit = {},
 )
 
 /**
@@ -178,10 +191,13 @@ class WorkWiring(private val deps: WorkDeps) {
         override suspend fun awaitWakeGate() = wakeGateRef.await()
     }
 
+    /** 이 실행의 기기 id(W-14 #7 — [WorkDeps.deviceIdSource] 를 몇 번까지 묻는다). 근무 상태가 이 값을 쓴다. */
+    val resolvedDeviceId: String? = resolveDeviceId(deps)
+
     val store: DesktopWorkStore = DesktopWorkStore(
         queue = queue,
         kv = deps.kv,
-        deviceId = deps.deviceId,
+        deviceId = resolvedDeviceId,
         userId = { session.session?.userID },
         teamId = deps.teamId,
         clock = clockFn,
@@ -265,6 +281,9 @@ class WorkWiring(private val deps: WorkDeps) {
         isSessionUsable = { isSessionUsable() },
     )
 
+    /** 근무 종료 뒤 주간 보상 조회의 1분 창·빚(맥 workEnded·owed). 발사 = [WorkDeps.onWorkEndedWeekly]. */
+    val weeklyAfterWork = WeeklyWorkEndRefresh(isSignedIn = { session.session != null }, fire = deps.onWorkEndedWeekly)
+
     /** work_tick 사용 가능 판정(⑨ — 404·403·계약은 이 실행 동안 끄고, (c) 일시 실패 3연속이면 정지). (b) 과부하는 세지 않는다. */
     val workTickGate = WorkTickGate()
 
@@ -341,6 +360,30 @@ class WorkWiring(private val deps: WorkDeps) {
                 store.adoptWorkStateOwner(uid)
                 queue.retainOwner(uid)
                 scope.launch { swallow { queue.retryPending() } }
+            }
+        }
+        // 근무 종료(수동·자동 마감) → 큐가 종료 기록을 보낸 뒤 주간 보상 조회(맥 refreshWeeklyWorkAfterWorkEnded — `await syncTask` 뒤).
+        // 종료 시퀀스의 멈춤은 빼고(맥 `if !isTerminating` — 볼 사람이 없다), 계정이 바뀌어 꺼진 전이는 근무 종료가 아니다.
+        // (복원된 근무가 세션보다 먼저 서면 주인을 모른다 — 그때는 계정 걸러내기 없이 지금 로그인한 사람 몫으로 본다.)
+        jobs += scope.launch {
+            var wasWorking = false
+            var workingUid: String? = null
+            store.snapshot.map { it.isWorking }.distinctUntilChanged().collect { working ->
+                val uid = session.session?.userID
+                if (working) {
+                    wasWorking = true
+                    workingUid = uid
+                    return@collect
+                }
+                if (!wasWorking) return@collect
+                wasWorking = false
+                val owner = workingUid
+                workingUid = null
+                if (uid == null || termination.isTerminating || (owner != null && owner != uid)) return@collect
+                scope.launch {
+                    queue.awaitIdle(Long.MAX_VALUE)
+                    weeklyAfterWork.onWorkEnded(clockFn())
+                }
             }
         }
         nudgeScheduler.start(scope)
@@ -621,6 +664,8 @@ class WorkWiring(private val deps: WorkDeps) {
             if (shown != null && store.snapshot.value.longSessionPromptShownAt == null) store.showLongSessionPrompt(shown)
         }
         swallow { milestones.evaluate(store.snapshot.value, now) }
+        // 맥 refreshWeeklyWorkIfOwed — 종료 직후 조회가 1분 창에 막혀 남긴 빚(요청 0~1건, 빚이 없으면 0건).
+        swallow { weeklyAfterWork.payIfOwed(now) }
     }
 
     private suspend fun fetchAway(): AwaySyncResult = try {
@@ -683,6 +728,17 @@ class WorkWiring(private val deps: WorkDeps) {
 
         /** 과부하 중 하트비트 간격 상한(Swift overloadHeartbeatMaxGapSeconds 120초). */
         const val OVERLOAD_HEARTBEAT_MAX_GAP_SECONDS: Double = 120.0
+
+        /** [WorkDeps.deviceIdSource] 를 조립 때 묻는 횟수 상한(읽기는 레지스트리·파일 — 잠깐의 잠금·백신 걸림을 넘긴다). */
+        const val DEVICE_ID_ATTEMPTS: Int = 3
+
+        internal fun resolveDeviceId(deps: WorkDeps): String? {
+            val source = deps.deviceIdSource ?: return deps.deviceId
+            repeat(DEVICE_ID_ATTEMPTS) {
+                runCatching(source).getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+            }
+            return null
+        }
     }
     internal val openRegistrations: Int get() = registrations.size
 
@@ -711,5 +767,47 @@ internal suspend inline fun swallow(block: () -> Unit) {
         throw e
     } catch (e: Throwable) {
         // 박자 한 칸의 실패는 다음 박자가 다시 본다(Swift 의 박자 함수는 throws 가 아니다).
+    }
+}
+
+/**
+ * 근무 종료 뒤 주간 보상 조회의 1분 창 + 빚(맥 refreshWeeklyWork(reason: .workEnded) · refreshWeeklyWorkIfOwed —
+ * WorkTimerStoreWeeklyWork.swift:39-71). 맥은 이 창을 다른 박자(패널 열기·지갑)와 한 도장으로 쓰지만 여기는 MeStore 가 제 박자를 따로
+ * 거르므로(60초 스로틀) 근무 종료 몫만 센다. 로그아웃이면 아무것도 안 한다(맥 `guard session != nil` — 도장도 빚도 안 바뀐다).
+ * 발사는 [fire] 한 번(AppGraph: MeStore.weeklyWorkDidChange — 스로틀 없는 조회 한 번). UI 단일 스레드에서만 부른다.
+ */
+class WeeklyWorkEndRefresh(private val isSignedIn: () -> Boolean, private val fire: () -> Unit) {
+    private var lastFiredAt: SwiftDate? = null
+
+    /** 1분 창에 막힌 종료 조회가 남았나. */
+    var owed: Boolean = false
+        private set
+
+    /** 근무가 끝났다(큐가 종료 기록을 보낸 뒤). 쐈으면 true, 창에 막혀 빚으로 남겼으면 false. */
+    fun onWorkEnded(now: SwiftDate): Boolean = attempt(now, fromWorkEnded = true)
+
+    /** 정책 박자: 빚이 있고 1분이 지났으면 쏜다. 빚이 없으면 0건. */
+    fun payIfOwed(now: SwiftDate): Boolean = if (owed) attempt(now, fromWorkEnded = false) else false
+
+    private fun attempt(now: SwiftDate, fromWorkEnded: Boolean): Boolean {
+        if (!isSignedIn()) return false
+        val last = lastFiredAt
+        if (last != null) {
+            val dt = now.timeIntervalSince(last)
+            if (dt >= 0 && dt < MIN_INTERVAL_SECONDS) {
+                if (fromWorkEnded) owed = true
+                return false
+            }
+        }
+        // 도장은 발사 시점에(맥과 같은 규약 — 성공에만 찍으면 서버가 죽어 있는 동안 매 박자가 다시 쏜다).
+        lastFiredAt = now
+        owed = false
+        runCatching(fire)
+        return true
+    }
+
+    companion object {
+        /** 맥 weeklyWorkMinIntervalSeconds. */
+        const val MIN_INTERVAL_SECONDS: Double = 60.0
     }
 }

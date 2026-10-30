@@ -156,7 +156,10 @@ class DesktopWorkQueueScenarioTest {
             queue.enqueue(start(id = "ff000000-0000-4000-8000-000000000001", owner = null))
             queue.enqueue(start())
             queue.awaitIdle(10_000)
-            queue.retainOwnedBy(GOLDEN_USER)
+            val pin: com.yehsung.aingcheck.feature.desktop.work.WorkQueue = queue
+            pin.retainOwner(GOLDEN_USER) // 핀으로 부른다(W-6 #3)
+            assertEquals(listOf<String?>(GOLDEN_USER), queue.items.value.map { it.ownerUserId }, "남의 것·소유자 null 은 빠진다")
+            assertEquals(listOf<String?>(GOLDEN_USER), DesktopWorkQueue.restore(store).map { it.ownerUserId }, "걷은 줄이 영속된다")
             session.current = com.yehsung.aingcheck.core.wire.SupabaseSession("golden-access-token", null, GOLDEN_USER)
             queue.retryPending()
         }

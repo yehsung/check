@@ -56,6 +56,8 @@ interface WorkQueue {
     suspend fun awaitIdle(timeoutMillis: Long)
     /** 5분 스로틀 한 칸(해소기 (2) · 팀 스캐빈저 공용). */
     val scavenge: ScavengeThrottle
+    /** 계정 전환(Swift adoptWorkStateOwner `pendingItems.removeAll { $0.ownerUserID != userID }`) — 그 사용자 것이 아닌 항목(소유자 null 포함)을 걷고 영속한다. W-6 #3. */
+    fun retainOwner(userId: String)
 }
 
 fun interface ScavengeThrottle {
@@ -114,7 +116,8 @@ data class LastAutoClose(val sessionId: String, val reason: AutoCloseReason, val
 
 interface DesktopWorkCommands {
     fun toggle()
-    fun start()
+    /** W-6 #2: 넛지 자동 시작은 [WorkStartOrigin.NUDGE] — 스냅숏 startOrigin 에 남고, 실제로 시작됐을 때만 ws 가 [WorkEvent.NudgeStarted] 를 낸다(wp 는 내지 않는다). */
+    fun start(origin: WorkStartOrigin = WorkStartOrigin.MANUAL)
     fun stop()
     fun confirmStillWorking()
     fun resumeRecentlyClosed()

@@ -404,6 +404,36 @@ class DesktopWorkStateScenarioTest {
         assertEquals(WorkStartOrigin.RESUME, snap.startOrigin)
         assertEquals(0, snap.accumulatedTodaySeconds, "마감 때 더한 몫을 되뺀다")
         assertTrue(r.queue.items.value.isEmpty(), "재개는 서버 reopen 으로 끝 — 줄에 넣지 않는다")
+        assertEquals(listOf<WorkEvent>(WorkEvent.AutoClosed(AutoCloseReason.AWAY, at(1_800))), r.events, "수동 재개는 넛지 사건 0")
+    }
+
+    /** W-6 #2: 넛지 재개의 NudgeStarted 는 ws 가 reopen 성공 때만, isWorking=true 스냅숏보다 먼저 낸다. 실패면 0. */
+    @Test
+    fun nudgeResumeEmitsNudgeStartedOnlyOnSuccess_beforeWorkingSnapshot() = runBlocking {
+        fun closed(): WorkStateRig {
+            val r = WorkStateRig(deviceId = WIN_DEVICE)
+            r.store.start()
+            r.queue.drain()
+            r.now = at(600)
+            r.store.closeOwnedSessionLocally(at(600), AutoCloseReason.SLEEP, "잠자기")
+            r.queue.drain()
+            r.events.clear()
+            r.now = at(900)
+            return r
+        }
+        val failed = closed()
+        failed.reopen = WorkReopenCall { _, _ -> error("오프라인") }
+        failed.store.performResumeRecentlyClosed(WorkStartOrigin.NUDGE)
+        assertFalse(failed.store.snapshot.value.isWorking)
+        assertEquals(emptyList<WorkEvent>(), failed.events, "reopen 실패 = 사건 0")
+
+        val ok = closed()
+        ok.reopen = WorkReopenCall { _, _ -> }
+        ok.store.performResumeRecentlyClosed(WorkStartOrigin.NUDGE)
+        assertEquals(listOf<WorkEvent>(WorkEvent.NudgeStarted), ok.events)
+        assertEquals(false, ok.workingAtEvents.lastOrNull(), "사건이 isWorking=true 발행보다 먼저(I-8)")
+        assertTrue(ok.store.snapshot.value.isWorking)
+        assertEquals(WorkStartOrigin.RESUME, ok.store.snapshot.value.startOrigin)
     }
 
     @Test

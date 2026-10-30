@@ -92,6 +92,9 @@ class DesktopWorkPolicyGoldenTest {
             if (idleForever) awaitCancellation()
         }
         override val scavenge: ScavengeThrottle = ScavengeThrottle { true }
+        override fun retainOwner(userId: String) {
+            flow.value = flow.value.filter { it.ownerUserId == userId }
+        }
     }
 
     private class FakeIdle : IdleSource {
@@ -590,14 +593,14 @@ class DesktopWorkPolicyGoldenTest {
     private class NudgeRig(rules: WorkPolicyRules = WorkPolicyRules.Standard, setting: Boolean = true, snapshot: DesktopWorkSnapshot = DesktopWorkSnapshot()) {
         var now = T0
         val idle = FakeIdle()
-        val events = Events()
         val starts = ArrayList<WorkStartOrigin>()
         var resumes = 0
+        val resumedVia = ArrayList<WorkStartOrigin>()
         val usability = SessionUsability()
         val suppression = AutoStartSuppression(InMemoryDesktopKeyValueStore(), TerminationFlag())
         val starter = NudgeAutoStarter(
             InMemoryDesktopWorkState(snapshot), { true }, { true }, suppression, { setting },
-            startWork = { starts += it }, resumeRecentlyClosed = { resumes++ }, clock = { now }, events = events,
+            startWork = { starts += it }, resumeRecentlyClosed = { resumes++; resumedVia += it }, clock = { now },
         )
         val scheduler = starter.scheduler(
             idleSeconds = { meaningfulIdleSeconds(idle, now, rules.meaningfulInputKinds) },
@@ -627,14 +630,13 @@ class DesktopWorkPolicyGoldenTest {
         assertTrue(rig.starts.isEmpty())
         rig.minutes(5..5, InputKind.CLICK)
         assertEquals(listOf(WorkStartOrigin.NUDGE), rig.starts, "클릭 5분(10분 창) = 시작 1")
-        assertEquals(listOf<WorkEvent>(WorkEvent.NudgeStarted), rig.events.seen)
         rig.minutes(6..64, InputKind.CLICK)
         assertEquals(1, rig.starts.size, "시작 뒤 1시간 쉼")
         rig.minutes(65..69, InputKind.CLICK)
         assertEquals(2, rig.starts.size, "쉼이 끝나면 다시 5분")
         val off = NudgeRig(setting = false)
         off.minutes(1..30, InputKind.KEY)
-        assertTrue(off.starts.isEmpty() && off.resumes == 0 && off.events.seen.isEmpty(), "설정 끔 = 0")
+        assertTrue(off.starts.isEmpty() && off.resumes == 0, "설정 끔 = 0")
         val locked = NudgeRig()
         locked.usability.on(SessionEvent.LOCK)
         locked.minutes(1..10, InputKind.KEY)
@@ -659,6 +661,7 @@ class DesktopWorkPolicyGoldenTest {
         rig.now = at(600.0)
         assertEquals(NudgeAction.RESUMED, rig.starter.fire())
         assertEquals(1, rig.resumes)
+        assertEquals(listOf(WorkStartOrigin.NUDGE), rig.resumedVia, "넛지 재개는 ws 에 NUDGE 로 넘긴다(사건은 ws 가 낸다)")
         assertTrue(rig.starts.isEmpty(), "재개가 있으면 새 세션을 만들지 않는다")
         val disk = InMemoryDesktopKeyValueStore()
         val s = AutoStartSuppression(disk, TerminationFlag())

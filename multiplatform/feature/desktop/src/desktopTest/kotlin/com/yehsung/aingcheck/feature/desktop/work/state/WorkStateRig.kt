@@ -34,6 +34,9 @@ internal class FakeWorkQueue : WorkQueue {
     }
     override suspend fun awaitIdle(timeoutMillis: Long) = Unit
     override val scavenge: ScavengeThrottle = ScavengeThrottle { true }
+    override fun retainOwner(userId: String) {
+        flow.value = flow.value.filter { it.ownerUserId == userId }
+    }
     fun drain(): List<PendingWorkItem> = flow.value.also { flow.value = emptyList() }
 }
 
@@ -68,6 +71,9 @@ internal class WorkStateRig(deviceId: String? = null, userId: String? = ME) {
     val kv = InMemoryDesktopKeyValueStore()
     val policy = RecordingPolicy()
     val events = mutableListOf<WorkEvent>()
+    /** 사건이 올 때의 발행된 isWorking(I-8 순서 확인용). */
+    val workingAtEvents = mutableListOf<Boolean>()
+    private var storeRef: DesktopWorkStore? = null
     private var uuidCount = 0
 
     /** 맥처럼 대문자 UUID 를 낸다 — 세션 id 는 상태 코어가 소문자로 고쳐야 한다(C#22). */
@@ -81,12 +87,14 @@ internal class WorkStateRig(deviceId: String? = null, userId: String? = ME) {
         teamId = { TEAM },
         clock = { now },
         newUuid = { nextUuid() },
-        events = WorkEventSink { events += it },
+        events = WorkEventSink { e -> events += e; storeRef?.let { workingAtEvents += it.snapshot.value.isWorking } },
         policy = policy,
         meaningfulInput = { input },
         scope = null,
         reopenCall = WorkReopenCall { team, session -> reopen?.reopen(team, session) ?: error("reopen 미설정") },
     )
+
+    init { storeRef = store }
 
     fun apply(member: TeamMemberStatus, generation: Int = store.workStateWriteGeneration) =
         store.applyRemoteOwnStatus(listOf(member), generation, now)

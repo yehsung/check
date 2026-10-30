@@ -82,6 +82,10 @@ import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.delay
+import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
+import com.yehsung.aingcheck.ui.screens.session.kit.AvatarFace
+import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
+import com.yehsung.aingcheck.core.wire.SwiftURL
 
 // MARK: - 나 · 그림 · 시계
 
@@ -337,15 +341,24 @@ fun BoardButton(
 
 // MARK: - 사람
 
-/** 이니셜 원(Swift `PersonAvatar` 의 사진·캐릭터가 없을 때 꼴) + 근무 중 점. 사진 URL 적재는 공용 부품 갈래(W3) 몫이다(보고 미해결). */
+/**
+ * 사람 아바타(Swift `PersonAvatar(name:colorSeed:status:url:userID:size:)` — 로비 GamesGomokuScreen.swift:398·443·528): 사진 → 착용 캐릭터 →
+ * 이니셜 원 + 근무 중 점. 착용 캐릭터는 조립이 흘린 표([LocalAppUserCharacters])를 [seed](= 사용자 id — 모든 호출부가 user.id 를 넘긴다)로 찾는다.
+ * 표가 이 사람을 모를 때만 이니셜(8c 04: 메시지 화면에선 캐릭터인 사람이 로비에선 이니셜로 보였다).
+ */
 @Composable
-fun BoardAvatar(name: String, seed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false) {
+fun BoardAvatar(name: String, seed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false, url: String? = null) {
     val colors = AingTheme.colors
-    val (ink, tint) = colors.avatar(seed)
-    val initial = name.trim().firstOrNull()?.toString() ?: "?"
+    val avatar = LocalAppUserCharacters.current.avatar(seed, url?.let { SwiftURL.parse(it) })
     Box(modifier.size(size).semantics(mergeDescendants = true) { contentDescription = name }) {
-        Box(Modifier.fillMaxSize().background(tint, CircleShape), contentAlignment = Alignment.Center) {
-            Text(initial, color = ink, fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        if (avatar is AppUserAvatar.Initials) {
+            val (ink, tint) = colors.avatar(seed)
+            val initial = name.trim().firstOrNull()?.toString() ?: "?"
+            Box(Modifier.fillMaxSize().background(tint, CircleShape), contentAlignment = Alignment.Center) {
+                Text(initial, color = ink, fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        } else {
+            AvatarFace(avatar, name, size, colorSeed = seed)
         }
         if (working) {
             val dot = (size.value * 0.28f).coerceIn(8f, 12f).dp

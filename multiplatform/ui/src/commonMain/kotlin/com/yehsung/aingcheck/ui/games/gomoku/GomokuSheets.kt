@@ -69,7 +69,7 @@ internal fun BoxScope.GomokuStakeSheet(gomoku: GomokuStore, target: GomokuUser, 
     BoardSheetOverlay(GomokuPhoneText.stakeTitle, onDismiss = onClose, subtitle = GomokuPhoneText.stakePromptTitle(target.displayName), testTag = GomokuScreenTags.stakeSheet) {
         BoardGroup {
             BoardRow(minHeight = 64.dp) {
-                BoardAvatar(target.displayName, target.id, 44.dp, working = target.isWorking)
+                BoardAvatar(target.displayName, target.id, 44.dp, working = target.isWorking, url = target.avatarURL)
                 Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                     BoardPersonName(target.displayName, center = target.center)
                     Text(

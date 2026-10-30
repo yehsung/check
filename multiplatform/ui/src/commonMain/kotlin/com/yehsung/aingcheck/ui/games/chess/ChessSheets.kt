@@ -157,7 +157,7 @@ internal fun BoxScope.ChessStakeSheet(games: GamesStore, chess: ChessStore, targ
     BoardSheetOverlay(ChessPhoneText.stakeTitle, onDismiss = onClose, subtitle = ChessPhoneText.stakePromptTitle(target.displayName), testTag = ChessScreenTags.stakeSheet) {
         BoardGroup {
             BoardRow(minHeight = 64.dp) {
-                BoardAvatar(target.displayName, target.id, 44.dp, working = target.isWorking)
+                BoardAvatar(target.displayName, target.id, 44.dp, working = target.isWorking, url = target.avatarURL)
                 Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                     BoardPersonName(target.displayName, center = target.center)
                     Text(selected?.let { ChessPhoneText.stakePromptChosen(it.rawValue) } ?: ChessPhoneText.stakePromptCaption,

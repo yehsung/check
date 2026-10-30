@@ -105,7 +105,10 @@ import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsActions
 import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsScreen
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.yehsung.aingcheck.desktop.pages.onboarding.FirstRunOnboarding
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -115,7 +118,11 @@ import kotlinx.coroutines.launch
 /** 데스크톱 문구(맥·폰 문구가 '폰'을 말하는 자리만 — 나머지는 공용 문구를 그대로). */
 object SharedText {
     const val teamlessBody = "소속된 팀이 없어요. 팀 코드를 입력해 합류하세요."
-    const val signOutConfirmMessage = "이 컴퓨터에서만 로그아웃돼요. 폰은 그대로예요."
+    // W-13 #8 · W-12 15시 사용자 결정: 데스크톱 자기 호칭은 'PC'.
+    const val signOutConfirmMessage = "이 PC에서만 로그아웃돼요. 폰은 그대로예요."
+    /** 공용 설정 맨 위 한 줄 — Windows 전용 설정(자동 실행·단축키·AI 사용 기록 동의·이용약관)으로 간다. */
+    const val desktopSettingsEntry = "PC 설정"
+    const val desktopSettingsEntryDetail = "자동 실행 · 단축키 · AI 사용 기록 · 이용약관"
     const val signOutCancel = "취소"
     const val pendingTitle = "준비 중이에요"
     const val pendingBody = "다음 업데이트에서 열려요."
@@ -143,6 +150,10 @@ class SharedPagesDeps(
     val openUrl: (String) -> Unit = {},
     /** 팀 코드 공유(데스크톱엔 공유 시트가 없다 — 조립: 클립보드). */
     val share: (String) -> Unit = {},
+    /** int-w2: 3차 페이지·상점·미션(PagesWiring.routePages). 없으면 그 라우트는 '준비 중'(공용 화면은 그대로). */
+    val routePages: RoutePages = RoutePages.NONE,
+    /** 첫 실행 화면(PagesWiring.firstRun). pending 동안 [SharedRouter.showsFirstRun] 이면 페이지·레일 대신 이것을 전체 폭으로 그린다. */
+    val firstRun: FirstRunOnboarding? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -158,7 +169,7 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
     /** 지금 페이지(세션 단계 · 소속 · 라우트 · 깃발). 수명과 그리기가 같은 흐름을 본다. */
     fun pages(nav: FlyoutNavigator): Flow<SharedPage> =
         combine(nav.route, deps.session.phaseFlow, deps.session.profileFlow, teamKnown) { route, phase, profile, known ->
-            SharedRouter.resolve(phase, profile, known, route, deps.config)
+            SharedRouter.resolve(phase, profile, known, route, deps.config, deps.routePages.runtimeShown)
         }.distinctUntilChanged()
 
     /** 페이지 수명 고리(화면 안에서 스스로 하지 않는 것만 — 목록·대화·제보·차단 목록은 화면이 DisposableEffect 로 한다). */
@@ -182,22 +193,35 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
 
         val visible by nav.visible.collectAsState()
         val page by pageFlow.collectAsState(SharedPage.Launching)
+        val firstRunPending by (deps.firstRun?.pending ?: NO_FIRST_RUN).collectAsState()
         AingTheme(deps.appearance.mode) {
             val colors = AingTheme.colors
-            Row(Modifier.width(widthDip.dp).fillMaxHeight().background(colors.background)) {
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    if (visible) PageBody(page, nav)
-                }
+            val firstRun = deps.firstRun
+            if (visible && firstRun != null && SharedRouter.showsFirstRun(firstRunPending, page)) {
+                Box(Modifier.width(widthDip.dp).fillMaxHeight().background(colors.background)) { firstRun.Content(nav, widthDip) }
+            } else {
                 val slots = SharedRail.slots(page, deps.config, deps.openMiniGame != null)
-                if (visible && slots.isNotEmpty()) Rail(slots, page, nav)
+                val railShown = visible && slots.isNotEmpty()
+                Row(Modifier.width(widthDip.dp).fillMaxHeight().background(colors.background)) {
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        if (visible) PageBody(page, nav, RouteBodyWidth.of(widthDip, railShown))
+                    }
+                    if (railShown) Rail(slots, page, nav)
+                }
             }
         }
     }
 
     @Composable
-    private fun PageBody(page: SharedPage, nav: FlyoutNavigator) {
+    private fun PageBody(page: SharedPage, nav: FlyoutNavigator, bodyWidthDip: Double) {
         val scope = rememberCoroutineScope()
         val fill = Modifier.fillMaxSize()
+        // 3차 페이지·상점·미션: 레일 옆 본문 폭으로(맥 CheckMenuView.swift 421-429 — RoutePages 주석).
+        val routed = deps.routePages.hostFor(page)
+        if (routed != null) {
+            routed.Content(nav, bodyWidthDip)
+            return
+        }
         when (page) {
             SharedPage.Launching -> LaunchScreen(fill)
             is SharedPage.NeedsUpdate -> {
@@ -243,7 +267,8 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
                 onClose = { nav.back() },
                 modifier = fill,
             )
-            is SharedPage.Pending -> CenteredNote(SharedText.pendingTitle, SharedText.pendingBody, fill)
+            SharedPage.Home, SharedPage.PokeList, SharedPage.Ultra, SharedPage.AiTokens, SharedPage.AiLimits, SharedPage.Devices,
+            SharedPage.DesktopSettings, is SharedPage.Pending -> CenteredNote(SharedText.pendingTitle, SharedText.pendingBody, fill)
         }
     }
 
@@ -356,7 +381,10 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
                 override fun share(text: String) = deps.share(text)
             }
         }
-        SettingsScreen(deps.me, deps.appearance, actions, modifier)
+        Column(modifier) {
+            if (deps.routePages.desktopSettings != null) DesktopSettingsEntryRow { nav.navigate(FlyoutRoute.DesktopSettings) }
+            SettingsScreen(deps.me, deps.appearance, actions, Modifier.weight(1f))
+        }
         if (confirmingSignOut) {
             AlertDialog(
                 onDismissRequest = { confirmingSignOut = false },
@@ -407,6 +435,26 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
         }
     }
 
+    /** 공용 설정 위 'PC 설정 ›' 한 줄(맥은 설정 창이 따로 — 데스크톱은 플라이아웃 안 하위 화면). */
+    @Composable
+    private fun DesktopSettingsEntryRow(onClick: () -> Unit) {
+        val colors = AingTheme.colors
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                .background(colors.surface, RoundedCornerShape(10.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .semantics { contentDescription = SharedText.desktopSettingsEntry },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(SharedText.desktopSettingsEntry, style = MaterialTheme.typography.bodyMedium, color = colors.label)
+                Text(SharedText.desktopSettingsEntryDetail, style = MaterialTheme.typography.bodySmall, color = colors.label2)
+            }
+            Text("›", style = MaterialTheme.typography.titleMedium, color = colors.label2)
+        }
+    }
+
     @Composable
     private fun BackRow(onBack: () -> Unit) {
         val colors = AingTheme.colors
@@ -441,6 +489,8 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
     /** 세션 단계 흐름이 로그인인가(배경 갱신 조립용). */
     fun signedInFlow(): Flow<Boolean> = deps.session.phaseFlow.map { it == SessionPhase.SignedIn }
 }
+
+private val NO_FIRST_RUN: StateFlow<Boolean> = MutableStateFlow(false)
 
 /** 플라이아웃 열기의 메시지 요약 스로틀 — 맥 팝오버 `messageMenuRefreshThrottleSeconds`(60초, W3-c0 · 공용 패치 9). */
 internal const val MESSAGE_MENU_REFRESH_THROTTLE_SECONDS: Double = 60.0

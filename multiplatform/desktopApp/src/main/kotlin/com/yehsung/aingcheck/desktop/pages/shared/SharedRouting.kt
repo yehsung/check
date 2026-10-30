@@ -15,6 +15,7 @@ import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.SessionProfile
 import com.yehsung.aingcheck.core.stores.me.MeDestination
 import com.yehsung.aingcheck.core.stores.me.MeGrassAxis
+import com.yehsung.aingcheck.desktop.pages.poke.SocialPageFlags
 import com.yehsung.aingcheck.desktop.shellapi.Entry
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
@@ -41,14 +42,23 @@ sealed interface SharedPage {
     data object Feedback : SharedPage
     data object Blocked : SharedPage
     data object AccountDeletion : SharedPage
-    /** 이번 웨이브에 없는 페이지(홈·콕·울트라·토큰·리밋·기기·데스크톱 설정 = W3-c2~c4, 상점 = W4-f, 고정 안내 = c1) — '준비 중' 자리표시. */
+    /** int-w2 배선(3차 페이지 — RoutePages 가 그린다): 홈(W3-c2) · 콕 목록·울트라(W3-c3) · AI 토큰·AI 리밋·기기·PC 설정(W3-c4). */
+    data object Home : SharedPage
+    data object PokeList : SharedPage
+    data object Ultra : SharedPage
+    data object AiTokens : SharedPage
+    data object AiLimits : SharedPage
+    data object Devices : SharedPage
+    data object DesktopSettings : SharedPage
+    /** 공용 호스트가 스스로 그리지 않는 라우트(상점 = W4-f 덮개 · 고정 안내 = c1). RoutePages 에 그 페이지가 없으면 '준비 중'. */
     data class Pending(val route: FlyoutRoute) : SharedPage
 }
 
 /** 수명(tabDidAppear/Disappear) 비교 열쇠 — 같은 열쇠면 같은 페이지로 본다(판만 바뀐 순위·상대만 바뀐 대화는 재진입이 아니다). */
 enum class SharedPageKey {
     LAUNCHING, NEEDS_UPDATE, SIGNED_OUT, ANOTHER_INSTANCE, TEAMLESS, MESSAGES, CONVERSATION, RANKINGS, RECORDS, GRASS, MISSIONS,
-    SETTINGS, PROFILE, CHARACTERS, FEEDBACK, BLOCKED, ACCOUNT_DELETION, PENDING,
+    SETTINGS, PROFILE, CHARACTERS, FEEDBACK, BLOCKED, ACCOUNT_DELETION, HOME, POKE_LIST, ULTRA, AI_TOKENS, AI_LIMITS, DEVICES,
+    DESKTOP_SETTINGS, PENDING,
 }
 
 object SharedRouter {
@@ -56,19 +66,24 @@ object SharedRouter {
     private fun allowedWhileTeamless(route: FlyoutRoute): Boolean =
         route == FlyoutRoute.Settings || route == FlyoutRoute.AccountDeletion || route == FlyoutRoute.Blocked
 
-    /** W-3 #17: 깃발이 꺼진 기능의 라우트인가. 빠짐없는 when(라우트를 더하면 여기가 컴파일로 막는다 — else 금지). */
+    /**
+     * W-3 #17: 깃발이 꺼진 기능의 라우트인가. 빠짐없는 when(라우트를 더하면 여기가 컴파일로 막는다 — else 금지).
+     * 콕·울트라는 **페이지 쪽 판정**(SocialPageFlags.visibleRoutes — W-9 #2) 하나를 읽는다(여기서 깃발을 다시 해석하지 않는다).
+     */
     fun isEnabled(route: FlyoutRoute, config: DesktopAppConfig): Boolean = when (route) {
-        FlyoutRoute.PokeList -> config.poke
-        FlyoutRoute.Ultra -> config.ultra
+        FlyoutRoute.PokeList, FlyoutRoute.Ultra -> route in SocialPageFlags.visibleRoutes(config)
         FlyoutRoute.Home, FlyoutRoute.Messages, is FlyoutRoute.Conversation, is FlyoutRoute.Rankings, FlyoutRoute.Records,
         is FlyoutRoute.Grass, FlyoutRoute.Missions, FlyoutRoute.Settings, FlyoutRoute.Profile, FlyoutRoute.Characters, FlyoutRoute.Feedback,
         FlyoutRoute.Blocked, FlyoutRoute.AccountDeletion, FlyoutRoute.PinToTaskbar, FlyoutRoute.Shop, FlyoutRoute.AiTokens,
         FlyoutRoute.AiLimits, FlyoutRoute.Devices, FlyoutRoute.DesktopSettings -> true
     }
 
-    /** 꺼진 라우트는 홈으로 접는다(진입 자체를 숨긴다 — 레일에도 칸이 없다). */
-    fun effectiveRoute(route: FlyoutRoute, config: DesktopAppConfig): FlyoutRoute =
-        if (isEnabled(route, config)) route else FlyoutRoute.Home
+    /**
+     * 꺼진 라우트는 홈으로 접는다(진입 자체를 숨긴다 — 레일에도 칸이 없다). [runtimeShown] = 실행 중 상태로 정해지는 라우트
+     * (AI 리밋 = 연동 있음 · 기기 = 두 대 이상 — RuntimeRouteRules). 기본은 늘 보임.
+     */
+    fun effectiveRoute(route: FlyoutRoute, config: DesktopAppConfig, runtimeShown: (FlyoutRoute) -> Boolean = { true }): FlyoutRoute =
+        if (isEnabled(route, config) && runtimeShown(route)) route else FlyoutRoute.Home
 
     /**
      * 무소속 판정. [teamKnown] = 로그인 직후 소속 읽기(SessionStore.pendingProfileRefresh)가 끝났다 — 끝나기 전의 teamID null 은
@@ -84,16 +99,24 @@ object SharedRouter {
         teamKnown: Boolean,
         route: FlyoutRoute,
         config: DesktopAppConfig,
+        runtimeShown: (FlyoutRoute) -> Boolean = { true },
     ): SharedPage = when (phase) {
         SessionPhase.Launching -> SharedPage.Launching
         is SessionPhase.NeedsUpdate -> SharedPage.NeedsUpdate(phase.minBuild)
         SessionPhase.SignedOut -> SharedPage.SignedOut
         SessionPhase.AnotherInstanceRunning -> SharedPage.AnotherInstance
         SessionPhase.SignedIn -> {
-            val effective = effectiveRoute(route, config)
+            val effective = effectiveRoute(route, config, runtimeShown)
             if (isTeamless(profile, teamKnown) && !allowedWhileTeamless(effective)) SharedPage.Teamless else pageOf(effective)
         }
     }
+
+    /**
+     * 첫 실행 화면(pages/onboarding)을 지금 페이지 대신 그리나. 실행 중·다른 실행·업데이트 필요는 그 화면이 먼저다(동의는 그 뒤에 물어도 늦지 않다 —
+     * 동의 전엔 스캔·자격 읽기가 0). 로그인 전에도 묻는다(자동 실행은 로그인과 무관 · 동의는 로그인 뒤 첫 스캔 전에 정해져 있어야 한다).
+     */
+    fun showsFirstRun(pending: Boolean, page: SharedPage): Boolean =
+        pending && page != SharedPage.Launching && page != SharedPage.AnotherInstance && page !is SharedPage.NeedsUpdate
 
     /** 로그인·소속이 끝난 뒤 라우트 → 페이지. 빠짐없는 when(else 금지). */
     fun pageOf(route: FlyoutRoute): SharedPage = when (route) {
@@ -109,8 +132,14 @@ object SharedRouter {
         FlyoutRoute.Feedback -> SharedPage.Feedback
         FlyoutRoute.Blocked -> SharedPage.Blocked
         FlyoutRoute.AccountDeletion -> SharedPage.AccountDeletion
-        FlyoutRoute.Home, FlyoutRoute.PinToTaskbar, FlyoutRoute.Shop, FlyoutRoute.PokeList, FlyoutRoute.Ultra,
-        FlyoutRoute.AiTokens, FlyoutRoute.AiLimits, FlyoutRoute.Devices, FlyoutRoute.DesktopSettings -> SharedPage.Pending(route)
+        FlyoutRoute.Home -> SharedPage.Home
+        FlyoutRoute.PokeList -> SharedPage.PokeList
+        FlyoutRoute.Ultra -> SharedPage.Ultra
+        FlyoutRoute.AiTokens -> SharedPage.AiTokens
+        FlyoutRoute.AiLimits -> SharedPage.AiLimits
+        FlyoutRoute.Devices -> SharedPage.Devices
+        FlyoutRoute.DesktopSettings -> SharedPage.DesktopSettings
+        FlyoutRoute.PinToTaskbar, FlyoutRoute.Shop -> SharedPage.Pending(route)
     }
 
     /** 라우트의 축 문자열 → 축. 모르는 값(옛 저장·오타)은 근무 잔디. */
@@ -146,6 +175,13 @@ object SharedRouter {
         SharedPage.Feedback -> SharedPageKey.FEEDBACK
         SharedPage.Blocked -> SharedPageKey.BLOCKED
         SharedPage.AccountDeletion -> SharedPageKey.ACCOUNT_DELETION
+        SharedPage.Home -> SharedPageKey.HOME
+        SharedPage.PokeList -> SharedPageKey.POKE_LIST
+        SharedPage.Ultra -> SharedPageKey.ULTRA
+        SharedPage.AiTokens -> SharedPageKey.AI_TOKENS
+        SharedPage.AiLimits -> SharedPageKey.AI_LIMITS
+        SharedPage.Devices -> SharedPageKey.DEVICES
+        SharedPage.DesktopSettings -> SharedPageKey.DESKTOP_SETTINGS
         is SharedPage.Pending -> SharedPageKey.PENDING
     }
 }
@@ -181,7 +217,8 @@ object SharedRail {
         else -> RailSlot.entries.filter { slot ->
             when (slot) {
                 RailSlot.MINIGAME -> miniGameAvailable
-                RailSlot.POKE -> config.poke
+                // 콕 칸 = 페이지 쪽 표면 판정(SocialPageFlags.surfaces.pokeList — 라우트 판정 visibleRoutes 와 같은 답, 시험이 견준다).
+                RailSlot.POKE -> SocialPageFlags.surfaces(config).pokeList
                 else -> true
             }
         }
@@ -203,15 +240,17 @@ object SharedRail {
 
     /** 칸이 켜져 보이는가(맥 isActive — 그 패널이 떠 있다). 대화는 메시지 칸, 하위 설정(차단·계정 삭제)은 설정 칸. */
     fun isActive(slot: RailSlot, page: SharedPage): Boolean = when (slot) {
-        RailSlot.HOME -> page is SharedPage.Pending && page.route == FlyoutRoute.Home
+        RailSlot.HOME -> page == SharedPage.Home
         RailSlot.MESSAGES -> page == SharedPage.Messages || page is SharedPage.Conversation
         RailSlot.MINIGAME -> false
-        RailSlot.POKE -> page is SharedPage.Pending && page.route == FlyoutRoute.PokeList
+        // 울트라 화면은 콕 제목 배지에서 들어간다(맥 openUltraPanel(from: .poke)) — 레일 칸이 따로 없으니 콕 칸이 켜진다.
+        RailSlot.POKE -> page == SharedPage.PokeList || page == SharedPage.Ultra
         RailSlot.SHOP -> page is SharedPage.Pending && page.route == FlyoutRoute.Shop
         RailSlot.MISSIONS -> page == SharedPage.Missions
         RailSlot.TEAM -> page is SharedPage.Rankings
         RailSlot.RECORDS -> page == SharedPage.Records || page == SharedPage.Profile || page == SharedPage.Characters
         RailSlot.FEEDBACK -> page == SharedPage.Feedback
-        RailSlot.SETTINGS -> page == SharedPage.Settings || page == SharedPage.Blocked || page == SharedPage.AccountDeletion
+        RailSlot.SETTINGS -> page == SharedPage.Settings || page == SharedPage.Blocked || page == SharedPage.AccountDeletion ||
+            page == SharedPage.DesktopSettings
     }
 }

@@ -38,7 +38,7 @@ class SignedOutRoutingTest {
     @Test
     fun `무소속은 소속 읽기가 끝난 뒤에만 — 설정·계정 삭제·차단만 지나간다`() {
         // 읽기 전의 teamID null 은 '모른다' — 무소속 화면이 번쩍이지 않는다.
-        assertEquals(SharedPage.Pending(FlyoutRoute.Home), SharedRouter.resolve(SessionPhase.SignedIn, noTeam, false, FlyoutRoute.Home, off))
+        assertEquals(SharedPage.Home, SharedRouter.resolve(SessionPhase.SignedIn, noTeam, false, FlyoutRoute.Home, off))
         assertEquals(SharedPage.Teamless, SharedRouter.resolve(SessionPhase.SignedIn, noTeam, true, FlyoutRoute.Home, off))
         assertEquals(SharedPage.Teamless, SharedRouter.resolve(SessionPhase.SignedIn, noTeam, true, FlyoutRoute.Messages, off))
         assertEquals(SharedPage.Teamless, SharedRouter.resolve(SessionPhase.SignedIn, noTeam, true, FlyoutRoute.Rankings("league"), off))
@@ -51,12 +51,12 @@ class SignedOutRoutingTest {
     @Test
     fun `W-3 17 깃발 꺼진 찌르기·울트라는 라우트로 와도 홈 — 레일에도 칸이 없다`() {
         for (route in listOf(FlyoutRoute.PokeList, FlyoutRoute.Ultra)) {
-            assertEquals(SharedPage.Pending(FlyoutRoute.Home), SharedRouter.resolve(SessionPhase.SignedIn, withTeam, true, route, off), "$route")
+            assertEquals(SharedPage.Home, SharedRouter.resolve(SessionPhase.SignedIn, withTeam, true, route, off), "$route")
         }
-        assertFalse(RailSlot.POKE in SharedRail.slots(SharedPage.Pending(FlyoutRoute.Home), off, miniGameAvailable = true))
+        assertFalse(RailSlot.POKE in SharedRail.slots(SharedPage.Home, off, miniGameAvailable = true))
         val on = DesktopAppConfig(poke = true, ultra = true)
-        assertEquals(SharedPage.Pending(FlyoutRoute.PokeList), SharedRouter.resolve(SessionPhase.SignedIn, withTeam, true, FlyoutRoute.PokeList, on))
-        assertTrue(RailSlot.POKE in SharedRail.slots(SharedPage.Pending(FlyoutRoute.Home), on, miniGameAvailable = true))
+        assertEquals(SharedPage.PokeList, SharedRouter.resolve(SessionPhase.SignedIn, withTeam, true, FlyoutRoute.PokeList, on))
+        assertTrue(RailSlot.POKE in SharedRail.slots(SharedPage.Home, on, miniGameAvailable = true))
         // 미니게임 칸은 창이 있을 때만(W4-e).
         assertFalse(RailSlot.MINIGAME in SharedRail.slots(SharedPage.Messages, on, miniGameAvailable = false))
     }
@@ -94,7 +94,7 @@ class SignedOutRoutingTest {
         assertEquals(SharedPage.Teamless, seen.last(), "seen=$seen")
         // 소속을 읽기 전 프레임에 무소속이 먼저 서지 않는다(번쩍임 0).
         val firstSignedIn = seen.indexOfFirst { it != SharedPage.Launching && it != SharedPage.SignedOut }
-        assertEquals(SharedPage.Pending(FlyoutRoute.Home), seen[firstSignedIn], "seen=$seen")
+        assertEquals(SharedPage.Home, seen[firstSignedIn], "seen=$seen")
         job.cancel()
 
         val team = SharedTestHarness(this, answer = SharedTestHarness.withTeam)

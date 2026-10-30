@@ -117,6 +117,9 @@ object MiniGameScreenTags {
  * @param refreshHz 이 화면이 선 디스플레이의 주사율(Android 셸이 `Display.refreshRate` 를 읽어 넘긴다 — 바뀌면 루프가 새 간격으로 다시 선다).
  * @param windowFocused 앱이 산 채로 초점을 가졌는가(Android ON_PAUSE·ON_RESUME). 거짓이 되면 진행 중인 판을 얼린다(G §8-2).
  * @param myUserID 순위 '나' 행 고르기(폰 세션 — Swift `context.session.session?.userID.lowercased()`).
+ * @param pauseToggleSerial 바깥 정지 토글(공용 패치 11 — 데스크톱 창의 ESC). 값이 **바뀔 때마다** 한 번 [MiniGamePauseState.toggled]
+ *   (맥 ESC 와 같은 전이 — 판 중이면 정지, 정지면 3-2-1, 카운트다운이면 다시 정지). 기본 0 이고 안 바꾸면 아무 일도 없다.
+ * @param onFrozenChanged 판이 얼었는가(정지 카드 · 3-2-1)가 바뀔 때. 껍데기가 얼어 있는 동안 조작 키를 막는 데 쓴다. 기본 {}.
  */
 @Composable
 fun GamesMiniGameScreen(
@@ -129,6 +132,8 @@ fun GamesMiniGameScreen(
     onBack: (() -> Unit)? = null,
     windowFocused: Boolean = true,
     reduceMotion: Boolean = false,
+    pauseToggleSerial: Int = 0,
+    onFrozenChanged: (Boolean) -> Unit = {},
 ) {
     val hub = store.miniGames
     DisposableEffect(kind) {
@@ -149,6 +154,7 @@ fun GamesMiniGameScreen(
                     MiniGamePlaySurface(
                         store, controller, refreshHz, art, windowFocused, reduceMotion,
                         Modifier.width(width).aspectRatio((MiniGameCanvas.logicalWidth / MiniGameCanvas.logicalHeight).toFloat()),
+                        pauseToggleSerial, onFrozenChanged,
                     )
                     // 테트리스만 버튼 줄이 붙는다 — 끌기로 표현할 수 없는 셋(홀드 · 반시계 회전 · 즉시 내리기)이다.
                     if (kind == MiniGameKind.tetris) TetrisControls(controller, width)
@@ -221,6 +227,8 @@ private fun MiniGamePlaySurface(
     windowFocused: Boolean,
     reduceMotion: Boolean,
     modifier: Modifier,
+    pauseToggleSerial: Int = 0,
+    onFrozenChanged: (Boolean) -> Unit = {},
 ) {
     var pause by remember(controller) { mutableStateOf<MiniGamePauseState>(MiniGamePauseState.None) }
     var pausedSeconds by remember(controller) { mutableStateOf(0) }
@@ -230,6 +238,19 @@ private fun MiniGamePlaySurface(
     LaunchedEffect(windowFocused) {
         if (!windowFocused) pause.resigningKey(controller.isPlaying)?.let { pause = it }
     }
+    // 바깥 정지 토글(공용 패치 11): 판이 설 때의 값을 기준으로, 바뀔 때마다 한 번 맥 ESC 전이. 기본 0 그대로면 들어오지 않는다.
+    val seenToggle = remember(controller) { intArrayOf(pauseToggleSerial) }
+    LaunchedEffect(controller, pauseToggleSerial) {
+        if (pauseToggleSerial != seenToggle[0]) {
+            seenToggle[0] = pauseToggleSerial
+            pause = pause.toggled(controller.isPlaying)
+        }
+    }
+    // 얼었는가를 밖에 알린다(바뀔 때 · 화면이 사라지면 풀림으로).
+    val frozen = pause.isFrozen
+    val reportFrozen by rememberUpdatedState(onFrozenChanged)
+    LaunchedEffect(frozen) { reportFrozen(frozen) }
+    DisposableEffect(Unit) { onDispose { reportFrozen(false) } }
     // 카운트다운 한 걸음 = 1초.
     LaunchedEffect(pause) {
         if (pause.countdown != null) {

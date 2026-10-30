@@ -301,6 +301,15 @@ extension RummyStore {
     package nonisolated static let engagedOwnerDefaultsKey = "rummy.engaged.v2.owner"
 
     /// 이 기기가 이 판에 손댄 적이 있는가(create·join·start·draft·play·draw·react 를 보냈다). **지금 계정의 장부일 때만.**
+    /// 확성기 배너를 미뤄야 하는 판인가(맥 `MegaphoneBannerDeferral` 이 읽는다 — 오목·체스 `playing` 과 같은 자리).
+    /// 이 기기가 손댄(engaged) 판이 진행 중이고 내 자리가 아직 playing 일 때만 참. 놀던 맥 · 기권 뒤 구경은 미루지 않는다
+    /// (놀던 맥은 판을 하는 게 아니라 배너를 못 볼 까닭이 없다 — SPEC-v2 §6).
+    package var defersMegaphoneBanner: Bool {
+        guard phase == .playing, let match, isEngaged(match.id) else { return false }
+        let seat = Self.mySeat(in: match, me: myUserID)
+        return seat?.state == nil || seat?.state == .playing
+    }
+
     package func isEngaged(_ matchID: UUID) -> Bool {
         engagedMatchIDs.contains(matchID) && engagedLedgerIsMine
     }

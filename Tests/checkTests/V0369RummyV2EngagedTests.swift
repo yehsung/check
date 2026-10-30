@@ -684,3 +684,43 @@ struct V0369RummyV2FixVerifyTests {
         #expect(!RummyExitPolicy.needsExitLeave(store))
     }
 }
+
+// MARK: - 확성기 배너 미룸(main 확성기 배너와 합친 뒤 — 버그 개선 세션 요청)
+
+@MainActor
+struct V0369RummyMegaphoneDeferralTests {
+    @Test("확성기 배너 미룸 — 손댄 판 진행 중(내 자리 playing)만 미룬다 · 놀던 맥·기권 뒤 구경·끝난 판은 안 미룬다")
+    func rummyDefersMegaphoneOnlyWhilePlaying() throws {
+        // 없으면: 아잉 큐브 판 위로 확성기 배너가 내려와 끌기 중인 타일 위를 덮는다(오목·체스·테트리스는 이미 미룬다).
+        let (playing, _, _) = egMake("mg-play", script: EGScript(), engaged: true)
+        playing.applyState(try egDecode(egState()))
+        #expect(playing.phase == .playing)
+        #expect(playing.defersMegaphoneBanner, "내가 하는 판인데 배너를 안 미룬다")
+        #expect(MegaphoneBannerDeferral.isDeferred(gomoku: .lobby, chess: .lobby, tetris: .lobby, miniGameRoundLive: false,
+                                                   rummyLive: playing.defersMegaphoneBanner))
+
+        let (idle, _, _) = egMake("mg-idle", script: EGScript(), engaged: false)
+        idle.applyState(try egDecode(egState()))
+        #expect(idle.phase == .playing && !idle.defersMegaphoneBanner, "놀던 맥(engaged 아님)이 배너를 미뤘다")
+
+        var forfeited = egState(seq: 2)
+        var seats = try #require(forfeited["seats"] as? [[String: Any]])
+        seats[0] = egSeat(0, egMe, state: "forfeit")
+        forfeited["seats"] = seats
+        forfeited["my_rack"] = NSNull()
+        playing.applyState(try egDecode(forfeited))
+        #expect(!playing.defersMegaphoneBanner, "기권한 뒤 구경 중인데 배너를 미뤘다")
+
+        playing.applyState(try egDecode(egState(status: "finished", seq: 3)))
+        #expect(!playing.defersMegaphoneBanner, "끝난 판인데 배너를 미뤘다")
+        // 기준선: 아무 판도 없으면 미루지 않는다.
+        #expect(!MegaphoneBannerDeferral.isDeferred(gomoku: .lobby, chess: .lobby, tetris: .lobby, miniGameRoundLive: false))
+    }
+
+    @Test("배선 — isMegaphoneBannerDeferred 가 rummy.defersMegaphoneBanner 를 넘긴다(관찰 추적이 판 상태를 읽게)")
+    func megaphoneDeferralWiring() throws {
+        let src = try String(contentsOf: CheckCoreSourceLayout.repoRoot.appendingPathComponent("Sources/check/WorkTimerStoreMegaphoneBanner.swift"),
+                             encoding: .utf8)
+        #expect(src.contains("rummyLive: rummy.defersMegaphoneBanner"))
+    }
+}

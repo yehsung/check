@@ -422,7 +422,8 @@ private func avFetches(_ host: String) -> Int {
         // 사라졌거나 검사가 헛돈다 — **새 창을 더하면 이 숫자도 같이 올린다**(안 올리면 '지우는 것'이 초록으로 가는 길이 된다).
         // 0.3.60: 1:1 테트리스 창이 여섯 자리를 더했다(로비 상대 줄 · 받은 신청 · 순위 행 · 지금 대결 중 둘 · 대결 상대 카드).
         // 0.3.69: 아잉 큐브 창이 일곱 자리를 더했다(아래 `rummy` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다).
-        #expect(avatars.count == 38, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 2026-10-30: 확성기 배너 카드가 한 자리를 더했다(보낸 사람 얼굴). 31 + 7 + 1.
+        #expect(avatars.count == 39, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -530,13 +531,15 @@ private func avFetches(_ host: String) -> Int {
             let n = V0325TooltipTests.count(".appUserAvatarCharacters(from:", in: code)
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
-        #expect(roots == ["CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
+        #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
                           "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
                 "\(roots)")
         // 아잉 큐브 창(v0.3.69)도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 탁자·결과의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["RummyPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
         #expect(sources["CheckRummyWindow.swift"]?.contains("RummyPanel(store: rummy, me: me, safety: safety)") == true)
         #expect(sources["CheckApp.swift"]?.contains("CheckRummyWindowController.shared.configure(store: store.rummy, me:") == true)
+        // 확성기 배너 창(2026-10-30)도 같은 짝이다 — 빠지면 보낸 사람 얼굴이 이니셜로 떨어진다.
+        #expect(sources["CheckMegaphoneBannerWindow.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["CheckMenuView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["CheckSettingsView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["MiniGamePanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)

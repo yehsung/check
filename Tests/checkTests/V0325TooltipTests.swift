@@ -721,9 +721,10 @@ struct V0325TooltipTests {
         // 돌아왔다 — 리밋 카드는 팝오버 안에 있고 팝오버 루트의 레이어를 쓴다(`CheckAILimitsRow.swift` 머리말).
         // 그 카드의 `.checkTooltip` 이 실제로 말풍선을 받는다는 사실은 아래 `.checkTooltip(` 자리 대조가 잰다.
         // v0.3.60: 1:1 테트리스 창(TetrisDuelPanel) 루트가 일곱 번째다.
-        // v0.3.69: 아잉 큐브 창(RummyPanel) 루트가 여덟 번째다 — 숫자만 올리지 않고 아래에서 자리(클리핑 바깥)까지 잰다.
+        // v0.3.69: 아잉 큐브 창(RummyPanel) · 2026-10-30 확성기 배너 창(CheckMegaphoneBannerWindow, [답장] 말풍선) — 루트가 아홉이다.
+        // 숫자만 올리지 않고 아래에서 자리(클리핑 바깥)까지 잰다.
         #expect(layerSites == [
-            "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
+            "CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
             "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "RummyPanel.swift:1",
             "TetrisDuelPanel.swift:1",
         ], "레이어 자리: \(layerSites)")

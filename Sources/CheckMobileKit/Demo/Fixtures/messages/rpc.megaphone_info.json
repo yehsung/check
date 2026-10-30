@@ -5,5 +5,8 @@
   "cooldown_seconds": 600,
   "cooldown_remaining_seconds": 0,
   "recipients": 12,
-  "max_length": 198
+  "max_length": 198,
+  "global_cooldown_seconds": 300,
+  "global_cooldown_remaining_seconds": 0,
+  "cooldown_scope": null
 }

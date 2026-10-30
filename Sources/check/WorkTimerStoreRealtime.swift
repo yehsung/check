@@ -275,6 +275,10 @@ extension WorkTimerStore {
             case .rummySignal:
                 // 아잉 큐브 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
                 rummy.handleSignal()
+            case .megaphoneSignal:
+                // 확성기 신호(2026-10-30)도 조회뿐이다(소비 아님 — 줄의 소비는 같은 묶음의 `ring` 이 맡는다). 근무 게이트가 없다:
+                // 배너는 근무 밖에서도 뜬다. 스로틀도 없다 — 겹친 호출은 배너 스토어가 하나로 모은다.
+                requestMegaphoneBannerRefresh()
             case .pushAccessToken(let token):
                 realtime.transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

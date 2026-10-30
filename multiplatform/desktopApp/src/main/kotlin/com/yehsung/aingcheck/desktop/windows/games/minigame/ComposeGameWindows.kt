@@ -18,6 +18,7 @@ import com.yehsung.aingcheck.desktop.windows.games.chess.ChessWindowDoors
 import com.yehsung.aingcheck.desktop.windows.games.gomoku.GomokuWindowContent
 import com.yehsung.aingcheck.desktop.windows.games.gomoku.GomokuWindowDoors
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelIme
+import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelInput
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelKeys
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelWindowContent
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelWindowDoors
@@ -50,9 +51,38 @@ import javax.swing.Timer
 import javax.swing.WindowConstants
 import java.awt.event.WindowEvent as AwtWindowEvent
 
-/** 창이 받은 키 하나. [ownsKeys] = 키가 실제로 향한 창이 이 창이다(맥 strokeBelongsToGame). 받았으면 true(삼킨다). */
+/**
+ * 창이 받은 키 하나. [ownsKeys] = 키가 실제로 향한 창이 이 창이다(맥 strokeBelongsToGame). 받았으면 true(삼킨다).
+ * ⚠️ 반환은 **이 창의 판이 받은 키**일 때만 true — 뗌도 같다(뗌 적용은 무조건이지만 삼킴은 owns). 창마다 전역 디스패처가 생성 순서로
+ * 붙고 앞이 true 면 뒤는 못 본다 — 남의 창 뗌을 삼키면 그 창의 키가 굳는다(맥 MiniGamePanel.swift:307-308 `belongs && wantsStrokes()` ·
+ * CheckTetrisDuelWindow.swift:436 `belongs && live`).
+ */
 fun interface GameKeyRouter {
     fun route(vk: Int, down: Boolean, hasModifiers: Boolean, isRepeat: Boolean, ownsKeys: Boolean): Boolean
+}
+
+/**
+ * 창 하나의 키 문(AWT KeyEventDispatcher 한 벌의 몸 — 창 0 으로 시험한다). 눌린 키 표로 자동 반복을 가린다:
+ * AWT 는 반복을 '뗌 없는 누름'으로 준다 — **이 창이 받은** 누름이 이미 눌려 있으면 반복(★4 반복 무시).
+ * 남의 창으로 간 누름은 적지 않는다(그 뗌을 앞 디스패처가 가져가도 이 창의 다음 누름이 반복으로 버려지지 않게).
+ */
+class GameKeyDispatch(private val router: GameKeyRouter) {
+    private val pressed = HashSet<Int>()
+
+    fun dispatch(vk: Int, down: Boolean, hasModifiers: Boolean, ownsKeys: Boolean): Boolean {
+        val repeat = when {
+            !down -> { pressed.remove(vk); false }
+            ownsKeys -> !pressed.add(vk)
+            else -> false
+        }
+        return router.route(vk, down, hasModifiers, repeat, ownsKeys)
+    }
+
+    /** 초점을 잃으면 눌린 키를 전부 뗀다(⚠️ 뗌이 안 오면 키가 굳는다 — 대결 스토어의 누른 채가 남지 않게). */
+    fun releaseAll() {
+        pressed.toList().forEach { router.route(it, down = false, hasModifiers = false, isRepeat = false, ownsKeys = false) }
+        pressed.clear()
+    }
 }
 
 /** 실제 창 손잡이(EDT 에서 만든다). 닫기 단추는 숨기기만 — 파괴는 고착 재생성 때뿐. */
@@ -66,10 +96,10 @@ class ComposeGameWindowHandle(
     content: @Composable () -> Unit,
 ) : GameWindowHandle {
     val window: ComposeWindow = ComposeWindow()
-    private val pressed = HashSet<Int>()
+    private val keys: GameKeyDispatch? = keyRouter?.let(::GameKeyDispatch)
     private var lastVisible = true
-    private val keyDispatcher: KeyEventDispatcher? = keyRouter?.let { router ->
-        KeyEventDispatcher { e -> dispatchKey(router, e) }
+    private val keyDispatcher: KeyEventDispatcher? = keys?.let { k ->
+        KeyEventDispatcher { e -> dispatchKey(k, e) }
     }
     private val cloakTimer = Timer(CLOAK_POLL_MS) {
         // 세션 잠금·가상 데스크톱 전환은 AWT 사건이 없다 — DWM cloak 을 읽어 바뀔 때만 넘긴다(완전히 덮임은 Windows 에 없다 — games.md 위험 ③).
@@ -111,26 +141,19 @@ class ComposeGameWindowHandle(
         cloakTimer.start()
     }
 
-    private fun dispatchKey(router: GameKeyRouter, e: KeyEvent): Boolean {
+    private fun dispatchKey(keys: GameKeyDispatch, e: KeyEvent): Boolean {
         val down = when (e.id) {
             KeyEvent.KEY_PRESSED -> true
             KeyEvent.KEY_RELEASED -> false
             else -> return false
         }
-        val vk = e.keyCode
         val owns = e.component?.let { it === window || SwingUtilities.getWindowAncestor(it) === window } == true
-        // AWT 는 자동 반복을 '뗌 없는 누름'으로 준다 — 이미 눌린 키의 누름이 반복(★4 반복 무시).
-        val repeat = down && !pressed.add(vk)
-        if (!down) pressed.remove(vk)
         val mods = e.isControlDown || e.isAltDown || e.isMetaDown
-        return router.route(vk, down, mods, repeat, owns)
+        return keys.dispatch(e.keyCode, down, mods, owns)
     }
 
-    /** 초점을 잃으면 눌린 키를 전부 뗀다(⚠️ 뗌이 안 오면 키가 굳는다 — 대결 스토어의 누른 채가 남지 않게). */
     private fun releaseAll() {
-        val router = keyRouter ?: return
-        pressed.toList().forEach { router.route(it, down = false, hasModifiers = false, isRepeat = false, ownsKeys = false) }
-        pressed.clear()
+        keys?.releaseAll()
     }
 
     override val isMinimized: Boolean get() = (window.extendedState and java.awt.Frame.ICONIFIED) != 0
@@ -277,7 +300,10 @@ object ComposeGamesWindows {
         return host
     }
 
-    /** 미니게임 창 키: 테트리스는 키 표, 다른 게임은 스페이스 = 탭. 판이 얼었으면(초점 상실 정지) 받지 않는다 — 뗌은 늘 지나간다. */
+    /**
+     * 미니게임 창 키: 테트리스는 키 표, 다른 게임은 스페이스 = 탭. 판이 얼었으면(초점 상실 정지) 받지 않는다.
+     * ⚠️뗌은 게이트보다 먼저 적용하되(★★ MiniGamePanel.swift:302-308) **삼킴은 이 창 판의 키만**(`belongs && wantsStrokes()`) — 남의 창(대결) 뗌을 삼키면 그 창 키가 굳는다.
+     */
     fun miniGameKeys(games: GamesStore, state: MiniGameWindowState): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
         val controller = games.miniGames.controller ?: return@GameKeyRouter false
         val gameOwns = owns && state.windowFocused && state.route is MiniGameWindowRoute.Game
@@ -286,20 +312,29 @@ object ComposeGamesWindows {
             return@GameKeyRouter gameOwns
         }
         if (controller.kind != MiniGameKind.tetris) return@GameKeyRouter false
-        val stroke = GameKeyMap.stroke(vk, down, mods, repeat, gameOwns) ?: return@GameKeyRouter false
+        val stroke = GameKeyMap.stroke(vk, down, mods, repeat, gameOwns)
+            ?: return@GameKeyRouter down && repeat && !mods && gameOwns // ★4 반복은 삼키기만(MiniGamePanel.swift:311)
         SoloTetrisKeys.apply(controller, stroke)
-        true
+        gameOwns
     }
 
-    /** 대결 창 키: 키 표 그대로 누름/뗌, 스페이스 = 하드드롭. 키 상실해도 판은 계속(뗌만 정리). */
-    fun duelKeys(games: GamesStore): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
-        val store = games.tetris
+    /** 대결 창 키 — 실제 대결 스토어로. */
+    fun duelKeys(games: GamesStore): GameKeyRouter = duelKeys(TetrisDuelKeys.input(games.tetris))
+
+    /**
+     * 대결 창 키: 키 표 그대로 누름/뗌, 스페이스 = 하드드롭. 키 상실해도 판은 계속(뗌만 정리).
+     * 받는 때 = 키가 향한 창이 이 창 ∧ 판 흐름(카운트다운·판 중 — CheckTetrisDuelWindow.swift:537 isLive). ⚠️뗌은 게이트보다 먼저, 무조건 적용(★433)하되
+     * 삼킴은 `belongs && live`(:436) — 로비에선 스페이스가 초점 단추로 가고, 남의 창(솔로) 뗌은 그 창 디스패처까지 간다.
+     */
+    fun duelKeys(input: TetrisDuelInput): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
+        val gameOwns = owns && input.live
         if (vk == GameKeyMap.VK_SPACE) {
-            if (down && !repeat && !mods && owns) TetrisDuelKeys.action(store)
-            return@GameKeyRouter owns
+            if (down && !repeat && !mods && gameOwns) input.hardDrop()
+            return@GameKeyRouter gameOwns
         }
-        val stroke = GameKeyMap.stroke(vk, down, mods, repeat, owns) ?: return@GameKeyRouter false
-        TetrisDuelKeys.apply(store, stroke)
-        true
+        val stroke = GameKeyMap.stroke(vk, down, mods, repeat, gameOwns)
+            ?: return@GameKeyRouter down && repeat && !mods && gameOwns // ★4 반복은 삼키기만(DAS·ARR 은 엔진 시계 — :441)
+        input.stroke(stroke)
+        gameOwns
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.yehsung.aingcheck.core.stores.games.GamesStore
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelPhase
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.hardDrop
 import com.yehsung.aingcheck.core.stores.tetris.hold
@@ -45,11 +46,27 @@ class TetrisDuelWindowState(private val doors: BoardWindowDoors, private val pro
     fun apply(notices: List<StoreNotice>) = BoardGameNoticeSink.apply(doors, notices, readRefreshRate = { refreshHz = probeHz() })
 }
 
+/** 대결 키가 가는 곳(실제는 [TetrisDuelKeys.input] — 대결 스토어, 시험은 기록기). [live] = 판 입력을 받는 흐름(카운트다운·판 중). */
+interface TetrisDuelInput {
+    val live: Boolean
+    fun stroke(stroke: GameStroke)
+    fun hardDrop()
+}
+
 /**
  * 대결 키 → 대결 스토어. 누름/뗌을 그대로 넘긴다(대결 스토어엔 setLeft/Right/SoftDropHeld 가 있다 — TetrisDuelStoreGame.kt:182-227).
- * 게이트(키가 향한 창 === 이 창 · 수정키 · 반복)는 kit GameKeyMap.stroke 가 이미 걸렀다 — ⚠️뗌은 게이트보다 먼저(★433) 여기까지 온다.
+ * 게이트(키가 향한 창 === 이 창 ∧ 판 흐름 · 수정키 · 반복)는 kit GameKeyMap.stroke 가 이미 걸렀다 — ⚠️뗌은 게이트보다 먼저(★433) 여기까지 온다.
  */
 object TetrisDuelKeys {
+    /** 판 입력을 받는 흐름 — 카운트다운에도 삼킨다(시작 직전 스페이스가 초점 단추를 누르지 않게. 입력 자체는 스토어가 버린다 — CheckTetrisDuelWindow.swift:535-539). */
+    fun isLive(store: TetrisDuelStore): Boolean = store.phase == TetrisDuelPhase.playing || store.phase == TetrisDuelPhase.countdown
+
+    fun input(store: TetrisDuelStore): TetrisDuelInput = object : TetrisDuelInput {
+        override val live: Boolean get() = isLive(store)
+        override fun stroke(stroke: GameStroke) = apply(store, stroke)
+        override fun hardDrop() = action(store)
+    }
+
     fun apply(store: TetrisDuelStore, stroke: GameStroke) {
         when (stroke.key) {
             GameKey.MoveLeft -> store.setLeftHeld(stroke.down)

@@ -1,6 +1,6 @@
 // 원본: Sources/check/CheckApp.swift:344-440(★ "전부 빠져도 컴파일·시험은 초록" — 옵셔널 문 다섯) · CheckMiniGameWindow.swift:247(③ 닫기 = 판 끝) ·
 //       :267(④ 키 상실 = 일시정지만, 0.3.62) · MiniGameExposure(길건너 숨김 — W-3 #1)
-//       (W4-e 완료 기준 — WindowWiringContractTest · MiniGameFocusPauseTest · ExposureTest)
+//       (W4-e 완료 기준 — WindowWiringContractTest · MiniGameFocusPauseTest · ExposureTest · 반박 수정: 순위 스위치 ①·닫기 정산·kind 없는 열기 멱등)
 package com.yehsung.aingcheck.desktop.windows.games.minigame
 
 import androidx.compose.runtime.snapshots.Snapshot
@@ -49,6 +49,8 @@ class WindowWiringContractTest {
     /** ★CheckApp.swift:344-440 — 문 다섯 × 스토어 셋 = 15 칸이 전부 차야 한다(빠져도 컴파일은 초록이라 시험이 그물이다). */
     @Test
     fun allFiveDoorsOfTheThreeBoardStoresAreWired() {
+        // 음성 대조: 배선 전 대결 스토어는 순위가 꺼져 있다(폰과 공용 — 기본 false). 아래 단언이 배선을 재는지 확인.
+        assertFalse(UiGamesHarness(TestScope(), AppConfig()) { null }.tetris.rankingEnabled, "대결 스토어 기본이 켜져 있다 — 순위 단언이 헛돈다")
         val r = Rig(DesktopAppConfig())
         val g = r.board.gomoku
         val c = r.board.chess
@@ -64,6 +66,8 @@ class WindowWiringContractTest {
         doors.forEach { (name, door) -> assertNotNull(door, "$name 이 비었다 — 배선이 빠졌다") }
         // W-3 #4 — Windows 는 관전·순위를 켠다(맥과 같게).
         assertTrue(g.spectatorFeaturesEnabled && c.spectatorFeaturesEnabled && t.spectatorFeaturesEnabled, "관전 스위치가 꺼져 있다")
+        // ①CheckApp.swift:409·430 — 순위의 주 스위치. 없으면 대결 순위 탭은 영영 로딩(GamesTetrisDuelRankingPlan.shouldRefresh 가 요구).
+        assertTrue(t.rankingEnabled, "테트리스 대결 rankingEnabled 가 꺼져 있다 — 순위 탭이 영영 로딩")
     }
 
     @Test
@@ -161,9 +165,10 @@ class MiniGameFocusPauseTest {
             assertTrue(StoreNotice.EndRound in r.shell.notices, "$kind: 닫기가 판 끝 통지를 안 냈다")
             assertEquals(MiniGameWindowRoute.Closed(kind), r.state.route)
             assertEquals(null, r.store.miniGames.controller, "$kind: 닫았는데 판이 살아 있다")
-            // 닫기의 판 끝은 core GamesPlayController.endRound(:408-427) 그대로 — 테트리스만 확정 제출(Confirmed), 타이밍 바·플래피는 버린다(Abandoned).
-            // 지시서의 'quittingKeepsTheScore 게임만'과 다르다(플래피는 그 표에선 true) → 보고 unresolved 에 적었다. 단언은 core 규칙으로.
-            val expected = if (kind == MiniGameKind.tetris) 1 else 0
+            // 맥 endRound(closing:) → settleMiniGameLiveRound → quittingKeepsTheScore(CheckMiniGameWindow.swift:303 · MiniGamePanel.swift:567-570):
+            // 테트리스·플래피는 그 점수로 1회, 타이밍 바는 0회(core endRound 는 플래피를 버린다 — 공용 패치 1 전 임시 어댑터가 MiniGameWindowState 에 있다).
+            assertEquals(kind != MiniGameKind.timingBar, MiniGameWindowState.quittingKeepsTheScore(kind))
+            val expected = if (kind == MiniGameKind.timingBar) 0 else 1
             assertEquals(expected, r.harness.server.count("minigame_submit_score"), "$kind: 제출 수")
             assertEquals(1, r.shell.handles.single().hidden, "$kind: 닫기가 창을 숨기지 않았다(파괴 금지)")
             assertFalse(r.shell.handles.single().disposed)
@@ -184,6 +189,36 @@ class ExposureTest {
         assertTrue(onAllNodesWithText("테트리스", substring = true).fetchSemanticsNodes().isNotEmpty(), "허브에 테트리스가 없다 — 노드를 못 읽는다")
         assertEquals(0, onAllNodesWithText("길건너", substring = true).fetchSemanticsNodes().size, "허브에 길건너가 있다")
         assertFalse(MiniGameKind.crossy in MiniGameExposure.visible)
+    }
+
+    /**
+     * kind 없는 열기(플라이아웃 게임 레일 · 두 번째 실행)는 멱등 — 판 도중이면 그 판 그대로(맥 show(), CheckMiniGameWindow.swift:213-235).
+     * 실제 화면을 띄워(화면 수명의 closeScreen 까지) 판이 살아 있는지 잰다. 음성 짝: kind 를 주면 그 게임으로 간다 · 허브·닫힘은 그대로.
+     */
+    @Test
+    fun reopeningWithoutAKindKeepsTheRoundInPlay() = runDesktopComposeUiTest(440, 720) {
+        val store = GamesStore(UiGamesHarness(TestScope(), AppConfig()) { null }.context)
+        val state = MiniGameWindowState(store.miniGames)
+        val host = GameWindowScenes.host(GameWindowScenes.fakeShells(), miniGame = state)
+        host.openGames(null)
+        assertEquals(MiniGameWindowRoute.Hub, state.route, "허브에서 kind 없이 열면 허브")
+        host.openGames(MiniGameKind.tetris)
+        setContent { MiniGameWindowContent(store, state, NO_FACTS, ART, null, { NOW }, false, true, {}, {}, {}) }
+        waitForIdle()
+        val c = requireNotNull(store.miniGames.controller) { "화면이 판을 열지 않았다" }
+        mainClock.autoAdvance = false
+        Snapshot.withMutableSnapshot { c.tap() }
+        mainClock.advanceTimeByFrame()
+        assertTrue(c.isPlaying, "판이 시작되지 않았다")
+        Snapshot.withMutableSnapshot { host.openGames(null) }
+        repeat(3) { mainClock.advanceTimeByFrame() }
+        assertEquals(MiniGameWindowRoute.Game(MiniGameKind.tetris), state.route, "kind 없는 다시 열기가 판 화면을 허브로 돌렸다")
+        assertTrue(store.miniGames.controller === c, "kind 없는 다시 열기가 판을 갈아 끼웠다")
+        assertTrue(c.isPlaying, "kind 없는 다시 열기가 진행 중인 판을 끝냈다")
+        // 양성 짝: kind 를 주면 그 게임으로 간다(판 바꾸기는 사람이 고른 것).
+        Snapshot.withMutableSnapshot { host.openGames(MiniGameKind.flappy) }
+        repeat(3) { mainClock.advanceTimeByFrame() }
+        assertEquals(MiniGameWindowRoute.Game(MiniGameKind.flappy), state.route)
     }
 
     /** 창 문으로 길건너를 열어도 허브에 남는다. 음성 짝: 테트리스는 바로 게임 화면으로 간다. */

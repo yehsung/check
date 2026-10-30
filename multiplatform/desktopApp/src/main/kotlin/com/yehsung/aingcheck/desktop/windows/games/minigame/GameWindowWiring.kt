@@ -16,6 +16,8 @@ import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
  * - onInviteArrived → [onInvite](알림 중재는 W3-c1). **대결 깃발이 꺼진 빌드는 부르지 않는다**(W-3 #7 — 스토어도 잠긴 빌드에서 안 부르지만 여기서 한 번 더 막는다)
  * - onAttention → [onTurnWhileHidden](창이 안 보이는 동안 내 차례)
  * - spectatorFeaturesEnabled ← [DesktopAppConfig.spectator](W-3 #4 — Windows 는 켠다)
+ * - 테트리스 대결 rankingEnabled = true(CheckApp.swift:409 ① 순위의 **주 스위치** — 스토어는 폰과 공용이라 기본 꺼짐, 없으면 순위 탭은 영영 로딩.
+ *   맥 :430 · 폰 PhoneAppModel 도 무조건 켠다. 관전 스위치와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다)
  */
 object GameWindowWiring {
     fun wire(
@@ -49,6 +51,7 @@ object GameWindowWiring {
         tetris.onInviteArrived = { if (duels) onInvite(GameWindowKind.TetrisDuel) }
         tetris.onAttention = { onTurnWhileHidden(GameWindowKind.TetrisDuel) }
         tetris.spectatorFeaturesEnabled = config.spectator
+        tetris.rankingEnabled = true
     }
 
     /** 판 게임 창을 스토어를 거쳐 여는 문(맥 openWindow(focusMatchID) — 조회를 먼저 쏘고 presentWindow). */

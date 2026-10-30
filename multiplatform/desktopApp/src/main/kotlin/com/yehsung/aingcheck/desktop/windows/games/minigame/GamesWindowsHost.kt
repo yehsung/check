@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
 import com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
@@ -69,7 +70,7 @@ sealed interface MiniGameWindowRoute {
 /**
  * 미니게임 창의 껍데기 상태. 통지 셋을 화면 값으로 옮긴다:
  *  · PauseIfPlaying → `windowFocused = false`(화면이 core MiniGamePauseState.resigningKey 로 얼린다 — ④ 키 상실은 **일시정지만**, 0.3.62)
- *  · EndRound → 허브 `closeScreen`(진행 중인 판을 끝낸다 — ③ 닫기 = 판 끝, CheckMiniGameWindow.swift:247. 테트리스는 여기까지 점수로 제출)
+ *  · EndRound → 허브 `closeScreen`(진행 중인 판을 끝낸다 — ③ 닫기 = 판 끝, CheckMiniGameWindow.swift:247. 기록 게임(테트리스·플래피 — quittingKeepsTheScore)은 여기까지 점수로 제출)
  *  · ReadRefreshRate → 창이 선 **뒤** 그 화면 주사율을 다시 읽는다(②·⑤ CheckMiniGameWindow.swift:225-232·276)
  */
 class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz: () -> Int = { DEFAULT_HZ }) {
@@ -80,10 +81,17 @@ class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz
     var refreshHz: Int by mutableStateOf(DEFAULT_HZ)
         private set
 
-    /** 창을 연다. [kind] 가 있으면 그 게임으로 — 노출 목록 밖(길건너 — W-3 #1)이면 허브에 남는다. */
+    /**
+     * 창을 연다. [kind] 가 있으면 그 게임으로 — 노출 목록 밖(길건너 — W-3 #1)이면 허브에 남는다.
+     * [kind] 없는 열기(플라이아웃 게임 레일 · 두 번째 실행)는 **멱등**이다 — 판 도중이면 그 판을 그대로 둔다(맥 show() 는 창만 앞으로,
+     * CheckMiniGameWindow.swift:213-235 · 레일은 kind 없이 openMiniGameWindow(), CheckMenuView.swift:976-978). 허브로 돌리면 화면 수명의
+     * closeScreen 이 판을 끝낸다(테트리스는 그 점수로 확정 제출, 플래피는 버림).
+     */
     fun show(kind: MiniGameKind?) {
-        val target = kind ?: (route as? MiniGameWindowRoute.Closed)?.last
         windowFocused = true
+        val current = route
+        if (kind == null && current is MiniGameWindowRoute.Game) return
+        val target = kind ?: (current as? MiniGameWindowRoute.Closed)?.last
         route = if (target != null && MiniGameExposure.isVisible(target)) MiniGameWindowRoute.Game(target) else MiniGameWindowRoute.Hub
     }
 
@@ -111,13 +119,32 @@ class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz
 
     private fun endRound() {
         val game = route as? MiniGameWindowRoute.Game
-        // 화면이 사라지기 전에 허브에서 직접 끝낸다 — onDispose 의 closeScreen 은 그 뒤 no-op(activeKind 가 비었다) → 제출은 한 번.
-        if (game != null) hub.closeScreen(game.kind)
+        if (game != null) {
+            // 닫기 = 판 끝, 기록이 남는 게임은 그 점수로 제출(맥 endRound(closing:) → settleMiniGameLiveRound → quittingKeepsTheScore,
+            // CheckMiniGameWindow.swift:303 · MiniGamePanel.swift:567-570 · WorkTimerStoreMiniGame.swift:300-305).
+            // 공용 패치 1 전 임시: core GamesPlayController.endRound(:408-427) 는 테트리스만 확정하고 플래피는 abandon 한다 —
+            // 끝내기 **전에** 점수를 읽어 두고, core 가 버린(Abandoned) 기록 게임만 여기서 한 번 올린다. core 에 '닫기 = quittingKeepsTheScore 정산'
+            // 문이 서면 이 가지를 지운다(shared_patch_requests).
+            val live = hub.controller?.takeIf { it.kind == game.kind && it.isPlaying }
+            val keptScore = live?.score
+            // 화면이 사라지기 전에 허브에서 직접 끝낸다 — onDispose 의 closeScreen 은 그 뒤 no-op(activeKind 가 비었다) → 제출은 한 번.
+            val outcome = live?.endRound()
+            hub.closeScreen(game.kind)
+            if (outcome == GamesPlayController.EndOutcome.Abandoned && keptScore != null && quittingKeepsTheScore(game.kind)) {
+                hub.recordScore(game.kind, keptScore)
+            }
+        }
         route = MiniGameWindowRoute.Closed(game?.kind)
     }
 
     companion object {
         const val DEFAULT_HZ = 60
+
+        /** 접어도(창 닫기) 기록이 남는 게임(맥 MiniGamePanel.swift:567-570 PauseState.quittingKeepsTheScore — 길건너는 Windows 에서 숨김). */
+        fun quittingKeepsTheScore(kind: MiniGameKind): Boolean = when (kind) {
+            MiniGameKind.tetris, MiniGameKind.flappy, MiniGameKind.crossy -> true
+            MiniGameKind.timingBar -> false
+        }
     }
 }
 

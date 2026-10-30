@@ -5,17 +5,28 @@
 // ([routePages] · [firstRun])을 낸다. 스토어는 만들지 않는다(조립 AppGraph 가 넘긴다). 깃발 판정은 페이지 쪽 함수(SocialPageFlags) 하나만
 // 읽는다 — 꺼진 기능의 페이지는 **짓지도 않는다**(라우트·레일도 SharedRouter 가 같은 함수로 숨긴다 → 그 서버 경로 요청 0).
 // 공용 18(울트라 가격)·19(회고 배너)는 조립 때 잇는다 — 여기는 공급자 매개만(기본 null).
+// int-w3(W-14 #5): 홈 배너 나머지(대결 신청·제보 답장·케이크 선물)는 [PagesWiringDeps.homeBanners] — 스토어 묶기는 [HomeBannerStores].
+// 로그아웃 때 페이지 쪽 계정 상태(울트라 고름 · 콕 디렉터리)를 [PagesWiring.onSignedOut] 하나로 푼다.
 package com.yehsung.aingcheck.desktop.wiring
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.ImageBitmap
+import com.yehsung.aingcheck.core.stores.chess.ChessStore
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
+import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.RubyBalanceMirror
+import com.yehsung.aingcheck.core.stores.me.feedbackDidDisappear
+import com.yehsung.aingcheck.core.stores.me.hasUnseenFeedbackReply
+import com.yehsung.aingcheck.core.stores.me.reopenCakeGift
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.desktop.pages.ailimits.AiLimitsActions
 import com.yehsung.aingcheck.desktop.pages.ailimits.AiLimitsFlyoutPage
 import com.yehsung.aingcheck.desktop.pages.ailimits.AiLimitsRouteRule
 import com.yehsung.aingcheck.desktop.pages.aitokens.AiTokensFlyoutPage
 import com.yehsung.aingcheck.desktop.pages.aitokens.AiTokensPageDeps
+import com.yehsung.aingcheck.desktop.pages.banners.DuelInviteBanner
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsDeps
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsFlyoutPage
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsStore
@@ -29,18 +40,26 @@ import com.yehsung.aingcheck.desktop.pages.shared.RuntimeRouteRules
 import com.yehsung.aingcheck.desktop.pages.ultra.UltraPage
 import com.yehsung.aingcheck.desktop.pages.ultra.UltraPageDeps
 import com.yehsung.aingcheck.desktop.pages.ultra.UltraPurchaseModel
+import com.yehsung.aingcheck.desktop.pages.work.CakeGiftBannerSource
+import com.yehsung.aingcheck.desktop.pages.work.DuelBannerSource
+import com.yehsung.aingcheck.desktop.pages.work.FeedbackReplyBannerSource
 import com.yehsung.aingcheck.desktop.pages.work.HomeAiEntryRow
+import com.yehsung.aingcheck.desktop.pages.work.HomeBannerSources
 import com.yehsung.aingcheck.desktop.pages.work.HomePage
 import com.yehsung.aingcheck.desktop.pages.work.HomePageDeps
 import com.yehsung.aingcheck.desktop.pages.work.HomeRetroBanner
 import com.yehsung.aingcheck.desktop.pages.work.assembled
+import com.yehsung.aingcheck.desktop.pages.work.withBannerSources
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutNavigator
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutPageHost
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
+import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.feature.desktop.ailimits.AILimitStore
 import com.yehsung.aingcheck.feature.desktop.ultra.UltraPurchase
 import com.yehsung.aingcheck.feature.desktop.ultra.UltraWalletStore
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 울트라 화면 재료(SocialWiring.wallet·purchase + 상점과 **같은** 루비 칸). */
 class UltraPageInputs(
@@ -65,6 +84,11 @@ class PagesWiringDeps(
     val home: ((FlyoutNavigator) -> HomePageDeps)? = null,
     /** 공용 19 회고 배너(조립 때 잇는다). null = 회고 배너 없음(HomeBannerFeed.retroDue 기본 거짓 그대로). */
     val retroBanner: HomeRetroBanner? = null,
+    /**
+     * 홈 배너 나머지(W-14 #5 — 대결 신청·제보 답장·케이크 선물). 조립: [HomeBannerStores] 로 스토어를 묶어 넘긴다. null = 그 배너들 없음.
+     * 대결 문은 `home` 의 duelsEnabled(= DesktopAppConfig.duels) 가 꺼져 있으면 읽지도 부르지도 않는다(withBannerSources).
+     */
+    val homeBanners: HomeBannerSources? = null,
     val pokeList: PokeListDeps? = null,
     val ultra: UltraPageInputs? = null,
     /** 공용 18 울트라 가격(MeStore.ultraPrice — Compose 상태를 읽는 람다, 조립 때 잇는다). null = 값 모름(구매 단추는 상점을 다시 읽기만). */
@@ -97,7 +121,7 @@ class PagesWiring(private val deps: PagesWiringDeps) {
     val homePage: FlyoutPageHost? = deps.home?.let { build ->
         NavBoundPage { nav ->
             HomePage(
-                build(nav).assembled(deps.retroBanner, middle = homeMiddle(nav)),
+                build(nav).assembled(deps.retroBanner, middle = homeMiddle(nav)).withBannerSources(deps.homeBanners, nav),
             )
         }
     }
@@ -118,6 +142,15 @@ class PagesWiring(private val deps: PagesWiringDeps) {
         missions = deps.missions,
         runtimeShown = runtimeShown,
     )
+
+    /**
+     * 로그아웃·계정 전환(조립: `social.addSignedOutListener { pages.onSignedOut() }`). 페이지 쪽 계정 상태를 푼다 —
+     * 울트라 고름(W-14 #5) · 콕 디렉터리(c3 notes). 지은 적 없는 페이지(깃발 꺼짐)는 건너뛴다.
+     */
+    fun onSignedOut() {
+        ultraPage?.purchase?.resetForSignOut()
+        pokeListPage?.model?.directory?.reset()
+    }
 
     private fun ultraPageOf(u: UltraPageInputs): UltraPage {
         val price: () -> Long? = deps.ultraPrice ?: { null }
@@ -148,5 +181,56 @@ internal class NavBoundPage(private val build: (FlyoutNavigator) -> FlyoutPageHo
     @Composable
     override fun Content(nav: FlyoutNavigator, widthDip: Double) {
         pageFor(nav).Content(nav, widthDip)
+    }
+}
+
+/**
+ * 홈 배너 나머지를 스토어에 묶는다(W-14 #5 — 조립 AppGraph 가 부른다). 문마다 맥 판정 줄의 재료 그대로:
+ * 오목 `bannerInvite`(CheckMenuView.swift:142-144) · 체스·테트리스 `visibleIncoming`(176-178 · 216-218) · 답장 `showsFeedbackReplyBanner`
+ * (WorkTimerStore.swift:3112-3134 → 코틀린 MeStore.hasUnseenFeedbackReply) · 케이크 `showsCakeGiftCard`(WorkTimerStoreCakeGift.swift:61-63 = 열린 선물 있음).
+ */
+object HomeBannerStores {
+    /** 케이크 [고르기]가 서버에 다시 물어 시트를 세울 때까지 기다리는 상한(세대가 바뀌면 시트가 영영 안 선다 — 매달리지 않는다). */
+    const val CAKE_REOPEN_WAIT_MS: Long = 10_000L
+
+    fun gomoku(store: GomokuStore, windows: () -> DesktopGameWindows): DuelBannerSource = DuelBannerSource(
+        invite = { store.bannerInvite?.let { DuelInviteBanner(it.id, it.peer.displayName, it.stake, it.expiresAt) } },
+        respond = { id, accept -> store.respond(id, accept) },
+        openWindow = { windows().openGomoku(it) },
+    )
+
+    fun chess(store: ChessStore, windows: () -> DesktopGameWindows): DuelBannerSource = DuelBannerSource(
+        invite = { store.visibleIncoming?.let { DuelInviteBanner(it.id, it.peer.displayName, it.stake, it.expiresAt) } },
+        respond = { id, accept -> store.respond(id, accept) },
+        openWindow = { windows().openChess(it) },
+    )
+
+    fun tetris(store: TetrisDuelStore, windows: () -> DesktopGameWindows): DuelBannerSource = DuelBannerSource(
+        invite = { store.visibleIncoming?.let { DuelInviteBanner(it.id, it.peer.displayName, it.stake.toLong(), it.expiresAt) } },
+        respond = { id, accept -> store.respond(id, accept) },
+        openWindow = { windows().openTetrisDuel(it) },
+    )
+
+    /**
+     * 답장 X = '봤음'(맥 markFeedbackReplyBannerSeen 3142-3147 — 적는 값은 서버가 준 마지막 답장 시각). 코틀린은 공개 문이 제보 화면을
+     * 떠나는 문(feedbackDidDisappear) 하나라 그것을 쓴다 — 홈이 보이는 동안 제보 화면은 닫혀 있어 나머지 효과(보임 끔·초점 지움)는 이미 그 값이다.
+     */
+    fun feedbackReply(me: MeStore): FeedbackReplyBannerSource =
+        FeedbackReplyBannerSource(unseen = { me.hasUnseenFeedbackReply }, markSeen = { me.feedbackDidDisappear() })
+
+    fun cakeGift(me: MeStore, windows: () -> DesktopGameWindows): CakeGiftBannerSource =
+        CakeGiftBannerSource(open = { me.cakeGift != null }, choose = { chooseCakeGift(me, windows) })
+
+    /**
+     * 케이크 [고르기](맥 openCakeGiftWindow 133-137 — 창 먼저, 팝오버 나중). 시트가 없으면 스토어가 서버에 다시 묻고 세운다(reopenCakeGift) —
+     * 서는 동안 플라이아웃이 보이므로 창이 키를 가져간다(CakeGiftWindowHost.userIsLooking). 시트가 서 있으면 창을 앞으로(openCakeGift).
+     */
+    suspend fun chooseCakeGift(me: MeStore, windows: () -> DesktopGameWindows) {
+        if (me.cakeGift == null) return
+        if (me.cakeGiftSheet == null) {
+            me.reopenCakeGift()
+            withTimeoutOrNull(CAKE_REOPEN_WAIT_MS) { snapshotFlow { me.cakeGiftSheet != null || !me.cakeGiftReopening }.first { it } }
+        }
+        windows().openCakeGift()
     }
 }

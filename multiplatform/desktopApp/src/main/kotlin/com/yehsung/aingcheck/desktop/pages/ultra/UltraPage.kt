@@ -136,6 +136,16 @@ class UltraPurchaseModel(
     /** 화면 진입(진입마다 1회 — 플라이아웃을 다시 여는 것은 진입이 아니다). */
     fun onEnter() = reloadShop()
 
+    /**
+     * 로그아웃·계정 전환(W-14 #5): **고른 것**과 안내 한 줄을 푼다. 고름은 그 계정의 것이다 — 남기면 다음 계정이 울트라 화면에
+     * 들어오자마자 [구매하기]가 서 있다(맥 WorkTimerStore.swift:4229-4234 '답장 알림도 계정의 것' 과 같은 근거, 맥 고름 칸은
+     * WorkTimerStore.swift:850 shopSelection). 진행 중 구매는 건드리지 않는다(결과는 서버 값으로 적힌다).
+     */
+    fun resetForSignOut() {
+        _selected.value = false
+        purchase.clearNotice()
+    }
+
     fun canConfirm(): Boolean {
         if (purchase.isPurchasing.value || !_selected.value) return false
         val have = ruby.rubyBalance ?: return false
@@ -194,6 +204,9 @@ class UltraPageDeps(
  */
 class UltraPage(private val deps: UltraPageDeps) : FlyoutPageHost {
     private val entry = PageEntry()
+
+    /** 구매 칸 모델(ultra=false → null). 로그아웃 때 조립이 [UltraPurchaseModel.resetForSignOut] 을 부른다(PagesWiring.onSignedOut). */
+    val purchase: UltraPurchaseModel? get() = deps.purchase
 
     @Composable
     override fun Content(nav: FlyoutNavigator, widthDip: Double) {

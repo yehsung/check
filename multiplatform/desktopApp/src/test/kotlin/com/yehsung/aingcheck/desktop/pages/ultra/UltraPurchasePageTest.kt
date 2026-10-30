@@ -105,6 +105,47 @@ class UltraPurchasePageTest {
     }
 
     @Test
+    fun `로그아웃 — 고른 것·안내 한 줄이 풀린다(음성 대조 — 안 부르면 남는다)`() = runTest {
+        val r = Rig(this, ruby = 100)
+        r.server.on("POST", BUY_PATH, Reply.Json("""{"message":"boom"}""", 500))
+        r.model.select()
+        r.model.confirm()
+        advanceUntilIdle()
+        // 음성 대조: 실패 뒤엔 고름과 안내가 그대로 남는다(다시 누를 수 있게) — 이 상태가 다음 계정에 넘어가면 안 된다.
+        assertTrue(r.model.selected.value, "전제: 실패 뒤 고름이 남아 있어야 리셋을 잰다")
+        assertEquals("구매 실패", r.model.notice.value)
+        r.model.resetForSignOut()
+        assertFalse(r.model.selected.value, "로그아웃 뒤에도 고른 것이 남았다")
+        assertNull(r.model.notice.value, "로그아웃 뒤에도 앞 계정 안내가 남았다")
+        assertFalse(r.model.canConfirm())
+        assertEquals(1, r.server.count("POST", BUY_PATH), "리셋이 요청을 냈다")
+    }
+
+    @Test
+    fun `PagesWiring onSignedOut — 울트라 고름을 푼다 · ultra 꺼짐(페이지 없음)이면 아무 일 없음`() = runTest {
+        val r = Rig(this, ruby = 100)
+        fun wiring(ultra: Boolean) = com.yehsung.aingcheck.desktop.wiring.PagesWiring(
+            com.yehsung.aingcheck.desktop.wiring.PagesWiringDeps(
+                desktopConfig = com.yehsung.aingcheck.feature.desktop.DesktopAppConfig(ultra = ultra),
+                settings = com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsStore(com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore()),
+                wallNow = r.clock::now,
+                ultra = com.yehsung.aingcheck.desktop.wiring.UltraPageInputs(wallet = r.wallet, purchase = r.purchase, ruby = r.rubyCell),
+                ultraPrice = { 30L },
+            ),
+        )
+        val on = wiring(ultra = true)
+        val model = requireNotNull(on.ultraPage?.purchase)
+        model.select()
+        assertTrue(model.selected.value)
+        on.onSignedOut()
+        assertFalse(model.selected.value, "onSignedOut 이 울트라 고름을 풀지 않았다")
+        val off = wiring(ultra = false)
+        assertNull(off.ultraPage)
+        off.onSignedOut()
+        assertEquals(0, r.server.calls.size)
+    }
+
+    @Test
     fun `서버 오류 — 구매 실패 · 잔액 그대로`() = runTest {
         val r = Rig(this, ruby = 100)
         r.server.on("POST", BUY_PATH, Reply.Json("""{"message":"boom"}""", 500))

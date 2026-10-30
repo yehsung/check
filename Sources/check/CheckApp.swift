@@ -111,6 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 근무중 3D 캐릭터 오버레이. 패널은 여기서 1회 생성하고 숨김으로 시작하며, 루트 뷰가
     // store.snapshot.isWorking을 관찰해 표시/숨김을 전환한다(store는 읽기 전용으로만 참조).
     private var overlayController: CheckOverlayController?
+    // 확성기 배너 창(2026-10-30). 배너 스토어의 `current` 를 지켜보다 띄우고 내린다 — 앱 수명 동안 살아 있어야 한다.
+    private var megaphoneBannerController: MegaphoneBannerWindowController?
     // 할 일 한 벌(목록·투명도 설정·보드 창). 오버레이와 **형제**다 — 캐릭터 패널을 키워 보드를 담으면
     // 울트라 프레임 복귀·드래그 위치 영속·클릭통과 기계가 전부 얽힌다.
     // 셋을 낱개가 아니라 한 묶음으로 드는 이유는 TodoBoardWiring.Board 주석 참고(스토어 중복 생성 방지).
@@ -197,6 +199,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireChess()
         // 1:1 테트리스(v0.3.60) — 체스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireTetrisDuel()
+        // 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로. **오버레이 컨트롤러를 만든 뒤에** 잇는다: 배너는 캐릭터 패널 한 칸 위에
+        // 서고, [답장] 이 여는 팝오버와 대결 미룸(위 세 판의 단계)이 이미 배선돼 있어야 첫 확성기가 제자리에 뜬다.
+        wireMegaphoneBanner()
         // 전역 단축키도 **오버레이 컨트롤러를 만든 뒤에** 잇는다 — 단축키로 시작한 근무도 알약으로 시작한 근무와 똑같이
         // 캐릭터가 나와야 하는데, 그 표시 전환이 위에서 배선된다.
         // ★ 진짜 Carbon 등록기는 **여기서만** 만든다. 테스트 프로세스가 실제 전역 키를 잡으면 스위트를 도는 동안
@@ -405,6 +410,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             CheckGomokuWindowController.shared.close()
             self?.overlayController?.clearGomokuInvites()
         }.start()
+    }
+
+    /// 확성기 배너 창(2026-10-30 — `CheckMegaphoneBannerWindow.swift`). 컨트롤러가 배너 스토어의 `current` 와 미룸(대결 단계 · 미니게임 창)을
+    /// 지켜본다. 이 한 줄이 없으면 컴파일도 스토어 시험도 초록이지만 확성기는 **메시지함에서 빠지기만 하고 어디에도 안 뜬다**
+    /// — 그래서 `MegaphoneBannerPanelTests` 의 소스 계약이 이 배선과 그 순서(오버레이 컨트롤러 뒤)를 글자로 되묻는다.
+    private func wireMegaphoneBanner() {
+        let controller = MegaphoneBannerWindowController(store: store)
+        controller.start()
+        megaphoneBannerController = controller
     }
 
     /// 1:1 체스(v0.3.44)의 문들을 잇는다(실행당 1회). **전부 빠져도 컴파일·테스트는 조용히 초록이다** —

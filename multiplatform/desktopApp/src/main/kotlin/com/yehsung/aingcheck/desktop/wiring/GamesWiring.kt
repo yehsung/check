@@ -23,6 +23,7 @@ import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
 import com.yehsung.aingcheck.desktop.windows.cakegift.CakeGiftWindowHost
 import com.yehsung.aingcheck.desktop.windows.gacha.GachaWindowHost
 import com.yehsung.aingcheck.desktop.windows.games.minigame.ComposeGamesWindows
+import com.yehsung.aingcheck.desktop.windows.games.minigame.DuelInviteArrival
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
 import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
@@ -83,6 +84,7 @@ interface GameWindowFactory {
                 onInviteNotice = deps.onInviteNotice,
                 characters = deps.characters,
                 messages = deps.messages,
+                onInviteArrival = deps.onInviteArrival,
             )
 
         override fun gacha(deps: GamesDeps, bounds: WindowBoundsStore): GachaDoor {
@@ -137,6 +139,8 @@ data class GamesDeps(
      * 기본 null = 오목 채팅 ⋯ 메뉴 0(자리표시 없이 숨는다).
      */
     val messages: MessagesStore? = null,
+    /** 구조 신청(id·만료) → 오버레이 말풍선. 조립: `overlay.onDuelInvite`. 글 알림([onInviteNotice])보다 먼저 온다. duels=false 면 오지 않는다. */
+    val onInviteArrival: DuelInviteArrival = { _, _, _, _, _ -> },
 )
 
 data class GamesHandle(

@@ -289,6 +289,8 @@ class ShellWiring(private val deps: ShellDeps) {
             appearance = deps.appearance,
             config = deps.desktopConfig,
             currentBuild = deps.clientIdentity.build,
+            // Store 업데이트 단추는 공용 호스트의 '업데이트 필요' 화면이 직접 그린다(W-14 #9 — 껍데기 덮개 제거).
+            updateDestination = deps.storeUpdateDestination,
             rankingsFace = deps.rankingsFace,
             rubyBalance = deps.rubyBalance,
             openMiniGame = { gameWindows.openGames() },
@@ -302,14 +304,17 @@ class ShellWiring(private val deps: ShellDeps) {
         ),
     )
 
-    /** 상점·미션은 공용 호스트 본문(레일 옆)이 그린다 — 전체 폭 덮개는 Store 업데이트 화면만 남는다(W-13 #9). */
+    /**
+     * 상점·미션은 공용 호스트 본문(레일 옆)이 그린다(W-13 #9). Store 업데이트 덮개도 걷었다(W-14 #9) — '업데이트 필요' 화면은
+     * SharedFlyoutPageHost 가 [SharedPagesDeps.updateDestination] 으로 Store 단추까지 그린다(옛 덮개는 SessionText.updateButton(WINDOWS)=null 이라
+     * 단추를 못 그렸다). update 기본값(목적지 없음)은 덮개를 세우지 않는다.
+     */
     private val pages = ShellPageHost(
         shared = sharedPages,
         shop = null,
         missions = null,
         appearance = deps.appearance,
         characters = { deps.characters.directory },
-        update = ShellUpdatePage(deps.storeUpdateDestination, deps.clientIdentity.build, deps.openUrl),
     )
     private val notifier = ShellNotifier(deps.desktopConfig, deps.balloon, nav, deps.bubble)
     private val updateChecker = DesktopUpdateChecker(

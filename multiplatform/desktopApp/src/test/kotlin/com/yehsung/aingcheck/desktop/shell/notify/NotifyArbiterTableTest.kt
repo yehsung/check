@@ -87,4 +87,17 @@ class NotifyArbiterTableTest {
         assertEquals(TOAST, n.deliver(ShellNotice(NotifyKind.UPDATE, "새 버전", "b"), toast))
         assertEquals(listOf(NotifyKind.UPDATE), b.shown)
     }
+
+    /** W-14 #4: 말풍선 문이 못 받으면(false — 캐릭터 꺼짐·stop 뒤) 오버레이가 없는 것처럼 다시 고른다 — 토스트, 토스트도 꺼졌으면 점. 사건이 사라지지 않는다. */
+    @Test
+    fun refusedBubbleFallsBackToToastOrDotNeverNowhere() {
+        val b = FakeBalloon()
+        val offered = mutableListOf<ShellNotice>()
+        val n = ShellNotifier(DesktopAppConfig(chatToast = false), b, InMemoryFlyoutNavigator(), bubble = { offered += it; false })
+        assertEquals(TOAST, n.deliver(ShellNotice(NotifyKind.UPDATE, "새 버전", "b"), bubbleCtx))
+        assertEquals(listOf(NotifyKind.UPDATE), b.shown, "말풍선을 거절당한 사건이 토스트로 내려가지 않았다")
+        assertEquals(DOT_ONLY, n.deliver(ShellNotice(NotifyKind.MESSAGE, "t", "b", "u"), bubbleCtx), "chatToast 꺼짐 → 거절된 말풍선은 점만")
+        assertEquals(listOf(NotifyKind.UPDATE), b.shown)
+        assertEquals(2, offered.size, "말풍선 문을 먼저 두드리지 않았다")
+    }
 }

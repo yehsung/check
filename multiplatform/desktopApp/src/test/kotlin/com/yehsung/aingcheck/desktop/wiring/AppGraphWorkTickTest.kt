@@ -76,7 +76,9 @@ import kotlin.time.Instant
 
 private class TickPlatform(private val installation: String?) : DesktopPlatform {
     override val paths = object : AppPaths {
-        override val dataDir = "D"; override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
+        // 할 일 목록 파일이 저장소 안 상대 경로에 흘리지 않게 임시 폴더.
+        override val dataDir: String = java.nio.file.Files.createTempDirectory("tick-data").toFile().apply { deleteOnExit() }.path
+        override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
     }
     override val env = object : EnvReader { override fun get(name: String): String? = null }
     override val tokenVault: TokenVault = InMemoryTokenVault()

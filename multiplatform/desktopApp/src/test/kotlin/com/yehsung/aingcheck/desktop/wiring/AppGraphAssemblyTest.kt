@@ -29,6 +29,7 @@ import com.yehsung.aingcheck.desktop.ShutdownSequence
 import com.yehsung.aingcheck.desktop.ShutdownStep
 import com.yehsung.aingcheck.desktop.SilentCharacterSink
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeMeasure
+import com.yehsung.aingcheck.desktop.platform.windows.display.DisplayChangeSource
 import com.yehsung.aingcheck.desktop.shell.flyout.FlyoutScreen
 import com.yehsung.aingcheck.desktop.shell.flyout.SyntheticScreen
 import com.yehsung.aingcheck.feature.desktop.DesktopAiHomes
@@ -71,8 +72,10 @@ import kotlin.time.Instant
 
 /** 부작용 녹음 플랫폼: 트레이 show/remove · 전원 구독 열고 닫기를 한 줄 장부에 적는다. */
 private class RecordingPlatform(val log: MutableList<String>) : DesktopPlatform {
+    // 할 일 목록(TodoWiring)이 dataDir 아래 todos.<계정>.json 을 쓴다 — 저장소 안 상대 경로("D")에 흘리지 않게 임시 폴더.
     override val paths = object : AppPaths {
-        override val dataDir = "D"; override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
+        override val dataDir: String = java.nio.file.Files.createTempDirectory("asm-data").toFile().apply { deleteOnExit() }.path
+        override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
     }
     override val env = object : EnvReader { override fun get(name: String): String? = null }
     override val tokenVault: TokenVault = InMemoryTokenVault()
@@ -113,6 +116,7 @@ private class AssemblyRig(
     val uncaught = mutableListOf<Throwable>()
     val platform = RecordingPlatform(log)
     val port = FakeWindowPort()
+    var displayOpen = 0
     private val engine = MockEngine(
         MockEngineConfig().apply {
             dispatcher = StandardTestDispatcher(test.testScheduler)
@@ -157,6 +161,10 @@ private class AssemblyRig(
         computeDiagnostics = { _, _ -> null },
         runningTests = object : RunningTests { override val isRunningTests: Boolean = true },
         keyValueStore = kv,
+        displayChanges = DisplayChangeSource { listener ->
+            displayOpen++
+            Registration { displayOpen-- }
+        },
     )
     val app: AppWirings = graph.assemble(seams, scope)
 
@@ -181,6 +189,8 @@ class AppGraphAssemblyTest {
             assertTrue(r.app.shell.handle.nav.visible.value, "첫 실행이면 start() 가 플라이아웃을 연다")
             assertTrue("tray.show" in r.log, "트레이 첫 그림은 shell.start 몫(고정 Off 아이콘 없음)")
             assertTrue(r.platform.powerOpen > 0, "업데이트·근무·오버레이가 전원 사건을 듣는다")
+            // W-14 #4: 화면 바뀜 출처는 overlay.start 가 한 번 열고 overlay.stop 이 거둔다.
+            assertEquals(1, r.displayOpen, "오버레이가 화면 바뀜 출처를 듣지 않는다")
 
             val steps = mutableListOf<String>()
             ShutdownSequence.run(r.app.shutdownSteps(), elapsedMillis = { testScheduler.currentTime }) { name ->
@@ -194,6 +204,7 @@ class AppGraphAssemblyTest {
                     AppWirings.STEP_TOKENS_STOP,
                     AppWirings.STEP_REALTIME_SHUTDOWN,
                     AppWirings.STEP_GAMES_STOP,
+                    AppWirings.STEP_TODO_STOP,
                     AppWirings.STEP_OVERLAY_STOP,
                     AppWirings.STEP_WORK_STOP,
                     AppWirings.STEP_OS_STOP,
@@ -209,7 +220,9 @@ class AppGraphAssemblyTest {
             val realtimeAt = r.log.indexOf("step:${AppWirings.STEP_REALTIME_SHUTDOWN}")
             val firstPowerClose = r.log.indexOf("power.close")
             assertTrue(firstPowerClose > realtimeAt, "전원·업데이트 구독은 실시간 shutdown 뒤에 닫힌다: ${r.log}")
-            assertEquals(0, r.platform.powerOpen, "종료 뒤 전원 구독 0")
+            assertEquals(0, r.platform.powerOpen, "종료 뒤 전원 구독 0(할 일 깨어남 구독 포함)")
+            assertEquals(0, r.displayOpen, "종료 뒤 화면 바뀜 구독 0")
+            assertEquals("todo.stop", AppWirings.STEP_TODO_STOP)
             assertTrue(r.hosts.all { it == "assembly.invalid" }, "망은 MockEngine 의 .invalid 만: ${r.hosts}")
             assertTrue(r.uncaught.isEmpty(), "잡히지 않은 예외: ${r.uncaught}")
         } finally {

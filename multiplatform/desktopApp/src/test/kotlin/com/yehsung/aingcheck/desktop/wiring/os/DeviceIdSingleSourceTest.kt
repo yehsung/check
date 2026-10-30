@@ -71,9 +71,10 @@ class DeviceIdSingleSourceTest {
     @Test
     fun work_tick_ai_limits_토큰_업로드가_같은_한_곳을_받는다() {
         val appGraph = code(pkg.resolve("AppGraph.kt"))
-        // WorkDeps(work_tick p_device_id) · TokensWiringDeps(토큰 업로드·ai_limits) — 둘 다 graph.deviceId.
+        // WorkDeps(work_tick p_device_id) · TokensWiringDeps(토큰 업로드·ai_limits) — 둘 다 graph.deviceId(W-14 #7 — 근무도 토큰과 같은 공급자 꼴).
         val workDeps = Regex("""WorkDeps\(([\s\S]*?)\n\s*\),""").find(appGraph)?.groupValues?.get(1).orEmpty()
-        assertTrue(Regex("""deviceId\s*=\s*graph\.deviceId\b""").containsMatchIn(workDeps), "WorkDeps.deviceId = graph.deviceId")
+        assertTrue(Regex("""deviceIdSource\s*=\s*\{\s*graph\.deviceId\s*\}""").containsMatchIn(workDeps), "WorkDeps.deviceIdSource = { graph.deviceId }")
+        assertFalse(Regex("""\bdeviceId\s*=""").containsMatchIn(workDeps), "WorkDeps 에 옛 꼴 deviceId 값이 남았다 — 공급자 한 벌만")
         val tokensDeps = Regex("""TokensWiringDeps\(([\s\S]*?)\n\s*\),""").find(appGraph)?.groupValues?.get(1).orEmpty()
         assertTrue(Regex("""deviceId\s*=\s*\{\s*graph\.deviceId\s*\}""").containsMatchIn(tokensDeps), "TokensWiringDeps.deviceId = { graph.deviceId }")
         val tokens = code(pkg.resolve("wiring/TokensWiring.kt"))

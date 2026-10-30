@@ -265,6 +265,8 @@ object ComposeGamesWindows {
         characters: () -> AppUserCharacterDirectory = { AppUserCharacterDirectory(CharacterArt.portraitIds) },
         /** 대국 채팅 신고·차단(W-14 #1 · Store 11.12) — 메시지 탭 스토어. null 이면 ⋯ 메뉴 0(맥 `safety == nil`). 체스·테트리스 대결은 채팅이 없다. */
         messages: MessagesStore? = null,
+        /** 구조 신청 → 오버레이(GameWindowWiring.DuelInviteArrival — 글 알림보다 먼저). */
+        onInviteArrival: DuelInviteArrival = { _, _, _, _, _ -> },
     ): GamesWindowsHost {
         lateinit var host: GamesWindowsHost
         lateinit var miniShell: ComposeGameWindowShell
@@ -321,7 +323,7 @@ object ComposeGamesWindows {
             storeOpen = GameWindowWiring.openers(gomoku, chess, games.tetris), others = others,
             later = { ms, action -> Timer(ms.toInt()) { action() }.apply { isRepeats = false; start() } },
         )
-        GameWindowWiring.wire(gomoku, chess, games.tetris, host, config, onInvite, onTurnWhileHidden, onInviteNotice)
+        GameWindowWiring.wire(gomoku, chess, games.tetris, host, config, onInvite, onTurnWhileHidden, onInviteNotice, onInviteArrival)
         return host
     }
 

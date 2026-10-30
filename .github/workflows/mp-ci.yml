@@ -329,7 +329,7 @@ jobs:
               return v if isinstance(v, str) else ""
           if d.get("platform") != "windows":
               errs.append(f"platform={d.get('platform')!r}")
-          if not (isinstance(d.get("build"), int) and d["build"] > 0):
+          if not (isinstance(d.get("build"), str) and re.fullmatch(r"[1-9][0-9]*", d["build"])):  # BuildIdentity.BUILD 는 문자열(release_win.py 영수증도 str 비교)
               errs.append(f"build={d.get('build')!r}")
           for k in ("version", "buildTime", "gitSha", "codexHomeSource", "javaVersion"):
               if not text(k):
@@ -523,7 +523,7 @@ jobs:
               return v if isinstance(v, str) else ""
           if d.get("platform") != "windows":
               errs.append(f"platform={d.get('platform')!r}")
-          if not (isinstance(d.get("build"), int) and d["build"] > 0):
+          if not (isinstance(d.get("build"), str) and re.fullmatch(r"[1-9][0-9]*", d["build"])):  # BuildIdentity.BUILD 는 문자열(release_win.py 영수증도 str 비교)
               errs.append(f"build={d.get('build')!r}")
           for k in ("version", "buildTime", "gitSha", "codexHomeSource", "javaVersion"):
               if not text(k):

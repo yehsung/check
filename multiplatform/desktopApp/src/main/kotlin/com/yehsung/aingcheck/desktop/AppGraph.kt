@@ -79,6 +79,20 @@ import com.yehsung.aingcheck.desktop.wiring.TokensWiring
 import com.yehsung.aingcheck.desktop.wiring.TokensWiringDeps
 import com.yehsung.aingcheck.desktop.wiring.WorkDeps
 import com.yehsung.aingcheck.desktop.wiring.WorkWiring
+import com.yehsung.aingcheck.desktop.wiring.HomeBannerStores
+import com.yehsung.aingcheck.desktop.wiring.TodoWiring
+import com.yehsung.aingcheck.desktop.wiring.TodoWiringDeps
+import com.yehsung.aingcheck.desktop.wiring.TokenUsageCollectSource
+import com.yehsung.aingcheck.desktop.todo.DesktopTodoFileSystem
+import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardController
+import com.yehsung.aingcheck.desktop.pages.work.HomeBannerSources
+import com.yehsung.aingcheck.desktop.platform.windows.display.DisplayChangeSource
+import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
+import com.yehsung.aingcheck.core.net.fetchTokenUsageSettings
+import com.yehsung.aingcheck.core.stores.me.loadFeedbackReplyLatest
+import com.yehsung.aingcheck.core.stores.me.weeklyWorkDidChange
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import com.yehsung.aingcheck.feature.desktop.DesktopAiHomes
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
@@ -242,6 +256,8 @@ class AppSeams(
     val networkReadiness: NetworkReadiness? = null,
     /** 오버레이 실물 표면(W5-b4 — Windows 는 OverlaySurfaces.create). null 이면 seams 의 sink·presenter(그리지 않음) 그대로. */
     val overlaySurfaces: ((OverlaySurfacesConfig) -> OverlaySurfaces?)? = null,
+    /** 화면 배치·배율 바뀜(W-14 #4 — Windows 는 Win32DisplayChangeSource: WM_DISPLAYCHANGE·WM_DPICHANGED). null 이면 오버레이가 다시 재지 않는다. */
+    val displayChanges: DisplayChangeSource? = null,
     /** 단축키가 지금 근무를 바꿀 수 없을 때(맥 NSSound.beep). */
     val beep: () -> Unit = {},
 )
@@ -342,13 +358,52 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         gamesStore.miniGames.visibleKinds = com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure.desktopVisible
     }
 
-    /** 설정 '토큰 사용량 수집'. 설정·MeStore 칸이 오기 전에는 꺼 둔다(동의 없는 스캔 0 — 안전 쪽). */
-    @Volatile var tokenUsageCollect: Boolean = false
+    /**
+     * 서버 수집 설정(profiles.token_usage_collect — W-14 #10, 맥 WorkTimerStorePoke.swift:841-856). 계정마다 받은 뒤에만 참 — 받기 전·
+     * 로그아웃은 거짓(동의 없는 스캔 0 — 안전 쪽). 업로드 자체는 여전히 빌드 깃발 tokenUpload(기본 꺼짐)가 막는다.
+     */
+    val tokenUsageCollectSource = TokenUsageCollectSource(
+        accountIds = sessionStore.sessionFlow.map { it?.userID },
+        fetchCollects = { sessionContext.withSessionRetry { s -> service.fetchTokenUsageSettings(s.accessToken, s.userID) }.collects },
+    )
+    val tokenUsageCollect: Boolean get() = tokenUsageCollectSource.collects
 
     lateinit var work: WorkWiring
         private set
     lateinit var social: SocialWiring
         private set
+
+    /**
+     * 할 일(W-14 #3 — 맥 TodoListStore·TodoSync): 계정별 파일 + 서버 맞추기. 오버레이 보드가 [TodoWiring.list] 를 그리므로 오버레이보다
+     * 먼저 짓는다. 계정 전환 직전 보드의 되돌리기 창을 앞 계정 파일에 확정한다(beforeAccountSwitch — 람다라 표면이 늦게 서도 된다).
+     */
+    val todo = TodoWiring(
+        TodoWiringDeps(
+            dataDir = Path.of(graph.platform.paths.dataDir),
+            transport = TodoWiring.sessionTransport(sessionContext),
+            accountIds = sessionStore.sessionFlow.map { it?.userID },
+            currentUserID = { sessionStore.session?.userID },
+            clock = { graph.clock.now().toEpochMilliseconds() / 1000.0 },
+            files = DesktopTodoFileSystem(
+                onQuarantine = { q -> System.err.println("todo quarantine ${q.backupPath} bytes=${q.bytes} preserved=${q.preserved}") },
+            ),
+            power = graph.platform.power,
+            wakeNetworkReady = seams.networkReadiness?.let { r -> suspend { r.awaitReady() } },
+            beforeAccountSwitch = { (overlaySurfaces?.board as? TodoBoardController)?.resetForAccountSwitch() },
+        ),
+        scope,
+    )
+
+    /** 실물 오버레이 표면(Windows). 할 일 보드는 [todo] 의 목록을 그리고, 보드를 열면 서버 맞추기를 한 번 청한다(맥 boardOpened). */
+    private val overlaySurfaces: OverlaySurfaces? = seams.overlaySurfaces?.invoke(
+        OverlaySurfacesConfig(
+            keyValueStore = kv,
+            todoStore = todo.list,
+            boardEnabled = { desktopSettings.todoBoard.value.enabled },
+            onBoardOpened = { scope.launch { todo.onBoardOpened() } },
+            initialCharacterId = me.equippedServerID,
+        ),
+    )
 
     val overlay = OverlayWiring(
         OverlayWiringDeps(
@@ -369,16 +424,14 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             todoBoard = desktopSettings.todoBoard,
             onBoardOpacityChanged = desktopSettings::setTodoBoardOpacity,
             weeklyRubyGrants = OverlayWiring.weeklyRubyGrants(snapshotFlow { me.weeklyGrantSerial to me.weeklyGrantNotice?.ruby }),
+            // W-14 #4: 팀 출근 · 새 버전 · 화면 바뀜. work·shell 은 오버레이 뒤에 지어지므로 차가운 흐름으로 감싼다(overlay.start 때 읽는다).
+            teamStatuses = flow { emitAll(work.teamStatuses) },
+            selfUserId = { sessionStore.session?.userID },
+            updateVersions = OverlayWiring.updateVersions(flow { emitAll(shell.handle.updateChecker.state) }),
+            displayChanges = seams.displayChanges,
         ),
-        // 실물 표면이 있으면 sink·presenter·board 를 표면 것으로 바꾼다(seams 값은 Windows 밖 대체값). 할 일 저장소는 아직 없다(보드 없음).
-        seams.overlaySurfaces?.invoke(
-            OverlaySurfacesConfig(
-                keyValueStore = kv,
-                todoStore = null,
-                boardEnabled = { desktopSettings.todoBoard.value.enabled },
-                initialCharacterId = me.equippedServerID,
-            ),
-        ),
+        // 실물 표면이 있으면 sink·presenter·board 를 표면 것으로 바꾼다(seams 값은 Windows 밖 대체값).
+        overlaySurfaces,
     )
 
     /** 미션 화면이 보이는가(지갑 박자 — 소셜이 껍데기보다 먼저 지어지므로 껍데기 생성 뒤 갈아 끼운다). */
@@ -393,7 +446,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
                 sessionStore = sessionStore,
                 kv = kv,
                 clock = graph.clock,
-                deviceId = graph.deviceId,
+                // W-14 #7: 조립 때 몇 번까지 묻는 공급자(레지스트리·파일 잠깐 잠김을 넘긴다 — 토큰 deviceId 와 같은 꼴).
+                deviceIdSource = { graph.deviceId },
                 idle = graph.platform.idle,
                 power = graph.platform.power,
                 session = graph.platform.session,
@@ -405,6 +459,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
                 consoleSessionUsable = seams.consoleSessionUsable,
                 // 빠른 주기 3항(근무 || 플라이아웃 열림 || 큐 대기) — 틱 루프는 work.start 뒤에만 부른다(shell 은 그때 서 있다).
                 menuPresented = { shell.handle.nav.visible.value },
+                // 주간 근무 보상 몫(맥 근무 종료 → weeklyWorkDidChange) — me 는 이 init 보다 먼저 선다.
+                onWorkEndedWeekly = { me.weeklyWorkDidChange() },
             ),
         )
         social = SocialWiring(
@@ -492,6 +548,15 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
                 seen = { me.markRetroBannerSeen() },
                 displayed = { me.markRetroBannerDisplayed() },
             ),
+            // W-14 #5 홈 배너 피드: 대결 신청·제보 답장·케이크 선물. 게임 창 문은 람다라 games 가 늦게 서도 된다(duels 꺼짐은 HomePageDeps 가 거른다).
+            homeBanners = HomeBannerSources(
+                gomoku = HomeBannerStores.gomoku(gomoku) { lateGames?.handle?.windows ?: DesktopGameWindows.None },
+                chess = HomeBannerStores.chess(chess) { lateGames?.handle?.windows ?: DesktopGameWindows.None },
+                tetris = HomeBannerStores.tetris(tetris) { lateGames?.handle?.windows ?: DesktopGameWindows.None },
+                feedbackReply = HomeBannerStores.feedbackReply(me),
+                cakeGift = HomeBannerStores.cakeGift(me) { lateGames?.handle?.windows ?: DesktopGameWindows.None },
+                launch = { block -> scope.launch { block() } },
+            ),
             pokeList = PokeListDeps(
                 host = sessionStore,
                 config = graph.desktopConfig,
@@ -524,8 +589,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
 
     init {
         pokeDirectoryReload = { pages.pokeListPage?.model?.directory?.load() }
-        // 로그아웃·계정 전환: 콕 디렉터리 비우기(c3 notes).
-        social.addSignedOutListener { pages.pokeListPage?.model?.directory?.reset() }
+        // 로그아웃·계정 전환: 콕 디렉터리 비우기(c3 notes) + 울트라 고른 것 풀기(W-14 #5).
+        social.addSignedOutListener { pages.onSignedOut() }
     }
 
     /** 트레이·메뉴가 읽는 근무 값(조정 ⑩ — DesktopWorkSnapshot 을 값으로 옮긴다, 판정 없음). 근무 중이면 30초마다 경과를 새로 적는다. */
@@ -577,6 +642,11 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             onUltraPageLeft = { social.onUltraPageLeft() },
             routePages = pages.routePages,
             firstRun = pages.firstRun,
+            // W-14 #4: 셸 사건 → 오버레이 말풍선 한 문. 오버레이가 보이거나 엿볼 수 있을 때만 말풍선을 고른다(못 받으면 토스트로 내려간다).
+            bubble = overlay.shellBubble,
+            notifyContext = {
+                ShellDeps.DEFAULT_NOTIFY_CONTEXT.copy(overlayVisible = overlay.availability.value.let { it.visibleNow || it.canPeek })
+            },
         ),
     )
 
@@ -602,6 +672,10 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             boardMe = { overlay.boardMe(me.displayName, me.equippedServerID) },
             onInviteNotice = { shell.handle.notifyDuelInvite(it) },
             characters = { shell.handle.characters.directory },
+            // W-14 #1: 대국 채팅 신고·차단 — 메시지 탭과 한 스토어.
+            messages = messages,
+            // W-14 #4: 구조 신청 → 오버레이(글 알림 onInviteNotice 보다 먼저 온다 — 같은 신청의 대체 말풍선을 하나로 묶는다).
+            onInviteArrival = { g, id, peer, stake, exp -> overlay.onDuelInvite(g, id, peer, stake, exp) },
         ),
     ).also { lateGames = it }
 
@@ -631,6 +705,9 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
      */
     fun start() {
         launchJob = scope.launch { sessionStore.launch() }
+        // 할 일: 계정 파일 · 깨어남(power WAKE) · 5분 주기 — 오버레이보다 먼저(보드가 첫 그림에 목록을 읽는다).
+        todo.start()
+        tokenUsageCollectSource.start(scope)
         workStatusJob = scope.launch {
             work.store.snapshot.collectLatest { s ->
                 while (true) {
@@ -663,6 +740,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             nav.visible.dropWhile { !it }.distinctUntilChanged().collect { open ->
                 if (open) {
                     tokens.onFlyoutOpened()
+                    // 제보 답장 시각(맥 WorkTimerStore.swift:3081-3083 refreshFeedbackReplyBadge — 부르는 자리는 팝오버를 여는 순간 하나뿐).
+                    scope.launch { me.loadFeedbackReplyLatest() }
                     // 맥은 열 때 회고가 아직 없으면 기록을 조용히 받아 온다 — 월요일 첫 열림에 배너가 뜨게.
                     if (!me.recordsState.hasLoaded) scope.launch { me.loadRecords() }
                     me.evaluateRetroBanner(isInsightsPanelVisible = recordsShown(), isMenuPresented = true)
@@ -691,15 +770,20 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
 
     /**
      * W-6 #6 종료 순서 한 벌(이름은 시험이 녹음한다): 근무 마무리(beginTermination → QuitFinisher 3초, UI 줄기) → 토큰 캐시 저장 →
-     * 토큰 루프 내림 → 실시간 shutdown(social) → 게임 구독 걷기 → 오버레이 내림 → 근무 루프·OS 구독 내림 → 단축키 등록 풀기(os) → 껍데기(구독 취소 → 업데이트
+     * 토큰 루프 내림 → 실시간 shutdown(social) → 게임 구독 걷기 → 할 일 내림 → 오버레이 내림 → 근무 루프·OS 구독 내림 → 단축키 등록 풀기(os) → 껍데기(구독 취소 → 업데이트
      * 감시·전원 Registration close → nav.hide → **tray.remove**) → kv flush(W3-d — 앞 단계들이 kv 에 쓴 뒤). 플랫폼 닫기는 Main 몫(이 뒤).
      */
     fun shutdownSteps(): List<ShutdownStep> = listOf(
         ShutdownStep.Bounded(STEP_WORK_FINISH, WORK_FINISH_MILLIS) { withContext(seams.mainDispatcher) { work.finishForQuit() } },
         ShutdownStep.Bounded(STEP_TOKENS_PERSIST, TOKENS_PERSIST_MILLIS) { tokens.finishForQuit() },
-        ShutdownStep.Always(STEP_TOKENS_STOP) { tokens.stop() },
+        ShutdownStep.Always(STEP_TOKENS_STOP) {
+            tokens.stop()
+            tokenUsageCollectSource.stop()
+        },
         ShutdownStep.Always(STEP_REALTIME_SHUTDOWN) { social.shutdown() },
         ShutdownStep.Always(STEP_GAMES_STOP) { games.stop() },
+        // 할 일: 계정 흐름·깨어남 구독·맞추기 타이머·진행 중 요청 거두기(파일은 고칠 때마다 이미 쓰였다) — 오버레이 보드보다 먼저, kv flush 앞.
+        ShutdownStep.Always(STEP_TODO_STOP) { todo.close() },
         ShutdownStep.Always(STEP_OVERLAY_STOP) { overlay.stop() },
         ShutdownStep.Always(STEP_WORK_STOP) {
             workStatusJob?.cancel()
@@ -721,6 +805,7 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         const val STEP_TOKENS_STOP = "tokens.stop"
         const val STEP_REALTIME_SHUTDOWN = "social.shutdown"
         const val STEP_GAMES_STOP = "games.stop"
+        const val STEP_TODO_STOP = TodoWiring.STEP_TODO_STOP
         const val STEP_OVERLAY_STOP = "overlay.stop"
         const val STEP_WORK_STOP = "work.stop"
         const val STEP_SHELL_STOP = "shell.stop"

@@ -8,6 +8,7 @@
 //   트레이 발표자·InstanceActivation·트레이 클릭·업데이트 감시는 shell.start 하나가 한다 — 고정 Off 아이콘·빈 신호 듣기는 두지 않는다).
 package com.yehsung.aingcheck.desktop
 
+import com.yehsung.aingcheck.desktop.platform.windows.display.Win32DisplayChangeSource
 import com.sun.jna.platform.win32.User32
 import com.yehsung.aingcheck.core.foundation.platform.RunningTests
 import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfaces
@@ -253,6 +254,8 @@ internal fun windowsSeams(platform: WindowsPlatform, graph: AppGraph, events: Ex
         networkReadiness = NetworkReadiness.forHost(HostOs.isWindows()),
         consoleSessionUsable = platform::consoleSessionUsable,
         overlaySurfaces = { config -> OverlaySurfaces.create(platform, config) },
+        // WM_DISPLAYCHANGE·WM_DPICHANGED → 오버레이 자리 다시 재기(W-14 #4 — 숨은 메시지 창 한 벌에 처리기만 더한다).
+        displayChanges = Win32DisplayChangeSource.on(platform.messageThread),
         beep = { runCatching { Toolkit.getDefaultToolkit().beep() } },
     )
 }

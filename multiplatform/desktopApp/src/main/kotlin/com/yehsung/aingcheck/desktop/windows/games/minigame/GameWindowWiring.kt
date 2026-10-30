@@ -5,6 +5,8 @@ package com.yehsung.aingcheck.desktop.windows.games.minigame
 import com.yehsung.aingcheck.core.stores.chess.ChessStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
+import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
 import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
@@ -20,6 +22,12 @@ import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
  * - 테트리스 대결 rankingEnabled = true(CheckApp.swift:409 ① 순위의 **주 스위치** — 스토어는 폰과 공용이라 기본 꺼짐, 없으면 순위 탭은 영영 로딩.
  *   맥 :430 · 폰 PhoneAppModel 도 무조건 켠다. 관전 스위치와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다)
  */
+/**
+ * 대결 신청 한 건의 구조 정보(id·만료) — 오버레이 말풍선(overlay.onDuelInvite)이 받는다. 맥 CheckApp.swift:380-387 onInviteArrived 가
+ * 구조 신청을 오버레이로 먼저 넘기고 글 알림은 그 뒤다 — 오버레이가 같은 글을 '이미 받은 신청'으로 묶어 대체 말풍선을 하나 더 세우지 않게.
+ */
+typealias DuelInviteArrival = (game: DuelGame, id: String, peerName: String, stake: Int, expiresAt: SwiftDate) -> Unit
+
 object GameWindowWiring {
     fun wire(
         gomoku: GomokuStore,
@@ -30,6 +38,8 @@ object GameWindowWiring {
         onInvite: (GameWindowKind) -> Unit = {},
         onTurnWhileHidden: (GameWindowKind) -> Unit = {},
         onInviteNotice: (DuelInviteNotice) -> Unit = {},
+        /** 구조 신청(오버레이 몫) — **onInviteNotice 보다 먼저** 부른다(짝짓기 열쇠: 셸 글이 먼저 오면 대체 말풍선이 하나 더 뜬다). */
+        onInviteArrival: DuelInviteArrival = { _, _, _, _, _ -> },
     ) {
         val duels = config.toAppConfig().duelsEnabled
 
@@ -39,6 +49,7 @@ object GameWindowWiring {
         gomoku.onInviteArrived = { invite ->
             if (duels) {
                 onInvite(GameWindowKind.Gomoku)
+                onInviteArrival(DuelGame.GOMOKU, invite.id, invite.peer.displayName, invite.stake.toInt(), invite.expiresAt)
                 onInviteNotice(DuelInviteNotice(GameWindowKind.Gomoku, invite.peer.displayName, invite.stake))
             }
         }
@@ -51,6 +62,7 @@ object GameWindowWiring {
         chess.onInviteArrived = { invite ->
             if (duels) {
                 onInvite(GameWindowKind.Chess)
+                onInviteArrival(DuelGame.CHESS, invite.id, invite.peer.displayName, invite.stake.toInt(), invite.expiresAt)
                 onInviteNotice(DuelInviteNotice(GameWindowKind.Chess, invite.peer.displayName, invite.stake))
             }
         }
@@ -63,6 +75,7 @@ object GameWindowWiring {
         tetris.onInviteArrived = { invite ->
             if (duels) {
                 onInvite(GameWindowKind.TetrisDuel)
+                onInviteArrival(DuelGame.TETRIS, invite.id, invite.peer.displayName, invite.stake, invite.expiresAt)
                 onInviteNotice(DuelInviteNotice(GameWindowKind.TetrisDuel, invite.peer.displayName, invite.stake.toLong()))
             }
         }

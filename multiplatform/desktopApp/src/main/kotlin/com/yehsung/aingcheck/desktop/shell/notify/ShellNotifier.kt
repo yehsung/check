@@ -46,9 +46,15 @@ class ShellNotifier(
     fun deliver(notice: ShellNotice, ctx: NotifyContext): NotifySurface? {
         if (!enabled(notice.kind)) return null
         val effective = ctx.copy(toastEnabled = ctx.toastEnabled && toastAllowed(notice.kind))
-        val surface = arbiter.surface(notice.kind, effective)
+        val chosen = arbiter.surface(notice.kind, effective)
+        // 오버레이 문이 못 받으면(꺼짐·잠김·큐 가득) 오버레이가 없는 것처럼 다시 고른다(토스트 → 점) — 사건 하나가 아무 데도 안 뜨는 일 0(D §10-2 한 표면).
+        val surface = if (chosen == NotifySurface.BUBBLE && !bubble(notice)) {
+            arbiter.surface(notice.kind, effective.copy(overlayVisible = false))
+        } else {
+            chosen
+        }
         when (surface) {
-            NotifySurface.BUBBLE -> bubble(notice)
+            NotifySurface.BUBBLE -> Unit
             NotifySurface.TOAST -> {
                 balloonTargets[notice.kind] = routeFor(notice)
                 balloon.showBalloon(notice.title, notice.body, notice.kind, respectQuietTime = true)

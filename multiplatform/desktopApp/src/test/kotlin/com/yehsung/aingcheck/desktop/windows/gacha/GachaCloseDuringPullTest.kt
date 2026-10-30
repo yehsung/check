@@ -41,7 +41,8 @@ class GachaCloseDuringPullTest {
         runBlocking { pull.await() }
         waitUntil("왕복이 끝난다") { !w.store.isPulling }
 
-        // 닫힌 창의 기계를 여러 프레임 그려도 손잡이 자동 회전 · [한 번 더] 가 서버로 가지 않는다(★①).
+        // 닫힌 창의 기계를 여러 프레임 그려도 저절로 뽑기가 나가지 않는다. 이 기계엔 손잡이 예약이 없어 isActive 배선과 무관하다 —
+        // '손잡이를 누르고 바로 닫기'(★① 배선)는 GachaKnobThenCloseTest 가 실제 누름으로 잰다.
         DesktopSnapshots.render(420, 552, frames = 30) {
             WithRepoArt { GachaWindowContent(w.store, c.state, onClose = c::close, dark = false) }
         }

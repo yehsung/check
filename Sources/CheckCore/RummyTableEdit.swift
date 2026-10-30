@@ -18,8 +18,15 @@ import Foundation
 //    반대 끝 곁 묶음까지 끌어오지 않는다). 첫 등록 전(R-12)엔 시작 판 타일이 든 묶음과는 붙지 않는다(붙으면
 //    initial_table_touched 로 낼 수 없는 판이 저절로 된다). 둘 다 3판 검증에서 고쳤다(편집기 `attachAll`).
 // ③ 알맞은 자리에 자동 삽입(`insertionIndex`): 묶음 위에 놓으면 결과가 유효(R-04~R-06) > 이어질 수 있는 모양이 되는
-//    자리(이 순서 그대로 이어지는 자리 — 유효성만은 순서를 안 본다)에 넣는다. 그룹 모양(숫자 타일이 한 숫자)이면 오른끝(기존 타일이 안 움직인다 · 그룹은 순서가 뜻이 없다).
+//    자리(이 순서 그대로 이어지는 자리 — 유효성만은 순서를 안 본다)에 넣는다. 그룹 모양(숫자 타일이 한 숫자)이면 **R-09 표시 순서
+//    자리**(색 A→D, 조커 뒤 — 0.3.70: 옛 '오른끝'은 확정 뒤 서버 표시 순서로 바뀌며 타일이 튀었다).
 //    런은 그런 자리 중 놓은 자리에 가장 가까운 곳(같으면 오른쪽). 맞는 자리가 없으면 놓은 자리 그대로(무효 표시는 판정 몫).
+//    그리고 블록을 받은 묶음이 **맞는 세트가 되면 R-09 표시 순서로 늘어놓는다**(편집기 몫 — 런의 조커도 확정 뒤 자리로): 확정 전후·
+//    남이 보는 작업 판이 같은 순서다. 기존 타일 하나(받은 묶음의 첫 남은 타일)가 제자리고 나머지는 밀리며 미끄러진다.
+// ④ 늘어난 묶음 앉히기(`settle`, 0.3.70 — 편집기 전용, 자동 배치 `place` 와 무관): 그 자리가 막히면 늘어난 장수만큼 안에서 옆으로
+//    (왼쪽 먼저) 밀고, 그래도 막히면 만지던 묶음은 제자리에 두고 막은 이웃을 가장 가까운 빈자리로 비켜 놓는다. 결과 점은 작업
+//    배치(`layout`)로 나가므로 모든 기기가 같은 판을 본다(남은 다시 계산하지 않는다).
+// ⑤ 길게 눌러 집기(`pickRange`, 0.3.70): 판 묶음 타일을 길게 누르면 누른 타일에서 **가까운 끝까지**(⌥ 없이 쪼개기).
 
 /// 붙는 쪽. 대상 묶음 기준이다.
 package enum RummyAttachSide: String, Hashable, Sendable {
@@ -169,13 +176,66 @@ package enum RummyTableEdit {
         }
         guard !fits.isEmpty else { return RummyInsertion(index: preferred, fits: false) }
         let numbers = Set((meld + block).compactMap(\.number))
-        if numbers.count == 1, fits.contains(meld.count) {
-            return RummyInsertion(index: meld.count, fits: true)  // 그룹 모양: 오른끝
-        }
+        // 그룹 모양: R-09 표시 순서 자리(블록 첫 장보다 뒤에 올 첫 타일 앞 — 색 A→D, 조커 맨 뒤). 놓은 자리는 안 본다.
+        let wanted = numbers.count == 1 ? (meld.firstIndex { block[0] < $0 } ?? meld.count) : preferred
         let best = fits.min { a, b in
-            let da = abs(a - preferred), db = abs(b - preferred)
+            let da = abs(a - wanted), db = abs(b - wanted)
             return da != db ? da < db : a > b
         }!
         return RummyInsertion(index: best, fits: true)
+    }
+
+    /// ⑤ `count` 장 묶음에서 `index` 번째 타일을 길게 눌러 집을 구간 — 누른 타일에서 **가까운 끝까지**.
+    ///   · 오른쪽 절반(타일 가운데가 묶음 가운데보다 오른쪽) → 그 타일부터 끝까지.
+    ///   · 왼쪽 절반 → 처음부터 그 타일까지.
+    ///   · 정확히 가운데(홀수 장의 가운데 타일) → 묶음 전체(두 끝이 같은 거리 — 어느 쪽도 고를 까닭이 없다).
+    /// 끝 타일을 누르면 그 한 장이다(한 장 끌기와 같다). 묶음 통째는 손잡이가 맡는다. 반 칸 단위 정수 비교라 경계가 흔들리지 않는다.
+    package static func pickRange(count: Int, pressed index: Int) -> Range<Int> {
+        guard count > 0, (0..<count).contains(index) else { return 0..<0 }
+        let center = 2 * index + 1  // 누른 타일 가운데 × 2 (묶음 가운데 × 2 = count)
+        if center > count { return index..<count }
+        if center < count { return 0..<(index + 1) }
+        return 0..<count
+    }
+
+    /// ④ 늘어난 묶음 `index` 를 판에 앉힌 뒤 모든 묶음의 점. `frames[index]` = 바라는 자리(남은 타일 제자리), `grown` = 이번에
+    /// 늘어난 장수(옆으로 밀 수 있는 거리 = 그 장수 × 타일폭 — 민 뒤에도 원래 타일 자리를 덮어 묶음이 멀리 튀지 않는다).
+    ///   1. 판 안이고 안 겹치면 그대로.
+    ///   2. 1 단위씩 넓혀 가며 옆으로 — 같은 거리면 **왼쪽 먼저**(오른쪽이 막혀 왼쪽으로 늘어나는 것).
+    ///   3. 그래도 막히면 만지던 묶음은 제자리(판 밖으로 나가면 안으로만 당긴다)에 두고, 그와 겹치는 이웃을 번호 순으로 저마다
+    ///      가장 가까운 빈자리(`RummyTableLayout.freeSpot` — 최소 거리)로 비켜 놓는다. 빈자리가 없는 이웃은 그대로(판이 꽉 찼다).
+    /// 정수만 · 순서 고정이라 결정적이다. 편집기 전용(`place` 계약과 무관) — 결과는 작업 배치로 나간다.
+    package static func settle(_ frames: [RummyRect], index: Int, grown: Int) -> [RummyPoint] {
+        var points = frames.map(\.origin)
+        guard frames.indices.contains(index) else { return points }
+        func frame(_ j: Int) -> RummyRect {
+            RummyRect(x: points[j].x, y: points[j].y, width: frames[j].width, height: frames[j].height)
+        }
+        func others(_ skip: Int) -> [RummyRect] { frames.indices.filter { $0 != skip }.map(frame) }
+        let mine = frames[index]
+        let obstacles = others(index)
+        if RummyTableLayout.isClear(mine, among: obstacles) { return points }
+        let reach = max(grown, 0) * RummyTableLayout.tileWidth
+        if reach > 0 {
+            for step in 1...reach {
+                for x in [mine.x - step, mine.x + step] {
+                    let moved = RummyRect(x: x, y: mine.y, width: mine.width, height: mine.height)
+                    if RummyTableLayout.isClear(moved, among: obstacles) {
+                        points[index] = moved.origin
+                        return points
+                    }
+                }
+            }
+        }
+        let tiles = mine.width / RummyTableLayout.tileWidth
+        points[index] = RummyTableLayout.clampInside(mine.origin, tiles: tiles)
+        let placed = frame(index)
+        for j in frames.indices where j != index && RummyTableLayout.overlaps(frame(j), placed) {
+            if let spot = RummyTableLayout.freeSpot(points[j], tiles: frames[j].width / RummyTableLayout.tileWidth,
+                                                    among: others(j)) {
+                points[j] = spot
+            }
+        }
+        return points
     }
 }

@@ -185,9 +185,10 @@ enum RummyText {
          ["B10", "C10", "D10"]),
         ("조커", "아잉이 타일은 어떤 숫자·색으로도 쓰여요. 판의 조커를 가져오면 이번 차례에 판에 다시 써야 해요.",
          ["A5", "J", "A7"]),
-        ("판 조작", "첫 등록 뒤엔 판의 묶음을 나누고 합치고 옮겨도 돼요. 묶음 끝 가까이 놓으면 붙고, 묶음 위에 놓으면 "
-            + "맞는 자리로 들어가요. 끝날 때 모든 묶음이 맞고 내 타일을 1장 이상 냈어야 해요. 판에 있던 타일은 랙으로 "
-            + "가져올 수 없어요.", []),
+        ("판 조작", "첫 등록 뒤엔 판의 묶음을 나누고 합치고 옮겨도 돼요. 끝날 때 모든 묶음이 맞고 내 타일을 1장 이상 "
+            + "냈어야 해요. 판에 있던 타일은 랙으로 가져올 수 없어요.", []),
+        ("조작", "끌면 한 장 · 0.5초 길게 눌러 끌면 덩어리(판에선 누른 타일에서 가까운 끝까지) · 묶음 왼쪽 손잡이로 묶음째 "
+            + "옮기기 · 묶음 끝 가까이 놓으면 붙기 · 묶음 위에 놓으면 맞는 자리에 끼우기 · 묶음 가운데를 빼면 둘로 나뉘어요.", []),
         ("시간 60초", "시간이 지나면 놓던 판이 맞으면 그대로 확정돼요. 틀렸거나 아무것도 안 놓았으면 되돌리고 1장 뽑아요. "
             + "시간 초과가 3번 이어지면 기권이에요.", []),
         ("끝과 점수", "누군가 랙을 비우면 끝나요(더미가 비고 모두 넘겨도 끝). 남은 타일 합만큼 잃고(아잉이 30점), "
@@ -339,12 +340,16 @@ struct RummyPanel: View {
         let scene = scene
         ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: RummyWindowLayout.headerSpacing) {
-                RummyHeader(scene: scene, onRules: { store.rulesShown = true },
-                            onForfeit: { confirmLeave = true },
-                            reactionButton: scene.match == nil ? nil : RummyReactionButton(store: store))
-                    .frame(height: RummyWindowLayout.headerHeight)
+                // 0.3.70: 판 화면은 머리글을 판의 위 띠로 옮긴다(판 칸이 머리글 높이만큼 커진다 — `matchBodyHeight`).
+                if !Self.isMatchScreen(scene) {
+                    RummyHeader(scene: scene, onRules: { store.rulesShown = true },
+                                onForfeit: { confirmLeave = true },
+                                reactionButton: scene.match == nil ? nil : RummyReactionButton(store: store))
+                        .frame(height: RummyWindowLayout.headerHeight)
+                }
                 content(scene)
-                    .frame(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.bodyHeight,
+                    .frame(width: RummyWindowLayout.innerWidth,
+                           height: Self.isMatchScreen(scene) ? RummyWindowLayout.matchBodyHeight : RummyWindowLayout.bodyHeight,
                            alignment: .topLeading)
             }
             .padding(RummyWindowLayout.contentPadding)
@@ -384,6 +389,11 @@ struct RummyPanel: View {
         return store.reactionFeed.map(RummyReactionBubble.init)
     }
 
+    /// 판 화면(머리글 없이 본문이 창을 채운다)인가 — `content` 가 `RummyMatchView` 를 그리는 조건과 같다.
+    static func isMatchScreen(_ scene: RummyScene) -> Bool {
+        scene.phase == .playing && scene.match != nil
+    }
+
     private func lobby(_ scene: RummyScene) -> RummyLobbyView {
         RummyLobbyView(store: store, scene: scene, tab: activeTab, onSelectTab: { lobbyTab = $0 },
                        onLeaveRoom: { confirmLeave = true },
@@ -401,7 +411,7 @@ struct RummyPanel: View {
             if let match = scene.match {
                 RummyMatchView(store: store, scene: scene, match: match, me: me(),
                                clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
-                               previewDrag: previewDrag)
+                               previewDrag: previewDrag, onForfeit: { confirmLeave = true })
             } else {
                 lobby(scene)
             }

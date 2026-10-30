@@ -171,6 +171,28 @@ struct V0370RummyIntegrationRenderTests {
                         name: "group-insert-confirmed")
     }
 
+    @Test("남은 토막 확정 전후(0.3.70 검증): A3 J A5 A6 에서 A3 을 빼면 남은 토막이 바로 표시 순서 A5 A6 J — 놓은 판 = 확정 뒤 판")
+    func leftoverRunBeforeAfterConfirm() throws {
+        // 없으면: 남은 토막이 J A5 A6 그대로 남았다가 확정 뒤 판에서 조커가 왼끝 → 오른끝으로 튀는 결함이 초록이 된다(창 전체 렌더).
+        let table = iTable + [["A3", "J", "A5", "A6"]]
+        let layout = iLayout + [[400, 220]]
+        var editor = iEditor(table: table, layout: layout, rack: iRack, initialDone: true)
+        _ = try iRender(editor, table: table, layout: layout, cues: RummyCuePreview(turnGlow: .steady), name: "leftover-before")
+        let a3 = try #require(editor.melds[6].first { $0.face.text == "A3" }?.id)
+        let moved = editor.moveBlock([a3], to: .newMeldAt(RummyPoint(x: 640, y: 400)))
+        #expect(moved)
+        #expect(editor.melds[6].map(\.face.text) == ["A5", "A6", "J"])
+        // A5 · A6 은 제자리(480 · 520), 조커만 오른끝(560)으로.
+        #expect(editor.points[6] == RummyPoint(x: 480, y: 220))
+        _ = try iRender(editor, table: table, layout: layout, cues: RummyCuePreview(turnGlow: .steady), name: "leftover-dropped")
+        let confirmed = RummyTurnEditor(table: editor.submissionTable, rack: editor.rack.map(\.face), initialDone: true,
+                                        tableLayout: editor.submissionLayout)
+        #expect(confirmed.melds.map { $0.map(\.face) } == editor.melds.map { $0.map(\.face) } && confirmed.points == editor.points)
+        _ = try iRender(confirmed, table: editor.submissionTable.map { $0.map(\.text) },
+                        layout: editor.submissionLayout.points.map { p in [p?.x ?? 0, p?.y ?? 0] },
+                        cues: RummyCuePreview(turnGlow: nil), name: "leftover-confirmed")
+    }
+
     @Test("첫 등록 전: 랙 묶음 띠 + '랙 묶음 a + 판 b = N / 30' 꼬리표 · 정렬 뒤 뽑은 타일 빛남 · 규칙 창 '조작'")
     func rackCuesAndRulesOnNewWindow() throws {
         // 없으면: 새 창 배치(P)에서 랙 묶음 띠·꼬리표·뽑은 타일 빛이 받침대 밖으로 밀리거나 잘리는 결함이 초록이 된다(그림 확인용).

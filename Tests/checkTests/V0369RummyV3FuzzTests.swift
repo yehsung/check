@@ -7,6 +7,8 @@ import Testing
 // 타일을 잃거나 · 판 출신을 랙으로 보내거나(R-14) · 묶음을 겹치게 두거나 · 손대지 않은 타일을 옮기거나 · 미리보기와 실제가
 // 어긋나거나 · 같은 입력에 다른 답을 내는 경우를 찾는다. 시퀀스 수 = 환경 `RUMMY_FUZZ_SEQS`(기본 240 — 빠른 게이트용),
 // `RUMMY_FUZZ_OUT` 을 주면 최종 판들을 reference.py 형식(cases.json)으로 써서 판정 짝(클라 `judgeTurn` ↔ reference.py)을 대 본다.
+// 0.3.70 검증에서 넓혔다: 길게 눌러 쪼개기(`meldChunk`) · 붐비는 판(비켜 놓기 · 꽉 찬 판 대체) · **모든** 맞는 묶음의 표시 순서(R-09 —
+// 확정 판과 같은 그림, 남은 토막 포함) · 판 밖 없음 · 와이어 배치 왕복. 실패는 `rummy fuzz tally` 로 갈래별 수를 찍는다.
 
 private struct FuzzRNG: RandomNumberGenerator {
     var state: UInt64
@@ -89,11 +91,24 @@ private func fuzzUntouched(before: RummyTurnEditor, after: RummyTurnEditor, land
         let ids = meld.map(\.id)
         guard !ids.contains(where: { moving.contains($0) || landedIDs.contains($0) }) else { continue }
         if ids.allSatisfy({ was[$0] == now[$0] }) { continue }
-        guard let first = was[ids[0]] else { return "손대지 않은 묶음 \(ids) 이 판에 없었다" }
-        let rigid = ids.indices.allSatisfy {
-            was[ids[$0]] == RummyPoint(x: first.x + $0 * RummyTableLayout.tileWidth, y: first.y)
+        let olds = ids.compactMap { was[$0] }
+        guard olds.count == ids.count, let minX = olds.map(\.x).min() else { return "손대지 않은 묶음 \(ids) 이 판에 없었다" }
+        let first = RummyPoint(x: minX, y: olds[0].y)
+        let rigid = Set(olds) == Set(ids.indices.map { RummyPoint(x: first.x + $0 * RummyTableLayout.tileWidth, y: first.y) })
+        // 0.3.70 검증: 남은 토막은 안의 순서가 바뀔 수 있다 — 그때는 표시 순서(확정 뒤 그림)여야 한다.
+        let faces = meld.map(\.face)
+        let reordered = ids != ids.sorted { was[$0]!.x < was[$1]!.x }
+        if reordered, faces != RummyRules.displayOrder(faces) {
+            return "손대지 않은 묶음 \(faces.map(\.text)) 의 순서가 바뀌었는데 표시 순서가 아니다"
         }
         let old = RummyTableLayout.frame(at: first, tiles: ids.count)
+        if rigid, old == RummyTableLayout.frame(at: now[ids[0]]!, tiles: ids.count) { continue }  // 제자리에서 순서만
+        // 남은 토막이 표시 순서로 바뀌며 사각형이 움직였으면 가장 많은 타일이 제자리인 밀기다(그 자리 타일 수 ≥ 제자리 순서만).
+        if reordered, rigid {
+            let stay = ids.filter { was[$0] == now[$0] }.count
+            let inPlace = ids.enumerated().filter { was[$0.element] == RummyPoint(x: first.x + $0.offset * RummyTableLayout.tileWidth, y: first.y) }.count
+            if stay >= inPlace, stay > 0 { continue }
+        }
         guard rigid, let landedFrame, RummyTableLayout.overlaps(old, landedFrame) else {
             return "손대지 않은 타일 이동(막은 이웃 통째 비켜 놓기가 아님) \(ids) \(first) → \(String(describing: now[ids[0]]))"
         }
@@ -149,7 +164,9 @@ private func fuzzOp(_ e: RummyTurnEditor, _ r: inout FuzzRNG) -> FuzzOp {
         let pick = Set(e.rack.shuffled(using: &r).prefix(Int.random(in: 1...3, using: &r)).map(\.id))
         ids = e.screenOrder(pick)
     case 2 where !tableIDs.isEmpty:
-        ids = e.meldPick(for: tableIDs.randomElement(using: &r)!, fromTileToEnd: Bool.random(using: &r))
+        // 0.3.70 ⑤: 판 길게 누르기 = 누른 타일에서 가까운 끝까지(`meldChunk`) — 옛 ⌥ 집기와 반반.
+        let pressed = tableIDs.randomElement(using: &r)!
+        ids = Bool.random(using: &r) ? e.meldChunk(for: pressed) : e.meldPick(for: pressed, fromTileToEnd: Bool.random(using: &r))
     case 3 where !tableIDs.isEmpty && !e.rack.isEmpty:
         ids = e.screenOrder([tableIDs.randomElement(using: &r)!, e.rack.randomElement(using: &r)!.id])
     case 4, 5:
@@ -201,7 +218,9 @@ private struct FuzzStart {
 }
 
 private func fuzzStart(_ r: inout FuzzRNG) -> FuzzStart {
-    let table = (0..<Int.random(in: 0...6, using: &r)).map { _ in fuzzSet(&r) }
+    // 가끔 붐비는 판(0.3.70 ④ 비켜 놓기 · 꽉 찬 판 대체가 실제로 일어나게).
+    let crowded = Int.random(in: 0..<5, using: &r) == 0
+    let table = (0..<Int.random(in: crowded ? 14...30 : 0...6, using: &r)).map { _ in fuzzSet(&r) }
     var rack = (0..<Int.random(in: 2...10, using: &r)).map { _ in fuzzFace(&r) }
     for set in table where Bool.random(using: &r) {
         if let face = extender(of: set, &r) { rack.append(face) }
@@ -280,9 +299,37 @@ private func fuzzCheck(
     if after.melds.contains(where: \.isEmpty) || after.melds.count != after.points.count { bad.append("빈 묶음/점 길이") }
     if after.rack.map(\.id) != after.rackLayout.readingOrder { bad.append("랙 화면 순서 ≠ 자리") }
     // 4) 겹침 없음(시작 판이 깨끗했으면).
-    if startClear, !fuzzClear(fuzzFrames(after)) { bad.append("묶음 겹침/판 밖") }
-    // 5) 거절이면 그대로.
-    if !accepted, before != after { bad.append("거절했는데 바뀜") }
+    if startClear, !fuzzClear(fuzzFrames(after)) {
+        // 0.3.70 ④ 대체: 붐비는 판에선 여백 0 자리(`freeSpot` 둘째 단계 — 0.3.69 스냅과 같은 대체)까지 쓴다. 그래서 여기선
+        // **실제로 덮는**(여백 없이 겹치는) 두 묶음만 본다 — 그것도 둘 중 하나에 덮지 않는 빈자리가 남아 있을 때만 결함.
+        func covers(_ a: RummyRect, _ b: RummyRect) -> Bool { a.x < b.maxX && a.maxX > b.x && a.y < b.maxY && a.maxY > b.y }
+        let frames = fuzzFrames(after)
+        var roomy: [String] = []
+        for i in frames.indices {
+            for j in frames.indices where j > i && covers(frames[i], frames[j]) {
+                for k in [i, j] {
+                    let others = frames.indices.filter { $0 != k }.map { frames[$0] }
+                    if let spot = RummyTableLayout.freeSpot(after.points[k], tiles: after.melds[k].count, among: others) {
+                        roomy.append("\(i)\(frames[i]) × \(j)\(frames[j]) — \(k)→\(spot)")
+                    }
+                }
+            }
+        }
+        if !roomy.isEmpty { bad.append("묶음이 덮임(빈자리 있음 \(roomy))") }
+    }
+    // 4-1) 판 밖 없음(시작 판이 붐벼도) · 와이어 배치(서버 0…1000 × 0…640 정수 → 모든 기기 `place`)가 화면 점 그대로 돌아온다.
+    if fuzzFrames(after).contains(where: { !RummyTableLayout.fits($0) }) { bad.append("판 밖 묶음") }
+    if RummyTableLayout.place(sets: after.submissionTable, layout: RummyLayout(after.points.map { Optional($0) })) != after.points {
+        bad.append("와이어 배치가 화면 점과 다르다")
+    }
+    // 4-2) R-09 확정 전후 같은 그림: 맞는 묶음은 모두(받은 묶음만이 아니라 남은 토막·손대지 않은 묶음까지) 표시 순서다 —
+    //      확정 판은 서버 K 를 모든 기기가 `displayOrder` 로 같은 점에 그린다.
+    for meld in after.melds {
+        let faces = meld.map(\.face)
+        if RummyRules.analyze(faces).valid, faces != RummyRules.displayOrder(faces) {
+            bad.append("맞는 묶음 \(faces.map(\.text)) 이 표시 순서가 아니다(확정 뒤 튐)")
+        }
+    }
     // 6) isChanged = !sameTable.
     if after.isChanged == RummyRules.sameTable(after.submissionTable, start.table) { bad.append("isChanged 불일치") }
     guard case .block(let ids, _) = op else {
@@ -339,6 +386,7 @@ struct V0369RummyV3FuzzTests {
         var failureCount = 0
         var corpus: [FuzzCase] = []
         var accepted = 0, steps = 0
+        var tally: [String: Int] = [:]
         for seed in 0..<sequences {
             var r = FuzzRNG(state: UInt64(seed) &* 0x1000_0001 &+ 7)
             let start = fuzzStart(&r)
@@ -369,6 +417,7 @@ struct V0369RummyV3FuzzTests {
                 let bad = fuzzCheck(before: before, after: editor, op: op, accepted: ok, preview: preview,
                                     start: start, startIDs: startIDs, tableIDs: tableIDs, startClear: startClear)
                 if !bad.isEmpty {
+                    for b in bad { tally[String(b.prefix(24)), default: 0] += 1 }
                     failureCount += 1
                     if failures.count < 12 {
                         failures.append("seed \(seed) step \(step) op \(op) → \(bad.joined(separator: " · "))\n  before \(before.submissionTable.map { $0.map(\.text) }) @ \(before.points)\n  after  \(editor.submissionTable.map { $0.map(\.text) }) @ \(editor.points)")
@@ -398,6 +447,7 @@ struct V0369RummyV3FuzzTests {
             try data.write(to: URL(fileURLWithPath: out))
         }
         print("rummy fuzz: sequences \(sequences) steps \(steps) accepted \(accepted) failures \(failureCount)")
+        for (key, count) in tally.sorted(by: { $0.value > $1.value }) { print("rummy fuzz tally: \(count) × \(key)") }
         #expect(failureCount == 0, "\(failures.joined(separator: "\n"))")
         #expect(accepted > steps / 3, "받아들인 단계가 너무 적다 — 퍼즈가 규칙을 못 건드린다")
     }

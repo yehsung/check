@@ -288,6 +288,8 @@ package struct RummyTurnEditor: Equatable, Sendable {
         var point: RummyPoint
         /// 옮기기 전 화면 묶음 번호(쪼개진 토막이면 원래 묶음). 새 묶음이면 nil.
         let origin: Int?
+        /// 판 묶음에서 타일이 빠져 남은 토막(규칙 ①). 받은 묶음이 아니면 마무리에서 제자리 표시 순서로(`apply` 4).
+        var cut = false
 
         var faces: [RummyFace] { tiles.map(\.face) }
         var frame: RummyRect { RummyTableLayout.frame(at: point, tiles: tiles.count) }
@@ -363,7 +365,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
                 pieces.append(Piece(tiles: meld, point: points[index], origin: index))
             } else {
                 for piece in RummyTableEdit.split(count: meld.count, point: points[index], removing: removed) {
-                    pieces.append(Piece(tiles: Array(meld[piece.range]), point: piece.point, origin: index))
+                    pieces.append(Piece(tiles: Array(meld[piece.range]), point: piece.point, origin: index, cut: true))
                 }
             }
         }
@@ -409,7 +411,19 @@ package struct RummyTurnEditor: Equatable, Sendable {
             rackLayout.insert(tileIDs, at: wanted)
         }
 
-        // 4) 받은 묶음 마무리(0.3.70): 맞는 세트면 R-09 표시 순서로(③), 그다음 판에 앉힌다(④).
+        // 4) 남은 토막(0.3.70 검증): 타일이 빠져 남은 토막이 맞는 세트면 R-09 표시 순서로 — 확정 판은 모든 기기가 표시 순서로
+        //    같은 점에 그린다(A3 J A5 A6 에서 A3 을 빼고 남은 J A5 A6 이 확정 뒤 A5 A6 J 로 튀지 않게 · 무효 묶음 끝을 빼 맞게 된
+        //    토막도). 가장 많은 타일이 제자리(J A5 A6 → 조커만 반대 끝으로 · B4 A4 C4 D4 → C4 D4 제자리) — 그 자리가 막히면(판 밖 ·
+        //    겹침) 사각형 제자리에서 순서만. 이웃은 건드리지 않는다. 붙기(②) 뒤라 '빼서 제자리 곁에 다시 놓기'는 옛 순서로
+        //    이어 붙는다. 받은 묶음은 아래 마무리 몫.
+        for i in pieces.indices where pieces[i].cut && i != receiving {
+            let point = pieces[i].point
+            Self.arrange(&pieces[i], moving: [])
+            guard pieces[i].point != point else { continue }
+            let others = pieces.indices.filter { $0 != i }.map { pieces[$0].frame }
+            if !RummyTableLayout.isClear(pieces[i].frame, among: others) { pieces[i].point = point }
+        }
+        // 받은 묶음 마무리(0.3.70): 맞는 세트면 R-09 표시 순서로(③), 그다음 판에 앉힌다(④).
         if !toRack, let landed = receiving {
             Self.finish(&pieces, landed, moving: moving, reorder: true)
             switch plan {
@@ -467,7 +481,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
     /// 그 묶음을 골라 놓은 것이라 그대로 두고 판정이 이유를 말한다. 3판 검증에서 찾은 결함.
     private var attachFixed: Set<Int> { initialDone ? [] : tableTileIDs }
 
-    /// 받은 묶음 마무리(0.3.70, `RummyTableEdit` ③·④): `reorder` 면 맞는 세트일 때 R-09 표시 순서로 늘어놓고(첫 남은 타일 제자리 —
+    /// 받은 묶음 마무리(0.3.70, `RummyTableEdit` ③·④): `reorder` 면 맞는 세트일 때 R-09 표시 순서로 늘어놓고(남은 타일이 가장 많이 제자리 —
     /// 남은 타일이 없으면 점 그대로), 그다음 `RummyTableEdit.settle` 로 앉힌다(늘어난 장수 = 이번에 옮긴 타일 수 — 막히면 옆으로,
     /// 그래도 막히면 이웃을 비켜 놓는다). 옛 `RummyTableLayout.refit`(막히면 가장 가까운 빈자리로 튄다)을 갈음한다.
     private static func finish(_ pieces: inout [Piece], _ index: Int, moving: Set<Int>, reorder: Bool) {
@@ -478,7 +492,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
     }
 
     /// 맞는 세트면 R-09 표시 순서로(`RummyRules.displayOrder` — 확정 판·남의 화면과 같은 순서). 같은 면(조커 둘)은 원래 순서를 잇는다.
-    /// 옮기지 않은 첫 타일이 화면에서 제자리가 되게 점을 민다.
+    /// 옮기지 않은 타일이 가장 많이 화면 제자리에 남게 점을 민다(남은 토막이면 모든 타일이 '옮기지 않은' 타일이다).
     private static func arrange(_ piece: inout Piece, moving: Set<Int>) {
         let faces = piece.faces
         guard RummyRules.analyze(faces).valid else { return }
@@ -490,9 +504,19 @@ package struct RummyTurnEditor: Equatable, Sendable {
             guard let at = pool.firstIndex(where: { $0.face == face }) else { return }
             arranged.append(pool.remove(at: at))
         }
-        if let anchor = piece.tiles.firstIndex(where: { !moving.contains($0.id) }),
-           let now = arranged.firstIndex(where: { $0.id == piece.tiles[anchor].id }) {
-            piece.point.x += (anchor - now) * RummyTableLayout.tileWidth
+        // 점 밀기(타일 칸 단위): 옮기지 않은 타일이 **가장 많이 제자리**인 밀기(숫자 2 · 조커 1 — 조커는 뜻(대신하는 숫자)에 따라
+        // 표시 자리가 바뀌는 타일이다). 같으면 첫 숫자 타일(없으면 첫 타일)이 제자리인 밀기 → 덜 미는 쪽 → 왼쪽. 0.3.70 검증:
+        // 첫 남은 타일만 제자리로 두면 작업 중 [J A5] 에 A6 을 놓을 때 A5 · A6 이 80 왼쪽으로 튀었다(조커가 기준).
+        let kept = piece.tiles.indices.filter { !moving.contains(piece.tiles[$0].id) }
+        let newIndex = Dictionary(uniqueKeysWithValues: arranged.enumerated().map { ($1.id, $0) })
+        func shift(_ i: Int) -> Int { i - (newIndex[piece.tiles[i].id] ?? i) }
+        var score: [Int: Int] = [:]
+        for i in kept { score[shift(i), default: 0] += piece.tiles[i].face.isJoker ? 1 : 2 }
+        let lead = (kept.first { !piece.tiles[$0].face.isJoker } ?? kept.first).map(shift)
+        if let best = score.max(by: { a, b in
+            (a.value, a.key == lead ? 1 : 0, -abs(a.key), -a.key) < (b.value, b.key == lead ? 1 : 0, -abs(b.key), -b.key)
+        }) {
+            piece.point.x += best.key * RummyTableLayout.tileWidth
         }
         piece.tiles = arranged
     }

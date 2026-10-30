@@ -88,7 +88,42 @@ extension RummyStore {
             shown.invites = shown.invites?.filter { !isHidden($0) }
             shown.publicRooms = shown.publicRooms?.filter { !isHidden($0) }
         }
+        // 나가기로 접은 방을 늦게 온 로비 응답이 다시 '내 방' 카드로 세우지 않게(나가기 전에 나간 조회).
+        if let room = shown.me?.room, dismissedMatchIDs.contains(room.id) { shown.me?.room = nil }
         if lobby != shown { lobby = shown }
+    }
+
+    // MARK: - 내 방(방 카드의 원천)
+
+    /// 방 카드에 그릴 내 방 — `shownRoom(match:lobby:)` 를 지금 값으로.
+    package var myRoom: RummyRoom? { Self.shownRoom(match: match, lobby: lobby) }
+
+    /// 방 카드에 그릴 내 방. **들고 있는 forming 판 state 가 먼저**고, 없을 때만 로비 `me.room` 이다.
+    ///
+    /// 왜(10-30 운영 결함 — 방 만들기 뒤 방 화면이 20~30초 안 떴다): 만들기·참가 응답과 초인종·5초 폴링은 `match` 만
+    /// 갈고(phase = .room), 로비 `me.room` 은 **30초 로비 폴링**만 간다. 방 카드가 로비 `me.room` 만 보면 phase 는 이미
+    /// 방인데 화면은 '방 만들기' 카드에 머물고, 들어온 사람·[시작] 단추(참가 2명↑)도 30초씩 늦는다.
+    /// `match` 는 서버 `rummy_state` 의 forming 모양 그대로다(자리 = joined·invited, 초대 자리는 seat_no null) —
+    /// 로비 ROOM 과 같은 칸을 옮기고, 방장 얼굴은 방장 자리 줄에서(없으면 같은 방의 로비 값) 읽는다.
+    package nonisolated static func shownRoom(match: RummyMatchState?, lobby: RummyLobby?) -> RummyRoom? {
+        let listed = lobby?.me?.room
+        guard let match, match.status == .forming else { return listed }
+        let sameListed = listed?.id == match.id ? listed : nil
+        let hostSeat = match.hostId.flatMap { hostID in match.seats?.first { $0.userId == hostID } }
+        let host: RummyPeer? = hostSeat.map {
+            RummyPeer(id: $0.userId, displayName: $0.displayName, avatarUrl: $0.avatarUrl, character: $0.character)
+        } ?? sameListed?.host ?? match.hostId.map { RummyPeer(id: $0, displayName: nil, avatarUrl: nil, character: nil) }
+        let seats: [RummyRoomSeat]? = match.seats.map { rows in
+            rows.map {
+                RummyRoomSeat(userId: $0.userId, displayName: $0.displayName, avatarUrl: $0.avatarUrl,
+                              character: $0.character, state: $0.state, seatNo: $0.seatNo)
+            }
+        } ?? sameListed?.seats
+        return RummyRoom(
+            id: match.id, host: host, stake: match.stake ?? sameListed?.stake,
+            isPublic: match.isPublic ?? sameListed?.isPublic,
+            expiresAtMs: match.expiresAtMs ?? sameListed?.expiresAtMs,
+            maxSeats: match.maxSeats ?? sameListed?.maxSeats, seats: seats)
     }
 
     /// 차단한 사람이 방장이거나 자리에 낀 방인가.
@@ -357,7 +392,13 @@ extension RummyStore {
     }
 
     /// 방·판을 내린다(편집기·작업 전송·마감 깨우기까지).
+    /// 로비 `me.room` 이 그 방이면 같이 걷는다 — 닫힘·나가기·빠짐을 안 순간 방 카드가 내려가야 한다(다음 30초 로비 폴링까지
+    /// 닫힌 방의 [시작]·[나가기] 가 남지 않게). 다음 로비 응답이 확인한다.
     package func clearMatch() {
+        if let cleared = match?.id, rawLobby?.me?.room?.id == cleared {
+            rawLobby?.me?.room = nil
+            publishLobby()
+        }
         if match != nil { match = nil }
         if editor != nil { editor = nil }
         editorKey = nil

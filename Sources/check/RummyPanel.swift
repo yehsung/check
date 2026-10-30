@@ -227,8 +227,10 @@ struct RummyScene {
         return match.seats?.first { $0.seatNo == turn }
     }
 
-    /// 내 방(로비 me.room). 내가 방장인가는 방장 id 와 내 id(세션) 또는 판 state 의 내 자리로 가린다.
-    var myRoom: RummyRoom? { lobby?.me?.room }
+    /// 내 방 — 들고 있는 forming 판 state 가 먼저, 없으면 로비 me.room(`RummyStore.shownRoom` 한 곳이 정한다).
+    /// 로비 me.room 만 보면 만들기·참가·초인종이 phase 를 방으로 바꿔도 30초 로비 폴링까지 '방 만들기' 카드에 머문다.
+    /// 내가 방장인가는 방장 id 와 내 id(세션) 또는 판 state 의 내 자리로 가린다.
+    var myRoom: RummyRoom? { RummyStore.shownRoom(match: match, lobby: lobby) }
 
     var amHost: Bool {
         if let match, let hostID = match.hostId, let mySeat { return mySeat.userId == hostID }

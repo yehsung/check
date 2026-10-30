@@ -467,22 +467,42 @@ package final class RummyStore {
 
     /// 공용 호출 관용구: 세션 가드 → 두 세대 캡처 → withSessionRetry → 두 세대 대조.
     /// nil = 버린 결과(세션 없음·세대가 밀림·취소). 호출부는 nil 이면 **아무것도 바꾸지 않는다.**
+    /// 왕복마다 notice 한 줄(부른 함수 이름 · 결과 · 밀리초)을 남긴다 — 현장에서 "응답이 왔는데 화면이 안 바뀌었나,
+    /// 응답이 안 왔나" 를 `/usr/bin/log show --predicate 'subsystem == "kingcheck" AND category == "rummy"'` 로 가린다.
+    /// 토큰·본문은 싣지 않는다.
     package func perform<T: Sendable>(
-        _ operation: @escaping @Sendable (SupabaseWorkService, String) async throws -> T
+        _ operation: @escaping @Sendable (SupabaseWorkService, String) async throws -> T,
+        label: String = #function
     ) async -> Result<T, any Error>? {
         guard let host, host.session != nil else { return nil }
         let sessionGeneration = host.sessionGeneration
         let generation = resetGeneration
         let service = host.service
+        let started = Date()
+        func trace(_ outcome: String) {
+            let ms = Int((Date().timeIntervalSince(started) * 1000).rounded())
+            Self.logger.notice("rpc \(label, privacy: .public) \(outcome, privacy: .public) \(ms, privacy: .public)ms")
+        }
         do {
             let value = try await host.withSessionRetry { session in
                 try await operation(service, session.accessToken)
             }
-            guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else { return nil }
+            guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else {
+                trace("discarded")
+                return nil
+            }
+            trace("ok")
             return .success(value)
         } catch {
-            guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else { return nil }
-            if case .cancelled = host.classifyAuthError(error) { return nil }
+            guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else {
+                trace("discarded")
+                return nil
+            }
+            if case .cancelled = host.classifyAuthError(error) {
+                trace("cancelled")
+                return nil
+            }
+            trace("failed")
             return .failure(error)
         }
     }
@@ -564,7 +584,12 @@ package final class RummyStore {
         case .finished?: next = .finished
         default: next = .lobby
         }
-        if phase != next { phase = next }
+        guard phase != next else { return }
+        // 화면 전환 한 줄(판 id 앞 8자만 — 사람 정보 없음).
+        let shortID = match.map { String($0.id.uuidString.lowercased().prefix(8)) } ?? "-"
+        Self.logger.notice(
+            "phase \(String(describing: self.phase), privacy: .public)→\(String(describing: next), privacy: .public) match=\(shortID, privacy: .public)")
+        phase = next
     }
 }
 

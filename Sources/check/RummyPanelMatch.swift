@@ -1035,7 +1035,9 @@ private struct RummySeatCard: View {
     }
 
     private var seconds: some View {
-        RummyCountdownLeaf(remaining: scene.turnRemaining(store), fixedNow: scene.fixedNow, label: RummyText.seconds)
+        // 0.3.70 통합: 자리 카드 초도 [완료] 안 초·차례 링과 같은 문턱(8초에 링·[완료]는 주황인데 여기만 빨강이었다).
+        RummyCountdownLeaf(remaining: scene.turnRemaining(store), fixedNow: scene.fixedNow, label: RummyText.seconds,
+                           tint: RummySubmitSeconds.tint)
             .font(.callout.weight(.heavy))
     }
 

@@ -189,6 +189,9 @@ enum RummyText {
             + "냈어야 해요. 판에 있던 타일은 랙으로 가져올 수 없어요.", []),
         ("조작", "끌면 한 장 · 0.5초 길게 눌러 끌면 덩어리(판에선 누른 타일에서 가까운 끝까지) · 묶음 왼쪽 손잡이로 묶음째 "
             + "옮기기 · 묶음 끝 가까이 놓으면 붙기 · 묶음 위에 놓으면 맞는 자리에 끼우기 · 묶음 가운데를 빼면 둘로 나뉘어요.", []),
+        // 0.3.70 통합: 받침대 손맛(끼워 넣기 · 랙 묶음 밑줄 · 정렬 유지)도 규칙 창 한 곳에서 — 2열 격자의 빈칸을 채운다.
+        ("받침대", "타일 사이에 놓으면 끼워 넣고 오른쪽을 밀어요. 딱 붙여 놓은 맞는 묶음엔 밑줄과 점수가 떠요. "
+            + "777·789로 정렬해 두면 새로 뽑은 타일도 그 정렬 자리로 들어가요.", []),
         ("시간 60초", "시간이 지나면 놓던 판이 맞으면 그대로 확정돼요. 틀렸거나 아무것도 안 놓았으면 되돌리고 1장 뽑아요. "
             + "시간 초과가 3번 이어지면 기권이에요.", []),
         ("끝과 점수", "누군가 랙을 비우면 끝나요(더미가 비고 모두 넘겨도 끝). 남은 타일 합만큼 잃고(아잉이 30점), "
@@ -490,6 +493,8 @@ struct RummyCountdownLeaf: View {
     let fixedNow: Date?
     let label: (Int) -> String
     var urgentBelow: Int = 10
+    /// 색 문턱을 직접 줄 때(0.3.70 — 자리 카드 초는 [완료] 안 초·차례 링과 같은 문턱: 10초 이하 주황, 5초 이하 빨강).
+    var tint: ((Int) -> Color?)? = nil
 
     var body: some View {
         if let fixedNow {
@@ -507,7 +512,8 @@ struct RummyCountdownLeaf: View {
             let seconds = max(0, Int(left.rounded(.up)))
             Text(label(seconds))
                 .monospacedDigit()
-                .foregroundStyle(seconds <= urgentBelow ? CheckTheme.danger : CheckTheme.primaryText)
+                .foregroundStyle(tint.map { $0(seconds) ?? CheckTheme.primaryText }
+                    ?? (seconds <= urgentBelow ? CheckTheme.danger : CheckTheme.primaryText))
         }
     }
 }
@@ -548,7 +554,7 @@ private struct RummyOverlayScrim<Content: View>: View {
     }
 }
 
-/// 규칙 시트 — 그룹·런·첫 등록·조커·판 조작·시간·끝과 점수·등수 분배를 예시 타일로.
+/// 규칙 시트 — 그룹·런·첫 등록·조커·판 조작·조작·받침대·시간·끝과 점수·등수 분배를 예시 타일로.
 private struct RummyRulesOverlay: View {
     let onClose: () -> Void
 

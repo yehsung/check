@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/MegaphoneBannerStore.swift @ f3360b47(f3360b47) — 확성기 배너 스토어(맥·폰 한 벌 — 계약 docs/plan/megaphone-banner-contract.md C2 · C3)
+// 원본: Sources/CheckCore/MegaphoneBannerStore.swift @ a3d59e74(a3d59e74) — 확성기 배너 스토어(맥·폰 한 벌 — 계약 docs/plan/megaphone-banner-contract.md C2 · C3)
 //
 // [MegaphoneStore] 와 같은 결: 세션 호스트([SessionHost] — 폰 조립은 PhoneMegaphoneHost)를 빌려 RPC 를 부른다.
 // 화면(폰 위 배너)은 [current] 하나만 그린다. 이 파일이 지키는 것:
@@ -84,6 +84,14 @@ class MegaphoneBannerStore(
      * 실시간·푸시의 refresh 가 필터를 켜도 옛 요약이 숨긴 확성기 줄을 세어 배지가 남는다(2026-10-30 안드로이드 이식 검증에서 발견).
      */
     var onCapabilityChange: (() -> Unit)? = null
+
+    /**
+     * 저절로 닫기를 붙드는가 — 화면 읽기가 켜져 있으면 참(안드로이드 `AccessibilityManager.isTouchExplorationEnabled` — TalkBack ·
+     * Swift 는 맥 `NSWorkspace.isVoiceOverEnabled` · 폰 `UIAccessibility.isVoiceOverRunning`). 본문은 최대 198자라 읽어 주는 데
+     * 5초를 훌쩍 넘고, "누르고 있으면 멈춤"은 화면 읽기 사용자의 조작이 아니다 — 참이면 [닫기]로만 닫힌다(2026-10-31 모바일 세션 지적).
+     * 켬·끔이 바뀌면 소유자가 [autoDismissHoldChanged] 를 부른다.
+     */
+    var holdsAutoDismiss: () -> Boolean = { false }
 
     // ---------------------------------------------------------------- 상태(화면이 읽는다)
 
@@ -340,6 +348,12 @@ class MegaphoneBannerStore(
         startTimer(maxOf(pausedRemaining, MegaphoneBannerRules.resumeMinimum))
     }
 
+    /** [holdsAutoDismiss] 가 바뀌었다(화면 읽기 켬·끔). 붙들기 시작이면 걸린 타이머를 버리고, 풀렸으면 떠 있는 배너를 처음부터 다시 센다. */
+    fun autoDismissHoldChanged() {
+        if (current == null || isTimerPaused) return
+        startTimer(MegaphoneBannerRules.displaySeconds)
+    }
+
     /** [isBannerDeferred] 가 바뀌었다. 미루기 시작이면 떠 있던 배너를 줄 맨 앞으로 되돌리고, 풀렸으면 **신선한 것만** 띄운다. */
     fun deferralChanged() {
         if (isBannerDeferred()) {
@@ -456,6 +470,11 @@ class MegaphoneBannerStore(
 
     private fun startTimer(delaySeconds: Double) {
         timerToken += 1
+        // 화면 읽기: 저절로 닫지 않는다 — 걸린 타이머는 위 한 줄(세대)로 이미 버렸다. [닫기]([dismissCurrent])로만 닫힌다.
+        if (holdsAutoDismiss()) {
+            currentDeadline = null
+            return
+        }
         val token = timerToken
         currentDeadline = clock().addingTimeInterval(delaySeconds)
         schedule(delaySeconds) {

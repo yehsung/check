@@ -1,6 +1,6 @@
-// 원본: Tests/checkTests/MegaphoneBannerStoreTests.swift @ f3360b47(f3360b47) — 확성기 배너 코어: 필터 술어 세 갈래 · inbox 404 · 신선도 10분 ·
+// 원본: Tests/checkTests/MegaphoneBannerStoreTests.swift @ a3d59e74(a3d59e74) — 확성기 배너 코어: 필터 술어 세 갈래 · inbox 404 · 신선도 10분 ·
 // 푸시 진입 24시간 · 본 것 기록 · 한 번에 하나 5초 · 멈춤 · 미룸 · 접두 경합 · 요약 v2 폴백 · 본인 배너 · reset · 전선 · 작성 문구 ·
-// 필터 바뀜 알림(onCapabilityChange)
+// 필터 바뀜 알림(onCapabilityChange) · 화면 읽기 붙듦(holdsAutoDismiss)
 // 진짜 세션 스토어(StoreHarness)를 붙여 **스텁이 받은 요청**으로 잰다. 타이머는 손으로 돌린다(5초를 기다리지 않는다).
 package com.yehsung.aingcheck.core.stores.messages
 
@@ -29,7 +29,13 @@ import kotlin.test.assertTrue
 /** 손으로 돌리는 타이머 + 시계. */
 class BannerTimers(var now: SwiftDate = SwiftDate(1_800_000_000.0)) {
     private val pending = mutableListOf<Pair<SwiftDate, () -> Unit>>()
-    val schedule: MegaphoneBannerSchedule = { after, fire -> pending += now.addingTimeInterval(after) to fire }
+
+    /** 걸린 타이머의 길이(초) — 걸린 순서대로. */
+    val scheduledDelays = mutableListOf<Double>()
+    val schedule: MegaphoneBannerSchedule = { after, fire ->
+        scheduledDelays += after
+        pending += now.addingTimeInterval(after) to fire
+    }
 
     fun advance(seconds: Double) {
         val target = now.addingTimeInterval(seconds)
@@ -183,6 +189,57 @@ class MegaphoneBannerStoreTest {
         assertEquals("g-1", r.store.current?.megaphoneID, "남은 1초가 아니라 3초 중 긴 쪽이어야 한다")
         r.timers.advance(0.2)
         assertNull(r.store.current)
+    }
+
+    // 없으면: 화면 읽기 사용자가 본문(최대 198자)을 다 듣기 전에 배너가 올라가는 결함이 초록(2026-10-31 모바일 세션 지적 · Swift a3d59e74
+    // voiceOverHoldsAutoDismiss 짝). 붙들면 [닫기]로만 · 미룸에서 돌아와 다시 떠도 붙든다 · 풀리면 다시 5초 · 기준선: 안 붙들면 5초.
+    @Test
+    fun screenReaderHoldsAutoDismiss() = runTest {
+        val r = rig()
+        var held = true
+        r.store.holdsAutoDismiss = { held }
+        r.store.presentOwn("천천히 들어요", senderName = "나")
+        assertFalse(MegaphoneBannerRules.displaySeconds in r.timers.scheduledDelays, "붙드는데 5초 타이머가 걸렸다")
+        r.timers.advance(100.0)
+        assertEquals("천천히 들어요", r.store.current?.body, "화면 읽기가 켜져 있는데 저절로 닫혔다")
+        // 멈췄다 풀어도(누르기) 붙듦이 이긴다.
+        r.store.pauseTimer()
+        r.store.resumeTimer()
+        r.timers.advance(100.0)
+        assertTrue(r.store.current != null, "멈춤을 풀자 붙듦을 잊었다")
+        // 미룸(대결·미니게임·시트)에서 돌아와 다시 뜨는 배너도 같은 자리(startTimer)를 지난다.
+        var deferred = true
+        r.store.isBannerDeferred = { deferred }
+        r.store.deferralChanged()
+        assertNull(r.store.current, "전제: 미루면 내린다")
+        deferred = false
+        r.store.deferralChanged()
+        assertTrue(r.store.current != null, "전제: 풀리면 다시 뜬다")
+        r.timers.advance(100.0)
+        assertTrue(r.store.current != null, "미룸에서 돌아온 배너가 저절로 닫혔다")
+        // [닫기] 는 언제나 닫는다.
+        r.store.dismissCurrent()
+        assertNull(r.store.current)
+
+        // 화면 읽기를 끄면 떠 있는 배너를 처음부터 5초 센다.
+        r.timers.advance(MegaphoneBannerRules.gap)
+        r.store.presentOwn("끄면 다시 센다", senderName = "나")
+        r.timers.advance(30.0)
+        held = false
+        r.store.autoDismissHoldChanged()
+        r.timers.advance(4.9)
+        assertTrue(r.store.current != null, "풀린 뒤 5초가 아니다")
+        r.timers.advance(0.1)
+        assertNull(r.store.current, "풀린 뒤 5초에 안 닫혔다")
+
+        // 기준선: 처음부터 안 붙들면 5초 뒤 닫힌다 · 다시 켜면 걸린 타이머를 버린다.
+        r.timers.advance(MegaphoneBannerRules.gap)
+        r.store.presentOwn("기준선", senderName = "나")
+        r.timers.advance(2.0)
+        held = true
+        r.store.autoDismissHoldChanged()
+        r.timers.advance(100.0)
+        assertEquals("기준선", r.store.current?.body, "화면 읽기를 켰는데 걸려 있던 타이머가 닫았다")
     }
 
     @Test

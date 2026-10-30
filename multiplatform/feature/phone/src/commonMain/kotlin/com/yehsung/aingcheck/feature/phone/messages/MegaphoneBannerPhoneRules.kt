@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Messages/MegaphoneBannerPhoneRules.swift · App/MobileAppModel+MegaphoneBanner.swift @ f3360b47(8e83aa35)
+// 원본: Sources/CheckMobileKit/Messages/MegaphoneBannerPhoneRules.swift · App/MobileAppModel+MegaphoneBanner.swift @ a3d59e74(a3d59e74)
 // 확성기 배너 · 폰 화면 규칙(계약 docs/plan/megaphone-banner-contract.md — 폰 배너). 뷰(androidApp MegaphoneBannerOverlay)는 그리기·손짓만 하고,
 // 판정은 전부 여기 둔다 — 위로 쓸기 판정 · 끌림 오프셋 · 미룸 집계 · 미룸 다시 맞추기. 단추는 [닫기] 하나뿐이다([답장]은 2026-10-30 걷었다).
 package com.yehsung.aingcheck.feature.phone.messages
@@ -56,5 +56,10 @@ object MegaphoneBannerPhoneRules {
 object MegaphoneBannerPhoneText {
     const val close = "닫기"
     fun accessibilityLabel(name: String, body: String): String = "${name}님의 확성기, $body"
-    const val accessibilityHint = "위로 쓸면 닫혀요. 누르고 있으면 멈춰요."
+    /**
+     * 화면 읽기만 읽는 글이다 — 그 사용자에게 배너는 저절로 닫히지 않는다(코어 holdsAutoDismiss · Swift a3d59e74). 손짓(쓸기·누르기)
+     * 말고 닫는 길을 말한다. Swift 는 보이스오버 동작 목록("위아래로 쓸어 닫기 동작을 고르세요")을, 안드로이드는 TalkBack 이 따로 짚는
+     * [닫기] 단추를 가리킨다.
+     */
+    const val accessibilityHint = "저절로 닫히지 않아요. 닫기 단추를 두 번 탭해 닫으세요."
 }

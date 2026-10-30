@@ -98,8 +98,23 @@ data class WorkDeps(
     val events: WorkEventSink = WorkEventSink.NONE,
     val social: () -> DesktopSocialLifecycle = { DesktopSocialLifecycle.None },
     val autoWorkStartEnabled: () -> Boolean = { false },
-    /** 깨움 결합 관측자(W3-d 네트워크). null 이면 게이트 없이 즉시 연다. */
+    /**
+     * 깨움 결합 관측자(W3-d 네트워크 — NetworkReadiness.awaitReady). null 이면 게이트 없이 즉시 연다(맥 networkPath nil — 틱 루프를
+     * 내리지 않는다, WorkTimerStore.swift:2278-2282). 있으면 깨움 직후 틱 루프를 내렸다가 결합(또는 상한 10초) 뒤 **본문부터** 되살린다
+     * (맥 beginWakeGate·releaseWakeGate → startRefreshLoopTask(runBodyFirst: true), :4309-4370 · :3363-3373).
+     */
     val wakeNetworkReady: (suspend () -> Unit)? = null,
+    /**
+     * 지금 이 세션이 사람 앞에 있나(맥 inputSessionUsable = NudgeScheduler.consoleSessionUsable — CheckWorkNudge.swift:81-87,
+     * WorkTimerStore.swift:1781 · :2392). Windows 는 WTS 질의(WtsSessionMonitor.consoleSessionUsable). 세션 사건 판정과 **둘 다** 참이어야
+     * 쓸 수 있다. 판독이 던지면 막지 않는다(맥 fail-open).
+     */
+    val consoleSessionUsable: () -> Boolean = { true },
+    /**
+     * 플라이아웃이 열려 있나(맥 isMenuPresented — refreshLoopIsFast 의 한 항, WorkTimerStore.swift:3319-3321). 공급자는 껍데기의
+     * 플라이아웃 nav.visible(조립이 넘긴다). 근무 중 || 열림 || 큐 대기 = 빠른 주기 30초, 아니면 300초.
+     */
+    val menuPresented: () -> Boolean = { false },
     val newUuid: () -> String = { java.util.UUID.randomUUID().toString() },
     /** 정책 박자(away·12h·마일스톤) 주기. Swift 하트비트 주기와 같다. */
     val policyBeatMillis: Long = (WorkPolicyConstants.HEARTBEAT_INTERVAL_SECONDS * 1000).toLong(),
@@ -126,7 +141,11 @@ class WorkWiring(private val deps: WorkDeps) {
     /** 종료 시퀀스 표식 한 개(wp 억제 · 퀵 피니셔 · 이 배선이 함께 본다). */
     val termination = TerminationFlag()
     val usability = SessionUsability()
-    val inputTracker = MeaningfulInputTracker(deps.idle, sessionUsable = { usability.isUsable })
+
+    /** 근무 판정의 세션 조건(의미 있는 입력·넛지 적립): 잠금·로그오프 사건 판정 && 콘솔 세션 질의(맥 inputSessionUsable). */
+    fun isSessionUsable(): Boolean = usability.isUsable && runCatching { deps.consoleSessionUsable() }.getOrDefault(true)
+
+    val inputTracker = MeaningfulInputTracker(deps.idle, sessionUsable = { isSessionUsable() })
     val suppression = AutoStartSuppression(deps.kv, termination)
     val sleepMarkers = SleepCloseMarkerStore(deps.kv)
     private val milestoneTracker = MilestoneTracker(deps.kv)
@@ -203,7 +222,7 @@ class WorkWiring(private val deps: WorkDeps) {
     val wakeGate: WakeGate = WakeGate(
         scope = scopeHolder(),
         waitUntilSatisfied = deps.wakeNetworkReady,
-        onRelease = { deps.social().onDidWake(clockFn()) },
+        onRelease = { releaseTickLoopAfterWake() },
     ).also { wakeGateRef = it }
 
     val sleep = SleepPolicy(
@@ -212,7 +231,10 @@ class WorkWiring(private val deps: WorkDeps) {
         markers = sleepMarkers,
         // 실시간 링은 근무 가드보다 앞에서 내린다(W2-g3).
         beforeSleepGuard = { at -> deps.social().onWillSleep(at) },
-        wakeFirst = { wakeGate.begin() },
+        wakeFirst = {
+            holdTickLoopForWake()
+            wakeGate.begin()
+        },
     )
     val sleepCorrection = SleepCloseCorrection(sleepMarkers, store, queue, newItemId = { deps.newUuid().lowercase() })
     val away = AwayPolicy(store, store, inputTracker).also { awayRef = it }
@@ -240,7 +262,7 @@ class WorkWiring(private val deps: WorkDeps) {
             val last = deps.idle.lastInput(InputKind.entries.toSet())
             if (last == null) Double.MAX_VALUE else maxOf(0.0, clockFn().timeIntervalSince(last.toSwiftDate()))
         },
-        isSessionUsable = { usability.isUsable },
+        isSessionUsable = { isSessionUsable() },
     )
 
     /** work_tick 사용 가능 판정(⑨ — 404·403·계약은 이 실행 동안 끄고, (c) 일시 실패 3연속이면 정지). (b) 과부하는 세지 않는다. */
@@ -268,6 +290,22 @@ class WorkWiring(private val deps: WorkDeps) {
 
     private var scope: CoroutineScope? = null
     private val jobs = mutableListOf<Job>()
+
+    /** 팀 상태 틱 루프(맥 refreshTask) — 깨움 게이트가 내렸다 되살리므로 [jobs] 와 따로 든다. */
+    private var tickJob: Job? = null
+    /** 게이트가 루프를 내려 두었나(맥 refreshLoopHeldByWakeGate). */
+    private var tickLoopHeldByWakeGate = false
+    /** 게이트가 미뤄 둔 소셜 깨움(맥 wakeRejoinPending) — 되살린 루프의 첫 본문 **뒤**에서 한 번(flushWakeRejoinIfPending). */
+    private var wakeRejoinPending = false
+
+    /** 맥 refreshLoopIsFast(WorkTimerStore.swift:3319-3321): 근무 중 || 플라이아웃 열림 || 미반영 큐. */
+    val refreshLoopIsFast: Boolean
+        get() = store.snapshot.value.isWorking ||
+            runCatching { deps.menuPresented() }.getOrDefault(false) ||
+            queue.items.value.isNotEmpty()
+
+    /** 시험·진단: 지금 틱 루프가 돌고 있나(게이트가 내려 두면 false). */
+    val isTickLoopRunning: Boolean get() = tickJob?.isActive == true
     private val registrations = mutableListOf<Registration>()
 
     /** 앱 시작(로그인 전이어도 된다). 멱등. */
@@ -289,8 +327,16 @@ class WorkWiring(private val deps: WorkDeps) {
             }
         }
         // 계정 전환: 상태 주인 바꾸기 → 남의 큐 항목 걷기 → 남은 줄 재시도(Swift adoptWorkStateOwner · W-6 #3).
+        // 로그아웃(또는 다른 계정)이면 팀 상태를 **즉시** 비운다 — 다음 틱(최대 300초)까지 앞 계정 팀원이 남지 않게(맥 signOut 이
+        // teamStatuses 를 함께 비운다). 소속 확정도 새 계정 몫으로 돌린다.
         jobs += scope.launch {
+            var lastUid: String? = session.session?.userID
             session.sessionFlow.map { it?.userID }.distinctUntilChanged().collect { uid ->
+                if (uid != lastUid) {
+                    if (lastUid != null) teamStatusFlow.value = emptyList()
+                    if (uid != membershipConfirmedFor) membershipConfirmedFor = null
+                    lastUid = uid
+                }
                 if (uid == null) return@collect
                 store.adoptWorkStateOwner(uid)
                 queue.retainOwner(uid)
@@ -304,11 +350,22 @@ class WorkWiring(private val deps: WorkDeps) {
                 policyBeat(clockFn())
             }
         }
-        // 팀 상태 틱(Swift startRefreshLoopTask): 근무 중 30초 · 비근무 300초(슬라이스마다 근무 전이를 본다). 이 루프가 없으면
-        // 근무 중 last_seen_at 이 시작 시각에 얼어 서버 스캐빈저(10분)가 세션을 닫는다.
-        jobs += scope.launch {
+        startTickLoop(scope, runBodyFirst = false)
+    }
+
+    /**
+     * 팀 상태 틱(Swift startRefreshLoopTask, WorkTimerStore.swift:3353-3400): 빠른 주기([refreshLoopIsFast]) 30초 · 아니면 300초
+     * (슬라이스마다 빠른 주기 전이를 본다). 이 루프가 없으면 근무 중 last_seen_at 이 시작 시각에 얼어 서버 스캐빈저(10분)가 세션을 닫는다.
+     * [runBodyFirst] 는 깨움 게이트가 열린 직후 전용 — 첫 반복의 잠을 건너뛰고 본문부터(게이트가 미뤄 둔 그 1회).
+     */
+    private fun startTickLoop(scope: CoroutineScope, runBodyFirst: Boolean) {
+        tickJob?.cancel()
+        tickJob = scope.launch {
+            var skipSleep = runBodyFirst
             while (isActive) {
-                if (store.snapshot.value.isWorking) {
+                if (skipSleep) {
+                    skipSleep = false
+                } else if (refreshLoopIsFast) {
                     delay(deps.tickSliceMillis)
                 } else {
                     var slices = 0
@@ -318,12 +375,51 @@ class WorkWiring(private val deps: WorkDeps) {
                         // 소속 미확정(실행 킥이 망 결합 전에 실패)은 유휴 1주기를 기다리지 않는다 — 그동안 팀이 null 이라
                         // 하트비트·큐 드레인이 전부 죽어 있다. 확정돼 있으면 요청 0(Swift 느린 주기 안 confirmMembershipIfNeeded).
                         swallow { confirmMembershipIfNeeded() }
-                        if (store.snapshot.value.isWorking) break
+                        if (refreshLoopIsFast) break
                     }
                 }
                 swallow { workTickBeat(clockFn()) }
+                // 맥 flushWakeRejoinIfPending — 본문(팀 상태 반영) 뒤에 미뤄 둔 깨움 재연결을 한 번.
+                if (wakeRejoinPending) {
+                    wakeRejoinPending = false
+                    runCatching { deps.social().onDidWake(clockFn()) }
+                }
             }
         }
+    }
+
+    /**
+     * 깨움 게이트가 선다(맥 beginWakeGate 앞부분): 관측자가 있을 때만 틱 루프를 내려 둔다 — 만료된 delay 가 망 결합 전에 본문을 쏘지
+     * 못하게. 관측자가 없으면(맥 networkPath nil) 아무것도 내리지 않는다.
+     */
+    private fun holdTickLoopForWake() {
+        if (deps.wakeNetworkReady == null) return
+        val job = tickJob ?: return
+        job.cancel()
+        tickJob = null
+        tickLoopHeldByWakeGate = true
+    }
+
+    /**
+     * 게이트가 열렸다(맥 releaseWakeGate, :4352-4370). 내려 둔 루프가 있고 로그인 상태면 **본문부터** 되살리고 소셜 깨움은 그 본문 뒤로,
+     * 로그아웃이면 루프만 평소대로 되살리고 깨움은 바로. 내려 둔 루프가 없으면(관측자 없음·루프 시작 전) 바로 깨움.
+     */
+    private fun releaseTickLoopAfterWake() {
+        val resume = tickLoopHeldByWakeGate
+        tickLoopHeldByWakeGate = false
+        val scope = this.scope
+        if (!resume || scope == null) {
+            deps.social().onDidWake(clockFn())
+            return
+        }
+        if (session.session == null) {
+            wakeRejoinPending = false
+            startTickLoop(scope, runBodyFirst = false)
+            deps.social().onDidWake(clockFn())
+            return
+        }
+        wakeRejoinPending = true
+        startTickLoop(scope, runBodyFirst = true)
     }
 
     /**
@@ -568,6 +664,10 @@ class WorkWiring(private val deps: WorkDeps) {
     /** 수명 끝(시험·종료 훅 마지막). 루프·OS 구독을 내린다. 큐 드레인은 취소하지 않는다(진 쪽은 큐 수명에서). */
     fun stop() {
         nudgeScheduler.stop()
+        tickJob?.cancel()
+        tickJob = null
+        tickLoopHeldByWakeGate = false
+        wakeRejoinPending = false
         jobs.forEach { it.cancel() }
         jobs.clear()
         registrations.forEach { runCatching { it.close() } }

@@ -307,12 +307,18 @@ class SessionStore(
      * (금고 저장 · 이메일 기억 · 기기 등록 · 소속 읽기 · 못 한 로그아웃 정리)은 반드시 여기 한 곳을 지난다.
      *
      * 호출하는 쪽이 세대 가드를 지난 뒤 부른다(여기서는 세대를 다시 보지 않는다 — 두 번 재면 호출부의 가드가 공허해진다).
+     *
+     * **다른 계정으로 바로 바꿔 탈 때만 세대를 올린다**(A 로그인 상태에서 B 를 들임 — 로그아웃을 거치지 않아 세대가 그대로였다).
+     * 안 올리면 A 때 나간 요청의 늦은 응답이 세대 가드를 지나 B 화면에 A 의 값을 적는다(윈도우 세션 10-31 실재현: 지갑 잔량).
+     * 같은 계정을 다시 들이거나 로그아웃 뒤 들이는 길(폰의 유일한 길)은 그대로다 — 호출부가 캡처한 세대가 계속 맞아야 한다.
      */
     fun adoptSignedInSession(signedIn: SupabaseSession, email: String) {
         if (!acquireInstance()) {
             refuseAnotherInstance()
             return
         }
+        val previous = _session.value
+        if (previous != null && previous.userID != signedIn.userID) _generation.value += 1
         persist(signedIn)
         prefs.putString(SessionPrefsKeys.email, email)
         _session.value = signedIn

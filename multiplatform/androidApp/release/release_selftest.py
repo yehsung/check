@@ -294,6 +294,10 @@ def preflight_cases(ctx, keyA, keyB):
     expect("P4 운영 주소가 .invalid → 거부", build("--prod-config", write_props(ctx, "inv.properties", v)), 2, "시험 주소")
     v = good_prod_values(); v["supabaseAnonKey"] = fake_jwt(ROLE_SECRET)
     expect("P5 비밀 역할 키 → 거부", build("--prod-config", write_props(ctx, "secret.properties", v)), 2, "role=anon")
+    v = good_prod_values(); v["supabaseAnonKey"] = "sb_publishable_" + "w6aSelftestNotReal_0123"
+    expect("P5b 새 공개 키(sb_publishable_) → 통과", build("--prod-config", write_props(ctx, "pub.properties", v)), 0, "plan-only mode=prod")
+    v = good_prod_values(); v["supabaseAnonKey"] = "sb" + "_secret_" + "w6aSelftestNotReal_0123"
+    expect("P5c 새 비밀 키(sb_secret 꼴) → 거부", build("--prod-config", write_props(ctx, "sbsecret.properties", v)), 2, "role=anon")
     p = write_props(ctx, "unknown.properties", good_prod_values())
     with open(p, "a") as f:
         f.write("aingcheck.prod.extra=1\n")
@@ -796,4 +800,4 @@ def run(script, tool):
 
 
 keyA_keytool = (None,)
-EXPECTED_MIN_CASES = 131
+EXPECTED_MIN_CASES = 133

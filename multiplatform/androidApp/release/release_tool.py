@@ -289,9 +289,11 @@ def check_prod_values(values):
     key = values["supabaseAnonKey"]
     if any(ch.isspace() or ch in "\"\\$" for ch in key):
         raise Refuse("aingcheck.prod.supabaseAnonKey 에 공백·따옴표가 있다")
-    payload = jwt_payload(key)
-    if payload is None or payload.get("role") != "anon":
-        raise Refuse("aingcheck.prod.supabaseAnonKey 가 role=anon 인 JWT 가 아니다(비밀 키를 넣지 않는다)")
+    # 운영은 새 공개 키(sb_publishable_…)를 쓴다 — 맥·iOS 번들과 같은 값(package-mas.sh 도 anon 으로 받는다).
+    # 옛 JWT 꼴이면 role=anon 만 받는다. 새 비밀 키·비밀 역할 JWT 는 아래 표식 검사(FORBIDDEN_MARKERS)가 거른다.
+    payload = {} if re.fullmatch(r"sb_publishable_[A-Za-z0-9_-]{10,}", key) else jwt_payload(key)
+    if payload is None or (payload and payload.get("role") != "anon"):
+        raise Refuse("aingcheck.prod.supabaseAnonKey 가 공개 키(sb_publishable_)도 role=anon 인 JWT 도 아니다(비밀 키를 넣지 않는다)")
     for m in FORBIDDEN_MARKERS:
         if m.decode() in key or m.decode() in json.dumps(payload):
             raise Refuse("aingcheck.prod.supabaseAnonKey 에 비밀 키 표식이 있다")

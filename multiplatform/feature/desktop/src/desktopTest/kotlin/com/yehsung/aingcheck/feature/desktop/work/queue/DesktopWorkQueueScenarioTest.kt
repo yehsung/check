@@ -1,6 +1,7 @@
 // 시나리오 원본: Tests/checkTests/V0345StartConflictStubTests.swift · V0236SyncTests.swift(큐 순서 · 세대 · 23505 해소기) @ a90d8623
 // 규약 번호: xplat-w1/briefs/work.md §2 wq ⑪(순서·세대 가드 앞 제거·소유자) ⑫(해소기 1·2·3a·3b·3c·3d, ★끝 시각을 고르지 않는다 C#24).
-// Swift 쪽 시나리오 골든(desktop-work-queue/)은 아직 없다 — 기대값은 위 Swift 시험과 WorkTimerStoreSync.swift 1669-1968 에서 옮겼다.
+// 이 파일의 기대값은 위 Swift 시험과 WorkTimerStoreSync.swift 1669-1968 에서 옮겼다. 같은 갈래를 Swift 로 실제로 돌린 녹음은
+// contract/golden/desktop-work-queue/scenarios.json — DesktopWorkQueueSwiftGoldenTest 가 대조한다.
 package com.yehsung.aingcheck.feature.desktop.work.queue
 
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -24,6 +25,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -72,14 +74,15 @@ class DesktopWorkQueueScenarioTest {
         script: List<Pair<Int, String>>,
         host: Host = Host(),
         store: InMemoryDesktopKeyValueStore = InMemoryDesktopKeyValueStore(),
+        clock: () -> SwiftDate = { GOLDEN_NOW },
         body: suspend Run.() -> Unit,
     ): Run {
         val recorder = GoldenRecorder(script)
-        val (service, client) = recorder.service()
+        val (service, client) = recorder.service(clock)
         val session = FakeSessionHost(service)
         lateinit var run: Run
         runBlocking {
-            val queue = DesktopWorkQueue(session, host, store, this, clock = { GOLDEN_NOW })
+            val queue = DesktopWorkQueue(session, host, store, this, clock = clock)
             run = Run(recorder, session, host, store, queue)
             run.body()
             queue.awaitIdle(10_000)
@@ -180,6 +183,76 @@ class DesktopWorkQueueScenarioTest {
             r.sigs().map { it.substringBefore('?') })
         assertEquals(listOf<String?>(sid), r.host.stamps)
         assertEquals(emptyList(), r.queue.items.value)
+    }
+
+    // ⑫(2) 5분 스로틀(Swift WorkTimerStore.swift:76 scavengeThrottleSeconds · WorkTimerStoreSync.swift:1842 `>= 300` 이면 발사).
+    // 시나리오 시계를 마지막 발사에서 4분 59초 / 5분 뒤로 둬 경계 양쪽을 잰다 — 같은 순간에 막고 같은 순간에 재면 0 보다 큰 어떤 스로틀도 통과한다.
+    @Test
+    fun rule12_2_scavengeThrottle_fiveMinuteBoundary() {
+        assertEquals(300.0, DesktopWorkQueue.scavengeThrottleSeconds)
+        val recorder = GoldenRecorder(emptyList())
+        val (service, client) = recorder.service()
+        runBlocking {
+            val queue = DesktopWorkQueue(FakeSessionHost(service), Host(), InMemoryDesktopKeyValueStore(), this, clock = { GOLDEN_NOW })
+            val t = GOLDEN_NOW
+            assertTrue(queue.scavenge.tryAcquire(t), "처음은 언제나 발사(Swift lastScavengeAt = .distantPast)")
+            assertFalse(queue.scavenge.tryAcquire(t.addingTimeInterval(1.0)))
+            assertFalse(queue.scavenge.tryAcquire(t.addingTimeInterval(299.0)), "4분 59초 — 아직 막힌다")
+            assertTrue(queue.scavenge.tryAcquire(t.addingTimeInterval(300.0)), "5분 정각 — 다시 발사")
+            assertFalse(queue.scavenge.tryAcquire(t.addingTimeInterval(599.0)), "기준은 마지막 **발사** 시각(막힌 시도는 기준을 옮기지 않는다)")
+            assertTrue(queue.scavenge.tryAcquire(t.addingTimeInterval(600.0)))
+        }
+        client.close()
+    }
+
+    @Test
+    fun rule12_2_resolver_4m59sAfterLastScavenge_noRpc_rethrows() {
+        val r = scenario(listOf(conflict, 200 to "[${row(other, "2026-09-17T04:35:00Z")}]")) {
+            queue.scavenge.tryAcquire(GOLDEN_NOW.addingTimeInterval(-299.0))
+            queue.enqueue(start())
+        }
+        assertEquals(listOf("POST work_sessions", "GET work_sessions"), r.sigs().map { it.substringBefore('?') },
+            "스로틀 안(4분 59초)이면 close_abandoned_work_sessions 를 쏘지 않고 (3-d) 로")
+        assertEquals(listOf("start-$sid"), r.queue.items.value.map { it.id })
+        assertEquals(1, r.host.failures.size)
+    }
+
+    @Test
+    fun rule12_2_resolver_5m00sAfterLastScavenge_firesRpc_thenRetryStart() {
+        val r = scenario(listOf(conflict, 200 to "[${row(other, "2026-09-17T04:35:00Z")}]", 200 to "1",
+            200 to "[${row(sid, "2026-09-17T04:05:00Z")}]", 200 to "{}")) {
+            queue.scavenge.tryAcquire(GOLDEN_NOW.addingTimeInterval(-300.0))
+            queue.enqueue(start())
+        }
+        assertEquals(listOf("POST work_sessions", "GET work_sessions", "POST rpc/close_abandoned_work_sessions", "POST work_sessions", "POST work_statuses"),
+            r.sigs().map { it.substringBefore('?') }, "5분 정각이면 다시 쏜다")
+        assertEquals(emptyList(), r.queue.items.value)
+        assertEquals(listOf<String?>(sid), r.host.stamps)
+    }
+
+    @Test
+    fun rule12_2_resolver_throttleReadsTheQueueClock() {
+        // 시계가 움직이는 시나리오: 같은 큐에서 첫 해소가 쏜 뒤 4분 59초 뒤의 둘째 해소는 막히고, 5분 뒤의 셋째는 다시 쏜다.
+        var now = GOLDEN_NOW
+        val r = scenario(listOf(
+            conflict, 200 to "[${row(other, "2026-09-17T04:35:00Z")}]", 200 to "1", conflict,
+            conflict, 200 to "[${row(other, "2026-09-17T04:35:00Z")}]",
+            conflict, 200 to "[${row(other, "2026-09-17T04:35:00Z")}]", 200 to "1", 200 to "[${row(sid, "2026-09-17T04:05:00Z")}]", 200 to "{}",
+        ), clock = { now }) {
+            queue.enqueue(start())
+            queue.awaitIdle(10_000)
+            now = GOLDEN_NOW.addingTimeInterval(299.0)
+            queue.retryPending()
+            now = GOLDEN_NOW.addingTimeInterval(300.0)
+            queue.retryPending()
+        }
+        assertEquals(listOf(
+            "POST work_sessions", "GET work_sessions", "POST rpc/close_abandoned_work_sessions", "POST work_sessions",
+            "POST work_sessions", "GET work_sessions",
+            "POST work_sessions", "GET work_sessions", "POST rpc/close_abandoned_work_sessions", "POST work_sessions", "POST work_statuses",
+        ), r.sigs().map { it.substringBefore('?') })
+        assertEquals(emptyList(), r.queue.items.value)
+        assertEquals(2, r.host.failures.size)
     }
 
     @Test

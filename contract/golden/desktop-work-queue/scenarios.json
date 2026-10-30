@@ -1,0 +1,1453 @@
+{
+  "cases": [
+    {
+      "confirmedServerSessionID": "ab000000-0000-4000-8000-0000000000f6",
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "drain/start-then-stop",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          },
+          {
+            "durationSeconds": 3540,
+            "endedAtSince1970": 1789621440,
+            "id": "0B000000-0000-4000-8000-000000000002",
+            "op": "stop",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": null,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "[{\"id\":\"AB000000-0000-4000-8000-0000000000F6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          },
+          {
+            "body": "[{\"id\":\"ab000000-0000-4000-8000-0000000000f6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":\"2026-09-17T05:04:00Z\"}]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "last_seen_at": "<WALL>",
+            "status": "off_work",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": "cd000000-0000-4000-8000-0000000000c7",
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "drain/start-zero-rows-keeps-stamp",
+      "input": {
+        "confirmedBeforeSessionID": "cd000000-0000-4000-8000-0000000000c7",
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": null,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "[]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": false,
+      "failed": true,
+      "id": "drain/failure-stops-in-place",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          },
+          {
+            "durationSeconds": 3540,
+            "endedAtSince1970": 1789621440,
+            "id": "0B000000-0000-4000-8000-000000000002",
+            "op": "stop",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": null,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"message\":\"boom\"}",
+            "status": 500
+          }
+        ]
+      },
+      "remaining": [
+        "0A000000-0000-4000-8000-000000000001",
+        "0B000000-0000-4000-8000-000000000002"
+      ],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": "동기화 실패"
+    },
+    {
+      "confirmedServerSessionID": "ab000000-0000-4000-8000-0000000000f6",
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/1-blocker-is-mine",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": null,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"AB000000-0000-4000-8000-0000000000F6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": "ab000000-0000-4000-8000-0000000000f6",
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/1-blocker-invisible-retry-once",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": null,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[]",
+            "status": 200
+          },
+          {
+            "body": "[{\"id\":\"ab000000-0000-4000-8000-0000000000f6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": "ab000000-0000-4000-8000-0000000000f6",
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/2-scavenge-then-retry",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": null,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "1",
+            "status": 200
+          },
+          {
+            "body": "[{\"id\":\"ab000000-0000-4000-8000-0000000000f6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        },
+        {
+          "body": {},
+          "method": "POST",
+          "path": "/rest/v1/rpc/close_abandoned_work_sessions",
+          "query": []
+        },
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": false,
+      "failed": true,
+      "id": "resolver/2-throttle-4m59s",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 299,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [
+        "0A000000-0000-4000-8000-000000000001"
+      ],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": "이미 다른 곳에서 근무 중이에요"
+    },
+    {
+      "confirmedServerSessionID": "ab000000-0000-4000-8000-0000000000f6",
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/2-throttle-5m00s",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 300,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "1",
+            "status": 200
+          },
+          {
+            "body": "[{\"id\":\"ab000000-0000-4000-8000-0000000000f6\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        },
+        {
+          "body": {},
+          "method": "POST",
+          "path": "/rest/v1/rpc/close_abandoned_work_sessions",
+          "query": []
+        },
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "active_session_id": "ab000000-0000-4000-8000-0000000000f6",
+            "last_seen_at": "<WALL>",
+            "status": "working",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "updated_at": "<WALL>",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_statuses",
+          "query": [
+            [
+              "on_conflict",
+              "team_id,user_id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/3a-stop-queued",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          },
+          {
+            "durationSeconds": 3540,
+            "endedAtSince1970": 1789621440,
+            "id": "0B000000-0000-4000-8000-000000000002",
+            "op": "stop",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 0,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "[]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z"
+          },
+          "method": "PATCH",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "id",
+              "eq.ab000000-0000-4000-8000-0000000000f6"
+            ],
+            [
+              "team_id",
+              "eq.ee000000-0000-4000-8000-0000000000e5"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 3540,
+            "ended_at": "2026-09-17T05:04:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "ended_at",
+              "is.null"
+            ],
+            [
+              "limit",
+              "1"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/3b-coverage-earliest-row",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 0,
+        "liveSessionID": "ab000000-0000-4000-8000-0000000000f6",
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null},{\"id\":\"x\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:20:00Z\",\"ended_at\":\"2026-09-17T04:30:00Z\"}]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 900,
+            "ended_at": "2026-09-17T04:20:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/3b-coverage-open-row",
+      "input": {
+        "confirmedBeforeSessionID": "ab000000-0000-4000-8000-0000000000f6",
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 0,
+        "liveSessionID": "ab000000-0000-4000-8000-0000000000f6",
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          },
+          {
+            "body": "{}",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        },
+        {
+          "body": {
+            "duration_seconds": 1800,
+            "ended_at": "2026-09-17T04:35:00Z",
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/3b-sub-second",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 0,
+        "liveSessionID": "ab000000-0000-4000-8000-0000000000f6",
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:05:00.500Z\",\"ended_at\":null}]",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": true,
+      "failed": false,
+      "id": "resolver/3c-stale-draft",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 0,
+        "liveSessionID": "cd000000-0000-4000-8000-0000000000c7",
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": null
+    },
+    {
+      "confirmedServerSessionID": null,
+      "drainedRefresh": false,
+      "failed": true,
+      "id": "resolver/3d-rethrow",
+      "input": {
+        "confirmedBeforeSessionID": null,
+        "items": [
+          {
+            "durationSeconds": null,
+            "endedAtSince1970": null,
+            "id": "0A000000-0000-4000-8000-000000000001",
+            "op": "start",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+            "sessionStartedAtSince1970": 1789617900
+          },
+          {
+            "durationSeconds": 3540,
+            "endedAtSince1970": 1789621440,
+            "id": "0B000000-0000-4000-8000-000000000002",
+            "op": "stop",
+            "ownerUserID": "aa000000-0000-4000-8000-0000000000a1",
+            "sessionID": "cd000000-0000-4000-8000-0000000000c7",
+            "sessionStartedAtSince1970": 1789617900
+          }
+        ],
+        "lastScavengeAgoSeconds": 0,
+        "liveSessionID": null,
+        "script": [
+          {
+            "body": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"work_sessions_one_open_per_user\\\"\"}",
+            "status": 409
+          },
+          {
+            "body": "[{\"id\":\"cd000000-0000-4000-8000-0000000000c7\",\"user_id\":\"aa000000-0000-4000-8000-0000000000a1\",\"started_at\":\"2026-09-17T04:35:00Z\",\"ended_at\":null}]",
+            "status": 200
+          }
+        ]
+      },
+      "remaining": [
+        "0A000000-0000-4000-8000-000000000001",
+        "0B000000-0000-4000-8000-000000000002"
+      ],
+      "requests": [
+        {
+          "body": {
+            "id": "ab000000-0000-4000-8000-0000000000f6",
+            "started_at": "2026-09-17T04:05:00Z",
+            "team_id": "ee000000-0000-4000-8000-0000000000e5",
+            "user_id": "aa000000-0000-4000-8000-0000000000a1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "on_conflict",
+              "id"
+            ]
+          ]
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/rest/v1/work_sessions",
+          "query": [
+            [
+              "select",
+              "id,user_id,started_at,ended_at,duration_seconds"
+            ],
+            [
+              "user_id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "or",
+              "(ended_at.is.null,ended_at.gte.2026-09-17T04:05:00Z)"
+            ],
+            [
+              "order",
+              "started_at.asc"
+            ],
+            [
+              "limit",
+              "50"
+            ]
+          ]
+        }
+      ],
+      "syncMessage": "이미 다른 곳에서 근무 중이에요"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-work-queue/GoldenExportDesktopWorkQueue.swift",
+  "golden": "desktop-work-queue/scenarios",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "outcome": "remaining = 남은 항목 id 순서 · confirmedServerSessionID = 끝의 도장 · failed = 드레인이 실패로 멈췄는가(pendingSync) · syncMessage = 그때 문구",
+    "requests": "스크립트 응답을 쓴 요청만(method · path · 디코드한 query 쌍 · 정규 JSON 본문, wallClockKeys 값은 \"<WALL>\"). 스크립트 뒤의 요청(드레인 끝 refreshTeamStatus 읽기)은 503 을 받고 drainedRefresh 로만 남는다.",
+    "run": "pendingItems = input.items(오프라인으로 쌓인 줄) → retryPendingSync. 시계는 nowSince1970 고정. liveSessionID 가 있으면 startedAt = 첫 항목 시작 · currentSessionID = 그 값(Kotlin WorkQueueHost.liveSessionId). lastScavengeAgoSeconds 가 있으면 마지막 스캐빈저 = now − 그 값(Kotlin scavenge.tryAcquire 로 미리 씀). confirmedBeforeSessionID = 드레인 전 도장.",
+    "values": {
+      "nowSince1970": 1789621500,
+      "otherSessionID": "cd000000-0000-4000-8000-0000000000c7",
+      "scavengeThrottleSeconds": 300,
+      "sessionID": "ab000000-0000-4000-8000-0000000000f6",
+      "teamID": "ee000000-0000-4000-8000-0000000000e5",
+      "userID": "aa000000-0000-4000-8000-0000000000a1"
+    },
+    "wallClockKeys": [
+      "auto_closed_at",
+      "last_seen_at",
+      "updated_at"
+    ]
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStoreSync.swift",
+    "Sources/check/WorkTimerStore.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift"
+  ]
+}

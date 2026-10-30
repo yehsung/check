@@ -150,6 +150,17 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
+    "desktop-work-queue/scenarios": {
+      "file": "1e0610d7d43104911170fe1495a052e80eab24d2d4e958f2c9aa1daa84916fdb",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-work-queue/GoldenExportDesktopWorkQueue.swift": "526a8331ec29772ef55f05e3a12b9ad43ea066d8755c2ab5ff821013da1721be"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStore.swift": "63d5c5965bfd95c02b6209b33788e9bd36e6dcf2ac8041528b1d85cc37231b2c",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+      }
+    },
     "desktop-work/requests": {
       "file": "c1fdc271214555edc08b0c4ffe05effe79d7ca7f9acf9c390dbdff0f51015f83",
       "generator": {

@@ -9,6 +9,7 @@ import CheckCore
 //   ① 고르기 — 제목 · 본문(`CakeGiftText`) · 두 초상을 크게(딸기 → 초코) · 확인 단추 · 실패 한 줄.
 //   ② 받은 뒤 — 받은 캐릭터 초상 · "○○를 받았어요!" · [지금 입기](기존 착용 경로) · [닫기].
 // 고르지 않고 닫으면 메뉴 팝오버의 '다시 열기' 카드가 받을 때까지 남는다(`CheckMenuView.TopBanner.cakeGift`).
+// 그 카드의 [고르기] 로 연 창은 사용자가 닫으면([닫기] · [지금 입기] · 빨간 점) 팝오버로 돌아간다(v0.3.69 — 스토어 `cakeGiftDidClose`).
 //
 // 창 계층은 뽑기 창(`CheckGachaWindow.swift`)의 규약 그대로다: 지연 생성 · 멱등 열기(최소화돼 있으면 되살린다) · 닫아도 파괴 안 함 ·
 // 고유 자동저장 이름(= 창 식별자, `MiniGameSpaceKey.standaloneWindowIDs` 에 등록 — 확인 단추가 키보드로도 눌린다) · 고착 감시자 + 재생성 상한.
@@ -366,6 +367,8 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
     }
 
     /// 사용자가 빨간 점을 눌렀다 — 고르지 않고 닫았으면 선물은 남는다('다시 열기' 카드). 받은 뒤 화면이었으면 다음엔 고르기부터.
+    /// 팝오버에서 연 창이면 팝오버로 돌아간다(스토어 `cakeGiftDidClose` — v0.3.69). 이 알림은 사용자 닫기에서만 온다: 우리 `close()` 는
+    /// `orderOut` 이고, 창을 버리는 두 길은 `close()` 전에 위임을 끊는다.
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         stuckWindowWatchdog?.cancel()

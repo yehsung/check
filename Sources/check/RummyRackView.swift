@@ -112,10 +112,24 @@ struct RummyRackView: View {
     let reduceMotion: Bool
     let onTileDrag: (Int, DragGesture.Value) -> Void
     let onTileDragEnd: (Int, DragGesture.Value) -> Void
+    /// 0.3.70 끼워 넣기 미리보기: 받침대 위로 끄는 동안 놓으면 될 받침대(= 실제). 다른 타일은 이 자리로 비켜 서고, 끄는 타일은
+    /// 원래 자리에서 감춘다(그 자리를 이웃이 채울 수 있다 — 놓을 자리는 점선 `ghostSlots`).
+    var previewLayout: RummyRackLayout? = nil
+    /// 0.3.70 방금 뽑은 타일(3초 빛남 — 동작 줄이기면 테두리만).
+    var freshTileIDs: Set<Int> = []
+    /// 0.3.70 받침대에서 그대로 맞는 덩어리(밑줄 띠 + 점수).
+    var rackMelds: [RummyRackMeld] = []
+    /// 0.3.70 첫 등록 전 '랙 묶음 합'(판 · 랙). nil 이면 안 보인다.
+    var planPoints: (table: Int, rack: Int)? = nil
+    /// 0.3.70 내 차례 테두리 빛.
+    var turnGlow: RummyTurnGlowPhase? = nil
+
+    private var shownLayout: RummyRackLayout { previewLayout ?? layout }
 
     var body: some View {
         let keys = RummyRackGeometry.motionKeys(tiles)
         let tileSize = RummyTileSize(geometry.tileSize)
+        let shown = shownLayout
         ZStack(alignment: .topLeading) {
             RummyRackStand()
                 .frame(width: size.width, height: size.height)
@@ -130,10 +144,11 @@ struct RummyRackView: View {
                     .position(x: frame.midX, y: frame.midY)
             }
             ForEach(tiles.map { KeyedTile(id: keys[$0.id] ?? "\($0.id)", tile: $0) }) { keyed in
-                if let slot = layout.slot(of: keyed.tile.id) {
+                if let slot = shown.slot(of: keyed.tile.id) {
                     tileView(keyed.tile, slot: slot, size: tileSize)
                 }
             }
+            RummyRackMeldMarks(melds: rackMelds, layout: shown, geometry: geometry)
             // 장수 뱃지는 집은 덩어리 **오른쪽 위 바깥**에 하나 — 누른 타일에 달면 이웃 타일 숫자를 가린다(10-30 사용자 지적).
             if let badge = liftBadge, badge.count > 1, let corner = liftedCorner {
                 RummyCountBadge(count: badge.count)
@@ -143,6 +158,20 @@ struct RummyRackView: View {
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .overlay(alignment: .topTrailing) {
+            // 첫 등록 전 '랙 묶음 합' — 뒷줄 위 난간 오른쪽(타일을 가리지 않는다).
+            if let plan = planPoints {
+                RummyRackPlanTag(table: plan.table, rack: plan.rack)
+                    .padding(.trailing, geometry.sideInset)
+                    .padding(.top, max(1, (geometry.rowBottom(0) - geometry.tileSize.height - 17) / 2))
+            }
+        }
+        .overlay {
+            if let turnGlow, !refused {
+                RummyTurnGlow(phase: turnGlow)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: turnGlow)
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(RummyTilePalette.color(RummyTilePalette.invalid), lineWidth: refused ? 3 : 0)
@@ -153,7 +182,7 @@ struct RummyRackView: View {
     /// 집은 덩어리의 오른쪽 위(들어 올림 5pt 반영). 덩어리가 두 줄에 걸치면 윗줄 기준.
     private var liftedCorner: CGPoint? {
         let frames = tiles.filter { liftedTileIDs.contains($0.id) }
-            .compactMap { layout.slot(of: $0.id).map(geometry.frame) }
+            .compactMap { shownLayout.slot(of: $0.id).map(geometry.frame) }
         guard let top = frames.map(\.minY).min() else { return nil }
         let topRow = frames.filter { abs($0.minY - top) < 1 }
         guard let right = topRow.map(\.maxX).max() else { return nil }
@@ -165,10 +194,18 @@ struct RummyRackView: View {
         let frame = geometry.frame(slot)
         let flying = flyIn.map { $0.tileIDs.contains(tile.id) && !$0.landed } ?? false
         let lifted = liftedTileIDs.contains(tile.id)
+        let fresh = freshTileIDs.contains(tile.id) && !lifted
+        // 끼워 넣기 미리보기 중엔 끄는 타일을 원래 자리에서 감춘다(이웃이 그 자리로 비켜 설 수 있다).
+        let hidden = previewLayout != nil && draggingTileIDs.contains(tile.id)
         let center = flying ? flyOrigin : CGPoint(x: frame.midX, y: frame.midY)
         RummyTileView(face: tile.face, size: size, dimmed: draggingTileIDs.contains(tile.id))
             .overlay(RoundedRectangle(cornerRadius: size.corner + 1, style: .continuous)
                 .stroke(CheckTheme.accent, lineWidth: lifted ? 2 : 0).padding(-1.5))
+            .overlay(RoundedRectangle(cornerRadius: size.corner + 1, style: .continuous)
+                .stroke(RummyCueStyle.fresh, lineWidth: fresh ? 2.5 : 0).padding(-2))
+            .shadow(color: RummyCueStyle.fresh.opacity(fresh && !reduceMotion ? 0.9 : 0), radius: 8)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.5), value: fresh)
+            .opacity(hidden ? 0 : 1)
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(RummyMatchView.space))
                 .onChanged { onTileDrag(tile.id, $0) }
                 .onEnded { onTileDragEnd(tile.id, $0) })

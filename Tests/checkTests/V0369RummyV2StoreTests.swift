@@ -281,6 +281,11 @@ struct V0369RummyV2StoreTests {
         store.onTileDrawn = { events.append($0) }
         store.applyState(try v2sDecodeState(v2sState()))
         store.sortRack(.color)
+        // 0.3.70: 정렬이 살아 있으면 뽑은 타일을 정렬 자리에 끼운다(아래 `drawJoinsLiveSort`) — 여기선 정렬 뒤 손으로 한 장
+        // 옮겨(정렬 꺼짐) 승계 규칙만 잰다.
+        let joker = try #require(store.editor?.rack.first { $0.face.isJoker }?.id)
+        store.moveTiles([joker], to: .rackSlot(RummyRackSlot(row: 1, halfCol: 20)))
+        #expect(store.rackSortMode == nil)
         let sortedSlots = try #require(store.editor?.rackEntries)
         script.stand("rummy_draw", v2sEnvelope(state: v2sState(
             seq: 2, turnSeat: 1, turnStartedMs: v2sNowMs + 5, rack: ["A4", "B9", "C2", "D13", "J", "B10"])))
@@ -297,6 +302,52 @@ struct V0369RummyV2StoreTests {
         store.applyState(try v2sDecodeState(v2sState(seq: 3, turnSeat: 0, turnStartedMs: v2sNowMs + 9,
                                                       rack: ["A4", "B9", "C2", "D13", "J", "B10"])))
         #expect(events.count == 1)
+    }
+
+    @Test("0.3.70 정렬 뒤 손대지 않았으면 뽑은 타일을 정렬 자리에 끼운다(반 칸 단위 유지) · 받침대로 놓기만 정렬을 끈다 · 새 판이면 지운다")
+    func drawJoinsLiveSort() async throws {
+        // 없으면: 789 로 정렬해 둔 받침대에 뽑은 B10 이 맨 끝 빈칸으로 가 B9 옆을 다시 손으로 옮겨야 하는 결함(감사 #10)이 초록이 된다.
+        let script = V2SScript()
+        script.stand("rummy_draft", #"{"status":"ok","draft_seq":1}"#)
+        let (store, _, _) = v2sMake("draw-sorted", script: script)
+        var events: [RummyDrawEvent] = []
+        store.onTileDrawn = { events.append($0) }
+        store.applyState(try v2sDecodeState(v2sState()))
+        #expect(store.rackSortMode == nil)
+        store.sortRack(.color)
+        #expect(store.rackSortMode == .color)
+        // 판으로 냈다 되돌리기 — 받침대를 손으로 정리한 게 아니다(정렬 유지).
+        let a4 = try #require(store.editor?.rack.first { $0.face.text == "A4" }?.id)
+        store.moveTiles([a4], to: .newMeldAt(RummyPoint(x: 400, y: 300)))
+        store.resetTurn()
+        #expect(store.rackSortMode == .color)
+        // 다음 차례에 B10 을 받았다(뽑기 · 시간 초과 벌칙 모두 이 길).
+        store.applyState(try v2sDecodeState(v2sState(
+            seq: 2, turnSeat: 1, turnStartedMs: v2sNowMs + 5, rack: ["A4", "B9", "C2", "D13", "J", "B10"])))
+        let editor = try #require(store.editor)
+        var expected = editor
+        expected.sortRack(.color)
+        #expect(editor.rackLayout == expected.rackLayout)
+        // 789: A4 | B9 B10 | C2 | D13 | J — 단위 사이 반 칸.
+        #expect(editor.rackEntries.map(\.face.text) == ["A4", "B9", "B10", "C2", "D13", "J"])
+        #expect(editor.rackEntries.map(\.slot.halfCol) == [0, 3, 5, 8, 11, 14])
+        let event = try #require(events.last)
+        #expect(event.tiles.map(\.face.text) == ["B10"])
+        #expect(editor.rackLayout.slot(of: event.tiles[0].tileID) == event.tiles[0].slot)
+        #expect(event.tiles[0].slot == RummyRackSlot(row: 0, halfCol: 5))
+        // 받침대로 놓는 끌기는 정렬을 끈다 → 다음 뽑기는 마지막 빈자리(옛 규칙).
+        let c2 = try #require(store.editor?.rack.first { $0.face.text == "C2" }?.id)
+        store.moveTiles([c2], to: .rackSlot(RummyRackSlot(row: 1, halfCol: 0)))
+        #expect(store.rackSortMode == nil)
+        store.applyState(try v2sDecodeState(v2sState(
+            seq: 3, turnSeat: 0, turnStartedMs: v2sNowMs + 9, rack: ["A4", "B9", "C2", "D13", "J", "B10", "A5"])))
+        let a5 = try #require(store.editor?.rack.first { $0.face.text == "A5" })
+        #expect(store.editor?.rack.last == a5)
+        // 정렬을 다시 켜고 판이 끝나면(편집기를 내리면) 지운다.
+        store.sortRack(.number)
+        #expect(store.rackSortMode == .number)
+        store.applyState(try v2sDecodeState(v2sState(status: "finished", seq: 9)))
+        #expect(store.editor == nil && store.rackSortMode == nil)
     }
 
     @Test("받침대 자리 저장: 판 id 키로 저장 → 새 스토어(앱 재실행)가 복원 → 판이 끝나면 지운다 · rackDefaults nil 이면 안 쓴다")

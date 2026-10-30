@@ -271,12 +271,15 @@ extension RummyStore {
 
     // MARK: - 뽑기 사건(머리말 ⑬)
 
-    /// 같은 판의 앞 편집기와 새 편집기를 대어 새로 들어온 면(다중집합 차)을 찾고, 그 타일(앞 자리 목록에 없던 자리)을 알린다.
-    func noteDrawn(previous: RummyTurnEditor, fresh: RummyTurnEditor, entries: [RummyRackEntry]) {
+    /// 같은 판의 앞 편집기와 새 편집기를 대어 새로 들어온 면(다중집합 차)을 찾는다 — 그 타일(앞 자리 목록에 없던 자리).
+    /// 0.3.70: 찾기와 알리기를 나눴다 — 정렬이 살아 있으면 그 사이에 받침대를 다시 정렬한다(`reconcileEditor`).
+    nonisolated static func drawnTiles(
+        previous: RummyTurnEditor, fresh: RummyTurnEditor, entries: [RummyRackEntry]
+    ) -> [RummyDrawnTile] {
         var gained: [RummyFace: Int] = [:]
         for face in fresh.startRackFaces { gained[face, default: 0] += 1 }
         for face in previous.startRackFaces { gained[face, default: 0] -= 1 }
-        guard gained.values.contains(where: { $0 > 0 }) else { return }
+        guard gained.values.contains(where: { $0 > 0 }) else { return [] }
         let known = Set(entries)
         var tiles: [RummyDrawnTile] = []
         // 새 타일은 마지막 빈자리로 갔다 — 뒤에서부터 고른다(같은 면이 둘이면 앞 자리 목록에 없는 쪽).
@@ -286,6 +289,11 @@ extension RummyStore {
             gained[tile.face, default: 0] -= 1
             tiles.insert(RummyDrawnTile(tileID: tile.id, face: tile.face, slot: slot), at: 0)
         }
+        return tiles
+    }
+
+    /// 뽑기 사건을 알린다(모션 · 3초 빛남 계기).
+    func noteDrawn(_ tiles: [RummyDrawnTile]) {
         guard !tiles.isEmpty else { return }
         drawSerial &+= 1
         let event = RummyDrawEvent(serial: drawSerial, tiles: tiles)

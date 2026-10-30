@@ -33,6 +33,8 @@ import Foundation
 //  · 늘어난 묶음이 막히면 옆으로(왼쪽 먼저) → 그래도 막히면 이웃을 비켜 놓는다(`RummyTableEdit.settle`, 편집기 전용).
 //  · 판이 꽉 차도 구석에 겹쳐 놓지 않는다(`RummyTableLayout.freeSpot` 이 없으면 놓은 자리 + 이웃 비켜 놓기).
 //  · 판 길게 누르기 = `meldChunk`(누른 타일에서 가까운 끝까지 — ⌥ 없이 쪼개기).
+// ── 0.3.70 받침대 — `.rackSlot` 이 타일 사이면 **끼우고 오른쪽을 민다**(빈칸이면 옛 그대로, 넘치면 다음 줄로 흘림 —
+//    `RummyRackLayout.insert`). 화면 미리보기는 `rackLayoutAfterDrop`(= 실제). 랙 묶음 표시는 `rackMelds`(RummyRackMelds.swift).
 
 /// 끌기용 타일 한 장. `id` 는 이 편집기 안에서만 뜻이 있는 로컬 번호다(와이어엔 면 문자열만 간다 — 설계서 §1).
 package struct RummyTile: Identifiable, Hashable, Sendable {
@@ -403,9 +405,8 @@ package struct RummyTurnEditor: Equatable, Sendable {
         case .rack(nil):
             rackLayout.set(tileIDs, at: rackLayout.endSlot(tiles: tileIDs.count))
         case .rackSlot(let wanted):
-            let slot = rackLayout.isFree(wanted, tiles: tileIDs.count)
-                ? wanted : rackLayout.nearestFree(to: wanted, tiles: tileIDs.count)
-            rackLayout.set(tileIDs, at: slot)
+            // 0.3.70: 빈칸이면 그 자리, 타일 사이면 끼우고 오른쪽을 민다(`RummyRackLayout.insert`).
+            rackLayout.insert(tileIDs, at: wanted)
         }
 
         // 4) 받은 묶음 마무리(0.3.70): 맞는 세트면 R-09 표시 순서로(③), 그다음 판에 앉힌다(④).

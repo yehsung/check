@@ -269,7 +269,13 @@ struct RummyMatchView: View {
     @State private var frozenCanvas: RummyCanvasTransform?
     @State private var stagger: [Int: Double] = [:]
     @State private var flyIn: RummyFlyIn?
-    @State private var lastSort: RummyRackSort?
+    /// 0.3.70 방금 뽑은 타일(3초 빛남).
+    @State private var freshDraw: (serial: Int, ids: Set<Int>)?
+    /// 0.3.70 내 차례 표시: 테두리 빛 단계 · '내 차례' 배지(차례 정체성으로 한 번만).
+    @State private var turnGlowPhase: RummyTurnGlowPhase = .steady
+    @State private var turnBadgeShown = false
+    @State private var turnCueKey: String?
+    @Environment(\.rummyCuePreview) private var cuePreview
     @State private var arrival: RummyArrival?
     @State private var arrivalSerial = 0
     /// 마지막으로 판에 놓은 타일(묶음 상자 모션 키에서 뺀다 — 캔버스 `recentTileIDs`).
@@ -295,8 +301,18 @@ struct RummyMatchView: View {
             arrival = nil
             recentDrop = []
         }
+        .onAppear { cueTurnIfNeeded() }
+        .onChange(of: myTurnCueKey) { _, _ in cueTurnIfNeeded() }
         .onChange(of: store.lastDraw?.serial) { _, serial in
-            guard let serial, let event = store.lastDraw, !reduceMotion else { return }
+            guard let serial, let event = store.lastDraw else { return }
+            // 0.3.70: 뽑은 타일은 3초 빛낸다(동작 줄이기면 테두리만 — 날아오기는 없다).
+            let ids = Set(event.tiles.map(\.tileID))
+            freshDraw = (serial, ids)
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                if freshDraw?.serial == serial { freshDraw = nil }
+            }
+            guard !reduceMotion else { return }
             flyIn = RummyFlyIn(serial: serial, tileIDs: Set(event.tiles.map(\.tileID)), landed: false)
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(30))
@@ -306,6 +322,48 @@ struct RummyMatchView: View {
                 if flyIn?.serial == serial { flyIn = nil }
             }
         }
+    }
+
+    // MARK: 내 차례 표시(0.3.70 — 화면 안에서만)
+
+    /// 내 차례 정체성(차례마다 다르다). 내 차례가 아니면 nil.
+    private var myTurnCueKey: String? {
+        isMyTurn && match.status == .active ? RummyEditorKey(match).text : nil
+    }
+
+    /// 내 차례가 새로 왔으면 받침대 테두리를 한 번 크게 빛내고(0.8초 뒤 은은하게) 판 가운데 '내 차례' 배지를 1.3초 띄운다.
+    /// 동작 줄이기면 펄스·배지 없이 은은한 테두리만.
+    private func cueTurnIfNeeded() {
+        guard let key = myTurnCueKey, key != turnCueKey else { return }
+        turnCueKey = key
+        guard !reduceMotion, !scene.isPreview else {
+            turnGlowPhase = .steady
+            return
+        }
+        turnGlowPhase = .pulse
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { turnBadgeShown = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard turnCueKey == key else { return }
+            turnGlowPhase = .steady
+            try? await Task.sleep(for: .milliseconds(500))
+            guard turnCueKey == key else { return }
+            withAnimation(.easeIn(duration: 0.25)) { turnBadgeShown = false }
+        }
+    }
+
+    private var shownTurnGlow: RummyTurnGlowPhase? {
+        if let preview = cuePreview { return preview.turnGlow }
+        return isMyTurn ? turnGlowPhase : nil
+    }
+
+    private var shownTurnBadge: Bool {
+        cuePreview?.turnBadge ?? (turnBadgeShown && isMyTurn)
+    }
+
+    /// 정렬 버튼의 '선택됨' — 정렬한 뒤 손대지 않은 동안만(스토어 `rackSortMode`).
+    private var shownSortMode: RummyRackSort? {
+        cuePreview?.sortMode ?? (scene.isPreview ? nil : store.rackSortMode)
     }
 
     // MARK: 장면 값
@@ -482,6 +540,11 @@ struct RummyMatchView: View {
             tableArea(L, model: model, canvas: canvas, dragging: dragging, target: target, lift: lift)
                 .frame(width: L.table.width, height: L.table.height)
                 .offset(x: L.table.minX, y: L.table.minY)
+            if shownTurnBadge {
+                RummyTurnBadge()
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity))
+                    .position(x: L.table.midX, y: L.table.midY)
+            }
             if let mine = scene.mySeat {
                 RummySeatCard(store: store, scene: scene, match: match, seat: mine, style: .mine)
                     .frame(width: L.mySeat.width, height: L.mySeat.height)
@@ -566,23 +629,30 @@ struct RummyMatchView: View {
     private func rackArea(_ L: RummyMatchLayout, geometry: RummyRackGeometry, dragging: RummyDragState?,
                           target: RummyDropTarget?, refused: Bool, lift: (tileID: Int, ids: [Int])?,
                           canvas: RummyCanvasTransform) -> some View {
-        let ghosts: [RummyRackSlot] = {
-            guard !refused, let dragging, case .rackSlot(let wanted)? = target, let editor else { return [] }
-            let n = dragging.tiles.count
-            let excluding = Set(dragging.ids)
-            let slot = editor.rackLayout.isFree(wanted, tiles: n, excluding: excluding)
-                ? wanted : editor.rackLayout.nearestFree(to: wanted, tiles: n, excluding: excluding)
-            return (0..<n).map { RummyRackSlot(row: slot.row, halfCol: slot.halfCol + $0 * RummyRackLayout.tileSpan) }
+        // 0.3.70 끼워 넣기 미리보기: 같은 놓기를 편집기 사본에 해 본 받침대(= 실제). 이웃이 비켜 서고 점선이 놓일 자리.
+        let dropped: RummyTurnEditor? = {
+            guard !refused, let dragging, case .rackSlot(let wanted)? = target, let editor else { return nil }
+            var copy = editor
+            return copy.moveBlock(dragging.ids, to: .rackSlot(wanted)) ? copy : nil
         }()
+        let ghosts: [RummyRackSlot] = dropped.map { after in dragging?.ids.compactMap { after.rackLayout.slot(of: $0) } ?? [] } ?? []
+        let shown = dropped ?? editor
+        // 미리보기가 새 줄을 열면 그리는 기하만 그 줄 수로(놓는 판정 기하는 그대로 — 끄는 동안 되먹임이 없게).
+        let drawGeometry = dropped.map { RummyRackGeometry(height: L.rackHeight, rowCount: $0.rackLayout.rowCount) } ?? geometry
         let origin = CGPoint(x: L.drawButton.midX - L.rack.minX, y: L.drawButton.midY - L.rack.minY)
         return RummyRackView(
-            tiles: editor?.rack ?? [], layout: editor?.rackLayout ?? RummyRackLayout(), geometry: geometry,
+            tiles: editor?.rack ?? [], layout: editor?.rackLayout ?? RummyRackLayout(), geometry: drawGeometry,
             size: L.rack.size, draggingTileIDs: dragging.map { Set($0.ids) } ?? [],
             liftedTileIDs: Set(lift?.ids ?? []), liftBadge: lift.map { ($0.tileID, $0.ids.count) },
             ghostSlots: ghosts, refused: refused || refusedFlash, stagger: stagger, flyIn: flyIn, flyOrigin: origin,
             reduceMotion: reduceMotion,
             onTileDrag: { id, value in tileChanged(id, value, surface: .rack, canvas: canvas) },
-            onTileDragEnd: { id, value in tileEnded(id, value, L: L) })
+            onTileDragEnd: { id, value in tileEnded(id, value, L: L) },
+            previewLayout: dropped?.rackLayout,
+            freshTileIDs: cuePreview?.freshTileIDs ?? freshDraw?.ids ?? [],
+            rackMelds: shown?.rackMelds ?? [],
+            planPoints: shown?.initialPlanPoints.map { (table: isMyTurn ? $0.table : 0, rack: $0.rack) },
+            turnGlow: shownTurnGlow)
     }
 
     // MARK: 손에 든 것
@@ -761,7 +831,6 @@ struct RummyMatchView: View {
     // MARK: 버튼
 
     private func sort(_ mode: RummyRackSort) {
-        lastSort = mode
         guard let editor else { return }
         if !reduceMotion {
             var sorted = editor
@@ -785,6 +854,13 @@ struct RummyMatchView: View {
                                    height: RummyMatchLayout.submitHeight, fullWidth: true,
                                    isEnabled: canEdit && editor?.canSubmit == true,
                                    action: { store.submitTurn() })
+                // 0.3.70: 남은 초를 손 가까이 — [완료] 오른쪽 안(10초 이하 주황 · 5초 이하 빨강).
+                .overlay(alignment: .trailing) {
+                    if isMyTurn {
+                        RummySubmitSeconds(remaining: scene.turnRemaining(store), fixedNow: scene.fixedNow)
+                            .padding(.trailing, 10)
+                    }
+                }
             HStack(spacing: RummyMatchLayout.actionSpacing) {
                 TetrisDuelActionButton(title: poolEmpty ? RummyText.pass : RummyText.draw,
                                        icon: poolEmpty ? "forward.fill" : "plus.rectangle.on.rectangle",
@@ -798,7 +874,7 @@ struct RummyMatchView: View {
                     .checkTooltip("이번 차례에 놓은 것을 처음으로")
             }
             HStack(spacing: RummyMatchLayout.actionSpacing) {
-                RummySortSwitch(selected: lastSort, enabled: editor != nil, onSort: sort)
+                RummySortSwitch(selected: shownSortMode, enabled: editor != nil, onSort: sort)
                 TetrisDuelActionButton(title: isZoomed ? RummyMatchText.zoomOut : RummyMatchText.zoomIn,
                                        icon: isZoomed ? "arrow.down.right.and.arrow.up.left" : "plus.magnifyingglass",
                                        style: .outline, height: RummyMatchLayout.smallButtonHeight, fullWidth: true,

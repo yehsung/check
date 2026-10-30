@@ -1,3 +1,4 @@
 # 원본: 없음 — Android 판 장부(W6-a · E§11 "versionCode 는 자체 축"). release-android.sh build 가 판정이 초록인 운영 판마다 한 줄 덧붙인다.
 # 규칙: versionCode 는 단조 증가(장부 최댓값보다 커야 한다, 1..1000000 — K5) · 업로드 키 인증서는 직전 판과 같다(바꾸면 --new-upload-key).
 # 칸(탭): versionCode	versionName	buildTimeUtc	gitSha	duels	aabSha256	uploadCertSha256
+1	1.0.0	20261030T003823Z	0bf6e2a8ec2a3f228a7d7cb55f372fb91623cf20	1	ae0660887d29c344698e8c56129b8cfa39d109258e18810c6b17ae3e330dc76b	9de55976ba2936d30b873d0971985f5f97b80b6d5dfafbec1b99bcf00cf66f3c

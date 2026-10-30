@@ -115,6 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: CheckOverlayController?
     // 확성기 배너 창(2026-10-30). 배너 스토어의 `current` 를 지켜보다 띄우고 내린다 — 앱 수명 동안 살아 있어야 한다.
     private var megaphoneBannerController: MegaphoneBannerWindowController?
+    /// 보이스오버 켬·끔 감시(확성기 배너 저절로 닫기 붙들기 — `wireMegaphoneBanner`).
+    private var megaphoneVoiceOverObservation: NSKeyValueObservation?
     // 할 일 한 벌(목록·투명도 설정·보드 창). 오버레이와 **형제**다 — 캐릭터 패널을 키워 보드를 담으면
     // 울트라 프레임 복귀·드래그 위치 영속·클릭통과 기계가 전부 얽힌다.
     // 셋을 낱개가 아니라 한 묶음으로 드는 이유는 TodoBoardWiring.Board 주석 참고(스토어 중복 생성 방지).
@@ -428,6 +430,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = MegaphoneBannerWindowController(store: store)
         controller.start()
         megaphoneBannerController = controller
+        // 보이스오버가 켜져 있으면 배너를 저절로 올리지 않는다 — 5초 안에 본문을 다 못 듣는다([닫기] 로만). 켬·끔은 KVO 로 다시 판단한다.
+        store.megaphoneBanner.holdsAutoDismiss = { NSWorkspace.shared.isVoiceOverEnabled }
+        megaphoneVoiceOverObservation = NSWorkspace.shared.observe(\.isVoiceOverEnabled) { [weak store] _, _ in
+            Task { @MainActor in store?.megaphoneBanner.autoDismissHoldChanged() }
+        }
     }
 
     /// 1:1 체스(v0.3.44)의 문들을 잇는다(실행당 1회). **전부 빠져도 컴파일·테스트는 조용히 초록이다** —

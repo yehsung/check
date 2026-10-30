@@ -280,6 +280,56 @@ struct MegaphoneBannerStoreTests {
         #expect(rig.store.current == nil)
     }
 
+    // 없으면: 보이스오버 사용자가 본문(최대 198자)을 다 듣기 전에 배너가 올라가는 결함이 초록(2026-10-31 모바일 세션 지적).
+    @Test("보이스오버: 저절로 닫기를 붙들면 [닫기]로만 · 미룸에서 돌아와 다시 떠도 붙든다 · 풀리면 다시 5초 · 기준선: 안 붙들면 5초")
+    func voiceOverHoldsAutoDismiss() async {
+        let rig = mbMake("voiceover") { _, _, _ in nil }
+        let held = MBFlag(true)
+        rig.store.holdsAutoDismiss = { held.value }
+        rig.store.presentOwn(body: "천천히 들어요", senderName: "나")
+        #expect(!rig.timeline.scheduledDelays.contains(MegaphoneBannerRules.displaySeconds), "붙드는데 5초 타이머가 걸렸다")
+        rig.timeline.advance(100)
+        #expect(rig.store.current?.body == "천천히 들어요", "보이스오버가 켜져 있는데 저절로 닫혔다")
+        // 멈췄다 풀어도(누르기·호버) 붙듦이 이긴다.
+        rig.store.pauseTimer()
+        rig.store.resumeTimer()
+        rig.timeline.advance(100)
+        #expect(rig.store.current != nil, "멈춤을 풀자 붙듦을 잊었다")
+        // 미룸(대결·미니게임·시트)에서 돌아와 다시 뜨는 배너도 같은 자리(startTimer)를 지난다.
+        let deferred = MBFlag(true)
+        rig.store.isBannerDeferred = { deferred.value }
+        rig.store.deferralChanged()
+        #expect(rig.store.current == nil, "전제: 미루면 내린다")
+        deferred.value = false
+        rig.store.deferralChanged()
+        #expect(rig.store.current != nil, "전제: 풀리면 다시 뜬다")
+        rig.timeline.advance(100)
+        #expect(rig.store.current != nil, "미룸에서 돌아온 배너가 저절로 닫혔다")
+        // [닫기] 는 언제나 닫는다.
+        rig.store.dismissCurrent()
+        #expect(rig.store.current == nil)
+
+        // 보이스오버를 끄면 떠 있는 배너를 처음부터 5초 센다.
+        rig.timeline.advance(MegaphoneBannerRules.gap)
+        rig.store.presentOwn(body: "끄면 다시 센다", senderName: "나")
+        rig.timeline.advance(30)
+        held.value = false
+        rig.store.autoDismissHoldChanged()
+        rig.timeline.advance(4.9)
+        #expect(rig.store.current != nil, "풀린 뒤 5초가 아니다")
+        rig.timeline.advance(0.1)
+        #expect(rig.store.current == nil, "풀린 뒤 5초에 안 닫혔다")
+
+        // 기준선: 처음부터 안 붙들면 5초 뒤 닫힌다 · 다시 켜면 걸린 타이머를 버린다.
+        rig.timeline.advance(MegaphoneBannerRules.gap)
+        rig.store.presentOwn(body: "기준선", senderName: "나")
+        rig.timeline.advance(2)
+        held.value = true
+        rig.store.autoDismissHoldChanged()
+        rig.timeline.advance(100)
+        #expect(rig.store.current?.body == "기준선", "보이스오버를 켰는데 걸려 있던 타이머가 닫았다")
+    }
+
     // 없으면: 마우스를 올려도 사라지거나, 떠난 뒤 남은 0.5초 만에 휙 사라지는 결함이 초록.
     @Test("멈춤: 올려 둔 동안은 안 사라진다 · 풀리면 남은 시간과 3초 중 긴 쪽")
     func pauseAndResume() async {

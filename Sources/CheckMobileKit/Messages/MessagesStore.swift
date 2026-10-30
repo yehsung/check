@@ -70,6 +70,8 @@ package final class MessagesStore {
     package private(set) var directoryLoaded = false
     package private(set) var directoryLoading = false
     package private(set) var directoryFailed = false
+    /// 확성기 [답장]이 넘긴 이름·아바타(사람 id → 값). 대화 머리의 마지막 기댈 곳 — 확성기 줄이 빠져 대화가 비어 있어도 빈 칸이 아니게.
+    package private(set) var replyPeerHints: [String: MegaphoneReplyPeerHint] = [:]
 
     // MARK: 차단 · 신고 (앱스토어 1.2 — 규칙과 문구는 코어 `BlockReportRules`(맥과 한 벌), 동작은 `MessagesBlockStore.swift`)
 
@@ -186,6 +188,7 @@ package final class MessagesStore {
         optimisticReads = [:]
         legacyReadStamps = [:]
         pokeLog = []
+        replyPeerHints = [:]
         pokeLogAvailable = false
         pokeChronology = [:]
         pokeSnapshot = nil
@@ -389,7 +392,13 @@ package final class MessagesStore {
     package func peerName(for peerID: String) -> String? {
         if let thread = thread(for: peerID) { return thread.peerName }
         if let poke = visiblePokeLog.last(where: { $0.peerUserID == peerID }) { return poke.peerName }
-        return directory.first { $0.userID == peerID }?.name
+        return directory.first { $0.userID == peerID }?.name ?? replyPeerHints[peerID]?.name
+    }
+
+    /// 확성기 [답장]이 여는 대화의 이름·아바타를 적어 둔다(`peerName`·`peerAvatarURL` 의 마지막 기댈 곳).
+    package func rememberPeerHint(peerID: String, name: String?, avatarURL: URL?) {
+        guard name != nil || avatarURL != nil else { return }
+        replyPeerHints[peerID] = MegaphoneReplyPeerHint(name: name, avatarURL: avatarURL)
     }
 
     /// 대화 머리. 이름을 모르면 가짜 이니셜 대신 일반 인물 아이콘(`MessagesConversationRules.header`).
@@ -402,7 +411,7 @@ package final class MessagesStore {
     package func peerAvatarURL(for peerID: String) -> URL? {
         if let url = thread(for: peerID)?.peerAvatarURL { return url }
         if let url = visiblePokeLog.last(where: { $0.peerUserID == peerID })?.peerAvatarURL { return url }
-        return directory.first { $0.userID == peerID }?.avatarURL
+        return directory.first { $0.userID == peerID }?.avatarURL ?? replyPeerHints[peerID]?.avatarURL
     }
 
     /// 차단해 숨긴 상대인가(대화 화면이 스스로 빠져나오는 근거 · 사람 찾기 거르기).

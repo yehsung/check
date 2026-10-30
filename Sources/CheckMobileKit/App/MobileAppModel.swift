@@ -33,6 +33,8 @@ public final class MobileAppModel {
     /// 확성기 배너(코어 `MegaphoneBannerStore` — 맥과 한 벌). 메시지함 필터·푸시·실시간·전송 뒤 내 배너가 이 하나를 쓴다.
     /// 호스트는 오목·체스·확성기 작성과 같은 하나(`gomokuHost`). 로그아웃 사슬(`sessionDidSignOut`)에서 비운다.
     package let megaphoneBanner: MegaphoneBannerStore
+    /// 시트·풀스크린 커버가 떠 있는가(배너 미룸의 한 갈래 — `isMegaphoneBannerDeferred`). 시험이 바꿔 끼운다.
+    @ObservationIgnored package var megaphoneModalProbe: @MainActor () -> Bool = { MegaphoneBannerModalProbe.isModalPresented() }
     /// 화면 모드(기기 설정). `sessionDidSignOut` 의 reset 사슬에 넣지 않는다 — 로그아웃해도 남는다.
     package let appearance: MobileAppearanceStore
     /// 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). 탭 막대가 환경값으로 흘린다. 로그아웃하면 비운다.
@@ -184,6 +186,8 @@ public final class MobileAppModel {
         links.games = games
         links.me = me
         links.megaphoneBanner = megaphoneBanner
+        // 배너 미룸(계약 — 폰 배너): 시트·대결 화면·미니게임 판. 바뀌는 순간은 배너 오버레이가 `syncMegaphoneBannerDeferral()` 로 알린다.
+        megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
         // 표가 바뀌면 위젯 근무 중 얼굴도 다시 쓴다(지금 탭이 위젯의 유일한 작성자 — 같은 값이면 쓰기 창구가 건너뛴다).
         characters.onDirectoryChange = { [weak now] in now?.writeWidgetSnapshot() }
         // 일일 미션(v0.3.64) — **1:1 판이 끝난 것을 처음 보는 자리**가 여기다(코어 스토어가 `match` 가 끝으로 바뀐 그 자리에서

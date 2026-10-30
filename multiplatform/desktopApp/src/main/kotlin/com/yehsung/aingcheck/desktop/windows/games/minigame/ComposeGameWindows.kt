@@ -302,7 +302,7 @@ object ComposeGamesWindows {
     }
 
     /**
-     * 미니게임 창 키: 테트리스는 키 표, 다른 게임은 스페이스 = 탭, ESC = 정지 토글. 판이 얼었으면(초점 상실 · ESC 정지 · 3-2-1) 판 키를 받지 않는다.
+     * 미니게임 창 키: 테트리스는 키 표, 길건너는 방향 = 뛰기(GameKeyMap.hop), 다른 게임은 스페이스 = 탭, ESC = 정지 토글. 판이 얼었으면(초점 상실 · ESC 정지 · 3-2-1) 판 키를 받지 않는다.
      * ⚠️뗌은 게이트보다 먼저 적용하되(★★ MiniGamePanel.swift:302-308) **삼킴은 이 창 판의 키만**(`belongs && wantsStrokes()`) — 남의 창(대결) 뗌을 삼키면 그 창 키가 굳는다.
      * ESC(맥 :332 onEscape · :983-990)는 **정지·재개를 실제로 했을 때만** 삼킨다 — 시작 전 · 결과 화면의 ESC 는 흘린다(남의 취소 키를 훔치지 않게).
      */
@@ -322,6 +322,16 @@ object ComposeGamesWindows {
         if (vk == GameKeyMap.VK_SPACE) {
             if (down && !repeat && !mods && live) SoloTetrisKeys.action(controller)
             return@GameKeyRouter gameOwns // 정지 중 스페이스는 삼키기만(맥 shouldConsume 뒤 action 이 아무것도 안 한다)
+        }
+        // 길건너 뛰기(맥 MiniGamePanel.swift:279-296): 테트리스 가지보다 **앞**(↑↓←→ 가 두 표에 다 있다) · wantsHops = 길건너 ∧ ¬얼음(:999).
+        // 게이트는 키가 게임 창으로 갔는가(gameOwns) — 뗌은 삼키기만, 조합키는 흘리고, OS 키 반복은 삼키기만(한 번 누름 = 한 칸).
+        val hop = GameKeyMap.hop(vk)
+        if (hop != null && controller.kind == MiniGameKind.crossy && !state.frozen) {
+            if (!gameOwns) return@GameKeyRouter false
+            if (!down) return@GameKeyRouter true
+            if (mods) return@GameKeyRouter false
+            if (!repeat) controller.hop(hop)
+            return@GameKeyRouter true
         }
         if (controller.kind != MiniGameKind.tetris) return@GameKeyRouter false
         val stroke = GameKeyMap.stroke(vk, down, mods, repeat, live)

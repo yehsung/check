@@ -3,6 +3,7 @@ package com.yehsung.aingcheck.core.stores.games
 
 import com.yehsung.aingcheck.core.rules.duel.DuelFee
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.rules.minigame.crossy.CrossyGame
 import com.yehsung.aingcheck.core.rules.renju.GomokuColor
 import com.yehsung.aingcheck.core.rules.renju.GomokuForbiddenReason
 import com.yehsung.aingcheck.core.rules.renju.GomokuOutcome
@@ -138,8 +139,8 @@ object GamesMiniGameText {
     fun endedInBackground(kind: MiniGameKind): String = when (kind) {
         MiniGameKind.timingBar, MiniGameKind.flappy -> "앱을 나가서 이번 판은 기록하지 않았어요"
         MiniGameKind.tetris -> "앱을 나가서 이번 판을 여기까지 기록했어요"
-        // 길건너 아잉이(v0.3.67)는 폰에 아직 없다(`phoneCases`) — 빠짐없는 when 을 지키는 자리다. 폰 판이 붙으면 그 판의
-        // `endRound` 의미론(확정인가 버림인가)에 맞춰 다시 적는다.
+        // 길건너 아잉이(v0.3.67): 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다 — 폰 background 출구는 이 판에 오지 않는다.
+        // 폰 판이 붙으면 그 판의 `endRound` 의미론(확정인가 버림인가)에 맞춰 다시 적는다.
         MiniGameKind.crossy -> "앱을 나가서 이번 판은 기록하지 않았어요"
     }
 
@@ -159,7 +160,22 @@ object GamesMiniGameText {
         // INV-GamesText-6e9a61c2 이식: 조작 줄에 **"탭해서 회전"이 반드시 들어가야 한다.** 폰에서 시계 회전은 캔버스 탭이고(버튼은
         // 반시계다) 그 사실을 말하는 자리가 시작 카드뿐이라, 빼면 아무도 시계 회전을 못 찾는다(시험이 글자로 잰다).
         MiniGameKind.tetris -> kind.howToPlay + "\n끌어서 이동 · 탭해서 회전 · 버튼으로 홀드·즉시 내리기"
-        MiniGameKind.crossy -> kind.howToPlay   // 폰에 없음(위 endedInBackground 주석)
+        MiniGameKind.crossy -> kind.howToPlay   // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다(맥 MiniGameKind.howToPlay 그대로)
+    }
+
+    // MARK: 길건너 아잉이(데스크톱 — 맥 CrossyHUD, MiniGameCrossy.swift:131-195)
+
+    /** 시작 카드 행동 문구. 클릭 · 스페이스 · 방향키가 다 시작이다(`CrossyGame.action` · `input`). */
+    const val crossyStartAction: String = "클릭 · 스페이스 · 방향키로 시작"
+
+    /** 결과 카드 행동 문구. 다시 하기는 클릭 · 스페이스뿐이다 — 방향키는 결과 화면에서 무시한다(엔진 `input` 주석). */
+    const val crossyRetryAction: String = "클릭 · 스페이스로 다시"
+
+    /** 결과 카드 가운데 줄 — 무엇에 끝났는가 + 최고(또는 신기록). 맥 `CrossyHUD.resultSubtitle` 그대로. */
+    fun crossyResultSubtitle(score: Int, best: Long, cause: CrossyGame.DeathCause?): String {
+        val reason = cause?.caption
+        if (score.toLong() > best) return reason?.let { "신기록! · $it" } ?: "신기록!"
+        return (reason?.let { "$it · " } ?: "") + "최고 " + best.toString()
     }
 
     /** 머리 줄 "최고 N점"(맥 하단 스트립과 같은 표기 — 자리수 구분 없음). */
@@ -187,7 +203,7 @@ object GamesMiniGameText {
     fun canvasAccessibility(kind: MiniGameKind): String = when (kind) {
         MiniGameKind.timingBar, MiniGameKind.flappy -> "${kind.title} 게임 화면 — 탭해서 조작"
         MiniGameKind.tetris -> "${kind.title} 게임 화면 — 탭해서 회전 · 이동은 액션으로"
-        MiniGameKind.crossy -> "${kind.title} 게임 화면"   // 폰에 없음(위 endedInBackground 주석)
+        MiniGameKind.crossy -> "${kind.title} 게임 화면 — 방향키로 뛰기"   // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다
     }
 
     // MARK: 테트리스 조작(폰에서 처음 쓰는 줄)

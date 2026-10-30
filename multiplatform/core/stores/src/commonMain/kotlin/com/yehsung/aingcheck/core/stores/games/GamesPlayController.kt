@@ -9,6 +9,7 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.rules.minigame.MiniGamePoint
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameSize
 import com.yehsung.aingcheck.core.rules.minigame.TimingBarGame
+import com.yehsung.aingcheck.core.rules.minigame.crossy.CrossyGame
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGame
 import com.yehsung.aingcheck.core.rules.tetris.TetrisLayout
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -34,8 +35,10 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
  * 폰 테트리스 입력(끌기·탭)의 **판정도 여기 있다**([canvasDragChanged]·[canvasDragEnded]) — JVM 시험이 손가락 좌표부터 조각 위치까지
  * 화면 없이 구동한다.
  *
- * 길건너 아잉이(v0.3.67)는 폰에 아직 없다 — `MiniGameKind.phoneCases` 가 거르므로 이 구동기가 crossy 로 만들어지는 일이 없다.
- * 빠짐없는 when 을 지키려고 '판 없음'으로 답한다(폰 판이 붙는 다음 판 — W4-b · 폰 1.0.15 와 같이 — 에 채운다).
+ * 길건너 아잉이(v0.3.67): **데스크톱은 구동, 폰은 phoneCases·라우트가 거른다**(공용 패치 15 — W-9). 규칙은 코어 `CrossyGame` 하나이고
+ * 이 구동기는 맥 `CrossyGameView`(MiniGameCrossy.swift:43-110)의 틀만 옮겼다 — 탭·스페이스 = `action()`(앞으로 한 칸 · 시작/다시),
+ * 방향 = [hop](`input(direction)` — 결과 화면의 방향은 엔진이 버린다), 틱 = `step(dt)`, `Result` 전이 = 확정 한 번.
+ * 출구([endRound])는 플래피와 같은 버림이다 — 닫기 = 기록은 데스크톱 창 쪽(quittingKeepsTheScore)이 맡는다.
  */
 class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     /** [endRound] 가 무엇을 했는가. 허브가 이 값으로 안내 문구를 고른다. */
@@ -55,6 +58,8 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     var flappy: FlappyGame by mutableStateOf(FlappyGame(seed))
         private set
     var tetris: TetrisGame by mutableStateOf(TetrisGame(seed))
+        private set
+    var crossy: CrossyGame by mutableStateOf(CrossyGame(seed))
         private set
 
     /** 탭이 판에 먹혔을 때마다 +1(가벼운 햅틱의 방아쇠). **판이 실제로 바뀌었을 때만** 올린다 — 소진된 홀드·못 도는 회전은 조용해야 한다. */
@@ -111,7 +116,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
             MiniGameKind.timingBar -> timing.isPlaying
             MiniGameKind.flappy -> flappy.isPlaying
             MiniGameKind.tetris -> tetris.isPlaying
-            MiniGameKind.crossy -> false
+            MiniGameKind.crossy -> crossy.isPlaying
         }
 
     /** 지금(또는 마지막) 판의 점수. */
@@ -120,7 +125,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
             MiniGameKind.timingBar -> timing.total
             MiniGameKind.flappy -> flappy.score
             MiniGameKind.tetris -> tetris.score
-            MiniGameKind.crossy -> 0          // 폰에 없음(머리 주석)
+            MiniGameKind.crossy -> crossy.score
         }
 
     // MARK: 입력
@@ -163,8 +168,38 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
                     }
                 }
             }
-            MiniGameKind.crossy -> Unit       // 폰에 없음(머리 주석)
+            // 길건너: 맥 `input.actionCount → action()` — 시작 전·결과면 새 판 + 앞으로 한 칸, 진행 중이면 앞으로 한 칸, 죽음 연출 중엔 무시.
+            MiniGameKind.crossy -> {
+                val next = crossy.copy()
+                next.action()
+                if (next != crossy) {
+                    crossy = next
+                    tapSerial += 1
+                }
+            }
         }
+        noteStarted(wasPlaying)
+    }
+
+    /**
+     * 길건너 뛰기 한 번(데스크톱 방향키 ↑↓←→·WASD — 맥 `input.hops(since:)` → `input(direction)`, MiniGameCrossy.swift:59-61).
+     * 누른 순서 그대로 엔진에 넣는다 — 뛰는 중 둘째는 엔진이 한 칸 줄 세우고 셋째부터 버린다(그것은 규칙이다 — 여기서 미리 거르지 않는다).
+     * 시작 전이면 판을 열고 그 방향으로 뛴다. 결과 화면·죽음 연출의 방향은 엔진이 버린다. 길건너가 아니면 아무 일 없다.
+     */
+    fun hop(direction: CrossyGame.Direction) {
+        if (kind != MiniGameKind.crossy) return
+        val wasPlaying = isPlaying
+        val next = crossy.copy()
+        next.input(direction)
+        if (next != crossy) {
+            crossy = next
+            tapSerial += 1
+        }
+        noteStarted(wasPlaying)
+    }
+
+    /** 판이 방금 켜졌으면(진행 아님 → 진행) 새 판 준비를 하고 [onStarted] 를 한 번 부른다. 탭·뛰기가 같은 한 벌을 쓴다. */
+    private fun noteStarted(wasPlaying: Boolean) {
         if (isPlaying && !wasPlaying) {
             reportedFinish = false
             lastTick = null
@@ -382,7 +417,18 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
                     onFinished?.invoke(next.score)
                 }
             }
-            MiniGameKind.crossy -> Unit       // 폰에 없음(머리 주석)
+            MiniGameKind.crossy -> {
+                // 맥 `onChange(of: game.phase)` — running/over → result 전이가 확정이다(완주 상한 maxScore 는 Over 없이 바로 Result).
+                val next = crossy.copy()
+                val wasRunning = next.phase == CrossyGame.Phase.Running
+                next.step(dt)
+                crossy = next
+                if (wasRunning && next.phase != CrossyGame.Phase.Running) gameOverSerial += 1
+                if (next.phase == CrossyGame.Phase.Result && !reportedFinish) {
+                    reportedFinish = true
+                    onFinished?.invoke(next.score)
+                }
+            }
         }
     }
 
@@ -420,7 +466,11 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
                 seedSource += 0x9E37_79B9u
                 tetris = TetrisGame(seedSource)
             }
-            MiniGameKind.crossy -> Unit       // 폰에 없음(머리 주석)
+            MiniGameKind.crossy -> {
+                // 길건너도 같다(`interrupt()` 는 그 점수로 확정이다) — 버리려면 새 판으로 갈아 끼운다.
+                seedSource += 0x9E37_79B9u
+                crossy = CrossyGame(seedSource)
+            }
         }
         return true
     }
@@ -454,10 +504,11 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     }
 
     /** 시험·데모 전용: 임의 상태에서 시작한다(Swift `#if DEBUG replaceForTesting`). */
-    fun replaceForTesting(timing: TimingBarGame? = null, flappy: FlappyGame? = null, tetris: TetrisGame? = null) {
+    fun replaceForTesting(timing: TimingBarGame? = null, flappy: FlappyGame? = null, tetris: TetrisGame? = null, crossy: CrossyGame? = null) {
         if (timing != null) this.timing = timing
         if (flappy != null) this.flappy = flappy
         if (tetris != null) this.tetris = tetris
+        if (crossy != null) this.crossy = crossy
         lastTick = null
         reportedFinish = !isPlaying
     }

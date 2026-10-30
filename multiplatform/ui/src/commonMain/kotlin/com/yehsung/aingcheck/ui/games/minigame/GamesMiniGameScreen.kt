@@ -69,6 +69,8 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGamePoint
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameSize
 import com.yehsung.aingcheck.core.rules.minigame.TimingBarGame
 import com.yehsung.aingcheck.core.rules.minigame.FlappyGame
+import com.yehsung.aingcheck.core.rules.minigame.crossy.CrossyGame
+import com.yehsung.aingcheck.ui.games.minigame.crossy.CrossyCanvas
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGame
 import com.yehsung.aingcheck.core.rules.tetris.TetrisLayout
 import com.yehsung.aingcheck.core.stores.games.GamesMiniGameText
@@ -339,8 +341,9 @@ fun GamesMiniGameCanvasHost(
             MiniGameKind.timingBar -> GamesTimingBarCanvas(controller.timing, bestScore, reduceMotion, Modifier.fillMaxSize())
             MiniGameKind.flappy -> GamesFlappyCanvas(controller.flappy, bestScore, reduceMotion, art, Modifier.fillMaxSize())
             MiniGameKind.tetris -> GamesTetrisCanvas(controller.tetris, bestScore, reduceMotion, Modifier.fillMaxSize())
-            // 길건너 아잉이(v0.3.67)는 폰에 아직 없다 — phoneCases 가 거르므로 이 화면이 crossy 로 열리지 않는다(G §8-18 7).
-            MiniGameKind.crossy -> Unit
+            // 길건너 아잉이(v0.3.67): 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다(G §8-18 7 · 공용 패치 16). 그림은 ui crossy/ 한 벌,
+            // 마스코트는 플래피와 같은 그림 경로(art), 클릭 = 탭 = 앞으로 한 칸(맥 마우스 다운 — MiniGameCrossy.swift:209-211).
+            MiniGameKind.crossy -> CrossyCanvas(controller.crossy, bestScore, reduceMotion, art, Modifier.fillMaxSize())
         }
     }
 }
@@ -430,7 +433,9 @@ internal fun accessibilityValue(controller: GamesPlayController): String = when 
         if (game.phase == TetrisGame.Phase.Ready) GamesMiniGameText.startAction
         else GamesMiniGameText.tetrisValue(game.score, game.scoreLevel, game.lines)
     }
-    MiniGameKind.crossy -> GamesMiniGameText.startAction
+    // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다. 값은 느린 것만(점수) — 자리를 넣으면 읽는 동안 값이 계속 바뀐다.
+    MiniGameKind.crossy ->
+        if (controller.crossy.phase == CrossyGame.Phase.Result || controller.isPlaying) "${controller.crossy.score}점" else GamesMiniGameText.crossyStartAction
 }
 
 /** 햅틱 네 채널(serial 이 오를 때만 — 처음 값은 기준이다). */

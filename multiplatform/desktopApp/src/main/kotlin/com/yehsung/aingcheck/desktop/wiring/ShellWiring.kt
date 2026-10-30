@@ -321,7 +321,8 @@ class ShellWiring(private val deps: ShellDeps) {
         deps.updateRpc, deps.clientIdentity.build, deps.deviceStore, deps.scope, deps.monotonic, deps.updateSchedule,
     )
     private val messagesRefresh = MessagesBackgroundRefresh(
-        signedIn = deps.session.phaseFlow.map { it == SessionPhase.SignedIn },
+        // 단계만 보면 A → B 직행(SignedIn 그대로)을 놓친다 — 사용자 id 까지 본다(int-w4b ③).
+        account = combine(deps.session.phaseFlow, deps.session.sessionFlow) { phase, s -> if (phase == SessionPhase.SignedIn) s?.userID else null },
         refresh = { deps.messages.requestActivityRefresh() },
         onSignedOut = { deps.messages.reset() },
         intervalMillis = deps.messagesRefreshIntervalMillis,

@@ -8,6 +8,8 @@
 //   미니게임 토큰 4286-4293 · 공개 4283 · 제출 안내 4305 — GamesStore.reset(miniGames.reset)
 //   미니게임 창 close() 4268(★ v0.2.48: 깃발만 내리면 빈 창이 남는다 — 4237-4250) — GamesWiring closeAll(오목·체스·테트리스·뽑기·케이크)
 // 일부러 남기는 것(맥과 같게): 미니게임 보기 선택(miniGameBoardScope — "앱 실행의 것" 4277).
+// int-w4b(L-acct): 늦은 응답(전환 전에 떠난 A 의 요청을 붙잡았다 전환 뒤 풀기 — 리그·케이크·판 토큰·지갑) · 토큰 업로드 장부·내 행(4072-4088,
+//   깃발 tokenUpload 를 켠 그래프) · A → B 직행 뒤 B 의 안 읽음 요약 · 센터(4145)·상태메시지(4149)·버전 도장(4140 — 데스크톱은 기기 등록 서명).
 // 망은 MockEngine(`.invalid`)뿐 · 픽스처는 합성.
 @file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
 
@@ -39,6 +41,13 @@ import com.yehsung.aingcheck.desktop.AppWirings
 import com.yehsung.aingcheck.desktop.DesktopPlatform
 import com.yehsung.aingcheck.desktop.SilentCharacterSink
 import com.yehsung.aingcheck.core.stores.me.loadCakeGift
+import com.yehsung.aingcheck.core.stores.me.loadStatusMessage
+import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.models.TokenUsageDayKey
+import com.yehsung.aingcheck.core.wire.models.TokenUsageMonthKey
+import com.yehsung.aingcheck.feature.desktop.socialapi.UltraSyncReason
+import com.yehsung.aingcheck.feature.desktop.tokens.TokenUsageMonthly
+import com.yehsung.aingcheck.feature.desktop.tokens.upload.TokenUploadCoordinator
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeMeasure
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsKeys
 import com.yehsung.aingcheck.desktop.shell.flyout.FlyoutScreen
@@ -56,6 +65,9 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.http.content.OutgoingContent
+import io.ktor.http.content.TextContent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,6 +85,8 @@ import java.util.concurrent.Executor
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -112,14 +126,34 @@ private object Accounts {
     const val A = "a0000000-0000-4000-8000-0000000000aa"
     const val B = "b0000000-0000-4000-8000-0000000000bb"
     const val PEER = "d0000000-0000-4000-8000-0000000000ee"
+    const val PEER_OF_B = "e0000000-0000-4000-8000-0000000000ff"
     fun token(user: String) = "tok-$user"
 }
 
 /** 앱 한 벌 — 실제 AppGraph 조립(start 포함). 요청은 (누구의 토큰, 경로)로 적는다. */
-private class BoundaryRig(test: TestScope, dataDir: Path) {
+private class BoundaryRig(
+    test: TestScope,
+    dataDir: Path,
+    config: DesktopAppConfig = DesktopAppConfig(duels = true),
+    /** AI 도구 기록 동의(W-13 #5) — 업로드 조정자의 수집 게이트가 서버 설정과 **함께** 본다. 토큰 업로드 시험만 켠다. */
+    aiConsent: Boolean = false,
+) {
     data class Sent(val user: String?, val path: String)
+    data class Wire(val user: String?, val url: String, val body: String)
 
     val sent = mutableListOf<Sent>()
+    /** 본문까지 적은 요청(늦은 응답·업로드 본문 시험). */
+    val wires = mutableListOf<Wire>()
+    /** 참이면 A 의 [gated] 경로 요청을 [gate] 가 풀릴 때까지 붙잡는다 — 전환 **뒤에** A 의 응답을 늦게 떨어뜨린다. */
+    var gateArmed = false
+    var gated = listOf("/rpc/team_weekly_leaderboard", "/rpc/character_gift_pending", "/rpc/minigame_start_round")
+    val gate = CompletableDeferred<Unit>()
+    val held = mutableListOf<String>()
+    /** 서버 수집 설정(profiles.token_usage_collect) 픽스처 — 토큰 업로드 시험만 켠다(다른 시험의 공개 설정 판정에 끼지 않게). */
+    var tokenCollect = false
+    /** 참이면 B 의 첫 기기 등록(로그인 때)만 500 — 버전 도장 시험이 포그라운드 재등록 길을 잰다. */
+    var failFirstBRegister = false
+    var bRegisters = 0
     val hosts = mutableSetOf<String>()
     val uncaught = mutableListOf<Throwable>()
     val factory = FakeGameFactory()
@@ -132,7 +166,15 @@ private class BoundaryRig(test: TestScope, dataDir: Path) {
                 val auth = request.headers[HttpHeaders.Authorization].orEmpty()
                 val user = listOf(Accounts.A, Accounts.B).firstOrNull { auth.contains(it) }
                 sent += Sent(user, p)
+                val bodyText = when (val b = request.body) {
+                    is TextContent -> b.text
+                    is OutgoingContent.ByteArrayContent -> b.bytes().decodeToString()
+                    else -> ""
+                }
+                wires += Wire(user, request.url.toString(), bodyText)
+                if (gateArmed && user == Accounts.A && gated.any { p.endsWith(it) }) { held += p; gate.await() }
                 val json = headersOf(HttpHeaders.ContentType, "application/json")
+                val select = request.url.parameters["select"].orEmpty()
                 when {
                     // A 의 팀 리그 한 줄(합성). B 의 몫은 비어 있다 — B 화면에 줄이 보이면 그건 A 의 것이 남은 것이다.
                     p.endsWith("/rpc/team_weekly_leaderboard") && user == Accounts.A ->
@@ -149,6 +191,38 @@ private class BoundaryRig(test: TestScope, dataDir: Path) {
                     p.endsWith("/rpc/minigame_start_round") && user == Accounts.A ->
                         respond("""{"status":"ok","token":"round-of-a","expires_at":"2099-01-01T00:00:00Z"}""", HttpStatusCode.OK, json)
                     p.endsWith("/rpc/take_pokes") -> respond("[]", HttpStatusCode.OK, json)
+                    // 울트라 지갑(합성 잔량 777 — A 의 것).
+                    p.endsWith("/rpc/ultra_wallet_sync") && user == Accounts.A ->
+                        respond("""{"status":"ok","balance":777,"day":"2026-10-30"}""", HttpStatusCode.OK, json)
+                    // 안 읽음 요약 — A 5통 · B 2통(서로 다른 사람에게서). 함수 이름은 배너 스토어가 고른다(_v2 포함).
+                    p.contains("/rpc/message_unread_summary") && user == Accounts.A ->
+                        respond("""{"status":"ok","total":5,"peers":[{"peer_user_id":"${Accounts.PEER}","count":5}]}""", HttpStatusCode.OK, json)
+                    p.contains("/rpc/message_unread_summary") && user == Accounts.B ->
+                        respond("""{"status":"ok","total":2,"peers":[{"peer_user_id":"${Accounts.PEER_OF_B}","count":2}]}""", HttpStatusCode.OK, json)
+                    // 기기 등록(버전 보고 — 맥 4140 reportedAppVersionStamp 의 데스크톱 짝).
+                    p.endsWith("/rpc/register_device") && user == Accounts.B && failFirstBRegister && bRegisters++ == 0 ->
+                        respond("""{"message":"synthetic outage"}""", HttpStatusCode.InternalServerError, json)
+                    p.endsWith("/rpc/register_device") && user != null ->
+                        respond("""{"status":"ok","push_prefs":{"message":true}}""", HttpStatusCode.OK, json)
+                    // 내 토큰 행(token_usage_board) — A 의 줄만. B 의 몫은 비어 있다.
+                    p.endsWith("/rpc/token_usage_board") && user == Accounts.A ->
+                        respond(
+                            """[{"user_id":"${Accounts.A}","display_name":"A","avatar_url":null,"claude_input":1000,"claude_output":0,""" +
+                                """"claude_cache_read":0,"claude_cache_creation":0,"codex_input":0,"codex_output":0,"total":1000,"codex_effective":0}]""",
+                            HttpStatusCode.OK, json,
+                        )
+                    p.endsWith("/rpc/token_usage_board") -> respond("[]", HttpStatusCode.OK, json)
+                    p.endsWith("/rest/v1/token_usage_device_monthly") || p.endsWith("/rest/v1/token_usage_device_daily") ->
+                        respond("", HttpStatusCode.Created)
+                    p.endsWith("/rest/v1/profiles") && select.contains("token_usage_collect") && tokenCollect ->
+                        respond("""[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]""", HttpStatusCode.OK, json)
+                    // A 의 센터·상태메시지(맥 4145·4149). B 의 몫은 픽스처가 없다(404) — 못 읽으면 지난 값을 두므로 남은 A 의 값이 그대로 보인다.
+                    p.endsWith("/rest/v1/profiles") && select == "display_name,avatar_url" && user == Accounts.A ->
+                        respond("""[{"display_name":"A","avatar_url":null}]""", HttpStatusCode.OK, json)
+                    p.endsWith("/rest/v1/profiles") && select == "center" && user == Accounts.A ->
+                        respond("""[{"center":"seoul"}]""", HttpStatusCode.OK, json)
+                    p.endsWith("/rest/v1/profiles") && select == "status_message" && user == Accounts.A ->
+                        respond("""[{"status_message":"A 의 상태"}]""", HttpStatusCode.OK, json)
                     else -> respond("""{"code":"PGRST202","message":"no fixture"}""", HttpStatusCode.NotFound, json)
                 }
             }
@@ -162,16 +236,16 @@ private class BoundaryRig(test: TestScope, dataDir: Path) {
         monotonic = object : MonotonicClock {
             override fun elapsedNanos(): Long = test.testScheduler.currentTime * 1_000_000
         },
-        desktopConfig = DesktopAppConfig(duels = true),
+        desktopConfig = config,
         backend = AppGraph.Backend("https://probe.invalid", "stub-anon-key"),
         osVersion = "Windows 11",
         httpFactory = { configure -> HttpClient(engine) { configure() } },
     )
     private val job = SupervisorJob()
     val scope = CoroutineScope(test.coroutineContext.minusKey(Job) + job + CoroutineExceptionHandler { _, e -> uncaught += e })
-    private val kv = InMemoryDesktopKeyValueStore().apply {
+    val kv = InMemoryDesktopKeyValueStore().apply {
         // 첫 실행 화면을 이미 지난 설치.
-        putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, false)
+        putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, aiConsent)
         putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, false)
     }
     val app: AppWirings = graph.assemble(
@@ -341,5 +415,260 @@ class AccountBoundaryTest {
         } finally {
             rig.close()
         }
+    }
+
+    // ------------------------------------------------------------------ 늦은 응답(int-w4a 검증 프로브 → 상설)
+    // 위 두 시험은 응답이 **끝난** 상태만 잰다. 전환 직전에 떠난 A 의 요청이 전환 **뒤에** 떨어지는 길은 여기서만 본다 — 리스너의 reset 이
+    // 이미 지나간 뒤라, 각 스토어가 세대·순번으로 그 응답을 버리지 않으면 B 의 화면을 다시 채운다.
+
+    private suspend fun TestScope.signedInA(rig: BoundaryRig): BoundaryRig {
+        rig.app.start(); runCurrent()
+        rig.signIn(Accounts.A); runCurrent()
+        advanceTimeBy(5_000); runCurrent()
+        return rig
+    }
+
+    private suspend fun TestScope.issueGatedLoadsAsA(rig: BoundaryRig) {
+        val app = rig.app
+        rig.gateArmed = true
+        val t0 = testScheduler.currentTime
+        rig.scope.launch { app.rankings.loadLeague() }
+        rig.scope.launch { app.me.loadCakeGift() }
+        app.gamesStore.miniGames.prefetchRoundToken(MiniGameKind.timingBar)
+        runCurrent()
+        assertEquals(3, rig.held.size, "전제: A 의 세 요청이 붙잡혔다 — ${rig.held}")
+        assertEquals(t0, testScheduler.currentTime, "전제: 붙잡는 동안 가상 시간이 흐르지 않았다(시간 초과로 실패한 게 아니다)")
+    }
+
+    private fun lateLeft(rig: BoundaryRig): List<String> = buildList {
+        val app = rig.app
+        if (app.rankings.league.isNotEmpty()) add("rankings.league=${app.rankings.league.map { it.name }}")
+        if (app.me.cakeGift != null) add("me.cakeGift=${app.me.cakeGift?.id}")
+        if (app.gamesStore.miniGames.hasUsableRoundToken(MiniGameKind.timingBar)) add("miniGames.roundToken")
+    }
+
+    /** 음성 대조: 계정이 그대로면 붙잡았던 응답은 **반영된다**(가드가 모든 응답을 버리는 고장이면 여기서 빨개진다). */
+    @Test
+    fun lateResponsesLandWhenTheAccountIsUnchanged() = runTest {
+        val rig = signedInA(BoundaryRig(this, dirs.new("late-control")))
+        try {
+            issueGatedLoadsAsA(rig)
+            assertTrue(lateLeft(rig).isEmpty(), "붙잡힌 동안엔 없다: ${lateLeft(rig)}")
+            rig.gate.complete(Unit); advanceTimeBy(2_000); runCurrent()
+            assertEquals(setOf("rankings.league", "me.cakeGift", "miniGames.roundToken"), lateLeft(rig).map { it.substringBefore('=') }.toSet())
+        } finally { rig.close() }
+    }
+
+    @Test
+    fun lateResponsesOfAAfterSignOutThenBDoNotRefill() = runTest {
+        val rig = signedInA(BoundaryRig(this, dirs.new("late-signout")))
+        try {
+            issueGatedLoadsAsA(rig)
+            rig.scope.launch { rig.app.sessionStore.signOut() }
+            advanceTimeBy(5_000); runCurrent()
+            assertNull(rig.app.sessionStore.session, "전제: 로그아웃")
+            rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent()
+            rig.gate.complete(Unit); advanceTimeBy(5_000); runCurrent()
+            assertEquals(Accounts.B, rig.app.sessionStore.session?.userID)
+            assertTrue(lateLeft(rig).isEmpty(), "로그아웃 직전 떠난 A 의 응답이 B 를 다시 채웠다: ${lateLeft(rig)}")
+            assertTrue(rig.uncaught.isEmpty(), "예외: ${rig.uncaught}")
+        } finally { rig.close() }
+    }
+
+    @Test
+    fun lateResponsesOfAAfterDirectSwitchDoNotRefill() = runTest {
+        val rig = signedInA(BoundaryRig(this, dirs.new("late-switch")))
+        try {
+            issueGatedLoadsAsA(rig)
+            rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent()
+            rig.gate.complete(Unit); advanceTimeBy(5_000); runCurrent()
+            assertEquals(Accounts.B, rig.app.sessionStore.session?.userID)
+            assertTrue(lateLeft(rig).isEmpty(), "A→B 직행 전 떠난 A 의 응답이 B 를 다시 채웠다: ${lateLeft(rig)}")
+            assertTrue(rig.uncaught.isEmpty(), "예외: ${rig.uncaught}")
+        } finally { rig.close() }
+    }
+
+    /** A 의 지갑 요청(잔량 777)을 붙잡았다가 [mode] 뒤에 푼다 → 그때의 지갑 잔량. */
+    private suspend fun TestScope.walletAfterLateA(mode: String): Long? {
+        val rig = signedInA(BoundaryRig(this, dirs.new("wallet-$mode")))
+        try {
+            rig.gated = listOf("/rpc/ultra_wallet_sync")
+            rig.gateArmed = true
+            rig.app.social.wallet.sync(UltraSyncReason.MissionCandidate)
+            runCurrent()
+            assertTrue(rig.held.any { it.endsWith("ultra_wallet_sync") }, "전제: A 의 지갑 요청이 붙잡혔다 — ${rig.held}")
+            when (mode) {
+                "switch" -> { rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent() }
+                "signout" -> {
+                    rig.scope.launch { rig.app.sessionStore.signOut() }; advanceTimeBy(5_000); runCurrent()
+                    rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent()
+                }
+            }
+            if (mode != "control") assertNull(rig.app.social.wallet.state.value.balance, "전제: 전환이 지갑을 비웠다")
+            rig.gate.complete(Unit); advanceTimeBy(3_000); runCurrent()
+            assertTrue(rig.uncaught.isEmpty(), "예외: ${rig.uncaught}")
+            return rig.app.social.wallet.state.value.balance
+        } finally { rig.close() }
+    }
+
+    @Test fun lateWalletLandsWhenTheAccountIsUnchanged() = runTest { assertEquals(777L, walletAfterLateA("control")) }
+
+    @Test fun lateWalletOfADoesNotLandOnBAfterSignOut() = runTest { assertNull(walletAfterLateA("signout"), "로그아웃 뒤 B 지갑에 A 의 잔량") }
+
+    /** ② A→B 직행은 세대가 그대로다(core SessionStore.adoptSignedInSession) — 지갑이 스스로 순번을 올려 늦은 응답을 버려야 한다. */
+    @Test fun lateWalletOfADoesNotLandOnBAfterDirectSwitch() = runTest { assertNull(walletAfterLateA("switch"), "A→B 직행 뒤 B 지갑에 A 의 잔량") }
+
+    // ------------------------------------------------------------------ ① 토큰 업로드 장부·내 행(맥 4074-4088)
+
+    private fun TestScope.nowSwift(): SwiftDate = SwiftDate.fromEpochMillis(WiringTestRig.BASE_MS + testScheduler.currentTime)
+
+    /** 이 기기의 이번 달 사용량(합성 — 1일과 오늘 이틀). 사람이 아니라 **기기**의 숫자라 A·B 가 같은 값을 올린다. */
+    private fun TestScope.machineUsage(): Pair<TokenUsageMonthly, List<String>> {
+        val now = nowSwift()
+        val month = TokenUsageMonthKey.current(now)
+        val days = listOf("$month-01", TokenUsageDayKey.current(now)).distinct()
+        return TokenUsageMonthly(month = month, claudeInput = 1000, claudeDaily = days.associateWith { 500L }) to days
+    }
+
+    private fun tokenRig(test: TestScope, name: String) =
+        BoundaryRig(test, dirs.new(name), DesktopAppConfig(duels = true, tokenUpload = true), aiConsent = true).apply { tokenCollect = true }
+
+    /**
+     * 깃발(tokenUpload)을 켠 그래프: A 가 월간·일별을 올리고 내 행을 받은 뒤 A → B 직행. 맥 4074-4088 처럼 내 행·영속본·업로드 장부가 비어야
+     * B 의 첫 업로드가 "이미 올린 날"로 빠지지 않고, B 의 첫 내 행 조회가 A 의 300초 스로틀에 막히지 않는다. 본문에 A 의 줄 0.
+     */
+    @Test
+    fun tokenLedgerAndMyRowStartOverForB() = runTest {
+        val rig = signedInA(tokenRig(this, "token-switch"))
+        try {
+            val up = rig.app.tokens.upload
+            val (usage, days) = machineUsage()
+            up.uploadTokenUsageIfNeeded(usage, null, null, nowSwift())
+            up.loadMyTokenRowIfDue(nowSwift(), force = true)
+            runCurrent()
+            val aPaths = rig.wires.filter { it.user == Accounts.A }.map { it.url.substringBefore('?') }
+            assertTrue(aPaths.any { it.endsWith("/token_usage_device_monthly") } && aPaths.any { it.endsWith("/token_usage_device_daily") },
+                "전제: A 의 월간·일별이 나갔다 — $aPaths")
+            assertEquals(Accounts.A, up.myTokenRow?.userID, "전제: A 의 내 행이 섰다")
+            assertNotNull(rig.kv.getString(TokenUploadCoordinator.MY_ROW_KEY), "전제: 내 행 영속본")
+
+            val mark = rig.wires.size
+            rig.signIn(Accounts.B); advanceTimeBy(5_000); runCurrent()
+            assertEquals(Accounts.B, rig.app.sessionStore.session?.userID, "전제: B 로 바뀌었다")
+            assertNull(up.myTokenRow, "B 화면에 A 의 내 행: ${up.myTokenRow}")
+            assertNull(rig.kv.getString(TokenUploadCoordinator.MY_ROW_KEY), "A 의 내 행 영속본이 남았다(재실행하면 B 화면에 복원된다)")
+
+            // 같은 기기 값 그대로 61초 뒤(60초 스로틀 밖): B 의 몫이 처음부터 다시 올라가야 한다.
+            advanceTimeBy(61_000)
+            up.uploadTokenUsageIfNeeded(usage, null, null, nowSwift())
+            up.loadMyTokenRowIfDue(nowSwift())
+            runCurrent()
+            val after = rig.wires.drop(mark)
+            val bMonthly = after.filter { it.user == Accounts.B && it.url.contains("/token_usage_device_monthly") }
+            val bDaily = after.filter { it.user == Accounts.B && it.url.contains("/token_usage_device_daily") }
+            assertEquals(1, bMonthly.size, "B 의 월간 업로드가 앞 사람 장부에 막혔다: ${after.map { it.user to it.url.substringBefore('?') }}")
+            assertEquals(1, bDaily.size, "B 의 일별 업로드가 앞 사람 장부에 막혔다")
+            days.forEach { d -> assertTrue(bDaily.single().body.contains("\"$d\""), "B 의 일별 본문에 $d 가 빠졌다('이미 올린 날'): ${bDaily.single().body}") }
+            assertTrue(after.any { it.user == Accounts.B && it.url.contains("/rpc/token_usage_board") }, "B 의 내 행 조회가 A 의 300초 스로틀에 막혔다")
+            val aTrace = after.filter { it.user == Accounts.B && (it.body.contains(Accounts.A) || it.url.contains(Accounts.A)) }
+            assertTrue(aTrace.isEmpty(), "B 의 업로드 본문에 A 의 줄: $aTrace")
+            assertTrue(after.none { it.user == Accounts.A }, "전환 뒤 A 의 토큰 요청: ${after.filter { it.user == Accounts.A }}")
+        } finally { rig.close() }
+    }
+
+    /** A 의 월간 업로드가 전환을 건너 늦게 끝나도 B 의 장부를 채우지 않는다(세대는 그대로 — 조정자의 계정 순번이 버린다). */
+    @Test
+    fun lateTokenUploadOfADoesNotFillBLedger() = runTest {
+        val rig = signedInA(tokenRig(this, "token-late"))
+        try {
+            val up = rig.app.tokens.upload
+            val (usage, _) = machineUsage()
+            rig.gated = listOf("/token_usage_device_monthly")
+            rig.gateArmed = true
+            rig.scope.launch { up.uploadTokenUsageIfNeeded(usage, null, null, nowSwift()) }
+            runCurrent()
+            assertEquals(1, rig.held.size, "전제: A 의 월간 업로드가 붙잡혔다 — ${rig.held}")
+            rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent()
+            val mark = rig.wires.size
+            rig.gate.complete(Unit); advanceTimeBy(2_000); runCurrent()
+            advanceTimeBy(61_000)
+            up.uploadTokenUsageIfNeeded(usage, null, null, nowSwift())
+            runCurrent()
+            val after = rig.wires.drop(mark)
+            assertEquals(1, after.count { it.user == Accounts.B && it.url.contains("/token_usage_device_monthly") },
+                "A 의 늦은 성공이 B 의 장부를 채워 B 의 월간 업로드가 빠졌다: ${after.map { it.user to it.url.substringBefore('?') }}")
+            assertTrue(rig.uncaught.isEmpty(), "예외: ${rig.uncaught}")
+        } finally { rig.close() }
+    }
+
+    // ------------------------------------------------------------------ ③ A → B 직행 뒤 안 읽음 요약
+
+    /** 단계가 SignedIn 에 머무는 직행에서도 B 의 요약을 **바로** 읽는다(60초 주기를 기다리면 그동안 B 의 배지가 0). */
+    @Test
+    fun directSwitchReadsBUnreadSummaryAtOnce() = runTest {
+        val rig = startedWithA()
+        try {
+            advanceTimeBy(1_000); runCurrent()
+            assertEquals(5L, rig.app.messages.summary?.summary?.total, "전제: A 의 요약(5통)이 섰다")
+            val mark = rig.sent.size
+            rig.signIn(Accounts.B)
+            advanceTimeBy(5_000); runCurrent()
+            val bSummary = rig.sent.drop(mark).filter { it.user == Accounts.B && it.path.contains("/rpc/message_unread_summary") }
+            assertTrue(bSummary.isNotEmpty(), "직행 뒤 5초 안에 B 의 요약을 읽지 않았다: ${rig.sent.drop(mark)}")
+            assertEquals(2L, rig.app.messages.summary?.summary?.total, "B 의 요약(2통)이 서야 한다")
+            assertEquals(setOf(Accounts.PEER_OF_B), rig.app.messages.summary?.summary?.unreadPeerIDs, "B 의 안 읽음에 A 의 상대")
+        } finally { rig.close() }
+    }
+
+    // ------------------------------------------------------------------ ④ 버전 보고 · 센터 · 상태메시지(맥 4140 · 4145 · 4149)
+
+    @Test
+    fun versionReportCenterAndStatusMessageDoNotCarryOverToB() = runTest {
+        val rig = signedInA(BoundaryRig(this, dirs.new("profile-switch")))
+        try {
+            val me = rig.app.me
+            me.loadHeader()
+            me.loadStatusMessage()
+            runCurrent()
+            assertEquals("seoul", me.centerServerValue, "전제: A 의 센터")
+            assertNotNull(me.statusMessage, "전제: A 의 상태메시지")
+            assertTrue(me.statusMessageLoaded, "전제: 상태메시지를 서버에서 받았다")
+            assertTrue(rig.sent.any { it.user == Accounts.A && it.path.endsWith("/rpc/register_device") }, "전제: A 의 버전 보고(register_device)")
+
+            val mark = rig.wires.size
+            rig.signIn(Accounts.B); advanceTimeBy(5_000); runCurrent()
+            // B 의 센터·상태메시지 조회는 실패(픽스처 없음)라 지난 값을 둔다 — 남은 값이 있으면 그건 A 의 것이다.
+            me.loadHeader()
+            me.loadStatusMessage()
+            runCurrent()
+            assertNull(me.centerServerValue, "B 의 설정 화면에 A 의 센터")
+            assertNull(me.statusMessage, "B 의 설정 화면에 A 의 상태메시지")
+            assertFalse(me.statusMessageLoaded, "A 의 상태메시지가 '서버가 확인해 준 B 의 값'으로 남았다")
+            // 맥 4138-4140: 버전 도장이 남으면 B 프로필에 버전이 안 남아 B 가 메시지를 못 받는다.
+            val bReport = rig.wires.drop(mark).filter { it.user == Accounts.B && it.url.contains("/rpc/register_device") }
+            assertEquals(1, bReport.size, "B 의 버전 보고가 A 의 도장에 막혔다: ${rig.wires.drop(mark).map { it.user to it.url.substringBefore('?') }}")
+            assertTrue(bReport.single().body.contains("p_app_version"), "B 의 버전 보고 본문: ${bReport.single().body}")
+        } finally { rig.close() }
+    }
+
+    /**
+     * ④ 데스크톱의 '버전 도장'은 기기 등록 서명(prefs deviceRegisteredSignature — core SessionStore.kt:593-621)이고 A → B 에 **지워지지 않는다**.
+     * 로그인 등록은 서명을 보지 않지만(SessionStore.kt:597 — 포그라운드만 스로틀), B 의 로그인 등록이 실패하면 남은 A 의 도장이 B 의 포그라운드
+     * 재등록과 비교된다 — 서명에 사용자 id 가 있어야(WindowsDeviceRegistration.signature) 막히지 않는다. 막히면 B 프로필에 버전이 안 남아
+     * B 가 메시지를 못 받는다(맥 4138-4140 reportedAppVersionStamp = nil 이 막는 그 일).
+     */
+    @Test
+    fun versionStampOfADoesNotBlockBForegroundReport() = runTest {
+        val rig = signedInA(BoundaryRig(this, dirs.new("version-stamp")).apply { failFirstBRegister = true })
+        try {
+            assertTrue(rig.sent.any { it.user == Accounts.A && it.path.endsWith("/rpc/register_device") }, "전제: A 의 등록(도장)")
+            rig.signIn(Accounts.B); advanceTimeBy(5_000); runCurrent()
+            assertEquals(1, rig.bRegisters, "전제: B 의 로그인 등록 1회(실패 — 도장은 A 의 것 그대로)")
+            val mark = rig.sent.size
+            rig.app.sessionStore.appDidBecomeActive()
+            advanceTimeBy(5_000); runCurrent()
+            assertEquals(1, rig.sent.drop(mark).count { it.user == Accounts.B && it.path.endsWith("/rpc/register_device") },
+                "B 의 포그라운드 재등록이 A 의 도장에 막혔다: ${rig.sent.drop(mark)}")
+        } finally { rig.close() }
     }
 }

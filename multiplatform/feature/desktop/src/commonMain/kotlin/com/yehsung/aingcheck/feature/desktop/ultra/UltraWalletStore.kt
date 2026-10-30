@@ -85,6 +85,14 @@ class UltraWalletStore(
     var lastSyncAt: SwiftDate? = null
         private set
 
+    /**
+     * 계정 순번 — [reset] 이 올린다. 세대(host.sessionGeneration)는 로그아웃에만 오르고 A → B 직행에선 그대로라(core
+     * SessionStore.adoptSignedInSession), 전환 전에 떠난 A 의 응답이 B 의 지갑에 A 의 잔량을 적는다(int-w4a 검증 프로브: 777).
+     * 세대와 순번이 **둘 다** 그대로일 때만 적는다. 맥은 clearPersistedSession 이 세대를 올리고(WorkTimerStore.swift 4036 @ af712521)
+     * 잔량을 비운다(4172) — 데스크톱 직행은 세대가 그대로라 이 순번이 그 몫을 한다.
+     */
+    private var accountEpoch = 0
+
     override fun sync(reason: UltraSyncReason) {
         if (reason == UltraSyncReason.Periodic && !isPeriodicDue(clock())) return
         fire(reason)
@@ -100,8 +108,9 @@ class UltraWalletStore(
     private fun fire(reason: UltraSyncReason): Job? {
         val job = if (host.session != null) {
             val generation = host.sessionGeneration
+            val epoch = accountEpoch
             lastSyncAt = clock()
-            scope.launch { perform(generation) }
+            scope.launch { perform(generation, epoch) }
         } else {
             null
         }
@@ -109,19 +118,21 @@ class UltraWalletStore(
         return job
     }
 
-    private suspend fun perform(generation: Int) {
+    private fun isStale(generation: Int, epoch: Int) = generation != host.sessionGeneration || epoch != accountEpoch
+
+    private suspend fun perform(generation: Int, epoch: Int) {
         val response = try {
             host.withSessionRetry { s -> host.service.syncUltraWallet(s.accessToken) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             if (host.classifyAuthError(e) == AuthErrorDisposition.cancelled) return
-            if (generation != host.sessionGeneration) return
+            if (isStale(generation, epoch)) return
             // U2 실패는 **잔량을 지우지 않는다** — 진단 깃발만.
             _state.update { it.copy(failed = true) }
             return
         }
-        if (generation != host.sessionGeneration) return
+        if (isStale(generation, epoch)) return
         apply(response)
     }
 
@@ -171,8 +182,9 @@ class UltraWalletStore(
         _state.update { it.copy(missionNotice = null) }
     }
 
-    /** 로그아웃(Swift WorkTimerStore.swift 4069-4087). */
+    /** 로그아웃·계정 전환(Swift WorkTimerStore.swift 4069-4087). 순번을 올려 떠 있던 앞 계정의 응답을 버린다. */
     fun reset() {
+        accountEpoch += 1
         _state.value = UltraWalletState()
         lastSyncAt = null
     }

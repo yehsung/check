@@ -73,6 +73,34 @@ class TokenUploadCoordinator(
     var lastMyTokenRowFetchAt: SwiftDate? = null; private set
     var myTokenRow: TokenRowServerValue? = restoreMyRow(); private set
 
+    /**
+     * 계정 순번 — [resetForAccount] 가 올린다. 세대(host.sessionGeneration)는 로그아웃에만 오르고 A → B 직행에선 그대로라
+     * (core SessionStore.adoptSignedInSession), 전환을 건너 늦게 끝난 A 의 응답은 세대만으로는 못 거른다 — 둘 다 같아야 적는다.
+     */
+    private var accountEpoch = 0
+
+    private fun isStale(generation: Int, epoch: Int) = generation != host.sessionGeneration || epoch != accountEpoch
+
+    /**
+     * 로그아웃·계정 전환(Swift WorkTimerStore.swift 4072-4088). 내 행·영속본·업로드 장부·하트비트 도장은 **사람에 묶인 사실**이라 비운다 —
+     * 남기면 다음 사람 화면에 앞 사람 숫자가 뜨고(4072), 다음 계정의 첫 업로드가 "이미 올린 날"로 읽혀 그 날들이 빠진다(4080).
+     * 배경 스캔 주기 스탬프([lastBackgroundTokenScanAt])와 진단 도장은 **일부러 남긴다** — 계정이 아니라 이 기기의 순회 비용·빌드에 묶인 값이다(4085-4087).
+     */
+    fun resetForAccount() {
+        accountEpoch += 1
+        myTokenRow = null
+        lastMyTokenRowFetchAt = null
+        didUploadTokenUsage = false
+        store.remove(MY_ROW_KEY)
+        lastUploadedUsage = null
+        lastUploadedAccountKey = null
+        lastUploadedDaily = emptyMap()
+        lastUploadedDailyBaselineDay = null
+        tokenDailyRetryPending = false
+        lastTokenUploadAt = null
+        lastTokenScanHeartbeatAt = null
+    }
+
     // MARK: 내 행(순위판 읽기 — 깃발과 무관)
 
     /** Swift loadMyTokenRowIfDue — 순위판이 이번 달을 보고 있으면 그쪽이 같은 RPC 를 이미 부른다. 300초 간격. */
@@ -85,10 +113,11 @@ class TokenUploadCoordinator(
         if (!force && last != null && now.timeIntervalSince(last) < 300) return
         val month = TokenUsageMonthKey.current(now)
         val generation = host.sessionGeneration
+        val epoch = accountEpoch
         lastMyTokenRowFetchAt = now
         try {
             val rows = host.withSessionRetry { s -> host.service.fetchTokenBoard(s.accessToken, month) }
-            if (generation != host.sessionGeneration) return
+            if (isStale(generation, epoch)) return
             val facts = rows.toTokenBoardEntries().map {
                 TokenBoardEntryFacts(it.userID, it.total, it.claudeTotal, it.codexEffective, it.antigravityEffective,
                     it.codexAccountMonth, it.hasServerCodexEffective)
@@ -153,28 +182,37 @@ class TokenUploadCoordinator(
         lastTokenUploadAt = now                              // ★2 시도 시각을 먼저
         val diagnostics = codexDiagnosticsIfUnreported(usage.month, now)
         val generation = host.sessionGeneration
+        val epoch = accountEpoch
         try {
             host.withSessionRetry { s ->
                 host.service.upsertTokenUsage(s.accessToken, s.userID, usage, device, account, accountStatus, diagnostics)
             }
             if (diagnostics != null) store.putString(CodexDiagnosticsStamp.KEY, CodexDiagnosticsStamp.stamp(diagnostics.appBuild, now))  // ★5
-            if (generation != host.sessionGeneration) return
+            // 전환을 건너 끝난 A 의 성공은 다음 사람의 장부를 채우지도, 일별을 다음 사람 토큰으로 잇지도 않는다.
+            if (isStale(generation, epoch)) return
             lastUploadedUsage = usage
             lastUploadedAccountKey = accountKey
             didUploadTokenUsage = true
-            uploadTokenUsageDailyIfNeeded(usage, account, generation, now)                       // ★3
+            uploadTokenUsageDailyIfNeeded(usage, account, generation, now, epoch)                // ★3
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            if (generation != host.sessionGeneration) return
+            if (isStale(generation, epoch)) return
             if (e == SupabaseWorkServiceError.DatabaseSchemaMissing) onSchemaMissing()
         }
     }
 
     // MARK: 일별
 
-    suspend fun uploadTokenUsageDailyIfNeeded(usage: TokenUsageMonthly, account: CodexAccountUsage?, generation: Int, now: SwiftDate) {
+    suspend fun uploadTokenUsageDailyIfNeeded(
+        usage: TokenUsageMonthly,
+        account: CodexAccountUsage?,
+        generation: Int,
+        now: SwiftDate,
+        epoch: Int = accountEpoch,
+    ) {
         if (!config.tokenUpload) return                     // ★1
+        if (isStale(generation, epoch)) return
         if (host.session == null || !tokenUsageCollect()) return
         val device = deviceId() ?: return
         val today = TokenUsageDayKey.current(now)
@@ -192,13 +230,13 @@ class TokenUploadCoordinator(
             host.withSessionRetry { s ->
                 host.service.upsertTokenUsageDaily(s.accessToken, TokenUsageDailyUpload.rows(s.userID, device, changed, current))
             }
-            if (generation != host.sessionGeneration) return
+            if (isStale(generation, epoch)) return
             lastUploadedDaily = current
             tokenDailyRetryPending = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            if (generation != host.sessionGeneration) return
+            if (isStale(generation, epoch)) return
             if (e == SupabaseWorkServiceError.DatabaseSchemaMissing) onSchemaMissing() else tokenDailyRetryPending = true
         }
     }
@@ -228,9 +266,10 @@ class TokenUploadCoordinator(
         if (scannedAt == null || scannedAt == lastTokenScanHeartbeatAt) return
         val month = TokenUsageMonthKey.current(now)
         val generation = host.sessionGeneration
+        val epoch = accountEpoch
         try {
             host.withSessionRetry { s -> host.service.sendTokenScanHeartbeat(s.accessToken, s.userID, month, device, files, scannedAt) }
-            if (generation != host.sessionGeneration) return
+            if (isStale(generation, epoch)) return
             lastTokenScanHeartbeatAt = scannedAt
         } catch (e: CancellationException) {
             throw e

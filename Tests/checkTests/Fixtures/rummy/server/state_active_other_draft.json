@@ -2,7 +2,7 @@
   "state": {
     "consecutive_passes": 0,
     "draft": {
-      "at_ms": 1793301840033,
+      "at_ms": 1793317458102,
       "draft_seq": 1,
       "table": [
         [
@@ -17,13 +17,13 @@
     "finished_at_ms": null,
     "grace_ms": 2000,
     "host_id": "d0000000-0000-4000-8000-000000000001",
-    "id": "64f20ed0-e913-4fb3-a50a-a94f4aad4419",
+    "id": "a14165d9-933d-4186-8a1c-dfc5f1b6a687",
     "is_public": true,
     "last_event": {
-      "at_ms": 1793301840016,
+      "at_ms": 1793317457969,
       "count": 4,
       "kind": "start",
-      "seat_no": 1
+      "seat_no": 0
     },
     "max_seats": 4,
     "my_initial_done": false,
@@ -109,13 +109,13 @@
       }
     ],
     "seq": 1,
-    "server_now_ms": 1793301840034,
+    "server_now_ms": 1793317458103,
     "stake": 5,
     "status": "active",
     "table": [],
-    "turn_deadline_ms": 1793301900024,
+    "turn_deadline_ms": 1793317517979,
     "turn_seat_no": 0,
-    "turn_started_ms": 1793301840024
+    "turn_started_ms": 1793317457979
   },
   "status": "ok"
 }

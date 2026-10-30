@@ -14,10 +14,15 @@ import Testing
 // MARK: - 하네스(V0369RummyStoreTests 의 틀을 베꼈다 — 거기 것은 file-private 이라 못 빌린다)
 
 private let v5Me = "d0000000-0000-4000-8000-000000000001"
-private let v5MatchID = UUID(uuidString: "64f20ed0-e913-4fb3-a50a-a94f4aad4419")!
-
 private let v5FixtureFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     .appendingPathComponent("Fixtures/rummy/server", isDirectory: true)
+
+// 픽스처를 다시 뜨면 판 id 가 바뀐다 — 박아 두지 말고 state_forming 의 id 를 읽는다(모든 픽스처가 같은 판이다).
+private let v5MatchID: UUID = {
+    let data = try! Data(contentsOf: v5FixtureFolder.appendingPathComponent("state_forming.json"))
+    let state = (try! JSONSerialization.jsonObject(with: data) as! [String: Any])["state"] as! [String: Any]
+    return UUID(uuidString: state["id"] as! String)!
+}()
 
 private func v5Raw(_ name: String) throws -> String {
     try String(contentsOf: v5FixtureFolder.appendingPathComponent("\(name).json"), encoding: .utf8)

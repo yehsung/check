@@ -4,13 +4,13 @@
     "draft": null,
     "end_reason": "rack_empty",
     "expires_at_ms": null,
-    "finished_at_ms": 1793301840604,
+    "finished_at_ms": 1793317458158,
     "grace_ms": 2000,
     "host_id": "d0000000-0000-4000-8000-000000000001",
-    "id": "64f20ed0-e913-4fb3-a50a-a94f4aad4419",
+    "id": "a14165d9-933d-4186-8a1c-dfc5f1b6a687",
     "is_public": true,
     "last_event": {
-      "at_ms": 1793301840606,
+      "at_ms": 1793317458160,
       "count": 1,
       "kind": "finish",
       "seat_no": 0
@@ -19,7 +19,7 @@
     "my_initial_done": true,
     "my_rack": null,
     "my_seat_no": 0,
-    "pool_count": 10,
+    "pool_count": 11,
     "seat_count": 4,
     "seats": [
       {
@@ -28,7 +28,7 @@
         "display_name": "디시험01",
         "final_rack": [],
         "final_rank": 1,
-        "final_score": 36,
+        "final_score": 35,
         "forfeit_order": null,
         "initial_done": true,
         "is_winner": true,
@@ -76,8 +76,7 @@
           "C12",
           "D1",
           "C6",
-          "C7",
-          "C10"
+          "C7"
         ],
         "final_rank": 3,
         "final_score": null,
@@ -100,10 +99,10 @@
           "B9",
           "C3",
           "C8",
-          "C11"
+          "C10"
         ],
         "final_rank": 2,
-        "final_score": -36,
+        "final_score": -35,
         "forfeit_order": null,
         "initial_done": true,
         "is_winner": false,
@@ -115,8 +114,8 @@
         "user_id": "d0000000-0000-4000-8000-000000000004"
       }
     ],
-    "seq": 15,
-    "server_now_ms": 1793301840629,
+    "seq": 14,
+    "server_now_ms": 1793317458162,
     "stake": 5,
     "status": "finished",
     "table": [

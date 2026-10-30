@@ -7,10 +7,10 @@
     "finished_at_ms": null,
     "grace_ms": 2000,
     "host_id": "d0000000-0000-4000-8000-000000000001",
-    "id": "64f20ed0-e913-4fb3-a50a-a94f4aad4419",
+    "id": "a14165d9-933d-4186-8a1c-dfc5f1b6a687",
     "is_public": true,
     "last_event": {
-      "at_ms": 1793301840397,
+      "at_ms": 1793317458142,
       "count": 7,
       "kind": "forfeit",
       "seat_no": 1
@@ -92,7 +92,7 @@
       }
     ],
     "seq": 7,
-    "server_now_ms": 1793301840398,
+    "server_now_ms": 1793317458142,
     "stake": 5,
     "status": "active",
     "table": [
@@ -107,9 +107,9 @@
         "D13"
       ]
     ],
-    "turn_deadline_ms": 1793301900397,
+    "turn_deadline_ms": 1793317518142,
     "turn_seat_no": 2,
-    "turn_started_ms": 1793301840397
+    "turn_started_ms": 1793317458142
   },
   "status": "ok"
 }

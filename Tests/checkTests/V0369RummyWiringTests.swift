@@ -211,7 +211,8 @@ func theCharacterBubblesCarryRummyInvitesAndTurns() throws {
     #expect(OverlayMessageBubble.fitsCapsule(long), "긴 이름에서 말풍선 문구가 캡슐을 넘친다: \(long)")
     #expect(long.hasSuffix("판돈 10"))
 
-    let overlay = try rwMac("CheckOverlayWindow.swift")
+    // 쪼갠 파일(맥 오버레이 + CheckCore 패널 가시성) — 반쪽 읽기 금지 계약대로 이어 읽는다.
+    let overlay = rwCollapsed(V0317ShopTests.stripped(try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayWindow.swift")))
     #expect(overlay.contains("if let rect = rummyInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }"),
             "몸체 히트테스트가 아잉 큐브 말풍선을 모른다")
     #expect(overlay.contains("if let rect = rummyInviteBubbleScreenRect(), rect.contains(location), let target = rummyBubbleTarget() { onOpenRummy?(target.matchID) return }"),

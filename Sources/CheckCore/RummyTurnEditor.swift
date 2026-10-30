@@ -354,7 +354,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
                 // 자란 쪽만 본다: 앞에 꽂혔으면 왼쪽 이웃의 오른끝, 아니면 오른쪽 이웃의 왼끝. 다 옮겨 비었던 묶음이면 안 본다.
                 let grewLeft = at == 0 && pieces[landed].tiles.count > block.count
                 let sides: [RummyAttachSide] = pieces[landed].tiles.count == block.count ? [] : (grewLeft ? [.right] : [.left])
-                _ = Self.attachAll(&pieces, receiving: &landed, sides: sides)
+                _ = Self.attachAll(&pieces, receiving: &landed, sides: sides, fixed: attachFixed)
                 Self.refit(&pieces, landed)
                 receiving = landed
             }
@@ -366,7 +366,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
         case .newMeldAt(let wanted):
             var landed = pieces.count
             pieces.append(Piece(tiles: block, point: wanted, origin: nil))
-            if let attached = Self.attachAll(&pieces, receiving: &landed) {
+            if let attached = Self.attachAll(&pieces, receiving: &landed, fixed: attachFixed) {
                 Self.refit(&pieces, landed)
                 plan = attached
             } else {
@@ -397,12 +397,18 @@ package struct RummyTurnEditor: Equatable, Sendable {
 
     /// 규칙 ②: `receiving` 묶음을 닿는 이웃 끝에 붙인다 — 합친 뒤 또 닿으면 또(가운데를 메우면 양쪽이 다 붙는다).
     /// 합친 묶음은 대상의 번호·점(제자리)을 잇고 `receiving` 이 그것을 가리킨다. 첫 붙기를 돌려준다(없으면 nil).
+    /// `fixed` 타일(첫 등록 전의 시작 판 타일 — `attachFixed`)이 든 묶음은 붙는 쪽도 받는 쪽도 안 된다.
+    /// 블록의 **끝마다 한 번만** 붙는다: 한 끝이 붙으면 그 쪽은 다 썼고, 합친 묶음의 그 바깥 끝은 대상의 반대 끝(손대지 않은
+    /// 이웃 자리)이다 — 자동 배치로 여백 16(붙기 거리 24 안)에 따로 서 있던 묶음까지 끌어와 합치지 않는다(3판 검증: A1-A3 · A4-A6
+    /// 곁에 A7 을 붙이면 A1-A7 이 되며 A4-A6 이 16 당겨지던 결함. 묶음 위에 꽂기(`.meld`)가 곁 이웃과 안 합치는 규칙과 같은 뜻).
     private static func attachAll(
-        _ pieces: inout [Piece], receiving: inout Int, sides: [RummyAttachSide] = [.right, .left]
+        _ pieces: inout [Piece], receiving: inout Int, sides: [RummyAttachSide] = [.right, .left], fixed: Set<Int> = []
     ) -> RummyDropPlan? {
+        var sides = sides
         var first: RummyDropPlan?
-        while !sides.isEmpty {
-            let others = pieces.indices.filter { $0 != receiving }
+        func isFixed(_ piece: Piece) -> Bool { !fixed.isEmpty && piece.tiles.contains { fixed.contains($0.id) } }
+        while !sides.isEmpty, !isFixed(pieces[receiving]) {
+            let others = pieces.indices.filter { $0 != receiving && !isFixed(pieces[$0]) }
             guard let hit = RummyTableEdit.attachment(
                 block: pieces[receiving].faces, frame: pieces[receiving].frame,
                 sets: others.map { pieces[$0].faces }, frames: others.map { pieces[$0].frame }, sides: sides)
@@ -415,9 +421,16 @@ package struct RummyTurnEditor: Equatable, Sendable {
                 target: pieces[host].point, side: hit.side, blockCount: mover.tiles.count)
             pieces.remove(at: receiving)
             receiving = host > receiving ? host - 1 : host
+            sides.removeAll { $0 == hit.side }
         }
         return first
     }
+
+    /// 규칙 ② 가 못 건드리는 타일: 첫 등록 전(R-12)이면 시작 판 타일 전부, 아니면 없음.
+    /// 첫 등록 전엔 판 묶음에 손대면(K 가 바뀌면) 차례가 `initial_table_touched` 로 막힌다 — 자동 붙기가 내 새 묶음을 곁의 판 묶음에
+    /// 합치거나(또는 판 묶음 둘을 위치만 옮기다 합쳐) 낼 수 없는 판을 **저절로** 만들지 않게 한다. 묶음 위에 꽂기(③)는 사용자가
+    /// 그 묶음을 골라 놓은 것이라 그대로 두고 판정이 이유를 말한다. 3판 검증에서 찾은 결함.
+    private var attachFixed: Set<Int> { initialDone ? [] : tableTileIDs }
 
     /// 받은 묶음 다시 맞추기: 그 자리가 판 안이고 안 겹치면 그대로, 아니면 가장 가까운 빈자리(`RummyTableLayout.refit`).
     private static func refit(_ pieces: inout [Piece], _ index: Int) {
@@ -440,7 +453,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
         var landed = setIndex
         pieces[setIndex].point = point
         let plan: RummyDropPlan
-        if let attached = Self.attachAll(&pieces, receiving: &landed) {
+        if let attached = Self.attachAll(&pieces, receiving: &landed, fixed: attachFixed) {
             Self.refit(&pieces, landed)
             plan = attached
         } else {

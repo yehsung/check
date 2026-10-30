@@ -119,6 +119,14 @@ enum RummyBoardPreview: Equatable {
         }
     }
 
+    /// 자석이 설 이음 x(논리) — 블록 칸의 대상 쪽 끝. 대상 오른끝에 붙으면 칸 왼쪽, 왼끝에 붙으면 칸 오른쪽.
+    /// 대상이 지금 끌고 있는 묶음의 토막일 때(끝 타일을 빼서 제자리 곁에 다시 놓기 · 가운데 빼서 틈에 다시 놓기) 옮기기 전
+    /// 묶음 끝(`frames[set]`)은 이음 자리가 아니다 — 늘 칸으로 잰다.
+    var magnetSeamX: Int? {
+        guard case .attach(_, let side, let slots, _, _) = self else { return nil }
+        return side == .right ? slots.x : slots.maxX
+    }
+
     /// 놓으면 그 묶음이 맞는 세트가 되는가(초록).
     var completes: Bool {
         switch self {
@@ -344,13 +352,12 @@ struct RummyTableCanvasView: View {
                     .position(x: x, y: frame.midY)
             }
             if valid { checkBadge(landing) }
-        case .attach(let set, let side, _, let landing, let valid):
-            if let frame = melds.indices.contains(set) ? transform.rect(melds[set].frame) : nil {
-                let x = side == .right ? frame.maxX : frame.minX
-                RummyMagnetSeam(color: tint(valid: valid), height: frame.height + pad * 2 + 6, side: side,
-                                badge: max(20, 26 * transform.scale))
-                    .position(x: x, y: frame.midY)
-            }
+        case .attach(_, let side, let slots, let landing, let valid):
+            // 자석은 **실제 이음 자리**(블록 칸의 대상 쪽 끝)에 — 대상이 끌어 온 묶음의 토막이면 옮기기 전 묶음 끝과 다르다.
+            let frame = transform.rect(slots)
+            RummyMagnetSeam(color: tint(valid: valid), height: frame.height + pad * 2 + 6, side: side,
+                            badge: max(20, 26 * transform.scale))
+                .position(x: transform.toScreen(CGPoint(x: CGFloat(preview.magnetSeamX ?? slots.x), y: 0)).x, y: frame.midY)
             if valid { checkBadge(landing) }
         }
     }

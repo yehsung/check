@@ -1,5 +1,5 @@
 {
-  "exportTests": 92,
+  "exportTests": 93,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -176,6 +176,32 @@
         "Sources/CheckCore/MilestoneTracker.swift",
         "Sources/CheckCore/SupabaseWorkModels.swift",
         "Sources/CheckCore/CheckTodoModel.swift"
+      ]
+    },
+    {
+      "cases": 14,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-queue/GoldenExportDesktopWorkQueue.swift",
+      "golden": "desktop-work-queue/scenarios",
+      "path": "contract/golden/desktop-work-queue/scenarios.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStoreSync.swift",
+        "Sources/check/WorkTimerStore.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift"
+      ]
+    },
+    {
+      "cases": 46,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/desktop-work/GoldenExportDesktopWorkRequests.swift",
+      "golden": "desktop-work/requests",
+      "path": "contract/golden/desktop-work/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/SupabaseWorkHTTP.swift"
       ]
     },
     {
@@ -1116,18 +1142,6 @@
         "Sources/CheckCore/TodoSync.swift",
         "Sources/CheckCore/SupabaseWorkService.swift",
         "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift"
-      ]
-    },
-    {
-      "cases": 17,
-      "equivalence": "bit",
-      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireScalars.swift",
-      "golden": "wire/scalar-props",
-      "path": "contract/golden/wire/scalar-props.json",
-      "platformSensitive": false,
-      "swiftSources": [
-        "Sources/CheckCore/SupabaseWorkService.swift",
-        "Sources/CheckCore/RealtimeTransport.swift"
       ]
     }
   ],

@@ -48,7 +48,7 @@ class GachaCloseDuringPullTest {
         }
         assertEquals(1, w.server.count(W4fServer.PULL), "창을 닫은 뒤 뽑기가 더 나갔다 — ${w.server.calls}")
 
-        // 왕복이 끝났고 미공개 신호가 없으면(공용 패치 P2 전엔 늘 없음) 다시 열 때 새 기계.
+        // 왕복이 끝났고 미공개 신호가 없으면(이 시험의 칸은 기계에 안 잇는다 — 잇는 배선은 GachaUnrevealedWiringTest) 다시 열 때 새 기계.
         c.open()
         assertEquals(1, c.state.contentID)
         assertTrue(c.state.isActive)

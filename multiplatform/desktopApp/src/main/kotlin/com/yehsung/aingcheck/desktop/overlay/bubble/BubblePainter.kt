@@ -3,7 +3,8 @@
 //       .shadow(black 0.25, r3, y1)) · 설계 D §9-1(레이어드 창은 알파>0 픽셀이 클릭을 먹는다 → 그림자를 옮기지 않는다)
 //
 // 판정(어떤 문구·도착 꼴)은 b1 BubbleForm, 여기는 받은 문구를 [BubbleMetrics] 숫자 그대로 그린다(I-4).
-// 색은 테마 토큰(AingColors.Light)에서만 — 이 폴더에 색 리터럴 0(OverlayColorLiteralTest, D5). 맥 말풍선은 어둠 모드에서도 흰 캡슐이라 Light 고정.
+// 색은 테마 말풍선 토큰(AingColors.overlayBubble* — 공용 패치 6)에서만 — 이 폴더에 색 리터럴 0(OverlayColorLiteralTest, D5).
+// 맥 말풍선은 어둠 모드에서도 흰 캡슐이라 토큰도 두 모드가 같은 값이다(여기는 Light 를 읽는다).
 package com.yehsung.aingcheck.desktop.overlay.bubble
 
 import androidx.compose.ui.graphics.toArgb
@@ -21,10 +22,6 @@ import org.jetbrains.skia.RRect
 object BubbleStyle {
     const val CORNER_RADIUS = 10.0
     const val STROKE_WIDTH = 0.5
-    const val FILL_OPACITY = 0.92f
-    const val STROKE_OPACITY = 0.10f
-    const val TEXT_OPACITY = 0.85f
-    const val ARROW_OPACITY = 0.45f
     const val ARROW_FONT_PT = 7.0
     const val ARROW = "›"
     /** 누를 수 있는 말풍선(도착·대결)은 화살표 몫만큼 캡슐을 **늘려** 글자 폭 94 를 지킨다(맥 CheckMessageArrivalBubble.capsuleMaxWidth). */
@@ -40,10 +37,10 @@ object BubbleStyle {
     const val SHADOW_OFFSET_Y = 1.0
 
     private val tokens get() = AingColors.Light
-    val fill: Int get() = tokens.surface.copy(alpha = FILL_OPACITY).toArgb()
-    val stroke: Int get() = tokens.label.copy(alpha = STROKE_OPACITY).toArgb()
-    val text: Int get() = tokens.label.copy(alpha = TEXT_OPACITY).toArgb()
-    val arrow: Int get() = tokens.label.copy(alpha = ARROW_OPACITY).toArgb()
+    val fill: Int get() = tokens.overlayBubbleFill.toArgb()
+    val stroke: Int get() = tokens.overlayBubbleStroke.toArgb()
+    val text: Int get() = tokens.overlayBubbleText.toArgb()
+    val arrow: Int get() = tokens.overlayBubbleArrival.toArgb()
     val shadow: Int get() = tokens.label.copy(alpha = SHADOW_ALPHA).toArgb()
 
     fun clickable(kind: BubbleKind): Boolean = kind is BubbleKind.Arrival || kind is BubbleKind.Invite

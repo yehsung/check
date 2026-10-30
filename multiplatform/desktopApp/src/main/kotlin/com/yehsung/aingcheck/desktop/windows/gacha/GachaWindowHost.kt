@@ -16,7 +16,7 @@ class GachaWindowHost(
     workAreas: () -> List<PxRect>,
     scale: () -> Double,
     private val reduceMotion: () -> Boolean = { false },
-    unrevealed: GachaUnrevealedCell = GachaUnrevealedCell(),
+    private val unrevealed: GachaUnrevealedCell = GachaUnrevealedCell(),
 ) {
     private val focus = ShowFocus()
     val controller = GachaWindowController(store.gachaMachineFacts(unrevealed), ::createHandle, bounds, workAreas, scale)
@@ -32,6 +32,6 @@ class GachaWindowHost(
 
     private fun createHandle(onEvent: (WindowEvent) -> Unit): GameWindowHandle =
         AwtGameWindowHandle(GachaText.title, focus, onEvent) {
-            GachaWindowContent(store, controller.state, onClose = ::close, reduceMotion = reduceMotion())
+            GachaWindowContent(store, controller.state, onClose = ::close, reduceMotion = reduceMotion(), unrevealed = unrevealed)
         }
 }

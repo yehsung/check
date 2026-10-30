@@ -85,6 +85,7 @@ import com.yehsung.aingcheck.ui.resources.ms_group_fill
 import com.yehsung.aingcheck.ui.resources.ms_groups
 import com.yehsung.aingcheck.ui.resources.ms_groups_fill
 import com.yehsung.aingcheck.ui.resources.ms_help
+import com.yehsung.aingcheck.ui.resources.ms_home_fill
 import com.yehsung.aingcheck.ui.resources.ms_hourglass_empty
 import com.yehsung.aingcheck.ui.resources.ms_how_to_reg
 import com.yehsung.aingcheck.ui.resources.ms_inbox
@@ -252,6 +253,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     Groups("groups", false),
     GroupsFill("groups", true),
     Help("help", false),
+    HomeFill("home", true),
     HourglassEmpty("hourglass_empty", false),
     HowToReg("how_to_reg", false),
     Inbox("inbox", false),
@@ -423,6 +425,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             Groups -> Res.drawable.ms_groups
             GroupsFill -> Res.drawable.ms_groups_fill
             Help -> Res.drawable.ms_help
+            HomeFill -> Res.drawable.ms_home_fill
             HourglassEmpty -> Res.drawable.ms_hourglass_empty
             HowToReg -> Res.drawable.ms_how_to_reg
             Inbox -> Res.drawable.ms_inbox

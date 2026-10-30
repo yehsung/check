@@ -150,26 +150,14 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
-    "desktop-work-queue/scenarios": {
-      "file": "1e0610d7d43104911170fe1495a052e80eab24d2d4e958f2c9aa1daa84916fdb",
+    "desktop-work-state/ownership": {
+      "file": "d7300eba7607777c27b7271975861dc45da522c0645750f22f533a3ac696f37a",
       "generator": {
-        "Tests/checkTests/GoldenExport/desktop-work-queue/GoldenExportDesktopWorkQueue.swift": "526a8331ec29772ef55f05e3a12b9ad43ea066d8755c2ab5ff821013da1721be"
+        "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift": "9e9d3f76971d461810543bc05d01c60ff781f0b3b8d768c582fa9b6ab3bdd551"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
         "Sources/check/WorkTimerStore.swift": "63d5c5965bfd95c02b6209b33788e9bd36e6dcf2ac8041528b1d85cc37231b2c",
         "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
-      }
-    },
-    "desktop-work/requests": {
-      "file": "c1fdc271214555edc08b0c4ffe05effe79d7ca7f9acf9c390dbdff0f51015f83",
-      "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/desktop-work/GoldenExportDesktopWorkRequests.swift": "7f7452db1c9a81b8dc220fbc0ac16cc1b9dbc662dbc7379815b98a23a5755ee1"
-      },
-      "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkHTTP.swift": "867512bfd55689c87800000591bdb7d298c7c9c9a1b51b5febedd1d18d3319e6",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75"
       }
     },
     "duel-fee/fee": {
@@ -980,16 +968,6 @@
         "Sources/CheckCore/SupabaseWorkService.swift": "12adc693c30b222d208b56f674345f63bc8736f476dc54acf390df4f66f3e404",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift": "0b142e721ce26eacf95187026ccd28ebf314c5e60c7962ae886c388ec1e957f6"
-      }
-    },
-    "wire/scalar-props": {
-      "file": "b29816da404d2ee12322a3442ae6d6905baa1c8182291da0bf4b6e36c22fa47a",
-      "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireScalars.swift": "4bfa00646e20d726ffd8e1d8d99f02394e8b078f82bb3854d8354e22f5f4f96d"
-      },
-      "swiftSources": {
-        "Sources/CheckCore/RealtimeTransport.swift": "747976ab2c637aa63c8e21b80d2549d743ff7445b02a8b7fb94a3d665259b625",
-        "Sources/CheckCore/SupabaseWorkService.swift": "12adc693c30b222d208b56f674345f63bc8736f476dc54acf390df4f66f3e404"
       }
     }
   },

@@ -1,5 +1,5 @@
 {
-  "exportTests": 93,
+  "exportTests": 92,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -179,29 +179,15 @@
       ]
     },
     {
-      "cases": 14,
+      "cases": 17,
       "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-work-queue/GoldenExportDesktopWorkQueue.swift",
-      "golden": "desktop-work-queue/scenarios",
-      "path": "contract/golden/desktop-work-queue/scenarios.json",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift",
+      "golden": "desktop-work-state/ownership",
+      "path": "contract/golden/desktop-work-state/ownership.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/check/WorkTimerStoreSync.swift",
         "Sources/check/WorkTimerStore.swift",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift"
-      ]
-    },
-    {
-      "cases": 46,
-      "equivalence": "bit",
-      "generator": "Tests/CheckMobileKitTests/GoldenExport/desktop-work/GoldenExportDesktopWorkRequests.swift",
-      "golden": "desktop-work/requests",
-      "path": "contract/golden/desktop-work/requests.json",
-      "platformSensitive": false,
-      "swiftSources": [
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
-        "Sources/CheckCore/SupabaseWorkModels.swift",
-        "Sources/CheckCore/SupabaseWorkHTTP.swift"
+        "Sources/check/WorkTimerStoreSync.swift"
       ]
     },
     {

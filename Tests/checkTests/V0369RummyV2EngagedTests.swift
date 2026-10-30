@@ -569,7 +569,10 @@ struct V0369RummyV2EngagedTests {
             try? png.write(to: URL(fileURLWithPath: "\(egStillsDir)/\(name).png"))
             return bitmap
         }
-        _ = try render(nil, name: "rummy2-my-turn-ruby-warmup")   // 첫 렌더는 다르게 나온다(실측) — 굳힌 뒤 비교한다.
+        // ImageRenderer 는 한 내용의 첫 **두** 장을 셋째 장부터와 다르게 굽는다(A A B B — 전면 Δ≤2 디더링). 한 장만 덥히면
+        // 비교하는 두 장(2·3장)이 그 경계를 가로질러 아래 판 전체가 '달라졌다'로 잡힌다(단독 실행 10-31: 머리글 33,607 · 아래 80,571).
+        _ = try render(nil, name: "rummy2-my-turn-ruby-warmup")
+        _ = try render(nil, name: "rummy2-my-turn-ruby-warmup2")
         let shown = try render(1_234, name: "rummy2-my-turn-ruby")
         let blank = try render(nil, name: "rummy2-my-turn-ruby-baseline")
         #expect(shown.pixelsWide == blank.pixelsWide && shown.pixelsHigh == blank.pixelsHigh)

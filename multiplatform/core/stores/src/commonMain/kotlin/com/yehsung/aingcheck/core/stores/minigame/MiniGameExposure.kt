@@ -39,4 +39,14 @@ object MiniGameExposure {
     val visible: List<MiniGameKind> = visibleKinds()
 
     fun isVisible(kind: MiniGameKind): Boolean = kind in visible
+
+    /**
+     * 데스크톱(Windows)에 보이는 게임 — 폰 노출 + 길건너 아잉이(W-9 #6: 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다).
+     * 증거 규칙은 같다(증거 골든이 비면 빠진다). 순서는 `MiniGameKind.entries`. 폰([visible])은 바뀌지 않는다.
+     */
+    fun desktopVisibleKinds(evidence: Map<MiniGameKind, List<String>> = evidenceGoldens): List<MiniGameKind> =
+        MiniGameKind.entries.filter { (it in MiniGameKind.phoneCases || it == MiniGameKind.crossy) && !evidence[it].isNullOrEmpty() }
+
+    /** 데스크톱 조립이 허브([GamesMiniGameHub.visibleKinds])에 건네는 목록. */
+    val desktopVisible: List<MiniGameKind> = desktopVisibleKinds()
 }

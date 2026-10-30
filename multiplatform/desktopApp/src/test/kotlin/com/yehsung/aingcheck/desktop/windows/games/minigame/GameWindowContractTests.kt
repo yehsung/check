@@ -191,6 +191,21 @@ class ExposureTest {
         assertFalse(MiniGameKind.crossy in MiniGameExposure.visible)
     }
 
+    /** 데스크톱 목록(허브 visibleKinds = desktopVisible): 허브에 길건너 칸이 서고, 창 문으로 열면 길건너 판(구동기)이 선다. 음성 짝은 위 hubShowsNoCrossy(기본 = 폰 노출). */
+    @Test
+    fun desktopListShowsAndOpensCrossy() = runDesktopComposeUiTest(440, 2400) {
+        val store = GamesStore(UiGamesHarness(TestScope(), AppConfig()) { null }.context)
+        store.miniGames.visibleKinds = MiniGameExposure.desktopVisible
+        val state = MiniGameWindowState(store.miniGames, visibleKinds = store.miniGames.visibleKinds)
+        setContent { MiniGameWindowContent(store, state, NO_FACTS, ART, null, { NOW }, false, true, {}, {}, {}) }
+        waitForIdle()
+        assertTrue(onAllNodesWithText("길건너", substring = true).fetchSemanticsNodes().isNotEmpty(), "데스크톱 허브에 길건너가 없다")
+        Snapshot.withMutableSnapshot { state.show(MiniGameKind.crossy) }
+        waitForIdle()
+        assertEquals(MiniGameWindowRoute.Game(MiniGameKind.crossy), state.route)
+        assertEquals(MiniGameKind.crossy, store.miniGames.controller?.kind, "허브가 길건너 판을 열지 않았다(빈 판)")
+    }
+
     /**
      * kind 없는 열기(플라이아웃 게임 레일 · 두 번째 실행)는 멱등 — 판 도중이면 그 판 그대로(맥 show(), CheckMiniGameWindow.swift:213-235).
      * 실제 화면을 띄워(화면 수명의 closeScreen 까지) 판이 살아 있는지 잰다. 음성 짝: kind 를 주면 그 게임으로 간다 · 허브·닫힘은 그대로.

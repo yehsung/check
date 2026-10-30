@@ -250,6 +250,12 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     /** 엔진 시드 — 화면을 열 때마다 달라야 같은 판이 반복되지 않는다(데모 고정 시계에서도). */
     private var seedCounter: ULong = 0u
 
+    /**
+     * 이 빌드의 허브가 여는 게임(첫 화면 타일 · 오늘 순위 · openScreen). 기본은 폰 노출([MiniGameExposure.visible] — Android 동작 그대로)이고,
+     * 데스크톱 조립만 [MiniGameExposure.desktopVisible](길건너 포함 — W-9 #6)로 바꾼다.
+     */
+    var visibleKinds: List<MiniGameKind> = MiniGameExposure.visible
+
     private val isSignedIn: Boolean get() = context.sessionStore.isSignedIn
     private val myUserID: String? get() = context.sessionStore.session?.userID?.lowercase()
 
@@ -261,7 +267,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
 
     /** 게임 화면이 열렸다. 오늘 순위·어제 1등·공개 여부를 읽고 **토큰을 미리 받는다**. 이 빌드에 보이지 않는 게임이면 아무것도 안 한다. */
     fun openScreen(kind: MiniGameKind) {
-        if (!MiniGameExposure.isVisible(kind)) return
+        if (kind !in visibleKinds) return
         if (activeKind == kind && controller != null) return
         // 화면 경합 정리는 **버리는 것**이다(`abandon()`) — 사람이 쌓아 올린 판을 끝내는 자리가 아니다.
         controller?.abandon()
@@ -365,7 +371,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         val last = lastSummaryAt
         if (last != null && now.timeIntervalSince(last) < summaryThrottleSeconds) return
         lastSummaryAt = now
-        for (kind in MiniGameExposure.visible) {
+        for (kind in visibleKinds) {
             loadLocalBest(kind)
             context.scope.launch { loadBoard(kind, withWinner = false) }
         }

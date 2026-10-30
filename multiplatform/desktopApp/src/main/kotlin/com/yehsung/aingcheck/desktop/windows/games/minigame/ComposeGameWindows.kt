@@ -250,7 +250,7 @@ object ComposeGamesWindows {
         lateinit var host: GamesWindowsHost
         lateinit var miniShell: ComposeGameWindowShell
         lateinit var duelShell: ComposeGameWindowShell
-        val miniState = MiniGameWindowState(games.miniGames) { miniShell.refreshHz() }
+        val miniState = MiniGameWindowState(games.miniGames, visibleKinds = games.miniGames.visibleKinds) { miniShell.refreshHz() }
         val duelState = TetrisDuelWindowState(TetrisDuelWindowDoors(games.tetris)) { duelShell.refreshHz() }
         val gomokuDoors = GomokuWindowDoors(gomoku)
         val chessDoors = ChessWindowDoors(chess)

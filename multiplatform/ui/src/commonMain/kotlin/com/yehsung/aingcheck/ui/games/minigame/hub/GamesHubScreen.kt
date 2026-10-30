@@ -169,7 +169,7 @@ fun GamesHubScreen(
 @Composable
 private fun MiniGameTiles(store: GamesStore, art: MiniGameArt, onOpen: (GamesDestination) -> Unit, modifier: Modifier) {
     val fontScale = LocalDensity.current.fontScale
-    val kinds = hubMiniGames
+    val kinds = store.miniGames.visibleKinds
     // 큰 글자: 한 열(반 폭 타일에서는 "오늘 최고 874점 · 3위"가 낱글자로 꺾인다). 보통은 2열 격자 — 셋째 타일은 다음 줄 왼쪽.
     val columns = if (fontScale >= 1.3f) 1 else 2
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -325,7 +325,7 @@ private fun TetrisDuelCard(store: GamesStore, onOpen: (GamesDestination) -> Unit
 private fun TodayRanks(store: GamesStore, art: MiniGameArt, onOpen: (GamesDestination) -> Unit, onOpenRankings: () -> Unit) {
     val hub = store.miniGames
     val colors = AingTheme.colors
-    val kinds = hubMiniGames
+    val kinds = store.miniGames.visibleKinds
     SectionHeader(GamesText.todayRankTitle, trailing = SectionTrailing.Action(GamesText.seeAllRankings, onOpenRankings), padded = true)
     InsetGroup {
         kinds.forEachIndexed { index, kind ->

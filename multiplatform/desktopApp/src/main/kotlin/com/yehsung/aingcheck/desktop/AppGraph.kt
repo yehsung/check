@@ -290,6 +290,10 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             override val sharedRubyBalance: Long? get() = ruby.rubyBalance
         },
     )
+    init {
+        // 데스크톱 허브는 길건너까지 연다(W-9 #6 — 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다). 창 상태는 이 목록을 그대로 받는다.
+        gamesStore.miniGames.visibleKinds = com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure.desktopVisible
+    }
 
     /** 설정 '캐릭터 켜짐'(설정 화면이 바꾼다 — 맥 기본 켜짐). */
     val overlayEnabled = MutableStateFlow(true)

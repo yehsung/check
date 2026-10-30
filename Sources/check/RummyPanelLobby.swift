@@ -673,10 +673,11 @@ private struct RummyTableCard: View {
 enum RummyTableStyle {
     /// 루비 분홍(판돈 테두리).
     static let ruby = Color(red: 1.0, green: 0.42, blue: 0.72)
-    /// 탁자 펠트(남보라 — 사용자가 고른 테이블 그림의 폴백 톤).
-    static let feltTop = Color(red: 0.24, green: 0.22, blue: 0.40)
-    static let feltBottom = Color(red: 0.15, green: 0.14, blue: 0.27)
-    static let rim = Color(red: 0.33, green: 0.34, blue: 0.43)
+    /// 탁자 테두리 — 판 화면 받침대·판 테두리와 같은 분홍 → 보라(펠트 천은 `RummyFeltPaint` — 판 화면과 같은 그림).
+    static var rim: LinearGradient {
+        LinearGradient(colors: [Color(red: 1.0, green: 0.50, blue: 0.80), Color(red: 0.62, green: 0.42, blue: 1.0)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
 }
 
 /// 둥근 탁자 + 둘레 의자 넷([아래, 왼, 위, 오른]).
@@ -702,11 +703,12 @@ struct RummyTableStage<Center: View>: View {
 
     var body: some View {
         ZStack {
-            Capsule()
-                .fill(LinearGradient(colors: [RummyTableStyle.feltTop, RummyTableStyle.feltBottom],
-                                     startPoint: .top, endPoint: .bottom))
-                .overlay(Capsule().strokeBorder(RummyTableStyle.rim, lineWidth: 9))
-                .overlay(Capsule().inset(by: 9).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            RummyFeltPaint()
+                .overlay(RadialGradient(colors: [Color.clear, Color.black.opacity(0.35)], center: .center,
+                                        startRadius: 40, endRadius: 220))
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(RummyTableStyle.rim, lineWidth: 6))
+                .overlay(Capsule().inset(by: 6).stroke(Color.black.opacity(0.35), lineWidth: 2).blur(radius: 2).clipShape(Capsule()))
                 .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
                 .frame(width: Self.ovalSize.width, height: Self.ovalSize.height)
             center

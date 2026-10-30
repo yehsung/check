@@ -80,10 +80,11 @@ private func mvBitmap(_ view: some View) throws -> NSBitmapImageRep {
 /// 창 화면 한 장(1240×700 · scale 2). 첫 두 장은 다르게 나온다(실측) — 굳힌 뒤 둘째 장을 쓴다.
 @MainActor
 private func mvRender(match: RummyMatchState, editor: RummyTurnEditor?, drag: RummyPreviewDrag? = nil,
-                      zoom: Bool? = nil, art: RummyArtStyle = .automatic, name: String? = nil) throws -> NSBitmapImageRep {
+                      zoom: Bool? = nil, art: RummyArtStyle = .automatic, reactions: [RummyReactionBubble]? = nil,
+                      name: String? = nil) throws -> NSBitmapImageRep {
     let panel = RummyPanel(store: RummyStore(), me: { mvMe }, clipsOverflowInsteadOfScroll: true, previewMatch: match,
                            previewEditor: editor, previewNow: mvNow, previewMyUserID: UUID(uuidString: mvPeople[0].id),
-                           previewDrag: drag)
+                           previewDrag: drag, previewReactions: reactions)
         .environment(\.rummyBoardZoomPreview, zoom)
         .environment(\.rummyArtStyle, art)
         .environment(\.colorScheme, .dark)
@@ -511,5 +512,22 @@ struct V0369RummyV2MatchRenderTests {
         #expect(blueness(drawn, rackBody) > 15, "폴백 받침대가 남색이 아니다")
         #expect(blueness(drawn, mvWin(CGRect(x: mvL.table.minX + 30, y: mvL.table.maxY - 60, width: 4, height: 4))) > 10,
                 "폴백 펠트가 남보라가 아니다")
+    }
+
+    @Test("판 위 반응 말풍선 — 자리 카드 앵커(위 자리는 오른쪽, 왼·오른 자리는 판 쪽, 내 자리는 위) · 기준선 = 말풍선 없음")
+    func matchReactionBubbles() throws {
+        // 없으면: 판 자리 카드에 앵커가 없어 말풍선이 방위 기본값(창 가장자리)에 떠 누가 보냈는지 안 읽히는 결함이 초록이 된다.
+        let match = try mvMatch(turn: 1)
+        let bubbles = [
+            RummyReactionBubble(id: 1, seatNo: 1, sticker: .heart, isMine: false, receivedAt: mvNow.addingTimeInterval(-0.6)),
+            RummyReactionBubble(id: 2, seatNo: 2, sticker: .surprised, isMine: false, receivedAt: mvNow.addingTimeInterval(-0.8)),
+            RummyReactionBubble(id: 3, seatNo: 0, sticker: .joy, isMine: true, receivedAt: mvNow.addingTimeInterval(-1)),
+        ]
+        let reacted = try mvRender(match: match, editor: mvEditor(), reactions: bubbles, name: "reactions")
+        let plain = try mvRender(match: match, editor: mvEditor())
+        #expect(mvDiff(reacted, plain, in: mvWin(CGRect(origin: .zero, size: mvL.size))) > 0.004, "말풍선이 안 그려졌다")
+        // 내 말풍선은 내 자리 카드 위쪽 띠(판 왼쪽 아래)에 선다.
+        let aboveMine = mvWin(CGRect(x: mvL.mySeat.minX, y: mvL.mySeat.minY - 70, width: mvL.mySeat.width, height: 70))
+        #expect(mvDiff(reacted, plain, in: aboveMine) > 0.03, "내 말풍선이 내 자리 위에 없다")
     }
 }

@@ -160,7 +160,8 @@ private func lxCount(_ bitmap: NSBitmapImageRep, near target: (Int, Int, Int), t
     return hits
 }
 
-/// 펠트(남보라) 픽셀 — 파랑이 빨강보다 28 이상 높고 어두운 것. 무채색 카드 배경(파랑−빨강 ≈ 16)은 안 걸린다.
+/// 펠트(남보라) 픽셀 — 판 화면과 같은 펠트 그림(`RummyFeltPaint`)은 카드 배경(≈ 40,40,56)보다 **어둡고** 파랑이 빨강보다 높다.
+/// 빨강 ≤ 30 으로 카드·창 배경(빨강 ≥ 40)을 거른다(통합 갈래 — 로비·결과 탁자가 판 화면 천으로 바뀌며 그린 폴백 기준을 고쳤다).
 private func lxFeltCount(_ bitmap: NSBitmapImageRep, in rect: CGRect) -> Int {
     guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return -1 }
     let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
@@ -172,7 +173,7 @@ private func lxFeltCount(_ bitmap: NSBitmapImageRep, in rect: CGRect) -> Int {
         for x in x0...x1 {
             let o = y * bpr + x * spp
             let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
-            if b - r >= 28, b < 130, g <= r + 4 { hits += 1 }
+            if b - r >= 14, r <= 30, b <= 80, g <= r + 4 { hits += 1 }
         }
     }
     return hits

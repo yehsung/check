@@ -398,16 +398,19 @@ struct RummyMatchView: View {
             if let seat = seat(arrangement.top) {
                 RummySeatCard(store: store, scene: scene, match: match, seat: seat, style: .top)
                     .frame(width: L.topSeat.width, height: L.topSeat.height)
+                    .rummyReactionAnchor(seatNo: seat.seatNo, edge: .trailing)
                     .offset(x: L.topSeat.minX, y: L.topSeat.minY)
             }
             if let seat = seat(arrangement.left) {
                 RummySeatCard(store: store, scene: scene, match: match, seat: seat, style: .side)
                     .frame(width: L.leftSeat.width, height: L.leftSeat.height)
+                    .rummyReactionAnchor(seatNo: seat.seatNo, edge: .trailing)
                     .offset(x: L.leftSeat.minX, y: L.leftSeat.minY)
             }
             if let seat = seat(arrangement.right) {
                 RummySeatCard(store: store, scene: scene, match: match, seat: seat, style: .side)
                     .frame(width: L.rightSeat.width, height: L.rightSeat.height)
+                    .rummyReactionAnchor(seatNo: seat.seatNo, edge: .leading)
                     .offset(x: L.rightSeat.minX, y: L.rightSeat.minY)
             }
             tableArea(L, model: model, canvas: canvas, dragging: dragging, target: target, lift: lift)
@@ -416,6 +419,7 @@ struct RummyMatchView: View {
             if let mine = scene.mySeat {
                 RummySeatCard(store: store, scene: scene, match: match, seat: mine, style: .mine)
                     .frame(width: L.mySeat.width, height: L.mySeat.height)
+                    .rummyReactionAnchor(seatNo: mine.seatNo, edge: .top)
                     .offset(x: L.mySeat.minX, y: L.mySeat.minY)
             }
             rackArea(L, geometry: geometry, dragging: dragging, target: target, refused: isRefused, lift: lift)

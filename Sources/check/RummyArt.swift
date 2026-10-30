@@ -265,6 +265,20 @@ struct RummyTableSurface: View {
     }
 }
 
+/// 펠트 천만(테두리·아잉이 없이) — 로비 탁자 · 결과 최종 판이 판 화면과 **같은 천**을 쓰게 한다(그림 → 그린 폴백 순서도 같다).
+struct RummyFeltPaint: View {
+    var art: RummyArt = .shared
+    @Environment(\.rummyArtStyle) private var style
+
+    var body: some View {
+        if style == .automatic, let felt = art.table {
+            Image(nsImage: felt).resizable(resizingMode: .tile)
+        } else {
+            RummyFeltFallback()
+        }
+    }
+}
+
 /// 그림이 없을 때의 펠트 — 남보라 그라데이션 + 가운데 빛.
 struct RummyFeltFallback: View {
     var body: some View {

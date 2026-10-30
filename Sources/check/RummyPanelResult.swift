@@ -170,11 +170,8 @@ struct RummyFinalBoard: View {
                                 height: CGFloat(RummyTableLayout.canvasHeight) * scale)
             let tileScale = CGFloat(RummyTableLayout.tileWidth) * scale / RummyTileSize.table.size.width
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(LinearGradient(colors: [RummyTableStyle.feltTop, RummyTableStyle.feltBottom],
-                                         startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(RummyTableStyle.rim, lineWidth: 6))
+                // 판 화면과 같은 바닥(펠트 그림 · 분홍-보라 테두리).
+                RummyTableSurface(cornerRadius: 18)
                 if sets.isEmpty {
                     Text(RummyResultText.emptyBoard)
                         .font(.callout)

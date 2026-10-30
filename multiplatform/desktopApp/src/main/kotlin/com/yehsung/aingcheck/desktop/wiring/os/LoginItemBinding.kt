@@ -6,6 +6,7 @@ package com.yehsung.aingcheck.desktop.wiring.os
 
 import com.yehsung.aingcheck.core.foundation.platform.desktop.LoginItem
 import com.yehsung.aingcheck.desktop.platform.windows.login.RunKeyLoginItem
+import com.yehsung.aingcheck.desktop.platform.windows.login.StartupTaskLoginItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,7 +30,7 @@ enum class LoginItemStatus {
     BLOCKED_BY_SYSTEM,
     /** 켜려 했지만 레지스트리 쓰기가 안 됐다 — 다음 실행·다음 설정 변경에서 다시. */
     FAILED,
-    /** 이 판은 앱이 관리하지 않는다(MSIX StartupTask). */
+    /** 자동 실행 길이 없다(패키지 신원도 실행 파일 경로도 없는 개발 실행 — loginItem null). MSIX 는 이제 StartupTask 로 관리한다(W-13 #6). */
     UNMANAGED,
 }
 
@@ -42,7 +43,16 @@ class LoginItemBinding(
     private val launchAtLogin: Flow<Boolean>,
     private val ioContext: CoroutineContext = Dispatchers.IO,
     /** 작업 관리자 '시작 앱'에서 사용자가 껐나(K3 LoginItem 에 없는 칸 — RunKeyLoginItem.userDisabled). */
-    private val disabledBySystem: () -> Boolean = { (loginItem as? RunKeyLoginItem)?.userDisabled() == true },
+    /** 적용 한 번이 끝났다(UI 줄기) — 조립이 설정 스위치를 실제 상태에 맞춘다(DesktopSettingsStore.reflectLaunchAtLoginActual). */
+    private val onApplied: (want: Boolean, status: LoginItemStatus) -> Unit = { _, _ -> },
+    private val disabledBySystem: () -> Boolean = {
+        when (loginItem) {
+            is RunKeyLoginItem -> loginItem.userDisabled() == true
+            // MSIX(W-13 #6): StartupTask 가 DisabledByUser·DisabledByPolicy 면 앱이 되살릴 수 없다 — 같은 안내.
+            is StartupTaskLoginItem -> loginItem.userDisabled()
+            else -> false
+        }
+    },
 ) : AutoCloseable {
     private val state = MutableStateFlow(if (loginItem == null) LoginItemStatus.UNMANAGED else LoginItemStatus.OFF)
     val status: StateFlow<LoginItemStatus> = state.asStateFlow()
@@ -55,7 +65,11 @@ class LoginItemBinding(
             if (loginItem == null) return@launch
             combine(launchAtLogin, retry) { want, n -> want to n }
                 .distinctUntilChanged()
-                .collect { (want, _) -> state.value = withContext(ioContext) { apply(loginItem, want) } }
+                .collect { (want, _) ->
+                    val next = withContext(ioContext) { apply(loginItem, want) }
+                    state.value = next
+                    onApplied(want, next)
+                }
         }.also { job = it }
     }
 

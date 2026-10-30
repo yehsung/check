@@ -13,7 +13,11 @@ import com.yehsung.aingcheck.desktop.platform.windows.identity.RegistryMachineId
 import com.yehsung.aingcheck.desktop.platform.windows.identity.WindowsInstallationIdentity
 import com.yehsung.aingcheck.desktop.platform.windows.input.WindowsIdleSource
 import com.yehsung.aingcheck.desktop.platform.windows.instance.WindowsSingleInstanceGuard
+import com.yehsung.aingcheck.core.foundation.platform.desktop.LoginItem
 import com.yehsung.aingcheck.desktop.platform.windows.login.RunKeyLoginItem
+import com.yehsung.aingcheck.desktop.platform.windows.login.StartupTaskLoginItem
+import com.yehsung.aingcheck.desktop.platform.windows.login.WinRtStartupTaskPort
+import com.yehsung.aingcheck.desktop.platform.windows.session.WtsSessionMonitor
 import com.yehsung.aingcheck.desktop.platform.windows.msg.Win32MessageThread
 import com.yehsung.aingcheck.desktop.platform.windows.paths.PackageIdentity
 import com.yehsung.aingcheck.desktop.platform.windows.paths.WindowsAppPaths
@@ -29,6 +33,8 @@ object HostOs {
     fun isWindows(osName: String? = System.getProperty("os.name")): Boolean = osName?.startsWith("Windows", ignoreCase = true) == true
 }
 
+enum class LoginItemKind { STARTUP_TASK, RUN_KEY, NONE }
+
 class WindowsPlatform private constructor(
     val messageThread: Win32MessageThread,
     override val paths: WindowsAppPaths,
@@ -40,16 +46,22 @@ class WindowsPlatform private constructor(
     override val hotkeys: WindowsHotkeyService,
     override val idle: WindowsIdleSource,
     val desktopEvents: DesktopPowerEvents,
-    override val loginItem: RunKeyLoginItem?,
+    override val loginItem: LoginItem?,
+    /** WTS 세션 감시(W3-d) — JDK 세션 통지를 위로 받아 잠금·콘솔·원격 전이를 거른다. [consoleSessionUsable] 이 근무 판정에 간다. */
+    val sessionMonitor: WtsSessionMonitor,
 ) : DesktopPlatform, AutoCloseable {
     override val env: EnvReader get() = environment
     override val power get() = desktopEvents
-    override val session: SessionEvents get() = desktopEvents.sessionEvents
+    override val session: SessionEvents get() = sessionMonitor
+
+    /** 지금 세션이 사람 앞에 있나(맥 consoleSessionUsable 짝 — AppSeams.consoleSessionUsable 에 넘긴다). */
+    fun consoleSessionUsable(): Boolean = sessionMonitor.consoleSessionUsable()
 
     override fun close() {
         runCatching { idle.close() }
         runCatching { hotkeys.close() }
         runCatching { tray.close() }
+        runCatching { sessionMonitor.close() }
         runCatching { messageThread.close() }
         runCatching { singleInstance.release() }
     }
@@ -75,8 +87,23 @@ class WindowsPlatform private constructor(
             val hotkeys = WindowsHotkeyService(thread, events)
             val idle = WindowsIdleSource(thread, clock, events).also { it.start() }
             val power = DesktopPowerEvents().also { it.install() }
-            val login = if (pfn == null && executable != null) RunKeyLoginItem(executable) else null
-            return WindowsPlatform(thread, paths, env, vault, identity, guard, tray, hotkeys, idle, power, login)
+            val login = when (loginItemKind(pfn, executable)) {
+                LoginItemKind.STARTUP_TASK -> StartupTaskLoginItem(WinRtStartupTaskPort())
+                LoginItemKind.RUN_KEY -> RunKeyLoginItem(requireNotNull(executable))
+                LoginItemKind.NONE -> null
+            }
+            val sessionMonitor = WtsSessionMonitor.live(thread, power.sessionEvents, events)
+            return WindowsPlatform(thread, paths, env, vault, identity, guard, tray, hotkeys, idle, power, login, sessionMonitor)
+        }
+
+        /**
+         * 자동 실행 길 고르기(W-13 #6 · D§5-5). **pfn 가드**: 패키지 신원이 있으면(MSIX) 실행 파일이 있어도 Run 키를 쓰지 않는다 —
+         * HKCU 쓰기가 앱별 사본으로 가상화돼 아무 일도 안 하거나, 언인스톨 뒤에도 남는다(R7 W19). 신원이 없으면(MSI·개발) Run 키.
+         */
+        fun loginItemKind(pfn: String?, executable: String?): LoginItemKind = when {
+            pfn != null -> LoginItemKind.STARTUP_TASK
+            executable != null -> LoginItemKind.RUN_KEY
+            else -> LoginItemKind.NONE
         }
     }
 }

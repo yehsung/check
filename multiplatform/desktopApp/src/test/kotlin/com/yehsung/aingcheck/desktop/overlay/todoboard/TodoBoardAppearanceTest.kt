@@ -57,6 +57,11 @@ class TodoBoardAppearanceTest {
         assertTrue(a(0.55).textContrast() >= TodoBoardContrast.AA_BODY_TEXT, "출고값은 본문 AA")
         assertTrue(a(0.55).textContrast(TodoBoardTint.SECONDARY_TEXT_ALPHA) >= TodoBoardContrast.AA_LARGE_TEXT, "출고값 보조는 큰 글자 3:1")
         assertEquals(TodoBoardTint.HUD_OVER_WHITE_LEVEL, TodoBoardTint.materialLevel(1.0), 0.0005, "순백 위 재질 0.713(:32)")
+        // 재질 겹을 흰 → 검정 두 겹(토큰만)으로 낸 합성이 회색 0.283 한 겹과 같다.
+        for (blur in listOf(0.0, 0.3, 0.691, 1.0)) for (bd in listOf(0.0, 0.12, 0.5, 1.0)) {
+            val (w, k) = TodoBoardTint.materialLayerAlphas(blur)
+            assertEquals(TodoBoardTint.materialLevel(bd, blur), (1 - k) * (w + (1 - w) * bd), 1e-12, "두 겹 합성(blur=$blur, 바탕=$bd)")
+        }
     }
 
     @Test

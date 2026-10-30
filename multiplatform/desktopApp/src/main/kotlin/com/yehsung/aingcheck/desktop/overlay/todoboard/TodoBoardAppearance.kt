@@ -8,6 +8,7 @@
 package com.yehsung.aingcheck.desktop.overlay.todoboard
 
 import androidx.compose.ui.graphics.Color
+import com.yehsung.aingcheck.ui.theme.AingColors
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import kotlin.math.max
 import kotlin.math.min
@@ -40,23 +41,34 @@ object TodoBoardTint {
     /** 보드 테두리 — 흰색 0.18 1px(CheckTodoBoardView.swift:453). 선은 표면 배율을 받지 않는다. */
     const val BORDER_WHITE_ALPHA = 0.18
 
-    // ── 그리는 색(이 파일이 보드의 비토큰 색 정본 한 벌 — 맥도 대비 계산과 그리기를 이 상수 하나로 한다, :1-9) ──
+    // ── 그리는 색 — 색은 **테마 토큰에서만** 받는다(D5): 보드는 어두움 고정이라 boardTint(어두움 0x2B2E3D) = CheckTheme.panel,
+    //    label(어두움 = 흰색) · boardTextHalo(검정)에 알파만 준다. ──
 
-    /** 재질 겹(Windows 는 블러 없이 밝기 기여만): 회색 0.283 × 알파 0.40·blurAlpha. */
-    fun materialColor(blurAlpha: Double): Color =
-        MATERIAL_TINT_WHITE.toFloat().let { Color(it, it, it, (MATERIAL_TINT_ALPHA * blurAlpha.coerceIn(0.0, 1.0)).toFloat()) }
+    /**
+     * 재질 겹(Windows 는 블러 없이 밝기 기여만) — 회색 0.283 × 알파 a(= 0.40·blurAlpha) 한 겹과 **같은 합성**을 흰색 w → 검정 k 두 겹으로 낸다:
+     * (1−k)(w + (1−w)B) = 0.283a + (1−a)B ⇔ k = 0.717a, w = 0.283a/(1−k). 반환 = (흰 겹, 검정 겹) 알파.
+     */
+    fun materialLayerAlphas(blurAlpha: Double): Pair<Double, Double> {
+        val a = MATERIAL_TINT_ALPHA * blurAlpha.coerceIn(0.0, 1.0)
+        val k = (1 - MATERIAL_TINT_WHITE) * a
+        val w = if (k >= 1.0) 0.0 else MATERIAL_TINT_WHITE * a / (1 - k)
+        return w to k
+    }
+
+    fun materialWhite(colors: AingColors, blurAlpha: Double): Color = colors.label.copy(alpha = materialLayerAlphas(blurAlpha).first.toFloat())
+    fun materialBlack(colors: AingColors, blurAlpha: Double): Color = colors.boardTextHalo.copy(alpha = materialLayerAlphas(blurAlpha).second.toFloat())
 
     /** CheckTheme.panel × [alpha](맥 CheckTodoBoardView.swift:472). */
-    fun panelColor(alpha: Double): Color = Color(PANEL_RGB.r.toFloat(), PANEL_RGB.g.toFloat(), PANEL_RGB.b.toFloat(), alpha.coerceIn(0.0, 1.0).toFloat())
+    fun panelColor(colors: AingColors, alpha: Double): Color = colors.boardTint.copy(alpha = alpha.coerceIn(0.0, 1.0).toFloat())
 
     /** 테두리 흰색 0.18(:453). */
-    val borderColor: Color = Color.White.copy(alpha = BORDER_WHITE_ALPHA.toFloat())
+    fun borderColor(colors: AingColors): Color = colors.label.copy(alpha = BORDER_WHITE_ALPHA.toFloat())
 
     /** 글자 헤일로 — 검정 × 알파(:151). */
-    fun haloColor(alpha: Double): Color = Color.Black.copy(alpha = alpha.coerceIn(0.0, 1.0).toFloat())
+    fun haloColor(colors: AingColors, alpha: Double): Color = colors.boardTextHalo.copy(alpha = alpha.coerceIn(0.0, 1.0).toFloat())
 
     /** 진하기 버튼 원(TodoBoardOpacityButton :914) — 켜짐·호버 0.14, 평소 0.06. 면이라 표면 배율을 받는다. */
-    fun opacityButtonFill(on: Boolean): Color = Color.White.copy(alpha = if (on) 0.14f else 0.06f)
+    fun opacityButtonFill(colors: AingColors, on: Boolean): Color = colors.label.copy(alpha = if (on) 0.14f else 0.06f)
 
     /** 재질을 바탕 위에 얹은 밝기(:51). 블러가 걷히면 재질 틴트 기여도 같이 준다. */
     fun materialLevel(over: Double, blurAlpha: Double = 1.0): Double {

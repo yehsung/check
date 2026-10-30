@@ -189,9 +189,9 @@ internal val LocalTodoBoardAppearance = staticCompositionLocalOf<TodoBoardAppear
 
 /** 면 채움 전용 배율(맥 Color.todoBoardSurface :219). 글자·선에는 쓰지 않는다. */
 @Composable
-private fun Color.boardSurface(): Color {
-    val a = LocalTodoBoardAppearance.current ?: return this
-    return copy(alpha = alpha * a.surfaceAlpha.toFloat())
+private fun boardSurface(fill: Color): Color {
+    val a = LocalTodoBoardAppearance.current ?: return fill
+    return fill.copy(alpha = fill.alpha * a.surfaceAlpha.toFloat())
 }
 
 /**
@@ -204,7 +204,7 @@ private fun boardTextShadow(): Shadow? {
     val strength = TodoBoardTextShadow.strength(a)
     if (strength <= 0.0) return null
     val px = with(LocalDensity.current) { TodoBoardTextShadow.SOFT_RADIUS.dp.toPx() }
-    return Shadow(TodoBoardTint.haloColor(TodoBoardTextShadow.TIGHT_ALPHA * strength), blurRadius = px)
+    return Shadow(TodoBoardTint.haloColor(AingTheme.colors, TodoBoardTextShadow.TIGHT_ALPHA * strength), blurRadius = px)
 }
 
 @Composable
@@ -231,9 +231,10 @@ fun TodoBoardView(
     } else {
         // 맥 합성 순서(:323 backgroundLevel): 바탕 → 재질 겹(회색 0.283 × 0.40·blurAlpha) → 패널 틴트(tintAlpha). 테두리 흰색 0.18.
         Modifier
-            .background(TodoBoardTint.materialColor(appearance.blurAlpha), shape)
-            .background(TodoBoardTint.panelColor(appearance.tintAlpha), shape)
-            .border(1.dp, TodoBoardTint.borderColor, shape)
+            .background(TodoBoardTint.materialWhite(colors, appearance.blurAlpha), shape)
+            .background(TodoBoardTint.materialBlack(colors, appearance.blurAlpha), shape)
+            .background(TodoBoardTint.panelColor(colors, appearance.tintAlpha), shape)
+            .border(1.dp, TodoBoardTint.borderColor(colors), shape)
     }
     val scroll = if (onAltScroll == null) Modifier else Modifier.pointerInput(onAltScroll) {
         awaitPointerEventScope {
@@ -306,7 +307,7 @@ private fun Header(onClose: () -> Unit, showsOpacityButton: Boolean = false, tun
                     .size(22.dp)
                     .clip(CircleShape)
                     // 맥 TodoBoardOpacityButton :914 — 원은 면(배율 받음), 글리프는 잉크.
-                    .background(TodoBoardTint.opacityButtonFill(on).boardSurface(), CircleShape)
+                    .background(boardSurface(TodoBoardTint.opacityButtonFill(colors, on)), CircleShape)
                     .hoverable(hover)
                     .clickable(onClick = onToggleTuning),
                 contentAlignment = Alignment.Center,
@@ -319,7 +320,7 @@ private fun Header(onClose: () -> Unit, showsOpacityButton: Boolean = false, tun
                 .semantics { contentDescription = TodoBoardStrings.CLOSE }
                 .size(20.dp)
                 .clip(CircleShape)
-                .background(colors.fill.boardSurface(), CircleShape)
+                .background(boardSurface(colors.fill), CircleShape)
                 .clickable(onClick = onClose),
             contentAlignment = Alignment.Center,
         ) { Cross(colors.label2, 8f) }
@@ -395,7 +396,7 @@ private fun DraftField(draft: String, autoFocus: Boolean, actions: TodoBoardActi
         Modifier
             .fillMaxWidth()
             .height(30.dp)
-            .background(colors.fill.boardSurface(), RoundedCornerShape(8.dp))
+            .background(boardSurface(colors.fill), RoundedCornerShape(8.dp))
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -435,7 +436,7 @@ private fun ListArea(state: TodoBoardViewState, actions: TodoBoardActions) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(colors.fill2.boardSurface(), card)
+            .background(boardSurface(colors.fill2), card)
             .border(1.dp, colors.separator, card)
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .verticalScroll(rememberScrollState()),
@@ -492,7 +493,7 @@ private fun RowView(item: TodoItem, todayKey: String, isEditing: Boolean, isPend
                     .testTag(TodoBoardTags.undo(item.id))
                     .height(22.dp)
                     .clip(RoundedCornerShape(7.dp))
-                    .background(colors.accentTint.boardSurface(), RoundedCornerShape(7.dp))
+                    .background(boardSurface(colors.accentTint), RoundedCornerShape(7.dp))
                     .border(1.dp, colors.accentLine, RoundedCornerShape(7.dp))
                     .clickable { actions.onUndoDelete(item.id) }
                     .padding(horizontal = 9.dp),
@@ -527,7 +528,7 @@ private fun RowView(item: TodoItem, todayKey: String, isEditing: Boolean, isPend
                 color = colors.label2,
                 modifier = Modifier
                     .semantics { contentDescription = TodoBoardStrings.carriedFrom(badge) }
-                    .background(colors.fill.boardSurface(), CircleShape)
+                    .background(boardSurface(colors.fill), CircleShape)
                     .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
@@ -549,7 +550,7 @@ private fun CheckCircle(item: TodoItem, actions: TodoBoardActions) {
     val colors = AingTheme.colors
     val ring = if (item.isDone) colors.separator else colors.label3
     val glyph = colors.label2
-    val fill = colors.fill.boardSurface() // 완료 원 채움은 면(맥 surfaceAlpha :287)
+    val fill = boardSurface(colors.fill) // 완료 원 채움은 면(맥 surfaceAlpha :287)
     Canvas(
         Modifier
             .testTag(TodoBoardTags.check(item.id))

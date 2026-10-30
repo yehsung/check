@@ -4,6 +4,8 @@
 // 맥 UserDefaults 는 cfprefsd 가 다른 프로세스에서 들고 있다 → 앱이 죽어도 방금 쓴 값이 남는다. 여기는 한 프로세스라 그 몫을
 // 이렇게 진다:
 //  - 메모리 지도가 진실, 디스크는 묶어 쓴다([debounceMillis] — 연속 put 을 한 번에). 종료 훅은 [flush] 로 바로 쓴다(조정자 종료 단계).
+//  - 예외(W-13 #2): [immediateKeys](근무 큐 `check.workQueue.pending`)는 put 자리에서 **바로** 쓴다 — 강제 종료·정전이 묶음 창(≤250ms)
+//    안에 오면 오프라인 근무 기록을 잃는다. 맥은 cfprefsd 가 그 몫을 진다. 바로 쓰기가 막히면 예약 쓰기로 다시 한다(값은 메모리에).
 //  - 쓰기 = 같은 폴더 임시 파일 → FileChannel.force(true)(fsync) → ATOMIC_MOVE 교체. 교체 전에 죽으면 옛 파일이 그대로 남는다
 //    (임시만 남음 → 다음 시작이 임시를 지우고 옛 값을 읽는다).
 //  - 깨진 파일(JSON 아님·모양 다름) → `<이름>.corrupt-<n>` 으로 옮기고 빈 상태로 시작한다. 앱은 죽지 않는다.
@@ -14,6 +16,7 @@
 package com.yehsung.aingcheck.desktop.platform.windows.store
 
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
+import com.yehsung.aingcheck.feature.desktop.work.queue.DesktopWorkQueue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -37,10 +40,15 @@ class FileDesktopKeyValueStore internal constructor(
     /** 임시 → 대상 교체. 시험이 '교체 전에 죽음'을 흉내 내려고 바꾼다. */
     private val commit: (tmp: Path, target: Path) -> Unit,
     private val log: (String) -> Unit,
+    /** put 즉시 디스크에 쓰는 키(W-13 #2 — 근무 큐). 나머지는 [debounceMillis] 묶음. */
+    val immediateKeys: Set<String>,
 ) : DesktopKeyValueStore, AutoCloseable {
 
-    constructor(file: Path, debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS) :
-        this(file, debounceMillis, ::atomicReplace, { System.err.println("aingcheck-kv: $it") })
+    internal constructor(file: Path, debounceMillis: Long, commit: (tmp: Path, target: Path) -> Unit, log: (String) -> Unit) :
+        this(file, debounceMillis, commit, log, emptySet())
+
+    constructor(file: Path, debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS, immediateKeys: Set<String> = emptySet()) :
+        this(file, debounceMillis, ::atomicReplace, { System.err.println("aingcheck-kv: $it") }, immediateKeys)
 
     /** 시작할 때 무엇을 읽었나(진단·시험). */
     enum class LoadOutcome { MISSING, LOADED, CORRUPT_QUARANTINED }
@@ -109,6 +117,11 @@ class FileDesktopKeyValueStore internal constructor(
             if (before == value) return
             if (value == null) values.remove(key) else values[key] = value
             generation += 1
+        }
+        if (key in immediateKeys) {
+            // 근무 큐: 묶음 창을 기다리지 않는다. 같은 스냅숏에 그때까지의 다른 변경도 실린다(잃는 것 없음). 막히면 예약으로 다시.
+            if (!flush()) scheduleAfter(RETRY_MILLIS)
+            return
         }
         schedule()
     }
@@ -201,9 +214,15 @@ class FileDesktopKeyValueStore internal constructor(
         private const val COMMIT_BACKOFF_MILLIS = 40L
         private const val MAX_QUARANTINE = 50
 
-        /** 앱 자리: [dataDir](WindowsAppPaths.dataDir — 패키지 안이면 이미 LocalCache 경로)/prefs.json. */
-        fun inDataDir(dataDir: String, debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS): FileDesktopKeyValueStore =
-            FileDesktopKeyValueStore(Path.of(dataDir, FILE_NAME), debounceMillis)
+        /** 즉시 쓰기 키(W-13 #2): 근무 큐 한 칸. 이름은 큐 쪽 상수 그대로(글자를 두 벌 적지 않는다). */
+        val WORK_QUEUE_IMMEDIATE_KEYS: Set<String> = setOf(DesktopWorkQueue.pendingWorkQueueKey)
+
+        /** 앱 자리: [dataDir](WindowsAppPaths.dataDir — 패키지 안이면 이미 LocalCache 경로)/prefs.json. 근무 큐는 즉시 쓰기. */
+        fun inDataDir(
+            dataDir: String,
+            debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
+            immediateKeys: Set<String> = WORK_QUEUE_IMMEDIATE_KEYS,
+        ): FileDesktopKeyValueStore = FileDesktopKeyValueStore(Path.of(dataDir, FILE_NAME), debounceMillis, immediateKeys)
 
         internal fun atomicReplace(tmp: Path, target: Path) {
             try {

@@ -3,7 +3,7 @@ package com.yehsung.aingcheck.core.rules.text
 
 /*
  * 차단·신고의 순수 규칙과 문구 — 폰·맥·Android·Windows 가 읽는 한 벌. 사실(사유 넷 · 24시간 · 200자 · 무엇이 막히는가)은 이 한 곳에만 둔다.
- * 플랫폼마다 길 안내만 다르다([BlockReportPlatform]). Android·Windows 는 폰 문구를 쓴다(맥에만 있는 콕·울트라 찌르기 표면이 없다).
+ * 플랫폼마다 길 안내만 다르다([BlockReportPlatform]). Android 는 폰 문구, Windows 는 맥 문구(ui LocalBlockReportPlatform 으로 고른다).
  *
  * INV-BlockReportRules-6d651a0c 이식: 신고 자유 입력은 사람이 쓴 문장이다 — 이 파일에 `println`/로거를 붙이지 마라(메시지 파일 공통 규약).
  * 오류 문자열에도 본문을 싣지 않는다(이 파일의 함수는 본문을 받아도 길이만 잰다).

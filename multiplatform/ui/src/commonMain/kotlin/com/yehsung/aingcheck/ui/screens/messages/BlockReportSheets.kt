@@ -45,7 +45,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
-import com.yehsung.aingcheck.core.rules.text.BlockReportPlatform
 import com.yehsung.aingcheck.core.rules.text.BlockReportRules
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
@@ -123,7 +122,7 @@ fun ReportBlockMenuButton(onReport: () -> Unit, onBlock: () -> Unit, modifier: M
 @Composable
 fun MessagesBlockConfirmSheet(peerName: String, onConfirm: () -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
-    val items = BlockReportText.blockConfirmItems(BlockReportPlatform.phone)
+    val items = BlockReportText.blockConfirmItems(LocalBlockReportPlatform.current)
     Column(modifier.fillMaxWidth().background(colors.surface).testTag(MessagesTags.BLOCK_SHEET)) {
         SheetHeader(BlockReportText.blockAction, onClose)
         Column(
@@ -143,7 +142,7 @@ fun MessagesBlockConfirmSheet(peerName: String, onConfirm: () -> Unit, onClose: 
                 }
             }
             Text(BlockReportText.blockConfirmScopeNote, style = MaterialTheme.typography.bodySmall, color = colors.label2, modifier = Modifier.padding(horizontal = 4.dp))
-            Text(BlockReportText.blockConfirmUndoNote(BlockReportPlatform.phone), style = MaterialTheme.typography.bodySmall, color = colors.label2,
+            Text(BlockReportText.blockConfirmUndoNote(LocalBlockReportPlatform.current), style = MaterialTheme.typography.bodySmall, color = colors.label2,
                 modifier = Modifier.padding(horizontal = 4.dp))
             AingButton(
                 BlockReportText.blockConfirm, onConfirm, Modifier.padding(top = 4.dp).testTag(MessagesTags.BLOCK_CONFIRM),

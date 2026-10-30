@@ -50,6 +50,17 @@ val aingcheckJnaAppResources = tasks.register<Sync>("aingcheckJnaAppResources") 
         include("com/sun/jna/win32-aarch64/jnidispatch.dll")
         eachFile { path = "windows-arm64/$name" }
     }
+    // W5-b4 P2: 오버레이 구운 아잉이(OverlaySurfaces → BakedCharacter.defaultRoot = <app-resources>/aing-bake). 골든은 빼고(시험 몫),
+    // 후광 원본 PNG 는 aing-bake/halo/ 에(Android 자산과 같은 배치 — git 사본 0).
+    from(rootDir.resolve("assets/aing-bake")) {
+        include("*.json", "*.webp", "tracks/**", "*/manifest.json", "*/cells-*.json", "*/*.webp")
+        exclude("golden/**")
+        into("common/aing-bake")
+    }
+    from(rootDir.parentFile.resolve("Sources/check/Resources")) {
+        include("aing_gold-halo*.png", "aing_rainbow-halo*.png")
+        into("common/aing-bake/halo")
+    }
     includeEmptyDirs = false
 }
 compose.desktop.application.nativeDistributions.appResourcesRootDir.set(

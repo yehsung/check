@@ -218,6 +218,9 @@ class GamesWindowsHost(
         slot
     }
 
+    /** 창 껍데기(시험이 창 없이 내용을 그린다 — 앱은 쓰지 않는다). */
+    internal fun shell(kind: GameWindowKind): GameWindowShell = requireNotNull(shells[kind]) { "껍데기 없음: $kind" }
+
     fun slot(kind: GameWindowKind): GameWindowSlot = requireNotNull(slots[kind]) { "이 호스트의 창이 아니다: $kind" }
 
     /** 스토어 presentWindow 문 — 창을 (지연 생성해) 앞으로. */

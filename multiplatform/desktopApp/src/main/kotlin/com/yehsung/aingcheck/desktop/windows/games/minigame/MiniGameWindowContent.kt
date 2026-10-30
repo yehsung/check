@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.rules.text.BlockReportPlatform
 import com.yehsung.aingcheck.core.stores.games.GamesDestination
 import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.GamesStore
@@ -19,13 +21,21 @@ import com.yehsung.aingcheck.ui.games.minigame.GamesMiniGameScreen
 import com.yehsung.aingcheck.ui.games.minigame.MiniGameArt
 import com.yehsung.aingcheck.ui.games.minigame.hub.GamesHubBoardFacts
 import com.yehsung.aingcheck.ui.games.minigame.hub.GamesHubScreen
+import com.yehsung.aingcheck.ui.screens.messages.LocalBlockReportPlatform
 import com.yehsung.aingcheck.ui.theme.AingTheme
 
-/** 게임 창 바탕 — 앱 테마 고정(★202: 창마다 시스템을 따로 따르지 않고 앱이 정한 밝음·어두움을 받는다) + 바탕색. */
+/**
+ * 게임 창 바탕 — 앱 테마 고정(★202: 창마다 시스템을 따로 따르지 않고 앱이 정한 밝음·어두움을 받는다) + 바탕색.
+ * 게임 창은 플라이아웃과 다른 Compose 뿌리(별도 Window)라 차단 문구 판도 여기서 다시 준다 — Windows 는 맥 문구
+ * (공용 패치 20 LocalBlockReportPlatform · 맥 WorkTimerStoreBlocks.swift:126 · CheckBlockReportViews.swift:220·276).
+ * 안 주면 대국 창 차단 확인이 폰 문구('나 → 설정 → 차단한 사람')로 남는다.
+ */
 @Composable
 fun GameWindowFrame(dark: Boolean, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    AingTheme(dark = dark) {
-        Box(modifier.fillMaxSize().background(AingTheme.colors.background), content = content)
+    CompositionLocalProvider(LocalBlockReportPlatform provides BlockReportPlatform.mac) {
+        AingTheme(dark = dark) {
+            Box(modifier.fillMaxSize().background(AingTheme.colors.background), content = content)
+        }
     }
 }
 

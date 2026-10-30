@@ -91,6 +91,8 @@ compose.desktop {
                 upgradeUuid = versions.required("windowsUpgradeUuid")
                 perUserInstall = true
                 menu = true
+                // W-6 #5(W6-b1 P3): 설치본·바로가기 아이콘. ico 항목 16/24/32/48/256(PNG) — W6-b1 이 커밋한 파일.
+                iconFile.set(project.file("packaging/AingCheck.ico"))
             }
         }
     }
@@ -101,5 +103,9 @@ compose.desktop {
 // 모듈 빌드 파일이 나중에 덮어쓴 값까지 보도록 평가가 끝난 뒤에 읽는다.
 afterEvaluate {
     val effectiveUpgradeUuid = compose.desktop.application.nativeDistributions.windows.upgradeUuid.orEmpty()
-    tasks.withType<Test>().configureEach { systemProperty("aingcheck.msiUpgradeUuid", effectiveUpgradeUuid) }
+    val effectiveIcon = compose.desktop.application.nativeDistributions.windows.iconFile.orNull?.asFile?.absolutePath.orEmpty()
+    tasks.withType<Test>().configureEach {
+        systemProperty("aingcheck.msiUpgradeUuid", effectiveUpgradeUuid)
+        systemProperty("aingcheck.msiIconFile", effectiveIcon)
+    }
 }

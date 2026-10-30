@@ -187,6 +187,26 @@ printf '%s\n' "$canary_report" | tail -n +2 | sed "s/^/gate-$KIND: /"
 ancestry_xml="$MP/testkit/build/test-results/desktopTest/TEST-com.yehsung.aingcheck.testkit.seal.SealAncestryTest.xml"
 if [[ -f "$ancestry_xml" ]]; then grep -o 'AINGCHECK-ANCESTRY.*' "$ancestry_xml" | head -n 1 | sed -e 's/]]>.*$//' -e "s/^/gate-$KIND: /" || true; fi
 
+# Windows 출시·맥 다시 싸기 도구 자기 시험(W-6 #5 — W6-b1 P6 · W6-b2 P6): 가짜 산출물·가짜 Gradle·가짜 makemsix 로 입력 거부·판정·장부를 잰다.
+# 망·Gradle·서명·makemsix 없음(표준 라이브러리 · __pycache__ 안 남김). release_win_selftest.py 는 OS 를 가리지 않고, repack.sh 는 bash 도구라
+# Windows 에서는 돌지 않는다(그 줄을 찍는다).
+mkdir -p "$MP/build/gate"
+rw_rc=0
+rw_log="$MP/build/gate/release-win-self-test.log"
+"$PY" -I "$MP/desktopApp/packaging/release_win_selftest.py" > "$rw_log" 2>&1 || rw_rc=$?
+rw_status="exit=$rw_rc"
+tail -n 1 "$rw_log" | sed "s/^/gate-$KIND: release_win_selftest /" || true
+rp_rc=0
+rp_status="not-run(windows)"
+if [[ "$OS" != windows ]]; then
+  rp_log="$MP/build/gate/repack-self-test.log"
+  /bin/bash "$MP/desktopApp/packaging/mac/repack.sh" self-test > "$rp_log" 2>&1 || rp_rc=$?
+  rp_status="exit=$rp_rc"
+  grep -E '^repack self-test:' "$rp_log" | sed "s/^/gate-$KIND: /" || true
+else
+  echo "gate-$KIND: repack.sh self-test 안 돎(Windows — 다시 싸기는 맥 몫)"
+fi
+
 # 홈 잔재: 새 꼭대기 항목(빌드 도구 캐시 폴더는 뺀다)과 java.util.prefs plist 변화.
 ls -A "$HOME" | LC_ALL=C sort > "$gate_dir/home-after.txt"
 new_home="$(LC_ALL=C comm -13 "$gate_dir/home-before.txt" "$gate_dir/home-after.txt" | grep -v -x -E '\.gradle|\.android|\.m2|\.kotlin|\.konan|\.skiko' || true)"
@@ -194,11 +214,13 @@ prefs_after="absent"
 if [[ -e "$prefs_plist" ]]; then prefs_after="$(stat -f '%m' "$prefs_plist" 2>/dev/null || echo present)"; fi
 
 status=0
-echo "gate-$KIND: os=$OS gradle-exit=$rc golden-digest-exit=$golden_rc emu-self-test=$emu_status release-self-test=$rel_status elapsed=${elapsed}s canary=$canary_status"
+echo "gate-$KIND: os=$OS gradle-exit=$rc golden-digest-exit=$golden_rc emu-self-test=$emu_status release-self-test=$rel_status release-win-self-test=$rw_status repack-self-test=$rp_status elapsed=${elapsed}s canary=$canary_status"
 if [[ $rc -ne 0 ]]; then status=1; fi
 if [[ $golden_rc -ne 0 ]]; then echo "gate-$KIND: golden-digest --check 빨강(exit $golden_rc)" >&2; status=1; fi
 if [[ $emu_rc -ne 0 ]]; then echo "gate-$KIND: emu.sh self-test 빨강(exit $emu_rc) — $MP/build/gate/emu-self-test.log" >&2; status=1; fi
 if [[ $rel_rc -ne 0 ]]; then echo "gate-$KIND: release-android.sh self-test 빨강(exit $rel_rc) — $MP/build/gate/release-self-test.log" >&2; status=1; fi
+if [[ $rw_rc -ne 0 ]]; then echo "gate-$KIND: release_win_selftest.py 빨강(exit $rw_rc) — $rw_log" >&2; status=1; fi
+if [[ $rp_rc -ne 0 ]]; then echo "gate-$KIND: repack.sh self-test 빨강(exit $rp_rc) — $MP/build/gate/repack-self-test.log" >&2; status=1; fi
 if [[ "$canary_status" != "ran" ]]; then echo "gate-$KIND: NetworkCanaryTest 가 초록으로 돌지 않았다($canary_status)" >&2; status=1; fi
 if [[ -n "$new_home" ]]; then echo "gate-$KIND: 시험이 \$HOME 에 새 항목을 남겼다: $new_home" >&2; status=1; fi
 if [[ "$prefs_before" != "$prefs_after" ]]; then echo "gate-$KIND: java.util.prefs plist 가 바뀌었다($prefs_before → $prefs_after)" >&2; status=1; fi

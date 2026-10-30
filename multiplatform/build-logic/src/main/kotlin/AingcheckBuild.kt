@@ -116,7 +116,11 @@ fun Project.aingcheckProdConfig(releaseAssembly: Boolean): ProdConfigValues {
     return ProdConfigValues(url, key, firebase[0], firebase[1], firebase[2], firebase[3])
 }
 
-/** 문자열 상수만 담은 Kotlin 파일 하나를 만든다. 값은 Kotlin 문자열 리터럴로 안전하게 적는다. */
+/**
+ * 문자열 상수만 담은 Kotlin 파일 하나를 만든다. 값은 Kotlin 문자열 리터럴로 안전하게 적는다.
+ * W-6 #5(W6-b2): `const val` 이 아니라 `@JvmField val` — const 는 쓰는 자리(SelfCheck·AppGraph…)에 값이 인라인되어
+ * 운영 값 주입 때 generated/ 밖 클래스까지 바뀐다(맥 jar 교체 허용 목록이 닫히지 않는다). 필드면 바뀌는 건 이 클래스 하나.
+ */
 abstract class GenerateKotlinConstants : DefaultTask() {
     @get:Input abstract val packageName: Property<String>
     @get:Input abstract val objectName: Property<String>
@@ -138,10 +142,10 @@ abstract class GenerateKotlinConstants : DefaultTask() {
             append("package ").append(packageName.get()).append("\n\n")
             append("internal object ").append(objectName.get()).append(" {\n")
             for ((name, value) in constants.getOrElse(emptyMap()).toSortedMap()) {
-                append("    const val ").append(name).append(" = ").append(kotlinStringLiteral(value)).append('\n')
+                append("    @JvmField val ").append(name).append(" = ").append(kotlinStringLiteral(value)).append('\n')
             }
             for ((name, value) in booleanConstants.getOrElse(emptyMap()).toSortedMap()) {
-                append("    const val ").append(name).append(": Boolean = ").append(value).append('\n')
+                append("    @JvmField val ").append(name).append(": Boolean = ").append(value).append('\n')
             }
             append("}\n")
         }

@@ -6,6 +6,8 @@ dist/
 Config/Supabase.local.xcconfig
 .env.local
 .claude/
+# W-6 #5(W2-h2): 데스크톱 시험의 합성 홈 픽스처 안 .claude 폴더는 저장소에 든다(가짜 transcript·자격 — 실제 비밀 아님).
+!multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/**/.claude/
 .DS_Store
 .omo/
 # 스키마/마이그레이션은 공개 저장소에서 제외한다(운영자 전용 서버 로직을 비공개로 유지).

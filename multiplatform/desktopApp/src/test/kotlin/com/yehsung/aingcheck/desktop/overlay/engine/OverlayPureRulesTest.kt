@@ -19,18 +19,9 @@ import kotlin.test.assertTrue
 /** Kotlin 우선순위·길이·말풍선 초 == 저장소 motion.json(굽기가 Swift ReactionKind 에서 읽어 낸 표). */
 class MotionTableContractTest {
     private fun motionJson(): File {
-        System.getProperty("aingcheck.repoRoot")?.let { root ->
-            File(root, "multiplatform/assets/aing-bake/motion.json").takeIf { it.isFile }?.let { return it }
-        }
-        var dir: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (dir != null) {
-            for (rel in listOf("assets/aing-bake/motion.json", "multiplatform/assets/aing-bake/motion.json")) {
-                val f = File(dir, rel)
-                if (f.isFile) return f
-            }
-            dir = dir.parentFile
-        }
-        error("motion.json 을 못 찾았다(user.dir=${System.getProperty("user.dir")})")
+        // W-6 #5(W5-b1 P2): 저장소 뿌리는 시험 봉인(aingcheck.test-seal)이 넘기는 aingcheck.repoRoot 하나 — user.dir 걷기 대체 경로는 걷었다.
+        val root = requireNotNull(System.getProperty("aingcheck.repoRoot")) { "aingcheck.repoRoot 시스템 속성이 없다(aingcheck.test-seal 밖 실행)" }
+        return File(root, "multiplatform/assets/aing-bake/motion.json").also { check(it.isFile) { "motion.json 이 없다: $it" } }
     }
 
     private val samples = listOf(

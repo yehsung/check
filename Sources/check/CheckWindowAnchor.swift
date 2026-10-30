@@ -412,11 +412,14 @@ extension WindowTopAnchor {
     /// 팝오버를 **프로그램으로** 열 때 앱을 활성 상태로 만든다. 증상 ①(한글 자음·모음 분리)의 원인 자리다.
     ///
     /// **왜 활성화가 필요한가**(2026-09-11 실측):
-    ///   · 이 문의 유일한 호출부는 캐릭터 머리 위 '메시지 도착' 말풍선 클릭이고(`CheckApp.swift`),
+    ///   · 이 문(`presentMenuPopover`)의 첫 호출부는 캐릭터 머리 위 '메시지 도착' 말풍선 클릭이고(`CheckApp.swift`),
     ///     그 말풍선 창은 `nonactivatingPanel`(`CheckOverlayWindow.makePanel`)이라 **클릭이 앱을 활성화하지
     ///     않는다** — 말풍선을 CGEvent 로 진짜 클릭해 재 봤다: `BUBBLE mouseDown appActive=false panelKey=false`
     ///     (bubble-215806.log 12.77s). 그 패널은 borderless 라 `canBecomeKey=false` 이기도 해서, 클릭해도
     ///     key 창조차 생기지 않는다.
+    ///   · 둘째 호출부는 `returnToMenuPopover`(v0.3.69)다 — 뽑기 창의 [닫기] · 빨간 점, 생일 축하 창의 [닫기] · [지금 입기] ·
+    ///     빨간 점. 전부 그 클릭 처리 안에서 **동기로** 닿는다(SwiftUI 버튼 동작 · `performClose` → `windowWillClose` ·
+    ///     `wearCakeGift` → `closeCakeGiftWindow`). 그 사이에 `await` 를 끼우면 아래 ①의 조건이 깨진다.
     ///   · 팝오버 창 자체는 `nonactivatingPanel`(측정 styleMask 0x8080)이라 **앱 활성 없이 키를 받는다.**
     ///     입력 문맥(`NSTextInputContext.current`)은 앱이 활성일 때만 켜지므로, 키는 들어오는데 입력기는
     ///     돌지 않는다 → 한글이 **날것의 자모**로 박힌다. 같은 하네스에서 재현했다(bubble-215806.log
@@ -450,7 +453,7 @@ extension WindowTopAnchor {
     ///  1. **`activate()` 는 "안 먹는" 것이 아니라 "사용자 이벤트 안에서만" 먹는다.** 타이머에서 부르면
     ///     3초 뒤에도 `appActive=false` 였다(activate-213108.log, 3회 모두). macOS 는 앱이 **스스로** 앞자리를
     ///     뺏는 것만 막는다 — 사용자가 우리 창을 누른 그 처리 중에는 허락한다. 그래서 이 문은 반드시
-    ///     클릭 핸들러 사슬 안에서만 불려야 하고(지금 유일한 호출부가 그렇다), **비동기로 완료된다**
+    ///     클릭 핸들러 사슬 안에서만 불려야 하고(지금 두 호출부 — 말풍선 · `returnToMenuPopover` — 가 다 그렇다), **비동기로 완료된다**
     ///     (돌아온 직후 `isActive` 를 읽어 판단하는 코드를 쓰지 마라 — 아직 false 다).
     ///  2. **`performClick` 은 활성화 수단이 아니다.** 팝오버가 닫혀 있을 때만 열면서 활성화를 데려온다.
     ///     앱이 비활성이 되면 팝오버 창은 화면에서 사라지는데(측정: `vis=false`) AppKit 은 여전히 열린 것으로

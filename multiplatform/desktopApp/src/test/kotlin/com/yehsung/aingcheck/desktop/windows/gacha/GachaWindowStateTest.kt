@@ -95,7 +95,7 @@ class GachaWindowStateTest {
 
     /**
      * ★② 단서: 루비 낸 판을 아직 못 봤으면 기계 그대로(`!state.machineLink.hasUnrevealedTurn`).
-     * 규칙은 여기서 잰다. 기계 → 칸 배선은 공용 패치 P2(MeGachaMachineScreen onUnrevealedChanged) 전이라 칸이 늘 false 다(deferred).
+     * 규칙은 여기서 잰다. 기계 → 칸 배선(공용 패치 5 MeGachaMachineScreen onUnrevealedChanged)은 GachaUnrevealedWiringTest 가 실제 누름으로 잰다.
      */
     @Test
     fun reopenWithUnrevealedTurnKeepsMachine() {

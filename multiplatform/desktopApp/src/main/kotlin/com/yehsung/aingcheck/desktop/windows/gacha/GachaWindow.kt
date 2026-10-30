@@ -30,6 +30,7 @@ import com.yehsung.aingcheck.desktop.windows.kit.GameWindowSlot
 import com.yehsung.aingcheck.desktop.windows.kit.StoreNotice
 import com.yehsung.aingcheck.desktop.windows.kit.WindowBoundsStore
 import com.yehsung.aingcheck.desktop.windows.kit.WindowEvent
+import com.yehsung.aingcheck.ui.gacha.GachaMachineChrome
 import com.yehsung.aingcheck.ui.gacha.MeGachaMachineScreen
 import com.yehsung.aingcheck.ui.theme.AingTheme
 
@@ -43,10 +44,9 @@ interface GachaMachineFacts {
 }
 
 /**
- * 기계가 '루비 낸 판 미공개'를 알려 오는 칸.
- * 공용 패치 P2 전 임시: ui MeGachaMachineScreen 이 GachaMachineDirector.hasUnrevealedTurn 을 밖에 내지 않는다 → 아무도 쓰지 않아 늘 false
- * (그동안은 '왕복 중'만 기계를 지킨다 — 왕복 0.3초 · 공개 2.4~3.8초라 공개 중에 닫았다 다시 열면 새 기계가 선다).
- * P2(`onUnrevealedChanged: (Boolean) -> Unit`) 뒤에는 [GachaWindowContent] 가 그 콜백을 이 칸에 잇는다.
+ * 기계가 '루비 낸 판 미공개'를 알려 오는 칸(맥 GachaMachineLink 자리).
+ * [GachaWindowContent] 가 ui MeGachaMachineScreen 의 `onUnrevealedChanged`(공용 패치 5 — 감독 hasUnrevealedTurn)를 이 칸에 잇는다 —
+ * 왕복 중뿐 아니라 공개 전(캡슐을 아직 안 엶 · 안 보이는 동안 공개가 자리 잡음)에도 닫았다 다시 열면 그 기계를 지킨다(★②).
  */
 class GachaUnrevealedCell {
     @Volatile
@@ -122,7 +122,9 @@ class GachaWindowController(
 /**
  * 뽑기 창 내용. 기계는 공용 ui 화면 그대로(공개 반응 동작은 건드리지 않는다) — 껍데기는 [GachaWindowState.isActive] 를 넘기고
  * [GachaWindowState.contentID] 로 기계를 새로 세우기만 한다(key — 감독·확률 시트·gachaMachineDidAppear 가 같이 새로 선다).
+ * 크롬은 창 꼴(공용 패치 12 — ✕ 없음 · 아래 띠 오른쪽 [확률 보기], 맥 CheckGachaWindowView.oddsLink).
  * @param dark ③ 시스템 외관(기본). 시험이 고정한다.
+ * @param unrevealed 기계의 '루비 낸 판 미공개' 알림을 받을 칸([GachaWindowHost] 가 컨트롤러의 사실과 같은 칸을 넘긴다).
  */
 @Composable
 fun GachaWindowContent(
@@ -131,11 +133,16 @@ fun GachaWindowContent(
     onClose: () -> Unit,
     dark: Boolean = isSystemInDarkTheme(),
     reduceMotion: Boolean = false,
+    unrevealed: GachaUnrevealedCell? = null,
 ) {
     AingTheme(dark = dark) {
         Box(Modifier.size(GameWindowKind.Gacha.defaultWidthDp.dp, GameWindowKind.Gacha.defaultHeightDp.dp).background(AingTheme.colors.background)) {
             key(state.contentID) {
-                MeGachaMachineScreen(store, onClose = onClose, isAppActive = state.isActive, reduceMotion = reduceMotion)
+                MeGachaMachineScreen(
+                    store, onClose = onClose, isAppActive = state.isActive, reduceMotion = reduceMotion,
+                    onUnrevealedChanged = { unrevealed?.value = it },
+                    chrome = GachaMachineChrome.Window,
+                )
             }
         }
     }

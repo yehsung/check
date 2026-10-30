@@ -157,7 +157,7 @@ fun TodoBoardView(
             .testTag(TodoBoardTags.BOARD)
             .fillMaxSize()
             .clip(shape)
-            .background(colors.surface, shape)
+            .background(colors.boardTint, shape)
             .border(1.dp, colors.separator, shape)
             .padding(TodoBoardMetrics.PADDING.dp),
     ) {

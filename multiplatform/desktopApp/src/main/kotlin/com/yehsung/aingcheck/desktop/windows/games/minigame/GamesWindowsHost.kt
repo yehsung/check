@@ -81,6 +81,22 @@ class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz
     var refreshHz: Int by mutableStateOf(DEFAULT_HZ)
         private set
 
+    /** 바깥 정지 토글 번호(ui GamesMiniGameScreen.pauseToggleSerial — 공용 패치 11). ESC 한 번 = +1([togglePause]). */
+    var pauseToggleSerial: Int by mutableStateOf(0)
+        private set
+
+    /**
+     * 판이 얼었는가(정지 카드 · 3-2-1) — 화면이 onFrozenChanged 로 적는다(화면이 사라지면 false). 얼어 있는 동안 키 라우터는 판 키를 받지 않는다
+     * (맥 MiniGamePanel action `guard !pauseState.isFrozen` · wantsStrokes `!pauseState.isFrozen`).
+     */
+    var frozen: Boolean by mutableStateOf(false)
+        internal set
+
+    /** ESC = 정지 토글(맥 onEscape → PauseState.escaped). 전이는 화면의 core MiniGamePauseState.toggled 가 한다. */
+    fun togglePause() {
+        pauseToggleSerial += 1
+    }
+
     /**
      * 창을 연다. [kind] 가 있으면 그 게임으로 — 노출 목록 밖(길건너 — W-3 #1)이면 허브에 남는다.
      * [kind] 없는 열기(플라이아웃 게임 레일 · 두 번째 실행)는 **멱등**이다 — 판 도중이면 그 판을 그대로 둔다(맥 show() 는 창만 앞으로,

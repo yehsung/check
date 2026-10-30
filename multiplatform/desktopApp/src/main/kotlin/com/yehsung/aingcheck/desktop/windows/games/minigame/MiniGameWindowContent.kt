@@ -65,6 +65,7 @@ fun MiniGameWindowContent(
             is MiniGameWindowRoute.Game -> GamesMiniGameScreen(
                 store, route.kind, state.refreshHz, art, myUserID, Modifier.fillMaxSize(),
                 onBack = state::backToHub, windowFocused = state.windowFocused, reduceMotion = reduceMotion,
+                pauseToggleSerial = state.pauseToggleSerial, onFrozenChanged = { state.frozen = it },
             )
             is MiniGameWindowRoute.Closed -> Unit
         }

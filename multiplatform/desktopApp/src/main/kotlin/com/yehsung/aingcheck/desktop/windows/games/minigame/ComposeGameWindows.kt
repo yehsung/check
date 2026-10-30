@@ -301,21 +301,29 @@ object ComposeGamesWindows {
     }
 
     /**
-     * 미니게임 창 키: 테트리스는 키 표, 다른 게임은 스페이스 = 탭. 판이 얼었으면(초점 상실 정지) 받지 않는다.
+     * 미니게임 창 키: 테트리스는 키 표, 다른 게임은 스페이스 = 탭, ESC = 정지 토글. 판이 얼었으면(초점 상실 · ESC 정지 · 3-2-1) 판 키를 받지 않는다.
      * ⚠️뗌은 게이트보다 먼저 적용하되(★★ MiniGamePanel.swift:302-308) **삼킴은 이 창 판의 키만**(`belongs && wantsStrokes()`) — 남의 창(대결) 뗌을 삼키면 그 창 키가 굳는다.
+     * ESC(맥 :332 onEscape · :983-990)는 **정지·재개를 실제로 했을 때만** 삼킨다 — 시작 전 · 결과 화면의 ESC 는 흘린다(남의 취소 키를 훔치지 않게).
      */
     fun miniGameKeys(games: GamesStore, state: MiniGameWindowState): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
         val controller = games.miniGames.controller ?: return@GameKeyRouter false
         val gameOwns = owns && state.windowFocused && state.route is MiniGameWindowRoute.Game
+        if (vk == GameKeyMap.VK_ESCAPE) {
+            if (!down || mods || !gameOwns || !(state.frozen || controller.isPlaying)) return@GameKeyRouter false
+            if (!repeat) state.togglePause()
+            return@GameKeyRouter true
+        }
+        // 정지 카드 · 3-2-1 동안은 판 키가 아니다(스크림 뒤에서 판이 움직이면 정지가 아니다 — 맥 action `guard !isFrozen` · wantsStrokes).
+        val live = gameOwns && !state.frozen
         if (vk == GameKeyMap.VK_SPACE) {
-            if (down && !repeat && !mods && gameOwns) SoloTetrisKeys.action(controller)
-            return@GameKeyRouter gameOwns
+            if (down && !repeat && !mods && live) SoloTetrisKeys.action(controller)
+            return@GameKeyRouter gameOwns // 정지 중 스페이스는 삼키기만(맥 shouldConsume 뒤 action 이 아무것도 안 한다)
         }
         if (controller.kind != MiniGameKind.tetris) return@GameKeyRouter false
-        val stroke = GameKeyMap.stroke(vk, down, mods, repeat, gameOwns)
-            ?: return@GameKeyRouter down && repeat && !mods && gameOwns // ★4 반복은 삼키기만(MiniGamePanel.swift:311)
+        val stroke = GameKeyMap.stroke(vk, down, mods, repeat, live)
+            ?: return@GameKeyRouter down && repeat && !mods && live // ★4 반복은 삼키기만(MiniGamePanel.swift:311)
         SoloTetrisKeys.apply(controller, stroke)
-        gameOwns
+        live
     }
 
     /** 대결 창 키 — 실제 대결 스토어로. */

@@ -152,7 +152,8 @@ package final class MessagesStore {
         // 등록은 네트워크가 아니다. 핸들러가 스스로 로그인·active·세대를 확인한다(등록은 reset 뒤에도 살아 있다).
         registrations.append(context.onMessageActivity { [weak self] in self?.realtimeMessageActivity() })
         registrations.append(context.onMessageRead { [weak self] in self?.realtimeMessageRead() })
-        watchMegaphoneSend()
+        // 보낸 직후 내 화면에 "이렇게 떴어요" 배너 한 번(계약 C2 — 서버 fan-out 에 나는 없으니 중복이 아니다).
+        megaphone.onSent = { [weak self] body, megaphoneID in self?.presentOwnMegaphone(body: body, megaphoneID: megaphoneID) }
     }
 
     // MARK: - 자리 API
@@ -1081,38 +1082,11 @@ package final class MessagesStore {
         evaluateReadMarking()
     }
 
-    /// 확성기 전송이 끝나는 순간을 지켜본다. 코어 `MegaphoneStore` 에는 완료 콜백이 없어 `isSending` 의 오르내림으로 안다:
-    /// 오르는 순간(요청을 띄움) 그 본문을 쥐고, 내린 뒤 **성공**(글 비움 · 오류 아닌 안내 — `apply` 의 `.sent` 가지)이면
-    /// 내 화면에 "이렇게 떴어요" 배너를 한 번 띄운다(계약 C2 — 서버 fan-out 에 나는 없으니 중복이 아니다).
-    private func watchMegaphoneSend() {
-        withObservationTracking {
-            _ = megaphone.isSending
-        } onChange: { [weak self] in
-            // 바뀌기 직전(willSet) 같은 메인 액터 차례에 불린다 — 오르는 쪽이면 `draft` 가 아직 보낸 본문이다.
-            MainActor.assumeIsolated { self?.megaphoneSendingWillChange() }
-        }
-    }
-
-    private func megaphoneSendingWillChange() {
-        if !megaphone.isSending, case .ok(let body) = MegaphoneBody.validate(megaphone.draft, maxLength: megaphone.maxLength) {
-            runtime.megaphoneSendingBody = body
-        }
-        // 바뀐 뒤(내린 쪽이면 `apply` 가 끝난 뒤)에 본다.
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.watchMegaphoneSend()
-            guard !self.megaphone.isSending, let body = self.runtime.megaphoneSendingBody else { return }
-            self.runtime.megaphoneSendingBody = nil
-            guard self.megaphone.draft.isEmpty, self.megaphone.notice != nil, !self.megaphone.noticeIsError else { return }
-            self.presentOwnMegaphone(body: body)
-        }
-    }
-
     /// 보낸 직후 내 배너(닉네임·아바타는 나 탭이 아는 것 — 모르면 코어 기본 이름).
-    private func presentOwnMegaphone(body: String) {
+    private func presentOwnMegaphone(body: String, megaphoneID: String?) {
         guard isSignedIn, let banner = context.links.megaphoneBanner else { return }
         let me = context.links.me
-        banner.presentOwn(body: body, senderName: me?.displayName ?? "", senderAvatarURL: me?.avatarURL)
+        banner.presentOwn(body: body, senderName: me?.displayName ?? "", senderAvatarURL: me?.avatarURL, megaphoneID: megaphoneID)
     }
 
     // MARK: - 실시간 핸들러
@@ -1185,8 +1159,6 @@ private final class MessagesRuntime {
     var megaphoneVerifying: Set<String> = []
     /// 마지막 요약을 받은 함수 이름(v1/v2) — 필터가 바뀌면 다시 받을지 가른다.
     var lastSummaryFunction: String?
-    /// 날아가는 확성기 전송의 본문(성공하면 내 배너로 띄운다).
-    var megaphoneSendingBody: String?
 
     nonisolated init() {}
 

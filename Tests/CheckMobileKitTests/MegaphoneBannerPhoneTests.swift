@@ -302,6 +302,7 @@ import Testing
         #expect(await baseWaitUntil { banner.current != nil }, "보낸 뒤 내 배너가 안 떴다")
         #expect(banner.current?.isOwn == true)
         #expect(banner.current?.body == "오늘 3시 라운지에서 간식 나눠요")
+        #expect(banner.current?.megaphoneID == "mg-own", "서버가 준 확성기 id 가 아니라 임시 id 로 떴다")
         _ = await baseWaitUntil { !mega.infoLoading }
         await h.settle()
     }

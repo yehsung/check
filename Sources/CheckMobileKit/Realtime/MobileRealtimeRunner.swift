@@ -182,21 +182,10 @@ package final class MobileRealtimeRunner {
     /// 링에 사건을 넣고 effect 를 실행한다. **러너가 링에 시각을 주는 유일한 문.**
     package func apply(_ event: RealtimeEvent, at now: Date? = nil) {
         let instant = now ?? clock.now()
-        var effects = link.apply(event, now: instant, jitter: jitter)
+        let effects = link.apply(event, now: instant, jitter: jitter)
         if state != link.state { state = link.state }
-        // 확성기 배너 신호(서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보낸다 — 계약 S2-3).
-        // 링은 이 이름을 몰라 기본값 `.drain` 으로 접는다. 여기서 **그 drain 을 배너 갱신으로 바꾼다**: 같은 확성기의
-        // `poke_ring` 이 이미 메시지 활동(요약)을 깨웠으므로 drain 을 남기면 메시지 조회가 한 번 더 나갈 뿐이다.
-        // 링이 거른 경우(구독 전 — 효과 없음)는 아무것도 하지 않는다.
-        if case .transport(.broadcast(let name)) = event, name == Self.megaphoneBroadcastEvent, effects == [.drain] {
-            effects = []
-            requestMegaphoneRefresh()
-        }
         run(effects, now: instant)
     }
-
-    /// 확성기 배너 신호의 이벤트 이름(서버 `realtime.send(…, 'megaphone', poke_topic(target), true)`).
-    package nonisolated static let megaphoneBroadcastEvent = "megaphone"
 
     /// 배너 스토어가 `megaphone_inbox` 를 다시 읽는다(겹친 호출은 코어가 하나로 모은다). 새 항목이 있으면 배너가 뜨고 메시지함 필터 id 가 는다.
     private func requestMegaphoneRefresh() {
@@ -276,9 +265,10 @@ package final class MobileRealtimeRunner {
                 //   테트리스와 아무 상관 없는 조회다. 잇는 것과 따로 두는 것은 별개의 요구다.
                 tetris?.handleSignal()
             case .megaphoneSignal:
-                // 확성기 배너 신호(2026-10-30). 폰 배너 배선은 폰 갈래가 잇는다(`MegaphoneBannerStore.refresh()`) — 그때까지 비워 둔다.
-                // `.drain` 으로 떨어뜨리지 않는 까닭은 위 체스 가지 ③과 같다(소비할 것이 없는 메시지 조회가 한 번 더 나간다).
-                break
+                // 확성기 배너 신호(2026-10-30 — 서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보낸다, 계약 S2-3).
+                // 배너 목록만 다시 읽는다. `.drain` 으로 떨어뜨리지 않는 까닭은 위 체스 가지 ③과 같다 — 같은 확성기의
+                // `poke_ring` 이 이미 메시지 활동을 깨웠으므로 메시지 조회가 한 번 더 나갈 뿐이다.
+                requestMegaphoneRefresh()
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

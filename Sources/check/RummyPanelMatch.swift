@@ -1,214 +1,225 @@
+import AppKit
 import SwiftUI
 import CheckCore
 
-// MARK: - 아잉 큐브 판·결과 (설계서 §5)
+// MARK: - 아잉 큐브 판 (2판 §3 — 배치 B "둘러앉은 탁자")
 //
-// 판 = 위 자리 띠(얼굴 · 이름 · 랙 장수 · '등록 전' · 차례 링과 남은 초 · 더미 · 판돈/분배) / 가운데 판(세트를 줄바꿈 흐름으로 ·
-// 무효 세트 빨간 테두리 · 이번 차례 낸 타일 노란 링 · 남의 차례면 그 사람 작업 판과 'OO님이 놓는 중') / 아래 내 랙 2줄
-// (넘치면 가로 스크롤) + [되돌리기] [777] [789] [뽑기|넘기기] [완료] · 상태 줄.
+// 판 화면 = 위 띠(판돈 · 위쪽 상대 · 더미) / 가운데(왼쪽 상대 · 펠트 판 캔버스 · 오른쪽 상대) / 아래(내 자리 · 받침대 위 2줄 랙 ·
+// [완료] [뽑기|넘기기] [되돌리기] [777|789] [판 확대] · 상태 글자). 칸 자리는 전부 `RummyMatchLayout`(순수) 한 곳에서 나온다.
 //
 // ── 끌기 ──
-// 체스 판처럼 `DragGesture` 하나로 받는다(키 창에서 확실히 도는 길 — `.draggable` 은 끌기 세션이 앱 밖 페이스트보드를
-// 거쳐 놓을 자리 판정이 늦고, 놓기 거절 표시를 그릴 틈이 없다). 좌표는 판 화면 전체의 이름 붙은 좌표계 하나
-// (`RummyMatchView.space`)에서 재고, 놓을 자리는 **순수 기하**(`RummyBoardGeometry`·`RummyRackGeometry`·`RummyDropResolver`)가
-// 정한다 — 그리는 자리와 놓는 자리가 한 산식에서 나온다(시험이 그 산식을 되묻는다).
-//   · 놓을 자리: 세트 위(타일 사이 = 끼울 자리) · 빈 곳(새 세트) · 랙(끼울 자리). 세트 사이 틈은 가까운 세트의 끝으로 간다.
-//   · 판에 있던 타일은 랙으로 안 간다 — 랙 위에서 빨간 테두리(놓기 거절 표시), 놓으면 제자리. 판단은 `editor.isFromTable`.
-//   · 내 차례가 아니면 랙 안 재배치만(판 타일은 집히지 않고, 랙 타일은 랙에만 놓인다).
-//   · 끼울 자리 번호(`index`)는 **끌던 타일을 뺀 배열 기준**이다(그 자리에 놓인 뒤의 위치).
+// 타일마다 `DragGesture(minimumDistance: 0)` 하나로 받고 시간·거리를 스스로 잰다(키 창에서 확실히 도는 길):
+//   · 3pt 넘게 움직이면 **한 장** 끌기.
+//   · 3pt 안에서 0.35초 버티면 **묶음째 집기** — 받침대 = `editor.rackChain(around:)`(딱 붙은 이어진 덩어리),
+//     판 = `editor.meldPick(for:fromTileToEnd:)`(묶음 전체, ⌥ = 그 타일부터 끝). 들어 올림 · 장수 뱃지 · 햅틱. 그다음 끌면 묶음째.
+//   · 묶음 왼쪽 손잡이를 끌면 묶음 통째 위치 이동(`store.moveSet`). 묶음 전체를 집어 빈 곳에 놓아도 같은 길로 간다.
+// 놓을 자리는 순수 판정(`RummyDropResolver`)이 정하고, 규칙(놓아도 되는가)은 편집기·서버가 정한다:
+//   · 받침대 위 = `.rackSlot`(반 칸 격자, 겹치면 편집기가 가장 가까운 빈자리로) · 묶음 위 = `.meld(m, index:)` ·
+//     판 빈 곳 = `.newMeldAt(왼쪽 위)`(편집기가 가장 가까운 빈 격자점으로 스냅).
+//   · 판에 있던 타일은 받침대로 안 간다(R-14) — 받침대 빨간 테두리 · 놓으면 제자리.
+//   · 내 차례가 아니면 받침대 안 재배치만.
+//
+// ── 모션 ── (동작 줄이기면 전부 끈다)
+//   · 뽑기: `store.lastDraw` 가 바뀌면 새 타일이 [뽑기] 버튼 자리에서 받침대 빈자리로 스프링(0.45초).
+//   · 정렬: 정렬 뒤 화면 순서대로 타일마다 25ms 시차로 미끄러진다.
+//   · 남의 작업 판·확정 판 변화: 묶음을 면 글자 키로 잡아 제자리에서 부드럽게 옮긴다.
 
-// MARK: - 순수 기하
+/// 판 화면 칸 자리(판 화면 좌표, 왼쪽 위 원점). 순수 값 — 그리는 자리·놓는 자리·시험이 같은 산식을 쓴다.
+struct RummyMatchLayout: Equatable {
+    static let topBandHeight: CGFloat = 46
+    static let gap: CGFloat = 8
+    static let sideColumnWidth: CGFloat = 150
+    static let cornerCardWidth: CGFloat = 230
+    static let topSeatWidth: CGFloat = 340
+    static let sideCardHeight: CGFloat = 220
+    static let submitHeight: CGFloat = 42
+    static let buttonHeight: CGFloat = 34
+    static let smallButtonHeight: CGFloat = 30
+    static let actionSpacing: CGFloat = 8
 
-/// 판(작업 판) 기하 — 세트를 왼쪽 위부터 줄바꿈 흐름으로 놓는다. 좌표는 판 **내용** 좌표(여백 안쪽 원점).
-struct RummyBoardGeometry: Equatable {
-    static var tile: CGSize { RummyTileSize.table.size }
-    static let tileGap: CGFloat = 2
-    static let meldPadding: CGFloat = 5
-    static let meldSpacing: CGFloat = 12
-    static let rowSpacing: CGFloat = 10
-    static var meldHeight: CGFloat { tile.height + meldPadding * 2 }
+    let size: CGSize
 
-    let counts: [Int]
-    let width: CGFloat
-    let meldFrames: [CGRect]
-    /// 새 세트 자리(끌 때 점선으로 보이는 빈 세트) — 마지막 세트 뒤.
-    let newMeldFrame: CGRect
-
-    static func meldWidth(_ count: Int) -> CGFloat {
-        meldPadding * 2 + CGFloat(count) * tile.width + CGFloat(max(0, count - 1)) * tileGap
+    static var standard: RummyMatchLayout {
+        RummyMatchLayout(size: CGSize(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.bodyHeight))
     }
 
-    init(counts: [Int], width: CGFloat) {
-        self.counts = counts
-        self.width = width
-        var frames: [CGRect] = []
-        var x: CGFloat = 0, y: CGFloat = 0
-        func place(_ w: CGFloat) -> CGRect {
-            if x > 0, x + w > width {
-                x = 0
-                y += Self.meldHeight + Self.rowSpacing
-            }
-            let rect = CGRect(x: x, y: y, width: w, height: Self.meldHeight)
-            x += w + Self.meldSpacing
-            return rect
+    var rackHeight: CGFloat { RummyRackGeometry.standHeight }
+    var rackWidth: CGFloat { RummyRackGeometry.standWidth }
+    var middleY: CGFloat { Self.topBandHeight + Self.gap }
+    var bottomY: CGFloat { size.height - rackHeight }
+    var middleHeight: CGFloat { bottomY - Self.gap - middleY }
+
+    var potCard: CGRect { CGRect(x: 0, y: 0, width: Self.cornerCardWidth, height: Self.topBandHeight) }
+    var poolCard: CGRect {
+        CGRect(x: size.width - Self.cornerCardWidth, y: 0, width: Self.cornerCardWidth, height: Self.topBandHeight)
+    }
+    var topSeat: CGRect {
+        CGRect(x: (size.width - Self.topSeatWidth) / 2, y: 0, width: Self.topSeatWidth, height: Self.topBandHeight)
+    }
+    var leftSeat: CGRect { sideCard(x: 0) }
+    var rightSeat: CGRect { sideCard(x: size.width - Self.sideColumnWidth) }
+    var table: CGRect {
+        let x = Self.sideColumnWidth + Self.gap
+        return CGRect(x: x, y: middleY, width: size.width - x * 2, height: middleHeight)
+    }
+    var mySeat: CGRect { CGRect(x: 0, y: bottomY, width: Self.sideColumnWidth, height: rackHeight) }
+    var rack: CGRect { CGRect(x: Self.sideColumnWidth + Self.gap, y: bottomY, width: rackWidth, height: rackHeight) }
+    var actions: CGRect {
+        let x = rack.maxX + Self.gap * 2
+        return CGRect(x: x, y: bottomY, width: size.width - x, height: rackHeight)
+    }
+    /// [뽑기|넘기기] 버튼 — 뽑은 타일이 여기서 튀어나온다.
+    var drawButton: CGRect {
+        CGRect(x: actions.minX, y: actions.minY + Self.submitHeight + Self.actionSpacing,
+               width: (actions.width - Self.actionSpacing) / 2, height: Self.buttonHeight)
+    }
+
+    private func sideCard(x: CGFloat) -> CGRect {
+        let height = min(Self.sideCardHeight, middleHeight)
+        return CGRect(x: x, y: middleY + (middleHeight - height) / 2, width: Self.sideColumnWidth, height: height)
+    }
+}
+
+/// 상대 자리 배치 — 나 다음 사람부터 왼쪽 → 위 → 오른쪽(둘이면 위, 셋이면 왼·오른). 순수.
+struct RummySeatArrangement: Equatable {
+    var left: Int?
+    var top: Int?
+    var right: Int?
+
+    /// `seatNos` = 판의 자리 번호들, `mine` = 내 자리.
+    static func arrange(seatNos: [Int], mine: Int?) -> RummySeatArrangement {
+        let sorted = seatNos.sorted()
+        guard let mine, let at = sorted.firstIndex(of: mine) else {
+            let others = sorted
+            return place(others)
         }
-        for count in counts { frames.append(place(Self.meldWidth(max(1, count)))) }
-        meldFrames = frames
-        newMeldFrame = place(Self.meldWidth(2))
+        let others = Array(sorted[(at + 1)...] + sorted[..<at])
+        return place(others)
     }
 
-    /// 세트를 다 담는 높이(새 세트 자리 포함).
-    var contentHeight: CGFloat { newMeldFrame.maxY }
-
-    func tileFrame(meld: Int, index: Int) -> CGRect {
-        let origin = meldFrames[meld].origin
-        return CGRect(x: origin.x + Self.meldPadding + CGFloat(index) * (Self.tile.width + Self.tileGap),
-                      y: origin.y + Self.meldPadding, width: Self.tile.width, height: Self.tile.height)
-    }
-
-    /// 판 내용 좌표 `p` 에 놓으면 어느 세트의 몇 번째인가. 세트 틀을 틈의 절반만큼 넓혀 잰다(세트 사이 틈 = 가까운 세트).
-    /// 끌던 타일이 같은 세트에 있으면 그 타일을 빼고 센다. nil = 세트 밖(빈 곳 → 새 세트).
-    func hit(_ p: CGPoint, excluding: (meld: Int, index: Int)? = nil) -> (meld: Int, index: Int)? {
-        for (meld, frame) in meldFrames.enumerated() {
-            let zone = frame.insetBy(dx: -Self.meldSpacing / 2, dy: -Self.rowSpacing / 2)
-            guard zone.contains(p) else { continue }
-            var index = 0
-            for i in 0..<counts[meld] {
-                if let excluding, excluding.meld == meld, excluding.index == i { continue }
-                if tileFrame(meld: meld, index: i).midX < p.x { index += 1 }
-            }
-            return (meld, index)
+    private static func place(_ others: [Int]) -> RummySeatArrangement {
+        switch others.count {
+        case 0: return RummySeatArrangement()
+        case 1: return RummySeatArrangement(top: others[0])
+        case 2: return RummySeatArrangement(left: others[0], right: others[1])
+        default: return RummySeatArrangement(left: others[0], top: others[1], right: others[2])
         }
-        return nil
     }
 }
 
-/// 랙 기하 — 두 줄, 첫 줄을 먼저 채운다. 보이는 폭에 안 들면 한 줄 칸 수를 늘려 가로로 넘친다(스크롤).
-struct RummyRackGeometry: Equatable {
-    static var tile: CGSize { RummyTileSize.rack.size }
-    static let gap: CGFloat = 4
-    static let rowSpacing: CGFloat = 6
-    static let rows = 2
-    static var pitch: CGFloat { tile.width + gap }
-
-    let count: Int
-    /// 한 줄 칸 수.
-    let perRow: Int
-
-    /// 보이는 폭에 드는 한 줄 칸 수.
-    static func capacity(viewportWidth: CGFloat) -> Int {
-        max(1, Int((viewportWidth + gap) / pitch))
-    }
-
-    init(count: Int, viewportWidth: CGFloat) {
-        self.count = count
-        perRow = max(Self.capacity(viewportWidth: viewportWidth), (count + Self.rows - 1) / Self.rows)
-    }
-
-    var contentWidth: CGFloat { CGFloat(perRow) * Self.pitch - Self.gap }
-    var contentHeight: CGFloat { CGFloat(Self.rows) * Self.tile.height + CGFloat(Self.rows - 1) * Self.rowSpacing }
-
-    func frame(_ index: Int) -> CGRect {
-        let row = index / perRow, column = index % perRow
-        return CGRect(x: CGFloat(column) * Self.pitch, y: CGFloat(row) * (Self.tile.height + Self.rowSpacing),
-                      width: Self.tile.width, height: Self.tile.height)
-    }
-
-    /// 랙 내용 좌표 `p` 에 놓으면 몇 번째에 끼우는가(끌던 랙 타일 `excluding` 을 뺀 배열 기준, 0...남은 장수).
-    func insertionIndex(at p: CGPoint, excluding: Int? = nil) -> Int {
-        let row = p.y < Self.tile.height + Self.rowSpacing / 2 ? 0 : 1
-        var column = 0
-        for c in 0..<perRow where CGFloat(c) * Self.pitch + Self.tile.width / 2 < p.x { column = c + 1 }
-        var raw = row * perRow + min(column, perRow)
-        if let excluding, excluding < raw { raw -= 1 }
-        let remaining = count - (excluding == nil ? 0 : 1)
-        return max(0, min(raw, remaining))
-    }
-}
-
-/// 끌던 타일이 어디서 왔나.
-enum RummyDragSource: Equatable {
-    case rack(index: Int)
-    case meld(Int, index: Int)
-}
-
-/// 판 화면 좌표계에서 본 칸 자리. 판·랙은 레이아웃 상수로 고정이고, 스크롤만 내용 원점을 옮긴다.
-struct RummyMatchZones: Equatable {
-    var boardViewport: CGRect
-    var boardContentOrigin: CGPoint
-    var rackViewport: CGRect
-    var rackContentOrigin: CGPoint
-
-    /// 스크롤 0 일 때의 자리 — 레이아웃 상수에서만 나온다.
-    static var standard: RummyMatchZones {
-        let L = RummyWindowLayout.self
-        let board = CGRect(x: 0, y: L.seatBarHeight + L.sectionSpacing, width: L.innerWidth, height: L.boardHeight)
-        let rackY = board.maxY + L.sectionSpacing + L.statusLineHeight + L.statusSpacing + L.rackCardPadding
-        let rack = CGRect(x: L.rackCardPadding, y: rackY, width: L.rackViewportWidth, height: L.rackAreaHeight)
-        return RummyMatchZones(
-            boardViewport: board,
-            boardContentOrigin: CGPoint(x: board.minX + L.boardPadding, y: board.minY + L.boardPadding),
-            rackViewport: rack, rackContentOrigin: rack.origin)
-    }
-}
-
-/// 놓을 자리 판정(순수). 판단 재료는 기하와 "내 차례인가" 뿐이다 — 규칙(놓아도 되는가)은 편집기·서버가 정한다.
+/// 놓을 자리 판정(순수). 재료는 칸 자리·변환·배치와 "내 차례인가" 뿐이다 — 놓아도 되는가는 편집기·서버가 정한다.
 enum RummyDropResolver {
-    static func target(at point: CGPoint, zones: RummyMatchZones, board: RummyBoardGeometry, rack: RummyRackGeometry,
-                       source: RummyDragSource, isMyTurn: Bool) -> RummyDropTarget? {
-        if zones.rackViewport.contains(point) {
-            let local = CGPoint(x: point.x - zones.rackContentOrigin.x, y: point.y - zones.rackContentOrigin.y)
-            var excluding: Int?
-            if case .rack(let index) = source { excluding = index }
-            return .rack(index: rack.insertionIndex(at: local, excluding: excluding))
+    /// 판 묶음 누르기 여유(논리 단위) — 묶음 사이 틈(16)의 반 남짓.
+    static let meldSlack = CGSize(width: 10, height: 10)
+
+    /// 타일 묶음(`count` 장, 손에 `grabIndex` 번째)을 `pointer`(판 화면 좌표)에 놓으면.
+    /// `skipMeld` = 묶음 하나를 통째로 끄는 중이면 그 묶음(자기 위에 놓기 = 위치 이동으로 본다).
+    static func target(pointer: CGPoint, grabIndex: Int, count: Int, layout: RummyMatchLayout,
+                       canvas: RummyCanvasTransform, table: RummyTableLayout, rack: RummyRackGeometry,
+                       isMyTurn: Bool, skipMeld: Int? = nil) -> RummyDropTarget? {
+        if layout.rack.contains(pointer) {
+            let local = CGPoint(x: pointer.x - layout.rack.minX, y: pointer.y - layout.rack.minY)
+            let left = local.x - (CGFloat(grabIndex) + 0.5) * rack.tileSize.width
+            return .rackSlot(rack.slot(tileLeft: left, centerY: local.y, tiles: count))
         }
-        // 내 차례가 아니면 랙 안 재배치만.
-        guard isMyTurn else { return nil }
-        guard zones.boardViewport.contains(point) else { return nil }
-        let local = CGPoint(x: point.x - zones.boardContentOrigin.x, y: point.y - zones.boardContentOrigin.y)
-        var excluding: (meld: Int, index: Int)?
-        if case .meld(let meld, let index) = source { excluding = (meld, index) }
-        if let hit = board.hit(local, excluding: excluding) {
-            return .meld(hit.meld, index: hit.index)
+        guard isMyTurn, layout.table.contains(pointer) else { return nil }
+        let logical = canvas.toLogical(CGPoint(x: pointer.x - layout.table.minX, y: pointer.y - layout.table.minY))
+        for (index, frame) in table.frames.enumerated() where index != skipMeld {
+            let zone = CGRect(x: CGFloat(frame.x), y: CGFloat(frame.y), width: CGFloat(frame.width),
+                              height: CGFloat(frame.height)).insetBy(dx: -meldSlack.width, dy: -meldSlack.height)
+            guard zone.contains(logical) else { continue }
+            var at = 0
+            for tile in 0..<table.counts[index] {
+                if let f = table.tileFrame(set: index, tile: tile), CGFloat(f.x) + CGFloat(f.width) / 2 < logical.x { at += 1 }
+            }
+            return .meld(index, index: at)
         }
-        return .newMeld
+        let w = CGFloat(RummyTableLayout.tileWidth), h = CGFloat(RummyTableLayout.tileHeight)
+        return .newMeldAt(clampedTopLeft(CGPoint(x: logical.x - (CGFloat(grabIndex) + 0.5) * w, y: logical.y - h / 2),
+                                         tiles: count))
+    }
+
+    /// 손잡이로 묶음을 끌어 `pointer` 에 놓으면 — 판 위면 새 왼쪽 위(잡은 자리 오프셋 `grab` 을 뺀다), 밖이면 nil.
+    static func setTarget(pointer: CGPoint, grab: CGPoint, tiles: Int, layout: RummyMatchLayout,
+                          canvas: RummyCanvasTransform) -> RummyPoint? {
+        guard layout.table.contains(pointer) else { return nil }
+        let logical = canvas.toLogical(CGPoint(x: pointer.x - layout.table.minX, y: pointer.y - layout.table.minY))
+        return clampedTopLeft(CGPoint(x: logical.x - grab.x, y: logical.y - grab.y), tiles: tiles)
+    }
+
+    static func clampedTopLeft(_ p: CGPoint, tiles: Int) -> RummyPoint {
+        let maxX = RummyTableLayout.canvasWidth - RummyTableLayout.width(tiles: tiles)
+        let maxY = RummyTableLayout.canvasHeight - RummyTableLayout.tileHeight
+        return RummyPoint(x: min(max(Int(p.x.rounded()), 0), max(0, maxX)),
+                          y: min(max(Int(p.y.rounded()), 0), max(0, maxY)))
     }
 }
 
-/// 렌더 시험 주입구: 이 타일을 판 화면 좌표 `point` 로 끌고 있는 장면.
+/// 렌더 시험 주입구: 이 타일을 판 화면 좌표 `point` 로 끌고 있는 장면(`block` = 길게 눌러 묶음째).
+/// `point` 가 nil 이면 길게 눌러 **들어 올리기만** 한 장면.
 struct RummyPreviewDrag: Equatable {
     let tileID: Int
-    let point: CGPoint
+    let point: CGPoint?
+    var block: Bool = false
+
+    init(tileID: Int, point: CGPoint, block: Bool = false) {
+        self.tileID = tileID
+        self.point = point
+        self.block = block
+    }
+
+    init(liftedTileID: Int) {
+        tileID = liftedTileID
+        point = nil
+        block = true
+    }
+}
+
+/// 렌더 시험 주입구: [판 확대] 를 켠 장면.
+private struct RummyBoardZoomPreviewKey: EnvironmentKey {
+    static let defaultValue: Bool? = nil
+}
+
+extension EnvironmentValues {
+    var rummyBoardZoomPreview: Bool? {
+        get { self[RummyBoardZoomPreviewKey.self] }
+        set { self[RummyBoardZoomPreviewKey.self] = newValue }
+    }
+}
+
+/// 판 화면 고정 글자(2판에서 더한 것).
+enum RummyMatchText {
+    static let zoomIn = "판 확대"
+    static let zoomOut = "전체 보기"
+    static let pool = "더미에 남은 타일"
+    static let initialProgress = "첫 등록"
+    static let me = "나"
+    static func pot(stake: Int?, seats: Int?) -> String { "판돈 \(stake ?? 0) × \(seats ?? 0)명" }
 }
 
 private struct RummyDragState: Equatable {
-    let tile: RummyTile
-    let source: RummyDragSource
+    enum Kind: Equatable {
+        case tiles
+        /// 손잡이로 묶음 위치 이동.
+        case set(Int)
+    }
+
+    var kind: Kind
+    var tiles: [RummyTile]
+    var grabIndex: Int
     var point: CGPoint
+    /// 손잡이 끌기: 잡은 자리 − 묶음 왼쪽 위(논리).
+    var grab: CGPoint = .zero
+
+    var ids: [Int] { tiles.map(\.id) }
 }
 
-/// 판 위에 그릴 타일 한 장(내 차례 = 편집기 타일 id, 남의 차례 = id 없음).
-private struct RummyBoardTile: Hashable {
-    let id: Int?
-    let face: RummyFace
-    let highlighted: Bool
-}
-
-private struct RummyContentOriginKey: PreferenceKey {
-    static let defaultValue: [String: CGPoint] = [:]
-    static func reduce(value: inout [String: CGPoint], nextValue: () -> [String: CGPoint]) {
-        value.merge(nextValue(), uniquingKeysWith: { $1 })
-    }
-}
-
-private extension View {
-    /// 스크롤 내용의 원점을 판 화면 좌표계로 알린다(스크롤 오프셋 = 이 원점의 이동).
-    func reportsContentOrigin(_ key: String) -> some View {
-        background(GeometryReader { proxy in
-            Color.clear.preference(key: RummyContentOriginKey.self,
-                                   value: [key: proxy.frame(in: .named(RummyMatchView.space)).origin])
-        })
-    }
+private struct RummyPressState: Equatable {
+    enum Surface: Equatable { case rack, board }
+    let tileID: Int
+    let token: Int
+    let surface: Surface
+    var picked: [Int]?
 }
 
 // MARK: - 판 화면
@@ -224,233 +235,462 @@ struct RummyMatchView: View {
     let previewDrag: RummyPreviewDrag?
 
     @State private var drag: RummyDragState?
-    @State private var scrolledOrigins: [String: CGPoint] = [:]
+    @State private var press: RummyPressState?
+    @State private var pressSerial = 0
     @State private var refusedFlash = false
+    @State private var zoomed = false
+    @State private var stagger: [Int: Double] = [:]
+    @State private var flyIn: RummyFlyIn?
+    @State private var lastSort: RummyRackSort?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.rummyBoardZoomPreview) private var zoomPreview
 
     private var editor: RummyTurnEditor? { scene.editor }
     private var isMyTurn: Bool { scene.isMyTurn && editor != nil }
+    private var isZoomed: Bool { zoomPreview ?? zoomed }
 
-    private var zones: RummyMatchZones {
-        var zones = RummyMatchZones.standard
-        if let origin = scrolledOrigins["board"] {
-            zones.boardContentOrigin = CGPoint(x: origin.x, y: origin.y)
+    var body: some View {
+        GeometryReader { proxy in
+            content(RummyMatchLayout(size: proxy.size))
         }
-        if let origin = scrolledOrigins["rack"] { zones.rackContentOrigin = origin }
-        return zones
+        .coordinateSpace(name: Self.space)
+        .onAppear { RummyArt.shared.refreshIfNeeded() }
+        // 판이 바뀌면(내 차례 끝 · 남의 확정) 끄는 중이던 타일을 거둔다 — 낡은 id 로 놓지 않게.
+        .onChange(of: match.seq) { _, _ in
+            drag = nil
+            press = nil
+        }
+        .onChange(of: store.lastDraw?.serial) { _, serial in
+            guard let serial, let event = store.lastDraw, !reduceMotion else { return }
+            flyIn = RummyFlyIn(serial: serial, tileIDs: Set(event.tiles.map(\.tileID)), landed: false)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(30))
+                guard flyIn?.serial == serial else { return }
+                flyIn?.landed = true
+                try? await Task.sleep(for: .milliseconds(900))
+                if flyIn?.serial == serial { flyIn = nil }
+            }
+        }
     }
 
-    /// 판에 그릴 세트들.
-    private var boardMelds: [[RummyBoardTile]] {
+    // MARK: 장면 값
+
+    /// 판에 그릴 것(묶음 · 배치 · 편집 가능 여부).
+    private var board: (melds: [RummyBoardMeld], layout: RummyTableLayout) {
         if isMyTurn, let editor {
-            return editor.melds.map { meld in
-                meld.map { RummyBoardTile(id: $0.id, face: $0.face, highlighted: !editor.isFromTable($0.id)) }
+            let layout = editor.tableLayout
+            let melds = editor.melds.enumerated().map { index, meld in
+                RummyBoardMeld(id: "e\(meld.first?.id ?? -index - 1)",
+                               tiles: meld.map { RummyBoardTile(id: $0.id, face: $0.face, highlighted: !editor.isFromTable($0.id)) },
+                               frame: layout.frame(of: index) ?? RummyTableLayout.frame(at: RummyPoint(x: 0, y: 0), tiles: meld.count),
+                               invalid: !editor.analysis(ofMeld: index).valid)
             }
+            return (melds, layout)
         }
         if let draft = scene.otherDraft {
             // 남의 작업 판 — 확정 판에 없던 면(다중집합 차)을 이번 차례에 낸 타일로 칠한다(표시 전용, 판정 아님).
+            let layout = RummyTableLayout(sets: draft, layout: match.draft?.layout)
             var confirmed: [RummyFace: Int] = [:]
             for face in (match.table ?? []).joined() { confirmed[face, default: 0] += 1 }
-            return draft.map { meld in
-                meld.map { face in
+            let keys = RummyBoardMeld.faceKeys(draft)
+            let melds = draft.enumerated().map { index, set in
+                RummyBoardMeld(id: keys[index], tiles: set.map { face in
                     let left = confirmed[face, default: 0]
                     if left > 0 { confirmed[face] = left - 1 }
                     return RummyBoardTile(id: nil, face: face, highlighted: left == 0)
-                }
+                }, frame: layout.frame(of: index) ?? RummyTableLayout.frame(at: RummyPoint(x: 0, y: 0), tiles: set.count),
+                invalid: !RummyRules.analyze(set).valid)
             }
+            return (melds, layout)
         }
-        return (match.table ?? []).map { meld in
-            RummyRules.displayOrder(meld).map { RummyBoardTile(id: nil, face: $0, highlighted: false) }
+        let table = match.table ?? []
+        let layout = RummyTableLayout(sets: table, layout: match.tableLayout)
+        let keys = RummyBoardMeld.faceKeys(table)
+        let melds = table.enumerated().map { index, set in
+            RummyBoardMeld(id: keys[index],
+                           tiles: RummyRules.displayOrder(set).map { RummyBoardTile(id: nil, face: $0, highlighted: false) },
+                           frame: layout.frame(of: index) ?? RummyTableLayout.frame(at: RummyPoint(x: 0, y: 0), tiles: set.count),
+                           invalid: false)
         }
+        return (melds, layout)
     }
 
-    /// 세트별 무효 여부 — 내 차례는 편집기, 남의 작업 판은 `RummyRules.analyze`, 확정 판은 서버가 이미 받았다.
-    private var invalidMelds: [Bool] {
-        if isMyTurn, let editor {
-            return editor.melds.indices.map { !editor.analysis(ofMeld: $0).valid }
-        }
-        if let draft = scene.otherDraft {
-            return draft.map { !RummyRules.analyze($0).valid }
-        }
-        return Array(repeating: false, count: match.table?.count ?? 0)
+    private func transform(_ L: RummyMatchLayout, layout: RummyTableLayout) -> RummyCanvasTransform {
+        isZoomed ? .zoom(viewport: L.table.size, content: layout.frames) : .fit(viewport: L.table.size)
     }
 
-    private var rackTiles: [RummyTile] { editor?.rack ?? [] }
-
-    private var boardGeometry: RummyBoardGeometry {
-        RummyBoardGeometry(counts: boardMelds.map(\.count), width: RummyWindowLayout.boardContentWidth)
+    private func rackGeometry(_ L: RummyMatchLayout) -> RummyRackGeometry {
+        RummyRackGeometry(height: L.rackHeight, rowCount: editor?.rackLayout.rowCount ?? RummyRackLayout.baseRows)
     }
 
-    private var rackGeometry: RummyRackGeometry {
-        RummyRackGeometry(count: rackTiles.count, viewportWidth: RummyWindowLayout.rackViewportWidth)
+    private func tile(_ id: Int) -> RummyTile? {
+        guard let editor else { return nil }
+        return editor.rack.first { $0.id == id } ?? editor.melds.lazy.compactMap { $0.first { $0.id == id } }.first
+    }
+
+    /// 묶음 하나를 통째로 집었으면 그 묶음 번호.
+    private func wholeMeld(_ ids: [Int]) -> Int? {
+        guard let editor else { return nil }
+        let set = Set(ids)
+        return editor.melds.firstIndex { Set($0.map(\.id)) == set }
     }
 
     /// 지금 끌고 있는 것(실제 끌기 또는 렌더 주입).
     private var activeDrag: RummyDragState? {
         if let drag { return drag }
-        guard let previewDrag, let editor else { return nil }
-        if let index = editor.rack.firstIndex(where: { $0.id == previewDrag.tileID }) {
-            return RummyDragState(tile: editor.rack[index], source: .rack(index: index), point: previewDrag.point)
-        }
-        for (m, meld) in editor.melds.enumerated() {
-            if let index = meld.firstIndex(where: { $0.id == previewDrag.tileID }) {
-                return RummyDragState(tile: meld[index], source: .meld(m, index: index), point: previewDrag.point)
-            }
-        }
-        return nil
+        guard let previewDrag, let point = previewDrag.point, let editor, let grabbed = tile(previewDrag.tileID)
+        else { return nil }
+        let ids = previewDrag.block ? pick(around: grabbed.id, in: editor, option: false) : [grabbed.id]
+        let tiles = ids.compactMap(tile)
+        return RummyDragState(kind: .tiles, tiles: tiles, grabIndex: ids.firstIndex(of: grabbed.id) ?? 0, point: point)
     }
 
-    private var hoverTarget: RummyDropTarget? {
-        guard let drag = activeDrag else { return nil }
-        return RummyDropResolver.target(at: drag.point, zones: zones, board: boardGeometry, rack: rackGeometry,
-                                        source: drag.source, isMyTurn: isMyTurn)
+    /// 길게 눌러 들어 올린 묶음(아직 안 끎).
+    private var activeLift: (tileID: Int, ids: [Int])? {
+        if drag == nil, let press, let picked = press.picked { return (press.tileID, picked) }
+        guard drag == nil, let previewDrag, previewDrag.point == nil, let editor else { return nil }
+        return (previewDrag.tileID, pick(around: previewDrag.tileID, in: editor, option: false))
     }
 
-    /// 판 타일을 랙 위로 끄는 중 — 놓기 거절 표시.
-    private var hoverRefused: Bool {
-        guard let drag = activeDrag, case .rack? = hoverTarget, let editor else { return false }
-        return editor.isFromTable(drag.tile.id)
+    private func pick(around id: Int, in editor: RummyTurnEditor, option: Bool) -> [Int] {
+        editor.rack.contains { $0.id == id } ? editor.rackChain(around: id) : editor.meldPick(for: id, fromTileToEnd: option)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: RummyWindowLayout.sectionSpacing) {
-            RummySeatBar(store: store, scene: scene, match: match)
-                .frame(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.seatBarHeight)
-            board
-                .frame(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.boardHeight)
-            VStack(alignment: .leading, spacing: RummyWindowLayout.statusSpacing) {
-                statusLine
-                    .frame(height: RummyWindowLayout.statusLineHeight)
-                rackCard
-                    .frame(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.rackCardHeight)
+    private func resolve(_ drag: RummyDragState, L: RummyMatchLayout, layout: RummyTableLayout,
+                         canvas: RummyCanvasTransform) -> RummyDropTarget? {
+        switch drag.kind {
+        case .set(let index):
+            let count = layout.counts.indices.contains(index) ? layout.counts[index] : drag.tiles.count
+            return RummyDropResolver.setTarget(pointer: drag.point, grab: drag.grab, tiles: count, layout: L, canvas: canvas)
+                .map { .newMeldAt($0) }
+        case .tiles:
+            return RummyDropResolver.target(pointer: drag.point, grabIndex: drag.grabIndex, count: drag.tiles.count,
+                                            layout: L, canvas: canvas, table: layout, rack: rackGeometry(L),
+                                            isMyTurn: isMyTurn, skipMeld: wholeMeld(drag.ids))
+        }
+    }
+
+    /// 판 타일을 받침대 위로 끄는 중 — 놓기 거절 표시.
+    private func refused(_ drag: RummyDragState?, target: RummyDropTarget?) -> Bool {
+        guard let drag, let target, RummyStore.isRackTarget(target), let editor else { return false }
+        return drag.ids.contains(where: editor.isFromTable)
+    }
+
+    // MARK: 조립
+
+    @ViewBuilder
+    private func content(_ L: RummyMatchLayout) -> some View {
+        let model = board
+        let canvas = transform(L, layout: model.layout)
+        let geometry = rackGeometry(L)
+        let dragging = activeDrag
+        let target = dragging.flatMap { resolve($0, L: L, layout: model.layout, canvas: canvas) }
+        let isRefused = refused(dragging, target: target)
+        let lift = activeLift
+        let arrangement = RummySeatArrangement.arrange(seatNos: seats.compactMap(\.seatNo), mine: match.mySeatNo)
+        ZStack(alignment: .topLeading) {
+            RummyPotCard(match: match)
+                .frame(width: L.potCard.width, height: L.potCard.height)
+                .offset(x: L.potCard.minX, y: L.potCard.minY)
+            RummyPoolCard(count: match.poolCount)
+                .frame(width: L.poolCard.width, height: L.poolCard.height)
+                .offset(x: L.poolCard.minX, y: L.poolCard.minY)
+            if let seat = seat(arrangement.top) {
+                RummySeatCard(store: store, scene: scene, match: match, seat: seat, style: .top)
+                    .frame(width: L.topSeat.width, height: L.topSeat.height)
+                    .offset(x: L.topSeat.minX, y: L.topSeat.minY)
             }
-            .frame(height: RummyWindowLayout.bottomHeight)
-        }
-        .frame(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.bodyHeight, alignment: .topLeading)
-        .coordinateSpace(name: Self.space)
-        .overlay(alignment: .topLeading) {
-            if let drag = activeDrag {
-                RummyTileView(face: drag.tile.face, size: .rack)
-                    .scaleEffect(1.08)
-                    .shadow(color: .black.opacity(0.4), radius: 6, y: 4)
-                    .overlay(alignment: .topTrailing) {
-                        if hoverRefused {
-                            Image(systemName: "nosign")
-                                .font(.system(size: 14, weight: .heavy))
-                                .foregroundStyle(RummyTilePalette.color(RummyTilePalette.invalid))
-                                .background(Circle().fill(Color.white).padding(-1))
-                                .offset(x: 6, y: -6)
-                        }
-                    }
-                    .position(drag.point)
-                    .allowsHitTesting(false)
+            if let seat = seat(arrangement.left) {
+                RummySeatCard(store: store, scene: scene, match: match, seat: seat, style: .side)
+                    .frame(width: L.leftSeat.width, height: L.leftSeat.height)
+                    .offset(x: L.leftSeat.minX, y: L.leftSeat.minY)
+            }
+            if let seat = seat(arrangement.right) {
+                RummySeatCard(store: store, scene: scene, match: match, seat: seat, style: .side)
+                    .frame(width: L.rightSeat.width, height: L.rightSeat.height)
+                    .offset(x: L.rightSeat.minX, y: L.rightSeat.minY)
+            }
+            tableArea(L, model: model, canvas: canvas, dragging: dragging, target: target, lift: lift)
+                .frame(width: L.table.width, height: L.table.height)
+                .offset(x: L.table.minX, y: L.table.minY)
+            if let mine = scene.mySeat {
+                RummySeatCard(store: store, scene: scene, match: match, seat: mine, style: .mine)
+                    .frame(width: L.mySeat.width, height: L.mySeat.height)
+                    .offset(x: L.mySeat.minX, y: L.mySeat.minY)
+            }
+            rackArea(L, geometry: geometry, dragging: dragging, target: target, refused: isRefused, lift: lift)
+                .frame(width: L.rack.width, height: L.rack.height)
+                .offset(x: L.rack.minX, y: L.rack.minY)
+            actions(L)
+                .frame(width: L.actions.width, height: L.actions.height, alignment: .top)
+                .offset(x: L.actions.minX, y: L.actions.minY)
+            if let dragging {
+                floatingBlock(dragging, L: L, canvas: canvas, refused: isRefused)
             }
         }
-        .onPreferenceChange(RummyContentOriginKey.self) { origins in
-            // 클립 갈래(렌더)는 스크롤이 없다 — 표준 자리 그대로.
-            guard !clipsOverflowInsteadOfScroll, scrolledOrigins != origins else { return }
-            scrolledOrigins = origins
-        }
-        // 판이 바뀌면(내 차례 끝 · 남의 확정) 끄는 중이던 타일을 거둔다 — 낡은 id 로 놓지 않게.
-        .onChange(of: match.seq) { _, _ in drag = nil }
+        .frame(width: L.size.width, height: L.size.height, alignment: .topLeading)
+    }
+
+    private var seats: [RummyMatchSeat] {
+        (match.seats ?? []).filter { $0.seatNo != nil }.sorted { ($0.seatNo ?? 0) < ($1.seatNo ?? 0) }
+    }
+
+    private func seat(_ seatNo: Int?) -> RummyMatchSeat? {
+        guard let seatNo else { return nil }
+        return seats.first { $0.seatNo == seatNo }
     }
 
     // MARK: 판
 
-    private var board: some View {
-        let geometry = boardGeometry
-        let melds = boardMelds
-        let invalid = invalidMelds
-        let target = hoverTarget
-        return ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(red: 0.13, green: 0.14, blue: 0.20).opacity(0.92))
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(CheckTheme.border, lineWidth: 1)
-            RummyScrollBox(clips: clipsOverflowInsteadOfScroll) {
-                ZStack(alignment: .topLeading) {
-                    ForEach(Array(melds.enumerated()), id: \.offset) { m, meld in
-                        meldChip(meld, index: m, invalid: invalid.indices.contains(m) && invalid[m],
-                                 targeted: { if case .meld(m, _)? = target { return true }; return false }())
-                            .frame(width: geometry.meldFrames[m].width, height: geometry.meldFrames[m].height)
-                            .position(x: geometry.meldFrames[m].midX, y: geometry.meldFrames[m].midY)
-                    }
-                    if isMyTurn, activeDrag != nil {
-                        newMeldGhost(targeted: target == .newMeld)
-                            .frame(width: geometry.newMeldFrame.width, height: geometry.newMeldFrame.height)
-                            .position(x: geometry.newMeldFrame.midX, y: geometry.newMeldFrame.midY)
-                    }
-                }
-                .frame(width: RummyWindowLayout.boardContentWidth,
-                       height: max(geometry.contentHeight, RummyWindowLayout.boardHeight - RummyWindowLayout.boardPadding * 2),
-                       alignment: .topLeading)
-                .reportsContentOrigin("board")
-            }
-            .padding(RummyWindowLayout.boardPadding)
-            if !isMyTurn, let name = scene.turnSeat?.displayName {
-                Label(scene.otherDraft != nil ? RummyText.placing(name) : RummyText.turnOf(name),
-                      systemImage: scene.otherDraft != nil ? "hand.draw.fill" : "hourglass")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(CheckTheme.accent)
-                    .padding(.horizontal, 10)
-                    .frame(height: 24)
-                    .background(Capsule().fill(CheckTheme.panelElevated))
-                    .overlay(Capsule().stroke(CheckTheme.accent.opacity(0.5), lineWidth: 1))
-                    .padding(10)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            }
-        }
-    }
-
-    private func meldChip(_ meld: [RummyBoardTile], index: Int, invalid: Bool, targeted: Bool) -> some View {
-        let invalidColor = RummyTilePalette.color(RummyTilePalette.invalid)
-        return HStack(spacing: RummyBoardGeometry.tileGap) {
-            ForEach(Array(meld.enumerated()), id: \.offset) { i, tile in
-                let view = RummyTileView(face: tile.face, size: .table, highlighted: tile.highlighted,
-                                         dimmed: tile.id != nil && activeDrag?.tile.id == tile.id)
-                if let id = tile.id, isMyTurn, let editorTile = editor?.melds[safe: index]?[safe: i], editorTile.id == id {
-                    view.gesture(dragGesture(editorTile, source: .meld(index, index: i)))
+    private func tableArea(_ L: RummyMatchLayout, model: (melds: [RummyBoardMeld], layout: RummyTableLayout),
+                           canvas: RummyCanvasTransform, dragging: RummyDragState?, target: RummyDropTarget?,
+                           lift: (tileID: Int, ids: [Int])?) -> some View {
+        let preview: RummyBoardPreview? = {
+            guard let dragging, let target else { return nil }
+            switch target {
+            case .meld(let m, let index?): return .meld(m, index: index)
+            case .newMeldAt(let p):
+                let n: Int
+                let skip: Int?
+                if case .set(let index) = dragging.kind {
+                    n = model.layout.counts.indices.contains(index) ? model.layout.counts[index] : dragging.tiles.count
+                    skip = index
                 } else {
-                    view
+                    n = dragging.tiles.count
+                    skip = wholeMeld(dragging.ids)
+                }
+                return .ghost(RummyTableLayout.frame(at: model.layout.snap(p, tiles: n, excluding: skip), tiles: n))
+            default: return nil
+            }
+        }()
+        let movingSet: Int? = {
+            if case .set(let index)? = dragging?.kind { return index }
+            return nil
+        }()
+        return ZStack(alignment: .bottom) {
+            RummyTableCanvasView(
+                melds: model.melds, transform: canvas, size: L.table.size, editable: isMyTurn && !scene.isWorking,
+                draggingTileIDs: dragging.map { Set($0.ids) } ?? [], liftedTileIDs: Set(lift?.ids ?? []),
+                movingSet: movingSet, preview: preview, reduceMotion: reduceMotion,
+                onTileDrag: { id, value in tileChanged(id, value, surface: .board) },
+                onTileDragEnd: { id, value in tileEnded(id, value, L: L) },
+                onHandleDrag: { index, value in handleChanged(index, value, L: L, canvas: canvas, layout: model.layout) },
+                onHandleDragEnd: { _, value in tileEnded(-1, value, L: L) })
+            HStack(alignment: .bottom, spacing: 8) {
+                if let event = RummyText.lastEvent(match.lastEvent, name: scene.name(of: match.lastEvent?.seatNo)) {
+                    Text(event)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .frame(height: 24)
+                        .background(Capsule().fill(Color.black.opacity(0.35)))
+                }
+                Spacer(minLength: 8)
+                if !isMyTurn, let name = scene.turnSeat?.displayName {
+                    Label(scene.otherDraft != nil ? RummyText.placing(name) : RummyText.turnOf(name),
+                          systemImage: scene.otherDraft != nil ? "hand.draw.fill" : "hourglass")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(CheckTheme.accent)
+                        .padding(.horizontal, 10)
+                        .frame(height: 24)
+                        .background(Capsule().fill(CheckTheme.panelElevated))
+                        .overlay(Capsule().stroke(CheckTheme.accent.opacity(0.5), lineWidth: 1))
                 }
             }
+            .padding(10)
+            .allowsHitTesting(false)
         }
-        .padding(RummyBoardGeometry.meldPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(invalid ? invalidColor.opacity(0.14) : Color.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .stroke(invalid ? invalidColor : (targeted ? CheckTheme.accent : Color.white.opacity(0.10)),
-                    lineWidth: invalid || targeted ? 2 : 1))
     }
 
-    private func newMeldGhost(targeted: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(style: StrokeStyle(lineWidth: targeted ? 2 : 1.5, dash: [5, 4]))
-            .foregroundStyle(targeted ? CheckTheme.accent : CheckTheme.secondaryText.opacity(0.6))
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(CheckTheme.accent.opacity(targeted ? 0.14 : 0.04)))
-            .overlay(Text(RummyText.newMeld).font(.caption2.weight(.bold))
-                .foregroundStyle(targeted ? CheckTheme.accent : CheckTheme.secondaryText))
+    // MARK: 받침대
+
+    private func rackArea(_ L: RummyMatchLayout, geometry: RummyRackGeometry, dragging: RummyDragState?,
+                          target: RummyDropTarget?, refused: Bool, lift: (tileID: Int, ids: [Int])?) -> some View {
+        let ghosts: [RummyRackSlot] = {
+            guard !refused, let dragging, case .rackSlot(let wanted)? = target, let editor else { return [] }
+            let n = dragging.tiles.count
+            let excluding = Set(dragging.ids)
+            let slot = editor.rackLayout.isFree(wanted, tiles: n, excluding: excluding)
+                ? wanted : editor.rackLayout.nearestFree(to: wanted, tiles: n, excluding: excluding)
+            return (0..<n).map { RummyRackSlot(row: slot.row, halfCol: slot.halfCol + $0 * RummyRackLayout.tileSpan) }
+        }()
+        let origin = CGPoint(x: L.drawButton.midX - L.rack.minX, y: L.drawButton.midY - L.rack.minY)
+        return RummyRackView(
+            tiles: editor?.rack ?? [], layout: editor?.rackLayout ?? RummyRackLayout(), geometry: geometry,
+            size: L.rack.size, draggingTileIDs: dragging.map { Set($0.ids) } ?? [],
+            liftedTileIDs: Set(lift?.ids ?? []), liftBadge: lift.map { ($0.tileID, $0.ids.count) },
+            ghostSlots: ghosts, refused: refused || refusedFlash, stagger: stagger, flyIn: flyIn, flyOrigin: origin,
+            reduceMotion: reduceMotion,
+            onTileDrag: { id, value in tileChanged(id, value, surface: .rack) },
+            onTileDragEnd: { id, value in tileEnded(id, value, L: L) })
     }
 
-    // MARK: 상태 줄
+    // MARK: 손에 든 것
 
-    private var statusLine: some View {
-        let status = statusText
-        return HStack(spacing: 8) {
-            Image(systemName: scene.notice != nil ? "exclamationmark.circle.fill" : "info.circle")
-            Text(status.text).lineLimit(1)
-            Spacer(minLength: 12)
-            if let event = RummyText.lastEvent(match.lastEvent, name: scene.name(of: match.lastEvent?.seatNo)) {
-                Text(event).lineLimit(1).foregroundStyle(CheckTheme.secondaryText)
+    private func floatingBlock(_ drag: RummyDragState, L: RummyMatchLayout, canvas: RummyCanvasTransform,
+                               refused: Bool) -> some View {
+        let overTable = L.table.contains(drag.point)
+        let size = overTable ? RummyTileSize.canvas(scale: canvas.scale) : RummyTileSize.rack
+        let n = CGFloat(drag.tiles.count)
+        let grab: CGFloat
+        if case .set = drag.kind { grab = 0 } else { grab = CGFloat(drag.grabIndex) + 0.5 }
+        return HStack(spacing: 1) {
+            ForEach(drag.tiles) { tile in
+                RummyTileView(face: tile.face, size: size)
             }
         }
-        .font(.callout.weight(.semibold))
-        .foregroundStyle(status.tint)
-        .padding(.horizontal, 4)
+        .scaleEffect(1.06)
+        .shadow(color: .black.opacity(0.45), radius: 8, y: 6)
+        // 아래 스냅 자리 점선이 비쳐 보이게.
+        .opacity(0.92)
+        .overlay(alignment: .topTrailing) {
+            if refused {
+                Image(systemName: "nosign")
+                    .font(.system(size: 15, weight: .heavy))
+                    .foregroundStyle(RummyTilePalette.color(RummyTilePalette.invalid))
+                    .background(Circle().fill(Color.white).padding(-1))
+                    .offset(x: 8, y: -8)
+            } else if drag.tiles.count > 1 {
+                RummyCountBadge(count: drag.tiles.count).offset(x: 9, y: -10)
+            }
+        }
+        .position(x: drag.point.x + (n / 2 - grab) * (size.size.width + 1), y: drag.point.y)
+        .allowsHitTesting(false)
     }
 
-    /// 상태 줄 글자 — 서버·판정 문구는 스토어 `notice`, 내 차례 글자는 `RummyText.myTurnStatus`(첫 등록 진행 ·
+    // MARK: 끌기
+
+    private func tileChanged(_ id: Int, _ value: DragGesture.Value, surface: RummyPressState.Surface) {
+        guard editor != nil else { return }
+        if drag != nil {
+            drag?.point = value.location
+            return
+        }
+        if press?.tileID != id {
+            pressSerial += 1
+            let token = pressSerial
+            press = RummyPressState(tileID: id, token: token, surface: surface, picked: nil)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                guard press?.token == token, drag == nil, let editor else { return }
+                let option = NSEvent.modifierFlags.contains(.option)
+                let ids = surface == .rack ? editor.rackChain(around: id) : editor.meldPick(for: id, fromTileToEnd: option)
+                guard !ids.isEmpty else { return }
+                press?.picked = ids
+                NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+            }
+        }
+        let moved = hypot(value.location.x - value.startLocation.x, value.location.y - value.startLocation.y)
+        guard moved >= 3 else { return }
+        let ids = press?.picked ?? [id]
+        let tiles = ids.compactMap(tile)
+        guard !tiles.isEmpty else { return }
+        drag = RummyDragState(kind: .tiles, tiles: tiles, grabIndex: ids.firstIndex(of: id) ?? 0, point: value.location)
+        press = nil
+    }
+
+    private func handleChanged(_ index: Int, _ value: DragGesture.Value, L: RummyMatchLayout,
+                               canvas: RummyCanvasTransform, layout: RummyTableLayout) {
+        if drag != nil {
+            drag?.point = value.location
+            return
+        }
+        guard isMyTurn, let editor, editor.melds.indices.contains(index), let frame = layout.frame(of: index) else { return }
+        let start = canvas.toLogical(CGPoint(x: value.startLocation.x - L.table.minX, y: value.startLocation.y - L.table.minY))
+        drag = RummyDragState(kind: .set(index), tiles: editor.melds[index], grabIndex: 0, point: value.location,
+                              grab: CGPoint(x: start.x - CGFloat(frame.x), y: start.y - CGFloat(frame.y)))
+    }
+
+    private func tileEnded(_ id: Int, _ value: DragGesture.Value, L: RummyMatchLayout) {
+        defer {
+            drag = nil
+            press = nil
+        }
+        guard var finished = drag, let editor else { return }
+        finished.point = value.location
+        let model = board
+        let canvas = transform(L, layout: model.layout)
+        guard let target = resolve(finished, L: L, layout: model.layout, canvas: canvas) else { return }
+        switch finished.kind {
+        case .set(let index):
+            if case .newMeldAt(let point) = target { store.moveSet(index, to: point) }
+        case .tiles:
+            if RummyStore.isRackTarget(target), finished.ids.contains(where: editor.isFromTable) {
+                // 판에 있던 타일은 받침대로 안 간다(R-14) — 놓지 않고 받침대를 잠깐 빨갛게.
+                refusedFlash = true
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(600))
+                    refusedFlash = false
+                }
+                return
+            }
+            if case .newMeldAt(let point) = target, let whole = wholeMeld(finished.ids) {
+                store.moveSet(whole, to: point)
+            } else {
+                store.moveTiles(finished.ids, to: target)
+            }
+        }
+    }
+
+    // MARK: 버튼
+
+    private func sort(_ mode: RummyRackSort) {
+        lastSort = mode
+        guard let editor else { return }
+        if !reduceMotion {
+            var sorted = editor
+            sorted.sortRack(mode)
+            stagger = Dictionary(uniqueKeysWithValues: sorted.rackLayout.readingOrder.enumerated().map { ($1, Double($0) * 0.025) })
+        }
+        store.sortRack(mode)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1400))
+            stagger = [:]
+        }
+    }
+
+    private func actions(_ L: RummyMatchLayout) -> some View {
+        let busy = scene.isWorking
+        let canEdit = isMyTurn && !busy
+        let poolEmpty = (match.poolCount ?? 0) == 0
+        let status = statusText
+        return VStack(spacing: RummyMatchLayout.actionSpacing) {
+            TetrisDuelActionButton(title: RummyText.submit, icon: "checkmark", tint: CheckTheme.working,
+                                   height: RummyMatchLayout.submitHeight, fullWidth: true,
+                                   isEnabled: canEdit && editor?.canSubmit == true,
+                                   action: { store.submitTurn() })
+            HStack(spacing: RummyMatchLayout.actionSpacing) {
+                TetrisDuelActionButton(title: poolEmpty ? RummyText.pass : RummyText.draw,
+                                       icon: poolEmpty ? "forward.fill" : "plus.rectangle.on.rectangle",
+                                       tint: CheckTheme.pending, style: .outline,
+                                       height: RummyMatchLayout.buttonHeight, fullWidth: true,
+                                       isEnabled: canEdit, action: { store.drawTile() })
+                TetrisDuelActionButton(title: RummyText.undo, icon: "arrow.uturn.backward", style: .outline,
+                                       height: RummyMatchLayout.buttonHeight, fullWidth: true,
+                                       isEnabled: canEdit && (editor?.isChanged == true || editor?.isLayoutChanged == true),
+                                       action: { store.resetTurn() })
+                    .checkTooltip("이번 차례에 놓은 것을 처음으로")
+            }
+            HStack(spacing: RummyMatchLayout.actionSpacing) {
+                RummySortSwitch(selected: lastSort, enabled: editor != nil, onSort: sort)
+                TetrisDuelActionButton(title: isZoomed ? RummyMatchText.zoomOut : RummyMatchText.zoomIn,
+                                       icon: isZoomed ? "arrow.down.right.and.arrow.up.left" : "plus.magnifyingglass",
+                                       style: .outline, height: RummyMatchLayout.smallButtonHeight, fullWidth: true,
+                                       action: { zoomed.toggle() })
+                    .checkTooltip("놓인 묶음에 맞춰 판을 크게 봐요")
+            }
+            Text(status.text)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(status.tint)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 2)
+        }
+    }
+
+    /// 상태 글자 — 서버·판정 문구는 스토어 `notice`, 내 차례 글자는 `RummyText.myTurnStatus`(첫 등록 진행 ·
     /// [완료]가 꺼진 이유), 색은 `editor.canSubmit`.
     private var statusText: (text: String, tint: Color) {
         if let notice = scene.notice { return (notice, CheckTheme.pending) }
@@ -461,220 +701,268 @@ struct RummyMatchView: View {
         if let name = scene.turnSeat?.displayName { return (RummyText.turnOf(name), CheckTheme.secondaryText) }
         return ("", CheckTheme.secondaryText)
     }
+}
 
-    // MARK: 랙 + 버튼
+/// 정렬 두 갈래(777 · 789) 분절 버튼.
+private struct RummySortSwitch: View {
+    let selected: RummyRackSort?
+    let enabled: Bool
+    let onSort: (RummyRackSort) -> Void
 
-    private var rackCard: some View {
-        let geometry = rackGeometry
-        let target = hoverTarget
-        let refused = hoverRefused || refusedFlash
-        let rackTargeted: Bool = { if case .rack? = target { return true }; return false }()
-        return HStack(alignment: .top, spacing: RummyWindowLayout.columnSpacing) {
-            RummyScrollBox(axis: .horizontal, clips: clipsOverflowInsteadOfScroll) {
-                ZStack(alignment: .topLeading) {
-                    ForEach(Array(rackTiles.enumerated()), id: \.element.id) { i, tile in
-                        let frame = geometry.frame(i)
-                        RummyTileView(face: tile.face, size: .rack, dimmed: activeDrag?.tile.id == tile.id)
-                            .gesture(dragGesture(tile, source: .rack(index: i)))
-                            .position(x: frame.midX, y: frame.midY)
-                    }
-                    if !refused, case .rack(let index?)? = target {
-                        rackCaret(at: index, geometry: geometry)
-                    }
-                }
-                .frame(width: geometry.contentWidth, height: geometry.contentHeight, alignment: .topLeading)
-                .reportsContentOrigin("rack")
-            }
-            .frame(width: RummyWindowLayout.rackViewportWidth, height: RummyWindowLayout.rackAreaHeight)
-            .padding(RummyWindowLayout.rackCardPadding)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(red: 0.24, green: 0.21, blue: 0.33).opacity(0.9)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(refused ? RummyTilePalette.color(RummyTilePalette.invalid)
-                        : (rackTargeted ? CheckTheme.accent : CheckTheme.border),
-                        lineWidth: refused || rackTargeted ? 2 : 1))
-            actions
-                .frame(width: RummyWindowLayout.actionColumnWidth, height: RummyWindowLayout.rackCardHeight)
+    var body: some View {
+        HStack(spacing: 2) {
+            segment(.number, title: RummyText.sortNumber, tip: "같은 숫자끼리 모아요")
+            segment(.color, title: RummyText.sortColor, tip: "색별로 이어지게 모아요")
         }
+        .padding(2)
+        .frame(height: RummyMatchLayout.smallButtonHeight)
+        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .overlay(Capsule().stroke(CheckTheme.border, lineWidth: 1))
+        .opacity(enabled ? 1 : 0.45)
     }
 
-    /// 랙의 끼울 자리 표시(세로 막대).
-    private func rackCaret(at index: Int, geometry: RummyRackGeometry) -> some View {
-        let row = min(index / geometry.perRow, RummyRackGeometry.rows - 1)
-        let column = index - row * geometry.perRow
-        let x = CGFloat(column) * RummyRackGeometry.pitch - RummyRackGeometry.gap / 2
-        let y = CGFloat(row) * (RummyRackGeometry.tile.height + RummyRackGeometry.rowSpacing)
-        return Capsule()
-            .fill(CheckTheme.accent)
-            .frame(width: 3, height: RummyRackGeometry.tile.height)
-            .position(x: max(1.5, x), y: y + RummyRackGeometry.tile.height / 2)
-    }
-
-    private var actions: some View {
-        let busy = scene.isWorking
-        let canEdit = isMyTurn && !busy
-        let poolEmpty = (match.poolCount ?? 0) == 0
-        return VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                TetrisDuelActionButton(title: RummyText.undo, icon: "arrow.uturn.backward", style: .outline,
-                                       height: RummyWindowLayout.actionButtonHeight, fullWidth: true,
-                                       isEnabled: canEdit && editor?.isChanged == true,
-                                       action: { store.resetTurn() })
-                    .checkTooltip("이번 차례에 놓은 것을 처음으로")
-                TetrisDuelActionButton(title: RummyText.sortNumber, style: .outline,
-                                       height: RummyWindowLayout.actionButtonHeight,
-                                       isEnabled: editor != nil, action: { store.sortRack(.number) })
-                    .checkTooltip("같은 숫자끼리 모아요")
-                TetrisDuelActionButton(title: RummyText.sortColor, style: .outline,
-                                       height: RummyWindowLayout.actionButtonHeight,
-                                       isEnabled: editor != nil, action: { store.sortRack(.color) })
-                    .checkTooltip("색별로 이어지게 모아요")
-            }
-            HStack(spacing: 8) {
-                TetrisDuelActionButton(title: poolEmpty ? RummyText.pass : RummyText.draw,
-                                       icon: poolEmpty ? "forward.fill" : "plus.rectangle.on.rectangle",
-                                       tint: CheckTheme.pending, style: .outline,
-                                       height: RummyWindowLayout.actionButtonHeight, fullWidth: true,
-                                       isEnabled: canEdit, action: { store.drawTile() })
-                TetrisDuelActionButton(title: RummyText.submit, icon: "checkmark", tint: CheckTheme.working,
-                                       height: RummyWindowLayout.actionButtonHeight, fullWidth: true,
-                                       isEnabled: canEdit && editor?.canSubmit == true,
-                                       action: { store.submitTurn() })
-            }
-            Spacer(minLength: 0)
+    private func segment(_ mode: RummyRackSort, title: String, tip: String) -> some View {
+        let on = selected == mode
+        return Button(action: { onSort(mode) }) {
+            Text(title)
+                .font(.callout.weight(.heavy))
+                .monospacedDigit()
+                .foregroundStyle(on ? Color.white : CheckTheme.primaryText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Capsule().fill(on ? CheckTheme.accent.opacity(0.85) : Color.clear))
+                .contentShape(Capsule())
         }
-        .padding(.vertical, RummyWindowLayout.rackCardPadding)
-    }
-
-    // MARK: 끌기
-
-    private func dragGesture(_ tile: RummyTile, source: RummyDragSource) -> some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.space))
-            .onChanged { value in
-                if drag?.tile.id == tile.id {
-                    drag?.point = value.location
-                } else {
-                    drag = RummyDragState(tile: tile, source: source, point: value.location)
-                }
-            }
-            .onEnded { value in
-                finishDrag(tile, source: source, at: value.location)
-            }
-    }
-
-    private func finishDrag(_ tile: RummyTile, source: RummyDragSource, at point: CGPoint) {
-        drag = nil
-        guard let target = RummyDropResolver.target(at: point, zones: zones, board: boardGeometry, rack: rackGeometry,
-                                                    source: source, isMyTurn: isMyTurn)
-        else { return }
-        if case .rack = target, editor?.isFromTable(tile.id) == true {
-            // 판에 있던 타일은 랙으로 안 간다(R-14) — 놓지 않고 랙을 잠깐 빨갛게.
-            refusedFlash = true
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(600))
-                refusedFlash = false
-            }
-            return
-        }
-        store.moveTile(tile.id, to: target)
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .checkTooltip(tip)
     }
 }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+// MARK: - 자리 카드
+
+/// 차례 시간 링 — **잎 뷰**만 시계를 읽는다. `fixedNow` 가 있으면(렌더 시험) 그 시각으로 한 번만 그린다.
+struct RummyTurnRing: View {
+    let remaining: (Date) -> TimeInterval?
+    let total: TimeInterval
+    let fixedNow: Date?
+    let diameter: CGFloat
+    var lineWidth: CGFloat = 4
+
+    var body: some View {
+        if let fixedNow {
+            ring(at: fixedNow)
+        } else {
+            TimelineView(.periodic(from: .now, by: 0.5)) { context in ring(at: context.date) }
+        }
+    }
+
+    private func ring(at date: Date) -> some View {
+        let left = remaining(date) ?? total
+        let fraction = min(1, max(0, left / max(total, 1)))
+        let tint = left <= 5 ? CheckTheme.danger : (left <= 10 ? CheckTheme.pending : CheckTheme.accent)
+        return ZStack {
+            Circle().stroke(Color.white.opacity(0.12), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: diameter, height: diameter)
+    }
 }
 
-// MARK: - 자리 띠
+private struct RummySeatCard: View {
+    enum Style { case side, top, mine }
 
-private struct RummySeatBar: View {
     let store: RummyStore
     let scene: RummyScene
     let match: RummyMatchState
+    let seat: RummyMatchSeat
+    let style: Style
 
-    private var seats: [RummyMatchSeat] {
-        (match.seats ?? []).filter { $0.seatNo != nil }.sorted { ($0.seatNo ?? 0) < ($1.seatNo ?? 0) }
+    private var isTurn: Bool { seat.seatNo == match.turnSeatNo && seat.state == .playing && match.status == .active }
+    private var forfeited: Bool { seat.state == .forfeit }
+    private var turnTotal: TimeInterval {
+        guard let start = match.turnStartedMs, let end = match.turnDeadlineMs, end > start else { return 60 }
+        return (end - start) / 1000
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(seats) { seat in
-                RummySeatCard(store: store, scene: scene, seat: seat,
-                              isTurn: seat.seatNo == match.turnSeatNo && seat.state == .playing,
-                              isMe: seat.seatNo == match.mySeatNo)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        Group {
+            switch style {
+            case .side: side
+            case .top: top
+            case .mine: mine
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Label(RummyText.pool(match.poolCount), systemImage: "square.stack.3d.up.fill")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(shape.fill(isTurn ? CheckTheme.accent.opacity(0.13) : CheckTheme.panel.opacity(0.88)))
+        .overlay(shape.stroke(isTurn ? CheckTheme.accent : CheckTheme.border, lineWidth: isTurn ? 2 : 1))
+        .opacity(forfeited ? 0.5 : 1)
+    }
+
+    private func avatar(_ size: CGFloat) -> some View {
+        ZStack {
+            if isTurn {
+                RummyTurnRing(remaining: scene.turnRemaining(store), total: turnTotal, fixedNow: scene.fixedNow,
+                              diameter: size + 10)
+            }
+            CheckAvatarView(name: seat.displayName ?? "?", userID: seat.userId.uuidString.lowercased(),
+                            avatarURL: seat.avatarUrl.flatMap(URL.init(string:)), size: size,
+                            characterHint: seat.character)
+        }
+        .frame(width: size + 10, height: size + 10)
+    }
+
+    @ViewBuilder
+    private var chips: some View {
+        if forfeited {
+            RummyChip(text: RummyText.forfeit, tint: CheckTheme.danger)
+        } else if seat.initialDone == false {
+            RummyChip(text: RummyText.beforeInitial, tint: CheckTheme.pending)
+        }
+        if let streak = seat.timeoutStreak, streak > 0, !forfeited {
+            RummyChip(text: RummyText.timeouts(streak), tint: CheckTheme.danger)
+        }
+    }
+
+    private var backs: some View {
+        HStack(spacing: -6) {
+            ForEach(0..<min(4, max(1, seat.rackCount ?? 0)), id: \.self) { _ in RummyTileBack() }
+        }
+    }
+
+    private var seconds: some View {
+        RummyCountdownLeaf(remaining: scene.turnRemaining(store), fixedNow: scene.fixedNow, label: RummyText.seconds)
+            .font(.callout.weight(.heavy))
+    }
+
+    private var side: some View {
+        VStack(spacing: 7) {
+            avatar(54)
+            Text(seat.displayName ?? "?").font(.callout.weight(.bold)).lineLimit(1)
+            HStack(spacing: 8) {
+                backs
+                Text(RummyText.rackCount(seat.rackCount))
+                    .font(.title3.weight(.heavy))
+                    .monospacedDigit()
+            }
+            VStack(spacing: 4) { chips }
+            if isTurn { seconds }
+        }
+        .padding(10)
+    }
+
+    private var top: some View {
+        HStack(spacing: 10) {
+            avatar(30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(seat.displayName ?? "?").font(.callout.weight(.bold)).lineLimit(1)
+                HStack(spacing: 4) { chips }
+            }
+            Spacer(minLength: 4)
+            backs
+            Text(RummyText.rackCount(seat.rackCount)).font(.callout.weight(.heavy)).monospacedDigit()
+            if isTurn { seconds }
+        }
+        .padding(.horizontal, 10)
+    }
+
+    private var mine: some View {
+        VStack(spacing: 6) {
+            avatar(44)
+            HStack(spacing: 5) {
+                Text(seat.displayName ?? "?").font(.callout.weight(.bold)).lineLimit(1)
+                RummyChip(text: RummyMatchText.me, tint: CheckTheme.accent)
+            }
+            HStack(spacing: 6) {
+                Text(RummyText.rackCount(seat.rackCount)).font(.caption.weight(.bold)).monospacedDigit()
+                    .foregroundStyle(CheckTheme.secondaryText)
+                if isTurn { seconds }
+            }
+            if seat.initialDone == false, !forfeited {
+                initialProgress
+            } else {
+                HStack(spacing: 4) { chips }
+            }
+        }
+        .padding(8)
+    }
+
+    /// 첫 등록 진행(내 차례 편집기 기준 · 30점).
+    private var initialProgress: some View {
+        let points = scene.editor?.initialPoints ?? 0
+        let fraction = min(1, Double(points) / 30)
+        return VStack(spacing: 3) {
+            HStack {
+                Text(RummyMatchText.initialProgress).font(.caption2.weight(.semibold))
+                Spacer()
+                Text("\(points) / 30").font(.caption2.weight(.bold)).monospacedDigit()
+                    .foregroundStyle(points >= 30 ? CheckTheme.working : CheckTheme.primaryText)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.1))
+                    Capsule().fill(points >= 30 ? CheckTheme.working : CheckTheme.pending)
+                        .frame(width: proxy.size.width * fraction)
+                }
+            }
+            .frame(height: 5)
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+/// 판돈 카드(위 왼쪽).
+private struct RummyPotCard: View {
+    let match: RummyMatchState
+
+    var body: some View {
+        HStack(spacing: 10) {
+            RubyIcon(size: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(RummyMatchText.pot(stake: match.stake, seats: match.seatCount))
                     .font(.callout.weight(.bold))
                     .monospacedDigit()
-                HStack(spacing: 4) {
-                    RubyIcon(size: 11)
-                    Text(RummyText.stake(match.stake)).monospacedDigit()
-                }
-                .font(.caption.weight(.semibold))
                 Text(RummyText.split(seatCount: match.seatCount, stake: match.stake))
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 12)
-            .frame(width: 176, alignment: .leading)
-            .frame(maxHeight: .infinity)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(CheckTheme.panel.opacity(0.85)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(CheckTheme.panel.opacity(0.88)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
     }
 }
 
-private struct RummySeatCard: View {
-    let store: RummyStore
-    let scene: RummyScene
-    let seat: RummyMatchSeat
-    let isTurn: Bool
-    let isMe: Bool
+/// 더미 카드(위 오른쪽).
+private struct RummyPoolCard: View {
+    let count: Int?
 
     var body: some View {
-        let forfeited = seat.state == .forfeit
         HStack(spacing: 10) {
-            CheckAvatarView(name: seat.displayName ?? "?", userID: seat.userId.uuidString.lowercased(),
-                            avatarURL: seat.avatarUrl.flatMap(URL.init(string:)), size: 38,
-                            characterHint: seat.character)
-                .padding(3)
-                .overlay(Circle().stroke(isTurn ? CheckTheme.accent : Color.clear, lineWidth: 3))
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 5) {
-                    Text(seat.displayName ?? "?").font(.callout.weight(.bold)).lineLimit(1)
-                    if isMe { RummyChip(text: "나", tint: CheckTheme.accent) }
-                }
-                HStack(spacing: 5) {
-                    Label(RummyText.rackCount(seat.rackCount), systemImage: "rectangle.portrait.fill")
-                        .font(.caption.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(CheckTheme.secondaryText)
-                    if forfeited {
-                        RummyChip(text: RummyText.forfeit, tint: CheckTheme.danger)
-                    } else if seat.initialDone == false {
-                        RummyChip(text: RummyText.beforeInitial, tint: CheckTheme.pending)
-                    }
-                    if let streak = seat.timeoutStreak, streak > 0, !forfeited {
-                        RummyChip(text: RummyText.timeouts(streak), tint: CheckTheme.danger)
-                    }
+            ZStack {
+                ForEach(0..<3, id: \.self) { i in
+                    RummyTileBack(size: CGSize(width: 16, height: 22)).offset(x: CGFloat(i) * 3, y: CGFloat(-i) * 2)
                 }
             }
-            Spacer(minLength: 4)
-            if isTurn {
-                RummyCountdownLeaf(remaining: scene.turnRemaining(store), fixedNow: scene.fixedNow,
-                                   label: RummyText.seconds)
-                    .font(.title3.weight(.heavy))
-            }
+            .frame(width: 26, height: 28)
+            Text("\(count ?? 0)")
+                .font(.title3.weight(.heavy))
+                .monospacedDigit()
+            Text(RummyMatchText.pool)
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(isTurn ? CheckTheme.accent.opacity(0.14) : CheckTheme.panel.opacity(0.85)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .stroke(isTurn ? CheckTheme.accent : CheckTheme.border, lineWidth: isTurn ? 2 : 1))
-        .opacity(forfeited ? 0.5 : 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(CheckTheme.panel.opacity(0.88)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
     }
 }
 

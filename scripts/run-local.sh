@@ -11,4 +11,6 @@ if [[ -f "$ROOT/.env.local" ]]; then
 fi
 
 APP_PATH="$("$ROOT/scripts/build-local.sh" | tail -n 1)"
-"$APP_PATH/Contents/MacOS/check"
+# 로컬 빌드도 번들 ID 가 kingcheck 이라, 설치된 앱이 떠 있으면 하나만 실행 판정(v0.3.69)이 로컬 빌드를 양보시킨다.
+# 인자 영역(-키 값)으로 탈출구를 이 실행에만 켠다 — `defaults write` 로 켜면 설치된 앱의 판정까지 꺼진다.
+"$APP_PATH/Contents/MacOS/check" -check.allowMultipleInstances YES

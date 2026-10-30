@@ -1,0 +1,2521 @@
+{
+  "cases": [
+    {
+      "id": "claude-dedupe",
+      "note": "Claude (message.id, requestId) 전역 중복 제거 — 두 파일 · 스트리밍 부분 줄 · requestId 없음 · 비-assistant · 깨진 줄",
+      "steps": [
+        {
+          "claudeEntries": [
+            [
+              "6e340b9cffb37a989ca544e6bb780a2c",
+              20261015001100,
+              2,
+              2,
+              0,
+              0
+            ],
+            [
+              "7ec9fd84cb2568f9fce0d45ba264df41",
+              20261014010100,
+              20,
+              7,
+              0,
+              0
+            ],
+            [
+              "92eb4617e1ccc9aefa0eafad86a9dd96",
+              20261015001000,
+              7,
+              5,
+              70,
+              0
+            ],
+            [
+              "e74fedba31ed72f81be9be083e845c75",
+              20261014013000,
+              100,
+              40,
+              1000,
+              50
+            ],
+            [
+              "efc8da7f875acdd6bc5c8e9d496dbce9",
+              20261014010200,
+              5,
+              3,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-a/s1.jsonl",
+              3121,
+              1791943200000000,
+              3121
+            ],
+            [
+              ".claude/projects/-synthetic-b/s2.jsonl",
+              1214,
+              1792023600000000,
+              1214
+            ]
+          ],
+          "codexFiles": [],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "claude-dedupe/s1.jsonl",
+              "mtime": 1791943200,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-a/s1.jsonl"
+            },
+            {
+              "from": "claude-dedupe/s2.jsonl",
+              "mtime": 1792023600,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-b/s2.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 4335,
+            "claudeFilesRead": 2,
+            "claudeFilesStatted": 2,
+            "codexBytesRead": 0,
+            "codexFilesRead": 0,
+            "codexFilesStatted": 0,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 50,
+            "claudeCacheRead": 1070,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-14": 1225,
+              "2026-10-15": 86
+            },
+            "claudeInput": 134,
+            "claudeOutput": 57,
+            "codexCacheRead": 0,
+            "codexDaily": {},
+            "codexDailyUTC": {},
+            "codexInput": 0,
+            "codexOutput": 0,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 86,
+            "total": 1311,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "claude-kst-boundary",
+      "note": "KST 자정·월 경계, 창 시작(13주) 전후, 보관 하한(창−48h) 밖은 안 담음, 오프셋 표기는 무시(앞 19자 UTC)",
+      "steps": [
+        {
+          "claudeEntries": [
+            [
+              "04d7bedac863ab831ecaa0c6c06ea8f3",
+              20260719150000,
+              3,
+              3,
+              0,
+              0
+            ],
+            [
+              "198b7b022a2632dfbfe5d4ec9366b921",
+              20260719145959,
+              2,
+              2,
+              0,
+              0
+            ],
+            [
+              "1bbcd1d7d0b056a5898fa1929b804e32",
+              20261014145959,
+              6,
+              6,
+              0,
+              0
+            ],
+            [
+              "3bdfa9d18f4f56a7dc6b0b80e971958c",
+              20260930145959,
+              4,
+              4,
+              0,
+              0
+            ],
+            [
+              "413d490a4cf3a0336ac9f18e134c1b43",
+              20260930150000,
+              5,
+              5,
+              0,
+              0
+            ],
+            [
+              "41b39aad17e6b6fdce86c246a0426205",
+              20261014150000,
+              7,
+              7,
+              0,
+              0
+            ],
+            [
+              "5285ad944aa6f22da0cba01d0af418c5",
+              20261015080000,
+              8,
+              8,
+              0,
+              0
+            ],
+            [
+              "5b4e8ae3bb440e08e351326416bd08cf",
+              20261031150000,
+              9,
+              9,
+              0,
+              0
+            ],
+            [
+              "d92a78c9067c237d8e99f09a0c4b0c81",
+              20261031145959,
+              10,
+              10,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-k/k.jsonl",
+              4471,
+              1792029600000000,
+              4471
+            ]
+          ],
+          "codexFiles": [],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "claude-kst-boundary/k.jsonl",
+              "mtime": 1792029600,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-k/k.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 4471,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 0,
+            "codexFilesRead": 0,
+            "codexFilesStatted": 0,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-07-20": 6,
+              "2026-09-30": 8,
+              "2026-10-01": 10,
+              "2026-10-14": 12,
+              "2026-10-15": 30,
+              "2026-10-31": 20
+            },
+            "claudeInput": 36,
+            "claudeOutput": 36,
+            "codexCacheRead": 0,
+            "codexDaily": {},
+            "codexDailyUTC": {},
+            "codexInput": 0,
+            "codexOutput": 0,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 30,
+            "total": 72,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "claude-transcripts",
+      "note": "projects + transcripts(하위 폴더 포함) · .json 은 무시 · 창 시작 전 mtime 은 열거 밖 · claudeCompleteFrom 은 projects mtime 만",
+      "steps": [
+        {
+          "claudeEntries": [
+            [
+              "46530662400299f02dfaf4465a9de4ca",
+              20261013230000,
+              20,
+              2,
+              0,
+              0
+            ],
+            [
+              "9175f61d428d6d08166185df7520c554",
+              20261015010000,
+              40,
+              4,
+              0,
+              0
+            ],
+            [
+              "aabe5539d262d06565648078cc6547a0",
+              20260819120000,
+              30,
+              3,
+              0,
+              0
+            ],
+            [
+              "f5676ae5669771f20d92a0dca1f959f1",
+              20260909230000,
+              10,
+              1,
+              100,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-t/new.jsonl",
+              408,
+              1791936000000000,
+              408
+            ],
+            [
+              ".claude/projects/-synthetic-t/old.jsonl",
+              410,
+              1788998400000000,
+              410
+            ],
+            [
+              ".claude/transcripts/sub/t2.jsonl",
+              408,
+              1792029600000000,
+              408
+            ],
+            [
+              ".claude/transcripts/t1.jsonl",
+              408,
+              1787184000000000,
+              408
+            ]
+          ],
+          "codexFiles": [],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "claude-transcripts/old.jsonl",
+              "mtime": 1788998400,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-t/old.jsonl"
+            },
+            {
+              "from": "claude-transcripts/new.jsonl",
+              "mtime": 1791936000,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-t/new.jsonl"
+            },
+            {
+              "from": "claude-transcripts/ancient.jsonl",
+              "mtime": 1782864000,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-t/ancient.jsonl"
+            },
+            {
+              "from": "claude-transcripts/t1.jsonl",
+              "mtime": 1787184000,
+              "op": "put",
+              "to": ".claude/transcripts/t1.jsonl"
+            },
+            {
+              "from": "claude-transcripts/t2.jsonl",
+              "mtime": 1792029600,
+              "op": "put",
+              "to": ".claude/transcripts/sub/t2.jsonl"
+            },
+            {
+              "from": "claude-transcripts/t3.json",
+              "mtime": 1792029600,
+              "op": "put",
+              "to": ".claude/transcripts/t3.json"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 1634,
+            "claudeFilesRead": 4,
+            "claudeFilesStatted": 4,
+            "codexBytesRead": 0,
+            "codexFilesRead": 0,
+            "codexFilesStatted": 0,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "2026-09-11",
+            "claudeDaily": {
+              "2026-08-19": 33,
+              "2026-09-10": 111,
+              "2026-10-14": 22,
+              "2026-10-15": 44
+            },
+            "claudeInput": 60,
+            "claudeOutput": 6,
+            "codexCacheRead": 0,
+            "codexDaily": {},
+            "codexDailyUTC": {},
+            "codexInput": 0,
+            "codexOutput": 0,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 44,
+            "total": 66,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "codex-baseline-first",
+      "note": "오프셋 0 파싱의 첫 유효 token_count 는 기준선만 · 필드별 델타 · KST/UTC 일 귀속",
+      "steps": [
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/14/rollout-2026-10-14T10-00-00-0000000000a4.jsonl",
+              1574,
+              1791991860000000,
+              1574,
+              1700,
+              300,
+              700,
+              "2026-10",
+              700,
+              100,
+              300,
+              {
+                "2026-10-14": 560,
+                "2026-10-15": 240
+              },
+              0,
+              {
+                "2026-10-14": 800
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "codex-baseline-first/r.jsonl",
+              "mtime": 1791991860,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/14/rollout-2026-10-14T10-00-00-0000000000a4.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 1574,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 300,
+            "codexDaily": {
+              "2026-10-14": 560,
+              "2026-10-15": 240
+            },
+            "codexDailyUTC": {
+              "2026-10-14": 800
+            },
+            "codexInput": 700,
+            "codexOutput": 100,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 240,
+            "total": 800,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "codex-resume-prev-month",
+      "note": "지난달에 시작해 이번 달로 이어진 rollout — 지난달 델타는 월 밖·UTC 보존 하한(전월 말일) 이후만 UTC 일에, mtime 이 월 시작 전인 파일은 열거 밖",
+      "steps": [
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/09/30/rollout-2026-09-30T22-00-00-0000000000a5.jsonl",
+              1860,
+              1790899200000000,
+              1860,
+              1500,
+              150,
+              90,
+              "2026-10",
+              1200,
+              120,
+              40,
+              {
+                "2026-10-01": 770,
+                "2026-10-02": 550
+              },
+              0,
+              {
+                "2026-09-30": 990,
+                "2026-10-01": 550
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "codex-resume-prev-month/r.jsonl",
+              "mtime": 1790899200,
+              "op": "put",
+              "to": ".codex/sessions/2026/09/30/rollout-2026-09-30T22-00-00-0000000000a5.jsonl"
+            },
+            {
+              "from": "codex-resume-prev-month/old.jsonl",
+              "mtime": 1790294400,
+              "op": "put",
+              "to": ".codex/archived_sessions/rollout-2026-09-20T10-00-00-0000000000b5.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 1860,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 40,
+            "codexDaily": {
+              "2026-10-01": 770,
+              "2026-10-02": 550
+            },
+            "codexDailyUTC": {
+              "2026-09-30": 990,
+              "2026-10-01": 550
+            },
+            "codexInput": 1200,
+            "codexOutput": 120,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 1320,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "codex-fork-copy",
+      "note": "포크 표시(forked_from_id) rollout 의 자기 session_meta+5초 안 이벤트는 기준선만(CodexForkRule) · 표시 없는 파일도 둘째 meta 뒤엔 자기 meta+5초 마감",
+      "steps": [
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/13/rollout-2026-10-13T09-00-00-0000000000a6.jsonl",
+              2538,
+              1791858600000000,
+              2538,
+              9300,
+              930,
+              330,
+              "2026-10",
+              1200,
+              120,
+              120,
+              {
+                "2026-10-13": 1320
+              },
+              1791849605000000,
+              {
+                "2026-10-13": 1320
+              }
+            ],
+            [
+              ".codex/sessions/2026/10/13/rollout-2026-10-13T12-00-00-0000000000a7.jsonl",
+              2016,
+              1791862200000000,
+              2016,
+              90,
+              10,
+              0,
+              "2026-10",
+              35,
+              4,
+              0,
+              {
+                "2026-10-13": 39
+              },
+              1791860405000000,
+              {
+                "2026-10-13": 39
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "codex-fork-copy/fork.jsonl",
+              "mtime": 1791858600,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/13/rollout-2026-10-13T09-00-00-0000000000a6.jsonl"
+            },
+            {
+              "from": "codex-fork-copy/resumed.jsonl",
+              "mtime": 1791862200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/13/rollout-2026-10-13T12-00-00-0000000000a7.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 4554,
+            "codexFilesRead": 2,
+            "codexFilesStatted": 2,
+            "codexForkCopyEvents": 4,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 120,
+            "codexDaily": {
+              "2026-10-13": 1359
+            },
+            "codexDailyUTC": {
+              "2026-10-13": 1359
+            },
+            "codexInput": 1235,
+            "codexOutput": 124,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 1359,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "codex-zst-freeze",
+      "note": "사라진 rollout 에 압축 쌍둥이(.zst — 같은 자리 · archived · sessions/y/m/d)가 있으면 상태 동결(기여 유지), .zst 는 읽지 않는다",
+      "steps": [
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/archived_sessions/rollout-2026-10-11T07-00-00-0000000000c7.jsonl",
+              1006,
+              1791694800000000,
+              1006,
+              77,
+              17,
+              0,
+              "2026-10",
+              70,
+              10,
+              0,
+              {
+                "2026-10-11": 80
+              },
+              0,
+              {
+                "2026-10-11": 80
+              }
+            ],
+            [
+              ".codex/sessions/2026/10/12/rollout-2026-10-12T08-00-00-0000000000e7.jsonl",
+              1020,
+              1791781200000000,
+              1020,
+              600,
+              60,
+              30,
+              "2026-10",
+              500,
+              50,
+              30,
+              {
+                "2026-10-12": 550
+              },
+              0,
+              {
+                "2026-10-12": 550
+              }
+            ],
+            [
+              ".codex/sessions/2026/10/12/rollout-2026-10-12T09-00-00-0000000000f7.jsonl",
+              1012,
+              1791781200000000,
+              1012,
+              310,
+              31,
+              0,
+              "2026-10",
+              300,
+              30,
+              0,
+              {
+                "2026-10-12": 330
+              },
+              0,
+              {
+                "2026-10-12": 330
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "codex-zst-freeze/a.jsonl",
+              "mtime": 1791781200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T08-00-00-0000000000e7.jsonl"
+            },
+            {
+              "from": "codex-zst-freeze/b.jsonl",
+              "mtime": 1791781200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T09-00-00-0000000000f7.jsonl"
+            },
+            {
+              "from": "codex-zst-freeze/c.jsonl",
+              "mtime": 1791694800,
+              "op": "put",
+              "to": ".codex/archived_sessions/rollout-2026-10-11T07-00-00-0000000000c7.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 3038,
+            "codexFilesRead": 3,
+            "codexFilesStatted": 3,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 30,
+            "codexDaily": {
+              "2026-10-11": 80,
+              "2026-10-12": 880
+            },
+            "codexDailyUTC": {
+              "2026-10-11": 80,
+              "2026-10-12": 880
+            },
+            "codexInput": 870,
+            "codexOutput": 90,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 960,
+            "windowStart": "2026-07-20"
+          }
+        },
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/archived_sessions/rollout-2026-10-11T07-00-00-0000000000c7.jsonl",
+              1006,
+              1791694800000000,
+              1006,
+              77,
+              17,
+              0,
+              "2026-10",
+              70,
+              10,
+              0,
+              {
+                "2026-10-11": 80
+              },
+              0,
+              {
+                "2026-10-11": 80
+              }
+            ],
+            [
+              ".codex/sessions/2026/10/12/rollout-2026-10-12T08-00-00-0000000000e7.jsonl",
+              1020,
+              1791781200000000,
+              1020,
+              600,
+              60,
+              30,
+              "2026-10",
+              500,
+              50,
+              30,
+              {
+                "2026-10-12": 550
+              },
+              0,
+              {
+                "2026-10-12": 550
+              }
+            ],
+            [
+              ".codex/sessions/2026/10/12/rollout-2026-10-12T09-00-00-0000000000f7.jsonl",
+              1012,
+              1791781200000000,
+              1012,
+              310,
+              31,
+              0,
+              "2026-10",
+              300,
+              30,
+              0,
+              {
+                "2026-10-12": 330
+              },
+              0,
+              {
+                "2026-10-12": 330
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033800,
+          "ops": [
+            {
+              "op": "delete",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T08-00-00-0000000000e7.jsonl"
+            },
+            {
+              "op": "delete",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T09-00-00-0000000000f7.jsonl"
+            },
+            {
+              "op": "delete",
+              "to": ".codex/archived_sessions/rollout-2026-10-11T07-00-00-0000000000c7.jsonl"
+            },
+            {
+              "from": "codex-zst-freeze/twin.zst",
+              "mtime": 1792033200,
+              "op": "put",
+              "to": ".codex/archived_sessions/rollout-2026-10-12T08-00-00-0000000000e7.jsonl.zst"
+            },
+            {
+              "from": "codex-zst-freeze/twin.zst",
+              "mtime": 1792033200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T09-00-00-0000000000f7.jsonl.zst"
+            },
+            {
+              "from": "codex-zst-freeze/twin.zst",
+              "mtime": 1792033200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/11/rollout-2026-10-11T07-00-00-0000000000c7.jsonl.zst"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 0,
+            "codexFilesRead": 0,
+            "codexFilesStatted": 0,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": false
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 30,
+            "codexDaily": {
+              "2026-10-11": 80,
+              "2026-10-12": 880
+            },
+            "codexDailyUTC": {
+              "2026-10-11": 80,
+              "2026-10-12": 880
+            },
+            "codexInput": 870,
+            "codexOutput": 90,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 960,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "codex-zst-no-twin",
+      "note": "쌍둥이 없이 사라진 rollout 은 상태를 지운다 · sessions→archived 로 옮긴 파일은 옛 경로 상태를 지우고 새 경로를 처음부터",
+      "steps": [
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/12/rollout-2026-10-12T10-00-00-0000000000a8.jsonl",
+              1018,
+              1791792000000000,
+              1018,
+              400,
+              40,
+              0,
+              "2026-10",
+              300,
+              30,
+              0,
+              {
+                "2026-10-12": 330
+              },
+              0,
+              {
+                "2026-10-12": 330
+              }
+            ],
+            [
+              ".codex/sessions/2026/10/12/rollout-2026-10-12T11-00-00-0000000000b8.jsonl",
+              1030,
+              1791792000000000,
+              1030,
+              1200,
+              120,
+              0,
+              "2026-10",
+              200,
+              20,
+              0,
+              {
+                "2026-10-12": 220
+              },
+              0,
+              {
+                "2026-10-12": 220
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "codex-zst-no-twin/a.jsonl",
+              "mtime": 1791792000,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T10-00-00-0000000000a8.jsonl"
+            },
+            {
+              "from": "codex-zst-no-twin/b.jsonl",
+              "mtime": 1791792000,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T11-00-00-0000000000b8.jsonl"
+            },
+            {
+              "from": "codex-zst-no-twin/other.zst",
+              "mtime": 1791792000,
+              "op": "put",
+              "to": ".codex/archived_sessions/rollout-2026-10-12T12-00-00-0000000000c8.jsonl.zst"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 2048,
+            "codexFilesRead": 2,
+            "codexFilesStatted": 2,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-12": 550
+            },
+            "codexDailyUTC": {
+              "2026-10-12": 550
+            },
+            "codexInput": 500,
+            "codexOutput": 50,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 550,
+            "windowStart": "2026-07-20"
+          }
+        },
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/archived_sessions/rollout-2026-10-12T11-00-00-0000000000b8.jsonl",
+              1030,
+              1791792000000000,
+              1030,
+              1200,
+              120,
+              0,
+              "2026-10",
+              200,
+              20,
+              0,
+              {
+                "2026-10-12": 220
+              },
+              0,
+              {
+                "2026-10-12": 220
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033800,
+          "ops": [
+            {
+              "op": "delete",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T10-00-00-0000000000a8.jsonl"
+            },
+            {
+              "op": "delete",
+              "to": ".codex/sessions/2026/10/12/rollout-2026-10-12T11-00-00-0000000000b8.jsonl"
+            },
+            {
+              "from": "codex-zst-no-twin/b.jsonl",
+              "mtime": 1791792000,
+              "op": "put",
+              "to": ".codex/archived_sessions/rollout-2026-10-12T11-00-00-0000000000b8.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 1030,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-12": 220
+            },
+            "codexDailyUTC": {
+              "2026-10-12": 220
+            },
+            "codexInput": 200,
+            "codexOutput": 20,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 220,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "codex-info-null",
+      "note": "info null · total 없음 · 깨진 줄 · timestamp 없음은 건너뛰되 기준선 유지 · 숫자 아닌 칸(글자 0·소수 버림·불 1)",
+      "steps": [
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/14/rollout-2026-10-14T12-00-00-0000000000a9.jsonl",
+              2809,
+              1792032600000000,
+              2809,
+              1300,
+              130,
+              70,
+              "2026-10",
+              2300,
+              120,
+              124,
+              {
+                "2026-10-14": 2420
+              },
+              0,
+              {
+                "2026-10-14": 2420
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "codex-info-null/r.jsonl",
+              "mtime": 1792032600,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/14/rollout-2026-10-14T12-00-00-0000000000a9.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 2809,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 124,
+            "codexDaily": {
+              "2026-10-14": 2420
+            },
+            "codexDailyUTC": {
+              "2026-10-14": 2420
+            },
+            "codexInput": 2300,
+            "codexOutput": 120,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 2420,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "codex-cum-reset",
+      "note": "누적치가 줄면 필드별 max(0, cum−기준선) 후 기준선을 새 값으로",
+      "steps": [
+        {
+          "claudeEntries": [],
+          "claudeFiles": [],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/14/rollout-2026-10-14T13-00-00-0000000000aa.jsonl",
+              1854,
+              1792032600000000,
+              1854,
+              700,
+              70,
+              30,
+              "2026-10",
+              5400,
+              540,
+              55,
+              {
+                "2026-10-14": 5940
+              },
+              0,
+              {
+                "2026-10-14": 5940
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "codex-cum-reset/r.jsonl",
+              "mtime": 1792032600,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/14/rollout-2026-10-14T13-00-00-0000000000aa.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 0,
+            "claudeFilesRead": 0,
+            "claudeFilesStatted": 0,
+            "codexBytesRead": 1854,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {},
+            "claudeInput": 0,
+            "claudeOutput": 0,
+            "codexCacheRead": 55,
+            "codexDaily": {
+              "2026-10-14": 5940
+            },
+            "codexDailyUTC": {
+              "2026-10-14": 5940
+            },
+            "codexInput": 5400,
+            "codexOutput": 540,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 0,
+            "total": 5940,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "append-equals-full",
+      "note": "덧붙인 바이트만 읽는 증분 3단계 = 마지막 상태를 처음부터 스캔한 값(fresh)",
+      "steps": [
+        {
+          "claudeEntries": [
+            [
+              "2d0e0500f54539efedaf6a096373dddc",
+              20261014200000,
+              10,
+              1,
+              100,
+              10
+            ],
+            [
+              "abaf1a72fc14d7baf03dc4697dca45c2",
+              20261014200100,
+              20,
+              2,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-g/grow.jsonl",
+              819,
+              1792030200000000,
+              819
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T08-00-00-0000000000ab.jsonl",
+              1018,
+              1792030200000000,
+              1018,
+              150,
+              15,
+              0,
+              "2026-10",
+              50,
+              5,
+              0,
+              {
+                "2026-10-15": 55
+              },
+              0,
+              {
+                "2026-10-14": 55
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "append-equals-full/c1.jsonl",
+              "mtime": 1792030200,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-g/grow.jsonl"
+            },
+            {
+              "from": "append-equals-full/x1.jsonl",
+              "mtime": 1792030200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T08-00-00-0000000000ab.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 819,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 1018,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 10,
+            "claudeCacheRead": 100,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 143
+            },
+            "claudeInput": 30,
+            "claudeOutput": 3,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-15": 55
+            },
+            "codexDailyUTC": {
+              "2026-10-14": 55
+            },
+            "codexInput": 50,
+            "codexOutput": 5,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 198,
+            "total": 198,
+            "windowStart": "2026-07-20"
+          }
+        },
+        {
+          "claudeEntries": [
+            [
+              "2d0e0500f54539efedaf6a096373dddc",
+              20261014200000,
+              10,
+              1,
+              100,
+              10
+            ],
+            [
+              "3f1e591a7869784ce383a7c385634d9c",
+              20261014210000,
+              30,
+              3,
+              0,
+              0
+            ],
+            [
+              "abaf1a72fc14d7baf03dc4697dca45c2",
+              20261014200200,
+              20,
+              9,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-g/grow.jsonl",
+              1635,
+              1792031200000000,
+              1635
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T08-00-00-0000000000ab.jsonl",
+              1956,
+              1792031200000000,
+              1956,
+              300,
+              30,
+              0,
+              "2026-10",
+              200,
+              20,
+              0,
+              {
+                "2026-10-15": 220
+              },
+              0,
+              {
+                "2026-10-14": 220
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033260,
+          "ops": [
+            {
+              "from": "append-equals-full/c2.jsonl",
+              "mtime": 1792031200,
+              "op": "append",
+              "to": ".claude/projects/-synthetic-g/grow.jsonl"
+            },
+            {
+              "from": "append-equals-full/x2.jsonl",
+              "mtime": 1792031200,
+              "op": "append",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T08-00-00-0000000000ab.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 816,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 938,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 10,
+            "claudeCacheRead": 100,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 183
+            },
+            "claudeInput": 60,
+            "claudeOutput": 13,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-15": 220
+            },
+            "codexDailyUTC": {
+              "2026-10-14": 220
+            },
+            "codexInput": 200,
+            "codexOutput": 20,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 403,
+            "total": 403,
+            "windowStart": "2026-07-20"
+          }
+        },
+        {
+          "claudeEntries": [
+            [
+              "2d0e0500f54539efedaf6a096373dddc",
+              20261014200000,
+              10,
+              1,
+              100,
+              10
+            ],
+            [
+              "3f1e591a7869784ce383a7c385634d9c",
+              20261014210000,
+              30,
+              3,
+              0,
+              0
+            ],
+            [
+              "79f500ca4dde9ec73a12eb60ab20b3f0",
+              20261015000000,
+              40,
+              4,
+              0,
+              0
+            ],
+            [
+              "abaf1a72fc14d7baf03dc4697dca45c2",
+              20261014200200,
+              20,
+              9,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-g/grow.jsonl",
+              2043,
+              1792032200000000,
+              2043
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T08-00-00-0000000000ab.jsonl",
+              2374,
+              1792032200000000,
+              2374,
+              1000,
+              100,
+              0,
+              "2026-10",
+              900,
+              90,
+              0,
+              {
+                "2026-10-15": 990
+              },
+              0,
+              {
+                "2026-10-14": 220,
+                "2026-10-15": 770
+              }
+            ]
+          ],
+          "fresh": true,
+          "now": 1792033320,
+          "ops": [
+            {
+              "from": "append-equals-full/c3.jsonl",
+              "mtime": 1792032200,
+              "op": "append",
+              "to": ".claude/projects/-synthetic-g/grow.jsonl"
+            },
+            {
+              "from": "append-equals-full/x3.jsonl",
+              "mtime": 1792032200,
+              "op": "append",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T08-00-00-0000000000ab.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 408,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 418,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 10,
+            "claudeCacheRead": 100,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 227
+            },
+            "claudeInput": 100,
+            "claudeOutput": 17,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-15": 990
+            },
+            "codexDailyUTC": {
+              "2026-10-14": 220,
+              "2026-10-15": 770
+            },
+            "codexInput": 900,
+            "codexOutput": 90,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 1217,
+            "total": 1217,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "partial-tail",
+      "note": "개행 없는 꼬리 조각은 세지 않고 consumedOffset 은 마지막 개행 뒤 · Codex 는 기준선이 없으면 오프셋을 0 에 둔다",
+      "steps": [
+        {
+          "claudeEntries": [
+            [
+              "ee610e6abc6e739e393a666149634cd8",
+              20261015005000,
+              10,
+              1,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-p/tail.jsonl",
+              617,
+              1792030200000000,
+              408
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T09-00-00-0000000000ac.jsonl",
+              317,
+              1792030200000000,
+              0,
+              0,
+              0,
+              0,
+              "2026-10",
+              0,
+              0,
+              0,
+              {},
+              0,
+              {}
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "partial-tail/c1.jsonl",
+              "mtime": 1792030200,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-p/tail.jsonl"
+            },
+            {
+              "from": "partial-tail/x1.jsonl",
+              "mtime": 1792030200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T09-00-00-0000000000ac.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 617,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 317,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 11
+            },
+            "claudeInput": 10,
+            "claudeOutput": 1,
+            "codexCacheRead": 0,
+            "codexDaily": {},
+            "codexDailyUTC": {},
+            "codexInput": 0,
+            "codexOutput": 0,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 11,
+            "total": 11,
+            "windowStart": "2026-07-20"
+          }
+        },
+        {
+          "claudeEntries": [
+            [
+              "3f5f4672be8bc57b078e5a8fd5fc657b",
+              20261015010000,
+              20,
+              2,
+              0,
+              0
+            ],
+            [
+              "ee610e6abc6e739e393a666149634cd8",
+              20261015005000,
+              10,
+              1,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-p/tail.jsonl",
+              816,
+              1792031200000000,
+              816
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T09-00-00-0000000000ac.jsonl",
+              1018,
+              1792031200000000,
+              1018,
+              180,
+              18,
+              0,
+              "2026-10",
+              80,
+              8,
+              0,
+              {
+                "2026-10-15": 88
+              },
+              0,
+              {
+                "2026-10-15": 88
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033260,
+          "ops": [
+            {
+              "from": "partial-tail/c2.jsonl",
+              "mtime": 1792031200,
+              "op": "append",
+              "to": ".claude/projects/-synthetic-p/tail.jsonl"
+            },
+            {
+              "from": "partial-tail/x2.jsonl",
+              "mtime": 1792031200,
+              "op": "append",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T09-00-00-0000000000ac.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 408,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 1018,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 33
+            },
+            "claudeInput": 30,
+            "claudeOutput": 3,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-15": 88
+            },
+            "codexDailyUTC": {
+              "2026-10-15": 88
+            },
+            "codexInput": 80,
+            "codexOutput": 8,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 121,
+            "total": 121,
+            "windowStart": "2026-07-20"
+          }
+        },
+        {
+          "claudeEntries": [
+            [
+              "3f5f4672be8bc57b078e5a8fd5fc657b",
+              20261015010000,
+              20,
+              2,
+              0,
+              0
+            ],
+            [
+              "ee610e6abc6e739e393a666149634cd8",
+              20261015005000,
+              10,
+              1,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-p/tail.jsonl",
+              1104,
+              1792032200000000,
+              816
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T09-00-00-0000000000ac.jsonl",
+              1165,
+              1792032200000000,
+              1018,
+              180,
+              18,
+              0,
+              "2026-10",
+              80,
+              8,
+              0,
+              {
+                "2026-10-15": 88
+              },
+              0,
+              {
+                "2026-10-15": 88
+              }
+            ]
+          ],
+          "fresh": true,
+          "now": 1792033320,
+          "ops": [
+            {
+              "from": "partial-tail/c3.jsonl",
+              "mtime": 1792032200,
+              "op": "append",
+              "to": ".claude/projects/-synthetic-p/tail.jsonl"
+            },
+            {
+              "from": "partial-tail/x3.jsonl",
+              "mtime": 1792032200,
+              "op": "append",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T09-00-00-0000000000ac.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 288,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 147,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": false,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 33
+            },
+            "claudeInput": 30,
+            "claudeOutput": 3,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-15": 88
+            },
+            "codexDailyUTC": {
+              "2026-10-15": 88
+            },
+            "codexInput": 80,
+            "codexOutput": 8,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 121,
+            "total": 121,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "crlf-lines",
+      "note": "CRLF 줄 끝(빈 \\r 줄 포함) — 값은 LF 와 같고 오프셋은 바이트 그대로",
+      "steps": [
+        {
+          "claudeEntries": [
+            [
+              "2281b67e0c0cb558205fa816d4850bc8",
+              20261015000200,
+              10,
+              6,
+              5,
+              1
+            ],
+            [
+              "62cbd8275e8451c0ee779af44a8efd99",
+              20261015000100,
+              20,
+              2,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-c/crlf.jsonl",
+              1229,
+              1792030200000000,
+              1229
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T10-00-00-0000000000ad.jsonl",
+              1023,
+              1792030200000000,
+              1023,
+              160,
+              16,
+              4,
+              "2026-10",
+              60,
+              6,
+              4,
+              {
+                "2026-10-15": 66
+              },
+              0,
+              {
+                "2026-10-15": 66
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1792033200,
+          "ops": [
+            {
+              "from": "crlf-lines/c1.jsonl",
+              "mtime": 1792030200,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-c/crlf.jsonl"
+            },
+            {
+              "from": "crlf-lines/x1.jsonl",
+              "mtime": 1792030200,
+              "op": "put",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T10-00-00-0000000000ad.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 1229,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 1023,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 1,
+            "claudeCacheRead": 5,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 44
+            },
+            "claudeInput": 30,
+            "claudeOutput": 8,
+            "codexCacheRead": 4,
+            "codexDaily": {
+              "2026-10-15": 66
+            },
+            "codexDailyUTC": {
+              "2026-10-15": 66
+            },
+            "codexInput": 60,
+            "codexOutput": 6,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 110,
+            "total": 110,
+            "windowStart": "2026-07-20"
+          }
+        },
+        {
+          "claudeEntries": [
+            [
+              "2281b67e0c0cb558205fa816d4850bc8",
+              20261015000200,
+              10,
+              6,
+              5,
+              1
+            ],
+            [
+              "62cbd8275e8451c0ee779af44a8efd99",
+              20261015000100,
+              20,
+              2,
+              0,
+              0
+            ],
+            [
+              "6bd4bc75a01d5ec65246446e07c78e0b",
+              20261015000300,
+              30,
+              3,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-c/crlf.jsonl",
+              1638,
+              1792031200000000,
+              1638
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/10/15/rollout-2026-10-15T10-00-00-0000000000ad.jsonl",
+              1436,
+              1792031200000000,
+              1436,
+              200,
+              20,
+              6,
+              "2026-10",
+              100,
+              10,
+              6,
+              {
+                "2026-10-15": 110
+              },
+              0,
+              {
+                "2026-10-15": 110
+              }
+            ]
+          ],
+          "fresh": true,
+          "now": 1792033260,
+          "ops": [
+            {
+              "from": "crlf-lines/c2.jsonl",
+              "mtime": 1792031200,
+              "op": "append",
+              "to": ".claude/projects/-synthetic-c/crlf.jsonl"
+            },
+            {
+              "from": "crlf-lines/x2.jsonl",
+              "mtime": 1792031200,
+              "op": "append",
+              "to": ".codex/sessions/2026/10/15/rollout-2026-10-15T10-00-00-0000000000ad.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 409,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 413,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 1,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 1,
+            "claudeCacheRead": 5,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-10-15": 77
+            },
+            "claudeInput": 60,
+            "claudeOutput": 11,
+            "codexCacheRead": 6,
+            "codexDaily": {
+              "2026-10-15": 110
+            },
+            "codexDailyUTC": {
+              "2026-10-15": 110
+            },
+            "codexInput": 100,
+            "codexOutput": 10,
+            "month": "2026-10",
+            "todayDate": "2026-10-15",
+            "todayTotal": 187,
+            "total": 187,
+            "windowStart": "2026-07-20"
+          }
+        }
+      ]
+    },
+    {
+      "id": "month-rollover",
+      "note": "KST 월 넘김 — 자란 파일·그대로인 파일·열거 밖 파일의 월 기여·UTC 일 보존",
+      "steps": [
+        {
+          "claudeEntries": [
+            [
+              "7079a9afa2eb644960b7a60ee1245f36",
+              20260930140000,
+              10,
+              1,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-m/m.jsonl",
+              408,
+              1790777400000000,
+              408
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/09/29/rollout-2026-09-29T10-00-00-0000000000b0.jsonl",
+              1006,
+              1790647200000000,
+              1006,
+              70,
+              7,
+              0,
+              "2026-09",
+              60,
+              6,
+              0,
+              {
+                "2026-09-29": 66
+              },
+              0,
+              {
+                "2026-09-29": 66
+              }
+            ],
+            [
+              ".codex/sessions/2026/09/30/rollout-2026-09-30T20-00-00-0000000000ae.jsonl",
+              1018,
+              1790773500000000,
+              1018,
+              300,
+              30,
+              0,
+              "2026-09",
+              200,
+              20,
+              0,
+              {
+                "2026-09-30": 220
+              },
+              0,
+              {
+                "2026-09-30": 220
+              }
+            ],
+            [
+              ".codex/sessions/2026/09/30/rollout-2026-09-30T21-00-00-0000000000af.jsonl",
+              1012,
+              1790780460000000,
+              1012,
+              150,
+              15,
+              0,
+              "2026-09",
+              100,
+              10,
+              0,
+              {
+                "2026-09-30": 110
+              },
+              0,
+              {
+                "2026-09-30": 110
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1790778600,
+          "ops": [
+            {
+              "from": "month-rollover/c1.jsonl",
+              "mtime": 1790777400,
+              "op": "put",
+              "to": ".claude/projects/-synthetic-m/m.jsonl"
+            },
+            {
+              "from": "month-rollover/x1.jsonl",
+              "mtime": 1790773500,
+              "op": "put",
+              "to": ".codex/sessions/2026/09/30/rollout-2026-09-30T20-00-00-0000000000ae.jsonl"
+            },
+            {
+              "from": "month-rollover/x2.jsonl",
+              "mtime": 1790780460,
+              "op": "put",
+              "to": ".codex/sessions/2026/09/30/rollout-2026-09-30T21-00-00-0000000000af.jsonl"
+            },
+            {
+              "from": "month-rollover/x3.jsonl",
+              "mtime": 1790647200,
+              "op": "put",
+              "to": ".codex/sessions/2026/09/29/rollout-2026-09-29T10-00-00-0000000000b0.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 408,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 3036,
+            "codexFilesRead": 3,
+            "codexFilesStatted": 3,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-09-30": 11
+            },
+            "claudeInput": 10,
+            "claudeOutput": 1,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-09-29": 66,
+              "2026-09-30": 330
+            },
+            "codexDailyUTC": {
+              "2026-09-29": 66,
+              "2026-09-30": 330
+            },
+            "codexInput": 360,
+            "codexOutput": 36,
+            "month": "2026-09",
+            "todayDate": "2026-09-30",
+            "todayTotal": 341,
+            "total": 407,
+            "windowStart": "2026-07-06"
+          }
+        },
+        {
+          "claudeEntries": [
+            [
+              "5a9c5bbfdcec6d1d10353a724c81fd92",
+              20260930152000,
+              20,
+              2,
+              0,
+              0
+            ],
+            [
+              "7079a9afa2eb644960b7a60ee1245f36",
+              20260930140000,
+              10,
+              1,
+              0,
+              0
+            ]
+          ],
+          "claudeFiles": [
+            [
+              ".claude/projects/-synthetic-m/m.jsonl",
+              816,
+              1790781900000000,
+              816
+            ]
+          ],
+          "codexFiles": [
+            [
+              ".codex/sessions/2026/09/29/rollout-2026-09-29T10-00-00-0000000000b0.jsonl",
+              1006,
+              1790647200000000,
+              1006,
+              70,
+              7,
+              0,
+              "2026-09",
+              60,
+              6,
+              0,
+              {
+                "2026-09-29": 66
+              },
+              0,
+              {
+                "2026-09-29": 66
+              }
+            ],
+            [
+              ".codex/sessions/2026/09/30/rollout-2026-09-30T20-00-00-0000000000ae.jsonl",
+              1430,
+              1790781300000000,
+              1430,
+              500,
+              50,
+              0,
+              "2026-10",
+              200,
+              20,
+              0,
+              {
+                "2026-10-01": 220
+              },
+              0,
+              {
+                "2026-09-30": 440
+              }
+            ],
+            [
+              ".codex/sessions/2026/09/30/rollout-2026-09-30T21-00-00-0000000000af.jsonl",
+              1012,
+              1790780460000000,
+              1012,
+              150,
+              15,
+              0,
+              "2026-10",
+              0,
+              0,
+              0,
+              {},
+              0,
+              {
+                "2026-09-30": 110
+              }
+            ]
+          ],
+          "fresh": false,
+          "now": 1790782200,
+          "ops": [
+            {
+              "from": "month-rollover/c2.jsonl",
+              "mtime": 1790781900,
+              "op": "append",
+              "to": ".claude/projects/-synthetic-m/m.jsonl"
+            },
+            {
+              "from": "month-rollover/x1b.jsonl",
+              "mtime": 1790781300,
+              "op": "append",
+              "to": ".codex/sessions/2026/09/30/rollout-2026-09-30T20-00-00-0000000000ae.jsonl"
+            }
+          ],
+          "stats": {
+            "claudeBytesRead": 408,
+            "claudeFilesRead": 1,
+            "claudeFilesStatted": 1,
+            "codexBytesRead": 412,
+            "codexFilesRead": 1,
+            "codexFilesStatted": 2,
+            "codexForkCopyEvents": 0,
+            "entriesChanged": true,
+            "statesChanged": true
+          },
+          "usage": {
+            "antigravityCacheRead": 0,
+            "antigravityDaily": {},
+            "antigravityInput": 0,
+            "antigravityOutput": 0,
+            "antigravityThinking": 0,
+            "claudeCacheCreation": 0,
+            "claudeCacheRead": 0,
+            "claudeCompleteFrom": "",
+            "claudeDaily": {
+              "2026-09-30": 11,
+              "2026-10-01": 22
+            },
+            "claudeInput": 20,
+            "claudeOutput": 2,
+            "codexCacheRead": 0,
+            "codexDaily": {
+              "2026-10-01": 220
+            },
+            "codexDailyUTC": {
+              "2026-09-30": 550
+            },
+            "codexInput": 200,
+            "codexOutput": 20,
+            "month": "2026-10",
+            "todayDate": "2026-10-01",
+            "todayTotal": 242,
+            "total": 242,
+            "windowStart": "2026-07-06"
+          }
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenScan.swift",
+  "golden": "token-usage/scan/scanner",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "claudeEntries": "[ClaudeEntryKey.hex(= SHA-256(\"id\\0requestId\") 앞 16바이트), ts14, input, output, cacheRead, cacheCreation] 16진 순",
+    "codexFiles": "[홈 기준 상대 경로, size, mtimeMicros, consumedOffset, prevInput, prevOutput, prevCached, monthKey, monthInput, monthOutput, monthCached, dayContrib, forkCopyDeadlineMicros, dayContribUTC]",
+    "fixtures": "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/scan/plan.json 의 단계(put·append·delete + mtime 초) — 조각 파일은 같은 폴더, 바이트 그대로(-text)",
+    "fresh": "true 인 단계는 빈 캐시 전체 스캔 usage 가 증분 usage 와 같다(Swift #expect)",
+    "scanner": "TokenUsageIncrementalScanner.update(cache, homeDirectory: 임시 홈, codexHome: 임시 홈/.codex, now) — 단계마다 캐시를 잇는다",
+    "zone": "KST 고정 +9 · UTC — tzdata 무관"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/CheckTokenUsage.swift"
+  ]
+}

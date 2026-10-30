@@ -752,6 +752,15 @@
         "Tests/checkTests/Fixtures/todo-rpc/_manifest.json": "dd985dcb27324c7b6a6fc202d8f3bcbef459d5147824987ba967f59460f2e67f"
       }
     },
+    "token-usage/scan/scanner": {
+      "file": "0b97d4e5860ed2fb4f6e51fb841dda359b9124f48352ed064a567fb9501a0660",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenScan.swift": "bfbbc8a198c6bb006b5b18759f88df45149f59c2789831dbc89f785e9aefd0a4"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckTokenUsage.swift": "5707ba6fecc5742f6c3239a78b0029f86a76c9845ce10309a80f206866621e85"
+      }
+    },
     "weekly/status": {
       "file": "d023fdc5a90d301fe581dc187989ad9a08b952de89cc55058bf9a8d87e4e99c4",
       "generator": {

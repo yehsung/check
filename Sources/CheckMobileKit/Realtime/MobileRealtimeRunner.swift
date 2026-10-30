@@ -47,6 +47,8 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored package weak var gomoku: GomokuStore?
     /// 테트리스 대결 신호를 받을 스토어(앱 모델이 붙인다 — 오목 칸과 같은 꼴·같은 자리).
     @ObservationIgnored package weak var tetris: TetrisDuelStore?
+    /// 확성기 배너 신호(`megaphone`)를 받을 스토어(앱 모델이 붙인다 — 오목·테트리스 칸과 같은 꼴).
+    @ObservationIgnored package weak var megaphoneBanner: MegaphoneBannerStore?
 
     /// 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 테스트는 크게 두고 `flushCoalescedSignals()` 를 직접 부른다.
     /// 메시지 활동은 이 창의 **앞쪽**(조용하던 창의 첫 신호)을 곧바로 갚고 창 안의 나머지를 창 끝에 한 번 갚는다 —
@@ -180,9 +182,26 @@ package final class MobileRealtimeRunner {
     /// 링에 사건을 넣고 effect 를 실행한다. **러너가 링에 시각을 주는 유일한 문.**
     package func apply(_ event: RealtimeEvent, at now: Date? = nil) {
         let instant = now ?? clock.now()
-        let effects = link.apply(event, now: instant, jitter: jitter)
+        var effects = link.apply(event, now: instant, jitter: jitter)
         if state != link.state { state = link.state }
+        // 확성기 배너 신호(서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보낸다 — 계약 S2-3).
+        // 링은 이 이름을 몰라 기본값 `.drain` 으로 접는다. 여기서 **그 drain 을 배너 갱신으로 바꾼다**: 같은 확성기의
+        // `poke_ring` 이 이미 메시지 활동(요약)을 깨웠으므로 drain 을 남기면 메시지 조회가 한 번 더 나갈 뿐이다.
+        // 링이 거른 경우(구독 전 — 효과 없음)는 아무것도 하지 않는다.
+        if case .transport(.broadcast(let name)) = event, name == Self.megaphoneBroadcastEvent, effects == [.drain] {
+            effects = []
+            requestMegaphoneRefresh()
+        }
         run(effects, now: instant)
+    }
+
+    /// 확성기 배너 신호의 이벤트 이름(서버 `realtime.send(…, 'megaphone', poke_topic(target), true)`).
+    package nonisolated static let megaphoneBroadcastEvent = "megaphone"
+
+    /// 배너 스토어가 `megaphone_inbox` 를 다시 읽는다(겹친 호출은 코어가 하나로 모은다). 새 항목이 있으면 배너가 뜨고 메시지함 필터 id 가 는다.
+    private func requestMegaphoneRefresh() {
+        guard let banner = megaphoneBanner else { return }
+        Task { @MainActor in await banner.refresh() }
     }
 
     /// 주기 점검 1회(테스트는 직접 부른다).

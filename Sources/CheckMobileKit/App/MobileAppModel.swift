@@ -30,6 +30,9 @@ public final class MobileAppModel {
     package let rankings: RankingsStore
     package let games: GamesStore
     package let me: MeStore
+    /// 확성기 배너(코어 `MegaphoneBannerStore` — 맥과 한 벌). 메시지함 필터·푸시·실시간·전송 뒤 내 배너가 이 하나를 쓴다.
+    /// 호스트는 오목·체스·확성기 작성과 같은 하나(`gomokuHost`). 로그아웃 사슬(`sessionDidSignOut`)에서 비운다.
+    package let megaphoneBanner: MegaphoneBannerStore
     /// 화면 모드(기기 설정). `sessionDidSignOut` 의 reset 사슬에 넣지 않는다 — 로그아웃해도 남는다.
     package let appearance: MobileAppearanceStore
     /// 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). 탭 막대가 환경값으로 흘린다. 로그아웃하면 비운다.
@@ -129,6 +132,10 @@ public final class MobileAppModel {
         // 러너는 **약한 참조**로 들고 있고(수명은 앱 모델이 쥔다) 핸들러가 스스로 세션 가드를 한다.
         realtime.tetris = tetris
         let links = MobileStoreLinks()
+        // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
+        let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })
+        // 실시간 'megaphone' 신호를 받을 자리(오목·테트리스 칸과 같은 꼴 — 러너는 약한 참조).
+        realtime.megaphoneBanner = megaphoneBanner
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let characters = AppUserCharacterStore(session: session, clock: env.clock)
         let context = MobileContext(
@@ -161,6 +168,7 @@ public final class MobileAppModel {
         self.links = links
         self.appearance = appearance
         self.characters = characters
+        self.megaphoneBanner = megaphoneBanner
         self.context = context
         self.push = PushCoordinator(context: context)
         self.now = NowStore(context: context)
@@ -175,6 +183,7 @@ public final class MobileAppModel {
         links.rankings = rankings
         links.games = games
         links.me = me
+        links.megaphoneBanner = megaphoneBanner
         // 표가 바뀌면 위젯 근무 중 얼굴도 다시 쓴다(지금 탭이 위젯의 유일한 작성자 — 같은 값이면 쓰기 창구가 건너뛴다).
         characters.onDirectoryChange = { [weak now] in now?.writeWidgetSnapshot() }
         // 일일 미션(v0.3.64) — **1:1 판이 끝난 것을 처음 보는 자리**가 여기다(코어 스토어가 `match` 가 끝으로 바뀐 그 자리에서
@@ -305,6 +314,8 @@ public final class MobileAppModel {
         me.reset()
         push.reset()
         characters.reset()
+        // 확성기 배너 줄·필터 id·떠 있는 배너 — 남기면 다음 사람 화면에 앞 사람의 배너가 뜨고 그 id 로 메시지함을 거른다.
+        megaphoneBanner.reset()
     }
 
     private func activateStores() {

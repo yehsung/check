@@ -4,7 +4,7 @@
 // 맥 UserDefaults 는 cfprefsd 가 다른 프로세스에서 들고 있다 → 앱이 죽어도 방금 쓴 값이 남는다. 여기는 한 프로세스라 그 몫을
 // 이렇게 진다:
 //  - 메모리 지도가 진실, 디스크는 묶어 쓴다([debounceMillis] — 연속 put 을 한 번에). 종료 훅은 [flush] 로 바로 쓴다(조정자 종료 단계).
-//  - 예외(W-13 #2): [immediateKeys](근무 큐 `check.workQueue.pending`)는 put 자리에서 **바로** 쓴다 — 강제 종료·정전이 묶음 창(≤250ms)
+//  - 예외(W-13 #2): [immediateKeys](근무 큐 `check.workQueue.pending` · 소유 세션 · AI 기록 동의)는 put 자리에서 **바로** 쓴다 — 강제 종료·정전이 묶음 창(≤250ms)
 //    안에 오면 오프라인 근무 기록을 잃는다. 맥은 cfprefsd 가 그 몫을 진다. 바로 쓰기가 막히면 예약 쓰기로 다시 한다(값은 메모리에).
 //  - 쓰기 = 같은 폴더 임시 파일 → FileChannel.force(true)(fsync) → ATOMIC_MOVE 교체. 교체 전에 죽으면 옛 파일이 그대로 남는다.
 //    (W-14 #6) 다음 시작에서 임시가 **온전한 JSON**(판 1·값 모두 문자열)이고 본 파일보다 오래되지 않았으면 임시를 채택한다 —
@@ -18,6 +18,7 @@
 // 비밀(토큰)은 여기 두지 않는다 — TokenVault(DPAPI) 몫(DesktopKeyValueStore 계약).
 package com.yehsung.aingcheck.desktop.platform.windows.store
 
+import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsKeys
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.work.queue.DesktopWorkQueue
 import com.yehsung.aingcheck.feature.desktop.work.state.OwnedSessionLedger
@@ -45,7 +46,7 @@ class FileDesktopKeyValueStore internal constructor(
     /** 임시 → 대상 교체. 시험이 '교체 전에 죽음'을 흉내 내려고 바꾼다. */
     private val commit: (tmp: Path, target: Path) -> Unit,
     private val log: (String) -> Unit,
-    /** put 즉시 디스크에 쓰는 키(W-13 #2 근무 큐 · W-14 #6 소유 세션 id·강도). 나머지는 [debounceMillis] 묶음. */
+    /** put 즉시 디스크에 쓰는 키(W-13 #2 근무 큐 · W-14 #6 소유 세션 id·강도 · AI 기록 동의). 나머지는 [debounceMillis] 묶음. */
     val immediateKeys: Set<String>,
 ) : DesktopKeyValueStore, AutoCloseable {
 
@@ -270,12 +271,15 @@ class FileDesktopKeyValueStore internal constructor(
 
         /**
          * 즉시 쓰기 키: 근무 큐 한 칸(W-13 #2) + 소유 세션 id·강도(W-14 #6 — 강제 종료가 묶음 창 안에 오면 다음 실행이 자기가 연 세션을
-         * '남의 것'으로 읽는다. 맥 isOwnedByThisMac 은 cfprefsd 가 그 값을 지킨다). 이름은 소비자 상수 그대로(글자를 두 벌 적지 않는다).
+         * '남의 것'으로 읽는다. 맥 isOwnedByThisMac 은 cfprefsd 가 그 값을 지킨다) + AI 도구 기록 동의(W-13 #5 — 철회가 묶음 창 안의
+         * 강제 종료로 사라지면 다음 실행이 동의=참으로 AI 기록을 다시 읽는다. 맥 MacEdition.swift:176-185 는 UserDefaults 라 철회가 남는다).
+         * 이름은 소비자 상수 그대로(글자를 두 벌 적지 않는다).
          */
         val WORK_IMMEDIATE_KEYS: Set<String> = setOf(
             DesktopWorkQueue.pendingWorkQueueKey,
             OwnedSessionLedger.OWNED_ID_KEY,
             OwnedSessionLedger.OWNED_STRENGTH_KEY,
+            DesktopSettingsKeys.AI_TOOL_DATA_CONSENT,
         )
 
         /** 앱 자리: [dataDir](WindowsAppPaths.dataDir — 패키지 안이면 이미 LocalCache 경로)/prefs.json. 근무 큐·소유 세션은 즉시 쓰기. */

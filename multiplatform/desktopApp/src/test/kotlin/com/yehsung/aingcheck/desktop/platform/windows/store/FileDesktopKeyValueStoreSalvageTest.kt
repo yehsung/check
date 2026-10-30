@@ -4,6 +4,7 @@
 package com.yehsung.aingcheck.desktop.platform.windows.store
 
 import com.yehsung.aingcheck.desktop.DesktopPrefs
+import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsKeys
 import com.yehsung.aingcheck.feature.desktop.work.queue.DesktopWorkQueue
 import com.yehsung.aingcheck.feature.desktop.work.state.OwnedSessionLedger
 import com.yehsung.aingcheck.feature.desktop.work.state.SessionClaimStrength
@@ -213,8 +214,9 @@ class FileDesktopKeyValueStoreSalvageTest {
     @Test
     fun `소유 세션 id·강도는 즉시 쓰기 — 묶음 창(60초) 안에도 디스크에 있다, 다른 키는 없다`() {
         val kv = FileDesktopKeyValueStore.inDataDir(dir.toString(), debounceMillis = 60_000).also { opened += it }
+        // 즉시 키는 이 넷뿐(int-w3 must_fix 로 AI 기록 동의가 더해짐 — FileDesktopKeyValueStoreImmediateTest 동의 철회 단언).
         assertEquals(
-            setOf(QUEUE, OwnedSessionLedger.OWNED_ID_KEY, OwnedSessionLedger.OWNED_STRENGTH_KEY),
+            setOf(QUEUE, OwnedSessionLedger.OWNED_ID_KEY, OwnedSessionLedger.OWNED_STRENGTH_KEY, DesktopSettingsKeys.AI_TOOL_DATA_CONSENT),
             kv.immediateKeys,
         )
         kv.putString("check.overlay.position", "1,2")

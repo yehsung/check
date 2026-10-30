@@ -205,12 +205,23 @@ package struct RummyTableLayout: Equatable, Sendable {
         return layout.points
     }
 
+    /// 서버 정리는 왼쪽 위 점만 범위(0…1000·0…640)로 본다 — `[999,640]` 도 통과한다(v2 실출력 `state_with_layout`).
+    /// 그대로 그리면 묶음이 판 밖에 놓여 안 보이므로, 묶음이 캔버스를 넘으면 **안으로 당긴다**(오른쪽·아래 끝에 붙인다).
+    /// 같은 입력이면 어느 기기든 같은 답이다.
+    package static func clampInside(_ point: RummyPoint, tiles: Int) -> RummyPoint {
+        let w = width(tiles: tiles)
+        return RummyPoint(x: min(max(point.x, 0), max(canvasWidth - w, 0)),
+                          y: min(max(point.y, 0), canvasHeight - tileHeight))
+    }
+
     /// **결정적 자동 배치.** 주어진 점은 그대로 두고(겹쳐 있어도 — 남이 놓은 자리다), nil 자리만 채운다:
     /// 기존 묶음과 안 겹치는 첫 자리(행 우선 스캔, 8 단위 격자). 채우는 차례는 **내용 순**(긴 묶음 먼저 → 면 글자 → 원래 번호)이라
     /// 묶음 순서를 섞어 넣어도 각 묶음이 받는 자리는 같다(같은 면의 묶음 둘은 서로 바뀔 수 있지만 보이는 판은 같다).
     package static func place(sets: [[RummyFace]], layout: RummyLayout?) -> [RummyPoint] {
-        let given = sanitize(layout, setCount: sets.count)
         let counts = sets.map(\.count)
+        let given = sanitize(layout, setCount: sets.count).enumerated().map { index, point in
+            point.map { clampInside($0, tiles: counts[index]) }
+        }
         var obstacles: [RummyRect] = []
         for (index, point) in given.enumerated() {
             if let point { obstacles.append(frame(at: point, tiles: counts[index])) }

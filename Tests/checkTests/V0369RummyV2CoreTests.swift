@@ -4,10 +4,9 @@ import Testing
 
 // 아잉 큐브 2판 코어(설계서 v2 §2 — 레인 K): 판 자유 배치 · 받침대 반 칸 배치 · 묶음째 옮기기 · 와이어 v2 · 스토어 v2.
 //
-// **픽스처 주의**: `Fixtures/rummy/v2-synth/*.json` 은 서버 v2 실출력이 **아니다.** v1 실서버 픽스처(`Fixtures/rummy/server/`)
-// 에 설계서 v2 §1 의 필드(`table_layout` · `draft.layout` · `reactions`)를 손으로 더하고(python, 2026-10-30 레인 K) 새 장면
-// (`react_ok` · `react_too_fast` · `heartbeat_ok` · `forfeit_disconnected`)을 같은 모양으로 지은 것이다.
-// 레인 S 가 하네스에서 뜬 v2 실출력이 오면 통합 갈래가 이 폴더를 갈아 끼우고 같은 시험을 돌린다.
+// **픽스처**: `Fixtures/rummy/server/*.json` — 레인 S 가 재생 하네스의 v2 서버(`20261104120000_rummy_v2.sql`)에서 실제 RPC 를
+// 불러 뜬 실출력이다(2026-10-30 통합 갈래가 레인 K 의 손 합성 `v2-synth` 를 이것으로 갈아 끼웠다). 값 전수 왕복은
+// V0369RummyWireContractTests 가 50장 모두에 대해 잰다 — 여기서는 v2 장면 7장의 뜻을 잰다.
 //
 // 각 시험의 첫 줄 주석은 "없으면 어떤 결함이 초록으로 통과하는가" 다(관례).
 
@@ -18,7 +17,7 @@ private func v2f(_ text: String) -> [RummyFace] {
 private func v2p(_ x: Int, _ y: Int) -> RummyPoint { RummyPoint(x: x, y: y) }
 
 private let v2FixtureFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    .appendingPathComponent("Fixtures/rummy/v2-synth", isDirectory: true)
+    .appendingPathComponent("Fixtures/rummy/server", isDirectory: true)
 
 private func v2Decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
     let decoder = JSONDecoder()
@@ -393,31 +392,42 @@ struct V0369RummyV2EditorTests {
 
 // MARK: - 와이어 v2 픽스처
 
-@Suite("v2 아잉 큐브 코어 — v2 합성 픽스처 디코드")
+@Suite("v2 아잉 큐브 코어 — v2 서버 실출력 디코드")
 struct V0369RummyV2WireTests {
-    @Test("state_with_layout: table_layout(빈 칸 포함)·reactions(모르는 키는 sticker nil) 디코드 · 자동 배치가 빈 칸만 채운다")
+    @Test("state_with_layout: table_layout 실값 디코드 · 캔버스를 넘는 칸([999,640])은 안으로 당긴다 · 반응 없음")
     func stateWithLayoutDecodes() throws {
-        // 없으면: v2 필드 이름(snake_case)이 어긋나 배치·반응이 조용히 nil 로 접히는 결함이 초록이 된다.
+        // 없으면: v2 필드 이름(snake_case)이 어긋나 배치가 조용히 nil 로 접히거나, 서버가 통과시킨 캔버스 밖 칸이 판 밖에 그려진다.
         let response = try v2Decode(RummyActionResponse.self, try v2Fixture("state_with_layout"))
         let state = try #require(response.state)
-        #expect(state.tableLayout?.points == [v2p(96, 64), nil])
-        #expect(state.reactions?.count == 3)
-        #expect(state.reactions?.first?.sticker == .heart)
-        #expect(state.reactions?.last?.sticker == nil)
+        #expect(state.table?.count == 2)
+        #expect(state.tableLayout?.points == [v2p(10, 20), v2p(999, 640)], "서버 정리 범위(0…1000·0…640) 안이라 둘 다 읽힌다")
+        #expect(state.reactions?.isEmpty == true)
         let layout = RummyTableLayout(sets: state.table ?? [], layout: state.tableLayout)
-        #expect(layout.points[0] == v2p(96, 64))
-        #expect(v2Disjoint(layout))
+        #expect(layout.points[0] == v2p(10, 20), "들어가는 칸은 받은 자리 그대로")
+        #expect(layout.points[1] == v2p(1000 - 3 * 40, 640 - 56), "넘치는 묶음은 오른쪽·아래 끝에 붙는다 — \(layout.points)")
+        #expect(v2Disjoint(layout), "당긴 뒤 판 안 · 안 겹침 — \(layout.points)")
+        // 같은 입력이면 어느 기기든 같은 답(배치 결정성).
+        #expect(RummyTableLayout(sets: state.table ?? [], layout: state.tableLayout).points == layout.points)
     }
 
-    @Test("draft_with_layout · forfeit_disconnected · react_ok · react_too_fast · heartbeat_ok 디코드")
+    @Test("draft_with_layout · state_forfeit_disconnected · state_with_reactions · react_ok · react_too_fast · heartbeat_ok 디코드")
     func otherScenesDecode() throws {
-        // 없으면: too_fast 가 unknown 으로 접히거나 draft.layout 을 못 읽는 결함이 초록이 된다.
+        // 없으면: too_fast 가 unknown 으로 접히거나 draft.layout · 끊김 기권 · 반응 목록을 못 읽는 결함이 초록이 된다.
         let draft = try #require(try v2Decode(RummyActionResponse.self, try v2Fixture("draft_with_layout")).state)
-        #expect(draft.draft?.layout?.points == [v2p(304, 232)])
-        #expect(draft.tableLayout?.points.isEmpty == true)
-        let forfeit = try #require(try v2Decode(RummyActionResponse.self, try v2Fixture("forfeit_disconnected")).state)
-        #expect(forfeit.tableLayout == nil && forfeit.lastEvent?.kind == "forfeit")
-        #expect(forfeit.seats?.contains { $0.state == .forfeit } == true)
+        #expect(draft.draft?.layout?.points == [v2p(100, 200)])
+        #expect(draft.draft?.table?.count == 1)
+        #expect(draft.tableLayout == nil, "빈 판의 table_layout 은 null")
+        let forfeit = try #require(try v2Decode(RummyActionResponse.self, try v2Fixture("state_forfeit_disconnected")).state)
+        #expect(forfeit.lastEvent?.kind == "forfeit" && forfeit.lastEvent?.seatNo == 1)
+        #expect(forfeit.seats?.first { $0.seatNo == 1 }?.state == .forfeit)
+        #expect(forfeit.status == .active, "셋 중 하나가 끊겨도 판은 이어진다")
+        #expect(forfeit.tableLayout?.points.count == forfeit.table?.count)
+        let reacted = try #require(try v2Decode(RummyActionResponse.self, try v2Fixture("state_with_reactions")).state)
+        let reactions = try #require(reacted.reactions)
+        #expect(reactions.count == 12, "최대 12개")
+        #expect(reactions.allSatisfy { $0.sticker != nil }, "서버 키 집합 = AingSticker rawValue")
+        #expect(zip(reactions, reactions.dropFirst()).allSatisfy { ($0.atMs ?? 0) >= ($1.atMs ?? 0) }, "최신 순")
+        #expect(reactions.first?.sticker == .surprised && reactions.first?.seatNo == 2)
         #expect(try v2Decode(RummyActionResponse.self, try v2Fixture("react_ok")).status == .ok)
         #expect(try v2Decode(RummyActionResponse.self, try v2Fixture("react_too_fast")).status == .tooFast)
         let beat = try v2Decode(RummyActionResponse.self, try v2Fixture("heartbeat_ok"))
@@ -441,6 +451,6 @@ struct V0369RummyV2WireTests {
             with: encoder.encode(RummyReactRequest(matchID: id, key: AingSticker.joy.rawValue))) as! [String: Any]
         #expect(Set(react.keys) == ["p_protocol", "p_match_id", "p_key"] && react["p_key"] as? String == "joy")
         #expect(RummyWire.RPC.v2Added == ["rummy_heartbeat", "rummy_react"])
-        #expect(Set(RummyWire.RPC.allV2) == Set(RummyWire.RPC.all).union(RummyWire.RPC.v2Added))
+        #expect(RummyWire.RPC.all == RummyWire.RPC.v1 + RummyWire.RPC.v2Added && RummyWire.RPC.all.count == 14)
     }
 }

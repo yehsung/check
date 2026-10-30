@@ -6,14 +6,18 @@ import Testing
 // v0.3.69 아잉 큐브 — **서버 계약 합류** 시험(통합 갈래).
 //
 // 두 가지를 잰다.
-// ① 실서버 출력 픽스처(`Fixtures/rummy/server/*.json`, S 갈래가 하네스에서 실제 RPC 를 불러 뜬 43장)가 전부 디코드되고,
+// ① 실서버 출력 픽스처(`Fixtures/rummy/server/*.json`, S 갈래가 하네스에서 실제 RPC 를 불러 뜬 50장 — 2판 서버에서 다시 떴다)가 전부 디코드되고,
 //    디코드한 값이 원본 JSON 의 값과 같다(키 이름·중첩·null 자리가 어긋나면 옵셔널이 조용히 nil 이 돼 초록이 되는 결함을 막는다).
 //    숨은 정보 규칙(§3.7 — 남의 랙·pool 내용이 어디에도 없다)도 원본 JSON 에서 잰다.
-// ② 와이어 요청 본문 키 집합 = 마이그레이션 `20261103120000_rummy.sql` 의 RPC 인자 이름(소스 계약). 이름 하나가 어긋나면
+// ② 와이어 요청 본문 키 집합 = 마이그레이션 `20261103120000_rummy.sql` + `20261104120000_rummy_v2.sql` 의 RPC 인자 이름(소스 계약 —
+//    두 파일을 이어 붙여 **마지막** 정의를 본다: v2 가 draft·play 에 p_layout 을 더해 다시 만든다). 이름 하나가 어긋나면
 //    PostgREST 가 함수를 못 찾는다(PGRST202) — 스텁 시험은 그걸 못 본다.
 //    마이그레이션은 `supabase/`(gitignore) 에 있다 — 워크트리면 메인의 supabase 를 통째 복사하거나 CHECK_MIGRATIONS_DIR 로 가리켜라.
 
-let rwcMigrationName = "20261103120000_rummy.sql"
+/// 아잉 큐브 마이그레이션(적용 순서).
+let rwcMigrationNames = ["20261103120000_rummy.sql", "20261104120000_rummy_v2.sql"]
+/// 실패 문구용 이름.
+let rwcMigrationName = rwcMigrationNames.joined(separator: " + ")
 
 private let rwcFixtureFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     .appendingPathComponent("Fixtures/rummy/server", isDirectory: true)
@@ -31,12 +35,15 @@ func rwcMigrationsDirectory() throws -> URL {
     throw CocoaError(.fileNoSuchFile)
 }
 
-/// `--` 주석을 걷은 아잉 큐브 마이그레이션(설명을 지워야만 초록이 되는 시험이 되지 않게).
+/// `--` 주석을 걷은 아잉 큐브 마이그레이션 두 장을 적용 순서대로 이은 것(설명을 지워야만 초록이 되는 시험이 되지 않게).
 func rwcMigrationSQL() throws -> String {
-    let raw = try String(contentsOf: rwcMigrationsDirectory().appendingPathComponent(rwcMigrationName), encoding: .utf8)
-    return raw.split(separator: "\n", omittingEmptySubsequences: false).map { line -> Substring in
-        if let range = line.range(of: "--") { return line[line.startIndex..<range.lowerBound] }
-        return line
+    let directory = try rwcMigrationsDirectory()
+    return try rwcMigrationNames.map { name in
+        let raw = try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)
+        return raw.split(separator: "\n", omittingEmptySubsequences: false).map { line -> Substring in
+            if let range = line.range(of: "--") { return line[line.startIndex..<range.lowerBound] }
+            return line
+        }.joined(separator: "\n")
     }.joined(separator: "\n")
 }
 
@@ -74,11 +81,11 @@ struct V0369RummyWireContractTests {
         }
     }
 
-    @Test("픽스처 43장이 전부 디코드되고 status 가 원본 글자와 같다(모르는 값 .unknown 없음)")
+    @Test("픽스처 50장이 전부 디코드되고 status 가 원본 글자와 같다(모르는 값 .unknown 없음)")
     func allFixturesDecode() throws {
         // 없으면: 실서버가 내는 status 하나를 클라가 몰라 .unknown 으로 접는(버튼이 아무 문구 없이 멎는) 결함이 초록이 된다.
         let all = try fixtures()
-        #expect(all.count == 43, "픽스처 \(all.count)장(기대 43 — S-d 산출)")
+        #expect(all.count == 50, "픽스처 \(all.count)장(기대 50 — v2 S 산출: 1판 장면 43 + v2 장면 7)")
         for (name, data, object) in all {
             let raw = try #require(object["status"] as? String, "status 없음: \(name)")
             let decoded: RummyRPCStatus
@@ -118,6 +125,22 @@ struct V0369RummyWireContractTests {
             let rawDraft = rawState["draft"] as? [String: Any]
             #expect(state.draft?.table?.map { $0.map(\.text) } == rawDraft?["table"] as? [[String]], "\(name): draft.table")
             #expect(state.draft?.draftSeq == rwcInt(rawDraft?["draft_seq"]), "\(name): draft_seq")
+            // v2: 판 배치 · 작업 판 배치 · 반응. 칸 단위로 원본과 같아야 한다(범위 밖·모양 틀림만 nil).
+            func rwcPoints(_ any: Any?) -> [RummyPoint?]? {
+                guard let rows = any as? [Any] else { return nil }
+                return rows.map { row in
+                    guard let xy = row as? [NSNumber], xy.count == 2 else { return nil }
+                    return RummyPoint(x: xy[0].intValue, y: xy[1].intValue)
+                }
+            }
+            #expect(state.tableLayout?.points == rwcPoints(rawState["table_layout"]), "\(name): table_layout")
+            #expect(state.draft?.layout?.points == rwcPoints(rawDraft?["layout"]), "\(name): draft.layout")
+            let rawReactions = (rawState["reactions"] as? [[String: Any]]) ?? []
+            #expect((state.reactions ?? []).count == rawReactions.count, "\(name): reactions 수")
+            for (reaction, raw) in zip(state.reactions ?? [], rawReactions) {
+                #expect(reaction.key == raw["key"] as? String && reaction.seatNo == rwcInt(raw["seat_no"]), "\(name): reaction")
+                #expect(reaction.sticker != nil, "\(name): 서버가 낸 반응 키 \(raw["key"] ?? "?") 를 클라가 모른다")
+            }
             let rawEvent = rawState["last_event"] as? [String: Any]
             #expect(state.lastEvent?.kind == rawEvent?["kind"] as? String, "\(name): last_event.kind")
             let rawSeats = (rawState["seats"] as? [[String: Any]]) ?? []
@@ -234,7 +257,7 @@ struct V0369RummyWireContractTests {
         #expect(ranking.rows?.allSatisfy { ($0.games ?? 0) > 0 } == true, "0판 행은 빠진다")
     }
 
-    @Test("와이어 RPC 12개가 마이그레이션에 있고, 모두 p_protocol 을 받는다(소스 계약)")
+    @Test("와이어 RPC 14개(1판 12 + v2 2)가 마이그레이션에 있고, 모두 p_protocol 을 받는다(소스 계약)")
     func everyClientRPCExistsInMigration() throws {
         // 없으면: 클라가 부르는 이름이 서버에 없어(오타·이름 바꿈) 모든 버튼이 404 인데 스텁 시험은 초록이다.
         let sql = try rwcMigrationSQL()

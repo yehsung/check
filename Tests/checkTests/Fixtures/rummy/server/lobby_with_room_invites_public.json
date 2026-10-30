@@ -1,14 +1,14 @@
 {
   "invites": [
     {
-      "expires_at_ms": 1793318057928,
+      "expires_at_ms": 1793341632145,
       "host": {
         "avatar_url": null,
         "character": null,
         "display_name": "디시험01",
         "id": "d0000000-0000-4000-8000-000000000001"
       },
-      "id": "a14165d9-933d-4186-8a1c-dfc5f1b6a687",
+      "id": "2a0b2f9f-3150-48bb-b727-267da36924f7",
       "is_public": true,
       "max_seats": 4,
       "seats": [
@@ -52,14 +52,14 @@
     "active_match_id": null,
     "games": 0,
     "room": {
-      "expires_at_ms": 1793318057943,
+      "expires_at_ms": 1793341632154,
       "host": {
         "avatar_url": null,
         "character": null,
         "display_name": "디시험06",
         "id": "d0000000-0000-4000-8000-000000000006"
       },
-      "id": "950b194b-a143-45c5-9d81-e62dfba6d46c",
+      "id": "fbab5cb5-0aed-4d70-92a6-cd8756b2e5ee",
       "is_public": false,
       "max_seats": 4,
       "seats": [
@@ -79,14 +79,14 @@
   },
   "public_rooms": [
     {
-      "expires_at_ms": 1793318057941,
+      "expires_at_ms": 1793341632153,
       "host": {
         "avatar_url": null,
         "character": null,
         "display_name": "디시험05",
         "id": "d0000000-0000-4000-8000-000000000005"
       },
-      "id": "20879dde-2647-4b30-abb1-95bec0bd8d6f",
+      "id": "685a52f6-9bce-4694-b727-f01f9bfe06cb",
       "is_public": true,
       "max_seats": 4,
       "seats": [
@@ -103,7 +103,7 @@
     }
   ],
   "room_ttl_seconds": 600,
-  "server_now_ms": 1793317457944,
+  "server_now_ms": 1793341032155,
   "stakes": [
     3,
     5,
@@ -112,306 +112,6 @@
   "status": "ok",
   "turn_seconds": 60,
   "users": [
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험01",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000001",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험02",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000002",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험03",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000003",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험04",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000004",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험05",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000005",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험06",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000006",
-      "in_match": true,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험07",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000007",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험08",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000008",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험09",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000009",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험10",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000010",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험11",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000011",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험12",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000012",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험13",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000013",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험14",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000014",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험15",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000015",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "B시험16",
-      "focus_mode": false,
-      "id": "b0000000-0000-4000-8000-000000000016",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험01",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000001",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험02",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000002",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험03",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000003",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험04",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000004",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험05",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000005",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험06",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000006",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험07",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000007",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험08",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000008",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험09",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000009",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험10",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000010",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험11",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000011",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "C시험12",
-      "focus_mode": false,
-      "id": "c1000000-0000-4000-8000-000000000012",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "abto.app",
-      "focus_mode": false,
-      "id": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "거부목록사용자",
-      "focus_mode": false,
-      "id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
-      "in_match": false,
-      "is_working": false
-    },
     {
       "avatar_url": null,
       "capable": true,
@@ -514,31 +214,21 @@
     },
     {
       "avatar_url": null,
-      "capable": true,
+      "capable": false,
       "character": null,
-      "display_name": "씨앗다섯",
+      "display_name": "abto.app",
       "focus_mode": false,
-      "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "id": "267a3495-643c-40cc-b1a7-14967166eae1",
       "in_match": false,
       "is_working": false
     },
     {
       "avatar_url": null,
-      "capable": true,
+      "capable": false,
       "character": null,
-      "display_name": "코덱스토큰도둑예은",
+      "display_name": "거부목록사용자",
       "focus_mode": false,
-      "id": "3e240c02-8972-478e-a674-014f498a641b",
-      "in_match": false,
-      "is_working": false
-    },
-    {
-      "avatar_url": null,
-      "capable": true,
-      "character": null,
-      "display_name": "코덱스토큰도둑지유",
-      "focus_mode": false,
-      "id": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
       "in_match": false,
       "is_working": false
     },
@@ -549,6 +239,36 @@
       "display_name": "디시험07",
       "focus_mode": false,
       "id": "d0000000-0000-4000-8000-000000000007",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "씨앗다섯",
+      "focus_mode": false,
+      "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "코덱스토큰도둑예은",
+      "focus_mode": false,
+      "id": "3e240c02-8972-478e-a674-014f498a641b",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "코덱스토큰도둑지유",
+      "focus_mode": false,
+      "id": "544e3837-f01c-4560-b82f-4d44c269f044",
       "in_match": false,
       "is_working": false
     }

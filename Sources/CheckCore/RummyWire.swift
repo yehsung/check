@@ -42,7 +42,8 @@ package enum RummyWire {
         package static let draw = "rummy_draw"
         package static let ranking = "rummy_ranking"
 
-        package static let all: [String] = [
+        /// 1판(`20261103120000_rummy.sql`) RPC 12개.
+        package static let v1: [String] = [
             lobby, create, invite, join, decline, leave, start, state, draft, play, draw, ranking,
         ]
 
@@ -51,10 +52,10 @@ package enum RummyWire {
         package static let heartbeat = "rummy_heartbeat"
         /// 이모티콘 반응. → `ok` · `invalid` · `too_fast` · `not_found`.
         package static let react = "rummy_react"
-        /// v2 에서 새로 생긴 RPC. `all` 은 v1 마이그레이션 계약 시험이 대는 12개라 아직 넣지 않았다 —
-        /// v2 마이그레이션이 합류하면(통합 갈래) `all` 로 합치고 계약 시험의 마이그레이션 이름을 늘린다.
+        /// v2 에서 새로 생긴 RPC.
         package static let v2Added: [String] = [heartbeat, react]
-        package static let allV2: [String] = all + v2Added
+        /// 클라가 부르는 RPC 전부(14) — 계약 시험이 두 마이그레이션(1판 + v2)의 마지막 정의와 잰다.
+        package static let all: [String] = v1 + v2Added
     }
 }
 

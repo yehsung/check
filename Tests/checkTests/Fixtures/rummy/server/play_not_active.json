@@ -4,13 +4,13 @@
     "draft": null,
     "end_reason": "rack_empty",
     "expires_at_ms": null,
-    "finished_at_ms": 1793317458158,
+    "finished_at_ms": 1793341032214,
     "grace_ms": 2000,
     "host_id": "d0000000-0000-4000-8000-000000000001",
-    "id": "a14165d9-933d-4186-8a1c-dfc5f1b6a687",
+    "id": "2a0b2f9f-3150-48bb-b727-267da36924f7",
     "is_public": true,
     "last_event": {
-      "at_ms": 1793317458160,
+      "at_ms": 1793341032217,
       "count": 1,
       "kind": "finish",
       "seat_no": 0
@@ -20,6 +20,7 @@
     "my_rack": null,
     "my_seat_no": 0,
     "pool_count": 11,
+    "reactions": [],
     "seat_count": 4,
     "seats": [
       {
@@ -115,7 +116,7 @@
       }
     ],
     "seq": 14,
-    "server_now_ms": 1793317458184,
+    "server_now_ms": 1793341032236,
     "stake": 5,
     "status": "finished",
     "table": [
@@ -142,6 +143,7 @@
         "C9"
       ]
     ],
+    "table_layout": null,
     "turn_deadline_ms": null,
     "turn_seat_no": null,
     "turn_started_ms": null

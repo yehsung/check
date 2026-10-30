@@ -271,7 +271,7 @@ private func rkPlayInitialMeld(_ store: RummyStore) {
 struct V0369RummyStoreTests {
     // MARK: 와이어
 
-    @Test("와이어: RPC 12개의 요청 본문 키 집합이 서버 인자 이름과 같고 p_protocol=1·uuid 소문자·p_table 은 면 배열의 배열")
+    @Test("와이어: RPC 14개의 요청 본문 키 집합이 서버 인자 이름과 같고 p_protocol=1·uuid 소문자·p_table 은 면 배열의 배열")
     func requestBodiesMatchServerArguments() async throws {
         // 없으면: 인자 하나 이름이 어긋나 PostgREST 가 함수를 못 찾는(PGRST202) 결함이 스텁 시험에서 초록이 된다.
         let script = RKScript()
@@ -287,10 +287,14 @@ struct V0369RummyStoreTests {
         _ = try await service.rummyLeave(accessToken: "t", matchID: rkMatch)
         _ = try await service.rummyStart(accessToken: "t", matchID: rkMatch)
         _ = try await service.rummyState(accessToken: "t", matchID: rkMatch)
-        _ = try await service.rummyDraft(accessToken: "t", matchID: rkMatch, expectedSeq: 7, table: table)
-        _ = try await service.rummyPlay(accessToken: "t", matchID: rkMatch, expectedSeq: 7, table: table)
+        // v2: 배치를 실으면 p_layout 이 붙는다(v2 서버 인자 5개와 같다). 없을 때 키가 빠지는 것은 V0369RummyV2WireTests.
+        let layout = RummyLayout([RummyPoint(x: 8, y: 16), RummyPoint(x: 200, y: 16)])
+        _ = try await service.rummyDraft(accessToken: "t", matchID: rkMatch, expectedSeq: 7, table: table, layout: layout)
+        _ = try await service.rummyPlay(accessToken: "t", matchID: rkMatch, expectedSeq: 7, table: table, layout: layout)
         _ = try await service.rummyDraw(accessToken: "t", matchID: rkMatch, expectedSeq: 7)
         _ = try await service.rummyRanking(accessToken: "t")
+        _ = try await service.rummyHeartbeat(accessToken: "t", matchID: rkMatch)
+        _ = try await service.rummyReact(accessToken: "t", matchID: rkMatch, key: "joy")
 
         let expected: [String: Set<String>] = [
             "rummy_lobby": ["p_protocol"],
@@ -301,10 +305,12 @@ struct V0369RummyStoreTests {
             "rummy_leave": ["p_protocol", "p_match_id"],
             "rummy_start": ["p_protocol", "p_match_id"],
             "rummy_state": ["p_protocol", "p_match_id"],
-            "rummy_draft": ["p_protocol", "p_match_id", "p_expected_seq", "p_table"],
-            "rummy_play": ["p_protocol", "p_match_id", "p_expected_seq", "p_table"],
+            "rummy_draft": ["p_protocol", "p_match_id", "p_expected_seq", "p_table", "p_layout"],
+            "rummy_play": ["p_protocol", "p_match_id", "p_expected_seq", "p_table", "p_layout"],
             "rummy_draw": ["p_protocol", "p_match_id", "p_expected_seq"],
             "rummy_ranking": ["p_protocol"],
+            "rummy_heartbeat": ["p_protocol", "p_match_id"],
+            "rummy_react": ["p_protocol", "p_match_id", "p_key"],
         ]
         #expect(Set(expected.keys) == Set(RummyWire.RPC.all))
         // 표만 맞추면 표와 서버가 같이 틀릴 수 있다 — 실제 마이그레이션의 인자 이름과도 잰다(V0369RummyWireContractTests 의 파서).
@@ -455,7 +461,7 @@ struct V0369RummyStoreTests {
             #expect(status != nil, "디코드 실패: \(name)")
             #expect(status != .unknown, "모르는 status: \(name)")
         }
-        #expect(entries.count == 43, "서버 픽스처 \(entries.count)장(기대 43 — 통합 때 저장소로 복사했다)")
+        #expect(entries.count == 50, "서버 픽스처 \(entries.count)장(기대 50 — v2 서버 실출력: 1판 장면 43 + v2 장면 7)")
 
         // 스토어가 실서버 state 를 옳게 읽는가(호스트 없는 스토어 — 내 자리는 my_seat_no 로 찾는다).
         if let mine = states["state_active_my_turn"]?.state {

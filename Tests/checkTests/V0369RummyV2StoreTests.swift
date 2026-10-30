@@ -5,7 +5,7 @@ import Testing
 // 아잉 큐브 2판 스토어(설계서 v2 §2.4 — 레인 K): 배치 동봉 · 묶음 위치 이동 · 하트비트 · 의도적 이탈 · 반응 · 뽑기 사건 · 받침대 저장.
 //
 // 서버는 스텁(`GomokuStubProtocol`)이고 응답 state 는 설계서 v2 §1 모양을 손으로 지은 것이다(v1 §3.7 state + `table_layout` ·
-// `draft.layout` · `reactions`). 레인 S 실출력이 오면 통합 갈래가 `Fixtures/rummy/v2-synth` 와 함께 대 본다.
+// `draft.layout` · `reactions`). 레인 S 실출력(`Fixtures/rummy/server`)은 V0369RummyV2WireTests 가 잰다.
 // 각 시험의 첫 줄 주석은 "없으면 어떤 결함이 초록으로 통과하는가" 다(관례).
 
 private let v2sMe = UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!

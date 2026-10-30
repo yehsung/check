@@ -2,19 +2,19 @@
   "state": {
     "consecutive_passes": 0,
     "draft": {
-      "at_ms": 1793317458102,
+      "at_ms": 1793341032746,
       "draft_seq": 1,
       "layout": [
         [
-          304,
-          232
+          100,
+          200
         ]
       ],
       "table": [
         [
           "A10",
-          "A11",
-          "A12"
+          "B10",
+          "C10"
         ]
       ]
     },
@@ -22,34 +22,32 @@
     "expires_at_ms": null,
     "finished_at_ms": null,
     "grace_ms": 2000,
-    "host_id": "d0000000-0000-4000-8000-000000000001",
-    "id": "a14165d9-933d-4186-8a1c-dfc5f1b6a687",
+    "host_id": "92000000-0000-4000-8000-000000000001",
+    "id": "698517ab-2a09-40dd-abaa-f82b7fb07e9c",
     "is_public": true,
     "last_event": {
-      "at_ms": 1793317457969,
-      "count": 4,
+      "at_ms": 1793341032742,
+      "count": 3,
       "kind": "start",
       "seat_no": 0
     },
     "max_seats": 4,
     "my_initial_done": false,
     "my_rack": [
-      "C1",
-      "C2",
-      "C5",
-      "D7",
-      "D8",
-      "B11"
+      "B5",
+      "B6",
+      "B7",
+      "C1"
     ],
     "my_seat_no": 1,
-    "pool_count": 20,
+    "pool_count": 8,
     "reactions": [],
-    "seat_count": 4,
+    "seat_count": 3,
     "seats": [
       {
         "avatar_url": null,
         "character": null,
-        "display_name": "디시험01",
+        "display_name": "이판01",
         "final_rack": null,
         "final_rank": null,
         "final_score": null,
@@ -61,12 +59,12 @@
         "seat_no": 0,
         "state": "playing",
         "timeout_streak": 0,
-        "user_id": "d0000000-0000-4000-8000-000000000001"
+        "user_id": "92000000-0000-4000-8000-000000000001"
       },
       {
         "avatar_url": null,
         "character": null,
-        "display_name": "디시험02",
+        "display_name": "이판02",
         "final_rack": null,
         "final_rank": null,
         "final_score": null,
@@ -74,16 +72,16 @@
         "initial_done": false,
         "is_winner": null,
         "payout": null,
-        "rack_count": 6,
+        "rack_count": 4,
         "seat_no": 1,
         "state": "playing",
         "timeout_streak": 0,
-        "user_id": "d0000000-0000-4000-8000-000000000002"
+        "user_id": "92000000-0000-4000-8000-000000000002"
       },
       {
         "avatar_url": null,
         "character": null,
-        "display_name": "디시험08",
+        "display_name": "이판03",
         "final_rack": null,
         "final_rank": null,
         "final_score": null,
@@ -95,35 +93,18 @@
         "seat_no": 2,
         "state": "playing",
         "timeout_streak": 0,
-        "user_id": "d0000000-0000-4000-8000-000000000008"
-      },
-      {
-        "avatar_url": null,
-        "character": null,
-        "display_name": "디시험04",
-        "final_rack": null,
-        "final_rank": null,
-        "final_score": null,
-        "forfeit_order": null,
-        "initial_done": false,
-        "is_winner": null,
-        "payout": null,
-        "rack_count": 6,
-        "seat_no": 3,
-        "state": "playing",
-        "timeout_streak": 0,
-        "user_id": "d0000000-0000-4000-8000-000000000004"
+        "user_id": "92000000-0000-4000-8000-000000000003"
       }
     ],
     "seq": 1,
-    "server_now_ms": 1793317458103,
-    "stake": 5,
+    "server_now_ms": 1793341032747,
+    "stake": 3,
     "status": "active",
     "table": [],
-    "table_layout": [],
-    "turn_deadline_ms": 1793317517979,
+    "table_layout": null,
+    "turn_deadline_ms": 1793341092745,
     "turn_seat_no": 0,
-    "turn_started_ms": 1793317457979
+    "turn_started_ms": 1793341032745
   },
   "status": "ok"
 }

@@ -1,153 +1,18 @@
 {
   "me": {
     "games": 1,
-    "rank": 2,
+    "rank": 1,
     "wins": 1
   },
   "rows": [
     {
       "avatar_url": null,
       "character": null,
-      "display_name": "C시험05",
-      "games": 2,
-      "id": "c1000000-0000-4000-8000-000000000005",
-      "rank": 1,
-      "wins": 2
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험02",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000002",
-      "rank": 2,
-      "wins": 1
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험08",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000008",
-      "rank": 2,
-      "wins": 1
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험12",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000012",
-      "rank": 2,
-      "wins": 1
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "abto.app",
-      "games": 1,
-      "id": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rank": 2,
-      "wins": 1
-    },
-    {
-      "avatar_url": null,
-      "character": null,
       "display_name": "디시험01",
       "games": 1,
       "id": "d0000000-0000-4000-8000-000000000001",
-      "rank": 2,
+      "rank": 1,
       "wins": 1
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "코덱스토큰도둑지유",
-      "games": 1,
-      "id": "544e3837-f01c-4560-b82f-4d44c269f044",
-      "rank": 2,
-      "wins": 1
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험01",
-      "games": 2,
-      "id": "c1000000-0000-4000-8000-000000000001",
-      "rank": 8,
-      "wins": 1
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "B시험01",
-      "games": 1,
-      "id": "b0000000-0000-4000-8000-000000000001",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "B시험16",
-      "games": 1,
-      "id": "b0000000-0000-4000-8000-000000000016",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험03",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000003",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험04",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000004",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험06",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000006",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험09",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000009",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험10",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000010",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험11",
-      "games": 1,
-      "id": "c1000000-0000-4000-8000-000000000011",
-      "rank": 9,
-      "wins": 0
     },
     {
       "avatar_url": null,
@@ -155,7 +20,7 @@
       "display_name": "디시험02",
       "games": 1,
       "id": "d0000000-0000-4000-8000-000000000002",
-      "rank": 9,
+      "rank": 2,
       "wins": 0
     },
     {
@@ -164,7 +29,7 @@
       "display_name": "디시험04",
       "games": 1,
       "id": "d0000000-0000-4000-8000-000000000004",
-      "rank": 9,
+      "rank": 2,
       "wins": 0
     },
     {
@@ -173,37 +38,10 @@
       "display_name": "디시험08",
       "games": 1,
       "id": "d0000000-0000-4000-8000-000000000008",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "씨앗다섯",
-      "games": 1,
-      "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "코덱스토큰도둑예은",
-      "games": 1,
-      "id": "3e240c02-8972-478e-a674-014f498a641b",
-      "rank": 9,
-      "wins": 0
-    },
-    {
-      "avatar_url": null,
-      "character": null,
-      "display_name": "C시험07",
-      "games": 2,
-      "id": "c1000000-0000-4000-8000-000000000007",
-      "rank": 22,
+      "rank": 2,
       "wins": 0
     }
   ],
-  "server_now_ms": 1793317458171,
+  "server_now_ms": 1793341032225,
   "status": "ok"
 }

@@ -141,6 +141,9 @@ enum TetrisDuelText {
     static let waitingTitle = "상대를 기다리는 중"
     static func waitingSubtitle(seconds: Int) -> String { "\(seconds)초 안에 둘 다 들어오면 시작해요" }
     static let waitingAction = "창을 열어 두세요"
+    /// 한 판 한 기기(0.3.69) — 이 판은 같은 계정의 다른 기기가 둔다. 제목은 코어 `TetrisDuelNoticeText.otherDevice`.
+    static let otherDeviceSubtitle = "신청하거나 수락한 기기에서만 둘 수 있어요"
+    static let otherDeviceAction = "그 기기에서 이어 가세요"
     static let startingSoon = "곧 시작해요"
     static let playingNow = "대결 중"
     static let toppedOutTitle = "꼭대기에 닿았어요"
@@ -1082,6 +1085,12 @@ struct TetrisDuelBoardView: View {
     @ViewBuilder
     private func overlay(phase: TetrisDuelPhase) -> some View {
         switch phase {
+        case .ready where store.playingElsewhere:
+            // 같은 계정의 다른 기기가 두는 판 — 이 창에는 판이 없다(코어가 구동기를 안 만든다). 기다리라는 말 대신 사실을 말한다.
+            MiniGameOverlayCard(title: TetrisDuelNoticeText.otherDevice,
+                                subtitle: TetrisDuelText.otherDeviceSubtitle,
+                                action: TetrisDuelText.otherDeviceAction,
+                                icon: "macbook.and.iphone", tint: CheckTheme.accent)
         case .ready:
             let seconds = readySecondsLeft()
             MiniGameOverlayCard(title: TetrisDuelText.waitingTitle,
@@ -1273,7 +1282,7 @@ private struct TetrisDuelMatchSide: View {
 
     private var headline: String {
         switch store.phase {
-        case .ready: return TetrisDuelText.waitingTitle
+        case .ready: return store.playingElsewhere ? TetrisDuelNoticeText.otherDevice : TetrisDuelText.waitingTitle
         case .countdown: return TetrisDuelText.startingSoon
         case .playing:
             return store.myStats?.toppedOut == true ? TetrisDuelText.toppedOutTitle : TetrisDuelText.playingNow
@@ -1282,6 +1291,8 @@ private struct TetrisDuelMatchSide: View {
     }
 
     private var detail: String? {
+        // 제목이 이미 그 안내다 — 같은 줄을 두 번 쓰지 않는다.
+        if store.playingElsewhere { return TetrisDuelText.otherDeviceSubtitle }
         if let notice = store.notice { return notice }
         switch store.phase {
         case .ready: return TetrisDuelText.waitingAction

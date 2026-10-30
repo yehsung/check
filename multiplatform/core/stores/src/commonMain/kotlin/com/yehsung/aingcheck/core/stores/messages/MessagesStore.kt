@@ -236,12 +236,34 @@ class MessagesStore(
 
     // ---------------------------------------------------------------- 자리 API
 
-    fun appDidBecomeActive() {
+    /**
+     * 앱(데스크톱은 플라이아웃)이 앞에 섰다. [activityRefreshThrottleSeconds] 가 0 이하(기본)면 지금처럼 **매번** 요약을 새로 받는다.
+     * 양수면 마지막으로 띄운 뒤 그만큼 지나야 받는다 — 맥 팝오버 열기 스로틀(Swift `messageMenuRefreshThrottleSeconds` 60초 ·
+     * `refreshMessageActivityOnMenuOpen`, Windows 공용 패치 9). 메시지 화면이 서 있는데 이력이 낡았으면 스로틀 없이 받되
+     * **같은 낡음 표시로는 한 번만**이다(Swift m-fix F1 · m-reverify R3). 읽음 판정([evaluateReadMarking])은 스로틀과 무관하게 돈다.
+     */
+    fun appDidBecomeActive(activityRefreshThrottleSeconds: Double = 0.0) {
         isAppActive = true
         syncRouterVisibility()
         if (!isSignedIn) return
-        requestActivityRefresh()
+        if (activeRefreshDue(activityRefreshThrottleSeconds)) requestActivityRefresh()
         evaluateReadMarking()
+    }
+
+    private fun activeRefreshDue(throttleSeconds: Double): Boolean {
+        val owner = runtime
+        val now = context.clock.now()
+        if (throttleSeconds <= 0.0) {
+            owner.lastActiveRefreshAt = now
+            return true
+        }
+        val stale = owner.historyStaleSerial
+        val staleScreenBypass = isMessagesScreenVisible && stale != null && stale != owner.activeBypassStaleSerial
+        val last = owner.lastActiveRefreshAt
+        if (!staleScreenBypass && last != null && now.timeIntervalSince(last) < throttleSeconds) return false
+        if (staleScreenBypass) owner.activeBypassStaleSerial = stale
+        owner.lastActiveRefreshAt = now
+        return true
     }
 
     fun appDidEnterBackground() {
@@ -1014,6 +1036,42 @@ class MessagesStore(
         requestActivityRefresh()
     }
 
+    // ---------------------------------------------------------------- 데스크톱 읽음 신호 창(Windows 공용 패치 8)
+
+    /**
+     * 읽음 신호(`message_read`)가 합치기 창에 얹혔다 — 데스크톱 실시간 러너가 **신호마다** 부른다(창 타이머는 러너가 든다).
+     * 원본: Sources/check/WorkTimerStoreMessages.swift `requestMessageActivityRefreshCoalesced()`(724-746)의 장부 몫.
+     * 화면이 안 보이면 이력을 **지금** 낡음으로 적고(`markHistoryStale`), 이 순간을 창의 계기 번호로 둔다(더 나중 신호가 덮는다).
+     * 폰의 [realtimeMessageRead] 는 그대로다 — 이것은 `isAppActive` 가드가 없다(트레이 상주라 앱이 안 떠 있어도 점은 갱신한다).
+     */
+    fun readSignalArrived() {
+        if (!isSignedIn) return
+        val owner = runtime
+        if (!isMessagesScreenVisible) owner.markHistoryStale()
+        owner.readSignalWindowSerial = owner.serial
+    }
+
+    /**
+     * 합치기 창이 닫혔다 — Swift `closeMessageActivityWindow(pendingSerial:)`(748-761). 창에 모인 계기를 **그보다 나중에 띄운** 조회가
+     * 이미 맡았으면 다시 묻지 않는다(창이 열린 사이 플라이아웃을 열어 요약·이력을 받았으면 그게 답이다). 안 맡았으면 [requestActivityRefresh] 한 번.
+     * [readSignalArrived] 없이 불리면 지금 순간을 계기로 본다(창 앞 조회는 계기를 맡지 못한다 — 곧 새로고침 한 번).
+     */
+    fun readSignalWindowClosed(): Job? {
+        if (!isSignedIn) return null
+        val owner = runtime
+        val pendingSerial = owner.readSignalWindowSerial ?: owner.serial
+        owner.readSignalWindowSerial = null
+        val screenVisible = isMessagesScreenVisible
+        val historyTaken = owner.lastHistoryLaunchSerial > pendingSerial
+        val summaryTaken = owner.lastSummaryLaunchSerial > pendingSerial
+        // 볼 사람이 없는 이력은 낡음으로 적는다(창이 열린 사이 화면이 닫혔을 수 있다 — 다시 설 때 받는다).
+        if (!screenVisible && !historyTaken) owner.markHistoryStale()
+        // 안 보이는 화면의 이력은 위 낡음 표시가 맡는다. 보이는 화면은 창 뒤에 띄운 이력이 있어야 맡은 것이다.
+        val historyCovered = historyTaken || !screenVisible
+        if (summaryTaken && historyCovered) return null
+        return requestActivityRefresh()
+    }
+
     // ---------------------------------------------------------------- 내부
 
     /** 메시지 화면(목록 또는 대화)이 지금 보이는가. */
@@ -1082,6 +1140,13 @@ private class MessagesRuntime {
 
     /** 이력을 건너뛴 계기의 순간(그보다 나중에 띄운 이력이 반영되면 내린다). null = 낡지 않음. */
     var historyStaleSerial: Int? = null
+
+    /** 데스크톱 읽음 신호 창의 계기 번호(공용 패치 8 — Swift `activityWindowSerial`). null = 창에 얹힌 신호 없음. */
+    var readSignalWindowSerial: Int? = null
+
+    /** 활성 새로고침 스로틀(공용 패치 9): 마지막으로 띄운 순간 · 스로틀을 이미 우회한 낡음 표시(같은 표시로는 한 번만 — Swift R3). */
+    var lastActiveRefreshAt: SwiftDate? = null
+    var activeBypassStaleSerial: Int? = null
     var lastListRefreshAt: SwiftDate = MessagesThreadListRules.distantPast
     var lastDirectoryLoadAt: SwiftDate = MessagesThreadListRules.distantPast
     val markInFlight: MutableSet<String> = LinkedHashSet()
@@ -1099,6 +1164,11 @@ private class MessagesRuntime {
     fun nextSerial(): Int {
         serial += 1
         return serial
+    }
+
+    /** Swift `markHistoryStale()` — 지금까지의 번호로 적는다(이보다 나중에 띄운 이력만 지운다). */
+    fun markHistoryStale() {
+        historyStaleSerial = serial
     }
 
     /**

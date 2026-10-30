@@ -2,6 +2,7 @@
 // 원본: CheckUpdateCheck.swift 147-152(빌드를 알면 빌드로만 비교) · 319-345(릴리스 뒤 공지, 각자 삼킨다) · WorkTimerStore.swift 1029-1044.
 package com.yehsung.aingcheck.desktop.shell.update
 
+import com.yehsung.aingcheck.core.wire.models.ClientReleaseResponse
 import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
@@ -12,7 +13,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DesktopUpdateStateTest {
-    private val ok11 = WindowsClientRelease(
+    private val ok11 = ClientReleaseResponse(
         status = "ok", platform = "windows", minBuild = 1, latestBuild = 11, notes = "고친 점",
         latestVersion = "0.4.1", downloadUrl = "https://example.invalid/aing-check-0.4.1.msix",
     )
@@ -47,13 +48,13 @@ class DesktopUpdateStateTest {
         c.checkNow()
         assertTrue(c.state.value.updateAvailable)
         // 서버가 줄을 지웠다(unknown_platform) — 알려진 새 버전이 없다.
-        rpc.release = { WindowsClientRelease(status = "unknown_platform") }
+        rpc.release = { ClientReleaseResponse(status = "unknown_platform") }
         c.checkNow()
         assertNull(c.state.value.latestBuild)
         assertNull(c.state.value.downloadUrl)
         assertFalse(c.state.value.updateAvailable)
         // "ok" 인데 latest_build 가 비었다.
-        rpc.release = { WindowsClientRelease(status = "ok", latestBuild = null) }
+        rpc.release = { ClientReleaseResponse(status = "ok", latestBuild = null) }
         c.checkNow()
         assertFalse(c.state.value.updateAvailable)
     }

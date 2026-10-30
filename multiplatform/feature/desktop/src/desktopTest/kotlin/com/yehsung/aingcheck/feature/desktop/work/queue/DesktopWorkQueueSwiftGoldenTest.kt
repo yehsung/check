@@ -3,6 +3,8 @@
 // 같은 입력(줄 · 근무 중 세션 · 마지막 스캐빈저)과 같은 응답으로 DesktopWorkQueue 를 돌려 요청열 · 남은 항목 · 도장 · 실패 여부 · 실패 문구를 대조한다.
 package com.yehsung.aingcheck.feature.desktop.work.queue
 
+import com.yehsung.aingcheck.feature.desktop.work.service.masked
+import com.yehsung.aingcheck.feature.desktop.work.service.service
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.work.PendingWorkItem

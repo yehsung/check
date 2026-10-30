@@ -350,6 +350,7 @@ class DesktopRealtimeRunner(
     /** R7: 읽음 신호는 1초 창으로 합친다 — 창이 열려 있으면 그 창에 얹고, 닫히면 한 번 부른다. 로그아웃·계정 전환 뒤 깬 창은 쏘지 않는다. */
     private fun requestReadRefreshCoalesced() {
         if (host.session == null) return
+        messages.readSignalArrived()
         if (readWindowJob != null) return
         val generation = host.sessionGeneration
         readWindowJob = scope.launch {

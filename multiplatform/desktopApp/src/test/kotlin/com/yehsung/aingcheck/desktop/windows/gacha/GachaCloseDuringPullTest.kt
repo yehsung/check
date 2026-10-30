@@ -3,7 +3,7 @@
 package com.yehsung.aingcheck.desktop.windows.gacha
 
 import com.yehsung.aingcheck.core.stores.me.pullGachaForMachine
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
 import com.yehsung.aingcheck.desktop.windows.kit.WindowEvent
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking

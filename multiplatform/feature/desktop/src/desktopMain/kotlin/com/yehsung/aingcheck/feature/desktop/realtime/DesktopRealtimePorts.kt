@@ -10,6 +10,9 @@ interface DesktopRealtimeMessages {
     /** 서버 표를 한 번 읽는다(take_pokes 아님). `.drain` 이 게이트에 막혔을 때 · 조인 직후 따라잡기에서 부른다. */
     fun requestActivityRefresh()
 
+    /** 읽음 신호(`message_read`)가 올 때마다(창에 얹기 전) 부른다 — 계기 순간을 적는다(공용 패치 8 `MessagesStore.readSignalArrived`). */
+    fun readSignalArrived() {}
+
     /** 읽음 신호(`message_read`)를 1초 창으로 모은 뒤 **창 하나에 한 번** 부른다(Swift m-fix2 · 부록 B-2). */
     fun readSignalWindowClosed()
 

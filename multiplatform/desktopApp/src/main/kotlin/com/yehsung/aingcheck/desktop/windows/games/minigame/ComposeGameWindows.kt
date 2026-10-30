@@ -9,6 +9,7 @@ import androidx.compose.ui.awt.ComposeWindow
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.stores.chess.ChessStore
 import com.yehsung.aingcheck.core.stores.games.GamesDestination
+import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -305,8 +306,11 @@ object ComposeGamesWindows {
      * ⚠️뗌은 게이트보다 먼저 적용하되(★★ MiniGamePanel.swift:302-308) **삼킴은 이 창 판의 키만**(`belongs && wantsStrokes()`) — 남의 창(대결) 뗌을 삼키면 그 창 키가 굳는다.
      * ESC(맥 :332 onEscape · :983-990)는 **정지·재개를 실제로 했을 때만** 삼킨다 — 시작 전 · 결과 화면의 ESC 는 흘린다(남의 취소 키를 훔치지 않게).
      */
-    fun miniGameKeys(games: GamesStore, state: MiniGameWindowState): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
-        val controller = games.miniGames.controller ?: return@GameKeyRouter false
+    fun miniGameKeys(games: GamesStore, state: MiniGameWindowState): GameKeyRouter = miniGameKeys({ games.miniGames.controller }, state)
+
+    /** 같은 라우터 — 판을 주는 자리만 뗐다(시험이 씨앗을 고른 판을 꽂는다: MiniGameKeyReplayTest). */
+    fun miniGameKeys(controllerOf: () -> GamesPlayController?, state: MiniGameWindowState): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
+        val controller = controllerOf() ?: return@GameKeyRouter false
         val gameOwns = owns && state.windowFocused && state.route is MiniGameWindowRoute.Game
         if (vk == GameKeyMap.VK_ESCAPE) {
             if (!down || mods || !gameOwns || !(state.frozen || controller.isPlaying)) return@GameKeyRouter false

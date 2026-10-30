@@ -21,10 +21,10 @@ import com.yehsung.aingcheck.core.stores.gomoku.GomokuRecord
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStake
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuUser
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
-import com.yehsung.aingcheck.desktop.testsupport.PixelImage
+import com.yehsung.aingcheck.ui.components.PixelImage
 import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.BoardGameRig
 import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.TestBoardArt
-import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.boardClock
+import com.yehsung.aingcheck.ui.games.gomoku.boardClock
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowHandle
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.desktop.windows.kit.StoreNotice

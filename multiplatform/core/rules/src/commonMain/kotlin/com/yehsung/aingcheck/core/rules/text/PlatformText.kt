@@ -53,8 +53,11 @@ object Graphemes {
     }
 }
 
-/** `String.codePointCount` 의 공용 판(commonMain 에서 JDK API 를 부르지 않는다). 짝 없는 서로게이트는 한 개로 센다. */
-internal fun String.codePointCountCompat(start: Int = 0, end: Int = length): Int {
+/**
+ * `String.codePointCount` 의 공용 판(commonMain 에서 JDK API 를 부르지 않는다). 짝 없는 서로게이트는 한 개로 센다.
+ * 공개(Windows 공용 패치 14): 데스크톱 AI 리밋 계약(`AILimitMainDeviceIDContract`)이 스칼라 세기 사본을 두지 않게 — 몸·기본값 그대로.
+ */
+fun String.codePointCountCompat(start: Int = 0, end: Int = length): Int {
     var count = 0
     var index = start
     while (index < end) {

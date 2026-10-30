@@ -169,7 +169,7 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
     }
 
     fun lifecycle(): SharedPageLifecycle = SharedPageLifecycle(::hooks) { active ->
-        if (active) deps.messages.appDidBecomeActive() else deps.messages.appDidEnterBackground()
+        if (active) deps.messages.appDidBecomeActive(MESSAGE_MENU_REFRESH_THROTTLE_SECONDS) else deps.messages.appDidEnterBackground()
     }
 
     @Composable
@@ -450,3 +450,6 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
     /** 세션 단계 흐름이 로그인인가(배경 갱신 조립용). */
     fun signedInFlow(): Flow<Boolean> = deps.session.phaseFlow.map { it == SessionPhase.SignedIn }
 }
+
+/** 플라이아웃 열기의 메시지 요약 스로틀 — 맥 팝오버 `messageMenuRefreshThrottleSeconds`(60초, W3-c0 · 공용 패치 9). */
+internal const val MESSAGE_MENU_REFRESH_THROTTLE_SECONDS: Double = 60.0

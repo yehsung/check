@@ -4,6 +4,7 @@
 // ai_limits 업로드는 **깃발 없이** 연다(W-3 #11 — 서버 ④·⑥ 대상 아님, device_id ≤128 CHECK 뿐). 토큰 축 표(token_usage_*)는 한 줄도 건드리지 않는다.
 package com.yehsung.aingcheck.feature.desktop.ailimits
 
+import com.yehsung.aingcheck.core.rules.text.codePointCountCompat
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
 import com.yehsung.aingcheck.core.net.fetchMyAILimitRows
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDevice
@@ -182,19 +183,8 @@ object AILimitMainDeviceIDContract {
         if (raw == null) return null
         val trimmed = TextScalars.trimmingWhitespacesAndNewlines(raw)
         // Swift `count` = 자소 묶음 수. device_id 는 ASCII(`win:`+hex·uuid)라 스칼라와 같다 — 넘치면 보내지 않고 null 로 접는다.
-        if (trimmed.isEmpty() || scalarCount(trimmed) > maxLength) return null
+        if (trimmed.isEmpty() || trimmed.codePointCountCompat() > maxLength) return null
         return trimmed
-    }
-
-    /** 유니코드 스칼라 수(대리 쌍 하나 = 1). core/rules 의 같은 도우미는 internal 이라 여기 둔다. */
-    private fun scalarCount(text: String): Int {
-        var n = 0
-        var i = 0
-        while (i < text.length) {
-            n += 1
-            i += if (text[i].isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()) 2 else 1
-        }
-        return n
     }
 
     /** INV-SupabaseWorkServiceAILimits-74747cf7 이식: `encodeIfPresent` 가 아니다 — null 을 적어야 "안 고른 상태로 되돌리기"가 닿는다. */

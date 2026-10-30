@@ -12,7 +12,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.desktop.windows.kit.WindowEvent
 import com.yehsung.aingcheck.ui.gacha.machine.GLayout

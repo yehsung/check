@@ -11,10 +11,10 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
-import com.yehsung.aingcheck.desktop.testsupport.PixelImage
-import com.yehsung.aingcheck.desktop.testsupport.SnapshotCompare
-import com.yehsung.aingcheck.desktop.testsupport.SnapshotPolicy
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.PixelImage
+import com.yehsung.aingcheck.ui.components.SnapshotCompare
+import com.yehsung.aingcheck.ui.components.SnapshotPolicy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle

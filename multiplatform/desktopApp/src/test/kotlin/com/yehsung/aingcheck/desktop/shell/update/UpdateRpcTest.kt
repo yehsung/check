@@ -3,6 +3,7 @@
 // MockRouter 는 등록 안 된 요청(app_latest_release·app_current_notice 포함)을 실패로 남긴다 — 끝마다 assertAllRouted.
 package com.yehsung.aingcheck.desktop.shell.update
 
+import com.yehsung.aingcheck.core.wire.models.ClientReleaseResponse
 import com.yehsung.aingcheck.core.wire.models.AppNotice
 import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
 import com.yehsung.aingcheck.testkit.mock.MockRouter
@@ -31,7 +32,7 @@ class UpdateRpcTest {
         assertEquals(windowsBody, req.bodyText)
         assertEquals(listOf("Bearer $STUB_ANON"), req.headers["Authorization"], "anon — 로그인 전에도 돈다")
         assertEquals(
-            WindowsClientRelease("ok", "windows", 3, 12, "고친 점", "0.4.2", "https://example.invalid/aing-check-0.4.2.msix", "2026-10-30T00:00:00+00:00"),
+            ClientReleaseResponse("ok", "windows", 3, 12, "고친 점", "0.4.2", "https://example.invalid/aing-check-0.4.2.msix", "2026-10-30T00:00:00+00:00"),
             r,
         )
     }
@@ -40,7 +41,7 @@ class UpdateRpcTest {
     fun unknownPlatformDecodesToNoLatest() = runTest {
         val router = MockRouter().rpc("client_release", StubResponse.Json("""{"status":"unknown_platform"}"""))
         val r = ServiceUpdateRpc(stubService(router), "windows").clientRelease()
-        assertEquals(WindowsClientRelease(status = "unknown_platform"), r)
+        assertEquals(ClientReleaseResponse(status = "unknown_platform"), r)
     }
 
     @Test

@@ -1,0 +1,5 @@
+# 원본: 없음 — Windows 운영 판 장부(W6-b2 · package.md §5). mac/repack.sh build(--dry 아님)가 판정이 초록인 판마다 한 줄 덧붙인다.
+# 규칙: windowsBuild 는 맥과 다른 정수 축(★2) — 장부 최댓값보다 커야 한다(release_win.ledger_next_ok) · 1..65535(MSIX 셋째 칸).
+# 운영 host 는 해시 8자리(sha8:…, ★5) · anon 키는 sha256 앞 8자리만 — 값 자체는 싣지 않는다(★3).
+# 칸(탭): mac/repack.py LEDGER_COLUMNS 와 같은 순서.
+windowsBuild	windowsVersion	msixVersion	buildTimeUtc	gitSha	ciRun	identity	prodHost	prodKeySha8	appJarSha256	x64MsixSha256	arm64MsixSha256	recordedUtc

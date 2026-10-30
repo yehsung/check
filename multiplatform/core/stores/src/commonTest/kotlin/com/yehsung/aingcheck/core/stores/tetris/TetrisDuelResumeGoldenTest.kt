@@ -199,12 +199,7 @@ class TetrisDuelResumeGoldenTest {
                 "apply" -> {
                     val at = step.bits("receivedAtBits")
                     now = at
-                    // 한 판 한 기기(Swift 75c31cd2 · TetrisDuelStore 머리말 ⑩): 이 골든은 그 전(1b8260d)의 Swift 스토어가 냈다 — 그때는 진행 중
-                    // 판을 받은 기기가 언제나 판을 두었다. 지금 스토어는 로그인 기록이 없는(호스트 없는) 자리에서 my_device 가 없으면 판을 두지
-                    // 않으므로, 골든 입력에 my_device 가 없으면 'this' 로 읽는다. **골든 파일은 그대로다** — 생성기가 my_device 'this' 를 싣게
-                    // 되면(Swift 데모 픽스처가 75c31cd2 에서 그렇게 바뀌었다) 이 줄은 아무 일도 안 한다.
-                    val decoded = json.decodeFromJsonElement(TetrisStatePayload.serializer(), step.obj("payload"))
-                    val payload = if (decoded.myDevice == null) decoded.copy(myDevice = "this") else decoded
+                    val payload = json.decodeFromJsonElement(TetrisStatePayload.serializer(), step.obj("payload"))
                     record["apply"] = JsonPrimitive(store.applyState(payload, at).name)
                 }
                 "tick" -> {

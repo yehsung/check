@@ -405,12 +405,11 @@ private fun BoardOverlay(tetris: TetrisDuelStore, chrome: GamesTetrisDuelChrome,
         when (chrome.stage) {
             // 같은 계정의 다른 기기가 두는 판(Swift 75c31cd2 `case .waiting where chrome.playingElsewhere`) — 이 폰에는 판이 없다(코어가
             // 구동기를 안 만든다). 기다리라는 말 대신 사실을 말한다(색은 카드 기본 accent — iOS 와 같은 자리). 기다림 잎보다 **먼저** 고른다.
-            // 기호: iOS 는 `macbook.and.iphone` — 이 워크트리의 Swift 원문(SfSymbolCoverageTest 의 기준)에는 아직 없어 대응표에 있는
-            // `desktopcomputer` 로 둔다(main 병합 때 대응표에 넣고 바꾼다).
+            // 기호: iOS 와 같은 `macbook.and.iphone`(대응표에서 DesktopWindows).
             GamesTetrisDuelChrome.Stage.waiting -> if (chrome.playingElsewhere) {
                 GamesOverlayCard(
                     TetrisDuelNoticeText.otherDevice, TetrisPhoneText.otherDeviceSubtitle, TetrisPhoneText.otherDeviceAction,
-                    icon = "desktopcomputer", scale = 0.9f,
+                    icon = "macbook.and.iphone", scale = 0.9f,
                 )
             } else WaitLeaf(tetris) { seconds ->
                 GamesOverlayCard(

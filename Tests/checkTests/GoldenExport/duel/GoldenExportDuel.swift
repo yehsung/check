@@ -61,8 +61,10 @@ struct GoldenExportDuel {
 
     static func payload(id: String = "match-a", status: String, stake: Int? = 5, seed: Int? = 77, startAtMs: Double? = nil,
                         serverNowMs: Double? = GoldenExportDuel.serverNowMs, me: GoldenJSON? = nil, opponent: GoldenJSON? = nil,
-                        extra: [String: GoldenJSON] = [:]) -> GoldenJSON {
+                        myDevice: String? = "this", extra: [String: GoldenJSON] = [:]) -> GoldenJSON {
         var members: [String: GoldenJSON] = ["match_id": .string(id), "status": .string(status)]
+        // 한 판 한 기기(75c31cd2): 운영 서버는 my_device 를 싣는다 — 기본 'this'(이 기기가 두는 판). nil 이면 옛 서버 모양.
+        if let myDevice { members["my_device"] = .string(myDevice) }
         if let stake { members["stake"] = .int(stake) }
         if let seed { members["seed"] = .int(seed) }
         if let startAtMs { members["start_at_ms"] = .int(Int(startAtMs)) }

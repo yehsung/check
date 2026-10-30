@@ -106,11 +106,8 @@ class GamesSnapshotDesktopTest {
     private fun matchScene(meName: String): @Composable () -> Unit {
         val store = store()
         val state = SwiftJson.decode(TetrisActionResponse.serializer(), RepoFiles.readText("$FIXTURES/rpc.tetris_state@demo-tetris-playing.json"))
-        // 한 판 한 기기(Swift 75c31cd2 — TetrisDuelStore 머리말 ⑩): 데모 픽스처는 그 판에서 my_device 'this' 를 싣는다(Swift
-        // GamesTetrisFixtureContractTests ①-b). 이 워크트리의 픽스처는 그 전이라 없으면 여기서 'this' 로 읽는다 — 안 그러면 코어가 구동기를
-        // 안 세워 스틸이 빈 판(다른 기기 안내)이 된다. 픽스처가 따라오면 이 줄은 아무 일도 안 한다.
-        val payload = requireNotNull(state.state).let { if (it.myDevice == null) it.copy(myDevice = "this") else it }
-        store.tetris.applyState(payload)
+        // 한 판 한 기기(Swift 75c31cd2): 데모 픽스처는 my_device 'this' 를 싣는다(GamesTetrisFixtureContractTests ①-b) — 구동기가 서야 스틸이 판이다.
+        store.tetris.applyState(requireNotNull(state.state))
         check(store.tetris.match != null) { "픽스처로 판이 서지 않았다" }
         check(store.tetris.duel != null && !store.tetris.playingElsewhere) { "픽스처 판에 구동기가 안 섰다" }
         return {

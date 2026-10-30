@@ -27,6 +27,7 @@
       "seq" : 1,
       "topped_out" : false
     },
+    "my_device" : "this",
     "opponent" : {
       "avatar_url" : null,
       "board" : null,

@@ -28,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,19 +70,19 @@ object DevicePickerModel {
     fun showsPicker(devices: List<AILimitDevice>): Boolean = devices.size >= 2
 }
 
-private val gaugeGradient = Brush.horizontalGradient(listOf(Color(0xFF5B8DEF), Color(0xFF8A76E0)))
-
 /** 맥 devicePicker(:300-345). 누르면 먼저 화면, 다음 서버(실패하면 되돌린다 — DesktopAILimitSync.setAILimitMainDevice). */
 @Composable
 fun DevicePickerList(store: AILimitStore, actions: AiLimitsActions) {
     val state by store.state.collectAsState()
     val scope = rememberCoroutineScope()
     val colors = AingTheme.colors
+    // 맥 gaugeGradient 자리 — 셸 색 리터럴 금지(D5)라 테마의 파랑→보라.
+    val gaugeGradient = Brush.horizontalGradient(listOf(colors.accent, colors.aiToken))
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (row in DevicePickerModel.rows(state.devices, state.mainDeviceID)) {
             val shape = RoundedCornerShape(8.dp)
             val bg = if (row.selected) Modifier.background(gaugeGradient, shape) else Modifier.background(colors.fill, shape).border(1.dp, colors.separator, shape)
-            val ink = if (row.selected) Color.White else colors.label
+            val ink = if (row.selected) colors.onAccentFill else colors.label
             Row(
                 Modifier.fillMaxWidth().height(26.dp).then(bg)
                     .clickable(role = Role.Button) { scope.launch { actions.setMainDevice(row.deviceID) } }

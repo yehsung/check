@@ -165,18 +165,16 @@ object AiLimitsRouteRule {
     fun showsRoute(store: AILimitStore): Boolean = store.isAvailable
 }
 
+/**
+ * 맥 고정 색(#5B8DEF 파랑 · #8A76E0 보라 · 바탕 #30343B)은 앱 셸 색 리터럴 금지(DesignRules D5 · G §8-15) 때문에 테마 색으로 옮긴다:
+ * 5시간 = accent(파랑) · 주간 = aiToken(보라) · 바탕 = fill · 구분선 = separator · 값 없음 = label3.
+ */
 private object AiLimitPalette {
-    val fiveHourBar = Color(0xFF5B8DEF)
-    val fiveHourHeader = Color(0xFF7FA8F5)
-    val weeklyBar = Color(0xFF8A76E0)
-    val weeklyHeader = Color(0xFFA796E8)
-    val darkTrack = Color(0xFF30343B)
-    val darkSeparator = Color(0xFF2C3037)
-    val darkAbsentText = Color(0xFF595E67)
-    val darkAbsentTrack = Color(0xFF22262C)
+    @Composable
+    fun bar(window: AILimitWindow): Color = if (window == AILimitWindow.fiveHour) AingTheme.colors.accent else AingTheme.colors.aiToken
 
-    fun bar(window: AILimitWindow) = if (window == AILimitWindow.fiveHour) fiveHourBar else weeklyBar
-    fun header(window: AILimitWindow) = if (window == AILimitWindow.fiveHour) fiveHourHeader else weeklyHeader
+    @Composable
+    fun header(window: AILimitWindow): Color = bar(window).copy(alpha = 0.85f)
 }
 
 private const val VALUE_WIDTH = 52
@@ -186,7 +184,7 @@ private const val MARK_SIDE = 20
 @Composable
 fun AiLimitsCard(models: List<AiLimitCardModel>, modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
-    val separator = if (colors.isDark) AiLimitPalette.darkSeparator else colors.separator
+    val separator = colors.separator
     MacPanel(modifier.fillMaxWidth()) {
         Column(Modifier.padding(vertical = 10.dp)) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(14.dp)) {
@@ -231,26 +229,23 @@ private fun AiLimitProviderRow(model: AiLimitCardModel, modifier: Modifier = Mod
 /** 맥 AIProviderTile 자리 — 로고 대신 이름 첫 글자 칩(상표 그림을 싣지 않는다). */
 @Composable
 private fun ProviderMark(provider: AILimitProvider) {
+    val colors = AingTheme.colors
     val tint = when (provider) {
-        AILimitProvider.claude -> Color(0xFFD97757)
-        AILimitProvider.codex -> Color(0xFF10A37F)
-        AILimitProvider.antigravity -> Color(0xFF4285F4)
+        AILimitProvider.claude -> colors.pending
+        AILimitProvider.codex -> colors.working
+        AILimitProvider.antigravity -> colors.accent
     }
     Box(Modifier.size(MARK_SIDE.dp).background(tint, RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
-        Text(provider.displayName.take(1), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+        Text(provider.displayName.take(1), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = colors.onAccentFill, maxLines = 1)
     }
 }
 
 @Composable
 private fun LimitCell(display: AILimitDisplay?, window: AILimitWindow, modifier: Modifier) {
     val colors = AingTheme.colors
-    val track = when {
-        !colors.isDark -> colors.fill
-        display == null -> AiLimitPalette.darkAbsentTrack
-        else -> AiLimitPalette.darkTrack
-    }
+    val track = if (display == null) colors.fill.copy(alpha = colors.fill.alpha * 0.5f) else colors.fill
     val valueColor = when (if (display == null) null else AiLimitTint.of(display.percent)) {
-        null -> if (colors.isDark) AiLimitPalette.darkAbsentText else colors.label3
+        null -> colors.label3
         AiLimitTint.DANGER -> colors.danger
         AiLimitTint.WARN -> colors.pending
         AiLimitTint.NONE -> colors.label2

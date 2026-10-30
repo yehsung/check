@@ -293,18 +293,19 @@ struct V0369RummyV2EditorTests {
     @Test("moveBlock: 세트 슬롯은 옮기기 전 화면 기준 — 같은 세트 안에선 앞쪽 집힌 장수만큼 당긴다 · 새 세트는 넘긴 순서")
     func moveBlockSlotsUsePreRemovalIndices() {
         // 없으면: 세트 안에서 묶음을 뒤로 옮길 때 한 칸씩 밀려 엉뚱한 자리에 꽂히는 결함이 초록이 된다.
-        var editor = RummyTurnEditor(table: [v2f("A1 A2 A3 A4 A5 A6")], rack: [], initialDone: true)
+        // v3(K3): 알맞은 정렬 자리가 있으면 그것이 슬롯보다 먼저라(규칙 ③), 슬롯 규약은 맞는 자리가 없는 조각으로 잰다.
+        var editor = RummyTurnEditor(table: [v2f("A1 B5 C9 D13 A7 B11")], rack: [], initialDone: true)
         let ids = editor.melds[0].map(\.id)
-        // [A1 A2] 를 A5 앞(슬롯 4)으로 → A3 A4 A1 A2 A5 A6.
+        // [A1 B5] 를 A7 앞(슬롯 4)으로 → C9 D13 A1 B5 A7 B11.
         let moved12 = editor.moveBlock([ids[0], ids[1]], to: .meld(0, index: 4))
         #expect(moved12)
-        #expect(editor.submissionTable == [v2f("A3 A4 A1 A2 A5 A6")])
-        // 런 쪼개기: A5 부터 끝까지를 새 세트로(⌥ 집기).
+        #expect(editor.submissionTable == [v2f("C9 D13 A1 B5 A7 B11")])
+        // 쪼개기: A7 부터 끝까지를 새 세트로(⌥ 집기).
         let pick = editor.meldPick(for: ids[4], fromTileToEnd: true)
         #expect(pick == [ids[4], ids[5]])
         let moved13 = editor.moveBlock(pick, to: .newMeldAt(v2p(500, 400)))
         #expect(moved13)
-        #expect(editor.submissionTable == [v2f("A3 A4 A1 A2"), v2f("A5 A6")])
+        #expect(editor.submissionTable == [v2f("C9 D13 A1 B5"), v2f("A7 B11")])
         #expect(editor.points[1] == v2p(496, 400))   // 500 은 격자 496·504 의 한가운데 — 같으면 왼쪽
         #expect(v2Disjoint(editor.tableLayout))
         #expect(editor.screenOrder(Set([ids[5], ids[0], 4242]))  == [ids[0], ids[5]])

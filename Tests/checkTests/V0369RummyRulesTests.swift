@@ -344,16 +344,17 @@ private let payoutCases: [PayoutCase] = [
     }
 
     @Test func editorMovesWithinMeldUsingPreRemovalSlots() {
-        var editor = RummyTurnEditor(table: [fs("A1 A2 A3 A4")], rack: [], initialDone: true)
+        // v3(K3): 맞는 정렬 자리가 있으면 슬롯보다 먼저라(규칙 ③), 슬롯 규약은 어디에도 안 이어지는 조각으로 잰다.
+        var editor = RummyTurnEditor(table: [fs("A1 B5 C9 D13")], rack: [], initialDone: true)
         let first = editor.melds[0][0].id
         move(&editor, first, .meld(0, index: 1))  // 자기 바로 뒤 슬롯 = 제자리
-        #expect(editor.melds[0].map(\.face) == fs("A1 A2 A3 A4"))
-        move(&editor, first, .meld(0, index: 3))  // A4 앞
-        #expect(editor.melds[0].map(\.face) == fs("A2 A3 A1 A4"))
+        #expect(editor.melds[0].map(\.face) == fs("A1 B5 C9 D13"))
+        move(&editor, first, .meld(0, index: 3))  // D13 앞
+        #expect(editor.melds[0].map(\.face) == fs("B5 C9 A1 D13"))
         move(&editor, first, .meld(0, index: nil))  // 끝
-        #expect(editor.melds[0].map(\.face) == fs("A2 A3 A4 A1"))
+        #expect(editor.melds[0].map(\.face) == fs("B5 C9 D13 A1"))
         move(&editor, first, .meld(0, index: 0))  // 맨 앞
-        #expect(editor.melds[0].map(\.face) == fs("A1 A2 A3 A4"))
+        #expect(editor.melds[0].map(\.face) == fs("A1 B5 C9 D13"))
         #expect(!editor.isChanged)
     }
 
@@ -413,8 +414,9 @@ private let payoutCases: [PayoutCase] = [
     @Test func editorIsChangedComparesKMultisets() {
         var editor = RummyTurnEditor(table: [fs("A1 A2 A3 A4 A5 A6")], rack: fs("B9"), initialDone: true)
         let tiles = editor.melds[0].map(\.id)
-        // 쪼개면 바뀜.
-        for tile in tiles[3...] { move(&editor, tile, tile == tiles[3] ? .newMeld : .meld(1, index: nil)) }
+        // 쪼개면 바뀜. v3(K3): 가운데 A4 를 빼면 A1-A3 · A5-A6 이 제자리에 남고 새 세트는 맨 끝이다 — A5·A6 을 거기로.
+        move(&editor, tiles[3], .newMeld)
+        for tile in tiles[4...] { move(&editor, tile, .meld(editor.melds.count - 1, index: nil)) }
         #expect(editor.melds.count == 2 && editor.isChanged)
         // 다시 합치면(순서는 섞여도) 안 바뀜 — R-19 "쪼갰다 원래대로 돌려놓은 것".
         for tile in tiles[3...].reversed() { move(&editor, tile, .meld(0, index: 0)) }

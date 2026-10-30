@@ -20,6 +20,12 @@ import Foundation
 //    `.rack(index: nil)` 은 마지막 빈자리(`RummyRackLayout.endSlot`). 판으로 나간 랙 타일은 나간 **자리**를 기억했다가
 //    `reset` 이 그 자리로(막혔으면 가장 가까운 빈자리로) 돌린다.
 //  · 묶음째 옮기기: `moveBlock` 은 전부 아니면 전무이고 `move(x)` 는 `moveBlock([x])` 다(같은 규약 한 벌).
+//
+// ── v3(K3, 0.3.69 실플레이 뒤) — 판 손맛 규칙. 서명 그대로, 판정과 무관(규칙 정본은 `RummyTableEdit` 머리말) ──
+//  ① 판 묶음에서 빼면 남은 토막이 제자리에 남는다(가운데면 둘로 — 오른 토막은 원래 묶음 바로 뒤 번호, 새 묶음은 늘 맨 끝).
+//  ② 빈 곳에 놓기(`.newMeldAt`)·묶음 옮기기(`moveSet`)가 다른 묶음 끝 가까이면 이어질 때 그 끝에 합친다(대상 제자리).
+//  ③ 묶음 위에 놓기(`.meld`)는 슬롯보다 알맞은 정렬 자리가 먼저(없으면 슬롯 — 위 자리 규약), 앞에 꽂히면 왼쪽으로 늘어난다.
+//  화면은 `previewDrop` · `previewMoveSet` 으로 놓기 전에 계획(붙기 · 꽂기 · 새 자리)을 묻는다.
 
 /// 끌기용 타일 한 장. `id` 는 이 편집기 안에서만 뜻이 있는 로컬 번호다(와이어엔 면 문자열만 간다 — 설계서 §1).
 package struct RummyTile: Identifiable, Hashable, Sendable {
@@ -250,29 +256,51 @@ package struct RummyTurnEditor: Equatable, Sendable {
     /// 없는 세트 번호. 놓인 순서 = 넘긴 순서(화면이 `screenOrder` 로 맞춰 넘긴다).
     /// 자리 = 옮기기 전 화면 슬롯(`move` 규약) — 같은 줄이면 그 슬롯 앞에 있던 집힌 장수만큼 당겨 꽂는다.
     /// 랙에서 판으로 나간 타일은 나갈 때의 받침대 자리를 하나씩 기억한다(→ `reset` 이 고칠 것 없이 맞는다).
+    /// v3(K3) 판 손맛(`RummyTableEdit` 머리말): ① 판 묶음에서 빼면 남은 토막이 제자리에 남는다(가운데면 둘로 — 오른 토막은
+    /// 원래 묶음 바로 뒤 번호) ② `.newMeldAt` 이 다른 묶음 끝 가까이면 이어질 때 그 끝에 붙는다 ③ `.meld` 는 슬롯보다
+    /// 알맞은 정렬 자리가 먼저다(없으면 슬롯). 받은 묶음은 붙기 → 늘어나다 막히면 가장 가까운 빈자리(`refit`) 순.
     @discardableResult
     package mutating func moveBlock(_ tileIDs: [Int], to target: RummyDropTarget) -> Bool {
-        guard !tileIDs.isEmpty, Set(tileIDs).count == tileIDs.count else { return false }
+        apply(tileIDs, to: target) != nil
+    }
+
+    /// 작업 중 판 묶음 하나.
+    private struct Piece {
+        var tiles: [RummyTile]
+        var point: RummyPoint
+        /// 옮기기 전 화면 묶음 번호(쪼개진 토막이면 원래 묶음). 새 묶음이면 nil.
+        let origin: Int?
+
+        var faces: [RummyFace] { tiles.map(\.face) }
+        var frame: RummyRect { RummyTableLayout.frame(at: point, tiles: tiles.count) }
+    }
+
+    /// `moveBlock` 의 몸체. 받아들였으면 계획과 놓은 뒤 블록이 든 묶음 번호(받침대행이면 nil), 거절이면 nil(아무것도 안 바꾼다).
+    private mutating func apply(_ tileIDs: [Int], to target: RummyDropTarget) -> (plan: RummyDropPlan, landed: Int?)? {
+        guard !tileIDs.isEmpty, Set(tileIDs).count == tileIDs.count else { return nil }
         var block: [RummyTile] = []
         var sources: [Int: Spot] = [:]
         for id in tileIDs {
-            guard let spot = locate(id), let found = tile(id) else { return false }
+            guard let spot = locate(id), let found = tile(id) else { return nil }
             sources[id] = spot
             block.append(found)
         }
         let toRack: Bool
+        var targetSet: Int?
+        var targetSlot: Int?
         switch target {
         case .rack, .rackSlot:
-            if tileIDs.contains(where: isFromTable) { return false }
+            if tileIDs.contains(where: isFromTable) { return nil }
             toRack = true
-        case .meld(let meldIndex, _):
-            guard melds.indices.contains(meldIndex) else { return false }
+        case .meld(let meldIndex, let slot):
+            guard melds.indices.contains(meldIndex) else { return nil }
             toRack = false
+            targetSet = meldIndex
+            targetSlot = slot
         case .newMeld, .newMeldAt:
             toRack = false
         }
         let moving = Set(tileIDs)
-        let countsBefore = melds.map(\.count)
         var lookup = Dictionary(uniqueKeysWithValues: rack.map { ($0.id, $0) })
         for tile in block { lookup[tile.id] = tile }
 
@@ -285,25 +313,68 @@ package struct RummyTurnEditor: Equatable, Sendable {
         }
         if toRack { departures.removeAll { moving.contains($0.tile.id) } }
 
-        // 2) 판에서 빼기(빈 세트는 아직 남겨 둔다 — 세트 번호가 옮기기 전 화면 기준이다).
-        var working = melds.map { meld in meld.filter { !moving.contains($0.id) } }
-        var newPointWanted: RummyPoint??
+        // 2) 판에서 빼기(규칙 ① — 남은 토막은 제자리) + 대상 묶음에 꽂기(규칙 ③). 세트 번호는 옮기기 전 화면 기준이다.
+        var pieces: [Piece] = []
+        var receiving: Int?
+        var plan: RummyDropPlan = .rack
+        let width = RummyTableLayout.tileWidth
+        for (index, meld) in melds.enumerated() {
+            let removed = Set(meld.indices.filter { moving.contains(meld[$0].id) })
+            if index == targetSet {
+                let rest = meld.filter { !moving.contains($0.id) }
+                var preferred = rest.count
+                if let slot = targetSlot {
+                    let before = meld.prefix(max(slot, 0)).filter { moving.contains($0.id) }.count
+                    preferred = Self.clamp(slot - before, upTo: rest.count)
+                }
+                let at = RummyTableEdit.insertionIndex(block.map(\.face), into: rest.map(\.face), preferred: preferred).index
+                var tiles = rest
+                tiles.insert(contentsOf: block, at: at)
+                // 남은 첫 타일이 제자리: 앞에 꽂히면 왼쪽으로 늘어난다.
+                var point = points[index]
+                if let firstKept = meld.indices.first(where: { !removed.contains($0) }) {
+                    point.x += (firstKept - (at == 0 ? block.count : 0)) * width
+                }
+                receiving = pieces.count
+                pieces.append(Piece(tiles: tiles, point: point, origin: index))
+                plan = .insert(set: index, index: at)
+            } else if removed.isEmpty {
+                pieces.append(Piece(tiles: meld, point: points[index], origin: index))
+            } else {
+                for piece in RummyTableEdit.split(count: meld.count, point: points[index], removing: removed) {
+                    pieces.append(Piece(tiles: Array(meld[piece.range]), point: piece.point, origin: index))
+                }
+            }
+        }
 
         // 3) 놓기.
         switch target {
-        case .meld(let meldIndex, let slot):
-            var at = working[meldIndex].count
-            if let slot {
-                let before = melds[meldIndex].prefix(max(slot, 0)).filter { moving.contains($0.id) }.count
-                at = Self.clamp(slot - before, upTo: working[meldIndex].count)
+        case .meld:
+            if var landed = receiving, case .insert(_, let at) = plan {
+                // 자란 쪽만 본다: 앞에 꽂혔으면 왼쪽 이웃의 오른끝, 아니면 오른쪽 이웃의 왼끝. 다 옮겨 비었던 묶음이면 안 본다.
+                let grewLeft = at == 0 && pieces[landed].tiles.count > block.count
+                let sides: [RummyAttachSide] = pieces[landed].tiles.count == block.count ? [] : (grewLeft ? [.right] : [.left])
+                _ = Self.attachAll(&pieces, receiving: &landed, sides: sides)
+                Self.refit(&pieces, landed)
+                receiving = landed
             }
-            working[meldIndex].insert(contentsOf: block, at: at)
         case .newMeld:
-            working.append(block)
-            newPointWanted = .some(nil)
-        case .newMeldAt(let point):
-            working.append(block)
-            newPointWanted = .some(point)
+            let point = RummyTableLayout.firstFree(tiles: block.count, among: pieces.map(\.frame))
+            receiving = pieces.count
+            pieces.append(Piece(tiles: block, point: point, origin: nil))
+            plan = .newSet(point)
+        case .newMeldAt(let wanted):
+            var landed = pieces.count
+            pieces.append(Piece(tiles: block, point: wanted, origin: nil))
+            if let attached = Self.attachAll(&pieces, receiving: &landed) {
+                Self.refit(&pieces, landed)
+                plan = attached
+            } else {
+                let others = pieces.indices.filter { $0 != landed }.map { pieces[$0].frame }
+                pieces[landed].point = RummyTableLayout.snap(wanted, tiles: block.count, among: others)
+                plan = .newSet(pieces[landed].point)
+            }
+            receiving = landed
         case .rack(let slot?):
             // 옛 선형 자리: 화면 순서에 꽂고 빈칸 없이 다시 채운다.
             var order = readingBefore.filter { !moving.contains($0) }
@@ -318,40 +389,92 @@ package struct RummyTurnEditor: Equatable, Sendable {
             rackLayout.set(tileIDs, at: slot)
         }
 
-        // 4) 빈 세트 지우기 + 길이가 바뀐 세트 다시 맞추기(오른쪽으로 늘다 막히면 가장 가까운 빈자리).
-        var keptMelds: [[RummyTile]] = []
-        var keptPoints: [RummyPoint] = []
-        var changed: [Int] = []
-        for index in countsBefore.indices where !working[index].isEmpty {
-            if working[index].count != countsBefore[index] { changed.append(keptMelds.count) }
-            keptMelds.append(working[index])
-            keptPoints.append(points[index])
-        }
-        for index in changed {
-            let others = keptMelds.indices.filter { $0 != index }
-                .map { RummyTableLayout.frame(at: keptPoints[$0], tiles: keptMelds[$0].count) }
-            keptPoints[index] = RummyTableLayout.refit(keptPoints[index], tiles: keptMelds[index].count, among: others)
-        }
-        if let wanted = newPointWanted {
-            let others = keptMelds.indices.map { RummyTableLayout.frame(at: keptPoints[$0], tiles: keptMelds[$0].count) }
-            let point = wanted.map { RummyTableLayout.snap($0, tiles: block.count, among: others) }
-                ?? RummyTableLayout.firstFree(tiles: block.count, among: others)
-            keptMelds.append(block)
-            keptPoints.append(point)
-        }
-        melds = keptMelds
-        points = keptPoints
+        melds = pieces.map(\.tiles)
+        points = pieces.map(\.point)
         rack = rackLayout.readingOrder.compactMap { lookup[$0] }
-        return true
+        return (plan, receiving)
+    }
+
+    /// 규칙 ②: `receiving` 묶음을 닿는 이웃 끝에 붙인다 — 합친 뒤 또 닿으면 또(가운데를 메우면 양쪽이 다 붙는다).
+    /// 합친 묶음은 대상의 번호·점(제자리)을 잇고 `receiving` 이 그것을 가리킨다. 첫 붙기를 돌려준다(없으면 nil).
+    private static func attachAll(
+        _ pieces: inout [Piece], receiving: inout Int, sides: [RummyAttachSide] = [.right, .left]
+    ) -> RummyDropPlan? {
+        var first: RummyDropPlan?
+        while !sides.isEmpty {
+            let others = pieces.indices.filter { $0 != receiving }
+            guard let hit = RummyTableEdit.attachment(
+                block: pieces[receiving].faces, frame: pieces[receiving].frame,
+                sets: others.map { pieces[$0].faces }, frames: others.map { pieces[$0].frame }, sides: sides)
+            else { break }
+            let host = others[hit.set]
+            let mover = pieces[receiving]
+            if first == nil { first = .attach(set: pieces[host].origin ?? host, side: hit.side) }
+            pieces[host].tiles = hit.side == .right ? pieces[host].tiles + mover.tiles : mover.tiles + pieces[host].tiles
+            pieces[host].point = RummyTableEdit.attachedPoint(
+                target: pieces[host].point, side: hit.side, blockCount: mover.tiles.count)
+            pieces.remove(at: receiving)
+            receiving = host > receiving ? host - 1 : host
+        }
+        return first
+    }
+
+    /// 받은 묶음 다시 맞추기: 그 자리가 판 안이고 안 겹치면 그대로, 아니면 가장 가까운 빈자리(`RummyTableLayout.refit`).
+    private static func refit(_ pieces: inout [Piece], _ index: Int) {
+        let others = pieces.indices.filter { $0 != index }.map { pieces[$0].frame }
+        pieces[index].point = RummyTableLayout.refit(pieces[index].point, tiles: pieces[index].tiles.count, among: others)
     }
 
     /// v2: 묶음 통째 위치 이동(판 좌표 왼쪽 위). 가장 가까운 빈자리로 스냅한다(자기 자리는 장애물에서 뺀다). 없는 번호면 false.
-    /// 내용은 안 바뀐다 — 판정(`reason`)·`isChanged` 와 무관하고 `isLayoutChanged` 만 바뀐다.
+    /// 배치만 바꾸면 판정(`reason`)·`isChanged` 와 무관하고 `isLayoutChanged` 만 바뀐다.
+    /// v3(K3) 규칙 ②: 놓은 자리가 다른 묶음 끝 가까이고 이어질 수 있으면 그 끝에 **합친다**(대상 제자리, 합친 묶음은 대상 번호).
+    /// 그때는 내용(묶음 수)이 바뀌므로 `isChanged` 도 바뀔 수 있다.
     @discardableResult
     package mutating func moveSet(_ setIndex: Int, to point: RummyPoint) -> Bool {
-        guard melds.indices.contains(setIndex) else { return false }
-        points[setIndex] = tableLayout.snap(point, tiles: melds[setIndex].count, excluding: setIndex)
-        return true
+        applySet(setIndex, to: point) != nil
+    }
+
+    private mutating func applySet(_ setIndex: Int, to point: RummyPoint) -> (plan: RummyDropPlan, landed: Int?)? {
+        guard melds.indices.contains(setIndex) else { return nil }
+        var pieces = melds.indices.map { Piece(tiles: melds[$0], point: points[$0], origin: $0) }
+        var landed = setIndex
+        pieces[setIndex].point = point
+        let plan: RummyDropPlan
+        if let attached = Self.attachAll(&pieces, receiving: &landed) {
+            Self.refit(&pieces, landed)
+            plan = attached
+        } else {
+            pieces[setIndex].point = tableLayout.snap(point, tiles: melds[setIndex].count, excluding: setIndex)
+            plan = .newSet(pieces[setIndex].point)
+        }
+        melds = pieces.map(\.tiles)
+        points = pieces.map(\.point)
+        return (plan, landed)
+    }
+
+    // MARK: - v3 놓기 미리보기(K3)
+
+    /// 놓기 전에 묻기(바꾸지 않는다): `moveBlock(tileIDs, to: target)` 이 할 일(계획)과 놓은 뒤 블록이 든 묶음.
+    /// 거절이면 nil. 화면은 끄는 동안 이것으로 붙을 끝·꽂힐 자리·새 자리를 미리 그린다(같은 입력이면 같은 답).
+    package func previewDrop(_ tileIDs: [Int], to target: RummyDropTarget) -> RummyDropPreview? {
+        var copy = self
+        guard let outcome = copy.apply(tileIDs, to: target), let first = tileIDs.first else { return nil }
+        return RummyDropPreview(plan: outcome.plan, landing: outcome.landed.map { copy.landing(set: $0, first: first) })
+    }
+
+    /// `moveSet(setIndex, to: point)` 의 미리보기 — 붙으면 `.attach`, 아니면 `.newSet(스냅된 점)`. 없는 번호면 nil.
+    package func previewMoveSet(_ setIndex: Int, to point: RummyPoint) -> RummyDropPreview? {
+        guard melds.indices.contains(setIndex), let first = melds[setIndex].first?.id else { return nil }
+        var copy = self
+        guard let outcome = copy.applySet(setIndex, to: point) else { return nil }
+        return RummyDropPreview(plan: outcome.plan, landing: outcome.landed.map { copy.landing(set: $0, first: first) })
+    }
+
+    private func landing(set: Int, first: Int) -> RummyDropPreview.Landing {
+        let tiles = melds[set]
+        return RummyDropPreview.Landing(
+            set: set, faces: tiles.map(\.face), frame: RummyTableLayout.frame(at: points[set], tiles: tiles.count),
+            blockStart: tiles.firstIndex { $0.id == first } ?? 0, valid: RummyRules.analyze(tiles.map(\.face)).valid)
     }
 
     private static func clamp(_ value: Int, upTo upper: Int) -> Int {

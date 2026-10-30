@@ -127,6 +127,13 @@ enum RummyBoardPreview: Equatable {
         return side == .right ? slots.x : slots.maxX
     }
 
+    /// 첫 등록 전(R-12) 판 묶음에 꽂기: 세트는 맞아도 차례가 `initial_table_touched` 로 막힌다 — 초록·체크(맞음)를 거둔다
+    /// (파랑 = 아직 아님). 3판 검증: 등록 전 판 묶음 위로 끌면 초록 체크가 떠서 놓고 [완료]를 눌러야 막히는 것을 알았다.
+    func beforeInitial(touchesTable: Bool) -> RummyBoardPreview {
+        guard touchesTable, case .insert(let set, let caretX, let landing, true) = self else { return self }
+        return .insert(set: set, caretX: caretX, landing: landing, valid: false)
+    }
+
     /// 놓으면 그 묶음이 맞는 세트가 되는가(초록).
     var completes: Bool {
         switch self {

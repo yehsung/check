@@ -661,8 +661,10 @@ struct RummyMatchView: View {
         case (.tiles, .newMeldAt(let point)) where wholeMeld(dragging.ids) != nil:
             return moveSet(wholeMeld(dragging.ids) ?? 0, point)
         case (.tiles, _):
-            return .make(editor.previewDrop(dragging.ids, to: target), blockCount: dragging.ids.count,
-                         meldTileIDs: ids, frames: layout.frames, dragged: dragged)
+            let preview = RummyBoardPreview.make(editor.previewDrop(dragging.ids, to: target), blockCount: dragging.ids.count,
+                                                 meldTileIDs: ids, frames: layout.frames, dragged: dragged)
+            guard !editor.initialDone, let set = preview?.targetSet, editor.melds.indices.contains(set) else { return preview }
+            return preview?.beforeInitial(touchesTable: editor.melds[set].contains { editor.isFromTable($0.id) })
         }
     }
 

@@ -254,6 +254,26 @@ struct V0369RummyV3MatchRenderTests {
                 "자석 배지가 없다")
     }
 
+    @Test("3판 검증 — 첫 등록 전 판 묶음(A4-A7) 위로 A3 을 끌면 세트는 맞아도 초록 체크가 없다(낼 수 없다) · 기준선 = 등록 뒤 같은 끌기")
+    func noGreenCheckBeforeInitialOnTableSet() throws {
+        // 없으면: 첫 등록 전 판 묶음에 꽂는 미리보기가 초록 체크(맞음)를 띄워, 놓고 [완료]를 눌러야 '판 묶음을 건드렸다'로 막히는 결함이 초록이 된다.
+        func render(initialDone: Bool) throws -> NSBitmapImageRep {
+            let editor = RummyTurnEditor(table: v3Table.map(v3Faces), rack: v3Faces(v3Rack), initialDone: initialDone,
+                                         tableLayout: RummyLayout(v3Layout.map { RummyPoint(x: $0[0], y: $0[1]) }))
+            let a3 = v3ID(editor, "A3", onTable: false)
+            return try v3Render(editor, drag: RummyPreviewDrag(tileID: a3, point: v3Pointer(CGPoint(x: 236, y: 368))))
+        }
+        let after = try render(initialDone: true)
+        let before = try render(initialDone: false)
+        // 놓은 뒤 윤곽 120…320 · y 340 — 체크 배지는 오른쪽 위 모서리.
+        let corner = v3Board(RummyRect(x: 320, y: 340, width: 0, height: 0))
+        let badge = CGRect(x: corner.minX - 6, y: corner.minY - 20, width: 26, height: 26)
+        let green = v3Count(after, near: v3Working, tolerance: 45, in: badge)
+        let gated = v3Count(before, near: v3Working, tolerance: 45, in: badge)
+        #expect(green > 40, "기준선(등록 뒤)에 체크 배지가 없다 — 재는 자리가 틀렸다(\(green))")
+        #expect(gated < green / 4, "첫 등록 전인데 판 묶음에 꽂는 미리보기가 초록 체크다(\(green) → \(gated))")
+    }
+
     @Test("묶음 위로 끄는 중 — 캐럿은 놓은 슬롯(A5|A6)이 아니라 들어갈 자리(맨 앞)에 · 놓은 뒤 윤곽은 왼쪽으로 늘어난다")
     func caretAtSortedSlot() throws {
         // 없으면: 옛 미리보기처럼 손 밑 슬롯에 캐럿이 서서, 놓으면 다른 자리(맨 앞)로 들어가는 것이 "튄다"로 보인다.

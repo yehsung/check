@@ -22,6 +22,8 @@ export const HERO_COPY = {
  * 주 버튼 접근 이름: "Mac용 다운로드, aing-check.dmg 30.1MB".
  * 크기는 getRelease() 의 10진 MB 문자열 그대로(하드코딩 금지). 릴리스에 DMG 가 없으면 zip(/api/download 와 같은 순서).
  * 둘 다 없으면 fallback(RELEASE_FALLBACK)으로. 순수 함수.
+ * 2026-10-30(§11) 부터 히어로·아웃트로 버튼은 바로 내려받지 않고 설치 선택 창을 연다 → 그 방아쇠의 접근 이름은 보이는 글자('Mac용 다운로드')다.
+ * 지금 이 함수를 부르는 화면은 없다(바로 내려받는 버튼이 다시 생기면 쓴다).
  */
 export function heroCtaAriaLabel(release: ReleaseInfo, fallback: ReleaseInfo): string {
   const rel = release.dmg || release.zip ? release : fallback;

@@ -17,6 +17,12 @@
     "h": 64,
     "bytes": 1434
   },
+  "brand/qr-android-beta": {
+    "src": "/assets/brand/qr-android-beta.svg?v=7c56ad3f",
+    "w": 148,
+    "h": 148,
+    "bytes": 3383
+  },
   "brand/qr-appstore": {
     "src": "/assets/brand/qr-appstore.svg?v=a9b2d4b9",
     "w": 148,

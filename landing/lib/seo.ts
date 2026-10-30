@@ -1,5 +1,5 @@
 // lib/seo.ts — 검색·답변 엔진용 정본(docs/v3/brief.md §10 · docs/v3/seo.md). 상수 + 순수 함수.
-// - 문장은 화면이 그리는 같은 상수(FEATURE_COPY · FAQ_ITEMS · INSTALL_COPY · HERO_COPY · OG_IMAGE)에서만 가져온다 — 화면에 없는 사실 0,
+// - 문장은 화면이 그리는 같은 상수(FEATURE_COPY · FAQ_ITEMS · INSTALL_COPY · ANDROID_COPY · HERO_COPY · OG_IMAGE)에서만 가져온다 — 화면에 없는 사실 0,
 //   별점·리뷰·지어낸 숫자 0, 숨긴 글 0. 버전·크기는 설치 카드와 같은 installChoice() 값.
 // - LINKS·BREW·FOOTER_LINKS(data/fixtures.ts · data/site-links.ts)는 JSON import 가 있어 node --test 가 못 불러온다 →
 //   부르는 쪽(app/page.tsx · app/llms.txt/route.ts)이 넘긴다. 여기 런타임 import 는 node 로 바로 읽히는 파일만(.ts 확장자 — lib/seo.test.ts).
@@ -9,7 +9,7 @@ import type { Metadata, MetadataRoute } from "next";
 import { FEATURE_COPY } from "../components/features/copy.ts";
 import { HERO_COPY } from "../components/hero/copy.ts";
 import { FAQ_ITEMS } from "../data/faq-items.ts";
-import { INSTALL_COPY, metaParts, type InstallChoice } from "../data/install-copy.ts";
+import { ANDROID_COPY, INSTALL_COPY, metaParts, type InstallChoice } from "../data/install-copy.ts";
 import { OG_IMAGE, SITE_NAME, SITE_URL } from "./site.ts";
 
 // ─── 문구(docs/v3/brief.md §8 메타 · §10 — 글자 그대로) ─────────────────────────────────────────
@@ -51,6 +51,10 @@ export type SeoLinks = {
   readonly support: string;
   readonly licenses: string;
   readonly install: string;
+  /** 안드로이드 베타 세 단계 주소(ANDROID_COPY.steps[].link — 그룹 가입 · 테스터 되기 · Play 스토어) */
+  readonly androidGroup: string;
+  readonly androidTesting: string;
+  readonly androidStore: string;
 };
 export type SeoChoice = Pick<InstallChoice, "file" | "label" | "version" | "mb">;
 export type SeoFooterLink = { readonly id: string; readonly label: string; readonly href: string };
@@ -264,6 +268,24 @@ export interface LlmsInput {
   siteUrl?: string;
 }
 
+/**
+ * llms.txt 설치 묶음의 안드로이드 한 줄(docs/v3/brief.md §12 — 설치 절 안드로이드 카드 글자 그대로, ANDROID_COPY 에서 조립):
+ * '- Android(베타): {한 줄} 1) [구글 그룹 가입](…) 2) [웹에서 테스터 되기](…) 3) [Play 스토어에서 설치](…) — {같은 계정 경고}'.
+ * 단계 순서 = 화면 순서(실제로 이 순서여야 한다). 안드로이드 MobileApplication LD 는 싣지 않는다(비공개 테스트 — 스토어 페이지가 테스터에게만 보인다).
+ */
+export function androidLine(links: Pick<SeoLinks, "androidGroup" | "androidTesting" | "androidStore">): string {
+  const steps = ANDROID_COPY.steps.map((s, i) => `${i + 1}) [${s.name}](${links[s.link]})`).join(" ");
+  return `- Android(베타): ${ANDROID_COPY.line} ${steps} — ${ANDROID_COPY.warn}`;
+}
+
+/**
+ * llms.txt 안드로이드 줄 아래 문제 해결(§12.6 — 카드의 접는 <details> 글자 그대로): 요약 줄 하나 + 항목 셋(화면 순서) — 들여 쓴 목록.
+ * '  - 3단계에서 앱이 안 보이나요?' · '    - Play 스토어 앱 …' …
+ */
+export function androidHelpLines(): string[] {
+  return [`  - ${ANDROID_COPY.helpTitle}`, ...ANDROID_COPY.helpItems.map((t) => `    - ${t}`)];
+}
+
 /** 내비 링크 경로(data/site-links NAV_LINKS) — llms.txt 본문 묶음의 이름표가 이 내비 이름이다. */
 const NAV_HREF = { features: "/#f-timer", install: "/#install", faq: "/#faq" } as const;
 
@@ -294,6 +316,8 @@ export function llmsTxt({ links, brewInstall, choice, live, publishedAt, footerL
       `- Homebrew: \`${brewInstall}\` — ${INSTALL_COPY.sub}`,
       `- DMG: [${choice.label}](${downloadUrl}) — ${dmgMeta}. ${INSTALL_COPY.dmgLine}`,
       `- iPhone: [App Store](${links.appStore}) — ${INSTALL_COPY.iphoneMeta}`,
+      androidLine(links),
+      ...androidHelpLines(),
       `- [GitHub 릴리스](${links.releases})${releaseNote}`,
     ]),
     ...block(nav(NAV_HREF.features), FEATURE_COPY.map((c) => `- ${c.title.join(" ")}: ${c.body}`)),

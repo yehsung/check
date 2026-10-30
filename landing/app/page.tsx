@@ -29,7 +29,7 @@ export default async function Page() {
     screenshot: popover?.src,
   });
   return (<>
-    <SiteNav />
+    <SiteNav release={release} />
     <main id="main">
       <Hero release={release} />
       <Scenes />

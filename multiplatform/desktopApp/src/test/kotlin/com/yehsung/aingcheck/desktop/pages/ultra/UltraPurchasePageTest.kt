@@ -35,7 +35,8 @@ class UltraPurchasePageTest {
             initial = UltraWalletState(balance = walletBalance),
         )
         val purchase = UltraPurchase(host, rubyCell, wallet, scope, { price }, { shopMutations += 1 })
-        val model = UltraPurchaseModel(purchase, rubyCell) { price }
+        var shopReloads = 0
+        val model = UltraPurchaseModel(purchase, rubyCell, { price }, reloadShop = { shopReloads += 1 })
     }
 
     @Test

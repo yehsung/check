@@ -29,10 +29,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -124,7 +126,13 @@ class PokeDirectoryLoader(
     }
 }
 
-/** 콕 목록이 읽는 것 — 조립(SocialWiring·MessagesStore)이 채운다. poke=false 면 [sender] 가 null(발신 0). */
+/**
+ * 콕 목록이 읽는 것 — 조립(SocialWiring·MessagesStore)이 채운다. poke=false 면 [sender] 가 null(발신 0).
+ *
+ * 람다 입력은 화면이 **다시 읽는다**(맥은 관찰값 — CheckMenuView.swift 4031-4053 · 723): Compose 상태(MessagesStore 의 mutableStateOf)를
+ * 읽는 람다는 바뀌는 즉시, [workChanges] 가 바뀌면 [localSessionOpen] 을, 그 밖(링 유예처럼 시간으로 넘어가는 판정)은 보이는 동안
+ * 1초 박자로(맥 menuClockNow). 같은 값이면 다시 그리지 않는다.
+ */
 class PokeListDeps(
     val host: SessionHost,
     val config: DesktopAppConfig,
@@ -138,6 +146,8 @@ class PokeListDeps(
     val clock: () -> SwiftDate,
     /** Swift `startedAt != nil`(발신자의 선게이트와 같은 값 — PokeFactsSource.localSessionOpen). */
     val localSessionOpen: () -> Boolean,
+    /** 근무 상태 흐름(SocialDeps.workState.snapshot). 값이 바뀔 때마다 [localSessionOpen] 을 다시 읽는다(맥은 startedAt 관찰값 — CheckMenuView.swift 4031-4053). */
+    val workChanges: StateFlow<*>,
     /** MessagesStore.hiddenBlockedPeerIDs(차단 직후 숨김). */
     val hiddenBlockedPeerIDs: () -> Set<String> = { emptySet() },
     val unreadMessagePeerIDs: () -> Set<String> = { emptySet() },
@@ -148,6 +158,8 @@ class PokeListDeps(
     val isPokeDisconnected: () -> Boolean = { false },
     val collation: Collation = NaturalKoNameCollation,
     val text: WireTextRules = RulesWireTextRules,
+    /** 보이는 동안 다시 읽는 박자(맥 menuClockNow 1초). 시험은 길게 두어 반응 경로만 잰다. */
+    val clockTickMillis: Long = 1_000L,
 )
 
 data class PokeRowView(val entry: PokeDirectoryEntry, val button: PokeButtonState, val unread: PokeRowUnreadMark)
@@ -170,6 +182,7 @@ class PokeListModel(private val deps: PokeListDeps) {
         deps.sender?.pruneExpiredCooldowns(deps.clock())
     }
     private val inFlight = mutableMapOf<String, Job>()
+    val entry = PageEntry()
 
     /** 화면에 세울 사람(나·차단 빼고, 네 무리 정렬). */
     fun rows(): List<PokeDirectoryEntry> = PokeListRules.visibleEntries(
@@ -183,10 +196,13 @@ class PokeListModel(private val deps: PokeListDeps) {
         targetWorking = entry.isWorking,
     )
 
-    /** 화면 열기(맥 팝오버·패널 열기): 디렉터리 1회 + 지갑 PanelOpen. */
+    /**
+     * 화면이 보일 때마다 디렉터리 1회. 지갑 PanelOpen(적립 쓰기)은 **진입의 첫 보임만**(맥 togglePokePanel 2853-2856) —
+     * 띄운 채 플라이아웃을 다시 열면 디렉터리만 읽는다(맥 setMenuPresented 303 · 지갑은 미션·울트라 화면만 :310).
+     */
     fun onOpen() {
         directory.load()
-        deps.wallet?.sync(UltraSyncReason.PanelOpen)
+        if (entry.firstShow()) deps.wallet?.sync(UltraSyncReason.PanelOpen)
     }
 
     /** 짧게 누름 = poke_user 1건. 목록에 없는 사람(나·차단)·가능이 아닌 단추·같은 대상 날아가는 중이면 0건. */
@@ -234,32 +250,41 @@ class PokeListPage(private val deps: PokeListDeps) : FlyoutPageHost {
 
     @Composable
     override fun Content(nav: FlyoutNavigator, widthDip: Double) {
-        val visible by nav.visible.collectAsState()
-        val entries by model.directory.entries.collectAsState()
-        val loaded by model.directory.hasLoaded.collectAsState()
-        val notice by (deps.sender?.notice ?: NO_NOTICE).collectAsState()
-        val cooldowns by (deps.sender?.cooldownUntil ?: NO_COOLDOWN).collectAsState()
-        val wallet = deps.wallet?.state?.collectAsState()
-        val focusOn = deps.focus?.focusMode?.collectAsState()
-        val focusRev = deps.focus?.revision?.collectAsState()
-        val tick = remember { mutableIntStateOf(0) }
-        LaunchedEffect(visible) {
-            if (!visible) return@LaunchedEffect
+        val active = pageActive(nav, FlyoutRoute.PokeList, model.entry)
+        // 흐름 입력(값이 바뀌면 다시 계산). 람다가 읽는 Compose 상태는 derivedStateOf 가 스스로 따라간다.
+        val inputs = listOfNotNull(
+            model.directory.entries.collectAsState(),
+            model.directory.hasLoaded.collectAsState(),
+            (deps.sender?.notice ?: NO_NOTICE).collectAsState(),
+            (deps.sender?.cooldownUntil ?: NO_COOLDOWN).collectAsState(),
+            deps.workChanges.collectAsState(),
+            deps.wallet?.state?.collectAsState(),
+            deps.focus?.focusMode?.collectAsState(),
+            deps.focus?.revision?.collectAsState(),
+        )
+        val clockTick = remember { mutableIntStateOf(0) }
+        LaunchedEffect(active) {
+            if (!active) return@LaunchedEffect
             model.onOpen()
             while (true) {
                 delay((PokeListRules.DIRECTORY_REFRESH_SECONDS * 1000).toLong())
                 model.directory.load()
             }
         }
-        // 쿨타임이 남은 동안만 1초 박자(만료 순간 단추가 살아난다). 없으면 박자 0.
-        LaunchedEffect(cooldowns) {
-            while (cooldowns.values.any { it > deps.clock() }) {
-                delay(1_000)
-                tick.intValue += 1
+        // 보이는 동안 1초 박자(맥 menuClockNow) — 쿨타임 만료·링 유예처럼 시간이 넘기는 판정. 같은 값이면 다시 그리지 않는다.
+        LaunchedEffect(active) {
+            while (active) {
+                delay(deps.clockTickMillis)
+                clockTick.intValue += 1
             }
-            tick.intValue += 1
         }
-        val state = remember(entries, loaded, notice, cooldowns, wallet?.value, focusOn?.value, focusRev?.value, tick.intValue) { model.viewState(deps.clock()) }
+        val state by remember(model, inputs) {
+            derivedStateOf(structuralEqualityPolicy()) {
+                inputs.forEach { it.value }
+                clockTick.intValue
+                model.viewState(deps.clock())
+            }
+        }
         PokeListContent(
             state = state,
             onBack = { nav.back() },

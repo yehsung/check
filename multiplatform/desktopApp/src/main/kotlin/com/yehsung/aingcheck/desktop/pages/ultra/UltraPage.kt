@@ -37,9 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.format.SharedText
 import com.yehsung.aingcheck.core.stores.me.RubyBalanceMirror
+import com.yehsung.aingcheck.desktop.pages.poke.PageEntry
 import com.yehsung.aingcheck.desktop.pages.poke.UltraBalanceText
+import com.yehsung.aingcheck.desktop.pages.poke.pageActive
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutNavigator
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutPageHost
+import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
 import com.yehsung.aingcheck.feature.desktop.socialapi.UltraSyncReason
 import com.yehsung.aingcheck.feature.desktop.ultra.UltraPurchase
 import com.yehsung.aingcheck.feature.desktop.ultra.UltraWalletStore
@@ -107,13 +110,17 @@ object UltraShopText {
 /**
  * 고르기 → [구매하기] 두 단계(맥 2026-09-14 신고 뒤 규칙 — 누르자마자 사지 않는다).
  * - 날아가는 동안 고르기·구매 둘 다 무시(요청 1건). [UltraPurchase] 도 같은 깃발로 한 번 더 막는다.
- * - 값·잔량을 **모르면** 살 수 없다(지어내지 않는다). 모자라면 바가 모자란 양을 말하고 단추는 흐리다(서버가 최종 판정).
+ * - 값·잔량을 **모르면** 살 수 없다(지어내지 않는다) — 그때 [구매하기]는 사지 않고 상점을 다시 읽는다(맥 WorkTimerStoreAuth.swift 736-744).
+ *   모자라면 바가 모자란 양을 말하고 단추는 흐리다(서버가 최종 판정).
+ * - 화면 진입 = 상점 한 번 읽기([onEnter] — 맥 toggleShopPanel → loadShopState, WorkTimerStore.swift 3022: 값·루비는 다른 기기에서도 바뀐다).
  * - ok 면 고른 것을 푼다(Swift shopSelection = nil). 잔액은 응답 값 그대로(UltraPurchase.apply).
  */
 class UltraPurchaseModel(
     private val purchase: UltraPurchase,
     private val ruby: RubyBalanceMirror,
     private val ultraPrice: () -> Long?,
+    /** 상점 상태 다시 읽기(MeStore.loadShop — 값·루비가 같은 응답으로 온다). */
+    private val reloadShop: () -> Unit,
 ) {
     private val _selected = MutableStateFlow(false)
     val selected: StateFlow<Boolean> = _selected.asStateFlow()
@@ -126,6 +133,9 @@ class UltraPurchaseModel(
         purchase.clearNotice()
     }
 
+    /** 화면 진입(진입마다 1회 — 플라이아웃을 다시 여는 것은 진입이 아니다). */
+    fun onEnter() = reloadShop()
+
     fun canConfirm(): Boolean {
         if (purchase.isPurchasing.value || !_selected.value) return false
         val have = ruby.rubyBalance ?: return false
@@ -134,6 +144,11 @@ class UltraPurchaseModel(
     }
 
     fun confirm(): Job? {
+        if (purchase.isPurchasing.value || !_selected.value) return null
+        if (ruby.rubyBalance == null || ultraPrice() == null) {
+            reloadShop()
+            return null
+        }
         if (!canConfirm()) return null
         val job = purchase.buy(1) ?: return null
         job.invokeOnCompletion { if (purchase.notice.value == UltraShopText.okNotice(1)) _selected.value = false }
@@ -165,17 +180,29 @@ class UltraPageDeps(
     val purchase: UltraPurchaseModel?,
     /** 상점과 **같은 칸**(RubyBalanceMirror — 칸이 둘이면 화면마다 잔액이 갈린다). */
     val ruby: RubyBalanceMirror,
-    /** shop_state.ultra_price(SocialDeps.ultraPrice 와 같은 출처). */
+    /**
+     * shop_state.ultra_price(SocialDeps.ultraPrice 와 같은 출처 — MeStore.ultraPrice). **Compose 상태를 읽는 람다**여야 한다:
+     * 화면이 구성 중에 읽으므로 상점 조회가 값을 적는 순간 다시 그린다(루비 칸 [ruby] 와 같은 결).
+     */
     val ultraPrice: () -> Long?,
     val rubyArt: () -> ImageBitmap? = { null },
 )
 
-/** 울트라 페이지. 열리면 지갑 PanelOpen sync 1회(맥 openUltraPanel). 뒤로 = 플라이아웃 뒤로. */
+/**
+ * 울트라 페이지. 보일 때마다 지갑 PanelOpen sync 1회(맥 openUltraPanel 2880 · 다시 열기 setMenuPresented 310).
+ * 진입의 첫 보임엔 상점도 읽는다(구매 칸이 있을 때만 — 맥 상점 진입 3022). 뒤로 = 플라이아웃 뒤로.
+ */
 class UltraPage(private val deps: UltraPageDeps) : FlyoutPageHost {
+    private val entry = PageEntry()
+
     @Composable
     override fun Content(nav: FlyoutNavigator, widthDip: Double) {
-        val visible by nav.visible.collectAsState()
-        LaunchedEffect(visible) { if (visible) deps.wallet.sync(UltraSyncReason.PanelOpen) }
+        val active = pageActive(nav, FlyoutRoute.Ultra, entry)
+        LaunchedEffect(active) {
+            if (!active) return@LaunchedEffect
+            deps.wallet.sync(UltraSyncReason.PanelOpen)
+            if (entry.firstShow()) deps.purchase?.onEnter()
+        }
         val wallet by deps.wallet.state.collectAsState()
         val p = deps.purchase
         val purchaseView = if (p == null) {

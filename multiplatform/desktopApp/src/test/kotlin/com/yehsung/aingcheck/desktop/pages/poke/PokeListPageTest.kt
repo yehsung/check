@@ -20,6 +20,7 @@ import com.yehsung.aingcheck.feature.desktop.poke.DesktopPokeSender
 import com.yehsung.aingcheck.feature.desktop.socialapi.UltraWalletTrigger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -62,7 +63,7 @@ class PokeListPageTest {
         val model = PokeListModel(
             PokeListDeps(
                 host = host, config = config, sender = if (config.poke) sender else null, wallet = null, focus = null, scope = scope,
-                clock = clock::now, localSessionOpen = { working }, hiddenBlockedPeerIDs = { hidden }, unreadMessagePeerIDs = { unreadMessages },
+                clock = clock::now, localSessionOpen = { working }, workChanges = MutableStateFlow(0), hiddenBlockedPeerIDs = { hidden }, unreadMessagePeerIDs = { unreadMessages },
             ),
         )
 

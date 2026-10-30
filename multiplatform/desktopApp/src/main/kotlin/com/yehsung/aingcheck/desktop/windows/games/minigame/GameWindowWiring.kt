@@ -6,6 +6,10 @@ import com.yehsung.aingcheck.core.stores.chess.ChessStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.stores.chess.ChessAttention
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuAttention
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttention
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttentionKind
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
 import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
@@ -17,7 +21,7 @@ import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
  * - presentWindow → 그 창을 (지연 생성해) 앞으로 · dismissWindow → 앱이 닫는다(reset — 로그아웃한 뒤 앞 계정의 판이 떠 있으면 안 된다)
  * - requestAttention → 앱이 뒤면 작업 표시줄 깜빡임(FlashWindowEx — 창이 없으면 아무 일도 없다)
  * - onInviteArrived → [onInvite](알림 중재는 W3-c1). **대결 깃발이 꺼진 빌드는 부르지 않는다**(W-3 #7 — 스토어도 잠긴 빌드에서 안 부르지만 여기서 한 번 더 막는다)
- * - onAttention → [onTurnWhileHidden](창이 안 보이는 동안 내 차례)
+ * - onAttention → [onTurnWhileHidden](창이 안 보이는 동안 내 차례) + 구조 정보 onDuelAttention(오버레이 말풍선 — 누르면 그 판)
  * - spectatorFeaturesEnabled ← [DesktopAppConfig.spectator](W-3 #4 — Windows 는 켠다)
  * - 테트리스 대결 rankingEnabled = true(CheckApp.swift:409 ① 순위의 **주 스위치** — 스토어는 폰과 공용이라 기본 꺼짐, 없으면 순위 탭은 영영 로딩.
  *   맥 :430 · 폰 PhoneAppModel 도 무조건 켠다. 관전 스위치와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다)
@@ -40,6 +44,11 @@ object GameWindowWiring {
         onInviteNotice: (DuelInviteNotice) -> Unit = {},
         /** 구조 신청(오버레이 몫) — **onInviteNotice 보다 먼저** 부른다(짝짓기 열쇠: 셸 글이 먼저 오면 대체 말풍선이 하나 더 뜬다). */
         onInviteArrival: DuelInviteArrival = { _, _, _, _, _ -> },
+        /**
+         * 차례 알림의 구조 정보(판 id·종류·상대·수 번호) → 오버레이 말풍선(overlay.onDuelAttention — 누르면 그 판 창).
+         * 맥 CheckApp.swift:367 · :404 · :440 `onAttention → enqueue…Attention`. duels=false 면 부르지 않는다.
+         */
+        onDuelAttention: (DuelAttention) -> Unit = {},
     ) {
         val duels = config.toAppConfig().duelsEnabled
 
@@ -50,10 +59,13 @@ object GameWindowWiring {
             if (duels) {
                 onInvite(GameWindowKind.Gomoku)
                 onInviteArrival(DuelGame.GOMOKU, invite.id, invite.peer.displayName, invite.stake.toInt(), invite.expiresAt)
-                onInviteNotice(DuelInviteNotice(GameWindowKind.Gomoku, invite.peer.displayName, invite.stake))
+                onInviteNotice(DuelInviteNotice(GameWindowKind.Gomoku, invite.peer.displayName, invite.stake, invite.id))
             }
         }
-        gomoku.onAttention = { onTurnWhileHidden(GameWindowKind.Gomoku) }
+        gomoku.onAttention = { a ->
+            onTurnWhileHidden(GameWindowKind.Gomoku)
+            if (duels) onDuelAttention(DuelAttention(DuelGame.GOMOKU, a.matchID, a.kind.toDuel(), a.opponentName, a.moveCount))
+        }
         gomoku.spectatorFeaturesEnabled = config.spectator
 
         chess.presentWindow = { windows.present(GameWindowKind.Chess) }
@@ -63,10 +75,13 @@ object GameWindowWiring {
             if (duels) {
                 onInvite(GameWindowKind.Chess)
                 onInviteArrival(DuelGame.CHESS, invite.id, invite.peer.displayName, invite.stake.toInt(), invite.expiresAt)
-                onInviteNotice(DuelInviteNotice(GameWindowKind.Chess, invite.peer.displayName, invite.stake))
+                onInviteNotice(DuelInviteNotice(GameWindowKind.Chess, invite.peer.displayName, invite.stake, invite.id))
             }
         }
-        chess.onAttention = { onTurnWhileHidden(GameWindowKind.Chess) }
+        chess.onAttention = { a ->
+            onTurnWhileHidden(GameWindowKind.Chess)
+            if (duels) onDuelAttention(DuelAttention(DuelGame.CHESS, a.matchID, a.kind.toDuel(), a.opponentName, a.plyCount))
+        }
         chess.spectatorFeaturesEnabled = config.spectator
 
         tetris.presentWindow = { windows.present(GameWindowKind.TetrisDuel) }
@@ -76,10 +91,14 @@ object GameWindowWiring {
             if (duels) {
                 onInvite(GameWindowKind.TetrisDuel)
                 onInviteArrival(DuelGame.TETRIS, invite.id, invite.peer.displayName, invite.stake, invite.expiresAt)
-                onInviteNotice(DuelInviteNotice(GameWindowKind.TetrisDuel, invite.peer.displayName, invite.stake.toLong()))
+                onInviteNotice(DuelInviteNotice(GameWindowKind.TetrisDuel, invite.peer.displayName, invite.stake.toLong(), invite.id))
             }
         }
-        tetris.onAttention = { onTurnWhileHidden(GameWindowKind.TetrisDuel) }
+        tetris.onAttention = { a ->
+            onTurnWhileHidden(GameWindowKind.TetrisDuel)
+            // 테트리스는 차례가 없다 — 판 시작 하나뿐(TetrisDuelAttention.Kind.matchStarted), 수 번호는 0.
+            if (duels) onDuelAttention(DuelAttention(DuelGame.TETRIS, a.matchID, DuelAttentionKind.MATCH_STARTED, a.opponentName, 0))
+        }
         tetris.spectatorFeaturesEnabled = config.spectator
         tetris.rankingEnabled = true
     }
@@ -91,4 +110,14 @@ object GameWindowWiring {
             override fun chess(focusMatchID: String?): Boolean { chess.openWindow(focusMatchID); return true }
             override fun tetrisDuel(focusMatchID: String?): Boolean { tetris.openWindow(focusMatchID); return true }
         }
+}
+
+private fun GomokuAttention.Kind.toDuel(): DuelAttentionKind = when (this) {
+    GomokuAttention.Kind.matchStarted -> DuelAttentionKind.MATCH_STARTED
+    GomokuAttention.Kind.myTurn -> DuelAttentionKind.MY_TURN
+}
+
+private fun ChessAttention.Kind.toDuel(): DuelAttentionKind = when (this) {
+    ChessAttention.Kind.matchStarted -> DuelAttentionKind.MATCH_STARTED
+    ChessAttention.Kind.myTurn -> DuelAttentionKind.MY_TURN
 }

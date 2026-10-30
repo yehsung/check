@@ -64,6 +64,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Path
 import java.util.concurrent.Executor
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -74,10 +75,10 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-private class TickPlatform(private val installation: String?) : DesktopPlatform {
+private class TickPlatform(private val installation: String?, dataDir: Path) : DesktopPlatform {
     override val paths = object : AppPaths {
-        // 할 일 목록 파일이 저장소 안 상대 경로에 흘리지 않게 임시 폴더.
-        override val dataDir: String = java.nio.file.Files.createTempDirectory("tick-data").toFile().apply { deleteOnExit() }.path
+        // 할 일 목록 파일이 저장소 안 상대 경로에 흘리지 않게 임시 폴더(시험 끝에 통째로 지운다 — TempDataDirs).
+        override val dataDir: String = dataDir.toString()
         override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
     }
     override val env = object : EnvReader { override fun get(name: String): String? = null }
@@ -113,7 +114,7 @@ private data class TickReq(val t: Long, val method: String, val path: String, va
         get() = method == "POST" && path.endsWith("/rest/v1/work_statuses") && body.contains("\"status\":\"working\"")
 }
 
-private class TickRig(val test: TestScope, var mode: TickMode, installation: String? = WiringTestRig.INSTALLATION) {
+private class TickRig(val test: TestScope, dirs: TempDataDirs, var mode: TickMode, installation: String? = WiringTestRig.INSTALLATION) {
     val requests = mutableListOf<TickReq>()
     val uncaught = mutableListOf<Throwable>()
 
@@ -163,7 +164,7 @@ private class TickRig(val test: TestScope, var mode: TickMode, installation: Str
         },
     )
     val graph = AppGraph(
-        platform = TickPlatform(installation),
+        platform = TickPlatform(installation, dirs.new("tick-data")),
         clock = object : Clock {
             override fun now(): Instant = Instant.fromEpochMilliseconds(WiringTestRig.BASE_MS + test.testScheduler.currentTime)
         },
@@ -258,10 +259,16 @@ private suspend fun TestScope.advanceInSteps(total: Duration, step: Duration = 1
 }
 
 class AppGraphWorkTickTest {
+    /** 시험마다 임시 dataDir — 끝나면 안의 파일째 지운다. */
+    private val dirs = TempDataDirs()
+
+    @AfterTest
+    fun removeDataDirs() = dirs.close()
+
     /** 근무 3시간 10분: work_tick 이 30초마다 하트비트를 실어 나간다(공백 ≤ 60초 — 스캐빈저 10분보다 한참 안쪽). */
     @Test
     fun workingSessionHeartbeatsThroughWorkTickEveryThirtySeconds() = runTest(timeout = 2.minutes) {
-        TickRig(this, TickMode.OK).use { r ->
+        TickRig(this, dirs, TickMode.OK).use { r ->
             r.app.start(); runCurrent()
             r.signIn()
             advanceInSteps(2.minutes)
@@ -295,7 +302,7 @@ class AppGraphWorkTickTest {
     /** work_tick 이 없는 서버(404 PGRST202): 이 실행 동안 끄고 레거시 하트비트 + 기기 행 + 팀 상태 4 GET 으로 같은 틱에 펼친다. */
     @Test
     fun missingWorkTickFallsBackToLegacyHeartbeatInTheSameTick() = runTest(timeout = 2.minutes) {
-        TickRig(this, TickMode.MISSING).use { r ->
+        TickRig(this, dirs, TickMode.MISSING).use { r ->
             r.app.start(); runCurrent()
             r.signIn()
             advanceInSteps(2.minutes)
@@ -320,7 +327,7 @@ class AppGraphWorkTickTest {
     /** 과부하(503): 4 GET·away 로 펼치지 않고, 근무 중 하트비트만 120초 간격으로 지킨다(Swift 10-30 안정화와 같은 뜻). */
     @Test
     fun overloadedWorkTickHoldsWithoutFanOutButKeepsSessionAlive() = runTest(timeout = 2.minutes) {
-        TickRig(this, TickMode.OVERLOAD).use { r ->
+        TickRig(this, dirs, TickMode.OVERLOAD).use { r ->
             r.app.start(); runCurrent()
             r.signIn()
             advanceInSteps(2.minutes)
@@ -352,7 +359,7 @@ class AppGraphWorkTickTest {
      */
     @Test
     fun offlineBootRecoversMembershipWithinOneSliceSoWorkReachesServer() = runTest(timeout = 2.minutes) {
-        TickRig(this, TickMode.OK).use { r ->
+        TickRig(this, dirs, TickMode.OK).use { r ->
             r.membershipFail = true
             r.app.start(); runCurrent()
             r.signIn()
@@ -380,7 +387,7 @@ class AppGraphWorkTickTest {
     /** 오프라인 부팅 중에 시작한 근무(큐에 noTeam 으로 남음)는 망이 붙은 그 틱에 재생된다 — 팀 확정이 큐 드레인보다 앞이다. */
     @Test
     fun workStartedDuringOfflineBootReplaysOnTheTickAfterMembershipRecovers() = runTest(timeout = 2.minutes) {
-        TickRig(this, TickMode.OK).use { r ->
+        TickRig(this, dirs, TickMode.OK).use { r ->
             r.membershipFail = true
             r.app.start(); runCurrent()
             r.signIn()
@@ -411,7 +418,7 @@ class AppGraphWorkTickTest {
     fun transportBlipResumesWorkTickWithinBackoffCap() = runTest(timeout = 2.minutes) { blipResumes(TickMode.TRANSPORT) }
 
     private suspend fun TestScope.blipResumes(mode: TickMode) {
-        TickRig(this, TickMode.OK).use { r ->
+        TickRig(this, dirs, TickMode.OK).use { r ->
             r.app.start(); runCurrent()
             r.signIn()
             advanceInSteps(2.minutes)
@@ -443,7 +450,7 @@ class AppGraphWorkTickTest {
     /** 로그인하면 client_devices 에 'windows' 행을 올린다(울트라 밑바닥 1 · Windows 빌드 축). 로그아웃은 그 행을 지운다. */
     @Test
     fun signInRegistersWindowsClientDeviceRow() = runTest(timeout = 1.minutes) {
-        TickRig(this, TickMode.OK).use { r ->
+        TickRig(this, dirs, TickMode.OK).use { r ->
             r.app.start(); runCurrent()
             r.signIn()
             advanceInSteps(1.minutes)
@@ -466,7 +473,7 @@ class AppGraphWorkTickTest {
     /** 설치 식별자를 확인하지 못했으면 기기 행을 올리지 않는다(지어낸 신원 금지). */
     @Test
     fun noInstallationIdentityMeansNoDeviceRow() = runTest(timeout = 1.minutes) {
-        TickRig(this, TickMode.OK, installation = null).use { r ->
+        TickRig(this, dirs, TickMode.OK, installation = null).use { r ->
             r.app.start(); runCurrent()
             r.signIn()
             advanceInSteps(1.minutes)

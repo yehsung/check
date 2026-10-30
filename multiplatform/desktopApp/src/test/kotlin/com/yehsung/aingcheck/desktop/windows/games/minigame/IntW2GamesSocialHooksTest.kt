@@ -64,7 +64,8 @@ class IntW2GamesSocialHooksTest {
         val on = mutableListOf<DuelInviteNotice>()
         val onRig = Rig(DesktopAppConfig(duels = true)) { on += it }
         requireNotNull(onRig.board.gomoku.onInviteArrived).invoke(invite)
-        assertEquals(listOf(DuelInviteNotice(GameWindowKind.Gomoku, invite.peer.displayName, 5)), on, "켠 빌드인데 글이 없다 — 꺼짐 단언이 헛돈다")
+        // 글 + 신청 id(int-w4a — 셸 알림이 ShellNotice.ref 로 실어 오버레이 구조 신청과 id 로 짝짓는다)
+        assertEquals(listOf(DuelInviteNotice(GameWindowKind.Gomoku, invite.peer.displayName, 5, invite.id)), on, "켠 빌드인데 글이 없다 — 꺼짐 단언이 헛돈다")
         assertTrue(on.single().body.startsWith("${invite.peer.displayName}님이 오목 대결을 신청했어요"))
         offRig.board.close()
         onRig.board.close()

@@ -116,6 +116,7 @@ import com.yehsung.aingcheck.core.stores.me.markRetroBannerSeen
 import com.yehsung.aingcheck.core.stores.me.retroBannerMenuDidClose
 import com.yehsung.aingcheck.core.wire.models.TeamWeeklyGoal
 import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfaces
+import com.yehsung.aingcheck.desktop.todo.TodoQuarantineLog
 import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfacesConfig
 import com.yehsung.aingcheck.desktop.pages.aitokens.AiTokensPageDeps
 import com.yehsung.aingcheck.desktop.pages.ailimits.asActions
@@ -392,7 +393,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             currentUserID = { sessionStore.session?.userID },
             clock = { graph.clock.now().toEpochMilliseconds() / 1000.0 },
             files = DesktopTodoFileSystem(
-                onQuarantine = { q -> System.err.println("todo quarantine ${q.backupPath} bytes=${q.bytes} preserved=${q.preserved}") },
+                // 손상 파일 격리 보고 → 앱 로그 폴더 aing-check-todo.log 한 줄(배포본은 콘솔이 없다 — System.err 는 어디에도 안 남는다).
+                onQuarantine = TodoQuarantineLog.sink(graph.platform.paths, now = { graph.clock.now() }),
             ),
             power = graph.platform.power,
             wakeNetworkReady = seams.networkReadiness?.let { r -> suspend { r.awaitReady() } },
@@ -412,6 +414,15 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         ),
     )
 
+    /**
+     * 오버레이 포인터 결과 한 문: 대결 말풍선(신청·차례)을 누르면 그 판 창(맥 CheckApp.swift:370·407·443 onOpen… → store.openWindow(focusMatchID:))
+     * 뒤 바깥 seam. 게임 배선([lateGames])은 오버레이 뒤에 지어진다 — 누를 때 읽는다.
+     */
+    internal val overlayPointerOutcome: (PointerOutcome) -> Unit = { o ->
+        OverlayWiring.openDuel(o, lateGames?.handle?.windows ?: com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows.None)
+        seams.onOverlayPointer(o)
+    }
+
     val overlay = OverlayWiring(
         OverlayWiringDeps(
             desktopConfig = graph.desktopConfig,
@@ -426,7 +437,7 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             session = graph.platform.session,
             consoleSessionUsable = seams.consoleSessionUsable,
             presenter = seams.overlayPresenter,
-            onPointerOutcome = seams.onOverlayPointer,
+            onPointerOutcome = overlayPointerOutcome,
             accountIds = sessionStore.sessionFlow.map { it?.userID },
             todoBoard = desktopSettings.todoBoard,
             onBoardOpacityChanged = desktopSettings::setTodoBoardOpacity,
@@ -706,6 +717,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             messages = messages,
             // W-14 #4: 구조 신청 → 오버레이(글 알림 onInviteNotice 보다 먼저 온다 — 같은 신청의 대체 말풍선을 하나로 묶는다).
             onInviteArrival = { g, id, peer, stake, exp -> overlay.onDuelInvite(g, id, peer, stake, exp) },
+            // 차례 알림 구조 정보(판 id·종류) → 오버레이 말풍선(누르면 위 onPointerOutcome 이 그 판 창을 연다).
+            onDuelAttention = { overlay.onDuelAttention(it) },
         ),
     ).also { lateGames = it }
 

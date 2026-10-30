@@ -2,7 +2,10 @@
 //       · W-14 #4(대결 신청 id·만료 → overlay.onDuelInvite — 셸 글이 먼저 오면 대체 말풍선이 하나 더 뜬다)
 package com.yehsung.aingcheck.desktop.windows.games.minigame
 
+import com.yehsung.aingcheck.core.stores.chess.ChessAttention
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuAttention
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuInvite
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelAttention
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
 import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.BoardGameRig
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
@@ -20,8 +23,10 @@ class IntW3InviteArrivalOrderTest {
         init {
             GameWindowWiring.wire(
                 board.gomoku, board.chess, games.tetris, host, config,
-                onInviteNotice = { log += "notice:${it.kind}" },
+                onInviteNotice = { log += "notice:${it.kind}:${it.inviteId}" },
                 onInviteArrival = { g, id, peer, stake, exp -> log += "arrival:$g:$id:$peer:$stake:${exp.timeIntervalSince1970}" },
+                onTurnWhileHidden = { log += "hidden:$it" },
+                onDuelAttention = { a -> log += "attention:${a.game}:${a.matchId}:${a.kind}:${a.opponentName}:${a.moveCount}" },
             )
         }
     }
@@ -43,11 +48,39 @@ class IntW3InviteArrivalOrderTest {
         assertEquals(
             listOf(
                 "arrival:${DuelGame.GOMOKU}:${invite.id}:${invite.peer.displayName}:5:${expires.timeIntervalSince1970}",
-                "notice:Gomoku",
+                "notice:Gomoku:${invite.id}",
             ),
             on,
         )
         offRig.board.close()
         onRig.board.close()
+    }
+
+    /**
+     * int-w4a ③: 차례 알림(onAttention)이 구조 정보(판 id·종류·상대·수 번호)를 실어 오버레이로 간다 — 맥 CheckApp.swift:367 · :404 · :440
+     * `onAttention → enqueue…Attention`(누르면 그 판 창). 셸 쪽 onTurnWhileHidden 은 그대로. duels 꺼짐이면 구조 알림 0.
+     */
+    @Test
+    fun attentionCarriesMatchIdAndKindToOverlay() {
+        val on = mutableListOf<String>()
+        val onRig = Rig(DesktopAppConfig(duels = true), on)
+        requireNotNull(onRig.board.gomoku.onAttention).invoke(GomokuAttention(GomokuAttention.Kind.myTurn, "g-1", "합성상대", 4))
+        requireNotNull(onRig.board.chess.onAttention).invoke(ChessAttention(ChessAttention.Kind.matchStarted, "c-1", "합성상대", 0))
+        requireNotNull(onRig.games.tetris.onAttention).invoke(TetrisDuelAttention(TetrisDuelAttention.Kind.matchStarted, "t-1", "합성상대"))
+        assertEquals(
+            listOf(
+                "hidden:Gomoku", "attention:GOMOKU:g-1:MY_TURN:합성상대:4",
+                "hidden:Chess", "attention:CHESS:c-1:MATCH_STARTED:합성상대:0",
+                "hidden:TetrisDuel", "attention:TETRIS:t-1:MATCH_STARTED:합성상대:0",
+            ),
+            on,
+        )
+
+        val off = mutableListOf<String>()
+        val offRig = Rig(DesktopAppConfig(duels = false), off)
+        requireNotNull(offRig.board.gomoku.onAttention).invoke(GomokuAttention(GomokuAttention.Kind.myTurn, "g-1", "합성상대", 4))
+        assertEquals(listOf("hidden:Gomoku"), off, "duels 꺼짐 → 구조 알림 0")
+        onRig.board.close()
+        offRig.board.close()
     }
 }

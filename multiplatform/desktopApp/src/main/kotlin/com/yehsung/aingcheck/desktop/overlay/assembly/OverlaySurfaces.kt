@@ -5,6 +5,8 @@
 // Windows 밖(맥 개발 실행 · 시험 JVM)은 [OverlaySurfaces.None] — 엔진은 그대로 돌고 화면엔 아무것도 없다(AppGraph SilentCharacterSink 와 같은 뜻).
 package com.yehsung.aingcheck.desktop.overlay.assembly
 
+import com.yehsung.aingcheck.desktop.platform.windows.display.DisplayChangeSource
+import com.yehsung.aingcheck.desktop.overlay.surface.OverlayWindowDpiRelay
 import com.yehsung.aingcheck.character.bake.BakeFiles
 import com.yehsung.aingcheck.character.bake.BakeLibrary
 import com.yehsung.aingcheck.character.bake.BakedFinish
@@ -126,6 +128,11 @@ class OverlaySurfaces internal constructor(
     /** 실물 발표자(Windows 에서만). */
     val surfacePresenter: OverlaySurfacePresenter?,
     private val pointerRelay: PointerRelay?,
+    /**
+     * 오버레이 창 **자신**이 받은 화면 바뀜(WM_DPICHANGED — 캐릭터가 있는 모니터의 배율). 앱 숨은 창(Win32DisplayChangeSource)은 자기가
+     * 있는 주 모니터 배율만 받으므로, 보조 모니터 배율 변경은 이 길로만 온다. OverlayWiring.start 가 구독한다.
+     */
+    val displayChanges: DisplayChangeSource = DisplayChangeSource.None,
     private val closer: () -> Unit,
 ) : AutoCloseable {
     /** 화면에 실제로 그리는가(Windows + 창 생성 성공). */
@@ -179,7 +186,8 @@ class OverlaySurfaces internal constructor(
         ): OverlaySurfaces {
             if (!isWindows || thread == null) return none()
             val relay = PointerRelay()
-            val surface = runCatching { WindowsOverlaySurface(thread, listener = relay) }.getOrNull() ?: return none()
+            val dpi = OverlayWindowDpiRelay()
+            val surface = runCatching { WindowsOverlaySurface(thread, listener = relay, dpiRelay = dpi) }.getOrNull() ?: return none()
             val character = BakedCharacter.loadOrNull(config.bakeRoot, config.initialCharacterId)
             val compositor = OverlayCompositor(PretendardBubbleMeasure.bundled)
             val placements = OverlayPlacementStore(config.keyValueStore)
@@ -197,6 +205,7 @@ class OverlaySurfaces internal constructor(
                 boardAppearance = appearance,
                 surfacePresenter = presenter,
                 pointerRelay = relay,
+                displayChanges = dpi,
             ) {
                 window?.let { w -> runCatching { javax.swing.SwingUtilities.invokeLater { w.dispose() } } }
                 surface.close()

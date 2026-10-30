@@ -85,9 +85,9 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-private class OwnershipPlatform : DesktopPlatform {
+private class OwnershipPlatform(dataDir: Path) : DesktopPlatform {
     override val paths = object : AppPaths {
-        override val dataDir: String = Files.createTempDirectory("own-data").toFile().apply { deleteOnExit() }.path
+        override val dataDir: String = dataDir.toString() // 시험이 만든 임시 폴더(@AfterTest 가 통째로 지운다)
         override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
     }
     override val env = object : EnvReader { override fun get(name: String): String? = null }
@@ -131,7 +131,7 @@ private object OldServer {
 }
 
 /** 앱 한 벌(같은 kv 를 받는다). [close] = 배선 범위만 걷는다 — kv 를 닫을지(정상 종료)는 시험이 정한다. */
-private class OwnershipRig(val test: TestScope, val kv: FileDesktopKeyValueStore) {
+private class OwnershipRig(val test: TestScope, val kv: FileDesktopKeyValueStore, dataDir: Path) {
     val requests = mutableListOf<String>()
     /** B 의 토큰으로 나간 요청 경로(계정 전환 시험이 본다). */
     val nextUserPaths = mutableListOf<String>()
@@ -178,7 +178,7 @@ private class OwnershipRig(val test: TestScope, val kv: FileDesktopKeyValueStore
         },
     )
     val graph = AppGraph(
-        platform = OwnershipPlatform(),
+        platform = OwnershipPlatform(dataDir),
         clock = object : Clock {
             override fun now(): Instant = Instant.fromEpochMilliseconds(WiringTestRig.BASE_MS + test.testScheduler.currentTime)
         },
@@ -248,7 +248,7 @@ class TetrisOwnershipRestartTest {
         // 첫 실행 화면을 이미 지난 설치(동의·자동 실행 값이 있다).
         kv.putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, false)
         kv.putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, false)
-        val first = OwnershipRig(this, kv)
+        val first = OwnershipRig(this, kv, newDir())
         first.signIn()
         runCurrent()
         return first to kv
@@ -264,7 +264,7 @@ class TetrisOwnershipRestartTest {
 
     /** 다시 켠 앱: 같은 사람 로그인 → my_device 없는 판 상태 → 둔다. */
     private suspend fun TestScope.secondRunPlays(kv: FileDesktopKeyValueStore): OwnershipRig {
-        val again = OwnershipRig(this, kv)
+        val again = OwnershipRig(this, kv, newDir())
         again.signIn()
         runCurrent()
         assertTrue(again.tetris.ownsMatch(OldServer.MATCH), "다시 켠 앱이 '이 기기가 연 판' 기록을 못 읽었다")
@@ -280,7 +280,7 @@ class TetrisOwnershipRestartTest {
 
     /** ★ 기준선: 기록 없는 새 폴더(같은 사람 · 같은 옛 서버 응답)는 안 둔다. */
     private suspend fun TestScope.strangerDoesNotPlay() {
-        val stranger = OwnershipRig(this, appKv(newDir()))
+        val stranger = OwnershipRig(this, appKv(newDir()), newDir())
         stranger.signIn()
         runCurrent()
         stranger.tetris.refreshMatch(OldServer.MATCH)
@@ -396,7 +396,7 @@ class TetrisOwnershipRestartTest {
         val kv = appKv(newDir())
         kv.putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, false)
         kv.putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, false)
-        val rig = OwnershipRig(this, kv)
+        val rig = OwnershipRig(this, kv, newDir())
         rig.app.start()
         runCurrent()
         rig.signIn()

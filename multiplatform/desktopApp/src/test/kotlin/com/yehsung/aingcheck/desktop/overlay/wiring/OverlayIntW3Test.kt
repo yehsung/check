@@ -25,6 +25,11 @@ import com.yehsung.aingcheck.desktop.overlay.engine.BoardHost
 import com.yehsung.aingcheck.desktop.overlay.engine.BubbleKind
 import com.yehsung.aingcheck.desktop.overlay.engine.ClickAction
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttention
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttentionKind
+import com.yehsung.aingcheck.desktop.overlay.surface.OverlayWindowDpiRelay
+import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
+import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeMeasure
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeSink
 import com.yehsung.aingcheck.desktop.overlay.engine.HitTarget
@@ -135,8 +140,9 @@ class OverlayIntW3Test {
     /** 설정 "캐릭터를 눌러 할 일 열기"(보드 시험). */
     private var boardOn = false
 
-    private fun invite(peer: String, stake: Long, game: String = "오목") =
-        ShellNotice(NotifyKind.DUEL_INVITE, "$game 대결 신청", "${peer}님이 $game 대결을 신청했어요 · 루비 $stake")
+    /** 셸 대결 신청 알림. [ref] = 신청 id(ShellWiring.notifyDuelInvite 가 DuelInviteNotice.inviteId 를 싣는다 — 짝짓기 열쇠). */
+    private fun invite(peer: String, stake: Long, game: String = "오목", ref: String? = null) =
+        ShellNotice(NotifyKind.DUEL_INVITE, "$game 대결 신청", "${peer}님이 $game 대결을 신청했어요 · 루비 $stake", ref = ref)
 
     // ───────────────────────── ① 셸 알림 → 말풍선 문 ─────────────────────────
 
@@ -182,7 +188,7 @@ class OverlayIntW3Test {
         step(100)
         val expires = SwiftDate.fromEpochMillis((wallEpoch + 60) * 1000)
         r.wiring.onDuelInvite(DuelGame.GOMOKU, "m-1", "합성상대", 5, expires)
-        assertTrue(r.wiring.shellBubble(invite("합성상대", 5)))
+        assertTrue(r.wiring.shellBubble(invite("합성상대", 5, ref = "m-1")))
         step(20_000)
         val notice = invite("합성상대", 5)
         val invites = r.bubbles().filter { it.kind is BubbleKind.Invite || it.text == notice.body }
@@ -195,7 +201,7 @@ class OverlayIntW3Test {
         r2.startWorking()
         step(100)
         r2.wiring.onDuelInvite(DuelGame.GOMOKU, "m-2", "합성상대", 5, SwiftDate.fromEpochMillis((wallEpoch + 120) * 1000))
-        assertTrue(r2.wiring.shellBubble(invite("합성상대", 10)))
+        assertTrue(r2.wiring.shellBubble(invite("합성상대", 10, ref = "m-3")))
         step(20_000)
         assertEquals(1, r2.bubbles().count { it.kind is BubbleKind.Invite }, "구조 신청 하나")
         assertEquals(1, r2.bubbles().count { it.text == invite("합성상대", 10).body }, "짝 없는 셸 글 하나: ${r2.bubbles()}")
@@ -420,5 +426,134 @@ class OverlayIntW3Test {
         step(500)
         assertFalse(surface.visible)
         assertEquals(2, net.count("/rpc/todo_sync"))
+    }
+
+    // ───────────────────────── int-w4a polish ─────────────────────────
+
+    /** ① 같은 상대가 60초 안에 같은 판돈으로 두 번 — 글은 똑같지만 신청 id 가 다르다. 구조 둘이 먼저, 셸 글 둘이 뒤여도 말풍선은 정확히 둘. */
+    @Test
+    fun `polish① 같은 상대·같은 판돈 신청 두 건 — 신청 id 로 짝지어 말풍선은 정확히 둘, 글만 말풍선 0`() = runTest {
+        val r = rig()
+        r.wiring.start(backgroundScope)
+        r.startWorking()
+        step(8_000) // 출근 말풍선이 끝난 뒤
+        val exp = SwiftDate.fromEpochMillis((wallEpoch + 60) * 1000)
+        r.wiring.onDuelInvite(DuelGame.GOMOKU, "inv-1", "합성상대", 5, exp)
+        r.wiring.onDuelInvite(DuelGame.GOMOKU, "inv-2", "합성상대", 5, exp)
+        assertTrue(r.wiring.shellBubble(invite("합성상대", 5, ref = "inv-1")))
+        assertTrue(r.wiring.shellBubble(invite("합성상대", 5, ref = "inv-2")))
+        step(40_000)
+        val body = invite("합성상대", 5).body
+        assertEquals(
+            listOf(BubbleKind.Invite(DuelGame.GOMOKU, "inv-1"), BubbleKind.Invite(DuelGame.GOMOKU, "inv-2")),
+            r.bubbles().map { it.kind }.filterIsInstance<BubbleKind.Invite>(),
+            "구조 신청 말풍선 둘(누르면 각자 그 판): ${r.bubbles()}",
+        )
+        assertEquals(0, r.bubbles().count { it.kind !is BubbleKind.Invite && it.text == body }, "글만 말풍선 0: ${r.bubbles()}")
+
+        // 음성 대조: 신청 id 가 짝이 없는 셸 글(구조 신청 없이 온 것)은 글 그대로 한 번 뜬다
+        r.wiring.onDuelInvite(DuelGame.GOMOKU, "inv-3", "합성상대", 5, SwiftDate.fromEpochMillis((wallEpoch + 120) * 1000))
+        assertTrue(r.wiring.shellBubble(invite("합성상대", 5, ref = "inv-x")))
+        step(40_000)
+        assertEquals(1, r.bubbles().count { it.kind !is BubbleKind.Invite && it.text == body }, "짝 없는 id 의 글은 한 번: ${r.bubbles()}")
+        r.wiring.stop()
+    }
+
+    /** ② 캐릭터를 끈 동안 온 신청 — 셸은 토스트(false), 엔진 큐엔 안 남는다 → 60초 안에 다시 켜도 같은 신청 말풍선 0. */
+    @Test
+    fun `polish② 캐릭터 꺼짐에 온 구조 신청은 큐에 남지 않는다 — 다시 켜도 말풍선 0, 켜짐이면 한 번`() = runTest {
+        val r = rig(enabled = false)
+        r.wiring.start(backgroundScope)
+        r.startWorking()
+        step(8_000)
+        val exp = SwiftDate.fromEpochMillis((wallEpoch + 60) * 1000)
+        r.wiring.onDuelInvite(DuelGame.CHESS, "inv-off", "합성상대", 3, exp)
+        assertFalse(r.wiring.shellBubble(invite("합성상대", 3, game = "체스", ref = "inv-off")), "꺼짐 → 셸이 토스트")
+        step(2_000)
+        r.overlayOn.value = true // 60초 안에 다시 켠다
+        step(30_000)
+        assertEquals(0, r.bubbles().count { it.kind is BubbleKind.Invite }, "토스트로 알린 신청이 말풍선으로 또 뜬다: ${r.bubbles()}")
+
+        // 양성 대조: 켜진 채로 온 신청은 한 번 뜬다
+        r.wiring.onDuelInvite(DuelGame.CHESS, "inv-on", "합성상대", 3, SwiftDate.fromEpochMillis((wallEpoch + 120) * 1000))
+        step(20_000)
+        assertEquals(listOf(BubbleKind.Invite(DuelGame.CHESS, "inv-on")), r.bubbles().map { it.kind }.filterIsInstance<BubbleKind.Invite>())
+        r.wiring.stop()
+    }
+
+    /** ③ 차례 알림 구조 정보 → 말풍선(같은 판 다음 차례도 뜬다) → 누르면 OpenDuel(그 판) → openDuel 이 그 게임 창을 그 판 id 로. */
+    @Test
+    fun `polish③ 차례 알림 — 같은 판 다음 차례도 다시 뜨고, 누르면 그 판 창(openDuel)`() = runTest {
+        val r = rig()
+        r.wiring.start(backgroundScope)
+        r.startWorking()
+        step(8_000)
+        r.wiring.onDuelAttention(DuelAttention(DuelGame.GOMOKU, "m-9", DuelAttentionKind.MY_TURN, "합성상대", 4))
+        step(300)
+        val first = r.bubbles().last()
+        assertEquals(BubbleKind.Invite(DuelGame.GOMOKU, "m-9"), first.kind)
+        r.wiring.onPointer(PointerKind.DOWN, OverlayPoint(20.0, 20.0), HitTarget.Bubble)
+        r.wiring.onPointer(PointerKind.UP, OverlayPoint(20.0, 20.0), HitTarget.Bubble)
+        step(100)
+        val click = r.outcomes.map { it.click }.filterIsInstance<ClickAction.OpenDuel>()
+        assertEquals(listOf(ClickAction.OpenDuel(DuelGame.GOMOKU, "m-9")), click)
+        val opened = RecordingGameWindows()
+        r.outcomes.forEach { OverlayWiring.openDuel(it, opened) }
+        assertEquals(listOf("gomoku:m-9"), opened.opened)
+
+        // 같은 판의 다음 차례(수 번호 6) — 사실 공급이 없어도 첫 알림의 수 번호에 묶여 버려지지 않는다
+        step(15_000)
+        r.wiring.onDuelAttention(DuelAttention(DuelGame.GOMOKU, "m-9", DuelAttentionKind.MY_TURN, "합성상대", 6))
+        step(300)
+        assertEquals(2, r.bubbles().count { it.kind == BubbleKind.Invite(DuelGame.GOMOKU, "m-9") }, "다음 차례 말풍선: ${r.bubbles()}")
+
+        // 음성 대조: 대결 말풍선이 아닌 클릭(때리기)·다른 게임 판
+        OverlayWiring.openDuel(PointerOutcome(click = ClickAction.Hit), opened)
+        OverlayWiring.openDuel(PointerOutcome(click = ClickAction.OpenDuel(DuelGame.TETRIS, "t-1")), opened)
+        OverlayWiring.openDuel(PointerOutcome(click = ClickAction.OpenDuel(DuelGame.CHESS, "c-1")), opened)
+        assertEquals(listOf("gomoku:m-9", "tetris:t-1", "chess:c-1"), opened.opened)
+        r.wiring.stop()
+    }
+
+    private class RecordingGameWindows : DesktopGameWindows {
+        val opened = mutableListOf<String>()
+        override fun openGames(kind: MiniGameKind?) = Unit
+        override fun openGomoku(focusMatchID: String?) { opened += "gomoku:$focusMatchID" }
+        override fun openChess(focusMatchID: String?) { opened += "chess:$focusMatchID" }
+        override fun openTetrisDuel(focusMatchID: String?) { opened += "tetris:$focusMatchID" }
+        override fun openGacha() = Unit
+        override fun openCakeGift() = Unit
+        override fun closeAll() = Unit
+    }
+
+    /** ④ 오버레이 창 자신의 WM_DPICHANGED(보조 모니터 배율) → 모니터 다시 읽기. 다른 메시지는 null·다시 읽기 0, stop 뒤 0. */
+    @Test
+    fun `polish④ 오버레이 창 WM_DPICHANGED — 0 을 돌려주고 발표자가 모니터를 다시 읽는다, 다른 메시지·stop 뒤는 0`() = runTest {
+        val mon = MonitorInfo("\\\\.\\DISPLAY2", OverlayRect(1920.0, 0.0, 1280.0, 720.0), OverlayRect(1920.0, 0.0, 1280.0, 690.0), primary = false)
+        val port = OverlaySurfacesTest.FakePort(listOf(mon), scale = 1.0)
+        val presenter = OverlaySurfacePresenter(port, OverlayFrameComposer { _, w, h, _, _ -> ComposedOverlay.empty(w, h) }) { null }
+        val dpi = OverlayWindowDpiRelay()
+        val surfaces = OverlaySurfaces(FakeSink(), presenter, BoardHost.None, null, presenter, null, displayChanges = dpi) {}
+        val r = rig(surfaces = surfaces) // 앱 숨은 창 출처(displayChanges)는 없다 — 이 창의 메시지만
+        r.wiring.start(backgroundScope)
+        r.startWorking()
+        step(500)
+        assertEquals(1, dpi.listenerCount, "start 가 오버레이 창 출처를 듣는다")
+        val reads = port.monitorReads
+
+        assertEquals(null, dpi.handle(DisplayMessages.WM_DISPLAYCHANGE), "숨은 창이 받는 메시지는 창 프로시저로 넘긴다")
+        assertEquals(null, dpi.handle(0x0201), "WM_LBUTTONDOWN 은 넘긴다")
+        step(200)
+        assertEquals(reads, port.monitorReads, "음성 대조: 배율 아닌 메시지는 다시 읽지 않는다")
+
+        assertEquals(WinDef.LRESULT(0), dpi.handle(DisplayMessages.WM_DPICHANGED), "처리했으면 0(MSDN)")
+        step(200)
+        assertEquals(reads + 1, port.monitorReads, "보조 모니터 배율 → 다음 그림 전에 한 번 다시 읽는다")
+
+        r.wiring.stop()
+        assertEquals(0, dpi.listenerCount, "stop 은 창 출처 등록을 거둔다")
+        dpi.handle(DisplayMessages.WM_DPICHANGED)
+        step(200)
+        assertEquals(reads + 1, port.monitorReads, "stop 뒤 0")
     }
 }

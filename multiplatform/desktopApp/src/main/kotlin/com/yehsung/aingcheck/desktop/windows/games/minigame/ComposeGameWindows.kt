@@ -31,6 +31,7 @@ import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelWindowState
 import com.yehsung.aingcheck.desktop.windows.kit.AttentionFlash
 import com.yehsung.aingcheck.desktop.windows.kit.CloakProbe
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttention
 import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameKeyMap
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowHandle
@@ -267,6 +268,8 @@ object ComposeGamesWindows {
         messages: MessagesStore? = null,
         /** 구조 신청 → 오버레이(GameWindowWiring.DuelInviteArrival — 글 알림보다 먼저). */
         onInviteArrival: DuelInviteArrival = { _, _, _, _, _ -> },
+        /** 차례 알림 구조 정보 → 오버레이(GameWindowWiring.onDuelAttention). */
+        onDuelAttention: (DuelAttention) -> Unit = {},
     ): GamesWindowsHost {
         lateinit var host: GamesWindowsHost
         lateinit var miniShell: ComposeGameWindowShell
@@ -323,7 +326,7 @@ object ComposeGamesWindows {
             storeOpen = GameWindowWiring.openers(gomoku, chess, games.tetris), others = others,
             later = { ms, action -> Timer(ms.toInt()) { action() }.apply { isRepeats = false; start() } },
         )
-        GameWindowWiring.wire(gomoku, chess, games.tetris, host, config, onInvite, onTurnWhileHidden, onInviteNotice, onInviteArrival)
+        GameWindowWiring.wire(gomoku, chess, games.tetris, host, config, onInvite, onTurnWhileHidden, onInviteNotice, onInviteArrival, onDuelAttention)
         return host
     }
 

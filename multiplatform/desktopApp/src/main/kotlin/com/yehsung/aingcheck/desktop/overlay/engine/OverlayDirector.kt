@@ -32,6 +32,8 @@ class OverlayDirector(
         val invites = ArrayList<DuelInvite>()
         var pendingAttention: DuelAttention? = null
         var facts = DuelFacts()
+        /** [facts].match 를 생산자 사실(onDuelFacts)이 아니라 마지막 차례 알림에서 지었다 — 다음 알림이 갈아 끼운다. */
+        var matchFromAttention = false
         var pumpAt: Double? = null
         fun hasWork(): Boolean = invites.isNotEmpty() || pendingAttention != null
     }
@@ -490,14 +492,19 @@ class OverlayDirector(
     override fun enqueueDuelAttention(attention: DuelAttention, now: Double) {
         val lane = duels.getValue(attention.game)
         lane.pendingAttention = attention
-        if (lane.facts.match == null) {
+        // 사실 공급(onDuelFacts)이 없으면 알림 자신이 사실이다 — 그때는 **매 알림마다** 갈아 끼운다(첫 알림의 판·수 번호가 남으면
+        // 같은 판의 다음 차례·다른 판·다음 계정의 알림이 attentionIsCurrent 에서 영영 버려진다). 공급이 있으면 그 사실을 믿는다.
+        if (lane.facts.match == null || lane.matchFromAttention) {
             lane.facts = lane.facts.copy(match = DuelMatchFact(attention.matchId, finished = false, myTurn = true, moveCount = attention.moveCount))
+            lane.matchFromAttention = true
         }
         startDuelPump(attention.game, now)
     }
 
     override fun onDuelFacts(game: DuelGame, facts: DuelFacts) {
-        duels.getValue(game).facts = facts
+        val lane = duels.getValue(game)
+        lane.facts = facts
+        lane.matchFromAttention = false
     }
 
     override fun clearDuels(game: DuelGame) {

@@ -17,8 +17,11 @@ import com.yehsung.aingcheck.desktop.shellapi.NotifySurface
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import java.util.concurrent.ConcurrentHashMap
 
-/** 알릴 사건 하나. 메시지는 [senderId] 를 싣는다(모르면 null — ★3). */
-data class ShellNotice(val kind: NotifyKind, val title: String, val body: String, val senderId: String? = null)
+/**
+ * 알릴 사건 하나. 메시지는 [senderId] 를 싣는다(모르면 null — ★3). 대결 신청은 [ref] 에 신청 id 를 싣는다 — 오버레이가 같은 신청의
+ * 구조 알림(overlay.onDuelInvite)과 짝짓는 열쇠다(글은 같은 상대·같은 판돈이면 겹친다 — int-w4a).
+ */
+data class ShellNotice(val kind: NotifyKind, val title: String, val body: String, val senderId: String? = null, val ref: String? = null)
 
 class ShellNotifier(
     private val flags: DesktopAppConfig,

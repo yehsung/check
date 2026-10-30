@@ -15,6 +15,11 @@
 // ([OverlayWiringDeps.updateVersions], 맥 CheckApp.swift:214 onNewVersionAvailable → showUpdateBubbleIfNeeded) · 대결 신청
 // ([onDuelInvite], 맥 CheckApp.swift:359·401·437 onInviteArrived → enqueue…Invite) ③ 화면 바뀜([OverlayWiringDeps.displayChanges] →
 // [onDisplayChanged] — 모니터를 다시 읽어 자리를 조인다).
+//
+// int-w4a(polish): ① 대결 신청 짝짓기는 **신청 id**(ShellNotice.ref)로 — 글(게임·이름·판돈)은 같은 상대가 같은 판돈으로 두 번 신청하면 겹친다.
+// ② 캐릭터를 끈 동안 온 구조 신청은 엔진 큐에 넣지 않는다(셸이 이미 토스트로 알렸다 — 다시 켤 때 말풍선으로 또 뜨지 않게).
+// ③ 대결 말풍선 클릭 → 그 판 창([openDuel] — 맥 CheckApp.swift:370·407·443 onOpen… → store.openWindow(focusMatchID:)).
+// ④ 오버레이 창 자신의 WM_DPICHANGED([OverlaySurfaces.displayChanges]) — 숨은 창은 주 모니터 배율만 받는다.
 package com.yehsung.aingcheck.desktop.wiring
 
 import com.yehsung.aingcheck.core.foundation.platform.MonotonicClock
@@ -29,6 +34,7 @@ import com.yehsung.aingcheck.core.wire.models.WorkStatus
 import com.yehsung.aingcheck.desktop.overlay.engine.BoardHost
 import com.yehsung.aingcheck.desktop.overlay.engine.BubbleTextMeasure
 import com.yehsung.aingcheck.desktop.overlay.engine.CharacterSink
+import com.yehsung.aingcheck.desktop.overlay.engine.ClickAction
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttention
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelFacts
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
@@ -53,8 +59,7 @@ import com.yehsung.aingcheck.desktop.shell.notify.ShellNotice
 import com.yehsung.aingcheck.desktop.shellapi.DesktopUpdateState
 import com.yehsung.aingcheck.desktop.shellapi.NotifyKind
 import com.yehsung.aingcheck.desktop.shellapi.OverlayAvailability
-import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
-import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
+import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.poke.DesktopMessageBubbleQueue
@@ -189,17 +194,18 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
         fun updateVersions(states: Flow<DesktopUpdateState>): Flow<String> =
             states.mapNotNull { s -> s.latestVersion?.takeIf { s.updateAvailable && it.isNotBlank() } }.distinctUntilChanged()
 
-        /** 셸이 같은 신청에 싣는 글(DuelInviteNotice.body — 맥 :1268·:1424·:1565 문장) — 구조 신청과 셸 알림을 짝짓는 열쇠. */
-        fun duelNoticeBody(game: DuelGame, peerName: String, stake: Int): String =
-            DuelInviteNotice(
-                when (game) {
-                    DuelGame.GOMOKU -> GameWindowKind.Gomoku
-                    DuelGame.CHESS -> GameWindowKind.Chess
-                    DuelGame.TETRIS -> GameWindowKind.TetrisDuel
-                },
-                peerName,
-                stake.toLong(),
-            ).body
+        /**
+         * 대결 말풍선(신청·차례)을 눌렀다 → 그 판 창(맥 CheckApp.swift:370·407·443 `onOpenGomoku/Chess/TetrisDuel` →
+         * `store.openWindow(focusMatchID:)`). [windows] 는 게임 창 문(GamesHandle.windows — 스토어 openWindow 를 거쳐 연다). 다른 클릭은 무시.
+         */
+        fun openDuel(outcome: PointerOutcome, windows: DesktopGameWindows) {
+            val click = outcome.click as? ClickAction.OpenDuel ?: return
+            when (click.game) {
+                DuelGame.GOMOKU -> windows.openGomoku(click.matchId)
+                DuelGame.CHESS -> windows.openChess(click.matchId)
+                DuelGame.TETRIS -> windows.openTetrisDuel(click.matchId)
+            }
+        }
 
         /** 게임 화면의 '나'(GamesDeps.boardMe) — 표정은 맥 CheckMascotAssets.mood(for:)(:73-75): 근무 중 Working, 아니면 Off. */
         fun boardMe(name: String?, characterId: String?, isWorking: Boolean): BoardGameMe =
@@ -242,8 +248,11 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
 
     private var surfacesClosed = false
     @Volatile private var stopped = false
-    /** 구조 신청(onDuelInvite)이 이미 엔진 큐에 넣은 신청의 셸 글 → 만료(벽시계 초). 셸 문이 같은 글을 받으면 두 번 띄우지 않는다. */
-    private val claimedDuelNotices = ConcurrentHashMap<String, Double>()
+    /**
+     * 구조 신청(onDuelInvite)이 이미 엔진 큐에 넣은 **신청 id** → 만료(벽시계 초). 셸 문이 같은 id(ShellNotice.ref)를 받으면 두 번 띄우지 않는다.
+     * 만료까지 남긴다(같은 신청의 셸 글이 다시 와도 한 번) — 다음 구조 신청 때 지난 것을 걷는다.
+     */
+    private val claimedDuelInvites = ConcurrentHashMap<String, Double>()
     /** 셸 글만 온 말풍선 대기열(엔진 실행기에서만 만진다). */
     private val pendingNotices = ArrayDeque<PendingNotice>()
     @Volatile private var latestUpdateVersion: String? = null
@@ -276,7 +285,7 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
     fun onAccountChanged() = post { _ ->
         director.onSignedOut()
         pendingNotices.clear()
-        claimedDuelNotices.clear()
+        claimedDuelInvites.clear()
         (deps.board as? TodoBoardController)?.resetForAccountSwitch()
     }
 
@@ -296,8 +305,8 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
      * 셸 알림 하나를 말풍선으로 받을까(W-14 #4 · W-3 #6 — 같은 사건은 한 표면만: 말풍선 > 토스트 > 점). true = 오버레이가 맡았다
      * (지금 띄웠거나, 맥처럼 못 띄우면 큐가 기다린다) → 셸은 풍선을 띄우지 않는다. false = 셸이 토스트로.
      * - 캐릭터를 끈 사용자(overlayEnabled=false)·stop 뒤 → false(그때만 토스트 — W-3 #6).
-     * - DUEL_INVITE: duels 깃발 꺼짐 → false(W-3 #7). 구조 신청([onDuelInvite])이 같은 글로 이미 들어왔으면 true(그 큐가 띄운다 —
-     *   누르면 그 판). 아니면 글 그대로 말풍선 대기열에 넣고 true(60초 안에 띄운다).
+     * - DUEL_INVITE: duels 깃발 꺼짐 → false(W-3 #7). 구조 신청([onDuelInvite])이 같은 **신청 id**([ShellNotice.ref])로 이미 들어왔으면
+     *   true(그 큐가 띄운다 — 누르면 그 판). 아니면(id 없음·짝 없음·만료) 글 그대로 말풍선 대기열에 넣고 true(60초 안에 띄운다).
      * - POKE: poke 깃발이 켜졌을 때만 — 받은 찌르기는 receivedPokeSink 길(엔진 onPokes)이 띄운다.
      * - MESSAGE: 같은 인스턴스 [bubbles] 큐에 있을 때만(소셜이 쌓고 엔진이 띄운다 — 규약 10).
      * - UPDATE: 새 버전 공급이 버전을 알려 줬을 때만(엔진이 버전당 1회 — 맥은 업데이트를 토스트로 알리지 않는다).
@@ -307,7 +316,7 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
         return when (notice.kind) {
             NotifyKind.DUEL_INVITE -> {
                 if (!deps.desktopConfig.duels) return false
-                val claimedUntil = claimedDuelNotices.remove(notice.body)
+                val claimedUntil = notice.ref?.let { claimedDuelInvites[it] }
                 if (claimedUntil == null || claimedUntil <= wallSeconds()) {
                     val text = notice.body
                     post { now -> pendingNotices.addLast(PendingNotice(text, now + NOTICE_TTL_S)) }
@@ -324,16 +333,21 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
     fun boardMe(name: String?, characterId: String?): BoardGameMe =
         boardMe(name, characterId, deps.workState().snapshot.value.isWorking)
 
-    /** 대결 신청 도착. duels=false 면 안내 0(W-3 #7). [expiresAt] 은 벽시계 — 단조 초로 바꿔 넣는다. */
+    /**
+     * 대결 신청 도착. duels=false 면 안내 0(W-3 #7). [expiresAt] 은 벽시계 — 단조 초로 바꿔 넣는다.
+     * 캐릭터를 끈 동안(overlayEnabled=false)·stop 뒤엔 큐에 넣지도 짝을 걸지도 않는다 — 셸 문이 false 라 셸이 토스트로 알리고,
+     * 60초 안에 캐릭터를 다시 켜도 같은 신청이 말풍선으로 한 번 더 뜨지 않는다(같은 사건은 한 표면만 — W-3 #6).
+     */
     fun onDuelInvite(game: DuelGame, id: String, peerName: String, stake: Int, expiresAt: SwiftDate) {
-        if (!deps.desktopConfig.duels) return
+        if (!deps.desktopConfig.duels || stopped || !deps.overlayEnabled.value) return
         val wall = wallSeconds()
         val remaining = expiresAt.timeIntervalSince1970 - wall
-        claimedDuelNotices.entries.removeIf { it.value <= wall }
-        claimedDuelNotices[duelNoticeBody(game, peerName, stake)] = expiresAt.timeIntervalSince1970
+        claimedDuelInvites.entries.removeIf { it.value <= wall }
+        claimedDuelInvites[id] = expiresAt.timeIntervalSince1970
         post { now -> director.enqueueDuelInvite(DuelInvite(game, id, peerName, stake, now + remaining), now) }
     }
 
+    /** 차례 알림(GameWindowWiring.onDuelAttention — 판 id·종류·수 번호). 말풍선을 누르면 그 판 창([openDuel]). */
     fun onDuelAttention(attention: DuelAttention) {
         if (!deps.desktopConfig.duels) return
         post { now -> director.enqueueDuelAttention(attention, now) }
@@ -364,6 +378,8 @@ class OverlayWiring(base: OverlayWiringDeps, private val surfaces: OverlaySurfac
             }
         }
         deps.displayChanges?.let { d -> registrations += d.addListener { onDisplayChanged() } }
+        // 오버레이 창 자신의 WM_DPICHANGED — 캐릭터가 보조 모니터에 있을 때 그 모니터 배율 변경은 숨은 창(주 모니터)에 오지 않는다.
+        surfaces?.displayChanges?.let { d -> registrations += d.addListener { onDisplayChanged() } }
         deps.session?.let { s ->
             registrations += s.addListener { e ->
                 val (reason, suspended) = when (e) {

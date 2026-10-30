@@ -232,13 +232,16 @@ func theMiniGameWindowOpensTheRummyWindow() throws {
     #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckRummyWindowController.frameAutosaveName))
     #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 7)
 
-    #expect(MiniGameRummyEntryButton.segmentTitle == "큐브", "설계 §1 입구 버튼 글자")
+    // v0.3.69 — 입구가 사이드바 줄이 되며 짧은 이름("큐브")을 떼고 **전체 이름**을 단다(사용자 요구 "좀 더 크게").
     #expect(MiniGameRummyEntryButton.title == "아잉 큐브")
     let panel = try rwMac("MiniGamePanel.swift")
-    #expect(panel.contains("MiniGameTetrisDuelEntryButton { onTetrisDuel() } MiniGameRummyEntryButton { onRummy() }"),
-            "대결 묶음에 큐브 입구가 없다")
+    #expect(panel.contains("MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() } MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }"),
+            "같이 하기 묶음에 큐브 입구가 없다")
     #expect(panel.contains("onRummy: { store.openRummyFromMiniGame() }"))
-    #expect(panel.contains("var onRummy: () -> Void = {}"), "기존 머리글 호출부를 지키려면 기본값이 있어야 한다")
+    // 사이드바는 문 넷을 **기본값 없이** 받는다 — 기본값 `{}` 가 있으면 배선을 빠뜨린 문이 조용히 아무 일도 안 한다
+    // (옛 머리글이 기본값을 둔 이유였던 '기존 호출부 보호'는 머리글에서 문이 빠지며 사라졌다).
+    #expect(panel.contains("let onRummy: () -> Void"), "사이드바가 큐브 문을 기본값 없이 받지 않는다")
+    #expect(!panel.contains("var onRummy: () -> Void = {}"), "큐브 문에 빈 기본값이 남았다")
 
     let miniGame = try rwMac("WorkTimerStoreMiniGame.swift")
     #expect(miniGame.contains("func openRummyFromMiniGame() { rummy.openWindow(focusMatchID: nil) closeMiniGamePanel() }"),

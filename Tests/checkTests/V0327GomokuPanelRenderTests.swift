@@ -1162,17 +1162,15 @@ func miniGameHeaderShowsTheGomokuEntry() throws {
     gpSave(bitmap, name: "minigame-header-entry")
     #expect(gpYellowPixels(bitmap) == 0)
 
-    // 게임 열 머리글 띠 안에 입구의 초록 글자·아이콘이 있고, 344pt 열 밖으로 넘치지 않는다.
-    let band = CGRect(
-        x: MiniGameWindowLayout.contentPadding, y: MiniGameWindowLayout.contentPadding,
-        width: MiniGameWindowLayout.canvasSize.width, height: MiniGameWindowLayout.headerHeight
-    )
-    let greens = gpGreenInk(bitmap, rect: band.insetBy(dx: -30, dy: 0))
-    #expect(greens.count > 40, "미니게임 헤더에 [1:1 오목] 입구가 안 보인다(초록 픽셀 \(greens.count))")
-    #expect(Double(greens.maxX) / 2 <= Double(band.maxX), "입구가 게임 열(344pt) 밖으로 넘친다(maxX \(Double(greens.maxX) / 2)pt)")
+    // v0.3.69 — 입구는 왼쪽 사이드바의 '같이 하기' 묶음에 선다. 그 띠 안에 초록 아이콘이 있고, 사이드바 밖(게임 열)으로 안 넘친다.
+    let band = MiniGameWindowLayout.sidebarDuelGroupRect
+    let greens = gpGreenInk(bitmap, rect: band.insetBy(dx: 0, dy: -10))
+    #expect(greens.count > 40, "미니게임 사이드바에 [1:1 오목] 입구가 안 보인다(초록 픽셀 \(greens.count))")
+    #expect(Double(greens.maxX) / 2 <= Double(band.maxX), "입구가 사이드바(\(band.maxX)pt) 밖으로 넘친다(maxX \(Double(greens.maxX) / 2)pt)")
 
-    let entry = try gpBitmap(MiniGameGomokuEntryButton(action: {}))
-    #expect(Double(entry.pixelsWide) / 2 <= 100, "입구 버튼이 \(Double(entry.pixelsWide) / 2)pt 다 — 칩 둘과 한 줄에 못 선다")
+    let entry = try gpBitmap(MiniGameGomokuEntryButton(action: {}).fixedSize())
+    #expect(Double(entry.pixelsWide) / 2 <= MiniGameWindowLayout.sidebarRowWidth,
+            "입구 줄이 \(Double(entry.pixelsWide) / 2)pt 다 — 사이드바 줄(\(MiniGameWindowLayout.sidebarRowWidth)pt)에서 이름이 잘린다")
 }
 
 // MARK: - 규칙 예시 · 문구(순수)
@@ -1394,8 +1392,9 @@ func gomokuPanelKeepsClocksInLeavesAndUsesNoYellowBoxControls() throws {
     // — 렌더 테스트가 머리글의 자연 폭을 단독으로 재야 했기 때문이다(V0338TetrisMacTests).
     // 두 조각을 다 본다: 한쪽만 보면 버튼은 있는데 아무 데도 안 이어진 상태가 조용히 통과한다.
     // v0.3.44: 입구가 **둘**이 됐지만 둘 다 이름을 그대로 단다(실측 330.5pt / 344pt — V0338 의 헤더 실측).
-    #expect(miniGame.contains("MiniGameGomokuEntryButton { onGomoku() }"),
-            "미니게임 머리글에 오목 입구 버튼이 없다")
+    // v0.3.69 — 입구 버튼은 머리글이 아니라 왼쪽 사이드바에 선다.
+    #expect(miniGame.contains("MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }"),
+            "미니게임 사이드바에 오목 입구 버튼이 없다")
     // v0.3.50: 입구가 스토어의 한 문(`openGomokuFromMiniGame`)을 지난다 — 오목 창을 띄우고 **미니게임 창은 내린다**.
     // 그래서 배선이 **세 조각**이 됐다(버튼 → 패널 클로저 → 스토어 문). 가운데까지만 보면 문은 있는데 그 문이
     // 오목 창을 안 여는 상태가 조용히 통과한다 — 문 안쪽까지 본다(동작은 V0350MiniGameDuelEntryTests 가 잰다).

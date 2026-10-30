@@ -16,6 +16,12 @@ import CheckCore
 //     정지 화면(스크림·카드·카운트다운)도 허브가 캔버스 **위에** 그린다 — 게임마다 따로 그리면 두 벌이 되어 언젠가 갈린다.
 //   · **크롬 개편**: "미니게임 창 자체도 좀 꾸며줘. 순위 쪽도 그렇고 전체적인 디자인이 너무 마음에 안 들어."
 //     창을 620×420 → 700×470 으로 넓혔지만 **캔버스는 344×356 그대로**다(아래 상수 주석).
+//
+// v0.3.69 에 **게임 고르기가 위쪽 칩 줄에서 왼쪽 사이드바로** 옮겨 갔다(사용자 요구 2026-10-30: "미니게임이 너무 많아져서
+// 미니게임 창을 살짝 개편해야될거 같아. 아예 위가 아니라 게임창 왼쪽편에 미니게임들이 좀 더 크게 뜨면 좋을듯").
+// 혼자 게임 넷 + 대결 문 넷이 344pt 머리글 한 줄을 다투느라 고른 칩만 이름을 달고 나머지는 12pt 아이콘이었다.
+// 사이드바(`MiniGameSidebar`)는 여덟 줄 전부에 큰 아이콘과 이름을 단다. 게임 열·순위 열(700×470 구역)은 **한 픽셀도 안 바뀐다** —
+// 창이 사이드바 폭만큼 왼쪽으로 늘었을 뿐이다.
 
 /// 미니게임 창의 **고정** 레이아웃(캔버스 · 순위 열 · 무스크롤 행수). 순수 상수 — 결정적 검증 지점.
 ///
@@ -30,17 +36,63 @@ import CheckCore
 ///
 /// 가로 2단이다(게임 | 오늘 순위). 처음엔 캔버스 아래에 순위를 세웠는데 "게임 창 밑에 뜨니까 보기 힘들다"는
 /// 실사용 지적이 나왔다 — 눈이 세로로 멀어지고, 창을 낮추면 순위부터 잘렸다.
+/// v0.3.69 부터 그 2단(= **게임 구역** 700×470) 왼쪽에 게임 고르기 사이드바(188)가 붙는다. 창 = 888×470.
 ///
 /// 산식(전부 아래 상수로 굳어 있다):
-///   · 안쪽 = 700−28 × 470−28 = 672 × 442
+///   · 창 = 사이드바 188 + 게임 구역 700 = **888** × 470
+///   · 안쪽(게임 구역) = 700−28 × 470−28 = 672 × 442
 ///   · 게임 열 = 344(= 캔버스 폭, 상수) × [헤더 32 + 10 + 캔버스 356 + 10 + 하단 스트립 32 = 440] ≤ 442
 ///   · 순위 열 = 672 − 14(단 사이) − 344 = **314** × 442
 ///   · 무스크롤 행수 = 어제 챔피언 카드가 있으면 9, 없으면 10. 넘치면 ScrollView.
 enum MiniGameWindowLayout {
-    /// 창 콘텐츠 크기(고정). 컨트롤러의 min/max 도 이 값 하나를 쓴다 — 두 곳에 적으면 언젠가 갈린다.
-    static let contentSize = CGSize(width: 700, height: 470)
-    /// 창 안쪽 여백(사방).
+    /// 게임 고르기 사이드바 폭(v0.3.69). 줄 폭 = 188 − 10×2 = 168 — 가장 긴 이름("길건너 아잉이" · "1:1 테트리스")이
+    /// 30pt 아이콘·'새 창' 표시와 한 줄에 줄지 않고 선다(V0338 · V0367 시험이 실측한다).
+    static let sidebarWidth: CGFloat = 188
+    /// 게임 구역(게임 열 + 순위 열) — v0.3.68 까지 창 전체였던 700×470 그대로다. 사이드바가 붙어도 이 구역의 모든 좌표는
+    /// 왼쪽으로 `sidebarWidth` 만큼 밀릴 뿐 안에서는 한 픽셀도 안 바뀐다(캔버스·순위 열 폭이 그대로라는 뜻이다).
+    static let gameAreaSize = CGSize(width: 700, height: 470)
+    /// 창 콘텐츠 크기(고정) = 사이드바 + 게임 구역. 컨트롤러의 min/max 도 이 값 하나를 쓴다 — 두 곳에 적으면 언젠가 갈린다.
+    static let contentSize = CGSize(width: sidebarWidth + gameAreaSize.width, height: gameAreaSize.height)
+    /// 창 안쪽 여백(게임 구역의 사방 · 사이드바의 위아래).
     static let contentPadding: CGFloat = 14
+
+    /// 게임 열 왼쪽 위(창 콘텐츠 좌표). 렌더 시험이 픽셀을 찾는 기준점이다 — 사이드바가 붙으며 x 가 `contentPadding` 에서 밀렸다.
+    static var gameColumnOrigin: CGPoint { CGPoint(x: sidebarWidth + contentPadding, y: contentPadding) }
+
+    /// 사이드바 안쪽 가로 여백.
+    static let sidebarPadding: CGFloat = 10
+    /// 묶음 머리("혼자 하기" · "같이 하기")와 그 아래 간격.
+    static let sidebarGroupTitleHeight: CGFloat = 16
+    static let sidebarGroupTitleSpacing: CGFloat = 6
+    /// 두 묶음 사이.
+    static let sidebarGroupSpacing: CGFloat = 16
+    /// 사이드바 한 줄 높이·줄 사이(옛 칩은 26pt 캡슐이었다).
+    static let sidebarRowHeight: CGFloat = 42
+    static let sidebarRowSpacing: CGFloat = 4
+    /// 줄 왼쪽 아이콘 타일 한 변(옛 칩 아이콘은 caption2 ≈ 12pt 였다).
+    static let sidebarIconSize: CGFloat = 30
+    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브).
+    static let sidebarDuelRows = 4
+
+    /// 한 묶음 세로(머리 + 줄들).
+    static func sidebarGroupHeight(rows: Int) -> CGFloat {
+        sidebarGroupTitleHeight + sidebarGroupTitleSpacing
+            + CGFloat(rows) * sidebarRowHeight + CGFloat(max(rows - 1, 0)) * sidebarRowSpacing
+    }
+
+    /// 사이드바 한 줄 폭(168).
+    static var sidebarRowWidth: CGFloat { sidebarWidth - sidebarPadding * 2 }
+
+    /// 같이 하기(대결 문) 묶음이 서는 자리(창 콘텐츠 좌표 — 렌더 시험이 초록 잉크를 찾는 곳).
+    static var sidebarDuelGroupRect: CGRect {
+        CGRect(x: 0, y: contentPadding + sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing,
+               width: sidebarWidth, height: sidebarGroupHeight(rows: sidebarDuelRows))
+    }
+
+    /// 사이드바 내용 세로 합(두 묶음). 안쪽 높이(442)를 넘으면 아래 줄이 창 밖으로 잘린다 — 게임이 또 늘면 여기서 먼저 걸린다.
+    static var sidebarContentHeight: CGFloat {
+        sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing + sidebarGroupHeight(rows: sidebarDuelRows)
+    }
     /// 게임 열 ↔ 순위 열 사이.
     static let columnSpacing: CGFloat = 14
 
@@ -76,9 +128,9 @@ enum MiniGameWindowLayout {
     /// 하한 2(그 아래는 순위표가 아니다). 창이 고정이라 실제로 걸릴 일은 없지만 계산의 바닥은 남겨 둔다.
     static let minVisibleRows = 2
 
-    /// 여백을 뺀 콘텐츠 영역(672×442).
+    /// 게임 구역에서 여백을 뺀 영역(672×442). 사이드바는 여기 안 든다.
     static var innerSize: CGSize {
-        CGSize(width: contentSize.width - contentPadding * 2, height: contentSize.height - contentPadding * 2)
+        CGSize(width: gameAreaSize.width - contentPadding * 2, height: gameAreaSize.height - contentPadding * 2)
     }
 
     /// 캔버스 **344×356 — 상수다.** 창 크기에서 계산하지 마라.
@@ -605,13 +657,15 @@ struct CheckMiniGameWindowView: View {
     let store: WorkTimerStore
     /// 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
+    /// 스냅샷 전용: 사이드바 대결 문의 '받은 신청' 점을 강제로 그린다(v0.3.69). 앱에서는 언제나 nil — 스토어의 네 사실로만 정한다.
+    var previewInvites: MiniGameDuelInvites? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 클릭·스페이스를 접은 입력 카운터. 게임 잎 뷰는 "늘었다"만 본다.
     @State private var input = MiniGameInput()
     /// 마우스 다운 래치 — DragGesture(minimumDistance: 0) 의 onChanged 는 누르고 있는 동안 계속 오므로 첫 호출만 입력으로 센다.
     @State private var pressLatched = false
-    /// 게임 진행 중(잎 뷰가 알려 준다). 진행 중엔 [일시정지]가 보이고, **정지 중이 아닐 때만** 종류 칩이 잠긴다.
+    /// 게임 진행 중(잎 뷰가 알려 준다). 진행 중엔 [일시정지]가 보이고, **정지 중이 아닐 때만** 사이드바의 다른 게임 줄과 대결 문이 잠긴다.
     @State private var isPlaying: Bool
     @State private var pauseState: PauseState
     /// 재개 카운트다운 Task. 창이 닫히거나 interruptToken 이 오르면 반드시 cancel 한다 — 안 그러면 죽은 화면의
@@ -631,9 +685,11 @@ struct CheckMiniGameWindowView: View {
 
     /// - Parameter initialPause: **스냅샷·프리뷰 전용** 초기 정지 상태. 앱은 언제나 `.none` 으로 연다.
     ///   `.none` 이 아니면 `isPlaying` 도 참으로 시작한다 — 정지는 진행 중일 때만 가능한 상태이기 때문이다.
-    init(store: WorkTimerStore, clipsOverflowInsteadOfScroll: Bool = false, initialPause: PauseState = .none) {
+    init(store: WorkTimerStore, clipsOverflowInsteadOfScroll: Bool = false, initialPause: PauseState = .none,
+         previewInvites: MiniGameDuelInvites? = nil) {
         self.store = store
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
+        self.previewInvites = previewInvites
         _pauseState = State(initialValue: initialPause)
         _isPlaying = State(initialValue: initialPause.isFrozen)
     }
@@ -678,15 +734,20 @@ struct CheckMiniGameWindowView: View {
     var body: some View {
         // 어제 1등 카드는 [오늘] 판에만 선다 — [역대] 에서는 그 48pt 를 순위 행이 쓴다(무스크롤 9 → 10행).
         let layout = MiniGameWindowLayout.layout(hasChampionRow: showsChampionCard)
-        // 가로 2단: 왼쪽이 게임(헤더 + 캔버스 + 하단 스트립), 오른쪽이 오늘 순위. 순위를 캔버스 **아래**에 두면 눈이
+        // 맨 왼쪽이 게임 고르기 사이드바(v0.3.69), 그 오른쪽이 게임 구역(700×470 — v0.3.68 까지 창 전체였던 그대로).
+        // 게임 구역은 가로 2단: 왼쪽이 게임(헤더 + 캔버스 + 하단 스트립), 오른쪽이 오늘 순위. 순위를 캔버스 **아래**에 두면 눈이
         // 세로로 멀어지고 창을 낮출 때 순위부터 잘린다("게임 창 밑에 뜨니까 보기 힘들다" — 실사용 지적).
-        HStack(alignment: .top, spacing: MiniGameWindowLayout.columnSpacing) {
-            gameColumn(canvas: layout.canvasSize)
-                .frame(width: layout.canvasSize.width, alignment: .top)
-            rankColumn(visibleRows: layout.visibleRows)
-                .frame(width: layout.rankSize.width, alignment: .top)
+        HStack(alignment: .top, spacing: 0) {
+            gameSidebar
+                .frame(width: MiniGameWindowLayout.sidebarWidth, height: MiniGameWindowLayout.contentSize.height, alignment: .top)
+            HStack(alignment: .top, spacing: MiniGameWindowLayout.columnSpacing) {
+                gameColumn(canvas: layout.canvasSize)
+                    .frame(width: layout.canvasSize.width, alignment: .top)
+                rankColumn(visibleRows: layout.visibleRows)
+                    .frame(width: layout.rankSize.width, alignment: .top)
+            }
+            .padding(MiniGameWindowLayout.contentPadding)
         }
-        .padding(MiniGameWindowLayout.contentPadding)
         .frame(width: MiniGameWindowLayout.contentSize.width, height: MiniGameWindowLayout.contentSize.height, alignment: .topLeading)
         // 툴팁 말풍선 레이어(v0.3.25) — 미니게임 창 루트. 캔버스·순위 열의 클리핑 바깥이다.
         .checkTooltipLayer()
@@ -753,14 +814,24 @@ struct CheckMiniGameWindowView: View {
         }
     }
 
-    /// 헤더(32pt): 종류 칩 셋 | Spacer | [일시정지](진행 중일 때만).
+    /// 헤더(32pt): 지금 고른 게임 이름 | Spacer | [일시정지](진행 중일 때만).
     private var gameHeader: some View {
         MiniGameGameHeader(
             selected: store.miniGameKind,
             isPlaying: isPlaying,
             isFrozen: pauseState.isFrozen,
+            onPause: { togglePause() }
+        )
+    }
+
+    /// 게임 고르기 사이드바(v0.3.69): 혼자 게임 넷(이 창에서 바뀐다) + 대결 문 넷(각자 넓은 창을 연다).
+    private var gameSidebar: some View {
+        MiniGameSidebar(
+            selected: store.miniGameKind,
+            isPlaying: isPlaying,
+            isFrozen: pauseState.isFrozen,
+            invites: previewInvites ?? MiniGameDuelInvites(store: store),
             onSelect: { store.selectMiniGame($0) },
-            onPause: { togglePause() },
             onGomoku: { store.openGomokuFromMiniGame() },
             onChess: { store.openChessFromMiniGame() },
             onTetrisDuel: { store.openTetrisDuelFromMiniGame() },
@@ -1141,7 +1212,7 @@ struct CheckMiniGameWindowView: View {
     }
 
     /// [그만두기]. 스토어의 `abortMiniGameRound()` 가 토큰을 올려 잎 뷰의 판을 끝낸다(플래피는 그 점수로 확정,
-    /// 타이밍 바는 무효). 종류 칩 잠금도 함께 풀린다.
+    /// 타이밍 바는 무효). 사이드바 잠금도 함께 풀린다.
     private func quitRound() {
         cancelResume()
         cancelPauseWatchdog()
@@ -1424,137 +1495,247 @@ private enum MiniGameMedal {
 
 // MARK: - 크롬 조각
 
-/// 게임 열 머리글(32pt). **렌더 테스트가 단독으로 자연 폭을 잰다**(internal) — 헤더가 344pt 를 넘는지는
-/// 창 안에서 그려서는 알 수 없다(넘치면 SwiftUI 가 조용히 눌러 담는다). 그래서 뷰를 떼어 `.fixedSize()` 로 잰다.
+/// 게임 열 머리글(32pt): 지금 고른 게임의 이름 | [일시정지](판이 도는 중일 때만). **렌더 테스트가 단독으로 자연 폭을 잰다**
+/// (internal) — 머리글이 344pt 를 넘는지는 창 안에서 그려서는 알 수 없다(넘치면 SwiftUI 가 조용히 눌러 담는다).
+///
+/// v0.3.69 전까지 이 줄은 종류 칩 넷 + 대결 문 넷이 344pt 를 다투는 자리였다(칩끼리 간격 4 · 고른 칩만 이름 · 문은 짧은 이름 묶음 —
+/// 예산을 맞추려고 깎아 온 흔적이다). 고르기가 왼쪽 사이드바(`MiniGameSidebar`)로 옮겨 가며 이 줄에는 **지금 하는 게임**만 남았다.
+/// 이름을 굳이 다시 말하는 이유: 오른쪽 순위 열 머리("오늘 순위")와 짝을 이뤄 두 단의 윗변이 같은 줄로 읽히고,
+/// 사이드바를 보지 않고도 캔버스 위에서 무엇을 하는지 안다.
 struct MiniGameGameHeader: View {
     let selected: MiniGameKind
     let isPlaying: Bool
     let isFrozen: Bool
-    let onSelect: (MiniGameKind) -> Void
     let onPause: () -> Void
-    let onGomoku: () -> Void
-    let onChess: () -> Void
-    /// [1:1 테트리스] 입구(v0.3.60). **기본값이 있는 채로 맨 끝** — 머리글을 부르는 기존 호출부(테스트 여섯 곳)가 그대로 산다.
-    var onTetrisDuel: () -> Void = {}
-    /// [아잉 큐브] 입구(v0.3.69). 테트리스 입구와 같은 이유로 **기본값이 있는 채로 맨 끝**이다(기존 호출부 보호).
-    var onRummy: () -> Void = {}
-
-    /// 종류 칩끼리의 간격(v0.3.67 — 넷째 칩 "길건너 아잉이"가 들어오며 344pt 예산을 다시 쟀다).
-    ///
-    /// 칩이 셋일 때는 머리글 전체가 한 간격(6)이었다. 넷째 칩(아이콘 전용 ≈33pt + 간격)이 들어오고 고른 칩의 이름이
-    /// 가장 긴 "길건너 아잉이"면, 1:1 입구 묶음이 선 머리글이 **349.5pt** 로 344 를 넘었다(실측 — V0367CrossyTests 의
-    /// `headerFitsWithFourChips`). 그래서 칩끼리만 4pt 로 좁히고(테두리 있는 캡슐이라 4pt 로도 갈린다) 칩 묶음과 입구 사이
-    /// Spacer 의 최소 폭을 4 → 0 으로 내렸다(바깥 간격 6 + 6 = 12pt 가 그대로 남는다). 이름을 줄이거나 칩 여백을 깎는
-    /// 길은 고르지 않았다 — 이름은 사용자가 지었고, 아이콘 전용 칩 여백(8)은 V0338 이 못 박은 값이다.
-    static let chipSpacing: CGFloat = 4
 
     var body: some View {
-        HStack(spacing: 6) {
-            HStack(spacing: Self.chipSpacing) {
+        HStack(spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: selected.icon)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(CheckTheme.accent)
+                Text(selected.title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            if isPlaying, !isFrozen {
+                MiniGameChromeButton(title: CheckMiniGameWindowView.pauseTitle, icon: "pause.fill", tint: CheckTheme.pending) {
+                    onPause()
+                }
+            }
+        }
+    }
+}
+
+/// 대결 문 넷의 '받은 신청' 점(v0.3.69). 값은 **메뉴바 점과 같은 네 사실**이다(`CheckApp` 의 hasGomokuInvite · hasChessInvite ·
+/// hasTetrisInvite · hasRummyInvite 와 같은 식) — 새 조회를 하지 않고, 스토어가 이미 들고 있는 것을 읽기만 한다.
+///
+/// 이 창에서 점이 필요한 이유: 대결 창을 여는 길이 이 사이드바다. 신청이 와 있는데 문이 아무 말도 안 하면 메뉴바 점을 보고
+/// 들어온 사람이 어느 문을 눌러야 하는지 모른다.
+struct MiniGameDuelInvites: Equatable {
+    var gomoku = false
+    var chess = false
+    var tetris = false
+    var rummy = false
+
+    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false) {
+        self.gomoku = gomoku
+        self.chess = chess
+        self.tetris = tetris
+        self.rummy = rummy
+    }
+
+    @MainActor
+    init(store: WorkTimerStore) {
+        self.init(
+            gomoku: !store.gomoku.pendingIncomingInvites.isEmpty,
+            chess: store.chess.visibleIncoming != nil,
+            tetris: store.tetris.visibleIncoming != nil,
+            rummy: store.rummy.hasIncomingInvite
+        )
+    }
+}
+
+/// 게임 고르기 사이드바(v0.3.69). 사용자 요구(2026-10-30): "미니게임이 너무 많아져서 미니게임 창을 살짝 개편해야될거 같아.
+/// 아예 위가 아니라 게임창 왼쪽편에 미니게임들이 좀 더 크게 뜨면 좋을듯". 렌더 테스트가 단독으로 그린다(internal).
+///
+/// 두 묶음이다 — 색과 뜻은 옛 머리글 그대로 옮겼다:
+///   · **혼자 하기**(파랑 · `CheckTheme.accent`): 이 창의 캔버스에서 바뀌는 게임. 고른 줄이 칠해진다.
+///   · **같이 하기**(초록 · `CheckTheme.working`): 다른 넓은 창을 여는 문(1:1 오목 · 체스 · 테트리스 · 2~4인 아잉 큐브).
+///     고른 상태가 없고, 오른쪽 끝의 '새 창' 표시가 "누르면 다른 창이 열린다"를 말한다. 누르면 이 창은 내려간다
+///     (0.3.50 — `WorkTimerStore.openGomokuFromMiniGame` 등. 대결 창과 둘이 떠 있지 않게).
+///
+/// 잠금 규칙도 옛 머리글 그대로다:
+///   · 혼자 게임 줄 — 판이 도는 중(정지 아님)에는 **고른 줄만** 누를 수 있다. 정지 중에는 다른 줄을 **푼다** — 사용자가 원한 것이
+///     정확히 "포기하고 다른 게임 하기"다(2026-09-10). 누르면 `selectMiniGame` 이 토큰을 올려 판을 무효화하고 넘어간다.
+///   · 대결 문 — 판이 도는 중(정지 아님)에는 잠긴다. 옛 머리글에서는 그동안 [일시정지]가 문 자리를 대신 썼다(0.3.62 — 정지 중에는
+///     문이 열린다. 누르면 그 문의 `closeMiniGamePanel()` 이 판을 끝낸다 — 대결 창으로 가는 것은 분명한 의사표시다).
+struct MiniGameSidebar: View {
+    static let soloTitle = "혼자 하기"
+    static let duelTitle = "같이 하기"
+
+    let selected: MiniGameKind
+    let isPlaying: Bool
+    let isFrozen: Bool
+    let invites: MiniGameDuelInvites
+    let onSelect: (MiniGameKind) -> Void
+    let onGomoku: () -> Void
+    let onChess: () -> Void
+    let onTetrisDuel: () -> Void
+    let onRummy: () -> Void
+
+    /// 대결 문이 열려 있는가(위 잠금 규칙).
+    private var doorsOpen: Bool { !isPlaying || isFrozen }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MiniGameWindowLayout.sidebarGroupSpacing) {
+            group(Self.soloTitle) {
                 ForEach(MiniGameKind.macCases) { kind in
-                    MiniGameKindChip(
+                    MiniGameSidebarRow(
                         title: kind.title,
                         icon: kind.icon,
+                        tint: CheckTheme.accent,
                         isSelected: kind == selected,
-                        // 게임이 셋이 되면서 "칩 셋 + [일시정지]" 가 344pt 예산을 다툰다(사용자 확정 2026-09-23:
-                        // "고른 칩만 이름, 나머지는 아이콘 전용"). 고른 칩만 이름을 다는 이유는 폭만이 아니다 —
-                        // 지금 무엇을 하고 있는지는 **한 번만** 말하면 되고, 나머지는 "다른 게임으로 가는 문"이다.
-                        showsTitle: kind == selected,
-                        // 정지 중에는 다른 게임 칩을 **푼다** — 사용자가 원한 것이 정확히 "포기하고 다른 게임 하기"다
-                        // (2026-09-10). 다른 칩을 누르면 selectMiniGame 이 토큰을 올려 판을 무효화하고 넘어간다.
                         isEnabled: !isPlaying || isFrozen || kind == selected
                     ) {
                         onSelect(kind)
                     }
                 }
             }
+            group(Self.duelTitle) {
+                MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }
+                MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }
+                MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }
+                MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }
+            }
+            .disabled(!doorsOpen)
             Spacer(minLength: 0)
-            if isPlaying, !isFrozen {
-                MiniGameChromeButton(title: CheckMiniGameWindowView.pauseTitle, icon: "pause.fill", tint: CheckTheme.pending) {
-                    onPause()
-                }
-            } else {
-                // 1:1 대결 창 입구 **둘**(오목 v0.3.27 · 체스 v0.3.44). 둘 다 이 창과 **별도의 넓은 창**이다
-                // (사용자 결정) — 여기는 문만 둔다. [일시정지] 와 **같은 자리를 번갈아 쓴다**: 판이 도는 중에는
-                // [일시정지]가 이 자리를 쓰고, **정지 중에는 이 문이 열린다**(0.3.62 — 키를 잃으면 판이 끝나는
-                // 대신 멈추므로 정지한 판 위에서 누를 수 있는 문이 됐다). 누르면 `openGomokuFromMiniGame` 쪽의
-                // `closeMiniGamePanel()` 이 판을 끝낸다 — 대결 창으로 가는 것은 분명한 의사표시다.
-                // **누르면 이 창은 내려간다**(0.3.50 — `WorkTimerStore.openGomokuFromMiniGame`): 대결 창과 둘이 떠 있지 않게.
-                // 팝오버를 닫지 않는다 — 이 창에서 오는 길이면 팝오버는 이미 닫혀 있다(토글이라 부르면 오히려 열린다).
-                //
-                // ★ **입구 둘 다 이름을 단다 — 실측으로 들어간다.** 입구가 둘이 되며 344pt 예산을 다시 쟀고,
-                //   이름을 둘 다 단 머리글이 **330.5pt** 였다(2026-10-05 `theHeaderFitsInThreeHundredFortyFour`
-                //   의 출력). 남는 여유는 13.5pt 뿐이라 **문을 하나 더 달거나 이름을 늘리면 넘친다** —
-                //   그 경계를 그 시험이 숫자로 지킨다(아이콘 전용으로 접는 길은 `showsTitle: false` 로 열어 뒀다).
-                //   이름을 떼지 않은 이유: 이 버튼은 '다른 창을 여는 문' 이라 아이콘만으로는 어디로 가는지
-                //   읽히지 않고, 종류 칩과 달리 **고른 상태가 없어** "지금 있는 자리" 라는 단서도 없다.
-                //
-                // ★ v0.3.60 — 문이 **셋**(오목 · 체스 · 테트리스)이 되며 예산을 다시 쟀다. 위 경계 그대로 이름 단 캡슐 셋은
-                //   344pt 를 넘는다(`theHeaderFitsInThreeHundredFortyFour` 가 그 대조군을 잰다). 그래서 **"1:1" 을 한 번만**
-                //   말하는 묶음 캡슐 하나(`MiniGameDuelEntryGroup`)로 접었다: [1:1 | 오목 | 체스 | 테트리스]. 이름은 셋 다 남는다
-                //   (아이콘 전용으로 접지 않은 이유는 위와 같다) — 반복되던 "1:1 " 접두와 아이콘 셋만 빠진다.
-                //   각 문은 여전히 **자기 버튼**이고(말풍선 · 보이스오버 이름 · 탭이 따로) 묶음은 그리기만 바꾼다(환경값).
-                // ★ v0.3.69 — 넷째 문 [큐브](아잉 큐브 · 2~4인)가 들어오며 머리 "1:1" 을 뗐다(예산 · 뜻 — `MiniGameDuelEntryGroup` 주석).
-                MiniGameDuelEntryGroup {
-                    MiniGameGomokuEntryButton { onGomoku() }
-                    MiniGameChessEntryButton { onChess() }
-                    MiniGameTetrisDuelEntryButton { onTetrisDuel() }
-                    // v0.3.69 — 아잉 큐브(2~4인)도 같은 묶음의 문이다(다른 넓은 창으로 가는 대결 문이라는 뜻이 같다).
-                    MiniGameRummyEntryButton { onRummy() }
-                }
+        }
+        .padding(.horizontal, MiniGameWindowLayout.sidebarPadding)
+        .padding(.vertical, MiniGameWindowLayout.contentPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(CheckTheme.fieldFill)
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(CheckTheme.border).frame(width: 1)
+        }
+    }
+
+    private func group<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
+        VStack(alignment: .leading, spacing: MiniGameWindowLayout.sidebarGroupTitleSpacing) {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(CheckTheme.secondaryText)
+                .padding(.leading, 4)
+                .frame(height: MiniGameWindowLayout.sidebarGroupTitleHeight)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: MiniGameWindowLayout.sidebarRowSpacing) {
+                rows()
             }
         }
     }
 }
 
-/// 게임 종류 칩. 선택 = accent 채움 + **이름**, 비선택 = 흐린 캡슐 + **아이콘만**.
+/// 사이드바 한 줄 — 아이콘 타일 + 이름(+ 대결 문이면 '새 창' 표시 · 받은 신청 점). 혼자 게임 줄과 대결 문 줄이 **한 부품**이다
+/// (같은 사실은 한 부품 — 각자 만들면 수치가 갈린다: 오목 입구에서 모서리 16 vs 14 · 아이콘 32 vs 34 로 갈려 있던 사고가 그 자리다).
 ///
-/// 아이콘 전용 칩에도 `.accessibilityLabel(title)` 이 붙는다 — 아이콘은 VoiceOver 에게 아무 말도 하지 않고,
-/// SF Symbol 의 기본 설명("square grid 2x2")은 게임 이름이 아니다. 말풍선(`.checkTooltip`)은 눈으로 보는
-/// 사람 몫이고 이 라벨은 듣는 사람 몫이라 **둘 다** 있어야 한다.
-private struct MiniGameKindChip: View {
+/// 이름이 늘 보이므로 말풍선은 **설명이 따로 있는 줄**(대결 문의 규칙 안내)에만 단다. 보이스오버 이름은 모든 줄에 있다 —
+/// 아이콘 타일은 아무 말도 안 하고, 받은 신청 점은 색뿐이라 말로도 붙인다.
+struct MiniGameSidebarRow: View {
+    /// 받은 신청 점의 보이스오버 꼬리.
+    static let inviteAccessibility = "받은 신청이 있어요"
+
     let title: String
     let icon: String
-    let isSelected: Bool
-    /// 이름을 함께 그릴지. 거짓이면 아이콘만(폭이 97 → 33 으로 준다).
-    var showsTitle: Bool = true
+    let tint: Color
+    var isSelected: Bool = false
     var isEnabled: Bool = true
+    /// 누르면 다른 창이 열리는 줄(대결 문)인가 — 오른쪽 끝에 '새 창' 표시를 단다.
+    var opensWindow: Bool = false
+    var hasInvite: Bool = false
+    var help: String? = nil
     let action: () -> Void
 
+    @Environment(\.isEnabled) private var environmentEnabled
     @State private var hovering = false
+
+    private var enabled: Bool { isEnabled && environmentEnabled }
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 10, style: .continuous) }
 
     var body: some View {
         Button(action: action) {
-            Group {
-                if showsTitle {
-                    Label(title, systemImage: icon)
-                } else {
-                    Image(systemName: icon)
+            HStack(spacing: 10) {
+                iconTile
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? CheckTheme.primaryText : CheckTheme.primaryText.opacity(0.86))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if opensWindow {
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(CheckTheme.secondaryText)
                 }
             }
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(isSelected ? CheckTheme.accent : CheckTheme.secondaryText)
-                // 아이콘 전용 칩은 좌우 여백을 줄인다 — 10 그대로면 아이콘 하나가 가운데 뜬 넓은 알약이 된다.
-                .padding(.horizontal, showsTitle ? 10 : 8)
-                .frame(height: 26)
-                .background(
-                    Capsule().fill(isSelected ? CheckTheme.accent.opacity(0.20) : Color.white.opacity(hovering ? 0.10 : 0.04))
-                )
-                .overlay(
-                    Capsule().stroke(isSelected ? CheckTheme.accent.opacity(0.55) : CheckTheme.border, lineWidth: 1)
-                )
-                .contentShape(Capsule())
+            .padding(.leading, 6)
+            .padding(.trailing, 9)
+            .frame(maxWidth: .infinity, minHeight: MiniGameWindowLayout.sidebarRowHeight,
+                   maxHeight: MiniGameWindowLayout.sidebarRowHeight)
+            .background(shape.fill(fill))
+            .overlay(shape.stroke(isSelected ? tint.opacity(0.55) : Color.clear, lineWidth: 1))
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.45)
+        .opacity(enabled ? 1 : 0.45)
         .onHover { hovering = $0 }
-        .accessibilityLabel(title)
-        .checkTooltip(title)
+        .accessibilityLabel(hasInvite ? "\(title) — \(Self.inviteAccessibility)" : title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .modifier(MiniGameSidebarHelp(text: help))
+    }
+
+    private var fill: Color {
+        if isSelected { return tint.opacity(0.18) }
+        return hovering && enabled ? Color.white.opacity(0.07) : Color.clear
+    }
+
+    private var iconTile: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(tint.opacity(isSelected ? 0.30 : 0.14))
+            .frame(width: MiniGameWindowLayout.sidebarIconSize, height: MiniGameWindowLayout.sidebarIconSize)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+            )
+            .overlay(alignment: .topTrailing) {
+                if hasInvite {
+                    Circle()
+                        .fill(CheckTheme.danger)
+                        .frame(width: 10, height: 10)
+                        .overlay(Circle().stroke(CheckTheme.panel, lineWidth: 2))
+                        .offset(x: 3, y: -3)
+                }
+            }
     }
 }
 
-/// 헤더 오른쪽 소형 버튼([일시정지]). 정지 카드 안 버튼과 수치가 다르다 — 여기는 32pt 헤더에 들어가야 한다.
+/// 말풍선을 설명이 있는 줄에만 단다(`MiniGameSidebarRow` 주석).
+private struct MiniGameSidebarHelp: ViewModifier {
+    let text: String?
+
+    func body(content: Content) -> some View {
+        if let text {
+            content.checkTooltip(text)
+        } else {
+            content
+        }
+    }
+}
+
+/// 머리글 오른쪽 소형 버튼([일시정지]). 정지 카드 안 버튼과 수치가 다르다 — 여기는 32pt 헤더에 들어가야 한다.
 private struct MiniGameChromeButton: View {
     let title: String
     let icon: String
@@ -1577,194 +1758,66 @@ private struct MiniGameChromeButton: View {
     }
 }
 
-/// 헤더의 [1:1 오목] 입구(v0.3.27). 종류 칩과 같은 26pt 캡슐이지만 **초록**이다 — 칩(파랑 = 이 창의 게임 고르기)과
-/// 같은 색이면 "세 번째 게임"으로 읽히는데, 이 버튼은 다른 창을 여는 문이다. 렌더 테스트가 단독으로 폭을 잰다(internal).
+/// 사이드바의 [1:1 오목] 문(v0.3.27 — 처음엔 머리글 캡슐, v0.3.69 부터 사이드바 줄). 초록 줄이다 — 파랑(이 창의 게임 고르기)과
+/// 같은 색이면 "다섯 번째 게임"으로 읽히는데, 이 문은 다른 창을 연다. 렌더 테스트가 단독으로 그린다(internal).
 struct MiniGameGomokuEntryButton: View {
     static let title = "1:1 오목"
     static let icon = "circle.grid.3x3.fill"
     static let help = "렌주룰 1:1 오목 대결 창을 열어요"
 
-    /// 이름을 함께 그릴지. **헤더는 참**(위 ★ — 실측 330.5pt / 344pt). 예산이 더 빠듯해지는 날 접는 문이다.
-    var showsTitle: Bool = true
+    var hasInvite: Bool = false
     let action: () -> Void
 
-    @State private var hovering = false
-
     var body: some View {
-        MiniGameEntryCapsule(title: Self.title, icon: Self.icon, help: Self.help, segmentTitle: Self.segmentTitle,
-                             showsTitle: showsTitle, hovering: hovering, action: action)
-            .onHover { hovering = $0 }
+        MiniGameSidebarRow(title: Self.title, icon: Self.icon, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
     }
-
-    /// 묶음 캡슐 안에서 쓰는 짧은 이름("1:1" 은 묶음이 한 번만 말한다).
-    static let segmentTitle = "오목"
 }
 
-/// 헤더의 [1:1 체스] 입구(v0.3.44). 오목 입구와 **같은 초록 캡슐**이다 — 색의 뜻이 "이 창의 게임"(파랑 칩)이
-/// 아니라 "다른 창으로 가는 1:1 대결 문"이고, 두 입구는 그 뜻이 같다. 가르는 것은 **아이콘**이다.
-/// 렌더 테스트가 단독으로 폭을 잰다(internal 인 이유).
+/// 사이드바의 [1:1 체스] 문(v0.3.44). 오목 문과 **같은 초록 줄**이다 — 색의 뜻이 "다른 창으로 가는 대결 문"이고,
+/// 문끼리 가르는 것은 **아이콘과 이름**이다. 렌더 테스트가 단독으로 그린다(internal).
 struct MiniGameChessEntryButton: View {
     static let title = "1:1 체스"
     static let icon = ChessEntryIcon.symbol
     static let help = "FIDE 규칙 1:1 체스 대결 창을 열어요"
 
-    var showsTitle: Bool = true
+    var hasInvite: Bool = false
     let action: () -> Void
-
-    @State private var hovering = false
 
     var body: some View {
         // 아이콘 이름은 이 맥에서 실제로 풀리는 것만 쓴다(없으면 아무것도 안 그려 자리만 빈다 — ChessEntryIcon).
-        MiniGameEntryCapsule(title: Self.title, icon: ChessEntryIcon.resolved, help: Self.help,
-                             segmentTitle: Self.segmentTitle,
-                             showsTitle: showsTitle, hovering: hovering, action: action)
-            .onHover { hovering = $0 }
+        MiniGameSidebarRow(title: Self.title, icon: ChessEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
     }
-
-    static let segmentTitle = "체스"
 }
 
-/// 헤더의 [1:1 테트리스] 입구(v0.3.60). 오목·체스 입구와 **같은 부품**이다. 아이콘은 두 판이 나란히 선 그림
-/// (`TetrisDuelEntryIcon`) — 이 창의 솔로 테트리스 칩(`square.grid.2x2.fill`)과 갈린다. 렌더 테스트가 단독으로 잰다(internal).
+/// 사이드바의 [1:1 테트리스] 문(v0.3.60). 아이콘은 두 판이 나란히 선 그림(`TetrisDuelEntryIcon`) — 바로 위 묶음의
+/// 솔로 테트리스 줄(`square.grid.2x2.fill`)과 갈린다. 렌더 테스트가 단독으로 그린다(internal).
 struct MiniGameTetrisDuelEntryButton: View {
     static let title = "1:1 테트리스"
-    static let segmentTitle = "테트리스"
     static let help = "공격형 1:1 테트리스 대결 창을 열어요"
 
-    var showsTitle: Bool = true
+    var hasInvite: Bool = false
     let action: () -> Void
 
-    @State private var hovering = false
-
     var body: some View {
-        MiniGameEntryCapsule(title: Self.title, icon: TetrisDuelEntryIcon.resolved, help: Self.help,
-                             segmentTitle: Self.segmentTitle,
-                             showsTitle: showsTitle, hovering: hovering, action: action)
-            .onHover { hovering = $0 }
+        MiniGameSidebarRow(title: Self.title, icon: TetrisDuelEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
     }
 }
 
-/// 헤더의 [아잉 큐브] 입구(v0.3.69). 오목·체스·테트리스 입구와 **같은 부품**이다. 2~4인 게임이라 이름에 "1:1" 이 없다.
-/// 렌더 테스트가 단독으로 잰다(internal).
+/// 사이드바의 [아잉 큐브] 문(v0.3.69). 2~4인 게임이라 이름에 "1:1" 이 없다 — 그래서 묶음 머리가 "대결"이 아니라 "같이 하기"다.
+/// 렌더 테스트가 단독으로 그린다(internal).
 struct MiniGameRummyEntryButton: View {
     static let title = RummyInviteText.gameName
-    static let segmentTitle = RummyInviteText.entrySegmentTitle
     static let help = "2~4인 아잉 큐브 창을 열어요"
 
-    var showsTitle: Bool = true
+    var hasInvite: Bool = false
     let action: () -> Void
 
-    @State private var hovering = false
-
     var body: some View {
-        MiniGameEntryCapsule(title: Self.title, icon: RummyEntryIcon.resolved, help: Self.help,
-                             segmentTitle: Self.segmentTitle,
-                             showsTitle: showsTitle, hovering: hovering, action: action)
-            .onHover { hovering = $0 }
-    }
-}
-
-/// 묶음 안에서는 입구가 **조각(세그먼트)** 으로 그려진다는 표시(환경값). 입구 버튼의 호출 모양은 그대로 둔 채
-/// 그리기만 바꾸려고 둔 문이다 — 버튼마다 인자를 하나씩 더하면 세 입구의 호출부가 갈린다.
-private struct MiniGameDuelEntryCompactKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    fileprivate var miniGameDuelEntryCompact: Bool {
-        get { self[MiniGameDuelEntryCompactKey.self] }
-        set { self[MiniGameDuelEntryCompactKey.self] = newValue }
-    }
-}
-
-/// 1:1 대결 입구 **묶음**(v0.3.60): 초록 캡슐 하나에 "1:1" 머리 + 문 조각들. 렌더 테스트가 단독으로 폭을 잰다(internal).
-///
-/// 왜 묶음인가: 문이 셋이 되자 이름 단 캡슐 셋이 344pt 를 넘었다(머리글 실측은 V0338 의 헤더 시험이 출력한다).
-/// "1:1 오목 · 1:1 체스 · 1:1 테트리스" 에서 겹치는 것은 "1:1 " 과 캡슐 테두리뿐이라, 그것을 한 번만 그리면 이름 셋이
-/// 그대로 들어간다. 색은 입구와 같은 초록이다(뜻: "다른 창으로 가는 1:1 대결 문").
-///
-/// ★ v0.3.69 — 넷째 문(아잉 큐브 · 2~4인)이 들어오며 **머리 "1:1" 을 뗐다.** 두 가지 까닭이다.
-///   ① 344pt 예산: 문 넷 묶음 머리글이 길건너 아잉이를 고른 채 **369pt** 였다(V0367CrossyTests.headerFitsWithFourChips 실측).
-///      머리 글자(≈28pt)를 떼고 조각 좌우 여백을 6 → 4 로 줄여 예산 안에 넣었다 — 숫자는 그 시험과 V0338 헤더 시험이 지킨다.
-///   ② 뜻: 아잉 큐브는 1:1 이 아니다. 묶음의 뜻("다른 넓은 창으로 가는 대결 문")은 초록 캡슐 자체가 말하고, 각 문의 전체 이름
-///      ("1:1 오목" · "아잉 큐브" …)은 말풍선과 보이스오버 이름에 그대로 남는다(조각은 짧은 이름만 그린다).
-struct MiniGameDuelEntryGroup<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        HStack(spacing: 0) {
-            content
-        }
-        .padding(.horizontal, 3)
-        .frame(height: 26)
-        .background(Capsule().fill(CheckTheme.working.opacity(0.14)))
-        .overlay(Capsule().stroke(CheckTheme.working.opacity(0.45), lineWidth: 1))
-        .environment(\.miniGameDuelEntryCompact, true)
-        .fixedSize()
-    }
-}
-
-/// 두 입구가 **한 부품**을 쓴다(같은 사실은 한 부품 — 각자 만들면 수치가 갈린다: 오목에서 모서리 16 vs 14 ·
-/// 아이콘 32 vs 34 로 갈려 있던 사고가 그 자리다).
-private struct MiniGameEntryCapsule: View {
-    let title: String
-    let icon: String
-    let help: String
-    /// 묶음(`MiniGameDuelEntryGroup`) 안에서 쓰는 짧은 이름.
-    let segmentTitle: String
-    let showsTitle: Bool
-    let hovering: Bool
-    let action: () -> Void
-
-    @Environment(\.miniGameDuelEntryCompact) private var compact
-
-    var body: some View {
-        if compact {
-            segment
-        } else {
-            capsule
-        }
-    }
-
-    /// 묶음 안의 조각 — 캡슐 테두리는 묶음이 한 번 그리고, 조각은 글자와 호버 바탕만 그린다.
-    private var segment: some View {
-        Button(action: action) {
-            Text(segmentTitle)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(CheckTheme.working)
-                .padding(.horizontal, 4)
-                .frame(height: 20)
-                .background(Capsule().fill(CheckTheme.working.opacity(hovering ? 0.24 : 0)))
-                .contentShape(Capsule())
-                .fixedSize()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .checkTooltip(help)
-    }
-
-    private var capsule: some View {
-        Button(action: action) {
-            Group {
-                if showsTitle {
-                    Label(title, systemImage: icon)
-                } else {
-                    Image(systemName: icon)
-                }
-            }
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(CheckTheme.working)
-                // 아이콘 전용은 좌우 여백을 줄인다(종류 칩과 같은 수치 — 10 그대로면 넓은 알약이 된다).
-                .padding(.horizontal, showsTitle ? 10 : 8)
-                .frame(height: 26)
-                .background(Capsule().fill(CheckTheme.working.opacity(hovering ? 0.24 : 0.14)))
-                .overlay(Capsule().stroke(CheckTheme.working.opacity(0.45), lineWidth: 1))
-                .contentShape(Capsule())
-                .fixedSize()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .checkTooltip(help)
+        MiniGameSidebarRow(title: Self.title, icon: RummyEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
     }
 }
 
@@ -2026,8 +2079,8 @@ private struct MiniGameRankPlaceholderRow: View {
     }
 }
 
-/// 순위 열 머리의 [오늘 | 역대] 전환(v0.3.67). **한 캡슐 안의 두 칸**이다 — 떨어진 칩 둘이면 게임 열 머리의
-/// 종류 칩 줄(이 창의 게임 고르기)과 같은 물건으로 읽힌다. 고른 칸의 말씨(accent 채움 + 테두리)는 종류 칩과 같다.
+/// 순위 열 머리의 [오늘 | 역대] 전환(v0.3.67). **한 캡슐 안의 두 칸**이다 — 떨어진 칩 둘이면 v0.3.68 까지 게임 열 머리에
+/// 있던 종류 칩 줄(게임 고르기 — v0.3.69 부터 왼쪽 사이드바)과 같은 물건으로 읽혔다. 고른 칸의 말씨는 accent 채움 + 테두리다.
 /// 렌더 테스트가 단독으로 폭을 잰다(internal) — 머리글 314pt 에 제목·인원 칩과 함께 서야 한다.
 struct MiniGameBoardScopePicker: View {
     let selected: MiniGameBoardScope

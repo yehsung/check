@@ -700,7 +700,10 @@ struct V0325TooltipTests {
         for sample in samples {
             #expect(sources[sample.file]?.contains(sample.call) == true, "\(sample.file) 에 \(sample.call) 이 없다")
         }
-        #expect(Self.count(".checkTooltip(title)", in: sources["MiniGamePanel.swift"] ?? "") == 3)
+        // v0.3.69 — 미니게임 창의 아이콘 전용 종류 칩(옛 `.help(title)` 자리)이 이름을 늘 그리는 사이드바 줄이 되며 그 말풍선은 빠졌다
+        // (보이는 이름을 또 띄우는 말풍선은 잡음이다). 대결 문의 규칙 안내 말풍선은 `MiniGameSidebarHelp` 가 단다.
+        #expect(Self.count(".checkTooltip(title)", in: sources["MiniGamePanel.swift"] ?? "") == 2)
+        #expect(sources["MiniGamePanel.swift"]?.contains("content.checkTooltip(text)") == true, "대결 문의 안내 말풍선이 없다")
     }
 
     @Test func fourWindowRootsCarryTheLayerOutsideEveryClip() throws {

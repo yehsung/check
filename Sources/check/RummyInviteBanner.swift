@@ -13,8 +13,6 @@ import CheckCore
 enum RummyInviteText {
     /// 게임 이름(설계 §1 창 제목과 같다).
     static let gameName = "아잉 큐브"
-    /// 미니게임 머리글 입구의 짧은 이름(설계 §1).
-    static let entrySegmentTitle = "큐브"
     /// 메뉴바 점 보이스오버 사유.
     static let dotReason = "아잉 큐브 초대"
     static let stakeTitle = "판돈"

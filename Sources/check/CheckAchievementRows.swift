@@ -65,7 +65,7 @@ enum AchievementCopy {
     static func claimAccessibility(_ amount: Int) -> String { "\(claimButton), 루비 \(max(0, amount))개" }
 
     /// 줄 아이콘. **키 앞부분으로 고른다**(계열 이름은 서버가 정하고 키는 계약 표에 있다) — 모르는 키는 별.
-    /// 다른 화면에서 이미 그 기능을 뜻하는 기호를 그대로 쓴다(콕 = 레일 손가락 · 미니게임 = 레일 게임기 · 오목 = 미니게임 머리글 입구 ·
+    /// 다른 화면에서 이미 그 기능을 뜻하는 기호를 그대로 쓴다(콕 = 레일 손가락 · 미니게임 = 레일 게임기 · 오목 = 미니게임 사이드바 입구 ·
     /// 체스 = 체스 입구 · 연속 근무 = 헤더 칩 불꽃 · 울트라 = 울트라 화면 번개). 전부 macOS 11+ (배포 타깃 14 ✓).
     static func icon(_ key: String) -> String {
         let table: [(prefix: String, symbol: String)] = [
@@ -92,7 +92,7 @@ enum DailyMissionCopy {
     /// (머리 줄 292pt 안에 제목 · 안내 · "받을 보상 N개"가 같이 선다 — 폭은 V0364 시험이 잰다).
     static let resetNote = "자정에 초기화 · 안 받으면 사라져요"
 
-    /// 줄 아이콘 — 그 게임이 **다른 화면에서 이미 쓰는 기호**(미니게임 창의 종류 칩 `MiniGameKind.icon` · 1:1 입구 셋). 모르는 게임은 별.
+    /// 줄 아이콘 — 그 게임이 **다른 화면에서 이미 쓰는 기호**(미니게임 창 사이드바의 게임 줄 `MiniGameKind.icon` · 대결 입구). 모르는 게임은 별.
     @MainActor
     static func icon(game: String) -> String {
         if let kind = MiniGameKind(rawValue: game) { return kind.icon }

@@ -429,8 +429,9 @@ func theAppWiresTheChessWindowAndItsMasterSwitch() throws {
 
     // 미니게임 창 머리글 입구 — 버튼과 배선 **두 조각**을 다 본다(한쪽만 보면 버튼은 있는데 아무 데도 안 이어진다).
     let miniGame = cwStripped(try cwSource("MiniGamePanel.swift"))
-    #expect(miniGame.contains("MiniGameChessEntryButton { onChess() }"),
-            "미니게임 머리글에 체스 입구 버튼이 없다")
+    // v0.3.69 — 입구 버튼은 머리글이 아니라 왼쪽 사이드바에 선다.
+    #expect(miniGame.contains("MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }"),
+            "미니게임 사이드바에 체스 입구 버튼이 없다")
     // v0.3.50: 입구가 스토어의 한 문(`openChessFromMiniGame`)을 지난다 — 체스 창을 띄우고 **미니게임 창은 내린다**.
     // 배선이 세 조각이 됐으므로 문 안쪽까지 본다(가운데까지만 보면 문은 있는데 체스 창을 안 여는 상태가 통과한다).
     #expect(miniGame.contains("onChess: { store.openChessFromMiniGame() }"),

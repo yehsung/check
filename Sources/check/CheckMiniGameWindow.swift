@@ -65,6 +65,10 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     /// 넓힌 것은 **크롬**(여백·헤더·하단 스트립·순위 열)뿐이고 **캔버스는 344×356 그대로**다 —
     /// 그래서 이 크기 변경은 위 '같은 조건에서 겨룬다'는 약속을 깨지 않는다. 아래 `show()` 의 되돌림 방어선이
     /// 옛 620×420 자동저장 프레임을 새 고정값으로 끌어올린다(그 경로가 없으면 업데이트한 사람만 옛 크기로 논다).
+    ///
+    /// v0.3.69 에 700×470 → **888×470** 이 됐다(왼쪽 게임 고르기 사이드바 188 — `MiniGameWindowLayout.sidebarWidth`).
+    /// 이번에도 넓힌 것은 크롬뿐이고 캔버스 344×356 · 순위 열 314 는 그대로다. 옛 700 폭 자리를 되살린 창은 오른쪽으로 188 늘어나므로,
+    /// 화면 오른쪽 끝에 붙여 두었던 사람은 그만큼이 화면 밖으로 나간다 — `originKeepingOnScreen` 이 안으로 민다.
     static let fixedContentSize = NSSize(
         width: MiniGameWindowLayout.contentSize.width,
         height: MiniGameWindowLayout.contentSize.height
@@ -171,6 +175,9 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
         if created.frame.size != created.frameRect(forContentRect: NSRect(origin: .zero, size: Self.fixedContentSize)).size {
             created.setContentSize(Self.fixedContentSize)
         }
+        // 되살린 자리가 지금 크기로는 화면 밖으로 삐져나갈 수 있다(v0.3.69 — 창이 188pt 넓어졌다 · 모니터를 뗐다).
+        // 만드는 순간에는 `created.screen` 이 아직 nil 이라 화면 목록 전체에서 가장 많이 겹치는 화면을 고른다.
+        created.setFrameOrigin(Self.originKeepingOnScreen(created.frame, visibleFrames: NSScreen.screens.map(\.visibleFrame)))
         // 반환값을 버리지 않는다 — 같은 이름이 이미 등록돼 있으면 false 를 돌려주고 자리 저장이 조용히 죽는다.
         frameAutosaveActive = created.setFrameAutosaveName(Self.frameAutosaveName)
         windowStorage = created
@@ -224,7 +231,11 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
         // 크기 고정의 마지막 방어선. contentMaxSize 는 **사용자** 리사이즈만 막는다 — 프로그램적 setFrame,
         // 옛 자동저장 프레임 복원, 화면 배율 변화는 통과하므로 열 때마다 되돌린다(그 맥만 더 쉬운 캔버스가 되지 않게).
         let fixedFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: Self.fixedContentSize)).size
-        if window.frame.size != fixedFrame { window.setContentSize(Self.fixedContentSize) }
+        if window.frame.size != fixedFrame {
+            window.setContentSize(Self.fixedContentSize)
+            // 되돌린 크기가 화면 밖으로 삐져나가면 안으로 민다(`setContentSize` 는 왼쪽 아래 원점을 지키고 오른쪽·위로 자란다).
+            window.setFrameOrigin(Self.originKeepingOnScreen(window.frame, visibleFrames: NSScreen.screens.map(\.visibleFrame)))
+        }
         window.makeKeyAndOrderFront(nil)
         isOpen = true
         // 이제서야 창이 화면에 섰다 — 프레임 상한의 재료를 여기서 읽는다(v0.2.50). 창을 만드는 시점에는
@@ -232,6 +243,27 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
         // 그 값이 틀린다. 근거·표는 `MiniGameFrameRate`.
         frameRateMonitor.update(for: window)
         armStuckWindowWatchdog()
+    }
+
+    /// 창 `frame` 이 화면 밖으로 삐져나가면 안으로 민 원점(순수 — 헤드리스 검증 지점, v0.3.69).
+    ///
+    /// 기준 화면은 창과 **가장 많이 겹치는** 화면의 `visibleFrame`(메뉴바·Dock 을 뺀 자리)이고, 어느 화면과도 안 겹치면
+    /// (모니터를 뗐다) 첫 화면이다. 창이 화면보다 크면 **왼쪽과 위**를 맞춘다 — 제목 막대가 화면 안에 남아야 사람이 옮길 수 있다.
+    /// 이미 안에 있으면 원점을 그대로 돌려준다(사용자가 둔 자리를 건드리지 않는다).
+    nonisolated static func originKeepingOnScreen(_ frame: NSRect, visibleFrames: [NSRect]) -> NSPoint {
+        guard let first = visibleFrames.first else { return frame.origin }
+        func overlap(_ screen: NSRect) -> CGFloat {
+            let shared = screen.intersection(frame)
+            return shared.isNull ? 0 : shared.width * shared.height
+        }
+        let best = visibleFrames.max { overlap($0) < overlap($1) } ?? first
+        let screen = overlap(best) > 0 ? best : first
+        var origin = frame.origin
+        // 가로: 오른쪽 끝을 먼저 맞추고 왼쪽 끝으로 덮는다 → 화면보다 넓으면 왼쪽이 맞는다.
+        origin.x = max(min(origin.x, screen.maxX - frame.width), screen.minX)
+        // 세로(원점이 아래): 바닥을 먼저 맞추고 위 끝으로 덮는다 → 화면보다 높으면 위(제목 막대)가 맞는다.
+        origin.y = min(max(origin.y, screen.minY), screen.maxY - frame.height)
+        return origin
     }
 
     /// 미니게임 창을 내린다(멱등). 창과 그 안의 상태는 남는다 — 다시 열면 같은 자리에 같은 크기로 선다.

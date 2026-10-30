@@ -730,13 +730,17 @@ struct V0367CrossyWiringTests {
     }
 
     @MainActor
-    @Test("헤더 실측: 칩 넷 + [일시정지] · 입구 묶음이 344pt 안에 든다 — 길건너를 골랐을 때(이름이 제일 길다)도")
+    @Test("머리글 실측: 고른 이름 + [일시정지] 가 344pt 안에 든다 — 길건너를 골랐을 때(이름이 제일 길다)도 · 사이드바 줄도 안 잘린다")
     func headerFitsWithFourChips() throws {
+        // v0.3.69 — 칩 넷은 왼쪽 사이드바로 갔다. 머리글에는 고른 게임 이름과 [일시정지] 만 남는다.
         let budget = MiniGameWindowLayout.canvasSize.width
+        let sidebarRow = try #require(ImageRenderer(content: MiniGameSidebarRow(
+            title: MiniGameKind.crossy.title, icon: MiniGameKind.crossy.icon, tint: CheckTheme.accent, isSelected: true) {}.fixedSize()).nsImage)
+        print("[길건너] 사이드바 줄 자연 폭: \(String(format: "%.1f", sidebarRow.size.width))pt / \(MiniGameWindowLayout.sidebarRowWidth)pt")
+        #expect(sidebarRow.size.width <= MiniGameWindowLayout.sidebarRowWidth, "사이드바에서 '길건너 아잉이' 가 잘린다")
         for selected in MiniGameKind.macCases {
             for (playing, frozen) in [(true, false), (false, false), (true, true)] {
-                let header = MiniGameGameHeader(selected: selected, isPlaying: playing, isFrozen: frozen,
-                                                onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}, onTetrisDuel: {})
+                let header = MiniGameGameHeader(selected: selected, isPlaying: playing, isFrozen: frozen, onPause: {})
                 let renderer = ImageRenderer(content: header.fixedSize())
                 renderer.scale = 2
                 let image = try #require(renderer.nsImage?.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))

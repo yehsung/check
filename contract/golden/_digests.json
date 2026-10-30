@@ -150,14 +150,34 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
-    "desktop-work-state/ownership": {
-      "file": "d7300eba7607777c27b7271975861dc45da522c0645750f22f533a3ac696f37a",
+    "desktop-work-policy/constants": {
+      "file": "697936af475bf4beeee477ffe0203d9ad076ec8d6e08fa0bb42084debc920c55",
       "generator": {
-        "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift": "9e9d3f76971d461810543bc05d01c60ff781f0b3b8d768c582fa9b6ab3bdd551"
+        "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift": "54a07039f84940fadb365e38808e82469177ffcaa835c92626204f867d70cf30"
       },
       "swiftSources": {
-        "Sources/check/WorkTimerStore.swift": "63d5c5965bfd95c02b6209b33788e9bd36e6dcf2ac8041528b1d85cc37231b2c",
-        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+        "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
+        "Sources/check/CheckWorkNudge.swift": "3b0e7931f58481d5d22651f64fd6405821e963b896c8124c59f960d0c31e6a4b",
+        "Sources/check/WorkTimerStore.swift": "63d5c5965bfd95c02b6209b33788e9bd36e6dcf2ac8041528b1d85cc37231b2c"
+      }
+    },
+    "desktop-work-policy/laps": {
+      "file": "a34886d7ddb7d819cfecf484c1ea6db9e85130080f4bed281dc268de6d7b28b1",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift": "54a07039f84940fadb365e38808e82469177ffcaa835c92626204f867d70cf30"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
+        "Sources/check/WorkTimerStore.swift": "63d5c5965bfd95c02b6209b33788e9bd36e6dcf2ac8041528b1d85cc37231b2c"
+      }
+    },
+    "desktop-work-policy/nudge": {
+      "file": "faff0de533c06592c4dabef6aa89f143a75c5d42f3d42a6624fb795dc58a76e7",
+      "generator": {
+        "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift": "54a07039f84940fadb365e38808e82469177ffcaa835c92626204f867d70cf30"
+      },
+      "swiftSources": {
+        "Sources/check/CheckWorkNudge.swift": "3b0e7931f58481d5d22651f64fd6405821e963b896c8124c59f960d0c31e6a4b"
       }
     },
     "duel-fee/fee": {

@@ -1,0 +1,2502 @@
+{
+  "cases": [
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 5,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 6,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        }
+      ],
+      "id": "click-every-minute",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 1,
+          "activeMinutes": 0,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 2,
+          "activeMinutes": 0,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 3,
+          "activeMinutes": 0,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 4,
+          "activeMinutes": 0,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 5,
+          "activeMinutes": 0,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 6,
+          "activeMinutes": 0,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 7,
+          "activeMinutes": 0,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 8,
+          "activeMinutes": 0,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 9,
+          "activeMinutes": 0,
+          "aliveTicks": 9,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 10,
+          "activeMinutes": 0,
+          "aliveTicks": 10,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 11,
+          "activeMinutes": 0,
+          "aliveTicks": 11,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 12,
+          "activeMinutes": 0,
+          "aliveTicks": 12,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        }
+      ],
+      "id": "move-only",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 660000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 720000,
+          "eligible": true,
+          "idleMs": null,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 5,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 6,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 7,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 8,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 9,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 10,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 11,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 12,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 13,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 14,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 15,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 16,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 17,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 18,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 19,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 20,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 21,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 22,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 23,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 24,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 25,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 26,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 27,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 28,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 29,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 30,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 31,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 32,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 33,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 34,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 35,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 36,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 37,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 38,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 39,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 40,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 41,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 42,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 43,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 44,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 45,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 46,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 47,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 48,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 49,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 50,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 51,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 52,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 53,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 54,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 55,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 56,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 57,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 58,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 59,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 60,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 61,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 62,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 63,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 64,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 65,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 66,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 67,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 68,
+          "cooldownUntilMs": 3900000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 69,
+          "cooldownUntilMs": 7740000,
+          "nudges": 2
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 70,
+          "cooldownUntilMs": 7740000,
+          "nudges": 2
+        }
+      ],
+      "id": "cooldown-one-hour",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 660000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 720000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 780000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 840000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 900000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 960000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1020000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1080000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1140000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1200000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1260000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1320000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1380000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1440000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1500000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1560000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1620000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1680000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1740000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1800000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1860000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1920000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 1980000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2040000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2100000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2160000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2220000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2280000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2340000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2400000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2460000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2520000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2580000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2640000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2700000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2760000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2820000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2880000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 2940000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3000000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3060000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3120000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3180000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3240000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3300000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3360000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3420000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3480000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3540000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3600000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3660000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3720000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3780000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3840000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3900000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3960000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 4020000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 4080000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 4140000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 4200000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 9,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 10,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 11,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 12,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        }
+      ],
+      "id": "setting-off",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 660000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 720000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 9,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 10,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 11,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 12,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        }
+      ],
+      "id": "locked",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 660000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 720000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": false,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 9,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 10,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 11,
+          "cooldownUntilMs": 4260000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 12,
+          "cooldownUntilMs": 4260000,
+          "nudges": 1
+        }
+      ],
+      "id": "idle-boundary",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 120000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 120000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 120000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": 120000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 120000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 120000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": 119999,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": 119999,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": 119999,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": 119999,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 660000,
+          "eligible": true,
+          "idleMs": 119999,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 720000,
+          "eligible": true,
+          "idleMs": 119999,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 9,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 10,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 11,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 12,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        }
+      ],
+      "id": "every-third-minute",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 660000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 720000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 9,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 10,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 11,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 12,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        }
+      ],
+      "id": "every-other-minute",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 660000,
+          "eligible": true,
+          "idleMs": 5000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 720000,
+          "eligible": true,
+          "idleMs": 600000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 9,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 10,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        }
+      ],
+      "id": "wake-resets",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": true
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 1,
+          "activeMinutes": 1,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 2,
+          "activeMinutes": 1,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        }
+      ],
+      "id": "absence-gap",
+      "steps": [
+        {
+          "atMs": 0,
+          "eligible": true,
+          "idleMs": 1000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 3599999,
+          "eligible": true,
+          "idleMs": 1000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 7199999,
+          "eligible": true,
+          "idleMs": 1000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 7259999,
+          "eligible": true,
+          "idleMs": 3600000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    },
+    {
+      "expect": [
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 1,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 2,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 3,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 4,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 1,
+          "aliveTicks": 5,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 2,
+          "aliveTicks": 6,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 3,
+          "aliveTicks": 7,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 4,
+          "aliveTicks": 8,
+          "cooldownUntilMs": null,
+          "nudges": 0
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 9,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        },
+        {
+          "absenceGaps": 0,
+          "activeMinutes": 0,
+          "aliveTicks": 10,
+          "cooldownUntilMs": 4140000,
+          "nudges": 1
+        }
+      ],
+      "id": "eligibility-flicker",
+      "steps": [
+        {
+          "atMs": 60000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 120000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 180000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 240000,
+          "eligible": false,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 300000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 360000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 420000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 480000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 540000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        },
+        {
+          "atMs": 600000,
+          "eligible": true,
+          "idleMs": 10000,
+          "usable": true,
+          "wakeBefore": false
+        }
+      ]
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+  "golden": "desktop-work-policy/nudge",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "drive": "t0 = 1970+1_790_000_000초. 걸음마다 시각·idle(ms, null=관측 없음=무한대)·자격·세션 사용 가능을 놓고(깨어남이면 handleWake 먼저) tick 한 번.",
+    "expect": "tick 뒤 누적 발동 수 · 적립 분 · 쿨다운 끝(t0 기준 ms, null=과거) · 누적 공백 신호 · 누적 생존 스탬프",
+    "rules": "㉔ 이동만이면 idle=무한대라 적립 0 · 최근 10분 창 안 5분이면 발동 · 발동 뒤 1시간 쉼 · 자격 거짓(설정 끔)·잠금이면 0"
+  },
+  "swiftSources": [
+    "Sources/check/CheckWorkNudge.swift"
+  ]
+}

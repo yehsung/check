@@ -1,0 +1,114 @@
+{
+  "cases": [
+    {
+      "id": "sleepGraceSeconds",
+      "value": 300
+    },
+    {
+      "id": "heartbeatIntervalSeconds",
+      "value": 30
+    },
+    {
+      "id": "adoptedReclaimStaleSeconds",
+      "value": 420
+    },
+    {
+      "id": "longSessionThresholdSeconds",
+      "value": 43200
+    },
+    {
+      "id": "longSessionResponseWindowSeconds",
+      "value": 1800
+    },
+    {
+      "id": "recentAutoCloseResumeWindowSeconds",
+      "value": 1800
+    },
+    {
+      "id": "awaySyncIdleThrottleSeconds",
+      "value": 120
+    },
+    {
+      "id": "milestoneHourOneSeconds",
+      "value": 3600
+    },
+    {
+      "id": "milestoneHourFourSeconds",
+      "value": 14400
+    },
+    {
+      "id": "missionWorkSecondsHint",
+      "value": 10800
+    },
+    {
+      "id": "nudgeCheckInterval",
+      "value": 60
+    },
+    {
+      "id": "nudgeActiveIdleThreshold",
+      "value": 120
+    },
+    {
+      "id": "nudgeRequiredActiveMinutes",
+      "value": 5
+    },
+    {
+      "id": "nudgeActiveWindowSeconds",
+      "value": 600
+    },
+    {
+      "id": "nudgeCooldownSeconds",
+      "value": 3600
+    },
+    {
+      "id": "nudgeRearmGapSeconds",
+      "value": 3600
+    },
+    {
+      "id": "pendingSleepCloseKey",
+      "value": "check.sleepClose.pending"
+    },
+    {
+      "id": "autoStartSuppressedKey",
+      "value": "check.nudge.autoStartSuppressed"
+    },
+    {
+      "id": "nudgeLastAliveAtKey",
+      "value": "check.nudge.lastAliveAt"
+    },
+    {
+      "id": "milestoneHourOneKey",
+      "value": "hour1"
+    },
+    {
+      "id": "milestoneHourFourKey",
+      "value": "hour4"
+    },
+    {
+      "id": "milestoneHourThreeKey",
+      "value": "hour3"
+    },
+    {
+      "id": "milestoneTeamGoalKey",
+      "value": "teamGoal"
+    },
+    {
+      "id": "milestoneFirstArrivalKey",
+      "value": "firstArrival"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+  "golden": "desktop-work-policy/constants",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "rules": "⑲ 잠자기 유예 초과만 마감 · ㉑ 12h + 30분 · 30분 재개 창 · away 비근무 스로틀 120초 · 방치 자가 마감 = 유예 + 4 하트비트",
+    "units": "초는 정수 초(Swift TimeInterval 을 Int 로 — 전부 정수다). 키는 영속 키 글자 그대로."
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStore.swift",
+    "Sources/check/CheckWorkNudge.swift",
+    "Sources/CheckCore/MilestoneTracker.swift"
+  ]
+}

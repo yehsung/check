@@ -1,5 +1,5 @@
 {
-  "exportTests": 92,
+  "exportTests": 94,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -179,15 +179,39 @@
       ]
     },
     {
-      "cases": 17,
+      "cases": 24,
       "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift",
-      "golden": "desktop-work-state/ownership",
-      "path": "contract/golden/desktop-work-state/ownership.json",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+      "golden": "desktop-work-policy/constants",
+      "path": "contract/golden/desktop-work-policy/constants.json",
       "platformSensitive": false,
       "swiftSources": [
         "Sources/check/WorkTimerStore.swift",
-        "Sources/check/WorkTimerStoreSync.swift"
+        "Sources/check/CheckWorkNudge.swift",
+        "Sources/CheckCore/MilestoneTracker.swift"
+      ]
+    },
+    {
+      "cases": 19,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+      "golden": "desktop-work-policy/laps",
+      "path": "contract/golden/desktop-work-policy/laps.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStore.swift",
+        "Sources/CheckCore/MilestoneTracker.swift"
+      ]
+    },
+    {
+      "cases": 11,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+      "golden": "desktop-work-policy/nudge",
+      "path": "contract/golden/desktop-work-policy/nudge.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/CheckWorkNudge.swift"
       ]
     },
     {

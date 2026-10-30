@@ -12,6 +12,7 @@ import com.yehsung.aingcheck.core.stores.chess.ChessStore
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.me.MeStore
+import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -81,6 +82,7 @@ interface GameWindowFactory {
                 onTurnWhileHidden = deps.onTurnWhileHidden,
                 onInviteNotice = deps.onInviteNotice,
                 characters = deps.characters,
+                messages = deps.messages,
             )
 
         override fun gacha(deps: GamesDeps, bounds: WindowBoundsStore): GachaDoor {
@@ -130,6 +132,11 @@ data class GamesDeps(
     /** 착용 캐릭터 표(W-8 3차). 조립: `{ shell.handle.characters.directory }`. 기본 = 빈 표(이니셜). */
     val characters: () -> AppUserCharacterDirectory = { AppUserCharacterDirectory(CharacterArt.portraitIds) },
     val factory: GameWindowFactory = GameWindowFactory.Compose,
+    /**
+     * 대국 채팅 신고·차단(W-14 #1 · Store 11.12 — 맥 CheckGomokuWindow.swift:198-204 `configure(safety:)`). 조립: AppGraph 의 `messages`(메시지 탭과 한 스토어).
+     * 기본 null = 오목 채팅 ⋯ 메뉴 0(자리표시 없이 숨는다).
+     */
+    val messages: MessagesStore? = null,
 )
 
 data class GamesHandle(

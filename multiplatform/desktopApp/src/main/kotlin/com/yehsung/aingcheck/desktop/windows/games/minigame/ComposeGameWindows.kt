@@ -13,6 +13,7 @@ import com.yehsung.aingcheck.core.stores.games.GamesDestination
 import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
+import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.AppUserCharacterDirectory
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
@@ -20,6 +21,7 @@ import com.yehsung.aingcheck.desktop.windows.games.chess.ChessWindowContent
 import com.yehsung.aingcheck.desktop.windows.games.chess.ChessWindowDoors
 import com.yehsung.aingcheck.desktop.windows.games.gomoku.GomokuWindowContent
 import com.yehsung.aingcheck.desktop.windows.games.gomoku.GomokuWindowDoors
+import com.yehsung.aingcheck.desktop.windows.games.gomoku.GomokuWindowSafety
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelIme
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelInput
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelKeys
@@ -213,7 +215,8 @@ class ComposeGameWindowShell(
     private val localEvent: (WindowEvent) -> Unit = {},
     private val keys: GameKeyRouter? = null,
     private val onCreated: (ComposeWindow) -> Unit = {},
-    private val content: @Composable () -> Unit,
+    /** 창 내용(창 뿌리). internal = 시험이 창 없이 그린다(GomokuWindowSafetyTest — 창 0, 기억 agents-no-visible-windows). */
+    internal val content: @Composable () -> Unit,
 ) : GameWindowShell {
     var handle: ComposeGameWindowHandle? = null
         private set
@@ -260,6 +263,8 @@ object ComposeGamesWindows {
         onInviteNotice: (DuelInviteNotice) -> Unit = {},
         /** 착용 캐릭터 표(W-8 3차 — 안드로이드 AingShell 과 같은 자리). Compose 상태를 읽는 람다라 표가 오면 다시 그린다. 기본 = 빈 표(이니셜). */
         characters: () -> AppUserCharacterDirectory = { AppUserCharacterDirectory(CharacterArt.portraitIds) },
+        /** 대국 채팅 신고·차단(W-14 #1 · Store 11.12) — 메시지 탭 스토어. null 이면 ⋯ 메뉴 0(맥 `safety == nil`). 체스·테트리스 대결은 채팅이 없다. */
+        messages: MessagesStore? = null,
     ): GamesWindowsHost {
         lateinit var host: GamesWindowsHost
         lateinit var miniShell: ComposeGameWindowShell
@@ -267,6 +272,7 @@ object ComposeGamesWindows {
         val miniState = MiniGameWindowState(games.miniGames, visibleKinds = games.miniGames.visibleKinds) { miniShell.refreshHz() }
         val duelState = TetrisDuelWindowState(TetrisDuelWindowDoors(games.tetris)) { duelShell.refreshHz() }
         val gomokuDoors = GomokuWindowDoors(gomoku)
+        val gomokuSafety = GomokuWindowSafety.of(messages)
         val chessDoors = ChessWindowDoors(chess)
         val closeOf = { kind: GameWindowKind -> { host.slot(kind).onEvent(WindowEvent.UserClosed) } }
 
@@ -292,7 +298,7 @@ object ComposeGamesWindows {
             }
         }
         val gomokuShell = ComposeGameWindowShell(GameWindowKind.Gomoku, "오목", { BoardGameNoticeSink.apply(gomokuDoors, it) }) {
-            WithCharacters(characters) { GomokuWindowContent(games, gomoku, me(), dark(), onLeave = closeOf(GameWindowKind.Gomoku)) }
+            WithCharacters(characters) { GomokuWindowContent(games, gomoku, me(), dark(), onLeave = closeOf(GameWindowKind.Gomoku), safety = gomokuSafety) }
         }
         val chessShell = ComposeGameWindowShell(GameWindowKind.Chess, "체스", { BoardGameNoticeSink.apply(chessDoors, it) }) {
             WithCharacters(characters) { ChessWindowContent(games, chess, me(), dark(), onLeave = closeOf(GameWindowKind.Chess)) }

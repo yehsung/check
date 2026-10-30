@@ -64,6 +64,9 @@ class FocusModeController(
 
     private var serverLoaded = false
 
+    /** 날아가는 서버값 GET(폴링 박자마다 불려도 겹쳐 보내지 않는다 — Swift 는 tick 을 await 해 저절로 하나였다). */
+    private var serverLoadJob: Job? = null
+
     private fun setFocus(value: Boolean) {
         if (_focusMode.value != value) _focusMode.value = value
     }
@@ -203,11 +206,14 @@ class FocusModeController(
     // ---- 서버 값 받기 ----
 
     /**
-     * 로그인 박자에 한 번 — profiles 의 focus_mode 를 읽어 합친다(토큰 공개·수집 칸은 버린다: W2-h 몫).
-     * 실패는 조용히(다음 로그인 때 다시). 같은 세션에서 한 번 받으면 다시 묻지 않는다.
+     * 로그인 박자와 **폴링 박자마다**(Swift localExpiryTick → loadTokenUsagePrivacyIfNeeded 394-411·841) — profiles 의
+     * focus_mode 를 읽어 합친다(토큰 공개·수집 칸은 버린다: W2-h 몫).
+     * ★F11 성공했을 때만 '받았다'를 세운다 — 실패는 조용히, 다음 박자에 다시(오프라인으로 켠 앱이 끝난 1단을
+     * 서버에서 끄지 못한 채 다음 로그인까지 가지 않게). 받은 뒤엔 같은 세션에서 다시 묻지 않고, 날아가는 중엔 겹쳐 보내지 않는다.
      */
     fun loadServerFocusMode(): Job? {
         if (serverLoaded || host.session == null) return null
+        if (serverLoadJob?.isActive == true) return null
         val generation = host.sessionGeneration
         val intentAtRequest = intentSerial
         return scope.launch {
@@ -221,7 +227,7 @@ class FocusModeController(
             if (generation != host.sessionGeneration) return@launch
             serverLoaded = true
             applyServerFocusMode(settings.focusMode, intentAtRequest)
-        }
+        }.also { serverLoadJob = it }
     }
 
     /**
@@ -259,5 +265,7 @@ class FocusModeController(
         patchInFlight = null
         expiryRetryAt = null
         serverLoaded = false
+        // 떠난 세션의 GET 은 세대 가드가 버린다 — 새 세션의 첫 GET 을 그것이 막지 않게 잊는다.
+        serverLoadJob = null
     }
 }

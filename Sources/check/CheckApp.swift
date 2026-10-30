@@ -174,6 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // 물러나지 않은 실행은 실행 중에 앱스토어 판이 켜지는지 본다(켜지면 근무를 마무리하고 물러남 모드로 다시 뜬다).
         startWatchingForAppStoreEdition()
+        // DMG·임시 자리에서 켜졌으면 응용 프로그램 폴더로 옮기기를 묻는다(v0.3.69 — `MoveToApplications` 머리 주석). 남기로 정해진
+        // 뒤 · 물러남이 아닐 때만 여기 온다. 묻는 것은 런루프 다음 바퀴다 — 모달이 아래 배선을 붙잡지 않게.
+        offerMoveToApplicationsIfNeeded()
         #endif
         // 오버레이 컨트롤러를 **먼저** 만든다. 바로 아래 실행 킥이 서버에 열려 있던 세션을 흡수해 곧장 근무중으로
         // 복구할 수 있는데, 그 순간 표시 전환과 리액션/찔림 싱크(store.onReactionTrigger / onPokesReceived)가
@@ -540,6 +543,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 NSApp.terminate(nil)
             }
+        }
+    }
+
+    /// DMG·임시 자리에서 돌면 옮기기를 묻는다. 테스트 프로세스는 묻지 않는다(모달이 스위트를 멈춘다).
+    private func offerMoveToApplicationsIfNeeded() {
+        guard !CheckPanelVisibility.isRunningTests else { return }
+        let plan = MoveToApplications.currentPlan()
+        guard plan != .none else { return }
+        let bundleURL = Bundle.main.bundleURL
+        Task { @MainActor in
+            await MoveToApplications.run(plan: plan, bundleURL: bundleURL, effects: .live)
         }
     }
 

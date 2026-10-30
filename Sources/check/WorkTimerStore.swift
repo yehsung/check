@@ -690,7 +690,14 @@ final class WorkTimerStore {
     /// **진행 중인 판의 장부**(v0.3.67) — 어느 게임의 판이 돌고 있고 지금 몇 점이며, 이미 기록했는가.
     /// 판을 접는 자리(게임 칩 전환 · 창 닫기 · 로그아웃 · [그만두기])가 잎 뷰의 생사와 무관하게 그 점수를 **바로** 올린다
     /// (`settleMiniGameLiveRound`). 잎 뷰가 늦게 `onFinished` 를 불러도 장부가 두 번 올리지 않는다.
-    @ObservationIgnored var miniGameLiveRound: MiniGameLiveRound?
+    @ObservationIgnored var miniGameLiveRound: MiniGameLiveRound? {
+        didSet {
+            // 판이 열리고 닫히는 순간 확성기 배너의 미룸이 바뀐다(이 장부는 관찰 밖이라 배너 창이 못 본다 — 여기서 알린다).
+            let wasLive = oldValue.map { !$0.settled } ?? false
+            let isLive = miniGameLiveRound.map { !$0.settled } ?? false
+            if wasLive != isLive { megaphoneBannerDeferralMayHaveChanged() }
+        }
+    }
     /// 내 미니게임 순위 공개 여부(profiles.minigame_public 미러). 끄면 순위표에서 빠지고 업로드도 건너뛴다.
     var miniGamePublic = true
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
@@ -1307,6 +1314,10 @@ final class WorkTimerStore {
     let megaphoneBanner: MegaphoneBannerStore
     /// 배너 예비 새로고침(팝오버 열기 · 폴링 틱)의 60초 스로틀 장부. 실시간 신호·판정 보류는 이 스로틀을 지나지 않는다.
     @ObservationIgnored var megaphoneBannerLastRefreshAt: Date = .distantPast
+    /// 배너 미룸의 마지막 값(바뀐 때만 `deferralChanged()` 를 부른다 — `megaphoneBannerDeferralMayHaveChanged`).
+    @ObservationIgnored var megaphoneBannerLastDeferred = false
+    /// 배너 [답장] 이 넘긴 상대 이름·아바타(`openMegaphoneReply`). 대화 제목의 마지막 출처다 — 로그아웃에 비운다.
+    var messagePeerHint: MessagePeerHint?
 
     /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
     /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로
@@ -2043,6 +2054,8 @@ final class WorkTimerStore {
         tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         megaphone.attach(host: self)
         megaphoneBanner.attach(host: self)
+        // 실시간 대결 · 미니게임 판 동안 배너를 미룬다(바뀔 때 알리는 쪽은 배너 창 컨트롤러 · 판 장부).
+        megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
         // 보낸 사람 본인에게도 보낸 직후 자기 배너를 한 번(서버 fan-out 에는 본인이 없다 — 계약 C2).
         megaphone.onSent = { [weak self] body, megaphoneID in
             self?.presentOwnMegaphoneBanner(body: body, megaphoneID: megaphoneID)

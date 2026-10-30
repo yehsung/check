@@ -78,6 +78,27 @@ class AingColors private constructor(val isDark: Boolean) {
     val brandLavender = AingPalette.brandLavender.toColor()
     val brandNavy = AingPalette.brandNavy.toColor()
 
+    // 데스크톱 오버레이 말풍선(인사 · 메시지 도착 · 대결 신청 — 맥 CheckGreetingBubble/CheckMessageArrivalBubble, 공용 패치 6).
+    // 맥 말풍선은 어둠 모드에서도 흰 캡슐이라 **라이트 · 다크가 같은 값**이다(라이트 표면 · 글자에 불투명도 — W5-b2 BubbleStyle 이 임시로 쓴 값 그대로).
+    /** 말풍선 바탕(흰 0.92). */
+    val overlayBubbleFill = AingPalette.surface.light.toColor().copy(alpha = 0.92f)
+
+    /** 말풍선 테두리(0.5 획, 검정 0.10). */
+    val overlayBubbleStroke = AingPalette.label.light.toColor().copy(alpha = 0.10f)
+
+    /** 말풍선 글자(검정 0.85). */
+    val overlayBubbleText = AingPalette.label.light.toColor().copy(alpha = 0.85f)
+
+    /** 도착 강조 — 누를 수 있는 말풍선(메시지 도착 · 대결 신청)의 ›(검정 0.45). */
+    val overlayBubbleArrival = AingPalette.label.light.toColor().copy(alpha = 0.45f)
+
+    // 데스크톱 할 일 보드(공용 패치 6). 틴트 = 보드 바탕(W5-b3 이 쓴 표면색 그대로 — 진하기 · 블러는 W-3 #9 외양 갈래).
+    /** 보드 바탕 틴트. */
+    val boardTint = c(AingPalette.surface)
+
+    /** 보드 글자 후광(맥 todoBoardTextHalo 의 검정 — 세기 · 겹수는 쓰는 쪽이 정한다). */
+    val boardTextHalo = AingRgb.hex(0x000000).toColor()
+
     /** 이니셜 원: (글자 색, 원 바탕 색). */
     fun avatar(seed: String): Pair<Color, Color> {
         val ink = AingPalette.avatarInks[AingPalette.avatarIndex(seed)].pick(isDark)

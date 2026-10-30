@@ -82,6 +82,10 @@ import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.delay
+import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
+import com.yehsung.aingcheck.ui.screens.session.kit.AvatarFace
+import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
+import com.yehsung.aingcheck.core.wire.SwiftURL
 
 // MARK: - 나 · 그림 · 시계
 
@@ -337,15 +341,24 @@ fun BoardButton(
 
 // MARK: - 사람
 
-/** 이니셜 원(Swift `PersonAvatar` 의 사진·캐릭터가 없을 때 꼴) + 근무 중 점. 사진 URL 적재는 공용 부품 갈래(W3) 몫이다(보고 미해결). */
+/**
+ * 사람 아바타(Swift `PersonAvatar(name:colorSeed:status:url:userID:size:)` — 로비 GamesGomokuScreen.swift:398·443·528): 사진 → 착용 캐릭터 →
+ * 이니셜 원 + 근무 중 점. 착용 캐릭터는 조립이 흘린 표([LocalAppUserCharacters])를 [seed](= 사용자 id — 모든 호출부가 user.id 를 넘긴다)로 찾는다.
+ * 표가 이 사람을 모를 때만 이니셜(8c 04: 메시지 화면에선 캐릭터인 사람이 로비에선 이니셜로 보였다).
+ */
 @Composable
-fun BoardAvatar(name: String, seed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false) {
+fun BoardAvatar(name: String, seed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false, url: String? = null) {
     val colors = AingTheme.colors
-    val (ink, tint) = colors.avatar(seed)
-    val initial = name.trim().firstOrNull()?.toString() ?: "?"
+    val avatar = LocalAppUserCharacters.current.avatar(seed, url?.let { SwiftURL.parse(it) })
     Box(modifier.size(size).semantics(mergeDescendants = true) { contentDescription = name }) {
-        Box(Modifier.fillMaxSize().background(tint, CircleShape), contentAlignment = Alignment.Center) {
-            Text(initial, color = ink, fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        if (avatar is AppUserAvatar.Initials) {
+            val (ink, tint) = colors.avatar(seed)
+            val initial = name.trim().firstOrNull()?.toString() ?: "?"
+            Box(Modifier.fillMaxSize().background(tint, CircleShape), contentAlignment = Alignment.Center) {
+                Text(initial, color = ink, fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        } else {
+            AvatarFace(avatar, name, size, colorSeed = seed)
         }
         if (working) {
             val dot = (size.value * 0.28f).coerceIn(8f, 12f).dp
@@ -496,8 +509,8 @@ fun BoardSummary(leftTitle: String, leftValue: String, rightTitle: String, rubyB
 // MARK: - 덮개(시트 · 확인)
 
 /**
- * 화면 안 시트(Swift `.sheet` 자리). 바깥(어두운 막)을 누르면 [onDismiss]. **새 목적지가 아니다** — 아래 화면은 컴포지션에 그대로 남는다
- * (오목·체스 한 화면 규약 · 폴링이 살아 있다).
+ * 판 시트(Swift `.sheet` 자리). 바깥(검정 막 [BoardSheetScrim])을 누르면 [onDismiss]. Android 앱은 창 전체에 띄운다(상태 바 · 탭 막대까지 덮는다 —
+ * [BoardSheetHost]). **새 목적지가 아니다** — 아래 화면은 컴포지션에 그대로 남는다(오목·체스 한 화면 규약 · 폴링이 살아 있다).
  */
 @Composable
 fun BoxScope.BoardSheetOverlay(
@@ -508,17 +521,7 @@ fun BoxScope.BoardSheetOverlay(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = AingTheme.colors
-    Box(
-        Modifier.matchParentSize().background(colors.label.copy(alpha = 0.32f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss?.invoke() },
-    )
-    Column(
-        Modifier.align(Alignment.BottomCenter).fillMaxWidth().widthIn(max = 640.dp)
-            .background(colors.background, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-            .padding(bottom = AingDimens.space3)
-            .testTag(testTag),
-    ) {
+    BoardSheetHost(onDismiss, colors.background, testTag) { Column(Modifier.fillMaxWidth().padding(bottom = AingDimens.space3)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onDismiss != null) {
                 Box(
@@ -537,7 +540,7 @@ fun BoxScope.BoardSheetOverlay(
             if (onDismiss != null) Spacer(Modifier.size(AingDimens.minimumTarget))
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin), verticalArrangement = Arrangement.spacedBy(AingDimens.space4), content = content)
-    }
+    } }
 }
 
 /**
@@ -555,7 +558,7 @@ fun BoxScope.BoardConfirmOverlay(
 ) {
     val colors = AingTheme.colors
     Box(
-        Modifier.matchParentSize().background(colors.label.copy(alpha = 0.32f))
+        Modifier.matchParentSize().background(BoardSheetScrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCancel() },
     )
     Column(
@@ -581,17 +584,7 @@ fun BoxScope.BoardConfirmOverlay(
  */
 @Composable
 fun BoxScope.BoardSheetFrame(onDismiss: (() -> Unit)?, testTag: String, content: @Composable () -> Unit) {
-    val colors = AingTheme.colors
-    Box(
-        Modifier.matchParentSize().background(colors.label.copy(alpha = 0.32f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss?.invoke() },
-    )
-    Box(
-        Modifier.align(Alignment.BottomCenter).fillMaxWidth().widthIn(max = 640.dp)
-            .background(colors.surface, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-            .testTag(testTag),
-    ) { content() }
+    BoardSheetHost(onDismiss, AingTheme.colors.surface, testTag, content)
 }
 
 /**

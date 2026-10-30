@@ -293,7 +293,7 @@ private fun InviteCard(store: GamesStore, invite: TetrisDuelInvite, now: () -> S
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(AingDimens.space3),
         ) {
-            PersonAvatar(invite.peer.displayName, invite.peer.id, 44.dp, working = invite.peer.isWorking)
+            PersonAvatar(invite.peer.displayName, invite.peer.id, 44.dp, working = invite.peer.isWorking, url = invite.peer.avatarURL)
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 PersonName(TetrisPhoneText.incomingTitle(invite.peer.displayName))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -329,7 +329,7 @@ private fun OutgoingSection(store: GamesStore, now: () -> SwiftDate) {
     SectionHeader(TetrisPhoneText.outgoingTitle, padded = true)
     InsetGroup {
         GroupRow(dividerInset = null, minHeight = 56.dp) {
-            PersonAvatar(invite.peer.displayName, invite.peer.id, 36.dp, working = invite.peer.isWorking)
+            PersonAvatar(invite.peer.displayName, invite.peer.id, 36.dp, working = invite.peer.isWorking, url = invite.peer.avatarURL)
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(TetrisPhoneText.outgoingTitle(invite.peer.displayName), style = rowTitleStyle(), color = colors.label)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -430,13 +430,13 @@ private fun OpponentRow(store: GamesStore, user: TetrisDuelUser, isLast: Boolean
         if (stacked) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(AingDimens.space3), verticalAlignment = Alignment.CenterVertically) {
-                    PersonAvatar(user.displayName, user.id, 36.dp, working = user.isWorking)
+                    PersonAvatar(user.displayName, user.id, 36.dp, working = user.isWorking, url = user.avatarURL)
                     OpponentInfo(user, lines.subtitle, Modifier.weight(1f))
                 }
                 button()
             }
         } else {
-            PersonAvatar(user.displayName, user.id, 36.dp, working = user.isWorking)
+            PersonAvatar(user.displayName, user.id, 36.dp, working = user.isWorking, url = user.avatarURL)
             OpponentInfo(user, lines.subtitle, Modifier.weight(1f))
             button()
         }
@@ -520,7 +520,7 @@ private fun GamesTetrisStakeSheet(store: GamesStore, target: TetrisDuelUser, onD
         Column(Modifier.padding(horizontal = AingDimens.sideMargin).padding(top = AingDimens.space2), verticalArrangement = Arrangement.spacedBy(AingDimens.space4)) {
             InsetGroup {
                 GroupRow(dividerInset = null, minHeight = 64.dp) {
-                    PersonAvatar(target.displayName, target.id, 44.dp, working = target.isWorking)
+                    PersonAvatar(target.displayName, target.id, 44.dp, working = target.isWorking, url = target.avatarURL)
                     Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         PersonName(target.displayName)
                         Text(

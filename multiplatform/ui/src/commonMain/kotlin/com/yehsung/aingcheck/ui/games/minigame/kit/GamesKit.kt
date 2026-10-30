@@ -62,6 +62,10 @@ import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import com.yehsung.aingcheck.ui.games.minigame.canvasFont
+import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
+import com.yehsung.aingcheck.ui.screens.session.kit.AvatarFace
+import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
+import com.yehsung.aingcheck.core.wire.SwiftURL
 
 /** 숫자 글자(고정폭 숫자 — iOS `.monospacedDigit()`). */
 const val TNUM: String = "tnum"
@@ -266,18 +270,26 @@ fun AingChip(text: String, modifier: Modifier = Modifier, tint: Color = AingThem
     }
 }
 
-/** 이니셜 원 아바타(+ 근무 중 점). 초상 그림 대신 이름 첫 글자 — 사진·착용 캐릭터는 공용 부품 통합(c-fold) 때 W3 의 PersonAvatar 로 접는다. */
+/**
+ * 사람 아바타(+ 근무 중 점) — Swift `PersonAvatar(name:colorSeed:status:url:userID:size:)`: 사진 → 착용 캐릭터 → 이니셜 원.
+ * 착용 캐릭터는 조립이 흘린 표([LocalAppUserCharacters])를 [colorSeed](= 사용자 id — 모든 호출부가 user.id 를 넘긴다)로 찾는다. 모르면 이니셜.
+ */
 @Composable
-fun PersonAvatar(name: String, colorSeed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false) {
+fun PersonAvatar(name: String, colorSeed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false, url: String? = null) {
     val colors = AingTheme.colors
-    val (ink, tint) = colors.avatar(colorSeed)
+    val avatar = LocalAppUserCharacters.current.avatar(colorSeed, url?.let { SwiftURL.parse(it) })
     Box(modifier.size(size).clearAndSetSemantics { }) {
-        Box(Modifier.size(size).background(tint, CircleShape), contentAlignment = Alignment.Center) {
-            Text(
-                name.trim().firstOrNull()?.toString() ?: "?",
-                style = TextStyle(fontFamily = canvasFont(), fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold),
-                color = ink,
-            )
+        if (avatar is AppUserAvatar.Initials) {
+            val (ink, tint) = colors.avatar(colorSeed)
+            Box(Modifier.size(size).background(tint, CircleShape), contentAlignment = Alignment.Center) {
+                Text(
+                    name.trim().firstOrNull()?.toString() ?: "?",
+                    style = TextStyle(fontFamily = canvasFont(), fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold),
+                    color = ink,
+                )
+            }
+        } else {
+            AvatarFace(avatar, name, size, colorSeed = colorSeed)
         }
         if (working) {
             val dot = (size.value * 0.28f).dp

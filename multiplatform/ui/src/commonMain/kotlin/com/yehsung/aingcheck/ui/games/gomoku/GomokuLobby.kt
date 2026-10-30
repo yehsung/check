@@ -152,7 +152,7 @@ internal fun GomokuOutgoingSection(gomoku: GomokuStore) {
     BoardSectionHeader(GomokuPhoneText.outgoingTitle)
     BoardGroup {
         BoardRow(minHeight = 56.dp) {
-            BoardAvatar(invite.peer.displayName, invite.peer.id, 36.dp, working = invite.peer.isWorking)
+            BoardAvatar(invite.peer.displayName, invite.peer.id, 36.dp, working = invite.peer.isWorking, url = invite.peer.avatarURL)
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Text(GomokuPhoneText.outgoingTitle(invite.peer.displayName), style = BoardText.rowTitle(), color = colors.label)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -177,7 +177,7 @@ internal fun GomokuInviteCard(gomoku: GomokuStore, invite: GomokuInvite, showsCo
             horizontalArrangement = Arrangement.spacedBy(AingDimens.space3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BoardAvatar(invite.peer.displayName, invite.peer.id, 44.dp, working = invite.peer.isWorking)
+            BoardAvatar(invite.peer.displayName, invite.peer.id, 44.dp, working = invite.peer.isWorking, url = invite.peer.avatarURL)
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 BoardPersonName(GomokuPhoneText.incomingTitle(invite.peer.displayName), center = invite.peer.center)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -256,7 +256,7 @@ internal fun GomokuOpponentsSection(games: GamesStore, gomoku: GomokuStore, rost
 private fun GomokuOpponentRow(gomoku: GomokuStore, user: GomokuUser, isLast: Boolean, onChallenge: (GomokuUser) -> Unit) {
     val colors = AingTheme.colors
     BoardRow(Modifier.testTag(GomokuScreenTags.opponent(user.id)), divider = !isLast, dividerInset = AingDimens.cardPadding + 36.dp + AingDimens.space3, minHeight = 56.dp) {
-        BoardAvatar(user.displayName, user.id, 36.dp, working = user.isWorking)
+        BoardAvatar(user.displayName, user.id, 36.dp, working = user.isWorking, url = user.avatarURL)
         Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
             BoardPersonName(user.displayName, center = user.center)
             Text(GomokuScreenText.opponentStatus(user, gomoku.liveMatches), style = BoardText.rowSubtitle(), color = colors.label2)

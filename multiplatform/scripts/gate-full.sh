@@ -72,11 +72,30 @@ if [[ "$(uname -s)" == Darwin ]]; then
   rel_ran=1
   rm -rf "$rel_out"
   mkdir -p "$MP_DIR/build/gate"
+  # 판돈 깃발은 커밋된 version.properties 를 따른다(androidDuelsFromBuild=N 이 있고 androidVersionCode ≥ N 이면 on, 아니면 off) —
+  # 출시될 판과 같은 변종을 R8 로 굽는다. 출시 도구의 이중 확인은 커밋 값과 어긋난 인자를 거부하므로(8c: 그 줄이 들어오자
+  # 인자 없는 dryrun 이 '거부'로 빨갛게 됐다) 여기서 고정값을 쓰지 않는다. 값이 이상하면 off 를 넘겨 출시 도구가 그 이유로 거부하게 둔다.
+  rel_duels="$(python3 -I - "$MP_DIR/version.properties" <<'PY' 2>/dev/null || echo off
+import sys
+vp = {}
+for line in open(sys.argv[1], encoding="utf-8"):
+    s = line.strip()
+    if s and not s.startswith(("#", "!")) and "=" in s:
+        k, v = s.split("=", 1)
+        vp[k.strip()] = v.strip()
+try:
+    on = "androidDuelsFromBuild" in vp and int(vp["androidVersionCode"]) >= int(vp["androidDuelsFromBuild"])
+except ValueError:
+    on = False
+print("on" if on else "off")
+PY
+)"
   set +e
-  "$HERE/release-android.sh" dryrun --allow-dirty --out "$rel_out" > "$MP_DIR/build/gate/release-dryrun.log" 2>&1
+  "$HERE/release-android.sh" dryrun --duels "$rel_duels" --allow-dirty --out "$rel_out" > "$MP_DIR/build/gate/release-dryrun.log" 2>&1
   rel_rc=$?
   set -e
-  grep -E '^release-android: (FAIL|verify checks=|dryrun ok)' "$MP_DIR/build/gate/release-dryrun.log" | sed 's/^/gate-full: /' || true
+  echo "gate-full: release-dryrun duels=$rel_duels(커밋된 version.properties 를 따름)"
+  grep -E '^release-android: (FAIL|거부|verify checks=|dryrun ok)' "$MP_DIR/build/gate/release-dryrun.log" | sed 's/^/gate-full: /' || true
   echo "gate-full: release-dryrun-exit=$rel_rc · log=$MP_DIR/build/gate/release-dryrun.log"
 else
   echo "gate-full: release-dryrun=not-run($(uname -s) — 출시 R8 판·스모크는 맥 몫: 이 OS 에서는 봉인 밖 R8 빌드를 하지 않는다)"

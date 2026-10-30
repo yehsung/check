@@ -8,6 +8,7 @@ package com.yehsung.aingcheck.ui.games.gomoku
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -34,7 +35,11 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w400dp-h2100dp-xhdpi")
 class BoardSnapshotAndroidTest {
-    private val wrap: @Composable (Boolean, @Composable () -> Unit) -> Unit = { dark, body -> BoardTestTheme(dark) { body() } }
+    // 판 시트는 Android 기본이 창 전체(따로 뜬 창 — 이 장면 한 장에 안 담긴다). 스냅숏은 시트 면을 재려고 화면 안으로 띄운다 —
+    // 창에 뜨는지는 BoardSheetWindowAndroidTest 가 따로 잰다.
+    private val wrap: @Composable (Boolean, @Composable () -> Unit) -> Unit = { dark, body ->
+        CompositionLocalProvider(LocalBoardSheetsInWindow provides false) { BoardTestTheme(dark) { body() } }
+    }
 
     @Test fun gomokuMatchLight() { check(BoardScenes.gomokuMatch(false), BoardScenes.gomokuMatch(false, meName = "나검정둘")) }
     @Test fun gomokuMatchDark() { check(BoardScenes.gomokuMatch(true), BoardScenes.gomokuMatch(true, meName = "나검정둘")) }

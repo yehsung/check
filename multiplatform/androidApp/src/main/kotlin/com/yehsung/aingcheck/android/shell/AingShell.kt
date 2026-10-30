@@ -4,9 +4,6 @@
 // 라우트(딥링크·알림)는 로그인 전이면 기다렸다가 탭 단계가 되면 연다(iOS "실행 복원 중이면 끝날 때까지 기다린다").
 package com.yehsung.aingcheck.android.shell
 
-import androidx.compose.foundation.background
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.runtime.CompositionLocalProvider
 import com.yehsung.aingcheck.android.nav.AppScreens
 import com.yehsung.aingcheck.android.nav.Dest
@@ -16,20 +13,19 @@ import com.yehsung.aingcheck.android.screens.session.LaunchEntry
 import com.yehsung.aingcheck.android.screens.session.UpdateRequiredEntry
 import com.yehsung.aingcheck.android.screens.shop.CakeGiftSheetRoute
 import com.yehsung.aingcheck.android.screens.stage.AingStage
+import com.yehsung.aingcheck.android.screens.stage.StageAssets
+import com.yehsung.aingcheck.android.screens.stage.StageClock
+import com.yehsung.aingcheck.android.screens.stage.StageHandle
+import com.yehsung.aingcheck.android.widget.rankingsMood
+import com.yehsung.aingcheck.ui.screens.session.kit.rememberPortrait
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalScreenArt
 import com.yehsung.aingcheck.ui.shop.LiveCharacterPreview
 import com.yehsung.aingcheck.ui.shop.LocalLiveCharacterPreview
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,8 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -49,10 +45,10 @@ import com.yehsung.aingcheck.android.nav.CurrentDest
 import com.yehsung.aingcheck.android.nav.RoutePlans
 import com.yehsung.aingcheck.android.nav.SessionNavHost
 import com.yehsung.aingcheck.android.nav.ShellNavigator
+import com.yehsung.aingcheck.android.nav.ShellSystemBarRules
 import com.yehsung.aingcheck.android.nav.ShellTabBarRules
 import com.yehsung.aingcheck.android.nav.TabsNavHost
 import com.yehsung.aingcheck.android.routing.AingRoute
-import com.yehsung.aingcheck.android.routing.AingTab
 import com.yehsung.aingcheck.android.routing.RouteRequest
 import com.yehsung.aingcheck.android.screens.session.LaunchPlaceholder
 import com.yehsung.aingcheck.android.screens.session.UpdateRequiredPlaceholder
@@ -117,22 +113,13 @@ fun AingShell(
             }
             Scaffold(
                 bottomBar = {
-                    NavigationBar(modifier = Modifier.testTag("tab-bar")) {
-                        AingTab.entries.forEach { tab ->
-                            val graph = RoutePlans.graphOf(tab)
-                            val selected = destination?.hierarchy?.any { it.hasRoute(graph::class) } == true
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = { navigator.selectTab(tab) },
-                                // 탭 기호(Material Symbols 대응표)는 W1-e 몫 — 그때까지 점 하나. 색은 NavigationBarItem 이 내려 주는 기호 색
-                                // (선택 = onSecondaryContainer = iOS tabSelected 파랑 · 안 선택 = onSurfaceVariant 회색). 파랑은 '선택'만 뜻한다(G §8-15) —
-                                // primary 로 칠하면 안 고른 탭 다섯 개에도 파란 점이 찍힌다(ShellTabColorsTest).
-                                icon = { Box(Modifier.size(10.dp).background(LocalContentColor.current, CircleShape)) },
-                                label = { Text(tab.title) },
-                                modifier = Modifier.testTag("tab:${tab.name.lowercase()}"),
-                            )
-                        }
-                    }
+                    // 자리표시 셸에는 나 탭 얼굴 원천(앱 모델)이 없다 — 사람 기호로 접는다. 배지도 없다.
+                    AingTabBar(
+                        selected = { tab -> destination?.hierarchy?.any { it.hasRoute(RoutePlans.graphOf(tab)::class) } == true },
+                        badge = { 0 },
+                        meFace = null,
+                        onSelect = { tab -> navigator.selectTab(tab) },
+                    )
                 },
             ) { padding ->
                 TabsNavHost(navController, Modifier.padding(padding))
@@ -174,7 +161,7 @@ private fun AssembledShell(
         LocalScreenArt provides app.screenArt,
         LocalAppUserCharacters provides phone.characters.directory,
         // W5-c 살아 있는 미리보기(고르기 머리 · 선물 받은 뒤 그림 — W4-c §5).
-        LocalLiveCharacterPreview provides LiveCharacterPreview { id, size, m, serial -> AingStage(id, null, m, artSize = size, revealKey = serial) },
+        LocalLiveCharacterPreview provides shellLivePreview(),
     ) {
         when (phase) {
             ShellPhase.LAUNCHING -> LaunchEntry()
@@ -214,32 +201,52 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
     Scaffold(
         bottomBar = {
             if (!hideTabBar) {
-                NavigationBar(modifier = Modifier.testTag("tab-bar")) {
-                    AingTab.entries.forEach { tab ->
-                        val graph = RoutePlans.graphOf(tab)
-                        val selected = destination?.hierarchy?.any { it.hasRoute(graph::class) } == true
-                        val badge = phone.badges.badge(RouteTargets.tab(tab)) ?: 0
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                navigator.selectTab(tab)
-                                phone.tabDidChange(RouteTargets.tab(tab))
-                            },
-                            icon = {
-                                BadgedBox(badge = { if (badge > 0) Badge(Modifier.testTag("tab-badge:${tab.name.lowercase()}")) { Text("$badge") } }) {
-                                    Box(Modifier.size(10.dp).background(LocalContentColor.current, CircleShape))
-                                }
-                            },
-                            label = { Text(tab.title) },
-                            modifier = Modifier.testTag("tab:${tab.name.lowercase()}"),
-                        )
-                    }
-                }
+                AingTabBar(
+                    selected = { tab -> destination?.hierarchy?.any { it.hasRoute(RoutePlans.graphOf(tab)::class) } == true },
+                    badge = { tab -> phone.badges.badge(RouteTargets.tab(tab)) ?: 0 },
+                    meFace = rememberMeTabFace(app),
+                    onSelect = { tab ->
+                        navigator.selectTab(tab)
+                        phone.tabDidChange(RouteTargets.tab(tab))
+                    },
+                )
             }
         },
     ) { padding ->
-        TabsNavHost(navController, Modifier.padding(padding), app = app, onTabBarHidden = { screenHidesTabBar = it })
+        // 뽑기 기계처럼 배경을 막대 뒤까지 까는 목적지는 셸 여백을 받지 않는다(ShellSystemBarRules — 내용 inset 은 그 화면이 스스로 단다).
+        val bars = if (ShellSystemBarRules.drawsBehindSystemBars(destination)) PaddingValues(0.dp) else padding
+        TabsNavHost(navController, Modifier.padding(bars), app = app, onTabBarHidden = { screenHidesTabBar = it })
     }
     // 생일 선물 고르기 창 — 어느 탭에 있든 뜬다(W4-c §4, 스토어가 대국 · 관전 중엔 스스로 안 띄운다).
     CakeGiftSheetRoute(phone.me)
 }
+
+/**
+ * 셸이 꽂는 살아 있는 미리보기(W5-c — 고르기 머리 · 케이크 시트 · 뽑기 공개 자리). **공개 번호 0 = 아직 공개 없음 → 열쇠 없음**:
+ * 0 을 열쇠로 넘기면 고르기 머리 · 케이크 시트(둘 다 revealSerial 기본 0)가 처음 열릴 때마다 한 바퀴 돈다. iOS 는 그 두 자리가 정지 초상
+ * (MeCakeGiftViews `CharacterPortrait(framed: false)`)이라 열 때 돌지 않는다. 1 이상(뽑기 결과)만 새 값마다 한 바퀴.
+ * [assets] · [clock] · [handle] 은 시험이 넘긴다(AingStageComposeTest).
+ */
+internal fun shellLivePreview(assets: StageAssets? = null, clock: StageClock = StageClock.System, handle: StageHandle? = null): LiveCharacterPreview =
+    LiveCharacterPreview { id, size, m, serial ->
+        AingStage(id, null, m, artSize = size, revealKey = serial.takeIf { it > 0 }, assets = assets ?: StageAssets.of(LocalContext.current), clock = clock, handle = handle)
+    }
+
+/** '나' 탭 얼굴(iOS meLabel — CharacterTabIcon(displayedCharacterID, displayedMood)). 그림을 아직 못 읽었으면 art = null → 사람 기호. */
+@Composable
+private fun rememberMeTabFace(app: AppScreens): MeTabFace {
+    val p = app.phone
+    val snapshot = p.widgets.current
+    val face = ShellTabFace.of(
+        equippedLoaded = p.me.equippedLoaded,
+        equippedCharacterID = p.me.equippedServerID,
+        snapshotCharacterID = snapshot?.characterID,
+        nowCard = p.now.myCard(p.environment.clock.now()),
+        snapshotMood = snapshot?.rankingsMood(),
+    )
+    val id = face.characterID ?: DEFAULT_CHARACTER
+    val art = rememberPortrait(id, face.mood.expression)
+    return MeTabFace(art, face.mood, id)
+}
+
+private const val DEFAULT_CHARACTER = "aing"

@@ -73,7 +73,8 @@ internal fun MeStore.applyShopRubyBalance(server: Long?, writeSerialAtDeparture:
 }
 
 /**
- * 서버가 말한 상점 상태를 옮긴다. **null 은 건너뛴다** — 모르는 것을 0 으로 적지 않는다. 울트라 칸은 읽지 않는다.
+ * 서버가 말한 상점 상태를 옮긴다. **null 은 건너뛴다** — 모르는 것을 0 으로 적지 않는다. 울트라는 값(`ultra_price`)만 읽는다
+ * (잔량은 데스크톱 지갑 UltraWalletStore 몫).
  *
  * INV-MeStoreCharacters-23099059 이식: **잔량은 여기서 쓰지 않는다** — 부르는 자리가 도장과 함께 [applyShopRubyBalance] 로 옮긴다
  *   (위 이식 주석). 새로 이 함수를 부르는 자리를 만들거든 잔량도 그 짝으로 같이 옮겨라.
@@ -82,6 +83,8 @@ internal fun MeStore.applyShopRubyBalance(server: Long?, writeSerialAtDeparture:
  */
 internal fun MeStore.applyShopState(state: ShopStateResponse) {
     gachaInfo = MeWireBridge.gachaInfo(state.gacha)
+    // Swift applyShopState 624 `if let price = state.ultraPrice` — 캐릭터 줄이 없는 응답에도 옮긴다(아래 조기 반환보다 앞).
+    state.ultraPrice?.let { ultraPrice = it }
     val rows = state.characters ?: return
     shopCharacters = rows
     val owned = LinkedHashSet<String>()

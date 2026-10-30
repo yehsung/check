@@ -175,6 +175,14 @@ class MeStore(
     var gachaInfo by mutableStateOf<GachaInfo?>(null)
         internal set
 
+    /**
+     * 서버 `shop_state.ultra_price`(울트라 1개 값 — Swift `ultraPrice`, WorkTimerStoreAuth.swift 624). null = 아직 모른다(지어내지 않는다 —
+     * 울트라 구매 화면은 모르면 사지 않고 [loadShop] 을 다시 부른다). Compose 상태라 화면이 읽으면 값이 오는 순간 다시 그린다.
+     * 계정에 묶인 값이 아니라 로그아웃에도 비우지 않는다(맥 signOut 도 그대로 둔다).
+     */
+    var ultraPrice by mutableStateOf<Long?>(null)
+        internal set
+
     /** 뽑기 요청이 떠 있다 — 버튼이 잠기고, 두 번 눌러도 요청은 하나다. */
     var isPulling by mutableStateOf(false)
         internal set

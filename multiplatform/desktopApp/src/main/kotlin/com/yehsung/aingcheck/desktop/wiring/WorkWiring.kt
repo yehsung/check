@@ -11,7 +11,10 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvent
 import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvents
 import com.yehsung.aingcheck.core.foundation.platform.desktop.Registration
 import com.yehsung.aingcheck.core.foundation.platform.desktop.SessionEvents
+import com.yehsung.aingcheck.core.net.assembleTeamStatuses
+import com.yehsung.aingcheck.core.net.fetchTeamStatuses
 import com.yehsung.aingcheck.core.session.SessionStore
+import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.TeamMemberStatus
 import com.yehsung.aingcheck.core.wire.models.WorkStatus
@@ -46,17 +49,30 @@ import com.yehsung.aingcheck.feature.desktop.work.policy.WakeGate
 import com.yehsung.aingcheck.feature.desktop.work.policy.WorkPolicyConstants
 import com.yehsung.aingcheck.feature.desktop.work.policy.toSwiftDate
 import com.yehsung.aingcheck.feature.desktop.work.queue.DesktopWorkQueue
+import com.yehsung.aingcheck.feature.desktop.work.service.LegacyHeartbeatFacts
+import com.yehsung.aingcheck.feature.desktop.work.service.WorkTickGate
 import com.yehsung.aingcheck.feature.desktop.work.service.awaySync
+import com.yehsung.aingcheck.feature.desktop.work.service.awaySyncFrom
+import com.yehsung.aingcheck.feature.desktop.work.service.makeWorkTickRequest
 import com.yehsung.aingcheck.feature.desktop.work.service.reopenSession
+import com.yehsung.aingcheck.feature.desktop.work.service.sendLegacyHeartbeat
+import com.yehsung.aingcheck.feature.desktop.work.service.workTick
 import com.yehsung.aingcheck.feature.desktop.work.state.DesktopWorkStore
+import com.yehsung.aingcheck.feature.desktop.work.state.HeartbeatPlan
 import com.yehsung.aingcheck.feature.desktop.work.state.SleepCloseMarker
 import com.yehsung.aingcheck.feature.desktop.work.state.WorkPolicyHooks
 import com.yehsung.aingcheck.feature.desktop.work.state.WorkReopenCall
+import com.yehsung.aingcheck.feature.desktop.work.wire.AwaySync
+import com.yehsung.aingcheck.feature.desktop.work.wire.AwaySyncResponse
 import com.yehsung.aingcheck.feature.desktop.work.wire.AwaySyncUnavailable
+import com.yehsung.aingcheck.feature.desktop.work.wire.WorkTickFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
@@ -86,6 +102,11 @@ data class WorkDeps(
     val newUuid: () -> String = { java.util.UUID.randomUUID().toString() },
     /** 정책 박자(away·12h·마일스톤) 주기. Swift 하트비트 주기와 같다. */
     val policyBeatMillis: Long = (WorkPolicyConstants.HEARTBEAT_INTERVAL_SECONDS * 1000).toLong(),
+    /**
+     * 팀 상태 틱(work_tick · 폴백 하트비트) 한 슬라이스(Swift refreshLoopSliceSeconds = heartbeatIntervalSeconds 30초).
+     * 근무 중엔 슬라이스마다, 비근무엔 [WorkWiring.IDLE_TICK_SLICES] 슬라이스(300초)마다 — 근무로 바뀌면 다음 슬라이스에 바로.
+     */
+    val tickSliceMillis: Long = (WorkPolicyConstants.HEARTBEAT_INTERVAL_SECONDS * 1000).toLong(),
 )
 
 /**
@@ -221,6 +242,18 @@ class WorkWiring(private val deps: WorkDeps) {
         isSessionUsable = { usability.isUsable },
     )
 
+    /** work_tick 사용 가능 판정(⑨ — 404·403·계약은 이 실행 동안 끄고, 일시 실패 3연속이면 1시간). */
+    val workTickGate = WorkTickGate()
+    private val teamStatusFlow = MutableStateFlow<List<TeamMemberStatus>>(emptyList())
+
+    /** 마지막으로 반영한 팀 상태(work_tick 조각 또는 폴백 4 GET). 팀 목록·트레이가 읽는다. 로그아웃이면 빈 목록. */
+    val teamStatuses: StateFlow<List<TeamMemberStatus>> = teamStatusFlow.asStateFlow()
+    private var lastHeartbeatSucceededAt: SwiftDate? = null
+    private var lastLegacyHeartbeatAt: SwiftDate? = null
+
+    /** 과부하·도달 불가로 work_tick 을 못 쓰는 동안(성공 한 번이면 내린다) — 이때는 폴백 4 GET 으로 펼치지 않는다. */
+    private var overloaded = false
+
     val quitFinisher = QuitFinisher(
         state = store,
         isSignedIn = { session.session != null },
@@ -267,13 +300,189 @@ class WorkWiring(private val deps: WorkDeps) {
                 policyBeat(clockFn())
             }
         }
+        // 팀 상태 틱(Swift startRefreshLoopTask): 근무 중 30초 · 비근무 300초(슬라이스마다 근무 전이를 본다). 이 루프가 없으면
+        // 근무 중 last_seen_at 이 시작 시각에 얼어 서버 스캐빈저(10분)가 세션을 닫는다.
+        jobs += scope.launch {
+            while (isActive) {
+                if (store.snapshot.value.isWorking) {
+                    delay(deps.tickSliceMillis)
+                } else {
+                    var slices = 0
+                    while (slices < IDLE_TICK_SLICES) {
+                        delay(deps.tickSliceMillis)
+                        slices += 1
+                        if (store.snapshot.value.isWorking) break
+                    }
+                }
+                swallow { workTickBeat(clockFn()) }
+            }
+        }
     }
 
-    /** 정책 박자 한 번(시험이 직접 부른다). away 서버 판정 → away·12h 평가 → 마일스톤. */
-    suspend fun policyBeat(now: SwiftDate) {
-        swallow {
-            if (away.shouldSync(now, signedIn = session.session != null)) away.apply(fetchAway())
+    /**
+     * 팀 상태 틱 한 번(Swift 폴링 본문 retryPendingSync → workTickIfPossible → finishWorkTick 자리, 시험이 직접 부른다).
+     * work_tick 1건이 하트비트·팀 상태·away 조각을 한 번에 가져온다. 못 쓰면(함수 없음·실행권·계약·일시 실패) 같은 틱에서
+     * 레거시 하트비트 → 팀 상태 4 GET → away_sync 로 펼친다. 과부하·도달 불가(502·503·504·52x·408·429·전송 실패)는 펼치지 않고
+     * 근무 중 하트비트만 120초 간격으로 지킨다(Swift overloadHeartbeatMaxGapSeconds — 스캐빈저 10분보다 한참 안쪽).
+     */
+    suspend fun workTickBeat(now: SwiftDate) {
+        if (session.session == null) {
+            teamStatusFlow.value = emptyList()
+            away.shouldSync(now, signedIn = false)
+            return
         }
+        swallow { queue.retryPending() }
+        when (val outcome = performWorkTick(now)) {
+            is TickOutcome.Applied -> {
+                applyTeamStatus(outcome.members, outcome.writeGeneration)
+                if (away.shouldSync(now, signedIn = true)) away.apply(awayFromTick(outcome.away))
+            }
+            TickOutcome.Fallback -> {
+                swallow { legacyHeartbeat(now) }
+                swallow { legacyTeamStatus(now) }
+                if (away.shouldSync(now, signedIn = true)) away.apply(fetchAway())
+            }
+            TickOutcome.Overloaded -> {
+                if (store.snapshot.value.isWorking && olderThan(lastHeartbeatSucceededAt, now) && olderThan(lastLegacyHeartbeatAt, now)) {
+                    swallow { legacyHeartbeat(now) }
+                }
+                if (away.shouldSync(now, signedIn = true)) away.apply(AwaySyncResult.Failed)
+            }
+            TickOutcome.Skipped -> Unit
+        }
+    }
+
+    private sealed interface TickOutcome {
+        data class Applied(val members: List<TeamMemberStatus>, val writeGeneration: Int, val away: AwaySyncResponse?) : TickOutcome
+        data object Fallback : TickOutcome
+        data object Overloaded : TickOutcome
+        data object Skipped : TickOutcome
+    }
+
+    private suspend fun performWorkTick(now: SwiftDate): TickOutcome {
+        // 무소속은 통합 대상이 아니다(Swift — 팀 GET 이 없어 합칠 것이 없다): 폴백(하트비트·팀 조회는 팀이 없어 0, away 만).
+        if (deps.teamId() == null) return TickOutcome.Fallback
+        if (!workTickGate.isAvailable(now)) {
+            if (overloaded) return TickOutcome.Overloaded
+            workTickGate.recordFallback()
+            return TickOutcome.Fallback
+        }
+        val args = store.planWorkTick(now) ?: return TickOutcome.Fallback
+        val generation = session.sessionGeneration
+        val service = session.service
+        val request = service.makeWorkTickRequest(
+            teamID = args.teamId,
+            heartbeat = args.heartbeat,
+            sessionID = args.sessionId,
+            deviceID = args.deviceId,
+            openedSession = args.openedSession,
+            lastInputAt = args.lastInputAt,
+            includeMeta = false,
+            now = now,
+        )
+        return try {
+            val response = session.withSessionRetry { s -> service.workTick(s.accessToken, request) }
+            workTickGate.recordSuccess(response.serverNow?.let(service::parseDate), clockFn())
+            overloaded = false
+            if (generation != session.sessionGeneration) return TickOutcome.Skipped
+            if (args.heartbeat) lastHeartbeatSucceededAt = now
+            val members = service.assembleTeamStatuses(
+                response.statuses.orEmpty(),
+                response.sessionsActive.orEmpty(),
+                response.sessionsWeekly.orEmpty(),
+                response.devices.orEmpty(),
+                now,
+            )
+            TickOutcome.Applied(members, args.writeGeneration, response.away)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: WorkTickFailure) {
+            val reason = e.message ?: e.toString()
+            when {
+                e.disablesForRun -> {
+                    workTickGate.disable(reason, now)
+                    overloaded = false // 이 실행 동안 꺼졌다 — 붙들지 말고 폴백으로 산다
+                    workTickGate.recordFallback()
+                    TickOutcome.Fallback
+                }
+                isOverload(e) -> {
+                    workTickGate.recordTransientFailure(reason, now)
+                    overloaded = true
+                    TickOutcome.Overloaded
+                }
+                else -> {
+                    workTickGate.recordTransientFailure(reason, now)
+                    workTickGate.recordFallback()
+                    TickOutcome.Fallback
+                }
+            }
+        } catch (e: SupabaseWorkServiceError) {
+            // 세션 만료·키 문제 등(c) — 폴백 경로가 같은 오류를 만나 기존 규약대로 다룬다.
+            workTickGate.recordTransientFailure(e.toString(), now)
+            workTickGate.recordFallback()
+            TickOutcome.Fallback
+        } catch (e: Exception) {
+            // 서버에 닿지 못했다(시간 초과·연결 실패·오프라인) — 펼쳐도 같은 벽이다(b).
+            workTickGate.recordTransientFailure(e::class.simpleName ?: "transport", now)
+            overloaded = true
+            TickOutcome.Overloaded
+        }
+    }
+
+    /** Swift WorkTickGate.isOverload — 502·503·504·520~524 · 408·429. */
+    private fun isOverload(e: WorkTickFailure): Boolean = when (e) {
+        is WorkTickFailure.ServerError -> e.status in 502..504 || e.status in 520..524
+        is WorkTickFailure.Rejected -> e.status == 408 || e.status == 429
+        else -> false
+    }
+
+    private fun olderThan(at: SwiftDate?, now: SwiftDate): Boolean =
+        at == null || now.timeIntervalSince(at) > OVERLOAD_HEARTBEAT_MAX_GAP_SECONDS
+
+    /** 레거시 하트비트(Swift sendHeartbeatIfWorking) — 계획은 ws, 와이어 순서·가드는 wq. */
+    private suspend fun legacyHeartbeat(now: SwiftDate) {
+        val facts = when (val plan = store.planHeartbeat(away.serverSupported, now)) {
+            HeartbeatPlan.Skip -> return
+            is HeartbeatPlan.DeviceInputOnly -> LegacyHeartbeatFacts(
+                teamId = plan.teamId, adopted = true, confirmedSessionId = null, deviceId = plan.deviceId,
+                ownsStrongly = false, awayServerSupported = true, observedInput = plan.lastInputAt,
+            )
+            is HeartbeatPlan.Beat -> LegacyHeartbeatFacts(
+                teamId = plan.teamId, adopted = false, confirmedSessionId = plan.sessionId, deviceId = plan.device?.deviceId,
+                ownsStrongly = plan.device?.openedSession ?: false, awayServerSupported = true, observedInput = plan.lastInputAt,
+            )
+        }
+        lastLegacyHeartbeatAt = now
+        session.sendLegacyHeartbeat(facts)
+    }
+
+    /** 레거시 팀 상태(Swift refreshTeamStatus — 4 GET). 세대는 발사 전에 잡는다(늦은 응답 버림). */
+    private suspend fun legacyTeamStatus(now: SwiftDate) {
+        val team = deps.teamId() ?: return
+        val generation = session.sessionGeneration
+        val writeGeneration = store.workStateWriteGeneration
+        val members = session.withSessionRetry { s -> session.service.fetchTeamStatuses(s.accessToken, team, now) }
+        if (generation != session.sessionGeneration) return
+        applyTeamStatus(members, writeGeneration)
+    }
+
+    private fun awayFromTick(fragment: AwaySyncResponse?): AwaySyncResult =
+        fragment?.let { awayResult(session.service.awaySyncFrom(it)) } ?: AwaySyncResult.Failed
+
+    private fun awayResult(sync: AwaySync): AwaySyncResult = if (!sync.isOK) {
+        AwaySyncResult.Failed
+    } else {
+        AwaySyncResult.Ok(
+            closeThresholdSeconds = sync.policy?.closeThresholdSeconds,
+            openSession = sync.openSession?.let { AwayOpenSession(it.sessionID, it.closeEligible, it.lastInputAt) },
+        )
+    }
+
+    /**
+     * 정책 박자 한 번(시험이 직접 부른다). away·12h 평가 → 마일스톤. away 서버 판정 재료는 팀 상태 틱이 넣는다
+     * ([workTickBeat] — work_tick 조각 또는 폴백 away_sync). 여기서 따로 away_sync 를 내지 않는다(요청 두 벌 금지).
+     */
+    suspend fun policyBeat(now: SwiftDate) {
         swallow { away.evaluate(now) }
         swallow {
             longSession.evaluate(now)
@@ -284,15 +493,7 @@ class WorkWiring(private val deps: WorkDeps) {
     }
 
     private suspend fun fetchAway(): AwaySyncResult = try {
-        val sync = session.withSessionRetry { s -> session.service.awaySync(s.accessToken) }
-        if (!sync.isOK) {
-            AwaySyncResult.Failed
-        } else {
-            AwaySyncResult.Ok(
-                closeThresholdSeconds = sync.policy?.closeThresholdSeconds,
-                openSession = sync.openSession?.let { AwayOpenSession(it.sessionID, it.closeEligible, it.lastInputAt) },
-            )
-        }
+        awayResult(session.withSessionRetry { s -> session.service.awaySync(s.accessToken) })
     } catch (e: CancellationException) {
         throw e
     } catch (e: AwaySyncUnavailable) {
@@ -306,6 +507,7 @@ class WorkWiring(private val deps: WorkDeps) {
      * 소셜 빚 되맞춤(Swift 3396 — 반영 **직후**).
      */
     fun applyTeamStatus(members: List<TeamMemberStatus>, writeGeneration: Int) {
+        teamStatusFlow.value = members
         store.applyRemoteOwnStatus(members, writeGeneration)
         val uid = session.session?.userID
         val own = members.firstOrNull { it.id == uid }
@@ -339,6 +541,14 @@ class WorkWiring(private val deps: WorkDeps) {
     }
 
     val isStarted: Boolean get() = scope != null
+
+    companion object {
+        /** 비근무 틱 = 슬라이스 × 10(Swift 느린 유휴 주기 300초). */
+        const val IDLE_TICK_SLICES: Int = 10
+
+        /** 과부하 중 하트비트 간격 상한(Swift overloadHeartbeatMaxGapSeconds 120초). */
+        const val OVERLOAD_HEARTBEAT_MAX_GAP_SECONDS: Double = 120.0
+    }
     internal val openRegistrations: Int get() = registrations.size
 
     private class LateWorkQueueHost : WorkQueueHost {

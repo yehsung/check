@@ -27,6 +27,7 @@ import com.yehsung.aingcheck.desktop.generated.DesktopFlags
 import com.yehsung.aingcheck.desktop.generated.ProdConfig
 import com.yehsung.aingcheck.desktop.http.HttpEngineFactory
 import com.yehsung.aingcheck.desktop.platform.windows.identity.WindowsDeviceIdentity
+import com.yehsung.aingcheck.desktop.wiring.WindowsDeviceRegistration
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
 import com.yehsung.aingcheck.core.foundation.platform.RunningTests
@@ -258,6 +259,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         clock = sessionClock,
         instanceGuard = graph.platform.singleInstance,
         parentScope = scope,
+        // client_devices 'windows' 행(B 계약 1) — 울트라 밑바닥·Windows 빌드 축이 이 행을 읽는다. core 기본값(None)은 그대로.
+        deviceRegistration = WindowsDeviceRegistration,
     )
     val sessionContext = SessionContext(sessionStore, graph.appConfig)
     val messages = MessagesStore(sessionContext, scope, NaturalKoNameCollation)

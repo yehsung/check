@@ -27,6 +27,12 @@ class TodoBoardWindow(
     private val content: @Composable () -> Unit,
     private val onDeactivated: () -> Unit = {},
     private val excludeFromCapture: Boolean = true,
+    /**
+     * 외양을 쓰면(조립 기본) 창을 **투명**으로 만들고(반투명 바탕이 뒤 화면을 비친다 — D §9-5 Compose 투명 창, DComp 판정은 VM)
+     * 테마를 **어두움 고정**으로 한다(맥 CheckTodoBoardWindow.swift:499 `panel.appearance = .darkAqua` — 대비 수식이 흰 글자·어두운 판 전제).
+     * false 면 W5-b3 1차 그대로(불투명 · 시스템 테마).
+     */
+    private val translucent: Boolean = false,
 ) : TodoBoardSurface {
     private var window: ComposeWindow? = null
 
@@ -70,8 +76,10 @@ class TodoBoardWindow(
         w.isAlwaysOnTop = true
         w.isResizable = false
         w.title = TodoBoardStrings.TITLE
+        // 투명은 창이 표시 가능해지기(addNotify) 전에만 걸린다.
+        if (translucent) w.isTransparent = true
         w.setContent {
-            AingTheme(dark = isSystemInDarkTheme()) { content() }
+            AingTheme(dark = translucent || isSystemInDarkTheme()) { content() }
         }
         w.addWindowFocusListener(object : WindowAdapter() {
             override fun windowLostFocus(e: WindowEvent) {

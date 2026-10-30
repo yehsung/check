@@ -166,10 +166,7 @@ extension WorkTimerStore {
         if let thread = messageThreads.first(where: { $0.peerUserID == id }) { return thread.peerName }
         if let entry = pokeDirectory.first(where: { $0.userID == id }) { return entry.name }
         if let last = lastShownMessage, last.fromUserID == id { return last.fromName }
-        if let name = receivedMessages.first(where: { $0.fromUserID == id })?.fromName { return name }
-        // ④ 확성기 배너 [답장](`openMegaphoneReply`) — 확성기 줄은 메시지함에서 빠지므로 위 셋 어디에도 없을 수 있다.
-        guard let hint = messagePeerHint, hint.userID == id else { return nil }
-        return hint.name
+        return receivedMessages.first { $0.fromUserID == id }?.fromName
     }
 
     /// 대화 머리에 쓸 상대의 상태메시지(v0.3.51). **콕찌르기 목록 한 곳**에서만 온다 — 이력 행(message_history)은 상태를
@@ -187,9 +184,7 @@ extension WorkTimerStore {
         if let thread = messageThreads.first(where: { $0.peerUserID == id }), let url = thread.peerAvatarURL {
             return url
         }
-        if let url = pokeDirectory.first(where: { $0.userID == id })?.avatarURL { return url }
-        guard let hint = messagePeerHint, hint.userID == id else { return nil }
-        return hint.avatarURL
+        return pokeDirectory.first { $0.userID == id }?.avatarURL
     }
 
     /// 지금 입력칸에 있는 글의 길이(코드포인트 — 서버와 같은 눈금).

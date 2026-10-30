@@ -6,7 +6,7 @@ import Testing
 // 계약 docs/plan/megaphone-banner-contract.md "그물 — 시험 · 코어" 줄의 항목을 하나씩 잰다. **모양이 아니라 결과를 잰다.**
 //
 // 서버는 스텁이다(`GomokuStubProtocol` — 시험마다 고유 호스트). 시계와 타이머는 `MBTimeline` 하나가 쥔다 — `advance` 가 시각을
-// 옮기고 그때까지 만기된 타이머를 순서대로 부른다(8초를 실제로 기다리지 않는다). 본 것 기록은 격리 스위트(`CheckTestScratch`)다.
+// 옮기고 그때까지 만기된 타이머를 순서대로 부른다(5초를 실제로 기다리지 않는다). 본 것 기록은 격리 스위트(`CheckTestScratch`)다.
 //
 // 각 시험은 비교 기준선을 하나씩 둔다 — 같은 입력에서 그 값 하나만 바꿔 결과가 갈리는 것을 보인다("상수가 있다"가 아니라).
 
@@ -204,10 +204,10 @@ struct MegaphoneBannerStoreTests {
                                   createdAt: mbWall0.addingTimeInterval(-threeHours))
         #expect(rig.store.current?.megaphoneID == "mega-p")
         #expect(rig.store.current?.body == "세 시간 전 말", "알림 본문의 📢 표식은 떼고 그린다")
-        #expect(rig.store.current?.canReply == false, "아직 상대를 모르면 답장 버튼이 없다")
+        #expect(rig.store.current?.senderID == nil, "푸시만으로는 아직 보낸 사람 id 를 모른다")
         // presentFromPush 가 스스로 refresh 한다 — 같은 확성기의 id·보낸 사람이 얹힌다(타이머는 다시 안 센다).
         #expect(await mbWait { rig.store.current?.messageID == "msg-p" })
-        #expect(rig.store.current?.senderID == mbOther && rig.store.current?.canReply == true)
+        #expect(rig.store.current?.senderID == mbOther)
         #expect(rig.store.hides(messageID: "msg-p"))
         #expect(rig.timeline.scheduledDelays.filter { $0 == MegaphoneBannerRules.displaySeconds }.count == 1)
 
@@ -258,23 +258,25 @@ struct MegaphoneBannerStoreTests {
         #expect(seen.first == "own-5" && seen.last == "own-104", "오래된 다섯을 밀어낸다 · 자리값 id 는 기록하지 않는다")
     }
 
-    // 없으면: 두 장이 한꺼번에 뜨거나, 8초가 아닌 시간에 닫히거나, 닫히자마자 다음 장이 붙는 결함이 초록.
-    @Test("한 번에 하나 · 8초 · 다음 장은 0.4초 뒤 · 오래된 것부터")
-    func oneAtATimeEightSeconds() async {
+    // 없으면: 두 장이 한꺼번에 뜨거나, 5초가 아닌 시간에 닫히거나, 닫히자마자 다음 장이 붙는 결함이 초록.
+    // 2026-10-30 사용자 결정으로 8초 → 5초("너무 오래 떠있으면 안좋을듯").
+    @Test("한 번에 하나 · 5초 · 다음 장은 0.4초 뒤 · 오래된 것부터")
+    func oneAtATimeFiveSeconds() async {
         let items = mbReply([mbItem("msg-b", "mega-b", agoSeconds: 60), mbItem("msg-a", "mega-a", agoSeconds: 120)])
         let rig = mbMake("one") { rpc, _, _ in rpc == "megaphone_inbox" ? items : nil }
         await rig.store.refresh()
         #expect(rig.store.current?.megaphoneID == "mega-a", "먼저 보낸 것부터")
         #expect(rig.store.queue.map(\.megaphoneID) == ["mega-b"])
-        rig.timeline.advance(7.9)
-        #expect(rig.store.current?.megaphoneID == "mega-a", "기준선: 8초 전에는 그대로")
+        #expect(MegaphoneBannerRules.displaySeconds == 5)
+        rig.timeline.advance(4.9)
+        #expect(rig.store.current?.megaphoneID == "mega-a", "기준선: 5초 전에는 그대로")
         rig.timeline.advance(0.1)
         #expect(rig.store.current == nil)
         rig.timeline.advance(0.39)
         #expect(rig.store.current == nil, "쉬는 0.4초 동안은 비어 있다")
         rig.timeline.advance(0.01)
         #expect(rig.store.current?.megaphoneID == "mega-b")
-        rig.timeline.advance(8)
+        rig.timeline.advance(5)
         #expect(rig.store.current == nil)
     }
 
@@ -288,14 +290,14 @@ struct MegaphoneBannerStoreTests {
         rig.timeline.advance(100)
         #expect(rig.store.current != nil && rig.store.isTimerPaused)
         rig.store.resumeTimer()
-        rig.timeline.advance(6.9)
-        #expect(rig.store.current != nil, "남은 7초가 3초보다 길다")
+        rig.timeline.advance(3.9)
+        #expect(rig.store.current != nil, "남은 4초가 3초보다 길다")
         rig.timeline.advance(0.1)
         #expect(rig.store.current == nil)
 
         rig.timeline.advance(MegaphoneBannerRules.gap)
         rig.store.presentOwn(body: "거의 끝", senderName: "나")
-        rig.timeline.advance(7.5)
+        rig.timeline.advance(4.5)
         rig.store.pauseTimer()
         rig.store.resumeTimer()
         rig.timeline.advance(2.9)
@@ -415,20 +417,19 @@ struct MegaphoneBannerStoreTests {
         #expect(good.store.hides(messageID: "msg-1") && good.store.capability == .available)
     }
 
-    // 없으면: 보낸 사람 화면에 아무것도 안 뜨거나(효과를 못 봄), 내 배너에 답장 버튼이 붙는 결함이 초록.
-    @Test("본인 배너: 보낸 직후 줄 맨 앞 · 내 id · 답장 없음 · 응답 id 를 주면 본 것으로 기록")
+    // 없으면: 보낸 사람 화면에 아무것도 안 뜨거나(효과를 못 봄), 남의 것과 구별이 안 되는 결함이 초록.
+    @Test("본인 배너: 보낸 직후 줄 맨 앞 · 내 id · isOwn · 응답 id 를 주면 본 것으로 기록")
     func ownBannerAfterSending() async {
         let items = mbReply([mbItem("msg-a", "mega-a", agoSeconds: 10), mbItem("msg-b", "mega-b", agoSeconds: 5)])
         let rig = mbMake("own") { rpc, _, _ in rpc == "megaphone_inbox" ? items : nil }
         await rig.store.refresh()
-        #expect(rig.store.current?.megaphoneID == "mega-a" && rig.store.current?.canReply == true)
+        #expect(rig.store.current?.megaphoneID == "mega-a" && rig.store.current?.isOwn == false)
         rig.store.presentOwn(body: "모두 힘내요", senderName: "나", megaphoneID: "mega-mine")
         #expect(rig.store.current?.megaphoneID == "mega-a", "떠 있는 것을 끊지 않는다")
         #expect(rig.store.queue.map(\.megaphoneID) == ["mega-mine", "mega-b"], "기준선: inbox 순서보다 앞에 선다")
-        rig.timeline.advance(8 + MegaphoneBannerRules.gap)
+        rig.timeline.advance(MegaphoneBannerRules.displaySeconds + MegaphoneBannerRules.gap)
         let own = rig.store.current
         #expect(own?.isOwn == true && own?.senderID == mbMe && own?.body == "모두 힘내요")
-        #expect(own?.canReply == false)
         #expect(rig.store.hasSeen(megaphoneID: "mega-mine"))
     }
 
@@ -443,16 +444,16 @@ struct MegaphoneBannerStoreTests {
         }
         await rig.store.refresh()
         #expect(rig.store.current?.megaphoneID == "mega-1" && rig.store.capability == .available)
-        rig.timeline.advance(5)
+        rig.timeline.advance(3)
         rig.store.reset()
         #expect(rig.store.capability == .unknown && rig.store.knownMessageIDs.isEmpty)
         #expect(rig.store.current == nil && rig.store.queue.isEmpty)
         #expect(rig.store.unreadSummaryFunction == MegaphoneBannerStore.unreadSummaryV1)
 
         rig.store.presentOwn(body: "새 배너", senderName: "나")
-        rig.timeline.advance(3)   // reset 전 타이머(8초)가 만기 — 새 배너를 닫으면 안 된다
+        rig.timeline.advance(2.5)   // reset 전 타이머(5초)가 만기 — 새 배너를 닫으면 안 된다
         #expect(rig.store.current?.isOwn == true, "기준선: 지난 타이머는 세대로 버린다")
-        rig.timeline.advance(5)
+        rig.timeline.advance(2.5)
         #expect(rig.store.current == nil)
 
         await rig.store.refresh()   // 같은 계정: 기록은 키에 남아 있다

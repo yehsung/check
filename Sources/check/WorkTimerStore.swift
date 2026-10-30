@@ -1323,8 +1323,6 @@ final class WorkTimerStore {
     @ObservationIgnored var megaphoneBannerLastRefreshAt: Date = .distantPast
     /// 배너 미룸의 마지막 값(바뀐 때만 `deferralChanged()` 를 부른다 — `megaphoneBannerDeferralMayHaveChanged`).
     @ObservationIgnored var megaphoneBannerLastDeferred = false
-    /// 배너 [답장] 이 넘긴 상대 이름·아바타(`openMegaphoneReply`). 대화 제목의 마지막 출처다 — 로그아웃에 비운다.
-    var messagePeerHint: MessagePeerHint?
 
     /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
     /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로

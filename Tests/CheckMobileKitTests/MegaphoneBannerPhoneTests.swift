@@ -270,6 +270,34 @@ import Testing
         #expect(h.count("megaphone_inbox") == inbox + 1, "'ring' 이 배너를 다시 읽었다")
     }
 
+    @Test("첫 판정이 네트워크로 실패한 뒤 실시간 refresh 가 필터를 켜면 요약을 v2 로 다시 받는다 · 기준선: 실패한 동안은 옛 요약")
+    func filterTurningOnLaterRefetchesSummaryAsV2() async {
+        // 2026-10-30 안드로이드 이식 검증에서 찾은 결함: 첫 판정 실패 → 옛 요약(확성기 줄도 셈) → 실시간 refresh 가 필터를 켜도
+        // 메시지함이 그 사실을 몰라 숨긴 줄을 센 배지가 다음 활동 새로고침까지 남았다. 코어 `onCapabilityChange` 한 곳에서 잡는다.
+        let inboxDown = BaseLockedBox<Bool>(true)
+        let h = await MessagesHarness.make { server in
+            server.override("megaphone_inbox") { _ in
+                inboxDown.get() ? MobileStubResponse(body: Data(), failure: .notConnectedToInternet) : .json("[]")
+            }
+            server.override("message_unread_summary_v2") { _ in .json(MessagesStubServer.summary([])) }
+        }
+        defer { h.tearDown() }
+        await Self.settleBanner(h)
+        #expect(h.model.megaphoneBanner.capability == .unknown && h.model.megaphoneBanner.lastRefreshFailed, "전제: 첫 판정 실패")
+        #expect(h.count("message_unread_summary") >= 1, "기준선: 판정을 모르는 동안은 옛 요약")
+        #expect(h.count("message_unread_summary_v2") == 0, "기준선: 아직 v2 를 부를 까닭이 없다")
+        h.transport.emit(.joined)
+        h.model.realtime.flushCoalescedSignals()
+        await h.settle()
+
+        inboxDown.mutate { $0 = false }
+        h.transport.emit(.broadcast(event: "megaphone"))
+        h.model.realtime.flushCoalescedSignals()
+        #expect(await baseWaitUntil { h.model.megaphoneBanner.capability == .available }, "실시간 refresh 가 필터를 안 켰다")
+        #expect(await baseWaitUntil { h.count("message_unread_summary_v2") >= 1 }, "필터가 켜졌는데 요약을 v2 로 다시 받지 않았다(배지 고착)")
+        await h.settle()
+    }
+
     // MARK: 전송 뒤 내 배너
 
     @Test("보낸 직후 내 화면에 배너 한 번(isOwn) · 기준선: 루비 부족 응답이면 안 뜬다")

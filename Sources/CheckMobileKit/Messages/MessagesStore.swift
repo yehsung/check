@@ -1065,7 +1065,7 @@ package final class MessagesStore {
 
     /// 배너 판정이 바뀌었을 수 있다 — 요약 함수 짝을 맞추고(옛 함수로 받은 요약 뒤에 필터가 켜졌으면 다시 받는다),
     /// 보류에서 풀린 줄이 떠 있는 대화에 있으면 읽음을 올린다.
-    private func megaphoneFilterDidSettle() {
+    package func megaphoneFilterDidSettle() {
         guard isSignedIn else { return }
         if let used = runtime.lastSummaryFunction, let banner = context.links.megaphoneBanner, used != banner.unreadSummaryFunction {
             requestActivityRefresh()

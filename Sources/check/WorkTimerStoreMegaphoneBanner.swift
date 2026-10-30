@@ -113,11 +113,9 @@ extension WorkTimerStore {
     }
 
     /// 로그아웃 · 계정 전환. 큐 · 필터 id · 판정 기록 · 스로틀을 비운다(본 것 기록은 계정 키에 남는다 — 코어 머리말 ⑤).
-    /// [답장] 이 남긴 상대 이름 힌트도 계정에 묶인다(앞 사람의 대화 제목이 새 계정에 남지 않게).
     func resetMegaphoneBanner() {
         megaphoneBanner.reset()
         megaphoneBannerLastRefreshAt = .distantPast
-        messagePeerHint = nil
     }
 
     // MARK: 미룸(배너 창 — CheckMegaphoneBannerWindow.swift)
@@ -142,26 +140,6 @@ extension WorkTimerStore {
         megaphoneBannerLastDeferred = deferred
         megaphoneBanner.deferralChanged()
     }
-
-    // MARK: [답장]
-
-    /// 배너의 [답장] — 보낸 사람과의 1:1 대화를 연다(진입 맥락 `.overlay` — [뒤로]는 홈). 확성기 줄은 메시지함에서 빠지므로
-    /// 그 사람과 주고받은 것이 없으면 대화 제목이 빈다 — 배너의 이름·아바타를 힌트로 함께 넘긴다(`selectedMessagePeerName` 의 마지막 출처).
-    /// 답장할 수 없는 배너(내 확성기 · 보낸 사람 모름)면 아무것도 안 하고 거짓.
-    @discardableResult
-    func openMegaphoneReply(_ banner: MegaphoneBanner) -> Bool {
-        guard banner.canReply, let peer = banner.senderID else { return false }
-        messagePeerHint = MessagePeerHint(userID: peer, name: banner.senderName, avatarURL: banner.senderAvatarURL)
-        openMessagePanel(peer: peer, from: .overlay)
-        return true
-    }
-}
-
-/// [답장] 으로 연 대화의 상대 이름·아바타(이력 · 콕찌르기 목록 · 받은 줄 어디에도 그 사람이 없을 때만 쓴다).
-struct MessagePeerHint: Equatable {
-    let userID: String
-    let name: String
-    let avatarURL: URL?
 }
 
 /// 배너 미룸 판정(순수 함수). 오목 · 체스는 `playing`, 테트리스는 `countdown` · `playing`, 미니게임은 판 진행 중, 아잉 큐브는 손댄 판에서 내 자리 playing.

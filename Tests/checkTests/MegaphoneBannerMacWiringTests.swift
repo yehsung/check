@@ -63,7 +63,7 @@ private func mbwServer(
 private func mbwStore(_ label: String, transport: RealtimeTransport? = nil,
                       _ handler: @escaping MessageReadStubProtocol.Handler) -> (WorkTimerStore, String) {
     let (store, host) = makeMessageReadStore("mbw-" + label, transport: transport, handler: handler)
-    // 배너 타이머는 걸기만 하고 안 부른다(8초를 기다리지 않는다 — 이 파일은 배너 표시가 아니라 필터 자리를 잰다).
+    // 배너 타이머는 걸기만 하고 안 부른다(5초를 기다리지 않는다 — 이 파일은 배너 표시가 아니라 필터 자리를 잰다).
     store.megaphoneBanner.schedule = { _, _ in }
     store.megaphoneBanner.clock = { Fx.now }
     return (store, host)

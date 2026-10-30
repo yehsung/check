@@ -27,8 +27,6 @@ package struct MegaphoneBanner: Equatable, Sendable, Identifiable {
 
     package var id: String { megaphoneID }
 
-    /// [답장] 을 보일 수 있는가 — 상대를 알고, 내가 보낸 것이 아닐 때.
-    package var canReply: Bool { !isOwn && !(senderID ?? "").isEmpty }
 
     package init(messageID: String?, megaphoneID: String, senderID: String?, senderName: String, senderAvatarURL: URL?,
                  body: String, createdAt: Date, isOwn: Bool = false) {
@@ -84,7 +82,7 @@ package enum MegaphoneBannerRules {
     /// 푸시를 눌러 들어온 항목은 이 안이면 신선도를 무시한다(24시간 — 서버 inbox 창과 같다).
     package static let pushWindow: TimeInterval = 24 * 3_600
     /// 한 장이 떠 있는 시간.
-    package static let displaySeconds: TimeInterval = 8
+    package static let displaySeconds: TimeInterval = 5
     /// 닫힌 뒤 다음 장까지 쉬는 시간.
     package static let gap: TimeInterval = 0.4
     /// 멈췄다(호버·누르고 있기) 풀리면 남은 시간과 이것 중 긴 쪽으로 다시 센다.

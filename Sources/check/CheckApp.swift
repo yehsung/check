@@ -489,6 +489,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.closeRummyWindow()
             self?.overlayController?.clearRummyInvites()
         }.start()
+        // 2판(§2.3): 받침대 자리는 판마다 이 맥에 남긴다 — 앱을 다시 켜도 내가 놓은 자리 그대로(판이 끝나면 코어가 지운다).
+        // 시험은 앱 델리게이트를 거치지 않아 Preferences 를 더럽히지 않는다(코어 기본은 nil = 저장 안 함).
+        rummy.rackDefaults = .standard
+        // 2판(§1.2) 하트비트는 코어가 판·방 동안 10초마다 스스로 보낸다(창과 무관). 앱 수명에 잇는 것은 하나 —
+        // 잠에서 깨면 다음 10초를 기다리지 않고 **바로 한 번** 보낸다(잠든 사이 쌓인 공백을 90초 끊김 판정 전에 메운다).
+        _ = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                guard let matchID = rummy.heartbeatMatchID else { return }
+                Task { @MainActor in await rummy.heartbeatTick(matchID: matchID) }
+            }
+        }
     }
 
     /// 아잉 큐브 창을 닫는다(멱등 — 창이 아직 없으면 아무것도 안 한다). 창 컨트롤러의 공개 표면은 `configure`·`show` 뿐이라
@@ -524,16 +537,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 근무를 이미 마무리한 뒤에 이 표식을 세운다(`retireMidRun`).
         if store.retiredForAppStoreEdition { return .terminateNow }
         #endif
-        // 로그인 안 됨/키 없음/근무중 아님 → 지연할 이유가 없으므로 즉시 종료.
+        // 아잉 큐브 판·방 중이면 의도적 이탈(`rummy_leave` — 판은 기권, 방은 나가기)을 **지금** 띄운다(2판 §3 ⑨ · 최대 2초).
+        // 근무 마무리(최대 3초)와 나란히 돌아 종료가 늘지 않는다. 아무 판도 없으면 nil.
+        let rummyExit = RummyExitPolicy.startQuitLeave(store.rummy)
+        // 로그인 안 됨/키 없음/근무중 아님 → 지연할 이유가 없으므로 즉시 종료(아잉 큐브 이탈이 떠 있으면 그것만 기다린다).
         // 흡수 세션(다른 맥이 연 세션)도 즉시 종료다: finishWorkBeforeQuit 이 같은 표식을 보고 즉시 반환하므로
         // 여기서 걸러 내지 않으면 .terminateLater 를 돌려놓고 아무것도 안 하는 헛왕복이 되어 종료만 한 틱 늦는다.
         guard store.isSignedIn, store.startedAt != nil, !store.adoptedRemoteSession else {
-            return .terminateNow
+            guard let rummyExit else { return .terminateNow }
+            Task { @MainActor in
+                _ = await rummyExit.value
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+            return .terminateLater
         }
         // 근무중이면 종료 동기화를 시작하고, 마무리(최대 3초)될 때까지 종료를 늦춘다.
         // 타임아웃이 걸려도 finishWorkBeforeQuit가 리턴하므로 반드시 종료로 이어진다.
         Task { @MainActor in
             await store.finishWorkBeforeQuit()
+            _ = await rummyExit?.value
             NSApp.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater

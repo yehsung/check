@@ -9,7 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.ImageBitmap
 import com.yehsung.aingcheck.ui.components.CharacterExpression
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
 import com.yehsung.aingcheck.ui.components.RubyGlyph
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import java.io.File

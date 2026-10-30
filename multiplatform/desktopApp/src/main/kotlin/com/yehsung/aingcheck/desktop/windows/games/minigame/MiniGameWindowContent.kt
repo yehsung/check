@@ -72,19 +72,19 @@ fun MiniGameWindowContent(
 }
 
 /**
- * 솔로 테트리스 키 → 컨트롤러. **공용 패치 1 전 임시**: GamesPlayController 에 누름/뗌(setLeftHeld…releaseAllKeys)이 없어
- * 누름 한 번 = 한 칸(뗌은 버린다 — 굳을 '누른 채'가 없으니 ⚠️뗌 먼저 규약도 지켜진다). P1 이 들어오면 뗌을 그대로 넘기고 DAS·ARR 은 게임 시계가 한다.
+ * 솔로 테트리스 키 → 컨트롤러(공용 패치 4 — GamesPlayController setLeft/Right/SoftDropHeld·releaseAllKeys). 누름/뗌을 그대로 넘기고
+ * DAS·ARR 은 게임 시계(tick)가 한다 — 대결 창 [com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelKeys] 와 같은 표.
+ * ⚠️뗌은 게이트보다 먼저(★433) 여기까지 온다. 키 상실(PauseIfPlaying)은 MiniGameWindowState 가 releaseAllKeys 로 놓는다.
  */
 object SoloTetrisKeys {
     fun apply(controller: GamesPlayController, stroke: GameStroke) {
-        if (!stroke.down) return
         when (stroke.key) {
-            GameKey.MoveLeft -> controller.moveLeftOneCell()
-            GameKey.MoveRight -> controller.moveRightOneCell()
-            GameKey.SoftDrop -> controller.softDropOneCell()
-            GameKey.RotateCW -> controller.rotate(clockwise = true)
-            GameKey.RotateCCW -> controller.rotate(clockwise = false)
-            GameKey.Hold -> controller.hold()
+            GameKey.MoveLeft -> controller.setLeftHeld(stroke.down)
+            GameKey.MoveRight -> controller.setRightHeld(stroke.down)
+            GameKey.SoftDrop -> controller.setSoftDropHeld(stroke.down)
+            GameKey.RotateCW -> if (stroke.down) controller.rotate(clockwise = true)
+            GameKey.RotateCCW -> if (stroke.down) controller.rotate(clockwise = false)
+            GameKey.Hold -> if (stroke.down) controller.hold()
         }
     }
 

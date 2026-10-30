@@ -4,10 +4,10 @@
 package com.yehsung.aingcheck.desktop.windows.gacha
 
 import androidx.compose.runtime.Composable
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
-import com.yehsung.aingcheck.desktop.testsupport.PixelImage
-import com.yehsung.aingcheck.desktop.testsupport.SnapshotCompare
-import com.yehsung.aingcheck.desktop.testsupport.SnapshotPolicy
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.PixelImage
+import com.yehsung.aingcheck.ui.components.SnapshotCompare
+import com.yehsung.aingcheck.ui.components.SnapshotPolicy
 import java.io.File
 import kotlin.math.max
 import kotlin.math.min

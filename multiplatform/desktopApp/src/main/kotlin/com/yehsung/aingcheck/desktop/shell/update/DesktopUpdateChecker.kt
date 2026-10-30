@@ -5,6 +5,7 @@
 // 맥 판의 GitHub 폴백·DMG·`app_latest_release`·semver 비교는 옮기지 않는다(Windows 는 빌드 번호 하나로 비교).
 package com.yehsung.aingcheck.desktop.shell.update
 
+import com.yehsung.aingcheck.core.wire.models.ClientReleaseResponse
 import com.yehsung.aingcheck.core.foundation.platform.MonotonicClock
 import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvent
 import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvents
@@ -170,7 +171,7 @@ class DesktopUpdateChecker(
      * 서버가 "ok" 면 그 값을 그대로 싣는다(되돌린 릴리스도 따른다 — 판정은 핀의 `updateAvailable` 한 줄).
      * 그 밖의 상태(`unknown_platform` — 서버에 Windows 줄이 아직 없다)는 "알려진 새 버전 없음"이다.
      */
-    internal fun applyRelease(release: WindowsClientRelease) {
+    internal fun applyRelease(release: ClientReleaseResponse) {
         _state.update { s ->
             if (release.status == STATUS_OK) {
                 s.copy(

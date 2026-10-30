@@ -114,7 +114,7 @@ class DesktopPokeDrainer(
     }
 }
 
-/** 공용 패치 3 전 임시: MessagesStore.insertConsumedPokes·receiveConsumedMessages 가 들어오기 전까지 기록에는 쓰지 않는다(개수 0). 찌르기 표시는 그대로 간다. */
+/** 기록에 쓰지 않는 자리(개수 0 — 시험·깃발 꺼짐). 조립은 [MessagesStoreConsumedRowsSink](공용 패치 3 의 MessagesStore 실함수)를 넘긴다. */
 object NoOpConsumedRowsSink : ConsumedRowsSink {
     override fun insertConsumedPokes(rows: List<TakenPokeRow>): Int = 0
     override fun receiveConsumedMessages(rows: List<TakenPokeRow>, now: SwiftDate) {}

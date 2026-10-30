@@ -21,9 +21,9 @@ import com.yehsung.aingcheck.desktop.pages.missions.MissionsFlyoutPage
 import com.yehsung.aingcheck.desktop.pages.shop.ShopFlyoutPage
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
 import com.yehsung.aingcheck.desktop.shellapi.InMemoryFlyoutNavigator
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
-import com.yehsung.aingcheck.desktop.testsupport.PixelImage
-import com.yehsung.aingcheck.desktop.testsupport.SnapshotCompare
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.PixelImage
+import com.yehsung.aingcheck.ui.components.SnapshotCompare
 import com.yehsung.aingcheck.desktop.windows.gacha.W4fSnapshots.PxBox
 import com.yehsung.aingcheck.desktop.windows.cakegift.CakeGiftWindowContent
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows

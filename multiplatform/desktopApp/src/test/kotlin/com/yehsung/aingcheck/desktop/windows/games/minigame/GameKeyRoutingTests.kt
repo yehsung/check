@@ -7,7 +7,7 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelPhase
-import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.UiGamesHarness
+import com.yehsung.aingcheck.ui.games.minigame.UiGamesHarness
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelInput
 import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelKeys
 import com.yehsung.aingcheck.desktop.windows.kit.GameKey

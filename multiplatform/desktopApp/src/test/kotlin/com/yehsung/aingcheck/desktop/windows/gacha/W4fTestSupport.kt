@@ -32,7 +32,7 @@ import com.yehsung.aingcheck.core.stores.me.loadWeeklyWork
 import com.yehsung.aingcheck.core.wire.SupabaseSession
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowHandle
 import com.yehsung.aingcheck.desktop.windows.kit.WindowBoundsStore
 import com.yehsung.aingcheck.ui.shop.LocalMeArt

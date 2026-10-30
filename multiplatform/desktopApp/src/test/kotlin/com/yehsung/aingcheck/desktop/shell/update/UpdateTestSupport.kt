@@ -3,6 +3,7 @@
 
 package com.yehsung.aingcheck.desktop.shell.update
 
+import com.yehsung.aingcheck.core.wire.models.ClientReleaseResponse
 import com.yehsung.aingcheck.core.foundation.platform.MonotonicClock
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -14,7 +15,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.TestCoroutineScheduler
 
 internal class FakeUpdateRpc(
-    var release: () -> WindowsClientRelease = { WindowsClientRelease(status = "ok") },
+    var release: () -> ClientReleaseResponse = { ClientReleaseResponse(status = "ok") },
     var notice: () -> AppNotice? = { null },
 ) : UpdateRpc {
     var now: () -> Long = { 0L }
@@ -22,7 +23,7 @@ internal class FakeUpdateRpc(
     val noticeCalls = mutableListOf<Long>()
     var gate: CompletableDeferred<Unit>? = null
 
-    override suspend fun clientRelease(): WindowsClientRelease {
+    override suspend fun clientRelease(): ClientReleaseResponse {
         releaseCalls += now()
         gate?.await()
         return release()

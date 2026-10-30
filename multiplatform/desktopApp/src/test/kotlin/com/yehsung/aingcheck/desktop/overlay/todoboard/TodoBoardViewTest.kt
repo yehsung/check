@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.todo.TodoItem
 import com.yehsung.aingcheck.desktop.overlay.engine.OverlayRect
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
-import com.yehsung.aingcheck.desktop.testsupport.PixelImage
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.PixelImage
 import com.yehsung.aingcheck.ui.theme.AingColors
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import org.jetbrains.skia.Bitmap

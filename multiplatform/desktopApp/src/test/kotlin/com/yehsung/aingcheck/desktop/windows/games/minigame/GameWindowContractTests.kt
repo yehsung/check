@@ -13,11 +13,11 @@ import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuInvite
 import com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure
 import com.yehsung.aingcheck.core.wire.SwiftDate
-import com.yehsung.aingcheck.desktop.testsupport.DesktopSnapshots
+import com.yehsung.aingcheck.ui.components.DesktopSnapshots
 import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.BoardGameRig
-import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.UiFixtures
-import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.UiGamesHarness
-import com.yehsung.aingcheck.desktop.windows.games.minigame.rig.boardClock
+import com.yehsung.aingcheck.ui.games.minigame.UiFixtures
+import com.yehsung.aingcheck.ui.games.minigame.UiGamesHarness
+import com.yehsung.aingcheck.ui.games.gomoku.boardClock
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.desktop.windows.kit.StoreNotice
 import com.yehsung.aingcheck.desktop.windows.kit.WindowEvent

@@ -4,6 +4,7 @@
 // contract/golden/desktop-work-queue/scenarios.json — DesktopWorkQueueSwiftGoldenTest 가 대조한다.
 package com.yehsung.aingcheck.feature.desktop.work.queue
 
+import com.yehsung.aingcheck.feature.desktop.work.service.service
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.work.AutoCloseReason

@@ -9,6 +9,7 @@ import androidx.compose.ui.awt.ComposeWindow
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.stores.chess.ChessStore
 import com.yehsung.aingcheck.core.stores.games.GamesDestination
+import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -304,8 +305,11 @@ object ComposeGamesWindows {
      * 미니게임 창 키: 테트리스는 키 표, 다른 게임은 스페이스 = 탭. 판이 얼었으면(초점 상실 정지) 받지 않는다.
      * ⚠️뗌은 게이트보다 먼저 적용하되(★★ MiniGamePanel.swift:302-308) **삼킴은 이 창 판의 키만**(`belongs && wantsStrokes()`) — 남의 창(대결) 뗌을 삼키면 그 창 키가 굳는다.
      */
-    fun miniGameKeys(games: GamesStore, state: MiniGameWindowState): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
-        val controller = games.miniGames.controller ?: return@GameKeyRouter false
+    fun miniGameKeys(games: GamesStore, state: MiniGameWindowState): GameKeyRouter = miniGameKeys({ games.miniGames.controller }, state)
+
+    /** 같은 라우터 — 판을 주는 자리만 뗐다(시험이 씨앗을 고른 판을 꽂는다: MiniGameKeyReplayTest). */
+    fun miniGameKeys(controllerOf: () -> GamesPlayController?, state: MiniGameWindowState): GameKeyRouter = GameKeyRouter { vk, down, mods, repeat, owns ->
+        val controller = controllerOf() ?: return@GameKeyRouter false
         val gameOwns = owns && state.windowFocused && state.route is MiniGameWindowRoute.Game
         if (vk == GameKeyMap.VK_SPACE) {
             if (down && !repeat && !mods && gameOwns) SoloTetrisKeys.action(controller)

@@ -109,7 +109,10 @@ class MiniGameWindowState(private val hub: GamesMiniGameHub, private val probeHz
 
     fun apply(notices: List<StoreNotice>) {
         for (notice in notices) when (notice) {
-            StoreNotice.PauseIfPlaying -> windowFocused = false
+            StoreNotice.PauseIfPlaying -> {
+                windowFocused = false
+                hub.controller?.releaseAllKeys() // ★433 뗌 — 눌린 채 얼면 돌아와서 저절로 미끄러진다(대결 창과 같은 규칙)
+            }
             StoreNotice.EndRound -> endRound()
             StoreNotice.ReadRefreshRate -> refreshHz = probeHz()
             StoreNotice.DidShow, StoreNotice.DidHide, StoreNotice.DidClose, is StoreNotice.Occlusion,

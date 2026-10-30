@@ -29,6 +29,11 @@ class DesktopAILimitSync(
     private val session: () -> AILimitSession?,
     /** 확인된 기기 id(Windows `win:…`) 또는 null. null 이면 서버 쓰기 0. */
     private val deviceId: () -> String?,
+    /**
+     * AI 도구 기록 읽기 동의(W-13 #5 · 맥 aiToolDataAllowed — WorkTimerStoreAILimits.swift:40-48·116). 거짓이면 리더(자격 파일 읽기)를
+     * 부르지 않고 값 행도 싣지 않는다 — 비우기만 나간다(철회 때 생긴 비우기는 철회 뒤에 나가야 한다). 기본 참 = 옛 호출 그대로.
+     */
+    private val aiToolDataAllowed: () -> Boolean = { true },
 ) {
     /** 마지막으로 **성공한** 업로드의 지문(맥 `lastUploadedAILimits` — 메모리). */
     var lastUploadedAILimits: String? = null
@@ -37,7 +42,7 @@ class DesktopAILimitSync(
 
     /** 플라이아웃 열림·30초 틱의 진입점. `force` = 방금 열었다(스토어 5분 하한 유지). */
     suspend fun refreshAILimitsIfNeeded(now: SwiftDate, force: Boolean = false) {
-        store.refreshIfDue(now, force)
+        if (aiToolDataAllowed()) store.refreshIfDue(now, force)
         uploadAILimitsIfNeeded(now)
     }
 
@@ -84,7 +89,7 @@ class DesktopAILimitSync(
         val session = session() ?: return
         val deviceID = deviceId() ?: return
         val claim = store.claimPendingClear()
-        val bundle = store.enabledBundle
+        val bundle = if (aiToolDataAllowed()) store.enabledBundle else AILimitSnapshotBundle(providers = emptyList())
         val hasValues = bundle.visibleProviders.isNotEmpty()
         val fingerprint = AILimitUploadLedger.fingerprint(bundle)
         val valuesChanged = hasValues && fingerprint != lastUploadedAILimits
@@ -107,8 +112,24 @@ class DesktopAILimitSync(
 
     // ------------------------------------------------------------------ 설정 스위치(설정 화면은 이 둘만 부른다)
     suspend fun setAILimitsVisible(enabled: Boolean) {
+        store.pausedByConsent = false
         store.setMasterEnabled(enabled)
         noteAILimitsSettingChanged()
+    }
+
+    /**
+     * 동의 스위치가 바뀌었다(맥 setAIToolDataConsent — WorkTimerStoreMacEdition.swift:75-87). 끄면 켜져 있던 마스터를 **같은 문**으로 끄고
+     * (그 순간 올라가 있던 행을 비우는 행이 나간다 — 폰·위젯에서도 사라진다) 우리가 껐다고 적는다. 켜면 우리가 끈 마스터만 되살린다
+     * (사용자가 원래 꺼 둔 마스터·그 사이 직접 만진 선택은 덮지 않는다).
+     */
+    suspend fun applyAIToolDataConsent(granted: Boolean) {
+        val master: Boolean = when {
+            granted && store.pausedByConsent -> true
+            !granted && store.visibility.masterEnabled -> false
+            else -> return
+        }
+        setAILimitsVisible(master)
+        if (!master) store.pausedByConsent = true
     }
 
     suspend fun setAILimitProviderEnabled(provider: AILimitProvider, enabled: Boolean) {

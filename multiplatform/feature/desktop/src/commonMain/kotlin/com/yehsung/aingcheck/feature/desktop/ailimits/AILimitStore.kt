@@ -113,6 +113,8 @@ class AILimitStore(
         const val disabledProvidersKey = "check.aiLimits.disabledProviders"
         /** INV-AILimitStore-4353f922 이식: 비우기 대기열은 **영속**한다(끄고 바로 죽어도 그 행이 서버에 남지 않게). */
         const val pendingClearKey = "check.aiLimits.pendingClear"
+        /** 동의를 거두면서 리밋 마스터를 **우리가** 껐다는 표식(맥 aiLimitsPausedByConsentKey — WorkTimerStoreMacEdition.swift:91). */
+        const val pausedByConsentKey = "check.mas.aiLimitsPausedByConsent"
         const val uploadRetryBaseBackoff: Double = 60.0
         const val uploadRetryMaxBackoff: Double = 3_600.0
         const val devicesReloadInterval: Double = 300.0
@@ -362,6 +364,11 @@ class AILimitStore(
     }
 
     // ------------------------------------------------------------------ 표시 설정
+    /** 동의 철회가 마스터를 껐는가(켜면 그것만 되살린다). 사용자가 마스터를 직접 만지면 지운다(DesktopAILimitSync.setAILimitsVisible). */
+    var pausedByConsent: Boolean
+        get() = defaults.getBoolean(pausedByConsentKey) ?: false
+        set(value) = defaults.putBoolean(pausedByConsentKey, if (value) true else null)
+
     fun setMasterEnabled(enabled: Boolean) {
         if (visibility.masterEnabled == enabled) return
         applyVisibility(visibility.copy(masterEnabled = enabled))

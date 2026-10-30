@@ -7,7 +7,22 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvent
 import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvents
 import com.yehsung.aingcheck.core.foundation.platform.desktop.Registration
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfaces
+import com.yehsung.aingcheck.desktop.overlay.engine.BoardHost
 import com.yehsung.aingcheck.desktop.overlay.engine.BubbleKind
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelFacts
+import com.yehsung.aingcheck.desktop.overlay.engine.HitTarget
+import com.yehsung.aingcheck.desktop.overlay.engine.OverlayPoint
+import com.yehsung.aingcheck.desktop.overlay.engine.OverlayRect
+import com.yehsung.aingcheck.desktop.overlay.engine.PointerKind
+import com.yehsung.aingcheck.desktop.overlay.engine.PointerOutcome
+import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardAppearanceStore
+import com.yehsung.aingcheck.desktop.pages.desktopsettings.TodoBoardSetting
+import com.yehsung.aingcheck.feature.desktop.poke.DesktopMessageBubbleQueue
+import com.yehsung.aingcheck.feature.desktop.socialapi.QueuedBubbleMessage
+import com.yehsung.aingcheck.ui.components.CharacterMood
+import com.yehsung.aingcheck.ui.games.gomoku.BoardGameMe
+import kotlinx.coroutines.launch
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeMeasure
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeSink
@@ -52,6 +67,8 @@ class OverlayWiringTest {
         config: DesktopAppConfig = DesktopAppConfig(),
         val kv: InMemoryDesktopKeyValueStore = InMemoryDesktopKeyValueStore(),
         enabled: Boolean = true,
+        val surfaces: OverlaySurfaces? = null,
+        extra: (OverlayWiringDeps) -> OverlayWiringDeps = { it },
     ) {
         val work = InMemoryDesktopWorkState()
         val overlayOn = MutableStateFlow(enabled)
@@ -59,8 +76,9 @@ class OverlayWiringTest {
         val power = FakePower()
         val weekly = MutableSharedFlow<Long>(extraBufferCapacity = 4)
         val views = ArrayList<Pair<Double, OverlayView>>()
+        val outcomes = ArrayList<PointerOutcome>()
         val wiring = OverlayWiring(
-            OverlayWiringDeps(
+            extra(OverlayWiringDeps(
                 desktopConfig = config,
                 keyValueStore = kv,
                 clock = object : Clock {
@@ -76,8 +94,10 @@ class OverlayWiringTest {
                 power = power,
                 weeklyRubyGrants = weekly,
                 presenter = OverlayPresenter { view, now -> views += now to view },
+                onPointerOutcome = { outcomes += it },
                 random = Random(7),
-            ),
+            )),
+            surfaces,
         )
 
         /** 화면에 뜬 말풍선(문구, 뜬 시각) — 같은 말풍선은 한 번만 센다. */
@@ -228,5 +248,133 @@ class OverlayWiringTest {
         step(200)
         assertFalse(rig.views.last().second.renderSuspended)
         rig.wiring.stop()
+    }
+
+    // ───────────────────────── int-w2 배선(W5-b4 notes · W-3 #6) ─────────────────────────
+
+    private fun msg(id: String) = QueuedBubbleMessage(id, "합성동료", "합성 메시지 $id", SwiftDate.fromEpochMillis(wallEpoch * 1000))
+
+    @Test
+    fun `말풍선 큐는 하나 — wiring_bubbles 에 쌓인 메시지는 띄우고 소비, 다른 큐 인스턴스는 엔진에 안 닿는다(W-3 #6)`() = runTest {
+        val rig = Rig(this)
+        rig.wiring.start(backgroundScope)
+        step(50)
+        val stranger = DesktopMessageBubbleQueue()
+        stranger.append(listOf(msg("x1")))
+        step(3_000)
+        assertEquals(1, stranger.queue.value.size, "음성 대조: 다른 큐는 소비되지 않는다")
+        assertTrue(rig.shownBubbles().isEmpty(), "음성 대조: 다른 큐 → 말풍선 0")
+
+        rig.wiring.bubbles.append(listOf(msg("b1")))
+        step(3_000)
+        assertTrue(rig.shownBubbles().isNotEmpty(), "같은 큐 → 말풍선")
+        assertTrue(rig.wiring.bubbles.queue.value.isEmpty(), "띄웠으니 소비(규약 10)")
+        rig.wiring.stop()
+    }
+
+    @Test
+    fun `계정 전환 — 알던 계정에서 다른 id·로그아웃이면 대결 큐를 비운다, 첫 로그인·같은 id 는 그대로`() = runTest {
+        val ids = MutableSharedFlow<String?>(extraBufferCapacity = 8)
+        val rig = Rig(this, DesktopAppConfig(duels = true)) { it.copy(accountIds = ids) }
+        rig.wiring.start(backgroundScope)
+        step(50)
+        rig.startWorking(WorkStartOrigin.MANUAL)
+        step(100) // 출근 말풍선이 떠 있는 동안 신청은 큐에 남는다
+        val expires = SwiftDate.fromEpochMillis((wallEpoch + 600) * 1000)
+        rig.wiring.onDuelFacts(DuelGame.GOMOKU, DuelFacts(aliveInviteIds = setOf("m-1", "m-2")))
+        rig.wiring.onDuelInvite(DuelGame.GOMOKU, "m-1", "합성상대", 5, expires)
+        step(100)
+        assertEquals(1, rig.wiring.director.pendingInvitesForTest(DuelGame.GOMOKU).size, "전제: 신청이 큐에 있다")
+
+        ids.emit(null); step(10); ids.emit("u-a"); step(10); ids.emit("u-a"); step(10)
+        assertEquals(1, rig.wiring.director.pendingInvitesForTest(DuelGame.GOMOKU).size, "음성 대조: 첫 로그인·같은 id 는 비우지 않는다")
+
+        ids.emit("u-b"); step(10)
+        assertTrue(rig.wiring.director.pendingInvitesForTest(DuelGame.GOMOKU).isEmpty(), "계정 전환 → onSignedOut")
+
+        rig.wiring.onDuelInvite(DuelGame.GOMOKU, "m-2", "합성상대", 5, expires)
+        step(10)
+        assertEquals(1, rig.wiring.director.pendingInvitesForTest(DuelGame.GOMOKU).size, "전제: 새 계정의 신청이 큐에 있다")
+        ids.emit(null); step(10)
+        assertTrue(rig.wiring.director.pendingInvitesForTest(DuelGame.GOMOKU).isEmpty(), "로그아웃 → onSignedOut")
+        rig.wiring.stop()
+    }
+
+    @Test
+    fun `할 일 보드 설정 — 켜짐이 꺼지면 열린 보드를 닫고, 진하기는 외양으로·보드에서 바꾼 진하기는 설정으로(stop 뒤 0)`() = runTest {
+        val board = com.yehsung.aingcheck.desktop.overlay.todoboard.BoardFixture()
+        val kv = InMemoryDesktopKeyValueStore()
+        val appearance = TodoBoardAppearanceStore(kv)
+        val setting = MutableStateFlow(TodoBoardSetting(enabled = true, opacity = null))
+        val written = ArrayList<Double>()
+        val surfaces = OverlaySurfaces(FakeSink(), OverlayPresenter.None, board.controller, appearance, null, null) {}
+        val rig = Rig(this, kv = kv, surfaces = surfaces) { it.copy(todoBoard = setting, onBoardOpacityChanged = { v -> written += v }) }
+        rig.wiring.start(backgroundScope)
+        step(50)
+        board.controller.toggle(OverlayRect(1200.0, 130.0, 140.0, 170.0), OverlayRect(0.0, 0.0, 1440.0, 900.0))
+        assertTrue(board.surface.visible, "전제: 보드 열림")
+
+        setting.value = TodoBoardSetting(enabled = true, opacity = 0.8)
+        step(50)
+        assertEquals(0.8, appearance.appearance.opacity, "설정 진하기 → 외양")
+        assertTrue(board.surface.visible, "음성 대조: 진하기만 바뀌면 보드는 그대로")
+
+        board.enabled = false
+        setting.value = TodoBoardSetting(enabled = false, opacity = 0.8)
+        step(50)
+        assertFalse(board.surface.visible, "켜짐 꺼짐 → 열린 보드 닫기(enabledDidChange)")
+
+        appearance.setOpacity(0.3)
+        assertEquals(listOf(0.3), written, "보드에서 바꾼 진하기 → 설정(같은 값 되돌림은 0)")
+        rig.wiring.stop()
+        appearance.setOpacity(0.4)
+        assertEquals(listOf(0.3), written, "stop 뒤 0")
+    }
+
+    @Test
+    fun `실물 화면 조립 — surfaces 의 sink·presenter·board 로 갈아 끼우고 포인터를 묶는다, stop 은 엔진 뒤 창을 한 번 닫는다`() = runTest {
+        val sink = FakeSink()
+        val frames = ArrayList<OverlayView>()
+        val relay = OverlaySurfaces.PointerRelay()
+        var closed = 0
+        val surfaces = OverlaySurfaces(sink, OverlayPresenter { v, _ -> frames += v }, BoardHost.None, null, null, relay) { closed += 1 }
+        val rig = Rig(this, surfaces = surfaces)
+        rig.wiring.start(backgroundScope)
+        step(100)
+        assertTrue(frames.isNotEmpty(), "그림은 실물 발표자로")
+        assertTrue(rig.views.isEmpty(), "음성 대조: deps 의 발표자는 갈아 끼워져 안 불린다")
+
+        relay.onPointer(PointerKind.DOWN, OverlayPoint(10.0, 10.0), HitTarget.Body)
+        relay.onPointer(PointerKind.UP, OverlayPoint(10.0, 10.0), HitTarget.Body)
+        step(50)
+        assertEquals(2, rig.outcomes.size, "창 포인터 → 배선 → 엔진 → 포인터 결과(원래 콜백도 불린다)")
+
+        rig.wiring.stop()
+        val n = frames.size
+        step(1_000)
+        assertEquals(n, frames.size, "stop 뒤 그림 0")
+        assertEquals(1, closed, "창은 한 번 닫힌다")
+        rig.wiring.stop()
+        assertEquals(1, closed, "두 번째 stop 도 한 번")
+    }
+
+    @Test
+    fun `주간 루비 흐름 — 일련번호가 오를 때만 낸다, 같은 값·로그아웃 0 되돌림은 0`() = runTest {
+        val src = MutableSharedFlow<Pair<Int, Long?>>(extraBufferCapacity = 8)
+        val out = ArrayList<Long>()
+        val job = launch { OverlayWiring.weeklyRubyGrants(src).collect { out += it } }
+        runCurrent()
+        src.emit(0 to null); src.emit(1 to 20L); src.emit(1 to 20L); src.emit(0 to null); src.emit(1 to 50L); src.emit(2 to null)
+        runCurrent()
+        assertEquals(listOf(20L, 50L), out)
+        job.cancel()
+    }
+
+    @Test
+    fun `게임 화면의 나 — 근무 중 Working, 아니면 Off(맥 CheckMascotAssets mood)`() = runTest {
+        val rig = Rig(this)
+        assertEquals(CharacterMood.Off, rig.wiring.boardMe("합성", "fox").mood)
+        rig.startWorking(WorkStartOrigin.MANUAL)
+        assertEquals(BoardGameMe("합성", "fox", CharacterMood.Working), rig.wiring.boardMe("합성", "fox"))
     }
 }

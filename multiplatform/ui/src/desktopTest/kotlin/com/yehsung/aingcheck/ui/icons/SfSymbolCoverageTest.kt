@@ -44,8 +44,12 @@ class SfSymbolCoverageTest {
             "대응표에 빠진 SF 기호 ${missing.size}개(아이콘이면 SfSymbols 에, 기호가 아니면 SfSymbolScan.NOT_SYMBOLS 에):\n" +
                 missing.sorted().joinToString("\n") { "$it  ← ${used.getValue(it).first()}" },
         )
-        val orphan = SfSymbols.toAppIcon.keys - used.keys
+        val orphan = SfSymbols.toAppIcon.keys - used.keys - SfSymbols.desktopOnly
         assertTrue(orphan.isEmpty(), "Swift 가 더는 쓰지 않는 대응(고아): ${orphan.sorted()}")
+        // 데스크톱 전용 이름은 대응표에 있어야 하고, Swift 가 쓰기 시작하면 보통 대응으로 돌린다(목록이 낡지 않게).
+        assertTrue(SfSymbols.toAppIcon.keys.containsAll(SfSymbols.desktopOnly), "데스크톱 전용 이름이 대응표에 없다: ${SfSymbols.desktopOnly - SfSymbols.toAppIcon.keys}")
+        val nowInSwift = SfSymbols.desktopOnly.intersect(used.keys)
+        assertTrue(nowInSwift.isEmpty(), "Swift 가 쓰기 시작한 데스크톱 전용 이름 — SfSymbols.desktopOnly 에서 지운다: $nowInSwift")
         val staleIndirect = SfSymbolScan.INDIRECT.filter { name -> sources.none { (_, code) -> code.contains("\"$name\"") } }
         assertTrue(staleIndirect.isEmpty(), "간접 기호 목록에 원문에서 사라진 이름: $staleIndirect")
         println("AINGCHECK-SFSYMBOLS swift=${sources.size} used=${used.size} mapped=${SfSymbols.toAppIcon.size} icons=${AppIcon.entries.size}")

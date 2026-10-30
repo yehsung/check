@@ -100,6 +100,8 @@ object SfSymbols {
         "hand.point.right.fill" to AppIcon.PanToolAltFill,
         "hand.tap.fill" to AppIcon.TouchAppFill,
         "hare.fill" to AppIcon.CrueltyFreeFill,
+        // Windows 플라이아웃 레일의 '홈' 칸(맥에 없는 칸 — 맥은 머리 카드, W3-c0). Swift 원문에 없어 [desktopOnly] 에 적는다(공용 패치 10).
+        "house.fill" to AppIcon.HomeFill,
         "hourglass" to AppIcon.HourglassEmpty,
         "info.circle" to AppIcon.Info,
         "info.circle.fill" to AppIcon.InfoFill,
@@ -183,5 +185,11 @@ object SfSymbols {
     )
 
     /** SF 이름 → 아이콘(모르면 null — 화면 갈래는 null 을 만나면 표에 더하고 시험을 다시 돌린다). */
+    /**
+     * Swift 원문이 쓰지 않는 데스크톱(Windows) 전용 이름. `SfSymbolCoverageTest` 의 고아 판정에서 빼고, 대신 Swift 가 이 이름을 쓰기 시작하면
+     * 빨개진다(그때는 여기서 지워 보통 대응으로 돌린다).
+     */
+    val desktopOnly: Set<String> = setOf("house.fill")
+
     fun icon(sfName: String): AppIcon? = toAppIcon[sfName]
 }

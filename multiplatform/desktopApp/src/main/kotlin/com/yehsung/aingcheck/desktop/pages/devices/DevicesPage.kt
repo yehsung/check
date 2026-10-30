@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDevice
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDeviceNameParts
-import com.yehsung.aingcheck.core.rules.ailimit.AILimitDeviceRoster
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitMainDeviceRule
 import com.yehsung.aingcheck.desktop.pages.ailimits.AiLimitsActions
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.CaptionLine
@@ -61,9 +60,9 @@ data class DevicePickerRow(val deviceID: String, val parts: AILimitDeviceNamePar
 object DevicePickerModel {
     /** 줄 순서 = 스토어 순서(최근 순 — Roster.fold). 고른 표시 = MainDeviceRule(맥 effectiveMainDevice). */
     fun rows(devices: List<AILimitDevice>, mainDeviceID: String?): List<DevicePickerRow> {
-        val names = AILimitDeviceRoster.displayNameParts(devices)
+        val names = DesktopDeviceNames.parts(devices) // W-13 #8: 'win:' → PC, 그 밖 → 맥
         val selected = AILimitMainDeviceRule.resolve(devices, mainDeviceID)?.deviceID
-        return devices.map { DevicePickerRow(it.deviceID, names[it.deviceID] ?: AILimitDeviceNameParts(it.baseName, null), it.deviceID == selected) }
+        return devices.map { DevicePickerRow(it.deviceID, names[it.deviceID] ?: AILimitDeviceNameParts(DesktopDeviceNames.baseName(it), null), it.deviceID == selected) }
     }
 
     /** 맥 showsMainDevicePicker — 두 대 이상일 때만 고른다. 라우트·레일 칸 판정도 이것(W-9 #2). */

@@ -40,7 +40,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,6 +61,7 @@ import com.yehsung.aingcheck.desktop.shellapi.FlyoutPageHost
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
 import com.yehsung.aingcheck.feature.desktop.work.DesktopWorkCommands
 import com.yehsung.aingcheck.feature.desktop.work.DesktopWorkState
+import com.yehsung.aingcheck.ui.fonts.pretendardFontFamily
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingTheme
@@ -246,7 +246,7 @@ private fun HeaderCardView(h: HeaderUi, onToggle: () -> Unit) {
                     Text(h.statusText, style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1)
                     Text(
                         h.todayText,
-                        style = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontFamily = pretendardFontFamily(), fontWeight = FontWeight.SemiBold, fontFeatureSettings = HomeDigits.TABULAR),
                         color = colors.label,
                         maxLines = 1,
                     )
@@ -447,7 +447,7 @@ private fun TeamPanelView(t: TeamPanelUi) {
                 }
             }
             if (t.inviteCode != null && showsCode) {
-                Text(t.inviteCode, style = MaterialTheme.typography.labelLarge.copy(fontFamily = FontFamily.Monospace), color = colors.label)
+                Text(t.inviteCode, style = MaterialTheme.typography.labelLarge.copy(fontFamily = pretendardFontFamily(), fontFeatureSettings = HomeDigits.TABULAR), color = colors.label)
             }
             HorizontalDivider(color = colors.separator)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -498,4 +498,13 @@ private fun PresenceChipView(p: MemberPresence, label: String) {
         maxLines = 1,
         modifier = Modifier.clip(CircleShape).background(bg).padding(horizontal = 9.dp, vertical = 4.dp),
     )
+}
+
+/**
+ * W-13 #1 — 홈 숫자 글꼴: 시스템 고정폭(FontFamily.Monospace — 맥 Menlo · 리눅스 DejaVu · Windows Consolas 로 러너마다 모양이 갈려 굵은 대조가
+ * 빨갰다) 대신 **번들 Pretendard + OpenType "tnum"**(숫자 폭 고정 — 맥 `.monospacedDigit()` 대응). 글자 모양이 러너와 무관해진다.
+ * 맥과 다른 점: 맥 큰 타이머는 design: .monospaced(SF Mono) — 여기는 Pretendard 의 고정폭 숫자라 글자 모양이 다르다(보고 unresolved).
+ */
+internal object HomeDigits {
+    const val TABULAR = "tnum"
 }

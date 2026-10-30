@@ -331,7 +331,7 @@ fun AiLimitsPageContent(
         if (!store.isAvailable) {
             MacSection("AI 리밋") {
                 CaptionLine(if (!state.visibility.masterEnabled) "AI 사용량 리밋 보기가 꺼져 있어요." else "연동된 AI 도구가 없어요. 클로드 코드나 코덱스를 한 번 실행해 주세요.")
-                LinkLine("컴퓨터 설정 열기", onOpenSettings)
+                LinkLine("PC 설정 열기", onOpenSettings)
             }
             return@DesktopPageScaffold
         }
@@ -349,7 +349,7 @@ fun AiLimitsPageContent(
             }
         }
         if (store.showsMainDevicePicker) LinkLine("폰·위젯에 보여줄 컴퓨터 고르기", onOpenDevices)
-        LinkLine("보일 도구 고르기 · 컴퓨터 설정", onOpenSettings)
+        LinkLine("보일 도구 고르기 · PC 설정", onOpenSettings)
     }
 }
 

@@ -406,7 +406,8 @@ func 내_판이_끝나면_순위를_다시_읽는다() async {
     try? await Task.sleep(for: .milliseconds(100))
     #expect(count(host, "gomoku_ranking") == 0, "진행 중 판은 순위를 안 읽는다")
     gomoku.applyState(decode(GomokuStatePayload.self, myStatePayload(finished: true)))
-    await rankingWait { count(host, "gomoku_ranking") == 1 }
+    // 스텁은 요청을 받는 순간 센다 — 응답 디코드·대입은 그 뒤라 횟수만 기다리면 `ranking` 이 아직 nil 일 수 있다(단독 5번 중 1번).
+    await rankingWait { count(host, "gomoku_ranking") == 1 && count(host, "gomoku_lobby") == 1 && gomoku.ranking != nil }
     #expect(count(host, "gomoku_ranking") == 1)
     #expect(count(host, "gomoku_lobby") == 1, "전적(로비)도 같은 순간 새로 읽는다 — 기존 동작")
     #expect(gomoku.ranking != nil)

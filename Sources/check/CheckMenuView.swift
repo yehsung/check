@@ -24,6 +24,8 @@ struct CheckMenuView: View {
     var previewUpdateBanner: Bool = false
     // 스냅샷 전용: 배너에 얹을 패치노트 줄을 강제로 주입한다. 앱에서는 updateCheck?.latestNotes(릴리스 노트 파싱본)만 쓴다.
     var previewUpdateNotes: [String] = []
+    /// 스냅샷 전용: 업데이트 배너가 아잉 큐브 판 중 확인을 띄운 장면.
+    var previewRummyUpdatePrompt: RummyUpdateDecision? = nil
     // 스냅샷 전용: 하위 패널의 TextEditor/TextField 를 순수 SwiftUI 로 바꿔 그린다.
     // ImageRenderer 는 AppKit 을 감싼 뷰를 **노란 상자**로 그리므로, 그대로 두면 대화·제보 스냅샷에서
     // 입력칸 자리가 통째로 눈먼 자리가 된다(이 저장소가 그런 자리에서 색 결함을 8일간 놓쳤다). 앱은 항상 false.
@@ -517,7 +519,8 @@ struct CheckMenuView: View {
             // 맥 앱스토어 판(v0.3.51)에는 배너 자체가 없다 — 업데이트는 앱스토어가 한다(`UpdateBanner` 정의 주석).
             #if !CHECK_MAS
             if topBanner == .update {
-                UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes)
+                UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes, rummy: store.rummy,
+                             rummyGate: RummyUpdateGate(previewPending: previewRummyUpdatePrompt))
             }
             #endif
             // 같은 슬롯의 서버 공지 카드(v0.3.40). 업데이트 배너와 **같은 자리, 같은 "한 번에 하나" 예산**이라 둘이 함께 서는 일은
@@ -1469,14 +1472,21 @@ private struct UpdateBanner: View {
     let versionText: String
     /// 이번 버전 패치노트(평문 줄, 최대 4). 비어 있으면 노트 줄 없이 예전 모습 그대로 그린다.
     let notes: [String]
+    /// 아잉 큐브 스토어(§6 후속). 이 맥이 쥔 판·방 중이면 [지금 업데이트]가 먼저 묻는다 — 업데이트는 앱을 끄고 새로 켠다.
+    let rummy: RummyStore?
     // runner 는 이 배너가 소유한다(AppDelegate 배선 불요). 테스트는 상태/스폰을 주입한 runner 를 넘겨 검증한다.
     @State private var runner: UpdateRunner
     @State private var copied = false
+    /// 판 중 업데이트 확인(`RummyUpdateGate` — 판단·이탈·다시 묻기는 거기 있다).
+    @State private var rummyGate: RummyUpdateGate
 
-    init(versionText: String, notes: [String] = [], runner: UpdateRunner = UpdateRunner()) {
+    init(versionText: String, notes: [String] = [], runner: UpdateRunner = UpdateRunner(), rummy: RummyStore? = nil,
+         rummyGate: RummyUpdateGate = RummyUpdateGate()) {
         self.versionText = versionText
         self.notes = notes
+        self.rummy = rummy
         _runner = State(initialValue: runner)
+        _rummyGate = State(initialValue: rummyGate)
     }
 
     // 실행 실패/미탐지 시에만 폴백 안내를 띄운다(정상 경로는 군더더기 없이 두 버튼만).
@@ -1567,22 +1577,29 @@ private struct UpdateBanner: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            if let pending = rummyGate.pending {
+                // 이 맥이 쥔 아잉 큐브 판·방 중 — 버튼 줄 대신 확인(승인 = 이탈 후 기존 업데이트, 취소 = 아무것도 안 함).
+                RummyUpdateConfirmRow(decision: pending, onConfirm: { rummyGate.confirm() },
+                                      onCancel: { rummyGate.cancel() })
+            } else {
             HStack(spacing: 8) {
                 // [지금 업데이트] — 원클릭(accent fill). running 중엔 "업데이트 중…"으로 바뀌고 비활성.
+                // 판 중이면 먼저 묻는다(`RummyUpdateGate.request` — 쥔 판·방이 없거나 놀던 맥이면 곧바로 업데이트).
                 Button {
                     copied = false
-                    runner.runUpgrade()
+                    rummyGate.request(store: rummy) { runner.runUpgrade() }
                 } label: {
-                    Text(runner.status == .running ? "업데이트 중…" : "지금 업데이트")
+                    Text(runner.status == .running ? "업데이트 중…"
+                         : rummyGate.isLeaving ? RummyUpdateText.leaving : "지금 업데이트")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(CheckTheme.accent))
-                        .opacity(runner.status == .running ? 0.7 : 1)
+                        .opacity(runner.status == .running || rummyGate.isLeaving ? 0.7 : 1)
                 }
                 .buttonStyle(.plain)
-                .disabled(runner.status == .running)
+                .disabled(runner.status == .running || rummyGate.isLeaving)
 
                 // 폴백 — brew 는 명령 복사(복사 후 "복사됨"으로 토글), 직접 설치는 DMG 주소를 브라우저로 연다.
                 // 직접 설치한 사람에게 brew 명령을 복사해 주면 붙여넣어도 똑같이 실패한다(그게 예전 모습이다).
@@ -1607,6 +1624,7 @@ private struct UpdateBanner: View {
                         )
                 }
                 .buttonStyle(.plain)
+            }
             }
             if let fallbackHint {
                 Text(fallbackHint)

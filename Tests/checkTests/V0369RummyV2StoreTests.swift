@@ -85,6 +85,9 @@ private func v2sMake(_ label: String, script: V2SScript) -> (RummyStore, V2SCloc
     store.draftDebounceSeconds = 0.05
     store.deadlineWakeEnabled = false
     store.heartbeatEnabled = false
+    // 설계서 v2 §6: 하트비트·이탈은 이 기기가 손댄 판에만 간다. 이 파일의 시험은 '판을 하는 기기' 를 재므로 미리 적는다
+    // (놀던 기기는 V0369RummyV2EngagedTests 가 잰다).
+    store.markEngaged(v2sMatch)
     return (store, clock, host)
 }
 

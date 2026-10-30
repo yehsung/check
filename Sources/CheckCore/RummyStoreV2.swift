@@ -8,6 +8,8 @@ package enum RummyExitReason: String, Sendable {
     case windowClosed = "window_closed"
     case appQuit = "app_quit"
     case signOut = "sign_out"
+    /// 판·방 중에 앱 업데이트를 골랐다(맥 업데이트 배너의 확인 뒤).
+    case appUpdate = "app_update"
 }
 
 /// 내 랙에 새로 들어온 타일 한 장(편집기 로컬 id · 면 · 받침대 자리).
@@ -78,10 +80,16 @@ extension RummyStore {
 
     // MARK: - 하트비트(머리말 ⑫)
 
-    /// phase 가 room·playing 이면 그 판의 하트비트를 돌리고, 아니면 멈춘다. `refreshPhase` 가 늘 부른다.
+    /// phase 가 room·playing 이고 **이 기기가 손댄 판**(머리말 ⑮)이면 그 판의 하트비트를 돌리고, 아니면 멈춘다.
+    /// 같은 조건으로 App Nap 활동(`isHoldingMatch`)도 쥐고 놓는다. `refreshPhase` 와 engaged 장부가 늘 부른다.
     func updateHeartbeat() {
-        let wanted: UUID? = heartbeatEnabled && host?.session != nil && (phase == .room || phase == .playing)
-            ? match?.id : nil
+        let holding = host?.session != nil && (phase == .room || phase == .playing)
+            && match.map { isEngaged($0.id) } == true
+        // App Nap 은 내 자리가 아직 판에 있을 때만 막는다 — 기권(forfeit)·끝(done)한 뒤 남의 판을 지켜보는 동안은 보낼 마감이 없다
+        // (쥐면 판이 끝날 때까지 배터리만 먹는다). 하트비트는 그대로 둔다(서버가 joined·playing 자리만 갱신한다).
+        let seatState = match.flatMap { mySeat(in: $0) }?.state
+        setHoldingMatch(holding && seatState != .forfeit && seatState != .done)
+        let wanted: UUID? = heartbeatEnabled && holding ? match?.id : nil
         guard wanted != heartbeatMatchID else { return }
         heartbeatTask?.cancel()
         heartbeatTask = nil
@@ -99,9 +107,9 @@ extension RummyStore {
         }
     }
 
-    /// 하트비트 한 번. 자리가 없어졌으면(`not_found`) 따라잡기 조회를 건다.
+    /// 하트비트 한 번. 자리가 없어졌으면(`not_found`) 따라잡기 조회를 건다. 이 기기가 손대지 않은 판엔 보내지 않는다(⑮).
     package func heartbeatTick(matchID: UUID) async {
-        guard host?.session != nil else { return }
+        guard host?.session != nil, isEngaged(matchID) else { return }
         guard let result = await perform({ try await $0.rummyHeartbeat(accessToken: $1, matchID: matchID) }) else { return }
         switch result {
         case .success(let response):
@@ -123,9 +131,14 @@ extension RummyStore {
     /// 서버 답을 최대 `exitLeaveLimitSeconds`(2초) 기다린다. 답과 무관하게 이 기기에선 판을 접는다(하트비트도 멈춘다) —
     /// 서버에 못 닿았으면 90초 끊김 기권이 마무리한다. 반환: 서버가 나감을 확인했는가(끝난 판·판 없음은 true).
     /// `isWorking` 과 무관하게 돈다(다른 동작이 비행 중이어도 나간다).
+    /// **이 기기가 손대지 않은 판이면 아무것도 보내지 않고 true**(머리말 ⑮ — 놀던 맥을 꺼도 다른 맥의 판이 기권되지 않게).
     @discardableResult
     package func leaveForExit(reason: RummyExitReason) async -> Bool {
         guard let current = match, Self.isUnsettled(current.status), host?.session != nil else { return true }
+        guard isEngaged(current.id) else {
+            Self.logger.notice("exit leave skipped: not engaged on this device reason=\(reason.rawValue, privacy: .public)")
+            return true
+        }
         let matchID = current.id
         let limit = Self.exitLeaveLimitSeconds
         Self.logger.notice("exit leave reason=\(reason.rawValue, privacy: .public)")
@@ -159,7 +172,7 @@ extension RummyStore {
     /// 반환: 나갔으면 `leaveForExit` 의 답, 시작된 판을 들고 남았으면 false.
     @discardableResult
     package func leaveRoomForExit(reason: RummyExitReason) async -> Bool {
-        guard let current = match, current.status == .forming, host?.session != nil else {
+        guard let current = match, current.status == .forming, host?.session != nil, isEngaged(current.id) else {
             return await leaveForExit(reason: reason)
         }
         let roomID = current.id
@@ -205,6 +218,7 @@ extension RummyStore {
         lastReactionSentAt = now
         let matchID = current.id
         let key = sticker.rawValue
+        markEngaged(matchID)
         if let seat = Self.mySeat(in: current, me: myUserID)?.seatNo ?? current.mySeatNo {
             pendingOwnReactions.append((key, now))
             emitReaction(seatNo: seat, sticker: sticker, isMine: true)
@@ -277,6 +291,88 @@ extension RummyStore {
         let event = RummyDrawEvent(serial: drawSerial, tiles: tiles)
         lastDraw = event
         onTileDrawn?(event)
+    }
+
+    // MARK: - 한 계정 기기 여럿(머리말 ⑮ · 설계서 v2 §6)
+
+    package nonisolated static let engagedDefaultsKey = "rummy.engaged.v2"
+    /// 장부 주인(계정 id). 강제 로그아웃(토큰 만료 — 이탈 없음)으로 남은 앞 계정의 판 id 가, 같은 판의 상대 계정이 이 맥에 들어왔을 때
+    /// 맞아 버리지 않게 한다(판 id 는 같은 판의 모든 자리에 같다).
+    package nonisolated static let engagedOwnerDefaultsKey = "rummy.engaged.v2.owner"
+
+    /// 이 기기가 이 판에 손댄 적이 있는가(create·join·start·draft·play·draw·react 를 보냈다). **지금 계정의 장부일 때만.**
+    package func isEngaged(_ matchID: UUID) -> Bool {
+        engagedMatchIDs.contains(matchID) && engagedLedgerIsMine
+    }
+
+    /// 장부 주인이 지금 계정인가. 주인을 모르거나(세션 전에 적었다) 세션이 없으면 믿는다(세션 없는 문은 따로 막혀 있다).
+    var engagedLedgerIsMine: Bool {
+        guard let owner = engagedOwnerUserID, let me = myUserID else { return true }
+        return owner == me
+    }
+
+    /// 들고 있는 판이 이 기기가 손댄 판인가 — 맥의 창 닫기·종료·로그아웃·업데이트 판단이 읽는다.
+    package var isEngagedInCurrentMatch: Bool {
+        match.map { isEngaged($0.id) } ?? false
+    }
+
+    /// 판에 쓰기를 **보내기 직전에** 부른다. 처음이면 장부에 적고(저장소가 있으면 남긴다) 하트비트·App Nap 을 다시 맞춘다.
+    package func markEngaged(_ matchID: UUID) {
+        var changed = false
+        if let me = myUserID, engagedOwnerUserID != me {
+            // 다른 계정의 장부(강제 로그아웃으로 남았다) — 버리고 이 계정 것으로 연다. 주인을 몰랐으면 지금 계정으로 적는다.
+            if engagedOwnerUserID != nil { engagedMatchIDs = [] }
+            engagedOwnerUserID = me
+            changed = true
+        }
+        if !engagedMatchIDs.contains(matchID) {
+            engagedMatchIDs.append(matchID)
+            if engagedMatchIDs.count > Self.engagedLimit {
+                engagedMatchIDs.removeFirst(engagedMatchIDs.count - Self.engagedLimit)
+            }
+            changed = true
+        }
+        guard changed else { return }
+        saveEngaged()
+        updateHeartbeat()
+    }
+
+    /// 판이 끝났다·접혔다·닫혔다 — 장부에서 지운다.
+    package func forgetEngaged(_ matchID: UUID) {
+        guard let index = engagedMatchIDs.firstIndex(of: matchID) else { return }
+        engagedMatchIDs.remove(at: index)
+        saveEngaged()
+        updateHeartbeat()
+    }
+
+    func setHoldingMatch(_ holding: Bool) {
+        guard holding != isHoldingMatch else { return }
+        isHoldingMatch = holding
+        Self.logger.notice("holding match \(holding, privacy: .public)")
+        onHoldingMatchChange?(holding)
+    }
+
+    func saveEngaged() {
+        engagedDefaults?.set(engagedMatchIDs.map { $0.uuidString.lowercased() }, forKey: Self.engagedDefaultsKey)
+        engagedDefaults?.set(engagedOwnerUserID, forKey: Self.engagedOwnerDefaultsKey)
+    }
+
+    /// 저장소를 꽂은 순간 저장된 목록을 앞에 합친다(앱을 다시 켜도 쥐던 판의 하트비트·이탈이 이어진다).
+    /// 저장된 주인이 메모리 장부의 주인과 다르면 저장된 것은 남의 장부라 합치지 않는다.
+    func loadEngaged() {
+        guard let defaults = engagedDefaults,
+              let stored = defaults.stringArray(forKey: Self.engagedDefaultsKey) else { return }
+        let storedOwner = defaults.string(forKey: Self.engagedOwnerDefaultsKey)
+        var merged = stored.compactMap(UUID.init(uuidString:))
+        if let current = engagedOwnerUserID {
+            if let storedOwner, storedOwner != current { merged = [] }
+        } else {
+            engagedOwnerUserID = storedOwner
+        }
+        for id in engagedMatchIDs where !merged.contains(id) { merged.append(id) }
+        if merged.count > Self.engagedLimit { merged.removeFirst(merged.count - Self.engagedLimit) }
+        engagedMatchIDs = merged
+        updateHeartbeat()
     }
 
     // MARK: - 받침대 자리 로컬 저장(머리말 ⑭)

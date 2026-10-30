@@ -216,6 +216,11 @@ struct RummyScene {
     /// 렌더 시험의 고정 시각(nil = 실제 시계).
     var fixedNow: Date?
     var isPreview: Bool
+    /// 마지막으로 안 내 루비 잔액(스토어 `rubyBalance` — 판 중에도 남는다). nil 이면 로비 `me.ruby_balance`.
+    var rubyBalance: Int? = nil
+
+    /// 머리글 💎 칸 — 판 중엔 로비가 없어도(렌더·늦은 로비) 스토어가 마지막으로 안 잔액을 보인다.
+    var shownRubyBalance: Int? { rubyBalance ?? lobby?.me?.rubyBalance }
 
     var mySeat: RummyMatchSeat? {
         guard let match, let mine = match.mySeatNo else { return nil }
@@ -278,6 +283,8 @@ struct RummyPanel: View {
     var previewDrag: RummyPreviewDrag? = nil
     /// 스냅샷 전용: 이 반응 말풍선들을 띄운 장면(2판 ⑧).
     var previewReactions: [RummyReactionBubble]? = nil
+    /// 스냅샷 전용: 머리글 루비 잔액(스토어가 마지막으로 안 값 자리).
+    var previewRubyBalance: Int? = nil
 
     @State private var lobbyTab: RummyLobbyTab = .users
     @State private var confirmLeave = false
@@ -307,13 +314,13 @@ struct RummyPanel: View {
                 phase: phase, availability: .available, lobby: previewLobby, match: match, editor: previewEditor,
                 isMyTurn: myTurn, otherDraft: myTurn ? nil : match?.draft?.table, notice: previewNotice,
                 isWorking: false, ranking: previewRanking, myUserID: previewMyUserID, fixedNow: previewNow,
-                isPreview: true)
+                isPreview: true, rubyBalance: previewRubyBalance)
         }
         return RummyScene(
             phase: store.phase, availability: store.availability, lobby: store.lobby, match: store.match,
             editor: store.editor, isMyTurn: store.isMyTurn, otherDraft: store.otherDraft, notice: store.notice,
             isWorking: store.isWorking, ranking: store.ranking, myUserID: sessionUserID, fixedNow: nil,
-            isPreview: false)
+            isPreview: false, rubyBalance: store.rubyBalance ?? store.host?.rubyBalance)
     }
 
     /// 주입된 판 state 의 status 로 화면을 고른다(렌더 전용 — 앱은 스토어 phase 가 정한다).
@@ -450,7 +457,7 @@ private struct RummyHeader: View {
                 .background(Capsule().fill(Color.white.opacity(0.06)))
                 .overlay(Capsule().stroke(CheckTheme.border, lineWidth: 1))
             }
-            RubyBalanceChip(balance: scene.lobby?.me?.rubyBalance, large: true)
+            RubyBalanceChip(balance: scene.shownRubyBalance, large: true)
                 .checkTooltip("내 루비")
             if let reactionButton { reactionButton }
             TetrisDuelActionButton(title: RummyText.rulesButton, icon: "book.fill", style: .outline,

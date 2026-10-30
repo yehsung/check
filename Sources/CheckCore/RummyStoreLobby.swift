@@ -77,6 +77,13 @@ extension RummyStore {
         }
     }
 
+    /// 판돈 차감(판 시작)·정산(판 끝)을 **처음 본** 순간 로비를 한 번 다시 읽어 잔액을 맞춘다(머리말 ⑯).
+    /// 판 state 에는 잔액이 없다 — 이게 없으면 판 화면 머리글이 시작 전 잔액(판돈 빼기 전)을 끝까지 보인다.
+    func refreshRubyAfterSettlement() {
+        guard host?.session != nil else { return }
+        Task { [weak self] in await self?.refreshLobby() }
+    }
+
     /// 차단 거울을 거친 로비를 낸다(관찰자를 헛되게 깨우지 않게 같으면 대입하지 않는다).
     func publishLobby() {
         guard var shown = rawLobby else {
@@ -164,6 +171,8 @@ extension RummyStore {
                     return
                 }
                 store.setNotice(nil)
+                // 이 기기가 세운 방(머리말 ⑮) — 만들기는 id 를 응답에서야 안다.
+                store.markEngaged(id)
                 store.matchRevision &+= 1
                 store.activeMatchID = id
                 store.dismissedMatchIDs.remove(id)
@@ -210,12 +219,16 @@ extension RummyStore {
     package func join(_ roomID: UUID) {
         runAction { store in
             let ticket = store.issueTicket()
+            // 보내기 직전에 적는다(머리말 ⑮) — 답이 안 와도 서버엔 앉았을 수 있다.
+            store.markEngaged(roomID)
             guard let result = await store.perform({ try await $0.rummyJoin(accessToken: $1, matchID: roomID) })
             else { return }
             switch result {
             case .success(let response):
                 store.noteServerNow(response.serverNowMs)
                 guard response.status == .ok else {
+                    // 못 앉았다 — 들고 있는 방이 아니면 장부에서 걷는다.
+                    if store.match?.id != roomID { store.forgetEngaged(roomID) }
                     store.noteRefusal(response, action: .join)
                     // 닫혔거나 초대가 없어진 방 — 로비를 다시 읽어 그 카드를 걷는다.
                     if response.status == .roomClosed || response.status == .notInvited
@@ -298,6 +311,7 @@ extension RummyStore {
         let roomID = room.id
         runAction { store in
             let ticket = store.issueTicket()
+            store.markEngaged(roomID)
             guard let result = await store.perform({ try await $0.rummyStart(accessToken: $1, matchID: roomID) })
             else { return }
             switch result {
@@ -376,6 +390,7 @@ extension RummyStore {
     func noteRefusal(_ response: RummyActionResponse, action: RummyNoticeText.Action) {
         Self.logger.notice(
             "\(action.rawValue, privacy: .public) refused status=\(response.status.rawValue, privacy: .public)")
+        applyRuby(response.rubyBalance)
         if response.status == .unsupportedClient {
             noteUpdateRequired()
             return
@@ -395,7 +410,10 @@ extension RummyStore {
     /// 로비 `me.room` 이 그 방이면 같이 걷는다 — 닫힘·나가기·빠짐을 안 순간 방 카드가 내려가야 한다(다음 30초 로비 폴링까지
     /// 닫힌 방의 [시작]·[나가기] 가 남지 않게). 다음 로비 응답이 확인한다.
     package func clearMatch() {
-        if let cleared = match?.id { forgetRack(matchID: cleared) }
+        if let cleared = match?.id {
+            forgetRack(matchID: cleared)
+            forgetEngaged(cleared)
+        }
         pendingOwnReactions = []
         seenReactionKeys = []
         if !reactionFeed.isEmpty { reactionFeed = [] }

@@ -96,6 +96,7 @@ extension RummyStore {
 
         // 닫힌 방(취소·만료) — 들고 있던 방이면 내리고 한 줄.
         if state.status == .cancelled || state.status == .expired {
+            forgetEngaged(id)
             if match?.id == id {
                 appliedTicket = max(appliedTicket, ticket)
                 clearMatch()
@@ -106,6 +107,7 @@ extension RummyStore {
         }
         // 내 자리가 아닌 state(초대만 받은 방 · 시작 검사에서 빠진 방 · 시작 때 declined 로 접힌 자리)는 들지 않는다.
         guard isParticipant(state) else {
+            forgetEngaged(id)
             if match?.id == id {
                 appliedTicket = max(appliedTicket, ticket)
                 let dropped = mySeat(in: state)?.state == .dropped
@@ -120,9 +122,16 @@ extension RummyStore {
         if previous != state { match = state }
         reconcileEditor(with: state)
         noteReactions(in: state)
-        if state.status == .finished { forgetRack(matchID: id) }
+        if state.status == .finished {
+            forgetRack(matchID: id)
+            forgetEngaged(id)
+        }
         refreshPhase()
+        // 판돈 차감(시작)·정산(끝)을 **처음** 본다 — 판 state 엔 잔액이 없어 로비로 맞춘다(머리말 ⑯). 알림과 같은 장부로 가른다.
+        let rubyMoved = state.status == .finished ? !finishAnnouncedIDs.contains(id)
+            : state.status == .active && !startAnnouncedIDs.contains(id)
         announce(previous: previous, state: state)
+        if rubyMoved { refreshRubyAfterSettlement() }
         scheduleDeadlineWake()
         return .applied
     }
@@ -206,7 +215,9 @@ extension RummyStore {
         // 차례 중간에 편집기를 새로 세웠는데(앱 재실행) 서버 작업 판이 내 화면과 다르면 맞춘다 — 시간 초과 때 서버는
         // 그 작업 판을 판정한다(R-19). 내 화면에 없는 판이 나 대신 내지지 않게 한다.
         // 비교는 K(다중집합) — 서버가 판정하는 기준과 같고, 편집기가 세트 안 순서를 표시 순서로 바꿔도 헛보내지 않는다.
-        if Self.isMyTurn(state, me: myUserID), let serverDraft = state.draft?.table,
+        // **이 기기가 손댄 판에서만**(머리말 ⑮). 놀던 맥이 판을 처음 읽은 순간(초인종·깨어남·앱 실행) 보이는 작업 판은 같은 계정의
+        // 다른 맥이 지금 만드는 것이다 — 되돌려 보내면 그 작업을 지우고, 보내는 순간 이 맥이 engaged 가 되어 이 맥을 끄면 판이 기권된다.
+        if Self.isMyTurn(state, me: myUserID), isEngaged(state.id), let serverDraft = state.draft?.table,
            !RummyRules.sameTable(serverDraft, fresh.submissionTable) {
             scheduleDraft()
         }
@@ -311,6 +322,7 @@ extension RummyStore {
         draftDebounceTask = nil
         runAction { store in
             let ticket = store.issueTicket()
+            store.markEngaged(matchID)
             guard let result = await store.perform({
                 try await $0.rummyPlay(accessToken: $1, matchID: matchID, expectedSeq: seq, table: table, layout: layout)
             }) else { return }
@@ -327,6 +339,7 @@ extension RummyStore {
         draftDebounceTask = nil
         runAction { store in
             let ticket = store.issueTicket()
+            store.markEngaged(matchID)
             guard let result = await store.perform({
                 try await $0.rummyDraw(accessToken: $1, matchID: matchID, expectedSeq: seq)
             }) else { return }
@@ -421,6 +434,7 @@ extension RummyStore {
         // 편집기가 선 seq 가 아니라 지금 든 판의 seq — 같은 차례에 남의 기권으로 오를 수 있다.
         let seq = current.seq ?? 0
         let generation = resetGeneration
+        markEngaged(matchID)
         draftFlushTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let ticket = self.issueTicket()

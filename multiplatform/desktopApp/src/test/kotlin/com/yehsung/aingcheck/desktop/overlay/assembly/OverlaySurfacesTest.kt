@@ -106,6 +106,22 @@ class OverlaySurfacesTest {
         assertEquals(PxBox(515, 0, 890, 1080), bandPx)
     }
 
+    /** int-w4b ① — 엿보기·작별 인사는 창 전체 클릭 통과(맥 :729 updateHitThrough 의 shouldBeVisible 가드), 근무 중 표시는 다시 클릭을 받는다. 숨김은 토글 없음. */
+    @Test
+    fun peekAndFarewellAreClickThroughLikeMac_normalTakesClicksAgain() {
+        val port = FakePort(listOf(primary), scale = 1.0)
+        val p = OverlaySurfacePresenter(port, composer) { null }
+        p.present(view(FrameIntent.Default(0), OverlayMode.Peek), 0.0)
+        assertTrue(p.clickThrough, "엿보기")
+        p.present(view(FrameIntent.Default(1), OverlayMode.Normal), 0.1)
+        assertFalse(p.clickThrough, "근무 중")
+        p.present(view(FrameIntent.Default(1), OverlayMode.Farewell), 0.2)
+        assertTrue(p.clickThrough, "작별 인사")
+        p.present(view(FrameIntent.Default(1), OverlayMode.Hidden), 0.3)
+        assertEquals(listOf("through true", "through false", "through true"), port.log.filter { it.startsWith("through") })
+        assertEquals("through true", port.log.first(), "통과는 그리기보다 먼저")
+    }
+
     @Test
     fun ultraPicksTheMonitorUnderThePanelCenter() {
         val port = FakePort(listOf(primary, second), scale = 1.0)

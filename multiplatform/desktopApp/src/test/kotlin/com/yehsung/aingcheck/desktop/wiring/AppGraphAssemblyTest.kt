@@ -37,6 +37,18 @@ import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttentionKind
 import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
 import com.yehsung.aingcheck.desktop.overlay.engine.OverlayView
 import com.yehsung.aingcheck.desktop.overlay.engine.PointerOutcome
+import com.yehsung.aingcheck.desktop.overlay.engine.HitTarget
+import com.yehsung.aingcheck.desktop.overlay.engine.OverlayMode
+import com.yehsung.aingcheck.desktop.overlay.engine.OverlayPoint
+import com.yehsung.aingcheck.desktop.overlay.engine.PointerKind
+import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfacePresenter
+import com.yehsung.aingcheck.desktop.shellapi.Entry
+import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
+import com.yehsung.aingcheck.core.rules.renju.GomokuBoard
+import com.yehsung.aingcheck.core.rules.renju.GomokuColor
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuInvite
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuMatchState
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuUser
 import com.yehsung.aingcheck.desktop.shellapi.NotifySurface
 import com.yehsung.aingcheck.desktop.todo.TodoQuarantineLog
 import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
@@ -328,6 +340,9 @@ class AppGraphAssemblyTest {
             val deps = requireNotNull(r.gameWindows.deps) { "조립이 게임 배선을 짓지 않았다" }
             fun bubbles() = views.mapNotNull { it.bubble }.distinctBy { it.text to it.shownAt }
             val exp = SwiftDate.fromEpochMillis(WiringTestRig.BASE_MS + testScheduler.currentTime + 60_000)
+            // int-w4b ②: 말풍선은 띄우기 직전 스토어 사실을 읽는다 — 스토어가 신청을 받은 뒤 알리는 순서(GomokuStore announceNewInvites) 그대로.
+            r.app.gomoku.incoming = listOf(synthInvite("inv-1", exp), synthInvite("inv-2", exp))
+            r.app.gomoku.match = synthMatch("g-7", moveCount = 3)
 
             deps.onInviteArrival(DuelGame.GOMOKU, "inv-1", "합성상대", 5, exp)
             deps.onInviteArrival(DuelGame.GOMOKU, "inv-2", "합성상대", 5, exp)
@@ -344,16 +359,143 @@ class AppGraphAssemblyTest {
             )
             assertEquals(0, bubbles().count { it.kind !is BubbleKind.Invite && it.text == n1.body }, "글만 말풍선 0: ${bubbles()}")
 
-            deps.onDuelAttention(DuelAttention(DuelGame.CHESS, "c-7", DuelAttentionKind.MY_TURN, "합성상대", 3))
+            deps.onDuelAttention(DuelAttention(DuelGame.GOMOKU, "g-7", DuelAttentionKind.MY_TURN, "합성상대", 3))
             advanceTimeBy(500)
             runCurrent()
-            assertEquals(BubbleKind.Invite(DuelGame.CHESS, "c-7"), bubbles().last().kind, "차례 알림 → 그 판 말풍선: ${bubbles()}")
+            assertEquals(BubbleKind.Invite(DuelGame.GOMOKU, "g-7"), bubbles().last().kind, "차례 알림 → 그 판 말풍선: ${bubbles()}")
 
             r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.Hit))
             assertEquals(emptyList(), r.gameWindows.board.opened, "음성 대조: 때리기 클릭은 창 0")
             r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenDuel(DuelGame.CHESS, "c-7")))
             r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenDuel(DuelGame.GOMOKU, "inv-2")))
             assertEquals(listOf("chess:c-7", "gomoku:inv-2"), r.gameWindows.board.opened)
+            r.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
+        } finally {
+            r.close()
+        }
+    }
+
+    // ───────────────────────── int-w4b overlay2 — 실제 조립 그래프 ─────────────────────────
+
+    /**
+     * ① 엿보기(근무 전) 중 대결 말풍선 클릭: 맥은 `shouldBeVisible` 이 거짓이면 클릭 통과 문을 열지 않고(CheckOverlayWindow.swift:729
+     * updateHitThrough 가드 · :2224 기본 통과) handleClick(:954)도 같은 가드라 아무것도 열지 않는다. 조립 그래프에서: 엿보기 그림은
+     * 창 전체 클릭 통과, 포인터가 와도 판 창 0. 음성 대조 — 같은 결과 문에 OpenDuel 을 넣으면 그 판 창이 열린다(배선이 죽은 0 이 아니다).
+     */
+    @Test
+    fun peekDuelBubbleClickPassesThroughLikeMacInAssembledGraph() = runTest {
+        val views = ArrayList<OverlayView>()
+        val r = AssemblyRig(this, dirs, DesktopAppConfig(duels = true), overlayPresenter = { v, _ -> views += v })
+        try {
+            r.app.start()
+            advanceTimeBy(1_000)
+            runCurrent()
+            val deps = requireNotNull(r.gameWindows.deps) { "조립이 게임 배선을 짓지 않았다" }
+            val exp = SwiftDate.fromEpochMillis(WiringTestRig.BASE_MS + testScheduler.currentTime + 60_000)
+            r.app.gomoku.incoming = listOf(synthInvite("inv-p", exp))
+            deps.onInviteArrival(DuelGame.GOMOKU, "inv-p", "합성상대", 5, exp)
+            advanceTimeBy(500)
+            runCurrent()
+            val peek = views.last()
+            assertEquals(OverlayMode.Peek, peek.mode, "근무 전 신청 → 엿보기")
+            assertEquals(BubbleKind.Invite(DuelGame.GOMOKU, "inv-p"), peek.bubble?.kind)
+            assertTrue(OverlaySurfacePresenter.clickThroughFor(peek), "엿보기 그림은 창 전체 클릭 통과(맥 :729 · :2224)")
+
+            r.app.overlay.onPointer(PointerKind.DOWN, OverlayPoint(20.0, 20.0), HitTarget.Bubble)
+            r.app.overlay.onPointer(PointerKind.UP, OverlayPoint(20.0, 20.0), HitTarget.Bubble)
+            advanceTimeBy(100)
+            runCurrent()
+            assertEquals(emptyList(), r.gameWindows.board.opened, "엿보기 중 말풍선 클릭 → 판 창 0(맥 handleClick :954)")
+
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenDuel(DuelGame.GOMOKU, "inv-p")))
+            assertEquals(listOf("gomoku:inv-p"), r.gameWindows.board.opened, "음성 대조: OpenDuel 결과는 그 판 창")
+            r.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
+        } finally {
+            r.close()
+        }
+    }
+
+    /**
+     * ② DuelFacts 공급자: 조립의 오버레이는 띄우기 직전 오목 스토어 사실(창 보임·지금 판)을 읽는다(맥 :1375 · :1393-1397 gomokuAttentionIsCurrent).
+     * 대조 — 창이 안 보이면 바쁜 말풍선 뒤에 기다리던 차례 말풍선이 뜬다. 본 — 기다리는 사이 판 창이 뜨면(windowDidShow) 버린다,
+     * 창을 닫은 뒤라도 기다리는 사이 판이 끝나면 버린다.
+     */
+    @Test
+    fun pendingTurnBubbleIsDroppedOnceTheBoardWindowShowsOrTheMatchEndsInAssembledGraph() = runTest {
+        val views = ArrayList<OverlayView>()
+        val r = AssemblyRig(this, dirs, DesktopAppConfig(duels = true), overlayPresenter = { v, _ -> views += v })
+        try {
+            r.app.start()
+            advanceTimeBy(1_000)
+            runCurrent()
+            val deps = requireNotNull(r.gameWindows.deps) { "조립이 게임 배선을 짓지 않았다" }
+            fun bubbles() = views.mapNotNull { it.bubble }.distinctBy { it.text to it.shownAt }
+            fun turnBubbles() = bubbles().filter { it.kind == BubbleKind.Invite(DuelGame.GOMOKU, "g-7") }
+            fun busyThenTurn(inviteId: String, moveCount: Int) {
+                val exp = SwiftDate.fromEpochMillis(WiringTestRig.BASE_MS + testScheduler.currentTime + 60_000)
+                r.app.gomoku.match = synthMatch("g-7", moveCount)
+                r.app.gomoku.incoming = listOf(synthInvite(inviteId, exp))
+                deps.onInviteArrival(DuelGame.GOMOKU, inviteId, "합성상대", 5, exp)
+                deps.onDuelAttention(DuelAttention(DuelGame.GOMOKU, "g-7", DuelAttentionKind.MY_TURN, "합성상대", moveCount))
+                advanceTimeBy(100)
+                runCurrent()
+                assertEquals(BubbleKind.Invite(DuelGame.GOMOKU, inviteId), bubbles().last().kind, "신청 말풍선이 앞을 막는다: ${bubbles()}")
+            }
+
+            busyThenTurn("inv-a", 3)
+            advanceTimeBy(40_000)
+            runCurrent()
+            assertEquals(1, turnBubbles().size, "대조: 창이 안 보이면 기다리던 차례 말풍선이 뜬다: ${bubbles()}")
+
+            busyThenTurn("inv-b", 5)
+            r.app.gomoku.windowDidShow()
+            advanceTimeBy(40_000)
+            runCurrent()
+            assertTrue(r.app.gomoku.isWindowVisible)
+            assertEquals(1, turnBubbles().size, "판 창을 연 뒤 대기 차례 말풍선 0: ${bubbles()}")
+
+            r.app.gomoku.isWindowVisible = false
+            busyThenTurn("inv-c", 7)
+            r.app.gomoku.match = synthMatch("g-7", 7, finished = true)
+            advanceTimeBy(40_000)
+            runCurrent()
+            assertEquals(1, turnBubbles().size, "판이 끝난 뒤 대기 차례 말풍선 0: ${bubbles()}")
+            r.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
+        } finally {
+            r.close()
+        }
+    }
+
+    /**
+     * ③ 메시지 도착 말풍선 클릭(OpenMessages) → 플라이아웃의 그 사람 대화(맥 CheckApp.swift:192-199 — `openMessagePanel(peer:from: .overlay)`
+     * 뒤 presentMenuPopover). 보낸이를 모르면(nil·빈 문자열 — WorkTimerStoreMessages.swift:266-271) 콕 목록. 음성 대조 — 때리기 클릭은 창 0.
+     */
+    @Test
+    fun messageArrivalBubbleClickOpensThatConversationInAssembledGraph() = runTest {
+        val r = AssemblyRig(this, dirs, DesktopAppConfig(poke = true))
+        try {
+            r.app.start()
+            advanceTimeBy(1_000)
+            runCurrent()
+            val nav = r.app.shell.handle.nav
+            nav.hide()
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.Hit))
+            assertFalse(nav.visible.value, "음성 대조: 때리기 클릭은 플라이아웃을 열지 않는다")
+
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenMessages("u-1")))
+            assertTrue(nav.visible.value, "말풍선 클릭은 플라이아웃을 연다(맥 presentMenuPopover)")
+            assertEquals(FlyoutRoute.Conversation("u-1", Entry.OVERLAY), nav.route.value)
+            nav.back()
+            assertEquals(FlyoutRoute.Home, nav.route.value, "말풍선에서 온 대화의 뒤로 = 홈(맥 .overlay)")
+
+            nav.hide()
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenMessages("")))
+            assertEquals(FlyoutRoute.PokeList, nav.route.value, "빈 보낸이는 대화가 아니라 콕 목록")
+            nav.hide()
+            nav.navigate(FlyoutRoute.Home)
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenMessages(null)))
+            assertEquals(FlyoutRoute.PokeList, nav.route.value, "보낸이 모름 → 콕 목록(맥 openPokeListToPickAPeer)")
+            assertTrue(nav.visible.value)
             r.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
         } finally {
             r.close()
@@ -391,3 +533,15 @@ class AppGraphAssemblyTest {
         }
     }
 }
+
+private fun synthPeer() = GomokuUser(
+    id = "peer-synth", displayName = "합성상대", avatarURL = null, characterID = null, isWorking = true, isCapable = true, inMatch = false,
+)
+
+private fun synthInvite(id: String, expiresAt: SwiftDate) = GomokuInvite(id, synthPeer(), 5, expiresAt)
+
+private fun synthMatch(id: String, moveCount: Int, finished: Boolean = false) = GomokuMatchState(
+    id = id, stake = 5, myColor = GomokuColor.black, opponent = synthPeer(), board = GomokuBoard(), lastMove = null,
+    moveCount = moveCount, turn = if (finished) null else GomokuColor.black, deadline = null, isFinished = finished,
+    outcome = null, endReason = null, rubyDelta = null, blackPassed = false,
+)

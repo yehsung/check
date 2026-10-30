@@ -115,7 +115,8 @@ class WindowsOverlaySurface(
     val isShown: Boolean get() = shown
 
     /**
-     * 창 전체 클릭 통과(WS_EX_TRANSPARENT) — 울트라 동안(맥 :817-822 몸 판정 거짓 → ignoresMouseEvents). 끄면 다시 알파가 판정이다.
+     * 창 전체 클릭 통과(WS_EX_TRANSPARENT) — 울트라 동안(맥 :817-822 몸 판정 거짓 → ignoresMouseEvents)과 엿보기·작별 인사 동안(맥 :729
+     * updateHitThrough 의 shouldBeVisible 가드 — 판정은 OverlaySurfacePresenter.clickThroughFor). 끄면 다시 알파가 판정이다.
      * 바꾼 뒤의 GWL_EXSTYLE 을 돌려준다.
      */
     fun setClickThrough(enabled: Boolean): Int = thread.call { _ ->

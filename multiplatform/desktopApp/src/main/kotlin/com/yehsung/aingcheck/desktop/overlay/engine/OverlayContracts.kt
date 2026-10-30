@@ -220,6 +220,18 @@ data class DuelFacts(
 
 data class DuelMatchFact(val id: String, val finished: Boolean, val myTurn: Boolean, val moveCount: Int)
 
+/**
+ * 스토어 사실을 **띄우기 직전에** 읽는 문(맥은 말풍선 펌프가 스토어를 실시간으로 읽는다 — CheckOverlayWindow.swift:1297·1450·1591
+ * alive · :1393·:1538·:1677 …AttentionIsCurrent). null 이면 공급 없음 — 엔진은 밀어 넣은 사실([OverlayInputs.onDuelFacts])·알림 자신을 쓴다.
+ */
+fun interface DuelFactsSource {
+    fun facts(game: DuelGame): DuelFacts?
+
+    companion object {
+        val None: DuelFactsSource = DuelFactsSource { null }
+    }
+}
+
 // ───────────────────────── I-1 엔진 입력 · I-7 출력 ─────────────────────────
 
 /**

@@ -1,0 +1,3 @@
+# 조정자 몫(lanes.yml reserved). 윈도우 2차 int-w0(2026-10-30, W-windows-resume W-3).
+# 합성 홈 픽스처(토큰 스캐너·AI 리밋·업로드 시험 W2-h1~h3)는 바이트 그대로 — Windows 체크아웃의 CRLF 변환이 줄 끝·해시·오프셋을 바꾸지 않게.
+multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/** -text

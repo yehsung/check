@@ -6,6 +6,7 @@
 package com.yehsung.aingcheck.desktop
 
 import com.yehsung.aingcheck.core.foundation.identity.ClientIdentity
+import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.foundation.platform.InstallationIdentity
 import com.yehsung.aingcheck.core.foundation.platform.MonotonicClock
 import com.yehsung.aingcheck.core.foundation.platform.SingleInstanceGuard
@@ -19,8 +20,10 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvents
 import com.yehsung.aingcheck.core.foundation.platform.desktop.SessionEvents
 import com.yehsung.aingcheck.core.foundation.platform.desktop.TrayHost
 import com.yehsung.aingcheck.desktop.generated.BuildIdentity
+import com.yehsung.aingcheck.desktop.generated.DesktopFlags
 import com.yehsung.aingcheck.desktop.http.HttpEngineFactory
 import com.yehsung.aingcheck.desktop.platform.windows.identity.WindowsDeviceIdentity
+import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import kotlin.time.Clock
@@ -47,7 +50,12 @@ class AppGraph(
     val clock: Clock = Clock.System,
     val monotonic: MonotonicClock = SystemMonotonicClock,
     val clientIdentity: ClientIdentity = ClientIdentity.fromGenerated(BuildIdentity.PLATFORM, BuildIdentity.BUILD, BuildIdentity.VERSION),
+    /** Windows 기능 깃발(W-3 #17). 앱은 생성 상수에서, 시험은 값을 넣는다. */
+    val desktopConfig: DesktopAppConfig = DesktopAppConfig.fromBuild(),
 ) {
+    /** 세션 문맥의 AppConfig(duelsEnabled 등)는 desktopConfig 에서만 만든다(W-3 #17 — 다른 곳에서 깃발을 다시 적지 않는다). */
+    val appConfig: AppConfig get() = desktopConfig.toAppConfig()
+
     /**
      * 서버 `device_id`(K6) = `'win:'` + 소문자 installation_id. 신원을 확인하지 못했으면 null — 이때 기기 단위 쓰기(토큰 업로드 등)는
      * 하지 않는다(G §5-1 #6, 기억 device-identity-must-not-be-invented). 부르는 쪽(W2-g·h)은 null 을 '건너뜀'으로 다룬다.
@@ -65,3 +73,18 @@ class AppGraph(
 object SystemMonotonicClock : MonotonicClock {
     override fun elapsedNanos(): Long = System.nanoTime()
 }
+
+/**
+ * W-3 #17 — [DesktopAppConfig] 를 생성 상수 DesktopFlags(`-Paingcheck.windows.<이름>=true|false`, build-logic aingcheckWindowsFlags)에서
+ * 만드는 **한 자리**. DesktopFlags 를 다른 곳에서 읽지 않는다(selfcheck 도 이 함수를 거친다).
+ */
+fun DesktopAppConfig.Companion.fromBuild(): DesktopAppConfig = DesktopAppConfig(
+    duels = DesktopFlags.DUELS,
+    poke = DesktopFlags.POKE,
+    ultra = DesktopFlags.ULTRA,
+    chatToast = DesktopFlags.CHAT_TOAST,
+    forkSafe = DesktopFlags.FORK_SAFE,
+    tokenUpload = DesktopFlags.TOKEN_UPLOAD,
+    adoptedPokeConsume = DesktopFlags.ADOPTED_POKE_CONSUME,
+    spectator = DesktopFlags.SPECTATOR,
+)

@@ -484,9 +484,9 @@ SELF_TEST_CASES = [
     ("W2-f", "multiplatform/feature/phone/src/commonMain/kotlin/com/yehsung/aingcheck/feature/phone/router/PhoneRouter.kt", "ok"),
     ("W2-f", "multiplatform/core/stores/src/commonMain/kotlin/com/yehsung/aingcheck/core/stores/gomoku/GomokuStore.kt", "outside"),
     ("W2-f", "multiplatform/core/session/build.gradle.kts", "reserved"),
-    ("W2-g", "contract/golden/_manifest.json", "ok"),
+    ("W2-g1", "contract/golden/_manifest.json", "ok"),
     ("W3-a", "contract/golden/_manifest.json", "reserved"),  # 골든 없는 갈래는 여전히 못 쓴다
-    ("W2-h", "contract/golden/_digests.json", "ok"),
+    ("W2-h1", "contract/golden/_digests.json", "ok"),
     ("W1-d", "multiplatform/core/net/src/commonMain/kotlin/com/yehsung/aingcheck/core/net/Service.kt", "closed"),
     ("W1-d", "multiplatform/core/net/build.gradle.kts", "closed"),
     # AndroidManifest.xml 은 W1-g 병합 뒤 조정자만(lanes.yml reserved). 남이 쓰면 예약 빨강, W1-g 는 닫힘 빨강.
@@ -498,8 +498,8 @@ SELF_TEST_CASES = [
     ("W3-b", "multiplatform/androidApp/src/main/res/xml/widget_info.xml", "reserved"),
     ("W2-e", "contract/golden/pause/transitions.json", "closed"),
     ("W2-e", "contract/golden/tetris/duel-resume.json", "closed"),
-    ("W2-g", "contract/golden/desktop-work/sessions.json", "ok"),
-    ("W2-g", "contract/golden/token-usage/claude.json", "outside"),
+    ("W2-g1", "contract/golden/desktop-work/sessions.json", "ok"),
+    ("W2-g1", "contract/golden/token-usage/scan/claude.json", "outside"),
     ("W3-a", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/screens/messages/MessagesScreen.kt", "ok"),
     ("W3-a", "multiplatform/ui/src/commonMain/kotlin/com/yehsung/aingcheck/ui/screens/me/MeScreen.kt", "outside"),
     ("coordinator", "multiplatform/version.properties", "ok"),
@@ -531,7 +531,7 @@ SELF_TEST_CASES = [
     ("coordinator", "contract/golden/messages/sort.json", "ok"),
     ("coordinator", "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift", "ok"),
     ("W2-f", "contract/golden/_manifest.json", "reserved"),  # 골든 폴더가 없는 열린 갈래는 여전히 못 쓴다
-    ("W2-h", "contract/golden/messages/sort.json", "outside"),
+    ("W2-h1", "contract/golden/messages/sort.json", "outside"),
     ("W1-d", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/dump/DecodeDump.kt", "closed"),
     ("W1-d", "multiplatform/testkit/src/desktopMain/kotlin/com/yehsung/aingcheck/testkit/golden/Golden.kt", "closed"),
     ("W1-d", "multiplatform/testkit/build.gradle.kts", "closed"),
@@ -555,6 +555,31 @@ SELF_TEST_CASES = [
     ("W6-a", "multiplatform/androidApp/build.gradle.kts", "reserved"),
     ("W6-c", "docs/android/listing-ko.md", "ok"),
     ("W6-c", "docs/privacy.md", "outside"),
+    # 윈도우 2차(int-w0, W-windows-resume W-3·W-4): 갈래 사이 핀은 조정자 예약 — 그 폴더를 덮는 갈래도 못 쓴다. 하위 갈래끼리는 남의 소유.
+    ("W2-g5", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/work/WorkContracts.kt", "reserved"),
+    ("W2-g5", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/work/state/WorkStateMachine.kt", "ok"),
+    ("W2-g5", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/work/queue/WorkQueueImpl.kt", "outside"),
+    ("W2-g2", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/socialapi/DesktopSocialContracts.kt", "reserved"),
+    ("W2-g2", "contract/golden/_digests.json", "ok"),
+    ("W2-g3", "contract/golden/_digests.json", "reserved"),  # 골든 없는 하위 갈래
+    ("W2-h3", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/tokens/TokenContracts.kt", "reserved"),
+    ("W2-h3", "multiplatform/feature/desktop/src/desktopMain/kotlin/com/yehsung/aingcheck/feature/desktop/DesktopAiHomes.kt", "reserved"),
+    ("W2-h1", "multiplatform/feature/desktop/src/commonMain/kotlin/com/yehsung/aingcheck/feature/desktop/tokens/scan/ClaudeScanner.kt", "ok"),
+    ("W2-h2", "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimitWindows.swift", "ok"),
+    ("W2-h1", "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimitWindows.swift", "outside"),
+    ("W2-h1", "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/limits/.codex/auth.json", "outside"),
+    ("W3-c1", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/shellapi/FlyoutContracts.kt", "reserved"),
+    ("W3-c1", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/shell/update/UpdateChecker.kt", "outside"),
+    ("W3-c5", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/shell/update/UpdateChecker.kt", "ok"),
+    ("W1-f2", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/platform/windows/tray/WindowsTrayHost.kt", "ok"),
+    ("W1-f2", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/platform/windows/hotkey/HotkeyPolicy.kt", "outside"),
+    ("W5-b2", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/overlay/engine/OverlayDirector.kt", "outside"),
+    ("W4-e", "multiplatform/desktopApp/src/main/kotlin/com/yehsung/aingcheck/desktop/windows/games/gomoku/GomokuWindow.kt", "ok"),
+    ("W4-d", "multiplatform/desktopApp/src/test/kotlin/com/yehsung/aingcheck/desktop/testsupport/DesktopSnapshots.kt", "reserved"),
+    ("W6-b2", "multiplatform/desktopApp/packaging/mac/repack.sh", "ok"),
+    ("W6-b1", "multiplatform/desktopApp/packaging/mac/repack.sh", "outside"),
+    ("W6-b1", "multiplatform/desktopApp/packaging/assets/Square44x44Logo.png", "ok"),
+    ("coordinator", ".gitattributes", "ok"),
 ]
 
 # 기준선 병합 몫 가르기(--upstream) 사례: (경로, upstream 이 바꿈, 머리가 upstream 과 다름, 기대: 뺌|남김).
@@ -623,6 +648,9 @@ def self_test(lanes_path: str) -> int:
         ("xplat/int", ValueError), ("xplat/int-", ValueError), ("xplat/int-A", ValueError), ("xplat/int-a-fix", ValueError),
         ("xplat/c-fold", "coordinator"), ("xplat/c-fold2", "coordinator"),
         ("xplat/c", ValueError), ("xplat/c-", ValueError), ("xplat/c-Fold", ValueError), ("xplat/c-fold-x", ValueError), ("xplat/c-1", ValueError),
+        # 윈도우 2차: 하위 갈래 이름이 그대로 풀린다. 옛 W2-g 는 없으니 꼬리 떼기로도 못 푼다.
+        ("xplat/w2-g1", "W2-g1"), ("xplat/w2-h3", "W2-h3"), ("xplat/w5-b3", "W5-b3"), ("xplat/w1-f2", "W1-f2"), ("xplat/w3-c0", "W3-c0"),
+        ("xplat/w6-b2", "W6-b2"), ("xplat/w4-f", "W4-f"), ("xplat/int-w0", "coordinator"), ("xplat/w2-g", ValueError), ("xplat/w2-g7", ValueError),
     ]
     for branch, expected in branch_cases:
         try:

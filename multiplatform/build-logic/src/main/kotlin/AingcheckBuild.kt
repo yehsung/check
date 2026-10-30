@@ -11,6 +11,7 @@ import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.getByType
@@ -121,6 +122,8 @@ abstract class GenerateKotlinConstants : DefaultTask() {
     @get:Input abstract val objectName: Property<String>
     @get:Input abstract val header: Property<String>
     @get:Input abstract val constants: MapProperty<String, String>
+    /** 불 상수(Windows 기능 깃발 DesktopFlags). 비우면 문자열 상수만 쓴다. */
+    @get:Input @get:Optional abstract val booleanConstants: MapProperty<String, Boolean>
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
     @TaskAction
@@ -134,8 +137,11 @@ abstract class GenerateKotlinConstants : DefaultTask() {
             append("// 생성물 — 손으로 고치지 않는다(build-logic/AingcheckBuild.kt).\n")
             append("package ").append(packageName.get()).append("\n\n")
             append("internal object ").append(objectName.get()).append(" {\n")
-            for ((name, value) in constants.get().toSortedMap()) {
+            for ((name, value) in constants.getOrElse(emptyMap()).toSortedMap()) {
                 append("    const val ").append(name).append(" = ").append(kotlinStringLiteral(value)).append('\n')
+            }
+            for ((name, value) in booleanConstants.getOrElse(emptyMap()).toSortedMap()) {
+                append("    const val ").append(name).append(": Boolean = ").append(value).append('\n')
             }
             append("}\n")
         }
@@ -157,9 +163,61 @@ abstract class GenerateKotlinConstants : DefaultTask() {
     }
 }
 
+/**
+ * Windows 빌드 신원의 출시 몫(xplat-w1/briefs/package.md 조정자 패치 P1): `-Paingcheck.buildTime`(기본 "dev")·`-Paingcheck.gitSha`
+ * (기본 "unknown"). selfcheck·영수증이 "이번 빌드"임을 이 둘로 대조한다. releaseAssembly=true 면 기본값·빈 값·모양이 틀린 값을 거부한다.
+ */
+data class BuildStamp(val buildTime: String, val gitSha: String)
+
+const val BUILD_TIME_DEFAULT = "dev"
+const val GIT_SHA_DEFAULT = "unknown"
+
+fun Project.aingcheckBuildStamp(releaseAssembly: Boolean): BuildStamp {
+    val time = providers.gradleProperty("aingcheck.buildTime").orNull?.trim().orEmpty().ifEmpty { BUILD_TIME_DEFAULT }
+    val sha = providers.gradleProperty("aingcheck.gitSha").orNull?.trim().orEmpty().ifEmpty { GIT_SHA_DEFAULT }
+    if (time.any { it.isWhitespace() || it == '"' || it == '\\' || it == '$' } || sha.any { it.isWhitespace() || it == '"' || it == '\\' || it == '$' }) {
+        throw GradleException("aingcheck.buildTime·aingcheck.gitSha 에 공백·따옴표가 있다")
+    }
+    if (releaseAssembly) {
+        if (time == BUILD_TIME_DEFAULT) throw GradleException("releaseAssembly=true 인데 -Paingcheck.buildTime 이 없다(기본값 '$BUILD_TIME_DEFAULT' 거부)")
+        if (sha == GIT_SHA_DEFAULT || !Regex("[0-9a-f]{7,40}").matches(sha)) {
+            throw GradleException("releaseAssembly=true 인데 -Paingcheck.gitSha 가 커밋 sha(소문자 16진 7~40자)가 아니다: '$sha'")
+        }
+    }
+    return BuildStamp(time, sha)
+}
+
+/**
+ * Windows 기능 깃발(W-3 #17) — 생성 상수 DesktopFlags 의 원천. 기본은 전부 false, SPECTATOR 만 true.
+ * `-Paingcheck.windows.<이름>=true|false` 로만 바꾼다(다른 글자는 빌드를 멈춘다). 이름 → 상수: duels → DUELS, chatToast → CHAT_TOAST.
+ * 켜는 건 서버 ⑥ 으로 상수를 내린 빌드에서 사용자 승인 뒤(W-1 6).
+ */
+val WINDOWS_FLAG_DEFAULTS: Map<String, Boolean> = linkedMapOf(
+    "duels" to false,
+    "poke" to false,
+    "ultra" to false,
+    "chatToast" to false,
+    "forkSafe" to false,
+    "tokenUpload" to false,
+    "adoptedPokeConsume" to false,
+    "spectator" to true,
+)
+
+fun Project.aingcheckWindowsFlags(): Map<String, Boolean> = WINDOWS_FLAG_DEFAULTS.entries.associate { (name, default) ->
+    val raw = providers.gradleProperty("aingcheck.windows.$name").orNull?.trim()
+    val value = when (raw) {
+        null, "" -> default
+        "true" -> true
+        "false" -> false
+        else -> throw GradleException("-Paingcheck.windows.$name 은 true|false 만 받는다: '$raw'")
+    }
+    name.replace(Regex("([a-z])([A-Z])"), "$1_$2").uppercase() to value
+}
+
 /** 생성 파일 이름(구조 시험이 이 이름 밖의 운영 주소를 0으로 단언한다 — testkit structure). */
 const val PROD_CONFIG_OBJECT = "ProdConfig"
 const val BUILD_IDENTITY_OBJECT = "BuildIdentity"
+const val DESKTOP_FLAGS_OBJECT = "DesktopFlags"
 
 /**
  * compileSdk 37(G §8-12 확정): CMP 1.12.2 가 끌어오는 Jetpack Compose 1.12.1 AAR 과 okhttp-android 5.5.0(Ktor 3.6.0 이 끌어옴)이

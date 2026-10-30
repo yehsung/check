@@ -17,6 +17,8 @@ val versions = aingcheckVersionProperties()
 val appPackage = aingcheckPackage()
 val releaseAssembly = providers.gradleProperty("aingcheck.desktop.releaseAssembly").map { it.toBoolean() }.orElse(false).get()
 val prodValues = aingcheckProdConfig(releaseAssembly = releaseAssembly)
+val buildStamp = aingcheckBuildStamp(releaseAssembly = releaseAssembly)
+val windowsFlags = aingcheckWindowsFlags()
 
 run {
     val build = versions.required("windowsBuild").toInt()
@@ -45,12 +47,25 @@ val generateBuildIdentity = tasks.register<GenerateKotlinConstants>("generateBui
     constants.put("PLATFORM", "windows")
     constants.put("BUILD", versions.required("windowsBuild"))
     constants.put("VERSION", versions.required("windowsVersion"))
+    // package.md P1: 출시 영수증·selfcheck 대조용. 기본 "dev"·"unknown" — releaseAssembly=true 면 기본값 거부(aingcheckBuildStamp).
+    constants.put("BUILD_TIME", buildStamp.buildTime)
+    constants.put("GIT_SHA", buildStamp.gitSha)
     outputDir.set(layout.buildDirectory.dir("generated/aingcheck/buildIdentity/main"))
+}
+// W-3 #17: Windows 기능 깃발의 유일한 원천(generated 패키지 — 맥 jar 교체 허용 목록이 이 패키지 하나로 닫힌다).
+// AppGraph 의 DesktopAppConfig.fromBuild() 한 곳에서만 읽는다.
+val generateDesktopFlags = tasks.register<GenerateKotlinConstants>("generateDesktopFlags") {
+    packageName.set("$appPackage.generated")
+    objectName.set(DESKTOP_FLAGS_OBJECT)
+    header.set("Windows 기능 깃발(W-3 #17). -Paingcheck.windows.<이름>=true|false 로만 바꾼다. 기본 전부 false, SPECTATOR 만 true")
+    booleanConstants.putAll(windowsFlags)
+    outputDir.set(layout.buildDirectory.dir("generated/aingcheck/desktopFlags/main"))
 }
 
 sourceSets.named("main") {
     kotlin.srcDir(generateProdConfig.flatMap { it.outputDir })
     kotlin.srcDir(generateBuildIdentity.flatMap { it.outputDir })
+    kotlin.srcDir(generateDesktopFlags.flatMap { it.outputDir })
 }
 
 dependencies {

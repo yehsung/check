@@ -76,6 +76,17 @@
 #   - W2-f 가 넘긴 AILimit 그리기 규약 INV 7건(AILimitColumnStyle 6 · AILimitSurfaceRules 1)은 W3-b 몫이었다(W2-f assembly.md §5 ID 목록).
 #     W3-b 가 닫혔으므로 남은 커버리지는 조정자 몫이다.
 #
+# 윈도우 2차 int-w0(2026-10-30, xplat-design/W-windows-resume.md W-3·W-4)에서 정리한 것:
+#   - 2차(구현) 갈래 20개를 연다. 옛 W2-g(근무·찌르기·울트라) → W2-g1(서비스·와이어·큐)·g5(상태 코어)·g6(정책)·g2(찌르기)·g3(실시간)·
+#     g4(울트라·집중), 옛 W2-h(토큰·리밋) → W2-h1(스캐너)·h2(AI 리밋)·h3(업로드·계정·진단). 골든 폴더는 갈래별(W-3 #16), token-usage 는
+#     하위 폴더 셋(scan·limits·upload — 골든 이름 규칙 '영역/이름' 이 여러 마디를 받는다). 골든 갈래는 생성물 _manifest·_digests 를 다시 만든다.
+#   - W3-c1 은 shell/{tray,flyout,notify,instance} 로 줄이고 업데이트·공지는 W3-c5, 공용 화면 감싸기는 W3-c0(pages/shared). W4-d(창 공통 부품) ·
+#     W4-e(게임 창 넷 — 닫힌 W4-a·b 의 desktopApp 줄을 옮김) · W4-f(상점·미션·뽑기·케이크 — 닫힌 W4-c 의 desktopApp 줄을 옮김).
+#     W5-b → b1(엔진)·b2(표면)·b3(할 일 보드), W6-b → b1(포장 CI)·b2(맥 다시 싸기). W1-f 닫힘 뒤 트레이 후속은 새 갈래 W1-f2.
+#   - 갈래 사이 핀(work/WorkContracts.kt · socialapi/** · 뿌리 DesktopAppConfig·DesktopAiHomes·DesktopKeyValueStore · tokens/TokenContracts.kt ·
+#     desktopApp shellapi/** · desktopApp 시험 testsupport/**)은 조정자 예약이다 — 갈래는 읽기만, 바꿀 일은 coordinator_patches 로(xplat-w2/pins.md).
+#   - 이번에 안 쓰는 열린 갈래(W0-e · W3-c2 · W3-c3 · W3-c4 · W3-d)는 그대로 둔다. .gitattributes 는 조정자 몫(합성 홈 픽스처 -text).
+#
 # 문법(이 파일이 쓰는 YAML 부분집합 — 도구가 직접 읽는다):
 #   매핑(키: 값 / 키: 아래 들여쓰기), 블록 목록("- 값"), 흐름 목록([a, b]), 따옴표 문자열, # 주석.
 # 경로 글롭: 저장소 뿌리 기준. "**" = 0개 이상 경로 마디, "*" = 한 마디 안, "{a,b}" = 고르기.
@@ -143,8 +154,16 @@ reserved:
   "multiplatform/androidApp/src/main/kotlin/{pkg:androidApp}/push/NotificationChannels.kt": [coordinator]
   # 생성물(golden-export.sh 쓰기 모드가 영수증·지문으로 다시 만든다). 골든을 더하는 갈래는 자기 브랜치에서 다시 만들어 커밋해야
   # 그 브랜치의 비교 모드·CI golden-digest 가 초록이다. 병합 때 두 파일이 부딪히면 어느 쪽이든 받고 쓰기 모드로 다시 만든다(G §2-5).
-  "contract/golden/{_manifest,_digests}.json": [W2-g, W2-h, coordinator]
+  "contract/golden/{_manifest,_digests}.json": [W2-g1, W2-g5, W2-g6, W2-g2, W2-g4, W2-h1, W2-h2, W2-h3, coordinator]
   ".gitignore": [coordinator]
+  ".gitattributes": [coordinator]
+  # 윈도우 2차 핀(xplat-w2/pins.md): 갈래 사이 계약 — 조정자만 쓴다(갈래 owns 가 덮더라도). 시험 기반 임시 사본(W-3 #19)도.
+  "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{DesktopAppConfig,DesktopAiHomes,DesktopKeyValueStore}.kt": [coordinator]
+  "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/work/WorkContracts.kt": [coordinator]
+  "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/socialapi/**": [coordinator]
+  "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/tokens/TokenContracts.kt": [coordinator]
+  "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/shellapi/**": [coordinator]
+  "multiplatform/desktopApp/src/test/kotlin/{pkg:desktopApp}/testsupport/**": [coordinator]
 
 # 조정자(메인 에이전트) 몫 공용 조립 파일(K11 + §8-3). 웨이브 병합 때만 고친다.
 coordinator:
@@ -153,6 +172,7 @@ coordinator:
     - "contract/**"
     - ".github/workflows/mp-*.yml"
     - ".gitignore"
+    - ".gitattributes"
     - "Package.swift"
     - "Tests/**"
     - "scripts/golden-export.sh"
@@ -304,6 +324,13 @@ lanes:
       - "multiplatform/desktopApp/src/main/kotlin/{pkg:desktopApp}/{AppGraph,Main}.kt"
     golden: []
 
+  W1-f2:
+    wave: W1
+    title: 트레이 풍선·테마 변경(W1-f 닫힘 뒤 후속 — BalloonNotifier 구현, 핀 shellapi 조정 ⑨)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/platform/windows/tray/**"
+    golden: []
+
   W1-g:
     wave: W1
     title: Android 셸
@@ -366,23 +393,94 @@ lanes:
       - "multiplatform/feature/phone/**"
     golden: []
 
-  W2-g:
+  W2-g1:
     wave: W2
-    title: 데스크톱 근무·찌르기·울트라
+    title: 데스크톱 근무 서비스·와이어·큐(23505 해소기 · 직렬 체인)
     owns:
-      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{work,poke,ultra,realtime}/**"
-      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/desktop-work/**"
-      - "contract/golden/desktop-work/**"
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/work/{wire,service,queue}/**"
+      - "Tests/CheckMobileKitTests/GoldenExport/desktop-work/**"
+      - "Tests/checkTests/GoldenExport/desktop-work-queue/**"
+      - "contract/golden/{desktop-work,desktop-work-queue}/**"
       - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
-    golden: [desktop-work]
+    golden: [desktop-work, desktop-work-queue]
 
-  W2-h:
+  W2-g5:
     wave: W2
-    title: 데스크톱 토큰·리밋
+    title: 데스크톱 근무 상태 코어(상태기계 · DesktopWorkState·WorkQueueHost·WorkAutoClose 구현)
     owns:
-      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{tokens,ailimits}/**"
-      - "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/**"
-      - "contract/golden/token-usage/**"
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/work/state/**"
+      - "Tests/checkTests/GoldenExport/desktop-work-state/**"
+      - "contract/golden/desktop-work-state/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
+    golden: [desktop-work-state]
+
+  W2-g6:
+    wave: W2
+    title: 데스크톱 근무 정책(잠자기·12h·away · 넛지 · 바퀴 · 마일스톤)
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/work/{policy,nudge,lap}/**"
+      - "Tests/checkTests/GoldenExport/desktop-work-policy/**"
+      - "contract/golden/desktop-work-policy/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
+    golden: [desktop-work-policy]
+
+  W2-g2:
+    wave: W2
+    title: 데스크톱 찌르기(발사 · 폴링 · 소비 게이트 · drain · 말풍선 큐)
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/poke/**"
+      - "Tests/checkTests/GoldenExport/desktop-poke/**"
+      - "contract/golden/desktop-poke/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
+    golden: [desktop-poke]
+
+  W2-g3:
+    wave: W2
+    title: 데스크톱 실시간(링 구독 · 따라잡기)
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/realtime/**"
+    golden: []
+
+  W2-g4:
+    wave: W2
+    title: 데스크톱 울트라·집중(지갑 동기 · 집중 모드)
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/{ultra,focus}/**"
+      - "Tests/checkTests/GoldenExport/desktop-ultra/**"
+      - "contract/golden/desktop-ultra/**"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
+    golden: [desktop-ultra]
+
+  W2-h1:
+    wave: W2
+    title: 데스크톱 토큰 스캐너(Claude·Codex·안티그래비티 → TokenUsageMonthly)
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/tokens/scan/**"
+      - "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/scan/**"
+      - "contract/golden/token-usage/scan/**"
+      - "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenScan*.swift"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
+    golden: [token-usage]
+
+  W2-h2:
+    wave: W2
+    title: 데스크톱 AI 리밋
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/ailimits/**"
+      - "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/limits/**"
+      - "contract/golden/token-usage/limits/**"
+      - "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit*.swift"
+      - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
+    golden: [token-usage]
+
+  W2-h3:
+    wave: W2
+    title: 데스크톱 토큰 업로드·계정·진단(tokenUpload 깃발 기본 꺼짐)
+    owns:
+      - "multiplatform/feature/desktop/src/*/kotlin/{pkg:feature/desktop}/tokens/{upload,account,diag}/**"
+      - "multiplatform/feature/desktop/src/desktopTest/resources/synthetic-home/upload/**"
+      - "contract/golden/token-usage/upload/**"
+      - "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload*.swift"
       - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [token-usage]
 
@@ -418,11 +516,25 @@ lanes:
       - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{rankings,me,settingscommon}/**"
     golden: []
 
+  W3-c0:
+    wave: W3
+    title: 공용 화면 감싸기(플라이아웃 레일·라우터·페이지 호스트 · ui 공용 화면 — 윈도우 2차)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/shared/**"
+    golden: []
+
   W3-c1:
     wave: W3
-    title: Windows 껍데기(트레이·플라이아웃·알림+중재 함수·업데이트·단일 실행 — shell/{tray,flyout,notify,update,instance} 확정)
+    title: Windows 껍데기 OS(트레이·플라이아웃 창·알림 중재·단일 실행 — 윈도우 2차에 update 를 W3-c5 로 뗐다)
     owns:
-      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/shell/{tray,flyout,notify,update,instance}/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/shell/{tray,flyout,notify,instance}/**"
+    golden: []
+
+  W3-c5:
+    wave: W3
+    title: 업데이트·공지(DesktopUpdateState 채우기 — 윈도우 2차)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/shell/update/**"
     golden: []
 
   W3-c2:
@@ -461,7 +573,6 @@ lanes:
       - "multiplatform/ui/src/*/kotlin/{pkg:ui}/games/{gomoku,chess}/**"
       - "multiplatform/ui/snapshots/games/{gomoku,chess}/**"
       - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/games/{gomoku,chess}/**"
-      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/games/{gomoku,chess}/**"
     golden: []
 
   W4-b:
@@ -471,7 +582,6 @@ lanes:
       - "multiplatform/ui/src/*/kotlin/{pkg:ui}/games/{tetris,minigame}/**"
       - "multiplatform/ui/snapshots/games/{tetris,minigame}/**"
       - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/games/{tetris,minigame,hub}/**"
-      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/games/{tetris,minigame}/**"
     golden: []
 
   W4-c:
@@ -481,7 +591,28 @@ lanes:
       - "multiplatform/ui/src/*/kotlin/{pkg:ui}/{shop,gacha,missions,weekly}/**"
       - "multiplatform/ui/snapshots/{shop,gacha,missions,weekly}/**"
       - "multiplatform/androidApp/src/*/kotlin/{pkg:androidApp}/screens/shop/**"
-      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/{shop,gacha}/**"
+    golden: []
+
+  W4-d:
+    wave: W4
+    title: 창 공통 부품(크기 조절 창 · 자리 기억 — 윈도우 2차)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/kit/**"
+    golden: []
+
+  W4-e:
+    wave: W4
+    title: 게임 창 넷(미니게임·오목·체스·테트리스 — 닫힌 W4-a·b 의 desktopApp 자리)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/games/{minigame,gomoku,chess,tetris}/**"
+    golden: []
+
+  W4-f:
+    wave: W4
+    title: 상점·미션·뽑기·케이크(플라이아웃 페이지 + 별도 창 — 닫힌 W4-c 의 desktopApp 자리)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/windows/{shop,gacha,cakegift}/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/pages/{shop,missions}/**"
     golden: []
 
   # ---------------- W5 ----------------
@@ -492,11 +623,25 @@ lanes:
       - "multiplatform/character/**"
     golden: []
 
-  W5-b:
+  W5-b1:
     wave: W5
-    title: Windows 오버레이
+    title: Windows 오버레이 엔진(OverlayDirector · 말풍선 판정 · 자리 계산 — 시계를 읽지 않는다)
     owns:
-      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/overlay/**"
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/overlay/engine/**"
+    golden: []
+
+  W5-b2:
+    wave: W5
+    title: Windows 오버레이 표면(레이어드 창 · Win32 · 그리기 · 말풍선 재기)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/overlay/{surface,win32,render,bubble}/**"
+    golden: []
+
+  W5-b3:
+    wave: W5
+    title: 할 일 보드(창·배치·입력 — 외양 조절은 다음 웨이브)
+    owns:
+      - "multiplatform/desktopApp/src/*/kotlin/{pkg:desktopApp}/overlay/todoboard/**"
     golden: []
 
   W5-c:
@@ -516,13 +661,20 @@ lanes:
       - "multiplatform/scripts/release-android.sh"
     golden: []
 
-  W6-b:
+  W6-b1:
     wave: W6
-    title: Windows 포장·배포
+    title: Windows 포장 CI(MSIX · WACK · install-check — 키 없이 .invalid)
     owns:
-      - "multiplatform/desktopApp/packaging/**"
+      - "multiplatform/desktopApp/packaging/{AppxManifest.template.xml,assets/**,AingCheck.ico,identity/**,release_win.py,release_win_selftest.py}"
       - "multiplatform/scripts/release-windows.ps1"
       - ".github/workflows/mp-release-windows.yml"
+    golden: []
+
+  W6-b2:
+    wave: W6
+    title: 맥 다시 싸기(desktopApp jar 하나 교체 · 장부)
+    owns:
+      - "multiplatform/desktopApp/packaging/{mac/**,versions.tsv}"
     golden: []
 
   W6-c:

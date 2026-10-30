@@ -95,6 +95,8 @@ package nonisolated enum RummyNoticeText {
             case .join: return "참가할 수 없는 방이에요"
             default: return tryAgain
             }
+        // v2 반응 쿨다운 — 화면은 이 문구를 띄우지 않는다(조용히 버린다). 표를 빠짐없이 두려고만 있다.
+        case .tooFast: return "조금 천천히 보내 주세요"
         case .ok, .rejected, .unknown: return tryAgain
         }
     }

@@ -119,6 +119,8 @@ extension RummyStore {
         let previous = match
         if previous != state { match = state }
         reconcileEditor(with: state)
+        noteReactions(in: state)
+        if state.status == .finished { forgetRack(matchID: id) }
         refreshPhase()
         announce(previous: previous, state: state)
         scheduleDeadlineWake()
@@ -184,9 +186,13 @@ extension RummyStore {
                 return
             }
         }
-        let order = editorKey?.matchID == state.id ? editor?.rackFaces : nil
+        // 랙 자리 승계: 같은 판의 앞 편집기(판에 나갔던 타일은 나간 자리로 돌린 모양) → 없으면(앱 재실행) 로컬 저장 → 면 순서.
+        let previous = editorKey?.matchID == state.id ? editor : nil
+        let order = previous?.rackFaces
+        let entries = previous?.restoredRackEntries ?? loadRackEntries(matchID: state.id)
         let fresh = RummyTurnEditor(
-            table: table, rack: rack, initialDone: state.myInitialDone ?? false, rackOrder: order)
+            table: table, rack: rack, initialDone: state.myInitialDone ?? false, rackOrder: order,
+            tableLayout: state.tableLayout, rackEntries: entries)
         editor = fresh
         editorKey = key
         editorSeq = seq
@@ -194,6 +200,9 @@ extension RummyStore {
         draftRetryCount = 0
         // 서버가 들고 있는 작업 판. 새 차례면 null(= 시작 판)이다.
         lastSentDraft = state.draft?.table ?? table
+        lastSentLayout = state.draft?.table != nil ? state.draft?.layout : state.tableLayout
+        saveRack()
+        if let previous { noteDrawn(previous: previous, fresh: fresh, entries: entries ?? []) }
         // 차례 중간에 편집기를 새로 세웠는데(앱 재실행) 서버 작업 판이 내 화면과 다르면 맞춘다 — 시간 초과 때 서버는
         // 그 작업 판을 판정한다(R-19). 내 화면에 없는 판이 나 대신 내지지 않게 한다.
         // 비교는 K(다중집합) — 서버가 판정하는 기준과 같고, 편집기가 세트 안 순서를 표시 순서로 바꿔도 헛보내지 않는다.
@@ -240,17 +249,31 @@ extension RummyStore {
 
     /// 끌어 놓기. 내 차례면 작업 판을 바꾸고 작업 상태를 보낸다(디바운스). 내 차례가 아니면 **랙 안 재배치만** 받는다.
     package func moveTile(_ tileID: Int, to target: RummyDropTarget) {
+        moveTiles([tileID], to: target)
+    }
+
+    /// v2 묶음째 끌어 놓기(전부 아니면 전무 — `RummyTurnEditor.moveBlock`). 가드는 `moveTile` 과 같다: 내 차례가 아니면
+    /// **랙 안 재배치만**(`.rack`·`.rackSlot`, 전부 랙 타일). 작업 상태 전송은 한 번(디바운스).
+    package func moveTiles(_ tileIDs: [Int], to target: RummyDropTarget) {
         guard var working = editor else { return }
         let myTurn = isMyTurn
         if !myTurn {
-            guard case .rack = target, !working.isFromTable(tileID),
-                  working.rack.contains(where: { $0.id == tileID }) else { return }
+            guard Self.isRackTarget(target),
+                  tileIDs.allSatisfy({ id in working.rack.contains { $0.id == id } }) else { return }
         }
-        guard working.move(tileID, to: target) else { return }
+        guard working.moveBlock(tileIDs, to: target) else { return }
         if editor != working { editor = working }
+        saveRack()
         guard myTurn else { return }
         setNotice(nil)
         scheduleDraft()
+    }
+
+    package nonisolated static func isRackTarget(_ target: RummyDropTarget) -> Bool {
+        switch target {
+        case .rack, .rackSlot: return true
+        case .meld, .newMeld, .newMeldAt: return false
+        }
     }
 
     /// 이번 차례 처음 상태로(랙 순서는 유지). 되돌린 판도 보낸다(남들이 보는 작업 판을 되돌린다).
@@ -258,6 +281,7 @@ extension RummyStore {
         guard var working = editor, isMyTurn else { return }
         working.reset()
         if editor != working { editor = working }
+        saveRack()
         setNotice(nil)
         scheduleDraft()
     }
@@ -267,6 +291,7 @@ extension RummyStore {
         guard var working = editor else { return }
         working.sortRack(mode)
         if editor != working { editor = working }
+        saveRack()
     }
 
     /// [완료]. 편집기가 이미 거절을 아는 판은 보내지 않고 이유 한 줄만 낸다(서버가 같은 판정을 다시 한다).
@@ -280,13 +305,14 @@ extension RummyStore {
         let matchID = current.id
         let seq = current.seq ?? 0
         let table = working.submissionTable
+        let layout = working.submissionLayout
         // 확정이 작업 상태를 대신한다 — 기다리던 디바운스는 걷는다(나가 있는 것은 서버가 stale 로 버린다).
         draftDebounceTask?.cancel()
         draftDebounceTask = nil
         runAction { store in
             let ticket = store.issueTicket()
             guard let result = await store.perform({
-                try await $0.rummyPlay(accessToken: $1, matchID: matchID, expectedSeq: seq, table: table)
+                try await $0.rummyPlay(accessToken: $1, matchID: matchID, expectedSeq: seq, table: table, layout: layout)
             }) else { return }
             store.handleTurnResult(result, matchID: matchID, ticket: ticket, action: .play)
         }
@@ -386,9 +412,11 @@ extension RummyStore {
         guard let current = match, let working = editor, let key = editorKey, key.matchID == current.id,
               Self.isMyTurn(current, me: myUserID) else { return }
         let table = working.submissionTable
-        guard table != lastSentDraft else { return }
+        let layout = working.submissionLayout
+        guard table != lastSentDraft || layout != lastSentLayout else { return }
         draftInFlight = true
         lastSentDraft = table
+        lastSentLayout = layout
         let matchID = current.id
         // 편집기가 선 seq 가 아니라 지금 든 판의 seq — 같은 차례에 남의 기권으로 오를 수 있다.
         let seq = current.seq ?? 0
@@ -397,7 +425,7 @@ extension RummyStore {
             guard let self else { return }
             let ticket = self.issueTicket()
             let result = await self.perform({
-                try await $0.rummyDraft(accessToken: $1, matchID: matchID, expectedSeq: seq, table: table)
+                try await $0.rummyDraft(accessToken: $1, matchID: matchID, expectedSeq: seq, table: table, layout: layout)
             })
             guard generation == self.resetGeneration else { return }
             self.draftInFlight = false
@@ -436,6 +464,7 @@ extension RummyStore {
             if let retryAfter, self.editorKey == key {
                 // 서버가 이 판을 못 받았다 — 다음 보내기가 같은 판이라고 건너뛰지 않게 기억을 지운다.
                 self.lastSentDraft = nil
+                self.lastSentLayout = nil
                 if !self.draftDirty, self.draftRetryCount < Self.draftRetryLimit {
                     self.draftRetryCount += 1
                     self.scheduleDraft(after: retryAfter)

@@ -35,6 +35,15 @@ import OSLog
 //     랙 배치는 면 순서로 넘긴다. 같은 차례면 **덮지 않는다**(내 작업 보존 — 내 draft 의 메아리·남의 폴링 응답, 그리고
 //     남의 기권이 seq 만 올린 state 가 작업을 지우지 않게). 같은 차례인데 확정 판·내 랙이 달라졌을 때만 다시 세운다.
 //     '내 차례' 알림·마감 깨우기도 같은 차례 정체성으로 가른다(`turnIdentity`).
+//
+// ── v2(설계서 v2 §2.4 — `RummyStoreV2.swift`) ──
+//  ⑪ **배치도 작업 상태다.** 편집기가 판 배치(`points`)를 들고, 작업 상태 전송·[완료]가 `p_layout` 으로 싣는다.
+//     같은 판·같은 배치면 다시 보내지 않는다(`lastSentDraft` + `lastSentLayout`).
+//  ⑫ **하트비트**는 phase 가 room·playing 인 동안 10초마다(창과 무관). 서버는 90초 안 보이면 끊김 기권시킨다.
+//     의도적 이탈(창 닫기·앱 종료·로그아웃)은 `leaveForExit` — 최대 2초 기다리고, 못 닿아도 이 기기에선 접는다.
+//  ⑬ **반응**은 꾸밈이라 내 말풍선을 바로 띄우고(같은 반응이 state 로 돌아오면 한 번 삼킨다), 남의 것은 state 의
+//     `reactions` 에서 처음 보는 것만 낸다. **뽑기**는 다음 편집기의 랙에서 새로 생긴 면을 찾아 `onTileDrawn` 으로 알린다.
+//  ⑭ **받침대 자리는 판마다 로컬 저장**(`rackDefaults`, 판 id 키) — 판이 끝나거나 접히면 지운다.
 
 // MARK: - 호스트
 
@@ -75,6 +84,16 @@ package final class RummyStore {
     /// 작업 상태 전송이 실패했을 때 다시 보내는 간격(초)과 상한.
     package nonisolated static let draftRetrySeconds: TimeInterval = 1
     package nonisolated static let draftRetryLimit = 3
+    /// v2 하트비트 주기(초, 설계서 v2 §2.4). 서버 끊김 기준은 90초(`rummy_disconnect_seconds()`).
+    package nonisolated static let heartbeatDefaultSeconds: TimeInterval = 10
+    /// v2 의도적 이탈(`leaveForExit`)이 서버 답을 기다리는 상한(초).
+    package nonisolated static let exitLeaveLimitSeconds: TimeInterval = 2
+    /// v2 반응 쿨다운(초) — 서버도 같은 사람 2초(`too_fast`).
+    package nonisolated static let reactionCooldownSeconds: TimeInterval = 2
+    /// v2 `reactionFeed` 상한.
+    package nonisolated static let reactionFeedLimit = 12
+    /// v2 내 반응의 메아리를 기다리는 창(초) — 서버 state 는 최근 10초만 싣는다.
+    package nonisolated static let reactionEchoSeconds: TimeInterval = 10
 
     package nonisolated static let logger = Logger(subsystem: "kingcheck", category: "rummy")
 
@@ -136,6 +155,36 @@ package final class RummyStore {
     @ObservationIgnored package var onAttention: (@MainActor (String) -> Void)?
     /// 내 판이 끝난 것을 **처음 본** 순간 한 번(판 id 마다). 맥은 여기서 일일 미션 진행을 묻는다.
     @ObservationIgnored package var onMatchFinished: (@MainActor () -> Void)?
+    /// v2: 내 랙에 새 타일이 들어왔다(뽑기 · 시간 초과 뽑기 · 벌칙). 편집기를 새로 세운 **뒤에** 부른다 — `tileID` 로 바로 찾을 수 있다.
+    @ObservationIgnored package var onTileDrawn: (@MainActor (RummyDrawEvent) -> Void)?
+    /// v2: 이모티콘 반응 하나(내 것은 보내는 즉시, 남의 것은 state 에서 처음 볼 때).
+    @ObservationIgnored package var onReaction: (@MainActor (RummyReactionEvent) -> Void)?
+
+    // MARK: v2 화면 상태(RummyStoreV2.swift)
+
+    /// 최근 반응(오래된 것이 앞, 최대 `reactionFeedLimit`). 화면은 `receivedAt` 에서 2.5초 동안 말풍선을 그린다.
+    package internal(set) var reactionFeed: [RummyReactionEvent] = []
+    /// 마지막 뽑기 사건(모션 계기). `serial` 이 바뀔 때마다 새 사건이다.
+    package internal(set) var lastDraw: RummyDrawEvent?
+
+    // MARK: v2 배선 · 장부
+
+    /// 하트비트 주 스위치(시험은 끄고 `heartbeatTick(matchID:)` 를 직접 밟는다).
+    @ObservationIgnored package var heartbeatEnabled = true
+    /// 하트비트 주기(초).
+    @ObservationIgnored package var heartbeatSeconds: TimeInterval = RummyStore.heartbeatDefaultSeconds
+    /// 받침대 자리 저장소. **nil 이면 저장하지 않는다**(기본 — 시험이 Preferences 를 더럽히지 않게). 맥 배선이 `.standard` 를 꽂는다.
+    @ObservationIgnored package var rackDefaults: UserDefaults?
+    @ObservationIgnored package internal(set) var heartbeatTask: Task<Void, Never>?
+    @ObservationIgnored package internal(set) var heartbeatMatchID: UUID?
+    /// 서버가 들고 있다고 믿는 작업 판 배치(`lastSentDraft` 의 짝).
+    @ObservationIgnored package internal(set) var lastSentLayout: RummyLayout?
+    @ObservationIgnored var lastReactionSentAt: Date = .distantPast
+    /// 내가 보내고 이미 띄운 반응(키 · 보낸 시각) — state 로 돌아온 메아리를 한 번 삼킨다.
+    @ObservationIgnored var pendingOwnReactions: [(key: String, at: Date)] = []
+    @ObservationIgnored var seenReactionKeys: Set<String> = []
+    @ObservationIgnored var reactionSerial = 0
+    @ObservationIgnored var drawSerial = 0
 
     // MARK: 내부 장부 (관찰 대상 아님)
 
@@ -427,6 +476,15 @@ package final class RummyStore {
         deadlineFetchKey = nil
         deadlineFetchCount = 0
         lastDeadlineFetchAt = .distantPast
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        heartbeatMatchID = nil
+        lastSentLayout = nil
+        lastReactionSentAt = .distantPast
+        pendingOwnReactions = []
+        seenReactionKeys = []
+        if !reactionFeed.isEmpty { reactionFeed = [] }
+        if lastDraw != nil { lastDraw = nil }
         if phase != .lobby { phase = .lobby }
         if availability != .available { availability = .available }
         if lobby != nil { lobby = nil }
@@ -584,6 +642,7 @@ package final class RummyStore {
         case .finished?: next = .finished
         default: next = .lobby
         }
+        defer { updateHeartbeat() }
         guard phase != next else { return }
         // 화면 전환 한 줄(판 id 앞 8자만 — 사람 정보 없음).
         let shortID = match.map { String($0.id.uuidString.lowercased().prefix(8)) } ?? "-"

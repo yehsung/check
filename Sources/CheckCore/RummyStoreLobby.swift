@@ -395,6 +395,11 @@ extension RummyStore {
     /// 로비 `me.room` 이 그 방이면 같이 걷는다 — 닫힘·나가기·빠짐을 안 순간 방 카드가 내려가야 한다(다음 30초 로비 폴링까지
     /// 닫힌 방의 [시작]·[나가기] 가 남지 않게). 다음 로비 응답이 확인한다.
     package func clearMatch() {
+        if let cleared = match?.id { forgetRack(matchID: cleared) }
+        pendingOwnReactions = []
+        seenReactionKeys = []
+        if !reactionFeed.isEmpty { reactionFeed = [] }
+        lastSentLayout = nil
         if let cleared = match?.id, rawLobby?.me?.room?.id == cleared {
             rawLobby?.me?.room = nil
             publishLobby()

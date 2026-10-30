@@ -56,7 +56,7 @@ class NowModelsTest {
         assertEquals("연결 끊김", NowText.staleLastSeen(null))
         assertEquals("6명", NowText.peopleCount(6))
         assertEquals("모래에게 말 걸기", NowText.talkTo("모래"))
-        assertEquals("근무는 맥이나 이 탭 맨 위 버튼으로 시작하고 끝내요", NowText.workingFooter)
+        assertEquals("근무는 맥·PC나 이 탭 맨 위 버튼으로 시작하고 끝내요", NowText.workingFooter)
         assertEquals("근무 시작과 종료는 맥 앱에서 해요", NowText.workingFooterMacOnly)
         assertEquals("이번 세션 10:20부터", NowText.sessionSince("10:20"))
         assertEquals("/ 40시간", NowText.goalSuffix(40))

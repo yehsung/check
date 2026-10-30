@@ -8,6 +8,7 @@ import com.yehsung.aingcheck.feature.desktop.tokens.TokenUsageMonthly
 import com.yehsung.aingcheck.feature.desktop.tokens.account.CodexAccountProbeStatus
 import com.yehsung.aingcheck.feature.desktop.tokens.account.CodexAccountUsage
 import com.yehsung.aingcheck.feature.desktop.tokens.diag.CodexUsageDiagnostics
+import com.yehsung.aingcheck.feature.desktop.tokens.scan.TokenMonthKeys
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftISO8601
 import kotlinx.serialization.SerialName
@@ -188,7 +189,7 @@ object TokenUsageDailyUpload {
         val windowStart = usage.windowStartDay
         val completeFrom = usage.claudeCompleteFrom
         val monthPrefix = usage.month + "-"
-        val utcRetainFrom = utcRetainFromKey(usage.month)
+        val utcRetainFrom = TokenMonthKeys.utcRetainFromKey(usage.month) // W-6 #4: h1 공용 규칙
         val utcMapIsFromThisBuild = usage.windowStart.isNotEmpty()
         val buckets = account?.buckets ?: emptyMap()
         val keys = LinkedHashSet<String>().apply {
@@ -228,24 +229,4 @@ object TokenUsageDailyUpload {
             val v = values[day] ?: return@mapNotNull null
             TokenUsageDailyUpsertRow(userID, day, deviceID, v.claude, v.codex, v.codexUTC, v.codexAccount, v.antigravity)
         }
-
-    /**
-     * Swift `TokenUsageIncrementalScanner.utcRetainFromKey`(CheckTokenUsage.swift:1975) — 'YYYY-MM' 의 전월 마지막 날.
-     * 스캐너(W2-h1 tokens/scan) 소유 규칙의 같은 값 사본 — h1 이 공개 함수로 내면 병합 때 이 자리를 그것으로 바꾼다.
-     */
-    fun utcRetainFromKey(monthString: String): String {
-        val parts = monthString.split("-")
-        if (parts.size != 2) return ""
-        val y = parts[0].toIntOrNull() ?: return ""
-        val m = parts[1].toIntOrNull() ?: return ""
-        if (m !in 1..12) return ""
-        val (py, pm) = if (m == 1) (y - 1) to 12 else y to (m - 1)
-        return "${py.toString().padStart(4, '0')}-${pm.toString().padStart(2, '0')}-${daysInMonth(py, pm).toString().padStart(2, '0')}"
-    }
-
-    private fun daysInMonth(year: Int, month: Int): Int = when (month) {
-        1, 3, 5, 7, 8, 10, 12 -> 31
-        4, 6, 9, 11 -> 30
-        else -> if ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) 29 else 28
-    }
 }

@@ -42,31 +42,42 @@ object RunnerSupport {
      * 같은 JDK·classpath 로 [ChildProbe] 를 띄운다. classpath 는 @인자 파일로 넘긴다 — Windows 는 명령줄과 환경 변수 하나가
      * 32K 자에서 잘리는데 데스크톱 시험 classpath(Compose·Ktor·skiko jar 수십 개)는 그 근처다. 인자 파일 안에서는 따옴표 안
      * 역슬래시가 이스케이프 문자라 두 번 쓴다(java 런처 @argfiles 규칙).
+     * [mainClass] 기본은 [ChildProbe] — 셸 시험(플라이아웃 창)처럼 자기 자식 main 이 있으면 그 이름(W-6 #4, 옛 ShellChildJvm 사본을 걷었다).
      */
-    fun runChild(args: List<String>, jvmArgs: List<String> = emptyList(), timeoutSeconds: Long = 60): ChildResult {
+    fun runChild(
+        args: List<String>,
+        jvmArgs: List<String> = emptyList(),
+        timeoutSeconds: Long = 60,
+        mainClass: String = ChildProbe::class.java.name,
+    ): ChildResult {
         val javaExe = ProcessHandle.current().info().command().orElseThrow { IllegalStateException("java 경로를 모른다") }
         val argFile = Files.createTempFile("aingcheck-child-cp", ".args")
         val cp = System.getProperty("java.class.path").replace("\\", "\\\\").replace("\"", "\\\"")
         Files.writeString(argFile, "-cp\n\"" + cp + "\"\n")
         try {
-            return runChildWith(javaExe, listOf("@" + argFile.toAbsolutePath()), args, jvmArgs, timeoutSeconds)
+            return runChildWith(javaExe, listOf("@" + argFile.toAbsolutePath()), mainClass, args, jvmArgs, timeoutSeconds)
         } finally {
             Files.deleteIfExists(argFile)
         }
     }
 
-    private fun runChildWith(javaExe: String, cpArgs: List<String>, args: List<String>, jvmArgs: List<String>, timeoutSeconds: Long): ChildResult {
-        val cmd = listOf(javaExe, "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8") + cpArgs + jvmArgs + listOf(ChildProbe::class.java.name) + args
+    private fun runChildWith(
+        javaExe: String, cpArgs: List<String>, mainClass: String, args: List<String>, jvmArgs: List<String>, timeoutSeconds: Long,
+    ): ChildResult {
+        val cmd = listOf(javaExe, "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8") + cpArgs + jvmArgs + listOf(mainClass) + args
         val pb = ProcessBuilder(cmd)
         pb.redirectInput(ProcessBuilder.Redirect.from(File(if (File.separatorChar == '\\') "NUL" else "/dev/null")))
         val p = pb.start()
+        // 표준 오류는 따로 읽는다 — 한쪽 파이프가 차면 자식이 멈춘다(옛 ShellChildJvm 의 방식을 들였다).
+        val err = StringBuilder()
+        val errThread = Thread { err.append(p.errorStream.bufferedReader().readText()) }.also { it.start() }
         val out = p.inputStream.bufferedReader().readText()
-        val err = p.errorStream.bufferedReader().readText()
         if (!p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
             p.destroyForcibly()
-            fail("자식 JVM 이 ${timeoutSeconds}초 안에 끝나지 않았다: $args")
+            fail("자식 JVM 이 ${timeoutSeconds}초 안에 끝나지 않았다: $mainClass $args")
         }
-        return ChildResult(p.exitValue(), out.trim(), err.trim())
+        errThread.join(5_000)
+        return ChildResult(p.exitValue(), out.trim(), err.toString().trim())
     }
 
     /**

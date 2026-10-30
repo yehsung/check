@@ -428,6 +428,11 @@ struct V0369RummyV2MatchRenderTests {
             let blue = mvCount(lifted, near: mvAccent, tolerance: 26, in: rect)
             let base = mvCount(plain, near: mvAccent, tolerance: 26, in: rect)
             #expect(blue > base + 60, "집힌 타일 \(id) 에 들어 올림 테두리가 없다(\(base) → \(blue))")
+            // 장수 뱃지가 타일 얼굴(숫자 칸)을 가리지 않는다 — 10-30 사용자 지적: 누른 타일에 단 뱃지가 이웃 숫자를 덮었다.
+            let face = mvRackSlot(slot).insetBy(dx: 5, dy: 6)
+            let inside = mvCount(lifted, near: mvAccent, tolerance: 26, in: face)
+            let insideBase = mvCount(plain, near: mvAccent, tolerance: 26, in: face)
+            #expect(inside <= insideBase + 25, "장수 뱃지가 타일 \(id) 얼굴을 가린다(\(insideBase) → \(inside))")
         }
     }
 

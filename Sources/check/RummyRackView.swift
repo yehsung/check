@@ -99,7 +99,7 @@ struct RummyRackView: View {
     let size: CGSize
     let draggingTileIDs: Set<Int>
     let liftedTileIDs: Set<Int>
-    /// 길게 눌러 집은 장수 뱃지(누른 타일 위).
+    /// 길게 눌러 집은 장수 뱃지(덩어리 오른쪽 위 바깥).
     let liftBadge: (tileID: Int, count: Int)?
     /// 놓기 미리보기 자리(점선).
     let ghostSlots: [RummyRackSlot]
@@ -134,6 +134,13 @@ struct RummyRackView: View {
                     tileView(keyed.tile, slot: slot, size: tileSize)
                 }
             }
+            // 장수 뱃지는 집은 덩어리 **오른쪽 위 바깥**에 하나 — 누른 타일에 달면 이웃 타일 숫자를 가린다(10-30 사용자 지적).
+            if let badge = liftBadge, badge.count > 1, let corner = liftedCorner {
+                RummyCountBadge(count: badge.count)
+                    .position(x: corner.x + 6, y: corner.y - 8)
+                    .zIndex(1)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .overlay(
@@ -141,6 +148,16 @@ struct RummyRackView: View {
                 .stroke(RummyTilePalette.color(RummyTilePalette.invalid), lineWidth: refused ? 3 : 0)
                 .padding(2)
         )
+    }
+
+    /// 집은 덩어리의 오른쪽 위(들어 올림 5pt 반영). 덩어리가 두 줄에 걸치면 윗줄 기준.
+    private var liftedCorner: CGPoint? {
+        let frames = tiles.filter { liftedTileIDs.contains($0.id) }
+            .compactMap { layout.slot(of: $0.id).map(geometry.frame) }
+        guard let top = frames.map(\.minY).min() else { return nil }
+        let topRow = frames.filter { abs($0.minY - top) < 1 }
+        guard let right = topRow.map(\.maxX).max() else { return nil }
+        return CGPoint(x: right, y: top - 5)
     }
 
     @ViewBuilder
@@ -152,11 +169,6 @@ struct RummyRackView: View {
         RummyTileView(face: tile.face, size: size, dimmed: draggingTileIDs.contains(tile.id))
             .overlay(RoundedRectangle(cornerRadius: size.corner + 1, style: .continuous)
                 .stroke(CheckTheme.accent, lineWidth: lifted ? 2 : 0).padding(-1.5))
-            .overlay(alignment: .topTrailing) {
-                if let badge = liftBadge, badge.tileID == tile.id, badge.count > 1 {
-                    RummyCountBadge(count: badge.count).offset(x: 8, y: -10)
-                }
-            }
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(RummyMatchView.space))
                 .onChanged { onTileDrag(tile.id, $0) }
                 .onEnded { onTileDragEnd(tile.id, $0) })

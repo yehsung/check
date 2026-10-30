@@ -251,11 +251,33 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
         case .close:
             return true
         case .leaveRoom:
-            Task { @MainActor in _ = await store.leaveForExit(reason: .windowClosed) }
+            // 묻지 않는 나가기 — 그새 판이 시작됐으면 기권을 보내지 않고 판을 든다(`leaveRoomForExit`).
+            Task { @MainActor in _ = await store.leaveRoomForExit(reason: .windowClosed) }
             return true
         case .confirmForfeit, .confirmCloseRoom:
-            exitPrompt.ask(decision) { [weak self] in self?.closeAndLeave(store: store) }
+            exitPrompt.ask(decision) { [weak self] in self?.confirmClose(asked: decision, store: store) }
             return false
+        }
+    }
+
+    /// 확인을 골랐다. 묻던 사이 판단이 바뀌었으면(방장 확인 중 판이 시작됐다 · 판이 끝났다) **지금 판단**으로 간다 —
+    /// "루비는 그대로예요" 를 읽고 고른 버튼이 판돈을 잃는 기권이 되면 안 된다. 바뀐 확인은 새 문구로 다시 묻는다.
+    private func confirmClose(asked: RummyCloseDecision, store: RummyStore) {
+        let now = RummyExitPolicy.closeDecision(for: store)
+        lastCloseDecision = now
+        switch now {
+        case asked where asked == .confirmCloseRoom:
+            close()
+            Task { @MainActor in _ = await store.leaveRoomForExit(reason: .windowClosed) }
+        case asked:
+            closeAndLeave(store: store)
+        case .close:
+            close()
+        case .leaveRoom:
+            close()
+            Task { @MainActor in _ = await store.leaveRoomForExit(reason: .windowClosed) }
+        case .confirmForfeit, .confirmCloseRoom:
+            exitPrompt.ask(now) { [weak self] in self?.confirmClose(asked: now, store: store) }
         }
     }
 

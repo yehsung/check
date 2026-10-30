@@ -387,7 +387,9 @@ struct V0369RummyV2LobbyTests {
 
         let window = V0317ShopTests.stripped(try V0317ShopTests.source("CheckRummyWindow.swift"))
         #expect(window.contains("func windowShouldClose(_ sender: NSWindow) -> Bool { guard sender === windowStorage, let store = wiring?.store else { return true } return requestClose(store: store) }"))
-        #expect(window.contains("case .leaveRoom: Task { @MainActor in _ = await store.leaveForExit(reason: .windowClosed) } return true"))
+        #expect(window.contains("case .leaveRoom: Task { @MainActor in _ = await store.leaveRoomForExit(reason: .windowClosed) } return true"))
+        // 확인은 낡은 판단으로 이탈하지 않는다 — 고르는 순간 다시 판단한다(V0369RummyV2ExitVerifyTests 가 동작으로 잰다).
+        #expect(window.contains("exitPrompt.ask(decision) { [weak self] in self?.confirmClose(asked: decision, store: store) }"))
         #expect(window.contains("private func closeAndLeave(store: RummyStore) { close() Task { @MainActor in _ = await store.leaveForExit(reason: .windowClosed) } }"))
         #expect(window.contains("RummyPanel(store: rummy, me: me, safety: safety) .environment(prompt)"))
         // 프로그램이 내리는 닫기(로그아웃 정리)는 `windowShouldClose` 를 거치지 않는 `window.close()` 다 — performClose 면 확인이 뜬다.

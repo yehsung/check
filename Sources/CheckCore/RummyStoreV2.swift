@@ -40,14 +40,14 @@ package struct RummyReactionEvent: Equatable, Hashable, Sendable, Identifiable {
 
 /// `continuation` 을 한 번만 깨운다(이탈 경주 — 서버 답 vs 2초).
 @MainActor
-private final class RummyExitGate {
-    private var continuation: CheckedContinuation<Bool, Never>?
+private final class RummyExitGate<Value: Sendable> {
+    private var continuation: CheckedContinuation<Value, Never>?
 
-    init(_ continuation: CheckedContinuation<Bool, Never>) {
+    init(_ continuation: CheckedContinuation<Value, Never>) {
         self.continuation = continuation
     }
 
-    func resume(_ value: Bool) {
+    func resume(_ value: Value) {
         continuation?.resume(returning: value)
         continuation = nil
     }
@@ -150,6 +150,43 @@ extension RummyStore {
         if activeMatchID == matchID { activeMatchID = nil }
         if match?.id == matchID { clearMatch() }
         return confirmed
+    }
+
+    /// 방 손님의 **묻지 않는** 이탈(창 닫기 — `RummyCloseDecision.leaveRoom`). 들고 있는 것은 방(forming)이어도 그새 방장이
+    /// 시작했으면(시작 신호가 이 기기에 닿기 전) `rummy_leave` 는 **판 기권**이다 — 묻지도 않고 판돈을 잃게 된다.
+    /// 그래서 먼저 그 방 state 를 한 번 읽는다(상한 `exitLeaveLimitSeconds`). 판이 시작돼 내 자리가 playing 이면 나가지 않고
+    /// 그 state 를 든다(판 시작 알림이 창을 다시 띄우고, 거기서 닫으면 기권 확인이 뜬다). 아직 방이거나 못 읽었으면 나간다.
+    /// 반환: 나갔으면 `leaveForExit` 의 답, 시작된 판을 들고 남았으면 false.
+    @discardableResult
+    package func leaveRoomForExit(reason: RummyExitReason) async -> Bool {
+        guard let current = match, current.status == .forming, host?.session != nil else {
+            return await leaveForExit(reason: reason)
+        }
+        let roomID = current.id
+        let ticket = issueTicket()
+        let limit = Self.exitLeaveLimitSeconds
+        let fetched = await withCheckedContinuation { (continuation: CheckedContinuation<RummyMatchState?, Never>) in
+            let gate = RummyExitGate(continuation)
+            Task { @MainActor [weak self] in
+                guard let self,
+                      let result = await self.perform({ try await $0.rummyState(accessToken: $1, matchID: roomID) }),
+                      case .success(let response) = result, response.status == .ok
+                else { gate.resume(nil); return }
+                self.noteServerNow(response.serverNowMs)
+                gate.resume(response.state)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(limit))
+                gate.resume(nil)
+            }
+        }
+        if let state = fetched, state.id == roomID, state.status == .active, match?.id == roomID,
+           mySeat(in: state)?.state == .playing {
+            Self.logger.notice("exit leave skipped: room already started")
+            applyState(state, ticket: ticket)
+            return false
+        }
+        return await leaveForExit(reason: reason)
     }
 
     // MARK: - 이모티콘 반응(머리말 ⑬)

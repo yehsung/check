@@ -1,0 +1,606 @@
+{
+  "cases": [
+    {
+      "account": null,
+      "accountStatus": null,
+      "diagnostics": null,
+      "id": "monthly-plain",
+      "kind": "monthly",
+      "requests": [
+        {
+          "body": {
+            "claude_cache_creation": 400,
+            "claude_cache_read": 3000,
+            "claude_input": 1000,
+            "claude_output": 200,
+            "codex_cache_read": 70,
+            "codex_input": 500,
+            "codex_output": 60,
+            "device_id": "win:dev-1",
+            "month": "2026-10",
+            "today_date": "2026-10-30",
+            "today_total": 123,
+            "total": 5160,
+            "user_id": "u-1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_monthly",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,month,device_id"
+            ]
+          ]
+        }
+      ],
+      "usage": {
+        "claudeCacheCreation": 400,
+        "claudeCacheRead": 3000,
+        "claudeInput": 1000,
+        "claudeOutput": 200,
+        "codexCacheRead": 70,
+        "codexInput": 500,
+        "codexOutput": 60,
+        "month": "2026-10",
+        "todayDate": "2026-10-30",
+        "todayTotal": 123
+      }
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "accountStatus": 1,
+      "diagnostics": {
+        "appBuild": 1,
+        "bigDeltaCount": 6,
+        "bigDeltaTotal": 7,
+        "bigGapMedianSeconds": 8,
+        "carryFiles": 9,
+        "carryTotal": 10,
+        "dedupTotal": 14,
+        "drops": 16,
+        "dupEvents": 11,
+        "dupTokens": 12,
+        "eventsMonth": 3,
+        "filesMonth": 2,
+        "filesTotal": 1,
+        "finalSum": 13,
+        "forkCopyTokens": 19,
+        "forkFiles": 18,
+        "legacyTotal": 15,
+        "maxDelta": 4,
+        "maxDeltaGapSeconds": 5,
+        "topFile": 17
+      },
+      "id": "monthly-account-ok-diag",
+      "kind": "monthly",
+      "requests": [
+        {
+          "body": {
+            "claude_cache_creation": 400,
+            "claude_cache_read": 3000,
+            "claude_input": 1000,
+            "claude_output": 200,
+            "codex_account_at": "2026-10-30T01:02:03Z",
+            "codex_account_last_day": "2026-10-29",
+            "codex_account_lifetime": 987654,
+            "codex_account_month": 300,
+            "codex_account_status": 1,
+            "codex_cache_read": 70,
+            "codex_diag_big_delta_count": 6,
+            "codex_diag_big_delta_total": 7,
+            "codex_diag_big_gap_median_s": 8,
+            "codex_diag_build": 1,
+            "codex_diag_carry_files": 9,
+            "codex_diag_carry_total": 10,
+            "codex_diag_dedup_total": 14,
+            "codex_diag_drops": 16,
+            "codex_diag_dup_events": 11,
+            "codex_diag_dup_tokens": 12,
+            "codex_diag_events_month": 3,
+            "codex_diag_files_month": 2,
+            "codex_diag_files_total": 1,
+            "codex_diag_final_sum": 13,
+            "codex_diag_fork_files": 18,
+            "codex_diag_fork_tokens": 19,
+            "codex_diag_input_at_scan": 560,
+            "codex_diag_legacy_total": 15,
+            "codex_diag_max_delta": 4,
+            "codex_diag_max_delta_gap_s": 5,
+            "codex_diag_top_file": 17,
+            "codex_input": 500,
+            "codex_output": 60,
+            "device_id": "win:dev-1",
+            "month": "2026-10",
+            "today_date": "2026-10-30",
+            "today_total": 123,
+            "total": 5160,
+            "user_id": "u-1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_monthly",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,month,device_id"
+            ]
+          ]
+        }
+      ],
+      "usage": {
+        "claudeCacheCreation": 400,
+        "claudeCacheRead": 3000,
+        "claudeInput": 1000,
+        "claudeOutput": 200,
+        "codexCacheRead": 70,
+        "codexInput": 500,
+        "codexOutput": 60,
+        "month": "2026-10",
+        "todayDate": "2026-10-30",
+        "todayTotal": 123
+      }
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "accountStatus": 3,
+      "diagnostics": null,
+      "id": "monthly-not-logged-in",
+      "kind": "monthly",
+      "requests": [
+        {
+          "body": {
+            "claude_cache_creation": 400,
+            "claude_cache_read": 3000,
+            "claude_input": 1000,
+            "claude_output": 200,
+            "codex_account_status": 3,
+            "codex_cache_read": 70,
+            "codex_input": 500,
+            "codex_output": 60,
+            "device_id": "win:dev-1",
+            "month": "2026-10",
+            "today_date": "2026-10-30",
+            "today_total": 123,
+            "total": 5160,
+            "user_id": "u-1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_monthly",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,month,device_id"
+            ]
+          ]
+        }
+      ],
+      "usage": {
+        "claudeCacheCreation": 400,
+        "claudeCacheRead": 3000,
+        "claudeInput": 1000,
+        "claudeOutput": 200,
+        "codexCacheRead": 70,
+        "codexInput": 500,
+        "codexOutput": 60,
+        "month": "2026-10",
+        "todayDate": "2026-10-30",
+        "todayTotal": 123
+      }
+    },
+    {
+      "account": null,
+      "accountStatus": 4,
+      "diagnostics": null,
+      "id": "monthly-status-only",
+      "kind": "monthly",
+      "requests": [
+        {
+          "body": {
+            "claude_cache_creation": 400,
+            "claude_cache_read": 3000,
+            "claude_input": 1000,
+            "claude_output": 200,
+            "codex_account_status": 4,
+            "codex_cache_read": 70,
+            "codex_input": 500,
+            "codex_output": 60,
+            "device_id": "win:dev-1",
+            "month": "2026-10",
+            "today_date": "2026-10-30",
+            "today_total": 123,
+            "total": 5160,
+            "user_id": "u-1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_monthly",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,month,device_id"
+            ]
+          ]
+        }
+      ],
+      "usage": {
+        "claudeCacheCreation": 400,
+        "claudeCacheRead": 3000,
+        "claudeInput": 1000,
+        "claudeOutput": 200,
+        "codexCacheRead": 70,
+        "codexInput": 500,
+        "codexOutput": 60,
+        "month": "2026-10",
+        "todayDate": "2026-10-30",
+        "todayTotal": 123
+      }
+    },
+    {
+      "account": {
+        "buckets": {
+          "2026-09-29": 11,
+          "2026-10-01": 100,
+          "2026-10-29": 200
+        },
+        "fetchedAtEpoch": 1793322123,
+        "lifetimeTokens": 987654
+      },
+      "accountStatus": null,
+      "diagnostics": null,
+      "id": "monthly-account-no-status",
+      "kind": "monthly",
+      "requests": [
+        {
+          "body": {
+            "claude_cache_creation": 400,
+            "claude_cache_read": 3000,
+            "claude_input": 1000,
+            "claude_output": 200,
+            "codex_account_at": "2026-10-30T01:02:03Z",
+            "codex_account_last_day": "2026-10-29",
+            "codex_account_lifetime": 987654,
+            "codex_account_month": 300,
+            "codex_cache_read": 70,
+            "codex_input": 500,
+            "codex_output": 60,
+            "device_id": "win:dev-1",
+            "month": "2026-10",
+            "today_date": "2026-10-30",
+            "today_total": 123,
+            "total": 5160,
+            "user_id": "u-1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_monthly",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,month,device_id"
+            ]
+          ]
+        }
+      ],
+      "usage": {
+        "claudeCacheCreation": 400,
+        "claudeCacheRead": 3000,
+        "claudeInput": 1000,
+        "claudeOutput": 200,
+        "codexCacheRead": 70,
+        "codexInput": 500,
+        "codexOutput": 60,
+        "month": "2026-10",
+        "todayDate": "2026-10-30",
+        "todayTotal": 123
+      }
+    },
+    {
+      "account": null,
+      "accountStatus": 2,
+      "diagnostics": {
+        "appBuild": 1,
+        "bigDeltaCount": 6,
+        "bigDeltaTotal": 7,
+        "bigGapMedianSeconds": 8,
+        "carryFiles": 9,
+        "carryTotal": 10,
+        "dedupTotal": 14,
+        "drops": 16,
+        "dupEvents": 11,
+        "dupTokens": 12,
+        "eventsMonth": 3,
+        "filesMonth": 2,
+        "filesTotal": 1,
+        "finalSum": 13,
+        "forkCopyTokens": 19,
+        "forkFiles": 18,
+        "legacyTotal": 15,
+        "maxDelta": 4,
+        "maxDeltaGapSeconds": 5,
+        "topFile": 17
+      },
+      "id": "monthly-antigravity",
+      "kind": "monthly",
+      "requests": [
+        {
+          "body": {
+            "antigravity_cache_read": 4,
+            "antigravity_input": 1,
+            "antigravity_output": 2,
+            "antigravity_thinking": 3,
+            "claude_cache_creation": 0,
+            "claude_cache_read": 0,
+            "claude_input": 10,
+            "claude_output": 0,
+            "codex_account_status": 2,
+            "codex_cache_read": 0,
+            "codex_diag_big_delta_count": 6,
+            "codex_diag_big_delta_total": 7,
+            "codex_diag_big_gap_median_s": 8,
+            "codex_diag_build": 1,
+            "codex_diag_carry_files": 9,
+            "codex_diag_carry_total": 10,
+            "codex_diag_dedup_total": 14,
+            "codex_diag_drops": 16,
+            "codex_diag_dup_events": 11,
+            "codex_diag_dup_tokens": 12,
+            "codex_diag_events_month": 3,
+            "codex_diag_files_month": 2,
+            "codex_diag_files_total": 1,
+            "codex_diag_final_sum": 13,
+            "codex_diag_fork_files": 18,
+            "codex_diag_fork_tokens": 19,
+            "codex_diag_input_at_scan": 5,
+            "codex_diag_legacy_total": 15,
+            "codex_diag_max_delta": 4,
+            "codex_diag_max_delta_gap_s": 5,
+            "codex_diag_top_file": 17,
+            "codex_input": 5,
+            "codex_output": 0,
+            "device_id": "win:dev-1",
+            "month": "2026-10",
+            "today_date": "2026-10-30",
+            "today_total": 0,
+            "total": 15,
+            "user_id": "u-1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_monthly",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,month,device_id"
+            ]
+          ]
+        }
+      ],
+      "usage": {
+        "antigravityCacheRead": 4,
+        "antigravityInput": 1,
+        "antigravityOutput": 2,
+        "antigravityThinking": 3,
+        "claudeInput": 10,
+        "codexInput": 5,
+        "month": "2026-10",
+        "todayDate": "2026-10-30",
+        "todayTotal": 0
+      }
+    },
+    {
+      "id": "daily-shapes",
+      "kind": "daily",
+      "requests": [
+        {
+          "body": [
+            {
+              "antigravity_total": 5,
+              "claude_total": 1,
+              "codex_account": 4,
+              "codex_total": 2,
+              "codex_utc_total": 3,
+              "day": "2026-10-01",
+              "device_id": "win:dev-1",
+              "user_id": "u-1"
+            }
+          ],
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_daily",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,day,device_id"
+            ]
+          ]
+        },
+        {
+          "body": [
+            {
+              "claude_total": 20,
+              "codex_total": 0,
+              "day": "2026-10-03",
+              "device_id": "win:dev-1",
+              "user_id": "u-1"
+            }
+          ],
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_daily",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,day,device_id"
+            ]
+          ]
+        },
+        {
+          "body": [
+            {
+              "claude_total": 10,
+              "day": "2026-10-02",
+              "device_id": "win:dev-1",
+              "user_id": "u-1"
+            },
+            {
+              "claude_total": 30,
+              "day": "2026-10-04",
+              "device_id": "win:dev-1",
+              "user_id": "u-1"
+            }
+          ],
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_daily",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,day,device_id"
+            ]
+          ]
+        },
+        {
+          "body": [
+            {
+              "codex_account": 0,
+              "day": "2026-09-20",
+              "device_id": "win:dev-1",
+              "user_id": "u-1"
+            }
+          ],
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_daily",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,day,device_id"
+            ]
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "antigravityTotal": 5,
+          "claudeTotal": 1,
+          "codexAccount": 4,
+          "codexTotal": 2,
+          "codexUtcTotal": 3,
+          "day": "2026-10-01",
+          "deviceId": "win:dev-1",
+          "userId": "u-1"
+        },
+        {
+          "antigravityTotal": null,
+          "claudeTotal": 10,
+          "codexAccount": null,
+          "codexTotal": null,
+          "codexUtcTotal": null,
+          "day": "2026-10-02",
+          "deviceId": "win:dev-1",
+          "userId": "u-1"
+        },
+        {
+          "antigravityTotal": null,
+          "claudeTotal": 20,
+          "codexAccount": null,
+          "codexTotal": 0,
+          "codexUtcTotal": null,
+          "day": "2026-10-03",
+          "deviceId": "win:dev-1",
+          "userId": "u-1"
+        },
+        {
+          "antigravityTotal": null,
+          "claudeTotal": 30,
+          "codexAccount": null,
+          "codexTotal": null,
+          "codexUtcTotal": null,
+          "day": "2026-10-04",
+          "deviceId": "win:dev-1",
+          "userId": "u-1"
+        },
+        {
+          "antigravityTotal": null,
+          "claudeTotal": null,
+          "codexAccount": 0,
+          "codexTotal": null,
+          "codexUtcTotal": null,
+          "day": "2026-09-20",
+          "deviceId": "win:dev-1",
+          "userId": "u-1"
+        }
+      ]
+    },
+    {
+      "id": "daily-empty",
+      "kind": "daily",
+      "requests": [],
+      "rows": []
+    },
+    {
+      "files": 42,
+      "id": "heartbeat",
+      "kind": "heartbeat",
+      "month": "2026-10",
+      "requests": [
+        {
+          "body": {
+            "device_id": "win:dev-1",
+            "last_scan_at": "2026-10-30T02:00:00Z",
+            "month": "2026-10",
+            "scan_files": 42,
+            "user_id": "u-1"
+          },
+          "method": "POST",
+          "path": "/rest/v1/token_usage_device_monthly",
+          "prefer": "resolution=merge-duplicates,return=minimal",
+          "query": [
+            [
+              "on_conflict",
+              "user_id,month,device_id"
+            ]
+          ]
+        }
+      ],
+      "scannedAtEpoch": 1793325600
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+  "golden": "token-usage/upload/requests",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "common": "userID \"u-1\" · deviceID \"win:dev-1\" · accessToken \"access-token\". 요청 = method · path · query([이름, 값]) · prefer · body(받은 JSON).",
+    "daily": "upsertTokenUsageDaily — 옵셔널 다섯의 유무 비트(claude 16 · codex 8 · utc 4 · account 2 · antigravity 1) 내림차순 묶음마다 한 요청. 빈 배열이면 0.",
+    "heartbeat": "sendTokenScanHeartbeat — 본문은 user_id · month · device_id · last_scan_at · scan_files 다섯뿐(토큰 칸 0).",
+    "monthly": "upsertTokenUsage — nil 옵셔널은 키째 빠진다(합성 Encodable). 미로그인(3)이면 계정 스냅샷 네 키를 싣지 않고 status 만.",
+    "time": "fetchedAtEpoch·scannedAtEpoch 는 1970 기준 초 — ISO8601DateFormatter 기본(초 단위 UTC 'Z')."
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStoreSync.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+    "Sources/CheckCore/CheckCodexAccountUsage.swift"
+  ]
+}

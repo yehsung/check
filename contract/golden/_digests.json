@@ -722,24 +722,56 @@
         "Tests/checkTests/Fixtures/todo-rpc/_manifest.json": "dd985dcb27324c7b6a6fc202d8f3bcbef459d5147824987ba967f59460f2e67f"
       }
     },
-    "token-usage/limits/readers": {
-      "file": "17ab6156e42c1af8c2bc1e5b4bfc40864fc2d175d1d3ce1a1aa781abe429b457",
+    "token-usage/upload/account": {
+      "file": "36a544e805f2b5717d856e2f3e54838c6c03cb02494e7747650e886d88ddf4ef",
       "generator": {
-        "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift": "ac40f2fc974f1e55b87f2faea245c52cab535405366fb27b0a633e7eeb0741a1"
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
       },
       "swiftSources": {
-        "Sources/CheckCore/AILimitReaders.swift": "f8fb4bcc314db740e2c3d4cc40682eb2c6d33917fcc0abf2eaf29fd1ea1667ef",
-        "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696"
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
       }
     },
-    "token-usage/limits/upload": {
-      "file": "809b51da1859669c8753fa2afe890959b4fd2688930e4d33b0c3047f5f2031d8",
+    "token-usage/upload/daily": {
+      "file": "f1ef802f105af28d260c5fd7daa831a1952c0f46ad0f67f3fd14ddeec74f3689",
       "generator": {
-        "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift": "ac40f2fc974f1e55b87f2faea245c52cab535405366fb27b0a633e7eeb0741a1"
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift": "eba8ed3bb06401cb4b17784a7a8c31f74d25900e573f77939a4d2b1de93f7423",
-        "Sources/check/WorkTimerStoreAILimits.swift": "f5e1d2b24008f9bc58bb8e1ea615aa7d9c5f9e4989740901a17d591f8620bf41"
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+      }
+    },
+    "token-usage/upload/diagnostics": {
+      "file": "82dcc85018770476ffeb0c2b0afe91c4b5d72af775288a88aea19fff9d42aafd",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
+      }
+    },
+    "token-usage/upload/requests": {
+      "file": "02b722164db111e97008c01327494ddb0999bec619c468ac604c9b05edd4b80f",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "431edbd2a4c41e727c75bd0276c3a41eae733f54d10dc1d27a743f6eb4b0cbf0",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75",
+        "Sources/check/WorkTimerStoreSync.swift": "7dfb46e74023fe8333349f9c2fce3242751ee5ef5baa5158fa13ae8733a698ad"
       }
     },
     "weekly/status": {

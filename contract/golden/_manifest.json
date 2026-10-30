@@ -1,5 +1,5 @@
 {
-  "exportTests": 93,
+  "exportTests": 95,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -859,27 +859,63 @@
       ]
     },
     {
-      "cases": 146,
+      "cases": 23,
       "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
-      "golden": "token-usage/limits/readers",
-      "path": "contract/golden/token-usage/limits/readers.json",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+      "golden": "token-usage/upload/account",
+      "path": "contract/golden/token-usage/upload/account.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/CheckCore/AILimitReaders.swift",
-        "Sources/CheckCore/JWTClaims.swift"
+        "Sources/check/WorkTimerStoreSync.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift"
       ]
     },
     {
-      "cases": 37,
+      "cases": 4,
       "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
-      "golden": "token-usage/limits/upload",
-      "path": "contract/golden/token-usage/limits/upload.json",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+      "golden": "token-usage/upload/daily",
+      "path": "contract/golden/token-usage/upload/daily.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
-        "Sources/check/WorkTimerStoreAILimits.swift"
+        "Sources/check/WorkTimerStoreSync.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift"
+      ]
+    },
+    {
+      "cases": 4,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+      "golden": "token-usage/upload/diagnostics",
+      "path": "contract/golden/token-usage/upload/diagnostics.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStoreSync.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift"
+      ]
+    },
+    {
+      "cases": 9,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+      "golden": "token-usage/upload/requests",
+      "path": "contract/golden/token-usage/upload/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStoreSync.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift"
       ]
     },
     {

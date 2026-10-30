@@ -1,0 +1,132 @@
+{
+  "cases": [
+    {
+      "appBuild": 1,
+      "home": "diag-basic",
+      "id": "basic-oct",
+      "month": "2026-10",
+      "result": {
+        "appBuild": 1,
+        "bigDeltaCount": 2,
+        "bigDeltaTotal": 4220000,
+        "bigGapMedianSeconds": 600,
+        "carryFiles": 1,
+        "carryTotal": 310000,
+        "dedupTotal": 4223450,
+        "drops": 1,
+        "dupEvents": 0,
+        "dupTokens": 0,
+        "eventsMonth": 9,
+        "filesMonth": 2,
+        "filesTotal": 2,
+        "finalSum": 4534150,
+        "forkCopyTokens": 0,
+        "forkFiles": 0,
+        "legacyTotal": 4533350,
+        "maxDelta": 2110000,
+        "maxDeltaGapSeconds": 600,
+        "topFile": 4220150
+      }
+    },
+    {
+      "appBuild": 1,
+      "home": "diag-basic",
+      "id": "basic-sep",
+      "month": "2026-09",
+      "result": {
+        "appBuild": 1,
+        "bigDeltaCount": 0,
+        "bigDeltaTotal": 0,
+        "bigGapMedianSeconds": 0,
+        "carryFiles": 0,
+        "carryTotal": 0,
+        "dedupTotal": 0,
+        "drops": 0,
+        "dupEvents": 0,
+        "dupTokens": 0,
+        "eventsMonth": 1,
+        "filesMonth": 1,
+        "filesTotal": 2,
+        "finalSum": 1200,
+        "forkCopyTokens": 0,
+        "forkFiles": 0,
+        "legacyTotal": 1200,
+        "maxDelta": 0,
+        "maxDeltaGapSeconds": 0,
+        "topFile": 0
+      }
+    },
+    {
+      "appBuild": 1,
+      "home": "diag-fork-dup",
+      "id": "fork-dup-oct",
+      "month": "2026-10",
+      "result": {
+        "appBuild": 1,
+        "bigDeltaCount": 0,
+        "bigDeltaTotal": 0,
+        "bigGapMedianSeconds": 0,
+        "carryFiles": 0,
+        "carryTotal": 0,
+        "dedupTotal": 2860,
+        "drops": 0,
+        "dupEvents": 3,
+        "dupTokens": 2200,
+        "eventsMonth": 13,
+        "filesMonth": 4,
+        "filesTotal": 4,
+        "finalSum": 6699,
+        "forkCopyTokens": 1254,
+        "forkFiles": 2,
+        "legacyTotal": 6699,
+        "maxDelta": 1100,
+        "maxDeltaGapSeconds": 299,
+        "topFile": 2200
+      }
+    },
+    {
+      "appBuild": 1,
+      "home": "diag-empty",
+      "id": "empty",
+      "month": "2026-10",
+      "result": {
+        "appBuild": 1,
+        "bigDeltaCount": 0,
+        "bigDeltaTotal": 0,
+        "bigGapMedianSeconds": 0,
+        "carryFiles": 0,
+        "carryTotal": 0,
+        "dedupTotal": 0,
+        "drops": 0,
+        "dupEvents": 0,
+        "dupTokens": 0,
+        "eventsMonth": 0,
+        "filesMonth": 0,
+        "filesTotal": 0,
+        "finalSum": 0,
+        "forkCopyTokens": 0,
+        "forkFiles": 0,
+        "legacyTotal": 0,
+        "maxDelta": 0,
+        "maxDeltaGapSeconds": 0,
+        "topFile": 0
+      }
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
+  "golden": "token-usage/upload/diagnostics",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "compute": "compute(homeDirectory: <home>, codexHome: <home>/.codex, month:, appBuild: 1) — Windows 는 Orca 홈이 없어 루트가 둘뿐.",
+    "input": "feature/desktop desktopTest resources synthetic-home/upload/<home>/.codex/{sessions,archived_sessions}/**/rollout-*.jsonl."
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStoreSync.swift",
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CheckTokenUsageDiagnostics.swift",
+    "Sources/CheckCore/CheckCodexAccountUsage.swift"
+  ]
+}

@@ -8,14 +8,14 @@ import com.yehsung.aingcheck.core.rules.format.TokenNumberFormatter
 import com.yehsung.aingcheck.core.rules.insights.TokenDailyGrid
 
 /**
- * 그릴 줄이 **하나도 없을 때** 폰 카드와 위젯이 쓰는 한 문장 · 다른 맥으로 대체했을 때의 한 줄. 두 표면이 **같은 상수**를 쓴다(위젯 — W2-f —
+ * 그릴 줄이 **하나도 없을 때** 폰 카드와 위젯이 쓰는 한 문장 · 다른 기기로 대체했을 때의 한 줄. 두 표면이 **같은 상수**를 쓴다(위젯 — W2-f —
  * 은 이 모듈을 본다). 까닭(연동 없음 / 맥 설정에서 껐음)을 가르지 않는다 — 위젯은 가릴 수 없고, 폰의 단서는 3일이면 스스로 사라져 문구가 혼자 바뀐다.
  */
 object AILimitSurfaceText {
-    const val noVisibleProviders = "맥 앱에서 AI 도구에 로그인하고 리밋 보기를 켜면 보여요"
+    const val noVisibleProviders = "맥·PC 앱에서 AI 도구에 로그인하고 리밋 보기를 켜면 보여요"
 
-    /** 고른 맥 대신 **다른 맥**을 그리고 있을 때(v0.3.47 P1). 고른 맥의 이름은 적지 않는다(꼬리 규약이 보이는 묶음 사이에서만 선다). */
-    const val substitutedMainDevice = "고른 맥은 지금 보여 줄 숫자가 없어서 다른 맥을 보여 주고 있어요"
+    /** 고른 기기 대신 **다른 기기**를 그리고 있을 때(v0.3.47 P1). 고른 기기의 이름은 적지 않는다(꼬리 규약이 보이는 묶음 사이에서만 선다). */
+    const val substitutedMainDevice = "고른 기기는 지금 보여 줄 숫자가 없어서 다른 기기를 보여 주고 있어요"
 }
 
 /** 창이 **아예 없는** 칸의 글자. `—`(판정 불가)와 다른 말이다 — 데스크톱 카드 모델과 같은 글자여야 한다. */

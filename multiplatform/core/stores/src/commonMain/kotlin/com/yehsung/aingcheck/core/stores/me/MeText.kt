@@ -701,7 +701,7 @@ object MeText {
 
     fun inviteShareMessage(teamName: String?, code: String): String {
         val team = teamName?.let { "「$it」 " } ?: ""
-        return "$appDisplayName ${team}팀 코드: $code\n맥 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
+        return "$appDisplayName ${team}팀 코드: $code\n맥·PC 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
     }
 
     const val accountSection = "계정"
